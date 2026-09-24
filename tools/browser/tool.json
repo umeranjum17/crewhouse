@@ -44,5 +44,5 @@
   "grant": {
     "default": true
   },
-  "note": "Headless until each bot gets its own display to watch."
+  "note": "With the Computer tool granted too, it drives the bot's own visible Chromium on the bot's own display, which you can watch and take over."
 }

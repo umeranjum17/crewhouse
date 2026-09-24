@@ -3,6 +3,7 @@ import { join, relative, resolve } from 'node:path';
 import type { Config } from './config.ts';
 import type { LaunchSpec } from './runner.ts';
 import { registry, resolveGrants, toolBin, toolStatus } from './tools.ts';
+import { browserBin, deskFor } from './desktop.ts';
 
 export const NOTES_CAP = 2500;
 
@@ -82,6 +83,9 @@ export function templateKit(cfg: Config, tpl: Template) {
     return { id, name: t.name, asks: t.asks, ready: t.ready };
   });
 }
+
+/** Granted and working on this machine. */
+export const canUse = (cfg: Config, id: string, tool: string) => botTools(cfg, id).some((t) => t.id === tool && t.granted && t.ready);
 
 export const templatesDir = (cfg: Config) => join(cfg.repoDir, 'templates');
 export const botDir = (cfg: Config, id: string) => join(cfg.crewDir, 'bots', id);
@@ -197,12 +201,17 @@ export function writePerson(cfg: Config, id: string, address: string | null) {
 const CREDENTIAL_DENY = ['~/.claude/**', '~/.claude.json', '~/.codex/**', '~/.pi/**', '~/.ssh/**', '~/.config/gh/**', '~/.aws/**', '~/.treg/**'];
 
 /** Everything needed to launch the bot's real CLI. Claude gets its hooks and policy via settings.local.json. */
-export function launchSpec(cfg: Config, bot: { id: string; display: string; runtime: string; model?: string; token: string }, url: string): LaunchSpec {
+export function launchSpec(cfg: Config, bot: { id: string; n: number; display: string; runtime: string; model?: string; token: string }, url: string): LaunchSpec {
   const dir = botDir(cfg, bot.id);
   const conf = botConfig(cfg, bot.id);
+  const desk = deskFor(cfg.stateDir, bot.id, bot.n);
   // Grants become the CLI's own allow list and MCP servers; a granted tool that is missing here simply is not offered.
-  const g = resolveGrants(cfg, conf.tools ?? [], { 'bot.dir': dir, 'bot.id': bot.id });
+  const g = resolveGrants(cfg, conf.tools ?? [], { 'bot.dir': dir, 'bot.id': bot.id, 'bot.display': desk.display, 'bot.xauth': desk.xauth });
   const allow = [...g.allow, ...(conf.allow ?? [])];
+  // Its own desktop: the browser MCP drives the visible Chromium crewd keeps on the bot's display, over CDP.
+  if (g.tools.includes('computer') && g.mcp.browser && browserBin()) {
+    g.mcp.browser.args = ['--cdp-endpoint', `http://127.0.0.1:${desk.cdp}`, '--output-dir', join(dir, 'work', 'browser')];
+  }
   const env = {
     ...g.env,
     CREWHOUSE_URL: url,
@@ -231,8 +240,8 @@ export function launchSpec(cfg: Config, bot: { id: string; display: string; runt
     statusLine: { type: 'command', command: `${JSON.stringify(join(cfg.repoDir, 'bin', 'crew'))} hook statusline` },
     hooks: {
       SessionStart: hook('session'),
-      // The browser's "asks first" rules: crewd knows the page each bot is on.
-      PreToolUse: [{ matcher: 'mcp__browser__.*', ...hook('pretool')[0] }],
+      // Every tool call: denied while the person holds the controls; browser acts on signed-in or payment pages ask first.
+      PreToolUse: hook('pretool'),
       PostToolUse: hook('tool', 10),
       Stop: hook('stop'),
       // A turn that ends on an API error (rate_limit, overloaded...) never fires Stop; this is how crewd hears of it.

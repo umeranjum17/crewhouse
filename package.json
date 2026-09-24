@@ -15,9 +15,11 @@
     "check": "tsc"
   },
   "dependencies": {
+    "@desklink/host": "^0.1.0",
     "ws": "^8.18.0"
   },
   "devDependencies": {
+    "@desklink/react-native": "^0.1.0",
     "@types/node": "^22.10.0",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
