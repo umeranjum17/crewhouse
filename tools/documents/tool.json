@@ -1,0 +1,18 @@
+{
+  "id": "documents",
+  "name": "MarkItDown",
+  "provides": "Turn PDF, Word, PowerPoint, Excel and HTML into Markdown to read",
+  "kind": "cli",
+  "bins": [
+    "markitdown"
+  ],
+  "license": "MIT",
+  "source": "user-installed",
+  "install": "pipx install 'markitdown[all]'",
+  "allow": [
+    "Bash(markitdown *)"
+  ],
+  "grant": {
+    "default": false
+  }
+}

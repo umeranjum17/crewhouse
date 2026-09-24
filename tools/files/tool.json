@@ -1,0 +1,20 @@
+{
+  "id": "files",
+  "name": "Files",
+  "provides": "Read and write files in the bot's own folder",
+  "kind": "built-in",
+  "bins": [],
+  "license": "vendor CLI",
+  "source": "bundled",
+  "install": "Built into the agent CLI",
+  "allow": [
+    "Read",
+    "Write",
+    "Edit",
+    "Glob",
+    "Grep"
+  ],
+  "grant": {
+    "default": true
+  }
+}

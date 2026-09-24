@@ -1,0 +1,23 @@
+{
+  "id": "browser",
+  "name": "agent-browser",
+  "provides": "The bot's own browser (its own profile, signed out until you sign it in): open pages, click, fill, screenshot",
+  "kind": "cli",
+  "bins": [
+    "agent-browser"
+  ],
+  "license": "Apache-2.0",
+  "source": "user-installed",
+  "install": "npm i -g agent-browser && agent-browser install",
+  "allow": [
+    "Bash(agent-browser *)"
+  ],
+  "env": {
+    "AGENT_BROWSER_PROFILE": "{bot.dir}/browser",
+    "AGENT_BROWSER_SESSION": "crewhouse-{bot.id}"
+  },
+  "grant": {
+    "default": true
+  },
+  "note": "Plan 3 moves this to Playwright MCP on the bot's own Chromium and Xvfb display."
+}

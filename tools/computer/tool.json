@@ -1,0 +1,14 @@
+{
+  "id": "computer",
+  "name": "Computer (desklink)",
+  "provides": "The bot's own desktop you can watch and take over from your phone",
+  "kind": "desktop",
+  "bins": [],
+  "license": "Apache-2.0",
+  "source": "planned",
+  "install": "Next: a per-bot Xvfb display plus @desklink/host (0.1.0 on npm) for watch and take over",
+  "allow": [],
+  "grant": {
+    "default": false
+  }
+}

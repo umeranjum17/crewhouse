@@ -1,0 +1,47 @@
+#!/usr/bin/env node
+// The one tool a bot needs: talks to crewd with the bot's own token. Also the CLIs' hook target.
+const [cmd, ...rest] = process.argv.slice(2);
+const url = process.env.CREWHOUSE_URL, token = process.env.CREWHOUSE_TOKEN;
+const usage = `usage:
+  crew roster                          who is on the crew, which templates exist
+  crew status                          open tasks
+  crew recruit <template> [--name N]   (Chief) recruit a bot
+  crew assign <bot> "<task>"           (Chief) hand a bot a task
+  crew call-me "<sir|ma'am|a name>"    (Chief) change how the person is addressed
+  crew report "<progress line>"
+  crew deliver <path> ["<note>"]       register a finished file (inside your folder)
+  crew remember "<one short line>"     add to your notes (capped)`;
+if (!url || !token) { console.error('crew: not running inside a Crewhouse bot (CREWHOUSE_URL/TOKEN unset)'); process.exit(2); }
+
+async function stdinJson() {
+  let raw = '';
+  for await (const c of process.stdin) raw += c;
+  try { return JSON.parse(raw || '{}'); } catch { return {}; }
+}
+
+async function call(path, body) {
+  const res = await fetch(`${url}/crew/${path}`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-crew-token': token }, body: JSON.stringify(body ?? {}) });
+  const out = await res.json().catch(() => ({}));
+  if (!res.ok) { console.error(`crew: ${out.error ?? res.status}`); process.exit(1); }
+  return out;
+}
+
+let body, path = cmd;
+switch (cmd) {
+  case 'roster': case 'status': body = {}; break;
+  case 'recruit': { const i = rest.indexOf('--name'); body = { template: rest[0], name: i >= 0 ? rest.slice(i + 1).join(' ') : undefined }; break; }
+  case 'assign': body = { bot: rest[0]?.toLowerCase(), text: rest.slice(1).join(' ') }; break;
+  case 'report': case 'remember': case 'call-me': body = { text: rest.join(' ') }; break;
+  case 'deliver': body = { path: rest[0], note: rest.slice(1).join(' ') }; break;
+  case 'hook': {
+    path = `hook/${rest[0]}`;
+    // Codex passes its notification as an argument; Claude pipes JSON on stdin.
+    body = rest[1] ? JSON.parse(rest[1]) : await stdinJson();
+    const out = await call(path, body).catch(() => ({}));
+    if (rest[0] === 'statusline') process.stdout.write(out.text ?? 'Crewhouse');
+    else if (Object.keys(out).length) process.stdout.write(JSON.stringify(out));
+    process.exit(0);
+  }
+  default: console.log(usage); process.exit(cmd ? 2 : 0);
+}
+console.log(JSON.stringify(await call(path, body), null, 2));

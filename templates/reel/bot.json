@@ -1,0 +1,21 @@
+{
+  "display": "Reel",
+  "role": "Makes demo videos from screenshots",
+  "runtime": "claude",
+  "model": "sonnet",
+  "color": "#C9542F",
+  "tools": [
+    "crew",
+    "files",
+    "web",
+    "browser",
+    "media",
+    "images",
+    "video-download",
+    "search-files"
+  ],
+  "allow": [
+    "Bash(ls *)",
+    "Bash(mkdir *)"
+  ]
+}
