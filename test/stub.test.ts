@@ -5,14 +5,16 @@ import { execFileSync, spawn } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createServer, type AddressInfo } from 'node:net';
 import { DatabaseSync } from 'node:sqlite';
 import { WebSocket } from 'ws';
 
 const root = mkdtempSync(join(tmpdir(), 'crewhouse-test-'));
-const port = 20000 + Math.floor(Math.random() * 20000);
+// A port the OS says is free, not a random guess that another run may hold.
+const port = await new Promise<number>((r) => { const s = createServer().listen(0, '127.0.0.1', () => { const { port } = s.address() as AddressInfo; s.close(() => r(port)); }); });
 const base = `http://127.0.0.1:${port}`;
 const daemon = spawn(process.execPath, [join(import.meta.dirname, '..', 'src', 'main.ts')], {
-  env: { ...process.env, CREWHOUSE_RUNNER: 'stub', CREWHOUSE_HOLD_MS: '1500', CREWHOUSE_PORT: String(port), CREWHOUSE_STATE_DIR: join(root, 'state'), CREWHOUSE_CREW_DIR: join(root, 'crew'), CREWHOUSE_TOOLS_DIR: join(root, 'tools') },
+  env: { ...process.env, CREWHOUSE_RUNNER: 'stub', CREWHOUSE_HOLD_MS: '5000', CREWHOUSE_PORT: String(port), CREWHOUSE_STATE_DIR: join(root, 'state'), CREWHOUSE_CREW_DIR: join(root, 'crew'), CREWHOUSE_TOOLS_DIR: join(root, 'tools') },
   stdio: ['ignore', 'pipe', 'inherit'],
 });
 after(() => daemon.kill());
@@ -24,7 +26,7 @@ async function api(method: string, path: string, body?: unknown, headers: Record
 }
 const token = (bot: string) => (new DatabaseSync(join(root, 'state', 'crew.db')).prepare('SELECT token FROM bots WHERE id = ?').get(bot) as any).token;
 const tool = (bot: string, cmd: string, body: unknown) => api('POST', `/crew/${cmd}`, body, { 'x-crew-token': token(bot) });
-async function until<T>(fn: () => Promise<T | undefined | false>, ms = 5000): Promise<T> {
+async function until<T>(fn: () => Promise<T | undefined | false>, ms = 10_000): Promise<T> {
   for (const end = Date.now() + ms; Date.now() < end; await sleep(100)) { const v = await fn(); if (v) return v; }
   throw new Error('timed out');
 }

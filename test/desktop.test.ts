@@ -11,7 +11,9 @@ import { deskFor, Desktops, missing, type DeskEvent } from '../src/desktop.ts';
 const root = mkdtempSync(join(tmpdir(), 'crewhouse-desk-'));
 const botDir = join(root, 'bots', 'reel');
 mkdirSync(join(botDir, '.crewhouse'), { recursive: true });
-const n = 190 + Math.floor(Math.random() * 60);
+// A display number nobody holds, so side-by-side runs and a real X server never collide.
+let n = 190 + Math.floor(Math.random() * 60);
+while (existsSync(`/tmp/.X${n}-lock`) || existsSync(`/tmp/.X11-unix/X${n}`)) n++;
 const desks = new Desktops(join(root, 'state'));
 const xauth = deskFor(join(root, 'state'), 'reel', n).xauth;
 after(() => desks.stopAll());
@@ -53,7 +55,7 @@ test('display lifecycle: start once, own cookie, idle stop', { skip: noXvfb }, a
   assert.ok(desks.running('reel'), 'not idle long enough yet');
   desks.sweep(() => false, Date.now() + 11 * 60_000);
   assert.ok(!desks.running('reel'), 'idle for ten minutes: stopped');
-  for (let i = 0; i < 50 && existsSync(`/tmp/.X11-unix/X${n}`); i++) await sleep(100);
+  for (let i = 0; i < 100 && existsSync(`/tmp/.X11-unix/X${n}`); i++) await sleep(100);
   assert.ok(!existsSync(`/tmp/.X11-unix/X${n}`), 'the display is gone');
 });
 
@@ -67,12 +69,11 @@ test('watching: crewd picks the display and the permissions', { skip: noXvfb }, 
   const view = await desks.signal('reel', a, 'session.open', { permissions: ['view'] }, false);
   assert.equal(view.source.kind, 'x11-root');
   assert.deepEqual([view.source.width, view.source.height], [1280, 800]);
-  for (let i = 0; i < 30 && !a.seen.some((e) => e.kind === 'description'); i++) await sleep(100);
+  for (let i = 0; i < 100 && !a.seen.some((e) => e.kind === 'description'); i++) await sleep(100);
   assert.ok(a.seen.some((e) => e.kind === 'description'), 'the offer reaches the watcher');
   await assert.rejects(desks.signal('reel', b, 'session.candidate', { session_id: view.sessionId, candidate: '' }, false), { code: 'not-authorized' });
   await assert.rejects(desks.signal('reel', a, 'clipboard.read', { session_id: view.sessionId }, false), { code: 'malformed' });
   desks.release(a);
-  await sleep(50);
   assert.equal(desks.info('reel')?.watching, false, 'a closed socket ends its session');
 
   const drive = await desks.signal('reel', b, 'session.open', { permissions: ['view', 'control'] }, true);

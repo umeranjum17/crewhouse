@@ -3,6 +3,7 @@
 This file is the project's committed home for project-intrinsic agent knowledge: build, test, release, architecture, and sharp-edge notes that should travel with the code.
 
 - Checks: `npm run check` (tsc, strict) and `./crewhouse test` (stub runner, no model quota). Run both before committing; CI (`.github/workflows/ci.yml`) runs them plus the web build on Node 22.18 and 24, so tests must never need Herdr, a CLI or a model.
+- Tests wait on a condition with a bound, never a fixed sleep: the stub run does sync disk and SQLite writes, so fixed sleeps flake on CI's slow disks. Use `prompted`/`settled`/`until` in `test/unit.test.ts`; daemon tests take an OS-assigned port.
 - Node runs `src/*.ts` directly with type stripping: no parameter properties, enums or namespaces (tsconfig sets `erasableSyntaxOnly`). Imports use `.ts` extensions.
 - Size budget: crewd (`src/`) stays under 5,000 lines, per the product plan. Prefer deleting to adding.
 - Only `src/runner.ts` knows how CLIs run. Facts come from the CLI's own hooks, wired in `src/bots.ts` `launchSpec` and handled at `/crew/hook/*` in `src/server.ts`. Herdr state is the fallback.
