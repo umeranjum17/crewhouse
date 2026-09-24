@@ -40,7 +40,7 @@ export function browserAsk(tool: string, url: string, signedIn: string[]): strin
   if (host && signedIn.some((d) => host === d || host.endsWith(`.${d}`))) return `${host}, a site you signed it in to`;
   return null;
 }
-/** Keys that pick "Yes" in a CLI's trust dialog. Claude now puts "No, exit" first when a folder pre-approves tools. */
+/** Keys that pick "Yes" in a CLI's folder-trust dialog. Claude now lists "No, exit" first when a folder pre-approves tools. */
 export function trustKeys(pane: string) {
   const lines = pane.split('\n');
   const at = lines.findLastIndex((l) => /^\s*[❯›>]\s/.test(l));
@@ -51,7 +51,7 @@ export function trustKeys(pane: string) {
 const STUCK_MS = Number(process.env.CREWHOUSE_STUCK_MS || 180_000); // working with no news this long: show "stuck?"
 /** Events that make up a bot's plain "what I did" trail. */
 const TRAIL = ['task.created', 'task.working', 'task.done', 'task.failed', 'task.progress', 'run.tool', 'run.allowed', 'run.typed',
-  'ask.opened', 'ask.answered', 'ask.parked', 'file.delivered', 'memory.learned', 'memory.undone', 'bot.recruited', 'bot.allowed'];
+  'ask.opened', 'ask.answered', 'ask.parked', 'file.delivered', 'memory.learned', 'memory.undone', 'bot.recruited', 'bot.allowed', 'run.trusted', 'run.reattached'];
 
 const PLAIN_TOOL: Record<string, string> = { Bash: 'run a command', Write: 'write a file', Edit: 'change a file', Read: 'read a file', WebFetch: 'open a web page', WebSearch: 'search the web' };
 
@@ -711,7 +711,7 @@ export class Crew {
         const b = this.bot(botId)!;
         this.say(CHIEF, 'system', `${b.display} has finished task #${task.id}: ${text.slice(0, 240)}${text.length > 240 ? '…' : ''}`, null, task.member ?? OWNER);
       }
-      this.db.run("UPDATE asks SET state = 'withdrawn' WHERE bot = ? AND state = 'open' AND kind IN ('blocked', 'trust')", botId);
+      this.db.run("UPDATE asks SET state = 'withdrawn' WHERE bot = ? AND state = 'open' AND kind = 'blocked'", botId);
     });
     const l = this.live.get(botId);
     if (l) Object.assign(l, { state: 'done', sawWorking: false });
@@ -780,12 +780,9 @@ export class Crew {
     const shown = scope === 'task' ? 'allowed for this task' : scope === 'always' ? `always allowed for ${who}` : body.answer ?? body.text ?? body.keys?.join(' ') ?? '';
     const held = this.holds.get(askId);
     this.answeredAt.set(ask.bot, Date.now());
-    if (ask.kind === 'permission' || ask.kind === 'trust') {
+    if (ask.kind === 'permission') {
       if (!['allow', 'deny'].includes(body.answer ?? '')) throw Object.assign(new Error('answer allow or deny'), { status: 400 });
-    }
-    if (ask.kind === 'trust') {
-      if (body.answer === 'allow') await this.runner.keys(ask.bot, trustKeys(await this.runner.read(ask.bot, 40).catch(() => '')));
-    } else if (ask.kind !== 'permission') {
+    } else {
       if (body.text) await this.runner.text(ask.bot, body.text);
       else if (body.keys?.length) await this.runner.keys(ask.bot, body.keys);
       else throw Object.assign(new Error('nothing to send'), { status: 400 });
@@ -799,10 +796,9 @@ export class Crew {
         this.db.event('bot.allowed', ask.bot, { rule: detail.rule, covers: detail.covers });
       }
       const task = ask.task_id && this.db.get("SELECT * FROM tasks WHERE id = ? AND state = 'needs_you'", ask.task_id);
-      if (task && !held && !(ask.kind === 'trust' && body.answer === 'deny')) this.setTask(task, 'working');
+      if (task && !held) this.setTask(task, 'working');
     });
     if (held) { held(body.answer!); this.holds.delete(askId); return; }
-    if (ask.kind === 'trust' && body.answer === 'deny') return this.resetBot(ask.bot, 'You chose not to trust the folder.');
     if (ask.kind === 'permission' && ask.task_id) {
       // Parked: the turn already ended with a "wait" denial, so the answer is the next prompt into the same session.
       if (body.answer === 'allow') this.granted.add(`${ask.bot}\n${detail.tool}\n${detail.summary}`);
@@ -902,12 +898,16 @@ export class Crew {
           const limit = this.limitInPane(l, pane);
           if (limit) { await this.failover(task.bot, 'rate_limit', limit.until); continue; }
           const b = this.bot(task.bot)!;
-          // Before the first prompt, a blocked CLI is showing a first-run dialog: the person decides, crewd sends the key.
-          if (!l.prompted && /trust/i.test(pane)) this.openAsk(task.bot, task, 'trust', `Trust ${b.display}'s folder?`, { pane, note: `${b.display}'s ${b.runtime} asks whether to trust its own folder, ${disk.botDir(this.cfg, b.id)}.` });
-          else this.openAsk(task.bot, task, 'blocked', `${b.display} is waiting on a question in its terminal`, { pane });
+          // Before the first prompt, a blocked CLI is asking whether to trust the bot's folder. crewd made that folder and wrote
+          // every setting the dialog lists, from the person's own grants, so it accepts: the CLI's own way of trusting a folder.
+          if (!l.prompted && /trust/i.test(pane)) {
+            this.answeredAt.set(task.bot, Date.now());
+            await this.runner.keys(task.bot, trustKeys(pane));
+            this.db.event('run.trusted', task.bot, { task: task.id, folder: disk.botDir(this.cfg, b.id) });
+          } else this.openAsk(task.bot, task, 'blocked', `${b.display} is waiting on a question in its terminal`, { pane });
         }
         if (st === 'idle' || st === 'done') {
-          this.db.run("UPDATE asks SET state = 'withdrawn' WHERE bot = ? AND state = 'open' AND kind IN ('blocked', 'trust')", task.bot);
+          this.db.run("UPDATE asks SET state = 'withdrawn' WHERE bot = ? AND state = 'open' AND kind = 'blocked'", task.bot);
           if (!l.prompted) { if (task.state === 'needs_you') this.setTask(task, 'working'); await this.submit(task, l.text ?? this.prompt(task)); continue; }
           if (!l.settledAt) l.settledAt = Date.now();
           const parked = this.db.get("SELECT 1 FROM asks WHERE task_id = ? AND state = 'open'", task.id);

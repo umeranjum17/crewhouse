@@ -100,6 +100,8 @@ function step(e: Json): string | null {
     case 'file.delivered': return `Delivered ${d.path}${d.note ? `: ${d.note}` : ''}`;
     case 'memory.learned': return `Learned: ${d.text}${d.removed ? ` (instead of “${d.removed.slice(2)}”)` : ''}`;
     case 'memory.undone': return `You undid: ${d.text}`;
+    case 'run.trusted': return 'First run: trusted its own folder';
+    case 'run.reattached': return 'Crewhouse restarted; picked up where it was';
     case 'bot.allowed': return `You allowed ${d.covers} from now on`;
     case 'task.done': return `Finished “${d.title}”`;
     case 'task.failed': return `Stopped: ${d.result ?? d.title}`;
@@ -257,7 +259,7 @@ function AskCard({ ask, bots, onDone }: { ask: Json; bots: Json[]; onDone: () =>
       <div className="ask-head">
         <Avatar bot={bot} size={28} />
         <span className="muted">{bot?.display}</span>
-        <span className="tag">{ask.kind === 'permission' ? 'PERMISSION' : ask.kind === 'trust' ? 'FIRST RUN' : 'QUESTION'}</span>
+        <span className="tag">{ask.kind === 'permission' ? 'PERMISSION' : 'QUESTION'}</span>
       </div>
       <div className="ask-title">{ask.title}</div>
       {ask.kind === 'permission' ? (
@@ -271,14 +273,6 @@ function AskCard({ ask, bots, onDone }: { ask: Json; bots: Json[]; onDone: () =>
           </div>
           {ask.detail.spends && <p className="tiny">This can spend your money, so {bot?.display} asks you every time. Check the price cap in the command above.</p>}
           {ask.detail.covers && <p className="tiny">“For this task” and “Always” cover {ask.detail.covers}. You can take “Always” back on {bot?.display}'s Tools tab.</p>}
-        </>
-      ) : ask.kind === 'trust' ? (
-        <>
-          <p className="muted small">{ask.detail.note}</p>
-          <div className="row">
-            <button className="btn primary" onClick={() => send({ answer: 'allow' })}>Trust it</button>
-            <button className="btn deny" onClick={() => send({ answer: 'deny' })}>Don't allow</button>
-          </div>
         </>
       ) : (
         <>

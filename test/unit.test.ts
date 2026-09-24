@@ -703,7 +703,27 @@ test('restart: a held approval keeps its card; the reconnecting hook gets the an
   s.done();
 });
 
-test('trust: "allow" picks Yes whether the CLI lists it first or second', () => {
+test('trust: a new bot accepts the trust dialog for its own folder on its first run, then gets its prompt', async () => {
+  const s = setup();
+  const pane = ' Quick safety check: Is this a project you created or one you trust?\n\n ❯ No, exit\n   Yes, I trust this folder\n\n Enter to confirm';
+  const sent: string[][] = [];
+  Object.assign(s.runner, {
+    start: async (spec: any) => { (s.runner as any).states.set(spec.bot, 'blocked'); },
+    read: async () => pane,
+    keys: async (bot: string, keys: string[]) => { sent.push(keys); (s.runner as any).states.set(bot, 'idle'); },
+  });
+  s.crew.onboard('sir');
+  s.crew.recruit('reel', 'Reel', 'person');
+  const t = s.crew.assign('reel', 'make a reel', 'chief').task;
+  for (let i = 0; i < 40 && task(s.db, t).state !== 'done'; i++) await sleep(100);
+  assert.deepEqual(sent, [['down', 'enter']], 'Yes, not the default "No, exit"');
+  assert.ok(s.db.get("SELECT 1 FROM events WHERE kind = 'run.trusted'"));
+  assert.equal(s.db.all('SELECT * FROM asks').length, 0, 'nothing for the person to answer');
+  assert.equal(task(s.db, t).state, 'done', 'then the task ran');
+  s.done();
+});
+
+test('trust: the keys pick Yes whether the CLI lists it first or second', () => {
   const now = 'quill master ? ❯ claude --setting-sources project,local\n Quick safety check: Is this a project you trust?\n\n ❯ No, exit\n   Yes, I trust this folder\n\n Enter to confirm · Esc to cancel';
   assert.deepEqual(trustKeys(now), ['down', 'enter']);
   assert.deepEqual(trustKeys(' Do you trust the files in this folder?\n\n ❯ 1. Yes, proceed\n   2. No, exit'), ['enter']);
