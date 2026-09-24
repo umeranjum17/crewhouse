@@ -374,7 +374,7 @@ function LiveCard({ bot, refresh }: { bot: Json; refresh: () => void }) {
           <div><b>{bot.display}</b> <Pill bot={bot} /> <span className="muted small">{bot.task.title}</span></div>
           <div className="muted small">{last ? `${clock(bot.step.at)} · ${last}` : 'Getting started…'}</div>
         </div>
-        <a className="btn" href={`#/bot/${bot.id}/work`}>Watch</a>
+        <a className="btn" href={`#/bot/${bot.id}/${bot.computer ? 'screen' : 'work'}`}>Watch</a>
       </div>
       <Stuck bot={bot} refresh={refresh} />
     </div>
