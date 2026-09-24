@@ -5,17 +5,23 @@
   "description": "Local-first crew of persistent AI teammates, run by Chief on your own signed-in agent CLIs.",
   "license": "Apache-2.0",
   "type": "module",
-  "engines": { "node": ">=22.18" },
+  "engines": {
+    "node": ">=22.18"
+  },
   "scripts": {
     "start": "node src/main.ts",
     "build:web": "node scripts/build-web.mjs",
-    "test": "node --test test/*.test.ts"
+    "test": "node --test test/*.test.ts",
+    "check": "tsc"
   },
   "dependencies": {
     "ws": "^8.18.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@types/ws": "^8.18.1",
     "esbuild": "^0.28.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

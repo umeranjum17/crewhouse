@@ -9,8 +9,9 @@ const HOLD_MS = 180_000; // how long a CLI's permission hook waits for an answer
 const FALLBACK_MS = 12_000; // settled with no Stop hook this long: take the reply from the terminal instead
 const TASK_TIMEOUT_MS = 60 * 60_000;
 
-export const CHIEF_GREETING =
-  "Good evening. I'm Chief, and I run the crew here at Crewhouse. It would be my pleasure to be of service. " +
+const partOfDay = () => { const h = new Date().getHours(); return h >= 5 && h < 12 ? 'morning' : h >= 12 && h < 18 ? 'afternoon' : 'evening'; };
+export const chiefGreeting = () =>
+  `Good ${partOfDay()}. I'm Chief, and I run the crew here at Crewhouse. It would be my pleasure to be of service. ` +
   'Before anything else, how would you like me to address you? "Sir", "ma\'am", your name, or something else entirely.';
 
 /** The deterministic half: people, bots, tasks, the per-bot queue, asks. Models only ever see prompts. */
@@ -40,7 +41,7 @@ export class Crew {
       this.db.event('system.started', null, { requeued: Number(n) });
     });
     const person = this.person();
-    if (!person.onboarded && !this.db.get('SELECT 1 FROM messages WHERE bot = ?', CHIEF)) this.say(CHIEF, 'bot', CHIEF_GREETING);
+    if (!person.onboarded && !this.db.get('SELECT 1 FROM messages WHERE bot = ?', CHIEF)) this.say(CHIEF, 'bot', chiefGreeting());
     for (const b of this.bots()) if (existsSync(disk.botDir(this.cfg, b.id))) disk.writePerson(this.cfg, b.id, person.address);
     this.timer = setInterval(() => this.tick().catch((e) => console.error('tick', e)), 1500);
     this.dispatch();

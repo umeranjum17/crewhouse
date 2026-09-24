@@ -174,7 +174,7 @@ export function launchSpec(cfg: Config, bot: { id: string; display: string; runt
         ...(bot.model ? ['--model', bot.model] : [])],
     };
   }
-  const hook = (sub: string, timeout = 30) => [{ hooks: [{ type: 'command', command: `crew hook ${sub}`, timeout }] }];
+  const hook = (sub: string, timeout = 30) => [{ hooks: [{ type: 'command', command: `${JSON.stringify(join(cfg.repoDir, 'bin', 'crew'))} hook ${sub}`, timeout }] }];
   const settings = {
     permissions: {
       allow,

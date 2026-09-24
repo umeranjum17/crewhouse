@@ -111,7 +111,8 @@ export class HerdrRunner implements Runner {
   }
 
   async stop(bot: string) {
-    const tab = this.tabs.get(bot);
+    // After a crewd restart the tab is only known to Herdr, so ask it.
+    const tab = this.tabs.get(bot) ?? (await this.call(['agent', 'get', this.name(bot)]).catch(() => null))?.agent?.tab_id;
     if (tab) await this.call(['tab', 'close', tab]).catch(() => {});
     this.tabs.delete(bot);
   }

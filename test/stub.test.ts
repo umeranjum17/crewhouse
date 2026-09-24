@@ -64,7 +64,7 @@ test('chief onboarding, recruit, assign, asks, memory', async () => {
   const settings = JSON.parse(readFileSync(join(dir, '.claude/settings.local.json'), 'utf8'));
   assert.ok(settings.permissions.allow.includes('Bash(crew *)'));
   assert.ok(settings.permissions.deny.includes('Read(~/.claude/**)'));
-  assert.equal(settings.hooks.Stop[0].hooks[0].command, 'crew hook stop');
+  assert.match(settings.hooks.Stop[0].hooks[0].command, /bin\/crew" hook stop$/);
   const tools = (await api('GET', '/api/bots/reel')).body.tools;
   assert.ok(tools.find((x: any) => x.id === 'media').granted);
   await api('PUT', '/api/bots/reel/tools', { tools: ['files', 'github'] });

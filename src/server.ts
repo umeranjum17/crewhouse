@@ -35,7 +35,7 @@ function sendFile(req: IncomingMessage, res: ServerResponse, path: string) {
     res.writeHead(206, { 'content-type': type, 'content-range': `bytes ${start}-${end}/${size}`, 'accept-ranges': 'bytes', 'content-length': end - start + 1 });
     return createReadStream(path, { start, end }).pipe(res);
   }
-  res.writeHead(200, { 'content-type': type, 'content-length': size, 'accept-ranges': 'bytes' });
+  res.writeHead(200, { 'content-type': type, 'content-length': size, 'accept-ranges': 'bytes', 'cache-control': 'no-cache' });
   createReadStream(path).pipe(res);
 }
 
@@ -70,7 +70,7 @@ export function startServer(cfg: Config, db: Store, crew: Crew) {
       if (existsSync(asset) && statSync(asset).isFile()) return sendFile(req, res, asset);
       const index = join(dist, 'index.html');
       if (!existsSync(index)) return send(res, 503, { error: 'web UI not built: run ./crewhouse setup' });
-      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache' });
       res.end(readFileSync(index));
     } catch (e: any) {
       send(res, e.status ?? 400, { error: e.message });
