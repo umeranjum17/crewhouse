@@ -1,7 +1,7 @@
 // End to end through the real daemon with the stub runner: no CLI, no model quota.
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -178,4 +178,36 @@ test('routines: Chief sets one up from chat, it fires on schedule through the da
   assert.equal(own.brain, 'claude:haiku');
   assert.equal((await api('DELETE', `/api/routines/${own.id}`)).status, 200);
   assert.equal((await api('POST', '/api/routines', { bot: 'reel', schedule: 'daily 9', task: 'x' }, {})).status, 403, 'cross-site pages cannot add routines');
+});
+
+test('memory: the bot proposes a note, crewd caps and commits it, Undo reverts it', async () => {
+  await until(async () => (await fetch(`${base}/api/state`).catch(() => null))?.ok);
+  await tool('chief', 'recruit', { template: 'scribe', name: 'Quill' });
+  const dir = join(root, 'crew', 'bots', 'quill');
+  const notes = () => readFileSync(join(dir, 'notes.md'), 'utf8');
+  const log = () => execFileSync('git', ['log', '--format=%s'], { cwd: dir }).toString().trim().split('\n');
+  const learned = async () => (await api('GET', '/api/bots/quill')).body.trail.filter((e: any) => e.kind === 'memory.learned');
+
+  // The debrief asks for it at the end of every task.
+  const t = (await tool('chief', 'assign', { bot: 'quill', text: 'Draft a note' })).body.task;
+  await until(async () => (await api('GET', '/api/bots/quill')).body.tasks.find((x: any) => x.id === t && x.state === 'done'));
+  assert.match((await api('GET', '/api/bots/quill')).body.messages.find((m: any) => m.author === 'bot').text, /When you finish: if this task showed/);
+
+  assert.equal((await tool('quill', 'remember', { text: 'Prefers 0.5 s transitions' })).status, 200);
+  assert.equal((await tool('quill', 'remember', { text: 'Signs off with "Best"' })).status, 200);
+  assert.equal((await tool('quill', 'remember', { text: 'Prefers ~0.8 s transitions', replaces: '0.5 s' })).status, 200);
+  assert.equal(notes(), '- Prefers ~0.8 s transitions\n- Signs off with "Best"\n', 'a correction rewrites, it does not append');
+  assert.equal((await tool('quill', 'remember', { text: 'x', replaces: 'nothing like this' })).status, 400);
+  assert.deepEqual(log().slice(0, 3), ['Learned: Prefers ~0.8 s transitions', 'Learned: Signs off with "Best"', 'Learned: Prefers 0.5 s transitions']);
+
+  // Undo the correction: the old note comes back, as a commit.
+  const [fix, sign] = await learned();
+  assert.equal((await api('POST', `/api/bots/quill/memory/${fix.seq}/undo`)).status, 200);
+  assert.equal(notes(), '- Prefers 0.5 s transitions\n- Signs off with "Best"\n');
+  assert.equal((await api('POST', `/api/bots/quill/memory/${fix.seq}/undo`)).status, 409, 'undone once');
+  assert.equal((await api('POST', `/api/bots/quill/memory/${sign.seq}/undo`)).status, 200);
+  assert.equal(notes(), '- Prefers 0.5 s transitions\n');
+  assert.equal(log()[0], 'Undo: Signs off with "Best"');
+  assert.ok((await learned()).find((e: any) => e.seq === sign.seq).undone);
+  assert.equal((await api('POST', `/api/bots/quill/memory/${sign.seq}/undo`, undefined, {})).status, 403, 'cross-site pages cannot undo');
 });

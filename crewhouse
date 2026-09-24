@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Crewhouse: setup | start | doctor | tools | test
+# Crewhouse: setup | start | update | uninstall | doctor | tools | test
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -7,6 +7,33 @@ need_node() {
   command -v node >/dev/null || { echo "Crewhouse needs Node 22.18 or later: https://nodejs.org" >&2; exit 1; }
   node -e 'const [a,b]=process.versions.node.split(".").map(Number); process.exit(a>22||(a===22&&b>=18)?0:1)' \
     || { echo "Crewhouse needs Node 22.18 or later (found $(node --version))" >&2; exit 1; }
+}
+
+# Where this Crewhouse keeps things, from the same config crewd reads (so env overrides agree).
+paths() {
+  IFS=$'\t' read -r STATE CREW TOOLS SESSION < <(node --input-type=module -e \
+    "const { loadConfig } = await import('./src/config.ts'); const c = loadConfig(); console.log([c.stateDir, c.crewDir, c.toolsDir, c.herdrSession].join('\t'))")
+}
+
+# crewd's pid, only if that process really is this checkout's crewd.
+crewd_pid() {
+  local f="$STATE/crewd.pid" pid
+  # ponytail: Linux /proc check; add a ps fallback when macOS is supported.
+  [ -f "$f" ] && pid=$(cat "$f") && [ "$(readlink "/proc/$pid/cwd" 2>/dev/null)" = "$(pwd -P)" ] \
+    && tr '\0' ' ' < "/proc/$pid/cmdline" | grep -q 'src/main.ts' && echo "$pid"
+}
+
+stop_crewd() {
+  local pid; pid=$(crewd_pid) || return 1
+  kill -TERM "$pid"
+  for _ in $(seq 50); do kill -0 "$pid" 2>/dev/null || return 0; sleep 0.2; done
+  echo "crewd (pid $pid) did not stop" >&2; exit 1
+}
+
+# Refuse to delete anything that isn't plainly a Crewhouse folder.
+remove() {
+  case "$1" in ""|/|"$HOME"|"$HOME/"|"$(pwd)") echo "refusing to delete '$1'" >&2; exit 1 ;; esac
+  rm -rf -- "$1"
 }
 
 case "${1:-}" in
@@ -30,6 +57,62 @@ case "${1:-}" in
     [ -f web/dist/index.html ] || npm run build:web
     exec node src/main.ts
     ;;
+  update)
+    need_node
+    # Pull, install, build, and only then restart, so crewd is down for a second, not for an install.
+    if [ -n "$(git status --porcelain)" ]; then
+      echo "This Crewhouse folder has local changes, so it was not updated:" >&2
+      git status --short >&2
+      echo "Commit or discard them, then run ./crewhouse update again." >&2
+      exit 1
+    fi
+    before=$(git rev-parse HEAD)
+    git pull --ff-only
+    if [ "$(git rev-parse HEAD)" = "$before" ]; then echo "Already up to date."; exit 0; fi
+    npm ci --no-audit --no-fund
+    npm run build:web
+    paths
+    if stop_crewd; then
+      mkdir -p "$STATE"
+      nohup node src/main.ts >> "$STATE/crewd.log" 2>&1 &
+      echo "Updated to $(git log -1 --format='%h %s'). crewd restarted; running work carries on (log: $STATE/crewd.log)."
+    else
+      echo "Updated to $(git log -1 --format='%h %s'). Start it with ./crewhouse start."
+    fi
+    ;;
+  uninstall)
+    need_node
+    paths
+    all=; yes=
+    for a in "${@:2}"; do
+      case "$a" in --all) all=1 ;; --yes|-y) yes=1 ;; *) echo "usage: ./crewhouse uninstall [--all] [--yes]" >&2; exit 2 ;; esac
+    done
+    echo "This removes what Crewhouse installed:"
+    echo "  $STATE  (the database, desktops, log)"
+    echo "  $TOOLS  (pinned tools)"
+    [ -n "$SESSION" ] && echo "  Herdr session '$SESSION'  (the bots' terminals)"
+    echo "  node_modules and web/dist in $(pwd)"
+    if [ -n "$all" ]; then echo "  $CREW  (your crew: every bot's notes, skills and files)"
+    else echo "Your crew stays in $CREW (every bot's notes, skills and files). Add --all to remove it too."; fi
+    if [ -z "$yes" ]; then
+      [ -t 0 ] || { echo "Run it in a terminal, or add --yes." >&2; exit 1; }
+      read -r -p "Go ahead? [y/N] " ok
+      case "$ok" in [Yy]*) ;; *) echo "Nothing was removed."; exit 0 ;; esac
+    fi
+    stop_crewd || true
+    # Only crewd's own session; a lab wrapper (CREWHOUSE_HERDR_CMD) owns its session itself. Never the owner's default.
+    if [ -n "$SESSION" ] && [ "$SESSION" != default ] && command -v herdr >/dev/null; then
+      herdr session stop "$SESSION" >/dev/null 2>&1 || true
+      herdr session delete "$SESSION" >/dev/null 2>&1 || true
+    fi
+    remove "$STATE"
+    remove "$TOOLS"
+    rmdir "$(dirname "$TOOLS")" 2>/dev/null || true
+    remove node_modules
+    remove web/dist
+    [ -n "$all" ] && remove "$CREW"
+    echo "Crewhouse is uninstalled. To remove the code as well, delete $(pwd)."
+    ;;
   doctor)
     need_node
     exec node src/doctor.ts
@@ -44,7 +127,7 @@ case "${1:-}" in
     exec npm test
     ;;
   *)
-    echo "usage: ./crewhouse setup | start | doctor | tools [install [ids...]] | test"
+    echo "usage: ./crewhouse setup | start | update | uninstall [--all] [--yes] | doctor | tools [install [ids...]] | test"
     exit 2
     ;;
 esac

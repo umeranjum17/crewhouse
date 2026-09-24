@@ -98,7 +98,8 @@ function step(e: Json): string | null {
     case 'ask.parked': return 'Paused until you answer';
     case 'ask.answered': return `You answered: ${d.answer}`;
     case 'file.delivered': return `Delivered ${d.path}${d.note ? `: ${d.note}` : ''}`;
-    case 'memory.learned': return `Learned: ${d.text}`;
+    case 'memory.learned': return `Learned: ${d.text}${d.removed ? ` (instead of “${d.removed.slice(2)}”)` : ''}`;
+    case 'memory.undone': return `You undid: ${d.text}`;
     case 'bot.allowed': return `You allowed ${d.covers} from now on`;
     case 'task.done': return `Finished “${d.title}”`;
     case 'task.failed': return `Stopped: ${d.result ?? d.title}`;
@@ -106,7 +107,7 @@ function step(e: Json): string | null {
   }
 }
 
-function Trail({ events, empty }: { events: Json[]; empty: string }) {
+function Trail({ events, empty, onUndo }: { events: Json[]; empty: string; onUndo?: (e: Json) => void }) {
   // A task goes back to work after every answer; "Started on" belongs only to the first time.
   const first = new Map<number, number>();
   for (const e of events) if (e.kind === 'task.working') first.set(e.data.task, e.seq); // newest first, so the oldest wins
@@ -114,7 +115,11 @@ function Trail({ events, empty }: { events: Json[]; empty: string }) {
   if (!rows.length) return <div className="muted empty">{empty}</div>;
   return (
     <ol className="trail">
-      {rows.map(({ e, s }) => <li key={e.seq}><time>{clock(e.at)}</time><span>{s}</span></li>)}
+      {rows.map(({ e, s }) => (
+        <li key={e.seq}><time>{clock(e.at)}</time><span>{s}</span>
+          {onUndo && e.kind === 'memory.learned' && !e.undone && <button className="btn" onClick={() => onUndo(e)}>Undo</button>}
+        </li>
+      ))}
     </ol>
   );
 }
@@ -202,6 +207,8 @@ function sentence(e: Json, name: (id: string) => string, who: (id: number) => st
     case 'ask.opened': return d.kind === 'permission' ? `${b} asked to use ${d.tool}: ${d.summary}` : `${b} is waiting on a question`;
     case 'ask.answered': return `You answered ${b}: ${d.answer}`;
     case 'memory.learned': return `${b} learned: ${d.text}`;
+    case 'memory.undone': return `You undid what ${b} learned: ${d.text}`;
+    case 'system.recovered': return `Crewhouse restarted and picked up ${d.reattached + d.resumed} running task${d.reattached + d.resumed === 1 ? '' : 's'}`;
     case 'memory.edited': return `You edited what ${b} knows`;
     case 'file.delivered': return `${b} delivered ${d.path}`;
     case 'desktop.takeover': return `You took the controls of ${b}'s screen`;
@@ -617,7 +624,8 @@ function BotPage({ id, tab, state, tick, refresh }: { id: string; tab: string; s
       {tab === 'did' && (
         <div className="card">
           <b>What {bot.display} did</b>
-          <Trail events={page.trail} empty={`Nothing yet. Every step ${bot.display} takes shows up here, in plain words.`} />
+          <Trail events={page.trail} empty={`Nothing yet. Every step ${bot.display} takes shows up here, in plain words.`}
+            onUndo={async (e) => { await api.undoMemory(id, e.seq).catch((x) => setMsg(x.message)); load(); }} />
           <p className="tiny">Recorded by Crewhouse as it happens, not recalled by {bot.display}. The raw terminal is under Show the work.</p>
         </div>
       )}
@@ -910,18 +918,24 @@ function NeedsYou({ state, refresh }: { state: Json; refresh: () => void }) {
   );
 }
 
-function Activity({ state, name }: { state: Json; name: (id: string) => string }) {
+function Activity({ state, name, refresh }: { state: Json; name: (id: string) => string; refresh: () => void }) {
   const who = (id: number) => (state.members.length > 1 ? state.members.find((m: Json) => m.id === id)?.name ?? null : null);
   const items = [...state.events].reverse().map((e: Json) => ({ e, s: sentence(e, name, who) })).filter((x) => x.s);
+  const undone = new Set(state.events.filter((e: Json) => e.kind === 'memory.undone').map((e: Json) => e.data.seq));
+  const [err, setErr] = useState('');
   return (
     <div>
       <h1>Activity</h1>
+      {err && <div className="error">{err}</div>}
       <div className="feed">
         {items.length === 0 && <div className="muted empty">Nothing yet.</div>}
         {items.map(({ e, s }) => (
           <a key={e.seq} className="feed-item" href={e.bot && e.bot !== 'chief' ? `#/bot/${e.bot}` : '#/chief'}>
             {e.bot ? <Avatar bot={state.bots.find((b: Json) => b.id === e.bot)} size={26} /> : <span className="avatar" style={{ width: 26, height: 26 }}>·</span>}
             <span className="grow">{s}</span>
+            {e.kind === 'memory.learned' && !undone.has(e.seq) && (
+              <button className="btn" onClick={async (ev) => { ev.preventDefault(); setErr(''); await api.undoMemory(e.bot, e.seq).catch((x) => setErr(x.message)); refresh(); }}>Undo</button>
+            )}
             <span className="muted tiny">{ago(e.at)}</span>
           </a>
         ))}
@@ -1121,7 +1135,7 @@ function App() {
         {route.view === 'crew' && <Crew state={state} refresh={refresh} />}
         {route.view === 'needs' && <NeedsYou state={state} refresh={refresh} />}
         {route.view === 'routines' && <Routines state={state} refresh={refresh} />}
-        {route.view === 'activity' && <Activity state={state} name={name} />}
+        {route.view === 'activity' && <Activity state={state} name={name} refresh={refresh} />}
         {route.view === 'settings' && <Settings state={state} me={me} switchTo={switchTo} tick={tick} refresh={refresh} />}
         {route.view === 'bot' && route.id && (route.id === 'chief' ? (go('#/chief'), null) : <BotPage id={route.id} tab={route.tab!} state={state} tick={tick} refresh={refresh} />)}
       </main>
