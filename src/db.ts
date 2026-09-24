@@ -11,7 +11,8 @@ CREATE TABLE IF NOT EXISTS bots (
   color TEXT, token TEXT UNIQUE, session TEXT, state TEXT DEFAULT 'off', created_at INTEGER);
 CREATE TABLE IF NOT EXISTS tasks (
   id INTEGER PRIMARY KEY, bot TEXT NOT NULL, title TEXT, body TEXT, origin TEXT,
-  state TEXT NOT NULL DEFAULT 'queued', result TEXT, created_at INTEGER, updated_at INTEGER);
+  state TEXT NOT NULL DEFAULT 'queued', result TEXT, created_at INTEGER, updated_at INTEGER,
+  brain TEXT, wake_at INTEGER);
 CREATE INDEX IF NOT EXISTS tasks_bot_state ON tasks(bot, state);
 CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY, bot TEXT NOT NULL, author TEXT, text TEXT, task_id INTEGER, at INTEGER);
 CREATE INDEX IF NOT EXISTS messages_bot ON messages(bot, id);
@@ -31,6 +32,10 @@ export class Store {
     this.db = new DatabaseSync(join(stateDir, 'crew.db'));
     this.db.exec('PRAGMA journal_mode=WAL; PRAGMA busy_timeout=3000;');
     this.db.exec(SCHEMA);
+    // Columns added after the first release; CREATE IF NOT EXISTS leaves older tables as they were.
+    for (const col of ['brain TEXT', 'wake_at INTEGER']) {
+      if (!this.all('PRAGMA table_info(tasks)').some((c) => c.name === col.split(' ')[0])) this.db.exec(`ALTER TABLE tasks ADD COLUMN ${col}`);
+    }
   }
 
   all(sql: string, ...args: any[]): Row[] { return this.db.prepare(sql).all(...args) as Row[]; }

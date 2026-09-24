@@ -8,6 +8,22 @@ import * as disk from './bots.ts';
 const HOLD_MS = Number(process.env.CREWHOUSE_HOLD_MS || 180_000); // how long a CLI's permission hook waits for an answer before its own dialog shows
 const FALLBACK_MS = 12_000; // settled with no Stop hook this long: take the reply from the terminal instead
 const TASK_TIMEOUT_MS = 60 * 60_000;
+const REST_MS = { rate_limit: 60 * 60_000, overloaded: 5 * 60_000 }; // how long an account rests when we don't know its reset time
+// Best-effort limit text for CLIs without a failure hook (Codex prints this and ends the turn).
+const LIMIT_TEXT = /hit your usage limit|usage limit (has been )?reached|rate limit reached/i;
+/** "…try again at Sep 26th, 2026 12:15 PM." (Codex) as epoch ms, or 0. */
+export function limitResetFromText(text: string) {
+  const m = /try again at\s+([^.]*\d:\d\d\s*[AP]M)/i.exec(text.replace(/\s+/g, ' '));
+  if (!m) return 0;
+  const when = m[1].replace(/(\d)(st|nd|rd|th)\b/g, '$1');
+  const t = Date.parse(/^\d/.test(when) ? `${new Date().toDateString()} ${when}` : when);
+  return t > Date.now() ? t : 0;
+}
+
+/** Reset times arrive as epoch seconds, epoch ms or ISO text. */
+const resetMs = (v: unknown): number => typeof v === 'number' ? (v < 1e12 ? v * 1000 : v) : typeof v === 'string' ? (Number(v) ? resetMs(Number(v)) : Date.parse(v) || 0) : 0;
+export const clock = (t: number) => (new Date(t).toDateString() === new Date().toDateString() ? '' : new Date(t).toLocaleDateString('en-US', { weekday: 'short' }) + ' ') +
+  new Date(t).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase();
 
 const BROWSER_ACTS = /^browser_(click|type|fill_form|press_key|select_option|file_upload|drag|hover|evaluate|run_code|handle_dialog)$/;
 const PAYMENT = /checkout|payment|billing|purchase|\/cart\b|\/pay\b|paypal\.|pay\.google/i;
@@ -30,7 +46,9 @@ export const chiefGreeting = () =>
 
 /** The deterministic half: people, bots, tasks, the per-bot queue, asks. Models only ever see prompts. */
 export class Crew {
-  private live = new Map<string, { state: RunState; promptedAt: number; sawWorking: boolean; settledAt: number; prompted: boolean }>();
+  private live = new Map<string, { state: RunState; promptedAt: number; sawWorking: boolean; settledAt: number; prompted: boolean; brain?: disk.Brain; text?: string }>();
+  /** Tasks whose last run was cut short by a limit: the next run starts from a continuation brief. */
+  private handoffs = new Map<number, { from: disk.Brain; why: string }>();
   private holds = new Map<number, (answer: string) => void>();
   /** One-time grants from answers that arrived after the hold: the retried tool call is let through once. */
   private granted = new Set<string>();
@@ -79,8 +97,29 @@ export class Crew {
   }
   activeTask(bot: string) { return this.db.get("SELECT * FROM tasks WHERE bot = ? AND state IN ('working', 'needs_you') ORDER BY id LIMIT 1", bot); }
 
+  /** 0 when the account is available; otherwise when it stops resting (a limit hit, or a window at 95% or more). */
+  restingUntil(runtime: string) {
+    const l = this.limits.get(runtime);
+    if (!l) return 0;
+    const hot = [l.fiveHour, l.sevenDay].filter((w) => w && w.used >= 95).map((w) => resetMs(w.resetsAt));
+    const until = Math.max(l.restUntil ?? 0, ...hot);
+    return until > Date.now() ? until : 0;
+  }
+
+  /** The models a task may run on, in order: its own choice first, then the bot's fallback order. */
+  choices(task: Row) {
+    return disk.dedupe([...(task.brain ? [disk.parseBrain(task.brain)] : []), ...disk.brains(this.cfg, task.bot)]);
+  }
+
+  /** What the bot page and crew cards show: "Thinks with: Claude Opus · falls back to ChatGPT". */
+  thinks(id: string) {
+    try {
+      return disk.brains(this.cfg, id).map((b) => ({ key: disk.brainKey(b), name: disk.brainName(b), restingUntil: this.restingUntil(b.runtime) }));
+    } catch { return []; } // a hand-edited bot.json with a bad model must not take the whole app down
+  }
+
   snapshot() {
-    const pub = ({ token, ...b }: Row) => ({ ...b, live: this.live.get(b.id)?.state ?? 'off', task: this.activeTask(b.id) ?? null,
+    const pub = ({ token, ...b }: Row) => ({ ...b, thinks: this.thinks(b.id), live: this.live.get(b.id)?.state ?? 'off', task: this.activeTask(b.id) ?? null,
       queued: this.db.get("SELECT COUNT(*) AS n FROM tasks WHERE bot = ? AND state = 'queued'", b.id)!.n });
     return {
       person: this.person(),
@@ -90,6 +129,7 @@ export class Crew {
       asks: this.db.all("SELECT * FROM asks WHERE state = 'open' ORDER BY id").map((a) => ({ ...a, detail: JSON.parse(a.detail || '{}') })),
       events: this.db.events(0, 80),
       limits: Object.fromEntries(this.limits),
+      resting: Object.fromEntries(Object.keys(disk.RUNTIMES).map((r) => [r, this.restingUntil(r)])),
       computer: { status: 'not-connected', note: 'Each bot gets its own desktop via desklink once @desklink/host is published as a standalone package.' },
     };
   }
@@ -99,7 +139,7 @@ export class Crew {
     if (!b) throw Object.assign(new Error('no such bot'), { status: 404 });
     const { token, ...bot } = b;
     return {
-      bot: { ...bot, live: this.live.get(id)?.state ?? 'off' },
+      bot: { ...bot, thinks: this.thinks(id), live: this.live.get(id)?.state ?? 'off' },
       messages: this.db.all('SELECT * FROM (SELECT * FROM messages WHERE bot = ? ORDER BY id DESC LIMIT 200) ORDER BY id', id),
       tasks: this.db.all('SELECT * FROM tasks WHERE bot = ? ORDER BY id DESC LIMIT 50', id),
       notes: disk.readNotes(this.cfg, id),
@@ -156,25 +196,27 @@ export class Crew {
   }
 
   /** A person's message in a bot's thread is a task for that bot; Chief's thread is a task for Chief. */
-  post(botId: string, text: string) {
+  post(botId: string, text: string, model?: string) {
     const bot = this.bot(botId);
     if (!bot) throw Object.assign(new Error('no such bot'), { status: 404 });
     if (!text.trim()) throw Object.assign(new Error('empty message'), { status: 400 });
     if (botId === CHIEF && !this.person().onboarded) return this.onboard(text);
-    return this.addTask(botId, text.trim(), 'person');
+    return this.addTask(botId, text.trim(), 'person', model);
   }
 
-  assign(botId: string, text: string, by: string) {
+  /** `model` picks the CLI and model for this one task (a cheap one for bulk steps, a strong one for judgment). */
+  assign(botId: string, text: string, by: string, model?: string) {
     if (!this.bot(botId)) throw Object.assign(new Error(`no bot called ${botId}; see crew roster`), { status: 404 });
     if (botId === CHIEF) throw Object.assign(new Error('Chief cannot assign to himself'), { status: 400 });
-    return this.addTask(botId, text.trim(), by);
+    return this.addTask(botId, text.trim(), by, model);
   }
 
-  private addTask(bot: string, body: string, origin: string) {
+  private addTask(bot: string, body: string, origin: string, model?: string) {
+    const brain = model ? disk.brainKey(disk.parseBrain(model)) : null;
     const id = this.db.tx(() => {
       const now = Date.now();
-      const r = this.db.run('INSERT INTO tasks (bot, title, body, origin, state, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        bot, body.split('\n')[0].slice(0, 80), body, origin, 'queued', now, now);
+      const r = this.db.run('INSERT INTO tasks (bot, title, body, origin, state, created_at, updated_at, brain) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        bot, body.split('\n')[0].slice(0, 80), body, origin, 'queued', now, now, brain);
       const id = Number(r.lastInsertRowid);
       this.say(bot, origin === 'person' ? 'person' : origin, body, id);
       this.db.event('task.created', bot, { task: id, origin, title: body.slice(0, 80) });
@@ -202,6 +244,7 @@ export class Crew {
 
   /** Per-bot queue: one task at a time per bot, a global cap across bots. */
   dispatch() {
+    for (const t of this.db.all("SELECT * FROM tasks WHERE state = 'paused' AND wake_at <= ?", Date.now())) this.setTask(t, 'queued');
     const busy = this.db.get("SELECT COUNT(DISTINCT bot) AS n FROM tasks WHERE state IN ('working', 'needs_you')")!.n + this.starting.size;
     let free = this.cfg.maxConcurrent - busy;
     for (const t of this.db.all("SELECT * FROM tasks WHERE state = 'queued' ORDER BY id")) {
@@ -216,13 +259,32 @@ export class Crew {
     const bot = this.bot(task.bot)!;
     this.starting.add(bot.id);
     try {
+      const choices = this.choices(task);
+      const brain = choices.find((b) => !this.restingUntil(b.runtime));
+      if (!brain) return this.pause(task, choices);
       this.setTask(task, 'working');
-      await this.runner.start(disk.launchSpec(this.cfg, bot as any, this.url));
+      // A bot switching models gets a new session on the new CLI; the folder, notes and files carry over.
+      const running = this.live.get(bot.id)?.brain ?? { runtime: bot.runtime, model: bot.model ?? undefined };
+      if (disk.brainKey(running) !== disk.brainKey(brain)) { await this.runner.stop(bot.id); this.live.delete(bot.id); }
+      const fresh = (await this.runner.state(bot.id)) === 'off';
+      this.db.run('UPDATE bots SET runtime = ?, model = ? WHERE id = ?', brain.runtime, brain.model ?? null, bot.id);
+      await this.runner.start(disk.launchSpec(this.cfg, { ...bot, runtime: brain.runtime, model: brain.model } as any, this.url));
       this.db.run("UPDATE bots SET state = 'on' WHERE id = ?", bot.id);
+      this.db.event('run.started', bot.id, { task: task.id, brain: disk.brainKey(brain), name: disk.brainName(brain) });
+      const handoff = this.handoffs.get(task.id);
+      this.handoffs.delete(task.id);
+      if (handoff) {
+        const same = handoff.from.runtime === brain.runtime;
+        this.say(bot.id, 'system', same ? `Back on ${disk.brainName(brain)}, continuing where it left off.`
+          : `Switched from ${disk.RUNTIMES[handoff.from.runtime]} to ${disk.RUNTIMES[brain.runtime]}: ${handoff.why}.`, task.id);
+      }
+      let text = handoff ? this.brief(task, handoff.why) : this.prompt(task);
+      // Claude loads notes and the person through CLAUDE.md imports; other CLIs are told at the start of a session.
+      if (fresh && brain.runtime !== 'claude') text = this.memory(bot.id) + text;
       const st = await this.runner.state(bot.id);
-      this.live.set(bot.id, { state: st, promptedAt: Date.now(), sawWorking: false, settledAt: 0, prompted: false });
+      this.live.set(bot.id, { state: st, promptedAt: Date.now(), sawWorking: false, settledAt: 0, prompted: false, brain, text });
       // A CLI stuck at a first-run dialog is prompted later, once the person has answered it (see tick).
-      if (st === 'idle' || st === 'done') await this.submit(task);
+      if (st === 'idle' || st === 'done') await this.submit(task, text);
     } catch (e: any) {
       this.setTask(task, 'failed', `Could not start ${bot.display}: ${e.message}`);
       this.say(bot.id, 'system', `I couldn't start ${bot.display}'s ${bot.runtime}: ${e.message}`, task.id);
@@ -232,7 +294,81 @@ export class Crew {
     }
   }
 
-  private async submit(task: Row, text = this.prompt(task)) {
+  /** Every account this task could use is resting: wait for the earliest reset. */
+  private pause(task: Row, choices: disk.Brain[]) {
+    const wake = Math.min(...choices.map((b) => this.restingUntil(b.runtime)));
+    const why = `All AI accounts are resting until ${clock(wake)}`;
+    this.db.tx(() => {
+      this.db.run('UPDATE tasks SET wake_at = ? WHERE id = ?', wake, task.id);
+      this.setTask(task, 'paused', `${why}.`);
+      this.say(task.bot, 'system', `${why}. I'll pick this up then.`, task.id);
+    });
+  }
+
+  /** Mark an account resting until its known reset, or for a while when we don't know it. */
+  private rest(runtime: string, error: keyof typeof REST_MS, known = 0) {
+    const l = this.limits.get(runtime) ?? {};
+    const w = error === 'rate_limit' && [l.fiveHour, l.sevenDay].filter((w) => w && resetMs(w.resetsAt) > Date.now()).sort((a, b) => b.used - a.used)[0];
+    const until = known || (w ? resetMs(w.resetsAt) : Date.now() + REST_MS[error]);
+    this.limits.set(runtime, { ...l, restUntil: until });
+    this.db.event('account.resting', null, { runtime, until, error });
+    return until;
+  }
+
+  /** A limit or overload ended the run: rest that account and continue the task on the next model, in a new session. */
+  async failover(botId: string, error: 'rate_limit' | 'overloaded', known = 0) {
+    const task = this.activeTask(botId);
+    const from = this.live.get(botId)?.brain;
+    if (!task || !from) return;
+    const until = this.rest(from.runtime, error, known);
+    const who = disk.RUNTIMES[from.runtime];
+    this.handoffs.set(task.id, { from, why: error === 'rate_limit' ? `${who} is resting until ${clock(until)}` : `${who} is overloaded right now` });
+    // The old session is at a dead end (Codex even leaves a dialog up), so it ends; the next run starts clean.
+    this.starting.add(botId);
+    try { await this.runner.stop(botId).catch(() => {}); } finally { this.starting.delete(botId); }
+    this.live.delete(botId);
+    this.db.tx(() => {
+      this.db.run("UPDATE asks SET state = 'withdrawn' WHERE bot = ? AND state = 'open'", botId);
+      this.db.run("UPDATE bots SET state = 'off' WHERE id = ?", botId);
+      this.setTask(task, 'queued');
+    });
+    this.dispatch();
+  }
+
+  /** CLIs without a failure hook print their limit and end the turn (Codex also opens a model-switch dialog). */
+  private limitInPane(l: { brain?: disk.Brain }, pane: string) {
+    if (!l.brain || l.brain.runtime === 'claude') return null;
+    const tail = pane.trim().split('\n').slice(-20).join('\n');
+    return LIMIT_TEXT.test(tail) ? { until: limitResetFromText(tail) } : null;
+  }
+
+  /** Claude's StopFailure hook: the turn ended on an API error instead of an answer. */
+  hookFailure(botId: string, payload: Row) {
+    const error = String(payload.error ?? 'unknown');
+    const text = String(payload.last_assistant_message ?? '').slice(0, 200);
+    this.db.event('run.error', botId, { error, text });
+    if (error === 'rate_limit' || error === 'overloaded') return this.failover(botId, error);
+    const task = this.activeTask(botId);
+    if (task) this.setTask(task, 'failed', `Stopped on an error from ${this.bot(botId)!.runtime}: ${text || error}. Try again.`);
+  }
+
+  /** The continuation brief: a new session continues the work, so it is told the goal and what already happened. */
+  private brief(task: Row, why: string) {
+    const trail = this.db.all("SELECT kind, data FROM events WHERE bot = ? AND kind IN ('task.progress', 'file.delivered') AND at >= ? ORDER BY seq", task.bot, task.created_at)
+      .map((e) => { const d = JSON.parse(e.data); return `- ${e.kind === 'file.delivered' ? `delivered ${d.path}` : d.text}`; });
+    const last = this.db.all('SELECT author, text FROM messages WHERE task_id = ? AND author != ? ORDER BY id DESC LIMIT 3', task.id, 'system')
+      .reverse().map((m) => `${m.author}: ${String(m.text).slice(0, 600)}`);
+    return `${this.prompt(task)}\n\n[Crewhouse] A previous session started this task and stopped (${why}). You are continuing it in a new session. ` +
+      'Anything it made is still in your folder; check files/ and work/ before redoing work.' +
+      (trail.length ? `\nProgress so far:\n${trail.join('\n')}` : '') + (last.length ? `\nLast messages:\n${last.join('\n')}` : '');
+  }
+
+  private memory(id: string) {
+    const notes = disk.readNotes(this.cfg, id).trim();
+    return `[Crewhouse] ${disk.addressLine(this.person().address)}${notes ? `\nYour notes (notes.md):\n${notes}` : ''}\n\n`;
+  }
+
+  private async submit(task: Row, text: string) {
     const l = this.live.get(task.bot)!;
     Object.assign(l, { prompted: true, promptedAt: Date.now(), sawWorking: false, settledAt: 0 });
     await this.runner.prompt(task.bot, text);
@@ -356,7 +492,7 @@ export class Crew {
     const prev = this.limits.get('claude');
     if (now.fiveHour || now.sevenDay) {
       if (JSON.stringify([prev?.fiveHour, prev?.sevenDay]) !== JSON.stringify([now.fiveHour, now.sevenDay])) this.db.event('account.limit', botId, { runtime: 'claude', ...now });
-      this.limits.set('claude', now);
+      this.limits.set('claude', { ...prev, ...now });
     }
     const b = this.bot(botId)!;
     return `Crewhouse · ${b.display}${now.fiveHour ? ` · 5h ${now.fiveHour.used}%` : ''}`;
@@ -388,6 +524,8 @@ export class Crew {
         if (st === 'working' || st === 'blocked') { l.sawWorking = true; l.settledAt = 0; }
         if (st === 'blocked' && !this.db.get("SELECT 1 FROM asks WHERE bot = ? AND state = 'open'", task.bot)) {
           const pane = (await this.runner.read(task.bot, 40).catch(() => '')).split('\n').slice(-30).join('\n');
+          const limit = this.limitInPane(l, pane);
+          if (limit) { await this.failover(task.bot, 'rate_limit', limit.until); continue; }
           const b = this.bot(task.bot)!;
           // Before the first prompt, a blocked CLI is showing a first-run dialog: the person decides, crewd sends the key.
           if (!l.prompted && /trust/i.test(pane)) this.openAsk(task.bot, task, 'trust', `Trust ${b.display}'s folder?`, { pane, note: `${b.display}'s ${b.runtime} asks whether to trust its own folder, ${disk.botDir(this.cfg, b.id)}.` });
@@ -395,11 +533,13 @@ export class Crew {
         }
         if (st === 'idle' || st === 'done') {
           this.db.run("UPDATE asks SET state = 'withdrawn' WHERE bot = ? AND state = 'open' AND kind IN ('blocked', 'trust')", task.bot);
-          if (!l.prompted) { if (task.state === 'needs_you') this.setTask(task, 'working'); await this.submit(task); continue; }
+          if (!l.prompted) { if (task.state === 'needs_you') this.setTask(task, 'working'); await this.submit(task, l.text ?? this.prompt(task)); continue; }
           if (!l.settledAt) l.settledAt = Date.now();
           const parked = this.db.get("SELECT 1 FROM asks WHERE task_id = ? AND state = 'open'", task.id);
           if (l.sawWorking && !parked && Date.now() - l.settledAt > FALLBACK_MS) {
             const pane = await this.runner.read(task.bot, 60).catch(() => '');
+            const limit = this.limitInPane(l, pane);
+            if (limit) { await this.failover(task.bot, 'rate_limit', limit.until); continue; }
             this.finish(task.bot, `(read from the terminal)\n${pane.trim().split('\n').slice(-25).join('\n')}`);
           }
         }

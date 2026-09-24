@@ -23,9 +23,20 @@ function Avatar({ bot, size = 40 }: { bot: Json; size?: number }) {
 }
 
 function Dot({ state }: { state: string }) {
-  const c = state === 'needs_you' || state === 'blocked' ? 'amber' : state === 'working' || state === 'queued' ? 'blue' : state === 'failed' ? 'red' : 'green';
+  const c = state === 'needs_you' || state === 'blocked' || state === 'paused' ? 'amber' : state === 'working' || state === 'queued' ? 'blue' : state === 'failed' ? 'red' : 'green';
   return <span className={`dot ${c}`} />;
 }
+
+/** "Thinks with: Claude Opus · falls back to ChatGPT"; a resting account says until when. */
+function thinksWith(b: Json) {
+  const t: Json[] = b.thinks ?? [];
+  if (!t.length) return '';
+  const rest = (x: Json) => x.restingUntil ? ` (resting until ${new Date(x.restingUntil).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })})` : '';
+  const others = t.slice(1).map((x) => x.name + rest(x)).join(', then ');
+  return `Thinks with: ${t[0].name}${rest(t[0])}${others ? ` · falls back to ${others}` : ''}`;
+}
+
+const MODEL_SUGGESTIONS = ['claude:opus', 'claude:sonnet', 'claude:haiku', 'codex', 'codex:gpt-5.5', 'codex:gpt-5-mini'];
 
 function botStatus(b: Json) {
   if (b.task) return `${stateWords[b.task.state]} · ${b.task.title}`;
@@ -74,6 +85,9 @@ function sentence(e: Json, name: (id: string) => string): string | null {
     case 'tool.installing': return `Installing ${d.tool}…`;
     case 'tool.installed': return `Installed ${d.tool}`;
     case 'tool.failed': return `Couldn't install ${d.tool}: ${d.error}`;
+    case 'bot.models': return `You changed which models ${b} thinks with`;
+    case 'account.resting': return `${d.runtime === 'codex' ? 'ChatGPT' : 'Claude'} is resting until ${new Date(d.until).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+    case 'task.paused': return `${b} paused “${d.title}”: ${d.result ?? ''}`;
     case 'ask.parked': return `${b} is waiting for your answer; the rest of its work is paused`;
     case 'account.limit': return d.fiveHour ? `Claude has used ${d.fiveHour.used}% of its 5-hour window${d.sevenDay ? ` and ${d.sevenDay.used}% of the week` : ''}` : null;
     default: return null;
@@ -278,7 +292,7 @@ function Crew({ state, refresh }: { state: Json; refresh: () => void }) {
             </div>
             <p className="muted">{b.role}</p>
             <div className="row between">
-              <span className="muted tiny">{b.runtime} · {b.model ?? 'default'}</span>
+              <span className="muted tiny">{thinksWith(b)}</span>
               <a className="btn" href={b.id === 'chief' ? '#/chief' : `#/bot/${b.id}`}>Message</a>
             </div>
           </div>
@@ -337,8 +351,8 @@ function BotPage({ id, tab, state, tick, refresh }: { id: string; tab: string; s
   useEffect(() => { load(); }, [load, tick]);
   const bot = state.bots.find((b: Json) => b.id === id);
   if (!bot || !page) return <div className="muted">{msg || 'Loading…'}</div>;
-  const tabs = ['chat', 'knows', 'skills', 'tools', 'files', 'history', 'screen', 'work'];
-  const label: Record<string, string> = { work: 'Show the work' };
+  const tabs = ['chat', 'knows', 'skills', 'tools', 'models', 'files', 'history', 'screen', 'work'];
+  const label: Record<string, string> = { work: 'Show the work', models: 'Thinks with' };
   const toggle = async (tool: string, on: boolean) => {
     const granted = page.tools.filter((t: Json) => t.granted).map((t: Json) => t.id).filter((t: string) => t !== tool);
     await api.tools(id, on ? [...granted, tool] : granted).catch((e) => setMsg(e.message));
@@ -352,6 +366,7 @@ function BotPage({ id, tab, state, tick, refresh }: { id: string; tab: string; s
           <div>
             <h1>{bot.display}</h1>
             <div className="muted"><Dot state={bot.task?.state ?? 'idle'} /> {botStatus(bot)} · {bot.role}</div>
+            <div className="muted small">{thinksWith(bot)}</div>
           </div>
         </div>
         {bot.task && <button className="btn" onClick={async () => { await api.reset(id); refresh(); }}>Stop</button>}
@@ -407,6 +422,7 @@ function BotPage({ id, tab, state, tick, refresh }: { id: string; tab: string; s
           <p className="muted small">Changes apply the next time {bot.display} starts. Anything not granted asks you first.</p>
         </div>
       )}
+      {tab === 'models' && <Models id={id} bot={bot} onSaved={refresh} />}
       {tab === 'files' && (
         <div className="list">
           {page.files.length === 0 && <div className="muted empty">No files yet. Deliverables land in {page.folder}/files.</div>}
@@ -442,6 +458,46 @@ function BotPage({ id, tab, state, tick, refresh }: { id: string; tab: string; s
         </div>
       )}
       {tab === 'work' && <ShowWork id={id} bot={bot} />}
+    </div>
+  );
+}
+
+/** The bot's models in fallback order. The first one does the work; the next takes over when an account rests. */
+function Models({ id, bot, onSaved }: { id: string; bot: Json; onSaved: () => void }) {
+  const saved: string[] = (bot.thinks ?? []).map((t: Json) => t.key);
+  const [list, setList] = useState<string[]>(saved);
+  const [add, setAdd] = useState('');
+  const [err, setErr] = useState('');
+  useEffect(() => setList(saved), [saved.join()]);
+  const move = (i: number, d: number) => { const l = [...list]; [l[i], l[i + d]] = [l[i + d], l[i]]; setList(l); };
+  const save = async () => { setErr(''); try { await api.models(id, list); onSaved(); } catch (e: any) { setErr(e.message); } };
+  return (
+    <div className="list">
+      <div className="card">
+        <b>{thinksWith(bot)}</b>
+        <p className="muted small">When an account is resting, {bot.display} carries on with the next one in a new session, briefed on the work so far.</p>
+      </div>
+      {list.map((m, i) => (
+        <div key={m} className="card line">
+          <div className="grow"><b>{i === 0 ? 'First choice' : `Then`}</b> <span className="mono">{m}</span></div>
+          <button className="btn" disabled={i === 0} onClick={() => move(i, -1)} aria-label="Move up">↑</button>
+          <button className="btn" disabled={i === list.length - 1} onClick={() => move(i, 1)} aria-label="Move down">↓</button>
+          <button className="btn" disabled={list.length === 1} onClick={() => setList(list.filter((_, j) => j !== i))}>Remove</button>
+        </div>
+      ))}
+      <div className="row">
+        <input className="input grow" list="model-suggestions" value={add} placeholder="claude:haiku or codex:gpt-5.5" onChange={(e) => setAdd(e.target.value)} />
+        <datalist id="model-suggestions">{MODEL_SUGGESTIONS.map((m) => <option key={m} value={m} />)}</datalist>
+        <button className="btn" disabled={!add.trim() || list.includes(add.trim())} onClick={() => { setList([...list, add.trim()]); setAdd(''); }}>Add</button>
+      </div>
+      {err && <div className="error">{err}</div>}
+      {list.join() !== saved.join() && (
+        <div className="row end">
+          <button className="btn" onClick={() => setList(saved)}>Undo</button>
+          <button className="btn primary" onClick={save}>Save</button>
+        </div>
+      )}
+      <p className="muted small">Written as cli:model. Chief can also pick a model for a single task, a cheap one for bulk work and a strong one for judgment. Changes apply to {bot.display}'s next task.</p>
     </div>
   );
 }

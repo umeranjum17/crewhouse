@@ -19,7 +19,7 @@ export interface Template {
   skills?: string[];
 }
 
-export function botConfig(cfg: Config, id: string): { tools: string[]; allow?: string[]; signedIn?: string[] } {
+export function botConfig(cfg: Config, id: string): { tools: string[]; allow?: string[]; signedIn?: string[]; runtime?: string; model?: string; models?: string[] } {
   const p = join(botDir(cfg, id), 'bot.json');
   return existsSync(p) ? JSON.parse(readFileSync(p, 'utf8')) : { tools: [] };
 }
@@ -30,6 +30,41 @@ export function setGrants(cfg: Config, id: string, tools: string[]) {
   if (bad.length) throw new Error(`unknown tools: ${bad.join(', ')}`);
   const p = join(botDir(cfg, id), 'bot.json');
   writeFileSync(p, JSON.stringify({ ...botConfig(cfg, id), tools: [...new Set(['crew', ...tools])] }, null, 2) + '\n');
+}
+
+/** A CLI and model a bot can think with, written "claude:opus" or just "codex" for the CLI's own default. */
+export interface Brain { runtime: string; model?: string }
+export const RUNTIMES: Record<string, string> = { claude: 'Claude', codex: 'ChatGPT' };
+
+export function parseBrain(s: string): Brain {
+  const [runtime, model, extra] = String(s).trim().split(':');
+  if (!RUNTIMES[runtime] || extra !== undefined || (model !== undefined && !/^[A-Za-z0-9][\w.\-\[\]]{0,63}$/.test(model))) {
+    throw Object.assign(new Error(`not a model choice: "${s}" (try claude:opus or codex:gpt-5.5)`), { status: 400 });
+  }
+  return model ? { runtime, model } : { runtime };
+}
+export const brainKey = (b: Brain) => b.model ? `${b.runtime}:${b.model}` : b.runtime;
+/** "Claude Opus", "ChatGPT gpt-5.5", "ChatGPT". */
+export const brainName = (b: Brain) => `${RUNTIMES[b.runtime] ?? b.runtime}${!b.model ? '' : /^[a-z]+$/.test(b.model) ? ' ' + b.model[0].toUpperCase() + b.model.slice(1) : ' ' + b.model}`;
+
+/** The bot's models in fallback order. Without a list: the template's own, then ChatGPT (plan 3, 3.10). */
+export function brains(cfg: Config, id: string): Brain[] {
+  const c = botConfig(cfg, id);
+  const list = c.models?.length ? c.models : [[c.runtime ?? cfg.runtime, c.model].filter(Boolean).join(':'), 'codex'];
+  return dedupe(list.map(parseBrain));
+}
+
+export function dedupe(list: Brain[]) {
+  const seen = new Set<string>();
+  return list.filter((b) => !seen.has(brainKey(b)) && !!seen.add(brainKey(b)));
+}
+
+export function setBrains(cfg: Config, id: string, models: string[]) {
+  if (!Array.isArray(models) || !models.length) throw Object.assign(new Error('pick at least one model'), { status: 400 });
+  const list = dedupe(models.map(parseBrain)).map(brainKey);
+  const p = join(botDir(cfg, id), 'bot.json');
+  writeFileSync(p, JSON.stringify({ ...botConfig(cfg, id), models: list }, null, 2) + '\n');
+  return list;
 }
 
 /** A bot's granted tools, each with whether it is ready here. */
@@ -178,7 +213,8 @@ export function launchSpec(cfg: Config, bot: { id: string; display: string; runt
   if (bot.runtime === 'codex') {
     return {
       bot: bot.id, kind: 'codex', cwd: dir, label: bot.display, env,
-      args: ['--sandbox', 'workspace-write', '--ask-for-approval', 'on-request', '-c', 'notify=["crew","hook","codex"]',
+      // No update prompt: it blocks an unattended start, and its default answer installs globally.
+      args: ['--sandbox', 'workspace-write', '--ask-for-approval', 'on-request', '-c', 'notify=["crew","hook","codex"]', '-c', 'check_for_update_on_startup=false',
         ...(g.tools.includes('web') ? ['--search'] : []),
         ...Object.entries(g.mcp).flatMap(([id, m]) => ['-c', `mcp_servers.${id}.command=${JSON.stringify(m.command)}`, '-c', `mcp_servers.${id}.args=${JSON.stringify(m.args)}`,
           '-c', `mcp_servers.${id}.env={${Object.entries(m.env).map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(',')}}`]),
@@ -199,6 +235,8 @@ export function launchSpec(cfg: Config, bot: { id: string; display: string; runt
       PreToolUse: [{ matcher: 'mcp__browser__.*', ...hook('pretool')[0] }],
       PostToolUse: hook('tool', 10),
       Stop: hook('stop'),
+      // A turn that ends on an API error (rate_limit, overloaded...) never fires Stop; this is how crewd hears of it.
+      StopFailure: hook('failure'),
       // Holds up to 3 minutes for an answer from the app, then falls back to the CLI's own dialog.
       PermissionRequest: hook('permission', 190),
       Notification: hook('notify'),
