@@ -1,5 +1,7 @@
 # Crewhouse
 
+[![CI](https://github.com/umeranjum17/crewhouse/actions/workflows/ci.yml/badge.svg)](https://github.com/umeranjum17/crewhouse/actions/workflows/ci.yml)
+
 Local-first, open-source crew of persistent AI teammates run by Chief on your own signed-in agent CLIs.
 
 You talk to **Chief**. Chief recruits bots from templates (Reel makes demo videos, Scout researches, Scribe drafts) and hands them work. Each bot is a folder on your disk with its own persona, notes, skills and files. It runs the real, unmodified `claude` (or `codex`) CLI, signed in through the vendor's own login. Approvals and questions come to you in one place, from a desktop or phone browser.
@@ -24,7 +26,7 @@ Open the address. Chief introduces himself and asks how to address you. Then try
 
 Chief recruits Reel and hands it the task. When Reel wants to run something outside its allow list, it shows up under **Needs you**. Tap **Allow once** and the video appears in Reel's chat and on its **Files** tab.
 
-Other commands: `./crewhouse doctor` (what's installed, what's missing, how to add it) and `./crewhouse test` (the test suite; no model quota used).
+Other commands: `./crewhouse doctor` (what's installed, what's missing, how to add it) and `./crewhouse test` (the test suite; it uses a stub runner, so it needs neither Herdr nor a signed-in CLI and uses no model quota). CI runs the typecheck, the web build and this suite on every pull request.
 
 ## How it works
 
