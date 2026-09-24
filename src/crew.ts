@@ -181,7 +181,7 @@ export class Crew {
     const crew = this.bots().filter((b) => b.id !== CHIEF)
       .map((b) => `${b.display} (id ${b.id}, ${b.template}, ${this.activeTask(b.id) ? 'busy' : 'free'})`).join('; ') || 'nobody yet';
     const tpls = disk.listTemplates(this.cfg).map((t) => `${t.id}: ${t.role}`).join('; ');
-    return `[Crewhouse] Address the person as: ${person.address || 'sir or ma\'am'}. Crew: ${crew}. Templates: ${tpls}.\n` +
+    return `[Crewhouse] ${disk.addressLine(person.address)} Crew: ${crew}. Templates: ${tpls}.\n` +
       `The person says: ${task.body}`;
   }
 
@@ -295,7 +295,7 @@ export class Crew {
       this.db.run("UPDATE asks SET state = 'answered', answer = ?, answered_at = ? WHERE id = ?", shown, Date.now(), askId);
       this.db.event('ask.answered', ask.bot, { ask: askId, answer: shown });
       const task = ask.task_id && this.db.get("SELECT * FROM tasks WHERE id = ? AND state = 'needs_you'", ask.task_id);
-      if (task && !(ask.kind === 'trust' && body.answer === 'deny')) this.setTask(task, 'working');
+      if (task && !held && !(ask.kind === 'trust' && body.answer === 'deny')) this.setTask(task, 'working');
     });
     if (held) { held(body.answer!); this.holds.delete(askId); return; }
     if (ask.kind === 'trust' && body.answer === 'deny') return this.resetBot(ask.bot, 'You chose not to trust the folder.');

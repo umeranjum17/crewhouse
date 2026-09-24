@@ -150,9 +150,17 @@ export function insideBot(cfg: Config, id: string, p: string) {
   return full;
 }
 
+/** How every model turn is told to address the person. A chosen name must not drift back to "sir". */
+export function addressLine(address: string | null) {
+  if (!address) return 'You do not yet know how to address the person; use no honorific.';
+  return /^(sir|ma'?am)$/i.test(address)
+    ? `Address the person as "${address.toLowerCase()}".`
+    : `Address the person by their chosen name, "${address}", never as "sir" or "ma'am".`;
+}
+
 /** Per-person facts every run sees; how to address them is the one that matters most. */
 export function writePerson(cfg: Config, id: string, address: string | null) {
-  const text = address ? `# The person you serve\nAddress them as: ${address}\n` : '';
+  const text = address ? `# The person you serve\n${addressLine(address)}\n` : '';
   writeFileSync(join(botDir(cfg, id), '.crewhouse', 'person.md'), text);
 }
 

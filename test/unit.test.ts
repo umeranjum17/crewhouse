@@ -130,5 +130,7 @@ test('bots on disk: persona rename, capped notes, folder confinement, slugs', ()
   assert.equal(disk.readNotes(cfg, 'frames'), '- Likes slow transitions\n');
   assert.throws(() => disk.insideBot(cfg, 'frames', '../chief/notes.md'), /outside/);
   assert.equal(disk.slug('Ma Reel 2!'), 'ma-reel-2');
+  assert.match(disk.addressLine('Umer'), /chosen name, "Umer", never as "sir"/);
+  assert.equal(disk.addressLine("Ma'am"), 'Address the person as "ma\'am".');
   done();
 });

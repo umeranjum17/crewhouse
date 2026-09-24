@@ -51,7 +51,7 @@ test('chief onboarding, recruit, assign, asks, memory', async () => {
   assert.equal(rec.body.recruited.id, 'reel');
   const dir = join(root, 'crew', 'bots', 'reel');
   for (const f of ['AGENTS.md', 'CLAUDE.md', 'notes.md', 'skills/make-reel/SKILL.md', '.claude/skills/make-reel/SKILL.md', '.crewhouse/person.md']) assert.ok(existsSync(join(dir, f)), f);
-  assert.match(readFileSync(join(dir, '.crewhouse/person.md'), 'utf8'), /Sir/);
+  assert.match(readFileSync(join(dir, '.crewhouse/person.md'), 'utf8'), /Address the person as "sir"/);
   assert.equal((await tool('reel', 'recruit', { template: 'scout' })).status, 403, 'only Chief recruits');
 
   // Chief hands Reel a task; it runs and reports back in Chief's thread.

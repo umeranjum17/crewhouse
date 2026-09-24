@@ -499,7 +499,7 @@ function App() {
 
   if (!state) return <div className="boot">{offline ? 'Crewhouse is not running. Start it with ./crewhouse start' : 'Opening Crewhouse…'}</div>;
   const nav: [Route['view'], string, string][] = [
-    ['home', 'Home', '⌂'], ['chief', 'Chief', '★'], ['needs', 'Needs you', '✉\uFE0E'], ['crew', 'Crew', '☺'], ['activity', 'Activity', '∿'],
+    ['home', 'Home', '⌂'], ['chief', 'Chief', '★'], ['needs', 'Needs you', '◉'], ['crew', 'Crew', '☺'], ['activity', 'Activity', '∿'],
   ];
   const active = route.view === 'bot' ? 'crew' : route.view;
   return (
