@@ -154,7 +154,8 @@ test('household: a member\'s routines run as them, and each member gets their ow
   crew.runRoutine(r.id);
   const t = db.get('SELECT * FROM tasks WHERE routine = ?', r.id)!;
   assert.equal(t.member, sam, 'runs on Sam\'s accounts');
-  await sleep(200);
+  // Wait for the run, not a fixed time: CI runs the test files side by side on two cores.
+  for (let i = 0; i < 50 && db.get('SELECT state FROM tasks WHERE id = ?', t.id)!.state !== 'done'; i++) await sleep(100);
   crew.runRoutine(digests[1].id);
   const mine = db.get("SELECT * FROM messages WHERE bot = 'chief' AND author = 'bot' ORDER BY id DESC")!;
   assert.equal(mine.member, sam);
