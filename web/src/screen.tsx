@@ -54,12 +54,15 @@ export function Screen({ bot, missing, refresh }: { bot: Json; missing: string[]
         <span className="muted tiny">{STATUS[live] ?? live}{bot.desktop ? ` · display ${bot.desktop.display}` : ''}{control ? ' · you have the controls' : ' · view only'}</span>
       </div>
       {control && <div className="chip amber">You have the controls. {bot.display} is paused until you give them back.</div>}
-      <DesktopView
-        sessionId={session.nativeId}
-        style={{ width: '100%', aspectRatio: '1280 / 800', borderRadius: 10 }}
-        accessibilityLabel={`${bot.display}'s screen`}
-        placeholder={<div className="screen" style={{ margin: 0, height: '100%', aspectRatio: 'auto', borderRadius: 0 }}>{live === 'idle' || live === 'ended' ? `Watch ${bot.display}'s own desktop here` : STATUS[live]}</div>}
-      />
+      {/* desklink types through its own hidden textarea; a click on the picture must focus it, or keys never reach the bot's desktop. */}
+      <div onPointerDownCapture={() => { if (control) session.showKeyboard(); }}>
+        <DesktopView
+          sessionId={session.nativeId}
+          style={{ width: '100%', aspectRatio: '1280 / 800', borderRadius: 10 }}
+          accessibilityLabel={`${bot.display}'s screen`}
+          placeholder={<div className="screen" style={{ margin: 0, height: '100%', aspectRatio: 'auto', borderRadius: 0 }}>{live === 'idle' || live === 'ended' ? `Watch ${bot.display}'s own desktop here` : STATUS[live]}</div>}
+        />
+      </div>
       {err && <div className="error">{err}</div>}
       <div className="row wrap end">
         {live === 'idle' || live === 'ended' || live === 'failed'
