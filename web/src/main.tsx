@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { api, subscribe, type Json } from './api.ts';
+import { api, setMember, subscribe, type Json } from './api.ts';
 import { stateWords } from './tokens.ts';
 import { Screen } from './screen.tsx';
 
-type Route = { view: 'home' | 'chief' | 'crew' | 'needs' | 'activity' | 'bot'; id?: string; tab?: string };
+type Route = { view: 'home' | 'chief' | 'crew' | 'needs' | 'activity' | 'settings' | 'bot'; id?: string; tab?: string };
 
 function parseRoute(): Route {
   const [view, id, tab] = location.hash.replace(/^#\/?/, '').split('/');
   if (view === 'bot' && id) return { view: 'bot', id, tab: tab || 'chat' };
-  return { view: (['home', 'chief', 'crew', 'needs', 'activity'].includes(view) ? view : 'home') as Route['view'] };
+  return { view: (['home', 'chief', 'crew', 'needs', 'activity', 'settings'].includes(view) ? view : 'home') as Route['view'] };
 }
 const go = (hash: string) => { location.hash = hash; };
 
@@ -184,12 +184,14 @@ function greeting() {
 const asksLine = (asks: string[] = []) =>
   /^never/i.test(asks[0] ?? '') ? `Never asks you${asks[0].replace(/^never/i, '')}` : `Asks you first when: ${asks.join('; ')}`;
 
-function sentence(e: Json, name: (id: string) => string): string | null {
+function sentence(e: Json, name: (id: string) => string, who: (id: number) => string | null): string | null {
   const b = e.bot ? name(e.bot) : '';
   const d = e.data ?? {};
+  const whose = d.member && who(d.member) ? `${who(d.member)}'s ` : '';
   switch (e.kind) {
     case 'system.started': return 'Crewhouse started';
-    case 'person.onboarded': return `Chief will address you as ${d.address}`;
+    case 'person.onboarded': return `Chief will address ${d.member && who(d.member) ? who(d.member) : 'you'} as ${d.address}`;
+    case 'person.added': return `${d.name} joined the household`;
     case 'bot.recruited': return `${d.display} joined the crew${d.by === 'chief' ? ', recruited by Chief' : ''}`;
     case 'task.created': return `${b} got a task: “${d.title}”${d.origin === 'chief' ? ' from Chief' : ''}`;
     case 'task.working': return `${b} is working on “${d.title}”`;
@@ -210,7 +212,7 @@ function sentence(e: Json, name: (id: string) => string): string | null {
     case 'tool.installed': return `Installed ${d.tool}`;
     case 'tool.failed': return `Couldn't install ${d.tool}: ${d.error}`;
     case 'bot.models': return `You changed which models ${b} thinks with`;
-    case 'account.resting': return `${d.runtime === 'codex' ? 'ChatGPT' : 'Claude'} is resting until ${new Date(d.until).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+    case 'account.resting': return `${whose}${d.runtime === 'codex' ? 'ChatGPT' : 'Claude'} is resting until ${new Date(d.until).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
     case 'task.paused': return `${b} paused “${d.title}”: ${d.result ?? ''}`;
     case 'ask.parked': return `${b} is waiting for your answer; the rest of its work is paused`;
     case 'run.allowed': return `${b} went ahead with ${d.summary}, as you allowed`;
@@ -383,17 +385,21 @@ function LiveCard({ bot, refresh }: { bot: Json; refresh: () => void }) {
 
 // ---------- views ----------
 function Usage({ limits, resting }: { limits: Json; resting: Json }) {
-  const c = limits?.claude;
+  return <Windows limits={limits?.claude} resting={resting?.claude} />;
+}
+
+/** Claude's usage windows as meters, with "resting until" once one is spent. */
+function Windows({ limits: c, resting }: { limits: Json; resting: number }) {
   const rows = ([['5-hour window', c?.fiveHour], ['This week', c?.sevenDay]] as [string, Json][]).filter(([, w]) => w);
   if (!rows.length) return null;
   return (
     <div className="usage">
       {rows.map(([label, w]) => {
         const until = resetWords(w.resetsAt);
-        const full = w.used >= 95 && !!resting?.claude;
+        const full = w.used >= 95 && !!resting;
         return (
           <div key={label} className="use">
-            <div className="row between small"><span>Claude · {label}</span><span className="muted">{full ? `Resting until ${until || resetWords(resting.claude)}` : `${w.used}% used${until ? ` · fresh at ${until}` : ''}`}</span></div>
+            <div className="row between small"><span>Claude · {label}</span><span className="muted">{full ? `Resting until ${until || resetWords(resting)}` : `${w.used}% used${until ? ` · fresh at ${until}` : ''}`}</span></div>
             <div className={`meter ${full ? 'full' : w.used >= 80 ? 'high' : ''}`}><span style={{ width: `${Math.min(100, w.used)}%` }} /></div>
           </div>
         );
@@ -502,6 +508,7 @@ function Crew({ state, refresh }: { state: Json; refresh: () => void }) {
               </div>
             </div>
             <p className="muted">{b.role}</p>
+            {state.members.length > 1 && b.id !== 'chief' && <div className="tiny">Works for {state.members.find((m: Json) => m.id === (b.member ?? 1))?.name}, on their own AI accounts</div>}
             <div className="row between">
               <span className="muted tiny">{thinksWith(b)}</span>
               <a className="btn" href={b.id === 'chief' ? '#/chief' : `#/bot/${b.id}`}>Message</a>
@@ -763,7 +770,8 @@ function NeedsYou({ state, refresh }: { state: Json; refresh: () => void }) {
 }
 
 function Activity({ state, name }: { state: Json; name: (id: string) => string }) {
-  const items = [...state.events].reverse().map((e: Json) => ({ e, s: sentence(e, name) })).filter((x) => x.s);
+  const who = (id: number) => (state.members.length > 1 ? state.members.find((m: Json) => m.id === id)?.name ?? null : null);
+  const items = [...state.events].reverse().map((e: Json) => ({ e, s: sentence(e, name, who) })).filter((x) => x.s);
   return (
     <div>
       <h1>Activity</h1>
@@ -781,12 +789,133 @@ function Activity({ state, name }: { state: Json; name: (id: string) => string }
   );
 }
 
+// ---------- settings ----------
+const PLAN = (p?: string) => (p ? ` · ${p[0].toUpperCase()}${p.slice(1)}` : '');
+/** Sign-in output with its links clickable. */
+function Linked({ text }: { text: string }) {
+  return <>{text.split(/(https?:\/\/\S+)/).map((t, i) => (i % 2 ? <a key={i} href={t} target="_blank" rel="noreferrer">{t}</a> : t))}</>;
+}
+
+/** The people in the house and each one's own AI accounts. One person needs none of this; a second one does. */
+function Settings({ state, me, switchTo, tick, refresh }: { state: Json; me: number; switchTo: (id: number) => void; tick: number; refresh: () => void }) {
+  const [accounts, setAccounts] = useState<Json[] | null>(null);
+  const [adding, setAdding] = useState('');
+  const [err, setErr] = useState('');
+  useEffect(() => { api.accounts().then(setAccounts).catch((e) => setErr(e.message)); }, [tick]);
+  const act = async (fn: () => Promise<unknown>) => { setErr(''); try { await fn(); refresh(); } catch (e: any) { setErr(e.message); } };
+  return (
+    <div className="settings">
+      <h1>Settings</h1>
+      <h4>People</h4>
+      <p className="muted small">Everyone here has their own thread with Chief, is addressed their own way, and runs their bots on their own AI accounts.</p>
+      {state.members.length > 1 && (
+        <label className="card line small">
+          <span className="grow"><b>Who is using this screen?</b><div className="muted tiny">Picks whose threads, questions and accounts you see here.</div></span>
+          <select className="input narrow" value={me} onChange={(e) => switchTo(Number(e.target.value))}>
+            {state.members.map((m: Json) => <option key={m.id} value={m.id}>{m.name}</option>)}
+          </select>
+        </label>
+      )}
+      {state.members.map((m: Json) => <Person key={m.id} m={m} me={me} act={act} />)}
+      <form className="row" onSubmit={(e) => { e.preventDefault(); if (adding.trim()) act(async () => { await api.addPerson(adding); setAdding(''); }); }}>
+        <input className="input" value={adding} onChange={(e) => setAdding(e.target.value)} placeholder="Add someone to the household: their name" />
+        <button className="btn primary" disabled={!adding.trim()}>Add</button>
+      </form>
+      {err && <div className="error">{err}</div>}
+      <h4>AI accounts</h4>
+      <p className="muted small">Each person signs in to their own Claude or ChatGPT through Anthropic's or OpenAI's own sign-in page. Crewhouse never sees a password or token, and never lends one person's account to another: both companies' terms forbid sharing an account.</p>
+      {!accounts && <div className="muted empty">Checking each account…</div>}
+      {accounts && state.members.map((m: Json) => (
+        <div key={m.id} className="card">
+          <div className="row between"><b>{m.id === me ? 'Your accounts' : `${m.name}'s accounts`}</b>
+            <button className="btn quiet small" onClick={() => api.accounts(true).then(setAccounts).catch((e) => setErr(e.message))}>Check again</button></div>
+          {accounts.filter((a) => a.member === m.id).map((a) => <Account key={a.runtime} a={a} mine={m.id === me} act={act} />)}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Person({ m, me, act }: { m: Json; me: number; act: (fn: () => Promise<unknown>) => void }) {
+  const [name, setName] = useState(m.name ?? '');
+  const [address, setAddress] = useState(m.address ?? '');
+  useEffect(() => { setName(m.name ?? ''); setAddress(m.address ?? ''); }, [m.name, m.address]);
+  const [from, to] = (m.quiet ?? '22:00-07:00').split('-');
+  const you = m.id === me;
+  return (
+    <div className="card person">
+      <div className="row">
+        <span className="avatar" style={{ width: 36, height: 36 }}>{(m.name ?? '?')[0]}</span>
+        <div className="grow">
+          <b>{m.name}</b> {m.id === 1 && <span className="lead">OWNER</span>} {you && <span className="chip">you</span>} {m.quietNow && <span className="pill">quiet hours</span>}
+          <div className="muted small">{m.address ? `Chief calls ${you ? 'you' : 'them'} “${m.address}”` : `Hasn't met Chief yet; Chief greets ${you ? 'you' : 'them'} in ${you ? 'your' : 'their'} own thread`}</div>
+        </div>
+      </div>
+      <div className="fields">
+        <label className="label">Name
+          <input className="input" value={name} onChange={(e) => setName(e.target.value)} onBlur={() => name.trim() && name !== m.name && act(() => api.person(m.id, { name }))} />
+        </label>
+        <label className="label">Chief calls {you ? 'you' : 'them'}
+          <input className="input" value={address} placeholder="sir, ma'am, or a name" onChange={(e) => setAddress(e.target.value)} onBlur={() => address.trim() && address !== m.address && act(() => api.person(m.id, { address }))} />
+        </label>
+      </div>
+      <label className="row small switch">
+        <input type="checkbox" checked={!!m.quiet} onChange={(e) => act(() => api.person(m.id, { quiet: e.target.checked ? '22:00-07:00' : null }))} />
+        Quiet hours{m.quiet ? '' : ': off'}
+      </label>
+      {m.quiet && (
+        <div className="row small">
+          <input className="input narrow" type="time" value={from} onChange={(e) => e.target.value && act(() => api.person(m.id, { quiet: `${e.target.value}-${to}` }))} />
+          <span>to</span>
+          <input className="input narrow" type="time" value={to} onChange={(e) => e.target.value && act(() => api.person(m.id, { quiet: `${from}-${e.target.value}` }))} />
+          <span className="tiny grow">The crew keeps working on what {you ? 'you have' : 'they have'} already allowed; anything new waits for {you ? 'you' : 'them'} instead of holding a bot.</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Account({ a, mine, act }: { a: Json; mine: boolean; act: (fn: () => Promise<unknown>) => void }) {
+  const [code, setCode] = useState('');
+  const signing = a.login?.state === 'running';
+  const [k, words] = a.state === 'ready' ? ['green', `Signed in${PLAN(a.plan)}`] : a.state === 'missing' ? ['', `${a.name} isn't installed on this computer`] : ['amber', 'Not signed in'];
+  return (
+    <div className="account">
+      <div className="row between wrap">
+        <span><b>{a.name}</b> <span className={`chip ${k}`}>{words}</span> {a.restingUntil > 0 && <span className="chip amber">Resting until {resetWords(a.restingUntil)}</span>}</span>
+        {a.state === 'signed-out' && !signing && (
+          <button className="btn primary" onClick={() => act(() => api.signIn(a.member, a.runtime))}>Sign in with {mine ? 'your' : 'their'} own {a.name}</button>
+        )}
+      </div>
+      <Windows limits={a.limits} resting={a.restingUntil} />
+      {a.login && a.login.state !== 'done' && (
+        <div className="signin">
+          <pre className="terminal small"><Linked text={a.login.out || `Starting ${a.name}'s sign-in…`} /></pre>
+          {signing && a.runtime === 'claude' && (
+            <form className="row" onSubmit={(e) => { e.preventDefault(); if (code.trim()) act(async () => { await api.signInCode(a.member, a.runtime, code); setCode(''); }); }}>
+              <input className="input" value={code} onChange={(e) => setCode(e.target.value)} placeholder="Paste the code Claude's page shows you" />
+              <button className="btn primary" disabled={!code.trim()}>Send</button>
+            </form>
+          )}
+          <div className="row">
+            <span className="tiny grow">{signing ? `Open the link and sign in as ${mine ? 'yourself' : 'them'}. ${a.runtime === 'codex' ? 'Enter the one-time code shown above.' : ''}` : "The sign-in didn't finish."}</span>
+            <button className="btn quiet small" onClick={() => act(() => api.signInCancel(a.member, a.runtime))}>{signing ? 'Cancel' : 'Close'}</button>
+          </div>
+        </div>
+      )}
+      <div className="tiny">Kept by {a.name} in {a.where}{a.member === 1 ? ' (its usual place)' : ''}</div>
+    </div>
+  );
+}
+
 // ---------- shell ----------
 function App() {
   const [route, setRoute] = useState<Route>(parseRoute());
   const [state, setState] = useState<Json>(null);
   const [tick, setTick] = useState(0);
   const [offline, setOffline] = useState(false);
+  const [me, setMe] = useState(() => { const id = Number(localStorage.getItem('crewhouse.member')) || 1; setMember(id); return id; });
+  const switchTo = useCallback((id: number) => { localStorage.setItem('crewhouse.member', String(id)); setMember(id); setMe(id); }, []);
   const refresh = useCallback(() => {
     api.state().then((s) => { setState(s); setOffline(false); }).catch(() => setOffline(true));
     setTick((t) => t + 1);
@@ -800,6 +929,9 @@ function App() {
     const poll = setInterval(refresh, 15000); // belt and braces if the socket is quietly gone
     return () => { removeEventListener('hashchange', onHash); stop(); clearInterval(poll); };
   }, [refresh]);
+  useEffect(() => { refresh(); }, [me, refresh]);
+  // crewd shows the owner for an id it doesn't know (a fresh install, say); follow it.
+  useEffect(() => { if (state && state.person.id !== me) switchTo(state.person.id); }, [state, me, switchTo]);
   const name = useMemo(() => {
     const m = new Map((state?.bots ?? []).map((b: Json) => [b.id, b.display]));
     return (id: string) => (m.get(id) as string) ?? id;
@@ -807,7 +939,7 @@ function App() {
 
   if (!state) return <div className="boot">{offline ? 'Crewhouse is not running. Start it with ./crewhouse start' : 'Opening Crewhouse…'}</div>;
   const nav: [Route['view'], string, string][] = [
-    ['home', 'Home', '⌂'], ['chief', 'Chief', '★'], ['needs', 'Needs you', '◉'], ['crew', 'Crew', '☺'], ['activity', 'Activity', '∿'],
+    ['home', 'Home', '⌂'], ['chief', 'Chief', '★'], ['needs', 'Needs you', '◉'], ['crew', 'Crew', '☺'], ['activity', 'Activity', '∿'], ['settings', 'Settings', '≡'],
   ];
   const active = route.view === 'bot' ? 'crew' : route.view;
   return (
@@ -825,8 +957,15 @@ function App() {
           <a key={b.id} className={`nav small ${route.id === b.id ? 'on' : ''}`} href={`#/bot/${b.id}`}><Avatar bot={b} size={22} status={live(b)[0]} /> {b.display}</a>
         ))}
         <div className="me">
-          <span className="avatar" style={{ width: 32, height: 32, background: '#2E2925', color: '#fff' }}>{(state.person.address ?? 'Y')[0]}</span>
-          <div><b>{state.person.address ?? 'You'}</b><div className="tiny muted">owner · this computer</div></div>
+          <span className="avatar" style={{ width: 32, height: 32, background: '#2E2925', color: '#fff' }}>{(state.members.length > 1 ? state.person.name : state.person.address ?? 'Y')[0]}</span>
+          <div className="grow">
+            <b>{state.members.length > 1 ? state.person.name : state.person.address ?? 'You'}</b>
+            {state.members.length > 1
+              ? <select className="who tiny" aria-label="Who is using this screen" value={me} onChange={(e) => switchTo(Number(e.target.value))}>
+                  {state.members.map((m: Json) => <option key={m.id} value={m.id}>{m.id === me ? 'switch person…' : m.name}</option>)}
+                </select>
+              : <div className="tiny muted">owner · this computer</div>}
+          </div>
         </div>
       </aside>
       <main className={`main ${route.view === 'chief' ? 'chat-view' : ''}`}>
@@ -841,6 +980,7 @@ function App() {
         {route.view === 'crew' && <Crew state={state} refresh={refresh} />}
         {route.view === 'needs' && <NeedsYou state={state} refresh={refresh} />}
         {route.view === 'activity' && <Activity state={state} name={name} />}
+        {route.view === 'settings' && <Settings state={state} me={me} switchTo={switchTo} tick={tick} refresh={refresh} />}
         {route.view === 'bot' && route.id && (route.id === 'chief' ? (go('#/chief'), null) : <BotPage id={route.id} tab={route.tab!} state={state} tick={tick} refresh={refresh} />)}
       </main>
       <nav className="tabbar">

@@ -10,7 +10,8 @@ import { join } from 'node:path';
 process.env.CREWHOUSE_HOLD_MS = '300';
 process.env.CREWHOUSE_STUCK_MS = '5000';
 const { Store } = await import('../src/db.ts');
-const { Crew, browserAsk } = await import('../src/crew.ts');
+const { Crew, browserAsk, quietNow } = await import('../src/crew.ts');
+const accounts = await import('../src/accounts.ts');
 const kit = await import('../src/tools.ts');
 const { StubRunner } = await import('../src/runner.ts');
 const disk = await import('../src/bots.ts');
@@ -323,7 +324,7 @@ test('fallback: resting accounts are skipped, all resting pauses until the reset
   assert.deepEqual(kinds, ['codex']);
 
   // Everyone resting: the task pauses with a wake-up time, and resumes when it passes.
-  crew['limits'].set('codex', { restUntil: Date.now() + 60_000 });
+  crew['limits'].set('1:codex', { restUntil: Date.now() + 60_000 });
   const b = crew.assign('scout', 'look it up again', 'chief').task;
   await sleep(100);
   assert.equal(task(db, b).state, 'paused');
@@ -508,5 +509,100 @@ test('home facts: ideas only from ready tools, stuck after quiet, memory switch'
   disk.launchSpec(cfg, crew.bot('scout') as any, 'http://127.0.0.1:1');
   assert.doesNotMatch(readFileSync(join(disk.botDir(cfg, 'scout'), 'CLAUDE.md'), 'utf8'), /notes\.md/, 'memory off: notes are not loaded');
   assert.throws(() => disk.setSettings(cfg, 'scout', { memory: 'yes' }), /on or off/);
+  done();
+});
+
+test('household: bots and tasks belong to a member and run on that member\'s own config home', async () => {
+  const { cfg, db, crew, runner, done } = setup();
+  const starts: any[] = [];
+  const start = runner.start.bind(runner);
+  runner.start = async (s) => { starts.push(s); return start(s); };
+  crew.onboard('sir');
+  crew.recruit('reel', 'Reel', 'person');
+  const sam = crew.addMember('Sam').id;
+  assert.throws(() => crew.addMember('sam'), /already here/);
+
+  // The owner stays on the CLIs' usual sign-in: a one-person house launches exactly as before.
+  assert.equal(accounts.home(cfg, accounts.OWNER, 'claude'), null);
+  assert.equal(accounts.home(cfg, sam, 'claude'), join(cfg.stateDir, 'people', String(sam), 'claude'));
+  assert.deepEqual(accounts.homeEnv(cfg, sam, 'codex'), { CODEX_HOME: join(cfg.stateDir, 'people', String(sam), 'codex') });
+
+  // Sam meets Chief in their own thread; the owner's conversation isn't in it.
+  assert.match(crew.botPage('chief', sam).messages.map((m: any) => m.text).join('\n'), /how would you like me to address you/);
+  assert.ok(!crew.botPage('chief', sam).messages.some((m: any) => m.text === 'sir'));
+  crew.post('chief', 'Sam', undefined, sam);
+  assert.equal(crew.member(sam).address, 'Sam');
+  assert.equal(crew.member(accounts.OWNER).address, 'sir', 'each person keeps their own form of address');
+
+  // The owner's task runs with no config-home override; Sam's on the same bot restarts it on Sam's homes.
+  const a = crew.post('reel', 'owner demo', undefined, accounts.OWNER)!.task;
+  await sleep(150);
+  assert.equal(task(db, a).state, 'done');
+  assert.equal(starts[0].env.CLAUDE_CONFIG_DIR, undefined);
+  const b = crew.post('reel', 'a demo for Sam', undefined, sam)!.task;
+  await sleep(150);
+  assert.equal(task(db, b).member, sam);
+  assert.equal(starts[1].env.CLAUDE_CONFIG_DIR, join(cfg.stateDir, 'people', String(sam), 'claude'));
+  assert.match(readFileSync(join(cfg.crewDir, 'bots/reel/.crewhouse/person.md'), 'utf8'), /chosen name, "Sam"/);
+  assert.match(runner['out'].get('reel')!, /task #\d+ from Sam\]/);
+  assert.equal(crew.bot('reel')!.account, sam);
+  assert.ok(crew.botPage('reel', sam).messages.some((m: any) => m.text === 'a demo for Sam'));
+  assert.ok(!crew.botPage('reel', accounts.OWNER).messages.some((m: any) => m.text === 'a demo for Sam'), 'threads are per person');
+  const settings = JSON.parse(readFileSync(join(cfg.crewDir, 'bots/reel/.claude/settings.local.json'), 'utf8'));
+  assert.ok(settings.permissions.deny.includes(`Read(/${join(cfg.stateDir, 'people')}/**)`), 'no bot reads anyone\'s sign-in');
+
+  // Chief works for whoever asked him: what he recruits and hands over is theirs, on their accounts.
+  const c = crew.post('chief', 'ask permission to find me a researcher', undefined, sam)!.task; // the stub keeps Chief working
+  await sleep(100);
+  assert.equal(task(db, c).member, sam);
+  assert.equal(crew.recruit('scout', 'Scout', 'chief').member, sam);
+  const d = crew.assign('scout', 'look it up', 'chief').task;
+  await sleep(150);
+  assert.equal(task(db, d).member, sam);
+  assert.equal(starts.at(-1).env.CLAUDE_CONFIG_DIR, join(cfg.stateDir, 'people', String(sam), 'claude'));
+  runner.complete('chief', 'Scout is on it.');
+
+  // One person's limit rests only their own account; the other's work carries on.
+  crew['limits'].set(`${sam}:claude`, { restUntil: Date.now() + 60_000 });
+  crew['limits'].set(`${sam}:codex`, { restUntil: Date.now() + 60_000 });
+  assert.equal(crew.restingUntil('claude', accounts.OWNER), 0);
+  const e = crew.post('reel', 'another for Sam', undefined, sam)!.task;
+  const f = crew.post('scout', 'owner lookup', undefined, accounts.OWNER)!.task;
+  await sleep(200);
+  assert.equal(task(db, e).state, 'paused');
+  assert.match(task(db, e).result, /All Sam's AI accounts are resting/);
+  assert.equal(task(db, f).state, 'done');
+  assert.equal(starts.at(-1).env.CLAUDE_CONFIG_DIR, undefined, 'the owner never borrows Sam\'s account, nor Sam the owner\'s');
+
+  // What each person sees: their own tasks and questions, their own accounts.
+  assert.deepEqual(crew.snapshot(sam).tasks.map((t: any) => t.id).sort(), [b, d, e].sort());
+  assert.ok(crew.snapshot(sam).resting.claude > 0);
+  assert.equal(crew.snapshot(accounts.OWNER).resting.claude, 0);
+  done();
+});
+
+test('household: quiet hours park questions at once; settings validate', async () => {
+  const { db, crew, done } = setup();
+  crew.onboard('sir');
+  crew.recruit('reel', 'Reel', 'person');
+  assert.equal(quietNow('22:00-07:00', new Date(2026, 0, 1, 23, 30)), true);
+  assert.equal(quietNow('22:00-07:00', new Date(2026, 0, 1, 6, 59)), true);
+  assert.equal(quietNow('22:00-07:00', new Date(2026, 0, 1, 7, 0)), false);
+  assert.equal(quietNow('13:00-14:00', new Date(2026, 0, 1, 13, 15)), true);
+  assert.equal(quietNow(null), false);
+  assert.throws(() => crew.updateMember(1, { quiet: '10pm-7am' }), /22:00-07:00/);
+  assert.throws(() => crew.updateMember(1, { name: '  ' }), /name/);
+  assert.equal(crew.updateMember(1, { name: 'Alex', quiet: '00:00-23:59' }).name, 'Alex');
+
+  const t = crew.post('reel', 'ask permission to copy', undefined, 1)!.task;
+  await sleep(100);
+  const started = Date.now();
+  const d = await crew.permission('reel', { tool_name: 'Bash', tool_input: { command: 'cp a b' } });
+  assert.ok(Date.now() - started < 200, 'no hold while they sleep');
+  assert.equal(d.behavior, 'deny');
+  assert.equal(task(db, t).state, 'needs_you');
+  assert.equal(crew.snapshot(1).asks.length, 1, 'the question waits for the morning');
+  assert.equal(crew.snapshot(crew.addMember('Sam').id).asks.length, 0, 'and only for them');
+  crew.updateMember(1, { quiet: null });
   done();
 });
