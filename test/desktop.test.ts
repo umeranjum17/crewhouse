@@ -11,7 +11,9 @@ import { deskFor, Desktops, missing, type DeskEvent } from '../src/desktop.ts';
 const root = mkdtempSync(join(tmpdir(), 'crewhouse-desk-'));
 const botDir = join(root, 'bots', 'reel');
 mkdirSync(join(botDir, '.crewhouse'), { recursive: true });
-const n = 190 + Math.floor(Math.random() * 60);
+// A display number nobody holds, so side-by-side runs and a real X server never collide.
+let n = 190 + Math.floor(Math.random() * 60);
+while (existsSync(`/tmp/.X${n}-lock`) || existsSync(`/tmp/.X11-unix/X${n}`)) n++;
 const desks = new Desktops(join(root, 'state'));
 const xauth = deskFor(join(root, 'state'), 'reel', n).xauth;
 after(() => desks.stopAll());
@@ -72,7 +74,6 @@ test('watching: crewd picks the display and the permissions', { skip: noXvfb }, 
   await assert.rejects(desks.signal('reel', b, 'session.candidate', { session_id: view.sessionId, candidate: '' }, false), { code: 'not-authorized' });
   await assert.rejects(desks.signal('reel', a, 'clipboard.read', { session_id: view.sessionId }, false), { code: 'malformed' });
   desks.release(a);
-  await sleep(50);
   assert.equal(desks.info('reel')?.watching, false, 'a closed socket ends its session');
 
   const drive = await desks.signal('reel', b, 'session.open', { permissions: ['view', 'control'] }, true);

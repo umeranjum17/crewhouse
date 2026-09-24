@@ -5,10 +5,12 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createServer, type AddressInfo } from 'node:net';
 import { DatabaseSync } from 'node:sqlite';
 
 const root = mkdtempSync(join(tmpdir(), 'crewhouse-restart-'));
-const port = 20000 + Math.floor(Math.random() * 20000);
+// A port the OS says is free, not a random guess that another run may hold.
+const port = await new Promise<number>((r) => { const s = createServer().listen(0, '127.0.0.1', () => { const { port } = s.address() as AddressInfo; s.close(() => r(port)); }); });
 const base = `http://127.0.0.1:${port}`;
 const env = { ...process.env, CREWHOUSE_RUNNER: 'stub', CREWHOUSE_PORT: String(port), CREWHOUSE_STATE_DIR: join(root, 'state'), CREWHOUSE_CREW_DIR: join(root, 'crew'), CREWHOUSE_TOOLS_DIR: join(root, 'tools') };
 let daemon: ChildProcess;

@@ -12,6 +12,13 @@ import { loadConfig } from '../src/config.ts';
 
 const at = (y: number, mo: number, d: number, h = 0, m = 0) => new Date(y, mo - 1, d, h, m).getTime();
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+/** Wait for the condition, never a fixed time: CI runs the test files side by side on slow disks and two cores. */
+async function until(what: string, fn: () => unknown, ms = 10_000) {
+  for (const end = Date.now() + ms; !(await fn()); await sleep(10)) if (Date.now() > end) throw new Error(`timed out waiting for ${what}`);
+}
+const state = (db: Store, t: number) => db.get('SELECT state FROM tasks WHERE id = ?', t)!.state;
+const prompted = (db: Store, t: number) => until(`task #${t} prompted`, () => db.get("SELECT 1 FROM events WHERE kind = 'run.prompted' AND json_extract(data, '$.task') = ?", t));
+const settled = (db: Store, t: number) => until(`task #${t} settled`, () => !['queued', 'working'].includes(state(db, t)));
 
 test('schedule words: parse, describe, reject', () => {
   const cases: [string, string][] = [
@@ -88,7 +95,7 @@ test('routines: fire when due, catch up once after sleep, skip on overlap, pause
   assert.equal(t.brain, 'claude:haiku', 'the routine picks the model');
   assert.equal(t.title, 'Weekly demo');
   assert.ok(db.get('SELECT next_at FROM routines WHERE id = ?', r.id)!.next_at > Date.now());
-  await sleep(100);
+  await prompted(db, t.id);
   assert.equal(db.get('SELECT state FROM tasks WHERE id = ?', t.id)!.state, 'working', 'the stub holds "ask permission" tasks open');
 
   // Due again while the last run is still going: skipped, not stacked.
@@ -102,9 +109,10 @@ test('routines: fire when due, catch up once after sleep, skip on overlap, pause
   runner.complete('reel', 'Demo made.');
   crew.runRoutine(r.id);
   assert.equal(db.get('SELECT COUNT(*) AS n FROM tasks WHERE routine = ?', r.id)!.n, 2);
-  await sleep(100);
+  const again = db.get('SELECT id FROM tasks WHERE routine = ? ORDER BY id DESC', r.id)!.id;
+  await prompted(db, again);
   runner.complete('reel', 'Demo made again.');
-  await sleep(50);
+  assert.equal(state(db, again), 'done');
 
   // Paused routines never fire, and never catch up when resumed.
   crew.updateRoutine(r.id, { state: 'paused' });
@@ -128,8 +136,7 @@ test('morning digest: on by default at 8:00, says what finished, what needs you,
   assert.equal(digest.words, 'Every day at 8:00 am');
   assert.throws(() => crew.deleteRoutine(digest.id), /paused, not removed/);
 
-  crew.assign('reel', 'Make the pairing demo', 'chief');
-  await sleep(200);
+  await settled(db, crew.assign('reel', 'Make the pairing demo', 'chief').task);
   crew.addRoutine({ bot: 'reel', schedule: 'every hour', task: 'Tidy the screenshots' }, 'person');
   db.run("INSERT INTO asks (bot, kind, title, detail, at) VALUES ('reel', 'permission', 'Reel would like to run a command', '{}', ?)", Date.now());
   crew.runRoutine(digest.id);
@@ -154,8 +161,7 @@ test('household: a member\'s routines run as them, and each member gets their ow
   crew.runRoutine(r.id);
   const t = db.get('SELECT * FROM tasks WHERE routine = ?', r.id)!;
   assert.equal(t.member, sam, 'runs on Sam\'s accounts');
-  // Wait for the run, not a fixed time: CI runs the test files side by side on two cores.
-  for (let i = 0; i < 50 && db.get('SELECT state FROM tasks WHERE id = ?', t.id)!.state !== 'done'; i++) await sleep(100);
+  await settled(db, t.id);
   crew.runRoutine(digests[1].id);
   const mine = db.get("SELECT * FROM messages WHERE bot = 'chief' AND author = 'bot' ORDER BY id DESC")!;
   assert.equal(mine.member, sam);

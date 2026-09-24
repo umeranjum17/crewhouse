@@ -33,6 +33,15 @@ function setup(maxConcurrent = 3) {
 }
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const task = (db: any, id: number) => db.get('SELECT * FROM tasks WHERE id = ?', id);
+const prompts = (db: any, t: number) => db.all("SELECT * FROM events WHERE kind = 'run.prompted' AND json_extract(data, '$.task') = ?", t).length;
+/** Wait for the condition, never a fixed time: CI runs the test files side by side on slow disks and two cores. */
+async function until(what: string, fn: () => unknown, ms = 10_000) {
+  for (const end = Date.now() + ms; !(await fn()); await sleep(10)) if (Date.now() > end) throw new Error(`timed out waiting for ${what}`);
+}
+/** The stub has the task's prompt (the nth one, after a resume or a switch). */
+const prompted = (db: any, t: number, n = 1) => until(`task #${t} prompted`, () => prompts(db, t) >= n);
+/** The task is past queued and working: done, failed, paused or waiting on the person. */
+const settled = (db: any, t: number) => until(`task #${t} settled`, () => !['queued', 'working'].includes(task(db, t).state));
 
 test('store: a failed transaction leaves nothing behind; events fan out after commit', async () => {
   const { db, done } = setup();
@@ -55,12 +64,12 @@ test('queue: one task at a time per bot, and a global cap across bots', async ()
   const a = crew.assign('reel', 'ask permission first', 'chief').task; // the stub keeps this one working
   const b = crew.assign('reel', 'second job', 'chief').task;
   const c = crew.assign('scout', 'look something up', 'chief').task;
-  await sleep(100);
+  await prompted(db, a);
   assert.equal(task(db, a).state, 'working');
   assert.equal(task(db, b).state, 'queued', 'same bot waits its turn');
   assert.equal(task(db, c).state, 'queued', 'global cap of 1 holds the other bot');
   runner.complete('reel', 'done with the first');
-  await sleep(300);
+  await settled(db, c); // the cap runs b first, then c
   assert.equal(task(db, a).state, 'done');
   assert.equal(task(db, b).state, 'done', 'next task for the bot ran');
   assert.equal(task(db, c).state, 'done', 'then the other bot');
@@ -85,7 +94,7 @@ test('approvals: held answer allows; no answer denies with "wait" and parks the 
   crew.onboard("ma'am");
   crew.recruit('reel', 'Reel', 'person');
   const t = crew.assign('reel', 'ask permission to write', 'chief').task;
-  await sleep(100);
+  await prompted(db, t);
   const held = crew.permission('reel', { tool_name: 'Write', tool_input: { file_path: '/elsewhere/x.txt' } });
   await sleep(20);
   const ask = db.get("SELECT * FROM asks WHERE state = 'open'")!;
@@ -103,7 +112,7 @@ test('approvals: held answer allows; no answer denies with "wait" and parks the 
   const parked = db.get("SELECT * FROM asks WHERE state = 'open'")!;
   await assert.rejects(crew.answer(parked.id, { answer: 'maybe' }), /allow or deny/);
   await crew.answer(parked.id, { answer: 'deny' });
-  await sleep(200);
+  await settled(db, t);
   assert.equal(task(db, t).state, 'done', 'the answer resumed the same session and it finished');
   done();
 });
@@ -306,14 +315,14 @@ test('models: per-bot fallback order, per-task choice, and a switch starts the o
   assert.throws(() => crew.assign('reel', 'x', 'chief', 'pi'), /not a model choice/);
 
   const a = crew.assign('reel', 'rename 400 files', 'chief', 'codex:gpt-5-mini').task;
-  await sleep(150);
+  await settled(db, a);
   assert.equal(task(db, a).state, 'done');
   assert.equal(starts[0].kind, 'codex');
   assert.deepEqual(starts[0].args.slice(-2), ['--model', 'gpt-5-mini']);
   assert.match(runner['out'].get('reel')!, /Address the person as "sir"/, 'codex is told who it serves; it has no CLAUDE.md imports');
 
   const b = crew.assign('reel', 'judge which take is best', 'chief').task;
-  await sleep(150);
+  await settled(db, b);
   assert.equal(task(db, b).state, 'done');
   assert.equal(starts[1].kind, 'claude', 'no per-task choice: the bot default');
   assert.deepEqual(starts[1].args.slice(-2), ['--model', 'opus']);
@@ -334,32 +343,32 @@ test('fallback: resting accounts are skipped, all resting pauses until the reset
   crew.hookStatus('scout', { rate_limits: { five_hour: { used_percentage: 97, resets_at: reset } } });
   assert.equal(crew.restingUntil('claude'), reset * 1000);
   const a = crew.assign('scout', 'look it up', 'chief').task;
-  await sleep(150);
+  await settled(db, a);
   assert.equal(task(db, a).state, 'done');
   assert.deepEqual(kinds, ['codex']);
 
   // Everyone resting: the task pauses with a wake-up time, and resumes when it passes.
   crew['limits'].set('1:codex', { restUntil: Date.now() + 60_000 });
   const b = crew.assign('scout', 'look it up again', 'chief').task;
-  await sleep(100);
+  await settled(db, b);
   assert.equal(task(db, b).state, 'paused');
   assert.ok(Math.abs(task(db, b).wake_at - (Date.now() + 60_000)) < 1000, 'earliest reset: ChatGPT in a minute, not Claude in an hour');
   assert.match(task(db, b).result, /All AI accounts are resting until \d+:\d\d [ap]m/);
   crew['limits'].clear();
   db.run('UPDATE tasks SET wake_at = ? WHERE id = ?', Date.now() - 1, b);
   crew.dispatch();
-  await sleep(150);
+  await settled(db, b);
   assert.equal(task(db, b).state, 'done');
   assert.equal(kinds.at(-1), 'claude', 'limits cleared: back to the first choice');
 
   // During a run: Claude's StopFailure(rate_limit) rests Claude and continues on ChatGPT from a brief.
   crew.hookStatus('scout', { rate_limits: { five_hour: { used_percentage: 60, resets_at: reset } } });
   const c = crew.assign('scout', 'ask permission then dig deep', 'chief').task; // the stub holds it working
-  await sleep(100);
+  await prompted(db, c);
   assert.equal(kinds.at(-1), 'claude');
   db.event('task.progress', 'scout', { text: 'found three sources' });
   crew.hookFailure('scout', { error: 'rate_limit', last_assistant_message: 'API Error: Rate limit reached' });
-  await sleep(100);
+  await prompted(db, c, 2); // the brief, on the next model
   assert.equal(kinds.at(-1), 'codex');
   assert.equal(task(db, c).state, 'working');
   assert.equal(crew.restingUntil('claude'), reset * 1000, 'rests until the known reset');
@@ -370,12 +379,11 @@ test('fallback: resting accounts are skipped, all resting pauses until the reset
   const said = db.all("SELECT text FROM messages WHERE bot = 'scout' AND author = 'system'").map((m) => m.text);
   assert.ok(said.some((t) => /^Switched from Claude to ChatGPT: Claude is resting until/.test(t)), said.join('\n'));
   runner.complete('scout', 'here is the report');
-  await sleep(50);
   assert.equal(task(db, c).state, 'done');
 
   // Any other API error fails the task plainly instead of pretending it finished.
   const d = crew.assign('scout', 'ask permission again', 'chief').task;
-  await sleep(100);
+  await prompted(db, d);
   crew.hookFailure('scout', { error: 'authentication_failed' });
   assert.equal(task(db, d).state, 'failed');
   done();
@@ -397,7 +405,7 @@ test('fallback: a Codex usage-limit screen rests ChatGPT until the time it print
 
   // The stub shows its prompt in the pane and blocks on "needs approval", like Codex's model-switch dialog.
   const t = crew.assign('scout', `needs approval ■ You've hit your usage limit. Visit x or try again at Sep 26th, ${year} 12:15 PM.`, 'chief').task;
-  await sleep(2500); // one watch-loop tick
+  await prompted(db, t, 2); // the watch loop reads the screen, rests ChatGPT and continues on Claude
   assert.equal(crew.restingUntil('codex'), reset);
   assert.deepEqual(kinds, ['codex', 'claude']);
   assert.equal(task(db, t).state !== 'failed', true);
@@ -410,7 +418,7 @@ test('take over: the bot pauses while the person drives; give back resumes it wi
   crew.onboard('sir');
   crew.recruit('reel', 'Reel', 'person');
   const t = crew.assign('reel', 'ask permission to open the site', 'chief').task; // the stub keeps this one working
-  await sleep(100);
+  await prompted(db, t);
   const settings = JSON.parse(readFileSync(join(cfg.crewDir, 'bots', 'reel', '.claude', 'settings.local.json'), 'utf8'));
   assert.match(settings.hooks.PreToolUse[0].hooks[0].command, /hook pretool$/, 'the CLI asks crewd before every tool call');
   assert.deepEqual(await crew.preTool('reel', { tool_name: 'Bash' }), {}, 'the bot acts freely while it has the controls');
@@ -424,13 +432,13 @@ test('take over: the bot pauses while the person drives; give back resumes it wi
   crew.finish('reel', 'I will wait for the owner.');
   assert.equal(task(db, t).state, 'working', 'a turn cut short by Take over does not end the task');
   const next = crew.assign('reel', 'second job', 'chief').task;
-  await sleep(100);
+  crew.dispatch(); // the queue gets its turn now; nothing may start
   assert.equal(task(db, next).state, 'queued', 'no new work starts while the person drives');
 
   await crew.giveBack('reel', 'signed you in to example.com');
   assert.deepEqual(await crew.preTool('reel', { tool_name: 'Bash' }), {});
   assert.match(await runner.read('reel'), /given them back\. What they did: signed you in to example\.com\./, 'the resume prompt carries the note');
-  await sleep(300);
+  await settled(db, next); // it waits behind t
   assert.equal(task(db, t).state, 'done', 'the resumed turn finishes the task');
   assert.equal(task(db, next).state, 'done', 'then the queue moves again');
   assert.ok(db.get("SELECT 1 FROM messages WHERE bot = 'reel' AND text = 'You gave the controls back: signed you in to example.com'"));
@@ -449,7 +457,7 @@ test('approval scopes: once, for this task, always for the bot; compound command
   crew.onboard('sir');
   crew.recruit('reel', 'Reel', 'person');
   const t = crew.assign('reel', 'ask permission to render', 'chief').task;
-  await sleep(100);
+  await prompted(db, t);
   const ask = async (command: string) => {
     const held = crew.permission('reel', { tool_name: 'Bash', tool_input: { command } });
     await sleep(20);
@@ -475,9 +483,9 @@ test('approval scopes: once, for this task, always for the bot; compound command
 
   // A new task keeps "always" but not "for this task".
   db.run("UPDATE tasks SET state = 'done' WHERE id = ?", t);
-  crew.assign('reel', 'ask permission again', 'chief');
+  const t2 = crew.assign('reel', 'ask permission again', 'chief').task;
   crew.dispatch();
-  await sleep(100);
+  await until(`task #${t2} started`, () => task(db, t2).state === 'working'); // the stub still shows the old turn, so it is not prompted
   a = await ask('magick c.png d.png');
   assert.equal(a.open, undefined);
   a = await ask('ffmpeg -i three.png');
@@ -513,8 +521,7 @@ test('home facts: ideas only from ready tools, stuck after quiet, memory switch'
   disk.setGrants(cfg, 'scout', ['files']);
   assert.equal(crew.snapshot().ideas.length, 0, 'no idea for a tool that is not granted');
 
-  crew.assign('scout', 'ask permission to look', 'chief');
-  await sleep(100);
+  await prompted(db, crew.assign('scout', 'ask permission to look', 'chief').task);
   assert.equal(crew.snapshot().bots.find((b: any) => b.id === 'scout')?.stuck, false);
   db.run('UPDATE events SET at = at - 10000');
   assert.equal(crew.snapshot().bots.find((b: any) => b.id === 'scout')?.stuck, true, 'quiet past the limit reads as stuck');
@@ -551,11 +558,11 @@ test('household: bots and tasks belong to a member and run on that member\'s own
 
   // The owner's task runs with no config-home override; Sam's on the same bot restarts it on Sam's homes.
   const a = crew.post('reel', 'owner demo', undefined, accounts.OWNER)!.task;
-  await sleep(150);
+  await settled(db, a);
   assert.equal(task(db, a).state, 'done');
   assert.equal(starts[0].env.CLAUDE_CONFIG_DIR, undefined);
   const b = crew.post('reel', 'a demo for Sam', undefined, sam)!.task;
-  await sleep(150);
+  await settled(db, b);
   assert.equal(task(db, b).member, sam);
   assert.equal(starts[1].env.CLAUDE_CONFIG_DIR, join(cfg.stateDir, 'people', String(sam), 'claude'));
   assert.match(readFileSync(join(cfg.crewDir, 'bots/reel/.crewhouse/person.md'), 'utf8'), /chosen name, "Sam"/);
@@ -568,11 +575,11 @@ test('household: bots and tasks belong to a member and run on that member\'s own
 
   // Chief works for whoever asked him: what he recruits and hands over is theirs, on their accounts.
   const c = crew.post('chief', 'ask permission to find me a researcher', undefined, sam)!.task; // the stub keeps Chief working
-  await sleep(100);
+  await prompted(db, c);
   assert.equal(task(db, c).member, sam);
   assert.equal(crew.recruit('scout', 'Scout', 'chief').member, sam);
   const d = crew.assign('scout', 'look it up', 'chief').task;
-  await sleep(150);
+  await settled(db, d);
   assert.equal(task(db, d).member, sam);
   assert.equal(starts.at(-1).env.CLAUDE_CONFIG_DIR, join(cfg.stateDir, 'people', String(sam), 'claude'));
   runner.complete('chief', 'Scout is on it.');
@@ -583,7 +590,8 @@ test('household: bots and tasks belong to a member and run on that member\'s own
   assert.equal(crew.restingUntil('claude', accounts.OWNER), 0);
   const e = crew.post('reel', 'another for Sam', undefined, sam)!.task;
   const f = crew.post('scout', 'owner lookup', undefined, accounts.OWNER)!.task;
-  await sleep(200);
+  await settled(db, e);
+  await settled(db, f);
   assert.equal(task(db, e).state, 'paused');
   assert.match(task(db, e).result, /All Sam's AI accounts are resting/);
   assert.equal(task(db, f).state, 'done');
@@ -610,7 +618,7 @@ test('household: quiet hours park questions at once; settings validate', async (
   assert.equal(crew.updateMember(1, { name: 'Alex', quiet: '00:00-23:59' }).name, 'Alex');
 
   const t = crew.post('reel', 'ask permission to copy', undefined, 1)!.task;
-  await sleep(100);
+  await prompted(db, t);
   const started = Date.now();
   const d = await crew.permission('reel', { tool_name: 'Bash', tool_input: { command: 'cp a b' } });
   assert.ok(Date.now() - started < 200, 'no hold while they sleep');
@@ -631,14 +639,12 @@ async function restart(s: ReturnType<typeof setup>, runner = s.runner) {
   await crew.init();
   return crew;
 }
-const prompts = (db: any, t: number) => db.all("SELECT * FROM events WHERE kind = 'run.prompted' AND json_extract(data, '$.task') = ?", t).length;
-
 test('restart: a live pane is re-attached, not prompted again, and its result lands once', async () => {
   const s = setup();
   s.crew.onboard('sir');
   s.crew.recruit('reel', 'Reel', 'person');
   const t = s.crew.assign('reel', 'ask permission first', 'chief').task; // stays working
-  await sleep(100);
+  await prompted(s.db, t);
   const crew = await restart(s);
   assert.equal(task(s.db, t).state, 'working');
   assert.ok(s.db.get("SELECT 1 FROM events WHERE kind = 'run.reattached'"));
@@ -657,11 +663,11 @@ test('restart: a turn that ended while crewd was down is read from the terminal,
   s.crew.onboard('sir');
   s.crew.recruit('reel', 'Reel', 'person');
   const t = s.crew.assign('reel', 'ask permission first', 'chief').task;
-  await sleep(100);
+  await prompted(s.db, t);
   s.crew.stop();
   (s.runner as any).states.set('reel', 'done'); // the Stop hook found nobody listening
   const crew = await restart(s);
-  for (let i = 0; i < 40 && task(s.db, t).state !== 'done'; i++) await sleep(100);
+  await settled(s.db, t);
   assert.equal(task(s.db, t).state, 'done');
   assert.match(task(s.db, t).result, /read from the terminal/);
   assert.equal(prompts(s.db, t), 1);
@@ -674,14 +680,14 @@ test('restart: with its pane gone, the task continues in a new session from its 
   s.crew.onboard('sir');
   s.crew.recruit('reel', 'Reel', 'person');
   const t = s.crew.assign('reel', 'ask permission to copy', 'chief').task;
-  await sleep(100);
+  await prompted(s.db, t);
   s.db.event('task.progress', 'reel', { task: t, text: 'Recorded the first scene' });
   assert.equal((await s.crew.permission('reel', { tool_name: 'Bash', tool_input: { command: 'cp a b' } })).behavior, 'deny');
   s.runner.complete('reel', 'Waiting for permission to copy.');
   assert.equal(task(s.db, t).state, 'needs_you');
   const fresh = new StubRunner(); // a reboot: Herdr's panes are gone
   const crew = await restart(s, fresh);
-  await sleep(200);
+  await prompted(s.db, t, 2); // the brief, in the new session
   assert.equal(task(s.db, t).state, 'working');
   const brief = await fresh.read('reel');
   assert.match(brief, /stopped \(Crewhouse restarted\)/);
@@ -691,7 +697,7 @@ test('restart: with its pane gone, the task continues in a new session from its 
   await crew.answer(ask.id, { answer: 'allow' });
   assert.match(await fresh.read('reel'), /has answered your request to use Bash \(cp a b\): allowed/);
   assert.equal((await crew.permission('reel', { tool_name: 'Bash', tool_input: { command: 'cp a b' } })).behavior, 'allow');
-  await sleep(200);
+  await settled(s.db, t);
   assert.equal(task(s.db, t).state, 'done', 'and the new session finished it');
   crew.stop();
   s.done();
@@ -701,8 +707,7 @@ test('restart: a held approval keeps its card; the reconnecting hook gets the an
   const s = setup();
   s.crew.onboard('sir');
   s.crew.recruit('reel', 'Reel', 'person');
-  s.crew.assign('reel', 'ask permission to write', 'chief');
-  await sleep(100);
+  await prompted(s.db, s.crew.assign('reel', 'ask permission to write', 'chief').task);
   const payload = { tool_name: 'Write', tool_input: { file_path: '/elsewhere/x.txt' } };
   s.crew.permission('reel', payload).catch(() => {}); // its connection dies with the old crewd
   await sleep(20);
@@ -729,7 +734,7 @@ test('trust: a new bot accepts the trust dialog for its own folder on its first 
   s.crew.onboard('sir');
   s.crew.recruit('reel', 'Reel', 'person');
   const t = s.crew.assign('reel', 'make a reel', 'chief').task;
-  for (let i = 0; i < 40 && task(s.db, t).state !== 'done'; i++) await sleep(100);
+  await settled(s.db, t);
   assert.deepEqual(sent, [['down', 'enter']], 'Yes, not the default "No, exit"');
   assert.ok(s.db.get("SELECT 1 FROM events WHERE kind = 'run.trusted'"));
   assert.equal(s.db.all('SELECT * FROM asks').length, 0, 'nothing for the person to answer');
