@@ -1,0 +1,14 @@
+{
+  "display": "Tracer",
+  "role": "Finds leads: people, work emails and phone numbers, paid per result",
+  "runtime": "claude",
+  "model": "sonnet",
+  "color": "#2E8A62",
+  "tools": [
+    "crew",
+    "files",
+    "web",
+    "search-files",
+    "people-search"
+  ]
+}

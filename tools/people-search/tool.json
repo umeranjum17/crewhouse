@@ -1,0 +1,24 @@
+{
+  "id": "people-search",
+  "name": "treg people search",
+  "provides": "Find people, work emails and phone numbers across Apollo, Hunter, Lusha, Prospeo and more, paid per result; every paid lookup asks you first with its price cap",
+  "kind": "cli",
+  "bins": [
+    "treg"
+  ],
+  "license": "Apache-2.0 with an added no-hosted-resale term (superdesigndev/treg)",
+  "source": "user-installed",
+  "install": "curl -fsSL https://treg.to/install.sh | sh (needs Python 3.12 or 3.13), then in your own terminal: treg login. New accounts get $1 of credit. Your own provider keys (treg secret add, or the treg dashboard) are used first and never billed by treg.",
+  "allow": [
+    "Bash(treg catalog *)",
+    "Bash(treg balance)",
+    "Bash(treg balance *)"
+  ],
+  "ask": [
+    "Bash(treg call *)"
+  ],
+  "grant": {
+    "default": false
+  },
+  "note": "Searching the catalog and reading prices is free. Every treg call asks you first, even if a bot's own allow list would let it through."
+}

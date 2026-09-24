@@ -4,7 +4,7 @@
 
 Local-first, open-source crew of persistent AI teammates run by Chief on your own signed-in agent CLIs.
 
-You talk to **Chief**. Chief recruits bots from templates (Reel makes demo videos, Scout researches, Scribe drafts) and hands them work. Each bot is a folder on your disk with its own persona, notes, skills and files. It runs the real, unmodified `claude` (or `codex`) CLI, signed in through the vendor's own login. Approvals and questions come to you in one place, from a desktop or phone browser.
+You talk to **Chief**. Chief recruits bots from templates (Reel makes demo videos, Scout researches, Scribe drafts, Tracer finds leads) and hands them work. Each bot is a folder on your disk with its own persona, notes, skills and files. It runs the real, unmodified `claude` (or `codex`) CLI, signed in through the vendor's own login. Approvals and questions come to you in one place, from a desktop or phone browser.
 
 Nothing leaves your machine: there is no server of ours and no telemetry, and Crewhouse never reads a CLI's credential files.
 
@@ -50,7 +50,8 @@ Other commands: `./crewhouse doctor` (what's installed, what's missing, how to a
   - The statusline reports your plan's usage windows.
   - Herdr's lifecycle (idle, working, blocked) is the fallback, plus the live terminal behind **Show the work**.
 - **Bots on disk** live at `~/Crewhouse/bots/<name>/`: `AGENTS.md` (persona), `CLAUDE.md` (imports persona, notes and how to address you), `notes.md` (what it learned, capped at 2,500 characters), `skills/*/SKILL.md` ([agentskills](https://agentskills.io) format), `files/` (deliverables) and `work/`. Bots start with `--setting-sources project,local`, so only their own skills and settings load; your global Claude setup stays out.
-- **Tools** are a small kit (`tools/<name>/tool.json`: what it does, its licence, how to install it). Each bot gets a grant list (Tools tab), which becomes the CLI's own allow list. Anything else asks you first, and credential folders are always denied.
+- **Tools** are a small kit (`tools/<name>/tool.json`: what it does, its licence, how to install it). Each bot gets a grant list (Tools tab), which becomes the CLI's own allow list. Anything else asks you first, and credential folders are always denied. A tool that spends money lists its commands under `ask`, which asks you every time, even over an allow rule.
+- **Tracer** finds people, work emails and phone numbers through [treg](https://github.com/superdesigndev/treg) (Apache-2.0 with an added no-hosted-resale term; Crewhouse only calls your installed `treg` CLI). Setup is yours, in your own terminal: `curl -fsSL https://treg.to/install.sh | sh` (Python 3.12 or 3.13), then `treg login` (new accounts get $1 of credit). Your own provider keys (`treg secret add`, or the treg dashboard) are used first and never billed by treg. Searching the catalog and reading prices is free and needs no account. Every paid `treg call` comes to you as an approval, and the command shows its price cap (`X-Treg-Route-Max-Cost`, which treg enforces on its routed people endpoints). No key ever goes into Crewhouse, and bots can't read `~/.treg`.
 - **The crew tool** (`bin/crew`) is how bots talk to crewd: `report`, `deliver`, `remember`, and for Chief, `recruit`, `assign` and `call-me`. Each bot carries its own token.
 
 Data lives outside the repo: the database is in `~/.local/state/crewhouse/`, the bots in `~/Crewhouse/`. Override with `CREWHOUSE_STATE_DIR` and `CREWHOUSE_CREW_DIR`. Other settings: `CREWHOUSE_PORT` (default 7711), `CREWHOUSE_HERDR_SESSION` (default `crewhouse`), `CREWHOUSE_MAX_CONCURRENT` (default 3) and `CREWHOUSE_RUNNER=stub`.

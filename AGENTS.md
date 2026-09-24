@@ -7,6 +7,7 @@ This file is the project's committed home for project-intrinsic agent knowledge:
 - Size budget: crewd (`src/`) stays under 5,000 lines, per the product plan. Prefer deleting to adding.
 - Only `src/runner.ts` knows how CLIs run. Facts come from the CLI's own hooks, wired in `src/bots.ts` `launchSpec` and handled at `/crew/hook/*` in `src/server.ts`. Herdr state is the fallback.
 - Never drive Herdr's `default` session while developing. Point crewd at an isolated session through `CREWHOUSE_HERDR_CMD` (a wrapper that adds `--session`), with `CREWHOUSE_STATE_DIR` and `CREWHOUSE_CREW_DIR` in a temp dir.
+- Spend-bearing tool commands go under `ask` in `tools/<id>/tool.json` (Claude's `permissions.ask`, which beats allow and fires the `PermissionRequest` hook), never under `allow`. See `tools/people-search`.
 - Chief's voice rules live in `templates/chief/AGENTS.md`. His first greeting is deterministic, in `src/crew.ts` (`chiefGreeting`).
 - The web UI is plain React bundled by `scripts/build-web.mjs`. `web/src/tokens.ts` and `web/src/api.ts` stay framework-free, so the future Expo app can reuse them.
 
