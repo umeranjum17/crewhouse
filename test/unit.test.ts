@@ -11,7 +11,7 @@ process.env.CREWHOUSE_HOLD_MS = '300';
 process.env.CREWHOUSE_STUCK_MS = '5000';
 process.env.CREWHOUSE_FALLBACK_MS = '1000';
 const { Store } = await import('../src/db.ts');
-const { Crew, browserAsk, quietNow, trustKeys } = await import('../src/crew.ts');
+const { Crew, browserAsk, quietNow, short, trustKeys } = await import('../src/crew.ts');
 const accounts = await import('../src/accounts.ts');
 const kit = await import('../src/tools.ts');
 const { StubRunner } = await import('../src/runner.ts');
@@ -67,6 +67,19 @@ test('queue: one task at a time per bot, and a global cap across bots', async ()
   done();
 });
 
+test('task titles are cut at a word, never mid-word', async () => {
+  assert.equal(short('  Make a demo  ', 80), 'Make a demo');
+  assert.equal(short('Open wikipedia.org in your browser, search for Herdr, then read the top 5 results slowly', 80),
+    'Open wikipedia.org in your browser, search for Herdr, then read the top 5…');
+  const { db, crew, done } = setup();
+  crew.onboard('sir');
+  crew.recruit('reel', 'Reel', 'person');
+  const t = crew.assign('reel', 'Make a 10 second video with three title cards: One, Two, Three, about three seconds each', 'chief').task;
+  assert.equal(task(db, t).title, 'Make a 10 second video with three title cards: One, Two, Three, about three…');
+  await sleep(100);
+  done();
+});
+
 test('approvals: held answer allows; no answer denies with "wait" and parks the task', async () => {
   const { db, crew, runner, done } = setup();
   crew.onboard("ma'am");
@@ -112,6 +125,7 @@ test('tool grants: only granted, installed tools reach the CLI; credentials alwa
     disk.launchSpec(cfg, bot as any, 'http://127.0.0.1:1');
     const s = JSON.parse(readFileSync(join(disk.botDir(cfg, 'reel'), '.claude', 'settings.local.json'), 'utf8'));
     assert.ok(s.permissions.allow.includes('Bash(ffmpeg *)'));
+    assert.ok(s.permissions.allow.includes('Bash(fc-match *)'), 'finding a font for a title card never asks');
     assert.ok(s.permissions.allow.includes('Bash(crew *)'), 'crew is always granted');
     assert.ok(!s.permissions.allow.some((a: string) => a.startsWith('Bash(gh ')), 'missing tool not offered');
     assert.ok(!s.permissions.allow.includes('Bash(magick *)'));

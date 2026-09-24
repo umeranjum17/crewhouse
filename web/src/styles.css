@@ -137,7 +137,7 @@ img.media { background: transparent; }
   .main { padding: 18px 14px 96px; }
   h1 { font-size: 26px; }
   .tabbar { display: flex; position: fixed; bottom: 0; left: 0; right: 0; background: var(--card); border-top: 1px solid var(--line); padding: 6px 4px calc(6px + env(safe-area-inset-bottom)); z-index: 5; }
-  .tabbar a { flex: 1; display: flex; flex-direction: column; align-items: center; font-size: 11px; color: var(--ink3); position: relative; gap: 2px; }
+  .tabbar a { flex: 1; display: flex; flex-direction: column; align-items: center; font-size: 11px; color: var(--ink3); position: relative; gap: 2px; white-space: nowrap; min-width: 0; }
   .tabbar a.on { color: var(--sea); font-weight: 600; }
   .tabbar .icon { font-size: 18px; }
   .tabbar .badge { position: absolute; top: -4px; left: 54%; min-width: 16px; height: 16px; font-size: 10px; }

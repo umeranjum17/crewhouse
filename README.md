@@ -8,7 +8,7 @@ You talk to **Chief**. Chief recruits bots from templates (Reel makes demo video
 
 Nothing leaves your machine: there is no server of ours and no telemetry, and Crewhouse never reads a CLI's credential files.
 
-> Status: first working slice (MVP). Chief, Reel, approvals, the web app and the Herdr runner work end to end on Linux. Each bot with the Computer tool gets its own desktop you can watch and take over. Phone pairing, push, routines and Codex turns come next; see "Not yet".
+> Status: first working slice (MVP). Chief, the crew, approvals, routines, a household, the web app and the Herdr runner work end to end on Linux, and crewd picks running work back up after a restart. Each bot with the Computer tool gets its own desktop you can watch and take over. The phone app is in review ([#7](https://github.com/umeranjum17/crewhouse/pull/7)); push and Codex turns come next. See "Not yet", and [TRY-IT.md](TRY-IT.md) for a first walk through.
 
 ## Quick start
 
@@ -50,6 +50,8 @@ Other commands: `./crewhouse update` (pulls, installs and restarts crewd; refuse
   - The statusline reports your plan's usage windows.
   - Herdr's lifecycle (idle, working, blocked) is the fallback, plus the live terminal behind **Show the work**.
 - **Bots on disk** live at `~/Crewhouse/bots/<name>/`: `AGENTS.md` (persona), `CLAUDE.md` (imports persona, notes and how to address you), `notes.md` (what it learned, capped at 2,500 characters), `skills/*/SKILL.md` ([agentskills](https://agentskills.io) format), `files/` (deliverables) and `work/`. Bots start with `--setting-sources project,local`, so only their own skills and settings load; your global Claude setup stays out.
+- **Thinks with**: each bot has a model order on its **Thinks with** tab, like `claude:sonnet` then `codex`. The first does the work; when its account hits a limit, the task carries on with the next one in a new session, briefed on the work so far. Chief can also pick a model for a single task.
+- **Memory**: every change to a bot's `notes.md` is a git commit in its folder, and **Undo** on the bot's **What I did** tab takes any one of them back.
 - **Tools** are a curated kit, one manifest per tool in `tools/<name>/tool.json`: what it does, its licence, how it installs and when it **asks you first**, in plain words (shown on the recruit card and the bot's Tools tab).
   - Pinned tools install into Crewhouse's own folder (`~/.local/share/crewhouse/tools/`), never globally and never with sudo: the browser ([Playwright MCP](https://github.com/microsoft/playwright-mcp) with its own Chromium), [MarkItDown](https://github.com/microsoft/markitdown) and [yt-dlp](https://github.com/yt-dlp/yt-dlp) (checksum-verified). System tools (gh, ffmpeg, ImageMagick, ripgrep, jq) are detected, and doctor prints the install line. Web search and fetch are the CLI's own.
   - A bot's grants become its CLI's allow list, its own MCP config (`--strict-mcp-config`, so your MCP servers stay out) and PATH. Anything else asks you first; file edits outside the bot's folder ask; credential folders are always denied. A tool that spends money lists its commands under `ask`, which asks you every time, even over an allow rule.
@@ -84,11 +86,11 @@ Data lives outside the repo: the database is in `~/.local/state/crewhouse/`, the
 
 ## Not yet
 
-- The phone app (Expo) and phone pairing with an encrypted link. The web UI is plain React with shared `tokens.ts` and `api.ts`, so the Expo app can reuse both. Today it works at phone width on the same machine, because crewd listens on 127.0.0.1 only.
+- The phone app (Expo) and phone pairing with an encrypted link, in review in [#7](https://github.com/umeranjum17/crewhouse/pull/7). The web UI is plain React with shared `tokens.ts` and `api.ts`, so the Expo app can reuse both. Today it works at phone width on the same machine, because crewd listens on 127.0.0.1 only.
 - Push notifications (they will follow each person's quiet hours), triggers (a folder or a webhook), Telegram. A per-person login: on this computer anyone can pick who they are.
 - Bot desktops on macOS (desklink is Linux only), watching from another device (crewd listens on 127.0.0.1), and a sandbox that hides your own X display from a bot's shell. A bot's `signedIn` list is still edited by hand in its `bot.json` after you sign it in.
 - Codex turns. The runner starts `codex` with its `notify` hook, `--search` and the granted MCP servers wired in, but this path is untested, and Codex has no hook for the browser's asks-first rules.
-- The crew tools as an MCP server (today they are the `crew` CLI), limit-based fallback between accounts, and Undo for memory.
+- The crew tools as an MCP server (today they are the `crew` CLI).
 
 ## License
 

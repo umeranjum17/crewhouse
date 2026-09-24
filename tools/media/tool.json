@@ -17,7 +17,8 @@
   ],
   "allow": [
     "Bash(ffmpeg *)",
-    "Bash(ffprobe *)"
+    "Bash(ffprobe *)",
+    "Bash(fc-match *)"
   ],
   "grant": {
     "default": false

@@ -14,4 +14,5 @@ export function useDesktopSession(options: {
   connect: () => Promise<void>;
   close: (reason?: string) => Promise<void>;
   setInputEnabled: (enabled: boolean) => void;
+  showKeyboard: () => void;
 };

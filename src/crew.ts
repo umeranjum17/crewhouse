@@ -28,6 +28,9 @@ const resetMs = (v: unknown): number => typeof v === 'number' ? (v < 1e12 ? v * 
 export const clock = (t: number) => (new Date(t).toDateString() === new Date().toDateString() ? '' : new Date(t).toLocaleDateString('en-US', { weekday: 'short' }) + ' ') +
   new Date(t).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase();
 
+/** At most n characters, cut at a word boundary with an ellipsis: titles on cards and in the digest. */
+export const short = (s: string, n: number) => (s = s.trim(), s.length > n ? `${s.slice(0, n - 1).replace(/\s+\S*$/, '')}…` : s);
+
 const BROWSER_ACTS = /^browser_(click|type|fill_form|press_key|select_option|file_upload|drag|hover|evaluate|run_code|handle_dialog)$/;
 const PAYMENT = /checkout|payment|billing|purchase|\/cart\b|\/pay\b|paypal\.|pay\.google/i;
 
@@ -285,7 +288,7 @@ export class Crew {
     const brain = b.model ? disk.brainKey(disk.parseBrain(b.model)) : null;
     // Unnamed routines take the task's first sentence: "Make a demo of this week's screenshots".
     const first = body.split(/\n|(?<=[.!?])\s/)[0].replace(/[.!?]$/, '');
-    const name = String(b.name ?? '').trim().slice(0, 60) || (first.length > 60 ? `${first.slice(0, 59).replace(/\s+\S*$/, '')}…` : first);
+    const name = String(b.name ?? '').trim().slice(0, 60) || short(first, 60);
     return this.db.tx(() => {
       const r = this.db.run('INSERT INTO routines (bot, name, schedule, body, brain, member, next_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
         bot.id, name, String(b.schedule).trim(), body, brain, member, nextRun(when, Date.now()), Date.now());
@@ -502,14 +505,15 @@ export class Crew {
 
   private addTask(bot: string, body: string, origin: string, model: string | undefined, member: number, routine?: Row) {
     const brain = model ? disk.brainKey(disk.parseBrain(model)) : null;
+    const title = short(routine?.name ?? body.split('\n')[0], 80);
     const id = this.db.tx(() => {
       const now = Date.now();
       const r = this.db.run('INSERT INTO tasks (bot, title, body, origin, state, created_at, updated_at, brain, member, routine) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        bot, (routine?.name ?? body.split('\n')[0]).slice(0, 80), body, origin, 'queued', now, now, brain, member, routine?.id ?? null);
+        bot, title, body, origin, 'queued', now, now, brain, member, routine?.id ?? null);
       const id = Number(r.lastInsertRowid);
       if (routine) this.say(bot, 'system', `Routine “${routine.name}”: ${body}`, id);
       else this.say(bot, origin === 'person' ? 'person' : origin, body, id);
-      this.db.event('task.created', bot, { task: id, origin, member, title: body.slice(0, 80) });
+      this.db.event('task.created', bot, { task: id, origin, member, title });
       return id;
     });
     queueMicrotask(() => this.dispatch());
