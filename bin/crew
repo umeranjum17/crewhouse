@@ -6,7 +6,7 @@ const usage = `usage:
   crew roster                          who is on the crew, which templates exist
   crew status                          open tasks
   crew recruit <template> [--name N]   (Chief) recruit a bot
-  crew assign <bot> "<task>"           (Chief) hand a bot a task
+  crew assign <bot> [--model M] "<task>"  (Chief) hand a bot a task; M picks the model for it, e.g. claude:haiku or codex
   crew call-me "<sir|ma'am|a name>"    (Chief) change how the person is addressed
   crew report "<progress line>"
   crew deliver <path> ["<note>"]       register a finished file (inside your folder)
@@ -30,7 +30,11 @@ let body, path = cmd;
 switch (cmd) {
   case 'roster': case 'status': body = {}; break;
   case 'recruit': { const i = rest.indexOf('--name'); body = { template: rest[0], name: i >= 0 ? rest.slice(i + 1).join(' ') : undefined }; break; }
-  case 'assign': body = { bot: rest[0]?.toLowerCase(), text: rest.slice(1).join(' ') }; break;
+  case 'assign': {
+    const m = rest[1] === '--model' ? rest[2] : undefined;
+    body = { bot: rest[0]?.toLowerCase(), model: m, text: rest.slice(m ? 3 : 1).join(' ') };
+    break;
+  }
   case 'report': case 'remember': case 'call-me': body = { text: rest.join(' ') }; break;
   case 'deliver': body = { path: rest[0], note: rest.slice(1).join(' ') }; break;
   case 'hook': {

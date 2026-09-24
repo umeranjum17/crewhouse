@@ -40,6 +40,7 @@ export class HerdrRunner implements Runner {
   private cmd: string[];
   private session: string;
   private workspaces = new Map<string, string>();
+  private freshCodex = new Set<string>();
 
   constructor(cmd: string[], session: string) { this.cmd = cmd; this.session = session; }
 
@@ -94,11 +95,19 @@ export class HerdrRunner implements Runner {
       // A first-run dialog (folder trust) blocks startup; crewd shows it to the person as an ask.
       if (e.code !== 'agent_not_ready') throw e;
     }
+    if (spec.kind === 'codex') this.freshCodex.add(spec.bot);
   }
 
   async prompt(bot: string, text: string) {
     // Submission only; completion arrives via the CLI's own hooks or the state poll.
     await this.call(['agent', 'prompt', this.name(bot), text]);
+    // A freshly started Codex drops its first input, however long after ready it arrives (Herdr lab, Codex 0.153).
+    // So check the prompt reached the screen and send it once more if not.
+    if (!this.freshCodex.delete(bot)) return;
+    await new Promise((r) => setTimeout(r, 3000));
+    const squash = (s: string) => s.replace(/\s+/g, '');
+    const needle = squash(text.trim().split('\n').pop() ?? '').slice(0, 32);
+    if (!squash(await this.read(bot, 120).catch(() => '')).includes(needle)) await this.call(['agent', 'prompt', this.name(bot), text]);
   }
 
   async state(bot: string): Promise<RunState> {

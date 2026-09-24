@@ -87,7 +87,13 @@ export function startServer(cfg: Config, db: Store, crew: Crew) {
     if (m === 'POST' && p === '/api/onboard') return crew.onboard((await readJson(req)).address ?? '');
     if (m === 'POST' && p === '/api/recruit') { const b = await readJson(req); return crew.recruit(b.template, b.name, 'person'); }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)$/)) && m === 'GET') return crew.botPage(r[1]);
-    if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/messages$/)) && m === 'POST') return crew.post(r[1], (await readJson(req)).text ?? '');
+    if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/messages$/)) && m === 'POST') { const b = await readJson(req); return crew.post(r[1], b.text ?? '', b.model); }
+    if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/models$/)) && m === 'PUT') {
+      crew.botPage(r[1]); // 404 for unknown bots
+      const models = disk.setBrains(cfg, r[1], (await readJson(req)).models);
+      db.event('bot.models', r[1], { by: 'person', models });
+      return { thinks: crew.thinks(r[1]) };
+    }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/notes$/)) && m === 'PUT') {
       disk.writeNotes(cfg, r[1], (await readJson(req)).text ?? '');
       db.event('memory.edited', r[1], { by: 'person' });
@@ -129,7 +135,7 @@ export function startServer(cfg: Config, db: Store, crew: Crew) {
         templates: disk.listTemplates(cfg).map((t) => ({ id: t.id, name: t.display, role: t.role })),
       };
       case 'recruit': chiefOnly(); { const n = crew.recruit(b.template, b.name, CHIEF); return { recruited: { id: n.id, name: n.display } }; }
-      case 'assign': chiefOnly(); return crew.assign(b.bot, b.text ?? '', CHIEF);
+      case 'assign': chiefOnly(); return crew.assign(b.bot, b.text ?? '', CHIEF, b.model);
       case 'status': return db.all("SELECT id, bot, title, state FROM tasks WHERE state IN ('queued','working','needs_you') ORDER BY id");
       case 'report': db.event('task.progress', bot.id, { text: String(b.text ?? '').slice(0, 200) }); return { ok: true };
       case 'remember': {
@@ -146,7 +152,9 @@ export function startServer(cfg: Config, db: Store, crew: Crew) {
         return { ok: true, path: rel };
       }
       case 'hook/stop': crew.finish(bot.id, String(b.last_assistant_message ?? '')); return {};
-      case 'hook/codex': if (b.type === 'agent-turn-complete') crew.finish(bot.id, String(b['last-assistant-message'] ?? '')); return {};
+      // An empty turn (Codex at a usage limit ends like this) is left to the terminal fallback, which reads the reason.
+      case 'hook/codex': if (b.type === 'agent-turn-complete' && b['last-assistant-message']) crew.finish(bot.id, String(b['last-assistant-message'])); return {};
+      case 'hook/failure': crew.hookFailure(bot.id, b); return {};
       case 'hook/notify': db.event('run.notice', bot.id, { text: String(b.message ?? '').slice(0, 200) }); return {};
       case 'hook/permission': return { hookSpecificOutput: { hookEventName: 'PermissionRequest', decision: await crew.permission(bot.id, b) } };
       case 'hook/session': crew.hookSession(bot.id, b); return {};

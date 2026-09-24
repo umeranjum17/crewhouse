@@ -271,3 +271,119 @@ test('bots on disk: persona rename, capped notes, folder confinement, slugs', ()
   assert.equal(disk.addressLine("Ma'am"), 'Address the person as "ma\'am".');
   done();
 });
+
+test('models: per-bot fallback order, per-task choice, and a switch starts the other CLI', async () => {
+  const { cfg, db, crew, runner, done } = setup();
+  crew.onboard('sir');
+  crew.recruit('reel', 'Reel', 'person');
+  const starts: any[] = [];
+  const start = runner.start.bind(runner);
+  runner.start = async (s) => { starts.push(s); return start(s); };
+
+  assert.deepEqual(crew.thinks('reel').map((b) => b.name), ['Claude Sonnet', 'ChatGPT'], 'template model, then ChatGPT');
+  assert.throws(() => disk.setBrains(cfg, 'reel', ['gemini:pro']), /not a model choice/);
+  assert.throws(() => disk.setBrains(cfg, 'reel', ['claude:$(rm -rf ~)']), /not a model choice/);
+  assert.throws(() => disk.setBrains(cfg, 'reel', []), /at least one/);
+  assert.deepEqual(disk.setBrains(cfg, 'reel', ['claude:opus', 'codex', 'claude:opus']), ['claude:opus', 'codex']);
+  assert.deepEqual(crew.thinks('reel').map((b) => b.name), ['Claude Opus', 'ChatGPT']);
+  assert.throws(() => crew.assign('reel', 'x', 'chief', 'pi'), /not a model choice/);
+
+  const a = crew.assign('reel', 'rename 400 files', 'chief', 'codex:gpt-5-mini').task;
+  await sleep(150);
+  assert.equal(task(db, a).state, 'done');
+  assert.equal(starts[0].kind, 'codex');
+  assert.deepEqual(starts[0].args.slice(-2), ['--model', 'gpt-5-mini']);
+  assert.match(runner['out'].get('reel')!, /Address the person as "sir"/, 'codex is told who it serves; it has no CLAUDE.md imports');
+
+  const b = crew.assign('reel', 'judge which take is best', 'chief').task;
+  await sleep(150);
+  assert.equal(task(db, b).state, 'done');
+  assert.equal(starts[1].kind, 'claude', 'no per-task choice: the bot default');
+  assert.deepEqual(starts[1].args.slice(-2), ['--model', 'opus']);
+  assert.equal(crew.bot('reel')!.runtime, 'claude');
+  done();
+});
+
+test('fallback: resting accounts are skipped, all resting pauses until the reset, a limit mid-run switches', async () => {
+  const { db, crew, runner, done } = setup();
+  crew.onboard('sir');
+  crew.recruit('scout', 'Scout', 'person');
+  const kinds: string[] = [];
+  const start = runner.start.bind(runner);
+  runner.start = async (s) => { kinds.push(s.kind); return start(s); };
+
+  // Before a run: Claude's 5-hour window at 97% means Claude is resting until it resets.
+  const reset = Math.floor(Date.now() / 1000) + 3600;
+  crew.hookStatus('scout', { rate_limits: { five_hour: { used_percentage: 97, resets_at: reset } } });
+  assert.equal(crew.restingUntil('claude'), reset * 1000);
+  const a = crew.assign('scout', 'look it up', 'chief').task;
+  await sleep(150);
+  assert.equal(task(db, a).state, 'done');
+  assert.deepEqual(kinds, ['codex']);
+
+  // Everyone resting: the task pauses with a wake-up time, and resumes when it passes.
+  crew['limits'].set('codex', { restUntil: Date.now() + 60_000 });
+  const b = crew.assign('scout', 'look it up again', 'chief').task;
+  await sleep(100);
+  assert.equal(task(db, b).state, 'paused');
+  assert.ok(Math.abs(task(db, b).wake_at - (Date.now() + 60_000)) < 1000, 'earliest reset: ChatGPT in a minute, not Claude in an hour');
+  assert.match(task(db, b).result, /All AI accounts are resting until \d+:\d\d [ap]m/);
+  crew['limits'].clear();
+  db.run('UPDATE tasks SET wake_at = ? WHERE id = ?', Date.now() - 1, b);
+  crew.dispatch();
+  await sleep(150);
+  assert.equal(task(db, b).state, 'done');
+  assert.equal(kinds.at(-1), 'claude', 'limits cleared: back to the first choice');
+
+  // During a run: Claude's StopFailure(rate_limit) rests Claude and continues on ChatGPT from a brief.
+  crew.hookStatus('scout', { rate_limits: { five_hour: { used_percentage: 60, resets_at: reset } } });
+  const c = crew.assign('scout', 'ask permission then dig deep', 'chief').task; // the stub holds it working
+  await sleep(100);
+  assert.equal(kinds.at(-1), 'claude');
+  db.event('task.progress', 'scout', { text: 'found three sources' });
+  crew.hookFailure('scout', { error: 'rate_limit', last_assistant_message: 'API Error: Rate limit reached' });
+  await sleep(100);
+  assert.equal(kinds.at(-1), 'codex');
+  assert.equal(task(db, c).state, 'working');
+  assert.equal(crew.restingUntil('claude'), reset * 1000, 'rests until the known reset');
+  const brief = runner['out'].get('scout')!;
+  assert.match(brief, /continuing it in a new session/);
+  assert.match(brief, /found three sources/);
+  assert.match(brief, /dig deep/);
+  const said = db.all("SELECT text FROM messages WHERE bot = 'scout' AND author = 'system'").map((m) => m.text);
+  assert.ok(said.some((t) => /^Switched from Claude to ChatGPT: Claude is resting until/.test(t)), said.join('\n'));
+  runner.complete('scout', 'here is the report');
+  await sleep(50);
+  assert.equal(task(db, c).state, 'done');
+
+  // Any other API error fails the task plainly instead of pretending it finished.
+  const d = crew.assign('scout', 'ask permission again', 'chief').task;
+  await sleep(100);
+  crew.hookFailure('scout', { error: 'authentication_failed' });
+  assert.equal(task(db, d).state, 'failed');
+  done();
+});
+
+test('fallback: a Codex usage-limit screen rests ChatGPT until the time it prints, then Claude continues', async () => {
+  const { cfg, db, crew, runner, done } = setup();
+  crew.onboard('sir');
+  crew.recruit('scout', 'Scout', 'person');
+  disk.setBrains(cfg, 'scout', ['codex', 'claude:haiku']);
+  const kinds: string[] = [];
+  const start = runner.start.bind(runner);
+  runner.start = async (s) => { kinds.push(s.kind); return start(s); };
+  const { limitResetFromText } = await import('../src/crew.ts');
+  const year = new Date().getFullYear() + 1;
+  const reset = Date.parse(`Sep 26, ${year} 12:15 PM`);
+  assert.equal(limitResetFromText(`■ You've hit your usage limit. Visit x or try again at\nSep 26th, ${year} 12:15 PM.`), reset);
+  assert.equal(limitResetFromText('try again later'), 0);
+
+  // The stub shows its prompt in the pane and blocks on "needs approval", like Codex's model-switch dialog.
+  const t = crew.assign('scout', `needs approval ■ You've hit your usage limit. Visit x or try again at Sep 26th, ${year} 12:15 PM.`, 'chief').task;
+  await sleep(2500); // one watch-loop tick
+  assert.equal(crew.restingUntil('codex'), reset);
+  assert.deepEqual(kinds, ['codex', 'claude']);
+  assert.equal(task(db, t).state !== 'failed', true);
+  assert.ok(db.all("SELECT text FROM messages WHERE bot = 'scout'").some((m) => /^Switched from ChatGPT to Claude: ChatGPT is resting until \w{3} 12:15 pm/.test(m.text)));
+  done();
+});

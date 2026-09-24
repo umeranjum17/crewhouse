@@ -14,6 +14,6 @@ export const font = {
 };
 /** Plain words for states; the UI never shows internal names. */
 export const stateWords: Record<string, string> = {
-  queued: 'Waiting its turn', working: 'Working', needs_you: 'Needs you', done: 'Done', failed: 'Stopped',
+  queued: 'Waiting its turn', paused: 'Paused', working: 'Working', needs_you: 'Needs you', done: 'Done', failed: 'Stopped',
   off: 'Resting', idle: 'Ready', blocked: 'Needs you', unknown: 'Working',
 };

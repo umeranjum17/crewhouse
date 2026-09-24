@@ -21,6 +21,7 @@ export const api = {
   notes: (id: string, text: string) => call('PUT', `/api/bots/${id}/notes`, { text }),
   tools: (id: string, tools: string[]) => call('PUT', `/api/bots/${id}/tools`, { tools }),
   install: (tool: string) => call('POST', `/api/tools/${tool}/install`),
+  models: (id: string, models: string[]) => call('PUT', `/api/bots/${id}/models`, { models }),
   reset: (id: string) => call('POST', `/api/bots/${id}/reset`),
   answer: (ask: number, body: { answer?: string; keys?: string[]; text?: string }) => call('POST', `/api/asks/${ask}/answer`, body),
 };
