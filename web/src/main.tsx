@@ -4,12 +4,12 @@ import { api, setMember, subscribe, type Json } from './api.ts';
 import { stateWords } from './tokens.ts';
 import { Screen } from './screen.tsx';
 
-type Route = { view: 'home' | 'chief' | 'crew' | 'needs' | 'activity' | 'settings' | 'bot'; id?: string; tab?: string };
+type Route = { view: 'home' | 'chief' | 'crew' | 'needs' | 'routines' | 'activity' | 'settings' | 'bot'; id?: string; tab?: string };
 
 function parseRoute(): Route {
   const [view, id, tab] = location.hash.replace(/^#\/?/, '').split('/');
   if (view === 'bot' && id) return { view: 'bot', id, tab: tab || 'chat' };
-  return { view: (['home', 'chief', 'crew', 'needs', 'activity', 'settings'].includes(view) ? view : 'home') as Route['view'] };
+  return { view: (['home', 'chief', 'crew', 'needs', 'routines', 'activity', 'settings'].includes(view) ? view : 'home') as Route['view'] };
 }
 const go = (hash: string) => { location.hash = hash; };
 
@@ -211,6 +211,11 @@ function sentence(e: Json, name: (id: string) => string, who: (id: number) => st
     case 'tool.installing': return `Installing ${d.tool}…`;
     case 'tool.installed': return `Installed ${d.tool}`;
     case 'tool.failed': return `Couldn't install ${d.tool}: ${d.error}`;
+    case 'routine.created': return `${d.by === 'chief' ? 'Chief' : 'You'} set up a routine for ${b}: “${d.name}”, ${String(d.words).toLowerCase()}`;
+    case 'routine.fired': return d.task ? `Routine “${d.name}” started ${b}${d.why === 'late' ? ', catching up after the computer slept' : d.why === 'now' ? ', as you asked' : ''}` : `Chief wrote the ${String(d.name).toLowerCase()}`;
+    case 'routine.skipped': return `Routine “${d.name}” skipped a run: ${b} was still on the last one`;
+    case 'routine.paused': return `You paused the routine “${d.name}”`;
+    case 'routine.resumed': return `You resumed the routine “${d.name}”`;
     case 'bot.models': return `You changed which models ${b} thinks with`;
     case 'account.resting': return `${whose}${d.runtime === 'codex' ? 'ChatGPT' : 'Claude'} is resting until ${new Date(d.until).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
     case 'task.paused': return `${b} paused “${d.title}”: ${d.result ?? ''}`;
@@ -413,6 +418,7 @@ function Home({ state, name, tick, refresh }: { state: Json; name: (id: string) 
   const working = state.bots.filter((b: Json) => b.task || b.queued);
   const done = state.tasks.filter((t: Json) => t.state === 'done' && Date.now() - t.updated_at < 86_400_000);
   const busy = working.some((b: Json) => b.task?.state === 'working');
+  const soon = state.routines.filter((r: Json) => r.state === 'on').sort((a: Json, b: Json) => a.next_at - b.next_at).slice(0, 3);
   return (
     <div className="home">
       <header className="heartbeat">
@@ -463,6 +469,18 @@ function Home({ state, name, tick, refresh }: { state: Json; name: (id: string) 
           </a>
         ))}
       </section>
+      {soon.length > 0 && (
+        <section>
+          <h4>Coming up</h4>
+          {soon.map((r: Json) => (
+            <a key={r.id} className="card line" href="#/routines">
+              <Avatar bot={state.bots.find((b: Json) => b.id === r.bot)} size={28} />
+              <div className="grow"><b>{r.name}</b> <span className="muted small">· {name(r.bot)} · {r.words}</span></div>
+              <span className="muted small">{clock(r.next_at)}</span>
+            </a>
+          ))}
+        </section>
+      )}
       {state.ideas.length > 0 && (
         <section>
           <h4>Ideas from the crew</h4>
@@ -569,7 +587,7 @@ function BotPage({ id, tab, state, tick, refresh }: { id: string; tab: string; s
   useEffect(() => { load(); }, [load, tick]);
   const bot = state.bots.find((b: Json) => b.id === id);
   if (!bot || !page) return <div className="muted">{msg || 'Loading…'}</div>;
-  const tabs = ['chat', 'did', 'knows', 'skills', 'tools', 'models', 'files', 'history', 'screen', 'work'];
+  const tabs = ['chat', 'did', 'knows', 'skills', 'tools', 'models', 'routines', 'files', 'history', 'screen', 'work'];
   const label: Record<string, string> = { did: 'What I did', work: 'Show the work', models: 'Thinks with' };
   const save = async (body: Json) => { await api.settings(id, body).catch((e) => setMsg(e.message)); load(); };
   const toggle = async (tool: string, on: boolean) => {
@@ -661,6 +679,7 @@ function BotPage({ id, tab, state, tick, refresh }: { id: string; tab: string; s
         </div>
       )}
       {tab === 'models' && <Models id={id} bot={bot} onSaved={refresh} />}
+      {tab === 'routines' && <Routines state={state} bot={id} refresh={refresh} />}
       {tab === 'files' && (
         <div className="list">
           {page.files.length === 0 && <div className="muted empty">No files yet. Deliverables land in {page.folder}/files.</div>}
@@ -755,6 +774,128 @@ function ShowWork({ id, bot }: { id: string; bot: Json }) {
         </form>
       )}
       {err && <div className="error">{err}</div>}
+    </div>
+  );
+}
+
+const WHEN_EXAMPLES = ['every Monday 9:00', 'weekdays 8am', 'every day 6pm', 'every Friday 17:00'];
+
+/** Work on a schedule: the whole list on the Routines screen, or one bot's on its page. */
+function Routines({ state, bot, refresh }: { state: Json; bot?: string; refresh: () => void }) {
+  const [adding, setAdding] = useState(false);
+  const list = state.routines.filter((r: Json) => !bot || r.bot === bot);
+  const who = bot ? state.bots.find((b: Json) => b.id === bot)?.display : '';
+  return (
+    <div className="list">
+      <div className="head">
+        <div>
+          {!bot && <h1>Routines</h1>}
+          <div className="muted">{bot ? `Work ${who} does on a schedule.` : 'Work the crew does on a schedule, by this computer\'s clock.'} Or tell Chief: “every Friday at five, have Reel make a demo of what shipped”.</div>
+        </div>
+        {!adding && <button className="btn primary" onClick={() => setAdding(true)}>＋ Add a routine</button>}
+      </div>
+      {adding && <AddRoutine state={state} bot={bot} onClose={() => setAdding(false)} onDone={() => { setAdding(false); refresh(); }} />}
+      {list.length === 0 && !adding && <div className="muted empty">No routines yet.</div>}
+      {list.map((r: Json) => <RoutineCard key={r.id} r={r} state={state} refresh={refresh} />)}
+      <p className="muted small">If the computer is asleep when a routine is due, it runs once when it wakes. If the last run is still going, the next one is skipped rather than stacked.</p>
+    </div>
+  );
+}
+
+function RoutineCard({ r, state, refresh }: { r: Json; state: Json; refresh: () => void }) {
+  const [when, setWhen] = useState<string | null>(null);
+  const [err, setErr] = useState('');
+  const b = state.bots.find((x: Json) => x.id === r.bot);
+  const act = async (fn: () => Promise<unknown>) => { setErr(''); try { await fn(); setWhen(null); refresh(); } catch (e: any) { setErr(e.message); } };
+  const last = r.history[0];
+  const lastWords = (h: Json) => h.kind === 'routine.skipped' ? 'Skipped: still on the last run'
+    : h.task ? `${stateWords[h.state] ?? h.state}${h.why === 'late' ? ' · caught up after sleep' : h.why === 'now' ? ' · run by you' : ''}` : 'Written';
+  return (
+    <div className="card routine">
+      <div className="row">
+        <Avatar bot={b} size={34} />
+        <div className="grow">
+          <div><b>{r.name}</b> {r.state === 'paused' && <span className="pill">Paused</span>}</div>
+          <div className="muted small">{r.kind === 'digest' ? 'Chief: while you were away, what finished, what needs you, what is coming up' : `${b?.display}${r.brain ? ` · thinks with ${r.brain}` : ''}`}</div>
+        </div>
+      </div>
+      <div className="row wrap small routine-when">
+        <span className="chip">{r.words}</span>
+        <span>{r.state === 'paused' ? 'Paused; nothing runs until you resume it' : <>Next: <b>{clock(r.next_at)}</b></>}</span>
+        {last && <span className="muted">Last: {clock(last.at)} · {lastWords(last)}</span>}
+      </div>
+      {when !== null && (
+        <form className="row" onSubmit={(e) => { e.preventDefault(); act(() => api.routine(r.id, { schedule: when })); }}>
+          <input className="input" autoFocus value={when} onChange={(e) => setWhen(e.target.value)} placeholder="every Monday 9:00" />
+          <button className="btn primary">Save</button>
+          <button type="button" className="btn" onClick={() => setWhen(null)}>Cancel</button>
+        </form>
+      )}
+      {err && <div className="error">{err}</div>}
+      <div className="row wrap end">
+        <button className="btn" onClick={() => act(() => api.runRoutine(r.id))}>Run now</button>
+        <button className="btn" onClick={() => act(() => api.routine(r.id, { state: r.state === 'on' ? 'paused' : 'on' }))}>{r.state === 'on' ? 'Pause' : 'Resume'}</button>
+        <button className="btn" onClick={() => setWhen(r.schedule)}>Change time</button>
+        {r.kind !== 'digest' && <button className="btn quiet" onClick={() => confirm(`Remove “${r.name}”?`) && act(() => api.removeRoutine(r.id))}>Remove</button>}
+      </div>
+      {r.history.length > 0 && (
+        <details>
+          <summary className="small muted">History</summary>
+          <ol className="trail">
+            {r.history.map((h: Json, i: number) => (
+              <li key={i}><time>{clock(h.at)}</time><span>{h.task ? <a href={`#/bot/${r.bot}/history`}>Task #{h.task}</a> : null} {lastWords(h)}</span></li>
+            ))}
+          </ol>
+        </details>
+      )}
+    </div>
+  );
+}
+
+function AddRoutine({ state, bot, onClose, onDone }: { state: Json; bot?: string; onClose: () => void; onDone: () => void }) {
+  const crew = state.bots.filter((b: Json) => b.id !== 'chief');
+  const [f, setF] = useState({ bot: bot ?? crew[0]?.id ?? '', task: '', schedule: '', model: '', name: '' });
+  const [preview, setPreview] = useState<Json>(null);
+  const [err, setErr] = useState('');
+  const set = (k: string, v: string) => setF({ ...f, [k]: v });
+  useEffect(() => {
+    if (!f.schedule.trim()) return setPreview(null);
+    const t = setTimeout(() => api.schedule(f.schedule).then(setPreview).catch((e) => setPreview({ error: e.message })), 250);
+    return () => clearTimeout(t);
+  }, [f.schedule]);
+  if (!crew.length) return <div className="card muted">Recruit a bot first; a routine hands one of the crew a task on a schedule.</div>;
+  const save = async () => { setErr(''); try { await api.addRoutine({ ...f, model: f.model.trim() || undefined }); onDone(); } catch (e: any) { setErr(e.message); } };
+  return (
+    <div className="card">
+      <b>A new routine</b>
+      {!bot && (
+        <label className="label">Who does it
+          <select className="input" value={f.bot} onChange={(e) => set('bot', e.target.value)}>
+            {crew.map((b: Json) => <option key={b.id} value={b.id}>{b.display} · {b.role}</option>)}
+          </select>
+        </label>
+      )}
+      <label className="label">What should {crew.find((b: Json) => b.id === f.bot)?.display ?? 'it'} do each time
+        <textarea className="input" rows={3} value={f.task} onChange={(e) => set('task', e.target.value)} placeholder="Make a 30-second demo from this week's screenshots in Pictures/Screenshots" />
+      </label>
+      <label className="label">When
+        <input className="input" value={f.schedule} onChange={(e) => set('schedule', e.target.value)} placeholder="every Monday 9:00" />
+      </label>
+      <div className="row wrap examples">{WHEN_EXAMPLES.map((w) => <button key={w} type="button" className="chip" onClick={() => set('schedule', w)}>{w}</button>)}</div>
+      {preview && <div className={`small ${preview.error ? 'error' : 'muted'}`}>{preview.error ?? `${preview.words}. First run ${clock(preview.next)}.`}</div>}
+      <details className="small">
+        <summary className="muted">More: a name, a different model</summary>
+        <label className="label">Name<input className="input" value={f.name} onChange={(e) => set('name', e.target.value)} placeholder="Weekly demo" /></label>
+        <label className="label">Model for this routine
+          <input className="input" list="model-suggestions" value={f.model} onChange={(e) => set('model', e.target.value)} placeholder="the bot's own (a cheap one such as claude:haiku suits routine work)" />
+        </label>
+        <datalist id="model-suggestions">{MODEL_SUGGESTIONS.map((m) => <option key={m} value={m} />)}</datalist>
+      </details>
+      {err && <div className="error">{err}</div>}
+      <div className="row end">
+        <button className="btn" onClick={onClose}>Cancel</button>
+        <button className="btn primary" disabled={!f.bot || !f.task.trim() || !preview || preview.error} onClick={save}>Add routine</button>
+      </div>
     </div>
   );
 }
@@ -939,7 +1080,7 @@ function App() {
 
   if (!state) return <div className="boot">{offline ? 'Crewhouse is not running. Start it with ./crewhouse start' : 'Opening Crewhouse…'}</div>;
   const nav: [Route['view'], string, string][] = [
-    ['home', 'Home', '⌂'], ['chief', 'Chief', '★'], ['needs', 'Needs you', '◉'], ['crew', 'Crew', '☺'], ['activity', 'Activity', '∿'], ['settings', 'Settings', '≡'],
+    ['home', 'Home', '⌂'], ['chief', 'Chief', '★'], ['needs', 'Needs you', '◉'], ['crew', 'Crew', '☺'], ['routines', 'Routines', '↻'], ['activity', 'Activity', '∿'], ['settings', 'Settings', '≡'],
   ];
   const active = route.view === 'bot' ? 'crew' : route.view;
   return (
@@ -979,6 +1120,7 @@ function App() {
         )}
         {route.view === 'crew' && <Crew state={state} refresh={refresh} />}
         {route.view === 'needs' && <NeedsYou state={state} refresh={refresh} />}
+        {route.view === 'routines' && <Routines state={state} refresh={refresh} />}
         {route.view === 'activity' && <Activity state={state} name={name} />}
         {route.view === 'settings' && <Settings state={state} me={me} switchTo={switchTo} tick={tick} refresh={refresh} />}
         {route.view === 'bot' && route.id && (route.id === 'chief' ? (go('#/chief'), null) : <BotPage id={route.id} tab={route.tab!} state={state} tick={tick} refresh={refresh} />)}

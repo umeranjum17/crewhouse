@@ -7,6 +7,8 @@ const usage = `usage:
   crew status                          open tasks
   crew recruit <template> [--name N]   (Chief) recruit a bot
   crew assign <bot> [--model M] "<task>"  (Chief) hand a bot a task; M picks the model for it, e.g. claude:haiku or codex
+  crew routine <bot> "<when>" [--name N] [--model M] "<task>"  (Chief) a task on a schedule, e.g. "every Monday 9:00", "weekdays 8am", "every 2 hours"
+  crew routines                        the routines and when each runs next
   crew call-me "<sir|ma'am|a name>"    (Chief) change how the person is addressed
   crew report "<progress line>"
   crew deliver <path> ["<note>"]       register a finished file (inside your folder)
@@ -28,7 +30,14 @@ async function call(path, body) {
 
 let body, path = cmd;
 switch (cmd) {
-  case 'roster': case 'status': body = {}; break;
+  case 'roster': case 'status': case 'routines': body = {}; break;
+  case 'routine': {
+    body = { bot: rest[0], schedule: rest[1] };
+    let i = 2;
+    for (; ['--model', '--name'].includes(rest[i]); i += 2) body[rest[i].slice(2)] = rest[i + 1];
+    body.task = rest.slice(i).join(' ');
+    break;
+  }
   case 'recruit': { const i = rest.indexOf('--name'); body = { template: rest[0], name: i >= 0 ? rest.slice(i + 1).join(' ') : undefined }; break; }
   case 'assign': {
     const m = rest[1] === '--model' ? rest[2] : undefined;

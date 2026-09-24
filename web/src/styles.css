@@ -206,3 +206,8 @@ details.card > summary::-webkit-details-marker { display: none; }
 .signin .terminal { min-height: 0; max-height: none; }
 .signin .terminal a { color: #9FD8CF; text-decoration: underline; word-break: break-all; }
 .who { margin-top: 2px; border: 0; background: transparent; color: var(--ink3); padding: 0; font: inherit; cursor: pointer; }
+.routine-when { margin: 10px 0 2px; }
+.routine details { margin-top: 8px; }
+button.chip { border: 0; cursor: pointer; }
+.routine .row.end { margin-top: 8px; } .routine .row.end .btn { padding: 5px 11px; font-size: 13px; }
+.examples { margin: 8px 0 6px; }
