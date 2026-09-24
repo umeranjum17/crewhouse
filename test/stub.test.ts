@@ -149,3 +149,33 @@ test('screen: take over and give back through the API; watching needs the Comput
   const foreign = new WebSocket(`ws://127.0.0.1:${port}/ws/desktop/reel`, { origin: 'https://evil.example' });
   assert.equal(await new Promise((r) => { foreign.once('open', () => r('open')); foreign.once('error', () => r('refused')); }), 'refused');
 });
+
+test('routines: Chief sets one up from chat, it fires on schedule through the daemon, the person manages it', async () => {
+  await until(async () => (await fetch(`${base}/api/state`).catch(() => null))?.ok);
+  assert.equal((await api('GET', '/api/schedule?text=' + encodeURIComponent('weekdays at 8am'))).body.words, 'Weekdays at 8:00 am');
+  assert.equal((await api('GET', '/api/schedule?text=someday')).status, 400);
+  assert.equal((await tool('reel', 'routine', { bot: 'reel', schedule: 'daily 9', task: 'x' })).status, 403, 'only Chief sets routines');
+
+  const made = (await tool('chief', 'routine', { bot: 'reel', schedule: 'every Friday 17:00', task: 'Make a demo of what shipped this week' })).body.routine;
+  assert.ok(made.id);
+  const chiefSays = (await api('GET', '/api/bots/chief')).body.messages.map((m: any) => m.text);
+  assert.ok(chiefSays.some((t: string) => /^Routine added: “Make a demo of what shipped this week” for Reel, every friday at 5:00 pm\. First run/.test(t)));
+  let r = (await api('GET', '/api/state')).body.routines.find((x: any) => x.id === made.id);
+  assert.equal(r.words, 'Every Friday at 5:00 pm');
+  assert.ok((await tool('chief', 'routines', {})).body.some((x: any) => x.id === made.id));
+
+  // Its time comes (moved into the past, as after a sleep): crewd's own loop fires it and Reel does the work.
+  new DatabaseSync(join(root, 'state', 'crew.db')).prepare('UPDATE routines SET next_at = ? WHERE id = ?').run(Date.now() - 1000, made.id);
+  r = await until(async () => (await api('GET', '/api/state')).body.routines.find((x: any) => x.id === made.id && x.history[0]?.state === 'done'));
+  assert.equal(r.history[0].why, 'schedule');
+  assert.ok(r.next_at > Date.now());
+
+  // The person pauses it, runs it now, and removes it.
+  assert.equal((await api('PUT', `/api/routines/${made.id}`, { state: 'paused' })).status, 200);
+  assert.equal((await api('POST', `/api/routines/${made.id}/run`)).status, 200);
+  await until(async () => (await api('GET', '/api/state')).body.routines.find((x: any) => x.id === made.id && x.history[0]?.why === 'now' && x.history[0]?.state === 'done'));
+  const own = (await api('POST', '/api/routines', { bot: 'reel', schedule: 'every 2 hours', task: 'Tidy the screenshots folder', model: 'claude:haiku' })).body;
+  assert.equal(own.brain, 'claude:haiku');
+  assert.equal((await api('DELETE', `/api/routines/${own.id}`)).status, 200);
+  assert.equal((await api('POST', '/api/routines', { bot: 'reel', schedule: 'daily 9', task: 'x' }, {})).status, 403, 'cross-site pages cannot add routines');
+});

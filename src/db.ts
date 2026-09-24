@@ -20,6 +20,9 @@ CREATE INDEX IF NOT EXISTS messages_bot ON messages(bot, id);
 CREATE TABLE IF NOT EXISTS asks (
   id INTEGER PRIMARY KEY, bot TEXT, task_id INTEGER, kind TEXT, title TEXT, detail TEXT,
   state TEXT DEFAULT 'open', answer TEXT, at INTEGER, answered_at INTEGER);
+CREATE TABLE IF NOT EXISTS routines (
+  id INTEGER PRIMARY KEY, bot TEXT NOT NULL, name TEXT, schedule TEXT NOT NULL, body TEXT, brain TEXT, member INTEGER DEFAULT 1,
+  kind TEXT DEFAULT 'task', state TEXT DEFAULT 'on', next_at INTEGER, last_at INTEGER, last_task INTEGER, created_at INTEGER);
 CREATE TABLE IF NOT EXISTS events (seq INTEGER PRIMARY KEY, at INTEGER, kind TEXT, bot TEXT, data TEXT);
 `;
 
@@ -36,7 +39,7 @@ export class Store {
     // Columns added after the first release; CREATE IF NOT EXISTS leaves older tables as they were.
     // `member` is whose the bot, task, message or ask is; `account` is whose sign-in the bot's running session uses.
     for (const [table, col] of [['tasks', 'brain TEXT'], ['tasks', 'wake_at INTEGER'], ['people', 'quiet TEXT'], ['bots', 'member INTEGER DEFAULT 1'],
-      ['bots', 'account INTEGER'], ['tasks', 'member INTEGER DEFAULT 1'], ['messages', 'member INTEGER'], ['asks', 'member INTEGER']]) {
+      ['bots', 'account INTEGER'], ['tasks', 'member INTEGER DEFAULT 1'], ['messages', 'member INTEGER'], ['asks', 'member INTEGER'], ['tasks', 'routine INTEGER']]) {
       if (!this.all(`PRAGMA table_info(${table})`).some((c) => c.name === col.split(' ')[0])) this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${col}`);
     }
   }

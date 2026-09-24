@@ -6,6 +6,7 @@ import type { RunState, Runner } from './runner.ts';
 import * as disk from './bots.ts';
 import { Desktops, missing as desktopMissing, type Watcher } from './desktop.ts';
 import { Accounts, OWNER } from './accounts.ts';
+import { describe, nextRun, parseSchedule } from './routines.ts';
 
 const HOLD_MS = Number(process.env.CREWHOUSE_HOLD_MS || 180_000); // how long a CLI's permission hook waits for an answer before its own dialog shows
 const FALLBACK_MS = 12_000; // settled with no Stop hook this long: take the reply from the terminal instead
@@ -110,6 +111,7 @@ export class Crew {
       this.db.run("UPDATE asks SET state = 'withdrawn' WHERE state = 'open'");
       this.db.run("UPDATE bots SET state = 'off'");
       this.db.event('system.started', null, { requeued: Number(n) });
+      for (const m of this.members()) this.ensureDigest(m.id);
     });
     if (!this.member(OWNER).onboarded && !this.db.get('SELECT 1 FROM messages WHERE bot = ?', CHIEF)) this.say(CHIEF, 'bot', chiefGreeting(), null, OWNER);
     for (const b of this.bots()) if (existsSync(disk.botDir(this.cfg, b.id))) disk.writePerson(this.cfg, b.id, this.member(b.member ?? OWNER).address);
@@ -204,7 +206,123 @@ export class Crew {
       limits: Object.fromEntries(runtimes.filter((r) => this.limitsOf(me.id, r)).map((r) => [r, this.limitsOf(me.id, r)])),
       resting: Object.fromEntries(runtimes.map((r) => [r, this.restingUntil(r, me.id)])),
       desktops: { missing: desktopMissing() },
+      routines: this.routines(me.id),
     };
+  }
+
+  // ---- routines: time-based, deterministic, no model call to decide when ----
+  /** One member's routines: those they set up, and their own morning digest. */
+  routines(member = OWNER) {
+    return this.db.all('SELECT * FROM routines WHERE member = ? ORDER BY kind, id', member).map((r): Row => ({
+      ...r, words: describe(parseSchedule(r.schedule)),
+      history: this.db.all("SELECT seq, at, kind, data FROM events WHERE kind IN ('routine.fired', 'routine.skipped') AND json_extract(data, '$.routine') = ? ORDER BY seq DESC LIMIT 8", r.id)
+        .map((e) => { const d = JSON.parse(e.data); return { at: e.at, kind: e.kind, ...d, state: d.task ? this.db.get('SELECT state FROM tasks WHERE id = ?', d.task)?.state : undefined }; }),
+    }));
+  }
+
+  private routine(id: number) {
+    const r = this.db.get('SELECT * FROM routines WHERE id = ?', id);
+    if (!r) throw Object.assign(new Error('no such routine'), { status: 404 });
+    return r;
+  }
+
+  /** Every member's morning digest is on from the start; they can move or pause it, not delete it. */
+  private ensureDigest(member: number) {
+    if (this.db.get("SELECT 1 FROM routines WHERE kind = 'digest' AND member = ?", member)) return;
+    this.db.run("INSERT INTO routines (bot, name, schedule, kind, member, next_at, created_at) VALUES (?, 'Morning digest', 'every day 8:00', 'digest', ?, ?, ?)",
+      CHIEF, member, nextRun(parseSchedule('every day 8:00'), Date.now()), Date.now());
+  }
+
+  /** A routine is its setter's: the member who added it, or the one Chief set it up for. Its runs use their accounts. */
+  addRoutine(b: { bot?: string; schedule?: string; task?: string; model?: string; name?: string }, by: string, member = by === CHIEF ? this.chiefFor() : OWNER) {
+    const bot = this.bot(String(b.bot ?? '').toLowerCase());
+    if (!bot || bot.id === CHIEF) throw Object.assign(new Error(`no bot called ${b.bot}; a routine hands a task to one of the crew`), { status: 404 });
+    const body = String(b.task ?? '').trim();
+    if (!body) throw Object.assign(new Error('say what the routine should do'), { status: 400 });
+    const when = parseSchedule(String(b.schedule ?? ''));
+    const brain = b.model ? disk.brainKey(disk.parseBrain(b.model)) : null;
+    // Unnamed routines take the task's first sentence: "Make a demo of this week's screenshots".
+    const first = body.split(/\n|(?<=[.!?])\s/)[0].replace(/[.!?]$/, '');
+    const name = String(b.name ?? '').trim().slice(0, 60) || (first.length > 60 ? `${first.slice(0, 59).replace(/\s+\S*$/, '')}…` : first);
+    return this.db.tx(() => {
+      const r = this.db.run('INSERT INTO routines (bot, name, schedule, body, brain, member, next_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        bot.id, name, String(b.schedule).trim(), body, brain, member, nextRun(when, Date.now()), Date.now());
+      const row = this.routine(Number(r.lastInsertRowid));
+      this.db.event('routine.created', bot.id, { routine: row.id, name, words: describe(when), by, member });
+      if (by === CHIEF) this.say(CHIEF, 'system', `Routine added: “${name}” for ${bot.display}, ${describe(when).toLowerCase()}. First run ${clock(row.next_at)}.`, null, member);
+      return row;
+    });
+  }
+
+  /** Pause, resume or move a routine. Resuming counts from now: a paused routine never catches up. */
+  updateRoutine(id: number, b: { state?: string; schedule?: string }) {
+    const r = this.routine(id);
+    const state = b.state ?? r.state;
+    if (!['on', 'paused'].includes(state)) throw Object.assign(new Error('a routine is on or paused'), { status: 400 });
+    const schedule = b.schedule?.trim() || r.schedule;
+    const next = nextRun(parseSchedule(schedule), Date.now());
+    this.db.tx(() => {
+      this.db.run('UPDATE routines SET state = ?, schedule = ?, next_at = ? WHERE id = ?', state, schedule, next, id);
+      this.db.event(state !== r.state ? `routine.${state === 'on' ? 'resumed' : 'paused'}` : 'routine.changed', r.bot, { routine: id, name: r.name, words: describe(parseSchedule(schedule)) });
+    });
+  }
+
+  deleteRoutine(id: number) {
+    const r = this.routine(id);
+    if (r.kind === 'digest') throw Object.assign(new Error('the morning digest can be paused, not removed'), { status: 400 });
+    this.db.tx(() => { this.db.run('DELETE FROM routines WHERE id = ?', id); this.db.event('routine.deleted', r.bot, { routine: id, name: r.name }); });
+  }
+
+  runRoutine(id: number) { this.fire(this.routine(id), 'now'); }
+
+  /** Fire every routine that is due. A machine that slept through runs catches up once (latest only), then moves on. */
+  schedule(now = Date.now()) {
+    for (const r of this.db.all("SELECT * FROM routines WHERE state = 'on' AND next_at <= ?", now)) {
+      this.db.run('UPDATE routines SET next_at = ? WHERE id = ?', nextRun(parseSchedule(r.schedule), now), r.id);
+      try { this.fire(r, now - r.next_at > 60_000 ? 'late' : 'schedule'); } catch (e) { console.error('routine', r.id, e); }
+    }
+  }
+
+  private fire(r: Row, why: 'schedule' | 'late' | 'now') {
+    const now = Date.now();
+    if (r.kind === 'digest') {
+      this.db.tx(() => {
+        this.say(CHIEF, 'bot', this.digest(r.member, r.last_at ?? now - 86_400_000), null, r.member);
+        this.db.run('UPDATE routines SET last_at = ? WHERE id = ?', now, r.id);
+        this.db.event('routine.fired', CHIEF, { routine: r.id, name: r.name, why, member: r.member });
+      });
+      return;
+    }
+    // Overlap: the last run is still going (or waiting on the person), so this one is skipped, not stacked.
+    const open = r.last_task && this.db.get("SELECT id FROM tasks WHERE id = ? AND state IN ('queued', 'working', 'needs_you', 'paused')", r.last_task);
+    if (open) {
+      this.db.event('routine.skipped', r.bot, { routine: r.id, name: r.name, why: 'overlap', task: r.last_task });
+      return;
+    }
+    const { task } = this.addTask(r.bot, r.body, 'routine', r.brain ?? undefined, r.member, r);
+    this.db.tx(() => {
+      this.db.run('UPDATE routines SET last_at = ?, last_task = ? WHERE id = ?', now, task, r.id);
+      this.db.event('routine.fired', r.bot, { routine: r.id, name: r.name, why, task });
+    });
+  }
+
+  /** Chief's "while you were away" for one member: what finished, what needs them, what is coming up. No model call. */
+  digest(member: number, since: number) {
+    const address = this.member(member).address;
+    const name = (id: string) => this.bot(id)?.display ?? id;
+    const list = (xs: string[]) => xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join('; ')} and ${xs.at(-1)}`;
+    const done = this.db.all("SELECT * FROM tasks WHERE bot != ? AND member = ? AND state = 'done' AND updated_at >= ? ORDER BY id", CHIEF, member, since);
+    const failed = this.db.all("SELECT * FROM tasks WHERE bot != ? AND member = ? AND state = 'failed' AND updated_at >= ? ORDER BY id", CHIEF, member, since);
+    const asks = this.db.all("SELECT * FROM asks WHERE state = 'open' AND COALESCE(member, ?) = ? ORDER BY id", OWNER, member);
+    const learned = this.db.all("SELECT bot, data FROM events WHERE kind = 'memory.learned' AND at >= ? ORDER BY seq", since);
+    const soon = this.db.all("SELECT * FROM routines WHERE state = 'on' AND kind != 'digest' AND member = ? AND next_at <= ? ORDER BY next_at", member, Date.now() + 86_400_000);
+    const lines = [`Good ${partOfDay()}${address ? `, ${address}` : ''}. While you were away:`];
+    lines.push(done.length ? `- Finished: ${list(done.slice(0, 5).map((t) => `${name(t.bot)}, “${t.title}”`))}${done.length > 5 ? `, and ${done.length - 5} more` : ''}.` : '- Nothing new was finished.');
+    if (failed.length) lines.push(`- Did not go well: ${list(failed.slice(0, 3).map((t) => `${name(t.bot)}, “${t.title}” (${String(t.result ?? '').slice(0, 80)})`))}.`);
+    lines.push(asks.length ? `- Needs you: ${list(asks.slice(0, 3).map((a) => a.title))}. It is under Needs you.` : '- Nothing needs you.');
+    for (const l of learned.slice(0, 3)) lines.push(`- ${name(l.bot)} learned: ${JSON.parse(l.data).text}`);
+    lines.push(soon.length ? `- Coming up: ${list(soon.map((r) => `“${r.name}” with ${name(r.bot)}, ${clock(r.next_at)}`))}.` : '- Nothing is scheduled for the next day.');
+    return lines.join('\n');
   }
 
   botPage(id: string, viewer = OWNER) {
@@ -264,6 +382,7 @@ export class Crew {
       const id = Number(this.db.run('INSERT INTO people (name, created_at) VALUES (?, ?)', n, Date.now()).lastInsertRowid);
       this.say(CHIEF, 'bot', chiefGreeting(), null, id);
       this.db.event('person.added', null, { member: id, name: n });
+      this.ensureDigest(id);
       return this.member(id);
     });
   }
@@ -297,7 +416,7 @@ export class Crew {
   }
 
   /** The member Chief is working for right now: whoever asked for his current task. */
-  private chiefFor() { return this.activeTask(CHIEF)?.member ?? OWNER; }
+  chiefFor() { return this.activeTask(CHIEF)?.member ?? OWNER; }
 
   /** A new bot is its recruiter's: the member who hired it, or the one Chief recruited it for. */
   recruit(template: string, name: string | undefined, by: string, member = by === CHIEF ? this.chiefFor() : OWNER) {
@@ -338,14 +457,15 @@ export class Crew {
     return this.addTask(botId, text.trim(), by, model, by === CHIEF ? this.chiefFor() : this.bot(botId)!.member ?? OWNER);
   }
 
-  private addTask(bot: string, body: string, origin: string, model: string | undefined, member: number) {
+  private addTask(bot: string, body: string, origin: string, model: string | undefined, member: number, routine?: Row) {
     const brain = model ? disk.brainKey(disk.parseBrain(model)) : null;
     const id = this.db.tx(() => {
       const now = Date.now();
-      const r = this.db.run('INSERT INTO tasks (bot, title, body, origin, state, created_at, updated_at, brain, member) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        bot, body.split('\n')[0].slice(0, 80), body, origin, 'queued', now, now, brain, member);
+      const r = this.db.run('INSERT INTO tasks (bot, title, body, origin, state, created_at, updated_at, brain, member, routine) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        bot, (routine?.name ?? body.split('\n')[0]).slice(0, 80), body, origin, 'queued', now, now, brain, member, routine?.id ?? null);
       const id = Number(r.lastInsertRowid);
-      this.say(bot, origin === 'person' ? 'person' : origin, body, id);
+      if (routine) this.say(bot, 'system', `Routine “${routine.name}”: ${body}`, id);
+      else this.say(bot, origin === 'person' ? 'person' : origin, body, id);
       this.db.event('task.created', bot, { task: id, origin, member, title: body.slice(0, 80) });
       return id;
     });
@@ -362,7 +482,8 @@ export class Crew {
   private prompt(task: Row) {
     const member = this.member(task.member ?? OWNER);
     const who = task.origin === 'person' ? this.called(member.id) : task.origin === CHIEF ? 'Chief' : task.origin;
-    if (task.bot !== CHIEF) return `[Crewhouse task #${task.id} from ${who}]\n${task.body}`;
+    const routine = task.routine && this.db.get('SELECT name FROM routines WHERE id = ?', task.routine)?.name;
+    if (task.bot !== CHIEF) return `[Crewhouse task #${task.id} from ${routine ? `the routine “${routine}”, set up by ${this.called(member.id)}` : who}]\n${task.body}`;
     const crew = this.bots().filter((b) => b.id !== CHIEF)
       .map((b) => `${b.display} (id ${b.id}, ${b.template}, ${this.activeTask(b.id) ? 'busy' : 'free'})`).join('; ') || 'nobody yet';
     const tpls = disk.listTemplates(this.cfg).map((t) => `${t.id}: ${t.role}`).join('; ');
@@ -703,6 +824,7 @@ export class Crew {
     if (this.ticking) return;
     this.ticking = true;
     try {
+      this.schedule();
       for (const task of this.db.all("SELECT * FROM tasks WHERE state IN ('working', 'needs_you')")) {
         if (this.starting.has(task.bot) || this.held.has(task.bot)) continue;
         const st = await this.runner.state(task.bot).catch(() => 'unknown' as RunState);

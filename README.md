@@ -71,14 +71,21 @@ Other commands: `./crewhouse doctor` (what's installed, what's missing, how to a
   | Settings | Signing in | Sam's Home |
   |---|---|---|
   | ![People and AI accounts](docs/screenshots/people-settings-owner.webp) | ![ChatGPT device sign-in](docs/screenshots/people-signin-sam.webp) | ![Sam's own Home](docs/screenshots/people-home-sam.webp) |
-- **The crew tool** (`bin/crew`) is how bots talk to crewd: `report`, `deliver`, `remember`, and for Chief, `recruit`, `assign` and `call-me`. Each bot carries its own token.
+- **Routines** hand a bot the same task on a schedule, written in plain words by this computer's clock: "every Monday 9:00", "weekdays 8am", "every day 7:30pm", "every 2 hours" (`src/routines.ts`). Add one on the **Routines** screen or a bot's Routines tab, or just tell Chief ("every Friday at five, have Reel make a demo of what shipped"), who sets it up with `crew routine`. Each routine can pick its own model, and runs on the accounts of whoever set it up.
+  - The schedule lives in SQLite and crewd's own loop fires it: no cron, no model call to decide when. A computer that slept through a run catches up **once** when it wakes; if the last run is still going (or waiting on you), the next one is **skipped**, not stacked. A paused routine never catches up. Every card shows the next run and the history.
+  - **Chief's morning digest** is on for everyone at 8:00: while you were away, what finished, what didn't go well, what needs you and what is coming up, in your own thread with Chief. It is written by crewd, so it costs no tokens. Move it or pause it under Routines.
+
+  | Routines | Adding one from a bot's page | Chief sets one up, then the digest |
+  |---|---|---|
+  | ![Routines](docs/screenshots/routines-list.webp) | ![Adding a routine](docs/screenshots/routines-add.webp) | ![Chief and the digest](docs/screenshots/routines-chief.webp) |
+- **The crew tool** (`bin/crew`) is how bots talk to crewd: `report`, `deliver`, `remember`, and for Chief, `recruit`, `assign`, `routine` and `call-me`. Each bot carries its own token.
 
 Data lives outside the repo: the database is in `~/.local/state/crewhouse/`, the bots in `~/Crewhouse/`. The tool kit is in `~/.local/share/crewhouse/tools/`. Override with `CREWHOUSE_STATE_DIR`, `CREWHOUSE_CREW_DIR` and `CREWHOUSE_TOOLS_DIR`. Other settings: `CREWHOUSE_PORT` (default 7711), `CREWHOUSE_HERDR_SESSION` (default `crewhouse`), `CREWHOUSE_MAX_CONCURRENT` (default 3) and `CREWHOUSE_RUNNER=stub`.
 
 ## Not yet
 
 - The phone app (Expo) and phone pairing with an encrypted link. The web UI is plain React with shared `tokens.ts` and `api.ts`, so the Expo app can reuse both. Today it works at phone width on the same machine, because crewd listens on 127.0.0.1 only.
-- Push notifications (they will follow each person's quiet hours), routines and schedules, Telegram. A per-person login: on this computer anyone can pick who they are.
+- Push notifications (they will follow each person's quiet hours), triggers (a folder or a webhook), Telegram. A per-person login: on this computer anyone can pick who they are.
 - Bot desktops on macOS (desklink is Linux only), watching from another device (crewd listens on 127.0.0.1), and a sandbox that hides your own X display from a bot's shell. A bot's `signedIn` list is still edited by hand in its `bot.json` after you sign it in.
 - Codex turns. The runner starts `codex` with its `notify` hook, `--search` and the granted MCP servers wired in, but this path is untested, and Codex has no hook for the browser's asks-first rules.
 - The crew tools as an MCP server (today they are the `crew` CLI), limit-based fallback between accounts, and Undo for memory.

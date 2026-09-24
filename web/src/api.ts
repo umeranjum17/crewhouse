@@ -38,6 +38,11 @@ export const api = {
   signIn: (member: number, runtime: string) => call('POST', `/api/accounts/${member}/${runtime}/login`),
   signInCode: (member: number, runtime: string, text: string) => call('POST', `/api/accounts/${member}/${runtime}/login/input`, { text }),
   signInCancel: (member: number, runtime: string) => call('POST', `/api/accounts/${member}/${runtime}/login/cancel`),
+  schedule: (text: string) => call('GET', `/api/schedule?text=${encodeURIComponent(text)}`),
+  addRoutine: (body: { bot: string; schedule: string; task: string; model?: string; name?: string }) => call('POST', '/api/routines', body),
+  routine: (id: number, body: { state?: 'on' | 'paused'; schedule?: string }) => call('PUT', `/api/routines/${id}`, body),
+  runRoutine: (id: number) => call('POST', `/api/routines/${id}/run`),
+  removeRoutine: (id: number) => call('DELETE', `/api/routines/${id}`),
   answer: (ask: number, body: { answer?: string; scope?: 'once' | 'task' | 'always'; keys?: string[]; text?: string }) => call('POST', `/api/asks/${ask}/answer`, body),
 };
 

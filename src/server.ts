@@ -8,6 +8,7 @@ import type { Crew } from './crew.ts';
 import * as disk from './bots.ts';
 import { installTool, toolStatus } from './tools.ts';
 import { where } from './accounts.ts';
+import { describe, nextRun, parseSchedule } from './routines.ts';
 
 const TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml',
@@ -150,6 +151,14 @@ export function startServer(cfg: Config, db: Store, crew: Crew) {
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/takeover$/)) && m === 'POST') { await crew.takeOver(r[1]); return { ok: true }; }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/giveback$/)) && m === 'POST') { await crew.giveBack(r[1], String((await readJson(req)).note ?? '')); return { ok: true }; }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/reset$/)) && m === 'POST') { await crew.resetBot(r[1]); return { ok: true }; }
+    if (m === 'GET' && p === '/api/schedule') {
+      const when = parseSchedule(url.searchParams.get('text') ?? '');
+      return { words: describe(when), next: nextRun(when, Date.now()) };
+    }
+    if (m === 'POST' && p === '/api/routines') return crew.addRoutine(await readJson(req), 'person', me);
+    if ((r = p.match(/^\/api\/routines\/(\d+)$/)) && m === 'PUT') { crew.updateRoutine(Number(r[1]), await readJson(req)); return { ok: true }; }
+    if ((r = p.match(/^\/api\/routines\/(\d+)$/)) && m === 'DELETE') { crew.deleteRoutine(Number(r[1])); return { ok: true }; }
+    if ((r = p.match(/^\/api\/routines\/(\d+)\/run$/)) && m === 'POST') { crew.runRoutine(Number(r[1])); return { ok: true }; }
     if ((r = p.match(/^\/api\/asks\/(\d+)\/answer$/)) && m === 'POST') { await crew.answer(Number(r[1]), await readJson(req)); return { ok: true }; }
     throw Object.assign(new Error('not found'), { status: 404 });
   }
@@ -167,6 +176,8 @@ export function startServer(cfg: Config, db: Store, crew: Crew) {
       };
       case 'recruit': chiefOnly(); { const n = crew.recruit(b.template, b.name, CHIEF); return { recruited: { id: n.id, name: n.display } }; }
       case 'assign': chiefOnly(); return crew.assign(b.bot, b.text ?? '', CHIEF, b.model);
+      case 'routine': chiefOnly(); { const x = crew.addRoutine(b, CHIEF); return { routine: { id: x.id, name: x.name, next: new Date(x.next_at).toString() } }; }
+      case 'routines': return crew.routines(crew.chiefFor()).map((x) => ({ id: x.id, bot: x.bot, name: x.name, when: x.words, state: x.state, next: new Date(x.next_at).toString() }));
       case 'status': return db.all("SELECT id, bot, title, state FROM tasks WHERE state IN ('queued','working','needs_you') ORDER BY id");
       case 'report': db.event('task.progress', bot.id, { task, text: String(b.text ?? '').slice(0, 200) }); return { ok: true };
       case 'remember': {
