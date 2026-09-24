@@ -161,6 +161,9 @@ export class StubRunner implements Runner {
     }, 50);
   }
 
+  /** Finish a held turn, as the CLI's Stop hook would. */
+  complete(bot: string, reply: string) { this.states.set(bot, 'done'); this.onTurn?.(bot, reply); }
+
   async state(bot: string) { return this.states.get(bot) ?? 'off'; }
   async read(bot: string) { return `[stub pane of ${bot}]\n${this.out.get(bot) ?? ''}\nDo you want to proceed? 1. Yes 2. No`; }
 
