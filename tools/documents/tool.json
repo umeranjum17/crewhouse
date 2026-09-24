@@ -7,12 +7,17 @@
     "markitdown"
   ],
   "license": "MIT",
-  "source": "user-installed",
-  "install": "pipx install 'markitdown[all]'",
+  "source": "pinned",
+  "install": {
+    "pip": "markitdown[pdf,docx,pptx,xlsx,xls,outlook]==0.1.8"
+  },
+  "asks": [
+    "never: it only reads files into text"
+  ],
   "allow": [
     "Bash(markitdown *)"
   ],
   "grant": {
-    "default": false
+    "default": true
   }
 }

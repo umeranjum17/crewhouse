@@ -11,7 +11,7 @@ const root = mkdtempSync(join(tmpdir(), 'crewhouse-test-'));
 const port = 20000 + Math.floor(Math.random() * 20000);
 const base = `http://127.0.0.1:${port}`;
 const daemon = spawn(process.execPath, [join(import.meta.dirname, '..', 'src', 'main.ts')], {
-  env: { ...process.env, CREWHOUSE_RUNNER: 'stub', CREWHOUSE_HOLD_MS: '1500', CREWHOUSE_PORT: String(port), CREWHOUSE_STATE_DIR: join(root, 'state'), CREWHOUSE_CREW_DIR: join(root, 'crew') },
+  env: { ...process.env, CREWHOUSE_RUNNER: 'stub', CREWHOUSE_HOLD_MS: '1500', CREWHOUSE_PORT: String(port), CREWHOUSE_STATE_DIR: join(root, 'state'), CREWHOUSE_CREW_DIR: join(root, 'crew'), CREWHOUSE_TOOLS_DIR: join(root, 'tools') },
   stdio: ['ignore', 'pipe', 'inherit'],
 });
 after(() => daemon.kill());
@@ -107,6 +107,16 @@ test('chief onboarding, recruit, assign, asks, memory', async () => {
   assert.equal((await api('GET', '/api/state')).body.limits.claude.fiveHour.used, 43);
   await tool('reel', 'hook/tool', { tool_name: 'Bash', tool_input: { command: 'ffmpeg -y -i a.png out.mp4' } });
   assert.ok((await api('GET', '/api/state')).body.events.some((e: any) => e.kind === 'run.tool' && e.data.summary.startsWith('ffmpeg')));
+
+  // The browser's page comes from its own tool results; acting on a payment page asks first, reading does not.
+  await tool('reel', 'hook/tool', { tool_name: 'mcp__browser__browser_navigate', tool_input: { url: 'https://shop.example/' },
+    tool_response: [{ type: 'text', text: '### Page\n- Page URL: https://shop.example/checkout\n- Page Title: Pay' }] });
+  assert.deepEqual((await tool('reel', 'hook/pretool', { tool_name: 'mcp__browser__browser_snapshot', tool_input: {} })).body, {});
+  const click = tool('reel', 'hook/pretool', { tool_name: 'mcp__browser__browser_click', tool_input: { ref: 'e12' } });
+  const pay = await until(async () => (await api('GET', '/api/state')).body.asks.find((a: any) => a.kind === 'permission'));
+  assert.match(pay.detail.summary, /click on a checkout or payment page \(shop\.example\): https:\/\/shop\.example\/checkout/);
+  await api('POST', `/api/asks/${pay.id}/answer`, { answer: 'allow' });
+  assert.equal((await click).body.hookSpecificOutput.permissionDecision, 'allow');
 
   // Delivery is confined to the bot's folder; memory is capped.
   assert.equal((await tool('reel', 'deliver', { path: '../../../etc/passwd' })).status, 400);

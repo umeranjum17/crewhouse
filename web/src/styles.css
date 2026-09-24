@@ -119,6 +119,7 @@ img.media { background: transparent; }
 .meter { height: 6px; background: var(--line2); border-radius: 3px; margin: 8px 0 12px; overflow: hidden; }
 .meter span { display: block; height: 100%; background: var(--sea); }
 .notes { width: 100%; min-height: 200px; border: 1px solid var(--line); border-radius: var(--r-sm); padding: 12px; font: 14px/1.6 var(--mono); background: var(--soft); }
+.kit { margin: 6px 0 0; padding-left: 16px; } .kit li { margin: 2px 0; }
 .tool { cursor: pointer; align-items: flex-start; }
 .tool input { margin-top: 5px; accent-color: var(--sea); width: 18px; height: 18px; }
 .screen { margin-top: 12px; aspect-ratio: 16 / 9; border-radius: var(--r-sm); background: repeating-linear-gradient(45deg, var(--soft), var(--soft) 10px, var(--line2) 10px, var(--line2) 20px); display: grid; place-items: center; color: var(--ink3); }

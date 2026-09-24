@@ -6,7 +6,13 @@
   "bins": [],
   "license": "Apache-2.0",
   "source": "planned",
-  "install": "Next: a per-bot Xvfb display plus @desklink/host (0.1.0 on npm) for watch and take over",
+  "install": {
+    "system": "Next: a per-bot Xvfb display plus @desklink/host for watch and take over"
+  },
+  "asks": [
+    "installing software",
+    "any app on its \"ask first\" list"
+  ],
   "allow": [],
   "grant": {
     "default": false

@@ -17,5 +17,9 @@
   "allow": [
     "Bash(ls *)",
     "Bash(mkdir *)"
+  ],
+  "skills": [
+    "make-reel",
+    "use-the-browser"
   ]
 }

@@ -8,13 +8,18 @@
     "jq"
   ],
   "license": "MIT/Unlicense; MIT",
-  "source": "user-installed",
-  "install": "sudo pacman -S ripgrep jq  |  sudo apt install ripgrep jq  |  brew install ripgrep jq",
+  "source": "system",
+  "install": {
+    "system": "sudo pacman -S ripgrep jq  |  sudo apt install ripgrep jq  |  brew install ripgrep jq"
+  },
+  "asks": [
+    "never: read-only"
+  ],
   "allow": [
     "Bash(rg *)",
     "Bash(jq *)"
   ],
   "grant": {
-    "default": false
+    "default": true
   }
 }

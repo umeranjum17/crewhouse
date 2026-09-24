@@ -1,7 +1,7 @@
 // `./crewhouse doctor`: is this machine ready? Uses only the vendors' own status commands; never reads credentials.
 import { execFileSync } from 'node:child_process';
 import { loadConfig } from './config.ts';
-import { toolStatus } from './bots.ts';
+import { toolStatus, which } from './tools.ts';
 
 const TESTED_HERDR = '0.9.1';
 const cfg = loadConfig();
@@ -41,9 +41,11 @@ if (codex) {
 
 console.log('\nTool kit:');
 for (const t of toolStatus(cfg)) {
-  if (t.source === 'planned') { line(null, t.name, `planned: ${t.install}`); continue; }
-  line(t.ready ? true : null, t.name, t.ready ? t.license : `missing ${t.missing.join(', ')}: ${t.install}`);
+  if (t.source === 'planned') { line(null, t.name, `planned: ${t.install.system ?? ''}`); continue; }
+  if (!t.ready) { line(null, t.name, `missing ${t.missing.join(', ')}: ${t.howto}`); continue; }
+  const where = t.bins.length && which(cfg, t.bins[0])!.startsWith(cfg.toolsDir) ? 'pinned in Crewhouse' : t.source === 'bundled' ? 'built in' : 'found on PATH';
+  line(true, t.name, `${t.license}, ${where}${t.outdated ? '; new pin available: ./crewhouse tools install ' + t.id : ''}`);
 }
-console.log(`\nData: ${cfg.stateDir} (database), ${cfg.crewDir} (bots)`);
+console.log(`\nData: ${cfg.stateDir} (database), ${cfg.crewDir} (bots), ${cfg.toolsDir} (tools)`);
 console.log(problems ? `\n${problems} problem(s) above.` : '\nReady.');
 process.exit(problems ? 1 : 0);

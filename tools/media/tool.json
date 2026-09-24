@@ -7,9 +7,14 @@
     "ffmpeg",
     "ffprobe"
   ],
-  "license": "LGPL-2.1+/GPL",
-  "source": "user-installed",
-  "install": "sudo pacman -S ffmpeg  |  sudo apt install ffmpeg  |  brew install ffmpeg",
+  "license": "LGPL-2.1+/GPL (detected, never bundled)",
+  "source": "system",
+  "install": {
+    "system": "sudo pacman -S ffmpeg  |  sudo apt install ffmpeg  |  brew install ffmpeg"
+  },
+  "asks": [
+    "never: it only works on files"
+  ],
   "allow": [
     "Bash(ffmpeg *)",
     "Bash(ffprobe *)"

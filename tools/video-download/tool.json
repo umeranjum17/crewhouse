@@ -7,12 +7,21 @@
     "yt-dlp"
   ],
   "license": "Unlicense",
-  "source": "user-installed",
-  "install": "pipx install yt-dlp  |  sudo pacman -S yt-dlp  |  brew install yt-dlp",
+  "source": "pinned",
+  "install": {
+    "download": {
+      "url": "https://github.com/yt-dlp/yt-dlp/releases/download/2026.08.19/yt-dlp",
+      "sha256": "1fa6733c37ea6fb51c99ad8fe785e7b7e5f3246c9b980230329d4fb72ed8d4d6"
+    }
+  },
+  "asks": [
+    "never: downloads land in its own folder"
+  ],
   "allow": [
     "Bash(yt-dlp *)"
   ],
   "grant": {
     "default": false
-  }
+  },
+  "note": "Needs python3."
 }

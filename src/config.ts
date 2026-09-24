@@ -8,6 +8,8 @@ export interface Config {
   stateDir: string;
   /** Human-visible crew folder: bots/<name>/, crew/. */
   crewDir: string;
+  /** Pinned tool installs (npm, pip, single binaries): Crewhouse's own folder, never global. */
+  toolsDir: string;
   host: string;
   port: number;
   /** Command used to talk to Herdr. A prefix so the Herdr lab helper can wrap it. */
@@ -34,6 +36,7 @@ export function loadConfig(): Config {
   return {
     stateDir: envPath('CREWHOUSE_STATE_DIR', join(xdgState, 'crewhouse')),
     crewDir: envPath('CREWHOUSE_CREW_DIR', join(home, 'Crewhouse')),
+    toolsDir: envPath('CREWHOUSE_TOOLS_DIR', join(process.env.XDG_DATA_HOME?.trim() || join(home, '.local', 'share'), 'crewhouse', 'tools')),
     host: process.env.CREWHOUSE_HOST?.trim() || '127.0.0.1',
     port: Number(process.env.CREWHOUSE_PORT || 7711),
     // e.g. CREWHOUSE_HERDR_CMD="/path/fm-herdr-lab.sh run fm-lab-x" keeps us off the live session.

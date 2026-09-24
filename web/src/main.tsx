@@ -47,6 +47,10 @@ function greeting() {
 }
 
 /** One plain sentence per feed event; internal events return null. */
+/** A tool's "asks first" rules in plain words. */
+const asksLine = (asks: string[] = []) =>
+  /^never/i.test(asks[0] ?? '') ? `Never asks you${asks[0].replace(/^never/i, '')}` : `Asks you first when: ${asks.join('; ')}`;
+
 function sentence(e: Json, name: (id: string) => string): string | null {
   const b = e.bot ? name(e.bot) : '';
   const d = e.data ?? {};
@@ -66,7 +70,10 @@ function sentence(e: Json, name: (id: string) => string): string | null {
     case 'memory.edited': return `You edited what ${b} knows`;
     case 'file.delivered': return `${b} delivered ${d.path}`;
     case 'bot.tools': return `You changed ${b}'s tools`;
-    case 'run.tool': return `${b} ${d.tool === 'Bash' ? 'ran' : 'used ' + d.tool + ':'} ${d.summary}`;
+    case 'run.tool': return `${b} ${d.tool === 'Bash' ? 'ran' : /^mcp__browser__/.test(d.tool) ? `used its browser (${d.tool.replace(/^mcp__browser__browser_/, '')})` + (d.summary ? ':' : '') : 'used ' + d.tool + ':'} ${d.summary}`;
+    case 'tool.installing': return `Installing ${d.tool}…`;
+    case 'tool.installed': return `Installed ${d.tool}`;
+    case 'tool.failed': return `Couldn't install ${d.tool}: ${d.error}`;
     case 'ask.parked': return `${b} is waiting for your answer; the rest of its work is paused`;
     case 'account.limit': return d.fiveHour ? `Claude has used ${d.fiveHour.used}% of its 5-hour window${d.sevenDay ? ` and ${d.sevenDay.used}% of the week` : ''}` : null;
     default: return null;
@@ -300,7 +307,14 @@ function Recruit({ state, onClose, onDone }: { state: Json; onClose: () => void;
           {state.templates.map((t: Json) => (
             <button key={t.id} className={`card tpl ${pick?.id === t.id ? 'on' : ''}`} onClick={() => { setPick(t); setName(t.display); }}>
               <Avatar bot={{ ...t, id: t.id }} size={34} />
-              <div><b>{t.display}</b><div className="muted small">{t.role}</div><div className="tiny muted">tools: {t.tools.join(', ')}</div></div>
+              <div>
+                <b>{t.display}</b><div className="muted small">{t.role}</div>
+                {pick?.id === t.id ? (
+                  <ul className="kit">
+                    {t.kit.map((k: Json) => <li key={k.id} className="tiny"><b>{k.name}</b>{k.ready ? '' : ' (not installed yet)'}: {asksLine(k.asks)}</li>)}
+                  </ul>
+                ) : <div className="tiny muted">tools: {t.kit.map((k: Json) => k.name).join(', ')}</div>}
+              </div>
             </button>
           ))}
         </div>
@@ -379,8 +393,14 @@ function BotPage({ id, tab, state, tick, refresh }: { id: string; tab: string; s
               <div className="grow">
                 <b>{t.name}</b> <span className={`chip ${t.ready ? 'green' : 'amber'}`}>{t.ready ? 'ready' : `missing ${t.missing.join(', ')}`}</span>
                 <div className="muted small">{t.provides}</div>
+                <div className="small">{asksLine(t.asks)}</div>
                 <div className="tiny">{t.license}{t.note ? ` · ${t.note}` : ''}</div>
-                {!t.ready && <div className="mono tiny">{t.install}</div>}
+                {!t.ready && !t.installable && <div className="mono tiny">{t.howto}</div>}
+                {t.installable && (!t.ready || t.outdated) && (
+                  <button className="btn small" onClick={async (e) => { e.preventDefault(); await api.install(t.id).catch((x) => setMsg(x.message)); setMsg(`Installing ${t.name} into Crewhouse's own tool folder; this can take a few minutes.`); }}>
+                    {t.outdated ? 'Update' : 'Install'}
+                  </button>
+                )}
               </div>
             </label>
           ))}

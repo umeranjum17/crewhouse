@@ -9,6 +9,19 @@ const HOLD_MS = Number(process.env.CREWHOUSE_HOLD_MS || 180_000); // how long a 
 const FALLBACK_MS = 12_000; // settled with no Stop hook this long: take the reply from the terminal instead
 const TASK_TIMEOUT_MS = 60 * 60_000;
 
+const BROWSER_ACTS = /^browser_(click|type|fill_form|press_key|select_option|file_upload|drag|hover|evaluate|run_code|handle_dialog)$/;
+const PAYMENT = /checkout|payment|billing|purchase|\/cart\b|\/pay\b|paypal\.|pay\.google/i;
+
+/** The browser's "asks first" rules, as a reason to ask, or null to let the call through. */
+export function browserAsk(tool: string, url: string, signedIn: string[]): string | null {
+  if (!BROWSER_ACTS.test(tool)) return null;
+  let host = '';
+  try { host = new URL(url).hostname; } catch { /* no page yet */ }
+  if (PAYMENT.test(url)) return `a checkout or payment page (${host || url})`;
+  if (host && signedIn.some((d) => host === d || host.endsWith(`.${d}`))) return `${host}, a site you signed it in to`;
+  return null;
+}
+
 const partOfDay = () => { const h = new Date().getHours(); return h >= 5 && h < 12 ? 'morning' : h >= 12 && h < 18 ? 'afternoon' : 'evening'; };
 /** Chief's first words (plan 3, section 3.13). Deterministic: no model call before we know how to address the person. */
 export const chiefGreeting = () =>
@@ -23,6 +36,8 @@ export class Crew {
   private granted = new Set<string>();
   private limits = new Map<string, Row>();
   private starting = new Set<string>();
+  /** The page each bot's browser is on, from its own tool results. */
+  private pages = new Map<string, string>();
   private timer?: NodeJS.Timeout;
 
   private cfg: Config;
@@ -70,7 +85,7 @@ export class Crew {
     return {
       person: this.person(),
       bots: this.bots().map(pub),
-      templates: disk.listTemplates(this.cfg),
+      templates: disk.listTemplates(this.cfg).map((t) => ({ ...t, kit: disk.templateKit(this.cfg, t) })),
       tasks: this.db.all('SELECT * FROM tasks WHERE bot != ? ORDER BY id DESC LIMIT 50', CHIEF),
       asks: this.db.all("SELECT * FROM asks WHERE state = 'open' ORDER BY id").map((a) => ({ ...a, detail: JSON.parse(a.detail || '{}') })),
       events: this.db.events(0, 80),
@@ -256,10 +271,10 @@ export class Crew {
   }
 
   /** Claude's PermissionRequest hook: hold the tool call while the person decides; after the hold, deny and park. */
-  async permission(botId: string, payload: Row): Promise<{ behavior: 'allow' | 'deny'; message?: string }> {
+  async permission(botId: string, payload: Row, why?: string): Promise<{ behavior: 'allow' | 'deny'; message?: string }> {
     const task = this.activeTask(botId);
     const input = payload.tool_input ?? {};
-    const summary = String(input.command ?? input.file_path ?? input.url ?? JSON.stringify(input)).slice(0, 300);
+    const summary = (why ?? String(input.command ?? input.file_path ?? input.url ?? JSON.stringify(input))).slice(0, 300);
     const key = `${botId}\n${payload.tool_name}\n${summary}`;
     if (this.granted.delete(key)) return { behavior: 'allow' }; // answered "allow" after the hold expired
     const askId = this.openAsk(botId, task, 'permission', `${this.bot(botId)!.display} would like to use ${payload.tool_name}`, { tool: payload.tool_name, summary });
@@ -313,8 +328,22 @@ export class Crew {
     if (payload.session_id) this.db.run('UPDATE bots SET session = ? WHERE id = ?', String(payload.session_id), botId);
   }
 
+  /** PreToolUse for the browser: act on a signed-in site or a payment page only after the person says yes. */
+  async browserGate(botId: string, payload: Row) {
+    const tool = String(payload.tool_name ?? '').replace(/^mcp__browser__/, '');
+    const url = this.pages.get(botId) ?? '';
+    const why = browserAsk(tool, url, disk.botConfig(this.cfg, botId).signedIn ?? []);
+    if (!why) return {};
+    const d = await this.permission(botId, payload, `${tool.replace('browser_', '')} on ${why}: ${url}`);
+    return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: d.behavior, permissionDecisionReason: d.message ?? 'The person allowed it.' } };
+  }
+
   hookTool(botId: string, payload: Row) {
     const i = payload.tool_input ?? {};
+    if (String(payload.tool_name).startsWith('mcp__browser__')) {
+      const page = /Page URL: (\S+?)(?:\\n|\s|"|$)/.exec(JSON.stringify(payload.tool_response ?? ''))?.[1] ?? i.url;
+      if (page) this.pages.set(botId, page);
+    }
     const summary = String(i.command ?? i.file_path ?? i.pattern ?? i.url ?? i.query ?? '').split('\n')[0].slice(0, 120);
     this.db.event('run.tool', botId, { tool: payload.tool_name, summary });
   }

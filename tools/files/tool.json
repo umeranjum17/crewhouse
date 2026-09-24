@@ -6,11 +6,13 @@
   "bins": [],
   "license": "vendor CLI",
   "source": "bundled",
-  "install": "Built into the agent CLI",
+  "install": {},
+  "asks": [
+    "reading, writing or deleting anything outside its own folder"
+  ],
   "allow": [
-    "Read",
-    "Write",
-    "Edit",
+    "Read(./**)",
+    "Edit(./**)",
     "Glob",
     "Grep"
   ],

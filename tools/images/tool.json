@@ -7,8 +7,13 @@
     "magick"
   ],
   "license": "ImageMagick (Apache-2.0 style)",
-  "source": "user-installed",
-  "install": "sudo pacman -S imagemagick  |  sudo apt install imagemagick  |  brew install imagemagick",
+  "source": "system",
+  "install": {
+    "system": "sudo pacman -S imagemagick  |  sudo apt install imagemagick  |  brew install imagemagick"
+  },
+  "asks": [
+    "never: it only works on files"
+  ],
   "allow": [
     "Bash(magick *)"
   ],

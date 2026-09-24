@@ -1,12 +1,15 @@
 {
   "id": "web",
   "name": "Web search and fetch",
-  "provides": "Search the web and read pages",
+  "provides": "Search the web and read pages, with the CLI's own tools (no key)",
   "kind": "built-in",
   "bins": [],
   "license": "vendor CLI",
   "source": "bundled",
-  "install": "Built into the agent CLI",
+  "install": {},
+  "asks": [
+    "never: read-only"
+  ],
   "allow": [
     "WebSearch",
     "WebFetch"

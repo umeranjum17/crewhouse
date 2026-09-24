@@ -6,6 +6,7 @@ import { CHIEF, type Config } from './config.ts';
 import type { Store } from './db.ts';
 import type { Crew } from './crew.ts';
 import * as disk from './bots.ts';
+import { installTool, toolStatus } from './tools.ts';
 
 const TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml',
@@ -42,6 +43,7 @@ function sendFile(req: IncomingMessage, res: ServerResponse, path: string) {
 /** HTTP + WebSocket on 127.0.0.1. The app API, the in-bot `crew` tool API, CLI hooks, and the web UI. */
 export function startServer(cfg: Config, db: Store, crew: Crew) {
   const dist = join(cfg.repoDir, 'web', 'dist');
+  const installing = new Set<string>();
   const localHost = (h = '') => /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/.test(h);
 
   const server = createServer(async (req, res) => {
@@ -97,7 +99,19 @@ export function startServer(cfg: Config, db: Store, crew: Crew) {
       db.event('bot.tools', r[1], { by: 'person' });
       return { ok: true };
     }
-    if (m === 'GET' && p === '/api/tools') return disk.toolStatus(cfg);
+    if (m === 'GET' && p === '/api/tools') return toolStatus(cfg);
+    if ((r = p.match(/^\/api\/tools\/([a-z0-9-]+)\/install$/)) && m === 'POST') {
+      // Installs take minutes (the browser downloads Chromium); the result arrives as an event.
+      const id = r[1];
+      if (installing.has(id)) return { ok: true, already: true };
+      installing.add(id);
+      db.event('tool.installing', null, { tool: id });
+      installTool(cfg, id)
+        .then(() => db.event('tool.installed', null, { tool: id }))
+        .catch((e) => db.event('tool.failed', null, { tool: id, error: String(e.message).slice(0, 300) }))
+        .finally(() => installing.delete(id));
+      return { ok: true };
+    }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/screen$/)) && m === 'GET') return { text: await crew.screen(r[1]).catch(() => '') };
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/reset$/)) && m === 'POST') { await crew.resetBot(r[1]); return { ok: true }; }
     if ((r = p.match(/^\/api\/asks\/(\d+)\/answer$/)) && m === 'POST') { await crew.answer(Number(r[1]), await readJson(req)); return { ok: true }; }
@@ -137,6 +151,7 @@ export function startServer(cfg: Config, db: Store, crew: Crew) {
       case 'hook/permission': return { hookSpecificOutput: { hookEventName: 'PermissionRequest', decision: await crew.permission(bot.id, b) } };
       case 'hook/session': crew.hookSession(bot.id, b); return {};
       case 'hook/tool': crew.hookTool(bot.id, b); return {};
+      case 'hook/pretool': return crew.browserGate(bot.id, b);
       case 'hook/statusline': return { text: crew.hookStatus(bot.id, b) };
       case 'call-me': chiefOnly(); crew.setAddress(String(b.text ?? '')); return { ok: true };
     }
