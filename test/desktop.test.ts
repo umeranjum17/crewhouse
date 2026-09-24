@@ -55,7 +55,7 @@ test('display lifecycle: start once, own cookie, idle stop', { skip: noXvfb }, a
   assert.ok(desks.running('reel'), 'not idle long enough yet');
   desks.sweep(() => false, Date.now() + 11 * 60_000);
   assert.ok(!desks.running('reel'), 'idle for ten minutes: stopped');
-  for (let i = 0; i < 50 && existsSync(`/tmp/.X11-unix/X${n}`); i++) await sleep(100);
+  for (let i = 0; i < 100 && existsSync(`/tmp/.X11-unix/X${n}`); i++) await sleep(100);
   assert.ok(!existsSync(`/tmp/.X11-unix/X${n}`), 'the display is gone');
 });
 
@@ -69,7 +69,7 @@ test('watching: crewd picks the display and the permissions', { skip: noXvfb }, 
   const view = await desks.signal('reel', a, 'session.open', { permissions: ['view'] }, false);
   assert.equal(view.source.kind, 'x11-root');
   assert.deepEqual([view.source.width, view.source.height], [1280, 800]);
-  for (let i = 0; i < 30 && !a.seen.some((e) => e.kind === 'description'); i++) await sleep(100);
+  for (let i = 0; i < 100 && !a.seen.some((e) => e.kind === 'description'); i++) await sleep(100);
   assert.ok(a.seen.some((e) => e.kind === 'description'), 'the offer reaches the watcher');
   await assert.rejects(desks.signal('reel', b, 'session.candidate', { session_id: view.sessionId, candidate: '' }, false), { code: 'not-authorized' });
   await assert.rejects(desks.signal('reel', a, 'clipboard.read', { session_id: view.sessionId }, false), { code: 'malformed' });

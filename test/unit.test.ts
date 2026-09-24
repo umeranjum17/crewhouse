@@ -85,7 +85,7 @@ test('task titles are cut at a word, never mid-word', async () => {
   crew.recruit('reel', 'Reel', 'person');
   const t = crew.assign('reel', 'Make a 10 second video with three title cards: One, Two, Three, about three seconds each', 'chief').task;
   assert.equal(task(db, t).title, 'Make a 10 second video with three title cards: One, Two, Three, about three…');
-  await sleep(100);
+  await settled(db, t); // let the run finish before the database closes
   done();
 });
 
