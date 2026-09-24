@@ -141,3 +141,23 @@ test('morning digest: on by default at 8:00, says what finished, what needs you,
   assert.doesNotMatch(text, /Master|aye|!/);
   done();
 });
+
+test('household: a member\'s routines run as them, and each member gets their own digest in their own thread', async () => {
+  const { db, crew, done } = setup();
+  const sam = crew.addMember('Sam').id;
+  crew.onboard('Sam', sam);
+  const digests = db.all("SELECT * FROM routines WHERE kind = 'digest' ORDER BY member");
+  assert.deepEqual(digests.map((r) => r.member), [1, sam], 'one digest each');
+  const r = crew.addRoutine({ bot: 'reel', schedule: 'every day 9:00', task: 'Sam\'s daily clip' }, 'person', sam);
+  assert.equal(crew.routines(1).some((x) => x.id === r.id), false, 'the owner does not see Sam\'s routines');
+  assert.ok(crew.routines(sam).some((x) => x.id === r.id));
+  crew.runRoutine(r.id);
+  const t = db.get('SELECT * FROM tasks WHERE routine = ?', r.id)!;
+  assert.equal(t.member, sam, 'runs on Sam\'s accounts');
+  await sleep(200);
+  crew.runRoutine(digests[1].id);
+  const mine = db.get("SELECT * FROM messages WHERE bot = 'chief' AND author = 'bot' ORDER BY id DESC")!;
+  assert.equal(mine.member, sam);
+  assert.match(mine.text, /^Good \w+, Sam\. While you were away:\n- Finished: Reel, “Sam's daily clip”/);
+  done();
+});
