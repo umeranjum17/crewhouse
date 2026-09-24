@@ -1,0 +1,14 @@
+{
+  "id": "computer",
+  "name": "Computer (desklink)",
+  "provides": "The bot's own desktop you can watch and take over from your phone",
+  "kind": "desktop",
+  "bins": [],
+  "license": "Apache-2.0",
+  "source": "planned",
+  "install": "Waiting on @desklink/host as a standalone package",
+  "allow": [],
+  "grant": {
+    "default": false
+  }
+}

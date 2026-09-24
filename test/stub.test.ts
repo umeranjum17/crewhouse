@@ -11,7 +11,7 @@ const root = mkdtempSync(join(tmpdir(), 'crewhouse-test-'));
 const port = 20000 + Math.floor(Math.random() * 20000);
 const base = `http://127.0.0.1:${port}`;
 const daemon = spawn(process.execPath, [join(import.meta.dirname, '..', 'src', 'main.ts')], {
-  env: { ...process.env, CREWHOUSE_RUNNER: 'stub', CREWHOUSE_PORT: String(port), CREWHOUSE_STATE_DIR: join(root, 'state'), CREWHOUSE_CREW_DIR: join(root, 'crew') },
+  env: { ...process.env, CREWHOUSE_RUNNER: 'stub', CREWHOUSE_HOLD_MS: '1500', CREWHOUSE_PORT: String(port), CREWHOUSE_STATE_DIR: join(root, 'state'), CREWHOUSE_CREW_DIR: join(root, 'crew') },
   stdio: ['ignore', 'pipe', 'inherit'],
 });
 after(() => daemon.kill());
@@ -33,7 +33,7 @@ test('chief onboarding, recruit, assign, asks, memory', async () => {
 
   // Chief greets first and asks how to address the person; the first reply is stored as the address.
   let page = (await api('GET', '/api/bots/chief')).body;
-  assert.match(page.messages[0].text, /I'm Chief/);
+  assert.match(page.messages[0].text, /I am Chief, of the Crewhouse/);
   assert.match(page.messages[0].text, /how would you like me to address you/);
   assert.doesNotMatch(page.messages[0].text, /Master|aye/i);
   await api('POST', '/api/bots/chief/messages', { text: 'Sir' });
@@ -58,7 +58,7 @@ test('chief onboarding, recruit, assign, asks, memory', async () => {
   const t = (await tool('chief', 'assign', { bot: 'reel', text: 'Make a 10 second demo' })).body.task;
   await until(async () => (await api('GET', '/api/bots/reel')).body.tasks.find((x: any) => x.id === t && x.state === 'done'));
   page = (await api('GET', '/api/bots/chief')).body;
-  assert.ok(page.messages.some((m: any) => m.author === 'system' && m.text.includes(`Reel finished task #${t}`)));
+  assert.ok(page.messages.some((m: any) => m.author === 'system' && m.text.includes(`Reel has finished task #${t}`)));
 
   // Tool grants become the CLI's own allow list; credential folders are always denied.
   const settings = JSON.parse(readFileSync(join(dir, '.claude/settings.local.json'), 'utf8'));
@@ -84,6 +84,29 @@ test('chief onboarding, recruit, assign, asks, memory', async () => {
   assert.equal(perm.detail.summary, 'rm -rf /tmp/x');
   await api('POST', `/api/asks/${perm.id}/answer`, { answer: 'deny' });
   assert.equal((await held).body.hookSpecificOutput.decision.behavior, 'deny');
+
+  // Past the hold, the hook denies with "wait" and the ask stays open; a later "allow" resumes the same session.
+  const { task: pt } = (await api('POST', '/api/bots/reel/messages', { text: 'ask permission to copy' })).body;
+  await until(async () => (await api('GET', '/api/bots/reel')).body.tasks.find((x: any) => x.id === pt && x.state === 'working'));
+  const late = await tool('reel', 'hook/permission', { tool_name: 'Bash', tool_input: { command: 'cp a b' } });
+  assert.equal(late.body.hookSpecificOutput.decision.behavior, 'deny');
+  assert.match(late.body.hookSpecificOutput.decision.message, /hasn't answered/);
+  await tool('reel', 'hook/stop', { last_assistant_message: 'Waiting for permission to copy.' });
+  const parkedTask = (await api('GET', '/api/bots/reel')).body.tasks.find((x: any) => x.id === pt);
+  assert.equal(parkedTask.state, 'needs_you', 'a turn that ends on a parked ask does not finish the task');
+  const parked = (await api('GET', '/api/state')).body.asks.find((a: any) => a.kind === 'permission');
+  assert.ok(parked, 'parked ask stays open');
+  await api('POST', `/api/asks/${parked.id}/answer`, { answer: 'allow' });
+  await until(async () => (await api('GET', '/api/bots/reel')).body.tasks.find((x: any) => x.id === pt && x.state === 'done'));
+  const again = await tool('reel', 'hook/permission', { tool_name: 'Bash', tool_input: { command: 'cp a b' } });
+  assert.equal(again.body.hookSpecificOutput.decision.behavior, 'allow', 'the retried call goes through once');
+
+  // Statusline limits are recorded; tool activity reaches the feed.
+  const line = await tool('reel', 'hook/statusline', { rate_limits: { five_hour: { used_percentage: 43, resets_at: 1790280000 }, seven_day: { used_percentage: 5 } } });
+  assert.equal(line.body.text, 'Crewhouse · Reel · 5h 43%');
+  assert.equal((await api('GET', '/api/state')).body.limits.claude.fiveHour.used, 43);
+  await tool('reel', 'hook/tool', { tool_name: 'Bash', tool_input: { command: 'ffmpeg -y -i a.png out.mp4' } });
+  assert.ok((await api('GET', '/api/state')).body.events.some((e: any) => e.kind === 'run.tool' && e.data.summary.startsWith('ffmpeg')));
 
   // Delivery is confined to the bot's folder; memory is capped.
   assert.equal((await tool('reel', 'deliver', { path: '../../../etc/passwd' })).status, 400);

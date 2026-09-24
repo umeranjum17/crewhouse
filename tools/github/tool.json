@@ -1,0 +1,22 @@
+{
+  "id": "github",
+  "name": "GitHub CLI",
+  "provides": "Read issues, pull requests and repos with your own gh sign-in (writes ask first)",
+  "kind": "cli",
+  "bins": [
+    "gh"
+  ],
+  "license": "MIT",
+  "source": "user-installed",
+  "install": "https://cli.github.com (then gh auth login, in your own terminal)",
+  "allow": [
+    "Bash(gh issue view *)",
+    "Bash(gh issue list *)",
+    "Bash(gh pr view *)",
+    "Bash(gh pr list *)",
+    "Bash(gh repo view *)"
+  ],
+  "grant": {
+    "default": false
+  }
+}

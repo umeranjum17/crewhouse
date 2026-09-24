@@ -1,0 +1,18 @@
+{
+  "id": "video-download",
+  "name": "yt-dlp",
+  "provides": "Download a video or its audio from a link, for editing or transcripts",
+  "kind": "cli",
+  "bins": [
+    "yt-dlp"
+  ],
+  "license": "Unlicense",
+  "source": "user-installed",
+  "install": "pipx install yt-dlp  |  sudo pacman -S yt-dlp  |  brew install yt-dlp",
+  "allow": [
+    "Bash(yt-dlp *)"
+  ],
+  "grant": {
+    "default": false
+  }
+}

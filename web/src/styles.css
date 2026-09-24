@@ -144,3 +144,4 @@ img.media { background: transparent; }
   .chat-view .messages { min-height: calc(100vh - 330px); }
   .msg { max-width: 100%; }
 }
+.terminal { margin: 10px 0 0; background: #1E1A16; color: #EDE7DD; border-radius: var(--r-sm); padding: 12px; font: 12px/1.45 var(--mono); white-space: pre-wrap; word-break: break-word; min-height: 320px; max-height: 70vh; overflow: auto; }

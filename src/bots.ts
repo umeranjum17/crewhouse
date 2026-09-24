@@ -17,12 +17,16 @@ export interface Template {
 }
 
 export interface Tool {
-  id: string; name: string; provides: string; bins: string[]; license: string;
+  id: string; name: string; provides: string; kind: string; bins: string[]; license: string;
   source: 'bundled' | 'user-installed' | 'planned'; install: string; allow: string[];
+  env?: Record<string, string>; grant?: { default: boolean }; note?: string;
 }
 
+/** The kit: one manifest per tool in tools/<id>/tool.json. */
 export function registry(cfg: Config): Tool[] {
-  return JSON.parse(readFileSync(join(cfg.repoDir, 'tools', 'registry.json'), 'utf8'));
+  const dir = join(cfg.repoDir, 'tools');
+  return readdirSync(dir).filter((t) => existsSync(join(dir, t, 'tool.json')))
+    .map((t) => JSON.parse(readFileSync(join(dir, t, 'tool.json'), 'utf8')));
 }
 
 const onPath = (bin: string) => (process.env.PATH ?? '').split(':').some((d) => d && existsSync(join(d, bin)));
@@ -48,7 +52,7 @@ export function setGrants(cfg: Config, id: string, tools: string[]) {
 /** A bot's granted tools, each with whether it is ready here. */
 export function botTools(cfg: Config, id: string) {
   const grants = new Set(botConfig(cfg, id).tools ?? []);
-  return toolStatus(cfg).map((t) => ({ id: t.id, name: t.name, provides: t.provides, ready: t.ready, missing: t.missing, install: t.install, source: t.source, granted: grants.has(t.id) }));
+  return toolStatus(cfg).map((t) => ({ id: t.id, name: t.name, provides: t.provides, license: t.license, ready: t.ready, missing: t.missing, install: t.install, source: t.source, note: t.note, granted: grants.has(t.id) }));
 }
 
 export const templatesDir = (cfg: Config) => join(cfg.repoDir, 'templates');
@@ -160,8 +164,12 @@ export function launchSpec(cfg: Config, bot: { id: string; display: string; runt
   const conf = botConfig(cfg, bot.id);
   const ready = new Map(toolStatus(cfg).map((t) => [t.id, t]));
   // Grants become the CLI's own allow list; a granted tool that is missing here simply is not offered.
-  const allow = [...(conf.tools ?? []).flatMap((t) => (ready.get(t)?.ready ? ready.get(t)!.allow : [])), ...(conf.allow ?? [])];
+  const granted = (conf.tools ?? []).map((t) => ready.get(t)).filter((t) => t?.ready) as Tool[];
+  const allow = [...granted.flatMap((t) => t.allow), ...(conf.allow ?? [])];
+  const toolEnv = Object.fromEntries(granted.flatMap((t) => Object.entries(t.env ?? {}))
+    .map(([k, v]) => [k, v.replaceAll('{bot.dir}', dir).replaceAll('{bot.id}', bot.id)]));
   const env = {
+    ...toolEnv,
     CREWHOUSE_URL: url,
     CREWHOUSE_TOKEN: bot.token,
     PATH: `${join(cfg.repoDir, 'bin')}:${process.env.PATH}`,
@@ -180,7 +188,10 @@ export function launchSpec(cfg: Config, bot: { id: string; display: string; runt
       allow,
       deny: [...CREDENTIAL_DENY.flatMap((p) => [`Read(${p})`, `Edit(${p})`]), 'CronCreate', 'ScheduleWakeup', 'RemoteTrigger'],
     },
+    statusLine: { type: 'command', command: `${JSON.stringify(join(cfg.repoDir, 'bin', 'crew'))} hook statusline` },
     hooks: {
+      SessionStart: hook('session'),
+      PostToolUse: hook('tool', 10),
       Stop: hook('stop'),
       // Holds up to 3 minutes for an answer from the app, then falls back to the CLI's own dialog.
       PermissionRequest: hook('permission', 190),

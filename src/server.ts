@@ -98,6 +98,7 @@ export function startServer(cfg: Config, db: Store, crew: Crew) {
       return { ok: true };
     }
     if (m === 'GET' && p === '/api/tools') return disk.toolStatus(cfg);
+    if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/screen$/)) && m === 'GET') return { text: await crew.screen(r[1]).catch(() => '') };
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/reset$/)) && m === 'POST') { await crew.resetBot(r[1]); return { ok: true }; }
     if ((r = p.match(/^\/api\/asks\/(\d+)\/answer$/)) && m === 'POST') { await crew.answer(Number(r[1]), await readJson(req)); return { ok: true }; }
     throw Object.assign(new Error('not found'), { status: 404 });
@@ -133,10 +134,11 @@ export function startServer(cfg: Config, db: Store, crew: Crew) {
       case 'hook/stop': crew.finish(bot.id, String(b.last_assistant_message ?? '')); return {};
       case 'hook/codex': if (b.type === 'agent-turn-complete') crew.finish(bot.id, String(b['last-assistant-message'] ?? '')); return {};
       case 'hook/notify': db.event('run.notice', bot.id, { text: String(b.message ?? '').slice(0, 200) }); return {};
-      case 'hook/permission': {
-        const d = await crew.permission(bot.id, b);
-        return d ? { hookSpecificOutput: { hookEventName: 'PermissionRequest', decision: { behavior: d, ...(d === 'deny' ? { message: 'The person said no.' } : {}) } } } : {};
-      }
+      case 'hook/permission': return { hookSpecificOutput: { hookEventName: 'PermissionRequest', decision: await crew.permission(bot.id, b) } };
+      case 'hook/session': crew.hookSession(bot.id, b); return {};
+      case 'hook/tool': crew.hookTool(bot.id, b); return {};
+      case 'hook/statusline': return { text: crew.hookStatus(bot.id, b) };
+      case 'call-me': chiefOnly(); crew.setAddress(String(b.text ?? '')); return { ok: true };
     }
     throw Object.assign(new Error(`unknown crew command ${cmd}`), { status: 404 });
   }

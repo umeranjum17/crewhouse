@@ -1,0 +1,20 @@
+{
+  "id": "media",
+  "name": "ffmpeg",
+  "provides": "Render, cut and convert video, audio and images",
+  "kind": "cli",
+  "bins": [
+    "ffmpeg",
+    "ffprobe"
+  ],
+  "license": "LGPL-2.1+/GPL",
+  "source": "user-installed",
+  "install": "sudo pacman -S ffmpeg  |  sudo apt install ffmpeg  |  brew install ffmpeg",
+  "allow": [
+    "Bash(ffmpeg *)",
+    "Bash(ffprobe *)"
+  ],
+  "grant": {
+    "default": false
+  }
+}

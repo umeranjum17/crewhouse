@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# Crewhouse: setup | start | doctor | test
+set -euo pipefail
+cd "$(dirname "$0")"
+
+need_node() {
+  command -v node >/dev/null || { echo "Crewhouse needs Node 22.18 or later: https://nodejs.org" >&2; exit 1; }
+  node -e 'const [a,b]=process.versions.node.split(".").map(Number); process.exit(a>22||(a===22&&b>=18)?0:1)' \
+    || { echo "Crewhouse needs Node 22.18 or later (found $(node --version))" >&2; exit 1; }
+}
+
+case "${1:-}" in
+  setup)
+    need_node
+    npm ci --no-audit --no-fund
+    npm run build:web
+    node src/doctor.ts || true
+    echo
+    echo "Next: ./crewhouse start, then open the address it prints."
+    ;;
+  start)
+    need_node
+    [ -f web/dist/index.html ] || npm run build:web
+    exec node src/main.ts
+    ;;
+  doctor)
+    need_node
+    exec node src/doctor.ts
+    ;;
+  test)
+    need_node
+    exec npm test
+    ;;
+  *)
+    echo "usage: ./crewhouse setup | start | doctor | test"
+    exit 2
+    ;;
+esac

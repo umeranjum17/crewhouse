@@ -12,6 +12,8 @@ export interface Config {
   port: number;
   /** Command used to talk to Herdr. A prefix so the Herdr lab helper can wrap it. */
   herdrCmd: string[];
+  /** crewd's own Herdr session. Empty when a wrapper (the Herdr lab) supplies the session itself. */
+  herdrSession: string;
   /** Default CLI kind for new bots. */
   runtime: string;
   /** 'herdr' for real CLIs, 'stub' for tests (no model quota). */
@@ -36,6 +38,7 @@ export function loadConfig(): Config {
     port: Number(process.env.CREWHOUSE_PORT || 7711),
     // e.g. CREWHOUSE_HERDR_CMD="/path/fm-herdr-lab.sh run fm-lab-x" keeps us off the live session.
     herdrCmd: (process.env.CREWHOUSE_HERDR_CMD?.trim() || 'herdr').split(/\s+/),
+    herdrSession: process.env.CREWHOUSE_HERDR_CMD?.trim() ? '' : process.env.CREWHOUSE_HERDR_SESSION?.trim() || 'crewhouse',
     runtime: process.env.CREWHOUSE_RUNTIME?.trim() || 'claude',
     runner: process.env.CREWHOUSE_RUNNER === 'stub' ? 'stub' : 'herdr',
     maxConcurrent: Number(process.env.CREWHOUSE_MAX_CONCURRENT || 3),

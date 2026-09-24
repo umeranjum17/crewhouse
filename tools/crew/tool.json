@@ -1,0 +1,18 @@
+{
+  "id": "crew",
+  "name": "Crew tool",
+  "provides": "Report progress, deliver files, remember preferences (Chief also recruits and assigns)",
+  "kind": "core",
+  "bins": [
+    "node"
+  ],
+  "license": "Apache-2.0",
+  "source": "bundled",
+  "install": "Ships with Crewhouse (bin/crew)",
+  "allow": [
+    "Bash(crew *)"
+  ],
+  "grant": {
+    "default": true
+  }
+}

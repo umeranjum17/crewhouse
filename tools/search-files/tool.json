@@ -1,0 +1,20 @@
+{
+  "id": "search-files",
+  "name": "ripgrep and jq",
+  "provides": "Search text in files fast; read and reshape JSON",
+  "kind": "cli",
+  "bins": [
+    "rg",
+    "jq"
+  ],
+  "license": "MIT/Unlicense; MIT",
+  "source": "user-installed",
+  "install": "sudo pacman -S ripgrep jq  |  sudo apt install ripgrep jq  |  brew install ripgrep jq",
+  "allow": [
+    "Bash(rg *)",
+    "Bash(jq *)"
+  ],
+  "grant": {
+    "default": false
+  }
+}

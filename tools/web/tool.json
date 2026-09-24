@@ -1,0 +1,17 @@
+{
+  "id": "web",
+  "name": "Web search and fetch",
+  "provides": "Search the web and read pages",
+  "kind": "built-in",
+  "bins": [],
+  "license": "vendor CLI",
+  "source": "bundled",
+  "install": "Built into the agent CLI",
+  "allow": [
+    "WebSearch",
+    "WebFetch"
+  ],
+  "grant": {
+    "default": true
+  }
+}

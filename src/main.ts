@@ -13,10 +13,11 @@ if ((cfg.stateDir + '/').startsWith(cfg.repoDir + '/') || (cfg.crewDir + '/').st
 }
 mkdirSync(join(cfg.crewDir, 'bots'), { recursive: true });
 const db = new Store(cfg.stateDir);
-const runner = cfg.runner === 'stub' ? new StubRunner() : new HerdrRunner(cfg.herdrCmd);
+const runner = cfg.runner === 'stub' ? new StubRunner() : new HerdrRunner(cfg.herdrCmd, cfg.herdrSession);
 const url = `http://${cfg.host}:${cfg.port}`;
 const crew = new Crew(cfg, db, runner, url);
 if (runner instanceof StubRunner) runner.onTurn = (bot, reply) => crew.finish(bot, reply);
+if (runner instanceof HerdrRunner) await runner.ensureServer();
 const server = await startServer(cfg, db, crew);
 crew.init();
 writeFileSync(join(cfg.stateDir, 'endpoint'), url + '\n');

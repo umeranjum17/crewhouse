@@ -66,6 +66,9 @@ function sentence(e: Json, name: (id: string) => string): string | null {
     case 'memory.edited': return `You edited what ${b} knows`;
     case 'file.delivered': return `${b} delivered ${d.path}`;
     case 'bot.tools': return `You changed ${b}'s tools`;
+    case 'run.tool': return `${b} ${d.tool === 'Bash' ? 'ran' : 'used ' + d.tool + ':'} ${d.summary}`;
+    case 'ask.parked': return `${b} is waiting for your answer; the rest of its work is paused`;
+    case 'account.limit': return d.fiveHour ? `Claude has used ${d.fiveHour.used}% of its 5-hour window${d.sevenDay ? ` and ${d.sevenDay.used}% of the week` : ''}` : null;
     default: return null;
   }
 }
@@ -91,14 +94,14 @@ function AskCard({ ask, bots, onDone }: { ask: Json; bots: Json[]; onDone: () =>
       <div className="ask-head">
         <Avatar bot={bot} size={28} />
         <span className="muted">{bot?.display}</span>
-        <span className="tag">{ask.kind === 'permission' ? 'PERMISSION' : 'QUESTION'}</span>
+        <span className="tag">{ask.kind === 'permission' ? 'PERMISSION' : ask.kind === 'trust' ? 'FIRST RUN' : 'QUESTION'}</span>
       </div>
       <div className="ask-title">{ask.title}</div>
-      {ask.kind === 'permission' ? (
+      {ask.kind === 'permission' || ask.kind === 'trust' ? (
         <>
-          <pre className="mono small">{ask.detail.summary}</pre>
+          {ask.kind === 'trust' ? <p className="muted small">{ask.detail.note}</p> : <pre className="mono small">{ask.detail.summary}</pre>}
           <div className="row">
-            <button className="btn primary" onClick={() => send({ answer: 'allow' })}>Allow once</button>
+            <button className="btn primary" onClick={() => send({ answer: 'allow' })}>{ask.kind === 'trust' ? 'Trust it' : 'Allow once'}</button>
             <button className="btn" onClick={() => send({ answer: 'deny' })}>Don't allow</button>
           </div>
         </>
@@ -128,6 +131,8 @@ function Thread({ botId, state, tick, compact }: { botId: string; state: Json; t
   const [text, setText] = useState('');
   const [err, setErr] = useState('');
   const end = useRef<HTMLDivElement>(null);
+  const input = useRef<HTMLTextAreaElement>(null);
+  const [byName, setByName] = useState(false);
   const load = useCallback(() => api.bot(botId).then(setPage).catch((e) => setErr(e.message)), [botId]);
   useEffect(() => { load(); }, [load, tick]);
   useEffect(() => { end.current?.scrollIntoView({ block: 'end' }); }, [page?.messages?.length]);
@@ -175,17 +180,18 @@ function Thread({ botId, state, tick, compact }: { botId: string; state: Json; t
       {onboarding && (
         <div className="row wrap quick">
           {['Sir', "Ma'am"].map((q) => <button key={q} className="btn" onClick={() => send(q)}>{q}</button>)}
-          <span className="muted small">or type your name below</span>
+          <button className="btn" onClick={() => { setByName(true); input.current?.focus(); }}>By my name…</button>
         </div>
       )}
       {err && <div className="error">{err}</div>}
       <form className="composer" onSubmit={(e) => { e.preventDefault(); send(text); }}>
         <textarea
+          ref={input}
           value={text}
           rows={1}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(text); } }}
-          placeholder={onboarding ? 'How should Chief address you?' : botId === 'chief' ? 'Ask Chief…' : `Give ${bot?.display ?? 'this bot'} a task or just chat…`}
+          placeholder={onboarding ? (byName ? 'Your name' : 'How should Chief address you?') : botId === 'chief' ? 'Ask Chief…' : `Give ${bot?.display ?? 'this bot'} a task or just chat…`}
         />
         <button className="send" aria-label="Send">➤</button>
       </form>
@@ -204,6 +210,7 @@ function Home({ state, name, tick, refresh }: { state: Json; name: (id: string) 
         <span className="chip green">✓ {done.length} done today</span>
         {state.asks.length > 0 && <span className="chip amber">{state.asks.length} need you</span>}
         <span className="chip">{state.bots.length - 1} on the crew</span>
+        {state.limits?.claude?.fiveHour && <span className="chip" title="From Claude's own status line">Claude · {state.limits.claude.fiveHour.used}% of the 5-hour window used</span>}
       </div>
       {state.asks.length > 0 && (
         <section>
@@ -316,7 +323,8 @@ function BotPage({ id, tab, state, tick, refresh }: { id: string; tab: string; s
   useEffect(() => { load(); }, [load, tick]);
   const bot = state.bots.find((b: Json) => b.id === id);
   if (!bot || !page) return <div className="muted">{msg || 'Loading…'}</div>;
-  const tabs = ['chat', 'knows', 'skills', 'tools', 'files', 'history', 'computer'];
+  const tabs = ['chat', 'knows', 'skills', 'tools', 'files', 'history', 'screen', 'work'];
+  const label: Record<string, string> = { work: 'Show the work' };
   const toggle = async (tool: string, on: boolean) => {
     const granted = page.tools.filter((t: Json) => t.granted).map((t: Json) => t.id).filter((t: string) => t !== tool);
     await api.tools(id, on ? [...granted, tool] : granted).catch((e) => setMsg(e.message));
@@ -335,7 +343,7 @@ function BotPage({ id, tab, state, tick, refresh }: { id: string; tab: string; s
         {bot.task && <button className="btn" onClick={async () => { await api.reset(id); refresh(); }}>Stop</button>}
       </div>
       <nav className="tabs">
-        {tabs.map((t) => <a key={t} className={t === tab ? 'on' : ''} href={`#/bot/${id}/${t}`}>{t[0].toUpperCase() + t.slice(1)}</a>)}
+        {tabs.map((t) => <a key={t} className={t === tab ? 'on' : ''} href={`#/bot/${id}/${t}`}>{label[t] ?? t[0].toUpperCase() + t.slice(1)}</a>)}
       </nav>
       {msg && <div className="error">{msg}</div>}
       {tab === 'chat' && <Thread botId={id} state={state} tick={tick} />}
@@ -371,6 +379,7 @@ function BotPage({ id, tab, state, tick, refresh }: { id: string; tab: string; s
               <div className="grow">
                 <b>{t.name}</b> <span className={`chip ${t.ready ? 'green' : 'amber'}`}>{t.ready ? 'ready' : `missing ${t.missing.join(', ')}`}</span>
                 <div className="muted small">{t.provides}</div>
+                <div className="tiny">{t.license}{t.note ? ` · ${t.note}` : ''}</div>
                 {!t.ready && <div className="mono tiny">{t.install}</div>}
               </div>
             </label>
@@ -400,13 +409,37 @@ function BotPage({ id, tab, state, tick, refresh }: { id: string; tab: string; s
           ))}
         </div>
       )}
-      {tab === 'computer' && (
+      {tab === 'screen' && (
         <div className="card">
-          <b>{bot.display}'s computer</b>
-          <p className="muted">Not connected yet. Each bot will get its own desktop through desklink, so you can watch it work and take over from your phone. This needs desklink's host published as a standalone package.</p>
-          <div className="screen">No desktop</div>
+          <b>{bot.display}'s screen</b>
+          <p className="muted">Each bot gets its own desktop, separate from yours: its own display and browser. You'll be able to watch it work and take the controls to sign it in to a site, then hand them back.</p>
+          <div className="screen">No desktop yet</div>
+          <div className="row end">
+            <button className="btn" disabled title="Coming next: per-bot Xvfb display through desklink">Watch {bot.display}'s screen</button>
+            <button className="btn" disabled title="Coming next: control-grant devices only">Take over</button>
+          </div>
+          <p className="muted tiny">Not in this build. Needs a per-bot virtual display (Xvfb) and @desklink/host.</p>
         </div>
       )}
+      {tab === 'work' && <ShowWork id={id} bot={bot} />}
+    </div>
+  );
+}
+
+/** Read-only live terminal of the bot's CLI. Hidden behind a tab on purpose: most people never need it. */
+function ShowWork({ id, bot }: { id: string; bot: Json }) {
+  const [text, setText] = useState('');
+  useEffect(() => {
+    let alive = true;
+    const pull = () => fetch(`/api/bots/${id}/screen`).then((r) => r.json()).then((r) => alive && setText(r.text ?? '')).catch(() => {});
+    pull();
+    const t = setInterval(pull, 1500);
+    return () => { alive = false; clearInterval(t); };
+  }, [id]);
+  return (
+    <div className="card">
+      <div className="row between"><b>{bot.display}'s terminal</b><span className="muted tiny">live · read-only · {bot.runtime}</span></div>
+      <pre className="terminal">{text || `${bot.display} isn't running right now.`}</pre>
     </div>
   );
 }

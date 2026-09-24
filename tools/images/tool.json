@@ -1,0 +1,18 @@
+{
+  "id": "images",
+  "name": "ImageMagick",
+  "provides": "Resize, crop, compose and annotate images",
+  "kind": "cli",
+  "bins": [
+    "magick"
+  ],
+  "license": "ImageMagick (Apache-2.0 style)",
+  "source": "user-installed",
+  "install": "sudo pacman -S imagemagick  |  sudo apt install imagemagick  |  brew install imagemagick",
+  "allow": [
+    "Bash(magick *)"
+  ],
+  "grant": {
+    "default": false
+  }
+}

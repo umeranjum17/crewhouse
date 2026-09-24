@@ -7,8 +7,11 @@
   "tools": [
     "crew",
     "files",
+    "web",
     "media",
-    "images"
+    "images",
+    "video-download",
+    "search-files"
   ],
   "allow": [
     "Bash(ls *)",

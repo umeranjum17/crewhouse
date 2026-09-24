@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 
 /** Lifecycle as the runner sees it. idle/done = ready for input; blocked = the CLI shows a question UI. */
 export type RunState = 'off' | 'idle' | 'working' | 'blocked' | 'done' | 'unknown';
@@ -23,6 +23,9 @@ export interface Runner {
   keys(bot: string, keys: string[]): Promise<void>;
   /** Literal text then Enter, for a free-text reply to a blocked CLI. */
   text(bot: string, text: string): Promise<void>;
+  /** The live terminal picture, for "Show the work". */
+  screen(bot: string): Promise<string>;
+  interrupt(bot: string): Promise<void>;
   stop(bot: string): Promise<void>;
 }
 
@@ -31,15 +34,21 @@ class HerdrError extends Error {
   constructor(msg: string, code?: string) { super(msg); this.code = code; }
 }
 
-/** Runs each bot's CLI in its own Herdr tab. `cmd` is a prefix so a lab wrapper can pin the session. */
+/** Runs each bot's CLI in its own Herdr workspace, in crewd's own Herdr session (never the owner's default).
+ *  `cmd` is a prefix so a lab wrapper can supply the session instead. */
 export class HerdrRunner implements Runner {
-  private workspace?: string;
-  private tabs = new Map<string, string>();
-
   private cmd: string[];
-  constructor(cmd: string[]) { this.cmd = cmd; }
+  private session: string;
+  private workspaces = new Map<string, string>();
+
+  constructor(cmd: string[], session: string) { this.cmd = cmd; this.session = session; }
 
   private call(args: string[], timeoutMs = 60_000): Promise<any> {
+    // --session is a Herdr option: it goes before any `--` so it never becomes an agent argument.
+    if (this.session) {
+      const i = args.indexOf('--');
+      args = i < 0 ? [...args, '--session', this.session] : [...args.slice(0, i), '--session', this.session, ...args.slice(i)];
+    }
     return new Promise((resolve, reject) => {
       execFile(this.cmd[0], [...this.cmd.slice(1), ...args], { timeout: timeoutMs, maxBuffer: 8 << 20 }, (err, stdout, stderr) => {
         const out = stdout.trim() || stderr.trim();
@@ -56,26 +65,33 @@ export class HerdrRunner implements Runner {
 
   private name(bot: string) { return `crew-${bot}`; }
 
-  private async ensureWorkspace(cwd: string) {
-    if (this.workspace) return this.workspace;
-    const list = await this.call(['workspace', 'list']);
-    const ws = list.workspaces?.find((w: any) => w.label === 'Crewhouse');
-    this.workspace = ws?.workspace_id
-      ?? (await this.call(['workspace', 'create', '--cwd', cwd, '--label', 'Crewhouse', '--no-focus'])).workspace.workspace_id;
-    return this.workspace!;
+  /** Start crewd's own headless Herdr server if it isn't running. Lab wrappers own their server. */
+  async ensureServer() {
+    if (!this.session) return;
+    const st = await this.call(['status', '--json']).catch(() => null);
+    const status = typeof st === 'string' ? JSON.parse(st) : st;
+    if (status?.server?.running) return;
+    const child = spawn(this.cmd[0], [...this.cmd.slice(1), 'server', '--session', this.session], { detached: true, stdio: 'ignore' });
+    child.unref();
+    for (let i = 0; i < 50; i++) {
+      await new Promise((r) => setTimeout(r, 200));
+      const again = await this.call(['status', '--json']).catch(() => null);
+      if ((typeof again === 'string' ? JSON.parse(again) : again)?.server?.running) return;
+    }
+    throw new Error(`Herdr session ${this.session} did not start`);
   }
 
   async start(spec: LaunchSpec) {
     if ((await this.state(spec.bot)) !== 'off') return;
-    const ws = await this.ensureWorkspace(spec.cwd);
     const env = Object.entries(spec.env).flatMap(([k, v]) => ['--env', `${k}=${v}`]);
-    const tab = await this.call(['tab', 'create', '--workspace', ws, '--cwd', spec.cwd, '--label', spec.label, ...env]);
-    this.tabs.set(spec.bot, tab.tab.tab_id);
+    // One workspace per bot, rooted in the bot's folder.
+    const ws = await this.call(['workspace', 'create', '--cwd', spec.cwd, '--label', spec.label, '--no-focus', ...env]);
+    this.workspaces.set(spec.bot, ws.workspace.workspace_id);
     try {
-      await this.call(['agent', 'start', this.name(spec.bot), '--kind', spec.kind, '--pane', tab.root_pane.pane_id,
+      await this.call(['agent', 'start', this.name(spec.bot), '--kind', spec.kind, '--pane', ws.root_pane.pane_id,
         '--timeout', '90000', '--', ...spec.args], 100_000);
     } catch (e: any) {
-      // A first-run dialog (folder trust) blocks startup; the caller surfaces it as a "needs you" item.
+      // A first-run dialog (folder trust) blocks startup; crewd shows it to the person as an ask.
       if (e.code !== 'agent_not_ready') throw e;
     }
   }
@@ -100,6 +116,11 @@ export class HerdrRunner implements Runner {
     return typeof r === 'string' ? r : (r.read?.text ?? r.text ?? JSON.stringify(r));
   }
 
+  async screen(bot: string) {
+    const r = await this.call(['agent', 'read', this.name(bot), '--source', 'visible'], 15_000);
+    return typeof r === 'string' ? r : (r.text ?? JSON.stringify(r));
+  }
+
   async keys(bot: string, keys: string[]) {
     await this.call(['agent', 'send-keys', this.name(bot), ...keys]);
   }
@@ -110,11 +131,13 @@ export class HerdrRunner implements Runner {
     await this.keys(bot, ['enter']);
   }
 
+  async interrupt(bot: string) { await this.keys(bot, ['esc']); }
+
   async stop(bot: string) {
-    // After a crewd restart the tab is only known to Herdr, so ask it.
-    const tab = this.tabs.get(bot) ?? (await this.call(['agent', 'get', this.name(bot)]).catch(() => null))?.agent?.tab_id;
-    if (tab) await this.call(['tab', 'close', tab]).catch(() => {});
-    this.tabs.delete(bot);
+    // After a crewd restart the workspace is only known to Herdr, so ask it.
+    const ws = this.workspaces.get(bot) ?? (await this.call(['agent', 'get', this.name(bot)]).catch(() => null))?.agent?.workspace_id;
+    if (ws) await this.call(['workspace', 'close', ws]).catch(() => {});
+    this.workspaces.delete(bot);
   }
 }
 
@@ -132,6 +155,7 @@ export class StubRunner implements Runner {
     this.out.set(bot, text);
     setTimeout(() => {
       if (/needs approval/i.test(text)) { this.states.set(bot, 'blocked'); return; }
+      if (/ask permission/i.test(text)) return; // stays working; the test plays the CLI's hooks
       this.states.set(bot, 'done');
       this.onTurn?.(bot, `stub ${bot}: done with "${text.split('\n').pop()!.slice(0, 60)}"`);
     }, 50);
@@ -147,5 +171,7 @@ export class StubRunner implements Runner {
   }
 
   async text(bot: string, _text: string) { await this.keys(bot, ['enter']); }
+  async screen(bot: string) { return this.read(bot); }
+  async interrupt(bot: string) { if (this.states.get(bot) === 'working') this.states.set(bot, 'idle'); }
   async stop(bot: string) { this.states.delete(bot); }
 }
