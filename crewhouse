@@ -88,7 +88,7 @@ case "${1:-}" in
       case "$a" in --all) all=1 ;; --yes|-y) yes=1 ;; *) echo "usage: ./crewhouse uninstall [--all] [--yes]" >&2; exit 2 ;; esac
     done
     echo "This removes what Crewhouse installed:"
-    echo "  $STATE  (the database, desktops, log)"
+    echo "  $STATE  (the database, household members' own AI sign-ins, desktops, log)"
     echo "  $TOOLS  (pinned tools)"
     [ -n "$SESSION" ] && echo "  Herdr session '$SESSION'  (the bots' terminals)"
     echo "  node_modules and web/dist in $(pwd)"
