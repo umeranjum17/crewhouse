@@ -171,7 +171,7 @@ test('grant resolution: MCP browser, pinned bin dir, asks-first gate, per-CLI wi
     const dir = disk.botDir(cfg, 'scout');
     const g = kit.resolveGrants(cfg, disk.botConfig(cfg, 'scout').tools, { 'bot.dir': dir, 'bot.id': 'scout' });
     assert.deepEqual(g.tools.sort(), ['browser', 'crew', 'documents', 'files', 'search-files', 'web']);
-    assert.deepEqual(g.missing, ['video-download'], 'granted but not installed: listed, not offered');
+    assert.deepEqual(g.missing, ['computer', 'video-download'], 'granted but not installed: listed, not offered');
     assert.equal(g.mcp.browser.command, join(kit.toolBin(cfg), 'playwright-mcp'), 'pinned copy, absolute');
     assert.ok(g.mcp.browser.args.includes(`${dir}/browser`), "the bot's own profile");
     assert.equal(g.mcp.browser.env.PLAYWRIGHT_BROWSERS_PATH, join(cfg.toolsDir, 'browser', 'ms-playwright'));
@@ -185,7 +185,7 @@ test('grant resolution: MCP browser, pinned bin dir, asks-first gate, per-CLI wi
     assert.ok(s.permissions.allow.includes('mcp__browser'));
     assert.ok(s.permissions.allow.includes('Bash(markitdown *)'));
     assert.ok(s.permissions.allow.includes('Edit(./**)') && !s.permissions.allow.includes('Write'), 'edits are confined to the bot folder');
-    assert.equal(s.hooks.PreToolUse[0].matcher, 'mcp__browser__.*');
+    assert.match(s.hooks.PreToolUse[0].hooks[0].command, /hook pretool$/, 'every tool call passes the gate: the controls, then the browser rules');
 
     // Revoke the browser: gone from the allow list and the MCP config.
     disk.setGrants(cfg, 'scout', ['files', 'web']);
@@ -385,5 +385,38 @@ test('fallback: a Codex usage-limit screen rests ChatGPT until the time it print
   assert.deepEqual(kinds, ['codex', 'claude']);
   assert.equal(task(db, t).state !== 'failed', true);
   assert.ok(db.all("SELECT text FROM messages WHERE bot = 'scout'").some((m) => /^Switched from ChatGPT to Claude: ChatGPT is resting until \w{3} 12:15 pm/.test(m.text)));
+  done();
+});
+
+test('take over: the bot pauses while the person drives; give back resumes it with their note', async () => {
+  const { db, crew, runner, cfg, done } = setup();
+  crew.onboard('sir');
+  crew.recruit('reel', 'Reel', 'person');
+  const t = crew.assign('reel', 'ask permission to open the site', 'chief').task; // the stub keeps this one working
+  await sleep(100);
+  const settings = JSON.parse(readFileSync(join(cfg.crewDir, 'bots', 'reel', '.claude', 'settings.local.json'), 'utf8'));
+  assert.match(settings.hooks.PreToolUse[0].hooks[0].command, /hook pretool$/, 'the CLI asks crewd before every tool call');
+  assert.deepEqual(await crew.preTool('reel', { tool_name: 'Bash' }), {}, 'the bot acts freely while it has the controls');
+
+  await crew.takeOver('reel');
+  assert.equal(crew.snapshot().bots.find((b: any) => b.id === 'reel')?.controls, 'person');
+  assert.equal(await runner.state('reel'), 'idle', 'the running turn is interrupted');
+  const deny = await crew.preTool('reel', { tool_name: 'Bash' }) as any;
+  assert.equal(deny.hookSpecificOutput.permissionDecision, 'deny');
+  assert.match(deny.hookSpecificOutput.permissionDecisionReason, /owner has the controls/);
+  crew.finish('reel', 'I will wait for the owner.');
+  assert.equal(task(db, t).state, 'working', 'a turn cut short by Take over does not end the task');
+  const next = crew.assign('reel', 'second job', 'chief').task;
+  await sleep(100);
+  assert.equal(task(db, next).state, 'queued', 'no new work starts while the person drives');
+
+  await crew.giveBack('reel', 'signed you in to example.com');
+  assert.deepEqual(await crew.preTool('reel', { tool_name: 'Bash' }), {});
+  assert.match(await runner.read('reel'), /given them back\. What they did: signed you in to example\.com\./, 'the resume prompt carries the note');
+  await sleep(300);
+  assert.equal(task(db, t).state, 'done', 'the resumed turn finishes the task');
+  assert.equal(task(db, next).state, 'done', 'then the queue moves again');
+  assert.ok(db.get("SELECT 1 FROM messages WHERE bot = 'reel' AND text = 'You gave the controls back: signed you in to example.com'"));
+  await assert.rejects(crew.giveBack('reel'), /already has the controls/);
   done();
 });

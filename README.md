@@ -8,7 +8,7 @@ You talk to **Chief**. Chief recruits bots from templates (Reel makes demo video
 
 Nothing leaves your machine: there is no server of ours and no telemetry, and Crewhouse never reads a CLI's credential files.
 
-> Status: first working slice (MVP). Chief, Reel, approvals, the web app and the Herdr runner work end to end on Linux. Phone pairing, push, routines, per-bot desktops and Codex turns come next; see "Not yet".
+> Status: first working slice (MVP). Chief, Reel, approvals, the web app and the Herdr runner work end to end on Linux. Each bot with the Computer tool gets its own desktop you can watch and take over. Phone pairing, push, routines and Codex turns come next; see "Not yet".
 
 ## Quick start
 
@@ -54,6 +54,14 @@ Other commands: `./crewhouse doctor` (what's installed, what's missing, how to a
   - Pinned tools install into Crewhouse's own folder (`~/.local/share/crewhouse/tools/`), never globally and never with sudo: the browser ([Playwright MCP](https://github.com/microsoft/playwright-mcp) with its own Chromium), [MarkItDown](https://github.com/microsoft/markitdown) and [yt-dlp](https://github.com/yt-dlp/yt-dlp) (checksum-verified). System tools (gh, ffmpeg, ImageMagick, ripgrep, jq) are detected, and doctor prints the install line. Web search and fetch are the CLI's own.
   - A bot's grants become its CLI's allow list, its own MCP config (`--strict-mcp-config`, so your MCP servers stay out) and PATH. Anything else asks you first; file edits outside the bot's folder ask; credential folders are always denied. A tool that spends money lists its commands under `ask`, which asks you every time, even over an allow rule.
   - Each bot's browser has its own profile in `bots/<name>/browser/`. A `PreToolUse` hook asks you before a click or keystroke on a checkout or payment page, or on a site listed in the bot's `bot.json` `signedIn`.
+- **Each bot's own desktop** (the Computer tool, Linux): when a task starts, crewd gives the bot a virtual display (`Xvfb :1NN`, 1280×800, its own X cookie) with its own Chromium on it, profile in `bots/<name>/browser/`. The browser MCP drives that Chromium over CDP, and the bot's CLI gets `DISPLAY` for that display only, never yours. The desktop stops after 10 idle minutes.
+  - On the bot's **Screen** tab, **Watch** streams it live through [desklink](https://www.npmjs.com/package/@desklink/host) (WebRTC, view only). crewd starts the desklink engine and picks the display and permissions; the page never can.
+  - **Take over** pauses the bot: its turn is interrupted and every tool call is refused ("the owner has the controls; wait") until you **Give back**, which resumes its task with your note of what you did. Use it to sign the bot's browser in to a site.
+  - Needs Xvfb and Chromium; `./crewhouse doctor` names what is missing.
+
+  | Watch | Take over | Phone width |
+  |---|---|---|
+  | ![Watching Scout's screen](docs/screenshots/desktop-watch.webp) | ![You have the controls](docs/screenshots/desktop-drive.webp) | ![Phone width](docs/screenshots/desktop-phone.webp) |
 - **Skills** live in a shared library (`skills/`, agentskills format). Each template lists the ones it starts with, and the bot gets its own copy.
 - **Tracer** finds people, work emails and phone numbers through [treg](https://github.com/superdesigndev/treg) (Apache-2.0 with an added no-hosted-resale term; Crewhouse only calls your installed `treg` CLI). Setup is yours, in your own terminal: `curl -fsSL https://treg.to/install.sh | sh` (Python 3.12 or 3.13), then `treg login` (new accounts get $1 of credit). Your own provider keys (`treg secret add`, or the treg dashboard) are used first and never billed by treg. Searching the catalog and reading prices is free and needs no account. Every paid `treg call` comes to you as an approval, and the command shows its price cap (`X-Treg-Route-Max-Cost`, which treg enforces on its routed people endpoints). No key ever goes into Crewhouse, and bots can't read `~/.treg`.
 - **The crew tool** (`bin/crew`) is how bots talk to crewd: `report`, `deliver`, `remember`, and for Chief, `recruit`, `assign` and `call-me`. Each bot carries its own token.
@@ -64,7 +72,7 @@ Data lives outside the repo: the database is in `~/.local/state/crewhouse/`, the
 
 - The phone app (Expo) and phone pairing with an encrypted link. The web UI is plain React with shared `tokens.ts` and `api.ts`, so the Expo app can reuse both. Today it works at phone width on the same machine, because crewd listens on 127.0.0.1 only.
 - Push notifications, routines and schedules, Telegram, multiple people with their own accounts.
-- Per-bot desktops: each bot's own display, watch and take over through [desklink](https://www.npmjs.com/package/@desklink/host). The Screen tab is a placeholder, and the browser runs headless until then. Signing a bot's browser in to a site (and so the `signedIn` list) waits on take over.
+- Bot desktops on macOS (desklink is Linux only), watching from another device (crewd listens on 127.0.0.1), and a sandbox that hides your own X display from a bot's shell. A bot's `signedIn` list is still edited by hand in its `bot.json` after you sign it in.
 - Codex turns. The runner starts `codex` with its `notify` hook, `--search` and the granted MCP servers wired in, but this path is untested, and Codex has no hook for the browser's asks-first rules.
 - The crew tools as an MCP server (today they are the `crew` CLI), limit-based fallback between accounts, and Undo for memory.
 

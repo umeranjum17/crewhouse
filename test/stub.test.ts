@@ -6,6 +6,7 @@ import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { WebSocket } from 'ws';
 
 const root = mkdtempSync(join(tmpdir(), 'crewhouse-test-'));
 const port = 20000 + Math.floor(Math.random() * 20000);
@@ -125,4 +126,25 @@ test('chief onboarding, recruit, assign, asks, memory', async () => {
   for (let i = 0; i < 40 && !refused; i++) refused = (await tool('reel', 'remember', { text: 'x'.repeat(100) })).status !== 200;
   assert.ok(refused, 'notes cap enforced');
   assert.ok(readFileSync(join(dir, 'notes.md'), 'utf8').length <= 2500);
+});
+
+test('screen: take over and give back through the API; watching needs the Computer grant', async () => {
+  await until(async () => (await fetch(`${base}/api/state`).catch(() => null))?.ok);
+  assert.equal((await api('POST', '/api/bots/reel/takeover')).status, 200);
+  assert.equal((await api('GET', '/api/state')).body.bots.find((b: any) => b.id === 'reel').controls, 'person');
+  assert.equal((await tool('reel', 'hook/pretool', { tool_name: 'Bash' })).body.hookSpecificOutput.permissionDecision, 'deny');
+  assert.equal((await api('POST', '/api/bots/reel/giveback', { note: 'signed in' })).status, 200);
+  assert.deepEqual((await tool('reel', 'hook/pretool', { tool_name: 'Bash' })).body, {});
+  assert.equal((await api('POST', '/api/bots/reel/giveback', {})).status, 409);
+  assert.equal((await api('POST', '/api/bots/reel/takeover', undefined, {})).status, 403, 'cross-site pages cannot take over');
+
+  // Reel's grants were narrowed above (no Computer), so its screen refuses to open.
+  const ws = new WebSocket(`ws://127.0.0.1:${port}/ws/desktop/reel`);
+  await new Promise((r) => ws.once('open', r));
+  ws.send(JSON.stringify({ id: 1, method: 'session.open', params: { permissions: ['view'] } }));
+  const reply = JSON.parse(String(await new Promise((r) => ws.once('message', r))));
+  assert.equal(reply.error.code, 'no-screen');
+  ws.close();
+  const foreign = new WebSocket(`ws://127.0.0.1:${port}/ws/desktop/reel`, { origin: 'https://evil.example' });
+  assert.equal(await new Promise((r) => { foreign.once('open', () => r('open')); foreign.once('error', () => r('refused')); }), 'refused');
 });

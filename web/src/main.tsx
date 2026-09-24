@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { api, subscribe, type Json } from './api.ts';
 import { stateWords } from './tokens.ts';
+import { Screen } from './screen.tsx';
 
 type Route = { view: 'home' | 'chief' | 'crew' | 'needs' | 'activity' | 'bot'; id?: string; tab?: string };
 
@@ -39,6 +40,7 @@ function thinksWith(b: Json) {
 const MODEL_SUGGESTIONS = ['claude:opus', 'claude:sonnet', 'claude:haiku', 'codex', 'codex:gpt-5.5', 'codex:gpt-5-mini'];
 
 function botStatus(b: Json) {
+  if (b.controls === 'person') return 'Paused · you have the controls';
   if (b.task) return `${stateWords[b.task.state]} · ${b.task.title}`;
   if (b.queued) return `${b.queued} waiting`;
   return b.state === 'on' ? 'Ready' : 'Resting';
@@ -80,6 +82,8 @@ function sentence(e: Json, name: (id: string) => string): string | null {
     case 'memory.learned': return `${b} learned: ${d.text}`;
     case 'memory.edited': return `You edited what ${b} knows`;
     case 'file.delivered': return `${b} delivered ${d.path}`;
+    case 'desktop.takeover': return `You took the controls of ${b}'s screen`;
+    case 'desktop.giveback': return `You gave ${b} its controls back${d.note ? `: ${d.note}` : ''}`;
     case 'bot.tools': return `You changed ${b}'s tools`;
     case 'run.tool': return `${b} ${d.tool === 'Bash' ? 'ran' : /^mcp__browser__/.test(d.tool) ? `used its browser (${d.tool.replace(/^mcp__browser__browser_/, '')})` + (d.summary ? ':' : '') : 'used ' + d.tool + ':'} ${d.summary}`;
     case 'tool.installing': return `Installing ${d.tool}…`;
@@ -445,18 +449,7 @@ function BotPage({ id, tab, state, tick, refresh }: { id: string; tab: string; s
           ))}
         </div>
       )}
-      {tab === 'screen' && (
-        <div className="card">
-          <b>{bot.display}'s screen</b>
-          <p className="muted">Each bot gets its own desktop, separate from yours: its own display and browser. You'll be able to watch it work and take the controls to sign it in to a site, then hand them back.</p>
-          <div className="screen">No desktop yet</div>
-          <div className="row end">
-            <button className="btn" disabled title="Coming next: per-bot Xvfb display through desklink">Watch {bot.display}'s screen</button>
-            <button className="btn" disabled title="Coming next: control-grant devices only">Take over</button>
-          </div>
-          <p className="muted tiny">Not in this build. Needs a per-bot virtual display (Xvfb) and @desklink/host.</p>
-        </div>
-      )}
+      {tab === 'screen' && <Screen bot={{ ...page.bot, ...bot }} missing={state.desktops?.missing ?? []} refresh={() => { refresh(); load(); }} />}
       {tab === 'work' && <ShowWork id={id} bot={bot} />}
     </div>
   );

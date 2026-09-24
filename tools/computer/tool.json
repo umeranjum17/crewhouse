@@ -1,20 +1,27 @@
 {
   "id": "computer",
   "name": "Computer (desklink)",
-  "provides": "The bot's own desktop you can watch and take over from your phone",
+  "provides": "The bot's own desktop: a virtual display with its own Chromium, which its browser tool drives. You can watch it and take over from the Screen tab",
   "kind": "desktop",
-  "bins": [],
-  "license": "Apache-2.0",
-  "source": "planned",
+  "bins": [
+    "Xvfb"
+  ],
+  "license": "Apache-2.0 (desklink); Xvfb is X.Org (MIT)",
+  "source": "system",
   "install": {
-    "system": "Next: a per-bot Xvfb display plus @desklink/host for watch and take over"
+    "system": "Install Xvfb (apt install xvfb, dnf install xorg-x11-server-Xvfb, pacman -S xorg-server-xvfb) and Chromium. The desklink engine ships with Crewhouse (Linux x64)"
   },
   "asks": [
-    "installing software",
-    "any app on its \"ask first\" list"
+    "nothing while you watch; taking over pauses it until you give the controls back"
   ],
   "allow": [],
+  "env": {
+    "DISPLAY": "{bot.display}",
+    "XAUTHORITY": "{bot.xauth}",
+    "WAYLAND_DISPLAY": "crewhouse-no-wayland"
+  },
   "grant": {
     "default": false
-  }
+  },
+  "note": "Linux only for now. Nothing reaches your own screen: the bot's display has its own X cookie."
 }

@@ -4,6 +4,7 @@ import { CHIEF, type Config } from './config.ts';
 import type { Row, Store } from './db.ts';
 import type { RunState, Runner } from './runner.ts';
 import * as disk from './bots.ts';
+import { Desktops, missing as desktopMissing, type Watcher } from './desktop.ts';
 
 const HOLD_MS = Number(process.env.CREWHOUSE_HOLD_MS || 180_000); // how long a CLI's permission hook waits for an answer before its own dialog shows
 const FALLBACK_MS = 12_000; // settled with no Stop hook this long: take the reply from the terminal instead
@@ -57,6 +58,9 @@ export class Crew {
   /** The page each bot's browser is on, from its own tool results. */
   private pages = new Map<string, string>();
   private timer?: NodeJS.Timeout;
+  /** Bots whose screen the person is driving: the bot is paused until they give the controls back. */
+  private held = new Set<string>();
+  readonly desktops: Desktops;
 
   private cfg: Config;
   private db: Store;
@@ -65,6 +69,7 @@ export class Crew {
 
   constructor(cfg: Config, db: Store, runner: Runner, url: string) {
     this.cfg = cfg; this.db = db; this.runner = runner; this.url = url;
+    this.desktops = new Desktops(cfg.stateDir);
   }
 
   init() {
@@ -84,11 +89,11 @@ export class Crew {
     this.dispatch();
   }
 
-  stop() { clearInterval(this.timer); }
+  stop() { clearInterval(this.timer); this.desktops.stopAll(); }
 
   // ---- reads ----
   person(): Row { return this.db.get('SELECT * FROM people WHERE id = 1')!; }
-  bot(id: string) { return this.db.get('SELECT * FROM bots WHERE id = ?', id); }
+  bot(id: string) { return this.db.get('SELECT rowid + 100 AS n, * FROM bots WHERE id = ?', id); }
   bots() { return this.db.all('SELECT * FROM bots ORDER BY created_at'); }
   byToken(token: string | undefined) {
     const b = token && this.db.get('SELECT * FROM bots WHERE token = ?', token);
@@ -119,7 +124,7 @@ export class Crew {
   }
 
   snapshot() {
-    const pub = ({ token, ...b }: Row) => ({ ...b, thinks: this.thinks(b.id), live: this.live.get(b.id)?.state ?? 'off', task: this.activeTask(b.id) ?? null,
+    const pub = ({ token, ...b }: Row) => ({ ...b, thinks: this.thinks(b.id), ...this.screenOf(b.id), live: this.live.get(b.id)?.state ?? 'off', task: this.activeTask(b.id) ?? null,
       queued: this.db.get("SELECT COUNT(*) AS n FROM tasks WHERE bot = ? AND state = 'queued'", b.id)!.n });
     return {
       person: this.person(),
@@ -130,7 +135,7 @@ export class Crew {
       events: this.db.events(0, 80),
       limits: Object.fromEntries(this.limits),
       resting: Object.fromEntries(Object.keys(disk.RUNTIMES).map((r) => [r, this.restingUntil(r)])),
-      computer: { status: 'not-connected', note: 'Each bot gets its own desktop via desklink once @desklink/host is published as a standalone package.' },
+      desktops: { missing: desktopMissing() },
     };
   }
 
@@ -139,7 +144,7 @@ export class Crew {
     if (!b) throw Object.assign(new Error('no such bot'), { status: 404 });
     const { token, ...bot } = b;
     return {
-      bot: { ...bot, thinks: this.thinks(id), live: this.live.get(id)?.state ?? 'off' },
+      bot: { ...bot, thinks: this.thinks(id), ...this.screenOf(id), live: this.live.get(id)?.state ?? 'off' },
       messages: this.db.all('SELECT * FROM (SELECT * FROM messages WHERE bot = ? ORDER BY id DESC LIMIT 200) ORDER BY id', id),
       tasks: this.db.all('SELECT * FROM tasks WHERE bot = ? ORDER BY id DESC LIMIT 50', id),
       notes: disk.readNotes(this.cfg, id),
@@ -149,6 +154,10 @@ export class Crew {
       files: disk.listFiles(this.cfg, id),
       folder: disk.botDir(this.cfg, id),
     };
+  }
+
+  private screenOf(id: string) {
+    return { controls: this.held.has(id) ? 'person' : 'bot', desktop: this.desktops.info(id), computer: disk.canUse(this.cfg, id, 'computer') };
   }
 
   // ---- people ----
@@ -249,7 +258,7 @@ export class Crew {
     let free = this.cfg.maxConcurrent - busy;
     for (const t of this.db.all("SELECT * FROM tasks WHERE state = 'queued' ORDER BY id")) {
       if (free <= 0) break;
-      if (this.activeTask(t.bot) || this.starting.has(t.bot)) continue;
+      if (this.activeTask(t.bot) || this.starting.has(t.bot) || this.held.has(t.bot)) continue;
       free--;
       this.run(t);
     }
@@ -268,6 +277,9 @@ export class Crew {
       if (disk.brainKey(running) !== disk.brainKey(brain)) { await this.runner.stop(bot.id); this.live.delete(bot.id); }
       const fresh = (await this.runner.state(bot.id)) === 'off';
       this.db.run('UPDATE bots SET runtime = ?, model = ? WHERE id = ?', brain.runtime, brain.model ?? null, bot.id);
+      // A bot with a computer gets its own display before its CLI starts, so DISPLAY points at it from the first turn.
+      // The stub runner has no CLI to hand a screen to.
+      if (this.cfg.runner === 'herdr' && disk.canUse(this.cfg, bot.id, 'computer')) await this.desktops.ensure(bot.id, bot.n, disk.botDir(this.cfg, bot.id));
       await this.runner.start(disk.launchSpec(this.cfg, { ...bot, runtime: brain.runtime, model: brain.model } as any, this.url));
       this.db.run("UPDATE bots SET state = 'on' WHERE id = ?", bot.id);
       this.db.event('run.started', bot.id, { task: task.id, brain: disk.brainKey(brain), name: disk.brainName(brain) });
@@ -383,7 +395,8 @@ export class Crew {
     const parked = task && this.db.get("SELECT 1 FROM asks WHERE task_id = ? AND state = 'open' AND kind = 'permission'", task.id);
     this.db.tx(() => {
       this.say(botId, 'bot', text, task?.id ?? null);
-      if (!task || parked) return;
+      // While the person holds the controls the turn was cut short on purpose; Give back resumes it.
+      if (!task || parked || this.held.has(botId)) return;
       this.setTask(task, 'done', text);
       if (task.origin === CHIEF) {
         const b = this.bot(botId)!;
@@ -515,7 +528,7 @@ export class Crew {
     this.ticking = true;
     try {
       for (const task of this.db.all("SELECT * FROM tasks WHERE state IN ('working', 'needs_you')")) {
-        if (this.starting.has(task.bot)) continue;
+        if (this.starting.has(task.bot) || this.held.has(task.bot)) continue;
         const st = await this.runner.state(task.bot).catch(() => 'unknown' as RunState);
         const l = this.live.get(task.bot) ?? { state: st, promptedAt: Date.now(), sawWorking: false, settledAt: 0, prompted: true };
         if (st !== l.state) this.db.event('run.state', task.bot, { state: st, task: task.id });
@@ -552,13 +565,68 @@ export class Crew {
           this.setTask(task, 'failed', 'Took longer than an hour, so I stopped it.');
         }
       }
+      this.desktops.sweep((bot) => !!this.activeTask(bot) || this.held.has(bot));
     } finally {
       this.ticking = false;
     }
     this.dispatch();
   }
 
+  // ---- the bot's screen: watch, take over, give back ----
+  /** One signaling request from a watching screen. Watching starts the bot's desktop if it is resting. */
+  async desktopSignal(botId: string, watcher: Watcher, method: string, params: Row) {
+    const bot = this.bot(botId);
+    if (!bot) throw Object.assign(new Error('no such bot'), { status: 404 });
+    if (method === 'session.open') {
+      if (!disk.canUse(this.cfg, botId, 'computer')) throw Object.assign(new Error(`${bot.display} has no computer; grant it on the Tools tab`), { code: 'no-screen' });
+      await this.desktops.ensure(botId, bot.n, disk.botDir(this.cfg, botId));
+    }
+    return this.desktops.signal(botId, watcher, method, params, this.held.has(botId));
+  }
+
+  /** The person takes the controls: the bot stops where it is, and its tool calls are refused until Give back. */
+  async takeOver(botId: string) {
+    const bot = this.bot(botId);
+    if (!bot) throw Object.assign(new Error('no such bot'), { status: 404 });
+    if (this.held.has(botId)) return;
+    this.held.add(botId);
+    const task = this.activeTask(botId);
+    this.db.tx(() => {
+      this.db.event('desktop.takeover', botId, { task: task?.id ?? null });
+      if (task) this.say(botId, 'system', `You have the controls. ${bot.display} is paused until you give them back.`, task.id);
+    });
+    if ((await this.runner.state(botId).catch(() => 'off')) === 'working') await this.runner.interrupt(botId).catch(() => {});
+  }
+
+  /** The person hands the controls back; the bot resumes its task with a note of what they did. */
+  async giveBack(botId: string, note = '') {
+    const bot = this.bot(botId);
+    if (!bot) throw Object.assign(new Error('no such bot'), { status: 404 });
+    if (!this.held.delete(botId)) throw Object.assign(new Error(`${bot.display} already has the controls`), { status: 409 });
+    await this.desktops.revokeControl(botId);
+    const did = note.replace(/\s+/g, ' ').trim().slice(0, 500);
+    const task = this.activeTask(botId);
+    this.db.tx(() => {
+      this.db.event('desktop.giveback', botId, { task: task?.id ?? null, note: did });
+      if (task) this.say(botId, 'system', `You gave the controls back${did ? `: ${did}` : '.'}`, task.id);
+    });
+    if (task && this.live.has(botId)) {
+      const who = this.person().address || 'The person';
+      await this.submit(task, `[Crewhouse] ${who} took the controls of your screen and has given them back. ` +
+        `${did ? `What they did: ${did}. ` : 'They left no note. '}Look at your screen again before you carry on with task #${task.id}.`);
+    } else this.dispatch();
+  }
+
+  /** Claude's PreToolUse hook: nothing while the person drives the bot's screen; then the browser's asks-first rules. */
+  async preTool(botId: string, payload: Row = {}) {
+    if (!this.held.has(botId)) return String(payload.tool_name ?? '').startsWith('mcp__browser__') ? this.browserGate(botId, payload) : {};
+    return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny',
+      permissionDecisionReason: 'The owner has the controls of your screen; wait. You will be told when they give them back.' } };
+  }
+
   async resetBot(id: string, why = 'Stopped by you.') {
+    this.held.delete(id);
+    await this.desktops.revokeControl(id);
     await this.runner.stop(id);
     this.live.delete(id);
     this.db.tx(() => {

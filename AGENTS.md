@@ -11,7 +11,8 @@ This file is the project's committed home for project-intrinsic agent knowledge:
 - Tool kit: manifests in `tools/*/tool.json`, logic in `src/tools.ts` (`resolveGrants`, `installTool`). Tests and labs set `CREWHOUSE_TOOLS_DIR` to a temp dir; a real `./crewhouse tools install` downloads Chromium (~170 MB). Claude ignores `Write(path)` allow rules: `Edit(path)` covers every file edit.
 - Which CLI and model runs is picked per run in `src/crew.ts` `run()`: a task's own `brain` first, then the bot's `models` fallback order in `bot.json`, skipping accounts that are resting. Limit hits go through `failover()`: Claude's `StopFailure` hook, or the limit text on Codex's screen.
 - Chief's voice rules live in `templates/chief/AGENTS.md`. His first greeting is deterministic, in `src/crew.ts` (`chiefGreeting`).
-- The web UI is plain React bundled by `scripts/build-web.mjs`. `web/src/tokens.ts` and `web/src/api.ts` stay framework-free, so the future Expo app can reuse them.
+- The web UI is plain React bundled by `scripts/build-web.mjs`. `web/src/tokens.ts` and `web/src/api.ts` stay framework-free, so the future Expo app can reuse them. It bundles `@desklink/react-native`'s `*.web.*` build with `react-native` aliased to `web/src/rn-web.tsx`; tsc checks `web/src/desklink.d.ts` instead of the package's Metro sources, and `.npmrc` (`legacy-peer-deps`) keeps its Expo peers out.
+- Bot desktops live in `src/desktop.ts` (Xvfb + the bot's Chromium + one desklink engine per bot). A distro Chromium wrapper can add Wayland and scale flags; the bot's flags come last so they win. Never let a bot process see the owner's `WAYLAND_DISPLAY` or X cookie.
 
 ## Maintaining this file
 

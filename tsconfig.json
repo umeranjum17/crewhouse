@@ -2,7 +2,9 @@
   "compilerOptions": {
     "target": "es2022", "module": "nodenext", "moduleResolution": "nodenext", "strict": true, "noEmit": true,
     "allowImportingTsExtensions": true, "erasableSyntaxOnly": true, "verbatimModuleSyntax": false,
-    "jsx": "react-jsx", "lib": ["es2023", "dom"], "types": ["node"], "skipLibCheck": true
+    "jsx": "react-jsx", "lib": ["es2023", "dom"], "types": ["node"], "skipLibCheck": true,
+    // @desklink/react-native ships Metro/Expo sources; tsc checks the web surface we use instead (web/src/desklink.d.ts).
+    "paths": { "@desklink/react-native": ["./web/src/desklink.d.ts"] }
   },
   "include": ["src", "web/src", "test"]
 }

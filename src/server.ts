@@ -85,7 +85,7 @@ export function startServer(cfg: Config, db: Store, crew: Crew) {
     if (m === 'GET' && p === '/api/state') return crew.snapshot();
     if (m === 'GET' && p === '/api/events') return db.events(Number(url.searchParams.get('after') || 0));
     if (m === 'POST' && p === '/api/onboard') return crew.onboard((await readJson(req)).address ?? '');
-    if (m === 'POST' && p === '/api/recruit') { const b = await readJson(req); return crew.recruit(b.template, b.name, 'person'); }
+    if (m === 'POST' && p === '/api/recruit') { const b = await readJson(req); const { token, ...bot } = crew.recruit(b.template, b.name, 'person'); return bot; }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)$/)) && m === 'GET') return crew.botPage(r[1]);
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/messages$/)) && m === 'POST') { const b = await readJson(req); return crew.post(r[1], b.text ?? '', b.model); }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/models$/)) && m === 'PUT') {
@@ -119,6 +119,8 @@ export function startServer(cfg: Config, db: Store, crew: Crew) {
       return { ok: true };
     }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/screen$/)) && m === 'GET') return { text: await crew.screen(r[1]).catch(() => '') };
+    if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/takeover$/)) && m === 'POST') { await crew.takeOver(r[1]); return { ok: true }; }
+    if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/giveback$/)) && m === 'POST') { await crew.giveBack(r[1], String((await readJson(req)).note ?? '')); return { ok: true }; }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/reset$/)) && m === 'POST') { await crew.resetBot(r[1]); return { ok: true }; }
     if ((r = p.match(/^\/api\/asks\/(\d+)\/answer$/)) && m === 'POST') { await crew.answer(Number(r[1]), await readJson(req)); return { ok: true }; }
     throw Object.assign(new Error('not found'), { status: 404 });
@@ -159,7 +161,7 @@ export function startServer(cfg: Config, db: Store, crew: Crew) {
       case 'hook/permission': return { hookSpecificOutput: { hookEventName: 'PermissionRequest', decision: await crew.permission(bot.id, b) } };
       case 'hook/session': crew.hookSession(bot.id, b); return {};
       case 'hook/tool': crew.hookTool(bot.id, b); return {};
-      case 'hook/pretool': return crew.browserGate(bot.id, b);
+      case 'hook/pretool': return crew.preTool(bot.id, b);
       case 'hook/statusline': return { text: crew.hookStatus(bot.id, b) };
       case 'call-me': chiefOnly(); crew.setAddress(String(b.text ?? '')); return { ok: true };
     }
@@ -167,11 +169,30 @@ export function startServer(cfg: Config, db: Store, crew: Crew) {
   }
 
   const wss = new WebSocketServer({ noServer: true });
+  const desk = new WebSocketServer({ noServer: true });
   server.on('upgrade', (req, socket, head) => {
     const origin = req.headers.origin;
     if (!localHost(req.headers.host) || (origin && !localHost(new URL(origin).host)) || !req.url?.startsWith('/ws')) return socket.destroy();
+    const bot = /^\/ws\/desktop\/([a-z0-9-]+)$/.exec(req.url)?.[1];
+    if (bot) return desk.handleUpgrade(req, socket, head, (ws) => watch(ws, bot));
     wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws));
   });
+
+  /** One socket per watching screen: desklink signaling in, engine events out. Closing it ends the session. */
+  function watch(ws: import('ws').WebSocket, bot: string) {
+    const watcher = { send: (event: unknown) => { if (ws.readyState === 1) ws.send(JSON.stringify({ event })); } };
+    ws.on('message', async (raw) => {
+      let msg: any;
+      try { msg = JSON.parse(String(raw)); } catch { return; }
+      try {
+        const result = await crew.desktopSignal(bot, watcher, String(msg.method), msg.params ?? {});
+        ws.send(JSON.stringify({ id: msg.id, result }));
+      } catch (e: any) {
+        ws.send(JSON.stringify({ id: msg.id, error: { code: e.code ?? 'engine', message: e.message } }));
+      }
+    });
+    ws.on('close', () => crew.desktops.release(watcher));
+  }
   db.onEvent((e) => { const s = JSON.stringify(e); for (const c of wss.clients) if (c.readyState === 1) c.send(s); });
 
   return new Promise<typeof server>((resolve) => server.listen(cfg.port, cfg.host, () => resolve(server)));
