@@ -13,5 +13,14 @@
   ],
   "skills": [
     "find-leads"
+  ],
+  "ideas": [
+    {
+      "needs": [
+        "people-search"
+      ],
+      "promise": "Tell me who you're after and I'll find their work email. I'll ask you before every paid lookup.",
+      "ask": "Find the work email of "
+    }
   ]
 }

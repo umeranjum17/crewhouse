@@ -22,10 +22,12 @@ export const api = {
   tools: (id: string, tools: string[]) => call('PUT', `/api/bots/${id}/tools`, { tools }),
   install: (tool: string) => call('POST', `/api/tools/${tool}/install`),
   models: (id: string, models: string[]) => call('PUT', `/api/bots/${id}/models`, { models }),
+  settings: (id: string, body: { allow?: string[]; memory?: boolean }) => call('PUT', `/api/bots/${id}/settings`, body),
+  type: (id: string, body: { text?: string; keys?: string[] }) => call('POST', `/api/bots/${id}/type`, body),
   reset: (id: string) => call('POST', `/api/bots/${id}/reset`),
   takeOver: (id: string) => call('POST', `/api/bots/${id}/takeover`),
   giveBack: (id: string, note: string) => call('POST', `/api/bots/${id}/giveback`, { note }),
-  answer: (ask: number, body: { answer?: string; keys?: string[]; text?: string }) => call('POST', `/api/asks/${ask}/answer`, body),
+  answer: (ask: number, body: { answer?: string; scope?: 'once' | 'task' | 'always'; keys?: string[]; text?: string }) => call('POST', `/api/asks/${ask}/answer`, body),
 };
 
 const wsBase = () => `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`;

@@ -14,14 +14,134 @@ function parseRoute(): Route {
 const go = (hash: string) => { location.hash = hash; };
 
 // ---------- small pieces ----------
-function Avatar({ bot, size = 40 }: { bot: Json; size?: number }) {
+function Avatar({ bot, size = 40, status }: { bot: Json; size?: number; status?: string }) {
   const lead = bot?.id === 'chief';
   return (
-    <span className="avatar" style={{ width: size, height: size, background: `${bot?.color ?? '#888'}22`, color: bot?.color ?? '#888', fontSize: size * 0.42 }}>
+    <span className={`avatar ${status ?? ''}`} style={{ width: size, height: size, background: `${bot?.color ?? '#888'}22`, color: bot?.color ?? '#888', fontSize: size * 0.42 }}>
       {lead ? '★' : (bot?.display ?? '?').slice(0, 1)}
+      {status && <i className="ring" />}
     </span>
   );
 }
+
+/** One word for where a bot is, from crewd's facts only: its task, its asks and how long it has been quiet. */
+function live(b: Json): [string, string] {
+  if (b?.controls === 'person') return ['resting', 'You have the controls'];
+  if (b?.task?.state === 'needs_you') return ['needs', 'Needs you'];
+  if (b?.stuck) return ['stuck', 'Stuck?'];
+  if (b?.task) return ['working', 'Working'];
+  if (b?.queued) return ['queued', 'Waiting its turn'];
+  if (b?.pausedUntil) return ['resting', `Resting until ${resetWords(b.pausedUntil)}`];
+  return b?.state === 'on' ? ['ready', 'Ready'] : ['resting', 'Resting'];
+}
+
+function Pill({ bot }: { bot: Json }) {
+  const [k, words] = live(bot);
+  return <span className={`pill ${k}`}>{words}</span>;
+}
+
+/** A limit's reset time in plain words: "6:40 pm", or "Sat 6:40 pm" when it isn't today. */
+function resetWords(at: any) {
+  if (at == null) return '';
+  const t = new Date(typeof at === 'number' ? (at < 1e12 ? at * 1000 : at) : Date.parse(at));
+  if (isNaN(+t)) return '';
+  const time = t.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).toLowerCase();
+  return t.toDateString() === new Date().toDateString() ? time : `${t.toLocaleDateString([], { weekday: 'short' })} ${time}`;
+}
+
+/** The whole crew in one line, under Chief's avatar: the heartbeat of Home. */
+function crewLine(state: Json) {
+  const parts = state.bots.filter((b: Json) => b.task || b.queued || b.pausedUntil).map((b: Json) => {
+    const [k, words] = live(b);
+    return k === 'needs' ? `${b.display} needs you` : k === 'stuck' ? `${b.display} may be stuck`
+      : k === 'queued' ? `${b.display} is waiting its turn` : k === 'resting' ? `${b.display} is ${words.toLowerCase()}` : `${b.display} is working`;
+  });
+  // crewd's own word on accounts: resting from a limit hit, or a window at 95% or more.
+  const resting = Object.entries(state.resting ?? {}).filter(([, t]) => t) as [string, number][];
+  if (resting.length && resting.length === Object.keys(state.resting).length) parts.unshift(`The crew is resting until ${resetWords(Math.min(...resting.map(([, t]) => t)))}`);
+  else for (const [r, t] of resting) parts.unshift(`${r === 'codex' ? 'ChatGPT' : 'Claude'} is resting until ${resetWords(t)}`);
+  if (parts.length) return parts.join(' · ');
+  return state.bots.length > 1 ? 'All quiet. Nothing needs you.' : 'The crew is empty. Tell me what needs doing.';
+}
+
+const clock = (t: number) => {
+  const d = new Date(t);
+  const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).toLowerCase();
+  return d.toDateString() === new Date().toDateString() ? time : `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })}, ${time}`;
+};
+const base = (p = '') => p.split('/').pop() || p;
+const cut = (t = '', n = 70) => (t.length > n ? `${t.slice(0, n - 1)}…` : t);
+
+/** One plain line per step for the "What I did" trail. The raw terminal stays behind Show the work. */
+function step(e: Json): string | null {
+  const d = e.data ?? {};
+  switch (e.kind) {
+    case 'bot.recruited': return 'Joined the crew';
+    case 'task.created': return d.origin === 'chief' ? `Chief handed over “${d.title}”` : `Got a task: “${d.title}”`;
+    case 'task.working': return `Started on “${d.title}”`;
+    case 'task.progress': return d.text;
+    case 'run.tool': {
+      const s = d.summary ?? '';
+      if (d.tool === 'Bash') return /^crew (report|deliver|remember)/.test(s) ? null : `Ran a command: ${cut(s, 60)}`;
+      if (d.tool === 'Read') return `Read ${base(s)}`;
+      if (d.tool === 'Write') return `Wrote ${base(s)}`;
+      if (d.tool === 'Edit') return `Changed ${base(s)}`;
+      if (d.tool === 'WebSearch') return `Searched the web for “${cut(s)}”`;
+      if (d.tool === 'WebFetch') { try { return `Read a page on ${new URL(s).hostname}`; } catch { return 'Read a web page'; } }
+      if (d.tool === 'Grep' || d.tool === 'Glob') return `Looked through files for “${cut(s, 40)}”`;
+      if (/^mcp__browser__/.test(d.tool)) return `Used its browser: ${d.tool.replace(/^mcp__browser__browser_/, '').replace(/_/g, ' ')}${s ? ` ${cut(s, 50)}` : ''}`;
+      return `Used ${d.tool}`;
+    }
+    case 'run.allowed': return `Went ahead with ${cut(d.summary, 50)}, as you allowed`;
+    case 'run.typed': return 'You took over and typed into the terminal';
+    case 'ask.opened': return d.kind === 'permission' ? `Asked your leave to ${String(d.title ?? `use ${d.tool}`).replace(/^.* would like to /, '')}: ${cut(d.summary, 50)}` : 'Stopped at a question in its terminal';
+    case 'ask.parked': return 'Paused until you answer';
+    case 'ask.answered': return `You answered: ${d.answer}`;
+    case 'file.delivered': return `Delivered ${d.path}${d.note ? `: ${d.note}` : ''}`;
+    case 'memory.learned': return `Learned: ${d.text}`;
+    case 'bot.allowed': return `You allowed ${d.covers} from now on`;
+    case 'task.done': return `Finished “${d.title}”`;
+    case 'task.failed': return `Stopped: ${d.result ?? d.title}`;
+    default: return null;
+  }
+}
+
+function Trail({ events, empty }: { events: Json[]; empty: string }) {
+  // A task goes back to work after every answer; "Started on" belongs only to the first time.
+  const first = new Map<number, number>();
+  for (const e of events) if (e.kind === 'task.working') first.set(e.data.task, e.seq); // newest first, so the oldest wins
+  const rows = events.filter((e) => e.kind !== 'task.working' || first.get(e.data.task) === e.seq).map((e) => ({ e, s: step(e) })).filter((x) => x.s);
+  if (!rows.length) return <div className="muted empty">{empty}</div>;
+  return (
+    <ol className="trail">
+      {rows.map(({ e, s }) => <li key={e.seq}><time>{clock(e.at)}</time><span>{s}</span></li>)}
+    </ol>
+  );
+}
+
+/** Quiet too long: Chief offers to stop it or hand over the controls. "Leave it" lasts until the bot's next step. */
+const leftAlone = new Map<string, number>();
+function Stuck({ bot, refresh }: { bot: Json; refresh: () => void }) {
+  const [, redraw] = useState(0);
+  if (live(bot)[0] !== 'stuck' || leftAlone.get(bot.id) === bot.quietSince) return null;
+  const mins = Math.max(1, Math.round((Date.now() - bot.quietSince) / 60_000));
+  return (
+    <div className="stuck-note">
+      <div><b>No news from {bot.display} for {mins} minute{mins === 1 ? '' : 's'}.</b> Shall I stop it, or would you like to take over?</div>
+      <div className="row wrap">
+        <button className="btn" onClick={async () => { await api.reset(bot.id); refresh(); }}>Stop {bot.display}</button>
+        {/* With a desktop, Take over pauses the bot and hands you its screen; without one, its terminal. */}
+        {bot.computer
+          ? <button className="btn" onClick={async () => { await api.takeOver(bot.id); refresh(); go(`#/bot/${bot.id}/screen`); }}>Take over</button>
+          : <a className="btn" href={`#/bot/${bot.id}/work`}>Take over</a>}
+        <button className="btn quiet" onClick={() => { leftAlone.set(bot.id, bot.quietSince); redraw((n) => n + 1); }}>Leave it running</button>
+      </div>
+    </div>
+  );
+}
+
+/** Pre-filled composer text, set by an Idea and used once by that bot's thread. */
+const drafts: Record<string, string> = {};
 
 function Dot({ state }: { state: string }) {
   const c = state === 'needs_you' || state === 'blocked' || state === 'paused' ? 'amber' : state === 'working' || state === 'queued' ? 'blue' : state === 'failed' ? 'red' : 'green';
@@ -41,7 +161,7 @@ const MODEL_SUGGESTIONS = ['claude:opus', 'claude:sonnet', 'claude:haiku', 'code
 
 function botStatus(b: Json) {
   if (b.controls === 'person') return 'Paused · you have the controls';
-  if (b.task) return `${stateWords[b.task.state]} · ${b.task.title}`;
+  if (b.task) return b.task.title;
   if (b.queued) return `${b.queued} waiting`;
   return b.state === 'on' ? 'Ready' : 'Resting';
 }
@@ -93,6 +213,10 @@ function sentence(e: Json, name: (id: string) => string): string | null {
     case 'account.resting': return `${d.runtime === 'codex' ? 'ChatGPT' : 'Claude'} is resting until ${new Date(d.until).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
     case 'task.paused': return `${b} paused “${d.title}”: ${d.result ?? ''}`;
     case 'ask.parked': return `${b} is waiting for your answer; the rest of its work is paused`;
+    case 'run.allowed': return `${b} went ahead with ${d.summary}, as you allowed`;
+    case 'bot.allowed': return `You allowed ${b} ${d.covers} from now on`;
+    case 'run.typed': return `You took over ${b}'s terminal`;
+    case 'bot.settings': return `You changed ${b}'s settings`;
     case 'account.limit': return d.fiveHour ? `Claude has used ${d.fiveHour.used}% of its 5-hour window${d.sevenDay ? ` and ${d.sevenDay.used}% of the week` : ''}` : null;
     default: return null;
   }
@@ -122,12 +246,24 @@ function AskCard({ ask, bots, onDone }: { ask: Json; bots: Json[]; onDone: () =>
         <span className="tag">{ask.kind === 'permission' ? 'PERMISSION' : ask.kind === 'trust' ? 'FIRST RUN' : 'QUESTION'}</span>
       </div>
       <div className="ask-title">{ask.title}</div>
-      {ask.kind === 'permission' || ask.kind === 'trust' ? (
+      {ask.kind === 'permission' ? (
         <>
-          {ask.kind === 'trust' ? <p className="muted small">{ask.detail.note}</p> : <pre className="mono small">{ask.detail.summary}</pre>}
+          <pre className="mono small">{ask.detail.summary}</pre>
+          <div className="scopes">
+            <button className="btn primary" onClick={() => send({ answer: 'allow', scope: 'once' })}>Allow once</button>
+            {ask.task_id && ask.detail.rule && <button className="btn" onClick={() => send({ answer: 'allow', scope: 'task' })}>For this task</button>}
+            {ask.detail.rule && <button className="btn" onClick={() => send({ answer: 'allow', scope: 'always' })}>Always for {bot?.display}</button>}
+            <button className="btn deny" onClick={() => send({ answer: 'deny' })}>Don't allow</button>
+          </div>
+          {ask.detail.spends && <p className="tiny">This can spend your money, so {bot?.display} asks you every time. Check the price cap in the command above.</p>}
+          {ask.detail.covers && <p className="tiny">“For this task” and “Always” cover {ask.detail.covers}. You can take “Always” back on {bot?.display}'s Tools tab.</p>}
+        </>
+      ) : ask.kind === 'trust' ? (
+        <>
+          <p className="muted small">{ask.detail.note}</p>
           <div className="row">
-            <button className="btn primary" onClick={() => send({ answer: 'allow' })}>{ask.kind === 'trust' ? 'Trust it' : 'Allow once'}</button>
-            <button className="btn" onClick={() => send({ answer: 'deny' })}>Don't allow</button>
+            <button className="btn primary" onClick={() => send({ answer: 'allow' })}>Trust it</button>
+            <button className="btn deny" onClick={() => send({ answer: 'deny' })}>Don't allow</button>
           </div>
         </>
       ) : (
@@ -151,16 +287,18 @@ function AskCard({ ask, bots, onDone }: { ask: Json; bots: Json[]; onDone: () =>
 }
 
 // ---------- chat ----------
-function Thread({ botId, state, tick, compact }: { botId: string; state: Json; tick: number; compact?: boolean }) {
+function Thread({ botId, state, tick, compact, refresh }: { botId: string; state: Json; tick: number; compact?: boolean; refresh: () => void }) {
   const [page, setPage] = useState<Json>(null);
-  const [text, setText] = useState('');
+  const [text, setText] = useState(() => { const d = drafts[botId] ?? ''; delete drafts[botId]; return d; });
   const [err, setErr] = useState('');
   const end = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
   const [byName, setByName] = useState(false);
   const load = useCallback(() => api.bot(botId).then(setPage).catch((e) => setErr(e.message)), [botId]);
   useEffect(() => { load(); }, [load, tick]);
-  useEffect(() => { end.current?.scrollIntoView({ block: 'end' }); }, [page?.messages?.length]);
+  const box = useRef<HTMLDivElement>(null);
+  // On Home the thread scrolls inside its own box, so the page stays on Chief's status line.
+  useEffect(() => { if (compact) box.current?.scrollTo(0, box.current.scrollHeight); else end.current?.scrollIntoView({ block: 'end' }); }, [page?.messages?.length, compact]);
 
   const bot = state.bots.find((b: Json) => b.id === botId);
   const chief = state.bots.find((b: Json) => b.id === 'chief');
@@ -171,11 +309,11 @@ function Thread({ botId, state, tick, compact }: { botId: string; state: Json; t
     setText('');
     try { onboarding ? await api.onboard(t) : await api.post(botId, t); load(); } catch (e: any) { setErr(e.message); setText(t); }
   };
-  const working = bot?.task && bot.task.state === 'working';
+  const asks = state.asks.filter((a: Json) => a.bot === botId);
 
   return (
     <div className={`thread ${compact ? 'compact' : ''}`}>
-      <div className="messages">
+      <div className="messages" ref={box}>
         {(page?.messages ?? []).map((m: Json) => {
           if (m.author === 'system') {
             const file = /^Delivered (files\/.+?)(?::\s|$)/.exec(m.text)?.[1];
@@ -199,7 +337,8 @@ function Thread({ botId, state, tick, compact }: { botId: string; state: Json; t
             </div>
           );
         })}
-        {working && <div className="typing"><Avatar bot={bot} size={22} /> {bot.display} is working…</div>}
+        {asks.map((a: Json) => <AskCard key={a.id} ask={a} bots={state.bots} onDone={refresh} />)}
+        {bot?.task && <LiveCard bot={bot} refresh={refresh} />}
         <div ref={end} />
       </div>
       {onboarding && (
@@ -224,19 +363,60 @@ function Thread({ botId, state, tick, compact }: { botId: string; state: Json; t
   );
 }
 
+/** The bot at work, inline in its thread: status, its latest step, and the way to watch or take over. */
+function LiveCard({ bot, refresh }: { bot: Json; refresh: () => void }) {
+  const last = bot.step && step(bot.step);
+  return (
+    <div className="card live">
+      <div className="row">
+        <Avatar bot={bot} size={30} status={live(bot)[0]} />
+        <div className="grow">
+          <div><b>{bot.display}</b> <Pill bot={bot} /> <span className="muted small">{bot.task.title}</span></div>
+          <div className="muted small">{last ? `${clock(bot.step.at)} · ${last}` : 'Getting started…'}</div>
+        </div>
+        <a className="btn" href={`#/bot/${bot.id}/work`}>Watch</a>
+      </div>
+      <Stuck bot={bot} refresh={refresh} />
+    </div>
+  );
+}
+
 // ---------- views ----------
+function Usage({ limits, resting }: { limits: Json; resting: Json }) {
+  const c = limits?.claude;
+  const rows = ([['5-hour window', c?.fiveHour], ['This week', c?.sevenDay]] as [string, Json][]).filter(([, w]) => w);
+  if (!rows.length) return null;
+  return (
+    <div className="usage">
+      {rows.map(([label, w]) => {
+        const until = resetWords(w.resetsAt);
+        const full = w.used >= 95 && !!resting?.claude;
+        return (
+          <div key={label} className="use">
+            <div className="row between small"><span>Claude · {label}</span><span className="muted">{full ? `Resting until ${until || resetWords(resting.claude)}` : `${w.used}% used${until ? ` · fresh at ${until}` : ''}`}</span></div>
+            <div className={`meter ${full ? 'full' : w.used >= 80 ? 'high' : ''}`}><span style={{ width: `${Math.min(100, w.used)}%` }} /></div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function Home({ state, name, tick, refresh }: { state: Json; name: (id: string) => string; tick: number; refresh: () => void }) {
-  const working = state.bots.filter((b: Json) => b.id !== 'chief' && b.task);
+  const chief = state.bots.find((b: Json) => b.id === 'chief');
+  const working = state.bots.filter((b: Json) => b.task || b.queued);
   const done = state.tasks.filter((t: Json) => t.state === 'done' && Date.now() - t.updated_at < 86_400_000);
+  const busy = working.some((b: Json) => b.task?.state === 'working');
   return (
     <div className="home">
-      <h1>{greeting()}{state.person.address ? `, ${state.person.address}` : ''}</h1>
-      <div className="row wrap chips">
-        <span className="chip green">✓ {done.length} done today</span>
-        {state.asks.length > 0 && <span className="chip amber">{state.asks.length} need you</span>}
-        <span className="chip">{state.bots.length - 1} on the crew</span>
-        {state.limits?.claude?.fiveHour && <span className="chip" title="From Claude's own status line">Claude · {state.limits.claude.fiveHour.used}% of the 5-hour window used</span>}
-      </div>
+      <header className="heartbeat">
+        <Avatar bot={chief} size={56} status={state.asks.length ? 'needs' : busy ? 'working' : undefined} />
+        <div className="grow">
+          <h1>{greeting()}{state.person.address ? `, ${state.person.address}` : ''}</h1>
+          <div className="status-line" aria-live="polite">{crewLine(state)}</div>
+        </div>
+      </header>
+      <Usage limits={state.limits} resting={state.resting} />
       {state.asks.length > 0 && (
         <section>
           <h4>Needs you <span className="badge">{state.asks.length}</span></h4>
@@ -246,28 +426,55 @@ function Home({ state, name, tick, refresh }: { state: Json; name: (id: string) 
       <section>
         <h4>Working now</h4>
         {working.length === 0 && <div className="muted empty">Nobody is working right now.</div>}
-        {working.map((b: Json) => (
-          <a key={b.id} className="card line" href={`#/bot/${b.id}`}>
-            <Avatar bot={b} size={32} />
-            <div className="grow"><b>{b.display}</b> · {b.task.title}<div className="bar"><span /></div></div>
-          </a>
-        ))}
+        {working.map((b: Json) => {
+          const last = b.step && step(b.step);
+          return (
+            <div key={b.id} className="card work">
+              <a className="row" href={b.id === 'chief' ? '#/chief' : `#/bot/${b.id}`}>
+                <Avatar bot={b} size={32} status={live(b)[0]} />
+                <div className="grow">
+                  <div><b>{b.display}</b> <Pill bot={b} /></div>
+                  <div className="small">{b.task?.title ?? `${b.queued} waiting`}</div>
+                  {last && <div className="muted small">{clock(b.step.at)} · {last}</div>}
+                </div>
+              </a>
+              <Stuck bot={b} refresh={refresh} />
+            </div>
+          );
+        })}
       </section>
       <section>
-        <h4>Done lately</h4>
+        <h4>Done today</h4>
         {done.length === 0 && <div className="muted empty">Finished work shows up here.</div>}
         {done.slice(0, 6).map((t: Json) => (
-          <a key={t.id} className="card line" href={`#/bot/${t.bot}`}>
-            <Avatar bot={state.bots.find((b: Json) => b.id === t.bot)} size={32} />
-            <div className="grow"><b>{name(t.bot)}</b> · {t.title}<div className="muted small clamp">{t.result}</div></div>
-            <span className="muted small">{ago(t.updated_at)}</span>
+          <a key={t.id} className="card" href={`#/bot/${t.bot}`}>
+            <div className="row">
+              <Avatar bot={state.bots.find((b: Json) => b.id === t.bot)} size={32} />
+              <div className="grow"><b>{name(t.bot)}</b> · {t.title}<div className="muted small clamp">{t.result}</div></div>
+              <span className="muted small">{ago(t.updated_at)}</span>
+            </div>
+            {t.files.slice(0, 2).map((f: string) => <Media key={f} bot={t.bot} path={f} />)}
           </a>
         ))}
       </section>
+      {state.ideas.length > 0 && (
+        <section>
+          <h4>Ideas from the crew</h4>
+          <div className="ideas">
+            {state.ideas.map((i: Json) => (
+              <button key={i.bot + i.ask} className="card idea" onClick={() => { drafts[i.bot] = i.ask; go(`#/bot/${i.bot}/chat`); }}>
+                <Avatar bot={state.bots.find((b: Json) => b.id === i.bot)} size={28} />
+                <span><b>{name(i.bot)}</b> <span className="muted">“{i.promise}”</span></span>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
       <section>
         <h4>Talk to Chief</h4>
-        <Thread botId="chief" state={state} tick={tick} compact />
+        <Thread botId="chief" state={state} tick={tick} refresh={refresh} compact />
       </section>
+      <p className="tiny leaves">What leaves this computer: only what the crew sends your own AI account (Claude or ChatGPT) to do the work. Crewhouse itself sends nothing anywhere.</p>
     </div>
   );
 }
@@ -288,10 +495,10 @@ function Crew({ state, refresh }: { state: Json; refresh: () => void }) {
         {state.bots.map((b: Json) => (
           <div key={b.id} className="card bot">
             <div className="row">
-              <Avatar bot={b} />
+              <Avatar bot={b} status={live(b)[0]} />
               <div className="grow">
-                <div><b>{b.display}</b> {b.id === 'chief' && <span className="lead">LEAD</span>}</div>
-                <div className="muted small"><Dot state={b.task?.state ?? (b.state === 'on' ? 'idle' : 'off')} /> {botStatus(b)}</div>
+                <div><b>{b.display}</b> {b.id === 'chief' && <span className="lead">LEAD</span>} <Pill bot={b} /></div>
+                <div className="muted small clamp">{botStatus(b)}</div>
               </div>
             </div>
             <p className="muted">{b.role}</p>
@@ -355,8 +562,9 @@ function BotPage({ id, tab, state, tick, refresh }: { id: string; tab: string; s
   useEffect(() => { load(); }, [load, tick]);
   const bot = state.bots.find((b: Json) => b.id === id);
   if (!bot || !page) return <div className="muted">{msg || 'Loading…'}</div>;
-  const tabs = ['chat', 'knows', 'skills', 'tools', 'models', 'files', 'history', 'screen', 'work'];
-  const label: Record<string, string> = { work: 'Show the work', models: 'Thinks with' };
+  const tabs = ['chat', 'did', 'knows', 'skills', 'tools', 'models', 'files', 'history', 'screen', 'work'];
+  const label: Record<string, string> = { did: 'What I did', work: 'Show the work', models: 'Thinks with' };
+  const save = async (body: Json) => { await api.settings(id, body).catch((e) => setMsg(e.message)); load(); };
   const toggle = async (tool: string, on: boolean) => {
     const granted = page.tools.filter((t: Json) => t.granted).map((t: Json) => t.id).filter((t: string) => t !== tool);
     await api.tools(id, on ? [...granted, tool] : granted).catch((e) => setMsg(e.message));
@@ -366,26 +574,38 @@ function BotPage({ id, tab, state, tick, refresh }: { id: string; tab: string; s
     <div className="botpage">
       <div className="head">
         <div className="row">
-          <Avatar bot={bot} size={52} />
+          <Avatar bot={bot} size={52} status={live(bot)[0]} />
           <div>
-            <h1>{bot.display}</h1>
-            <div className="muted"><Dot state={bot.task?.state ?? 'idle'} /> {botStatus(bot)} · {bot.role}</div>
+            <h1>{bot.display} <Pill bot={bot} /></h1>
+            <div className="muted">{bot.task ? bot.task.title : bot.role}</div>
             <div className="muted small">{thinksWith(bot)}</div>
           </div>
         </div>
         {bot.task && <button className="btn" onClick={async () => { await api.reset(id); refresh(); }}>Stop</button>}
       </div>
+      {tab !== 'chat' && <Stuck bot={bot} refresh={refresh} />}
       <nav className="tabs">
         {tabs.map((t) => <a key={t} className={t === tab ? 'on' : ''} href={`#/bot/${id}/${t}`}>{label[t] ?? t[0].toUpperCase() + t.slice(1)}</a>)}
       </nav>
       {msg && <div className="error">{msg}</div>}
-      {tab === 'chat' && <Thread botId={id} state={state} tick={tick} />}
+      {tab === 'chat' && <Thread botId={id} state={state} tick={tick} refresh={refresh} />}
+      {tab === 'did' && (
+        <div className="card">
+          <b>What {bot.display} did</b>
+          <Trail events={page.trail} empty={`Nothing yet. Every step ${bot.display} takes shows up here, in plain words.`} />
+          <p className="tiny">Recorded by Crewhouse as it happens, not recalled by {bot.display}. The raw terminal is under Show the work.</p>
+        </div>
+      )}
       {tab === 'knows' && (
         <div className="card">
           <div className="row between">
             <b>What {bot.display} knows</b>
             <span className="muted small">{(notes ?? page.notes).length} / {page.notesCap} characters</span>
           </div>
+          <label className="row small switch">
+            <input type="checkbox" checked={page.memory} onChange={(e) => save({ memory: e.target.checked })} />
+            {page.memory ? `Memory on: ${bot.display} reads this at the start of every session and can add to it.` : `Memory off: ${bot.display} neither reads nor adds to this.`}
+          </label>
           <div className="meter"><span style={{ width: `${Math.min(100, ((notes ?? page.notes).length / page.notesCap) * 100)}%` }} /></div>
           <textarea className="notes" value={notes ?? page.notes} onChange={(e) => setNotes(e.target.value)} placeholder="Nothing learned yet. Bots add a line here when they learn a preference of yours." />
           {notes !== null && notes !== page.notes && (
@@ -424,6 +644,13 @@ function BotPage({ id, tab, state, tick, refresh }: { id: string; tab: string; s
             </label>
           ))}
           <p className="muted small">Changes apply the next time {bot.display} starts. Anything not granted asks you first.</p>
+          <div className="card">
+            <b>Always allowed for {bot.display}</b>
+            {page.allow.length === 0 && <div className="muted small">Nothing yet. “Always for {bot.display}” on a question adds it here.</div>}
+            {page.allow.map((r: string) => (
+              <div key={r} className="row between small allow"><code>{r}</code><button className="btn quiet" onClick={() => save({ allow: page.allow.filter((x: string) => x !== r) })}>Take back</button></div>
+            ))}
+          </div>
         </div>
       )}
       {tab === 'models' && <Models id={id} bot={bot} onSaved={refresh} />}
@@ -442,10 +669,11 @@ function BotPage({ id, tab, state, tick, refresh }: { id: string; tab: string; s
         <div className="list">
           {page.tasks.length === 0 && <div className="muted empty">No tasks yet.</div>}
           {page.tasks.map((t: Json) => (
-            <div key={t.id} className="card">
-              <div className="row between"><b>#{t.id} · {t.title}</b><span className="muted small"><Dot state={t.state} /> {stateWords[t.state]} · {ago(t.updated_at)}</span></div>
+            <details key={t.id} className="card">
+              <summary className="row between"><b>#{t.id} · {t.title}</b><span className="muted small"><Dot state={t.state} /> {stateWords[t.state]} · {ago(t.updated_at)}</span></summary>
               {t.result && <div className="muted small clamp">{t.result}</div>}
-            </div>
+              <Trail events={page.trail.filter((e: Json) => e.data.task === t.id)} empty="No steps recorded for this task." />
+            </details>
           ))}
         </div>
       )}
@@ -495,9 +723,12 @@ function Models({ id, bot, onSaved }: { id: string; bot: Json; onSaved: () => vo
   );
 }
 
-/** Read-only live terminal of the bot's CLI. Hidden behind a tab on purpose: most people never need it. */
+/** Live terminal of the bot's CLI, and taking over by typing into it. Hidden behind a tab on purpose: most people never need it. */
 function ShowWork({ id, bot }: { id: string; bot: Json }) {
   const [text, setText] = useState('');
+  const [line, setLine] = useState('');
+  const [err, setErr] = useState('');
+  const type = async (body: Json) => { setErr(''); try { await api.type(id, body); setLine(''); } catch (e: any) { setErr(e.message); } };
   useEffect(() => {
     let alive = true;
     const pull = () => fetch(`/api/bots/${id}/screen`).then((r) => r.json()).then((r) => alive && setText(r.text ?? '')).catch(() => {});
@@ -507,8 +738,16 @@ function ShowWork({ id, bot }: { id: string; bot: Json }) {
   }, [id]);
   return (
     <div className="card">
-      <div className="row between"><b>{bot.display}'s terminal</b><span className="muted tiny">live · read-only · {bot.runtime}</span></div>
+      <div className="row between"><b>{bot.display}'s terminal</b><span className="muted tiny">live · {bot.runtime}</span></div>
       <pre className="terminal">{text || `${bot.display} isn't running right now.`}</pre>
+      {text && (
+        <form className="row takeover" onSubmit={(e) => { e.preventDefault(); if (line.trim()) type({ text: line }); }}>
+          <input className="input" value={line} onChange={(e) => setLine(e.target.value)} placeholder={`Type into ${bot.display}'s terminal…`} />
+          <button className="btn primary">Send</button>
+          <button type="button" className="btn" title="Interrupt what it is doing" onClick={() => type({ keys: ['esc'] })}>Esc</button>
+        </form>
+      )}
+      {err && <div className="error">{err}</div>}
     </div>
   );
 }
@@ -583,7 +822,7 @@ function App() {
         ))}
         <div className="grow" />
         {state.bots.filter((b: Json) => b.id !== 'chief').map((b: Json) => (
-          <a key={b.id} className={`nav small ${route.id === b.id ? 'on' : ''}`} href={`#/bot/${b.id}`}><Avatar bot={b} size={22} /> {b.display}</a>
+          <a key={b.id} className={`nav small ${route.id === b.id ? 'on' : ''}`} href={`#/bot/${b.id}`}><Avatar bot={b} size={22} status={live(b)[0]} /> {b.display}</a>
         ))}
         <div className="me">
           <span className="avatar" style={{ width: 32, height: 32, background: '#2E2925', color: '#fff' }}>{(state.person.address ?? 'Y')[0]}</span>
@@ -595,8 +834,8 @@ function App() {
         {route.view === 'home' && <Home state={state} name={name} tick={tick} refresh={refresh} />}
         {route.view === 'chief' && (
           <div className="chief">
-            <div className="head"><div className="row"><Avatar bot={state.bots.find((b: Json) => b.id === 'chief')} size={44} /><div><h1>Chief</h1><div className="muted">Runs the crew and answers to you</div></div></div></div>
-            <Thread botId="chief" state={state} tick={tick} />
+            <div className="head"><div className="row"><Avatar bot={state.bots.find((b: Json) => b.id === 'chief')} size={44} /><div><h1>Chief</h1><div className="status-line">{crewLine(state)}</div></div></div></div>
+            <Thread botId="chief" state={state} tick={tick} refresh={refresh} />
           </div>
         )}
         {route.view === 'crew' && <Crew state={state} refresh={refresh} />}

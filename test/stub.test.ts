@@ -36,6 +36,7 @@ test('chief onboarding, recruit, assign, asks, memory', async () => {
   let page = (await api('GET', '/api/bots/chief')).body;
   assert.match(page.messages[0].text, /I am Chief, of the Crewhouse/);
   assert.match(page.messages[0].text, /how would you like me to address you/);
+  assert.match(page.messages[0].text, /stop and ask you first before anything leaves this house, costs money/, 'his stop-and-ask rules come first');
   assert.doesNotMatch(page.messages[0].text, /Master|aye/i);
   await api('POST', '/api/bots/chief/messages', { text: 'Sir' });
   assert.equal((await api('GET', '/api/state')).body.person.address, 'Sir');
