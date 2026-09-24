@@ -92,7 +92,7 @@ export class HerdrRunner implements Runner {
       await this.call(['agent', 'start', this.name(spec.bot), '--kind', spec.kind, '--pane', ws.root_pane.pane_id,
         '--timeout', '90000', '--', ...spec.args], 100_000);
     } catch (e: any) {
-      // A first-run dialog (folder trust) blocks startup; crewd shows it to the person as an ask.
+      // A first-run dialog (folder trust) blocks startup; crewd's watch loop answers it.
       if (e.code !== 'agent_not_ready') throw e;
     }
     if (spec.kind === 'codex') this.freshCodex.add(spec.bot);

@@ -29,6 +29,7 @@ export const api = {
   settings: (id: string, body: { allow?: string[]; memory?: boolean }) => call('PUT', `/api/bots/${id}/settings`, body),
   type: (id: string, body: { text?: string; keys?: string[] }) => call('POST', `/api/bots/${id}/type`, body),
   reset: (id: string) => call('POST', `/api/bots/${id}/reset`),
+  undoMemory: (id: string, seq: number) => call('POST', `/api/bots/${id}/memory/${seq}/undo`),
   takeOver: (id: string) => call('POST', `/api/bots/${id}/takeover`),
   giveBack: (id: string, note: string) => call('POST', `/api/bots/${id}/giveback`, { note }),
   people: () => call('GET', '/api/people'),

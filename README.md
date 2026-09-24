@@ -26,7 +26,7 @@ Open the address. Chief introduces himself and asks how to address you. Then try
 
 Chief recruits Reel and hands it the task. When Reel wants to run something outside its allow list, it shows up under **Needs you**. Tap **Allow once** and the video appears in Reel's chat and on its **Files** tab.
 
-Other commands: `./crewhouse doctor` (what's installed, what's missing, how to add it), `./crewhouse tools [install [ids...]]` (the tool kit) and `./crewhouse test` (the test suite; it uses a stub runner, so it needs neither Herdr nor a signed-in CLI and uses no model quota). CI runs the typecheck, the web build and this suite on every pull request.
+Other commands: `./crewhouse update` (pulls, installs and restarts crewd; refuses if this folder has local changes; running work carries on), `./crewhouse uninstall [--all]` (removes the database, pinned tools and Crewhouse's own Herdr session; your crew folder stays unless you add `--all`), `./crewhouse doctor` (what's installed, what's missing, how to add it), `./crewhouse tools [install [ids...]]` (the tool kit) and `./crewhouse test` (the test suite; it uses a stub runner, so it needs neither Herdr nor a signed-in CLI and uses no model quota). CI runs the typecheck, the web build and this suite on every pull request.
 
 ## How it works
 

@@ -9,7 +9,7 @@ import { Accounts, OWNER } from './accounts.ts';
 import { describe, nextRun, parseSchedule } from './routines.ts';
 
 const HOLD_MS = Number(process.env.CREWHOUSE_HOLD_MS || 180_000); // how long a CLI's permission hook waits for an answer before its own dialog shows
-const FALLBACK_MS = 12_000; // settled with no Stop hook this long: take the reply from the terminal instead
+const FALLBACK_MS = Number(process.env.CREWHOUSE_FALLBACK_MS || 12_000); // settled with no Stop hook this long: take the reply from the terminal instead
 const TASK_TIMEOUT_MS = 60 * 60_000;
 const REST_MS = { rate_limit: 60 * 60_000, overloaded: 5 * 60_000 }; // how long an account rests when we don't know its reset time
 // Best-effort limit text for CLIs without a failure hook (Codex prints this and ends the turn).
@@ -40,10 +40,18 @@ export function browserAsk(tool: string, url: string, signedIn: string[]): strin
   if (host && signedIn.some((d) => host === d || host.endsWith(`.${d}`))) return `${host}, a site you signed it in to`;
   return null;
 }
+/** Keys that pick "Yes" in a CLI's folder-trust dialog. Claude now lists "No, exit" first when a folder pre-approves tools. */
+export function trustKeys(pane: string) {
+  const lines = pane.split('\n');
+  const at = lines.findLastIndex((l) => /^\s*[❯›>]\s/.test(l));
+  const yes = lines.findIndex((l, i) => i >= at - 3 && /^\s*[❯›>]?\s*(\d\.\s*)?(Yes|Trust)\b/i.test(l));
+  if (at < 0 || yes < 0 || yes === at) return ['enter'];
+  return [...Array(Math.abs(yes - at)).fill(yes > at ? 'down' : 'up'), 'enter'];
+}
 const STUCK_MS = Number(process.env.CREWHOUSE_STUCK_MS || 180_000); // working with no news this long: show "stuck?"
 /** Events that make up a bot's plain "what I did" trail. */
 const TRAIL = ['task.created', 'task.working', 'task.done', 'task.failed', 'task.progress', 'run.tool', 'run.allowed', 'run.typed',
-  'ask.opened', 'ask.answered', 'ask.parked', 'file.delivered', 'memory.learned', 'bot.recruited', 'bot.allowed'];
+  'ask.opened', 'ask.answered', 'ask.parked', 'file.delivered', 'memory.learned', 'memory.undone', 'bot.recruited', 'bot.allowed', 'run.trusted', 'run.reattached'];
 
 const PLAIN_TOOL: Record<string, string> = { Bash: 'run a command', Write: 'write a file', Edit: 'change a file', Read: 'read a file', WebFetch: 'open a web page', WebSearch: 'search the web' };
 
@@ -87,6 +95,7 @@ export class Crew {
   private timer?: NodeJS.Timeout;
   /** Bots whose screen the person is driving: the bot is paused until they give the controls back. */
   private held = new Set<string>();
+  private bootAt = Date.now();
   readonly desktops: Desktops;
   readonly accounts: Accounts;
 
@@ -106,17 +115,50 @@ export class Crew {
     this.db.tx(() => {
       if (!this.db.get('SELECT 1 FROM people WHERE id = 1')) this.db.run('INSERT INTO people (id, name, created_at) VALUES (1, ?, ?)', 'Owner', Date.now());
       if (!this.bot(CHIEF)) this.addBot(disk.loadTemplate(this.cfg, 'chief'), 'Chief', CHIEF, 'system');
-      // A restart interrupts whatever was running: queue it again so it resumes.
-      const n = this.db.run("UPDATE tasks SET state = 'queued', updated_at = ? WHERE state IN ('working', 'needs_you')", Date.now()).changes;
-      this.db.run("UPDATE asks SET state = 'withdrawn' WHERE state = 'open'");
+      // Questions whose task is over have no one left to answer them; recover() settles the rest.
+      this.db.run("UPDATE asks SET state = 'withdrawn' WHERE state = 'open' AND (task_id IS NULL OR task_id NOT IN (SELECT id FROM tasks WHERE state IN ('working', 'needs_you')))");
       this.db.run("UPDATE bots SET state = 'off'");
-      this.db.event('system.started', null, { requeued: Number(n) });
+      this.db.event('system.started', null, {});
       for (const m of this.members()) this.ensureDigest(m.id);
     });
     if (!this.member(OWNER).onboarded && !this.db.get('SELECT 1 FROM messages WHERE bot = ?', CHIEF)) this.say(CHIEF, 'bot', chiefGreeting(), null, OWNER);
     for (const b of this.bots()) if (existsSync(disk.botDir(this.cfg, b.id))) disk.writePerson(this.cfg, b.id, this.member(b.member ?? OWNER).address);
     this.timer = setInterval(() => this.tick().catch((e) => console.error('tick', e)), 1500);
-    this.dispatch();
+    if (!this.db.get("SELECT 1 FROM tasks WHERE state IN ('working', 'needs_you')")) return void this.dispatch();
+    return this.recover().catch((e) => console.error('recover', e)).finally(() => this.dispatch());
+  }
+
+  /** A restart is a non-event: re-attach to a CLI still alive in Herdr, or continue its task in a new session from the trail. */
+  private async recover() {
+    const tasks = this.db.all("SELECT * FROM tasks WHERE state IN ('working', 'needs_you')");
+    for (const t of tasks) this.starting.add(t.bot); // the watch loop and the queue leave them alone meanwhile
+    let reattached = 0, resumed = 0;
+    try {
+      for (const task of tasks) {
+        const bot = this.bot(task.bot)!;
+        const brain: disk.Brain = bot.model ? { runtime: bot.runtime, model: bot.model } : { runtime: bot.runtime };
+        const st = await this.runner.state(bot.id).catch(() => 'off' as RunState);
+        if (st !== 'off') {
+          // Same session: open asks stay answerable, and a turn that ended while crewd was away is read from the terminal.
+          this.live.set(bot.id, { state: st, promptedAt: Date.now(), sawWorking: true, settledAt: 0, prompted: true, brain });
+          this.db.run("UPDATE bots SET state = 'on' WHERE id = ?", bot.id);
+          if (this.cfg.runner === 'herdr' && disk.canUse(this.cfg, bot.id, 'computer')) await this.desktops.ensure(bot.id, bot.n, disk.botDir(this.cfg, bot.id)).catch(() => {});
+          this.db.event('run.reattached', bot.id, { task: task.id, state: st });
+          reattached++;
+          continue;
+        }
+        // The session is gone. A parked approval stays open and is answered into the new session; screen questions went with the screen.
+        this.db.tx(() => {
+          this.db.run("UPDATE asks SET state = 'withdrawn' WHERE task_id = ? AND state = 'open' AND kind != 'permission'", task.id);
+          this.setTask(task, 'queued');
+        });
+        this.handoffs.set(task.id, { from: brain, why: 'Crewhouse restarted' });
+        resumed++;
+      }
+    } finally {
+      for (const t of tasks) this.starting.delete(t.bot);
+    }
+    if (tasks.length) this.db.event('system.recovered', null, { reattached, resumed });
   }
 
   stop() { clearInterval(this.timer); this.desktops.stopAll(); this.accounts.stop(); }
@@ -329,6 +371,7 @@ export class Crew {
     const b = this.bot(id);
     if (!b) throw Object.assign(new Error('no such bot'), { status: 404 });
     const { token, ...bot } = b;
+    const undone = new Set(this.db.all("SELECT data FROM events WHERE bot = ? AND kind = 'memory.undone'", id).map((e) => JSON.parse(e.data).seq));
     return {
       bot: { ...bot, thinks: this.thinks(id), ...this.screenOf(id), live: this.live.get(id)?.state ?? 'off' },
       // Each member has their own thread with a bot; notes to the whole house (member NULL) show to everyone.
@@ -340,7 +383,7 @@ export class Crew {
       tools: disk.botTools(this.cfg, id),
       files: disk.listFiles(this.cfg, id),
       trail: this.db.all(`SELECT * FROM events WHERE bot = ? AND kind IN (${TRAIL.map(() => '?').join(', ')}) ORDER BY seq DESC LIMIT 300`, id, ...TRAIL)
-        .map((e) => ({ ...e, data: JSON.parse(e.data) })),
+        .map((e) => ({ ...e, data: JSON.parse(e.data), ...(e.kind === 'memory.learned' && undone.has(e.seq) ? { undone: true } : {}) })),
       allow: disk.botConfig(this.cfg, id).allow ?? [],
       memory: disk.botConfig(this.cfg, id).memory !== false,
       folder: disk.botDir(this.cfg, id),
@@ -483,7 +526,10 @@ export class Crew {
     const member = this.member(task.member ?? OWNER);
     const who = task.origin === 'person' ? this.called(member.id) : task.origin === CHIEF ? 'Chief' : task.origin;
     const routine = task.routine && this.db.get('SELECT name FROM routines WHERE id = ?', task.routine)?.name;
-    if (task.bot !== CHIEF) return `[Crewhouse task #${task.id} from ${routine ? `the routine “${routine}”, set up by ${this.called(member.id)}` : who}]\n${task.body}`;
+    // The debrief: the bot proposes what to keep; crewd caps it, commits it and offers Undo.
+    const debrief = disk.botConfig(this.cfg, task.bot).memory === false ? '' : `\n\n[Crewhouse] When you finish: if this task showed you a lasting preference of ${who}, ` +
+      'save it with crew remember "<one short line>" (add --replaces "<words of the old note>" to correct one). Otherwise save nothing.';
+    if (task.bot !== CHIEF) return `[Crewhouse task #${task.id} from ${routine ? `the routine “${routine}”, set up by ${this.called(member.id)}` : who}]\n${task.body}${debrief}`;
     const crew = this.bots().filter((b) => b.id !== CHIEF)
       .map((b) => `${b.display} (id ${b.id}, ${b.template}, ${this.activeTask(b.id) ? 'busy' : 'free'})`).join('; ') || 'nobody yet';
     const tpls = disk.listTemplates(this.cfg).map((t) => `${t.id}: ${t.role}`).join('; ');
@@ -628,9 +674,12 @@ export class Crew {
       .map((e) => { const d = JSON.parse(e.data); return `- ${e.kind === 'file.delivered' ? `delivered ${d.path}` : d.text}`; });
     const last = this.db.all('SELECT author, text FROM messages WHERE task_id = ? AND author != ? ORDER BY id DESC LIMIT 3', task.id, 'system')
       .reverse().map((m) => `${m.author}: ${String(m.text).slice(0, 600)}`);
+    const waiting = this.db.all("SELECT detail FROM asks WHERE task_id = ? AND state = 'open' AND kind = 'permission'", task.id)
+      .map((a) => `- ${JSON.parse(a.detail).summary}`);
     return `${this.prompt(task)}\n\n[Crewhouse] A previous session started this task and stopped (${why}). You are continuing it in a new session. ` +
-      'Anything it made is still in your folder; check files/ and work/ before redoing work.' +
-      (trail.length ? `\nProgress so far:\n${trail.join('\n')}` : '') + (last.length ? `\nLast messages:\n${last.join('\n')}` : '');
+      'Anything it made is still in your folder; check files/ and work/ before redoing work, and never deliver the same file twice.' +
+      (trail.length ? `\nProgress so far:\n${trail.join('\n')}` : '') + (last.length ? `\nLast messages:\n${last.join('\n')}` : '') +
+      (waiting.length ? `\nStill waiting on the person's answer (do not retry these until you are told):\n${waiting.join('\n')}` : '');
   }
 
   private memory(id: string, member: number) {
@@ -649,6 +698,8 @@ export class Crew {
   finish(botId: string, reply: string) {
     const task = this.activeTask(botId);
     const text = reply.trim() || '(no reply)';
+    // A Stop hook retried across a restart can arrive twice: the second copy is already in the thread.
+    if (!task && this.db.get("SELECT text FROM messages WHERE bot = ? AND author = 'bot' ORDER BY id DESC LIMIT 1", botId)?.text === text) return;
     // A turn that ended on a parked question isn't the end of the task: it resumes when the person answers.
     const parked = task && this.db.get("SELECT 1 FROM asks WHERE task_id = ? AND state = 'open' AND kind = 'permission'", task.id);
     this.db.tx(() => {
@@ -660,7 +711,7 @@ export class Crew {
         const b = this.bot(botId)!;
         this.say(CHIEF, 'system', `${b.display} has finished task #${task.id}: ${text.slice(0, 240)}${text.length > 240 ? '…' : ''}`, null, task.member ?? OWNER);
       }
-      this.db.run("UPDATE asks SET state = 'withdrawn' WHERE bot = ? AND state = 'open' AND kind IN ('blocked', 'trust')", botId);
+      this.db.run("UPDATE asks SET state = 'withdrawn' WHERE bot = ? AND state = 'open' AND kind = 'blocked'", botId);
     });
     const l = this.live.get(botId);
     if (l) Object.assign(l, { state: 'done', sawWorking: false });
@@ -680,7 +731,7 @@ export class Crew {
   }
 
   /** Claude's PermissionRequest hook: hold the tool call while the person decides; after the hold, deny and park. */
-  async permission(botId: string, payload: Row, why?: string): Promise<{ behavior: 'allow' | 'deny'; message?: string }> {
+  async permission(botId: string, payload: Row, why?: string, waited = 0): Promise<{ behavior: 'allow' | 'deny'; message?: string }> {
     const task = this.activeTask(botId);
     const input = payload.tool_input ?? {};
     const summary = (why ?? String(input.command ?? input.file_path ?? input.url ?? JSON.stringify(input))).slice(0, 300);
@@ -697,12 +748,16 @@ export class Crew {
       return { behavior: 'allow' };
     }
     const b = this.bot(botId)!;
-    const askId = this.openAsk(botId, task, 'permission', `${b.display} would like to ${PLAIN_TOOL[payload.tool_name] ?? (payload.tool_name.startsWith('mcp__browser__') ? 'act in its browser' : `use ${payload.tool_name}`)}`,
+    // The same call asked again (its hook reconnecting after a crewd restart) takes over the card already shown.
+    const same = this.db.all("SELECT id FROM asks WHERE bot = ? AND kind = 'permission' AND state = 'open' AND json_extract(detail, '$.tool') = ? AND json_extract(detail, '$.summary') = ?",
+      botId, payload.tool_name, summary).find((a) => !this.holds.has(a.id));
+    const askId = same ? same.id : this.openAsk(botId, task, 'permission', `${b.display} would like to ${PLAIN_TOOL[payload.tool_name] ?? (payload.tool_name.startsWith('mcp__browser__') ? 'act in its browser' : `use ${payload.tool_name}`)}`,
       spends ? { tool: payload.tool_name, summary, spends } : why ? { tool: payload.tool_name, summary } : { tool: payload.tool_name, summary, rule, covers });
     // In their quiet hours nobody will answer soon: park at once instead of holding the CLI (standing answers still apply, above).
     const quiet = quietNow(this.member(task?.member ?? b.member ?? OWNER).quiet);
     const answer = await new Promise<string | null>((resolve) => {
-      const t = setTimeout(() => { this.holds.delete(askId); resolve(null); }, quiet ? 0 : HOLD_MS);
+      // A hook that reconnected has already waited part of its time: answer before the CLI gives up on it.
+      const t = setTimeout(() => { this.holds.delete(askId); resolve(null); }, quiet ? 0 : Math.max(1000, HOLD_MS - waited));
       this.holds.set(askId, (a) => { clearTimeout(t); resolve(a); });
     });
     if (answer === null) {
@@ -725,12 +780,9 @@ export class Crew {
     const shown = scope === 'task' ? 'allowed for this task' : scope === 'always' ? `always allowed for ${who}` : body.answer ?? body.text ?? body.keys?.join(' ') ?? '';
     const held = this.holds.get(askId);
     this.answeredAt.set(ask.bot, Date.now());
-    if (ask.kind === 'permission' || ask.kind === 'trust') {
+    if (ask.kind === 'permission') {
       if (!['allow', 'deny'].includes(body.answer ?? '')) throw Object.assign(new Error('answer allow or deny'), { status: 400 });
-    }
-    if (ask.kind === 'trust') {
-      if (body.answer === 'allow') await this.runner.keys(ask.bot, ['enter']);
-    } else if (ask.kind !== 'permission') {
+    } else {
       if (body.text) await this.runner.text(ask.bot, body.text);
       else if (body.keys?.length) await this.runner.keys(ask.bot, body.keys);
       else throw Object.assign(new Error('nothing to send'), { status: 400 });
@@ -744,10 +796,9 @@ export class Crew {
         this.db.event('bot.allowed', ask.bot, { rule: detail.rule, covers: detail.covers });
       }
       const task = ask.task_id && this.db.get("SELECT * FROM tasks WHERE id = ? AND state = 'needs_you'", ask.task_id);
-      if (task && !held && !(ask.kind === 'trust' && body.answer === 'deny')) this.setTask(task, 'working');
+      if (task && !held) this.setTask(task, 'working');
     });
     if (held) { held(body.answer!); this.holds.delete(askId); return; }
-    if (ask.kind === 'trust' && body.answer === 'deny') return this.resetBot(ask.bot, 'You chose not to trust the folder.');
     if (ask.kind === 'permission' && ask.task_id) {
       // Parked: the turn already ended with a "wait" denial, so the answer is the next prompt into the same session.
       if (body.answer === 'allow') this.granted.add(`${ask.bot}\n${detail.tool}\n${detail.summary}`);
@@ -834,17 +885,29 @@ export class Crew {
         this.live.set(task.bot, l);
         if (st === 'working' || st === 'blocked') { l.sawWorking = true; l.settledAt = 0; }
         const settling = Date.now() - (this.answeredAt.get(task.bot) ?? 0) < 4000;
+        // An approval whose hook gave up while crewd was down now sits in the CLI's own dialog: ask about the screen instead.
+        if (st === 'blocked' && Date.now() - this.bootAt > 10_000) {
+          for (const a of this.db.all("SELECT id FROM asks WHERE bot = ? AND kind = 'permission' AND state = 'open' AND at < ?", task.bot, this.bootAt)) {
+            if (!this.holds.has(a.id) && !this.db.get("SELECT 1 FROM events WHERE kind = 'ask.parked' AND json_extract(data, '$.ask') = ?", a.id)) {
+              this.db.run("UPDATE asks SET state = 'withdrawn' WHERE id = ?", a.id);
+            }
+          }
+        }
         if (st === 'blocked' && !settling && !this.db.get("SELECT 1 FROM asks WHERE bot = ? AND state = 'open'", task.bot)) {
           const pane = (await this.runner.read(task.bot, 40).catch(() => '')).split('\n').slice(-30).join('\n');
           const limit = this.limitInPane(l, pane);
           if (limit) { await this.failover(task.bot, 'rate_limit', limit.until); continue; }
           const b = this.bot(task.bot)!;
-          // Before the first prompt, a blocked CLI is showing a first-run dialog: the person decides, crewd sends the key.
-          if (!l.prompted && /trust/i.test(pane)) this.openAsk(task.bot, task, 'trust', `Trust ${b.display}'s folder?`, { pane, note: `${b.display}'s ${b.runtime} asks whether to trust its own folder, ${disk.botDir(this.cfg, b.id)}.` });
-          else this.openAsk(task.bot, task, 'blocked', `${b.display} is waiting on a question in its terminal`, { pane });
+          // Before the first prompt, a blocked CLI is asking whether to trust the bot's folder. crewd made that folder and wrote
+          // every setting the dialog lists, from the person's own grants, so it accepts: the CLI's own way of trusting a folder.
+          if (!l.prompted && /trust/i.test(pane)) {
+            this.answeredAt.set(task.bot, Date.now());
+            await this.runner.keys(task.bot, trustKeys(pane));
+            this.db.event('run.trusted', task.bot, { task: task.id, folder: disk.botDir(this.cfg, b.id) });
+          } else this.openAsk(task.bot, task, 'blocked', `${b.display} is waiting on a question in its terminal`, { pane });
         }
         if (st === 'idle' || st === 'done') {
-          this.db.run("UPDATE asks SET state = 'withdrawn' WHERE bot = ? AND state = 'open' AND kind IN ('blocked', 'trust')", task.bot);
+          this.db.run("UPDATE asks SET state = 'withdrawn' WHERE bot = ? AND state = 'open' AND kind = 'blocked'", task.bot);
           if (!l.prompted) { if (task.state === 'needs_you') this.setTask(task, 'working'); await this.submit(task, l.text ?? this.prompt(task)); continue; }
           if (!l.settledAt) l.settledAt = Date.now();
           const parked = this.db.get("SELECT 1 FROM asks WHERE task_id = ? AND state = 'open'", task.id);

@@ -9,8 +9,9 @@ import { join } from 'node:path';
 
 process.env.CREWHOUSE_HOLD_MS = '300';
 process.env.CREWHOUSE_STUCK_MS = '5000';
+process.env.CREWHOUSE_FALLBACK_MS = '1000';
 const { Store } = await import('../src/db.ts');
-const { Crew, browserAsk, quietNow } = await import('../src/crew.ts');
+const { Crew, browserAsk, quietNow, trustKeys } = await import('../src/crew.ts');
 const accounts = await import('../src/accounts.ts');
 const kit = await import('../src/tools.ts');
 const { StubRunner } = await import('../src/runner.ts');
@@ -605,4 +606,126 @@ test('household: quiet hours park questions at once; settings validate', async (
   assert.equal(crew.snapshot(crew.addMember('Sam').id).asks.length, 0, 'and only for them');
   crew.updateMember(1, { quiet: null });
   done();
+});
+
+/** Stop crewd and start a new one on the same database. The same runner means the Herdr panes outlived crewd; a new one, that they did not. */
+async function restart(s: ReturnType<typeof setup>, runner = s.runner) {
+  s.crew.stop();
+  const crew = new Crew(s.cfg, s.db, runner, 'http://127.0.0.1:1');
+  runner.onTurn = (bot, reply) => crew.finish(bot, reply);
+  after(() => crew.stop());
+  await crew.init();
+  return crew;
+}
+const prompts = (db: any, t: number) => db.all("SELECT * FROM events WHERE kind = 'run.prompted' AND json_extract(data, '$.task') = ?", t).length;
+
+test('restart: a live pane is re-attached, not prompted again, and its result lands once', async () => {
+  const s = setup();
+  s.crew.onboard('sir');
+  s.crew.recruit('reel', 'Reel', 'person');
+  const t = s.crew.assign('reel', 'ask permission first', 'chief').task; // stays working
+  await sleep(100);
+  const crew = await restart(s);
+  assert.equal(task(s.db, t).state, 'working');
+  assert.ok(s.db.get("SELECT 1 FROM events WHERE kind = 'run.reattached'"));
+  await sleep(200);
+  assert.equal(prompts(s.db, t), 1, 'the running turn is left alone');
+  s.runner.complete('reel', 'All done.');
+  crew.finish('reel', 'All done.'); // the Stop hook retried across the restart
+  assert.equal(task(s.db, t).state, 'done');
+  assert.equal(s.db.all("SELECT * FROM messages WHERE bot = 'reel' AND text = 'All done.'").length, 1);
+  crew.stop();
+  s.done();
+});
+
+test('restart: a turn that ended while crewd was down is read from the terminal, not redone', async () => {
+  const s = setup();
+  s.crew.onboard('sir');
+  s.crew.recruit('reel', 'Reel', 'person');
+  const t = s.crew.assign('reel', 'ask permission first', 'chief').task;
+  await sleep(100);
+  s.crew.stop();
+  (s.runner as any).states.set('reel', 'done'); // the Stop hook found nobody listening
+  const crew = await restart(s);
+  for (let i = 0; i < 40 && task(s.db, t).state !== 'done'; i++) await sleep(100);
+  assert.equal(task(s.db, t).state, 'done');
+  assert.match(task(s.db, t).result, /read from the terminal/);
+  assert.equal(prompts(s.db, t), 1);
+  crew.stop();
+  s.done();
+});
+
+test('restart: with its pane gone, the task continues in a new session from its trail; a parked approval stays answerable', async () => {
+  const s = setup();
+  s.crew.onboard('sir');
+  s.crew.recruit('reel', 'Reel', 'person');
+  const t = s.crew.assign('reel', 'ask permission to copy', 'chief').task;
+  await sleep(100);
+  s.db.event('task.progress', 'reel', { task: t, text: 'Recorded the first scene' });
+  assert.equal((await s.crew.permission('reel', { tool_name: 'Bash', tool_input: { command: 'cp a b' } })).behavior, 'deny');
+  s.runner.complete('reel', 'Waiting for permission to copy.');
+  assert.equal(task(s.db, t).state, 'needs_you');
+  const fresh = new StubRunner(); // a reboot: Herdr's panes are gone
+  const crew = await restart(s, fresh);
+  await sleep(200);
+  assert.equal(task(s.db, t).state, 'working');
+  const brief = await fresh.read('reel');
+  assert.match(brief, /stopped \(Crewhouse restarted\)/);
+  assert.match(brief, /Recorded the first scene/);
+  assert.match(brief, /Still waiting on the person's answer[^]*cp a b/);
+  const ask = s.db.get("SELECT * FROM asks WHERE state = 'open' AND kind = 'permission'")!;
+  await crew.answer(ask.id, { answer: 'allow' });
+  assert.match(await fresh.read('reel'), /has answered your request to use Bash \(cp a b\): allowed/);
+  assert.equal((await crew.permission('reel', { tool_name: 'Bash', tool_input: { command: 'cp a b' } })).behavior, 'allow');
+  await sleep(200);
+  assert.equal(task(s.db, t).state, 'done', 'and the new session finished it');
+  crew.stop();
+  s.done();
+});
+
+test('restart: a held approval keeps its card; the reconnecting hook gets the answer', async () => {
+  const s = setup();
+  s.crew.onboard('sir');
+  s.crew.recruit('reel', 'Reel', 'person');
+  s.crew.assign('reel', 'ask permission to write', 'chief');
+  await sleep(100);
+  const payload = { tool_name: 'Write', tool_input: { file_path: '/elsewhere/x.txt' } };
+  s.crew.permission('reel', payload).catch(() => {}); // its connection dies with the old crewd
+  await sleep(20);
+  const crew = await restart(s);
+  const held = crew.permission('reel', payload, undefined, 100);
+  await sleep(20);
+  const asks = s.db.all("SELECT * FROM asks WHERE kind = 'permission'");
+  assert.equal(asks.length, 1, 'no second card for the same call');
+  await crew.answer(asks[0].id, { answer: 'allow' });
+  assert.deepEqual(await held, { behavior: 'allow' });
+  crew.stop();
+  s.done();
+});
+
+test('trust: a new bot accepts the trust dialog for its own folder on its first run, then gets its prompt', async () => {
+  const s = setup();
+  const pane = ' Quick safety check: Is this a project you created or one you trust?\n\n ❯ No, exit\n   Yes, I trust this folder\n\n Enter to confirm';
+  const sent: string[][] = [];
+  Object.assign(s.runner, {
+    start: async (spec: any) => { (s.runner as any).states.set(spec.bot, 'blocked'); },
+    read: async () => pane,
+    keys: async (bot: string, keys: string[]) => { sent.push(keys); (s.runner as any).states.set(bot, 'idle'); },
+  });
+  s.crew.onboard('sir');
+  s.crew.recruit('reel', 'Reel', 'person');
+  const t = s.crew.assign('reel', 'make a reel', 'chief').task;
+  for (let i = 0; i < 40 && task(s.db, t).state !== 'done'; i++) await sleep(100);
+  assert.deepEqual(sent, [['down', 'enter']], 'Yes, not the default "No, exit"');
+  assert.ok(s.db.get("SELECT 1 FROM events WHERE kind = 'run.trusted'"));
+  assert.equal(s.db.all('SELECT * FROM asks').length, 0, 'nothing for the person to answer');
+  assert.equal(task(s.db, t).state, 'done', 'then the task ran');
+  s.done();
+});
+
+test('trust: the keys pick Yes whether the CLI lists it first or second', () => {
+  const now = 'quill master ? ❯ claude --setting-sources project,local\n Quick safety check: Is this a project you trust?\n\n ❯ No, exit\n   Yes, I trust this folder\n\n Enter to confirm · Esc to cancel';
+  assert.deepEqual(trustKeys(now), ['down', 'enter']);
+  assert.deepEqual(trustKeys(' Do you trust the files in this folder?\n\n ❯ 1. Yes, proceed\n   2. No, exit'), ['enter']);
+  assert.deepEqual(trustKeys('no dialog here'), ['enter']);
 });

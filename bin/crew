@@ -12,7 +12,8 @@ const usage = `usage:
   crew call-me "<sir|ma'am|a name>"    (Chief) change how the person is addressed
   crew report "<progress line>"
   crew deliver <path> ["<note>"]       register a finished file (inside your folder)
-  crew remember "<one short line>"     add to your notes (capped)`;
+  crew remember "<one short line>" [--replaces "<words of the old note>"]
+                                       add to your notes (capped), or correct an old note`;
 if (!url || !token) { console.error('crew: not running inside a Crewhouse bot (CREWHOUSE_URL/TOKEN unset)'); process.exit(2); }
 
 async function stdinJson() {
@@ -21,8 +22,22 @@ async function stdinJson() {
   try { return JSON.parse(raw || '{}'); } catch { return {}; }
 }
 
+// How long a call keeps trying while crewd restarts: just under each hook's own timeout (bots.ts launchSpec).
+const PATIENCE = { 'hook/permission': 185_000, 'hook/tool': 8_000, 'hook/statusline': 0 };
+const started = Date.now();
+
 async function call(path, body) {
-  const res = await fetch(`${url}/crew/${path}`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-crew-token': token }, body: JSON.stringify(body ?? {}) });
+  const give = PATIENCE[path] ?? 25_000;
+  let res;
+  for (;;) {
+    try {
+      res = await fetch(`${url}/crew/${path}`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-crew-token': token, 'x-crew-waited': String(Date.now() - started) }, body: JSON.stringify(body ?? {}) });
+      break;
+    } catch (e) { // crewd is down or restarting; answered calls never retry
+      if (Date.now() - started + 1000 > give) throw e;
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+  }
   const out = await res.json().catch(() => ({}));
   if (!res.ok) { console.error(`crew: ${out.error ?? res.status}`); process.exit(1); }
   return out;
@@ -44,7 +59,8 @@ switch (cmd) {
     body = { bot: rest[0]?.toLowerCase(), model: m, text: rest.slice(m ? 3 : 1).join(' ') };
     break;
   }
-  case 'report': case 'remember': case 'call-me': body = { text: rest.join(' ') }; break;
+  case 'remember': { const i = rest.indexOf('--replaces'); body = i < 0 ? { text: rest.join(' ') } : { text: rest.slice(0, i).join(' '), replaces: rest.slice(i + 1).join(' ') }; break; }
+  case 'report': case 'call-me': body = { text: rest.join(' ') }; break;
   case 'deliver': body = { path: rest[0], note: rest.slice(1).join(' ') }; break;
   case 'hook': {
     path = `hook/${rest[0]}`;
@@ -57,4 +73,4 @@ switch (cmd) {
   }
   default: console.log(usage); process.exit(cmd ? 2 : 0);
 }
-console.log(JSON.stringify(await call(path, body), null, 2));
+console.log(JSON.stringify(await call(path, body).catch((e) => { console.error(`crew: Crewhouse is not answering (${e.cause?.code ?? e.message})`); process.exit(1); }), null, 2));

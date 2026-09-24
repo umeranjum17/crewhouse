@@ -21,6 +21,7 @@ if (runner instanceof HerdrRunner) await runner.ensureServer();
 const server = await startServer(cfg, db, crew);
 crew.init();
 writeFileSync(join(cfg.stateDir, 'endpoint'), url + '\n');
+writeFileSync(join(cfg.stateDir, 'crewd.pid'), `${process.pid}\n`); // ./crewhouse update restarts it; uninstall stops it
 console.log(`crewd listening on ${url} (runner: ${cfg.runner}, crew: ${cfg.crewDir}, state: ${cfg.stateDir})`);
 
 const shutdown = () => { crew.stop(); server.close(); db.close(); process.exit(0); };

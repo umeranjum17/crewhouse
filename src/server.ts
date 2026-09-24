@@ -121,6 +121,15 @@ export function startServer(cfg: Config, db: Store, crew: Crew) {
       db.event('memory.edited', r[1], { by: 'person' });
       return { ok: true };
     }
+    if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/memory\/(\d+)\/undo$/)) && m === 'POST') {
+      const e = db.get("SELECT * FROM events WHERE seq = ? AND bot = ? AND kind = 'memory.learned'", Number(r[2]), r[1]);
+      if (!e) throw Object.assign(new Error('no such memory'), { status: 404 });
+      if (db.get("SELECT 1 FROM events WHERE kind = 'memory.undone' AND json_extract(data, '$.seq') = ?", e.seq)) throw Object.assign(new Error('already undone'), { status: 409 });
+      const d = JSON.parse(e.data);
+      const commit = disk.forget(cfg, r[1], { added: d.added ?? `- ${d.text}`, removed: d.removed ?? null, commit: d.commit ?? null });
+      db.event('memory.undone', r[1], { seq: e.seq, text: d.text, commit });
+      return { ok: true };
+    }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/tools$/)) && m === 'PUT') {
       crew.botPage(r[1]); // 404 for unknown bots
       disk.setGrants(cfg, r[1], (await readJson(req)).tools ?? []);
@@ -181,14 +190,16 @@ export function startServer(cfg: Config, db: Store, crew: Crew) {
       case 'status': return db.all("SELECT id, bot, title, state FROM tasks WHERE state IN ('queued','working','needs_you') ORDER BY id");
       case 'report': db.event('task.progress', bot.id, { task, text: String(b.text ?? '').slice(0, 200) }); return { ok: true };
       case 'remember': {
-        disk.remember(cfg, bot.id, String(b.text ?? ''));
-        db.event('memory.learned', bot.id, { task, text: String(b.text).slice(0, 200) });
+        const change = disk.remember(cfg, bot.id, String(b.text ?? ''), String(b.replaces ?? ''));
+        db.event('memory.learned', bot.id, { task, text: change.added.slice(2, 202), ...change });
         return { ok: true };
       }
       case 'deliver': {
         const full = disk.insideBot(cfg, bot.id, String(b.path ?? ''));
         if (!existsSync(full)) throw new Error(`no file at ${b.path}`);
         const rel = full.slice(disk.botDir(cfg, bot.id).length + 1);
+        // Delivered once per task, even when a call is retried across a restart.
+        if (task && db.get(`SELECT 1 FROM events WHERE kind = 'file.delivered' AND bot = ? AND json_extract(data, '$.task') = ? AND json_extract(data, '$.path') = ?`, bot.id, task, rel)) return { ok: true, path: rel, already: true };
         db.event('file.delivered', bot.id, { task, path: rel, note: String(b.note ?? '').slice(0, 200), size: statSync(full).size });
         crew.say(bot.id, 'system', `Delivered ${rel}${b.note ? `: ${b.note}` : ''}`, task ?? null);
         return { ok: true, path: rel };
@@ -198,7 +209,7 @@ export function startServer(cfg: Config, db: Store, crew: Crew) {
       case 'hook/codex': if (b.type === 'agent-turn-complete' && b['last-assistant-message']) crew.finish(bot.id, String(b['last-assistant-message'])); return {};
       case 'hook/failure': crew.hookFailure(bot.id, b); return {};
       case 'hook/notify': db.event('run.notice', bot.id, { text: String(b.message ?? '').slice(0, 200) }); return {};
-      case 'hook/permission': return { hookSpecificOutput: { hookEventName: 'PermissionRequest', decision: await crew.permission(bot.id, b) } };
+      case 'hook/permission': return { hookSpecificOutput: { hookEventName: 'PermissionRequest', decision: await crew.permission(bot.id, b, undefined, Number(req.headers['x-crew-waited']) || 0) } };
       case 'hook/session': crew.hookSession(bot.id, b); return {};
       case 'hook/tool': crew.hookTool(bot.id, b); return {};
       case 'hook/pretool': return crew.preTool(bot.id, b);

@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import type { Config } from './config.ts';
@@ -164,6 +165,7 @@ export function createBotFolder(cfg: Config, id: string, tpl: Template, display:
   // Copies, not links: the bot owns its skills and may refine them.
   for (const sk of tpl.skills ?? []) cpSync(join(cfg.repoDir, 'skills', sk), join(dir, 'skills', sk), { recursive: true });
   writeFileSync(join(dir, 'notes.md'), '');
+  commitNotes(cfg, id, 'Joined the crew');
   // Claude reads CLAUDE.md, Codex and others read AGENTS.md. Imports load memory deterministically at start.
   writeFileSync(join(dir, 'CLAUDE.md'), '@AGENTS.md\n@notes.md\n@.crewhouse/person.md\n');
   // One skills folder, seen by each CLI in its own project location (agentskills SKILL.md format).
@@ -178,21 +180,59 @@ export function readNotes(cfg: Config, id: string) {
   return existsSync(p) ? readFileSync(p, 'utf8') : '';
 }
 
-/** Capped memory: a write that would overflow is refused, so the bot must consolidate. */
-export function remember(cfg: Config, id: string, line: string) {
+/** The bot's folder is its own git repository and every memory change is a commit. Without git there is simply no history. */
+function commitNotes(cfg: Config, id: string, message: string): string | null {
+  const git = (...args: string[]) => execFileSync('git', ['-c', 'user.name=Crewhouse', '-c', 'user.email=crewhouse@localhost', '-c', 'commit.gpgsign=false',
+    '-c', 'core.hooksPath=/dev/null', ...args], { cwd: botDir(cfg, id), stdio: 'pipe' }).toString().trim();
+  try {
+    if (!existsSync(join(botDir(cfg, id), '.git'))) git('init', '-q');
+    git('add', 'notes.md');
+    git('commit', '-q', '-m', message.slice(0, 200), '--', 'notes.md');
+    return git('rev-parse', '--short', 'HEAD');
+  } catch { return null; }
+}
+
+function saveNotes(cfg: Config, id: string, lines: string[], message: string) {
+  const text = lines.join('\n').replace(/\n*$/, '\n').replace(/^\n$/, '');
+  if (text.length > NOTES_CAP) throw new Error(`notes are full (${text.length}/${NOTES_CAP}); rewrite notes.md shorter first, or use --replaces`);
+  writeFileSync(join(botDir(cfg, id), 'notes.md'), text);
+  return commitNotes(cfg, id, message);
+}
+
+const noteLines = (cfg: Config, id: string) => { const t = readNotes(cfg, id).replace(/\n$/, ''); return t ? t.split('\n') : []; };
+
+/** A memory change, enough to undo it: the line added and the one it replaced. */
+export interface Learned { added: string; removed: string | null; commit: string | null }
+
+/** Capped memory: rewrite, don't append. `replaces` names words of the old note a correction replaces. Over the cap is refused, so the bot must consolidate. */
+export function remember(cfg: Config, id: string, line: string, replaces = ''): Learned {
   const clean = line.replace(/\s+/g, ' ').trim();
   if (!clean) throw new Error('nothing to remember');
   if (botConfig(cfg, id).memory === false) throw new Error('memory is off for this bot; the person turned it off');
-  const notes = readNotes(cfg, id);
-  const next = `${notes}${notes && !notes.endsWith('\n') ? '\n' : ''}- ${clean}\n`;
-  if (next.length > NOTES_CAP) throw new Error(`notes are full (${notes.length}/${NOTES_CAP}); rewrite notes.md shorter first`);
-  writeFileSync(join(botDir(cfg, id), 'notes.md'), next);
-  return next;
+  const lines = noteLines(cfg, id);
+  const old = replaces.trim() ? lines.findIndex((l) => l.includes(replaces.trim())) : -1;
+  if (replaces.trim() && old < 0) throw new Error(`no note mentions "${replaces.trim()}"; read notes.md`);
+  const added = `- ${clean}`;
+  const removed = old >= 0 ? lines[old] : null;
+  if (old >= 0) lines[old] = added; else lines.push(added);
+  return { added, removed, commit: saveNotes(cfg, id, lines, `Learned: ${clean}`) };
+}
+
+/** Undo one memory change: take the added line out and put back the one it replaced. Also a commit. */
+export function forget(cfg: Config, id: string, change: Learned) {
+  const lines = noteLines(cfg, id);
+  const i = lines.indexOf(change.added);
+  if (i < 0 && !change.removed) throw new Error('that note is no longer in notes.md');
+  if (i >= 0 && change.removed) lines[i] = change.removed;
+  else if (i >= 0) lines.splice(i, 1);
+  else lines.push(change.removed!);
+  return saveNotes(cfg, id, lines, `Undo: ${change.added.slice(2)}`);
 }
 
 export function writeNotes(cfg: Config, id: string, text: string) {
   if (text.length > NOTES_CAP) throw new Error(`notes are over the ${NOTES_CAP} character cap`);
   writeFileSync(join(botDir(cfg, id), 'notes.md'), text);
+  commitNotes(cfg, id, 'Edited by the person');
 }
 
 export function listSkills(cfg: Config, id: string) {
