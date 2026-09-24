@@ -117,6 +117,41 @@ test('tool grants: only granted, installed tools reach the CLI; credentials alwa
   }
 });
 
+test('Tracer: people search is free to price, every paid call asks first with its cap, the treg token is denied', () => {
+  const { root, cfg, crew, done } = setup();
+  const tool = disk.registry(cfg).find((t) => t.id === 'people-search')!;
+  assert.deepEqual(tool.bins, ['treg']);
+  assert.equal(tool.source, 'user-installed');
+  assert.match(tool.install, /treg login/, 'setup names the sign-in step');
+  assert.ok(!tool.allow.some((a) => a.startsWith('Bash(treg call')), 'spending is never pre-allowed');
+  assert.deepEqual(tool.ask, ['Bash(treg call *)']);
+  assert.ok(disk.listTemplates(cfg).some((t) => t.id === 'tracer' && t.tools.includes('people-search')));
+
+  const bot = crew.recruit('tracer', 'Tracer', 'person');
+  const dir = disk.botDir(cfg, 'tracer');
+  const skill = readFileSync(join(dir, 'skills', 'find-leads', 'SKILL.md'), 'utf8');
+  assert.match(skill, /treg call \S+ --header 'X-Treg-Route-Max-Cost: [\d.]+'/, 'the example call carries its price cap');
+  assert.deepEqual(disk.listSkills(cfg, 'tracer').map((s) => s.name), ['find-leads']);
+  // No key or token ships with the template.
+  for (const f of ['AGENTS.md', 'bot.json', 'skills/find-leads/SKILL.md']) assert.doesNotMatch(readFileSync(join(dir, f), 'utf8'), /(sk|tk|tr)_[A-Za-z0-9]{16,}|X-Treg-Token:/);
+
+  const bin = join(root, 'bin');
+  mkdirSync(bin);
+  for (const b of ['treg', 'node']) { writeFileSync(join(bin, b), '#!/bin/sh\n'); chmodSync(join(bin, b), 0o755); }
+  const path = process.env.PATH;
+  process.env.PATH = bin;
+  try {
+    disk.launchSpec(cfg, bot as any, 'http://127.0.0.1:1');
+    const s = JSON.parse(readFileSync(join(dir, '.claude', 'settings.local.json'), 'utf8'));
+    assert.ok(s.permissions.allow.includes('Bash(treg catalog *)'));
+    assert.deepEqual(s.permissions.ask, ['Bash(treg call *)']);
+    assert.ok(s.permissions.deny.includes('Read(~/.treg/**)'));
+  } finally {
+    process.env.PATH = path;
+    done();
+  }
+});
+
 test('bots on disk: persona rename, capped notes, folder confinement, slugs', () => {
   const { cfg, crew, done } = setup();
   crew.recruit('reel', 'Frames', 'person');

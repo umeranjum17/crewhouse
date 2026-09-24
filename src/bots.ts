@@ -19,6 +19,8 @@ export interface Template {
 export interface Tool {
   id: string; name: string; provides: string; kind: string; bins: string[]; license: string;
   source: 'bundled' | 'user-installed' | 'planned'; install: string; allow: string[];
+  /** Always asks the person first, even over an allow rule; for anything that spends money. */
+  ask?: string[];
   env?: Record<string, string>; grant?: { default: boolean }; note?: string;
 }
 
@@ -164,7 +166,7 @@ export function writePerson(cfg: Config, id: string, address: string | null) {
   writeFileSync(join(botDir(cfg, id), '.crewhouse', 'person.md'), text);
 }
 
-const CREDENTIAL_DENY = ['~/.claude/**', '~/.claude.json', '~/.codex/**', '~/.pi/**', '~/.ssh/**', '~/.config/gh/**', '~/.aws/**'];
+const CREDENTIAL_DENY = ['~/.claude/**', '~/.claude.json', '~/.codex/**', '~/.pi/**', '~/.ssh/**', '~/.config/gh/**', '~/.aws/**', '~/.treg/**'];
 
 /** Everything needed to launch the bot's real CLI. Claude gets its hooks and policy via settings.local.json. */
 export function launchSpec(cfg: Config, bot: { id: string; display: string; runtime: string; model?: string; token: string }, url: string): LaunchSpec {
@@ -194,6 +196,7 @@ export function launchSpec(cfg: Config, bot: { id: string; display: string; runt
   const settings = {
     permissions: {
       allow,
+      ask: granted.flatMap((t) => t.ask ?? []),
       deny: [...CREDENTIAL_DENY.flatMap((p) => [`Read(${p})`, `Edit(${p})`]), 'CronCreate', 'ScheduleWakeup', 'RemoteTrigger'],
     },
     statusLine: { type: 'command', command: `${JSON.stringify(join(cfg.repoDir, 'bin', 'crew'))} hook statusline` },

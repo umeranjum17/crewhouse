@@ -106,7 +106,7 @@ export class Crew {
       this.say(CHIEF, 'person', a);
       this.say(CHIEF, 'bot', `Very good, ${a}. The whole crew will know it. ` +
         'Tell me what needs doing and I shall see it into the right hands. The crew is empty for now; I can recruit ' +
-        'Reel for demo videos, Scout for research, or Scribe for drafts, whenever you wish.');
+        'Reel for demo videos, Scout for research, Scribe for drafts, or Tracer for leads, whenever you wish.');
       this.db.event('person.onboarded', null, { address: a });
     });
     for (const b of this.bots()) disk.writePerson(this.cfg, b.id, a);
