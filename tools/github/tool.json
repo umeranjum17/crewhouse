@@ -1,20 +1,27 @@
 {
   "id": "github",
   "name": "GitHub CLI",
-  "provides": "Read issues, pull requests and repos with your own gh sign-in (writes ask first)",
+  "provides": "Read issues, pull requests and repos with your own gh sign-in",
   "kind": "cli",
   "bins": [
     "gh"
   ],
   "license": "MIT",
-  "source": "user-installed",
-  "install": "https://cli.github.com (then gh auth login, in your own terminal)",
+  "source": "system",
+  "install": {
+    "system": "https://cli.github.com (then gh auth login, in your own terminal)"
+  },
+  "asks": [
+    "anything that changes GitHub: comments, issues, pull requests, merges, pushes"
+  ],
   "allow": [
     "Bash(gh issue view *)",
     "Bash(gh issue list *)",
     "Bash(gh pr view *)",
     "Bash(gh pr list *)",
-    "Bash(gh repo view *)"
+    "Bash(gh pr diff *)",
+    "Bash(gh repo view *)",
+    "Bash(gh search *)"
   ],
   "grant": {
     "default": false

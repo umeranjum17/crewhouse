@@ -8,7 +8,10 @@
   ],
   "license": "Apache-2.0",
   "source": "bundled",
-  "install": "Ships with Crewhouse (bin/crew)",
+  "install": {},
+  "asks": [
+    "never: it only talks to Crewhouse"
+  ],
   "allow": [
     "Bash(crew *)"
   ],

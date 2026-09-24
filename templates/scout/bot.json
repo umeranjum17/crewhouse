@@ -10,6 +10,12 @@
     "web",
     "browser",
     "documents",
+    "video-download",
     "search-files"
+  ],
+  "skills": [
+    "research-report",
+    "summarize-document",
+    "use-the-browser"
   ]
 }

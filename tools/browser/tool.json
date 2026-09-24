@@ -1,23 +1,48 @@
 {
   "id": "browser",
-  "name": "agent-browser",
-  "provides": "The bot's own browser (its own profile, signed out until you sign it in): open pages, click, fill, screenshot",
-  "kind": "cli",
+  "name": "Browser (Playwright MCP)",
+  "provides": "The bot's own Chromium with its own profile, signed out until you sign it in: open pages, read them, click, fill, screenshot",
+  "kind": "mcp",
   "bins": [
-    "agent-browser"
+    "playwright-mcp"
   ],
   "license": "Apache-2.0",
-  "source": "user-installed",
-  "install": "npm i -g agent-browser && agent-browser install",
-  "allow": [
-    "Bash(agent-browser *)"
-  ],
-  "env": {
-    "AGENT_BROWSER_PROFILE": "{bot.dir}/browser",
-    "AGENT_BROWSER_SESSION": "crewhouse-{bot.id}"
+  "source": "pinned",
+  "install": {
+    "npm": "@playwright/mcp@0.0.82",
+    "then": [
+      [
+        "playwright",
+        "install",
+        "chromium",
+        "--no-shell"
+      ]
+    ]
   },
+  "mcp": {
+    "command": "playwright-mcp",
+    "args": [
+      "--browser",
+      "chromium",
+      "--headless",
+      "--user-data-dir",
+      "{bot.dir}/browser",
+      "--output-dir",
+      "{bot.dir}/work/browser"
+    ],
+    "env": {
+      "PLAYWRIGHT_BROWSERS_PATH": "{tools}/browser/ms-playwright"
+    }
+  },
+  "asks": [
+    "clicking, typing or submitting on a site you signed it in to",
+    "anything on a checkout or payment page"
+  ],
+  "allow": [
+    "mcp__browser"
+  ],
   "grant": {
     "default": true
   },
-  "note": "Plan 3 moves this to Playwright MCP on the bot's own Chromium and Xvfb display."
+  "note": "Headless until each bot gets its own display to watch."
 }

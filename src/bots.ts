@@ -2,6 +2,7 @@ import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, sym
 import { join, relative, resolve } from 'node:path';
 import type { Config } from './config.ts';
 import type { LaunchSpec } from './runner.ts';
+import { registry, resolveGrants, toolBin, toolStatus } from './tools.ts';
 
 export const NOTES_CAP = 2500;
 
@@ -14,31 +15,11 @@ export interface Template {
   color: string;
   tools: string[];
   allow?: string[];
+  /** Skills copied from the repo's skills/ library into the new bot's own skills/ folder. */
+  skills?: string[];
 }
 
-export interface Tool {
-  id: string; name: string; provides: string; kind: string; bins: string[]; license: string;
-  source: 'bundled' | 'user-installed' | 'planned'; install: string; allow: string[];
-  /** Always asks the person first, even over an allow rule; for anything that spends money. */
-  ask?: string[];
-  env?: Record<string, string>; grant?: { default: boolean }; note?: string;
-}
-
-/** The kit: one manifest per tool in tools/<id>/tool.json. */
-export function registry(cfg: Config): Tool[] {
-  const dir = join(cfg.repoDir, 'tools');
-  return readdirSync(dir).filter((t) => existsSync(join(dir, t, 'tool.json')))
-    .map((t) => JSON.parse(readFileSync(join(dir, t, 'tool.json'), 'utf8')));
-}
-
-const onPath = (bin: string) => (process.env.PATH ?? '').split(':').some((d) => d && existsSync(join(d, bin)));
-
-/** Registry plus whether each tool works on this machine right now. */
-export function toolStatus(cfg: Config) {
-  return registry(cfg).map((t) => ({ ...t, ready: t.source !== 'planned' && t.bins.every(onPath), missing: t.bins.filter((b) => !onPath(b)) }));
-}
-
-export function botConfig(cfg: Config, id: string): { tools: string[]; allow?: string[] } {
+export function botConfig(cfg: Config, id: string): { tools: string[]; allow?: string[]; signedIn?: string[] } {
   const p = join(botDir(cfg, id), 'bot.json');
   return existsSync(p) ? JSON.parse(readFileSync(p, 'utf8')) : { tools: [] };
 }
@@ -54,7 +35,17 @@ export function setGrants(cfg: Config, id: string, tools: string[]) {
 /** A bot's granted tools, each with whether it is ready here. */
 export function botTools(cfg: Config, id: string) {
   const grants = new Set(botConfig(cfg, id).tools ?? []);
-  return toolStatus(cfg).map((t) => ({ id: t.id, name: t.name, provides: t.provides, license: t.license, ready: t.ready, missing: t.missing, install: t.install, source: t.source, note: t.note, granted: grants.has(t.id) }));
+  return toolStatus(cfg).map((t) => ({ id: t.id, name: t.name, provides: t.provides, license: t.license, asks: t.asks, ready: t.ready, missing: t.missing,
+    howto: t.howto, installable: t.installable, outdated: t.outdated, source: t.source, note: t.note, granted: grants.has(t.id) }));
+}
+
+/** A template's tools in plain words, for the recruit card. */
+export function templateKit(cfg: Config, tpl: Template) {
+  const all = new Map(toolStatus(cfg).map((t) => [t.id, t]));
+  return tpl.tools.filter((id) => id !== 'crew' && all.has(id)).map((id) => {
+    const t = all.get(id)!;
+    return { id, name: t.name, asks: t.asks, ready: t.ready };
+  });
 }
 
 export const templatesDir = (cfg: Config) => join(cfg.repoDir, 'templates');
@@ -89,13 +80,15 @@ export function createBotFolder(cfg: Config, id: string, tpl: Template, display:
     writeFileSync(p, readFileSync(p, 'utf8').replaceAll(`# ${tpl.display}`, `# ${display}`).replaceAll(`You are ${tpl.display}`, `You are ${display}`));
   }
   for (const d of ['files', 'work', 'skills', '.claude', '.agents', '.crewhouse']) mkdirSync(join(dir, d), { recursive: true });
+  // Copies, not links: the bot owns its skills and may refine them.
+  for (const sk of tpl.skills ?? []) cpSync(join(cfg.repoDir, 'skills', sk), join(dir, 'skills', sk), { recursive: true });
   writeFileSync(join(dir, 'notes.md'), '');
   // Claude reads CLAUDE.md, Codex and others read AGENTS.md. Imports load memory deterministically at start.
   writeFileSync(join(dir, 'CLAUDE.md'), '@AGENTS.md\n@notes.md\n@.crewhouse/person.md\n');
   // One skills folder, seen by each CLI in its own project location (agentskills SKILL.md format).
   symlinkSync('../skills', join(dir, '.claude', 'skills'));
   symlinkSync('../skills', join(dir, '.agents', 'skills'));
-  writeFileSync(join(dir, '.gitignore'), 'work/\n.crewhouse/\n.claude/settings.local.json\n');
+  writeFileSync(join(dir, '.gitignore'), 'work/\nbrowser/\n.crewhouse/\n.claude/settings.local.json\n');
   return dir;
 }
 
@@ -172,23 +165,23 @@ const CREDENTIAL_DENY = ['~/.claude/**', '~/.claude.json', '~/.codex/**', '~/.pi
 export function launchSpec(cfg: Config, bot: { id: string; display: string; runtime: string; model?: string; token: string }, url: string): LaunchSpec {
   const dir = botDir(cfg, bot.id);
   const conf = botConfig(cfg, bot.id);
-  const ready = new Map(toolStatus(cfg).map((t) => [t.id, t]));
-  // Grants become the CLI's own allow list; a granted tool that is missing here simply is not offered.
-  const granted = (conf.tools ?? []).map((t) => ready.get(t)).filter((t) => t?.ready) as Tool[];
-  const allow = [...granted.flatMap((t) => t.allow), ...(conf.allow ?? [])];
-  const toolEnv = Object.fromEntries(granted.flatMap((t) => Object.entries(t.env ?? {}))
-    .map(([k, v]) => [k, v.replaceAll('{bot.dir}', dir).replaceAll('{bot.id}', bot.id)]));
+  // Grants become the CLI's own allow list and MCP servers; a granted tool that is missing here simply is not offered.
+  const g = resolveGrants(cfg, conf.tools ?? [], { 'bot.dir': dir, 'bot.id': bot.id });
+  const allow = [...g.allow, ...(conf.allow ?? [])];
   const env = {
-    ...toolEnv,
+    ...g.env,
     CREWHOUSE_URL: url,
     CREWHOUSE_TOKEN: bot.token,
-    PATH: `${join(cfg.repoDir, 'bin')}:${process.env.PATH}`,
+    PATH: `${join(cfg.repoDir, 'bin')}:${toolBin(cfg)}:${process.env.PATH}`,
     CLAUDE_CODE_DISABLE_AUTO_MEMORY: '1',
   };
   if (bot.runtime === 'codex') {
     return {
       bot: bot.id, kind: 'codex', cwd: dir, label: bot.display, env,
       args: ['--sandbox', 'workspace-write', '--ask-for-approval', 'on-request', '-c', 'notify=["crew","hook","codex"]',
+        ...(g.tools.includes('web') ? ['--search'] : []),
+        ...Object.entries(g.mcp).flatMap(([id, m]) => ['-c', `mcp_servers.${id}.command=${JSON.stringify(m.command)}`, '-c', `mcp_servers.${id}.args=${JSON.stringify(m.args)}`,
+          '-c', `mcp_servers.${id}.env={${Object.entries(m.env).map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(',')}}`]),
         ...(bot.model ? ['--model', bot.model] : [])],
     };
   }
@@ -196,12 +189,14 @@ export function launchSpec(cfg: Config, bot: { id: string; display: string; runt
   const settings = {
     permissions: {
       allow,
-      ask: granted.flatMap((t) => t.ask ?? []),
+      ask: g.ask,
       deny: [...CREDENTIAL_DENY.flatMap((p) => [`Read(${p})`, `Edit(${p})`]), 'CronCreate', 'ScheduleWakeup', 'RemoteTrigger'],
     },
     statusLine: { type: 'command', command: `${JSON.stringify(join(cfg.repoDir, 'bin', 'crew'))} hook statusline` },
     hooks: {
       SessionStart: hook('session'),
+      // The browser's "asks first" rules: crewd knows the page each bot is on.
+      PreToolUse: [{ matcher: 'mcp__browser__.*', ...hook('pretool')[0] }],
       PostToolUse: hook('tool', 10),
       Stop: hook('stop'),
       // Holds up to 3 minutes for an answer from the app, then falls back to the CLI's own dialog.
@@ -210,8 +205,11 @@ export function launchSpec(cfg: Config, bot: { id: string; display: string; runt
     },
   };
   writeFileSync(join(dir, '.claude', 'settings.local.json'), JSON.stringify(settings, null, 2));
+  // Only the granted MCP servers; --strict keeps the person's own MCP servers out.
+  const mcpFile = join(dir, '.crewhouse', 'mcp.json');
+  writeFileSync(mcpFile, JSON.stringify({ mcpServers: g.mcp }, null, 2));
   return {
     bot: bot.id, kind: 'claude', cwd: dir, label: bot.display, env,
-    args: ['--setting-sources', 'project,local', ...(bot.model ? ['--model', bot.model] : [])],
+    args: ['--setting-sources', 'project,local', '--mcp-config', mcpFile, '--strict-mcp-config', ...(bot.model ? ['--model', bot.model] : [])],
   };
 }

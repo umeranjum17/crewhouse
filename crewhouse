@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Crewhouse: setup | start | doctor | test
+# Crewhouse: setup | start | doctor | tools | test
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -14,6 +14,13 @@ case "${1:-}" in
     need_node
     npm ci --no-audit --no-fund
     npm run build:web
+    # Detect, explain, ask, then install: pinned tools go into Crewhouse's own folder, never global, never sudo.
+    node src/tools.ts
+    if [ -t 0 ]; then
+      read -r -p "Install the missing pinned tools now (browser with its own Chromium, MarkItDown, yt-dlp)? [Y/n] " yn
+      case "${yn:-y}" in [Yy]*) node src/tools.ts install || true ;; esac
+    fi
+    echo
     node src/doctor.ts || true
     echo
     echo "Next: ./crewhouse start, then open the address it prints."
@@ -27,12 +34,17 @@ case "${1:-}" in
     need_node
     exec node src/doctor.ts
     ;;
+  tools)
+    need_node
+    shift
+    exec node src/tools.ts "$@"
+    ;;
   test)
     need_node
     exec npm test
     ;;
   *)
-    echo "usage: ./crewhouse setup | start | doctor | test"
+    echo "usage: ./crewhouse setup | start | doctor | tools [install [ids...]] | test"
     exit 2
     ;;
 esac

@@ -1,20 +1,23 @@
 // Unit checks for the deterministic half: store, queue, approvals, tool grants, memory. No CLI, no quota.
 import { after, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 process.env.CREWHOUSE_HOLD_MS = '300';
 const { Store } = await import('../src/db.ts');
-const { Crew } = await import('../src/crew.ts');
+const { Crew, browserAsk } = await import('../src/crew.ts');
+const kit = await import('../src/tools.ts');
 const { StubRunner } = await import('../src/runner.ts');
 const disk = await import('../src/bots.ts');
 const { loadConfig } = await import('../src/config.ts');
 
 function setup(maxConcurrent = 3) {
   const root = mkdtempSync(join(tmpdir(), 'crewhouse-unit-'));
-  const cfg = { ...loadConfig(), stateDir: join(root, 'state'), crewDir: join(root, 'crew'), maxConcurrent, runner: 'stub' as const };
+  const cfg = { ...loadConfig(), stateDir: join(root, 'state'), crewDir: join(root, 'crew'), toolsDir: join(root, 'tools'), maxConcurrent, runner: 'stub' as const };
   const db = new Store(cfg.stateDir);
   const runner = new StubRunner();
   const crew = new Crew(cfg, db, runner, 'http://127.0.0.1:1');
@@ -119,10 +122,10 @@ test('tool grants: only granted, installed tools reach the CLI; credentials alwa
 
 test('Tracer: people search is free to price, every paid call asks first with its cap, the treg token is denied', () => {
   const { root, cfg, crew, done } = setup();
-  const tool = disk.registry(cfg).find((t) => t.id === 'people-search')!;
+  const tool = kit.registry(cfg).find((t) => t.id === 'people-search')!;
   assert.deepEqual(tool.bins, ['treg']);
-  assert.equal(tool.source, 'user-installed');
-  assert.match(tool.install, /treg login/, 'setup names the sign-in step');
+  assert.equal(tool.source, 'system');
+  assert.match(tool.install.system!, /treg login/, 'setup names the sign-in step');
   assert.ok(!tool.allow.some((a) => a.startsWith('Bash(treg call')), 'spending is never pre-allowed');
   assert.deepEqual(tool.ask, ['Bash(treg call *)']);
   assert.ok(disk.listTemplates(cfg).some((t) => t.id === 'tracer' && t.tools.includes('people-search')));
@@ -149,6 +152,105 @@ test('Tracer: people search is free to price, every paid call asks first with it
   } finally {
     process.env.PATH = path;
     done();
+  }
+});
+
+const fakeBin = (dir: string, ...names: string[]) => {
+  mkdirSync(dir, { recursive: true });
+  for (const b of names) { writeFileSync(join(dir, b), '#!/bin/sh\necho fake\n'); chmodSync(join(dir, b), 0o755); }
+};
+
+test('grant resolution: MCP browser, pinned bin dir, asks-first gate, per-CLI wiring', () => {
+  const { root, cfg, crew, done } = setup();
+  const bot = crew.recruit('scout', 'Scout', 'person');
+  fakeBin(join(root, 'bin'), 'node', 'rg', 'jq');
+  fakeBin(kit.toolBin(cfg), 'playwright-mcp', 'markitdown'); // as a pinned install leaves them
+  const path = process.env.PATH;
+  process.env.PATH = join(root, 'bin');
+  try {
+    const dir = disk.botDir(cfg, 'scout');
+    const g = kit.resolveGrants(cfg, disk.botConfig(cfg, 'scout').tools, { 'bot.dir': dir, 'bot.id': 'scout' });
+    assert.deepEqual(g.tools.sort(), ['browser', 'crew', 'documents', 'files', 'search-files', 'web']);
+    assert.deepEqual(g.missing, ['video-download'], 'granted but not installed: listed, not offered');
+    assert.equal(g.mcp.browser.command, join(kit.toolBin(cfg), 'playwright-mcp'), 'pinned copy, absolute');
+    assert.ok(g.mcp.browser.args.includes(`${dir}/browser`), "the bot's own profile");
+    assert.equal(g.mcp.browser.env.PLAYWRIGHT_BROWSERS_PATH, join(cfg.toolsDir, 'browser', 'ms-playwright'));
+
+    const spec = disk.launchSpec(cfg, bot as any, 'http://127.0.0.1:1');
+    assert.ok(spec.env.PATH.split(':').includes(kit.toolBin(cfg)));
+    const mcp = JSON.parse(readFileSync(join(dir, '.crewhouse', 'mcp.json'), 'utf8'));
+    assert.deepEqual(Object.keys(mcp.mcpServers), ['browser']);
+    assert.ok(spec.args.includes('--strict-mcp-config'), "the person's own MCP servers stay out");
+    const s = JSON.parse(readFileSync(join(dir, '.claude', 'settings.local.json'), 'utf8'));
+    assert.ok(s.permissions.allow.includes('mcp__browser'));
+    assert.ok(s.permissions.allow.includes('Bash(markitdown *)'));
+    assert.ok(s.permissions.allow.includes('Edit(./**)') && !s.permissions.allow.includes('Write'), 'edits are confined to the bot folder');
+    assert.equal(s.hooks.PreToolUse[0].matcher, 'mcp__browser__.*');
+
+    // Revoke the browser: gone from the allow list and the MCP config.
+    disk.setGrants(cfg, 'scout', ['files', 'web']);
+    disk.launchSpec(cfg, bot as any, 'http://127.0.0.1:1');
+    assert.deepEqual(JSON.parse(readFileSync(join(dir, '.crewhouse', 'mcp.json'), 'utf8')).mcpServers, {});
+
+    disk.setGrants(cfg, 'scout', ['files', 'web', 'browser']);
+    const codex = disk.launchSpec(cfg, { ...bot, runtime: 'codex' } as any, 'http://127.0.0.1:1');
+    assert.ok(codex.args.includes('--search'));
+    assert.ok(codex.args.some((a) => a.startsWith('mcp_servers.browser.command=')));
+
+    // Recruit card: the template's tools with their rules in plain words.
+    const card = disk.templateKit(cfg, disk.loadTemplate(cfg, 'scout'));
+    assert.match(card.find((k) => k.id === 'browser')!.asks.join(), /payment page/);
+    assert.ok(existsSync(join(dir, 'skills', 'use-the-browser', 'SKILL.md')), 'library skills copied in');
+  } finally {
+    process.env.PATH = path;
+    done();
+  }
+});
+
+test('browser asks first on signed-in sites and payment pages, only for actions', () => {
+  assert.equal(browserAsk('browser_navigate', 'https://shop.example/checkout', []), null, 'looking is fine');
+  assert.match(browserAsk('browser_click', 'https://shop.example/checkout', [])!, /payment/);
+  assert.match(browserAsk('browser_type', 'https://mail.google.com/x', ['google.com'])!, /signed it in/);
+  assert.equal(browserAsk('browser_click', 'https://news.ycombinator.com/', ['google.com']), null);
+  assert.equal(browserAsk('browser_snapshot', 'https://pay.google.com/', []), null);
+});
+
+test('installs: pinned npm and checksummed download land in the tool folder; bad checksum keeps nothing', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'crewhouse-kit-'));
+  const payload = '#!/bin/sh\necho downloaded\n';
+  const sha = createHash('sha256').update(payload).digest('hex');
+  const srv = createServer((_q, r) => r.end(payload)).listen(0, '127.0.0.1');
+  await new Promise((r) => srv.once('listening', r));
+  const url = `http://127.0.0.1:${(srv.address() as any).port}/fake-dl`;
+  const pkg = join(root, 'pkg');
+  fakeBin(join(pkg, 'bin'), 'fake-npm');
+  writeFileSync(join(pkg, 'package.json'), JSON.stringify({ name: 'fake-npm', version: '1.0.0', bin: { 'fake-npm': 'bin/fake-npm' } }));
+  const manifest = (id: string, install: object, bins: string[]) => {
+    mkdirSync(join(root, 'repo', 'tools', id), { recursive: true });
+    writeFileSync(join(root, 'repo', 'tools', id, 'tool.json'), JSON.stringify({ id, name: id, provides: '', kind: 'cli', bins, license: 'MIT', source: 'pinned', install, asks: [], allow: [] }));
+  };
+  manifest('npmtool', { npm: `file:${pkg}`, then: [['fake-npm']] }, ['fake-npm']);
+  manifest('dltool', { download: { url, sha256: sha } }, ['fake-dl']);
+  manifest('badtool', { download: { url, sha256: '0'.repeat(64) } }, ['fake-bad']);
+  const cfg = { ...loadConfig(), repoDir: join(root, 'repo'), toolsDir: join(root, 'tools') };
+  try {
+    await kit.installTool(cfg, 'npmtool');
+    await kit.installTool(cfg, 'dltool');
+    await assert.rejects(kit.installTool(cfg, 'badtool'), /checksum mismatch/);
+    assert.match(readlinkSync(join(kit.toolBin(cfg), 'fake-npm')), /npmtool\/node_modules\/\.bin\/fake-npm$/);
+    assert.equal(readFileSync(join(kit.toolBin(cfg), 'fake-dl'), 'utf8'), payload);
+    assert.ok(!existsSync(join(kit.toolBin(cfg), 'fake-bad')));
+    const st = () => new Map(kit.toolStatus(cfg).map((t) => [t.id, t]));
+    assert.equal(st().get('dltool')!.ready, true);
+    assert.equal(st().get('badtool')!.ready, false);
+    const logs: string[] = [];
+    await kit.installTool(cfg, 'dltool', (l) => logs.push(l));
+    assert.match(logs.join(), /already installed/);
+    manifest('dltool', { download: { url: url + '?v=2', sha256: sha } }, ['fake-dl']); // Crewhouse moved the pin
+    assert.equal(st().get('dltool')!.outdated, true);
+    await assert.rejects(kit.installTool(cfg, 'nope'), /unknown tool/);
+  } finally {
+    srv.close();
   }
 });
 
