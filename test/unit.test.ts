@@ -11,7 +11,7 @@ process.env.CREWHOUSE_HOLD_MS = '300';
 process.env.CREWHOUSE_STUCK_MS = '5000';
 process.env.CREWHOUSE_FALLBACK_MS = '1000';
 const { Store } = await import('../src/db.ts');
-const { Crew, browserAsk, quietNow } = await import('../src/crew.ts');
+const { Crew, browserAsk, quietNow, trustKeys } = await import('../src/crew.ts');
 const accounts = await import('../src/accounts.ts');
 const kit = await import('../src/tools.ts');
 const { StubRunner } = await import('../src/runner.ts');
@@ -701,4 +701,11 @@ test('restart: a held approval keeps its card; the reconnecting hook gets the an
   assert.deepEqual(await held, { behavior: 'allow' });
   crew.stop();
   s.done();
+});
+
+test('trust: "allow" picks Yes whether the CLI lists it first or second', () => {
+  const now = 'quill master ? ❯ claude --setting-sources project,local\n Quick safety check: Is this a project you trust?\n\n ❯ No, exit\n   Yes, I trust this folder\n\n Enter to confirm · Esc to cancel';
+  assert.deepEqual(trustKeys(now), ['down', 'enter']);
+  assert.deepEqual(trustKeys(' Do you trust the files in this folder?\n\n ❯ 1. Yes, proceed\n   2. No, exit'), ['enter']);
+  assert.deepEqual(trustKeys('no dialog here'), ['enter']);
 });

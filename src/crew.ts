@@ -40,6 +40,14 @@ export function browserAsk(tool: string, url: string, signedIn: string[]): strin
   if (host && signedIn.some((d) => host === d || host.endsWith(`.${d}`))) return `${host}, a site you signed it in to`;
   return null;
 }
+/** Keys that pick "Yes" in a CLI's trust dialog. Claude now puts "No, exit" first when a folder pre-approves tools. */
+export function trustKeys(pane: string) {
+  const lines = pane.split('\n');
+  const at = lines.findLastIndex((l) => /^\s*[❯›>]\s/.test(l));
+  const yes = lines.findIndex((l, i) => i >= at - 3 && /^\s*[❯›>]?\s*(\d\.\s*)?(Yes|Trust)\b/i.test(l));
+  if (at < 0 || yes < 0 || yes === at) return ['enter'];
+  return [...Array(Math.abs(yes - at)).fill(yes > at ? 'down' : 'up'), 'enter'];
+}
 const STUCK_MS = Number(process.env.CREWHOUSE_STUCK_MS || 180_000); // working with no news this long: show "stuck?"
 /** Events that make up a bot's plain "what I did" trail. */
 const TRAIL = ['task.created', 'task.working', 'task.done', 'task.failed', 'task.progress', 'run.tool', 'run.allowed', 'run.typed',
@@ -776,7 +784,7 @@ export class Crew {
       if (!['allow', 'deny'].includes(body.answer ?? '')) throw Object.assign(new Error('answer allow or deny'), { status: 400 });
     }
     if (ask.kind === 'trust') {
-      if (body.answer === 'allow') await this.runner.keys(ask.bot, ['enter']);
+      if (body.answer === 'allow') await this.runner.keys(ask.bot, trustKeys(await this.runner.read(ask.bot, 40).catch(() => '')));
     } else if (ask.kind !== 'permission') {
       if (body.text) await this.runner.text(ask.bot, body.text);
       else if (body.keys?.length) await this.runner.keys(ask.bot, body.keys);
