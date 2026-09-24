@@ -195,3 +195,14 @@ details.card > summary::-webkit-details-marker { display: none; }
 .takeover { margin-top: 10px; }
 @media (max-width: 760px) { .heartbeat { align-items: flex-start; } .trail time { width: 60px; } }
 .home .card .media { max-height: 180px; display: block; }
+
+/* settings */
+.input.narrow { flex: none; width: auto; }
+.person .fields { display: grid; gap: 0 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.person .label { margin-top: 10px; }
+.account { padding: 12px 0; border-bottom: 1px solid var(--line2); display: grid; gap: 6px; }
+.account:last-child { border-bottom: 0; padding-bottom: 2px; }
+.signin { display: grid; gap: 8px; }
+.signin .terminal { min-height: 0; max-height: none; }
+.signin .terminal a { color: #9FD8CF; text-decoration: underline; word-break: break-all; }
+.who { margin-top: 2px; border: 0; background: transparent; color: var(--ink3); padding: 0; font: inherit; cursor: pointer; }

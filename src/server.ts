@@ -7,6 +7,7 @@ import type { Store } from './db.ts';
 import type { Crew } from './crew.ts';
 import * as disk from './bots.ts';
 import { installTool, toolStatus } from './tools.ts';
+import { where } from './accounts.ts';
 
 const TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml',
@@ -82,12 +83,32 @@ export function startServer(cfg: Config, db: Store, crew: Crew) {
   async function api(req: IncomingMessage, p: string, url: URL) {
     const m = req.method;
     let r: RegExpMatchArray | null;
-    if (m === 'GET' && p === '/api/state') return crew.snapshot();
+    // Which household member is using this screen. It picks whose threads and accounts are shown, never what is allowed.
+    const me = crew.viewer(req.headers['x-crewhouse-member']).id as number;
+    if (m === 'GET' && p === '/api/state') return crew.snapshot(me);
     if (m === 'GET' && p === '/api/events') return db.events(Number(url.searchParams.get('after') || 0));
-    if (m === 'POST' && p === '/api/onboard') return crew.onboard((await readJson(req)).address ?? '');
-    if (m === 'POST' && p === '/api/recruit') { const b = await readJson(req); const { token, ...bot } = crew.recruit(b.template, b.name, 'person'); return bot; }
-    if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)$/)) && m === 'GET') return crew.botPage(r[1]);
-    if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/messages$/)) && m === 'POST') { const b = await readJson(req); return crew.post(r[1], b.text ?? '', b.model); }
+    if (m === 'POST' && p === '/api/onboard') return crew.onboard((await readJson(req)).address ?? '', me);
+    if (m === 'POST' && p === '/api/recruit') { const b = await readJson(req); const { token, ...bot } = crew.recruit(b.template, b.name, 'person', me); return bot; }
+    if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)$/)) && m === 'GET') return crew.botPage(r[1], me);
+    if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/messages$/)) && m === 'POST') { const b = await readJson(req); return crew.post(r[1], b.text ?? '', b.model, me); }
+    if (m === 'GET' && p === '/api/people') return crew.members();
+    if (m === 'POST' && p === '/api/people') return crew.addMember((await readJson(req)).name);
+    if ((r = p.match(/^\/api\/people\/(\d+)$/)) && m === 'PUT') return crew.updateMember(Number(r[1]), await readJson(req));
+    if (m === 'GET' && p === '/api/accounts') {
+      // Everyone's accounts, each from the vendor's own status command, with live limits and any sign-in in progress.
+      return Promise.all(crew.members().flatMap((mm) => Object.entries(disk.RUNTIMES).map(async ([rt, name]) => ({
+        member: mm.id, runtime: rt, name, where: where(cfg, mm.id, rt), ...(await crew.accounts.status(mm.id, rt, url.searchParams.has('fresh'))),
+        limits: crew.limitsOf(mm.id, rt), restingUntil: crew.restingUntil(rt, mm.id), login: crew.accounts.loginView(mm.id, rt),
+      }))));
+    }
+    if ((r = p.match(/^\/api\/accounts\/(\d+)\/([a-z]+)\/login(\/input|\/cancel)?$/)) && m === 'POST') {
+      const [who, rt, sub] = [crew.member(Number(r[1])).id as number, r[2], r[3]];
+      if (!disk.RUNTIMES[rt]) throw Object.assign(new Error(`no such account kind ${rt}`), { status: 404 });
+      if (sub === '/input') crew.accounts.loginInput(who, rt, String((await readJson(req)).text ?? ''));
+      else if (sub === '/cancel') crew.accounts.cancelLogin(who, rt);
+      else crew.accounts.login(who, rt);
+      return { ok: true };
+    }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/models$/)) && m === 'PUT') {
       crew.botPage(r[1]); // 404 for unknown bots
       const models = disk.setBrains(cfg, r[1], (await readJson(req)).models);

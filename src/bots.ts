@@ -4,6 +4,7 @@ import type { Config } from './config.ts';
 import type { LaunchSpec } from './runner.ts';
 import { registry, resolveGrants, toolBin, toolStatus } from './tools.ts';
 import { browserBin, deskFor } from './desktop.ts';
+import { homeEnv, OWNER } from './accounts.ts';
 
 export const NOTES_CAP = 2500;
 
@@ -242,8 +243,9 @@ export function writePerson(cfg: Config, id: string, address: string | null) {
 
 const CREDENTIAL_DENY = ['~/.claude/**', '~/.claude.json', '~/.codex/**', '~/.pi/**', '~/.ssh/**', '~/.config/gh/**', '~/.aws/**', '~/.treg/**'];
 
-/** Everything needed to launch the bot's real CLI. Claude gets its hooks and policy via settings.local.json. */
-export function launchSpec(cfg: Config, bot: { id: string; n: number; display: string; runtime: string; model?: string; token: string }, url: string): LaunchSpec {
+/** Everything needed to launch the bot's real CLI. Claude gets its hooks and policy via settings.local.json.
+ *  `account` is the member whose own sign-in this session uses. */
+export function launchSpec(cfg: Config, bot: { id: string; n: number; display: string; runtime: string; model?: string; token: string }, url: string, account = OWNER): LaunchSpec {
   const dir = botDir(cfg, bot.id);
   const conf = botConfig(cfg, bot.id);
   const desk = deskFor(cfg.stateDir, bot.id, bot.n);
@@ -258,6 +260,7 @@ export function launchSpec(cfg: Config, bot: { id: string; n: number; display: s
   }
   const env = {
     ...g.env,
+    ...homeEnv(cfg, account, bot.runtime),
     CREWHOUSE_URL: url,
     CREWHOUSE_TOKEN: bot.token,
     PATH: `${join(cfg.repoDir, 'bin')}:${toolBin(cfg)}:${process.env.PATH}`,
@@ -279,7 +282,8 @@ export function launchSpec(cfg: Config, bot: { id: string; n: number; display: s
     permissions: {
       allow,
       ask: g.ask,
-      deny: [...CREDENTIAL_DENY.flatMap((p) => [`Read(${p})`, `Edit(${p})`]), 'CronCreate', 'ScheduleWakeup', 'RemoteTrigger'],
+      // Every member's config home too (`//` marks an absolute path in Claude's rules).
+      deny: [...[...CREDENTIAL_DENY, `/${join(cfg.stateDir, 'people')}/**`].flatMap((p) => [`Read(${p})`, `Edit(${p})`]), 'CronCreate', 'ScheduleWakeup', 'RemoteTrigger'],
     },
     statusLine: { type: 'command', command: `${JSON.stringify(join(cfg.repoDir, 'bin', 'crew'))} hook statusline` },
     hooks: {

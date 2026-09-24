@@ -1,10 +1,14 @@
 // The whole client contract with crewd. Framework-free so the Expo app can reuse it.
 export type Json = any;
 
+/** Which household member is using this screen: picks whose threads, questions and accounts crewd returns. */
+let member = 1;
+export const setMember = (id: number) => { member = id; };
+
 async function call(method: string, path: string, body?: Json) {
   const res = await fetch(path, {
     method,
-    headers: { 'content-type': 'application/json', 'x-crewhouse': '1' },
+    headers: { 'content-type': 'application/json', 'x-crewhouse': '1', 'x-crewhouse-member': String(member) },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const out = await res.json().catch(() => ({}));
@@ -27,6 +31,13 @@ export const api = {
   reset: (id: string) => call('POST', `/api/bots/${id}/reset`),
   takeOver: (id: string) => call('POST', `/api/bots/${id}/takeover`),
   giveBack: (id: string, note: string) => call('POST', `/api/bots/${id}/giveback`, { note }),
+  people: () => call('GET', '/api/people'),
+  addPerson: (name: string) => call('POST', '/api/people', { name }),
+  person: (id: number, body: { name?: string; address?: string; quiet?: string | null }) => call('PUT', `/api/people/${id}`, body),
+  accounts: (fresh = false) => call('GET', `/api/accounts${fresh ? '?fresh' : ''}`),
+  signIn: (member: number, runtime: string) => call('POST', `/api/accounts/${member}/${runtime}/login`),
+  signInCode: (member: number, runtime: string, text: string) => call('POST', `/api/accounts/${member}/${runtime}/login/input`, { text }),
+  signInCancel: (member: number, runtime: string) => call('POST', `/api/accounts/${member}/${runtime}/login/cancel`),
   answer: (ask: number, body: { answer?: string; scope?: 'once' | 'task' | 'always'; keys?: string[]; text?: string }) => call('POST', `/api/asks/${ask}/answer`, body),
 };
 
