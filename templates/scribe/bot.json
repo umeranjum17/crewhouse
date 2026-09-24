@@ -1,0 +1,12 @@
+{
+  "display": "Scribe",
+  "role": "Drafts posts, emails and copy (drafts only)",
+  "runtime": "claude",
+  "model": "sonnet",
+  "color": "#6D51C4",
+  "tools": [
+    "crew",
+    "files",
+    "web"
+  ]
+}

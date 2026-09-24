@@ -1,0 +1,18 @@
+[
+  { "id": "crew", "name": "Crew tool", "provides": "Report progress, deliver files, remember preferences (Chief also recruits and assigns)",
+    "bins": ["node"], "license": "Apache-2.0", "source": "bundled", "install": "Ships with Crewhouse (bin/crew)", "allow": ["Bash(crew *)"] },
+  { "id": "files", "name": "Files", "provides": "Read and write files in the bot's own folder",
+    "bins": [], "license": "vendor CLI", "source": "bundled", "install": "Built into the agent CLI", "allow": ["Read", "Write", "Edit", "Glob", "Grep"] },
+  { "id": "web", "name": "Web search and fetch", "provides": "Search the web and read pages",
+    "bins": [], "license": "vendor CLI", "source": "bundled", "install": "Built into the agent CLI", "allow": ["WebSearch", "WebFetch"] },
+  { "id": "media", "name": "ffmpeg", "provides": "Render, cut and convert video, audio and images",
+    "bins": ["ffmpeg", "ffprobe"], "license": "LGPL-2.1+/GPL", "source": "user-installed", "install": "sudo pacman -S ffmpeg  |  sudo apt install ffmpeg  |  brew install ffmpeg", "allow": ["Bash(ffmpeg *)", "Bash(ffprobe *)"] },
+  { "id": "images", "name": "ImageMagick", "provides": "Resize, crop, compose and annotate images",
+    "bins": ["magick"], "license": "ImageMagick (Apache-2.0 style)", "source": "user-installed", "install": "sudo pacman -S imagemagick  |  sudo apt install imagemagick  |  brew install imagemagick", "allow": ["Bash(magick *)"] },
+  { "id": "browser", "name": "agent-browser", "provides": "Drive a real browser: open pages, click, fill, screenshot",
+    "bins": ["agent-browser"], "license": "Apache-2.0", "source": "user-installed", "install": "npm i -g agent-browser && agent-browser install", "allow": ["Bash(agent-browser *)"] },
+  { "id": "github", "name": "GitHub CLI", "provides": "Read issues, pull requests and repos with your own gh sign-in",
+    "bins": ["gh"], "license": "MIT", "source": "user-installed", "install": "https://cli.github.com (then gh auth login, in your own terminal)", "allow": ["Bash(gh issue view *)", "Bash(gh issue list *)", "Bash(gh pr view *)", "Bash(gh pr list *)", "Bash(gh repo view *)"] },
+  { "id": "computer", "name": "Computer (desklink)", "provides": "The bot's own desktop you can watch and take over from your phone",
+    "bins": [], "license": "Apache-2.0", "source": "planned", "install": "Waiting on @desklink/host as a standalone package", "allow": [] }
+]

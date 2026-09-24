@@ -1,0 +1,8 @@
+node_modules/
+web/dist/
+bots/
+work/
+*.log
+*.key
+.env
+.DS_Store
