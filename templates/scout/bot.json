@@ -18,5 +18,21 @@
     "research-report",
     "summarize-document",
     "use-the-browser"
+  ],
+  "ideas": [
+    {
+      "needs": [
+        "web"
+      ],
+      "promise": "Ask me any question and I'll come back with a short answer and its sources.",
+      "ask": "Find out "
+    },
+    {
+      "needs": [
+        "documents"
+      ],
+      "promise": "Give me a PDF or Word file and I'll tell you what's in it in five lines.",
+      "ask": "Summarise this document in five lines: "
+    }
   ]
 }

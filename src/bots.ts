@@ -18,19 +18,26 @@ export interface Template {
   allow?: string[];
   /** Skills copied from the repo's skills/ library into the new bot's own skills/ folder. */
   skills?: string[];
+  /** Promises the bot makes on Home; each is shown only while every tool it needs is granted and ready. */
+  ideas?: { needs: string[]; promise: string; ask: string }[];
 }
 
-export function botConfig(cfg: Config, id: string): { tools: string[]; allow?: string[]; signedIn?: string[]; runtime?: string; model?: string; models?: string[] } {
+type BotConfig = { tools: string[]; allow?: string[]; signedIn?: string[]; runtime?: string; model?: string; models?: string[]; memory?: boolean; ideas?: Template['ideas'] };
+
+export function botConfig(cfg: Config, id: string): BotConfig {
   const p = join(botDir(cfg, id), 'bot.json');
   return existsSync(p) ? JSON.parse(readFileSync(p, 'utf8')) : { tools: [] };
+}
+
+function patchConfig(cfg: Config, id: string, patch: Partial<BotConfig>) {
+  writeFileSync(join(botDir(cfg, id), 'bot.json'), JSON.stringify({ ...botConfig(cfg, id), ...patch }, null, 2) + '\n');
 }
 
 export function setGrants(cfg: Config, id: string, tools: string[]) {
   const known = new Set(registry(cfg).map((t) => t.id));
   const bad = tools.filter((t) => !known.has(t));
   if (bad.length) throw new Error(`unknown tools: ${bad.join(', ')}`);
-  const p = join(botDir(cfg, id), 'bot.json');
-  writeFileSync(p, JSON.stringify({ ...botConfig(cfg, id), tools: [...new Set(['crew', ...tools])] }, null, 2) + '\n');
+  patchConfig(cfg, id, { tools: [...new Set(['crew', ...tools])] });
 }
 
 /** A CLI and model a bot can think with, written "claude:opus" or just "codex" for the CLI's own default. */
@@ -67,6 +74,40 @@ export function setBrains(cfg: Config, id: string, models: string[]) {
   writeFileSync(p, JSON.stringify({ ...botConfig(cfg, id), models: list }, null, 2) + '\n');
   return list;
 }
+/** The person's standing permissions for a bot ("Always for Reel") and its memory switch. */
+export function setSettings(cfg: Config, id: string, s: { allow?: unknown; memory?: unknown }) {
+  if (s.allow !== undefined && !(Array.isArray(s.allow) && s.allow.every((a) => typeof a === 'string'))) throw new Error('allow must be a list of rules');
+  if (s.memory !== undefined && typeof s.memory !== 'boolean') throw new Error('memory is on or off');
+  patchConfig(cfg, id, { ...(s.allow ? { allow: [...new Set(s.allow as string[])] } : {}), ...(s.memory !== undefined ? { memory: s.memory } : {}) });
+}
+
+/** What an answer can grant beyond "once", in the CLI's own allow-list syntax, and what that covers in plain words. */
+export function permissionRule(tool: string, input: Record<string, any>): { rule: string; covers: string } {
+  if (tool === 'Bash') {
+    const cmd = String(input.command ?? '').trim();
+    const first = cmd.split(/\s+/)[0];
+    // Anything after `&&`, a pipe or an env prefix could hide another command: grant only that exact command.
+    if (!first || first.includes('=') || /[;&|`$<>(){}\\\n]/.test(cmd)) return { rule: `Bash(${cmd})`, covers: 'this exact command' };
+    return { rule: `Bash(${first} *)`, covers: `any ${first} command` };
+  }
+  if (tool === 'WebFetch') {
+    try { const h = new URL(String(input.url)).hostname; return { rule: `WebFetch(domain:${h})`, covers: `any page on ${h}` }; } catch { /* no url */ }
+  }
+  return { rule: tool, covers: `any use of ${tool}` };
+}
+
+/** A call under a granted tool's ask list (anything that spends money) reaches the person every time: no standing grant covers it. */
+export function mustAsk(cfg: Config, id: string, tool: string, input: Record<string, any>) {
+  const grants = new Set(botConfig(cfg, id).tools ?? []);
+  const text = tool === 'Bash' ? String(input.command ?? '') : '';
+  return registry(cfg).filter((t) => grants.has(t.id)).flatMap((t) => t.ask ?? []).some((r) => {
+    const m = /^(\w+)(?:\((.*?)(?: \*)?\))?$/.exec(r);
+    return !!m && m[1] === tool && (!m[2] || text.includes(m[2])); // anywhere in the command, so `cd x && treg call` still asks
+  });
+}
+
+/** Whether a granted rule covers this call, read exactly the way permissionRule writes rules. */
+export const ruleAllows = (rule: string, tool: string, input: Record<string, any>) => rule === tool || rule === permissionRule(tool, input).rule;
 
 /** A bot's granted tools, each with whether it is ready here. */
 export function botTools(cfg: Config, id: string) {
@@ -140,6 +181,7 @@ export function readNotes(cfg: Config, id: string) {
 export function remember(cfg: Config, id: string, line: string) {
   const clean = line.replace(/\s+/g, ' ').trim();
   if (!clean) throw new Error('nothing to remember');
+  if (botConfig(cfg, id).memory === false) throw new Error('memory is off for this bot; the person turned it off');
   const notes = readNotes(cfg, id);
   const next = `${notes}${notes && !notes.endsWith('\n') ? '\n' : ''}- ${clean}\n`;
   if (next.length > NOTES_CAP) throw new Error(`notes are full (${notes.length}/${NOTES_CAP}); rewrite notes.md shorter first`);
@@ -205,6 +247,8 @@ export function launchSpec(cfg: Config, bot: { id: string; n: number; display: s
   const dir = botDir(cfg, bot.id);
   const conf = botConfig(cfg, bot.id);
   const desk = deskFor(cfg.stateDir, bot.id, bot.n);
+  // Memory off: notes are neither loaded nor added to.
+  writeFileSync(join(dir, 'CLAUDE.md'), `@AGENTS.md\n${conf.memory === false ? '' : '@notes.md\n'}@.crewhouse/person.md\n`);
   // Grants become the CLI's own allow list and MCP servers; a granted tool that is missing here simply is not offered.
   const g = resolveGrants(cfg, conf.tools ?? [], { 'bot.dir': dir, 'bot.id': bot.id, 'bot.display': desk.display, 'bot.xauth': desk.xauth });
   const allow = [...g.allow, ...(conf.allow ?? [])];

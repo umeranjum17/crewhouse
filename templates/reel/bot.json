@@ -22,5 +22,22 @@
   "skills": [
     "make-reel",
     "use-the-browser"
+  ],
+  "ideas": [
+    {
+      "needs": [
+        "media"
+      ],
+      "promise": "Send me three screenshots and I'll make a 20-second demo video.",
+      "ask": "Make a 20-second demo video from these screenshots: "
+    },
+    {
+      "needs": [
+        "video-download",
+        "media"
+      ],
+      "promise": "Give me a video link and the minutes you want, and I'll cut them into a clip.",
+      "ask": "Cut a clip from this video (link, then from/to): "
+    }
   ]
 }

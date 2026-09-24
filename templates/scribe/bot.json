@@ -14,5 +14,21 @@
   "skills": [
     "write-draft",
     "summarize-document"
+  ],
+  "ideas": [
+    {
+      "needs": [
+        "files"
+      ],
+      "promise": "Tell me who it's for and I'll draft the email. You send it yourself.",
+      "ask": "Draft an email to "
+    },
+    {
+      "needs": [
+        "web"
+      ],
+      "promise": "Give me a link and I'll turn it into a short post in your voice.",
+      "ask": "Write a short post about this link: "
+    }
   ]
 }

@@ -146,3 +146,52 @@ img.media { background: transparent; }
   .msg { max-width: 100%; }
 }
 .terminal { margin: 10px 0 0; background: #1E1A16; color: #EDE7DD; border-radius: var(--r-sm); padding: 12px; font: 12px/1.45 var(--mono); white-space: pre-wrap; word-break: break-word; min-height: 320px; max-height: 70vh; overflow: auto; }
+
+/* status: a dot on every avatar, a pill beside every name */
+.avatar { position: relative; }
+.avatar .ring { position: absolute; right: -1px; bottom: -1px; width: 28%; height: 28%; min-width: 8px; min-height: 8px; border-radius: 50%; border: 2px solid var(--card); background: var(--ink3); }
+.avatar.working .ring { background: var(--blue); } .avatar.needs .ring, .avatar.stuck .ring { background: var(--amber); }
+.avatar.ready .ring { background: var(--green); } .avatar.queued .ring { background: var(--sea); } .avatar.resting .ring { background: var(--line); }
+/* A slow breath while the crew works: calm, not a cartoon. */
+.heartbeat .avatar.working { animation: breathe 3.2s ease-in-out infinite; }
+@keyframes breathe { 0%, 100% { box-shadow: 0 0 0 0 rgba(31,111,102,.18); } 50% { box-shadow: 0 0 0 7px rgba(31,111,102,0); } }
+@media (prefers-reduced-motion: reduce) { .heartbeat .avatar.working { animation: none; } }
+.pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font: 600 11px/18px var(--ui); letter-spacing: .02em; vertical-align: 2px; background: var(--line2); color: var(--ink2); }
+.pill.working { background: var(--blue-soft); color: var(--blue); } .pill.needs, .pill.stuck { background: var(--amber-soft); color: var(--amber); }
+.pill.ready { background: var(--green-soft); color: var(--green); } .pill.queued { background: var(--sea-soft); color: var(--sea); }
+h1 .pill { font-size: 12px; vertical-align: 6px; }
+
+/* home */
+.heartbeat { display: flex; gap: 16px; align-items: center; margin-bottom: 14px; }
+.heartbeat h1 { margin: 0; }
+.status-line { color: var(--ink2); font-size: 15px; margin-top: 2px; }
+.usage { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); margin: 6px 0 4px; }
+.use .meter { margin: 6px 0 0; }
+.meter.high span { background: var(--amber); } .meter.full span { background: var(--ink3); }
+.card.work > a { align-items: flex-start; }
+.ideas { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.card.idea { display: flex; gap: 10px; align-items: flex-start; text-align: left; margin: 0; font-size: 14px; border-style: dashed; }
+.card.idea:hover { border-color: var(--sea); }
+.leaves { margin-top: 28px; }
+
+/* asks: the same card in Needs you, on Home and in chat */
+.scopes { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 4px; }
+.btn.deny { color: var(--red); }
+.btn.quiet { border-color: transparent; background: transparent; color: var(--ink2); }
+.stuck-note { margin-top: 10px; padding: 10px 12px; border-radius: var(--r-sm); background: var(--amber-soft); border: 1px solid var(--amber-line); font-size: 14px; display: grid; gap: 8px; }
+.card.live { margin: 0; border-left: 4px solid var(--blue); }
+
+/* trail */
+.trail { list-style: none; margin: 10px 0 4px; padding: 0; }
+.trail li { display: flex; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--line2); font-size: 14px; }
+.trail li:last-child { border-bottom: 0; }
+.trail time { flex: none; width: 72px; color: var(--ink3); font-variant-numeric: tabular-nums; font-size: 13px; }
+details.card > summary { cursor: pointer; list-style: none; }
+details.card > summary::-webkit-details-marker { display: none; }
+.switch { margin: 10px 0 2px; cursor: pointer; }
+.switch input, .allow input { accent-color: var(--sea); width: 18px; height: 18px; }
+.allow { padding: 6px 0; border-bottom: 1px solid var(--line2); }
+.allow code { font: 13px var(--mono); word-break: break-all; }
+.takeover { margin-top: 10px; }
+@media (max-width: 760px) { .heartbeat { align-items: flex-start; } .trail time { width: 60px; } }
+.home .card .media { max-height: 180px; display: block; }

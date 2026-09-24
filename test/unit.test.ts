@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 process.env.CREWHOUSE_HOLD_MS = '300';
+process.env.CREWHOUSE_STUCK_MS = '5000';
 const { Store } = await import('../src/db.ts');
 const { Crew, browserAsk } = await import('../src/crew.ts');
 const kit = await import('../src/tools.ts');
@@ -418,5 +419,94 @@ test('take over: the bot pauses while the person drives; give back resumes it wi
   assert.equal(task(db, next).state, 'done', 'then the queue moves again');
   assert.ok(db.get("SELECT 1 FROM messages WHERE bot = 'reel' AND text = 'You gave the controls back: signed you in to example.com'"));
   await assert.rejects(crew.giveBack('reel'), /already has the controls/);
+  done();
+});
+
+test('approval scopes: once, for this task, always for the bot; compound commands only ever get exact grants', async () => {
+  assert.deepEqual(disk.permissionRule('Bash', { command: 'ffmpeg -y -i a.png out.mp4' }), { rule: 'Bash(ffmpeg *)', covers: 'any ffmpeg command' });
+  assert.equal(disk.permissionRule('Bash', { command: 'ffmpeg -i a && rm -rf ~' }).rule, 'Bash(ffmpeg -i a && rm -rf ~)');
+  assert.equal(disk.permissionRule('Bash', { command: 'X=1 rm y' }).covers, 'this exact command');
+  assert.equal(disk.permissionRule('WebFetch', { url: 'https://example.com/a' }).rule, 'WebFetch(domain:example.com)');
+  assert.ok(!disk.ruleAllows('Bash(ffmpeg *)', 'Bash', { command: 'ffmpeg a; rm -rf ~' }), 'a granted prefix never covers a compound command');
+
+  const { db, cfg, crew, done } = setup();
+  crew.onboard('sir');
+  crew.recruit('reel', 'Reel', 'person');
+  const t = crew.assign('reel', 'ask permission to render', 'chief').task;
+  await sleep(100);
+  const ask = async (command: string) => {
+    const held = crew.permission('reel', { tool_name: 'Bash', tool_input: { command } });
+    await sleep(20);
+    return { held, open: db.get("SELECT * FROM asks WHERE state = 'open'") };
+  };
+
+  let a = await ask('ffmpeg -i one.png');
+  assert.equal(a.open!.title, 'Reel would like to run a command');
+  await assert.rejects(crew.answer(a.open!.id, { answer: 'allow', scope: 'forever' }), /once, for this task, or always/);
+  await crew.answer(a.open!.id, { answer: 'allow', scope: 'task' });
+  assert.equal((await a.held).behavior, 'allow');
+  a = await ask('ffmpeg -i two.png');
+  assert.equal(a.open, undefined, 'the same kind of call in the same task goes through without asking');
+  assert.equal((await a.held).behavior, 'allow');
+  assert.ok(db.get("SELECT 1 FROM events WHERE kind = 'run.allowed'"));
+
+  a = await ask('magick a.png b.png');
+  await crew.answer(a.open!.id, { answer: 'allow', scope: 'always' });
+  assert.ok(disk.botConfig(cfg, 'reel').allow!.includes('Bash(magick *)'), 'always is written where the CLI reads its allow list');
+  const trail = crew.botPage('reel').trail.map((e: any) => e.kind);
+  assert.ok(trail.includes('bot.allowed') && trail.includes('ask.answered'));
+  crew.stop();
+
+  // A new task keeps "always" but not "for this task".
+  db.run("UPDATE tasks SET state = 'done' WHERE id = ?", t);
+  crew.assign('reel', 'ask permission again', 'chief');
+  crew.dispatch();
+  await sleep(100);
+  a = await ask('magick c.png d.png');
+  assert.equal(a.open, undefined);
+  a = await ask('ffmpeg -i three.png');
+  assert.ok(a.open, 'task grants end with their task');
+  await crew.answer(a.open!.id, { answer: 'deny' });
+  await a.held;
+
+  // Spending always asks: no standing grant covers it, and the card offers no wider scope.
+  disk.setGrants(cfg, 'reel', ['files', 'media', 'people-search']);
+  disk.setSettings(cfg, 'reel', { allow: ['Bash', 'Bash(treg *)'] });
+  a = await ask('cd work && treg call apollo.people -H "X-Treg-Route-Max-Cost: 0.05"');
+  assert.ok(a.open, 'an allow rule never lets a paid call through');
+  assert.equal(JSON.parse(a.open!.detail).spends, true);
+  await assert.rejects(crew.answer(a.open!.id, { answer: 'allow', scope: 'always' }), /once, for this task, or always/);
+  await crew.answer(a.open!.id, { answer: 'allow' });
+  assert.equal((await a.held).behavior, 'allow');
+  a = await ask('ls work');
+  assert.equal(a.open, undefined, 'the bare Bash rule still covers everything else');
+  done();
+});
+
+test('home facts: ideas only from ready tools, stuck after quiet, memory switch', async () => {
+  const { cfg, crew, db, done } = setup();
+  crew.onboard('sir');
+  crew.recruit('scout', 'Scout', 'person');
+  const path = process.env.PATH;
+  process.env.PATH = '/nonexistent'; // markitdown absent: its promise is not made
+  try {
+    const ideas = crew.snapshot().ideas;
+    assert.ok(ideas.some((i: any) => i.bot === 'scout' && /sources/.test(i.promise)), 'web is built in');
+    assert.ok(!ideas.some((i: any) => /PDF/.test(i.promise)), 'no idea for a tool that is missing here');
+  } finally { process.env.PATH = path; }
+  disk.setGrants(cfg, 'scout', ['files']);
+  assert.equal(crew.snapshot().ideas.length, 0, 'no idea for a tool that is not granted');
+
+  crew.assign('scout', 'ask permission to look', 'chief');
+  await sleep(100);
+  assert.equal(crew.snapshot().bots.find((b: any) => b.id === 'scout')?.stuck, false);
+  db.run('UPDATE events SET at = at - 10000');
+  assert.equal(crew.snapshot().bots.find((b: any) => b.id === 'scout')?.stuck, true, 'quiet past the limit reads as stuck');
+
+  disk.setSettings(cfg, 'scout', { memory: false });
+  assert.throws(() => disk.remember(cfg, 'scout', 'likes tea'), /memory is off/);
+  disk.launchSpec(cfg, crew.bot('scout') as any, 'http://127.0.0.1:1');
+  assert.doesNotMatch(readFileSync(join(disk.botDir(cfg, 'scout'), 'CLAUDE.md'), 'utf8'), /notes\.md/, 'memory off: notes are not loaded');
+  assert.throws(() => disk.setSettings(cfg, 'scout', { memory: 'yes' }), /on or off/);
   done();
 });

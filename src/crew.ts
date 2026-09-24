@@ -38,11 +38,21 @@ export function browserAsk(tool: string, url: string, signedIn: string[]): strin
   if (host && signedIn.some((d) => host === d || host.endsWith(`.${d}`))) return `${host}, a site you signed it in to`;
   return null;
 }
+const STUCK_MS = Number(process.env.CREWHOUSE_STUCK_MS || 180_000); // working with no news this long: show "stuck?"
+/** Events that make up a bot's plain "what I did" trail. */
+const TRAIL = ['task.created', 'task.working', 'task.done', 'task.failed', 'task.progress', 'run.tool', 'run.allowed', 'run.typed',
+  'ask.opened', 'ask.answered', 'ask.parked', 'file.delivered', 'memory.learned', 'bot.recruited', 'bot.allowed'];
+
+const PLAIN_TOOL: Record<string, string> = { Bash: 'run a command', Write: 'write a file', Edit: 'change a file', Read: 'read a file', WebFetch: 'open a web page', WebSearch: 'search the web' };
 
 const partOfDay = () => { const h = new Date().getHours(); return h >= 5 && h < 12 ? 'morning' : h >= 12 && h < 18 ? 'afternoon' : 'evening'; };
 /** Chief's first words (plan 3, section 3.13). Deterministic: no model call before we know how to address the person. */
 export const chiefGreeting = () =>
-  `Good ${partOfDay()}. I am Chief, of the Crewhouse, and I'm at your service. ` +
+  `Good ${partOfDay()}. I am Chief, of the Crewhouse, and I'm at your service.\n\n` +
+  'A word on how we work. The crew works here, on this computer, even while you are away. ' +
+  'We stop and ask you first before anything leaves this house, costs money or touches your own files, ' +
+  "and whenever a sign-in or a fee looks off. We'd rather ask than get it wrong. " +
+  'Nothing you tell us leaves this computer, apart from what the crew sends your own AI account to do the work.\n\n' +
   'Before we begin, how would you like me to address you? "Sir", "ma\'am", or by name, as you prefer.';
 
 /** The deterministic half: people, bots, tasks, the per-bot queue, asks. Models only ever see prompts. */
@@ -53,6 +63,10 @@ export class Crew {
   private holds = new Map<number, (answer: string) => void>();
   /** One-time grants from answers that arrived after the hold: the retried tool call is let through once. */
   private granted = new Set<string>();
+  /** "For this task" answers: rules that let a task's later calls through without asking. */
+  private taskGrants = new Map<number, string[]>();
+  /** When the person last answered each bot: the CLI's own dialog lingers a moment after a hook answer. */
+  private answeredAt = new Map<string, number>();
   private limits = new Map<string, Row>();
   private starting = new Set<string>();
   /** The page each bot's browser is on, from its own tool results. */
@@ -123,14 +137,37 @@ export class Crew {
     } catch { return []; } // a hand-edited bot.json with a bad model must not take the whole app down
   }
 
+  /** A working bot's latest step and how long it has been quiet; quiet past STUCK_MS reads as "stuck?". */
+  private progress(bot: string, task: Row | undefined) {
+    if (!task) return { step: null, quietSince: null, stuck: false };
+    const step = this.db.get(`SELECT * FROM events WHERE bot = ? AND kind IN ('run.tool', 'task.progress', 'file.delivered') AND json_extract(data, '$.task') = ? ORDER BY seq DESC LIMIT 1`, bot, task.id);
+    const quietSince = this.db.get('SELECT MAX(at) AS at FROM events WHERE bot = ?', bot)!.at as number;
+    return { step: step ? { ...step, data: JSON.parse(step.data) } : null, quietSince, stuck: task.state === 'working' && Date.now() - quietSince > STUCK_MS };
+  }
+
+  /** Ideas are promises a hired bot can keep: each needs tools the bot is granted and that work on this computer. */
+  private ideas() {
+    return this.bots().filter((b) => b.id !== CHIEF).flatMap((b) => {
+      const ready = new Set(disk.botTools(this.cfg, b.id).filter((t) => t.granted && t.ready).map((t) => t.id));
+      return (disk.botConfig(this.cfg, b.id).ideas ?? []).filter((i) => i.needs.every((t) => ready.has(t)))
+        .map((i) => ({ bot: b.id, promise: i.promise, ask: i.ask }));
+    }).slice(0, 6);
+  }
+
   snapshot() {
-    const pub = ({ token, ...b }: Row) => ({ ...b, thinks: this.thinks(b.id), ...this.screenOf(b.id), live: this.live.get(b.id)?.state ?? 'off', task: this.activeTask(b.id) ?? null,
-      queued: this.db.get("SELECT COUNT(*) AS n FROM tasks WHERE bot = ? AND state = 'queued'", b.id)!.n });
+    const pub = ({ token, ...b }: Row) => {
+      const task = this.activeTask(b.id);
+      return { ...b, thinks: this.thinks(b.id), ...this.screenOf(b.id), live: this.live.get(b.id)?.state ?? 'off', task: task ?? null, ...this.progress(b.id, task),
+        queued: this.db.get("SELECT COUNT(*) AS n FROM tasks WHERE bot = ? AND state = 'queued'", b.id)!.n,
+        pausedUntil: this.db.get("SELECT MIN(wake_at) AS w FROM tasks WHERE bot = ? AND state = 'paused'", b.id)!.w };
+    };
+    const files = (task: number) => this.db.all(`SELECT data FROM events WHERE kind = 'file.delivered' AND json_extract(data, '$.task') = ?`, task).map((e) => JSON.parse(e.data).path);
     return {
       person: this.person(),
       bots: this.bots().map(pub),
       templates: disk.listTemplates(this.cfg).map((t) => ({ ...t, kit: disk.templateKit(this.cfg, t) })),
-      tasks: this.db.all('SELECT * FROM tasks WHERE bot != ? ORDER BY id DESC LIMIT 50', CHIEF),
+      tasks: this.db.all('SELECT * FROM tasks WHERE bot != ? ORDER BY id DESC LIMIT 50', CHIEF).map((t) => ({ ...t, files: t.state === 'done' ? files(t.id) : [] })),
+      ideas: this.ideas(),
       asks: this.db.all("SELECT * FROM asks WHERE state = 'open' ORDER BY id").map((a) => ({ ...a, detail: JSON.parse(a.detail || '{}') })),
       events: this.db.events(0, 80),
       limits: Object.fromEntries(this.limits),
@@ -152,6 +189,10 @@ export class Crew {
       skills: disk.listSkills(this.cfg, id),
       tools: disk.botTools(this.cfg, id),
       files: disk.listFiles(this.cfg, id),
+      trail: this.db.all(`SELECT * FROM events WHERE bot = ? AND kind IN (${TRAIL.map(() => '?').join(', ')}) ORDER BY seq DESC LIMIT 300`, id, ...TRAIL)
+        .map((e) => ({ ...e, data: JSON.parse(e.data) })),
+      allow: disk.botConfig(this.cfg, id).allow ?? [],
+      memory: disk.botConfig(this.cfg, id).memory !== false,
       folder: disk.botDir(this.cfg, id),
     };
   }
@@ -236,6 +277,7 @@ export class Crew {
   }
 
   private setTask(task: Row, state: string, result?: string) {
+    if (state === 'done' || state === 'failed') this.taskGrants.delete(task.id);
     this.db.run('UPDATE tasks SET state = ?, result = COALESCE(?, result), updated_at = ? WHERE id = ?', state, result ?? null, Date.now(), task.id);
     this.db.event(`task.${state}`, task.bot, { task: task.id, title: task.title, ...(result ? { result: result.slice(0, 280) } : {}) });
   }
@@ -414,7 +456,7 @@ export class Crew {
     return this.db.tx(() => {
       const r = this.db.run('INSERT INTO asks (bot, task_id, kind, title, detail, at) VALUES (?, ?, ?, ?, ?, ?)', bot, task?.id ?? null, kind, title, JSON.stringify(detail), Date.now());
       if (task) this.setTask(task, 'needs_you');
-      this.db.event('ask.opened', bot, { ask: Number(r.lastInsertRowid), kind, ...detail, pane: undefined });
+      this.db.event('ask.opened', bot, { ask: Number(r.lastInsertRowid), task: task?.id, kind, title, ...detail, pane: undefined });
       return Number(r.lastInsertRowid);
     });
   }
@@ -426,25 +468,43 @@ export class Crew {
     const summary = (why ?? String(input.command ?? input.file_path ?? input.url ?? JSON.stringify(input))).slice(0, 300);
     const key = `${botId}\n${payload.tool_name}\n${summary}`;
     if (this.granted.delete(key)) return { behavior: 'allow' }; // answered "allow" after the hold expired
-    const askId = this.openAsk(botId, task, 'permission', `${this.bot(botId)!.display} would like to use ${payload.tool_name}`, { tool: payload.tool_name, summary });
+    // Standing answers: "For this task" and "Always for <bot>". crewd decides, not the bot's own words.
+    // Money and the browser's own asks-first rules reach the person every time.
+    const spends = disk.mustAsk(this.cfg, botId, payload.tool_name, input);
+    const { rule, covers } = disk.permissionRule(payload.tool_name, input);
+    const standing = [...(task && this.taskGrants.get(task.id) || []), ...(disk.botConfig(this.cfg, botId).allow ?? [])];
+    const by = !spends && !why && standing.find((r) => disk.ruleAllows(r, payload.tool_name, input));
+    if (by) {
+      this.db.event('run.allowed', botId, { task: task?.id, tool: payload.tool_name, summary, rule: by });
+      return { behavior: 'allow' };
+    }
+    const b = this.bot(botId)!;
+    const askId = this.openAsk(botId, task, 'permission', `${b.display} would like to ${PLAIN_TOOL[payload.tool_name] ?? (payload.tool_name.startsWith('mcp__browser__') ? 'act in its browser' : `use ${payload.tool_name}`)}`,
+      spends ? { tool: payload.tool_name, summary, spends } : why ? { tool: payload.tool_name, summary } : { tool: payload.tool_name, summary, rule, covers });
     const answer = await new Promise<string | null>((resolve) => {
       const t = setTimeout(() => { this.holds.delete(askId); resolve(null); }, HOLD_MS);
       this.holds.set(askId, (a) => { clearTimeout(t); resolve(a); });
     });
     if (answer === null) {
-      this.db.event('ask.parked', botId, { ask: askId });
+      this.db.event('ask.parked', botId, { ask: askId, task: task?.id });
       return { behavior: 'deny', message: "The owner hasn't answered yet; stop here and wait. You'll be told when they answer." };
     }
     if (task) this.setTask(this.db.get('SELECT * FROM tasks WHERE id = ?', task.id)!, 'working');
     return answer === 'allow' ? { behavior: 'allow' } : { behavior: 'deny', message: 'The person said no. Continue without it, or explain what you need.' };
   }
 
-  async answer(askId: number, body: { answer?: string; keys?: string[]; text?: string }) {
+  async answer(askId: number, body: { answer?: string; scope?: string; keys?: string[]; text?: string }) {
     const ask = this.db.get("SELECT * FROM asks WHERE id = ? AND state = 'open'", askId);
     if (!ask) throw Object.assign(new Error('that question is already settled'), { status: 409 });
-    const shown = body.answer ?? body.text ?? body.keys?.join(' ') ?? '';
     const detail = JSON.parse(ask.detail || '{}');
+    const scope = body.answer === 'allow' ? body.scope ?? 'once' : 'once';
+    if (!['once', 'task', 'always'].includes(scope) || (scope !== 'once' && (ask.kind !== 'permission' || !detail.rule)) || (scope === 'task' && !ask.task_id)) {
+      throw Object.assign(new Error('allow once, for this task, or always'), { status: 400 });
+    }
+    const who = this.bot(ask.bot)?.display ?? ask.bot;
+    const shown = scope === 'task' ? 'allowed for this task' : scope === 'always' ? `always allowed for ${who}` : body.answer ?? body.text ?? body.keys?.join(' ') ?? '';
     const held = this.holds.get(askId);
+    this.answeredAt.set(ask.bot, Date.now());
     if (ask.kind === 'permission' || ask.kind === 'trust') {
       if (!['allow', 'deny'].includes(body.answer ?? '')) throw Object.assign(new Error('answer allow or deny'), { status: 400 });
     }
@@ -457,7 +517,12 @@ export class Crew {
     }
     this.db.tx(() => {
       this.db.run("UPDATE asks SET state = 'answered', answer = ?, answered_at = ? WHERE id = ?", shown, Date.now(), askId);
-      this.db.event('ask.answered', ask.bot, { ask: askId, answer: shown });
+      this.db.event('ask.answered', ask.bot, { ask: askId, task: ask.task_id, answer: shown });
+      if (scope === 'task') this.taskGrants.set(ask.task_id, [...(this.taskGrants.get(ask.task_id) ?? []), detail.rule]);
+      if (scope === 'always') {
+        disk.setSettings(this.cfg, ask.bot, { allow: [...(disk.botConfig(this.cfg, ask.bot).allow ?? []), detail.rule] });
+        this.db.event('bot.allowed', ask.bot, { rule: detail.rule, covers: detail.covers });
+      }
       const task = ask.task_id && this.db.get("SELECT * FROM tasks WHERE id = ? AND state = 'needs_you'", ask.task_id);
       if (task && !held && !(ask.kind === 'trust' && body.answer === 'deny')) this.setTask(task, 'working');
     });
@@ -494,7 +559,7 @@ export class Crew {
       if (page) this.pages.set(botId, page);
     }
     const summary = String(i.command ?? i.file_path ?? i.pattern ?? i.url ?? i.query ?? '').split('\n')[0].slice(0, 120);
-    this.db.event('run.tool', botId, { tool: payload.tool_name, summary });
+    this.db.event('run.tool', botId, { task: this.activeTask(botId)?.id, tool: payload.tool_name, summary });
   }
 
   /** Claude's statusline carries the account's usage windows on every refresh; record them when they move. */
@@ -521,6 +586,15 @@ export class Crew {
 
   screen(botId: string) { return this.runner.screen(botId); }
 
+  /** Take over: the person types into the bot's terminal, or presses a key such as Esc. */
+  async type(botId: string, body: { text?: string; keys?: string[] }) {
+    if (!this.bot(botId)) throw Object.assign(new Error('no such bot'), { status: 404 });
+    if (body.text?.trim()) await this.runner.text(botId, body.text);
+    else if (body.keys?.length) await this.runner.keys(botId, body.keys);
+    else throw Object.assign(new Error('nothing to send'), { status: 400 });
+    this.db.event('run.typed', botId, { task: this.activeTask(botId)?.id, what: body.text ? 'text' : body.keys!.join(' ') });
+  }
+
   // ---- the watch loop: Herdr's lifecycle is the fallback truth when no hook speaks ----
   private ticking = false;
   private async tick() {
@@ -535,7 +609,8 @@ export class Crew {
         l.state = st;
         this.live.set(task.bot, l);
         if (st === 'working' || st === 'blocked') { l.sawWorking = true; l.settledAt = 0; }
-        if (st === 'blocked' && !this.db.get("SELECT 1 FROM asks WHERE bot = ? AND state = 'open'", task.bot)) {
+        const settling = Date.now() - (this.answeredAt.get(task.bot) ?? 0) < 4000;
+        if (st === 'blocked' && !settling && !this.db.get("SELECT 1 FROM asks WHERE bot = ? AND state = 'open'", task.bot)) {
           const pane = (await this.runner.read(task.bot, 40).catch(() => '')).split('\n').slice(-30).join('\n');
           const limit = this.limitInPane(l, pane);
           if (limit) { await this.failover(task.bot, 'rate_limit', limit.until); continue; }

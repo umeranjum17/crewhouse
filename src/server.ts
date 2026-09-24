@@ -105,6 +105,13 @@ export function startServer(cfg: Config, db: Store, crew: Crew) {
       db.event('bot.tools', r[1], { by: 'person' });
       return { ok: true };
     }
+    if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/settings$/)) && m === 'PUT') {
+      crew.botPage(r[1]);
+      disk.setSettings(cfg, r[1], await readJson(req));
+      db.event('bot.settings', r[1], { by: 'person' });
+      return { ok: true };
+    }
+    if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/type$/)) && m === 'POST') { await crew.type(r[1], await readJson(req)); return { ok: true }; }
     if (m === 'GET' && p === '/api/tools') return toolStatus(cfg);
     if ((r = p.match(/^\/api\/tools\/([a-z0-9-]+)\/install$/)) && m === 'POST') {
       // Installs take minutes (the browser downloads Chromium); the result arrives as an event.
@@ -130,6 +137,7 @@ export function startServer(cfg: Config, db: Store, crew: Crew) {
   async function crewTool(cmd: string, req: IncomingMessage) {
     const bot = crew.byToken(req.headers['x-crew-token'] as string);
     const b = await readJson(req);
+    const task = crew.activeTask(bot.id)?.id;
     const chiefOnly = () => { if (bot.id !== CHIEF) throw Object.assign(new Error('only Chief can do that'), { status: 403 }); };
     switch (cmd) {
       case 'roster': return {
@@ -139,18 +147,18 @@ export function startServer(cfg: Config, db: Store, crew: Crew) {
       case 'recruit': chiefOnly(); { const n = crew.recruit(b.template, b.name, CHIEF); return { recruited: { id: n.id, name: n.display } }; }
       case 'assign': chiefOnly(); return crew.assign(b.bot, b.text ?? '', CHIEF, b.model);
       case 'status': return db.all("SELECT id, bot, title, state FROM tasks WHERE state IN ('queued','working','needs_you') ORDER BY id");
-      case 'report': db.event('task.progress', bot.id, { text: String(b.text ?? '').slice(0, 200) }); return { ok: true };
+      case 'report': db.event('task.progress', bot.id, { task, text: String(b.text ?? '').slice(0, 200) }); return { ok: true };
       case 'remember': {
         disk.remember(cfg, bot.id, String(b.text ?? ''));
-        db.event('memory.learned', bot.id, { text: String(b.text).slice(0, 200) });
+        db.event('memory.learned', bot.id, { task, text: String(b.text).slice(0, 200) });
         return { ok: true };
       }
       case 'deliver': {
         const full = disk.insideBot(cfg, bot.id, String(b.path ?? ''));
         if (!existsSync(full)) throw new Error(`no file at ${b.path}`);
         const rel = full.slice(disk.botDir(cfg, bot.id).length + 1);
-        db.event('file.delivered', bot.id, { path: rel, note: String(b.note ?? '').slice(0, 200), size: statSync(full).size });
-        crew.say(bot.id, 'system', `Delivered ${rel}${b.note ? `: ${b.note}` : ''}`, crew.activeTask(bot.id)?.id ?? null);
+        db.event('file.delivered', bot.id, { task, path: rel, note: String(b.note ?? '').slice(0, 200), size: statSync(full).size });
+        crew.say(bot.id, 'system', `Delivered ${rel}${b.note ? `: ${b.note}` : ''}`, task ?? null);
         return { ok: true, path: rel };
       }
       case 'hook/stop': crew.finish(bot.id, String(b.last_assistant_message ?? '')); return {};
