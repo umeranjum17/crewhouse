@@ -17,7 +17,7 @@
     "AGENT_BROWSER_SESSION": "crewhouse-{bot.id}"
   },
   "grant": {
-    "default": false
+    "default": true
   },
   "note": "Plan 3 moves this to Playwright MCP on the bot's own Chromium and Xvfb display."
 }
