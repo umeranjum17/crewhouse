@@ -2,7 +2,7 @@
 
 This file is the project's committed home for project-intrinsic agent knowledge: build, test, release, architecture, and sharp-edge notes that should travel with the code.
 
-- Checks: `npm run check` (tsc, strict) and `./crewhouse test`. Run both before committing; CI (`.github/workflows/ci.yml`) runs them plus the web build on Node 22.19 and 24, so tests must never need an account, the network or a model: they run the real engine on the stub model (`src/stub.ts`, `CREWHOUSE_ENGINE=stub`; its script is in the file header).
+- Checks: `npm run check` (tsc, strict) and `./crewhouse test` (a throwaway HOME, then a check that the owner's `~/.pi` sign-ins, settings and extensions are byte-for-byte unchanged). Run both before committing; CI (`.github/workflows/ci.yml`) runs them plus the web build on Node 22.19 and 24, so tests must never need an account, the network or a model: they run the real engine on the stub model (`src/stub.ts`, `CREWHOUSE_ENGINE=stub`; its script is in the file header).
 - Tests wait on a condition with a bound, never a fixed sleep: CI's disks are slow. Use `test/lab.ts` (`setup`, `until`, `settled`, `holding`, `release`); daemon tests take an OS-assigned port. A session file only exists once the model has answered once (Pi writes it lazily).
 - Node runs `src/*.ts` directly with type stripping: no parameter properties, enums or namespaces (tsconfig sets `erasableSyntaxOnly`). Imports use `.ts` extensions.
 - Size budget: crewd (`src/`) stays under 5,000 lines, per the product plan. Prefer deleting to adding.

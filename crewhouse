@@ -118,7 +118,13 @@ case "${1:-}" in
     ;;
   test)
     need_node
-    exec npm test
+    # The tests run in a throwaway HOME; and the owner's own Pi (its sign-ins, settings, extensions) must come out of
+    # a run byte for byte as it went in. Its sessions are left out: the owner's own pi writes those as it runs.
+    pi_state() { [ -d "$HOME/.pi/agent" ] || return 0; (cd "$HOME/.pi/agent" && find auth.json settings.json models.json extensions -type f 2>/dev/null | sort | xargs -r sha256sum); }
+    before=$(pi_state)
+    npm test
+    [ "$(pi_state)" = "$before" ] || { echo "~/.pi changed while the tests ran" >&2; exit 1; }
+    [ -z "$before" ] || echo "~/.pi: sign-ins, settings and extensions unchanged, byte for byte."
     ;;
   *)
     echo "usage: ./crewhouse setup | start | update | uninstall [--all] [--yes] | doctor | tools [install [ids...]] | test"
