@@ -129,9 +129,28 @@ export class Link {
     await this.bind();
   }
 
+  /** The relay phones reach this computer through from anywhere: the family's own choice in Settings, else the default
+   *  (config.ts `RELAY`, or CREWHOUSE_RELAY). Empty: no relay. */
+  get relay(): string { return this.db.get("SELECT value FROM settings WHERE key = 'link.relay'")?.value ?? this.cfg.relay; }
+
+  /** An `https://` or `wss://` address (`http`/`ws` for a relay on the home network or Tailscale); '' turns the relay
+   *  off; null goes back to the default. */
+  setRelay(url: string | null) {
+    let value = url;
+    if (value) {
+      const u = URL.canParse(value) ? new URL(value) : null;
+      if (!u || !/^(https?|wss?):$/.test(u.protocol)) throw Object.assign(new Error('a relay address starts with https:// or wss://'), { status: 400 });
+      value = u.origin;
+    }
+    if (value === null) this.db.run("DELETE FROM settings WHERE key = 'link.relay'");
+    else this.db.run("INSERT INTO settings (key, value) VALUES ('link.relay', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", value);
+    this.db.event('link.relay', null, { on: !!this.relay });
+  }
+
   /** Settings, Phones: how phones reach this computer, and any phone waiting for a yes (docs/ui-contract.md). */
   status() {
     return { on: this.cfg.linkPort > 0, lan: this.lan, pinned: !!this.cfg.linkHost, hosts: [...this.servers.keys()], tailscale: this.hosts().some(tailscale),
+      relay: this.relay, relayDefault: this.relay === this.cfg.relay,
       asking: [...this.asking.values()].map(({ id, name, words, role }) => ({ id, name, words, role })) };
   }
 

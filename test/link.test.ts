@@ -136,3 +136,14 @@ test('pairing with a yes at the computer, grants, approvals from the phone, and 
   assert.equal((await watcher.req('GET', '/api/state')).status, 200, 'other phones are untouched');
   watcher.link.stop();
 });
+
+test('the relay address: empty until the project relay is approved, the family can set their own, and phones cannot', async () => {
+  await until(async () => (await fetch(`${base}/api/state`).catch(() => null))?.ok);
+  const relay = async (url?: unknown, headers?: Record<string, string>) => (await http('PUT', '/api/phones/relay', { url }, headers));
+  assert.deepEqual([(await http('GET', '/api/phones/link')).body.relay, (await http('GET', '/api/phones/link')).body.relayDefault], ['', true]);
+  assert.equal((await relay('https://relay.example/ignored/path')).body.relay, 'https://relay.example', 'kept as an origin');
+  assert.equal((await http('GET', '/api/phones/link')).body.relayDefault, false);
+  assert.equal((await relay('ftp://nope')).status, 400);
+  assert.equal((await relay('wss://elsewhere.example', {})).status, 403, 'only this computer changes it');
+  assert.deepEqual((await relay(null)).body.relay, '', 'back to the default');
+});

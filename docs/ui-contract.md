@@ -92,7 +92,8 @@ A sign-in that fails ends as `signIn: {state: 'failed', error, why?}`: `why: 'de
 ## Phones
 
 `GET /api/phones` → `[{id, name, member, person, role, seen, online}]`; `POST /api/phones/pair {role: 'control'|'view'}` → `{qr, expires, urls}`;
-`DELETE /api/phones/:id`; `GET /api/phones/link` and `PUT /api/phones/lan {on}` → `{on, lan, pinned, tailscale, hosts, asking: [{id, name, words, role}]}`.
+`DELETE /api/phones/:id`; `GET /api/phones/link`, `PUT /api/phones/lan {on}` and `PUT /api/phones/relay {url}` → `{on, lan, pinned, tailscale, hosts, relay, relayDefault, asking: [{id, name, words, role}]}`.
+`relay` is the address phones use from anywhere (`''`: none); `relayDefault` says it is Crewhouse's own. `url` is an `https://` or `wss://` address, `''` for none, or `null` to go back to the default.
 A phone that scans the code waits in `asking` until the person compares its two words and answers `POST /api/phones/answer {id, yes}`.
 These answer on the computer only, never over the phone link (`src/link.ts`, on `@byokit/link`). A 404, or `on: false`, shows "The phone app is on its way".
 The phone app (`mobile/`) reads crewd through this same adapter and `web/src/api.ts`, with the link as its transport: each call is one request `METHOD /path`.

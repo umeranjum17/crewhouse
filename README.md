@@ -90,9 +90,10 @@ Other commands: `./crewhouse update` (pulls, installs and restarts crewd; refuse
   | Routines | Adding one from a bot's page | Chief sets one up, then the digest |
   |---|---|---|
   | ![Routines](docs/screenshots/routines-list.webp) | ![Adding a routine](docs/screenshots/routines-add.webp) | ![Chief and the digest](docs/screenshots/routines-chief.webp) |
+- **From anywhere** (`relay/`): phones reach the family computer through a relay the computer dials out to, so it opens no port. The relay passes the link's encrypted frames without reading them, and push is content-free: a phone is only told "Crewhouse has news" and fetches the words over the link. The project will run one public relay; anyone can run their own with one command (`docker compose -f relay/compose.yml up -d`, see [relay/README.md](relay/README.md)) and set it under **Settings, Phones** or with `CREWHOUSE_RELAY`.
 - **The crew tools** are how bots talk to crewd, as engine tools calling crewd directly: `crew_report`, `crew_deliver`, `crew_remember`, and for Chief, `crew_roster`, `crew_recruit`, `crew_assign`, `crew_routine`, `crew_routines`, `crew_status` and `crew_call_me`.
 
-Data lives outside the repo: the database is in `~/.local/state/crewhouse/`, the bots in `~/Crewhouse/`. The tool kit is in `~/.local/share/crewhouse/tools/`. Override with `CREWHOUSE_STATE_DIR`, `CREWHOUSE_CREW_DIR` and `CREWHOUSE_TOOLS_DIR`. Other settings: `CREWHOUSE_PORT` (default 7711), `CREWHOUSE_MAX_CONCURRENT` (default 3) and `CREWHOUSE_ENGINE=stub` (the scripted test model).
+Data lives outside the repo: the database is in `~/.local/state/crewhouse/`, the bots in `~/Crewhouse/`. The tool kit is in `~/.local/share/crewhouse/tools/`. Override with `CREWHOUSE_STATE_DIR`, `CREWHOUSE_CREW_DIR` and `CREWHOUSE_TOOLS_DIR`. Other settings: `CREWHOUSE_PORT` (default 7711), `CREWHOUSE_MAX_CONCURRENT` (default 3), `CREWHOUSE_RELAY` (the relay address; Settings, Phones overrides it) and `CREWHOUSE_ENGINE=stub` (the scripted test model).
 
 ## Not yet
 

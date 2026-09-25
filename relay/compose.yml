@@ -1,0 +1,17 @@
+# Self-host: `docker compose -f relay/compose.yml up -d`, then put TLS in front (relay/README.md).
+services:
+  relay:
+    build: .
+    ports:
+      - "127.0.0.1:7300:7300" # loopback: Caddy or Tailscale Serve on this machine carries it to the internet
+    volumes:
+      - relay-data:/data
+    environment:
+      RELAY_SIGNUP: ${RELAY_SIGNUP:-enrol}
+      RELAY_OWNER_TOKEN: ${RELAY_OWNER_TOKEN:-}
+      RELAY_TRUST_PROXY: ${RELAY_TRUST_PROXY:-1}
+      RELAY_PUSH_SUBJECT: ${RELAY_PUSH_SUBJECT:-}
+    restart: unless-stopped
+
+volumes:
+  relay-data:

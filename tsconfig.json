@@ -6,5 +6,5 @@
     // @desklink/react-native ships Metro/Expo sources; tsc checks the web surface we use instead (web/src/desklink.d.ts).
     "paths": { "@desklink/react-native": ["./web/src/desklink.d.ts"] }
   },
-  "include": ["src", "web/src", "test"]
+  "include": ["src", "web/src", "test", "relay"]
 }
