@@ -34,9 +34,10 @@ const FRIENDLY = {
   offline: "Can't reach the home computer right now. Check it's on, then try again.",
   failed: 'That didn’t work. Please try again.',
 };
-/** Run an action; a failure becomes a friendly toast, never an error message (web/src/parts.tsx attempt). */
-async function attempt(fn: () => Promise<unknown>, ok?: string) {
-  try { await fn(); if (ok) say(ok); return true; } catch (e: any) { say(FRIENDLY[trouble(e)]); return false; }
+/** Run an action; a failure becomes a friendly toast, never an error message (web/src/parts.tsx attempt). `quiet`
+ *  leaves the word to the caller — the composer's own "Not sent. Retry" line. */
+async function attempt(fn: () => Promise<unknown>, ok?: string, quiet = false) {
+  try { await fn(); if (ok) say(ok); return true; } catch (e: any) { if (!quiet) say(FRIENDLY[trouble(e)]); return false; }
 }
 function Toast() {
   const [m, setM] = useState('');
@@ -562,7 +563,7 @@ function Home(ctx: Ctx) {
   const crew = A.crew(state);
   const who = (id: string) => crew.find((h) => h.id === id);
   const cards = A.cards(state);
-  const toChief = async (x: string, p: Photo[] = []) => { const ok = await attempt(() => api.post('chief', x, p.map(({ type, data }) => ({ type, data })))); if (ok) { refresh(); go({ view: 'chief' }); } return ok; };
+  const toChief = async (x: string, p: Photo[] = []) => { const ok = await attempt(() => api.post('chief', x, p.map(({ type, data }) => ({ type, data }))), undefined, true); if (ok) { refresh(); go({ view: 'chief' }); } return ok; };
   const helperRoute = (id: string): Route => (id === 'chief' ? { view: 'chief' } : { view: 'helper', id });
   return (
     <View style={{ flex: 1 }}>
@@ -634,7 +635,7 @@ function Chat({ id, state, tick, refresh, canAct, offline, open }: Ctx & { id: s
   // Seen: the chat's unread count goes once its newest line is on screen (a watch-only phone can't mark it).
   const newest = last?.id;
   useEffect(() => { if (canAct && newest && b?.unread) void api.read(id).then(refresh).catch(() => {}); }, [canAct, newest, b?.unread, id, refresh]);
-  const send = async (x: string, p: Photo[] = []) => { const ok = await attempt(() => api.post(id, x, p.map(({ type, data }) => ({ type, data })))); if (ok) { void load(); refresh(); } return ok; };
+  const send = async (x: string, p: Photo[] = []) => { const ok = await attempt(() => api.post(id, x, p.map(({ type, data }) => ({ type, data }))), undefined, true); if (ok) { void load(); refresh(); } return ok; };
   return (
     <View style={{ flex: 1 }}>
       <ScrollView ref={scroll} style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 10 }} onContentSizeChange={() => scroll.current?.scrollToEnd({ animated: false })}>

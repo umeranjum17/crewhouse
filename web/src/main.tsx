@@ -90,7 +90,7 @@ function Share({ refresh }: Ctx) {
   const text = [q.get('title'), q.get('text'), q.get('url')].filter(Boolean).join('\n').trim();
   const [other, setOther] = useState(false);
   const home = () => { history.replaceState(null, '', '/#/chief'); dispatchEvent(new HashChangeEvent('hashchange')); };
-  const send = async (what: string) => { if (await attempt(() => api.post('chief', `${what}\n\nWhat I shared:\n${text}`))) { refresh(); home(); } return true; };
+  const send = async (what: string) => { if (await attempt(() => api.post('chief', `${what}\n\nWhat I shared:\n${text}`), undefined, true)) { refresh(); home(); } return true; };
   if (!text) return <div className="page"><div className="card empty">Nothing came through. Try sharing it again.</div></div>;
   return (
     <div className="page share">
@@ -177,7 +177,7 @@ function Home({ state, me, refresh, tick }: Ctx) {
   const cards = A.cards(state).filter((c) => c.kind !== 'connect');
   const accounts = useAccounts(0, tick);
   const g = A.account(accounts, me);
-  const toChief = async (t: string) => { const ok = await attempt(() => api.post('chief', t)); if (ok) { refresh(); go('#/chief'); } return ok; };
+  const toChief = async (t: string) => { const ok = await attempt(() => api.post('chief', t), undefined, true); if (ok) { refresh(); go('#/chief'); } return ok; };
   return (
     <div className="home">
       <div className="home-top"><Heartbeat state={state} /></div>
@@ -234,7 +234,7 @@ function Chat({ id, state, me, tick, refresh }: Ctx & { id: string }) {
   const trail = live && page ? A.steps(page.trail ?? [], live.id, true) : [];
   const cards = A.cards(state).filter((c) => c.helper === id);
   const last = lines.at(-1);
-  const send = async (t: string) => { const ok = await attempt(() => api.post(id, t)); if (ok) { void load(); refresh(); } return ok; };
+  const send = async (t: string) => { const ok = await attempt(() => api.post(id, t), undefined, true); if (ok) { void load(); refresh(); } return ok; };
   const name = h?.name ?? 'Chief';
   return (
     <div className="chat">
@@ -316,7 +316,7 @@ function AddHelper({ state, refresh }: Ctx) {
         ))}
       </div>
       <div className="card"><b>Need something else?</b><p className="mute">Tell Chief in your own words, like "I need help with the kids' school stuff", and he'll find the right helper.</p>
-        <Composer placeholder="Tell Chief what you need help with…" onSend={async (t) => { const ok = await attempt(() => api.post('chief', t)); if (ok) go('#/chief'); return ok; }} {...typeInto('chief')} /></div>
+        <Composer placeholder="Tell Chief what you need help with…" onSend={async (t) => { const ok = await attempt(() => api.post('chief', t), undefined, true); if (ok) go('#/chief'); return ok; }} {...typeInto('chief')} /></div>
     </div>
   );
 }

@@ -20,9 +20,10 @@ export function Toasts() {
   }, []);
   return m ? <div className="toast" role="status">{m}</div> : null;
 }
-/** Run an action; a failure becomes a friendly toast, never a stack trace. */
-export async function attempt(fn: () => Promise<unknown>, ok?: string) {
-  try { await fn(); if (ok) toast(ok); return true; } catch (e: any) { toast(FRIENDLY[trouble(e)]); return false; }
+/** Run an action; a failure becomes a friendly toast, never a stack trace. `quiet` leaves the word to the caller —
+ *  the composer, whose failed send keeps the words on screen with a Retry instead. */
+export async function attempt(fn: () => Promise<unknown>, ok?: string, quiet = false) {
+  try { await fn(); if (ok) toast(ok); return true; } catch (e: any) { if (!quiet) toast(FRIENDLY[trouble(e)]); return false; }
 }
 const FRIENDLY = {
   missing: "That isn't ready yet. It arrives with the next Crewhouse update.",
@@ -198,7 +199,7 @@ export function Composer({ placeholder, onSend, chat }: { placeholder: string; o
     let ok = false;
     try { ok = !!(await onSend(t)); } catch { ok = false; }
     setBusy(false);
-    if (ok) { setText(''); if (chat) keepDraft(chat, ''); } else { setFailed(true); if (chat) sent(chat, false, text); }
+    if (ok) { setText(''); setFailed(false); if (chat) keepDraft(chat, ''); } else { setFailed(true); if (chat) sent(chat, false, text); }
   };
   return (
     <form className="composer" onSubmit={(e) => { e.preventDefault(); void send(); }}>
