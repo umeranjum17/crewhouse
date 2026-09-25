@@ -3,7 +3,7 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer as http, type Server } from 'node:http';
 import { createServer, type AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -59,4 +59,32 @@ test('the downloaded app\'s words: tools getting ready, and Google in steps on G
   assert.equal(A.update({}), null);
   for (const s of A.GOOGLE_STEPS) assert.match(s.url, /^https:\/\/console\.cloud\.google\.com\//);
   assert.equal(A.GOOGLE_STEPS.length, 4);
+});
+
+test('the downloaded app keeps answering while it fetches the helpers\' tools on its first run', async () => {
+  // A fake npm (and pip, and download) that takes eight seconds, so an install is certainly still running.
+  const bin = join(root, 'slow-bin');
+  mkdirSync(bin, { recursive: true });
+  for (const b of ['npm', 'npx', 'python3', 'curl']) { writeFileSync(join(bin, b), `#!/bin/sh\nenv > '${join(root, 'install-env')}'\nsleep 8\nexit 1\n`); chmodSync(join(bin, b), 0o755); }
+  const p2 = await free();
+  const first = spawn(process.execPath, [join(import.meta.dirname, '..', 'src', 'main.ts')], {
+    env: { ...process.env, PATH: `${bin}:/usr/bin:/bin`, XDG_DATA_HOME: join(root, 'owner-data'), WAYLAND_DISPLAY: 'wayland-owner', CREWHOUSE_PACKAGED: '1', CREWHOUSE_ENGINE: 'stub', CREWHOUSE_PORT: String(p2), CREWHOUSE_LINK_PORT: '0',
+      CREWHOUSE_STATE_DIR: join(root, 'first', 'state'), CREWHOUSE_CREW_DIR: join(root, 'first', 'crew'), CREWHOUSE_TOOLS_DIR: join(root, 'first', 'tools') },
+    stdio: ['ignore', 'ignore', 'ignore'],
+  });
+  after(() => first.kill());
+  let s: any = null;
+  for (let i = 0; i < 100 && !s?.installing?.length; i++) {
+    const r = await fetch(`http://127.0.0.1:${p2}/api/state`, { signal: AbortSignal.timeout(1000) }).catch(() => null);
+    if (r?.ok) s = await r.json(); else await sleep(100);
+  }
+  assert.ok(s?.installing?.length, 'an install is under way');
+  const t0 = Date.now();
+  const r = await fetch(`http://127.0.0.1:${p2}/api/state`, { signal: AbortSignal.timeout(2000) });
+  assert.ok(r.ok && Date.now() - t0 < 1000, 'and crewd answers at once meanwhile');
+  assert.match(A.gettingReady(await r.json()), /getting|Getting/);
+  for (let i = 0; i < 50 && !existsSync(join(root, 'install-env')); i++) await sleep(100);
+  const env = readFileSync(join(root, 'install-env'), 'utf8');
+  assert.doesNotMatch(env, /^(XDG_|WAYLAND_DISPLAY=)/m, 'the installers see none of the owner\'s desktop session');
+  assert.match(env, new RegExp(`^CREWHOUSE_TOOLS_DIR=${join(root, 'first', 'tools')}$`, 'm'));
 });
