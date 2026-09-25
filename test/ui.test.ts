@@ -127,6 +127,11 @@ test('the screens read view models only, and the mono face draws art only', () =
   }
 });
 
+test('Home renders once: a second full Home (bd51524) put a second composer below the first', () => {
+  const src = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
+  assert.equal([...src.matchAll(/<Home\b/g)].length, 1, 'the app is one page per view, never two');
+});
+
 test('the phone app moves only through mobile/src/motion.ts, where Reduce Motion always snaps', () => {
   const app = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
   assert.doesNotMatch(app, /\bAnimated\b|LayoutAnimation|animated: true|animationType="(slide|fade)"/, 'a move named outside motion.ts');

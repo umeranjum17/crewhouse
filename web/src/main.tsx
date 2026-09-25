@@ -954,7 +954,6 @@ function App() {
           {v.view === 'apps' && <Apps {...ctx} />}
           {v.view === 'share' && <Share {...ctx} />}
         </main>
-        {v.view === 'home' && <Home {...ctx} />}
         <nav className="tabbar">{nav.map(([h, l, i]) => <a key={h} href={h} className={active(h) ? 'on' : ''}><span className="ic">{i}</span>{l}{h === '#/' && asks > 0 && <span className="badge">{asks}</span>}</a>)}</nav>
       </div>
       {sheet && <AskSheet c={sheet} who={crew.find((h) => h.id === sheet.helper)} chiefSays={ctx.state.asks.find((a: Json) => a.id === sheet.id)?.detail?.chief} onClose={() => history.length > 1 ? history.back() : go('#/')} />}
