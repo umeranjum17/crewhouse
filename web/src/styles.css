@@ -163,6 +163,9 @@ textarea.input { resize: vertical; }
 .preview { background: var(--soft); border-radius: 18px; padding: 12px 16px; text-align: left; width: 100%; font-size: 15px; line-height: 1.5; }
 .preview > div:nth-child(2) { white-space: pre-line; }
 .preview:not(.open) > div:nth-child(2) { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+/* The reviewed order: every line as the page writes it, with the total unmistakable. */
+.order { background: var(--soft); border-radius: 18px; padding: 12px 16px; text-align: left; width: 100%; font-size: 15px; line-height: 1.6; }
+.order-total { display: block; font-size: 18px; margin-top: 4px; }
 .chief-says { display: flex; gap: 10px; align-items: center; text-align: left; color: var(--ink2); font-size: 14.5px; margin: 6px 0; }
 .approve-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; margin-top: 6px; }
 .approve-btns .btn.big { grid-column: 1 / -1; }
