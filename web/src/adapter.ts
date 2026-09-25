@@ -188,23 +188,15 @@ export function step(e: Json): string | null {
     case 'task.created': return `Got the job: “${plain(d.title)}”`;
     case 'task.working': return `Started on “${plain(d.title)}”`;
     case 'task.progress': return plain(d.text) || null;
-    case 'run.tool': {
-      const t = String(d.tool ?? '');
-      if (t === 'WebSearch') return `Looked up “${plain(d.summary).slice(0, 60)}”`;
-      if (t === 'WebFetch') { try { return `Read a page on ${new URL(d.summary).hostname.replace(/^www\./, '')}`; } catch { return 'Read a web page'; } }
-      if (t === 'Read') return 'Read through its notes';
-      if (t === 'Write' || t === 'Edit') return 'Saved its work';
-      if (/browser/.test(t)) return 'Used its browser';
-      if (t === 'Bash' && /^crew (report|deliver|remember)/.test(d.summary ?? '')) return null;
-      return 'Worked on it';
-    }
+    // crewd writes the step in plain words ("Searched the web for “school trips”", "Worked on a video").
+    case 'run.tool': return d.words ? plain(d.words) : 'Worked on it';
     case 'run.allowed': return 'Went ahead, as you allowed';
     case 'ask.opened': return 'Asked for your OK';
     case 'ask.answered': return `You said ${ANSWER[d.answer] ?? (/always/.test(d.answer) ? 'always OK' : /task/.test(d.answer) ? 'yes for this job' : 'what to do')}`;
     case 'file.delivered': return `Made “${pretty(d.path)}”`;
     case 'memory.learned': return `Learned: ${plain(d.text)}`;
     case 'memory.undone': return `You undid: ${plain(d.text)}`;
-    case 'run.reattached': return 'Picked up where it left off';
+    case 'run.resumed': return 'Picked up where it left off';
     case 'desktop.takeover': return 'You took the wheel';
     case 'desktop.giveback': return 'You handed the wheel back';
     case 'task.paused': return `Paused “${plain(d.title)}” for now`;
@@ -254,19 +246,25 @@ export function routines(state: Json, bot?: string) {
   }));
 }
 
-/** The person's own ChatGPT: signed in, or a sign-in in progress as a link and a code. Never another brand. */
-export function chatgpt(accounts: Json[] | null, member: number) {
-  const a = accounts?.find((x) => x.member === member && x.runtime === 'codex');
+/** The AI accounts a person can think with, in the order the app offers them. Never another brand, and never Claude. */
+export const AIS = [{ key: 'chatgpt', name: 'ChatGPT' }]; // the one front door; crewd keeps other accounts as quiet paths
+
+/** One of the person's own AI accounts: signed in, or a sign-in in progress as a link and a code. */
+export function account(accounts: Json[] | null, member: number, key = 'chatgpt') {
+  const a = accounts?.find((x) => x.member === member && x.account === key);
   if (!a) return { state: 'checking' as const, signing: null, expired: false, failed: false, resting: '' };
-  const out = String(a.login?.out ?? '');
-  const signing = a.login?.state === 'running' ? {
-    url: a.login.url ?? /https:\/\/\S+/.exec(out)?.[0] ?? 'https://auth.openai.com/codex/device',
-    code: a.login.code ?? /\b[A-Z0-9]{4,5}-[A-Z0-9]{4,6}\b/.exec(out)?.[0] ?? '',
-  } : null;
-  const ended = a.login?.state === 'failed' || a.login?.state === 'expired';
-  const expired = a.login?.state === 'expired' || (ended && /expire|timed? ?out|timeout/i.test(out));
-  return { state: a.state === 'ready' ? 'ready' as const : a.state === 'missing' ? 'unavailable' as const : 'signed-out' as const,
-    signing, expired, failed: ended && !expired, resting: a.restingUntil > 0 ? `Resting until ${clock(a.restingUntil)}` : '' };
+  const s = a.signIn;
+  const signing = s?.state === 'waiting' && s.code ? { url: s.url ?? '', code: s.code } : null;
+  const expired = s?.state === 'failed' && /expired|too long/i.test(s.error ?? '');
+  // 'unavailable' was the CLI missing; the engine now ships inside Crewhouse, so there is always something to sign in to.
+  return { state: a.signedIn ? 'ready' as const : 'signed-out' as const as 'ready' | 'signed-out' | 'unavailable',
+    signing, expired, failed: s?.state === 'failed' && !expired, resting: a.restingUntil > 0 ? `Resting until ${clock(a.restingUntil)}` : '' };
+}
+export const chatgpt = (accounts: Json[] | null, member: number) => account(accounts, member, 'chatgpt');
+/** The account the crew thinks with: the first one signed in. Null while checking, 'none' when there is none yet. */
+export function thinking(accounts: Json[] | null, member: number) {
+  if (!accounts) return null;
+  return AIS.find((a) => account(accounts, member, a.key).state === 'ready') ?? 'none';
 }
 
 /** Whose sign-in page an app opens: "Google" for Gmail, Calendar and Drive. */

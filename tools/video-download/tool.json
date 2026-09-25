@@ -17,9 +17,6 @@
   "asks": [
     "never: downloads land in its own folder"
   ],
-  "allow": [
-    "Bash(yt-dlp *)"
-  ],
   "grant": {
     "default": false
   },

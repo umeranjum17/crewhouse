@@ -6,3 +6,4 @@ work/
 *.key
 .env
 .DS_Store
+.lab/

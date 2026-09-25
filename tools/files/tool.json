@@ -1,20 +1,14 @@
 {
   "id": "files",
   "name": "Files",
-  "provides": "Read and write files in the bot's own folder",
+  "provides": "Read, write and work on files in the bot's own folder, with its own sandboxed shell",
   "kind": "built-in",
   "bins": [],
-  "license": "vendor CLI",
+  "license": "Apache-2.0 (bundled engine)",
   "source": "bundled",
   "install": {},
   "asks": [
-    "reading, writing or deleting anything outside its own folder"
-  ],
-  "allow": [
-    "Read(./**)",
-    "Edit(./**)",
-    "Glob",
-    "Grep"
+    "opening or changing anything outside its own folder"
   ],
   "grant": {
     "default": true

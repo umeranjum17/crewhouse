@@ -38,21 +38,23 @@ export const api = {
   people: () => call('GET', '/api/people'),
   addPerson: (name: string) => call('POST', '/api/people', { name }),
   person: (id: number, body: { name?: string; address?: string; quiet?: string | null }) => call('PUT', `/api/people/${id}`, body),
-  accounts: (fresh = false) => call('GET', `/api/accounts${fresh ? '?fresh' : ''}`),
-  signIn: (member: number, runtime: string) => call('POST', `/api/accounts/${member}/${runtime}/login`),
-  signInCancel: (member: number, runtime: string) => call('POST', `/api/accounts/${member}/${runtime}/login/cancel`),
+  accounts: () => call('GET', '/api/accounts'),
+  /** "Sign in with ChatGPT": a one-time code to type on its page, which works from any phone or computer. */
+  signIn: (member: number, account: string) => call('POST', `/api/accounts/${member}/${account}/login`, { via: 'code' }),
+  signInCancel: (member: number, account: string) => call('POST', `/api/accounts/${member}/${account}/cancel`),
+  signOut: (member: number, account: string) => call('POST', `/api/accounts/${member}/${account}/logout`),
   schedule: (text: string) => call('GET', `/api/schedule?text=${encodeURIComponent(text)}`),
   addRoutine: (body: { bot: string; schedule: string; task: string; model?: string; name?: string }) => call('POST', '/api/routines', body),
   routine: (id: number, body: { state?: 'on' | 'paused'; schedule?: string }) => call('PUT', `/api/routines/${id}`, body),
   runRoutine: (id: number) => call('POST', `/api/routines/${id}/run`),
   removeRoutine: (id: number) => call('DELETE', `/api/routines/${id}`),
-  // Wanted from the engine rework (docs/ui-contract.md); the screens show "coming soon" until crewd answers them.
+  // Phones are still wanted (docs/ui-contract.md); the screens show "coming soon" until crewd answers them.
   phones: () => call('GET', '/api/phones'),
   pairPhone: () => call('POST', '/api/phones/pair'),
   connect: (app: string) => call('POST', `/api/connections/${app}`),
   connection: (app: string) => call('GET', `/api/connections/${app}`),
   disconnect: (app: string) => call('DELETE', `/api/connections/${app}`),
-  answer: (ask: number, body: { answer?: string; scope?: 'once' | 'task' | 'always'; keys?: string[]; text?: string }) => call('POST', `/api/asks/${ask}/answer`, body),
+  answer: (ask: number, body: { answer: 'allow' | 'deny'; scope?: 'once' | 'task' | 'always' }) => call('POST', `/api/asks/${ask}/answer`, body),
 };
 
 const wsBase = () => `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`;

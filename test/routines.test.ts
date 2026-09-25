@@ -1,24 +1,12 @@
 // Routines: plain-words schedules, next run, catch-up after sleep, overlap, pause, the morning digest. No CLI, no quota.
-import { after, test } from 'node:test';
+import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { describe, nextRun, parseSchedule } from '../src/routines.ts';
-import { Store } from '../src/db.ts';
-import { Crew } from '../src/crew.ts';
-import { StubRunner } from '../src/runner.ts';
-import { loadConfig } from '../src/config.ts';
+import { setup as lab, settled, release, until } from './lab.ts';
+import type { Store } from '../src/db.ts';
+const { describe, nextRun, parseSchedule } = await import('../src/routines.ts');
 
 const at = (y: number, mo: number, d: number, h = 0, m = 0) => new Date(y, mo - 1, d, h, m).getTime();
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-/** Wait for the condition, never a fixed time: CI runs the test files side by side on slow disks and two cores. */
-async function until(what: string, fn: () => unknown, ms = 10_000) {
-  for (const end = Date.now() + ms; !(await fn()); await sleep(10)) if (Date.now() > end) throw new Error(`timed out waiting for ${what}`);
-}
 const state = (db: Store, t: number) => db.get('SELECT state FROM tasks WHERE id = ?', t)!.state;
-const prompted = (db: Store, t: number) => until(`task #${t} prompted`, () => db.get("SELECT 1 FROM events WHERE kind = 'run.prompted' AND json_extract(data, '$.task') = ?", t));
-const settled = (db: Store, t: number) => until(`task #${t} settled`, () => !['queued', 'working'].includes(state(db, t)));
 
 test('schedule words: parse, describe, reject', () => {
   const cases: [string, string][] = [
@@ -54,29 +42,20 @@ test('next run: same day if still ahead, else the next matching day; intervals c
 });
 
 function setup() {
-  const root = mkdtempSync(join(tmpdir(), 'crewhouse-routines-'));
-  const cfg = { ...loadConfig(), stateDir: join(root, 'state'), crewDir: join(root, 'crew'), toolsDir: join(root, 'tools'), runner: 'stub' as const };
-  const db = new Store(cfg.stateDir);
-  const runner = new StubRunner();
-  const crew = new Crew(cfg, db, runner, 'http://127.0.0.1:1');
-  runner.onTurn = (bot, reply) => crew.finish(bot, reply);
-  crew.init();
+  const { db, crew, done } = lab();
   crew.onboard('sir');
   crew.recruit('reel', 'Reel', 'person');
-  let closed = false;
-  const done = () => { if (!closed) { closed = true; crew.stop(); db.close(); } };
-  after(done);
-  return { db, runner, crew, done };
+  return { db, crew, done };
 }
 const fired = (db: Store, id: number) => db.all("SELECT kind, data FROM events WHERE kind IN ('routine.fired', 'routine.skipped') AND json_extract(data, '$.routine') = ?", id)
   .map((e) => ({ kind: e.kind, ...JSON.parse(e.data) }));
 
 test('routines: fire when due, catch up once after sleep, skip on overlap, pause, run now, per-routine model', async () => {
-  const { db, runner, crew, done } = setup();
+  const { db, crew, done } = setup();
   assert.throws(() => crew.addRoutine({ bot: 'chief', schedule: 'daily 9', task: 'x' }, 'person'), /no bot/);
   assert.throws(() => crew.addRoutine({ bot: 'reel', schedule: 'whenever', task: 'x' }, 'person'), /can't read/);
-  assert.throws(() => crew.addRoutine({ bot: 'reel', schedule: 'daily 9', task: 'x', model: 'nope:x' }, 'person'), /not a model/);
-  const r = crew.addRoutine({ bot: 'reel', schedule: 'every Monday 9:00', task: 'ask permission: make the weekly demo', model: 'claude:haiku', name: 'Weekly demo' }, 'person');
+  assert.throws(() => crew.addRoutine({ bot: 'reel', schedule: 'daily 9', task: 'x', model: 'nope:x' }, 'person'), /not an AI account/);
+  const r = crew.addRoutine({ bot: 'reel', schedule: 'every Monday 9:00', task: 'ask permission: make the weekly demo', model: 'copilot', name: 'Weekly demo' }, 'person');
   assert.ok(r.next_at > Date.now());
   assert.equal(new Date(r.next_at).getDay(), 1);
 
@@ -92,10 +71,11 @@ test('routines: fire when due, catch up once after sleep, skip on overlap, pause
   assert.equal(h.length, 1, 'latest only');
   assert.equal(h[0].why, 'late');
   const t = db.get('SELECT * FROM tasks WHERE id = ?', h[0].task)!;
-  assert.equal(t.brain, 'claude:haiku', 'the routine picks the model');
+  assert.equal(t.brain, 'copilot', 'the routine picks the AI account');
+  assert.equal(crew.routines().find((x) => x.id === r.id)!.thinks, 'GitHub Copilot');
   assert.equal(t.title, 'Weekly demo');
   assert.ok(db.get('SELECT next_at FROM routines WHERE id = ?', r.id)!.next_at > Date.now());
-  await prompted(db, t.id);
+  await until('holding', () => crew.sessionOf('reel'));
   assert.equal(db.get('SELECT state FROM tasks WHERE id = ?', t.id)!.state, 'working', 'the stub holds "ask permission" tasks open');
 
   // Due again while the last run is still going: skipped, not stacked.
@@ -106,12 +86,13 @@ test('routines: fire when due, catch up once after sleep, skip on overlap, pause
   assert.equal(db.get('SELECT COUNT(*) AS n FROM tasks WHERE routine = ?', r.id)!.n, 1);
 
   // Once it finishes, Run now starts a fresh task.
-  runner.complete('reel', 'Demo made.');
+  await release(crew, 'reel', 'Demo made.');
+  await settled(db, t.id);
   crew.runRoutine(r.id);
   assert.equal(db.get('SELECT COUNT(*) AS n FROM tasks WHERE routine = ?', r.id)!.n, 2);
   const again = db.get('SELECT id FROM tasks WHERE routine = ? ORDER BY id DESC', r.id)!.id;
-  await prompted(db, again);
-  runner.complete('reel', 'Demo made again.');
+  await release(crew, 'reel', 'Demo made again.');
+  await settled(db, again);
   assert.equal(state(db, again), 'done');
 
   // Paused routines never fire, and never catch up when resumed.
@@ -138,12 +119,12 @@ test('morning digest: on by default at 8:00, says what finished, what needs you,
 
   await settled(db, crew.assign('reel', 'Make the pairing demo', 'chief').task);
   crew.addRoutine({ bot: 'reel', schedule: 'every hour', task: 'Tidy the screenshots' }, 'person');
-  db.run("INSERT INTO asks (bot, kind, title, detail, at) VALUES ('reel', 'permission', 'Reel would like to run a command', '{}', ?)", Date.now());
+  db.run("INSERT INTO asks (bot, kind, title, detail, at) VALUES ('reel', 'permission', 'Reel wants to look through your Pictures folder.', '{}', ?)", Date.now());
   crew.runRoutine(digest.id);
   const text = db.get("SELECT text FROM messages WHERE bot = 'chief' AND author = 'bot' ORDER BY id DESC")!.text;
   assert.match(text, /^Good (morning|afternoon|evening), sir\. While you were away:/);
   assert.match(text, /Finished: Reel, “Make the pairing demo”/);
-  assert.match(text, /Needs you: Reel would like to run a command/);
+  assert.match(text, /Needs you: Reel wants to look through your Pictures folder\./);
   assert.match(text, /Coming up: “Tidy the screenshots” with Reel/);
   assert.doesNotMatch(text, /Master|aye|!/);
   done();

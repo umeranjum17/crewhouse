@@ -55,7 +55,7 @@ const FORBIDDEN = /fc-list|2>&1|\| ?head|\bBash\b|claude|anthropic|codex|sonnet|
 const shown = (x: unknown) => JSON.stringify(x, (k, v) => (k === 'url' ? undefined : v));
 
 test('nothing technical survives the adapter', () => {
-  const h = A.chatgpt([{ member: 2, runtime: 'codex', state: 'signed-out', login: { state: 'running', out: 'Open https://auth.openai.com/codex/device and enter AB12-CDE34' } }], 2);
+  const h = A.chatgpt([{ member: 2, account: 'chatgpt', name: 'ChatGPT', signedIn: false, signIn: { state: 'waiting', url: 'https://auth.openai.com/codex/device', code: 'AB12-CDE34' } }], 2);
   const views = {
     crew: A.crew(state), chief: A.chief(state), cards: A.cards(state), work: A.work(state), things: A.things(state), ideas: A.ideas(state),
     steps: A.steps(page.trail, undefined, true), lines: A.lines(page, 'reel'), memories: A.memories(page.notes), routines: A.routines(state), gallery: A.gallery(state),

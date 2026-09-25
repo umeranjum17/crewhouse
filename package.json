@@ -2,20 +2,21 @@
   "name": "crewhouse",
   "version": "0.1.0",
   "private": true,
-  "description": "Local-first crew of persistent AI teammates, run by Chief on your own signed-in agent CLIs.",
+  "description": "Local-first crew of persistent AI helpers, run by Chief on your own AI accounts.",
   "license": "Apache-2.0",
   "type": "module",
   "engines": {
-    "node": ">=22.18"
+    "node": ">=22.19"
   },
   "scripts": {
     "start": "node src/main.ts",
     "build:web": "node scripts/build-web.mjs",
-    "test": "node --test test/*.test.ts",
+    "test": "HOME=$(mktemp -d) node --test test/*.test.ts",
     "check": "tsc"
   },
   "dependencies": {
     "@desklink/host": "^0.1.0",
+    "@earendil-works/pi-coding-agent": "0.87.1",
     "ws": "^8.18.0"
   },
   "devDependencies": {

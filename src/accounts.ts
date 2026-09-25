@@ -1,114 +1,193 @@
-// Per-person AI accounts (plan 3, 4.3): sharing one person's Claude or ChatGPT breaks the vendors' terms, so each
-// member signs in to their own, into their own CLI config home. crewd runs the vendors' own login and status
-// commands and never opens what they write.
-import { execFile, spawn, type ChildProcess } from 'node:child_process';
+// Per-person AI accounts (plan 3, 4.3): sharing one person's ChatGPT or Grok breaks the vendors' terms, so each member
+// signs in to their own, from inside the app, into their own credential file under Crewhouse's folders.
+// The engine's own sign-in flows do the work; crewd only shows the link to open or the code to type.
+import './isolate.ts';
 import { mkdirSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { ModelRuntime } from '@earendil-works/pi-coding-agent';
+import type { AuthPrompt } from '@earendil-works/pi-ai';
 import type { Config } from './config.ts';
 
 export const OWNER = 1;
-const HOME_VAR: Record<string, string> = { claude: 'CLAUDE_CONFIG_DIR', codex: 'CODEX_HOME' };
-const USUAL: Record<string, string> = { claude: '~/.claude', codex: '~/.codex' };
-const STATUS: Record<string, string[]> = { claude: ['claude', 'auth', 'status'], codex: ['codex', 'login', 'status'] };
-// Device code for Codex, so the sign-in works from any browser; Claude prints a link and reads the code back.
-const LOGIN: Record<string, string[]> = { claude: ['claude', 'auth', 'login'], codex: ['codex', 'login', '--device-auth'] };
 
-/** A member's config home for a CLI. The owner keeps the CLI's usual one, so a one-person house runs exactly as before. */
-export function home(cfg: Config, member: number, runtime: string): string | null {
-  return member === OWNER || !HOME_VAR[runtime] ? null : join(cfg.stateDir, 'people', String(member), runtime);
+/** The AI accounts a person can bring, by the name they know. `pi` is the engine's provider; `model` its default there.
+ *  ChatGPT is the one front door the app shows; the rest are kept as quiet "more options" paths the app doesn't offer yet. */
+export const PROVIDERS: Record<string, { pi: string; name: string; model: string }> = {
+  chatgpt: { pi: 'openai-codex', name: 'ChatGPT', model: 'gpt-5.5' },
+  grok: { pi: 'xai', name: 'Grok', model: 'grok-4.7' },
+  copilot: { pi: 'github-copilot', name: 'GitHub Copilot', model: 'gpt-5.4' },
+  openrouter: { pi: 'openrouter', name: 'OpenRouter', model: 'moonshotai/kimi-k2.6' },
+};
+// No Claude: Anthropic allows its subscriptions only in its own apps, so the engine's Anthropic sign-in is never offered.
+// No Meta: Muse is a direct competitor, and the owner chose not to build on it.
+
+export function provider(key: string) {
+  const p = PROVIDERS[key];
+  if (!p) throw Object.assign(new Error('no such AI account'), { status: 404 });
+  return p;
 }
 
-/** The environment that points a CLI at the member's own sign-in. */
-export function homeEnv(cfg: Config, member: number, runtime: string): Record<string, string> {
-  const h = home(cfg, member, runtime);
-  if (!h) return {};
-  mkdirSync(h, { recursive: true, mode: 0o700 });
-  return { [HOME_VAR[runtime]]: h };
-}
+/** What the person sees while signing in: a link to open or a code to type, never the engine's own prompts. */
+export type SignIn = { state: 'waiting' | 'done' | 'failed'; url?: string; code?: string; expiresAt?: number; error?: string };
+type Flow = SignIn & { abort: AbortController; paste?: (text: string) => void; timedOut?: boolean; done?: Promise<void> };
 
-/** Where a member's sign-in lives, for Settings. */
-export function where(cfg: Config, member: number, runtime: string) {
-  const h = home(cfg, member, runtime) ?? process.env[HOME_VAR[runtime]] ?? USUAL[runtime];
-  return h.startsWith(homedir() + '/') ? '~' + h.slice(homedir().length) : h;
-}
+const LOGIN_MS = Number(process.env.CREWHOUSE_SIGNIN_MS || 15 * 60_000); // longer than any provider's code lives
 
-const ANSI = /\x1b\[[0-9;?]*[A-Za-z]|\x1b\][^\x07]*\x07/g;
-export type Readiness = { state: 'ready' | 'signed-out' | 'missing'; plan?: string; at: number };
+/** A failed sign-in in one plain sentence with one next step. */
+export function signInError(name: string, error: string) {
+  if (/expired|expire/i.test(error)) return `The code expired before it was used. Tap Sign in with ${name} for a new one.`;
+  if (/denied|declined|access_denied|rejected/i.test(error)) return `The sign-in was declined on the ${name} page. Tap Sign in with ${name} to try again.`;
+  if (/fetch failed|network|ENOTFOUND|EAI_AGAIN|ECONN|timed? ?out|socket/i.test(error)) return `Couldn't reach ${name}. Check the internet connection, then tap Sign in again.`;
+  if (/device code.*(disabled|not enabled)|enable device/i.test(error)) return `${name} needs device sign-in turned on first: in ${name}, Settings, Security, turn on device code sign-in, then try again.`;
+  return `${name} didn't finish the sign-in. Tap Sign in with ${name} to try again.`;
+}
 
 export class Accounts {
   private cfg: Config;
-  private seen = new Map<string, Readiness>();
-  private logins = new Map<string, { proc: ChildProcess; out: string; state: 'running' | 'done' | 'failed' }>();
-  onChange?: (member: number, runtime: string) => void;
+  private runtimes = new Map<number, Promise<ModelRuntime>>();
+  private flows = new Map<string, Flow>();
+  private ready = new Map<string, boolean>();
+  onChange?: (member: number, key: string) => void;
+  /** Set by the stub engine: its scripted model stands in for every provider. */
+  prepare?: (runtime: ModelRuntime) => void;
 
   constructor(cfg: Config) { this.cfg = cfg; }
 
-  private env(member: number, runtime: string) { return { ...process.env, ...homeEnv(this.cfg, member, runtime), NO_COLOR: '1' }; }
+  /** A member's own credential file. The owner has one too: nothing falls back to another sign-in on this computer. */
+  authPath(member: number) { return join(this.cfg.stateDir, 'people', String(member), 'engine', 'auth.json'); }
 
-  /** Ready, signed out or not installed, from the vendor's own status command; cached for a minute. */
-  status(member: number, runtime: string, fresh = false): Promise<Readiness> {
-    const key = `${member}:${runtime}`;
-    const had = this.seen.get(key);
-    if (had && !fresh && Date.now() - had.at < 60_000) return Promise.resolve(had);
-    const [cmd, ...args] = STATUS[runtime];
-    return new Promise((resolve) => {
-      execFile(cmd, args, { env: this.env(member, runtime), timeout: 20_000 }, (err: any, stdout) => {
-        let r: Readiness;
-        if (err?.code === 'ENOENT') r = { state: 'missing', at: Date.now() };
-        else if (runtime === 'claude') {
-          // Only the two fields we show; the rest of the status (the email, the org) stays unread.
-          let s: any = {};
-          try { s = JSON.parse(stdout); } catch { /* old CLI */ }
-          r = { state: s.loggedIn ? 'ready' : 'signed-out', plan: s.loggedIn ? s.subscriptionType ?? undefined : undefined, at: Date.now() };
-        } else r = { state: err ? 'signed-out' : 'ready', plan: /chatgpt/i.test(stdout) ? 'ChatGPT' : /api key/i.test(stdout) ? 'API key' : undefined, at: Date.now() };
-        this.seen.set(key, r);
-        resolve(r);
-      });
+  /** One engine runtime per member, holding only their own sign-ins. */
+  runtime(member: number) {
+    let r = this.runtimes.get(member);
+    if (!r) {
+      mkdirSync(join(this.cfg.stateDir, 'people', String(member), 'engine'), { recursive: true, mode: 0o700 });
+      r = ModelRuntime.create({ authPath: this.authPath(member), modelsPath: null, refreshOnCreate: false }).then((rt) => { this.prepare?.(rt); return rt; });
+      this.runtimes.set(member, r);
+    }
+    return r;
+  }
+
+  /** Signed in, from the engine's own side-effect-free check. */
+  async signedIn(member: number, key: string) {
+    const ok = !!(await (await this.runtime(member)).checkAuth(provider(key).pi).catch(() => undefined));
+    this.ready.set(`${member}:${key}`, ok);
+    return ok;
+  }
+
+  /** Known to be signed out (an unchecked account counts as usable, so a first run still tries). */
+  unready(member: number, key: string) { return this.ready.get(`${member}:${key}`) === false; }
+
+  /** The account turned the bot away (its sign-in expired): signed out until the person signs in again. */
+  forget(member: number, key: string) { this.ready.set(`${member}:${key}`, false); this.onChange?.(member, key); }
+
+  /** Start "Sign in with …". `via: 'code'` picks the device-code flow where there is a choice (a phone can't take a redirect).
+   *  One button, first time: a browser sign-in that can't come back falls back to a code by itself; a flow that stalls
+   *  times out; nothing is kept unless the engine then sees a working sign-in. Every failure ends in one plain sentence.
+   *  Returns as soon as there is a link to open or a code to show (or it is over); the sign-in carries on by itself. */
+  async login(member: number, key: string, body: { via?: 'code' | 'browser' } = {}): Promise<SignIn | null> {
+    provider(key);
+    const id = `${member}:${key}`;
+    if (this.flows.get(id)?.state !== 'waiting') {
+      const flow: Flow = { state: 'waiting', abort: new AbortController() };
+      this.flows.set(id, flow);
+      let shown!: () => void;
+      const visible = new Promise<void>((r) => (shown = r));
+      flow.done = this.signIn(member, key, body, flow, shown);
+      await Promise.race([visible, flow.done]);
+    }
+    return this.view(member, key);
+  }
+
+  /** The whole sign-in, for when the caller wants to wait for its end (tests do). */
+  finished(member: number, key: string) { return this.flows.get(`${member}:${key}`)?.done ?? Promise.resolve(); }
+
+  private async signIn(member: number, key: string, body: { via?: 'code' | 'browser' }, flow: Flow, shown: () => void) {
+    const p = provider(key);
+    const id = `${member}:${key}`;
+    const rt = await this.runtime(member);
+    let codeOffered = false;
+    const attempt = (via?: 'code' | 'browser') => rt.login(p.pi, 'oauth', {
+      signal: flow.abort.signal,
+      prompt: (q: AuthPrompt): Promise<string> => {
+        if (q.type === 'select') {
+          const device = q.options.find((o) => /device/i.test(o.id));
+          codeOffered = !!device;
+          return Promise.resolve((via === 'code' && device ? device : q.options.find((o) => o !== device) ?? q.options[0]).id);
+        }
+        if (q.type === 'text') return Promise.resolve(''); // GitHub Enterprise domain: never, for a household
+        // "Paste the redirect address": only if the person pastes one; otherwise the engine's own listener finishes it.
+        return new Promise((resolve, reject) => {
+          flow.paste = resolve;
+          q.signal?.addEventListener('abort', () => reject(new Error('answered elsewhere')));
+        });
+      },
+      notify: (e) => {
+        if (e.type === 'auth_url') Object.assign(flow, { url: e.url, code: undefined });
+        if (e.type === 'device_code') Object.assign(flow, { code: e.userCode, url: e.verificationUri, expiresAt: e.expiresInSeconds ? Date.now() + e.expiresInSeconds * 1000 : undefined });
+        if (flow.url) shown();
+        this.onChange?.(member, key);
+      },
     });
+    const timer = setTimeout(() => { flow.timedOut = true; flow.abort.abort(); }, LOGIN_MS);
+    try {
+      try { await attempt(body.via); } catch (e) {
+        // The browser couldn't come back to this computer (its port was taken, or it was a phone): the code works anywhere.
+        if (body.via === 'code' || !codeOffered || flow.abort.signal.aborted) throw e;
+        Object.assign(flow, { url: undefined, code: undefined });
+        await attempt('code');
+      }
+      // Never half signed in: only a sign-in the engine can use counts.
+      if (!(await rt.checkAuth(p.pi).catch(() => undefined))) { await rt.logout(p.pi).catch(() => {}); throw new Error('no usable credential'); }
+      flow.state = 'done';
+      this.ready.set(id, true);
+    } catch (e: any) {
+      if (flow.state !== 'waiting') return; // cancelled: already settled
+      console.error(`sign-in ${key} for member ${member}:`, e?.message ?? e);
+      Object.assign(flow, { state: 'failed', url: undefined, code: undefined, expiresAt: undefined, error: flow.timedOut ? `The sign-in took too long. Tap Sign in with ${p.name} to start again.` : signInError(p.name, String(e?.message ?? e)) });
+    } finally {
+      clearTimeout(timer);
+      this.onChange?.(member, key);
+    }
   }
 
-  /** Known to be signed out or not installed (never true for an unchecked account, so a first run still tries). */
-  unready(member: number, runtime: string) { const s = this.seen.get(`${member}:${runtime}`)?.state; return !!s && s !== 'ready'; }
-
-  /** The vendor's own sign-in, run into the member's config home. Its output (a link, a one-time code) is shown to them. */
-  login(member: number, runtime: string) {
-    const key = `${member}:${runtime}`;
-    if (!LOGIN[runtime]) throw Object.assign(new Error(`no sign-in for ${runtime}`), { status: 400 });
-    if (this.logins.get(key)?.state === 'running') return;
-    const [cmd, ...args] = LOGIN[runtime];
-    const proc = spawn(cmd, args, { env: this.env(member, runtime), stdio: ['pipe', 'pipe', 'pipe'] });
-    const l = { proc, out: '', state: 'running' as 'running' | 'done' | 'failed' };
-    this.logins.set(key, l);
-    const add = (b: Buffer) => { l.out = (l.out + b.toString().replace(ANSI, '')).slice(-4000); this.onChange?.(member, runtime); };
-    proc.stdout!.on('data', add);
-    proc.stderr!.on('data', add);
-    proc.on('error', (e) => { l.state = 'failed'; l.out += `\n${e.message}`; this.onChange?.(member, runtime); });
-    proc.on('close', async (code) => {
-      if (l.state === 'running') l.state = code === 0 ? 'done' : 'failed';
-      await this.status(member, runtime, true);
-      this.onChange?.(member, runtime);
-    });
+  /** The redirect address (or a code) pasted back, for when the browser couldn't return to this computer by itself. */
+  paste(member: number, key: string, text: string) {
+    const f = this.flows.get(`${member}:${key}`);
+    if (f?.state !== 'waiting' || !f.paste) throw Object.assign(new Error('no sign-in is waiting'), { status: 409 });
+    f.paste(text.trim());
   }
 
-  /** A line typed back into the sign-in, such as the code Claude's page shows. */
-  loginInput(member: number, runtime: string, text: string) {
-    const l = this.logins.get(`${member}:${runtime}`);
-    if (l?.state !== 'running') throw Object.assign(new Error('no sign-in is waiting'), { status: 409 });
-    l.proc.stdin!.write(text.trim() + '\n');
+  /** Stop a sign-in and forget it; nothing it started is kept. */
+  cancel(member: number, key: string) {
+    const f = this.flows.get(`${member}:${key}`);
+    if (f?.state === 'waiting') { f.state = 'failed'; f.abort.abort(); }
+    this.flows.delete(`${member}:${key}`);
+    this.onChange?.(member, key);
   }
 
-  cancelLogin(member: number, runtime: string) {
-    const l = this.logins.get(`${member}:${runtime}`);
-    if (l?.state === 'running') { l.state = 'failed'; l.proc.kill(); }
-    this.logins.delete(`${member}:${runtime}`);
+  /** Refresh every signed-in account now and then (crewd's clock calls this), so a sign-in never lapses while nobody is
+   *  looking. One that can't be refreshed is signed out, and `onExpired` says so once, in plain words. */
+  onExpired?: (member: number, key: string) => void;
+  async keepFresh(members: number[]) {
+    for (const m of members) for (const [key, p] of Object.entries(PROVIDERS)) {
+      if (this.ready.get(`${m}:${key}`) !== true) continue;
+      const rt = await this.runtime(m);
+      // A network hiccup is not a lapsed sign-in: only the account refusing the refresh signs it out.
+      const ok = await rt.getAuth(p.pi, { minOAuthValidityMs: 60 * 60_000 }).then(Boolean, (e) => /fetch failed|network|ENOTFOUND|EAI_AGAIN|ECONN|timed? ?out/i.test(String(e?.message)));
+      if (!ok) { this.forget(m, key); this.onExpired?.(m, key); }
+    }
   }
 
-  loginView(member: number, runtime: string) {
-    const l = this.logins.get(`${member}:${runtime}`);
-    // The CLIs' own warnings (PATH aliases and the like) mean nothing to the person signing in.
-    return l ? { state: l.state, out: l.out.split('\n').filter((x) => !/^WARNING:/.test(x)).join('\n').trim() } : null;
+  async logout(member: number, key: string) {
+    await (await this.runtime(member)).logout(provider(key).pi);
+    this.ready.set(`${member}:${key}`, false);
+    this.onChange?.(member, key);
   }
 
-  stop() { for (const l of this.logins.values()) if (l.state === 'running') l.proc.kill(); }
+  view(member: number, key: string): SignIn | null {
+    const f = this.flows.get(`${member}:${key}`);
+    return f ? { state: f.state, url: f.url, code: f.code, expiresAt: f.state === 'waiting' ? f.expiresAt : undefined, error: f.error } : null;
+  }
+
+  stop() { for (const f of this.flows.values()) f.abort.abort(); }
 }

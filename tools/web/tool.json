@@ -1,18 +1,14 @@
 {
   "id": "web",
   "name": "Web search and fetch",
-  "provides": "Search the web and read pages, with the CLI's own tools (no key)",
+  "provides": "Search the web and read pages (no key)",
   "kind": "built-in",
   "bins": [],
-  "license": "vendor CLI",
+  "license": "Apache-2.0 (Crewhouse)",
   "source": "bundled",
   "install": {},
   "asks": [
     "never: read-only"
-  ],
-  "allow": [
-    "WebSearch",
-    "WebFetch"
   ],
   "grant": {
     "default": true

@@ -14,9 +14,6 @@
   "asks": [
     "never: it only works on files"
   ],
-  "allow": [
-    "Bash(magick *)"
-  ],
   "grant": {
     "default": false
   }

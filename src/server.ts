@@ -2,12 +2,14 @@ import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { extname, join } from 'node:path';
 import { WebSocketServer } from 'ws';
-import { CHIEF, type Config } from './config.ts';
+import type { Config } from './config.ts';
 import type { Store } from './db.ts';
 import type { Crew } from './crew.ts';
 import * as disk from './bots.ts';
-import { installTool, toolStatus } from './tools.ts';
-import { where } from './accounts.ts';
+import { installTool } from './tools.ts';
+import { PROVIDERS, provider } from './accounts.ts';
+import { coversOf } from './policy.ts';
+import { Connections } from './connections.ts';
 import { describe, nextRun, parseSchedule } from './routines.ts';
 
 const TYPES: Record<string, string> = {
@@ -42,7 +44,7 @@ function sendFile(req: IncomingMessage, res: ServerResponse, path: string) {
   createReadStream(path).pipe(res);
 }
 
-/** HTTP + WebSocket on 127.0.0.1. The app API, the in-bot `crew` tool API, CLI hooks, and the web UI. */
+/** HTTP + WebSocket on 127.0.0.1: the app API and the web UI. What it returns is plain words: no commands, paths or model ids. */
 export function startServer(cfg: Config, db: Store, crew: Crew) {
   const dist = join(cfg.repoDir, 'web', 'dist');
   const installing = new Set<string>();
@@ -55,12 +57,17 @@ export function startServer(cfg: Config, db: Store, crew: Crew) {
       // DNS-rebinding guard: only answer requests addressed to loopback.
       if (!localHost(req.headers.host)) return send(res, 403, { error: 'loopback only' });
 
-      if (p.startsWith('/crew/')) return send(res, 200, await crewTool(p.slice(6), req));
-
       if (p.startsWith('/api/')) {
         // Mutations need a custom header, which a cross-site page cannot send without a preflight we never allow.
         if (req.method !== 'GET' && req.headers['x-crewhouse'] !== '1') return send(res, 403, { error: 'missing x-crewhouse header' });
         return send(res, 200, await api(req, p, url));
+      }
+
+      // An app's sign-in page sends the browser back here; the tab says, in words, how it went.
+      if (p === '/connect/callback') {
+        const words = await crew.connections.finish(url.searchParams);
+        res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
+        return res.end(`<!doctype html><meta name="viewport" content="width=device-width"><title>Crewhouse</title><body style="font:18px system-ui;margin:3em auto;max-width:28em;text-align:center">${words.replace(/[<&]/g, '')}</body>`);
       }
 
       const file = p.match(/^\/files\/([a-z0-9-]+)\/(.+)$/);
@@ -96,19 +103,30 @@ export function startServer(cfg: Config, db: Store, crew: Crew) {
     if (m === 'POST' && p === '/api/people') return crew.addMember((await readJson(req)).name);
     if ((r = p.match(/^\/api\/people\/(\d+)$/)) && m === 'PUT') return crew.updateMember(Number(r[1]), await readJson(req));
     if (m === 'GET' && p === '/api/accounts') {
-      // Everyone's accounts, each from the vendor's own status command, with live limits and any sign-in in progress.
-      return Promise.all(crew.members().flatMap((mm) => Object.entries(disk.RUNTIMES).map(async ([rt, name]) => ({
-        member: mm.id, runtime: rt, name, where: where(cfg, mm.id, rt), ...(await crew.accounts.status(mm.id, rt, url.searchParams.has('fresh'))),
-        limits: crew.limitsOf(mm.id, rt), restingUntil: crew.restingUntil(rt, mm.id), login: crew.accounts.loginView(mm.id, rt),
+      // Everyone's AI accounts: signed in or not (the engine's own local check), resting until when, and any sign-in in progress.
+      return Promise.all(crew.members().flatMap((mm) => Object.entries(PROVIDERS).map(async ([key, pr]) => ({
+        member: mm.id, account: key, name: pr.name, signedIn: await crew.accounts.signedIn(mm.id, key),
+        restingUntil: crew.restingUntil(key, mm.id), signIn: crew.accounts.view(mm.id, key),
       }))));
     }
-    if ((r = p.match(/^\/api\/accounts\/(\d+)\/([a-z]+)\/login(\/input|\/cancel)?$/)) && m === 'POST') {
-      const [who, rt, sub] = [crew.member(Number(r[1])).id as number, r[2], r[3]];
-      if (!disk.RUNTIMES[rt]) throw Object.assign(new Error(`no such account kind ${rt}`), { status: 404 });
-      if (sub === '/input') crew.accounts.loginInput(who, rt, String((await readJson(req)).text ?? ''));
-      else if (sub === '/cancel') crew.accounts.cancelLogin(who, rt);
-      else crew.accounts.login(who, rt);
-      return { ok: true };
+    // "Sign in with …": start (optionally by code), paste the address the browser landed on, cancel, or sign out.
+    if ((r = p.match(/^\/api\/accounts\/(\d+)\/([a-z]+)\/(login|paste|cancel|logout)$/)) && m === 'POST') {
+      const [who, key, act] = [crew.member(Number(r[1])).id as number, r[2], r[3]];
+      provider(key);
+      const b = await readJson(req);
+      if (act === 'login') return { ok: true, signIn: await crew.accounts.login(who, key, { via: b.via === 'code' ? 'code' : 'browser' }) };
+      else if (act === 'paste') crew.accounts.paste(who, key, String(b.text ?? ''));
+      else if (act === 'cancel') crew.accounts.cancel(who, key);
+      else await crew.accounts.logout(who, key);
+      return { ok: true, signIn: crew.accounts.view(who, key) };
+    }
+    // Connections: the viewer's own apps (Notion, Canva, Google…), connected on the app's own page (docs/ui-contract.md).
+    if (m === 'GET' && p === '/api/connections') return crew.connections.list(me);
+    if ((r = p.match(/^\/api\/connections\/([a-z]+)$/))) {
+      const app = Connections.id(r[1]);
+      if (m === 'POST') { const v = await crew.connections.connect(me, app); return v.state === 'done' ? { state: 'on' } : v.state === 'failed' ? Promise.reject(Object.assign(new Error(v.error), { status: 502 })) : { url: v.url }; }
+      if (m === 'GET') return crew.connections.status(me, app);
+      if (m === 'DELETE') { crew.connections.cancel(me, app); return { ok: true }; }
     }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/models$/)) && m === 'PUT') {
       crew.botPage(r[1]); // 404 for unknown bots
@@ -138,12 +156,14 @@ export function startServer(cfg: Config, db: Store, crew: Crew) {
     }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/settings$/)) && m === 'PUT') {
       crew.botPage(r[1]);
-      disk.setSettings(cfg, r[1], await readJson(req));
+      const b = await readJson(req);
+      // Standing answers come back as the plain words the page showed; keep the ones still listed.
+      if (Array.isArray(b.allow)) b.allow = (disk.botConfig(cfg, r[1]).allow ?? []).filter((k) => b.allow.includes(coversOf(k)));
+      disk.setSettings(cfg, r[1], b);
       db.event('bot.settings', r[1], { by: 'person' });
       return { ok: true };
     }
-    if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/type$/)) && m === 'POST') { await crew.type(r[1], await readJson(req)); return { ok: true }; }
-    if (m === 'GET' && p === '/api/tools') return toolStatus(cfg);
+    if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/steer$/)) && m === 'POST') { crew.steer(r[1], String((await readJson(req)).text ?? ''), me); return { ok: true }; }
     if ((r = p.match(/^\/api\/tools\/([a-z0-9-]+)\/install$/)) && m === 'POST') {
       // Installs take minutes (the browser downloads Chromium); the result arrives as an event.
       const id = r[1];
@@ -152,11 +172,10 @@ export function startServer(cfg: Config, db: Store, crew: Crew) {
       db.event('tool.installing', null, { tool: id });
       installTool(cfg, id)
         .then(() => db.event('tool.installed', null, { tool: id }))
-        .catch((e) => db.event('tool.failed', null, { tool: id, error: String(e.message).slice(0, 300) }))
+        .catch((e) => { console.error(`install ${id}:`, e); db.event('tool.failed', null, { tool: id }); })
         .finally(() => installing.delete(id));
       return { ok: true };
     }
-    if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/screen$/)) && m === 'GET') return { text: await crew.screen(r[1]).catch(() => '') };
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/takeover$/)) && m === 'POST') { await crew.takeOver(r[1]); return { ok: true }; }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/giveback$/)) && m === 'POST') { await crew.giveBack(r[1], String((await readJson(req)).note ?? '')); return { ok: true }; }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/reset$/)) && m === 'POST') { await crew.resetBot(r[1]); return { ok: true }; }
@@ -164,59 +183,12 @@ export function startServer(cfg: Config, db: Store, crew: Crew) {
       const when = parseSchedule(url.searchParams.get('text') ?? '');
       return { words: describe(when), next: nextRun(when, Date.now()) };
     }
-    if (m === 'POST' && p === '/api/routines') return crew.addRoutine(await readJson(req), 'person', me);
+    if (m === 'POST' && p === '/api/routines') { const row = crew.addRoutine(await readJson(req), 'person', me); return crew.routines(me).find((x) => x.id === row.id); }
     if ((r = p.match(/^\/api\/routines\/(\d+)$/)) && m === 'PUT') { crew.updateRoutine(Number(r[1]), await readJson(req)); return { ok: true }; }
     if ((r = p.match(/^\/api\/routines\/(\d+)$/)) && m === 'DELETE') { crew.deleteRoutine(Number(r[1])); return { ok: true }; }
     if ((r = p.match(/^\/api\/routines\/(\d+)\/run$/)) && m === 'POST') { crew.runRoutine(Number(r[1])); return { ok: true }; }
     if ((r = p.match(/^\/api\/asks\/(\d+)\/answer$/)) && m === 'POST') { await crew.answer(Number(r[1]), await readJson(req)); return { ok: true }; }
     throw Object.assign(new Error('not found'), { status: 404 });
-  }
-
-  /** What `bin/crew` calls from inside a bot's CLI. The per-bot token decides who is asking. */
-  async function crewTool(cmd: string, req: IncomingMessage) {
-    const bot = crew.byToken(req.headers['x-crew-token'] as string);
-    const b = await readJson(req);
-    const task = crew.activeTask(bot.id)?.id;
-    const chiefOnly = () => { if (bot.id !== CHIEF) throw Object.assign(new Error('only Chief can do that'), { status: 403 }); };
-    switch (cmd) {
-      case 'roster': return {
-        crew: crew.bots().filter((x) => x.id !== CHIEF).map((x) => ({ id: x.id, name: x.display, role: x.role, busy: !!crew.activeTask(x.id) })),
-        templates: disk.listTemplates(cfg).map((t) => ({ id: t.id, name: t.display, role: t.role })),
-      };
-      case 'recruit': chiefOnly(); { const n = crew.recruit(b.template, b.name, CHIEF); return { recruited: { id: n.id, name: n.display } }; }
-      case 'assign': chiefOnly(); return crew.assign(b.bot, b.text ?? '', CHIEF, b.model);
-      case 'routine': chiefOnly(); { const x = crew.addRoutine(b, CHIEF); return { routine: { id: x.id, name: x.name, next: new Date(x.next_at).toString() } }; }
-      case 'routines': return crew.routines(crew.chiefFor()).map((x) => ({ id: x.id, bot: x.bot, name: x.name, when: x.words, state: x.state, next: new Date(x.next_at).toString() }));
-      case 'status': return db.all("SELECT id, bot, title, state FROM tasks WHERE state IN ('queued','working','needs_you') ORDER BY id");
-      case 'report': db.event('task.progress', bot.id, { task, text: String(b.text ?? '').slice(0, 200) }); return { ok: true };
-      case 'remember': {
-        const change = disk.remember(cfg, bot.id, String(b.text ?? ''), String(b.replaces ?? ''));
-        db.event('memory.learned', bot.id, { task, text: change.added.slice(2, 202), ...change });
-        return { ok: true };
-      }
-      case 'deliver': {
-        const full = disk.insideBot(cfg, bot.id, String(b.path ?? ''));
-        if (!existsSync(full)) throw new Error(`no file at ${b.path}`);
-        const rel = full.slice(disk.botDir(cfg, bot.id).length + 1);
-        // Delivered once per task, even when a call is retried across a restart.
-        if (task && db.get(`SELECT 1 FROM events WHERE kind = 'file.delivered' AND bot = ? AND json_extract(data, '$.task') = ? AND json_extract(data, '$.path') = ?`, bot.id, task, rel)) return { ok: true, path: rel, already: true };
-        db.event('file.delivered', bot.id, { task, path: rel, note: String(b.note ?? '').slice(0, 200), size: statSync(full).size });
-        crew.say(bot.id, 'system', `Delivered ${rel}${b.note ? `: ${b.note}` : ''}`, task ?? null);
-        return { ok: true, path: rel };
-      }
-      case 'hook/stop': crew.finish(bot.id, String(b.last_assistant_message ?? '')); return {};
-      // An empty turn (Codex at a usage limit ends like this) is left to the terminal fallback, which reads the reason.
-      case 'hook/codex': if (b.type === 'agent-turn-complete' && b['last-assistant-message']) crew.finish(bot.id, String(b['last-assistant-message'])); return {};
-      case 'hook/failure': crew.hookFailure(bot.id, b); return {};
-      case 'hook/notify': db.event('run.notice', bot.id, { text: String(b.message ?? '').slice(0, 200) }); return {};
-      case 'hook/permission': return { hookSpecificOutput: { hookEventName: 'PermissionRequest', decision: await crew.permission(bot.id, b, undefined, Number(req.headers['x-crew-waited']) || 0) } };
-      case 'hook/session': crew.hookSession(bot.id, b); return {};
-      case 'hook/tool': crew.hookTool(bot.id, b); return {};
-      case 'hook/pretool': return crew.preTool(bot.id, b);
-      case 'hook/statusline': return { text: crew.hookStatus(bot.id, b) };
-      case 'call-me': chiefOnly(); crew.setAddress(String(b.text ?? '')); return { ok: true };
-    }
-    throw Object.assign(new Error(`unknown crew command ${cmd}`), { status: 404 });
   }
 
   const wss = new WebSocketServer({ noServer: true });
@@ -229,7 +201,7 @@ export function startServer(cfg: Config, db: Store, crew: Crew) {
     wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws));
   });
 
-  /** One socket per watching screen: desklink signaling in, engine events out. Closing it ends the session. */
+  /** One socket per watching screen: desklink signaling in, desktop events out. Closing it ends the session. */
   function watch(ws: import('ws').WebSocket, bot: string) {
     const watcher = { send: (event: unknown) => { if (ws.readyState === 1) ws.send(JSON.stringify({ event })); } };
     ws.on('message', async (raw) => {

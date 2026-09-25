@@ -1,8 +1,9 @@
 {
   "display": "Reel",
   "role": "Makes demo videos from screenshots",
-  "runtime": "claude",
-  "model": "sonnet",
+  "models": [
+    "chatgpt"
+  ],
   "color": "#C9542F",
   "tools": [
     "crew",
@@ -14,10 +15,6 @@
     "images",
     "video-download",
     "search-files"
-  ],
-  "allow": [
-    "Bash(ls *)",
-    "Bash(mkdir *)"
   ],
   "skills": [
     "make-reel",

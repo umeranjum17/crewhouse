@@ -1,13 +1,11 @@
 {
   "display": "Chief",
   "role": "Runs the crew and answers to you",
-  "runtime": "claude",
-  "model": "sonnet",
+  "models": [
+    "chatgpt"
+  ],
   "color": "#1F6F66",
   "tools": [
     "crew"
-  ],
-  "allow": [
-    "Read"
   ]
 }

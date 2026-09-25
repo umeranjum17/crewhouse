@@ -1,56 +1,36 @@
-// `./crewhouse doctor`: is this machine ready? Uses only the vendors' own status commands; never reads credentials.
-import { execFileSync } from 'node:child_process';
+// `./crewhouse doctor`: is this machine ready? Never reads a sign-in.
+import './isolate.ts'; // first: before anything loads the engine
 import { loadConfig } from './config.ts';
 import { toolStatus, which } from './tools.ts';
 import { browserBin, missing } from './desktop.ts';
+import { sandboxReady } from './engine.ts';
+import { VERSION } from '@earendil-works/pi-coding-agent';
 
-const TESTED_HERDR = '0.9.1';
 const cfg = loadConfig();
 let problems = 0;
 const line = (ok: boolean | null, what: string, detail = '') => {
   if (ok === false) problems++;
   console.log(`${ok === null ? '·' : ok ? '✓' : '✗'} ${what}${detail ? ` — ${detail}` : ''}`);
 };
-const run = (cmd: string, args: string[]) => {
-  try { return execFileSync(cmd, args, { encoding: 'utf8', timeout: 20_000, stdio: ['ignore', 'pipe', 'pipe'] }).trim(); } catch { return null; }
-};
 
 const [maj, min] = process.versions.node.split('.').map(Number);
-line(maj > 22 || (maj === 22 && min >= 18), `Node ${process.versions.node}`, 'needs 22.18 or later (built-in TypeScript and node:sqlite)');
-
-const herdr = run('herdr', ['--version']);
-line(!!herdr, 'Herdr', herdr ? `${herdr}${herdr.includes(TESTED_HERDR) ? '' : ` (tested with ${TESTED_HERDR})`}` : 'not found: see https://herdr.dev');
-if (herdr) {
-  // Same command prefix and session as crewd, so a lab wrapper stays in charge of which session is asked.
-  const [cmd, ...pre] = cfg.herdrCmd;
-  const st = run(cmd, [...pre, 'status', '--json', ...(cfg.herdrSession ? ['--session', cfg.herdrSession] : [])]);
-  const s = st ? JSON.parse(st) : null;
-  line(null, `Herdr session "${cfg.herdrSession || s?.client?.session || '?'}"`, s?.server?.running ? `running, ${s.server.compatible ? 'compatible' : 'INCOMPATIBLE'}` : 'not running (crewd starts it)');
-}
-
-const claude = run('claude', ['--version']);
-if (claude) {
-  const auth = run('claude', ['auth', 'status']);
-  const signedIn = auth ? JSON.parse(auth).loggedIn === true : false;
-  line(signedIn, `Claude Code ${claude.split(' ')[0]}`, signedIn ? 'signed in' : 'run `claude` once and sign in with your own account');
-} else line(false, 'Claude Code', 'not found: https://claude.com/claude-code');
-const codex = run('codex', ['--version']);
-if (codex) {
-  const st = run('codex', ['login', 'status']);
-  line(null, codex, st ?? 'not signed in: run `codex login`');
-} else line(null, 'Codex', 'not installed (optional)');
+line(maj > 22 || (maj === 22 && min >= 19), `Node ${process.versions.node}`, 'needs 22.19 or later (built-in TypeScript and node:sqlite)');
+line(true, `Engine: Pi ${VERSION}, bundled`, `its own folder in ${cfg.stateDir}/engine; your own pi and ~/.pi are never used`);
+line(sandboxReady() || null, sandboxReady() ? "Bots' shell runs in a sandbox (bubblewrap)" : 'no sandbox here: bots work without a shell',
+  sandboxReady() ? '' : 'install bubblewrap (apt install bubblewrap, dnf install bubblewrap, pacman -S bubblewrap), and allow unprivileged user namespaces');
+console.log('AI accounts: each person signs in from the app, under Settings, AI accounts.');
 
 console.log('\nTool kit:');
 for (const t of toolStatus(cfg)) {
   if (t.source === 'planned') { line(null, t.name, `planned: ${t.install.system ?? ''}`); continue; }
   if (!t.ready) { line(null, t.name, `missing ${t.missing.join(', ')}: ${t.howto}`); continue; }
-  const where = t.bins.length && which(cfg, t.bins[0])!.startsWith(cfg.toolsDir) ? 'pinned in Crewhouse' : t.source === 'bundled' ? 'built in' : 'found on PATH';
+  const where = !t.bins.length ? 'built in' : which(cfg, t.bins[0])!.startsWith(cfg.toolsDir) ? 'pinned in Crewhouse' : 'found on PATH';
   line(true, t.name, `${t.license}, ${where}${t.outdated ? '; new pin available: ./crewhouse tools install ' + t.id : ''}`);
 }
 console.log('\nBot desktops (the Computer tool):');
 const gaps = missing();
 line(gaps.length ? null : true, gaps.length ? `not available: needs ${gaps.join('; ')}` : 'Xvfb and the desklink engine are ready');
 line(browserBin() ? true : null, browserBin() ? `Chromium for bots: ${browserBin()}` : 'no Chromium found: bot desktops start without a browser (install chromium)');
-console.log(`\nData: ${cfg.stateDir} (database), ${cfg.crewDir} (bots), ${cfg.toolsDir} (tools)`);
+console.log(`\nData: ${cfg.stateDir} (database, engine, sign-ins), ${cfg.crewDir} (bots), ${cfg.toolsDir} (tools)`);
 console.log(problems ? `\n${problems} problem(s) above.` : '\nReady.');
 process.exit(problems ? 1 : 0);

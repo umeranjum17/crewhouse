@@ -1,47 +1,29 @@
-// Unit checks for the deterministic half: store, queue, approvals, tool grants, memory. No CLI, no quota.
-import { after, test } from 'node:test';
+// Unit checks for the deterministic half: store, queue, the gate, tool grants, memory, accounts. The real engine runs
+// every task on the stub model: no network, no account, no quota.
+import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { setup, sleep, task, until, prompted, settled, holding, release, lastSaid } from './lab.ts';
 
-process.env.CREWHOUSE_HOLD_MS = '300';
-process.env.CREWHOUSE_STUCK_MS = '5000';
-process.env.CREWHOUSE_FALLBACK_MS = '1000';
-const { Store } = await import('../src/db.ts');
-const { Crew, browserAsk, quietNow, short, trustKeys } = await import('../src/crew.ts');
-const accounts = await import('../src/accounts.ts');
+const { quietNow, short, classify } = await import('../src/crew.ts');
+const { OWNER, signInError } = await import('../src/accounts.ts');
+const { effectOf, browserAsk, coversOf, toolWords } = await import('../src/policy.ts');
 const kit = await import('../src/tools.ts');
-const { StubRunner } = await import('../src/runner.ts');
 const disk = await import('../src/bots.ts');
 const { loadConfig } = await import('../src/config.ts');
+const { createProvider } = await import('@earendil-works/pi-ai');
 
-function setup(maxConcurrent = 3) {
-  const root = mkdtempSync(join(tmpdir(), 'crewhouse-unit-'));
-  const cfg = { ...loadConfig(), stateDir: join(root, 'state'), crewDir: join(root, 'crew'), toolsDir: join(root, 'tools'), maxConcurrent, runner: 'stub' as const };
-  const db = new Store(cfg.stateDir);
-  const runner = new StubRunner();
-  const crew = new Crew(cfg, db, runner, 'http://127.0.0.1:1');
-  runner.onTurn = (bot, reply) => crew.finish(bot, reply);
-  crew.init();
-  let closed = false;
-  const done = () => { if (!closed) { closed = true; crew.stop(); db.close(); } };
-  after(done); // a failed assertion must not leave the watch loop running
-  return { root, cfg, db, runner, crew, done };
-}
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-const task = (db: any, id: number) => db.get('SELECT * FROM tasks WHERE id = ?', id);
-const prompts = (db: any, t: number) => db.all("SELECT * FROM events WHERE kind = 'run.prompted' AND json_extract(data, '$.task') = ?", t).length;
-/** Wait for the condition, never a fixed time: CI runs the test files side by side on slow disks and two cores. */
-async function until(what: string, fn: () => unknown, ms = 10_000) {
-  for (const end = Date.now() + ms; !(await fn()); await sleep(10)) if (Date.now() > end) throw new Error(`timed out waiting for ${what}`);
-}
-/** The stub has the task's prompt (the nth one, after a resume or a switch). */
-const prompted = (db: any, t: number, n = 1) => until(`task #${t} prompted`, () => prompts(db, t) >= n);
-/** The task is past queued and working: done, failed, paused or waiting on the person. */
-const settled = (db: any, t: number) => until(`task #${t} settled`, () => !['queued', 'working'].includes(task(db, t).state));
+const fakeBin = (dir: string, ...names: string[]) => {
+  mkdirSync(dir, { recursive: true });
+  for (const b of names) { writeFileSync(join(dir, b), '#!/bin/sh\necho "fake $0 $*"\n'); chmodSync(join(dir, b), 0o755); }
+};
+const openAsk = (db: any) => db.get("SELECT * FROM asks WHERE state = 'open'");
+/** A user message the stub model turns into one tool call. */
+const call = (tool: string, input: object) => `[tool ${tool} ${JSON.stringify(input)}]`;
 
 test('store: a failed transaction leaves nothing behind; events fan out after commit', async () => {
   const { db, done } = setup();
@@ -57,22 +39,24 @@ test('store: a failed transaction leaves nothing behind; events fan out after co
 });
 
 test('queue: one task at a time per bot, and a global cap across bots', async () => {
-  const { db, crew, runner, done } = setup(1);
+  const { db, crew, done } = setup(1);
   crew.onboard('sir');
   crew.recruit('reel', 'Reel', 'person');
   crew.recruit('scout', 'Scout', 'person');
-  const a = crew.assign('reel', 'ask permission first', 'chief').task; // the stub keeps this one working
+  const a = crew.assign('reel', 'ask permission first', 'chief').task; // the stub model holds this turn
   const b = crew.assign('reel', 'second job', 'chief').task;
   const c = crew.assign('scout', 'look something up', 'chief').task;
-  await prompted(db, a);
+  await holding(crew, 'reel');
   assert.equal(task(db, a).state, 'working');
   assert.equal(task(db, b).state, 'queued', 'same bot waits its turn');
   assert.equal(task(db, c).state, 'queued', 'global cap of 1 holds the other bot');
-  runner.complete('reel', 'done with the first');
+  await release(crew, 'reel', 'done with the first');
   await settled(db, c); // the cap runs b first, then c
   assert.equal(task(db, a).state, 'done');
+  assert.equal(task(db, a).result, 'done with the first');
   assert.equal(task(db, b).state, 'done', 'next task for the bot ran');
   assert.equal(task(db, c).state, 'done', 'then the other bot');
+  assert.equal(crew.sessionOf('reel'), undefined, 'a finished task closes its session');
   done();
 });
 
@@ -85,111 +69,196 @@ test('task titles are cut at a word, never mid-word', async () => {
   crew.recruit('reel', 'Reel', 'person');
   const t = crew.assign('reel', 'Make a 10 second video with three title cards: One, Two, Three, about three seconds each', 'chief').task;
   assert.equal(task(db, t).title, 'Make a 10 second video with three title cards: One, Two, Three, about three…');
-  await settled(db, t); // let the run finish before the database closes
+  await settled(db, t);
   done();
 });
 
-test('approvals: held answer allows; no answer denies with "wait" and parks the task', async () => {
-  const { db, crew, runner, done } = setup();
+test('policy: own space and the sandboxed shell run silently; the person\'s files, sending and spending ask; secrets never', () => {
+  const home = homedir();
+  const s = { bot: 'Maya', space: '/data/bots/maya', secret: [join(home, '.pi'), '/state'], page: 'https://mail.google.com/x', signedIn: ['google.com'],
+    run: { people_search: { name: 'people search', free: ['catalog', 'balance'], spend: ['call'] } } };
+  assert.deepEqual(effectOf('write', { path: 'files/list.txt' }, s), { kind: 'safe' });
+  assert.deepEqual(effectOf('read', { path: '/data/bots/maya/notes.md' }, s), { kind: 'safe' });
+  assert.deepEqual(effectOf('bash', { command: 'fc-list 2>&1 | head -20' }, s), { kind: 'safe' }, 'the font lookup from the owner\'s screenshot runs silently');
+  assert.deepEqual(effectOf('web_search', { query: 'x' }, s), { kind: 'safe' });
+  const doc = effectOf('write', { path: join(home, 'Documents', 'probe.txt') }, s) as any;
+  assert.equal(doc.kind, 'files');
+  assert.equal(doc.words, 'Maya wants to change a file in your Documents folder: “probe.txt”.');
+  assert.equal(coversOf(doc.key), 'your Documents folder');
+  assert.equal((effectOf('ls', { path: join(home, 'Pictures') }, s) as any).words, 'Maya wants to look through your Pictures folder.');
+  assert.equal(effectOf('read', { path: join(home, '.pi', 'agent', 'auth.json') }, s).kind, 'refuse', 'sign-ins are never opened, not even with leave');
+  assert.equal(effectOf('read', { path: '/state/people/1/engine/auth.json' }, s).kind, 'refuse');
+  const pay = effectOf('people_search', { args: ['call', 'treg.people.phone.find', '--header', 'X-Treg-Route-Max-Cost: 0.05'] }, s) as any;
+  assert.deepEqual([pay.kind, pay.words, pay.key], ['spend', 'Maya wants to make a paid lookup with people search, up to $0.05.', undefined], 'spending has no standing key');
+  assert.deepEqual(effectOf('people_search', { args: ['catalog', 'search', 'phone'] }, s), { kind: 'safe' });
+  assert.equal(effectOf('people_search', { args: ['logout'] }, s).kind, 'refuse');
+  assert.equal(effectOf('browser_click', { ref: 'e1' }, s).kind, 'send');
+  assert.equal(effectOf('browser_snapshot', {}, s).kind, 'safe');
+  assert.equal(effectOf('teleport', {}, s).kind, 'refuse', 'unknown tools fail closed');
+  assert.equal(toolWords('bash', { command: 'ffmpeg -y -i a.png out.mp4' }), 'Worked on a video');
+  assert.equal(toolWords('bash', { command: 'fc-list | head' }), 'Worked in its own space', 'the trail never shows a command');
+  assert.equal(toolWords('write', { path: '/data/bots/maya/files/list.txt' }), 'Saved list.txt');
+});
+
+const { sandboxReady } = await import('../src/engine.ts');
+test('the shell: its own space is the only writable place, the home folder is empty, nothing asks', { skip: !sandboxReady() && 'bubblewrap is not usable here' }, async () => {
+  const { root, db, crew, done } = setup();
+  crew.onboard('sir');
+  crew.recruit('reel', 'Reel', 'person');
+  const outside = join(root, 'outside.txt');
+  const t = crew.assign('reel', `try it ${call('bash', { command: `echo made > work/in.txt; cat work/in.txt; ls ~ | wc -l; echo x > ${outside}; ls ${homedir()}/.ssh; echo "key:$OPENAI_API_KEY"` })}`, 'chief').task;
+  await settled(db, t);
+  const out = task(db, t).result;
+  assert.match(out, /made/, 'works in its own space');
+  assert.match(out, /Read-only file system|No such file or directory|Permission denied/, 'nothing outside it is writable');
+  assert.ok(!existsSync(outside));
+  assert.match(out, /key:(\n|$)/, 'no keys in its environment');
+  assert.equal(db.all('SELECT * FROM asks').length, 0, 'and it never asked');
+  done();
+});
+
+test('browser asks first on signed-in sites and payment pages, only for actions', () => {
+  assert.equal(browserAsk('browser_navigate', 'https://shop.example/checkout', []), null, 'looking is fine');
+  assert.deepEqual(browserAsk('browser_click', 'https://shop.example/checkout', []), { spend: true, host: 'shop.example' });
+  assert.deepEqual(browserAsk('browser_type', 'https://mail.google.com/x', ['google.com']), { spend: false, host: 'mail.google.com' });
+  assert.equal(browserAsk('browser_click', 'https://news.ycombinator.com/', ['google.com']), null);
+  assert.equal(browserAsk('browser_snapshot', 'https://pay.google.com/', []), null);
+});
+
+test('the gate: an ask holds the call; allowed, it runs; unanswered, the turn parks and the answer resumes the same session', async () => {
+  const { root, db, crew, done } = setup();
   crew.onboard("ma'am");
   crew.recruit('reel', 'Reel', 'person');
-  const t = crew.assign('reel', 'ask permission to write', 'chief').task;
-  await prompted(db, t);
-  const held = crew.permission('reel', { tool_name: 'Write', tool_input: { file_path: '/elsewhere/x.txt' } });
-  await sleep(20);
-  const ask = db.get("SELECT * FROM asks WHERE state = 'open'")!;
+  const outside = join(root, 'outside', 'x.txt');
+  const t = crew.assign('reel', `save it ${call('write', { path: outside, content: 'hello' })}`, 'chief').task;
+  await until('an ask', () => openAsk(db));
+  const ask = openAsk(db);
+  assert.equal(ask.title, 'Reel wants to change a file in a folder outside your home: “x.txt”.');
   assert.equal(task(db, t).state, 'needs_you');
+  const view = crew.snapshot().asks[0];
+  assert.deepEqual(view.detail, { effect: 'files', words: ask.title, spends: false, covers: 'a folder outside your home', always: 'a folder outside your home' }, 'the app sees words, never the path');
   await crew.answer(ask.id, { answer: 'allow' });
-  assert.deepEqual(await held, { behavior: 'allow' });
-  assert.equal(task(db, t).state, 'working');
+  await settled(db, t);
+  assert.equal(task(db, t).state, 'done');
+  assert.equal(readFileSync(outside, 'utf8'), 'hello');
 
-  const late = await crew.permission('reel', { tool_name: 'Bash', tool_input: { command: 'rm -r /tmp/x' } });
-  assert.equal(late.behavior, 'deny');
-  assert.match(late.message!, /hasn't answered/);
-  runner.complete('reel', 'Waiting on you.');
-  assert.equal(task(db, t).state, 'needs_you', 'parked, not done');
+  // Nobody answers within the hold: the turn parks, the task waits on the person, and the answer is the next prompt.
+  const p = crew.assign('reel', `again ${call('write', { path: outside, content: 'second' })}`, 'chief').task;
+  await until('parked', () => db.get("SELECT 1 FROM events WHERE kind = 'ask.parked'"));
+  await until('turn over', () => !crew.sessionOf('reel')?.isStreaming);
+  assert.equal(task(db, p).state, 'needs_you', 'parked, not done');
   await assert.rejects(crew.answer(9999, { answer: 'allow' }), /already settled/);
-  const parked = db.get("SELECT * FROM asks WHERE state = 'open'")!;
+  const parked = openAsk(db);
   await assert.rejects(crew.answer(parked.id, { answer: 'maybe' }), /allow or deny/);
   await crew.answer(parked.id, { answer: 'deny' });
-  await settled(db, t);
-  assert.equal(task(db, t).state, 'done', 'the answer resumed the same session and it finished');
+  await settled(db, p);
+  assert.equal(task(db, p).state, 'done', 'the answer resumed the same session and it finished');
+  assert.equal(readFileSync(outside, 'utf8'), 'hello', 'not allowed, not written');
+  assert.match(crew.botPage('reel').trail.map((e: any) => e.kind).join(), /ask\.parked/);
   done();
 });
 
-test('tool grants: only granted, installed tools reach the CLI; credentials always denied', () => {
-  const { root, cfg, crew, done } = setup();
-  const bot = crew.recruit('reel', 'Reel', 'person');
-  const bin = join(root, 'bin');
-  mkdirSync(bin);
-  for (const b of ['ffmpeg', 'ffprobe', 'node']) { writeFileSync(join(bin, b), '#!/bin/sh\n'); chmodSync(join(bin, b), 0o755); }
+test('approval scopes: once, for this task, always for the bot; spending asks every time', async () => {
+  const { root, cfg, db, crew, done } = setup();
+  crew.onboard('sir');
+  crew.recruit('reel', 'Reel', 'person');
+  const dir = join(root, 'Outside');
+  const t = crew.assign('reel', 'ask permission while I test the gate', 'chief').task;
+  await holding(crew, 'reel');
+  const gate = (tool: string, input: object) => (crew as any).gate('reel', tool, input);
+  const ask = async (tool: string, input: object) => {
+    const held = gate(tool, input);
+    await sleep(20);
+    return { held, open: openAsk(db) };
+  };
+
+  let a = await ask('write', { path: join(dir, 'one.txt') });
+  await assert.rejects(crew.answer(a.open!.id, { answer: 'allow', scope: 'forever' }), /once, for this task, or always/);
+  await crew.answer(a.open!.id, { answer: 'allow', scope: 'task' });
+  assert.equal(await a.held, undefined);
+  a = await ask('write', { path: join(dir, 'two.txt') });
+  assert.equal(a.open, undefined, 'the same folder in the same task goes through without asking');
+  assert.equal(await a.held, undefined);
+  assert.ok(db.get("SELECT 1 FROM events WHERE kind = 'run.allowed'"));
+
+  a = await ask('read', { path: join(root, 'Elsewhere', 'b.txt') });
+  await crew.answer(a.open!.id, { answer: 'allow', scope: 'always' });
+  assert.deepEqual(crew.botPage('reel').allow, ['a folder outside your home'], 'the page shows what it covers in words');
+  const trail = crew.botPage('reel').trail.map((e: any) => e.kind);
+  assert.ok(trail.includes('bot.allowed') && trail.includes('ask.answered'));
+  await release(crew, 'reel', 'ok');
+  await settled(db, t);
+
+  // A new task keeps "always" but not "for this task".
+  const t2 = crew.assign('reel', 'ask permission again', 'chief').task;
+  await holding(crew, 'reel');
+  a = await ask('read', { path: join(root, 'Elsewhere', 'c.txt') });
+  assert.equal(a.open, undefined);
+  await a.held;
+  a = await ask('write', { path: join(dir, 'three.txt') });
+  assert.ok(a.open, 'task grants end with their task');
+  await crew.answer(a.open!.id, { answer: 'deny' });
+  assert.equal((await a.held).block, true);
+
+  // Spending always asks: no standing answer covers it, and the card offers nothing wider than once.
+  disk.setGrants(cfg, 'reel', ['files', 'people-search']);
+  a = await ask('people_search', { args: ['call', 'apollo.people', '-H', 'X-Treg-Route-Max-Cost: 0.05'] });
+  assert.equal(a.open.title, 'Reel wants to make a paid lookup with treg people search, up to $0.05.');
+  assert.equal(crew.snapshot().asks[0].detail.spends, true);
+  await assert.rejects(crew.answer(a.open!.id, { answer: 'allow', scope: 'always' }), /once, for this task, or always/);
+  await crew.answer(a.open!.id, { answer: 'allow' });
+  assert.equal(await a.held, undefined);
+  a = await ask('people_search', { args: ['call', 'apollo.people', '-H', 'X-Treg-Route-Max-Cost: 0.05'] });
+  assert.ok(a.open, 'and asks again next time');
+  await crew.answer(a.open!.id, { answer: 'deny' });
+  await a.held;
+  // Taking "always" back on the Tools tab.
+  disk.setSettings(cfg, 'reel', { allow: [] });
+  assert.deepEqual(crew.botPage('reel').allow, []);
+  await release(crew, 'reel');
+  await settled(db, t2);
+  done();
+});
+
+
+test('tool grants: a session gets only granted, installed tools; command-line tools run as typed calls', async () => {
+  const { root, cfg, db, crew, done } = setup();
+  crew.onboard('sir');
+  crew.recruit('tracer', 'Tracer', 'person');
+  fakeBin(join(root, 'bin'), 'treg');
   const path = process.env.PATH;
-  process.env.PATH = bin; // ffmpeg present, gh and magick absent
+  process.env.PATH = `${join(root, 'bin')}:${path}`; // treg here, gh not
   try {
-    assert.throws(() => disk.setGrants(cfg, 'reel', ['files', 'teleport']), /unknown tools: teleport/);
-    disk.setGrants(cfg, 'reel', ['files', 'media', 'github', 'images', 'computer']);
-    const tools = disk.botTools(cfg, 'reel');
-    assert.equal(tools.find((t) => t.id === 'media')!.ready, true);
-    assert.deepEqual(tools.find((t) => t.id === 'github')!.missing, ['gh']);
-    disk.launchSpec(cfg, bot as any, 'http://127.0.0.1:1');
-    const s = JSON.parse(readFileSync(join(disk.botDir(cfg, 'reel'), '.claude', 'settings.local.json'), 'utf8'));
-    assert.ok(s.permissions.allow.includes('Bash(ffmpeg *)'));
-    assert.ok(s.permissions.allow.includes('Bash(fc-match *)'), 'finding a font for a title card never asks');
-    assert.ok(s.permissions.allow.includes('Bash(crew *)'), 'crew is always granted');
-    assert.ok(!s.permissions.allow.some((a: string) => a.startsWith('Bash(gh ')), 'missing tool not offered');
-    assert.ok(!s.permissions.allow.includes('Bash(magick *)'));
-    assert.ok(s.permissions.deny.includes('Read(~/.ssh/**)'));
-    assert.ok(s.permissions.deny.includes('CronCreate'), 'crewd owns schedules');
+    assert.throws(() => disk.setGrants(cfg, 'tracer', ['files', 'teleport']), /unknown tools: teleport/);
+    disk.setGrants(cfg, 'tracer', ['files', 'web', 'people-search', 'github']);
+    const gh: any = disk.botTools(cfg, 'tracer').find((t) => t.id === 'github');
+    assert.deepEqual([gh.granted, 'howto' in gh, 'missing' in gh, 'install' in gh], [true, false, false, false], 'tools are described in words: no commands, paths or binary names');
+    const t = crew.assign('tracer', `price it ${call('people_search', { args: ['catalog', 'search', 'phone'] })}`, 'chief').task;
+    await settled(db, t);
+    assert.match(task(db, t).result, /people_search said fake .*treg catalog search phone/, 'free calls run at once, with a fixed argv');
+    const h = crew.assign('tracer', 'ask permission so I can look at the tools', 'chief').task;
+    await holding(crew, 'tracer');
+    const names = crew.sessionOf('tracer')!.getActiveToolNames();
+    for (const n of ['read', 'write', 'edit', 'web_search', 'web_fetch', 'people_search', 'crew_deliver', 'crew_remember', 'crew_report']) assert.ok(names.includes(n), n);
+    assert.equal(names.includes('github'), gh.ready, 'offered only where it is installed');
+    assert.ok(!names.includes('crew_assign'), 'only Chief runs the crew');
+    await release(crew, 'tracer');
+    await settled(db, h);
+    const card = disk.templateKit(cfg, disk.loadTemplate(cfg, 'scout'));
+    assert.match(card.find((k) => k.id === 'browser')!.asks.join(), /payment page/);
+    assert.ok(existsSync(join(disk.botDir(cfg, 'tracer'), 'skills', 'find-leads', 'SKILL.md')), 'library skills copied in');
+    // No key or token ships with the template.
+    for (const f of ['AGENTS.md', 'bot.json', 'skills/find-leads/SKILL.md']) assert.doesNotMatch(readFileSync(join(disk.botDir(cfg, 'tracer'), f), 'utf8'), /(sk|tk|tr)_[A-Za-z0-9]{16,}|X-Treg-Token:/);
   } finally {
     process.env.PATH = path;
     done();
   }
 });
 
-test('Tracer: people search is free to price, every paid call asks first with its cap, the treg token is denied', () => {
+test('grant resolution: MCP browser from the pinned bin dir, missing tools listed, not offered', () => {
   const { root, cfg, crew, done } = setup();
-  const tool = kit.registry(cfg).find((t) => t.id === 'people-search')!;
-  assert.deepEqual(tool.bins, ['treg']);
-  assert.equal(tool.source, 'system');
-  assert.match(tool.install.system!, /treg login/, 'setup names the sign-in step');
-  assert.ok(!tool.allow.some((a) => a.startsWith('Bash(treg call')), 'spending is never pre-allowed');
-  assert.deepEqual(tool.ask, ['Bash(treg call *)']);
-  assert.ok(disk.listTemplates(cfg).some((t) => t.id === 'tracer' && t.tools.includes('people-search')));
-
-  const bot = crew.recruit('tracer', 'Tracer', 'person');
-  const dir = disk.botDir(cfg, 'tracer');
-  const skill = readFileSync(join(dir, 'skills', 'find-leads', 'SKILL.md'), 'utf8');
-  assert.match(skill, /treg call \S+ --header 'X-Treg-Route-Max-Cost: [\d.]+'/, 'the example call carries its price cap');
-  assert.deepEqual(disk.listSkills(cfg, 'tracer').map((s) => s.name), ['find-leads']);
-  // No key or token ships with the template.
-  for (const f of ['AGENTS.md', 'bot.json', 'skills/find-leads/SKILL.md']) assert.doesNotMatch(readFileSync(join(dir, f), 'utf8'), /(sk|tk|tr)_[A-Za-z0-9]{16,}|X-Treg-Token:/);
-
-  const bin = join(root, 'bin');
-  mkdirSync(bin);
-  for (const b of ['treg', 'node']) { writeFileSync(join(bin, b), '#!/bin/sh\n'); chmodSync(join(bin, b), 0o755); }
-  const path = process.env.PATH;
-  process.env.PATH = bin;
-  try {
-    disk.launchSpec(cfg, bot as any, 'http://127.0.0.1:1');
-    const s = JSON.parse(readFileSync(join(dir, '.claude', 'settings.local.json'), 'utf8'));
-    assert.ok(s.permissions.allow.includes('Bash(treg catalog *)'));
-    assert.deepEqual(s.permissions.ask, ['Bash(treg call *)']);
-    assert.ok(s.permissions.deny.includes('Read(~/.treg/**)'));
-  } finally {
-    process.env.PATH = path;
-    done();
-  }
-});
-
-const fakeBin = (dir: string, ...names: string[]) => {
-  mkdirSync(dir, { recursive: true });
-  for (const b of names) { writeFileSync(join(dir, b), '#!/bin/sh\necho fake\n'); chmodSync(join(dir, b), 0o755); }
-};
-
-test('grant resolution: MCP browser, pinned bin dir, asks-first gate, per-CLI wiring', () => {
-  const { root, cfg, crew, done } = setup();
-  const bot = crew.recruit('scout', 'Scout', 'person');
-  fakeBin(join(root, 'bin'), 'node', 'rg', 'jq');
+  crew.recruit('scout', 'Scout', 'person');
+  fakeBin(join(root, 'bin'), 'rg', 'jq');
   fakeBin(kit.toolBin(cfg), 'playwright-mcp', 'markitdown'); // as a pinned install leaves them
   const path = process.env.PATH;
   process.env.PATH = join(root, 'bin');
@@ -201,44 +270,10 @@ test('grant resolution: MCP browser, pinned bin dir, asks-first gate, per-CLI wi
     assert.equal(g.mcp.browser.command, join(kit.toolBin(cfg), 'playwright-mcp'), 'pinned copy, absolute');
     assert.ok(g.mcp.browser.args.includes(`${dir}/browser`), "the bot's own profile");
     assert.equal(g.mcp.browser.env.PLAYWRIGHT_BROWSERS_PATH, join(cfg.toolsDir, 'browser', 'ms-playwright'));
-
-    const spec = disk.launchSpec(cfg, bot as any, 'http://127.0.0.1:1');
-    assert.ok(spec.env.PATH.split(':').includes(kit.toolBin(cfg)));
-    const mcp = JSON.parse(readFileSync(join(dir, '.crewhouse', 'mcp.json'), 'utf8'));
-    assert.deepEqual(Object.keys(mcp.mcpServers), ['browser']);
-    assert.ok(spec.args.includes('--strict-mcp-config'), "the person's own MCP servers stay out");
-    const s = JSON.parse(readFileSync(join(dir, '.claude', 'settings.local.json'), 'utf8'));
-    assert.ok(s.permissions.allow.includes('mcp__browser'));
-    assert.ok(s.permissions.allow.includes('Bash(markitdown *)'));
-    assert.ok(s.permissions.allow.includes('Edit(./**)') && !s.permissions.allow.includes('Write'), 'edits are confined to the bot folder');
-    assert.match(s.hooks.PreToolUse[0].hooks[0].command, /hook pretool$/, 'every tool call passes the gate: the controls, then the browser rules');
-
-    // Revoke the browser: gone from the allow list and the MCP config.
-    disk.setGrants(cfg, 'scout', ['files', 'web']);
-    disk.launchSpec(cfg, bot as any, 'http://127.0.0.1:1');
-    assert.deepEqual(JSON.parse(readFileSync(join(dir, '.crewhouse', 'mcp.json'), 'utf8')).mcpServers, {});
-
-    disk.setGrants(cfg, 'scout', ['files', 'web', 'browser']);
-    const codex = disk.launchSpec(cfg, { ...bot, runtime: 'codex' } as any, 'http://127.0.0.1:1');
-    assert.ok(codex.args.includes('--search'));
-    assert.ok(codex.args.some((a) => a.startsWith('mcp_servers.browser.command=')));
-
-    // Recruit card: the template's tools with their rules in plain words.
-    const card = disk.templateKit(cfg, disk.loadTemplate(cfg, 'scout'));
-    assert.match(card.find((k) => k.id === 'browser')!.asks.join(), /payment page/);
-    assert.ok(existsSync(join(dir, 'skills', 'use-the-browser', 'SKILL.md')), 'library skills copied in');
   } finally {
     process.env.PATH = path;
     done();
   }
-});
-
-test('browser asks first on signed-in sites and payment pages, only for actions', () => {
-  assert.equal(browserAsk('browser_navigate', 'https://shop.example/checkout', []), null, 'looking is fine');
-  assert.match(browserAsk('browser_click', 'https://shop.example/checkout', [])!, /payment/);
-  assert.match(browserAsk('browser_type', 'https://mail.google.com/x', ['google.com'])!, /signed it in/);
-  assert.equal(browserAsk('browser_click', 'https://news.ycombinator.com/', ['google.com']), null);
-  assert.equal(browserAsk('browser_snapshot', 'https://pay.google.com/', []), null);
 });
 
 test('installs: pinned npm and checksummed download land in the tool folder; bad checksum keeps nothing', async () => {
@@ -286,6 +321,8 @@ test('bots on disk: persona rename, capped notes, folder confinement, slugs', ()
   const dir = disk.botDir(cfg, 'frames');
   assert.match(readFileSync(join(dir, 'AGENTS.md'), 'utf8'), /^# Frames/);
   assert.match(readFileSync(join(dir, 'AGENTS.md'), 'utf8'), /You are Frames/);
+  assert.ok(!existsSync(join(dir, 'CLAUDE.md')) && !existsSync(join(dir, '.claude')), 'no CLI wiring in a bot folder');
+  assert.match(disk.systemPrompt(cfg, 'frames', false), /Your id in Crewhouse is frames\./);
   assert.throws(() => crew.recruit('reel', 'Frames', 'person'), /already a bot/);
   assert.throws(() => crew.recruit('chief', 'Deputy', 'person'), /only one Chief/);
   disk.remember(cfg, 'frames', 'Likes slow transitions');
@@ -298,212 +335,123 @@ test('bots on disk: persona rename, capped notes, folder confinement, slugs', ()
   done();
 });
 
-test('models: per-bot fallback order, per-task choice, and a switch starts the other CLI', async () => {
-  const { cfg, db, crew, runner, done } = setup();
+test('accounts a bot thinks with: fallback order by name only, a per-task choice, no Claude', async () => {
+  const { cfg, db, crew, done } = setup();
   crew.onboard('sir');
   crew.recruit('reel', 'Reel', 'person');
-  const starts: any[] = [];
-  const start = runner.start.bind(runner);
-  runner.start = async (s) => { starts.push(s); return start(s); };
-
-  assert.deepEqual(crew.thinks('reel').map((b) => b.name), ['Claude Sonnet', 'ChatGPT'], 'template model, then ChatGPT');
-  assert.throws(() => disk.setBrains(cfg, 'reel', ['gemini:pro']), /not a model choice/);
-  assert.throws(() => disk.setBrains(cfg, 'reel', ['claude:$(rm -rf ~)']), /not a model choice/);
+  assert.deepEqual(crew.thinks('reel').map((b) => b.name), ['ChatGPT']);
+  assert.throws(() => disk.setBrains(cfg, 'reel', ['claude']), /not an AI account/, 'Claude is not offered');
+  assert.throws(() => disk.setBrains(cfg, 'reel', ['chatgpt:$(rm -rf ~)']), /not an AI account/);
   assert.throws(() => disk.setBrains(cfg, 'reel', []), /at least one/);
-  assert.deepEqual(disk.setBrains(cfg, 'reel', ['claude:opus', 'codex', 'claude:opus']), ['claude:opus', 'codex']);
-  assert.deepEqual(crew.thinks('reel').map((b) => b.name), ['Claude Opus', 'ChatGPT']);
-  assert.throws(() => crew.assign('reel', 'x', 'chief', 'pi'), /not a model choice/);
+  assert.deepEqual(disk.setBrains(cfg, 'reel', ['copilot', 'chatgpt:gpt-5.5', 'copilot']), ['copilot', 'chatgpt:gpt-5.5']);
+  assert.deepEqual(crew.thinks('reel'), [{ key: 'copilot', name: 'GitHub Copilot', restingUntil: 0 }, { key: 'chatgpt', name: 'ChatGPT', restingUntil: 0 }], 'never a model id');
+  assert.throws(() => crew.assign('reel', 'x', 'chief', 'pi'), /not an AI account/);
 
-  const a = crew.assign('reel', 'rename 400 files', 'chief', 'codex:gpt-5-mini').task;
+  const a = crew.assign('reel', 'rename 400 files', 'chief', 'chatgpt').task;
   await settled(db, a);
   assert.equal(task(db, a).state, 'done');
-  assert.equal(starts[0].kind, 'codex');
-  assert.deepEqual(starts[0].args.slice(-2), ['--model', 'gpt-5-mini']);
-  assert.match(runner['out'].get('reel')!, /Address the person as "sir"/, 'codex is told who it serves; it has no CLAUDE.md imports');
-
+  const started = () => JSON.parse(db.get("SELECT data FROM events WHERE kind = 'run.started' ORDER BY seq DESC")!.data);
+  assert.deepEqual([started().account, started().name], ['chatgpt', 'ChatGPT']);
+  assert.match(lastSaid(db, 'reel'), /^stub reel: done/);
   const b = crew.assign('reel', 'judge which take is best', 'chief').task;
   await settled(db, b);
-  assert.equal(task(db, b).state, 'done');
-  assert.equal(starts[1].kind, 'claude', 'no per-task choice: the bot default');
-  assert.deepEqual(starts[1].args.slice(-2), ['--model', 'opus']);
-  assert.equal(crew.bot('reel')!.runtime, 'claude');
+  assert.equal(started().account, 'copilot', 'no per-task choice: the bot\'s first');
   done();
 });
 
-test('fallback: resting accounts are skipped, all resting pauses until the reset, a limit mid-run switches', async () => {
-  const { db, crew, runner, done } = setup();
+test('limits: a limit rests that account and the task carries on in the same conversation on the next; all resting pauses', async () => {
+  const { cfg, db, crew, done } = setup();
   crew.onboard('sir');
   crew.recruit('scout', 'Scout', 'person');
-  const kinds: string[] = [];
-  const start = runner.start.bind(runner);
-  runner.start = async (s) => { kinds.push(s.kind); return start(s); };
+  disk.setBrains(cfg, 'scout', ['chatgpt', 'copilot']);
+  assert.deepEqual(classify('You have hit your ChatGPT usage limit (plus plan). Try again in ~30 min.')?.why, 'rate_limit');
+  assert.equal(classify('503 overloaded')?.why, 'overloaded');
+  assert.equal(classify('401 Unauthorized')?.why, 'signed_out');
+  assert.equal(classify('context window exceeded by your prompt'), null);
 
-  // Before a run: Claude's 5-hour window at 97% means Claude is resting until it resets.
-  const reset = Math.floor(Date.now() / 1000) + 3600;
-  crew.hookStatus('scout', { rate_limits: { five_hour: { used_percentage: 97, resets_at: reset } } });
-  assert.equal(crew.restingUntil('claude'), reset * 1000);
-  const a = crew.assign('scout', 'look it up', 'chief').task;
-  await settled(db, a);
-  assert.equal(task(db, a).state, 'done');
-  assert.deepEqual(kinds, ['codex']);
+  const t = crew.assign('scout', 'dig deep, then hit the limit', 'chief').task;
+  await settled(db, t);
+  assert.equal(task(db, t).state, 'done');
+  const until = crew.restingUntil('chatgpt');
+  assert.ok(Math.abs(until - (Date.now() + 30 * 60_000)) < 5000, 'rests until the time the account said');
+  const said = db.all("SELECT text FROM messages WHERE bot = 'scout' AND author = 'system'").map((m) => m.text);
+  assert.ok(said.some((x) => /^ChatGPT is resting until \d+:\d\d [ap]m\. Scout carries on with GitHub Copilot\.$/.test(x)), said.join('\n'));
+  assert.ok(db.get("SELECT 1 FROM events WHERE kind = 'run.resumed'"), 'the same session file, reopened');
+  const file = task(db, t).session;
+  assert.ok(file && readFileSync(file, 'utf8').includes('dig deep'), 'the conversation carried over');
+  assert.deepEqual(crew.snapshot().resting, { chatgpt: until });
 
-  // Everyone resting: the task pauses with a wake-up time, and resumes when it passes.
-  crew['limits'].set('1:codex', { restUntil: Date.now() + 60_000 });
+  // Every account resting: the task pauses with a wake-up time, and resumes when it passes.
+  const others = ['copilot', 'openrouter']; // the stub counts these as signed in; Grok is not
+  for (const k of others) (crew as any).rests.set(`1:${k}`, Date.now() + (k === 'copilot' ? 60_000 : 120_000));
   const b = crew.assign('scout', 'look it up again', 'chief').task;
   await settled(db, b);
   assert.equal(task(db, b).state, 'paused');
-  assert.ok(Math.abs(task(db, b).wake_at - (Date.now() + 60_000)) < 1000, 'earliest reset: ChatGPT in a minute, not Claude in an hour');
+  assert.ok(Math.abs(task(db, b).wake_at - (Date.now() + 60_000)) < 1000, 'earliest reset: Copilot in a minute, not ChatGPT in half an hour');
   assert.match(task(db, b).result, /All AI accounts are resting until \d+:\d\d [ap]m/);
-  crew['limits'].clear();
+  (crew as any).rests.clear();
   db.run('UPDATE tasks SET wake_at = ? WHERE id = ?', Date.now() - 1, b);
   crew.dispatch();
   await settled(db, b);
   assert.equal(task(db, b).state, 'done');
-  assert.equal(kinds.at(-1), 'claude', 'limits cleared: back to the first choice');
 
-  // During a run: Claude's StopFailure(rate_limit) rests Claude and continues on ChatGPT from a brief.
-  crew.hookStatus('scout', { rate_limits: { five_hour: { used_percentage: 60, resets_at: reset } } });
-  const c = crew.assign('scout', 'ask permission then dig deep', 'chief').task; // the stub holds it working
-  await prompted(db, c);
-  assert.equal(kinds.at(-1), 'claude');
-  db.event('task.progress', 'scout', { text: 'found three sources' });
-  crew.hookFailure('scout', { error: 'rate_limit', last_assistant_message: 'API Error: Rate limit reached' });
-  await prompted(db, c, 2); // the brief, on the next model
-  assert.equal(kinds.at(-1), 'codex');
-  assert.equal(task(db, c).state, 'working');
-  assert.equal(crew.restingUntil('claude'), reset * 1000, 'rests until the known reset');
-  const brief = runner['out'].get('scout')!;
-  assert.match(brief, /continuing it in a new session/);
-  assert.match(brief, /found three sources/);
-  assert.match(brief, /dig deep/);
-  const said = db.all("SELECT text FROM messages WHERE bot = 'scout' AND author = 'system'").map((m) => m.text);
-  assert.ok(said.some((t) => /^Switched from Claude to ChatGPT: Claude is resting until/.test(t)), said.join('\n'));
-  runner.complete('scout', 'here is the report');
+  // A bot set to an account the person doesn't have carries on with one they do.
+  disk.setBrains(cfg, 'scout', ['grok']);
+  const c = crew.assign('scout', 'one more', 'chief').task;
+  await settled(db, c);
   assert.equal(task(db, c).state, 'done');
-
-  // Any other API error fails the task plainly instead of pretending it finished.
-  const d = crew.assign('scout', 'ask permission again', 'chief').task;
-  await prompted(db, d);
-  crew.hookFailure('scout', { error: 'authentication_failed' });
+  assert.equal(JSON.parse(db.get("SELECT data FROM events WHERE kind = 'run.started' ORDER BY seq DESC")!.data).account, 'chatgpt');
+  // Signed in to nothing at all: it says so plainly.
+  crew.accounts.signedIn = async () => false;
+  (crew.accounts as any).ready = { get: () => false, set: () => {} };
+  const d = crew.assign('scout', 'and another', 'chief').task;
+  await settled(db, d);
   assert.equal(task(db, d).state, 'failed');
-  done();
-});
-
-test('fallback: a Codex usage-limit screen rests ChatGPT until the time it prints, then Claude continues', async () => {
-  const { cfg, db, crew, runner, done } = setup();
-  crew.onboard('sir');
-  crew.recruit('scout', 'Scout', 'person');
-  disk.setBrains(cfg, 'scout', ['codex', 'claude:haiku']);
-  const kinds: string[] = [];
-  const start = runner.start.bind(runner);
-  runner.start = async (s) => { kinds.push(s.kind); return start(s); };
-  const { limitResetFromText } = await import('../src/crew.ts');
-  const year = new Date().getFullYear() + 1;
-  const reset = Date.parse(`Sep 26, ${year} 12:15 PM`);
-  assert.equal(limitResetFromText(`■ You've hit your usage limit. Visit x or try again at\nSep 26th, ${year} 12:15 PM.`), reset);
-  assert.equal(limitResetFromText('try again later'), 0);
-
-  // The stub shows its prompt in the pane and blocks on "needs approval", like Codex's model-switch dialog.
-  const t = crew.assign('scout', `needs approval ■ You've hit your usage limit. Visit x or try again at Sep 26th, ${year} 12:15 PM.`, 'chief').task;
-  await prompted(db, t, 2); // the watch loop reads the screen, rests ChatGPT and continues on Claude
-  assert.equal(crew.restingUntil('codex'), reset);
-  assert.deepEqual(kinds, ['codex', 'claude']);
-  assert.equal(task(db, t).state !== 'failed', true);
-  assert.ok(db.all("SELECT text FROM messages WHERE bot = 'scout'").some((m) => /^Switched from ChatGPT to Claude: ChatGPT is resting until \w{3} 12:15 pm/.test(m.text)));
+  assert.equal(task(db, d).result, 'You have no AI account signed in yet. Sign in under Settings, AI accounts, then try again.');
   done();
 });
 
 test('take over: the bot pauses while the person drives; give back resumes it with their note', async () => {
-  const { db, crew, runner, cfg, done } = setup();
+  const { db, crew, done } = setup();
   crew.onboard('sir');
   crew.recruit('reel', 'Reel', 'person');
-  const t = crew.assign('reel', 'ask permission to open the site', 'chief').task; // the stub keeps this one working
-  await prompted(db, t);
-  const settings = JSON.parse(readFileSync(join(cfg.crewDir, 'bots', 'reel', '.claude', 'settings.local.json'), 'utf8'));
-  assert.match(settings.hooks.PreToolUse[0].hooks[0].command, /hook pretool$/, 'the CLI asks crewd before every tool call');
-  assert.deepEqual(await crew.preTool('reel', { tool_name: 'Bash' }), {}, 'the bot acts freely while it has the controls');
+  const t = crew.assign('reel', 'ask permission to open the site', 'chief').task;
+  await holding(crew, 'reel');
+  assert.equal(await (crew as any).gate('reel', 'bash', { command: 'ls' }), undefined, 'the bot acts freely while it has the controls');
 
   await crew.takeOver('reel');
   assert.equal(crew.snapshot().bots.find((b: any) => b.id === 'reel')?.controls, 'person');
-  assert.equal(await runner.state('reel'), 'idle', 'the running turn is interrupted');
-  const deny = await crew.preTool('reel', { tool_name: 'Bash' }) as any;
-  assert.equal(deny.hookSpecificOutput.permissionDecision, 'deny');
-  assert.match(deny.hookSpecificOutput.permissionDecisionReason, /owner has the controls/);
-  crew.finish('reel', 'I will wait for the owner.');
+  await until('stopped', () => !crew.sessionOf('reel')!.isStreaming);
+  const deny = await (crew as any).gate('reel', 'bash', { command: 'ls' });
+  assert.equal(deny.block, true);
+  assert.match(deny.reason, /person has the controls/);
   assert.equal(task(db, t).state, 'working', 'a turn cut short by Take over does not end the task');
   const next = crew.assign('reel', 'second job', 'chief').task;
-  crew.dispatch(); // the queue gets its turn now; nothing may start
+  crew.dispatch();
   assert.equal(task(db, next).state, 'queued', 'no new work starts while the person drives');
 
   await crew.giveBack('reel', 'signed you in to example.com');
-  assert.deepEqual(await crew.preTool('reel', { tool_name: 'Bash' }), {});
-  assert.match(await runner.read('reel'), /given them back\. What they did: signed you in to example\.com\./, 'the resume prompt carries the note');
-  await settled(db, next); // it waits behind t
+  await settled(db, next);
   assert.equal(task(db, t).state, 'done', 'the resumed turn finishes the task');
+  assert.match(readFileSync(task(db, t).session, 'utf8'), /given them back\. What they did: signed you in to example\.com\./, 'the resume prompt carries the note');
   assert.equal(task(db, next).state, 'done', 'then the queue moves again');
   assert.ok(db.get("SELECT 1 FROM messages WHERE bot = 'reel' AND text = 'You gave the controls back: signed you in to example.com'"));
   await assert.rejects(crew.giveBack('reel'), /already has the controls/);
   done();
 });
 
-test('approval scopes: once, for this task, always for the bot; compound commands only ever get exact grants', async () => {
-  assert.deepEqual(disk.permissionRule('Bash', { command: 'ffmpeg -y -i a.png out.mp4' }), { rule: 'Bash(ffmpeg *)', covers: 'any ffmpeg command' });
-  assert.equal(disk.permissionRule('Bash', { command: 'ffmpeg -i a && rm -rf ~' }).rule, 'Bash(ffmpeg -i a && rm -rf ~)');
-  assert.equal(disk.permissionRule('Bash', { command: 'X=1 rm y' }).covers, 'this exact command');
-  assert.equal(disk.permissionRule('WebFetch', { url: 'https://example.com/a' }).rule, 'WebFetch(domain:example.com)');
-  assert.ok(!disk.ruleAllows('Bash(ffmpeg *)', 'Bash', { command: 'ffmpeg a; rm -rf ~' }), 'a granted prefix never covers a compound command');
-
-  const { db, cfg, crew, done } = setup();
+test('steer: a word from the person reaches the bot mid-task without starting over', async () => {
+  const { db, crew, done } = setup();
   crew.onboard('sir');
   crew.recruit('reel', 'Reel', 'person');
+  assert.throws(() => crew.steer('reel', 'faster'), /isn't working on anything/);
   const t = crew.assign('reel', 'ask permission to render', 'chief').task;
-  await prompted(db, t);
-  const ask = async (command: string) => {
-    const held = crew.permission('reel', { tool_name: 'Bash', tool_input: { command } });
-    await sleep(20);
-    return { held, open: db.get("SELECT * FROM asks WHERE state = 'open'") };
-  };
-
-  let a = await ask('ffmpeg -i one.png');
-  assert.equal(a.open!.title, 'Reel would like to run a command');
-  await assert.rejects(crew.answer(a.open!.id, { answer: 'allow', scope: 'forever' }), /once, for this task, or always/);
-  await crew.answer(a.open!.id, { answer: 'allow', scope: 'task' });
-  assert.equal((await a.held).behavior, 'allow');
-  a = await ask('ffmpeg -i two.png');
-  assert.equal(a.open, undefined, 'the same kind of call in the same task goes through without asking');
-  assert.equal((await a.held).behavior, 'allow');
-  assert.ok(db.get("SELECT 1 FROM events WHERE kind = 'run.allowed'"));
-
-  a = await ask('magick a.png b.png');
-  await crew.answer(a.open!.id, { answer: 'allow', scope: 'always' });
-  assert.ok(disk.botConfig(cfg, 'reel').allow!.includes('Bash(magick *)'), 'always is written where the CLI reads its allow list');
-  const trail = crew.botPage('reel').trail.map((e: any) => e.kind);
-  assert.ok(trail.includes('bot.allowed') && trail.includes('ask.answered'));
-  crew.stop();
-
-  // A new task keeps "always" but not "for this task".
-  db.run("UPDATE tasks SET state = 'done' WHERE id = ?", t);
-  const t2 = crew.assign('reel', 'ask permission again', 'chief').task;
-  crew.dispatch();
-  await until(`task #${t2} started`, () => task(db, t2).state === 'working'); // the stub still shows the old turn, so it is not prompted
-  a = await ask('magick c.png d.png');
-  assert.equal(a.open, undefined);
-  a = await ask('ffmpeg -i three.png');
-  assert.ok(a.open, 'task grants end with their task');
-  await crew.answer(a.open!.id, { answer: 'deny' });
-  await a.held;
-
-  // Spending always asks: no standing grant covers it, and the card offers no wider scope.
-  disk.setGrants(cfg, 'reel', ['files', 'media', 'people-search']);
-  disk.setSettings(cfg, 'reel', { allow: ['Bash', 'Bash(treg *)'] });
-  a = await ask('cd work && treg call apollo.people -H "X-Treg-Route-Max-Cost: 0.05"');
-  assert.ok(a.open, 'an allow rule never lets a paid call through');
-  assert.equal(JSON.parse(a.open!.detail).spends, true);
-  await assert.rejects(crew.answer(a.open!.id, { answer: 'allow', scope: 'always' }), /once, for this task, or always/);
-  await crew.answer(a.open!.id, { answer: 'allow' });
-  assert.equal((await a.held).behavior, 'allow');
-  a = await ask('ls work');
-  assert.equal(a.open, undefined, 'the bare Bash rule still covers everything else');
+  await holding(crew, 'reel');
+  crew.steer('reel', 'make it faster');
+  await release(crew, 'reel');
+  await settled(db, t);
+  assert.ok(db.get("SELECT 1 FROM messages WHERE bot = 'reel' AND author = 'person' AND text = 'make it faster'"));
+  assert.ok(readFileSync(task(db, t).session, 'utf8').includes('make it faster'), 'it went into the same conversation');
   done();
 });
 
@@ -521,91 +469,94 @@ test('home facts: ideas only from ready tools, stuck after quiet, memory switch'
   disk.setGrants(cfg, 'scout', ['files']);
   assert.equal(crew.snapshot().ideas.length, 0, 'no idea for a tool that is not granted');
 
-  await prompted(db, crew.assign('scout', 'ask permission to look', 'chief').task);
+  disk.remember(cfg, 'scout', 'Prefers short answers');
+  const t = crew.assign('scout', 'ask permission to look', 'chief').task;
+  await holding(crew, 'scout');
   assert.equal(crew.snapshot().bots.find((b: any) => b.id === 'scout')?.stuck, false);
   db.run('UPDATE events SET at = at - 10000');
   assert.equal(crew.snapshot().bots.find((b: any) => b.id === 'scout')?.stuck, true, 'quiet past the limit reads as stuck');
+  assert.match(JSON.stringify(crew.sessionOf('scout')!.messages), /Prefers short answers/, 'notes are read at the start of the task');
+  await release(crew, 'scout');
+  await settled(db, t);
 
   disk.setSettings(cfg, 'scout', { memory: false });
   assert.throws(() => disk.remember(cfg, 'scout', 'likes tea'), /memory is off/);
-  disk.launchSpec(cfg, crew.bot('scout') as any, 'http://127.0.0.1:1');
-  assert.doesNotMatch(readFileSync(join(disk.botDir(cfg, 'scout'), 'CLAUDE.md'), 'utf8'), /notes\.md/, 'memory off: notes are not loaded');
+  const u = crew.assign('scout', 'another look', 'chief').task;
+  await settled(db, u);
+  assert.doesNotMatch(readFileSync(task(db, u).session, 'utf8'), /Prefers short answers|When you finish/, 'memory off: notes are neither loaded nor asked for');
   assert.throws(() => disk.setSettings(cfg, 'scout', { memory: 'yes' }), /on or off/);
   done();
 });
 
-test('household: bots and tasks belong to a member and run on that member\'s own config home', async () => {
-  const { cfg, db, crew, runner, done } = setup();
-  const starts: any[] = [];
-  const start = runner.start.bind(runner);
-  runner.start = async (s) => { starts.push(s); return start(s); };
+
+test('household: bots and tasks belong to a member and run on that member\'s own sign-ins, never anyone else\'s', async () => {
+  const { cfg, db, crew, done } = setup();
   crew.onboard('sir');
   crew.recruit('reel', 'Reel', 'person');
   const sam = crew.addMember('Sam').id;
   assert.throws(() => crew.addMember('sam'), /already here/);
-
-  // The owner stays on the CLIs' usual sign-in: a one-person house launches exactly as before.
-  assert.equal(accounts.home(cfg, accounts.OWNER, 'claude'), null);
-  assert.equal(accounts.home(cfg, sam, 'claude'), join(cfg.stateDir, 'people', String(sam), 'claude'));
-  assert.deepEqual(accounts.homeEnv(cfg, sam, 'codex'), { CODEX_HOME: join(cfg.stateDir, 'people', String(sam), 'codex') });
+  // Each person has their own credential file under Crewhouse's folders, the owner too.
+  assert.equal(crew.accounts.authPath(OWNER), join(cfg.stateDir, 'people', '1', 'engine', 'auth.json'));
+  assert.equal(crew.accounts.authPath(sam), join(cfg.stateDir, 'people', String(sam), 'engine', 'auth.json'));
+  assert.notEqual(await crew.accounts.runtime(sam), await crew.accounts.runtime(OWNER));
 
   // Sam meets Chief in their own thread; the owner's conversation isn't in it.
   assert.match(crew.botPage('chief', sam).messages.map((m: any) => m.text).join('\n'), /how would you like me to address you/);
   assert.ok(!crew.botPage('chief', sam).messages.some((m: any) => m.text === 'sir'));
   crew.post('chief', 'Sam', undefined, sam);
   assert.equal(crew.member(sam).address, 'Sam');
-  assert.equal(crew.member(accounts.OWNER).address, 'sir', 'each person keeps their own form of address');
+  assert.equal(crew.member(OWNER).address, 'sir', 'each person keeps their own form of address');
 
-  // The owner's task runs with no config-home override; Sam's on the same bot restarts it on Sam's homes.
-  const a = crew.post('reel', 'owner demo', undefined, accounts.OWNER)!.task;
+  // Only Sam signs in to Grok: Sam's Grok task runs, the owner's can't borrow it.
+  disk.setBrains(cfg, 'reel', ['grok']);
+  await crew.accounts.login(sam, 'grok');
+  await crew.accounts.finished(sam, 'grok');
+  assert.equal(crew.accounts.view(sam, 'grok')?.state, 'done');
+  assert.ok(existsSync(crew.accounts.authPath(sam)));
+  const a = crew.post('reel', 'a demo for Sam', undefined, sam)!.task;
   await settled(db, a);
   assert.equal(task(db, a).state, 'done');
-  assert.equal(starts[0].env.CLAUDE_CONFIG_DIR, undefined);
-  const b = crew.post('reel', 'a demo for Sam', undefined, sam)!.task;
+  assert.equal(JSON.parse(db.get("SELECT data FROM events WHERE kind = 'run.started' ORDER BY seq DESC")!.data).member, sam);
+  assert.match(readFileSync(task(db, a).session, 'utf8'), /task #\d+ from Sam\]/);
+  assert.match(readFileSync(task(db, a).session, 'utf8'), /chosen name, \\"Sam\\"/);
+  const b = crew.post('reel', 'owner demo', undefined, OWNER)!.task;
   await settled(db, b);
-  assert.equal(task(db, b).member, sam);
-  assert.equal(starts[1].env.CLAUDE_CONFIG_DIR, join(cfg.stateDir, 'people', String(sam), 'claude'));
-  assert.match(readFileSync(join(cfg.crewDir, 'bots/reel/.crewhouse/person.md'), 'utf8'), /chosen name, "Sam"/);
-  assert.match(runner['out'].get('reel')!, /task #\d+ from Sam\]/);
-  assert.equal(crew.bot('reel')!.account, sam);
+  const ran = JSON.parse(db.get("SELECT data FROM events WHERE kind = 'run.started' ORDER BY seq DESC")!.data);
+  assert.deepEqual([ran.member, ran.account], [OWNER, 'chatgpt'], 'the owner never borrows Sam\'s Grok; the owner\'s own ChatGPT does it');
   assert.ok(crew.botPage('reel', sam).messages.some((m: any) => m.text === 'a demo for Sam'));
-  assert.ok(!crew.botPage('reel', accounts.OWNER).messages.some((m: any) => m.text === 'a demo for Sam'), 'threads are per person');
-  const settings = JSON.parse(readFileSync(join(cfg.crewDir, 'bots/reel/.claude/settings.local.json'), 'utf8'));
-  assert.ok(settings.permissions.deny.includes(`Read(/${join(cfg.stateDir, 'people')}/**)`), 'no bot reads anyone\'s sign-in');
+  assert.ok(!crew.botPage('reel', OWNER).messages.some((m: any) => m.text === 'a demo for Sam'), 'threads are per person');
 
   // Chief works for whoever asked him: what he recruits and hands over is theirs, on their accounts.
-  const c = crew.post('chief', 'ask permission to find me a researcher', undefined, sam)!.task; // the stub keeps Chief working
-  await prompted(db, c);
+  const c = crew.post('chief', 'ask permission to find me a researcher', undefined, sam)!.task;
+  await holding(crew, 'chief');
   assert.equal(task(db, c).member, sam);
   assert.equal(crew.recruit('scout', 'Scout', 'chief').member, sam);
   const d = crew.assign('scout', 'look it up', 'chief').task;
   await settled(db, d);
   assert.equal(task(db, d).member, sam);
-  assert.equal(starts.at(-1).env.CLAUDE_CONFIG_DIR, join(cfg.stateDir, 'people', String(sam), 'claude'));
-  runner.complete('chief', 'Scout is on it.');
+  await release(crew, 'chief', 'Scout is on it.');
 
-  // One person's limit rests only their own account; the other's work carries on.
-  crew['limits'].set(`${sam}:claude`, { restUntil: Date.now() + 60_000 });
-  crew['limits'].set(`${sam}:codex`, { restUntil: Date.now() + 60_000 });
-  assert.equal(crew.restingUntil('claude', accounts.OWNER), 0);
+  // One person's limit rests only their own account.
+  disk.setBrains(cfg, 'reel', ['chatgpt']);
+  for (const k of ['chatgpt', 'grok', 'copilot', 'openrouter']) (crew as any).rests.set(`${sam}:${k}`, Date.now() + 60_000);
+  assert.equal(crew.restingUntil('chatgpt', OWNER), 0);
   const e = crew.post('reel', 'another for Sam', undefined, sam)!.task;
-  const f = crew.post('scout', 'owner lookup', undefined, accounts.OWNER)!.task;
+  const f = crew.post('scout', 'owner lookup', undefined, OWNER)!.task;
   await settled(db, e);
   await settled(db, f);
   assert.equal(task(db, e).state, 'paused');
   assert.match(task(db, e).result, /All Sam's AI accounts are resting/);
   assert.equal(task(db, f).state, 'done');
-  assert.equal(starts.at(-1).env.CLAUDE_CONFIG_DIR, undefined, 'the owner never borrows Sam\'s account, nor Sam the owner\'s');
 
   // What each person sees: their own tasks and questions, their own accounts.
-  assert.deepEqual(crew.snapshot(sam).tasks.map((t: any) => t.id).sort(), [b, d, e].sort());
-  assert.ok(crew.snapshot(sam).resting.claude > 0);
-  assert.equal(crew.snapshot(accounts.OWNER).resting.claude, 0);
+  assert.deepEqual(crew.snapshot(sam).tasks.map((t: any) => t.id).sort(), [a, d, e].sort());
+  assert.ok(crew.snapshot(sam).resting.chatgpt > 0);
+  assert.deepEqual(crew.snapshot(OWNER).resting, {});
   done();
 });
 
 test('household: quiet hours park questions at once; settings validate', async () => {
-  const { db, crew, done } = setup();
+  const { root, db, crew, done } = setup();
   crew.onboard('sir');
   crew.recruit('reel', 'Reel', 'person');
   assert.equal(quietNow('22:00-07:00', new Date(2026, 0, 1, 23, 30)), true);
@@ -617,12 +568,10 @@ test('household: quiet hours park questions at once; settings validate', async (
   assert.throws(() => crew.updateMember(1, { name: '  ' }), /name/);
   assert.equal(crew.updateMember(1, { name: 'Alex', quiet: '00:00-23:59' }).name, 'Alex');
 
-  const t = crew.post('reel', 'ask permission to copy', undefined, 1)!.task;
-  await prompted(db, t);
   const started = Date.now();
-  const d = await crew.permission('reel', { tool_name: 'Bash', tool_input: { command: 'cp a b' } });
-  assert.ok(Date.now() - started < 200, 'no hold while they sleep');
-  assert.equal(d.behavior, 'deny');
+  const t = crew.post('reel', `copy it ${call('write', { path: join(root, 'elsewhere', 'b.txt'), content: 'x' })}`, undefined, 1)!.task;
+  await until('parked', () => db.get("SELECT 1 FROM events WHERE kind = 'ask.parked'"));
+  assert.ok(Date.now() - started < 3000, 'no hold while they sleep');
   assert.equal(task(db, t).state, 'needs_you');
   assert.equal(crew.snapshot(1).asks.length, 1, 'the question waits for the morning');
   assert.equal(crew.snapshot(crew.addMember('Sam').id).asks.length, 0, 'and only for them');
@@ -630,121 +579,157 @@ test('household: quiet hours park questions at once; settings validate', async (
   done();
 });
 
-/** Stop crewd and start a new one on the same database. The same runner means the Herdr panes outlived crewd; a new one, that they did not. */
-async function restart(s: ReturnType<typeof setup>, runner = s.runner) {
+/** Stop crewd and start a new one on the same database: the engine sessions die with it, their files stay. */
+async function restart(s: ReturnType<typeof setup>) {
   s.crew.stop();
-  const crew = new Crew(s.cfg, s.db, runner, 'http://127.0.0.1:1');
-  runner.onTurn = (bot, reply) => crew.finish(bot, reply);
-  after(() => crew.stop());
-  await crew.init();
+  const { Crew } = await import('../src/crew.ts');
+  const crew = new Crew(s.cfg, s.db);
+  crew.init();
   return crew;
 }
-test('restart: a live pane is re-attached, not prompted again, and its result lands once', async () => {
+
+test('restart: a running task continues in its own session, from its session file', async () => {
   const s = setup();
   s.crew.onboard('sir');
   s.crew.recruit('reel', 'Reel', 'person');
-  const t = s.crew.assign('reel', 'ask permission first', 'chief').task; // stays working
-  await prompted(s.db, t);
+  // Its session file exists once the model has said something: here, the tool call before the held reply.
+  const t = s.crew.assign('reel', `ask permission after ${call('write', { path: 'work/a.txt', content: 'x' })}`, 'chief').task;
+  await holding(s.crew, 'reel');
+  const file = task(s.db, t).session;
+  assert.ok(existsSync(file));
   const crew = await restart(s);
-  assert.equal(task(s.db, t).state, 'working');
-  assert.ok(s.db.get("SELECT 1 FROM events WHERE kind = 'run.reattached'"));
-  await sleep(200);
-  assert.equal(prompts(s.db, t), 1, 'the running turn is left alone');
-  s.runner.complete('reel', 'All done.');
-  crew.finish('reel', 'All done.'); // the Stop hook retried across the restart
-  assert.equal(task(s.db, t).state, 'done');
-  assert.equal(s.db.all("SELECT * FROM messages WHERE bot = 'reel' AND text = 'All done.'").length, 1);
-  crew.stop();
-  s.done();
+  try {
+    await settled(s.db, t);
+    assert.equal(task(s.db, t).state, 'done');
+    assert.equal(task(s.db, t).session, file, 'the same session');
+    assert.ok(s.db.get("SELECT 1 FROM events WHERE kind = 'system.recovered'"));
+    assert.ok(s.db.get("SELECT 1 FROM events WHERE kind = 'run.resumed'"));
+    const log = readFileSync(file, 'utf8');
+    assert.ok(log.includes('ask permission after') && log.includes('Continue task #'), 'one conversation: the task, then the resume');
+    assert.equal(s.db.all("SELECT 1 FROM messages WHERE bot = 'reel' AND author = 'system' AND text LIKE '%restarted%'").length, 0, 'a restart is a non-event for the person');
+  } finally { crew.stop(); s.done(); }
 });
 
-test('restart: a turn that ended while crewd was down is read from the terminal, not redone', async () => {
+test('restart: a parked question stays open, and its answer reaches the resumed session', async () => {
   const s = setup();
   s.crew.onboard('sir');
   s.crew.recruit('reel', 'Reel', 'person');
-  const t = s.crew.assign('reel', 'ask permission first', 'chief').task;
-  await prompted(s.db, t);
-  s.crew.stop();
-  (s.runner as any).states.set('reel', 'done'); // the Stop hook found nobody listening
+  const outside = join(s.root, 'elsewhere', 'c.txt');
+  const t = s.crew.assign('reel', `copy it ${call('write', { path: outside, content: 'kept' })}`, 'chief').task;
+  await until('parked', () => s.db.get("SELECT 1 FROM events WHERE kind = 'ask.parked'"));
   const crew = await restart(s);
-  await settled(s.db, t);
-  assert.equal(task(s.db, t).state, 'done');
-  assert.match(task(s.db, t).result, /read from the terminal/);
-  assert.equal(prompts(s.db, t), 1);
-  crew.stop();
-  s.done();
+  try {
+    await until('resumed and waiting', () => task(s.db, t).state === 'needs_you' && s.db.get("SELECT 1 FROM events WHERE kind = 'run.resumed'"));
+    const ask = s.db.get("SELECT * FROM asks WHERE state = 'open'")!;
+    await crew.answer(ask.id, { answer: 'allow' });
+    await settled(s.db, t);
+    assert.equal(task(s.db, t).state, 'done');
+    assert.match(readFileSync(task(s.db, t).session, 'utf8'), /has answered your request/);
+  } finally { crew.stop(); s.done(); }
 });
 
-test('restart: with its pane gone, the task continues in a new session from its trail; a parked approval stays answerable', async () => {
-  const s = setup();
-  s.crew.onboard('sir');
-  s.crew.recruit('reel', 'Reel', 'person');
-  const t = s.crew.assign('reel', 'ask permission to copy', 'chief').task;
-  await prompted(s.db, t);
-  s.db.event('task.progress', 'reel', { task: t, text: 'Recorded the first scene' });
-  assert.equal((await s.crew.permission('reel', { tool_name: 'Bash', tool_input: { command: 'cp a b' } })).behavior, 'deny');
-  s.runner.complete('reel', 'Waiting for permission to copy.');
-  assert.equal(task(s.db, t).state, 'needs_you');
-  const fresh = new StubRunner(); // a reboot: Herdr's panes are gone
-  const crew = await restart(s, fresh);
-  await prompted(s.db, t, 2); // the brief, in the new session
-  assert.equal(task(s.db, t).state, 'working');
-  const brief = await fresh.read('reel');
-  assert.match(brief, /stopped \(Crewhouse restarted\)/);
-  assert.match(brief, /Recorded the first scene/);
-  assert.match(brief, /Still waiting on the person's answer[^]*cp a b/);
-  const ask = s.db.get("SELECT * FROM asks WHERE state = 'open' AND kind = 'permission'")!;
-  await crew.answer(ask.id, { answer: 'allow' });
-  assert.match(await fresh.read('reel'), /has answered your request to use Bash \(cp a b\): allowed/);
-  assert.equal((await crew.permission('reel', { tool_name: 'Bash', tool_input: { command: 'cp a b' } })).behavior, 'allow');
-  await settled(s.db, t);
-  assert.equal(task(s.db, t).state, 'done', 'and the new session finished it');
-  crew.stop();
-  s.done();
+
+/** A Grok that fails its sign-in the given way, on one member's runtime (the engine's real login path, a scripted provider). */
+async function grokThat(crew: any, member: number, login: (i: any) => Promise<any>) {
+  const rt = await crew.accounts.runtime(member);
+  const base = rt.getProvider('xai');
+  rt.registerNativeProvider(createProvider({
+    id: 'xai', name: 'Grok', models: base.getModels(),
+    auth: { oauth: { name: 'Grok', login, refresh: async (c: any) => c, toAuth: async () => ({}) } },
+    api: { stream: base.stream, streamSimple: base.streamSimple },
+  } as any));
+}
+const cred = { type: 'oauth', access: 'a', refresh: 'r', expires: Date.now() + 86_400_000 };
+
+test('sign-in: one button shows a code or a link, finishes by itself, keeps the sign-in in that person\'s own file; sign out', async () => {
+  const { db, crew, done } = setup();
+  assert.equal(await crew.accounts.signedIn(OWNER, 'grok'), false);
+  const shown = await crew.accounts.login(OWNER, 'grok', { via: 'code' });
+  assert.deepEqual(shown, { state: 'waiting', code: 'CREW-2026', url: 'https://example.test/xai/device', expiresAt: undefined, error: undefined }, 'it answers with the code at once');
+  await crew.accounts.finished(OWNER, 'grok');
+  assert.equal(crew.accounts.view(OWNER, 'grok')!.state, 'done');
+  await until('the account change reached the app', () => db.get("SELECT 1 FROM events WHERE kind = 'account.changed'"));
+  assert.equal(await crew.accounts.signedIn(OWNER, 'grok'), true);
+  assert.equal(await crew.accounts.signedIn(crew.addMember('Sam').id, 'grok'), false, 'one person\'s sign-in is theirs alone');
+  await crew.accounts.logout(OWNER, 'grok');
+  assert.equal(await crew.accounts.signedIn(OWNER, 'grok'), false);
+  await assert.rejects(crew.accounts.login(OWNER, 'claude'), /no such AI account/);
+
+  // While it waits: the code and the page, nothing else.
+  let go!: () => void;
+  await grokThat(crew, OWNER, async (i) => { i.notify({ type: 'device_code', userCode: 'WB60-FFVO', verificationUri: 'https://accounts.x.ai/device' }); await new Promise<void>((r) => (go = r)); return cred; });
+  assert.deepEqual(await crew.accounts.login(OWNER, 'grok'), { state: 'waiting', code: 'WB60-FFVO', url: 'https://accounts.x.ai/device', expiresAt: undefined, error: undefined });
+  go();
+  await crew.accounts.finished(OWNER, 'grok');
+  assert.equal(crew.accounts.view(OWNER, 'grok')!.state, 'done');
+  done();
 });
 
-test('restart: a held approval keeps its card; the reconnecting hook gets the answer', async () => {
-  const s = setup();
-  s.crew.onboard('sir');
-  s.crew.recruit('reel', 'Reel', 'person');
-  await prompted(s.db, s.crew.assign('reel', 'ask permission to write', 'chief').task);
-  const payload = { tool_name: 'Write', tool_input: { file_path: '/elsewhere/x.txt' } };
-  s.crew.permission('reel', payload).catch(() => {}); // its connection dies with the old crewd
+test('sign-in failures: expired, declined, offline, stalled and cancelled all end signed out with one next step', async () => {
+  const { crew, done } = setup();
+  const fails = async (login: (i: any) => Promise<any>) => {
+    await grokThat(crew, OWNER, login);
+    await crew.accounts.login(OWNER, 'grok');
+    await crew.accounts.finished(OWNER, 'grok');
+    const v = crew.accounts.view(OWNER, 'grok')!;
+    assert.equal(await crew.accounts.signedIn(OWNER, 'grok'), false, 'never half signed in');
+    return v;
+  };
+  assert.deepEqual(await fails(async () => { throw new Error('expired_token'); }),
+    { state: 'failed', url: undefined, code: undefined, expiresAt: undefined, error: 'The code expired before it was used. Tap Sign in with Grok for a new one.' });
+  assert.equal((await fails(async () => { throw new Error('access_denied'); })).error, 'The sign-in was declined on the Grok page. Tap Sign in with Grok to try again.');
+  assert.equal((await fails(async () => { throw new TypeError('fetch failed'); })).error, "Couldn't reach Grok. Check the internet connection, then tap Sign in again.");
+  // A flow that stalls past the limit is stopped.
+  const stalled = await fails((i) => new Promise((_r, reject) => i.signal.addEventListener('abort', () => reject(new Error('aborted')))));
+  assert.equal(stalled.error, 'The sign-in took too long. Tap Sign in with Grok to start again.');
+  // Cancel: nothing kept, nothing shown.
+  await grokThat(crew, OWNER, (i) => new Promise((_r, reject) => i.signal.addEventListener('abort', () => reject(new Error('aborted')))));
+  const p = crew.accounts.login(OWNER, 'grok');
   await sleep(20);
-  const crew = await restart(s);
-  const held = crew.permission('reel', payload, undefined, 100);
-  await sleep(20);
-  const asks = s.db.all("SELECT * FROM asks WHERE kind = 'permission'");
-  assert.equal(asks.length, 1, 'no second card for the same call');
-  await crew.answer(asks[0].id, { answer: 'allow' });
-  assert.deepEqual(await held, { behavior: 'allow' });
-  crew.stop();
-  s.done();
+  const flow = crew.accounts.finished(OWNER, 'grok');
+  crew.accounts.cancel(OWNER, 'grok');
+  await p;
+  await flow;
+  assert.equal(crew.accounts.view(OWNER, 'grok'), null);
+  assert.equal(await crew.accounts.signedIn(OWNER, 'grok'), false);
+  // And a retry after any of these works first time.
+  await grokThat(crew, OWNER, async () => cred);
+  await crew.accounts.login(OWNER, 'grok');
+  await crew.accounts.finished(OWNER, 'grok');
+  assert.equal(crew.accounts.view(OWNER, 'grok')!.state, 'done');
+  assert.equal(signInError('ChatGPT', 'Device code authorization is not enabled for this account'), 'ChatGPT needs device sign-in turned on first: in ChatGPT, Settings, Security, turn on device code sign-in, then try again.');
+  await assert.rejects(crew.accounts.login(OWNER, 'muse'), /no such AI account/, 'no Meta');
+  done();
 });
 
-test('trust: a new bot accepts the trust dialog for its own folder on its first run, then gets its prompt', async () => {
-  const s = setup();
-  const pane = ' Quick safety check: Is this a project you created or one you trust?\n\n ❯ No, exit\n   Yes, I trust this folder\n\n Enter to confirm';
-  const sent: string[][] = [];
-  Object.assign(s.runner, {
-    start: async (spec: any) => { (s.runner as any).states.set(spec.bot, 'blocked'); },
-    read: async () => pane,
-    keys: async (bot: string, keys: string[]) => { sent.push(keys); (s.runner as any).states.set(bot, 'idle'); },
+test('sign-in: a browser sign-in that cannot come back falls back to a code by itself', async () => {
+  const { crew, done } = setup();
+  const tries: string[] = [];
+  await grokThat(crew, OWNER, async (i) => {
+    const how = await i.prompt({ type: 'select', message: 'How?', options: [{ id: 'browser', label: 'Browser' }, { id: 'device_code', label: 'Code' }] });
+    tries.push(how);
+    if (how === 'browser') throw new Error('listen EADDRINUSE: address already in use 127.0.0.1:1455');
+    i.notify({ type: 'device_code', userCode: 'AB12-CD34', verificationUri: 'https://example.test/device' });
+    return cred;
   });
-  s.crew.onboard('sir');
-  s.crew.recruit('reel', 'Reel', 'person');
-  const t = s.crew.assign('reel', 'make a reel', 'chief').task;
-  await settled(s.db, t);
-  assert.deepEqual(sent, [['down', 'enter']], 'Yes, not the default "No, exit"');
-  assert.ok(s.db.get("SELECT 1 FROM events WHERE kind = 'run.trusted'"));
-  assert.equal(s.db.all('SELECT * FROM asks').length, 0, 'nothing for the person to answer');
-  assert.equal(task(s.db, t).state, 'done', 'then the task ran');
-  s.done();
+  await crew.accounts.login(OWNER, 'grok');
+  await crew.accounts.finished(OWNER, 'grok');
+  assert.deepEqual(tries, ['browser', 'device_code']);
+  assert.equal(crew.accounts.view(OWNER, 'grok')!.state, 'done');
+  done();
 });
 
-test('trust: the keys pick Yes whether the CLI lists it first or second', () => {
-  const now = 'quill master ? ❯ claude --setting-sources project,local\n Quick safety check: Is this a project you trust?\n\n ❯ No, exit\n   Yes, I trust this folder\n\n Enter to confirm · Esc to cancel';
-  assert.deepEqual(trustKeys(now), ['down', 'enter']);
-  assert.deepEqual(trustKeys(' Do you trust the files in this folder?\n\n ❯ 1. Yes, proceed\n   2. No, exit'), ['enter']);
-  assert.deepEqual(trustKeys('no dialog here'), ['enter']);
+test('sign-in: a lapsed sign-in is found in the background and said once, in plain words', async () => {
+  const { db, crew, done } = setup();
+  crew.onboard('sir');
+  await grokThat(crew, OWNER, async () => cred);
+  await crew.accounts.login(OWNER, 'grok');
+  await crew.accounts.finished(OWNER, 'grok');
+  const rt: any = await crew.accounts.runtime(OWNER);
+  rt.getAuth = async () => { throw new Error('invalid_grant: refresh token revoked'); };
+  await crew.accounts.keepFresh([OWNER]);
+  assert.ok(crew.accounts.unready(OWNER, 'grok'));
+  assert.match(db.get("SELECT text FROM messages WHERE bot = 'chief' ORDER BY id DESC")!.text, /Your Grok sign-in has run out\. Sign in again under Settings, AI accounts/);
+  done();
 });
+

@@ -14,9 +14,6 @@
   "asks": [
     "never: it only reads files into text"
   ],
-  "allow": [
-    "Bash(markitdown *)"
-  ],
   "grant": {
     "default": true
   }

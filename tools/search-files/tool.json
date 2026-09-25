@@ -15,10 +15,6 @@
   "asks": [
     "never: read-only"
   ],
-  "allow": [
-    "Bash(rg *)",
-    "Bash(jq *)"
-  ],
   "grant": {
     "default": true
   }
