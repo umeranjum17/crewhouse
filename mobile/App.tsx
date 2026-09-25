@@ -381,7 +381,7 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
     ? { text: [shareIntent.text, shareIntent.webUrl].filter((x, i, a) => x && a.indexOf(x) === i).join('\n'), files: (shareIntent.files ?? []).map((f) => ({ path: f.path, mimeType: f.mimeType })) } : null;
   if (shared) return <ShareIn state={state} shared={shared} go={go} onDone={() => resetShareIntent()} />;
   if (!state.person.onboarded && canAct) return <Hello {...ctx} />;
-  const nav: [Route['view'], string, string][] = [['home', 'Chats', '⌂'], ['crew', 'Crew', '☺\uFE0E'], ['things', 'Things', '▤'], ['routines', 'Routines', '↻'], ['phone', 'This phone', '▯']];
+  const nav: [Route['view'], string, art.Tab][] = [['home', 'Chats', 'chats'], ['crew', 'Crew', 'crew'], ['things', 'Things', 'things'], ['routines', 'Routines', 'routines'], ['phone', 'This phone', 'phone']];
   const active = ['chief', 'helper', 'add'].includes(route.view) ? 'crew' : route.view;
   const live = sheet && A.cards(state).find((c) => c.id === sheet.id);
   return (
@@ -415,7 +415,7 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
       <View style={[s.tabbar, { backgroundColor: t.bg, borderColor: t.line }]}>
         {nav.map(([v, label, icon]) => (
           <Pressable key={v} style={s.tab} onPress={() => go({ view: v }, true)} accessibilityRole="tab" accessibilityLabel={label}>
-            <Text style={[s.tabIcon, { color: active === v ? t.ink : t.mute }]}>{icon}</Text>
+            <View style={s.tabIcon}><Dots rows={art.TABS[icon]} pal={{ x: active === v ? t.ink : t.mute }} d={3} /></View>
             <Text style={[s.tabLabel, { color: active === v ? t.ink : t.mute }]}>{label}</Text>
             {v === 'home' && state.asks.length > 0 && <Text style={[s.badge, { backgroundColor: t.wait }]}>{state.asks.length}</Text>}
           </Pressable>
@@ -960,7 +960,7 @@ const s = StyleSheet.create({
   tabPillText: { fontSize: 14, fontWeight: '800' },
   tabbar: { flexDirection: 'row', borderTopWidth: 1, paddingVertical: 6 },
   tab: { flex: 1, alignItems: 'center', gap: 1, minHeight: 48, justifyContent: 'center' },
-  tabIcon: { fontSize: 20 },
+  tabIcon: { height: 30, justifyContent: 'center' },
   tabLabel: { fontSize: 11.5, fontWeight: '700' },
   unread: { minWidth: 20, height: 20, borderRadius: 10, color: '#2e2a40', fontSize: 12, fontWeight: '900', textAlign: 'center', overflow: 'hidden', paddingHorizontal: 5, lineHeight: 20 },
   badge: { position: 'absolute', top: 0, left: '58%', minWidth: 18, height: 18, borderRadius: 9, color: '#fff', fontSize: 11, fontWeight: '800', textAlign: 'center', overflow: 'hidden', paddingHorizontal: 4 },
