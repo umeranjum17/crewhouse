@@ -1,4 +1,5 @@
-// The phone link: envelope crypto, then pairing, grants and revocation through the real daemon.
+// The phone link: where it listens, then pairing, the person's yes, grants, approvals and removal through the real
+// daemon, with @byokit/link's own device side as the phone. The Noise handshake and frames are the package's, tested there.
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
@@ -6,63 +7,8 @@ import { mkdtempSync, readFileSync, statSync } from 'node:fs';
 import { createServer, type AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import b4a from 'b4a';
-import Noise from 'noise-handshake';
-import { Channel, keyPair, openLink, parseOffer, respond, unb64 } from '../src/envelope.ts';
+import { DeviceLink, pairWithOffer, type DeviceGrant, type LinkStatus } from '@byokit/link';
 import { linkHosts, phoneAddresses } from '../src/link.ts';
-
-/** The phone's half of Noise IK, as the app runs it. */
-function phoneHello(me: ReturnType<typeof keyPair>, crewdPk: Uint8Array, hello = { v: 1, pair: false }) {
-  const hs = new Noise('IK', true, { publicKey: b4a.from(me.publicKey), secretKey: b4a.from(me.secretKey) });
-  hs.initialise(b4a.from('crewhouse-link-v1'), b4a.from(crewdPk));
-  return { hs, first: b4a.toString(hs.send(b4a.from(JSON.stringify(hello))), 'base64') };
-}
-
-test('Noise IK handshake: both ends agree, and each learns who the other is', () => {
-  const [phone, crewd] = [keyPair(), keyPair()];
-  const { hs, first } = phoneHello(phone, crewd.publicKey, { v: 1, pair: true });
-  const r = respond(crewd, first);
-  assert.deepEqual(r.hello, { v: 1, pair: true });
-  assert.deepEqual(Buffer.from(r.phone), Buffer.from(phone.publicKey), 'crewd learns the phone key from the handshake');
-  hs.recv(unb64(r.reply));
-  assert.ok(hs.complete);
-  const p = new Channel(hs), c = r.channel;
-  const [f] = p.seal({ hi: 'ünïcode ✓' });
-  assert.doesNotMatch(Buffer.from(f, 'base64').toString('latin1'), /hi|nicode/, 'payload is not readable on the wire');
-  assert.deepEqual(c.open(f), { hi: 'ünïcode ✓' });
-  assert.deepEqual(p.open(c.seal({ back: 1 })[0]), { back: 1 });
-});
-
-test('wrong keys are refused', () => {
-  const [phone, crewd, other] = [keyPair(), keyPair(), keyPair()];
-  // A phone holding a different crewd key (a spoofed QR, or the wrong computer) can't complete.
-  assert.throws(() => respond(crewd, phoneHello(phone, other.publicKey).first), /verify/);
-  // And a reply from anyone but the crewd in the QR fails on the phone.
-  const { hs, first } = phoneHello(phone, crewd.publicKey);
-  respond(crewd, first);
-  const impostor = respond(other, phoneHello(phone, other.publicKey).first);
-  assert.throws(() => hs.recv(unb64(impostor.reply)));
-  assert.throws(() => parseOffer('{"crewhouse":1}'), /not a Crewhouse/);
-});
-
-test('frames: replay, tamper and reorder are refused; big messages go in pieces', () => {
-  const [phone, crewd] = [keyPair(), keyPair()];
-  const { hs, first } = phoneHello(phone, crewd.publicKey);
-  const r = respond(crewd, first);
-  hs.recv(unb64(r.reply));
-  const p = new Channel(hs), c = r.channel;
-  const [f0] = p.seal({ n: 0 }), [f1] = p.seal({ n: 1 }), [f2] = p.seal({ n: 2 });
-  assert.deepEqual(c.open(f0), { n: 0 });
-  assert.throws(() => c.open(f0), 'a replayed frame is refused');
-  assert.throws(() => c.open(f2), 'a skipped frame is refused');
-  const bytes = unb64(f1); bytes[3] ^= 1;
-  assert.throws(() => c.open(Buffer.from(bytes).toString('base64')), 'a flipped bit is refused');
-  const big = { text: 'x'.repeat(150_000) };
-  const frames = p.seal(big);
-  assert.equal(frames.length, 3);
-  const c2 = respond(crewd, phoneHello(phone, crewd.publicKey).first).channel;
-  assert.throws(() => c2.open(frames[0]), 'frames do not carry into another socket');
-});
 
 test('the link binds loopback and Tailscale by default; the home network only when turned on', () => {
   const at = (address: string, internal = false) => [{ address, family: 'IPv4', internal, netmask: '', mac: '', cidr: null }] as any;
@@ -70,7 +16,8 @@ test('the link binds loopback and Tailscale by default; the home network only wh
   assert.deepEqual(linkHosts('', false, ifaces), ['127.0.0.1', '100.101.2.3']);
   assert.deepEqual(linkHosts('', true, ifaces), ['0.0.0.0']);
   assert.deepEqual(linkHosts('10.0.0.5, 127.0.0.1', true, ifaces), ['10.0.0.5', '127.0.0.1'], 'CREWHOUSE_LINK_HOST pins the addresses');
-  assert.deepEqual(phoneAddresses(['127.0.0.1', '100.101.2.3'], ifaces), ['100.101.2.3'], 'the QR never offers loopback');
+  assert.deepEqual(phoneAddresses(['127.0.0.1', '100.101.2.3'], ifaces), ['100.101.2.3'], 'the QR offers loopback only when there is nothing else');
+  assert.deepEqual(phoneAddresses(['127.0.0.1'], ifaces), ['127.0.0.1']);
   assert.deepEqual(phoneAddresses(['0.0.0.0'], ifaces), ['192.168.1.20', '100.101.2.3'], 'home network first; container bridges skipped');
   assert.deepEqual(linkHosts('', false, { lo: at('127.0.0.1', true), eth0: at('192.168.1.20') }), ['127.0.0.1'], 'no Tailscale: loopback only');
 });
@@ -82,8 +29,8 @@ const port = await free();
 const linkPort = await free();
 const base = `http://127.0.0.1:${port}`;
 const daemon = spawn(process.execPath, [join(import.meta.dirname, '..', 'src', 'main.ts')], {
-  env: { ...process.env, CREWHOUSE_ENGINE: 'stub', CREWHOUSE_PAIR_MS: '1500', CREWHOUSE_HOLD_MS: '5000', CREWHOUSE_PORT: String(port), CREWHOUSE_LINK_PORT: String(linkPort),
-    CREWHOUSE_STATE_DIR: join(root, 'state'), CREWHOUSE_CREW_DIR: join(root, 'crew'), CREWHOUSE_TOOLS_DIR: join(root, 'tools') },
+  env: { ...process.env, CREWHOUSE_ENGINE: 'stub', CREWHOUSE_PAIR_MS: '3000', CREWHOUSE_HOLD_MS: '5000', CREWHOUSE_PORT: String(port), CREWHOUSE_LINK_PORT: String(linkPort),
+    CREWHOUSE_LINK_HOST: '127.0.0.1', CREWHOUSE_STATE_DIR: join(root, 'state'), CREWHOUSE_CREW_DIR: join(root, 'crew'), CREWHOUSE_TOOLS_DIR: join(root, 'tools') },
   stdio: ['ignore', 'pipe', 'inherit'],
 });
 after(() => daemon.kill());
@@ -98,110 +45,94 @@ async function until<T>(fn: () => Promise<T | undefined | false>, ms = 10_000): 
   throw new Error('timed out');
 }
 
-/** A phone: its own key pair, one socket, numbered requests. */
-async function phone(me: ReturnType<typeof keyPair>, crewdPk: Uint8Array, first: any) {
-  const events: any[] = [], waiting = new Map<number, (r: any) => void>();
-  let closed = '', n = 0;
-  const link = await openLink(`ws://127.0.0.1:${linkPort}/link`, me, crewdPk, first, {
-    message: (m) => (m.t === 'res' ? waiting.get(m.id)?.(m) : events.push(m)),
-    close: (why) => { closed = why; },
-  });
-  const req = (method: string, path: string, body?: unknown, key?: string) => new Promise<any>((resolve) => {
-    const id = ++n; waiting.set(id, resolve); link.send({ t: 'req', id, method, path, body, key });
-  });
-  return { link, req, events, closed: () => closed };
+/** A phone scans the QR; the person at the computer checks the two words and answers. */
+async function pairPhone(qr: string, name: string, yes = true) {
+  let words = '';
+  const paired = pairWithOffer(qr, { name, onWords: (w) => { words = w; } });
+  const asking = await until(async () => (await http('GET', '/api/phones/link')).body.asking.find((a: any) => a.name === name));
+  assert.equal(asking.words, words, 'the computer shows the same two words as the phone');
+  assert.match(words, /^[a-z]+ [a-z]+$/);
+  await http('POST', '/api/phones/answer', { id: asking.id, yes });
+  return paired;
 }
 
-test('pairing, grants, idempotent answers and revocation', async () => {
+/** A paired phone's live link, answered like HTTP (as the app's transport reads it). */
+function open(grant: DeviceGrant) {
+  const events: any[] = [];
+  let status: LinkStatus = 'connecting';
+  const link = new DeviceLink(grant, { onEvent: (e) => events.push(e), onStatus: (s) => { status = s; } });
+  const req = async (method: string, path: string, body?: unknown) => {
+    try { return await link.request(`${method} ${path}`, body) as { status: number; body: any }; }
+    catch (e: any) { return { status: e.code === 'view-only' ? 403 : 0, body: { error: e.code } }; }
+  };
+  return { link, req, events, status: () => status };
+}
+
+test('pairing with a yes at the computer, grants, approvals from the phone, and removal', async () => {
   await until(async () => (await fetch(`${base}/api/state`).catch(() => null))?.ok);
   assert.equal(statSync(join(root, 'state', 'link.key')).mode & 0o777, 0o600, 'the link key is private to the owner');
-
-  // By default the link is on loopback (and Tailscale, when there is one), never every interface.
   assert.deepEqual((await http('GET', '/api/phones')).body, [], 'docs/ui-contract.md: a list');
-  let st = (await http('GET', '/api/phones/link')).body;
-  assert.equal(st.lan, false);
-  assert.ok(st.hosts.includes('127.0.0.1') && !st.hosts.includes('0.0.0.0'), JSON.stringify(st.hosts));
-  assert.ok(st.hosts.every((h: string) => h === '127.0.0.1' || h.startsWith('100.')));
-  assert.equal((await http('PUT', '/api/phones/lan', { on: true }, {})).status, 403, 'only this computer can widen it');
-  st = (await http('PUT', '/api/phones/lan', { on: true })).body;
-  assert.deepEqual(st.hosts, ['0.0.0.0'], 'the home network is an explicit opt-in');
-  st = (await http('PUT', '/api/phones/lan', { on: false })).body;
-  assert.ok(!st.hosts.includes('0.0.0.0'));
 
-  // The QR: crewd's key, a single-use code, addresses. Only this computer can ask for one.
+  // Only this computer can widen the link, show a code or answer a phone.
+  assert.equal((await http('PUT', '/api/phones/lan', { on: true }, {})).status, 403);
   assert.equal((await http('POST', '/api/phones/pair', { role: 'control' }, {})).status, 403);
-  const offer = (await http('POST', '/api/phones/pair', { role: 'control' })).body;
-  const qr = parseOffer(offer.qr);
-  const crewdPk = unb64(qr.k);
-  assert.match(offer.fp, /^[0-9a-f]{4}( [0-9a-f]{4}){3}$/);
+  assert.equal((await http('POST', '/api/phones/answer', { id: 1, yes: true }, {})).status, 403);
 
-  // An unpaired phone gets nowhere without a code; a wrong server key fails the handshake.
-  const me = keyPair();
-  await assert.rejects(phone(me, crewdPk, { t: 'auth' }), /not paired/);
-  await assert.rejects(phone(me, keyPair().publicKey, { t: 'pair', code: qr.c, name: 'Pixel' }), /verify|closed/);
-  // That failed attempt burned nothing: the code only dies when crewd can read it.
+  // A no at the computer stores nothing, and the phone is told.
+  const first = (await http('POST', '/api/phones/pair', { role: 'control' })).body;
+  assert.deepEqual(first.urls, [`ws://127.0.0.1:${linkPort}/link`]);
+  await assert.rejects(pairPhone(first.qr, 'Stranger', false), /said no/);
+  assert.deepEqual((await http('GET', '/api/phones')).body, []);
 
-  const a = await phone(me, crewdPk, { t: 'pair', code: qr.c, name: 'Pixel' });
-  assert.equal(a.link.ready.device.role, 'control');
-  assert.equal(a.link.ready.fp, offer.fp);
-  await assert.rejects(phone(keyPair(), crewdPk, { t: 'pair', code: qr.c, name: 'Again' }), /expired|not paired/, 'codes are single use');
-  const late = parseOffer((await http('POST', '/api/phones/pair', { role: 'control' })).body.qr);
-  await sleep(1700);
-  await assert.rejects(phone(keyPair(), crewdPk, { t: 'pair', code: late.c, name: 'Late' }), /expired|not paired/, 'codes expire');
+  const grant = await pairPhone((await http('POST', '/api/phones/pair', { role: 'control' })).body.qr, 'Pixel');
+  assert.equal(grant.device.role, 'control');
+  const late = (await http('POST', '/api/phones/pair', { role: 'control' })).body.qr;
+  await sleep(3200);
+  await assert.rejects(pairWithOffer(late, { name: 'Late', onWords: () => {} }), /run out/, 'codes expire');
 
-  // The grant is durable: a fresh socket with the same key needs no code.
-  a.link.close();
-  const b = await phone(me, crewdPk, { t: 'auth' });
-  const state = await b.req('GET', '/api/state');
+  // The grant is durable: the phone connects with its key alone, as the member whose screen showed the code.
+  const a = open(grant);
+  const state = await a.req('GET', '/api/state');
   assert.equal(state.status, 200);
   assert.ok(state.body.bots.some((x: any) => x.id === 'chief'));
-  assert.equal((await b.req('POST', '/api/phones/pair', { role: 'control' })).status, 404, 'a phone cannot mint pairing codes');
-  assert.equal((await b.req('GET', '/api/phones')).status, 404, 'or list phones');
-  assert.equal((await b.req('GET', '/api/phones/link')).status, 404);
-  assert.equal((await b.req('POST', '/api/connections/notion')).status, 403, 'connecting apps stays on the computer');
-  assert.equal((await b.req('PUT', '/api/house/google', { id: 'x', secret: 'y' })).status, 403, 'and so does the house Google app');
-  assert.equal((await b.req('GET', '/api/accounts')).status, 403, 'AI account sign-ins stay on the computer');
-  assert.equal((await b.req('POST', '/api/people', { name: 'Mallory' })).status, 403, 'and so does adding people');
-  assert.equal((await b.req('GET', '/api/people')).status, 200);
-  assert.equal((await b.req('GET', '/files/chief/x')).status, 404);
+  assert.equal((await a.req('POST', '/api/phones/pair', { role: 'control' })).status, 403, 'a phone cannot show pairing codes');
+  assert.equal((await a.req('GET', '/api/phones')).status, 403, 'or list phones');
+  assert.equal((await a.req('GET', '/api/accounts')).status, 403, 'AI account sign-ins stay on the computer');
+  assert.equal((await a.req('POST', '/api/people', { name: 'Mallory' })).status, 403, 'and so does adding people');
+  assert.equal((await a.req('POST', '/api/connections/notion')).status, 403, 'and connecting apps');
+  assert.equal((await a.req('PUT', '/api/house/google', { id: 'x', secret: 'y' })).status, 403, 'and the house Google app');
+  assert.equal((await a.req('GET', '/api/people')).status, 200);
+  assert.equal((await a.req('GET', '/files/chief/x')).status, 404);
 
-  // Live events arrive sealed; a retried tap with the same key runs once.
-  await b.req('POST', '/api/onboard', { address: 'Sir' });
-  const r1 = await b.req('POST', '/api/bots/chief/messages', { text: 'hello from the phone' }, 'tap-1');
-  const r2 = await b.req('POST', '/api/bots/chief/messages', { text: 'hello from the phone' }, 'tap-1');
-  assert.deepEqual(r1, { ...r2, id: r1.id });
-  const msgs = (await http('GET', '/api/bots/chief')).body.messages.filter((m: any) => m.text === 'hello from the phone');
-  assert.equal(msgs.length, 1);
-  await until(async () => b.events.find((m) => m.t === 'event' && m.e.kind === 'person.onboarded'));
+  // Live events arrive over the link.
+  await a.req('POST', '/api/onboard', { address: 'Sir' });
+  await until(async () => a.events.find((e) => e.kind === 'person.onboarded'));
 
   // An approval answered from the phone: the gate holds the bot's write until the phone says yes.
   await http('POST', '/api/recruit', { template: 'reel', name: 'Reel' });
   const outside = join(root, 'Documents', 'from-phone.txt');
-  const job = (await b.req('POST', '/api/bots/reel/messages', { text: `save it [tool write ${JSON.stringify({ path: outside, content: 'from the phone' })}]` }, 'tap-2')).body.task;
-  const ask = await until(async () => (await b.req('GET', '/api/state')).body.asks.find((x: any) => x.kind === 'permission'));
+  const job = (await a.req('POST', '/api/bots/reel/messages', { text: `save it [tool write ${JSON.stringify({ path: outside, content: 'from the phone' })}]` })).body.task;
+  const ask = await until(async () => (await a.req('GET', '/api/state')).body.asks.find((x: any) => x.kind === 'permission'));
   assert.match(ask.title, /Reel wants to change a file/);
-  assert.equal((await b.req('POST', `/api/asks/${ask.id}/answer`, { answer: 'allow' }, 'ans-1')).status, 200);
+  assert.equal((await a.req('POST', `/api/asks/${ask.id}/answer`, { answer: 'allow' })).status, 200);
   await until(async () => (await http('GET', '/api/bots/reel')).body.tasks.find((x: any) => x.id === job && x.state === 'done'));
   assert.equal(readFileSync(outside, 'utf8'), 'from the phone');
 
-  // A view-only phone watches but can't act.
-  // Paired from Sam's screen, the tablet is Sam's: his thread, his questions.
+  // Paired from Sam's screen, the view-only tablet is Sam's: his thread, his questions, and it can only watch.
   const sam = (await http('POST', '/api/people', { name: 'Sam' })).body;
-  const v = parseOffer((await http('POST', '/api/phones/pair', { role: 'view' }, { 'x-crewhouse': '1', 'x-crewhouse-member': String(sam.id) })).body.qr);
-  const watcher = await phone(keyPair(), crewdPk, { t: 'pair', code: v.c, name: 'Tablet' });
-  assert.equal(watcher.link.ready.device.role, 'view');
+  const offer = (await http('POST', '/api/phones/pair', { role: 'view' }, { 'x-crewhouse': '1', 'x-crewhouse-member': String(sam.id) })).body;
+  const watcher = open(await pairPhone(offer.qr, 'Tablet'));
+  assert.equal(watcher.link.grant.device.role, 'view');
   assert.equal((await watcher.req('GET', '/api/state')).body.person.id, sam.id);
-  assert.equal((await watcher.req('GET', '/api/state')).status, 200);
   assert.equal((await watcher.req('POST', '/api/bots/chief/messages', { text: 'hi' })).status, 403);
 
-  // Settings lists both; revoking closes the socket and refuses the key from then on.
-  const devices = (await http('GET', '/api/phones')).body;
-  assert.deepEqual(devices.map((d: any) => d.member), [1, sam.id], 'a phone belongs to the member whose screen showed the code');
-  assert.deepEqual(devices.map((d: any) => [d.name, d.role, d.online]), [['Pixel', 'control', true], ['Tablet', 'view', true]]);
-  assert.equal((await http('DELETE', `/api/phones/${devices[0].id}`)).status, 200);
-  await until(async () => b.closed());
-  assert.ok(b.events.some((m) => m.t === 'revoked'), 'removal is said inside the encrypted channel, not only in a plaintext close');
-  await assert.rejects(phone(me, crewdPk, { t: 'auth' }), /not paired/);
+  // Settings lists both; removing one closes its link, the phone forgets its grant, and its key is refused.
+  const phones = (await http('GET', '/api/phones')).body;
+  assert.deepEqual(phones.map((d: any) => [d.name, d.role, d.member, d.online]), [['Pixel', 'control', 1, true], ['Tablet', 'view', sam.id, true]]);
+  assert.equal((await http('DELETE', `/api/phones/${phones[0].id}`)).status, 200);
+  await until(async () => a.status() === 'removed');
+  const again = open(grant);
+  await until(async () => again.status() === 'removed', 15_000);
   assert.equal((await watcher.req('GET', '/api/state')).status, 200, 'other phones are untouched');
-  watcher.link.close();
+  watcher.link.stop();
 });

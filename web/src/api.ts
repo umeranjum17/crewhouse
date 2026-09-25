@@ -73,6 +73,8 @@ export const api = {
   phoneLink: () => call('GET', '/api/phones/link'),
   pairPhone: (role: 'control' | 'view' = 'control') => call('POST', '/api/phones/pair', { role }),
   removePhone: (id: string) => call('DELETE', `/api/phones/${id}`),
+  /** The person's yes or no for a phone that scanned the code; both screens show the same two words. */
+  answerPhone: (id: number, yes: boolean) => call('POST', '/api/phones/answer', { id, yes }),
   phonesAtHome: (on: boolean) => call('PUT', '/api/phones/lan', { on }),
   connect: (app: string) => call('POST', `/api/connections/${app}`),
   connection: (app: string) => call('GET', `/api/connections/${app}`),

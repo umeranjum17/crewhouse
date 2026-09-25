@@ -43,7 +43,7 @@ Install the APK from the draft release [Phone app preview (debug-signed APK)](ht
 
 ```bash
 gh release download untagged-1276d44f733d753e4f66 -R umeranjum17/crewhouse -p '*.apk'
-sha256sum crewhouse-phone-debug.apk   # 364243318191a91a23e0bd0c01bb6f3c741091eedd3d18992496578a29b56edb
+sha256sum crewhouse-phone-debug.apk   # 480f6810a021ca6d4c80d9890ea9e2bf32e84dd2e54690510df869dffd02f8dd
 adb install -r crewhouse-phone-debug.apk   # phone on USB with USB debugging on
 ```
 
@@ -53,7 +53,7 @@ To pair:
 
 1. The phone needs to reach this computer. Either turn on Tailscale on the phone, or tick **Phones on this Wi-Fi can reach the crew** under **Settings, Phones**.
 2. Open **http://127.0.0.1:7711**, then **Settings, Phones, Add a phone**.
-3. In the app, press **Scan the code** and scan it within 2 minutes. Check that the letters on the phone match the ones on the computer.
+3. In the app, press **Scan the code** and scan it within 2 minutes. The phone shows two words, and the computer asks whether it may join: press **Yes, the words match** only if the words are the same. A phone paired before this version keeps working without pairing again.
 4. In the app, tell Reel: *Save a copy of the video in my Documents folder.* When the question shows on the app's Home, tap **Yes, go ahead**.
 
 ## Known issues

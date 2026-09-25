@@ -1,116 +1,46 @@
-// The phone's end of the link: its key pair and grant in secure storage, one socket to crewd that
-// reconnects forever, and requests that survive a reconnect (same idempotency key, so a retried tap runs once).
+// The phone's end of the link: @byokit/link's device side, its grant in secure storage, and the transport that
+// web/src/api.ts calls through. Each call is one request, `METHOD /path`, answered like HTTP (src/link.ts).
+import { DeviceLink, LinkError, pairWithOffer, type DeviceGrant, type LinkStatus } from '@byokit/link';
 import * as Device from 'expo-device';
 import * as SecureStore from 'expo-secure-store';
-import { b64, fingerprint, keyPair, keyPairFrom, openLink, parseOffer, unb64, type KeyPair } from '../../src/envelope.ts';
 
-export type Grant = { sk: string; crewdPk: string; fp: string; urls: string[]; device: { id: string; name: string; role: 'control' | 'view' } };
-export type Status = 'connecting' | 'online' | 'offline' | 'refused' | 'removed';
+export type Grant = DeviceGrant;
+export type Status = LinkStatus;
 const STORE = 'crewhouse.grant';
+const url64 = (s: string) => s.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+const store = { save: (g: Grant) => SecureStore.setItemAsync(STORE, JSON.stringify(g)), clear: () => SecureStore.deleteItemAsync(STORE) };
 
 export async function loadGrant(): Promise<Grant | null> {
   const s = await SecureStore.getItemAsync(STORE);
-  return s ? JSON.parse(s) : null;
+  if (!s) return null;
+  const g = JSON.parse(s);
+  if (g.v === 1) return g;
+  // Paired before @byokit/link: the same keys, stored in the old shape. The computer kept this phone's grant too.
+  const moved: Grant = { v: 1, secretKey: url64(g.sk), host: url64(g.crewdPk), hostName: 'your computer', urls: g.urls, device: g.device };
+  await store.save(moved);
+  return moved;
 }
-export const forgetGrant = () => SecureStore.deleteItemAsync(STORE);
-const me = (g: Grant): KeyPair => keyPairFrom(unb64(g.sk));
+export const forgetGrant = store.clear;
 
-/** Scan result in, durable grant out. Tries each address in the QR until one answers. */
-export async function pair(qrText: string): Promise<Grant> {
-  const offer = parseOffer(qrText);
-  const mine = keyPair();
-  const crewdPk = unb64(offer.k);
+/** Scan result in, grant out, once the person at the computer says yes. `onWords`: the two words to show meanwhile. */
+export async function pair(scanned: string, onWords: (w: string) => void): Promise<Grant> {
   const name = (Device.deviceName || Device.modelName || 'Phone').slice(0, 40);
-  let last = new Error('the code has no addresses');
-  for (const url of offer.u) {
-    try {
-      const l = await openLink(url, mine, crewdPk, { t: 'pair', code: offer.c, name }, { message: () => {}, close: () => {} });
-      l.close();
-      const g: Grant = { sk: b64(mine.secretKey), crewdPk: offer.k, fp: fingerprint(crewdPk), urls: [url, ...offer.u.filter((u) => u !== url)], device: l.ready.device };
-      await SecureStore.setItemAsync(STORE, JSON.stringify(g));
-      return g;
-    } catch (e: any) {
-      last = e;
-      if (/expired|removed/.test(e.message)) break; // the code is spent; other addresses won't help
-    }
-  }
-  throw last;
+  const g = await pairWithOffer(scanned, { name, onWords });
+  await store.save(g);
+  return g;
 }
 
-type Pending = { msg: any; resolve: (v: any) => void; reject: (e: Error) => void };
-
-export class PhoneLink {
-  grant: Grant;
-  status: Status = 'connecting';
-  url = '';
-  private conn: { send: (m: unknown) => void; close: () => void } | null = null;
-  private pending = new Map<number, Pending>();
-  private n = 0;
-  private stopped = false;
-  private onEvent: (e: any) => void;
-  private onStatus: (s: Status) => void;
-
-  constructor(grant: Grant, onEvent: (e: any) => void, onStatus: (s: Status) => void) {
-    this.grant = grant;
-    this.onEvent = onEvent;
-    this.onStatus = onStatus;
-    this.connect();
-  }
-
-  private set(s: Status) { this.status = s; this.onStatus(s); }
-
-  private async connect() {
-    if (this.stopped) return;
-    this.set(this.status === 'online' ? 'offline' : this.status);
-    for (const url of this.grant.urls) {
-      try {
-        const l = await openLink(url, me(this.grant), unb64(this.grant.crewdPk), { t: 'auth' }, {
-          message: (m) => {
-            if (m.t === 'revoked') return this.removed(); // sealed by crewd, so it is really crewd saying it
-            if (m.t === 'event') return this.onEvent(m.e);
-            const p = m.t === 'res' && this.pending.get(m.id);
-            if (!p) return;
-            this.pending.delete(m.id);
-            m.status === 200 ? p.resolve(m.body) : p.reject(new Error(m.body?.error ?? `error ${m.status}`));
-          },
-          close: () => { this.conn = null; if (this.status === 'removed') return; this.set('offline'); setTimeout(() => this.connect(), 1500); },
-        });
-        if (this.stopped) return l.close();
-        this.conn = l;
-        this.url = url;
-        this.grant.urls = [url, ...this.grant.urls.filter((u) => u !== url)]; // try the one that worked first next time
-        this.set('online');
-        this.onEvent({ kind: 'connected' });
-        for (const p of this.pending.values()) l.send(p.msg); // resend with the same key: crewd runs each once
-        return;
-      } catch (e: any) {
-        // crewd answered but won't take this phone. That answer is not authenticated, so keep the grant
-        // and let the person decide (pair again, or retry) rather than forget it on a stranger's word.
-        if (/not paired|removed|verify/.test(e.message)) { this.stopped = true; return this.set('refused'); }
-      }
+export function connect(grant: Grant, onEvent: (e: any) => void, onStatus: (s: Status) => void) {
+  const link = new DeviceLink(grant, { store, onEvent, onStatus });
+  /** The Transport for web/src/api.ts: crewd's answer, or an error with the HTTP status the screens understand. */
+  const call = async (method: string, path: string, body?: unknown) => {
+    let r: { status: number; body: any };
+    try { r = (await link.request(`${method} ${path}`, body)) as typeof r; } catch (e) {
+      // No status means "can't reach the home computer"; a view-only phone is told it can't, as crewd would.
+      throw Object.assign(new Error((e as Error).message), e instanceof LinkError && e.code === 'view-only' ? { status: 403 } : {});
     }
-    this.set('offline');
-    setTimeout(() => this.connect(), 3000);
-  }
-
-  private removed() {
-    this.stopped = true;
-    for (const p of this.pending.values()) p.reject(new Error('this phone was removed'));
-    this.pending.clear();
-    forgetGrant();
-    this.set('removed');
-  }
-
-  /** The Transport for web/src/api.ts. Resolves only when crewd has answered. */
-  call = (method: string, path: string, body?: unknown) => new Promise<any>((resolve, reject) => {
-    const id = ++this.n;
-    const key = method === 'GET' ? undefined : `${Date.now().toString(36)}-${id}-${Math.random().toString(36).slice(2)}`;
-    const msg = { t: 'req', id, method, path, body, key };
-    this.pending.set(id, { msg, resolve, reject });
-    this.conn?.send(msg);
-  });
-
-  retry() { this.stopped = false; this.set('connecting'); this.connect(); }
-
-  stop() { this.stopped = true; this.conn?.close(); }
+    if (r.status !== 200) throw Object.assign(new Error(r.body?.error ?? `error ${r.status}`), { status: r.status });
+    return r.body;
+  };
+  return { link, call };
 }

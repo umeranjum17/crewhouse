@@ -16,11 +16,9 @@
   },
   "dependencies": {
     "@byokit/accounts": "0.1.0",
+    "@byokit/link": "0.1.0",
     "@desklink/host": "^0.1.0",
     "@earendil-works/pi-coding-agent": "0.87.1",
-    "b4a": "1.9.0",
-    "noise-handshake": "4.2.0",
-    "sodium-universal": "5.0.1",
     "ws": "^8.18.0"
   },
   "devDependencies": {
