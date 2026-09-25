@@ -41,7 +41,9 @@ export async function pairTyped(relay: string, short: string, code: string, onWo
 }
 
 export function connect(grant: Grant, onEvent: (e: any) => void, onStatus: (s: Status) => void) {
-  const link = new DeviceLink(grant, { store, onEvent, onStatus });
+  // The computer says where else it can be reached (Tailscale came up, its home address moved): remember each one.
+  const heard = (e: any) => { if (e?.kind === 'link.urls') (e.data?.urls ?? []).forEach((u: string) => link.addUrl(u)); else onEvent(e); };
+  const link: DeviceLink = new DeviceLink(grant, { store, onEvent: heard, onStatus });
   /** The Transport for web/src/api.ts: crewd's answer, or an error with the HTTP status the screens understand. */
   const call = async (method: string, path: string, body?: unknown) => {
     let r: { status: number; body: any };
