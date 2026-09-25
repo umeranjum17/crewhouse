@@ -44,7 +44,7 @@ export function whenOf(e: Pick<Event, 'start' | 'end' | 'allDay'>) {
 }
 
 /** A TOON table; a value with a comma, quote or leading space is quoted. */
-function table(name: string, fields: string[], rows: Record<string, string>[]) {
+export function table(name: string, fields: string[], rows: Record<string, string>[]) {
   const cell = (v: string) => (/[,"\\]|^\s|\s$|^$/.test(v) ? JSON.stringify(v) : v);
   return [`${name}[${rows.length}]{${fields.join(',')}}:`, ...rows.map((r) => '  ' + fields.map((f) => cell(r[f] ?? '')).join(','))].join('\n');
 }
@@ -78,7 +78,7 @@ export async function events(token: Token, from: Date, to: Date, extra: Record<s
 const span = (at: Date, allDay: boolean, end: Date) => (allDay ? { start: { date: ymd(at) }, end: { date: ymd(end) } } : { start: { dateTime: at.toISOString() }, end: { dateTime: end.toISOString() } });
 
 /** `--name value` options, and the words left over. */
-function options(args: string[]) {
+export function options(args: string[]) {
   const o: Record<string, string> = {}, rest: string[] = [];
   for (let i = 0; i < args.length; i++) {
     if (args[i].startsWith('--') && i + 1 < args.length) o[args[i].slice(2)] = args[++i];

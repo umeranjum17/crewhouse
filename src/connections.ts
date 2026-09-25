@@ -8,6 +8,7 @@ import { defineTool, type ToolDefinition } from '@earendil-works/pi-coding-agent
 import { Type } from '@earendil-works/pi-ai';
 import type { Config } from './config.ts';
 import { CALENDAR, calendarTool, events } from './calendar.ts';
+import { mailTool } from './mail.ts';
 
 export { CALENDAR };
 
@@ -37,7 +38,7 @@ const google = (scope: string, server?: string) => ({
 export const APPS: Record<string, App> = {
   drive: { name: 'Google Drive', google: true, ...google('drive.file', 'drivemcp') },
   calendar: { name: 'Google Calendar', google: true, warns: true, ...google('calendar.events'), tool: calendarTool },
-  gmail: { name: 'Gmail', google: true, warns: true, ...google('gmail.readonly', 'gmailmcp') },
+  gmail: { name: 'Gmail', google: true, warns: true, ...google('gmail.readonly'), tool: mailTool },
   notion: { name: 'Notion', servers: ['https://mcp.notion.com/mcp'], issuer: 'https://mcp.notion.com' },
   canva: { name: 'Canva', servers: ['https://mcp.canva.com/mcp'], issuer: 'https://mcp.canva.com' },
 };
