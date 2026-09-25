@@ -49,7 +49,7 @@ const asks = [
   { id: 11, bot: 'scout', task_id: 42, kind: 'permission', at: now - 30_000, member: me, title: '', detail: {
     effect: 'spend', spends: true, ...(variant === 'unknown' ? {
       words: "Scout wants to act on a checkout page at shop.example. I couldn't read the total on this page.",
-      preview: { head: 'The order at shop.example', body: "Garlic, 2 kg — $6.20\nWhole milk (1 gal) x2\nBasmati rice 10 lb\nI couldn't read the total on this page." },
+      preview: { head: 'The order at shop.example', body: "Garlic, 2 kg — $6.20\nWhole milk (1 gal) x2\nBasmati rice 10 lb\nTotal: couldn’t read it on this page" },
       order: { shown: '', known: false, dollars: false },
     } : {
       words: 'Scout wants to place this order at shop.example: Garlic, 2 kg, Whole milk (1 gal) x2, Basmati rice 10 lb. Total $43.10.',
