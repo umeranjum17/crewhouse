@@ -190,3 +190,13 @@ test('chats: Chief first, then the latest talk; last lines in plain words, never
   assert.deepEqual(f.map((x) => [x.name, x.text]), [['Scout', 'Made “Rentals in Phuket”'], ['Reel', 'Sent “X”']]);
   assert.doesNotMatch(shown(f), FORBIDDEN);
 });
+
+test('reach from anywhere: one plain sentence per relay state, naming only the relay\'s host', () => {
+  assert.equal(A.reach({ relay: '', relayStatus: 'off' }).on, false);
+  for (const st of ['connecting', 'online', 'offline', 'refused', 'replaced']) {
+    const r = A.reach({ relay: 'https://relay.example.com', relayStatus: st });
+    assert.ok(r.on && r.words.length > 10, st);
+    assert.doesNotMatch(r.words, /https?:|wss?:|\/relay\/v1|undefined/, st);
+  }
+  assert.equal(A.reach({ relay: 'https://relay.example.com', relayStatus: 'online' }).online, true);
+});

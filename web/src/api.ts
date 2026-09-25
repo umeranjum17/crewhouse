@@ -82,6 +82,10 @@ export const api = {
   /** The person's yes or no for a phone that scanned the code; both screens show the same two words. */
   answerPhone: (id: number, yes: boolean) => call('POST', '/api/phones/answer', { id, yes }),
   phonesAtHome: (on: boolean) => call('PUT', '/api/phones/lan', { on }),
+  /** The relay phones reach this computer through from anywhere ('' off, null back to the default), and a one-use invitation. */
+  phoneRelay: (url: string | null, enrol?: string) => call('PUT', '/api/phones/relay', { url, enrol }),
+  /** Codes to type on the phone instead of scanning, through the relay. */
+  phoneCode: (role: 'control' | 'view' = 'control') => call('POST', '/api/phones/code', { role }),
   connect: (app: string) => call('POST', `/api/connections/${app}`),
   connection: (app: string) => call('GET', `/api/connections/${app}`),
   disconnect: (app: string) => call('DELETE', `/api/connections/${app}`),

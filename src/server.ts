@@ -51,6 +51,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
   const localHost = (h = '') => /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/.test(h);
   // A paired phone acts as the household member it was paired for.
   const link = new Link(cfg, db, (m, path, body, member) => { const u = new URL(path, 'http://x'); return api(m, u.pathname, u.searchParams, body, member); });
+  link.quiet = (member) => !!crew.members().find((x) => x.id === member)?.quietNow;
 
   const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://x');
@@ -69,7 +70,8 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
         if (p === '/api/phones/link' && req.method === 'GET') return send(res, 200, link.status());
         if (p === '/api/phones/pair' && req.method === 'POST') return send(res, 200, await link.offer((await readJson(req)).role ?? 'control', me));
         if (p === '/api/phones/lan' && req.method === 'PUT') { await link.setLan(!!(await readJson(req)).on); return send(res, 200, link.status()); }
-        if (p === '/api/phones/relay' && req.method === 'PUT') { const b = await readJson(req); link.setRelay(typeof b.url === 'string' ? b.url.trim() : null); return send(res, 200, link.status()); }
+        if (p === '/api/phones/relay' && req.method === 'PUT') { const b = await readJson(req); link.setRelay(typeof b.url === 'string' ? b.url.trim() : null, typeof b.enrol === 'string' ? b.enrol : undefined); return send(res, 200, link.status()); }
+        if (p === '/api/phones/code' && req.method === 'POST') return send(res, 200, await link.typed((await readJson(req)).role ?? 'control', me));
         // A phone that scanned the code waits here: the person checks its two words and says yes or no.
         if (p === '/api/phones/answer' && req.method === 'POST') { const b = await readJson(req); link.answer(Number(b.id), b.yes === true); return send(res, 200, { ok: true }); }
         const phone = p.match(/^\/api\/phones\/([\w-]+)$/);

@@ -530,6 +530,9 @@ function Phones({ tick }: { tick: number }) {
   const [link, setLink] = useState<Json>(null);
   const [offer, setOffer] = useState<Json>(null);
   const [qr, setQr] = useState('');
+  const [typed, setTyped] = useState<Json>(null);
+  const [relay, setRelay] = useState<string | null>(null);
+  const [enrol, setEnrol] = useState('');
   const [now, setNow] = useState(Date.now());
   const load = () => Promise.all([api.phones(), api.phoneLink()]).then(([p, l]) => { setPhones(p); setLink(l); }).catch(() => setPhones(null));
   useEffect(() => { void load(); }, [tick]);
@@ -538,12 +541,12 @@ function Phones({ tick }: { tick: number }) {
   // The code closes by itself once a phone uses it.
   const joined = offer && phones?.find((p) => !offer.had.includes(p.id));
   useEffect(() => { if (joined) { setOffer(null); toast(`${joined.name} is paired`); } }, [joined?.id]);
-  const show = (role: 'control' | 'view') => attempt(async () => setOffer({ ...(await api.pairPhone(role)), role, had: (phones ?? []).map((p) => p.id) }));
+  const show = (role: 'control' | 'view') => attempt(async () => { setTyped(null); setOffer({ ...(await api.pairPhone(role)), role, had: (phones ?? []).map((p) => p.id) }); });
   const left = offer ? Math.max(0, Math.round((offer.expires - now) / 1000)) : 0;
 
   return (<>
     <div className="label">Phones</div>
-    {phones === undefined ? <div className="card mute">Checking…</div> : phones === null || !link?.on ? (
+    {phones === undefined ? <div className="card mute">Checking…</div> : phones === null || (!link?.on && !link?.relay) ? (
       <div className="card"><b>Crewhouse on your phone</b><p className="mute">The phone app is on its way. When it arrives, you'll scan a code here and the crew is in your pocket.</p></div>
     ) : (<>
       <div className="card list">
@@ -575,6 +578,8 @@ function Phones({ tick }: { tick: number }) {
             <p className="mute small">{offer.role === 'view' ? 'This phone will watch the crew but not answer or give jobs.' : 'This phone will answer the crew and give them jobs, as you.'}</p>
             <p className="mute small">Then check the two words the phone shows against the ones that appear here.</p>
             <p className="mute small">{left > 0 ? `Works once, for ${left} more seconds.` : 'Make a new one when the phone is ready.'}</p>
+            {left > 0 && A.reach(link).online && (typed ? <p className="small">On the phone, tap <b>Type a code</b> and enter <b>{typed.short}</b>, then <b>{typed.code}</b>.</p>
+              : <button className="link inline small" onClick={() => attempt(async () => setTyped(await api.phoneCode(offer.role)))}>Can't scan? Type a code instead</button>)}
             <div className="btns">{left <= 0 && <button className="btn go" onClick={() => show(offer.role)}>New code</button>}<button className="btn ghost" onClick={() => setOffer(null)}>Close</button></div>
           </div>
         </div>
@@ -584,6 +589,15 @@ function Phones({ tick }: { tick: number }) {
         <span className="grow"><b>Phones on this Wi-Fi can reach the crew</b>
           <div className="mute small">Off: a phone reaches this computer only through <a href="https://tailscale.com" target="_blank" rel="noreferrer">Tailscale</a>, from anywhere. Either way it needs to be paired here first, and everything between them is locked.</div></span>
       </label>
+      <form className="card form" onSubmit={(e) => { e.preventDefault(); void attempt(async () => { setLink(await api.phoneRelay((relay ?? link.relay).trim(), enrol)); setRelay(null); setEnrol(''); }, 'Saved'); }}>
+        <b>Reach this computer from anywhere</b>
+        <p className="mute small">{A.reach(link).words}</p>
+        <p className="mute small">A relay passes messages between your phones and this computer, so this computer opens nothing to the internet. <a href="https://github.com/umeranjum17/crewhouse/blob/main/relay/README.md" target="_blank" rel="noreferrer">Run your own ↗</a></p>
+        <input className="input" value={relay ?? link.relay ?? ''} onChange={(e) => setRelay(e.target.value)} placeholder="Relay address, like https://relay.example.com" aria-label="Relay address" autoComplete="off" />
+        <input className="input" value={enrol} onChange={(e) => setEnrol(e.target.value)} placeholder="Invitation, if the relay gave you one" aria-label="Invitation" autoComplete="off" />
+        <div className="btns"><button className="btn go" disabled={relay === null && !enrol}>Save</button>
+          {!!link.relay && <button type="button" className="btn ghost" onClick={() => attempt(async () => setLink(await api.phoneRelay('')), 'Turned off')}>Turn off</button>}</div>
+      </form>
       {!link.lan && !link.tailscale && !link.pinned && <div className="card mute">This computer has no Tailscale yet, so a phone can't reach it. Install Tailscale on both, or turn on Wi-Fi above.</div>}
     </>)}
   </>);

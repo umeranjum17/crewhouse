@@ -12,8 +12,7 @@ What the relay can and can't see:
   or buttons, and fetches the words over the encrypted link. `main.ts` enforces this on the relay itself.
 - **Metadata:** which computers are registered, when phones connect to them, and phones' push addresses.
 
-The project runs one public relay, whose address is `RELAY` in `src/config.ts` (empty until its hosting is approved).
-A family can use another one: **Settings, Phones** on the computer (`PUT /api/phones/relay {url}`), or
+There is no hosted Crewhouse relay, and the app has no relay address built in. A family runs their own and sets it: **Settings, Phones** on the computer (`PUT /api/phones/relay {url}`), or
 `CREWHOUSE_RELAY=https://relay.example` for crewd. `''` turns the relay off.
 
 ## Run your own

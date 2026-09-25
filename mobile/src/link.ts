@@ -1,6 +1,7 @@
 // The phone's end of the link: @byokit/link's device side, its grant in secure storage, and the transport that
 // web/src/api.ts calls through. Each call is one request, `METHOD /path`, answered like HTTP (src/link.ts).
-import { DeviceLink, LinkError, pairWithOffer, type DeviceGrant, type LinkStatus } from '@byokit/link';
+import { DeviceLink, LinkError, pairWithCode, pairWithOffer, type DeviceGrant, type LinkStatus } from '@byokit/link';
+import { findHost } from '@byokit/relay/device';
 import * as Device from 'expo-device';
 import * as SecureStore from 'expo-secure-store';
 
@@ -30,6 +31,15 @@ export async function pair(scanned: string, onWords: (w: string) => void): Promi
   return g;
 }
 
+/** Typed instead of scanned, through the family's relay: its address, the relay's short code, then the pairing code. */
+export async function pairTyped(relay: string, short: string, code: string, onWords: (w: string) => void): Promise<Grant> {
+  const name = (Device.deviceName || Device.modelName || 'Phone').slice(0, 40);
+  const base = /^[a-z]+:\/\//i.test(relay.trim()) ? relay.trim() : `https://${relay.trim()}`;
+  const g = await pairWithCode(await findHost(base, short.toUpperCase()), code.toUpperCase(), { name, onWords });
+  await store.save(g);
+  return g;
+}
+
 export function connect(grant: Grant, onEvent: (e: any) => void, onStatus: (s: Status) => void) {
   const link = new DeviceLink(grant, { store, onEvent, onStatus });
   /** The Transport for web/src/api.ts: crewd's answer, or an error with the HTTP status the screens understand. */
@@ -42,5 +52,7 @@ export function connect(grant: Grant, onEvent: (e: any) => void, onStatus: (s: S
     if (r.status !== 200) throw Object.assign(new Error(r.body?.error ?? `error ${r.status}`), { status: r.status });
     return r.body;
   };
-  return { link, call };
+  // A phone paired at home learns the relay's address, so it keeps reaching the computer when it leaves the house.
+  const learn = () => call('GET', '/api/reach').then((r: { urls: string[] }) => r.urls.forEach((u) => link.addUrl(u))).catch(() => {});
+  return { link, call, learn };
 }

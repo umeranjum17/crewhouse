@@ -2,8 +2,8 @@
 // without the computer opening a port. It routes link frames it cannot read. Push is content-free: whatever a host
 // asks, a phone is only told "Crewhouse has news" and fetches the text over the encrypted link.
 //
-// Run: `node relay/main.ts` (env below), or the Dockerfile beside it. The project runs one public copy; anyone can
-// run their own (relay/README.md) and point Settings, Phones at it.
+// Run: `node relay/main.ts` (env below), or the Dockerfile beside it. There is no hosted copy: a family runs
+// their own (relay/README.md) and points Settings, Phones at it.
 //   PORT (7300), HOST (127.0.0.1), RELAY_DATA (./relay-data): where it listens and keeps its state
 //   RELAY_SIGNUP: 'enrol' (default: a host needs a one-use enrolment from the owner) or 'open' (any host that proves
 //     its key, up to RELAY_MAX_HOSTS, default 1000)
