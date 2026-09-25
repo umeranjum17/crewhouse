@@ -67,7 +67,10 @@ test('chief onboarding, recruit, assign, grants', async () => {
   await done('chief', hand);
   const t = await until(async () => (await api('GET', '/api/bots/reel')).body.tasks.find((x: any) => x.title === 'Make a 10 second demo' && x.state === 'done'));
   page = (await api('GET', '/api/bots/chief')).body;
-  assert.ok(page.messages.some((m: any) => m.author === 'system' && m.text.includes(`Reel has finished task #${t.id}`)));
+  const said = page.messages.find((m: any) => m.author === 'bot' && m.text.startsWith('Reel has finished “Make a 10 second demo”'));
+  assert.ok(said, 'Chief says it himself');
+  assert.doesNotMatch(said.text, /#\d/, 'no task number');
+  assert.match(said.text, /It's in Reel's chat: “stub reel: done/);
 
   // Grants: what the person ticks is what the bot gets.
   const tools = (await api('GET', '/api/bots/reel')).body.tools;

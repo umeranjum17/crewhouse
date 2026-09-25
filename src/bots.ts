@@ -18,6 +18,8 @@ export interface Template {
   skills?: string[];
   /** Promises the bot makes on Home; each is shown only while every tool it needs is granted and ready. */
   ideas?: { needs: string[]; promise: string; ask: string }[];
+  /** A base for helpers Chief makes up (templates/helper): never offered on its own. */
+  hidden?: boolean;
 }
 
 /** `allow` holds the person's standing answers ("Always for Reel"), as the gate's keys. */
@@ -103,7 +105,7 @@ export const botDir = (cfg: Config, id: string) => join(cfg.crewDir, 'bots', id)
 export function listTemplates(cfg: Config): Template[] {
   return readdirSync(templatesDir(cfg))
     .filter((t) => t !== 'chief' && existsSync(join(templatesDir(cfg), t, 'bot.json')))
-    .map((t) => loadTemplate(cfg, t));
+    .map((t) => loadTemplate(cfg, t)).filter((t) => !t.hidden);
 }
 
 export function loadTemplate(cfg: Config, id: string): Template {
@@ -150,6 +152,13 @@ function commit(dir: string, files: string[], message: string): string | null {
     git('commit', '-q', '-m', message.slice(0, 200), '--', ...files.filter((f) => present.includes(f) || git('ls-files', '--', f)));
     return git('rev-parse', '--short', 'HEAD');
   } catch { return null; }
+}
+
+/** A made-up helper's job, in its AGENTS.md: the words the person said yes to on Chief's card. */
+export function setJob(cfg: Config, id: string, job: string) {
+  const p = join(botDir(cfg, id), 'AGENTS.md');
+  writeFileSync(p, readFileSync(p, 'utf8').replace(/^JOB$/m, () => job.replace(/\r/g, '').trim()));
+  return commit(botDir(cfg, id), ['AGENTS.md'], 'Took on its job');
 }
 
 // ---- the soul: who the bot is, in its own file, written by the person, never by the bot ----

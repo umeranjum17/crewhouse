@@ -834,7 +834,7 @@ test('routing: a plain request goes straight to its helper, the member\'s AI pla
   assert.equal(task(db, a).body, 'Reel, make a 10 second demo of the signup screen');
   assert.equal(chiefSaid(), 'Reel is on it.');
   await settled(db, a);
-  assert.match(db.get("SELECT text FROM messages WHERE bot = 'chief' ORDER BY id DESC")!.text, /^Reel has finished task #\d+/);
+  assert.match(db.get("SELECT text FROM messages WHERE bot = 'chief' ORDER BY id DESC")!.text, /^Reel has finished “Reel, make a 10 second demo of the/);
 
   // "@Scout" anywhere is a rule too: the member's AI (here set to say Reel) is never asked.
   const m = (await crew.post('chief', 'could you look into standing desks for me @Scout [route reel]'))!.task;
@@ -927,5 +927,47 @@ test('passing work on: a helper hands the next step to another for the same pers
   assert.throws(() => pass('scout'), /three times already/);
   await release(crew, 'reel', 'Passed it on.');
   await settled(db, t);
+  done();
+});
+
+test('Chief makes up a new helper on a card: nothing until the person says yes, then it joins with its job and starts', async () => {
+  const { db, crew, done } = setup();
+  crew.onboard('sir');
+  const create = (args: object) => `[tool crew_create ${JSON.stringify(args)}]`;
+  const pip = { name: 'Pip', job: 'Watches rental listings in Phuket. Tells you about new flats under $900 a month.', personality: 'You are Pip. Cheerful and quick.', first: 'find me flats in Phuket under $900' };
+  const { task: t } = (await crew.post('chief', `please ${create(pip)}`))!;
+  await settled(db, t);
+  const card = () => db.get("SELECT * FROM asks WHERE bot = 'chief' AND kind = 'propose' AND state = 'open'");
+  assert.ok(card(), 'a card, not a helper');
+  assert.equal(crew.bot('pip'), undefined);
+  const view = crew.snapshot().asks.find((a: any) => a.id === card()!.id)!;
+  assert.equal(view.detail.yes, 'Yes, take Pip on');
+  assert.match(view.detail.preview.body, /Phuket[\s\S]*Cheerful[\s\S]*asks you before/);
+  assert.ok(!crew.snapshot().templates.some((x: any) => x.id === 'helper'), 'the base is never offered on its own');
+
+  // Not now: nothing is made.
+  await crew.answer(card()!.id, { answer: 'deny' });
+  assert.equal(crew.bot('pip'), undefined);
+
+  // Asked again, and yes: Pip joins with the job and personality from the card, and starts on the request.
+  const { task: t2 } = (await crew.post('chief', `again ${create(pip)}`))!;
+  await settled(db, t2);
+  await crew.answer(card()!.id, { answer: 'allow' });
+  const b = crew.bot('pip')!;
+  assert.equal(b.role, 'Watches rental listings in Phuket');
+  assert.equal(b.template, 'helper');
+  const dir = join(crew['cfg'].crewDir, 'bots', 'pip');
+  assert.match(readFileSync(join(dir, 'AGENTS.md'), 'utf8'), /^# Pip[\s\S]*## Your job\nWatches rental listings in Phuket\. Tells you/);
+  assert.equal(readFileSync(join(dir, 'soul.md'), 'utf8'), '# Pip\n\nYou are Pip. Cheerful and quick.\n');
+  assert.match(lastSaid(db, 'chief'), /^Pip has joined the crew, sir\. I've handed Pip your request/);
+  const first = db.get("SELECT * FROM tasks WHERE bot = 'pip'")!;
+  assert.deepEqual([first.origin, first.body], ['chief', 'find me flats in Phuket under $900']);
+  await settled(db, first.id);
+
+  // A name already taken is refused before any card.
+  const { task: t3 } = (await crew.post('chief', `once more ${create(pip)}`))!;
+  await settled(db, t3);
+  assert.equal(card(), undefined);
+  assert.match(lastSaid(db, 'chief')!, /already a helper called Pip/);
   done();
 });
