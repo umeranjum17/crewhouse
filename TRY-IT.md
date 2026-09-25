@@ -35,23 +35,15 @@ Everything lives in `~/.local/state/crewhouse/` (the database, the engine's own 
 
 Then run `./crewhouse doctor` in a second terminal.
 
-## 3. The phone app (PR #7, not merged)
+## 3. The phone app
 
-The app and its encrypted link live in PR [#7](https://github.com/umeranjum17/crewhouse/pull/7) (branch `fm/ch-phone`), which predates the engine change. `main` has no link yet, so run that branch as a second crewd beside the first one, on its own port and data:
+crewd now carries the phone link. On start it prints `phone link (Noise-encrypted) on port 7712: 127.0.0.1, <your Tailscale address>`.
 
-```bash
-git clone -b fm/ch-phone https://github.com/umeranjum17/crewhouse ~/crewhouse-phone && cd ~/crewhouse-phone
-./crewhouse setup
-CREWHOUSE_PORT=7721 CREWHOUSE_STATE_DIR=$HOME/.local/state/crewhouse-phone CREWHOUSE_CREW_DIR=$HOME/Crewhouse-phone ./crewhouse start
-```
-
-It prints `phone link (Noise-encrypted) on port 7712: 127.0.0.1, <your Tailscale address>`.
-
-Install the APK from the draft release [Phone app preview (PR #7, debug-signed APK)](https://github.com/umeranjum17/crewhouse/releases/tag/untagged-1276d44f733d753e4f66):
+Install the APK from the draft release [Phone app preview (debug-signed APK)](https://github.com/umeranjum17/crewhouse/releases/tag/untagged-1276d44f733d753e4f66):
 
 ```bash
 gh release download untagged-1276d44f733d753e4f66 -R umeranjum17/crewhouse -p '*.apk'
-sha256sum crewhouse-phone-debug.apk   # 304eb56a5cff9c7286e87b2d492a68fb7a068232d59dd2016d03b4881ed39da0
+sha256sum crewhouse-phone-debug.apk   # 364243318191a91a23e0bd0c01bb6f3c741091eedd3d18992496578a29b56edb
 adb install -r crewhouse-phone-debug.apk   # phone on USB with USB debugging on
 ```
 
@@ -59,16 +51,14 @@ Or open the release page on the phone while signed in to GitHub, download the AP
 
 To pair:
 
-1. The phone needs to reach this computer. Either turn on Tailscale on the phone, or tick **Also allow phones on this computer's home network** under **Settings, Phones & computers**.
-2. Open **http://127.0.0.1:7721**, then **Settings, Phones & computers**, then **Pair a phone**.
-3. In the app, press **Scan the QR code** and scan it within 2 minutes. Check that the fingerprint on the phone matches the one on the computer.
-4. In the app's Chief tab, say *Please recruit Reel and have it make a 4 second title card that says Phone.* When the approval shows on the app's Home, tap **Allow once**.
+1. The phone needs to reach this computer. Either turn on Tailscale on the phone, or tick **Phones on this Wi-Fi can reach the crew** under **Settings, Phones**.
+2. Open **http://127.0.0.1:7711**, then **Settings, Phones, Add a phone**.
+3. In the app, press **Scan the code** and scan it within 2 minutes. Check that the letters on the phone match the ones on the computer.
+4. In the app, tell Reel: *Save a copy of the video in my Documents folder.* When the question shows on the app's Home, tap **Yes, go ahead**.
 
 ## Known issues
 
-- **Phone app:**
-  - It needs PR #7's crewd, above. PR #7 conflicts with `main` and predates #11, so that second crewd has no restart pickup, `update` or memory Undo.
-  - The app can't watch a bot's desktop, and its approvals offer only **Allow once** and **Don't allow**.
+- **Phone app:** it can't watch a helper's screen, set up routines or connect apps yet, and files open on the computer. Adding people and AI sign-ins stay on the computer by design.
 - **Bots recruited before the engine change** keep their old instructions (they mention a `crew` command). Recruit them again to pick up the new ones.
 - **Chief's wording:** he sometimes rewords a task awkwardly, e.g. *Use its browser to open…*.
 - **Household:**

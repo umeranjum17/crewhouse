@@ -12,6 +12,10 @@ export interface Config {
   toolsDir: string;
   host: string;
   port: number;
+  /** The phone link (src/link.ts). Empty host: loopback and Tailscale, plus the LAN when the owner turns
+   *  it on in Settings, Phones. A comma list pins the addresses instead. Port 0 turns the link off. */
+  linkHost: string;
+  linkPort: number;
   /** 'pi' for the real AI accounts, 'stub' for tests: a scripted model inside the same engine, no quota. */
   engine: 'pi' | 'stub';
   /** Max concurrent bot runs. */
@@ -33,6 +37,8 @@ export function loadConfig(): Config {
     toolsDir: envPath('CREWHOUSE_TOOLS_DIR', join(process.env.XDG_DATA_HOME?.trim() || join(home, '.local', 'share'), 'crewhouse', 'tools')),
     host: process.env.CREWHOUSE_HOST?.trim() || '127.0.0.1',
     port: Number(process.env.CREWHOUSE_PORT || 7711),
+    linkHost: process.env.CREWHOUSE_LINK_HOST?.trim() || '',
+    linkPort: Number(process.env.CREWHOUSE_LINK_PORT ?? 7712),
     engine: process.env.CREWHOUSE_ENGINE === 'stub' ? 'stub' : 'pi',
     maxConcurrent: Number(process.env.CREWHOUSE_MAX_CONCURRENT || 3),
     repoDir: resolve(import.meta.dirname, '..'),

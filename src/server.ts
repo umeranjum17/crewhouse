@@ -10,6 +10,7 @@ import { installTool } from './tools.ts';
 import { OWNER, PROVIDERS, callbackPage, provider } from './accounts.ts';
 import { coversOf } from './policy.ts';
 import { describe, nextRun, parseSchedule } from './routines.ts';
+import { Link } from './link.ts';
 
 const TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml',
@@ -44,10 +45,12 @@ function sendFile(req: IncomingMessage, res: ServerResponse, path: string) {
 }
 
 /** HTTP + WebSocket on 127.0.0.1: the app API and the web UI. What it returns is plain words: no commands, paths or model ids. */
-export function startServer(cfg: Config, db: Store, crew: Crew) {
+export async function startServer(cfg: Config, db: Store, crew: Crew) {
   const dist = join(cfg.repoDir, 'web', 'dist');
   const installing = new Set<string>();
   const localHost = (h = '') => /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/.test(h);
+  // A paired phone acts as the household member it was paired for.
+  const link = new Link(cfg, db, (m, path, body, member) => { const u = new URL(path, 'http://x'); return api(m, u.pathname, u.searchParams, body, member); });
 
   const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://x');
@@ -59,7 +62,16 @@ export function startServer(cfg: Config, db: Store, crew: Crew) {
       if (p.startsWith('/api/')) {
         // Mutations need a custom header, which a cross-site page cannot send without a preflight we never allow.
         if (req.method !== 'GET' && req.headers['x-crewhouse'] !== '1') return send(res, 403, { error: 'missing x-crewhouse header' });
-        return send(res, 200, await api(req, p, url));
+        // Which household member is using this screen. It picks whose threads and accounts are shown, never what is allowed.
+        const me = crew.viewer(req.headers['x-crewhouse-member']).id as number;
+        // Phones: pairing and grants answer on this computer only, never over the phone link.
+        if (p === '/api/phones' && req.method === 'GET') return send(res, 200, link.devices());
+        if (p === '/api/phones/link' && req.method === 'GET') return send(res, 200, link.status());
+        if (p === '/api/phones/pair' && req.method === 'POST') return send(res, 200, await link.offer((await readJson(req)).role ?? 'control', me));
+        if (p === '/api/phones/lan' && req.method === 'PUT') { await link.setLan(!!(await readJson(req)).on); return send(res, 200, link.status()); }
+        const phone = p.match(/^\/api\/phones\/([a-f0-9]+)$/);
+        if (phone && req.method === 'DELETE') { link.revoke(phone[1]); return send(res, 200, { ok: true }); }
+        return send(res, 200, await api(req.method!, p, url.searchParams, req.method === 'GET' ? {} : await readJson(req), me));
       }
 
       // An app's sign-in page sends the browser back here; the tab says, in words, how it went.
@@ -87,20 +99,18 @@ export function startServer(cfg: Config, db: Store, crew: Crew) {
     }
   });
 
-  async function api(req: IncomingMessage, p: string, url: URL) {
-    const m = req.method;
+  /** The app API, shared by the web app (HTTP) and paired phones (the link). `me` is the member using it. */
+  async function api(m: string, p: string, q: URLSearchParams, body: any, me: number) {
     let r: RegExpMatchArray | null;
-    // Which household member is using this screen. It picks whose threads and accounts are shown, never what is allowed.
-    const me = crew.viewer(req.headers['x-crewhouse-member']).id as number;
     if (m === 'GET' && p === '/api/state') return crew.snapshot(me);
-    if (m === 'GET' && p === '/api/events') return db.events(Number(url.searchParams.get('after') || 0));
-    if (m === 'POST' && p === '/api/onboard') { const b = await readJson(req); return crew.onboard(b.address ?? '', me, b.ask) ?? { ok: true }; }
-    if (m === 'POST' && p === '/api/recruit') { const b = await readJson(req); const { token, ...bot } = crew.recruit(b.template, b.name, 'person', me); return bot; }
+    if (m === 'GET' && p === '/api/events') return db.events(Number(q.get('after') || 0));
+    if (m === 'POST' && p === '/api/onboard') { const b = body; return crew.onboard(b.address ?? '', me, b.ask) ?? { ok: true }; }
+    if (m === 'POST' && p === '/api/recruit') { const b = body; const { token, ...bot } = crew.recruit(b.template, b.name, 'person', me); return bot; }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)$/)) && m === 'GET') return crew.botPage(r[1], me);
-    if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/messages$/)) && m === 'POST') { const b = await readJson(req); return crew.post(r[1], b.text ?? '', b.model, me); }
+    if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/messages$/)) && m === 'POST') { const b = body; return crew.post(r[1], b.text ?? '', b.model, me); }
     if (m === 'GET' && p === '/api/people') return crew.members();
-    if (m === 'POST' && p === '/api/people') return crew.addMember((await readJson(req)).name);
-    if ((r = p.match(/^\/api\/people\/(\d+)$/)) && m === 'PUT') return crew.updateMember(Number(r[1]), await readJson(req));
+    if (m === 'POST' && p === '/api/people') return crew.addMember(body.name);
+    if ((r = p.match(/^\/api\/people\/(\d+)$/)) && m === 'PUT') return crew.updateMember(Number(r[1]), body);
     if (m === 'GET' && p === '/api/accounts') {
       // Everyone's AI accounts: signed in or not (the engine's own local check), resting until when, and any sign-in in progress.
       // A work ChatGPT (Business, Enterprise, Edu) is flagged by its email, so the app can steer to a personal one.
@@ -116,7 +126,7 @@ export function startServer(cfg: Config, db: Store, crew: Crew) {
     if ((r = p.match(/^\/api\/accounts\/(\d+)\/([a-z]+)\/(login|paste|cancel|logout|retry|ask-owner)$/)) && m === 'POST') {
       const [who, key, act] = [crew.member(Number(r[1])).id as number, r[2], r[3]];
       provider(key);
-      const b = await readJson(req);
+      const b = body;
       if (act === 'login') return { ok: true, signIn: await crew.accounts.login(who, key, { via: b.via === 'code' ? 'code' : 'browser', fresh: !!b.fresh }) };
       else if (act === 'retry') crew.retryAccount(who, key);
       else if (act === 'ask-owner') crew.askOwner(who, key);
@@ -130,7 +140,7 @@ export function startServer(cfg: Config, db: Store, crew: Crew) {
     // The owner switches Google on for the house, once: the household Google app's client ID and secret.
     if (m === 'PUT' && p === '/api/house/google') {
       if (me !== OWNER) throw Object.assign(new Error('only the owner sets this up'), { status: 403 });
-      const b = await readJson(req);
+      const b = body;
       crew.connections.setHouseGoogle(b.id, b.secret);
       return { ok: true };
     }
@@ -142,20 +152,20 @@ export function startServer(cfg: Config, db: Store, crew: Crew) {
     }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/models$/)) && m === 'PUT') {
       crew.botPage(r[1]); // 404 for unknown bots
-      const models = disk.setBrains(cfg, r[1], (await readJson(req)).models);
+      const models = disk.setBrains(cfg, r[1], body.models);
       db.event('bot.models', r[1], { by: 'person', models });
       return { thinks: crew.thinks(r[1]) };
     }
     // What a helper learned about the viewer, and what the whole crew knows about them: each person edits only their own.
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/notes$/)) && m === 'PUT') {
       crew.botPage(r[1]); // 404 for unknown bots
-      disk.writeNotes(cfg, { member: me, bot: r[1] }, (await readJson(req)).text ?? '');
+      disk.writeNotes(cfg, { member: me, bot: r[1] }, body.text ?? '');
       db.event('memory.edited', r[1], { by: 'person', member: me });
       return { ok: true };
     }
     if (p === '/api/about' && m === 'GET') return { notes: disk.readNotes(cfg, { member: me, bot: null }), cap: disk.ABOUT_CAP };
     if (p === '/api/about' && m === 'PUT') {
-      disk.writeNotes(cfg, { member: me, bot: null }, (await readJson(req)).text ?? '');
+      disk.writeNotes(cfg, { member: me, bot: null }, body.text ?? '');
       db.event('memory.edited', null, { by: 'person', member: me, everyone: true });
       return { ok: true };
     }
@@ -178,7 +188,7 @@ export function startServer(cfg: Config, db: Store, crew: Crew) {
     // Who a helper is: the person writes it, a bot never does. "Put back" is the template's, under the helper's own name.
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/soul$/)) && m === 'PUT') {
       crew.botPage(r[1]); // 404 for unknown bots
-      disk.writeSoul(cfg, r[1], (await readJson(req)).text ?? '');
+      disk.writeSoul(cfg, r[1], body.text ?? '');
       db.event('soul.changed', r[1], { by: 'person', member: me });
       return { soul: disk.readSoul(cfg, r[1]) };
     }
@@ -190,20 +200,20 @@ export function startServer(cfg: Config, db: Store, crew: Crew) {
     }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/tools$/)) && m === 'PUT') {
       crew.botPage(r[1]); // 404 for unknown bots
-      disk.setGrants(cfg, r[1], (await readJson(req)).tools ?? []);
+      disk.setGrants(cfg, r[1], body.tools ?? []);
       db.event('bot.tools', r[1], { by: 'person' });
       return { ok: true };
     }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/settings$/)) && m === 'PUT') {
       crew.botPage(r[1]);
-      const b = await readJson(req);
+      const b = body;
       // Standing answers come back as the plain words the page showed; keep the ones still listed.
       if (Array.isArray(b.allow)) b.allow = (disk.botConfig(cfg, r[1]).allow ?? []).filter((k) => b.allow.includes(coversOf(k)));
       disk.setSettings(cfg, r[1], b);
       db.event('bot.settings', r[1], { by: 'person' });
       return { ok: true };
     }
-    if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/steer$/)) && m === 'POST') { crew.steer(r[1], String((await readJson(req)).text ?? ''), me); return { ok: true }; }
+    if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/steer$/)) && m === 'POST') { crew.steer(r[1], String(body.text ?? ''), me); return { ok: true }; }
     if ((r = p.match(/^\/api\/tools\/([a-z0-9-]+)\/install$/)) && m === 'POST') {
       // Installs take minutes (the browser downloads Chromium); the result arrives as an event.
       const id = r[1];
@@ -217,17 +227,17 @@ export function startServer(cfg: Config, db: Store, crew: Crew) {
       return { ok: true };
     }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/takeover$/)) && m === 'POST') { await crew.takeOver(r[1]); return { ok: true }; }
-    if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/giveback$/)) && m === 'POST') { await crew.giveBack(r[1], String((await readJson(req)).note ?? '')); return { ok: true }; }
+    if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/giveback$/)) && m === 'POST') { await crew.giveBack(r[1], String(body.note ?? '')); return { ok: true }; }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/reset$/)) && m === 'POST') { await crew.resetBot(r[1]); return { ok: true }; }
     if (m === 'GET' && p === '/api/schedule') {
-      const when = parseSchedule(url.searchParams.get('text') ?? '');
+      const when = parseSchedule(q.get('text') ?? '');
       return { words: describe(when), next: nextRun(when, Date.now()) };
     }
-    if (m === 'POST' && p === '/api/routines') { const row = crew.addRoutine(await readJson(req), 'person', me); return crew.routines(me).find((x) => x.id === row.id); }
-    if ((r = p.match(/^\/api\/routines\/(\d+)$/)) && m === 'PUT') { crew.updateRoutine(Number(r[1]), await readJson(req)); return { ok: true }; }
+    if (m === 'POST' && p === '/api/routines') { const row = crew.addRoutine(body, 'person', me); return crew.routines(me).find((x) => x.id === row.id); }
+    if ((r = p.match(/^\/api\/routines\/(\d+)$/)) && m === 'PUT') { crew.updateRoutine(Number(r[1]), body); return { ok: true }; }
     if ((r = p.match(/^\/api\/routines\/(\d+)$/)) && m === 'DELETE') { crew.deleteRoutine(Number(r[1])); return { ok: true }; }
     if ((r = p.match(/^\/api\/routines\/(\d+)\/run$/)) && m === 'POST') { crew.runRoutine(Number(r[1])); return { ok: true }; }
-    if ((r = p.match(/^\/api\/asks\/(\d+)\/answer$/)) && m === 'POST') { await crew.answer(Number(r[1]), await readJson(req)); return { ok: true }; }
+    if ((r = p.match(/^\/api\/asks\/(\d+)\/answer$/)) && m === 'POST') { await crew.answer(Number(r[1]), body); return { ok: true }; }
     throw Object.assign(new Error('not found'), { status: 404 });
   }
 
@@ -258,5 +268,7 @@ export function startServer(cfg: Config, db: Store, crew: Crew) {
   }
   db.onEvent((e) => { const s = JSON.stringify(e); for (const c of wss.clients) if (c.readyState === 1) c.send(s); });
 
+  await link.listen();
+  server.on('close', () => link.close());
   return new Promise<typeof server>((resolve) => server.listen(cfg.port, cfg.host, () => resolve(server)));
 }

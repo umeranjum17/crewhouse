@@ -108,9 +108,12 @@ test('plain() keeps what a person wrote and drops the machinery', () => {
 
 test('the screens read view models only, and the mono face draws art only', () => {
   const dir = join(import.meta.dirname, '..', 'web', 'src');
-  for (const f of readdirSync(dir).filter((f) => f.endsWith('.tsx'))) {
-    const src = readFileSync(join(dir, f), 'utf8');
-    assert.doesNotMatch(src, /detail\.(summary|pane|rule|tool)|\.thinks\b|\.limits\b|\.runtime\b|\bclaude\b|terminal|<pre(?![^>]*className="art)/i, f);
+  // The phone app's screens too (mobile/App.tsx), which read the same adapter.
+  for (const f of [...readdirSync(dir).filter((f) => f.endsWith('.tsx')).map((f) => join(dir, f)), join(dir, '..', '..', 'mobile', 'App.tsx')]) {
+    const src = readFileSync(f, 'utf8');
+    assert.doesNotMatch(src, /detail\.(summary|pane|rule|tool)|\.thinks\b|\.limits\b|\.runtime\b|\bclaude\b|terminal/i, f);
+    if (f.endsWith('App.tsx')) assert.doesNotMatch(src, /monospace/, 'the phone app draws its art as dots, and sets no text in mono');
+    else assert.doesNotMatch(src, /<pre(?![^>]*className="art)/, f);
   }
   const css = readFileSync(join(dir, 'styles.css'), 'utf8');
   for (const rule of css.split('}')) {
