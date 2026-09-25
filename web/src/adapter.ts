@@ -37,6 +37,9 @@ export function pretty(path: string) {
   const b = (path.split('/').pop() ?? path).replace(/\.[a-z0-9]+$/i, '').replace(/[-_.]+/g, ' ').trim();
   return b ? b[0].toUpperCase() + b.slice(1) : 'A file';
 }
+/** The bot and path a file view came from, for the phone's photo fetch: `/files/<bot>/<path under files/>`. */
+export const fileSource = (url: string) => { const m = /^\/files\/([a-z0-9-]+)\/(.+)$/.exec(url); return m ? { bot: m[1], path: `files/${decodeURIComponent(m[2])}` } : null; };
+
 export function fileView(bot: string, path: string): FileView {
   const rel = path.replace(/^files\//, '');
   const url = /^(data:|\/)/.test(path) ? path : `/files/${bot}/${rel.split('/').map(encodeURIComponent).join('/')}`;
@@ -160,7 +163,9 @@ export type Chat = { id: string; name: string; who: Helper | 'chief'; line: stri
 /** A thread's last line as the list shows it: "You: …", "Sent “Birthday video”", or the bot's words. */
 export function preview(last: Json | null | undefined, status = '') {
   if (!last) return status || 'Say hello';
-  const text = String(last.text ?? '');
+  const n = photos(String(last.text ?? '')).length;
+  const said = String(last.text ?? '').replace(PHOTO, '').trim();
+  const text = n && (!said || /^Here (is a photo|are some photos)\.$/.test(said)) ? (n === 1 ? 'Photo' : `${n} photos`) : said;
   const f = /^Delivered (files\/.+?)(?::\s|$)/.exec(text);
   if (f) return `Sent “${pretty(f[1])}”`;
   return last.author === 'person' ? `You: ${text.replace(/\s+/g, ' ')}` : plain(text.replace(/\s+/g, ' '));
@@ -281,7 +286,7 @@ export function step(e: Json): string | null {
     case 'run.allowed': return 'Went ahead, as you allowed';
     case 'ask.opened': return 'Asked for your OK';
     case 'ask.answered': return `You said ${ANSWER[d.answer] ?? (/always/.test(d.answer) ? 'always OK' : /task/.test(d.answer) ? 'yes for this job' : 'what to do')}`;
-    case 'file.delivered': return `Made “${pretty(d.path)}”`;
+    case 'file.delivered': return d.photo ? 'You sent a photo' : `Made “${pretty(d.path)}”`;
     case 'memory.learned': return `${d.everyone ? 'Learned, for the whole crew' : 'Learned'}: ${plain(d.text)}`;
     case 'memory.undone': return `You undid: ${plain(d.text)}`;
     case 'skill.learned': return `Learned how to: ${plain(d.says ?? d.name)}`;
@@ -313,9 +318,14 @@ export function steps(events: Json[], task?: number, live = false): Step[] {
 }
 
 // ---------- a chat ----------
+/** Photos sent with a message ride in its text as `[photo <bot>] files/photos/…` lines: pictures, not words. */
+const PHOTO = /\n?\[photo ([a-z0-9-]+)\] (files\/\S+)/g;
+const photos = (text: string) => [...text.matchAll(PHOTO)].map((m) => fileView(m[1], m[2]));
+
 export function lines(page: Json, bot: string): Line[] {
   return (page?.messages ?? []).map((m: Json) => {
-    const text = String(m.text ?? '');
+    const pics = photos(String(m.text ?? ''));
+    const text = String(m.text ?? '').replace(PHOTO, '').trim();
     if (m.author === 'system') {
       const f = /^Delivered (files\/.+?)(?::\s|$)/.exec(text);
       return f ? { id: m.id, from: 'note', text: plain(text.slice(f[0].length)) || `Here's “${pretty(f[1])}”`, files: [fileView(bot, f[1])], choices: [] }
@@ -324,7 +334,7 @@ export function lines(page: Json, bot: string): Line[] {
     // Another helper handing this one a job: a note in its words, "Reel asked: …".
     if (!['person', 'bot', 'chief'].includes(m.author)) return { id: m.id, from: 'note', text: `${String(m.author).replace(/^./, (c) => c.toUpperCase())} asked: ${plain(text)}`, files: [], choices: [] };
     return { id: m.id, from: m.author === 'person' ? 'me' : m.author === 'chief' && bot !== 'chief' ? 'chief' : 'them',
-      text: m.author === 'person' ? text : plain(text), files: [], choices: (m.choices ?? []).map(plain) };
+      text: m.author === 'person' ? (pics.length && /^Here (is a photo|are some photos)\.$/.test(text) ? '' : text) : plain(text), files: pics, choices: (m.choices ?? []).map(plain) };
   }).filter((l: Line) => l.text || l.files.length);
 }
 

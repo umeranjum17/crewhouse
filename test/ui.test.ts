@@ -54,8 +54,8 @@ const page = { messages: [
   skills: [{ name: 'make-reel', description: 'Turn screenshots into a demo video (mp4) with ffmpeg.', says: 'Turn photos into a short video' }, { name: 'plan-dinners', description: 'Uses the browser MCP tools' }] };
 
 const FORBIDDEN = /fc-list|2>&1|\| ?head|\bBash\b|claude|anthropic|codex|sonnet|haiku|opus|gpt-|mcp__|\/home\/|~\/|files\/|\.md\b|\bpane\b|terminal|\d+ ?%|a command|ffmpeg|magick|\bls -la\b|```|`|\besc\b|529/i;
-// URLs are for fetching files, never shown as text.
-const shown = (x: unknown) => JSON.stringify(x, (k, v) => (k === 'url' ? undefined : v));
+// URLs are for fetching files, never shown as text; nor are times, which are numbers (a timestamp can contain "529").
+const shown = (x: unknown) => JSON.stringify(x, (k, v) => (k === 'url' || k === 'at' ? undefined : v));
 
 test('nothing technical survives the adapter', () => {
   const h = A.chatgpt([{ member: 2, account: 'chatgpt', name: 'ChatGPT', signedIn: false, signIn: { state: 'waiting', url: 'https://auth.openai.com/codex/device', code: 'AB12-CDE34' } }], 2);
@@ -225,4 +225,15 @@ test('the week under the share is a third in words, never a number', () => {
   assert.equal(A.share({ share: { choice: 'light', used: false, week: 'fair' } }).week, 'This week the crew has used a fair part of what it may use of your ChatGPT.');
   assert.equal(A.share({ share: { choice: 'full', used: false, week: null } }).week, '');
   for (const w of ['small', 'fair', 'most']) assert.doesNotMatch(A.share({ share: { choice: 'light', week: w } }).week, /\d|%/);
+});
+
+test('a photo in a message is a picture, not words', () => {
+  const [l] = A.lines({ messages: [{ id: 1, author: 'person', text: 'Here is a photo.\n[photo reel] files/photos/5-1.png' }] }, 'reel');
+  assert.equal(l.text, '');
+  assert.equal(l.files[0].kind, 'image');
+  const [c] = A.lines({ messages: [{ id: 2, author: 'person', text: 'the school poster\n[photo pip] files/photos/6-1.jpg' }] }, 'chief');
+  assert.equal(c.text, 'the school poster');
+  assert.match(c.files[0].url, /\/files\/pip\/photos\/6-1\.jpg/);
+  assert.equal(A.preview({ author: 'person', text: 'Here is a photo.\n[photo reel] files/photos/5-1.png' }), 'You: Photo');
+  assert.doesNotMatch(shown([l, c]), FORBIDDEN);
 });

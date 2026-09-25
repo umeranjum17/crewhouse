@@ -972,3 +972,30 @@ test('Chief makes up a new helper on a card: nothing until the person says yes, 
   assert.match(lastSaid(db, 'chief')!, /already a helper called Pip/);
   done();
 });
+
+test('photos with a message: kept in the helper\'s files, shown in the chat, seen by the model, and through Chief too', async () => {
+  const { db, crew, cfg, done } = setup();
+  crew.onboard('sir');
+  crew.recruit('reel', 'Reel', 'person');
+  const png = { type: 'image/png', data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==' };
+  await assert.rejects(crew.post('reel', 'x', undefined, 1, [png, png, png, png, png]), /up to four/);
+  await assert.rejects(crew.post('reel', 'x', undefined, 1, [{ type: 'image/gif', data: png.data }]), /JPEG or PNG/);
+  await assert.rejects(crew.post('reel', '  ', undefined, 1, []), /empty message/);
+
+  const { task: t } = (await crew.post('reel', '', undefined, 1, [png]))!;
+  assert.equal(task(db, t).body, 'Here is a photo.');
+  assert.deepEqual(JSON.parse(task(db, t).photos), [`files/photos/${t}-1.png`]);
+  assert.ok(existsSync(join(cfg.crewDir, 'bots', 'reel', 'files', 'photos', `${t}-1.png`)));
+  assert.equal(db.get("SELECT text FROM messages WHERE task_id = ? AND author = 'person'", t)!.text, `Here is a photo.\n[photo reel] files/photos/${t}-1.png`);
+  await settled(db, t);
+  const prompted = JSON.parse(db.get("SELECT data FROM events WHERE kind = 'run.prompted' AND json_extract(data, '$.task') = ?", t)!.data);
+  assert.equal(prompted.photos, 1, 'the model is given the photo with the words');
+  assert.ok(crew.snapshot().tasks.find((x: any) => x.id === t)!.files.includes(`files/photos/${t}-1.png`), 'and it is in Things');
+
+  // Through Chief: the photo goes to the helper that takes the job, and shows in Chief's thread where it was sent.
+  const { task: c } = (await crew.post('chief', 'put this poster in the family video @Reel', undefined, 1, [png]))!;
+  assert.equal(task(db, c).bot, 'reel');
+  assert.match(db.get("SELECT text FROM messages WHERE bot = 'chief' AND author = 'person' ORDER BY id DESC")!.text, new RegExp(`\\[photo reel\\] files/photos/${c}-1\\.png$`));
+  await settled(db, c);
+  done();
+});

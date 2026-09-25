@@ -47,6 +47,27 @@
             "usesCleartextTraffic": true
           }
         }
+      ],
+      [
+        "expo-share-intent",
+        {
+          "androidIntentFilters": [
+            "text/*",
+            "image/*"
+          ],
+          "androidMultiIntentFilters": [
+            "image/*"
+          ],
+          "disableIOS": true
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Crewhouse lets you send a photo to a helper.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
       ]
     ],
     "scheme": "crewhouse"

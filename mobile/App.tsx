@@ -5,7 +5,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { StatusBar } from 'expo-status-bar';
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
-  ActivityIndicator, AppState, BackHandler, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, useColorScheme, View,
+  ActivityIndicator, AppState, BackHandler, Image, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, useColorScheme, View,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import * as A from '../web/src/adapter.ts';
@@ -14,6 +14,9 @@ import * as art from '../web/src/art.ts';
 import { color, radius } from '../web/src/tokens.ts';
 import { CONTROL_PERMISSIONS, DesktopView, useDesktopSession } from '@desklink/react-native';
 import { desktopAvailable } from '@desklink/react-native/availability';
+import * as ImagePicker from 'expo-image-picker';
+import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
+import { useShareIntent } from 'expo-share-intent';
 import { connect, desktopSignaling, forgetGrant, loadGrant, pair, pairTyped, type Grant, type Status } from './src/link';
 
 // ---------- look ----------
@@ -128,16 +131,44 @@ function Page({ title, lead, children }: { title?: string; lead?: string; childr
     </ScrollView>
   );
 }
-function Composer({ placeholder, onSend, draft = '' }: { placeholder: string; onSend: (t: string) => unknown; draft?: string }) {
+type Photo = { type: string; data: string; uri: string };
+/** A picked photo, made small enough for the link (about 1280 px, JPEG): a school poster reads fine at that size. */
+async function shrink(uri: string): Promise<Photo> {
+  const r = await manipulateAsync(uri, [{ resize: { width: 1280 } }], { compress: 0.6, format: SaveFormat.JPEG, base64: true });
+  return { type: 'image/jpeg', data: r.base64 ?? '', uri: r.uri };
+}
+
+/** The message box: words (the phone keyboard's own mic dictates them) and up to four photos. */
+function Composer({ placeholder, onSend, draft = '', photos: canPhoto = true }: { placeholder: string; onSend: (t: string, photos: Photo[]) => unknown; draft?: string; photos?: boolean }) {
   const t = useLook();
   const [text, setText] = useState(draft);
-  const send = () => { const x = text.trim(); if (!x) return; setText(''); onSend(x); };
+  const [pics, setPics] = useState<Photo[]>([]);
+  const ready = !!text.trim() || pics.length > 0;
+  const send = () => { if (!ready) return; const x = text.trim(), p = pics; setText(''); setPics([]); onSend(x, p); };
+  const pick = () => attempt(async () => {
+    const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsMultipleSelection: true, selectionLimit: 4 - pics.length, quality: 1 });
+    if (r.canceled) return;
+    const made = await Promise.all(r.assets.slice(0, 4 - pics.length).map((a) => shrink(a.uri)));
+    setPics((p) => [...p, ...made].slice(0, 4));
+  });
   return (
-    <View style={[s.composer, { backgroundColor: t.solid, borderColor: t.line }]}>
-      <TextInput style={[s.composerInput, { color: t.ink }]} value={text} onChangeText={setText} multiline placeholder={placeholder} placeholderTextColor={t.mute} accessibilityLabel={placeholder} />
-      <Pressable onPress={send} disabled={!text.trim()} accessibilityLabel="Send" style={[s.send, { backgroundColor: t.go, opacity: text.trim() ? 1 : 0.4 }]}>
-        <Text style={{ color: t.goInk, fontSize: 18, fontWeight: '900' }}>↑</Text>
-      </Pressable>
+    <View style={{ gap: 6 }}>
+      {pics.length > 0 && <View style={{ flexDirection: 'row', gap: 6, paddingHorizontal: 8 }}>
+        {pics.map((p, i) => (
+          <Pressable key={p.uri} onPress={() => setPics((x) => x.filter((_, j) => j !== i))} accessibilityLabel={`Remove photo ${i + 1}`}>
+            <Image source={{ uri: p.uri }} style={{ width: 56, height: 56, borderRadius: 12 }} />
+          </Pressable>
+        ))}
+      </View>}
+      <View style={[s.composer, { backgroundColor: t.solid, borderColor: t.line }]}>
+        {canPhoto && <Pressable onPress={pick} disabled={pics.length >= 4} accessibilityLabel="Add a photo" style={[s.send, { backgroundColor: 'transparent' }]}>
+          <Text style={{ color: t.ink, fontSize: 20 }}>＋</Text>
+        </Pressable>}
+        <TextInput style={[s.composerInput, { color: t.ink }]} value={text} onChangeText={setText} multiline placeholder={placeholder} placeholderTextColor={t.mute} accessibilityLabel={placeholder} />
+        <Pressable onPress={send} disabled={!ready} accessibilityLabel="Send" style={[s.send, { backgroundColor: t.go, opacity: ready ? 1 : 0.4 }]}>
+          <Text style={{ color: t.goInk, fontSize: 18, fontWeight: '900' }}>↑</Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -157,7 +188,16 @@ function Steps({ steps, max = 6 }: { steps: A.Step[]; max?: number }) {
   );
 }
 /** Files open on the home computer; the phone shows what they are. */
-function FileRow({ f }: { f: A.FileView }) {
+/** A photo someone sent: fetched over the link as data (this computer's /files address isn't reachable from the phone). */
+function PhotoView({ f }: { f: A.FileView }) {
+  const [uri, setUri] = useState('');
+  const src = A.fileSource(f.url);
+  useEffect(() => { if (src) void api.photo(src.bot, src.path).then((p) => setUri(`data:${p.type};base64,${p.data}`)).catch(() => {}); }, [f.url]);
+  return uri ? <Image source={{ uri }} style={{ width: 240, height: 240, borderRadius: 16 }} resizeMode="contain" accessibilityLabel="A photo" /> : <FileRow f={f} plain />;
+}
+
+function FileRow({ f, plain }: { f: A.FileView; plain?: boolean }) {
+  if (!plain && f.kind === 'image' && /\/photos\//.test(f.url)) return <PhotoView f={f} />;
   return <View style={s.row}><T tone="mute">{f.kind === 'video' ? '▶' : f.kind === 'image' ? '▣' : '▤'}</T><T style={{ flex: 1 }}>{f.name}</T><T tone="mute" style={s.small}>on your computer</T></View>;
 }
 
@@ -268,6 +308,14 @@ type Ctx = { state: Json; tick: number; refresh: () => void; go: (r: Route, repl
 
 function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }) {
   const t = useLook();
+  // A photo, link or text shared from another app arrives here (Android's share sheet).
+  const { hasShareIntent, shareIntent, resetShareIntent, error: shareError } = useShareIntent();
+  // A share the phone wouldn't let Crewhouse read: said plainly, and nothing else happens.
+  useEffect(() => {
+    if (!shareError) return;
+    say("That photo couldn't be opened here. Share it again from your gallery, or tap + in a chat to pick it.");
+    resetShareIntent();
+  }, [shareError]);
   const [state, setState] = useState<Json>(null);
   const [status, setStatus] = useState<Status>('connecting');
   const [tick, setTick] = useState(0);
@@ -322,6 +370,9 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
   }
   const canAct = grant.device.role === 'control';
   const ctx: Ctx = { state, tick, refresh, go, canAct, open: setSheet };
+  const shared = hasShareIntent && canAct && state.person.onboarded
+    ? { text: [shareIntent.text, shareIntent.webUrl].filter((x, i, a) => x && a.indexOf(x) === i).join('\n'), files: (shareIntent.files ?? []).map((f) => ({ path: f.path, mimeType: f.mimeType })) } : null;
+  if (shared) return <ShareIn state={state} shared={shared} go={go} onDone={() => resetShareIntent()} />;
   if (!state.person.onboarded && canAct) return <Hello {...ctx} />;
   const nav: [Route['view'], string, string][] = [['home', 'Chats', '⌂'], ['crew', 'Crew', '☺\uFE0E'], ['things', 'Things', '▤'], ['routines', 'Routines', '↻'], ['phone', 'This phone', '▯']];
   const active = ['chief', 'helper', 'add'].includes(route.view) ? 'crew' : route.view;
@@ -443,7 +494,7 @@ function Home(ctx: Ctx) {
   const crew = A.crew(state);
   const who = (id: string) => crew.find((h) => h.id === id);
   const cards = A.cards(state);
-  const toChief = async (x: string) => { if (await attempt(() => api.post('chief', x))) { refresh(); go({ view: 'chief' }); } };
+  const toChief = async (x: string, p: Photo[] = []) => { if (await attempt(() => api.post('chief', x, p.map(({ type, data }) => ({ type, data }))))) { refresh(); go({ view: 'chief' }); } };
   const helperRoute = (id: string): Route => (id === 'chief' ? { view: 'chief' } : { view: 'helper', id });
   return (
     <View style={{ flex: 1 }}>
@@ -514,7 +565,7 @@ function Chat({ id, state, tick, refresh, canAct, open }: Ctx & { id: string }) 
   // Seen: the chat's unread count goes once its newest line is on screen (a watch-only phone can't mark it).
   const newest = last?.id;
   useEffect(() => { if (canAct && newest && b?.unread) void api.read(id).then(refresh).catch(() => {}); }, [canAct, newest, b?.unread, id, refresh]);
-  const send = async (x: string) => { if (await attempt(() => api.post(id, x))) { void load(); refresh(); } };
+  const send = async (x: string, p: Photo[] = []) => { if (await attempt(() => api.post(id, x, p.map(({ type, data }) => ({ type, data }))))) { void load(); refresh(); } };
   return (
     <View style={{ flex: 1 }}>
       <ScrollView ref={scroll} style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 10 }} onContentSizeChange={() => scroll.current?.scrollToEnd({ animated: false })}>
@@ -742,6 +793,38 @@ function RoutineList({ state, refresh, canAct, bot }: Ctx & { bot?: string }) {
         </Card>
       ) : crew.length ? <Btn go label="＋ Add a routine" onPress={() => setAdding(true)} /> : <Card><T tone="mute">Add a helper first; a routine gives one of them a job on a schedule.</T></Card>)}
     </>
+  );
+}
+
+/** Something shared from another app (a photo of the school poster, a link, some text): who should have it, and a word. */
+function ShareIn({ state, shared, onDone, go }: { state: Json; shared: { text: string; files: { path: string; mimeType: string }[] }; onDone: () => void; go: Ctx['go'] }) {
+  const t = useLook();
+  const [to, setTo] = useState('chief');
+  const [text, setText] = useState(shared.text);
+  const [pics, setPics] = useState<Photo[] | null>(null);
+  useEffect(() => {
+    const images = shared.files.filter((f) => f.mimeType.startsWith('image/')).slice(0, 4);
+    void Promise.all(images.map((f) => shrink(f.path.startsWith('file:') || f.path.startsWith('content:') ? f.path : `file://${f.path}`))).then(setPics, () => setPics([]));
+  }, []);
+  const crew = A.crew(state);
+  const send = () => attempt(async () => {
+    await api.post(to, text.trim(), (pics ?? []).map(({ type, data }) => ({ type, data })));
+    onDone();
+    go(to === 'chief' ? { view: 'chief' } : { view: 'helper', id: to });
+  }, 'Sent');
+  return (
+    <Page title="Send this to…" lead="Chief will see it into the right hands, or pick a helper yourself.">
+      {pics === null ? <ActivityIndicator color={t.pink} /> : pics.length > 0 && <View style={{ flexDirection: 'row', gap: 6 }}>{pics.map((p) => <Image key={p.uri} source={{ uri: p.uri }} style={{ width: 72, height: 72, borderRadius: 12 }} />)}</View>}
+      <View style={s.chips}>
+        <Btn label="Chief" go={to === 'chief'} onPress={() => setTo('chief')} />
+        {crew.map((h) => <Btn key={h.id} label={h.name} go={to === h.id} onPress={() => setTo(h.id)} />)}
+      </View>
+      <TextInput style={[s.input, { color: t.ink, borderColor: t.line, minHeight: 80 }]} value={text} onChangeText={setText} multiline placeholder="What should they do with it? For example: put this in the calendar" placeholderTextColor={t.mute} accessibilityLabel="What should they do with it" />
+      <View style={s.chips}>
+        <Btn go label="Send" disabled={pics === null || (!text.trim() && !pics.length)} onPress={send} />
+        <Btn ghost label="Not now" onPress={onDone} />
+      </View>
+    </Page>
   );
 }
 
