@@ -101,7 +101,8 @@ test('a delivered fix ends done only when crewd saw its check fail before and pa
 test('the validator checks a run against crewd\'s record: issues read, citations real, the answer kept, blind or not', async () => {
   const { cfg, db, crew, done } = setup();
   crew.onboard('sir');
-  crew.recruit('support', 'Desk', 'person');
+  // An unfenced helper: the local stand-in for GitHub is (rightly) off the support desk's list. The validator doesn't care which.
+  crew.recruit('scribe', 'Desk', 'person');
   const srv = createServer((_q, res) => res.end('{"number":7}')).listen(0, '127.0.0.1');
   srv.unref();
   await once(srv, 'listening');
