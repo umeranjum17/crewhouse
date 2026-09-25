@@ -152,6 +152,8 @@ export class Crew {
       this.db.run("UPDATE asks SET state = 'withdrawn' WHERE state = 'open' AND kind != 'propose' AND (task_id IS NULL OR task_id NOT IN (SELECT id FROM tasks WHERE state IN ('working', 'needs_you')))");
       this.db.run("UPDATE bots SET state = 'off'");
       this.db.event('system.started', null, {});
+      // Chats were unread-less before: an existing house starts with everything already seen.
+      if (!this.db.get('SELECT 1 FROM reads')) this.db.run('INSERT INTO reads (member, bot, seen) SELECT p.id, b.id, COALESCE((SELECT MAX(id) FROM messages), 0) FROM people p, bots b');
       for (const m of this.members()) this.ensureDigest(m.id);
     });
     for (const b of this.bots()) {
@@ -263,7 +265,7 @@ export class Crew {
     return {
       person: { ...me, quietNow: quietNow(me.quiet) },
       members: this.members(),
-      bots: this.bots().map((b) => this.pub(b)),
+      bots: this.bots().map((b) => ({ ...this.pub(b), ...this.chat(b.id, me.id) })),
       templates: disk.listTemplates(this.cfg).map((t) => ({ id: t.id, display: t.display, role: t.role, color: t.color, kit: disk.templateKit(this.cfg, t) })),
       tasks: this.db.all('SELECT * FROM tasks WHERE bot != ? AND member = ? ORDER BY id DESC LIMIT 50', CHIEF, me.id).map((t) => ({ ...this.task(t), files: t.state === 'done' ? files(t.id) : [] })),
       ideas: this.ideas(),
@@ -281,6 +283,34 @@ export class Crew {
       share: { choice: me.share ?? 'light', used: this.overShare(me.id) },
       /** Owner only: the house's monthly money cap and what was spent this month, in dollars. */
       ...(me.id === OWNER ? { money: { cap: this.moneyCap(), spent: this.spentThisMonth() } } : {}),
+    };
+  }
+
+  // ---- chats: each thread's last line and what the member hasn't seen ----
+  /** Lines that make a thread unread: the bot's and Chief's words, anything in Chief's thread, and a helper's delivered files. */
+  private static UNSEEN = "author != 'person' AND (author != 'system' OR bot = 'chief' OR text LIKE 'Delivered %')";
+  private chat(bot: string, member: number) {
+    const mine = 'bot = ? AND COALESCE(member, ?) = ?';
+    const last = this.db.get(`SELECT author, substr(text, 1, 160) AS text, at FROM messages WHERE ${mine} ORDER BY id DESC LIMIT 1`, bot, member, member);
+    const seen = this.db.get('SELECT seen FROM reads WHERE member = ? AND bot = ?', member, bot)?.seen ?? 0;
+    const unread = this.db.get(`SELECT COUNT(*) AS n FROM messages WHERE ${mine} AND id > ? AND ${Crew.UNSEEN}`, bot, member, member, seen)!.n as number;
+    return { last: last ?? null, unread };
+  }
+
+  /** The member has read this thread up to now. */
+  read(bot: string, member: number) {
+    if (!this.bot(bot)) throw fail('no such bot', 404);
+    const top = this.db.get('SELECT MAX(id) AS id FROM messages WHERE bot = ? AND COALESCE(member, ?) = ?', bot, member, member)!.id ?? 0;
+    this.db.run('INSERT INTO reads (member, bot, seen) VALUES (?, ?, ?) ON CONFLICT(member, bot) DO UPDATE SET seen = MAX(seen, excluded.seen)', member, bot, top);
+  }
+
+  /** Words across the member's own chats and finished work, newest first. Plain LIKE: a house has thousands of lines, not millions. */
+  search(q: string, member: number) {
+    const like = `%${String(q).trim().replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+    if (like.length < 4) return { messages: [], things: [] };
+    return {
+      messages: this.db.all("SELECT id, bot, author, substr(text, 1, 200) AS text, at FROM messages WHERE COALESCE(member, ?) = ? AND text LIKE ? ESCAPE '\\' ORDER BY id DESC LIMIT 50", member, member, like),
+      things: this.db.all("SELECT id, bot, title, updated_at AS at FROM tasks WHERE member = ? AND bot != ? AND state = 'done' AND (title LIKE ? ESCAPE '\\' OR result LIKE ? ESCAPE '\\') ORDER BY id DESC LIMIT 20", member, CHIEF, like, like),
     };
   }
 

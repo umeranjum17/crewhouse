@@ -31,7 +31,7 @@ export function byRule(helpers: Helper[]) {
     const named = (re: (name: string) => string) => helpers.find((h) => new RegExp(re(esc(h.display)), 'i').test(s.text))?.id;
     // The answer to Chief's question: a name is enough.
     if (s.earlier) return /^(you|yourself|chief)\b/i.test(s.text) ? CHIEF : named((n) => `\\b${n}\\b`);
-    return named((n) => `^(${n}\\s*[,:]|(ask|tell|get|have) ${n} to\\b)`);
+    return named((n) => `^(${n}\\s*[,:]|(ask|tell|get|have) ${n} to\\b)|(^|\\s)@${n}\\b`);
   });
 }
 

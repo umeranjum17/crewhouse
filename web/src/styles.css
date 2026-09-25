@@ -349,3 +349,11 @@ button.code { border: 0; color: var(--ink); cursor: pointer; display: grid; gap:
 .qr { width: 220px; height: 220px; flex: none; background: #fff; border-radius: 14px; overflow: hidden; }
 .qr svg { width: 100%; height: 100%; display: block; }
 .qr.expired { display: grid; place-items: center; color: var(--mute); border: 1px dashed var(--line); background: none; }
+
+/* The chat list: a search box on top, then each thread's last line, time and unread count. */
+.chats .search { margin: 8px 0 4px; }
+.chat-end { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; min-width: 52px; }
+.chat-end .badge { margin-left: 0; }
+.chats .job .grow { min-width: 0; }
+.side-row .grow { min-width: 0; }
+.side-meter { display: block; padding: 6px 10px 10px; line-height: 1.3; }

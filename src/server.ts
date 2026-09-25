@@ -222,6 +222,8 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       db.event('bot.settings', r[1], { by: 'person' });
       return { ok: true };
     }
+    if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/read$/)) && m === 'POST') { crew.read(r[1], me); return { ok: true }; }
+    if (m === 'GET' && p === '/api/search') return crew.search(q.get('q') ?? '', me);
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/steer$/)) && m === 'POST') { crew.steer(r[1], String(body.text ?? ''), me); return { ok: true }; }
     if ((r = p.match(/^\/api\/tools\/([a-z0-9-]+)\/install$/)) && m === 'POST') {
       // Installs take minutes (the browser downloads Chromium); the result arrives as an event.

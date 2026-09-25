@@ -93,6 +93,8 @@ export const SHARES = [
   { key: 'normal', label: 'Normal', says: 'Share it evenly' },
   { key: 'full', label: 'As much as it needs', says: 'Use what the work takes' },
 ];
+/** The small line at the bottom of the side rail: how the crew's share of ChatGPT stands today. */
+export const meter = (state: Json) => (state.share?.used ? 'ChatGPT: the crew has had its share today' : resting(state) ? `${resting(state)}` : 'ChatGPT: plenty left for you today');
 export function share(state: Json) {
   const s = state.share ?? { choice: 'light', used: false };
   return { choice: s.choice as string, today: s.used ? 'The crew has had its share for today. Routines and check-ins start again tomorrow morning; anything you ask for still goes ahead.'
@@ -135,6 +137,40 @@ const crewName = (state: Json, id: string) => state.bots.find((b: Json) => b.id 
 export function crew(state: Json) {
   const owner = state.person.id === OWNER;
   return state.bots.filter((b: Json) => b.id !== 'chief' && (owner || !OWNER_ONLY.has(b.template))).map(helper) as Helper[];
+}
+
+/** One thread in the chat list: Chief pinned on top, then the helpers, the latest talk first. */
+export type Chat = { id: string; name: string; who: Helper | 'chief'; line: string; at: number; unread: number; ring: Helper['ring'] };
+/** A thread's last line as the list shows it: "You: …", "Sent “Birthday video”", or the bot's words. */
+export function preview(last: Json | null | undefined, status = '') {
+  if (!last) return status || 'Say hello';
+  const text = String(last.text ?? '');
+  const f = /^Delivered (files\/.+?)(?::\s|$)/.exec(text);
+  if (f) return `Sent “${pretty(f[1])}”`;
+  return last.author === 'person' ? `You: ${text.replace(/\s+/g, ' ')}` : plain(text.replace(/\s+/g, ' '));
+}
+export function chats(state: Json): Chat[] {
+  const bot = (id: string) => state.bots.find((b: Json) => b.id === id) ?? {};
+  const c = chief(state);
+  const lead: Chat = { id: 'chief', name: 'Chief', who: 'chief', line: preview(bot('chief').last, c.line), at: at(bot('chief').last?.at ?? 0) || 0, unread: bot('chief').unread ?? 0, ring: c.mood === 'ask' ? 'needs' : '' };
+  const rest = crew(state).map((h): Chat => {
+    const b = bot(h.id);
+    // Working or waiting on the person says more than the last line did.
+    const line = h.ring === 'needs' ? 'Needs you' : h.driving ? h.status : h.ring === 'working' ? `Working on: ${h.status}` : preview(b.last, h.role);
+    return { id: h.id, name: h.name, who: h, line, at: at(b.last?.at ?? 0) || 0, unread: b.unread ?? 0, ring: h.ring };
+  }).sort((a, b) => b.at - a.at);
+  return [lead, ...rest];
+}
+export const unreadBadge = (n: number) => (n > 9 ? '9+' : String(n));
+
+/** What Search found: lines from the member's chats and finished things, each opening its chat. */
+export function found(state: Json, r: Json | null) {
+  if (!r) return [];
+  const name = (id: string) => (id === 'chief' ? 'Chief' : state.bots.find((b: Json) => b.id === id)?.display ?? id);
+  return [
+    ...(r.things ?? []).map((t: Json) => ({ key: `t${t.id}`, bot: t.bot as string, name: name(t.bot), text: `Made “${plain(t.title)}”`, at: at(t.at) })),
+    ...(r.messages ?? []).map((m: Json) => ({ key: `m${m.id}`, bot: m.bot as string, name: name(m.bot), text: preview(m), at: at(m.at) })),
+  ];
 }
 
 export function gallery(state: Json) {

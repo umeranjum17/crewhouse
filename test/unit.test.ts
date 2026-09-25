@@ -836,6 +836,11 @@ test('routing: a plain request goes straight to its helper, the member\'s AI pla
   await settled(db, a);
   assert.match(db.get("SELECT text FROM messages WHERE bot = 'chief' ORDER BY id DESC")!.text, /^Reel has finished task #\d+/);
 
+  // "@Scout" anywhere is a rule too: the member's AI (here set to say Reel) is never asked.
+  const m = (await crew.post('chief', 'could you look into standing desks for me @Scout [route reel]'))!.task;
+  assert.equal(task(db, m).bot, 'scout');
+  await settled(db, m);
+
   // A routine is Chief's own work, even with Reel in it.
   const b = (await crew.post('chief', 'ask Reel to make a demo every Friday'))!.task;
   assert.equal(task(db, b).bot, 'chief');
@@ -864,5 +869,40 @@ test('routing: a plain request goes straight to its helper, the member\'s AI pla
   assert.equal(task(db, e).bot, 'chief');
   assert.equal(task(db, e).body, 'hmm [route ?]\nnot sure [route ?]');
   await settled(db, e);
+  done();
+});
+
+test('chats: each thread\'s last line and unread count are the viewer\'s own; reading clears it; search finds words', async () => {
+  const { db, crew, done } = setup();
+  crew.onboard('sir');
+  crew.recruit('reel', 'Reel', 'person');
+  const view = (member = 1) => Object.fromEntries(crew.snapshot(member).bots.map((b: any) => [b.id, { last: b.last, unread: b.unread }]));
+  assert.equal(view().reel.unread, 0, 'a new helper starts read');
+  const chiefBefore = view().chief.unread;
+
+  const { task: t } = (await crew.post('reel', 'make the birthday card'))!;
+  await settled(db, t);
+  const v = view();
+  assert.equal(v.reel.last.author, 'bot');
+  assert.match(v.reel.last.text, /birthday card/);
+  assert.equal(v.reel.unread, 1, 'the reply is new; the person\'s own line is not');
+  assert.equal(v.chief.unread, chiefBefore);
+
+  // Someone else in the house has their own threads: nothing of the owner's shows, or counts.
+  const sara = crew.addMember('Sara').id;
+  assert.match(view(sara).reel.last.text, /joined the crew/, 'only the house-wide note');
+  assert.equal(view(sara).reel.unread, 0);
+  assert.equal(view(sara).chief.unread, 1, 'her greeting from Chief');
+
+  crew.read('reel', 1);
+  assert.equal(view().reel.unread, 0);
+  assert.throws(() => crew.read('nobody', 1), /no such bot/);
+
+  const found = crew.search('birthday', 1);
+  assert.ok(found.messages.some((m: any) => m.bot === 'reel'));
+  assert.ok(found.things.some((x: any) => x.id === t));
+  assert.deepEqual(crew.search('birthday', sara), { messages: [], things: [] }, 'only your own');
+  assert.deepEqual(crew.search('b', 1), { messages: [], things: [] }, 'one letter finds nothing');
+  assert.deepEqual(crew.search('100%_', 1).messages, [], 'LIKE wildcards are plain characters');
   done();
 });

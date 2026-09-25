@@ -22,7 +22,7 @@ const bot = (id: string, display: string, role: string, extra: Json = {}) => ({
 const task = (id: number, b: string, title: string, state: string, extra: Json = {}) => ({ id, bot: b, title, state, member: me, updated_at: now - 20 * min, files: [], ...extra });
 
 const bots = [
-  bot('chief', 'Chief', 'Runs the crew and answers to you'),
+  bot('chief', 'Chief', 'Runs the crew and answers to you', { last: { author: 'bot', text: 'Scout has found three flights to Lahore. Shall I book the Friday one?', at: now - 4 * min }, unread: 1 }),
   bot('reel', 'Reel', 'Makes videos and posters from your photos', {
     task: task(41, 'reel', "Mum's birthday video", 'working'), step: { kind: 'task.progress', at: now - 2 * min, data: { text: 'Picking the music…' } },
   }),
@@ -30,7 +30,7 @@ const bots = [
     task: task(42, 'scout', 'Flights to Lahore in December', 'working'), step: { kind: 'task.progress', at: now - min, data: { text: 'Comparing three airlines' } },
   }),
   bot('scribe', 'Scribe', 'Writes notes, emails and letters with you', { task: task(43, 'scribe', 'Thank-you note for Aunty Sara', 'needs_you') }),
-  bot('pip', 'Pip', 'Keeps your week and the school stuff in order'),
+  bot('pip', 'Pip', 'Keeps your week and the school stuff in order', { last: { author: 'bot', text: 'Sports day is in your calendar, with a reminder the night before.', at: now - 3 * 60 * min }, unread: 0 }),
   bot('tracer', 'Tracer', "Finds a person's work email or number", { task: task(44, 'tracer', "Sara Malik's work email", 'needs_you', { member: 1 }) }),
 ];
 
