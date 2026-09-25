@@ -1,6 +1,7 @@
 ---
 name: use-the-browser
 description: Use your own browser (the browser MCP tools) to open pages, read them, click and fill forms. Use when a page needs JavaScript, a click, or a screenshot, or when web fetch cannot read it.
+says: Open web pages, read them and click through them
 ---
 
 # Use the browser

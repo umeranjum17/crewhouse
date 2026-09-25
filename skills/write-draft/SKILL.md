@@ -1,6 +1,7 @@
 ---
 name: write-draft
 description: Write drafts of posts, emails or copy in the person's voice. Use for any writing request. Drafts only, never publish.
+says: Write a draft of a post, email or letter in your voice
 ---
 
 # Write a draft

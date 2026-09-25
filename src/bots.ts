@@ -1,12 +1,10 @@
 import { execFileSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { join, relative, resolve } from 'node:path';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { dirname, join, relative, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import type { Config } from './config.ts';
 import { registry, toolStatus } from './tools.ts';
 import { PROVIDERS } from './accounts.ts';
-
-export const NOTES_CAP = 2500;
 
 export interface Template {
   id: string;
@@ -120,83 +118,146 @@ export function slug(name: string) {
   return name.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 24) || 'bot';
 }
 
+/** "Frames" for "Reel": a template's own name swapped for the bot's, in its soul and its job. */
+const renamed = (text: string, from: string, to: string) => from === to ? text : text.replaceAll(`# ${from}`, `# ${to}`).replaceAll(`You are ${from}`, `You are ${to}`);
+
 /** Copy a template into bots/<id>/ and rename the persona. The folder is the bot; SQLite only indexes it. */
 export function createBotFolder(cfg: Config, id: string, tpl: Template, display: string) {
   const dir = botDir(cfg, id);
   if (existsSync(dir)) throw new Error(`a bot folder already exists at ${dir}`);
   mkdirSync(dir, { recursive: true });
   cpSync(join(templatesDir(cfg), tpl.id), dir, { recursive: true });
-  if (display !== tpl.display) {
-    const p = join(dir, 'AGENTS.md');
-    writeFileSync(p, readFileSync(p, 'utf8').replaceAll(`# ${tpl.display}`, `# ${display}`).replaceAll(`You are ${tpl.display}`, `You are ${display}`));
+  for (const f of ['AGENTS.md', 'soul.md']) {
+    const p = join(dir, f);
+    if (existsSync(p)) writeFileSync(p, renamed(readFileSync(p, 'utf8'), tpl.display, display));
   }
   for (const d of ['files', 'work', 'skills']) mkdirSync(join(dir, d), { recursive: true });
   // Copies, not links: the bot owns its skills and may refine them.
   for (const sk of tpl.skills ?? []) cpSync(join(cfg.repoDir, 'skills', sk), join(dir, 'skills', sk), { recursive: true });
-  writeFileSync(join(dir, 'notes.md'), '');
-  commitNotes(cfg, id, 'Joined the crew');
   writeFileSync(join(dir, '.gitignore'), 'work/\nbrowser/\n');
+  commit(dir, ['soul.md', 'AGENTS.md'], 'Joined the crew');
   return dir;
 }
 
-export function readNotes(cfg: Config, id: string) {
-  const p = join(botDir(cfg, id), 'notes.md');
-  return existsSync(p) ? readFileSync(p, 'utf8') : '';
-}
-
-/** The bot's folder is its own git repository and every memory change is a commit. Without git there is simply no history. */
-function commitNotes(cfg: Config, id: string, message: string): string | null {
+/** A folder that is its own git repository, where every change to the files that matter is a commit. Without git there is simply no history. */
+function commit(dir: string, files: string[], message: string): string | null {
   const git = (...args: string[]) => execFileSync('git', ['-c', 'user.name=Crewhouse', '-c', 'user.email=crewhouse@localhost', '-c', 'commit.gpgsign=false',
-    '-c', 'core.hooksPath=/dev/null', ...args], { cwd: botDir(cfg, id), stdio: 'pipe' }).toString().trim();
+    '-c', 'core.hooksPath=/dev/null', ...args], { cwd: dir, stdio: 'pipe' }).toString().trim();
   try {
-    if (!existsSync(join(botDir(cfg, id), '.git'))) git('init', '-q');
-    git('add', 'notes.md');
-    git('commit', '-q', '-m', message.slice(0, 200), '--', 'notes.md');
+    if (!existsSync(join(dir, '.git'))) git('init', '-q');
+    const present = files.filter((f) => existsSync(join(dir, f)));
+    if (present.length) git('add', '--', ...present);
+    git('commit', '-q', '-m', message.slice(0, 200), '--', ...files.filter((f) => present.includes(f) || git('ls-files', '--', f)));
     return git('rev-parse', '--short', 'HEAD');
   } catch { return null; }
 }
 
-function saveNotes(cfg: Config, id: string, lines: string[], message: string) {
-  const text = lines.join('\n').replace(/\n*$/, '\n').replace(/^\n$/, '');
-  if (text.length > NOTES_CAP) throw new Error(`notes are full (${text.length}/${NOTES_CAP}); rewrite notes.md shorter first, or use --replaces`);
-  writeFileSync(join(botDir(cfg, id), 'notes.md'), text);
-  return commitNotes(cfg, id, message);
+// ---- the soul: who the bot is, in its own file, written by the person, never by the bot ----
+export const SOUL_CAP = 2000;
+
+export function readSoul(cfg: Config, id: string) {
+  const p = join(botDir(cfg, id), 'soul.md');
+  return existsSync(p) ? readFileSync(p, 'utf8') : '';
 }
 
-const noteLines = (cfg: Config, id: string) => { const t = readNotes(cfg, id).replace(/\n$/, ''); return t ? t.split('\n') : []; };
+export function writeSoul(cfg: Config, id: string, text: string, message = 'Personality changed by the person') {
+  const clean = String(text).replace(/\r/g, '').trim();
+  if (!clean) throw Object.assign(new Error('say a few words about how it should come across'), { status: 400 });
+  if (clean.length > SOUL_CAP) throw Object.assign(new Error(`that is longer than ${SOUL_CAP} characters; say it shorter`), { status: 400 });
+  writeFileSync(join(botDir(cfg, id), 'soul.md'), clean + '\n');
+  return commit(botDir(cfg, id), ['soul.md'], message);
+}
+
+/** The template's soul under the bot's own name: "Put back how Scout started". */
+export function templateSoul(cfg: Config, tpl: Template, display: string) {
+  const p = join(templatesDir(cfg), tpl.id, 'soul.md');
+  return existsSync(p) ? renamed(readFileSync(p, 'utf8'), tpl.display, display) : '';
+}
+
+// ---- memory: everything the crew knows about a person lives in that person's own folder ----
+// people/<member>/about.md is what every helper knows about them; people/<member>/notes/<bot>.md is what one helper
+// learned doing its work for them. Other members' notes are never in a bot's folder, prompt or screens.
+export const NOTES_CAP = 2500;
+export const ABOUT_CAP = 1500;
+
+/** Whose memory, and which: one helper's notes (`bot`), or what the whole crew knows about them (`bot` null). */
+export interface Memory { member: number; bot: string | null }
+
+export const personDir = (cfg: Config, member: number) => join(cfg.crewDir, 'people', String(member));
+const memoryFile = (m: Memory) => m.bot ? `notes/${m.bot}.md` : 'about.md';
+const capOf = (m: Memory) => m.bot ? NOTES_CAP : ABOUT_CAP;
+
+export function readNotes(cfg: Config, m: Memory) {
+  const p = join(personDir(cfg, m.member), memoryFile(m));
+  return existsSync(p) ? readFileSync(p, 'utf8') : '';
+}
+
+function saveNotes(cfg: Config, m: Memory, text: string, message: string) {
+  if (text.length > capOf(m)) throw new Error(`notes are full (${text.length}/${capOf(m)}); fold two notes into one with \`replaces\` first`);
+  const p = join(personDir(cfg, m.member), memoryFile(m));
+  mkdirSync(dirname(p), { recursive: true });
+  writeFileSync(p, text);
+  return commit(personDir(cfg, m.member), [memoryFile(m)], message);
+}
+
+const noteLines = (cfg: Config, m: Memory) => { const t = readNotes(cfg, m).replace(/\n$/, ''); return t ? t.split('\n') : []; };
+const joinLines = (lines: string[]) => lines.join('\n').replace(/\n*$/, '\n').replace(/^\n$/, '');
 
 /** A memory change, enough to undo it: the line added and the one it replaced. */
 export interface Learned { added: string; removed: string | null; commit: string | null }
 
+/** Remembered lines go into every later prompt, so they stay plain words about the person: a web page a bot read can't plant a link or a command in them. */
+const RISKY = /https?:|www\.|[\w.+-]+@[\w-]+\.[a-z]|(^|\s)~?\/[\w.-]*\/|`|\$\(|&&/i;
+
 /** Capped memory: rewrite, don't append. `replaces` names words of the old note a correction replaces. Over the cap is refused, so the bot must consolidate. */
-export function remember(cfg: Config, id: string, line: string, replaces = ''): Learned {
+export function remember(cfg: Config, m: Memory, line: string, replaces = ''): Learned {
   const clean = line.replace(/\s+/g, ' ').trim();
   if (!clean) throw new Error('nothing to remember');
-  if (botConfig(cfg, id).memory === false) throw new Error('memory is off for this bot; the person turned it off');
-  const lines = noteLines(cfg, id);
+  if (RISKY.test(clean)) throw new Error('notes are plain words about the person: no links, email addresses, file locations or commands');
+  const lines = noteLines(cfg, m);
   const old = replaces.trim() ? lines.findIndex((l) => l.includes(replaces.trim())) : -1;
-  if (replaces.trim() && old < 0) throw new Error(`no note mentions "${replaces.trim()}"; read notes.md`);
+  if (replaces.trim() && old < 0) throw new Error(`no note mentions "${replaces.trim()}"; your notes are in your prompt`);
   const added = `- ${clean}`;
   const removed = old >= 0 ? lines[old] : null;
   if (old >= 0) lines[old] = added; else lines.push(added);
-  return { added, removed, commit: saveNotes(cfg, id, lines, `Learned: ${clean}`) };
+  return { added, removed, commit: saveNotes(cfg, m, joinLines(lines), `Learned: ${clean}`) };
 }
 
 /** Undo one memory change: take the added line out and put back the one it replaced. Also a commit. */
-export function forget(cfg: Config, id: string, change: Learned) {
-  const lines = noteLines(cfg, id);
+export function forget(cfg: Config, m: Memory, change: Learned) {
+  const lines = noteLines(cfg, m);
   const i = lines.indexOf(change.added);
-  if (i < 0 && !change.removed) throw new Error('that note is no longer in notes.md');
+  if (i < 0 && !change.removed) throw new Error('that note is no longer there');
   if (i >= 0 && change.removed) lines[i] = change.removed;
   else if (i >= 0) lines.splice(i, 1);
   else lines.push(change.removed!);
-  return saveNotes(cfg, id, lines, `Undo: ${change.added.slice(2)}`);
+  return saveNotes(cfg, m, joinLines(lines), `Undo: ${change.added.slice(2)}`);
 }
 
-export function writeNotes(cfg: Config, id: string, text: string) {
-  if (text.length > NOTES_CAP) throw new Error(`notes are over the ${NOTES_CAP} character cap`);
-  writeFileSync(join(botDir(cfg, id), 'notes.md'), text);
-  commitNotes(cfg, id, 'Edited by the person');
+export function writeNotes(cfg: Config, m: Memory, text: string) {
+  if (text.length > capOf(m)) throw new Error(`notes are over the ${capOf(m)} character cap`);
+  saveNotes(cfg, m, text, 'Edited by the person');
+}
+
+/** Before notes were each person's, a bot kept one notes.md for the whole house. It becomes the owner's, history kept in both folders;
+ *  a soul still written into the job file moves into its own file. Runs at every start; a no-op once done. */
+export function upgradeFolder(cfg: Config, id: string, tpl: Template | null, display: string, owner: number) {
+  const dir = botDir(cfg, id);
+  const old = join(dir, 'notes.md');
+  if (existsSync(old)) {
+    const text = readFileSync(old, 'utf8');
+    const m = { member: owner, bot: id };
+    if (text.trim() && !readNotes(cfg, m).trim()) saveNotes(cfg, m, text.slice(0, NOTES_CAP), `Kept from ${display}'s notes`);
+    rmSync(old);
+    commit(dir, ['notes.md'], 'Notes now live in each person\'s own folder');
+  }
+  if (tpl && !existsSync(join(dir, 'soul.md')) && templateSoul(cfg, tpl, display)) {
+    writeFileSync(join(dir, 'soul.md'), templateSoul(cfg, tpl, display));
+    const job = join(dir, 'AGENTS.md');
+    // Chief's voice used to be a section of his job; it is his soul now, so it is said once.
+    if (existsSync(job)) writeFileSync(job, readFileSync(job, 'utf8').replace(/\n## Voice\n[\s\S]*?(?=\n## |$)/, ''));
+    commit(dir, ['soul.md', 'AGENTS.md'], 'A soul of its own');
+  }
 }
 
 export function listSkills(cfg: Config, id: string) {
@@ -204,7 +265,8 @@ export function listSkills(cfg: Config, id: string) {
   if (!existsSync(dir)) return [];
   return readdirSync(dir).filter((s) => existsSync(join(dir, s, 'SKILL.md'))).map((s) => {
     const text = readFileSync(join(dir, s, 'SKILL.md'), 'utf8');
-    return { name: s, description: /^description:\s*(.+)$/m.exec(text)?.[1] ?? '' };
+    // `says` is the skill in the person's words, for the app; `description` is for the model.
+    return { name: s, description: /^description:\s*(.+)$/m.exec(text)?.[1] ?? '', says: /^says:\s*(.+)$/m.exec(text)?.[1] ?? '' };
   });
 }
 
@@ -239,10 +301,10 @@ export function addressLine(address: string | null) {
     : `Address the person by their chosen name, "${address}", never as "sir" or "ma'am".`;
 }
 
-/** What the engine is told about the bot for a whole session: its persona, then how Crewhouse works. */
+/** What the engine is told about the bot for a whole session: who it is (its soul), its job, then how Crewhouse works. */
 export function systemPrompt(cfg: Config, id: string, chief: boolean) {
   const dir = botDir(cfg, id);
-  const persona = existsSync(join(dir, 'AGENTS.md')) ? readFileSync(join(dir, 'AGENTS.md'), 'utf8').trim() : '';
+  const persona = ['soul.md', 'AGENTS.md'].map((f) => existsSync(join(dir, f)) ? readFileSync(join(dir, f), 'utf8').trim() : '').filter(Boolean).join('\n\n');
   return `${persona}\n\n## Crewhouse\nYour id in Crewhouse is ${id}. Your working folder is your own space: work in \`work/\`, put finished things in \`files/\`, ` +
     'and use relative paths. Anything you do there needs nobody\'s leave; sending, paying, deleting or opening the person\'s own files stops for their answer, ' +
     'which the app asks for you. If a tool call is refused, adapt and carry on, or say plainly what you need.\n' +

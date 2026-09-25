@@ -1,6 +1,7 @@
 // Routines: plain-words schedules, next run, catch-up after sleep, overlap, pause, the morning digest. No CLI, no quota.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { setup as lab, settled, release, until } from './lab.ts';
 import type { Store } from '../src/db.ts';
 const { describe, nextRun, parseSchedule } = await import('../src/routines.ts');
@@ -147,5 +148,31 @@ test('household: a member\'s routines run as them, and each member gets their ow
   const mine = db.get("SELECT * FROM messages WHERE bot = 'chief' AND author = 'bot' ORDER BY id DESC")!;
   assert.equal(mine.member, sam);
   assert.match(mine.text, /^Good \w+, Sam\. While you were away:\n- Finished: Reel, “Sam's daily clip”/);
+  done();
+});
+
+test('quiet check-ins: all clear says nothing and stays out of the digest; anything else speaks up', async () => {
+  const { db, crew, done } = setup();
+  const r = crew.addRoutine({ bot: 'reel', schedule: 'every day 9:00', task: 'ask permission: check the shared folder for new photos', quiet: true }, 'person');
+  const said = () => db.all("SELECT text FROM messages WHERE bot = 'reel' AND author = 'bot'").map((m) => m.text);
+  const run = async (reply: string) => {
+    crew.runRoutine(r.id);
+    const t = db.get('SELECT id FROM tasks WHERE routine = ? ORDER BY id DESC', r.id)!.id;
+    await release(crew, 'reel', reply);
+    await settled(db, t);
+    return t;
+  };
+  const first = await run('ALL-CLEAR');
+  assert.match(readFileSync(db.get('SELECT session FROM tasks WHERE id = ?', first)!.session, 'utf8'), /This is a check-in\. If nothing needs [^,]+, reply exactly ALL-CLEAR/);
+  assert.deepEqual(said(), [], 'all clear: nothing in the thread');
+  assert.equal(db.get('SELECT result FROM tasks WHERE id = ?', first)!.result, 'All clear');
+  assert.equal(crew.routines().find((x) => x.id === r.id)!.history[0].clear, true);
+  assert.match(crew.digest(1, 0), /Nothing new was finished/, 'and nothing in the digest');
+  await run('Three new photos from Saturday are in the shared folder.');
+  assert.deepEqual(said(), ['Three new photos from Saturday are in the shared folder.']);
+  assert.match(crew.digest(1, 0), /Finished: Reel/);
+  crew.updateRoutine(r.id, { quiet: false });
+  assert.equal(db.get('SELECT quiet FROM routines WHERE id = ?', r.id)!.quiet, 0);
+  assert.throws(() => crew.updateRoutine(db.get("SELECT id FROM routines WHERE kind = 'digest'")!.id, { quiet: true }), /helper's routine/);
   done();
 });

@@ -19,7 +19,7 @@ The rule behind every field: nothing a person reads may be a command, a file pat
 | `asks[]` | Ask cards, the approval sheet | See below |
 | `events` | Desktop "Today" rail | Mapped to steps by `adapter.step()` |
 | `ideas[]` `{bot, promise, ask}` | Idea chips | `promise` is shown as written |
-| `routines[]` `{name, words, next_at, state, kind, history}` | Routines | `thinks` (an account name) is never read |
+| `routines[]` `{name, words, next_at, state, kind, quiet, history}` | Routines | `quiet`: a check-in that only speaks up when something needs the person ("Only tell me if something's up"); a history run with `clear` found nothing. `thinks` (an account name) is never read |
 | `resting` `{account: until}` | "Your ChatGPT is resting until 6:40 pm" | Only this member's resting accounts; only the earliest time is shown |
 | `connections` | Apps grid: which apps are on | Array of app ids: `drive`, `calendar`, `gmail` (each its own Google connection), `notion`, `canva` |
 | `house` `{google}` | Google's apps: connect, or "Ask the owner" | Whether the owner has switched Google on for the house |
@@ -47,6 +47,12 @@ It shows as a card in that helper's chat, never on Home. Answer `allow` once con
 **Wanted**: `choices: string[]` on a bot message, shown as tap-to-reply chips ("Soft & sweet", "Upbeat").
 `trail` (events) becomes the "What I did" step list; `run.tool` events carry crewd's own plain `words` ("Searched the web for “school trips”", "Worked on a video", "Used its browser").
 **Wanted**: a crewd-written `task.progress` for each meaningful step ("Picked 8 photos from Eid"), because that is what makes the list worth reading.
+
+## Who a helper is, and what the crew knows about you (today)
+
+`GET /api/bots/:id` also carries `soul` (who the helper is, in plain sentences under a `# Name` heading), `soulCap`, `skills[]` `{name, says}` (`says` is the skill in the person's words; the app never shows `description`), and `notes`: what that helper learned about **the viewer**, never another member.
+`PUT /api/bots/:id/soul` `{text}` saves the person's words (the app keeps the `# Name` heading); `POST /api/bots/:id/soul/reset` puts back how it started. No bot can change its own.
+`PUT /api/bots/:id/notes` `{text}` is the viewer's own notes with that helper. `GET`/`PUT /api/about` `{notes, cap}` is what the whole crew knows about the viewer: every helper reads it before a job for them. A `memory.learned` step with `everyone` went there; Undo works on the viewer's own only.
 
 ## First run (today)
 

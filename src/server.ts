@@ -146,19 +146,41 @@ export function startServer(cfg: Config, db: Store, crew: Crew) {
       db.event('bot.models', r[1], { by: 'person', models });
       return { thinks: crew.thinks(r[1]) };
     }
+    // What a helper learned about the viewer, and what the whole crew knows about them: each person edits only their own.
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/notes$/)) && m === 'PUT') {
-      disk.writeNotes(cfg, r[1], (await readJson(req)).text ?? '');
-      db.event('memory.edited', r[1], { by: 'person' });
+      crew.botPage(r[1]); // 404 for unknown bots
+      disk.writeNotes(cfg, { member: me, bot: r[1] }, (await readJson(req)).text ?? '');
+      db.event('memory.edited', r[1], { by: 'person', member: me });
+      return { ok: true };
+    }
+    if (p === '/api/about' && m === 'GET') return { notes: disk.readNotes(cfg, { member: me, bot: null }), cap: disk.ABOUT_CAP };
+    if (p === '/api/about' && m === 'PUT') {
+      disk.writeNotes(cfg, { member: me, bot: null }, (await readJson(req)).text ?? '');
+      db.event('memory.edited', null, { by: 'person', member: me, everyone: true });
       return { ok: true };
     }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/memory\/(\d+)\/undo$/)) && m === 'POST') {
       const e = db.get("SELECT * FROM events WHERE seq = ? AND bot = ? AND kind = 'memory.learned'", Number(r[2]), r[1]);
       if (!e) throw Object.assign(new Error('no such memory'), { status: 404 });
-      if (db.get("SELECT 1 FROM events WHERE kind = 'memory.undone' AND json_extract(data, '$.seq') = ?", e.seq)) throw Object.assign(new Error('already undone'), { status: 409 });
       const d = JSON.parse(e.data);
-      const commit = disk.forget(cfg, r[1], { added: d.added ?? `- ${d.text}`, removed: d.removed ?? null, commit: d.commit ?? null });
-      db.event('memory.undone', r[1], { seq: e.seq, text: d.text, commit });
+      if ((d.member ?? 1) !== me) throw Object.assign(new Error('that is someone else\'s'), { status: 403 });
+      if (db.get("SELECT 1 FROM events WHERE kind = 'memory.undone' AND json_extract(data, '$.seq') = ?", e.seq)) throw Object.assign(new Error('already undone'), { status: 409 });
+      const commit = disk.forget(cfg, { member: me, bot: d.everyone ? null : r[1] }, { added: d.added ?? `- ${d.text}`, removed: d.removed ?? null, commit: d.commit ?? null });
+      db.event('memory.undone', r[1], { seq: e.seq, text: d.text, commit, member: me });
       return { ok: true };
+    }
+    // Who a helper is: the person writes it, a bot never does. "Put back" is the template's, under the helper's own name.
+    if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/soul$/)) && m === 'PUT') {
+      crew.botPage(r[1]); // 404 for unknown bots
+      disk.writeSoul(cfg, r[1], (await readJson(req)).text ?? '');
+      db.event('soul.changed', r[1], { by: 'person', member: me });
+      return { soul: disk.readSoul(cfg, r[1]) };
+    }
+    if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/soul\/reset$/)) && m === 'POST') {
+      const b = crew.botPage(r[1]).bot;
+      disk.writeSoul(cfg, r[1], disk.templateSoul(cfg, disk.loadTemplate(cfg, b.template), b.display), 'Put back how it started');
+      db.event('soul.changed', r[1], { by: 'person', member: me, reset: true });
+      return { soul: disk.readSoul(cfg, r[1]) };
     }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/tools$/)) && m === 'PUT') {
       crew.botPage(r[1]); // 404 for unknown bots

@@ -35,6 +35,8 @@ b { font-weight: 800; }
 .grow { flex: 1; min-width: 0; }
 .mute { color: var(--mute); }
 .small { font-size: 13px; }
+.bad { color: var(--pink-ink); }
+.add-row { margin-top: 10px; }
 .center { text-align: center; }
 .lead { color: var(--ink2); margin: 0 0 16px; max-width: 640px; }
 .label { font: 800 12px/1 var(--ui); letter-spacing: 1.2px; text-transform: uppercase; color: var(--mute); margin: 26px 4px 10px; }

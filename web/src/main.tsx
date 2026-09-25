@@ -331,7 +331,7 @@ function HelperPage(ctx: Ctx & { id: string; tab: string }) {
   useEffect(() => { void load(); }, [load, tick]);
   if (!h) return <div className="page mute">{state.bots.some((b: Json) => b.id === id) ? '' : 'This helper has left the crew.'}</div>;
   const b = state.bots.find((x: Json) => x.id === id);
-  const tabs: [string, string][] = [['chat', 'Chat'], ['did', 'What I did'], ['things', 'Things'], ['routines', 'Routines'], ...(h.computer ? [['screen', 'Screen'] as [string, string]] : []), ['remembers', 'Remembers']];
+  const tabs: [string, string][] = [['chat', 'Chat'], ['did', 'What I did'], ['things', 'Things'], ['routines', 'Routines'], ...(h.computer ? [['screen', 'Screen'] as [string, string]] : []), ['me', 'About me'], ['remembers', 'Remembers']];
   return (
     <div className={`page helper ${tab === 'chat' ? 'chat-page' : ''}`}>
       <div className="sticky-top">
@@ -352,26 +352,87 @@ function HelperPage(ctx: Ctx & { id: string; tab: string }) {
       {tab === 'things' && <ThingsGrid list={A.things(state).filter((t) => t.helper === id)} state={state} empty={`${h.name}'s finished work shows up here.`} />}
       {tab === 'routines' && <RoutineList {...ctx} bot={id} />}
       {tab === 'screen' && <Screen bot={{ ...page?.bot, ...b }} refresh={() => { refresh(); void load(); }} />}
+      {tab === 'me' && page && <AboutMe id={id} name={h.name} page={page} reload={load} />}
       {tab === 'remembers' && page && <Remembers id={id} name={h.name} page={page} reload={load} />}
     </div>
   );
 }
 
-function Remembers({ id, name, page, reload }: { id: string; name: string; page: Json; reload: () => void }) {
-  const list = A.memories(page.notes);
-  const forget = (i: number) => {
-    const raw = String(page.notes).split('\n');
-    let n = -1;
-    const kept = raw.filter((l) => { if (!l.replace(/^[-*]\s*/, '').trim() || l.trim().startsWith('#')) return true; n++; return n !== i; });
-    return attempt(async () => { await api.notes(id, kept.join('\n')); reload(); }, 'Forgotten');
-  };
+/** A list of remembered lines with Forget, and a line to add one: a helper's notes on you, or what the whole crew knows about you. */
+function MemoryList({ notes, save, empty, placeholder }: { notes: string; save: (text: string) => Promise<unknown>; empty: string; placeholder: string }) {
+  const [adding, setAdding] = useState('');
+  const list = A.memories(notes);
+  const add = () => adding.trim() && attempt(async () => { await save(A.withMemory(notes, adding)); setAdding(''); }, 'Remembered');
   return (
     <>
-      <p className="lead">What {name} has learned about how you like things. It reads this every time it starts work.</p>
+      {list.length ? <div className="card list">{list.map((m, i) => <div key={i} className="row-item"><span className="grow">{m}</span>
+        <button className="link" onClick={() => attempt(() => save(A.withoutMemory(notes, i)), 'Forgotten')}>Forget</button></div>)}</div>
+        : <div className="card empty">{empty}</div>}
+      <div className="row add-row"><input className="input grow" value={adding} onChange={(e) => setAdding(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} placeholder={placeholder} aria-label="Something to remember" />
+        <button className="btn" disabled={!adding.trim()} onClick={add}>Add</button></div>
+    </>
+  );
+}
+
+function Remembers({ id, name, page, reload }: { id: string; name: string; page: Json; reload: () => void }) {
+  return (
+    <>
+      <p className="lead">What {name} has learned about how you like its work. It reads this every time it starts a job for you. Others in the house have their own.</p>
       <label className="card toggle"><span className="grow"><b>Remember things</b><div className="mute small">{page.memory === false ? `${name} starts fresh every time.` : `${name} keeps notes on what you like.`}</div></span>
         <input type="checkbox" role="switch" checked={page.memory !== false} onChange={(e) => attempt(async () => { await api.settings(id, { memory: e.target.checked }); reload(); })} /></label>
-      {list.length ? <div className="card list">{list.map((m, i) => <div key={i} className="row-item"><span className="grow">{m}</span><button className="link" onClick={() => forget(i)}>Forget</button></div>)}</div>
-        : <div className="card empty">Nothing yet. {name} adds a line when it learns something you like.</div>}
+      <MemoryList notes={page.notes ?? ''} save={async (t) => { await api.notes(id, t); reload(); }}
+        empty={`Nothing yet. ${name} adds a line when it learns something you like.`} placeholder={`Tell ${name} something to keep in mind`} />
+    </>
+  );
+}
+
+/** Who a helper is, in plain words, and what it knows how to do. The person changes it; the helper never does. */
+function AboutMe({ id, name, page, reload }: { id: string; name: string; page: Json; reload: () => void }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const lines = A.personality(page.soul);
+  const knows = A.knows(page.skills);
+  const left = (page.soulCap ?? 2000) - A.soulText(name, draft ?? '').length;
+  return (
+    <>
+      <p className="lead">How {name} comes across. {name} reads this before every job.</p>
+      {draft === null ? (
+        <div className="card">
+          {lines.length ? lines.map((l, i) => <p key={i}>{l}</p>) : <p className="mute">{name} hasn't a personality of its own yet.</p>}
+          <div className="btns">
+            <button className="btn" onClick={() => setDraft(A.soulDraft(page.soul))}>Change</button>
+            <button className="btn ghost" onClick={() => confirm(`Put ${name} back the way it started?`) && attempt(async () => { await api.soulReset(id); reload(); }, `${name} is back to its old self`)}>Put back how {name} started</button>
+          </div>
+        </div>
+      ) : (
+        <div className="card form">
+          <b>In your words, how should {name} come across?</b>
+          <textarea className="input" rows={10} value={draft} onChange={(e) => setDraft(e.target.value)} aria-label={`How ${name} comes across`} />
+          <div className={`small ${left < 0 ? 'bad' : 'mute'}`}>{left < 0 ? 'A little shorter, please.' : left < 300 ? 'Nearly full.' : ''}</div>
+          <div className="btns">
+            <button className="btn go" disabled={!draft.trim() || left < 0} onClick={() => attempt(async () => { await api.soul(id, A.soulText(name, draft)); setDraft(null); reload(); }, 'Saved')}>Save</button>
+            <button className="btn ghost" onClick={() => setDraft(null)}>Cancel</button>
+          </div>
+        </div>
+      )}
+      <div className="label">{name} knows how to</div>
+      {knows.length ? <div className="card list">{knows.map((k, i) => <div key={i} className="row-item"><span className="grow">{k}</span></div>)}</div>
+        : <div className="card empty">Plain jobs, the way you ask for them.</div>}
+    </>
+  );
+}
+
+/** What the whole crew knows about this person: every helper reads it before a job for them. */
+function AboutYou({ tick }: { tick: number }) {
+  const [notes, setNotes] = useState<string | null>(null);
+  const load = useCallback(() => api.about().then((a) => setNotes(a.notes ?? '')).catch(() => {}), []);
+  useEffect(() => { void load(); }, [load, tick]);
+  if (notes === null) return null;
+  return (
+    <>
+      <div className="label">About you</div>
+      <p className="mute small">What the whole crew knows about you. Every helper reads it before a job for you; nobody else in the house sees it.</p>
+      <MemoryList notes={notes} save={async (t) => { await api.setAbout(t); await load(); }}
+        empty="Nothing yet. Tell Chief things like “we're vegetarian” and the whole crew will know." placeholder="For example: we're vegetarian" />
     </>
   );
 }
@@ -416,11 +477,12 @@ function RoutineList({ state, refresh, bot }: Ctx & { bot?: string }) {
           <div key={r.id} className={`card routine ${r.paused ? 'paused' : ''}`}>
             <div className="row">
               <Face who={h ?? 'chief'} size={40} />
-              <div className="grow"><b>{r.name}</b><div className="mute small">{r.when}{r.paused ? ' · paused' : ` · next ${r.next}`}</div>{r.last && <div className="mute small">{r.last}</div>}</div>
+              <div className="grow"><b>{r.name}</b><div className="mute small">{r.when}{r.paused ? ' · paused' : ` · next ${r.next}`}{r.quiet ? " · stays quiet if there's nothing" : ''}</div>{r.last && <div className="mute small">{r.last}</div>}</div>
             </div>
             <div className="btns">
               <button className="btn" onClick={() => act(() => api.runRoutine(r.id), 'Started')}>Do it now</button>
               <button className="btn" onClick={() => act(() => api.routine(r.id, { state: r.paused ? 'on' : 'paused' }))}>{r.paused ? 'Resume' : 'Pause'}</button>
+              {!r.digest && <button className={`chip ${r.quiet ? 'on' : ''}`} aria-pressed={r.quiet} onClick={() => act(() => api.routine(r.id, { quiet: !r.quiet }), r.quiet ? 'It will always report back' : "It will only speak up when something's up")}>Only tell me if something's up</button>}
               {!r.digest && <button className="btn ghost" onClick={() => confirm(`Remove “${r.name}”?`) && act(() => api.removeRoutine(r.id))}>Remove</button>}
             </div>
           </div>
@@ -437,6 +499,7 @@ function AddRoutine({ state, bot, done }: { state: Json; bot?: string; done: () 
   const [who, setWho] = useState(bot ?? crew[0]?.id ?? '');
   const [what, setWhat] = useState('');
   const [when, setWhen] = useState('');
+  const [quiet, setQuiet] = useState(false);
   const [preview, setPreview] = useState<Json>(null);
   useEffect(() => {
     if (!when.trim()) return setPreview(null);
@@ -451,9 +514,10 @@ function AddRoutine({ state, bot, done }: { state: Json; bot?: string; done: () 
       <textarea className="input" rows={2} value={what} onChange={(e) => setWhat(e.target.value)} placeholder="What should they do each time? For example: plan the week's dinners" aria-label="What to do" />
       <input className="input" value={when} onChange={(e) => setWhen(e.target.value)} placeholder="When? For example: every Saturday 10am" aria-label="When" />
       <div className="chips">{WHEN.map((w) => <button key={w} className="chip" onClick={() => setWhen(w)}>{w}</button>)}</div>
+      <label className="toggle small"><input type="checkbox" checked={quiet} onChange={(e) => setQuiet(e.target.checked)} /> Only tell me if something's up</label>
       {preview && <div className="mute small">{preview.bad ? "I didn't catch that time. Try “every Monday 9:00”." : `${preview.words}. First time ${A.clock(preview.next)}.`}</div>}
       <div className="btns">
-        <button className="btn go" disabled={!who || !what.trim() || !preview || preview.bad} onClick={() => attempt(async () => { await api.addRoutine({ bot: who, task: what, schedule: when }); done(); }, 'Routine added')}>Add routine</button>
+        <button className="btn go" disabled={!who || !what.trim() || !preview || preview.bad} onClick={() => attempt(async () => { await api.addRoutine({ bot: who, task: what, schedule: when, quiet }); done(); }, 'Routine added')}>Add routine</button>
         <button className="btn ghost" onClick={done}>Cancel</button>
       </div>
     </div>
@@ -492,6 +556,8 @@ function Settings({ state, me, refresh, tick, look, setLook, switchTo }: Ctx & {
           </div>
         );
       })}
+
+      <AboutYou key={me} tick={tick} />
 
       <div className="label">Your apps</div>
       <a className="card row" href="#/apps"><span className="app-row">{A.apps(state).slice(0, 5).map((a) => <span key={a.id} className="app-ic sm" style={{ background: a.bg }}>{a.mark}</span>)}</span><span className="grow mute">{A.apps(state).filter((a) => a.on).length} connected</span><b>›</b></a>

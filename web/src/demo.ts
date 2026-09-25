@@ -104,7 +104,7 @@ const state = {
   routines: [
     routine(1, 'chief', 'Your week, every morning', 'every day 8:00', 'on', 'digest'),
     routine(2, 'scout', 'Plan the week’s dinners', 'every Saturday 10:00', 'on'),
-    routine(3, 'pip', 'Check the school newsletter', 'every Friday 16:00', 'paused'),
+    { ...routine(3, 'pip', 'Check the school newsletter', 'every Friday 16:00', 'paused'), quiet: 1 },
   ],
   connections: variant === 'connect' ? [] : ['drive', 'gmail'],
   house: { google: variant !== 'nogoogle' && !new URLSearchParams(location.search).has('nohouse') },
@@ -132,7 +132,9 @@ const pages: Record<string, Json> = {
     { id: 2, author: 'bot', text: "Love this! I found 38 photos from Eid, and I'll pick the 8 happiest. What kind of music?", choices: ['🎹 Soft & sweet', '🎉 Upbeat', 'No music'] },
     { id: 3, author: 'person', text: 'soft and sweet please' },
     { id: 4, author: 'system', text: "Delivered files/happy-birthday-mum.mp4: Here's a first look 💐" },
-  ], notes: '- Nadia likes soft piano music for family videos\n- Mum is "Ammi" in titles', tasks: [] },
+  ], notes: '- Nadia likes soft piano music for family videos\n- Mum is "Ammi" in titles', tasks: [],
+  soul: '# Reel\n\nYou are Reel. You love a tidy thirty seconds: clean cuts, steady pacing, nothing that shouts.\n\n- Upbeat and practical. You show rather than tell.\n- You make a sensible call when something is missing, and say what you assumed.',
+  skills: [{ name: 'make-reel', says: 'Turn photos and screenshots into a short video' }] },
 };
 if (variant === 'connect') pages.pip = { messages: [
   { id: 1, author: 'person', text: "What's on this week?" },
@@ -153,6 +155,7 @@ export async function demoCall(method: string, path: string, _body?: Json) {
   const b = /^\/api\/bots\/([a-z0-9-]+)$/.exec(path);
   if (method === 'GET' && b) return { ...pages[b[1]], bot: bots.find((x) => x.id === b[1]) };
   if (method === 'GET' && path.startsWith('/api/accounts')) return accounts;
+  if (method === 'GET' && path === '/api/about') return { notes: '- Vegetarian at home\n- Two children: Zara (9) and Ali (6)\n- Prefers weekend plans before Thursday' };
   if (method === 'GET' && path === '/api/phones') return [{ id: 1, name: "Nadia's phone", member: 2, seen: now - 5 * min }, { id: 2, name: "Umer's phone", member: 1, seen: now - 2 * 60 * min }];
   if (method === 'POST' && path.startsWith('/api/connections/')) return { url: 'https://accounts.google.com/' };
   if (method === 'GET' && path.startsWith('/api/connections/')) return { state: 'waiting' };

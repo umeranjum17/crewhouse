@@ -48,7 +48,9 @@ const page = { messages: [
   { id: 1, author: 'person', text: 'can you make a birthday video for mum' },
   { id: 2, author: 'bot', text: 'Done! I ran `ffmpeg -i /home/umer/Crewhouse/bots/reel/files/in.mp4 out.mp4` with Claude Code.\n```sh\nls -la\n```' },
   { id: 3, author: 'system', text: 'Delivered files/mum-birthday_v2.mp4: first cut' },
-], notes: '# Notes\n- Nadia likes soft piano\n- Keep videos in ~/Crewhouse/bots/reel/files', trail: state.events };
+], notes: '# Notes\n- Nadia likes soft piano\n- Keep videos in ~/Crewhouse/bots/reel/files', trail: state.events,
+  soul: '# Reel\n\nYou are Reel.\n\n## Voice\n- Upbeat. Say what you made, never `ffmpeg -i in.mp4`.',
+  skills: [{ name: 'make-reel', description: 'Turn screenshots into a demo video (mp4) with ffmpeg.', says: 'Turn photos into a short video' }, { name: 'plan-dinners', description: 'Uses the browser MCP tools' }] };
 
 const FORBIDDEN = /fc-list|2>&1|\| ?head|\bBash\b|claude|anthropic|codex|sonnet|haiku|opus|gpt-|mcp__|\/home\/|~\/|files\/|\.md\b|\bpane\b|terminal|\d+ ?%|a command|ffmpeg|magick|\bls -la\b|```|`|\besc\b|529/i;
 // URLs are for fetching files, never shown as text.
@@ -58,11 +60,15 @@ test('nothing technical survives the adapter', () => {
   const h = A.chatgpt([{ member: 2, account: 'chatgpt', name: 'ChatGPT', signedIn: false, signIn: { state: 'waiting', url: 'https://auth.openai.com/codex/device', code: 'AB12-CDE34' } }], 2);
   const views = {
     crew: A.crew(state), chief: A.chief(state), cards: A.cards(state), work: A.work(state), things: A.things(state), ideas: A.ideas(state),
-    steps: A.steps(page.trail, undefined, true), lines: A.lines(page, 'reel'), memories: A.memories(page.notes), routines: A.routines(state), gallery: A.gallery(state),
+    steps: A.steps(page.trail, undefined, true), lines: A.lines(page, 'reel'), memories: A.memories(page.notes), personality: A.personality(page.soul), knows: A.knows(page.skills), routines: A.routines(state), gallery: A.gallery(state),
     resting: A.resting(state), apps: A.apps(state), chatgpt: { ...h, signing: { code: h.signing?.code } },
   };
   for (const [name, v] of Object.entries(views)) assert.doesNotMatch(shown(v), FORBIDDEN, name);
   assert.equal(h.signing?.code, 'AB12-CDE34', 'the one-time code reaches the sign-in sheet');
+  assert.deepEqual(A.knows(page.skills), ['Turn photos into a short video', 'plan dinners'], 'the person\'s words, never the model\'s');
+  assert.equal(A.personality(page.soul)[0], 'You are Reel.', 'the name heading is not repeated');
+  assert.equal(A.soulText('Reel', A.soulDraft(page.soul)), page.soul + '\n', 'editing keeps the name heading');
+  assert.equal(A.withoutMemory(A.withMemory('- One\n', 'Two'), 0), '- Two\n');
 });
 
 test('asks become plain cards: money never gets "always", a blocked terminal becomes a question', () => {

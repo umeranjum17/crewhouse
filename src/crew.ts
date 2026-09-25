@@ -27,6 +27,9 @@ export const short = (s: string, n: number) => (s = s.trim(), s.length > n ? `${
 
 const STUCK_MS = Number(process.env.CREWHOUSE_STUCK_MS || 180_000); // working with no news this long: show "stuck?"
 /** Events that make up a bot's plain "what I did" trail. */
+/** A quiet check-in's reply when nothing needs the person, and how its run is recorded. */
+const ALL_CLEAR = 'ALL-CLEAR';
+const ALL_CLEAR_RESULT = 'All clear';
 const TRAIL = ['task.created', 'task.working', 'task.done', 'task.failed', 'task.progress', 'run.tool', 'run.allowed', 'run.typed',
   'ask.opened', 'ask.answered', 'ask.parked', 'file.delivered', 'memory.learned', 'memory.undone', 'bot.recruited', 'bot.allowed', 'run.resumed'];
 
@@ -104,6 +107,11 @@ export class Crew {
       this.db.event('system.started', null, {});
       for (const m of this.members()) this.ensureDigest(m.id);
     });
+    for (const b of this.bots()) {
+      let tpl: disk.Template | null = null;
+      try { tpl = disk.loadTemplate(this.cfg, b.template); } catch { /* a template since removed: its bot keeps its folder as is */ }
+      disk.upgradeFolder(this.cfg, b.id, tpl, b.display, OWNER);
+    }
     if (!this.member(OWNER).onboarded && !this.db.get('SELECT 1 FROM messages WHERE bot = ?', CHIEF)) this.say(CHIEF, 'bot', chiefGreeting(), null, OWNER);
     this.timer = setInterval(() => this.tick(), 1500);
     this.recover();
@@ -229,7 +237,11 @@ export class Crew {
     return this.db.all('SELECT * FROM routines WHERE member = ? ORDER BY kind, id', member).map(({ brain, ...r }): Row => ({
       ...r, words: describe(parseSchedule(r.schedule)), thinks: brain ? disk.brainName(disk.parseBrain(brain)) : null,
       history: this.db.all("SELECT seq, at, kind, data FROM events WHERE kind IN ('routine.fired', 'routine.skipped') AND json_extract(data, '$.routine') = ? ORDER BY seq DESC LIMIT 8", r.id)
-        .map((e) => { const d = JSON.parse(e.data); return { at: e.at, kind: e.kind, ...d, state: d.task ? this.db.get('SELECT state FROM tasks WHERE id = ?', d.task)?.state : undefined }; }),
+        .map((e) => {
+          const d = JSON.parse(e.data);
+          const t = d.task ? this.db.get('SELECT state, result FROM tasks WHERE id = ?', d.task) : undefined;
+          return { at: e.at, kind: e.kind, ...d, state: t?.state, ...(t?.result === ALL_CLEAR_RESULT ? { clear: true } : {}) };
+        }),
     }));
   }
 
@@ -247,7 +259,7 @@ export class Crew {
   }
 
   /** A routine is its setter's: the member who added it, or the one Chief set it up for. Its runs use their accounts. */
-  addRoutine(b: { bot?: string; schedule?: string; task?: string; model?: string; name?: string }, by: string, member = by === CHIEF ? this.chiefFor() : OWNER) {
+  addRoutine(b: { bot?: string; schedule?: string; task?: string; model?: string; name?: string; quiet?: boolean }, by: string, member = by === CHIEF ? this.chiefFor() : OWNER) {
     const bot = this.bot(String(b.bot ?? '').toLowerCase());
     if (!bot || bot.id === CHIEF) throw Object.assign(new Error(`no bot called ${b.bot}; a routine hands a task to one of the crew`), { status: 404 });
     const body = String(b.task ?? '').trim();
@@ -258,8 +270,8 @@ export class Crew {
     const first = body.split(/\n|(?<=[.!?])\s/)[0].replace(/[.!?]$/, '');
     const name = String(b.name ?? '').trim().slice(0, 60) || short(first, 60);
     return this.db.tx(() => {
-      const r = this.db.run('INSERT INTO routines (bot, name, schedule, body, brain, member, next_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        bot.id, name, String(b.schedule).trim(), body, brain, member, nextRun(when, Date.now()), Date.now());
+      const r = this.db.run('INSERT INTO routines (bot, name, schedule, body, brain, member, quiet, next_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        bot.id, name, String(b.schedule).trim(), body, brain, member, b.quiet === true ? 1 : 0, nextRun(when, Date.now()), Date.now());
       const row = this.routine(Number(r.lastInsertRowid));
       this.db.event('routine.created', bot.id, { routine: row.id, name, words: describe(when), by, member });
       if (by === CHIEF) this.say(CHIEF, 'system', `Routine added: “${name}” for ${bot.display}, ${describe(when).toLowerCase()}. First run ${clock(row.next_at)}.`, null, member);
@@ -267,9 +279,14 @@ export class Crew {
     });
   }
 
-  /** Pause, resume or move a routine. Resuming counts from now: a paused routine never catches up. */
-  updateRoutine(id: number, b: { state?: string; schedule?: string }) {
+  /** Pause, resume or move a routine, or make it a quiet check-in. Resuming counts from now: a paused routine never catches up. */
+  updateRoutine(id: number, b: { state?: string; schedule?: string; quiet?: boolean }) {
     const r = this.routine(id);
+    if (b.quiet !== undefined) {
+      if (typeof b.quiet !== 'boolean' || r.kind === 'digest') throw Object.assign(new Error('only a helper\'s routine can be a quiet check-in'), { status: 400 });
+      this.db.run('UPDATE routines SET quiet = ? WHERE id = ?', b.quiet ? 1 : 0, id);
+      if (b.state === undefined && b.schedule === undefined) return;
+    }
     const state = b.state ?? r.state;
     if (!['on', 'paused'].includes(state)) throw Object.assign(new Error('a routine is on or paused'), { status: 400 });
     const schedule = b.schedule?.trim() || r.schedule;
@@ -324,10 +341,10 @@ export class Crew {
     const address = this.member(member).address;
     const name = (id: string) => this.bot(id)?.display ?? id;
     const list = (xs: string[]) => xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join('; ')} and ${xs.at(-1)}`;
-    const done = this.db.all("SELECT * FROM tasks WHERE bot != ? AND member = ? AND state = 'done' AND updated_at >= ? ORDER BY id", CHIEF, member, since);
+    const done = this.db.all("SELECT * FROM tasks WHERE bot != ? AND member = ? AND state = 'done' AND updated_at >= ? AND COALESCE(result, '') != ? ORDER BY id", CHIEF, member, since, ALL_CLEAR_RESULT);
     const failed = this.db.all("SELECT * FROM tasks WHERE bot != ? AND member = ? AND state = 'failed' AND updated_at >= ? ORDER BY id", CHIEF, member, since);
     const asks = this.db.all("SELECT * FROM asks WHERE state = 'open' AND COALESCE(member, ?) = ? ORDER BY id", OWNER, member);
-    const learned = this.db.all("SELECT bot, data FROM events WHERE kind = 'memory.learned' AND at >= ? ORDER BY seq", since);
+    const learned = this.db.all("SELECT bot, data FROM events WHERE kind = 'memory.learned' AND at >= ? AND COALESCE(json_extract(data, '$.member'), ?) = ? ORDER BY seq", since, OWNER, member);
     const soon = this.db.all("SELECT * FROM routines WHERE state = 'on' AND kind != 'digest' AND member = ? AND next_at <= ? ORDER BY next_at", member, Date.now() + 86_400_000);
     const lines = [`Good ${partOfDay()}${address ? `, ${address}` : ''}. While you were away:`];
     lines.push(done.length ? `- Finished: ${list(done.slice(0, 5).map((t) => `${name(t.bot)}, “${t.title}”`))}${done.length > 5 ? `, and ${done.length - 5} more` : ''}.` : '- Nothing new was finished.');
@@ -347,13 +364,17 @@ export class Crew {
       // Each member has their own thread with a bot; notes to the whole house (member NULL) show to everyone.
       messages: this.db.all('SELECT * FROM (SELECT * FROM messages WHERE bot = ? AND COALESCE(member, ?) = ? ORDER BY id DESC LIMIT 200) ORDER BY id', id, viewer, viewer),
       tasks: this.db.all('SELECT * FROM tasks WHERE bot = ? ORDER BY id DESC LIMIT 50', id).map((t) => this.task(t)),
-      notes: disk.readNotes(this.cfg, id),
+      // What this helper learned about the viewer: never another member's notes.
+      notes: disk.readNotes(this.cfg, { member: viewer, bot: id }),
       notesCap: disk.NOTES_CAP,
+      soul: disk.readSoul(this.cfg, id),
+      soulCap: disk.SOUL_CAP,
       skills: disk.listSkills(this.cfg, id),
       tools: disk.botTools(this.cfg, id),
       files: disk.listFiles(this.cfg, id),
       trail: this.db.all(`SELECT * FROM events WHERE bot = ? AND kind IN (${TRAIL.map(() => '?').join(', ')}) ORDER BY seq DESC LIMIT 300`, id, ...TRAIL)
-        .map((e) => ({ ...e, data: JSON.parse(e.data), ...(e.kind === 'memory.learned' && undone.has(e.seq) ? { undone: true } : {}) })),
+        .map((e) => ({ ...e, data: JSON.parse(e.data), ...(e.kind === 'memory.learned' && undone.has(e.seq) ? { undone: true } : {}) }))
+        .filter((e: Row) => !String(e.kind).startsWith('memory.') || (e.data.member ?? OWNER) === viewer),
       // Standing answers in plain words; taking one back sends the words back.
       allow: (disk.botConfig(this.cfg, id).allow ?? []).map(coversOf),
       memory: disk.botConfig(this.cfg, id).memory !== false,
@@ -500,11 +521,15 @@ export class Crew {
   private prompt(task: Row) {
     const member = this.member(task.member ?? OWNER);
     const who = task.origin === 'person' ? this.called(member.id) : task.origin === CHIEF ? 'Chief' : task.origin;
-    const routine = task.routine && this.db.get('SELECT name FROM routines WHERE id = ?', task.routine)?.name;
+    const r = task.routine && this.db.get('SELECT name, quiet FROM routines WHERE id = ?', task.routine);
+    const routine = r?.name;
+    // A quiet check-in only speaks up when something needs the person.
+    const quiet = r?.quiet ? `\n\n[Crewhouse] This is a check-in. If nothing needs ${who}, reply exactly ${ALL_CLEAR} and nothing else.` : '';
     // The debrief: the bot proposes what to keep; crewd caps it, commits it and offers Undo.
     const debrief = disk.botConfig(this.cfg, task.bot).memory === false ? '' : `\n\n[Crewhouse] When you finish: if this task showed you a lasting preference of ${who} (not how to address them; Crewhouse keeps that), ` +
-      'save it with crew_remember (one short line; name the old note in `replaces` to correct one). Otherwise save nothing.';
-    if (task.bot !== CHIEF) return `${this.memory(task.bot, member.id)}[Crewhouse task #${task.id} from ${routine ? `the routine “${routine}”, set up by ${this.called(member.id)}` : who}]\n${task.body}${debrief}`;
+      'save it with crew_remember (one short line; name the old note in `replaces` to correct one). Set `everyone` when every helper should know it ' +
+      '(family, diet, units, where they live); leave it out for how they like your own work. Otherwise save nothing.';
+    if (task.bot !== CHIEF) return `${this.memory(task.bot, member.id)}[Crewhouse task #${task.id} from ${routine ? `the routine “${routine}”, set up by ${this.called(member.id)}` : who}]\n${task.body}${quiet}${debrief}`;
     const crew = this.bots().filter((b) => b.id !== CHIEF)
       .map((b) => `${b.display} (id ${b.id}, ${b.template}, ${this.activeTask(b.id) ? 'busy' : 'free'})`).join('; ') || 'nobody yet';
     const tpls = disk.listTemplates(this.cfg).map((t) => `${t.id}: ${t.role}`).join('; ');
@@ -512,10 +537,15 @@ export class Crew {
     return `${this.memory(task.bot, member.id)}[Crewhouse]${house} Crew: ${crew}. Templates: ${tpls}.\nThe person says: ${task.body}`;
   }
 
-  /** How to address the person, and the bot's notes: read at the start of every task, so a correction lands at once. */
+  /** How to address the person, what the whole crew knows about them, and this bot's own notes on them: read at the start of
+   *  every task, so a correction lands at once. Only the task's own member's, never another member's. */
   private memory(id: string, member: number) {
-    const notes = disk.botConfig(this.cfg, id).memory === false ? '' : disk.readNotes(this.cfg, id).trim();
-    return `[Crewhouse] ${disk.addressLine(this.member(member).address)}${notes ? `\nYour notes (what you have learned about the person):\n${notes}` : ''}\n\n`;
+    const on = disk.botConfig(this.cfg, id).memory !== false;
+    const about = on ? disk.readNotes(this.cfg, { member, bot: null }).trim() : '';
+    const notes = on ? disk.readNotes(this.cfg, { member, bot: id }).trim() : '';
+    return `[Crewhouse] ${disk.addressLine(this.member(member).address)}` +
+      `${about ? `\nWhat the whole crew knows about the person:\n${about}` : ''}` +
+      `${notes ? `\nYour notes (what you have learned about how they like your work):\n${notes}` : ''}\n\n`;
   }
 
   /** Per-bot queue: one task at a time per bot, a global cap across bots. */
@@ -724,12 +754,13 @@ export class Crew {
     const text = reply.trim();
     // A turn that ended on a parked question isn't the end of the task: it resumes when the person answers.
     const parked = task && this.db.get("SELECT 1 FROM asks WHERE task_id = ? AND state = 'open' AND kind IN ('permission', 'connect')", task.id);
+    const clear = !!task?.routine && text.replace(/[.\s]+$/, '') === ALL_CLEAR && !!this.db.get('SELECT 1 FROM routines WHERE id = ? AND quiet = 1', task.routine);
     this.db.tx(() => {
-      if (text) this.say(botId, 'bot', text, task?.id ?? null);
+      if (text && !clear) this.say(botId, 'bot', text, task?.id ?? null);
       if (task && parked && task.state !== 'needs_you') this.setTask(task, 'needs_you');
       // While the person holds the controls the turn was cut short on purpose; Give back resumes it.
       if (!task || parked || this.held.has(botId)) return;
-      this.setTask(task, 'done', text || 'Done.');
+      this.setTask(task, 'done', clear ? ALL_CLEAR_RESULT : text || 'Done.');
       if (task.origin === CHIEF) {
         const b = this.bot(botId)!;
         this.say(CHIEF, 'system', `${b.display} has finished task #${task.id}: ${text.slice(0, 240)}${text.length > 240 ? '…' : ''}`, null, task.member ?? OWNER);
@@ -881,26 +912,33 @@ export class Crew {
           copyFileSync(from, String(p.to));
           this.db.event('task.progress', botId, { task: task(), text: `Put a copy of ${basename(from)} in your ${basename(dirname(String(p.to)))} folder` });
         }),
-      tool('crew_remember', 'Save a lasting preference of the person to your notes (one short line). `replaces`: words of an old note this corrects.',
-        { text: Type.String(), replaces: Type.Optional(Type.String()) }, (p) => {
-          const change = disk.remember(this.cfg, botId, String(p.text ?? ''), String(p.replaces ?? ''));
-          this.db.event('memory.learned', botId, { task: task(), text: change.added.slice(2, 202), ...change });
+      tool('crew_remember', 'Save a lasting preference of the person (one short line). `replaces`: words of an old note this corrects. ' +
+        '`everyone`: true for something every helper should know about them; otherwise it goes in your own notes.',
+        { text: Type.String(), replaces: Type.Optional(Type.String()), everyone: Type.Optional(Type.Boolean()) }, (p) => {
+          if (disk.botConfig(this.cfg, botId).memory === false) throw new Error('memory is off for this bot; the person turned it off');
+          // Whose memory is the running task's member's, never the model's choice.
+          const member = this.activeTask(botId)?.member ?? OWNER;
+          const everyone = p.everyone === true;
+          const change = disk.remember(this.cfg, { member, bot: everyone ? null : botId }, String(p.text ?? ''), String(p.replaces ?? ''));
+          this.db.event('memory.learned', botId, { task: task(), text: change.added.slice(2, 202), member, ...(everyone ? { everyone } : {}), ...change });
         }),
     ];
     if (botId !== CHIEF) return own;
     const accounts = Object.keys(PROVIDERS).join(', ');
     return [...own,
       tool('crew_roster', 'Who is on the crew, and the templates you can recruit from.', {}, () => ({
-        crew: this.bots().filter((x) => x.id !== CHIEF).map((x) => ({ id: x.id, name: x.display, role: x.role, busy: !!this.activeTask(x.id) })),
+        crew: this.bots().filter((x) => x.id !== CHIEF).map((x) => ({ id: x.id, name: x.display, role: x.role, busy: !!this.activeTask(x.id),
+          knows: disk.listSkills(this.cfg, x.id).map((k) => k.description || k.name) })),
         templates: disk.listTemplates(this.cfg).map((t) => ({ id: t.id, name: t.display, role: t.role })),
       })),
       tool('crew_recruit', 'Recruit a bot from a template.', { template: Type.String(), name: Type.Optional(Type.String()) },
         (p) => { const n = this.recruit(p.template, p.name, CHIEF); return { recruited: { id: n.id, name: n.display } }; }),
       tool('crew_assign', `Hand a bot a task: the person's words, then one line "Done means: …". \`account\` (${accounts}) only when a task plainly suits another AI.`,
         { bot: Type.String(), task: Type.String(), account: Type.Optional(Type.String()) }, (p) => this.assign(String(p.bot).toLowerCase(), p.task ?? '', CHIEF, p.account)),
-      tool('crew_routine', 'Hand a bot the same task on a schedule. `when` is plain words in local time: "every Monday 9:00", "weekdays 8am", "every 2 hours".',
-        { bot: Type.String(), when: Type.String(), task: Type.String(), name: Type.Optional(Type.String()), account: Type.Optional(Type.String()) },
-        (p) => { const x = this.addRoutine({ bot: p.bot, schedule: p.when, task: p.task, name: p.name, model: p.account }, CHIEF); return { routine: { id: x.id, name: x.name, next: new Date(x.next_at).toString() } }; }),
+      tool('crew_routine', 'Hand a bot the same task on a schedule. `when` is plain words in local time: "every Monday 9:00", "weekdays 8am", "every 2 hours". ' +
+        '`quiet`: a check-in that only speaks up when something needs the person.',
+        { bot: Type.String(), when: Type.String(), task: Type.String(), name: Type.Optional(Type.String()), account: Type.Optional(Type.String()), quiet: Type.Optional(Type.Boolean()) },
+        (p) => { const x = this.addRoutine({ bot: p.bot, schedule: p.when, task: p.task, name: p.name, model: p.account, quiet: p.quiet }, CHIEF); return { routine: { id: x.id, name: x.name, next: new Date(x.next_at).toString() } }; }),
       tool('crew_routines', 'The routines and when each runs next.', {}, () => this.routines(this.chiefFor()).map((x) => ({ id: x.id, bot: x.bot, name: x.name, when: x.words, state: x.state, next: new Date(x.next_at).toString() }))),
       tool('crew_status', 'Open tasks.', {}, () => this.db.all("SELECT id, bot, title, state FROM tasks WHERE state IN ('queued','working','needs_you','paused') ORDER BY id")),
       tool('crew_call_me', 'Change how the person is addressed, when they ask.', { how: Type.String() }, (p) => { this.setAddress(String(p.how ?? '')); }),

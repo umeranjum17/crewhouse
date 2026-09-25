@@ -1,6 +1,7 @@
 ---
 name: make-reel
 description: Turn a folder of screenshots or images into a short demo video (mp4) with ffmpeg. Use for any demo, promo or teaser video request.
+says: Turn photos and screenshots into a short video
 ---
 
 # Make a reel

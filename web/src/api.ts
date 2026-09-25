@@ -30,7 +30,13 @@ export const api = {
   /** First run: how Chief addresses the person, and (from an idea card) their first request, in one tap. */
   onboard: (address: string, ask?: string) => call('POST', '/api/onboard', { address, ask }),
   recruit: (template: string, name: string) => call('POST', '/api/recruit', { template, name }),
+  /** What one helper learned about this member, and what the whole crew knows about them: each person's own. */
   notes: (id: string, text: string) => call('PUT', `/api/bots/${id}/notes`, { text }),
+  about: () => call('GET', '/api/about'),
+  setAbout: (text: string) => call('PUT', '/api/about', { text }),
+  /** Who a helper is, in the person's words; `soulReset` puts back how it started. */
+  soul: (id: string, text: string) => call('PUT', `/api/bots/${id}/soul`, { text }),
+  soulReset: (id: string) => call('POST', `/api/bots/${id}/soul/reset`),
   settings: (id: string, body: { allow?: string[]; memory?: boolean }) => call('PUT', `/api/bots/${id}/settings`, body),
   reset: (id: string) => call('POST', `/api/bots/${id}/reset`),
   undoMemory: (id: string, seq: number) => call('POST', `/api/bots/${id}/memory/${seq}/undo`),
@@ -51,8 +57,8 @@ export const api = {
   signInCancel: (member: number, account: string) => call('POST', `/api/accounts/${member}/${account}/cancel`),
   signOut: (member: number, account: string) => call('POST', `/api/accounts/${member}/${account}/logout`),
   schedule: (text: string) => call('GET', `/api/schedule?text=${encodeURIComponent(text)}`),
-  addRoutine: (body: { bot: string; schedule: string; task: string; model?: string; name?: string }) => call('POST', '/api/routines', body),
-  routine: (id: number, body: { state?: 'on' | 'paused'; schedule?: string }) => call('PUT', `/api/routines/${id}`, body),
+  addRoutine: (body: { bot: string; schedule: string; task: string; model?: string; name?: string; quiet?: boolean }) => call('POST', '/api/routines', body),
+  routine: (id: number, body: { state?: 'on' | 'paused'; schedule?: string; quiet?: boolean }) => call('PUT', `/api/routines/${id}`, body),
   runRoutine: (id: number) => call('POST', `/api/routines/${id}/run`),
   removeRoutine: (id: number) => call('DELETE', `/api/routines/${id}`),
   // Phones are still wanted (docs/ui-contract.md); the screens show "coming soon" until crewd answers them.
