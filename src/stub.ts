@@ -6,6 +6,7 @@
 //   no helpers in plan   on ChatGPT, answer as a plan without helpers does (the same words, with no time to come back)
 //   sign me out          answer as an account whose sign-in stopped working does
 //   ask permission       hold the turn (after its tool call, if any) until the test releases it (`release`)
+//   [route ID]           asked who should take a request: ID, fairly sure; [route ?]: torn evenly; neither: Chief, sure
 //   anything else        reply `stub <bot>: done with "<the last line of the task itself>"`
 // Grok stands in for an account that must be signed in first: its sign-in shows a code, then succeeds.
 import './isolate.ts'; // first: before anything loads the engine
@@ -31,6 +32,11 @@ const step: FauxResponseFactory = async (ctx, options, _state, model): Promise<A
   const bot = /Your id in Crewhouse is ([a-z0-9-]+)\./.exec(msgs.filter((m) => m.role === 'system').map(getSystemMessageText).join('\n'))?.[1] ?? 'bot';
   const last = msgs.at(-1);
   const said = words([...msgs].reverse().find((m) => m.role === 'user') ?? { content: '' });
+  if (said.startsWith('[Crewhouse routing]')) {
+    const options = [...said.matchAll(/^- ([a-z0-9-]+):/gm)].map((m) => m[1]);
+    const pick = /\[route ([a-z0-9-]+|\?)\]/.exec(said)?.[1] ?? 'chief';
+    return fauxAssistantMessage(JSON.stringify(Object.fromEntries(options.map((o) => [o, pick === '?' ? 1 / options.length : o === pick ? 0.9 : 0.1 / (options.length - 1)]))));
+  }
   if (last?.role === 'toolResult') return fauxAssistantMessage(await hold(said, options?.sessionId, options?.signal, `stub ${bot}: ${last.toolName} said ${words(last).slice(0, 300)}`));
   const tool = /\[tool (\w+) (\{.*?\})\]/.exec(said);
   if (tool) return fauxAssistantMessage([fauxToolCall(tool[1], JSON.parse(tool[2]))], { stopReason: 'toolUse' });
