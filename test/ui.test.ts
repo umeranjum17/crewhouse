@@ -91,6 +91,7 @@ test('plain() keeps what a person wrote and drops the machinery', () => {
   assert.equal(A.plain('Saved it to /home/umer/x/report.pdf for you'), 'Saved it to “Report” for you');
   assert.equal(A.plain('I used `ls -la` and it worked'), 'I used and it worked');
   assert.equal(A.plain('Your `Birthday` video'), 'Your Birthday video');
+  assert.equal(A.plain('It is saved at `files/birthday-card.mp4` and is 1080p.'), 'It is saved at “Birthday card” and is 1080p.', 'a file named by the bot keeps its name');
   assert.equal(A.plain('She said 3/4 of us are in'), 'She said 3/4 of us are in');
   assert.equal(A.pretty('files/mum-birthday_v2.mp4'), 'Mum birthday v2');
 });

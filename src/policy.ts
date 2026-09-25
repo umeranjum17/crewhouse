@@ -52,6 +52,11 @@ function folderWords(path: string) {
 const inside = (root: string, p: string) => p === root || p.startsWith(root + '/');
 
 export function effectOf(tool: string, input: Record<string, any>, s: Seen): Effect {
+  // A copy of the bot's own work into the person's folders is a write there.
+  if (tool === 'crew_copy') {
+    const e = effectOf('write', { path: input.to }, s);
+    return e.kind === 'files' ? { ...e, words: `${s.bot} wants to put a copy of “${basename(String(input.to))}” in ${e.covers}.` } : e;
+  }
   if (SAFE.test(tool)) return { kind: 'safe' };
   if (READS.has(tool) || WRITES.has(tool)) {
     const path = resolve(s.space, String(input.path ?? '.'));
