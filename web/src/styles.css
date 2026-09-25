@@ -49,7 +49,7 @@ b { font-weight: 800; }
 .art i { font-style: normal; }
 .dots { display: grid; grid-template-columns: repeat(var(--w), var(--d)); gap: calc(var(--d) * .22); width: max-content; }
 .dots b { width: var(--d); height: var(--d); border-radius: 50%; background: var(--off); }
-.face .dots b:not([style]), .halo .dots b:not([style]), .logo .dots b:not([style]) { background: transparent; }
+.face .dots b:not(.on), .halo .dots b:not(.on), .logo .dots b:not(.on) { background: transparent; }
 .halo { display: grid; place-items: center; padding: 18px; border-radius: 50%; background: radial-gradient(circle, var(--halo) 45%, transparent 70%); }
 .face { border-radius: 50%; display: inline-grid; place-items: center; flex: none; overflow: hidden; position: relative; }
 .face.working { box-shadow: 0 0 0 3px var(--ok); }
@@ -130,7 +130,7 @@ textarea.input { resize: vertical; }
 .splash .field { position: absolute; inset: 0; font-size: 13px; line-height: 1.15; color: #b58cff; opacity: .16; overflow: hidden; }
 .splash-in { position: relative; display: grid; justify-items: center; gap: 16px; padding: 20px; }
 .banner { font-size: clamp(5px, 1.35vw, 13px); line-height: 1.02; }
-.splash .dots b:not([style]) { background: transparent; }
+.splash .dots b:not(.on) { background: transparent; }
 .splash .laptop { color: #8dffc0; font-size: 11px; margin-top: -18px; }
 .splash-line { color: #cfc8dc; font: 700 15px var(--ui); letter-spacing: .5px; min-height: 22px; }
 .cur { display: inline-block; width: .55em; height: 1.05em; background: #8dffc0; vertical-align: -3px; margin-left: 3px; animation: blink 1s steps(1) infinite; }

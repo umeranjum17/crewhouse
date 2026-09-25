@@ -2,34 +2,79 @@
 // (the block-letter boot splash, Chief's laptop, confetti). Framework-free, so the Expo app draws the same art:
 // a bitmap is an array of equal-width strings, '.' is an unlit dot, any other letter indexes a palette.
 
-export type Mood = 'idle' | 'blink' | 'happy' | 'work' | 'ask' | 'rest';
+export type Mood = 'idle' | 'blink' | 'twitch' | 'hello' | 'happy' | 'work' | 'ask' | 'listen' | 'rest' | 'error';
 export type Bitmap = string[];
 export type Palette = Record<string, string>;
 
-const pad = (rows: string[], w: number) => rows.map((r) => (r + '.'.repeat(w)).slice(0, w));
-
-// ── Chief: a round dot gentleman with a bowler, moustache and bow tie ──
-export const CHIEF_PAL: Palette = { h: '#3b3552', H: '#5a5275', y: '#ffd9a0', e: '#3b3552', c: '#ff9bb3', m: '#6b4a3a', w: '#ffffff', b: '#ff7aa2' };
-/** At night his bowler catches the light, or it would vanish into the dark. */
-export const CHIEF_PAL_NIGHT: Palette = { ...CHIEF_PAL, h: '#6a5a9a', H: '#9c8cd0' };
-export function chief(mood: Mood = 'idle'): Bitmap {
-  const eyes = {
-    idle: ['.yyyeyyyyeyyy.', '.yyyeyyyyeyyy.'],
-    blink: ['.yyyyyyyyyyyy.', '.yyeeyyyyeeyy.'],
-    happy: ['.yyeyeyyeyeyy.', '.yyyyyyyyyyyy.'],
-    work: ['.yyyyyyyyyyyy.', '.yyyeyyyyeyyy.'],
-    ask: ['.yyyeyyyyeyyy.', '.yyyeyyyyeyyy.'],
-    rest: ['.yyyyyyyyyyyy.', '.yyeeyyyyeeyy.'],
-  }[mood];
-  return pad([
-    '.....hhhh.....', '....hhhhhh....', '....hHhhhh....', '....bbbbbb....', '..hhhhhhhhhh..',
-    '...yyyyyyyy...', '..yyyyyyyyyy..', eyes[0], eyes[1], '.ycyyyyyyyycy.',
-    '.yyymmmmmmyyy.', '.yymmyyyymmyy.', '..yyyyyyyyyy..', '...yyyyyyyy...',
-    '....wwbbww....', '...wwwbbwww...',
-  ], 14);
+/** Stamp hand-drawn layers onto a blank w×h bitmap: [x, y, rows], where ' ' in a layer is transparent. */
+function draw(w: number, h: number, ...layers: [number, number, string[]][]): Bitmap {
+  const out = Array.from({ length: h }, () => Array(w).fill('.'));
+  for (const [x0, y0, rows] of layers) rows.forEach((r, j) => [...r].forEach((c, i) => {
+    if (c !== ' ' && out[y0 + j] && x0 + i >= 0 && x0 + i < w) out[y0 + j][x0 + i] = c;
+  }));
+  return out.map((r) => r.join(''));
 }
 
-// ── The pals: one blob shape, two dot eyes, a colour and an accessory each ──
+// Little signs beside a face: a sparkle when done, z's asleep, a sweat drop, sound, a polite "!".
+const SPARKLE = [' * ', '***', ' * '], ZZ = ['ZZ ', ' Z ', 'ZZ ', '   ', 'zz', ' z', 'zz'], SWEAT = [' d', 'dd', 'dd'];
+const SOUND = [' l', '  l', '  l', ' l'], BANG = ['t', 't', 't', ' ', 't'];
+const SIGNS: Palette = { '*': '#ffc23c', z: '#b9b3d4', Z: '#8f88b0', d: '#6aa8ff', l: '#ff7aa2', t: '#ff5f87', k: '#c2475f', c: '#ff9bb3', e: '#2e2a40' };
+
+// ── Chief, the Gentleman: a round portrait head, 22×23 dots. Big eyes low on the face, brows that act, a walrus
+// handlebar that is his mouth (up when pleased, down when not) and a bowler he raises when he needs you, puts a
+// monocle in to work, and pulls over his eyes to rest. Every dot is placed by hand. ──
+export const CHIEF_PAL: Palette = { ...SIGNS, h: '#3b3552', H: '#6a6190', b: '#ff7aa2', y: '#ffd9a8', n: '#eba277', m: '#7a4b35', s: '#ffffff', T: '#c2475f', g: '#ffc23c' };
+/** At night his bowler catches the light, or it would vanish into the dark. */
+export const CHIEF_PAL_NIGHT: Palette = { ...CHIEF_PAL, h: '#6a5a9a', H: '#9c8cd0', e: '#1d1929' };
+const HEAD = [
+  '       yyyyyy', '      yyyyyyyy', '    yyyyyyyyyyyy', '   yyyyyyyyyyyyyy', '  yyyyyyyyyyyyyyyy', '  yyyyyyyyyyyyyyyy',
+  ' yyyyyyyyyyyyyyyyyy', ' yyyyyyyyyyyyyyyyyy', ' yyyyyyyyyyyyyyyyyy', ' yyyyyyyyyyyyyyyyyy', ' yyyyyyyyyyyyyyyyyy', ' yyyyyyyyyyyyyyyyyy',
+  '  yyyyyyyyyyyyyyyy', '  yyyyyyyyyyyyyyyy', '   yyyyyyyyyyyyyy', '    ssyyyyyyyyss', '   sssttsTTsttsss', '    sstt    ttss',
+];
+const HAT = ['       hhhhhh', '      hhhhhhhh', '      hHhhhhhh', '      hHhhhhhh', '      bbbbbbbb', '  hhhhhhhhhhhhhhhh'];
+const MO = {
+  idle: ['   m   mmmmmm   m', '    mmmmmmmmmmmm', '     mmmm  mmmm'],
+  up: ['  m    mmmmmm    m', '   mmmmmmmmmmmmmm', '     mmmm  mmmm'],
+  down: ['       mmmmmm', '    mmmmmmmmmmmm', '   mmmm      mmmm', '   m            m'],
+};
+const CHEEK = '  c      nn      c';
+/** One face per mood, from head row 3 down. Column ruler: 01234567890123456789. */
+const FACES: Record<Mood, string[]> = {
+  idle: ['', '    mmm      mmm', '', '     ee      ee', '     ee      ee', CHEEK, ...MO.idle],
+  blink: ['', '    mmm      mmm', '', '', '     ee      ee', CHEEK, ...MO.idle],
+  twitch: ['', '    mmm      mmm', '', '     ee      ee', '     ee      ee', CHEEK, '  m    mmmmmm    m', ...MO.idle.slice(1)],
+  work: ['', '             mmm', '    mmm      gg', '            geeg', '     ee     geeg', '  c      nn  gg  c', ...MO.idle],
+  ask: ['    mmm      mmm', '', '     ee      ee', '     ee      ee', '     ee      ee', CHEEK, ...MO.idle, '         kk'],
+  hello: ['    mmm      mmm', '', '', '     ee      ee', '     ee      ee', CHEEK, ...MO.up],
+  happy: ['    mmm      mmm', '', '', '     ee      ee', '    e  e    e  e', '  cc     nn     cc', ...MO.up, '        kkkk', '         kk'],
+  listen: ['              mmm', '    mmm', '', '      ee      ee', '      ee      ee', CHEEK, ...MO.idle],
+  rest: ['', '', '', '    e  e    e  e', '     ee      ee', CHEEK, ...MO.down],
+  error: ['      m      m', '    mm        mm', '', '     ee      ee', '     ee      ee', CHEEK, ...MO.down, '', '        kkkk', '        k  k'],
+};
+export function chief(mood: Mood = 'idle', bob = 0): Bitmap {
+  const lift = ({ ask: -2, hello: -2, rest: 2, error: -1 } as Record<string, number>)[mood] ?? 0; // raised to ask, over the eyes to rest, askew on error
+  const hat: [number, number, string[]] = [mood === 'error' ? 2 : 1, 2 + bob + lift, HAT];
+  const signs: [number, number, string[]][] = ({
+    happy: [[0, 3, SPARKLE], [19, 1, SPARKLE], [19, 9, ['*']]], rest: [[18, 0, ZZ]], error: [[19, 8, SWEAT]], listen: [[19, 10, SOUND]], ask: [[20, 0, BANG]],
+  } as Record<string, [number, number, string[]][]>)[mood] ?? [];
+  return draw(22, 23, [1, 5 + bob, HEAD], [1, 8 + bob, FACES[mood]], hat, ...signs);
+}
+/** The 12×13 cut for 48 px and below (the app icon, avatars, the status bar): hat, eyes and moustache. */
+export function chiefSmall(mood: Mood = 'idle'): Bitmap {
+  const eyes = ({ blink: ['', ' e    e'], work: ['', ' e    e'], rest: ['e e  e e', ' e    e'], happy: [' e    e', 'e e  e e'], listen: ['  e    e', '  e    e'] } as Record<string, string[]>)[mood] ?? [' e    e', ' e    e'];
+  const mo = mood === 'happy' ? ['m        m', ' mmmmmmmm', '  mm  mm'] : mood === 'error' || mood === 'rest' ? ['', '  mmmmmm', ' mm    mm'] : ['', 'm mmmmmm m', ' mm    mm'];
+  const lift = mood === 'ask' || mood === 'hello' ? -1 : mood === 'rest' ? 1 : 0;
+  return draw(12, 13, [0, 5, ['  yyyyyyyy', ' yyyyyyyyyy', ' yyyyyyyyyy', ' yyyyyyyyyy', ' yyyyyyyyyy', ' yyyyyyyyyy', '  yyyyyyyy', '    yyyy']],
+    [2, 7, eyes], [1, 9, mo], [mood === 'error' ? 1 : 0, 1 + lift, ['   hhhhhh', '   hhhhhh', '   bbbbbb', ' hhhhhhhhhh']]);
+}
+/** The notification glyph: alpha-only, drawn as solid pixels (white on transparent) so it holds at 24 px. */
+export const NOTIFY: Bitmap = [
+  '...xxxxxx...', '..xxxxxxxx..', '..xxxxxxxx..', '............', 'xxxxxxxxxxxx', '............',
+  '..xx....xx..', '..xx....xx..', 'x..........x', 'xx..xxxx..xx', '.xxxxxxxxxx.', '..xxx..xxx..',
+];
+
+// ── The pals: round heads that share Chief's face, one colour each and ONE shape that breaks the silhouette
+// (film-reel ears, an explorer's helmet, an ink-drop point, a sprout, headphones), 18×17 dots ──
 export type Kind = 'reel' | 'scout' | 'scribe' | 'tracer' | 'pip';
 export const PALS: Record<Kind, { body: string; dark: string; soft: string }> = {
   reel: { body: '#ffb199', dark: '#e0664a', soft: '#ffe6dd' },
@@ -38,20 +83,38 @@ export const PALS: Record<Kind, { body: string; dark: string; soft: string }> = 
   tracer: { body: '#d9c2ff', dark: '#8a5fd6', soft: '#f0e8ff' },
   pip: { body: '#ffe38f', dark: '#d9a21c', soft: '#fff5d6' },
 };
-const HATS: Record<Kind, string[]> = {
-  reel: ['..dd....dd..', '.dwwd..dwwd.', '..dd....dd..'], // film-reel ears
-  scout: ['............', '...dddddd...', '..dddddddd..'], // a cap
-  scribe: ['.........d..', '........d...', '.......d....'], // a pencil
-  tracer: ['............', '..dd....dd..', '...dddddd...'], // a headset
-  pip: ['..d......d..', '...d....d...', '....dddd....'], // antennae
+const PAL_SHAPES: Record<Kind, { ey: number; body: string[]; top: string[] }> = {
+  reel: { ey: 10,
+    body: ['', '', '', '', '', '       bbbb', '    bbbbbbbbbb', '   bbbbbbbbbbbb', '  bbbbbbbbbbbbbb', ' bbbbbbbbbbbbbbbb', ' bbbbbbbbbbbbbbbb', ' bbbbbbbbbbbbbbbb', ' bbbbbbbbbbbbbbbb', '  bbbbbbbbbbbbbb', '   bbbbbbbbbbbb', '    bbbbbbbbbb', '       bbbb'],
+    top: ['', '   DD        DD', ' DDDDDD    DDDDDD', ' DDSSDD    DDSSDD', ' DDDDDD    DDDDDD', ' DSDDSD    DSDDSD', ' DDDDDD    DDDDDD', '  DDDD      DDDD'] },
+  scout: { ey: 9,
+    body: ['', '', '', '', '', '      bbbbbb', '     bbbbbbbb', '    bbbbbbbbbb', '   bbbbbbbbbbbb', '   bbbbbbbbbbbb', '   bbbbbbbbbbbb', '   bbbbbbbbbbbb', '   bbbbbbbbbbbb', '   bbbbbbbbbbbb', '    bbbbbbbbbb', '     bbbbbbbb', '       bbbb'],
+    top: ['', '', '     DDDDDDDD', '    DDDSDDDDDD', '    DDDSDDDDDD', '    DDDDDDDDDD', ' DDDDDDDDDDDDDDDD'] },
+  scribe: { ey: 10,
+    body: ['', '        bb', '       bbbb', '       bbbb', '      bbbbbb', '     bbbbbbbb', '     bbbbbbbb', '   bbbbbbbbbbbb', '   bbbbbbbbbbbb', '  bbbbbbbbbbbbbb', '  bbbbbbbbbbbbbb', '  bbbbbbbbbbbbbb', '  bbbbbbbbbbbbbb', '   bbbbbbbbbbbb', '   bbbbbbbbbbbb', '     bbbbbbbb', '       bbbb'],
+    top: ['', '         D', '         D', '         D'] },
+  pip: { ey: 10,
+    body: ['', '', '', '', '', '', '', '     bbbbbbbb', '    bbbbbbbbbb', '   bbbbbbbbbbbb', '   bbbbbbbbbbbb', '   bbbbbbbbbbbb', '   bbbbbbbbbbbb', '   bbbbbbbbbbbb', '    bbbbbbbbbb', '     bbbbbbbb', '      D    D'],
+    top: ['', '          GG', '      GG GGGG', '     GGGG GG', '      GG G', '         G', '         G'] },
+  tracer: { ey: 9,
+    body: ['', '', '', '', '', '     bbbbbbbb', '    bbbbbbbbbb', '   bbbbbbbbbbbb', '  bbbbbbbbbbbbbb', '  bbbbbbbbbbbbbb', '  bbbbbbbbbbbbbb', '  bbbbbbbbbbbbbb', '  bbbbbbbbbbbbbb', '   bbbbbbbbbbbb', '    bbbbbbbbbb', '     bbbbbbbb', '        bb'],
+    top: ['', '', '     DDDDDDDD', '   DDD      DDD', '  DD          DD', ' DD            DD', ' D              D', ' D              D', 'DDD            DDD', 'DDD            DDD', 'DDD            DDD', 'DDD            DDD'] },
 };
+const PAL_EYES: Record<Mood, string[]> = {
+  idle: ['ee', 'ee'], blink: ['', 'ee'], twitch: ['ee', 'ee'], rest: ['', 'ee'], work: ['', 'ee', 'ee'], ask: ['ee', 'ee', 'ee'],
+  hello: [' ee', 'e  e'], happy: [' ee', 'e  e'], listen: [' ee', ' ee'], error: ['e', 'ee'],
+};
+const PAL_MOUTH: Partial<Record<Mood, string[]>> = { happy: ['k  k', ' kk'], ask: [' kk', ' kk'], error: [' kk', 'k  k'], listen: ['  e'] };
 export function pal(kind: Kind, mood: Mood = 'idle'): Bitmap {
-  const eyes = mood === 'happy' ? ['.beebbbbeeb.', '.bbbbbbbbbb.']
-    : mood === 'blink' || mood === 'rest' ? ['.bbbbbbbbbb.', '.bbeebbeebb.'] : ['.bbebbbbebb.', '.bbebbbbebb.'];
-  const mouth = mood === 'ask' ? '.bbbbmbbbbb.' : mood === 'happy' ? '.bbbmmmmbbb.' : '.bbbbmmbbbb.';
-  return pad([...HATS[kind], '...bbbbbb...', '..bbbbbbbb..', eyes[0], eyes[1], '.bcbbbbbbcb.', mouth, '..bbbbbbbb..', '...bbbbbb...'], 12);
+  const { ey, body, top } = PAL_SHAPES[kind];
+  const a = 5, b = 11, off = mood === 'happy' || mood === 'hello' ? -1 : 0, y = mood === 'ask' ? ey - 1 : ey;
+  const eyes: [number, number, string[]][] = mood === 'rest' ? [[a - 1, ey, ['e  e', ' ee']], [b - 1, ey, ['e  e', ' ee']]] : [[a + off, y, PAL_EYES[mood]], [b + off, y, PAL_EYES[mood]]];
+  const signs: [number, number, string[]][] = ({
+    happy: [[0, 2, SPARKLE], [15, 4, SPARKLE]], rest: [[15, 0, ZZ.slice(0, 3)]], error: [[16, 6, SWEAT]], ask: [[17, 0, BANG]], listen: [[15, 8, SOUND]],
+  } as Record<string, [number, number, string[]][]>)[mood] ?? [];
+  return draw(18, 17, [0, 0, body], [0, mood === 'ask' ? -1 : 0, top], ...eyes, [7, ey + 3, PAL_MOUTH[mood] ?? [' ee']], [a - 2, ey + 2, ['c']], [b + 3, ey + 2, ['c']], ...signs);
 }
-export const palPalette = (kind: Kind): Palette => ({ b: PALS[kind].body, d: PALS[kind].dark, e: '#3b3552', c: '#ff8fa8', m: '#3b3552', w: '#ffffff' });
+export const palPalette = (kind: Kind): Palette => ({ ...SIGNS, b: PALS[kind].body, D: PALS[kind].dark, S: PALS[kind].soft, G: '#5fc27e' });
 
 // ── The logo: a dot house with a smile, and the wordmark in the same dots ──
 export const HOUSE: Bitmap = [

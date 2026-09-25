@@ -125,3 +125,18 @@ test('sign-in states reach the screens as plain states, never the engine\'s word
   assert.ok(A.needsHouse({ house: { google: false } }, A.apps({})[1]));
   assert.ok(!A.needsHouse({ house: { google: false } }, A.apps({})[3]), 'Notion needs no setup');
 });
+
+test('the mascots: every mood draws a whole grid in known colours, and Chief\'s moods all look different', async () => {
+  const art = await import('../web/src/art.ts');
+  const moods = ['blink', 'twitch', 'hello', 'happy', 'work', 'ask', 'listen', 'rest', 'error'] as const;
+  const faces = [
+    ...[undefined, ...moods].map((m) => [art.chief(m), art.CHIEF_PAL] as const),
+    ...[undefined, ...moods].map((m) => [art.chiefSmall(m), art.CHIEF_PAL] as const),
+    ...(['reel', 'scout', 'scribe', 'pip', 'tracer'] as const).flatMap((k) => [undefined, ...moods].map((m) => [art.pal(k, m), art.palPalette(k)] as const)),
+  ];
+  for (const [rows, pal] of faces) {
+    assert.ok(rows.every((r) => r.length === rows[0].length), 'a ragged bitmap breaks the dot grid');
+    for (const k of rows.join('').replace(/\./g, '')) assert.ok(pal[k], `no colour for "${k}"`);
+  }
+  assert.equal(new Set(moods.map((m) => art.chief(m).join())).size, moods.length, 'two of Chief\'s moods look the same');
+});

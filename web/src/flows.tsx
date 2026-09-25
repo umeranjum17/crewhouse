@@ -30,7 +30,8 @@ function Progress({ at, steps }: { at: number; steps: string[] }) {
 }
 
 function Mood({ phase, app }: { phase: Phase; app?: A.App }) {
-  const mood: art.Mood = phase === 'done' ? 'happy' : phase === 'offline' ? 'rest' : phase === 'waiting' ? 'idle' : phase === 'opening' ? 'work' : 'ask';
+  const mood: art.Mood = phase === 'done' ? 'happy' : phase === 'offline' ? 'rest' : phase === 'waiting' ? 'idle' : phase === 'opening' ? 'work'
+    : phase === 'failed' || phase === 'expired' || phase === 'unavailable' ? 'error' : 'ask';
   return (
     <div className="flow-face">
       <span className="halo"><ChiefArt mood={mood} d={5} /></span>

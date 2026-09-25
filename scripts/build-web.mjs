@@ -5,7 +5,8 @@ const root = new URL('../web/', import.meta.url).pathname;
 mkdirSync(root + 'dist', { recursive: true });
 cpSync(root + 'index.html', root + 'dist/index.html');
 cpSync(root + 'fonts', root + 'dist/fonts', { recursive: true });
-cpSync(root + 'icon.svg', root + 'dist/icon.svg');
+// Icons are drawn from Chief's bitmaps by scripts/icons.mjs.
+for (const f of ['icon.svg', 'favicon.svg', 'notify.svg', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png', 'notify-96.png']) cpSync(root + f, root + 'dist/' + f);
 cpSync(root + 'manifest.webmanifest', root + 'dist/manifest.webmanifest'); // "Share to Crewhouse" from the phone's Share sheet
 await build({
   entryPoints: [root + 'src/main.tsx', root + 'src/styles.css'],
