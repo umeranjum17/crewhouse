@@ -1,6 +1,7 @@
 // The shared pieces: dot art, the ASCII moments, ask cards and the approval sheet, media, steps, the composer.
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { api, trouble, type Json } from './api.ts';
+import { draftOf, keepDraft, sent } from './draft.ts';
 import * as art from './art.ts';
 import { bannerStops } from './tokens.ts';
 import { clock, type Card, type FileView, type Helper, type Step } from './adapter.ts';
@@ -19,9 +20,10 @@ export function Toasts() {
   }, []);
   return m ? <div className="toast" role="status">{m}</div> : null;
 }
-/** Run an action; a failure becomes a friendly toast, never a stack trace. */
-export async function attempt(fn: () => Promise<unknown>, ok?: string) {
-  try { await fn(); if (ok) toast(ok); return true; } catch (e: any) { toast(FRIENDLY[trouble(e)]); return false; }
+/** Run an action; a failure becomes a friendly toast, never a stack trace. `quiet` leaves the word to the caller —
+ *  the composer, whose failed send keeps the words on screen with a Retry instead. */
+export async function attempt(fn: () => Promise<unknown>, ok?: string, quiet = false) {
+  try { await fn(); if (ok) toast(ok); return true; } catch (e: any) { if (!quiet) toast(FRIENDLY[trouble(e)]); return false; }
 }
 const FRIENDLY = {
   missing: "That isn't ready yet. It arrives with the next Crewhouse update.",
@@ -181,16 +183,30 @@ export function Steps({ steps, max = 6, onUndo }: { steps: Step[]; max?: number;
   );
 }
 
-export function Composer({ placeholder, onSend, draft = '' }: { placeholder: string; onSend: (t: string) => Promise<unknown> | void; draft?: string }) {
-  const [text, setText] = useState(draft);
-  const box = useRef<HTMLTextAreaElement>(null);
-  useEffect(() => { if (draft) { setText(draft); box.current?.focus(); } }, [draft]);
-  const send = () => { const t = text.trim(); if (!t) return; setText(''); void onSend(t); };
+/**
+ * The message box. `chat` ties it to one conversation's held draft. A send that doesn't go through keeps the words
+ * here with a Retry: nothing a person typed is ever thrown away (web/src/draft.ts).
+ */
+export function Composer({ placeholder, onSend, chat }: { placeholder: string; onSend: (t: string) => Promise<unknown> | unknown; chat?: string }) {
+  const [text, setText] = useState(() => (chat ? draftOf(chat).text : ''));
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const change = (t: string) => { setText(t); setFailed(false); if (chat) keepDraft(chat, t); };
+  const send = async () => {
+    const t = text.trim();
+    if (!t || busy) return;
+    setBusy(true);
+    let ok = false;
+    try { ok = !!(await onSend(t)); } catch { ok = false; }
+    setBusy(false);
+    if (ok) { setText(''); setFailed(false); if (chat) keepDraft(chat, ''); } else { setFailed(true); if (chat) sent(chat, false, text); }
+  };
   return (
-    <form className="composer" onSubmit={(e) => { e.preventDefault(); send(); }}>
-      <textarea ref={box} rows={1} value={text} placeholder={placeholder} aria-label={placeholder}
-        onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }} />
-      <button className="send" aria-label="Send" disabled={!text.trim()}>↑</button>
+    <form className="composer" onSubmit={(e) => { e.preventDefault(); void send(); }}>
+      {failed && <div className="send-failed" role="alert">Not sent — it's kept here. <button type="button" className="link inline" onClick={() => void send()}>Retry</button></div>}
+      <textarea rows={1} value={text} placeholder={placeholder} aria-label={placeholder}
+        onChange={(e) => change(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(); } }} />
+      <button className="send" aria-label="Send" disabled={!text.trim() || busy}>↑</button>
     </form>
   );
 }

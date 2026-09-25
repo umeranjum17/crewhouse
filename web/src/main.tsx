@@ -6,6 +6,7 @@ import QRCode from 'qrcode';
 import { api, demo, setMember, subscribe, type Json } from './api.ts';
 import * as A from './adapter.ts';
 import { AskCard, AskSheet, attempt, Celebrate, setNight, ChiefArt, Composer, Face, Laptop, Logo, Media, PalArt, Pill, Splash, Steps, Toasts, toast } from './parts.tsx';
+import { keepDraft } from './draft.ts';
 import { Screen } from './screen.tsx';
 import { AccountCard, ConnectApp, ConnectCard, openTab, sheet, SignIn, Unreachable } from './flows.tsx';
 
@@ -23,8 +24,8 @@ const go = (hash: string) => { location.hash = hash; };
 /** ?splash keeps the boot splash up, for design review. */
 const HOLD_SPLASH = new URLSearchParams(location.search).has('splash');
 const hrefOf = (id: string) => (id === 'chief' ? '#/chief' : `#/h/${id}`);
-/** Pre-filled composer text, set by an Idea and used once by that chat. */
-const drafts: Record<string, string> = {};
+/** Which chat each composer writes into: its held draft lives in web/src/draft.ts. */
+const typeInto = (id: string) => ({ chat: id });
 
 type Ctx = { state: Json; me: number; tick: number; refresh: () => void; night: boolean };
 
@@ -89,7 +90,7 @@ function Share({ refresh }: Ctx) {
   const text = [q.get('title'), q.get('text'), q.get('url')].filter(Boolean).join('\n').trim();
   const [other, setOther] = useState(false);
   const home = () => { history.replaceState(null, '', '/#/chief'); dispatchEvent(new HashChangeEvent('hashchange')); };
-  const send = async (what: string) => { if (await attempt(() => api.post('chief', `${what}\n\nWhat I shared:\n${text}`))) { refresh(); home(); } };
+  const send = async (what: string) => { if (await attempt(() => api.post('chief', `${what}\n\nWhat I shared:\n${text}`), undefined, true)) { refresh(); home(); } return true; };
   if (!text) return <div className="page"><div className="card empty">Nothing came through. Try sharing it again.</div></div>;
   return (
     <div className="page share">
@@ -176,7 +177,7 @@ function Home({ state, me, refresh, tick }: Ctx) {
   const cards = A.cards(state).filter((c) => c.kind !== 'connect');
   const accounts = useAccounts(0, tick);
   const g = A.account(accounts, me);
-  const toChief = async (t: string) => { if (await attempt(() => api.post('chief', t))) { refresh(); go('#/chief'); } };
+  const toChief = async (t: string) => { const ok = await attempt(() => api.post('chief', t), undefined, true); if (ok) { refresh(); go('#/chief'); } return ok; };
   return (
     <div className="home">
       <div className="home-top"><Heartbeat state={state} /></div>
@@ -190,10 +191,10 @@ function Home({ state, me, refresh, tick }: Ctx) {
       <div className="dock">
         <div className="chips">
           {A.ideas(state).map((i: Json) => (
-            <button key={i.bot + i.label} className="chip" onClick={() => { drafts[i.bot] = i.ask; go(hrefOf(i.bot)); }}>✦ {i.label}</button>
+            <button key={i.bot + i.label} className="chip" onClick={() => { keepDraft(i.bot, i.ask); go(hrefOf(i.bot)); }}>✦ {i.label}</button>
           ))}
         </div>
-        <Composer placeholder="Ask Chief anything…" onSend={toChief} />
+        <Composer placeholder="Ask Chief anything…" onSend={toChief} {...typeInto('chief')} />
       </div>
     </div>
   );
@@ -218,7 +219,6 @@ function Rail({ state }: { state: Json }) {
 function Chat({ id, state, me, tick, refresh }: Ctx & { id: string }) {
   const g = A.account(useAccounts(0, tick), me);
   const [page, setPage] = useState<Json>(null);
-  const [draft] = useState(() => { const d = drafts[id] ?? ''; delete drafts[id]; return d; });
   const load = useCallback(() => api.bot(id).then(setPage).catch(() => {}), [id]);
   useEffect(() => { void load(); }, [load, tick]);
   const end = useRef<HTMLDivElement>(null);
@@ -234,7 +234,7 @@ function Chat({ id, state, me, tick, refresh }: Ctx & { id: string }) {
   const trail = live && page ? A.steps(page.trail ?? [], live.id, true) : [];
   const cards = A.cards(state).filter((c) => c.helper === id);
   const last = lines.at(-1);
-  const send = async (t: string) => { if (await attempt(() => api.post(id, t))) { void load(); refresh(); } };
+  const send = async (t: string) => { const ok = await attempt(() => api.post(id, t), undefined, true); if (ok) { void load(); refresh(); } return ok; };
   const name = h?.name ?? 'Chief';
   return (
     <div className="chat">
@@ -255,7 +255,7 @@ function Chat({ id, state, me, tick, refresh }: Ctx & { id: string }) {
         {g.state === 'ready' && !g.notIncluded && A.resting(state) && <div className="card nudge"><span className="grow">{A.resting(state)}. {name === 'Chief' ? "I'll" : `${name} will`} finish then.</span></div>}
         <div ref={end} className="end" />
       </div>
-      <div className="dock"><Composer placeholder={id === 'chief' ? 'Ask Chief anything…' : `Message ${name}…`} onSend={send} draft={draft} /></div>
+      <div className="dock"><Composer placeholder={id === 'chief' ? 'Ask Chief anything…' : `Message ${name}…`} onSend={send} {...typeInto(id)} /></div>
     </div>
   );
 }
@@ -316,7 +316,7 @@ function AddHelper({ state, refresh }: Ctx) {
         ))}
       </div>
       <div className="card"><b>Need something else?</b><p className="mute">Tell Chief in your own words, like "I need help with the kids' school stuff", and he'll find the right helper.</p>
-        <Composer placeholder="Tell Chief what you need help with…" onSend={async (t) => { if (await attempt(() => api.post('chief', t))) go('#/chief'); }} /></div>
+        <Composer placeholder="Tell Chief what you need help with…" onSend={async (t) => { const ok = await attempt(() => api.post('chief', t), undefined, true); if (ok) go('#/chief'); return ok; }} {...typeInto('chief')} /></div>
     </div>
   );
 }

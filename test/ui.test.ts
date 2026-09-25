@@ -5,6 +5,8 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import * as A from '../web/src/adapter.ts';
+import { draftOf, keepDraft, sent } from '../web/src/draft.ts';
+import { color } from '../web/src/tokens.ts';
 
 const now = Date.now();
 const bot = (id: string, extra = {}) => ({ id, display: id[0].toUpperCase() + id.slice(1), role: 'Makes demo videos from screenshots', template: id, runtime: 'claude', model: 'sonnet',
@@ -323,6 +325,27 @@ test('the week under the share is a third in words, never a number', () => {
   assert.equal(A.share({ share: { choice: 'light', used: false, week: 'fair' } }).week, 'This week the crew has used a fair part of what it may use of your ChatGPT.');
   assert.equal(A.share({ share: { choice: 'full', used: false, week: null } }).week, '');
   for (const w of ['small', 'fair', 'most']) assert.doesNotMatch(A.share({ share: { choice: 'light', week: w } }).week, /\d|%/);
+});
+
+test('a failed send keeps the words for a Retry; every chat keeps its own draft', () => {
+  keepDraft('chief', 'Please keep this unsent draft');
+  keepDraft('reel', 'a different chat');
+  sent('chief', false, draftOf('chief').text); // the send failed: nothing left the composer
+  assert.equal(draftOf('chief').text, 'Please keep this unsent draft', 'the failed send kept the words');
+  assert.equal(draftOf('reel').text, 'a different chat', 'the other chat kept its own draft');
+  keepDraft('chief', 'Please keep this unsent draft, with one more word'); // the person edits before retrying
+  sent('chief', true, draftOf('chief').text); // the retry went out
+  assert.equal(draftOf('chief').text, '', 'a sent message is no longer held');
+  assert.equal(draftOf('never-typed').text, '', 'an untouched chat has no draft');
+  keepDraft('chief', '');
+  assert.equal(draftOf('chief').text, '', 'emptying the box clears the hold');
+  // One Retry sends once: the Retry affordance is a plain button, never a second form submit (the duplicate-message
+  // regression this pins sent the same words twice). And the pink "Not sent" line reads against its background.
+  const parts = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'parts.tsx'), 'utf8');
+  assert.match(parts, /send-failed[\s\S]{0,200}type="button"/, 'the composer\u2019s Retry is type="button"');
+  const lum = (hex: string) => { const c = hex.replace('#', ''); const [r, g, b] = [0, 2, 4].map((i) => parseInt(c.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+  const ratio = (a: string, b: string) => { const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m); return (x + 0.05) / (y + 0.05); };
+  assert.ok(ratio(color.day.pinkInk, '#ffffff') >= 4.5, `the "Not sent" pink on white is ${ratio(color.day.pinkInk, '#ffffff').toFixed(2)}`);
 });
 
 test('a photo in a message is a picture, not words', () => {
