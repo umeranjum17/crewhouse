@@ -53,7 +53,7 @@ export function stepsOf(raw: Raw[]): string[] {
 
 /** One show: a single browser-level DevTools connection, and one flattened session per page it listens to. */
 type Showing = { bot: string; what: string; raw: Raw[]; shots: { type: string; data: string }[]; seen: Set<string>; ws: WebSocket; timer: NodeJS.Timeout;
-  poll?: NodeJS.Timeout; at: number; n: number; pending: Map<number, (r: any) => void>; pages: Map<string, (m: any) => void> };
+  poll?: NodeJS.Timeout; at: number; n: number; pending: Map<number, (r: any) => void>; pages: Map<string, (m: any) => void>; busy?: boolean };
 
 /** The shows in progress, one per bot. */
 export class Teacher {
@@ -105,13 +105,17 @@ export class Teacher {
 
   /** Every page the browser has open: listen to it once. */
   private async attach(s: Showing) {
-    const list = ((await this.call(s, 'Target.getTargets'))?.targetInfos ?? []) as any[];
-    for (const t of list.filter((x) => x.type === 'page' && !s.seen.has(x.targetId))) {
-      if (!this.shows.has(s.bot)) return;
-      s.seen.add(t.targetId);
-      const r = await this.call(s, 'Target.attachToTarget', { targetId: t.targetId, flatten: true });
-      if (r?.sessionId) await this.listen(s, r.sessionId, t.url);
-    }
+    if (s.busy) return; // a slow pass must not run twice: two sessions for one page would record every step twice
+    s.busy = true;
+    try {
+      const list = ((await this.call(s, 'Target.getTargets'))?.targetInfos ?? []) as any[];
+      for (const t of list.filter((x) => x.type === 'page' && !s.seen.has(x.targetId))) {
+        if (!this.shows.has(s.bot)) return;
+        s.seen.add(t.targetId);
+        const r = await this.call(s, 'Target.attachToTarget', { targetId: t.targetId, flatten: true });
+        if (r?.sessionId) await this.listen(s, r.sessionId, t.url);
+      }
+    } finally { s.busy = false; }
   }
 
   /** Resolves once the page is being listened to, so nothing the person does after Start is missed. */
