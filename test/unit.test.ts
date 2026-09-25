@@ -600,13 +600,13 @@ test('household: bots and tasks belong to a member and run on that member\'s own
   await crew.accounts.finished(sam, 'grok');
   assert.equal(crew.accounts.view(sam, 'grok')?.state, 'done');
   assert.ok(existsSync(crew.accounts.authPath(sam)));
-  const a = crew.post('reel', 'a demo for Sam', undefined, sam)!.task;
+  const a = (await crew.post('reel', 'a demo for Sam', undefined, sam))!.task;
   await settled(db, a);
   assert.equal(task(db, a).state, 'done');
   assert.equal(JSON.parse(db.get("SELECT data FROM events WHERE kind = 'run.started' ORDER BY seq DESC")!.data).member, sam);
   assert.match(readFileSync(task(db, a).session, 'utf8'), /task #\d+ from Sam\]/);
   assert.match(readFileSync(task(db, a).session, 'utf8'), /chosen name, \\"Sam\\"/);
-  const b = crew.post('reel', 'owner demo', undefined, OWNER)!.task;
+  const b = (await crew.post('reel', 'owner demo', undefined, OWNER))!.task;
   await settled(db, b);
   const ran = JSON.parse(db.get("SELECT data FROM events WHERE kind = 'run.started' ORDER BY seq DESC")!.data);
   assert.deepEqual([ran.member, ran.account], [OWNER, 'chatgpt'], 'the owner never borrows Sam\'s Grok; the owner\'s own ChatGPT does it');
@@ -614,7 +614,7 @@ test('household: bots and tasks belong to a member and run on that member\'s own
   assert.ok(!crew.botPage('reel', OWNER).messages.some((m: any) => m.text === 'a demo for Sam'), 'threads are per person');
 
   // Chief works for whoever asked him: what he recruits and hands over is theirs, on their accounts.
-  const c = crew.post('chief', 'ask permission to find me a researcher', undefined, sam)!.task;
+  const c = (await crew.post('chief', 'ask permission to find me a researcher', undefined, sam))!.task;
   await holding(crew, 'chief');
   assert.equal(task(db, c).member, sam);
   assert.equal(crew.recruit('scout', 'Scout', 'chief').member, sam);
@@ -627,8 +627,8 @@ test('household: bots and tasks belong to a member and run on that member\'s own
   disk.setBrains(cfg, 'reel', ['chatgpt']);
   for (const k of ['chatgpt', 'grok', 'copilot', 'openrouter']) await crew.accounts.failed(sam, k, 'usage limit, try again in 1 min');
   assert.equal(crew.restingUntil('chatgpt', OWNER), 0);
-  const e = crew.post('reel', 'another for Sam', undefined, sam)!.task;
-  const f = crew.post('scout', 'owner lookup', undefined, OWNER)!.task;
+  const e = (await crew.post('reel', 'another for Sam', undefined, sam))!.task;
+  const f = (await crew.post('scout', 'owner lookup', undefined, OWNER))!.task;
   await settled(db, e);
   await settled(db, f);
   assert.equal(task(db, e).state, 'paused');
@@ -656,7 +656,7 @@ test('household: quiet hours park questions at once; settings validate', async (
   assert.equal(crew.updateMember(1, { name: 'Alex', quiet: '00:00-23:59' }).name, 'Alex');
 
   const started = Date.now();
-  const t = crew.post('reel', `copy it ${call('write', { path: join(root, 'elsewhere', 'b.txt'), content: 'x' })}`, undefined, 1)!.task;
+  const t = (await crew.post('reel', `copy it ${call('write', { path: join(root, 'elsewhere', 'b.txt'), content: 'x' })}`, undefined, 1))!.task;
   await until('parked', () => db.get("SELECT 1 FROM events WHERE kind = 'ask.parked'"));
   assert.ok(Date.now() - started < 3000, 'no hold while they sleep');
   assert.equal(task(db, t).state, 'needs_you');
@@ -820,3 +820,49 @@ test('sign-in: a lapsed sign-in is found in the background and said once, in pla
   done();
 });
 
+test('routing: a plain request goes straight to its helper, the member\'s AI places the rest, and a torn one gets one question', async () => {
+  const { db, crew, done } = setup();
+  crew.onboard('sir');
+  crew.recruit('reel', 'Reel', 'person');
+  crew.recruit('scout', 'Scout', 'person');
+  const chiefSaid = () => lastSaid(db, 'chief');
+  const models = () => db.all("SELECT 1 FROM events WHERE kind = 'run.prompted'").length;
+
+  // A rule: addressed to Reel by name. Reel gets the words as they were said; Chief says who is on it.
+  const a = (await crew.post('chief', 'Reel, make a 10 second demo of the signup screen'))!.task;
+  assert.equal(task(db, a).bot, 'reel');
+  assert.equal(task(db, a).body, 'Reel, make a 10 second demo of the signup screen');
+  assert.equal(chiefSaid(), 'Reel is on it.');
+  await settled(db, a);
+  assert.match(db.get("SELECT text FROM messages WHERE bot = 'chief' ORDER BY id DESC")!.text, /^Reel has finished task #\d+/);
+
+  // A routine is Chief's own work, even with Reel in it.
+  const b = (await crew.post('chief', 'ask Reel to make a demo every Friday'))!.task;
+  assert.equal(task(db, b).bot, 'chief');
+  await settled(db, b);
+
+  // No rule places it: the member's own AI (the stub) does, and Scout takes it.
+  const before = models();
+  const c = (await crew.post('chief', 'what do people say about standing desks? [route scout]'))!.task;
+  assert.equal(task(db, c).bot, 'scout');
+  assert.equal(models(), before, 'the routing question is not a crew turn');
+  await settled(db, c);
+
+  // The AI is torn: no task, one plain question, and the answer sends the request where it belongs.
+  const n = db.get('SELECT COUNT(*) AS n FROM tasks')!.n;
+  assert.equal(await crew.post('chief', 'something about the screenshots [route ?]'), undefined);
+  assert.equal(db.get('SELECT COUNT(*) AS n FROM tasks')!.n, n, 'nothing starts on a guess');
+  assert.match(chiefSaid(), /^Just so this goes to the right hands, sir: shall (Reel|Scout) take it, or (Scout|Reel|shall I see to it myself)\?$/);
+  const d = (await crew.post('chief', 'Reel please'))!.task;
+  assert.equal(task(db, d).bot, 'reel');
+  assert.equal(task(db, d).body, 'something about the screenshots [route ?]\nReel please');
+  await settled(db, d);
+
+  // Asked once only: torn again, it is Chief's to handle, not a second question.
+  await crew.post('chief', 'hmm [route ?]');
+  const e = (await crew.post('chief', 'not sure [route ?]'))!.task;
+  assert.equal(task(db, e).bot, 'chief');
+  assert.equal(task(db, e).body, 'hmm [route ?]\nnot sure [route ?]');
+  await settled(db, e);
+  done();
+});

@@ -16,6 +16,7 @@ import { coversOf, effectOf, toolWords, type Effect } from './policy.ts';
 import { registry, resolveGrants, toolBin, which } from './tools.ts';
 import { stubModels } from './stub.ts';
 import { describe, nextRun, parseSchedule } from './routines.ts';
+import { byModel, clarify, route, type Helper } from './route.ts';
 
 const HOLD_MS = Number(process.env.CREWHOUSE_HOLD_MS || 180_000); // how long a tool call waits for an answer before the turn parks
 const TASK_TIMEOUT_MS = 60 * 60_000;
@@ -477,17 +478,45 @@ export class Crew {
   /** A message in a bot's thread: the member's own thread when it belongs to their task, the whole house's otherwise. */
   say(bot: string, author: string, text: string, taskId: number | null = null, member?: number | null) {
     const m = member !== undefined ? member : taskId ? this.db.get('SELECT member FROM tasks WHERE id = ?', taskId)?.member ?? null : null;
-    const r = this.db.run('INSERT INTO messages (bot, author, text, task_id, at, member) VALUES (?, ?, ?, ?, ?, ?)', bot, author, text, taskId, Date.now(), m);
-    this.db.event('message', bot, { id: Number(r.lastInsertRowid), author, text: text.slice(0, 280) });
+    const id = Number(this.db.run('INSERT INTO messages (bot, author, text, task_id, at, member) VALUES (?, ?, ?, ?, ?, ?)', bot, author, text, taskId, Date.now(), m).lastInsertRowid);
+    this.db.event('message', bot, { id, author, text: text.slice(0, 280) });
+    return id;
   }
 
-  /** A person's message in a bot's thread is a task for that bot; Chief's thread is a task for Chief. */
-  post(botId: string, text: string, model?: string, member = OWNER) {
+  /** A person's message in a bot's thread is a task for that bot; in Chief's thread it goes where `route` says. */
+  async post(botId: string, text: string, model?: string, member = OWNER) {
     const bot = this.bot(botId);
     if (!bot) throw Object.assign(new Error('no such bot'), { status: 404 });
     if (!text.trim()) throw Object.assign(new Error('empty message'), { status: 400 });
     if (botId === CHIEF && !this.member(member).onboarded) return this.onboard(text, member);
+    if (botId === CHIEF) return this.route(text.trim(), model, member);
     return this.addTask(botId, text.trim(), 'person', model, member);
+  }
+
+  /** A request to Chief: plainly one helper's goes straight to them, Chief's own (or one nobody can place) is a Chief task,
+   *  and one the member's AI is torn over gets one plain question back. The question and the request it was about are
+   *  a message and an event, so an answer after a restart still finds them. */
+  private async route(text: string, model: string | undefined, member: number) {
+    const helpers = this.bots().filter((b) => b.id !== CHIEF) as Helper[];
+    const last = this.db.get('SELECT id FROM messages WHERE bot = ? AND member = ? ORDER BY id DESC LIMIT 1', CHIEF, member)?.id;
+    const asked = this.db.get("SELECT data FROM events WHERE kind = 'route.asked' AND json_extract(data, '$.member') = ? ORDER BY seq DESC LIMIT 1", member);
+    const earlier: string | undefined = asked && JSON.parse(asked.data).message === last ? JSON.parse(asked.data).text : undefined;
+    const brain = await this.usable(member, this.choices({ bot: CHIEF, brain: model ? disk.brainKey(disk.parseBrain(model)) : null }));
+    const answerer = brain && byModel(await this.accounts.runtime(member), PROVIDERS[brain.provider].pi, brain.model ?? PROVIDERS[brain.provider].models.strong);
+    const to = await route({ text, earlier }, helpers, answerer);
+    if (to.abstained && to.probabilities && !earlier) {
+      return void this.db.tx(() => {
+        this.say(CHIEF, 'person', text, null, member);
+        const message = this.say(CHIEF, 'bot', clarify(to, helpers, this.member(member).address ?? ''), null, member);
+        this.db.event('route.asked', CHIEF, { member, message, text });
+      });
+    }
+    const body = earlier ? `${earlier}\n${text}` : text;
+    const helper = !to.abstained && helpers.find((b) => b.id === to.answer);
+    if (!helper) return this.addTask(CHIEF, body, 'person', model, member, undefined, text);
+    this.say(CHIEF, 'person', text, null, member);
+    this.say(CHIEF, 'bot', `${helper.display} is on it.`, null, member);
+    return this.addTask(helper.id, body, CHIEF, model, member);
   }
 
   /** `model` picks the AI account for this one task (a cheap one for bulk steps, a strong one for judgment). */
@@ -498,7 +527,8 @@ export class Crew {
     return this.addTask(botId, text.trim(), by, model, by === CHIEF ? this.chiefFor() : this.bot(botId)!.member ?? OWNER);
   }
 
-  private addTask(bot: string, body: string, origin: string, model: string | undefined, member: number, routine?: Row) {
+  /** `said` is what the thread shows, when it isn't the whole body. */
+  private addTask(bot: string, body: string, origin: string, model: string | undefined, member: number, routine?: Row, said = body) {
     const brain = model ? disk.brainKey(disk.parseBrain(model)) : null;
     const title = short(routine?.name ?? body.split('\n')[0], 80);
     const id = this.db.tx(() => {
@@ -507,7 +537,7 @@ export class Crew {
         bot, title, body, origin, 'queued', now, now, brain, member, routine?.id ?? null);
       const id = Number(r.lastInsertRowid);
       if (routine) this.say(bot, 'system', `Routine “${routine.name}”: ${body}`, id);
-      else this.say(bot, origin === 'person' ? 'person' : origin, body, id);
+      else this.say(bot, origin === 'person' ? 'person' : origin, said, id);
       this.db.event('task.created', bot, { task: id, origin, member, title });
       return id;
     });
@@ -571,8 +601,7 @@ export class Crew {
     const member = task.member ?? OWNER;
     try {
       const choices = this.choices(task);
-      for (const b of choices) await this.accounts.signedIn(member, b.provider).catch(() => false);
-      const brain = this.accounts.ladder(member, choices, (b) => b.provider);
+      const brain = await this.usable(member, choices);
       if (!brain) return this.pause(task, choices);
       this.setTask(task, 'working');
       const handoff = this.handoffs.get(task.id);
@@ -663,6 +692,12 @@ export class Crew {
     if (task) this.setTask(task, 'failed', `${PROVIDERS[l.brain.provider].name} couldn't finish this one. Try again.`);
     this.close(botId);
     this.dispatch();
+  }
+
+  /** The first of these accounts the member can think with now. */
+  private async usable(member: number, choices: disk.Brain[]) {
+    for (const b of choices) await this.accounts.signedIn(member, b.provider).catch(() => false);
+    return this.accounts.ladder(member, choices, (b) => b.provider);
   }
 
   /** Every account this task could use is resting: wait for the earliest. None usable yet (never signed in, signed out,

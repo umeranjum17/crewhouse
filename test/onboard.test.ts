@@ -186,7 +186,7 @@ test('a ChatGPT plan without helpers: said plainly with the way forward; "ask th
   disk.setBrains(cfg, 'scout', ['chatgpt']);
   db.run('UPDATE bots SET member = ? WHERE id = ?', sara, 'scout');
   only(crew, sara, ['chatgpt']);
-  const { task: t } = crew.post('scout', 'find a plumber, no helpers in plan', undefined, sara) as { task: number };
+  const { task: t } = await crew.post('scout', 'find a plumber, no helpers in plan', undefined, sara) as { task: number };
   await until('waiting on the plan', () => task(db, t).state === 'paused');
   assert.equal(task(db, t).wake_at, null);
   assert.equal(crew.accounts.notIncluded(sara, 'chatgpt'), true);
