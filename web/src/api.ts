@@ -27,7 +27,8 @@ export const api = {
   state: () => call('GET', '/api/state'),
   bot: (id: string) => call('GET', `/api/bots/${id}`),
   post: (id: string, text: string) => call('POST', `/api/bots/${id}/messages`, { text }),
-  onboard: (address: string) => call('POST', '/api/onboard', { address }),
+  /** First run: how Chief addresses the person, and (from an idea card) their first request, in one tap. */
+  onboard: (address: string, ask?: string) => call('POST', '/api/onboard', { address, ask }),
   recruit: (template: string, name: string) => call('POST', '/api/recruit', { template, name }),
   notes: (id: string, text: string) => call('PUT', `/api/bots/${id}/notes`, { text }),
   settings: (id: string, body: { allow?: string[]; memory?: boolean }) => call('PUT', `/api/bots/${id}/settings`, body),
@@ -39,8 +40,14 @@ export const api = {
   addPerson: (name: string) => call('POST', '/api/people', { name }),
   person: (id: number, body: { name?: string; address?: string; quiet?: string | null }) => call('PUT', `/api/people/${id}`, body),
   accounts: () => call('GET', '/api/accounts'),
-  /** "Sign in with ChatGPT": a one-time code to type on its page, which works from any phone or computer. */
-  signIn: (member: number, account: string) => call('POST', `/api/accounts/${member}/${account}/login`, { via: 'code' }),
+  /** "Sign in with ChatGPT": its own page, which comes straight back to the home computer. `via: 'code'` is the fallback;
+   *  `fresh` asks ChatGPT's page which account again ("Use my personal account"). */
+  signIn: (member: number, account: string, body: { via?: 'code'; fresh?: boolean } = {}) => call('POST', `/api/accounts/${member}/${account}/login`, body),
+  /** A plan without helpers: "Ask the owner to cover it", or "I've changed my plan". */
+  askOwner: (member: number, account: string) => call('POST', `/api/accounts/${member}/${account}/ask-owner`),
+  retryAccount: (member: number, account: string) => call('POST', `/api/accounts/${member}/${account}/retry`),
+  /** The owner switches Google on for the house: the household Google app's client ID and secret (docs/google-setup.md). */
+  houseGoogle: (id: string, secret: string) => call('PUT', '/api/house/google', { id, secret }),
   signInCancel: (member: number, account: string) => call('POST', `/api/accounts/${member}/${account}/cancel`),
   signOut: (member: number, account: string) => call('POST', `/api/accounts/${member}/${account}/logout`),
   schedule: (text: string) => call('GET', `/api/schedule?text=${encodeURIComponent(text)}`),

@@ -18,7 +18,7 @@ Everything lives in `~/.local/state/crewhouse/` (the database, the engine's own 
 
 ## 2. What to test first
 
-1. **Chief and ChatGPT.** He greets you and asks how to address you. Then **Sign in with ChatGPT**: type the code on ChatGPT's page, and the app moves on by itself. (If ChatGPT says device codes are off, turn on *device code sign-in* under ChatGPT's Settings, Security, once.)
+1. **Chief and ChatGPT.** He greets you and offers three ideas; tap one (**Call me something else** changes how he addresses you). He asks you to **Sign in with ChatGPT** right under his line: ChatGPT's page opens, pick your account, tap **Continue** (the page says *Codex*: that's the part of ChatGPT the crew uses), and the app moves on by itself, and your request starts. **Having trouble?** switches to a code.
 2. **Reel and a video.** Tell Chief: *Please recruit Reel and have it make a 6 second title card that says Crewhouse.* Reel works in its own folder without asking you anything. After a few minutes the video plays in Reel's chat and appears on its **Files** tab.
 3. **An approval, at phone width.** Tell Reel: *Save a copy of the video in my Documents folder.* That is your own folder, so Reel asks first, in one sentence. Make the browser window narrow (or use the browser's device mode) to see the phone layout, then answer.
 4. **Scout and its browser.** Tell Chief: *Please recruit Scout and have it use its browser to open news.ycombinator.com and tell me the top 3 story titles.* The answer takes about a minute.
@@ -29,8 +29,8 @@ Everything lives in `~/.local/state/crewhouse/` (the database, the engine's own 
 6. **A routine.** Tell Chief: *Every weekday at 9am, have Scout check the top 3 Hacker News stories and send me the titles.* Open **Routines**:
    - Press **Run now** on the new routine. It shows *Done · run by you* when Scout finishes.
    - Press **Run now** on **Morning digest**. Chief posts what finished, what needs you and what is coming up, in your thread.
-7. **Household.** Under **Settings, People**, add someone. Pick them under **Who is using this screen?** and they get their own Chief thread, which asks how to address them, and their own **Sign in with ChatGPT**. Until they sign in, their tasks stop with a plain message; yours is never lent.
-8. **An app.** Under **Settings, Connections**, connect Notion or Canva: their own page opens, you allow Crewhouse, and it turns to Connected by itself. Then ask Scribe to find something in your Notion; reading runs at once, adding a page asks first.
+7. **Household.** Under **Settings, People**, add someone. Pick them under **Who is using this screen?** and they get their own Chief thread, which asks how to address them, and their own **Sign in with ChatGPT**. Until they sign in, their requests wait for them, with the sign-in right there; yours is never lent.
+8. **An app.** Ask Scribe to find something in your Notion: Scribe asks for it with a **Connect Notion** card in the chat. Tap it, allow Crewhouse on Notion's page, and Scribe carries on; reading runs at once, adding a page asks first. (Or connect ahead of time under **Settings, Your apps**.) For Google Calendar, Gmail and Drive, first switch Google on for the house under **Settings, Google for the house** ([docs/google-setup.md](docs/google-setup.md)).
 9. **Restart mid-task.** While Reel is working (or waiting on you), press Ctrl-C in the crewd terminal, then run `./crewhouse start` again. Reel's **What I did** tab shows *Picked up where it left off*, and a waiting approval can still be answered.
 
 Then run `./crewhouse doctor` in a second terminal.
@@ -74,5 +74,5 @@ To pair:
 - **Household:**
   - Everyone sees the whole crew. Tasks, questions, the Chief thread and AI accounts are per person.
   - With two or more people, the sidebar shows your name as *Owner* until you rename yourself under **Settings, People**.
-  - Signing someone in from a phone uses a code; ChatGPT asks each account to allow device codes once, under its Settings, Security.
+  - Signing someone in from a phone uses the code (Having trouble?); ChatGPT asks each account to allow device codes once, under its Settings, Security. Catching ChatGPT's page on the phone itself is the next step.
 - **Setup:** it prints an npm warning that esbuild's install script was blocked. The web build still works.

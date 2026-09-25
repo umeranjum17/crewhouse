@@ -1,5 +1,8 @@
 // A made-up household in crewd's own shape, plus the fields the engine rework will add (docs/ui-contract.md).
-// Open the app with ?demo (Nadia's phone), ?demo=umer (the owner), ?demo=hello or ?demo=signin (first run).
+// Open the app with ?demo (Nadia's phone), ?demo=umer (the owner), ?demo=hello (first run), ?demo=first (her first
+// request, waiting for her sign-in), ?demo=answer (Chief's first answer), ?demo=plan (a plan without helpers),
+// ?demo=resting, ?demo=connect (a helper asks for Google Calendar in chat), ?demo=nogoogle (Google not on for the house).
+// &sheet=signin or &sheet=connect opens that sheet, and &phase=… pins it to one state.
 import type { Json } from './api.ts';
 import { describe, nextRun, parseSchedule } from '../../src/routines.ts';
 
@@ -7,7 +10,8 @@ const variant = new URLSearchParams(typeof location === 'undefined' ? '' : locat
 const now = Date.now();
 const min = 60_000;
 const me = variant === 'umer' ? 1 : 2;
-const signin = variant === 'signin' || variant === 'hello';
+const signin = ['signin', 'hello', 'first', 'work'].includes(variant);
+const firstRun = ['first', 'answer', 'plan', 'work'].includes(variant);
 
 const svg = (a: string, b: string, label: string) => `data:image/svg+xml,${encodeURIComponent(
   `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="400"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient></defs><rect width="640" height="400" fill="url(#g)"/><text x="320" y="215" font-family="Nunito,sans-serif" font-weight="900" font-size="46" fill="#fff" text-anchor="middle">${label}</text></svg>`)}`;
@@ -29,6 +33,9 @@ const bots = [
   bot('pip', 'Pip', 'Keeps your week and the school stuff in order'),
   bot('tracer', 'Tracer', "Finds a person's work email or number", { task: task(44, 'tracer', "Sara Malik's work email", 'needs_you', { member: 1 }) }),
 ];
+
+// A first run, or one helper's chat: nobody else is busy.
+if (firstRun || variant === 'connect') for (const b of bots) Object.assign(b, { task: b.id === 'pip' && variant === 'connect' ? task(45, 'pip', "What's on this week?", 'needs_you') : null, step: undefined });
 
 const asks = [
   { id: 7, bot: 'scribe', task_id: 43, kind: 'permission', at: now - 3 * min, member: me, title: 'Scribe would like to send an email', detail: {
@@ -90,20 +97,32 @@ const state = {
     { bot: 'chief', promise: "What's on this week?", ask: "What's on this week?" },
     { bot: 'reel', promise: 'Make a poster from photos', ask: 'Make a poster from these photos: ' },
   ],
-  asks: asks.filter((a) => a.member === me),
+  asks: variant === 'connect' ? [{ id: 11, bot: 'pip', task_id: 45, kind: 'connect', at: now, member: me, title: 'Connect Google Calendar', detail: { app: 'calendar', words: 'Let Pip use your Google Calendar' } }]
+    : firstRun ? [] : asks.filter((a) => a.member === me),
   events,
-  resting: {},
+  resting: variant === 'resting' ? { chatgpt: now + 95 * min } : {},
   routines: [
     routine(1, 'chief', 'Your week, every morning', 'every day 8:00', 'on', 'digest'),
     routine(2, 'scout', 'Plan the week’s dinners', 'every Saturday 10:00', 'on'),
     routine(3, 'pip', 'Check the school newsletter', 'every Friday 16:00', 'paused'),
   ],
-  connections: ['photos', 'gmail'],
+  connections: variant === 'connect' ? [] : ['drive', 'gmail'],
+  house: { google: variant !== 'nogoogle' && !new URLSearchParams(location.search).has('nohouse') },
   desktops: { missing: [] },
 };
 
+const first = "Plan this week's dinners, with a shopping list";
 const pages: Record<string, Json> = {
-  chief: { messages: [
+  chief: firstRun ? { messages: [
+    { id: 1, author: 'person', text: first },
+    { id: 2, author: 'chief', text: 'Delighted, Nadia. To think, the crew uses your own ChatGPT, the same one you already use.' },
+    ...(variant === 'plan' ? [{ id: 3, author: 'chief', text: "Your ChatGPT plan doesn't include helpers yet. Everything else in ChatGPT is fine. ChatGPT Plus includes it, or you can ask Umer to cover it." }] : []),
+    ...(variant === 'answer' ? [
+      { id: 3, author: 'chief', text: "You're signed in. Thank you, Nadia. On it now." },
+      { id: 4, author: 'chief', text: 'Dinners this week: Mon dal & rice · Tue chicken wraps · Wed pasta bake · Thu fish tikka · Fri pizza night.\n\nShopping list (18 items): lentils, rice, onions, garlic, ginger, tomatoes, chicken thighs, wraps, lettuce, yoghurt, pasta, cheddar, passata, white fish, tikka paste, pizza bases, mozzarella, peppers.' },
+      { id: 5, author: 'chief', text: 'Shall I do this every Sunday evening?', choices: ['Yes, Sundays', 'Not now'] },
+    ] : []),
+  ] } : variant === 'connect' ? { messages: [] } : { messages: [
     { id: 1, author: 'chief', text: `${variant === 'umer' ? 'Good evening, sir.' : 'Good evening, Nadia.'} Two small things need you. Scribe's note for Aunty Sara is ready to go, and Reel would like to save a copy of Mum's video. Scout expects to have flights within ten minutes.` },
     { id: 2, author: 'person', text: 'great, and can scout find somewhere nice for dinner on saturday too?' },
     { id: 3, author: 'chief', text: "Of course. I've asked Scout to look once the flights are done. Shall I tell him four people, near home?", choices: ['Yes, four, near home', 'Six people', 'Somewhere special'] },
@@ -115,11 +134,16 @@ const pages: Record<string, Json> = {
     { id: 4, author: 'system', text: "Delivered files/happy-birthday-mum.mp4: Here's a first look 💐" },
   ], notes: '- Nadia likes soft piano music for family videos\n- Mum is "Ammi" in titles', tasks: [] },
 };
+if (variant === 'connect') pages.pip = { messages: [
+  { id: 1, author: 'person', text: "What's on this week?" },
+  { id: 2, author: 'bot', text: 'I can do this with your Google Calendar.' },
+] };
 for (const b of bots) pages[b.id] ??= { messages: [], notes: '', tasks: [] };
 for (const [id, p] of Object.entries(pages)) p.trail = events.filter((e) => e.bot === id);
 
-const accounts = [1, 2, 3].map((m) => ({ member: m, account: 'chatgpt', name: 'ChatGPT', signedIn: !(signin && m === me),
-  signIn: variant === 'signin' && m === me ? { state: 'waiting', url: 'https://auth.openai.com/codex/device', code: 'WB60-FFV06' } : null }));
+const accounts = [1, 2, 3].map((m) => ({ member: m, account: 'chatgpt', name: 'ChatGPT', signedIn: !(signin && m === me) || (variant === 'work' && m === me),
+  restingUntil: variant === 'resting' && m === me ? now + 95 * min : 0, notIncluded: variant === 'plan' && m === me, work: variant === 'work' && m === me ? 'nadia@acme.com' : false,
+  signIn: variant === 'signin' && m === me ? { state: 'waiting', via: 'browser', url: 'https://auth.openai.com/oauth/authorize' } : null }));
 
 let calls = 0;
 export async function demoCall(method: string, path: string, _body?: Json) {

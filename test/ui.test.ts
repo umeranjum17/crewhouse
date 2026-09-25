@@ -77,7 +77,7 @@ test('asks become plain cards: money never gets "always", a blocked terminal bec
   const send = A.card({ id: 9, bot: 'reel', kind: 'permission', at: now, detail: { effect: 'send', words: 'Reel wants to email Aunty Sara. Send it?', always: 'Aunty Sara', preview: { head: 'To Aunty Sara', body: 'Dear Aunty Sara' } } }, state);
   assert.equal(send.words, 'Reel wants to email Aunty Sara. Send it?');
   assert.deepEqual(send.choices.map((c) => c.label), ['Send', 'Always OK for Aunty Sara', 'Not now']);
-  assert.equal(A.card({ id: 8, bot: 'reel', kind: 'connect', at: now, detail: { app: 'drive' } }, state).app?.name, 'Drive');
+  assert.equal(A.card({ id: 8, bot: 'reel', kind: 'connect', at: now, detail: { app: 'drive' } }, state).app?.name, 'Google Drive');
 });
 
 test('owner-only helpers stay with the owner', () => {
@@ -106,4 +106,21 @@ test('the screens read view models only, and the mono face draws art only', () =
     if (!/var\(--art\)|monospace/.test(rule)) continue;
     assert.match(rule, /(\.art\b|--art:|@font-face)/, `mono type outside the art: ${rule.trim().slice(0, 80)}`);
   }
+});
+
+test('sign-in states reach the screens as plain states, never the engine\'s words', () => {
+  const row = (signIn: any, extra = {}) => A.account([{ member: 2, account: 'chatgpt', name: 'ChatGPT', signedIn: false, signIn, ...extra }], 2);
+  const page = row({ state: 'waiting', via: 'browser', url: 'https://auth.openai.com/oauth/authorize?x' });
+  assert.equal(page.page, 'https://auth.openai.com/oauth/authorize?x', 'the redirect: a page to open, no code');
+  assert.equal(page.signing, null);
+  assert.equal(row({ state: 'waiting', via: 'code', url: 'https://auth.openai.com/codex/device', code: 'AB12-CD34' }).signing?.code, 'AB12-CD34');
+  assert.ok(row({ state: 'failed', why: 'declined', error: 'The sign-in was declined' }).declined);
+  assert.ok(row({ state: 'failed', why: 'busy', error: 'Something else…' }).busy);
+  assert.ok(row({ state: 'failed', error: 'The sign-in took too long.' }).expired);
+  const ready = row(null, { signedIn: true, notIncluded: true, work: 'sara@acme.com' });
+  assert.deepEqual([ready.state, ready.notIncluded, ready.work], ['ready', true, 'sara@acme.com']);
+  assert.equal(A.resting({ resting: { chatgpt: Date.now() + 3600_000 } }).startsWith('Your ChatGPT is resting until'), true);
+  assert.deepEqual(A.apps({ connections: [] }).map((a) => a.id), ['drive', 'calendar', 'gmail', 'notion', 'canva'], 'v1: no Outlook');
+  assert.ok(A.needsHouse({ house: { google: false } }, A.apps({})[1]));
+  assert.ok(!A.needsHouse({ house: { google: false } }, A.apps({})[3]), 'Notion needs no setup');
 });

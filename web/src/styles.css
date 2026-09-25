@@ -323,3 +323,23 @@ button.code { border: 0; color: var(--ink); cursor: pointer; display: grid; gap:
 .sticky-top { position: sticky; top: 0; z-index: 5; margin: -18px -18px 0; padding: 14px 18px 0; background: color-mix(in srgb, var(--bg) 78%, transparent); backdrop-filter: blur(14px); }
 .lines .end { scroll-margin-bottom: 140px; }
 @media (min-width: 900px) { .sticky-top { margin: -32px -36px 0; padding: 24px 36px 0; } }
+
+/* ---------- first run, sign-in and connect cards (the onboarding prototype) ---------- */
+.hello-brand { justify-self: start; margin-bottom: 4px; }
+.hello .promises { margin-top: 10px; }
+.hello h2.plate { font-size: 18px; margin: 18px 0 6px; }
+.ideas { display: grid; gap: 10px; width: 100%; }
+.idea { display: flex; gap: 12px; align-items: center; text-align: left; border: 0; background: var(--solid); color: var(--ink); border-radius: 28px; padding: 16px 18px; box-shadow: var(--lift); font: 700 16px/1.35 var(--ui); min-height: 56px; }
+.idea b { flex: 1; font-weight: 700; }
+.idea i { font-style: normal; color: var(--mute); font-weight: 900; }
+.idea:first-child { box-shadow: 0 0 0 2.5px var(--pink), var(--lift); }
+.hello .link { margin-top: 10px; }
+.account-card { display: grid; gap: 8px; justify-items: center; text-align: center; }
+.account-card p { margin: 0; }
+.account-card .btn.big { margin: 0; }
+.connect-offer { display: grid; gap: 8px; justify-items: center; margin-top: 12px; }
+.connect-offer .card { width: 100%; margin: 0; }
+.warn-line { font-size: 13.5px; color: var(--mute); text-align: left; margin: 0; }
+.share .shared .clamp { white-space: pre-wrap; }
+.share .line { margin-top: 14px; }
+.share .chips { flex-wrap: wrap; margin-top: 12px; }

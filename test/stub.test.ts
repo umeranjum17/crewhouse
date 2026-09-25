@@ -101,8 +101,10 @@ test('nothing technical reaches the app; the person\'s own files ask in one plai
 
 test('connecting an app, as the app screen asks for it: not yet, or the app\'s own page', async () => {
   await ready();
-  assert.equal((await api('POST', '/api/connections/outlook')).status, 404, 'not connectable yet: the screen says it arrives with an update');
-  assert.equal((await api('POST', '/api/connections/gmail')).status, 404, 'Google waits for the household app');
+  assert.equal((await api('POST', '/api/connections/outlook')).status, 404, 'cut from v1');
+  assert.equal((await api('POST', '/api/connections/gmail')).status, 409, 'Google waits for the owner to switch it on for the house');
+  assert.equal((await api('GET', '/api/state')).body.house.google, false);
+  assert.equal((await api('PUT', '/api/house/google', { id: 'nope', secret: 's' })).status, 400, "the owner's setup checks what was pasted");
   assert.deepEqual((await api('GET', '/api/connections/notion')).body, { state: 'cancelled' });
   assert.deepEqual((await api('GET', '/api/state')).body.connections, []);
   assert.equal((await api('DELETE', '/api/connections/notion', undefined, {})).status, 403, 'cross-site pages cannot touch connections');

@@ -7,16 +7,15 @@ import type { Store } from './db.ts';
 import type { Crew } from './crew.ts';
 import * as disk from './bots.ts';
 import { installTool } from './tools.ts';
-import { PROVIDERS, provider } from './accounts.ts';
+import { OWNER, PROVIDERS, callbackPage, provider } from './accounts.ts';
 import { coversOf } from './policy.ts';
-import { Connections } from './connections.ts';
 import { describe, nextRun, parseSchedule } from './routines.ts';
 
 const TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml',
   '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif',
   '.mp4': 'video/mp4', '.webm': 'video/webm', '.md': 'text/plain; charset=utf-8', '.txt': 'text/plain; charset=utf-8',
-  '.json': 'application/json', '.pdf': 'application/pdf',
+  '.json': 'application/json', '.pdf': 'application/pdf', '.webmanifest': 'application/manifest+json',
 };
 
 function send(res: ServerResponse, status: number, body: unknown) {
@@ -67,7 +66,7 @@ export function startServer(cfg: Config, db: Store, crew: Crew) {
       if (p === '/connect/callback') {
         const words = await crew.connections.finish(url.searchParams);
         res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
-        return res.end(`<!doctype html><meta name="viewport" content="width=device-width"><title>Crewhouse</title><body style="font:18px system-ui;margin:3em auto;max-width:28em;text-align:center">${words.replace(/[<&]/g, '')}</body>`);
+        return res.end(callbackPage(words, /connected\./.test(words)));
       }
 
       const file = p.match(/^\/files\/([a-z0-9-]+)\/(.+)$/);
@@ -95,7 +94,7 @@ export function startServer(cfg: Config, db: Store, crew: Crew) {
     const me = crew.viewer(req.headers['x-crewhouse-member']).id as number;
     if (m === 'GET' && p === '/api/state') return crew.snapshot(me);
     if (m === 'GET' && p === '/api/events') return db.events(Number(url.searchParams.get('after') || 0));
-    if (m === 'POST' && p === '/api/onboard') return crew.onboard((await readJson(req)).address ?? '', me);
+    if (m === 'POST' && p === '/api/onboard') { const b = await readJson(req); return crew.onboard(b.address ?? '', me, b.ask) ?? { ok: true }; }
     if (m === 'POST' && p === '/api/recruit') { const b = await readJson(req); const { token, ...bot } = crew.recruit(b.template, b.name, 'person', me); return bot; }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)$/)) && m === 'GET') return crew.botPage(r[1], me);
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/messages$/)) && m === 'POST') { const b = await readJson(req); return crew.post(r[1], b.text ?? '', b.model, me); }
@@ -104,17 +103,23 @@ export function startServer(cfg: Config, db: Store, crew: Crew) {
     if ((r = p.match(/^\/api\/people\/(\d+)$/)) && m === 'PUT') return crew.updateMember(Number(r[1]), await readJson(req));
     if (m === 'GET' && p === '/api/accounts') {
       // Everyone's AI accounts: signed in or not (the engine's own local check), resting until when, and any sign-in in progress.
-      return Promise.all(crew.members().flatMap((mm) => Object.entries(PROVIDERS).map(async ([key, pr]) => ({
-        member: mm.id, account: key, name: pr.name, signedIn: await crew.accounts.signedIn(mm.id, key),
-        restingUntil: crew.restingUntil(key, mm.id), signIn: crew.accounts.view(mm.id, key),
-      }))));
+      // A work ChatGPT (Business, Enterprise, Edu) is flagged by its email, so the app can steer to a personal one.
+      return Promise.all(crew.members().flatMap((mm) => Object.entries(PROVIDERS).map(async ([key, pr]) => {
+        const signedIn = await crew.accounts.signedIn(mm.id, key);
+        const plan = signedIn && key === 'chatgpt' ? crew.accounts.chatgptPlan(mm.id) : null;
+        return { member: mm.id, account: key, name: pr.name, signedIn, restingUntil: crew.restingUntil(key, mm.id), signIn: crew.accounts.view(mm.id, key),
+          notIncluded: crew.accounts.notIncluded(mm.id, key), work: plan?.work ? plan.email || true : false };
+      })));
     }
-    // "Sign in with …": start (optionally by code), paste the address the browser landed on, cancel, or sign out.
-    if ((r = p.match(/^\/api\/accounts\/(\d+)\/([a-z]+)\/(login|paste|cancel|logout)$/)) && m === 'POST') {
+    // "Sign in with …": start (the page by default, `via: 'code'` for the code), paste the address the browser landed on,
+    // cancel, sign out; "I've changed my plan" (retry) and "Ask the owner to cover it".
+    if ((r = p.match(/^\/api\/accounts\/(\d+)\/([a-z]+)\/(login|paste|cancel|logout|retry|ask-owner)$/)) && m === 'POST') {
       const [who, key, act] = [crew.member(Number(r[1])).id as number, r[2], r[3]];
       provider(key);
       const b = await readJson(req);
-      if (act === 'login') return { ok: true, signIn: await crew.accounts.login(who, key, { via: b.via === 'code' ? 'code' : 'browser' }) };
+      if (act === 'login') return { ok: true, signIn: await crew.accounts.login(who, key, { via: b.via === 'code' ? 'code' : 'browser', fresh: !!b.fresh }) };
+      else if (act === 'retry') crew.retryAccount(who, key);
+      else if (act === 'ask-owner') crew.askOwner(who, key);
       else if (act === 'paste') crew.accounts.paste(who, key, String(b.text ?? ''));
       else if (act === 'cancel') crew.accounts.cancel(who, key);
       else await crew.accounts.logout(who, key);
@@ -122,8 +127,15 @@ export function startServer(cfg: Config, db: Store, crew: Crew) {
     }
     // Connections: the viewer's own apps (Notion, Canva, Google…), connected on the app's own page (docs/ui-contract.md).
     if (m === 'GET' && p === '/api/connections') return crew.connections.list(me);
+    // The owner switches Google on for the house, once: the household Google app's client ID and secret.
+    if (m === 'PUT' && p === '/api/house/google') {
+      if (me !== OWNER) throw Object.assign(new Error('only the owner sets this up'), { status: 403 });
+      const b = await readJson(req);
+      crew.connections.setHouseGoogle(b.id, b.secret);
+      return { ok: true };
+    }
     if ((r = p.match(/^\/api\/connections\/([a-z]+)$/))) {
-      const app = Connections.id(r[1]);
+      const app = r[1];
       if (m === 'POST') { const v = await crew.connections.connect(me, app); return v.state === 'done' ? { state: 'on' } : v.state === 'failed' ? Promise.reject(Object.assign(new Error(v.error), { status: 502 })) : { url: v.url }; }
       if (m === 'GET') return crew.connections.status(me, app);
       if (m === 'DELETE') { crew.connections.cancel(me, app); return { ok: true }; }

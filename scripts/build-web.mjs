@@ -6,6 +6,7 @@ mkdirSync(root + 'dist', { recursive: true });
 cpSync(root + 'index.html', root + 'dist/index.html');
 cpSync(root + 'fonts', root + 'dist/fonts', { recursive: true });
 cpSync(root + 'icon.svg', root + 'dist/icon.svg');
+cpSync(root + 'manifest.webmanifest', root + 'dist/manifest.webmanifest'); // "Share to Crewhouse" from the phone's Share sheet
 await build({
   entryPoints: [root + 'src/main.tsx', root + 'src/styles.css'],
   outdir: root + 'dist', bundle: true, minify: true, sourcemap: true, target: 'es2022', jsx: 'automatic',
