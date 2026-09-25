@@ -345,3 +345,8 @@ button.code { border: 0; color: var(--ink); cursor: pointer; display: grid; gap:
 .share .shared .clamp { white-space: pre-wrap; }
 .share .line { margin-top: 14px; }
 .share .chips { flex-wrap: wrap; margin-top: 12px; }
+.pair { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; }
+.qr { width: 220px; height: 220px; flex: none; background: #fff; border-radius: 14px; overflow: hidden; }
+.qr svg { width: 100%; height: 100%; display: block; }
+.qr.expired { display: grid; place-items: center; color: var(--mute); border: 1px dashed var(--line); background: none; }
+.letters { letter-spacing: .12em; font-variant-numeric: tabular-nums; }

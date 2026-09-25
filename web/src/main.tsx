@@ -2,6 +2,7 @@
 // plain-words view models (adapter.ts), never crewd's raw rows.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import QRCode from 'qrcode';
 import { api, demo, setMember, subscribe, type Json } from './api.ts';
 import * as A from './adapter.ts';
 import { AskCard, AskSheet, attempt, Celebrate, setNight, ChiefArt, Composer, Face, Laptop, Logo, Media, PalArt, Pill, Splash, Steps, Toasts, toast } from './parts.tsx';
@@ -529,12 +530,64 @@ function Routines(ctx: Ctx) {
 }
 
 // ---------- settings ----------
+/** Settings, Phones: pair the phone app by its camera, see each phone, take one away. Only this computer can. */
+function Phones({ tick }: { tick: number }) {
+  const [phones, setPhones] = useState<Json[] | null | undefined>(undefined);
+  const [link, setLink] = useState<Json>(null);
+  const [offer, setOffer] = useState<Json>(null);
+  const [qr, setQr] = useState('');
+  const [now, setNow] = useState(Date.now());
+  const load = () => Promise.all([api.phones(), api.phoneLink()]).then(([p, l]) => { setPhones(p); setLink(l); }).catch(() => setPhones(null));
+  useEffect(() => { void load(); }, [tick]);
+  useEffect(() => { if (offer) QRCode.toString(offer.qr, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' }).then(setQr); }, [offer]);
+  useEffect(() => { if (!offer) return; const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, [offer]);
+  // The code closes by itself once a phone uses it.
+  const joined = offer && phones?.find((p) => !offer.had.includes(p.id));
+  useEffect(() => { if (joined) { setOffer(null); toast(`${joined.name} is paired`); } }, [joined?.id]);
+  const show = (role: 'control' | 'view') => attempt(async () => setOffer({ ...(await api.pairPhone(role)), role, had: (phones ?? []).map((p) => p.id) }));
+  const left = offer ? Math.max(0, Math.round((offer.expires - now) / 1000)) : 0;
+
+  return (<>
+    <div className="label">Phones</div>
+    {phones === undefined ? <div className="card mute">Checking…</div> : phones === null || !link?.on ? (
+      <div className="card"><b>Crewhouse on your phone</b><p className="mute">The phone app is on its way. When it arrives, you'll scan a code here and the crew is in your pocket.</p></div>
+    ) : (<>
+      <div className="card list">
+        {phones.map((p) => (
+          <div key={p.id} className="row-item"><span className="phone-ic">▯</span>
+            <span className="grow"><b>{p.name}</b><div className="mute small">{p.role === 'view' ? 'Can watch, not answer' : 'Can answer and give jobs'}{p.person ? ` · ${p.person}'s` : ''} · {p.online ? 'with you now' : `last seen ${A.clock(p.seen)}`}</div></span>
+            <button className="btn ghost" onClick={() => attempt(async () => { await api.removePhone(p.id); await load(); }, `${p.name} can't reach the crew any more`)}>Remove</button>
+          </div>
+        ))}
+        {!phones.length && <p className="mute">No phones yet. Install the Crewhouse app, then scan the code it asks for.</p>}
+        {!offer && <div className="btns"><button className="btn go" onClick={() => show('control')}>Add a phone</button><button className="btn" onClick={() => show('view')}>Add one that only watches</button></div>}
+      </div>
+      {offer && (
+        <div className="card pair">
+          {left > 0 ? <div className="qr" dangerouslySetInnerHTML={{ __html: qr }} /> : <div className="qr expired">This code ran out.</div>}
+          <div className="grow">
+            <b>Scan this with the Crewhouse app</b>
+            <p className="mute small">{offer.role === 'view' ? 'This phone will watch the crew but not answer or give jobs.' : 'This phone will answer the crew and give them jobs, as you.'}</p>
+            <p className="small">The app should show these same letters: <b className="letters">{offer.fp}</b></p>
+            <p className="mute small">{left > 0 ? `Works once, for ${left} more seconds.` : 'Make a new one when the phone is ready.'}</p>
+            <div className="btns">{left <= 0 && <button className="btn go" onClick={() => show(offer.role)}>New code</button>}<button className="btn ghost" onClick={() => setOffer(null)}>Close</button></div>
+          </div>
+        </div>
+      )}
+      <label className="card row">
+        <input type="checkbox" checked={link.lan} disabled={link.pinned} onChange={(e) => attempt(async () => setLink(await api.phonesAtHome(e.target.checked)))} />
+        <span className="grow"><b>Phones on this Wi-Fi can reach the crew</b>
+          <div className="mute small">Off: a phone reaches this computer only through <a href="https://tailscale.com" target="_blank" rel="noreferrer">Tailscale</a>, from anywhere. Either way it needs to be paired here first, and everything between them is locked.</div></span>
+      </label>
+      {!link.lan && !link.tailscale && !link.pinned && <div className="card mute">This computer has no Tailscale yet, so a phone can't reach it. Install Tailscale on both, or turn on Wi-Fi above.</div>}
+    </>)}
+  </>);
+}
+
 function Settings({ state, me, refresh, tick, look, setLook, switchTo }: Ctx & { look: string; setLook: (l: string) => void; switchTo: (id: number) => void }) {
   const accounts = useAccounts(0, tick);
   const [signing, setSigning] = useState<Window | null | false>(sheet === 'signin' ? null : false);
   const [adding, setAdding] = useState('');
-  const [phones, setPhones] = useState<Json[] | null | undefined>(undefined);
-  useEffect(() => { api.phones().then(setPhones).catch(() => setPhones(null)); }, [tick]);
   const owner = state.person.id === A.OWNER;
   const act = (fn: () => Promise<unknown>, ok?: string) => attempt(async () => { await fn(); refresh(); }, ok);
   return (
@@ -572,15 +625,7 @@ function Settings({ state, me, refresh, tick, look, setLook, switchTo }: Ctx & {
         </form>
       )}
 
-      <div className="label">Phones</div>
-      {phones === undefined ? <div className="card mute">Checking…</div> : phones === null ? (
-        <div className="card"><b>Crewhouse on your phone</b><p className="mute">The phone app is on its way. When it arrives, you'll scan a code here and the crew is in your pocket.</p></div>
-      ) : (
-        <div className="card list">
-          {phones.map((p) => <div key={p.id} className="row-item"><span className="phone-ic">▯</span><span className="grow"><b>{p.name}</b><div className="mute small">Last seen {A.clock(p.seen)}</div></span></div>)}
-          <button className="btn" onClick={() => attempt(() => api.pairPhone())}>Add a phone</button>
-        </div>
-      )}
+      <Phones tick={tick} />
 
       <div className="label">Look</div>
       <div className="seg">{[['auto', 'Evenings dark'], ['day', 'Day'], ['night', 'Night']].map(([k, l]) => <button key={k} className={look === k ? 'on' : ''} onClick={() => setLook(k)}>{l}</button>)}</div>

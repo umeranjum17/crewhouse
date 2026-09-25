@@ -8,7 +8,12 @@ export const setMember = (id: number) => { member = id; };
 /** `?demo` runs the screens on a made-up household (web/src/demo.ts): for design review and screenshots. */
 export const demo = typeof location !== 'undefined' && new URLSearchParams(location.search).has('demo');
 
-async function call(method: string, path: string, body?: Json) {
+/** How a call reaches crewd: HTTP on this computer; the phone app swaps in its encrypted link. */
+export type Transport = (method: string, path: string, body?: Json) => Promise<Json>;
+let call: Transport = http;
+export function setTransport(t: Transport) { call = t; }
+
+async function http(method: string, path: string, body?: Json) {
   if (demo) return (await import('./demo.ts')).demoCall(method, path, body);
   const res = await fetch(path, {
     method,
@@ -63,9 +68,12 @@ export const api = {
   routine: (id: number, body: { state?: 'on' | 'paused'; schedule?: string; quiet?: boolean }) => call('PUT', `/api/routines/${id}`, body),
   runRoutine: (id: number) => call('POST', `/api/routines/${id}/run`),
   removeRoutine: (id: number) => call('DELETE', `/api/routines/${id}`),
-  // Phones are still wanted (docs/ui-contract.md); the screens show "coming soon" until crewd answers them.
+  // Phones: this computer only; crewd refuses these over the phone link.
   phones: () => call('GET', '/api/phones'),
-  pairPhone: () => call('POST', '/api/phones/pair'),
+  phoneLink: () => call('GET', '/api/phones/link'),
+  pairPhone: (role: 'control' | 'view' = 'control') => call('POST', '/api/phones/pair', { role }),
+  removePhone: (id: string) => call('DELETE', `/api/phones/${id}`),
+  phonesAtHome: (on: boolean) => call('PUT', '/api/phones/lan', { on }),
   connect: (app: string) => call('POST', `/api/connections/${app}`),
   connection: (app: string) => call('GET', `/api/connections/${app}`),
   disconnect: (app: string) => call('DELETE', `/api/connections/${app}`),
