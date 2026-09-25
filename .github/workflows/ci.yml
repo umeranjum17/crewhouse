@@ -45,11 +45,15 @@ jobs:
       - run: npm run build:web
       - run: node scripts/package.mjs
       - run: sudo apt-get update -qq && sudo apt-get install -y -qq ./dist/crewhouse_*_amd64.deb
-      - run: dpkg -s bubblewrap xvfb | grep -c 'Status: install ok installed' | grep -qx 2
-      - run: grep -q '^Exec=/opt/crewhouse/node/bin/node /opt/crewhouse/launch.mjs$' /usr/share/applications/crewhouse.desktop
+      - run: |
+          dpkg -s bubblewrap xvfb | grep -c 'Status: install ok installed' | grep -qx 2
+      - run: |
+          grep -q '^Exec=/opt/crewhouse/node/bin/node /opt/crewhouse/launch.mjs$' /usr/share/applications/crewhouse.desktop
       - run: CREWHOUSE_ENGINE=stub CREWHOUSE_PACKAGED=0 CREWHOUSE_NO_SERVICE=1 crewhouse-app --no-open
-      - run: curl -fsS http://127.0.0.1:7711/api/state | grep -q '"person"'
-      - run: curl -fsS http://127.0.0.1:7711/ | grep -qi '<html'
+      - run: |
+          curl -fsS http://127.0.0.1:7711/api/state | grep -q '"person"'
+      - run: |
+          curl -fsS http://127.0.0.1:7711/ | grep -qi '<html'
 
   relay-image:
     runs-on: ubuntu-latest
