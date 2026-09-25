@@ -164,7 +164,9 @@ export async function demoCall(method: string, path: string, _body?: Json) {
   if (method === 'GET' && b) return { ...pages[b[1]], bot: bots.find((x) => x.id === b[1]) };
   if (method === 'GET' && path.startsWith('/api/accounts')) return accounts;
   if (method === 'GET' && path === '/api/about') return { notes: '- Vegetarian at home\n- Two children: Zara (9) and Ali (6)\n- Prefers weekend plans before Thursday' };
-  if (method === 'GET' && path === '/api/phones/link') return { on: true, lan: false, pinned: false, tailscale: true, relay: '', relayStatus: 'off', asking: [] };
+  // ?demo=home / ?demo=signin-again: Settings, Phones before Tailscale, and with it signed out.
+  if (method === 'GET' && path === '/api/phones/link') return { on: true, lan: false, pinned: false, tailscale: variant !== 'home', relay: '', relayStatus: 'off', asking: [],
+    anywhere: variant === 'home' ? 'home' : variant === 'signin-again' ? 'signin' : 'anywhere' };
   if (method === 'POST' && path === '/api/phones/pair') return { qr: 'crewhouse-demo', expires: Date.now() + 120_000 };
   if (method === 'GET' && path === '/api/phones') return [{ id: 1, name: "Nadia's phone", member: 2, seen: now - 5 * min }, { id: 2, name: "Umer's phone", member: 1, seen: now - 2 * 60 * min }];
   if (method === 'POST' && path.startsWith('/api/connections/')) return { url: 'https://accounts.google.com/' };

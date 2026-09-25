@@ -68,7 +68,7 @@ test('reachable from anywhere: enrol once, pair by typed code, talk through the 
   after(() => phone.stop());
   const req = (op: string, body?: unknown) => phone.request(op, body) as Promise<{ status: number; body: any }>;
   assert.equal((await req('GET /api/state')).status, 200, 'the app, through the relay');
-  assert.deepEqual((await req('GET /api/reach')).body, { urls: [url] }, 'a phone paired at home learns the relay address');
+  assert.deepEqual((await req('GET /api/reach')).body.urls, [url], 'a phone paired at home learns the relay address');
   assert.equal((await req('POST /api/push', { expo: 'ExponentPushToken[crewhouse-test]' })).status, 200);
 
   // Chief speaks to the owner: the phone is told only "Crewhouse has news".

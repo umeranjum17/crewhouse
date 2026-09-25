@@ -1,0 +1,7 @@
+expo.modules.crewhousenet.crewhouse-net-pngs-0 /home/umer/.treehouse/crewhouse-0ec48b/4/crewhouse/mobile/modules/crewhouse-net/android/build/generated/res/pngs/release
+expo.modules.crewhousenet.crewhouse-net-resValues-1 /home/umer/.treehouse/crewhouse-0ec48b/4/crewhouse/mobile/modules/crewhouse-net/android/build/generated/res/resValues/release
+expo.modules.crewhousenet.crewhouse-net-mergeReleaseResources-2 /home/umer/.treehouse/crewhouse-0ec48b/4/crewhouse/mobile/modules/crewhouse-net/android/build/intermediates/incremental/release/mergeReleaseResources/merged.dir
+expo.modules.crewhousenet.crewhouse-net-mergeReleaseResources-3 /home/umer/.treehouse/crewhouse-0ec48b/4/crewhouse/mobile/modules/crewhouse-net/android/build/intermediates/incremental/release/mergeReleaseResources/stripped.dir
+expo.modules.crewhousenet.crewhouse-net-release-4 /home/umer/.treehouse/crewhouse-0ec48b/4/crewhouse/mobile/modules/crewhouse-net/android/build/intermediates/merged_res/release/mergeReleaseResources
+expo.modules.crewhousenet.crewhouse-net-main-5 /home/umer/.treehouse/crewhouse-0ec48b/4/crewhouse/mobile/modules/crewhouse-net/android/src/main/res
+expo.modules.crewhousenet.crewhouse-net-release-6 /home/umer/.treehouse/crewhouse-0ec48b/4/crewhouse/mobile/modules/crewhouse-net/android/src/release/res

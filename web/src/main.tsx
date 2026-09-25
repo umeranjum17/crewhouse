@@ -594,16 +594,21 @@ function Phones({ tick }: { tick: number }) {
         <span className="grow"><b>Phones on this Wi-Fi can reach the crew</b>
           <div className="mute small">Off: the Wi-Fi opens only while a pairing code is showing here, so a phone can join at home. After that it reaches this computer through <a href="https://tailscale.com" target="_blank" rel="noreferrer">Tailscale</a>, from anywhere. Either way everything between them is locked.</div></span>
       </label>
-      <form className="card form" onSubmit={(e) => { e.preventDefault(); void attempt(async () => { setLink(await api.phoneRelay((relay ?? link.relay).trim(), enrol)); setRelay(null); setEnrol(''); }, 'Saved'); }}>
-        <b>Reach this computer from anywhere</b>
+      <div className="card anywhere">
+        <b>Reach it from anywhere</b>
+        <p className="mute small">{A.anywhere(link).words}</p>
+        {!!A.anywhere(link).steps.length && <ol className="how">{A.anywhere(link).steps.map((s) => <li key={s}>{s}</li>)}</ol>}
+        <p className="mute small"><a href="https://tailscale.com/download" target="_blank" rel="noreferrer">Get Tailscale ↗</a> · Free for a family. Tailscale sees which devices are yours, never what they say.</p>
+      </div>
+      <details className="card" open={!!link.relay}><summary className="small">Other ways: a relay you run yourself</summary>
+      <form className="form" onSubmit={(e) => { e.preventDefault(); void attempt(async () => { setLink(await api.phoneRelay((relay ?? link.relay).trim(), enrol)); setRelay(null); setEnrol(''); }, 'Saved'); }}>
         <p className="mute small">{A.reach(link).words}</p>
         <p className="mute small">A relay passes messages between your phones and this computer, so this computer opens nothing to the internet. <a href="https://github.com/umeranjum17/crewhouse/blob/main/relay/README.md" target="_blank" rel="noreferrer">Run your own ↗</a></p>
         <input className="input" value={relay ?? link.relay ?? ''} onChange={(e) => setRelay(e.target.value)} placeholder="Relay address, like https://relay.example.com" aria-label="Relay address" autoComplete="off" />
         <input className="input" value={enrol} onChange={(e) => setEnrol(e.target.value)} placeholder="Invitation, if the relay gave you one" aria-label="Invitation" autoComplete="off" />
         <div className="btns"><button className="btn go" disabled={relay === null && !enrol}>Save</button>
           {!!link.relay && <button type="button" className="btn ghost" onClick={() => attempt(async () => setLink(await api.phoneRelay('')), 'Turned off')}>Turn off</button>}</div>
-      </form>
-      {!link.lan && !link.tailscale && !link.pinned && <div className="card mute">This computer has no Tailscale yet, so a phone can't reach it. Install Tailscale on both, or turn on Wi-Fi above.</div>}
+      </form></details>
     </>)}
   </>);
 }
