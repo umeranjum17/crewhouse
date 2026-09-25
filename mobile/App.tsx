@@ -309,7 +309,13 @@ type Ctx = { state: Json; tick: number; refresh: () => void; go: (r: Route, repl
 function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }) {
   const t = useLook();
   // A photo, link or text shared from another app arrives here (Android's share sheet).
-  const { hasShareIntent, shareIntent, resetShareIntent } = useShareIntent();
+  const { hasShareIntent, shareIntent, resetShareIntent, error: shareError } = useShareIntent();
+  // A share the phone wouldn't let Crewhouse read: said plainly, and nothing else happens.
+  useEffect(() => {
+    if (!shareError) return;
+    say("That photo couldn't be opened here. Share it again from your gallery, or tap + in a chat to pick it.");
+    resetShareIntent();
+  }, [shareError]);
   const [state, setState] = useState<Json>(null);
   const [status, setStatus] = useState<Status>('connecting');
   const [tick, setTick] = useState(0);

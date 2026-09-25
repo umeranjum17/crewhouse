@@ -32,7 +32,7 @@
     "android": "expo run:android",
     "apk": "expo prebuild -p android && cd android && ./gradlew assembleRelease",
     "typecheck": "tsc --noEmit",
-    "postinstall": "node scripts/desklink-gradle.mjs"
+    "postinstall": "node scripts/patch-modules.mjs"
   },
   "private": true
 }
