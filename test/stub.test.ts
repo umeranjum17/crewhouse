@@ -81,12 +81,12 @@ test('chief onboarding, recruit, assign, grants', async () => {
 test('nothing technical reaches the app; the person\'s own files ask in one plain sentence', async () => {
   await ready();
   const seen = JSON.stringify([(await api('GET', '/api/state')).body, (await api('GET', '/api/bots/reel')).body, (await api('GET', '/api/bots/chief')).body, (await api('GET', '/api/accounts')).body, (await api('GET', '/api/connections')).body]);
-  for (const bad of [root, homedir() + '/', 'openai-codex', 'gpt-', 'muse-spark', 'grok-4', 'bwrap', 'ffmpeg -', '[Crewhouse', 'Your id in Crewhouse', 'claude', 'CLAUDE', 'token']) {
+  for (const bad of [root, homedir() + '/', 'openai-codex', 'gpt-', 'grok-4', 'Muse', 'Meta', 'bwrap', 'ffmpeg -', '[Crewhouse', 'Your id in Crewhouse', 'claude', 'CLAUDE', 'token']) {
     assert.ok(!seen.includes(bad), `the app was sent "${bad}": …${seen.slice(Math.max(0, seen.indexOf(bad) - 120), seen.indexOf(bad) + 80)}…`);
   }
   assert.doesNotMatch(seen, /\d%/, 'no usage percentages');
   const accounts = (await api('GET', '/api/accounts')).body;
-  assert.deepEqual(accounts.filter((a: any) => a.member === 1).map((a: any) => a.name), ['ChatGPT', 'Grok', 'Meta Muse', 'GitHub Copilot', 'Kimi', 'OpenRouter', 'Gemini']);
+  assert.deepEqual(accounts.filter((a: any) => a.member === 1).map((a: any) => a.name), ['ChatGPT', 'Grok', 'GitHub Copilot', 'OpenRouter']);
 
   // Touching the person's own files asks, in one plain sentence; the answer comes from the app.
   const outside = join(root, 'Documents', 'plan.txt');
@@ -164,8 +164,8 @@ test('routines: Chief sets one up from chat, it fires on schedule through the da
   assert.equal((await api('PUT', `/api/routines/${r.id}`, { state: 'paused' })).status, 200);
   assert.equal((await api('POST', `/api/routines/${r.id}/run`)).status, 200);
   await until(async () => (await api('GET', '/api/state')).body.routines.find((x: any) => x.id === r.id && x.history[0]?.why === 'now' && x.history[0]?.state === 'done'));
-  const own = (await api('POST', '/api/routines', { bot: 'reel', schedule: 'every 2 hours', task: 'Tidy the screenshots folder', model: 'muse' })).body;
-  assert.equal(own.thinks, 'Meta Muse');
+  const own = (await api('POST', '/api/routines', { bot: 'reel', schedule: 'every 2 hours', task: 'Tidy the screenshots folder', model: 'copilot' })).body;
+  assert.equal(own.thinks, 'GitHub Copilot');
   assert.equal((await api('DELETE', `/api/routines/${own.id}`)).status, 200);
   assert.equal((await api('POST', '/api/routines', { bot: 'reel', schedule: 'daily 9', task: 'x' }, {})).status, 403, 'cross-site pages cannot add routines');
 });

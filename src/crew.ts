@@ -160,7 +160,7 @@ export class Crew {
   }
 
   /** The accounts a task may run on, in order: its own choice, the bot's fallback order, then any other account its
-   *  member has signed in to (someone who only has Meta Muse still gets a working crew). Never another member's. */
+   *  member has signed in to (someone who only has Grok still gets a working crew). Never another member's. */
   choices(task: Row) {
     return disk.dedupe([...(task.brain ? [disk.parseBrain(task.brain)] : []), ...disk.brains(this.cfg, task.bot), ...Object.keys(PROVIDERS).map((provider) => ({ provider }))]);
   }

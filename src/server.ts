@@ -105,16 +105,16 @@ export function startServer(cfg: Config, db: Store, crew: Crew) {
     if (m === 'GET' && p === '/api/accounts') {
       // Everyone's AI accounts: signed in or not (the engine's own local check), resting until when, and any sign-in in progress.
       return Promise.all(crew.members().flatMap((mm) => Object.entries(PROVIDERS).map(async ([key, pr]) => ({
-        member: mm.id, account: key, name: pr.name, key: !!pr.key, signedIn: await crew.accounts.signedIn(mm.id, key),
+        member: mm.id, account: key, name: pr.name, signedIn: await crew.accounts.signedIn(mm.id, key),
         restingUntil: crew.restingUntil(key, mm.id), signIn: crew.accounts.view(mm.id, key),
       }))));
     }
-    // "Sign in with …": start (optionally by code, or with a pasted key), paste the address the browser landed on, cancel, or sign out.
+    // "Sign in with …": start (optionally by code), paste the address the browser landed on, cancel, or sign out.
     if ((r = p.match(/^\/api\/accounts\/(\d+)\/([a-z]+)\/(login|paste|cancel|logout)$/)) && m === 'POST') {
       const [who, key, act] = [crew.member(Number(r[1])).id as number, r[2], r[3]];
       provider(key);
       const b = await readJson(req);
-      if (act === 'login') return { ok: true, signIn: await crew.accounts.login(who, key, { via: b.via === 'code' ? 'code' : 'browser', key: b.key }) };
+      if (act === 'login') return { ok: true, signIn: await crew.accounts.login(who, key, { via: b.via === 'code' ? 'code' : 'browser' }) };
       else if (act === 'paste') crew.accounts.paste(who, key, String(b.text ?? ''));
       else if (act === 'cancel') crew.accounts.cancel(who, key);
       else await crew.accounts.logout(who, key);

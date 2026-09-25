@@ -55,7 +55,7 @@ test('routines: fire when due, catch up once after sleep, skip on overlap, pause
   assert.throws(() => crew.addRoutine({ bot: 'chief', schedule: 'daily 9', task: 'x' }, 'person'), /no bot/);
   assert.throws(() => crew.addRoutine({ bot: 'reel', schedule: 'whenever', task: 'x' }, 'person'), /can't read/);
   assert.throws(() => crew.addRoutine({ bot: 'reel', schedule: 'daily 9', task: 'x', model: 'nope:x' }, 'person'), /not an AI account/);
-  const r = crew.addRoutine({ bot: 'reel', schedule: 'every Monday 9:00', task: 'ask permission: make the weekly demo', model: 'muse', name: 'Weekly demo' }, 'person');
+  const r = crew.addRoutine({ bot: 'reel', schedule: 'every Monday 9:00', task: 'ask permission: make the weekly demo', model: 'copilot', name: 'Weekly demo' }, 'person');
   assert.ok(r.next_at > Date.now());
   assert.equal(new Date(r.next_at).getDay(), 1);
 
@@ -71,8 +71,8 @@ test('routines: fire when due, catch up once after sleep, skip on overlap, pause
   assert.equal(h.length, 1, 'latest only');
   assert.equal(h[0].why, 'late');
   const t = db.get('SELECT * FROM tasks WHERE id = ?', h[0].task)!;
-  assert.equal(t.brain, 'muse', 'the routine picks the AI account');
-  assert.equal(crew.routines().find((x) => x.id === r.id)!.thinks, 'Meta Muse');
+  assert.equal(t.brain, 'copilot', 'the routine picks the AI account');
+  assert.equal(crew.routines().find((x) => x.id === r.id)!.thinks, 'GitHub Copilot');
   assert.equal(t.title, 'Weekly demo');
   assert.ok(db.get('SELECT next_at FROM routines WHERE id = ?', r.id)!.next_at > Date.now());
   await until('holding', () => crew.sessionOf('reel'));

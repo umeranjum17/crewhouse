@@ -54,7 +54,7 @@ function usePoll<T>(fn: () => Promise<T>, ms: number, on = true) {
   return { value, offline };
 }
 
-// ---------- Sign in with ChatGPT (or Meta Muse, or Grok) ----------
+// ---------- Sign in with ChatGPT ----------
 export function SignIn({ me, owner, ai = A.AIS[0], onReady, onClose }: { me: number; owner: string; ai?: { key: string; name: string }; onReady: () => void; onClose: () => void }) {
   const name = ai.name;
   const { value, offline } = usePoll(() => api.accounts(), 2000);

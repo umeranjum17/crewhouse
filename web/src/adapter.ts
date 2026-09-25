@@ -247,7 +247,7 @@ export function routines(state: Json, bot?: string) {
 }
 
 /** The AI accounts a person can think with, in the order the app offers them. Never another brand, and never Claude. */
-export const AIS = [{ key: 'chatgpt', name: 'ChatGPT' }, { key: 'muse', name: 'Meta Muse' }, { key: 'grok', name: 'Grok' }];
+export const AIS = [{ key: 'chatgpt', name: 'ChatGPT' }]; // the one front door; crewd keeps other accounts as quiet paths
 
 /** One of the person's own AI accounts: signed in, or a sign-in in progress as a link and a code. */
 export function account(accounts: Json[] | null, member: number, key = 'chatgpt') {

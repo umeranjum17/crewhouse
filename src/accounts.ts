@@ -10,17 +10,16 @@ import type { Config } from './config.ts';
 
 export const OWNER = 1;
 
-/** The AI accounts a person can bring, by the name they know. `pi` is the engine's provider; `model` its default there. */
-export const PROVIDERS: Record<string, { pi: string; name: string; model: string; key?: true }> = {
+/** The AI accounts a person can bring, by the name they know. `pi` is the engine's provider; `model` its default there.
+ *  ChatGPT is the one front door the app shows; the rest are kept as quiet "more options" paths the app doesn't offer yet. */
+export const PROVIDERS: Record<string, { pi: string; name: string; model: string }> = {
   chatgpt: { pi: 'openai-codex', name: 'ChatGPT', model: 'gpt-5.5' },
   grok: { pi: 'xai', name: 'Grok', model: 'grok-4.7' },
-  muse: { pi: 'meta', name: 'Meta Muse', model: 'muse-spark-1.3' },
   copilot: { pi: 'github-copilot', name: 'GitHub Copilot', model: 'gpt-5.4' },
-  kimi: { pi: 'kimi-coding', name: 'Kimi', model: 'kimi-for-coding' },
   openrouter: { pi: 'openrouter', name: 'OpenRouter', model: 'moonshotai/kimi-k2.6' },
-  gemini: { pi: 'google', name: 'Gemini', model: 'gemini-3.1-pro-preview', key: true },
 };
 // No Claude: Anthropic allows its subscriptions only in its own apps, so the engine's Anthropic sign-in is never offered.
+// No Meta: Muse is a direct competitor, and the owner chose not to build on it.
 
 export function provider(key: string) {
   const p = PROVIDERS[key];
@@ -35,8 +34,7 @@ type Flow = SignIn & { abort: AbortController; paste?: (text: string) => void; t
 const LOGIN_MS = Number(process.env.CREWHOUSE_SIGNIN_MS || 15 * 60_000); // longer than any provider's code lives
 
 /** A failed sign-in in one plain sentence with one next step. */
-export function signInError(name: string, error: string, key = false) {
-  if (key && /invalid|unauthori[sz]ed|\b40[13]\b/i.test(error)) return `${name} didn't accept that key. Copy it again and paste it here.`;
+export function signInError(name: string, error: string) {
   if (/expired|expire/i.test(error)) return `The code expired before it was used. Tap Sign in with ${name} for a new one.`;
   if (/denied|declined|access_denied|rejected/i.test(error)) return `The sign-in was declined on the ${name} page. Tap Sign in with ${name} to try again.`;
   if (/fetch failed|network|ENOTFOUND|EAI_AGAIN|ECONN|timed? ?out|socket/i.test(error)) return `Couldn't reach ${name}. Check the internet connection, then tap Sign in again.`;
@@ -86,11 +84,10 @@ export class Accounts {
    *  One button, first time: a browser sign-in that can't come back falls back to a code by itself; a flow that stalls
    *  times out; nothing is kept unless the engine then sees a working sign-in. Every failure ends in one plain sentence.
    *  Returns as soon as there is a link to open or a code to show (or it is over); the sign-in carries on by itself. */
-  async login(member: number, key: string, body: { via?: 'code' | 'browser'; key?: string } = {}): Promise<SignIn | null> {
-    const p = provider(key);
+  async login(member: number, key: string, body: { via?: 'code' | 'browser' } = {}): Promise<SignIn | null> {
+    provider(key);
     const id = `${member}:${key}`;
     if (this.flows.get(id)?.state !== 'waiting') {
-      if (p.key && !body.key?.trim()) throw Object.assign(new Error(`Paste your ${p.name} key first.`), { status: 400 });
       const flow: Flow = { state: 'waiting', abort: new AbortController() };
       this.flows.set(id, flow);
       let shown!: () => void;
@@ -104,12 +101,12 @@ export class Accounts {
   /** The whole sign-in, for when the caller wants to wait for its end (tests do). */
   finished(member: number, key: string) { return this.flows.get(`${member}:${key}`)?.done ?? Promise.resolve(); }
 
-  private async signIn(member: number, key: string, body: { via?: 'code' | 'browser'; key?: string }, flow: Flow, shown: () => void) {
+  private async signIn(member: number, key: string, body: { via?: 'code' | 'browser' }, flow: Flow, shown: () => void) {
     const p = provider(key);
     const id = `${member}:${key}`;
     const rt = await this.runtime(member);
     let codeOffered = false;
-    const attempt = (via?: 'code' | 'browser') => rt.login(p.pi, p.key ? 'api_key' : 'oauth', {
+    const attempt = (via?: 'code' | 'browser') => rt.login(p.pi, 'oauth', {
       signal: flow.abort.signal,
       prompt: (q: AuthPrompt): Promise<string> => {
         if (q.type === 'select') {
@@ -117,7 +114,6 @@ export class Accounts {
           codeOffered = !!device;
           return Promise.resolve((via === 'code' && device ? device : q.options.find((o) => o !== device) ?? q.options[0]).id);
         }
-        if (q.type === 'secret') return Promise.resolve(body.key!.trim());
         if (q.type === 'text') return Promise.resolve(''); // GitHub Enterprise domain: never, for a household
         // "Paste the redirect address": only if the person pastes one; otherwise the engine's own listener finishes it.
         return new Promise((resolve, reject) => {
@@ -147,7 +143,7 @@ export class Accounts {
     } catch (e: any) {
       if (flow.state !== 'waiting') return; // cancelled: already settled
       console.error(`sign-in ${key} for member ${member}:`, e?.message ?? e);
-      Object.assign(flow, { state: 'failed', url: undefined, code: undefined, expiresAt: undefined, error: flow.timedOut ? `The sign-in took too long. Tap Sign in with ${p.name} to start again.` : signInError(p.name, String(e?.message ?? e), !!p.key) });
+      Object.assign(flow, { state: 'failed', url: undefined, code: undefined, expiresAt: undefined, error: flow.timedOut ? `The sign-in took too long. Tap Sign in with ${p.name} to start again.` : signInError(p.name, String(e?.message ?? e)) });
     } finally {
       clearTimeout(timer);
       this.onChange?.(member, key);
@@ -174,7 +170,7 @@ export class Accounts {
   onExpired?: (member: number, key: string) => void;
   async keepFresh(members: number[]) {
     for (const m of members) for (const [key, p] of Object.entries(PROVIDERS)) {
-      if (p.key || this.ready.get(`${m}:${key}`) !== true) continue;
+      if (this.ready.get(`${m}:${key}`) !== true) continue;
       const rt = await this.runtime(m);
       // A network hiccup is not a lapsed sign-in: only the account refusing the refresh signs it out.
       const ok = await rt.getAuth(p.pi, { minOAuthValidityMs: 60 * 60_000 }).then(Boolean, (e) => /fetch failed|network|ENOTFOUND|EAI_AGAIN|ECONN|timed? ?out/i.test(String(e?.message)));

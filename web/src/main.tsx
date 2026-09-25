@@ -61,9 +61,8 @@ function Hello({ state, me, refresh }: Ctx) {
       </div>
       <button className="btn go big" onClick={() => need() && setSigning(A.AIS[0])}><span className="gpt">◎</span>Sign in with ChatGPT</button>
       <button className="link" onClick={() => setOther(!other)}>Other ways to sign in</button>
-      {other && <div className="chips center">{A.AIS.slice(1).map((ai) => <button key={ai.key} className="chip" onClick={() => need() && setSigning(ai)}>Sign in with {ai.name}</button>)}
-        <button className="link inline" onClick={() => need() && finish()}>Set this up later</button></div>}
-      <p className="mute small">The crew thinks with your own AI account. Your password goes to them, never to us.</p>
+      {other && <p className="mute small">More are on the way. For now the crew thinks with ChatGPT, and a free account works. <button className="link inline" onClick={() => need() && finish()}>Set this up later</button></p>}
+      <p className="mute small">The crew thinks with your own ChatGPT. Your password goes to ChatGPT, never to us.</p>
       {signing && <SignIn me={me} owner={owner} ai={signing} onReady={() => { setSigning(null); void finish(); }} onClose={() => setSigning(null)} />}
     </div>
   );
@@ -444,12 +443,12 @@ function Settings({ state, me, refresh, tick, look, setLook, switchTo }: Ctx & {
       {state.members.length > 1 && (<><div className="label">Who's using this screen</div>
         <div className="chips">{state.members.map((m: Json) => <button key={m.id} className={`chip ${m.id === me ? 'on' : ''}`} onClick={() => switchTo(m.id)}>{m.name}</button>)}</div></>)}
 
-      <div className="label">Your AI</div>
+      <div className="label">Your ChatGPT</div>
       {A.AIS.map((ai) => {
         const g = A.account(accounts, me, ai.key);
         return (
           <div key={ai.key} className="card row">
-            <span className="app-ic" style={{ background: ai.key === 'chatgpt' ? '#10a37f' : ai.key === 'muse' ? '#0866ff' : '#111' }}>{ai.name[0]}</span>
+            <span className="app-ic" style={{ background: '#10a37f' }}>◎</span>
             <div className="grow"><b>{ai.name}</b><div className="mute small">{g.state === 'ready' ? `Connected. The crew can think with it.${g.resting ? ` ${g.resting}.` : ''}` : g.state === 'checking' ? 'Checking…' : 'Not signed in'}</div></div>
             {g.state === 'signed-out' && <button className="btn go" onClick={() => setSigning(ai)}>Sign in</button>}
             {g.state === 'ready' && <button className="btn" onClick={() => attempt(async () => { await api.signOut(me, ai.key); refresh(); }, `Signed out of ${ai.name}`)}>Sign out</button>}

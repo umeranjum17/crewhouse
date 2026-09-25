@@ -1,4 +1,4 @@
-// Connecting a person's apps (Notion, Canva, Google…) the Muse way: one Connect button, the app's own sign-in page,
+// Connecting a person's apps (Notion, Canva, Google…) the easy way: one Connect button, the app's own sign-in page,
 // back to Crewhouse, done. Each app is a remote MCP server behind OAuth; the tokens are that person's alone, kept in their
 // own folder under Crewhouse's, refreshed in the background, and never shown to a bot or to the app screen.
 import { createHash, randomBytes } from 'node:crypto';

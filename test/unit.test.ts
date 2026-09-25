@@ -112,7 +112,7 @@ test('the shell: its own space is the only writable place, the home folder is em
   assert.match(out, /made/, 'works in its own space');
   assert.match(out, /Read-only file system|No such file or directory|Permission denied/, 'nothing outside it is writable');
   assert.ok(!existsSync(outside));
-  assert.match(out, /key:\s*$/, 'no keys in its environment');
+  assert.match(out, /key:(\n|$)/, 'no keys in its environment');
   assert.equal(db.all('SELECT * FROM asks').length, 0, 'and it never asked');
   done();
 });
@@ -343,8 +343,8 @@ test('accounts a bot thinks with: fallback order by name only, a per-task choice
   assert.throws(() => disk.setBrains(cfg, 'reel', ['claude']), /not an AI account/, 'Claude is not offered');
   assert.throws(() => disk.setBrains(cfg, 'reel', ['chatgpt:$(rm -rf ~)']), /not an AI account/);
   assert.throws(() => disk.setBrains(cfg, 'reel', []), /at least one/);
-  assert.deepEqual(disk.setBrains(cfg, 'reel', ['muse', 'chatgpt:gpt-5.5', 'muse']), ['muse', 'chatgpt:gpt-5.5']);
-  assert.deepEqual(crew.thinks('reel'), [{ key: 'muse', name: 'Meta Muse', restingUntil: 0 }, { key: 'chatgpt', name: 'ChatGPT', restingUntil: 0 }], 'never a model id');
+  assert.deepEqual(disk.setBrains(cfg, 'reel', ['copilot', 'chatgpt:gpt-5.5', 'copilot']), ['copilot', 'chatgpt:gpt-5.5']);
+  assert.deepEqual(crew.thinks('reel'), [{ key: 'copilot', name: 'GitHub Copilot', restingUntil: 0 }, { key: 'chatgpt', name: 'ChatGPT', restingUntil: 0 }], 'never a model id');
   assert.throws(() => crew.assign('reel', 'x', 'chief', 'pi'), /not an AI account/);
 
   const a = crew.assign('reel', 'rename 400 files', 'chief', 'chatgpt').task;
@@ -355,7 +355,7 @@ test('accounts a bot thinks with: fallback order by name only, a per-task choice
   assert.match(lastSaid(db, 'reel'), /^stub reel: done/);
   const b = crew.assign('reel', 'judge which take is best', 'chief').task;
   await settled(db, b);
-  assert.equal(started().account, 'muse', 'no per-task choice: the bot\'s first');
+  assert.equal(started().account, 'copilot', 'no per-task choice: the bot\'s first');
   done();
 });
 
@@ -363,7 +363,7 @@ test('limits: a limit rests that account and the task carries on in the same con
   const { cfg, db, crew, done } = setup();
   crew.onboard('sir');
   crew.recruit('scout', 'Scout', 'person');
-  disk.setBrains(cfg, 'scout', ['chatgpt', 'muse']);
+  disk.setBrains(cfg, 'scout', ['chatgpt', 'copilot']);
   assert.deepEqual(classify('You have hit your ChatGPT usage limit (plus plan). Try again in ~30 min.')?.why, 'rate_limit');
   assert.equal(classify('503 overloaded')?.why, 'overloaded');
   assert.equal(classify('401 Unauthorized')?.why, 'signed_out');
@@ -375,19 +375,19 @@ test('limits: a limit rests that account and the task carries on in the same con
   const until = crew.restingUntil('chatgpt');
   assert.ok(Math.abs(until - (Date.now() + 30 * 60_000)) < 5000, 'rests until the time the account said');
   const said = db.all("SELECT text FROM messages WHERE bot = 'scout' AND author = 'system'").map((m) => m.text);
-  assert.ok(said.some((x) => /^ChatGPT is resting until \d+:\d\d [ap]m\. Scout carries on with Meta Muse\.$/.test(x)), said.join('\n'));
+  assert.ok(said.some((x) => /^ChatGPT is resting until \d+:\d\d [ap]m\. Scout carries on with GitHub Copilot\.$/.test(x)), said.join('\n'));
   assert.ok(db.get("SELECT 1 FROM events WHERE kind = 'run.resumed'"), 'the same session file, reopened');
   const file = task(db, t).session;
   assert.ok(file && readFileSync(file, 'utf8').includes('dig deep'), 'the conversation carried over');
   assert.deepEqual(crew.snapshot().resting, { chatgpt: until });
 
   // Every account resting: the task pauses with a wake-up time, and resumes when it passes.
-  const others = ['muse', 'copilot', 'kimi', 'openrouter', 'gemini']; // the stub counts these as signed in; Grok is not
-  for (const k of others) (crew as any).rests.set(`1:${k}`, Date.now() + (k === 'muse' ? 60_000 : 120_000));
+  const others = ['copilot', 'openrouter']; // the stub counts these as signed in; Grok is not
+  for (const k of others) (crew as any).rests.set(`1:${k}`, Date.now() + (k === 'copilot' ? 60_000 : 120_000));
   const b = crew.assign('scout', 'look it up again', 'chief').task;
   await settled(db, b);
   assert.equal(task(db, b).state, 'paused');
-  assert.ok(Math.abs(task(db, b).wake_at - (Date.now() + 60_000)) < 1000, 'earliest reset: Muse in a minute, not ChatGPT in half an hour');
+  assert.ok(Math.abs(task(db, b).wake_at - (Date.now() + 60_000)) < 1000, 'earliest reset: Copilot in a minute, not ChatGPT in half an hour');
   assert.match(task(db, b).result, /All AI accounts are resting until \d+:\d\d [ap]m/);
   (crew as any).rests.clear();
   db.run('UPDATE tasks SET wake_at = ? WHERE id = ?', Date.now() - 1, b);
@@ -538,7 +538,7 @@ test('household: bots and tasks belong to a member and run on that member\'s own
 
   // One person's limit rests only their own account.
   disk.setBrains(cfg, 'reel', ['chatgpt']);
-  for (const k of ['chatgpt', 'grok', 'muse', 'copilot', 'kimi', 'openrouter', 'gemini']) (crew as any).rests.set(`${sam}:${k}`, Date.now() + 60_000);
+  for (const k of ['chatgpt', 'grok', 'copilot', 'openrouter']) (crew as any).rests.set(`${sam}:${k}`, Date.now() + 60_000);
   assert.equal(crew.restingUntil('chatgpt', OWNER), 0);
   const e = crew.post('reel', 'another for Sam', undefined, sam)!.task;
   const f = crew.post('scout', 'owner lookup', undefined, OWNER)!.task;
@@ -653,7 +653,6 @@ test('sign-in: one button shows a code or a link, finishes by itself, keeps the 
   assert.equal(await crew.accounts.signedIn(crew.addMember('Sam').id, 'grok'), false, 'one person\'s sign-in is theirs alone');
   await crew.accounts.logout(OWNER, 'grok');
   assert.equal(await crew.accounts.signedIn(OWNER, 'grok'), false);
-  await assert.rejects(crew.accounts.login(OWNER, 'gemini'), /Paste your Gemini key first/);
   await assert.rejects(crew.accounts.login(OWNER, 'claude'), /no such AI account/);
 
   // While it waits: the code and the page, nothing else.
@@ -698,7 +697,8 @@ test('sign-in failures: expired, declined, offline, stalled and cancelled all en
   await crew.accounts.login(OWNER, 'grok');
   await crew.accounts.finished(OWNER, 'grok');
   assert.equal(crew.accounts.view(OWNER, 'grok')!.state, 'done');
-  assert.equal(signInError('Gemini', '400 API key not valid, invalid', true), "Gemini didn't accept that key. Copy it again and paste it here.");
+  assert.equal(signInError('ChatGPT', 'Device code authorization is not enabled for this account'), 'ChatGPT needs device sign-in turned on first: in ChatGPT, Settings, Security, turn on device code sign-in, then try again.');
+  await assert.rejects(crew.accounts.login(OWNER, 'muse'), /no such AI account/, 'no Meta');
   done();
 });
 
