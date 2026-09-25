@@ -4,15 +4,15 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdtempSync } from 'node:fs';
+import {  } from 'node:fs';
 import { createServer, type AddressInfo } from 'node:net';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { temp } from './tmp.ts';
 import { DeviceLink, pairWithCode } from '@byokit/link';
 import { findHost } from '@byokit/relay/device';
 import { NEWS, startRelay } from '../relay/main.ts';
 
-const root = mkdtempSync(join(tmpdir(), 'crewhouse-reach-'));
+const root = temp('crewhouse-reach');
 const pushed: any[] = [];
 const pushFetch = (async (_url: string, init: any) => {
   pushed.push(...JSON.parse(init.body));

@@ -3,11 +3,12 @@
 import { test } from 'node:test';
 import { execFileSync } from 'node:child_process';
 import assert from 'node:assert/strict';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync,  readFileSync, readlinkSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { temp } from './tmp.ts';
 import { setup, sleep, task, until, prompted, settled, holding, release, lastSaid } from './lab.ts';
 
 const { Crew, quietNow, short } = await import('../src/crew.ts');
@@ -289,7 +290,7 @@ test('grant resolution: MCP browser from the pinned bin dir, missing tools liste
 });
 
 test('installs: pinned npm and checksummed download land in the tool folder; bad checksum keeps nothing', async () => {
-  const root = mkdtempSync(join(tmpdir(), 'crewhouse-kit-'));
+  const root = temp('crewhouse-kit');
   const payload = '#!/bin/sh\necho downloaded\n';
   const sha = createHash('sha256').update(payload).digest('hex');
   const srv = createServer((_q, r) => r.end(payload)).listen(0, '127.0.0.1');

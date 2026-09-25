@@ -1,10 +1,9 @@
 // Shared test setup: a Crew on a temp data dir, running the real engine on the stub model. No network, no quota.
 import { after } from 'node:test';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { temp } from './tmp.ts';
 
-const root = mkdtempSync(join(tmpdir(), 'crewhouse-lab-'));
+const root = temp('lab');
 process.env.CREWHOUSE_STATE_DIR ??= join(root, 'state'); // the engine's own folder is set once, at import
 process.env.CREWHOUSE_HOLD_MS ??= '300';
 process.env.CREWHOUSE_STUCK_MS ??= '5000';

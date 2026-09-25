@@ -3,10 +3,10 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdtempSync, readFileSync, statSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { createServer, type AddressInfo } from 'node:net';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { temp } from './tmp.ts';
 import { DeviceLink, pairWithOffer, type DeviceGrant, type LinkStatus } from '@byokit/link';
 import { linkHosts, phoneAddresses } from '../src/link.ts';
 
@@ -22,7 +22,7 @@ test('the link binds loopback and Tailscale by default; the home network only wh
   assert.deepEqual(linkHosts('', false, { lo: at('127.0.0.1', true), eth0: at('192.168.1.20') }), ['127.0.0.1'], 'no Tailscale: loopback only');
 });
 
-const root = mkdtempSync(join(tmpdir(), 'crewhouse-link-'));
+const root = temp('crewhouse-link');
 // Ports the OS says are free, not random guesses that another run may hold.
 const free = () => new Promise<number>((r) => { const s = createServer().listen(0, '127.0.0.1', () => { const { port } = s.address() as AddressInfo; s.close(() => r(port)); }); });
 const port = await free();

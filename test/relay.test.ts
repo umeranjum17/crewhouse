@@ -3,16 +3,16 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import {  } from 'node:fs';
 import { join } from 'node:path';
+import { temp } from './tmp.ts';
 import { promisify } from 'node:util';
 import { DeviceLink, Host, keyPair, pairWithCode } from '@byokit/link';
 import { RelayClient, type RelayStatus } from '@byokit/relay';
 import { findHost } from '@byokit/relay/device';
 import { NEWS, startRelay } from '../relay/main.ts';
 
-const dir = mkdtempSync(join(tmpdir(), 'crewhouse-relay-'));
+const dir = temp('crewhouse-relay');
 const pushed: any[] = [];
 const pushFetch = (async (url: string, init: any) => {
   pushed.push({ url: String(url), body: JSON.parse(init.body) });

@@ -11,7 +11,7 @@
   "scripts": {
     "start": "node src/main.ts",
     "build:web": "node scripts/build-web.mjs",
-    "test": "T=$(mktemp -d) && mkdir \"$T/home\" \"$T/tmp\" && HOME=$T/home TMPDIR=$T/tmp node --test test/*.test.ts; s=$?; rm -rf \"$T\"; exit $s",
+    "test": "node scripts/test.mjs",
     "check": "tsc"
   },
   "dependencies": {
