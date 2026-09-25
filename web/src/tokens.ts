@@ -2,9 +2,9 @@
 // file unchanged; web/src/styles.css mirrors them as CSS variables.
 export const color = {
   day: {
-    ink: '#2e2a40', ink2: '#4d4760', mute: '#7a7490', card: '#ffffffd9', solid: '#ffffff', line: '#eee6f6', soft: '#f8f4fc',
+    ink: '#2e2a40', ink2: '#4d4760', mute: '#6b6484', card: '#ffffffd9', solid: '#ffffff', line: '#eee6f6', soft: '#f8f4fc',
     pink: '#ff7aa2', pinkInk: '#c9356b', peach: '#ffb199', amber: '#ffc27a', sky: '#a9cbff', mint: '#b5ecc4', lilac: '#d9c2ff',
-    ok: '#3ccf7e', okInk: '#239a5c', wait: '#ffae3c', bg: '#fff7f2',
+    ok: '#3ccf7e', okInk: '#177a47', wait: '#ffae3c', bg: '#fff7f2',
   },
   // A · Night Shift: ink #0d0b14, phosphor, amber, pink, violet.
   night: {
