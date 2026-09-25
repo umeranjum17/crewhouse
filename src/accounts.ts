@@ -5,7 +5,7 @@
 import './isolate.ts';
 import { join } from 'node:path';
 import { ModelRuntime } from '@earendil-works/pi-coding-agent';
-import { Accounts as Kit, fileStore, offered } from '@byokit/accounts';
+import { Accounts as Kit, fileStore, offered, type AuthHost } from '@byokit/accounts';
 import type { Config } from './config.ts';
 
 export { callbackPage, planOf, signInError } from '@byokit/accounts';
@@ -24,7 +24,7 @@ export function provider(key: string) {
 /** ChatGPT sends the browser back here, on this computer, and nowhere else: it is fixed for the client the engine signs in as. */
 export const CALLBACK_PORT = Number(process.env.CREWHOUSE_CALLBACK_PORT || 1455);
 
-export class Accounts extends Kit<ModelRuntime, number> {
+export class Accounts extends Kit<ModelRuntime & AuthHost, number> {
   private cfg: Config;
   /** Set by the stub engine: its scripted model stands in for every provider. */
   prepare?: (runtime: ModelRuntime) => void;
@@ -42,6 +42,11 @@ export class Accounts extends Kit<ModelRuntime, number> {
 
   /** One engine runtime per member, holding only their own sign-ins. */
   protected open(member: number) {
-    return ModelRuntime.create({ credentials: this.store(member), modelsPath: null, refreshOnCreate: false }).then((rt) => { this.prepare?.(rt); return rt; });
+    const credentials = this.store(member);
+    return ModelRuntime.create({ credentials, modelsPath: null, refreshOnCreate: false }).then((rt) => {
+      Object.assign(rt, { credentialStore: credentials, readCredential: (id: string) => credentials.read(id) });
+      this.prepare?.(rt);
+      return rt as ModelRuntime & AuthHost;
+    });
   }
 }

@@ -1,0 +1,32 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    allow:
+      - dependency-name: '@byokit/*'
+    groups:
+      byokit:
+        patterns:
+          - '@byokit/*'
+  - package-ecosystem: npm
+    directory: /mobile
+    schedule:
+      interval: weekly
+    allow:
+      - dependency-name: '@byokit/*'
+    groups:
+      byokit:
+        patterns:
+          - '@byokit/*'
+  - package-ecosystem: npm
+    directory: /relay
+    schedule:
+      interval: weekly
+    allow:
+      - dependency-name: '@byokit/*'
+    groups:
+      byokit:
+        patterns:
+          - '@byokit/*'
