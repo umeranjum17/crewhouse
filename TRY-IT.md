@@ -1,10 +1,10 @@
 # Try it
 
-A first walk through Crewhouse on your own computer, about 30 minutes. Every step here was run on this machine on 24 September 2026, from a fresh clone, with the real `claude` CLI.
+A first walk through Crewhouse on your own computer, about 30 minutes. It needs your own ChatGPT account (Plus or Pro, or another account under **Settings, AI accounts**).
 
 ## 1. Install and start
 
-You need Node 22.18 or later, Herdr 0.9.x and Claude Code signed in (`claude` once). `./crewhouse doctor` tells you what is missing.
+You need Node 22.19 or later, and bubblewrap for the bots' shell (`./crewhouse doctor` tells you what is missing). No CLIs and no terminal sign-ins: the engine ships inside Crewhouse.
 
 ```bash
 git clone https://github.com/umeranjum17/crewhouse ~/crewhouse && cd ~/crewhouse
@@ -14,15 +14,13 @@ git clone https://github.com/umeranjum17/crewhouse ~/crewhouse && cd ~/crewhouse
 
 Open **http://127.0.0.1:7711**.
 
-If the pull request that adds this file isn't merged yet, clone with `-b fm/ch-accept` to get its fixes.
-
-Everything lives in `~/.local/state/crewhouse/` (the database), `~/Crewhouse/` (the bots) and `~/.local/share/crewhouse/tools/` (the tool kit), and crewd runs the bots in its own Herdr session called `crewhouse`. `./crewhouse uninstall --all` removes all of it.
+Everything lives in `~/.local/state/crewhouse/` (the database, the engine's own folder and everyone's sign-ins), `~/Crewhouse/` (the bots) and `~/.local/share/crewhouse/tools/` (the tool kit). Your own `pi`, if you have one, is never touched. `./crewhouse uninstall --all` removes all of it.
 
 ## 2. What to test first
 
-1. **Chief.** He greets you and asks how to address you. Press **By my name…** and type your name. His reply uses it.
-2. **Reel and a video.** Tell Chief: *Please recruit Reel and have it make a 6 second title card that says Crewhouse.* Reel may stop once or twice under **Needs you**; press **Allow once**. After about 3 minutes the video plays in Reel's chat and appears on its **Files** tab.
-3. **Approvals at phone width.** The web app only listens on this computer, so to see the phone layout, make the browser window narrow (or use the browser's device mode). The next approval card fits on the screen with the tab bar at the bottom.
+1. **Chief and ChatGPT.** He greets you and asks how to address you. Then **Sign in with ChatGPT**: type the code on ChatGPT's page, and the app moves on by itself. (If ChatGPT says device codes are off, turn on *device code sign-in* under ChatGPT's Settings, Security, once.)
+2. **Reel and a video.** Tell Chief: *Please recruit Reel and have it make a 6 second title card that says Crewhouse.* Reel works in its own folder without asking you anything. After a few minutes the video plays in Reel's chat and appears on its **Files** tab.
+3. **An approval, at phone width.** Tell Reel: *Save a copy of the video in my Documents folder.* That is your own folder, so Reel asks first, in one sentence. Make the browser window narrow (or use the browser's device mode) to see the phone layout, then answer.
 4. **Scout and its browser.** Tell Chief: *Please recruit Scout and have it use its browser to open news.ycombinator.com and tell me the top 3 story titles.* The answer takes about a minute.
 5. **Watch, Take over, Give back.** Give Scout a slower job, e.g. *Open wikipedia.org in your browser and read the featured article of the day slowly, section by section, then summarise it in three lines.* Open Scout's **Screen** tab:
    - **Watch** shows its own desktop live.
@@ -31,22 +29,20 @@ Everything lives in `~/.local/state/crewhouse/` (the database), `~/Crewhouse/` (
 6. **A routine.** Tell Chief: *Every weekday at 9am, have Scout check the top 3 Hacker News stories and send me the titles.* Open **Routines**:
    - Press **Run now** on the new routine. It shows *Done · run by you* when Scout finishes.
    - Press **Run now** on **Morning digest**. Chief posts what finished, what needs you and what is coming up, in your thread.
-7. **Models and household.**
-   - On Reel's **Thinks with** tab, add `claude:haiku`, move it to the top and press **Save**. Reel's next task runs on Haiku.
-   - Under **Settings, People**, add someone. Pick them under **Who is using this screen?** and they get their own Chief thread, which asks how to address them.
-   - Until they sign in to their own Claude under **Settings, AI accounts**, their tasks stop with a plain message; yours are never lent.
-8. **Restart mid-task.** While Reel is working (or waiting on you), press Ctrl-C in the crewd terminal, then run `./crewhouse start` again. Reel's **What I did** tab shows *Crewhouse restarted; picked up where it was*, and a waiting approval can still be answered.
+7. **Household.** Under **Settings, People**, add someone. Pick them under **Who is using this screen?** and they get their own Chief thread, which asks how to address them, and their own **Sign in with ChatGPT**. Until they sign in, their tasks stop with a plain message; yours is never lent.
+8. **An app.** Under **Settings, Connections**, connect Notion or Canva: their own page opens, you allow Crewhouse, and it turns to Connected by itself. Then ask Scribe to find something in your Notion; reading runs at once, adding a page asks first.
+9. **Restart mid-task.** While Reel is working (or waiting on you), press Ctrl-C in the crewd terminal, then run `./crewhouse start` again. Reel's **What I did** tab shows *Picked up where it left off*, and a waiting approval can still be answered.
 
 Then run `./crewhouse doctor` in a second terminal.
 
 ## 3. The phone app (PR #7, not merged)
 
-The app and its encrypted link live in PR [#7](https://github.com/umeranjum17/crewhouse/pull/7) (branch `fm/ch-phone`). `main` has no link yet, so run that branch as a second crewd beside the first one. It uses its own port, data and Herdr session:
+The app and its encrypted link live in PR [#7](https://github.com/umeranjum17/crewhouse/pull/7) (branch `fm/ch-phone`), which predates the engine change. `main` has no link yet, so run that branch as a second crewd beside the first one, on its own port and data:
 
 ```bash
 git clone -b fm/ch-phone https://github.com/umeranjum17/crewhouse ~/crewhouse-phone && cd ~/crewhouse-phone
 ./crewhouse setup
-CREWHOUSE_PORT=7721 CREWHOUSE_STATE_DIR=$HOME/.local/state/crewhouse-phone CREWHOUSE_CREW_DIR=$HOME/Crewhouse-phone CREWHOUSE_HERDR_SESSION=crewhouse-phone ./crewhouse start
+CREWHOUSE_PORT=7721 CREWHOUSE_STATE_DIR=$HOME/.local/state/crewhouse-phone CREWHOUSE_CREW_DIR=$HOME/Crewhouse-phone ./crewhouse start
 ```
 
 It prints `phone link (Noise-encrypted) on port 7712: 127.0.0.1, <your Tailscale address>`.
@@ -73,12 +69,10 @@ To pair:
 - **Phone app:**
   - It needs PR #7's crewd, above. PR #7 conflicts with `main` and predates #11, so that second crewd has no restart pickup, `update` or memory Undo.
   - The app can't watch a bot's desktop, and its approvals offer only **Allow once** and **Don't allow**.
-- **Approvals:**
-  - Bots still ask now and then (Reel asked once, to copy its video into `files/`). Haiku asks more often than Sonnet.
-  - Bots recruited before this change keep their old instructions and ask more often. Recruit them again to pick up the new ones.
+- **Bots recruited before the engine change** keep their old instructions (they mention a `crew` command). Recruit them again to pick up the new ones.
 - **Chief's wording:** he sometimes rewords a task awkwardly, e.g. *Use its browser to open…*.
 - **Household:**
   - Everyone sees the whole crew. Tasks, questions, the Chief thread and AI accounts are per person.
   - With two or more people, the sidebar shows your name as *Owner* until you rename yourself under **Settings, People**.
-  - Signing a second person in to Claude says *Opening browser to sign in…* and may open a tab on this computer. Use the link shown in Crewhouse and sign in as that person. This was not tried to the end, because there was no second Claude account to use.
+  - Signing someone in from a phone uses a code; ChatGPT asks each account to allow device codes once, under its Settings, Security.
 - **Setup:** it prints an npm warning that esbuild's install script was blocked. The web build still works.
