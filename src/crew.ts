@@ -13,7 +13,7 @@ import { Desktops, deskFor, browserBin, missing as desktopMissing, type Watcher 
 import { Accounts, OWNER, PROVIDERS } from './accounts.ts';
 import { Connections, type AppTool } from './connections.ts';
 import { cliTool, Mcp, openSession, readPage, sandboxBash, sandboxReady, webTools } from './engine.ts';
-import { coversOf, effectOf, toolWords, type Effect } from './policy.ts';
+import { coversOf, effectOf, orderOf, toolWords, type Effect } from './policy.ts';
 import { registry, resolveGrants, toolBin, which } from './tools.ts';
 import { stubModels } from './stub.ts';
 import { describe, nextRun, parseSchedule } from './routines.ts';
@@ -111,7 +111,7 @@ function inhibitor() {
 }
 
 /** A bot at work: its task's engine session, on whose account and which AI, and the browser if it has one. */
-interface Live { session: AgentSession; task: number; member: number; brain: disk.Brain; mcp?: Mcp; page?: string; apps?: Record<string, AppTool>; counted: number }
+interface Live { session: AgentSession; task: number; member: number; brain: disk.Brain; mcp?: Mcp; page?: string; snapshot?: string; apps?: Record<string, AppTool>; counted: number }
 
 /** The deterministic half: people, bots, tasks, the per-bot queue, asks. Models only ever see prompts. */
 export class Crew {
@@ -139,6 +139,8 @@ export class Crew {
   private awake = false;
   /** Watches reading their page right now: a slow page is never read twice at once. */
   private checking = new Set<number>();
+  /** A checkout the person said yes to: that task's clicks on that page go through while its total stays the same. */
+  private checkouts = new Map<string, { task: number; page: string; total: number | null }>();
   private stopped = false;
 
   private cfg: Config;
@@ -271,7 +273,7 @@ export class Crew {
     const covers = d.key ? coversOf(d.key) : null;
     if (a.kind === 'connect') return { ...a, detail: { app: d.app, words: d.words } };
     if (a.kind === 'propose') return { ...a, detail: { words: a.title, preview: d.preview, ...(d.create ? { yes: `Yes, take ${d.create.name} on` } : {}) } };
-    return { ...a, detail: { effect: d.effect, words: a.title, spends: d.effect === 'spend', covers, ...(covers ? { always: covers } : {}) } };
+    return { ...a, detail: { effect: d.effect, words: a.title, spends: d.effect === 'spend', covers, ...(covers ? { always: covers } : {}), ...(d.preview ? { preview: d.preview } : {}) } };
   }
 
   /** What one member sees: the whole crew, but their own tasks, questions and accounts. */
@@ -751,7 +753,10 @@ export class Crew {
   }
 
   private setTask(task: Row, state: string, result?: string) {
-    if (state === 'done' || state === 'failed') this.taskGrants.delete(task.id);
+    if (state === 'done' || state === 'failed') {
+      this.taskGrants.delete(task.id);
+      if (this.checkouts.get(task.bot)?.task === task.id) this.checkouts.delete(task.bot);
+    }
     this.db.run('UPDATE tasks SET state = ?, result = COALESCE(?, result), updated_at = ? WHERE id = ?', state, result ?? null, Date.now(), task.id);
     this.db.event(`task.${state}`, task.bot, { task: task.id, title: task.title, ...(result ? { result: result.slice(0, 280) } : {}) });
     if (state === 'failed' && result && result !== STOPPED) this.failedLine(task, result);
@@ -878,7 +883,11 @@ export class Crew {
         g.mcp.browser.args = ['--cdp-endpoint', `http://127.0.0.1:${desk.cdp}`, '--output-dir', join(space, 'work', 'browser')];
       }
       const mcp = new Mcp(g.mcp.browser.command, g.mcp.browser.args, g.mcp.browser.env);
-      const seen = (text: string) => { const page = /Page URL: (\S+)/.exec(text)?.[1]; if (page) l.page = page; };
+      const seen = (text: string) => {
+        const page = /Page URL: (\S+)/.exec(text)?.[1];
+        if (page) l.page = page;
+        if (/Page Snapshot/i.test(text)) l.snapshot = text.slice(0, 100_000); // what a checkout card reads its order from
+      };
       try { tools.push(...await mcp.tools(seen)); l.mcp = mcp; } catch (e) { console.error(`browser for ${bot.id}:`, e); mcp.stop(); }
     }
     l.session = await openSession({
@@ -1057,11 +1066,22 @@ export class Crew {
   private async gate(botId: string, tool: string, input: Record<string, any>) {
     if (this.held.has(botId)) return { block: true, reason: 'The person has the controls of your screen; wait. You will be told when they give them back.', terminate: true };
     const task = this.activeTask(botId);
-    const e = effectOf(tool, input, this.seen(botId));
+    let e = effectOf(tool, input, this.seen(botId));
     const words = toolWords(tool, input);
     if (words) this.db.event('run.tool', botId, { task: task?.id, words });
     if (e.kind === 'safe') return undefined;
     if (e.kind === 'refuse') return { block: true, reason: e.why };
+    let checkout: { page: string; total: number | null } | undefined;
+    if (e.kind === 'spend' && tool.startsWith('browser_')) {
+      const r = this.order(botId, e);
+      e = r.effect; checkout = r.checkout;
+      // One yes covers the rest of that page's clicks (place order included), until the page or its total changes.
+      const ok = this.checkouts.get(botId);
+      if (ok && ok.task === task?.id && ok.page === checkout.page && ok.total === checkout.total) {
+        this.db.event('run.allowed', botId, { task: task?.id, words: e.words });
+        return undefined;
+      }
+    }
     if (e.kind === 'spend' && e.cost !== undefined && this.spentThisMonth() + e.cost > this.moneyCap()) {
       this.db.event('money.refused', botId, { task: task?.id, cost: e.cost });
       return { block: true, reason: `That would take this month's spending past the $${this.moneyCap()} the household set. Tell the person, in one line; the owner can raise the limit in Settings.` };
@@ -1072,16 +1092,31 @@ export class Crew {
       this.db.event('run.allowed', botId, { task: task?.id, words: e.words });
       return undefined;
     }
-    const answer = await this.ask(botId, task, e);
+    const answer = await this.ask(botId, task, e, checkout);
     if (answer === null) return { block: true, terminate: true, reason: "The person hasn't answered yet; stop here and wait. You'll be told when they answer." };
     return answer === 'allow' ? undefined : { block: true, reason: 'The person said not now. Continue without it, or explain what you need.' };
   }
 
   /** Hold the call while the person decides; after the hold, park: the turn ends and the answer arrives as the next prompt. */
-  private async ask(botId: string, task: Row | undefined, e: Extract<Effect, { words: string }>): Promise<string | null> {
+  /** A checkout page's card: the order as the page shows it, and its total as the cost the money cap counts. crewd reads
+   *  it from the browser tool's own last page snapshot; the model's words never reach it. */
+  private order(botId: string, e: Extract<Effect, { words: string }>) {
+    const l = this.live.get(botId);
+    const name = this.bot(botId)?.display ?? botId;
+    let host = 'a shop', page = '';
+    try { const u = new URL(l?.page ?? ''); host = u.hostname.replace(/^www\./, ''); page = u.origin + u.pathname; } catch { /* no page yet */ }
+    const o = orderOf(l?.snapshot ?? '');
+    const few = o.items.slice(0, 3).map((i) => i.replace(/\s*[—–-]?\s*[$£€]\s?[\d,.]+\s*$/, '')).join(', ');
+    const words = o.total === null ? `${name} wants to act on a checkout page at ${host}. I couldn't read the total on this page.`
+      : `${name} wants to place this order at ${host}${few ? `: ${few}${o.items.length + o.more > 3 ? ', …' : ''}` : ''}. Total ${o.shown}.`;
+    const body = [...o.items, ...(o.more ? [`and ${o.more} more`] : []), o.total === null ? "I couldn't read the total on this page." : `Total ${o.shown}`].join('\n');
+    return { effect: { ...e, words, ...(o.total !== null ? { cost: o.total } : {}), preview: { head: `The order at ${host}`, body } }, checkout: { page, total: o.total } };
+  }
+
+  private async ask(botId: string, task: Row | undefined, e: Extract<Effect, { words: string }>, checkout?: { page: string; total: number | null }): Promise<string | null> {
     // The same call asked again (the bot resumed after a restart) takes over the card already shown.
     const same = this.db.all("SELECT id FROM asks WHERE bot = ? AND kind = 'permission' AND state = 'open' AND title = ?", botId, e.words).find((a) => !this.holds.has(a.id));
-    const askId = same ? same.id : this.openAsk(botId, task, e.words, { effect: e.kind, key: e.key, ...(e.cost !== undefined ? { cost: e.cost } : {}) });
+    const askId = same ? same.id : this.openAsk(botId, task, e.words, { effect: e.kind, key: e.key, ...(e.cost !== undefined ? { cost: e.cost } : {}), ...(e.preview ? { preview: e.preview } : {}), ...(checkout ? { checkout } : {}) });
     if (same && task) this.setTask(task, 'needs_you');
     // In their quiet hours nobody will answer soon: park at once instead of holding the bot.
     const quiet = quietNow(this.member(task?.member ?? this.bot(botId)?.member ?? OWNER).quiet);
@@ -1122,6 +1157,7 @@ export class Crew {
       this.db.run("UPDATE asks SET state = 'answered', answer = ?, answered_at = ? WHERE id = ?", shown, Date.now(), askId);
       this.db.event('ask.answered', ask.bot, { ask: askId, task: ask.task_id, answer: shown });
       // Counted when the person says yes, at its most: the cap holds even if the tool spent less.
+      if (body.answer === 'allow' && detail.checkout && ask.task_id) this.checkouts.set(ask.bot, { task: ask.task_id, ...detail.checkout });
       if (body.answer === 'allow' && detail.effect === 'spend' && detail.cost) this.db.event('money.spent', ask.bot, { amount: detail.cost, month: monthOf(), ask: askId });
       if (scope === 'task') this.taskGrants.set(ask.task_id, [...(this.taskGrants.get(ask.task_id) ?? []), detail.key]);
       if (scope === 'always') {

@@ -33,6 +33,7 @@ The rule behind every field: nothing a person reads may be a command, a file pat
 Today a permission ask carries `title` and `detail.{effect, words, spends, covers, always}`, written by crewd's gate from the tool and its input, never by the model:
 `effect` is `send`, `spend`, `delete` or `files`; `words` is the sentence ("Reel wants to change a file in your Documents folder: “plan.txt”."); `always` is what "Always OK" would cover, and is absent for spending.
 There is no `summary`, `tool`, `rule` or terminal text any more.
+A checkout page (a `spend` from the browser) carries `preview` `{head, body}`: the order's lines as the page writes them and its total, read by crewd from the browser tool's own page snapshot, never the model's words, with the shop's host only. Its total is the spend's cost toward the monthly cap. When the total can't be read, the words say so and it doesn't count. One yes covers that page's later clicks until the page or the total changes.
 **Wanted** still, on `ask.detail`:
 
 | Field | Example | Shown as |

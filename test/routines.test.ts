@@ -423,3 +423,70 @@ test('a new job in a chat carries the chat\'s last line, so "OK, post it" knows 
   await settled(db, t);
   done();
 });
+
+const snap = (total: string, extra = '') => `### Page state
+- Page URL: https://www.walmart.com/checkout/review?cart=123&token=abc
+- Page Snapshot:
+\`\`\`yaml
+- main [ref=e1]:
+  - heading "Review your order" [level=1] [ref=e2]
+  - list [ref=e3]:
+    - listitem [ref=e4]: Garlic, 2 kg — $6.20
+    - listitem [ref=e5]: "Great Value milk (1 gal) x2 — $7.90"
+    - listitem "Basmati rice 10 lb" [ref=e6]: $24.00
+${extra}  - text: "Subtotal: $38.10"
+  - text: "Delivery fee: $5.00"
+  - text: "Estimated tax: $0.00"
+  - text: "Estimated total: ${total}"
+  - button "Place order" [ref=e9]
+\`\`\``;
+
+test('the checkout card is read from the page: items and total as the page writes them, one yes per page and total, and the cap holds', async () => {
+  const { orderOf } = await import('../src/policy.ts');
+  assert.deepEqual(orderOf(snap('$43.10')), {
+    items: ['Garlic, 2 kg — $6.20', 'Great Value milk (1 gal) x2 — $7.90', 'Basmati rice 10 lb $24.00'], more: 0, total: 43.1, shown: '$43.10' });
+  assert.equal(orderOf('- text: nothing here').total, null);
+  assert.equal(orderOf('- text: "Order total: £1,204.50"').total, 1204.5);
+
+  const { db, crew, done } = setup();
+  crew.setMoneyCap(100);
+  crew.recruit('scout', 'Scout', 'person');
+  const { task: t } = (await crew.post('scout', 'ask permission: buy the groceries'))!;
+  await until('working', () => crew.sessionOf('scout'));
+  const live = (crew as any).live.get('scout');
+  live.page = 'https://www.walmart.com/checkout/review?cart=123&token=abc';
+  const click = () => (crew as any).gate('scout', 'browser_click', { element: 'Place order', ref: 'e9' });
+  const open = () => db.get("SELECT * FROM asks WHERE bot = 'scout' AND state = 'open'");
+
+  live.snapshot = snap('$43.10');
+  const first = click();
+  await until('asked', open);
+  const card = crew.snapshot().asks.find((a: any) => a.id === open()!.id)!;
+  assert.equal(card.detail.words, 'Scout wants to place this order at walmart.com: Garlic, 2 kg, Great Value milk (1 gal) x2, Basmati rice 10 lb. Total $43.10.');
+  assert.equal(card.detail.preview.body, 'Garlic, 2 kg — $6.20\nGreat Value milk (1 gal) x2 — $7.90\nBasmati rice 10 lb $24.00\nTotal $43.10');
+  assert.doesNotMatch(JSON.stringify(card.detail), /checkout\/|cart=|token/, 'the host only, never the path or query');
+  await crew.answer(open()!.id, { answer: 'allow' });
+  assert.equal(await first, undefined);
+  assert.equal(crew.snapshot().money!.spent, 43.1, 'the total counts toward the cap');
+  assert.equal(await click(), undefined, 'the same page and total: the yes covers the next click');
+  assert.equal(db.get("SELECT COUNT(*) AS n FROM asks WHERE bot = 'scout'")!.n, 1);
+
+  // The total changed: asked again. Past the cap: refused before it asks.
+  live.snapshot = snap('$60.00');
+  const over = await click();
+  assert.equal(over.block, true);
+  assert.match(over.reason, /past the \$100/);
+  assert.equal(db.get("SELECT COUNT(*) AS n FROM asks WHERE bot = 'scout'")!.n, 1);
+
+  // A page whose total can't be read: said plainly, and it doesn't count.
+  live.snapshot = '- Page Snapshot:\n- button "Pay" [ref=e1]';
+  const unread = click();
+  await until('asked again', open);
+  assert.equal(open()!.title, "Scout wants to act on a checkout page at walmart.com. I couldn't read the total on this page.");
+  await crew.answer(open()!.id, { answer: 'deny' });
+  assert.equal((await unread).block, true);
+  assert.equal(crew.snapshot().money!.spent, 43.1);
+  await release(crew, 'scout', 'Done shopping.');
+  await settled(db, t);
+  done();
+});
