@@ -230,8 +230,12 @@ export function ConnectApp({ app, helper, state, tab: first, onConnected, onDone
         <button className="btn go big" onClick={again}>Try again</button>{notNow}</>}
       {phase === 'expired' && <><h2>That page timed out</h2><p className="mute">{who}'s page only waits a few minutes. Let's open a fresh one.</p>
         <button className="btn go big" onClick={again}>Start again</button>{notNow}</>}
-      {phase === 'failed' && <><h2>That didn't go through</h2><p className="mute">{who} didn't finish connecting. No harm done; let's try once more.</p>
-        <button className="btn go big" onClick={again}>Try again</button>{notNow}</>}
+      {phase === 'failed' && (poll.value?.step
+        // Google answered that one of the owner's four setup steps isn't done: say which, and send the owner to it.
+        ? <><h2>A Google setup step is missing</h2><p className="mute">{poll.value.error}</p>
+          {isOwner ? <a className="btn go big" href="#/settings" onClick={onClose}>Open Settings</a> : <p className="mute">Ask {owner} to do that step; then tap Connect again.</p>}{notNow}</>
+        : <><h2>That didn't go through</h2><p className="mute">{poll.value?.error ?? `${who} didn't finish connecting. No harm done; let's try once more.`}</p>
+          <button className="btn go big" onClick={again}>Try again</button>{notNow}</>)}
       {phase === 'offline' && <OfflineWords onClose={onClose} />}
       {phase === 'house' && (isOwner ? <><h2>Switch Google on for the house</h2><p className="mute">It's a one-time setup, about twenty minutes, and then everyone in the house can connect Calendar, Gmail and Drive.</p>
         <a className="btn go big" href="#/settings" onClick={onClose}>Open Settings</a>{notNow}</>

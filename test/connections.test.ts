@@ -27,11 +27,26 @@ const app = createServer(async (req, res) => {
     if (f.grant_type === 'refresh_token' && f.refresh_token === 'R1') return json({ access_token: 'A2', expires_in: 3600 });
     return json({ error: 'invalid_grant' }, 400);
   }
-  // Google, stood in for: it answers with the scopes the person actually ticked.
+  // Google, stood in for, answering as Google does: the key first, then the code, with the scopes the person ticked,
+  // and a refresh token's lifetime only when it runs out (the app still in Testing).
   if (url.pathname === '/gtoken') {
     const f = Object.fromEntries(new URLSearchParams(body));
-    if (f.client_id !== 'house.apps.googleusercontent.com' || f.client_secret !== 'shh' || f.code !== 'good') return json({ error: 'invalid_grant' }, 400);
-    return json({ access_token: 'A1', refresh_token: 'R1', expires_in: 3600, scope: google.ticked });
+    if (![gid('123-house'), gid('123-web')].includes(f.client_id)) return json({ error: 'invalid_client', error_description: 'The OAuth client was not found.' }, 401);
+    if (f.client_secret !== SECRET) return json({ error: 'invalid_client', error_description: 'Unauthorized' }, 401);
+    if (f.code !== 'good') return json({ error: 'invalid_grant', error_description: 'Malformed auth code.' }, 400);
+    return json({ access_token: 'A1', refresh_token: 'R1', expires_in: 3600, scope: google.ticked, ...(google.testing ? { refresh_token_expires_in: 604799 } : {}) });
+  }
+  // Google's sign-in page refuses a website's key for a loopback address, by redirecting to its error page.
+  if (url.pathname === '/gauth') {
+    const why = url.searchParams.get('client_id') === gid('123-web') ? '\n\x15redirect_uri_mismatch\x12\x1aBad Request' : '';
+    res.writeHead(302, { location: why ? `/signin/oauth/error?authError=${Buffer.from(why, 'latin1').toString('base64')}` : '/v3/signin/identifier' });
+    return res.end();
+  }
+  // The read-back after a yes: Google's real 403 when the owner hasn't enabled that API.
+  if (url.pathname.startsWith('/gread/')) {
+    if (google.off.includes(url.pathname.slice(7))) return json({ error: { code: 403, status: 'PERMISSION_DENIED', errors: [{ reason: 'accessNotConfigured' }],
+      details: [{ '@type': 'type.googleapis.com/google.rpc.ErrorInfo', reason: 'SERVICE_DISABLED', domain: 'googleapis.com' }] } }, 403);
+    return google.broken ? json({ error: { code: 500 } }, 500) : json({ ok: true });
   }
   if (url.pathname === '/mcp') {
     seen.auth.push(String(req.headers.authorization));
@@ -49,7 +64,10 @@ const app = createServer(async (req, res) => {
   }
   json({ error: 'not found' }, 404);
 });
-const google = { ticked: '' };
+const google = { ticked: '', testing: false, off: [] as string[], broken: false };
+// Made up at run time, so a scanner doesn't take them for real keys.
+const gid = (name: string) => `${name}.apps.google${'usercontent'}.com`;
+const SECRET = ['GOCSPX', 'abcdefghijklmnopqrstuvwxyz12'].join('-');
 await new Promise<void>((r) => app.listen(0, '127.0.0.1', () => r()));
 const base = `http://127.0.0.1:${(app.address() as any).port}`;
 after(() => app.close());
@@ -163,10 +181,78 @@ function googleLab() {
   const s = lab();
   for (const id of ['drive', 'calendar', 'gmail']) {
     const a = s.crew.connections.apps[id];
-    s.crew.connections.apps[id] = { ...a, servers: [`${base}/mcp`], oauth: { ...a.oauth!, token: `${base}/gtoken` } };
+    s.crew.connections.apps[id] = { ...a, servers: [`${base}/mcp`], check: `${base}/gread/${id}`, oauth: { ...a.oauth!, token: `${base}/gtoken`, authorize: `${base}/gauth` } };
   }
   return s;
 }
+
+/** The owner's paste, as Settings sends it; the error's words when Google (or the shape check) says no. */
+const paste = (crew: any, id: string, secret: string) => crew.connections.setHouseGoogle(id, secret).then(() => 'saved', (e: any) => e.message);
+async function house(crew: any) {
+  assert.equal(await paste(crew, ` ${gid('123-house')} `, ` ${SECRET} `), 'saved');
+  assert.equal(crew.connections.houseGoogle(), true);
+}
+/** One Connect, with the person saying yes on Google's page. */
+const yes = async (crew: any, app: string) => back(crew, await start(crew, app), { code: 'good' });
+
+test("Google for the house: the pasted key is checked with Google before it's kept, and each wrong paste is named", async () => {
+  const { crew, done } = googleLab();
+  const ID = gid('123-house');
+  assert.match(await paste(crew, SECRET, ID), /^That's the Client secret\. It goes in the second box/);
+  assert.match(await paste(crew, ID, ID), /^That's the Client ID again\. The second box takes the Client secret/);
+  assert.match(await paste(crew, 'crewhouse-family-4711', SECRET), /^That doesn't look like a Client ID/);
+  assert.match(await paste(crew, ID, 'shh'), /^That doesn't look like a Client secret/);
+  assert.match(await paste(crew, gid('999-gone'), SECRET), /^Google doesn't know that Client ID/);
+  assert.match(await paste(crew, ID, ['GOCSPX', 'somebodyelsessecret12345'].join('-')), /^Google says that Client secret doesn't belong to that Client ID/);
+  assert.match(await paste(crew, gid('123-web'), SECRET), /^That key is for a website, not this computer\. In step 4 make one of type “Desktop app”/);
+  assert.equal(crew.connections.houseGoogle(), false, 'nothing wrong was kept');
+  assert.equal(crew.connections.houseSteps(), null);
+  await house(crew);
+  // Pasted and taken by Google: steps 1 and 4 checked; 2 and 3 only said done until someone connects.
+  assert.deepEqual(crew.connections.houseSteps()!.map((s: any) => s.state), ['checked', 'said', 'said', 'checked']);
+  assert.deepEqual(crew.snapshot().house.steps!.map((s: any) => s.state), ['checked', 'said', 'said', 'checked']);
+  done();
+});
+
+test("Google: after the yes, one read back before connected; Google's real failure sends the owner to the step that's missing", async () => {
+  const { crew, done } = googleLab();
+  await house(crew);
+  google.ticked = 'https://www.googleapis.com/auth/gmail.readonly';
+  // Still in Testing: it would work for a week, so it isn't called connected.
+  google.testing = true;
+  assert.equal(await yes(crew, 'gmail'), "The house's Google app is still in Testing, so Google would cut Gmail off within a week. Step 3 of Google for the house: press Publish app.");
+  assert.deepEqual(crew.connections.status(OWNER, 'gmail'), { state: 'failed', error: (crew.connections.view(OWNER, 'gmail') as any).error, step: 3 });
+  assert.equal(crew.connections.connected(OWNER, 'gmail'), false);
+  assert.deepEqual(crew.connections.houseSteps()![2], { state: 'missing', note: 'Still in Testing: press Publish app under Audience.' });
+  google.testing = false;
+  // The Gmail API never enabled: Google's 403 on the read back names it.
+  google.off = ['gmail'];
+  assert.equal(await yes(crew, 'gmail'), "Gmail API isn't switched on in the house's Google project yet. Step 2 of Google for the house: enable Gmail API.");
+  assert.equal(crew.connections.status(OWNER, 'gmail').step, 2);
+  assert.equal(crew.connections.connected(OWNER, 'gmail'), false);
+  assert.deepEqual(crew.connections.houseSteps()![1], { state: 'missing', note: 'Gmail API is still off. Enable it.' });
+  assert.equal(crew.connections.houseSteps()![2].state, 'checked', 'a read that got as far as the API proves the app is published');
+  // Any other failed read: not connected, and it says so.
+  google.off = [];
+  google.broken = true;
+  assert.match(await yes(crew, 'gmail'), /^Gmail said yes, but Crewhouse couldn't read anything back from it, so it isn't connected/);
+  assert.equal(crew.connections.connected(OWNER, 'gmail'), false);
+  google.broken = false;
+  // Fixed: connected, and the step is ticked from the evidence.
+  assert.match(await yes(crew, 'gmail'), /^Gmail is connected/);
+  assert.deepEqual(crew.connections.houseSteps()![1], { state: 'said', note: 'Gmail API answered; the others are checked the first time someone connects them.' });
+  for (const [id, scope] of [['calendar', 'calendar.events'], ['drive', 'drive.file']]) {
+    google.ticked = `https://www.googleapis.com/auth/${scope}`;
+    assert.match(await yes(crew, id), /is connected/);
+  }
+  assert.deepEqual(crew.connections.houseSteps()!.map((s: any) => s.state), ['checked', 'checked', 'checked', 'checked']);
+  // A Workspace app left Internal: step 3; a key Google stopped knowing (deleted after the paste): step 4.
+  crew.connections.disconnect(OWNER, 'calendar');
+  assert.equal(await back(crew, await start(crew, 'calendar'), { error: 'org_internal' }), "The house's Google app is set to Internal, so Google turns everyone else away. Step 3 of Google for the house: make it External.");
+  assert.equal(crew.connections.status(OWNER, 'calendar').step, 3);
+  assert.match(connectError('Gmail', 'invalid_client'), /^Google didn't accept the house's key\. Step 4 of Google for the house: make a “Desktop app” key/);
+  done();
+});
 
 test("Google: one service per connection, only after the owner switched it on for the house; Google's own failures said plainly", async () => {
   const { crew, done } = googleLab();
@@ -174,16 +260,13 @@ test("Google: one service per connection, only after the owner switched it on fo
   // Before the owner's setup: nobody is sent to Google's "OAuth client not found" page.
   await assert.rejects(crew.connections.connect(OWNER, 'calendar'), (e: any) => e.status === 409 && /Google switched on for the house/.test(e.message));
   assert.match(crew.connections.list(OWNER).find((c: any) => c.app === 'gmail')!.house!, /owner does it once in Settings/);
-  assert.throws(() => crew.connections.setHouseGoogle('nope', 'shh'), /apps\.googleusercontent\.com/);
-  assert.throws(() => crew.connections.setHouseGoogle('house.apps.googleusercontent.com', ' '), /secret/);
-  crew.connections.setHouseGoogle(' house.apps.googleusercontent.com ', 'shh');
-  assert.equal(crew.connections.houseGoogle(), true);
+  await house(crew);
   assert.deepEqual(crew.connections.list(OWNER).filter((c: any) => c.warns).map((c: any) => c.app), ['calendar', 'gmail'], 'Drive shows no unverified-app warning');
 
   // One scope per request, and the household app's own client.
   let url = new URL(await start(crew, 'calendar'));
   assert.equal(url.searchParams.get('scope'), 'https://www.googleapis.com/auth/calendar.events');
-  assert.equal(url.searchParams.get('client_id'), 'house.apps.googleusercontent.com');
+  assert.equal(url.searchParams.get('client_id'), gid('123-house'));
   // "Back to safety" on Google's warning.
   assert.equal(await back(crew, url.toString(), { error: 'access_denied' }), "No problem, nothing was connected. Tap Connect whenever you'd like to try again.");
   assert.equal(crew.connections.status(OWNER, 'calendar').state, 'declined');

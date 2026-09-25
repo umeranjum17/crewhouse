@@ -314,8 +314,9 @@ export class Crew {
       resting: Object.fromEntries(Object.keys(PROVIDERS).map((k) => [k, this.restingUntil(k, me.id)]).filter(([, t]) => t)),
       /** The apps this member has connected, by the app screen's own names. */
       connections: this.connections.on(me.id),
-      /** Whether the owner has switched Google on for the house (Calendar, Gmail and Drive need it). */
-      house: { google: this.connections.houseGoogle() },
+      /** Whether the owner has switched Google on for the house (Calendar, Gmail and Drive need it), and its four steps as
+       *  far as Google's own answers show: checked, missing, or only said done. */
+      house: { google: this.connections.houseGoogle(), steps: this.connections.houseSteps() },
       desktops: { ready: desktopMissing().length === 0 },
       routines: this.routines(me.id),
       /** The viewer's pick for the crew's share of their AI, and whether today's is used up. Never a number. */

@@ -115,7 +115,9 @@ const state = {
   connections: variant === 'connect' ? [] : ['drive', 'gmail'],
   share: { choice: 'light', used: variant === 'share' },
   money: { cap: 20, spent: variant === 'share' ? 4 : 0 },
-  house: { google: variant !== 'nogoogle' && !new URLSearchParams(location.search).has('nohouse') },
+  house: { google: variant !== 'nogoogle' && !new URLSearchParams(location.search).has('nohouse'), steps: [
+    { state: 'checked', note: 'Google knows the project.' }, { state: 'missing', note: 'Gmail API is still off. Enable it.' },
+    { state: 'said', note: 'Checked the first time someone connects.' }, { state: 'checked', note: 'Google took the key.' }] },
   desktops: { missing: [] },
 };
 

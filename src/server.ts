@@ -200,7 +200,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     if (m === 'PUT' && p === '/api/house/google') {
       if (me !== OWNER) throw Object.assign(new Error('only the owner sets this up'), { status: 403 });
       const b = body;
-      crew.connections.setHouseGoogle(b.id, b.secret);
+      await crew.connections.setHouseGoogle(b.id, b.secret);
       return { ok: true };
     }
     // The owner sets the house's monthly money cap: helpers can never spend past it, however many yeses.

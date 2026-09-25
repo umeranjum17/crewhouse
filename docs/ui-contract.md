@@ -29,7 +29,7 @@ The rule behind every field: nothing a person reads may be a command, a file pat
 | `showing` `{[bot]: {what, steps}}` | "Showing how to …: 3 steps so far" on the Screen tab, with Done showing and Cancel (`adapter.showing()`) | `POST /api/bots/:id/show {what}` starts one (Take over with a recorder; needs the bot's computer), `POST /api/bots/:id/shown {keep}` ends it: `keep` hands the bot the steps and page pictures as a message from the person |
 | `installing` | "Getting the helpers' own web browser ready…" (`adapter.gettingReady()`) | Tool ids crewd is fetching now; the downloaded app fetches every missing tool on its first runs |
 | `update` `{version, url}` | "A new Crewhouse is ready (0.2.0)" with Download (`adapter.update()`) | Owner only, and only in the downloaded app (checked once a day from the project's public release list) |
-| `house` `{google}` | Google's apps: connect, or "Ask the owner" | Whether the owner has switched Google on for the house |
+| `house` `{google, steps}` | Google's apps: connect, or "Ask the owner"; Settings, Google for the house | Whether the owner has switched Google on for the house; once the key is in, `steps` is the four setup steps as `{state: 'checked' \| 'said' \| 'missing', note}`, from Google's own answers (`said`: nobody has connected yet to find out) |
 
 ## Asks: the approval moment
 
@@ -90,7 +90,7 @@ A sign-in that fails ends as `signIn: {state: 'failed', error, why?}`: `why: 'de
 | `POST /api/connections/:app` | `{url}` of the app's own sign-in page, or `{state: 'on'}` if already connected; 409 for a Google app before the owner switched Google on; 404 for an app not in v1 |
 | `GET /api/connections/:app` | `{state: 'waiting' \| 'on' \| 'declined' \| 'unticked' \| 'expired' \| 'failed' \| 'cancelled', error?}`, polled |
 | `DELETE /api/connections/:app` | Cancels a pending one, or disconnects |
-| `PUT /api/house/google` `{id, secret}` | Owner only: the household Google app's client, once ([google-setup.md](google-setup.md)) |
+| `PUT /api/house/google` `{id, secret}` | Owner only: the household Google app's client, once ([google-setup.md](google-setup.md)). Checked with Google before it is kept: 400 with plain words for a swapped or mistyped paste, a key Google doesn't know, a secret that doesn't match, or a key that isn't a Desktop app; 502 if Google can't be reached |
 
 `drive`, `calendar` and `gmail` are one Google service each, on the household's Google app; `calendar` and `gmail` show Google's "unverified app" screen, which the card warns about first. `notion` and `canva` need nothing set up.
 
