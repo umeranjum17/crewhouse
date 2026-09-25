@@ -26,11 +26,13 @@ while (existsSync(`/tmp/.X${n}-lock`) || existsSync(`/tmp/.X11-unix/X${n}`)) n++
 function ours() {
   const kids = new Map<number, number[]>();
   for (const p of readdirSync('/proc').filter((d) => /^\d+$/.test(d))) {
-    try { const ppid = Number(readFileSync(`/proc/${p}/stat`, 'utf8').split(') ')[1].split(' ')[1]); kids.set(ppid, [...(kids.get(ppid) ?? []), Number(p)]); } catch { /* gone */ }
+    try { const st = readFileSync(`/proc/${p}/stat`, 'utf8'); const ppid = Number(st.slice(st.lastIndexOf(') ') + 2).split(' ')[1]); kids.set(ppid, [...(kids.get(ppid) ?? []), Number(p)]); } catch { /* gone */ }
   }
   const tree = [process.pid];
   for (let i = 0; i < tree.length; i++) tree.push(...(kids.get(tree[i]) ?? []));
-  const inodes = new Set(tree.flatMap((p) => { try { return readdirSync(`/proc/${p}/fd`).map((f) => readlinkSync(`/proc/${p}/fd/${f}`)); } catch { return []; } })
+  // A busy Chrome opens and closes descriptors while they are read: skip the one that went, never the whole process.
+  const link = (f: string) => { try { return readlinkSync(f); } catch { return ''; } };
+  const inodes = new Set(tree.flatMap((p) => { try { return readdirSync(`/proc/${p}/fd`).map((f) => link(`/proc/${p}/fd/${f}`)); } catch { return []; } })
     .map((l) => l.match(/^socket:\[(\d+)\]$/)?.[1]).filter(Boolean));
   return ['/proc/net/tcp', '/proc/net/tcp6'].flatMap((f) => readFileSync(f, 'utf8').split('\n').slice(1)).map((l) => l.trim().split(/\s+/))
     .filter((c) => c[3] === '0A' && inodes.has(c[9])).map((c) => String(parseInt(c[1].split(':')[1], 16)));
