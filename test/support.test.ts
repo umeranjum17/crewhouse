@@ -125,21 +125,46 @@ test('the validator checks a run against crewd\'s record: issues read, citations
     return t;
   };
   const verdicts = (t: number, forbid: string[] = []) => Object.fromEntries(validate({ db, crewDir: cfg.crewDir }, t, forbid).map((r: any) => [r.what, r.verdict]));
+  const rowOf = (t: number, what: string, forbid: string[] = []) =>
+    validate({ db, crewDir: cfg.crewDir }, t, forbid).find((r: any) => r.what === what)!;
 
-  write(7, `Kind: bug. The value comes from src/a.ts:2@${at} and src/a.ts:3@${at}.\n`);
+  // A fenced range and a backticked range are citations like any single line, checked to the last line of the range.
+  write(7, `Kind: bug. The value comes from src/a.ts:2@${at} and src/a.ts:3@${at}.
+\`\`\`
+src/a.ts:1-2@${at}
+\`\`\`
+Also \`src/a.ts:2-3@${at}\`.\n`);
   const good = await run(7, call('web_fetch', { url: issue }));
   assert.equal(verdicts(good)['answer on files/support/7/reply.md'], 'UNKNOWN', 'on a card, not answered yet');
   await crew.answer(db.get("SELECT id FROM asks WHERE kind = 'propose' AND state = 'open'")!.id, { answer: 'allow' });
   assert.deepEqual(verdicts(good), { ended: 'PASS', 'issues read': 'PASS', 'citations in files/support/7/triage.md': 'PASS', 'citations in files/support/7/reply.md': 'PASS',
     'answer on files/support/7/reply.md': 'PASS', fix: 'PASS', blind: 'UNKNOWN', tokens: 'PASS' });
+  assert.match(rowOf(good, 'citations in files/support/7/triage.md').detail, /4 of 4 found/, 'the range citations were checked, not skipped');
   assert.equal(verdicts(good, ['/issues/7'])['blind'], 'FAIL', 'it reached the answer: contaminated');
   writeFileSync(join(space, 'files', 'support', '7', 'reply.md'), 'Other words.\n');
   assert.equal(verdicts(good)['answer on files/support/7/reply.md'], 'FAIL', 'the yes was for different words');
 
-  // Wrote about an issue it never read, and cited a line that isn't there: both fail.
-  write(8, `Kind: bug. See src/a.ts:99@${at}.\n`);
-  const bad = verdicts(await run(8, ''));
+  // Wrote about an issue it never read; cited a line that isn't there, a range past the file's end, and an unknown commit.
+  write(8, `Kind: bug. See src/a.ts:99@${at}, plus src/a.ts:2-99@${at} and src/a.ts:1-2@deadbee.\n`);
+  const badTask = await run(8, '');
+  const bad = verdicts(badTask);
   assert.deepEqual([bad['issues read'], bad['citations in files/support/8/triage.md']], ['FAIL', 'FAIL']);
+  assert.match(rowOf(badTask, 'citations in files/support/8/triage.md').detail, /src\/a\.ts:2-99@.*src\/a\.ts:1-2@deadbee/s,
+    'the range end past the file and the unknown commit are each named');
+
+  // Blindness asks where it went, not what it wrote: naming the answer inside a heredoc is clean; fetching it is not.
+  const leak = await run(7, [
+    call('bash', { command: `cat > files/support/7/scratch.md <<'EOF'\nraw status snapshots/events for the same pane\nEOF` }),
+    call('web_fetch', { url: `${issue}/comments` }),
+    call('bash', { command: `curl -s ${issue}/comments` }),
+    call('bash', { command: 'git fetch http://127.0.0.1:1/o/app.git fix-208' }),
+  ].join(' '));
+  assert.equal(rowOf(leak, 'blind', ['/events']).verdict, 'PASS', 'words it wrote are not places it went');
+  const reached = rowOf(leak, 'blind', ['/comments']);
+  assert.equal(reached.verdict, 'FAIL', 'web_fetch and curl fetched the comments');
+  assert.match(reached.detail, /web_fetch/);
+  assert.match(reached.detail, /curl /);
+  assert.equal(rowOf(leak, 'blind', ['fix-208']).verdict, 'FAIL', 'git fetch reaching for the fix is caught');
   srv.close();
   done();
 });

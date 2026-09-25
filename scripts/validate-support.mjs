@@ -9,7 +9,8 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const sha = (s) => createHash('sha256').update(s).digest('hex');
-const CITE = /([\w./-]+\.[\w]+):(\d+)@([0-9a-f]{7,40})/g;
+// A citation is path:LINE@sha or a range path:START-END@sha, bare or in backticks/fences.
+const CITE = /([\w./-]+\.[\w]+):(\d+)(?:-(\d+))?@([0-9a-f]{7,40})/g;
 
 /** Every tool call in a session file, with its result's first line and whether it errored. */
 export function calls(file) {
@@ -45,12 +46,20 @@ export function validate({ db, crewDir }, id, forbid = []) {
   // 2. Citations: each path:line@commit exists at that commit, in one of its clones.
   const clones = existsSync(join(bot, 'work')) ? readdirSync(join(bot, 'work')).map((d) => join(bot, 'work', d)).filter((d) => existsSync(join(d, '.git'))) : [];
   const lines = (sha1, path) => {
-    for (const c of clones) try { return execFileSync('git', ['-C', c, 'show', `${sha1}:${path}`], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 64 << 20 }).split('\n').length; } catch { /* not in this clone */ }
+    for (const c of clones) try {
+      const text = execFileSync('git', ['-C', c, 'show', `${sha1}:${path}`], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 64 << 20 });
+      const l = text.split('\n');
+      if (l.at(-1) === '') l.pop(); // a trailing newline ends the last line, it doesn't start a new one
+      return l.length;
+    } catch { /* not in this clone */ }
     return 0;
   };
   for (const p of delivered.filter((p) => /(triage|reply)\.md$/.test(p))) {
     const text = existsSync(join(bot, p)) ? readFileSync(join(bot, p), 'utf8') : '';
-    const cites = [...text.matchAll(CITE)], bad = cites.filter(([, path, line, c]) => lines(c, path) < Number(line));
+    const cites = [...text.matchAll(CITE)], bad = cites.filter(([, path, s, e, c]) => {
+      const [a, b] = [Number(s), Number(e ?? s)];
+      return a < 1 || b < a || lines(c, path) < b; // the whole range must sit inside the file at that commit
+    });
     row(!cites.length || bad.length ? 'FAIL' : 'PASS', `citations in ${p}`,
       !cites.length ? 'none: no claim can be checked' : `${cites.length - bad.length} of ${cites.length} found` + (bad.length ? `; not there: ${bad.map((b) => b[0]).join(', ')}` : ''));
   }
@@ -70,9 +79,28 @@ export function validate({ db, crewDir }, id, forbid = []) {
   for (const p of patches) row(existsSync(join(bot, p)) && ok.has(sha(readFileSync(join(bot, p), 'utf8'))) ? 'PASS' : 'FAIL', `fix ${p}`, 'failed before, passed after, seen by crewd');
   if (!patches.length) row('PASS', 'fix', 'none offered (nothing claimed)');
 
-  // 5. Blind: nothing it called reached the answer.
+  // 5. Blind: nothing it called reached the answer. Only read-capable inputs can reach it — the address a tool
+  // fetches or opens, and shell words that actually read or reach out. Text the helper is merely writing (a heredoc
+  // body, a write call) is never a place it went. # ponytail: shell reads are an allowlist, not a parser — a read
+  // hidden in python/perl or an unquoted heredoc edge slips through; parse the shell if a backtest ever needs it.
+  const reaches = (c) => {
+    const a = c.args ?? {};
+    if (c.name === 'web_fetch') return [String(a.url ?? '')];
+    if (/^(read|ls|grep|find)$/.test(c.name)) return [String(a.path ?? '')];
+    if (c.name !== 'bash') return [];
+    const kept = [];
+    let body = null;
+    for (const l of String(a.command ?? '').split('\n')) {
+      if (body !== null) { if (l.trim() === body) body = null; continue; } // inside a heredoc: text being written
+      kept.push(l);
+      const m = /<<-?\s*(['"]?)(\w+)\1/.exec(l);
+      if (m) body = m[2];
+    }
+    const cmd = kept.join('\n');
+    return /\b(curl|wget|ssh|scp|nc|cat|head|tail|less|more|grep|egrep|fgrep|rg|awk|find|git\s+(fetch|pull|clone|ls-remote))\b/.test(cmd) ? [cmd] : [];
+  };
   if (forbid.length) {
-    const hit = all.filter((c) => forbid.some((f) => JSON.stringify(c.args).includes(f)));
+    const hit = all.filter((c) => reaches(c).some((s) => forbid.some((f) => s.includes(f))));
     row(hit.length ? 'FAIL' : 'PASS', 'blind', hit.length ? `contaminated: ${hit.map((c) => `${c.name} ${JSON.stringify(c.args).slice(0, 120)}`).join('; ')}` : `none of ${forbid.length} answer address(es) was reached`);
   } else row('UNKNOWN', 'blind', 'not a backtest: no answer given to check against');
 
