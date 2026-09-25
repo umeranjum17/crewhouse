@@ -146,6 +146,12 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       crew.connections.setHouseGoogle(b.id, b.secret);
       return { ok: true };
     }
+    // The owner sets the house's monthly money cap: helpers can never spend past it, however many yeses.
+    if (m === 'PUT' && p === '/api/house/money') {
+      if (me !== OWNER) throw Object.assign(new Error('only the owner sets this'), { status: 403 });
+      crew.setMoneyCap(body.cap);
+      return { cap: crew.moneyCap(), spent: crew.spentThisMonth() };
+    }
     if ((r = p.match(/^\/api\/connections\/([a-z]+)$/))) {
       const app = r[1];
       if (m === 'POST') { const v = await crew.connections.connect(me, app); return v.state === 'done' ? { state: 'on' } : v.state === 'failed' ? Promise.reject(Object.assign(new Error(v.error), { status: 502 })) : { url: v.url }; }

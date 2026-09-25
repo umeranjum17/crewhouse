@@ -622,6 +622,11 @@ function Settings({ state, me, refresh, tick, look, setLook, switchTo }: Ctx & {
         );
       })}
 
+      <div className="label">How much of it the crew may use</div>
+      <div className="seg">{A.SHARES.map((o) => <button key={o.key} className={A.share(state).choice === o.key ? 'on' : ''} title={o.says}
+        onClick={() => act(() => api.person(me, { share: o.key }), o.says)}>{o.label}</button>)}</div>
+      <p className="mute small">{A.SHARES.find((o) => o.key === A.share(state).choice)?.says}. {A.share(state).today}</p>
+
       <AboutYou key={me} tick={tick} />
 
       <div className="label">Your apps</div>
@@ -640,10 +645,28 @@ function Settings({ state, me, refresh, tick, look, setLook, switchTo }: Ctx & {
 
       <div className="label">Look</div>
       <div className="seg">{[['auto', 'Evenings dark'], ['day', 'Day'], ['night', 'Night']].map(([k, l]) => <button key={k} className={look === k ? 'on' : ''} onClick={() => setLook(k)}>{l}</button>)}</div>
+      {owner && <Money state={state} refresh={refresh} />}
       {owner && <HouseGoogle on={!!state.house?.google} refresh={refresh} />}
       {signing !== false && <SignIn me={me} owner={ownerName(state)} tab={signing} onReady={() => { setSigning(false); refresh(); }} onClose={() => setSigning(false)} />}
     </div>
   );
+}
+
+/** Owner only: the house's monthly money cap. Helpers ask before every spend; past this they can't spend at all. */
+function Money({ state, refresh }: { state: Json; refresh: () => void }) {
+  const m = A.money(state);
+  const [cap, setCap] = useState(String(m?.cap ?? 20));
+  useEffect(() => setCap(String(m?.cap ?? 20)), [m?.cap]);
+  if (!m) return null;
+  return (<>
+    <div className="label">Money</div>
+    <form className="card form" onSubmit={(e) => { e.preventDefault(); void attempt(async () => { await api.moneyCap(Number(cap)); refresh(); }, 'Saved'); }}>
+      <label className="field">Helpers ask before spending anything, and never more than this in a month
+        <span className="row">$<input className="input" style={{ maxWidth: 120 }} inputMode="numeric" value={cap} onChange={(e) => setCap(e.target.value.replace(/[^\d]/g, ''))} aria-label="Most the crew may spend in a month, in dollars" />
+          <button className="btn" disabled={!cap || Number(cap) === m.cap}>Save</button></span></label>
+      <div className="mute small">{m.month}</div>
+    </form>
+  </>);
 }
 
 /** Owner only: switch Google on for the house, once (docs/google-setup.md walks through Google's console). */

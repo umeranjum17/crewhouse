@@ -94,7 +94,7 @@ test('policy: own space and the sandboxed shell run silently; the person\'s file
   assert.equal(effectOf('read', { path: join(home, '.pi', 'agent', 'auth.json') }, s).kind, 'refuse', 'sign-ins are never opened, not even with leave');
   assert.equal(effectOf('read', { path: '/state/people/1/engine/auth.json' }, s).kind, 'refuse');
   const pay = effectOf('people_search', { args: ['call', 'treg.people.phone.find', '--header', 'X-Treg-Route-Max-Cost: 0.05'] }, s) as any;
-  assert.deepEqual([pay.kind, pay.words, pay.key], ['spend', 'Maya wants to make a paid lookup with people search, up to $0.05.', undefined], 'spending has no standing key');
+  assert.deepEqual([pay.kind, pay.words, pay.key, pay.cost], ['spend', 'Maya wants to make a paid lookup with people search, up to $0.05.', undefined, 0.05], 'spending has no standing key');
   assert.deepEqual(effectOf('people_search', { args: ['catalog', 'search', 'phone'] }, s), { kind: 'safe' });
   assert.equal(effectOf('people_search', { args: ['logout'] }, s).kind, 'refuse');
   assert.equal(effectOf('browser_click', { ref: 'e1' }, s).kind, 'send');

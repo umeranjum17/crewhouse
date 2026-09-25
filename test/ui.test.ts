@@ -153,3 +153,15 @@ test('the mascots: every mood draws a whole grid in known colours, and Chief\'s 
   }
   assert.equal(new Set(moods.map((m) => art.chief(m).join())).size, moods.length, 'two of Chief\'s moods look the same');
 });
+
+test('the crew\'s share is words, never a number; money is whole dollars and only for the owner', () => {
+  for (const s of [{ choice: 'light', used: false }, { choice: 'light', used: true }, { choice: 'full', used: false }]) {
+    const v = A.share({ share: s });
+    assert.doesNotMatch(shown(v), FORBIDDEN);
+    assert.doesNotMatch(v.today, /\d/, 'no counts, no percentages');
+  }
+  assert.match(A.share({ share: { choice: 'light', used: true } }).today, /start again tomorrow/);
+  assert.equal(A.money({}), null, 'not the owner: nothing about money');
+  assert.equal(A.money({ money: { cap: 20, spent: 0 } })!.month, 'This month: nothing spent yet.');
+  assert.equal(A.money({ money: { cap: 20, spent: 4.5 } })!.month, 'This month: $4.50 of $20 spent.');
+});
