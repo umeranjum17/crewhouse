@@ -13,3 +13,6 @@ terms.
 
 Crewhouse drives terminal sessions through Herdr (Apache-2.0), which you
 install separately.
+
+The web app bundles the Nunito and JetBrains Mono fonts under the SIL Open
+Font License 1.1 (see web/fonts/OFL.txt).

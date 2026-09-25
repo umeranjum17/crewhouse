@@ -2,12 +2,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { CONTROL_PERMISSIONS, DesktopView, useDesktopSession } from '@desklink/react-native';
 import { api, desktopSignaling, type Json } from './api.ts';
+import { attempt, Pill } from './parts.tsx';
 
 const STATUS: Record<string, string> = {
-  idle: 'not watching', opening: 'starting…', connecting: 'connecting…', live: 'live', reconnecting: 'reconnecting…', ended: 'stopped', failed: 'could not connect',
+  idle: 'Not watching', opening: 'Opening…', connecting: 'Connecting…', live: 'Live', reconnecting: 'Reconnecting…', ended: 'Stopped', failed: "Couldn't open it",
 };
 
-export function Screen({ bot, missing, refresh }: { bot: Json; missing: string[]; refresh: () => void }) {
+export function Screen({ bot, refresh }: { bot: Json; refresh: () => void }) {
   const control = bot.controls === 'person';
   const controlRef = useRef(control);
   controlRef.current = control;
@@ -22,7 +23,7 @@ export function Screen({ bot, missing, refresh }: { bot: Json; missing: string[]
       signaling.current = desktopSignaling(bot.id);
       return { signaling: signaling.current, session: { permissions: controlRef.current ? CONTROL_PERMISSIONS : ['view'], maxFps: 15 } };
     },
-    onError: (f) => setErr(f.message),
+    onError: () => setErr(`Couldn't open ${bot.display}'s screen. Try again in a moment.`),
   });
 
   // Input is per session (closing one turns it off), so it is switched on after each connect.
@@ -35,48 +36,38 @@ export function Screen({ bot, missing, refresh }: { bot: Json; missing: string[]
 
   const watch = () => { setErr(''); watching.current = true; void open(); };
   const stop = () => { watching.current = false; void session.close().then(() => signaling.current?.close()); };
-  const act = (fn: () => Promise<unknown>) => async () => { setErr(''); try { await fn(); refresh(); } catch (e: any) { setErr(e.message); } };
+  const act = (fn: () => Promise<unknown>) => async () => { setErr(''); if (await attempt(fn)) refresh(); };
 
-  if (!bot.computer) {
-    return (
-      <div className="card">
-        <b>{bot.display}'s screen</b>
-        <p className="muted">{bot.display} has no computer. Grant <b>Computer</b> on the Tools tab to give it its own desktop: a virtual display with its own browser, separate from yours.</p>
-        {missing.length > 0 && <p className="muted small">This machine needs {missing.join('; ')}.</p>}
-      </div>
-    );
-  }
   const live = session.snapshot.status;
+  const idle = live === 'idle' || live === 'ended' || live === 'failed';
   return (
-    <div className="card">
-      <div className="row between">
-        <b>{bot.display}'s screen</b>
-        <span className="muted tiny">{STATUS[live] ?? live}{bot.desktop ? ` · display ${bot.desktop.display}` : ''}{control ? ' · you have the controls' : ' · view only'}</span>
+    <div className="card screen">
+      <div className="row">
+        <b className="grow">{bot.display}'s screen</b>
+        <Pill tone={live === 'live' ? 'ok' : 'off'}>{control ? 'You have the wheel' : STATUS[live] ?? 'Opening…'}</Pill>
       </div>
-      {control && <div className="chip amber">You have the controls. {bot.display} is paused until you give them back.</div>}
+      {control && <p className="nudge-line">You're driving. {bot.display} waits until you hand the wheel back.</p>}
       {/* desklink types through its own hidden textarea; a click on the picture must focus it, or keys never reach the bot's desktop. */}
       <div onPointerDownCapture={() => { if (control) session.showKeyboard(); }}>
         <DesktopView
           sessionId={session.nativeId}
-          style={{ width: '100%', aspectRatio: '1280 / 800', borderRadius: 10 }}
+          style={{ width: '100%', aspectRatio: '1280 / 800', borderRadius: 16 }}
           accessibilityLabel={`${bot.display}'s screen`}
-          placeholder={<div className="screen" style={{ margin: 0, height: '100%', aspectRatio: 'auto', borderRadius: 0 }}>{live === 'idle' || live === 'ended' ? `Watch ${bot.display}'s own desktop here` : STATUS[live]}</div>}
+          placeholder={<div className="screen-idle">{idle ? `Watch ${bot.display} work on its own computer` : STATUS[live]}</div>}
         />
       </div>
-      {err && <div className="error">{err}</div>}
-      <div className="row wrap end">
-        {live === 'idle' || live === 'ended' || live === 'failed'
-          ? <button className="btn primary" onClick={watch}>Watch {bot.display}'s screen</button>
-          : <button className="btn" onClick={stop}>Stop watching</button>}
-        {!control && <button className="btn" onClick={act(async () => { await api.takeOver(bot.id); watching.current = true; })}>Take over</button>}
+      {err && <p className="nudge-line">{err}</p>}
+      <div className="btns">
+        {idle ? <button className="btn go" onClick={watch}>Watch {bot.display}</button> : <button className="btn" onClick={stop}>Stop watching</button>}
+        {!control && <button className="btn" onClick={act(async () => { await api.takeOver(bot.id); watching.current = true; })}>Take the wheel</button>}
       </div>
       {control && (
         <form className="row" onSubmit={(e) => { e.preventDefault(); void act(async () => { await api.giveBack(bot.id, note); setNote(''); })(); }}>
-          <input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder={`What did you do? ${bot.display} reads this when it resumes`} />
-          <button className="btn primary">Give back</button>
+          <input className="input grow" value={note} onChange={(e) => setNote(e.target.value)} placeholder={`What did you do? ${bot.display} reads this when it carries on`} />
+          <button className="btn go">Hand it back</button>
         </form>
       )}
-      <p className="muted tiny">A virtual display with its own Chromium profile in {bot.display}'s folder; your own screen is never shared. Taking over pauses {bot.display}; giving back resumes its task.</p>
+      <p className="mute small">{bot.display} has its own computer at home, separate from yours. Taking the wheel pauses it; handing back lets it carry on.</p>
     </div>
   );
 }
