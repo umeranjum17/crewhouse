@@ -349,7 +349,7 @@ function HelperPage(ctx: Ctx & { id: string; tab: string }) {
       </> : null)}
       {tab === 'things' && <ThingsGrid list={A.things(state).filter((t) => t.helper === id)} state={state} empty={`${h.name}'s finished work shows up here.`} />}
       {tab === 'routines' && <RoutineList {...ctx} bot={id} />}
-      {tab === 'screen' && <Screen bot={{ ...page?.bot, ...b }} refresh={() => { refresh(); void load(); }} />}
+      {tab === 'screen' && <Screen bot={{ ...page?.bot, ...b }} showing={A.showing(state, id)} refresh={() => { refresh(); void load(); }} />}
       {tab === 'me' && page && <AboutMe id={id} name={h.name} page={page} reload={load} />}
       {tab === 'remembers' && page && <Remembers id={id} name={h.name} page={page} reload={load} />}
     </div>

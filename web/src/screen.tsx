@@ -8,7 +8,7 @@ const STATUS: Record<string, string> = {
   idle: 'Not watching', opening: 'Opening…', connecting: 'Connecting…', live: 'Live', reconnecting: 'Reconnecting…', ended: 'Stopped', failed: "Couldn't open it",
 };
 
-export function Screen({ bot, refresh }: { bot: Json; refresh: () => void }) {
+export function Screen({ bot, refresh, showing }: { bot: Json; refresh: () => void; showing?: { words: string } | null }) {
   const control = bot.controls === 'person';
   const controlRef = useRef(control);
   controlRef.current = control;
@@ -16,6 +16,7 @@ export function Screen({ bot, refresh }: { bot: Json; refresh: () => void }) {
   const signaling = useRef<ReturnType<typeof desktopSignaling> | null>(null);
   const [err, setErr] = useState('');
   const [note, setNote] = useState('');
+  const [what, setWhat] = useState<string | null>(null); // "Show Reel how": what it is, before the recorder starts
 
   const session = useDesktopSession({
     authorize: async () => {
@@ -60,8 +61,21 @@ export function Screen({ bot, refresh }: { bot: Json; refresh: () => void }) {
       <div className="btns">
         {idle ? <button className="btn go" onClick={watch}>Watch {bot.display}</button> : <button className="btn" onClick={stop}>Stop watching</button>}
         {!control && <button className="btn" onClick={act(async () => { await api.takeOver(bot.id); watching.current = true; })}>Take the wheel</button>}
+        {!control && what === null && <button className="btn" onClick={() => setWhat('')}>Show {bot.display} how</button>}
       </div>
-      {control && (
+      {what !== null && !control && (
+        <form className="row" onSubmit={(e) => { e.preventDefault(); void act(async () => { await api.show(bot.id, what); setWhat(null); watching.current = true; if (idle) watch(); })(); }}>
+          <input className="input grow" autoFocus value={what} onChange={(e) => setWhat(e.target.value)} placeholder="What are you showing? For example: pull the newsletter stats" />
+          <button className="btn go" disabled={!what.trim()}>Start</button>
+          <button type="button" className="btn ghost" onClick={() => setWhat(null)}>Cancel</button>
+        </form>
+      )}
+      {showing && (
+        <div className="card nudge row"><span className="grow">{showing.words} I write down where you go and what you click, never what you type.</span>
+          <button className="btn go" onClick={act(() => api.shown(bot.id, true))}>Done showing</button>
+          <button className="btn ghost" onClick={act(() => api.shown(bot.id, false))}>Cancel</button></div>
+      )}
+      {control && !showing && (
         <form className="row" onSubmit={(e) => { e.preventDefault(); void act(async () => { await api.giveBack(bot.id, note); setNote(''); })(); }}>
           <input className="input grow" value={note} onChange={(e) => setNote(e.target.value)} placeholder={`What did you do? ${bot.display} reads this when it carries on`} />
           <button className="btn go">Hand it back</button>

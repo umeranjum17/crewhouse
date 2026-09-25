@@ -11,6 +11,8 @@ import { OWNER, PROVIDERS, callbackPage, provider } from './accounts.ts';
 import { coversOf } from './policy.ts';
 import { describe, nextRun, parseSchedule } from './routines.ts';
 import { Link } from './link.ts';
+import { deskFor } from './desktop.ts';
+import { lesson, Teacher } from './teach.ts';
 
 const TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml',
@@ -48,6 +50,16 @@ function sendFile(req: IncomingMessage, res: ServerResponse, path: string) {
 export async function startServer(cfg: Config, db: Store, crew: Crew) {
   const dist = join(cfg.repoDir, 'web', 'dist');
   const installing = new Set<string>();
+  const teacher = new Teacher();
+  /** "Done showing": the wheel goes back, and the bot gets the steps (and a few page pictures) to keep as a skill. */
+  const shown = async (bot: string, member: number, keep: boolean) => {
+    const s = teacher.stop(bot);
+    if (!s) throw Object.assign(new Error('nothing is being shown'), { status: 409 });
+    await crew.giveBack(bot).catch(() => {});
+    if (!keep || !s.steps.length) return { steps: s.steps.length };
+    await crew.post(bot, lesson(s.what, s.steps), undefined, member, s.shots);
+    return { steps: s.steps.length };
+  };
   /** Installs take minutes (the browser downloads Chromium); the result arrives as an event. */
   const install = (id: string) => {
     if (installing.has(id)) return;
@@ -134,7 +146,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
   async function api(m: string, p: string, q: URLSearchParams, body: any, me: number) {
     let r: RegExpMatchArray | null;
     // What is installing now, and (for the owner) a newer Crewhouse to download.
-    if (m === 'GET' && p === '/api/state') return { ...crew.snapshot(me), installing: [...installing], ...(update && me === OWNER ? { update } : {}) };
+    if (m === 'GET' && p === '/api/state') return { ...crew.snapshot(me), installing: [...installing], showing: teacher.showing(), ...(update && me === OWNER ? { update } : {}) };
     if (m === 'GET' && p === '/api/events') return db.events(Number(q.get('after') || 0));
     // A sent photo for the phone, which can't open this computer's /files address: small enough for one link frame.
     if (m === 'GET' && p === '/api/photo') {
@@ -267,6 +279,25 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       if (installing.has(r[1])) return { ok: true, already: true };
       void install(r[1]);
       return { ok: true };
+    }
+    // Teach by showing: take the wheel with a recorder on, then Done (keep it) or Cancel.
+    if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/show$/)) && m === 'POST') {
+      const b = crew.bot(r[1]);
+      if (!b) throw Object.assign(new Error('no such bot'), { status: 404 });
+      if (!disk.canUse(cfg, b.id, 'computer')) throw Object.assign(new Error(`${b.display} has no computer of its own to show it on`), { status: 409 });
+      const what = String(body.what ?? '').replace(/\s+/g, ' ').trim().slice(0, 120);
+      if (!what) throw Object.assign(new Error('say in a few words what you are showing'), { status: 400 });
+      await crew.desktops.ensure(b.id, b.n, disk.botDir(cfg, b.id));
+      await crew.takeOver(b.id);
+      const bot = b.id;
+      await teacher.start(bot, what, deskFor(cfg.stateDir, bot, b.n).cdp, () => void shown(bot, me, true).catch(() => {}));
+      db.event('teach.started', bot, { what, member: me });
+      return { ok: true };
+    }
+    if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/shown$/)) && m === 'POST') {
+      const out = await shown(r[1], me, body.keep !== false);
+      db.event('teach.done', r[1], { steps: out.steps, kept: body.keep !== false, member: me });
+      return out;
     }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/takeover$/)) && m === 'POST') { await crew.takeOver(r[1]); return { ok: true }; }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/giveback$/)) && m === 'POST') { await crew.giveBack(r[1], String(body.note ?? '')); return { ok: true }; }
