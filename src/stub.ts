@@ -1,7 +1,8 @@
 // The stub model for tests (CREWHOUSE_ENGINE=stub): a scripted model inside the real engine, so sessions, tools, the gate
 // and session files are all the engine's own code path. No network, no account, no quota.
 // Script, read from the latest message:
-//   [tool NAME {json}]   call that tool once, then reply with what it returned
+//   [tool NAME {json}]   call that tool once, then reply with what it returned; several are called in turn, the reply
+//                        saying what the last one returned
 //   hit the limit        on ChatGPT, answer with ChatGPT's own usage-limit error
 //   no helpers in plan   on ChatGPT, answer as a plan without helpers does (the same words, with no time to come back)
 //   sign me out          answer as an account whose sign-in stopped working does
@@ -37,9 +38,10 @@ const step: FauxResponseFactory = async (ctx, options, _state, model): Promise<A
     const pick = /\[route ([a-z0-9-]+|\?)\]/.exec(said)?.[1] ?? 'chief';
     return fauxAssistantMessage(JSON.stringify(Object.fromEntries(options.map((o) => [o, pick === '?' ? 1 / options.length : o === pick ? 0.9 : 0.1 / (options.length - 1)]))));
   }
+  const calls = [...said.matchAll(/\[tool (\w+) (\{.*?\})\]/g)];
+  const next = calls[msgs.slice(msgs.findLastIndex((m) => m.role === 'user') + 1).filter((m) => m.role === 'toolResult').length];
+  if (next) return fauxAssistantMessage([fauxToolCall(next[1], JSON.parse(next[2]))], { stopReason: 'toolUse' });
   if (last?.role === 'toolResult') return fauxAssistantMessage(await hold(said, options?.sessionId, options?.signal, `stub ${bot}: ${last.toolName} said ${words(last).slice(0, 300)}`));
-  const tool = /\[tool (\w+) (\{.*?\})\]/.exec(said);
-  if (tool) return fauxAssistantMessage([fauxToolCall(tool[1], JSON.parse(tool[2]))], { stopReason: 'toolUse' });
   if (/hit the limit/i.test(said) && model.provider === 'openai-codex') {
     return fauxAssistantMessage('', { stopReason: 'error', errorMessage: 'You have hit your ChatGPT usage limit (plus plan). Try again in ~30 min.' });
   }

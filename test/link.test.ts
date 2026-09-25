@@ -8,7 +8,8 @@ import { createServer, type AddressInfo } from 'node:net';
 import { join } from 'node:path';
 import { temp } from './tmp.ts';
 import { DeviceLink, pairWithOffer, type DeviceGrant, type LinkStatus } from '@byokit/link';
-import { linkHosts, phoneAddresses } from '../src/link.ts';
+import { Link, linkHosts, phoneAddresses } from '../src/link.ts';
+import { Store } from '../src/db.ts';
 
 test('the link binds loopback and Tailscale by default; the home network only when turned on', () => {
   const at = (address: string, internal = false) => [{ address, family: 'IPv4', internal, netmask: '', mac: '', cidr: null }] as any;
@@ -20,6 +21,35 @@ test('the link binds loopback and Tailscale by default; the home network only wh
   assert.deepEqual(phoneAddresses(['127.0.0.1'], ifaces), ['127.0.0.1']);
   assert.deepEqual(phoneAddresses(['0.0.0.0'], ifaces), ['192.168.1.20', '100.101.2.3'], 'home network first; container bridges skipped');
   assert.deepEqual(linkHosts('', false, { lo: at('127.0.0.1', true), eth0: at('192.168.1.20') }), ['127.0.0.1'], 'no Tailscale: loopback only');
+});
+
+test('quiet hours hold the push and send exactly one when they end, even across a restart', () => {
+  const dir = temp('crewhouse-held');
+  const sent: { id: string; to: string[] }[] = [];
+  let quiet = true;
+  const link = (db: Store) => Object.assign(new Link({} as any, db, async () => null) as any, {
+    client: { notify: async (n: any) => { sent.push(n); return {}; } }, relayStatus: 'online', quiet: (m: number) => m === 1 && quiet,
+    host: { devices: () => [{ id: 'pixel', meta: { member: 1 } }, { id: 'ipad', meta: { member: 2 } }] },
+  });
+  let db = new Store(dir);
+  const a = link(db);
+  // 2 am: a failed job, then a not-sure one, for member 1 in their quiet hours; member 2 is awake.
+  a.news({ seq: 1, kind: 'alert', data: { member: 1 }, bot: null });
+  a.news({ seq: 2, kind: 'alert', data: { member: 1 }, bot: null });
+  a.sendHeld();
+  assert.equal(sent.length, 0, 'nothing reaches the phone in quiet hours');
+  a.news({ seq: 3, kind: 'alert', data: { member: 2 }, bot: null });
+  assert.deepEqual(sent.map((n) => n.to), [['ipad']], 'someone awake is told at once');
+
+  // crewd restarts overnight; the hold is in the store.
+  db.close();
+  db = new Store(dir);
+  const b = link(db);
+  quiet = false;
+  b.sendHeld();
+  b.sendHeld();
+  assert.deepEqual(sent.map((n) => n.to), [['ipad'], ['pixel']], 'one push when quiet hours end, for however much came in');
+  db.close();
 });
 
 const root = temp('crewhouse-link');

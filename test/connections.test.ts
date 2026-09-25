@@ -9,6 +9,7 @@ import { setup, settled, task, until } from './lab.ts';
 
 const { OWNER } = await import('../src/accounts.ts');
 const { connectError } = await import('../src/connections.ts');
+const disk = await import('../src/bots.ts');
 
 const seen: { tokens: Record<string, string>[]; auth: string[] } = { tokens: [], auth: [] };
 const app = createServer(async (req, res) => {
@@ -150,7 +151,8 @@ test('a connected app\'s tools: reading runs silently, changing something asks i
   assert.equal(crew.snapshot().asks[0].detail.covers, '“create a page” in your Mocknote');
   await crew.answer(ask.id, { answer: 'allow' });
   await settled(db, u);
-  assert.match(task(db, u).result, /did create-page/);
+  assert.match(db.get("SELECT text FROM messages WHERE bot = 'quill' AND author = 'bot' AND task_id = ? ORDER BY id LIMIT 1", u)!.text, /did create-page/);
+  assert.equal(task(db, u).state, 'unsure', 'it changed something and never said it saw it work');
   assert.ok(seen.auth.every((a) => /^Bearer A[12]$/.test(a)), 'the bot never holds the token; crewd adds it');
   assert.ok(!existsSync(join(crew['cfg'].crewDir, 'bots', 'quill', 'connections.json')));
   done();
@@ -225,5 +227,58 @@ test('in chat: a helper asks for an app, the person connects it from the card, a
   await crew.answer(crew.snapshot().asks.find((a: any) => a.kind === 'connect')!.id, { answer: 'deny' });
   await settled(db, w);
   assert.equal(task(db, w).state, 'done');
+  done();
+});
+
+test('done needs proof: a job that acts but sees no confirmation, or says nothing, ends not sure with an alert; never a false done', async () => {
+  const { cfg, db, crew, done } = lab();
+  crew.onboard('sir');
+  crew.recruit('scribe', 'Quill', 'person');
+  await back(crew, await start(crew), { code: 'good' });
+  disk.setSettings(cfg, 'quill', { allow: ['app:Mocknote:create a page'] }); // "Always": no card, so the call goes straight through
+  const book = '[tool mocknote_create_page {"title":"Dentist"}]';
+  const outcome = (worked: boolean, seen: string) => `[tool crew_outcome ${JSON.stringify({ worked, seen })}]`;
+  const alerts = () => db.get("SELECT COUNT(*) AS n FROM events WHERE kind = 'alert'")!.n as number;
+  const job = async (text: string) => {
+    const before = alerts();
+    const t = (await crew.post('quill', text))!.task;
+    await settled(db, t);
+    const lines = db.all("SELECT text FROM messages WHERE bot = 'quill' AND author = 'bot' AND task_id = ?", t).map((m) => m.text as string);
+    return { ...task(db, t), lines, alerted: alerts() > before, trail: db.all("SELECT kind FROM events WHERE json_extract(data, '$.task') = ?", t).map((e) => e.kind as string) };
+  };
+
+  // Clicked through, no confirmation: the helper says so, and that is what the job ends as.
+  const unsure = await job(`book it ${book} ${outcome(false, "I pressed Book, but the page didn't show a confirmation. Worth checking your email for one.")}`);
+  assert.equal(unsure.state, 'unsure');
+  assert.equal(unsure.lines.at(-1), "Not sure it worked: I pressed Book, but the page didn't show a confirmation. Worth checking your email for one.");
+  assert.ok(unsure.alerted, 'the phone hears about it, like a failure');
+  assert.ok(unsure.trail.includes('task.unsure') && !unsure.trail.includes('task.done'));
+
+  // Acted and declared nothing: not sure, in crewd's words, never done.
+  const silent = await job(`book it ${book}`);
+  assert.equal(silent.state, 'unsure');
+  assert.equal(silent.lines.at(-1), "Not sure it worked: I did something on your Mocknote, but I didn't see it confirmed. Worth checking there yourself.");
+  assert.ok(silent.alerted);
+
+  // Said it worked, then acted again: the old "it worked" doesn't cover the new act.
+  const again = await job(`book it ${outcome(true, 'x')} ${book}`);
+  assert.equal(again.state, 'unsure');
+
+  // Confirmed with what it saw: done, and no alert.
+  const sure = await job(`book it ${book} ${outcome(true, 'The page showed confirmation number 4417.')}`);
+  assert.equal(sure.state, 'done');
+  assert.ok(!sure.alerted);
+  assert.ok(!sure.lines.some((l: string) => l.startsWith('Not sure')));
+
+  // Nothing done out in the world: done as before, nothing to declare.
+  assert.equal((await job('what time is it')).state, 'done');
+
+  // A routine's not sure lands in Chief's thread, where every push-worthy Chief line goes.
+  const r = crew.addRoutine({ bot: 'quill', schedule: 'every day 9:00', task: `book it ${book}` }, 'person');
+  crew.runRoutine(r.id);
+  await until('routine settled', () => { const t = db.get('SELECT state FROM tasks WHERE routine = ? ORDER BY id DESC', r.id); return t && !['queued', 'working'].includes(t.state); });
+  assert.equal(db.get('SELECT state FROM tasks WHERE routine = ? ORDER BY id DESC', r.id)!.state, 'unsure');
+  assert.match(db.get("SELECT text FROM messages WHERE bot = 'chief' ORDER BY id DESC")!.text, /^Quill isn't sure “.+” worked\. I did something on your Mocknote/);
+  assert.match(crew.digest(OWNER, 0), /- Not sure it worked: Quill, /);
   done();
 });

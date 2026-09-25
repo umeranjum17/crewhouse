@@ -198,6 +198,7 @@ a.back:not([aria-label]) { font-size: 15px; margin-bottom: 6px; }
 .line.me .bubble-text { background: var(--me, var(--go)); color: var(--me-ink, var(--go-ink)); border-radius: 22px 22px 6px 22px; }
 .line.them .bubble-text, .line.chief .bubble-text { background: var(--solid); border-radius: 6px 22px 22px 22px; box-shadow: 0 6px 18px -10px #6a4f9a55; }
 .line.note { max-width: 92%; }
+.line.unsure .bubble-text { box-shadow: 0 0 0 2px var(--wait) inset; }
 .line.note .bubble-text { background: var(--card); border-radius: 22px; box-shadow: var(--lift); }
 .line .who { font: 800 12px var(--ui); color: var(--pink-ink); margin-left: 10px; }
 .tabs { display: flex; gap: 6px; overflow-x: auto; padding: 4px 0 10px; scrollbar-width: none; }

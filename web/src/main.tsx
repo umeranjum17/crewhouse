@@ -241,7 +241,7 @@ function Chat({ id, state, me, tick, refresh }: Ctx & { id: string }) {
       <div className="lines">
         {!lines.length && page && <div className="mute center empty">Say hello to {name}. Ask for anything, in your own words.</div>}
         {lines.map((l) => (
-          <div key={l.id} className={`line ${l.from}`}>
+          <div key={l.id} className={`line ${l.from}${l.unsure ? ' unsure' : ''}`}>
             {l.from === 'chief' && <span className="who">Chief</span>}
             {l.text && <div className="bubble-text">{l.text}</div>}
             {l.files.map((f) => <Media key={f.url} f={f} big />)}

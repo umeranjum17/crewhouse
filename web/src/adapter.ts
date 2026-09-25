@@ -19,7 +19,8 @@ export type Work = { helper: string; title: string; line: string; waiting: boole
 export type Thing = { id: number; helper: string; title: string; at: number; summary: string; files: FileView[] };
 export type FileView = { url: string; kind: 'video' | 'image' | 'doc'; name: string };
 export type Step = { at: number; text: string; now?: boolean; asked?: boolean; seq: number; undo?: boolean };
-export type Line = { id: number; from: 'me' | 'them' | 'chief' | 'note'; text: string; files: FileView[]; choices: string[] };
+/** `unsure`: crewd's line for a job that acted but couldn't confirm it worked, shown apart from the helper's own words. */
+export type Line = { id: number; from: 'me' | 'them' | 'chief' | 'note'; text: string; files: FileView[]; choices: string[]; unsure?: boolean };
 export type App = { id: string; name: string; mark: string; bg: string; on: boolean; does: string; warns?: boolean };
 
 // ---------- words ----------
@@ -350,6 +351,7 @@ export function step(e: Json): string | null {
     case 'task.paused': return `Paused “${plain(d.title)}” for now`;
     case 'task.done': return `Finished “${plain(d.title)}”`;
     case 'task.failed': return `Couldn't finish “${plain(d.title)}”`;
+    case 'task.unsure': return `Not sure “${plain(d.title)}” worked`;
     default: return null;
   }
 }
@@ -386,7 +388,7 @@ export function lines(page: Json, bot: string): Line[] {
     // Another helper handing this one a job: a note in its words, "Reel asked: …".
     if (!['person', 'bot', 'chief'].includes(m.author)) return { id: m.id, from: 'note', text: `${String(m.author).replace(/^./, (c) => c.toUpperCase())} asked: ${plain(text)}`, files: [], choices: [] };
     return { id: m.id, from: m.author === 'person' ? 'me' : m.author === 'chief' && bot !== 'chief' ? 'chief' : 'them',
-      text: m.author === 'person' ? (pics.length && /^Here (is a photo|are some photos)\.$/.test(text) ? '' : text) : plain(text), files: pics, choices: (m.choices ?? []).map(plain) };
+      text: m.author === 'person' ? (pics.length && /^Here (is a photo|are some photos)\.$/.test(text) ? '' : text) : plain(text), files: pics, choices: (m.choices ?? []).map(plain), unsure: m.author === 'bot' && /^Not sure it worked:|^[^.]{1,40} isn't sure “/.test(text) };
   }).filter((l: Line) => l.text || l.files.length);
 }
 
