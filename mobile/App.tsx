@@ -14,7 +14,7 @@ import * as art from '../web/src/art.ts';
 import { color, radius } from '../web/src/tokens.ts';
 import { CONTROL_PERMISSIONS, DesktopView, useDesktopSession } from '@desklink/react-native';
 import { desktopAvailable } from '@desklink/react-native/availability';
-import { connect, desktopSignaling, forgetGrant, loadGrant, pair, pairTyped, type Grant, type Status } from './src/link';
+import { connect, desktopSignaling, forgetGrant, kept, loadGrant, pair, pairTyped, type Grant, type Status } from './src/link';
 
 // ---------- look ----------
 type Look = typeof color.day & { go: string; goInk: string; night: boolean };
@@ -264,21 +264,25 @@ function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
 
 // ---------- the app ----------
 type Route = { view: 'home' | 'chief' | 'crew' | 'helper' | 'things' | 'routines' | 'add' | 'phone'; id?: string; tab?: string };
-type Ctx = { state: Json; tick: number; refresh: () => void; go: (r: Route, replace?: boolean) => void; canAct: boolean; open: (c: A.Card) => void };
+/** `offline`: the screens show what this phone kept, read-only, until the home computer answers again. */
+type Ctx = { state: Json; tick: number; refresh: () => void; go: (r: Route, replace?: boolean) => void; canAct: boolean; offline: boolean; open: (c: A.Card) => void };
 
 function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }) {
   const t = useLook();
-  const [state, setState] = useState<Json>(null);
+  // Opens on what this phone kept, so recent chats read even while the home computer is asleep.
+  const [first] = useState(() => kept.load(grant.host));
+  const [state, setState] = useState<Json>(first.state);
   const [status, setStatus] = useState<Status>('connecting');
+  const [why, setWhy] = useState(false);
   const [tick, setTick] = useState(0);
   const [stack, setStack] = useState<Route[]>([{ view: 'home' }]);
   const [sheet, setSheet] = useState<A.Card | null>(null);
   const link = useRef<ReturnType<typeof connect>['link'] | null>(null);
-  const heard = useRef(0); // when the home computer last answered
+  const heard = useRef(first.at); // when the home computer last answered
   const route = stack[stack.length - 1];
 
   const refresh = useCallback(() => {
-    api.state().then((st) => { setState(st); heard.current = Date.now(); }).catch(() => {});
+    api.state().then((st) => { setState(st); heard.current = Date.now(); kept.state(st); }).catch(() => {});
     setTick((n) => n + 1);
   }, []);
   useEffect(() => {
@@ -288,8 +292,8 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
     setTransport(call);
     return () => l.stop();
   }, [grant, refresh, onRemoved]);
-  const wasOnline = useRef(false);
-  useEffect(() => { if (status === 'online' && wasOnline.current === false && state) say('Back in touch with the home computer ✓'); wasOnline.current = status === 'online'; }, [status]);
+  const was = useRef<Status>('connecting');
+  useEffect(() => { if (status === 'online' && was.current === 'offline' && state) say('Back in touch with the home computer ✓'); was.current = status; }, [status]);
 
   const go = (r: Route, replace = false) => setStack((st) => (replace ? [r] : [...st, r]));
   const back = useCallback(() => {
@@ -320,15 +324,31 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
       </Center>
     );
   }
-  const canAct = grant.device.role === 'control';
-  const ctx: Ctx = { state, tick, refresh, go, canAct, open: setSheet };
+  const offline = status !== 'online';
+  const canAct = grant.device.role === 'control' && !offline;
+  const ctx: Ctx = { state, tick, refresh, go, canAct, offline, open: setSheet };
   if (!state.person.onboarded && canAct) return <Hello {...ctx} />;
   const nav: [Route['view'], string, string][] = [['home', 'Chats', '⌂'], ['crew', 'Crew', '☺\uFE0E'], ['things', 'Things', '▤'], ['routines', 'Routines', '↻'], ['phone', 'This phone', '▯']];
   const active = ['chief', 'helper', 'add'].includes(route.view) ? 'crew' : route.view;
   const live = sheet && A.cards(state).find((c) => c.id === sheet.id);
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior="height">
-      {status !== 'online' && <Text style={[s.offline, { backgroundColor: t.amber, color: color.day.ink }]}>{`The home computer isn't answering. If it's asleep, the crew has paused and carries on when it wakes.${heard.current ? ` Last heard from it at ${A.clock(heard.current)}.` : ''} Trying again…`}</Text>}
+      {offline && (
+        <Pressable onPress={() => setWhy(true)} style={[s.offline, { backgroundColor: t.amber }]} accessibilityRole="button" accessibilityHint="Explains what is happening">
+          <Text style={[s.offlineText, { color: color.day.ink }]} numberOfLines={1}>{`Can't reach the home computer${heard.current ? ` · last heard ${A.clock(heard.current)}` : ''}`}</Text>
+        </Pressable>
+      )}
+      <Modal visible={why} transparent animationType="slide" onRequestClose={() => setWhy(false)}>
+        <Pressable style={s.scrim} onPress={() => setWhy(false)}>
+          <Pressable style={[s.sheet, { backgroundColor: t.bg }]} onPress={() => {}}>
+            <View style={{ alignItems: 'center' }}><ChiefArt mood="rest" size={88} /></View>
+            <T style={s.h2}>The home computer isn't answering</T>
+            <T tone="ink2">If it's asleep, the crew has paused and carries on when it wakes. Check it's on, and that this phone is on its Wi-Fi or Tailscale. This phone keeps trying by itself.</T>
+            <T tone="ink2">Meanwhile you can read your recent chats. You can reply once it's back.</T>
+            <Btn go big label="OK" onPress={() => setWhy(false)} />
+          </Pressable>
+        </Pressable>
+      </Modal>
       <View style={{ flex: 1 }}>
         {route.view === 'home' && <Home {...ctx} />}
         {route.view === 'chief' && <ChiefPage {...ctx} />}
@@ -337,7 +357,7 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
         {route.view === 'routines' && <Page title="Routines" lead="Jobs the crew does on a schedule. You can also just tell Chief: “every Friday, make a video of the week's photos”."><RoutineList {...ctx} /></Page>}
         {route.view === 'add' && <AddHelper {...ctx} />}
         {route.view === 'things' && <Page title="Things" lead="Everything the crew has made for you."><ThingsList list={A.things(state)} state={state} empty="Videos, lists, letters and plans the crew makes for you land here." /></Page>}
-        {route.view === 'phone' && <ThisPhone grant={grant} status={status} onForget={forget} />}
+        {route.view === 'phone' && <ThisPhone grant={grant} status={status} onForget={forget} onClear={() => { kept.clear(); say('Cleared from this phone ✓'); }} />}
       </View>
       <View style={[s.tabbar, { backgroundColor: t.bg, borderColor: t.line }]}>
         {nav.map(([v, label, icon]) => (
@@ -379,7 +399,7 @@ function Hello({ state, refresh, go }: Ctx) {
 // ---------- asks ----------
 const answer = (c: A.Card, body: Json) => attempt(() => api.answer(c.id, body), body.answer === 'deny' ? 'OK, not now' : 'Done. Carrying on.');
 
-function AskCard({ c, who, onDone, canAct, open }: { c: A.Card; who: A.Helper | undefined; onDone: () => void; canAct: boolean; open: (c: A.Card) => void }) {
+function AskCard({ c, who, onDone, canAct, offline, open }: { c: A.Card; who: A.Helper | undefined; onDone: () => void; canAct: boolean; offline: boolean; open: (c: A.Card) => void }) {
   const [reply, setReply] = useState('');
   const t = useLook();
   const act = async (body: Json) => { if (await answer(c, body)) onDone(); };
@@ -391,7 +411,8 @@ function AskCard({ c, who, onDone, canAct, open }: { c: A.Card; who: A.Helper | 
         <View style={{ flex: 1 }}><T style={s.b}>{c.head}</T><T tone="mute" style={s.small}>{A.clock(c.at)}</T></View>
       </View>
       <T style={{ marginVertical: 8 }}>{c.words}</T>
-      {!canAct ? <T tone="mute" style={s.small}>This phone watches; answer on another phone or the computer.</T> : c.kind === 'connect' ? (
+      {offline ? <T tone="mute" style={s.small}>You can answer once the home computer is back.</T>
+        : !canAct ? <T tone="mute" style={s.small}>This phone watches; answer on another phone or the computer.</T> : c.kind === 'connect' ? (
         <T tone="mute" style={s.small}>Connecting an app is done on the computer: Settings, Your apps.</T>
       ) : c.reply ? (
         <View style={s.row}>
@@ -433,13 +454,20 @@ function AskSheet({ c, who, chiefSays, canAct, onClose }: { c: A.Card; who: A.He
 }
 
 // ---------- home ----------
-function Heartbeat({ state }: { state: Json }) {
-  const { mood, line } = A.chief(state);
+// What this phone kept says how things were, not how they are: while the computer is out of reach, nobody claims to be busy.
+const OUT = 'Out of reach for now';
+const chiefNow = (state: Json, offline: boolean) => (offline ? { mood: 'rest' as const, line: OUT } : A.chief(state));
+function HelperPill({ h, offline }: { h: A.Helper; offline: boolean }) {
+  return offline ? <Pill tone="off">{OUT}</Pill> : <Pill tone={h.ring === 'needs' ? 'wait' : h.ring ? 'ok' : 'off'}>{h.status}</Pill>;
+}
+
+function Heartbeat({ state, offline }: { state: Json; offline: boolean }) {
+  const { mood, line } = chiefNow(state, offline);
   return <View style={{ alignItems: 'center', gap: 8 }}><ChiefArt mood={mood} size={120} /><Pill tone={mood === 'ask' ? 'wait' : mood === 'rest' ? 'off' : 'ok'}>{line}</Pill></View>;
 }
 
 function Home(ctx: Ctx) {
-  const { state, go, refresh, canAct, open } = ctx;
+  const { state, go, refresh, canAct, offline, open } = ctx;
   const crew = A.crew(state);
   const who = (id: string) => crew.find((h) => h.id === id);
   const cards = A.cards(state);
@@ -448,10 +476,10 @@ function Home(ctx: Ctx) {
   return (
     <View style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={s.page} keyboardShouldPersistTaps="handled">
-        <Pressable onPress={() => go({ view: 'chief' })}><Heartbeat state={state} /></Pressable>
+        <Pressable onPress={() => go({ view: 'chief' })}><Heartbeat state={state} offline={offline} /></Pressable>
         <T style={[s.h1, s.centerText]}>{A.greeting()}, {state.person.address ?? state.person.name}</T>
         {!!A.resting(state) && <Card><T>{A.resting(state)}. I'll pick things back up then.</T></Card>}
-        {cards.map((c) => <AskCard key={c.id} c={c} who={who(c.helper)} onDone={refresh} canAct={canAct} open={open} />)}
+        {cards.map((c) => <AskCard key={c.id} c={c} who={who(c.helper)} onDone={refresh} canAct={canAct} offline={offline} open={open} />)}
         <ChatList state={state} go={go} />
         {canAct && (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
@@ -498,10 +526,11 @@ function ChatList({ state, go }: { state: Json; go: Ctx['go'] }) {
 }
 
 // ---------- a chat ----------
-function Chat({ id, state, tick, refresh, canAct, open }: Ctx & { id: string }) {
+function Chat({ id, state, tick, refresh, canAct, offline, open }: Ctx & { id: string }) {
   const t = useLook();
-  const [page, setPage] = useState<Json>(null);
-  const load = useCallback(() => api.bot(id).then(setPage).catch(() => {}), [id]);
+  // The computer's page when it answers; otherwise the lines this phone kept, until it does.
+  const [page, setPage] = useState<Json>(() => kept.page(id));
+  const load = useCallback(() => api.bot(id).then((p) => { setPage(p); kept.chat(id, p); }).catch(() => {}), [id]);
   useEffect(() => { void load(); }, [load, tick]);
   const scroll = useRef<ScrollView>(null);
   const lines = A.lines(page, id);
@@ -533,10 +562,10 @@ function Chat({ id, state, tick, refresh, canAct, open }: Ctx & { id: string }) 
         ))}
         {canAct && !!last?.choices.length && <View style={s.chips}>{last.choices.map((c) => <Btn key={c} label={c} onPress={() => send(c)} />)}</View>}
         <Steps steps={trail} />
-        {cards.map((c) => <AskCard key={c.id} c={c} who={h} onDone={refresh} canAct={canAct} open={open} />)}
+        {cards.map((c) => <AskCard key={c.id} c={c} who={h} onDone={refresh} canAct={canAct} offline={offline} open={open} />)}
       </ScrollView>
       {canAct ? <View style={s.dock}><Composer placeholder={id === 'chief' ? 'Ask Chief anything…' : `Message ${name}…`} onSend={send} /></View>
-        : <T tone="mute" style={[s.small, { padding: 16 }]}>This phone watches the crew; it can't send messages.</T>}
+        : <T tone="mute" style={[s.small, { padding: 16 }]}>{offline ? "You can reply once the home computer is back." : "This phone watches the crew; it can't send messages."}</T>}
     </View>
   );
 }
@@ -552,12 +581,12 @@ function Head({ children, onBack }: { children: ReactNode; onBack: () => void })
 }
 
 function ChiefPage(ctx: Ctx) {
-  const { mood, line } = A.chief(ctx.state);
+  const { mood, line } = chiefNow(ctx.state, ctx.offline);
   return (
     <View style={{ flex: 1 }}>
       <Head onBack={() => ctx.go({ view: 'home' }, true)}>
         <Face who="chief" size={44} />
-        <View style={{ flex: 1, gap: 4, alignItems: 'flex-start' }}><T style={s.b}>Chief</T><Pill tone={mood === 'ask' ? 'wait' : 'ok'}>{line}</Pill></View>
+        <View style={{ flex: 1, gap: 4, alignItems: 'flex-start' }}><T style={s.b}>Chief</T><Pill tone={mood === 'ask' ? 'wait' : mood === 'rest' ? 'off' : 'ok'}>{line}</Pill></View>
       </Head>
       <Chat {...ctx} id="chief" />
     </View>
@@ -568,7 +597,7 @@ function ChiefPage(ctx: Ctx) {
 function Crew(ctx: Ctx) {
   const { state, go } = ctx;
   const t = useLook();
-  const chief = A.chief(state);
+  const chief = chiefNow(state, ctx.offline);
   const tile = (key: string, face: ReactNode, name: string, pill: ReactNode, role: string, r: Route) => (
     <Pressable key={key} style={[s.palCard, { backgroundColor: t.card, borderColor: t.line }]} onPress={() => go(r)}>
       {face}<T style={s.b}>{name}</T>{pill}<T tone="mute" style={[s.small, s.centerText]} lines={2}>{role}</T>
@@ -577,8 +606,8 @@ function Crew(ctx: Ctx) {
   return (
     <Page title="Your crew" lead="Everyone answers to Chief. Tap a helper to chat.">
       <View style={s.grid}>
-        {tile('chief', <ChiefArt mood={chief.mood} size={84} />, 'Chief', <Pill>{chief.line}</Pill>, 'Runs the crew and answers to you', { view: 'chief' })}
-        {A.crew(state).map((h) => tile(h.id, <Face who={h} size={84} />, h.name, <Pill tone={h.ring === 'needs' ? 'wait' : h.ring ? 'ok' : 'off'}>{h.status}</Pill>, h.role, { view: 'helper', id: h.id }))}
+        {tile('chief', <ChiefArt mood={chief.mood} size={84} />, 'Chief', <Pill tone={chief.mood === 'rest' ? 'off' : 'ok'}>{chief.line}</Pill>, 'Runs the crew and answers to you', { view: 'chief' })}
+        {A.crew(state).map((h) => tile(h.id, <Face who={h} size={84} />, h.name, <HelperPill h={h} offline={ctx.offline} />, h.role, { view: 'helper', id: h.id }))}
       </View>
       {ctx.canAct ? <Btn go label="Add a helper" onPress={() => go({ view: 'add' })} /> : null}
     </Page>
@@ -602,7 +631,7 @@ function HelperPage(ctx: Ctx & { id: string; tab: string; setTab: (t: string) =>
     <View style={{ flex: 1 }}>
       <Head onBack={() => go({ view: 'crew' }, true)}>
         <Face who={h} size={48} />
-        <View style={{ flex: 1, gap: 4, alignItems: 'flex-start' }}><T style={s.b}>{h.name}</T><Pill tone={h.ring === 'needs' ? 'wait' : h.ring ? 'ok' : 'off'}>{h.status}</Pill></View>
+        <View style={{ flex: 1, gap: 4, alignItems: 'flex-start' }}><T style={s.b}>{h.name}</T><HelperPill h={h} offline={ctx.offline} /></View>
         {b?.task && canAct && <Btn label="Stop" onPress={() => attempt(async () => { await api.reset(id); refresh(); }, `Stopped ${h.name}`)} />}
       </Head>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={{ padding: 10, gap: 6 }}>
@@ -787,13 +816,18 @@ function ThingsList({ list, state, empty }: { list: A.Thing[]; state: Json; empt
 }
 
 // ---------- this phone ----------
-function ThisPhone({ grant, status, onForget }: { grant: Grant; status: Status; onForget: () => void }) {
+function ThisPhone({ grant, status, onForget, onClear }: { grant: Grant; status: Status; onForget: () => void; onClear: () => void }) {
   return (
     <Page title="This phone">
       <Card>
         <T style={s.b}>{grant.device.name}</T>
         <T tone="mute">{grant.device.role === 'view' ? 'Watches the crew; can’t answer or give jobs.' : 'Answers the crew and gives them jobs, as you.'}</T>
         <View style={[s.row, { marginTop: 6 }]}><Pill tone={status === 'online' ? 'ok' : 'wait'}>{status === 'online' ? 'With the home computer' : 'Looking for the home computer…'}</Pill></View>
+      </Card>
+      <Card>
+        <T style={s.b}>Chats kept on this phone</T>
+        <T tone="mute">This phone keeps the last week of your chats, so you can read them while the home computer is off. Clearing removes them from this phone only; unpairing clears them too.</T>
+        <View style={s.row}><Btn label="Clear" onPress={onClear} /></View>
       </Card>
       <T tone="mute" style={s.small}>🔒 Only the computer this phone was paired with can read what it sends.</T>
       <Btn label="Unpair this phone" onPress={onForget} />
@@ -844,7 +878,8 @@ const s = StyleSheet.create({
   tabLabel: { fontSize: 11.5, fontWeight: '700' },
   unread: { minWidth: 20, height: 20, borderRadius: 10, color: '#2e2a40', fontSize: 12, fontWeight: '900', textAlign: 'center', overflow: 'hidden', paddingHorizontal: 5, lineHeight: 20 },
   badge: { position: 'absolute', top: 0, left: '58%', minWidth: 18, height: 18, borderRadius: 9, color: '#fff', fontSize: 11, fontWeight: '800', textAlign: 'center', overflow: 'hidden', paddingHorizontal: 4 },
-  offline: { textAlign: 'center', padding: 6, fontSize: 13, fontWeight: '700' },
+  offline: { paddingVertical: 7, paddingHorizontal: 16 },
+  offlineText: { textAlign: 'center', fontSize: 13, fontWeight: '700' },
   toast: { position: 'absolute', bottom: 84, alignSelf: 'center', paddingHorizontal: 16, paddingVertical: 10, borderRadius: radius.chip, fontWeight: '700', overflow: 'hidden', maxWidth: '90%' },
   scanHint: { position: 'absolute', left: 0, right: 0, bottom: 0, padding: 20, gap: 12, backgroundColor: '#000a' },
   scrim: { flex: 1, backgroundColor: '#0006', justifyContent: 'flex-end' },

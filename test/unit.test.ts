@@ -972,3 +972,25 @@ test('Chief makes up a new helper on a card: nothing until the person says yes, 
   assert.match(lastSaid(db, 'chief')!, /already a helper called Pip/);
   done();
 });
+
+test('what the phone keeps: its computer\'s chats only, the newest lines, nothing older than a week', async () => {
+  const K = await import('../web/src/kept.ts');
+  const now = 100 * K.WEEK;
+  const msgs = Array.from({ length: 80 }, (_, i) => ({ id: i, author: 'bot', text: `line ${i}`, at: now - 1000 + i }));
+  let k = K.keepState(K.empty('host-a'), { person: { name: 'Sara' } }, now);
+  k = K.keepChat(k, 'pip', { messages: msgs, notes: 'private', soul: 'x', trail: [1] }, now);
+  const back = K.fresh(JSON.parse(JSON.stringify(k)), 'host-a', now);
+  assert.equal(back.state.person.name, 'Sara');
+  assert.deepEqual(back.chats.pip.messages.map((m: any) => m.id), msgs.slice(-K.LINES).map((m) => m.id));
+  assert.deepEqual(Object.keys(back.chats.pip), ['at', 'messages']); // never notes, soul or trail
+  // Another computer's copy, or none, reads as nothing kept.
+  assert.equal(K.fresh(k, 'host-b', now).state, null);
+  assert.equal(K.fresh(null, 'host-a', now).state, null);
+  // A week on, the lines and the home screen from then are gone; a chat kept since stays.
+  const later = now + K.WEEK;
+  const k2 = K.keepChat(k, 'reel', { messages: [{ id: 1, at: later - 5 }] }, later - 5);
+  const old = K.fresh(k2, 'host-a', later);
+  assert.equal(old.state, null);
+  assert.equal(old.chats.pip, undefined);
+  assert.deepEqual(old.chats.reel.messages.map((m: any) => m.id), [1]);
+});
