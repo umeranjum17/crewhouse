@@ -1541,8 +1541,8 @@ export class Crew {
     const run = (side: string, only: string[]) => {
       const w = join(space, 'work', 'verify', `${task}-${side}`);
       return runSandboxed(space, [this.cfg.toolsDir], { PATH: toolBin(this.cfg) }, `rm -rf ${q(w)}; git -C ${q(repo)} worktree prune; ` +
-        `git -C ${q(repo)} worktree add -q --detach ${q(w)} ${q(p.base)} && cd ${q(w)} && git apply ${only.map((t) => `--include=${q(t)} `).join('')}${q(patch)} || exit 97; (cd ${q(repo)} && find . -name node_modules -type d -prune -print0 | xargs -0 -r cp -a --parents -t ${q(w)}); ` +
-        `(${p.command}); e=$?; cd /; git -C ${q(repo)} worktree remove --force ${q(w)}; exit $e`, this.netOf(botId)?.sock);
+        `git -C ${q(repo)} worktree add -q --detach ${q(w)} ${q(p.base)} && cd ${q(w)} && git apply ${only.map((t) => `--include=${q(t)} `).join('')}${q(patch)} || exit 97; (cd ${q(repo)} && find . -name node_modules -type d -prune -print0 | xargs -0 -r cp -a --reflink=auto --parents -t ${q(w)}); ` +
+        `(${p.command}); e=$?; cd /; git -C ${q(repo)} worktree remove --force ${q(w)}; rm -rf ${q(w)}; exit $e`, this.netOf(botId)?.sock);
     };
     const before = await run('base', tests), after = await run('fix', []);
     if (before.code === 97 || after.code === 97) throw new Error(`the patch doesn't apply to ${p.base}: ${(before.code === 97 ? before : after).tail}`);

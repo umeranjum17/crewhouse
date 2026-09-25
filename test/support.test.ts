@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { setup, settled, task } from './lab.ts';
 import * as disk from '../src/bots.ts';
@@ -132,6 +132,7 @@ test('the check runs on the deps the helper installed; a pair that failed only o
   const fix = patch(app, 'app-fix.patch', { 'add.sh': 'echo $(($1 + $2))\n' });
   const proved = await job(`fix it ${verify('work/app', baseA, fix)} ${call('crew_deliver', { path: fix })}`);
   assert.equal(proved.state, 'done');
+  for (const side of ['base', 'fix']) assert.equal(existsSync(join(space, 'work', 'verify', `${proved.id}-${side}`)), false, `${side} worktree and its seeded deps are gone`);
   assert.equal(events(db, 'verify.result').at(-1).passed, true);
   assert.equal(validate({ db, crewDir: cfg.crewDir }, proved.id).find((r: any) => r.what === `fix ${fix}`).verdict, 'PASS');
 
@@ -149,6 +150,7 @@ test('the check runs on the deps the helper installed; a pair that failed only o
   const wrong = patch(gadget, 'gadget-fix.patch', { 'src/lib.sh': 'echo $(($1 + $2))\n' });
   const suspicious = await job(`fix it ${verify('work/gadget', baseG, wrong)} ${call('crew_deliver', { path: wrong })}`);
   assert.equal(suspicious.state, 'unsure');
+  for (const side of ['base', 'fix']) assert.equal(existsSync(join(space, 'work', 'verify', `${suspicious.id}-${side}`)), false, `${side} worktree gone when the check fails too`);
   assert.deepEqual([events(db, 'verify.result').at(-1).passed, events(db, 'verify.result').at(-1).missingDep], [false, true]);
   const row = validate({ db, crewDir: cfg.crewDir }, suspicious.id).find((r: any) => r.what === `fix ${wrong}`);
   assert.equal(row.verdict, 'UNKNOWN');
