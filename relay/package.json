@@ -1,0 +1,18 @@
+{
+  "name": "crewhouse-relay",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Crewhouse's relay: phones reach the family computer from anywhere; content-free push.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.19"
+  },
+  "scripts": {
+    "start": "node main.ts",
+    "health": "node health.ts"
+  },
+  "dependencies": {
+    "@byokit/relay": "0.1.1"
+  }
+}
