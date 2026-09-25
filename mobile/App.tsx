@@ -5,14 +5,16 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { StatusBar } from 'expo-status-bar';
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
-  ActivityIndicator, BackHandler, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, useColorScheme, View,
+  ActivityIndicator, AppState, BackHandler, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, useColorScheme, View,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import * as A from '../web/src/adapter.ts';
 import { api, setTransport, trouble, type Json } from '../web/src/api.ts';
 import * as art from '../web/src/art.ts';
 import { color, radius } from '../web/src/tokens.ts';
-import { connect, forgetGrant, loadGrant, pair, pairTyped, type Grant, type Status } from './src/link';
+import { CONTROL_PERMISSIONS, DesktopView, useDesktopSession } from '@desklink/react-native';
+import { desktopAvailable } from '@desklink/react-native/availability';
+import { connect, desktopSignaling, forgetGrant, loadGrant, pair, pairTyped, type Grant, type Status } from './src/link';
 
 // ---------- look ----------
 type Look = typeof color.day & { go: string; goInk: string; night: boolean };
@@ -261,7 +263,7 @@ function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
 }
 
 // ---------- the app ----------
-type Route = { view: 'home' | 'chief' | 'crew' | 'helper' | 'things' | 'phone'; id?: string; tab?: string };
+type Route = { view: 'home' | 'chief' | 'crew' | 'helper' | 'things' | 'routines' | 'add' | 'phone'; id?: string; tab?: string };
 type Ctx = { state: Json; tick: number; refresh: () => void; go: (r: Route, replace?: boolean) => void; canAct: boolean; open: (c: A.Card) => void };
 
 function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }) {
@@ -321,8 +323,8 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
   const canAct = grant.device.role === 'control';
   const ctx: Ctx = { state, tick, refresh, go, canAct, open: setSheet };
   if (!state.person.onboarded && canAct) return <Hello {...ctx} />;
-  const nav: [Route['view'], string, string][] = [['home', 'Chats', '⌂'], ['crew', 'Crew', '☺\uFE0E'], ['things', 'Things', '▤'], ['phone', 'This phone', '▯']];
-  const active = ['chief', 'helper'].includes(route.view) ? 'crew' : route.view;
+  const nav: [Route['view'], string, string][] = [['home', 'Chats', '⌂'], ['crew', 'Crew', '☺\uFE0E'], ['things', 'Things', '▤'], ['routines', 'Routines', '↻'], ['phone', 'This phone', '▯']];
+  const active = ['chief', 'helper', 'add'].includes(route.view) ? 'crew' : route.view;
   const live = sheet && A.cards(state).find((c) => c.id === sheet.id);
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior="height">
@@ -332,6 +334,8 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
         {route.view === 'chief' && <ChiefPage {...ctx} />}
         {route.view === 'crew' && <Crew {...ctx} />}
         {route.view === 'helper' && <HelperPage {...ctx} id={route.id!} tab={route.tab ?? 'chat'} setTab={(tab) => setStack((st) => [...st.slice(0, -1), { ...route, tab }])} />}
+        {route.view === 'routines' && <Page title="Routines" lead="Jobs the crew does on a schedule. You can also just tell Chief: “every Friday, make a video of the week's photos”."><RoutineList {...ctx} /></Page>}
+        {route.view === 'add' && <AddHelper {...ctx} />}
         {route.view === 'things' && <Page title="Things" lead="Everything the crew has made for you."><ThingsList list={A.things(state)} state={state} empty="Videos, lists, letters and plans the crew makes for you land here." /></Page>}
         {route.view === 'phone' && <ThisPhone grant={grant} status={status} onForget={forget} />}
       </View>
@@ -561,7 +565,8 @@ function ChiefPage(ctx: Ctx) {
 }
 
 // ---------- the crew ----------
-function Crew({ state, go }: Ctx) {
+function Crew(ctx: Ctx) {
+  const { state, go } = ctx;
   const t = useLook();
   const chief = A.chief(state);
   const tile = (key: string, face: ReactNode, name: string, pill: ReactNode, role: string, r: Route) => (
@@ -575,7 +580,7 @@ function Crew({ state, go }: Ctx) {
         {tile('chief', <ChiefArt mood={chief.mood} size={84} />, 'Chief', <Pill>{chief.line}</Pill>, 'Runs the crew and answers to you', { view: 'chief' })}
         {A.crew(state).map((h) => tile(h.id, <Face who={h} size={84} />, h.name, <Pill tone={h.ring === 'needs' ? 'wait' : h.ring ? 'ok' : 'off'}>{h.status}</Pill>, h.role, { view: 'helper', id: h.id }))}
       </View>
-      <T tone="mute" style={[s.small, s.centerText]}>To add a helper, ask Chief, or use Crewhouse on the computer.</T>
+      {ctx.canAct ? <Btn go label="Add a helper" onPress={() => go({ view: 'add' })} /> : null}
     </Page>
   );
 }
@@ -589,7 +594,8 @@ function HelperPage(ctx: Ctx & { id: string; tab: string; setTab: (t: string) =>
   useEffect(() => { void load(); }, [load, tick]);
   if (!h) return <Center><T tone="mute">This helper has left the crew.</T></Center>;
   const b = state.bots.find((x: Json) => x.id === id);
-  const tabs: [string, string][] = [['chat', 'Chat'], ['did', 'What I did'], ['things', 'Things'], ['remembers', 'Remembers']];
+  const tabs: [string, string][] = [['chat', 'Chat'], ['did', 'What I did'], ['things', 'Things'], ['routines', 'Routines'],
+    ...(h.computer && desktopAvailable ? [['screen', 'Screen'] as [string, string]] : []), ['me', 'About me'], ['remembers', 'Remembers']];
   const trail = A.steps(page?.trail ?? []);
   const memories = A.memories(page?.notes);
   return (
@@ -611,11 +617,152 @@ function HelperPage(ctx: Ctx & { id: string; tab: string; setTab: (t: string) =>
         {trail.length ? <Steps steps={trail} max={40} /> : <Card><T tone="mute">Nothing yet. Give {h.name} something to do.</T></Card>}
       </Page>}
       {tab === 'things' && <Page><ThingsList list={A.things(state).filter((x) => x.helper === id)} state={state} empty={`${h.name}'s finished work shows up here.`} /></Page>}
+      {tab === 'routines' && <Page><RoutineList {...ctx} bot={id} /></Page>}
+      {tab === 'screen' && <Page><Screen bot={{ ...page?.bot, ...b }} canAct={canAct} refresh={() => { refresh(); void load(); }} /></Page>}
+      {tab === 'me' && <Page lead={`Who ${h.name} is, and what it knows how to do. Change it on the computer, or ask Chief.`}>
+        <Card>{A.personality(page?.soul).map((l, i) => <T key={i} style={{ paddingVertical: 4 }}>{l}</T>)}</Card>
+        {A.knows(page?.skills).length > 0 && <Card><T style={s.b}>Knows how to</T>{A.knows(page?.skills).map((k) => <T key={k.name} style={{ paddingVertical: 4 }}>{`• ${k.says}`}</T>)}</Card>}
+      </Page>}
       {tab === 'remembers' && <Page lead={`What ${h.name} has learned about how you like things.`}>
         {memories.length ? <Card>{memories.map((m, i) => <T key={i} style={{ paddingVertical: 6 }}>{m}</T>)}</Card>
           : <Card><T tone="mute">Nothing yet. {h.name} adds a line when it learns something you like.</T></Card>}
       </Page>}
     </View>
+  );
+}
+
+/** A bot's own screen on the phone, through desklink over the encrypted link: Watch, Take the wheel, Hand it back. */
+function Screen({ bot, canAct, refresh }: { bot: Json; canAct: boolean; refresh: () => void }) {
+  const t = useLook();
+  const control = bot.controls === 'person';
+  const controlRef = useRef(control);
+  controlRef.current = control;
+  const watching = useRef(false);
+  const sig = useRef<ReturnType<typeof desktopSignaling> | null>(null);
+  const [err, setErr] = useState('');
+  const [note, setNote] = useState('');
+  const session = useDesktopSession({
+    authorize: async () => {
+      sig.current?.close();
+      sig.current = desktopSignaling(bot.id);
+      return { signaling: sig.current as any, session: { permissions: controlRef.current && canAct ? CONTROL_PERMISSIONS : ['view'], maxFps: 15 } };
+    },
+    onError: () => setErr(`Couldn't open ${bot.display}'s screen. Try again in a moment.`),
+  });
+  const open = () => session.connect().then(() => session.setInputEnabled(controlRef.current && canAct));
+  useEffect(() => { if (watching.current) void session.close().then(open); }, [control]);
+  useEffect(() => () => { session.setInputEnabled(false); void session.close(); sig.current?.close(); }, []);
+  // Never drive from a phone in someone's pocket: input goes off in the background, and back on when it returns.
+  useEffect(() => { const sub = AppState.addEventListener('change', (st) => session.setInputEnabled(st === 'active' && controlRef.current && canAct)); return () => sub.remove(); }, []);
+  const watch = () => { setErr(''); watching.current = true; void open(); };
+  const stop = () => { watching.current = false; void session.close().then(() => sig.current?.close()); };
+  const act = (fn: () => Promise<unknown>) => async () => { setErr(''); if (await attempt(fn)) refresh(); };
+  const live = session.snapshot.status;
+  const idle = live === 'idle' || live === 'ended' || live === 'failed';
+  const words: Record<string, string> = { opening: 'Opening…', connecting: 'Connecting…', live: 'Live', reconnecting: 'Reconnecting…', failed: "Couldn't open it" };
+  return (
+    <Card>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <T style={[s.b, { flex: 1 }]}>{bot.display}'s screen</T>
+        <Pill tone={live === 'live' ? 'ok' : 'off'}>{control ? 'You have the wheel' : words[live] ?? 'Not watching'}</Pill>
+      </View>
+      {control && <T tone="ink2">You're driving. {bot.display} waits until you hand the wheel back.</T>}
+      <View style={{ width: '100%', aspectRatio: 1280 / 800, borderRadius: 16, overflow: 'hidden', backgroundColor: t.line }}>
+        <DesktopView sessionId={session.nativeId} style={{ flex: 1 }} accessibilityLabel={`${bot.display}'s screen`} keyboardClearance={120} />
+        {idle && <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center', padding: 16 }]}><T tone="mute" style={s.centerText}>{live === 'failed' ? words.failed : `Watch ${bot.display} work on its own computer`}</T></View>}
+      </View>
+      {!!err && <T tone="pinkInk">{err}</T>}
+      <View style={s.chips}>
+        {idle ? <Btn go label={`Watch ${bot.display}`} onPress={watch} /> : <Btn label="Stop watching" onPress={stop} />}
+        {canAct && !control && <Btn label="Take the wheel" onPress={act(async () => { await api.takeOver(bot.id); watching.current = true; if (idle) watch(); })} />}
+        {canAct && control && !idle && <Btn label="Keyboard" onPress={() => session.showKeyboard()} />}
+      </View>
+      {canAct && control && (
+        <View style={{ gap: 8 }}>
+          <TextInput style={[s.input, { color: t.ink, borderColor: t.line }]} value={note} onChangeText={setNote} placeholder={`What did you do? ${bot.display} reads this`} placeholderTextColor={t.mute} accessibilityLabel="What did you do" />
+          <Btn go label="Hand it back" onPress={act(async () => { await api.giveBack(bot.id, note); setNote(''); })} />
+        </View>
+      )}
+      <T tone="mute" style={s.small}>{bot.display} has its own computer at home, separate from yours. Taking the wheel pauses it, for a sign-in or anything it's stuck on; handing back lets it carry on.</T>
+    </Card>
+  );
+}
+
+/** Routines on the phone: each one's schedule and latest run, with Do it now, Pause and Remove, and a way to add one. */
+function RoutineList({ state, refresh, canAct, bot }: Ctx & { bot?: string }) {
+  const t = useLook();
+  const crew = A.crew(state);
+  const [adding, setAdding] = useState(false);
+  const [who, setWho] = useState(bot ?? crew[0]?.id ?? '');
+  const [what, setWhat] = useState('');
+  const [when, setWhen] = useState('');
+  const [watch, setWatch] = useState('');
+  const [preview, setPreview] = useState<Json>(null);
+  useEffect(() => {
+    if (!when.trim()) { setPreview(null); return; }
+    const x = setTimeout(() => api.schedule(when).then(setPreview).catch(() => setPreview({ bad: true })), 250);
+    return () => clearTimeout(x);
+  }, [when]);
+  const act = (fn: () => Promise<unknown>, ok?: string) => attempt(async () => { await fn(); refresh(); }, ok);
+  const list = A.routines(state, bot);
+  const input = (value: string, set: (v: string) => void, placeholder: string, label: string) => (
+    <TextInput style={[s.input, { color: t.ink, borderColor: t.line }]} value={value} onChangeText={set} placeholder={placeholder} placeholderTextColor={t.mute} accessibilityLabel={label} autoCapitalize="none" />
+  );
+  return (
+    <>
+      {list.map((r: Json) => (
+        <Card key={r.id} style={r.paused && { opacity: 0.7 }}>
+          <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
+            <Face who={crew.find((h) => h.id === r.helper) ?? 'chief'} size={40} />
+            <View style={{ flex: 1 }}><T style={s.b}>{r.name}</T>
+              <T tone="mute" style={s.small}>{`${r.watching ? `Keeps an eye on ${r.watching} · ` : ''}${r.when}${r.paused ? ' · paused' : ` · next ${r.next}`}`}</T>
+              {!!r.last && <T tone="mute" style={s.small}>{r.last}</T>}</View>
+          </View>
+          {canAct && <View style={s.chips}>
+            <Btn label="Do it now" onPress={() => act(() => api.runRoutine(r.id), 'Started')} />
+            <Btn label={r.paused ? 'Resume' : 'Pause'} onPress={() => act(() => api.routine(r.id, { state: r.paused ? 'on' : 'paused' }))} />
+            {!r.digest && <Btn ghost label="Remove" onPress={() => act(() => api.removeRoutine(r.id), 'Removed')} />}
+          </View>}
+        </Card>
+      ))}
+      {!list.length && !adding && <Card><T tone="mute">Nothing on a schedule yet.</T></Card>}
+      {canAct && (adding ? (
+        <Card>
+          <T style={s.b}>A new routine</T>
+          {!bot && <View style={s.chips}>{crew.map((h) => <Btn key={h.id} label={h.name} go={who === h.id} onPress={() => setWho(h.id)} />)}</View>}
+          {input(what, setWhat, 'What should they do each time?', 'What to do')}
+          {input(watch, setWatch, 'A page to keep an eye on, if any', 'A page to keep an eye on')}
+          {input(when, setWhen, 'When? For example: every Saturday 10am', 'When')}
+          {!!preview && <T tone="mute" style={s.small}>{preview.bad ? "I didn't catch that time. Try “every Monday 9:00”." : `${preview.words}. First time ${A.clock(preview.next)}.`}</T>}
+          <View style={s.chips}>
+            <Btn go label="Add routine" disabled={!who || (!what.trim() && !watch.trim()) || !preview || preview.bad}
+              onPress={() => act(async () => { await api.addRoutine({ bot: who, task: what, schedule: when, ...(watch.trim() ? { watch: watch.trim() } : {}) }); setAdding(false); setWhat(''); setWhen(''); setWatch(''); }, 'Routine added')} />
+            <Btn ghost label="Cancel" onPress={() => setAdding(false)} />
+          </View>
+        </Card>
+      ) : crew.length ? <Btn go label="＋ Add a routine" onPress={() => setAdding(true)} /> : <Card><T tone="mute">Add a helper first; a routine gives one of them a job on a schedule.</T></Card>)}
+    </>
+  );
+}
+
+/** Add a helper from the gallery, as on the computer. */
+function AddHelper({ state, refresh, go }: Ctx) {
+  const t = useLook();
+  const [names, setNames] = useState<Record<string, string>>({});
+  return (
+    <Page title="Add a helper" lead="Each helper has its own little computer at home and gets better as it learns what you like. It always asks before sending, paying or deleting anything.">
+      {A.gallery(state).map((g: Json) => {
+        const name = (names[g.id] ?? g.name).trim() || g.name;
+        return (
+          <Card key={g.id}>
+            <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}><Face who={{ kind: g.kind, name: g.name } as any} size={52} /><T tone="ink2" style={{ flex: 1 }}>{g.does}</T></View>
+            <TextInput style={[s.input, { color: t.ink, borderColor: t.line }]} value={names[g.id] ?? g.name} onChangeText={(v) => setNames({ ...names, [g.id]: v })} accessibilityLabel={`Name for ${g.name}`} />
+            <Btn go label={`Welcome ${name}`} onPress={() => attempt(async () => { const b = await api.recruit(g.id, name); refresh(); go({ view: 'helper', id: b.id }, true); }, `${name} joined the crew`)} />
+          </Card>
+        );
+      })}
+      <Card><T style={s.b}>Need something else?</T><T tone="mute">Tell Chief in your own words, like “keep an eye on flats in Phuket”, and he'll suggest the right helper.</T></Card>
+    </Page>
   );
 }
 

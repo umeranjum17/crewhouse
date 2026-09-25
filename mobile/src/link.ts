@@ -40,10 +40,48 @@ export async function pairTyped(relay: string, short: string, code: string, onWo
   return g;
 }
 
+/** The live link, for a bot's screen: its signaling rides a stream on it (src/link.ts `desktop`). */
+let current: DeviceLink | null = null;
+
+/** desklink's Signaling for one bot's screen, over the encrypted link: the computer's /ws/desktop messages, one JSON per line. */
+export function desktopSignaling(bot: string) {
+  const pending = new Map<number, { resolve: (v: any) => void; reject: (e: Error) => void }>();
+  const handlers = new Set<(e: any) => void>();
+  let next = 1;
+  let buf = '';
+  const opened = (async () => {
+    if (!current) throw new Error("Can't reach the home computer");
+    const s = await current.stream('desktop', { bot });
+    s.onData = (chunk) => {
+      buf += new TextDecoder().decode(chunk);
+      for (let i; (i = buf.indexOf('\n')) >= 0; buf = buf.slice(i + 1)) {
+        const msg = JSON.parse(buf.slice(0, i));
+        if (msg.event) { handlers.forEach((h) => h(msg.event)); continue; }
+        const p = pending.get(msg.id);
+        pending.delete(msg.id);
+        if (msg.error) p?.reject(Object.assign(new Error(msg.error.message), { code: msg.error.code }));
+        else p?.resolve(msg.result);
+      }
+    };
+    s.onEnd = () => { for (const p of pending.values()) p.reject(new Error('Lost touch with the home computer')); pending.clear(); };
+    return s;
+  })();
+  return {
+    async request<T = unknown>(method: string, params?: Record<string, unknown>): Promise<T> {
+      const s = await opened;
+      const id = next++;
+      return new Promise<T>((resolve, reject) => { pending.set(id, { resolve, reject }); s.write(JSON.stringify({ id, method, params }) + '\n').catch(reject); });
+    },
+    subscribe(handler: (e: any) => void) { handlers.add(handler); return () => { handlers.delete(handler); }; },
+    close() { void opened.then((s) => s.end(), () => {}); },
+  };
+}
+
 export function connect(grant: Grant, onEvent: (e: any) => void, onStatus: (s: Status) => void) {
   // The computer says where else it can be reached (Tailscale came up, its home address moved): remember each one.
   const heard = (e: any) => { if (e?.kind === 'link.urls') (e.data?.urls ?? []).forEach((u: string) => link.addUrl(u)); else onEvent(e); };
   const link: DeviceLink = new DeviceLink(grant, { store, onEvent: heard, onStatus });
+  current = link;
   /** The Transport for web/src/api.ts: crewd's answer, or an error with the HTTP status the screens understand. */
   const call = async (method: string, path: string, body?: unknown) => {
     let r: { status: number; body: any };

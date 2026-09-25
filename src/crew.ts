@@ -1331,14 +1331,15 @@ export class Crew {
 
   // ---- the bot's screen: watch, take over, give back ----
   /** One signaling request from a watching screen. Watching starts the bot's desktop if it is resting. */
-  async desktopSignal(botId: string, watcher: Watcher, method: string, params: Row) {
+  /** `canControl` false: a watch-only phone, which never drives even while the person holds the controls elsewhere. */
+  async desktopSignal(botId: string, watcher: Watcher, method: string, params: Row, canControl = true) {
     const bot = this.bot(botId);
     if (!bot) throw fail('no such bot', 404);
     if (method === 'session.open') {
       if (!disk.canUse(this.cfg, botId, 'computer')) throw Object.assign(new Error(`${bot.display} has no computer; grant it on the Tools tab`), { code: 'no-screen' });
       await this.desktops.ensure(botId, bot.n, disk.botDir(this.cfg, botId));
     }
-    return this.desktops.signal(botId, watcher, method, params, this.held.has(botId));
+    return this.desktops.signal(botId, watcher, method, params, canControl && this.held.has(botId));
   }
 
   /** The person takes the controls: the bot stops where it is, and its tool calls are refused until Give back. */

@@ -97,9 +97,9 @@ Data lives outside the repo: the database is in `~/.local/state/crewhouse/`, the
 
 ## Not yet
 
-- The phone app (Expo) and phone pairing with an encrypted link, in review in [#7](https://github.com/umeranjum17/crewhouse/pull/7). The web UI is plain React with shared `tokens.ts` and `api.ts`, so the Expo app can reuse both. Today it works at phone width on the same machine, because crewd listens on 127.0.0.1 only.
+- The phone app (`mobile/`, Android) has chats, the crew, adding a helper, routines, things, about me and each bot's screen, which it can watch and take over. Not yet on the phone: notifications (the app doesn't register for push yet), editing a helper's personality or tools, and Settings; those stay on the computer. iOS comes later.
 - Push notifications (they will follow each person's quiet hours), triggers (a folder or a webhook), Telegram. A per-person login: on this computer anyone can pick who they are.
-- Bot desktops and the bots' shell on macOS (desklink is Linux only; the shell needs a Seatbelt wrapper), and on Windows. Watching from another device (crewd listens on 127.0.0.1). A bot's `signedIn` list is still edited by hand in its `bot.json` after you sign it in.
+- Bot desktops and the bots' shell on macOS (desklink is Linux only; the shell needs a Seatbelt wrapper), and on Windows. Watching a bot's screen from outside the house through a relay (the picture needs a TURN route; chat, routines and take-over's buttons work). A bot's `signedIn` list is still edited by hand in its `bot.json` after you sign it in.
 - Signing in with ChatGPT *from the phone*: ChatGPT's page returns to `localhost:1455` on the device that opened it, so the phone app needs to catch it there and relay it to the home computer (the next step, after the phone app). Until then, a phone signs in with the code, or at the home computer. The owner-funded "house allowance". Outlook and OneDrive.
 - The desktop installer (Electron, no terminal); today it is `./crewhouse setup`.
 

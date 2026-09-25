@@ -5,6 +5,7 @@
   "dependencies": {
     "@byokit/link": "0.3.0",
     "@byokit/relay": "0.1.1",
+    "@desklink/react-native": "0.1.0",
     "expo": "~57.0.25",
     "expo-build-properties": "~57.0.22",
     "expo-camera": "~57.0.5",
@@ -14,7 +15,8 @@
     "expo-status-bar": "~57.0.1",
     "react": "19.2.3",
     "react-native": "0.86.3",
-    "react-native-safe-area-context": "~5.7.0"
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-webrtc": "124.0.8"
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
@@ -24,7 +26,8 @@
     "start": "expo start",
     "android": "expo run:android",
     "apk": "expo prebuild -p android && cd android && ./gradlew assembleRelease",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "postinstall": "node scripts/desklink-gradle.mjs"
   },
   "private": true
 }
