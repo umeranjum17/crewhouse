@@ -9,7 +9,8 @@ import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setup, sleep, task, until, prompted, settled, holding, release, lastSaid } from './lab.ts';
 
-const { quietNow, short, classify } = await import('../src/crew.ts');
+const { quietNow, short } = await import('../src/crew.ts');
+const { classify } = await import('@byokit/accounts');
 const { OWNER, signInError } = await import('../src/accounts.ts');
 const { effectOf, browserAsk, coversOf, toolWords } = await import('../src/policy.ts');
 const kit = await import('../src/tools.ts');
@@ -374,9 +375,9 @@ test('limits: a limit rests that account and the task carries on in the same con
   crew.onboard('sir');
   crew.recruit('scout', 'Scout', 'person');
   disk.setBrains(cfg, 'scout', ['chatgpt', 'copilot']);
-  assert.deepEqual(classify('You have hit your ChatGPT usage limit (plus plan). Try again in ~30 min.')?.why, 'rate_limit');
-  assert.equal(classify('503 overloaded')?.why, 'overloaded');
-  assert.equal(classify('401 Unauthorized')?.why, 'signed_out');
+  assert.deepEqual(classify('You have hit your ChatGPT usage limit (plus plan). Try again in ~30 min.')?.kind, 'rate_limit');
+  assert.equal(classify('503 overloaded')?.kind, 'overloaded');
+  assert.equal(classify('401 Unauthorized')?.kind, 'signed_out');
   assert.equal(classify('context window exceeded by your prompt'), null);
 
   const t = crew.assign('scout', 'dig deep, then hit the limit', 'chief').task;
@@ -393,13 +394,13 @@ test('limits: a limit rests that account and the task carries on in the same con
 
   // Every account resting: the task pauses with a wake-up time, and resumes when it passes.
   const others = ['copilot', 'openrouter']; // the stub counts these as signed in; Grok is not
-  for (const k of others) (crew as any).rests.set(`1:${k}`, Date.now() + (k === 'copilot' ? 60_000 : 120_000));
+  for (const k of others) await crew.accounts.failed(OWNER, k, `usage limit, try again in ${k === 'copilot' ? 1 : 2} min`);
   const b = crew.assign('scout', 'look it up again', 'chief').task;
   await settled(db, b);
   assert.equal(task(db, b).state, 'paused');
   assert.ok(Math.abs(task(db, b).wake_at - (Date.now() + 60_000)) < 1000, 'earliest reset: Copilot in a minute, not ChatGPT in half an hour');
   assert.match(task(db, b).result, /All AI accounts are resting until \d+:\d\d [ap]m/);
-  (crew as any).rests.clear();
+  (crew.accounts as any).rests.clear();
   db.run('UPDATE tasks SET wake_at = ? WHERE id = ?', Date.now() - 1, b);
   crew.dispatch();
   await settled(db, b);
@@ -558,7 +559,7 @@ test('household: bots and tasks belong to a member and run on that member\'s own
 
   // One person's limit rests only their own account.
   disk.setBrains(cfg, 'reel', ['chatgpt']);
-  for (const k of ['chatgpt', 'grok', 'copilot', 'openrouter']) (crew as any).rests.set(`${sam}:${k}`, Date.now() + 60_000);
+  for (const k of ['chatgpt', 'grok', 'copilot', 'openrouter']) await crew.accounts.failed(sam, k, 'usage limit, try again in 1 min');
   assert.equal(crew.restingUntil('chatgpt', OWNER), 0);
   const e = crew.post('reel', 'another for Sam', undefined, sam)!.task;
   const f = crew.post('scout', 'owner lookup', undefined, OWNER)!.task;
@@ -696,7 +697,7 @@ test('sign-in failures: expired, declined, offline, stalled and cancelled all en
     return v;
   };
   assert.deepEqual(await fails(async () => { throw new Error('expired_token'); }),
-    { state: 'failed', via: undefined, url: undefined, code: undefined, expiresAt: undefined, error: 'The code expired before it was used. Tap Sign in with Grok for a new one.', why: undefined });
+    { state: 'failed', via: undefined, url: undefined, code: undefined, expiresAt: undefined, error: 'The code expired before it was used. Tap Sign in with Grok for a new one.', why: 'expired' });
   assert.equal((await fails(async () => { throw new Error('access_denied'); })).error, 'The sign-in was declined on the Grok page. Tap Sign in with Grok to try again.');
   assert.equal((await fails(async () => { throw new TypeError('fetch failed'); })).error, "Couldn't reach Grok. Check the internet connection, then tap Sign in again.");
   // A flow that stalls past the limit is stopped.

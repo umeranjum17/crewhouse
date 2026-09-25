@@ -66,7 +66,7 @@ export function startServer(cfg: Config, db: Store, crew: Crew) {
       if (p === '/connect/callback') {
         const words = await crew.connections.finish(url.searchParams);
         res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
-        return res.end(callbackPage(words, /connected\./.test(words)));
+        return res.end(callbackPage('Crewhouse', words, /connected\./.test(words)));
       }
 
       const file = p.match(/^\/files\/([a-z0-9-]+)\/(.+)$/);
@@ -106,7 +106,7 @@ export function startServer(cfg: Config, db: Store, crew: Crew) {
       // A work ChatGPT (Business, Enterprise, Edu) is flagged by its email, so the app can steer to a personal one.
       return Promise.all(crew.members().flatMap((mm) => Object.entries(PROVIDERS).map(async ([key, pr]) => {
         const signedIn = await crew.accounts.signedIn(mm.id, key);
-        const plan = signedIn && key === 'chatgpt' ? crew.accounts.chatgptPlan(mm.id) : null;
+        const plan = signedIn && key === 'chatgpt' ? await crew.accounts.plan(mm.id) : null;
         return { member: mm.id, account: key, name: pr.name, signedIn, restingUntil: crew.restingUntil(key, mm.id), signIn: crew.accounts.view(mm.id, key),
           notIncluded: crew.accounts.notIncluded(mm.id, key), work: plan?.work ? plan.email || true : false };
       })));

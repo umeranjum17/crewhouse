@@ -9,6 +9,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSyn
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer, type AddressInfo } from 'node:net';
+import { traceFs } from '@byokit/accounts/testing';
 
 const root = mkdtempSync(join(tmpdir(), 'crewhouse-isolation-'));
 const home = join(root, 'home');
@@ -48,7 +49,7 @@ const env = {
   TRACE_ROOTS: [pi, install, agents].join(':'), TRACE_LOG: trace,
 };
 let daemon: ChildProcess;
-const start = () => { daemon = spawn(process.execPath, ['--import', join(import.meta.dirname, 'trace-fs.mjs'), join(import.meta.dirname, '..', 'src', 'main.ts')], { env, stdio: ['ignore', 'ignore', 'inherit'] }); };
+const start = () => { daemon = spawn(process.execPath, ['--import', traceFs, join(import.meta.dirname, '..', 'src', 'main.ts')], { env, stdio: ['ignore', 'ignore', 'inherit'] }); };
 after(() => daemon?.kill());
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -70,6 +71,7 @@ test("the owner's own Pi is never read or written, and never run", async () => {
   await finished((await api('POST', '/api/bots/reel/messages', { text: 'save [tool write {"path":"files/a.txt","content":"x"}]' })).task);
   await finished((await api('POST', '/api/bots/reel/messages', { text: 'look [tool bash {"command":"ls ~ ~/.pi; echo $OPENAI_API_KEY; pi --version"}]' })).task);
   await api('POST', '/api/accounts/1/grok/login', { via: 'code' });
+  await until(async () => (await api('GET', '/api/accounts')).find((a: any) => a.member === 1 && a.account === 'grok').signedIn);
   const { task } = await api('POST', '/api/bots/reel/messages', { text: 'ask permission while [tool read {"path":"files/a.txt"}]' });
   await until(async () => (await api('GET', '/api/bots/reel')).trail.find((e: any) => e.kind === 'run.tool' && e.data.task === task));
   daemon.kill('SIGKILL');

@@ -49,7 +49,7 @@ const step: FauxResponseFactory = async (ctx, options, _state, model): Promise<A
 /** Every AI account, answered by the script. */
 export function stubModels(rt: ModelRuntime) {
   for (const p of Object.values(PROVIDERS)) {
-    const core = createFauxCore({ provider: p.pi, api: `stub-${p.pi}`, models: [{ id: p.model }], tokensPerSecond: 0 });
+    const core = createFauxCore({ provider: p.pi, api: `stub-${p.pi}`, models: [{ id: p.models.strong }], tokensPerSecond: 0 });
     core.setResponses(Array(100_000).fill(step));
     const oauth = {
       name: p.name,

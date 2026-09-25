@@ -19,25 +19,8 @@ import { describe, nextRun, parseSchedule } from './routines.ts';
 
 const HOLD_MS = Number(process.env.CREWHOUSE_HOLD_MS || 180_000); // how long a tool call waits for an answer before the turn parks
 const TASK_TIMEOUT_MS = 60 * 60_000;
-// How long an account rests when its limit didn't say.
-const REST_MS = { rate_limit: 60 * 60_000, overloaded: 5 * 60_000, signed_out: 0, not_included: 0 };
-type Why = keyof typeof REST_MS;
-
-/** An account's error, in the three kinds crewd acts on, and when it said to come back. Anything else fails the task. */
-export function classify(error: string): { why: Why; until: number } | null {
-  const mins = /try again in ~?(\d+)\s*min/i.exec(error)?.[1];
-  const until = mins ? Date.now() + Number(mins) * 60_000 : 0;
-  // ChatGPT words "your plan has no helpers" (usage_not_included) like a limit, but with no time to come back.
-  // ponytail: told apart by the missing "try again"; a real limit always says when it resets.
-  if (/usage limit/i.test(error) && !mins) return { why: 'not_included', until };
-  if (/usage limit|rate.?limit|quota|too many requests|\b429\b/i.test(error)) return { why: 'rate_limit', until };
-  if (/overloaded|high demand|\b50[234]\b|unavailable/i.test(error)) return { why: 'overloaded', until };
-  if (/unauthori[sz]ed|\b40[13]\b|sign in again|expired|invalid.*token|authentication/i.test(error)) return { why: 'signed_out', until };
-  return null;
-}
-
-export const clock = (t: number) => (new Date(t).toDateString() === new Date().toDateString() ? '' : new Date(t).toLocaleDateString('en-US', { weekday: 'short' }) + ' ') +
-  new Date(t).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase();
+import { classify, clock } from '@byokit/accounts';
+export { clock };
 
 /** At most n characters, cut at a word boundary with an ellipsis: titles on cards and in the digest. */
 export const short = (s: string, n: number) => (s = s.trim(), s.length > n ? `${s.slice(0, n - 1).replace(/\s+\S*$/, '')}…` : s);
@@ -86,8 +69,6 @@ export class Crew {
   private granted = new Set<string>();
   /** "For this task" answers: the gate's keys a task's later calls go through on. */
   private taskGrants = new Map<number, string[]>();
-  /** When each account rests until, keyed "<member>:<account>": one person's limit never rests another's account. */
-  private rests = new Map<string, number>();
   private starting = new Set<string>();
   private timer?: NodeJS.Timeout;
   /** Bots whose screen the person is driving: the bot is paused until they give the controls back. */
@@ -163,10 +144,7 @@ export class Crew {
   activeTask(bot: string) { return this.db.get("SELECT * FROM tasks WHERE bot = ? AND state IN ('working', 'needs_you') ORDER BY id LIMIT 1", bot); }
 
   /** 0 when the member's account is available; otherwise when it stops resting. */
-  restingUntil(account: string, member = OWNER) {
-    const until = this.rests.get(`${member}:${account}`) ?? 0;
-    return until > Date.now() ? until : 0;
-  }
+  restingUntil(account: string, member = OWNER) { return this.accounts.restingUntil(member, account); }
 
   /** The accounts a task may run on, in order: its own choice, the bot's fallback order, then any other account its
    *  member has signed in to (someone who only has Grok still gets a working crew). Never another member's. */
@@ -561,7 +539,7 @@ export class Crew {
     try {
       const choices = this.choices(task);
       for (const b of choices) await this.accounts.signedIn(member, b.provider).catch(() => false);
-      const brain = choices.find((b) => !this.restingUntil(b.provider, member) && !this.accounts.unready(member, b.provider));
+      const brain = this.accounts.ladder(member, choices, (b) => b.provider);
       if (!brain) return this.pause(task, choices);
       this.setTask(task, 'working');
       const handoff = this.handoffs.get(task.id);
@@ -615,7 +593,7 @@ export class Crew {
       try { tools.push(...await mcp.tools(seen)); l.mcp = mcp; } catch (e) { console.error(`browser for ${bot.id}:`, e); mcp.stop(); }
     }
     l.session = await openSession({
-      runtime: await this.accounts.runtime(member), provider: PROVIDERS[brain.provider].pi, model: brain.model ?? PROVIDERS[brain.provider].model,
+      runtime: await this.accounts.runtime(member), provider: PROVIDERS[brain.provider].pi, model: brain.model ?? PROVIDERS[brain.provider].models.strong,
       space, file, sessionsDir: join(this.cfg.stateDir, 'sessions', bot.id), system: disk.systemPrompt(this.cfg, bot.id, bot.id === CHIEF),
       skills: join(space, 'skills'), builtins, tools, gate: (tool, input) => this.gate(bot.id, tool, input), retry: this.cfg.engine === 'pi',
     });
@@ -646,7 +624,7 @@ export class Crew {
     const error = err ? String((err as Error).message ?? err) : last?.stopReason === 'error' ? String(last.errorMessage ?? 'error') : '';
     if (!error) return this.finish(botId, l.session.getLastAssistantText() ?? '');
     const kind = classify(error);
-    if (kind) return void this.failover(botId, kind.why, kind.until);
+    if (kind && kind.kind !== 'network') return void this.failover(botId, error);
     console.error(`${botId}: ${error}`);
     const task = this.activeTask(botId);
     if (task) this.setTask(task, 'failed', `${PROVIDERS[l.brain.provider].name} couldn't finish this one. Try again.`);
@@ -717,19 +695,17 @@ export class Crew {
 
   /** An account hit its limit, is overloaded or needs signing in again: rest it, and the task continues in its own
    *  session on the next account, conversation and all. */
-  private async failover(botId: string, why: Why, known = 0) {
+  private async failover(botId: string, error: string) {
     const l = this.live.get(botId);
     const task = this.activeTask(botId);
     if (!l || !task) return;
     const name = PROVIDERS[l.brain.provider].name;
+    // A sign-in that still refreshes was only turned away in passing, so it rests a few minutes instead of looping.
+    const why = (await this.accounts.failed(l.member, l.brain.provider, error))!.kind;
     let words = `${name} needs you to sign in again`;
-    // Turned away: a sign-in that can't even be refreshed any more is signed out for real, and the task waits for a new
-    // one; one that still refreshes was a passing refusal, so the account rests a few minutes instead of looping.
-    if (why === 'signed_out' && await this.accounts.recheck(l.member, l.brain.provider)) why = 'overloaded';
-    if (why === 'not_included') { this.accounts.notIncluded(l.member, l.brain.provider, true); words = `${name}'s plan doesn't include helpers`; }
+    if (why === 'not_included') words = `${name}'s plan doesn't include helpers`;
     else if (why !== 'signed_out') {
-      const until = known || Date.now() + REST_MS[why];
-      this.rests.set(`${l.member}:${l.brain.provider}`, until);
+      const until = this.accounts.restingUntil(l.member, l.brain.provider);
       this.db.event('account.resting', null, { account: l.brain.provider, name, member: l.member, until });
       words = why === 'rate_limit' ? `${name} is resting until ${clock(until)}` : `${name} is busy right now`;
     }
