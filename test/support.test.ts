@@ -8,6 +8,10 @@ import { join } from 'node:path';
 import { setup, settled, task } from './lab.ts';
 import * as disk from '../src/bots.ts';
 import { sandboxReady } from '../src/engine.ts';
+import { createServer } from 'node:http';
+import { once } from 'node:events';
+// @ts-expect-error: a plain script, no types
+import { validate } from '../scripts/validate-support.mjs';
 
 const call = (name: string, args: object) => `[tool ${name} ${JSON.stringify(args)}]`;
 const events = (db: any, kind: string) => db.all('SELECT data FROM events WHERE kind = ? ORDER BY seq', kind).map((e: any) => JSON.parse(e.data));
@@ -91,5 +95,50 @@ test('a delivered fix ends done only when crewd saw its check fail before and pa
   assert.equal((await job(`send it ${call('crew_deliver', { path: good })}`)).state, 'done');
   writeFileSync(join(space, good), '');
   assert.equal((await job(`send it ${call('crew_deliver', { path: good })}`)).state, 'unsure');
+  done();
+});
+
+test('the validator checks a run against crewd\'s record: issues read, citations real, the answer kept, blind or not', async () => {
+  const { cfg, db, crew, done } = setup();
+  crew.onboard('sir');
+  crew.recruit('support', 'Desk', 'person');
+  const srv = createServer((_q, res) => res.end('{"number":7}')).listen(0, '127.0.0.1');
+  srv.unref();
+  await once(srv, 'listening');
+  const issue = `http://127.0.0.1:${(srv.address() as any).port}/repos/o/app/issues/7`;
+  const space = disk.botDir(cfg, 'desk'), repo = join(space, 'work', 'app');
+  mkdirSync(join(repo, 'src'), { recursive: true });
+  writeFileSync(join(repo, 'src', 'a.ts'), 'one\ntwo\nthree\n');
+  const git = (...a: string[]) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', '-C', repo, ...a], { encoding: 'utf8' });
+  git('init', '-q'); git('add', '-A'); git('commit', '-qm', 'base');
+  const at = git('rev-parse', 'HEAD').trim().slice(0, 12);
+  const write = (n: number, triage: string) => {
+    mkdirSync(join(space, 'files', 'support', String(n)), { recursive: true });
+    writeFileSync(join(space, 'files', 'support', String(n), 'triage.md'), triage);
+    writeFileSync(join(space, 'files', 'support', String(n), 'reply.md'), `Thanks. It is set in src/a.ts:2@${at}.\n`);
+  };
+  const run = async (n: number, fetch: string) => {
+    const f = (p: string) => call('crew_deliver', { path: `files/support/${n}/${p}` });
+    const t = (await crew.post('desk', `${fetch} ${f('triage.md')} ${f('reply.md')} ${call('crew_draft', { path: `files/support/${n}/reply.md`, to: `app issue #${n}` })}`))!.task;
+    await settled(db, t);
+    return t;
+  };
+  const verdicts = (t: number, forbid: string[] = []) => Object.fromEntries(validate({ db, crewDir: cfg.crewDir }, t, forbid).map((r: any) => [r.what, r.verdict]));
+
+  write(7, `Kind: bug. The value comes from src/a.ts:2@${at} and src/a.ts:3@${at}.\n`);
+  const good = await run(7, call('web_fetch', { url: issue }));
+  assert.equal(verdicts(good)['answer on files/support/7/reply.md'], 'UNKNOWN', 'on a card, not answered yet');
+  await crew.answer(db.get("SELECT id FROM asks WHERE kind = 'propose' AND state = 'open'")!.id, { answer: 'allow' });
+  assert.deepEqual(verdicts(good), { ended: 'PASS', 'issues read': 'PASS', 'citations in files/support/7/triage.md': 'PASS', 'citations in files/support/7/reply.md': 'PASS',
+    'answer on files/support/7/reply.md': 'PASS', fix: 'PASS', blind: 'UNKNOWN', tokens: 'PASS' });
+  assert.equal(verdicts(good, ['/issues/7'])['blind'], 'FAIL', 'it reached the answer: contaminated');
+  writeFileSync(join(space, 'files', 'support', '7', 'reply.md'), 'Other words.\n');
+  assert.equal(verdicts(good)['answer on files/support/7/reply.md'], 'FAIL', 'the yes was for different words');
+
+  // Wrote about an issue it never read, and cited a line that isn't there: both fail.
+  write(8, `Kind: bug. See src/a.ts:99@${at}.\n`);
+  const bad = verdicts(await run(8, ''));
+  assert.deepEqual([bad['issues read'], bad['citations in files/support/8/triage.md']], ['FAIL', 'FAIL']);
+  srv.close();
   done();
 });
