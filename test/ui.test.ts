@@ -381,6 +381,7 @@ test('the words people read make only claims Crewhouse can keep', () => {
   // The usage line describes the crew's own share, never a provider balance.
   assert.equal(A.meter({ share: { used: false } }), 'ChatGPT: the crew is within its share today');
   assert.equal(A.share({ share: { choice: 'light', used: false } }).today, 'The crew stays within the share you gave it.');
+});
 
 test('a dialog owns the keyboard: Tab cycles inside and wraps, and an outside focus still lands inside', () => {
   let on = '';
@@ -426,5 +427,4 @@ test('a photo in a message is a picture, not words', () => {
   assert.match(c.files[0].url, /\/files\/pip\/photos\/6-1\.jpg/);
   assert.equal(A.preview({ author: 'person', text: 'Here is a photo.\n[photo reel] files/photos/5-1.png' }), 'You: Photo');
   assert.doesNotMatch(shown([l, c]), FORBIDDEN);
-});
 });
