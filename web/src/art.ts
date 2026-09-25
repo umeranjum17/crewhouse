@@ -2,7 +2,7 @@
 // (the block-letter boot splash, Chief's laptop, confetti). Framework-free, so the Expo app draws the same art:
 // a bitmap is an array of equal-width strings, '.' is an unlit dot, any other letter indexes a palette.
 
-export type Mood = 'idle' | 'blink' | 'twitch' | 'hello' | 'happy' | 'work' | 'ask' | 'listen' | 'rest' | 'error';
+export type Mood = 'idle' | 'blink' | 'twitch' | 'hello' | 'happy' | 'work' | 'ask' | 'listen' | 'rest' | 'worried' | 'error';
 export type Bitmap = string[];
 export type Palette = Record<string, string>;
 
@@ -32,10 +32,13 @@ const HEAD = [
   '  yyyyyyyyyyyyyyyy', '  yyyyyyyyyyyyyyyy', '   yyyyyyyyyyyyyy', '    ssyyyyyyyyss', '   sssttsTTsttsss', '    sstt    ttss',
 ];
 const HAT = ['       hhhhhh', '      hhhhhhhh', '      hHhhhhhh', '      hHhhhhhh', '      bbbbbbbb', '  hhhhhhhhhhhhhhhh'];
+// Content is a ∪: ends curled up, the lowest dots in the centre, no lobes — six faces smile through it. Pleased curls
+// deeper, across the whole face; the flat bar is worried; the ∩ stays for sad and rest alone.
 const MO = {
-  idle: ['   m   mmmmmm   m', '    mmmmmmmmmmmm', '     mmmm  mmmm'],
-  up: ['  m    mmmmmm    m', '   mmmmmmmmmmmmmm', '     mmmm  mmmm'],
-  down: ['       mmmmmm', '    mmmmmmmmmmmm', '   mmmm      mmmm', '   m            m'],
+  idle: ['  m              m', '  mm   mmmmmm   mm', '   mmmmmmmmmmmmmm', '      mmmmmmmm'],
+  up: [' m                m', '  mm            mm', '   mmmmmmmmmmmmmm', '     mmmmmmmmmm', '       mmmmmm'],
+  flat: ['     mmmmmmmmmm', '  mm  mmmmmmmm  mm'],
+  down: ['       mmmmmmmm', '   mmmmmmmmmmmmmm', '  mm            mm', '  m              m'],
 };
 const CHEEK = '  c      nn      c';
 /** One face per mood, from head row 3 down. Column ruler: 01234567890123456789. */
@@ -46,27 +49,41 @@ const FACES: Record<Mood, string[]> = {
   work: ['', '             mmm', '    mmm      gg', '            geeg', '     ee     geeg', '  c      nn  gg  c', ...MO.idle],
   ask: ['    mmm      mmm', '', '     ee      ee', '     ee      ee', '     ee      ee', CHEEK, ...MO.idle, '         kk'],
   hello: ['    mmm      mmm', '', '', '     ee      ee', '     ee      ee', CHEEK, ...MO.up],
-  happy: ['    mmm      mmm', '', '', '     ee      ee', '    e  e    e  e', '  cc     nn     cc', ...MO.up, '        kkkk', '         kk'],
+  happy: ['    mmm      mmm', '', '', '    e  e    e  e', '   e    e  e    e', '  cc     nn     cc', ...MO.up],
   listen: ['              mmm', '    mmm', '', '      ee      ee', '      ee      ee', CHEEK, ...MO.idle],
   rest: ['', '', '', '    e  e    e  e', '     ee      ee', CHEEK, ...MO.down],
-  error: ['      m      m', '    mm        mm', '', '     ee      ee', '     ee      ee', CHEEK, ...MO.down, '', '        kkkk', '        k  k'],
+  worried: ['      m      m', '    mm        mm', '', '    eee      eee', '    eee      eee', CHEEK, ...MO.flat],
+  error: ['      m      m', '    mm        mm', '', '     ee      ee', '    e          e', CHEEK, ...MO.down],
 };
 export function chief(mood: Mood = 'idle', bob = 0): Bitmap {
   const lift = ({ ask: -2, hello: -2, rest: 2, error: -1 } as Record<string, number>)[mood] ?? 0; // raised to ask, over the eyes to rest, askew on error
   const hat: [number, number, string[]] = [mood === 'error' ? 2 : 1, 2 + bob + lift, HAT];
   const signs: [number, number, string[]][] = ({
-    happy: [[0, 3, SPARKLE], [19, 1, SPARKLE], [19, 9, ['*']]], rest: [[18, 0, ZZ]], error: [[19, 8, SWEAT]], listen: [[19, 10, SOUND]], ask: [[20, 0, BANG]],
+    happy: [[19, 1, SPARKLE]], rest: [[18, 0, ZZ]], worried: [[19, 8, SWEAT]], listen: [[19, 10, SOUND]], ask: [[20, 0, BANG]],
   } as Record<string, [number, number, string[]][]>)[mood] ?? [];
   return draw(22, 23, [1, 5 + bob, HEAD], [1, 8 + bob, FACES[mood]], hat, ...signs);
 }
-/** The 12×13 cut for 48 px and below (the app icon, avatars, the status bar): hat, eyes and moustache. */
+/** The cut for 48 px and below (the app icon, avatars, the list rows): a tiny glyph per mood. A 34 px face is about
+ *  nine meaningful dots, so the moustache line itself is the mouth - curled ∪ for pleased and content, ∩ for sad, level
+ *  for worried - the eyes carry the rest (arcs, wide blocks, droops, shut), the hat is a two-row block, and only needs
+ *  you and pleased keep an edge cue. */
 export function chiefSmall(mood: Mood = 'idle'): Bitmap {
-  const eyes = ({ blink: ['', ' e    e'], work: ['', ' e    e'], rest: ['e e  e e', ' e    e'], happy: [' e    e', 'e e  e e'], listen: ['  e    e', '  e    e'] } as Record<string, string[]>)[mood] ?? [' e    e', ' e    e'];
-  const mo = mood === 'happy' ? ['m        m', ' mmmmmmmm', '  mm  mm'] : mood === 'error' || mood === 'rest' ? ['', '  mmmmmm', ' mm    mm'] : ['', 'm mmmmmm m', ' mm    mm'];
-  const lift = mood === 'ask' || mood === 'hello' ? -1 : mood === 'rest' ? 1 : 0;
-  return draw(12, 13, [0, 5, ['  yyyyyyyy', ' yyyyyyyyyy', ' yyyyyyyyyy', ' yyyyyyyyyy', ' yyyyyyyyyy', ' yyyyyyyyyy', '  yyyyyyyy', '    yyyy']],
-    [2, 7, eyes], [1, 9, mo], [mood === 'error' ? 1 : 0, 1 + lift, ['   hhhhhh', '   hhhhhh', '   bbbbbb', ' hhhhhhhhhh']]);
+  const eyes: [number, number, string[]] = ({
+    happy: [1, 2, ['   e    e  ', '  e e  e e ']], blink: [1, 3, [' ee   ee ']], rest: [1, 3, [' ee   ee ']],
+    listen: [1, 2, ['  e    e  ']], worried: [1, 2, [' eee   eee ']],
+    error: [1, 2, ['   e    e  ', '  e      e ']],
+    work: [1, 2, [' ee   gg ']],
+  } as Record<string, [number, number, string[]]>)[mood] ?? [1, 2, [' ee   ee ']];
+  const mouth: [number, number, string[]] = ({
+    happy: [1, 4, [' mmmmmmmmm ', '    mmm    ']], worried: [1, 4, [' mmmmmmmmm ']],
+    error: [1, 4, ['   mmmmm   ', ' m       m ']], rest: [1, 5, ['  mmmmmmm  ']],
+  } as Record<string, [number, number, string[]]>)[mood] ?? [1, 4, [' m       m ', '  mmmmmmm  ']];
+  const sign: [number, number, string[]] | undefined = ({
+    ask: [10, 1, ['t', 't', 't']], happy: [10, 2, ['*']],
+  } as Record<string, [number, number, string[]]>)[mood];
+  return draw(11, 8, [1, 0, ['   hhhhh   ', ' hhhhhhhhh ']], eyes, mouth, ...(sign ? [sign] : []));
 }
+
 /** The notification glyph: alpha-only, drawn as solid pixels (white on transparent) so it holds at 24 px. */
 export const NOTIFY: Bitmap = [
   '...xxxxxx...', '..xxxxxxxx..', '..xxxxxxxx..', '............', 'xxxxxxxxxxxx', '............',
@@ -102,7 +119,7 @@ const PAL_SHAPES: Record<Kind, { ey: number; body: string[]; top: string[] }> = 
 };
 const PAL_EYES: Record<Mood, string[]> = {
   idle: ['ee', 'ee'], blink: ['', 'ee'], twitch: ['ee', 'ee'], rest: ['', 'ee'], work: ['', 'ee', 'ee'], ask: ['ee', 'ee', 'ee'],
-  hello: [' ee', 'e  e'], happy: [' ee', 'e  e'], listen: [' ee', ' ee'], error: ['e', 'ee'],
+  hello: [' ee', 'e  e'], happy: [' ee', 'e  e'], listen: [' ee', ' ee'], worried: ['e', 'ee'], error: ['e', 'ee'],
 };
 const PAL_MOUTH: Partial<Record<Mood, string[]>> = { happy: ['k  k', ' kk'], ask: [' kk', ' kk'], error: [' kk', 'k  k'], listen: ['  e'] };
 export function pal(kind: Kind, mood: Mood = 'idle'): Bitmap {
@@ -110,7 +127,7 @@ export function pal(kind: Kind, mood: Mood = 'idle'): Bitmap {
   const a = 5, b = 11, off = mood === 'happy' || mood === 'hello' ? -1 : 0, y = mood === 'ask' ? ey - 1 : ey;
   const eyes: [number, number, string[]][] = mood === 'rest' ? [[a - 1, ey, ['e  e', ' ee']], [b - 1, ey, ['e  e', ' ee']]] : [[a + off, y, PAL_EYES[mood]], [b + off, y, PAL_EYES[mood]]];
   const signs: [number, number, string[]][] = ({
-    happy: [[0, 2, SPARKLE], [15, 4, SPARKLE]], rest: [[15, 0, ZZ.slice(0, 3)]], error: [[16, 6, SWEAT]], ask: [[17, 0, BANG]], listen: [[15, 8, SOUND]],
+    happy: [[0, 2, SPARKLE], [15, 4, SPARKLE]], rest: [[15, 0, ZZ.slice(0, 3)]], worried: [[16, 6, SWEAT]], ask: [[17, 0, BANG]], listen: [[15, 8, SOUND]],
   } as Record<string, [number, number, string[]][]>)[mood] ?? [];
   return draw(18, 17, [0, 0, body], [0, mood === 'ask' ? -1 : 0, top], ...eyes, [7, ey + 3, PAL_MOUTH[mood] ?? [' ee']], [a - 2, ey + 2, ['c']], [b + 3, ey + 2, ['c']], ...signs);
 }

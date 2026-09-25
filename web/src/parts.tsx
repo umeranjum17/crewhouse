@@ -67,7 +67,8 @@ export function Dots({ rows, pal, d = 6, label }: { rows: art.Bitmap; pal: art.P
   );
 }
 
-/** Blinks now and then (Chief's moustache twitches too), so the crew feels alive; still when the person prefers less motion. */
+/** Blinks now and then (Chief's moustache twitches too), so the crew feels alive; still when the person prefers less motion.
+ *  Only the hero does this: it blinks in content, work and listen, and twitches in content only. */
 function useBlink(on: boolean, twitch = false) {
   const [beat, setBeat] = useState<'' | 'blink' | 'twitch'>('');
   useEffect(() => {
@@ -80,14 +81,61 @@ function useBlink(on: boolean, twitch = false) {
   return beat;
 }
 
-/** Set by the shell as it renders, so the art matches day or night without waiting a frame. */
+/** One 170 ms blink frame when the mood changes, then the new face. No tween, no slide; Reduce Motion changes at once. */
+function useChangeBlink(on: boolean, mood: art.Mood) {
+  const [flash, setFlash] = useState(false);
+  const prev = useRef(mood);
+  useEffect(() => {
+    if (prev.current === mood) return;
+    prev.current = mood;
+    if (!on || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    setFlash(true);
+    const t = setTimeout(() => setFlash(false), 170);
+    return () => clearTimeout(t);
+  }, [mood, on]);
+  return flash;
+}
+
+/** Chief's mood holds: a higher-priority mood takes over at once, a lower one waits until the current one has held for
+ *  6 s, so the 120 ms refresh and the 15 s poll never flicker him. Hero-sized faces only; small faces change at once. */
+export function useHeld<V extends { mood: art.Mood; rank: number }>(view: V): V {
+  const [cur, setCur] = useState(view);
+  const since = useRef(Date.now());
+  useEffect(() => {
+    if (cur.mood === view.mood && cur.rank === view.rank) return;
+    if (view.rank < cur.rank || Date.now() - since.current >= 6000) { setCur(view); since.current = Date.now(); }
+  }, [view, cur]);
+  return cur.mood === view.mood ? view : cur;
+}
+
+/** Chief leans in while his composer holds your words, and for a beat after it empties or blurs. */
+let listening = false;
+const listenSubs = new Set<() => void>();
+export function setListen(chat: string | undefined, on: boolean) {
+  const next = !!chat && chat === 'chief' && on;
+  if (next === listening) return;
+  listening = next;
+  listenSubs.forEach((f) => f());
+}
+export function useListen() {
+  const [on, setOn] = useState(listening);
+  useEffect(() => { const f = () => setOn(listening); listenSubs.add(f); return () => { listenSubs.delete(f); }; }, []);
+  return on;
+}
+
+/** Set by the shell as it renders, so the art matches day or night without waiting a frame — and so every little
+ *  Chief face (avatars, headers) carries the mood without each caller holding the state. */
 let night = false;
 export const setNight = (n: boolean) => { night = n; };
+let chiefMood: art.Mood = 'idle';
+export const setChiefMood = (m: art.Mood) => { chiefMood = m; };
 
-/** Chief. `d` is sized for the old 14-dot head, so callers keep their footprint; small sizes get the 12-dot cut. */
-export function ChiefArt({ mood = 'idle', d = 6, dark }: { mood?: art.Mood; d?: number; dark?: boolean }) {
-  const beat = useBlink(mood === 'idle', true);
-  const m = beat || mood;
+/** Chief. `d` is sized for the old 14-dot head, so callers keep their footprint; small sizes get the 12-dot cut.
+ *  `hero` marks the one face on screen that lives: it blinks and shows the 170 ms change-blink. */
+export function ChiefArt({ mood = 'idle', d = 6, dark, hero }: { mood?: art.Mood; d?: number; dark?: boolean; hero?: boolean }) {
+  const beat = useBlink(!!hero && ['idle', 'work', 'listen'].includes(mood), hero && mood === 'idle');
+  const flash = useChangeBlink(!!hero, mood);
+  const m = beat || (flash ? 'blink' : mood);
   const dd = (d * 14) / 22, small = dd < 2.4;
   return <Dots rows={small ? art.chiefSmall(m) : art.chief(m)} pal={dark ?? night ? art.CHIEF_PAL_NIGHT : art.CHIEF_PAL} d={small ? (dd * 22) / 12 : dd} label="Chief" />;
 }
@@ -102,7 +150,7 @@ export function Face({ who, size = 44, ring = '' }: { who: Helper | 'chief' | { 
   const soft = chief ? '#fff7e8' : art.PALS[who.kind].soft;
   return (
     <span className={`face ${ring}`} style={{ width: size, height: size, background: soft }}>
-      {chief ? <ChiefArt d={size / 22} /> : <PalArt kind={who.kind} mood={who.mood} d={size / 17} name={who.name} />}
+      {chief ? <ChiefArt d={size / 22} mood={chiefMood} /> : <PalArt kind={who.kind} mood={who.mood} d={size / 17} name={who.name} />}
     </span>
   );
 }
@@ -176,8 +224,8 @@ export function Celebrate({ title, onDone }: { title: string; onDone: () => void
 }
 
 // ---------- small things ----------
-export function Pill({ tone = 'ok', children }: { tone?: 'ok' | 'wait' | 'off'; children: ReactNode }) {
-  return <span className={`pill ${tone}`}><i />{children}</span>;
+export function Pill({ tone = 'ok', live, children }: { tone?: 'ok' | 'wait' | 'off'; live?: boolean; children: ReactNode }) {
+  return <span className={`pill ${tone}${live ? ' live' : ''}`}><i />{children}</span>;
 }
 
 export function Media({ f, big }: { f: FileView; big?: boolean }) {
@@ -218,7 +266,14 @@ export function Composer({ placeholder, onSend, chat }: { placeholder: string; o
   const [text, setText] = useState(() => (chat ? draftOf(chat).text : ''));
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
-  const change = (t: string) => { setText(t); setFailed(false); if (chat) keepDraft(chat, t); };
+  const [focused, setFocused] = useState(false);
+  const hold = useRef<any>(null);
+  const hear = (on: boolean, words: string) => { // he listens while focused with words, 1.5 s after it ends
+    clearTimeout(hold.current);
+    if (on && words.trim()) setListen(chat, true);
+    else hold.current = setTimeout(() => setListen(chat, false), 1500);
+  };
+  const change = (t: string) => { setText(t); setFailed(false); hear(focused, t); if (chat) keepDraft(chat, t); };
   const send = async () => {
     const t = text.trim();
     if (!t || busy) return;
@@ -226,12 +281,13 @@ export function Composer({ placeholder, onSend, chat }: { placeholder: string; o
     let ok = false;
     try { ok = !!(await onSend(t)); } catch { ok = false; }
     setBusy(false);
-    if (ok) { setText(''); setFailed(false); if (chat) keepDraft(chat, ''); } else { setFailed(true); if (chat) sent(chat, false, text); }
+    if (ok) { setText(''); setFailed(false); hear(focused, ''); if (chat) keepDraft(chat, ''); } else { setFailed(true); if (chat) sent(chat, false, text); }
   };
   return (
     <form className="composer" onSubmit={(e) => { e.preventDefault(); void send(); }}>
       {failed && <div className="send-failed" role="alert">Not sent — it's kept here. <button type="button" className="link inline" onClick={() => void send()}>Retry</button></div>}
       <textarea rows={1} value={text} placeholder={placeholder} aria-label={placeholder}
+        onFocus={() => { setFocused(true); hear(true, text); }} onBlur={() => { setFocused(false); hear(false, text); }}
         onChange={(e) => change(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(); } }} />
       <button className="send" aria-label="Send" disabled={!text.trim() || busy}>↑</button>
     </form>

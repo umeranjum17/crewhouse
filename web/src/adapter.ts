@@ -79,7 +79,7 @@ export function kindOf(b: Json): Kind {
 /** Templates only the owner sees in the gallery (people-finding spends money). */
 const OWNER_ONLY = new Set(['tracer']);
 
-export function helper(b: Json): Helper {
+export function helper(b: Json, events: Json[] = []): Helper {
   const needs = b.task?.state === 'needs_you';
   const stuck = !!b.stuck;
   const driving = b.controls === 'person';
@@ -87,10 +87,23 @@ export function helper(b: Json): Helper {
     : b.queued ? 'Up next' : b.pausedUntil ? `Resting until ${clock(at(b.pausedUntil))}` : 'Free to help';
   return {
     id: b.id, name: b.display, kind: kindOf(b), role: plain(b.role ?? ''), status: plain(status), computer: !!b.computer, driving,
-    mood: needs ? 'ask' : b.task ? 'work' : b.pausedUntil ? 'rest' : 'idle',
+    mood: helperMood(b, needs, stuck, events),
     ring: needs ? 'needs' : b.task ? 'working' : '',
     stuckFor: stuck ? Math.max(1, Math.round((Date.now() - b.quietSince) / 60_000)) : 0, quietSince: b.quietSince ?? 0,
   };
+}
+
+/** A helper's face follows the same story as Chief's: waiting on you, gone quiet, an unread failure, fresh work, on the
+ *  job, paused, else content. The failure window is 30 minutes and needs the bot's chat unread; fresh work is 5 minutes. */
+function helperMood(b: Json, needs: boolean, stuck: boolean, events: Json[]): Mood {
+  if (needs) return 'ask';
+  if (stuck) return 'worried';
+  const now = Date.now();
+  if ((b.unread ?? 0) > 0 && events.some((e) => (e.kind === 'task.failed' || e.kind === 'task.unsure') && e.bot === b.id && now - at(e.at) < 30 * 60_000)) return 'error';
+  if (events.some((e) => e.kind === 'task.done' && e.bot === b.id && now - at(e.at) < 5 * 60_000)) return 'happy';
+  if (b.task) return 'work';
+  if (b.pausedUntil) return 'rest';
+  return 'idle';
 }
 
 /** Settings, Phones, "Reach it from anywhere": one of three states in plain words, and the steps still to do. Tailscale
@@ -241,26 +254,58 @@ export function resting(state: Json) {
   return r.length === 1 && ai ? `Your ${ai.name} is resting until ${when}` : `The crew is resting until ${when}`;
 }
 
-/** Chief's heartbeat: his mood and one line for the whole crew. */
-export function chief(state: Json) {
+/**
+ * Chief's mood and his one line for the whole crew. The first matching row wins, so the face follows how things are
+ * actually going; `local` carries what only the app knows (the computer out of reach, his composer, the sign-in).
+ * Every Chief render — hero, sidebar, avatars, chat header — reads this.
+ */
+export type ChiefLocal = { offline?: boolean; listen?: boolean; signedOut?: boolean };
+export type ChiefView = { mood: Mood; line: string; tone: 'ok' | 'wait' | 'off'; rank: number };
+export function chief(state: Json, local: ChiefLocal = {}): ChiefView {
+  const v = chiefRow(state, local);
+  if (local.offline) return { mood: 'rest', line: 'The home computer is asleep', tone: 'off', rank: 1 };
+  if (local.listen) return { ...v, mood: 'listen', rank: 2 }; // he leans in; the line stays as it was
+  return v;
+}
+
+/** The priority table, minus the listen row (the caller's `local` carries it, with offline and the sign-in). */
+function chiefRow(state: Json, local: ChiefLocal): ChiefView {
   const all = crew(state);
+  const now = Date.now();
+  const events = (state.events ?? []) as Json[];
+  const asks = state.asks.length;
   const needs = all.find((h) => h.ring === 'needs');
+  const stuck = all.find((h) => h.stuckFor > 0);
   const busy = all.filter((h) => h.ring === 'working');
   const rest = resting(state);
-  const mood: Mood = state.asks.length ? 'ask' : busy.length ? 'work' : rest ? 'rest' : 'idle';
+  const recent = (kind: string, ms = 30 * 60_000) => events.filter((e) => e.kind === kind && now - at(e.at) < ms).sort((a, b) => at(b.at) - at(a.at));
+  const botOf = (id: string) => state.bots.find((b: Json) => b.id === id);
+  const failure = recent('task.failed').concat(recent('task.unsure'))
+    .find((e) => ((botOf(String(e.bot))?.unread ?? 0) > 0));
+  const done = recent('task.done', 5 * 60_000)[0];
+  const name = (id: string) => crewName(state, id);
   const line = needs ? `${needs.name} needs you`
-    : state.asks.length ? `${crewName(state, state.asks[0].bot)} needs you`
+    : asks ? `${name(state.asks[0].bot)} needs you`
     : busy.length === 1 ? `${busy[0].name} is on “${busy[0].status}”`
     : busy.length > 1 ? `${busy.map((h) => h.name).join(' and ')} are working`
     : rest || 'Keeping an eye on things';
-  return { mood, line };
+  const view: ChiefView =
+    failure ? { mood: 'error', line: `${name(String(failure.bot))} couldn't finish “${plain(failure.data?.title ?? '') || 'its job'}”`, tone: 'wait', rank: 3 }
+    : stuck ? { mood: 'worried', line: `${stuck.name} has gone quiet`, tone: 'wait', rank: 4 }
+    : local.signedOut ? { mood: 'worried', line: 'Waiting for your sign-in', tone: 'wait', rank: 4 }
+    : needs || asks ? { mood: 'ask', line, tone: 'wait', rank: 5 }
+    : done ? { mood: 'happy', line: `${name(String(done.bot))} finished “${plain(done.data?.title ?? '') || 'a job'}”`, tone: 'ok', rank: 6 }
+    : busy.length ? { mood: 'work', line, tone: 'ok', rank: 7 }
+    : rest ? { mood: 'rest', line: rest, tone: 'off', rank: 8 }
+    : { mood: 'idle', line: 'Keeping an eye on things', tone: 'ok', rank: 9 };
+  return view;
 }
 const crewName = (state: Json, id: string) => state.bots.find((b: Json) => b.id === id)?.display ?? 'The crew';
 
 /** The helpers this person sees: everyone's, less the owner-only ones unless it's the owner. */
 export function crew(state: Json) {
   const owner = state.person.id === OWNER;
-  return state.bots.filter((b: Json) => b.id !== 'chief' && (owner || !OWNER_ONLY.has(b.template))).map(helper) as Helper[];
+  return state.bots.filter((b: Json) => b.id !== 'chief' && (owner || !OWNER_ONLY.has(b.template))).map((b: Json) => helper(b, state.events ?? [])) as Helper[];
 }
 
 /** One thread in the chat list: Chief pinned on top, then the helpers, the latest talk first. */

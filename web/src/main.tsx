@@ -5,7 +5,7 @@ import { createRoot } from 'react-dom/client';
 import QRCode from 'qrcode';
 import { api, demo, setMember, subscribe, type Json } from './api.ts';
 import * as A from './adapter.ts';
-import { AskCard, AskSheet, attempt, Celebrate, setNight, ChiefArt, Composer, Face, Laptop, Logo, Media, PalArt, Pill, Splash, Steps, Toasts, toast } from './parts.tsx';
+import { AskCard, AskSheet, attempt, Celebrate, setChiefMood, setNight, ChiefArt, Composer, Face, Laptop, Logo, Media, PalArt, Pill, Splash, Steps, Toasts, toast, useHeld, useListen } from './parts.tsx';
 import { keepDraft } from './draft.ts';
 import { Screen } from './screen.tsx';
 import { AccountCard, ConnectApp, ConnectCard, openTab, sheet, SignIn, Unreachable } from './flows.tsx';
@@ -27,7 +27,13 @@ const hrefOf = (id: string) => (id === 'chief' ? '#/chief' : `#/h/${id}`);
 /** Which chat each composer writes into: its held draft lives in web/src/draft.ts. */
 const typeInto = (id: string) => ({ chat: id });
 
-type Ctx = { state: Json; me: number; tick: number; refresh: () => void; night: boolean };
+type Ctx = { state: Json; me: number; tick: number; refresh: () => void; night: boolean; offline: boolean; accounts: Json[] | null };
+
+/** What Chief knows from the app itself, not the state: the computer out of reach, his composer, the sign-in. */
+function chiefLocal(ctx: Ctx, listen = false): A.ChiefLocal {
+  const g = A.account(ctx.accounts, ctx.me);
+  return { offline: ctx.offline, listen, signedOut: g.state === 'signed-out' || g.notIncluded };
+}
 
 // ---------- first run ----------
 function useAccounts(poll: number, tick = 0) {
@@ -106,13 +112,13 @@ function Share({ refresh }: Ctx) {
 }
 
 // ---------- home ----------
-function Heartbeat({ state, big }: { state: Json; big?: boolean }) {
-  const { mood, line } = A.chief(state);
+function Heartbeat({ state, big, local }: { state: Json; big?: boolean; local?: A.ChiefLocal }) {
+  const { mood, line, tone } = useHeld(A.chief(state, local));
   return (
     <div className="beat">
-      <span className="halo"><ChiefArt mood={mood} d={big ? 6 : 5} /></span>
+      <span className="halo"><ChiefArt mood={mood} d={big ? 6 : 5} hero /></span>
       {mood === 'work' && <Laptop />}
-      <Pill tone={mood === 'ask' ? 'wait' : mood === 'rest' ? 'off' : 'ok'}>{line}</Pill>
+      <Pill tone={tone} live={mood === 'work'}>{line}</Pill>
     </div>
   );
 }
@@ -171,15 +177,15 @@ function Chats({ state, refresh }: { state: Json; refresh: () => void }) {
   );
 }
 
-function Home({ state, me, refresh, tick }: Ctx) {
+function Home({ state, me, refresh, tick, accounts, offline, night }: Ctx) {
+  const listen = useListen();
   const crew = A.crew(state);
   const cards = A.cards(state).filter((c) => c.kind !== 'connect');
-  const accounts = useAccounts(0, tick);
   const g = A.account(accounts, me);
   const toChief = async (t: string) => { const ok = await attempt(() => api.post('chief', t), undefined, true); if (ok) { refresh(); go('#/chief'); } return ok; };
   return (
     <div className="home">
-      <div className="home-top"><Heartbeat state={state} /></div>
+      <div className="home-top"><Heartbeat state={state} local={chiefLocal({ state, me, tick, refresh, night, offline, accounts }, listen)} /></div>
       <h1 className="hi">{A.greeting()}, {state.person.address ?? state.person.name}</h1>
       {(g.state === 'signed-out' || g.notIncluded) && <AccountCard me={me} owner={ownerName(state)} isOwner={me === A.OWNER} g={g} onReady={refresh} />}
       {A.resting(state) && <div className="card nudge"><span className="grow">{A.resting(state)}. I'll pick things back up then.</span></div>}
@@ -215,8 +221,8 @@ function Rail({ state }: { state: Json }) {
 }
 
 // ---------- a chat ----------
-function Chat({ id, state, me, tick, refresh }: Ctx & { id: string }) {
-  const g = A.account(useAccounts(0, tick), me);
+function Chat({ id, state, me, tick, refresh, accounts }: Ctx & { id: string }) {
+  const g = A.account(accounts, me);
   const [page, setPage] = useState<Json>(null);
   const load = useCallback(() => api.bot(id).then(setPage).catch(() => {}), [id]);
   useEffect(() => { void load(); }, [load, tick]);
@@ -260,24 +266,26 @@ function Chat({ id, state, me, tick, refresh }: Ctx & { id: string }) {
 }
 
 function ChiefPage(ctx: Ctx) {
-  const { mood, line } = A.chief(ctx.state);
+  const { mood, line, tone } = A.chief(ctx.state, chiefLocal(ctx, useListen()));
   return (
     <div className="page chat-page">
       <header className="chat-head sticky-top"><a href="#/" className="back" aria-label="Back">‹</a><span className="face" style={{ width: 44, height: 44, background: '#fff7e8' }}><ChiefArt mood={mood} d={2.1} /></span>
-        <div><b>Chief</b><div><Pill tone={mood === 'ask' ? 'wait' : 'ok'}>{line}</Pill></div></div></header>
+        <div><b>Chief</b><div><Pill tone={tone}>{line}</Pill></div></div></header>
       <Chat {...ctx} id="chief" />
     </div>
   );
 }
 
 // ---------- the crew ----------
-function Crew({ state }: Ctx) {
+function Crew(ctx: Ctx) {
+  const { state } = ctx;
+  const c = A.chief(state, chiefLocal(ctx));
   return (
     <div className="page">
       <h1>Your crew</h1>
       <p className="lead">Everyone answers to Chief. Tap a helper to chat, or add one for something new.</p>
       <div className="grid">
-        <a className="card pal-card" href="#/chief"><span className="halo"><ChiefArt mood={A.chief(state).mood} d={4} /></span><b>Chief</b><Pill>{A.chief(state).line}</Pill><span className="mute small">Runs the crew and answers to you</span></a>
+        <a className="card pal-card" href="#/chief"><span className="halo"><ChiefArt mood={c.mood} d={4} /></span><b>Chief</b><Pill tone={c.tone}>{c.line}</Pill><span className="mute small">Runs the crew and answers to you</span></a>
         {A.crew(state).map((h) => (
           <a key={h.id} className="card pal-card" href={hrefOf(h.id)}>
             <span className="halo"><PalArt kind={h.kind} mood={h.mood} d={5} name={h.name} /></span>
@@ -614,8 +622,7 @@ function Phones({ tick }: { tick: number }) {
   </>);
 }
 
-function Settings({ state, me, refresh, tick, look, setLook, switchTo }: Ctx & { look: string; setLook: (l: string) => void; switchTo: (id: number) => void }) {
-  const accounts = useAccounts(0, tick);
+function Settings({ state, me, refresh, tick, accounts, look, setLook, switchTo }: Ctx & { look: string; setLook: (l: string) => void; switchTo: (id: number) => void }) {
   const [signing, setSigning] = useState<Window | null | false>(sheet === 'signin' ? null : false);
   const [adding, setAdding] = useState('');
   const owner = state.person.id === A.OWNER;
@@ -796,6 +803,7 @@ function App() {
   const [offline, setOffline] = useState(false);
   const [booted, setBooted] = useState(false);
   const [party, setParty] = useState<string | null>(null);
+  const accounts = useAccounts(0, tick);
   const seenDone = useRef<Set<number> | null>(null);
   const heard = useRef(0); // when the home computer last answered
   const { look, setLook, night } = useLook();
@@ -828,11 +836,13 @@ function App() {
     if (seenDone.current) { const fresh = done.find((t) => !seenDone.current!.has(t.id)); if (fresh) setParty(fresh.title); }
     seenDone.current = new Set(done.map((t) => t.id));
   }, [state]);
-  const ctx: Ctx | null = useMemo(() => (state ? { state, me, tick, refresh, night } : null), [state, me, tick, refresh, night]);
+  const ctx: Ctx | null = useMemo(() => (state ? { state, me, tick, refresh, night, offline, accounts } : null), [state, me, tick, refresh, night, offline, accounts]);
 
   const ready = !!ctx && booted;
   const splash = <Splash done={!HOLD_SPLASH && (ready || (offline && booted))} />;
   if (!ctx) return <>{splash}{offline && booted && <Unreachable retry={refresh} owner={me === A.OWNER} />}</>;
+  // Every little Chief face on the page carries the mood from here, the way the night palette does.
+  setChiefMood(A.chief(ctx.state, chiefLocal(ctx)).mood);
   if (!ctx.state.person.onboarded) return <>{splash}<Hello {...ctx} /><Toasts /></>;
   const v = under.current;
   const crew = A.crew(ctx.state);
@@ -846,7 +856,7 @@ function App() {
       <div className={`shell ${v.view === 'home' ? 'with-rail' : ''} ${['chief', 'helper'].includes(v.view) ? 'is-chat' : ''}`}>
         <aside className="side">
           <a href="#/" className="brand"><Logo night={night} /></a>
-          <a href="#/chief" className={`side-row chief-row ${v.view === 'chief' ? 'on' : ''}`}><span className="face" style={{ width: 34, height: 34, background: '#fff7e8' }}><ChiefArt mood={A.chief(ctx.state).mood} d={1.7} /></span><b className="grow">Chief</b>{(A.chats(ctx.state)[0].unread > 0) && <span className="badge">{A.unreadBadge(A.chats(ctx.state)[0].unread)}</span>}</a>
+          <a href="#/chief" className={`side-row chief-row ${v.view === 'chief' ? 'on' : ''}`}><span className="face" style={{ width: 34, height: 34, background: '#fff7e8' }}><ChiefArt mood={A.chief(ctx.state, chiefLocal(ctx)).mood} d={1.7} /></span><b className="grow">Chief</b>{(A.chats(ctx.state)[0].unread > 0) && <span className="badge">{A.unreadBadge(A.chats(ctx.state)[0].unread)}</span>}</a>
           <div className="label">Helpers</div>
           {A.chats(ctx.state).filter((c) => c.who !== 'chief').map((c) => (
             <a key={c.id} href={hrefOf(c.id)} className={`side-row ${v.id === c.id ? 'on' : ''}`}><Face who={c.who as A.Helper} size={32} ring={c.ring} /><span className="grow"><b>{c.name}</b><span className="mute small clamp1">{c.line}</span></span>{c.unread > 0 && <span className="badge">{A.unreadBadge(c.unread)}</span>}</a>

@@ -153,7 +153,7 @@ test('sign-in states reach the screens as plain states, never the engine\'s word
 
 test('the mascots: every mood draws a whole grid in known colours, and Chief\'s moods all look different', async () => {
   const art = await import('../web/src/art.ts');
-  const moods = ['blink', 'twitch', 'hello', 'happy', 'work', 'ask', 'listen', 'rest', 'error'] as const;
+  const moods = ['blink', 'twitch', 'hello', 'happy', 'work', 'ask', 'listen', 'rest', 'worried', 'error'] as const;
   const faces = [
     ...[undefined, ...moods].map((m) => [art.chief(m), art.CHIEF_PAL] as const),
     ...[undefined, ...moods].map((m) => [art.chiefSmall(m), art.CHIEF_PAL] as const),
@@ -164,6 +164,94 @@ test('the mascots: every mood draws a whole grid in known colours, and Chief\'s 
     for (const k of rows.join('').replace(/\./g, '')) assert.ok(pal[k], `no colour for "${k}"`);
   }
   assert.equal(new Set(moods.map((m) => art.chief(m).join())).size, moods.length, 'two of Chief\'s moods look the same');
+  // The redraw: content is a ∪ (ends curled up, lowest dots in the centre), sad lost the sweat drop, worried keeps it,
+  // and content still smiles in the small cut that draws every face under 48 px.
+  const shape = (r: string) => [...r].map((c) => (c === 'm' ? 'm' : '.')).join('').replace(/^\.+|\.+$/g, '');
+  assert.deepEqual(art.chief('idle').filter((r) => r.includes('m')).slice(-4).map(shape),
+    ['m..............m', 'mm...mmmmmm...mm', 'mmmmmmmmmmmmmm', 'mmmmmmmm'], 'content: a ∪ moustache, lowest dots in the centre');
+  assert.ok(!art.chief('error').join().includes('d'), 'sad lost the sweat drop');
+  assert.ok(art.chief('worried').join().includes('d'), 'worried keeps the drop');
+  assert.notEqual(art.chiefSmall('idle').join(), art.chiefSmall('error').join(), 'small content is not the small cut');
+  assert.deepEqual(art.chiefSmall('idle').filter((r) => r.includes('m')).map(shape), ['m.......m', 'mmmmmmm'], 'small content: the moustache line curls \\u2228');
+});
+
+test("Chief's mood is the first matching row of the table, and the line follows the face", () => {
+  const min = 60_000, ago = (m: number) => Date.now() - m * min;
+  const bot = (id: string, extra: Json = {}) => ({ id, display: id[0].toUpperCase() + id.slice(1), template: id, ...extra });
+  const base: Json = { person: { id: 1 }, members: [], asks: [], tasks: [], events: [], resting: {}, bots: [bot('chief'), bot('reel'), bot('scout')] };
+  const withBots = (...bs: Json[]) => ({ ...base, bots: [bot('chief'), ...bs] });
+  const mood = (v: { mood: string }) => v.mood;
+  // 9 · nothing applies: content
+  assert.equal(A.chief(base).mood, 'idle');
+  assert.equal(A.chief(base).line, 'Keeping an eye on things');
+  assert.equal(A.chief(base).tone, 'ok');
+  // 1 · the computer is asleep, whatever else is true
+  const busyHouse = withBots(bot('reel', { task: { id: 1, title: 'A video', state: 'working' } }));
+  const off = A.chief(busyHouse, { offline: true });
+  assert.deepEqual([off.mood, off.tone, off.line], ['rest', 'off', 'The home computer is asleep']);
+  // 2 · listening: the face changes, the line stays
+  const work = A.chief(busyHouse);
+  assert.deepEqual([work.mood, work.rank], ['work', 7]);
+  const listen = A.chief(busyHouse, { listen: true });
+  assert.deepEqual([listen.mood, listen.line], ['listen', work.line]);
+  // 3 · an unread failure in the last 30 minutes is sad, and said once
+  const failed = { ...base, bots: [bot('chief'), bot('reel', { unread: 2 })], events: [{ kind: 'task.failed', bot: 'reel', at: ago(4), data: { title: 'Flights' } }] };
+  const sad = A.chief(failed);
+  assert.deepEqual([sad.mood, sad.tone, sad.rank], ['error', 'wait', 3]);
+  assert.equal(sad.line, "Reel couldn't finish \u201cFlights\u201d");
+  assert.equal(A.chief({ ...failed, events: [{ kind: 'task.failed', bot: 'reel', at: ago(31), data: { title: 'Flights' } }] }).mood, 'idle', 'over half an hour old: over it');
+  assert.equal(A.chief({ ...failed, bots: [bot('chief'), bot('reel')] }).mood, 'idle', 'read: over it');
+  assert.equal(A.chief({ ...failed, events: [{ kind: 'task.unsure', bot: 'reel', at: ago(2), data: { title: 'Booking' } }] }).mood, 'error', 'unsure counts too');
+  // 4 · a helper gone quiet, or the sign-in out, is worried — and beats waiting on you
+  const worried = A.chief(withBots(bot('reel', { stuck: true, quietSince: ago(6) }), bot('scout', { task: { id: 2, title: 'Flights', state: 'needs_you' } })));
+  assert.deepEqual([worried.mood, worried.line], ['worried', 'Reel has gone quiet']);
+  assert.equal(A.chief(base, { signedOut: true }).line, 'Waiting for your sign-in');
+  // 5 · waiting on you
+  const ask = A.chief(withBots(bot('reel', { task: { id: 3, title: 'A video', state: 'needs_you' } })));
+  assert.deepEqual([ask.mood, ask.tone, ask.line], ['ask', 'wait', 'Reel needs you']);
+  const askCard = A.chief({ ...base, asks: [{ id: 1, bot: 'scout' }] });
+  assert.deepEqual([askCard.mood, askCard.line], ['ask', 'Scout needs you']);
+  // 6 · fresh finished work is pleased
+  const done = { ...base, bots: [bot('chief'), bot('reel', { task: { id: 4, title: 'A video', state: 'working' } }), bot('scout')], events: [{ kind: 'task.done', bot: 'scout', at: ago(2), data: { title: 'Dinners' } }] };
+  const pleased = A.chief(done);
+  assert.deepEqual([pleased.mood, pleased.line], ['happy', 'Scout finished “Dinners”']);
+  assert.equal(A.chief({ ...done, events: [{ kind: 'task.done', bot: 'scout', at: ago(6), data: { title: 'Dinners' } }] }).mood, 'work', 'five minutes gone: back to the work');
+  // 7 · on the job, even while the account rests
+  const resting = { ...busyHouse, resting: { chatgpt: Date.now() + 30 * min } };
+  assert.deepEqual([mood(A.chief(resting)), A.chief(resting).tone], ['work', 'ok']);
+  // 8 · the crew rests
+  const rest = A.chief({ ...base, resting: { chatgpt: Date.now() + 30 * min } });
+  assert.deepEqual([rest.mood, rest.tone], ['rest', 'off']);
+  assert.match(rest.line, /resting until/);
+  // And the whole ladder, top down: each row beats the one under it.
+  const ladder = { ...failed, events: [...failed.events, { kind: 'task.done', bot: 'scout', at: ago(1), data: { title: 'Dinners' } }], bots: [...failed.bots, bot('scout', { stuck: true, quietSince: ago(6), task: { id: 9, title: 'Flights', state: 'needs_you' } })] };
+  assert.equal(mood(A.chief(ladder)), 'error', 'sad over worried');
+  assert.equal(mood(A.chief({ ...ladder, bots: (ladder.bots as Json[]).map((b) => (b.id === 'reel' ? { ...b, unread: 0 } : b)) })), 'worried', 'worried over ask');
+  const askOver = withBots(bot('scout', { task: { id: 5, title: 'Flights', state: 'needs_you' } }), bot('pip', { task: { id: 6, title: 'Week', state: 'working' } }));
+  assert.equal(mood(A.chief({ ...askOver, events: [{ kind: 'task.done', bot: 'pip', at: ago(1), data: { title: 'Week' } }] })), 'ask', 'ask over happy');
+  assert.equal(mood(A.chief({ ...done, resting: { chatgpt: Date.now() + min } })), 'happy', 'happy over work');
+  assert.equal(A.chief({ ...resting, asks: [{ id: 2, bot: 'reel' }] }).rank, 5, 'the rank rides along for the hold');
+});
+
+test('helpers wear the same story on their own faces', () => {
+  const min = 60_000, ago = (m: number) => Date.now() - m * min;
+  const s = { person: { id: 1 }, asks: [], tasks: [], resting: {}, events: [
+    { kind: 'task.failed', bot: 'scribe', at: ago(3), data: { title: 'The note' } },
+    { kind: 'task.done', bot: 'scout', at: ago(2), data: { title: 'Flights' } },
+  ], bots: [
+    { id: 'chief', display: 'Chief' },
+    { id: 'scribe', display: 'Scribe', template: 'scribe', unread: 1 },                       // unread failure → sad
+    { id: 'reel', display: 'Reel', template: 'reel', task: { id: 1, title: 'A video', state: 'needs_you' } }, // → ask
+    { id: 'scout', display: 'Scout', template: 'scout' },                                     // fresh work → happy
+    { id: 'pip', display: 'Pip', template: 'scout', stuck: true, quietSince: ago(7) },        // → worried
+    { id: 'tracer', display: 'Tracer', template: 'tracer', task: { id: 2, title: 'An email', state: 'working' } }, // → work
+    { id: 'muse', display: 'Muse', template: 'reel', pausedUntil: ago(-30) },                 // → rest
+    { id: 'ink', display: 'Ink', template: 'reel' },                                          // → idle
+  ] } as Json;
+  const moodOf = (id: string) => A.crew(s).find((h) => h.id === id)!.mood;
+  assert.deepEqual(['scribe', 'reel', 'scout', 'pip', 'tracer', 'muse', 'ink'].map(moodOf), ['error', 'ask', 'happy', 'worried', 'work', 'rest', 'idle']);
+  assert.equal(moodOf('scribe') === 'error' && A.crew(s).find((h) => h.id === 'scribe')!.ring, '', 'sad is a face, not a ring');
+  // The owner only test below keeps tracer visible; here the mapping is what matters.
 });
 
 test('the phone\'s tab icons: whole 9×9 grids of one ink, each its own shape, and no font glyphs in the tab bar', async () => {
