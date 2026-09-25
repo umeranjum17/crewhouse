@@ -8,12 +8,18 @@
   "tools": [
     "crew",
     "files",
-    "web",
-    "search-files",
-    "documents"
+    "web"
   ],
   "skills": [
     "triage-issue",
     "sandbox-patch"
+  ],
+  "net": [
+    "api.github.com",
+    "github.com",
+    "codeload.github.com",
+    "objects.githubusercontent.com",
+    "registry.npmjs.org",
+    "registry.yarnpkg.com"
   ]
 }
