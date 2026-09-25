@@ -20,6 +20,8 @@ export interface Template {
   ideas?: { needs: string[]; promise: string; ask: string }[];
   /** A base for helpers Chief makes up (templates/helper): never offered on its own. */
   hidden?: boolean;
+  /** The only hosts its shell and web tools may reach (src/net.ts); none listed: the open network. */
+  net?: string[];
 }
 
 /** `allow` holds the person's standing answers ("Always for Reel"), as the gate's keys. */

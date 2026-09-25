@@ -1,7 +1,7 @@
 import './isolate.ts'; // first: before anything loads the engine
 import { createHash, randomBytes } from 'node:crypto';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { defineTool, type AgentSession, type ToolDefinition } from '@earendil-works/pi-coding-agent';
@@ -13,6 +13,8 @@ import { Desktops, browserBin, missing as desktopMissing, type Watcher } from '.
 import { Accounts, OWNER, PROVIDERS } from './accounts.ts';
 import { Connections, type AppTool } from './connections.ts';
 import { axiTool, cliTool, openSession, readPage, runAxi, runSandboxed, sandboxBash, q, sandboxReady, webTools } from './engine.ts';
+import { allowed, proxy } from './net.ts';
+import type { Server } from 'node:net';
 import { acts, coversOf, effectOf, orderOf, toolWords, type Effect } from './policy.ts';
 import { axiEnv, registry, resolveGrants, toolBin, which } from './tools.ts';
 import { stubModels } from './stub.ts';
@@ -161,6 +163,8 @@ export class Crew {
   private awake = false;
   /** Watches reading their page right now: a slow page is never read twice at once. */
   private checking = new Set<number>();
+  /** Each fenced helper's allowlisting proxy (src/net.ts), started the first time it is needed. */
+  private nets = new Map<string, Server>();
   /** A checkout the person said yes to: that task's clicks on that page go through while its total stays the same. */
   private checkouts = new Map<string, { task: number; page: string; total: number | null }>();
   private stopped = false;
@@ -223,6 +227,7 @@ export class Crew {
     if (this.awake) this.keepAwake(false);
     for (const [id, l] of this.live) { this.live.delete(id); l.browser?.end(); l.session.dispose(); }
     void this.desktops.stopAll();
+    for (const n of this.nets.values()) n.close();
     this.accounts.stop();
   }
 
@@ -913,6 +918,22 @@ export class Crew {
     }
   }
 
+  /** A helper whose template lists the only hosts it may reach: its list and its proxy's socket. Every refusal is an event,
+   *  so an attempt is seen. The list comes from the template in the repo, never from the bot's own folder, which it can write. */
+  private netOf(botId: string) {
+    let list: string[] | undefined;
+    try { list = disk.loadTemplate(this.cfg, this.bot(botId)?.template ?? '').net; } catch { /* no template: not fenced */ }
+    if (!list) return undefined;
+    const sock = join(this.cfg.stateDir, 'net', `${botId}.sock`);
+    if (!this.nets.has(botId)) {
+      mkdirSync(dirname(sock), { recursive: true });
+      rmSync(sock, { force: true });
+      this.nets.set(botId, proxy(sock, list, (host, port) => this.refusedNet(botId, `${host}:${port}`)));
+    }
+    return { list, sock, may: (u: URL) => allowed(list!, u.hostname, Number(u.port || (u.protocol === 'http:' ? 80 : 443))) || (this.refusedNet(botId, u.host), false) };
+  }
+  private refusedNet(botId: string, to: string) { this.db.event('net.refused', botId, { task: this.activeTask(botId)?.id, to: to.slice(0, 260) }); }
+
   /** The engine session for a task: the bot's folder as its space, its granted tools, crewd's gate on every call. */
   private async open(bot: Row, task: Row, member: number, brain: disk.Brain, file?: string) {
     this.close(bot.id);
@@ -922,8 +943,9 @@ export class Crew {
     const tools: ToolDefinition[] = [...this.crewTools(bot.id)];
     const builtins = g.tools.includes('files') ? ['read', 'write', 'edit', 'ls', 'grep', 'find'] : [];
     const l = { task: task.id, member, brain, counted: 0 } as Live;
-    if (g.tools.includes('files') && sandboxReady()) tools.push(sandboxBash(space, [this.cfg.toolsDir], { ...g.env, PATH: toolBin(this.cfg) }) as ToolDefinition);
-    if (g.tools.includes('web')) tools.push(...webTools());
+    const net = this.netOf(bot.id);
+    if (g.tools.includes('files') && sandboxReady()) tools.push(sandboxBash(space, [this.cfg.toolsDir], { ...g.env, PATH: toolBin(this.cfg) }, net?.sock) as ToolDefinition);
+    if (g.tools.includes('web')) tools.push(...webTools(net?.may));
     for (const t of registry(this.cfg).filter((t) => t.run && g.tools.includes(t.id))) {
       tools.push(cliTool(t.id.replace(/-/g, '_'), which(this.cfg, t.bins[0]) ?? t.bins[0], t.name, space, g.env));
     }
@@ -1163,6 +1185,11 @@ export class Crew {
   private async decide(botId: string, tool: string, input: Record<string, any>) {
     if (this.held.has(botId)) return { block: true, reason: 'The person has the controls of your screen; wait. You will be told when they give them back.', terminate: true };
     const task = this.activeTask(botId);
+    // A fenced helper uses only tools whose way out crewd holds: the proxied shell, the checked web, its files, the crew.
+    if (this.netOf(botId) && !/^(bash|web_fetch|web_search|read|write|edit|ls|grep|find|crew_\w+)$/.test(tool)) {
+      this.refusedNet(botId, tool);
+      return { block: true, reason: 'This helper may reach only the places on its list; that tool goes elsewhere.' };
+    }
     let e = effectOf(tool, input, this.seen(botId));
     const words = toolWords(tool, input);
     if (words) this.db.event('run.tool', botId, { task: task?.id, words });
@@ -1508,7 +1535,7 @@ export class Crew {
       const w = join(space, 'work', 'verify', `${task}-${side}`);
       return runSandboxed(space, [this.cfg.toolsDir], { PATH: toolBin(this.cfg) }, `rm -rf ${q(w)}; git -C ${q(repo)} worktree prune; ` +
         `git -C ${q(repo)} worktree add -q --detach ${q(w)} ${q(p.base)} && cd ${q(w)} && git apply ${only.map((t) => `--include=${q(t)} `).join('')}${q(patch)} || exit 97; ` +
-        `(${p.command}); e=$?; cd /; git -C ${q(repo)} worktree remove --force ${q(w)}; exit $e`);
+        `(${p.command}); e=$?; cd /; git -C ${q(repo)} worktree remove --force ${q(w)}; exit $e`, this.netOf(botId)?.sock);
     };
     const before = await run('base', tests), after = await run('fix', []);
     if (before.code === 97 || after.code === 97) throw new Error(`the patch doesn't apply to ${p.base}: ${(before.code === 97 ? before : after).tail}`);
