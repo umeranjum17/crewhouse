@@ -323,6 +323,7 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
   const [state, setState] = useState<Json>(first.state);
   const [status, setStatus] = useState<Status>('connecting');
   const [why, setWhy] = useState(false);
+  const reduce = motion.useReduceMotion();
   const [tick, setTick] = useState(0);
   const [stack, setStack] = useState<Route[]>([{ view: 'home' }]);
   const [sheet, setSheet] = useState<A.Card | null>(null);
@@ -390,7 +391,7 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
           <Text style={[s.offlineText, { color: color.day.ink }]} numberOfLines={1}>{`Can't reach the home computer${heard.current ? ` · last heard ${A.clock(heard.current)}` : ''}`}</Text>
         </Pressable>
       )}
-      <Modal visible={why} transparent animationType="slide" onRequestClose={() => setWhy(false)}>
+      <Modal visible={why} transparent animationType={motion.sheet(reduce)} onRequestClose={() => setWhy(false)}>
         <Pressable style={s.scrim} onPress={() => setWhy(false)}>
           <Pressable style={[s.sheet, { backgroundColor: t.bg }]} onPress={() => {}}>
             <View style={{ alignItems: 'center' }}><ChiefArt mood="rest" size={88} /></View>
