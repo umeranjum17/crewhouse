@@ -433,7 +433,7 @@ test('limits: a limit rests that account and the task carries on in the same con
   const until = crew.restingUntil('chatgpt');
   assert.ok(Math.abs(until - (Date.now() + 30 * 60_000)) < 5000, 'rests until the time the account said');
   const said = db.all("SELECT text FROM messages WHERE bot = 'scout' AND author = 'system'").map((m) => m.text);
-  assert.ok(said.some((x) => /^ChatGPT is resting until \d+:\d\d [ap]m\. Scout carries on with GitHub Copilot\.$/.test(x)), said.join('\n'));
+  assert.ok(said.some((x) => /^ChatGPT is resting until (?:[A-Z][a-z]{2} )?\d+:\d\d [ap]m\. Scout carries on with GitHub Copilot\.$/.test(x)), said.join('\n'));
   assert.ok(db.get("SELECT 1 FROM events WHERE kind = 'run.resumed'"), 'the same session file, reopened');
   const file = task(db, t).session;
   assert.ok(file && readFileSync(file, 'utf8').includes('dig deep'), 'the conversation carried over');
