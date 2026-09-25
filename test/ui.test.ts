@@ -122,7 +122,8 @@ test('the screens read view models only, and the mono face draws art only', () =
   const css = readFileSync(join(dir, 'styles.css'), 'utf8');
   for (const rule of css.split('}')) {
     if (!/var\(--art\)|monospace/.test(rule)) continue;
-    assert.match(rule, /(\.art\b|--art:|@font-face)/, `mono type outside the art: ${rule.trim().slice(0, 80)}`);
+    // Mono draws the art and the desktop's ASCII furniture (frame headers, status marks) - never reading text.
+    assert.match(rule, /(\.art\b|\.ascii\b|--art:|@font-face)/, `mono type outside the art: ${rule.trim().slice(0, 80)}`);
   }
 });
 

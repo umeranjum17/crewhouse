@@ -203,35 +203,37 @@ function Home({ state, me, refresh, tick, accounts, offline, night }: Ctx) {
         </div>
         <div className="desk">
           <section className="frame needs">
-            <div className="label">Needs you</div>
+            <div className="label ascii">Needs you</div>
             {cards.length ? <div className="cards">{cards.map(card)}</div> : <div className="frame-empty">All clear. Nothing needs you.</div>}
           </section>
-          <section className="frame working">
-            <div className="label">Working now</div>
-            {works.length ? works.map((w) => {
-              const h = crew.find((x) => x.id === w.helper);
-              return (
-                <a key={w.helper} className="frame-row" href={hrefOf(w.helper)}>
-                  {h && <Face who={h} size={40} ring={h.ring} />}
-                  <span className="grow"><b>{w.title}</b><div className="mute small clamp1">{w.line}</div></span>
-                  <i className="dot-ok" aria-label="working" />
-                </a>
-              );
-            }) : <div className="frame-empty">Nothing right now.</div>}
-          </section>
-          <section className="frame done">
-            <div className="label">Done today</div>
-            {todays.length ? todays.map((t) => {
-              const h = crew.find((x) => x.id === t.helper);
-              return (
-                <div key={t.id} className="frame-row">
-                  {h && <Face who={h} size={26} />}
-                  <span className="grow"><b>{t.title}</b><div className="mute small clamp1">{t.summary}</div></span>
-                  {t.files[0] ? <a className="btn" href={t.files[0].url} target="_blank" rel="noreferrer">Open</a> : <a className="btn" href={hrefOf(t.helper)}>Open</a>}
-                </div>
-              );
-            }) : <div className="frame-empty">Nothing yet today.</div>}
-          </section>
+          <div className="desk-side">
+            <section className="frame working">
+              <div className="label ascii">Working now</div>
+              {works.length ? works.map((w) => {
+                const h = crew.find((x) => x.id === w.helper);
+                return (
+                  <a key={w.helper} className="frame-row" href={hrefOf(w.helper)}>
+                    {h && <Face who={h} size={40} ring={h.ring} />}
+                    <span className="grow"><b>{w.title}</b><div className="mute small clamp1">{w.line}</div></span>
+                    <span className="ascii mark-ok" aria-label="working">●</span>
+                  </a>
+                );
+              }) : <div className="frame-empty">Nothing right now.</div>}
+            </section>
+            <section className="frame done">
+              <div className="label ascii">Done today</div>
+              {todays.length ? todays.map((t) => {
+                const h = crew.find((x) => x.id === t.helper);
+                return (
+                  <div key={t.id} className="frame-row">
+                    {h && <Face who={h} size={26} />}
+                    <span className="grow"><b>{t.title}</b><div className="mute small clamp1">{t.summary}</div></span>
+                    {t.files[0] ? <a className="btn" href={t.files[0].url} target="_blank" rel="noreferrer">Open</a> : <a className="btn" href={hrefOf(t.helper)}>Open</a>}
+                  </div>
+                );
+              }) : <div className="frame-empty">Nothing yet today.</div>}
+            </section>
+          </div>
         </div>
       </div>
       <div className="dock">
@@ -299,7 +301,7 @@ function Chat({ id, state, me, tick, refresh, accounts }: Ctx & { id: string }) 
       </div>
       <aside className="working-on">
         {live && h && <section className="frame working-on-frame">
-          <div className="label">Working on</div>
+          <div className="label ascii">Working on</div>
           <div className="frame-row head"><Face who={h} size={32} ring={h.ring} /><span className="grow"><b>{h.name}</b><div className="mute small clamp1">{A.plain(live.title)}</div></span></div>
           {trail.length > 0 && <Steps steps={trail} max={7} />}
           {cards.map((c) => c.kind === 'connect' ? <ConnectCard key={c.id} c={c} helper={h?.name} state={state} onDone={refresh} /> : <AskCard key={c.id} c={c} who={h} onDone={refresh} />)}
@@ -846,7 +848,7 @@ function ChiefFrame({ ctx, on }: { ctx: Ctx; on: boolean }) {
   const { mood, line } = useHeld(A.chief(ctx.state, chiefLocal(ctx, listen)));
   return (
     <a href="#/chief" className={`chief-frame ${on ? 'on' : ''}`}>
-      <div className="label">Chief</div>
+      <div className="label ascii">Chief</div>
       <ChiefArt mood={mood} d={4.5} hero />
       {mood === 'work' && <Laptop />}
       <div className="chief-line"><span className="art" aria-hidden>▸ </span><span>{line}</span><span className={`cur${mood === 'work' ? ' live' : ''}`} aria-hidden /></div>
@@ -861,7 +863,7 @@ function SideCrew({ state, view, id }: { state: Json; view: View; id?: string })
   const shown = q.trim() ? rows.filter((c) => (c.name + ' ' + c.line).toLowerCase().includes(q.trim().toLowerCase())) : rows;
   return (
     <>
-      <div className="label">Crew</div>
+      <div className="label ascii">Crew</div>
       <input className="input side-search" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search chats" aria-label="Search chats" />
       {shown.map((c) => (
         <a key={c.id} href={hrefOf(c.id)} className={`side-row ${id === c.id ? 'on' : ''}`}><Face who={c.who as A.Helper} size={32} ring={c.ring} /><span className="grow"><b>{c.name}</b><span className="mute small clamp1">{c.line}</span></span>{c.unread > 0 && <span className="badge">{A.unreadBadge(c.unread)}</span>}</a>
