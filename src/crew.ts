@@ -127,8 +127,9 @@ function inhibitor() {
 }
 
 /** A bot at work: its task's engine session, on whose account and which AI, and the browser if it has one. */
-/** The bot's browser while a task runs: its AXI, and how to let go of the browser when the task ends. */
-interface Browser { run: (args: string[], signal?: AbortSignal) => Promise<string>; end: () => void }
+/** The bot's browser while a task runs: its AXI; letting go of the browser when the task ends, or for a while (`release`:
+ *  the person takes the wheel, and the recorder may need the browser's one DevTools connection; the next call re-attaches). */
+interface Browser { run: (args: string[], signal?: AbortSignal) => Promise<string>; end: () => void; release: () => void }
 interface Live { session: AgentSession; task: number; member: number; brain: disk.Brain; browser?: Browser; page?: string; snapshot?: string; apps?: Record<string, AppTool>; counted: number }
 
 /** The deterministic half: people, bots, tasks, the per-bot queue, asks. Models only ever see prompts. */
@@ -935,7 +936,11 @@ export class Crew {
         const cdp = onScreen ? (await this.desktops.ensure(bot.id, bot.n, space)).cdp : undefined;
         return run(cdp ? ['attach', '--cdp', cdp] : ['open', '--persistent', '--profile', join(space, 'browser')]);
       };
-      l.browser = { run, end: () => { if (started) void run([onScreen ? 'detach' : 'close']); } };
+      l.browser = {
+        run,
+        end: () => { if (started) void run([onScreen ? 'detach' : 'close']); },
+        release: () => { if (started && onScreen) { started = undefined; void run(['detach']); } },
+      };
       tools.push(axiTool('browser', 'Your own browser (playwright-axi): goto <url>, snapshot, find <text>, click <ref>, fill <ref> <text>, press <key>, go-back', async (args, signal) => {
         started ??= start();
         const opened = await started;
@@ -1505,6 +1510,7 @@ export class Crew {
       this.db.event('desktop.takeover', botId, { task: task?.id ?? null });
       if (task) this.say(botId, 'system', `You have the controls. ${bot.display} is paused until you give them back.`, task.id);
     });
+    this.live.get(botId)?.browser?.release();
     await this.live.get(botId)?.session.abort();
   }
 

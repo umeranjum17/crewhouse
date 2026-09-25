@@ -11,7 +11,6 @@ import { OWNER, PROVIDERS, callbackPage, provider } from './accounts.ts';
 import { coversOf } from './policy.ts';
 import { describe, nextRun, parseSchedule } from './routines.ts';
 import { Link } from './link.ts';
-import { deskFor } from './desktop.ts';
 import { lesson, Teacher } from './teach.ts';
 
 const TYPES: Record<string, string> = {
@@ -287,10 +286,11 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       if (!disk.canUse(cfg, b.id, 'computer')) throw Object.assign(new Error(`${b.display} has no computer of its own to show it on`), { status: 409 });
       const what = String(body.what ?? '').replace(/\s+/g, ' ').trim().slice(0, 120);
       if (!what) throw Object.assign(new Error('say in a few words what you are showing'), { status: 400 });
-      await crew.desktops.ensure(b.id, b.n, disk.botDir(cfg, b.id));
+      const desk = await crew.desktops.ensure(b.id, b.n, disk.botDir(cfg, b.id));
+      if (!desk.cdp) throw Object.assign(new Error(`${b.display}'s computer has no browser to show it on`), { status: 409 });
       await crew.takeOver(b.id);
       const bot = b.id;
-      await teacher.start(bot, what, deskFor(cfg.stateDir, bot, b.n).cdp, () => void shown(bot, me, true).catch(() => {}));
+      await teacher.start(bot, what, desk.cdp, () => void shown(bot, me, true).catch(() => {}));
       db.event('teach.started', bot, { what, member: me });
       return { ok: true };
     }

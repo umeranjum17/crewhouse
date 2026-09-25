@@ -1,5 +1,5 @@
 // Teach a task by showing it: while the person drives a bot's own Chromium ("Show Reel how"), crewd watches that browser
-// over its debugging port and writes down what they did, in plain words: pages opened, what they clicked by its visible
+// through its DevTools endpoint (crewd's own, see desktop.ts) and writes down what they did, in plain words: pages opened, what they clicked by its visible
 // label, which field they typed in by its label. Never what they typed, and nothing at all from a password field.
 // One screenshot per page. The bot then gets the steps (and the first screenshots) and keeps them as a skill on the
 // person's yes. Nothing here involves the model.
@@ -51,7 +51,9 @@ export function stepsOf(raw: Raw[]): string[] {
   return out.slice(0, MAX_STEPS);
 }
 
-type Showing = { bot: string; what: string; raw: Raw[]; shots: { type: string; data: string }[]; seen: Set<string>; sockets: WebSocket[]; timer: NodeJS.Timeout; poll: NodeJS.Timeout; at: number };
+/** One show: a single browser-level DevTools connection, and one flattened session per page it listens to. */
+type Showing = { bot: string; what: string; raw: Raw[]; shots: { type: string; data: string }[]; seen: Set<string>; ws: WebSocket; timer: NodeJS.Timeout;
+  poll?: NodeJS.Timeout; at: number; n: number; pending: Map<number, (r: any) => void>; pages: Map<string, (m: any) => void> };
 
 /** The shows in progress, one per bot. */
 export class Teacher {
@@ -60,13 +62,23 @@ export class Teacher {
   showing() { return Object.fromEntries([...this.shows].map(([bot, s]) => [bot, { what: s.what, steps: stepsOf(s.raw).length }])); }
   has(bot: string) { return this.shows.has(bot); }
 
-  /** Start watching the bot's browser on its debugging port. `onTimeout` ends a show left running for 15 minutes. */
-  start(bot: string, what: string, cdp: number, onTimeout: () => void) {
+  /** Start watching the bot's browser at its DevTools endpoint (a browser-level WebSocket). `onTimeout` ends a show
+   *  left running for 15 minutes. */
+  async start(bot: string, what: string, cdp: string, onTimeout: () => void) {
     this.stop(bot);
-    const s: Showing = { bot, what, raw: [], shots: [], seen: new Set(), sockets: [], at: Date.now(),
-      timer: setTimeout(onTimeout, SHOW_MS), poll: setInterval(() => void this.attach(s, cdp), 1000) };
+    const ws = new WebSocket(cdp, { perMessageDeflate: false });
+    const s: Showing = { bot, what, raw: [], shots: [], seen: new Set(), ws, at: Date.now(), n: 0, pending: new Map(), pages: new Map(),
+      timer: setTimeout(onTimeout, SHOW_MS) };
     this.shows.set(bot, s);
-    return this.attach(s, cdp);
+    ws.on('message', (raw) => {
+      let m: any;
+      try { m = JSON.parse(String(raw)); } catch { return; }
+      if (m.id) { s.pending.get(m.id)?.(m.result); s.pending.delete(m.id); } else if (m.sessionId) s.pages.get(m.sessionId)?.(m);
+    });
+    ws.on('error', () => {});
+    await new Promise((r) => { ws.once('open', r); ws.once('error', r); });
+    s.poll = setInterval(() => void this.attach(s), 1000);
+    return this.attach(s);
   }
 
   /** End the show: its steps in plain words and up to four page pictures. */
@@ -75,27 +87,34 @@ export class Teacher {
     if (!s) return null;
     this.shows.delete(bot);
     clearTimeout(s.timer); clearInterval(s.poll);
-    for (const ws of s.sockets) ws.close();
+    s.ws.close();
     return { what: s.what, steps: stepsOf(s.raw), shots: s.shots.slice(0, 4) };
   }
 
+  /** A DevTools command, on the browser or one page's session. */
+  private call(s: Showing, method: string, params: object = {}, sessionId?: string) {
+    return new Promise<any>((resolve) => {
+      if (s.ws.readyState !== WebSocket.OPEN) return resolve(undefined);
+      const id = ++s.n;
+      s.pending.set(id, resolve);
+      s.ws.send(JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) }));
+    });
+  }
+
   /** Every page the browser has open: listen to it once. */
-  private async attach(s: Showing, cdp: number) {
-    const list = await fetch(`http://127.0.0.1:${cdp}/json/list`, { signal: AbortSignal.timeout(2000) }).then((r) => r.json(), () => []) as any[];
-    for (const t of list.filter((x) => x.type === 'page' && x.webSocketDebuggerUrl && !s.seen.has(x.id))) {
+  private async attach(s: Showing) {
+    const list = ((await this.call(s, 'Target.getTargets'))?.targetInfos ?? []) as any[];
+    for (const t of list.filter((x) => x.type === 'page' && !s.seen.has(x.targetId))) {
       if (!this.shows.has(s.bot)) return;
-      s.seen.add(t.id);
-      await this.listen(s, t.webSocketDebuggerUrl, t.url);
+      s.seen.add(t.targetId);
+      const r = await this.call(s, 'Target.attachToTarget', { targetId: t.targetId, flatten: true });
+      if (r?.sessionId) await this.listen(s, r.sessionId, t.url);
     }
   }
 
   /** Resolves once the page is being listened to, so nothing the person does after Start is missed. */
-  private listen(s: Showing, url: string, first: string) {
-    const ws = new WebSocket(url, { perMessageDeflate: false });
-    s.sockets.push(ws);
-    let n = 0;
-    const pending = new Map<number, (r: any) => void>();
-    const call = (method: string, params: object = {}) => new Promise<any>((resolve) => { const id = ++n; pending.set(id, resolve); ws.send(JSON.stringify({ id, method, params })); });
+  private listen(s: Showing, sessionId: string, first: string) {
+    const call = (method: string, params: object = {}) => this.call(s, method, params, sessionId);
     const opened = (u: string) => {
       if (/^(about|chrome|devtools|data):/.test(u)) return;
       s.raw.push({ kind: 'open', url: u });
@@ -104,19 +123,7 @@ export class Teacher {
         if (r?.data && s.shots.length < 8) s.shots.push({ type: 'image/jpeg', data: r.data });
       }), 1200);
     };
-    const ready = new Promise<void>((resolve) => ws.on('open', async () => {
-      await call('Runtime.enable');
-      await call('Page.enable');
-      await call('Runtime.addBinding', { name: '__crewhouseStep' });
-      await call('Page.addScriptToEvaluateOnNewDocument', { source: PAGE });
-      await call('Runtime.evaluate', { expression: PAGE });
-      opened(first);
-      resolve();
-    }));
-    ws.on('message', (raw) => {
-      let m: any;
-      try { m = JSON.parse(String(raw)); } catch { return; }
-      if (m.id) { pending.get(m.id)?.(m.result); pending.delete(m.id); return; }
+    s.pages.set(sessionId, (m) => {
       if (s.raw.length >= MAX_STEPS * 4) return;
       if (m.method === 'Page.frameNavigated' && !m.params.frame.parentId) opened(m.params.frame.url);
       if (m.method === 'Runtime.bindingCalled' && m.params.name === '__crewhouseStep') {
@@ -126,7 +133,14 @@ export class Teacher {
         } catch { /* not ours */ }
       }
     });
-    ws.on('error', () => {});
+    const ready = (async () => {
+      await call('Runtime.enable');
+      await call('Page.enable');
+      await call('Runtime.addBinding', { name: '__crewhouseStep' });
+      await call('Page.addScriptToEvaluateOnNewDocument', { source: PAGE });
+      await call('Runtime.evaluate', { expression: PAGE });
+      opened(first);
+    })();
     return Promise.race([ready, new Promise<void>((r) => setTimeout(r, 3000))]);
   }
 }

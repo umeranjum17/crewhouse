@@ -12,6 +12,7 @@ import { temp } from './tmp.ts';
 import { EngineClient, resolveEngine } from '@desklink/host';
 import { browserBin, deskFor, Desktops, missing, type DeskEvent } from '../src/desktop.ts';
 import { sandboxBash, sandboxReady } from '../src/engine.ts';
+import { Teacher } from '../src/teach.ts';
 
 const root = temp('crewhouse-desk');
 const botDir = join(root, 'bots', 'reel');
@@ -147,6 +148,31 @@ test("a bot's shell cannot find or drive another bot's browser", { skip: noAttac
   assert.deepEqual(targetInfos.filter((x: any) => /pwned/.test(x.url)), [], "nothing the shell sent reached the bot's browser");
 
   assert.deepEqual(hits.filter((h) => h.startsWith('/pwned') && h !== `/pwned-${decoyPort}`), []);
+});
+
+// Teach by showing records through the same endpoint: crewd's recorder is the one client of the bot's DevTools while the
+// person has the wheel. The page clicks and moves on by itself, standing in for the person's hands on the screen.
+test("a show is recorded through crewd's own endpoint to the bot's browser", { skip: noXvfb || (!browserBin() && 'no Chromium here') }, async (t) => {
+  const page = `<label for="q">Search</label><input id="q"><button id="go">Find</button>
+    <script>setTimeout(() => { const q = document.getElementById('q'); q.value = 'private words'; q.dispatchEvent(new Event('change', { bubbles: true }));
+      document.getElementById('go').click(); setTimeout(() => { location = '/results'; }, 300); }, 1500)</script>`;
+  const site = createServer((q, r) => r.writeHead(200, { 'content-type': 'text/html' }).end(q.url === '/results' ? '<p>3 found</p>' : page)).listen(0, '127.0.0.1');
+  await new Promise((r) => site.once('listening', r));
+  const url = `http://127.0.0.1:${(site.address() as AddressInfo).port}`;
+  const teacher = new Teacher();
+  t.after(async () => { teacher.stop('reel'); site.close(); await desks.stopAll(); });
+  const d = await desks.ensure('reel', n, botDir);
+  // The bot's browser was on the page (its own tool had it open, then let go when the person took the wheel).
+  const bot = new WebSocket(d.cdp!);
+  await new Promise((r, j) => { bot.once('open', r); bot.once('error', j); });
+  bot.send(JSON.stringify({ id: 1, method: 'Target.createTarget', params: { url: `${url}/search` } }));
+  await new Promise((r) => bot.on('message', (m) => { if (JSON.parse(String(m)).id === 1) r(0); }));
+  bot.close();
+  await teacher.start('reel', 'find a thing', d.cdp!, () => {});
+  await until('the show saw the next page', () => teacher.showing().reel?.steps >= 4);
+  const out = teacher.stop('reel')!;
+  assert.deepEqual(out.steps.slice(0, 4), ['Opened 127.0.0.1/search', 'Typed in “Search”', 'Clicked “Find”', 'Opened 127.0.0.1/results']);
+  assert.doesNotMatch(JSON.stringify(out), /private words/, 'never what was typed');
 });
 
 async function until(what: string, fn: () => unknown, ms = 15_000) {

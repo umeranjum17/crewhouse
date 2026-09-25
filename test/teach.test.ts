@@ -48,7 +48,9 @@ test('a real show: what was clicked and which box was typed in, never the words,
   // A cold Chrome on a busy CI runner can take a while to open its port: up to 30 seconds, and say why if it never does.
   const until = async (what: string, fn: () => unknown) => { for (let i = 0; i < 600; i++) { if (await fn()) return; await new Promise((r) => setTimeout(r, 50)); } throw new Error(`timed out: ${what}; Chrome said: ${said.slice(-600)}`); };
   await until('chromium', () => fetch(`http://127.0.0.1:${port}/json/list`).then((r) => r.ok, () => false));
-  await teacher.start('reel', 'pull the stats', port, () => {});
+  // The recorder gets a browser-level DevTools endpoint, as crewd's own relay gives it (desktop.ts).
+  const endpoint = (await (await fetch(`http://127.0.0.1:${port}/json/version`)).json()).webSocketDebuggerUrl;
+  await teacher.start('reel', 'pull the stats', endpoint, () => {});
   assert.ok(teacher.has('reel'));
 
   // The person drives: we act in the page as they would, through its own debugging connection.
