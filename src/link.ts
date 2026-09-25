@@ -57,6 +57,10 @@ export class Link {
   private handle: Handler;
   private client?: RelayClient;
   private relayStatus: RelayStatus | 'off' = 'off';
+  private told = ''; // the dial addresses paired phones were last told
+  private watch?: NodeJS.Timeout;
+  /** This computer's network addresses; a test swaps in its own. */
+  ifaces: () => Ifaces = networkInterfaces;
   /** Whether a member is in their quiet hours now: their phones get no notification then. Set by the server. */
   quiet: (member: number) => boolean = () => false;
 
@@ -114,12 +118,14 @@ export class Link {
   }
 
   get lan() { return this.db.get("SELECT value FROM settings WHERE key = 'link.lan'")?.value === '1'; }
-  hosts() { return linkHosts(this.cfg.linkHost, this.lan); }
+  hosts() { return linkHosts(this.cfg.linkHost, this.lan, this.ifaces()); }
 
-  /** Listen on exactly the addresses `hosts()` names now. Rerun when the LAN setting or Tailscale changes. */
+  /** Listen on exactly the addresses `hosts()` names now, then tell paired phones if where to dial changed.
+   *  Rerun when the LAN setting changes, and every half minute for Tailscale coming up or the home address moving. */
   async bind() {
-    if (!this.cfg.linkPort) return;
+    if (!this.cfg.linkPort) return this.follow();
     const want = new Set(this.hosts());
+    const before = [...this.servers.keys()].join(', ');
     for (const [host, s] of this.servers) if (!want.has(host)) { s.close(); this.servers.delete(host); }
     await Promise.all([...want].filter((h) => !this.servers.has(h)).map((host) => new Promise<void>((resolve) => {
       const s = createServer((_req, res) => { res.writeHead(404).end(); });
@@ -130,7 +136,24 @@ export class Link {
       s.once('error', (e) => { console.error(`phone link: can't listen on ${host}: ${e.message}`); resolve(); });
       s.listen(this.cfg.linkPort, host, () => { this.servers.set(host, s); resolve(); });
     })));
-    console.log(`phone link (Noise-encrypted) on port ${this.cfg.linkPort}: ${[...this.servers.keys()].join(', ') || 'nowhere'}${this.lan ? ' (home network on)' : ''}`);
+    const now = [...this.servers.keys()].join(', ');
+    if (now !== before) console.log(`phone link (Noise-encrypted) on port ${this.cfg.linkPort}: ${now || 'nowhere'}${this.lan ? ' (home network on)' : ''}`);
+    this.follow();
+  }
+
+  /** Every address a phone can dial now: the home network, Tailscale, then the family's relay. */
+  urls() {
+    const direct = this.servers.size ? phoneAddresses([...this.servers.keys()], this.ifaces()).map((ip) => `ws://${ip}:${this.cfg.linkPort}/link`) : [];
+    return [...direct, ...(this.relayUrl() ? [this.relayUrl()] : [])];
+  }
+
+  /** A phone paired before Tailscale was installed, or before the home address moved, learns the new address while any
+   *  route is up; the ones offline ask `GET /api/reach` when they reconnect. A wrong host there only fails its handshake. */
+  private follow() {
+    const urls = this.urls();
+    if (!this.host || JSON.stringify(urls) === this.told) return;
+    this.told = JSON.stringify(urls);
+    this.host.broadcast({ kind: 'link.urls', data: { urls } });
   }
 
   async setLan(on: boolean) {
@@ -157,6 +180,7 @@ export class Link {
     if (enrol?.trim()) this.db.run("INSERT INTO settings (key, value) VALUES ('link.relay.enrol', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", enrol.trim());
     this.db.event('link.relay', null, { on: !!this.relay });
     this.dial();
+    this.follow();
   }
 
   /** Dial out to the relay (when one is set), so phones reach this computer from anywhere with no port opened here. */
@@ -210,7 +234,7 @@ export class Link {
   async offer(role: string, member: number): Promise<{ qr: string; expires: number; urls: string[] }> {
     if (role !== 'control' && role !== 'view') throw Object.assign(new Error('role is control or view'), { status: 400 });
     await this.bind(); // Tailscale may have come up since crewd started
-    const urls = [...(this.servers.size ? phoneAddresses([...this.servers.keys()]).map((ip) => `ws://${ip}:${this.cfg.linkPort}/link`) : []), ...(this.relayUrl() ? [this.relayUrl()] : [])];
+    const urls = this.urls();
     const { text, expires } = this.host.offer({ role, urls, meta: { member } });
     return { qr: text, expires, urls };
   }
@@ -240,8 +264,9 @@ export class Link {
   private async request(op: string, body: unknown, g: Grant): Promise<{ status: number; body: unknown }> {
     const [method, path = ''] = op.split(' ', 2);
     if (!path.startsWith('/api/')) return { status: 404, body: { error: 'not found' } };
-    // The phone's own: where else it can reach this computer (a phone paired at home learns the relay), and its push address.
-    if (op === 'GET /api/reach') return { status: 200, body: { urls: this.relayUrl() ? [this.relayUrl()] : [] } };
+    // The phone's own: every address it can reach this computer at now (a phone paired at home learns Tailscale and the
+    // relay), and its push address.
+    if (op === 'GET /api/reach') return { status: 200, body: { urls: this.urls() } };
     if (op === 'POST /api/push') {
       const sub = body as any;
       if (!this.client || !sub || (typeof sub.expo !== 'string' && typeof sub.web !== 'object')) return { status: 409, body: { error: 'no relay for notifications' } };
@@ -260,7 +285,8 @@ export class Link {
     this.db.onEvent((e) => this.news(e as any));
     await this.bind();
     this.dial();
+    this.watch = setInterval(() => void this.bind(), 30_000).unref();
   }
 
-  close() { this.client?.stop(); this.host?.close(); for (const s of this.servers.values()) s.close(); }
+  close() { clearInterval(this.watch); this.client?.stop(); this.host?.close(); for (const s of this.servers.values()) s.close(); }
 }
