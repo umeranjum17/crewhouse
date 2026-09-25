@@ -7,6 +7,9 @@ import { join } from 'node:path';
 import { defineTool, type ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { Type } from '@earendil-works/pi-ai';
 import type { Config } from './config.ts';
+import { CALENDAR, calendarTool, events } from './calendar.ts';
+
+export { CALENDAR };
 
 export interface App {
   name: string;
@@ -16,14 +19,16 @@ export interface App {
   warns?: boolean;
   /** The app's MCP servers: their tools become the bots' tools, named `<app>_<tool>`. */
   servers: string[];
+  /** Or crewd's own one-tool AXI for it, on the member's token (its commands are gated in src/policy.ts). */
+  tool?: (token: () => Promise<string | null>) => ToolDefinition;
   /** Where OAuth is discovered (RFC 8414) and clients register themselves (RFC 7591): nothing to set up. */
   issuer?: string;
   /** Or fixed endpoints with the household's own registered app (Google), read from <state>/apps.json. */
   oauth?: { authorize: string; token: string; scopes: string[]; extra?: Record<string, string> };
 }
 
-const google = (scope: string, server: string) => ({
-  servers: [`https://${server}.googleapis.com/mcp/v1`],
+const google = (scope: string, server?: string) => ({
+  servers: server ? [`https://${server}.googleapis.com/mcp/v1`] : [],
   oauth: { authorize: 'https://accounts.google.com/o/oauth2/v2/auth', token: 'https://oauth2.googleapis.com/token',
     scopes: [`https://www.googleapis.com/auth/${scope}`], extra: { access_type: 'offline', prompt: 'consent' } },
 });
@@ -31,14 +36,11 @@ const google = (scope: string, server: string) => ({
  *  grant). Drive's scope is non-sensitive, so Google shows no warning; Calendar and Gmail show the unverified-app screen. */
 export const APPS: Record<string, App> = {
   drive: { name: 'Google Drive', google: true, ...google('drive.file', 'drivemcp') },
-  calendar: { name: 'Google Calendar', google: true, warns: true, ...google('calendar.events', 'calendarmcp') },
+  calendar: { name: 'Google Calendar', google: true, warns: true, ...google('calendar.events'), tool: calendarTool },
   gmail: { name: 'Gmail', google: true, warns: true, ...google('gmail.readonly', 'gmailmcp') },
   notion: { name: 'Notion', servers: ['https://mcp.notion.com/mcp'], issuer: 'https://mcp.notion.com' },
   canva: { name: 'Canva', servers: ['https://mcp.canva.com/mcp'], issuer: 'https://mcp.canva.com' },
 };
-
-/** Google Calendar's REST API; its events scope is the one a Calendar connection already has. */
-export const CALENDAR = 'https://www.googleapis.com/calendar/v3';
 
 type Tokens = { access: string; refresh?: string; expires: number; scope?: string };
 type Endpoints = { authorize: string; token: string; register?: string; scopes: string[]; extra?: Record<string, string> };
@@ -241,15 +243,11 @@ export class Connections {
   /** Today's events on the member's own Google Calendar, read by crewd itself for the morning digest (no AI). All-day
    *  events have no time. Null when Calendar isn't connected or can't be read right now. */
   async today(member: number): Promise<{ at: number | null; title: string }[] | null> {
-    const token = this.connected(member, 'calendar') && await this.token(member, 'calendar');
-    if (!token) return null;
+    if (!this.connected(member, 'calendar')) return null;
     const d = new Date();
-    const from = new Date(d.getFullYear(), d.getMonth(), d.getDate()), to = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);
-    const q = new URLSearchParams({ timeMin: from.toISOString(), timeMax: to.toISOString(), singleEvents: 'true', orderBy: 'startTime', maxResults: '12' });
-    const res = await fetch(`${CALENDAR}/calendars/primary/events?${q}`, { headers: { authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(15_000) });
-    if (!res.ok) return null;
-    const { items = [] } = await res.json() as { items?: any[] };
-    return items.filter((e) => e.status !== 'cancelled').map((e) => ({ at: e.start?.dateTime ? Date.parse(e.start.dateTime) : null, title: String(e.summary ?? 'Busy').slice(0, 80) }));
+    const from = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const list = await events(() => this.token(member, 'calendar'), from, new Date(from.getFullYear(), from.getMonth(), from.getDate() + 1)).catch(() => null);
+    return list && list.slice(0, 12).map((e) => ({ at: e.allDay ? null : e.start.getTime(), title: e.title }));
   }
 
   disconnect(member: number, id: string) {
@@ -271,6 +269,7 @@ export class Connections {
     for (const id of Object.keys(this.read(member))) {
       const a = this.apps[id];
       if (!a) continue;
+      if (a.tool) tools.push(a.tool(() => this.token(member, id)));
       for (const server of a.servers) {
         try {
           const mcp = new RemoteMcp(server, () => this.token(member, id));
