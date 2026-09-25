@@ -1225,7 +1225,8 @@ export class Crew {
   }
 
   /** Hold the call while the person decides; after the hold, park: the turn ends and the answer arrives as the next prompt. */
-  /** A checkout page's card: the order as the page shows it, and its total as the cost the money cap counts. crewd reads
+  /** A checkout page's card: the order as the page shows it, and its total as the cost the money cap counts when it's
+   *  in dollars. crewd reads
    *  it from the page as the browser tool itself reports it; the model's words never reach it. */
   private order(botId: string, e: Extract<Effect, { words: string }>) {
     const l = this.live.get(botId);
@@ -1234,10 +1235,14 @@ export class Crew {
     try { const u = new URL(l?.page ?? ''); host = u.hostname.replace(/^www\./, ''); page = u.origin + u.pathname; } catch { /* no page yet */ }
     const o = orderOf(l?.snapshot ?? '');
     const few = o.items.slice(0, 3).map((i) => i.replace(/\s*[—–-]?\s*[$£€]\s?[\d,.]+\s*$/, '')).join(', ');
+    // The card says what the page charges, in the page's own money. Only a dollar price counts toward the dollar cap;
+    // anything else says so in plain words, so a capped-looking yes can never hide a different currency.
+    const not$ = o.total !== null && o.currency !== '$';
     const words = o.total === null ? `${name} wants to act on a checkout page at ${host}. I couldn't read the total on this page.`
-      : `${name} wants to place this order at ${host}${few ? `: ${few}${o.items.length + o.more > 3 ? ', …' : ''}` : ''}. Total ${o.shown}.`;
-    const body = [...o.items, ...(o.more ? [`and ${o.more} more`] : []), o.total === null ? "I couldn't read the total on this page." : `Total ${o.shown}`].join('\n');
-    return { effect: { ...e, words, ...(o.total !== null ? { cost: o.total } : {}), preview: { head: `The order at ${host}`, body } }, checkout: { page, total: o.total } };
+      : `${name} wants to place this order at ${host}${few ? `: ${few}${o.items.length + o.more > 3 ? ', …' : ''}` : ''}. Total ${o.shown}.${not$ ? ` That's ${o.currency === '£' ? 'pounds' : 'euros'}, not dollars, so the monthly limit can't count it.` : ''}`;
+    const body = [...o.items, ...(o.more ? [`and ${o.more} more`] : []),
+      o.total === null ? "I couldn't read the total on this page." : `Total ${o.shown}${not$ ? " — not dollars, the monthly limit can't count it" : ''}`].join('\n');
+    return { effect: { ...e, words, ...(o.capped ? { cost: o.total! } : {}), preview: { head: `The order at ${host}`, body } }, checkout: { page, total: o.total } };
   }
 
   private async ask(botId: string, task: Row | undefined, e: Extract<Effect, { words: string }>, checkout?: { page: string; total: number | null }): Promise<string | null> {

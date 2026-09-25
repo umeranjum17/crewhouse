@@ -477,7 +477,7 @@ function Hello({ state, refresh, go }: Ctx) {
     <Page>
       <View style={{ alignItems: 'center' }}><ChiefArt mood="hello" size={150} /></View>
       <T style={[s.h1, s.centerText]}>{A.greeting()}{address.trim() ? `, ${address.trim()}` : ''}</T>
-      <T tone="ink2" style={s.centerText}>I'm Chief. I run the crew in this house. I ask before anything leaves the house or costs money.</T>
+      <T tone="ink2" style={s.centerText}>I'm Chief. I run the crew on this computer, using your ChatGPT to help with the work. I'll ask before sending messages, deleting things or spending money.</T>
       <TextInput style={[s.input, { color: useLook().ink, borderColor: useLook().line }]} value={address} onChangeText={setAddress} placeholder="What shall I call you?" placeholderTextColor={useLook().mute} />
       <View style={s.chips}>{['Sir', "Ma'am", ...(named ? [named] : [])].map((q) => <Btn key={q} label={q} onPress={() => setAddress(q)} />)}</View>
       <Label>What can I take off your plate?</Label>

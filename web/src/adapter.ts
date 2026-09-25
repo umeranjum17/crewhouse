@@ -212,13 +212,14 @@ export const SHARES = [
   { key: 'normal', label: 'Normal', says: 'Share it evenly' },
   { key: 'full', label: 'As much as it needs', says: 'Use what the work takes' },
 ];
-/** The small line at the bottom of the side rail: how the crew's share of ChatGPT stands today. */
-export const meter = (state: Json) => (state.share?.used ? 'ChatGPT: the crew has had its share today' : resting(state) ? `${resting(state)}` : 'ChatGPT: plenty left for you today');
+/** The small line at the bottom of the side rail: how the crew's share of ChatGPT stands today. It says what Crewhouse
+ *  itself knows — the share this household gave the crew — never how much of the provider's allowance is left. */
+export const meter = (state: Json) => (state.share?.used ? 'ChatGPT: the crew has had its share today' : resting(state) ? `${resting(state)}` : 'ChatGPT: the crew is within its share today');
 export function share(state: Json) {
   const s = state.share ?? { choice: 'light', used: false };
   const part: Record<string, string> = { small: 'a small part', fair: 'a fair part', most: 'most' };
   return { choice: s.choice as string, week: part[s.week] ? `This week the crew has used ${part[s.week]} of what it may use of your ChatGPT.` : '', today: s.used ? 'The crew has had its share for today. Routines and check-ins start again tomorrow morning; anything you ask for still goes ahead.'
-    : s.choice === 'full' ? 'When ChatGPT needs a rest, the crew waits and says so.' : 'Plenty left for you today.' };
+    : s.choice === 'full' ? 'When ChatGPT needs a rest, the crew waits and says so.' : 'The crew stays within the share you gave it.' };
 }
 
 /** The house's monthly money cap, owner only: "This month: nothing spent yet" or "$4 of $20 spent". */

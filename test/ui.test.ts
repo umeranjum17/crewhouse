@@ -348,6 +348,16 @@ test('a failed send keeps the words for a Retry; every chat keeps its own draft'
   assert.ok(ratio(color.day.pinkInk, '#ffffff') >= 4.5, `the "Not sent" pink on white is ${ratio(color.day.pinkInk, '#ffffff').toFixed(2)}`);
 });
 
+test('the words people read make only claims Crewhouse can keep', () => {
+  for (const f of ['web/src/main.tsx', 'web/src/flows.tsx', 'web/src/adapter.ts', 'mobile/App.tsx', 'src/crew.ts']) {
+    const src = readFileSync(join(import.meta.dirname, '..', f), 'utf8');
+    assert.doesNotMatch(src, /so it's safe|stays in this house|treat them like you|plenty left|never more than this in a month|that's us/i, f);
+  }
+  // The usage line describes the crew's own share, never a provider balance.
+  assert.equal(A.meter({ share: { used: false } }), 'ChatGPT: the crew is within its share today');
+  assert.equal(A.share({ share: { choice: 'light', used: false } }).today, 'The crew stays within the share you gave it.');
+});
+
 test('a photo in a message is a picture, not words', () => {
   const [l] = A.lines({ messages: [{ id: 1, author: 'person', text: 'Here is a photo.\n[photo reel] files/photos/5-1.png' }] }, 'reel');
   assert.equal(l.text, '');

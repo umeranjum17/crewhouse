@@ -113,7 +113,7 @@ export function SignIn({ me, owner, ai = A.AIS[0], tab: first, onReady, onClose 
       {phase === 'opening' && <><h2>Opening {name}…</h2><div className="dotdot" aria-hidden><i /><i /><i /></div><button className="link" onClick={cancel}>Cancel</button></>}
       {phase === 'waiting' && <>
         <h2>Say yes on {name}'s page</h2>
-        <p className="mute">Pick your account, then tap <b>Continue</b>. {name}'s page calls this part <b>Codex</b>; that's us. Come back here after; this moves on by itself.</p>
+        <p className="mute">Pick your account, then tap <b>Continue</b>. {name} calls the access your helpers use <b>“Codex”</b>. Come back here after; this moves on by itself.</p>
         {!tab.open() && <a className="btn go big" href={g.page || '#'} target="_blank" rel="noreferrer">Open {name} ↗</a>}
         <Pill tone="wait">Waiting for {name}…</Pill>
         <button className="link" onClick={() => start({ via: 'code' })}>Having trouble? Use a code instead</button>
@@ -165,7 +165,7 @@ export function AccountCard({ me, owner, isOwner, g, inChat, onReady }: { me: nu
   );
   return (
     <div className="card account-card">
-      <p>{ai.name} will ask you once; it calls this part <b>Codex</b>, and that's us.</p>
+      <p>{ai.name} will ask you once; it calls the access your helpers use <b>“Codex”</b>.</p>
       <button className="btn go big" onClick={() => setSigning(openTab())}><span className="gpt">◎</span>Sign in with {ai.name}</button>
       <button className="link" onClick={() => { setNoAccount(true); window.open('https://chatgpt.com/', '_blank'); }}>No {ai.name} account? Make a free one</button>
       {noAccount && <p className="mute small">{ai.name} opened in a new tab: sign up with Google or Apple in a few taps, then come straight back and tap Sign in.</p>}
@@ -206,7 +206,7 @@ export function ConnectApp({ app, helper, state, tab: first, onConnected, onDone
   useEffect(() => { if (phase === 'done' && !pinned) onConnected?.(); }, [phase]);
   const cancel = () => { void api.disconnect(app.id).catch(() => {}); setPhase('cancelled'); };
   const at = phase === 'done' ? 3 : phase === 'waiting' ? 1 : 0;
-  const warn = app.warns && <p className="warn-line">Google will show a warning because Crewhouse is {owner}'s family app. Tap <b>Advanced</b>, then <b>Go to Crewhouse</b>.</p>;
+  const warn = app.warns && <p className="warn-line">Google shows a warning for apps it hasn't reviewed — a family app always gets it. Tap <b>Advanced</b>, then <b>Go to Crewhouse</b>.</p>;
   const notNow = <button className="link" onClick={onClose}>Not now</button>;
   return (
     <Sheet label={`Connect ${app.name}`} onClose={onClose}>
@@ -224,7 +224,7 @@ export function ConnectApp({ app, helper, state, tab: first, onConnected, onDone
       {phase === 'done' && <><h2>{app.name} is connected</h2><p>{app.does}</p>{helper && <p className="mute">{helper} is carrying on with it now.</p>}
         <button className="btn go big" onClick={onDone}>Done</button></>}
       {phase === 'cancelled' && <><h2>No problem</h2><p className="mute">Nothing was connected{helper ? `, and ${helper} will manage without it` : ''}.
-        {app.warns ? ` Google shows that warning for apps it hasn't reviewed. Crewhouse is ${owner}'s family app, so it's safe: tap Advanced, then Go to Crewhouse.` : ` You can connect ${app.name} any time.`}</p>
+        {app.warns ? ` Google shows that warning for every app it hasn't reviewed — a family app always gets it. Crewhouse is ${owner}'s app, running on your own computer. Tap Advanced, then Go to Crewhouse.` : ` You can connect ${app.name} any time.`}</p>
         <button className="btn go big" onClick={again}>Try again</button>{notNow}</>}
       {phase === 'unticked' && <><h2>Almost: tick the box</h2><p className="mute">{app.name} still isn't ticked. Tap Try again, then tick {app.name} on Google's page.</p>
         <button className="btn go big" onClick={again}>Try again</button>{notNow}</>}
@@ -251,14 +251,13 @@ export function ConnectApp({ app, helper, state, tab: first, onConnected, onDone
 export function ConnectCard({ c, helper, state, onDone }: { c: A.Card; helper?: string; state: Json; onDone: () => void }) {
   const [open, setOpen] = useState<Window | null | false>(sheet === 'connect' ? null : false);
   const app = c.app!;
-  const owner = state.members.find((m: Json) => m.id === A.OWNER)?.name ?? 'the owner';
   const no = () => api.answer(c.id, { answer: 'deny' }).then(onDone, () => toast("Can't reach the home computer right now."));
   const yes = () => void api.answer(c.id, { answer: 'allow' }).catch(() => {}).then(onDone);
   return (
     <div className="connect-offer">
       <div className="card connect"><span className="app-ic" style={{ background: app.bg }}>{app.mark}</span><span className="grow">{c.words}</span></div>
       <button className="btn go big" onClick={() => setOpen(A.needsHouse(state, app) ? null : openTab())}>Connect {app.name}</button>
-      {app.warns && <p className="warn-line">Google will show a warning because Crewhouse is {owner}'s family app. Tap <b>Advanced</b>, then <b>Go to Crewhouse</b>.</p>}
+      {app.warns && <p className="warn-line">Google shows a warning for apps it hasn't reviewed — a family app always gets it. Tap <b>Advanced</b>, then <b>Go to Crewhouse</b>.</p>}
       <button className="link" onClick={no}>Not now</button>
       {open !== false && <ConnectApp app={app} helper={helper} state={state} tab={open} onConnected={yes} onClose={() => setOpen(false)} onDone={() => setOpen(false)} />}
     </div>

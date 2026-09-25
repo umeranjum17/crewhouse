@@ -149,14 +149,16 @@ function readable(line: string) {
 }
 
 /** What a checkout page says it will charge: its line items as the page writes them (up to eight) and the order total.
- *  `total` is null when no total can be read. ponytail: any currency counts as its number toward the dollar cap. */
-export function orderOf(snapshot: string): { items: string[]; more: number; total: number | null; shown: string } {
+ *  `total` is null when no total can be read. `capped` is true only when that total is in dollars — the money cap is
+ *  a dollar figure, so a price in another currency is shown as what it is and never counted against it. */
+export function orderOf(snapshot: string): { items: string[]; more: number; total: number | null; shown: string; currency: string; capped: boolean } {
   const lines = snapshot.split('\n').filter((l) => /^\s*-\s/.test(l)).map(readable).filter((t) => MONEY.test(t) && t.length < 200);
   const totals = lines.filter((t) => /total|amount due|pay now/i.test(t) && !/sub\s?-?total/i.test(t));
   const pick = totals.find((t) => BEST_TOTAL.test(t)) ?? totals.at(-1);
   const m = pick ? MONEY.exec(pick) : null;
   const items = [...new Set(lines.filter((t) => !NOT_ITEM.test(t)))];
-  return { items: items.slice(0, 8), more: Math.max(0, items.length - 8), total: m ? Number(m[2].replace(/,/g, '')) : null, shown: m ? `${m[1]}${m[2]}` : '' };
+  const currency = m ? m[1] : '';
+  return { items: items.slice(0, 8), more: Math.max(0, items.length - 8), total: m ? Number(m[2].replace(/,/g, '')) : null, shown: m ? `${m[1]}${m[2]}` : '', currency, capped: !!m && m[1] === '$' };
 }
 
 /** What "For this task" or "Always" covers, from the gate's key, in plain words. */

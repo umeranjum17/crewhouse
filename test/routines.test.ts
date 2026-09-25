@@ -444,9 +444,11 @@ ${extra}  - text: "Subtotal: $38.10"
 test('the checkout card is read from the page: items and total as the page writes them, one yes per page and total, and the cap holds', async () => {
   const { orderOf } = await import('../src/policy.ts');
   assert.deepEqual(orderOf(snap('$43.10')), {
-    items: ['Garlic, 2 kg — $6.20', 'Whole milk (1 gal) x2 — $7.90', 'Basmati rice 10 lb $24.00'], more: 0, total: 43.1, shown: '$43.10' });
+    items: ['Garlic, 2 kg — $6.20', 'Whole milk (1 gal) x2 — $7.90', 'Basmati rice 10 lb $24.00'], more: 0, total: 43.1, shown: '$43.10', currency: '$', capped: true });
   assert.equal(orderOf('- text: nothing here').total, null);
-  assert.equal(orderOf('- text: "Order total: £1,204.50"').total, 1204.5);
+  const gbp = orderOf('- text: "Order total: £1,204.50"');
+  assert.equal(gbp.total, 1204.5);
+  assert.equal(gbp.capped, false, 'a pound price is shown as pounds, never counted as dollars');
 
   const { db, crew, done } = setup();
   crew.setMoneyCap(100);
