@@ -17,7 +17,7 @@
 [data-theme='night'] {
   --ink: #efe9dc; --ink2: #cfc8dc; --mute: #8a83a3; --card: #1d1929e6; --solid: #15121f; --line: #2e2842; --soft: #221d31;
   --pink: #ff5f87; --pink-ink: #ff7aa2; --ok: #8dffc0; --ok-ink: #8dffc0; --wait: #ffb45c; --bg: #0d0b14; --go: #8dffc0; --go-ink: #07140e;
-  --halo: #2a2340; --off: rgba(239, 233, 220, .06); --shadow: #3a3152; --lift: 0 0 0 1px #2e2842, 0 12px 30px -14px #000; --chip: 0 0 0 1.5px #2e2842 inset;
+  --me: #2a2340; --me-ink: #efe9dc; --halo: #2a2340; --off: rgba(239, 233, 220, .06); --shadow: #3a3152; --lift: 0 0 0 1px #2e2842, 0 12px 30px -14px #000; --chip: 0 0 0 1.5px #2e2842 inset;
   --wash: radial-gradient(900px 500px at 10% 0, #1f1733, transparent 70%), radial-gradient(600px 500px at 100% 40%, #1a1330, transparent 70%), var(--bg);
   color-scheme: dark;
 }
@@ -192,7 +192,7 @@ a.back:not([aria-label]) { font-size: 15px; margin-bottom: 6px; }
 .line { max-width: 84%; margin-top: 10px; }
 .line .bubble-text { padding: 10px 15px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .line.me { margin-left: auto; }
-.line.me .bubble-text { background: var(--go); color: var(--go-ink); border-radius: 22px 22px 6px 22px; }
+.line.me .bubble-text { background: var(--me, var(--go)); color: var(--me-ink, var(--go-ink)); border-radius: 22px 22px 6px 22px; }
 .line.them .bubble-text, .line.chief .bubble-text { background: var(--solid); border-radius: 6px 22px 22px 22px; box-shadow: 0 6px 18px -10px #6a4f9a55; }
 .line.note { max-width: 92%; }
 .line.note .bubble-text { background: var(--card); border-radius: 22px; box-shadow: var(--lift); }
@@ -278,6 +278,9 @@ input[role='switch']:checked::after { left: 21px; }
   .hi { text-align: left; font-size: 34px; }
   .bubbles { justify-content: flex-start; }
   .chat { min-height: calc(100vh - 150px); }
+  .page:not(.chat-page) { max-width: 1040px; }
+  .scrim { align-items: center; padding: 24px; }
+  .sheet { border-radius: 32px; }
 }
 @media (min-width: 1240px) {
   .shell.with-rail { grid-template-columns: 272px minmax(0, 1fr) 340px; }
