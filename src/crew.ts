@@ -13,7 +13,7 @@ import { Desktops, browserBin, missing as desktopMissing, type Watcher } from '.
 import { Accounts, OWNER, PROVIDERS } from './accounts.ts';
 import { Connections, type AppTool } from './connections.ts';
 import { axiTool, cliTool, openSession, readPage, runAxi, sandboxBash, sandboxReady, webTools } from './engine.ts';
-import { coversOf, effectOf, orderOf, toolWords, type Effect } from './policy.ts';
+import { acts, coversOf, effectOf, orderOf, toolWords, type Effect } from './policy.ts';
 import { axiEnv, registry, resolveGrants, toolBin, which } from './tools.ts';
 import { stubModels } from './stub.ts';
 import { describe, nextRun, parseSchedule } from './routines.ts';
@@ -34,6 +34,8 @@ export const SHARES: Record<string, number> = { light: 0.25, normal: 0.6, full: 
 const dayBudget = () => Number(process.env.CREWHOUSE_DAY_TOKENS || 2_000_000);
 /** A job the person stopped: they know, so it gets no failure line. */
 const STOPPED = 'Stopped by you.';
+/** How crewd starts the line for a job that acted but couldn't confirm it worked; the app shows it apart from the rest. */
+const UNSURE = 'Not sure it worked:';
 const MONEY_CAP = 20; // dollars a month, until the owner changes it
 /** Local calendar day and month: the share resets at midnight here, the money cap on the 1st. */
 const dayOf = (t = Date.now()) => new Date(t).toLocaleDateString('en-CA');
@@ -48,7 +50,7 @@ const STUCK_MS = Number(process.env.CREWHOUSE_STUCK_MS || 180_000); // working w
 /** A quiet check-in's reply when nothing needs the person, and how its run is recorded. */
 const ALL_CLEAR = 'ALL-CLEAR';
 const ALL_CLEAR_RESULT = 'All clear';
-const TRAIL = ['task.created', 'task.working', 'task.done', 'task.failed', 'task.progress', 'run.tool', 'run.allowed', 'run.typed',
+const TRAIL = ['task.created', 'task.working', 'task.done', 'task.failed', 'task.unsure', 'task.progress', 'run.tool', 'run.allowed', 'run.typed',
   'ask.opened', 'ask.answered', 'ask.parked', 'file.delivered', 'memory.learned', 'memory.undone', 'bot.recruited', 'bot.allowed', 'run.resumed',
   'skill.learned', 'skill.removed', 'soul.changed'];
 
@@ -566,13 +568,15 @@ export class Crew {
     const name = (id: string) => this.bot(id)?.display ?? id;
     const list = (xs: string[]) => xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join('; ')} and ${xs.at(-1)}`;
     const done = this.db.all("SELECT * FROM tasks WHERE bot != ? AND member = ? AND state = 'done' AND updated_at >= ? AND COALESCE(result, '') != ? ORDER BY id", CHIEF, member, since, ALL_CLEAR_RESULT);
-    const failed = this.db.all("SELECT * FROM tasks WHERE bot != ? AND member = ? AND state = 'failed' AND updated_at >= ? ORDER BY id", CHIEF, member, since);
+    const ended = (state: string) => this.db.all('SELECT * FROM tasks WHERE bot != ? AND member = ? AND state = ? AND updated_at >= ? ORDER BY id', CHIEF, member, state, since);
+    const failed = ended('failed'), unsure = ended('unsure');
     const asks = this.db.all("SELECT * FROM asks WHERE state = 'open' AND COALESCE(member, ?) = ? ORDER BY id", OWNER, member);
     const learned = this.db.all("SELECT bot, data FROM events WHERE kind = 'memory.learned' AND at >= ? AND COALESCE(json_extract(data, '$.member'), ?) = ? ORDER BY seq", since, OWNER, member);
     const soon = this.db.all("SELECT * FROM routines WHERE state = 'on' AND kind != 'digest' AND member = ? AND next_at <= ? ORDER BY next_at", member, Date.now() + 86_400_000);
     const lines = [`Good ${partOfDay()}${address ? `, ${address}` : ''}. While you were away:`];
     lines.push(done.length ? `- Finished: ${list(done.slice(0, 5).map((t) => `${name(t.bot)}, “${t.title}”`))}${done.length > 5 ? `, and ${done.length - 5} more` : ''}.` : '- Nothing new was finished.');
     if (failed.length) lines.push(`- Did not go well: ${list(failed.slice(0, 3).map((t) => `${name(t.bot)}, “${t.title}” (${String(t.result ?? '').slice(0, 80)})`))}.`);
+    if (unsure.length) lines.push(`- Not sure it worked: ${list(unsure.slice(0, 3).map((t) => `${name(t.bot)}, “${t.title}” (${String(t.result ?? '').slice(0, 80)})`))}.`);
     lines.push(asks.length ? `- Needs you: ${list(asks.slice(0, 3).map((a) => a.title))}. It is under Needs you.` : '- Nothing needs you.');
     for (const l of learned.slice(0, 3)) lines.push(`- ${name(l.bot)} learned: ${JSON.parse(l.data).text}`);
     if (day) lines.push(day.length ? `- Today on your calendar: ${list(day.map((e) => e.at ? `${clock(e.at)}, ${e.title}` : `${e.title} (all day)`))}.` : '- Nothing on your calendar today.');
@@ -788,13 +792,14 @@ export class Crew {
   }
 
   private setTask(task: Row, state: string, result?: string) {
-    if (state === 'done' || state === 'failed') {
+    if (state === 'done' || state === 'failed' || state === 'unsure') {
       this.taskGrants.delete(task.id);
       if (this.checkouts.get(task.bot)?.task === task.id) this.checkouts.delete(task.bot);
     }
     this.db.run('UPDATE tasks SET state = ?, result = COALESCE(?, result), updated_at = ? WHERE id = ?', state, result ?? null, Date.now(), task.id);
     this.db.event(`task.${state}`, task.bot, { task: task.id, title: task.title, ...(result ? { result: result.slice(0, 280) } : {}) });
     if (state === 'failed' && result && result !== STOPPED) this.failedLine(task, result);
+    if (state === 'unsure') this.failedLine(task, result!, true);
   }
 
   /** The photos sent with a task, for its first prompt: the helper sees them. */
@@ -809,16 +814,18 @@ export class Crew {
   }
 
   /** A job that didn't work always says so, in words crewd writes: a routine's in the member's Chief thread (with when it
-   *  tries again), anything else in its own chat. Never silent, and never a model call. */
-  private failedLine(task: Row, result: string) {
+   *  tries again), anything else in its own chat. Never silent, and never a model call. A job that acted but couldn't
+   *  confirm it worked (`unsure`) says so the same way: not sure is never reported as done. */
+  private failedLine(task: Row, result: string, unsure = false) {
     const member = task.member ?? OWNER;
     const b = this.bot(task.bot)?.display ?? task.bot;
     const r = task.routine && this.db.get('SELECT * FROM routines WHERE id = ?', task.routine);
     if (r) {
+      if (unsure) return void this.say(CHIEF, 'bot', `${b} isn't sure “${r.name}” worked. ${result}`, null, member);
       const again = r.state === 'on' ? ` It will try again ${clock(r.next_at)}.` : '';
       return void this.say(CHIEF, 'bot', `${b} couldn't finish “${r.name}”. ${result}${again}`, null, member);
     }
-    this.say(task.bot, 'bot', result, task.id, member);
+    this.say(task.bot, 'bot', unsure ? `${UNSURE} ${result}` : result, task.id, member);
     this.alert(member);
   }
 
@@ -1098,9 +1105,17 @@ export class Crew {
       if (task && parked && task.state !== 'needs_you') this.setTask(task, 'needs_you');
       // While the person holds the controls the turn was cut short on purpose; Give back resumes it.
       if (!task || parked || this.held.has(botId)) return;
+      // Done needs proof: a job that acted out in the world ends done only when the helper declared it saw it work
+      // (crew_outcome). Declared unsure, or declared nothing, it ends unsure, never done.
+      const said = task.outcome ? JSON.parse(task.outcome) : null;
+      const b = this.bot(botId)!;
+      if (said ? !said.worked : task.acted) {
+        this.setTask(task, 'unsure', said?.seen || `I did something on ${task.acted}, but I didn't see it confirmed. Worth checking there yourself.`);
+        if (task.origin === CHIEF) this.say(CHIEF, 'bot', `${b.display} isn't sure “${short(task.title, 60)}” worked. It's in ${b.display}'s chat.`, null, task.member ?? OWNER);
+        return;
+      }
       this.setTask(task, 'done', clear ? ALL_CLEAR_RESULT : text || 'Done.');
       if (task.origin === CHIEF) {
-        const b = this.bot(botId)!;
         // In Chief's own voice, written by crewd: no model call, no task number.
         const address = this.member(task.member ?? OWNER).address;
         this.say(CHIEF, 'bot', `${b.display} has finished “${short(task.title, 60)}”${address ? `, ${address}` : ''}. It's in ${b.display}'s chat${text ? `: “${short(text.replace(/\s+/g, ' '), 200)}”` : '.'}`.replace(/\s+/g, ' ').trim(), null, task.member ?? OWNER);
@@ -1123,8 +1138,23 @@ export class Crew {
     };
   }
 
-  /** Run it, refuse it, or ask the person in one plain sentence and wait. The model's own words never decide. */
+  /** A call that goes through and acts out in the world marks its job: that job must now say whether it worked, and an
+   *  earlier "it worked" no longer covers it. */
   private async gate(botId: string, tool: string, input: Record<string, any>) {
+    const s = this.seen(botId);
+    const e = effectOf(tool, input, s);
+    const r = await this.decide(botId, tool, input);
+    const task = !r && acts(tool, input, e) && this.activeTask(botId);
+    if (task) {
+      let where = s.apps?.[tool] ? `your ${s.apps[tool].app}` : s.run?.[tool]?.name ?? 'a web page';
+      try { if (tool === 'browser') where = new URL(s.page ?? '').hostname.replace(/^www\./, '') || where; } catch { /* no page yet */ }
+      this.db.run('UPDATE tasks SET acted = ?, outcome = NULL WHERE id = ?', where, task.id);
+    }
+    return r;
+  }
+
+  /** Run it, refuse it, or ask the person in one plain sentence and wait. The model's own words never decide. */
+  private async decide(botId: string, tool: string, input: Record<string, any>) {
     if (this.held.has(botId)) return { block: true, reason: 'The person has the controls of your screen; wait. You will be told when they give them back.', terminate: true };
     const task = this.activeTask(botId);
     let e = effectOf(tool, input, this.seen(botId));
@@ -1281,6 +1311,17 @@ export class Crew {
       tool('crew_connect', `Ask the person to connect one of their apps (${apps}) when the task needs it and it isn't connected yet. ` +
         'Ask for one app at a time, then end your turn with one short line saying what you could do with it; you are resumed when they answer.',
         { app: Type.String() }, (p) => this.askConnect(botId, String(p.app ?? '').toLowerCase())),
+      tool('crew_outcome', 'Before you end a job that did something outside your own space (booked, sent, bought, posted, pressed a button on a ' +
+        'site, changed something in an app), say whether it worked. `worked`: true only when you saw the proof yourself (a confirmation page ' +
+        'or number, the sent message, the event read back), and `seen` names it. Otherwise false, and `seen` says in plain words what you did ' +
+        'and what the person should check ("I pressed Book, but the page didn\'t show a confirmation. Worth checking your email for one."). ' +
+        'Not sure is an honest answer; a job that acted and says nothing counts as not sure.',
+        { worked: Type.Boolean(), seen: Type.String() }, (p) => {
+          const seen = clean(p.seen, 400);
+          if (!seen) throw new Error('say what you saw, or what the person should check');
+          const id = task();
+          if (id) this.db.run('UPDATE tasks SET outcome = ? WHERE id = ?', JSON.stringify({ worked: p.worked === true, seen }), id);
+        }),
       tool('crew_report', 'A one-line progress note the person sees.', { text: Type.String() }, (p) => { this.db.event('task.progress', botId, { task: task(), text: clean(p.text, 200) }); }),
       tool('crew_deliver', 'Register a finished file (a path in your folder, usually under files/).', { path: Type.String(), note: Type.Optional(Type.String()) }, (p) => this.deliver(botId, p.path, p.note)),
       tool('crew_copy', "Put a copy of a file from your folder into the person's own folders. `to` is the full path of the new file.",

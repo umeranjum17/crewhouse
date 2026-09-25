@@ -262,6 +262,13 @@ test('watches and hand-offs read as plain words, with only the page\'s host', ()
   assert.deepEqual([l.from, l.text], ['note', 'Reel asked: find three songs']);
 });
 
+test('not sure it worked stands apart: in the chat, in Chief\'s thread and in the trail', () => {
+  const ls = A.lines({ messages: [{ id: 1, author: 'bot', text: 'Booked it.' }, { id: 2, author: 'bot', text: "Not sure it worked: I pressed Book, but saw no confirmation." },
+    { id: 3, author: 'bot', text: "Pip isn't sure “Book the dentist” worked. Worth checking your email." }] }, 'pip');
+  assert.deepEqual(ls.map((l) => !!l.unsure), [false, true, true]);
+  assert.equal(A.step({ kind: 'task.unsure', data: { title: 'Book the dentist' } }), 'Not sure “Book the dentist” worked');
+});
+
 test('a new helper from Chief is a yes-or-no card with its own yes', () => {
   const s = { person: { id: 1 }, bots: [], asks: [{ id: 5, bot: 'chief', kind: 'propose', at: 1, title: 'Shall I take on a new helper? Pip: Watches rentals',
     detail: { words: 'Shall I take on a new helper? Pip: Watches rentals', yes: 'Yes, take Pip on', preview: { head: 'Pip, a new helper', body: 'Watches rentals.' } } }] };

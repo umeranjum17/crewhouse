@@ -27,6 +27,12 @@ export interface Seen {
 
 const READS = new Set(['read', 'ls', 'grep', 'find']);
 const WRITES = new Set(['write', 'edit']);
+/** Whether a call that goes through does something out in the world (sends, buys, deletes, or presses and types on a web
+ *  page): a job that did has to say whether it worked. */
+export function acts(tool: string, input: Record<string, any>, e: Effect) {
+  return e.kind === 'send' || e.kind === 'spend' || e.kind === 'delete' || (tool === 'browser' && BROWSER_ACTS.has(String(input.args?.[0] ?? '')));
+}
+
 /** Always safe: they only touch the bot's own space, the web, or Crewhouse itself. bash runs in the sandbox. */
 const SAFE = /^(bash|web_search|web_fetch|crew_\w+)$/;
 // The browser AXI's commands: looking never asks, acting follows the "asks first" rules, anything else is refused
