@@ -712,7 +712,7 @@ function HelperPage(ctx: Ctx & { id: string; tab: string; setTab: (t: string) =>
       </Page>}
       {tab === 'things' && <Page><ThingsList list={A.things(state).filter((x) => x.helper === id)} state={state} empty={`${h.name}'s finished work shows up here.`} /></Page>}
       {tab === 'routines' && <Page><RoutineList {...ctx} bot={id} /></Page>}
-      {tab === 'screen' && <Page><Screen bot={{ ...page?.bot, ...b }} canAct={canAct} refresh={() => { refresh(); void load(); }} /></Page>}
+      {tab === 'screen' && <Page><Screen bot={{ ...page?.bot, ...b }} canAct={canAct} showing={A.showing(state, id)} refresh={() => { refresh(); void load(); }} /></Page>}
       {tab === 'me' && <Page lead={`Who ${h.name} is, and what it knows how to do. Change it on the computer, or ask Chief.`}>
         <Card>{A.personality(page?.soul).map((l, i) => <T key={i} style={{ paddingVertical: 4 }}>{l}</T>)}</Card>
         {A.knows(page?.skills).length > 0 && <Card><T style={s.b}>Knows how to</T>{A.knows(page?.skills).map((k) => <T key={k.name} style={{ paddingVertical: 4 }}>{`• ${k.says}`}</T>)}</Card>}
@@ -726,7 +726,7 @@ function HelperPage(ctx: Ctx & { id: string; tab: string; setTab: (t: string) =>
 }
 
 /** A bot's own screen on the phone, through desklink over the encrypted link: Watch, Take the wheel, Hand it back. */
-function Screen({ bot, canAct, refresh }: { bot: Json; canAct: boolean; refresh: () => void }) {
+function Screen({ bot, canAct, refresh, showing }: { bot: Json; canAct: boolean; refresh: () => void; showing?: { words: string } | null }) {
   const t = useLook();
   const control = bot.controls === 'person';
   const controlRef = useRef(control);
@@ -735,6 +735,7 @@ function Screen({ bot, canAct, refresh }: { bot: Json; canAct: boolean; refresh:
   const sig = useRef<ReturnType<typeof desktopSignaling> | null>(null);
   const [err, setErr] = useState('');
   const [note, setNote] = useState('');
+  const [what, setWhat] = useState<string | null>(null);
   const session = useDesktopSession({
     authorize: async () => {
       sig.current?.close();
@@ -770,8 +771,24 @@ function Screen({ bot, canAct, refresh }: { bot: Json; canAct: boolean; refresh:
         {idle ? <Btn go label={`Watch ${bot.display}`} onPress={watch} /> : <Btn label="Stop watching" onPress={stop} />}
         {canAct && !control && <Btn label="Take the wheel" onPress={act(async () => { await api.takeOver(bot.id); watching.current = true; if (idle) watch(); })} />}
         {canAct && control && !idle && <Btn label="Keyboard" onPress={() => session.showKeyboard()} />}
+        {canAct && !control && what === null && <Btn label={`Show ${bot.display} how`} onPress={() => setWhat('')} />}
       </View>
-      {canAct && control && (
+      {canAct && !control && what !== null && (
+        <View style={{ gap: 8 }}>
+          <TextInput style={[s.input, { color: t.ink, borderColor: t.line }]} value={what} onChangeText={setWhat} placeholder="What are you showing? For example: pull the newsletter stats" placeholderTextColor={t.mute} accessibilityLabel="What are you showing" />
+          <View style={s.chips}>
+            <Btn go label="Start" disabled={!what.trim()} onPress={act(async () => { await api.show(bot.id, what); setWhat(null); watching.current = true; if (idle) watch(); })} />
+            <Btn ghost label="Cancel" onPress={() => setWhat(null)} />
+          </View>
+        </View>
+      )}
+      {canAct && showing && (
+        <View style={{ gap: 8 }}>
+          <T>{showing.words} I write down where you go and what you tap, never what you type.</T>
+          <View style={s.chips}><Btn go label="Done showing" onPress={act(() => api.shown(bot.id, true))} /><Btn ghost label="Cancel" onPress={act(() => api.shown(bot.id, false))} /></View>
+        </View>
+      )}
+      {canAct && control && !showing && (
         <View style={{ gap: 8 }}>
           <TextInput style={[s.input, { color: t.ink, borderColor: t.line }]} value={note} onChangeText={setNote} placeholder={`What did you do? ${bot.display} reads this`} placeholderTextColor={t.mute} accessibilityLabel="What did you do" />
           <Btn go label="Hand it back" onPress={act(async () => { await api.giveBack(bot.id, note); setNote(''); })} />

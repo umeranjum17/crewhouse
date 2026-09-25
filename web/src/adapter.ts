@@ -118,6 +118,12 @@ export function away(f: { home?: boolean; tailnet?: boolean; vpn?: boolean; anyw
 }
 
 /** When the crew is resting because an account ran out, in one sentence: "Your ChatGPT is resting until 6:40 pm". */
+/** A show in progress on a helper's screen: what, and how many steps so far, in words. */
+export function showing(state: Json, bot: string) {
+  const s = state.showing?.[bot];
+  return s ? { what: plain(s.what), words: s.steps ? `Showing how to ${plain(s.what)}: ${s.steps} step${s.steps === 1 ? '' : 's'} so far.` : `Showing how to ${plain(s.what)}. Go ahead; I'm watching.` } : null;
+}
+
 /** The helpers' tools the downloaded app is still fetching, in one sentence; empty when none. */
 export function gettingReady(state: Json) {
   const ids: string[] = state.installing ?? [];

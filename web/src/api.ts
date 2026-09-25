@@ -55,6 +55,9 @@ export const api = {
   reset: (id: string) => call('POST', `/api/bots/${id}/reset`),
   undoMemory: (id: string, seq: number) => call('POST', `/api/bots/${id}/memory/${seq}/undo`),
   takeOver: (id: string) => call('POST', `/api/bots/${id}/takeover`),
+  /** Teach by showing: take the wheel with a recorder on; then Done (the bot keeps it as a skill) or Cancel. */
+  show: (id: string, what: string) => call('POST', `/api/bots/${id}/show`, { what }),
+  shown: (id: string, keep: boolean) => call('POST', `/api/bots/${id}/shown`, { keep }),
   giveBack: (id: string, note: string) => call('POST', `/api/bots/${id}/giveback`, { note }),
   people: () => call('GET', '/api/people'),
   addPerson: (name: string) => call('POST', '/api/people', { name }),
