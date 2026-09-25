@@ -54,8 +54,8 @@ const page = { messages: [
   skills: [{ name: 'make-reel', description: 'Turn screenshots into a demo video (mp4) with ffmpeg.', says: 'Turn photos into a short video' }, { name: 'plan-dinners', description: 'Uses the browser MCP tools' }] };
 
 const FORBIDDEN = /fc-list|2>&1|\| ?head|\bBash\b|claude|anthropic|codex|sonnet|haiku|opus|gpt-|mcp__|\/home\/|~\/|files\/|\.md\b|\bpane\b|terminal|\d+ ?%|a command|ffmpeg|magick|\bls -la\b|```|`|\besc\b|529/i;
-// URLs are for fetching files, never shown as text.
-const shown = (x: unknown) => JSON.stringify(x, (k, v) => (k === 'url' ? undefined : v));
+// URLs are for fetching files, never shown as text; nor are times, which are numbers (a timestamp can contain "529").
+const shown = (x: unknown) => JSON.stringify(x, (k, v) => (k === 'url' || k === 'at' ? undefined : v));
 
 test('nothing technical survives the adapter', () => {
   const h = A.chatgpt([{ member: 2, account: 'chatgpt', name: 'ChatGPT', signedIn: false, signIn: { state: 'waiting', url: 'https://auth.openai.com/codex/device', code: 'AB12-CDE34' } }], 2);
