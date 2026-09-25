@@ -1,11 +1,11 @@
-// The app shares the web app's api, adapter, tokens and art (../web/src). Metro watches that folder and resolves
-// its imports as if from this app. @byokit/link's libsodium resolves to sodium-javascript through its browser field.
+// The app shares the web app's api, adapter, tokens and art (../web/src). Metro watches those folders and resolves
+// their imports as if from this app. @byokit/link's libsodium resolves to sodium-javascript through its browser field.
 const { getDefaultConfig } = require('expo/metro-config');
 const path = require('path');
 
 const config = getDefaultConfig(__dirname);
 const repo = path.resolve(__dirname, '..');
-const shared = [path.join(repo, 'web', 'src')];
+const shared = [path.join(repo, 'src'), path.join(repo, 'web', 'src')]; // web/src/demo.ts reads ../../src/routines.ts
 config.watchFolders = shared;
 config.resolver.nodeModulesPaths = [path.join(__dirname, 'node_modules')];
 config.resolver.resolveRequest = (context, name, platform) => {

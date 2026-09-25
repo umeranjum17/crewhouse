@@ -249,7 +249,7 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
   }, []);
   useEffect(() => {
     let pending: any;
-    const { link: l, call } = connect(grant, () => { clearTimeout(pending); pending = setTimeout(refresh, 120); }, (st) => { setStatus(st); if (st === 'removed') onRemoved(); });
+    const { link: l, call } = connect(grant, () => { clearTimeout(pending); pending = setTimeout(refresh, 120); }, (st) => { setStatus(st); if (st === 'online') refresh(); if (st === 'removed') onRemoved(); }); // online: first load, and catching up after a reconnect
     link.current = l;
     setTransport(call);
     return () => l.stop();
