@@ -107,7 +107,9 @@ test('a helper uses the connected calendar through crewd: no Google MCP, the tok
   assert.equal(store.size, 0, 'nothing is added before the yes');
   await crew.answer(db.get("SELECT id FROM asks WHERE state = 'open'")!.id, { answer: 'allow' });
   await settled(db, u);
-  assert.match(task(db, u).result, /added: \{id: ev\d+abc/);
+  assert.match(db.get("SELECT text FROM messages WHERE bot = 'quill' AND author = 'bot' AND task_id = ? ORDER BY id LIMIT 1", u)!.text, /added: \{id: ev\d+abc/);
+  assert.equal(task(db, u).state, 'unsure', 'it added an event and never said it saw it there');
+  assert.match(task(db, u).result, /on your Google Calendar/);
   assert.ok(asked.length > 0 && asked.every((a) => a.endsWith(' Bearer tok')), 'crewd adds the token to every call');
   done();
 });

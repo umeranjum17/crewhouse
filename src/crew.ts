@@ -1146,7 +1146,7 @@ export class Crew {
     const r = await this.decide(botId, tool, input);
     const task = !r && acts(tool, input, e) && this.activeTask(botId);
     if (task) {
-      let where = s.apps?.[tool] ? `your ${s.apps[tool].app}` : s.run?.[tool]?.name ?? 'a web page';
+      let where = s.apps?.[tool] ? `your ${s.apps[tool].app}` : tool === 'calendar' ? 'your Google Calendar' : s.run?.[tool]?.name ?? 'a web page';
       try { if (tool === 'browser') where = new URL(s.page ?? '').hostname.replace(/^www\./, '') || where; } catch { /* no page yet */ }
       this.db.run('UPDATE tasks SET acted = ?, outcome = NULL WHERE id = ?', where, task.id);
     }
