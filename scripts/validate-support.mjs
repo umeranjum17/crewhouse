@@ -80,9 +80,9 @@ export function validate({ db, crewDir }, id, forbid = []) {
   if (!patches.length) row('PASS', 'fix', 'none offered (nothing claimed)');
 
   // 5. Blind: nothing it called reached the answer. Only read-capable inputs can reach it — the address a tool
-  // fetches or opens, and shell words that actually read or reach out. Text the helper is merely writing (a heredoc
-  // body, a write call) is never a place it went. # ponytail: shell reads are an allowlist, not a parser — a read
-  // hidden in python/perl or an unquoted heredoc edge slips through; parse the shell if a backtest ever needs it.
+  // fetches or opens, and the shell command with heredoc bodies stripped (text the helper is merely writing; write
+  // calls never count). # ponytail: the heredoc strip is line-based skimming, not a shell parser — a terminator
+  // with trailing text or a nested heredoc would need a real parse.
   const reaches = (c) => {
     const a = c.args ?? {};
     if (c.name === 'web_fetch') return [String(a.url ?? '')];
@@ -96,8 +96,7 @@ export function validate({ db, crewDir }, id, forbid = []) {
       const m = /<<-?\s*(['"]?)(\w+)\1/.exec(l);
       if (m) body = m[2];
     }
-    const cmd = kept.join('\n');
-    return /\b(curl|wget|ssh|scp|nc|cat|head|tail|less|more|grep|egrep|fgrep|rg|awk|find|git\s+(fetch|pull|clone|ls-remote))\b/.test(cmd) ? [cmd] : [];
+    return [kept.join('\n')];
   };
   if (forbid.length) {
     const hit = all.filter((c) => reaches(c).some((s) => forbid.some((f) => s.includes(f))));
