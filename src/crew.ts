@@ -9,12 +9,12 @@ import { Type } from '@earendil-works/pi-ai';
 import { CHIEF, type Config } from './config.ts';
 import type { Row, Store } from './db.ts';
 import * as disk from './bots.ts';
-import { Desktops, deskFor, browserBin, missing as desktopMissing, type Watcher } from './desktop.ts';
+import { Desktops, browserBin, missing as desktopMissing, type Watcher } from './desktop.ts';
 import { Accounts, OWNER, PROVIDERS } from './accounts.ts';
 import { Connections, type AppTool } from './connections.ts';
-import { cliTool, Mcp, openSession, readPage, sandboxBash, sandboxReady, webTools } from './engine.ts';
+import { axiTool, cliTool, openSession, readPage, runAxi, sandboxBash, sandboxReady, webTools } from './engine.ts';
 import { coversOf, effectOf, orderOf, toolWords, type Effect } from './policy.ts';
-import { registry, resolveGrants, toolBin, which } from './tools.ts';
+import { axiEnv, registry, resolveGrants, toolBin, which } from './tools.ts';
 import { stubModels } from './stub.ts';
 import { describe, nextRun, parseSchedule } from './routines.ts';
 import { byModel, clarify, route, type Helper } from './route.ts';
@@ -127,7 +127,10 @@ function inhibitor() {
 }
 
 /** A bot at work: its task's engine session, on whose account and which AI, and the browser if it has one. */
-interface Live { session: AgentSession; task: number; member: number; brain: disk.Brain; mcp?: Mcp; page?: string; snapshot?: string; apps?: Record<string, AppTool>; counted: number }
+/** The bot's browser while a task runs: its AXI; letting go of the browser when the task ends, or for a while (`release`:
+ *  the person takes the wheel, and the recorder may need the browser's one DevTools connection; the next call re-attaches). */
+interface Browser { run: (args: string[], signal?: AbortSignal) => Promise<string>; end: () => void; release: () => void }
+interface Live { session: AgentSession; task: number; member: number; brain: disk.Brain; browser?: Browser; page?: string; snapshot?: string; apps?: Record<string, AppTool>; counted: number }
 
 /** The deterministic half: people, bots, tasks, the per-bot queue, asks. Models only ever see prompts. */
 export class Crew {
@@ -215,8 +218,8 @@ export class Crew {
     this.stopped = true;
     clearInterval(this.timer);
     if (this.awake) this.keepAwake(false);
-    for (const [id, l] of this.live) { this.live.delete(id); l.mcp?.stop(); l.session.dispose(); }
-    this.desktops.stopAll();
+    for (const [id, l] of this.live) { this.live.delete(id); l.browser?.end(); l.session.dispose(); }
+    void this.desktops.stopAll();
     this.accounts.stop();
   }
 
@@ -905,7 +908,6 @@ export class Crew {
     this.close(bot.id);
     const space = disk.botDir(this.cfg, bot.id);
     const conf = disk.botConfig(this.cfg, bot.id);
-    const desk = deskFor(this.cfg.stateDir, bot.id, bot.n);
     const g = resolveGrants(this.cfg, conf.tools ?? [], { 'bot.dir': space, 'bot.id': bot.id });
     const tools: ToolDefinition[] = [...this.crewTools(bot.id)];
     const builtins = g.tools.includes('files') ? ['read', 'write', 'edit', 'ls', 'grep', 'find'] : [];
@@ -919,19 +921,35 @@ export class Crew {
     const apps = await this.connections.tools(member);
     tools.push(...apps.tools);
     l.apps = apps.effects;
-    if (g.mcp.browser) {
-      // With its own computer, the bot's browser tool drives the visible Chromium crewd keeps on the bot's display.
-      if (g.tools.includes('computer') && browserBin() && this.cfg.engine === 'pi') {
-        await this.desktops.ensure(bot.id, bot.n, space);
-        g.mcp.browser.args = ['--cdp-endpoint', `http://127.0.0.1:${desk.cdp}`, '--output-dir', join(space, 'work', 'browser')];
-      }
-      const mcp = new Mcp(g.mcp.browser.command, g.mcp.browser.args, g.mcp.browser.env);
-      const seen = (text: string) => {
-        const page = /Page URL: (\S+)/.exec(text)?.[1];
-        if (page) l.page = page;
-        if (/Page Snapshot/i.test(text)) l.snapshot = text.slice(0, 100_000); // what a checkout card reads its order from
+    const axi = g.axi.browser;
+    if (axi) {
+      // With its own computer, the browser tool drives the visible Chromium crewd keeps on the bot's display.
+      const onScreen = g.tools.includes('computer') && !!browserBin() && this.cfg.engine === 'pi';
+      if (onScreen) await this.desktops.ensure(bot.id, bot.n, space);
+      // Its own HOME and XDG folders (the playwright daemon's state lives there), never the person's.
+      const env = axiEnv(join(this.cfg.stateDir, 'homes', bot.id), { ...axi.env, PLAYWRIGHT_CLI_SESSION: bot.id });
+      const run = (args: string[], signal?: AbortSignal) => runAxi(axi.script, args, space, env, signal);
+      // The browser starts on first use. ponytail: a crewd that dies leaves a headless browser up until that bot's next
+      // task reopens it; an idle timeout when the engine has one.
+      let started: Promise<string> | undefined;
+      const start = async () => {
+        const cdp = onScreen ? (await this.desktops.ensure(bot.id, bot.n, space)).cdp : undefined;
+        return run(cdp ? ['attach', '--cdp', cdp] : ['open', '--persistent', '--profile', join(space, 'browser')]);
       };
-      try { tools.push(...await mcp.tools(seen)); l.mcp = mcp; } catch (e) { console.error(`browser for ${bot.id}:`, e); mcp.stop(); }
+      l.browser = {
+        run,
+        end: () => { if (started) void run([onScreen ? 'detach' : 'close']); },
+        release: () => { if (started && onScreen) { started = undefined; void run(['detach']); } },
+      };
+      tools.push(axiTool('browser', 'Your own browser (playwright-axi): goto <url>, snapshot, find <text>, click <ref>, fill <ref> <text>, press <key>, go-back', async (args, signal) => {
+        started ??= start();
+        const opened = await started;
+        if (/^error:/m.test(opened)) { started = undefined; return opened; }
+        const out = await run(args, signal);
+        const page = /^page: \{url: ([^,}\s]+)/m.exec(out)?.[1];
+        if (page) l.page = page;
+        return out;
+      }) as ToolDefinition);
     }
     l.session = await openSession({
       runtime: await this.accounts.runtime(member), provider: PROVIDERS[brain.provider].pi, model: brain.model ?? PROVIDERS[brain.provider].models.strong,
@@ -948,7 +966,7 @@ export class Crew {
     const l = this.live.get(botId);
     if (!l) return;
     this.live.delete(botId);
-    l.mcp?.stop();
+    l.browser?.end();
     l.session.dispose();
   }
 
@@ -1115,7 +1133,10 @@ export class Crew {
     if (e.kind === 'safe') return undefined;
     if (e.kind === 'refuse') return { block: true, reason: e.why };
     let checkout: { page: string; total: number | null } | undefined;
-    if (e.kind === 'spend' && tool.startsWith('browser_')) {
+    if (e.kind === 'spend' && tool === 'browser') {
+      // The whole page, read by crewd itself: the model's view of it is cut short and never decides a card.
+      const l = this.live.get(botId);
+      if (l?.browser) l.snapshot = await l.browser.run(['snapshot', '--full']);
       const r = this.order(botId, e);
       e = r.effect; checkout = r.checkout;
       // One yes covers the rest of that page's clicks (place order included), until the page or its total changes.
@@ -1142,7 +1163,7 @@ export class Crew {
 
   /** Hold the call while the person decides; after the hold, park: the turn ends and the answer arrives as the next prompt. */
   /** A checkout page's card: the order as the page shows it, and its total as the cost the money cap counts. crewd reads
-   *  it from the browser tool's own last page snapshot; the model's words never reach it. */
+   *  it from the page as the browser tool itself reports it; the model's words never reach it. */
   private order(botId: string, e: Extract<Effect, { words: string }>) {
     const l = this.live.get(botId);
     const name = this.bot(botId)?.display ?? botId;
@@ -1489,6 +1510,7 @@ export class Crew {
       this.db.event('desktop.takeover', botId, { task: task?.id ?? null });
       if (task) this.say(botId, 'system', `You have the controls. ${bot.display} is paused until you give them back.`, task.id);
     });
+    this.live.get(botId)?.browser?.release();
     await this.live.get(botId)?.session.abort();
   }
 

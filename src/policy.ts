@@ -29,12 +29,21 @@ const READS = new Set(['read', 'ls', 'grep', 'find']);
 const WRITES = new Set(['write', 'edit']);
 /** Always safe: they only touch the bot's own space, the web, or Crewhouse itself. bash runs in the sandbox. */
 const SAFE = /^(bash|web_search|web_fetch|crew_\w+)$/;
-const BROWSER_ACTS = /^browser_(click|type|fill_form|press_key|select_option|file_upload|drag|hover|evaluate|run_code|handle_dialog)$/;
+// The browser AXI's commands: looking never asks, acting follows the "asks first" rules, anything else is refused
+// (attaching elsewhere, running page scripts, reading or setting cookies and storage, the session's own lifecycle).
+const BROWSER_LOOKS = new Set(['goto', 'snapshot', 'find', 'go-back', 'go-forward', 'reload', 'tab-list', 'tab-new', 'tab-select', 'tab-close',
+  'console', 'requests', 'request', 'request-headers', 'hover', 'mousemove', 'mousewheel', 'resize', 'dialog-dismiss', 'screenshot', 'pdf']);
+const BROWSER_ACTS = new Set(['click', 'dblclick', 'fill', 'type', 'press', 'keydown', 'keyup', 'select', 'check', 'uncheck', 'drag', 'drop', 'upload',
+  'dialog-accept', 'mousedown', 'mouseup']);
+/** Flags that would pick another browser, profile or session: crewd picks those, never the model. */
+const BROWSER_OWN = /^(-s|--(session|config|browser|profile|persistent|cdp|endpoint|extension|headed|device|mobile))(=|$)/;
 const PAYMENT = /checkout|payment|billing|purchase|\/cart\b|\/pay\b|paypal\.|pay\.google/i;
+/** A flag's values in an argument list, as `--flag v` or `--flag=v`. */
+const valuesOf = (args: string[], flag: string) => args.flatMap((a, i) => (a === flag ? [args[i + 1] ?? ''] : a.startsWith(flag + '=') ? [a.slice(flag.length + 1)] : []));
 
-/** The browser's "asks first" rules, as a reason to ask, or null to let the call through. */
-export function browserAsk(tool: string, url: string, signedIn: string[]): { spend: boolean; host: string } | null {
-  if (!BROWSER_ACTS.test(tool)) return null;
+/** The browser's "asks first" rules for one command, as a reason to ask, or null to let the call through. */
+export function browserAsk(command: string, url: string, signedIn: string[]): { spend: boolean; host: string } | null {
+  if (!BROWSER_ACTS.has(command)) return null;
   let host = '';
   try { host = new URL(url).hostname; } catch { /* no page yet */ }
   if (PAYMENT.test(url)) return { spend: true, host: host || 'a shop' };
@@ -69,8 +78,18 @@ export function effectOf(tool: string, input: Record<string, any>, s: Seen): Eff
     const what = WRITES.has(tool) ? `change a file in ${folder}: “${basename(path)}”` : tool === 'read' ? `look at a file in ${folder}: “${basename(path)}”` : `look through ${folder}`;
     return { kind: 'files', words: `${s.bot} wants to ${what}.`, key, covers: `${folder}` };
   }
-  if (tool.startsWith('browser_')) {
-    const act = browserAsk(tool, s.page ?? '', s.signedIn ?? []);
+  if (tool === 'browser') {
+    const [cmd = '', ...rest] = (Array.isArray(input.args) ? input.args : []).map(String);
+    if ((!BROWSER_LOOKS.has(cmd) && !BROWSER_ACTS.has(cmd)) || rest.some((a) => BROWSER_OWN.test(a))) {
+      return { kind: 'refuse', why: "Your browser can't do that here. Use goto, snapshot, find, click, fill, type, press, select or screenshot." };
+    }
+    // Web pages only: a file:// or chrome:// address would read the person's disk or the browser's own settings.
+    const to = cmd === 'goto' || cmd === 'tab-new' ? rest.find((a) => !a.startsWith('-')) : undefined;
+    if (to && /^[a-z][\w+.-]*:/i.test(to) && !/^(https?:|about:blank$)/i.test(to)) return { kind: 'refuse', why: 'Your browser opens web pages only (http or https).' };
+    // Files it uploads or saves stay in its own space: the person's folders are reached only through the files asks.
+    const files = cmd === 'upload' ? rest.filter((a) => !a.startsWith('-')) : valuesOf(rest, cmd === 'drop' ? '--path' : '--filename');
+    if (files.some((f) => !inside(s.space, resolve(s.space, f)))) return { kind: 'refuse', why: 'Browser files stay in your own space: use work/ or files/.' };
+    const act = browserAsk(cmd, s.page ?? '', s.signedIn ?? []);
     if (!act) return { kind: 'safe' };
     return act.spend ? { kind: 'spend', words: `${s.bot} wants to act on a checkout or payment page at ${act.host}.` }
       : { kind: 'send', words: `${s.bot} wants to act as you on ${act.host}, a site you signed it in to.`, key: `send:${act.host}`, covers: `acting as you on ${act.host}` };
@@ -129,7 +148,7 @@ export function coversOf(key: string) {
 
 const PROGRAMS: Record<string, string> = { ffmpeg: 'Worked on a video', ffprobe: 'Checked a video', magick: 'Worked on an image', markitdown: 'Read a document',
   'yt-dlp': 'Downloaded a video', rg: 'Searched its files', jq: 'Read some data', python3: 'Ran a small program', node: 'Ran a small program' };
-const host = (u: unknown) => { try { return new URL(String(u)).hostname; } catch { return 'a page'; } };
+const host = (u: unknown) => { try { return new URL(String(u)).hostname || 'a page'; } catch { return 'a page'; } };
 
 /** A line for the "What I did" trail. No commands, no paths: what a person would say they saw. Empty for the crew's own tools. */
 export function toolWords(tool: string, input: Record<string, any>): string {
@@ -142,9 +161,8 @@ export function toolWords(tool: string, input: Record<string, any>): string {
     case 'bash': return PROGRAMS[String(input.command ?? '').trim().split(/\s+/)[0]] ?? 'Worked in its own space';
     case 'web_search': return `Searched the web for “${String(input.query ?? '').slice(0, 80)}”`;
     case 'web_fetch': return `Read ${host(input.url)}`;
-    case 'browser_navigate': return `Opened ${host(input.url)} in its browser`;
+    case 'browser': return input.args?.[0] === 'goto' ? `Opened ${host(input.args[1])} in its browser` : 'Used its browser';
   }
   if (tool.startsWith('crew_')) return '';
-  if (tool.startsWith('browser_')) return 'Used its browser';
   return `Used ${tool.replace(/_/g, ' ')}`;
 }

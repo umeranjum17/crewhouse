@@ -1,0 +1,9 @@
+{
+  "name": "crewhouse-tool-browser",
+  "private": true,
+  "description": "The browser tool's pinned dependency tree; installed by ./crewhouse tools install browser with npm ci.",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "playwright-axi": "0.1.0"
+  }
+}

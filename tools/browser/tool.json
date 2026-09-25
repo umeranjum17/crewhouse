@@ -1,15 +1,15 @@
 {
   "id": "browser",
-  "name": "Browser (Playwright MCP)",
+  "name": "Browser (playwright-axi)",
   "provides": "The bot's own Chromium with its own profile, signed out until you sign it in: open pages, read them, click, fill, screenshot",
-  "kind": "mcp",
+  "kind": "axi",
   "bins": [
-    "playwright-mcp"
+    "playwright-axi"
   ],
-  "license": "Apache-2.0",
+  "license": "MIT (playwright-axi); Apache-2.0 (Playwright)",
   "source": "pinned",
   "install": {
-    "npm": "@playwright/mcp@0.0.82",
+    "npm": "playwright-axi@0.1.0",
     "then": [
       [
         "playwright",
@@ -19,17 +19,7 @@
       ]
     ]
   },
-  "mcp": {
-    "command": "playwright-mcp",
-    "args": [
-      "--browser",
-      "chromium",
-      "--headless",
-      "--user-data-dir",
-      "{bot.dir}/browser",
-      "--output-dir",
-      "{bot.dir}/work/browser"
-    ],
+  "axi": {
     "env": {
       "PLAYWRIGHT_BROWSERS_PATH": "{tools}/browser/ms-playwright"
     }

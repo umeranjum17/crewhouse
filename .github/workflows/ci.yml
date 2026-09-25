@@ -26,6 +26,8 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: npm
       - run: npm ci --no-audit --no-fund
+      # Bot desktops and the sandboxed shell, so the cross-bot browser test runs rather than skips (Ubuntu's AppArmor blocks bwrap's namespaces by default).
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq xvfb bubblewrap && sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - run: npm run check
       - run: npm run build:web
       - run: npm test # stub runner only: no Herdr, no CLI, no model calls

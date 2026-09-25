@@ -2,11 +2,18 @@
 // Needs Xvfb (skipped without it); the desklink parts also need the Linux x64 engine and its system libraries.
 import { after, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync,  statSync } from 'node:fs';
+import { spawn } from 'node:child_process';
+import { existsSync, mkdirSync, readdirSync, readFileSync, readlinkSync, statSync } from 'node:fs';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
+import WebSocket from 'ws';
 import { join } from 'node:path';
 import { temp } from './tmp.ts';
 import { EngineClient, resolveEngine } from '@desklink/host';
-import { deskFor, Desktops, missing, type DeskEvent } from '../src/desktop.ts';
+import { browserBin, deskFor, Desktops, missing, type DeskEvent } from '../src/desktop.ts';
+import { sandboxBash, sandboxReady } from '../src/engine.ts';
+import { Teacher } from '../src/teach.ts';
+import { effectOf } from '../src/policy.ts';
 
 const root = temp('crewhouse-desk');
 const botDir = join(root, 'bots', 'reel');
@@ -14,6 +21,20 @@ mkdirSync(join(botDir, '.crewhouse'), { recursive: true });
 // A display number nobody holds, so side-by-side runs and a real X server never collide.
 let n = 190 + Math.floor(Math.random() * 60);
 while (existsSync(`/tmp/.X${n}-lock`) || existsSync(`/tmp/.X11-unix/X${n}`)) n++;
+/** Loopback ports this test's own processes listen on (crewd's relays, the bots' browsers, the decoy): the attack scans
+ *  these and leaves every other program's alone, including other test files' browsers running alongside. */
+function ours() {
+  const kids = new Map<number, number[]>();
+  for (const p of readdirSync('/proc').filter((d) => /^\d+$/.test(d))) {
+    try { const ppid = Number(readFileSync(`/proc/${p}/stat`, 'utf8').split(') ')[1].split(' ')[1]); kids.set(ppid, [...(kids.get(ppid) ?? []), Number(p)]); } catch { /* gone */ }
+  }
+  const tree = [process.pid];
+  for (let i = 0; i < tree.length; i++) tree.push(...(kids.get(tree[i]) ?? []));
+  const inodes = new Set(tree.flatMap((p) => { try { return readdirSync(`/proc/${p}/fd`).map((f) => readlinkSync(`/proc/${p}/fd/${f}`)); } catch { return []; } })
+    .map((l) => l.match(/^socket:\[(\d+)\]$/)?.[1]).filter(Boolean));
+  return ['/proc/net/tcp', '/proc/net/tcp6'].flatMap((f) => readFileSync(f, 'utf8').split('\n').slice(1)).map((l) => l.trim().split(/\s+/))
+    .filter((c) => c[3] === '0A' && inodes.has(c[9])).map((c) => String(parseInt(c[1].split(':')[1], 16)));
+}
 const desks = new Desktops(join(root, 'state'));
 const xauth = deskFor(join(root, 'state'), 'reel', n).xauth;
 after(() => desks.stopAll());
@@ -84,3 +105,113 @@ test('watching: crewd picks the display and the permissions', { skip: noXvfb }, 
   assert.ok(b.seen.some((e) => e.kind === 'revoked'));
   desks.stop('reel');
 });
+
+// Every bot's sandboxed shell shares the machine's loopback. A browser whose DevTools listened on a port there could be
+// driven by any bot's shell, past crewd's gate: open pages as the person, read their signed-in sites. This runs the real
+// attack from a real bot shell: find every loopback port that appeared during the test and, wherever DevTools answers,
+// open a page. A decoy Chromium with an open port shows the attack works; the bot's own browser must be out of its
+// reach, yet still drivable through crewd's own endpoint. (Only this test's own processes' ports are scanned: other
+// programs', and other test files' browsers, are left alone.)
+const noAttack = noXvfb || (!browserBin() && 'no Chromium here') || (!sandboxReady() && 'bubblewrap is not usable here');
+test("a bot's shell cannot find or drive another bot's browser", { skip: noAttack }, async (t) => {
+  const hits: string[] = [];
+  const pages = createServer((q, r) => { hits.push(q.url!); r.end('<title>page</title><button>Place order</button>'); }).listen(0, '127.0.0.1');
+  await new Promise((r) => pages.once('listening', r));
+  const site = `http://127.0.0.1:${(pages.address() as AddressInfo).port}`;
+  const decoyDir = join(root, 'decoy');
+  const decoy = spawn(browserBin()!, ['--headless=new', '--disable-gpu', '--remote-debugging-port=0', `--user-data-dir=${decoyDir}`, '--no-first-run', 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
+  let said = '';
+  decoy.stderr!.on('data', (c) => { said = (said + c).slice(-1000); });
+  t.after(async () => { pages.close(); decoy.kill('SIGKILL'); await Promise.all([new Promise((r) => (decoy.exitCode === null && decoy.signalCode === null ? decoy.once('exit', r) : r(0))), desks.stopAll()]); });
+  const d = await desks.ensure('reel', n, botDir);
+  // The attacker, maya, has a computer and browser of its own too.
+  const space = join(root, 'bots', 'maya');
+  mkdirSync(join(space, '.crewhouse'), { recursive: true });
+  let m = n + 1;
+  while (existsSync(`/tmp/.X${m}-lock`) || existsSync(`/tmp/.X11-unix/X${m}`)) m++;
+  const own = await desks.ensure('maya', m, space);
+  // A cold Chrome on a busy CI runner can take a while to open its port.
+  await until(`the decoy's DevTools port (Chrome said: ${said.slice(-300)})`, () => existsSync(join(decoyDir, 'DevToolsActivePort')), 30_000);
+  const decoyPort = readFileSync(join(decoyDir, 'DevToolsActivePort'), 'utf8').split('\n')[0];
+
+  // crewd's own endpoint for a bot's browser (the only one that bot's browser tool is given): open a page, list its pages.
+  const drive = async (cdp: string, path: string) => {
+    const ws = new WebSocket(cdp);
+    await new Promise((r, j) => { ws.once('open', r); ws.once('error', j); });
+    const call = (id: number, method: string, params = {}) => new Promise<any>((r) => {
+      ws.on('message', (raw) => { const j = JSON.parse(String(raw)); if (j.id === id) r(j.result); });
+      ws.send(JSON.stringify({ id, method, params }));
+    });
+    if (path) await call(1, 'Target.createTarget', { url: `${site}${path}` });
+    const { targetInfos } = await call(2, 'Target.getTargets');
+    ws.close();
+    return (targetInfos as any[]).map((x) => x.url);
+  };
+  await drive(d.cdp!, '/crewd');
+  await until("crewd drove the bot's browser", () => hits.includes('/crewd'));
+
+  // Bot "maya"'s own shell, exactly as a task gets it; it scans every port this test's processes listen on.
+  const scan = ours();
+  assert.ok(scan.includes(decoyPort), 'the decoy is among the ports scanned');
+  const attack = `
+    for hex in $(awk 'NR>1 && $4=="0A" { split($2, a, ":"); print a[2] }' /proc/net/tcp /proc/net/tcp6 | sort -u); do
+      p=$((16#$hex))
+      case " ${scan.join(' ')} " in *" $p "*) ;; *) continue;; esac
+      if curl -s -m 2 http://127.0.0.1:$p/json/version | grep -q '"Browser"'; then
+        echo "devtools $p"
+        curl -s -m 2 -X PUT "http://127.0.0.1:$p/json/new?${site}/pwned-$p" > /dev/null
+      fi
+      for path in / /devtools/browser /devtools/browser/x; do
+        code=$(curl -s -m 2 -o /dev/null -w '%{http_code}' --http1.1 -H 'Connection: Upgrade' -H 'Upgrade: websocket' -H 'Sec-WebSocket-Version: 13' -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' http://127.0.0.1:$p$path)
+        [ "$code" = 101 ] && echo "websocket $p$path"
+      done
+    done; echo scanned`;
+  const r: any = await sandboxBash(space, [], {}).execute('attack', { command: attack }, undefined as any, undefined as any);
+  const out = r.content.map((c: any) => c.text).join('');
+  assert.match(out, /scanned/, out);
+  assert.deepEqual(out.match(/^devtools \d+$/gm), [`devtools ${decoyPort}`], "the shell found the decoy's DevTools, and no other");
+  assert.doesNotMatch(out, /^websocket /m, 'no DevTools socket answers without its secret');
+  await until('the decoy was driven', () => hits.includes(`/pwned-${decoyPort}`));
+  assert.deepEqual(hits.filter((h) => h.startsWith('/pwned') && h !== `/pwned-${decoyPort}`), []);
+  for (const cdp of [d.cdp!, own.cdp!]) assert.deepEqual((await drive(cdp, '')).filter((u) => /pwned/.test(u)), [], "nothing the shell sent reached a bot's browser");
+
+  // What must keep working: each bot still drives its own browser through crewd, and its gate still asks at a checkout.
+  for (const [bot, cdp, dir] of [['reel', d.cdp!, botDir], ['maya', own.cdp!, space]]) {
+    const urls = await drive(cdp, `/${bot}/checkout`);
+    await until(`${bot} drove its own browser`, () => hits.includes(`/${bot}/checkout`));
+    const page = urls.find((u) => u.endsWith(`/${bot}/checkout`));
+    assert.ok(page, `${bot}'s browser is on its checkout page`);
+    const seen = { bot, space: dir, page, secret: [] };
+    assert.equal(effectOf('browser', { args: ['snapshot'] }, seen).kind, 'safe', 'looking needs no yes');
+    assert.equal(effectOf('browser', { args: ['click', 'e3'] }, seen).kind, 'spend', 'acting on a checkout asks every time');
+  }
+});
+
+// Teach by showing records through the same endpoint: crewd's recorder is the one client of the bot's DevTools while the
+// person has the wheel. The page clicks and moves on by itself, standing in for the person's hands on the screen.
+test("a show is recorded through crewd's own endpoint to the bot's browser", { skip: noXvfb || (!browserBin() && 'no Chromium here') }, async (t) => {
+  const page = `<label for="q">Search</label><input id="q"><button id="go">Find</button>
+    <script>setTimeout(() => { const q = document.getElementById('q'); q.value = 'private words'; q.dispatchEvent(new Event('change', { bubbles: true }));
+      document.getElementById('go').click(); setTimeout(() => { location = '/results'; }, 300); }, 1500)</script>`;
+  const site = createServer((q, r) => r.writeHead(200, { 'content-type': 'text/html' }).end(q.url === '/results' ? '<p>3 found</p>' : page)).listen(0, '127.0.0.1');
+  await new Promise((r) => site.once('listening', r));
+  const url = `http://127.0.0.1:${(site.address() as AddressInfo).port}`;
+  const teacher = new Teacher();
+  t.after(async () => { teacher.stop('reel'); site.close(); await desks.stopAll(); });
+  const d = await desks.ensure('reel', n, botDir);
+  // The bot's browser was on the page (its own tool had it open, then let go when the person took the wheel).
+  const bot = new WebSocket(d.cdp!);
+  await new Promise((r, j) => { bot.once('open', r); bot.once('error', j); });
+  bot.send(JSON.stringify({ id: 1, method: 'Target.createTarget', params: { url: `${url}/search` } }));
+  await new Promise((r) => bot.on('message', (m) => { if (JSON.parse(String(m)).id === 1) r(0); }));
+  bot.close();
+  await teacher.start('reel', 'find a thing', d.cdp!, () => {});
+  await until('the show saw the next page', () => teacher.showing().reel?.steps >= 4);
+  const out = teacher.stop('reel')!;
+  assert.deepEqual(out.steps.slice(0, 4), ['Opened 127.0.0.1/search', 'Typed in “Search”', 'Clicked “Find”', 'Opened 127.0.0.1/results']);
+  assert.doesNotMatch(JSON.stringify(out), /private words/, 'never what was typed');
+});
+
+async function until(what: string, fn: () => unknown, ms = 15_000) {
+  for (const end = Date.now() + ms; !(await fn()); await sleep(50)) if (Date.now() > end) throw new Error(`timed out waiting for ${what}`);
+}

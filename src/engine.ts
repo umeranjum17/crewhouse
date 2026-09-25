@@ -1,8 +1,7 @@
 // The bundled Pi engine, in-process. Each task runs as one Pi session in its bot's own folder (its "space"), on the
 // task member's own runtime, with only the tools its grants give it. Every tool call passes crewd's gate first.
 import './isolate.ts';
-import { execFile, execFileSync, spawn, type ChildProcess } from 'node:child_process';
-import { createInterface } from 'node:readline';
+import { execFile, execFileSync } from 'node:child_process';
 import { createAgentSession, createBashTool, DefaultResourceLoader, defineTool, SessionManager, SettingsManager,
   type AgentSession, type ModelRuntime, type ToolCallEventResult, type ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { Type } from '@earendil-works/pi-ai';
@@ -127,48 +126,21 @@ export function cliTool(name: string, bin: string, about: string, cwd: string, e
   });
 }
 
-// ---- MCP servers (the browser), bridged into engine tools: a few lines of JSON-RPC over stdio ----
-export class Mcp {
-  private proc: ChildProcess;
-  private next = 1;
-  private pending = new Map<number, (m: any) => void>();
+// ---- AXIs: pinned agent-ergonomic CLIs (compact TOON output, one tool schema instead of a server's dozens) ----
+/** Run a pinned AXI by its absolute path on crewd's own node, with only the environment crewd gives it: never the
+ *  owner's HOME, XDG folders or PATH, so it reads and writes nothing of theirs. */
+export function runAxi(script: string, args: string[], cwd: string, env: Record<string, string>, signal?: AbortSignal) {
+  return new Promise<string>((resolve) => {
+    execFile(process.execPath, [script, ...args], { cwd, env, timeout: 120_000, maxBuffer: 8 << 20, signal }, (err, out, errOut) =>
+      resolve(`${out}${errOut}${err && !out ? `\n(exit: ${err.message})` : ''}`.slice(0, 30_000)));
+  });
+}
 
-  constructor(command: string, args: string[], env: Record<string, string>) {
-    this.proc = spawn(command, args, { env: { ...process.env, ...env }, stdio: ['pipe', 'pipe', 'ignore'] });
-    this.proc.on('error', () => {});
-    createInterface({ input: this.proc.stdout! }).on('line', (l) => {
-      let m: any;
-      try { m = JSON.parse(l); } catch { return; }
-      this.pending.get(m.id)?.(m);
-      this.pending.delete(m.id);
-    });
-    this.proc.on('exit', () => { for (const r of this.pending.values()) r({ error: { message: 'the tool stopped' } }); this.pending.clear(); });
-  }
-
-  request(method: string, params: object): Promise<any> {
-    const id = this.next++;
-    return new Promise((resolve, reject) => {
-      this.pending.set(id, (m) => (m.error ? reject(new Error(m.error.message)) : resolve(m.result)));
-      this.proc.stdin!.write(JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n');
-    });
-  }
-
-  /** Its tools as engine tools; `seen` hears each result's text (the browser says which page it is on). */
-  async tools(seen: (text: string) => void): Promise<ToolDefinition[]> {
-    await this.request('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'crewhouse', version: '1' } });
-    this.proc.stdin!.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n');
-    const { tools } = await this.request('tools/list', {});
-    return tools.map((t: any) => defineTool({
-      name: t.name, label: t.title ?? t.name, description: t.description ?? t.name, parameters: Type.Unsafe(t.inputSchema ?? { type: 'object' }),
-      execute: async (_id, args) => {
-        const r = await this.request('tools/call', { name: t.name, arguments: args });
-        const content = (r.content ?? []).filter((c: any) => c.type === 'text' || c.type === 'image')
-          .map((c: any) => (c.type === 'text' ? { type: 'text', text: c.text } : { type: 'image', data: c.data, mimeType: c.mimeType }));
-        seen(content.filter((c: any) => c.type === 'text').map((c: any) => c.text).join('\n'));
-        return { content, details: {} };
-      },
-    }) as ToolDefinition);
-  }
-
-  stop() { this.proc.kill(); }
+/** An AXI as one engine tool: the model passes the command's arguments as a list; crewd's gate reads them first. */
+export function axiTool(name: string, about: string, run: (args: string[], signal?: AbortSignal) => Promise<string>) {
+  return defineTool({
+    name, label: about, description: `${about}. Pass the command's arguments as a list, without the program name.`,
+    parameters: Type.Object({ args: Type.Array(Type.String()) }),
+    execute: async (_id, p, signal) => text(await run(p.args, signal)),
+  });
 }
