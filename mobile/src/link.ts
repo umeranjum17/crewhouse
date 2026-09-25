@@ -3,14 +3,29 @@
 import { DeviceLink, LinkError, hostId, pairWithCode, pairWithOffer, unb64url, type DeviceGrant, type LinkStatus } from '@byokit/link';
 import { findHost } from '@byokit/relay/device';
 import * as Device from 'expo-device';
+import { File, Paths } from 'expo-file-system';
 import * as SecureStore from 'expo-secure-store';
 import Zeroconf from 'react-native-zeroconf';
+import * as K from '../../web/src/kept.ts';
 
 export type Grant = DeviceGrant;
 export type Status = LinkStatus;
 const STORE = 'crewhouse.grant';
 const url64 = (s: string) => s.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-const store = { save: (g: Grant) => SecureStore.setItemAsync(STORE, JSON.stringify(g)), clear: () => SecureStore.deleteItemAsync(STORE) };
+// Unpaired or removed on the computer: the chats this phone kept go with the grant.
+const store = { save: (g: Grant) => SecureStore.setItemAsync(STORE, JSON.stringify(g)), clear: () => { kept.clear(); return SecureStore.deleteItemAsync(STORE); } };
+
+/** Recent chats kept in the app's own files (web/src/kept.ts), readable while the home computer can't be reached. */
+const keptFile = () => new File(Paths.document, 'kept.json');
+let mine = K.empty('');
+const write = () => { try { keptFile().write(JSON.stringify(mine)); } catch {} };
+export const kept = {
+  load(host: string) { try { const f = keptFile(); mine = K.fresh(f.exists ? JSON.parse(f.textSync()) : null, host); } catch { mine = K.empty(host); } return mine; },
+  state(s: unknown) { mine = K.keepState(mine, s); write(); },
+  chat(id: string, page: unknown) { mine = K.keepChat(mine, id, page); write(); },
+  page: (id: string) => mine.chats[id] ?? null,
+  clear() { mine = K.empty(mine.host); try { const f = keptFile(); if (f.exists) f.delete(); } catch {} },
+};
 
 export async function loadGrant(): Promise<Grant | null> {
   const s = await SecureStore.getItemAsync(STORE);
