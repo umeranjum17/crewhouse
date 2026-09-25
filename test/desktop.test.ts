@@ -2,13 +2,13 @@
 // Needs Xvfb (skipped without it); the desklink parts also need the Linux x64 engine and its system libraries.
 import { after, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, statSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, mkdirSync,  statSync } from 'node:fs';
 import { join } from 'node:path';
+import { temp } from './tmp.ts';
 import { EngineClient, resolveEngine } from '@desklink/host';
 import { deskFor, Desktops, missing, type DeskEvent } from '../src/desktop.ts';
 
-const root = mkdtempSync(join(tmpdir(), 'crewhouse-desk-'));
+const root = temp('crewhouse-desk');
 const botDir = join(root, 'bots', 'reel');
 mkdirSync(join(botDir, '.crewhouse'), { recursive: true });
 // A display number nobody holds, so side-by-side runs and a real X server never collide.

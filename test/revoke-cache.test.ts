@@ -2,13 +2,13 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdtempSync } from 'node:fs';
+import {  } from 'node:fs';
 import { createServer, type AddressInfo } from 'node:net';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { temp } from './tmp.ts';
 import { DeviceLink, pairWithOffer, type DeviceGrant } from '@byokit/link';
 
-const root = mkdtempSync(join(tmpdir(), 'crewhouse-revoke-cache-'));
+const root = temp('crewhouse-revoke-cache');
 const free = () => new Promise<number>((resolve) => {
   const server = createServer().listen(0, '127.0.0.1', () => {
     const port = (server.address() as AddressInfo).port;

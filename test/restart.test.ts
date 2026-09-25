@@ -2,12 +2,12 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { mkdtempSync, readFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { temp } from './tmp.ts';
 import { createServer, type AddressInfo } from 'node:net';
 
-const root = mkdtempSync(join(tmpdir(), 'crewhouse-restart-'));
+const root = temp('crewhouse-restart');
 // A port the OS says is free, not a random guess that another run may hold.
 const port = await new Promise<number>((r) => { const s = createServer().listen(0, '127.0.0.1', () => { const { port } = s.address() as AddressInfo; s.close(() => r(port)); }); });
 const base = `http://127.0.0.1:${port}`;

@@ -5,13 +5,13 @@ import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { chmodSync, existsSync, mkdirSync,  readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { temp } from './tmp.ts';
 import { createServer, type AddressInfo } from 'node:net';
 import { traceFs } from '@byokit/accounts/testing';
 
-const root = mkdtempSync(join(tmpdir(), 'crewhouse-isolation-'));
+const root = temp('crewhouse-isolation');
 const home = join(root, 'home');
 const pi = join(home, '.pi');
 const agents = join(home, '.agents'); // the owner's shared agent skills, which Pi would also scan
