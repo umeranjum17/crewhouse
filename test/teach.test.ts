@@ -34,7 +34,9 @@ test('a real show: what was clicked and which box was typed in, never the words,
   await new Promise<void>((r) => site.listen(0, '127.0.0.1', r));
   const port = await new Promise<number>((r) => { const s = createServer().listen(0, '127.0.0.1', () => { const { port } = s.address() as AddressInfo; s.close(() => r(port)); }); });
   const profile = mkdtempSync(join(tmpdir(), 'crewhouse-teach-'));
-  const chrome = spawn(browser!, ['--headless=new', '--no-sandbox', '--disable-gpu', `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, 'about:blank'], { stdio: 'ignore' });
+  const chrome = spawn(browser!, ['--headless=new', '--no-sandbox', '--disable-gpu', '--no-first-run', '--no-default-browser-check', `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
+  let said = '';
+  chrome.stderr!.on('data', (d) => { said = (said + d).slice(-2000); });
   const teacher = new Teacher();
   // Chrome keeps writing its profile until it has exited: wait for that before removing it.
   after(async () => {
@@ -43,7 +45,8 @@ test('a real show: what was clicked and which box was typed in, never the words,
     if (chrome.exitCode === null) await new Promise((r) => { chrome.once('exit', r); chrome.kill(); });
     rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   });
-  const until = async (what: string, fn: () => unknown) => { for (let i = 0; i < 200; i++) { if (await fn()) return; await new Promise((r) => setTimeout(r, 50)); } throw new Error(`timed out: ${what}`); };
+  // A cold Chrome on a busy CI runner can take a while to open its port: up to 30 seconds, and say why if it never does.
+  const until = async (what: string, fn: () => unknown) => { for (let i = 0; i < 600; i++) { if (await fn()) return; await new Promise((r) => setTimeout(r, 50)); } throw new Error(`timed out: ${what}; Chrome said: ${said.slice(-600)}`); };
   await until('chromium', () => fetch(`http://127.0.0.1:${port}/json/list`).then((r) => r.ok, () => false));
   await teacher.start('reel', 'pull the stats', port, () => {});
   assert.ok(teacher.has('reel'));
