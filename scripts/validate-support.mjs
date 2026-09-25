@@ -103,10 +103,15 @@ export function validate({ db, crewDir }, id, forbid = []) {
     else row(card ? 'UNKNOWN' : 'FAIL', `answer on ${p}`, card ? 'on a card, not answered yet' : 'never put before the person');
   }
 
-  // 4. A patch counts only if crewd saw it fail before and pass after, for this exact file.
-  const ok = new Set(db.all("SELECT data FROM events WHERE kind = 'verify.result' AND bot = ?", t.bot).map((e) => JSON.parse(e.data)).filter((v) => v.passed).map((v) => v.sha));
+  // 4. A patch counts only if crewd saw it fail before and pass after, for this exact file. A pair whose before side failed
+  // on a missing module (the verify worktree had no node_modules) proves nothing either way, and is marked as such.
+  const vr = db.all("SELECT data FROM events WHERE kind = 'verify.result' AND bot = ?", t.bot).map((e) => JSON.parse(e.data));
+  const ok = new Set(vr.filter((v) => v.passed).map((v) => v.sha)), wrong = new Set(vr.filter((v) => v.missingDep).map((v) => v.sha));
   const patches = delivered.filter((p) => /\.(patch|diff)$/.test(p));
-  for (const p of patches) row(existsSync(join(bot, p)) && ok.has(sha(readFileSync(join(bot, p), 'utf8'))) ? 'PASS' : 'FAIL', `fix ${p}`, 'failed before, passed after, seen by crewd');
+  for (const p of patches) {
+    const s = existsSync(join(bot, p)) ? sha(readFileSync(join(bot, p), 'utf8')) : null, mark = s && ok.has(s) ? 'PASS' : s && wrong.has(s) ? 'UNKNOWN' : 'FAIL';
+    row(mark, `fix ${p}`, mark === 'UNKNOWN' ? 'its check failed before only on a missing module (deps not seeded): not proof' : 'failed before, passed after, seen by crewd');
+  }
   if (!patches.length) row('PASS', 'fix', 'none offered (nothing claimed)');
 
   // 5. Blind: nothing it called reached the answer.
