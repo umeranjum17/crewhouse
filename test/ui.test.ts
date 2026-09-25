@@ -217,6 +217,39 @@ test('reach from anywhere: one plain sentence per relay state, naming only the r
   assert.equal(A.reach({ relay: 'https://relay.example.com', relayStatus: 'online' }).online, true);
 });
 
+test('reach it from anywhere: three plain states and numbered steps, and the phone says which step is missing', () => {
+  // Whatever crewd sends, no address, port, command or network jargon reaches a screen.
+  const TECH = /\d+\.\d+|:\d{2,5}\b|ws:|https?:|\b100\.x\b|tailscale (up|serve|funnel|status)|\bserve\b|\bfunnel\b|port|\bIP\b|undefined/i;
+  const home = A.anywhere({ anywhere: 'home', hosts: ['127.0.0.1', '100.101.2.3'], tailscale: false });
+  assert.equal(home.state, 'home');
+  assert.match(home.words, /^Only at home\./);
+  assert.deepEqual(home.steps.map((x) => x.split(' ').slice(0, 2).join(' ')), ['Install Tailscale', 'For each', 'On their']);
+  const anywhere = A.anywhere({ anywhere: 'anywhere', hosts: ['100.101.2.3'] });
+  assert.match(anywhere.words, /^Reachable from anywhere\./);
+  assert.equal(anywhere.steps.length, 2, 'this computer is done; the steps for each person stay');
+  const signin = A.anywhere({ anywhere: 'signin' });
+  assert.match(signin.words, /^Tailscale needs signing in again/);
+  assert.equal(A.anywhere(null).state, 'home');
+  for (const x of [home, anywhere, signin]) assert.doesNotMatch(shown(x), TECH);
+  assert.match(home.steps[1], /Share/, 'share the computer, not an invitation into the network');
+  assert.doesNotMatch(shown(home), /invite/i);
+
+  const away = [
+    A.away({ home: true, tailnet: true, vpn: true }),
+    A.away({ home: false, tailnet: false }),
+    A.away({ tailnet: true, vpn: false }),
+    A.away({ tailnet: true, vpn: true, anywhere: 'signin' }),
+    A.away({ tailnet: true, vpn: true, anywhere: 'anywhere' }),
+  ];
+  assert.match(away[0], /on the home Wi-Fi/);
+  assert.match(away[1], /share the computer with you in Tailscale/);
+  assert.match(away[2], /Tailscale is off on this phone/);
+  assert.match(away[3], /needs signing in again/);
+  assert.match(away[4], /asleep/);
+  assert.equal(new Set(away).size, away.length);
+  for (const w of away) assert.doesNotMatch(w, TECH);
+});
+
 test('watches and hand-offs read as plain words, with only the page\'s host', () => {
   const s = { routines: [{ id: 1, bot: 'scout', name: 'Watch rentals.example.com', words: 'Every hour', next_at: Date.now() + 1000, state: 'on', kind: 'task', quiet: 1,
     watch: 'https://www.rentals.example.com/phuket?max=900&sort=new', history: [{ at: Date.now(), kind: 'routine.fired', watch: 'same' }, { at: Date.now() - 9e5, kind: 'routine.fired', watch: 'changed', task: 3 }] }] };

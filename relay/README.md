@@ -15,6 +15,15 @@ What the relay can and can't see:
 There is no hosted Crewhouse relay, and the app has no relay address built in. A family runs their own and sets it: **Settings, Phones** on the computer (`PUT /api/phones/relay {url}`), or
 `CREWHOUSE_RELAY=https://relay.example` for crewd. `''` turns the relay off.
 
+## Without Tailscale's servers: Headscale
+
+The guided route in **Settings, Phones** uses Tailscale's free plan, whose coordination server Tailscale Inc runs. A
+family that would rather not depend on it can run [Headscale](https://github.com/juanfont/headscale) (BSD-3), an open
+coordination server that the official Tailscale apps can sign in to (on the phone: Tailscale's settings, alternate
+server). Crewhouse needs no change for it: crewd still recognises the Tailscale address and puts it in pairing codes.
+Like this relay, Headscale has to be reachable from the internet (a small server, or a port and a name), so it is for
+families with someone technical.
+
 ## Run your own
 
 With Docker, from the repository root:

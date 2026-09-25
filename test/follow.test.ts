@@ -29,6 +29,7 @@ async function computer(name: string, ifaces: Record<string, any>, lan = true) {
   const db = new Store(cfg.stateDir);
   const link = new Link(cfg, db, async () => ({ ok: true }));
   link.ifaces = () => ifaces as any;
+  link.tailscaleBin = join(root, 'no-tailscale-here'); // never this machine's own
   const mdns = { on: [] as any[], ever: 0 };
   link.bonjour = {
     publish: (c) => { mdns.on.push(c); mdns.ever++; return { stop: (cb) => { mdns.on.splice(mdns.on.indexOf(c), 1); cb?.(); } }; },
@@ -128,4 +129,27 @@ test('the home network opens for a pairing code, closes after it, and stays open
   assert.equal(home.mdns.ever, 2, 'announced once per opening, not per code');
   await home.link.setLan(false);
   assert.equal(home.mdns.on.length, 0);
+});
+
+test('Tailscale in three plain states, from its own status: signed in, signed out or expired, or none', async () => {
+  const { tailscaleState } = await import('../src/link.ts');
+  const { writeFileSync } = await import('node:fs');
+  const cli = (name: string, status: object | null) => {
+    const bin = join(root, name);
+    writeFileSync(bin, status ? `#!/bin/sh\ncat <<'X'\n${JSON.stringify(status)}\nX\n` : '#!/bin/sh\nexit 1\n', { mode: 0o755 });
+    return bin;
+  };
+  const running = cli('ts-running', { BackendState: 'Running', Self: { KeyExpiry: new Date(Date.now() + 86_400_000).toISOString() } });
+  assert.equal(await tailscaleState(true, running), 'anywhere');
+  assert.equal(await tailscaleState(false, running), 'home', 'running but no address bound yet');
+  assert.equal(await tailscaleState(true, cli('ts-out', { BackendState: 'NeedsLogin', Self: {} })), 'signin');
+  assert.equal(await tailscaleState(true, cli('ts-expired', { BackendState: 'Running', Self: { KeyExpiry: '2020-01-01T00:00:00Z' } })), 'signin', 'its key ran out');
+  assert.equal(await tailscaleState(false, join(root, 'no-such-tailscale')), 'home', 'not installed');
+  assert.equal(await tailscaleState(true, cli('ts-broken', null)), 'anywhere', 'not answering: the bound address decides');
+
+  // Settings and the phone hear it; the home network being open doesn't hide Tailscale.
+  const home = await computer('ts', { wlan0: at('127.0.0.8'), tailscale0: at('100.101.2.3') }, true);
+  home.link.tailscaleBin = cli('ts-out2', { BackendState: 'NeedsLogin' });
+  await home.link.bind();
+  assert.deepEqual([home.link.status().tailscale, home.link.status().anywhere], [true, 'signin']);
 });

@@ -7,6 +7,7 @@ import { File, Paths } from 'expo-file-system';
 import * as SecureStore from 'expo-secure-store';
 import Zeroconf from 'react-native-zeroconf';
 import * as K from '../../web/src/kept.ts';
+import { addresses } from '../modules/crewhouse-net';
 
 export type Grant = DeviceGrant;
 export type Status = LinkStatus;
@@ -115,10 +116,23 @@ export function connect(grant: Grant, onEvent: (e: any) => void, onStatus: (s: S
     if (r.status !== 200) throw Object.assign(new Error(r.body?.error ?? `error ${r.status}`), { status: r.status });
     return r.body;
   };
-  // A phone paired at home learns the relay's address, so it keeps reaching the computer when it leaves the house.
-  const learn = () => call('GET', '/api/reach').then((r: { urls: string[] }) => r.urls.forEach((u) => link.addUrl(u))).catch(() => {});
-  return { link, call, learn };
+  // A phone paired at home learns every address, so it keeps reaching the computer when it leaves the house; and what the
+  // computer says of its own Tailscale, for when it can't be reached.
+  let said: string | undefined;
+  const learn = () => call('GET', '/api/reach').then((r: { urls: string[]; anywhere?: string }) => { r.urls.forEach((u) => link.addUrl(u)); said = r.anywhere; }).catch(() => {});
+  /** Out of touch: what this phone can see for itself, for `away()` in web/src/adapter.ts to say which step is missing. */
+  const facts = async () => {
+    const mine = await addresses();
+    const hosts = link.grant.urls.map((u) => { try { return new URL(u).hostname; } catch { return ''; } });
+    // ponytail: "the same Wi-Fi" is the same /24 as the computer's home address; most home routers hand out a /24.
+    const net = (ip: string) => ip.split('.').slice(0, 3).join('.');
+    const home = hosts.some((h) => /^(10|172|192)\./.test(h) && mine.some((m) => !tailnet(m) && net(m) === net(h)));
+    return { home, tailnet: hosts.some(tailnet), vpn: mine.some(tailnet), anywhere: said };
+  };
+  return { link, call, learn, facts };
 }
+
+const tailnet = (ip: string) => /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(ip);
 
 /** Browse the Wi-Fi for Crewhouse computers over mDNS; only this phone's own (by the id in its announcement) is dialled,
  *  and its handshake still checks the key. Returns stop. */

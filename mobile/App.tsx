@@ -329,6 +329,8 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
   const [sheet, setSheet] = useState<A.Card | null>(null);
   const link = useRef<ReturnType<typeof connect>['link'] | null>(null);
   const heard = useRef(first.at); // when the home computer last answered
+  const [missing, setMissing] = useState(A.away({}));
+  const facts = useRef<ReturnType<typeof connect>['facts'] | null>(null);
   const route = stack[stack.length - 1];
 
   const refresh = useCallback(() => {
@@ -337,11 +339,20 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
   }, []);
   useEffect(() => {
     let pending: any;
-    const { link: l, call, learn } = connect(grant, () => { clearTimeout(pending); pending = setTimeout(refresh, 120); }, (st) => { setStatus(st); if (st === 'online') { refresh(); void learn(); } if (st === 'removed') onRemoved(); }); // online: first load, and catching up after a reconnect
+    const { link: l, call, learn, facts: f } = connect(grant, () => { clearTimeout(pending); pending = setTimeout(refresh, 120); }, (st) => { setStatus(st); if (st === 'online') { refresh(); void learn(); } if (st === 'removed') onRemoved(); }); // online: first load, and catching up after a reconnect
     link.current = l;
+    facts.current = f;
     setTransport(call);
     return () => l.stop();
   }, [grant, refresh, onRemoved]);
+  // Out of touch: say which step is missing, looked at again every few seconds (Tailscale switched on, back on the Wi-Fi).
+  useEffect(() => {
+    if (status !== 'offline') return;
+    const check = () => facts.current?.().then((f) => setMissing(A.away(f))).catch(() => {});
+    void check();
+    const t = setInterval(check, 5000);
+    return () => clearInterval(t);
+  }, [status]);
   const was = useRef<Status>('connecting');
   useEffect(() => { if (status === 'online' && was.current === 'offline' && state) say('Back in touch with the home computer ✓'); was.current = status; }, [status]);
 
@@ -370,7 +381,7 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
     return (
       <Center>
         <ChiefArt mood="work" size={140} />
-        <T tone="ink2" style={s.centerText}>{status === 'offline' ? "Can't reach the home computer. If it's asleep, the crew has paused and carries on when it wakes. Check it's on, and that this phone is on its Wi-Fi or Tailscale. Trying again by itself." : 'Waking the crew…'}</T>
+        <T tone="ink2" style={s.centerText}>{status === 'offline' ? `Can't reach the home computer. ${missing} Trying again by itself.` : 'Waking the crew…'}</T>
       </Center>
     );
   }
@@ -396,7 +407,7 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
           <Pressable style={[s.sheet, { backgroundColor: t.bg }]} onPress={() => {}}>
             <View style={{ alignItems: 'center' }}><ChiefArt mood="rest" size={88} /></View>
             <T style={s.h2}>The home computer isn't answering</T>
-            <T tone="ink2">If it's asleep, the crew has paused and carries on when it wakes. Check it's on, and that this phone is on its Wi-Fi or Tailscale. This phone keeps trying by itself.</T>
+            <T tone="ink2">{missing} If it's asleep, the crew has paused and carries on when it wakes. This phone keeps trying by itself.</T>
             <T tone="ink2">Meanwhile you can read your recent chats. You can reply once it's back.</T>
             <Btn go big label="OK" onPress={() => setWhy(false)} />
           </Pressable>

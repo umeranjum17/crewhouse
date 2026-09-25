@@ -89,6 +89,34 @@ export function helper(b: Json): Helper {
   };
 }
 
+/** Settings, Phones, "Reach it from anywhere": one of three states in plain words, and the steps still to do. Tailscale
+ *  is free for a family; each person gets this computer shared with them, never an invitation into the owner's network. */
+export function anywhere(link: Json) {
+  const state: 'home' | 'anywhere' | 'signin' = link?.anywhere === 'anywhere' || link?.anywhere === 'signin' ? link.anywhere : 'home';
+  const words = {
+    home: 'Only at home. Phones reach this computer on the home Wi-Fi. To reach it from anywhere, set up Tailscale, a free app:',
+    anywhere: "Reachable from anywhere. A phone that has this computer shared with it in Tailscale opens Crewhouse on mobile data too. To add someone:",
+    signin: "Tailscale needs signing in again on this computer. Until then, phones reach it only on the home Wi-Fi. Open Tailscale here and sign in.",
+  }[state];
+  const steps = [
+    'Install Tailscale on this computer and sign in with Google.',
+    'For each person, open this computer in Tailscale, tap Share, and send them the link.',
+    'On their phone: install Tailscale, sign in with Google, and tap Accept on the link. Then pair the phone here.',
+  ];
+  return { state, words, steps: state === 'home' ? steps : state === 'anywhere' ? steps.slice(1) : [] };
+}
+
+/** The phone can't reach the home computer: which step is missing, from what the phone can see for itself (`home`: on
+ *  the same Wi-Fi as the computer's home address; `tailnet`: it knows the computer's Tailscale address; `vpn`: Tailscale
+ *  is on on the phone) and what the computer last said about its own Tailscale. */
+export function away(f: { home?: boolean; tailnet?: boolean; vpn?: boolean; anywhere?: string }) {
+  if (f.home) return "You're on the home Wi-Fi, but the home computer isn't answering. Check it's switched on and awake.";
+  if (!f.tailnet) return "Away from home, this phone reaches the home computer through Tailscale, and that isn't set up yet. Ask whoever set up Crewhouse to share the computer with you in Tailscale.";
+  if (!f.vpn) return 'Tailscale is off on this phone. Open the Tailscale app and switch it on.';
+  if (f.anywhere === 'signin') return "The home computer's Tailscale needs signing in again. Ask whoever set up Crewhouse to open Tailscale there and sign in.";
+  return "Tailscale is on, but the home computer isn't answering. It may be asleep or switched off.";
+}
+
 /** When the crew is resting because an account ran out, in one sentence: "Your ChatGPT is resting until 6:40 pm". */
 /** The helpers' tools the downloaded app is still fetching, in one sentence; empty when none. */
 export function gettingReady(state: Json) {
@@ -120,7 +148,7 @@ export function reach(link: Json) {
     replaced: 'Another copy of Crewhouse took over this address, so this one stepped back.',
   };
   const on = !!link?.relay && link.relayStatus !== 'off';
-  return { on, online: link?.relayStatus === 'online', words: on ? words[link.relayStatus] ?? words.connecting : 'Off. Phones reach this computer at home, or over Tailscale.' };
+  return { on, online: link?.relayStatus === 'online', words: on ? words[link.relayStatus] ?? words.connecting : 'Off.' };
 }
 
 /** The crew's share of the viewer's ChatGPT, as three choices and one sentence about today. Never a number. */

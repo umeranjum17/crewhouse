@@ -2,6 +2,7 @@
 // opens itself. By default it listens on loopback and Tailscale only; the home network opens for the two minutes a
 // pairing code lasts, and stays open only when the owner turns it on. Crewhouse's part
 // is where it listens, who a phone acts as, what a phone may not do, and the person at the computer saying yes.
+import { execFile } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import { networkInterfaces } from 'node:os';
@@ -24,7 +25,7 @@ export const PAIR_MS = Number(process.env.CREWHOUSE_PAIR_MS || 120_000); // a pa
 export type Handler = (method: string, path: string, body: any, member: number) => Promise<unknown>;
 type Ifaces = ReturnType<typeof networkInterfaces>;
 
-// ponytail: Tailscale is recognised by its address range (100.64.0.0/10), not by asking tailscaled.
+// Tailscale is recognised by its address range (100.64.0.0/10); tailscaled is asked only whether it needs signing in.
 const tailscale = (ip: string) => /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(ip);
 const ipv4 = (ifaces: Ifaces) => Object.entries(ifaces)
   .filter(([name]) => !/^(docker|br-|veth|virbr|vmnet|vboxnet)/.test(name)) // container and VM bridges a phone can't reach
@@ -42,6 +43,19 @@ export function phoneAddresses(hosts: string[], ifaces: Ifaces = networkInterfac
   const ips = hosts.includes('0.0.0.0') ? ipv4(ifaces) : hosts.filter((h) => !/^127\.|^localhost$/.test(h));
   const out = [...ips.filter((ip) => !tailscale(ip)), ...ips.filter(tailscale)];
   return out.length ? out : ['127.0.0.1'];
+}
+
+/** Tailscale on this computer, as Settings says it: `anywhere` (a Tailscale address is bound), `signin` (installed, but
+ *  signed out or its key ran out), `home` (none: phones reach it only on the home Wi-Fi). Direct `ws://` to the tailnet
+ *  address, never Serve or Funnel: the link does its own encryption, and a shared computer is reachable the same way. */
+export type Anywhere = 'home' | 'anywhere' | 'signin';
+export function tailscaleState(bound: boolean, bin = 'tailscale'): Promise<Anywhere> {
+  return new Promise((resolve) => execFile(bin, ['status', '--json', '--peers=false'], { timeout: 5000 }, (_e, out) => {
+    let s: any;
+    try { s = JSON.parse(out); } catch { return resolve(bound ? 'anywhere' : 'home'); } // not installed, or not answering
+    const expired = s?.Self?.KeyExpiry && Date.parse(s.Self.KeyExpiry) < Date.now();
+    resolve(/^(NeedsLogin|NeedsMachineAuth)$/.test(s?.BackendState) || expired ? 'signin' : bound ? 'anywhere' : 'home');
+  }));
 }
 
 /** Every notification says only this; the phone fetches the words over the link (the relay enforces it too). */
@@ -76,6 +90,8 @@ export class Link {
   /** This computer's network addresses, and its mDNS publisher; a test swaps in its own. */
   ifaces: () => Ifaces = networkInterfaces;
   bonjour?: Bonjour;
+  tailscaleBin = 'tailscale';
+  private anywhere: Anywhere = 'home';
   /** Whether a member is in their quiet hours now: their phones get no notification then. Set by the server. */
   quiet: (member: number) => boolean = () => false;
 
@@ -157,6 +173,7 @@ export class Link {
     if (now !== before) console.log(`phone link (Noise-encrypted) on port ${this.cfg.linkPort}: ${now || 'nowhere'}${this.lan ? ' (home network on)' : ''}`);
     this.follow();
     await (this.announcing = this.announcing.then(() => this.announce()));
+    this.anywhere = await tailscaleState(ipv4(this.ifaces()).some(tailscale), this.tailscaleBin);
   }
 
   /** While the home network is open, say so over mDNS, so a paired phone finds this computer after the router gives it a
@@ -287,7 +304,7 @@ export class Link {
 
   /** Settings, Phones: how phones reach this computer, and any phone waiting for a yes (docs/ui-contract.md). */
   status() {
-    return { on: this.cfg.linkPort > 0, lan: this.lan, pinned: !!this.cfg.linkHost, hosts: [...this.servers.keys()], tailscale: this.hosts().some(tailscale),
+    return { on: this.cfg.linkPort > 0, lan: this.lan, pinned: !!this.cfg.linkHost, hosts: [...this.servers.keys()], tailscale: ipv4(this.ifaces()).some(tailscale), anywhere: this.anywhere,
       relay: this.relay, relayStatus: this.relayStatus,
       asking: [...this.asking.values()].map(({ id, name, words, role }) => ({ id, name, words, role })) };
   }
@@ -333,7 +350,7 @@ export class Link {
     if (!path.startsWith('/api/')) return { status: 404, body: { error: 'not found' } };
     // The phone's own: every address it can reach this computer at now (a phone paired at home learns Tailscale and the
     // relay), and its push address.
-    if (op === 'GET /api/reach') return { status: 200, body: { urls: this.urls() } };
+    if (op === 'GET /api/reach') return { status: 200, body: { urls: this.urls(), anywhere: this.anywhere } };
     if (op === 'POST /api/push') {
       const sub = body as any;
       if (!this.client || !sub || (typeof sub.expo !== 'string' && typeof sub.web !== 'object')) return { status: 409, body: { error: 'no relay for notifications' } };
