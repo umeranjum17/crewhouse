@@ -427,6 +427,13 @@ test('not sure it worked stands apart: in the chat, in Chief\'s thread and in th
   assert.equal(A.step({ kind: 'task.unsure', data: { title: 'Book the dentist' } }), 'Not sure “Book the dentist” worked');
 });
 
+test('a patch is only ever a suggested change, never a fix, wherever the app words it', () => {
+  assert.equal(A.step({ kind: 'file.delivered', data: { path: 'files/support/7/suggested.patch' } }), 'Suggested a change for the maintainer to review: “Suggested”');
+  assert.equal(A.step({ kind: 'file.delivered', data: { path: 'files/notes.txt' } }), 'Made “Notes”');
+  const [card] = A.lines({ messages: [{ id: 1, author: 'system', text: 'Delivered files/support/7/suggested.patch: Suggested change (for the maintainer to review): passed its own check' }] }, 'desk');
+  assert.deepEqual([card.text, card.files.length, card.files[0].name], ['Suggested change (for the maintainer to review): passed its own check', 1, 'Suggested']);
+});
+
 test('a new helper from Chief is a yes-or-no card with its own yes', () => {
   const s = { person: { id: 1 }, bots: [], asks: [{ id: 5, bot: 'chief', kind: 'propose', at: 1, title: 'Shall I take on a new helper? Pip: Watches rentals',
     detail: { words: 'Shall I take on a new helper? Pip: Watches rentals', yes: 'Yes, take Pip on', preview: { head: 'Pip, a new helper', body: 'Watches rentals.' } } }] };

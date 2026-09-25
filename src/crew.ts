@@ -1140,7 +1140,7 @@ export class Crew {
       // A fix it delivered counts only when crewd saw its check fail without it and pass with it (crew_verify).
       const unchecked = this.unchecked(task);
       if (unchecked || (said ? !said.worked : task.acted)) {
-        this.setTask(task, 'unsure', unchecked ? `I suggested a fix (${unchecked}), but it wasn't seen to fail before it and pass after it. Check it before you use it.`
+        this.setTask(task, 'unsure', unchecked ? `I suggested a change (${unchecked}) for the maintainer to review, but it wasn't seen to fail before it and pass after it. Check it before you use it.`
           : said?.seen || `I did something on ${task.acted}, but I didn't see it confirmed. Worth checking there yourself.`);
         if (task.origin === CHIEF) this.say(CHIEF, 'bot', `${b.display} isn't sure “${short(task.title, 60)}” worked. It's in ${b.display}'s chat.`, null, task.member ?? OWNER);
         return;
@@ -1569,7 +1569,8 @@ export class Crew {
     const task = this.activeTask(botId)?.id;
     if (task && this.db.get(`SELECT 1 FROM events WHERE kind = 'file.delivered' AND bot = ? AND json_extract(data, '$.task') = ? AND json_extract(data, '$.path') = ?`, botId, task, rel)) return { ok: true, already: true };
     this.db.event('file.delivered', botId, { task, path: rel, note: clean(note, 200), size: statSync(full).size });
-    this.say(botId, 'system', `Delivered ${rel}${note ? `: ${note}` : ''}`, task ?? null);
+    // A patch is only ever a suggested change for the maintainer to review, in crewd's own words, never the model's.
+    this.say(botId, 'system', /\.(patch|diff)$/.test(rel) ? `Delivered ${rel}: Suggested change (for the maintainer to review)${this.db.get("SELECT 1 FROM events WHERE kind = 'verify.result' AND bot = ? AND json_extract(data, '$.passed') AND json_extract(data, '$.sha') = ?", botId, sha(readFileSync(full, 'utf8'))) ? ': passed its own check' : ''}` : `Delivered ${rel}${note ? `: ${note}` : ''}`, task ?? null);
     return { ok: true };
   }
 

@@ -76,20 +76,25 @@ test('a delivered fix ends done only when crewd saw its check fail before and pa
   const good = patch(true, 'fix.patch');
   const bare = await job(`fix it ${call('crew_deliver', { path: good })}`);
   assert.equal(bare.state, 'unsure');
-  assert.match(bare.result, /^I suggested a fix \(files\/fix\.patch\), but it wasn't seen to fail before it and pass after it/);
+  assert.match(bare.result, /^I suggested a change \(files\/fix\.patch\) for the maintainer to review, but it wasn't seen to fail before it and pass after it/);
 
-  // Checked by crewd: the check fails on the old code and passes with the fix.
-  const proved = await job(`fix it ${verify(good)} ${call('crew_deliver', { path: good })}`);
+  // Checked by crewd: the check fails on the old code and passes with the fix. The delivery is worded by crewd, never
+  // by the model's note: a suggested change for the maintainer to review, never a fix.
+  const proved = await job(`fix it ${verify(good)} ${call('crew_deliver', { path: good, note: 'fix applied' })}`);
   assert.equal(proved.state, 'done');
   const v = events(db, 'verify.result').at(-1);
   assert.deepEqual([v.passed, v.after, v.task], [true, 0, proved.id]);
   assert.notEqual(v.before, 0);
+  assert.equal(db.get("SELECT text FROM messages WHERE bot = 'desk' AND author = 'system' ORDER BY id DESC")!.text,
+    'Delivered files/fix.patch: Suggested change (for the maintainer to review): passed its own check');
 
   // A "fix" whose check never failed proves nothing.
   const idle = patch(false, 'noop.patch');
   const noop = await job(`fix it ${verify(idle)} ${call('crew_deliver', { path: idle })}`);
   assert.equal(events(db, 'verify.result').at(-1).passed, false);
   assert.equal(noop.state, 'unsure');
+  assert.equal(db.get("SELECT text FROM messages WHERE bot = 'desk' AND author = 'system' ORDER BY id DESC")!.text,
+    'Delivered files/noop.patch: Suggested change (for the maintainer to review)', 'unproved, it cannot say it passed');
 
   // Checked in an earlier job, the same patch still counts; changed since, it doesn't.
   assert.equal((await job(`send it ${call('crew_deliver', { path: good })}`)).state, 'done');
