@@ -4,7 +4,7 @@
 
 Local-first, open-source crew of persistent AI helpers run by Chief on your own ChatGPT.
 
-You talk to **Chief**. Chief recruits bots from templates (Reel makes demo videos, Scout researches, Scribe drafts, Tracer finds leads) and hands them work. Each bot is a folder on your disk with its own persona, notes, skills and files. It thinks with your own AI account, which you sign in to from inside the app. Questions come to you in one place, as one plain sentence, from a desktop or phone browser.
+You talk to **Chief**. Chief recruits bots from templates (Reel makes demo videos, Scout researches, Scribe drafts, Tracer finds leads) and hands them work. Each bot is a folder on your disk with its own persona, notes, skills and files. It thinks with your own AI account, which you sign in to from inside the app. Questions come to you in one place, as one plain sentence, from a desktop or phone browser. Every helper is a chat, like a messaging app: the list shows each one's last line and what's new, a search box finds anything anyone said, and `@Scout` in Chief's box goes straight to Scout.
 
 Nothing leaves your machine except what the crew sends your own AI account to do the work: there is no server of ours and no telemetry.
 

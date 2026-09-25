@@ -290,7 +290,7 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
   const canAct = grant.device.role === 'control';
   const ctx: Ctx = { state, tick, refresh, go, canAct, open: setSheet };
   if (!state.person.onboarded && canAct) return <Hello {...ctx} />;
-  const nav: [Route['view'], string, string][] = [['home', 'Home', '⌂'], ['crew', 'Crew', '☺\uFE0E'], ['things', 'Things', '▤'], ['phone', 'This phone', '▯']];
+  const nav: [Route['view'], string, string][] = [['home', 'Chats', '⌂'], ['crew', 'Crew', '☺\uFE0E'], ['things', 'Things', '▤'], ['phone', 'This phone', '▯']];
   const active = ['chief', 'helper'].includes(route.view) ? 'crew' : route.view;
   const live = sheet && A.cards(state).find((c) => c.id === sheet.id);
   return (
@@ -408,8 +408,6 @@ function Home(ctx: Ctx) {
   const crew = A.crew(state);
   const who = (id: string) => crew.find((h) => h.id === id);
   const cards = A.cards(state);
-  const work = A.work(state);
-  const done = A.things(state).filter((x) => Date.now() - x.at < 86_400_000);
   const toChief = async (x: string) => { if (await attempt(() => api.post('chief', x))) { refresh(); go({ view: 'chief' }); } };
   const helperRoute = (id: string): Route => (id === 'chief' ? { view: 'chief' } : { view: 'helper', id });
   return (
@@ -417,33 +415,9 @@ function Home(ctx: Ctx) {
       <ScrollView contentContainerStyle={s.page} keyboardShouldPersistTaps="handled">
         <Pressable onPress={() => go({ view: 'chief' })}><Heartbeat state={state} /></Pressable>
         <T style={[s.h1, s.centerText]}>{A.greeting()}, {state.person.address ?? state.person.name}</T>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 14, paddingVertical: 6 }}>
-          {crew.map((h) => (
-            <Pressable key={h.id} style={[s.bubble, !h.ring && { opacity: 0.75 }]} onPress={() => go(helperRoute(h.id))}>
-              <Face who={h} size={56} /><T style={s.small} lines={1}>{h.name}</T>
-            </Pressable>
-          ))}
-        </ScrollView>
         {!!A.resting(state) && <Card><T>{A.resting(state)}. I'll pick things back up then.</T></Card>}
         {cards.map((c) => <AskCard key={c.id} c={c} who={who(c.helper)} onDone={refresh} canAct={canAct} open={open} />)}
-        {!work.length && !done.length ? <Card><T tone="mute" style={s.centerText}>Nothing on the go. Ask Chief anything, or try an idea below.</T></Card> : (
-          <Card>
-            {work.map((w) => (
-              <Pressable key={w.helper} style={s.job} onPress={() => go(helperRoute(w.helper))}>
-                <Face who={who(w.helper)!} size={46} />
-                <View style={{ flex: 1 }}><T style={s.b} lines={2}>{w.title}</T><T tone="mute" lines={2}>{w.line}</T></View>
-                <T tone="mute" style={s.small}>{who(w.helper)?.ring === 'needs' ? 'needs you' : w.waiting ? 'next' : 'working'}</T>
-              </Pressable>
-            ))}
-            {done.slice(0, 3).map((x) => (
-              <Pressable key={x.id} style={s.job} onPress={() => go({ view: 'things' }, true)}>
-                {who(x.helper) ? <Face who={who(x.helper)!} size={46} /> : <Face who="chief" size={46} />}
-                <View style={{ flex: 1 }}><T style={s.b} lines={2}>{x.title}</T><T tone="mute">Done{x.files.length ? ` · with ${x.files.length === 1 ? x.files[0].name.toLowerCase() : `${x.files.length} things`}` : ''}</T></View>
-                <T style={[s.small, s.b]}>Open</T>
-              </Pressable>
-            ))}
-          </Card>
-        )}
+        <ChatList state={state} go={go} />
         {canAct && (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
             {A.ideas(state).map((i: Json) => <Btn key={i.bot + i.label} label={`✦ ${i.label}`} onPress={() => attempt(async () => { await api.post(i.bot, i.ask); refresh(); go(helperRoute(i.bot)); })} />)}
@@ -452,6 +426,39 @@ function Home(ctx: Ctx) {
       </ScrollView>
       {canAct && <View style={s.dock}><Composer placeholder="Ask Chief anything…" onSend={toChief} /></View>}
     </View>
+  );
+}
+
+/** Every chat, like a messaging app: Chief on top, then whoever spoke last; search finds words across them. */
+function ChatList({ state, go }: { state: Json; go: Ctx['go'] }) {
+  const t = useLook();
+  const [q, setQ] = useState('');
+  const [hits, setHits] = useState<Json | null>(null);
+  useEffect(() => {
+    if (q.trim().length < 2) { setHits(null); return; }
+    const x = setTimeout(() => api.search(q.trim()).then(setHits).catch(() => {}), 250);
+    return () => clearTimeout(x);
+  }, [q]);
+  const crew = A.crew(state);
+  const to = (id: string): Route => (id === 'chief' ? { view: 'chief' } : { view: 'helper', id });
+  const face = (id: string) => (id === 'chief' ? <Face who="chief" size={46} /> : <Face who={crew.find((h) => h.id === id) ?? 'chief'} size={46} />);
+  const row = (key: string, id: string, name: string, line: string, at: number, unread = 0) => (
+    <Pressable key={key} style={s.job} onPress={() => go(to(id))} accessibilityLabel={`${name}${unread ? `, ${unread} new` : ''}`}>
+      {face(id)}
+      <View style={{ flex: 1 }}><T style={s.b}>{name}</T><T tone={unread ? 'ink' : 'mute'} lines={1}>{line}</T></View>
+      <View style={{ alignItems: 'flex-end', gap: 4 }}>
+        <T tone="mute" style={s.small}>{at ? A.clock(at) : ''}</T>
+        {unread > 0 && <Text style={[s.unread, { backgroundColor: t.wait }]}>{A.unreadBadge(unread)}</Text>}
+      </View>
+    </Pressable>
+  );
+  const found = A.found(state, hits);
+  return (
+    <Card>
+      <TextInput style={[s.input, { color: t.ink, borderColor: t.line }]} value={q} onChangeText={setQ} placeholder="Search your chats" placeholderTextColor={t.mute} accessibilityLabel="Search your chats" />
+      {hits ? (found.length ? found.map((f) => row(f.key, f.bot, f.name, f.text, f.at)) : <T tone="mute" style={s.centerText}>Nothing matches “{q.trim()}”.</T>)
+        : A.chats(state).map((c) => row(c.id, c.id, c.name, c.line, c.at, c.unread))}
+    </Card>
   );
 }
 
@@ -469,6 +476,9 @@ function Chat({ id, state, tick, refresh, canAct, open }: Ctx & { id: string }) 
   const cards = A.cards(state).filter((c) => c.helper === id);
   const last = lines.at(-1);
   const name = h?.name ?? 'Chief';
+  // Seen: the chat's unread count goes once its newest line is on screen (a watch-only phone can't mark it).
+  const newest = last?.id;
+  useEffect(() => { if (canAct && newest && b?.unread) void api.read(id).then(refresh).catch(() => {}); }, [canAct, newest, b?.unread, id, refresh]);
   const send = async (x: string) => { if (await attempt(() => api.post(id, x))) { void load(); refresh(); } };
   return (
     <View style={{ flex: 1 }}>
@@ -654,6 +664,7 @@ const s = StyleSheet.create({
   tab: { flex: 1, alignItems: 'center', gap: 1, minHeight: 48, justifyContent: 'center' },
   tabIcon: { fontSize: 20 },
   tabLabel: { fontSize: 11.5, fontWeight: '700' },
+  unread: { minWidth: 20, height: 20, borderRadius: 10, color: '#2e2a40', fontSize: 12, fontWeight: '900', textAlign: 'center', overflow: 'hidden', paddingHorizontal: 5, lineHeight: 20 },
   badge: { position: 'absolute', top: 0, left: '58%', minWidth: 18, height: 18, borderRadius: 9, color: '#fff', fontSize: 11, fontWeight: '800', textAlign: 'center', overflow: 'hidden', paddingHorizontal: 4 },
   offline: { textAlign: 'center', padding: 6, fontSize: 13, fontWeight: '700' },
   toast: { position: 'absolute', bottom: 84, alignSelf: 'center', paddingHorizontal: 16, paddingVertical: 10, borderRadius: radius.chip, fontWeight: '700', overflow: 'hidden', maxWidth: '90%' },

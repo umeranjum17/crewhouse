@@ -31,6 +31,10 @@ export const trouble = (e: any): 'offline' | 'missing' | 'failed' => (e?.status 
 export const api = {
   state: () => call('GET', '/api/state'),
   bot: (id: string) => call('GET', `/api/bots/${id}`),
+  /** The person has read this chat up to now: its unread dot goes. */
+  read: (id: string) => call('POST', `/api/bots/${id}/read`),
+  /** Words across the person's own chats and finished things. */
+  search: (q: string) => call('GET', `/api/search?q=${encodeURIComponent(q)}`),
   post: (id: string, text: string) => call('POST', `/api/bots/${id}/messages`, { text }),
   /** First run: how Chief addresses the person, and (from an idea card) their first request, in one tap. */
   onboard: (address: string, ask?: string) => call('POST', '/api/onboard', { address, ask }),

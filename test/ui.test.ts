@@ -165,3 +165,28 @@ test('the crew\'s share is words, never a number; money is whole dollars and onl
   assert.equal(A.money({ money: { cap: 20, spent: 0 } })!.month, 'This month: nothing spent yet.');
   assert.equal(A.money({ money: { cap: 20, spent: 4.5 } })!.month, 'This month: $4.50 of $20 spent.');
 });
+
+test('chats: Chief first, then the latest talk; last lines in plain words, never a path', () => {
+  const now = Date.now();
+  const s = {
+    person: { id: 1 }, events: [], asks: [], tasks: [],
+    bots: [
+      { id: 'chief', display: 'Chief', last: { author: 'bot', text: 'Reel is on it.', at: now - 50_000 }, unread: 2 },
+      { id: 'reel', display: 'Reel', template: 'reel', role: 'Makes demo videos', last: { author: 'system', text: 'Delivered files/mum-birthday_v2.mp4: 31 s', at: now - 1000 }, unread: 12 },
+      { id: 'scout', display: 'Scout', template: 'scout', role: 'Researches', last: { author: 'person', text: 'find   rentals\nin Phuket', at: now - 9000 }, unread: 0 },
+      { id: 'scribe', display: 'Scribe', template: 'scribe', role: 'Drafts letters', last: null, unread: 0 },
+      { id: 'pip', display: 'Pip', template: 'scout', role: 'Plans', task: { id: 9, title: 'Plan the week', state: 'working' }, last: { author: 'bot', text: 'old', at: now - 99_000 }, unread: 0 },
+    ],
+  };
+  const c = A.chats(s);
+  assert.deepEqual(c.map((x) => x.id), ['chief', 'reel', 'scout', 'pip', 'scribe']);
+  assert.equal(c[1].line, 'Sent “Mum birthday v2”');
+  assert.equal(c[2].line, 'You: find rentals in Phuket');
+  assert.equal(c[3].line, 'Working on: Plan the week');
+  assert.equal(c[4].line, 'Drafts letters', 'nothing said yet: what it does');
+  assert.equal(A.unreadBadge(c[1].unread), '9+');
+  assert.doesNotMatch(shown(c), FORBIDDEN);
+  const f = A.found(s, { messages: [{ id: 3, bot: 'reel', author: 'system', text: 'Delivered files/x.mp4', at: now }], things: [{ id: 4, bot: 'scout', title: 'Rentals in Phuket', at: now }] });
+  assert.deepEqual(f.map((x) => [x.name, x.text]), [['Scout', 'Made “Rentals in Phuket”'], ['Reel', 'Sent “X”']]);
+  assert.doesNotMatch(shown(f), FORBIDDEN);
+});

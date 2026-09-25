@@ -116,19 +116,6 @@ function Heartbeat({ state, big }: { state: Json; big?: boolean }) {
   );
 }
 
-function Bubbles({ crew }: { crew: A.Helper[] }) {
-  return (
-    <div className="bubbles">
-      {crew.map((h) => (
-        <a key={h.id} href={hrefOf(h.id)} className={`bubble ${h.ring ? '' : 'dim'}`}>
-          <Face who={h} size={56} ring={h.ring} /><span>{h.name}</span>
-        </a>
-      ))}
-      <a href="#/crew/add" className="bubble dim"><span className="face add" style={{ width: 56, height: 56 }}>+</span><span>Add</span></a>
-    </div>
-  );
-}
-
 /** A helper that has gone quiet: stop it, take the wheel, or leave it be. */
 const leftAlone = new Map<string, number>();
 function Stuck({ h, refresh }: { h: A.Helper; refresh: () => void }) {
@@ -146,34 +133,39 @@ function Stuck({ h, refresh }: { h: A.Helper; refresh: () => void }) {
   );
 }
 
-function JobList({ state, refresh }: { state: Json; refresh: () => void }) {
+/** Every chat, like a messaging app: Chief on top, then whoever spoke last. A search box finds words across them. */
+function Chats({ state, refresh }: { state: Json; refresh: () => void }) {
+  const [q, setQ] = useState('');
+  const [hits, setHits] = useState<Json | null>(null);
+  useEffect(() => {
+    if (q.trim().length < 2) return setHits(null);
+    const t = setTimeout(() => api.search(q.trim()).then(setHits).catch(() => {}), 250);
+    return () => clearTimeout(t);
+  }, [q]);
   const crew = A.crew(state);
-  const who = (id: string) => crew.find((h) => h.id === id);
-  const work = A.work(state);
-  const done = A.things(state).filter((t) => Date.now() - t.at < 86_400_000);
-  if (!work.length && !done.length) return <div className="card empty"><pre className="art small-art" aria-hidden>{'  ( ˘ ᵕ ˘ )  zz'}</pre>Nothing on the go. Ask Chief anything, or try an idea below.</div>;
+  const found = A.found(state, hits);
   return (
-    <div className="card jobs">
-      {work.map((w) => {
-        const h = who(w.helper)!;
+    <div className="card jobs chats">
+      <input className="input search" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search your chats" aria-label="Search your chats" />
+      {hits ? (found.length ? found.map((f) => (
+        <a key={f.key} className="job" href={hrefOf(f.bot)}>
+          {f.bot === 'chief' ? <Face who="chief" size={40} /> : <Face who={crew.find((h) => h.id === f.bot) ?? { kind: 'pip', name: f.name }} size={40} />}
+          <div className="grow"><b>{f.name}</b><div className="mute clamp1">{f.text}</div></div>
+          <span className="mute small">{A.clock(f.at)}</span>
+        </a>
+      )) : <div className="mute center empty">Nothing matches “{q.trim()}”.</div>) : A.chats(state).map((c) => {
+        const h = c.who === 'chief' ? undefined : c.who;
         return (
-          <div key={w.helper}>
-            <a className="job" href={hrefOf(w.helper)}>
-              <Face who={h} size={46} ring={h.ring} />
-              <div className="grow"><b>{w.title}</b><div className="mute">{w.line}</div>{!w.waiting && <div className="bar"><span /></div>}</div>
-              <span className="mute small">{h.ring === 'needs' ? 'needs you' : w.waiting ? 'next' : 'working'}</span>
+          <div key={c.id}>
+            <a className="job" href={hrefOf(c.id)}>
+              {c.who === 'chief' ? <span className="face" style={{ width: 46, height: 46, background: '#fff7e8' }}><ChiefArt mood={A.chief(state).mood} d={2.2} /></span> : <Face who={c.who} size={46} ring={c.ring} />}
+              <div className="grow"><b>{c.name}</b><div className={`clamp1 ${c.unread ? '' : 'mute'}`}>{c.line}</div></div>
+              <span className="chat-end"><span className="mute small">{c.at ? A.clock(c.at) : ''}</span>{c.unread > 0 && <span className="badge" aria-label={`${c.unread} new`}>{A.unreadBadge(c.unread)}</span>}</span>
             </a>
-            <Stuck h={h} refresh={refresh} />
+            {h && <Stuck h={h} refresh={refresh} />}
           </div>
         );
       })}
-      {done.slice(0, 3).map((t) => (
-        <a key={t.id} className="job" href="#/things">
-          <Face who={who(t.helper) ?? { kind: 'pip', name: '' }} size={46} />
-          <div className="grow"><b>{t.title}</b><div className="mute">Done{t.files.length ? ` · with ${t.files.length === 1 ? t.files[0].name.toLowerCase() : `${t.files.length} things`}` : ''}</div></div>
-          <b className="small">Open</b>
-        </a>
-      ))}
     </div>
   );
 }
@@ -188,11 +180,10 @@ function Home({ state, me, refresh, tick }: Ctx) {
     <div className="home">
       <div className="home-top"><Heartbeat state={state} /></div>
       <h1 className="hi">{A.greeting()}, {state.person.address ?? state.person.name}</h1>
-      <Bubbles crew={crew} />
       {(g.state === 'signed-out' || g.notIncluded) && <AccountCard me={me} owner={ownerName(state)} isOwner={me === A.OWNER} g={g} onReady={refresh} />}
       {A.resting(state) && <div className="card nudge"><span className="grow">{A.resting(state)}. I'll pick things back up then.</span></div>}
       {cards.map((c) => <AskCard key={c.id} c={c} who={crew.find((h) => h.id === c.helper)} onDone={refresh} />)}
-      <JobList state={state} refresh={refresh} />
+      <Chats state={state} refresh={refresh} />
       <div className="dock">
         <div className="chips">
           {A.ideas(state).map((i: Json) => (
@@ -234,6 +225,9 @@ function Chat({ id, state, me, tick, refresh }: Ctx & { id: string }) {
   const h = crew.find((x) => x.id === id);
   const b = state.bots.find((x: Json) => x.id === id);
   const live = b?.task;
+  // Seen: the chat's unread dot goes once its newest line is on screen.
+  const newest = lines.at(-1)?.id;
+  useEffect(() => { if (newest && b?.unread) void api.read(id).then(refresh).catch(() => {}); }, [newest, b?.unread, id, refresh]);
   const trail = live && page ? A.steps(page.trail ?? [], live.id, true) : [];
   const cards = A.cards(state).filter((c) => c.helper === id);
   const last = lines.at(-1);
@@ -797,7 +791,7 @@ function App() {
   const crew = A.crew(ctx.state);
   const asks = ctx.state.asks.length;
   const sheet = route.view === 'ask' ? A.cards(ctx.state).find((c) => String(c.id) === route.id) : undefined;
-  const nav: [string, string, string, number?][] = [['#/', 'Home', '⌂'], ['#/crew', 'Crew', '☺'], ['#/things', 'Things', '▤'], ['#/routines', 'Routines', '↻'], ['#/settings', 'Settings', '⚙']];
+  const nav: [string, string, string, number?][] = [['#/', 'Chats', '⌂'], ['#/crew', 'Crew', '☺'], ['#/things', 'Things', '▤'], ['#/routines', 'Routines', '↻'], ['#/settings', 'Settings', '⚙']];
   const active = (h: string) => (h === '#/' ? v.view === 'home' : h === '#/crew' ? ['crew', 'add', 'helper', 'chief'].includes(v.view) : h === `#/${v.view}` || (h === '#/settings' && v.view === 'apps'));
   return (
     <>
@@ -805,12 +799,13 @@ function App() {
       <div className={`shell ${v.view === 'home' ? 'with-rail' : ''} ${['chief', 'helper'].includes(v.view) ? 'is-chat' : ''}`}>
         <aside className="side">
           <a href="#/" className="brand"><Logo night={night} /></a>
-          <a href="#/chief" className={`side-row chief-row ${v.view === 'chief' ? 'on' : ''}`}><span className="face" style={{ width: 34, height: 34, background: '#fff7e8' }}><ChiefArt mood={A.chief(ctx.state).mood} d={1.7} /></span><b>Chief</b></a>
+          <a href="#/chief" className={`side-row chief-row ${v.view === 'chief' ? 'on' : ''}`}><span className="face" style={{ width: 34, height: 34, background: '#fff7e8' }}><ChiefArt mood={A.chief(ctx.state).mood} d={1.7} /></span><b className="grow">Chief</b>{(A.chats(ctx.state)[0].unread > 0) && <span className="badge">{A.unreadBadge(A.chats(ctx.state)[0].unread)}</span>}</a>
           <div className="label">Helpers</div>
-          {crew.map((h) => (
-            <a key={h.id} href={hrefOf(h.id)} className={`side-row ${v.id === h.id ? 'on' : ''}`}><Face who={h} size={32} ring={h.ring} /><span className="grow"><b>{h.name}</b><span className="mute small clamp1">{h.status}</span></span></a>
+          {A.chats(ctx.state).filter((c) => c.who !== 'chief').map((c) => (
+            <a key={c.id} href={hrefOf(c.id)} className={`side-row ${v.id === c.id ? 'on' : ''}`}><Face who={c.who as A.Helper} size={32} ring={c.ring} /><span className="grow"><b>{c.name}</b><span className="mute small clamp1">{c.line}</span></span>{c.unread > 0 && <span className="badge">{A.unreadBadge(c.unread)}</span>}</a>
           ))}
           <div className="grow" />
+          <a href="#/settings" className="side-meter mute small">{A.meter(ctx.state)}</a>
           {nav.map(([h, l, i]) => <a key={h} href={h} className={`side-nav ${active(h) ? 'on' : ''}`}><span className="ic">{i}</span>{l}{h === '#/' && asks > 0 && <span className="badge">{asks}</span>}</a>)}
         </aside>
         <main className="main">
