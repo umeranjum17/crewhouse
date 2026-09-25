@@ -3,12 +3,13 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { readFileSync, statSync } from 'node:fs';
+import { readFileSync, statSync, writeFileSync } from 'node:fs';
+import { createServer as http1 } from 'node:http';
 import { createServer, type AddressInfo } from 'node:net';
 import { join } from 'node:path';
 import { temp } from './tmp.ts';
 import { DeviceLink, pairWithOffer, type DeviceGrant, type LinkStatus } from '@byokit/link';
-import { Link, linkHosts, phoneAddresses } from '../src/link.ts';
+import { Link, NEWS, linkHosts, phoneAddresses, tailscalePeer } from '../src/link.ts';
 import { Store } from '../src/db.ts';
 
 test('the link binds loopback and Tailscale by default; the home network only when turned on', () => {
@@ -50,6 +51,56 @@ test('quiet hours hold the push and send exactly one when they end, even across 
   b.sendHeld();
   assert.deepEqual(sent.map((n) => n.to), [['ipad'], ['pixel']], 'one push when quiet hours end, for however much came in');
   db.close();
+});
+
+test('push through a stubbed Expo: exactly one content-free push per paired phone, and a missing credential said once', async () => {
+  const got: any[][] = [];
+  let answer = (msgs: any[]) => msgs.map(() => ({ status: 'ok' }));
+  const expo = http1((req, res) => { let b = ''; req.on('data', (c) => { b += c; }); req.on('end', () => { got.push(JSON.parse(b)); res.end(JSON.stringify({ data: answer(got.at(-1)!) })); }); });
+  await new Promise<void>((r) => expo.listen(0, '127.0.0.1', r));
+  after(() => expo.close());
+  const db = new Store(temp('crewhouse-push'));
+  const devices = [{ id: 'pixel', meta: { member: 1 } }, { id: 'moto', meta: { member: 1 } }, { id: 'ipad', meta: { member: 2 } }];
+  const link = Object.assign(new Link({} as any, db, async () => null) as any, { host: { devices: () => devices }, pushUrl: `http://127.0.0.1:${(expo.address() as AddressInfo).port}/push` });
+  const phone = (id: string, body: unknown) => link.request('POST /api/push', body, { id, meta: devices.find((d) => d.id === id)!.meta });
+  assert.equal((await phone('pixel', { expo: 'ExponentPushToken[pixel-1]' })).status, 200);
+  assert.equal((await phone('moto', { expo: 'ExponentPushToken[moto-1]' })).status, 200);
+  assert.equal((await phone('ipad', { expo: 'not a token' })).status, 409, 'only an Expo token, or saying why there is none');
+  assert.equal(link.status().push, 'ready');
+
+  // A job fails for member 1: each of their phones gets "Crewhouse has news" and nothing else; member 2's gets nothing.
+  link.news({ seq: 7, kind: 'alert', data: { member: 1, words: 'Reel could not pay the dentist' }, bot: null });
+  for (const end = Date.now() + 5000; !got.length && Date.now() < end;) await new Promise((r) => setTimeout(r, 20));
+  assert.deepEqual(got, [[
+    { to: 'ExponentPushToken[pixel-1]', title: NEWS, sound: 'default', collapseId: 'e7' },
+    { to: 'ExponentPushToken[moto-1]', title: NEWS, sound: 'default', collapseId: 'e7' },
+  ]]);
+
+  // Expo has no Android credential for the app yet: Settings says so, once, rather than pushes vanishing.
+  answer = (msgs) => msgs.map(() => ({ status: 'error', details: { error: 'InvalidCredentials' } }));
+  await link.tell(1, 'e8');
+  assert.equal(link.status().push, 'missing');
+  answer = (msgs) => msgs.map((_m, i) => (i ? { status: 'error', details: { error: 'DeviceNotRegistered' } } : { status: 'ok' }));
+  await link.tell(1, 'e9');
+  assert.equal(link.status().push, 'ready', 'a push that goes through clears it');
+  await link.tell(1, 'e10');
+  assert.deepEqual(got.at(-1)!.map((m: any) => m.to), ['ExponentPushToken[pixel-1]'], 'a phone Expo no longer knows is dropped');
+
+  // The app build itself has no push credential: the phone says so, and Settings shows it; said no to notifications is per phone.
+  await phone('ipad', { missing: true });
+  assert.equal(link.status().push, 'missing');
+  await phone('ipad', { off: true });
+  assert.equal(link.status().push, 'ready');
+  db.close();
+});
+
+test('the computer tells a phone whether its Tailscale has that phone as a peer', async () => {
+  const dir = temp('crewhouse-peer');
+  const cli = (name: string, out: string) => { const bin = join(dir, name); writeFileSync(bin, `#!/bin/sh\ncat <<'X'\n${out}\nX\n`, { mode: 0o755 }); return bin; };
+  const ts = cli('ts', JSON.stringify({ Self: { TailscaleIPs: ['100.101.2.3'] }, Peer: { k1: { TailscaleIPs: ['100.90.1.1'] } } }));
+  assert.equal(await tailscalePeer('100.90.1.1', ts), true, 'shared with this phone\'s account');
+  assert.equal(await tailscalePeer('100.90.9.9', ts), false, 'not shared: the computer never sees it');
+  assert.equal(await tailscalePeer('100.90.1.1', cli('broken', 'no')), undefined, 'no Tailscale here to ask');
 });
 
 const root = temp('crewhouse-link');
@@ -133,6 +184,10 @@ test('pairing with a yes at the computer, grants, approvals from the phone, and 
   assert.equal((await a.req('PUT', '/api/house/google', { id: 'x', secret: 'y' })).status, 403, 'and the house Google app');
   assert.equal((await a.req('GET', '/api/people')).status, 200);
   assert.equal((await a.req('GET', '/files/chief/x')).status, 404);
+  // The phone says which route it came by; Settings shows when each phone last reached the computer, and how.
+  assert.deepEqual(Object.keys((await a.req('GET', '/api/reach', { via: 'home' })).body.reached), ['home']);
+  await a.req('GET', '/api/reach', { via: 'anything' });
+  assert.deepEqual(Object.keys((await http('GET', '/api/phones')).body[0].reached), ['home'], 'only a route it knows');
 
   // Live events arrive over the link.
   await a.req('POST', '/api/onboard', { address: 'Sir' });

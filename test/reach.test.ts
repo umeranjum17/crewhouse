@@ -1,10 +1,10 @@
 // From anywhere (Option B): crewd dials out to a relay on this machine and opens no link port of its own. A phone pairs by
 // typed code through the relay, talks to crewd through it, learns the relay address, and gets content-free pushes.
-// The push service is a mocked fetch; nothing leaves the machine.
+// The push service is a stand-in on this machine; nothing leaves it.
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import {  } from 'node:fs';
+import { createServer as http1 } from 'node:http';
 import { createServer, type AddressInfo } from 'node:net';
 import { join } from 'node:path';
 import { temp } from './tmp.ts';
@@ -13,22 +13,22 @@ import { findHost } from '@byokit/relay/device';
 import { NEWS, startRelay } from '../relay/main.ts';
 
 const root = temp('crewhouse-reach');
+// Expo's push service, stood in for: crewd sends a phone's push there itself, relay or not.
 const pushed: any[] = [];
-const pushFetch = (async (_url: string, init: any) => {
-  pushed.push(...JSON.parse(init.body));
-  return new Response(JSON.stringify({ data: JSON.parse(init.body).map(() => ({ status: 'ok' })) }), { status: 200 });
-}) as typeof fetch;
-const relay = await startRelay({ port: 0, dataDir: join(root, 'relay'), ownerToken: 'owner-secret', push: { fetch: pushFetch } });
+const expo = http1((req, res) => { let b = ''; req.on('data', (c) => { b += c; }); req.on('end', () => { pushed.push(...JSON.parse(b)); res.end(JSON.stringify({ data: JSON.parse(b).map(() => ({ status: 'ok' })) })); }); });
+await new Promise<void>((r) => expo.listen(0, '127.0.0.1', r));
+const relay = await startRelay({ port: 0, dataDir: join(root, 'relay'), ownerToken: 'owner-secret' });
 const free = () => new Promise<number>((r) => { const s = createServer().listen(0, '127.0.0.1', () => { const { port } = s.address() as AddressInfo; s.close(() => r(port)); }); });
 const port = await free();
 const base = `http://127.0.0.1:${port}`;
 const daemon = spawn(process.execPath, [join(import.meta.dirname, '..', 'src', 'main.ts')], {
   // CREWHOUSE_LINK_PORT=0: no link socket of its own, so the relay is the only way in.
   env: { ...process.env, CREWHOUSE_ENGINE: 'stub', CREWHOUSE_PAIR_MS: '5000', CREWHOUSE_PORT: String(port), CREWHOUSE_LINK_PORT: '0', CREWHOUSE_RELAY: '',
+    CREWHOUSE_PUSH_URL: `http://127.0.0.1:${(expo.address() as AddressInfo).port}/push`,
     CREWHOUSE_STATE_DIR: join(root, 'state'), CREWHOUSE_CREW_DIR: join(root, 'crew'), CREWHOUSE_TOOLS_DIR: join(root, 'tools') },
   stdio: ['ignore', 'pipe', 'inherit'],
 });
-after(async () => { daemon.kill(); await relay.close(); });
+after(async () => { daemon.kill(); expo.close(); await relay.close(); });
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 async function http(method: string, path: string, body?: unknown) {
@@ -68,7 +68,9 @@ test('reachable from anywhere: enrol once, pair by typed code, talk through the 
   after(() => phone.stop());
   const req = (op: string, body?: unknown) => phone.request(op, body) as Promise<{ status: number; body: any }>;
   assert.equal((await req('GET /api/state')).status, 200, 'the app, through the relay');
-  assert.deepEqual((await req('GET /api/reach')).body.urls, [url], 'a phone paired at home learns the relay address');
+  const reach = (await req('GET /api/reach', { via: 'relay' })).body;
+  assert.deepEqual(reach.urls, [url], 'a phone paired at home learns the relay address');
+  assert.deepEqual(Object.keys(reach.reached), ['relay']);
   assert.equal((await req('POST /api/push', { expo: 'ExponentPushToken[crewhouse-test]' })).status, 200);
 
   // Chief speaks to the owner: the phone is told only "Crewhouse has news".

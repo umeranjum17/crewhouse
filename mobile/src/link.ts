@@ -3,10 +3,12 @@
 import { DeviceLink, LinkError, hostId, pairWithCode, pairWithOffer, unb64url, type DeviceGrant, type LinkStatus } from '@byokit/link';
 import { findHost } from '@byokit/relay/device';
 import * as Device from 'expo-device';
+import * as Notifications from 'expo-notifications';
 import { File, Paths } from 'expo-file-system';
 import * as SecureStore from 'expo-secure-store';
 import Zeroconf from 'react-native-zeroconf';
 import * as K from '../../web/src/kept.ts';
+import { knock } from '../../web/src/adapter.ts';
 import { addresses } from '../modules/crewhouse-net';
 
 export type Grant = DeviceGrant;
@@ -14,7 +16,7 @@ export type Status = LinkStatus;
 const STORE = 'crewhouse.grant';
 const url64 = (s: string) => s.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 // Unpaired or removed on the computer: the chats this phone kept go with the grant.
-const store = { save: (g: Grant) => SecureStore.setItemAsync(STORE, JSON.stringify(g)), clear: () => { kept.clear(); return SecureStore.deleteItemAsync(STORE); } };
+const store = { save: (g: Grant) => SecureStore.setItemAsync(STORE, JSON.stringify(g)), clear: () => { kept.clear(); void SecureStore.deleteItemAsync('crewhouse.said'); return SecureStore.deleteItemAsync(STORE); } };
 
 /** Recent chats kept in the app's own files (web/src/kept.ts), readable while the home computer can't be reached. */
 const keptFile = () => new File(Paths.document, 'kept.json');
@@ -116,21 +118,53 @@ export function connect(grant: Grant, onEvent: (e: any) => void, onStatus: (s: S
     if (r.status !== 200) throw Object.assign(new Error(r.body?.error ?? `error ${r.status}`), { status: r.status });
     return r.body;
   };
-  // A phone paired at home learns every address, so it keeps reaching the computer when it leaves the house; and what the
-  // computer says of its own Tailscale, for when it can't be reached.
-  let said: string | undefined;
-  const learn = () => call('GET', '/api/reach').then((r: { urls: string[]; anywhere?: string }) => { r.urls.forEach((u) => link.addUrl(u)); said = r.anywhere; }).catch(() => {});
-  /** Out of touch: what this phone can see for itself, for `away()` in web/src/adapter.ts to say which step is missing. */
+  // A phone paired at home learns every address, so it keeps reaching the computer when it leaves the house. It says
+  // which route it came by and its own Tailscale address; what the computer says back (its own Tailscale, whether it has
+  // this phone as a Tailscale peer, when this phone last reached it each way) is kept for when it can't be reached.
+  const learn = async () => {
+    const [via, mine] = [route(link.grant.urls[0]), await addresses()];
+    await call('GET', '/api/reach', { via, ip: mine.find(tailnet) }).then((r: { urls: string[] } & Said) => {
+      r.urls.forEach((u) => link.addUrl(u));
+      said = { anywhere: r.anywhere, peer: r.peer, reached: r.reached };
+      void SecureStore.setItemAsync(SAID, JSON.stringify(said));
+    }).catch(() => {});
+  };
+  /** Where to push this phone "Crewhouse has news": its Expo push token once the person allows notifications (asked once
+   *  per launch), `{off}` if they said no, `{missing}` when this app build has no Android push credential yet (README,
+   *  "Phone notifications"), so the computer's Settings says so instead of pushes going nowhere. A network hiccup says
+   *  nothing and tries again on the next reconnect. */
+  const push = async () => {
+    await Notifications.setNotificationChannelAsync('default', { name: 'Crewhouse', importance: Notifications.AndroidImportance.DEFAULT });
+    const { status } = asked ? await Notifications.getPermissionsAsync() : await Notifications.requestPermissionsAsync();
+    asked = true;
+    if (status !== 'granted') return call('POST', '/api/push', { off: true });
+    const token = await Notifications.getExpoPushTokenAsync().then((t) => t.data, (e: Error & { code?: string }) =>
+      (e.code === 'ERR_NOTIFICATIONS_NO_EXPERIENCE_ID' || /firebase|fcm|google-services/i.test(e.message) ? '' : undefined));
+    if (token !== undefined) await call('POST', '/api/push', token ? { expo: token } : { missing: true });
+  };
+  /** Out of touch: what this phone can see for itself, and a bounded knock on the computer's address, for `away()` in
+   *  web/src/adapter.ts to say what was observed and what to try. */
   const facts = async () => {
     const mine = await addresses();
-    const hosts = link.grant.urls.map((u) => { try { return new URL(u).hostname; } catch { return ''; } });
     // ponytail: "the same Wi-Fi" is the same /24 as the computer's home address; most home routers hand out a /24.
     const net = (ip: string) => ip.split('.').slice(0, 3).join('.');
-    const home = hosts.some((h) => /^(10|172|192)\./.test(h) && mine.some((m) => !tailnet(m) && net(m) === net(h)));
-    return { home, tailnet: hosts.some(tailnet), vpn: mine.some(tailnet), anywhere: said };
+    const home = link.grant.urls.find((u) => route(u) === 'home' && mine.some((m) => !tailnet(m) && net(m) === net(new URL(u).hostname)));
+    const away = link.grant.urls.find((u) => route(u) === 'tailscale');
+    const vpn = mine.some(tailnet);
+    const target = home ?? (vpn ? away : undefined);
+    return { ...said, home: !!home, tailnet: !!away, vpn, knock: target ? await knock(target) : undefined };
   };
-  return { link, call, learn, facts };
+  return { link, call, learn, facts, push: () => push().catch(() => {}) };
 }
+
+let asked = false;
+
+type Said = { anywhere?: string; peer?: boolean; reached?: { tailscale?: number } };
+const SAID = 'crewhouse.said';
+let said: Said = {};
+void SecureStore.getItemAsync(SAID).then((s) => { if (s) said = { ...JSON.parse(s), ...said }; }).catch(() => {});
+/** Which route an address is: the family's relay, Tailscale, or the home network. */
+const route = (u = '') => (/\/link\/v1\//.test(u) ? 'relay' : tailnet(u.replace(/^\w+:\/\//, '')) ? 'tailscale' : 'home');
 
 const tailnet = (ip: string) => /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(ip);
 

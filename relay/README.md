@@ -9,8 +9,9 @@ What the relay can and can't see:
 
 - **Messages:** it can't read them. They are end-to-end encrypted (Noise IK) between the phone and the computer.
 - **Push:** content-free. Whatever a computer asks for, a phone is told only "Crewhouse has news", with no body, data
-  or buttons, and fetches the words over the encrypted link. `main.ts` enforces this on the relay itself.
-- **Metadata:** which computers are registered, when phones connect to them, and phones' push addresses.
+  or buttons, and fetches the words over the encrypted link. `main.ts` enforces this on the relay itself. The relay
+  keeps only browsers' Web Push addresses: the phone app's push goes from the computer through Expo, relay or not.
+- **Metadata:** which computers are registered, when phones connect to them, and browsers' push addresses.
 
 There is no hosted Crewhouse relay, and the app has no relay address built in. A family runs their own and sets it: **Settings, Phones** on the computer (`PUT /api/phones/relay {url}`), or
 `CREWHOUSE_RELAY=https://relay.example` for crewd. `''` turns the relay off.

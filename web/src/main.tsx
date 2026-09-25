@@ -557,10 +557,12 @@ function Phones({ tick }: { tick: number }) {
       <div className="card list">
         {phones.map((p) => (
           <div key={p.id} className="row-item"><span className="phone-ic">▯</span>
-            <span className="grow"><b>{p.name}</b><div className="mute small">{p.role === 'view' ? 'Can watch, not answer' : 'Can answer and give jobs'}{p.person ? ` · ${p.person}'s` : ''} · {p.online ? 'with you now' : `last seen ${A.clock(p.seen)}`}</div></span>
+            <span className="grow"><b>{p.name}</b><div className="mute small">{p.role === 'view' ? 'Can watch, not answer' : 'Can answer and give jobs'}{p.person ? ` · ${p.person}'s` : ''} · {p.online ? 'with you now' : `last seen ${A.clock(p.seen)}`}</div>
+              <div className="mute small">{A.reached(p)}{p.push === 'off' ? ' · notifications off on this phone' : ''}</div></span>
             <button className="btn ghost" onClick={() => attempt(async () => { await api.removePhone(p.id); await load(); }, `${p.name} can't reach the crew any more`)}>Remove</button>
           </div>
         ))}
+        {!!A.pushWords(link) && <p className="mute small">{A.pushWords(link)}</p>}
         {!phones.length && <p className="mute">No phones yet. Install the Crewhouse app, then scan the code it asks for.</p>}
         {!offer && <div className="btns"><button className="btn go" onClick={() => show('control')}>Add a phone</button><button className="btn" onClick={() => show('view')}>Add one that only watches</button></div>}
       </div>
