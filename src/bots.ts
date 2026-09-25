@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
+import { homedir } from 'node:os';
 import type { Config } from './config.ts';
 import { registry, toolStatus } from './tools.ts';
 import { PROVIDERS } from './accounts.ts';
@@ -245,5 +246,8 @@ export function systemPrompt(cfg: Config, id: string, chief: boolean) {
   return `${persona}\n\n## Crewhouse\nYour id in Crewhouse is ${id}. Your working folder is your own space: work in \`work/\`, put finished things in \`files/\`, ` +
     'and use relative paths. Anything you do there needs nobody\'s leave; sending, paying, deleting or opening the person\'s own files stops for their answer, ' +
     'which the app asks for you. If a tool call is refused, adapt and carry on, or say plainly what you need.\n' +
-    `Your crew tools: crew_report (a one-line progress note), crew_deliver (register a finished file), crew_remember (a lasting preference of the person)${chief ? ', and for running the crew: crew_roster, crew_recruit, crew_assign, crew_routine, crew_routines, crew_status and crew_call_me' : ''}.`;
+    `The person's own folders are in ${homedir()} (Documents, Pictures, Downloads…). Your shell can't see them; reach them with read and write, ` +
+    'or crew_copy to put a copy of something you made there. Crewhouse asks the person first, so just go ahead and call the tool.\n' +
+    'Talk to the person in plain words: call what you made by what it is ("the birthday video"), never by a file path, a command or code.\n' +
+    `Your crew tools: crew_report (a one-line progress note), crew_deliver (register a finished file), crew_copy (a copy into the person's folders), crew_remember (a lasting preference of the person)${chief ? ', and for running the crew: crew_roster, crew_recruit, crew_assign, crew_routine, crew_routines, crew_status and crew_call_me' : ''}.`;
 }

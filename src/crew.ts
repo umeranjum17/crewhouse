@@ -1,8 +1,8 @@
 import './isolate.ts'; // first: before anything loads the engine
 import { randomBytes } from 'node:crypto';
-import { existsSync, statSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { defineTool, type AgentSession, type ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { Type } from '@earendil-works/pi-ai';
 import { CHIEF, type Config } from './config.ts';
@@ -502,7 +502,7 @@ export class Crew {
     const who = task.origin === 'person' ? this.called(member.id) : task.origin === CHIEF ? 'Chief' : task.origin;
     const routine = task.routine && this.db.get('SELECT name FROM routines WHERE id = ?', task.routine)?.name;
     // The debrief: the bot proposes what to keep; crewd caps it, commits it and offers Undo.
-    const debrief = disk.botConfig(this.cfg, task.bot).memory === false ? '' : `\n\n[Crewhouse] When you finish: if this task showed you a lasting preference of ${who}, ` +
+    const debrief = disk.botConfig(this.cfg, task.bot).memory === false ? '' : `\n\n[Crewhouse] When you finish: if this task showed you a lasting preference of ${who} (not how to address them; Crewhouse keeps that), ` +
       'save it with crew_remember (one short line; name the old note in `replaces` to correct one). Otherwise save nothing.';
     if (task.bot !== CHIEF) return `${this.memory(task.bot, member.id)}[Crewhouse task #${task.id} from ${routine ? `the routine “${routine}”, set up by ${this.called(member.id)}` : who}]\n${task.body}${debrief}`;
     const crew = this.bots().filter((b) => b.id !== CHIEF)
@@ -821,6 +821,14 @@ export class Crew {
     const own = [
       tool('crew_report', 'A one-line progress note the person sees.', { text: Type.String() }, (p) => { this.db.event('task.progress', botId, { task: task(), text: clean(p.text, 200) }); }),
       tool('crew_deliver', 'Register a finished file (a path in your folder, usually under files/).', { path: Type.String(), note: Type.Optional(Type.String()) }, (p) => this.deliver(botId, p.path, p.note)),
+      tool('crew_copy', "Put a copy of a file from your folder into the person's own folders. `to` is the full path of the new file.",
+        { from: Type.String(), to: Type.String() }, (p) => {
+          const from = disk.insideBot(this.cfg, botId, String(p.from ?? ''));
+          if (!existsSync(from)) throw new Error(`no file at ${p.from}`);
+          mkdirSync(dirname(String(p.to)), { recursive: true });
+          copyFileSync(from, String(p.to));
+          this.db.event('task.progress', botId, { task: task(), text: `Put a copy of ${basename(from)} in your ${basename(dirname(String(p.to)))} folder` });
+        }),
       tool('crew_remember', 'Save a lasting preference of the person to your notes (one short line). `replaces`: words of an old note this corrects.',
         { text: Type.String(), replaces: Type.Optional(Type.String()) }, (p) => {
           const change = disk.remember(this.cfg, botId, String(p.text ?? ''), String(p.replaces ?? ''));

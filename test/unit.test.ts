@@ -86,6 +86,9 @@ test('policy: own space and the sandboxed shell run silently; the person\'s file
   assert.equal(doc.words, 'Maya wants to change a file in your Documents folder: “probe.txt”.');
   assert.equal(coversOf(doc.key), 'your Documents folder');
   assert.equal((effectOf('ls', { path: join(home, 'Pictures') }, s) as any).words, 'Maya wants to look through your Pictures folder.');
+  assert.equal((effectOf('crew_copy', { from: 'files/card.mp4', to: join(home, 'Documents', 'card.mp4') }, s) as any).words,
+    'Maya wants to put a copy of “card.mp4” in your Documents folder.', 'a copy into the person\'s folders asks like any write there');
+  assert.equal(effectOf('crew_copy', { from: 'files/x', to: join(home, '.pi', 'agent', 'auth.json') }, s).kind, 'refuse');
   assert.equal(effectOf('read', { path: join(home, '.pi', 'agent', 'auth.json') }, s).kind, 'refuse', 'sign-ins are never opened, not even with leave');
   assert.equal(effectOf('read', { path: '/state/people/1/engine/auth.json' }, s).kind, 'refuse');
   const pay = effectOf('people_search', { args: ['call', 'treg.people.phone.find', '--header', 'X-Treg-Route-Max-Cost: 0.05'] }, s) as any;
@@ -141,6 +144,13 @@ test('the gate: an ask holds the call; allowed, it runs; unanswered, the turn pa
   await settled(db, t);
   assert.equal(task(db, t).state, 'done');
   assert.equal(readFileSync(outside, 'utf8'), 'hello');
+  // A copy of its own work into the person's folders asks, then lands.
+  const copy = join(root, 'Documents', 'hello.txt');
+  const c = crew.assign('reel', `copy it ${call('crew_copy', { from: 'notes.md', to: copy })}`, 'chief').task;
+  await until('copy ask', () => openAsk(db));
+  await crew.answer(openAsk(db).id, { answer: 'allow' });
+  await settled(db, c);
+  assert.ok(existsSync(copy));
 
   // Nobody answers within the hold: the turn parks, the task waits on the person, and the answer is the next prompt.
   const p = crew.assign('reel', `again ${call('write', { path: outside, content: 'second' })}`, 'chief').task;
