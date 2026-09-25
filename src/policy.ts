@@ -7,7 +7,8 @@ export type Effect =
   | { kind: 'safe' }
   | { kind: 'refuse'; why: string }
   /** `key` is what "For this task" and "Always" remember; spending has none, so it asks every time. */
-  | { kind: 'files' | 'send' | 'spend' | 'delete'; words: string; key?: string; covers?: string };
+  /** `cost` is the most a spend can cost, in dollars, when the tool says so up front. */
+  | { kind: 'files' | 'send' | 'spend' | 'delete'; words: string; key?: string; covers?: string; cost?: number };
 
 export interface Seen {
   bot: string;
@@ -86,7 +87,7 @@ export function effectOf(tool: string, input: Record<string, any>, s: Seen): Eff
     const starts = (p: string) => args === p || args.startsWith(p + ' ');
     if (cli.spend.some(starts)) {
       const cap = /max-cost:\s*\$?([\d.]+)/i.exec(args)?.[1];
-      return { kind: 'spend', words: `${s.bot} wants to make a paid lookup with ${cli.name}${cap ? `, up to $${cap}` : ''}.` };
+      return { kind: 'spend', words: `${s.bot} wants to make a paid lookup with ${cli.name}${cap ? `, up to $${cap}` : ''}.`, ...(cap ? { cost: Number(cap) } : {}) };
     }
     if (cli.free.some(starts)) return { kind: 'safe' };
     return { kind: 'refuse', why: `That is not something a bot may do with ${cli.name}. Ask the person to do it themselves.` };

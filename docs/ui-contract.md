@@ -22,6 +22,8 @@ The rule behind every field: nothing a person reads may be a command, a file pat
 | `routines[]` `{name, words, next_at, state, kind, quiet, history}` | Routines | `quiet`: a check-in that only speaks up when something needs the person ("Only tell me if something's up"); a history run with `clear` found nothing. `thinks` (an account name) is never read |
 | `resting` `{account: until}` | "Your ChatGPT is resting until 6:40 pm" | Only this member's resting accounts; only the earliest time is shown |
 | `connections` | Apps grid: which apps are on | Array of app ids: `drive`, `calendar`, `gmail` (each its own Google connection), `notion`, `canva` |
+| `share` `{choice, used}` | Settings, "How much of it the crew may use" | `choice` is `light` (default), `normal` or `full`; `used`: today's share is gone, so routines and check-ins wait for tomorrow (things the person asks for still run). Shown as words, never a number. Set with `PUT /api/people/:id {share}` |
+| `money` `{cap, spent}` | Settings, Money (owner only; absent for everyone else) | Dollars this month: the cap (`PUT /api/house/money {cap}`, owner only, default 20) and what yeses to spends with a known price added up to. Past the cap a spend is refused before it asks |
 | `house` `{google}` | Google's apps: connect, or "Ask the owner" | Whether the owner has switched Google on for the house |
 
 ## Asks: the approval moment

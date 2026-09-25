@@ -1,7 +1,7 @@
 // A made-up household in crewd's own shape, plus the fields the engine rework will add (docs/ui-contract.md).
 // Open the app with ?demo (Nadia's phone), ?demo=umer (the owner), ?demo=hello (first run), ?demo=first (her first
 // request, waiting for her sign-in), ?demo=answer (Chief's first answer), ?demo=plan (a plan without helpers),
-// ?demo=resting, ?demo=connect (a helper asks for Google Calendar in chat), ?demo=nogoogle (Google not on for the house).
+// ?demo=resting, ?demo=connect (a helper asks for Google Calendar in chat), ?demo=nogoogle (Google not on for the house), ?demo=share (the crew's share used up today, $4 spent).
 // &sheet=signin or &sheet=connect opens that sheet, and &phase=… pins it to one state.
 import type { Json } from './api.ts';
 import { describe, nextRun, parseSchedule } from '../../src/routines.ts';
@@ -110,6 +110,8 @@ const state = {
     { ...routine(3, 'pip', 'Check the school newsletter', 'every Friday 16:00', 'paused'), quiet: 1 },
   ],
   connections: variant === 'connect' ? [] : ['drive', 'gmail'],
+  share: { choice: 'light', used: variant === 'share' },
+  money: { cap: 20, spent: variant === 'share' ? 4 : 0 },
   house: { google: variant !== 'nogoogle' && !new URLSearchParams(location.search).has('nohouse') },
   desktops: { missing: [] },
 };

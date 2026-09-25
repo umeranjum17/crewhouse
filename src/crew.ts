@@ -27,6 +27,18 @@ export { clock };
 /** At most n characters, cut at a word boundary with an ellipsis: titles on cards and in the digest. */
 export const short = (s: string, n: number) => (s = s.trim(), s.length > n ? `${s.slice(0, n - 1).replace(/\s+\S*$/, '')}…` : s);
 
+/** How much of a member's AI the crew may use in a day: a share of `dayBudget`, as the person picks it in plain words. */
+export const SHARES: Record<string, number> = { light: 0.25, normal: 0.6, full: Infinity };
+/** ponytail: one fixed guess at a day of a ChatGPT plan, weighted like its limits (cached reading is cheap); the vendors
+ *  publish no allowance to read, so tune this, or read the plan's own when one is published. */
+const dayBudget = () => Number(process.env.CREWHOUSE_DAY_TOKENS || 2_000_000);
+const MONEY_CAP = 20; // dollars a month, until the owner changes it
+/** Local calendar day and month: the share resets at midnight here, the money cap on the 1st. */
+const dayOf = (t = Date.now()) => new Date(t).toLocaleDateString('en-CA');
+const monthOf = (t = Date.now()) => dayOf(t).slice(0, 7);
+/** The shortest a routine may repeat: faster checks would use up the person's AI. */
+export const MIN_EVERY = 15;
+
 /** crewd's tick is 1.5 s; a gap this long means the computer was asleep. */
 const SLEPT_MS = 60_000;
 const STUCK_MS = Number(process.env.CREWHOUSE_STUCK_MS || 180_000); // working with no news this long: show "stuck?"
@@ -63,6 +75,12 @@ export const chiefGreeting = () =>
 /** A sign-in that stopped working (a password change, usually), and what happens next. */
 const signedOutWords = (name: string) => `${name} signed you out. That happens after a password change. Sign in again and the crew picks up where it left off.`;
 
+/** No routine faster than every MIN_EVERY minutes: a check each minute would use up the person's AI in an afternoon. */
+function paced(when: ReturnType<typeof parseSchedule>) {
+  if ('every' in when && when.every < MIN_EVERY) throw fail(`A routine runs at most every ${MIN_EVERY} minutes, so your AI stays free for you. Try “every ${MIN_EVERY} minutes”.`);
+  return when;
+}
+
 /** Holds an idle-sleep inhibitor while on: systemd-inhibit on Linux, caffeinate on macOS. Nothing where neither exists. */
 function inhibitor() {
   let child: ChildProcess | undefined;
@@ -81,7 +99,7 @@ function inhibitor() {
 }
 
 /** A bot at work: its task's engine session, on whose account and which AI, and the browser if it has one. */
-interface Live { session: AgentSession; task: number; member: number; brain: disk.Brain; mcp?: Mcp; page?: string; apps?: Record<string, AppTool> }
+interface Live { session: AgentSession; task: number; member: number; brain: disk.Brain; mcp?: Mcp; page?: string; apps?: Record<string, AppTool>; counted: number }
 
 /** The deterministic half: people, bots, tasks, the per-bot queue, asks. Models only ever see prompts. */
 export class Crew {
@@ -259,7 +277,54 @@ export class Crew {
       house: { google: this.connections.houseGoogle() },
       desktops: { ready: desktopMissing().length === 0 },
       routines: this.routines(me.id),
+      /** The viewer's pick for the crew's share of their AI, and whether today's is used up. Never a number. */
+      share: { choice: me.share ?? 'light', used: this.overShare(me.id) },
+      /** Owner only: the house's monthly money cap and what was spent this month, in dollars. */
+      ...(me.id === OWNER ? { money: { cap: this.moneyCap(), spent: this.spentThisMonth() } } : {}),
     };
+  }
+
+  // ---- the crew's share of each member's AI, and the house's money cap ----
+  /** Add up what a live session's finished turns used, once each, into its member's day. */
+  private count(l: Live) {
+    const msgs = l.session.messages as any[];
+    let n = 0;
+    for (const m of msgs.slice(l.counted)) if (m.role === 'assistant' && m.usage) n += m.usage.input + m.usage.output + m.usage.cacheWrite + m.usage.cacheRead / 10;
+    l.counted = msgs.length;
+    if (n) this.db.run('INSERT INTO usage (member, day, tokens) VALUES (?, ?, ?) ON CONFLICT(member, day) DO UPDATE SET tokens = tokens + excluded.tokens', l.member, dayOf(), Math.round(n));
+  }
+
+  /** The member's routines and check-ins have had their share of today. Things they ask for directly never wait on it. */
+  overShare(member: number) {
+    const used = this.db.get('SELECT tokens FROM usage WHERE member = ? AND day = ?', member, dayOf())?.tokens ?? 0;
+    return used >= dayBudget() * (SHARES[this.member(member).share ?? 'light'] ?? SHARES.light);
+  }
+
+  /** A routine run over the share waits for tomorrow; Chief says so once a day. */
+  private waitForTomorrow(task: Row) {
+    const now = new Date();
+    const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime();
+    const member = task.member ?? OWNER;
+    this.db.tx(() => {
+      this.db.run('UPDATE tasks SET wake_at = ? WHERE id = ?', midnight, task.id);
+      this.setTask(task, 'paused', 'Waiting for tomorrow: the crew has had its share of your AI today.');
+      if (this.db.get("SELECT 1 FROM events WHERE kind = 'share.reached' AND json_extract(data, '$.member') = ? AND json_extract(data, '$.day') = ?", member, dayOf())) return;
+      this.db.event('share.reached', null, { member, day: dayOf() });
+      this.say(CHIEF, 'bot', `I've stopped the routines and check-ins for today, ${this.called(member)}, so your ${PROVIDERS.chatgpt.name} stays free for you. ` +
+        'They start again tomorrow morning. Anything you ask for yourself still goes ahead.', null, member);
+    });
+  }
+
+  moneyCap() { return Number(this.db.get("SELECT value FROM settings WHERE key = 'money.cap'")?.value ?? MONEY_CAP); }
+  spentThisMonth() {
+    return this.db.get("SELECT COALESCE(SUM(json_extract(data, '$.amount')), 0) AS n FROM events WHERE kind = 'money.spent' AND json_extract(data, '$.month') = ?", monthOf())!.n as number;
+  }
+  /** Owner only (the server checks): the most the crew may spend in a month, however many times the person says yes. */
+  setMoneyCap(cap: unknown) {
+    const n = Number(cap);
+    if (!Number.isFinite(n) || n < 0 || n > 10_000) throw fail('a monthly limit is between $0 and $10,000');
+    this.db.run("INSERT INTO settings (key, value) VALUES ('money.cap', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", String(Math.round(n)));
+    this.db.event('money.cap', null, { cap: Math.round(n) });
   }
 
   // ---- routines: time-based, deterministic, no model call to decide when ----
@@ -295,7 +360,7 @@ export class Crew {
     if (!bot || bot.id === CHIEF) throw Object.assign(new Error(`no bot called ${b.bot}; a routine hands a task to one of the crew`), { status: 404 });
     const body = String(b.task ?? '').trim();
     if (!body) throw Object.assign(new Error('say what the routine should do'), { status: 400 });
-    const when = parseSchedule(String(b.schedule ?? ''));
+    const when = paced(parseSchedule(String(b.schedule ?? '')));
     const brain = b.model ? disk.brainKey(disk.parseBrain(b.model)) : null;
     // Unnamed routines take the task's first sentence: "Make a demo of this week's screenshots".
     const first = body.split(/\n|(?<=[.!?])\s/)[0].replace(/[.!?]$/, '');
@@ -321,7 +386,7 @@ export class Crew {
     const state = b.state ?? r.state;
     if (!['on', 'paused'].includes(state)) throw Object.assign(new Error('a routine is on or paused'), { status: 400 });
     const schedule = b.schedule?.trim() || r.schedule;
-    const next = nextRun(parseSchedule(schedule), Date.now());
+    const next = nextRun(paced(parseSchedule(schedule)), Date.now());
     this.db.tx(() => {
       this.db.run('UPDATE routines SET state = ?, schedule = ?, next_at = ? WHERE id = ?', state, schedule, next, id);
       this.db.event(state !== r.state ? `routine.${state === 'on' ? 'resumed' : 'paused'}` : 'routine.changed', r.bot, { routine: id, name: r.name, words: describe(parseSchedule(schedule)) });
@@ -458,7 +523,7 @@ export class Crew {
   }
 
   /** Name, how Chief addresses them, and quiet hours ("22:00-07:00", or null for none). */
-  updateMember(id: number, body: { name?: unknown; address?: unknown; quiet?: unknown }) {
+  updateMember(id: number, body: { name?: unknown; address?: unknown; quiet?: unknown; share?: unknown }) {
     this.member(id);
     if (body.name !== undefined) {
       const n = clean(body.name, 32);
@@ -470,6 +535,10 @@ export class Crew {
         throw Object.assign(new Error('quiet hours look like 22:00-07:00'), { status: 400 });
       }
       this.db.run('UPDATE people SET quiet = ? WHERE id = ?', body.quiet, id);
+    }
+    if (body.share !== undefined) {
+      if (!(typeof body.share === 'string' && body.share in SHARES)) throw fail('the crew\'s share is light, normal or full');
+      this.db.run('UPDATE people SET share = ? WHERE id = ?', body.share, id);
     }
     if (body.address !== undefined) this.setAddress(String(body.address), id);
     this.db.event('person.updated', null, { member: id });
@@ -630,6 +699,7 @@ export class Crew {
       const choices = this.choices(task);
       const brain = await this.usable(member, choices);
       if (!brain) return this.pause(task, choices);
+      if (task.origin === 'routine' && this.overShare(member)) return this.waitForTomorrow(task);
       this.setTask(task, 'working');
       const handoff = this.handoffs.get(task.id);
       this.handoffs.delete(task.id);
@@ -661,7 +731,7 @@ export class Crew {
     const g = resolveGrants(this.cfg, conf.tools ?? [], { 'bot.dir': space, 'bot.id': bot.id });
     const tools: ToolDefinition[] = [...this.crewTools(bot.id)];
     const builtins = g.tools.includes('files') ? ['read', 'write', 'edit', 'ls', 'grep', 'find'] : [];
-    const l = { task: task.id, member, brain } as Live;
+    const l = { task: task.id, member, brain, counted: 0 } as Live;
     if (g.tools.includes('files') && sandboxReady()) tools.push(sandboxBash(space, [this.cfg.toolsDir], { ...g.env, PATH: toolBin(this.cfg) }) as ToolDefinition);
     if (g.tools.includes('web')) tools.push(...webTools());
     for (const t of registry(this.cfg).filter((t) => t.run && g.tools.includes(t.id))) {
@@ -686,6 +756,7 @@ export class Crew {
       space, file, sessionsDir: join(this.cfg.stateDir, 'sessions', bot.id), system: disk.systemPrompt(this.cfg, bot.id, bot.id === CHIEF),
       skills: join(space, 'skills'), builtins, tools, gate: (tool, input) => this.gate(bot.id, tool, input), retry: this.cfg.engine === 'pi',
     });
+    l.counted = l.session.messages.length; // a resumed session's earlier turns were counted when they ran
     this.live.set(bot.id, l);
     this.db.run('UPDATE tasks SET session = ? WHERE id = ?', l.session.sessionFile ?? null, task.id);
     return l;
@@ -707,6 +778,7 @@ export class Crew {
   }
 
   private settled(botId: string, l: Live, err?: unknown) {
+    this.count(l);
     if (this.live.get(botId) !== l || l.session.isStreaming) return; // replaced, reset, or more work queued behind this turn
     const last: any = [...l.session.messages].reverse().find((m: any) => m.role === 'assistant');
     if (last?.stopReason === 'aborted') return; // stopped on purpose: Take over or Stop
@@ -857,6 +929,10 @@ export class Crew {
     if (words) this.db.event('run.tool', botId, { task: task?.id, words });
     if (e.kind === 'safe') return undefined;
     if (e.kind === 'refuse') return { block: true, reason: e.why };
+    if (e.kind === 'spend' && e.cost !== undefined && this.spentThisMonth() + e.cost > this.moneyCap()) {
+      this.db.event('money.refused', botId, { task: task?.id, cost: e.cost });
+      return { block: true, reason: `That would take this month's spending past the $${this.moneyCap()} the household set. Tell the person, in one line; the owner can raise the limit in Settings.` };
+    }
     if (this.granted.delete(`${botId}\n${e.words}`)) return undefined; // answered "allow" after the turn had parked
     const standing = e.key && [...(task && this.taskGrants.get(task.id) || []), ...(disk.botConfig(this.cfg, botId).allow ?? [])].includes(e.key);
     if (standing) {
@@ -872,7 +948,7 @@ export class Crew {
   private async ask(botId: string, task: Row | undefined, e: Extract<Effect, { words: string }>): Promise<string | null> {
     // The same call asked again (the bot resumed after a restart) takes over the card already shown.
     const same = this.db.all("SELECT id FROM asks WHERE bot = ? AND kind = 'permission' AND state = 'open' AND title = ?", botId, e.words).find((a) => !this.holds.has(a.id));
-    const askId = same ? same.id : this.openAsk(botId, task, e.words, { effect: e.kind, key: e.key });
+    const askId = same ? same.id : this.openAsk(botId, task, e.words, { effect: e.kind, key: e.key, ...(e.cost !== undefined ? { cost: e.cost } : {}) });
     if (same && task) this.setTask(task, 'needs_you');
     // In their quiet hours nobody will answer soon: park at once instead of holding the bot.
     const quiet = quietNow(this.member(task?.member ?? this.bot(botId)?.member ?? OWNER).quiet);
@@ -912,6 +988,8 @@ export class Crew {
     this.db.tx(() => {
       this.db.run("UPDATE asks SET state = 'answered', answer = ?, answered_at = ? WHERE id = ?", shown, Date.now(), askId);
       this.db.event('ask.answered', ask.bot, { ask: askId, task: ask.task_id, answer: shown });
+      // Counted when the person says yes, at its most: the cap holds even if the tool spent less.
+      if (body.answer === 'allow' && detail.effect === 'spend' && detail.cost) this.db.event('money.spent', ask.bot, { amount: detail.cost, month: monthOf(), ask: askId });
       if (scope === 'task') this.taskGrants.set(ask.task_id, [...(this.taskGrants.get(ask.task_id) ?? []), detail.key]);
       if (scope === 'always') {
         disk.setSettings(this.cfg, ask.bot, { allow: [...(disk.botConfig(this.cfg, ask.bot).allow ?? []), detail.key] });

@@ -87,6 +87,26 @@ export function helper(b: Json): Helper {
 }
 
 /** When the crew is resting because an account ran out, in one sentence: "Your ChatGPT is resting until 6:40 pm". */
+/** The crew's share of the viewer's ChatGPT, as three choices and one sentence about today. Never a number. */
+export const SHARES = [
+  { key: 'light', label: 'Light', says: 'Leave most of my ChatGPT for me' },
+  { key: 'normal', label: 'Normal', says: 'Share it evenly' },
+  { key: 'full', label: 'As much as it needs', says: 'Use what the work takes' },
+];
+export function share(state: Json) {
+  const s = state.share ?? { choice: 'light', used: false };
+  return { choice: s.choice as string, today: s.used ? 'The crew has had its share for today. Routines and check-ins start again tomorrow morning; anything you ask for still goes ahead.'
+    : s.choice === 'full' ? 'When ChatGPT needs a rest, the crew waits and says so.' : 'Plenty left for you today.' };
+}
+
+/** The house's monthly money cap, owner only: "This month: nothing spent yet" or "$4 of $20 spent". */
+export function money(state: Json) {
+  if (!state.money) return null;
+  const { cap, spent } = state.money as { cap: number; spent: number };
+  const $ = (n: number) => `$${Number.isInteger(n) ? n : n.toFixed(2)}`;
+  return { cap, month: spent ? `This month: ${$(spent)} of ${$(cap)} spent.` : 'This month: nothing spent yet.' };
+}
+
 export function resting(state: Json) {
   const r = Object.entries(state.resting ?? {}).filter(([, t]) => t) as [string, number][];
   if (!r.length) return '';

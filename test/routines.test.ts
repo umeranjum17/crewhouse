@@ -204,3 +204,78 @@ test('sleep: missed routines are named once in each member\'s Chief thread, and 
   assert.deepEqual(awake, [true, false], 'one hold, one release');
   done();
 });
+
+test('the crew\'s share: routines wait for tomorrow once it is used up, what the person asks for still runs, and nothing faster than 15 minutes', async () => {
+  const { db, crew, done } = setup();
+  assert.throws(() => crew.addRoutine({ bot: 'reel', schedule: 'every 5 minutes', task: 'check' }, 'person'), /at most every 15 minutes/);
+  const r = crew.addRoutine({ bot: 'reel', schedule: 'every 15 minutes', task: 'check the prices', name: 'Deal check' }, 'person');
+  assert.throws(() => crew.updateRoutine(r.id, { schedule: 'every minute' }), /at most every 15 minutes/);
+  const before = process.env.CREWHOUSE_DAY_TOKENS;
+  process.env.CREWHOUSE_DAY_TOKENS = '1'; // any turn at all uses up a Light share
+  try {
+    assert.deepEqual(crew.snapshot().share, { choice: 'light', used: false });
+    const { task: asked } = (crew as any).addTask('reel', 'make the card', 'person', undefined, 1);
+    await settled(db, asked);
+    assert.equal(state(db, asked), 'done');
+    assert.ok(db.get('SELECT tokens FROM usage WHERE member = 1')!.tokens > 0, 'the turn was counted');
+    assert.deepEqual(crew.snapshot().share, { choice: 'light', used: true });
+
+    // The routine's run waits for local midnight, and Chief says so once.
+    crew.runRoutine(r.id);
+    const t = db.get('SELECT * FROM tasks WHERE routine = ? ORDER BY id DESC', r.id)!;
+    await until('waiting for tomorrow', () => state(db, t.id) === 'paused');
+    const wake = db.get('SELECT wake_at FROM tasks WHERE id = ?', t.id)!.wake_at;
+    assert.equal(new Date(wake).getHours(), 0);
+    assert.ok(wake > Date.now() && wake - Date.now() <= 86_400_000);
+    const chief = () => db.all("SELECT text FROM messages WHERE bot = 'chief' AND text LIKE 'I''ve stopped the routines%'");
+    assert.equal(chief().length, 1);
+    crew.runRoutine(r.id); // still waiting: skipped, not stacked, and no second word from Chief
+    assert.equal(chief().length, 1);
+
+    // What the person asks for goes ahead anyway.
+    const { task: again } = (crew as any).addTask('reel', 'one more card', 'person', undefined, 1);
+    await settled(db, again);
+    assert.equal(state(db, again), 'done');
+
+    // "As much as it needs" lifts it; a made-up choice is refused.
+    assert.throws(() => crew.updateMember(1, { share: 'lots' }), /light, normal or full/);
+    crew.updateMember(1, { share: 'full' });
+    assert.deepEqual(crew.snapshot().share, { choice: 'full', used: false });
+  } finally {
+    if (before === undefined) delete process.env.CREWHOUSE_DAY_TOKENS; else process.env.CREWHOUSE_DAY_TOKENS = before;
+  }
+  done();
+});
+
+test('money cap: each spend still asks, and past the month\'s cap the crew cannot spend at all', async () => {
+  const { db, crew, done } = setup();
+  crew.recruit('tracer', 'Tracer', 'person');
+  const gate = (cost: number) => (crew as any).gate('tracer', 'people_search', { args: ['call', 'treg.people.phone.find', '--header', `X-Treg-Route-Max-Cost: ${cost}`] });
+  assert.deepEqual(crew.snapshot().money, { cap: 20, spent: 0 });
+  assert.equal(crew.snapshot(2 as any).money?.cap, 20, 'an unknown viewer is shown as the owner');
+  crew.addMember('Sara');
+  assert.equal(crew.snapshot(2).money, undefined, 'only the owner sees the money');
+
+  const first = gate(15);
+  await until('asked', () => db.get("SELECT id FROM asks WHERE bot = 'tracer' AND state = 'open'"));
+  const ask = db.get("SELECT * FROM asks WHERE bot = 'tracer' AND state = 'open'")!;
+  assert.equal(JSON.parse(ask.detail).cost, 15);
+  await crew.answer(ask.id, { answer: 'allow' });
+  assert.equal(await first, undefined, 'the yes lets it through');
+  assert.deepEqual(crew.snapshot().money, { cap: 20, spent: 15 });
+
+  // $15 + $10 would pass $20: refused at once, no card.
+  const refused = await gate(10);
+  assert.equal(refused.block, true);
+  assert.match(refused.reason, /past the \$20 the household set/);
+  assert.equal(db.get("SELECT COUNT(*) AS n FROM asks WHERE bot = 'tracer'")!.n, 1);
+
+  assert.throws(() => crew.setMoneyCap(-1), /between/);
+  crew.setMoneyCap(40);
+  const later = gate(10);
+  await until('asked again', () => db.get("SELECT id FROM asks WHERE bot = 'tracer' AND state = 'open'"));
+  await crew.answer(db.get("SELECT id FROM asks WHERE bot = 'tracer' AND state = 'open'")!.id, { answer: 'deny' });
+  assert.equal((await later).block, true);
+  assert.equal(crew.snapshot().money!.spent, 15, 'a no spends nothing');
+  done();
+});

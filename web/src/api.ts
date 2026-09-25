@@ -51,7 +51,7 @@ export const api = {
   giveBack: (id: string, note: string) => call('POST', `/api/bots/${id}/giveback`, { note }),
   people: () => call('GET', '/api/people'),
   addPerson: (name: string) => call('POST', '/api/people', { name }),
-  person: (id: number, body: { name?: string; address?: string; quiet?: string | null }) => call('PUT', `/api/people/${id}`, body),
+  person: (id: number, body: { name?: string; address?: string; quiet?: string | null; share?: string }) => call('PUT', `/api/people/${id}`, body),
   accounts: () => call('GET', '/api/accounts'),
   /** "Sign in with ChatGPT": its own page, which comes straight back to the home computer. `via: 'code'` is the fallback;
    *  `fresh` asks ChatGPT's page which account again ("Use my personal account"). */
@@ -61,6 +61,8 @@ export const api = {
   retryAccount: (member: number, account: string) => call('POST', `/api/accounts/${member}/${account}/retry`),
   /** The owner switches Google on for the house: the household Google app's client ID and secret (docs/google-setup.md). */
   houseGoogle: (id: string, secret: string) => call('PUT', '/api/house/google', { id, secret }),
+  /** Owner only: the most helpers may spend in a month, in dollars. */
+  moneyCap: (cap: number) => call('PUT', '/api/house/money', { cap }),
   signInCancel: (member: number, account: string) => call('POST', `/api/accounts/${member}/${account}/cancel`),
   signOut: (member: number, account: string) => call('POST', `/api/accounts/${member}/${account}/logout`),
   schedule: (text: string) => call('GET', `/api/schedule?text=${encodeURIComponent(text)}`),
