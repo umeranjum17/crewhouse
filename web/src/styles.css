@@ -339,8 +339,10 @@ input[role='switch']:checked::after { left: 21px; }
   .frame .step .ascii::before { content: '●'; font-family: var(--art); font-size: 10px; color: var(--ok-ink); }
   .frame .step.asked .ascii::before { color: var(--wait); }
   .frame .step.now .ascii::before { content: '○'; }
-  .home { background-image: radial-gradient(#d9d0ea 1.6px, transparent 2.1px); background-size: 24px 24px; }
-  [data-theme='night'] .home { background-image: radial-gradient(#241e35 1.6px, transparent 2.1px); }
+  /* the dots and the dock's backdrop are the page's own wash, pinned to the viewport, so the dock shows no band */
+  .home { --weave: radial-gradient(#d9d0ea 1.6px, transparent 2.1px) 0 0 / 24px 24px; background: var(--weave); background-attachment: fixed; }
+  [data-theme='night'] .home { --weave: radial-gradient(#241e35 1.6px, transparent 2.1px) 0 0 / 24px 24px; }
+  .home .dock { background: var(--weave), var(--wash); background-attachment: fixed; backdrop-filter: none; }
 
   /* a chat is its own column: the header and dock stay put, the thread scrolls, no phone boxes */
   .page.chat-page { max-width: none; height: 100dvh; display: flex; flex-direction: column; padding-bottom: 0; }
