@@ -9,8 +9,29 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const sha = (s) => createHash('sha256').update(s).digest('hex');
-// A citation is path:LINE@sha or a range path:START-END@sha, bare or in backticks/fences.
-const CITE = /([\w./-]+\.[\w]+):(\d+)(?:-(\d+))?@([0-9a-f]{7,40})/g;
+// A citation is path:LINE@sha or a range path:START-END@sha, bare or in backticks/fences. The path may carry
+// route segments like (app) or [id], so after the first word/slash character (so a citation wrapped in
+// parentheses does not swallow the opening paren) the class also allows ()[].
+const CITE = /([\w./][\w./()[\]-]*\.[\w]+):(\d+)(?:-(\d+))?@([0-9a-f]{7,40})/g;
+
+// Every citation in text, checked against the files at their commits in one of the clones: the whole range
+// must sit inside the file. Exported so the backtest kits import this logic instead of keeping a drifting copy.
+export function citeBad(text, clones) {
+  const lines = (sha1, path) => {
+    for (const c of clones) try {
+      const body = execFileSync('git', ['-C', c, 'show', `${sha1}:${path}`], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 64 << 20 });
+      const l = body.split('\n');
+      if (l.at(-1) === '') l.pop(); // a trailing newline ends the last line, it doesn't start a new one
+      return l.length;
+    } catch { /* not in this clone */ }
+    return 0;
+  };
+  const cites = [...text.matchAll(CITE)];
+  return { cites, bad: cites.filter(([, path, s, e, c]) => {
+    const [a, b] = [Number(s), Number(e ?? s)];
+    return a < 1 || b < a || lines(c, path) < b; // the whole range must sit inside the file at that commit
+  }) };
+}
 
 /** Every tool call in a session file, with its result's first line and whether it errored. */
 export function calls(file) {
@@ -21,6 +42,27 @@ export function calls(file) {
     if (m?.role === 'toolResult' && out.has(m.toolCallId)) Object.assign(out.get(m.toolCallId), { error: m.isError, head: (m.content?.[0]?.text ?? '').split('\n')[0] });
   }
   return [...out.values()];
+}
+
+// Blindness asks where a call went, not what it wrote: content being written never counts (write and edit); bash counts
+// by its command with heredoc bodies stripped; every other tool by its whole arguments, so a search, a browser goto
+// or a tool added later is still checked. # ponytail: the heredoc strip is line-based skimming, not a shell parser
+// — a terminator with trailing text or a nested heredoc would need a real parse. Exported for the backtest kits.
+export function reaches(c) {
+  const a = c.args ?? {};
+  if (c.name === 'write' || c.name === 'edit') return [];
+  if (c.name === 'web_fetch') return [String(a.url ?? '')];
+  if (/^(read|ls|grep|find)$/.test(c.name)) return [String(a.path ?? '')];
+  if (c.name !== 'bash') return [JSON.stringify(a)];
+  const kept = [];
+  let body = null;
+  for (const l of String(a.command ?? '').split('\n')) {
+    if (body !== null) { if (l.trim() === body) body = null; continue; } // inside a heredoc: text being written
+    kept.push(l);
+    const m = /<<-?\s*(['"]?)(\w+)\1/.exec(l);
+    if (m) body = m[2];
+  }
+  return [kept.join('\n')];
 }
 
 export function validate({ db, crewDir }, id, forbid = []) {
@@ -45,21 +87,9 @@ export function validate({ db, crewDir }, id, forbid = []) {
 
   // 2. Citations: each path:line@commit exists at that commit, in one of its clones.
   const clones = existsSync(join(bot, 'work')) ? readdirSync(join(bot, 'work')).map((d) => join(bot, 'work', d)).filter((d) => existsSync(join(d, '.git'))) : [];
-  const lines = (sha1, path) => {
-    for (const c of clones) try {
-      const text = execFileSync('git', ['-C', c, 'show', `${sha1}:${path}`], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 64 << 20 });
-      const l = text.split('\n');
-      if (l.at(-1) === '') l.pop(); // a trailing newline ends the last line, it doesn't start a new one
-      return l.length;
-    } catch { /* not in this clone */ }
-    return 0;
-  };
   for (const p of delivered.filter((p) => /(triage|reply)\.md$/.test(p))) {
     const text = existsSync(join(bot, p)) ? readFileSync(join(bot, p), 'utf8') : '';
-    const cites = [...text.matchAll(CITE)], bad = cites.filter(([, path, s, e, c]) => {
-      const [a, b] = [Number(s), Number(e ?? s)];
-      return a < 1 || b < a || lines(c, path) < b; // the whole range must sit inside the file at that commit
-    });
+    const { cites, bad } = citeBad(text, clones);
     row(!cites.length || bad.length ? 'FAIL' : 'PASS', `citations in ${p}`,
       !cites.length ? 'none: no claim can be checked' : `${cites.length - bad.length} of ${cites.length} found` + (bad.length ? `; not there: ${bad.map((b) => b[0]).join(', ')}` : ''));
   }
@@ -79,26 +109,7 @@ export function validate({ db, crewDir }, id, forbid = []) {
   for (const p of patches) row(existsSync(join(bot, p)) && ok.has(sha(readFileSync(join(bot, p), 'utf8'))) ? 'PASS' : 'FAIL', `fix ${p}`, 'failed before, passed after, seen by crewd');
   if (!patches.length) row('PASS', 'fix', 'none offered (nothing claimed)');
 
-  // 5. Blind: nothing it called reached the answer. Content being written never counts (write and edit); bash counts
-  // by its command with heredoc bodies stripped; every other tool by its whole arguments, so a search, a browser goto
-  // or a tool added later is still checked. # ponytail: the heredoc strip is line-based skimming, not a shell parser
-  // — a terminator with trailing text or a nested heredoc would need a real parse.
-  const reaches = (c) => {
-    const a = c.args ?? {};
-    if (c.name === 'write' || c.name === 'edit') return [];
-    if (c.name === 'web_fetch') return [String(a.url ?? '')];
-    if (/^(read|ls|grep|find)$/.test(c.name)) return [String(a.path ?? '')];
-    if (c.name !== 'bash') return [JSON.stringify(a)];
-    const kept = [];
-    let body = null;
-    for (const l of String(a.command ?? '').split('\n')) {
-      if (body !== null) { if (l.trim() === body) body = null; continue; } // inside a heredoc: text being written
-      kept.push(l);
-      const m = /<<-?\s*(['"]?)(\w+)\1/.exec(l);
-      if (m) body = m[2];
-    }
-    return [kept.join('\n')];
-  };
+  // 5. Blind: nothing it called reached the answer.
   if (forbid.length) {
     const hit = all.filter((c) => reaches(c).some((s) => forbid.some((f) => s.includes(f))));
     row(hit.length ? 'FAIL' : 'PASS', 'blind', hit.length ? `contaminated: ${hit.map((c) => `${c.name} ${JSON.stringify(c.args).slice(0, 120)}`).join('; ')}` : `none of ${forbid.length} answer address(es) was reached`);
