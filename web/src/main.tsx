@@ -179,46 +179,77 @@ function Chats({ state, refresh }: { state: Json; refresh: () => void }) {
 
 function Home({ state, me, refresh, tick, accounts, offline, night }: Ctx) {
   const listen = useListen();
+  const ctx: Ctx = { state, me, tick, refresh, night, offline, accounts };
   const crew = A.crew(state);
   const cards = A.cards(state).filter((c) => c.kind !== 'connect');
+  const works = A.work(state).filter((w) => !w.waiting);
+  const day = new Date(); day.setHours(0, 0, 0, 0);
+  const todays = A.things(state).filter((t) => t.at >= day.getTime());
   const g = A.account(accounts, me);
   const toChief = async (t: string) => { const ok = await attempt(() => api.post('chief', t), undefined, true); if (ok) { refresh(); go('#/chief'); } return ok; };
+  const card = (c: A.Card) => <AskCard key={c.id} c={c} who={crew.find((h) => h.id === c.helper)} onDone={refresh} />;
   return (
     <div className="home">
-      <div className="home-top"><Heartbeat state={state} local={chiefLocal({ state, me, tick, refresh, night, offline, accounts }, listen)} /></div>
-      <h1 className="hi">{A.greeting()}, {state.person.address ?? state.person.name}</h1>
-      {(g.state === 'signed-out' || g.notIncluded) && <AccountCard me={me} owner={ownerName(state)} isOwner={me === A.OWNER} g={g} onReady={refresh} />}
-      {A.resting(state) && <div className="card nudge"><span className="grow">{A.resting(state)}. I'll pick things back up then.</span></div>}
-      {A.gettingReady(state) && <div className="card nudge"><span className="grow">{A.gettingReady(state)}</span></div>}
-      {A.update(state) && <div className="card nudge"><span className="grow">{A.update(state)!.words}</span><a className="btn go" href={A.update(state)!.url} target="_blank" rel="noreferrer">Download</a></div>}
-      {cards.map((c) => <AskCard key={c.id} c={c} who={crew.find((h) => h.id === c.helper)} onDone={refresh} />)}
-      <Chats state={state} refresh={refresh} />
-      <div className="dock">
-        <div className="chips">
-          {A.ideas(state).map((i: Json) => (
-            <button key={i.bot + i.label} className="chip" onClick={() => { keepDraft(i.bot, i.ask); go(hrefOf(i.bot)); }}>✦ {i.label}</button>
-          ))}
+      <div className="home-top"><Heartbeat state={state} local={chiefLocal(ctx, listen)} /></div>
+      <div className="desk-col">
+        <h1 className="hi">{A.greeting()}, {state.person.address ?? state.person.name}</h1>
+        {(g.state === 'signed-out' || g.notIncluded) && <AccountCard me={me} owner={ownerName(state)} isOwner={me === A.OWNER} g={g} onReady={refresh} />}
+        {A.resting(state) && <div className="card nudge"><span className="grow">{A.resting(state)}. I'll pick things back up then.</span></div>}
+        {A.gettingReady(state) && <div className="card nudge"><span className="grow">{A.gettingReady(state)}</span></div>}
+        {A.update(state) && <div className="card nudge"><span className="grow">{A.update(state)!.words}</span><a className="btn go" href={A.update(state)!.url} target="_blank" rel="noreferrer">Download</a></div>}
+        <div className="phone-only">
+          {cards.map(card)}
+          <Chats state={state} refresh={refresh} />
         </div>
-        <Composer placeholder="Ask Chief anything…" onSend={toChief} {...typeInto('chief')} />
+        <div className="desk">
+          <section className="frame needs">
+            <div className="label ascii">Needs you</div>
+            {cards.length ? <div className="cards">{cards.map(card)}</div> : <div className="frame-empty">All clear. Nothing needs you.</div>}
+          </section>
+          <div className="desk-side">
+            <section className="frame working">
+              <div className="label ascii">Working now</div>
+              {works.length ? works.map((w) => {
+                const h = crew.find((x) => x.id === w.helper);
+                return (
+                  <a key={w.helper} className="frame-row" href={hrefOf(w.helper)}>
+                    {h && <Face who={h} size={40} ring={h.ring} />}
+                    <span className="grow"><b>{w.title}</b><div className="mute small clamp1">{w.line}</div></span>
+                    <span className="ascii mark-ok" aria-label="working">●</span>
+                  </a>
+                );
+              }) : <div className="frame-empty">Nothing right now.</div>}
+            </section>
+            <section className="frame done">
+              <div className="label ascii">Done today</div>
+              {todays.length ? todays.map((t) => {
+                const h = crew.find((x) => x.id === t.helper);
+                return (
+                  <div key={t.id} className="frame-row">
+                    {h && <Face who={h} size={26} />}
+                    <span className="grow"><b>{t.title}</b><div className="mute small clamp1">{t.summary}</div></span>
+                    {t.files[0] ? <a className="btn" href={t.files[0].url} target="_blank" rel="noreferrer">Open</a> : <a className="btn" href={hrefOf(t.helper)}>Open</a>}
+                  </div>
+                );
+              }) : <div className="frame-empty">Nothing yet today.</div>}
+            </section>
+          </div>
+        </div>
+      </div>
+      <div className="dock">
+        <div className="desk-col">
+          <div className="chips">
+            {A.ideas(state).map((i: Json) => (
+              <button key={i.bot + i.label} className="chip" onClick={() => { keepDraft(i.bot, i.ask); go(hrefOf(i.bot)); }}>✦ {i.label}</button>
+            ))}
+          </div>
+          <Composer placeholder="Ask Chief anything…" onSend={toChief} {...typeInto('chief')} />
+        </div>
       </div>
     </div>
   );
 }
 const ownerName = (state: Json) => state.members.find((m: Json) => m.id === A.OWNER)?.name ?? 'the owner';
-
-/** Desktop only: Chief and today's steps across the crew, down the right side. */
-function Rail({ state }: { state: Json }) {
-  const names = new Map(A.crew(state).map((h) => [h.id, h.name]));
-  const today = A.steps(state.events.filter((e: Json) => names.has(e.bot) && Date.now() - e.at < 86_400_000 && e.kind !== 'run.tool'))
-    .map((s) => ({ ...s, text: `${names.get(state.events.find((e: Json) => e.seq === s.seq)?.bot)}: ${s.text}` }));
-  return (
-    <aside className="rail">
-      <Heartbeat state={state} big />
-      <div className="label">Today</div>
-      {today.length ? <Steps steps={today} max={9} /> : <div className="mute small">Nothing yet today.</div>}
-    </aside>
-  );
-}
 
 // ---------- a chat ----------
 function Chat({ id, state, me, tick, refresh, accounts }: Ctx & { id: string }) {
@@ -228,7 +259,13 @@ function Chat({ id, state, me, tick, refresh, accounts }: Ctx & { id: string }) 
   useEffect(() => { void load(); }, [load, tick]);
   const end = useRef<HTMLDivElement>(null);
   const lines = A.lines(page, id);
-  useEffect(() => { end.current?.scrollIntoView({ block: 'end' }); }, [lines.length]);
+  const box = useRef<HTMLDivElement>(null);
+  // The thread scrolls by its own column on a desk (a scrollIntoView here once dragged the whole page up with it,
+  // leaving a dead band on top); the phone keeps the document scroll.
+  useEffect(() => {
+    if (matchMedia('(min-width: 900px)').matches) { const el = box.current; if (el) el.scrollTop = el.scrollHeight; }
+    else end.current?.scrollIntoView({ block: 'end' });
+  }, [lines.length]);
   const crew = A.crew(state);
   const h = crew.find((x) => x.id === id);
   const b = state.bots.find((x: Json) => x.id === id);
@@ -242,8 +279,8 @@ function Chat({ id, state, me, tick, refresh, accounts }: Ctx & { id: string }) 
   const send = async (t: string) => { const ok = await attempt(() => api.post(id, t), undefined, true); if (ok) { void load(); refresh(); } return ok; };
   const name = h?.name ?? 'Chief';
   return (
-    <div className="chat">
-      <div className="lines">
+    <div className={`chat${live && h ? ' with-live' : ''}`}>
+      <div className="lines" ref={box}>
         {!lines.length && page && <div className="mute center empty">Say hello to {name}. Ask for anything, in your own words.</div>}
         {lines.map((l) => (
           <div key={l.id} className={`line ${l.from}${l.unsure ? ' unsure' : ''}`}>
@@ -253,13 +290,23 @@ function Chat({ id, state, me, tick, refresh, accounts }: Ctx & { id: string }) 
           </div>
         ))}
         {last?.choices.length ? <div className="chips">{last.choices.map((c) => <button key={c} className="chip" onClick={() => send(c)}>{c}</button>)}</div> : null}
-        {trail.length > 0 && <Steps steps={trail} />}
+        <div className="thread-side">
+          {trail.length > 0 && <Steps steps={trail} />}
+          {cards.map((c) => c.kind === 'connect' ? <ConnectCard key={c.id} c={c} helper={h?.name} state={state} onDone={refresh} /> : <AskCard key={c.id} c={c} who={h} onDone={refresh} />)}
+        </div>
         {h && <Stuck h={h} refresh={refresh} />}
-        {cards.map((c) => c.kind === 'connect' ? <ConnectCard key={c.id} c={c} helper={h?.name} state={state} onDone={refresh} /> : <AskCard key={c.id} c={c} who={h} onDone={refresh} />)}
         {(g.state === 'signed-out' || g.notIncluded) && <AccountCard me={me} owner={ownerName(state)} isOwner={me === A.OWNER} g={g} inChat onReady={() => { void load(); refresh(); }} />}
         {g.state === 'ready' && !g.notIncluded && A.resting(state) && <div className="card nudge"><span className="grow">{A.resting(state)}. {name === 'Chief' ? "I'll" : `${name} will`} finish then.</span></div>}
         <div ref={end} className="end" />
       </div>
+      <aside className="working-on">
+        {live && h && <section className="frame working-on-frame">
+          <div className="label ascii">Working on</div>
+          <div className="frame-row head"><Face who={h} size={32} ring={h.ring} /><span className="grow"><b>{h.name}</b><div className="mute small clamp1">{A.plain(live.title)}</div></span></div>
+          {trail.length > 0 && <Steps steps={trail} max={7} />}
+          {cards.map((c) => c.kind === 'connect' ? <ConnectCard key={c.id} c={c} helper={h?.name} state={state} onDone={refresh} /> : <AskCard key={c.id} c={c} who={h} onDone={refresh} />)}
+        </section>}
+      </aside>
       <div className="dock"><Composer placeholder={id === 'chief' ? 'Ask Chief anything…' : `Message ${name}…`} onSend={send} {...typeInto(id)} /></div>
     </div>
   );
@@ -794,6 +841,38 @@ function useLook() {
   return { look, setLook, night };
 }
 
+/** The sidebar's CHIEF frame: the full 22-dot cut, his laptop while he works, and his status line. The one hero on a
+ *  desktop screen; every other Chief face is still. */
+function ChiefFrame({ ctx, on }: { ctx: Ctx; on: boolean }) {
+  const listen = useListen();
+  const { mood, line } = useHeld(A.chief(ctx.state, chiefLocal(ctx, listen)));
+  return (
+    <a href="#/chief" className={`chief-frame ${on ? 'on' : ''}`}>
+      <div className="label ascii">Chief</div>
+      <ChiefArt mood={mood} d={4.5} hero />
+      {mood === 'work' && <Laptop />}
+      <div className="chief-line"><span className="art" aria-hidden>▸ </span><span>{line}</span><span className={`cur${mood === 'work' ? ' live' : ''}`} aria-hidden /></div>
+    </a>
+  );
+}
+
+/** The crew room's wall: every helper, one line each, with a search above. */
+function SideCrew({ state, view, id }: { state: Json; view: View; id?: string }) {
+  const [q, setQ] = useState('');
+  const rows = A.chats(state).filter((c) => c.who !== 'chief');
+  const shown = q.trim() ? rows.filter((c) => (c.name + ' ' + c.line).toLowerCase().includes(q.trim().toLowerCase())) : rows;
+  return (
+    <>
+      <div className="label ascii">Crew</div>
+      <input className="input side-search" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search chats" aria-label="Search chats" />
+      {shown.map((c) => (
+        <a key={c.id} href={hrefOf(c.id)} className={`side-row ${id === c.id ? 'on' : ''}`}><Face who={c.who as A.Helper} size={32} ring={c.ring} /><span className="grow"><b>{c.name}</b><span className="mute small clamp1">{c.line}</span></span>{c.unread > 0 && <span className="badge">{A.unreadBadge(c.unread)}</span>}</a>
+      ))}
+      {!shown.length && <div className="mute small side-blank">Nobody by that name.</div>}
+    </>
+  );
+}
+
 function App() {
   const [route, setRoute] = useState<Route>(parseRoute());
   const under = useRef<Route>({ view: 'home' });
@@ -853,14 +932,11 @@ function App() {
   return (
     <>
       {splash}
-      <div className={`shell ${v.view === 'home' ? 'with-rail' : ''} ${['chief', 'helper'].includes(v.view) ? 'is-chat' : ''}`}>
+      <div className={`shell ${['chief', 'helper'].includes(v.view) ? 'is-chat' : ''}`}>
         <aside className="side">
           <a href="#/" className="brand"><Logo night={night} /></a>
-          <a href="#/chief" className={`side-row chief-row ${v.view === 'chief' ? 'on' : ''}`}><span className="face" style={{ width: 34, height: 34, background: '#fff7e8' }}><ChiefArt mood={A.chief(ctx.state, chiefLocal(ctx)).mood} d={1.7} /></span><b className="grow">Chief</b>{(A.chats(ctx.state)[0].unread > 0) && <span className="badge">{A.unreadBadge(A.chats(ctx.state)[0].unread)}</span>}</a>
-          <div className="label">Helpers</div>
-          {A.chats(ctx.state).filter((c) => c.who !== 'chief').map((c) => (
-            <a key={c.id} href={hrefOf(c.id)} className={`side-row ${v.id === c.id ? 'on' : ''}`}><Face who={c.who as A.Helper} size={32} ring={c.ring} /><span className="grow"><b>{c.name}</b><span className="mute small clamp1">{c.line}</span></span>{c.unread > 0 && <span className="badge">{A.unreadBadge(c.unread)}</span>}</a>
-          ))}
+          <ChiefFrame ctx={ctx} on={v.view === 'chief'} />
+          <SideCrew state={ctx.state} view={v.view} id={v.id} />
           <div className="grow" />
           <a href="#/settings" className="side-meter mute small">{A.meter(ctx.state)}</a>
           {nav.map(([h, l, i]) => <a key={h} href={h} className={`side-nav ${active(h) ? 'on' : ''}`}><span className="ic">{i}</span>{l}{h === '#/' && asks > 0 && <span className="badge">{asks}</span>}</a>)}
@@ -878,7 +954,7 @@ function App() {
           {v.view === 'apps' && <Apps {...ctx} />}
           {v.view === 'share' && <Share {...ctx} />}
         </main>
-        {v.view === 'home' && <Rail state={ctx.state} />}
+        {v.view === 'home' && <Home {...ctx} />}
         <nav className="tabbar">{nav.map(([h, l, i]) => <a key={h} href={h} className={active(h) ? 'on' : ''}><span className="ic">{i}</span>{l}{h === '#/' && asks > 0 && <span className="badge">{asks}</span>}</a>)}</nav>
       </div>
       {sheet && <AskSheet c={sheet} who={crew.find((h) => h.id === sheet.helper)} chiefSays={ctx.state.asks.find((a: Json) => a.id === sheet.id)?.detail?.chief} onClose={() => history.length > 1 ? history.back() : go('#/')} />}

@@ -249,7 +249,7 @@ export function Steps({ steps, max = 6, onUndo }: { steps: Step[]; max?: number;
       {steps.length > shown.length && <button className="link" onClick={() => setAll(true)}>Show all {steps.length} steps</button>}
       {shown.map((s) => (
         <div key={s.seq} className={`step ${s.now ? 'now' : s.asked ? 'asked' : ''}`}>
-          <i /><span className="grow">{s.text}</span>
+          <i className="ascii" /><span className="grow">{s.text}</span>
           {onUndo && s.undo && <button className="link" onClick={() => onUndo(s)}>Undo</button>}
           <time>{s.now ? 'now' : clock(s.at)}</time>
         </div>
