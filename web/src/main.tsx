@@ -562,13 +562,24 @@ function Phones({ tick }: { tick: number }) {
         {!phones.length && <p className="mute">No phones yet. Install the Crewhouse app, then scan the code it asks for.</p>}
         {!offer && <div className="btns"><button className="btn go" onClick={() => show('control')}>Add a phone</button><button className="btn" onClick={() => show('view')}>Add one that only watches</button></div>}
       </div>
-      {offer && (
+      {link.asking.map((a: Json) => (
+        <div key={a.id} className="card ask">
+          <b>{a.name} would like to join</b>
+          <p>Only say yes if the phone shows these two words: <b>{a.words}</b></p>
+          <p className="mute small">{a.role === 'view' ? 'It will watch the crew but not answer or give jobs.' : 'It will answer the crew and give them jobs, as you.'}</p>
+          <div className="btns">
+            <button className="btn go" onClick={() => attempt(async () => { await api.answerPhone(a.id, true); await load(); })}>Yes, the words match</button>
+            <button className="btn" onClick={() => attempt(async () => { await api.answerPhone(a.id, false); await load(); }, `${a.name} was turned away`)}>No</button>
+          </div>
+        </div>
+      ))}
+      {offer && !link.asking.length && (
         <div className="card pair">
           {left > 0 ? <div className="qr" dangerouslySetInnerHTML={{ __html: qr }} /> : <div className="qr expired">This code ran out.</div>}
           <div className="grow">
             <b>Scan this with the Crewhouse app</b>
             <p className="mute small">{offer.role === 'view' ? 'This phone will watch the crew but not answer or give jobs.' : 'This phone will answer the crew and give them jobs, as you.'}</p>
-            <p className="small">The app should show these same letters: <b className="letters">{offer.fp}</b></p>
+            <p className="mute small">Then check the two words the phone shows against the ones that appear here.</p>
             <p className="mute small">{left > 0 ? `Works once, for ${left} more seconds.` : 'Make a new one when the phone is ready.'}</p>
             <div className="btns">{left <= 0 && <button className="btn go" onClick={() => show(offer.role)}>New code</button>}<button className="btn ghost" onClick={() => setOffer(null)}>Close</button></div>
           </div>

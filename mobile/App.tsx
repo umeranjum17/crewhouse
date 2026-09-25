@@ -12,7 +12,7 @@ import * as A from '../web/src/adapter.ts';
 import { api, setTransport, trouble, type Json } from '../web/src/api.ts';
 import * as art from '../web/src/art.ts';
 import { color, radius } from '../web/src/tokens.ts';
-import { forgetGrant, loadGrant, pair, PhoneLink, type Grant, type Status } from './src/link';
+import { connect, forgetGrant, loadGrant, pair, type Grant, type Status } from './src/link';
 
 // ---------- look ----------
 type Look = typeof color.day & { go: string; goInk: string; night: boolean };
@@ -167,6 +167,7 @@ function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [done, setDone] = useState<Grant | null>(null);
+  const [words, setWords] = useState('');
   const seen = useRef('');
   const tryCode = async (text: string) => {
     if (busy || seen.current === text) return;
@@ -174,12 +175,9 @@ function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
     setScanning(false);
     setBusy(true);
     setErr('');
-    try { setDone(await pair(text)); } catch (e: any) {
-      seen.current = '';
-      setErr(/expired|not paired/.test(e.message) ? 'That code ran out or was already used. Make a new one on the computer.'
-        : /code|offer|parse|JSON/i.test(e.message) ? "That isn't a Crewhouse code. On the computer: Settings, Phones, Add a phone."
-        : "Couldn't reach the computer. Is Crewhouse on, and is this phone on its Wi-Fi or Tailscale?");
-    }
+    // @byokit/link's failures are already plain sentences ("That pairing code has run out. Show a new one on your computer.").
+    try { setDone(await pair(text, setWords)); } catch (e: any) { seen.current = ''; setErr(e.message); }
+    setWords('');
     setBusy(false);
   };
   if (done) {
@@ -188,9 +186,18 @@ function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
         <ChiefArt mood="happy" size={150} />
         <T style={s.h1}>You're in</T>
         <T tone="ink2" style={s.centerText}>This phone is paired with your computer{done.device.role === 'view' ? '. It can watch the crew, not answer' : ''}.</T>
-        <T tone="mute" style={[s.centerText, { marginTop: 12 }]}>The computer should show these same letters:</T>
-        <Text style={[s.fp, { color: t.pinkInk }]}>{done.fp}</Text>
         <Btn go big label="Open Crewhouse" onPress={() => onPaired(done)} />
+      </Center>
+    );
+  }
+  if (words) {
+    return (
+      <Center>
+        <ChiefArt mood="listen" size={150} />
+        <T style={s.h1}>Check the words</T>
+        <T tone="ink2" style={s.centerText}>Your computer is asking whether this phone may join. Say yes there only if it shows these same two words:</T>
+        <Text style={[s.fp, { color: t.pinkInk }]}>{words}</Text>
+        <ActivityIndicator color={t.pink} />
       </Center>
     );
   }
@@ -233,7 +240,7 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
   const [tick, setTick] = useState(0);
   const [stack, setStack] = useState<Route[]>([{ view: 'home' }]);
   const [sheet, setSheet] = useState<A.Card | null>(null);
-  const link = useRef<PhoneLink | null>(null);
+  const link = useRef<ReturnType<typeof connect>['link'] | null>(null);
   const route = stack[stack.length - 1];
 
   const refresh = useCallback(() => {
@@ -242,9 +249,9 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
   }, []);
   useEffect(() => {
     let pending: any;
-    const l = new PhoneLink(grant, () => { clearTimeout(pending); pending = setTimeout(refresh, 120); }, (st) => { setStatus(st); if (st === 'removed') onRemoved(); });
+    const { link: l, call } = connect(grant, () => { clearTimeout(pending); pending = setTimeout(refresh, 120); }, (st) => { setStatus(st); if (st === 'removed') onRemoved(); });
     link.current = l;
-    setTransport(l.call);
+    setTransport(call);
     return () => l.stop();
   }, [grant, refresh, onRemoved]);
   const wasOnline = useRef(false);
@@ -592,7 +599,6 @@ function ThingsList({ list, state, empty }: { list: A.Thing[]; state: Json; empt
 
 // ---------- this phone ----------
 function ThisPhone({ grant, status, onForget }: { grant: Grant; status: Status; onForget: () => void }) {
-  const t = useLook();
   return (
     <Page title="This phone">
       <Card>
@@ -600,11 +606,7 @@ function ThisPhone({ grant, status, onForget }: { grant: Grant; status: Status; 
         <T tone="mute">{grant.device.role === 'view' ? 'Watches the crew; can’t answer or give jobs.' : 'Answers the crew and gives them jobs, as you.'}</T>
         <View style={[s.row, { marginTop: 6 }]}><Pill tone={status === 'online' ? 'ok' : 'wait'}>{status === 'online' ? 'With the home computer' : 'Looking for the home computer…'}</Pill></View>
       </Card>
-      <Card>
-        <T style={s.b}>Your computer's letters</T>
-        <Text style={[s.fp, { color: t.pinkInk }]}>{grant.fp}</Text>
-        <T tone="mute" style={s.small}>🔒 Only the computer with these letters can read what this phone sends.</T>
-      </Card>
+      <T tone="mute" style={s.small}>🔒 Only the computer this phone was paired with can read what it sends.</T>
       <Btn label="Unpair this phone" onPress={onForget} />
       <T tone="mute" style={s.small}>To take a phone's access away for good, remove it on the computer too: Settings, Phones.</T>
     </Page>

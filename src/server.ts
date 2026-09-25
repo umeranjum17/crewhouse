@@ -69,8 +69,10 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
         if (p === '/api/phones/link' && req.method === 'GET') return send(res, 200, link.status());
         if (p === '/api/phones/pair' && req.method === 'POST') return send(res, 200, await link.offer((await readJson(req)).role ?? 'control', me));
         if (p === '/api/phones/lan' && req.method === 'PUT') { await link.setLan(!!(await readJson(req)).on); return send(res, 200, link.status()); }
-        const phone = p.match(/^\/api\/phones\/([a-f0-9]+)$/);
-        if (phone && req.method === 'DELETE') { link.revoke(phone[1]); return send(res, 200, { ok: true }); }
+        // A phone that scanned the code waits here: the person checks its two words and says yes or no.
+        if (p === '/api/phones/answer' && req.method === 'POST') { const b = await readJson(req); link.answer(Number(b.id), b.yes === true); return send(res, 200, { ok: true }); }
+        const phone = p.match(/^\/api\/phones\/([\w-]+)$/);
+        if (phone && req.method === 'DELETE') { await link.revoke(phone[1]); return send(res, 200, { ok: true }); }
         return send(res, 200, await api(req.method!, p, url.searchParams, req.method === 'GET' ? {} : await readJson(req), me));
       }
 

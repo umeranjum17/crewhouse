@@ -1,16 +1,14 @@
-// The phone link: pairing by single-use QR, durable device grants, and a WebSocket that carries only
-// Noise-encrypted frames (src/envelope.ts). By default it listens on loopback and Tailscale only;
-// the home network is an opt-in. It answers nothing but the handshake: every request after it is
-// authenticated by the phone's key.
-import { randomBytes } from 'node:crypto';
+// The phone link: @byokit/link's host (Noise IK pairing, durable grants, encrypted requests, revoke) on sockets crewd
+// opens itself. By default it listens on loopback and Tailscale only; the home network is an opt-in. Crewhouse's part
+// is where it listens, who a phone acts as, what a phone may not do, and the person at the computer saying yes.
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import { networkInterfaces } from 'node:os';
 import { join } from 'node:path';
-import { WebSocketServer, type WebSocket } from 'ws';
+import { WebSocketServer } from 'ws';
+import { Host, keyPair, keyPairFrom, type Grant, type PairRequest, type Role } from '@byokit/link';
 import type { Config } from './config.ts';
-import type { Row, Store } from './db.ts';
-import { b64, fingerprint, keyPair, keyPairFrom, respond, unb64, type Channel, type KeyPair, type PairOffer } from './envelope.ts';
+import type { Store } from './db.ts';
 
 export const PAIR_MS = Number(process.env.CREWHOUSE_PAIR_MS || 120_000); // a pairing QR is good for two minutes
 export type Handler = (method: string, path: string, body: any, member: number) => Promise<unknown>;
@@ -28,20 +26,26 @@ export function linkHosts(pinned: string, lan: boolean, ifaces: Ifaces = network
   return lan ? ['0.0.0.0'] : ['127.0.0.1', ...ipv4(ifaces).filter(tailscale)];
 }
 
-/** Addresses a phone can dial for those hosts: home network first, then Tailscale, never loopback. */
+/** Addresses a phone can dial for those hosts: home network first, then Tailscale. Loopback only when there is
+ *  nothing else, which reaches an emulator or a phone forwarded over USB. */
 export function phoneAddresses(hosts: string[], ifaces: Ifaces = networkInterfaces()): string[] {
   const ips = hosts.includes('0.0.0.0') ? ipv4(ifaces) : hosts.filter((h) => !/^127\.|^localhost$/.test(h));
-  return [...ips.filter((ip) => !tailscale(ip)), ...ips.filter(tailscale)];
+  const out = [...ips.filter((ip) => !tailscale(ip)), ...ips.filter(tailscale)];
+  return out.length ? out : ['127.0.0.1'];
 }
 
+const b64url = (s: string) => s.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); // phones paired before 0.1.0 were stored as base64
+const memberOf = (g: Grant) => (g.meta as { member?: number } | undefined)?.member ?? 1;
+
+/** A phone waiting at the computer for the person's yes: its name and the two words both screens show. */
+type Asking = { id: number; name: string; words: string; role: Role; member: number; answer: (yes: boolean) => void };
+
 export class Link {
-  keys: KeyPair;
-  fp: string;
-  private codes = new Map<string, { role: string; member: number; expires: number }>();
-  private sockets = new Map<WebSocket, { dev: Row; ch: Channel }>(); // authenticated sockets
-  private done = new Map<string, Promise<unknown>>(); // idempotency: device:key -> result
+  host!: Host;
   private servers = new Map<string, Server>(); // one listener per bound address
   private wss = new WebSocketServer({ noServer: true, maxPayload: 1 << 20 });
+  private asking = new Map<number, Asking>();
+  private n = 0;
   private cfg: Config;
   private db: Store;
   private handle: Handler;
@@ -50,12 +54,53 @@ export class Link {
     this.cfg = cfg;
     this.db = db;
     this.handle = handle;
-    const file = join(cfg.stateDir, 'link.key');
-    if (!existsSync(file)) writeFileSync(file, JSON.stringify({ sk: b64(keyPair().secretKey) }), { mode: 0o600 });
-    this.keys = keyPairFrom(unb64(JSON.parse(readFileSync(file, 'utf8')).sk));
-    this.fp = fingerprint(this.keys.publicKey);
-    this.wss.on('connection', (ws) => this.connection(ws));
-    db.onEvent((e) => { for (const ws of this.sockets.keys()) this.send(ws, { t: 'event', e }); });
+  }
+
+  async open() {
+    const file = join(this.cfg.stateDir, 'link.key');
+    if (!existsSync(file)) writeFileSync(file, JSON.stringify({ sk: Buffer.from(keyPair().secretKey).toString('base64') }), { mode: 0o600 });
+    const keys = keyPairFrom(new Uint8Array(Buffer.from(JSON.parse(readFileSync(file, 'utf8')).sk, 'base64')));
+    this.host = await Host.open({
+      keys, name: 'your computer', pairMs: PAIR_MS,
+      grants: { load: () => this.load(), save: (g) => this.save(g) },
+      confirm: (p) => this.confirm(p),
+      canView: (req) => req.op.startsWith('GET '),
+      handle: (req, g) => this.request(req.op, req.args, g),
+      onError: (e) => console.error('phone link:', e),
+    });
+    this.wss.on('connection', (ws) => this.host.accept(ws as any));
+    this.db.onEvent((e) => this.host.broadcast(e));
+  }
+
+  // Grants live in the devices table: one row per phone, with the member it acts as.
+  private load(): Grant[] {
+    return this.db.all('SELECT * FROM devices ORDER BY created_at').map((d) => ({
+      id: d.id, key: b64url(d.pk), name: d.name, role: d.role, created: d.created_at, lastSeen: d.last_seen ?? undefined, meta: { member: d.member ?? 1 } }));
+  }
+  private save(grants: Grant[]) {
+    const before = new Map(this.load().map((g) => [g.id, g]));
+    this.db.tx(() => {
+      this.db.run('DELETE FROM devices');
+      for (const g of grants) this.db.run('INSERT INTO devices (id, name, pk, role, member, created_at, last_seen) VALUES (?, ?, ?, ?, ?, ?, ?)', g.id, g.name, g.key, g.role, memberOf(g), g.created, g.lastSeen ?? null);
+      for (const g of grants) if (!before.has(g.id)) this.db.event('device.paired', null, { id: g.id, name: g.name, role: g.role, member: memberOf(g) });
+      for (const [id, g] of before) if (!grants.some((x) => x.id === id)) this.db.event('device.revoked', null, { id, name: g.name });
+    });
+  }
+
+  /** A phone scanned the code: nothing is stored until the person at the computer says yes (`answer`). */
+  private confirm(p: PairRequest) {
+    return new Promise<boolean>((resolve) => {
+      const id = ++this.n;
+      const done = (yes: boolean) => { if (this.asking.delete(id)) { this.db.event('device.asked', null, { id, done: true }); resolve(yes); } };
+      this.asking.set(id, { id, name: p.name, words: p.words, role: p.role, member: (p.meta as any)?.member ?? 1, answer: done });
+      this.db.event('device.asked', null, { id, name: p.name }); // Settings shows the question
+      setTimeout(() => done(false), PAIR_MS).unref();
+    });
+  }
+  answer(id: number, yes: boolean) {
+    const a = this.asking.get(id);
+    if (!a) throw Object.assign(new Error('that phone stopped waiting'), { status: 404 });
+    a.answer(yes);
   }
 
   get lan() { return this.db.get("SELECT value FROM settings WHERE key = 'link.lan'")?.value === '1'; }
@@ -84,120 +129,44 @@ export class Link {
     await this.bind();
   }
 
-  /** Settings, Phones: the paired phones (docs/ui-contract.md) and how phones reach this computer. */
+  /** Settings, Phones: how phones reach this computer, and any phone waiting for a yes (docs/ui-contract.md). */
   status() {
-    return { fp: this.fp, on: this.cfg.linkPort > 0, lan: this.lan, pinned: !!this.cfg.linkHost,
-      hosts: [...this.servers.keys()], tailscale: this.hosts().some(tailscale) };
+    return { on: this.cfg.linkPort > 0, lan: this.lan, pinned: !!this.cfg.linkHost, hosts: [...this.servers.keys()], tailscale: this.hosts().some(tailscale),
+      asking: [...this.asking.values()].map(({ id, name, words, role }) => ({ id, name, words, role })) };
   }
 
-  /** A single-use code good for two minutes, and the QR text that carries it. */
-  async offer(role: string, member: number): Promise<{ qr: string; fp: string; expires: number; urls: string[] }> {
+  /** A single-use QR for a phone that will act as `member`. */
+  async offer(role: string, member: number): Promise<{ qr: string; expires: number; urls: string[] }> {
     if (role !== 'control' && role !== 'view') throw Object.assign(new Error('role is control or view'), { status: 400 });
     await this.bind(); // Tailscale may have come up since crewd started
-    const now = Date.now();
-    for (const [c, v] of this.codes) if (v.expires < now) this.codes.delete(c);
-    const c = randomBytes(16).toString('base64url');
-    const expires = now + PAIR_MS;
-    this.codes.set(c, { role, member, expires });
-    const u = phoneAddresses([...this.servers.keys()]).map((ip) => `ws://${ip}:${this.cfg.linkPort}/link`);
-    const offer: PairOffer = { crewhouse: 1, k: b64(this.keys.publicKey), c, u };
-    return { qr: JSON.stringify(offer), fp: this.fp, expires, urls: u };
+    const urls = phoneAddresses([...this.servers.keys()]).map((ip) => `ws://${ip}:${this.cfg.linkPort}/link`);
+    const { text, expires } = this.host.offer({ role, urls, meta: { member } });
+    return { qr: text, expires, urls };
   }
 
   devices() {
-    const online = new Set([...this.sockets.values()].map((s) => s.dev.id));
-    return this.db.all('SELECT d.id, d.name, d.role, d.member, p.name AS person, d.created_at, d.last_seen FROM devices d LEFT JOIN people p ON p.id = d.member ORDER BY d.created_at')
-      .map((d) => ({ id: d.id, name: d.name, member: d.member, person: d.person, role: d.role, seen: d.last_seen ?? d.created_at, online: online.has(d.id) }));
+    const people = new Map(this.db.all('SELECT id, name FROM people').map((p) => [p.id, p.name]));
+    return this.host.devices().map((g) => ({ id: g.id, name: g.name, member: memberOf(g), person: people.get(memberOf(g)) ?? null, role: g.role,
+      seen: g.lastSeen ?? g.created, online: g.online }));
   }
 
-  revoke(id: string) {
-    const d = this.db.get('SELECT * FROM devices WHERE id = ?', id);
-    if (!d) throw Object.assign(new Error('no such device'), { status: 404 });
-    this.db.tx(() => { this.db.run('DELETE FROM devices WHERE id = ?', id); this.db.event('device.revoked', null, { id, name: d.name }); });
-    // Said inside the encrypted channel: a close reason is plaintext, and a phone must not drop its grant on one.
-    // Android can surface the close before a frame sent just ahead of it, so the close waits a moment.
-    for (const [ws, s] of this.sockets) {
-      if (s.dev.id !== id) continue;
-      this.send(ws, { t: 'revoked' });
-      this.sockets.delete(ws); // no more events or answers for it
-      setTimeout(() => ws.close(4401, 'this phone was removed'), 1000).unref();
-    }
+  async revoke(id: string) {
+    if (!this.host.devices().some((g) => g.id === id)) throw Object.assign(new Error('no such device'), { status: 404 });
+    await this.host.revoke(id); // said inside the encrypted channel; the phone forgets its grant only then
   }
 
-  private send(ws: WebSocket, msg: unknown, ch = this.sockets.get(ws)?.ch) {
-    if (ch && ws.readyState === 1) for (const f of ch.seal(msg)) ws.send(f);
-  }
-
-  private connection(ws: WebSocket) {
-    let ch: Channel | null = null;
-    let phone: Uint8Array;
-    let dev: Row | undefined;
-    const fail = (why: string) => ws.close(4400, why.slice(0, 120));
-    const timer = setTimeout(() => { if (!dev) fail('handshake timeout'); }, 15_000);
-    ws.on('close', () => { clearTimeout(timer); this.sockets.delete(ws); });
-    ws.on('message', async (raw) => {
-      try {
-        if (!ch) { // Noise IK message one: the phone's key, sealed to ours
-          const r = respond(this.keys, String(raw));
-          phone = r.phone;
-          const known = this.db.get('SELECT id FROM devices WHERE pk = ?', b64(phone));
-          if (!known && !(r.hello?.pair && [...this.codes.values()].some((c) => c.expires > Date.now()))) return fail('this phone is not paired, or was removed');
-          ch = r.channel;
-          return ws.send(r.reply);
-        }
-        const m = ch.open(String(raw)); // throws unless this is the phone's next authentic frame
-        if (m === undefined) return;
-        if (!dev) {
-          dev = m.t === 'pair' ? this.pair(phone, m) : this.db.get('SELECT * FROM devices WHERE pk = ?', b64(phone));
-          if (!dev) return fail('this phone is not paired, or was removed');
-          this.db.run('UPDATE devices SET last_seen = ? WHERE id = ?', Date.now(), dev.id);
-          this.sockets.set(ws, { dev, ch });
-          return this.send(ws, { t: 'ready', device: { id: dev.id, name: dev.name, role: dev.role }, fp: this.fp });
-        }
-        if (m.t === 'req') this.send(ws, { t: 'res', id: m.id, ...(await this.request(dev, m)) });
-      } catch (e: any) {
-        fail(e.message || 'bad frame'); // a bad frame ends the socket; the phone reconnects
-      }
-    });
-  }
-
-  private pair(pk: Uint8Array, m: Row): Row {
-    const code = this.codes.get(String(m.code));
-    this.codes.delete(String(m.code)); // single use, even when it has expired
-    if (!code || code.expires < Date.now()) throw new Error('that pairing code has expired; show a new one');
-    const id = randomBytes(6).toString('hex');
-    const name = String(m.name ?? 'Phone').slice(0, 40) || 'Phone';
-    this.db.tx(() => {
-      this.db.run('DELETE FROM devices WHERE pk = ?', b64(pk)); // re-pairing the same phone replaces its grant
-      this.db.run('INSERT INTO devices (id, name, pk, role, member, created_at) VALUES (?, ?, ?, ?, ?, ?)', id, name, b64(pk), code.role, code.member, Date.now());
-      this.db.event('device.paired', null, { id, name, role: code.role, member: code.member });
-    });
-    return this.db.get('SELECT * FROM devices WHERE id = ?', id)!;
-  }
-
-  private async request(dev: Row, m: Row): Promise<{ status: number; body: unknown }> {
-    const method = String(m.method ?? 'GET');
-    const path = String(m.path ?? '');
+  /** One request from a phone, as `METHOD /path`: run as its member, answered like HTTP. */
+  private async request(op: string, body: unknown, g: Grant): Promise<{ status: number; body: unknown }> {
+    const [method, path = ''] = op.split(' ', 2);
     if (!path.startsWith('/api/')) return { status: 404, body: { error: 'not found' } };
-    // Household admin stays on the computer: AI account sign-ins, people, the house's Google app, and connecting
-    // apps (their sign-in pages come back to this computer's own address).
-    if (/^\/api\/(accounts|house)\b/.test(path) || (/^\/api\/(people|connections)\b/.test(path) && method !== 'GET')) return { status: 403, body: { error: 'do that on the computer' } };
-    if (method !== 'GET' && dev.role !== 'control') return { status: 403, body: { error: 'this phone can watch but not answer' } };
-    if (!this.db.get('SELECT id FROM devices WHERE id = ?', dev.id)) return { status: 401, body: { error: 'this phone was removed' } };
-    // A retried tap carries the same key, so it runs once and gets the first answer.
-    const key = m.key ? `${dev.id}:${m.key}` : '';
-    let p = key ? this.done.get(key) : undefined;
-    if (!p) {
-      p = this.handle(method, path, m.body ?? {}, dev.member ?? 1);
-      if (key) {
-        this.done.set(key, p);
-        if (this.done.size > 500) this.done.delete(this.done.keys().next().value!);
-      }
-    }
-    try { return { status: 200, body: await p }; } catch (e: any) { return { status: e.status ?? 400, body: { error: e.message } }; }
+    // Household admin stays on the computer: AI account sign-ins, people, the house's Google app, connecting apps
+    // (their sign-in pages come back to this computer's own address), and the phones themselves.
+    if (/^\/api\/(accounts|house|phones)\b/.test(path) || (/^\/api\/(people|connections)\b/.test(path) && method !== 'GET')) return { status: 403, body: { error: 'do that on the computer' } };
+    try { return { status: 200, body: await this.handle(method, path, body ?? {}, memberOf(g)) }; }
+    catch (e: any) { return { status: e.status ?? 400, body: { error: e.message } }; }
   }
 
-  listen() { return this.bind(); }
+  async listen() { await this.open(); await this.bind(); }
 
-  close() { for (const s of this.servers.values()) s.close(); for (const ws of this.sockets.keys()) ws.terminate(); }
+  close() { this.host?.close(); for (const s of this.servers.values()) s.close(); }
 }
