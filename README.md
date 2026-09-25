@@ -12,7 +12,9 @@ Nothing leaves your machine except what the crew sends your own AI account to do
 
 ## Quick start
 
-You need Linux (macOS works without the bots' shell and desktops) and [Node](https://nodejs.org) 22.19 or later. Nothing else: no CLIs, no terminal sign-ins.
+**The download (Debian, Ubuntu and friends):** open `crewhouse_<version>_amd64.deb` from the release page, and the software centre installs it along with what it needs (bubblewrap for the helpers' shell, Xvfb for their own screens). Then open **Crewhouse** from the app menu. It starts itself, opens in its own window, starts by itself whenever you log in, and fetches the helpers' own tools (their web browser is the big one) in the background on its first run, while everything else already works. On other Linux, `crewhouse-<version>-linux-x64.tar.gz` is the same folder: unpack it and run `crewhouse/node/bin/node crewhouse/launch.mjs`. Both carry their own Node. The downloaded app checks the project's public release list once a day and tells the owner when a new version is ready; nothing of the family's is sent. `node scripts/package.mjs` builds both, after `npm run build:web`.
+
+**From source:** you need Linux (macOS works without the bots' shell and desktops) and [Node](https://nodejs.org) 22.19 or later. Nothing else: no CLIs, no terminal sign-ins.
 
 ```bash
 git clone https://github.com/umeranjum17/crewhouse && cd crewhouse
@@ -101,7 +103,7 @@ Data lives outside the repo: the database is in `~/.local/state/crewhouse/`, the
 - Push notifications (they will follow each person's quiet hours), triggers (a folder or a webhook), Telegram. A per-person login: on this computer anyone can pick who they are.
 - Bot desktops and the bots' shell on macOS (desklink is Linux only; the shell needs a Seatbelt wrapper), and on Windows. Watching a bot's screen from outside the house through a relay (the picture needs a TURN route; chat, routines and take-over's buttons work). A bot's `signedIn` list is still edited by hand in its `bot.json` after you sign it in.
 - Signing in with ChatGPT *from the phone*: ChatGPT's page returns to `localhost:1455` on the device that opened it, so the phone app needs to catch it there and relay it to the home computer (the next step, after the phone app). Until then, a phone signs in with the code, or at the home computer. The owner-funded "house allowance". Outlook and OneDrive.
-- The desktop installer (Electron, no terminal); today it is `./crewhouse setup`.
+- A macOS download, and updating in place: today a new version is a new download (the app says when one is ready).
 
 ## License
 

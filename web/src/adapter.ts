@@ -90,6 +90,24 @@ export function helper(b: Json): Helper {
 }
 
 /** When the crew is resting because an account ran out, in one sentence: "Your ChatGPT is resting until 6:40 pm". */
+/** The helpers' tools the downloaded app is still fetching, in one sentence; empty when none. */
+export function gettingReady(state: Json) {
+  const ids: string[] = state.installing ?? [];
+  if (!ids.length) return '';
+  return ids.includes('browser') ? "Getting the helpers' own web browser ready: a big download, so it takes a few minutes. Everything else works meanwhile."
+    : "Getting a few of the helpers' tools ready. Everything else works meanwhile.";
+}
+/** For the owner: a newer Crewhouse to download, in words. */
+export const update = (state: Json) => (state.update ? { words: `A new Crewhouse is ready (${state.update.version}). Download it and open it, and the crew carries on where it was.`, url: String(state.update.url) } : null);
+
+/** The owner's steps to switch Google on for the house, each with the Google page it happens on (docs/google-setup.md). */
+export const GOOGLE_STEPS = [
+  { title: 'Make a project', url: 'https://console.cloud.google.com/projectcreate', says: 'Sign in with your own Google account and name it “Crewhouse (family)”. No billing is needed.' },
+  { title: 'Switch on Calendar, Gmail and Drive', url: 'https://console.cloud.google.com/apis/library', says: 'Search for each of “Google Calendar API”, “Gmail API” and “Google Drive API”, and press Enable on each.' },
+  { title: 'Describe the app', url: 'https://console.cloud.google.com/auth/overview', says: 'Choose External, name it “Crewhouse” with your email as the contact. Under Data access add calendar.events, gmail.readonly and drive.file. Under Audience press Publish app, so it says “In production”.' },
+  { title: 'Make the key', url: 'https://console.cloud.google.com/apis/credentials', says: 'Create credentials, OAuth client ID, type “Desktop app”, named “Crewhouse home computer”. Copy the Client ID and the Client secret, and paste them below.' },
+];
+
 /** Settings, Phones: whether phones reach this computer from anywhere, in one sentence. */
 export function reach(link: Json) {
   let where = '';

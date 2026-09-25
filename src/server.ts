@@ -6,7 +6,7 @@ import type { Config } from './config.ts';
 import type { Store } from './db.ts';
 import type { Crew } from './crew.ts';
 import * as disk from './bots.ts';
-import { installTool } from './tools.ts';
+import { installTool, toolStatus } from './tools.ts';
 import { OWNER, PROVIDERS, callbackPage, provider } from './accounts.ts';
 import { coversOf } from './policy.ts';
 import { describe, nextRun, parseSchedule } from './routines.ts';
@@ -48,6 +48,31 @@ function sendFile(req: IncomingMessage, res: ServerResponse, path: string) {
 export async function startServer(cfg: Config, db: Store, crew: Crew) {
   const dist = join(cfg.repoDir, 'web', 'dist');
   const installing = new Set<string>();
+  /** Installs take minutes (the browser downloads Chromium); the result arrives as an event. */
+  const install = (id: string) => {
+    if (installing.has(id)) return;
+    installing.add(id);
+    db.event('tool.installing', null, { tool: id });
+    return installTool(cfg, id)
+      .then(() => db.event('tool.installed', null, { tool: id }))
+      .catch((e) => { console.error(`install ${id}:`, e); db.event('tool.failed', null, { tool: id }); })
+      .finally(() => installing.delete(id));
+  };
+  // The downloaded app has no setup step: on its first runs it fetches the helpers' own tools itself, one at a time,
+  // while everything else already works. The browser, with its own Chromium, is the big one.
+  const packaged = process.env.CREWHOUSE_PACKAGED === '1';
+  if (packaged) void (async () => { for (const t of toolStatus(cfg).filter((x) => x.installable && !x.ready)) await install(t.id); })();
+  // A newer release, from the project's public release list, once a day and only for the downloaded app: nothing of
+  // the family's is sent. The owner sees "A new Crewhouse is ready" with its download page.
+  let update: { version: string; url: string } | null = null;
+  const version = JSON.parse(readFileSync(join(cfg.repoDir, 'package.json'), 'utf8')).version as string;
+  const newer = (a: string, b: string) => { const x = a.split('.').map(Number), y = b.split('.').map(Number); for (let i = 0; i < 3; i++) if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) > (y[i] ?? 0); return false; };
+  const checkUpdate = () => fetch(process.env.CREWHOUSE_RELEASES || 'https://api.github.com/repos/umeranjum17/crewhouse/releases/latest', { signal: AbortSignal.timeout(15_000), headers: { accept: 'application/vnd.github+json' } })
+    .then((r) => (r.ok ? r.json() : null)).then((rel: any) => {
+      const v = String(rel?.tag_name ?? '').replace(/^v/, '');
+      update = /^\d+\.\d+\.\d+$/.test(v) && newer(v, version) ? { version: v, url: String(rel.html_url) } : null;
+    }).catch(() => {});
+  if (packaged || process.env.CREWHOUSE_RELEASES) { void checkUpdate(); setInterval(checkUpdate, 86_400_000).unref(); }
   const localHost = (h = '') => /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/.test(h);
   // A paired phone acts as the household member it was paired for.
   const link = new Link(cfg, db, (m, path, body, member) => { const u = new URL(path, 'http://x'); return api(m, u.pathname, u.searchParams, body, member); });
@@ -108,7 +133,8 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
   /** The app API, shared by the web app (HTTP) and paired phones (the link). `me` is the member using it. */
   async function api(m: string, p: string, q: URLSearchParams, body: any, me: number) {
     let r: RegExpMatchArray | null;
-    if (m === 'GET' && p === '/api/state') return crew.snapshot(me);
+    // What is installing now, and (for the owner) a newer Crewhouse to download.
+    if (m === 'GET' && p === '/api/state') return { ...crew.snapshot(me), installing: [...installing], ...(update && me === OWNER ? { update } : {}) };
     if (m === 'GET' && p === '/api/events') return db.events(Number(q.get('after') || 0));
     // A sent photo for the phone, which can't open this computer's /files address: small enough for one link frame.
     if (m === 'GET' && p === '/api/photo') {
@@ -238,15 +264,8 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     if (m === 'GET' && p === '/api/search') return crew.search(q.get('q') ?? '', me);
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/steer$/)) && m === 'POST') { crew.steer(r[1], String(body.text ?? ''), me); return { ok: true }; }
     if ((r = p.match(/^\/api\/tools\/([a-z0-9-]+)\/install$/)) && m === 'POST') {
-      // Installs take minutes (the browser downloads Chromium); the result arrives as an event.
-      const id = r[1];
-      if (installing.has(id)) return { ok: true, already: true };
-      installing.add(id);
-      db.event('tool.installing', null, { tool: id });
-      installTool(cfg, id)
-        .then(() => db.event('tool.installed', null, { tool: id }))
-        .catch((e) => { console.error(`install ${id}:`, e); db.event('tool.failed', null, { tool: id }); })
-        .finally(() => installing.delete(id));
+      if (installing.has(r[1])) return { ok: true, already: true };
+      void install(r[1]);
       return { ok: true };
     }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/takeover$/)) && m === 'POST') { await crew.takeOver(r[1]); return { ok: true }; }
