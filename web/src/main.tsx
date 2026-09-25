@@ -664,7 +664,7 @@ function Settings({ state, me, refresh, tick, look, setLook, switchTo }: Ctx & {
       <div className="label">Look</div>
       <div className="seg">{[['auto', 'Evenings dark'], ['day', 'Day'], ['night', 'Night']].map(([k, l]) => <button key={k} className={look === k ? 'on' : ''} onClick={() => setLook(k)}>{l}</button>)}</div>
       {owner && <Money state={state} refresh={refresh} />}
-      {owner && <HouseGoogle on={!!state.house?.google} refresh={refresh} />}
+      {owner && <HouseGoogle on={!!state.house?.google} steps={state.house?.steps} refresh={refresh} />}
       {signing !== false && <SignIn me={me} owner={ownerName(state)} tab={signing} onReady={() => { setSigning(false); refresh(); }} onClose={() => setSigning(false)} />}
     </div>
   );
@@ -689,7 +689,7 @@ function Money({ state, refresh }: { state: Json; refresh: () => void }) {
 
 /** Owner only: switch Google on for the house, once. Each step opens the Google page it happens on, in turn, and the
  *  last one ends with two things to paste here (docs/google-setup.md has the same steps with the why). */
-function HouseGoogle({ on, refresh }: { on: boolean; refresh: () => void }) {
+function HouseGoogle({ on, steps, refresh }: { on: boolean; steps?: A.GoogleStep[] | null; refresh: () => void }) {
   const [edit, setEdit] = useState(false);
   const [step, setStep] = useState(0);
   const [id, setId] = useState('');
@@ -698,7 +698,14 @@ function HouseGoogle({ on, refresh }: { on: boolean; refresh: () => void }) {
   const s = A.GOOGLE_STEPS[step];
   return (<>
     <div className="label">Google for the house</div>
-    {on && !edit ? <div className="card row"><span className="grow"><b>Google is on for the house ✓</b><div className="mute small">Everyone can connect Calendar, Gmail and Drive from a chat.</div></span><button className="btn" onClick={() => { setEdit(true); setStep(A.GOOGLE_STEPS.length - 1); }}>Change</button></div>
+    {on && !edit ? <div className="card">
+        <div className="row"><span className="grow"><b>{A.googleHeadline(steps)}</b><div className="mute small">What Google itself has answered so far. Steps nobody has tried yet say “you said done”.</div></span>
+          <button className="btn" onClick={() => { setEdit(true); setStep(A.GOOGLE_STEPS.length - 1); }}>Change key</button></div>
+        {steps?.map((m, i) => <div key={i} className="row">
+          <span className="grow"><b>{i + 1}. {A.GOOGLE_STEPS[i].title}</b> <span className={m.state === 'checked' ? 'ok' : m.state === 'missing' ? 'warn-line' : 'mute'}>{A.STEP_MARK[m.state]}</span><div className="mute small">{m.note}</div></span>
+          {m.state === 'missing' && <a className="btn go" href={A.GOOGLE_STEPS[i].url} target="_blank" rel="noreferrer">Open Google's page</a>}
+        </div>)}
+      </div>
       : <form className="card form" onSubmit={(e) => { e.preventDefault(); void attempt(async () => { await api.houseGoogle(id, secret); setEdit(false); refresh(); }, 'Google is on for the house'); }}>
         <b>Switch Google on, once for everyone</b>
         <p className="mute small">About twenty minutes on Google's own pages, free. Then anyone here can let a helper use their Calendar, Gmail or Drive with one tap.</p>

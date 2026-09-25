@@ -137,11 +137,20 @@ export const update = (state: Json) => (state.update ? { words: `A new Crewhouse
 
 /** The owner's steps to switch Google on for the house, each with the Google page it happens on (docs/google-setup.md). */
 export const GOOGLE_STEPS = [
-  { title: 'Make a project', url: 'https://console.cloud.google.com/projectcreate', says: 'Sign in with your own Google account and name it “Crewhouse (family)”. No billing is needed.' },
-  { title: 'Switch on Calendar, Gmail and Drive', url: 'https://console.cloud.google.com/apis/library', says: 'Search for each of “Google Calendar API”, “Gmail API” and “Google Drive API”, and press Enable on each.' },
-  { title: 'Describe the app', url: 'https://console.cloud.google.com/auth/overview', says: 'Choose External, name it “Crewhouse” with your email as the contact. Under Data access add calendar.events, gmail.readonly and drive.file. Under Audience press Publish app, so it says “In production”.' },
-  { title: 'Make the key', url: 'https://console.cloud.google.com/apis/credentials', says: 'Create credentials, OAuth client ID, type “Desktop app”, named “Crewhouse home computer”. Copy the Client ID and the Client secret, and paste them below.' },
+  { title: 'Make a project', url: 'https://console.cloud.google.com/projectcreate', says: 'Name it “Crewhouse (family)” and press Create. No billing needed.' },
+  { title: 'Switch on Calendar, Gmail and Drive', url: 'https://console.cloud.google.com/apis/library', says: 'Search “Google Calendar API” and press Enable. Do the same for “Gmail API” and “Google Drive API”.' },
+  { title: 'Describe the app', url: 'https://console.cloud.google.com/auth/overview', says: 'Pick External, call it “Crewhouse”, give your email. Under Data access add calendar.events, gmail.readonly and drive.file. Under Audience press Publish app, so it says “In production”.' },
+  { title: 'Make the key', url: 'https://console.cloud.google.com/apis/credentials', says: 'Create credentials → OAuth client ID → type “Desktop app”. Paste the Client ID and Client secret below.' },
 ];
+
+/** crewd's word on each step once the key is in (`house.steps`): checked from Google's own answers, or not. */
+export type GoogleStep = { state: 'checked' | 'said' | 'missing'; note: string };
+export const STEP_MARK = { checked: '✓ Checked', said: 'You said done', missing: 'Missing' } as const;
+export const googleHeadline = (steps?: GoogleStep[] | null) => {
+  const missing = steps?.findIndex((s) => s.state === 'missing') ?? -1;
+  if (missing >= 0) return `Step ${missing + 1} is missing`;
+  return steps?.every((s) => s.state === 'checked') ? 'Google is on for the house ✓' : 'Google key saved and checked by Google';
+};
 
 /** Settings, Phones: whether phones reach this computer from anywhere, in one sentence. */
 export function reach(link: Json) {
