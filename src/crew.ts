@@ -294,13 +294,16 @@ export class Crew {
   /** A task for the app: its words and state, not the AI it asked for or its session file. */
   private task({ brain, session, tokens: _, ...t }: Row) { return { ...t, thinks: brain ? disk.brainName(disk.parseBrain(brain)) : null }; }
 
-  /** An open question for the app: the plain sentence and what "For this task" or "Always" would cover. The gate's key stays here. */
+  /** An open question for the app: the plain sentence and what "For this task" or "Always" would cover. The gate's key stays here.
+   *  A checkout adds the order's plain facts for the review sheet — what the page charges and whether crewd could read it,
+   *  in the page's own currency; never the page's address. */
   private askView({ detail, ...a }: Row): Row {
     const d = JSON.parse(detail || '{}');
     const covers = d.key ? coversOf(d.key) : null;
     if (a.kind === 'connect') return { ...a, detail: { app: d.app, words: d.words } };
     if (a.kind === 'propose') return { ...a, detail: { words: a.title, preview: d.preview, ...(d.create ? { yes: `Yes, take ${d.create.name} on` } : d.draft ? { yes: 'Approve' } : {}) } };
-    return { ...a, detail: { effect: d.effect, words: a.title, spends: d.effect === 'spend', covers, ...(covers ? { always: covers } : {}), ...(d.preview ? { preview: d.preview } : {}) } };
+    return { ...a, detail: { effect: d.effect, words: a.title, spends: d.effect === 'spend', covers, ...(covers ? { always: covers } : {}), ...(d.preview ? { preview: d.preview } : {}),
+      ...(d.checkout ? { order: { shown: d.checkout.shown ?? '', known: Number.isFinite(d.checkout.total), dollars: d.checkout.currency === '$' } } : {}) } };
   }
 
   /** What one member sees: the whole crew, but their own tasks, questions and accounts. */
@@ -1225,9 +1228,8 @@ export class Crew {
   }
 
   /** Hold the call while the person decides; after the hold, park: the turn ends and the answer arrives as the next prompt. */
-  /** A checkout page's card: the order as the page shows it, and its total as the cost the money cap counts when it's
-   *  in dollars. crewd reads
-   *  it from the page as the browser tool itself reports it; the model's words never reach it. */
+  /** A checkout page's card: the order as the page shows it, and its total as the cost the money cap counts when it's in
+   *  dollars. crewd reads it from the page as the browser tool itself reports it; the model's words never reach it. */
   private order(botId: string, e: Extract<Effect, { words: string }>) {
     const l = this.live.get(botId);
     const name = this.bot(botId)?.display ?? botId;
@@ -1241,8 +1243,8 @@ export class Crew {
     const words = o.total === null ? `${name} wants to act on a checkout page at ${host}. I couldn't read the total on this page.`
       : `${name} wants to place this order at ${host}${few ? `: ${few}${o.items.length + o.more > 3 ? ', …' : ''}` : ''}. Total ${o.shown}.${not$ ? ` That's ${o.currency === '£' ? 'pounds' : 'euros'}, not dollars, so the monthly limit can't count it.` : ''}`;
     const body = [...o.items, ...(o.more ? [`and ${o.more} more`] : []),
-      o.total === null ? "I couldn't read the total on this page." : `Total ${o.shown}${not$ ? " — not dollars, the monthly limit can't count it" : ''}`].join('\n');
-    return { effect: { ...e, words, ...(o.capped ? { cost: o.total! } : {}), preview: { head: `The order at ${host}`, body } }, checkout: { page, total: o.total } };
+      o.total === null ? "Total: couldn’t read it on this page" : `Total ${o.shown}${not$ ? " — not dollars, the monthly limit can't count it" : ''}`].join('\n');
+    return { effect: { ...e, words, ...(o.capped ? { cost: o.total! } : {}), preview: { head: `The order at ${host}`, body } }, checkout: { page, total: o.total, shown: o.shown, currency: o.currency } };
   }
 
   private async ask(botId: string, task: Row | undefined, e: Extract<Effect, { words: string }>, checkout?: { page: string; total: number | null }): Promise<string | null> {

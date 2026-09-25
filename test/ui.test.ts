@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import type { Json } from '../web/src/api.ts';
 import * as A from '../web/src/adapter.ts';
 import { draftOf, keepDraft, sent } from '../web/src/draft.ts';
 import { color } from '../web/src/tokens.ts';
@@ -170,6 +171,29 @@ test('the phone\'s tab icons: whole 9×9 grids of one ink, each its own shape, a
   assert.equal(new Set(Object.values(TABS).map((b) => b.join())).size, Object.keys(TABS).length);
   const app = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
   assert.doesNotMatch(app.slice(app.indexOf('const nav:'), app.indexOf('</View>', app.indexOf('s.tabbar'))), /[⌂☺▤↻▯]/);
+});
+
+test('a checkout asks for review first: the yes names the order, an unreadable total sends the person to do it themselves', () => {
+  const ask = (detail: Json) => A.card({ id: 11, bot: 'scout', kind: 'permission', at: now, detail }, state);
+  const known = ask({ effect: 'spend', words: 'Scout wants to place this order at shop.example: Garlic, 2 kg. Total $43.10.', spends: true,
+    preview: { head: 'The order at shop.example', body: 'Garlic, 2 kg — $6.20\nTotal $43.10' }, order: { shown: '$43.10', known: true, dollars: true } });
+  assert.equal(known.head, "Review Scout's order");
+  assert.ok(known.review, 'the inbox opens the review before any yes');
+  assert.deepEqual(known.choices.map((c) => c.label), ['Place order · $43.10', "Don't place order"], 'the yes names the action and the amount');
+  assert.deepEqual(known.choices.filter((c) => c.body.answer === 'deny').map((c) => c.label), ["Don't place order"], 'deny says what it does');
+  const unknown = ask({ effect: 'spend', words: "Scout wants to act on a checkout page at shop.example. I couldn't read the total on this page.", spends: true,
+    order: { shown: '', known: false, dollars: false } });
+  assert.equal(unknown.review, true);
+  assert.ok(!unknown.choices.some((c) => c.body.answer === 'allow'), 'no yes without a readable total');
+  assert.deepEqual(unknown.choices.map((c) => c.label), ["Don't place order", "I'll buy it myself"], 'the safe way out is offered');
+  // The un-readable total is said once — in the order's own line — and the note only adds the consequence.
+  unknown.preview = { head: 'The order at shop.example', body: 'Garlic, 2 kg \u2014 $6.20\nTotal: couldn\u2019t read it on this page' };
+  const sheetLines = unknown.preview.body.split('\n');
+  assert.equal(sheetLines.filter((l) => /couldn.t read/.test(l)).length, 1, 'the total is said once');
+  // A spend without an order (a paid lookup, the words carry its cap) keeps a direct answer.
+  const lookup = ask({ effect: 'spend', words: "Tracer wants to make a paid lookup with Finder, up to $0.50.", spends: true });
+  assert.ok(!lookup.review);
+  assert.deepEqual(lookup.choices.map((c) => c.label), ['OK, spend it', 'Not now']);
 });
 
 test('the crew\'s share is words, never a number; money is whole dollars and only for the owner', () => {

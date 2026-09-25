@@ -214,11 +214,14 @@ export function Composer({ placeholder, onSend, chat }: { placeholder: string; o
 // ---------- asks ----------
 const answer = (c: Card, body: Json) => attempt(() => api.answer(c.id, body), body.answer === 'deny' ? 'OK, not now' : 'Done. Carrying on.');
 
-/** The plain-language ask card on Home and in a chat. "Read it first" opens the approval sheet. */
+/** The plain-language ask card on Home and in a chat. A checkout opens the review before any yes. */
 export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; onDone: () => void }) {
   const [reply, setReply] = useState('');
-  const act = async (body: Json) => { if (await answer(c, body)) onDone(); };
+  const [oops, setOops] = useState(false);
+  const last = useRef<Json | null>(null);
+  const act = async (body: Json) => { last.current = body; setOops(false); if (await answer(c, body)) onDone(); else setOops(true); };
   const [yes, ...rest] = c.choices;
+  const deny = c.choices.find((x) => x.body.answer === 'deny');
   return (
     <div className="card ask">
       <div className="ask-head">
@@ -226,11 +229,17 @@ export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; 
         <div><b>{c.head}</b><div className="mute small">{clock(c.at)}</div></div>
       </div>
       <p className="ask-words">{c.words}</p>
+      {oops && <div className="send-failed" role="alert">That didn't go through. <button type="button" className="link inline" onClick={() => last.current && act(last.current)}>Try again</button></div>}
       {c.reply ? (
         <form className="row" onSubmit={(e) => { e.preventDefault(); if (reply.trim()) act({ text: reply.trim() }); }}>
           <input className="input grow" value={reply} onChange={(e) => setReply(e.target.value)} placeholder={`Tell ${who?.name ?? 'them'} what to do`} />
           <button className="btn go" disabled={!reply.trim()}>Send</button>
         </form>
+      ) : c.review ? (
+        <div className="btns">
+          <a className="btn go" href={`#/ask/${c.id}`}>Review order</a>
+          {deny && <button className="btn" onClick={() => act(deny.body)}>{deny.label}</button>}
+        </div>
       ) : (
         <div className="btns">
           <button className="btn go" onClick={() => act(yes.body)}>{yes.label}</button>
@@ -243,19 +252,29 @@ export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; 
   );
 }
 
-/** The approval moment: who, what and where, exactly what goes out, and three choices. */
+/** The approval moment: who, what and where, exactly what goes out, and the choices. A checkout reviews the whole
+ *  order here, with a yes that names it; an order without a readable total offers no yes at all. */
 export function AskSheet({ c, who, chiefSays, onClose }: { c: Card; who: Helper | undefined; chiefSays?: string; onClose: () => void }) {
   const [open, setOpen] = useState(false);
-  const act = async (body: Json) => { if (await answer(c, body)) onClose(); };
+  const [oops, setOops] = useState(false);
+  const last = useRef<Json | null>(null);
+  const act = async (body: Json) => { last.current = body; setOops(false); if (await answer(c, body)) onClose(); else setOops(true); };
+  const heading = c.review && c.preview?.head ? c.preview.head : c.words;
+  const lines = c.review && c.preview?.body ? c.preview.body.split('\n') : [];
   return (
     <div className="scrim" onClick={onClose}>
       <div className="sheet approve" role="dialog" aria-modal aria-label={c.head} onClick={(e) => e.stopPropagation()}>
         <div className="approve-face">
           {who && <span className="halo"><PalArt kind={who.kind} mood="ask" d={6} name={who.name} /></span>}
-          <Pill tone="wait">{who?.name ?? 'The crew'} · {c.kind === 'spend' ? 'needs a quick OK' : 'needs your OK'}</Pill>
+          <Pill tone="wait">{who?.name ?? 'The crew'} · {c.kind === 'spend' ? 'wants to spend money' : 'needs your OK'}</Pill>
         </div>
-        <h2>{c.words}</h2>
-        {c.preview && (
+        <h2>{heading}</h2>
+        {c.review ? (
+          <div className="order">
+            {lines.map((l, i) => /^Total/.test(l) ? <b key={i} className="order-total">{l}</b> : <div key={i}>{l}</div>)}
+            {c.order && !c.order.known && <div className="mute small">So nothing is counted against the monthly limit.</div>}
+          </div>
+        ) : c.preview && (
           <div className={`preview ${open ? 'open' : ''}`}>
             {c.preview.head && <div className="mute small">{c.preview.head}</div>}
             <div>{c.preview.body}</div>
@@ -264,6 +283,7 @@ export function AskSheet({ c, who, chiefSays, onClose }: { c: Card; who: Helper 
         )}
         {chiefSays && <div className="chief-says"><Face who="chief" size={30} /><span><b>Chief:</b> {chiefSays}</span></div>}
         {c.kind === 'spend' && <p className="mute small">Anything that costs money asks you every time.</p>}
+        {oops && <div className="send-failed" role="alert">That didn't go through. <button type="button" className="link inline" onClick={() => last.current && act(last.current)}>Try again</button></div>}
         <div className="approve-btns">
           {c.choices.map((x, i) => <button key={x.label} className={`btn ${i === 0 ? 'go big' : ''}`} onClick={() => act(x.body)}>{x.label}</button>)}
         </div>

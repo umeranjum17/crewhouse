@@ -492,9 +492,12 @@ const answer = (c: A.Card, body: Json) => attempt(() => api.answer(c.id, body), 
 
 function AskCard({ c, who, onDone, canAct, offline, open }: { c: A.Card; who: A.Helper | undefined; onDone: () => void; canAct: boolean; offline: boolean; open: (c: A.Card) => void }) {
   const [reply, setReply] = useState('');
+  const [oops, setOops] = useState(false);
+  const last = useRef<Json | null>(null);
   const t = useLook();
-  const act = async (body: Json) => { if (await answer(c, body)) onDone(); };
+  const act = async (body: Json) => { last.current = body; setOops(false); if (await answer(c, body)) onDone(); else setOops(true); };
   const [yes, ...rest] = c.choices;
+  const deny = c.choices.find((x) => x.body.answer === 'deny');
   return (
     <Card ask>
       <View style={s.row}>
@@ -502,6 +505,7 @@ function AskCard({ c, who, onDone, canAct, offline, open }: { c: A.Card; who: A.
         <View style={{ flex: 1 }}><T style={s.b}>{c.head}</T><T tone="mute" style={s.small}>{A.clock(c.at)}</T></View>
       </View>
       <T style={{ marginVertical: 8 }}>{c.words}</T>
+      {oops && <T tone="pinkInk" style={s.small}>That didn't go through. Try again.</T>}
       {offline ? <T tone="mute" style={s.small}>You can answer once the home computer is back.</T>
         : !canAct ? <T tone="mute" style={s.small}>This phone watches; answer on another phone or the computer.</T> : c.kind === 'connect' ? (
         <T tone="mute" style={s.small}>Connecting an app is done on the computer: Settings, Your apps.</T>
@@ -509,6 +513,11 @@ function AskCard({ c, who, onDone, canAct, offline, open }: { c: A.Card; who: A.
         <View style={s.row}>
           <TextInput style={[s.input, { flex: 1, color: t.ink, borderColor: t.line }]} value={reply} onChangeText={setReply} placeholder={`Tell ${who?.name ?? 'them'} what to do`} placeholderTextColor={t.mute} />
           <Btn go label="Send" disabled={!reply.trim()} onPress={() => act({ text: reply.trim() })} />
+        </View>
+      ) : c.review ? (
+        <View style={s.chips}>
+          <Btn go label="Review order" onPress={() => open(c)} />
+          {deny && <Btn label={deny.label} onPress={() => act(deny.body)} />}
         </View>
       ) : (
         <View style={s.chips}>
@@ -521,23 +530,31 @@ function AskCard({ c, who, onDone, canAct, offline, open }: { c: A.Card; who: A.
   );
 }
 
-/** The approval moment: who, what, exactly what goes out, and the choices. */
+/** The approval moment: who, what, exactly what goes out, and the choices. A checkout reviews the order here, with a
+ *  yes that names it; an order without a readable total offers no yes at all. */
 function AskSheet({ c, who, chiefSays, canAct, onClose }: { c: A.Card; who: A.Helper | undefined; chiefSays?: string; canAct: boolean; onClose: () => void }) {
   const t = useLook();
-  const act = async (body: Json) => { if (await answer(c, body)) onClose(); };
+  const [oops, setOops] = useState(false);
+  const last = useRef<Json | null>(null);
+  const act = async (body: Json) => { last.current = body; setOops(false); if (await answer(c, body)) onClose(); else setOops(true); };
   const reduce = motion.useReduceMotion();
+  const heading = c.review && c.preview?.head ? c.preview.head : c.words;
   return (
     <Modal visible transparent animationType={motion.sheet(reduce)} onRequestClose={onClose}>
       <Pressable style={s.scrim} onPress={onClose}>
         <Pressable style={[s.sheet, { backgroundColor: t.bg }]} onPress={() => {}}>
           <View style={{ alignItems: 'center', gap: 10 }}>
             {who && <Face who={{ ...who, mood: 'ask' }} size={84} />}
-            <Pill tone="wait">{who?.name ?? 'The crew'} · {c.kind === 'spend' ? 'needs a quick OK' : 'needs your OK'}</Pill>
+            <Pill tone="wait">{who?.name ?? 'The crew'} · {c.kind === 'spend' ? 'wants to spend money' : 'needs your OK'}</Pill>
           </View>
-          <T style={s.h2}>{c.words}</T>
-          {c.preview && <Card>{!!c.preview.head && <T tone="mute" style={s.small}>{c.preview.head}</T>}<T>{c.preview.body}</T></Card>}
+          <T style={s.h2}>{heading}</T>
+          {c.review ? <>
+            {c.preview && <Card>{c.preview.body.split('\n').map((l, i) => /^Total/.test(l) ? <T key={i} style={s.b}>{l}</T> : <T key={i}>{l}</T>)}</Card>}
+            {c.order && !c.order.known && <T tone="mute" style={s.small}>So nothing is counted against the monthly limit.</T>}
+          </> : c.preview && <Card>{!!c.preview.head && <T tone="mute" style={s.small}>{c.preview.head}</T>}<T>{c.preview.body}</T></Card>}
           {!!chiefSays && <View style={s.row}><Face who="chief" size={30} /><T style={{ flex: 1 }}><Text style={s.b}>Chief:</Text> {A.plain(chiefSays)}</T></View>}
           {c.kind === 'spend' && <T tone="mute" style={s.small}>Anything that costs money asks you every time.</T>}
+          {oops && <T tone="pinkInk" style={s.small}>That didn't go through. Try again.</T>}
           {canAct ? c.choices.map((x, i) => <Btn key={x.label} go={i === 0} big label={x.label} onPress={() => act(x.body)} />) : <Btn big label="Close" onPress={onClose} />}
         </Pressable>
       </Pressable>
