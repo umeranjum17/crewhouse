@@ -110,6 +110,8 @@ test('the validator checks a run against crewd\'s record: issues read, citations
   const space = disk.botDir(cfg, 'desk'), repo = join(space, 'work', 'app');
   mkdirSync(join(repo, 'src'), { recursive: true });
   writeFileSync(join(repo, 'src', 'a.ts'), 'one\ntwo\nthree\n');
+  mkdirSync(join(repo, 'apps', 'mobile', 'sources', 'app', '(app)', 'session', '[id]'), { recursive: true });
+  writeFileSync(join(repo, 'apps', 'mobile', 'sources', 'app', '(app)', 'session', '[id]', 'takeover.tsx'), 'one\ntwo\n');
   const git = (...a: string[]) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', '-C', repo, ...a], { encoding: 'utf8' });
   git('init', '-q'); git('add', '-A'); git('commit', '-qm', 'base');
   const at = git('rev-parse', 'HEAD').trim().slice(0, 12);
@@ -151,6 +153,17 @@ Also \`src/a.ts:2-3@${at}\`.\n`);
   assert.deepEqual([bad['issues read'], bad['citations in files/support/8/triage.md']], ['FAIL', 'FAIL']);
   assert.match(rowOf(badTask, 'citations in files/support/8/triage.md').detail, /src\/a\.ts:2-99@.*src\/a\.ts:1-2@deadbee/s,
     'the range end past the file and the unknown commit are each named');
+
+  // Route paths with () and [] are citations like any other; a range ending past the file's end fails.
+  const route = 'apps/mobile/sources/app/(app)/session/[id]/takeover.tsx';
+  write(9, `Kind: bug. The takeover screen is ${route}:1-2@${at}.\n`);
+  const routed = await run(9, '');
+  assert.equal(verdicts(routed)['citations in files/support/9/triage.md'], 'PASS', 'a route-path range citation is found');
+  write(10, `Kind: bug. The takeover screen is ${route}:1-99@${at}.\n`);
+  const past = await run(10, '');
+  assert.equal(verdicts(past)['citations in files/support/10/triage.md'], 'FAIL', 'the range end is past the file');
+  assert.match(rowOf(past, 'citations in files/support/10/triage.md').detail,
+    new RegExp(`${route.replace(/[()[\]]/g, '\\$&')}:1-99`), 'the whole route path is named, not a truncated tail');
 
   // Blindness asks where it went, not what it wrote: naming the answer inside a heredoc is clean; fetching it is not.
   const leak = await run(7, [
