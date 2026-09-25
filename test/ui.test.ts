@@ -8,6 +8,7 @@ import type { Json } from '../web/src/api.ts';
 import * as A from '../web/src/adapter.ts';
 import { draftOf, keepDraft, sent } from '../web/src/draft.ts';
 import { color } from '../web/src/tokens.ts';
+import { cycle } from '../web/src/dialog.ts';
 
 const now = Date.now();
 const bot = (id: string, extra = {}) => ({ id, display: id[0].toUpperCase() + id.slice(1), role: 'Makes demo videos from screenshots', template: id, runtime: 'claude', model: 'sonnet',
@@ -380,6 +381,41 @@ test('the words people read make only claims Crewhouse can keep', () => {
   // The usage line describes the crew's own share, never a provider balance.
   assert.equal(A.meter({ share: { used: false } }), 'ChatGPT: the crew is within its share today');
   assert.equal(A.share({ share: { choice: 'light', used: false } }).today, 'The crew stays within the share you gave it.');
+});
+
+test('a dialog owns the keyboard: Tab cycles inside and wraps, and an outside focus still lands inside', () => {
+  let on = '';
+  const el = (name: string) => ({ name, focus: () => { on = name; } });
+  const [a, b, c] = [el('a'), el('b'), el('c')];
+  const list = [a, b, c];
+  assert.equal(cycle(list, a), b, 'forward');
+  assert.equal(cycle(list, c), a, 'forward wraps');
+  assert.equal(cycle(list, c, true), b, 'back');
+  assert.equal(cycle(list, a, true), c, 'back wraps');
+  assert.equal(cycle(list, null), a, 'focus not yet inside: Tab moves in');
+  assert.equal(cycle(list, null, true), c, 'Shift+Tab moves in at the end');
+  assert.equal(cycle(list, el('outside')), a);
+  assert.equal(cycle([], a), null, 'an empty dialog traps nothing, but nothing is in it');
+  assert.equal(on, '', 'deciding a move focuses nothing by itself');
+});
+
+test('secondary text clears 4.5:1 against the surfaces it sits on, day and night', () => {
+  const lum = (hex: string) => { const c = hex.replace('#', ''); const [r, g, b] = [0, 2, 4].map((i) => parseInt(c.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+  const ratio = (a: string, b: string) => { const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m); return (x + 0.05) / (y + 0.05); };
+  // Card is translucent over the page, so white is its lightest possible read.
+  for (const [name, pal, bgs] of [
+    ['day', color.day, ['#ffffff', color.day.bg, color.day.soft]],
+    ['night', color.night, [color.night.bg, color.night.solid, '#1a1626', color.night.soft]],
+  ] as const) {
+    for (const t of [pal.ink, pal.ink2, pal.mute, pal.okInk, pal.pinkInk]) {
+      for (const b of bgs) assert.ok(ratio(t, b) >= 4.5, `${name}: ${t} on ${b} is ${ratio(t, b).toFixed(2)}`);
+    }
+  }
+  // Both dialogs own the keyboard through the one hook.
+  for (const f of ['web/src/parts.tsx', 'web/src/flows.tsx']) {
+    assert.match(readFileSync(join(import.meta.dirname, '..', f), 'utf8'), /useDialogOwn\(/, f);
+  }
+
 });
 
 test('a photo in a message is a picture, not words', () => {

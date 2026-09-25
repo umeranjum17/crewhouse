@@ -1,7 +1,8 @@
 // The shared pieces: dot art, the ASCII moments, ask cards and the approval sheet, media, steps, the composer.
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { api, trouble, type Json } from './api.ts';
 import { draftOf, keepDraft, sent } from './draft.ts';
+import { cycle, type Focused } from './dialog.ts';
 import * as art from './art.ts';
 import { bannerStops } from './tokens.ts';
 import { clock, type Card, type FileView, type Helper, type Step } from './adapter.ts';
@@ -30,6 +31,32 @@ const FRIENDLY = {
   offline: "Can't reach the home computer right now. Check it's on, then try again.",
   failed: 'That didn’t work. Please try again.',
 };
+
+// ---------- dialogs ----------
+/** A dialog that owns the keyboard while it's open: focus moves in on open, Tab cycles inside (the page behind never
+ *  gets it), Escape leaves, and on close the focus goes home. One hook, so every sheet behaves the same. */
+export function useDialogOwn(box: RefObject<HTMLElement | null>, onClose: () => void) {
+  const close = useRef(onClose);
+  close.current = onClose;
+  useLayoutEffect(() => {
+    const dlg = box.current;
+    if (!dlg) return;
+    const prev = document.activeElement as HTMLElement | null;
+    if (!dlg.hasAttribute('tabindex')) dlg.setAttribute('tabindex', '-1');
+    dlg.focus();
+    const keys = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close.current(); }
+      else if (e.key === 'Tab') {
+        const list = dlg.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])');
+        const now = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        const next = cycle(Array.from(list) as unknown as Focused[], now, e.shiftKey);
+        if (next) { e.preventDefault(); next.focus(); }
+      }
+    };
+    addEventListener('keydown', keys, true);
+    return () => { removeEventListener('keydown', keys, true); prev?.focus?.(); };
+  }, [box]);
+}
 
 // ---------- dot art ----------
 export function Dots({ rows, pal, d = 6, label }: { rows: art.Bitmap; pal: art.Palette; d?: number; label?: string }) {
@@ -258,12 +285,14 @@ export function AskSheet({ c, who, chiefSays, onClose }: { c: Card; who: Helper 
   const [open, setOpen] = useState(false);
   const [oops, setOops] = useState(false);
   const last = useRef<Json | null>(null);
+  const box = useRef<HTMLDivElement>(null);
+  useDialogOwn(box, onClose);
   const act = async (body: Json) => { last.current = body; setOops(false); if (await answer(c, body)) onClose(); else setOops(true); };
   const heading = c.review && c.preview?.head ? c.preview.head : c.words;
   const lines = c.review && c.preview?.body ? c.preview.body.split('\n') : [];
   return (
     <div className="scrim" onClick={onClose}>
-      <div className="sheet approve" role="dialog" aria-modal aria-label={c.head} onClick={(e) => e.stopPropagation()}>
+      <div ref={box} className="sheet approve" role="dialog" aria-modal aria-label={c.head} onClick={(e) => e.stopPropagation()}>
         <div className="approve-face">
           {who && <span className="halo"><PalArt kind={who.kind} mood="ask" d={6} name={who.name} /></span>}
           <Pill tone="wait">{who?.name ?? 'The crew'} · {c.kind === 'spend' ? 'wants to spend money' : 'needs your OK'}</Pill>

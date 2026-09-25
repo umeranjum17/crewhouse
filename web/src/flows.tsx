@@ -6,7 +6,7 @@ import { createPortal } from 'react-dom';
 import { api, demo, trouble, type Json } from './api.ts';
 import * as A from './adapter.ts';
 import * as art from './art.ts';
-import { attempt, ChiefArt, Dots, Face, Laptop, Pill, toast } from './parts.tsx';
+import { attempt, ChiefArt, Dots, Face, Laptop, Pill, toast, useDialogOwn } from './parts.tsx';
 
 type Phase = 'opening' | 'waiting' | 'code' | 'done' | 'work' | 'busy' | 'cancelled' | 'unticked' | 'expired' | 'failed' | 'offline' | 'unavailable' | 'house';
 /** ?demo&phase=expired pins a flow to one state, for design review and screenshots. */
@@ -15,9 +15,11 @@ const pinned = demo ? (new URLSearchParams(location.search).get('phase') as Phas
 export const sheet = demo ? new URLSearchParams(location.search).get('sheet') : null;
 
 function Sheet({ label, onClose, children }: { label: string; onClose: () => void; children: ReactNode }) {
-  useEffect(() => { const k = (e: KeyboardEvent) => e.key === 'Escape' && onClose(); addEventListener('keydown', k); return () => removeEventListener('keydown', k); }, [onClose]);
-  // A portal, so a sheet opened from inside a card still covers the whole screen.
-  return createPortal(<div className="scrim" onClick={onClose}><div className="sheet flow" role="dialog" aria-modal aria-label={label} onClick={(e) => e.stopPropagation()}>{children}</div></div>, document.body);
+  // A portal, so a sheet opened from inside a card still covers the whole screen. The keyboard belongs to it while
+  // it's open, the same as every other sheet (parts.tsx useDialogOwn).
+  const box = useRef<HTMLDivElement>(null);
+  useDialogOwn(box, onClose);
+  return createPortal(<div className="scrim" onClick={onClose}><div ref={box} className="sheet flow" role="dialog" aria-modal aria-label={label} onClick={(e) => e.stopPropagation()}>{children}</div></div>, document.body);
 }
 
 /** Three little steps across the top, so nobody wonders where they are. */
