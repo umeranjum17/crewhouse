@@ -1394,8 +1394,8 @@ export class Crew {
             { draft: { to, path: full.slice(disk.botDir(this.cfg, botId).length + 1), sha: sha(text) }, preview: { head: `Draft for ${to}`, body: text.slice(0, 4000) } });
         }),
       tool('crew_verify', 'Have Crewhouse itself check a fix you propose to a git checkout in your folder: it applies only the check (`tests`, the ' +
-        'paths in the patch that test the fix) to `base` and runs `command`, which must fail; then the whole patch, which must pass. A patch you ' +
-        'deliver that was not seen to fail before and pass after ends as not sure. `command` runs in a fresh copy (install what it needs).',
+        'paths in the patch that test the fix) to `base` and runs `command`, which must fail; then the whole patch, which must pass; it runs in a ' +
+        'fresh copy seeded with the dependencies your checkout already has installed. A check that failed before only on a missing module proves nothing, and a patch you deliver unproven ends as not sure.',
         { repo: Type.String(), base: Type.String(), patch: Type.String(), tests: Type.Array(Type.String()), command: Type.String() }, (p) => this.verify(botId, p)),
       tool('crew_learn', 'Ask the person to let you keep a way of doing something you will need again (a job you have now done at least twice). ' +
         '`name`: two to four words; `description`: when to use it; `says`: what it does, in the person\'s plain words; `steps`: the steps, short and in plain words, as the person sees them. ' +
@@ -1530,7 +1530,7 @@ export class Crew {
   }
 
   /** crew_verify: crewd applies the check alone to the base (it must fail), then the whole patch (it must pass), each in a
-   *  fresh worktree in the bot's sandbox, and keeps the exit codes. The model's word about its tests never counts. */
+   *  fresh worktree seeded with a copy of the helper's installed node_modules, and keeps the exit codes. The model's word about its tests never counts. */
   private async verify(botId: string, p: { repo: string; base: string; patch: string; tests: string[]; command: string }) {
     if (!sandboxReady()) throw new Error('this computer has no sandbox to run a check in');
     const space = disk.botDir(this.cfg, botId), repo = disk.insideBot(this.cfg, botId, String(p.repo ?? '')), patch = disk.insideBot(this.cfg, botId, String(p.patch ?? ''));
@@ -1541,14 +1541,14 @@ export class Crew {
     const run = (side: string, only: string[]) => {
       const w = join(space, 'work', 'verify', `${task}-${side}`);
       return runSandboxed(space, [this.cfg.toolsDir], { PATH: toolBin(this.cfg) }, `rm -rf ${q(w)}; git -C ${q(repo)} worktree prune; ` +
-        `git -C ${q(repo)} worktree add -q --detach ${q(w)} ${q(p.base)} && cd ${q(w)} && git apply ${only.map((t) => `--include=${q(t)} `).join('')}${q(patch)} || exit 97; ` +
-        `(${p.command}); e=$?; cd /; git -C ${q(repo)} worktree remove --force ${q(w)}; exit $e`, this.netOf(botId)?.sock);
+        `git -C ${q(repo)} worktree add -q --detach ${q(w)} ${q(p.base)} && cd ${q(w)} && git apply ${only.map((t) => `--include=${q(t)} `).join('')}${q(patch)} || exit 97; (cd ${q(repo)} && find . -name node_modules -type d -prune -print0 | xargs -0 -r cp -a --reflink=auto --parents -t ${q(w)}); ` +
+        `(${p.command}); e=$?; cd /; git -C ${q(repo)} worktree remove --force ${q(w)}; rm -rf ${q(w)}; exit $e`, this.netOf(botId)?.sock);
     };
     const before = await run('base', tests), after = await run('fix', []);
     if (before.code === 97 || after.code === 97) throw new Error(`the patch doesn't apply to ${p.base}: ${(before.code === 97 ? before : after).tail}`);
-    const passed = before.code !== 0 && after.code === 0;
-    this.db.event('verify.result', botId, { task, patch: patch.slice(space.length + 1), sha: sha(readFileSync(patch, 'utf8')), base: p.base, command: clean(p.command, 300), before: before.code, after: after.code, passed });
-    return { passed, before: { exit: before.code, tail: before.tail }, after: { exit: after.code, tail: after.tail } };
+    const missingDep = /Cannot find (?:package|module)|ERR_MODULE_NOT_FOUND/.test(before.tail), passed = before.code !== 0 && after.code === 0 && !missingDep; // red on a missing module proves nothing: a patch that deletes the import would pass it
+    this.db.event('verify.result', botId, { task, patch: patch.slice(space.length + 1), sha: sha(readFileSync(patch, 'utf8')), base: p.base, command: clean(p.command, 300), before: before.code, after: after.code, passed, ...(missingDep ? { missingDep } : {}) });
+    return { passed, missingDep, before: { exit: before.code, tail: before.tail }, after: { exit: after.code, tail: after.tail } };
   }
 
   /** A patch this task delivered that crewd never saw pass its check, as the file is now; null when there is none. */

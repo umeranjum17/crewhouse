@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { setup, settled, task } from './lab.ts';
 import * as disk from '../src/bots.ts';
@@ -100,6 +100,66 @@ test('a delivered fix ends done only when crewd saw its check fail before and pa
   assert.equal((await job(`send it ${call('crew_deliver', { path: good })}`)).state, 'done');
   writeFileSync(join(space, good), '');
   assert.equal((await job(`send it ${call('crew_deliver', { path: good })}`)).state, 'unsure');
+  done();
+});
+
+test('the check runs on the deps the helper installed; a pair that failed only on a missing module proves nothing', { skip: !sandboxReady() && 'bubblewrap is not usable here' }, async () => {
+  const { cfg, db, crew, done } = setup();
+  crew.onboard('sir');
+  crew.recruit('support', 'Desk', 'person');
+  const space = disk.botDir(cfg, 'desk');
+  const git = (repo: string, ...a: string[]) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', '-C', repo, ...a], { encoding: 'utf8' });
+  const patch = (repo: string, name: string, body: Record<string, string>) => {
+    for (const [f, text] of Object.entries(body)) writeFileSync(join(repo, f), text);
+    git(repo, 'add', ...Object.keys(body));
+    mkdirSync(join(space, 'files'), { recursive: true });
+    writeFileSync(join(space, 'files', name), git(repo, 'diff', '--cached'));
+    git(repo, 'reset', '-q', '--hard');
+    return `files/${name}`;
+  };
+  const verify = (repo: string, base: string, p: string) => call('crew_verify', { repo, base, patch: p, tests: ['check.sh'], command: 'sh check.sh' });
+  const job = async (text: string) => { const t = (await crew.post('desk', text))!.task; await settled(db, t); return task(db, t); };
+
+  // The helper installed left-pad in work/app/node_modules (never committed). Its check needs it.
+  const app = join(space, 'work', 'app');
+  mkdirSync(app, { recursive: true });
+  git(app, 'init', '-q');
+  mkdirSync(join(app, 'node_modules', 'left-pad'), { recursive: true });
+  writeFileSync(join(app, 'node_modules', 'left-pad', 'index.sh'), 'pad() { printf "%*s" "$1" | tr " " "$2"; }\n');
+  writeFileSync(join(app, 'add.sh'), 'echo $(($1 - $2))\n');
+  writeFileSync(join(app, 'check.sh'), `[ -f node_modules/left-pad/index.sh ] || { echo "Error: Cannot find package 'left-pad'" >&2; exit 1; }\n` +
+    `. node_modules/left-pad/index.sh\n[ "$(sh add.sh 2 3)" = "$(pad 1 5)" ] || { echo "check: add.sh is wrong"; exit 1; }\n`);
+  git(app, 'add', 'add.sh', 'check.sh');
+  git(app, 'commit', '-qm', 'base');
+  const baseA = git(app, 'rev-parse', 'HEAD').trim();
+
+  // A fresh verify worktree has no node_modules: crewd seeds it from the helper's own install, so the pair behaves.
+  const fix = patch(app, 'app-fix.patch', { 'add.sh': 'echo $(($1 + $2))\n' });
+  const proved = await job(`fix it ${verify('work/app', baseA, fix)} ${call('crew_deliver', { path: fix })}`);
+  assert.equal(proved.state, 'done');
+  for (const side of ['base', 'fix']) assert.equal(existsSync(join(space, 'work', 'verify', `${proved.id}-${side}`)), false, `${side} worktree and its seeded deps are gone`);
+  assert.equal(events(db, 'verify.result').at(-1).passed, true);
+  assert.equal(validate({ db, crewDir: cfg.crewDir }, proved.id).find((r: any) => r.what === `fix ${fix}`).verdict, 'PASS');
+
+  // Red for the wrong reason: gadget's base needs ghost, which was never installed, so the before side could only fail
+  // on the missing module. The patch deletes the import and passes: no proof, unsure, and the validator marks it.
+  const gadget = join(space, 'work', 'gadget');
+  mkdirSync(gadget, { recursive: true });
+  git(gadget, 'init', '-q');
+  mkdirSync(join(gadget, 'src'), { recursive: true });
+  writeFileSync(join(gadget, 'src', 'lib.sh'), `[ -f node_modules/ghost/index.sh ] || { echo "Error: Cannot find package 'ghost'" >&2; exit 1; }\necho $(($1 - $2))\n`);
+  writeFileSync(join(gadget, 'check.sh'), `[ "$(sh src/lib.sh 2 3)" = 5 ] || { echo "check: lib is wrong"; exit 1; }\n`);
+  git(gadget, 'add', 'src/lib.sh', 'check.sh');
+  git(gadget, 'commit', '-qm', 'base');
+  const baseG = git(gadget, 'rev-parse', 'HEAD').trim();
+  const wrong = patch(gadget, 'gadget-fix.patch', { 'src/lib.sh': 'echo $(($1 + $2))\n' });
+  const suspicious = await job(`fix it ${verify('work/gadget', baseG, wrong)} ${call('crew_deliver', { path: wrong })}`);
+  assert.equal(suspicious.state, 'unsure');
+  for (const side of ['base', 'fix']) assert.equal(existsSync(join(space, 'work', 'verify', `${suspicious.id}-${side}`)), false, `${side} worktree gone when the check fails too`);
+  assert.deepEqual([events(db, 'verify.result').at(-1).passed, events(db, 'verify.result').at(-1).missingDep], [false, true]);
+  const row = validate({ db, crewDir: cfg.crewDir }, suspicious.id).find((r: any) => r.what === `fix ${wrong}`);
+  assert.equal(row.verdict, 'UNKNOWN');
+  assert.match(row.detail, /missing module/);
   done();
 });
 
