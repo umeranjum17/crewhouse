@@ -10,6 +10,7 @@ import type { Row, Store } from './db.ts';
 import * as disk from './bots.ts';
 import { Desktops, deskFor, browserBin, missing as desktopMissing, type Watcher } from './desktop.ts';
 import { Accounts, OWNER, PROVIDERS } from './accounts.ts';
+import { Connections, type AppTool } from './connections.ts';
 import { cliTool, Mcp, openSession, sandboxBash, sandboxReady, webTools } from './engine.ts';
 import { coversOf, effectOf, toolWords, type Effect } from './policy.ts';
 import { registry, resolveGrants, toolBin, which } from './tools.ts';
@@ -65,7 +66,7 @@ export const chiefGreeting = () =>
   'Before we begin, how would you like me to address you? "Sir", "ma\'am", or by name, as you prefer.';
 
 /** A bot at work: its task's engine session, on whose account and which AI, and the browser if it has one. */
-interface Live { session: AgentSession; task: number; member: number; brain: disk.Brain; mcp?: Mcp; page?: string }
+interface Live { session: AgentSession; task: number; member: number; brain: disk.Brain; mcp?: Mcp; page?: string; apps?: Record<string, AppTool> }
 
 /** The deterministic half: people, bots, tasks, the per-bot queue, asks. Models only ever see prompts. */
 export class Crew {
@@ -85,6 +86,8 @@ export class Crew {
   private held = new Set<string>();
   readonly desktops: Desktops;
   readonly accounts: Accounts;
+  readonly connections: Connections;
+  private freshAt = 0;
 
   private cfg: Config;
   private db: Store;
@@ -96,6 +99,9 @@ export class Crew {
     if (cfg.engine === 'stub') this.accounts.prepare = stubModels;
     this.accounts.onChange = (member, key) => this.db.event('account.changed', null, { member, account: key });
     this.accounts.onExpired = (member, key) => this.say(CHIEF, 'system', `Your ${PROVIDERS[key].name} sign-in has run out. Sign in again under Settings, AI accounts, and the crew carries on.`, null, member);
+    this.connections = new Connections(cfg, `http://${cfg.host}:${cfg.port}/connect/callback`);
+    this.connections.onChange = (member, app) => this.db.event('app.changed', null, { member, app });
+    this.connections.onExpired = (member, app) => this.say(CHIEF, 'system', `Your ${this.connections.apps[app].name} connection has run out. Connect it again under Settings, Connections, whenever you like.`, null, member);
   }
 
   init() {
@@ -569,6 +575,10 @@ export class Crew {
     for (const t of registry(this.cfg).filter((t) => t.run && g.tools.includes(t.id))) {
       tools.push(cliTool(t.id.replace(/-/g, '_'), which(this.cfg, t.bins[0]) ?? t.bins[0], t.name, space, g.env));
     }
+    // The person's connected apps (their Notion, their Google…): every helper working for them can use them, through the gate.
+    const apps = await this.connections.tools(member);
+    tools.push(...apps.tools);
+    l.apps = apps.effects;
     if (g.mcp.browser) {
       // With its own computer, the bot's browser tool drives the visible Chromium crewd keeps on the bot's display.
       if (g.tools.includes('computer') && browserBin() && this.cfg.engine === 'pi') {
@@ -692,7 +702,7 @@ export class Crew {
     const conf = disk.botConfig(this.cfg, botId);
     const granted = new Set(conf.tools ?? []);
     return {
-      bot: this.bot(botId)!.display, space: disk.botDir(this.cfg, botId), page: this.live.get(botId)?.page, signedIn: conf.signedIn ?? [],
+      bot: this.bot(botId)!.display, space: disk.botDir(this.cfg, botId), page: this.live.get(botId)?.page, signedIn: conf.signedIn ?? [], apps: this.live.get(botId)?.apps,
       run: Object.fromEntries(registry(this.cfg).filter((t) => t.run && granted.has(t.id)).map((t) => [t.id.replace(/-/g, '_'), { name: t.name, ...t.run! }])),
       // Sign-ins and keys: every member's, the engine's, and other programs'. Nothing reads them through a bot.
       secret: [this.cfg.stateDir, this.cfg.toolsDir, ...['.pi', '.ssh', '.gnupg', '.aws', '.config/gh', '.treg', '.codex', '.claude', '.claude.json'].map((d) => join(homedir(), d))],
@@ -855,7 +865,12 @@ export class Crew {
         this.setTask(task, 'failed', 'Took longer than an hour, so I stopped it.');
       }
       this.desktops.sweep((bot) => !!this.activeTask(bot) || this.held.has(bot));
-      void this.accounts.keepFresh(this.members().map((m) => m.id)).catch((e) => console.error('keep fresh', e));
+      if (Date.now() - this.freshAt > 30 * 60_000) {
+        this.freshAt = Date.now();
+        const members = this.members().map((m) => m.id);
+        void this.accounts.keepFresh(members).catch((e) => console.error('keep fresh', e));
+        void this.connections.keepFresh(members).catch((e) => console.error('keep fresh', e));
+      }
     } catch (e) { console.error('tick', e); }
     this.dispatch();
   }

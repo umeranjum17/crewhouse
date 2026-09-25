@@ -112,7 +112,7 @@ test('the shell: its own space is the only writable place, the home folder is em
   assert.match(out, /made/, 'works in its own space');
   assert.match(out, /Read-only file system|No such file or directory|Permission denied/, 'nothing outside it is writable');
   assert.ok(!existsSync(outside));
-  assert.match(out, /key:\n/, 'no keys in its environment');
+  assert.match(out, /key:\s*$/, 'no keys in its environment');
   assert.equal(db.all('SELECT * FROM asks').length, 0, 'and it never asked');
   done();
 });
@@ -712,7 +712,7 @@ test('sign-in: a lapsed sign-in is found in the background and said once, in pla
   await crew.accounts.login(OWNER, 'grok');
   const rt: any = await crew.accounts.runtime(OWNER);
   rt.getAuth = async () => { throw new Error('invalid_grant: refresh token revoked'); };
-  await crew.accounts.keepFresh([OWNER], Date.now() + 3_600_000);
+  await crew.accounts.keepFresh([OWNER]);
   assert.ok(crew.accounts.unready(OWNER, 'grok'));
   assert.match(db.get("SELECT text FROM messages WHERE bot = 'chief' ORDER BY id DESC")!.text, /Your Grok sign-in has run out\. Sign in again under Settings, AI accounts/);
   done();

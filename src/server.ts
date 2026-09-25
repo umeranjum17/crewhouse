@@ -62,6 +62,13 @@ export function startServer(cfg: Config, db: Store, crew: Crew) {
         return send(res, 200, await api(req, p, url));
       }
 
+      // An app's sign-in page sends the browser back here; the tab says, in words, how it went.
+      if (p === '/connect/callback') {
+        const words = await crew.connections.finish(url.searchParams);
+        res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
+        return res.end(`<!doctype html><meta name="viewport" content="width=device-width"><title>Crewhouse</title><body style="font:18px system-ui;margin:3em auto;max-width:28em;text-align:center">${words.replace(/[<&]/g, '')}</body>`);
+      }
+
       const file = p.match(/^\/files\/([a-z0-9-]+)\/(.+)$/);
       if (file) {
         const full = disk.insideBot(cfg, file[1], join('files', decodeURIComponent(file[2])));
@@ -111,6 +118,14 @@ export function startServer(cfg: Config, db: Store, crew: Crew) {
       else if (act === 'cancel') crew.accounts.cancel(who, key);
       else await crew.accounts.logout(who, key);
       return { ok: true, signIn: crew.accounts.view(who, key) };
+    }
+    // Connections: each person's own apps (Notion, Canva, Google…), connected on the app's own page.
+    if (m === 'GET' && p === '/api/connections') return crew.members().flatMap((mm) => crew.connections.list(mm.id).map((c) => ({ member: mm.id, ...c })));
+    if ((r = p.match(/^\/api\/connections\/(\d+)\/([a-z]+)\/(connect|disconnect)$/)) && m === 'POST') {
+      const who = crew.member(Number(r[1])).id as number;
+      if (r[3] === 'connect') return crew.connections.connect(who, r[2]);
+      crew.connections.disconnect(who, r[2]);
+      return { ok: true };
     }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/models$/)) && m === 'PUT') {
       crew.botPage(r[1]); // 404 for unknown bots

@@ -4,15 +4,15 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 need_node() {
-  command -v node >/dev/null || { echo "Crewhouse needs Node 22.18 or later: https://nodejs.org" >&2; exit 1; }
-  node -e 'const [a,b]=process.versions.node.split(".").map(Number); process.exit(a>22||(a===22&&b>=18)?0:1)' \
-    || { echo "Crewhouse needs Node 22.18 or later (found $(node --version))" >&2; exit 1; }
+  command -v node >/dev/null || { echo "Crewhouse needs Node 22.19 or later: https://nodejs.org" >&2; exit 1; }
+  node -e 'const [a,b]=process.versions.node.split(".").map(Number); process.exit(a>22||(a===22&&b>=19)?0:1)' \
+    || { echo "Crewhouse needs Node 22.19 or later (found $(node --version))" >&2; exit 1; }
 }
 
 # Where this Crewhouse keeps things, from the same config crewd reads (so env overrides agree).
 paths() {
-  IFS=$'\t' read -r STATE CREW TOOLS SESSION < <(node --input-type=module -e \
-    "const { loadConfig } = await import('./src/config.ts'); const c = loadConfig(); console.log([c.stateDir, c.crewDir, c.toolsDir, c.herdrSession].join('\t'))")
+  IFS=$'\t' read -r STATE CREW TOOLS < <(node --input-type=module -e \
+    "const { loadConfig } = await import('./src/config.ts'); const c = loadConfig(); console.log([c.stateDir, c.crewDir, c.toolsDir].join('\t'))")
 }
 
 # crewd's pid, only if that process really is this checkout's crewd.
@@ -88,9 +88,8 @@ case "${1:-}" in
       case "$a" in --all) all=1 ;; --yes|-y) yes=1 ;; *) echo "usage: ./crewhouse uninstall [--all] [--yes]" >&2; exit 2 ;; esac
     done
     echo "This removes what Crewhouse installed:"
-    echo "  $STATE  (the database, household members' own AI sign-ins, desktops, log)"
+    echo "  $STATE  (the database, the engine's own folder, household members' own AI sign-ins, desktops, log)"
     echo "  $TOOLS  (pinned tools)"
-    [ -n "$SESSION" ] && echo "  Herdr session '$SESSION'  (the bots' terminals)"
     echo "  node_modules and web/dist in $(pwd)"
     if [ -n "$all" ]; then echo "  $CREW  (your crew: every bot's notes, skills and files)"
     else echo "Your crew stays in $CREW (every bot's notes, skills and files). Add --all to remove it too."; fi
@@ -100,11 +99,6 @@ case "${1:-}" in
       case "$ok" in [Yy]*) ;; *) echo "Nothing was removed."; exit 0 ;; esac
     fi
     stop_crewd || true
-    # Only crewd's own session; a lab wrapper (CREWHOUSE_HERDR_CMD) owns its session itself. Never the owner's default.
-    if [ -n "$SESSION" ] && [ "$SESSION" != default ] && command -v herdr >/dev/null; then
-      herdr session stop "$SESSION" >/dev/null 2>&1 || true
-      herdr session delete "$SESSION" >/dev/null 2>&1 || true
-    fi
     remove "$STATE"
     remove "$TOOLS"
     rmdir "$(dirname "$TOOLS")" 2>/dev/null || true

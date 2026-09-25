@@ -33,7 +33,6 @@ export type SignIn = { state: 'waiting' | 'done' | 'failed'; url?: string; code?
 type Flow = SignIn & { abort: AbortController; paste?: (text: string) => void; timedOut?: boolean };
 
 const LOGIN_MS = Number(process.env.CREWHOUSE_SIGNIN_MS || 15 * 60_000); // longer than any provider's code lives
-const FRESH_MS = 30 * 60_000;
 
 /** A failed sign-in in one plain sentence with one next step. */
 export function signInError(name: string, error: string, key = false) {
@@ -154,13 +153,10 @@ export class Accounts {
     this.onChange?.(member, key);
   }
 
-  /** Refresh every signed-in account now and then, so a sign-in never lapses while nobody is looking. One that can't be
-   *  refreshed is signed out, and `onExpired` says so once, in plain words. */
-  private freshAt = 0;
+  /** Refresh every signed-in account now and then (crewd's clock calls this), so a sign-in never lapses while nobody is
+   *  looking. One that can't be refreshed is signed out, and `onExpired` says so once, in plain words. */
   onExpired?: (member: number, key: string) => void;
-  async keepFresh(members: number[], now = Date.now()) {
-    if (now - this.freshAt < FRESH_MS) return;
-    this.freshAt = now;
+  async keepFresh(members: number[]) {
     for (const m of members) for (const [key, p] of Object.entries(PROVIDERS)) {
       if (p.key || this.ready.get(`${m}:${key}`) !== true) continue;
       const rt = await this.runtime(m);

@@ -20,6 +20,8 @@ export interface Seen {
   run?: Record<string, { name: string; free: string[]; spend: string[] }>;
   /** Folders no bot may open at all: sign-ins and keys, the engine's own and every other program's. */
   secret: string[];
+  /** Tools from the person's connected apps, with what each does to the world. */
+  apps?: Record<string, { app: string; title: string; readOnly: boolean; destructive: boolean }>;
 }
 
 const READS = new Set(['read', 'ls', 'grep', 'find']);
@@ -67,6 +69,12 @@ export function effectOf(tool: string, input: Record<string, any>, s: Seen): Eff
     return act.spend ? { kind: 'spend', words: `${s.bot} wants to act on a checkout or payment page at ${act.host}.` }
       : { kind: 'send', words: `${s.bot} wants to act as you on ${act.host}, a site you signed it in to.`, key: `send:${act.host}`, covers: `acting as you on ${act.host}` };
   }
+  const app = s.apps?.[tool];
+  if (app) {
+    if (app.readOnly) return { kind: 'safe' };
+    const key = `app:${app.app}:${app.title}`;
+    return { kind: app.destructive ? 'delete' : 'send', words: `${s.bot} wants to use your ${app.app}: ${app.title}.`, key, covers: coversOf(key) };
+  }
   const cli = s.run?.[tool];
   if (cli) {
     const args = (Array.isArray(input.args) ? input.args : []).map(String).join(' ');
@@ -85,6 +93,7 @@ export function effectOf(tool: string, input: Record<string, any>, s: Seen): Eff
 export function coversOf(key: string) {
   const [kind, ...rest] = key.split(':');
   const what = rest.join(':');
+  if (kind === 'app') { const [app, ...title] = rest; return `“${title.join(':')}” in your ${app}`; }
   return kind === 'files' ? folderWords(what + '/x') : kind === 'send' ? `acting as you on ${what}` : 'this';
 }
 

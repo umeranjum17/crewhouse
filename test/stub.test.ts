@@ -80,7 +80,7 @@ test('chief onboarding, recruit, assign, grants', async () => {
 
 test('nothing technical reaches the app; the person\'s own files ask in one plain sentence', async () => {
   await ready();
-  const seen = JSON.stringify([(await api('GET', '/api/state')).body, (await api('GET', '/api/bots/reel')).body, (await api('GET', '/api/bots/chief')).body, (await api('GET', '/api/accounts')).body]);
+  const seen = JSON.stringify([(await api('GET', '/api/state')).body, (await api('GET', '/api/bots/reel')).body, (await api('GET', '/api/bots/chief')).body, (await api('GET', '/api/accounts')).body, (await api('GET', '/api/connections')).body]);
   for (const bad of [root, homedir() + '/', 'openai-codex', 'gpt-', 'muse-spark', 'grok-4', 'bwrap', 'ffmpeg -', '[Crewhouse', 'Your id in Crewhouse', 'claude', 'CLAUDE', 'token']) {
     assert.ok(!seen.includes(bad), `the app was sent "${bad}": …${seen.slice(Math.max(0, seen.indexOf(bad) - 120), seen.indexOf(bad) + 80)}…`);
   }
