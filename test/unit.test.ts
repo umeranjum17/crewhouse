@@ -10,7 +10,7 @@ import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setup, sleep, task, until, prompted, settled, holding, release, lastSaid } from './lab.ts';
 
-const { quietNow, short } = await import('../src/crew.ts');
+const { Crew, quietNow, short } = await import('../src/crew.ts');
 const { classify } = await import('@byokit/accounts');
 const { OWNER, signInError } = await import('../src/accounts.ts');
 const { effectOf, browserAsk, coversOf, toolWords } = await import('../src/policy.ts');
@@ -488,6 +488,24 @@ test('steer: a word from the person reaches the bot mid-task without starting ov
   await settled(db, t);
   assert.ok(db.get("SELECT 1 FROM messages WHERE bot = 'reel' AND author = 'person' AND text = 'make it faster'"));
   assert.ok(readFileSync(task(db, t).session, 'utf8').includes('make it faster'), 'it went into the same conversation');
+  done();
+});
+
+test('suggestions wait for their answer across a restart; other questions without a job are withdrawn', () => {
+  const { cfg, db, crew, done } = setup();
+  crew.recruit('scout', 'Scout', 'person');
+  const keep = { name: 'weekly-shop', description: 'Plan the weekly shop', says: 'Plan the weekly shop', steps: '1. List the dinners.\n2. Write the shopping list.' };
+  (crew as any).propose('scout', 'Scout would like to remember how to do this: Plan the weekly shop', { skill: keep });
+  (crew as any).openAsk('scout', undefined, 'Scout would like to look at a file', { effect: 'files' });
+  crew.stop();
+  const again = new Crew(cfg, db);
+  again.init();
+  const open = db.all("SELECT kind FROM asks WHERE state = 'open'").map((a) => a.kind);
+  assert.deepEqual(open, ['propose']);
+  again.stop();
+  assert.throws(() => disk.draftSkill(cfg, 'scout', { ...keep, name: 'research-report' }), /already have a skill called research-report/, 'a skill it came with is not overwritten');
+  assert.throws(() => disk.draftSkill(cfg, 'scout', { ...keep, steps: 'x'.repeat(disk.SKILL_CAP) }), /over 4000/);
+  assert.match(disk.draftSkill(cfg, 'scout', { ...keep, description: 'Use: when asked' }).text, /^description: "Use: when asked"$/m, 'a colon cannot break the header');
   done();
 });
 

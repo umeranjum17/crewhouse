@@ -54,6 +54,9 @@ It shows as a card in that helper's chat, never on Home. Answer `allow` once con
 `PUT /api/bots/:id/soul` `{text}` saves the person's words (the app keeps the `# Name` heading); `POST /api/bots/:id/soul/reset` puts back how it started. No bot can change its own.
 `PUT /api/bots/:id/notes` `{text}` is the viewer's own notes with that helper. `GET`/`PUT /api/about` `{notes, cap}` is what the whole crew knows about the viewer: every helper reads it before a job for them. A `memory.learned` step with `everyone` went there; Undo works on the viewer's own only.
 
+A **suggestion** is an ask with `kind: 'propose'` and `detail.{words, preview: {head, body}}`: a skill a helper would like to keep (from `crew_learn`), or a new personality Chief suggests for a helper (from `crew_suggest`). It is a yes-or-no card ("Yes, keep it" / "Not now"), never "always"; nothing changes until `allow`, and it belongs to no running job, so it waits across restarts.
+`skills[]` rows carry `learned`; `DELETE /api/bots/:id/skills/:name` puts a learned one away (kept, no longer used). A skill it came with can't be removed.
+
 ## First run (today)
 
 `POST /api/onboard` `{address, ask}`: how Chief addresses the person and, from an idea card, their first request, in one tap.

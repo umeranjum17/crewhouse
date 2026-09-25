@@ -30,6 +30,7 @@ const state = {
     { id: 1, bot: 'reel', task_id: 5, kind: 'permission', at: now, title: 'Reel would like to run a command', detail: { tool: 'Bash', summary: 'fc-list 2>&1 | head -20', rule: 'Bash(fc-list *)', covers: 'fc-list commands' } },
     { id: 2, bot: 'reel', task_id: 5, kind: 'permission', at: now, title: 'Reel would like to use mcp__people__search', detail: { tool: 'mcp__people__search', summary: 'curl -X POST https://api.example.com', spends: true } },
     { id: 3, bot: 'scout', task_id: 6, kind: 'blocked', at: now, title: 'Scout is waiting on a question in its terminal', detail: { pane: '❯ 1. Yes\n  2. No, and tell Claude what to do (esc)' } },
+    { id: 4, bot: 'reel', task_id: null, kind: 'propose', at: now, title: 'Reel would like to remember how to do this: make a birthday video', detail: { words: 'Reel would like to remember how to do this: make a birthday video', preview: { head: 'How Reel would do it', body: '1. Pick the happiest photos from ~/Pictures/eid\n2. Run `ffmpeg -i x.mp4`' } } },
   ],
   events: [
     { seq: 1, at: now, kind: 'run.tool', bot: 'reel', data: { task: 5, tool: 'Bash', summary: 'ffmpeg -i in.mp4 out.mp4' } },
@@ -65,14 +66,17 @@ test('nothing technical survives the adapter', () => {
   };
   for (const [name, v] of Object.entries(views)) assert.doesNotMatch(shown(v), FORBIDDEN, name);
   assert.equal(h.signing?.code, 'AB12-CDE34', 'the one-time code reaches the sign-in sheet');
-  assert.deepEqual(A.knows(page.skills), ['Turn photos into a short video', 'plan dinners'], 'the person\'s words, never the model\'s');
+  assert.deepEqual(A.knows(page.skills).map((k) => k.says), ['Turn photos into a short video', 'plan dinners'], 'the person\'s words, never the model\'s');
   assert.equal(A.personality(page.soul)[0], 'You are Reel.', 'the name heading is not repeated');
   assert.equal(A.soulText('Reel', A.soulDraft(page.soul)), page.soul + '\n', 'editing keeps the name heading');
   assert.equal(A.withoutMemory(A.withMemory('- One\n', 'Two'), 0), '- Two\n');
 });
 
 test('asks become plain cards: money never gets "always", a blocked terminal becomes a question', () => {
-  const [run, spend, question] = A.cards(state);
+  const [run, spend, question, keep] = A.cards(state);
+  assert.equal(keep.head, 'Reel learned something');
+  assert.deepEqual(keep.choices.map((c) => c.label), ['Yes, keep it', 'Not now'], 'a suggestion is yes or no, never "always"');
+  assert.equal(keep.preview?.head, 'How Reel would do it');
   assert.equal(run.words, 'Reel would like your OK to carry on.');
   assert.deepEqual(run.choices.map((c) => c.label), ['Yes, go ahead', 'Always OK for Reel', 'Not now']);
   assert.equal(spend.kind, 'spend');
