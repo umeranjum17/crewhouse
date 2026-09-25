@@ -272,7 +272,7 @@ export function AskSheet({ c, who, chiefSays, onClose }: { c: Card; who: Helper 
         {c.review ? (
           <div className="order">
             {lines.map((l, i) => /^Total/.test(l) ? <b key={i} className="order-total">{l}</b> : <div key={i}>{l}</div>)}
-            {c.order && !c.order.known && <div className="mute small">I couldn't read the total on this page, so nothing is counted against the monthly limit.</div>}
+            {c.order && !c.order.known && <div className="mute small">So nothing is counted against the monthly limit.</div>}
           </div>
         ) : c.preview && (
           <div className={`preview ${open ? 'open' : ''}`}>

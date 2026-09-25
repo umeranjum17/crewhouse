@@ -550,7 +550,7 @@ function AskSheet({ c, who, chiefSays, canAct, onClose }: { c: A.Card; who: A.He
           <T style={s.h2}>{heading}</T>
           {c.review ? <>
             {c.preview && <Card>{c.preview.body.split('\n').map((l, i) => /^Total/.test(l) ? <T key={i} style={s.b}>{l}</T> : <T key={i}>{l}</T>)}</Card>}
-            {c.order && !c.order.known && <T tone="mute" style={s.small}>I couldn't read the total on this page, so nothing is counted against the monthly limit.</T>}
+            {c.order && !c.order.known && <T tone="mute" style={s.small}>So nothing is counted against the monthly limit.</T>}
           </> : c.preview && <Card>{!!c.preview.head && <T tone="mute" style={s.small}>{c.preview.head}</T>}<T>{c.preview.body}</T></Card>}
           {!!chiefSays && <View style={s.row}><Face who="chief" size={30} /><T style={{ flex: 1 }}><Text style={s.b}>Chief:</Text> {A.plain(chiefSays)}</T></View>}
           {c.kind === 'spend' && <T tone="mute" style={s.small}>Anything that costs money asks you every time.</T>}

@@ -186,6 +186,10 @@ test('a checkout asks for review first: the yes names the order, an unreadable t
   assert.equal(unknown.review, true);
   assert.ok(!unknown.choices.some((c) => c.body.answer === 'allow'), 'no yes without a readable total');
   assert.deepEqual(unknown.choices.map((c) => c.label), ["Don't place order", "I'll buy it myself"], 'the safe way out is offered');
+  // The un-readable total is said once — in the order's own line — and the note only adds the consequence.
+  unknown.preview = { head: 'The order at shop.example', body: 'Garlic, 2 kg \u2014 $6.20\nTotal: couldn\u2019t read it on this page' };
+  const sheetLines = unknown.preview.body.split('\n');
+  assert.equal(sheetLines.filter((l) => /couldn.t read/.test(l)).length, 1, 'the total is said once');
   // A spend without an order (a paid lookup, the words carry its cap) keeps a direct answer.
   const lookup = ask({ effect: 'spend', words: "Tracer wants to make a paid lookup with Finder, up to $0.50.", spends: true });
   assert.ok(!lookup.review);
