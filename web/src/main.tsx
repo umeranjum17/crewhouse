@@ -733,11 +733,12 @@ function App() {
   const [booted, setBooted] = useState(false);
   const [party, setParty] = useState<string | null>(null);
   const seenDone = useRef<Set<number> | null>(null);
+  const heard = useRef(0); // when the home computer last answered
   const { look, setLook, night } = useLook();
   const [me, setMe] = useState(() => { const id = Number(localStorage.getItem('crewhouse.member')) || 1; setMember(id); return id; });
   const switchTo = useCallback((id: number) => { localStorage.setItem('crewhouse.member', String(id)); setMember(id); setMe(id); }, []);
   const refresh = useCallback(() => {
-    api.state().then((s) => { setState(s); setOffline(false); }).catch(() => setOffline(true));
+    api.state().then((s) => { setState(s); setOffline(false); heard.current = Date.now(); }).catch(() => setOffline(true));
     setTick((t) => t + 1);
   }, []);
   useEffect(() => {
@@ -790,7 +791,7 @@ function App() {
           {nav.map(([h, l, i]) => <a key={h} href={h} className={`side-nav ${active(h) ? 'on' : ''}`}><span className="ic">{i}</span>{l}{h === '#/' && asks > 0 && <span className="badge">{asks}</span>}</a>)}
         </aside>
         <main className="main">
-          {offline && <div className="offline" role="status">Lost touch with the home computer. Your helpers keep working; reconnecting… <button className="link inline" onClick={refresh}>Try now</button></div>}
+          {offline && <div className="offline" role="status">The home computer isn't answering. If it's asleep, the crew has paused and carries on when it wakes. Last heard from it at {A.clock(heard.current)}. Reconnecting… <button className="link inline" onClick={refresh}>Try now</button></div>}
           {v.view === 'home' && <Home {...ctx} />}
           {v.view === 'chief' && <ChiefPage {...ctx} />}
           {v.view === 'crew' && <Crew {...ctx} />}

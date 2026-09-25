@@ -20,6 +20,8 @@ git clone https://github.com/umeranjum17/crewhouse && cd crewhouse
 ./crewhouse start     # starts crewd and prints the address, http://127.0.0.1:7711
 ```
 
+On Linux, setup offers to start Crewhouse by itself whenever you log in (a systemd user service; `./crewhouse autostart on|off` changes it later), so a reboot needs no terminal.
+
 Open the address. Chief greets you and offers three things he can take off your plate; tap one. He asks you to **Sign in with ChatGPT** right there: ChatGPT's own page opens, you pick your account and tap Continue, and it comes straight back. Then try:
 
 > Please recruit Reel and have it make a 6 second title card that says Crewhouse.
@@ -79,7 +81,8 @@ Other commands: `./crewhouse update` (pulls, installs and restarts crewd; refuse
 
   Every other state, at phone width, is in [docs/screenshots/onboard/](docs/screenshots/onboard/) (`?demo=…&sheet=…&phase=…` shows each one; see `web/src/demo.ts`).
 - **Routines** hand a bot the same task on a schedule, written in plain words by this computer's clock: "every Monday 9:00", "weekdays 8am", "every day 7:30pm", "every 2 hours" (`src/routines.ts`). Add one on the **Routines** screen or a bot's Routines tab, or just tell Chief ("every Friday at five, have Reel make a demo of what shipped"), who sets it up with his `crew_routine` tool. Each routine can pick its own AI account, and runs on the accounts of whoever set it up.
-  - The schedule lives in SQLite and crewd's own loop fires it: no cron, no model call to decide when. A computer that slept through a run catches up **once** when it wakes; if the last run is still going (or waiting on you), the next one is **skipped**, not stacked. A paused routine never catches up. Every card shows the next run and the history.
+  - The schedule lives in SQLite and crewd's own loop fires it: no cron, no model call to decide when. A computer that slept through a run catches up **once** when it wakes, and Chief says in each person's thread which routines were missed and are running now; if the last run is still going (or waiting on you), the next one is **skipped**, not stacked. A paused routine never catches up. Every card shows the next run and the history.
+  - **Sleep, honestly.** The crew runs on this computer, so it pauses while the computer sleeps; the app and Chief say so, and the phone shows when it last heard from it. While a helper is actually working, crewd holds off idle sleep (`systemd-inhibit` on Linux, `caffeinate` on macOS) and lets go the moment the crew is idle. It never overrides closing the lid.
   - **Chief's morning digest** is on for everyone at 8:00: while you were away, what finished, what didn't go well, what needs you and what is coming up, in your own thread with Chief. It is written by crewd, so it costs no tokens. Move it or pause it under Routines.
 
   | Routines | Adding one from a bot's page | Chief sets one up, then the digest |

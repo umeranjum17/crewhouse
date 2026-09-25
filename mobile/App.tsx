@@ -241,10 +241,11 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
   const [stack, setStack] = useState<Route[]>([{ view: 'home' }]);
   const [sheet, setSheet] = useState<A.Card | null>(null);
   const link = useRef<ReturnType<typeof connect>['link'] | null>(null);
+  const heard = useRef(0); // when the home computer last answered
   const route = stack[stack.length - 1];
 
   const refresh = useCallback(() => {
-    api.state().then(setState).catch(() => {});
+    api.state().then((st) => { setState(st); heard.current = Date.now(); }).catch(() => {});
     setTick((n) => n + 1);
   }, []);
   useEffect(() => {
@@ -282,7 +283,7 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
     return (
       <Center>
         <ChiefArt mood="work" size={140} />
-        <T tone="ink2" style={s.centerText}>{status === 'offline' ? "Can't reach the home computer. Check it's on, and that this phone is on its Wi-Fi or Tailscale. Trying again by itself." : 'Waking the crew…'}</T>
+        <T tone="ink2" style={s.centerText}>{status === 'offline' ? "Can't reach the home computer. If it's asleep, the crew has paused and carries on when it wakes. Check it's on, and that this phone is on its Wi-Fi or Tailscale. Trying again by itself." : 'Waking the crew…'}</T>
       </Center>
     );
   }
@@ -294,7 +295,7 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
   const live = sheet && A.cards(state).find((c) => c.id === sheet.id);
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior="height">
-      {status !== 'online' && <Text style={[s.offline, { backgroundColor: t.amber, color: color.day.ink }]}>The home computer isn't answering. Trying again…</Text>}
+      {status !== 'online' && <Text style={[s.offline, { backgroundColor: t.amber, color: color.day.ink }]}>{`The home computer isn't answering. If it's asleep, the crew has paused and carries on when it wakes.${heard.current ? ` Last heard from it at ${A.clock(heard.current)}.` : ''} Trying again…`}</Text>}
       <View style={{ flex: 1 }}>
         {route.view === 'home' && <Home {...ctx} />}
         {route.view === 'chief' && <ChiefPage {...ctx} />}
