@@ -274,7 +274,8 @@ input[role='switch']:checked::after { left: 21px; }
   .shell { display: grid; grid-template-columns: 272px minmax(0, 1fr); min-height: 100vh; }
   .shell.with-rail { grid-template-columns: 272px minmax(0, 1fr); }
   .tabbar { display: none; }
-  .main { padding-bottom: 0; }
+  .main { padding-bottom: 0; display: flex; flex-direction: column; }
+  .main > .home, .main > .page { flex: 1; }
   .is-chat .dock, .home .dock { bottom: 0; }
   .side { display: flex; flex-direction: column; gap: 4px; padding: 24px 16px; position: sticky; top: 0; height: 100vh; overflow-y: auto; background: color-mix(in srgb, var(--solid) 40%, transparent); border-right: 1px solid color-mix(in srgb, var(--solid) 70%, transparent); }
   .brand { padding: 0 8px 18px; }
