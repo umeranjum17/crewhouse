@@ -239,15 +239,57 @@ test('reach it from anywhere: three plain states and numbered steps, and the pho
     A.away({ home: false, tailnet: false }),
     A.away({ tailnet: true, vpn: false }),
     A.away({ tailnet: true, vpn: true, anywhere: 'signin' }),
-    A.away({ tailnet: true, vpn: true, anywhere: 'anywhere' }),
+    A.away({ tailnet: true, vpn: true, anywhere: 'anywhere', knock: 'timeout' }),
+    A.away({ tailnet: true, vpn: true, knock: 'refused' }),
+    A.away({ tailnet: true, vpn: true, knock: 'answers' }),
+    A.away({ tailnet: true, vpn: true, knock: 'timeout', peer: false }),
+    A.away({ tailnet: true, vpn: true, knock: 'timeout', reached: { tailscale: Date.now() - 3_600_000 } }),
+    A.away({ home: true, knock: 'refused' }),
+    A.away({ home: true, knock: 'answers' }),
   ];
-  assert.match(away[0], /on the home Wi-Fi/);
+  assert.match(away[0], /on the home Wi-Fi, but the home computer doesn't answer at all/);
   assert.match(away[1], /share the computer with you in Tailscale/);
   assert.match(away[2], /Tailscale is off on this phone/);
   assert.match(away[3], /needs signing in again/);
-  assert.match(away[4], /asleep/);
+  // No answer over Tailscale and nothing else known: never one cheerful guess, but both causes and who checks them.
+  assert.match(away[4], /Either the computer is asleep or off, or it hasn't been shared with this phone's Tailscale account/);
+  assert.match(away[4], /check both/);
+  assert.match(away[5], /answers over Tailscale, but Crewhouse isn't running/, 'refused: the computer is there');
+  assert.match(away[6], /getting back in touch/);
+  assert.match(away[7], /isn't shared with this phone's Tailscale account: it checked/, 'the computer\'s own Tailscale said so');
+  assert.match(away[8], /reached it that way before .*so sharing works/, 'sharing proven, so only then the likely cause');
+  assert.match(away[9], /Either Crewhouse isn't running on it, or its setting for phones on this Wi-Fi is off/);
+  assert.match(away[10], /getting back in touch/);
   assert.equal(new Set(away).size, away.length);
-  for (const w of away) assert.doesNotMatch(w, TECH);
+  for (const w of away) assert.doesNotMatch(w, /may be asleep or switched off\.$/, 'the old single guess is gone');
+  for (const w of away) assert.doesNotMatch(w.replace(/\d{1,2}:\d{2}(\s?[ap]m)?/gi, ''), TECH); // a clock time is not a port
+});
+
+test('a knock on the computer\'s address ends within its bound: answers, refused, or timed out', async () => {
+  const { createServer } = await import('node:net');
+  const { createServer: web } = await import('node:http');
+  const listen = (s: any) => new Promise<number>((r) => s.listen(0, '127.0.0.1', () => r(s.address().port)));
+  const up = web((_q, res) => res.writeHead(404).end());
+  const silent = createServer(() => {}); // takes the connection, never answers: like a peer that drops the packets
+  const closed = createServer();
+  const [a, b, c] = [await listen(up), await listen(silent), await listen(closed)];
+  await new Promise((r) => closed.close(r));
+  try {
+    assert.equal(await A.knock(`ws://127.0.0.1:${a}/link`, 1500), 'answers');
+    assert.equal(await A.knock(`ws://127.0.0.1:${c}/link`, 1500), 'refused');
+    const t0 = Date.now();
+    assert.equal(await A.knock(`ws://127.0.0.1:${b}/link`, 600), 'timeout');
+    assert.ok(Date.now() - t0 < 1500, 'no spinner without an end');
+  } finally { up.closeAllConnections(); up.close(); silent.close(); }
+});
+
+test('Settings, Phones: when each phone last reached the computer and how, and missing notifications said once', () => {
+  assert.equal(A.reached({}), 'Not in touch yet');
+  assert.match(A.reached({ reached: { home: Date.now() } }), /^Last reached it .* over home Wi-Fi · never from away yet$/);
+  assert.match(A.reached({ reached: { home: Date.now() - 9e6, tailscale: Date.now() } }), /over Tailscale$/);
+  assert.match(A.reached({ reached: { tailscale: Date.now() - 9e6, home: Date.now() } }), /over home Wi-Fi$/, 'the latest route, with away proven');
+  assert.equal(A.pushWords({ push: 'ready' }), '');
+  assert.match(A.pushWords({ push: 'missing' }), /^Phone notifications aren't switched on for this app yet/);
 });
 
 test('watches and hand-offs read as plain words, with only the page\'s host', () => {

@@ -107,16 +107,55 @@ export function anywhere(link: Json) {
   return { state, words, steps: state === 'home' ? steps : state === 'anywhere' ? steps.slice(1) : [] };
 }
 
-/** The phone can't reach the home computer: which step is missing, from what the phone can see for itself (`home`: on
- *  the same Wi-Fi as the computer's home address; `tailnet`: it knows the computer's Tailscale address; `vpn`: Tailscale
- *  is on on the phone) and what the computer last said about its own Tailscale. */
-export function away(f: { home?: boolean; tailnet?: boolean; vpn?: boolean; anywhere?: string }) {
-  if (f.home) return "You're on the home Wi-Fi, but the home computer isn't answering. Check it's switched on and awake.";
+/** What a quick knock on the computer's address found: `answers` (something is listening), `refused` (the computer
+ *  answered, but nothing listens there), `timeout` (nothing came back within the bound). Never hangs: `ms` ends it. */
+export type Knock = 'answers' | 'refused' | 'timeout';
+export async function knock(url: string, ms = 4000, get: typeof fetch = fetch): Promise<Knock> {
+  const stop = new AbortController();
+  const started = Date.now();
+  const timer = setTimeout(() => stop.abort(), ms);
+  try { await get(url.replace(/^ws/, 'http'), { signal: stop.signal }); return 'answers'; }
+  // ponytail: a phone's fetch error has no code, so a failure well inside the bound counts as refused; a Tailscale that
+  // has no such peer drops the packets, which ends as a timeout.
+  catch { return stop.signal.aborted || Date.now() - started >= ms - 100 ? 'timeout' : 'refused'; }
+  finally { clearTimeout(timer); }
+}
+
+/** The phone can't reach the home computer: what it actually saw, and what to try. From the phone itself: `home` (on the
+ *  same Wi-Fi as the computer's home address), `tailnet` (it knows the computer's Tailscale address), `vpn` (Tailscale
+ *  is on on this phone), `knock` (what the computer's address did just now: its home one at home, else its Tailscale
+ *  one); and from what the computer said when last in touch: `anywhere` (its own Tailscale), `peer` (whether its
+ *  Tailscale had this phone as a peer, i.e. shared with this phone's account) and `reached` (when this phone last
+ *  reached it over each route). Where the cause can't be told apart, it says so and names each thing to check. */
+export function away(f: { home?: boolean; tailnet?: boolean; vpn?: boolean; anywhere?: string; knock?: Knock; peer?: boolean; reached?: { tailscale?: number } }) {
+  if (f.home) {
+    if (f.knock === 'refused') return "You're on the home Wi-Fi and the home computer answers, but Crewhouse isn't letting phones in there. Either Crewhouse isn't running on it, or its setting for phones on this Wi-Fi is off (then switch Tailscale on on this phone).";
+    if (f.knock === 'answers') return "You're on the home Wi-Fi and Crewhouse on the home computer answers; this phone is getting back in touch.";
+    return "You're on the home Wi-Fi, but the home computer doesn't answer at all. Check it's switched on and awake.";
+  }
   if (!f.tailnet) return "Away from home, this phone reaches the home computer through Tailscale, and that isn't set up yet. Ask whoever set up Crewhouse to share the computer with you in Tailscale.";
   if (!f.vpn) return 'Tailscale is off on this phone. Open the Tailscale app and switch it on.';
   if (f.anywhere === 'signin') return "The home computer's Tailscale needs signing in again. Ask whoever set up Crewhouse to open Tailscale there and sign in.";
-  return "Tailscale is on, but the home computer isn't answering. It may be asleep or switched off.";
+  if (f.knock === 'answers') return 'The home computer answers over Tailscale, so it is on; this phone is getting back in touch. If this lasts, restart Crewhouse on the computer.';
+  if (f.knock === 'refused') return "The home computer answers over Tailscale, but Crewhouse isn't running on it. Ask whoever set it up to open Crewhouse on the computer.";
+  if (f.peer === false) return "The home computer isn't shared with this phone's Tailscale account: it checked when this phone was last in touch. Ask whoever set up Crewhouse to share it with you in Tailscale, then tap Accept on this phone.";
+  if (f.reached?.tailscale) return `The home computer doesn't answer over Tailscale. This phone has reached it that way before (last ${clock(f.reached.tailscale)}), so sharing works: it's most likely asleep, switched off, or its Tailscale is off.`;
+  return "This phone can't reach the home computer over Tailscale, and hasn't yet from away. Either the computer is asleep or off, or it hasn't been shared with this phone's Tailscale account: ask whoever set up Crewhouse to check both.";
 }
+
+/** Settings, Phones: when a paired phone last reached this computer, and over which route; a phone that never has from
+ *  away says so, since that is the route that fails unseen. */
+export function reached(p: Json) {
+  const r: Record<string, number> = p?.reached ?? {};
+  const names: Record<string, string> = { home: 'home Wi-Fi', tailscale: 'Tailscale', relay: 'your relay' };
+  const [via, t] = Object.entries(r).filter(([k]) => names[k]).sort((a, b) => b[1] - a[1])[0] ?? [];
+  if (!via) return 'Not in touch yet';
+  const last = `Last reached it ${clock(t)} over ${names[via]}`;
+  return r.tailscale || r.relay ? last : `${last} · never from away yet`;
+}
+
+/** Settings, Phones: one plain line when notifications can't reach phones yet (README, "Phone notifications"). */
+export const pushWords = (link: Json) => (link?.push === 'missing' ? "Phone notifications aren't switched on for this app yet, so phones hear news only when they open Crewhouse." : '');
 
 /** When the crew is resting because an account ran out, in one sentence: "Your ChatGPT is resting until 6:40 pm". */
 /** A show in progress on a helper's screen: what, and how many steps so far, in words. */

@@ -10,7 +10,7 @@ import { join } from 'node:path';
 import { WebSocket as WS, WebSocketServer } from 'ws';
 import { Host, keyPair, keyPairFrom, type Grant, type PairRequest, type Role } from '@byokit/link';
 import { advertise, type Bonjour } from '@byokit/reach';
-import { RelayClient, type RelayStatus } from '@byokit/relay';
+import { RelayClient, isExpoToken, type RelayStatus } from '@byokit/relay';
 import type { Config } from './config.ts';
 import type { Store } from './db.ts';
 import type { Watcher } from './desktop.ts';
@@ -49,14 +49,25 @@ export function phoneAddresses(hosts: string[], ifaces: Ifaces = networkInterfac
  *  signed out or its key ran out), `home` (none: phones reach it only on the home Wi-Fi). Direct `ws://` to the tailnet
  *  address, never Serve or Funnel: the link does its own encryption, and a shared computer is reachable the same way. */
 export type Anywhere = 'home' | 'anywhere' | 'signin';
-export function tailscaleState(bound: boolean, bin = 'tailscale'): Promise<Anywhere> {
-  return new Promise((resolve) => execFile(bin, ['status', '--json', '--peers=false'], { timeout: 5000 }, (_e, out) => {
-    let s: any;
-    try { s = JSON.parse(out); } catch { return resolve(bound ? 'anywhere' : 'home'); } // not installed, or not answering
-    const expired = s?.Self?.KeyExpiry && Date.parse(s.Self.KeyExpiry) < Date.now();
-    resolve(/^(NeedsLogin|NeedsMachineAuth)$/.test(s?.BackendState) || expired ? 'signin' : bound ? 'anywhere' : 'home');
-  }));
+export async function tailscaleState(bound: boolean, bin = 'tailscale'): Promise<Anywhere> {
+  const s = await tsStatus(bin, false);
+  if (!s) return bound ? 'anywhere' : 'home'; // not installed, or not answering
+  const expired = s.Self?.KeyExpiry && Date.parse(s.Self.KeyExpiry) < Date.now();
+  return /^(NeedsLogin|NeedsMachineAuth)$/.test(s.BackendState) || expired ? 'signin' : bound ? 'anywhere' : 'home';
 }
+const tsStatus = (bin: string, peers: boolean) => new Promise<any>((resolve) => execFile(bin, ['status', '--json', `--peers=${peers}`], { timeout: 5000 }, (_e, out) => {
+  try { resolve(JSON.parse(out)); } catch { resolve(null); }
+}));
+
+/** Whether this computer's Tailscale has a phone's Tailscale address among its peers: a phone whose account the computer
+ *  was never shared with is not one. Undefined when this computer's Tailscale can't say. */
+export async function tailscalePeer(ip: string, bin = 'tailscale'): Promise<boolean | undefined> {
+  const s = await tsStatus(bin, true);
+  return s?.Self ? Object.values<any>(s.Peer ?? {}).some((p) => p?.TailscaleIPs?.includes(ip)) : undefined;
+}
+
+/** The routes a phone reaches this computer by, as it reports them (`GET /api/reach {via}`). */
+const ROUTES = ['home', 'tailscale', 'relay'];
 
 /** Every notification says only this; the phone fetches the words over the link (the relay enforces it too). */
 export const NEWS = 'Crewhouse has news';
@@ -64,6 +75,7 @@ export const NEWS = 'Crewhouse has news';
 const wsOrigin = (url: string) => url.replace(/^http/, 'ws');
 
 const b64url = (s: string) => s.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); // phones paired before 0.1.0 were stored as base64
+const pushOf = (v?: string) => (v === 'missing' || v === 'off' ? v : v ? 'on' : undefined);
 const memberOf = (g: Grant) => (g.meta as { member?: number } | undefined)?.member ?? 1;
 
 /** A phone waiting at the computer for the person's yes: its name and the two words both screens show. */
@@ -91,6 +103,8 @@ export class Link {
   ifaces: () => Ifaces = networkInterfaces;
   bonjour?: Bonjour;
   tailscaleBin = 'tailscale';
+  /** Expo's push service: it holds the app's Android push credential, so crewd sends with no secret of its own. */
+  pushUrl = process.env.CREWHOUSE_PUSH_URL || 'https://exp.host/--/api/v2/push/send';
   private anywhere: Anywhere = 'home';
   /** Whether a member is in their quiet hours now: their phones get no notification then. Set by the server. */
   quiet: (member: number) => boolean = () => false;
@@ -130,7 +144,10 @@ export class Link {
       this.db.run('DELETE FROM devices');
       for (const g of grants) this.db.run('INSERT INTO devices (id, name, pk, role, member, created_at, last_seen) VALUES (?, ?, ?, ?, ?, ?, ?)', g.id, g.name, g.key, g.role, memberOf(g), g.created, g.lastSeen ?? null);
       for (const g of grants) if (!before.has(g.id)) this.db.event('device.paired', null, { id: g.id, name: g.name, role: g.role, member: memberOf(g) });
-      for (const [id, g] of before) if (!grants.some((x) => x.id === id)) this.db.event('device.revoked', null, { id, name: g.name });
+      for (const [id, g] of before) if (!grants.some((x) => x.id === id)) {
+        this.db.run("DELETE FROM settings WHERE key IN (?, ?)", `phone.push.${id}`, `phone.reach.${id}`);
+        this.db.event('device.revoked', null, { id, name: g.name });
+      }
     });
   }
 
@@ -149,6 +166,11 @@ export class Link {
     if (!a) throw Object.assign(new Error('that phone stopped waiting'), { status: 404 });
     a.answer(yes);
   }
+
+  private setting(key: string): string | undefined { return this.db.get('SELECT value FROM settings WHERE key = ?', key)?.value; }
+  private put(key: string, value: string) { this.db.run('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', key, value); }
+  /** When a phone last reached this computer by each route: `{home?, tailscale?, relay?}`. */
+  private reached(id: string): Record<string, number> { return JSON.parse(this.setting(`phone.reach.${id}`) ?? '{}'); }
 
   get lan() { return this.db.get("SELECT value FROM settings WHERE key = 'link.lan'")?.value === '1'; }
   hosts() { return linkHosts(this.cfg.linkHost, this.lan || Date.now() < this.pairing, this.ifaces()); }
@@ -288,14 +310,28 @@ export class Link {
    *  quiet hours the push is held (kept in the store, so a restart keeps it) and `sendHeld` sends one when they end. */
   private async tell(member: number, id: string) {
     if (this.quiet(member)) return void this.db.run("INSERT INTO settings (key, value) VALUES (?, '1') ON CONFLICT(key) DO NOTHING", `push.held.${member}`);
-    if (!this.client || this.relayStatus !== 'online') return;
     const to = this.host.devices().filter((g) => memberOf(g) === member).map((g) => g.id);
-    if (to.length) await this.client.notify({ id, title: NEWS, to }).catch((e) => console.error('push:', e.message));
+    const phones = to.map((d) => [d, this.setting(`phone.push.${d}`)]).filter(([, t]) => isExpoToken(t));
+    if (phones.length) await this.expo(id, phones as [string, string][]).catch((e) => console.error('push:', e.message));
+    // A browser's Web Push address is kept on the family's relay, which holds the key for it.
+    if (to.length && this.client && this.relayStatus === 'online') await this.client.notify({ id, title: NEWS, to }).catch((e) => console.error('push:', e.message));
+  }
+
+  /** One content-free push per phone through Expo. Expo refusing the app's credential (none set up yet) is kept for
+   *  Settings to say once; a phone Expo no longer knows loses its token. */
+  private async expo(id: string, phones: [string, string][]) {
+    const res = await fetch(this.pushUrl, { method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json' }, signal: AbortSignal.timeout(10_000),
+      body: JSON.stringify(phones.map(([, to]) => ({ to, title: NEWS, sound: 'default', collapseId: id }))) });
+    const tickets: any[] = (await res.json().catch(() => null))?.data ?? [];
+    tickets.forEach((t, i) => {
+      if (t?.status === 'ok') this.db.run("DELETE FROM settings WHERE key = 'push.refused'");
+      else if (t?.details?.error === 'InvalidCredentials') this.put('push.refused', '1');
+      else if (t?.details?.error === 'DeviceNotRegistered') this.db.run('DELETE FROM settings WHERE key = ?', `phone.push.${phones[i][0]}`);
+    });
   }
 
   /** Quiet hours over: one push per member for everything that came in during them, however much it was. */
   sendHeld(at = Date.now()) {
-    if (!this.client || this.relayStatus !== 'online') return; // kept until the relay is back
     for (const { key } of this.db.all("SELECT key FROM settings WHERE key LIKE 'push.held.%'")) {
       const member = Number(key.slice('push.held.'.length));
       if (this.quiet(member)) continue;
@@ -318,8 +354,10 @@ export class Link {
 
   /** Settings, Phones: how phones reach this computer, and any phone waiting for a yes (docs/ui-contract.md). */
   status() {
+    // `push: 'missing'`: this app build, or Expo, has no Android push credential yet (README, "Phone notifications").
+    const missing = this.setting('push.refused') || this.host?.devices().some((g) => this.setting(`phone.push.${g.id}`) === 'missing');
     return { on: this.cfg.linkPort > 0, lan: this.lan, pinned: !!this.cfg.linkHost, hosts: [...this.servers.keys()], tailscale: ipv4(this.ifaces()).some(tailscale), anywhere: this.anywhere,
-      relay: this.relay, relayStatus: this.relayStatus,
+      relay: this.relay, relayStatus: this.relayStatus, push: missing ? 'missing' : 'ready',
       asking: [...this.asking.values()].map(({ id, name, words, role }) => ({ id, name, words, role })) };
   }
 
@@ -349,7 +387,7 @@ export class Link {
   devices() {
     const people = new Map(this.db.all('SELECT id, name FROM people').map((p) => [p.id, p.name]));
     return this.host.devices().map((g) => ({ id: g.id, name: g.name, member: memberOf(g), person: people.get(memberOf(g)) ?? null, role: g.role,
-      seen: g.lastSeen ?? g.created, online: g.online }));
+      seen: g.lastSeen ?? g.created, online: g.online, reached: this.reached(g.id), push: pushOf(this.setting(`phone.push.${g.id}`)) }));
   }
 
   async revoke(id: string) {
@@ -364,11 +402,22 @@ export class Link {
     if (!path.startsWith('/api/')) return { status: 404, body: { error: 'not found' } };
     // The phone's own: every address it can reach this computer at now (a phone paired at home learns Tailscale and the
     // relay), and its push address.
-    if (op === 'GET /api/reach') return { status: 200, body: { urls: this.urls(), anywhere: this.anywhere } };
+    // The phone says which route it came by and its own Tailscale address; the computer says whether its Tailscale has
+    // that address as a peer (shared with this phone's account), for the words when the phone later can't reach it.
+    if (op === 'GET /api/reach') {
+      const a = (body ?? {}) as { via?: unknown; ip?: unknown };
+      if (ROUTES.includes(a.via as string)) this.put(`phone.reach.${g.id}`, JSON.stringify({ ...this.reached(g.id), [a.via as string]: Date.now() }));
+      const peer = typeof a.ip === 'string' && tailscale(a.ip) ? await tailscalePeer(a.ip, this.tailscaleBin) : undefined;
+      return { status: 200, body: { urls: this.urls(), anywhere: this.anywhere, peer, reached: this.reached(g.id) } };
+    }
+    // Its push address: an Expo token (kept here; crewd sends through Expo), `{missing}` when this app build has no push
+    // credential, `{off}` when the person said no to notifications; a browser's Web Push address goes to the relay.
     if (op === 'POST /api/push') {
       const sub = body as any;
-      if (!this.client || !sub || (typeof sub.expo !== 'string' && typeof sub.web !== 'object')) return { status: 409, body: { error: 'no relay for notifications' } };
-      await this.client.subscribe(g.id, typeof sub.expo === 'string' ? { expo: sub.expo } : { web: sub.web });
+      const phone = isExpoToken(sub?.expo) ? sub.expo : sub?.missing === true ? 'missing' : sub?.off === true ? 'off' : '';
+      if (phone) { this.put(`phone.push.${g.id}`, phone); this.db.event('device.push', null, { id: g.id }); return { status: 200, body: { ok: true } }; }
+      if (!this.client || typeof sub?.web !== 'object') return { status: 409, body: { error: 'no relay for notifications' } };
+      await this.client.subscribe(g.id, { web: sub.web });
       return { status: 200, body: { ok: true } };
     }
     // Household admin stays on the computer: AI account sign-ins, people, the house's Google app, connecting apps
