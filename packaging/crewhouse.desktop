@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Crewhouse
+Comment=Your crew of helpers, at home
+Exec=/opt/crewhouse/node/bin/node /opt/crewhouse/launch.mjs
+Icon=crewhouse
+Terminal=false
+Categories=Utility;Office;
+StartupWMClass=Crewhouse

@@ -69,6 +69,7 @@ function Hello({ state, refresh, night }: Ctx) {
       <div className="promises">
         <div>🔒 I ask before anything leaves the house or costs money.</div>
         <div>🏠 What you tell us stays in this house.</div>
+        <div>🛒 The crew shops and browses from your home, so sites treat them like you.</div>
       </div>
       <h2 className="plate">What can I take off your plate?</h2>
       <div className="ideas">
@@ -182,6 +183,8 @@ function Home({ state, me, refresh, tick }: Ctx) {
       <h1 className="hi">{A.greeting()}, {state.person.address ?? state.person.name}</h1>
       {(g.state === 'signed-out' || g.notIncluded) && <AccountCard me={me} owner={ownerName(state)} isOwner={me === A.OWNER} g={g} onReady={refresh} />}
       {A.resting(state) && <div className="card nudge"><span className="grow">{A.resting(state)}. I'll pick things back up then.</span></div>}
+      {A.gettingReady(state) && <div className="card nudge"><span className="grow">{A.gettingReady(state)}</span></div>}
+      {A.update(state) && <div className="card nudge"><span className="grow">{A.update(state)!.words}</span><a className="btn go" href={A.update(state)!.url} target="_blank" rel="noreferrer">Download</a></div>}
       {cards.map((c) => <AskCard key={c.id} c={c} who={crew.find((h) => h.id === c.helper)} onDone={refresh} />)}
       <Chats state={state} refresh={refresh} />
       <div className="dock">
@@ -679,20 +682,35 @@ function Money({ state, refresh }: { state: Json; refresh: () => void }) {
   </>);
 }
 
-/** Owner only: switch Google on for the house, once (docs/google-setup.md walks through Google's console). */
+/** Owner only: switch Google on for the house, once. Each step opens the Google page it happens on, in turn, and the
+ *  last one ends with two things to paste here (docs/google-setup.md has the same steps with the why). */
 function HouseGoogle({ on, refresh }: { on: boolean; refresh: () => void }) {
   const [edit, setEdit] = useState(false);
+  const [step, setStep] = useState(0);
   const [id, setId] = useState('');
   const [secret, setSecret] = useState('');
+  const last = step === A.GOOGLE_STEPS.length - 1;
+  const s = A.GOOGLE_STEPS[step];
   return (<>
     <div className="label">Google for the house</div>
-    {on && !edit ? <div className="card row"><span className="grow"><b>Google is on for the house ✓</b><div className="mute small">Everyone can connect Calendar, Gmail and Drive from a chat.</div></span><button className="btn" onClick={() => setEdit(true)}>Change</button></div>
+    {on && !edit ? <div className="card row"><span className="grow"><b>Google is on for the house ✓</b><div className="mute small">Everyone can connect Calendar, Gmail and Drive from a chat.</div></span><button className="btn" onClick={() => { setEdit(true); setStep(A.GOOGLE_STEPS.length - 1); }}>Change</button></div>
       : <form className="card form" onSubmit={(e) => { e.preventDefault(); void attempt(async () => { await api.houseGoogle(id, secret); setEdit(false); refresh(); }, 'Google is on for the house'); }}>
         <b>Switch Google on, once for everyone</b>
-        <p className="mute small">About twenty minutes in Google's console, free. <a href="https://github.com/umeranjum17/crewhouse/blob/main/docs/google-setup.md" target="_blank" rel="noreferrer">The step-by-step guide ↗</a> ends with two things to paste here.</p>
-        <input className="input" value={id} onChange={(e) => setId(e.target.value)} placeholder="Client ID (ends in .apps.googleusercontent.com)" aria-label="Client ID" autoComplete="off" />
-        <input className="input" value={secret} onChange={(e) => setSecret(e.target.value)} placeholder="Client secret" aria-label="Client secret" type="password" autoComplete="off" />
-        <div className="btns"><button className="btn go" disabled={!id.trim() || !secret.trim()}>Switch it on</button>{on && <button type="button" className="btn ghost" onClick={() => setEdit(false)}>Cancel</button>}</div>
+        <p className="mute small">About twenty minutes on Google's own pages, free. Then anyone here can let a helper use their Calendar, Gmail or Drive with one tap.</p>
+        <div className="mute small">Step {step + 1} of {A.GOOGLE_STEPS.length}</div>
+        <b>{s.title}</b>
+        <p className="small">{s.says}</p>
+        <div className="btns">
+          <a className="btn go" href={s.url} target="_blank" rel="noreferrer">Open Google's page</a>
+          {step > 0 && <button type="button" className="btn ghost" onClick={() => setStep(step - 1)}>Back</button>}
+          {!last && <button type="button" className="btn" onClick={() => setStep(step + 1)}>Done, next step</button>}
+        </div>
+        {last && <>
+          <input className="input" value={id} onChange={(e) => setId(e.target.value)} placeholder="Client ID (ends in .apps.googleusercontent.com)" aria-label="Client ID" autoComplete="off" />
+          <input className="input" value={secret} onChange={(e) => setSecret(e.target.value)} placeholder="Client secret" aria-label="Client secret" type="password" autoComplete="off" />
+          <div className="btns"><button className="btn go" disabled={!id.trim() || !secret.trim()}>Switch it on</button>{on && <button type="button" className="btn ghost" onClick={() => setEdit(false)}>Cancel</button>}</div>
+        </>}
+        <p className="mute small"><a href="https://github.com/umeranjum17/crewhouse/blob/main/docs/google-setup.md" target="_blank" rel="noreferrer">The same steps, with why ↗</a></p>
       </form>}
   </>);
 }
