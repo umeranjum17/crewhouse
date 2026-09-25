@@ -159,6 +159,7 @@ Also \`src/a.ts:2-3@${at}\`.\n`);
     call('bash', { command: `curl -s ${issue}/comments` }),
     call('bash', { command: 'git fetch http://127.0.0.1:1/o/app.git fix-208' }),
     call('bash', { command: `node -e "fetch('${issue}/comments?per_page=30').catch(() => {})"` }),
+    call('web_search', { query: 'merged fix pull request for the bug answer-key' }),
   ].join(' '));
   assert.equal(rowOf(leak, 'blind', ['/events']).verdict, 'PASS', 'words it wrote are not places it went');
   const reached = rowOf(leak, 'blind', ['/comments']);
@@ -167,6 +168,7 @@ Also \`src/a.ts:2-3@${at}\`.\n`);
   assert.match(reached.detail, /curl /);
   assert.equal(rowOf(leak, 'blind', ['fix-208']).verdict, 'FAIL', 'git fetch reaching for the fix is caught');
   assert.equal(rowOf(leak, 'blind', ['per_page=30']).verdict, 'FAIL', 'a read hidden in node is caught like any other');
+  assert.equal(rowOf(leak, 'blind', ['answer-key']).verdict, 'FAIL', 'a web_search for the answer is caught too');
   srv.close();
   done();
 });

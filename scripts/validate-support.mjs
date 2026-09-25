@@ -79,15 +79,16 @@ export function validate({ db, crewDir }, id, forbid = []) {
   for (const p of patches) row(existsSync(join(bot, p)) && ok.has(sha(readFileSync(join(bot, p), 'utf8'))) ? 'PASS' : 'FAIL', `fix ${p}`, 'failed before, passed after, seen by crewd');
   if (!patches.length) row('PASS', 'fix', 'none offered (nothing claimed)');
 
-  // 5. Blind: nothing it called reached the answer. Only read-capable inputs can reach it — the address a tool
-  // fetches or opens, and the shell command with heredoc bodies stripped (text the helper is merely writing; write
-  // calls never count). # ponytail: the heredoc strip is line-based skimming, not a shell parser — a terminator
-  // with trailing text or a nested heredoc would need a real parse.
+  // 5. Blind: nothing it called reached the answer. Content being written never counts (write and edit); bash counts
+  // by its command with heredoc bodies stripped; every other tool by its whole arguments, so a search, a browser goto
+  // or a tool added later is still checked. # ponytail: the heredoc strip is line-based skimming, not a shell parser
+  // — a terminator with trailing text or a nested heredoc would need a real parse.
   const reaches = (c) => {
     const a = c.args ?? {};
+    if (c.name === 'write' || c.name === 'edit') return [];
     if (c.name === 'web_fetch') return [String(a.url ?? '')];
     if (/^(read|ls|grep|find)$/.test(c.name)) return [String(a.path ?? '')];
-    if (c.name !== 'bash') return [];
+    if (c.name !== 'bash') return [JSON.stringify(a)];
     const kept = [];
     let body = null;
     for (const l of String(a.command ?? '').split('\n')) {
