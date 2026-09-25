@@ -12,7 +12,7 @@ import * as A from '../web/src/adapter.ts';
 import { api, setTransport, trouble, type Json } from '../web/src/api.ts';
 import * as art from '../web/src/art.ts';
 import { color, radius } from '../web/src/tokens.ts';
-import { connect, forgetGrant, loadGrant, pair, type Grant, type Status } from './src/link';
+import { connect, forgetGrant, loadGrant, pair, pairTyped, type Grant, type Status } from './src/link';
 
 // ---------- look ----------
 type Look = typeof color.day & { go: string; goInk: string; night: boolean };
@@ -168,7 +168,18 @@ function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
   const [err, setErr] = useState('');
   const [done, setDone] = useState<Grant | null>(null);
   const [words, setWords] = useState('');
+  const [typing, setTyping] = useState(false);
+  const [relay, setRelay] = useState('');
+  const [short, setShort] = useState('');
+  const [code, setCode] = useState('');
   const seen = useRef('');
+  const typed = async () => {
+    setBusy(true);
+    setErr('');
+    try { setDone(await pairTyped(relay, short, code, setWords)); } catch (e: any) { setErr(e.message); }
+    setWords('');
+    setBusy(false);
+  };
   const tryCode = async (text: string) => {
     if (busy || seen.current === text) return;
     seen.current = text;
@@ -212,6 +223,25 @@ function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
       </View>
     );
   }
+  if (typing) {
+    const input = (value: string, set: (v: string) => void, placeholder: string, label: string) => (
+      <TextInput style={[s.input, { alignSelf: 'stretch', color: t.ink, borderColor: t.line }]} value={value} onChangeText={set} placeholder={placeholder} placeholderTextColor={t.mute}
+        accessibilityLabel={label} autoCapitalize={label === 'Relay address' ? 'none' : 'characters'} autoCorrect={false} />
+    );
+    return (
+      <Center>
+        <ChiefArt mood="listen" size={120} />
+        <T style={s.h1}>Type a code</T>
+        <T tone="ink2" style={s.centerText}>On your computer, Settings, Phones, Add a phone, then “Can't scan? Type a code instead”.</T>
+        {input(relay, setRelay, 'Your relay, like relay.example.com', 'Relay address')}
+        {input(short, setShort, 'Short code, like K7M2QX', 'Short code')}
+        {input(code, setCode, 'Pairing code, like 7KQ4-M2XP-9RTH', 'Pairing code')}
+        {busy ? <ActivityIndicator color={t.pink} style={{ margin: 20 }} /> : <Btn go big label="Pair" disabled={!relay.trim() || !short.trim() || !code.trim()} onPress={typed} />}
+        {!!err && <T tone="pinkInk" style={s.centerText}>{err}</T>}
+        <Btn label="Scan instead" onPress={() => { setTyping(false); setErr(''); }} />
+      </Center>
+    );
+  }
   return (
     <Center>
       <ChiefArt mood="hello" size={170} />
@@ -223,8 +253,9 @@ function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
           if (p.granted) setScanning(true); else setErr('Crewhouse needs the camera to read the code.');
         }} />
       )}
+      {!busy && <Btn label="Type a code" onPress={() => { setTyping(true); setErr(''); }} />}
       {!!err && <T tone="pinkInk" style={s.centerText}>{err}</T>}
-      <T tone="mute" style={[s.small, s.centerText, { marginTop: 20 }]}>🔒 Only your computer can read what this phone sends. Nothing goes through anyone's server.</T>
+      <T tone="mute" style={[s.small, s.centerText, { marginTop: 20 }]}>🔒 Only your computer can read what this phone sends. A relay, if you use one, passes it along without being able to read it.</T>
     </Center>
   );
 }
@@ -250,7 +281,7 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
   }, []);
   useEffect(() => {
     let pending: any;
-    const { link: l, call } = connect(grant, () => { clearTimeout(pending); pending = setTimeout(refresh, 120); }, (st) => { setStatus(st); if (st === 'online') refresh(); if (st === 'removed') onRemoved(); }); // online: first load, and catching up after a reconnect
+    const { link: l, call, learn } = connect(grant, () => { clearTimeout(pending); pending = setTimeout(refresh, 120); }, (st) => { setStatus(st); if (st === 'online') { refresh(); void learn(); } if (st === 'removed') onRemoved(); }); // online: first load, and catching up after a reconnect
     link.current = l;
     setTransport(call);
     return () => l.stop();

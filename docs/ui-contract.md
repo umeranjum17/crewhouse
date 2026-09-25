@@ -94,8 +94,11 @@ A sign-in that fails ends as `signIn: {state: 'failed', error, why?}`: `why: 'de
 ## Phones
 
 `GET /api/phones` → `[{id, name, member, person, role, seen, online}]`; `POST /api/phones/pair {role: 'control'|'view'}` → `{qr, expires, urls}`;
-`DELETE /api/phones/:id`; `GET /api/phones/link`, `PUT /api/phones/lan {on}` and `PUT /api/phones/relay {url}` → `{on, lan, pinned, tailscale, hosts, relay, relayDefault, asking: [{id, name, words, role}]}`.
-`relay` is the address phones use from anywhere (`''`: none); `relayDefault` says it is Crewhouse's own. `url` is an `https://` or `wss://` address, `''` for none, or `null` to go back to the default.
+`DELETE /api/phones/:id`; `GET /api/phones/link`, `PUT /api/phones/lan {on}` and `PUT /api/phones/relay {url}` → `{on, lan, pinned, tailscale, hosts, relay, relayStatus, asking: [{id, name, words, role}]}`.
+`relay` is the family's own relay, which phones use away from home (`''`, the default: none; there is no hosted Crewhouse relay). `url` is an `https://` or `wss://` address, `''` for none, or `null` to go back to `CREWHOUSE_RELAY`.
+`relayStatus` is `off`, `connecting`, `online`, `offline`, `refused` (the relay didn't let this computer in: paste a new invitation) or `replaced`; `adapter.reach()` words it. `PUT /api/phones/relay` also takes `enrol`, a one-use invitation from a relay that lets computers in by invitation; it is dropped once used.
+`POST /api/phones/code {role}` → `{short, code, relay, expires}`: codes to type on the phone instead of scanning, once `relayStatus` is `online` (409 before). The phone types the relay's address, `short`, then `code`.
+Over the link only, for the phone itself: `GET /api/reach` → `{urls}` (a phone paired at home learns the relay address) and `POST /api/push {expo} | {web}` (its push address, kept on the relay). Every push says only "Crewhouse has news": a question for that person, their job finished or failed, or Chief speaking to them, never in their quiet hours.
 A phone that scans the code waits in `asking` until the person compares its two words and answers `POST /api/phones/answer {id, yes}`.
 These answer on the computer only, never over the phone link (`src/link.ts`, on `@byokit/link`). A 404, or `on: false`, shows "The phone app is on its way".
 The phone app (`mobile/`) reads crewd through this same adapter and `web/src/api.ts`, with the link as its transport: each call is one request `METHOD /path`.

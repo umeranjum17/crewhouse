@@ -7,6 +7,7 @@ import { networkInterfaces } from 'node:os';
 import { join } from 'node:path';
 import { WebSocketServer } from 'ws';
 import { Host, keyPair, keyPairFrom, type Grant, type PairRequest, type Role } from '@byokit/link';
+import { RelayClient, type RelayStatus } from '@byokit/relay';
 import type { Config } from './config.ts';
 import type { Store } from './db.ts';
 
@@ -34,6 +35,11 @@ export function phoneAddresses(hosts: string[], ifaces: Ifaces = networkInterfac
   return out.length ? out : ['127.0.0.1'];
 }
 
+/** Every notification says only this; the phone fetches the words over the link (the relay enforces it too). */
+export const NEWS = 'Crewhouse has news';
+/** The relay's WebSocket origin, from the https/wss address Settings keeps. */
+const wsOrigin = (url: string) => url.replace(/^http/, 'ws');
+
 const b64url = (s: string) => s.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); // phones paired before 0.1.0 were stored as base64
 const memberOf = (g: Grant) => (g.meta as { member?: number } | undefined)?.member ?? 1;
 
@@ -49,6 +55,10 @@ export class Link {
   private cfg: Config;
   private db: Store;
   private handle: Handler;
+  private client?: RelayClient;
+  private relayStatus: RelayStatus | 'off' = 'off';
+  /** Whether a member is in their quiet hours now: their phones get no notification then. Set by the server. */
+  quiet: (member: number) => boolean = () => false;
 
   constructor(cfg: Config, db: Store, handle: Handler) {
     this.cfg = cfg;
@@ -129,13 +139,12 @@ export class Link {
     await this.bind();
   }
 
-  /** The relay phones reach this computer through from anywhere: the family's own choice in Settings, else the default
-   *  (config.ts `RELAY`, or CREWHOUSE_RELAY). Empty: no relay. */
+  /** The family's own relay, from Settings, else CREWHOUSE_RELAY. Empty (the default): no relay. */
   get relay(): string { return this.db.get("SELECT value FROM settings WHERE key = 'link.relay'")?.value ?? this.cfg.relay; }
 
   /** An `https://` or `wss://` address (`http`/`ws` for a relay on the home network or Tailscale); '' turns the relay
-   *  off; null goes back to the default. */
-  setRelay(url: string | null) {
+   *  off; null goes back to CREWHOUSE_RELAY. */
+  setRelay(url: string | null, enrol?: string) {
     let value = url;
     if (value) {
       const u = URL.canParse(value) ? new URL(value) : null;
@@ -144,13 +153,56 @@ export class Link {
     }
     if (value === null) this.db.run("DELETE FROM settings WHERE key = 'link.relay'");
     else this.db.run("INSERT INTO settings (key, value) VALUES ('link.relay', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", value);
+    // A relay that lets computers in by invitation gives a one-use enrolment; it is kept only until it is used.
+    if (enrol?.trim()) this.db.run("INSERT INTO settings (key, value) VALUES ('link.relay.enrol', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", enrol.trim());
     this.db.event('link.relay', null, { on: !!this.relay });
+    this.dial();
+  }
+
+  /** Dial out to the relay (when one is set), so phones reach this computer from anywhere with no port opened here. */
+  private dial() {
+    this.client?.stop();
+    this.client = undefined;
+    this.relayStatus = 'off';
+    if (!this.relay || !this.host) return;
+    const enrol = this.db.get("SELECT value FROM settings WHERE key = 'link.relay.enrol'")?.value || undefined;
+    const c = this.client = new RelayClient(this.host, {
+      url: `${wsOrigin(this.relay)}/relay/v1/host`, enrol, name: 'Crewhouse',
+      onStatus: (st) => {
+        if (this.client !== c) return;
+        this.relayStatus = st;
+        // Registered: the relay knows this computer's key now, so the one-use enrolment is spent.
+        if (st === 'online' && enrol) this.db.run("DELETE FROM settings WHERE key = 'link.relay.enrol'");
+        this.db.event('link.relay', null, { status: st });
+      },
+    });
+  }
+
+  /** The address a phone dials through the relay, or none. */
+  relayUrl() { return this.relay && this.host ? `${wsOrigin(this.relay)}/link/v1/${this.host.id}` : ''; }
+
+  /** Tell a member's phones there is news. Content-free: the words stay on this computer until the phone asks. */
+  private async tell(member: number, id: string) {
+    if (!this.client || this.relayStatus !== 'online' || this.quiet(member)) return;
+    const to = this.host.devices().filter((g) => memberOf(g) === member).map((g) => g.id);
+    if (to.length) await this.client.notify({ id, title: NEWS, to }).catch((e) => console.error('push:', e.message));
+  }
+
+  /** What a phone hears about: a question for its person, their job finished or stuck, and Chief speaking to them. */
+  private news(e: { seq: number; kind: string; data: any; bot: string | null }) {
+    let member: number | undefined;
+    if (e.kind === 'ask.opened') member = this.db.get('SELECT member FROM asks WHERE id = ?', e.data.ask)?.member ?? 1;
+    else if (e.kind === 'task.done' || e.kind === 'task.failed') {
+      const t = this.db.get('SELECT member, bot, result FROM tasks WHERE id = ?', e.data.task);
+      if (t && t.bot !== 'chief' && t.result !== 'All clear') member = t.member ?? 1;
+    } else if (e.kind === 'message' && e.bot === 'chief' && e.data.author === 'bot') member = this.db.get('SELECT member FROM messages WHERE id = ?', e.data.id)?.member ?? undefined;
+    if (member !== undefined) void this.tell(member, `e${e.seq}`);
   }
 
   /** Settings, Phones: how phones reach this computer, and any phone waiting for a yes (docs/ui-contract.md). */
   status() {
     return { on: this.cfg.linkPort > 0, lan: this.lan, pinned: !!this.cfg.linkHost, hosts: [...this.servers.keys()], tailscale: this.hosts().some(tailscale),
-      relay: this.relay, relayDefault: this.relay === this.cfg.relay,
+      relay: this.relay, relayStatus: this.relayStatus,
       asking: [...this.asking.values()].map(({ id, name, words, role }) => ({ id, name, words, role })) };
   }
 
@@ -158,9 +210,18 @@ export class Link {
   async offer(role: string, member: number): Promise<{ qr: string; expires: number; urls: string[] }> {
     if (role !== 'control' && role !== 'view') throw Object.assign(new Error('role is control or view'), { status: 400 });
     await this.bind(); // Tailscale may have come up since crewd started
-    const urls = phoneAddresses([...this.servers.keys()]).map((ip) => `ws://${ip}:${this.cfg.linkPort}/link`);
+    const urls = [...(this.servers.size ? phoneAddresses([...this.servers.keys()]).map((ip) => `ws://${ip}:${this.cfg.linkPort}/link`) : []), ...(this.relayUrl() ? [this.relayUrl()] : [])];
     const { text, expires } = this.host.offer({ role, urls, meta: { member } });
     return { qr: text, expires, urls };
+  }
+
+  /** Codes to type instead of scanning, through the relay: its short code (which computer) and link's pairing code. */
+  async typed(role: string, member: number) {
+    if (role !== 'control' && role !== 'view') throw Object.assign(new Error('role is control or view'), { status: 400 });
+    if (!this.client || this.relayStatus !== 'online') throw Object.assign(new Error('typing a code works once this computer is reachable from anywhere'), { status: 409 });
+    const { code: short, expires } = await this.client.code();
+    const { code } = this.host.code({ role, meta: { member } });
+    return { short, code, relay: this.relay, expires };
   }
 
   devices() {
@@ -171,13 +232,22 @@ export class Link {
 
   async revoke(id: string) {
     if (!this.host.devices().some((g) => g.id === id)) throw Object.assign(new Error('no such device'), { status: 404 });
-    await this.host.revoke(id); // said inside the encrypted channel; the phone forgets its grant only then
+    // Said inside the encrypted channel; the phone forgets its grant only then. Through the relay, its push addresses go too.
+    if (this.client) await this.client.revoke(id); else await this.host.revoke(id);
   }
 
   /** One request from a phone, as `METHOD /path`: run as its member, answered like HTTP. */
   private async request(op: string, body: unknown, g: Grant): Promise<{ status: number; body: unknown }> {
     const [method, path = ''] = op.split(' ', 2);
     if (!path.startsWith('/api/')) return { status: 404, body: { error: 'not found' } };
+    // The phone's own: where else it can reach this computer (a phone paired at home learns the relay), and its push address.
+    if (op === 'GET /api/reach') return { status: 200, body: { urls: this.relayUrl() ? [this.relayUrl()] : [] } };
+    if (op === 'POST /api/push') {
+      const sub = body as any;
+      if (!this.client || !sub || (typeof sub.expo !== 'string' && typeof sub.web !== 'object')) return { status: 409, body: { error: 'no relay for notifications' } };
+      await this.client.subscribe(g.id, typeof sub.expo === 'string' ? { expo: sub.expo } : { web: sub.web });
+      return { status: 200, body: { ok: true } };
+    }
     // Household admin stays on the computer: AI account sign-ins, people, the house's Google app, connecting apps
     // (their sign-in pages come back to this computer's own address), and the phones themselves.
     if (/^\/api\/(accounts|house|phones)\b/.test(path) || (/^\/api\/(people|connections)\b/.test(path) && method !== 'GET')) return { status: 403, body: { error: 'do that on the computer' } };
@@ -185,7 +255,12 @@ export class Link {
     catch (e: any) { return { status: e.status ?? 400, body: { error: e.message } }; }
   }
 
-  async listen() { await this.open(); await this.bind(); }
+  async listen() {
+    await this.open();
+    this.db.onEvent((e) => this.news(e as any));
+    await this.bind();
+    this.dial();
+  }
 
-  close() { this.host?.close(); for (const s of this.servers.values()) s.close(); }
+  close() { this.client?.stop(); this.host?.close(); for (const s of this.servers.values()) s.close(); }
 }

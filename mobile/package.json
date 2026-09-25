@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "main": "index.ts",
   "dependencies": {
-    "@byokit/link": "0.1.0",
+    "@byokit/link": "0.3.0",
+    "@byokit/relay": "0.1.1",
     "expo": "~57.0.25",
     "expo-build-properties": "~57.0.22",
     "expo-camera": "~57.0.5",

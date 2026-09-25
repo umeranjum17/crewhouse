@@ -87,6 +87,21 @@ export function helper(b: Json): Helper {
 }
 
 /** When the crew is resting because an account ran out, in one sentence: "Your ChatGPT is resting until 6:40 pm". */
+/** Settings, Phones: whether phones reach this computer from anywhere, in one sentence. */
+export function reach(link: Json) {
+  let where = '';
+  try { where = link?.relay ? new URL(link.relay).host : ''; } catch { /* kept as typed */ }
+  const words: Record<string, string> = {
+    online: `On. Phones reach this computer from anywhere through ${where}, which passes along what they say without being able to read it.`,
+    connecting: `Getting in touch with ${where}…`,
+    offline: `Can't reach ${where} right now. Trying again by itself.`,
+    refused: `${where} didn't let this computer in. Ask whoever runs it for a new invitation and paste it below.`,
+    replaced: 'Another copy of Crewhouse took over this address, so this one stepped back.',
+  };
+  const on = !!link?.relay && link.relayStatus !== 'off';
+  return { on, online: link?.relayStatus === 'online', words: on ? words[link.relayStatus] ?? words.connecting : 'Off. Phones reach this computer at home, or over Tailscale.' };
+}
+
 /** The crew's share of the viewer's ChatGPT, as three choices and one sentence about today. Never a number. */
 export const SHARES = [
   { key: 'light', label: 'Light', says: 'Leave most of my ChatGPT for me' },

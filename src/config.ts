@@ -16,7 +16,8 @@ export interface Config {
    *  it on in Settings, Phones. A comma list pins the addresses instead. Port 0 turns the link off. */
   linkHost: string;
   linkPort: number;
-  /** The relay phones reach this computer through from anywhere (relay/). Settings, Phones overrides it. */
+  /** A relay the family runs themselves (relay/), for phones away from home. None by default: there is no hosted one.
+   *  Settings, Phones overrides it. */
   relay: string;
   /** 'pi' for the real AI accounts, 'stub' for tests: a scripted model inside the same engine, no quota. */
   engine: 'pi' | 'stub';
@@ -41,7 +42,7 @@ export function loadConfig(): Config {
     port: Number(process.env.CREWHOUSE_PORT || 7711),
     linkHost: process.env.CREWHOUSE_LINK_HOST?.trim() || '',
     linkPort: Number(process.env.CREWHOUSE_LINK_PORT ?? 7712),
-    relay: process.env.CREWHOUSE_RELAY?.trim() ?? RELAY,
+    relay: process.env.CREWHOUSE_RELAY?.trim() ?? '',
     engine: process.env.CREWHOUSE_ENGINE === 'stub' ? 'stub' : 'pi',
     maxConcurrent: Number(process.env.CREWHOUSE_MAX_CONCURRENT || 3),
     repoDir: resolve(import.meta.dirname, '..'),
@@ -49,6 +50,3 @@ export function loadConfig(): Config {
 }
 
 export const CHIEF = 'chief';
-/** The project's public relay. Empty until its hosting is approved; until then a family sets its own in Settings,
- *  Phones, or CREWHOUSE_RELAY (relay/README.md). */
-export const RELAY = '';
