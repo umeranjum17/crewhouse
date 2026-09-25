@@ -6,3 +6,6 @@ import { loadConfig } from './config.ts';
 
 /** The engine's own folder (Pi's "agent dir"), never ~/.pi. Every session is also given it explicitly. */
 export const engineDir = isolate(join(loadConfig().stateDir, 'engine'));
+// Pi looks for Google Cloud's sign-in in the owner's ~/.config/gcloud unless told where it is; it is told a file that is
+// never there, so it doesn't look at theirs.
+process.env.GOOGLE_APPLICATION_CREDENTIALS = join(engineDir, 'no-google-cloud-sign-in.json');

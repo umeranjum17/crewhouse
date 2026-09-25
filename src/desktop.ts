@@ -2,9 +2,11 @@
 // and, while a person watches, a desklink engine streaming it. Never the owner's display.
 import { spawn, type ChildProcess } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
+import type { AddressInfo } from 'node:net';
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { EngineClient, resolveEngine, explainMissingEngine, type EngineEvent } from '@desklink/host';
+import { WebSocketServer, type WebSocket } from 'ws';
 
 export const WIDTH = 1280, HEIGHT = 800;
 const IDLE_MS = Number(process.env.CREWHOUSE_DESKTOP_IDLE_MS || 10 * 60_000);
@@ -21,9 +23,9 @@ export function missing() {
   return out;
 }
 
-/** Display :N, its cookie file, and the bot's Chromium debugging port. N is stable per bot, so a restarted desktop keeps its address. */
+/** Display :N and its cookie file. N is stable per bot, so a restarted desktop keeps its address. */
 export function deskFor(stateDir: string, bot: string, n: number) {
-  return { n, display: `:${n}`, xauth: join(stateDir, 'desktops', `${bot}.xauth`), cdp: 29000 + n };
+  return { n, display: `:${n}`, xauth: join(stateDir, 'desktops', `${bot}.xauth`) };
 }
 
 /** An Xauthority file with one wildcard MIT-MAGIC-COOKIE-1 entry: only holders of this file may use the display. */
@@ -52,8 +54,10 @@ function unwrap(e: EngineEvent): DeskEvent | null {
 export interface Watcher { send(e: DeskEvent): void }
 
 interface Desk {
-  bot: string; n: number; display: string; xauth: string; cdp: number;
-  xvfb: ChildProcess; chrome?: ChildProcess; engine?: EngineClient;
+  bot: string; n: number; display: string; xauth: string;
+  /** Where the bot's browser tool attaches: crewd's own endpoint for this Chromium, at a secret path (see `browser`). */
+  cdp?: string;
+  xvfb: ChildProcess; chrome?: ChildProcess; engine?: EngineClient; devtools?: WebSocketServer;
   session?: { id: string; generation: number; control: boolean; watcher: Watcher };
   used: number;
   /** The engine announces a session's offer before its open call returns; held here until the session is known. */
@@ -78,7 +82,7 @@ export class Desktops {
     const have = this.desks.get(bot);
     if (have) {
       have.used = Date.now();
-      if (!have.chrome || have.chrome.exitCode !== null) have.chrome = this.browser(have, botDir);
+      if (!have.chrome || have.chrome.exitCode !== null) await this.browser(have, botDir);
       return have;
     }
     const why = missing().find((m) => m.startsWith('Xvfb'));
@@ -99,7 +103,7 @@ export class Desktops {
     const desk: Desk = { bot, ...d, xvfb, used: Date.now(), early: [] };
     xvfb.on('exit', () => { if (this.desks.get(bot) === desk) this.stop(bot); });
     this.desks.set(bot, desk);
-    desk.chrome = this.browser(desk, botDir);
+    await this.browser(desk, botDir);
     return desk;
   }
 
@@ -112,18 +116,42 @@ export class Desktops {
     }
   }
 
-  /** The bot's own Chromium: its own profile in its folder, maximized on its display; the browser MCP drives it over CDP. */
-  private browser(d: Desk, botDir: string) {
+  /** The bot's own Chromium: its own profile in its folder, maximized on its display; the bot's browser tool drives it.
+   *  Its DevTools speak over a pipe to crewd, never a TCP port: every bot's sandboxed shell shares the machine's
+   *  loopback, and an open port would let any bot drive any bot's browser. crewd relays the pipe on a loopback
+   *  WebSocket whose path is a fresh secret, which only the bot's own browser tool is given. */
+  private async browser(d: Desk, botDir: string) {
     const bin = browserBin();
-    if (!bin) return undefined;
+    if (!bin) return;
+    d.devtools?.close();
     const child = spawn(bin, [
       // Last flag wins, so these beat a distro wrapper's own flags (for example a Wayland default).
-      '--ozone-platform=x11', `--user-data-dir=${join(botDir, 'browser')}`, `--remote-debugging-port=${d.cdp}`,
+      '--ozone-platform=x11', `--user-data-dir=${join(botDir, 'browser')}`, '--remote-debugging-pipe',
       '--no-first-run', '--no-default-browser-check', '--password-store=basic', '--force-device-scale-factor=1', '--start-maximized',
       '--window-position=0,0', `--window-size=${WIDTH},${HEIGHT}`, 'about:blank',
-    ], { env: this.env(d), stdio: 'ignore' });
+    ], { env: this.env(d), stdio: ['ignore', 'ignore', 'ignore', 'pipe', 'pipe'] });
     child.on('error', () => {});
-    return child;
+    const path = `/devtools/browser/${randomBytes(24).toString('hex')}`;
+    const wss = new WebSocketServer({ host: '127.0.0.1', port: 0, path });
+    await new Promise((r) => wss.once('listening', r));
+    // Chromium's pipe carries one JSON message per NUL; one client at a time (a newer attach replaces the last).
+    const toChrome = child.stdio[3] as NodeJS.WritableStream, fromChrome = child.stdio[4] as NodeJS.ReadableStream;
+    let client: WebSocket | undefined, buf = '';
+    fromChrome.setEncoding('utf8'); // a character split across chunks stays whole
+    fromChrome.on('data', (c) => {
+      buf += c;
+      for (let i; (i = buf.indexOf('\0')) >= 0; buf = buf.slice(i + 1)) client?.send(buf.slice(0, i));
+    });
+    toChrome.on('error', () => {});
+    wss.on('connection', (ws) => {
+      client?.close();
+      client = ws;
+      ws.on('message', (m) => toChrome.write(`${m}\0`));
+    });
+    child.on('exit', () => { wss.close(); if (d.devtools === wss) d.cdp = undefined; });
+    d.chrome = child;
+    d.devtools = wss;
+    d.cdp = `ws://127.0.0.1:${(wss.address() as AddressInfo).port}${path}`;
   }
 
   /** Environment bound to the bot's display only: its cookie, and no route to the owner's Wayland session. */
@@ -216,6 +244,7 @@ export class Desktops {
     d.session?.watcher.send({ kind: 'revoked', reason: 'the desktop stopped' });
     void d.engine?.stop().catch(() => {});
     d.chrome?.kill();
+    d.devtools?.close();
     d.xvfb.kill();
   }
 

@@ -118,6 +118,8 @@ case "${1:-}" in
     npm ci --no-audit --no-fund
     npm run build:web
     paths
+    # A tool whose pin moved (a new version, or a new program) is reinstalled now, before crewd comes back.
+    node src/tools.ts install --refresh || echo "A tool didn't update; ./crewhouse tools install tries again." >&2
     if autostarted; then
       systemctl --user restart crewhouse.service
       echo "Updated to $(git log -1 --format='%h %s'). crewd restarted; running work carries on."

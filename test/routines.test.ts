@@ -455,7 +455,7 @@ test('the checkout card is read from the page: items and total as the page write
   await until('working', () => crew.sessionOf('scout'));
   const live = (crew as any).live.get('scout');
   live.page = 'https://www.shop.example/checkout/review?cart=123&token=abc';
-  const click = () => (crew as any).gate('scout', 'browser_click', { element: 'Place order', ref: 'e9' });
+  const click = () => (crew as any).gate('scout', 'browser', { args: ['click', 'e9'] });
   const open = () => db.get("SELECT * FROM asks WHERE bot = 'scout' AND state = 'open'");
 
   live.snapshot = snap('$43.10');

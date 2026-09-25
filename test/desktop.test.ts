@@ -2,11 +2,16 @@
 // Needs Xvfb (skipped without it); the desklink parts also need the Linux x64 engine and its system libraries.
 import { after, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync,  statSync } from 'node:fs';
+import { spawn } from 'node:child_process';
+import { existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
+import WebSocket from 'ws';
 import { join } from 'node:path';
 import { temp } from './tmp.ts';
 import { EngineClient, resolveEngine } from '@desklink/host';
-import { deskFor, Desktops, missing, type DeskEvent } from '../src/desktop.ts';
+import { browserBin, deskFor, Desktops, missing, type DeskEvent } from '../src/desktop.ts';
+import { sandboxBash, sandboxReady } from '../src/engine.ts';
 
 const root = temp('crewhouse-desk');
 const botDir = join(root, 'bots', 'reel');
@@ -14,6 +19,9 @@ mkdirSync(join(botDir, '.crewhouse'), { recursive: true });
 // A display number nobody holds, so side-by-side runs and a real X server never collide.
 let n = 190 + Math.floor(Math.random() * 60);
 while (existsSync(`/tmp/.X${n}-lock`) || existsSync(`/tmp/.X11-unix/X${n}`)) n++;
+/** Loopback ports already listening before any desktop here starts: other programs' own, which the attack test leaves alone. */
+const before = new Set(['/proc/net/tcp', '/proc/net/tcp6'].flatMap((f) => (existsSync(f) ? readFileSync(f, 'utf8').split('\n').slice(1) : []))
+  .map((l) => l.trim().split(/\s+/)).filter((c) => c[3] === '0A').map((c) => String(parseInt(c[1].split(':')[1], 16))));
 const desks = new Desktops(join(root, 'state'));
 const xauth = deskFor(join(root, 'state'), 'reel', n).xauth;
 after(() => desks.stopAll());
@@ -84,3 +92,63 @@ test('watching: crewd picks the display and the permissions', { skip: noXvfb }, 
   assert.ok(b.seen.some((e) => e.kind === 'revoked'));
   desks.stop('reel');
 });
+
+// Every bot's sandboxed shell shares the machine's loopback. A browser whose DevTools listened on a port there could be
+// driven by any bot's shell, past crewd's gate: open pages as the person, read their signed-in sites. This runs the real
+// attack from a real bot shell: find every loopback port that appeared during the test and, wherever DevTools answers,
+// open a page. A decoy Chromium with an open port shows the attack works; the bot's own browser must be out of its
+// reach, yet still drivable through crewd's own endpoint. (Ports already open before this file ran, other programs'
+// own, are left alone.)
+const noAttack = noXvfb || (!browserBin() && 'no Chromium here') || (!sandboxReady() && 'bubblewrap is not usable here');
+test("a bot's shell cannot find or drive another bot's browser", { skip: noAttack }, async (t) => {
+  const hits: string[] = [];
+  const pages = createServer((q, r) => { hits.push(q.url!); r.end('<title>page</title>'); }).listen(0, '127.0.0.1');
+  await new Promise((r) => pages.once('listening', r));
+  const site = `http://127.0.0.1:${(pages.address() as AddressInfo).port}`;
+  const decoyDir = join(root, 'decoy');
+  const decoy = spawn(browserBin()!, ['--headless=new', '--remote-debugging-port=0', `--user-data-dir=${decoyDir}`, '--no-first-run', 'about:blank'], { stdio: 'ignore' });
+  t.after(() => { decoy.kill(); pages.close(); desks.stop('reel'); });
+  const d = await desks.ensure('reel', n, botDir);
+  for (let i = 0; i < 100 && !existsSync(join(decoyDir, 'DevToolsActivePort')); i++) await sleep(100);
+  const decoyPort = readFileSync(join(decoyDir, 'DevToolsActivePort'), 'utf8').split('\n')[0];
+
+  // The bot's browser is up, and crewd's own endpoint (the only one its browser tool is given) drives it.
+  const ws = new WebSocket(d.cdp!);
+  await new Promise((r, j) => { ws.once('open', r); ws.once('error', j); });
+  const reply = (id: number) => new Promise<any>((r) => ws.on('message', (m) => { const j = JSON.parse(String(m)); if (j.id === id) r(j.result); }));
+  ws.send(JSON.stringify({ id: 1, method: 'Target.createTarget', params: { url: `${site}/crewd` } }));
+  await until("crewd drove the bot's browser", () => hits.includes('/crewd'));
+
+  // Bot "maya"'s own shell, exactly as a task gets it; it scans every port except those open before this file ran.
+  const space = join(root, 'bots', 'maya');
+  mkdirSync(space, { recursive: true });
+  const attack = `
+    for hex in $(awk 'NR>1 && $4=="0A" { split($2, a, ":"); print a[2] }' /proc/net/tcp /proc/net/tcp6 | sort -u); do
+      p=$((16#$hex))
+      case " ${[...before].join(' ')} " in *" $p "*) continue;; esac
+      if curl -s -m 2 http://127.0.0.1:$p/json/version | grep -q '"Browser"'; then
+        echo "devtools $p"
+        curl -s -m 2 -X PUT "http://127.0.0.1:$p/json/new?${site}/pwned-$p" > /dev/null
+      fi
+      for path in / /devtools/browser /devtools/browser/x; do
+        code=$(curl -s -m 2 -o /dev/null -w '%{http_code}' --http1.1 -H 'Connection: Upgrade' -H 'Upgrade: websocket' -H 'Sec-WebSocket-Version: 13' -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' http://127.0.0.1:$p$path)
+        [ "$code" = 101 ] && echo "websocket $p$path"
+      done
+    done; echo scanned`;
+  const r: any = await sandboxBash(space, [], {}).execute('attack', { command: attack }, undefined as any, undefined as any);
+  const out = r.content.map((c: any) => c.text).join('');
+  assert.match(out, /scanned/, out);
+  assert.deepEqual(out.match(/^devtools \d+$/gm), [`devtools ${decoyPort}`], "the shell found the decoy's DevTools, and no other");
+  assert.doesNotMatch(out, /^websocket /m, 'no DevTools socket answers without its secret');
+  await until('the decoy was driven', () => hits.includes(`/pwned-${decoyPort}`));
+  ws.send(JSON.stringify({ id: 2, method: 'Target.getTargets' }));
+  const { targetInfos } = await reply(2);
+  ws.close();
+  assert.deepEqual(targetInfos.filter((x: any) => /pwned/.test(x.url)), [], "nothing the shell sent reached the bot's browser");
+
+  assert.deepEqual(hits.filter((h) => h.startsWith('/pwned') && h !== `/pwned-${decoyPort}`), []);
+});
+
+async function until(what: string, fn: () => unknown, ms = 15_000) {
+  for (const end = Date.now() + ms; !(await fn()); await sleep(50)) if (Date.now() > end) throw new Error(`timed out waiting for ${what}`);
+}

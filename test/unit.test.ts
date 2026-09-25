@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import { execFileSync } from 'node:child_process';
 import assert from 'node:assert/strict';
-import { chmodSync, existsSync, mkdirSync,  readFileSync, readlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync,  readdirSync, readFileSync, readlinkSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
 import { homedir, tmpdir } from 'node:os';
@@ -98,8 +98,18 @@ test('policy: own space and the sandboxed shell run silently; the person\'s file
   assert.deepEqual([pay.kind, pay.words, pay.key, pay.cost], ['spend', 'Maya wants to make a paid lookup with people search, up to $0.05.', undefined, 0.05], 'spending has no standing key');
   assert.deepEqual(effectOf('people_search', { args: ['catalog', 'search', 'phone'] }, s), { kind: 'safe' });
   assert.equal(effectOf('people_search', { args: ['logout'] }, s).kind, 'refuse');
-  assert.equal(effectOf('browser_click', { ref: 'e1' }, s).kind, 'send');
-  assert.equal(effectOf('browser_snapshot', {}, s).kind, 'safe');
+  assert.equal(effectOf('browser', { args: ['click', 'e1'] }, s).kind, 'send');
+  assert.equal(effectOf('browser', { args: ['snapshot', '--query', 'inbox'] }, s).kind, 'safe');
+  // The browser's own reach: only web pages, its own space for files, and crewd's choice of browser and session.
+  for (const args of [['eval', 'document.cookie'], ['attach', '--cdp', 'ws://127.0.0.1:1/x'], ['cookie-list'], ['state-save', 'x.json'], ['close'],
+    ['goto', 'file:///etc/passwd'], ['goto', 'chrome://settings'], ['tab-new', 'view-source:https://x.test'], ['goto', 'https://x.test', '--session', 'reel'],
+    ['click', 'e1', '-s=reel'], ['upload', join(home, '.ssh', 'id_ed25519')], ['screenshot', '--filename', join(home, 'Desktop', 'x.png')],
+    ['drop', 'e2', '--path=/etc/hosts'], [], ['open', 'https://x.test']]) {
+    assert.equal(effectOf('browser', { args }, s).kind, 'refuse', args.join(' '));
+  }
+  assert.deepEqual(effectOf('browser', { args: ['goto', 'https://news.ycombinator.com'] }, s), { kind: 'safe' });
+  assert.deepEqual(effectOf('browser', { args: ['screenshot', '--filename', 'files/page.png'] }, s), { kind: 'safe' });
+  assert.equal(effectOf('browser', { args: ['upload', 'files/form.pdf'] }, s).kind, 'send', 'its own file, on a signed-in site: asks');
   assert.equal(effectOf('teleport', {}, s).kind, 'refuse', 'unknown tools fail closed');
   assert.equal(toolWords('bash', { command: 'ffmpeg -y -i a.png out.mp4' }), 'Worked on a video');
   assert.equal(toolWords('bash', { command: 'fc-list | head' }), 'Worked in its own space', 'the trail never shows a command');
@@ -124,11 +134,12 @@ test('the shell: its own space is the only writable place, the home folder is em
 });
 
 test('browser asks first on signed-in sites and payment pages, only for actions', () => {
-  assert.equal(browserAsk('browser_navigate', 'https://shop.example/checkout', []), null, 'looking is fine');
-  assert.deepEqual(browserAsk('browser_click', 'https://shop.example/checkout', []), { spend: true, host: 'shop.example' });
-  assert.deepEqual(browserAsk('browser_type', 'https://mail.google.com/x', ['google.com']), { spend: false, host: 'mail.google.com' });
-  assert.equal(browserAsk('browser_click', 'https://news.ycombinator.com/', ['google.com']), null);
-  assert.equal(browserAsk('browser_snapshot', 'https://pay.google.com/', []), null);
+  assert.equal(browserAsk('goto', 'https://shop.example/checkout', []), null, 'looking is fine');
+  assert.deepEqual(browserAsk('click', 'https://shop.example/checkout', []), { spend: true, host: 'shop.example' });
+  assert.deepEqual(browserAsk('type', 'https://mail.google.com/x', ['google.com']), { spend: false, host: 'mail.google.com' });
+  assert.equal(browserAsk('click', 'https://news.ycombinator.com/', ['google.com']), null);
+  assert.equal(browserAsk('snapshot', 'https://pay.google.com/', []), null);
+  assert.equal(toolWords('browser', { args: ['goto', 'https://www.walmart.com/cart'] }), 'Opened www.walmart.com in its browser');
 });
 
 test('the gate: an ask holds the call; allowed, it runs; unanswered, the turn parks and the answer resumes the same session', async () => {
@@ -268,21 +279,28 @@ test('tool grants: a session gets only granted, installed tools; command-line to
   }
 });
 
-test('grant resolution: MCP browser from the pinned bin dir, missing tools listed, not offered', () => {
+test('grant resolution: the browser AXI from the pinned copy only, missing tools listed, not offered', () => {
   const { root, cfg, crew, done } = setup();
   crew.recruit('scout', 'Scout', 'person');
-  fakeBin(join(root, 'bin'), 'rg', 'jq');
-  fakeBin(kit.toolBin(cfg), 'playwright-mcp', 'markitdown'); // as a pinned install leaves them
+  fakeBin(join(root, 'bin'), 'rg', 'jq', 'playwright-axi', 'markitdown'); // the person's own copies, on their PATH
   const path = process.env.PATH;
   process.env.PATH = join(root, 'bin');
   try {
     const dir = disk.botDir(cfg, 'scout');
-    const g = kit.resolveGrants(cfg, disk.botConfig(cfg, 'scout').tools, { 'bot.dir': dir, 'bot.id': 'scout' });
+    const grants = () => kit.resolveGrants(cfg, disk.botConfig(cfg, 'scout').tools, { 'bot.dir': dir, 'bot.id': 'scout' });
+    assert.deepEqual(grants().missing, ['browser', 'computer', 'documents', 'video-download'], "a pinned tool is never the person's own copy");
+    // As a pinned install leaves it: a link in the kit's bin to the script in the tool's own node_modules.
+    const script = join(cfg.toolsDir, 'browser', 'node_modules', 'playwright-axi', 'bin', 'playwright-axi.js');
+    fakeBin(join(script, '..'), 'playwright-axi.js');
+    fakeBin(kit.toolBin(cfg), 'markitdown');
+    symlinkSync(script, join(kit.toolBin(cfg), 'playwright-axi'));
+    const g = grants();
     assert.deepEqual(g.tools.sort(), ['browser', 'crew', 'documents', 'files', 'search-files', 'web']);
     assert.deepEqual(g.missing, ['computer', 'video-download'], 'granted but not installed: listed, not offered');
-    assert.equal(g.mcp.browser.command, join(kit.toolBin(cfg), 'playwright-mcp'), 'pinned copy, absolute');
-    assert.ok(g.mcp.browser.args.includes(`${dir}/browser`), "the bot's own profile");
-    assert.equal(g.mcp.browser.env.PLAYWRIGHT_BROWSERS_PATH, join(cfg.toolsDir, 'browser', 'ms-playwright'));
+    assert.equal(g.axi.browser.script, script, 'the pinned script itself, run on crewd\'s node');
+    assert.equal(g.axi.browser.env.PLAYWRIGHT_BROWSERS_PATH, join(cfg.toolsDir, 'browser', 'ms-playwright'));
+    const env = kit.axiEnv('/state/homes/scout');
+    assert.deepEqual([env.PATH, env.HOME, env.XDG_CACHE_HOME], ['/usr/bin:/bin', '/state/homes/scout', '/state/homes/scout/.cache'], 'nothing inherited');
   } finally {
     process.env.PATH = path;
     done();
@@ -322,6 +340,10 @@ test('installs: pinned npm and checksummed download land in the tool folder; bad
     assert.match(logs.join(), /already installed/);
     manifest('dltool', { download: { url: url + '?v=2', sha256: sha } }, ['fake-dl']); // Crewhouse moved the pin
     assert.equal(st().get('dltool')!.outdated, true);
+    // A tool whose new pin drops a program (the browser went from playwright-mcp to playwright-axi) leaves no stale link.
+    symlinkSync(join(cfg.toolsDir, 'dltool', 'old-program'), join(kit.toolBin(cfg), 'old-program'));
+    await kit.installTool(cfg, 'dltool');
+    assert.ok(!readdirSync(kit.toolBin(cfg)).includes('old-program') && existsSync(join(kit.toolBin(cfg), 'fake-dl')));
     await assert.rejects(kit.installTool(cfg, 'nope'), /unknown tool/);
   } finally {
     srv.close();
