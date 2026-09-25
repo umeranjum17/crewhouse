@@ -14,7 +14,7 @@ process.env.CREWHOUSE_CALLBACK_PORT = String(await free());
 process.env.CREWHOUSE_REDIRECT_MS = '600';
 const { setup, settled, task, until } = await import('./lab.ts');
 const { Accounts, CALLBACK_PORT, OWNER, planOf } = await import('../src/accounts.ts');
-const { classify } = await import('../src/crew.ts');
+const { classify } = await import('@byokit/accounts');
 const disk = await import('../src/bots.ts');
 
 /** A ChatGPT access token as OpenAI shapes it: the account, the plan and the email in its claims. */
@@ -81,7 +81,7 @@ test("sign in with ChatGPT: its own page, straight back here; the tab shows Crew
     assert.equal(a.view(OWNER, 'chatgpt')!.state, 'done');
     assert.equal(await a.signedIn(OWNER, 'chatgpt'), true);
     assert.match(readFileSync(a.authPath(OWNER), 'utf8'), /openai-codex/);
-    assert.deepEqual(a.chatgptPlan(OWNER), { plan: 'plus', email: 'sara@example.com', work: false });
+    assert.deepEqual(await a.plan(OWNER), { plan: 'plus', email: 'sara@example.com', work: false });
   } finally { a.stop(); done(); }
 });
 
@@ -146,7 +146,7 @@ test('a work ChatGPT is recognised from the sign-in itself, so the app can steer
     const v = (await a.login(OWNER, 'chatgpt'))!;
     await back({ code: 'good', state: stateOf(v.url!) });
     await a.finished(OWNER, 'chatgpt');
-    assert.equal(a.chatgptPlan(OWNER)!.work, true);
+    assert.equal((await a.plan(OWNER))!.work, true);
   } finally { Object.assign(openai, { plan: 'plus', email: 'sara@example.com' }); a.stop(); done(); }
 });
 
@@ -178,8 +178,8 @@ test('first run: her first request waits for her own sign-in, Chief says why in 
 
 test('a ChatGPT plan without helpers: said plainly with the way forward; "ask the owner" and "I changed my plan"', async () => {
   const { cfg, db, crew, done } = setup();
-  assert.equal(classify('You have hit your ChatGPT usage limit (free plan).')?.why, 'not_included');
-  assert.equal(classify('You have hit your ChatGPT usage limit (plus plan). Try again in ~30 min.')?.why, 'rate_limit');
+  assert.equal(classify('You have hit your ChatGPT usage limit (free plan).')?.kind, 'not_included');
+  assert.equal(classify('You have hit your ChatGPT usage limit (plus plan). Try again in ~30 min.')?.kind, 'rate_limit');
   const sara = crew.addMember('Sara').id;
   crew.onboard('Sara', sara);
   crew.recruit('scout', 'Scout', 'person');
