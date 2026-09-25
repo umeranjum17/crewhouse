@@ -5,16 +5,23 @@ export type Json = any;
 let member = 1;
 export const setMember = (id: number) => { member = id; };
 
+/** `?demo` runs the screens on a made-up household (web/src/demo.ts): for design review and screenshots. */
+export const demo = typeof location !== 'undefined' && new URLSearchParams(location.search).has('demo');
+
 async function call(method: string, path: string, body?: Json) {
+  if (demo) return (await import('./demo.ts')).demoCall(method, path, body);
   const res = await fetch(path, {
     method,
     headers: { 'content-type': 'application/json', 'x-crewhouse': '1', 'x-crewhouse-member': String(member) },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const out = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(out.error ?? `HTTP ${res.status}`);
+  if (!res.ok) throw Object.assign(new Error(out.error ?? `HTTP ${res.status}`), { status: res.status });
   return out;
 }
+
+/** What went wrong, in the three ways a screen cares about: the home computer is unreachable, crewd doesn't do that yet, or it failed. */
+export const trouble = (e: any): 'offline' | 'missing' | 'failed' => (e?.status === 404 ? 'missing' : !e?.status ? 'offline' : 'failed');
 
 export const api = {
   state: () => call('GET', '/api/state'),
@@ -23,11 +30,7 @@ export const api = {
   onboard: (address: string) => call('POST', '/api/onboard', { address }),
   recruit: (template: string, name: string) => call('POST', '/api/recruit', { template, name }),
   notes: (id: string, text: string) => call('PUT', `/api/bots/${id}/notes`, { text }),
-  tools: (id: string, tools: string[]) => call('PUT', `/api/bots/${id}/tools`, { tools }),
-  install: (tool: string) => call('POST', `/api/tools/${tool}/install`),
-  models: (id: string, models: string[]) => call('PUT', `/api/bots/${id}/models`, { models }),
   settings: (id: string, body: { allow?: string[]; memory?: boolean }) => call('PUT', `/api/bots/${id}/settings`, body),
-  type: (id: string, body: { text?: string; keys?: string[] }) => call('POST', `/api/bots/${id}/type`, body),
   reset: (id: string) => call('POST', `/api/bots/${id}/reset`),
   undoMemory: (id: string, seq: number) => call('POST', `/api/bots/${id}/memory/${seq}/undo`),
   takeOver: (id: string) => call('POST', `/api/bots/${id}/takeover`),
@@ -37,13 +40,18 @@ export const api = {
   person: (id: number, body: { name?: string; address?: string; quiet?: string | null }) => call('PUT', `/api/people/${id}`, body),
   accounts: (fresh = false) => call('GET', `/api/accounts${fresh ? '?fresh' : ''}`),
   signIn: (member: number, runtime: string) => call('POST', `/api/accounts/${member}/${runtime}/login`),
-  signInCode: (member: number, runtime: string, text: string) => call('POST', `/api/accounts/${member}/${runtime}/login/input`, { text }),
   signInCancel: (member: number, runtime: string) => call('POST', `/api/accounts/${member}/${runtime}/login/cancel`),
   schedule: (text: string) => call('GET', `/api/schedule?text=${encodeURIComponent(text)}`),
   addRoutine: (body: { bot: string; schedule: string; task: string; model?: string; name?: string }) => call('POST', '/api/routines', body),
   routine: (id: number, body: { state?: 'on' | 'paused'; schedule?: string }) => call('PUT', `/api/routines/${id}`, body),
   runRoutine: (id: number) => call('POST', `/api/routines/${id}/run`),
   removeRoutine: (id: number) => call('DELETE', `/api/routines/${id}`),
+  // Wanted from the engine rework (docs/ui-contract.md); the screens show "coming soon" until crewd answers them.
+  phones: () => call('GET', '/api/phones'),
+  pairPhone: () => call('POST', '/api/phones/pair'),
+  connect: (app: string) => call('POST', `/api/connections/${app}`),
+  connection: (app: string) => call('GET', `/api/connections/${app}`),
+  disconnect: (app: string) => call('DELETE', `/api/connections/${app}`),
   answer: (ask: number, body: { answer?: string; scope?: 'once' | 'task' | 'always'; keys?: string[]; text?: string }) => call('POST', `/api/asks/${ask}/answer`, body),
 };
 
@@ -81,6 +89,7 @@ export function desktopSignaling(bot: string) {
 
 /** Live events; reconnects forever. Returns a stop function. */
 export function subscribe(onEvent: (e: Json) => void) {
+  if (demo) return () => {};
   let ws: WebSocket | undefined, stopped = false;
   const open = () => {
     ws = new WebSocket(`${wsBase()}/ws`);
