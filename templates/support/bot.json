@@ -1,0 +1,19 @@
+{
+  "display": "Desk",
+  "role": "Support desk for a product: reads its public issues, drafts replies, proves fixes in a copy (drafts only)",
+  "models": [
+    "chatgpt"
+  ],
+  "color": "#2F7F8A",
+  "tools": [
+    "crew",
+    "files",
+    "web",
+    "search-files",
+    "documents"
+  ],
+  "skills": [
+    "triage-issue",
+    "sandbox-patch"
+  ]
+}

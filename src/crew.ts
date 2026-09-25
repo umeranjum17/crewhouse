@@ -1,5 +1,5 @@
 import './isolate.ts'; // first: before anything loads the engine
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -12,7 +12,7 @@ import * as disk from './bots.ts';
 import { Desktops, browserBin, missing as desktopMissing, type Watcher } from './desktop.ts';
 import { Accounts, OWNER, PROVIDERS } from './accounts.ts';
 import { Connections, type AppTool } from './connections.ts';
-import { axiTool, cliTool, openSession, readPage, runAxi, sandboxBash, sandboxReady, webTools } from './engine.ts';
+import { axiTool, cliTool, openSession, readPage, runAxi, runSandboxed, sandboxBash, q, sandboxReady, webTools } from './engine.ts';
 import { acts, coversOf, effectOf, orderOf, toolWords, type Effect } from './policy.ts';
 import { axiEnv, registry, resolveGrants, toolBin, which } from './tools.ts';
 import { stubModels } from './stub.ts';
@@ -62,6 +62,7 @@ export function quietNow(quiet: string | null | undefined, at = new Date()) {
   return from <= to ? t >= from && t < to : t >= from || t < to;
 }
 
+const sha = (s: string) => createHash('sha256').update(s).digest('hex');
 const clean = (s: unknown, n: number) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n);
 const fail = (message: string, status = 400) => Object.assign(new Error(message), { status });
 
@@ -286,14 +287,14 @@ export class Crew {
   private liveState(id: string) { const l = this.live.get(id); return !l ? 'off' : l.session.isStreaming ? 'working' : 'idle'; }
 
   /** A task for the app: its words and state, not the AI it asked for or its session file. */
-  private task({ brain, session, ...t }: Row) { return { ...t, thinks: brain ? disk.brainName(disk.parseBrain(brain)) : null }; }
+  private task({ brain, session, tokens: _, ...t }: Row) { return { ...t, thinks: brain ? disk.brainName(disk.parseBrain(brain)) : null }; }
 
   /** An open question for the app: the plain sentence and what "For this task" or "Always" would cover. The gate's key stays here. */
   private askView({ detail, ...a }: Row): Row {
     const d = JSON.parse(detail || '{}');
     const covers = d.key ? coversOf(d.key) : null;
     if (a.kind === 'connect') return { ...a, detail: { app: d.app, words: d.words } };
-    if (a.kind === 'propose') return { ...a, detail: { words: a.title, preview: d.preview, ...(d.create ? { yes: `Yes, take ${d.create.name} on` } : {}) } };
+    if (a.kind === 'propose') return { ...a, detail: { words: a.title, preview: d.preview, ...(d.create ? { yes: `Yes, take ${d.create.name} on` } : d.draft ? { yes: 'Approve' } : {}) } };
     return { ...a, detail: { effect: d.effect, words: a.title, spends: d.effect === 'spend', covers, ...(covers ? { always: covers } : {}), ...(d.preview ? { preview: d.preview } : {}) } };
   }
 
@@ -361,6 +362,7 @@ export class Crew {
     let n = 0;
     for (const m of msgs.slice(l.counted)) if (m.role === 'assistant' && m.usage) n += m.usage.input + m.usage.output + m.usage.cacheWrite + m.usage.cacheRead / 10;
     l.counted = msgs.length;
+    if (n) this.db.run('UPDATE tasks SET tokens = tokens + ? WHERE id = ?', Math.round(n), l.task);
     if (n) this.db.run('INSERT INTO usage (member, day, tokens) VALUES (?, ?, ?) ON CONFLICT(member, day) DO UPDATE SET tokens = tokens + excluded.tokens', l.member, dayOf(), Math.round(n));
   }
 
@@ -1110,8 +1112,11 @@ export class Crew {
       // (crew_outcome). Declared unsure, or declared nothing, it ends unsure, never done.
       const said = task.outcome ? JSON.parse(task.outcome) : null;
       const b = this.bot(botId)!;
-      if (said ? !said.worked : task.acted) {
-        this.setTask(task, 'unsure', said?.seen || `I did something on ${task.acted}, but I didn't see it confirmed. Worth checking there yourself.`);
+      // A fix it delivered counts only when crewd saw its check fail without it and pass with it (crew_verify).
+      const unchecked = this.unchecked(task);
+      if (unchecked || (said ? !said.worked : task.acted)) {
+        this.setTask(task, 'unsure', unchecked ? `I suggested a fix (${unchecked}), but it wasn't seen to fail before it and pass after it. Check it before you use it.`
+          : said?.seen || `I did something on ${task.acted}, but I didn't see it confirmed. Worth checking there yourself.`);
         if (task.origin === CHIEF) this.say(CHIEF, 'bot', `${b.display} isn't sure “${short(task.title, 60)}” worked. It's in ${b.display}'s chat.`, null, task.member ?? OWNER);
         return;
       }
@@ -1246,6 +1251,7 @@ export class Crew {
     const who = this.bot(ask.bot)?.display ?? ask.bot;
     // A suggestion takes effect on yes, before the card closes: if it can't, the card stays open.
     if (ask.kind === 'propose' && body.answer === 'allow') this.adopt(ask.bot, detail, ask.member ?? OWNER);
+    if (ask.kind === 'propose' && body.answer === 'deny' && detail.draft) this.db.event('draft.rejected', ask.bot, { ...detail.draft, task: detail.task });
     const shown = body.answer === 'deny' ? 'not now' : scope === 'task' ? 'allowed for this task' : scope === 'always' ? `always allowed for ${who}` : 'allowed once';
     const held = this.holds.get(askId);
     this.db.tx(() => {
@@ -1343,6 +1349,20 @@ export class Crew {
           const change = disk.remember(this.cfg, { member, bot: everyone ? null : botId }, String(p.text ?? ''), String(p.replaces ?? ''));
           this.db.event('memory.learned', botId, { task: task(), text: change.added.slice(2, 202), member, ...(everyone ? { everyone } : {}), ...change });
         }),
+      tool('crew_draft', 'Put a draft that would go out in the person\'s name (a reply, a post, an email) in front of them on a card. Nothing is ' +
+        'sent either way: they post it themselves if they approve. `path`: the draft in your folder; `to`: where it would go ("muxr issue #208").',
+        { path: Type.String(), to: Type.String() }, (p) => {
+          const full = disk.insideBot(this.cfg, botId, String(p.path ?? ''));
+          if (!existsSync(full)) throw new Error(`no file at ${p.path}`);
+          const text = readFileSync(full, 'utf8').trim(), to = clean(p.to, 80), b = this.bot(botId)!;
+          if (!text) throw new Error('the draft is empty');
+          return this.propose(botId, `${b.display} drafted something for ${to}. Nothing is sent: you post it yourself.`,
+            { draft: { to, path: full.slice(disk.botDir(this.cfg, botId).length + 1), sha: sha(text) }, preview: { head: `Draft for ${to}`, body: text.slice(0, 4000) } });
+        }),
+      tool('crew_verify', 'Have Crewhouse itself check a fix you propose to a git checkout in your folder: it applies only the check (`tests`, the ' +
+        'paths in the patch that test the fix) to `base` and runs `command`, which must fail; then the whole patch, which must pass. A patch you ' +
+        'deliver that was not seen to fail before and pass after ends as not sure. `command` runs in a fresh copy (install what it needs).',
+        { repo: Type.String(), base: Type.String(), patch: Type.String(), tests: Type.Array(Type.String()), command: Type.String() }, (p) => this.verify(botId, p)),
       tool('crew_learn', 'Ask the person to let you keep a way of doing something you will need again (a job you have now done at least twice). ' +
         '`name`: two to four words; `description`: when to use it; `says`: what it does, in the person\'s plain words; `steps`: the steps, short and in plain words, as the person sees them. ' +
         'The person sees a card; it becomes one of your skills only if they say yes.',
@@ -1364,7 +1384,7 @@ export class Crew {
       tool('crew_roster', 'Who is on the crew, and the templates you can recruit from.', {}, () => ({
         crew: this.bots().filter((x) => x.id !== CHIEF).map((x) => ({ id: x.id, name: x.display, role: x.role, busy: !!this.activeTask(x.id),
           knows: disk.listSkills(this.cfg, x.id).map((k) => k.description || k.name) })),
-        templates: disk.listTemplates(this.cfg).map((t) => ({ id: t.id, name: t.display, role: t.role })),
+        templates: disk.listTemplates(this.cfg).map((t) => ({ id: t.id, name: t.display, role: t.role, knows: t.skills ?? [] })),
       })),
       tool('crew_recruit', 'Recruit a bot from a template.', { template: Type.String(), name: Type.Optional(Type.String()) },
         (p) => { const n = this.recruit(p.template, p.name, CHIEF); return { recruited: { id: n.id, name: n.display } }; }),
@@ -1442,6 +1462,7 @@ export class Crew {
       disk.writeSoul(this.cfg, d.soul.bot, d.soul.text, 'Personality changed, as Chief suggested');
       this.db.event('soul.changed', d.soul.bot, { by: CHIEF, member });
     } else if (d.create) this.create(d.create, member);
+    else if (d.draft) this.db.event('draft.approved', botId, { ...d.draft, task: d.task, member });
   }
 
   /** A helper Chief made up, on the person's yes: the plain base template with the job and personality from the card,
@@ -1472,6 +1493,38 @@ export class Crew {
       this.openAsk(botId, t, `Connect ${a.name}`, { app, words: `Let ${this.bot(botId)!.display} use your ${a.name}` }, 'connect');
     }
     return { asked: true, note: 'The person sees a Connect card now. End your turn with one short line; you will be told when they answer.' };
+  }
+
+  /** crew_verify: crewd applies the check alone to the base (it must fail), then the whole patch (it must pass), each in a
+   *  fresh worktree in the bot's sandbox, and keeps the exit codes. The model's word about its tests never counts. */
+  private async verify(botId: string, p: { repo: string; base: string; patch: string; tests: string[]; command: string }) {
+    if (!sandboxReady()) throw new Error('this computer has no sandbox to run a check in');
+    const space = disk.botDir(this.cfg, botId), repo = disk.insideBot(this.cfg, botId, String(p.repo ?? '')), patch = disk.insideBot(this.cfg, botId, String(p.patch ?? ''));
+    const tests = (p.tests ?? []).map(String).filter(Boolean);
+    if (!existsSync(join(repo, '.git')) || !existsSync(patch)) throw new Error('`repo` must be a git checkout and `patch` a file, both in your folder');
+    if (!tests.length || !/^[\w./-]+$/.test(String(p.base)) || !String(p.command ?? '').trim()) throw new Error('give the base commit, the check\'s paths and the command');
+    const task = this.activeTask(botId)?.id;
+    const run = (side: string, only: string[]) => {
+      const w = join(space, 'work', 'verify', `${task}-${side}`);
+      return runSandboxed(space, [this.cfg.toolsDir], { PATH: toolBin(this.cfg) }, `rm -rf ${q(w)}; git -C ${q(repo)} worktree prune; ` +
+        `git -C ${q(repo)} worktree add -q --detach ${q(w)} ${q(p.base)} && cd ${q(w)} && git apply ${only.map((t) => `--include=${q(t)} `).join('')}${q(patch)} || exit 97; ` +
+        `(${p.command}); e=$?; cd /; git -C ${q(repo)} worktree remove --force ${q(w)}; exit $e`);
+    };
+    const before = await run('base', tests), after = await run('fix', []);
+    if (before.code === 97 || after.code === 97) throw new Error(`the patch doesn't apply to ${p.base}: ${(before.code === 97 ? before : after).tail}`);
+    const passed = before.code !== 0 && after.code === 0;
+    this.db.event('verify.result', botId, { task, patch: patch.slice(space.length + 1), sha: sha(readFileSync(patch, 'utf8')), base: p.base, command: clean(p.command, 300), before: before.code, after: after.code, passed });
+    return { passed, before: { exit: before.code, tail: before.tail }, after: { exit: after.code, tail: after.tail } };
+  }
+
+  /** A patch this task delivered that crewd never saw pass its check, as the file is now; null when there is none. */
+  private unchecked(task: Row): string | null {
+    const ok = new Set(this.db.all("SELECT data FROM events WHERE kind = 'verify.result' AND bot = ? AND json_extract(data, '$.passed')", task.bot).map((e) => JSON.parse(e.data).sha));
+    for (const e of this.db.all("SELECT data FROM events WHERE kind = 'file.delivered' AND json_extract(data, '$.task') = ?", task.id)) {
+      const { path } = JSON.parse(e.data), full = join(disk.botDir(this.cfg, task.bot), path);
+      if (/\.(patch|diff)$/.test(path) && !(existsSync(full) && ok.has(sha(readFileSync(full, 'utf8'))))) return path;
+    }
+    return null;
   }
 
   /** A finished file, registered once per task (a retried call is a no-op). Only inside the bot's own folder. */

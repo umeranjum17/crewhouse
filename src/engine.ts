@@ -59,25 +59,29 @@ export function sandboxReady() {
   return sandboxOk;
 }
 
-const q = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
+export const q = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
 
 /** The shell tool, sandboxed: /usr and /etc read-only, /home empty but for the space, network on. No command ever asks.
  *  ponytail: assumes a merged /usr (all current distros); a sandboxed shell can still send data out over the network. */
 export function sandboxBash(space: string, readOnly: string[], env: Record<string, string>) {
   return createBashTool(space, {
     exposeSessionEnvironment: false,
-    spawnHook: ({ command }) => ({
-      cwd: space,
-      env: { PATH: '/usr/bin:/bin', LANG: 'C.UTF-8' },
-      command: ['exec bwrap --ro-bind /usr /usr --symlink usr/bin /bin --symlink usr/sbin /sbin --symlink usr/lib /lib --symlink usr/lib64 /lib64',
-        '--ro-bind /etc /etc --ro-bind-try /run/systemd/resolve /run/systemd/resolve --proc /proc --dev /dev --tmpfs /tmp --tmpfs /home',
-        ...readOnly.map((d) => `--ro-bind-try ${q(d)} ${q(d)}`), `--bind ${q(space)} ${q(space)}`,
-        '--clearenv', ...Object.entries({ ...env, HOME: space, LANG: 'C.UTF-8', TERM: 'dumb', PATH: `${env.PATH ? env.PATH + ':' : ''}/usr/local/bin:/usr/bin` })
-          .map(([k, v]) => `--setenv ${k} ${q(v)}`),
-        `--chdir ${q(space)} --unshare-all --share-net --die-with-parent -- bash -c ${q(command)}`].join(' '),
-    }),
+    spawnHook: ({ command }) => ({ cwd: space, env: { PATH: '/usr/bin:/bin', LANG: 'C.UTF-8' }, command: sandboxed(space, readOnly, env, command) }),
   });
 }
+const sandboxed = (space: string, readOnly: string[], env: Record<string, string>, command: string) => [
+  'exec bwrap --ro-bind /usr /usr --symlink usr/bin /bin --symlink usr/sbin /sbin --symlink usr/lib /lib --symlink usr/lib64 /lib64',
+  '--ro-bind /etc /etc --ro-bind-try /run/systemd/resolve /run/systemd/resolve --proc /proc --dev /dev --tmpfs /tmp --tmpfs /home',
+  ...readOnly.map((d) => `--ro-bind-try ${q(d)} ${q(d)}`), `--bind ${q(space)} ${q(space)}`,
+  '--clearenv', ...Object.entries({ ...env, HOME: space, LANG: 'C.UTF-8', TERM: 'dumb', PATH: `${env.PATH ? env.PATH + ':' : ''}/usr/local/bin:/usr/bin` })
+    .map(([k, v]) => `--setenv ${k} ${q(v)}`),
+  `--chdir ${q(space)} --unshare-all --share-net --die-with-parent -- bash -c ${q(command)}`].join(' ');
+
+/** One command in the same sandbox, run by crewd itself: its exit code and the tail of its output are crewd's to read. */
+export const runSandboxed = (space: string, readOnly: string[], env: Record<string, string>, command: string, timeout = 1_200_000) =>
+  new Promise<{ code: number; tail: string }>((resolve) => execFile('bash', ['-c', sandboxed(space, readOnly, env, command)],
+    { cwd: space, env: { PATH: '/usr/bin:/bin', LANG: 'C.UTF-8' }, timeout, maxBuffer: 64 << 20 },
+    (err: any, out, errOut) => resolve({ code: err ? (typeof err.code === 'number' ? err.code : -1) : 0, tail: `${out}${errOut}`.slice(-1000) })));
 
 // ---- the web, without a key ----
 const text = (t: string) => ({ content: [{ type: 'text' as const, text: t }], details: {} });
