@@ -446,7 +446,7 @@ export function step(e: Json): string | null {
     case 'run.allowed': return 'Went ahead, as you allowed';
     case 'ask.opened': return 'Asked for your OK';
     case 'ask.answered': return `You said ${ANSWER[d.answer] ?? (/always/.test(d.answer) ? 'always OK' : /task/.test(d.answer) ? 'yes for this job' : 'what to do')}`;
-    case 'file.delivered': return d.photo ? 'You sent a photo' : `Made “${pretty(d.path)}”`;
+    case 'file.delivered': return d.photo ? 'You sent a photo' : /\.(patch|diff)$/.test(String(d.path)) ? `Suggested a change for the maintainer to review: “${pretty(String(d.path))}”` : `Made “${pretty(d.path)}”`;
     case 'memory.learned': return `${d.everyone ? 'Learned, for the whole crew' : 'Learned'}: ${plain(d.text)}`;
     case 'memory.undone': return `You undid: ${plain(d.text)}`;
     case 'skill.learned': return `Learned how to: ${plain(d.says ?? d.name)}`;
