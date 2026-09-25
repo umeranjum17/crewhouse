@@ -3,17 +3,12 @@
   "name": "Crew tool",
   "provides": "Report progress, deliver files, remember preferences (Chief also recruits and assigns)",
   "kind": "core",
-  "bins": [
-    "node"
-  ],
+  "bins": [],
   "license": "Apache-2.0",
   "source": "bundled",
   "install": {},
   "asks": [
     "never: it only talks to Crewhouse"
-  ],
-  "allow": [
-    "Bash(crew *)"
   ],
   "grant": {
     "default": true

@@ -1,8 +1,9 @@
 {
   "display": "Scout",
   "role": "Researches a question into a sourced report",
-  "runtime": "claude",
-  "model": "sonnet",
+  "models": [
+    "chatgpt"
+  ],
   "color": "#3355C2",
   "tools": [
     "crew",

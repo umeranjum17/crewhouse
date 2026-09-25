@@ -38,9 +38,6 @@
     "clicking, typing or submitting on a site you signed it in to",
     "anything on a checkout or payment page"
   ],
-  "allow": [
-    "mcp__browser"
-  ],
   "grant": {
     "default": true
   },

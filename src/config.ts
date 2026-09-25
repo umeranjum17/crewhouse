@@ -2,9 +2,9 @@ import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 /** Everything the daemon needs to know about where it lives. All overridable by env,
- *  because the tests and the Herdr lab need their own data dir. Never inside the repo. */
+ *  because the tests need their own data dir. Never inside the repo. */
 export interface Config {
-  /** SQLite + endpoint file live here. */
+  /** SQLite, the endpoint file, the engine's own folder and each member's sign-ins live here. */
   stateDir: string;
   /** Human-visible crew folder: bots/<name>/, crew/. */
   crewDir: string;
@@ -12,14 +12,8 @@ export interface Config {
   toolsDir: string;
   host: string;
   port: number;
-  /** Command used to talk to Herdr. A prefix so the Herdr lab helper can wrap it. */
-  herdrCmd: string[];
-  /** crewd's own Herdr session. Empty when a wrapper (the Herdr lab) supplies the session itself. */
-  herdrSession: string;
-  /** Default CLI kind for new bots. */
-  runtime: string;
-  /** 'herdr' for real CLIs, 'stub' for tests (no model quota). */
-  runner: 'herdr' | 'stub';
+  /** 'pi' for the real AI accounts, 'stub' for tests: a scripted model inside the same engine, no quota. */
+  engine: 'pi' | 'stub';
   /** Max concurrent bot runs. */
   maxConcurrent: number;
   repoDir: string;
@@ -39,11 +33,7 @@ export function loadConfig(): Config {
     toolsDir: envPath('CREWHOUSE_TOOLS_DIR', join(process.env.XDG_DATA_HOME?.trim() || join(home, '.local', 'share'), 'crewhouse', 'tools')),
     host: process.env.CREWHOUSE_HOST?.trim() || '127.0.0.1',
     port: Number(process.env.CREWHOUSE_PORT || 7711),
-    // e.g. CREWHOUSE_HERDR_CMD="/path/fm-herdr-lab.sh run fm-lab-x" keeps us off the live session.
-    herdrCmd: (process.env.CREWHOUSE_HERDR_CMD?.trim() || 'herdr').split(/\s+/),
-    herdrSession: process.env.CREWHOUSE_HERDR_CMD?.trim() ? '' : process.env.CREWHOUSE_HERDR_SESSION?.trim() || 'crewhouse',
-    runtime: process.env.CREWHOUSE_RUNTIME?.trim() || 'claude',
-    runner: process.env.CREWHOUSE_RUNNER === 'stub' ? 'stub' : 'herdr',
+    engine: process.env.CREWHOUSE_ENGINE === 'stub' ? 'stub' : 'pi',
     maxConcurrent: Number(process.env.CREWHOUSE_MAX_CONCURRENT || 3),
     repoDir: resolve(import.meta.dirname, '..'),
   };

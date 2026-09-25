@@ -5,7 +5,7 @@ import { join } from 'node:path';
 export type Row = Record<string, any>;
 
 const SCHEMA = `
--- Household members. Id 1 is the owner, on the CLIs' usual sign-in; everyone else has their own config homes.
+-- Household members. Id 1 is the owner. Each member signs in to their own AI accounts.
 CREATE TABLE IF NOT EXISTS people (id INTEGER PRIMARY KEY, name TEXT, address TEXT, onboarded INTEGER DEFAULT 0, created_at INTEGER, quiet TEXT);
 CREATE TABLE IF NOT EXISTS bots (
   id TEXT PRIMARY KEY, display TEXT NOT NULL, role TEXT, template TEXT, runtime TEXT, model TEXT,
@@ -39,7 +39,7 @@ export class Store {
     // Columns added after the first release; CREATE IF NOT EXISTS leaves older tables as they were.
     // `member` is whose the bot, task, message or ask is; `account` is whose sign-in the bot's running session uses.
     for (const [table, col] of [['tasks', 'brain TEXT'], ['tasks', 'wake_at INTEGER'], ['people', 'quiet TEXT'], ['bots', 'member INTEGER DEFAULT 1'],
-      ['bots', 'account INTEGER'], ['tasks', 'member INTEGER DEFAULT 1'], ['messages', 'member INTEGER'], ['asks', 'member INTEGER'], ['tasks', 'routine INTEGER']]) {
+      ['bots', 'account INTEGER'], ['tasks', 'member INTEGER DEFAULT 1'], ['messages', 'member INTEGER'], ['asks', 'member INTEGER'], ['tasks', 'routine INTEGER'], ['tasks', 'session TEXT']]) {
       if (!this.all(`PRAGMA table_info(${table})`).some((c) => c.name === col.split(' ')[0])) this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${col}`);
     }
   }

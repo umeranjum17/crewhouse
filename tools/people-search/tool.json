@@ -12,18 +12,19 @@
     "system": "curl -fsSL https://treg.to/install.sh | sh (needs Python 3.12 or 3.13), then in your own terminal: treg login. New accounts get $1 of credit. Your own provider keys (treg secret add, or the treg dashboard) are used first and never billed by treg."
   },
   "asks": [
-    "every paid lookup (treg call), showing its price cap"
-  ],
-  "allow": [
-    "Bash(treg catalog *)",
-    "Bash(treg balance)",
-    "Bash(treg balance *)"
-  ],
-  "ask": [
-    "Bash(treg call *)"
+    "every paid lookup, showing its price cap"
   ],
   "grant": {
     "default": false
   },
-  "note": "Searching the catalog and reading prices is free. Every treg call asks you first, even if a bot's own allow list would let it through."
+  "note": "Searching the catalog and reading prices is free. Every paid lookup asks you first with its price cap, and no standing answer covers it.",
+  "run": {
+    "free": [
+      "catalog",
+      "balance"
+    ],
+    "spend": [
+      "call"
+    ]
+  }
 }

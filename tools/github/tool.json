@@ -12,18 +12,22 @@
     "system": "https://cli.github.com (then gh auth login, in your own terminal)"
   },
   "asks": [
-    "anything that changes GitHub: comments, issues, pull requests, merges, pushes"
-  ],
-  "allow": [
-    "Bash(gh issue view *)",
-    "Bash(gh issue list *)",
-    "Bash(gh pr view *)",
-    "Bash(gh pr list *)",
-    "Bash(gh pr diff *)",
-    "Bash(gh repo view *)",
-    "Bash(gh search *)"
+    "anything that changes GitHub: it can only read, so you make those changes yourself"
   ],
   "grant": {
     "default": false
+  },
+  "run": {
+    "free": [
+      "issue view",
+      "issue list",
+      "pr view",
+      "pr list",
+      "pr diff",
+      "pr checks",
+      "repo view",
+      "search"
+    ],
+    "spend": []
   }
 }

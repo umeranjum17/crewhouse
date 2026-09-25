@@ -1,9 +1,9 @@
-// End to end through the real daemon with the stub runner: no CLI, no model quota.
+// End to end through the real daemon, running the bundled engine on the stub model: no account, no network, no quota.
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer, type AddressInfo } from 'node:net';
 import { DatabaseSync } from 'node:sqlite';
@@ -14,7 +14,7 @@ const root = mkdtempSync(join(tmpdir(), 'crewhouse-test-'));
 const port = await new Promise<number>((r) => { const s = createServer().listen(0, '127.0.0.1', () => { const { port } = s.address() as AddressInfo; s.close(() => r(port)); }); });
 const base = `http://127.0.0.1:${port}`;
 const daemon = spawn(process.execPath, [join(import.meta.dirname, '..', 'src', 'main.ts')], {
-  env: { ...process.env, CREWHOUSE_RUNNER: 'stub', CREWHOUSE_HOLD_MS: '5000', CREWHOUSE_PORT: String(port), CREWHOUSE_STATE_DIR: join(root, 'state'), CREWHOUSE_CREW_DIR: join(root, 'crew'), CREWHOUSE_TOOLS_DIR: join(root, 'tools') },
+  env: { ...process.env, CREWHOUSE_ENGINE: 'stub', CREWHOUSE_HOLD_MS: '5000', CREWHOUSE_PORT: String(port), CREWHOUSE_STATE_DIR: join(root, 'state'), CREWHOUSE_CREW_DIR: join(root, 'crew'), CREWHOUSE_TOOLS_DIR: join(root, 'tools') },
   stdio: ['ignore', 'pipe', 'inherit'],
 });
 after(() => daemon.kill());
@@ -24,15 +24,18 @@ async function api(method: string, path: string, body?: unknown, headers: Record
   const res = await fetch(base + path, { method, headers: { 'content-type': 'application/json', ...headers }, body: body ? JSON.stringify(body) : undefined });
   return { status: res.status, body: await res.json() };
 }
-const token = (bot: string) => (new DatabaseSync(join(root, 'state', 'crew.db')).prepare('SELECT token FROM bots WHERE id = ?').get(bot) as any).token;
-const tool = (bot: string, cmd: string, body: unknown) => api('POST', `/crew/${cmd}`, body, { 'x-crew-token': token(bot) });
 async function until<T>(fn: () => Promise<T | undefined | false>, ms = 10_000): Promise<T> {
   for (const end = Date.now() + ms; Date.now() < end; await sleep(100)) { const v = await fn(); if (v) return v; }
   throw new Error('timed out');
 }
+/** A message the stub model answers with one tool call, then a reply saying what the tool returned. */
+const call = (tool: string, input: object) => `[tool ${tool} ${JSON.stringify(input)}]`;
+const say = (bot: string, text: string) => api('POST', `/api/bots/${bot}/messages`, { text });
+const done = (bot: string, task: number) => until(async () => (await api('GET', `/api/bots/${bot}`)).body.tasks.find((x: any) => x.id === task && ['done', 'failed'].includes(x.state)));
+const ready = () => until(async () => (await fetch(`${base}/api/state`).catch(() => null))?.ok);
 
-test('chief onboarding, recruit, assign, asks, memory', async () => {
-  await until(async () => (await fetch(`${base}/api/state`).catch(() => null))?.ok);
+test('chief onboarding, recruit, assign, grants', async () => {
+  await ready();
 
   // Chief greets first and asks how to address the person; the first reply is stored as the address.
   let page = (await api('GET', '/api/bots/chief')).body;
@@ -40,106 +43,84 @@ test('chief onboarding, recruit, assign, asks, memory', async () => {
   assert.match(page.messages[0].text, /how would you like me to address you/);
   assert.match(page.messages[0].text, /stop and ask you first before anything leaves this house, costs money/, 'his stop-and-ask rules come first');
   assert.doesNotMatch(page.messages[0].text, /Master|aye/i);
-  await api('POST', '/api/bots/chief/messages', { text: 'Sir' });
+  await say('chief', 'Sir');
   assert.equal((await api('GET', '/api/state')).body.person.address, 'Sir');
 
   // Cross-site writes are refused.
   assert.equal((await api('POST', '/api/recruit', { template: 'reel' }, {})).status, 403);
 
-  // A normal message to Chief is a Chief turn on the runner.
-  await api('POST', '/api/bots/chief/messages', { text: 'I need a demo video' });
-  await until(async () => (await api('GET', '/api/bots/chief')).body.messages.find((m: any) => m.text.startsWith('stub chief')));
+  // A normal message to Chief is a Chief turn on the engine.
+  await say('chief', 'I need a demo video');
+  await until(async () => (await api('GET', '/api/bots/chief')).body.messages.find((m: any) => m.text === 'stub chief: done with "The person says: I need a demo video"'));
 
-  // Chief recruits Reel from the template; the folder is the bot.
-  const rec = await tool('chief', 'recruit', { template: 'reel', name: 'Reel' });
-  assert.equal(rec.body.recruited.id, 'reel');
+  // Chief recruits Reel with his own tool; the folder is the bot.
+  const rec = (await say('chief', `get me a video maker ${call('crew_recruit', { template: 'reel', name: 'Reel' })}`)).body.task;
+  await done('chief', rec);
   const dir = join(root, 'crew', 'bots', 'reel');
-  for (const f of ['AGENTS.md', 'CLAUDE.md', 'notes.md', 'skills/make-reel/SKILL.md', '.claude/skills/make-reel/SKILL.md', '.crewhouse/person.md']) assert.ok(existsSync(join(dir, f)), f);
-  assert.match(readFileSync(join(dir, '.crewhouse/person.md'), 'utf8'), /Address the person as "sir"/);
-  assert.equal((await tool('reel', 'recruit', { template: 'scout' })).status, 403, 'only Chief recruits');
+  for (const f of ['AGENTS.md', 'notes.md', 'skills/make-reel/SKILL.md']) assert.ok(existsSync(join(dir, f)), f);
+  const tried = (await say('reel', `hire a friend ${call('crew_recruit', { template: 'scout' })}`)).body.task;
+  await done('reel', tried);
+  assert.ok(!(await api('GET', '/api/state')).body.bots.some((b: any) => b.id === 'scout'), 'only Chief recruits');
 
   // Chief hands Reel a task; it runs and reports back in Chief's thread.
-  const t = (await tool('chief', 'assign', { bot: 'reel', text: 'Make a 10 second demo' })).body.task;
-  await until(async () => (await api('GET', '/api/bots/reel')).body.tasks.find((x: any) => x.id === t && x.state === 'done'));
+  const hand = (await say('chief', `please ${call('crew_assign', { bot: 'reel', task: 'Make a 10 second demo' })}`)).body.task;
+  await done('chief', hand);
+  const t = await until(async () => (await api('GET', '/api/bots/reel')).body.tasks.find((x: any) => x.title === 'Make a 10 second demo' && x.state === 'done'));
   page = (await api('GET', '/api/bots/chief')).body;
-  assert.ok(page.messages.some((m: any) => m.author === 'system' && m.text.includes(`Reel has finished task #${t}`)));
+  assert.ok(page.messages.some((m: any) => m.author === 'system' && m.text.includes(`Reel has finished task #${t.id}`)));
 
-  // Tool grants become the CLI's own allow list; credential folders are always denied.
-  const settings = JSON.parse(readFileSync(join(dir, '.claude/settings.local.json'), 'utf8'));
-  assert.ok(settings.permissions.allow.includes('Bash(crew *)'));
-  assert.ok(settings.permissions.deny.includes('Read(~/.claude/**)'));
-  assert.match(settings.hooks.Stop[0].hooks[0].command, /bin\/crew" hook stop$/);
+  // Grants: what the person ticks is what the bot gets.
   const tools = (await api('GET', '/api/bots/reel')).body.tools;
   assert.ok(tools.find((x: any) => x.id === 'media').granted);
   await api('PUT', '/api/bots/reel/tools', { tools: ['files', 'github'] });
   assert.deepEqual((await api('GET', '/api/bots/reel')).body.tools.filter((x: any) => x.granted).map((x: any) => x.id).sort(), ['crew', 'files', 'github']);
   await api('PUT', '/api/bots/reel/tools', { tools: ['files', 'media', 'images'] });
 
-  // A blocked CLI becomes a "needs you" item with the terminal text; answering sends keys and resumes.
-  await api('POST', '/api/bots/reel/messages', { text: 'this needs approval' });
-  const ask = await until(async () => (await api('GET', '/api/state')).body.asks.find((a: any) => a.kind === 'blocked'));
-  assert.match(ask.detail.pane, /Do you want to proceed/);
-  assert.equal((await api('POST', `/api/asks/${ask.id}/answer`, { keys: ['1'] })).status, 200);
-  await until(async () => (await api('GET', '/api/bots/reel')).body.messages.find((m: any) => m.text.includes('continued after your answer')));
+});
 
-  // The permission hook holds the tool call until the person answers in the app.
-  const held = tool('reel', 'hook/permission', { tool_name: 'Bash', tool_input: { command: 'rm -rf /tmp/x' } });
-  const perm = await until(async () => (await api('GET', '/api/state')).body.asks.find((a: any) => a.kind === 'permission'));
-  assert.equal(perm.detail.summary, 'rm -rf /tmp/x');
-  await api('POST', `/api/asks/${perm.id}/answer`, { answer: 'deny' });
-  assert.equal((await held).body.hookSpecificOutput.decision.behavior, 'deny');
+test('nothing technical reaches the app; the person\'s own files ask in one plain sentence', async () => {
+  await ready();
+  const seen = JSON.stringify([(await api('GET', '/api/state')).body, (await api('GET', '/api/bots/reel')).body, (await api('GET', '/api/bots/chief')).body, (await api('GET', '/api/accounts')).body]);
+  for (const bad of [root, homedir() + '/', 'openai-codex', 'gpt-', 'muse-spark', 'grok-4', 'bwrap', 'ffmpeg -', '[Crewhouse', 'Your id in Crewhouse', 'claude', 'CLAUDE', 'token']) {
+    assert.ok(!seen.includes(bad), `the app was sent "${bad}": …${seen.slice(Math.max(0, seen.indexOf(bad) - 120), seen.indexOf(bad) + 80)}…`);
+  }
+  assert.doesNotMatch(seen, /\d%/, 'no usage percentages');
+  const accounts = (await api('GET', '/api/accounts')).body;
+  assert.deepEqual(accounts.filter((a: any) => a.member === 1).map((a: any) => a.name), ['ChatGPT', 'Grok', 'Meta Muse', 'GitHub Copilot', 'Kimi', 'OpenRouter', 'Gemini']);
 
-  // Past the hold, the hook denies with "wait" and the ask stays open; a later "allow" resumes the same session.
-  const { task: pt } = (await api('POST', '/api/bots/reel/messages', { text: 'ask permission to copy' })).body;
-  await until(async () => (await api('GET', '/api/bots/reel')).body.tasks.find((x: any) => x.id === pt && x.state === 'working'));
-  const late = await tool('reel', 'hook/permission', { tool_name: 'Bash', tool_input: { command: 'cp a b' } });
-  assert.equal(late.body.hookSpecificOutput.decision.behavior, 'deny');
-  assert.match(late.body.hookSpecificOutput.decision.message, /hasn't answered/);
-  await tool('reel', 'hook/stop', { last_assistant_message: 'Waiting for permission to copy.' });
-  const parkedTask = (await api('GET', '/api/bots/reel')).body.tasks.find((x: any) => x.id === pt);
-  assert.equal(parkedTask.state, 'needs_you', 'a turn that ends on a parked ask does not finish the task');
-  const parked = (await api('GET', '/api/state')).body.asks.find((a: any) => a.kind === 'permission');
-  assert.ok(parked, 'parked ask stays open');
-  await api('POST', `/api/asks/${parked.id}/answer`, { answer: 'allow' });
-  await until(async () => (await api('GET', '/api/bots/reel')).body.tasks.find((x: any) => x.id === pt && x.state === 'done'));
-  const again = await tool('reel', 'hook/permission', { tool_name: 'Bash', tool_input: { command: 'cp a b' } });
-  assert.equal(again.body.hookSpecificOutput.decision.behavior, 'allow', 'the retried call goes through once');
+  // Touching the person's own files asks, in one plain sentence; the answer comes from the app.
+  const outside = join(root, 'Documents', 'plan.txt');
+  const w = (await say('reel', `save the plan ${call('write', { path: outside, content: 'plan' })}`)).body.task;
+  const ask = await until(async () => (await api('GET', '/api/state')).body.asks[0]);
+  assert.equal(ask.title, 'Reel wants to change a file in a folder outside your home: “plan.txt”.');
+  assert.deepEqual(ask.detail, { effect: 'files', spends: false, covers: 'a folder outside your home' });
+  assert.equal((await api('POST', `/api/asks/${ask.id}/answer`, { answer: 'allow' })).status, 200);
+  await done('reel', w);
+  assert.equal(readFileSync(outside, 'utf8'), 'plan');
+});
 
-  // Statusline limits are recorded; tool activity reaches the feed.
-  const line = await tool('reel', 'hook/statusline', { rate_limits: { five_hour: { used_percentage: 43, resets_at: 1790280000 }, seven_day: { used_percentage: 5 } } });
-  assert.equal(line.body.text, 'Crewhouse · Reel · 5h 43%');
-  assert.equal((await api('GET', '/api/state')).body.limits.claude.fiveHour.used, 43);
-  await tool('reel', 'hook/tool', { tool_name: 'Bash', tool_input: { command: 'ffmpeg -y -i a.png out.mp4' } });
-  assert.ok((await api('GET', '/api/state')).body.events.some((e: any) => e.kind === 'run.tool' && e.data.summary.startsWith('ffmpeg')));
-
-  // The browser's page comes from its own tool results; acting on a payment page asks first, reading does not.
-  await tool('reel', 'hook/tool', { tool_name: 'mcp__browser__browser_navigate', tool_input: { url: 'https://shop.example/' },
-    tool_response: [{ type: 'text', text: '### Page\n- Page URL: https://shop.example/checkout\n- Page Title: Pay' }] });
-  assert.deepEqual((await tool('reel', 'hook/pretool', { tool_name: 'mcp__browser__browser_snapshot', tool_input: {} })).body, {});
-  const click = tool('reel', 'hook/pretool', { tool_name: 'mcp__browser__browser_click', tool_input: { ref: 'e12' } });
-  const pay = await until(async () => (await api('GET', '/api/state')).body.asks.find((a: any) => a.kind === 'permission'));
-  assert.match(pay.detail.summary, /click on a checkout or payment page \(shop\.example\): https:\/\/shop\.example\/checkout/);
-  await api('POST', `/api/asks/${pay.id}/answer`, { answer: 'allow' });
-  assert.equal((await click).body.hookSpecificOutput.permissionDecision, 'allow');
-
-  // Delivery is confined to the bot's folder; memory is capped.
-  assert.equal((await tool('reel', 'deliver', { path: '../../../etc/passwd' })).status, 400);
-  assert.equal((await tool('reel', 'remember', { text: 'Likes 0.8 s transitions' })).status, 200);
-  let refused = false;
-  for (let i = 0; i < 40 && !refused; i++) refused = (await tool('reel', 'remember', { text: 'x'.repeat(100) })).status !== 200;
-  assert.ok(refused, 'notes cap enforced');
-  assert.ok(readFileSync(join(dir, 'notes.md'), 'utf8').length <= 2500);
+test('sign in from the app: a code to show and a page to open, then signed in', async () => {
+  await ready();
+  const grok = async () => (await api('GET', '/api/accounts')).body.find((a: any) => a.member === 1 && a.account === 'grok');
+  assert.equal((await grok()).signedIn, false);
+  assert.equal((await api('POST', '/api/accounts/1/claude/login', {})).status, 404, 'no Claude');
+  assert.equal((await api('POST', '/api/accounts/1/grok/login', { via: 'code' }, {})).status, 403, 'cross-site pages cannot start a sign-in');
+  const started = await api('POST', '/api/accounts/1/grok/login', { via: 'code' });
+  assert.equal(started.status, 200);
+  assert.equal(started.body.signIn.state, 'done');
+  assert.equal((await grok()).signedIn, true);
+  assert.equal((await api('POST', '/api/accounts/1/grok/logout', {})).status, 200);
+  assert.equal((await grok()).signedIn, false);
 });
 
 test('screen: take over and give back through the API; watching needs the Computer grant', async () => {
-  await until(async () => (await fetch(`${base}/api/state`).catch(() => null))?.ok);
+  await ready();
   assert.equal((await api('POST', '/api/bots/reel/takeover')).status, 200);
   assert.equal((await api('GET', '/api/state')).body.bots.find((b: any) => b.id === 'reel').controls, 'person');
-  assert.equal((await tool('reel', 'hook/pretool', { tool_name: 'Bash' })).body.hookSpecificOutput.permissionDecision, 'deny');
   assert.equal((await api('POST', '/api/bots/reel/giveback', { note: 'signed in' })).status, 200);
-  assert.deepEqual((await tool('reel', 'hook/pretool', { tool_name: 'Bash' })).body, {});
   assert.equal((await api('POST', '/api/bots/reel/giveback', {})).status, 409);
   assert.equal((await api('POST', '/api/bots/reel/takeover', undefined, {})).status, 403, 'cross-site pages cannot take over');
+  assert.equal((await api('POST', '/api/bots/reel/steer', { text: 'faster' })).status, 409, 'nothing running to steer');
 
   // Reel's grants were narrowed above (no Computer), so its screen refuses to open.
   const ws = new WebSocket(`ws://127.0.0.1:${port}/ws/desktop/reel`);
@@ -153,53 +134,54 @@ test('screen: take over and give back through the API; watching needs the Comput
 });
 
 test('routines: Chief sets one up from chat, it fires on schedule through the daemon, the person manages it', async () => {
-  await until(async () => (await fetch(`${base}/api/state`).catch(() => null))?.ok);
+  await ready();
   assert.equal((await api('GET', '/api/schedule?text=' + encodeURIComponent('weekdays at 8am'))).body.words, 'Weekdays at 8:00 am');
   assert.equal((await api('GET', '/api/schedule?text=someday')).status, 400);
-  assert.equal((await tool('reel', 'routine', { bot: 'reel', schedule: 'daily 9', task: 'x' })).status, 403, 'only Chief sets routines');
 
-  const made = (await tool('chief', 'routine', { bot: 'reel', schedule: 'every Friday 17:00', task: 'Make a demo of what shipped this week' })).body.routine;
-  assert.ok(made.id);
+  const t = (await say('chief', `every friday ${call('crew_routine', { bot: 'reel', when: 'every Friday 17:00', task: 'Make a demo of what shipped this week' })}`)).body.task;
+  await done('chief', t);
   const chiefSays = (await api('GET', '/api/bots/chief')).body.messages.map((m: any) => m.text);
-  assert.ok(chiefSays.some((t: string) => /^Routine added: “Make a demo of what shipped this week” for Reel, every friday at 5:00 pm\. First run/.test(t)));
-  let r = (await api('GET', '/api/state')).body.routines.find((x: any) => x.id === made.id);
+  assert.ok(chiefSays.some((x: string) => /^Routine added: “Make a demo of what shipped this week” for Reel, every friday at 5:00 pm\. First run/.test(x)));
+  let r = (await api('GET', '/api/state')).body.routines.find((x: any) => x.name === 'Make a demo of what shipped this week');
   assert.equal(r.words, 'Every Friday at 5:00 pm');
-  assert.ok((await tool('chief', 'routines', {})).body.some((x: any) => x.id === made.id));
 
-  // Its time comes (moved into the past, as after a sleep): crewd's own loop fires it and Reel does the work.
-  new DatabaseSync(join(root, 'state', 'crew.db')).prepare('UPDATE routines SET next_at = ? WHERE id = ?').run(Date.now() - 1000, made.id);
-  r = await until(async () => (await api('GET', '/api/state')).body.routines.find((x: any) => x.id === made.id && x.history[0]?.state === 'done'));
+  // Its time comes (moved into the past, as after a sleep): crewd's own clock fires it and Reel does the work.
+  new DatabaseSync(join(root, 'state', 'crew.db')).prepare('UPDATE routines SET next_at = ? WHERE id = ?').run(Date.now() - 1000, r.id);
+  r = await until(async () => (await api('GET', '/api/state')).body.routines.find((x: any) => x.id === r.id && x.history[0]?.state === 'done'));
   assert.equal(r.history[0].why, 'schedule');
   assert.ok(r.next_at > Date.now());
 
   // The person pauses it, runs it now, and removes it.
-  assert.equal((await api('PUT', `/api/routines/${made.id}`, { state: 'paused' })).status, 200);
-  assert.equal((await api('POST', `/api/routines/${made.id}/run`)).status, 200);
-  await until(async () => (await api('GET', '/api/state')).body.routines.find((x: any) => x.id === made.id && x.history[0]?.why === 'now' && x.history[0]?.state === 'done'));
-  const own = (await api('POST', '/api/routines', { bot: 'reel', schedule: 'every 2 hours', task: 'Tidy the screenshots folder', model: 'claude:haiku' })).body;
-  assert.equal(own.brain, 'claude:haiku');
+  assert.equal((await api('PUT', `/api/routines/${r.id}`, { state: 'paused' })).status, 200);
+  assert.equal((await api('POST', `/api/routines/${r.id}/run`)).status, 200);
+  await until(async () => (await api('GET', '/api/state')).body.routines.find((x: any) => x.id === r.id && x.history[0]?.why === 'now' && x.history[0]?.state === 'done'));
+  const own = (await api('POST', '/api/routines', { bot: 'reel', schedule: 'every 2 hours', task: 'Tidy the screenshots folder', model: 'muse' })).body;
+  assert.equal(own.thinks, 'Meta Muse');
   assert.equal((await api('DELETE', `/api/routines/${own.id}`)).status, 200);
   assert.equal((await api('POST', '/api/routines', { bot: 'reel', schedule: 'daily 9', task: 'x' }, {})).status, 403, 'cross-site pages cannot add routines');
 });
 
 test('memory: the bot proposes a note, crewd caps and commits it, Undo reverts it', async () => {
-  await until(async () => (await fetch(`${base}/api/state`).catch(() => null))?.ok);
-  await tool('chief', 'recruit', { template: 'scribe', name: 'Quill' });
+  await ready();
+  const hire = (await say('chief', `a writer please ${call('crew_recruit', { template: 'scribe', name: 'Quill' })}`)).body.task;
+  await done('chief', hire);
   const dir = join(root, 'crew', 'bots', 'quill');
   const notes = () => readFileSync(join(dir, 'notes.md'), 'utf8');
   const log = () => execFileSync('git', ['log', '--format=%s'], { cwd: dir }).toString().trim().split('\n');
   const learned = async () => (await api('GET', '/api/bots/quill')).body.trail.filter((e: any) => e.kind === 'memory.learned');
+  const remember = async (input: object) => { const t = (await say('quill', `note this ${call('crew_remember', input)}`)).body.task; return done('quill', t); };
 
   // The debrief asks for it at the end of every task.
-  const t = (await tool('chief', 'assign', { bot: 'quill', text: 'Draft a note' })).body.task;
-  await until(async () => (await api('GET', '/api/bots/quill')).body.tasks.find((x: any) => x.id === t && x.state === 'done'));
-  assert.match((await api('GET', '/api/bots/quill')).body.messages.find((m: any) => m.author === 'bot').text, /When you finish: if this task showed/);
+  const first = (await say('quill', 'Draft a note')).body.task;
+  await done('quill', first);
+  const session = new DatabaseSync(join(root, 'state', 'crew.db')).prepare('SELECT session FROM tasks WHERE id = ?').get(first) as any;
+  assert.match(readFileSync(session.session, 'utf8'), /When you finish: if this task showed/);
 
-  assert.equal((await tool('quill', 'remember', { text: 'Prefers 0.5 s transitions' })).status, 200);
-  assert.equal((await tool('quill', 'remember', { text: 'Signs off with "Best"' })).status, 200);
-  assert.equal((await tool('quill', 'remember', { text: 'Prefers ~0.8 s transitions', replaces: '0.5 s' })).status, 200);
+  await remember({ text: 'Prefers 0.5 s transitions' });
+  await remember({ text: 'Signs off with "Best"' });
+  await remember({ text: 'Prefers ~0.8 s transitions', replaces: '0.5 s' });
   assert.equal(notes(), '- Prefers ~0.8 s transitions\n- Signs off with "Best"\n', 'a correction rewrites, it does not append');
-  assert.equal((await tool('quill', 'remember', { text: 'x', replaces: 'nothing like this' })).status, 400);
+  assert.match((await remember({ text: 'x', replaces: 'nothing like this' })).result, /no note mentions/);
   assert.deepEqual(log().slice(0, 3), ['Learned: Prefers ~0.8 s transitions', 'Learned: Signs off with "Best"', 'Learned: Prefers 0.5 s transitions']);
 
   // Undo the correction: the old note comes back, as a commit.

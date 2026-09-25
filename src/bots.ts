@@ -1,11 +1,9 @@
 import { execFileSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import type { Config } from './config.ts';
-import type { LaunchSpec } from './runner.ts';
-import { registry, resolveGrants, toolBin, toolStatus } from './tools.ts';
-import { browserBin, deskFor } from './desktop.ts';
-import { homeEnv, OWNER } from './accounts.ts';
+import { registry, toolStatus } from './tools.ts';
+import { PROVIDERS } from './accounts.ts';
 
 export const NOTES_CAP = 2500;
 
@@ -13,18 +11,18 @@ export interface Template {
   id: string;
   display: string;
   role: string;
-  runtime: string;
-  model?: string;
+  /** The AI accounts it thinks with, in fallback order: "chatgpt", "grok" or "chatgpt:<model>". */
+  models?: string[];
   color: string;
   tools: string[];
-  allow?: string[];
   /** Skills copied from the repo's skills/ library into the new bot's own skills/ folder. */
   skills?: string[];
   /** Promises the bot makes on Home; each is shown only while every tool it needs is granted and ready. */
   ideas?: { needs: string[]; promise: string; ask: string }[];
 }
 
-type BotConfig = { tools: string[]; allow?: string[]; signedIn?: string[]; runtime?: string; model?: string; models?: string[]; memory?: boolean; ideas?: Template['ideas'] };
+/** `allow` holds the person's standing answers ("Always for Reel"), as the gate's keys. */
+type BotConfig = { tools: string[]; allow?: string[]; signedIn?: string[]; models?: string[]; memory?: boolean; ideas?: Template['ideas'] };
 
 export function botConfig(cfg: Config, id: string): BotConfig {
   const p = join(botDir(cfg, id), 'bot.json');
@@ -42,26 +40,24 @@ export function setGrants(cfg: Config, id: string, tools: string[]) {
   patchConfig(cfg, id, { tools: [...new Set(['crew', ...tools])] });
 }
 
-/** A CLI and model a bot can think with, written "claude:opus" or just "codex" for the CLI's own default. */
-export interface Brain { runtime: string; model?: string }
-export const RUNTIMES: Record<string, string> = { claude: 'Claude', codex: 'ChatGPT' };
+/** An AI account a bot can think with, and optionally which of its models (set by Chief or a template, never shown). */
+export interface Brain { provider: string; model?: string }
 
 export function parseBrain(s: string): Brain {
-  const [runtime, model, extra] = String(s).trim().split(':');
-  if (!RUNTIMES[runtime] || extra !== undefined || (model !== undefined && !/^[A-Za-z0-9][\w.\-\[\]]{0,63}$/.test(model))) {
-    throw Object.assign(new Error(`not a model choice: "${s}" (try claude:opus or codex:gpt-5.5)`), { status: 400 });
+  const [provider, model, extra] = String(s).trim().split(':');
+  if (!PROVIDERS[provider] || extra !== undefined || (model !== undefined && !/^[A-Za-z0-9][\w.\-\/\[\]]{0,63}$/.test(model))) {
+    throw Object.assign(new Error(`not an AI account: "${s}" (try ${Object.keys(PROVIDERS).slice(0, 3).join(', ')})`), { status: 400 });
   }
-  return model ? { runtime, model } : { runtime };
+  return model ? { provider, model } : { provider };
 }
-export const brainKey = (b: Brain) => b.model ? `${b.runtime}:${b.model}` : b.runtime;
-/** "Claude Opus", "ChatGPT gpt-5.5", "ChatGPT". */
-export const brainName = (b: Brain) => `${RUNTIMES[b.runtime] ?? b.runtime}${!b.model ? '' : /^[a-z]+$/.test(b.model) ? ' ' + b.model[0].toUpperCase() + b.model.slice(1) : ' ' + b.model}`;
+export const brainKey = (b: Brain) => b.model ? `${b.provider}:${b.model}` : b.provider;
+/** "ChatGPT", "Grok": the account's name only, never a model id. */
+export const brainName = (b: Brain) => PROVIDERS[b.provider]?.name ?? b.provider;
 
-/** The bot's models in fallback order. Without a list: the template's own, then ChatGPT (plan 3, 3.10). */
+/** The bot's accounts in fallback order. Without a list: ChatGPT. */
 export function brains(cfg: Config, id: string): Brain[] {
   const c = botConfig(cfg, id);
-  const list = c.models?.length ? c.models : [[c.runtime ?? cfg.runtime, c.model].filter(Boolean).join(':'), 'codex'];
-  return dedupe(list.map(parseBrain));
+  return dedupe((c.models?.length ? c.models : ['chatgpt']).map(parseBrain));
 }
 
 export function dedupe(list: Brain[]) {
@@ -76,46 +72,18 @@ export function setBrains(cfg: Config, id: string, models: string[]) {
   writeFileSync(p, JSON.stringify({ ...botConfig(cfg, id), models: list }, null, 2) + '\n');
   return list;
 }
-/** The person's standing permissions for a bot ("Always for Reel") and its memory switch. */
+/** The person's standing answers for a bot ("Always for Reel") and its memory switch. */
 export function setSettings(cfg: Config, id: string, s: { allow?: unknown; memory?: unknown }) {
-  if (s.allow !== undefined && !(Array.isArray(s.allow) && s.allow.every((a) => typeof a === 'string'))) throw new Error('allow must be a list of rules');
+  if (s.allow !== undefined && !(Array.isArray(s.allow) && s.allow.every((a) => typeof a === 'string'))) throw new Error('allow must be a list');
   if (s.memory !== undefined && typeof s.memory !== 'boolean') throw new Error('memory is on or off');
   patchConfig(cfg, id, { ...(s.allow ? { allow: [...new Set(s.allow as string[])] } : {}), ...(s.memory !== undefined ? { memory: s.memory } : {}) });
 }
 
-/** What an answer can grant beyond "once", in the CLI's own allow-list syntax, and what that covers in plain words. */
-export function permissionRule(tool: string, input: Record<string, any>): { rule: string; covers: string } {
-  if (tool === 'Bash') {
-    const cmd = String(input.command ?? '').trim();
-    const first = cmd.split(/\s+/)[0];
-    // Anything after `&&`, a pipe or an env prefix could hide another command: grant only that exact command.
-    if (!first || first.includes('=') || /[;&|`$<>(){}\\\n]/.test(cmd)) return { rule: `Bash(${cmd})`, covers: 'this exact command' };
-    return { rule: `Bash(${first} *)`, covers: `any ${first} command` };
-  }
-  if (tool === 'WebFetch') {
-    try { const h = new URL(String(input.url)).hostname; return { rule: `WebFetch(domain:${h})`, covers: `any page on ${h}` }; } catch { /* no url */ }
-  }
-  return { rule: tool, covers: `any use of ${tool}` };
-}
-
-/** A call under a granted tool's ask list (anything that spends money) reaches the person every time: no standing grant covers it. */
-export function mustAsk(cfg: Config, id: string, tool: string, input: Record<string, any>) {
-  const grants = new Set(botConfig(cfg, id).tools ?? []);
-  const text = tool === 'Bash' ? String(input.command ?? '') : '';
-  return registry(cfg).filter((t) => grants.has(t.id)).flatMap((t) => t.ask ?? []).some((r) => {
-    const m = /^(\w+)(?:\((.*?)(?: \*)?\))?$/.exec(r);
-    return !!m && m[1] === tool && (!m[2] || text.includes(m[2])); // anywhere in the command, so `cd x && treg call` still asks
-  });
-}
-
-/** Whether a granted rule covers this call, read exactly the way permissionRule writes rules. */
-export const ruleAllows = (rule: string, tool: string, input: Record<string, any>) => rule === tool || rule === permissionRule(tool, input).rule;
-
-/** A bot's granted tools, each with whether it is ready here. */
+/** A bot's tools, each with whether it is granted and ready here: plain words only, no commands or paths. */
 export function botTools(cfg: Config, id: string) {
   const grants = new Set(botConfig(cfg, id).tools ?? []);
-  return toolStatus(cfg).map((t) => ({ id: t.id, name: t.name, provides: t.provides, license: t.license, asks: t.asks, ready: t.ready, missing: t.missing,
-    howto: t.howto, installable: t.installable, outdated: t.outdated, source: t.source, note: t.note, granted: grants.has(t.id) }));
+  return toolStatus(cfg).map((t) => ({ id: t.id, name: t.name, provides: t.provides, license: t.license, asks: t.asks, ready: t.ready,
+    installable: t.installable, outdated: t.outdated, note: t.note, granted: grants.has(t.id) }));
 }
 
 /** A template's tools in plain words, for the recruit card. */
@@ -161,17 +129,12 @@ export function createBotFolder(cfg: Config, id: string, tpl: Template, display:
     const p = join(dir, 'AGENTS.md');
     writeFileSync(p, readFileSync(p, 'utf8').replaceAll(`# ${tpl.display}`, `# ${display}`).replaceAll(`You are ${tpl.display}`, `You are ${display}`));
   }
-  for (const d of ['files', 'work', 'skills', '.claude', '.agents', '.crewhouse']) mkdirSync(join(dir, d), { recursive: true });
+  for (const d of ['files', 'work', 'skills']) mkdirSync(join(dir, d), { recursive: true });
   // Copies, not links: the bot owns its skills and may refine them.
   for (const sk of tpl.skills ?? []) cpSync(join(cfg.repoDir, 'skills', sk), join(dir, 'skills', sk), { recursive: true });
   writeFileSync(join(dir, 'notes.md'), '');
   commitNotes(cfg, id, 'Joined the crew');
-  // Claude reads CLAUDE.md, Codex and others read AGENTS.md. Imports load memory deterministically at start.
-  writeFileSync(join(dir, 'CLAUDE.md'), '@AGENTS.md\n@notes.md\n@.crewhouse/person.md\n');
-  // One skills folder, seen by each CLI in its own project location (agentskills SKILL.md format).
-  symlinkSync('../skills', join(dir, '.claude', 'skills'));
-  symlinkSync('../skills', join(dir, '.agents', 'skills'));
-  writeFileSync(join(dir, '.gitignore'), 'work/\nbrowser/\n.crewhouse/\n.claude/settings.local.json\n');
+  writeFileSync(join(dir, '.gitignore'), 'work/\nbrowser/\n');
   return dir;
 }
 
@@ -275,76 +238,12 @@ export function addressLine(address: string | null) {
     : `Address the person by their chosen name, "${address}", never as "sir" or "ma'am".`;
 }
 
-/** Per-person facts every run sees; how to address them is the one that matters most. */
-export function writePerson(cfg: Config, id: string, address: string | null) {
-  const text = address ? `# The person you serve\n${addressLine(address)}\n` : '';
-  writeFileSync(join(botDir(cfg, id), '.crewhouse', 'person.md'), text);
-}
-
-const CREDENTIAL_DENY = ['~/.claude/**', '~/.claude.json', '~/.codex/**', '~/.pi/**', '~/.ssh/**', '~/.config/gh/**', '~/.aws/**', '~/.treg/**'];
-
-/** Everything needed to launch the bot's real CLI. Claude gets its hooks and policy via settings.local.json.
- *  `account` is the member whose own sign-in this session uses. */
-export function launchSpec(cfg: Config, bot: { id: string; n: number; display: string; runtime: string; model?: string; token: string }, url: string, account = OWNER): LaunchSpec {
-  const dir = botDir(cfg, bot.id);
-  const conf = botConfig(cfg, bot.id);
-  const desk = deskFor(cfg.stateDir, bot.id, bot.n);
-  // Memory off: notes are neither loaded nor added to.
-  writeFileSync(join(dir, 'CLAUDE.md'), `@AGENTS.md\n${conf.memory === false ? '' : '@notes.md\n'}@.crewhouse/person.md\n`);
-  // Grants become the CLI's own allow list and MCP servers; a granted tool that is missing here simply is not offered.
-  const g = resolveGrants(cfg, conf.tools ?? [], { 'bot.dir': dir, 'bot.id': bot.id, 'bot.display': desk.display, 'bot.xauth': desk.xauth });
-  const allow = [...g.allow, ...(conf.allow ?? [])];
-  // Its own desktop: the browser MCP drives the visible Chromium crewd keeps on the bot's display, over CDP.
-  if (g.tools.includes('computer') && g.mcp.browser && browserBin()) {
-    g.mcp.browser.args = ['--cdp-endpoint', `http://127.0.0.1:${desk.cdp}`, '--output-dir', join(dir, 'work', 'browser')];
-  }
-  const env = {
-    ...g.env,
-    ...homeEnv(cfg, account, bot.runtime),
-    CREWHOUSE_URL: url,
-    CREWHOUSE_TOKEN: bot.token,
-    PATH: `${join(cfg.repoDir, 'bin')}:${toolBin(cfg)}:${process.env.PATH}`,
-    CLAUDE_CODE_DISABLE_AUTO_MEMORY: '1',
-  };
-  if (bot.runtime === 'codex') {
-    return {
-      bot: bot.id, kind: 'codex', cwd: dir, label: bot.display, env,
-      // No update prompt: it blocks an unattended start, and its default answer installs globally.
-      args: ['--sandbox', 'workspace-write', '--ask-for-approval', 'on-request', '-c', 'notify=["crew","hook","codex"]', '-c', 'check_for_update_on_startup=false',
-        ...(g.tools.includes('web') ? ['--search'] : []),
-        ...Object.entries(g.mcp).flatMap(([id, m]) => ['-c', `mcp_servers.${id}.command=${JSON.stringify(m.command)}`, '-c', `mcp_servers.${id}.args=${JSON.stringify(m.args)}`,
-          '-c', `mcp_servers.${id}.env={${Object.entries(m.env).map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(',')}}`]),
-        ...(bot.model ? ['--model', bot.model] : [])],
-    };
-  }
-  const hook = (sub: string, timeout = 30) => [{ hooks: [{ type: 'command', command: `${JSON.stringify(join(cfg.repoDir, 'bin', 'crew'))} hook ${sub}`, timeout }] }];
-  const settings = {
-    permissions: {
-      allow,
-      ask: g.ask,
-      // Every member's config home too (`//` marks an absolute path in Claude's rules).
-      deny: [...[...CREDENTIAL_DENY, `/${join(cfg.stateDir, 'people')}/**`].flatMap((p) => [`Read(${p})`, `Edit(${p})`]), 'CronCreate', 'ScheduleWakeup', 'RemoteTrigger'],
-    },
-    statusLine: { type: 'command', command: `${JSON.stringify(join(cfg.repoDir, 'bin', 'crew'))} hook statusline` },
-    hooks: {
-      SessionStart: hook('session'),
-      // Every tool call: denied while the person holds the controls; browser acts on signed-in or payment pages ask first.
-      PreToolUse: hook('pretool'),
-      PostToolUse: hook('tool', 10),
-      Stop: hook('stop'),
-      // A turn that ends on an API error (rate_limit, overloaded...) never fires Stop; this is how crewd hears of it.
-      StopFailure: hook('failure'),
-      // Holds up to 3 minutes for an answer from the app, then falls back to the CLI's own dialog.
-      PermissionRequest: hook('permission', 190),
-      Notification: hook('notify'),
-    },
-  };
-  writeFileSync(join(dir, '.claude', 'settings.local.json'), JSON.stringify(settings, null, 2));
-  // Only the granted MCP servers; --strict keeps the person's own MCP servers out.
-  const mcpFile = join(dir, '.crewhouse', 'mcp.json');
-  writeFileSync(mcpFile, JSON.stringify({ mcpServers: g.mcp }, null, 2));
-  return {
-    bot: bot.id, kind: 'claude', cwd: dir, label: bot.display, env,
-    args: ['--setting-sources', 'project,local', '--mcp-config', mcpFile, '--strict-mcp-config', ...(bot.model ? ['--model', bot.model] : [])],
-  };
+/** What the engine is told about the bot for a whole session: its persona, then how Crewhouse works. */
+export function systemPrompt(cfg: Config, id: string, chief: boolean) {
+  const dir = botDir(cfg, id);
+  const persona = existsSync(join(dir, 'AGENTS.md')) ? readFileSync(join(dir, 'AGENTS.md'), 'utf8').trim() : '';
+  return `${persona}\n\n## Crewhouse\nYour id in Crewhouse is ${id}. Your working folder is your own space: work in \`work/\`, put finished things in \`files/\`, ` +
+    'and use relative paths. Anything you do there needs nobody\'s leave; sending, paying, deleting or opening the person\'s own files stops for their answer, ' +
+    'which the app asks for you. If a tool call is refused, adapt and carry on, or say plainly what you need.\n' +
+    `Your crew tools: crew_report (a one-line progress note), crew_deliver (register a finished file), crew_remember (a lasting preference of the person)${chief ? ', and for running the crew: crew_roster, crew_recruit, crew_assign, crew_routine, crew_routines, crew_status and crew_call_me' : ''}.`;
 }

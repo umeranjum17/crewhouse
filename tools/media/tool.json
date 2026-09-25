@@ -15,11 +15,6 @@
   "asks": [
     "never: it only works on files"
   ],
-  "allow": [
-    "Bash(ffmpeg *)",
-    "Bash(ffprobe *)",
-    "Bash(fc-match *)"
-  ],
   "grant": {
     "default": false
   }

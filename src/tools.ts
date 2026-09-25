@@ -21,15 +21,15 @@ export interface Install {
 
 export interface Tool {
   id: string; name: string; provides: string; kind: string; bins: string[]; license: string;
-  /** bundled: ships with Crewhouse or the CLI. pinned: Crewhouse installs it. system: detected. planned: not yet. */
+  /** bundled: ships with Crewhouse. pinned: Crewhouse installs it. system: detected. planned: not yet. */
   source: 'bundled' | 'pinned' | 'system' | 'planned';
   install: Install;
   /** "Asks you first when…", in plain words, for the recruit card and bot settings. */
   asks: string[];
-  allow: string[];
-  /** Claude permission rules that always ask, even over an allow rule; for anything that spends money. */
-  ask?: string[];
-  /** An MCP server the bot's CLI starts, named after the tool id. */
+  /** A command-line tool that runs with the person's own sign-in, on this computer rather than in the bot's sandbox.
+   *  The bot calls it with a list of arguments: `free` prefixes run at once, `spend` prefixes ask every time, anything else is refused. */
+  run?: { free: string[]; spend: string[] };
+  /** An MCP server the bot's session starts, named after the tool id. */
   mcp?: { command: string; args: string[]; env?: Record<string, string> };
   env?: Record<string, string>;
   grant?: { default: boolean };
@@ -73,7 +73,7 @@ export function toolStatus(cfg: Config) {
 
 export type ToolState = ReturnType<typeof toolStatus>[number];
 
-/** What a bot's grants turn into: ready tools, the CLI allow list, MCP servers and env. Missing tools are not offered. */
+/** What a bot's grants turn into: ready tools, MCP servers and env. Missing tools are not offered. */
 export function resolveGrants(cfg: Config, grants: string[], vars: Record<string, string>) {
   const all = new Map(toolStatus(cfg).map((t) => [t.id, t]));
   const wanted = [...new Set(['crew', ...grants])].map((g) => all.get(g)).filter((t) => t) as ToolState[];
@@ -87,8 +87,6 @@ export function resolveGrants(cfg: Config, grants: string[], vars: Record<string
   return {
     tools: tools.map((t) => t.id),
     missing: wanted.filter((t) => !t.ready && t.source !== 'planned').map((t) => t.id),
-    allow: tools.flatMap((t) => t.allow),
-    ask: tools.flatMap((t) => t.ask ?? []),
     env: Object.fromEntries(tools.flatMap((t) => Object.entries(t.env ?? {})).map(([k, x]) => [k, fill(x, v)])),
     mcp,
   };
