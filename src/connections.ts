@@ -10,39 +10,43 @@ import type { Config } from './config.ts';
 
 export interface App {
   name: string;
+  /** Google's apps share the household's one registered Google app (the owner sets it up once: docs/google-setup.md). */
+  google?: boolean;
+  /** Google shows its "unverified app" screen for this one; the Connect card warns first. */
+  warns?: boolean;
   /** The app's MCP servers: their tools become the bots' tools, named `<app>_<tool>`. */
   servers: string[];
   /** Where OAuth is discovered (RFC 8414) and clients register themselves (RFC 7591): nothing to set up. */
   issuer?: string;
   /** Or fixed endpoints with the household's own registered app (Google), read from <state>/apps.json. */
   oauth?: { authorize: string; token: string; scopes: string[]; extra?: Record<string, string> };
-  /** Listed, but not connectable yet: what the person is told instead. */
-  soon?: string;
 }
 
+const google = (scope: string, server: string) => ({
+  servers: [`https://${server}.googleapis.com/mcp/v1`],
+  oauth: { authorize: 'https://accounts.google.com/o/oauth2/v2/auth', token: 'https://oauth2.googleapis.com/token',
+    scopes: [`https://www.googleapis.com/auth/${scope}`], extra: { access_type: 'offline', prompt: 'consent' } },
+});
+/** v1: one Google service per connection (several at once makes Google show tick-boxes, and an unticked box is a partial
+ *  grant). Drive's scope is non-sensitive, so Google shows no warning; Calendar and Gmail show the unverified-app screen. */
 export const APPS: Record<string, App> = {
-  google: {
-    name: 'Google', servers: ['https://gmailmcp.googleapis.com/mcp/v1', 'https://calendarmcp.googleapis.com/mcp/v1', 'https://drivemcp.googleapis.com/mcp/v1'],
-    oauth: {
-      authorize: 'https://accounts.google.com/o/oauth2/v2/auth', token: 'https://oauth2.googleapis.com/token',
-      scopes: ['gmail.readonly', 'gmail.compose', 'calendar.events', 'drive.file'].map((s) => `https://www.googleapis.com/auth/${s}`),
-      extra: { access_type: 'offline', prompt: 'consent' },
-    },
-  },
+  drive: { name: 'Google Drive', google: true, ...google('drive.file', 'drivemcp') },
+  calendar: { name: 'Google Calendar', google: true, warns: true, ...google('calendar.events', 'calendarmcp') },
+  gmail: { name: 'Gmail', google: true, warns: true, ...google('gmail.readonly', 'gmailmcp') },
   notion: { name: 'Notion', servers: ['https://mcp.notion.com/mcp'], issuer: 'https://mcp.notion.com' },
   canva: { name: 'Canva', servers: ['https://mcp.canva.com/mcp'], issuer: 'https://mcp.canva.com' },
-  outlook: { name: 'Outlook', servers: [], soon: 'Outlook is coming soon. Until then, a helper can use it in its own browser once you sign in there.' },
 };
 
-type Tokens = { access: string; refresh?: string; expires: number };
+type Tokens = { access: string; refresh?: string; expires: number; scope?: string };
 type Endpoints = { authorize: string; token: string; register?: string; scopes: string[]; extra?: Record<string, string> };
-export type Connecting = { state: 'waiting' | 'done' | 'failed'; url?: string; error?: string };
+export type Connecting = { state: 'waiting' | 'done' | 'failed'; url?: string; error?: string; why?: 'declined' | 'unticked' };
 
 const CONNECT_MS = Number(process.env.CREWHOUSE_SIGNIN_MS || 15 * 60_000);
 
 /** A failed connection in one plain sentence with one next step. */
 export function connectError(name: string, error: string) {
-  if (/access_denied|denied|declined/i.test(error)) return `The connection was declined on ${name}'s page. Tap Connect to try again.`;
+  if (/unticked/.test(error)) return `${name} still isn't ticked. Tap Connect, then tick ${name} on Google's page.`;
+  if (/access_denied|denied|declined/i.test(error)) return `No problem, nothing was connected. Tap Connect whenever you'd like to try again.`;
   if (/fetch failed|network|ENOTFOUND|EAI_AGAIN|ECONN|timed? ?out/i.test(error)) return `Couldn't reach ${name}. Check the internet connection, then tap Connect again.`;
   return `${name} didn't finish connecting. Tap Connect to try again.`;
 }
@@ -75,21 +79,31 @@ export class Connections {
     const f = join(this.cfg.stateDir, 'apps.json');
     return existsSync(f) ? JSON.parse(readFileSync(f, 'utf8')) : {};
   }
+  private clientKey = (id: string) => (this.apps[id]?.google ? 'google' : id);
+
+  /** Whether the owner has switched Google on for the house (docs/google-setup.md). */
+  houseGoogle() { return !!this.clients().google?.id; }
+
+  /** The owner pastes the household Google app's client ID and secret, once. */
+  setHouseGoogle(id: string, secret: string) {
+    const clean = (x: unknown) => String(x ?? '').trim();
+    if (!/^[\w.-]+\.apps\.googleusercontent\.com$/.test(clean(id))) throw Object.assign(new Error("That doesn't look like a Google client ID. It ends in .apps.googleusercontent.com."), { status: 400 });
+    if (!clean(secret)) throw Object.assign(new Error('Paste the client secret too.'), { status: 400 });
+    mkdirSync(this.cfg.stateDir, { recursive: true });
+    writeFileSync(join(this.cfg.stateDir, 'apps.json'), JSON.stringify({ ...this.clients(), google: { id: clean(id), secret: clean(secret) } }, null, 2), { mode: 0o600 });
+  }
 
   connected(member: number, app: string) { return !!this.read(member)[app]; }
 
-  /** The app screen's names for what is connected: one Google connection is Gmail, Calendar and Drive. */
-  on(member: number) { return Object.keys(this.read(member)).flatMap((id) => (id === 'google' ? ['gmail', 'calendar', 'drive'] : [id])); }
+  /** The app screen's ids for what is connected. */
+  on(member: number) { return Object.keys(this.read(member)).filter((id) => this.apps[id]); }
 
-  /** The app screen's name for an app to ours: Gmail, Calendar and Drive all connect Google. */
-  static id(name: string) { return ['gmail', 'calendar', 'drive'].includes(name) ? 'google' : name; }
-
-  /** Where a connection stands, in the app screen's words: waiting, on, expired, failed or cancelled. */
+  /** Where a connection stands, in the app screen's words: waiting, on, expired, declined, unticked, failed or cancelled. */
   status(member: number, id: string) {
     if (this.connected(member, id)) return { state: 'on' };
     const v = this.view(member, id);
     if (!v) return { state: 'cancelled' };
-    return { state: v.state === 'waiting' ? 'waiting' : /too long|expired/.test(v.error ?? '') ? 'expired' : 'failed', error: v.error };
+    return { state: v.state === 'waiting' ? 'waiting' : v.why ?? (/too long|expired/.test(v.error ?? '') ? 'expired' : 'failed'), error: v.error };
   }
 
   /** The person closed the sheet: a waiting connection stops; a finished one is disconnected. */
@@ -104,8 +118,8 @@ export class Connections {
   /** What the Connections screen lists for one person: plain words only. */
   list(member: number) {
     return Object.entries(this.apps).map(([id, a]) => ({
-      app: id, name: a.name, connected: this.connected(member, id), connecting: this.view(member, id),
-      soon: a.soon ?? (a.oauth && !this.clients()[id] ? `${a.name} needs the household's own ${a.name} app first; the owner sets it up once in Settings.` : null),
+      app: id, name: a.name, connected: this.connected(member, id), connecting: this.view(member, id), warns: !!a.warns,
+      house: a.google && !this.houseGoogle() ? `${a.name} needs Google switched on for the house first; the owner does it once in Settings.` : null,
     }));
   }
 
@@ -121,25 +135,27 @@ export class Connections {
   /** This computer's client with the app: registered once by itself where the app allows it, else the household's own app. */
   private async client(id: string, ends: Endpoints) {
     const all = this.clients();
+    const c = all[this.clientKey(id)];
     // A registration is for one return address; the household's own app (no address on file) takes any loopback port.
-    if (all[id]?.id && (!all[id].redirect || all[id].redirect === this.redirect)) return all[id];
+    if (c?.id && (!c.redirect || c.redirect === this.redirect)) return c;
     if (!ends.register) throw Object.assign(new Error('needs the household app'), { status: 409 });
     const res = await fetch(ends.register, {
       method: 'POST', headers: { 'content-type': 'application/json' }, signal: AbortSignal.timeout(15_000),
       body: JSON.stringify({ client_name: 'Crewhouse', redirect_uris: [this.redirect], grant_types: ['authorization_code', 'refresh_token'], response_types: ['code'], token_endpoint_auth_method: 'none' }),
     });
     if (!res.ok) throw new Error(`register ${res.status}`);
-    const c = { id: String((await res.json() as any).client_id), redirect: this.redirect };
-    writeFileSync(join(this.cfg.stateDir, 'apps.json'), JSON.stringify({ ...all, [id]: c }, null, 2), { mode: 0o600 });
-    return c;
+    const fresh = { id: String((await res.json() as any).client_id), redirect: this.redirect };
+    writeFileSync(join(this.cfg.stateDir, 'apps.json'), JSON.stringify({ ...all, [id]: fresh }, null, 2), { mode: 0o600 });
+    return fresh;
   }
 
   /** Connect: returns the app's own page to open. The browser comes back to `finish` through crewd's callback.
-   *  An app that can't be connected here yet answers 404, which the app screen shows as "arrives with an update". */
+   *  A Google app before the owner has switched Google on for the house answers 409 (the app says "Ask the owner"),
+   *  so nobody ever reaches Google's "OAuth client not found" page. */
   async connect(member: number, id: string) {
     const a = this.app(id);
-    const soon = this.list(member).find((x) => x.app === id)!.soon;
-    if (soon) throw Object.assign(new Error(soon), { status: 404 });
+    const house = this.list(member).find((x) => x.app === id)!.house;
+    if (house) throw Object.assign(new Error(house), { status: 409 });
     if (this.connected(member, id)) return { state: 'done' } as Connecting;
     const key = `${member}:${id}`;
     for (const [s, f] of this.flows) if (f.member === member && f.app === id) { clearTimeout(f.timer); this.flows.delete(s); } // a new try replaces the old
@@ -175,12 +191,15 @@ export class Connections {
     try {
       if (q.get('error')) throw new Error(q.get('error')!);
       const tokens = await this.exchange(f.ends, f.client, { grant_type: 'authorization_code', code: q.get('code') ?? '', redirect_uri: this.redirect, code_verifier: f.verifier });
+      // Google lets a box be left unticked: that connection would be half there, so it doesn't count.
+      if (a.google && tokens.scope && !f.ends.scopes.every((sc) => tokens.scope!.split(' ').includes(sc))) throw new Error('unticked');
       this.write(f.member, { ...this.read(f.member), [f.app]: tokens });
-      Object.assign(view, { state: 'done', url: undefined, error: undefined });
-      return `${a.name} is connected. You can close this tab.`;
+      Object.assign(view, { state: 'done', url: undefined, error: undefined, why: undefined });
+      return `${a.name} is connected. You can go back to Crewhouse now.`;
     } catch (e: any) {
       console.error(`connect ${f.app} for member ${f.member}:`, e?.message ?? e);
-      Object.assign(view, { state: 'failed', url: undefined, error: connectError(a.name, String(e?.message)) });
+      const m = String(e?.message);
+      Object.assign(view, { state: 'failed', url: undefined, why: m === 'unticked' ? 'unticked' : /access_denied|denied/i.test(m) ? 'declined' : undefined, error: connectError(a.name, m) });
       return view.error!;
     } finally {
       this.onChange?.(f.member, f.app);
@@ -194,7 +213,7 @@ export class Connections {
     });
     const t: any = await res.json().catch(() => ({}));
     if (!res.ok || !t.access_token) throw new Error(t.error ?? `token ${res.status}`);
-    return { access: t.access_token, refresh: t.refresh_token ?? form.refresh_token, expires: Date.now() + (Number(t.expires_in) || 3600) * 1000 };
+    return { access: t.access_token, refresh: t.refresh_token ?? form.refresh_token, expires: Date.now() + (Number(t.expires_in) || 3600) * 1000, scope: t.scope };
   }
 
   /** A working access token, refreshed when it is close to running out. A refused refresh disconnects and says so once. */

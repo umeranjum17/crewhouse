@@ -3,6 +3,8 @@
 // Script, read from the latest message:
 //   [tool NAME {json}]   call that tool once, then reply with what it returned
 //   hit the limit        on ChatGPT, answer with ChatGPT's own usage-limit error
+//   no helpers in plan   on ChatGPT, answer as a plan without helpers does (the same words, with no time to come back)
+//   sign me out          answer as an account whose sign-in stopped working does
 //   ask permission       hold the turn (after its tool call, if any) until the test releases it (`release`)
 //   anything else        reply `stub <bot>: done with "<the last line of the task itself>"`
 // Grok stands in for an account that must be signed in first: its sign-in shows a code, then succeeds.
@@ -35,6 +37,10 @@ const step: FauxResponseFactory = async (ctx, options, _state, model): Promise<A
   if (/hit the limit/i.test(said) && model.provider === 'openai-codex') {
     return fauxAssistantMessage('', { stopReason: 'error', errorMessage: 'You have hit your ChatGPT usage limit (plus plan). Try again in ~30 min.' });
   }
+  if (/no helpers in plan/i.test(said) && model.provider === 'openai-codex') {
+    return fauxAssistantMessage('', { stopReason: 'error', errorMessage: 'You have hit your ChatGPT usage limit (free plan).' });
+  }
+  if (/sign me out/i.test(said)) return fauxAssistantMessage('', { stopReason: 'error', errorMessage: '401 Unauthorized: your sign-in has expired' });
   // Its own words, not Crewhouse's framing around them: a real model doesn't read its prompt back either.
   const asked = said.split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('[Crewhouse')).pop() ?? '';
   return fauxAssistantMessage(await hold(said, options?.sessionId, options?.signal, `stub ${bot}: done with "${asked.slice(0, 60)}"`));

@@ -411,13 +411,23 @@ test('limits: a limit rests that account and the task carries on in the same con
   await settled(db, c);
   assert.equal(task(db, c).state, 'done');
   assert.equal(JSON.parse(db.get("SELECT data FROM events WHERE kind = 'run.started' ORDER BY seq DESC")!.data).account, 'chatgpt');
-  // Signed in to nothing at all: it says so plainly.
+  // Signed in to nothing at all: the task waits for the person's own sign-in (nobody else's), and says so plainly.
+  const signedIn = crew.accounts.signedIn;
   crew.accounts.signedIn = async () => false;
   (crew.accounts as any).ready = { get: () => false, set: () => {} };
   const d = crew.assign('scout', 'and another', 'chief').task;
   await settled(db, d);
-  assert.equal(task(db, d).state, 'failed');
-  assert.equal(task(db, d).result, 'You have no AI account signed in yet. Sign in under Settings, AI accounts, then try again.');
+  assert.equal(task(db, d).state, 'paused');
+  assert.equal(task(db, d).wake_at, null, 'no time to wake: it waits for the sign-in');
+  assert.equal(task(db, d).result, 'Waiting for you to sign in with Grok.');
+  assert.equal(db.get("SELECT text FROM messages WHERE bot = 'scout' ORDER BY id DESC")!.text, 'Scout will start the moment you sign in with Grok.');
+  // Signing in starts it by itself, and Chief says so.
+  crew.accounts.signedIn = signedIn;
+  (crew.accounts as any).ready = new Map();
+  crew.accounts.onSignedIn!(OWNER, 'grok');
+  await settled(db, d);
+  assert.equal(task(db, d).state, 'done');
+  assert.ok(db.get("SELECT 1 FROM messages WHERE bot = 'chief' AND text = ?", "You're signed in. Thank you, sir. On it now."));
   done();
 });
 
@@ -655,7 +665,7 @@ test('sign-in: one button shows a code or a link, finishes by itself, keeps the 
   const { db, crew, done } = setup();
   assert.equal(await crew.accounts.signedIn(OWNER, 'grok'), false);
   const shown = await crew.accounts.login(OWNER, 'grok', { via: 'code' });
-  assert.deepEqual(shown, { state: 'waiting', code: 'CREW-2026', url: 'https://example.test/xai/device', expiresAt: undefined, error: undefined }, 'it answers with the code at once');
+  assert.deepEqual(shown, { state: 'waiting', via: 'code', code: 'CREW-2026', url: 'https://example.test/xai/device', expiresAt: undefined, error: undefined, why: undefined }, 'it answers with the code at once');
   await crew.accounts.finished(OWNER, 'grok');
   assert.equal(crew.accounts.view(OWNER, 'grok')!.state, 'done');
   await until('the account change reached the app', () => db.get("SELECT 1 FROM events WHERE kind = 'account.changed'"));
@@ -668,7 +678,7 @@ test('sign-in: one button shows a code or a link, finishes by itself, keeps the 
   // While it waits: the code and the page, nothing else.
   let go!: () => void;
   await grokThat(crew, OWNER, async (i) => { i.notify({ type: 'device_code', userCode: 'WB60-FFVO', verificationUri: 'https://accounts.x.ai/device' }); await new Promise<void>((r) => (go = r)); return cred; });
-  assert.deepEqual(await crew.accounts.login(OWNER, 'grok'), { state: 'waiting', code: 'WB60-FFVO', url: 'https://accounts.x.ai/device', expiresAt: undefined, error: undefined });
+  assert.deepEqual(await crew.accounts.login(OWNER, 'grok'), { state: 'waiting', via: 'code', code: 'WB60-FFVO', url: 'https://accounts.x.ai/device', expiresAt: undefined, error: undefined, why: undefined });
   go();
   await crew.accounts.finished(OWNER, 'grok');
   assert.equal(crew.accounts.view(OWNER, 'grok')!.state, 'done');
@@ -686,7 +696,7 @@ test('sign-in failures: expired, declined, offline, stalled and cancelled all en
     return v;
   };
   assert.deepEqual(await fails(async () => { throw new Error('expired_token'); }),
-    { state: 'failed', url: undefined, code: undefined, expiresAt: undefined, error: 'The code expired before it was used. Tap Sign in with Grok for a new one.' });
+    { state: 'failed', via: undefined, url: undefined, code: undefined, expiresAt: undefined, error: 'The code expired before it was used. Tap Sign in with Grok for a new one.', why: undefined });
   assert.equal((await fails(async () => { throw new Error('access_denied'); })).error, 'The sign-in was declined on the Grok page. Tap Sign in with Grok to try again.');
   assert.equal((await fails(async () => { throw new TypeError('fetch failed'); })).error, "Couldn't reach Grok. Check the internet connection, then tap Sign in again.");
   // A flow that stalls past the limit is stopped.
@@ -739,7 +749,7 @@ test('sign-in: a lapsed sign-in is found in the background and said once, in pla
   rt.getAuth = async () => { throw new Error('invalid_grant: refresh token revoked'); };
   await crew.accounts.keepFresh([OWNER]);
   assert.ok(crew.accounts.unready(OWNER, 'grok'));
-  assert.match(db.get("SELECT text FROM messages WHERE bot = 'chief' ORDER BY id DESC")!.text, /Your Grok sign-in has run out\. Sign in again under Settings, AI accounts/);
+  assert.match(db.get("SELECT text FROM messages WHERE bot = 'chief' ORDER BY id DESC")!.text, /^Grok signed you out\. That happens after a password change\. Sign in again and the crew picks up where it left off\.$/);
   done();
 });
 

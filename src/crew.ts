@@ -20,13 +20,16 @@ import { describe, nextRun, parseSchedule } from './routines.ts';
 const HOLD_MS = Number(process.env.CREWHOUSE_HOLD_MS || 180_000); // how long a tool call waits for an answer before the turn parks
 const TASK_TIMEOUT_MS = 60 * 60_000;
 // How long an account rests when its limit didn't say.
-const REST_MS = { rate_limit: 60 * 60_000, overloaded: 5 * 60_000, signed_out: 0 };
+const REST_MS = { rate_limit: 60 * 60_000, overloaded: 5 * 60_000, signed_out: 0, not_included: 0 };
 type Why = keyof typeof REST_MS;
 
 /** An account's error, in the three kinds crewd acts on, and when it said to come back. Anything else fails the task. */
 export function classify(error: string): { why: Why; until: number } | null {
   const mins = /try again in ~?(\d+)\s*min/i.exec(error)?.[1];
   const until = mins ? Date.now() + Number(mins) * 60_000 : 0;
+  // ChatGPT words "your plan has no helpers" (usage_not_included) like a limit, but with no time to come back.
+  // ponytail: told apart by the missing "try again"; a real limit always says when it resets.
+  if (/usage limit/i.test(error) && !mins) return { why: 'not_included', until };
   if (/usage limit|rate.?limit|quota|too many requests|\b429\b/i.test(error)) return { why: 'rate_limit', until };
   if (/overloaded|high demand|\b50[234]\b|unavailable/i.test(error)) return { why: 'overloaded', until };
   if (/unauthori[sz]ed|\b40[13]\b|sign in again|expired|invalid.*token|authentication/i.test(error)) return { why: 'signed_out', until };
@@ -65,6 +68,9 @@ export const chiefGreeting = () =>
   'Nothing you tell us leaves this computer, apart from what the crew sends your own AI account to do the work.\n\n' +
   'Before we begin, how would you like me to address you? "Sir", "ma\'am", or by name, as you prefer.';
 
+/** A sign-in that stopped working (a password change, usually), and what happens next. */
+const signedOutWords = (name: string) => `${name} signed you out. That happens after a password change. Sign in again and the crew picks up where it left off.`;
+
 /** A bot at work: its task's engine session, on whose account and which AI, and the browser if it has one. */
 interface Live { session: AgentSession; task: number; member: number; brain: disk.Brain; mcp?: Mcp; page?: string; apps?: Record<string, AppTool> }
 
@@ -73,6 +79,8 @@ export class Crew {
   private live = new Map<string, Live>();
   /** Tasks to pick up in their own session: after a restart, or on the next AI account after a limit. */
   private handoffs = new Map<number, string>();
+  /** Tasks resuming because the person just connected an app they asked for. */
+  private connected = new Set<number>();
   private holds = new Map<number, (answer: string) => void>();
   /** One-time grants from answers that arrived after the hold: the retried tool call is let through once. */
   private granted = new Set<string>();
@@ -98,7 +106,8 @@ export class Crew {
     this.accounts = new Accounts(cfg);
     if (cfg.engine === 'stub') this.accounts.prepare = stubModels;
     this.accounts.onChange = (member, key) => this.db.event('account.changed', null, { member, account: key });
-    this.accounts.onExpired = (member, key) => this.say(CHIEF, 'system', `Your ${PROVIDERS[key].name} sign-in has run out. Sign in again under Settings, AI accounts, and the crew carries on.`, null, member);
+    this.accounts.onSignedIn = (member) => this.wake(member, `You're signed in. Thank you, ${this.called(member)}. On it now.`);
+    this.accounts.onExpired = (member, key) => this.say(CHIEF, 'system', signedOutWords(PROVIDERS[key].name), null, member);
     this.connections = new Connections(cfg, `http://${cfg.host}:${cfg.port}/connect/callback`);
     this.connections.onChange = (member, app) => this.db.event('app.changed', null, { member, app });
     this.connections.onExpired = (member, app) => this.say(CHIEF, 'system', `Your ${this.connections.apps[app].name} connection has run out. Connect it again under Settings, Connections, whenever you like.`, null, member);
@@ -205,9 +214,10 @@ export class Crew {
   private task({ brain, session, ...t }: Row) { return { ...t, thinks: brain ? disk.brainName(disk.parseBrain(brain)) : null }; }
 
   /** An open question for the app: the plain sentence and what "For this task" or "Always" would cover. The gate's key stays here. */
-  private askView({ detail, ...a }: Row) {
+  private askView({ detail, ...a }: Row): Row {
     const d = JSON.parse(detail || '{}');
     const covers = d.key ? coversOf(d.key) : null;
+    if (a.kind === 'connect') return { ...a, detail: { app: d.app, words: d.words } };
     return { ...a, detail: { effect: d.effect, words: a.title, spends: d.effect === 'spend', covers, ...(covers ? { always: covers } : {}) } };
   }
 
@@ -228,6 +238,8 @@ export class Crew {
       resting: Object.fromEntries(Object.keys(PROVIDERS).map((k) => [k, this.restingUntil(k, me.id)]).filter(([, t]) => t)),
       /** The apps this member has connected, by the app screen's own names. */
       connections: this.connections.on(me.id),
+      /** Whether the owner has switched Google on for the house (Calendar, Gmail and Drive need it). */
+      house: { google: this.connections.houseGoogle() },
       desktops: { ready: desktopMissing().length === 0 },
       routines: this.routines(me.id),
     };
@@ -377,9 +389,19 @@ export class Crew {
 
   // ---- people ----
   /** First meeting: the person tells Chief how to be addressed. Stored per person, used by every bot. */
-  onboard(address: string, member = OWNER) {
+  onboard(address: string, member = OWNER, ask?: string): { task: number } | void {
     const a = clean(address, 40);
     if (!a) throw Object.assign(new Error('say how Chief should address you'), { status: 400 });
+    if (ask?.trim()) {
+      // The app's first-run screen: Chief greeted her there by name, and she tapped something she wants done. Her
+      // thread starts with that request (the written greeting asked a question she has now answered), and it goes to work.
+      this.db.tx(() => {
+        this.db.run("DELETE FROM messages WHERE bot = ? AND member = ? AND author = 'bot'", CHIEF, member);
+        this.db.run('UPDATE people SET address = ?, onboarded = 1 WHERE id = ?', a, member);
+        this.db.event('person.onboarded', null, { member, address: a });
+      });
+      return this.addTask(CHIEF, ask.trim(), 'person', undefined, member);
+    }
     const empty = this.bots().length === 1;
     this.db.tx(() => {
       this.db.run('UPDATE people SET address = ?, onboarded = 1 WHERE id = ?', a, member);
@@ -549,7 +571,7 @@ export class Crew {
       this.db.run("UPDATE bots SET state = 'on' WHERE id = ?", bot.id);
       this.db.event('run.started', bot.id, { task: task.id, account: brain.provider, name: disk.brainName(brain), member });
       if (handoff && resumes) this.db.event('run.resumed', bot.id, { task: task.id, why: handoff });
-      if (handoff && handoff !== 'Crewhouse restarted') this.say(bot.id, 'system', `${handoff}. ${bot.display} carries on with ${disk.brainName(brain)}.`, task.id);
+      if (handoff && handoff !== 'Crewhouse restarted') this.say(bot.id, 'system', `${handoff}. ${bot.display} carries on${this.connected.delete(task.id) ? '' : ` with ${disk.brainName(brain)}`}.`, task.id);
       this.turn(bot.id, l, resumes ? `[Crewhouse] ${handoff ?? 'You were interrupted'}. Continue task #${task.id} where you left off; ` +
         'check work/ and files/ before redoing anything.' : this.prompt(task));
     } catch (e: any) {
@@ -632,27 +654,65 @@ export class Crew {
     this.dispatch();
   }
 
-  /** Every account this task could use is resting: wait for the earliest. Signed out of all of them: say so. */
+  /** Every account this task could use is resting: wait for the earliest. None usable yet (never signed in, signed out,
+   *  or a plan without helpers): the task waits for this person's own account, nobody else's, and starts by itself once
+   *  they sign in. The app shows the sign-in (or the plan's options) right under these words. */
   private pause(task: Row, choices: disk.Brain[]) {
     const member = task.member ?? OWNER;
     const whose = this.members().length > 1 ? `${this.member(member).name}'s` : '';
+    const name = PROVIDERS[choices[0]?.provider]?.name ?? 'ChatGPT';
+    const who = this.bot(task.bot)!.display;
     // Only accounts the member has: a resting one wakes up; one never signed in doesn't.
     const rests = choices.filter((b) => !this.accounts.unready(member, b.provider)).map((b) => this.restingUntil(b.provider, member)).filter(Boolean);
     if (!rests.length) {
-      const why = `${whose ? `${this.member(member).name} has` : 'You have'} no AI account signed in yet`;
+      const handoff = this.handoffs.get(task.id) ?? '';
+      this.handoffs.delete(task.id);
+      const plan = choices.some((b) => this.accounts.notIncluded(member, b.provider));
+      const owner = member !== OWNER ? this.member(OWNER).name : '';
+      const first = !this.db.get("SELECT 1 FROM tasks WHERE member = ? AND id != ? AND state != 'paused'", member, task.id);
+      const words = plan ? `Your ${name} plan doesn't include helpers yet. Everything else in ${name} is fine. ${name} Plus includes it${owner ? `, or you can ask ${owner} to cover it` : ''}.`
+        : /sign in again/.test(handoff) ? signedOutWords(name)
+        : first && task.bot === CHIEF ? `Delighted, ${this.called(member)}. To think, the crew uses your own ${name}, the same one you already use.`
+        : `${task.bot === CHIEF ? 'I' : who} will start the moment you sign in with ${name}.`;
       this.db.tx(() => {
-        this.setTask(task, 'failed', `${why}. Sign in under Settings, AI accounts, then try again.`);
-        this.say(task.bot, 'system', `${why}. Sign in under Settings, AI accounts; nobody else's account can stand in.`, task.id);
+        this.db.run('UPDATE tasks SET wake_at = NULL WHERE id = ?', task.id);
+        this.setTask(task, 'paused', plan ? `Waiting for a ${name} plan with helpers.` : `Waiting for you to sign in with ${name}.`);
+        this.say(task.bot, task.bot === CHIEF ? 'bot' : 'system', words, task.id);
       });
       return;
     }
     const wake = Math.min(...rests);
-    const why = `All ${whose ? whose + ' ' : ''}AI accounts are resting until ${clock(wake)}`;
+    const why = choices.length === 1 ? `Your ${name} is resting until ${clock(wake)}` : `All ${whose ? whose + ' ' : ''}AI accounts are resting until ${clock(wake)}`;
     this.db.tx(() => {
       this.db.run('UPDATE tasks SET wake_at = ? WHERE id = ?', wake, task.id);
       this.setTask(task, 'paused', `${why}.`);
-      this.say(task.bot, 'system', `${why}. I'll pick this up then.`, task.id);
+      this.say(task.bot, 'system', `${why}. ${choices.length === 1 ? `${who} will finish this then` : "I'll pick this up then"}.`, task.id);
     });
+  }
+
+  /** The member can think again (signed in, or their plan changed): what was waiting for them starts now. */
+  wake(member: number, words?: string) {
+    const waiting = this.db.all("SELECT * FROM tasks WHERE state = 'paused' AND wake_at IS NULL AND member = ?", member);
+    if (!waiting.length) return;
+    this.db.tx(() => {
+      for (const t of waiting) this.setTask(t, 'queued');
+      if (words) this.say(CHIEF, 'bot', words, null, member);
+    });
+    this.dispatch();
+  }
+
+  /** "I've changed my plan": try the account again. */
+  retryAccount(member: number, key: string) {
+    this.accounts.notIncluded(member, key, false);
+    this.wake(member);
+  }
+
+  /** "Ask the owner to cover it": a note in the owner's own Chief thread, in plain words. Nothing is spent by asking. */
+  askOwner(member: number, key: string) {
+    if (member === OWNER) throw fail('you are the owner');
+    const m = this.member(member);
+    this.say(CHIEF, 'bot', `${m.name} asked if you could cover their helpers. Their ${PROVIDERS[key].name} plan doesn't include them yet; ${PROVIDERS[key].name} Plus does.`, null, OWNER);
+    this.say(CHIEF, 'bot', `I've asked ${this.member(OWNER).name} for you. I'll carry on the moment it's sorted.`, null, member);
   }
 
   /** An account hit its limit, is overloaded or needs signing in again: rest it, and the task continues in its own
@@ -663,8 +723,11 @@ export class Crew {
     if (!l || !task) return;
     const name = PROVIDERS[l.brain.provider].name;
     let words = `${name} needs you to sign in again`;
-    if (why === 'signed_out') this.accounts.forget(l.member, l.brain.provider);
-    else {
+    // Turned away: a sign-in that can't even be refreshed any more is signed out for real, and the task waits for a new
+    // one; one that still refreshes was a passing refusal, so the account rests a few minutes instead of looping.
+    if (why === 'signed_out' && await this.accounts.recheck(l.member, l.brain.provider)) why = 'overloaded';
+    if (why === 'not_included') { this.accounts.notIncluded(l.member, l.brain.provider, true); words = `${name}'s plan doesn't include helpers`; }
+    else if (why !== 'signed_out') {
       const until = known || Date.now() + REST_MS[why];
       this.rests.set(`${l.member}:${l.brain.provider}`, until);
       this.db.event('account.resting', null, { account: l.brain.provider, name, member: l.member, until });
@@ -684,7 +747,7 @@ export class Crew {
     const task = this.activeTask(botId);
     const text = reply.trim();
     // A turn that ended on a parked question isn't the end of the task: it resumes when the person answers.
-    const parked = task && this.db.get("SELECT 1 FROM asks WHERE task_id = ? AND state = 'open' AND kind = 'permission'", task.id);
+    const parked = task && this.db.get("SELECT 1 FROM asks WHERE task_id = ? AND state = 'open' AND kind IN ('permission', 'connect')", task.id);
     this.db.tx(() => {
       if (text) this.say(botId, 'bot', text, task?.id ?? null);
       if (task && parked && task.state !== 'needs_you') this.setTask(task, 'needs_you');
@@ -750,11 +813,11 @@ export class Crew {
     return answer;
   }
 
-  private openAsk(bot: string, task: Row | undefined, title: string, detail: Row) {
+  private openAsk(bot: string, task: Row | undefined, title: string, detail: Row, kind = 'permission') {
     return this.db.tx(() => {
       // The question goes to whoever the work is for.
       const member = task?.member ?? this.bot(bot)?.member ?? OWNER;
-      const r = this.db.run("INSERT INTO asks (bot, task_id, kind, title, detail, at, member) VALUES (?, ?, 'permission', ?, ?, ?, ?)", bot, task?.id ?? null, title, JSON.stringify(detail), Date.now(), member);
+      const r = this.db.run('INSERT INTO asks (bot, task_id, kind, title, detail, at, member) VALUES (?, ?, ?, ?, ?, ?, ?)', bot, task?.id ?? null, kind, title, JSON.stringify(detail), Date.now(), member);
       if (task) this.setTask(task, 'needs_you');
       this.db.event('ask.opened', bot, { ask: Number(r.lastInsertRowid), task: task?.id, title, effect: detail.effect });
       return Number(r.lastInsertRowid);
@@ -784,6 +847,15 @@ export class Crew {
       if (task && !held) this.setTask(task, 'working');
     });
     if (held) { held(body.answer!); this.holds.delete(askId); return; }
+    const t = ask.task_id && this.db.get('SELECT * FROM tasks WHERE id = ?', ask.task_id);
+    if (ask.kind === 'connect' && t && body.answer === 'allow' && this.live.get(ask.bot)?.task === t.id) {
+      // Connected: the app's tools arrive with a fresh session, so the task picks up in its own conversation with them.
+      this.close(ask.bot);
+      this.handoffs.set(t.id, `${this.connections.apps[detail.app]?.name ?? 'The app'} is connected now`);
+      this.connected.add(t.id);
+      this.setTask(t, 'queued');
+      return this.dispatch();
+    }
     // Parked: the turn already ended with a "wait", so the answer is the next prompt into the same session.
     if (body.answer === 'allow') this.granted.add(`${ask.bot}\n${ask.title}`);
     const task = ask.task_id && this.db.get('SELECT * FROM tasks WHERE id = ?', ask.task_id);
@@ -818,7 +890,11 @@ export class Crew {
       execute: async (_id, p) => ({ content: [{ type: 'text', text: JSON.stringify(await fn(p) ?? { ok: true }) }], details: {} }),
     }) as ToolDefinition;
     const task = () => this.activeTask(botId)?.id;
+    const apps = Object.keys(this.connections.apps).join(', ');
     const own = [
+      tool('crew_connect', `Ask the person to connect one of their apps (${apps}) when the task needs it and it isn't connected yet. ` +
+        'Ask for one app at a time, then end your turn with one short line saying what you could do with it; you are resumed when they answer.',
+        { app: Type.String() }, (p) => this.askConnect(botId, String(p.app ?? '').toLowerCase())),
       tool('crew_report', 'A one-line progress note the person sees.', { text: Type.String() }, (p) => { this.db.event('task.progress', botId, { task: task(), text: clean(p.text, 200) }); }),
       tool('crew_deliver', 'Register a finished file (a path in your folder, usually under files/).', { path: Type.String(), note: Type.Optional(Type.String()) }, (p) => this.deliver(botId, p.path, p.note)),
       tool('crew_copy', "Put a copy of a file from your folder into the person's own folders. `to` is the full path of the new file.",
@@ -853,6 +929,19 @@ export class Crew {
       tool('crew_status', 'Open tasks.', {}, () => this.db.all("SELECT id, bot, title, state FROM tasks WHERE state IN ('queued','working','needs_you','paused') ORDER BY id")),
       tool('crew_call_me', 'Change how the person is addressed, when they ask.', { how: Type.String() }, (p) => { this.setAddress(String(p.how ?? '')); }),
     ];
+  }
+
+  /** A helper needs one of the person's apps: an in-chat Connect card, answered once it is connected (or Not now). */
+  private askConnect(botId: string, app: string) {
+    const a = this.connections.apps[app];
+    if (!a) throw fail(`no app called ${app}`);
+    const t = this.activeTask(botId);
+    const member = t?.member ?? OWNER;
+    if (this.connections.connected(member, app)) return { connected: true, note: `${a.name} is already connected; its tools arrive with your next task.` };
+    if (!this.db.get("SELECT 1 FROM asks WHERE bot = ? AND kind = 'connect' AND state = 'open' AND json_extract(detail, '$.app') = ?", botId, app)) {
+      this.openAsk(botId, t, `Connect ${a.name}`, { app, words: `Let ${this.bot(botId)!.display} use your ${a.name}` }, 'connect');
+    }
+    return { asked: true, note: 'The person sees a Connect card now. End your turn with one short line; you will be told when they answer.' };
   }
 
   /** A finished file, registered once per task (a retried call is a no-op). Only inside the bot's own folder. */

@@ -20,8 +20,9 @@ The rule behind every field: nothing a person reads may be a command, a file pat
 | `events` | Desktop "Today" rail | Mapped to steps by `adapter.step()` |
 | `ideas[]` `{bot, promise, ask}` | Idea chips | `promise` is shown as written |
 | `routines[]` `{name, words, next_at, state, kind, history}` | Routines | `thinks` (an account name) is never read |
-| `resting` `{account: until}` | "The crew is resting until 6:40 pm" | Only this member's resting accounts; only the earliest time is shown |
-| `connections` | Apps grid: which apps are on | Array of app ids; today `gmail`, `calendar`, `drive` (one Google connection), `notion`, `canva` |
+| `resting` `{account: until}` | "Your ChatGPT is resting until 6:40 pm" | Only this member's resting accounts; only the earliest time is shown |
+| `connections` | Apps grid: which apps are on | Array of app ids: `drive`, `calendar`, `gmail` (each its own Google connection), `notion`, `canva` |
+| `house` `{google}` | Google's apps: connect, or "Ask the owner" | Whether the owner has switched Google on for the house |
 
 ## Asks: the approval moment
 
@@ -37,8 +38,8 @@ There is no `summary`, `tool`, `rule` or terminal text any more.
 | `chief` | "A lovely note, if I may say so." | Chief's line under the preview |
 | `question` | "Which photos, the Eid ones or the beach?" | For a question ask, instead of terminal text |
 
-A connection a task needs is an ask with `kind: 'connect'` and `detail.{app, words}` ("Want a copy in the family Drive too?").
-It shows as a card in that helper's chat, never on Home. Answer `allow` once connected, `deny` for Not now.
+A connection a task needs is an ask with `kind: 'connect'` and `detail.{app, words}` ("Let Pip use your Google Calendar"), opened by the helper's `crew_connect` tool.
+It shows as a card in that helper's chat, never on Home. Answer `allow` once connected (the app does it by itself), `deny` for Not now; the task carries on either way.
 
 ## Messages: `GET /api/bots/:id` (today)
 
@@ -47,24 +48,35 @@ It shows as a card in that helper's chat, never on Home. Answer `allow` once con
 `trail` (events) becomes the "What I did" step list; `run.tool` events carry crewd's own plain `words` ("Searched the web for “school trips”", "Worked on a video", "Used its browser").
 **Wanted**: a crewd-written `task.progress` for each meaningful step ("Picked 8 photos from Eid"), because that is what makes the list worth reading.
 
+## First run (today)
+
+`POST /api/onboard` `{address, ask}`: how Chief addresses the person and, from an idea card, their first request, in one tap.
+Her Chief thread then starts with that request. With no AI account yet it waits (a `paused` task with no wake time) and Chief says one line ("Delighted, Sara. To think, the crew uses your own ChatGPT, the same one you already use."); the app shows the sign-in right under it. Signing in starts it by itself, and Chief says "You're signed in. Thank you, Sara. On it now."
+
 ## Sign in with ChatGPT (today)
 
-`GET /api/accounts` rows `{member, account, name, signedIn, restingUntil, signIn}`; the app reads `account: 'chatgpt'` for the viewer's member id.
-`POST /api/accounts/:member/chatgpt/login` with `{via: 'code'}` answers at once with `signIn: {state: 'waiting', url, code}`: the page to open and the one-time code to type there.
-The sign-in finishes by itself (`signedIn` turns true); `…/cancel` stops it, `…/logout` signs out.
-A sign-in that fails ends as `signIn: {state: 'failed', error}` with `error` in plain words and one next step; a code that ran out says "expired" or "took too long".
-No other provider is shown. Claude is never offered.
+`GET /api/accounts` rows `{member, account, name, signedIn, restingUntil, signIn, notIncluded, work}`; the app reads `account: 'chatgpt'` for the viewer's member id.
+`POST /api/accounts/:member/chatgpt/login` answers at once with `signIn: {state: 'waiting', via: 'browser', url}`: ChatGPT's own page, which the app opens in a tab it opened in the same tap (so it is never blocked as a pop-up). ChatGPT sends that tab back to crewd's own listener on port 1455, which shows Crewhouse's words only once the sign-in works; the sheet moves on when `signedIn` turns true.
+`{via: 'code'}` ("Having trouble?") turns the same sign-in into `{via: 'code', code, url}`; crewd does it by itself when the page hasn't come back in three minutes. `{fresh: true}` asks ChatGPT's page which account again ("Use my personal account").
+A sign-in that fails ends as `signIn: {state: 'failed', error, why?}`: `why: 'declined'` (Cancel on ChatGPT's page), `why: 'busy'` (something else on this computer is signing in to ChatGPT), or `error` saying "expired"/"took too long"; each has its own words in the app.
+`work` is the email of a work ChatGPT (Business, Enterprise, Edu), read from the sign-in itself; the app offers "Use my personal account".
+`notIncluded`: the plan has no helpers (ChatGPT's `usage_not_included`). `…/ask-owner` puts a note in the owner's Chief thread; `…/retry` is "I've changed my plan".
+`…/cancel` stops a sign-in, `…/logout` signs out. No other provider is shown. Claude is never offered.
 
 ## Connecting an app (today)
 
 | Call | Returns |
 |---|---|
-| `POST /api/connections/:app` | `{url}` of the app's own sign-in page, or `{state: 'on'}` if already connected; 404 for an app that can't be connected here yet |
-| `GET /api/connections/:app` | `{state: 'waiting' \| 'on' \| 'expired' \| 'failed' \| 'cancelled', error?}`, polled every 2 s |
+| `POST /api/connections/:app` | `{url}` of the app's own sign-in page, or `{state: 'on'}` if already connected; 409 for a Google app before the owner switched Google on; 404 for an app not in v1 |
+| `GET /api/connections/:app` | `{state: 'waiting' \| 'on' \| 'declined' \| 'unticked' \| 'expired' \| 'failed' \| 'cancelled', error?}`, polled |
 | `DELETE /api/connections/:app` | Cancels a pending one, or disconnects |
+| `PUT /api/house/google` `{id, secret}` | Owner only: the household Google app's client, once ([google-setup.md](google-setup.md)) |
 
-`gmail`, `calendar` and `drive` are one Google connection, and need the household's own Google app (set up once by the owner); `notion` and `canva` need nothing set up.
-`outlook`, `photos` and `spotify` answer 404 for now.
+`drive`, `calendar` and `gmail` are one Google service each, on the household's Google app; `calendar` and `gmail` show Google's "unverified app" screen, which the card warns about first. `notion` and `canva` need nothing set up.
+
+## Share to Crewhouse (today)
+
+`web/manifest.webmanifest` makes the installed app a Share target: `/share?title&text&url` opens a card, and Chief asks what to do with it (Add to my calendar + remind me, Just remember it, Something else…). It goes to Chief as a request.
 
 ## Phones (wanted)
 

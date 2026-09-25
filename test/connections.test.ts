@@ -26,6 +26,12 @@ const app = createServer(async (req, res) => {
     if (f.grant_type === 'refresh_token' && f.refresh_token === 'R1') return json({ access_token: 'A2', expires_in: 3600 });
     return json({ error: 'invalid_grant' }, 400);
   }
+  // Google, stood in for: it answers with the scopes the person actually ticked.
+  if (url.pathname === '/gtoken') {
+    const f = Object.fromEntries(new URLSearchParams(body));
+    if (f.client_id !== 'house.apps.googleusercontent.com' || f.client_secret !== 'shh' || f.code !== 'good') return json({ error: 'invalid_grant' }, 400);
+    return json({ access_token: 'A1', refresh_token: 'R1', expires_in: 3600, scope: google.ticked });
+  }
   if (url.pathname === '/mcp') {
     seen.auth.push(String(req.headers.authorization));
     if (!/^Bearer A[12]$/.test(String(req.headers.authorization))) return json({ error: 'invalid_token' }, 401);
@@ -42,6 +48,7 @@ const app = createServer(async (req, res) => {
   }
   json({ error: 'not found' }, 404);
 });
+const google = { ticked: '' };
 await new Promise<void>((r) => app.listen(0, '127.0.0.1', () => r()));
 const base = `http://127.0.0.1:${(app.address() as any).port}`;
 after(() => app.close());
@@ -64,7 +71,7 @@ test('connect: the app\'s own page, back to Crewhouse, connected; the tokens sta
   for (const k of ['client_id', 'state', 'code_challenge', 'redirect_uri']) assert.ok(url.searchParams.get(k), k);
   assert.equal(url.searchParams.get('code_challenge_method'), 'S256');
   assert.equal(url.searchParams.get('scope'), 'read write');
-  assert.equal(await back(crew, view.url!, { code: 'good' }), 'Mocknote is connected. You can close this tab.');
+  assert.equal(await back(crew, view.url!, { code: 'good' }), 'Mocknote is connected. You can go back to Crewhouse now.');
   assert.equal(crew.connections.view(OWNER, 'mocknote')!.state, 'done');
   const file = join(cfg.stateDir, 'people', '1', 'connections.json');
   assert.equal(statSync(file).mode & 0o777, 0o600);
@@ -82,7 +89,8 @@ test('connect: the app\'s own page, back to Crewhouse, connected; the tokens sta
 test('connect failures: declined, a bad return, an old link, offline, too slow; each ends not connected with one next step', async () => {
   const { crew, done } = lab();
   let link = await start(crew);
-  assert.equal(await back(crew, link, { error: 'access_denied' }), "The connection was declined on Mocknote's page. Tap Connect to try again.");
+  assert.equal(await back(crew, link, { error: 'access_denied' }), "No problem, nothing was connected. Tap Connect whenever you'd like to try again.");
+  assert.equal(crew.connections.status(OWNER, 'mocknote').state, 'declined');
   assert.equal(crew.connections.connected(OWNER, 'mocknote'), false);
   link = await start(crew);
   assert.equal(await back(crew, link, { code: 'forged' }), "Mocknote didn't finish connecting. Tap Connect to try again.");
@@ -104,8 +112,7 @@ test('connect failures: declined, a bad return, an old link, offline, too slow; 
   assert.equal(crew.connections.view(OWNER, 'mocknote')!.error, 'Connecting took too long. Tap Connect to start again.');
   assert.equal(crew.connections.status(OWNER, 'mocknote').state, 'expired');
   assert.match(await back(crew, slow, { code: 'good' }), /expired/);
-  await assert.rejects(crew.connections.connect(OWNER, 'outlook'), /coming soon/);
-  assert.match(crew.connections.list(OWNER).find((c) => c.app === 'google')!.soon!, /household's own Google app first/, 'Google waits for the household app, and says so');
+  await assert.rejects(crew.connections.connect(OWNER, 'outlook'), /no such app/, 'Outlook is cut from v1');
   assert.equal(connectError('Canva', 'getaddrinfo ENOTFOUND mcp.canva.com'), "Couldn't reach Canva. Check the internet connection, then tap Connect again.");
   done();
 });
@@ -146,5 +153,77 @@ test('a connected app\'s tools: reading runs silently, changing something asks i
   assert.match(task(db, u).result, /did create-page/);
   assert.ok(seen.auth.every((a) => /^Bearer A[12]$/.test(a)), 'the bot never holds the token; crewd adds it');
   assert.ok(!existsSync(join(crew['cfg'].crewDir, 'bots', 'quill', 'connections.json')));
+  done();
+});
+
+/** Google's apps, pointed at the stand-in (same scopes and servers otherwise). */
+function googleLab() {
+  const s = lab();
+  for (const id of ['drive', 'calendar', 'gmail']) {
+    const a = s.crew.connections.apps[id];
+    s.crew.connections.apps[id] = { ...a, servers: [`${base}/mcp`], oauth: { ...a.oauth!, token: `${base}/gtoken` } };
+  }
+  return s;
+}
+
+test("Google: one service per connection, only after the owner switched it on for the house; Google's own failures said plainly", async () => {
+  const { crew, done } = googleLab();
+  assert.deepEqual(Object.keys(crew.connections.apps).filter((k) => k !== 'mocknote'), ['drive', 'calendar', 'gmail', 'notion', 'canva'], 'v1: no Outlook, no OneDrive');
+  // Before the owner's setup: nobody is sent to Google's "OAuth client not found" page.
+  await assert.rejects(crew.connections.connect(OWNER, 'calendar'), (e: any) => e.status === 409 && /Google switched on for the house/.test(e.message));
+  assert.match(crew.connections.list(OWNER).find((c: any) => c.app === 'gmail')!.house!, /owner does it once in Settings/);
+  assert.throws(() => crew.connections.setHouseGoogle('nope', 'shh'), /apps\.googleusercontent\.com/);
+  assert.throws(() => crew.connections.setHouseGoogle('house.apps.googleusercontent.com', ' '), /secret/);
+  crew.connections.setHouseGoogle(' house.apps.googleusercontent.com ', 'shh');
+  assert.equal(crew.connections.houseGoogle(), true);
+  assert.deepEqual(crew.connections.list(OWNER).filter((c: any) => c.warns).map((c: any) => c.app), ['calendar', 'gmail'], 'Drive shows no unverified-app warning');
+
+  // One scope per request, and the household app's own client.
+  let url = new URL(await start(crew, 'calendar'));
+  assert.equal(url.searchParams.get('scope'), 'https://www.googleapis.com/auth/calendar.events');
+  assert.equal(url.searchParams.get('client_id'), 'house.apps.googleusercontent.com');
+  // "Back to safety" on Google's warning.
+  assert.equal(await back(crew, url.toString(), { error: 'access_denied' }), "No problem, nothing was connected. Tap Connect whenever you'd like to try again.");
+  assert.equal(crew.connections.status(OWNER, 'calendar').state, 'declined');
+  // The box left unticked: not half connected.
+  url = new URL(await start(crew, 'calendar'));
+  google.ticked = 'openid';
+  assert.equal(await back(crew, url.toString(), { code: 'good' }), "Google Calendar still isn't ticked. Tap Connect, then tick Google Calendar on Google's page.");
+  assert.equal(crew.connections.status(OWNER, 'calendar').state, 'unticked');
+  assert.equal(crew.connections.connected(OWNER, 'calendar'), false);
+  // Ticked: connected, as Calendar only.
+  url = new URL(await start(crew, 'calendar'));
+  google.ticked = 'https://www.googleapis.com/auth/calendar.events';
+  assert.match(await back(crew, url.toString(), { code: 'good' }), /^Google Calendar is connected/);
+  assert.deepEqual(crew.snapshot().connections, ['calendar']);
+  assert.equal(crew.connections.connected(OWNER, 'gmail'), false, 'Calendar is not Gmail');
+  done();
+});
+
+test('in chat: a helper asks for an app, the person connects it from the card, and the task carries on with it', async () => {
+  const { db, crew, done } = lab();
+  crew.onboard('sir');
+  crew.recruit('scribe', 'Quill', 'person');
+  const t = crew.assign('quill', 'what is on this week [tool crew_connect {"app":"mocknote"}]', 'chief').task;
+  await until('asked', () => task(db, t).state === 'needs_you');
+  const ask = crew.snapshot().asks.find((a: any) => a.kind === 'connect')!;
+  assert.deepEqual(ask.detail, { app: 'mocknote', words: 'Let Quill use your Mocknote' });
+  const v = await crew.connections.connect(OWNER, 'mocknote');
+  await back(crew, v.url!, { code: 'good' });
+  await crew.answer(ask.id, { answer: 'allow' });
+  await settled(db, t);
+  assert.equal(task(db, t).state, 'done');
+  assert.ok(db.get("SELECT 1 FROM messages WHERE bot = 'quill' AND text = 'Mocknote is connected now. Quill carries on.'"));
+  // Asked again while connected: nothing to ask.
+  const u = crew.assign('quill', 'again [tool crew_connect {"app":"mocknote"}]', 'chief').task;
+  await settled(db, u);
+  assert.equal(task(db, u).state, 'done');
+  assert.match(task(db, u).result, /already connected/);
+  // Not now: it carries on without.
+  const w = crew.assign('quill', 'and [tool crew_connect {"app":"canva"}]', 'chief').task;
+  await until('asked again', () => task(db, w).state === 'needs_you');
+  await crew.answer(crew.snapshot().asks.find((a: any) => a.kind === 'connect')!.id, { answer: 'deny' });
+  await settled(db, w);
+  assert.equal(task(db, w).state, 'done');
   done();
 });

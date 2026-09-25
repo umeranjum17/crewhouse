@@ -20,7 +20,7 @@ export type Thing = { id: number; helper: string; title: string; at: number; sum
 export type FileView = { url: string; kind: 'video' | 'image' | 'doc'; name: string };
 export type Step = { at: number; text: string; now?: boolean; asked?: boolean; seq: number; undo?: boolean };
 export type Line = { id: number; from: 'me' | 'them' | 'chief' | 'note'; text: string; files: FileView[]; choices: string[] };
-export type App = { id: string; name: string; mark: string; bg: string; on: boolean; does: string };
+export type App = { id: string; name: string; mark: string; bg: string; on: boolean; does: string; warns?: boolean };
 
 // ---------- words ----------
 export const clock = (t: number) => {
@@ -86,10 +86,13 @@ export function helper(b: Json): Helper {
   };
 }
 
-/** When the crew is resting because an account ran out, in one sentence: "The crew is resting until 6:40 pm". */
+/** When the crew is resting because an account ran out, in one sentence: "Your ChatGPT is resting until 6:40 pm". */
 export function resting(state: Json) {
-  const until = Object.values(state.resting ?? {}).filter((t) => t) as number[];
-  return until.length ? `The crew is resting until ${clock(Math.min(...until))}` : '';
+  const r = Object.entries(state.resting ?? {}).filter(([, t]) => t) as [string, number][];
+  if (!r.length) return '';
+  const when = clock(Math.min(...r.map(([, t]) => t)));
+  const ai = AIS.find((a) => a.key === r[0][0]);
+  return r.length === 1 && ai ? `Your ${ai.name} is resting until ${when}` : `The crew is resting until ${when}`;
 }
 
 /** Chief's heartbeat: his mood and one line for the whole crew. */
@@ -168,6 +171,13 @@ export function things(state: Json): Thing[] {
     files: (t.files ?? []).map((f: string) => fileView(t.bot, f)),
   }));
 }
+
+/** Chief's three first-run ideas: one tap is both "hello" and the first job. */
+export const FIRST_IDEAS = [
+  { icon: '🍲', label: "Plan this week's dinners, with a shopping list" },
+  { icon: '🎂', label: 'Write a birthday message for Mum' },
+  { icon: '📅', label: "What's on this week?" },
+];
 
 /** Ideas are promises from a named helper; Chief offers three of his own when the crew has none. */
 export function ideas(state: Json) {
@@ -249,16 +259,23 @@ export function routines(state: Json, bot?: string) {
 /** The AI accounts a person can think with, in the order the app offers them. Never another brand, and never Claude. */
 export const AIS = [{ key: 'chatgpt', name: 'ChatGPT' }]; // the one front door; crewd keeps other accounts as quiet paths
 
-/** One of the person's own AI accounts: signed in, or a sign-in in progress as a link and a code. */
+/** One of the person's own AI accounts: signed in; a sign-in in progress (ChatGPT's page to say yes on, or the fallback
+ *  code); how a sign-in ended (declined, the port busy, expired, failed); a plan without helpers; a work account. */
 export function account(accounts: Json[] | null, member: number, key = 'chatgpt') {
   const a = accounts?.find((x) => x.member === member && x.account === key);
-  if (!a) return { state: 'checking' as const, signing: null, expired: false, failed: false, resting: '' };
+  const none = { signing: null, page: '', expired: false, failed: false, declined: false, busy: false, resting: '', notIncluded: false, work: '' };
+  if (!a) return { state: 'checking' as const, ...none };
   const s = a.signIn;
-  const signing = s?.state === 'waiting' && s.code ? { url: s.url ?? '', code: s.code } : null;
+  const waiting = s?.state === 'waiting';
+  const signing = waiting && s.code ? { url: s.url ?? '', code: s.code } : null;
   const expired = s?.state === 'failed' && /expired|too long/i.test(s.error ?? '');
+  const declined = s?.state === 'failed' && s.why === 'declined';
+  const busy = s?.state === 'failed' && s.why === 'busy';
   // 'unavailable' was the CLI missing; the engine now ships inside Crewhouse, so there is always something to sign in to.
   return { state: a.signedIn ? 'ready' as const : 'signed-out' as const as 'ready' | 'signed-out' | 'unavailable',
-    signing, expired, failed: s?.state === 'failed' && !expired, resting: a.restingUntil > 0 ? `Resting until ${clock(a.restingUntil)}` : '' };
+    signing, page: waiting && !s.code ? s.url ?? '' : '', expired, declined, busy, failed: s?.state === 'failed' && !expired && !declined && !busy,
+    resting: a.restingUntil > 0 ? `Resting until ${clock(a.restingUntil)}` : '', notIncluded: !!a.notIncluded,
+    work: a.work ? (typeof a.work === 'string' ? a.work : 'a work account') : '' };
 }
 export const chatgpt = (accounts: Json[] | null, member: number) => account(accounts, member, 'chatgpt');
 /** The account the crew thinks with: the first one signed in. Null while checking, 'none' when there is none yet. */
@@ -268,18 +285,19 @@ export function thinking(accounts: Json[] | null, member: number) {
 }
 
 /** Whose sign-in page an app opens: "Google" for Gmail, Calendar and Drive. */
-export const signsInWith = (app: App) => ({ gmail: 'Google', calendar: 'Google', drive: 'Google', outlook: 'Microsoft', photos: 'your phone' } as Record<string, string>)[app.id] ?? app.name;
+export const signsInWith = (app: App) => ({ gmail: 'Google', calendar: 'Google', drive: 'Google' } as Record<string, string>)[app.id] ?? app.name;
 export const appById = (state: Json, id: string) => apps(state).find((a) => a.id === id);
+/** Google's apps wait for the owner to switch Google on for the house (once, in Settings). */
+export const needsHouse = (state: Json, app: App) => signsInWith(app) === 'Google' && state.house?.google === false;
 
+// v1: Drive, Calendar and Gmail on the household's Google app, then Notion and Canva. Sharing from the phone needs no
+// connection at all. Calendar and Gmail show Google's "unverified app" screen, so their card warns first.
 const APPS: App[] = [
-  { id: 'photos', name: 'Phone photos', mark: '✿', bg: 'linear-gradient(135deg,#ffc27a,#ff7aa2)', on: false, does: 'Helpers can use photos you pick. Nothing else.' },
-  { id: 'gmail', name: 'Gmail', mark: 'M', bg: '#ea4335', on: false, does: 'Helpers can read and draft. Sending always asks you first.' },
-  { id: 'calendar', name: 'Calendar', mark: '31', bg: '#4285f4', on: false, does: 'Helpers can see your week and add things. You can undo any change.' },
-  { id: 'drive', name: 'Drive', mark: '▲', bg: '#fbbc04', on: false, does: 'Helpers can save copies of what they make.' },
-  { id: 'outlook', name: 'Outlook', mark: 'O', bg: '#0a64d6', on: false, does: 'Helpers can read and draft. Sending always asks you first.' },
+  { id: 'drive', name: 'Google Drive', mark: '▲', bg: '#fbbc04', on: false, does: 'Helpers can save copies of what they make, and open files you pick.' },
+  { id: 'calendar', name: 'Google Calendar', mark: '31', bg: '#4285f4', on: false, warns: true, does: 'Helpers can see your week and add things. You can undo any change.' },
+  { id: 'gmail', name: 'Gmail', mark: 'M', bg: '#ea4335', on: false, warns: true, does: 'Helpers can read your email to find things. They never send from it.' },
   { id: 'notion', name: 'Notion', mark: 'N', bg: '#2e2a40', on: false, does: 'Helpers can read and add pages you share with them.' },
   { id: 'canva', name: 'Canva', mark: 'C', bg: 'linear-gradient(135deg,#00c4cc,#7d2ae8)', on: false, does: 'Helpers can make designs in your Canva.' },
-  { id: 'spotify', name: 'Spotify', mark: '♫', bg: '#1db954', on: false, does: 'Helpers can make playlists for you.' },
 ];
 /** The app grid; which ones are on comes from crewd's connections once it has them. */
 export const apps = (state: Json): App[] => APPS.map((a) => ({ ...a, on: !!state.connections?.includes?.(a.id) }));
