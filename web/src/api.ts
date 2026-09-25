@@ -35,7 +35,10 @@ export const api = {
   read: (id: string) => call('POST', `/api/bots/${id}/read`),
   /** Words across the person's own chats and finished things. */
   search: (q: string) => call('GET', `/api/search?q=${encodeURIComponent(q)}`),
-  post: (id: string, text: string) => call('POST', `/api/bots/${id}/messages`, { text }),
+  /** `photos`: up to four, each `{type: 'image/jpeg' | 'image/png' | 'image/webp', data: base64}`. */
+  /** A photo someone sent, as data: the phone shows it without opening this computer's own address. */
+  photo: (bot: string, path: string) => call('GET', `/api/photo?bot=${encodeURIComponent(bot)}&path=${encodeURIComponent(path)}`) as Promise<{ type: string; data: string }>,
+  post: (id: string, text: string, photos?: { type: string; data: string }[]) => call('POST', `/api/bots/${id}/messages`, { text, ...(photos?.length ? { photos } : {}) }),
   /** First run: how Chief addresses the person, and (from an idea card) their first request, in one tap. */
   onboard: (address: string, ask?: string) => call('POST', '/api/onboard', { address, ask }),
   recruit: (template: string, name: string) => call('POST', '/api/recruit', { template, name }),

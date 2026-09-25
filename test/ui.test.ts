@@ -226,3 +226,14 @@ test('the week under the share is a third in words, never a number', () => {
   assert.equal(A.share({ share: { choice: 'full', used: false, week: null } }).week, '');
   for (const w of ['small', 'fair', 'most']) assert.doesNotMatch(A.share({ share: { choice: 'light', week: w } }).week, /\d|%/);
 });
+
+test('a photo in a message is a picture, not words', () => {
+  const [l] = A.lines({ messages: [{ id: 1, author: 'person', text: 'Here is a photo.\n[photo reel] files/photos/5-1.png' }] }, 'reel');
+  assert.equal(l.text, '');
+  assert.equal(l.files[0].kind, 'image');
+  const [c] = A.lines({ messages: [{ id: 2, author: 'person', text: 'the school poster\n[photo pip] files/photos/6-1.jpg' }] }, 'chief');
+  assert.equal(c.text, 'the school poster');
+  assert.match(c.files[0].url, /\/files\/pip\/photos\/6-1\.jpg/);
+  assert.equal(A.preview({ author: 'person', text: 'Here is a photo.\n[photo reel] files/photos/5-1.png' }), 'You: Photo');
+  assert.doesNotMatch(shown([l, c]), FORBIDDEN);
+});

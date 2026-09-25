@@ -48,6 +48,8 @@ It shows as a card in that helper's chat, never on Home. Answer `allow` once con
 
 ## Messages: `GET /api/bots/:id` (today)
 
+`POST /api/bots/:id/messages {text, photos?}`: `photos` is up to four `{type: 'image/jpeg' | 'image/png' | 'image/webp', data: base64}` (5 MB each; the phone sends about 1280 px JPEG so it fits one link frame). They are kept in the helper's `files/photos/` (so they show in Things), given to the model with the words, and ride in the chat line as `[photo <bot>] files/photos/…`, which `adapter.lines()` turns into pictures. `GET /api/photo?bot&path` returns one such photo as `{type, data}` for the phone, which can't open this computer's `/files` address.
+
 `messages[]` `{author: person|bot|chief|system, text}`; a system text `Delivered files/x.mp4: note` becomes a media card.
 **Wanted**: `choices: string[]` on a bot message, shown as tap-to-reply chips ("Soft & sweet", "Upbeat").
 `trail` (events) becomes the "What I did" step list; `run.tool` events carry crewd's own plain `words` ("Searched the web for “school trips”", "Worked on a video", "Used its browser").

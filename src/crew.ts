@@ -87,6 +87,22 @@ export function changed(before: string, now: string, cap = 1500) {
   return `Before: ${around(before)}\nNow: ${around(now)}`;
 }
 
+/** A photo sent with a message: its bytes and file ending, checked at the edge. */
+export type Photo = { bytes: Buffer; ext: string; mime: string };
+const PHOTO_TYPES: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
+/** At most four photos of 5 MB each, JPEG, PNG or WebP: anything else is refused in plain words. */
+export function checkPhotos(photos: unknown): Photo[] {
+  if (photos === undefined || photos === null) return [];
+  if (!Array.isArray(photos) || photos.length > 4) throw fail('send up to four photos at a time');
+  return photos.map((p: any) => {
+    const ext = PHOTO_TYPES[String(p?.type ?? '')];
+    const bytes = typeof p?.data === 'string' ? Buffer.from(p.data, 'base64') : Buffer.alloc(0);
+    if (!ext || !bytes.length) throw fail('that photo could not be read; try a JPEG or PNG');
+    if (bytes.length > 5 << 20) throw fail('that photo is too big; try a smaller one');
+    return { bytes, ext, mime: String(p.type) };
+  });
+}
+
 /** No routine faster than every MIN_EVERY minutes: a check each minute would use up the person's AI in an afternoon. */
 function paced(when: ReturnType<typeof parseSchedule>) {
   if ('every' in when && when.every < MIN_EVERY) throw fail(`A routine runs at most every ${MIN_EVERY} minutes, so your AI stays free for you. Try “every ${MIN_EVERY} minutes”.`);
@@ -690,19 +706,22 @@ export class Crew {
   }
 
   /** A person's message in a bot's thread is a task for that bot; in Chief's thread it goes where `route` says. */
-  async post(botId: string, text: string, model?: string, member = OWNER) {
+  /** `photos` from the phone or the share sheet: the helper sees them with the words, and they are kept in its files. */
+  async post(botId: string, text: string, model?: string, member = OWNER, photos?: unknown) {
     const bot = this.bot(botId);
     if (!bot) throw Object.assign(new Error('no such bot'), { status: 404 });
-    if (!text.trim()) throw Object.assign(new Error('empty message'), { status: 400 });
-    if (botId === CHIEF && !this.member(member).onboarded) return this.onboard(text, member);
-    if (botId === CHIEF) return this.route(text.trim(), model, member);
-    return this.addTask(botId, text.trim(), 'person', model, member);
+    const pics = checkPhotos(photos);
+    if (!text.trim() && !pics.length) throw Object.assign(new Error('empty message'), { status: 400 });
+    const words = text.trim() || (pics.length === 1 ? 'Here is a photo.' : 'Here are some photos.');
+    if (botId === CHIEF && !this.member(member).onboarded) return this.onboard(words, member);
+    if (botId === CHIEF) return this.route(words, model, member, pics);
+    return this.addTask(botId, words, 'person', model, member, undefined, words, pics);
   }
 
   /** A request to Chief: plainly one helper's goes straight to them, Chief's own (or one nobody can place) is a Chief task,
    *  and one the member's AI is torn over gets one plain question back. The question and the request it was about are
    *  a message and an event, so an answer after a restart still finds them. */
-  private async route(text: string, model: string | undefined, member: number) {
+  private async route(text: string, model: string | undefined, member: number, pics: Photo[] = []) {
     const helpers = this.bots().filter((b) => b.id !== CHIEF) as Helper[];
     const last = this.db.get('SELECT id FROM messages WHERE bot = ? AND member = ? ORDER BY id DESC LIMIT 1', CHIEF, member)?.id;
     const asked = this.db.get("SELECT data FROM events WHERE kind = 'route.asked' AND json_extract(data, '$.member') = ? ORDER BY seq DESC LIMIT 1", member);
@@ -710,7 +729,8 @@ export class Crew {
     const brain = await this.usable(member, this.choices({ bot: CHIEF, brain: model ? disk.brainKey(disk.parseBrain(model)) : null }));
     const answerer = brain && byModel(await this.accounts.runtime(member), PROVIDERS[brain.provider].pi, brain.model ?? PROVIDERS[brain.provider].models.strong);
     const to = await route({ text, earlier }, helpers, answerer);
-    if (to.abstained && to.probabilities && !earlier) {
+    // Torn with photos in hand: Chief takes it himself rather than ask, so the photos go with the request.
+    if (to.abstained && to.probabilities && !earlier && !pics.length) {
       return void this.db.tx(() => {
         this.say(CHIEF, 'person', text, null, member);
         const message = this.say(CHIEF, 'bot', clarify(to, helpers, this.member(member).address ?? ''), null, member);
@@ -719,10 +739,11 @@ export class Crew {
     }
     const body = earlier ? `${earlier}\n${text}` : text;
     const helper = !to.abstained && helpers.find((b) => b.id === to.answer);
-    if (!helper) return this.addTask(CHIEF, body, 'person', model, member, undefined, text);
-    this.say(CHIEF, 'person', text, null, member);
+    if (!helper) return this.addTask(CHIEF, body, 'person', model, member, undefined, text, pics);
+    const r = this.addTask(helper.id, body, CHIEF, model, member, undefined, body, pics);
+    this.say(CHIEF, 'person', text + r.shown, null, member);
     this.say(CHIEF, 'bot', `${helper.display} is on it.`, null, member);
-    return this.addTask(helper.id, body, CHIEF, model, member);
+    return { task: r.task };
   }
 
   /** `model` picks the AI account for this one task (a cheap one for bulk steps, a strong one for judgment). */
@@ -734,22 +755,33 @@ export class Crew {
   }
 
   /** `said` is what the thread shows, when it isn't the whole body. */
-  private addTask(bot: string, body: string, origin: string, model: string | undefined, member: number, routine?: Row, said = body) {
+  private addTask(bot: string, body: string, origin: string, model: string | undefined, member: number, routine?: Row, said = body, pics: Photo[] = []) {
     const brain = model ? disk.brainKey(disk.parseBrain(model)) : null;
     const title = short(routine?.name ?? body.split('\n')[0], 80);
+    let shown = '';
     const id = this.db.tx(() => {
       const now = Date.now();
       const r = this.db.run('INSERT INTO tasks (bot, title, body, origin, state, created_at, updated_at, brain, member, routine) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         bot, title, body, origin, 'queued', now, now, brain, member, routine?.id ?? null);
       const id = Number(r.lastInsertRowid);
+      // Photos are kept in the helper's files (so they show in the person's Things) and shown in the chat by that path.
+      const kept = pics.map((p, i) => {
+        const rel = `files/photos/${id}-${i + 1}.${p.ext}`;
+        mkdirSync(join(disk.botDir(this.cfg, bot), 'files', 'photos'), { recursive: true });
+        writeFileSync(join(disk.botDir(this.cfg, bot), rel), p.bytes);
+        this.db.event('file.delivered', bot, { task: id, path: rel, note: 'your photo', size: p.bytes.length, photo: true });
+        return rel;
+      });
+      if (kept.length) this.db.run('UPDATE tasks SET photos = ? WHERE id = ?', JSON.stringify(kept), id);
+      shown = kept.map((k) => `\n[photo ${bot}] ${k}`).join('');
       // The thread shows the routine's own words, never Crewhouse's note to the bot (a watch's page and its before and after).
       if (routine) this.say(bot, 'system', `${routine.watch ? `“${routine.name}”: the page changed` : `Routine “${routine.name}”`}: ${body.split('\n\n[Crewhouse]')[0]}`, id);
-      else this.say(bot, origin === 'person' ? 'person' : origin, said, id);
+      else this.say(bot, origin === 'person' ? 'person' : origin, said + shown, id);
       this.db.event('task.created', bot, { task: id, origin, member, title });
       return id;
     });
     queueMicrotask(() => this.dispatch());
-    return { task: id };
+    return { task: id, shown };
   }
 
   private setTask(task: Row, state: string, result?: string) {
@@ -760,6 +792,17 @@ export class Crew {
     this.db.run('UPDATE tasks SET state = ?, result = COALESCE(?, result), updated_at = ? WHERE id = ?', state, result ?? null, Date.now(), task.id);
     this.db.event(`task.${state}`, task.bot, { task: task.id, title: task.title, ...(result ? { result: result.slice(0, 280) } : {}) });
     if (state === 'failed' && result && result !== STOPPED) this.failedLine(task, result);
+  }
+
+  /** The photos sent with a task, for its first prompt: the helper sees them. */
+  private images(bot: string, task: Row) {
+    const paths: string[] = task.photos ? JSON.parse(task.photos) : [];
+    return paths.flatMap((rel) => {
+      const full = join(disk.botDir(this.cfg, bot), rel);
+      if (!existsSync(full)) return [];
+      const ext = rel.split('.').pop()!;
+      return [{ type: 'image' as const, data: readFileSync(full).toString('base64'), mimeType: ext === 'jpg' ? 'image/jpeg' : `image/${ext}` }];
+    });
   }
 
   /** A job that didn't work always says so, in words crewd writes: a routine's in the member's Chief thread (with when it
@@ -846,7 +889,7 @@ export class Crew {
       if (handoff && resumes) this.db.event('run.resumed', bot.id, { task: task.id, why: handoff });
       if (handoff && handoff !== 'Crewhouse restarted') this.say(bot.id, 'system', `${handoff}. ${bot.display} carries on${this.connected.delete(task.id) ? '' : ` with ${disk.brainName(brain)}`}.`, task.id);
       this.turn(bot.id, l, resumes ? `[Crewhouse] ${handoff ?? 'You were interrupted'}. Continue task #${task.id} where you left off; ` +
-        'check work/ and files/ before redoing anything.' : this.prompt(task));
+        'check work/ and files/ before redoing anything.' : this.prompt(task), resumes ? undefined : this.images(bot.id, task));
     } catch (e: any) {
       console.error(`run ${bot.id} #${task.id}:`, e);
       this.close(bot.id);
@@ -910,9 +953,9 @@ export class Crew {
   }
 
   /** One turn: the prompt goes in, and when the engine settles the reply (or the account's error) is handled. */
-  private turn(botId: string, l: Live, text: string) {
-    this.db.event('run.prompted', botId, { task: l.task });
-    const run = l.session.isStreaming ? l.session.followUp(text) : l.session.prompt(text);
+  private turn(botId: string, l: Live, text: string, images?: { type: 'image'; data: string; mimeType: string }[]) {
+    this.db.event('run.prompted', botId, { task: l.task, ...(images?.length ? { photos: images.length } : {}) });
+    const run = l.session.isStreaming ? l.session.followUp(text, images) : l.session.prompt(text, images?.length ? { images } : undefined);
     run.then(() => this.settled(botId, l), (e) => this.settled(botId, l, e));
   }
 

@@ -47,8 +47,8 @@ const asks = [
     words: 'Scout would like to remember how to do this: Plan the week’s dinners, with a shopping list',
     preview: { head: 'How Scout would do it', body: '1. Five dinners, vegetarian, nothing over forty minutes.\n2. One shopping list, grouped by aisle.\n3. Keep Friday for pizza night.' } } },
   { id: 11, bot: 'scout', task_id: 42, kind: 'permission', at: now - 30_000, member: me, title: '', detail: {
-    effect: 'spend', spends: true, words: 'Scout wants to place this order at walmart.com: Garlic, 2 kg, Great Value milk (1 gal) x2, Basmati rice 10 lb. Total $43.10.',
-    preview: { head: 'The order at walmart.com', body: 'Garlic, 2 kg — $6.20\nGreat Value milk (1 gal) x2 — $7.90\nBasmati rice 10 lb $24.00\nTotal $43.10' } } },
+    effect: 'spend', spends: true, words: 'Scout wants to place this order at shop.example: Garlic, 2 kg, Whole milk (1 gal) x2, Basmati rice 10 lb. Total $43.10.',
+    preview: { head: 'The order at shop.example', body: 'Garlic, 2 kg — $6.20\nWhole milk (1 gal) x2 — $7.90\nBasmati rice 10 lb $24.00\nTotal $43.10' } } },
   { id: 8, bot: 'reel', task_id: 41, kind: 'connect', at: now - min, member: me, title: '', detail: { app: 'drive', words: 'Want a copy in the family Drive too?' } },
   ...(me === 1 ? [{ id: 9, bot: 'tracer', task_id: 44, kind: 'permission', at: now - 2 * min, member: 1, title: '', detail: {
     effect: 'spend', spends: true, words: "Tracer wants to spend about $0.50 to find Sara Malik's work email. OK?" } }] : []),
