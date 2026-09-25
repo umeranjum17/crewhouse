@@ -243,14 +243,17 @@ export class Desktops {
     this.desks.delete(bot);
     d.session?.watcher.send({ kind: 'revoked', reason: 'the desktop stopped' });
     void d.engine?.stop().catch(() => {});
-    d.chrome?.kill();
+    const chrome = d.chrome;
+    chrome?.kill();
+    // A Chromium that won't finish shutting down is not left running.
+    if (chrome) setTimeout(() => { if (chrome.exitCode === null && chrome.signalCode === null) chrome.kill('SIGKILL'); }, 3000).unref();
     d.devtools?.close();
     d.xvfb.kill();
   }
 
   /** Stop every desktop; settles once each bot's Chromium has exited (it writes its profile on the way out). */
   stopAll() {
-    const gone = [...this.desks.values()].map((d) => d.chrome && d.chrome.exitCode === null && new Promise((r) => d.chrome!.once('exit', r)));
+    const gone = [...this.desks.values()].map((d) => d.chrome && d.chrome.exitCode === null && d.chrome.signalCode === null && new Promise((r) => d.chrome!.once('exit', r)));
     for (const bot of [...this.desks.keys()]) this.stop(bot);
     return Promise.all(gone);
   }
