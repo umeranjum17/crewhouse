@@ -212,3 +212,11 @@ test('watches and hand-offs read as plain words, with only the page\'s host', ()
   const [l] = A.lines({ messages: [{ id: 1, author: 'reel', text: 'find three songs' }] }, 'scout');
   assert.deepEqual([l.from, l.text], ['note', 'Reel asked: find three songs']);
 });
+
+test('a new helper from Chief is a yes-or-no card with its own yes', () => {
+  const s = { person: { id: 1 }, bots: [], asks: [{ id: 5, bot: 'chief', kind: 'propose', at: 1, title: 'Shall I take on a new helper? Pip: Watches rentals',
+    detail: { words: 'Shall I take on a new helper? Pip: Watches rentals', yes: 'Yes, take Pip on', preview: { head: 'Pip, a new helper', body: 'Watches rentals.' } } }] };
+  const [c] = A.cards(s);
+  assert.deepEqual(c.choices.map((x: any) => x.label), ['Yes, take Pip on', 'Not now']);
+  assert.ok(!c.choices.some((x: any) => /always/i.test(x.label)));
+});

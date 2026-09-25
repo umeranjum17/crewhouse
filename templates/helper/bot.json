@@ -1,0 +1,23 @@
+{
+  "display": "Helper",
+  "role": "A helper Chief took on for you",
+  "hidden": true,
+  "models": [
+    "chatgpt"
+  ],
+  "color": "#C2577A",
+  "tools": [
+    "crew",
+    "files",
+    "web",
+    "browser",
+    "computer",
+    "documents",
+    "search-files"
+  ],
+  "skills": [
+    "research-report",
+    "summarize-document",
+    "use-the-browser"
+  ]
+}

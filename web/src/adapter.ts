@@ -212,7 +212,7 @@ export function card(a: Json, state: Json): Card {
     // A suggestion: a skill a helper would like to keep, or a new personality from Chief. Nothing changes without a yes.
     return { ...base, kind: 'ok', head: a.bot === 'chief' ? 'Chief has a suggestion' : `${name} learned something`, words: plain(d.words ?? `${name} has a suggestion.`),
       preview: d.preview ? { head: d.preview.head ? plain(d.preview.head) : undefined, body: plain(d.preview.body ?? '') } : undefined,
-      choices: [{ label: a.bot === 'chief' ? 'Yes, change it' : 'Yes, keep it', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
+      choices: [{ label: d.yes ? plain(d.yes) : a.bot === 'chief' ? 'Yes, change it' : 'Yes, keep it', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
   }
   if (a.kind !== 'permission') {
     return { ...base, kind: 'question', reply: true, head: `${name} has a question`,

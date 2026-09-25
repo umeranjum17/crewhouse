@@ -266,7 +266,7 @@ export class Crew {
     const d = JSON.parse(detail || '{}');
     const covers = d.key ? coversOf(d.key) : null;
     if (a.kind === 'connect') return { ...a, detail: { app: d.app, words: d.words } };
-    if (a.kind === 'propose') return { ...a, detail: { words: a.title, preview: d.preview } };
+    if (a.kind === 'propose') return { ...a, detail: { words: a.title, preview: d.preview, ...(d.create ? { yes: `Yes, take ${d.create.name} on` } : {}) } };
     return { ...a, detail: { effect: d.effect, words: a.title, spends: d.effect === 'spend', covers, ...(covers ? { always: covers } : {}) } };
   }
 
@@ -974,7 +974,9 @@ export class Crew {
       this.setTask(task, 'done', clear ? ALL_CLEAR_RESULT : text || 'Done.');
       if (task.origin === CHIEF) {
         const b = this.bot(botId)!;
-        this.say(CHIEF, 'system', `${b.display} has finished task #${task.id}: ${text.slice(0, 240)}${text.length > 240 ? '…' : ''}`, null, task.member ?? OWNER);
+        // In Chief's own voice, written by crewd: no model call, no task number.
+        const address = this.member(task.member ?? OWNER).address;
+        this.say(CHIEF, 'bot', `${b.display} has finished “${short(task.title, 60)}”${address ? `, ${address}` : ''}. It's in ${b.display}'s chat${text ? `: “${short(text.replace(/\s+/g, ' '), 200)}”` : '.'}`.replace(/\s+/g, ' ').trim(), null, task.member ?? OWNER);
       }
     });
     if (task && !parked && !this.held.has(botId)) this.close(botId);
@@ -1187,6 +1189,22 @@ export class Crew {
           return this.propose(CHIEF, `Chief suggests a change to how ${b.display} comes across`,
             { soul: { bot: b.id, text }, preview: { head: `${b.display}, as Chief suggests`, body } });
         }),
+      tool('crew_create', 'Suggest a new helper when no one on the crew and no template fits a job that will come round again (a watch, a standing chore). ' +
+        '`name`: a short friendly first name; `job`: what it does, in two or three plain lines the person will read; `personality`: a few short plain lines ' +
+        'in the second person ("You are Pip. …"); `first`: the person\'s request, to start on once they say yes. The person sees a card and decides; nothing is made until then.',
+        { name: Type.String(), job: Type.String(), personality: Type.String(), first: Type.Optional(Type.String()) }, (p) => {
+          const name = clean(p.name, 24);
+          const job = String(p.job ?? '').replace(/\r/g, '').trim();
+          const body = String(p.personality ?? '').replace(/\r/g, '').trim().replace(/^# .*\n+/, '');
+          if (!name || !/[a-z]/i.test(name)) throw fail('give the new helper a name');
+          if (this.bot(disk.slug(name)) || disk.slug(name) === 'helper') throw fail(`there is already a helper called ${name}; pick another name`, 409);
+          if (!job || job.length > 600) throw fail('say what it does in two or three lines');
+          const soul = `# ${name}\n\n${body || `You are ${name}. Friendly, careful and brief.`}`;
+          if (soul.length > disk.SOUL_CAP) throw fail(`say who it is in a few lines, under ${disk.SOUL_CAP} characters`);
+          return this.propose(CHIEF, `Shall I take on a new helper? ${name}: ${short(job, 160)}`,
+            { create: { name, job, soul, first: p.first ? String(p.first).slice(0, 2000) : undefined },
+              preview: { head: `${name}, a new helper`, body: `${job}\n\n${body}\n\n${name} can use the web, a browser of its own and its own files, and asks you before anything leaves this computer or costs money.` } });
+        }),
       tool('crew_call_me', 'Change how the person is addressed, when they ask.', { how: Type.String() }, (p) => { this.setAddress(String(p.how ?? '')); }),
     ];
   }
@@ -1224,7 +1242,24 @@ export class Crew {
     } else if (d.soul) {
       disk.writeSoul(this.cfg, d.soul.bot, d.soul.text, 'Personality changed, as Chief suggested');
       this.db.event('soul.changed', d.soul.bot, { by: CHIEF, member });
-    }
+    } else if (d.create) this.create(d.create, member);
+  }
+
+  /** A helper Chief made up, on the person's yes: the plain base template with the job and personality from the card,
+   *  and the request that prompted it as its first task. It gets the base tools only: nothing that spends money. */
+  private create(c: { name: string; job: string; soul: string; first?: string }, member: number) {
+    const id = disk.slug(c.name);
+    if (this.bot(id)) throw fail(`there is already a helper called ${c.name}`, 409);
+    const tpl = disk.loadTemplate(this.cfg, 'helper');
+    this.db.tx(() => {
+      this.addBot({ ...tpl, role: short(c.job.split(/\n|(?<=[.!?])\s/)[0].replace(/[.!?]$/, ''), 80) }, c.name, id, CHIEF, member);
+      this.say(id, 'system', `${c.name} joined the crew.`);
+    });
+    disk.setJob(this.cfg, id, c.job);
+    disk.writeSoul(this.cfg, id, c.soul, 'Who it is, as Chief suggested and the person agreed');
+    const address = this.member(member).address;
+    this.say(CHIEF, 'bot', `${c.name} has joined the crew${address ? `, ${address}` : ''}.${c.first ? ` I've handed ${c.name} your request; results will reach you in ${c.name}'s chat.` : ''}`, null, member);
+    if (c.first?.trim()) this.addTask(id, c.first.trim(), CHIEF, undefined, member);
   }
 
   /** A helper needs one of the person's apps: an in-chat Connect card, answered once it is connected (or Not now). */
