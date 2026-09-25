@@ -51,6 +51,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
   const localHost = (h = '') => /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/.test(h);
   // A paired phone acts as the household member it was paired for.
   const link = new Link(cfg, db, (m, path, body, member) => { const u = new URL(path, 'http://x'); return api(m, u.pathname, u.searchParams, body, member); });
+  link.desk = { signal: (bot, w, method, params, canControl) => crew.desktopSignal(bot, w, method, params, canControl), release: (w) => crew.desktops.release(w) };
   link.quiet = (member) => !!crew.members().find((x) => x.id === member)?.quietNow;
 
   const server = createServer(async (req, res) => {

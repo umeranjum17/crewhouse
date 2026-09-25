@@ -146,3 +146,29 @@ test('the relay address: none built in, the family can set their own, and phones
   assert.equal((await relay('wss://elsewhere.example', {})).status, 403, 'only this computer changes it');
   assert.deepEqual((await relay(null)).body.relay, '', 'back to the default');
 });
+
+test('a bot\'s screen over the link: a watch-only phone may open it, and crewd answers as on the computer\'s own socket', async () => {
+  await until(async () => (await fetch(`${base}/api/state`).catch(() => null))?.ok);
+  const grant = await pairPhone((await http('POST', '/api/phones/pair', { role: 'view' })).body.qr, 'Watcher');
+  const w = open(grant);
+  await until(async () => w.status() === 'online');
+  const s = await w.link.stream('desktop', { bot: 'chief' });
+  const lines: any[] = [];
+  let buf = '';
+  s.onData = (c) => { buf += new TextDecoder().decode(c); for (let i; (i = buf.indexOf('\n')) >= 0; buf = buf.slice(i + 1)) lines.push(JSON.parse(buf.slice(0, i))); };
+  await s.write(JSON.stringify({ id: 1, method: 'session.open', params: { permissions: ['view'] } }) + '\n');
+  const reply = await until(async () => lines.find((l) => l.id === 1));
+  assert.equal(reply.error.code, 'no-screen', 'Chief has no computer; said as the computer\'s socket says it');
+  s.end();
+  // Watching isn't hiring: a watch-only phone can't add a helper; a phone that can answer adds one from the gallery.
+  assert.equal((await w.req('POST', '/api/recruit', { template: 'scribe', name: 'Quill' })).status, 403);
+  const c = open(await pairPhone((await http('POST', '/api/phones/pair', { role: 'control' })).body.qr, 'Helper-adder'));
+  const added = await c.req('POST', '/api/recruit', { template: 'scribe', name: 'Quill' });
+  assert.deepEqual([added.status, added.body.id], [200, 'quill']);
+  c.link.stop();
+  // A stream for anything else, or a bot name that isn't one, is turned away.
+  const bad = await w.link.stream('desktop', { bot: '../x' });
+  const ended = await new Promise<string | undefined>((r) => { bad.onEnd = r; });
+  assert.equal(ended, 'not-supported');
+  w.link.stop();
+});

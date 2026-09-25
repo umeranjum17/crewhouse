@@ -5,11 +5,18 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import { networkInterfaces } from 'node:os';
 import { join } from 'node:path';
-import { WebSocketServer } from 'ws';
+import { WebSocket as WS, WebSocketServer } from 'ws';
 import { Host, keyPair, keyPairFrom, type Grant, type PairRequest, type Role } from '@byokit/link';
 import { RelayClient, type RelayStatus } from '@byokit/relay';
 import type { Config } from './config.ts';
 import type { Store } from './db.ts';
+import type { Watcher } from './desktop.ts';
+
+/** A bot's screen for a phone: the same signaling the computer's /ws/desktop socket carries (src/server.ts). */
+export interface Desk {
+  signal(bot: string, watcher: Watcher, method: string, params: any, canControl: boolean): Promise<unknown>;
+  release(watcher: Watcher): void;
+}
 
 export const PAIR_MS = Number(process.env.CREWHOUSE_PAIR_MS || 120_000); // a pairing QR is good for two minutes
 export type Handler = (method: string, path: string, body: any, member: number) => Promise<unknown>;
@@ -78,8 +85,10 @@ export class Link {
       keys, name: 'your computer', pairMs: PAIR_MS,
       grants: { load: () => this.load(), save: (g) => this.save(g) },
       confirm: (p) => this.confirm(p),
-      canView: (req) => req.op.startsWith('GET '),
+      // A watch-only phone may read and watch a bot's screen; the desktop never gives it the controls.
+      canView: (req) => req.op.startsWith('GET ') || req.op === 'desktop',
       handle: (req, g) => this.request(req.op, req.args, g),
+      stream: (s, req, g) => this.desktop(s, req.args, g),
       onError: (e) => console.error('phone link:', e),
     });
     this.wss.on('connection', (ws) => this.host.accept(ws as any));
@@ -192,6 +201,9 @@ export class Link {
     const enrol = this.db.get("SELECT value FROM settings WHERE key = 'link.relay.enrol'")?.value || undefined;
     const c = this.client = new RelayClient(this.host, {
       url: `${wsOrigin(this.relay)}/relay/v1/host`, enrol, name: 'Crewhouse',
+      // ponytail: ws, not Node's own WebSocket: on Node 22 the relay client's close-on-error makes Node's socket fire
+      // error again, and the loop overflows the stack and takes crewd down. Drop once @byokit/relay guards it.
+      WebSocket: WS as any,
       onStatus: (st) => {
         if (this.client !== c) return;
         this.relayStatus = st;
@@ -204,6 +216,34 @@ export class Link {
 
   /** The address a phone dials through the relay, or none. */
   relayUrl() { return this.relay && this.host ? `${wsOrigin(this.relay)}/link/v1/${this.host.id}` : ''; }
+
+  /** Set by the server: what a phone's desktop stream talks to. */
+  desk?: Desk;
+
+  /** A phone watching (and, holding the controls, driving) a bot's screen: one JSON message per line each way,
+   *  {id, method, params} in and {id, result | error} or {event} out, as on the computer's own socket. */
+  private desktop(s: import('@byokit/link').LinkStream, args: any, g: Grant) {
+    const bot = String(args?.bot ?? '');
+    if (s.op !== 'desktop' || !/^[a-z0-9-]+$/.test(bot) || !this.desk) return s.end('not-supported');
+    const desk = this.desk;
+    const send = (m: unknown) => { void s.write(JSON.stringify(m) + '\n').catch(() => {}); };
+    const watcher: Watcher = { send: (event) => send({ event }) };
+    let buf = '';
+    s.onData = async (chunk) => {
+      buf += new TextDecoder().decode(chunk);
+      if (buf.length > 1 << 20) return s.end('too-large');
+      let i;
+      while ((i = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, i);
+        buf = buf.slice(i + 1);
+        let msg: any;
+        try { msg = JSON.parse(line); } catch { continue; }
+        try { send({ id: msg.id, result: await desk.signal(bot, watcher, String(msg.method), msg.params ?? {}, g.role === 'control') }); }
+        catch (e: any) { send({ id: msg.id, error: { code: e.code ?? 'engine', message: e.message } }); }
+      }
+    };
+    s.onEnd = () => desk.release(watcher);
+  }
 
   /** Tell a member's phones there is news. Content-free: the words stay on this computer until the phone asks. */
   private async tell(member: number, id: string) {
