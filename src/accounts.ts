@@ -29,7 +29,7 @@ export function provider(key: string) {
 }
 
 /** What the person sees while signing in: a link to open or a code to type, never the engine's own prompts. */
-export type SignIn = { state: 'waiting' | 'done' | 'failed'; url?: string; code?: string; error?: string };
+export type SignIn = { state: 'waiting' | 'done' | 'failed'; url?: string; code?: string; expiresAt?: number; error?: string };
 type Flow = SignIn & { abort: AbortController; paste?: (text: string) => void; timedOut?: boolean; done?: Promise<void> };
 
 const LOGIN_MS = Number(process.env.CREWHOUSE_SIGNIN_MS || 15 * 60_000); // longer than any provider's code lives
@@ -127,7 +127,7 @@ export class Accounts {
       },
       notify: (e) => {
         if (e.type === 'auth_url') Object.assign(flow, { url: e.url, code: undefined });
-        if (e.type === 'device_code') Object.assign(flow, { code: e.userCode, url: e.verificationUri });
+        if (e.type === 'device_code') Object.assign(flow, { code: e.userCode, url: e.verificationUri, expiresAt: e.expiresInSeconds ? Date.now() + e.expiresInSeconds * 1000 : undefined });
         if (flow.url) shown();
         this.onChange?.(member, key);
       },
@@ -147,7 +147,7 @@ export class Accounts {
     } catch (e: any) {
       if (flow.state !== 'waiting') return; // cancelled: already settled
       console.error(`sign-in ${key} for member ${member}:`, e?.message ?? e);
-      Object.assign(flow, { state: 'failed', url: undefined, code: undefined, error: flow.timedOut ? `The sign-in took too long. Tap Sign in with ${p.name} to start again.` : signInError(p.name, String(e?.message ?? e), !!p.key) });
+      Object.assign(flow, { state: 'failed', url: undefined, code: undefined, expiresAt: undefined, error: flow.timedOut ? `The sign-in took too long. Tap Sign in with ${p.name} to start again.` : signInError(p.name, String(e?.message ?? e), !!p.key) });
     } finally {
       clearTimeout(timer);
       this.onChange?.(member, key);
@@ -190,7 +190,7 @@ export class Accounts {
 
   view(member: number, key: string): SignIn | null {
     const f = this.flows.get(`${member}:${key}`);
-    return f ? { state: f.state, url: f.url, code: f.code, error: f.error } : null;
+    return f ? { state: f.state, url: f.url, code: f.code, expiresAt: f.state === 'waiting' ? f.expiresAt : undefined, error: f.error } : null;
   }
 
   stop() { for (const f of this.flows.values()) f.abort.abort(); }

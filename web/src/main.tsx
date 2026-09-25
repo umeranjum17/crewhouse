@@ -41,7 +41,7 @@ function useAccounts(poll: number, tick = 0) {
 
 function Hello({ state, me, refresh }: Ctx) {
   const [name, setName] = useState('');
-  const [signing, setSigning] = useState(false);
+  const [signing, setSigning] = useState<{ key: string; name: string } | null>(null);
   const [other, setOther] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const owner = state.members.find((m: Json) => m.id === A.OWNER)?.name ?? 'the owner';
@@ -59,11 +59,12 @@ function Hello({ state, me, refresh }: Ctx) {
         <div>🏠 The crew works on your home computer, even while you're out.</div>
         <div>🤫 What you tell us stays in this house.</div>
       </div>
-      <button className="btn go big" onClick={() => need() && setSigning(true)}><span className="gpt">◎</span>Sign in with ChatGPT</button>
+      <button className="btn go big" onClick={() => need() && setSigning(A.AIS[0])}><span className="gpt">◎</span>Sign in with ChatGPT</button>
       <button className="link" onClick={() => setOther(!other)}>Other ways to sign in</button>
-      {other && <p className="mute small">More are on the way. For now the crew thinks with ChatGPT, and a free account works. <button className="link inline" onClick={() => need() && finish()}>Set this up later</button></p>}
-      <p className="mute small">The crew thinks with your own ChatGPT. Your password goes to ChatGPT, never to us.</p>
-      {signing && <SignIn me={me} owner={owner} onReady={() => { setSigning(false); void finish(); }} onClose={() => setSigning(false)} />}
+      {other && <div className="chips center">{A.AIS.slice(1).map((ai) => <button key={ai.key} className="chip" onClick={() => need() && setSigning(ai)}>Sign in with {ai.name}</button>)}
+        <button className="link inline" onClick={() => need() && finish()}>Set this up later</button></div>}
+      <p className="mute small">The crew thinks with your own AI account. Your password goes to them, never to us.</p>
+      {signing && <SignIn me={me} owner={owner} ai={signing} onReady={() => { setSigning(null); void finish(); }} onClose={() => setSigning(null)} />}
     </div>
   );
 }
@@ -146,7 +147,7 @@ function Home({ state, me, refresh, tick }: Ctx) {
   const crew = A.crew(state);
   const cards = A.cards(state).filter((c) => c.kind !== 'connect');
   const accounts = useAccounts(0, tick);
-  const g = A.chatgpt(accounts, me);
+  const thinks = A.thinking(accounts, me);
   const [signing, setSigning] = useState(false);
   const toChief = async (t: string) => { if (await attempt(() => api.post('chief', t))) { refresh(); go('#/chief'); } };
   return (
@@ -154,7 +155,7 @@ function Home({ state, me, refresh, tick }: Ctx) {
       <div className="home-top"><Heartbeat state={state} /></div>
       <h1 className="hi">{A.greeting()}, {state.person.address ?? state.person.name}</h1>
       <Bubbles crew={crew} />
-      {g.state === 'signed-out' && (
+      {thinks === 'none' && (
         <div className="card nudge"><span className="grow">Sign in with ChatGPT so the crew can think.</span><button className="btn go" onClick={() => setSigning(true)}>Sign in</button></div>
       )}
       {A.resting(state) && <div className="card nudge"><span className="grow">{A.resting(state)}. I'll pick things back up then.</span></div>}
@@ -431,8 +432,7 @@ function Routines(ctx: Ctx) {
 // ---------- settings ----------
 function Settings({ state, me, refresh, tick, look, setLook, switchTo }: Ctx & { look: string; setLook: (l: string) => void; switchTo: (id: number) => void }) {
   const accounts = useAccounts(0, tick);
-  const g = A.chatgpt(accounts, me);
-  const [signing, setSigning] = useState(false);
+  const [signing, setSigning] = useState<{ key: string; name: string } | null>(null);
   const [adding, setAdding] = useState('');
   const [phones, setPhones] = useState<Json[] | null | undefined>(undefined);
   useEffect(() => { api.phones().then(setPhones).catch(() => setPhones(null)); }, [tick]);
@@ -444,12 +444,18 @@ function Settings({ state, me, refresh, tick, look, setLook, switchTo }: Ctx & {
       {state.members.length > 1 && (<><div className="label">Who's using this screen</div>
         <div className="chips">{state.members.map((m: Json) => <button key={m.id} className={`chip ${m.id === me ? 'on' : ''}`} onClick={() => switchTo(m.id)}>{m.name}</button>)}</div></>)}
 
-      <div className="label">Your ChatGPT</div>
-      <div className="card row">
-        <span className="app-ic" style={{ background: '#10a37f' }}>◎</span>
-        <div className="grow"><b>ChatGPT</b><div className="mute small">{g.state === 'ready' ? `Connected. The crew thinks with it.${g.resting ? ` ${g.resting}.` : ''}` : g.state === 'checking' ? 'Checking…' : g.state === 'unavailable' ? 'Not set up on the home computer yet' : 'Not signed in'}</div></div>
-        {g.state === 'signed-out' && <button className="btn go" onClick={() => setSigning(true)}>Sign in</button>}
-      </div>
+      <div className="label">Your AI</div>
+      {A.AIS.map((ai) => {
+        const g = A.account(accounts, me, ai.key);
+        return (
+          <div key={ai.key} className="card row">
+            <span className="app-ic" style={{ background: ai.key === 'chatgpt' ? '#10a37f' : ai.key === 'muse' ? '#0866ff' : '#111' }}>{ai.name[0]}</span>
+            <div className="grow"><b>{ai.name}</b><div className="mute small">{g.state === 'ready' ? `Connected. The crew can think with it.${g.resting ? ` ${g.resting}.` : ''}` : g.state === 'checking' ? 'Checking…' : 'Not signed in'}</div></div>
+            {g.state === 'signed-out' && <button className="btn go" onClick={() => setSigning(ai)}>Sign in</button>}
+            {g.state === 'ready' && <button className="btn" onClick={() => attempt(async () => { await api.signOut(me, ai.key); refresh(); }, `Signed out of ${ai.name}`)}>Sign out</button>}
+          </div>
+        );
+      })}
 
       <div className="label">Your apps</div>
       <a className="card row" href="#/apps"><span className="app-row">{A.apps(state).slice(0, 5).map((a) => <span key={a.id} className="app-ic sm" style={{ background: a.bg }}>{a.mark}</span>)}</span><span className="grow mute">{A.apps(state).filter((a) => a.on).length} connected</span><b>›</b></a>
@@ -475,7 +481,7 @@ function Settings({ state, me, refresh, tick, look, setLook, switchTo }: Ctx & {
 
       <div className="label">Look</div>
       <div className="seg">{[['auto', 'Evenings dark'], ['day', 'Day'], ['night', 'Night']].map(([k, l]) => <button key={k} className={look === k ? 'on' : ''} onClick={() => setLook(k)}>{l}</button>)}</div>
-      {signing && <SignIn me={me} owner={state.members[0]?.name ?? 'the owner'} onReady={() => { setSigning(false); refresh(); }} onClose={() => setSigning(false)} />}
+      {signing && <SignIn me={me} owner={state.members[0]?.name ?? 'the owner'} ai={signing} onReady={() => { setSigning(null); refresh(); }} onClose={() => setSigning(null)} />}
     </div>
   );
 }

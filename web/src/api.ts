@@ -42,6 +42,7 @@ export const api = {
   /** "Sign in with ChatGPT": a one-time code to type on its page, which works from any phone or computer. */
   signIn: (member: number, account: string) => call('POST', `/api/accounts/${member}/${account}/login`, { via: 'code' }),
   signInCancel: (member: number, account: string) => call('POST', `/api/accounts/${member}/${account}/cancel`),
+  signOut: (member: number, account: string) => call('POST', `/api/accounts/${member}/${account}/logout`),
   schedule: (text: string) => call('GET', `/api/schedule?text=${encodeURIComponent(text)}`),
   addRoutine: (body: { bot: string; schedule: string; task: string; model?: string; name?: string }) => call('POST', '/api/routines', body),
   routine: (id: number, body: { state?: 'on' | 'paused'; schedule?: string }) => call('PUT', `/api/routines/${id}`, body),

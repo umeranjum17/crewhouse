@@ -381,8 +381,9 @@ test('limits: a limit rests that account and the task carries on in the same con
   assert.ok(file && readFileSync(file, 'utf8').includes('dig deep'), 'the conversation carried over');
   assert.deepEqual(crew.snapshot().resting, { chatgpt: until });
 
-  // Everyone resting: the task pauses with a wake-up time, and resumes when it passes.
-  (crew as any).rests.set('1:muse', Date.now() + 60_000);
+  // Every account resting: the task pauses with a wake-up time, and resumes when it passes.
+  const others = ['muse', 'copilot', 'kimi', 'openrouter', 'gemini']; // the stub counts these as signed in; Grok is not
+  for (const k of others) (crew as any).rests.set(`1:${k}`, Date.now() + (k === 'muse' ? 60_000 : 120_000));
   const b = crew.assign('scout', 'look it up again', 'chief').task;
   await settled(db, b);
   assert.equal(task(db, b).state, 'paused');
@@ -394,12 +395,19 @@ test('limits: a limit rests that account and the task carries on in the same con
   await settled(db, b);
   assert.equal(task(db, b).state, 'done');
 
-  // Signed out of every account it could use: it says so plainly, and no one else's account stands in.
+  // A bot set to an account the person doesn't have carries on with one they do.
   disk.setBrains(cfg, 'scout', ['grok']);
   const c = crew.assign('scout', 'one more', 'chief').task;
   await settled(db, c);
-  assert.equal(task(db, c).state, 'failed');
-  assert.equal(task(db, c).result, 'You have no Grok signed in yet. Sign in under Settings, AI accounts, then try again.');
+  assert.equal(task(db, c).state, 'done');
+  assert.equal(JSON.parse(db.get("SELECT data FROM events WHERE kind = 'run.started' ORDER BY seq DESC")!.data).account, 'chatgpt');
+  // Signed in to nothing at all: it says so plainly.
+  crew.accounts.signedIn = async () => false;
+  (crew.accounts as any).ready = { get: () => false, set: () => {} };
+  const d = crew.assign('scout', 'and another', 'chief').task;
+  await settled(db, d);
+  assert.equal(task(db, d).state, 'failed');
+  assert.equal(task(db, d).result, 'You have no AI account signed in yet. Sign in under Settings, AI accounts, then try again.');
   done();
 });
 
@@ -513,7 +521,8 @@ test('household: bots and tasks belong to a member and run on that member\'s own
   assert.match(readFileSync(task(db, a).session, 'utf8'), /chosen name, \\"Sam\\"/);
   const b = crew.post('reel', 'owner demo', undefined, OWNER)!.task;
   await settled(db, b);
-  assert.equal(task(db, b).state, 'failed', 'the owner never borrows Sam\'s account');
+  const ran = JSON.parse(db.get("SELECT data FROM events WHERE kind = 'run.started' ORDER BY seq DESC")!.data);
+  assert.deepEqual([ran.member, ran.account], [OWNER, 'chatgpt'], 'the owner never borrows Sam\'s Grok; the owner\'s own ChatGPT does it');
   assert.ok(crew.botPage('reel', sam).messages.some((m: any) => m.text === 'a demo for Sam'));
   assert.ok(!crew.botPage('reel', OWNER).messages.some((m: any) => m.text === 'a demo for Sam'), 'threads are per person');
 
@@ -529,7 +538,7 @@ test('household: bots and tasks belong to a member and run on that member\'s own
 
   // One person's limit rests only their own account.
   disk.setBrains(cfg, 'reel', ['chatgpt']);
-  (crew as any).rests.set(`${sam}:chatgpt`, Date.now() + 60_000);
+  for (const k of ['chatgpt', 'grok', 'muse', 'copilot', 'kimi', 'openrouter', 'gemini']) (crew as any).rests.set(`${sam}:${k}`, Date.now() + 60_000);
   assert.equal(crew.restingUntil('chatgpt', OWNER), 0);
   const e = crew.post('reel', 'another for Sam', undefined, sam)!.task;
   const f = crew.post('scout', 'owner lookup', undefined, OWNER)!.task;
@@ -541,7 +550,7 @@ test('household: bots and tasks belong to a member and run on that member\'s own
 
   // What each person sees: their own tasks and questions, their own accounts.
   assert.deepEqual(crew.snapshot(sam).tasks.map((t: any) => t.id).sort(), [a, d, e].sort());
-  assert.deepEqual(Object.keys(crew.snapshot(sam).resting), ['chatgpt']);
+  assert.ok(crew.snapshot(sam).resting.chatgpt > 0);
   assert.deepEqual(crew.snapshot(OWNER).resting, {});
   done();
 });
@@ -636,7 +645,7 @@ test('sign-in: one button shows a code or a link, finishes by itself, keeps the 
   const { db, crew, done } = setup();
   assert.equal(await crew.accounts.signedIn(OWNER, 'grok'), false);
   const shown = await crew.accounts.login(OWNER, 'grok', { via: 'code' });
-  assert.deepEqual(shown, { state: 'waiting', code: 'CREW-2026', url: 'https://example.test/xai/device', error: undefined }, 'it answers with the code at once');
+  assert.deepEqual(shown, { state: 'waiting', code: 'CREW-2026', url: 'https://example.test/xai/device', expiresAt: undefined, error: undefined }, 'it answers with the code at once');
   await crew.accounts.finished(OWNER, 'grok');
   assert.equal(crew.accounts.view(OWNER, 'grok')!.state, 'done');
   await until('the account change reached the app', () => db.get("SELECT 1 FROM events WHERE kind = 'account.changed'"));
@@ -650,7 +659,7 @@ test('sign-in: one button shows a code or a link, finishes by itself, keeps the 
   // While it waits: the code and the page, nothing else.
   let go!: () => void;
   await grokThat(crew, OWNER, async (i) => { i.notify({ type: 'device_code', userCode: 'WB60-FFVO', verificationUri: 'https://accounts.x.ai/device' }); await new Promise<void>((r) => (go = r)); return cred; });
-  assert.deepEqual(await crew.accounts.login(OWNER, 'grok'), { state: 'waiting', code: 'WB60-FFVO', url: 'https://accounts.x.ai/device', error: undefined });
+  assert.deepEqual(await crew.accounts.login(OWNER, 'grok'), { state: 'waiting', code: 'WB60-FFVO', url: 'https://accounts.x.ai/device', expiresAt: undefined, error: undefined });
   go();
   await crew.accounts.finished(OWNER, 'grok');
   assert.equal(crew.accounts.view(OWNER, 'grok')!.state, 'done');
@@ -668,7 +677,7 @@ test('sign-in failures: expired, declined, offline, stalled and cancelled all en
     return v;
   };
   assert.deepEqual(await fails(async () => { throw new Error('expired_token'); }),
-    { state: 'failed', url: undefined, code: undefined, error: 'The code expired before it was used. Tap Sign in with Grok for a new one.' });
+    { state: 'failed', url: undefined, code: undefined, expiresAt: undefined, error: 'The code expired before it was used. Tap Sign in with Grok for a new one.' });
   assert.equal((await fails(async () => { throw new Error('access_denied'); })).error, 'The sign-in was declined on the Grok page. Tap Sign in with Grok to try again.');
   assert.equal((await fails(async () => { throw new TypeError('fetch failed'); })).error, "Couldn't reach Grok. Check the internet connection, then tap Sign in again.");
   // A flow that stalls past the limit is stopped.

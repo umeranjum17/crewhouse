@@ -246,16 +246,25 @@ export function routines(state: Json, bot?: string) {
   }));
 }
 
-/** The person's own ChatGPT: signed in, or a sign-in in progress as a link and a code. Never another brand. */
-export function chatgpt(accounts: Json[] | null, member: number) {
-  const a = accounts?.find((x) => x.member === member && x.account === 'chatgpt');
+/** The AI accounts a person can think with, in the order the app offers them. Never another brand, and never Claude. */
+export const AIS = [{ key: 'chatgpt', name: 'ChatGPT' }, { key: 'muse', name: 'Meta Muse' }, { key: 'grok', name: 'Grok' }];
+
+/** One of the person's own AI accounts: signed in, or a sign-in in progress as a link and a code. */
+export function account(accounts: Json[] | null, member: number, key = 'chatgpt') {
+  const a = accounts?.find((x) => x.member === member && x.account === key);
   if (!a) return { state: 'checking' as const, signing: null, expired: false, failed: false, resting: '' };
   const s = a.signIn;
-  const signing = s?.state === 'waiting' && s.code ? { url: s.url ?? 'https://auth.openai.com/codex/device', code: s.code } : null;
+  const signing = s?.state === 'waiting' && s.code ? { url: s.url ?? '', code: s.code } : null;
   const expired = s?.state === 'failed' && /expired|too long/i.test(s.error ?? '');
-  // 'unavailable' was the CLI missing; the engine now ships inside Crewhouse, so ChatGPT is always there to sign in to.
+  // 'unavailable' was the CLI missing; the engine now ships inside Crewhouse, so there is always something to sign in to.
   return { state: a.signedIn ? 'ready' as const : 'signed-out' as const as 'ready' | 'signed-out' | 'unavailable',
     signing, expired, failed: s?.state === 'failed' && !expired, resting: a.restingUntil > 0 ? `Resting until ${clock(a.restingUntil)}` : '' };
+}
+export const chatgpt = (accounts: Json[] | null, member: number) => account(accounts, member, 'chatgpt');
+/** The account the crew thinks with: the first one signed in. Null while checking, 'none' when there is none yet. */
+export function thinking(accounts: Json[] | null, member: number) {
+  if (!accounts) return null;
+  return AIS.find((a) => account(accounts, member, a.key).state === 'ready') ?? 'none';
 }
 
 /** Whose sign-in page an app opens: "Google" for Gmail, Calendar and Drive. */

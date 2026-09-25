@@ -118,8 +118,8 @@ const pages: Record<string, Json> = {
 for (const b of bots) pages[b.id] ??= { messages: [], notes: '', tasks: [] };
 for (const [id, p] of Object.entries(pages)) p.trail = events.filter((e) => e.bot === id);
 
-const accounts = [1, 2, 3].map((m) => ({ member: m, runtime: 'codex', state: signin && m === me ? 'signed-out' : 'ready',
-  login: variant === 'signin' && m === me ? { state: 'running', out: 'Open https://auth.openai.com/codex/device and enter WB60-FFV06' } : null }));
+const accounts = [1, 2, 3].map((m) => ({ member: m, account: 'chatgpt', name: 'ChatGPT', signedIn: !(signin && m === me),
+  signIn: variant === 'signin' && m === me ? { state: 'waiting', url: 'https://auth.openai.com/codex/device', code: 'WB60-FFV06' } : null }));
 
 let calls = 0;
 export async function demoCall(method: string, path: string, _body?: Json) {

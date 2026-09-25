@@ -54,46 +54,47 @@ function usePoll<T>(fn: () => Promise<T>, ms: number, on = true) {
   return { value, offline };
 }
 
-// ---------- Sign in with ChatGPT ----------
-export function SignIn({ me, owner, onReady, onClose }: { me: number; owner: string; onReady: () => void; onClose: () => void }) {
+// ---------- Sign in with ChatGPT (or Meta Muse, or Grok) ----------
+export function SignIn({ me, owner, ai = A.AIS[0], onReady, onClose }: { me: number; owner: string; ai?: { key: string; name: string }; onReady: () => void; onClose: () => void }) {
+  const name = ai.name;
   const { value, offline } = usePoll(() => api.accounts(), 2000);
-  const g = A.chatgpt(value, me);
+  const g = A.account(value, me, ai.key);
   const [cancelled, setCancelled] = useState(false);
   const started = useRef(false);
-  const start = () => { started.current = true; setCancelled(false); api.signIn(me, 'chatgpt').catch(() => {}); };
+  const start = () => { started.current = true; setCancelled(false); api.signIn(me, ai.key).catch(() => {}); };
   const live: Phase = offline ? 'offline' : cancelled ? 'cancelled' : g.state === 'ready' ? 'done' : g.state === 'unavailable' ? 'unavailable'
     : g.signing?.code ? 'waiting' : g.expired ? 'expired' : g.failed ? 'failed' : 'opening';
   const phase = pinned ?? live;
   useEffect(() => { if (!pinned && live === 'opening' && g.state === 'signed-out' && !g.signing && !started.current) start(); }, [live, g.state]);
-  const cancel = () => { void api.signInCancel(me, 'chatgpt').catch(() => {}); started.current = true; setCancelled(true); };
-  const close = () => { if (phase === 'waiting' || phase === 'opening') void api.signInCancel(me, 'chatgpt').catch(() => {}); onClose(); };
+  const cancel = () => { void api.signInCancel(me, ai.key).catch(() => {}); started.current = true; setCancelled(true); };
+  const close = () => { if (phase === 'waiting' || phase === 'opening') void api.signInCancel(me, ai.key).catch(() => {}); onClose(); };
   const code = g.signing?.code || 'WB60-FFV06';
-  const url = g.signing?.url || 'https://auth.openai.com/codex/device';
+  const url = g.signing?.url || '';
   const at = phase === 'done' ? 3 : phase === 'waiting' ? 1 : 0;
   return (
-    <Sheet label="Sign in with ChatGPT" onClose={close}>
+    <Sheet label={`Sign in with ${name}`} onClose={close}>
       {!['offline', 'unavailable'].includes(phase) && <Progress at={at} steps={['Get code', 'Sign in', 'Done']} />}
       <Mood phase={phase} />
       {phase === 'opening' && <><h2>Getting your sign-in code…</h2><p className="mute">This takes a few seconds.</p><div className="dotdot" aria-hidden><i /><i /><i /></div>
         <button className="link" onClick={cancel}>Cancel</button></>}
       {phase === 'waiting' && <>
-        <h2>Type this code on ChatGPT's page</h2>
+        <h2>Type this code on {name}'s page</h2>
         <button className="code" onClick={() => navigator.clipboard?.writeText(code).then(() => toast('Code copied'), () => {})} aria-label={`Code ${code.split('').join(' ')}. Tap to copy.`}>{code}<span>Tap to copy</span></button>
-        <a className="btn go big" href={url} target="_blank" rel="noreferrer">Open ChatGPT ↗</a>
+        {url && <a className="btn go big" href={url} target="_blank" rel="noreferrer">Open {name} ↗</a>}
         <p className="mute small">Sign in the way you always do (Google, Apple or email), then type the code. Come back here after; this moves on by itself.</p>
-        <Pill tone="wait">Waiting for ChatGPT…</Pill>
+        <Pill tone="wait">Waiting for {name}…</Pill>
         <button className="link" onClick={cancel}>Cancel</button>
       </>}
-      {phase === 'done' && <><h2>You're signed in!</h2><p>The crew thinks with your own ChatGPT now. Your password stayed with ChatGPT.</p>
+      {phase === 'done' && <><h2>You're signed in!</h2><p>The crew thinks with your own {name} now. Your password stayed with {name}.</p>
         <button className="btn go big" onClick={onReady}>Let's go</button></>}
       {phase === 'cancelled' && <><h2>No problem</h2><p className="mute">Nothing was changed. You can sign in whenever you like.</p>
         <button className="btn go big" onClick={start}>Try again</button><button className="link" onClick={onClose}>Not now</button></>}
       {phase === 'expired' && <><h2>That code ran out</h2><p className="mute">Codes only last a few minutes, to keep your account safe. Here's a fresh one whenever you're ready.</p>
         <button className="btn go big" onClick={start}>Get a new code</button><button className="link" onClick={onClose}>Not now</button></>}
-      {phase === 'failed' && <><h2>That didn't go through</h2><p className="mute">ChatGPT didn't finish the sign-in. No harm done; let's try once more.</p>
+      {phase === 'failed' && <><h2>That didn't go through</h2><p className="mute">{name} didn't finish the sign-in. No harm done; let's try once more.</p>
         <button className="btn go big" onClick={start}>Try again</button><button className="link" onClick={onClose}>Not now</button></>}
       {phase === 'offline' && <OfflineWords onClose={onClose} />}
-      {phase === 'unavailable' && <><h2>Almost ready</h2><p className="mute">ChatGPT sign-in isn't switched on at the home computer yet. Ask {owner} to open Crewhouse there once, and you're good to go.</p>
+      {phase === 'unavailable' && <><h2>Almost ready</h2><p className="mute">{name} sign-in isn't switched on at the home computer yet. Ask {owner} to open Crewhouse there once, and you're good to go.</p>
         <button className="btn go big" onClick={onClose}>OK</button></>}
     </Sheet>
   );

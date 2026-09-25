@@ -159,9 +159,10 @@ export class Crew {
     return until > Date.now() ? until : 0;
   }
 
-  /** The models a task may run on, in order: its own choice first, then the bot's fallback order. */
+  /** The accounts a task may run on, in order: its own choice, the bot's fallback order, then any other account its
+   *  member has signed in to (someone who only has Meta Muse still gets a working crew). Never another member's. */
   choices(task: Row) {
-    return disk.dedupe([...(task.brain ? [disk.parseBrain(task.brain)] : []), ...disk.brains(this.cfg, task.bot)]);
+    return disk.dedupe([...(task.brain ? [disk.parseBrain(task.brain)] : []), ...disk.brains(this.cfg, task.bot), ...Object.keys(PROVIDERS).map((provider) => ({ provider }))]);
   }
 
   /** What the bot page and crew cards show: "Thinks with ChatGPT, then Grok". Account names only, never model ids. */
@@ -635,9 +636,10 @@ export class Crew {
   private pause(task: Row, choices: disk.Brain[]) {
     const member = task.member ?? OWNER;
     const whose = this.members().length > 1 ? `${this.member(member).name}'s` : '';
-    const rests = choices.map((b) => this.restingUntil(b.provider, member)).filter(Boolean);
+    // Only accounts the member has: a resting one wakes up; one never signed in doesn't.
+    const rests = choices.filter((b) => !this.accounts.unready(member, b.provider)).map((b) => this.restingUntil(b.provider, member)).filter(Boolean);
     if (!rests.length) {
-      const why = `${whose ? `${this.member(member).name} has` : 'You have'} no ${[...new Set(choices.map(disk.brainName))].join(' or ')} signed in yet`;
+      const why = `${whose ? `${this.member(member).name} has` : 'You have'} no AI account signed in yet`;
       this.db.tx(() => {
         this.setTask(task, 'failed', `${why}. Sign in under Settings, AI accounts, then try again.`);
         this.say(task.bot, 'system', `${why}. Sign in under Settings, AI accounts; nobody else's account can stand in.`, task.id);
