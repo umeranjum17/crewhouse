@@ -204,7 +204,7 @@ export function step(e: Json): string | null {
     case 'ask.opened': return 'Asked for your OK';
     case 'ask.answered': return `You said ${ANSWER[d.answer] ?? (/always/.test(d.answer) ? 'always OK' : /task/.test(d.answer) ? 'yes for this job' : 'what to do')}`;
     case 'file.delivered': return `Made “${pretty(d.path)}”`;
-    case 'memory.learned': return `Learned: ${plain(d.text)}`;
+    case 'memory.learned': return `${d.everyone ? 'Learned, for the whole crew' : 'Learned'}: ${plain(d.text)}`;
     case 'memory.undone': return `You undid: ${plain(d.text)}`;
     case 'run.resumed': return 'Picked up where it left off';
     case 'desktop.takeover': return 'You took the wheel';
@@ -245,14 +245,30 @@ export function lines(page: Json, bot: string): Line[] {
   }).filter((l: Line) => l.text || l.files.length);
 }
 
-/** What a helper remembers about you, one line each, from its notes. */
+/** What a helper remembers about you (or the whole crew knows about you), one line each, from its notes. */
 export const memories = (notes = '') => notes.split('\n').map((l) => l.replace(/^[-*]\s*/, '').trim()).filter((l) => l && !l.startsWith('#')).map(plain);
+/** The notes with one more line, or without the i-th: what Add and Forget send back. */
+export const withMemory = (notes = '', line: string) => `${notes.replace(/\n*$/, '\n').replace(/^\n$/, '')}- ${line.replace(/\s+/g, ' ').trim()}\n`;
+export function withoutMemory(notes = '', i: number) {
+  let n = -1;
+  return notes.split('\n').filter((l) => { if (!l.replace(/^[-*]\s*/, '').trim() || l.trim().startsWith('#')) return true; n++; return n !== i; }).join('\n');
+}
+
+/** Who a helper is, as plain lines: its own name heading dropped, section headings and bullets read as sentences. */
+export const personality = (soul = '') => soul.split('\n').slice(soul.startsWith('# ') ? 1 : 0)
+  .map((l) => l.replace(/^#+\s*/, '').replace(/^[-*]\s*/, '').trim()).filter(Boolean).map(plain);
+/** The text a person edits: everything but the name heading, which crewd keeps. */
+export const soulDraft = (soul = '') => soul.split('\n').slice(soul.startsWith('# ') ? 1 : 0).join('\n').trim();
+export const soulText = (name: string, draft: string) => `# ${name}\n\n${draft.trim()}\n`;
+/** What a helper knows how to do, from its skills: their own descriptions, in plain words. */
+export const knows = (skills: Json[] = []) => skills.map((k) => plain(k.says || String(k.name).replace(/-/g, ' '))).filter(Boolean);
 
 // ---------- routines, people, accounts, apps ----------
 export function routines(state: Json, bot?: string) {
   return state.routines.filter((r: Json) => !bot || r.bot === bot).map((r: Json) => ({
     id: r.id, name: plain(r.name), helper: r.kind === 'digest' ? 'chief' : r.bot, when: r.words, paused: r.state === 'paused', next: clock(r.next_at), digest: r.kind === 'digest',
-    last: r.history?.[0] ? `Last ran ${clock(r.history[0].at)}${r.history[0].kind === 'routine.skipped' ? ', skipped while busy' : ''}` : '',
+    quiet: !!r.quiet,
+    last: r.history?.[0] ? `Last ran ${clock(r.history[0].at)}${r.history[0].kind === 'routine.skipped' ? ', skipped while busy' : r.history[0].clear ? ', all clear' : ''}` : '',
   }));
 }
 

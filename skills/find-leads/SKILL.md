@@ -1,6 +1,7 @@
 ---
 name: find-leads
 description: Find people, work emails or phone numbers for a role, company or named person with treg. Use for any "find leads", "who runs X at Y", "get me the email/phone of" request.
+says: Find the right people at a company, with a work email or phone number
 ---
 
 # Find leads

@@ -1,6 +1,7 @@
 ---
 name: summarize-document
 description: Read a PDF, Word, PowerPoint, Excel or HTML file and summarize it. Use whenever the person hands you a document or a link to one.
+says: Read a document and tell you what is in it
 ---
 
 # Summarize a document

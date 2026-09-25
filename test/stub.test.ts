@@ -57,7 +57,7 @@ test('chief onboarding, recruit, assign, grants', async () => {
   const rec = (await say('chief', `get me a video maker ${call('crew_recruit', { template: 'reel', name: 'Reel' })}`)).body.task;
   await done('chief', rec);
   const dir = join(root, 'crew', 'bots', 'reel');
-  for (const f of ['AGENTS.md', 'notes.md', 'skills/make-reel/SKILL.md']) assert.ok(existsSync(join(dir, f)), f);
+  for (const f of ['AGENTS.md', 'soul.md', 'skills/make-reel/SKILL.md']) assert.ok(existsSync(join(dir, f)), f);
   const tried = (await say('reel', `hire a friend ${call('crew_recruit', { template: 'scout' })}`)).body.task;
   await done('reel', tried);
   assert.ok(!(await api('GET', '/api/state')).body.bots.some((b: any) => b.id === 'scout'), 'only Chief recruits');
@@ -176,8 +176,9 @@ test('memory: the bot proposes a note, crewd caps and commits it, Undo reverts i
   await ready();
   const hire = (await say('chief', `a writer please ${call('crew_recruit', { template: 'scribe', name: 'Quill' })}`)).body.task;
   await done('chief', hire);
-  const dir = join(root, 'crew', 'bots', 'quill');
-  const notes = () => readFileSync(join(dir, 'notes.md'), 'utf8');
+  // What Quill learned about the owner lives in the owner's own folder.
+  const dir = join(root, 'crew', 'people', '1');
+  const notes = () => readFileSync(join(dir, 'notes', 'quill.md'), 'utf8');
   const log = () => execFileSync('git', ['log', '--format=%s'], { cwd: dir }).toString().trim().split('\n');
   const learned = async () => (await api('GET', '/api/bots/quill')).body.trail.filter((e: any) => e.kind === 'memory.learned');
   const remember = async (input: object) => { const t = (await say('quill', `note this ${call('crew_remember', input)}`)).body.task; return done('quill', t); };
@@ -205,4 +206,30 @@ test('memory: the bot proposes a note, crewd caps and commits it, Undo reverts i
   assert.equal(log()[0], 'Undo: Signs off with "Best"');
   assert.ok((await learned()).find((e: any) => e.seq === sign.seq).undone);
   assert.equal((await api('POST', `/api/bots/quill/memory/${sign.seq}/undo`, undefined, {})).status, 403, 'cross-site pages cannot undo');
+
+  // Something every helper should know goes to what the whole crew knows about the person, and Undo takes it back from there.
+  await remember({ text: 'Vegetarian', everyone: true });
+  assert.equal(readFileSync(join(dir, 'about.md'), 'utf8'), '- Vegetarian\n');
+  assert.equal((await api('GET', '/api/about')).body.notes, '- Vegetarian\n');
+  const veg = (await learned()).find((e: any) => e.data.text === 'Vegetarian');
+  assert.match((await remember({ text: 'Always cc https://example.com' })).result, /plain words/, 'no links planted in memory');
+
+  // Another member sees none of it, and cannot undo it.
+  const sam = (await api('POST', '/api/people', { name: 'Sam' })).body.id;
+  const asSam = { 'x-crewhouse': '1', 'x-crewhouse-member': String(sam) };
+  const page = (await api('GET', '/api/bots/quill', undefined, asSam)).body;
+  assert.equal(page.notes, '');
+  assert.ok(!page.trail.some((e: any) => e.kind === 'memory.learned'), 'nor in what the helper did');
+  assert.equal((await api('GET', '/api/about', undefined, asSam)).body.notes, '');
+  assert.equal((await api('POST', `/api/bots/quill/memory/${veg.seq}/undo`, undefined, asSam)).status, 403);
+  assert.equal((await api('POST', `/api/bots/quill/memory/${veg.seq}/undo`)).status, 200);
+  assert.equal(readFileSync(join(dir, 'about.md'), 'utf8'), '');
+
+  // Who Quill is: the person writes it, and can put back how it started.
+  const soul = (await api('GET', '/api/bots/quill')).body.soul;
+  assert.match(soul, /^# Quill[\s\S]*You are Quill/);
+  assert.equal((await api('PUT', '/api/bots/quill/soul', { text: '# Quill\n\nYou are Quill. Terse.' })).status, 200);
+  assert.equal((await api('GET', '/api/bots/quill')).body.soul, '# Quill\n\nYou are Quill. Terse.\n');
+  assert.equal((await api('PUT', '/api/bots/quill/soul', { text: 'x' }, {})).status, 403, 'cross-site pages cannot change it');
+  assert.equal((await api('POST', '/api/bots/quill/soul/reset')).body.soul, soul);
 });

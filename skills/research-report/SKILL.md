@@ -1,6 +1,7 @@
 ---
 name: research-report
 description: Research a question on the web and write a short sourced markdown report. Use for any "find out", "compare", "what is" request.
+says: Look something up and bring back a short answer with its sources
 ---
 
 # Research report

@@ -39,7 +39,7 @@ export class Store {
     // Columns added after the first release; CREATE IF NOT EXISTS leaves older tables as they were.
     // `member` is whose the bot, task, message or ask is; `account` is whose sign-in the bot's running session uses.
     for (const [table, col] of [['tasks', 'brain TEXT'], ['tasks', 'wake_at INTEGER'], ['people', 'quiet TEXT'], ['bots', 'member INTEGER DEFAULT 1'],
-      ['bots', 'account INTEGER'], ['tasks', 'member INTEGER DEFAULT 1'], ['messages', 'member INTEGER'], ['asks', 'member INTEGER'], ['tasks', 'routine INTEGER'], ['tasks', 'session TEXT']]) {
+      ['bots', 'account INTEGER'], ['tasks', 'member INTEGER DEFAULT 1'], ['messages', 'member INTEGER'], ['asks', 'member INTEGER'], ['tasks', 'routine INTEGER'], ['tasks', 'session TEXT'], ['routines', 'quiet INTEGER DEFAULT 0']]) {
       if (!this.all(`PRAGMA table_info(${table})`).some((c) => c.name === col.split(' ')[0])) this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${col}`);
     }
   }

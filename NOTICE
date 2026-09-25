@@ -5,14 +5,9 @@ This product includes software developed by the Crewhouse Authors.
 
 Licensed under the Apache License, Version 2.0 (see LICENSE).
 
-Crewhouse runs the official, unmodified agent CLIs you have installed and
-signed in yourself (Claude Code, Codex CLI, Pi, ...). It does not bundle,
-modify, or redistribute them, and it never reads or copies their credential
-files. Those CLIs remain subject to their own licenses and their vendors'
-terms.
-
-Crewhouse drives terminal sessions through Herdr (Apache-2.0), which you
-install separately.
+Crewhouse runs its AI engine, Pi (MIT), in-process, on the AI accounts each
+person signs in to themselves. Those accounts remain subject to their
+vendors' terms.
 
 The web app bundles the Nunito and JetBrains Mono fonts under the SIL Open
 Font License 1.1 (see web/fonts/OFL.txt).
