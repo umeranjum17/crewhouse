@@ -53,6 +53,8 @@ function Hello({ state, refresh, night }: Ctx) {
   const [address, setAddress] = useState<string>(me.address || named);
   const [other, setOther] = useState(!named);
   const input = useRef<HTMLInputElement>(null);
+  const [tipped, setTipped] = useState(false); // he raises his bowler as he greets, then settles
+  useEffect(() => { const t = setTimeout(() => setTipped(true), 2400); return () => clearTimeout(t); }, []);
   const pick = (ask: string) => {
     if (!address.trim()) { setOther(true); toast('First, what shall I call you?'); input.current?.focus(); return; }
     void attempt(async () => { await api.onboard(address.trim(), ask); refresh(); go('#/chief'); });
@@ -60,7 +62,7 @@ function Hello({ state, refresh, night }: Ctx) {
   return (
     <div className="hello">
       <div className="hello-brand"><Logo night={night} /></div>
-      <span className="halo"><ChiefArt mood="idle" d={8.5} /></span>
+      <span className="halo"><ChiefArt mood={tipped ? 'idle' : 'hello'} d={8.5} /></span>
       <h1>{A.greeting()}{address.trim() ? `, ${address.trim()}` : ''}</h1>
       <p className="lead">I'm Chief. I run the crew in this house{isOwner ? '.' : `; ${owner} set me up for you.`}</p>
       <div className="promises">

@@ -33,35 +33,38 @@ const FRIENDLY = {
 export function Dots({ rows, pal, d = 6, label }: { rows: art.Bitmap; pal: art.Palette; d?: number; label?: string }) {
   return (
     <div className="dots" style={{ ['--w' as any]: rows[0].length, ['--d' as any]: `${d}px` }} role={label ? 'img' : undefined} aria-label={label} aria-hidden={label ? undefined : true}>
-      {rows.flatMap((r, y) => [...r].map((k, x) => <b key={`${y}.${x}`} style={pal[k] ? { background: pal[k] } : undefined} />))}
+      {rows.flatMap((r, y) => [...r].map((k, x) => <b key={`${y}.${x}`} className={pal[k] ? 'on' : undefined} style={pal[k] ? { background: pal[k] } : undefined} />))}
     </div>
   );
 }
 
-/** Blinks now and then, so the crew feels alive; still when the person prefers less motion. */
-function useBlink(on: boolean) {
-  const [blink, setBlink] = useState(false);
+/** Blinks now and then (Chief's moustache twitches too), so the crew feels alive; still when the person prefers less motion. */
+function useBlink(on: boolean, twitch = false) {
+  const [beat, setBeat] = useState<'' | 'blink' | 'twitch'>('');
   useEffect(() => {
     if (!on || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     let t: any;
-    const next = () => { t = setTimeout(() => { setBlink(true); t = setTimeout(() => { setBlink(false); next(); }, 170); }, 2600 + Math.random() * 2600); };
+    const next = () => { t = setTimeout(() => { setBeat(twitch && Math.random() < 0.3 ? 'twitch' : 'blink'); t = setTimeout(() => { setBeat(''); next(); }, 170); }, 2600 + Math.random() * 2600); };
     next();
     return () => clearTimeout(t);
-  }, [on]);
-  return blink;
+  }, [on, twitch]);
+  return beat;
 }
 
 /** Set by the shell as it renders, so the art matches day or night without waiting a frame. */
 let night = false;
 export const setNight = (n: boolean) => { night = n; };
 
+/** Chief. `d` is sized for the old 14-dot head, so callers keep their footprint; small sizes get the 12-dot cut. */
 export function ChiefArt({ mood = 'idle', d = 6, dark }: { mood?: art.Mood; d?: number; dark?: boolean }) {
-  const blink = useBlink(mood !== 'happy' && mood !== 'rest');
-  return <Dots rows={art.chief(blink ? 'blink' : mood)} pal={dark ?? night ? art.CHIEF_PAL_NIGHT : art.CHIEF_PAL} d={d} label="Chief" />;
+  const beat = useBlink(mood === 'idle', true);
+  const m = beat || mood;
+  const dd = (d * 14) / 22, small = dd < 2.4;
+  return <Dots rows={small ? art.chiefSmall(m) : art.chief(m)} pal={dark ?? night ? art.CHIEF_PAL_NIGHT : art.CHIEF_PAL} d={small ? (dd * 22) / 12 : dd} label="Chief" />;
 }
 export function PalArt({ kind, mood = 'idle', d = 4, name }: { kind: art.Kind; mood?: art.Mood; d?: number; name?: string }) {
-  const blink = useBlink(mood === 'idle' || mood === 'work');
-  return <Dots rows={art.pal(kind, blink ? 'blink' : mood)} pal={art.palPalette(kind)} d={d} label={name} />;
+  const beat = useBlink(mood === 'idle' || mood === 'work');
+  return <Dots rows={art.pal(kind, beat === 'blink' ? 'blink' : mood)} pal={art.palPalette(kind)} d={(d * 12) / 18} label={name} />;
 }
 
 /** A round face: Chief or a pal, with a ring when it's working (green) or needs you (amber). */
@@ -75,10 +78,11 @@ export function Face({ who, size = 44, ring = '' }: { who: Helper | 'chief' | { 
   );
 }
 
+/** The mark is Chief himself (the app icon's 12-dot cut), then the dot wordmark. */
 export function Logo({ night }: { night?: boolean }) {
   return (
     <span className="logo" aria-label="Crewhouse">
-      <Dots rows={art.HOUSE} pal={art.HOUSE_PAL} d={2.6} />
+      <Dots rows={art.chiefSmall()} pal={night ? art.CHIEF_PAL_NIGHT : art.CHIEF_PAL} d={2.3} />
       <Dots rows={art.WORD} pal={night ? art.WORD_PAL_NIGHT : art.WORD_PAL} d={2.3} />
     </span>
   );
