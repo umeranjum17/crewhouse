@@ -9,6 +9,7 @@ import * as disk from './bots.ts';
 import { installTool } from './tools.ts';
 import { PROVIDERS, provider } from './accounts.ts';
 import { coversOf } from './policy.ts';
+import { Connections } from './connections.ts';
 import { describe, nextRun, parseSchedule } from './routines.ts';
 
 const TYPES: Record<string, string> = {
@@ -119,13 +120,13 @@ export function startServer(cfg: Config, db: Store, crew: Crew) {
       else await crew.accounts.logout(who, key);
       return { ok: true, signIn: crew.accounts.view(who, key) };
     }
-    // Connections: each person's own apps (Notion, Canva, Google…), connected on the app's own page.
-    if (m === 'GET' && p === '/api/connections') return crew.members().flatMap((mm) => crew.connections.list(mm.id).map((c) => ({ member: mm.id, ...c })));
-    if ((r = p.match(/^\/api\/connections\/(\d+)\/([a-z]+)\/(connect|disconnect)$/)) && m === 'POST') {
-      const who = crew.member(Number(r[1])).id as number;
-      if (r[3] === 'connect') return crew.connections.connect(who, r[2]);
-      crew.connections.disconnect(who, r[2]);
-      return { ok: true };
+    // Connections: the viewer's own apps (Notion, Canva, Google…), connected on the app's own page (docs/ui-contract.md).
+    if (m === 'GET' && p === '/api/connections') return crew.connections.list(me);
+    if ((r = p.match(/^\/api\/connections\/([a-z]+)$/))) {
+      const app = Connections.id(r[1]);
+      if (m === 'POST') { const v = await crew.connections.connect(me, app); return v.state === 'done' ? { state: 'on' } : v.state === 'failed' ? Promise.reject(Object.assign(new Error(v.error), { status: 502 })) : { url: v.url }; }
+      if (m === 'GET') return crew.connections.status(me, app);
+      if (m === 'DELETE') { crew.connections.cancel(me, app); return { ok: true }; }
     }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/models$/)) && m === 'PUT') {
       crew.botPage(r[1]); // 404 for unknown bots

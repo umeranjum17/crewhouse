@@ -93,10 +93,19 @@ test('nothing technical reaches the app; the person\'s own files ask in one plai
   const w = (await say('reel', `save the plan ${call('write', { path: outside, content: 'plan' })}`)).body.task;
   const ask = await until(async () => (await api('GET', '/api/state')).body.asks[0]);
   assert.equal(ask.title, 'Reel wants to change a file in a folder outside your home: “plan.txt”.');
-  assert.deepEqual(ask.detail, { effect: 'files', spends: false, covers: 'a folder outside your home' });
+  assert.deepEqual(ask.detail, { effect: 'files', words: ask.title, spends: false, covers: 'a folder outside your home', always: 'a folder outside your home' });
   assert.equal((await api('POST', `/api/asks/${ask.id}/answer`, { answer: 'allow' })).status, 200);
   await done('reel', w);
   assert.equal(readFileSync(outside, 'utf8'), 'plan');
+});
+
+test('connecting an app, as the app screen asks for it: not yet, or the app\'s own page', async () => {
+  await ready();
+  assert.equal((await api('POST', '/api/connections/outlook')).status, 404, 'not connectable yet: the screen says it arrives with an update');
+  assert.equal((await api('POST', '/api/connections/gmail')).status, 404, 'Google waits for the household app');
+  assert.deepEqual((await api('GET', '/api/connections/notion')).body, { state: 'cancelled' });
+  assert.deepEqual((await api('GET', '/api/state')).body.connections, []);
+  assert.equal((await api('DELETE', '/api/connections/notion', undefined, {})).status, 403, 'cross-site pages cannot touch connections');
 });
 
 test('sign in from the app: a code to show and a page to open, then signed in', async () => {

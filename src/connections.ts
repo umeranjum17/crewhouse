@@ -77,6 +77,28 @@ export class Connections {
   }
 
   connected(member: number, app: string) { return !!this.read(member)[app]; }
+
+  /** The app screen's names for what is connected: one Google connection is Gmail, Calendar and Drive. */
+  on(member: number) { return Object.keys(this.read(member)).flatMap((id) => (id === 'google' ? ['gmail', 'calendar', 'drive'] : [id])); }
+
+  /** The app screen's name for an app to ours: Gmail, Calendar and Drive all connect Google. */
+  static id(name: string) { return ['gmail', 'calendar', 'drive'].includes(name) ? 'google' : name; }
+
+  /** Where a connection stands, in the app screen's words: waiting, on, expired, failed or cancelled. */
+  status(member: number, id: string) {
+    if (this.connected(member, id)) return { state: 'on' };
+    const v = this.view(member, id);
+    if (!v) return { state: 'cancelled' };
+    return { state: v.state === 'waiting' ? 'waiting' : /too long|expired/.test(v.error ?? '') ? 'expired' : 'failed', error: v.error };
+  }
+
+  /** The person closed the sheet: a waiting connection stops; a finished one is disconnected. */
+  cancel(member: number, id: string) {
+    for (const [s, f] of this.flows) if (f.member === member && f.app === id) { clearTimeout(f.timer); this.flows.delete(s); }
+    if (this.connected(member, id)) return this.disconnect(member, id);
+    this.views.delete(`${member}:${id}`);
+    this.onChange?.(member, id);
+  }
   view(member: number, app: string) { return this.views.get(`${member}:${app}`) ?? null; }
 
   /** What the Connections screen lists for one person: plain words only. */
@@ -112,10 +134,13 @@ export class Connections {
     return c;
   }
 
-  /** Connect: returns the app's own page to open. The browser comes back to `finish` through crewd's callback. */
+  /** Connect: returns the app's own page to open. The browser comes back to `finish` through crewd's callback.
+   *  An app that can't be connected here yet answers 404, which the app screen shows as "arrives with an update". */
   async connect(member: number, id: string) {
     const a = this.app(id);
-    if (a.soon) throw Object.assign(new Error(a.soon), { status: 409 });
+    const soon = this.list(member).find((x) => x.app === id)!.soon;
+    if (soon) throw Object.assign(new Error(soon), { status: 404 });
+    if (this.connected(member, id)) return { state: 'done' } as Connecting;
     const key = `${member}:${id}`;
     for (const [s, f] of this.flows) if (f.member === member && f.app === id) { clearTimeout(f.timer); this.flows.delete(s); } // a new try replaces the old
     const view: Connecting = { state: 'waiting' };
@@ -133,7 +158,7 @@ export class Connections {
       this.flows.set(state, { ...view, member, app: id, verifier, ends, client, timer });
     } catch (e: any) {
       console.error(`connect ${id} for member ${member}:`, e?.message ?? e);
-      Object.assign(view, { state: 'failed', error: e.status === 409 ? this.list(member).find((x) => x.app === id)!.soon : connectError(a.name, String(e?.message)) });
+      Object.assign(view, { state: 'failed', error: connectError(a.name, String(e?.message)) });
     }
     this.onChange?.(member, id);
     return view;

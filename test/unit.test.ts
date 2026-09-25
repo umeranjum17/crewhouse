@@ -136,7 +136,7 @@ test('the gate: an ask holds the call; allowed, it runs; unanswered, the turn pa
   assert.equal(ask.title, 'Reel wants to change a file in a folder outside your home: “x.txt”.');
   assert.equal(task(db, t).state, 'needs_you');
   const view = crew.snapshot().asks[0];
-  assert.deepEqual(view.detail, { effect: 'files', spends: false, covers: 'a folder outside your home' }, 'the app sees words, never the path');
+  assert.deepEqual(view.detail, { effect: 'files', words: ask.title, spends: false, covers: 'a folder outside your home', always: 'a folder outside your home' }, 'the app sees words, never the path');
   await crew.answer(ask.id, { answer: 'allow' });
   await settled(db, t);
   assert.equal(task(db, t).state, 'done');
@@ -379,7 +379,7 @@ test('limits: a limit rests that account and the task carries on in the same con
   assert.ok(db.get("SELECT 1 FROM events WHERE kind = 'run.resumed'"), 'the same session file, reopened');
   const file = task(db, t).session;
   assert.ok(file && readFileSync(file, 'utf8').includes('dig deep'), 'the conversation carried over');
-  assert.deepEqual(crew.snapshot().resting, [{ account: 'chatgpt', name: 'ChatGPT', until }]);
+  assert.deepEqual(crew.snapshot().resting, { chatgpt: until });
 
   // Everyone resting: the task pauses with a wake-up time, and resumes when it passes.
   (crew as any).rests.set('1:muse', Date.now() + 60_000);
@@ -541,8 +541,8 @@ test('household: bots and tasks belong to a member and run on that member\'s own
 
   // What each person sees: their own tasks and questions, their own accounts.
   assert.deepEqual(crew.snapshot(sam).tasks.map((t: any) => t.id).sort(), [a, d, e].sort());
-  assert.deepEqual(crew.snapshot(sam).resting.map((r: any) => r.account), ['chatgpt']);
-  assert.deepEqual(crew.snapshot(OWNER).resting, []);
+  assert.deepEqual(Object.keys(crew.snapshot(sam).resting), ['chatgpt']);
+  assert.deepEqual(crew.snapshot(OWNER).resting, {});
   done();
 });
 

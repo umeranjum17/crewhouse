@@ -60,13 +60,13 @@ export function SignIn({ me, owner, onReady, onClose }: { me: number; owner: str
   const g = A.chatgpt(value, me);
   const [cancelled, setCancelled] = useState(false);
   const started = useRef(false);
-  const start = () => { started.current = true; setCancelled(false); api.signIn(me, 'codex').catch(() => {}); };
+  const start = () => { started.current = true; setCancelled(false); api.signIn(me, 'chatgpt').catch(() => {}); };
   const live: Phase = offline ? 'offline' : cancelled ? 'cancelled' : g.state === 'ready' ? 'done' : g.state === 'unavailable' ? 'unavailable'
     : g.signing?.code ? 'waiting' : g.expired ? 'expired' : g.failed ? 'failed' : 'opening';
   const phase = pinned ?? live;
   useEffect(() => { if (!pinned && live === 'opening' && g.state === 'signed-out' && !g.signing && !started.current) start(); }, [live, g.state]);
-  const cancel = () => { void api.signInCancel(me, 'codex').catch(() => {}); started.current = true; setCancelled(true); };
-  const close = () => { if (phase === 'waiting' || phase === 'opening') void api.signInCancel(me, 'codex').catch(() => {}); onClose(); };
+  const cancel = () => { void api.signInCancel(me, 'chatgpt').catch(() => {}); started.current = true; setCancelled(true); };
+  const close = () => { if (phase === 'waiting' || phase === 'opening') void api.signInCancel(me, 'chatgpt').catch(() => {}); onClose(); };
   const code = g.signing?.code || 'WB60-FFV06';
   const url = g.signing?.url || 'https://auth.openai.com/codex/device';
   const at = phase === 'done' ? 3 : phase === 'waiting' ? 1 : 0;

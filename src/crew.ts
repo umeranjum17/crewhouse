@@ -206,7 +206,8 @@ export class Crew {
   /** An open question for the app: the plain sentence and what "For this task" or "Always" would cover. The gate's key stays here. */
   private askView({ detail, ...a }: Row) {
     const d = JSON.parse(detail || '{}');
-    return { ...a, detail: { effect: d.effect, spends: d.effect === 'spend', covers: d.key ? coversOf(d.key) : null } };
+    const covers = d.key ? coversOf(d.key) : null;
+    return { ...a, detail: { effect: d.effect, words: a.title, spends: d.effect === 'spend', covers, ...(covers ? { always: covers } : {}) } };
   }
 
   /** What one member sees: the whole crew, but their own tasks, questions and accounts. */
@@ -222,9 +223,10 @@ export class Crew {
       ideas: this.ideas(),
       asks: this.db.all("SELECT * FROM asks WHERE state = 'open' AND COALESCE(member, ?) = ? ORDER BY id", OWNER, me.id).map((a) => this.askView(a)),
       events: this.db.events(0, 80),
-      /** The AI accounts a bot can think with, by name, for pickers; and those of this member's that are resting now. */
-      accounts: Object.entries(PROVIDERS).map(([key, p]) => ({ key, name: p.name })),
-      resting: Object.keys(PROVIDERS).filter((k) => this.restingUntil(k, me.id)).map((k) => ({ account: k, name: PROVIDERS[k].name, until: this.restingUntil(k, me.id) })),
+      /** This member's AI accounts that are resting now, and until when (docs/ui-contract.md). */
+      resting: Object.fromEntries(Object.keys(PROVIDERS).map((k) => [k, this.restingUntil(k, me.id)]).filter(([, t]) => t)),
+      /** The apps this member has connected, by the app screen's own names. */
+      connections: this.connections.on(me.id),
       desktops: { ready: desktopMissing().length === 0 },
       routines: this.routines(me.id),
     };
