@@ -122,6 +122,14 @@ test('the screens read view models only, and the mono face draws art only', () =
   }
 });
 
+test('the phone app moves only through mobile/src/motion.ts, where Reduce Motion always snaps', () => {
+  const app = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
+  assert.doesNotMatch(app, /\bAnimated\b|LayoutAnimation|animated: true|animationType="(slide|fade)"/, 'a move named outside motion.ts');
+  for (const [m] of app.matchAll(/animationType=\{[^}]*\}|animationType="[^"]*"/g)) assert.match(m, /motion\.\w+\(reduce\)|"none"/, m);
+  const rule = readFileSync(join(import.meta.dirname, '..', 'mobile', 'src', 'motion.ts'), 'utf8');
+  assert.match(rule, /reduce \? 'none'/, 'Reduce Motion snaps a sheet');
+});
+
 test('sign-in states reach the screens as plain states, never the engine\'s words', () => {
   const row = (signIn: any, extra = {}) => A.account([{ member: 2, account: 'chatgpt', name: 'ChatGPT', signedIn: false, signIn, ...extra }], 2);
   const page = row({ state: 'waiting', via: 'browser', url: 'https://auth.openai.com/oauth/authorize?x' });
