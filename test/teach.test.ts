@@ -36,7 +36,13 @@ test('a real show: what was clicked and which box was typed in, never the words,
   const profile = mkdtempSync(join(tmpdir(), 'crewhouse-teach-'));
   const chrome = spawn(browser!, ['--headless=new', '--no-sandbox', '--disable-gpu', `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, 'about:blank'], { stdio: 'ignore' });
   const teacher = new Teacher();
-  after(() => { teacher.stop('reel'); chrome.kill(); site.close(); rmSync(profile, { recursive: true, force: true }); });
+  // Chrome keeps writing its profile until it has exited: wait for that before removing it.
+  after(async () => {
+    teacher.stop('reel');
+    site.close();
+    if (chrome.exitCode === null) await new Promise((r) => { chrome.once('exit', r); chrome.kill(); });
+    rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+  });
   const until = async (what: string, fn: () => unknown) => { for (let i = 0; i < 200; i++) { if (await fn()) return; await new Promise((r) => setTimeout(r, 50)); } throw new Error(`timed out: ${what}`); };
   await until('chromium', () => fetch(`http://127.0.0.1:${port}/json/list`).then((r) => r.ok, () => false));
   await teacher.start('reel', 'pull the stats', port, () => {});
