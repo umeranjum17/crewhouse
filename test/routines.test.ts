@@ -279,3 +279,44 @@ test('money cap: each spend still asks, and past the month\'s cap the crew canno
   assert.equal(crew.snapshot().money!.spent, 15, 'a no spends nothing');
   done();
 });
+
+test('watches: crewd reads the page, says nothing and uses no AI while it is the same, and wakes the helper when it changes', async () => {
+  const { createServer } = await import('node:http');
+  let page = '<html><body><h1>Flats</h1><p>Rent: $950 a month</p><script>track()</script></body></html>';
+  let up = true;
+  const site = createServer((_q, res) => { if (!up) return void res.writeHead(503).end(); res.writeHead(200, { 'content-type': 'text/html' }).end(page); });
+  await new Promise<void>((r) => site.listen(0, '127.0.0.1', r));
+  const url = `http://127.0.0.1:${(site.address() as any).port}/listing`;
+  const { db, crew, done } = setup();
+  try {
+    assert.throws(() => crew.addRoutine({ bot: 'reel', schedule: 'every hour', watch: 'file:///etc/passwd' }, 'person'), /starts with https/);
+    const r = crew.addRoutine({ bot: 'reel', schedule: 'every hour', watch: url }, 'person');
+    assert.equal(r.name, 'Watch 127.0.0.1');
+    assert.equal(r.quiet, 1, 'a watch is a quiet check-in');
+    const prompts = () => db.get("SELECT COUNT(*) AS n FROM events WHERE kind = 'run.prompted'")!.n;
+    const watched = async (n: number) => { await until(`check ${n}`, () => fired(db, r.id).length >= n); return fired(db, r.id).at(-1); };
+
+    crew.runRoutine(r.id);
+    assert.equal((await watched(1)).watch, 'started', 'the first look is the baseline');
+    crew.runRoutine(r.id);
+    assert.equal((await watched(2)).watch, 'same');
+    assert.equal(prompts(), 0, 'nothing changed, so no AI was used');
+    up = false;
+    crew.runRoutine(r.id);
+    assert.equal((await watched(3)).watch, 'unreachable');
+
+    up = true;
+    page = page.replace('$950', '$850');
+    crew.runRoutine(r.id);
+    const hit = await watched(4);
+    assert.equal(hit.watch, 'changed');
+    const t = db.get('SELECT * FROM tasks WHERE id = ?', hit.task)!;
+    assert.match(t.body, /Before: .*\$950.*\nNow: .*\$850/);
+    assert.doesNotMatch(t.body, /track\(\)/, 'readable text, not scripts');
+    assert.doesNotMatch(db.get("SELECT text FROM messages WHERE task_id = ? AND author = 'system'", t.id)!.text, /\/listing|Before:/, 'the chat shows the routine, not the page address');
+    await settled(db, t.id);
+    assert.equal(state(db, t.id), 'done');
+    assert.deepEqual(crew.routines().find((x) => x.id === r.id)!.history.map((h: any) => h.watch), ['changed', 'unreachable', 'same', 'started']);
+  } finally { site.close(); }
+  done();
+});

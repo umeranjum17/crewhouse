@@ -85,14 +85,20 @@ const text = (t: string) => ({ content: [{ type: 'text' as const, text: t }], de
 const plain = (html: string) => html.replace(/<(script|style|noscript)[^]*?<\/\1>/gi, ' ').replace(/<[^>]+>/g, ' ')
   .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\s+/g, ' ').trim();
 
+/** A page's status and readable text, as a bot's web_fetch and a routine's watch both read it. */
+export async function readPage(url: string, signal?: AbortSignal) {
+  const res = await fetch(url, { signal: signal ?? AbortSignal.timeout(20_000), headers: { 'user-agent': 'Mozilla/5.0 Crewhouse' } });
+  const body = await res.text();
+  return { status: res.status, text: (/html/.test(res.headers.get('content-type') ?? '') ? plain(body) : body).slice(0, 20_000) };
+}
+
 export const webTools = () => [
   defineTool({
     name: 'web_fetch', label: 'Read a web page', description: 'Fetch a web page and return its text.',
     parameters: Type.Object({ url: Type.String() }),
     async execute(_id, p, signal) {
-      const res = await fetch(p.url, { signal: signal ?? AbortSignal.timeout(20_000), headers: { 'user-agent': 'Mozilla/5.0 Crewhouse' } });
-      const body = await res.text();
-      return text(`${res.status} ${p.url}\n${(/html/.test(res.headers.get('content-type') ?? '') ? plain(body) : body).slice(0, 20_000)}`);
+      const page = await readPage(p.url, signal);
+      return text(`${page.status} ${p.url}\n${page.text}`);
     },
   }),
   // ponytail: DuckDuckGo's plain HTML results page, no key; swap for a search API if it starts refusing.

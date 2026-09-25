@@ -1,7 +1,7 @@
 import './isolate.ts'; // first: before anything loads the engine
 import { randomBytes } from 'node:crypto';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, statSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { defineTool, type AgentSession, type ToolDefinition } from '@earendil-works/pi-coding-agent';
@@ -12,7 +12,7 @@ import * as disk from './bots.ts';
 import { Desktops, deskFor, browserBin, missing as desktopMissing, type Watcher } from './desktop.ts';
 import { Accounts, OWNER, PROVIDERS } from './accounts.ts';
 import { Connections, type AppTool } from './connections.ts';
-import { cliTool, Mcp, openSession, sandboxBash, sandboxReady, webTools } from './engine.ts';
+import { cliTool, Mcp, openSession, readPage, sandboxBash, sandboxReady, webTools } from './engine.ts';
 import { coversOf, effectOf, toolWords, type Effect } from './policy.ts';
 import { registry, resolveGrants, toolBin, which } from './tools.ts';
 import { stubModels } from './stub.ts';
@@ -75,6 +75,16 @@ export const chiefGreeting = () =>
 /** A sign-in that stopped working (a password change, usually), and what happens next. */
 const signedOutWords = (name: string) => `${name} signed you out. That happens after a password change. Sign in again and the crew picks up where it left off.`;
 
+/** What changed between two readings of a page: the differing middle, with a little of what surrounds it, capped. */
+export function changed(before: string, now: string, cap = 1500) {
+  let a = 0;
+  while (a < before.length && a < now.length && before[a] === now[a]) a++;
+  let z = 0;
+  while (z < before.length - a && z < now.length - a && before[before.length - 1 - z] === now[now.length - 1 - z]) z++;
+  const around = (s: string) => { const from = Math.max(0, a - 200), to = Math.min(s.length, s.length - z + 200); return `${from ? '…' : ''}${s.slice(from, to).slice(0, cap)}${to < s.length ? '…' : ''}`; };
+  return `Before: ${around(before)}\nNow: ${around(now)}`;
+}
+
 /** No routine faster than every MIN_EVERY minutes: a check each minute would use up the person's AI in an afternoon. */
 function paced(when: ReturnType<typeof parseSchedule>) {
   if ('every' in when && when.every < MIN_EVERY) throw fail(`A routine runs at most every ${MIN_EVERY} minutes, so your AI stays free for you. Try “every ${MIN_EVERY} minutes”.`);
@@ -125,6 +135,8 @@ export class Crew {
   /** Keeps idle sleep away while a helper is working, and only then. Never the lid. Tests replace it. */
   keepAwake: (on: boolean) => void;
   private awake = false;
+  /** Watches reading their page right now: a slow page is never read twice at once. */
+  private checking = new Set<number>();
 
   private cfg: Config;
   private db: Store;
@@ -385,19 +397,23 @@ export class Crew {
   }
 
   /** A routine is its setter's: the member who added it, or the one Chief set it up for. Its runs use their accounts. */
-  addRoutine(b: { bot?: string; schedule?: string; task?: string; model?: string; name?: string; quiet?: boolean }, by: string, member = by === CHIEF ? this.chiefFor() : OWNER) {
+  addRoutine(b: { bot?: string; schedule?: string; task?: string; model?: string; name?: string; quiet?: boolean; watch?: string }, by: string, member = by === CHIEF ? this.chiefFor() : OWNER) {
     const bot = this.bot(String(b.bot ?? '').toLowerCase());
     if (!bot || bot.id === CHIEF) throw Object.assign(new Error(`no bot called ${b.bot}; a routine hands a task to one of the crew`), { status: 404 });
-    const body = String(b.task ?? '').trim();
+    // A watch: crewd reads the page on schedule and wakes the helper only when it changed.
+    const watch = b.watch ? String(b.watch).trim() : null;
+    if (watch && !/^https?:$/.test(URL.canParse(watch) ? new URL(watch).protocol : '')) throw fail('a page to watch starts with https://');
+    const body = String(b.task ?? '').trim() || (watch ? 'Tell the person what changed on the page, in one or two lines.' : '');
     if (!body) throw Object.assign(new Error('say what the routine should do'), { status: 400 });
     const when = paced(parseSchedule(String(b.schedule ?? '')));
     const brain = b.model ? disk.brainKey(disk.parseBrain(b.model)) : null;
     // Unnamed routines take the task's first sentence: "Make a demo of this week's screenshots".
     const first = body.split(/\n|(?<=[.!?])\s/)[0].replace(/[.!?]$/, '');
-    const name = String(b.name ?? '').trim().slice(0, 60) || short(first, 60);
+    const name = String(b.name ?? '').trim().slice(0, 60) || (watch && !b.task ? `Watch ${new URL(watch).hostname}` : short(first, 60));
     return this.db.tx(() => {
-      const r = this.db.run('INSERT INTO routines (bot, name, schedule, body, brain, member, quiet, next_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        bot.id, name, String(b.schedule).trim(), body, brain, member, b.quiet === true ? 1 : 0, nextRun(when, Date.now()), Date.now());
+      // A watch is always a quiet check-in: a change that doesn't matter to the person stays quiet.
+      const r = this.db.run('INSERT INTO routines (bot, name, schedule, body, brain, member, quiet, watch, next_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        bot.id, name, String(b.schedule).trim(), body, brain, member, b.quiet === true || watch ? 1 : 0, watch, nextRun(when, Date.now()), Date.now());
       const row = this.routine(Number(r.lastInsertRowid));
       this.db.event('routine.created', bot.id, { routine: row.id, name, words: describe(when), by, member });
       if (by === CHIEF) this.say(CHIEF, 'system', `Routine added: “${name}” for ${bot.display}, ${describe(when).toLowerCase()}. First run ${clock(row.next_at)}.`, null, member);
@@ -455,11 +471,38 @@ export class Crew {
       this.db.event('routine.skipped', r.bot, { routine: r.id, name: r.name, why: 'overlap', task: r.last_task });
       return;
     }
+    if (r.watch) return void this.check(r, why);
     const { task } = this.addTask(r.bot, r.body, 'routine', r.brain ?? undefined, r.member, r);
     this.db.tx(() => {
       this.db.run('UPDATE routines SET last_at = ?, last_task = ? WHERE id = ?', now, task, r.id);
       this.db.event('routine.fired', r.bot, { routine: r.id, name: r.name, why, task });
     });
+  }
+
+  /** A watch's check: read the page, compare it with last time's, and hand the helper a task only when it changed.
+   *  Nothing changed costs no AI at all. ponytail: readable text of a public page; a page behind a sign-in needs the
+   *  helper's own browser, and a page whose text changes on every load (a clock, a visitor count) wakes it each time. */
+  private async check(r: Row, why: string) {
+    if (this.checking.has(r.id)) return;
+    this.checking.add(r.id);
+    const seen = (watch: string, task?: number) => this.db.tx(() => {
+      this.db.run('UPDATE routines SET last_at = ?, last_task = COALESCE(?, last_task) WHERE id = ?', Date.now(), task ?? null, r.id);
+      this.db.event('routine.fired', r.bot, { routine: r.id, name: r.name, why, watch, ...(task ? { task } : {}) });
+    });
+    try {
+      let now: string;
+      try { const page = await readPage(r.watch); if (page.status >= 400) throw new Error(String(page.status)); now = page.text.trim(); }
+      catch { return seen('unreachable'); }
+      const file = join(disk.botDir(this.cfg, r.bot), 'work', 'watch', `${r.id}.txt`);
+      const before = existsSync(file) ? readFileSync(file, 'utf8') : null;
+      mkdirSync(dirname(file), { recursive: true });
+      writeFileSync(file, now);
+      if (before === null) return seen('started');
+      if (before === now) return seen('same');
+      const { task } = this.addTask(r.bot, `${r.body}\n\n[Crewhouse] The page you watch (${r.watch}) changed since the last check.\n${changed(before, now)}`,
+        'routine', r.brain ?? undefined, r.member, r);
+      seen('changed', task);
+    } finally { this.checking.delete(r.id); }
   }
 
   /** Chief's "while you were away" for one member: what finished, what needs them, what is coming up. No model call. */
@@ -662,7 +705,8 @@ export class Crew {
       const r = this.db.run('INSERT INTO tasks (bot, title, body, origin, state, created_at, updated_at, brain, member, routine) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         bot, title, body, origin, 'queued', now, now, brain, member, routine?.id ?? null);
       const id = Number(r.lastInsertRowid);
-      if (routine) this.say(bot, 'system', `Routine “${routine.name}”: ${body}`, id);
+      // The thread shows the routine's own words, never Crewhouse's note to the bot (a watch's page and its before and after).
+      if (routine) this.say(bot, 'system', `${routine.watch ? `“${routine.name}”: the page changed` : `Routine “${routine.name}”`}: ${body.split('\n\n[Crewhouse]')[0]}`, id);
       else this.say(bot, origin === 'person' ? 'person' : origin, said, id);
       this.db.event('task.created', bot, { task: id, origin, member, title });
       return id;
@@ -679,7 +723,7 @@ export class Crew {
 
   private prompt(task: Row) {
     const member = this.member(task.member ?? OWNER);
-    const who = task.origin === 'person' ? this.called(member.id) : task.origin === CHIEF ? 'Chief' : task.origin;
+    const who = task.origin === 'person' ? this.called(member.id) : task.origin === CHIEF ? 'Chief' : this.bot(task.origin)?.display ?? task.origin;
     const r = task.routine && this.db.get('SELECT name, quiet FROM routines WHERE id = ?', task.routine);
     const routine = r?.name;
     // A quiet check-in only speaks up when something needs the person.
@@ -1108,7 +1152,12 @@ export class Crew {
             { skill: { name: d.slug, description: String(p.description), says: d.says, steps: d.steps }, preview: { head: `How ${b.display} would do it`, body: d.steps } });
         }),
     ];
-    if (botId !== CHIEF) return own;
+    if (botId !== CHIEF) {
+      const others = this.bots().filter((b) => b.id !== CHIEF && b.id !== botId).map((b) => `${b.id} (${b.role})`).join('; ');
+      if (!others) return own;
+      return [...own, tool('crew_pass', `Hand the next step to another helper, for the same person: ${others}. Write what they should do and what "done" means; ` +
+        'their result reaches the person in their own chat.', { bot: Type.String(), task: Type.String() }, (p) => this.pass(botId, String(p.bot ?? '').toLowerCase(), String(p.task ?? '')))];
+    }
     const accounts = Object.keys(PROVIDERS).join(', ');
     return [...own,
       tool('crew_roster', 'Who is on the crew, and the templates you can recruit from.', {}, () => ({
@@ -1121,9 +1170,10 @@ export class Crew {
       tool('crew_assign', `Hand a bot a task: the person's words, then one line "Done means: …". \`account\` (${accounts}) only when a task plainly suits another AI.`,
         { bot: Type.String(), task: Type.String(), account: Type.Optional(Type.String()) }, (p) => this.assign(String(p.bot).toLowerCase(), p.task ?? '', CHIEF, p.account)),
       tool('crew_routine', 'Hand a bot the same task on a schedule. `when` is plain words in local time: "every Monday 9:00", "weekdays 8am", "every 2 hours". ' +
-        '`quiet`: a check-in that only speaks up when something needs the person.',
-        { bot: Type.String(), when: Type.String(), task: Type.String(), name: Type.Optional(Type.String()), account: Type.Optional(Type.String()), quiet: Type.Optional(Type.Boolean()) },
-        (p) => { const x = this.addRoutine({ bot: p.bot, schedule: p.when, task: p.task, name: p.name, model: p.account, quiet: p.quiet }, CHIEF); return { routine: { id: x.id, name: x.name, next: new Date(x.next_at).toString() } }; }),
+        '`quiet`: a check-in that only speaks up when something needs the person. `watch`: a page address to keep an eye on; Crewhouse reads it on ' +
+        'schedule and wakes the bot only when it changed, and `task` says what matters ("tell me if the price drops below $900").',
+        { bot: Type.String(), when: Type.String(), task: Type.String(), name: Type.Optional(Type.String()), account: Type.Optional(Type.String()), quiet: Type.Optional(Type.Boolean()), watch: Type.Optional(Type.String()) },
+        (p) => { const x = this.addRoutine({ bot: p.bot, schedule: p.when, task: p.task, name: p.name, model: p.account, quiet: p.quiet, watch: p.watch }, CHIEF); return { routine: { id: x.id, name: x.name, next: new Date(x.next_at).toString() } }; }),
       tool('crew_routines', 'The routines and when each runs next.', {}, () => this.routines(this.chiefFor()).map((x) => ({ id: x.id, bot: x.bot, name: x.name, when: x.words, state: x.state, next: new Date(x.next_at).toString() }))),
       tool('crew_status', 'Open tasks.', {}, () => this.db.all("SELECT id, bot, title, state FROM tasks WHERE state IN ('queued','working','needs_you','paused') ORDER BY id")),
       tool('crew_suggest', 'Suggest a change to how a helper comes across (its personality), when the person asks for one. ' +
@@ -1139,6 +1189,21 @@ export class Crew {
         }),
       tool('crew_call_me', 'Change how the person is addressed, when they ask.', { how: Type.String() }, (p) => { this.setAddress(String(p.how ?? '')); }),
     ];
+  }
+
+  /** A helper hands the next step to another, for the same member. Three hand-offs from one request at most, so two
+   *  helpers can't pass a job back and forth for ever. Chief is not handed work: the person talks to him. */
+  private pass(from: string, to: string, text: string) {
+    const task = this.activeTask(from);
+    const b = this.bot(to);
+    if (!task) throw fail('pass work on while you are working on a task');
+    if (!b || to === CHIEF || to === from) throw fail(`no helper called ${to} to hand this to`, 404);
+    if (!text.trim()) throw fail('say what they should do');
+    const hops = (task.hops ?? 0) + 1;
+    if (hops > 3) throw fail('this job has been handed on three times already; finish it yourself, or tell the person what is left');
+    const { task: id } = this.addTask(to, text.trim(), from, undefined, task.member ?? OWNER);
+    this.db.run('UPDATE tasks SET hops = ? WHERE id = ?', hops, id);
+    return { passed: { to: b.display, task: id }, note: `${b.display} has it. Tell the person in one line; their result reaches them in ${b.display}'s chat.` };
   }
 
   /** A suggestion card: nothing changes until the person says yes, and the bot carries on meanwhile. */

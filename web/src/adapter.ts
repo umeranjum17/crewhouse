@@ -320,6 +320,8 @@ export function lines(page: Json, bot: string): Line[] {
       return f ? { id: m.id, from: 'note', text: plain(text.slice(f[0].length)) || `Here's “${pretty(f[1])}”`, files: [fileView(bot, f[1])], choices: [] }
         : { id: m.id, from: 'note', text: plain(text), files: [], choices: [] };
     }
+    // Another helper handing this one a job: a note in its words, "Reel asked: …".
+    if (!['person', 'bot', 'chief'].includes(m.author)) return { id: m.id, from: 'note', text: `${String(m.author).replace(/^./, (c) => c.toUpperCase())} asked: ${plain(text)}`, files: [], choices: [] };
     return { id: m.id, from: m.author === 'person' ? 'me' : m.author === 'chief' && bot !== 'chief' ? 'chief' : 'them',
       text: m.author === 'person' ? text : plain(text), files: [], choices: (m.choices ?? []).map(plain) };
   }).filter((l: Line) => l.text || l.files.length);
@@ -347,9 +349,21 @@ export const knows = (skills: Json[] = []) => skills.map((k) => ({ name: String(
 export function routines(state: Json, bot?: string) {
   return state.routines.filter((r: Json) => !bot || r.bot === bot).map((r: Json) => ({
     id: r.id, name: plain(r.name), helper: r.kind === 'digest' ? 'chief' : r.bot, when: r.words, paused: r.state === 'paused', next: clock(r.next_at), digest: r.kind === 'digest',
-    quiet: !!r.quiet,
-    last: r.history?.[0] ? `Last ran ${clock(r.history[0].at)}${r.history[0].kind === 'routine.skipped' ? ', skipped while busy' : r.history[0].clear ? ', all clear' : ''}` : '',
+    quiet: !!r.quiet, watching: r.watch ? host(r.watch) : '',
+    last: r.history?.[0] ? lastRun(r.history[0]) : '',
+    changes: (r.history ?? []).filter((h: Json) => h.watch === 'changed').length,
   }));
+}
+const host = (url: string) => { try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return 'a page'; } };
+/** A routine's latest run in words; a watch says whether the page changed. */
+function lastRun(h: Json) {
+  const at = clock(h.at);
+  if (h.kind === 'routine.skipped') return `Last ran ${at}, skipped while busy`;
+  if (h.watch === 'same') return `Checked ${at}, no change`;
+  if (h.watch === 'started') return `Started watching ${at}`;
+  if (h.watch === 'unreachable') return `Couldn't open the page ${at}; I'll try again next time`;
+  if (h.watch === 'changed') return `Changed ${at}${h.clear ? ", nothing you'd want to hear about" : ''}`;
+  return `Last ran ${at}${h.clear ? ', all clear' : ''}`;
 }
 
 /** The AI accounts a person can think with, in the order the app offers them. Never another brand, and never Claude. */

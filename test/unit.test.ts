@@ -906,3 +906,26 @@ test('chats: each thread\'s last line and unread count are the viewer\'s own; re
   assert.deepEqual(crew.search('100%_', 1).messages, [], 'LIKE wildcards are plain characters');
   done();
 });
+
+test('passing work on: a helper hands the next step to another for the same person, never to Chief, three hops at most', async () => {
+  const { db, crew, done } = setup();
+  crew.onboard('sir');
+  crew.recruit('reel', 'Reel', 'person');
+  crew.recruit('scout', 'Scout', 'person');
+  const { task: t } = (await crew.post('reel', 'ask permission [tool crew_pass {"bot":"scout","task":"find three songs for the video. Done means: a list"}]'))!;
+  await holding(crew, 'reel');
+  const passed = db.get("SELECT * FROM tasks WHERE bot = 'scout'")!;
+  assert.deepEqual([passed.origin, passed.member, passed.hops], ['reel', 1, 1]);
+  assert.ok(db.get("SELECT 1 FROM messages WHERE bot = 'scout' AND author = 'reel' AND text LIKE 'find three songs%'"), 'the hand-off shows in Scout\'s chat, from Reel');
+  await settled(db, passed.id);
+  assert.equal(task(db, passed.id).state, 'done');
+
+  const pass = (to: string) => (crew as any).pass('reel', to, 'more');
+  assert.throws(() => pass('chief'), /no helper called chief/);
+  assert.throws(() => pass('reel'), /no helper called reel/);
+  db.run('UPDATE tasks SET hops = 3 WHERE id = ?', t);
+  assert.throws(() => pass('scout'), /three times already/);
+  await release(crew, 'reel', 'Passed it on.');
+  await settled(db, t);
+  done();
+});

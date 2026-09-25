@@ -473,12 +473,12 @@ function RoutineList({ state, refresh, bot }: Ctx & { bot?: string }) {
           <div key={r.id} className={`card routine ${r.paused ? 'paused' : ''}`}>
             <div className="row">
               <Face who={h ?? 'chief'} size={40} />
-              <div className="grow"><b>{r.name}</b><div className="mute small">{r.when}{r.paused ? ' · paused' : ` · next ${r.next}`}{r.quiet ? " · stays quiet if there's nothing" : ''}</div>{r.last && <div className="mute small">{r.last}</div>}</div>
+              <div className="grow"><b>{r.name}</b><div className="mute small">{r.watching ? `Keeps an eye on ${r.watching} · ` : ''}{r.when}{r.paused ? ' · paused' : ` · next ${r.next}`}{r.quiet && !r.watching ? " · stays quiet if there's nothing" : ''}</div>{r.last && <div className="mute small">{r.last}</div>}</div>
             </div>
             <div className="btns">
               <button className="btn" onClick={() => act(() => api.runRoutine(r.id), 'Started')}>Do it now</button>
               <button className="btn" onClick={() => act(() => api.routine(r.id, { state: r.paused ? 'on' : 'paused' }))}>{r.paused ? 'Resume' : 'Pause'}</button>
-              {!r.digest && <button className={`chip ${r.quiet ? 'on' : ''}`} aria-pressed={r.quiet} onClick={() => act(() => api.routine(r.id, { quiet: !r.quiet }), r.quiet ? 'It will always report back' : "It will only speak up when something's up")}>Only tell me if something's up</button>}
+              {!r.digest && !r.watching && <button className={`chip ${r.quiet ? 'on' : ''}`} aria-pressed={r.quiet} onClick={() => act(() => api.routine(r.id, { quiet: !r.quiet }), r.quiet ? 'It will always report back' : "It will only speak up when something's up")}>Only tell me if something's up</button>}
               {!r.digest && <button className="btn ghost" onClick={() => confirm(`Remove “${r.name}”?`) && act(() => api.removeRoutine(r.id))}>Remove</button>}
             </div>
           </div>
@@ -496,6 +496,7 @@ function AddRoutine({ state, bot, done }: { state: Json; bot?: string; done: () 
   const [what, setWhat] = useState('');
   const [when, setWhen] = useState('');
   const [quiet, setQuiet] = useState(false);
+  const [watch, setWatch] = useState('');
   const [preview, setPreview] = useState<Json>(null);
   useEffect(() => {
     if (!when.trim()) return setPreview(null);
@@ -508,12 +509,13 @@ function AddRoutine({ state, bot, done }: { state: Json; bot?: string; done: () 
       <b>A new routine</b>
       {!bot && <div className="chips">{crew.map((h) => <button key={h.id} className={`chip pal-chip ${who === h.id ? 'on' : ''}`} onClick={() => setWho(h.id)}><Face who={h} size={22} />{h.name}</button>)}</div>}
       <textarea className="input" rows={2} value={what} onChange={(e) => setWhat(e.target.value)} placeholder="What should they do each time? For example: plan the week's dinners" aria-label="What to do" />
+      <input className="input" type="url" value={watch} onChange={(e) => setWatch(e.target.value)} placeholder="A page to keep an eye on, if any: paste its address" aria-label="A page to keep an eye on" />
       <input className="input" value={when} onChange={(e) => setWhen(e.target.value)} placeholder="When? For example: every Saturday 10am" aria-label="When" />
       <div className="chips">{WHEN.map((w) => <button key={w} className="chip" onClick={() => setWhen(w)}>{w}</button>)}</div>
-      <label className="toggle small"><input type="checkbox" checked={quiet} onChange={(e) => setQuiet(e.target.checked)} /> Only tell me if something's up</label>
+      {watch.trim() ? <div className="mute small">I'll look at the page each time and only wake {crew.find((h) => h.id === who)?.name ?? 'them'} when it changes.</div> : <label className="toggle small"><input type="checkbox" checked={quiet} onChange={(e) => setQuiet(e.target.checked)} /> Only tell me if something's up</label>}
       {preview && <div className="mute small">{preview.bad ? "I didn't catch that time. Try “every Monday 9:00”." : `${preview.words}. First time ${A.clock(preview.next)}.`}</div>}
       <div className="btns">
-        <button className="btn go" disabled={!who || !what.trim() || !preview || preview.bad} onClick={() => attempt(async () => { await api.addRoutine({ bot: who, task: what, schedule: when, quiet }); done(); }, 'Routine added')}>Add routine</button>
+        <button className="btn go" disabled={!who || (!what.trim() && !watch.trim()) || !preview || preview.bad} onClick={() => attempt(async () => { await api.addRoutine({ bot: who, task: what, schedule: when, quiet, ...(watch.trim() ? { watch: watch.trim() } : {}) }); done(); }, watch.trim() ? 'Watching it' : 'Routine added')}>Add routine</button>
         <button className="btn ghost" onClick={done}>Cancel</button>
       </div>
     </div>

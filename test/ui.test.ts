@@ -200,3 +200,15 @@ test('reach from anywhere: one plain sentence per relay state, naming only the r
   }
   assert.equal(A.reach({ relay: 'https://relay.example.com', relayStatus: 'online' }).online, true);
 });
+
+test('watches and hand-offs read as plain words, with only the page\'s host', () => {
+  const s = { routines: [{ id: 1, bot: 'scout', name: 'Watch rentals.example.com', words: 'Every hour', next_at: Date.now() + 1000, state: 'on', kind: 'task', quiet: 1,
+    watch: 'https://www.rentals.example.com/phuket?max=900&sort=new', history: [{ at: Date.now(), kind: 'routine.fired', watch: 'same' }, { at: Date.now() - 9e5, kind: 'routine.fired', watch: 'changed', task: 3 }] }] };
+  const [r] = A.routines(s);
+  assert.equal(r.watching, 'rentals.example.com');
+  assert.match(r.last, /^Checked .*, no change$/);
+  assert.equal(r.changes, 1);
+  assert.doesNotMatch(shown(r), /phuket\?|https?:/);
+  const [l] = A.lines({ messages: [{ id: 1, author: 'reel', text: 'find three songs' }] }, 'scout');
+  assert.deepEqual([l.from, l.text], ['note', 'Reel asked: find three songs']);
+});
