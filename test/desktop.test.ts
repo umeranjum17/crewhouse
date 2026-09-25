@@ -202,7 +202,8 @@ test("a show is recorded through crewd's own endpoint to the bot's browser", { s
   const page = `<label for="q">Search</label><input id="q"><button id="go">Find</button>
     <script>setTimeout(() => { const q = document.getElementById('q'); q.value = 'private words'; q.dispatchEvent(new Event('change', { bubbles: true }));
       document.getElementById('go').click(); setTimeout(() => { location = '/results'; }, 300); }, 1500)</script>`;
-  const site = createServer((q, r) => r.writeHead(200, { 'content-type': 'text/html' }).end(q.url === '/results' ? '<p>3 found</p>' : page)).listen(0, '127.0.0.1');
+  const site = createServer((q, r) => r.writeHead(200, { 'content-type': 'text/html' })
+    .end(q.url === '/results' ? '<p>3 found</p>' : q.url === '/crewd' ? '<p>crewd was here</p>' : page)).listen(0, '127.0.0.1');
   await new Promise((r) => site.once('listening', r));
   const url = `http://127.0.0.1:${(site.address() as AddressInfo).port}`;
   const teacher = new Teacher();
@@ -211,11 +212,18 @@ test("a show is recorded through crewd's own endpoint to the bot's browser", { s
   // The bot's browser was on the page (its own tool had it open, then let go when the person took the wheel).
   const bot = new WebSocket(d.cdp!);
   await new Promise((r, j) => { bot.once('open', r); bot.once('error', j); });
-  bot.send(JSON.stringify({ id: 1, method: 'Target.createTarget', params: { url: `${url}/search` } }));
-  await new Promise((r) => bot.on('message', (m) => { if (JSON.parse(String(m)).id === 1) r(0); }));
+  // The person took the wheel on the front page; behind it sit pages crewd opened itself (its tool's page, and one an
+  // old session restored). The recorder writes down what the person saw, never the pages behind the front one.
+  const open = (id: number, path: string) => new Promise((r) => {
+    bot.send(JSON.stringify({ id, method: 'Target.createTarget', params: { url: `${url}${path}` } }));
+    bot.on('message', function back(m) { if (JSON.parse(String(m)).id === id) { bot.off('message', back); r(0); } });
+  });
+  await open(1, '/crewd');
+  await open(2, '/search');
   bot.close();
   await teacher.start('reel', 'find a thing', d.cdp!, () => {});
-  await until('the show saw the next page', () => teacher.showing().reel?.steps >= 4);
+  // The show must see the final navigation itself: a count of steps can be filled by anything recorded early.
+  await until('the show saw the next page', () => teacher.steps('reel').includes('Opened 127.0.0.1/results'));
   const out = teacher.stop('reel')!;
   assert.deepEqual(out.steps.slice(0, 4), ['Opened 127.0.0.1/search', 'Typed in “Search”', 'Clicked “Find”', 'Opened 127.0.0.1/results']);
   assert.doesNotMatch(JSON.stringify(out), /private words/, 'never what was typed');
