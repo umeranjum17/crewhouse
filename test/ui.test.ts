@@ -172,7 +172,7 @@ test('the mascots: every mood draws a whole grid in known colours, and Chief\'s 
   assert.ok(!art.chief('error').join().includes('d'), 'sad lost the sweat drop');
   assert.ok(art.chief('worried').join().includes('d'), 'worried keeps the drop');
   assert.notEqual(art.chiefSmall('idle').join(), art.chiefSmall('error').join(), 'small content is not the small cut');
-  assert.deepEqual(art.chiefSmall('idle').filter((r) => r.includes('m')).map(shape), ['m........m', 'mmmmmmmm'], 'small content: ends curled up above the bar');
+  assert.deepEqual(art.chiefSmall('idle').filter((r) => r.includes('m')).map(shape), ['m.......m', 'mmmmmmm'], 'small content: the moustache line curls \\u2228');
 });
 
 test("Chief's mood is the first matching row of the table, and the line follows the face", () => {
