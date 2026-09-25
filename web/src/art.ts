@@ -123,6 +123,16 @@ export const HOUSE: Bitmap = [
 ];
 export const HOUSE_PAL: Palette = { r: '#ff7aa2', p: '#ffc27a', e: '#3b3552', m: '#3b3552' };
 
+/** The phone's tab bar, 9×9 dots each, one colour (the tab's ink): the same on every phone, unlike a font's glyphs. */
+export type Tab = 'chats' | 'crew' | 'things' | 'routines' | 'phone';
+export const TABS: Record<Tab, Bitmap> = {
+  chats: ['....x....', '...x.x...', '..x...x..', '.x.....x.', 'xxxxxxxxx', '.x.....x.', '.x.xxx.x.', '.x.x.x.x.', '.xxx.xxx.'],
+  crew: ['..xxxxx..', '.x.....x.', 'x..x.x..x', 'x..x.x..x', 'x.......x', 'x.x...x.x', 'x..xxx..x', '.x.....x.', '..xxxxx..'],
+  things: ['xxxxxxxxx', 'x.......x', 'x.xxxxx.x', 'x.......x', 'x.xxxxx.x', 'x.......x', 'x.xxx...x', 'x.......x', 'xxxxxxxxx'],
+  routines: ['..xxxxx.x', '.x.....xx', 'x.....xxx', 'x........', 'x.......x', '........x', 'xxx.....x', 'xx.....x.', 'x.xxxxx..'],
+  phone: ['..xxxxx..', '..x...x..', '..x...x..', '..x...x..', '..x...x..', '..x...x..', '..xxxxx..', '..x.x.x..', '..xxxxx..'],
+};
+
 const DOTFONT: Record<string, string[]> = {
   c: ['.....', '.....', '.###.', '#....', '#....', '#....', '.###.'],
   r: ['.....', '.....', '#.##.', '##..#', '#....', '#....', '#....'],

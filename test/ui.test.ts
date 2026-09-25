@@ -162,6 +162,14 @@ test('the mascots: every mood draws a whole grid in known colours, and Chief\'s 
   assert.equal(new Set(moods.map((m) => art.chief(m).join())).size, moods.length, 'two of Chief\'s moods look the same');
 });
 
+test('the phone\'s tab icons: whole 9×9 grids of one ink, each its own shape, and no font glyphs in the tab bar', async () => {
+  const { TABS } = await import('../web/src/art.ts');
+  for (const [k, b] of Object.entries(TABS)) assert.ok(b.length === 9 && b.every((r) => /^[.x]{9}$/.test(r)), k);
+  assert.equal(new Set(Object.values(TABS).map((b) => b.join())).size, Object.keys(TABS).length);
+  const app = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
+  assert.doesNotMatch(app.slice(app.indexOf('const nav:'), app.indexOf('</View>', app.indexOf('s.tabbar'))), /[⌂☺▤↻▯]/);
+});
+
 test('the crew\'s share is words, never a number; money is whole dollars and only for the owner', () => {
   for (const s of [{ choice: 'light', used: false }, { choice: 'light', used: true }, { choice: 'full', used: false }]) {
     const v = A.share({ share: s });
