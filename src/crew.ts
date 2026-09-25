@@ -1,5 +1,6 @@
 import './isolate.ts'; // first: before anything loads the engine
 import { randomBytes } from 'node:crypto';
+import { spawn, type ChildProcess } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
@@ -26,6 +27,8 @@ export { clock };
 /** At most n characters, cut at a word boundary with an ellipsis: titles on cards and in the digest. */
 export const short = (s: string, n: number) => (s = s.trim(), s.length > n ? `${s.slice(0, n - 1).replace(/\s+\S*$/, '')}…` : s);
 
+/** crewd's tick is 1.5 s; a gap this long means the computer was asleep. */
+const SLEPT_MS = 60_000;
 const STUCK_MS = Number(process.env.CREWHOUSE_STUCK_MS || 180_000); // working with no news this long: show "stuck?"
 /** Events that make up a bot's plain "what I did" trail. */
 /** A quiet check-in's reply when nothing needs the person, and how its run is recorded. */
@@ -50,7 +53,8 @@ const partOfDay = () => { const h = new Date().getHours(); return h >= 5 && h < 
 /** Chief's first words (plan 3, section 3.13). Deterministic: no model call before we know how to address the person. */
 export const chiefGreeting = () =>
   `Good ${partOfDay()}. I am Chief, of the Crewhouse, and I'm at your service.\n\n` +
-  'A word on how we work. The crew works here, on this computer, even while you are away. ' +
+  'A word on how we work. The crew works here, on this computer, while you get on with your day. ' +
+  'When the computer sleeps we pause, and we pick up where we left off the moment it wakes. ' +
   'We stop and ask you first before anything leaves this house, costs money or touches your own files, ' +
   "and whenever a sign-in or a fee looks off. We'd rather ask than get it wrong. " +
   'Nothing you tell us leaves this computer, apart from what the crew sends your own AI account to do the work.\n\n' +
@@ -58,6 +62,23 @@ export const chiefGreeting = () =>
 
 /** A sign-in that stopped working (a password change, usually), and what happens next. */
 const signedOutWords = (name: string) => `${name} signed you out. That happens after a password change. Sign in again and the crew picks up where it left off.`;
+
+/** Holds an idle-sleep inhibitor while on: systemd-inhibit on Linux, caffeinate on macOS. Nothing where neither exists. */
+function inhibitor() {
+  let child: ChildProcess | undefined;
+  // Both let go by themselves if crewd dies without saying so: they only live as long as its pid.
+  const pid = String(process.pid);
+  const cmd = process.platform === 'darwin' ? ['caffeinate', '-i', '-w', pid]
+    : ['systemd-inhibit', '--what=idle:sleep', '--who=Crewhouse', '--why=A helper is working', '--mode=block', 'tail', `--pid=${pid}`, '-f', '/dev/null'];
+  return (on: boolean) => {
+    if (!on) { child?.kill(); child = undefined; return; }
+    if (child) return;
+    const c = child = spawn(cmd[0], cmd.slice(1), { stdio: 'ignore' });
+    const gone = () => { if (child === c) child = undefined; };
+    c.on('error', gone); // not installed: the computer's own sleep settings apply
+    c.on('exit', gone);
+  };
+}
 
 /** A bot at work: its task's engine session, on whose account and which AI, and the browser if it has one. */
 interface Live { session: AgentSession; task: number; member: number; brain: disk.Brain; mcp?: Mcp; page?: string; apps?: Record<string, AppTool> }
@@ -82,6 +103,10 @@ export class Crew {
   readonly accounts: Accounts;
   readonly connections: Connections;
   private freshAt = 0;
+  private lastTick = 0;
+  /** Keeps idle sleep away while a helper is working, and only then. Never the lid. Tests replace it. */
+  keepAwake: (on: boolean) => void;
+  private awake = false;
 
   private cfg: Config;
   private db: Store;
@@ -89,6 +114,7 @@ export class Crew {
   constructor(cfg: Config, db: Store) {
     this.cfg = cfg; this.db = db;
     this.desktops = new Desktops(cfg.stateDir);
+    this.keepAwake = cfg.engine === 'pi' ? inhibitor() : () => {};
     this.accounts = new Accounts(cfg);
     if (cfg.engine === 'stub') this.accounts.prepare = stubModels;
     this.accounts.onChange = (member, key) => this.db.event('account.changed', null, { member, account: key });
@@ -134,6 +160,7 @@ export class Crew {
 
   stop() {
     clearInterval(this.timer);
+    if (this.awake) this.keepAwake(false);
     for (const [id, l] of this.live) { this.live.delete(id); l.mcp?.stop(); l.session.dispose(); }
     this.desktops.stopAll();
     this.accounts.stop();
@@ -1055,7 +1082,12 @@ export class Crew {
   // ---- crewd's own clock: routines, timeouts, idle desktops ----
   private tick() {
     try {
+      const now = Date.now();
+      if (this.lastTick && now - this.lastTick > SLEPT_MS) this.slept(this.lastTick, now);
+      this.lastTick = now;
       this.schedule();
+      const working = !!this.db.get("SELECT 1 FROM tasks WHERE state = 'working' LIMIT 1");
+      if (working !== this.awake) { this.awake = working; this.keepAwake(working); }
       for (const task of this.db.all("SELECT * FROM tasks WHERE state IN ('working', 'needs_you') AND created_at < ?", Date.now() - TASK_TIMEOUT_MS)) {
         void this.live.get(task.bot)?.session.abort();
         this.close(task.bot);
@@ -1070,6 +1102,23 @@ export class Crew {
       }
     } catch (e) { console.error('tick', e); }
     this.dispatch();
+  }
+
+  /** The computer slept from `from` to `to`: each member whose routines were missed hears which ones run now, once.
+   *  Call it before `schedule()`, which does the catching up. The morning digest speaks for itself. */
+  slept(from: number, to: number) {
+    this.db.tx(() => {
+      this.db.event('system.slept', null, { from, to });
+      // Only those that really run now: one whose last run is still open is skipped, not caught up.
+      const missed = this.db.all("SELECT * FROM routines WHERE state = 'on' AND kind != 'digest' AND next_at <= ? AND (last_task IS NULL OR last_task NOT IN " +
+        "(SELECT id FROM tasks WHERE state IN ('queued', 'working', 'needs_you', 'paused'))) ORDER BY next_at", to);
+      for (const member of new Set(missed.map((r) => r.member as number))) {
+        const names = missed.filter((r) => r.member === member).map((r) => `“${r.name}”`);
+        const list = names.length < 2 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
+        this.say(CHIEF, 'bot', `Your computer was asleep from ${clock(from)} to ${clock(to)}, so the crew paused. ` +
+          `I'm running ${list} now, once, to catch up.`, null, member);
+      }
+    });
   }
 
   // ---- the bot's screen: watch, take over, give back ----

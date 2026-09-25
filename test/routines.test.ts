@@ -176,3 +176,31 @@ test('quiet check-ins: all clear says nothing and stays out of the digest; anyth
   assert.throws(() => crew.updateRoutine(db.get("SELECT id FROM routines WHERE kind = 'digest'")!.id, { quiet: true }), /helper's routine/);
   done();
 });
+
+test('sleep: missed routines are named once in each member\'s Chief thread, and a working crew keeps idle sleep away', async () => {
+  const { db, crew, done } = setup();
+  const said = () => db.all("SELECT text FROM messages WHERE bot = 'chief' AND author = 'bot' AND text LIKE 'Your computer was asleep%'").map((m) => m.text);
+  const awake: boolean[] = [];
+  crew.keepAwake = (on) => awake.push(on);
+
+  // Asleep with nothing missed (the digest speaks for itself): recorded, but nobody hears about it.
+  crew.slept(Date.now() - 3_600_000, Date.now());
+  assert.equal(db.get("SELECT COUNT(*) AS n FROM events WHERE kind = 'system.slept'")!.n, 1);
+  assert.deepEqual(said(), []);
+
+  // A routine came due while it slept: Chief names it, and it runs once, late.
+  const r = crew.addRoutine({ bot: 'reel', schedule: 'every day 7:00', task: 'ask permission: check the prices', name: 'Deal check' }, 'person');
+  db.run('UPDATE routines SET next_at = ? WHERE id = ?', Date.now() - 3 * 3_600_000, r.id);
+  crew.slept(Date.now() - 8 * 3_600_000, Date.now());
+  crew.schedule();
+  assert.equal(said().length, 1);
+  assert.match(said()[0], /the crew paused\. I'm running “Deal check” now, once, to catch up\.$/);
+  assert.equal(fired(db, r.id).at(-1).why, 'late');
+
+  // Its run holds the machine awake; finishing lets it sleep again.
+  await until('kept awake', () => awake.at(-1) === true);
+  await release(crew, 'reel', 'Prices checked.');
+  await until('allowed to sleep', () => awake.at(-1) === false);
+  assert.deepEqual(awake, [true, false], 'one hold, one release');
+  done();
+});

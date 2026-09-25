@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Crewhouse: setup | start | update | uninstall | doctor | tools | test
+# Crewhouse: setup | start | autostart | update | uninstall | doctor | tools | test
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -30,6 +30,39 @@ stop_crewd() {
   echo "crewd (pid $pid) did not stop" >&2; exit 1
 }
 
+# Start with the computer: a systemd user service, so a reboot or a login brings the crew back with no terminal.
+# ponytail: Linux with systemd only; a macOS LaunchAgent when macOS is supported.
+UNIT="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/crewhouse.service"
+has_systemd() { command -v systemctl >/dev/null && systemctl --user show-environment >/dev/null 2>&1; }
+autostart_on() {
+  has_systemd || { echo "This computer has no systemd user session, so Crewhouse can't start by itself here. Use ./crewhouse start." >&2; return 1; }
+  mkdir -p "$(dirname "$UNIT")"
+  cat > "$UNIT" <<UNIT
+[Unit]
+Description=Crewhouse (crewd)
+After=network-online.target
+
+[Service]
+WorkingDirectory=$(pwd -P)
+ExecStart=$(node -p process.execPath) src/main.ts
+Restart=on-failure
+$(env | grep '^CREWHOUSE_' | sed 's/^/Environment=/')
+
+[Install]
+WantedBy=default.target
+UNIT
+  systemctl --user daemon-reload
+  systemctl --user enable --now crewhouse.service >/dev/null
+  echo "Crewhouse now starts by itself when you log in, and is running now."
+}
+autostart_off() {
+  [ -f "$UNIT" ] || return 0
+  has_systemd && systemctl --user disable --now crewhouse.service >/dev/null 2>&1 || true
+  rm -f "$UNIT"
+  has_systemd && systemctl --user daemon-reload || true
+}
+autostarted() { [ -f "$UNIT" ] && has_systemd && systemctl --user is-active --quiet crewhouse.service; }
+
 # Refuse to delete anything that isn't plainly a Crewhouse folder.
 remove() {
   case "$1" in ""|/|"$HOME"|"$HOME/"|"$(pwd)") echo "refusing to delete '$1'" >&2; exit 1 ;; esac
@@ -50,11 +83,24 @@ case "${1:-}" in
     echo
     node src/doctor.ts || true
     echo
+    if [ -t 0 ] && has_systemd && [ ! -f "$UNIT" ]; then
+      read -r -p "Start Crewhouse by itself whenever you log in? [Y/n] " yn
+      case "${yn:-y}" in [Yy]*) autostart_on && { echo "Open http://127.0.0.1:${CREWHOUSE_PORT:-7711}"; exit 0; } ;; esac
+    fi
     echo "Next: ./crewhouse start, then open the address it prints."
+    ;;
+  autostart)
+    need_node
+    case "${2:-}" in
+      on) autostart_on ;;
+      off) autostart_off; echo "Crewhouse no longer starts by itself." ;;
+      *) echo "usage: ./crewhouse autostart on | off" >&2; exit 2 ;;
+    esac
     ;;
   start)
     need_node
     [ -f web/dist/index.html ] || npm run build:web
+    if autostarted; then echo "Crewhouse is already running (it starts by itself when you log in): http://127.0.0.1:${CREWHOUSE_PORT:-7711}"; exit 0; fi
     exec node src/main.ts
     ;;
   update)
@@ -72,7 +118,10 @@ case "${1:-}" in
     npm ci --no-audit --no-fund
     npm run build:web
     paths
-    if stop_crewd; then
+    if autostarted; then
+      systemctl --user restart crewhouse.service
+      echo "Updated to $(git log -1 --format='%h %s'). crewd restarted; running work carries on."
+    elif stop_crewd; then
       mkdir -p "$STATE"
       nohup node src/main.ts >> "$STATE/crewd.log" 2>&1 &
       echo "Updated to $(git log -1 --format='%h %s'). crewd restarted; running work carries on (log: $STATE/crewd.log)."
@@ -98,6 +147,7 @@ case "${1:-}" in
       read -r -p "Go ahead? [y/N] " ok
       case "$ok" in [Yy]*) ;; *) echo "Nothing was removed."; exit 0 ;; esac
     fi
+    autostart_off
     stop_crewd || true
     remove "$STATE"
     remove "$TOOLS"
@@ -127,7 +177,7 @@ case "${1:-}" in
     [ -z "$before" ] || echo "~/.pi: sign-ins, settings and extensions unchanged, byte for byte."
     ;;
   *)
-    echo "usage: ./crewhouse setup | start | update | uninstall [--all] [--yes] | doctor | tools [install [ids...]] | test"
+    echo "usage: ./crewhouse setup | start | autostart on|off | update | uninstall [--all] [--yes] | doctor | tools [install [ids...]] | test"
     exit 2
     ;;
 esac
