@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import * as A from '../web/src/adapter.ts';
+import { draftOf, keepDraft, sent } from '../web/src/draft.ts';
 
 const now = Date.now();
 const bot = (id: string, extra = {}) => ({ id, display: id[0].toUpperCase() + id.slice(1), role: 'Makes demo videos from screenshots', template: id, runtime: 'claude', model: 'sonnet',
@@ -323,6 +324,20 @@ test('the week under the share is a third in words, never a number', () => {
   assert.equal(A.share({ share: { choice: 'light', used: false, week: 'fair' } }).week, 'This week the crew has used a fair part of what it may use of your ChatGPT.');
   assert.equal(A.share({ share: { choice: 'full', used: false, week: null } }).week, '');
   for (const w of ['small', 'fair', 'most']) assert.doesNotMatch(A.share({ share: { choice: 'light', week: w } }).week, /\d|%/);
+});
+
+test('a failed send keeps the words for a Retry; every chat keeps its own draft', () => {
+  keepDraft('chief', 'Please keep this unsent draft');
+  keepDraft('reel', 'a different chat');
+  sent('chief', false, draftOf('chief').text); // the send failed: nothing left the composer
+  assert.equal(draftOf('chief').text, 'Please keep this unsent draft', 'the failed send kept the words');
+  assert.equal(draftOf('reel').text, 'a different chat', 'the other chat kept its own draft');
+  keepDraft('chief', 'Please keep this unsent draft, with one more word'); // the person edits before retrying
+  sent('chief', true, draftOf('chief').text); // the retry went out
+  assert.equal(draftOf('chief').text, '', 'a sent message is no longer held');
+  assert.equal(draftOf('never-typed').text, '', 'an untouched chat has no draft');
+  keepDraft('chief', '');
+  assert.equal(draftOf('chief').text, '', 'emptying the box clears the hold');
 });
 
 test('a photo in a message is a picture, not words', () => {

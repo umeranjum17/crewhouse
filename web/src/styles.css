@@ -182,6 +182,9 @@ textarea.input { resize: vertical; }
 .dock .chips { flex-wrap: nowrap; overflow-x: auto; margin: 0 0 8px; scrollbar-width: none; }
 .composer { display: flex; gap: 8px; align-items: flex-end; background: var(--solid); border-radius: 28px; padding: 6px 6px 6px 18px; box-shadow: 0 8px 24px -10px #6a4f9a55, var(--chip); }
 .composer textarea { flex: 1; border: 0; background: transparent; resize: none; padding: 9px 0; font-size: 16px; outline: none; max-height: 160px; field-sizing: content; }
+/* A send that didn't go through stays with its words until the Retry works. */
+.composer:has(.send-failed) { flex-wrap: wrap; border-radius: 22px; }
+.send-failed { flex-basis: 100%; font-size: 13.5px; font-weight: 700; color: var(--pink-ink); padding: 8px 12px 2px; }
 .send { width: 40px; height: 40px; border-radius: 50%; border: 0; background: var(--go); color: var(--go-ink); font: 900 18px var(--ui); flex: none; }
 .send:disabled { opacity: .3; }
 

@@ -10,6 +10,7 @@ import {
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import * as A from '../web/src/adapter.ts';
 import { api, setTransport, trouble, type Json } from '../web/src/api.ts';
+import { draftOf, keepDraft, sent } from '../web/src/draft.ts';
 import * as art from '../web/src/art.ts';
 import { color, radius } from '../web/src/tokens.ts';
 import { CONTROL_PERMISSIONS, DesktopView, useDesktopSession } from '@desklink/react-native';
@@ -139,13 +140,25 @@ async function shrink(uri: string): Promise<Photo> {
   return { type: 'image/jpeg', data: r.base64 ?? '', uri: r.uri };
 }
 
-/** The message box: words (the phone keyboard's own mic dictates them) and up to four photos. */
-function Composer({ placeholder, onSend, draft = '', photos: canPhoto = true }: { placeholder: string; onSend: (t: string, photos: Photo[]) => unknown; draft?: string; photos?: boolean }) {
+/** The message box: words (the phone keyboard's own mic dictates them) and up to four photos. A send that didn't go
+ *  through keeps both with a Retry; each chat holds its own words (web/src/draft.ts). */
+function Composer({ placeholder, onSend, chat, photos: canPhoto = true }: { placeholder: string; onSend: (t: string, photos: Photo[]) => unknown; chat?: string; photos?: boolean }) {
   const t = useLook();
-  const [text, setText] = useState(draft);
+  const [text, setText] = useState(() => (chat ? draftOf(chat).text : ''));
   const [pics, setPics] = useState<Photo[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
   const ready = !!text.trim() || pics.length > 0;
-  const send = () => { if (!ready) return; const x = text.trim(), p = pics; setText(''); setPics([]); onSend(x, p); };
+  const change = (x: string) => { setText(x); setFailed(false); if (chat) keepDraft(chat, x); };
+  const send = async () => {
+    if (busy || (!text.trim() && !pics.length)) return;
+    const x = text.trim(), p = pics;
+    setBusy(true);
+    let ok = false;
+    try { ok = !!(await onSend(x, p)); } catch { ok = false; }
+    setBusy(false);
+    if (ok) { setText(''); setPics([]); if (chat) keepDraft(chat, ''); } else { setFailed(true); if (chat) sent(chat, false, text); }
+  };
   const pick = () => attempt(async () => {
     const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsMultipleSelection: true, selectionLimit: 4 - pics.length, quality: 1 });
     if (r.canceled) return;
@@ -154,6 +167,10 @@ function Composer({ placeholder, onSend, draft = '', photos: canPhoto = true }: 
   });
   return (
     <View style={{ gap: 6 }}>
+      {failed && <View style={s.row}>
+        <T tone="pinkInk" style={[s.small, { flex: 1 }]}>Not sent — it's kept here.</T>
+        <Btn label="Retry" onPress={() => void send()} />
+      </View>}
       {pics.length > 0 && <View style={{ flexDirection: 'row', gap: 6, paddingHorizontal: 8 }}>
         {pics.map((p, i) => (
           <Pressable key={p.uri} onPress={() => setPics((x) => x.filter((_, j) => j !== i))} accessibilityLabel={`Remove photo ${i + 1}`}>
@@ -161,12 +178,12 @@ function Composer({ placeholder, onSend, draft = '', photos: canPhoto = true }: 
           </Pressable>
         ))}
       </View>}
-      <View style={[s.composer, { backgroundColor: t.solid, borderColor: t.line }]}>
+      <View style={[s.composer, { backgroundColor: t.solid, borderColor: t.line, opacity: busy ? 0.7 : 1 }]}>
         {canPhoto && <Pressable onPress={pick} disabled={pics.length >= 4} accessibilityLabel="Add a photo" style={[s.send, { backgroundColor: 'transparent' }]}>
           <Text style={{ color: t.ink, fontSize: 20 }}>＋</Text>
         </Pressable>}
-        <TextInput style={[s.composerInput, { color: t.ink }]} value={text} onChangeText={setText} multiline placeholder={placeholder} placeholderTextColor={t.mute} accessibilityLabel={placeholder} />
-        <Pressable onPress={send} disabled={!ready} accessibilityLabel="Send" style={[s.send, { backgroundColor: t.go, opacity: ready ? 1 : 0.4 }]}>
+        <TextInput style={[s.composerInput, { color: t.ink }]} value={text} onChangeText={change} multiline placeholder={placeholder} placeholderTextColor={t.mute} accessibilityLabel={placeholder} />
+        <Pressable onPress={() => void send()} disabled={!ready || busy} accessibilityLabel="Send" style={[s.send, { backgroundColor: t.go, opacity: ready && !busy ? 1 : 0.4 }]}>
           <Text style={{ color: t.goInk, fontSize: 18, fontWeight: '900' }}>↑</Text>
         </Pressable>
       </View>
@@ -545,7 +562,7 @@ function Home(ctx: Ctx) {
   const crew = A.crew(state);
   const who = (id: string) => crew.find((h) => h.id === id);
   const cards = A.cards(state);
-  const toChief = async (x: string, p: Photo[] = []) => { if (await attempt(() => api.post('chief', x, p.map(({ type, data }) => ({ type, data }))))) { refresh(); go({ view: 'chief' }); } };
+  const toChief = async (x: string, p: Photo[] = []) => { const ok = await attempt(() => api.post('chief', x, p.map(({ type, data }) => ({ type, data })))); if (ok) { refresh(); go({ view: 'chief' }); } return ok; };
   const helperRoute = (id: string): Route => (id === 'chief' ? { view: 'chief' } : { view: 'helper', id });
   return (
     <View style={{ flex: 1 }}>
@@ -561,7 +578,7 @@ function Home(ctx: Ctx) {
           </ScrollView>
         )}
       </ScrollView>
-      {canAct && <View style={s.dock}><Composer placeholder="Ask Chief anything…" onSend={toChief} /></View>}
+      {canAct && <View style={s.dock}><Composer placeholder="Ask Chief anything…" onSend={toChief} chat="chief" /></View>}
     </View>
   );
 }
@@ -617,7 +634,7 @@ function Chat({ id, state, tick, refresh, canAct, offline, open }: Ctx & { id: s
   // Seen: the chat's unread count goes once its newest line is on screen (a watch-only phone can't mark it).
   const newest = last?.id;
   useEffect(() => { if (canAct && newest && b?.unread) void api.read(id).then(refresh).catch(() => {}); }, [canAct, newest, b?.unread, id, refresh]);
-  const send = async (x: string, p: Photo[] = []) => { if (await attempt(() => api.post(id, x, p.map(({ type, data }) => ({ type, data }))))) { void load(); refresh(); } };
+  const send = async (x: string, p: Photo[] = []) => { const ok = await attempt(() => api.post(id, x, p.map(({ type, data }) => ({ type, data })))); if (ok) { void load(); refresh(); } return ok; };
   return (
     <View style={{ flex: 1 }}>
       <ScrollView ref={scroll} style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 10 }} onContentSizeChange={() => scroll.current?.scrollToEnd({ animated: false })}>
@@ -638,7 +655,7 @@ function Chat({ id, state, tick, refresh, canAct, offline, open }: Ctx & { id: s
         <Steps steps={trail} />
         {cards.map((c) => <AskCard key={c.id} c={c} who={h} onDone={refresh} canAct={canAct} offline={offline} open={open} />)}
       </ScrollView>
-      {canAct ? <View style={s.dock}><Composer placeholder={id === 'chief' ? 'Ask Chief anything…' : `Message ${name}…`} onSend={send} /></View>
+      {canAct ? <View style={s.dock}><Composer placeholder={id === 'chief' ? 'Ask Chief anything…' : `Message ${name}…`} onSend={send} chat={id} /></View>
         : <T tone="mute" style={[s.small, { padding: 16 }]}>{offline ? "You can reply once the home computer is back." : "This phone watches the crew; it can't send messages."}</T>}
     </View>
   );
