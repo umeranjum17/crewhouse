@@ -216,7 +216,9 @@ export class Crew {
       ideas: this.ideas(),
       asks: this.db.all("SELECT * FROM asks WHERE state = 'open' AND COALESCE(member, ?) = ? ORDER BY id", OWNER, me.id).map((a) => this.askView(a)),
       events: this.db.events(0, 80),
-      resting: Object.fromEntries(Object.keys(PROVIDERS).map((k) => [k, this.restingUntil(k, me.id)]).filter(([, t]) => t)),
+      /** The AI accounts a bot can think with, by name, for pickers; and those of this member's that are resting now. */
+      accounts: Object.entries(PROVIDERS).map(([key, p]) => ({ key, name: p.name })),
+      resting: Object.keys(PROVIDERS).filter((k) => this.restingUntil(k, me.id)).map((k) => ({ account: k, name: PROVIDERS[k].name, until: this.restingUntil(k, me.id) })),
       desktops: { ready: desktopMissing().length === 0 },
       routines: this.routines(me.id),
     };

@@ -100,6 +100,23 @@ test('policy: own space and the sandboxed shell run silently; the person\'s file
   assert.equal(toolWords('write', { path: '/data/bots/maya/files/list.txt' }), 'Saved list.txt');
 });
 
+const { sandboxReady } = await import('../src/engine.ts');
+test('the shell: its own space is the only writable place, the home folder is empty, nothing asks', { skip: !sandboxReady() && 'bubblewrap is not usable here' }, async () => {
+  const { root, db, crew, done } = setup();
+  crew.onboard('sir');
+  crew.recruit('reel', 'Reel', 'person');
+  const outside = join(root, 'outside.txt');
+  const t = crew.assign('reel', `try it ${call('bash', { command: `echo made > work/in.txt; cat work/in.txt; ls ~ | wc -l; echo x > ${outside}; ls ${homedir()}/.ssh; echo "key:$OPENAI_API_KEY"` })}`, 'chief').task;
+  await settled(db, t);
+  const out = task(db, t).result;
+  assert.match(out, /made/, 'works in its own space');
+  assert.match(out, /Read-only file system|No such file or directory|Permission denied/, 'nothing outside it is writable');
+  assert.ok(!existsSync(outside));
+  assert.match(out, /key:\n/, 'no keys in its environment');
+  assert.equal(db.all('SELECT * FROM asks').length, 0, 'and it never asked');
+  done();
+});
+
 test('browser asks first on signed-in sites and payment pages, only for actions', () => {
   assert.equal(browserAsk('browser_navigate', 'https://shop.example/checkout', []), null, 'looking is fine');
   assert.deepEqual(browserAsk('browser_click', 'https://shop.example/checkout', []), { spend: true, host: 'shop.example' });
@@ -362,7 +379,7 @@ test('limits: a limit rests that account and the task carries on in the same con
   assert.ok(db.get("SELECT 1 FROM events WHERE kind = 'run.resumed'"), 'the same session file, reopened');
   const file = task(db, t).session;
   assert.ok(file && readFileSync(file, 'utf8').includes('dig deep'), 'the conversation carried over');
-  assert.equal(crew.snapshot().resting.chatgpt, until);
+  assert.deepEqual(crew.snapshot().resting, [{ account: 'chatgpt', name: 'ChatGPT', until }]);
 
   // Everyone resting: the task pauses with a wake-up time, and resumes when it passes.
   (crew as any).rests.set('1:muse', Date.now() + 60_000);
@@ -523,8 +540,8 @@ test('household: bots and tasks belong to a member and run on that member\'s own
 
   // What each person sees: their own tasks and questions, their own accounts.
   assert.deepEqual(crew.snapshot(sam).tasks.map((t: any) => t.id).sort(), [a, d, e].sort());
-  assert.ok(crew.snapshot(sam).resting.chatgpt > 0);
-  assert.equal(crew.snapshot(OWNER).resting.chatgpt, undefined);
+  assert.deepEqual(crew.snapshot(sam).resting.map((r: any) => r.account), ['chatgpt']);
+  assert.deepEqual(crew.snapshot(OWNER).resting, []);
   done();
 });
 
