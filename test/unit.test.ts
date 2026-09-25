@@ -14,7 +14,7 @@ import { setup, sleep, task, until, prompted, settled, holding, release, lastSai
 const { Crew, quietNow, short } = await import('../src/crew.ts');
 const { classify } = await import('@byokit/accounts');
 const { OWNER, signInError } = await import('../src/accounts.ts');
-const { effectOf, browserAsk, coversOf, toolWords } = await import('../src/policy.ts');
+const { effectOf, browserAsk, coversOf, toolWords, orderOf } = await import('../src/policy.ts');
 const kit = await import('../src/tools.ts');
 const disk = await import('../src/bots.ts');
 const { loadConfig } = await import('../src/config.ts');
@@ -27,6 +27,15 @@ const fakeBin = (dir: string, ...names: string[]) => {
 const openAsk = (db: any) => db.get("SELECT * FROM asks WHERE state = 'open'");
 /** A user message the stub model turns into one tool call. */
 const call = (tool: string, input: object) => `[tool ${tool} ${JSON.stringify(input)}]`;
+
+test('money limits: only a total in dollars counts toward the dollar cap', () => {
+  const usd = orderOf('- text: Order total $43.10');
+  assert.deepEqual([usd.total, usd.shown, usd.currency, usd.capped], [43.10, '$43.10', '$', true]);
+  const gbp = orderOf('- text: Order total £19.00');
+  assert.deepEqual([gbp.total, gbp.shown, gbp.currency, gbp.capped], [19, '£19.00', '£', false], 'a pound price is shown as pounds, never counted as dollars');
+  const none = orderOf('- text: Total unavailable');
+  assert.deepEqual([none.total, none.capped], [null, false], 'no readable total, nothing counted');
+});
 
 test('store: a failed transaction leaves nothing behind; events fan out after commit', async () => {
   const { db, done } = setup();

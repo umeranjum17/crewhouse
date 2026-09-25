@@ -68,9 +68,8 @@ function Hello({ state, refresh, night }: Ctx) {
       <h1>{A.greeting()}{address.trim() ? `, ${address.trim()}` : ''}</h1>
       <p className="lead">I'm Chief. I run the crew in this house{isOwner ? '.' : `; ${owner} set me up for you.`}</p>
       <div className="promises">
-        <div>🔒 I ask before anything leaves the house or costs money.</div>
-        <div>🏠 What you tell us stays in this house.</div>
-        <div>🛒 The crew shops and browses from your home, so sites treat them like you.</div>
+        <div>🏠 Your crew runs on this computer, using your ChatGPT to help with the work.</div>
+        <div>🔒 I'll ask before sending messages, deleting things or spending money.</div>
       </div>
       <h2 className="plate">What can I take off your plate?</h2>
       <div className="ideas">
@@ -635,7 +634,7 @@ function Settings({ state, me, refresh, tick, look, setLook, switchTo }: Ctx & {
             <span className="app-ic" style={{ background: '#10a37f' }}>◎</span>
             <div className="grow"><b>{ai.name}</b><div className="mute small">{g.state === 'ready'
               ? g.notIncluded ? "Your plan doesn't include helpers yet." : `Connected${g.work ? ` as ${g.work}, a work account` : ''}. The crew can think with it.${g.resting ? ` ${g.resting}.` : ''}`
-              : g.state === 'checking' ? 'Checking…' : `Not signed in. ${ai.name}'s page will say Codex; that's the part of ${ai.name} the crew uses.`}</div></div>
+              : g.state === 'checking' ? 'Checking…' : `Not signed in. You'll say yes once on ${ai.name}; it calls the access your helpers use “Codex”.`}</div></div>
             {g.state === 'signed-out' && <button className="btn go" onClick={() => setSigning(openTab())}>Sign in</button>}
             {g.state === 'ready' && <button className="btn" onClick={() => attempt(async () => { await api.signOut(me, ai.key); refresh(); }, `Signed out of ${ai.name}`)}>Sign out</button>}
           </div>
@@ -681,7 +680,7 @@ function Money({ state, refresh }: { state: Json; refresh: () => void }) {
   return (<>
     <div className="label">Money</div>
     <form className="card form" onSubmit={(e) => { e.preventDefault(); void attempt(async () => { await api.moneyCap(Number(cap)); refresh(); }, 'Saved'); }}>
-      <label className="field">Helpers ask before spending anything, and never more than this in a month
+      <label className="field">The crew asks before every purchase; this is the most it can spend in a month on things priced in dollars
         <span className="row">$<input className="input" style={{ maxWidth: 120 }} inputMode="numeric" value={cap} onChange={(e) => setCap(e.target.value.replace(/[^\d]/g, ''))} aria-label="Most the crew may spend in a month, in dollars" />
           <button className="btn" disabled={!cap || Number(cap) === m.cap}>Save</button></span></label>
       <div className="mute small">{m.month}</div>
