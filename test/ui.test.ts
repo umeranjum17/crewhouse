@@ -220,3 +220,9 @@ test('a new helper from Chief is a yes-or-no card with its own yes', () => {
   assert.deepEqual(c.choices.map((x: any) => x.label), ['Yes, take Pip on', 'Not now']);
   assert.ok(!c.choices.some((x: any) => /always/i.test(x.label)));
 });
+
+test('the week under the share is a third in words, never a number', () => {
+  assert.equal(A.share({ share: { choice: 'light', used: false, week: 'fair' } }).week, 'This week the crew has used a fair part of what it may use of your ChatGPT.');
+  assert.equal(A.share({ share: { choice: 'full', used: false, week: null } }).week, '');
+  for (const w of ['small', 'fair', 'most']) assert.doesNotMatch(A.share({ share: { choice: 'light', week: w } }).week, /\d|%/);
+});

@@ -112,7 +112,8 @@ export const SHARES = [
 export const meter = (state: Json) => (state.share?.used ? 'ChatGPT: the crew has had its share today' : resting(state) ? `${resting(state)}` : 'ChatGPT: plenty left for you today');
 export function share(state: Json) {
   const s = state.share ?? { choice: 'light', used: false };
-  return { choice: s.choice as string, today: s.used ? 'The crew has had its share for today. Routines and check-ins start again tomorrow morning; anything you ask for still goes ahead.'
+  const part: Record<string, string> = { small: 'a small part', fair: 'a fair part', most: 'most' };
+  return { choice: s.choice as string, week: part[s.week] ? `This week the crew has used ${part[s.week]} of what it may use of your ChatGPT.` : '', today: s.used ? 'The crew has had its share for today. Routines and check-ins start again tomorrow morning; anything you ask for still goes ahead.'
     : s.choice === 'full' ? 'When ChatGPT needs a rest, the crew waits and says so.' : 'Plenty left for you today.' };
 }
 
