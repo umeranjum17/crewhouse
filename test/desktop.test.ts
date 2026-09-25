@@ -107,7 +107,7 @@ test("a bot's shell cannot find or drive another bot's browser", { skip: noAttac
   const site = `http://127.0.0.1:${(pages.address() as AddressInfo).port}`;
   const decoyDir = join(root, 'decoy');
   const decoy = spawn(browserBin()!, ['--headless=new', '--remote-debugging-port=0', `--user-data-dir=${decoyDir}`, '--no-first-run', 'about:blank'], { stdio: 'ignore' });
-  t.after(() => { decoy.kill(); pages.close(); desks.stop('reel'); });
+  t.after(async () => { pages.close(); decoy.kill(); await Promise.all([new Promise((r) => (decoy.exitCode === null ? decoy.once('exit', r) : r(0))), desks.stopAll()]); });
   const d = await desks.ensure('reel', n, botDir);
   for (let i = 0; i < 100 && !existsSync(join(decoyDir, 'DevToolsActivePort')); i++) await sleep(100);
   const decoyPort = readFileSync(join(decoyDir, 'DevToolsActivePort'), 'utf8').split('\n')[0];

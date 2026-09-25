@@ -248,5 +248,10 @@ export class Desktops {
     d.xvfb.kill();
   }
 
-  stopAll() { for (const bot of [...this.desks.keys()]) this.stop(bot); }
+  /** Stop every desktop; settles once each bot's Chromium has exited (it writes its profile on the way out). */
+  stopAll() {
+    const gone = [...this.desks.values()].map((d) => d.chrome && d.chrome.exitCode === null && new Promise((r) => d.chrome!.once('exit', r)));
+    for (const bot of [...this.desks.keys()]) this.stop(bot);
+    return Promise.all(gone);
+  }
 }

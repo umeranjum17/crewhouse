@@ -218,7 +218,7 @@ export class Crew {
     clearInterval(this.timer);
     if (this.awake) this.keepAwake(false);
     for (const [id, l] of this.live) { this.live.delete(id); l.browser?.end(); l.session.dispose(); }
-    this.desktops.stopAll();
+    void this.desktops.stopAll();
     this.accounts.stop();
   }
 
