@@ -17,6 +17,7 @@ import { desktopAvailable } from '@desklink/react-native/availability';
 import * as ImagePicker from 'expo-image-picker';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { useShareIntent } from 'expo-share-intent';
+import * as motion from './src/motion';
 import { connect, desktopSignaling, forgetGrant, loadGrant, pair, pairTyped, type Grant, type Status } from './src/link';
 
 // ---------- look ----------
@@ -464,8 +465,9 @@ function AskCard({ c, who, onDone, canAct, open }: { c: A.Card; who: A.Helper | 
 function AskSheet({ c, who, chiefSays, canAct, onClose }: { c: A.Card; who: A.Helper | undefined; chiefSays?: string; canAct: boolean; onClose: () => void }) {
   const t = useLook();
   const act = async (body: Json) => { if (await answer(c, body)) onClose(); };
+  const reduce = motion.useReduceMotion();
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible transparent animationType={motion.sheet(reduce)} onRequestClose={onClose}>
       <Pressable style={s.scrim} onPress={onClose}>
         <Pressable style={[s.sheet, { backgroundColor: t.bg }]} onPress={() => {}}>
           <View style={{ alignItems: 'center', gap: 10 }}>
