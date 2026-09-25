@@ -61,6 +61,8 @@ export class Teacher {
 
   showing() { return Object.fromEntries([...this.shows].map(([bot, s]) => [bot, { what: s.what, steps: stepsOf(s.raw).length }])); }
   has(bot: string) { return this.shows.has(bot); }
+  /** The steps so far, while the show is still on — for waiting on one to land. */
+  steps(bot: string) { return stepsOf(this.shows.get(bot)?.raw ?? []); }
 
   /** Start watching the bot's browser at its DevTools endpoint (a browser-level WebSocket). `onTimeout` ends a show
    *  left running for 15 minutes. */
@@ -115,21 +117,27 @@ export class Teacher {
   /** Resolves once the page is being listened to, so nothing the person does after Start is missed. */
   private listen(s: Showing, sessionId: string, first: string) {
     const call = (method: string, params: object = {}) => this.call(s, method, params, sessionId);
-    const opened = (u: string) => {
-      if (/^(about|chrome|devtools|data):/.test(u)) return;
-      s.raw.push({ kind: 'open', url: u });
-      // A picture of each page once it has drawn, for the bot to look at alongside the steps.
-      setTimeout(() => void call('Page.captureScreenshot', { format: 'jpeg', quality: 50 }).then((r) => {
-        if (r?.data && s.shots.length < 8) s.shots.push({ type: 'image/jpeg', data: r.data });
-      }), 1200);
-    };
+    const snap = () => setTimeout(() => void call('Page.captureScreenshot', { format: 'jpeg', quality: 50 }).then((r) => {
+      if (r?.data && s.shots.length < 8) s.shots.push({ type: 'image/jpeg', data: r.data });
+    }), 1200);
+    // The show starts on the page the person took the wheel of, but where it starts is written down only when the
+    // person actually does something there or the browser really moves on: attaching also replays the current state
+    // of every page crewd's own tool or an old session left open, and that state is nobody's step.
+    let begun = false, live = false;
+    const open = (url: string) => { begun = true; s.raw.push({ kind: 'open', url }); snap(); };
+    const begin = () => { if (!begun && !/^(about|chrome|devtools|data):/.test(first)) open(first); };
     s.pages.set(sessionId, (m) => {
       if (s.raw.length >= MAX_STEPS * 4) return;
-      if (m.method === 'Page.frameNavigated' && !m.params.frame.parentId) opened(m.params.frame.url);
+      if (m.method === 'Page.frameStartedLoading') { live = true; return; } // the browser really moved, not the state replayed at attach
+      if (m.method === 'Page.frameNavigated' && m.params?.frame && !m.params.frame.parentId) {
+        if (live && !/^(about|chrome|devtools|data):/.test(m.params.frame.url)) open(m.params.frame.url);
+        live = false;
+        return;
+      }
       if (m.method === 'Runtime.bindingCalled' && m.params.name === '__crewhouseStep') {
         try {
           const r = JSON.parse(m.params.payload);
-          if (['click', 'fill', 'choose'].includes(r.kind) && typeof r.label === 'string' && r.label.trim()) s.raw.push({ kind: r.kind, label: r.label.slice(0, 60) });
+          if (['click', 'fill', 'choose'].includes(r.kind) && typeof r.label === 'string' && r.label.trim()) { begin(); s.raw.push({ kind: r.kind, label: r.label.slice(0, 60) }); }
         } catch { /* not ours */ }
       }
     });
@@ -139,7 +147,6 @@ export class Teacher {
       await call('Runtime.addBinding', { name: '__crewhouseStep' });
       await call('Page.addScriptToEvaluateOnNewDocument', { source: PAGE });
       await call('Runtime.evaluate', { expression: PAGE });
-      opened(first);
     })();
     return Promise.race([ready, new Promise<void>((r) => setTimeout(r, 3000))]);
   }
