@@ -8,7 +8,7 @@ export type Effect =
   | { kind: 'refuse'; why: string }
   /** `key` is what "For this task" and "Always" remember; spending has none, so it asks every time. */
   /** `cost` is the most a spend can cost, in dollars, when the tool says so up front. */
-  | { kind: 'files' | 'send' | 'spend' | 'delete'; words: string; key?: string; covers?: string; cost?: number };
+  | { kind: 'files' | 'send' | 'spend' | 'delete'; words: string; key?: string; covers?: string; cost?: number; preview?: { head: string; body: string } };
 
 export interface Seen {
   bot: string;
@@ -93,6 +93,30 @@ export function effectOf(tool: string, input: Record<string, any>, s: Seen): Eff
     return { kind: 'refuse', why: `That is not something a bot may do with ${cli.name}. Ask the person to do it themselves.` };
   }
   return { kind: 'refuse', why: 'Unknown tool.' };
+}
+
+// ---- a checkout page, read from the browser tool's own page snapshot (tool output, never the model's words) ----
+const MONEY = /([$£€])\s?(\d{1,3}(?:,\d{3})+(?:\.\d{2})?|\d+(?:\.\d{2})?)/;
+const NOT_ITEM = /sub\s?-?total|\btotal\b|tax|vat|shipping|delivery|discount|saving|you save|\bfee|\btip\b|balance|gift card|coupon|promo|points/i;
+const BEST_TOTAL = /order total|grand total|estimated total|total due|total to pay|amount due|total \(|pay now/i;
+
+/** One snapshot line as a person reads it: `- listitem "Garlic" [ref=e5]: 2 kg — $3.10` → "Garlic 2 kg — $3.10". */
+function readable(line: string) {
+  const m = /^\s*-\s*(?:[a-z][\w-]*)?(?:\s+"((?:[^"\\]|\\.)*)")?((?:\s*\[[^\]]*\])*)\s*:?\s*(.*)$/i.exec(line);
+  if (!m) return '';
+  const rest = m[3].replace(/^"(.*)"$/, '$1');
+  return [m[1] ?? '', rest].filter(Boolean).join(' ').replace(/\\"/g, '"').replace(/\s+/g, ' ').trim();
+}
+
+/** What a checkout page says it will charge: its line items as the page writes them (up to eight) and the order total.
+ *  `total` is null when no total can be read. ponytail: any currency counts as its number toward the dollar cap. */
+export function orderOf(snapshot: string): { items: string[]; more: number; total: number | null; shown: string } {
+  const lines = snapshot.split('\n').filter((l) => /^\s*-\s/.test(l)).map(readable).filter((t) => MONEY.test(t) && t.length < 200);
+  const totals = lines.filter((t) => /total|amount due|pay now/i.test(t) && !/sub\s?-?total/i.test(t));
+  const pick = totals.find((t) => BEST_TOTAL.test(t)) ?? totals.at(-1);
+  const m = pick ? MONEY.exec(pick) : null;
+  const items = [...new Set(lines.filter((t) => !NOT_ITEM.test(t)))];
+  return { items: items.slice(0, 8), more: Math.max(0, items.length - 8), total: m ? Number(m[2].replace(/,/g, '')) : null, shown: m ? `${m[1]}${m[2]}` : '' };
 }
 
 /** What "For this task" or "Always" covers, from the gate's key, in plain words. */
