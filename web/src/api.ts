@@ -37,6 +37,8 @@ export const api = {
   /** Who a helper is, in the person's words; `soulReset` puts back how it started. */
   soul: (id: string, text: string) => call('PUT', `/api/bots/${id}/soul`, { text }),
   soulReset: (id: string) => call('POST', `/api/bots/${id}/soul/reset`),
+  /** Put away a skill a helper learned (it is kept, just no longer used). */
+  removeSkill: (id: string, name: string) => call('DELETE', `/api/bots/${id}/skills/${name}`),
   settings: (id: string, body: { allow?: string[]; memory?: boolean }) => call('PUT', `/api/bots/${id}/settings`, body),
   reset: (id: string) => call('POST', `/api/bots/${id}/reset`),
   undoMemory: (id: string, seq: number) => call('POST', `/api/bots/${id}/memory/${seq}/undo`),

@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import type { Config } from './config.ts';
@@ -260,14 +260,58 @@ export function upgradeFolder(cfg: Config, id: string, tpl: Template | null, dis
   }
 }
 
+/** A frontmatter value: plain, or quoted as a learned skill writes it. */
+const field = (text: string, key: string) => {
+  const v = new RegExp(`^${key}:\\s*(.+)$`, 'm').exec(text)?.[1] ?? '';
+  try { return v.startsWith('"') ? String(JSON.parse(v)) : v; } catch { return v; }
+};
+
 export function listSkills(cfg: Config, id: string) {
   const dir = join(botDir(cfg, id), 'skills');
   if (!existsSync(dir)) return [];
   return readdirSync(dir).filter((s) => existsSync(join(dir, s, 'SKILL.md'))).map((s) => {
     const text = readFileSync(join(dir, s, 'SKILL.md'), 'utf8');
     // `says` is the skill in the person's words, for the app; `description` is for the model.
-    return { name: s, description: /^description:\s*(.+)$/m.exec(text)?.[1] ?? '', says: /^says:\s*(.+)$/m.exec(text)?.[1] ?? '' };
+    return { name: s, description: field(text, 'description'), says: field(text, 'says'), learned: field(text, 'learned') === 'yes' };
   });
+}
+
+// ---- skills a bot learns: it proposes one, and it is written only after the person says yes ----
+export const SKILL_CAP = 4000;
+export interface SkillDraft { slug: string; says: string; steps: string; text: string }
+
+export function draftSkill(cfg: Config, id: string, p: { name?: unknown; description?: unknown; says?: unknown; steps?: unknown }): SkillDraft {
+  const one = (v: unknown) => String(v ?? '').replace(/\s+/g, ' ').trim();
+  const name = slug(one(p.name)), description = one(p.description), says = one(p.says);
+  const steps = String(p.steps ?? '').replace(/\r/g, '').trim();
+  if (!one(p.name) || !description || !says || !steps) throw new Error('a skill needs a name, a description, what it does in the person\'s words (`says`) and its steps');
+  // A skill is kept instructions, like a note: a page the bot read must not be able to plant an address in it.
+  if (/https?:|www\.|[\w.+-]+@[\w-]+\.[a-z]/i.test(`${description} ${says} ${steps}`)) throw new Error('a skill has no links or email addresses in it; describe the steps in plain words');
+  const have = join(botDir(cfg, id), 'skills', name, 'SKILL.md');
+  if (existsSync(have) && field(readFileSync(have, 'utf8'), 'learned') !== 'yes') throw new Error(`you already have a skill called ${name}; choose another name`);
+  // Quoted, so a colon in the model's words can't break the header.
+  const text = `---\nname: ${name}\ndescription: ${JSON.stringify(description)}\nsays: ${JSON.stringify(says)}\nlearned: yes\n---\n\n${steps}\n`;
+  if (text.length > SKILL_CAP) throw new Error(`that skill is over ${SKILL_CAP} characters; keep the steps short`);
+  return { slug: name, says, steps, text };
+}
+
+export function saveSkill(cfg: Config, id: string, d: SkillDraft) {
+  const dir = join(botDir(cfg, id), 'skills', d.slug);
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, 'SKILL.md'), d.text);
+  return commit(botDir(cfg, id), [`skills/${d.slug}/SKILL.md`], `Learned how to: ${d.says}`);
+}
+
+/** "Remove" puts a learned skill away in skills/.archive (the engine skips dot folders), never deletes it. Bundled skills stay. */
+export function archiveSkill(cfg: Config, id: string, name: string) {
+  const skill = listSkills(cfg, id).find((k) => k.name === name);
+  if (!skill) throw Object.assign(new Error('no such skill'), { status: 404 });
+  if (!skill.learned) throw Object.assign(new Error('only a skill it learned can be removed'), { status: 400 });
+  const dir = join(botDir(cfg, id), 'skills');
+  mkdirSync(join(dir, '.archive'), { recursive: true });
+  renameSync(join(dir, name), join(dir, '.archive', `${name}-${Date.now()}`));
+  commit(botDir(cfg, id), [`skills/${name}/SKILL.md`], `Put away: ${skill.says || name}`);
+  return skill;
 }
 
 export function listFiles(cfg: Config, id: string) {
@@ -311,5 +355,5 @@ export function systemPrompt(cfg: Config, id: string, chief: boolean) {
     `The person's own folders are in ${homedir()} (Documents, Pictures, Downloads…). Your shell can't see them; reach them with read and write, ` +
     'or crew_copy to put a copy of something you made there. Crewhouse asks the person first, so just go ahead and call the tool.\n' +
     'Talk to the person in plain words: call what you made by what it is ("the birthday video"), never by a file path, a command or code.\n' +
-    `Your crew tools: crew_report (a one-line progress note), crew_deliver (register a finished file), crew_copy (a copy into the person's folders), crew_remember (a lasting preference of the person)${chief ? ', and for running the crew: crew_roster, crew_recruit, crew_assign, crew_routine, crew_routines, crew_status and crew_call_me' : ''}.`;
+    `Your crew tools: crew_report (a one-line progress note), crew_deliver (register a finished file), crew_copy (a copy into the person's folders), crew_remember (a lasting preference of the person), crew_learn (ask to keep a way of doing a job you will need again)${chief ? ', and for running the crew: crew_roster, crew_recruit, crew_assign, crew_routine, crew_routines, crew_status, crew_suggest and crew_call_me' : ''}.`;
 }

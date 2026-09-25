@@ -43,6 +43,9 @@ const asks = [
     words: 'Scribe wants to email your thank-you note to Aunty Sara. Send it?',
     preview: { head: 'To Aunty Sara · from your Gmail', body: "Dear Aunty Sara, thank you so much for the lovely dinner on Sunday. Mum hasn't stopped talking about your biryani, and neither have I. Next time, it's at ours! With love, Nadia" },
   } },
+  { id: 10, bot: 'scout', task_id: null, kind: 'propose', at: now - 4 * min, member: me, title: 'Scout would like to remember how to do this: Plan the week’s dinners, with a shopping list', detail: {
+    words: 'Scout would like to remember how to do this: Plan the week’s dinners, with a shopping list',
+    preview: { head: 'How Scout would do it', body: '1. Five dinners, vegetarian, nothing over forty minutes.\n2. One shopping list, grouped by aisle.\n3. Keep Friday for pizza night.' } } },
   { id: 8, bot: 'reel', task_id: 41, kind: 'connect', at: now - min, member: me, title: '', detail: { app: 'drive', words: 'Want a copy in the family Drive too?' } },
   ...(me === 1 ? [{ id: 9, bot: 'tracer', task_id: 44, kind: 'permission', at: now - 2 * min, member: 1, title: '', detail: {
     effect: 'spend', spends: true, words: "Tracer wants to spend about $0.50 to find Sara Malik's work email. OK?" } }] : []),
@@ -134,7 +137,7 @@ const pages: Record<string, Json> = {
     { id: 4, author: 'system', text: "Delivered files/happy-birthday-mum.mp4: Here's a first look 💐" },
   ], notes: '- Nadia likes soft piano music for family videos\n- Mum is "Ammi" in titles', tasks: [],
   soul: '# Reel\n\nYou are Reel. You love a tidy thirty seconds: clean cuts, steady pacing, nothing that shouts.\n\n- Upbeat and practical. You show rather than tell.\n- You make a sensible call when something is missing, and say what you assumed.',
-  skills: [{ name: 'make-reel', says: 'Turn photos and screenshots into a short video' }] },
+  skills: [{ name: 'make-reel', says: 'Turn photos and screenshots into a short video' }, { name: 'birthday-video', says: 'Make a birthday video from family photos', learned: true }] },
 };
 if (variant === 'connect') pages.pip = { messages: [
   { id: 1, author: 'person', text: "What's on this week?" },

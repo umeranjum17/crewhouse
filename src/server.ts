@@ -169,6 +169,12 @@ export function startServer(cfg: Config, db: Store, crew: Crew) {
       db.event('memory.undone', r[1], { seq: e.seq, text: d.text, commit, member: me });
       return { ok: true };
     }
+    if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/skills\/([a-z0-9-]+)$/)) && m === 'DELETE') {
+      crew.botPage(r[1]); // 404 for unknown bots
+      const k = disk.archiveSkill(cfg, r[1], r[2]);
+      db.event('skill.removed', r[1], { name: k.name, says: k.says, member: me });
+      return { ok: true };
+    }
     // Who a helper is: the person writes it, a bot never does. "Put back" is the template's, under the helper's own name.
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/soul$/)) && m === 'PUT') {
       crew.botPage(r[1]); // 404 for unknown bots

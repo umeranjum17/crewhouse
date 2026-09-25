@@ -31,7 +31,8 @@ const STUCK_MS = Number(process.env.CREWHOUSE_STUCK_MS || 180_000); // working w
 const ALL_CLEAR = 'ALL-CLEAR';
 const ALL_CLEAR_RESULT = 'All clear';
 const TRAIL = ['task.created', 'task.working', 'task.done', 'task.failed', 'task.progress', 'run.tool', 'run.allowed', 'run.typed',
-  'ask.opened', 'ask.answered', 'ask.parked', 'file.delivered', 'memory.learned', 'memory.undone', 'bot.recruited', 'bot.allowed', 'run.resumed'];
+  'ask.opened', 'ask.answered', 'ask.parked', 'file.delivered', 'memory.learned', 'memory.undone', 'bot.recruited', 'bot.allowed', 'run.resumed',
+  'skill.learned', 'skill.removed', 'soul.changed'];
 
 /** Whether a member's quiet hours ("22:00-07:00", may wrap past midnight) cover this moment. */
 export function quietNow(quiet: string | null | undefined, at = new Date()) {
@@ -102,7 +103,8 @@ export class Crew {
       if (!this.db.get('SELECT 1 FROM people WHERE id = 1')) this.db.run('INSERT INTO people (id, name, created_at) VALUES (1, ?, ?)', 'Owner', Date.now());
       if (!this.bot(CHIEF)) this.addBot(disk.loadTemplate(this.cfg, 'chief'), 'Chief', CHIEF, 'system');
       // Questions whose task is over have no one left to answer them.
-      this.db.run("UPDATE asks SET state = 'withdrawn' WHERE state = 'open' AND (task_id IS NULL OR task_id NOT IN (SELECT id FROM tasks WHERE state IN ('working', 'needs_you')))");
+      // A suggestion (a skill to keep, a new personality) belongs to no running task, so it waits for its answer across restarts.
+      this.db.run("UPDATE asks SET state = 'withdrawn' WHERE state = 'open' AND kind != 'propose' AND (task_id IS NULL OR task_id NOT IN (SELECT id FROM tasks WHERE state IN ('working', 'needs_you')))");
       this.db.run("UPDATE bots SET state = 'off'");
       this.db.event('system.started', null, {});
       for (const m of this.members()) this.ensureDigest(m.id);
@@ -204,6 +206,7 @@ export class Crew {
     const d = JSON.parse(detail || '{}');
     const covers = d.key ? coversOf(d.key) : null;
     if (a.kind === 'connect') return { ...a, detail: { app: d.app, words: d.words } };
+    if (a.kind === 'propose') return { ...a, detail: { words: a.title, preview: d.preview } };
     return { ...a, detail: { effect: d.effect, words: a.title, spends: d.effect === 'spend', covers, ...(covers ? { always: covers } : {}) } };
   }
 
@@ -820,10 +823,10 @@ export class Crew {
     return answer;
   }
 
-  private openAsk(bot: string, task: Row | undefined, title: string, detail: Row, kind = 'permission') {
+  private openAsk(bot: string, task: Row | undefined, title: string, detail: Row, kind = 'permission', to?: number) {
     return this.db.tx(() => {
       // The question goes to whoever the work is for.
-      const member = task?.member ?? this.bot(bot)?.member ?? OWNER;
+      const member = to ?? task?.member ?? this.bot(bot)?.member ?? OWNER;
       const r = this.db.run('INSERT INTO asks (bot, task_id, kind, title, detail, at, member) VALUES (?, ?, ?, ?, ?, ?, ?)', bot, task?.id ?? null, kind, title, JSON.stringify(detail), Date.now(), member);
       if (task) this.setTask(task, 'needs_you');
       this.db.event('ask.opened', bot, { ask: Number(r.lastInsertRowid), task: task?.id, title, effect: detail.effect });
@@ -840,6 +843,8 @@ export class Crew {
     const scope = body.answer === 'allow' ? body.scope ?? 'once' : 'once';
     if (!['once', 'task', 'always'].includes(scope) || (scope !== 'once' && !detail.key) || (scope === 'task' && !ask.task_id)) throw fail('allow once, for this task, or always');
     const who = this.bot(ask.bot)?.display ?? ask.bot;
+    // A suggestion takes effect on yes, before the card closes: if it can't, the card stays open.
+    if (ask.kind === 'propose' && body.answer === 'allow') this.adopt(ask.bot, detail, ask.member ?? OWNER);
     const shown = body.answer === 'deny' ? 'not now' : scope === 'task' ? 'allowed for this task' : scope === 'always' ? `always allowed for ${who}` : 'allowed once';
     const held = this.holds.get(askId);
     this.db.tx(() => {
@@ -854,6 +859,7 @@ export class Crew {
       if (task && !held) this.setTask(task, 'working');
     });
     if (held) { held(body.answer!); this.holds.delete(askId); return; }
+    if (ask.kind === 'propose') return;
     const t = ask.task_id && this.db.get('SELECT * FROM tasks WHERE id = ?', ask.task_id);
     if (ask.kind === 'connect' && t && body.answer === 'allow' && this.live.get(ask.bot)?.task === t.id) {
       // Connected: the app's tools arrive with a fresh session, so the task picks up in its own conversation with them.
@@ -922,6 +928,15 @@ export class Crew {
           const change = disk.remember(this.cfg, { member, bot: everyone ? null : botId }, String(p.text ?? ''), String(p.replaces ?? ''));
           this.db.event('memory.learned', botId, { task: task(), text: change.added.slice(2, 202), member, ...(everyone ? { everyone } : {}), ...change });
         }),
+      tool('crew_learn', 'Ask the person to let you keep a way of doing something you will need again (a job you have now done at least twice). ' +
+        '`name`: two to four words; `description`: when to use it; `says`: what it does, in the person\'s plain words; `steps`: the steps, short and in plain words, as the person sees them. ' +
+        'The person sees a card; it becomes one of your skills only if they say yes.',
+        { name: Type.String(), description: Type.String(), says: Type.String(), steps: Type.String() }, (p) => {
+          const d = disk.draftSkill(this.cfg, botId, p);
+          const b = this.bot(botId)!;
+          return this.propose(botId, `${b.display} would like to remember how to do this: ${d.says}`,
+            { skill: { name: d.slug, description: String(p.description), says: d.says, steps: d.steps }, preview: { head: `How ${b.display} would do it`, body: d.steps } });
+        }),
     ];
     if (botId !== CHIEF) return own;
     const accounts = Object.keys(PROVIDERS).join(', ');
@@ -941,8 +956,40 @@ export class Crew {
         (p) => { const x = this.addRoutine({ bot: p.bot, schedule: p.when, task: p.task, name: p.name, model: p.account, quiet: p.quiet }, CHIEF); return { routine: { id: x.id, name: x.name, next: new Date(x.next_at).toString() } }; }),
       tool('crew_routines', 'The routines and when each runs next.', {}, () => this.routines(this.chiefFor()).map((x) => ({ id: x.id, bot: x.bot, name: x.name, when: x.words, state: x.state, next: new Date(x.next_at).toString() }))),
       tool('crew_status', 'Open tasks.', {}, () => this.db.all("SELECT id, bot, title, state FROM tasks WHERE state IN ('queued','working','needs_you','paused') ORDER BY id")),
+      tool('crew_suggest', 'Suggest a change to how a helper comes across (its personality), when the person asks for one. ' +
+        '`text`: the whole new personality, a few short plain lines in the second person ("You are Reel. …"). The person sees it and says yes or no.',
+        { bot: Type.String(), text: Type.String() }, (p) => {
+          const b = this.bot(String(p.bot ?? '').toLowerCase());
+          if (!b) throw fail(`no bot called ${p.bot}; see crew_roster`, 404);
+          const body = String(p.text ?? '').replace(/\r/g, '').trim().replace(/^# .*\n+/, '');
+          const text = `# ${b.display}\n\n${body}`;
+          if (!body || text.length > disk.SOUL_CAP) throw fail(`say it in a few lines, under ${disk.SOUL_CAP} characters`);
+          return this.propose(CHIEF, `Chief suggests a change to how ${b.display} comes across`,
+            { soul: { bot: b.id, text }, preview: { head: `${b.display}, as Chief suggests`, body } });
+        }),
       tool('crew_call_me', 'Change how the person is addressed, when they ask.', { how: Type.String() }, (p) => { this.setAddress(String(p.how ?? '')); }),
     ];
+  }
+
+  /** A suggestion card: nothing changes until the person says yes, and the bot carries on meanwhile. */
+  private propose(botId: string, title: string, detail: Row) {
+    const t = this.activeTask(botId);
+    const member = t?.member ?? this.bot(botId)?.member ?? OWNER;
+    if (!this.db.get("SELECT 1 FROM asks WHERE bot = ? AND kind = 'propose' AND state = 'open' AND title = ? AND member = ?", botId, title, member)) {
+      this.openAsk(botId, undefined, title, { ...detail, task: t?.id }, 'propose', member);
+    }
+    return { asked: true, note: 'The person sees your suggestion on a card. Carry on; nothing changes unless they say yes.' };
+  }
+
+  /** The person said yes to a suggestion. */
+  private adopt(botId: string, d: Row, member: number) {
+    if (d.skill) {
+      disk.saveSkill(this.cfg, botId, disk.draftSkill(this.cfg, botId, d.skill));
+      this.db.event('skill.learned', botId, { name: disk.slug(d.skill.name), says: d.skill.says, member });
+    } else if (d.soul) {
+      disk.writeSoul(this.cfg, d.soul.bot, d.soul.text, 'Personality changed, as Chief suggested');
+      this.db.event('soul.changed', d.soul.bot, { by: CHIEF, member });
+    }
   }
 
   /** A helper needs one of the person's apps: an in-chat Connect card, answered once it is connected (or Not now). */

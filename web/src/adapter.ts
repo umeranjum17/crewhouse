@@ -137,6 +137,12 @@ export function card(a: Json, state: Json): Card {
     return { ...base, kind: 'connect', app, head: `${name} could use ${app.name}`, words: plain(d.words ?? `${name} can do this with your ${app.name}. Connect it?`),
       choices: [{ label: `Connect ${app.name}`, body: { answer: 'allow' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
   }
+  if (a.kind === 'propose') {
+    // A suggestion: a skill a helper would like to keep, or a new personality from Chief. Nothing changes without a yes.
+    return { ...base, kind: 'ok', head: a.bot === 'chief' ? 'Chief has a suggestion' : `${name} learned something`, words: plain(d.words ?? `${name} has a suggestion.`),
+      preview: d.preview ? { head: d.preview.head ? plain(d.preview.head) : undefined, body: plain(d.preview.body ?? '') } : undefined,
+      choices: [{ label: a.bot === 'chief' ? 'Yes, change it' : 'Yes, keep it', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
+  }
   if (a.kind !== 'permission') {
     return { ...base, kind: 'question', reply: true, head: `${name} has a question`,
       words: d.question ? plain(d.question) : `${name} stopped to check something with you. Tell ${name} what to do:`, choices: [] };
@@ -206,6 +212,9 @@ export function step(e: Json): string | null {
     case 'file.delivered': return `Made “${pretty(d.path)}”`;
     case 'memory.learned': return `${d.everyone ? 'Learned, for the whole crew' : 'Learned'}: ${plain(d.text)}`;
     case 'memory.undone': return `You undid: ${plain(d.text)}`;
+    case 'skill.learned': return `Learned how to: ${plain(d.says ?? d.name)}`;
+    case 'skill.removed': return `You put away: ${plain(d.says || d.name)}`;
+    case 'soul.changed': return d.by === 'chief' ? 'Took on the personality Chief suggested' : d.reset ? 'Went back to how it started' : 'You changed how it comes across';
     case 'run.resumed': return 'Picked up where it left off';
     case 'desktop.takeover': return 'You took the wheel';
     case 'desktop.giveback': return 'You handed the wheel back';
@@ -261,7 +270,7 @@ export const personality = (soul = '') => soul.split('\n').slice(soul.startsWith
 export const soulDraft = (soul = '') => soul.split('\n').slice(soul.startsWith('# ') ? 1 : 0).join('\n').trim();
 export const soulText = (name: string, draft: string) => `# ${name}\n\n${draft.trim()}\n`;
 /** What a helper knows how to do, from its skills: their own descriptions, in plain words. */
-export const knows = (skills: Json[] = []) => skills.map((k) => plain(k.says || String(k.name).replace(/-/g, ' '))).filter(Boolean);
+export const knows = (skills: Json[] = []) => skills.map((k) => ({ name: String(k.name), says: plain(k.says || String(k.name).replace(/-/g, ' ')), learned: !!k.learned }));
 
 // ---------- routines, people, accounts, apps ----------
 export function routines(state: Json, bot?: string) {

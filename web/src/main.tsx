@@ -415,7 +415,8 @@ function AboutMe({ id, name, page, reload }: { id: string; name: string; page: J
         </div>
       )}
       <div className="label">{name} knows how to</div>
-      {knows.length ? <div className="card list">{knows.map((k, i) => <div key={i} className="row-item"><span className="grow">{k}</span></div>)}</div>
+      {knows.length ? <div className="card list">{knows.map((k) => <div key={k.name} className="row-item"><span className="grow">{k.says}{k.learned && <div className="mute small">Learned from you</div>}</span>
+        {k.learned && <button className="link" onClick={() => confirm(`Should ${name} stop doing it this way?`) && attempt(async () => { await api.removeSkill(id, k.name); reload(); }, 'Put away')}>Remove</button>}</div>)}</div>
         : <div className="card empty">Plain jobs, the way you ask for them.</div>}
     </>
   );
