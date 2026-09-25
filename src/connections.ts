@@ -37,6 +37,9 @@ export const APPS: Record<string, App> = {
   canva: { name: 'Canva', servers: ['https://mcp.canva.com/mcp'], issuer: 'https://mcp.canva.com' },
 };
 
+/** Google Calendar's REST API; its events scope is the one a Calendar connection already has. */
+export const CALENDAR = 'https://www.googleapis.com/calendar/v3';
+
 type Tokens = { access: string; refresh?: string; expires: number; scope?: string };
 type Endpoints = { authorize: string; token: string; register?: string; scopes: string[]; extra?: Record<string, string> };
 export type Connecting = { state: 'waiting' | 'done' | 'failed'; url?: string; error?: string; why?: 'declined' | 'unticked' };
@@ -233,6 +236,20 @@ export class Connections {
       this.onExpired?.(member, id);
       return null;
     }
+  }
+
+  /** Today's events on the member's own Google Calendar, read by crewd itself for the morning digest (no AI). All-day
+   *  events have no time. Null when Calendar isn't connected or can't be read right now. */
+  async today(member: number): Promise<{ at: number | null; title: string }[] | null> {
+    const token = this.connected(member, 'calendar') && await this.token(member, 'calendar');
+    if (!token) return null;
+    const d = new Date();
+    const from = new Date(d.getFullYear(), d.getMonth(), d.getDate()), to = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);
+    const q = new URLSearchParams({ timeMin: from.toISOString(), timeMax: to.toISOString(), singleEvents: 'true', orderBy: 'startTime', maxResults: '12' });
+    const res = await fetch(`${CALENDAR}/calendars/primary/events?${q}`, { headers: { authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(15_000) });
+    if (!res.ok) return null;
+    const { items = [] } = await res.json() as { items?: any[] };
+    return items.filter((e) => e.status !== 'cancelled').map((e) => ({ at: e.start?.dateTime ? Date.parse(e.start.dateTime) : null, title: String(e.summary ?? 'Busy').slice(0, 80) }));
   }
 
   disconnect(member: number, id: string) {

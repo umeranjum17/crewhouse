@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { setup as lab, settled, release, until } from './lab.ts';
+import { setup as lab, settled, release, until, lastSaid } from './lab.ts';
 import type { Store } from '../src/db.ts';
 const { describe, nextRun, parseSchedule } = await import('../src/routines.ts');
 
@@ -43,10 +43,10 @@ test('next run: same day if still ahead, else the next matching day; intervals c
 });
 
 function setup() {
-  const { db, crew, done } = lab();
+  const { db, crew, cfg, done } = lab();
   crew.onboard('sir');
   crew.recruit('reel', 'Reel', 'person');
-  return { db, crew, done };
+  return { db, crew, cfg, done };
 }
 const fired = (db: Store, id: number) => db.all("SELECT kind, data FROM events WHERE kind IN ('routine.fired', 'routine.skipped') AND json_extract(data, '$.routine') = ?", id)
   .map((e) => ({ kind: e.kind, ...JSON.parse(e.data) }));
@@ -213,12 +213,12 @@ test('the crew\'s share: routines wait for tomorrow once it is used up, what the
   const before = process.env.CREWHOUSE_DAY_TOKENS;
   process.env.CREWHOUSE_DAY_TOKENS = '1'; // any turn at all uses up a Light share
   try {
-    assert.deepEqual(crew.snapshot().share, { choice: 'light', used: false });
+    assert.deepEqual([crew.snapshot().share.choice, crew.snapshot().share.used], ['light', false]);
     const { task: asked } = (crew as any).addTask('reel', 'make the card', 'person', undefined, 1);
     await settled(db, asked);
     assert.equal(state(db, asked), 'done');
     assert.ok(db.get('SELECT tokens FROM usage WHERE member = 1')!.tokens > 0, 'the turn was counted');
-    assert.deepEqual(crew.snapshot().share, { choice: 'light', used: true });
+    assert.deepEqual([crew.snapshot().share.choice, crew.snapshot().share.used, crew.snapshot().share.week], ['light', true, 'most']);
 
     // The routine's run waits for local midnight, and Chief says so once.
     crew.runRoutine(r.id);
@@ -240,7 +240,7 @@ test('the crew\'s share: routines wait for tomorrow once it is used up, what the
     // "As much as it needs" lifts it; a made-up choice is refused.
     assert.throws(() => crew.updateMember(1, { share: 'lots' }), /light, normal or full/);
     crew.updateMember(1, { share: 'full' });
-    assert.deepEqual(crew.snapshot().share, { choice: 'full', used: false });
+    assert.deepEqual(crew.snapshot().share, { choice: 'full', used: false, week: null });
   } finally {
     if (before === undefined) delete process.env.CREWHOUSE_DAY_TOKENS; else process.env.CREWHOUSE_DAY_TOKENS = before;
   }
@@ -318,5 +318,108 @@ test('watches: crewd reads the page, says nothing and uses no AI while it is the
     assert.equal(state(db, t.id), 'done');
     assert.deepEqual(crew.routines().find((x) => x.id === r.id)!.history.map((h: any) => h.watch), ['changed', 'unreachable', 'same', 'started']);
   } finally { site.close(); }
+  done();
+});
+
+test('tell me when something\'s wrong: a watched page that stays down is said once, and again when it\'s back', async () => {
+  const { createServer } = await import('node:http');
+  let up = false;
+  const site = createServer((_q, res) => { if (!up) return void res.writeHead(500).end(); res.writeHead(200, { 'content-type': 'text/html' }).end('<p>Rent $950</p>'); });
+  await new Promise<void>((r) => site.listen(0, '127.0.0.1', r));
+  const { db, crew, done } = setup();
+  try {
+    const r = crew.addRoutine({ bot: 'reel', schedule: 'every hour', watch: `http://127.0.0.1:${(site.address() as any).port}/`, name: 'Rentals' }, 'person');
+    const lines = () => db.all("SELECT text FROM messages WHERE bot = 'reel' AND author = 'bot'").map((m) => m.text);
+    const alerts = () => db.get("SELECT COUNT(*) AS n FROM events WHERE kind = 'alert'")!.n;
+    const run = async (n: number) => { crew.runRoutine(r.id); await until(`check ${n}`, () => fired(db, r.id).length >= n); };
+    await run(1);
+    assert.deepEqual(lines(), [], 'one failure stays quiet');
+    await run(2);
+    assert.deepEqual(lines(), ["I couldn't open the page for “Rentals” twice now. It may be down, or need a sign-in. I'll keep trying, and tell you when it works again."]);
+    await run(3);
+    assert.equal(lines().length, 1, 'one line per outage, not per run');
+    up = true;
+    await run(4);
+    assert.equal(lines().at(-1), "The page for “Rentals” opens again. I'm back to keeping an eye on it.");
+    assert.equal(alerts(), 2, 'both lines reach the phone');
+    await run(5);
+    assert.equal(lines().length, 2);
+  } finally { site.close(); }
+  done();
+});
+
+test('tell me when something\'s wrong: a routine that fails says so in Chief\'s thread, anything else in its own chat; stopping says nothing', async () => {
+  const { db, crew, done } = setup();
+  const timeOut = async (t: number) => {
+    await until('working', () => state(db, t) === 'working');
+    db.run('UPDATE tasks SET created_at = ? WHERE id = ?', Date.now() - 2 * 3_600_000, t);
+    (crew as any).tick();
+    await until('failed', () => state(db, t) === 'failed');
+  };
+  const r = crew.addRoutine({ bot: 'reel', schedule: 'every day 7:00', task: 'ask permission: check the deals', name: 'Deal check' }, 'person');
+  crew.runRoutine(r.id);
+  await timeOut(db.get('SELECT id FROM tasks WHERE routine = ?', r.id)!.id);
+  assert.match(lastSaid(db, 'chief')!, /^Reel couldn't finish “Deal check”\. Took longer than an hour, so I stopped it\. It will try again .*\.$/);
+
+  const { task: t } = (await crew.post('reel', 'ask permission: make the card'))!;
+  await timeOut(t);
+  assert.equal(db.get("SELECT text FROM messages WHERE task_id = ? AND author = 'bot' ORDER BY id DESC", t)!.text, 'Took longer than an hour, so I stopped it.');
+  assert.equal(db.get("SELECT COUNT(*) AS n FROM events WHERE kind = 'alert'")!.n, 1, 'the chat line reaches the phone');
+
+  const { task: s } = (await crew.post('reel', 'ask permission: another card'))!;
+  await until('working', () => state(db, s) === 'working');
+  await crew.resetBot('reel');
+  assert.equal(db.get("SELECT COUNT(*) AS n FROM messages WHERE task_id = ? AND author = 'bot'", s)!.n, 0, 'the person stopped it; no line');
+  done();
+});
+
+test('the digest reads today\'s calendar itself once Calendar is connected, and the share has a weekly line in thirds', async () => {
+  const { db, crew, cfg, done } = setup();
+  const { mkdirSync: mk, writeFileSync: wf } = await import('node:fs');
+  const { join: j } = await import('node:path');
+  const { CALENDAR } = await import('../src/connections.ts');
+  mk(j(cfg.stateDir, 'people', '1'), { recursive: true });
+  wf(j(cfg.stateDir, 'people', '1', 'connections.json'), JSON.stringify({ calendar: { access: 'tok', expires: Date.now() + 3_600_000 } }));
+  const nine = new Date(); nine.setHours(9, 0, 0, 0);
+  const real = globalThis.fetch;
+  let asked = '';
+  globalThis.fetch = (async (url: any, init: any) => {
+    if (!String(url).startsWith(CALENDAR)) return real(url, init);
+    asked = `${url} ${init?.headers?.authorization}`;
+    return new Response(JSON.stringify({ items: [{ summary: 'Dentist', start: { dateTime: nine.toISOString() } }, { summary: 'Eid', start: { date: '2026-09-25' } }, { summary: 'Gone', status: 'cancelled', start: {} }] }), { status: 200 });
+  }) as typeof fetch;
+  try {
+    const d = crew.routines().find((x) => x.kind === 'digest')!;
+    crew.runRoutine(d.id);
+    await until('digest', () => /calendar/.test(lastSaid(db, 'chief') ?? ''));
+    assert.match(asked, /calendars\/primary\/events\?.*singleEvents=true.* Bearer tok$/);
+    assert.match(lastSaid(db, 'chief')!, /- Today on your calendar: 9:00 am, Dentist and Eid \(all day\)\./);
+    assert.equal(db.get("SELECT COUNT(*) AS n FROM events WHERE kind = 'run.prompted'")!.n, 0, 'no AI');
+  } finally { globalThis.fetch = real; }
+
+  // The week, in thirds of the share: never a number.
+  const day = (ago: number) => new Date(Date.now() - ago * 86_400_000).toLocaleDateString('en-CA');
+  const budget = 2_000_000 * 0.25 * 7;
+  db.run('INSERT INTO usage (member, day, tokens) VALUES (1, ?, ?)', day(2), Math.round(budget * 0.2));
+  assert.equal(crew.snapshot().share.week, 'small');
+  db.run('INSERT INTO usage (member, day, tokens) VALUES (1, ?, ?)', day(3), Math.round(budget * 0.3));
+  assert.equal(crew.snapshot().share.week, 'fair');
+  db.run('INSERT INTO usage (member, day, tokens) VALUES (1, ?, ?)', day(9), Math.round(budget * 5));
+  assert.equal(crew.snapshot().share.week, 'fair', 'older than a week does not count');
+  crew.updateMember(1, { share: 'full' });
+  assert.equal(crew.snapshot().share.week, null);
+  done();
+});
+
+test('a new job in a chat carries the chat\'s last line, so "OK, post it" knows what "it" is', async () => {
+  const { db, crew, done } = setup();
+  const r = crew.addRoutine({ bot: 'reel', schedule: 'every day 7:00', task: 'draft the weekly post', name: 'Weekly post' }, 'person');
+  crew.runRoutine(r.id);
+  const first = db.get('SELECT id FROM tasks WHERE routine = ?', r.id)!.id;
+  await settled(db, first);
+  const { task: t } = (await crew.post('reel', 'OK, post it'))!;
+  const prompt = (crew as any).prompt(db.get('SELECT * FROM tasks WHERE id = ?', t));
+  assert.match(prompt, /Your last message in this chat, which this may answer: “stub reel: done with "draft the weekly post"”/);
+  await settled(db, t);
   done();
 });

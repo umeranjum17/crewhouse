@@ -32,6 +32,8 @@ export const SHARES: Record<string, number> = { light: 0.25, normal: 0.6, full: 
 /** ponytail: one fixed guess at a day of a ChatGPT plan, weighted like its limits (cached reading is cheap); the vendors
  *  publish no allowance to read, so tune this, or read the plan's own when one is published. */
 const dayBudget = () => Number(process.env.CREWHOUSE_DAY_TOKENS || 2_000_000);
+/** A job the person stopped: they know, so it gets no failure line. */
+const STOPPED = 'Stopped by you.';
 const MONEY_CAP = 20; // dollars a month, until the owner changes it
 /** Local calendar day and month: the share resets at midnight here, the money cap on the 1st. */
 const dayOf = (t = Date.now()) => new Date(t).toLocaleDateString('en-CA');
@@ -137,6 +139,7 @@ export class Crew {
   private awake = false;
   /** Watches reading their page right now: a slow page is never read twice at once. */
   private checking = new Set<number>();
+  private stopped = false;
 
   private cfg: Config;
   private db: Store;
@@ -191,6 +194,7 @@ export class Crew {
   }
 
   stop() {
+    this.stopped = true;
     clearInterval(this.timer);
     if (this.awake) this.keepAwake(false);
     for (const [id, l] of this.live) { this.live.delete(id); l.mcp?.stop(); l.session.dispose(); }
@@ -292,7 +296,7 @@ export class Crew {
       desktops: { ready: desktopMissing().length === 0 },
       routines: this.routines(me.id),
       /** The viewer's pick for the crew's share of their AI, and whether today's is used up. Never a number. */
-      share: { choice: me.share ?? 'light', used: this.overShare(me.id) },
+      share: { choice: me.share ?? 'light', used: this.overShare(me.id), week: this.week(me.id) },
       /** Owner only: the house's monthly money cap and what was spent this month, in dollars. */
       ...(me.id === OWNER ? { money: { cap: this.moneyCap(), spent: this.spentThisMonth() } } : {}),
     };
@@ -340,6 +344,15 @@ export class Crew {
   overShare(member: number) {
     const used = this.db.get('SELECT tokens FROM usage WHERE member = ? AND day = ?', member, dayOf())?.tokens ?? 0;
     return used >= dayBudget() * (SHARES[this.member(member).share ?? 'light'] ?? SHARES.light);
+  }
+
+  /** How this week is going against the member's share, in thirds: 'small', 'fair' or 'most'. Null on "as much as it needs". */
+  week(member: number) {
+    const share = SHARES[this.member(member).share ?? 'light'] ?? SHARES.light;
+    if (!Number.isFinite(share)) return null;
+    const used = this.db.get('SELECT COALESCE(SUM(tokens), 0) AS n FROM usage WHERE member = ? AND day > ?', member, dayOf(Date.now() - 7 * 86_400_000))!.n as number;
+    const part = used / (dayBudget() * share * 7);
+    return part < 1 / 3 ? 'small' : part < 2 / 3 ? 'fair' : 'most';
   }
 
   /** A routine run over the share waits for tomorrow; Chief says so once a day. */
@@ -455,15 +468,22 @@ export class Crew {
     }
   }
 
+  private sendDigest(r: Row, why: string, now: number, day?: { at: number | null; title: string }[]) {
+    this.db.tx(() => {
+      this.say(CHIEF, 'bot', this.digest(r.member, r.last_at ?? now - 86_400_000, day), null, r.member);
+      this.db.run('UPDATE routines SET last_at = ? WHERE id = ?', now, r.id);
+      this.db.event('routine.fired', CHIEF, { routine: r.id, name: r.name, why, member: r.member });
+    });
+  }
+
   private fire(r: Row, why: 'schedule' | 'late' | 'now') {
     const now = Date.now();
     if (r.kind === 'digest') {
-      this.db.tx(() => {
-        this.say(CHIEF, 'bot', this.digest(r.member, r.last_at ?? now - 86_400_000), null, r.member);
-        this.db.run('UPDATE routines SET last_at = ? WHERE id = ?', now, r.id);
-        this.db.event('routine.fired', CHIEF, { routine: r.id, name: r.name, why, member: r.member });
-      });
-      return;
+      // With Calendar connected, crewd reads today's events itself first; the digest still costs no AI.
+      if (this.connections.connected(r.member, 'calendar')) {
+        return void this.connections.today(r.member).catch(() => null).then((day) => this.sendDigest(r, why, now, day ?? undefined));
+      }
+      return this.sendDigest(r, why, now);
     }
     // Overlap: the last run is still going (or waiting on the person), so this one is skipped, not stacked.
     const open = r.last_task && this.db.get("SELECT id FROM tasks WHERE id = ? AND state IN ('queued', 'working', 'needs_you', 'paused')", r.last_task);
@@ -492,7 +512,8 @@ export class Crew {
     try {
       let now: string;
       try { const page = await readPage(r.watch); if (page.status >= 400) throw new Error(String(page.status)); now = page.text.trim(); }
-      catch { return seen('unreachable'); }
+      catch { this.outage(r, true); return seen('unreachable'); }
+      this.outage(r, false);
       const file = join(disk.botDir(this.cfg, r.bot), 'work', 'watch', `${r.id}.txt`);
       const before = existsSync(file) ? readFileSync(file, 'utf8') : null;
       mkdirSync(dirname(file), { recursive: true });
@@ -505,8 +526,21 @@ export class Crew {
     } finally { this.checking.delete(r.id); }
   }
 
+  /** A watched page that won't open: one line on the second failure in a row (one timeout stays quiet), and one when it
+   *  opens again. Not one per run. */
+  private outage(r: Row, down: boolean) {
+    const was = this.db.get('SELECT down FROM routines WHERE id = ?', r.id)?.down ?? 0;
+    if (!down && !was) return;
+    this.db.run('UPDATE routines SET down = ? WHERE id = ?', down ? was + 1 : 0, r.id);
+    const line = down && was + 1 === 2 ? `I couldn't open the page for “${r.name}” twice now. It may be down, or need a sign-in. I'll keep trying, and tell you when it works again.`
+      : !down && was >= 2 ? `The page for “${r.name}” opens again. I'm back to keeping an eye on it.` : '';
+    if (!line) return;
+    this.say(r.bot, 'bot', line, null, r.member);
+    this.alert(r.member);
+  }
+
   /** Chief's "while you were away" for one member: what finished, what needs them, what is coming up. No model call. */
-  digest(member: number, since: number) {
+  digest(member: number, since: number, day?: { at: number | null; title: string }[]) {
     const address = this.member(member).address;
     const name = (id: string) => this.bot(id)?.display ?? id;
     const list = (xs: string[]) => xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join('; ')} and ${xs.at(-1)}`;
@@ -520,6 +554,7 @@ export class Crew {
     if (failed.length) lines.push(`- Did not go well: ${list(failed.slice(0, 3).map((t) => `${name(t.bot)}, “${t.title}” (${String(t.result ?? '').slice(0, 80)})`))}.`);
     lines.push(asks.length ? `- Needs you: ${list(asks.slice(0, 3).map((a) => a.title))}. It is under Needs you.` : '- Nothing needs you.');
     for (const l of learned.slice(0, 3)) lines.push(`- ${name(l.bot)} learned: ${JSON.parse(l.data).text}`);
+    if (day) lines.push(day.length ? `- Today on your calendar: ${list(day.map((e) => e.at ? `${clock(e.at)}, ${e.title}` : `${e.title} (all day)`))}.` : '- Nothing on your calendar today.');
     lines.push(soon.length ? `- Coming up: ${list(soon.map((r) => `“${r.name}” with ${name(r.bot)}, ${clock(r.next_at)}`))}.` : '- Nothing is scheduled for the next day.');
     return lines.join('\n');
   }
@@ -719,7 +754,25 @@ export class Crew {
     if (state === 'done' || state === 'failed') this.taskGrants.delete(task.id);
     this.db.run('UPDATE tasks SET state = ?, result = COALESCE(?, result), updated_at = ? WHERE id = ?', state, result ?? null, Date.now(), task.id);
     this.db.event(`task.${state}`, task.bot, { task: task.id, title: task.title, ...(result ? { result: result.slice(0, 280) } : {}) });
+    if (state === 'failed' && result && result !== STOPPED) this.failedLine(task, result);
   }
+
+  /** A job that didn't work always says so, in words crewd writes: a routine's in the member's Chief thread (with when it
+   *  tries again), anything else in its own chat. Never silent, and never a model call. */
+  private failedLine(task: Row, result: string) {
+    const member = task.member ?? OWNER;
+    const b = this.bot(task.bot)?.display ?? task.bot;
+    const r = task.routine && this.db.get('SELECT * FROM routines WHERE id = ?', task.routine);
+    if (r) {
+      const again = r.state === 'on' ? ` It will try again ${clock(r.next_at)}.` : '';
+      return void this.say(CHIEF, 'bot', `${b} couldn't finish “${r.name}”. ${result}${again}`, null, member);
+    }
+    this.say(task.bot, 'bot', result, task.id, member);
+    this.alert(member);
+  }
+
+  /** A line in a helper's chat that the person should hear about even with the app closed: the phone gets a push. */
+  private alert(member: number) { this.db.event('alert', null, { member }); }
 
   private prompt(task: Row) {
     const member = this.member(task.member ?? OWNER);
@@ -732,7 +785,11 @@ export class Crew {
     const debrief = disk.botConfig(this.cfg, task.bot).memory === false ? '' : `\n\n[Crewhouse] When you finish: if this task showed you a lasting preference of ${who} (not how to address them; Crewhouse keeps that), ` +
       'save it with crew_remember (one short line; name the old note in `replaces` to correct one). Set `everyone` when every helper should know it ' +
       '(family, diet, units, where they live); leave it out for how they like your own work. Otherwise save nothing.';
-    if (task.bot !== CHIEF) return `${this.memory(task.bot, member.id)}[Crewhouse task #${task.id} from ${routine ? `the routine “${routine}”, set up by ${this.called(member.id)}` : who}]\n${task.body}${quiet}${debrief}`;
+    // A new job in a chat often answers the last thing said there ("OK, post it"): a new session carries that line.
+    const said = task.origin === 'person' && task.bot !== CHIEF && this.db.get("SELECT text FROM messages WHERE bot = ? AND author = 'bot' AND COALESCE(member, ?) = ? AND COALESCE(task_id, 0) != ? AND at > ? ORDER BY id DESC LIMIT 1",
+      task.bot, member.id, member.id, task.id, Date.now() - 2 * 86_400_000)?.text;
+    const last = said ? `[Crewhouse] Your last message in this chat, which this may answer: “${short(said, 800)}”\n` : '';
+    if (task.bot !== CHIEF) return `${this.memory(task.bot, member.id)}${last}[Crewhouse task #${task.id} from ${routine ? `the routine “${routine}”, set up by ${this.called(member.id)}` : who}]\n${task.body}${quiet}${debrief}`;
     const crew = this.bots().filter((b) => b.id !== CHIEF)
       .map((b) => `${b.display} (id ${b.id}, ${b.template}, ${this.activeTask(b.id) ? 'busy' : 'free'})`).join('; ') || 'nobody yet';
     const tpls = disk.listTemplates(this.cfg).map((t) => `${t.id}: ${t.role}`).join('; ');
@@ -788,8 +845,7 @@ export class Crew {
     } catch (e: any) {
       console.error(`run ${bot.id} #${task.id}:`, e);
       this.close(bot.id);
-      this.setTask(task, 'failed', `${bot.display} couldn't start. Try again.`);
-      this.say(bot.id, 'system', `${bot.display} couldn't start this one. Try again in a moment.`, task.id);
+      this.setTask(task, 'failed', `${bot.display} couldn't start this one. Try again in a moment.`);
     } finally {
       this.starting.delete(bot.id);
       this.dispatch();
@@ -852,6 +908,7 @@ export class Crew {
   }
 
   private settled(botId: string, l: Live, err?: unknown) {
+    if (this.stopped) return; // a turn cut short by shutdown settles after the store has closed
     this.count(l);
     if (this.live.get(botId) !== l || l.session.isStreaming) return; // replaced, reset, or more work queued behind this turn
     const last: any = [...l.session.messages].reverse().find((m: any) => m.role === 'assistant');
@@ -1376,7 +1433,7 @@ export class Crew {
     } else this.dispatch();
   }
 
-  async resetBot(id: string, why = 'Stopped by you.') {
+  async resetBot(id: string, why = STOPPED) {
     this.held.delete(id);
     await this.desktops.revokeControl(id);
     this.close(id);

@@ -635,7 +635,7 @@ function Settings({ state, me, refresh, tick, look, setLook, switchTo }: Ctx & {
       <div className="label">How much of it the crew may use</div>
       <div className="seg">{A.SHARES.map((o) => <button key={o.key} className={A.share(state).choice === o.key ? 'on' : ''} title={o.says}
         onClick={() => act(() => api.person(me, { share: o.key }), o.says)}>{o.label}</button>)}</div>
-      <p className="mute small">{A.SHARES.find((o) => o.key === A.share(state).choice)?.says}. {A.share(state).today}</p>
+      <p className="mute small">{A.SHARES.find((o) => o.key === A.share(state).choice)?.says}. {A.share(state).today} {A.share(state).week}</p>
 
       <AboutYou key={me} tick={tick} />
 

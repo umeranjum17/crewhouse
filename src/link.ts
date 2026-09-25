@@ -256,7 +256,8 @@ export class Link {
   private news(e: { seq: number; kind: string; data: any; bot: string | null }) {
     let member: number | undefined;
     if (e.kind === 'ask.opened') member = this.db.get('SELECT member FROM asks WHERE id = ?', e.data.ask)?.member ?? 1;
-    else if (e.kind === 'task.done' || e.kind === 'task.failed') {
+    else if (e.kind === 'alert') member = e.data.member;
+    else if (e.kind === 'task.done') {
       const t = this.db.get('SELECT member, bot, result FROM tasks WHERE id = ?', e.data.task);
       if (t && t.bot !== 'chief' && t.result !== 'All clear') member = t.member ?? 1;
     } else if (e.kind === 'message' && e.bot === 'chief' && e.data.author === 'bot') member = this.db.get('SELECT member FROM messages WHERE id = ?', e.data.id)?.member ?? undefined;
