@@ -248,6 +248,7 @@ export class Link {
         // Registered: the relay knows this computer's key now, so the one-use enrolment is spent.
         if (st === 'online' && enrol) this.db.run("DELETE FROM settings WHERE key = 'link.relay.enrol'");
         this.db.event('link.relay', null, { status: st });
+        if (st === 'online') this.sendHeld(); // what waited while it was away (a restart, say)
       },
     });
   }
@@ -283,11 +284,24 @@ export class Link {
     s.onEnd = () => desk.release(watcher);
   }
 
-  /** Tell a member's phones there is news. Content-free: the words stay on this computer until the phone asks. */
+  /** Tell a member's phones there is news. Content-free: the words stay on this computer until the phone asks. In their
+   *  quiet hours the push is held (kept in the store, so a restart keeps it) and `sendHeld` sends one when they end. */
   private async tell(member: number, id: string) {
-    if (!this.client || this.relayStatus !== 'online' || this.quiet(member)) return;
+    if (this.quiet(member)) return void this.db.run("INSERT INTO settings (key, value) VALUES (?, '1') ON CONFLICT(key) DO NOTHING", `push.held.${member}`);
+    if (!this.client || this.relayStatus !== 'online') return;
     const to = this.host.devices().filter((g) => memberOf(g) === member).map((g) => g.id);
     if (to.length) await this.client.notify({ id, title: NEWS, to }).catch((e) => console.error('push:', e.message));
+  }
+
+  /** Quiet hours over: one push per member for everything that came in during them, however much it was. */
+  sendHeld(at = Date.now()) {
+    if (!this.client || this.relayStatus !== 'online') return; // kept until the relay is back
+    for (const { key } of this.db.all("SELECT key FROM settings WHERE key LIKE 'push.held.%'")) {
+      const member = Number(key.slice('push.held.'.length));
+      if (this.quiet(member)) continue;
+      this.db.run('DELETE FROM settings WHERE key = ?', key);
+      void this.tell(member, `held-${member}-${at}`);
+    }
   }
 
   /** What a phone hears about: a question for its person, their job finished or stuck, and Chief speaking to them. */
@@ -369,7 +383,7 @@ export class Link {
     this.db.onEvent((e) => this.news(e as any));
     await this.bind();
     this.dial();
-    this.watch = setInterval(() => void this.bind(), 30_000).unref();
+    this.watch = setInterval(() => { void this.bind(); this.sendHeld(); }, 30_000).unref();
   }
 
   close() { clearInterval(this.watch); clearTimeout(this.shut); void this.mdns?.stop().catch(() => {}); this.client?.stop(); this.host?.close(); for (const s of this.servers.values()) s.close(); }
