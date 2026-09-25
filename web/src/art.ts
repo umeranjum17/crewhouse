@@ -59,7 +59,7 @@ export function chief(mood: Mood = 'idle', bob = 0): Bitmap {
   const lift = ({ ask: -2, hello: -2, rest: 2, error: -1 } as Record<string, number>)[mood] ?? 0; // raised to ask, over the eyes to rest, askew on error
   const hat: [number, number, string[]] = [mood === 'error' ? 2 : 1, 2 + bob + lift, HAT];
   const signs: [number, number, string[]][] = ({
-    happy: [[0, 3, SPARKLE], [19, 1, SPARKLE], [19, 9, ['*']]], rest: [[18, 0, ZZ]], worried: [[19, 8, SWEAT]], listen: [[19, 10, SOUND]], ask: [[20, 0, BANG]],
+    happy: [[19, 1, SPARKLE]], rest: [[18, 0, ZZ]], worried: [[19, 8, SWEAT]], listen: [[19, 10, SOUND]], ask: [[20, 0, BANG]],
   } as Record<string, [number, number, string[]][]>)[mood] ?? [];
   return draw(22, 23, [1, 5 + bob, HEAD], [1, 8 + bob, FACES[mood]], hat, ...signs);
 }
