@@ -30,7 +30,7 @@ export function provider(key: string) {
 
 /** What the person sees while signing in: a link to open or a code to type, never the engine's own prompts. */
 export type SignIn = { state: 'waiting' | 'done' | 'failed'; url?: string; code?: string; error?: string };
-type Flow = SignIn & { abort: AbortController; paste?: (text: string) => void; timedOut?: boolean };
+type Flow = SignIn & { abort: AbortController; paste?: (text: string) => void; timedOut?: boolean; done?: Promise<void> };
 
 const LOGIN_MS = Number(process.env.CREWHOUSE_SIGNIN_MS || 15 * 60_000); // longer than any provider's code lives
 
@@ -84,14 +84,29 @@ export class Accounts {
 
   /** Start "Sign in with …". `via: 'code'` picks the device-code flow where there is a choice (a phone can't take a redirect).
    *  One button, first time: a browser sign-in that can't come back falls back to a code by itself; a flow that stalls
-   *  times out; nothing is kept unless the engine then sees a working sign-in. Every failure ends in one plain sentence. */
-  async login(member: number, key: string, body: { via?: 'code' | 'browser'; key?: string } = {}) {
+   *  times out; nothing is kept unless the engine then sees a working sign-in. Every failure ends in one plain sentence.
+   *  Returns as soon as there is a link to open or a code to show (or it is over); the sign-in carries on by itself. */
+  async login(member: number, key: string, body: { via?: 'code' | 'browser'; key?: string } = {}): Promise<SignIn | null> {
     const p = provider(key);
     const id = `${member}:${key}`;
-    if (this.flows.get(id)?.state === 'waiting') return;
-    if (p.key && !body.key?.trim()) throw Object.assign(new Error(`Paste your ${p.name} key first.`), { status: 400 });
-    const flow: Flow = { state: 'waiting', abort: new AbortController() };
-    this.flows.set(id, flow);
+    if (this.flows.get(id)?.state !== 'waiting') {
+      if (p.key && !body.key?.trim()) throw Object.assign(new Error(`Paste your ${p.name} key first.`), { status: 400 });
+      const flow: Flow = { state: 'waiting', abort: new AbortController() };
+      this.flows.set(id, flow);
+      let shown!: () => void;
+      const visible = new Promise<void>((r) => (shown = r));
+      flow.done = this.signIn(member, key, body, flow, shown);
+      await Promise.race([visible, flow.done]);
+    }
+    return this.view(member, key);
+  }
+
+  /** The whole sign-in, for when the caller wants to wait for its end (tests do). */
+  finished(member: number, key: string) { return this.flows.get(`${member}:${key}`)?.done ?? Promise.resolve(); }
+
+  private async signIn(member: number, key: string, body: { via?: 'code' | 'browser'; key?: string }, flow: Flow, shown: () => void) {
+    const p = provider(key);
+    const id = `${member}:${key}`;
     const rt = await this.runtime(member);
     let codeOffered = false;
     const attempt = (via?: 'code' | 'browser') => rt.login(p.pi, p.key ? 'api_key' : 'oauth', {
@@ -113,6 +128,7 @@ export class Accounts {
       notify: (e) => {
         if (e.type === 'auth_url') Object.assign(flow, { url: e.url, code: undefined });
         if (e.type === 'device_code') Object.assign(flow, { code: e.userCode, url: e.verificationUri });
+        if (flow.url) shown();
         this.onChange?.(member, key);
       },
     });

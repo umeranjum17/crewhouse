@@ -502,7 +502,8 @@ test('household: bots and tasks belong to a member and run on that member\'s own
   // Only Sam signs in to Grok: Sam's Grok task runs, the owner's can't borrow it.
   disk.setBrains(cfg, 'reel', ['grok']);
   await crew.accounts.login(sam, 'grok');
-  await until('Sam signed in', () => crew.accounts.view(sam, 'grok')?.state === 'done');
+  await crew.accounts.finished(sam, 'grok');
+  assert.equal(crew.accounts.view(sam, 'grok')?.state, 'done');
   assert.ok(existsSync(crew.accounts.authPath(sam)));
   const a = crew.post('reel', 'a demo for Sam', undefined, sam)!.task;
   await settled(db, a);
@@ -634,9 +635,10 @@ const cred = { type: 'oauth', access: 'a', refresh: 'r', expires: Date.now() + 8
 test('sign-in: one button shows a code or a link, finishes by itself, keeps the sign-in in that person\'s own file; sign out', async () => {
   const { db, crew, done } = setup();
   assert.equal(await crew.accounts.signedIn(OWNER, 'grok'), false);
-  await crew.accounts.login(OWNER, 'grok', { via: 'code' });
-  const view = crew.accounts.view(OWNER, 'grok')!;
-  assert.equal(view.state, 'done');
+  const shown = await crew.accounts.login(OWNER, 'grok', { via: 'code' });
+  assert.deepEqual(shown, { state: 'waiting', code: 'CREW-2026', url: 'https://example.test/xai/device', error: undefined }, 'it answers with the code at once');
+  await crew.accounts.finished(OWNER, 'grok');
+  assert.equal(crew.accounts.view(OWNER, 'grok')!.state, 'done');
   await until('the account change reached the app', () => db.get("SELECT 1 FROM events WHERE kind = 'account.changed'"));
   assert.equal(await crew.accounts.signedIn(OWNER, 'grok'), true);
   assert.equal(await crew.accounts.signedIn(crew.addMember('Sam').id, 'grok'), false, 'one person\'s sign-in is theirs alone');
@@ -648,11 +650,9 @@ test('sign-in: one button shows a code or a link, finishes by itself, keeps the 
   // While it waits: the code and the page, nothing else.
   let go!: () => void;
   await grokThat(crew, OWNER, async (i) => { i.notify({ type: 'device_code', userCode: 'WB60-FFVO', verificationUri: 'https://accounts.x.ai/device' }); await new Promise<void>((r) => (go = r)); return cred; });
-  const p = crew.accounts.login(OWNER, 'grok');
-  await until('code', () => crew.accounts.view(OWNER, 'grok')?.code);
-  assert.deepEqual(crew.accounts.view(OWNER, 'grok'), { state: 'waiting', code: 'WB60-FFVO', url: 'https://accounts.x.ai/device', error: undefined });
+  assert.deepEqual(await crew.accounts.login(OWNER, 'grok'), { state: 'waiting', code: 'WB60-FFVO', url: 'https://accounts.x.ai/device', error: undefined });
   go();
-  await p;
+  await crew.accounts.finished(OWNER, 'grok');
   assert.equal(crew.accounts.view(OWNER, 'grok')!.state, 'done');
   done();
 });
@@ -662,6 +662,7 @@ test('sign-in failures: expired, declined, offline, stalled and cancelled all en
   const fails = async (login: (i: any) => Promise<any>) => {
     await grokThat(crew, OWNER, login);
     await crew.accounts.login(OWNER, 'grok');
+    await crew.accounts.finished(OWNER, 'grok');
     const v = crew.accounts.view(OWNER, 'grok')!;
     assert.equal(await crew.accounts.signedIn(OWNER, 'grok'), false, 'never half signed in');
     return v;
@@ -677,13 +678,16 @@ test('sign-in failures: expired, declined, offline, stalled and cancelled all en
   await grokThat(crew, OWNER, (i) => new Promise((_r, reject) => i.signal.addEventListener('abort', () => reject(new Error('aborted')))));
   const p = crew.accounts.login(OWNER, 'grok');
   await sleep(20);
+  const flow = crew.accounts.finished(OWNER, 'grok');
   crew.accounts.cancel(OWNER, 'grok');
   await p;
+  await flow;
   assert.equal(crew.accounts.view(OWNER, 'grok'), null);
   assert.equal(await crew.accounts.signedIn(OWNER, 'grok'), false);
   // And a retry after any of these works first time.
   await grokThat(crew, OWNER, async () => cred);
   await crew.accounts.login(OWNER, 'grok');
+  await crew.accounts.finished(OWNER, 'grok');
   assert.equal(crew.accounts.view(OWNER, 'grok')!.state, 'done');
   assert.equal(signInError('Gemini', '400 API key not valid, invalid', true), "Gemini didn't accept that key. Copy it again and paste it here.");
   done();
@@ -700,6 +704,7 @@ test('sign-in: a browser sign-in that cannot come back falls back to a code by i
     return cred;
   });
   await crew.accounts.login(OWNER, 'grok');
+  await crew.accounts.finished(OWNER, 'grok');
   assert.deepEqual(tries, ['browser', 'device_code']);
   assert.equal(crew.accounts.view(OWNER, 'grok')!.state, 'done');
   done();
@@ -710,6 +715,7 @@ test('sign-in: a lapsed sign-in is found in the background and said once, in pla
   crew.onboard('sir');
   await grokThat(crew, OWNER, async () => cred);
   await crew.accounts.login(OWNER, 'grok');
+  await crew.accounts.finished(OWNER, 'grok');
   const rt: any = await crew.accounts.runtime(OWNER);
   rt.getAuth = async () => { throw new Error('invalid_grant: refresh token revoked'); };
   await crew.accounts.keepFresh([OWNER]);

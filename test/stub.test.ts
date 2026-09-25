@@ -107,8 +107,8 @@ test('sign in from the app: a code to show and a page to open, then signed in', 
   assert.equal((await api('POST', '/api/accounts/1/grok/login', { via: 'code' }, {})).status, 403, 'cross-site pages cannot start a sign-in');
   const started = await api('POST', '/api/accounts/1/grok/login', { via: 'code' });
   assert.equal(started.status, 200);
-  assert.equal(started.body.signIn.state, 'done');
-  assert.equal((await grok()).signedIn, true);
+  assert.deepEqual([started.body.signIn.code, started.body.signIn.url], ['CREW-2026', 'https://example.test/xai/device'], 'a code to show and a page to open');
+  await until(async () => (await grok()).signedIn);
   assert.equal((await api('POST', '/api/accounts/1/grok/logout', {})).status, 200);
   assert.equal((await grok()).signedIn, false);
 });

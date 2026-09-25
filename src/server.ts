@@ -113,7 +113,7 @@ export function startServer(cfg: Config, db: Store, crew: Crew) {
       const [who, key, act] = [crew.member(Number(r[1])).id as number, r[2], r[3]];
       provider(key);
       const b = await readJson(req);
-      if (act === 'login') await crew.accounts.login(who, key, { via: b.via === 'code' ? 'code' : 'browser', key: b.key });
+      if (act === 'login') return { ok: true, signIn: await crew.accounts.login(who, key, { via: b.via === 'code' ? 'code' : 'browser', key: b.key }) };
       else if (act === 'paste') crew.accounts.paste(who, key, String(b.text ?? ''));
       else if (act === 'cancel') crew.accounts.cancel(who, key);
       else await crew.accounts.logout(who, key);
