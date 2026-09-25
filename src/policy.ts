@@ -105,6 +105,10 @@ export function effectOf(tool: string, input: Record<string, any>, s: Seen): Eff
     if (cmd === 'cancel') return { kind: 'delete', words: `${s.bot} wants to cancel an event on your Google Calendar.`, key, covers: coversOf(key) };
     return { kind: 'refuse', why: 'Your calendar can: today, week, free, add, move or cancel.' };
   }
+  // mail-axi (src/mail.ts) only reads: its token is gmail.readonly.
+  if (tool === 'mail') {
+    return ['inbox', 'search', 'read'].includes(String(input.args?.[0] ?? 'inbox')) ? { kind: 'safe' } : { kind: 'refuse', why: 'Your email can: search or read (it cannot send or change mail).' };
+  }
   const app = s.apps?.[tool];
   if (app) {
     if (app.readOnly) return { kind: 'safe' };
@@ -173,6 +177,7 @@ export function toolWords(tool: string, input: Record<string, any>): string {
     case 'web_search': return `Searched the web for “${String(input.query ?? '').slice(0, 80)}”`;
     case 'web_fetch': return `Read ${host(input.url)}`;
     case 'calendar': return ({ add: `Added “${String(input.args?.[1] ?? '').slice(0, 60)}” to the calendar`, move: 'Moved a calendar event', cancel: 'Cancelled a calendar event' } as Record<string, string>)[input.args?.[0]] ?? 'Looked at the calendar';
+    case 'mail': return input.args?.[0] === 'search' ? `Searched the email for “${String(input.args[1] ?? '').slice(0, 60)}”` : input.args?.[0] === 'read' ? 'Read an email' : 'Looked at the email';
     case 'browser': return input.args?.[0] === 'goto' ? `Opened ${host(input.args[1])} in its browser` : 'Used its browser';
   }
   if (tool.startsWith('crew_')) return '';
