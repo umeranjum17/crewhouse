@@ -3,7 +3,7 @@
 import { after, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, readlinkSync, statSync } from 'node:fs';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import WebSocket from 'ws';
@@ -21,9 +21,20 @@ mkdirSync(join(botDir, '.crewhouse'), { recursive: true });
 // A display number nobody holds, so side-by-side runs and a real X server never collide.
 let n = 190 + Math.floor(Math.random() * 60);
 while (existsSync(`/tmp/.X${n}-lock`) || existsSync(`/tmp/.X11-unix/X${n}`)) n++;
-/** Loopback ports already listening before any desktop here starts: other programs' own, which the attack test leaves alone. */
-const before = new Set(['/proc/net/tcp', '/proc/net/tcp6'].flatMap((f) => (existsSync(f) ? readFileSync(f, 'utf8').split('\n').slice(1) : []))
-  .map((l) => l.trim().split(/\s+/)).filter((c) => c[3] === '0A').map((c) => String(parseInt(c[1].split(':')[1], 16))));
+/** Loopback ports this test's own processes listen on (crewd's relays, the bots' browsers, the decoy): the attack scans
+ *  these and leaves every other program's alone, including other test files' browsers running alongside. */
+function ours() {
+  const kids = new Map<number, number[]>();
+  for (const p of readdirSync('/proc').filter((d) => /^\d+$/.test(d))) {
+    try { const ppid = Number(readFileSync(`/proc/${p}/stat`, 'utf8').split(') ')[1].split(' ')[1]); kids.set(ppid, [...(kids.get(ppid) ?? []), Number(p)]); } catch { /* gone */ }
+  }
+  const tree = [process.pid];
+  for (let i = 0; i < tree.length; i++) tree.push(...(kids.get(tree[i]) ?? []));
+  const inodes = new Set(tree.flatMap((p) => { try { return readdirSync(`/proc/${p}/fd`).map((f) => readlinkSync(`/proc/${p}/fd/${f}`)); } catch { return []; } })
+    .map((l) => l.match(/^socket:\[(\d+)\]$/)?.[1]).filter(Boolean));
+  return ['/proc/net/tcp', '/proc/net/tcp6'].flatMap((f) => readFileSync(f, 'utf8').split('\n').slice(1)).map((l) => l.trim().split(/\s+/))
+    .filter((c) => c[3] === '0A' && inodes.has(c[9])).map((c) => String(parseInt(c[1].split(':')[1], 16)));
+}
 const desks = new Desktops(join(root, 'state'));
 const xauth = deskFor(join(root, 'state'), 'reel', n).xauth;
 after(() => desks.stopAll());
@@ -99,8 +110,8 @@ test('watching: crewd picks the display and the permissions', { skip: noXvfb }, 
 // driven by any bot's shell, past crewd's gate: open pages as the person, read their signed-in sites. This runs the real
 // attack from a real bot shell: find every loopback port that appeared during the test and, wherever DevTools answers,
 // open a page. A decoy Chromium with an open port shows the attack works; the bot's own browser must be out of its
-// reach, yet still drivable through crewd's own endpoint. (Ports already open before this file ran, other programs'
-// own, are left alone.)
+// reach, yet still drivable through crewd's own endpoint. (Only this test's own processes' ports are scanned: other
+// programs', and other test files' browsers, are left alone.)
 const noAttack = noXvfb || (!browserBin() && 'no Chromium here') || (!sandboxReady() && 'bubblewrap is not usable here');
 test("a bot's shell cannot find or drive another bot's browser", { skip: noAttack }, async (t) => {
   const hits: string[] = [];
@@ -139,11 +150,13 @@ test("a bot's shell cannot find or drive another bot's browser", { skip: noAttac
   await drive(d.cdp!, '/crewd');
   await until("crewd drove the bot's browser", () => hits.includes('/crewd'));
 
-  // Bot "maya"'s own shell, exactly as a task gets it; it scans every port except those open before this file ran.
+  // Bot "maya"'s own shell, exactly as a task gets it; it scans every port this test's processes listen on.
+  const scan = ours();
+  assert.ok(scan.includes(decoyPort), 'the decoy is among the ports scanned');
   const attack = `
     for hex in $(awk 'NR>1 && $4=="0A" { split($2, a, ":"); print a[2] }' /proc/net/tcp /proc/net/tcp6 | sort -u); do
       p=$((16#$hex))
-      case " ${[...before].join(' ')} " in *" $p "*) continue;; esac
+      case " ${scan.join(' ')} " in *" $p "*) ;; *) continue;; esac
       if curl -s -m 2 http://127.0.0.1:$p/json/version | grep -q '"Browser"'; then
         echo "devtools $p"
         curl -s -m 2 -X PUT "http://127.0.0.1:$p/json/new?${site}/pwned-$p" > /dev/null
