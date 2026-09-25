@@ -5,7 +5,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import { networkInterfaces } from 'node:os';
 import { join } from 'node:path';
-import { WebSocketServer } from 'ws';
+import { WebSocket as WS, WebSocketServer } from 'ws';
 import { Host, keyPair, keyPairFrom, type Grant, type PairRequest, type Role } from '@byokit/link';
 import { RelayClient, type RelayStatus } from '@byokit/relay';
 import type { Config } from './config.ts';
@@ -201,6 +201,9 @@ export class Link {
     const enrol = this.db.get("SELECT value FROM settings WHERE key = 'link.relay.enrol'")?.value || undefined;
     const c = this.client = new RelayClient(this.host, {
       url: `${wsOrigin(this.relay)}/relay/v1/host`, enrol, name: 'Crewhouse',
+      // ponytail: ws, not Node's own WebSocket: on Node 22 the relay client's close-on-error makes Node's socket fire
+      // error again, and the loop overflows the stack and takes crewd down. Drop once @byokit/relay guards it.
+      WebSocket: WS as any,
       onStatus: (st) => {
         if (this.client !== c) return;
         this.relayStatus = st;
