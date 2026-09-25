@@ -121,9 +121,12 @@ test("a bot's shell cannot find or drive another bot's browser", { skip: noAttac
   await new Promise((r) => pages.once('listening', r));
   const site = `http://127.0.0.1:${(pages.address() as AddressInfo).port}`;
   const decoyDir = join(root, 'decoy');
-  const decoy = spawn(browserBin()!, ['--headless=new', '--disable-gpu', '--remote-debugging-port=0', `--user-data-dir=${decoyDir}`, '--no-first-run', 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
+  // --disable-dev-shm-usage: a CI container's /dev/shm is tiny, and a headless Chrome that cannot fit its shared
+  // memory there hangs silently. The decoy is only bait: it must start, then stay out of the way.
+  const decoy = spawn(browserBin()!, ['--headless=new', '--disable-gpu', '--disable-dev-shm-usage', '--remote-debugging-port=0', `--user-data-dir=${decoyDir}`, '--no-first-run', 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
   let said = '';
   decoy.stderr!.on('data', (c) => { said = (said + c).slice(-1000); });
+  decoy.on('error', (e) => { said = `${said}\nspawn error: ${e.message}`.slice(-1000); });
   t.after(async () => { pages.close(); decoy.kill('SIGKILL'); await Promise.all([new Promise((r) => (decoy.exitCode === null && decoy.signalCode === null ? decoy.once('exit', r) : r(0))), desks.stopAll()]); });
   const d = await desks.ensure('reel', n, botDir);
   // The attacker, maya, has a computer and browser of its own too.
@@ -132,8 +135,12 @@ test("a bot's shell cannot find or drive another bot's browser", { skip: noAttac
   let m = n + 1;
   while (existsSync(`/tmp/.X${m}-lock`) || existsSync(`/tmp/.X11-unix/X${m}`)) m++;
   const own = await desks.ensure('maya', m, space);
-  // A cold Chrome on a busy CI runner can take a while to open its port.
-  await until(`the decoy's DevTools port (Chrome said: ${said.slice(-300)})`, () => existsSync(join(decoyDir, 'DevToolsActivePort')), 30_000);
+  // A cold Chrome on a busy CI runner can take a while to open its port. A Chromium that DIED (crash, sandbox,
+  // singleton) never will: say so at once with its last words, instead of burning the whole bound on an empty wait.
+  await until(`the decoy's DevTools port (Chrome said: ${said.slice(-300)})`, () => {
+    if (decoy.exitCode !== null || decoy.signalCode !== null) throw new Error(`the decoy Chromium exited (code ${decoy.exitCode ?? decoy.signalCode}): ${said.slice(-300)}`);
+    return existsSync(join(decoyDir, 'DevToolsActivePort'));
+  }, 60_000);
   const decoyPort = readFileSync(join(decoyDir, 'DevToolsActivePort'), 'utf8').split('\n')[0];
 
   // crewd's own endpoint for a bot's browser (the only one that bot's browser tool is given): open a page, list its pages.
