@@ -18,6 +18,7 @@
     "@byokit/accounts": "0.2.2",
     "@byokit/decide": "0.1.1",
     "@byokit/link": "0.3.0",
+    "@byokit/reach": "0.1.0",
     "@byokit/relay": "0.1.1",
     "@desklink/host": "^0.1.0",
     "@earendil-works/pi-coding-agent": "0.87.1",

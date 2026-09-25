@@ -1,5 +1,6 @@
 // The phone link: @byokit/link's host (Noise IK pairing, durable grants, encrypted requests, revoke) on sockets crewd
-// opens itself. By default it listens on loopback and Tailscale only; the home network is an opt-in. Crewhouse's part
+// opens itself. By default it listens on loopback and Tailscale only; the home network opens for the two minutes a
+// pairing code lasts, and stays open only when the owner turns it on. Crewhouse's part
 // is where it listens, who a phone acts as, what a phone may not do, and the person at the computer saying yes.
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
@@ -7,6 +8,7 @@ import { networkInterfaces } from 'node:os';
 import { join } from 'node:path';
 import { WebSocket as WS, WebSocketServer } from 'ws';
 import { Host, keyPair, keyPairFrom, type Grant, type PairRequest, type Role } from '@byokit/link';
+import { advertise, type Bonjour } from '@byokit/reach';
 import { RelayClient, type RelayStatus } from '@byokit/relay';
 import type { Config } from './config.ts';
 import type { Store } from './db.ts';
@@ -66,8 +68,14 @@ export class Link {
   private relayStatus: RelayStatus | 'off' = 'off';
   private told = ''; // the dial addresses paired phones were last told
   private watch?: NodeJS.Timeout;
-  /** This computer's network addresses; a test swaps in its own. */
+  private pairing = 0; // until when a pairing code holds the home network open
+  private shut?: NodeJS.Timeout;
+  private advertised = ''; // the address last advertised on the home network
+  private mdns?: { stop(): Promise<void> };
+  private announcing = Promise.resolve();
+  /** This computer's network addresses, and its mDNS publisher; a test swaps in its own. */
   ifaces: () => Ifaces = networkInterfaces;
+  bonjour?: Bonjour;
   /** Whether a member is in their quiet hours now: their phones get no notification then. Set by the server. */
   quiet: (member: number) => boolean = () => false;
 
@@ -127,7 +135,7 @@ export class Link {
   }
 
   get lan() { return this.db.get("SELECT value FROM settings WHERE key = 'link.lan'")?.value === '1'; }
-  hosts() { return linkHosts(this.cfg.linkHost, this.lan, this.ifaces()); }
+  hosts() { return linkHosts(this.cfg.linkHost, this.lan || Date.now() < this.pairing, this.ifaces()); }
 
   /** Listen on exactly the addresses `hosts()` names now, then tell paired phones if where to dial changed.
    *  Rerun when the LAN setting changes, and every half minute for Tailscale coming up or the home address moving. */
@@ -148,6 +156,19 @@ export class Link {
     const now = [...this.servers.keys()].join(', ');
     if (now !== before) console.log(`phone link (Noise-encrypted) on port ${this.cfg.linkPort}: ${now || 'nowhere'}${this.lan ? ' (home network on)' : ''}`);
     this.follow();
+    await (this.announcing = this.announcing.then(() => this.announce()));
+  }
+
+  /** While the home network is open, say so over mDNS, so a paired phone finds this computer after the router gives it a
+   *  new address. The phone dials only a `url` whose `id` is its own computer's, and the handshake checks the key anyway. */
+  private async announce() {
+    const url = this.host && this.servers.has('0.0.0.0') ? this.urls()[0] ?? '' : '';
+    if (url === this.advertised) return;
+    this.advertised = url;
+    await this.mdns?.stop().catch(() => {});
+    this.mdns = undefined;
+    if (url) this.mdns = await advertise({ type: 'crewhouse', port: this.cfg.linkPort, txt: { id: this.host.id, url }, bonjour: this.bonjour })
+      .catch((e) => { console.error('phone link: mDNS:', e.message); return undefined; });
   }
 
   /** Every address a phone can dial now: the home network, Tailscale, then the family's relay. */
@@ -274,7 +295,12 @@ export class Link {
   /** A single-use QR for a phone that will act as `member`. */
   async offer(role: string, member: number): Promise<{ qr: string; expires: number; urls: string[] }> {
     if (role !== 'control' && role !== 'view') throw Object.assign(new Error('role is control or view'), { status: 400 });
-    await this.bind(); // Tailscale may have come up since crewd started
+    // The home network opens for as long as the code lasts (and a phone that joins keeps its socket); Tailscale may have
+    // come up since crewd started.
+    this.pairing = Date.now() + PAIR_MS;
+    clearTimeout(this.shut);
+    this.shut = setTimeout(() => void this.bind(), PAIR_MS + 100).unref();
+    await this.bind();
     const urls = this.urls();
     const { text, expires } = this.host.offer({ role, urls, meta: { member } });
     return { qr: text, expires, urls };
@@ -329,5 +355,5 @@ export class Link {
     this.watch = setInterval(() => void this.bind(), 30_000).unref();
   }
 
-  close() { clearInterval(this.watch); this.client?.stop(); this.host?.close(); for (const s of this.servers.values()) s.close(); }
+  close() { clearInterval(this.watch); clearTimeout(this.shut); void this.mdns?.stop().catch(() => {}); this.client?.stop(); this.host?.close(); for (const s of this.servers.values()) s.close(); }
 }

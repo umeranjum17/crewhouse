@@ -96,6 +96,7 @@ A sign-in that fails ends as `signIn: {state: 'failed', error, why?}`: `why: 'de
 
 `GET /api/phones` → `[{id, name, member, person, role, seen, online}]`; `POST /api/phones/pair {role: 'control'|'view'}` → `{qr, expires, urls}`;
 `DELETE /api/phones/:id`; `GET /api/phones/link`, `PUT /api/phones/lan {on}` and `PUT /api/phones/relay {url}` → `{on, lan, pinned, tailscale, hosts, relay, relayStatus, asking: [{id, name, words, role}]}`.
+`lan` is the owner's "home network" setting. With it off, `hosts` still includes `0.0.0.0` for the two minutes a pairing code is showing, so a phone can pair over the home Wi-Fi; while the home network is open crewd also announces itself over mDNS (`_crewhouse._tcp`, TXT `{id, url}`), so a paired phone finds it again after the router hands it a new address.
 `relay` is the family's own relay, which phones use away from home (`''`, the default: none; there is no hosted Crewhouse relay). `url` is an `https://` or `wss://` address, `''` for none, or `null` to go back to `CREWHOUSE_RELAY`.
 `relayStatus` is `off`, `connecting`, `online`, `offline`, `refused` (the relay didn't let this computer in: paste a new invitation) or `replaced`; `adapter.reach()` words it. `PUT /api/phones/relay` also takes `enrol`, a one-use invitation from a relay that lets computers in by invitation; it is dropped once used.
 `POST /api/phones/code {role}` → `{short, code, relay, expires}`: codes to type on the phone instead of scanning, once `relayStatus` is `online` (409 before). The phone types the relay's address, `short`, then `code`.

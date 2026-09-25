@@ -1,18 +1,19 @@
-// Addresses that follow the computer: a phone paired on one address learns the ones this computer gains later (its home
-// address moved, Tailscale came up) while any route is up, and dials them once the old one is gone. The interfaces are
-// fake; the sockets, the Noise handshake and the phone's side are real, all on loopback.
+// Where phones reach this computer: the home network opens only while a pairing code lasts (or when the owner leaves it
+// on), and says so over mDNS; a phone paired on one address learns the ones this computer gains later (its home address
+// moved, Tailscale came up) while any route is up, and dials them once the old one is gone. The interfaces and the mDNS
+// publisher are fake; the sockets, the Noise handshake and the phone's side are real, all on loopback.
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
 import { createServer, type AddressInfo } from 'node:net';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { temp } from './tmp.ts';
 import { DeviceLink, pairWithOffer, type DeviceGrant, type LinkStatus } from '@byokit/link';
-import { loadConfig } from '../src/config.ts';
-import { Store } from '../src/db.ts';
-import { Link } from '../src/link.ts';
+process.env.CREWHOUSE_PAIR_MS = '1500'; // read when src/link.ts loads
+const { loadConfig } = await import('../src/config.ts');
+const { Store } = await import('../src/db.ts');
+const { Link } = await import('../src/link.ts');
 
-const root = mkdtempSync(join(tmpdir(), 'crewhouse-follow-'));
+const root = temp('follow');
 const free = () => new Promise<number>((r) => { const s = createServer().listen(0, '127.0.0.1', () => { const { port } = s.address() as AddressInfo; s.close(() => r(port)); }); });
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 async function until<T>(what: string, fn: () => T | undefined | false, ms = 10_000): Promise<T> {
@@ -21,17 +22,28 @@ async function until<T>(what: string, fn: () => T | undefined | false, ms = 10_0
 }
 const at = (address: string) => [{ address, family: 'IPv4', internal: false, netmask: '', mac: '', cidr: null }] as any;
 
-/** A computer with the home network on, whose interfaces the test moves. */
-async function computer(name: string, ifaces: Record<string, any>) {
+/** A computer whose interfaces the test moves, with the home network on unless `lan` is false. Its mDNS goes nowhere:
+ *  `on` is what it announces now. */
+async function computer(name: string, ifaces: Record<string, any>, lan = true) {
   const cfg = { ...loadConfig(), stateDir: join(root, name), linkHost: '', linkPort: await free() };
   const db = new Store(cfg.stateDir);
   const link = new Link(cfg, db, async () => ({ ok: true }));
   link.ifaces = () => ifaces as any;
-  db.run("INSERT INTO settings (key, value) VALUES ('link.lan', '1')");
+  const mdns = { on: [] as any[], ever: 0 };
+  link.bonjour = {
+    publish: (c) => { mdns.on.push(c); mdns.ever++; return { stop: (cb) => { mdns.on.splice(mdns.on.indexOf(c), 1); cb?.(); } }; },
+    destroy: (cb) => cb?.(),
+  };
+  if (lan) db.run("INSERT INTO settings (key, value) VALUES ('link.lan', '1')");
   await link.listen();
   after(() => { link.close(); db.close(); });
-  return { link, port: cfg.linkPort, ifaces };
+  return { link, port: cfg.linkPort, ifaces, mdns };
 }
+const dials = (url: string) => new Promise<boolean>((resolve) => {
+  const ws = new WebSocket(url);
+  ws.onopen = () => { ws.close(); resolve(true); };
+  ws.onerror = () => resolve(false);
+});
 
 function phone(grant: DeviceGrant) {
   let status: LinkStatus = 'connecting';
@@ -79,4 +91,41 @@ test('another computer at a learned address fails the handshake', async () => {
   const grant = await paired;
   const p = phone({ ...grant, urls: [`ws://127.0.0.6:${other.port}/link`] });
   await until('refused', () => p.status() === 'refused');
+});
+
+test('the home network opens for a pairing code, closes after it, and stays open only when the owner turns it on', async () => {
+  const home = await computer('window', { wlan0: at('127.0.0.7') }, false);
+  const lan = `ws://127.0.0.7:${home.port}/link`;
+  assert.deepEqual(home.link.status().hosts, ['127.0.0.1'], 'off by default: loopback (and Tailscale) only');
+  assert.equal(await dials(lan), false);
+  assert.equal(home.mdns.on.length, 0, 'and nothing announced');
+
+  const offer = await home.link.offer('control', 1);
+  assert.deepEqual(offer.urls, [lan], 'the code carries the home address');
+  assert.deepEqual(home.link.status().hosts, ['0.0.0.0']);
+  assert.deepEqual(home.mdns.on.map((m) => [m.type, m.port, m.txt]), [['crewhouse', home.port, { id: home.link.host.id, url: lan }]]);
+  const paired = pairWithOffer(offer.qr, { name: 'Pixel', onWords: () => {} });
+  home.link.answer((await until('asked', () => home.link.status().asking[0])).id, true);
+  const p = phone(await paired);
+  await until('online', () => p.status() === 'online');
+
+  // The code runs out: the home network closes and the announcement stops. The phone that joined keeps its socket.
+  await until('closed after the code', () => home.link.status().hosts.join() === '127.0.0.1', 5000);
+  assert.equal(await dials(lan), false);
+  assert.equal(home.mdns.on.length, 0);
+  assert.equal(p.status(), 'online');
+  const req = await p.link.request('GET /api/reach') as { body: { urls: string[] } };
+  assert.deepEqual(req.body.urls, ['ws://127.0.0.1:' + home.port + '/link'], 'no home address offered once it is closed');
+
+  // The owner turns "home network" on: open, and announced, past any code.
+  await home.link.setLan(true);
+  assert.equal(await dials(lan), true);
+  assert.equal(home.mdns.on.length, 1);
+  await home.link.offer('control', 1);
+  await sleep(1700);
+  assert.equal(await dials(lan), true, 'still open after the code ran out');
+  assert.equal(home.mdns.on.length, 1);
+  assert.equal(home.mdns.ever, 2, 'announced once per opening, not per code');
+  await home.link.setLan(false);
+  assert.equal(home.mdns.on.length, 0);
 });

@@ -589,7 +589,7 @@ function Phones({ tick }: { tick: number }) {
       <label className="card row">
         <input type="checkbox" checked={link.lan} disabled={link.pinned} onChange={(e) => attempt(async () => setLink(await api.phonesAtHome(e.target.checked)))} />
         <span className="grow"><b>Phones on this Wi-Fi can reach the crew</b>
-          <div className="mute small">Off: a phone reaches this computer only through <a href="https://tailscale.com" target="_blank" rel="noreferrer">Tailscale</a>, from anywhere. Either way it needs to be paired here first, and everything between them is locked.</div></span>
+          <div className="mute small">Off: the Wi-Fi opens only while a pairing code is showing here, so a phone can join at home. After that it reaches this computer through <a href="https://tailscale.com" target="_blank" rel="noreferrer">Tailscale</a>, from anywhere. Either way everything between them is locked.</div></span>
       </label>
       <form className="card form" onSubmit={(e) => { e.preventDefault(); void attempt(async () => { setLink(await api.phoneRelay((relay ?? link.relay).trim(), enrol)); setRelay(null); setEnrol(''); }, 'Saved'); }}>
         <b>Reach this computer from anywhere</b>

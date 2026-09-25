@@ -1,9 +1,10 @@
 // The phone's end of the link: @byokit/link's device side, its grant in secure storage, and the transport that
 // web/src/api.ts calls through. Each call is one request, `METHOD /path`, answered like HTTP (src/link.ts).
-import { DeviceLink, LinkError, pairWithCode, pairWithOffer, type DeviceGrant, type LinkStatus } from '@byokit/link';
+import { DeviceLink, LinkError, hostId, pairWithCode, pairWithOffer, unb64url, type DeviceGrant, type LinkStatus } from '@byokit/link';
 import { findHost } from '@byokit/relay/device';
 import * as Device from 'expo-device';
 import * as SecureStore from 'expo-secure-store';
+import Zeroconf from 'react-native-zeroconf';
 
 export type Grant = DeviceGrant;
 export type Status = LinkStatus;
@@ -80,7 +81,14 @@ export function desktopSignaling(bot: string) {
 export function connect(grant: Grant, onEvent: (e: any) => void, onStatus: (s: Status) => void) {
   // The computer says where else it can be reached (Tailscale came up, its home address moved): remember each one.
   const heard = (e: any) => { if (e?.kind === 'link.urls') (e.data?.urls ?? []).forEach((u: string) => link.addUrl(u)); else onEvent(e); };
-  const link: DeviceLink = new DeviceLink(grant, { store, onEvent: heard, onStatus });
+  // Out of touch: look for this phone's own computer on the Wi-Fi (the router may have given it a new address).
+  let looking: (() => void) | undefined;
+  const status = (st: Status) => {
+    if (st === 'offline' && !looking) looking = look(grant, (u) => link.addUrl(u));
+    if (st !== 'offline') { looking?.(); looking = undefined; }
+    onStatus(st);
+  };
+  const link: DeviceLink = new DeviceLink(grant, { store, onEvent: heard, onStatus: status });
   current = link;
   /** The Transport for web/src/api.ts: crewd's answer, or an error with the HTTP status the screens understand. */
   const call = async (method: string, path: string, body?: unknown) => {
@@ -95,4 +103,15 @@ export function connect(grant: Grant, onEvent: (e: any) => void, onStatus: (s: S
   // A phone paired at home learns the relay's address, so it keeps reaching the computer when it leaves the house.
   const learn = () => call('GET', '/api/reach').then((r: { urls: string[] }) => r.urls.forEach((u) => link.addUrl(u))).catch(() => {});
   return { link, call, learn };
+}
+
+/** Browse the Wi-Fi for Crewhouse computers over mDNS; only this phone's own (by the id in its announcement) is dialled,
+ *  and its handshake still checks the key. Returns stop. */
+function look(grant: Grant, found: (url: string) => void) {
+  const id = hostId(unb64url(grant.host));
+  const z = new Zeroconf();
+  z.on('resolved', (s) => { if (s.txt?.id === id && s.txt.url?.startsWith('ws://')) found(s.txt.url); });
+  z.on('error', () => {}); // no Wi-Fi, or mDNS blocked: the other addresses keep trying
+  z.scan('crewhouse', 'tcp', 'local.');
+  return () => { z.stop(); z.removeDeviceListeners(); };
 }
