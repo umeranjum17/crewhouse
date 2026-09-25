@@ -34,19 +34,20 @@ test('a real show: what was clicked and which box was typed in, never the words,
   await new Promise<void>((r) => site.listen(0, '127.0.0.1', r));
   const port = await new Promise<number>((r) => { const s = createServer().listen(0, '127.0.0.1', () => { const { port } = s.address() as AddressInfo; s.close(() => r(port)); }); });
   const profile = mkdtempSync(join(tmpdir(), 'crewhouse-teach-'));
-  const chrome = spawn(browser!, ['--headless=new', '--no-sandbox', '--disable-gpu', '--no-first-run', '--no-default-browser-check', `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
+  const chrome = spawn(browser!, ['--headless=new', '--no-sandbox', '--disable-gpu', '--no-first-run', '--no-default-browser-check', `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'], detached: true });
   let said = '';
   chrome.stderr!.on('data', (d) => { said = (said + d).slice(-2000); });
   const teacher = new Teacher();
-  // Chrome keeps writing its profile until it has exited: wait for that before removing it.
+  // Chrome's helper processes keep writing its profile after the main one exits: end the whole group, then remove it.
   after(async () => {
     teacher.stop('reel');
     site.close();
-    if (chrome.exitCode === null) await new Promise((r) => { chrome.once('exit', r); chrome.kill(); });
-    rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    if (chrome.exitCode === null) await new Promise((r) => { chrome.once('exit', r); process.kill(-chrome.pid!); });
+    try { process.kill(-chrome.pid!, 'SIGKILL'); } catch { /* all gone */ }
+    rmSync(profile, { recursive: true, force: true, maxRetries: 30, retryDelay: 100 });
   });
   // A cold Chrome on a busy CI runner can take a while to open its port: up to 30 seconds, and say why if it never does.
-  const until = async (what: string, fn: () => unknown) => { for (let i = 0; i < 600; i++) { if (await fn()) return; await new Promise((r) => setTimeout(r, 50)); } throw new Error(`timed out: ${what}; Chrome said: ${said.slice(-600)}`); };
+  const until = async (what: string, fn: () => unknown) => { for (let i = 0; i < 600; i++) { if (await fn()) return; await new Promise((r) => setTimeout(r, 50)); } throw new Error(`timed out: ${what}; recorded ${JSON.stringify(teacher.showing().reel)}; Chrome said: ${said.slice(-600)}`); };
   await until('chromium', () => fetch(`http://127.0.0.1:${port}/json/list`).then((r) => r.ok, () => false));
   // The recorder gets a browser-level DevTools endpoint, as crewd's own relay gives it (desktop.ts).
   const endpoint = (await (await fetch(`http://127.0.0.1:${port}/json/version`)).json()).webSocketDebuggerUrl;
@@ -64,11 +65,13 @@ test('a real show: what was clicked and which box was typed in, never the words,
     ws.on('message', on);
     ws.send(JSON.stringify({ id: me, method, params }));
   });
+  // start() stops waiting after a few seconds; on a slow runner the recorder may still be attaching, so wait for it.
+  await until('the recorder', async () => (await call('Runtime.evaluate', { expression: 'window.__crewhouseShow === true', returnByValue: true }))?.result?.value);
   const site_ = `http://127.0.0.1:${(site.address() as AddressInfo).port}`;
   await call('Page.navigate', { url: `${site_}/stats` });
   await until('the page', async () => (await call('Runtime.evaluate', { expression: 'document.getElementById("save") !== null && window.__crewhouseShow === true', returnByValue: true }))?.result?.value);
   const act = (js: string) => call('Runtime.evaluate', { expression: js });
-  await act(`(() => { const n = document.getElementById('n'); n.value = 'Umer secret words'; n.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+  await act(`(() => { const n = document.getElementById('n'); n.value = 'Nadia secret words'; n.dispatchEvent(new Event('change', { bubbles: true })); })()`);
   await act(`(() => { const p = document.querySelector('[type=password]'); p.value = 'hunter2'; p.dispatchEvent(new Event('change', { bubbles: true })); p.click(); })()`);
   await act(`document.getElementById('save').click()`);
   await act(`document.querySelector('a').click()`);
@@ -79,7 +82,7 @@ test('a real show: what was clicked and which box was typed in, never the words,
   const out = teacher.stop('reel')!;
   const host = `127.0.0.1`;
   assert.deepEqual(out.steps, [`Opened ${host}/stats`, 'Typed in “Your name”', 'Clicked “Save”', 'Clicked “Subscribers”', `Opened ${host}/next`]);
-  assert.doesNotMatch(JSON.stringify(out.steps), /Umer|secret|hunter2|Password/i, 'never what was typed, nothing from the password box');
+  assert.doesNotMatch(JSON.stringify(out.steps), /Nadia|secret|hunter2|Password/i, 'never what was typed, nothing from the password box');
   assert.ok(out.shots.length >= 1 && out.shots.every((s) => s.type === 'image/jpeg' && s.data.length > 100), 'a picture of the pages');
   assert.equal(teacher.has('reel'), false);
 });

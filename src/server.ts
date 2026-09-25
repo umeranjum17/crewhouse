@@ -1,3 +1,4 @@
+import { spawn } from 'node:child_process';
 import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { extname, join } from 'node:path';
@@ -6,7 +7,7 @@ import type { Config } from './config.ts';
 import type { Store } from './db.ts';
 import type { Crew } from './crew.ts';
 import * as disk from './bots.ts';
-import { installTool, toolStatus } from './tools.ts';
+import { toolStatus } from './tools.ts';
 import { OWNER, PROVIDERS, callbackPage, provider } from './accounts.ts';
 import { coversOf } from './policy.ts';
 import { describe, nextRun, parseSchedule } from './routines.ts';
@@ -59,15 +60,21 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     await crew.post(bot, lesson(s.what, s.steps), undefined, member, s.shots);
     return { steps: s.steps.length };
   };
-  /** Installs take minutes (the browser downloads Chromium); the result arrives as an event. */
+  /** Installs take minutes (the browser downloads Chromium) and run npm, pip and downloads one after another, so each
+   *  runs as its own process (src/tools.ts's own command): crewd keeps answering meanwhile. The result arrives as an event. */
   const install = (id: string) => {
     if (installing.has(id)) return;
     installing.add(id);
     db.event('tool.installing', null, { tool: id });
-    return installTool(cfg, id)
-      .then(() => db.event('tool.installed', null, { tool: id }))
-      .catch((e) => { console.error(`install ${id}:`, e); db.event('tool.failed', null, { tool: id }); })
-      .finally(() => installing.delete(id));
+    return new Promise<void>((resolve) => {
+      const done = (ok: boolean) => { if (!installing.delete(id)) return; db.event(ok ? 'tool.installed' : 'tool.failed', null, { tool: id }); resolve(); };
+      const child = spawn(process.execPath, [join(cfg.repoDir, 'src', 'tools.ts'), 'install', id], {
+        // crewd's own folders, spelled out; none of the owner's desktop session (XDG_*, display) reaches the installers.
+        env: { ...Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^(XDG_|WAYLAND_DISPLAY$|DISPLAY$|XAUTHORITY$)/.test(k))),
+          CREWHOUSE_TOOLS_DIR: cfg.toolsDir, CREWHOUSE_STATE_DIR: cfg.stateDir, CREWHOUSE_CREW_DIR: cfg.crewDir }, stdio: ['ignore', 'inherit', 'inherit'] });
+      child.on('exit', (code) => done(code === 0));
+      child.on('error', (e) => { console.error(`install ${id}:`, e); done(false); });
+    });
   };
   // The downloaded app has no setup step: on its first runs it fetches the helpers' own tools itself, one at a time,
   // while everything else already works. The browser, with its own Chromium, is the big one.
