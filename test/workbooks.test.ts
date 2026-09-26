@@ -76,7 +76,18 @@ test('the preview JSON: every sheet, its headings and its first rows, as words a
   assert.deepEqual(json.sheets[1].rows[1], ['Amina Khan', '204', 'Checked in', 'yes']);
   assert.deepEqual(json.sheets[1].rows.at(-1), ['Bilal Sheikh', '108', 'Booked', 'not yet']);
   assert.equal(json.sheets[1].total, 3, 'the header and the finished rows, not the blank ones under the dropdown');
-  assert.equal(json.sheets[0].rows[2][2], '=COUNTIF(Rooms!D2:D40,"Ready")', 'a formula shows as the formula');
+  assert.equal(json.sheets[0].rows[2][2], '—', 'a formula with no computed value is a quiet dash, never the formula text');
+  for (const s of json.sheets) for (const r of s.rows) for (const c of r) assert.doesNotMatch(c, /^=/, 'no preview cell ever shows a formula');
+
+  // A file that carries its own computed values (as Excel does) shows them, not the dash.
+  const dir = temp('cached');
+  const cached = new ExcelJS.Workbook();
+  const ws = cached.addWorksheet('Maths');
+  ws.addRow(['Guests', 6]);
+  ws.addRow(['Beds', { formula: 'B1+2', result: 8 }]);
+  await cached.xlsx.writeFile(join(dir, 'cached.xlsx'));
+  const again = await readWorkbook(join(dir, 'cached.xlsx'));
+  assert.deepEqual(again.sheets[0].rows[1], ['Beds', '8'], 'the computed value, when the file has one');
   assert.deepEqual(JSON.parse(JSON.stringify(json)), json, 'plain JSON: no dates, no library objects');
 });
 

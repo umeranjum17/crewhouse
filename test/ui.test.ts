@@ -623,7 +623,7 @@ test('a photo in a message is a picture, not words', () => {
 // reaches a screen — crewd reads it (src/workbooks.ts) and the app renders these words.
 test('a delivered workbook is a card in the chat, and opens as a read-only sheet with tabs', () => {
   const json = { sheets: [
-    { name: 'Daily dashboard', total: 6, rows: [['Today', 'Number', 'Notes'], ['Arrivals', '6', 'from /home/umer/Crewhouse/bots/quill/files/log.xlsx'], ['Rooms ready', '=COUNTIF(Rooms!D2:D40,"Ready")', '']] },
+    { name: 'Daily dashboard', total: 6, rows: [['Today', 'Number', 'Notes'], ['Arrivals', '6', 'from /home/umer/Crewhouse/bots/quill/files/log.xlsx'], ['Rooms ready', '—', '']] },
     { name: 'Rooms & housekeeping', total: 40, rows: [['Room', 'State', 'Checked by'], ['204', 'Ready', 'Rani']] },
   ] };
   const book = A.workbook(json, 'Hotel guest reception');

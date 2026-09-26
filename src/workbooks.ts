@@ -57,14 +57,14 @@ export async function buildWorkbook(file: string, spec: WorkbookSpec) {
   return { sheets: wb.worksheets.map((w: any) => w.name) };
 }
 
-/** What a cell says, whatever kind of cell it is: one string for the preview's table. */
+/** What a cell says, whatever kind of cell it is: one string for the preview's table. A formula shows its computed
+ *  value when the file has one cached, or a quiet dash — never the formula text; the downloaded file keeps the real thing. */
 function text(v: any): string {
   if (v === null || v === undefined) return '';
   if (v instanceof Date) return Number.isNaN(v.getTime()) ? '' : v.toISOString().slice(0, 10);
   if (typeof v === 'object') {
     if (Array.isArray(v.richText)) return v.richText.map((t: any) => text(t.text)).join('');
-    if ('result' in v) return text(v.result ?? (v.formula ? `=${v.formula}` : ''));
-    if ('formula' in v) return `=${v.formula}`;
+    if ('result' in v || 'formula' in v) return v.result == null ? '—' : text(v.result);
     if ('text' in v) return text(v.text);
     if ('hyperlink' in v) return text(v.text ?? v.hyperlink);
     return '';

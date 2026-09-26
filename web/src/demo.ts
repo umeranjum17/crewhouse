@@ -181,7 +181,7 @@ pages.scribe = { messages: [
 const book = {
   sheets: [
     { name: 'Daily dashboard', total: 6, rows: [
-      ['Today', 'Number', 'Notes'], ['Arrivals', '6', 'Two early, one at 4pm'], ['Departures', '4', 'One late checkout agreed'], ['Walk-ins so far', '1', 'Room 204 taken'], ['Rooms ready', '=COUNTIF(\'Rooms & housekeeping\'!D2:D40,"Ready")', 'Counted off the room board']] },
+      ['Today', 'Number', 'Notes'], ['Arrivals', '6', 'Two early, one at 4pm'], ['Departures', '4', 'One late checkout agreed'], ['Walk-ins so far', '1', 'Room 204 taken'], ['Rooms ready', '—', 'Worked out when you open it']] },
     { name: 'Booking & check-in', total: 34, rows: [
       ['Guest', 'Room', 'Arrival', 'Departure', 'Nights', 'Status', 'Rate', 'Paid'],
       ['Amina Khan', '204', '11 Oct', '14 Oct', '3', 'Checked in', '285', '285'],
@@ -194,9 +194,9 @@ const book = {
       ['301', 'Family suite', '', 'To do', '', 'Hairdryer missing']] },
     { name: 'Payments', total: 12, rows: [
       ['Guest', 'Room', 'Bill', 'Paid', 'To pay', 'Way paid'],
-      ['Amina Khan', '204', '285', '285', '=C2-D2', 'Card'],
-      ['Bilal Sheikh', '108', '120', '40', '=C3-D3', 'Cash'],
-      ['Family Nazir', '301', '520', '0', '=C4-D4', 'Not paid yet']] },
+      ['Amina Khan', '204', '285', '285', '0', 'Card'],
+      ['Bilal Sheikh', '108', '120', '40', '80', 'Cash'],
+      ['Family Nazir', '301', '520', '0', '520', 'Not paid yet']] },
   ],
 };
 for (const b of bots) pages[b.id] ??= { messages: [], notes: '', tasks: [] };
