@@ -507,7 +507,7 @@ function Remembers({ id, name, page, reload }: { id: string; name: string; page:
 /** Who a helper is, in plain words, and what it knows how to do. The person changes it; the helper never does. */
 function AboutMe({ id, name, page, reload }: { id: string; name: string; page: Json; reload: () => void }) {
   const [draft, setDraft] = useState<string | null>(null);
-  const lines = A.personality(page.soul);
+  const traits = A.aboutTraits(name, page.soul);
   const knows = A.knows(page.skills);
   const left = (page.soulCap ?? 2000) - A.soulText(name, draft ?? '').length;
   return (
@@ -515,16 +515,17 @@ function AboutMe({ id, name, page, reload }: { id: string; name: string; page: J
       <p className="lead">How {name} comes across. {name} reads this before every job.</p>
       {draft === null ? (
         <div className="card">
-          {lines.length ? lines.map((l, i) => <p key={i}>{l}</p>) : <p className="mute">{name} hasn't a personality of its own yet.</p>}
+          {traits.length ? traits.map((t, i) => <p key={i}>{t}</p>) : <p className="mute">{name} hasn't a personality of its own yet.</p>}
           <div className="btns">
-            <button className="btn" onClick={() => setDraft(A.soulDraft(page.soul))}>Change</button>
+            <button className="btn" onClick={() => setDraft(A.aboutDraft(name, page.soul))}>Change</button>
             <button className="btn ghost" onClick={() => confirm(`Put ${name} back the way it started?`) && attempt(async () => { await api.soulReset(id); reload(); }, `${name} is back to its old self`)}>Put back how {name} started</button>
           </div>
         </div>
       ) : (
         <div className="card form">
           <b>In your words, how should {name} come across?</b>
-          <textarea className="input" rows={10} value={draft} onChange={(e) => setDraft(e.target.value)} aria-label={`How ${name} comes across`} />
+          <p className="mute small">One line each — plain words about {name}. Crewhouse turns them into {name}'s own instructions.</p>
+          <textarea className="input" rows={8} value={draft} onChange={(e) => setDraft(e.target.value)} aria-label={`How ${name} comes across`} />
           <div className={`small ${left < 0 ? 'bad' : 'mute'}`}>{left < 0 ? 'A little shorter, please.' : left < 300 ? 'Nearly full.' : ''}</div>
           <div className="btns">
             <button className="btn go" disabled={!draft.trim() || left < 0} onClick={() => attempt(async () => { await api.soul(id, A.soulText(name, draft)); setDraft(null); reload(); }, 'Saved')}>Save</button>

@@ -802,7 +802,7 @@ function HelperPage(ctx: Ctx & { id: string; tab: string; m?: number; setTab: (t
           <T style={s.b}>Routines</T>
           <RoutineList {...ctx} bot={id} />
           <T style={s.b}>{`About ${h.name}`}</T>
-          <Card>{A.personality(page?.soul).map((l, i) => <T key={i} style={{ paddingVertical: 4 }}>{l}</T>)}</Card>
+          <Card>{A.aboutTraits(h.name, page?.soul).map((l, i) => <T key={i} style={{ paddingVertical: 4 }}>{l}</T>)}</Card>
           {A.knows(page?.skills).length > 0 && <Card><T style={s.b}>Knows how to</T>{A.knows(page?.skills).map((k) => <T key={k.name} style={{ paddingVertical: 4 }}>{`• ${k.says}`}</T>)}</Card>}
           <T style={s.b}>{`What ${h.name} remembers`}</T>
           {A.memories(page?.notes).length ? <Card>{A.memories(page?.notes).map((mm, i) => <T key={i} style={{ paddingVertical: 6 }}>{mm}</T>)}</Card>

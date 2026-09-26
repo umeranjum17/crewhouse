@@ -527,9 +527,32 @@ export function withoutMemory(notes = '', i: number) {
 /** Who a helper is, as plain lines: its own name heading dropped, section headings and bullets read as sentences. */
 export const personality = (soul = '') => soul.split('\n').slice(soul.startsWith('# ') ? 1 : 0)
   .map((l) => l.replace(/^#+\s*/, '').replace(/^[-*]\s*/, '').trim()).filter(Boolean).map(plain);
-/** The text a person edits: everything but the name heading, which crewd keeps. */
-export const soulDraft = (soul = '') => soul.split('\n').slice(soul.startsWith('# ') ? 1 : 0).join('\n').trim();
-export const soulText = (name: string, draft: string) => `# ${name}\n\n${draft.trim()}\n`;
+
+/** The About section, in the family's words: one trait per line, about the helper, never instructions to it.
+ *  Older souls were written as a prompt ("You are Reel. You love…"): read those as facts about the helper instead. */
+export function aboutTraits(name: string, soul = ''): string[] {
+  const lines = soul.split('\n');
+  const at = lines.findIndex((l) => /^##\s+how you come across\s*$/i.test(l.trim()));
+  if (at < 0) {
+    return personality(soul).map((l) => l
+      .replace(/^you are\b[^.：.]*[.：.]?\s*/i, '')
+      .replace(/\byou are\b/gi, `${name} is`)
+      .replace(/\byou're\b/gi, `${name} is`)
+      .replace(/\byour\b/gi, `${name}'s`)
+      .replace(/\byou\b/gi, name));
+  }
+  const traits: string[] = [];
+  for (const l of lines.slice(at + 1)) {
+    if (/^##\s/.test(l)) break;
+    const t = plain(l.replace(/^[-*]\s*/, '').trim());
+    if (t) traits.push(t);
+  }
+  return traits;
+}
+/** What the person edits: the traits, one per line, nothing else. */
+export const aboutDraft = (name: string, soul = '') => aboutTraits(name, soul).join('\n');
+/** The helper's instructions, composed behind the scenes from the family's plain words. */
+export const soulText = (name: string, draft: string) => `# ${name}\n\n## How you come across\n${draft.trim().split('\n').map((l) => `- ${l.replace(/^[-*]\s*/, '').trim()}`).filter((l) => l !== '- ').join('\n')}\n`;
 /** What a helper knows how to do, from its skills: their own descriptions, in plain words. */
 export const knows = (skills: Json[] = []) => skills.map((k) => ({ name: String(k.name), says: plain(k.says || String(k.name).replace(/-/g, ' ')), learned: !!k.learned }));
 
