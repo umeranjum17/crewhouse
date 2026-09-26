@@ -470,6 +470,8 @@ function Hello({ state, refresh, go }: Ctx) {
   const me = state.person;
   const named = me.name && !(me.id === A.OWNER && me.name === 'Owner') ? me.name : '';
   const [address, setAddress] = useState<string>(me.address || named);
+  const [own, setOwn] = useState(false);
+  const [words, setWords] = useState('');
   const pick = (ask?: string) => {
     if (!address.trim()) return say('First, what shall I call you?');
     void attempt(async () => { await api.onboard(address.trim(), ask); refresh(); go({ view: 'chief' }, true); });
@@ -482,8 +484,11 @@ function Hello({ state, refresh, go }: Ctx) {
       <TextInput style={[s.input, { color: useLook().ink, borderColor: useLook().line }]} value={address} onChangeText={setAddress} placeholder="What shall I call you?" placeholderTextColor={useLook().mute} />
       <View style={s.chips}>{['Sir', "Ma'am", ...(named ? [named] : [])].map((q) => <Btn key={q} label={q} onPress={() => setAddress(q)} />)}</View>
       <Label>What can I take off your plate?</Label>
-      {A.FIRST_IDEAS.map((i) => <Btn key={i.label} label={`${i.icon}  ${i.label}`} onPress={() => pick(i.label)} />)}
-      <Btn go big label="Just say hello" onPress={() => pick()} />
+      {A.firstIdeas(state).map((i) => <Btn key={i.label} label={`${i.icon}  ${i.label}`} onPress={() => pick(i.label)} />)}
+      {own ? <>
+        <TextInput style={[s.input, { color: useLook().ink, borderColor: useLook().line }]} value={words} onChangeText={setWords} placeholder="Ask for anything…" placeholderTextColor={useLook().mute} accessibilityLabel="Your first ask" />
+        <Btn go big label="Send" disabled={!words.trim()} onPress={() => pick(words.trim())} />
+      </> : <Btn label="Or ask in your own words" onPress={() => setOwn(true)} />}
     </Page>
   );
 }
@@ -546,7 +551,7 @@ function AskSheet({ c, who, chiefSays, canAct, onClose }: { c: A.Card; who: A.He
         <Pressable style={[s.sheet, { backgroundColor: t.bg }]} onPress={() => {}}>
           <View style={{ alignItems: 'center', gap: 10 }}>
             {who && <Face who={{ ...who, mood: 'ask' }} size={84} />}
-            <Pill tone="wait">{who?.name ?? 'The crew'} · {c.kind === 'spend' ? 'wants to spend money' : 'needs your OK'}</Pill>
+            <Pill tone="wait">{who?.name ?? 'The crew'} · {c.kind === 'spend' ? 'wants to spend money' : c.kind === 'setup' ? 'Home setup' : 'needs your OK'}</Pill>
           </View>
           <T style={s.h2}>{heading}</T>
           {c.review ? <>

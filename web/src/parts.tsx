@@ -351,7 +351,7 @@ export function AskSheet({ c, who, chiefSays, onClose }: { c: Card; who: Helper 
       <div ref={box} className="sheet approve" role="dialog" aria-modal aria-label={c.head} onClick={(e) => e.stopPropagation()}>
         <div className="approve-face">
           {who && <span className="halo"><PalArt kind={who.kind} mood="ask" d={6} name={who.name} /></span>}
-          <Pill tone="wait">{who?.name ?? 'The crew'} · {c.kind === 'spend' ? 'wants to spend money' : 'needs your OK'}</Pill>
+          <Pill tone="wait">{who?.name ?? 'The crew'} · {c.kind === 'spend' ? 'wants to spend money' : c.kind === 'setup' ? 'Home setup' : 'needs your OK'}</Pill>
         </div>
         <h2>{heading}</h2>
         {c.review ? (
@@ -370,7 +370,9 @@ export function AskSheet({ c, who, chiefSays, onClose }: { c: Card; who: Helper 
         {c.kind === 'spend' && <p className="mute small">Anything that costs money asks you every time.</p>}
         {oops && <div className="send-failed" role="alert">That didn't go through. <button type="button" className="link inline" onClick={() => last.current && act(last.current)}>Try again</button></div>}
         <div className="approve-btns">
-          {c.choices.map((x, i) => <button key={x.label} className={`btn ${i === 0 ? 'go big' : ''}`} onClick={() => act(x.body)}>{x.label}</button>)}
+          {c.kind === 'setup' && <><a className="btn go big" href="#/settings" onClick={onClose}>Open Home setup</a>
+            <button className="btn" onClick={() => act({ answer: 'deny' })}>Not now</button></>}
+          {c.kind !== 'setup' && c.choices.map((x, i) => <button key={x.label} className={`btn ${i === 0 ? 'go big' : ''}`} onClick={() => act(x.body)}>{x.label}</button>)}
         </div>
       </div>
     </div>

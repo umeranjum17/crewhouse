@@ -68,6 +68,8 @@ function Hello({ state, refresh, night }: Ctx) {
   const [other, setOther] = useState(!named);
   const input = useRef<HTMLInputElement>(null);
   const [tipped, setTipped] = useState(false); // he raises his bowler as he greets, then settles
+  const [own, setOwn] = useState(false);
+  const [words, setWords] = useState('');
   useEffect(() => { const t = setTimeout(() => setTipped(true), 2400); return () => clearTimeout(t); }, []);
   const pick = (ask: string) => {
     if (!address.trim()) { setOther(true); toast('First, what shall I call you?'); input.current?.focus(); return; }
@@ -85,8 +87,14 @@ function Hello({ state, refresh, night }: Ctx) {
       </div>
       <h2 className="plate">What can I take off your plate?</h2>
       <div className="ideas">
-        {A.FIRST_IDEAS.map((i) => <button key={i.label} className="idea" onClick={() => pick(i.label)}><span aria-hidden>{i.icon}</span><b>{i.label}</b><i aria-hidden>›</i></button>)}
+        {A.firstIdeas(state).map((i) => <button key={i.label} className="idea" onClick={() => pick(i.label)}><span aria-hidden>{i.icon}</span><b>{i.label}</b><i aria-hidden>›</i></button>)}
       </div>
+      {own ? <div className="own-ask">
+        <input className="input" value={words} onChange={(e) => setWords(e.target.value)} placeholder="Ask for anything…" aria-label="Your first ask"
+          onKeyDown={(e) => { if (e.key === 'Enter' && words.trim()) pick(words.trim()); }} />
+        <button className="btn go" disabled={!words.trim()} onClick={() => pick(words.trim())}>Send</button>
+      </div>
+        : <button className="link" onClick={() => setOwn(true)}>Or ask in your own words</button>}
       {other ? <>
         <input ref={input} className="input name" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="What shall I call you?" aria-label="What shall I call you?" />
         <div className="chips center">{['Sir', "Ma'am", ...(named ? [named] : [])].map((q) => <button key={q} className={`chip ${address === q ? 'on' : ''}`} onClick={() => setAddress(q)}>{q}</button>)}</div>
@@ -172,6 +180,15 @@ function Chats({ state, refresh }: { state: Json; refresh: () => void }) {
   );
 }
 
+/** The owner's row until the house is fully set up: how many of the three jobs are left. */
+function SetupRow({ state, accounts, tick }: { state: Json; accounts: Json[] | null; tick: number }) {
+  const [link, setLink] = useState<Json>(null);
+  useEffect(() => { api.phoneLink().then(setLink).catch(() => {}); }, [tick]);
+  const { left } = A.homeSetup(state, A.account(accounts, A.OWNER), link);
+  if (!left) return null;
+  return <a className="card nudge" href="#/settings"><span className="grow">Home setup: {left} {left === 1 ? 'thing' : 'things'} left</span><b>›</b></a>;
+}
+
 /** Needs you as one compact list: a number, the face, the subject, one plain line. A row opens the review sheet;
  *  nothing commits from Home. At most three rows, then "N more", which expands in place. */
 function NeedsRows({ state, cards }: { state: Json; cards: A.Card[] }) {
@@ -211,6 +228,7 @@ function Home({ state, me, refresh, tick, accounts, offline, night }: Ctx) {
           <h1>{A.greeting()}, {state.person.address ?? state.person.name}</h1>
         </header>
         {(g.state === 'signed-out' || g.notIncluded) && <AccountCard me={me} owner={ownerName(state)} isOwner={me === A.OWNER} g={g} onReady={refresh} />}
+        {state.person.id === A.OWNER && <SetupRow state={state} accounts={accounts} tick={tick} />}
         {A.resting(state) && <div className="card nudge"><span className="grow">{A.resting(state)}. I'll pick things back up then.</span></div>}
         {A.gettingReady(state) && <div className="card nudge"><span className="grow">{A.gettingReady(state)}</span></div>}
         {A.update(state) && <div className="card nudge"><span className="grow">{A.update(state)!.words}</span><a className="btn go" href={A.update(state)!.url} target="_blank" rel="noreferrer">Download</a></div>}
@@ -683,7 +701,7 @@ function Phones({ tick }: { tick: number }) {
   const left = offer ? Math.max(0, Math.round((offer.expires - now) / 1000)) : 0;
 
   return (<>
-    <div className="label">Phones</div>
+    <div className="label" id="setup-phones">Phones</div>
     {phones === undefined ? <div className="card mute">Checking…</div> : phones === null || (!link?.on && !link?.relay) ? (
       <div className="card"><b>Crewhouse on your phone</b><p className="mute">The phone app is on its way. When it arrives, you'll scan a code here and the crew is in your pocket.</p></div>
     ) : (<>
@@ -748,6 +766,26 @@ function Phones({ tick }: { tick: number }) {
   </>);
 }
 
+/** Owner only: the house's three setup jobs, and where each one is finished. The family never sees Google's own
+ *  words here — those live inside the Google panel alone. */
+function HomeSetup({ state, accounts, tick }: { state: Json; accounts: Json[] | null; tick: number }) {
+  const [link, setLink] = useState<Json>(null);
+  useEffect(() => { api.phoneLink().then(setLink).catch(() => {}); }, [tick]);
+  const { rows, left } = A.homeSetup(state, A.account(accounts, A.OWNER), link);
+  const jump = (key: string) => document.getElementById(`setup-${key}`)?.scrollIntoView({ behavior: 'smooth' });
+  return (<>
+    <div className="label">Home setup</div>
+    <div className="card list">{rows.map((r) => (
+      <div key={r.key} className="row-item">
+        <span className={`setup-mark${r.done ? ' done' : ''}`} aria-label={r.done ? 'done' : 'to do'}>{r.done ? '✓' : '○'}</span>
+        <span className="grow"><b>{r.says}</b></span>
+        {!r.done && <button className="link" onClick={() => jump(r.key)}>Open</button>}
+      </div>
+    ))}{left === 0 && <div className="row-item mute small">All set.</div>}
+    </div>
+  </>);
+}
+
 function Settings({ state, me, refresh, tick, accounts, look, setLook, switchTo }: Ctx & { look: string; setLook: (l: string) => void; switchTo: (id: number) => void }) {
   const [signing, setSigning] = useState<Window | null | false>(sheet === 'signin' ? null : false);
   const [adding, setAdding] = useState('');
@@ -756,6 +794,7 @@ function Settings({ state, me, refresh, tick, accounts, look, setLook, switchTo 
   return (
     <div className="page settings">
       <h1>Settings</h1>
+      {owner && <HomeSetup state={state} accounts={accounts} tick={tick} />}
       {state.members.length > 1 && (<><div className="label">Who's using this screen</div>
         <div className="chips">{state.members.map((m: Json) => <button key={m.id} className={`chip ${m.id === me ? 'on' : ''}`} onClick={() => switchTo(m.id)}>{m.name}</button>)}</div></>)}
 
@@ -831,7 +870,7 @@ function HouseGoogle({ on, steps, refresh }: { on: boolean; steps?: A.GoogleStep
   const last = step === A.GOOGLE_STEPS.length - 1;
   const s = A.GOOGLE_STEPS[step];
   return (<>
-    <div className="label">Google for the house</div>
+    <div className="label" id="setup-google">Google for the house</div>
     {on && !edit ? <div className="card">
         <div className="row"><span className="grow"><b>{A.googleHeadline(steps)}</b><div className="mute small">What Google itself has answered so far. Steps nobody has tried yet say “you said done”.</div></span>
           <button className="btn" onClick={() => { setEdit(true); setStep(A.GOOGLE_STEPS.length - 1); }}>Change key</button></div>

@@ -35,6 +35,8 @@ export const api = {
   read: (id: string) => call('POST', `/api/bots/${id}/read`),
   /** Words across the person's own chats and finished things. */
   search: (q: string) => call('GET', `/api/search?q=${encodeURIComponent(q)}`),
+  /** Ask the owner to switch Google on for the house: one ask on their list. */
+  houseAsk: (app: string) => call('POST', '/api/house/ask', { app }),
   /** `photos`: up to four, each `{type: 'image/jpeg' | 'image/png' | 'image/webp', data: base64}`. */
   /** A photo someone sent, as data: the phone shows it without opening this computer's own address. */
   photo: (bot: string, path: string) => call('GET', `/api/photo?bot=${encodeURIComponent(bot)}&path=${encodeURIComponent(path)}`) as Promise<{ type: string; data: string }>,
