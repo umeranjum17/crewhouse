@@ -2,7 +2,6 @@
 // Everything a person reads comes through web/src/adapter.ts, the same plain-words view models as the web app
 // (docs/ui-contract.md); the colours are web/src/tokens.ts and the mascots are web/src/art.ts, drawn as dots.
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { StatusBar } from 'expo-status-bar';
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator, AppState, BackHandler, Image, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, useColorScheme, View,
@@ -16,6 +15,8 @@ import { color, radius } from '../web/src/tokens.ts';
 import { CONTROL_PERMISSIONS, DesktopView, useDesktopSession } from '@desklink/react-native';
 import { desktopAvailable } from '@desklink/react-native/availability';
 import * as ImagePicker from 'expo-image-picker';
+import * as Linking from 'expo-linking';
+import * as Notifications from 'expo-notifications';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { useShareIntent } from 'expo-share-intent';
 import * as motion from './src/motion';
@@ -53,7 +54,6 @@ export default function App() {
   return (
     <Theme.Provider value={t}>
       <SafeAreaProvider>
-        <StatusBar style={t.night ? 'light' : 'dark'} />
         <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }} edges={['top', 'bottom']}>
           {grant === undefined ? <Center><ActivityIndicator color={t.pink} /></Center>
             : grant === null ? <Pair onPaired={setGrant} />
@@ -221,6 +221,29 @@ function FileRow({ f, plain }: { f: A.FileView; plain?: boolean }) {
 }
 
 // ---------- pairing ----------
+/** One plain line for a pairing failure, and the retry is the action — never the machinery's own words. */
+const pairWords = (e: any): string => {
+  const m = String(e?.message ?? e ?? '');
+  if (/run out|expired/i.test(m)) return 'That code has run out. Show a new one on your computer, then try again.';
+  if (/match|refus|wrong|no such|not found|unknown/i.test(m)) return "That code didn't match. Show a fresh one and try again.";
+  if (/reach|network|timeout|address|relay|host/i.test(m)) return "Couldn't reach your computer. Check it's awake, then try again.";
+  return 'That didn\'t go through. Check the code, then try again.';
+};
+/** What this phone knows about its own news: allowed and working (on), said no (off), or this build can't push at all
+ *  (missing — the phone still shows everything the moment the app is opened). */
+async function pushState(): Promise<'on' | 'off' | 'missing'> {
+  const { status } = await Notifications.getPermissionsAsync();
+  if (status !== 'granted') return 'off';
+  const token = await Notifications.getExpoPushTokenAsync().then((x) => x.data,
+    (e: Error & { code?: string }) => (e.code === 'ERR_NOTIFICATIONS_NO_EXPERIENCE_ID' || /firebase|fcm|google-services/i.test(e.message) ? '' : undefined));
+  return token === '' ? 'missing' : 'on';
+}
+const PUSH_WORDS = {
+  on: 'On',
+  off: 'Notifications are off for Crewhouse on this phone',
+  missing: "Notifications aren't switched on yet. You'll see news when you open Crewhouse.",
+};
+
 function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
   const t = useLook();
   const [perm, askPerm] = useCameraPermissions();
@@ -237,7 +260,7 @@ function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
   const typed = async () => {
     setBusy(true);
     setErr('');
-    try { setDone(await pairTyped(relay, short, code, setWords)); } catch (e: any) { setErr(e.message); }
+    try { setDone(await pairTyped(relay, short, code, setWords)); } catch (e: any) { setErr(pairWords(e)); }
     setWords('');
     setBusy(false);
   };
@@ -248,16 +271,20 @@ function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
     setBusy(true);
     setErr('');
     // @byokit/link's failures are already plain sentences ("That pairing code has run out. Show a new one on your computer.").
-    try { setDone(await pair(text, setWords)); } catch (e: any) { seen.current = ''; setErr(e.message); }
+    try { setDone(await pair(text, setWords)); } catch (e: any) { seen.current = ''; setErr(pairWords(e)); }
     setWords('');
     setBusy(false);
   };
   if (done) {
+    const [push] = useState<'on' | 'off' | 'missing' | null>(null);
+    const [checked, setChecked] = useState(false);
+    useEffect(() => { void pushState().then((p) => { setPush(p); setChecked(true); }).catch(() => setChecked(true)); }, []);
     return (
       <Center>
         <ChiefArt mood="happy" size={150} />
         <T style={s.h1}>You're in</T>
         <T tone="ink2" style={s.centerText}>This phone is paired with your computer{done.device.role === 'view' ? '. It can watch the crew, not answer' : ''}.</T>
+        {checked && push === 'missing' && <T tone="mute" style={s.centerText}>{PUSH_WORDS.missing}</T>}
         <Btn go big label="Open Crewhouse" onPress={() => onPaired(done)} />
       </Center>
     );
@@ -314,8 +341,9 @@ function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
           if (p.granted) setScanning(true); else setErr('Crewhouse needs the camera to read the code.');
         }} />
       )}
-      {!busy && <Btn label="Type a code" onPress={() => { setTyping(true); setErr(''); }} />}
       {!!err && <T tone="pinkInk" style={s.centerText}>{err}</T>}
+      {!!err && /camera/.test(err) && <Btn label="Open phone settings" onPress={() => void Linking.openSettings()} />}
+      {!busy && <Btn label="Type a code" onPress={() => { setTyping(true); setErr(''); }} />}
       <T tone="mute" style={[s.small, s.centerText, { marginTop: 20 }]}>🔒 Only your computer can read what this phone sends. A relay, if you use one, passes it along without being able to read it.</T>
     </Center>
   );
@@ -504,6 +532,8 @@ function AskCard({ c, who, onDone, canAct, offline, open }: { c: A.Card; who: A.
   const act = async (body: Json) => { last.current = body; setOops(false); if (await answer(c, body)) onDone(); else setOops(true); };
   const [yes, ...rest] = c.choices;
   const deny = c.choices.find((x) => x.body.answer === 'deny');
+  const owner = state.members.find((m: Json) => m.id === A.OWNER)?.name ?? 'the owner';
+  const [askedAt, setAskedAt] = useState(0); // after 'Ask {owner} to set it up', the card itself says so
   // A routine offered by Chief: the lines are the confirmation; changing the time is an edit before the yes.
   const [when, setWhen] = useState<string | null>(null);
   const [sched, setSched] = useState<Json>(null);
@@ -525,7 +555,13 @@ function AskCard({ c, who, onDone, canAct, offline, open }: { c: A.Card; who: A.
       {oops && <T tone="pinkInk" style={s.small}>That didn't go through. Try again.</T>}
       {offline ? <T tone="mute" style={s.small}>You can answer once the home computer is back.</T>
         : !canAct ? <T tone="mute" style={s.small}>This phone watches; answer on another phone or the computer.</T> : c.kind === 'connect' ? (
-        <T tone="mute" style={s.small}>Connecting an app is done on the computer: Settings, Your apps.</T>
+        askedAt ? <T tone="mute" style={s.small}>Asked {owner} · {A.clock(askedAt)}</T>
+          : <View style={{ gap: 8 }}>
+            {A.needsHouse(state, c.app!)
+              ? <Btn go label={`Ask ${owner} to set it up`} onPress={() => { setAskedAt(Date.now()); void attempt(() => api.houseAsk(c.app!.id)); }} />
+              : <T tone="mute" style={s.small}>Finish on the computer: it's waiting in this chat there.</T>}
+            <Btn label={`Do it without ${c.app!.name}`} onPress={() => act({ answer: 'deny' })} />
+          </View>
       ) : c.kind === 'routine' ? (
         <>
           {when !== null && <TextInput style={[s.input, { color: t.ink, borderColor: t.line }]} value={when} onChangeText={setWhen} autoFocus
@@ -793,7 +829,7 @@ function Crew(ctx: Ctx) {
 }
 
 function HelperPage(ctx: Ctx & { id: string; tab: string; m?: number; setTab: (t: string) => void }) {
-  const { id, tab, m, setTab, state, tick, refresh, canAct, back } = ctx;
+  const { id, tab, m, setTab, state, tick, refresh, canAct, back, go } = ctx;
   const h = A.crew(state).find((x) => x.id === id);
   const [page, setPage] = useState<Json>(null);
   const [all, setAll] = useState(false); // Details shows what it is doing now; "Every step" opens the whole trail in place
@@ -831,6 +867,7 @@ function HelperPage(ctx: Ctx & { id: string; tab: string; m?: number; setTab: (t
           <RoutineList {...ctx} bot={id} />
           <T style={s.b}>{`About ${h.name}`}</T>
           <Card>{A.aboutTraits(h.name, page?.soul).map((l, i) => <T key={i} style={{ paddingVertical: 4 }}>{l}</T>)}</Card>
+          <Btn ghost label="Ask Chief to change it" onPress={() => { keepDraft('chief', `Please change how ${h.name} comes across: `); go({ view: 'chief' }); }} />
           {A.knows(page?.skills).length > 0 && <Card><T style={s.b}>Knows how to</T>{A.knows(page?.skills).map((k) => <T key={k.name} style={{ paddingVertical: 4 }}>{`• ${k.says}`}</T>)}</Card>}
           <T style={s.b}>{`What ${h.name} remembers`}</T>
           {A.memories(page?.notes).length ? <Card>{A.memories(page?.notes).map((mm, i) => <T key={i} style={{ paddingVertical: 6 }}>{mm}</T>)}</Card>
@@ -845,9 +882,11 @@ function HelperPage(ctx: Ctx & { id: string; tab: string; m?: number; setTab: (t
   );
 }
 
-/** A bot's own screen on the phone, through desklink over the encrypted link: Watch, Take the wheel, Hand it back. */
+/** A bot's own screen on the phone, through desklink over the encrypted link: Watch, Take the wheel, Hand it back.
+ *  Taking the wheel is the whole page: one status line, the screen, Hand it back pinned at the bottom. */
 function Screen({ bot, canAct, refresh, showing }: { bot: Json; canAct: boolean; refresh: () => void; showing?: { words: string } | null }) {
   const t = useLook();
+  const reduce = motion.useReduceMotion();
   const control = bot.controls === 'person';
   const controlRef = useRef(control);
   controlRef.current = control;
@@ -872,28 +911,50 @@ function Screen({ bot, canAct, refresh, showing }: { bot: Json; canAct: boolean;
   const watch = () => { setErr(''); watching.current = true; void open(); };
   const stop = () => { watching.current = false; void session.close().then(() => sig.current?.close()); };
   const act = (fn: () => Promise<unknown>) => async () => { setErr(''); if (await attempt(fn)) refresh(); };
+  const [help, setHelp] = useState(false);
   const live = session.snapshot.status;
   const idle = live === 'idle' || live === 'ended' || live === 'failed';
   const words: Record<string, string> = { opening: 'Opening…', connecting: 'Connecting…', live: 'Live', reconnecting: 'Reconnecting…', failed: "Couldn't open it" };
+  // Taking the wheel: the whole page, the header and tab bar behind it. One status line, the screen, and
+  // Hand it back pinned at the bottom with Keyboard beside the "?".
+  if (canAct && control) return (
+    <Modal visible animationType={motion.sheet(reduce)} onRequestClose={() => {}}>
+      <View style={{ flex: 1, backgroundColor: t.bg }}>
+        <T style={[s.centerText, { padding: 12 }]}><Text style={s.b}>You're in control</Text>{` · ${bot.display} waits`}</T>
+        <View style={{ flex: 1, margin: 12, borderRadius: 16, overflow: 'hidden', backgroundColor: t.line }}>
+          <DesktopView sessionId={session.nativeId} style={{ flex: 1 }} accessibilityLabel={`${bot.display}'s screen`} keyboardClearance={120} />
+          {idle && <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center', padding: 16 }]}><T tone="mute" style={s.centerText}>{live === 'failed' ? words.failed : `Opening ${bot.display}'s screen…`}</T></View>}
+          {!!err && <T tone="pinkInk" style={s.centerText}>{err}</T>}
+        </View>
+        <View style={{ padding: 12, gap: 8 }}>
+          <TextInput style={[s.input, { color: t.ink, borderColor: t.line }]} value={note} onChangeText={setNote} placeholder={`What did you do? ${bot.display} reads this`} placeholderTextColor={t.mute} accessibilityLabel="What did you do" />
+          <Btn go big label="Hand it back" onPress={act(async () => { await api.giveBack(bot.id, note); setNote(''); })} />
+          <View style={[s.chips, { justifyContent: 'center' }]}>
+            <Btn label="Keyboard" onPress={() => session.showKeyboard()} />
+            <Btn ghost label="?" onPress={() => setHelp((v) => !v)} />
+          </View>
+          {help && <T tone="mute" style={s.small}>{bot.display} has its own computer at home, separate from yours. Taking the wheel pauses it, for a sign-in or anything it's stuck on; handing back lets it carry on.</T>}
+        </View>
+      </View>
+    </Modal>
+  );
   return (
     <Card>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
         <T style={[s.b, { flex: 1 }]}>{bot.display}'s screen</T>
-        <Pill tone={live === 'live' ? 'ok' : 'off'}>{control ? 'You have the wheel' : words[live] ?? 'Not watching'}</Pill>
+        <Pill tone={live === 'live' ? 'ok' : 'off'}>{words[live] ?? 'Not watching'}</Pill>
       </View>
-      {control && <T tone="ink2">You're driving. {bot.display} waits until you hand the wheel back.</T>}
       <View style={{ width: '100%', aspectRatio: 1280 / 800, borderRadius: 16, overflow: 'hidden', backgroundColor: t.line }}>
         <DesktopView sessionId={session.nativeId} style={{ flex: 1 }} accessibilityLabel={`${bot.display}'s screen`} keyboardClearance={120} />
         {idle && <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center', padding: 16 }]}><T tone="mute" style={s.centerText}>{live === 'failed' ? words.failed : `Watch ${bot.display} work on its own computer`}</T></View>}
       </View>
       {!!err && <T tone="pinkInk">{err}</T>}
       <View style={s.chips}>
-        {idle ? <Btn go label={`Watch ${bot.display}`} onPress={watch} /> : <Btn label="Stop watching" onPress={stop} />}
-        {canAct && !control && <Btn label="Take the wheel" onPress={act(async () => { await api.takeOver(bot.id); watching.current = true; if (idle) watch(); })} />}
-        {canAct && control && !idle && <Btn label="Keyboard" onPress={() => session.showKeyboard()} />}
-        {canAct && !control && what === null && <Btn label={`Show ${bot.display} how`} onPress={() => setWhat('')} />}
+        {idle ? <Btn go label={`Watch ${bot.display}`} onPress={watch} /> : <Btn label="Close" onPress={stop} />}
+        {canAct && <Btn label="Take the wheel" onPress={act(async () => { await api.takeOver(bot.id); watching.current = true; if (idle) watch(); })} />}
+        {what === null && <Btn label={`Show ${bot.display} how`} onPress={() => setWhat('')} />}
       </View>
-      {canAct && !control && what !== null && (
+      {what !== null && (
         <View style={{ gap: 8 }}>
           <TextInput style={[s.input, { color: t.ink, borderColor: t.line }]} value={what} onChangeText={setWhat} placeholder="What are you showing? For example: pull the newsletter stats" placeholderTextColor={t.mute} accessibilityLabel="What are you showing" />
           <View style={s.chips}>
@@ -906,12 +967,6 @@ function Screen({ bot, canAct, refresh, showing }: { bot: Json; canAct: boolean;
         <View style={{ gap: 8 }}>
           <T>{showing.words} I write down where you go and what you tap, never what you type.</T>
           <View style={s.chips}><Btn go label="Done showing" onPress={act(() => api.shown(bot.id, true))} /><Btn ghost label="Cancel" onPress={act(() => api.shown(bot.id, false))} /></View>
-        </View>
-      )}
-      {canAct && control && !showing && (
-        <View style={{ gap: 8 }}>
-          <TextInput style={[s.input, { color: t.ink, borderColor: t.line }]} value={note} onChangeText={setNote} placeholder={`What did you do? ${bot.display} reads this`} placeholderTextColor={t.mute} accessibilityLabel="What did you do" />
-          <Btn go label="Hand it back" onPress={act(async () => { await api.giveBack(bot.id, note); setNote(''); })} />
         </View>
       )}
       <T tone="mute" style={s.small}>{bot.display} has its own computer at home, separate from yours. Taking the wheel pauses it, for a sign-in or anything it's stuck on; handing back lets it carry on.</T>
@@ -1065,12 +1120,20 @@ function ThingsList({ list, state, empty }: { list: A.Thing[]; state: Json; empt
 
 // ---------- this phone ----------
 function ThisPhone({ grant, status, onForget, onClear }: { grant: Grant; status: Status; onForget: () => void; onClear: () => void }) {
+  // This phone knows its own news state: allowed and working, said no, or this build can't push at all.
+  const [push, setPush] = useState<'on' | 'off' | 'missing' | null>(null);
+  useEffect(() => { void pushState().then(setPush).catch(() => {}); }, []);
   return (
     <Page title="This phone">
       <Card>
         <T style={s.b}>{grant.device.name}</T>
         <T tone="mute">{grant.device.role === 'view' ? 'Watches the crew; can’t answer or give jobs.' : 'Answers the crew and gives them jobs, as you.'}</T>
         <View style={[s.row, { marginTop: 6 }]}><Pill tone={status === 'online' ? 'ok' : 'wait'}>{status === 'online' ? 'With the home computer' : 'Looking for the home computer…'}</Pill></View>
+      </Card>
+      <Card>
+        <T style={s.b}>News</T>
+        <T tone={push === 'on' ? 'ink' : 'mute'}>{push ? PUSH_WORDS[push] : 'Checking…'}</T>
+        {push === 'off' && <View style={s.row}><Btn label="Open phone settings" onPress={() => void Linking.openSettings()} /></View>}
       </Card>
       <Card>
         <T style={s.b}>Chats kept on this phone</T>
