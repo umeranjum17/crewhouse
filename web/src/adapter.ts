@@ -350,12 +350,13 @@ export function needsYou(state: Json): Card[] {
 }
 
 /** What Search found: lines from the member's chats and finished things, each opening its chat. */
+/** What Search found: lines from the member's chats (with the line to land on) and finished things (with the result). */
 export function found(state: Json, r: Json | null) {
   if (!r) return [];
   const name = (id: string) => (id === 'chief' ? 'Chief' : state.bots.find((b: Json) => b.id === id)?.display ?? id);
   return [
-    ...(r.things ?? []).map((t: Json) => ({ key: `t${t.id}`, bot: t.bot as string, name: name(t.bot), text: `Made “${plain(t.title)}”`, at: at(t.at) })),
-    ...(r.messages ?? []).map((m: Json) => ({ key: `m${m.id}`, bot: m.bot as string, name: name(m.bot), text: preview(m), at: at(m.at) })),
+    ...(r.things ?? []).map((t: Json) => ({ key: `t${t.id}`, bot: t.bot as string, thing: t.id as number, name: name(t.bot), text: `Made “${plain(t.title)}”`, at: at(t.at) })),
+    ...(r.messages ?? []).map((m: Json) => ({ key: `m${m.id}`, bot: m.bot as string, msg: m.id as number, name: name(m.bot), text: preview(m), at: at(m.at) })),
   ];
 }
 

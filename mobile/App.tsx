@@ -322,9 +322,9 @@ function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
 }
 
 // ---------- the app ----------
-type Route = { view: 'home' | 'chief' | 'crew' | 'helper' | 'things' | 'routines' | 'add' | 'phone'; id?: string; tab?: string };
+type Route = { view: 'home' | 'chief' | 'crew' | 'helper' | 'things' | 'routines' | 'add' | 'phone'; id?: string; tab?: string; m?: number };
 /** `offline`: the screens show what this phone kept, read-only, until the home computer answers again. */
-type Ctx = { state: Json; tick: number; refresh: () => void; go: (r: Route, replace?: boolean) => void; canAct: boolean; offline: boolean; open: (c: A.Card) => void };
+type Ctx = { state: Json; tick: number; refresh: () => void; go: (r: Route, replace?: boolean) => void; back: () => void; canAct: boolean; offline: boolean; open: (c: A.Card) => void };
 
 function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }) {
   const t = useLook();
@@ -414,13 +414,14 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
   }
   const offline = status !== 'online';
   const canAct = grant.device.role === 'control' && !offline;
-  const ctx: Ctx = { state, tick, refresh, go, canAct, offline, open: setSheet };
+  const ctx: Ctx = { state, tick, refresh, go, back: () => { back(); }, canAct, offline, open: setSheet };
   const shared = hasShareIntent && canAct && state.person.onboarded
     ? { text: [shareIntent.text, shareIntent.webUrl].filter((x, i, a) => x && a.indexOf(x) === i).join('\n'), files: (shareIntent.files ?? []).map((f) => ({ path: f.path, mimeType: f.mimeType })) } : null;
   if (shared) return <ShareIn state={state} shared={shared} go={go} onDone={() => resetShareIntent()} />;
   if (!state.person.onboarded && canAct) return <Hello {...ctx} />;
   const nav: [Route['view'], string, art.Tab][] = [['home', 'Chats', 'chats'], ['crew', 'Crew', 'crew'], ['things', 'Things', 'things'], ['routines', 'Routines', 'routines'], ['phone', 'This phone', 'phone']];
-  const active = ['chief', 'helper', 'add'].includes(route.view) ? 'crew' : route.view;
+  // In any chat Chats is lit; Crew is lit only on Crew and Add.
+  const active = route.view === 'add' ? 'crew' : ['chief', 'helper'].includes(route.view) ? 'home' : route.view;
   const live = sheet && A.cards(state).find((c) => c.id === sheet.id);
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior="height">
@@ -442,9 +443,9 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
       </Modal>
       <View style={{ flex: 1 }}>
         {route.view === 'home' && <Home {...ctx} />}
-        {route.view === 'chief' && <ChiefPage {...ctx} />}
+        {route.view === 'chief' && <ChiefPage {...ctx} m={route.m} />}
         {route.view === 'crew' && <Crew {...ctx} />}
-        {route.view === 'helper' && <HelperPage {...ctx} id={route.id!} tab={route.tab ?? 'chat'} setTab={(tab) => setStack((st) => [...st.slice(0, -1), { ...route, tab }])} />}
+        {route.view === 'helper' && <HelperPage {...ctx} id={route.id!} tab={route.tab ?? 'chat'} m={route.m} setTab={(tab) => setStack((st) => [...st.slice(0, -1), { ...route, tab }])} />}
         {route.view === 'routines' && <Page title="Routines" lead="Jobs the crew does on a schedule. You can also just tell Chief: “every Friday, make a video of the week's photos”."><RoutineList {...ctx} /></Page>}
         {route.view === 'add' && <AddHelper {...ctx} />}
         {route.view === 'things' && <Page title="Things" lead="Everything the crew has made for you."><ThingsList list={A.things(state)} state={state} empty="Videos, lists, letters and plans the crew makes for you land here." /></Page>}
@@ -455,7 +456,7 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
           <Pressable key={v} style={s.tab} onPress={() => go({ view: v }, true)} accessibilityRole="tab" accessibilityLabel={label}>
             <View style={s.tabIcon}><Dots rows={art.TABS[icon]} pal={{ x: active === v ? t.ink : t.mute }} d={3} /></View>
             <Text style={[s.tabLabel, { color: active === v ? t.ink : t.mute }]}>{label}</Text>
-            {v === 'home' && state.asks.length > 0 && <Text style={[s.badge, { backgroundColor: t.wait }]}>{state.asks.length}</Text>}
+            {v === 'home' && A.needsYou(state).length > 0 && <Text style={[s.badge, { backgroundColor: t.wait }]}>{A.needsYou(state).length}</Text>}
           </Pressable>
         ))}
       </View>
@@ -629,8 +630,8 @@ function ChatList({ state, go, mood }: { state: Json; go: Ctx['go']; mood?: art.
   const crew = A.crew(state);
   const to = (id: string): Route => (id === 'chief' ? { view: 'chief' } : { view: 'helper', id });
   const face = (id: string) => (id === 'chief' ? <Face who="chief" size={46} mood={mood} /> : <Face who={crew.find((h) => h.id === id) ?? 'chief'} size={46} />);
-  const row = (key: string, id: string, name: string, line: string, at: number, unread = 0) => (
-    <Pressable key={key} style={s.job} onPress={() => go(to(id))} accessibilityLabel={`${name}${unread ? `, ${unread} new` : ''}`}>
+  const row = (key: string, id: string, name: string, line: string, at: number, unread = 0, msg?: number) => (
+    <Pressable key={key} style={s.job} onPress={() => go(msg ? (id === 'chief' ? { view: 'chief', m: msg } : { view: 'helper', id, m: msg }) : to(id))} accessibilityLabel={`${name}${unread ? `, ${unread} new` : ''}`}>
       {face(id)}
       <View style={{ flex: 1 }}><T style={s.b}>{name}</T><T tone={unread ? 'ink' : 'mute'} lines={1}>{line}</T></View>
       <View style={{ alignItems: 'flex-end', gap: 4 }}>
@@ -643,20 +644,25 @@ function ChatList({ state, go, mood }: { state: Json; go: Ctx['go']; mood?: art.
   return (
     <Card>
       <TextInput style={[s.input, { color: t.ink, borderColor: t.line }]} value={q} onChangeText={setQ} placeholder="Search your chats" placeholderTextColor={t.mute} accessibilityLabel="Search your chats" />
-      {hits ? (found.length ? found.map((f) => row(f.key, f.bot, f.name, f.text, f.at)) : <T tone="mute" style={s.centerText}>Nothing matches “{q.trim()}”.</T>)
+      {hits ? (found.length ? found.map((f) => row(f.key, f.bot, f.name, f.text, f.at, 0, 'msg' in f ? f.msg : undefined)) : <T tone="mute" style={s.centerText}>Nothing matches “{q.trim()}”.</T>)
         : A.chats(state).map((c) => row(c.id, c.id, c.name, c.line, c.at, c.unread))}
     </Card>
   );
 }
 
 // ---------- a chat ----------
-function Chat({ id, state, tick, refresh, canAct, offline, open }: Ctx & { id: string }) {
+function Chat({ id, m, state, tick, refresh, canAct, offline, open }: Ctx & { id: string; m?: number }) {
   const t = useLook();
   // The computer's page when it answers; otherwise the lines this phone kept, until it does.
   const [page, setPage] = useState<Json>(() => kept.page(id));
-  const load = useCallback(() => api.bot(id).then((p) => { setPage(p); kept.chat(id, p); }).catch(() => {}), [id]);
+  // A search landing on an old line loads a window around it; once you send, the anchor goes and the thread reads to the end.
+  const [around, setAround] = useState(m ?? 0);
+  const load = useCallback((ar = around) => api.bot(id, ar || undefined).then((p) => { setPage(p); kept.chat(id, p); }).catch(() => {}), [id, around]);
   useEffect(() => { void load(); }, [load, tick]);
   const scroll = useRef<ScrollView>(null);
+  const ys = useRef(new Map<number, number>()); // each line's y, for landing on the matched one
+  const landed = useRef(0); // the anchor we already landed on: once per line, never again on every tick
+  const [land, setLand] = useState(0);
   const lines = A.lines(page, id);
   const [seed, setSeed] = useState(0); // a starter chip fills the box from outside; remount reads the draft back
   const h = A.crew(state).find((x) => x.id === id);
@@ -668,10 +674,22 @@ function Chat({ id, state, tick, refresh, canAct, offline, open }: Ctx & { id: s
   // Seen: the chat's unread count goes once its newest line is on screen (a watch-only phone can't mark it).
   const newest = last?.id;
   useEffect(() => { if (canAct && newest && b?.unread) void api.read(id).then(refresh).catch(() => {}); }, [canAct, newest, b?.unread, id, refresh]);
-  const send = async (x: string, p: Photo[] = []) => { const ok = await attempt(() => api.post(id, x, p.map(({ type, data }) => ({ type, data }))), undefined, true); if (ok) { void load(); refresh(); } return ok; };
+  const send = async (x: string, p: Photo[] = []) => { const ok = await attempt(() => api.post(id, x, p.map(({ type, data }) => ({ type, data }))), undefined, true); if (ok) { setAround(0); void load(0); refresh(); } return ok; };
+  // The landing: the matched line, brought to view and marked for a moment — where you are, said once.
+  useEffect(() => {
+    if (!around || !lines.length || landed.current === around) return;
+    const y = ys.current.get(around);
+    if (y === undefined) return;
+    landed.current = around;
+    scroll.current?.scrollTo({ y: Math.max(0, y - 240), animated: false });
+    setLand(around);
+    const timer = setTimeout(() => setLand(0), 1300);
+    return () => clearTimeout(timer);
+  }, [around, lines.length]);
   return (
     <View style={{ flex: 1 }}>
-      <ScrollView ref={scroll} style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 10 }} onContentSizeChange={() => scroll.current?.scrollToEnd({ animated: false })}>
+      <ScrollView ref={scroll} style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 10 }}
+        onContentSizeChange={() => { if (!around) scroll.current?.scrollToEnd({ animated: false }); }}>
         {!lines.length && page && <View style={{ alignItems: 'center', gap: 10 }}>
           <T tone="mute" style={s.centerText}>Say hello to {name}. Ask for anything, in your own words.</T>
           {id === 'chief' && canAct && <View style={[s.chips, { justifyContent: 'center' }]}>
@@ -679,11 +697,13 @@ function Chat({ id, state, tick, refresh, canAct, offline, open }: Ctx & { id: s
           </View>}
         </View>}
         {lines.map((l) => (
-          <View key={l.id} style={[s.line, l.from === 'me' && { alignSelf: 'flex-end' }, l.from === 'note' && { maxWidth: '92%' }]}>
+          <View key={l.id} onLayout={(e) => ys.current.set(l.id, e.nativeEvent.layout.y)}
+            style={[s.line, l.from === 'me' && { alignSelf: 'flex-end' }, l.from === 'note' && { maxWidth: '92%' }]}>
             {l.from === 'chief' && <T tone="pinkInk" style={[s.small, s.b, { marginLeft: 10 }]}>Chief</T>}
             {!!l.text && (
               <View style={[s.bubbleText, l.from === 'me' ? { backgroundColor: t.night ? '#2a2340' : t.go, borderBottomRightRadius: 6 }
-                : l.from === 'note' ? { backgroundColor: t.card } : { backgroundColor: t.solid, borderTopLeftRadius: 6 }]}>
+                : l.from === 'note' ? { backgroundColor: t.card } : { backgroundColor: t.solid, borderTopLeftRadius: 6 },
+                land === l.id && { backgroundColor: t.night ? '#3a3152' : '#ffe9c4' }]}>
                 <Text style={[s.text, { color: l.from === 'me' && !t.night ? t.goInk : t.ink }]}>{l.text}</Text>
               </View>
             )}
@@ -710,15 +730,15 @@ function Head({ children, onBack }: { children: ReactNode; onBack: () => void })
   );
 }
 
-function ChiefPage(ctx: Ctx) {
+function ChiefPage(ctx: Ctx & { m?: number }) {
   const { mood, line } = chiefNow(ctx.state, ctx.offline);
   return (
     <View style={{ flex: 1 }}>
-      <Head onBack={() => ctx.go({ view: 'home' }, true)}>
+      <Head onBack={ctx.back}>
         <Face who="chief" size={44} />
         <View style={{ flex: 1, gap: 4, alignItems: 'flex-start' }}><T style={s.b}>Chief</T><Pill tone={mood === 'ask' ? 'wait' : mood === 'rest' ? 'off' : 'ok'}>{line}</Pill></View>
       </Head>
-      <Chat {...ctx} id="chief" />
+      <Chat {...ctx} id="chief" m={ctx.m} />
     </View>
   );
 }
@@ -744,48 +764,55 @@ function Crew(ctx: Ctx) {
   );
 }
 
-function HelperPage(ctx: Ctx & { id: string; tab: string; setTab: (t: string) => void }) {
-  const { id, tab, setTab, state, tick, refresh, canAct, go } = ctx;
-  const t = useLook();
+function HelperPage(ctx: Ctx & { id: string; tab: string; m?: number; setTab: (t: string) => void }) {
+  const { id, tab, m, setTab, state, tick, refresh, canAct, back } = ctx;
   const h = A.crew(state).find((x) => x.id === id);
   const [page, setPage] = useState<Json>(null);
+  const [all, setAll] = useState(false); // Details shows what it is doing now; "Every step" opens the whole trail in place
   const load = useCallback(() => api.bot(id).then(setPage).catch(() => {}), [id]);
   useEffect(() => { void load(); }, [load, tick]);
   if (!h) return <Center><T tone="mute">This helper has left the crew.</T></Center>;
   const b = state.bots.find((x: Json) => x.id === id);
-  const tabs: [string, string][] = [['chat', 'Chat'], ['did', 'What I did'], ['things', 'Things'], ['routines', 'Routines'],
-    ...(h.computer && desktopAvailable ? [['screen', 'Screen'] as [string, string]] : []), ['me', 'About me'], ['remembers', 'Remembers']];
+  // The chat is the page; everything else lives behind Details. Old deep links to a section land on Details too.
+  const details = tab !== 'chat';
   const trail = A.steps(page?.trail ?? []);
-  const memories = A.memories(page?.notes);
   return (
     <View style={{ flex: 1 }}>
-      <Head onBack={() => go({ view: 'crew' }, true)}>
-        <Face who={h} size={48} />
-        <View style={{ flex: 1, gap: 4, alignItems: 'flex-start' }}><T style={s.b}>{h.name}</T><HelperPill h={h} offline={ctx.offline} /></View>
-        {b?.task && canAct && <Btn label="Stop" onPress={() => attempt(async () => { await api.reset(id); refresh(); }, `Stopped ${h.name}`)} />}
-      </Head>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={{ padding: 10, gap: 6 }}>
-        {tabs.map(([k, l]) => (
-          <Pressable key={k} onPress={() => setTab(k)} style={[s.tabPill, k === tab && { backgroundColor: t.solid, borderColor: t.line }]}>
-            <Text style={[s.tabPillText, { color: k === tab ? t.ink : t.mute }]}>{l}</Text>
-          </Pressable>
-        ))}
-      </ScrollView>
-      {tab === 'chat' && <Chat key={id} {...ctx} id={id} />}
-      {tab === 'did' && <Page lead={`Every step ${h.name} takes, as it happens. Recorded by Crewhouse, not remembered by ${h.name}.`}>
-        {trail.length ? <Steps steps={trail} max={40} /> : <Card><T tone="mute">Nothing yet. Give {h.name} something to do.</T></Card>}
-      </Page>}
-      {tab === 'things' && <Page><ThingsList list={A.things(state).filter((x) => x.helper === id)} state={state} empty={`${h.name}'s finished work shows up here.`} /></Page>}
-      {tab === 'routines' && <Page><RoutineList {...ctx} bot={id} /></Page>}
-      {tab === 'screen' && <Page><Screen bot={{ ...page?.bot, ...b }} canAct={canAct} showing={A.showing(state, id)} refresh={() => { refresh(); void load(); }} /></Page>}
-      {tab === 'me' && <Page lead={`Who ${h.name} is, and what it knows how to do. Change it on the computer, or ask Chief.`}>
-        <Card>{A.personality(page?.soul).map((l, i) => <T key={i} style={{ paddingVertical: 4 }}>{l}</T>)}</Card>
-        {A.knows(page?.skills).length > 0 && <Card><T style={s.b}>Knows how to</T>{A.knows(page?.skills).map((k) => <T key={k.name} style={{ paddingVertical: 4 }}>{`• ${k.says}`}</T>)}</Card>}
-      </Page>}
-      {tab === 'remembers' && <Page lead={`What ${h.name} has learned about how you like things.`}>
-        {memories.length ? <Card>{memories.map((m, i) => <T key={i} style={{ paddingVertical: 6 }}>{m}</T>)}</Card>
-          : <Card><T tone="mute">Nothing yet. {h.name} adds a line when it learns something you like.</T></Card>}
-      </Page>}
+      {tab === 'chat' ? <>
+        <Head onBack={back}>
+          <Face who={h} size={48} />
+          <View style={{ flex: 1, gap: 4, alignItems: 'flex-start' }}><T style={s.b}>{h.name}</T><HelperPill h={h} offline={ctx.offline} /></View>
+          {b?.task && canAct && <Btn label="Stop" onPress={() => attempt(async () => { await api.reset(id); refresh(); }, `Stopped ${h.name}`)} />}
+          <Btn ghost label="Details" onPress={() => setTab('details')} />
+        </Head>
+        <Chat key={id} {...ctx} id={id} m={m} />
+      </> : <>
+        <Head onBack={() => setTab('chat')}>
+          <Face who={h} size={40} />
+          <View style={{ flex: 1 }}><T style={s.b}>{h.name}</T><T tone="mute" style={s.small} lines={1}>{h.status}</T></View>
+          <Btn ghost label="Chat" onPress={() => setTab('chat')} />
+        </Head>
+        <ScrollView contentContainerStyle={{ padding: 16, gap: 10 }}>
+          <T style={s.b}>{`What ${h.name} is doing`}</T>
+          {b?.task ? (trail.length ? <Card><Steps steps={A.steps(page?.trail ?? [], b.task.id, true)} max={all ? 40 : 7} /></Card> : <T tone="mute">{`Working on “${A.plain(b.task.title)}”. Steps show as they happen.`}</T>)
+            : <T tone="mute">Nothing right now.</T>}
+          {trail.length > 7 && <Btn ghost label={all ? 'Just now' : 'Every step'} onPress={() => setAll((v) => !v)} />}</T>
+          <T style={s.b}>Things</T>
+          <ThingsList list={A.things(state).filter((x) => x.helper === id)} state={state} empty={`${h.name}'s finished work shows up here.`} />
+          <T style={s.b}>Routines</T>
+          <RoutineList {...ctx} bot={id} />
+          <T style={s.b}>{`About ${h.name}`}</T>
+          <Card>{A.personality(page?.soul).map((l, i) => <T key={i} style={{ paddingVertical: 4 }}>{l}</T>)}</Card>
+          {A.knows(page?.skills).length > 0 && <Card><T style={s.b}>Knows how to</T>{A.knows(page?.skills).map((k) => <T key={k.name} style={{ paddingVertical: 4 }}>{`• ${k.says}`}</T>)}</Card>}
+          <T style={s.b}>{`What ${h.name} remembers`}</T>
+          {A.memories(page?.notes).length ? <Card>{A.memories(page?.notes).map((mm, i) => <T key={i} style={{ paddingVertical: 6 }}>{mm}</T>)}</Card>
+            : <Card><T tone="mute">Nothing yet. {h.name} adds a line when it learns something you like.</T></Card>}
+          {h.computer && desktopAvailable && <>
+            <T style={s.b}>{`See ${h.name}'s screen`}</T>
+            <Screen bot={{ ...page?.bot, ...b }} canAct={canAct} showing={A.showing(state, id)} refresh={() => { refresh(); void load(); }} />
+          </>}
+        </ScrollView>
+      </>}
     </View>
   );
 }
@@ -1049,8 +1076,6 @@ const s = StyleSheet.create({
   head: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, justifyContent: 'space-between' },
   palCard: { width: '48%', borderRadius: radius.card, borderWidth: 1, padding: 14, alignItems: 'center', gap: 8 },
-  tabPill: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: radius.chip, borderWidth: 1.5, borderColor: 'transparent' },
-  tabPillText: { fontSize: 14, fontWeight: '800' },
   tabbar: { flexDirection: 'row', borderTopWidth: 1, paddingVertical: 6 },
   tab: { flex: 1, alignItems: 'center', gap: 1, minHeight: 48, justifyContent: 'center' },
   tabIcon: { height: 30, justifyContent: 'center' },

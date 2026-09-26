@@ -30,7 +30,7 @@ export const trouble = (e: any): 'offline' | 'missing' | 'failed' => (e?.status 
 
 export const api = {
   state: () => call('GET', '/api/state'),
-  bot: (id: string) => call('GET', `/api/bots/${id}`),
+  bot: (id: string, around?: number) => call('GET', `/api/bots/${id}${around ? `?around=${around}` : ''}`),
   /** The person has read this chat up to now: its unread dot goes. */
   read: (id: string) => call('POST', `/api/bots/${id}/read`),
   /** Words across the person's own chats and finished things. */

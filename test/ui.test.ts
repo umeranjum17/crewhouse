@@ -113,6 +113,15 @@ test('Home commits nothing: a row opens the review sheet, and a starter fills th
   assert.doesNotMatch(app, /api\.post\(i\.bot/, 'an idea chip fills the draft, it never sends');
 });
 
+test('chat navigation acts like chat: no tab scroller, Details behind the header, Back by history', () => {
+  const src = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
+  assert.doesNotMatch(src, /className="tabs"/, 'the seven-tab scroller is gone; the chat is the page and Details is one link');
+  assert.match(src, /Details<\/button>/, 'Details is a text button in the chat header');
+  const app = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
+  assert.doesNotMatch(app, /tabPill/, 'the phone has no tab strip either');
+  assert.doesNotMatch(app, /\['chief', 'helper', 'add'\]\.includes\(route\.view\) \? 'crew'/, 'a helper chat lights Chats, not Crew');
+});
+
 test('owner-only helpers stay with the owner', () => {
   assert.ok(!A.crew(state).some((h) => h.id === 'tracer'));
   assert.ok(!A.gallery(state).some((t: any) => t.id === 'tracer'));

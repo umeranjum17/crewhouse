@@ -1052,3 +1052,19 @@ test('what the phone keeps: its computer\'s chats only, the newest lines, nothin
   assert.equal(old.chats.pip, undefined);
   assert.deepEqual(old.chats.reel.messages.map((m: any) => m.id), [1]);
 });
+
+test('a search landing on an old line: botPage opens a window around it', async () => {
+  const { crew, db } = setup();
+  const now = Date.now();
+  for (let i = 1; i <= 220; i++) db.run('INSERT INTO messages (bot, author, text, at, member) VALUES (?, ?, ?, ?, ?)', 'chief', 'person', `line ${i}`, now + i, 1);
+  const fresh = crew.botPage('chief', 1);
+  assert.equal(fresh.messages.length, 200, 'the newest 200, as always');
+  assert.equal(fresh.messages[0].text, 'line 21');
+  assert.ok(!fresh.messages.some((m: any) => m.id === 5), 'line 5 is history now');
+  const around = crew.botPage('chief', 1, 5);
+  const ids = around.messages.map((m: any) => m.id);
+  assert.ok(ids.length <= 200, 'a window, not the whole thread');
+  assert.ok(ids.includes(5), 'the anchored line is in it');
+  assert.deepEqual(ids.filter((n: number) => n < 5), [1, 2, 3, 4], 'a little before');
+  assert.ok(ids.includes(104), 'a little after');
+});
