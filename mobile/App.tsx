@@ -231,8 +231,8 @@ const pairWords = (e: any): string => {
 };
 /** What this phone knows about its own news: allowed and working (on), said no (off), or this build can't push at all
  *  (missing — the phone still shows everything the moment the app is opened). */
-async function pushState(): Promise<'on' | 'off' | 'missing'> {
-  const { status } = await Notifications.getPermissionsAsync();
+async function pushState(ask = false): Promise<'on' | 'off' | 'missing'> {
+  const { status } = ask ? await Notifications.requestPermissionsAsync() : await Notifications.getPermissionsAsync();
   if (status !== 'granted') return 'off';
   const token = await Notifications.getExpoPushTokenAsync().then((x) => x.data,
     (e: Error & { code?: string }) => (e.code === 'ERR_NOTIFICATIONS_NO_EXPERIENCE_ID' || /firebase|fcm|google-services/i.test(e.message) ? '' : undefined));
@@ -247,6 +247,8 @@ const PUSH_WORDS = {
 function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
   const t = useLook();
   const [perm, askPerm] = useCameraPermissions();
+  const [push, setPush] = useState<'on' | 'off' | 'missing' | null>(null);
+  const [checked, setChecked] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -275,10 +277,9 @@ function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
     setWords('');
     setBusy(false);
   };
+  // The pairing success says the news state once ('missing' when this build has no push credential).
+  useEffect(() => { if (!done) return; void pushState(true).then((p) => { setPush(p); setChecked(true); }).catch(() => setChecked(true)); }, [!!done]);
   if (done) {
-    const [push] = useState<'on' | 'off' | 'missing' | null>(null);
-    const [checked, setChecked] = useState(false);
-    useEffect(() => { void pushState().then((p) => { setPush(p); setChecked(true); }).catch(() => setChecked(true)); }, []);
     return (
       <Center>
         <ChiefArt mood="happy" size={150} />
@@ -524,7 +525,7 @@ function Hello({ state, refresh, go }: Ctx) {
 // ---------- asks ----------
 const answer = (c: A.Card, body: Json) => attempt(() => api.answer(c.id, body), body.answer === 'deny' ? 'OK, not now' : 'Done. Carrying on.');
 
-function AskCard({ c, who, onDone, canAct, offline, open }: { c: A.Card; who: A.Helper | undefined; onDone: () => void; canAct: boolean; offline: boolean; open: (c: A.Card) => void }) {
+function AskCard({ c, who, state, onDone, canAct, offline, open }: { c: A.Card; who: A.Helper | undefined; state: Json; onDone: () => void; canAct: boolean; offline: boolean; open: (c: A.Card) => void }) {
   const [reply, setReply] = useState('');
   const [oops, setOops] = useState(false);
   const last = useRef<Json | null>(null);
@@ -776,7 +777,7 @@ function Chat({ id, m, state, tick, refresh, canAct, offline, open }: Ctx & { id
         ))}
         {canAct && !!last?.choices.length && <View style={s.chips}>{last.choices.map((c) => <Btn key={c} label={c} onPress={() => send(c)} />)}</View>}
         <Steps steps={trail} />
-        {cards.map((c) => <AskCard key={c.id} c={c} who={h} onDone={refresh} canAct={canAct} offline={offline} open={open} />)}
+        {cards.map((c) => <AskCard key={c.id} c={c} who={h} state={state} onDone={refresh} canAct={canAct} offline={offline} open={open} />)}
       </ScrollView>
       {canAct ? <View style={s.dock}><Composer key={seed} placeholder={id === 'chief' ? 'Ask Chief anything…' : `Message ${name}…`} onSend={send} chat={id} /></View>
         : <T tone="mute" style={[s.small, { padding: 16 }]}>{offline ? "You can reply once the home computer is back." : "This phone watches the crew; it can't send messages."}</T>}
