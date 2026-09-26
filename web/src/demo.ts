@@ -59,6 +59,10 @@ const asks = [
   { id: 8, bot: 'reel', task_id: 41, kind: 'connect', at: now - min, member: me, title: '', detail: { app: 'drive', words: 'Want a copy in the family Drive too?' } },
   { id: 12, bot: 'reel', task_id: 41, kind: 'question', at: now - 2 * min, member: me, title: '', detail: { question: 'Include the baby photos Mum sent, or just the recent ones?' } },
   { id: 13, bot: 'pip', task_id: null, kind: 'question', at: now - 6 * min, member: me, title: '', detail: { question: 'Sports day and the dentist trip are both on Friday morning. Keep both?' } },
+  { id: 14, bot: 'chief', task_id: null, kind: 'propose', at: now - 30_000, member: me, title: "Every weekday at 8:00 am, Pip will plan the week's dinners.", detail: {
+    words: "Every weekday at 8:00 am, Pip will plan the week's dinners.",
+    routine: { bot: 'pip', schedule: 'weekdays 8am', task: "Plan the week's dinners and make the shopping list", quiet: true },
+    preview: { head: 'A new routine', body: "Every weekday at 8:00 am\nPip will plan the week's dinners\nTells you only when something changed\nFirst time: Mon 8:00 am" } } },
   ...(me === 1 ? [{ id: 9, bot: 'tracer', task_id: 44, kind: 'permission', at: now - 2 * min, member: 1, title: '', detail: {
     effect: 'spend', spends: true, words: "Tracer wants to spend about $0.50 to find Sara Malik's work email. OK?" } }] : []),
 ];
@@ -192,6 +196,6 @@ export async function demoCall(method: string, path: string, _body?: Json) {
     { id: 2, name: "Umer's phone", member: 1, seen: now - 2 * 60 * min, reached: { home: now - 26 * 60 * min, tailscale: now - 2 * 60 * min }, push: 'off' }];
   if (method === 'POST' && path.startsWith('/api/connections/')) return { url: 'https://accounts.google.com/' };
   if (method === 'GET' && path.startsWith('/api/connections/')) return { state: 'waiting' };
-  if (method === 'GET' && path.startsWith('/api/schedule')) return { words: 'Every Monday at 9:00', next: now + 2 * 24 * 60 * min };
+  if (method === 'GET' && path.startsWith('/api/schedule')) return { words: 'Every Monday at 9:00', next: now + 2 * 24 * 60 * min, first: 'Mon 9:00 am' };
   return { ok: true };
 }

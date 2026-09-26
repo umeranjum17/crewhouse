@@ -12,8 +12,11 @@ export type Helper = {
 };
 export type Choice = { label: string; body: Json; primary?: boolean };
 export type Card = {
-  id: number; helper: string; kind: 'ok' | 'spend' | 'question' | 'connect'; head: string; words: string;
+  id: number; helper: string; kind: 'ok' | 'spend' | 'question' | 'connect' | 'routine'; head: string; words: string;
   preview?: { head?: string; body: string }; choices: Choice[]; reply: boolean; app?: App; at: number;
+  /** Chief's offered routine: the lines to confirm (cadence, what, quiet, first run), the schedule words to edit, and
+   *  the time-zone line when the home computer's clock sits in another zone from this device's. */
+  lines?: string[]; schedule?: string; zoneNote?: string;
   /** A checkout: the inbox opens the review before any yes, and the sheet's yes names the order.
    *  `known`: crewd could read the total. Without it, the safe way out is the person buying it themselves. */
   review?: boolean; order?: { shown: string; known: boolean; dollars: boolean };
@@ -302,6 +305,13 @@ function chiefRow(state: Json, local: ChiefLocal): ChiefView {
 }
 const crewName = (state: Json, id: string) => state.bots.find((b: Json) => b.id === id)?.display ?? 'The crew';
 
+/** Named only when the home computer's clock sits in a different zone from this device's: routine times are home time. */
+export function zoneNote(state: Json) {
+  const z = state.zone as string | undefined;
+  const mine = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : '';
+  return z && mine && z !== mine ? `Times follow the home computer's clock (${z}).` : '';
+}
+
 /** The helpers this person sees: everyone's, less the owner-only ones unless it's the owner. */
 export function crew(state: Json) {
   const owner = state.person.id === OWNER;
@@ -379,6 +389,15 @@ export function card(a: Json, state: Json): Card {
     const app = apps(state).find((x) => x.id === d.app) ?? APPS[0];
     return { ...base, kind: 'connect', app, head: `${name} could use ${app.name}`, words: plain(d.words ?? `${name} can do this with your ${app.name}. Connect it?`),
       choices: [{ label: `Connect ${app.name}`, body: { answer: 'allow' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
+  }
+  if (a.kind === 'propose' && d.routine) {
+    // Chief's offered routine: the lines are the whole confirmation (cadence, what, quiet behaviour, first run). It
+    // stays off Home like every suggestion, and nothing runs until the person starts it.
+    const note = zoneNote(state);
+    return { ...base, kind: 'routine', head: 'A new routine', words: plain(d.words ?? a.title),
+      lines: String(d.preview?.body ?? '').split('\n').map((l: string) => plain(l)).filter(Boolean).concat(note ? [note] : []),
+      schedule: String(d.routine.schedule ?? ''), zoneNote: note,
+      choices: [{ label: 'Start it', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
   }
   if (a.kind === 'propose') {
     // A suggestion: a skill a helper would like to keep, or a new personality from Chief. Nothing changes without a yes.
@@ -562,6 +581,8 @@ export function routines(state: Json, bot?: string) {
     id: r.id, name: plain(r.name), helper: r.kind === 'digest' ? 'chief' : r.bot, when: r.words, paused: r.state === 'paused', next: clock(r.next_at), digest: r.kind === 'digest',
     quiet: !!r.quiet, watching: r.watch ? host(r.watch) : '',
     last: r.history?.[0] ? lastRun(r.history[0]) : '',
+    // Where the last run ended up: the thing it made, else its line in the helper's chat. A skipped run has neither.
+    result: r.history?.[0]?.thing ? { thing: r.history[0].thing } : r.history?.[0]?.msg ? { msg: r.history[0].msg } : null,
     changes: (r.history ?? []).filter((h: Json) => h.watch === 'changed').length,
   }));
 }

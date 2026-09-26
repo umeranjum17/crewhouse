@@ -455,6 +455,32 @@ test('watches and hand-offs read as plain words, with only the page\'s host', ()
   assert.deepEqual([l.from, l.text], ['note', 'Reel asked: find three songs']);
 });
 
+test('a routine offered by Chief is a confirmation card: lines, Start it / Not now, the schedule words to edit, and the zone named only away from home', () => {
+  const s = { bots: [{ id: 'chief', display: 'Chief' }], asks: [{ id: 1, bot: 'chief', kind: 'propose', at: now, title: 'Every weekday at 8:00 am, Pip will plan the week\'s dinners.', detail: {
+    words: 'Every weekday at 8:00 am, Pip will plan the week\'s dinners.',
+    routine: { bot: 'pip', schedule: 'weekdays 8am', task: "Plan the week's dinners" },
+    preview: { head: 'A new routine', body: 'Every weekday at 8:00 am\nPip will plan the week\'s dinners\nTells you each time it runs\nFirst time: Sat 8:00 am' } } }] };
+  const c = A.card(s.asks[0], s);
+  assert.equal(c.kind, 'routine');
+  assert.deepEqual(c.lines, ['Every weekday at 8:00 am', 'Pip will plan the week\'s dinners', 'Tells you each time it runs', 'First time: Sat 8:00 am']);
+  assert.deepEqual(c.choices.map((x: any) => x.label), ['Start it', 'Not now']);
+  assert.equal(c.schedule, 'weekdays 8am', 'the words the person edits when they tap Change time');
+  assert.equal(c.zoneNote, '', 'same zone, no time-zone talk');
+  const away = { ...s, zone: 'Asia/Karachi' };
+  const [line, note] = [A.card(away.asks[0], away).lines!.at(-1), A.zoneNote(away)];
+  if (Intl.DateTimeFormat().resolvedOptions().timeZone === 'Asia/Karachi') { assert.equal(note, ''); }
+  else { assert.match(note, /^Times follow the home computer's clock \(Asia\/Karachi\)\.$/); assert.equal(line, note); }
+  // Stays off Home like every suggestion, and the last run links out.
+  assert.equal(A.needsYou(s).length, 0);
+  const rs = { routines: [{ id: 2, bot: 'reel', name: 'Weekly demo', words: 'Every Monday at 9:00', next_at: now, state: 'on', kind: 'task',
+    history: [{ at: now, kind: 'routine.fired', task: 7, thing: 7, msg: 21 }] }] };
+  assert.deepEqual(A.routines(rs)[0].result, { thing: 7 }, 'the last run opens the thing it made');
+  const said = { routines: [{ ...rs.routines[0], history: [{ at: now, kind: 'routine.fired', task: 7, msg: 21 }] }] };
+  assert.deepEqual(A.routines(said)[0].result, { msg: 21 }, 'or lands on its line in the helper\'s chat');
+  const skipped = { routines: [{ ...rs.routines[0], history: [{ at: now, kind: 'routine.skipped', why: 'overlap' }] }] };
+  assert.equal(A.routines(skipped)[0].result, null, 'a skipped run has no result to see');
+});
+
 test('not sure it worked stands apart: in the chat, in Chief\'s thread and in the trail', () => {
   const ls = A.lines({ messages: [{ id: 1, author: 'bot', text: 'Booked it.' }, { id: 2, author: 'bot', text: "Not sure it worked: I pressed Book, but saw no confirmation." },
     { id: 3, author: 'bot', text: "Pip isn't sure “Book the dentist” worked. Worth checking your email." }] }, 'pip');

@@ -5,6 +5,7 @@ import { createRoot } from 'react-dom/client';
 import QRCode from 'qrcode';
 import { api, demo, setMember, subscribe, type Json } from './api.ts';
 import * as A from './adapter.ts';
+type Helper = ReturnType<typeof A.crew>[number];
 import { AskCard, AskSheet, attempt, Celebrate, setChiefMood, setNight, ChiefArt, Composer, Face, Laptop, Logo, Media, PalArt, Pill, Splash, Steps, Toasts, toast, useHeld, useListen } from './parts.tsx';
 import { keepDraft } from './draft.ts';
 import { Screen } from './screen.tsx';
@@ -595,70 +596,76 @@ function Things({ state, id }: Ctx & { id?: string }) {
 }
 
 // ---------- routines ----------
-const WHEN = ['every Monday 9:00', 'weekdays 8am', 'every day 6pm', 'every Sunday 19:00'];
 function RoutineList({ state, refresh, bot }: Ctx & { bot?: string }) {
-  const [adding, setAdding] = useState(false);
   const crew = A.crew(state);
   const list = A.routines(state, bot);
   const act = (fn: () => Promise<unknown>, ok?: string) => attempt(async () => { await fn(); refresh(); }, ok);
   return (
     <>
-      {list.map((r: Json) => {
-        const h = crew.find((x) => x.id === r.helper);
-        return (
-          <div key={r.id} className={`card routine ${r.paused ? 'paused' : ''}`}>
-            <div className="row">
-              <Face who={h ?? 'chief'} size={40} />
-              <div className="grow"><b>{r.name}</b><div className="mute small">{r.watching ? `Keeps an eye on ${r.watching} · ` : ''}{r.when}{r.paused ? ' · paused' : ` · next ${r.next}`}{r.quiet && !r.watching ? " · stays quiet if there's nothing" : ''}</div>{r.last && <div className="mute small">{r.last}</div>}</div>
-            </div>
-            <div className="btns">
-              <button className="btn" onClick={() => act(() => api.runRoutine(r.id), 'Started')}>Do it now</button>
-              <button className="btn" onClick={() => act(() => api.routine(r.id, { state: r.paused ? 'on' : 'paused' }))}>{r.paused ? 'Resume' : 'Pause'}</button>
-              {!r.digest && !r.watching && <button className={`chip ${r.quiet ? 'on' : ''}`} aria-pressed={r.quiet} onClick={() => act(() => api.routine(r.id, { quiet: !r.quiet }), r.quiet ? 'It will always report back' : "It will only speak up when something's up")}>Only tell me if something's up</button>}
-              {!r.digest && <button className="btn ghost" onClick={() => confirm(`Remove “${r.name}”?`) && act(() => api.removeRoutine(r.id))}>Remove</button>}
-            </div>
-          </div>
-        );
-      })}
-      {!list.length && !adding && <div className="card empty">Nothing on a schedule yet.</div>}
-      {adding ? <AddRoutine state={state} bot={bot} done={() => { setAdding(false); refresh(); }} /> : <button className="btn go" onClick={() => setAdding(true)}>＋ Add a routine</button>}
+      {list.map((r: Json) => <RoutineRow key={r.id} r={r} h={crew.find((x) => x.id === r.helper)} act={act} />)}
+      {!list.length && <div className="card empty">Nothing on a schedule yet.</div>}
     </>
   );
 }
 
-function AddRoutine({ state, bot, done }: { state: Json; bot?: string; done: () => void }) {
-  const crew = A.crew(state);
-  const [who, setWho] = useState(bot ?? crew[0]?.id ?? '');
-  const [what, setWhat] = useState('');
-  const [when, setWhen] = useState('');
-  const [quiet, setQuiet] = useState(false);
-  const [watch, setWatch] = useState('');
+/** One routine: its time line is tappable (the same field Chief's card uses), its last run can be seen. */
+function RoutineRow({ r, h, act }: { r: Json; h: Helper | undefined; act: (fn: () => Promise<unknown>, ok?: string) => Promise<boolean> }) {
+  const [when, setWhen] = useState<string | null>(null); // null: the time line; a string: editing it
   const [preview, setPreview] = useState<Json>(null);
   useEffect(() => {
-    if (!when.trim()) return setPreview(null);
+    if (when === null || !when.trim()) { setPreview(null); return; }
     const t = setTimeout(() => api.schedule(when).then(setPreview).catch(() => setPreview({ bad: true })), 250);
     return () => clearTimeout(t);
   }, [when]);
-  if (!crew.length) return <div className="card empty">Add a helper first; a routine gives one of them a job on a schedule.</div>;
+  const save = async () => { if (await act(() => api.routine(r.id, { schedule: when!.trim() }), 'Time changed')) setWhen(null); };
   return (
-    <div className="card form">
-      <b>A new routine</b>
-      {!bot && <div className="chips">{crew.map((h) => <button key={h.id} className={`chip pal-chip ${who === h.id ? 'on' : ''}`} onClick={() => setWho(h.id)}><Face who={h} size={22} />{h.name}</button>)}</div>}
-      <textarea className="input" rows={2} value={what} onChange={(e) => setWhat(e.target.value)} placeholder="What should they do each time? For example: plan the week's dinners" aria-label="What to do" />
-      <input className="input" type="url" value={watch} onChange={(e) => setWatch(e.target.value)} placeholder="A page to keep an eye on, if any: paste its address" aria-label="A page to keep an eye on" />
-      <input className="input" value={when} onChange={(e) => setWhen(e.target.value)} placeholder="When? For example: every Saturday 10am" aria-label="When" />
-      <div className="chips">{WHEN.map((w) => <button key={w} className="chip" onClick={() => setWhen(w)}>{w}</button>)}</div>
-      {watch.trim() ? <div className="mute small">I'll look at the page each time and only wake {crew.find((h) => h.id === who)?.name ?? 'them'} when it changes.</div> : <label className="toggle small"><input type="checkbox" checked={quiet} onChange={(e) => setQuiet(e.target.checked)} /> Only tell me if something's up</label>}
-      {preview && <div className="mute small">{preview.bad ? "I didn't catch that time. Try “every Monday 9:00”." : `${preview.words}. First time ${A.clock(preview.next)}.`}</div>}
+    <div className={`card routine ${r.paused ? 'paused' : ''}`}>
+      <div className="row">
+        <Face who={h ?? 'chief'} size={40} />
+        <div className="grow">
+          <b>{r.name}</b>
+          {when === null ? <button className="link line-when" onClick={() => setWhen(r.when)}>
+            {r.watching ? `Keeps an eye on ${r.watching} · ` : ''}{r.when}{r.paused ? ' · paused' : ` · next ${r.next}`}{r.quiet && !r.watching ? " · stays quiet if there's nothing" : ''}
+          </button> : <div className="mute small">Moving it — save a new time below, or cancel.</div>}
+          {r.last && <div className="mute small">{r.last}{r.result && <> · <a className="link pink" href={r.result.thing ? `#/things/t${r.result.thing}` : `#/h/${r.helper}/chat/m${r.result.msg}`}>See result</a></>}</div>}
+        </div>
+      </div>
+      {when !== null && <form className="row" onSubmit={(e) => { e.preventDefault(); if (when.trim() && preview && !preview.bad) void save(); }}>
+        <input className="input grow" value={when} onChange={(e) => setWhen(e.target.value)} placeholder="When? For example: every Saturday 10am" aria-label="When" autoFocus />
+        <button className="btn go" disabled={!when.trim() || !preview || preview.bad}>Save</button>
+        <button className="btn ghost" type="button" onClick={() => setWhen(null)}>Cancel</button>
+      </form>}
+      {when !== null && preview && !preview.bad && <div className="mute small">{preview.words}. First time {preview.first}.</div>}
+      {when !== null && preview?.bad && <div className="mute small">I didn't catch that time. Try “every Monday 9:00”.</div>}
       <div className="btns">
-        <button className="btn go" disabled={!who || (!what.trim() && !watch.trim()) || !preview || preview.bad} onClick={() => attempt(async () => { await api.addRoutine({ bot: who, task: what, schedule: when, quiet, ...(watch.trim() ? { watch: watch.trim() } : {}) }); done(); }, watch.trim() ? 'Watching it' : 'Routine added')}>Add routine</button>
-        <button className="btn ghost" onClick={done}>Cancel</button>
+        <button className="btn" onClick={() => act(() => api.runRoutine(r.id), 'Started')}>Do it now</button>
+        <button className="btn" onClick={() => act(() => api.routine(r.id, { state: r.paused ? 'on' : 'paused' }))}>{r.paused ? 'Resume' : 'Pause'}</button>
+        {!r.digest && !r.watching && <button className={`chip ${r.quiet ? 'on' : ''}`} aria-pressed={r.quiet} onClick={() => act(() => api.routine(r.id, { quiet: !r.quiet }), r.quiet ? 'It will always report back' : "It will only speak up when something's up")}>Only tell me if something's up</button>}
+        {!r.digest && <button className="btn ghost" onClick={() => confirm(`Remove “${r.name}”?`) && act(() => api.removeRoutine(r.id))}>Remove</button>}
       </div>
     </div>
   );
 }
+
+/** Recurring work starts as a request: say it in your own words, Chief brings back a card to start — no setup form. */
+function RoutineAsk() {
+  const [text, setText] = useState('');
+  const send = async () => { const t = text.trim(); if (!t) return; if (await attempt(() => api.post('chief', t), undefined, true)) { setText(''); go('#/chief'); } };
+  return (
+    <div className="card ask routine-ask">
+      <div className="ask-head">
+        <Face who="chief" size={36} />
+        <div><b>Tell Chief what should happen regularly</b><div className="mute small">In your own words. He brings it back as a card to start.</div></div>
+      </div>
+      <form className="row" onSubmit={(e) => { e.preventDefault(); void send(); }}>
+        <input className="input grow" value={text} onChange={(e) => setText(e.target.value)} placeholder="Plan the week's dinners every Saturday morning" aria-label="Tell Chief what should happen regularly" />
+        <button className="send" aria-label="Send" disabled={!text.trim()}>↑</button>
+      </form>
+    </div>
+  );
+}
 function Routines(ctx: Ctx) {
-  return (<div className="page"><h1>Routines</h1><p className="lead">Jobs the crew does on a schedule. You can also just tell Chief: “every Friday, make a video of the week's photos”.</p><RoutineList {...ctx} /></div>);
+  return (<div className="page"><h1>Routines</h1><RoutineAsk /><RoutineList {...ctx} /></div>);
 }
 
 // ---------- settings ----------

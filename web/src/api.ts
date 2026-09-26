@@ -76,7 +76,6 @@ export const api = {
   signInCancel: (member: number, account: string) => call('POST', `/api/accounts/${member}/${account}/cancel`),
   signOut: (member: number, account: string) => call('POST', `/api/accounts/${member}/${account}/logout`),
   schedule: (text: string) => call('GET', `/api/schedule?text=${encodeURIComponent(text)}`),
-  addRoutine: (body: { bot: string; schedule: string; task: string; model?: string; name?: string; quiet?: boolean; watch?: string }) => call('POST', '/api/routines', body),
   routine: (id: number, body: { state?: 'on' | 'paused'; schedule?: string; quiet?: boolean }) => call('PUT', `/api/routines/${id}`, body),
   runRoutine: (id: number) => call('POST', `/api/routines/${id}/run`),
   removeRoutine: (id: number) => call('DELETE', `/api/routines/${id}`),

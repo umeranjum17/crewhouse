@@ -297,6 +297,17 @@ export function Composer({ placeholder, onSend, chat }: { placeholder: string; o
 // ---------- asks ----------
 const answer = (c: Card, body: Json) => attempt(() => api.answer(c.id, body), body.answer === 'deny' ? 'OK, not now' : 'Done. Carrying on.');
 
+/** A waiting-for-the-computer schedule preview: the words in plain time, and the first run on the computer's own clock. */
+function useSchedule(text: string | null) {
+  const [preview, setPreview] = useState<Json>(null);
+  useEffect(() => {
+    if (text === null || !text.trim()) return setPreview(null);
+    const t = setTimeout(() => api.schedule(text).then(setPreview).catch(() => setPreview({ bad: true })), 250);
+    return () => clearTimeout(t);
+  }, [text]);
+  return preview;
+}
+
 /** The plain-language ask card on Home and in a chat. A checkout opens the review before any yes. */
 export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; onDone: () => void }) {
   const [reply, setReply] = useState('');
@@ -305,15 +316,34 @@ export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; 
   const act = async (body: Json) => { last.current = body; setOops(false); if (await answer(c, body)) onDone(); else setOops(true); };
   const [yes, ...rest] = c.choices;
   const deny = c.choices.find((x) => x.body.answer === 'deny');
+  // A routine offered by Chief: the lines are the confirmation, and changing the time is an edit before the yes.
+  const [when, setWhen] = useState<string | null>(null);
+  const preview = useSchedule(when);
+  const start = () => act({ answer: 'allow', scope: 'once', ...(when !== null && when.trim() && when.trim() !== c.schedule ? { schedule: when.trim() } : {}) });
+  const stuck = when !== null && (!when.trim() || !preview || preview.bad);
   return (
     <div className="card ask">
       <div className="ask-head">
         {who && <Face who={{ ...who, mood: 'ask' }} size={36} />}
         <div><b>{c.head}</b><div className="mute small">{clock(c.at)}</div></div>
       </div>
-      <p className="ask-words">{c.words}</p>
+      {c.kind === 'routine' && c.lines ? <div className="routine-lines">{c.lines.map((l, i) => <div key={i} className={i ? 'mute' : ''}>{l}</div>)}</div>
+        : <p className="ask-words">{c.words}</p>}
       {oops && <div className="send-failed" role="alert">That didn't go through. <button type="button" className="link inline" onClick={() => last.current && act(last.current)}>Try again</button></div>}
-      {c.reply ? (
+      {c.kind === 'routine' ? (
+        <>
+          {when !== null && <form className="row routine-edit" onSubmit={(e) => { e.preventDefault(); if (!stuck) void start(); }}>
+            <input className="input grow" value={when} onChange={(e) => setWhen(e.target.value)} placeholder="When? For example: every Saturday 10am" aria-label="When" />
+          </form>}
+          {when !== null && preview && !preview.bad && <div className="mute small routine-note">{preview.words}. First time {preview.first}. {c.zoneNote}</div>}
+          {when !== null && preview?.bad && <div className="mute small routine-note">I didn't catch that time. Try “every Monday 9:00”.</div>}
+          <div className="btns">
+            <button className="btn go" disabled={stuck} onClick={start}>Start it</button>
+            <button className="btn" aria-pressed={when !== null} onClick={() => { setWhen(when === null ? c.schedule || '' : null); }}>{when === null ? 'Change time' : 'Keep the time'}</button>
+            <button className="btn" onClick={() => act({ answer: 'deny' })}>Not now</button>
+          </div>
+        </>
+      ) : c.reply ? (
         <form className="row" onSubmit={(e) => { e.preventDefault(); if (reply.trim()) act({ text: reply.trim() }); }}>
           <input className="input grow" value={reply} onChange={(e) => setReply(e.target.value)} placeholder={`Tell ${who?.name ?? 'them'} what to do`} />
           <button className="btn go" disabled={!reply.trim()}>Send</button>

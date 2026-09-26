@@ -99,6 +99,13 @@ textarea.input { resize: vertical; }
 .ask { box-shadow: 0 0 0 2px #ffcf8f, var(--lift); }
 .ask-head { display: flex; gap: 10px; align-items: center; }
 .ask-words { font: 700 16.5px/1.4 var(--ui); margin: 10px 0 0; }
+/* Chief's offered routine: the confirmation lines (cadence first), the edit under it, and the tappable time on a row. */
+.routine-lines { display: grid; gap: 5px; margin-top: 10px; font: 700 16px/1.4 var(--ui); }
+.routine-edit { margin-top: 10px; }
+.routine-note { margin-top: 6px; }
+.routine-ask form { margin-top: 12px; }
+.line-when { padding: 0; font: 400 13px/1.45 var(--ui); text-align: left; text-decoration: none; }
+.line-when:hover, .line-when:focus-visible { text-decoration: underline; }
 .connect { display: flex; gap: 12px; align-items: center; }
 .app-ic { width: 40px; height: 40px; border-radius: 12px; display: inline-grid; place-items: center; color: #fff; font: 900 18px var(--ui); flex: none; }
 .app-ic.sm { width: 28px; height: 28px; border-radius: 9px; font-size: 13px; margin-right: -6px; box-shadow: 0 0 0 2px var(--solid); }
