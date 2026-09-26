@@ -42,6 +42,8 @@ export const api = {
   photo: (bot: string, path: string) => call('GET', `/api/photo?bot=${encodeURIComponent(bot)}&path=${encodeURIComponent(path)}`) as Promise<{ type: string; data: string }>,
   /** A delivered spreadsheet, read by crewd itself: its tabs, headings and first rows, as words only. */
   workbook: (bot: string, path: string) => call('GET', `/api/workbook?bot=${encodeURIComponent(bot)}&path=${encodeURIComponent(path)}`) as Promise<Json>,
+  /** A delivered document, read by crewd itself: its headings, paragraphs, lists and tables, as words only. */
+  document: (bot: string, path: string) => call('GET', `/api/document?bot=${encodeURIComponent(bot)}&path=${encodeURIComponent(path)}`) as Promise<Json>,
   post: (id: string, text: string, photos?: { type: string; data: string }[]) => call('POST', `/api/bots/${id}/messages`, { text, ...(photos?.length ? { photos } : {}) }),
   /** First run: how Chief addresses the person, and (from an idea card) their first request, in one tap. */
   onboard: (address: string, ask?: string) => call('POST', '/api/onboard', { address, ask }),

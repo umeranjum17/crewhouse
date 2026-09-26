@@ -176,6 +176,11 @@ pages.scribe = { messages: [
   { id: 3, author: 'person', text: "the desk's own day sheet" },
   { id: 4, author: 'bot', text: 'Then one workbook, ready to use: a dashboard for today, the booking and check-in log, the room and housekeeping board, and the payments. Each has an example row and dropdowns where you need them.' },
   { id: 5, author: 'system', text: 'Delivered files/hotel-guest-reception.xlsx: 4 sheets: Daily dashboard, Booking & check-in, Rooms & housekeeping, Payments' },
+  { id: 6, author: 'person', text: 'now put the desk rules together as a word document for the drawer' },
+  { id: 7, author: 'bot', text: 'One thing: just for the front-desk team, or one the manager signs off on too?' },
+  { id: 8, author: 'person', text: 'just the front-desk team' },
+  { id: 9, author: 'bot', text: 'Done: the front-desk handbook. How the day opens, check-ins, payments, and what to do when the power goes. Say the word and I’ll change anything in it.' },
+  { id: 10, author: 'system', text: 'Delivered files/front-desk-handbook.docx: A document in 3 sections: Front-desk handbook' },
 ] };
 /** What crewd read out of that workbook (src/workbooks.ts): the demo\u2019s own copy, in crewd\u2019s shape. */
 const book = {
@@ -197,6 +202,21 @@ const book = {
       ['Amina Khan', '204', '285', '285', '0', 'Card'],
       ['Bilal Sheikh', '108', '120', '40', '80', 'Cash'],
       ['Family Nazir', '301', '520', '0', '520', 'Not paid yet']] },
+  ],
+};
+/** What crewd read out of the handbook (src/documents.ts): plain parts, never the file. */
+const doc = {
+  parts: [
+    { kind: 'heading', text: 'Front-desk handbook' },
+    { kind: 'p', text: 'How the desk runs on an ordinary day, and what to do on a day that is not ordinary.' },
+    { kind: 'heading', text: 'Opening the day' },
+    { kind: 'li', text: 'Count the till against yesterday’s sheet before the first check-in.' },
+    { kind: 'li', text: 'Walk the free rooms; anything not ready goes on the board as Cleaning.' },
+    { kind: 'li', text: 'Print the arrivals list and mark early check-ins the guest asked for.' },
+    { kind: 'heading', text: 'Check-ins and departures' },
+    { kind: 'p', text: 'Check-in is from 2 pm; the night team leaves the welcome envelopes ready. At departure, walk the room before returning the key deposit.' },
+    { kind: 'heading', text: 'Today' },
+    { kind: 'table', head: ['Shift', 'On the desk', 'Notes'], rows: [['Morning', 'Rani', 'Two early arrivals'], ['Evening', 'Yusuf', 'Late checkout, room 204']] },
   ],
 };
 for (const b of bots) pages[b.id] ??= { messages: [], notes: '', tasks: [] };
@@ -224,6 +244,8 @@ export async function demoCall(method: string, path: string, _body?: Json) {
   if (method === 'GET' && path.startsWith('/api/accounts')) return accounts;
   // The workbook crewd reads for the card and the panel (src/workbooks.ts): the tabs, headings and first rows.
   if (method === 'GET' && path.startsWith('/api/workbook')) return book;
+  // The document crewd reads for its card and panel (src/documents.ts): the headings, paragraphs, lists and tables.
+  if (method === 'GET' && path.startsWith('/api/document')) return doc;
   if (method === 'GET' && path === '/api/about') return { notes: '- Vegetarian at home\n- Two children: Zara (9) and Ali (6)\n- Prefers weekend plans before Thursday' };
   // ?demo=home / ?demo=signin-again: Settings, Phones before Tailscale, and with it signed out.
   if (method === 'GET' && path === '/api/phones/link') return { on: true, lan: false, pinned: false, tailscale: variant !== 'home', relay: '', relayStatus: 'off', asking: [], push: variant === 'home' ? 'missing' : 'ready',
