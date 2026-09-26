@@ -115,6 +115,7 @@ const state = {
     task(46, 'scribe', 'Hotel guest reception', 'done', { updated_at: now - 22 * min, result: 'A workbook the front desk can run the day on: the dashboard, the booking log, the room board and the payments.', files: ['files/hotel-guest-reception.xlsx'] }),
   ],
   ideas: [
+    { bot: 'scout', promise: "I'll keep an eye on what you just bought, and tell you the day you can claim the money back. I'll do it end to end — you just tap approve.", ask: 'Watch something I bought and tell me when I can claim the difference back', group: 'money', needs: ['Gmail'] },
     { bot: 'pip', promise: 'Plan a birthday party', ask: 'Plan a birthday party for ' },
     { bot: 'chief', promise: "What's on this week?", ask: "What's on this week?" },
     { bot: 'reel', promise: 'Make a poster from photos', ask: 'Make a poster from these photos: ' },

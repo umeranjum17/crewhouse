@@ -131,6 +131,38 @@ test('Home commits nothing: a row opens the review sheet, and a starter fills th
   assert.doesNotMatch(app, /api\.post\(i\.bot/, 'an idea chip fills the draft, it never sends');
 });
 
+test('Home keeps a standing "hand me a job" list, straight from crewd\'s ideas: money back first, and a job that needs an app says so', () => {
+  const withJobs = { ...state, ideas: [
+    { bot: 'scout', promise: 'I\'ll claim the money back the day the price drops. I\'ll do it end to end — you just tap approve.', ask: 'Watch something I bought', group: 'money', needs: ['Gmail'] },
+    { bot: 'scribe', promise: 'Say who it is for and the email is written', ask: 'Write an email to ' },
+    { bot: 'reel', promise: 'Turn photos into a short video', ask: 'Make a video from these photos: ' },
+  ] };
+  const rows = A.jobs(withJobs);
+  assert.deepEqual(rows.map((r) => [r.bot, r.needs.length]), [['scout', 1], ['scribe', 0], ['reel', 0]], 'money back leads, and a waiting row keeps its needs');
+  assert.deepEqual(A.ideas(withJobs).map((i: any) => i.bot), ['scribe', 'reel'], 'Chief\'s chips stay jobs the crew can run now');
+  assert.match(A.jobNeeds(rows[0].needs), /^Needs Gmail first\.$/);
+  assert.doesNotMatch(shown(rows), FORBIDDEN, 'the list is a person\'s sentence, not a screen of details');
+  // The claim card is a press, not a message going out: it says acting on a site, and names the page's own button.
+  const press = A.card({ id: 9, bot: 'scout', kind: 'permission', state: 'open',
+    title: 'Scout wants to press “Request price adjustment” on shop.example, a site you signed it in to. The page shows $999.00.',
+    detail: { effect: 'send', press: true, spends: false,
+      words: 'Scout wants to press “Request price adjustment” on shop.example, a site you signed it in to. The page shows $999.00.',
+      preview: { head: 'What Scout will press on shop.example', body: 'Paid on 12 March: $999.00\nRequest price adjustment' } } }, withJobs);
+  assert.equal(press.head, 'Scout wants to act on a site', 'a press is not called a message ready to send');
+  assert.match(press.choices[0].label, /press it/i);
+  assert.match(press.preview!.body, /Request price adjustment/, 'the button, as the page writes it');
+  assert.equal(press.choices.find((c: any) => c.body.scope === 'always'), undefined, 'no standing answer for acting as the person');
+  const src = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
+  const home = src.slice(src.indexOf('function Home('), src.indexOf('const ownerName'));
+  assert.match(home, /<JobList state=\{state\} \/>/, 'the desk\'s frame beside Working now and Done today');
+  assert.match(home, /<JobList state=\{state\} phone \/>/, 'and under the chats on a phone');
+  const list = src.slice(src.indexOf('function JobList('), src.indexOf('function JobList(') + 1800);
+  assert.match(list, /A\.jobs\(state\)/, 'the rows are the ideas, not a list written in the app');
+  assert.match(list, /keepDraft\('chief', ask\)/, 'a tap fills Chief\'s box; it never sends');
+  assert.match(list, /className="frame-row"/, 'Home\'s own row shape, with the helper\'s face');
+  assert.doesNotMatch(list, /api\.post/, 'nothing is handed over by itself');
+});
+
 test('chat navigation acts like chat: no tab scroller, Details behind the header, Back by history', () => {
   const src = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
   assert.doesNotMatch(src, /className="tabs"/, 'the seven-tab scroller is gone; the chat is the page and Details is one link');

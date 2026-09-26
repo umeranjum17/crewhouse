@@ -495,13 +495,15 @@ export function card(a: Json, state: Json): Card {
     return { ...base, kind: 'spend', review: true, order, words, choices, head: `Review ${name}'s order`,
       preview: d.preview ? { head: d.preview.head ? plain(d.preview.head) : undefined, body: plain(d.preview.body ?? '') } : undefined };
   }
-  const choices: Choice[] = [{ label: spend ? 'OK, spend it' : d.effect === 'send' ? 'Send' : 'Yes, go ahead', body: { answer: 'allow', scope: 'once' }, primary: true }];
+  // A press on a site they signed the bot in to is not a message going out: the card says acting, not sending. (docs/ui-contract.md)
+  const press = d.effect === 'send' && d.press === true;
+  const choices: Choice[] = [{ label: spend ? 'OK, spend it' : press ? 'Yes, press it' : d.effect === 'send' ? 'Send' : 'Yes, go ahead', body: { answer: 'allow', scope: 'once' }, primary: true }];
   // "Always" is a relationship ("Always OK for Aunty Sara"), and money never gets one.
   if (!spend && (d.always || d.rule)) choices.push({ label: `Always OK for ${d.always ?? name}`, body: { answer: 'allow', scope: 'always' } });
   choices.push({ label: 'Not now', body: { answer: 'deny' } });
   return {
     ...base, kind: spend ? 'spend' : 'ok', words, choices,
-    head: spend ? `${name} needs your OK to spend` : d.effect === 'send' ? `${name}'s ${d.thing ?? 'message'} is ready to send` : `${name} would like your OK`,
+    head: spend ? `${name} needs your OK to spend` : press ? `${name} wants to act on a site` : d.effect === 'send' ? `${name}'s ${d.thing ?? 'message'} is ready to send` : `${name} would like your OK`,
     preview: d.preview ? { head: d.preview.head ? plain(d.preview.head) : undefined, body: plain(d.preview.body ?? '') } : undefined,
   };
 }
@@ -523,6 +525,21 @@ export function things(state: Json): Thing[] {
     files: (t.files ?? []).map((f: string) => fileView(t.bot, f)),
   }));
 }
+
+export type Job = { bot: string; label: string; ask: string; money: boolean; needs: string[] };
+
+/** Home's standing "hand me a job" list: the jobs the crew offers to do end to end, from crewd's `ideas[]` — which is
+ *  already only what this crew can do. Money back first, then the everyday jobs. A row that needs an app the person
+ *  hasn't connected says what it needs instead of dead-ending, and never fills the box. (docs/ui-contract.md) */
+export function jobs(state: Json): Job[] {
+  const rows: Job[] = (state.ideas ?? []).map((i: Json) => ({
+    bot: String(i.bot ?? 'chief'), label: plain(i.promise ?? ''), ask: String(i.ask ?? ''),
+    money: i.group === 'money', needs: ((i.needs ?? []) as string[]).map((w) => plain(w)).filter(Boolean),
+  }));
+  return rows.sort((a, b) => Number(b.money) - Number(a.money) || a.needs.length - b.needs.length);
+}
+/** What a job that can't run yet would need first, in one plain line. */
+export const jobNeeds = (needs: string[]) => `Needs ${needs.join(' and ')} first.`;
 
 /** Chief's three first-run ideas: one tap is both "hello" and the first job. */
 export const FIRST_IDEAS = [
@@ -549,9 +566,10 @@ export function homeSetup(state: Json, g: Json | null, link: Json | null) {
   return { rows, left: rows.filter((r) => !r.done).length };
 }
 
-/** Ideas are promises from a named helper; Chief offers three of his own when the crew has none. */
+/** Ideas are promises from a named helper; Chief offers three of his own when the crew has none.
+ *  A job still waiting on an app the person hasn't connected belongs on Home (jobs), not among these chips. */
 export function ideas(state: Json) {
-  const own = state.ideas.map((i: Json) => ({ bot: i.bot, label: plain(i.promise), ask: i.ask }));
+  const own = state.ideas.filter((i: Json) => !(i.needs ?? []).length).map((i: Json) => ({ bot: i.bot, label: plain(i.promise), ask: i.ask }));
   return own.length ? own : [
     { bot: 'chief', label: "Plan this week's dinners", ask: "Plan this week's dinners and make a shopping list" },
     { bot: 'chief', label: 'Write a birthday message', ask: 'Help me write a birthday message for ' },
