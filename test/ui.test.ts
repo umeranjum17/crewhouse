@@ -58,8 +58,9 @@ const page = { messages: [
   skills: [{ name: 'make-reel', description: 'Turn screenshots into a demo video (mp4) with ffmpeg.', says: 'Turn photos into a short video' }, { name: 'plan-dinners', description: 'Uses the browser MCP tools' }] };
 
 const FORBIDDEN = /fc-list|2>&1|\| ?head|\bBash\b|claude|anthropic|codex|sonnet|haiku|opus|gpt-|mcp__|\/home\/|~\/|files\/|\.md\b|\bpane\b|terminal|\d+ ?%|a command|ffmpeg|magick|\bls -la\b|```|`|\besc\b|529/i;
-// URLs are for fetching files, never shown as text; nor are times, which are numbers (a timestamp can contain "529").
-const shown = (x: unknown) => JSON.stringify(x, (k, v) => (k === 'url' || k === 'at' ? undefined : v));
+// URLs are for fetching files, never shown as text; nor are times, which are numbers (a timestamp can contain "529"),
+// nor `quietSince`, the machine token behind "Leave it" — never words a person reads.
+const shown = (x: unknown) => JSON.stringify(x, (k, v) => (k === 'url' || k === 'at' || k === 'quietSince' ? undefined : v));
 
 test('nothing technical survives the adapter', () => {
   const h = A.chatgpt([{ member: 2, account: 'chatgpt', name: 'ChatGPT', signedIn: false, signIn: { state: 'waiting', url: 'https://auth.openai.com/codex/device', code: 'AB12-CDE34' } }], 2);
@@ -486,6 +487,17 @@ test('not sure it worked stands apart: in the chat, in Chief\'s thread and in th
     { id: 3, author: 'bot', text: "Pip isn't sure “Book the dentist” worked. Worth checking your email." }] }, 'pip');
   assert.deepEqual(ls.map((l) => !!l.unsure), [false, true, true]);
   assert.equal(A.step({ kind: 'task.unsure', data: { title: 'Book the dentist' } }), 'Not sure “Book the dentist” worked');
+});
+
+test('a thread never shows a tool call or raw JSON, whoever typed it', () => {
+  const ls = A.lines({ messages: [
+    { id: 1, author: 'person', text: 'set up the weekly demo [tool crew_routine {"bot":"reel","when":"every Friday 17:00"}]' },
+    { id: 2, author: 'bot', text: 'I could do that {"asked":true,"note":"carry on"} — shall I?' },
+    { id: 3, author: 'system', text: 'stub chief: crew_routine said {"asked":true,"note":"the person sees a card"}' },
+  ] }, 'chief');
+  for (const l of ls) assert.doesNotMatch(l.text, /\[tool|\{"|crew_[a-z_]+/);
+  assert.equal(ls[0].text, 'set up the weekly demo', 'the person\'s words stay, the machinery goes');
+  assert.equal(ls[1].text, 'I could do that — shall I?');
 });
 
 test('a patch is only ever a suggested change, never a fix, wherever the app words it', () => {

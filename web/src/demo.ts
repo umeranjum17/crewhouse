@@ -150,6 +150,8 @@ const pages: Record<string, Json> = {
     { id: 1, author: 'chief', text: `${variant === 'umer' ? 'Good evening, sir.' : 'Good evening, Nadia.'} Two small things need you. Scribe's note for Aunty Sara is ready to go, and Reel would like to save a copy of Mum's video. Scout expects to have flights within ten minutes.` },
     { id: 2, author: 'person', text: 'great, and can scout find somewhere nice for dinner on saturday too?' },
     { id: 3, author: 'chief', text: "Of course. I've asked Scout to look once the flights are done. Shall I tell him four people, near home?", choices: ['Yes, four, near home', 'Six people', 'Somewhere special'] },
+    { id: 4, author: 'person', text: "every weekday morning, have Pip plan the week's dinners" },
+    { id: 5, author: 'chief', text: "Gladly. Pip plans, you say yes — here it is; start it and the first one lands tomorrow morning." },
   ] },
   reel: { messages: [
     { id: 1, author: 'person', text: 'can you make a birthday video for mum from the eid photos? something sweet, like 20 secs' },
@@ -196,6 +198,14 @@ export async function demoCall(method: string, path: string, _body?: Json) {
     { id: 2, name: "Umer's phone", member: 1, seen: now - 2 * 60 * min, reached: { home: now - 26 * 60 * min, tailscale: now - 2 * 60 * min }, push: 'off' }];
   if (method === 'POST' && path.startsWith('/api/connections/')) return { url: 'https://accounts.google.com/' };
   if (method === 'GET' && path.startsWith('/api/connections/')) return { state: 'waiting' };
-  if (method === 'GET' && path.startsWith('/api/schedule')) return { words: 'Every Monday at 9:00', next: now + 2 * 24 * 60 * min, first: 'Mon 9:00 am' };
+  if (method === 'GET' && path.startsWith('/api/schedule')) {
+    const text = decodeURIComponent(path.split('text=')[1] ?? '').replace(/\+/g, ' ');
+    try {
+      const when = parseSchedule(text || 'every Monday 9:00');
+      const next = nextRun(when, now);
+      return { words: describe(when), next, first: new Date(next).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', weekday: 'short' }).replace(/ [AP]M/i, (m) => m.toLowerCase()) };
+    } catch { return { bad: true };
+    }
+  }
   return { ok: true };
 }

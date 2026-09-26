@@ -471,7 +471,7 @@ export class Crew {
         plan.bot.id, plan.name, String(b.schedule).trim(), plan.body, plan.brain, member, plan.quiet ? 1 : 0, plan.watch, nextRun(plan.when, Date.now()), Date.now());
       const row = this.routine(Number(r.lastInsertRowid));
       this.db.event('routine.created', plan.bot.id, { routine: row.id, name: plan.name, words: describe(plan.when), by, member });
-      if (by === CHIEF) this.say(CHIEF, 'system', `Routine added: “${plan.name}” for ${plan.bot.display}, ${describe(plan.when).toLowerCase()}. First run ${clock(row.next_at)}.`, null, member);
+      if (by === CHIEF) this.say(CHIEF, 'system', `Routine added: “${plan.name}” for ${plan.bot.display}, ${describe(plan.when)}. First run ${clock(row.next_at)}.`, null, member);
       return row;
     });
   }

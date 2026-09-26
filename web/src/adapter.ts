@@ -58,13 +58,18 @@ export function fileView(bot: string, path: string): FileView {
  * A helper's own words, scrubbed of the machinery: code spans, fenced blocks, file paths and the names of engines.
  * ponytail: a pattern scrub, not a guarantee; the engine's prompts keep bots in plain words (docs/ui-contract.md).
  */
+const TOOL_CALL = /\[tool \w+ [^\]]*\]/g; // a tool call is an engine event, never a sentence
+const TOOL_FRAGMENT = /\[tool\b[\s\S]*$/i; // ...and a cut-off one (task titles are trimmed) still isn't
+const JSON_BLOB = /\{(?:[^{}]|\{[^{}]*\})*\}/g; // nor is a raw JSON object, one nesting level deep
+export const noTools = (text = '') => text.replace(TOOL_CALL, ' ').replace(JSON_BLOB, ' ').replace(TOOL_FRAGMENT, '').replace(/\s{2,}/g, ' ').trim();
+
 export function plain(text = '') {
-  return text
+  return noTools(text)
     .replace(/```[\s\S]*?```/g, '')
     .replace(/`([^`\n]*)`/g, (_, s: string) => (/^[\w.\-~\/]+\.[a-z0-9]{2,4}$/i.test(s) ? `“${pretty(s)}”` : /[\/\\$|]|--?\w/.test(s) ? '' : s))
     .replace(/(^|[\s(“"'])((~|\.{1,2})?\/[\w.\-~]+)+\/?(?=[\s).,;:!?”"']|$)/g, (_, pre: string, p: string) => `${pre}${/\.[a-z0-9]{2,4}$/i.test(p) ? `“${pretty(p)}”` : 'its folder'}`)
     .replace(/\bfiles\/([\w.\-]+)/g, (_, f: string) => `“${pretty(f)}”`)
-    .replace(/\b(claude(\s+code)?|anthropic|codex|sonnet|opus|haiku|gpt-[\w.]+|herdr|mcp__\w+)\b/gi, 'the crew')
+    .replace(/\b(claude(\s+code)?|anthropic|codex|sonnet|opus|haiku|gpt-[\w.]+|herdr|mcp__\w+|crew_[a-z_]+)\b/gi, 'the crew')
     .replace(/\s{2,}/g, ' ')
     .trim();
 }
@@ -530,7 +535,7 @@ export function lines(page: Json, bot: string): Line[] {
     // Another helper handing this one a job: a note in its words, "Reel asked: …".
     if (!['person', 'bot', 'chief'].includes(m.author)) return { id: m.id, from: 'note', text: `${String(m.author).replace(/^./, (c) => c.toUpperCase())} asked: ${plain(text)}`, files: [], choices: [] };
     return { id: m.id, from: m.author === 'person' ? 'me' : m.author === 'chief' && bot !== 'chief' ? 'chief' : 'them',
-      text: m.author === 'person' ? (pics.length && /^Here (is a photo|are some photos)\.$/.test(text) ? '' : text) : plain(text), files: pics, choices: (m.choices ?? []).map(plain), unsure: m.author === 'bot' && /^Not sure it worked:|^[^.]{1,40} isn't sure “/.test(text) };
+      text: m.author === 'person' ? (pics.length && /^Here (is a photo|are some photos)\.$/.test(text) ? '' : noTools(text)) : plain(text), files: pics, choices: (m.choices ?? []).map(plain), unsure: m.author === 'bot' && /^Not sure it worked:|^[^.]{1,40} isn't sure “/.test(text) };
   }).filter((l: Line) => l.text || l.files.length);
 }
 
