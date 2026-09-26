@@ -29,7 +29,6 @@ let moved = false; // this session has navigated inside the app, so Back has som
 /** Back returns where you came from: the previous screen when there is one, else Chats. */
 const back = () => { if (moved && history.length > 1) history.back(); else go('#/'); };
 /** ?splash keeps the boot splash up, for design review. */
-const HOLD_SPLASH = new URLSearchParams(location.search).has('splash');
 const hrefOf = (id: string) => (id === 'chief' ? '#/chief' : `#/h/${id}`);
 /** Which chat each composer writes into: its held draft lives in web/src/draft.ts. */
 const typeInto = (id: string) => ({ chat: id });
@@ -83,8 +82,8 @@ function Hello({ state, refresh, night }: Ctx) {
       <h1>{A.greeting()}{address.trim() ? `, ${address.trim()}` : ''}</h1>
       <p className="lead">I'm Chief. I run the crew in this house{isOwner ? '.' : `; ${owner} set me up for you.`}</p>
       <div className="promises">
-        <div>🏠 Your crew runs on this computer, using your ChatGPT to help with the work.</div>
-        <div>🔒 I'll ask before sending messages, deleting things or spending money.</div>
+        <div>› Your crew runs on this computer, using your ChatGPT to help with the work.</div>
+        <div>› I'll ask before sending messages, deleting things or spending money.</div>
       </div>
       <h2 className="plate">What can I take off your plate?</h2>
       <div className="ideas">
@@ -192,7 +191,7 @@ function SetupRow({ state, accounts, tick }: { state: Json; accounts: Json[] | n
 
 /** Needs you as one compact list: a number, the face, the subject, one plain line. A row opens the review sheet;
  *  nothing commits from Home. At most three rows, then "N more", which expands in place. */
-function NeedsRows({ state, cards }: { state: Json; cards: A.Card[] }) {
+function NeedsRows({ state, cards, quiet }: { state: Json; cards: A.Card[]; quiet?: boolean }) {
   const crew = A.crew(state);
   const [all, setAll] = useState(false);
   const shown = all ? cards : cards.slice(0, 3);
@@ -207,6 +206,7 @@ function NeedsRows({ state, cards }: { state: Json; cards: A.Card[] }) {
         </a>
       ))}
       {!all && cards.length > 3 && <button className="link needs-more" onClick={() => setAll(true)}>{cards.length - 3} more {cards.length - 3 === 1 ? 'needs' : 'need'} you</button>}
+      {quiet && (all || cards.length <= 3) && <div className="mute small needs-quiet">Nothing else needs you.</div>}
     </>
   );
 }
@@ -239,7 +239,7 @@ function Home({ state, me, refresh, tick, accounts, offline, night }: Ctx) {
         <div className="desk">
           <section className="frame needs">
             <div className="label ascii">Needs you</div>
-            {cards.length ? <NeedsRows state={state} cards={cards} /> : <div className="frame-empty">All clear. Nothing needs you.</div>}
+            {cards.length ? <NeedsRows state={state} cards={cards} quiet /> : <div className="frame-empty">All clear. Nothing needs you.</div>}
           </section>
           <div className="desk-side">
             <section className="frame working">
@@ -1005,8 +1005,7 @@ function App() {
   const [state, setState] = useState<Json>(null);
   const [tick, setTick] = useState(0);
   const [offline, setOffline] = useState(false);
-  const [booted, setBooted] = useState(false);
-  const [party, setParty] = useState<string | null>(null);
+  const [party, setParty] = useState<{ title: string; helper: string } | null>(null);
   const accounts = useAccounts(0, tick);
   const seenDone = useRef<Set<number> | null>(null);
   const heard = useRef(0); // when the home computer last answered
@@ -1024,9 +1023,8 @@ function App() {
     let pending: any;
     const stop = subscribe(() => { clearTimeout(pending); pending = setTimeout(refresh, 120); });
     const poll = setInterval(refresh, 15000); // belt and braces if the socket is quietly gone
-    const splash = setTimeout(() => setBooted(true), demo ? 0 : 1300); // long enough to enjoy, short enough to never wait on
-    if (new URLSearchParams(location.search).has('celebrate')) setParty("Mum's birthday video");
-    return () => { removeEventListener('hashchange', onHash); stop(); clearInterval(poll); clearTimeout(splash); };
+    if (new URLSearchParams(location.search).has('celebrate')) setParty({ title: "Mum's birthday video", helper: 'reel' });
+    return () => { removeEventListener('hashchange', onHash); stop(); clearInterval(poll); };
   }, [refresh]);
   useEffect(() => { refresh(); }, [me, refresh]);
   const wasOffline = useRef(false);
@@ -1037,14 +1035,13 @@ function App() {
   useEffect(() => {
     if (!state) return;
     const done = A.things(state);
-    if (seenDone.current) { const fresh = done.find((t) => !seenDone.current!.has(t.id)); if (fresh) setParty(fresh.title); }
+    if (seenDone.current) { const fresh = done.find((t) => !seenDone.current!.has(t.id)); if (fresh) setParty({ title: fresh.title, helper: fresh.helper }); }
     seenDone.current = new Set(done.map((t) => t.id));
   }, [state]);
   const ctx: Ctx | null = useMemo(() => (state ? { state, me, tick, refresh, night, offline, accounts } : null), [state, me, tick, refresh, night, offline, accounts]);
 
-  const ready = !!ctx && booted;
-  const splash = <Splash done={!HOLD_SPLASH && (ready || (offline && booted))} />;
-  if (!ctx) return <>{splash}{offline && booted && <Unreachable retry={refresh} owner={me === A.OWNER} />}</>;
+  const splash = <Splash done={!!ctx || offline} />;
+  if (!ctx) return <>{splash}{offline && <Unreachable retry={refresh} owner={me === A.OWNER} />}</>;
   // Every little Chief face on the page carries the mood from here, the way the night palette does.
   setChiefMood(A.chief(ctx.state, chiefLocal(ctx)).mood);
   if (!ctx.state.person.onboarded) return <>{splash}<Hello {...ctx} /><Toasts /></>;
@@ -1052,7 +1049,7 @@ function App() {
   const crew = A.crew(ctx.state);
   const asks = A.needsYou(ctx.state).length; // the badge counts only what Needs you shows
   const sheet = route.view === 'ask' ? A.cards(ctx.state).find((c) => String(c.id) === route.id) : undefined;
-  const nav: [string, string, string, number?][] = [['#/', 'Chats', '⌂'], ['#/crew', 'Crew', '☺'], ['#/things', 'Things', '▤'], ['#/routines', 'Routines', '↻'], ['#/settings', 'Settings', '⚙']];
+  const nav: [string, string, string, number?][] = [['#/', 'Chats', '⌂'], ['#/crew', 'Crew', '☺'], ['#/things', 'Things', '▤'], ['#/routines', 'Routines', '↻'], ['#/settings', 'Settings', '⚙\ufe0e']];
   const active = (h: string) => (h === '#/' ? ['home', 'helper', 'chief'].includes(v.view) : h === '#/crew' ? ['crew', 'add'].includes(v.view) : h === `#/${v.view}` || (h === '#/settings' && v.view === 'apps'));
   return (
     <>
@@ -1082,7 +1079,7 @@ function App() {
         <nav className="tabbar">{nav.map(([h, l, i]) => <a key={h} href={h} className={active(h) ? 'on' : ''}><span className="ic">{i}</span>{l}{h === '#/' && asks > 0 && <span className="badge">{asks}</span>}</a>)}</nav>
       </div>
       {sheet && <AskSheet c={sheet} who={crew.find((h) => h.id === sheet.helper)} chiefSays={ctx.state.asks.find((a: Json) => a.id === sheet.id)?.detail?.chief} onClose={() => history.length > 1 ? history.back() : go('#/')} />}
-      {party && <Celebrate title={party} onDone={() => setParty(null)} />}
+      {party && <Celebrate title={party.title} href={hrefOf(party.helper)} onDone={() => setParty(null)} />}
       <Toasts />
     </>
   );

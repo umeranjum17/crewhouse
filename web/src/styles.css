@@ -24,7 +24,7 @@
 
 * { box-sizing: border-box; }
 html, body { margin: 0; min-height: 100%; }
-body { background: var(--wash); background-attachment: fixed; color: var(--ink); font: 16px/1.45 var(--ui); -webkit-font-smoothing: antialiased; }
+body { background: var(--bg); color: var(--ink); font: 16px/1.45 var(--ui); -webkit-font-smoothing: antialiased; }
 a { color: inherit; text-decoration: none; }
 button, input, textarea, select { font: inherit; color: inherit; }
 button { cursor: pointer; }
@@ -54,8 +54,8 @@ b { font-weight: 800; }
 .face .dots b:not(.on), .halo .dots b:not(.on), .logo .dots b:not(.on) { background: transparent; }
 .halo { display: grid; place-items: center; padding: 18px; border-radius: 50%; background: radial-gradient(circle, var(--halo) 45%, transparent 70%); }
 .face { border-radius: 50%; display: inline-grid; place-items: center; flex: none; overflow: hidden; position: relative; }
-.face.working { box-shadow: 0 0 0 3px var(--ok); }
-.face.needs { box-shadow: 0 0 0 3px var(--wait); }
+.face.working { border: 3px solid var(--ok); }
+.face.needs { border: 3px solid var(--wait); }
 .face.add { background: transparent; border: 2px dashed var(--shadow); color: var(--mute); font-size: 24px; }
 .logo { display: inline-flex; gap: 10px; align-items: center; }
 .laptop { font-size: 9px; color: var(--mute); margin-top: -10px; }
@@ -63,13 +63,11 @@ b { font-weight: 800; }
 .small-art { font-size: 13px; color: var(--mute); margin: 0 auto 8px; text-align: center; }
 
 /* pills, chips, buttons */
-.pill { display: inline-flex; gap: 7px; align-items: center; font: 700 13px/1.3 var(--ui); background: var(--solid); border-radius: 999px; padding: 5px 12px 5px 9px; box-shadow: 0 4px 14px -6px #6a4f9a55; max-width: 100%; }
+.pill { display: inline-flex; gap: 7px; align-items: center; font: 700 13px/1.3 var(--ui); background: var(--solid); border-radius: 999px; padding: 5px 12px 5px 9px; max-width: 100%; }
 .pill i { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); flex: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 25%, transparent); }
-/* The dot pulses only while the crew is on the job; the rest of the time it is a steady light. */
-.pill.live i { animation: pulse 1.8s infinite; }
+/* The working dot is static: the words carry the state, the dot only marks it. */
 .pill.wait i { background: var(--wait); box-shadow: 0 0 0 3px color-mix(in srgb, var(--wait) 25%, transparent); }
-.pill.off i { background: var(--shadow); box-shadow: none; animation: none; }
-@keyframes pulse { 50% { box-shadow: 0 0 0 6px transparent; } }
+.pill.off i { background: var(--shadow); box-shadow: none; }
 .chips { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0; }
 .chips.center { justify-content: center; }
 .chip { font: 700 14px var(--ui); background: var(--solid); border: 0; border-radius: 999px; padding: 8px 14px; box-shadow: var(--chip); white-space: nowrap; display: inline-flex; gap: 6px; align-items: center; }
@@ -88,8 +86,9 @@ b { font-weight: 800; }
 .input.center { text-align: center; font-weight: 800; }
 textarea.input { resize: vertical; }
 
-/* cards */
-.card { background: var(--card); border-radius: 24px; padding: 16px; margin-top: 12px; box-shadow: var(--lift); backdrop-filter: blur(10px); display: block; }
+/* cards: one flat surface, hairline-divided rows inside; only Needs you, the review sheet, dialogs and the composer
+   are elevated (shadow, 24 px corners) */
+.card { background: var(--solid); border-radius: 16px; padding: 16px; margin-top: 12px; display: block; }
 .card.row { display: flex; }
 .card.empty { text-align: center; color: var(--mute); padding: 22px; }
 .card.nudge { display: flex; gap: 12px; align-items: center; }
@@ -123,8 +122,7 @@ textarea.input { resize: vertical; }
 .step { display: flex; gap: 10px; align-items: baseline; padding: 5px 0; font-size: 14.5px; }
 .step i { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); flex: none; transform: translateY(-1px); }
 .step.asked i { background: var(--wait); }
-.step.now i { background: transparent; border: 2px solid var(--wait); animation: breathe 1.6s infinite; }
-@keyframes breathe { 50% { opacity: .35; } }
+.step.now i { background: transparent; border: 2px solid var(--wait); }
 .step time { color: var(--mute); font-size: 13px; white-space: nowrap; }
 .media { display: block; width: 100%; border-radius: 18px; margin-top: 10px; overflow: hidden; border: 0; background: var(--soft); }
 .media img, video.media { display: block; width: 100%; max-height: 360px; object-fit: cover; }
@@ -147,12 +145,9 @@ textarea.input { resize: vertical; }
 .cur { display: inline-block; width: .55em; height: 1.05em; background: #8dffc0; vertical-align: -3px; margin-left: 3px; }
 .splash-line .cur, .cur.live { animation: blink 1s steps(1) infinite; }
 @keyframes blink { 50% { opacity: 0; } }
-.celebrate { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; background: color-mix(in srgb, var(--bg) 55%, transparent); backdrop-filter: blur(2px); animation: fade .25s ease; }
-.confetti { position: absolute; inset: 0; font-size: 26px; line-height: 1.2; display: grid; place-content: center; opacity: .95; }
-.celebrate-card { position: relative; background: var(--solid); border-radius: 32px; padding: 22px 32px; display: grid; justify-items: center; gap: 6px; box-shadow: 0 30px 60px -10px #0004; animation: pop .45s cubic-bezier(.2, 1.4, .4, 1); }
-.celebrate-card b { font-size: 26px; }
-@keyframes fade { from { opacity: 0; } }
-@keyframes pop { from { transform: scale(.7); opacity: 0; } }
+/* A finished job is a toast now (parts.tsx Celebrate), not an overlay. */
+.celebrate-toast { bottom: 90px; }
+.celebrate-toast a { text-decoration: underline; text-underline-offset: 3px; margin-left: 4px; }
 
 /* hello */
 .hello { max-width: 440px; margin: 0 auto; padding: 36px 20px 40px; display: grid; justify-items: center; text-align: center; gap: 4px; }
@@ -164,8 +159,8 @@ textarea.input { resize: vertical; }
 .gpt { width: 22px; height: 22px; border-radius: 50%; background: var(--go-ink); color: var(--go); display: grid; place-items: center; font-size: 13px; }
 
 /* sheets */
-.scrim { position: fixed; inset: 0; z-index: 30; background: color-mix(in srgb, #2e2a40 40%, transparent); backdrop-filter: blur(4px); display: grid; align-items: end; justify-items: center; animation: fade .2s ease; }
-.sheet { background: var(--solid); width: min(520px, 100%); border-radius: 32px 32px 0 0; padding: 24px 22px 30px; box-shadow: 0 -20px 60px -10px #0004; display: grid; gap: 10px; justify-items: center; text-align: center; max-height: 92vh; overflow: auto; animation: up .3s cubic-bezier(.2, .9, .3, 1); }
+.scrim { position: fixed; inset: 0; z-index: 30; background: color-mix(in srgb, #2e2a40 40%, transparent); display: grid; align-items: end; justify-items: center; animation: fade .2s ease; }
+.sheet { background: var(--solid); width: min(520px, 100%); border-radius: 24px 24px 0 0; padding: 24px 22px 30px; box-shadow: 0 -20px 60px -10px #0004; display: grid; gap: 10px; justify-items: center; text-align: center; max-height: 92vh; overflow: auto; animation: up .3s cubic-bezier(.2, .9, .3, 1); }
 @keyframes up { from { transform: translateY(40px); opacity: 0; } }
 .sheet h2 { font-size: 21px; }
 .approve-face { display: grid; justify-items: center; }
@@ -195,6 +190,7 @@ textarea.input { resize: vertical; }
 .needs-row b { font-size: 15.5px; display: block; }
 .needs-row .clamp1 { font-size: 13.5px; }
 .needs-more { margin: 2px 0 6px 23px; }
+.needs-quiet { margin-top: 8px; }
 /* The house's setup jobs: a tick ring, a plain line, and the panel it opens. */
 .setup-mark { font: 900 15px var(--ui); color: var(--mute); width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--shadow); display: inline-grid; place-items: center; flex: none; }
 .setup-mark.done { color: var(--ok-ink); border-color: var(--ok); background: color-mix(in srgb, var(--ok) 18%, transparent); }
@@ -206,9 +202,9 @@ textarea.input { resize: vertical; }
 .bubble { display: grid; justify-items: center; gap: 4px; font: 800 13.5px var(--ui); flex: none; }
 .bubble.dim { color: var(--mute); font-weight: 700; }
 .bubble .face { background: var(--solid) !important; }
-.dock { position: sticky; bottom: 0; padding: 18px 18px 12px; margin: 8px -18px 0; z-index: 3; background: color-mix(in srgb, var(--bg) 60%, transparent); backdrop-filter: blur(12px); mask-image: linear-gradient(transparent, #000 16px); }
+.dock { position: sticky; bottom: 0; padding: 18px 18px 12px; margin: 8px -18px 0; z-index: 3; background: color-mix(in srgb, var(--bg) 60%, transparent); mask-image: linear-gradient(transparent, #000 16px); }
 .dock .chips { flex-wrap: nowrap; overflow-x: auto; margin: 0 0 8px; scrollbar-width: none; }
-.composer { display: flex; gap: 8px; align-items: flex-end; background: var(--solid); border-radius: 28px; padding: 6px 6px 6px 18px; box-shadow: 0 8px 24px -10px #6a4f9a55, var(--chip); }
+.composer { display: flex; gap: 8px; align-items: flex-end; background: var(--solid); border-radius: 24px; padding: 6px 6px 6px 18px; box-shadow: 0 8px 24px -10px #6a4f9a55, var(--chip); }
 .composer textarea { flex: 1; border: 0; background: transparent; resize: none; padding: 9px 0; font-size: 16px; outline: none; max-height: 160px; field-sizing: content; }
 /* A send that didn't go through stays with its words until the Retry works. */
 .composer:has(.send-failed) { flex-wrap: wrap; border-radius: 22px; }
@@ -231,10 +227,10 @@ a.back:not([aria-label]) { font-size: 15px; margin-bottom: 6px; }
 .line .bubble-text { padding: 10px 15px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .line.me { margin-left: auto; }
 .line.me .bubble-text { background: var(--me, var(--go)); color: var(--me-ink, var(--go-ink)); border-radius: 22px 22px 6px 22px; }
-.line.them .bubble-text, .line.chief .bubble-text { background: var(--solid); border-radius: 6px 22px 22px 22px; box-shadow: 0 6px 18px -10px #6a4f9a55; }
+.line.them .bubble-text, .line.chief .bubble-text { background: var(--solid); border-radius: 6px 22px 22px 22px; }
 .line.note { max-width: 92%; }
 .line.unsure .bubble-text { box-shadow: 0 0 0 2px var(--wait) inset; }
-.line.note .bubble-text { background: var(--card); border-radius: 22px; box-shadow: var(--lift); }
+.line.note .bubble-text { background: var(--card); border-radius: 22px; }
 .line .who { font: 800 12px var(--ui); color: var(--pink-ink); margin-left: 10px; }
 /* A search landing: the matched line glows once, then fades — the one motion that explains where you are. */
 .line.land { scroll-margin: 40vh 0 60vh; }
@@ -311,7 +307,7 @@ input[role='switch']:checked::after { left: 21px; }
   [data-theme='night'] .side-search { border-color: var(--shadow); }
   .side-row { display: flex; gap: 10px; align-items: center; padding: 8px 10px; border-radius: 16px; font-size: 14.5px; }
   .side-row b { display: block; }
-  .side-row.on, .side-row:hover { background: var(--solid); box-shadow: 0 6px 18px -10px #6a4f9a55; }
+  .side-row.on, .side-row:hover { background: var(--solid); }
   .side-blank { padding: 4px 10px 8px; }
   .side-nav { display: flex; gap: 10px; align-items: center; padding: 7px 12px; border-radius: 12px; font-weight: 700; color: var(--ink2); }
   .side-nav.on { background: var(--solid); color: var(--ink); }
@@ -328,7 +324,7 @@ input[role='switch']:checked::after { left: 21px; }
   .bubbles { justify-content: flex-start; }
   .page:not(.chat-page) { max-width: 1040px; }
   .scrim { align-items: center; padding: 24px; }
-  .sheet { border-radius: 32px; }
+  .sheet { border-radius: 24px; }
 
   /* the CHIEF frame: the wall's centrepiece, the one living face on a desk screen */
   .chief-frame { position: relative; display: grid; justify-items: center; gap: 8px; padding: 16px 10px 12px; margin: 10px 0 8px; border: 1.5px solid var(--line); border-radius: 16px; background: var(--solid); }
@@ -359,17 +355,18 @@ input[role='switch']:checked::after { left: 21px; }
   .desk-side { display: grid; gap: 28px; align-content: start; }
   .home { flex: 1; display: flex; flex-direction: column; }
   .home .dock { position: sticky; bottom: 0; margin-top: auto; }
-  /* the ASCII language at desk scale: mono section headers, glyph status marks, a faint dot grid as the desk's weave */
+  /* the ASCII language at desk scale: mono section headers and glyph status marks stay, and the desk keeps its
+     dot-matrix weave - a step quieter than before, so it reads as texture, not pattern */
   .frame > .label.ascii, .chief-frame .label.ascii, .side .label.ascii { font-family: var(--art); font-weight: 700; letter-spacing: 1px; }
+  .home { --weave: radial-gradient(#eee7f2 1.6px, transparent 2.1px) 0 0 / 24px 24px; background: var(--weave); background-attachment: fixed; }
+  [data-theme='night'] .home { --weave: radial-gradient(#191427 1.6px, transparent 2.1px) 0 0 / 24px 24px; }
+  .home .dock { background: var(--weave), color-mix(in srgb, var(--bg) 60%, transparent); background-attachment: fixed; }
   .desk .ascii.mark-ok { font-size: 13px; color: var(--ok-ink); }
   .frame .step .ascii { background: none; transform: none; border: 0; }
   .frame .step .ascii::before { content: '●'; font-family: var(--art); font-size: 10px; color: var(--ok-ink); }
   .frame .step.asked .ascii::before { color: var(--wait); }
   .frame .step.now .ascii::before { content: '○'; }
-  /* the dots and the dock's backdrop are the page's own wash, pinned to the viewport, so the dock shows no band */
-  .home { --weave: radial-gradient(#d9d0ea 1.6px, transparent 2.1px) 0 0 / 24px 24px; background: var(--weave); background-attachment: fixed; }
-  [data-theme='night'] .home { --weave: radial-gradient(#241e35 1.6px, transparent 2.1px) 0 0 / 24px 24px; }
-  .home .dock { background: var(--weave), var(--wash); background-attachment: fixed; backdrop-filter: none; }
+
 
   /* a chat is its own column: the header and dock stay put, the thread scrolls, no phone boxes */
   .page.chat-page { max-width: none; height: 100dvh; display: flex; flex-direction: column; padding-bottom: 0; }

@@ -924,8 +924,8 @@ function Screen({ bot, canAct, refresh, showing }: { bot: Json; canAct: boolean;
         <T style={[s.centerText, { padding: 12 }]}><Text style={s.b}>You're in control</Text>{` · ${bot.display} waits`}</T>
         <View style={{ flex: 1, margin: 12, borderRadius: 16, overflow: 'hidden', backgroundColor: t.line }}>
           <DesktopView sessionId={session.nativeId} style={{ flex: 1 }} accessibilityLabel={`${bot.display}'s screen`} keyboardClearance={120} />
-          {idle && <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center', padding: 16 }]}><T tone="mute" style={s.centerText}>{live === 'failed' ? words.failed : `Opening ${bot.display}'s screen…`}</T></View>}
-          {!!err && <T tone="pinkInk" style={s.centerText}>{err}</T>}
+          {/* one calm grey line, with the way forward — never a doubled failure */}
+          {idle && <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center', padding: 16 }]}><T tone="mute" style={s.centerText}>{live === 'failed' ? "Couldn't open it. Try again in a moment." : `Opening ${bot.display}'s screen…`}</T></View>}
         </View>
         <View style={{ padding: 12, gap: 8 }}>
           <TextInput style={[s.input, { color: t.ink, borderColor: t.line }]} value={note} onChangeText={setNote} placeholder={`What did you do? ${bot.display} reads this`} placeholderTextColor={t.mute} accessibilityLabel="What did you do" />
