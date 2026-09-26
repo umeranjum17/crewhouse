@@ -446,7 +446,7 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
         {route.view === 'chief' && <ChiefPage {...ctx} m={route.m} />}
         {route.view === 'crew' && <Crew {...ctx} />}
         {route.view === 'helper' && <HelperPage {...ctx} id={route.id!} tab={route.tab ?? 'chat'} m={route.m} setTab={(tab) => setStack((st) => [...st.slice(0, -1), { ...route, tab }])} />}
-        {route.view === 'routines' && <Page title="Routines" lead="Jobs the crew does on a schedule. You can also just tell Chief: “every Friday, make a video of the week's photos”."><RoutineList {...ctx} /></Page>}
+        {route.view === 'routines' && <Page title="Routines" lead="Jobs the crew does on a schedule."><RoutineList {...ctx} /></Page>}
         {route.view === 'add' && <AddHelper {...ctx} />}
         {route.view === 'things' && <Page title="Things" lead="Everything the crew has made for you."><ThingsList list={A.things(state)} state={state} empty="Videos, lists, letters and plans the crew makes for you land here." /></Page>}
         {route.view === 'phone' && <ThisPhone grant={grant} status={status} onForget={forget} onClear={() => { kept.clear(); say('Cleared from this phone ✓'); }} />}
@@ -499,17 +499,40 @@ function AskCard({ c, who, onDone, canAct, offline, open }: { c: A.Card; who: A.
   const act = async (body: Json) => { last.current = body; setOops(false); if (await answer(c, body)) onDone(); else setOops(true); };
   const [yes, ...rest] = c.choices;
   const deny = c.choices.find((x) => x.body.answer === 'deny');
+  // A routine offered by Chief: the lines are the confirmation; changing the time is an edit before the yes.
+  const [when, setWhen] = useState<string | null>(null);
+  const [sched, setSched] = useState<Json>(null);
+  useEffect(() => {
+    if (when === null || !when.trim()) { setSched(null); return; }
+    const x = setTimeout(() => api.schedule(when).then(setSched).catch(() => setSched({ bad: true })), 250);
+    return () => clearTimeout(x);
+  }, [when]);
+  const stuck = when !== null && (!when.trim() || !sched || sched.bad);
   return (
     <Card ask>
       <View style={s.row}>
         {who && <Face who={{ ...who, mood: 'ask' }} size={36} />}
         <View style={{ flex: 1 }}><T style={s.b}>{c.head}</T><T tone="mute" style={s.small}>{A.clock(c.at)}</T></View>
       </View>
-      <T style={{ marginVertical: 8 }}>{c.words}</T>
+      {c.kind === 'routine' && c.lines ? <View style={{ gap: 3, marginVertical: 8 }}>
+        {c.lines.map((l, i) => <T key={i} tone={i ? 'mute' : undefined} style={i ? s.small : s.b}>{l}</T>)}
+      </View> : <T style={{ marginVertical: 8 }}>{c.words}</T>}
       {oops && <T tone="pinkInk" style={s.small}>That didn't go through. Try again.</T>}
       {offline ? <T tone="mute" style={s.small}>You can answer once the home computer is back.</T>
         : !canAct ? <T tone="mute" style={s.small}>This phone watches; answer on another phone or the computer.</T> : c.kind === 'connect' ? (
         <T tone="mute" style={s.small}>Connecting an app is done on the computer: Settings, Your apps.</T>
+      ) : c.kind === 'routine' ? (
+        <>
+          {when !== null && <TextInput style={[s.input, { color: t.ink, borderColor: t.line }]} value={when} onChangeText={setWhen} autoFocus
+            placeholder="When? For example: every Saturday 10am" placeholderTextColor={t.mute} accessibilityLabel="When" autoCapitalize="none" />}
+          {when !== null && !!sched && !sched.bad && <T tone="mute" style={s.small}>{sched.words}. First time {sched.first}.{c.zoneNote ? ` ${c.zoneNote}` : ''}</T>}
+          {when !== null && !!sched?.bad && <T tone="mute" style={s.small}>I didn't catch that time. Try “every Monday 9:00”.</T>}
+          <View style={s.chips}>
+            <Btn go label="Start it" disabled={stuck} onPress={() => act({ answer: 'allow', scope: 'once', ...(when !== null && when.trim() && when.trim() !== c.schedule ? { schedule: when.trim() } : {}) })} />
+            <Btn label={when === null ? 'Change time' : 'Keep the time'} onPress={() => setWhen(when === null ? c.schedule || '' : null)} />
+            <Btn label="Not now" onPress={() => act({ answer: 'deny' })} />
+          </View>
+        </>
       ) : c.reply ? (
         <View style={s.row}>
           <TextInput style={[s.input, { flex: 1, color: t.ink, borderColor: t.line }]} value={reply} onChangeText={setReply} placeholder={`Tell ${who?.name ?? 'them'} what to do`} placeholderTextColor={t.mute} />
@@ -796,7 +819,7 @@ function HelperPage(ctx: Ctx & { id: string; tab: string; m?: number; setTab: (t
           <T style={s.b}>{`What ${h.name} is doing`}</T>
           {b?.task ? (trail.length ? <Card><Steps steps={A.steps(page?.trail ?? [], b.task.id, true)} max={all ? 40 : 7} /></Card> : <T tone="mute">{`Working on “${A.plain(b.task.title)}”. Steps show as they happen.`}</T>)
             : <T tone="mute">Nothing right now.</T>}
-          {trail.length > 7 && <Btn ghost label={all ? 'Just now' : 'Every step'} onPress={() => setAll((v) => !v)} />}</T>
+          {trail.length > 7 && <Btn ghost label={all ? 'Just now' : 'Every step'} onPress={() => setAll((v) => !v)} />}
           <T style={s.b}>Things</T>
           <ThingsList list={A.things(state).filter((x) => x.helper === id)} state={state} empty={`${h.name}'s finished work shows up here.`} />
           <T style={s.b}>Routines</T>
@@ -891,60 +914,74 @@ function Screen({ bot, canAct, refresh, showing }: { bot: Json; canAct: boolean;
   );
 }
 
-/** Routines on the phone: each one's schedule and latest run, with Do it now, Pause and Remove, and a way to add one. */
-function RoutineList({ state, refresh, canAct, bot }: Ctx & { bot?: string }) {
+/** Routines on the phone: each one's schedule and latest run, with Do it now, Pause and Remove. Recurring work starts
+ *  as a request to Chief (a card comes back to start); a row's time line is tappable, and its last run can be seen. */
+function RoutineList({ state, refresh, canAct, bot, go }: Ctx & { bot?: string; go: (r: Route, replace?: boolean) => void }) {
   const t = useLook();
   const crew = A.crew(state);
-  const [adding, setAdding] = useState(false);
-  const [who, setWho] = useState(bot ?? crew[0]?.id ?? '');
-  const [what, setWhat] = useState('');
-  const [when, setWhen] = useState('');
-  const [watch, setWatch] = useState('');
-  const [preview, setPreview] = useState<Json>(null);
-  useEffect(() => {
-    if (!when.trim()) { setPreview(null); return; }
-    const x = setTimeout(() => api.schedule(when).then(setPreview).catch(() => setPreview({ bad: true })), 250);
-    return () => clearTimeout(x);
-  }, [when]);
+  const [text, setText] = useState('');
   const act = (fn: () => Promise<unknown>, ok?: string) => attempt(async () => { await fn(); refresh(); }, ok);
   const list = A.routines(state, bot);
-  const input = (value: string, set: (v: string) => void, placeholder: string, label: string) => (
-    <TextInput style={[s.input, { color: t.ink, borderColor: t.line }]} value={value} onChangeText={set} placeholder={placeholder} placeholderTextColor={t.mute} accessibilityLabel={label} autoCapitalize="none" />
-  );
+  const ask = async () => { const x = text.trim(); if (!x) return; if (await attempt(() => api.post('chief', x), undefined, true)) { setText(''); refresh(); go({ view: 'chief' }); } };
   return (
     <>
-      {list.map((r: Json) => (
-        <Card key={r.id} style={r.paused && { opacity: 0.7 }}>
-          <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
-            <Face who={crew.find((h) => h.id === r.helper) ?? 'chief'} size={40} />
-            <View style={{ flex: 1 }}><T style={s.b}>{r.name}</T>
-              <T tone="mute" style={s.small}>{`${r.watching ? `Keeps an eye on ${r.watching} · ` : ''}${r.when}${r.paused ? ' · paused' : ` · next ${r.next}`}`}</T>
-              {!!r.last && <T tone="mute" style={s.small}>{r.last}</T>}</View>
-          </View>
-          {canAct && <View style={s.chips}>
-            <Btn label="Do it now" onPress={() => act(() => api.runRoutine(r.id), 'Started')} />
-            <Btn label={r.paused ? 'Resume' : 'Pause'} onPress={() => act(() => api.routine(r.id, { state: r.paused ? 'on' : 'paused' }))} />
-            {!r.digest && <Btn ghost label="Remove" onPress={() => act(() => api.removeRoutine(r.id), 'Removed')} />}
-          </View>}
-        </Card>
-      ))}
-      {!list.length && !adding && <Card><T tone="mute">Nothing on a schedule yet.</T></Card>}
-      {canAct && (adding ? (
-        <Card>
-          <T style={s.b}>A new routine</T>
-          {!bot && <View style={s.chips}>{crew.map((h) => <Btn key={h.id} label={h.name} go={who === h.id} onPress={() => setWho(h.id)} />)}</View>}
-          {input(what, setWhat, 'What should they do each time?', 'What to do')}
-          {input(watch, setWatch, 'A page to keep an eye on, if any', 'A page to keep an eye on')}
-          {input(when, setWhen, 'When? For example: every Saturday 10am', 'When')}
-          {!!preview && <T tone="mute" style={s.small}>{preview.bad ? "I didn't catch that time. Try “every Monday 9:00”." : `${preview.words}. First time ${A.clock(preview.next)}.`}</T>}
-          <View style={s.chips}>
-            <Btn go label="Add routine" disabled={!who || (!what.trim() && !watch.trim()) || !preview || preview.bad}
-              onPress={() => act(async () => { await api.addRoutine({ bot: who, task: what, schedule: when, ...(watch.trim() ? { watch: watch.trim() } : {}) }); setAdding(false); setWhat(''); setWhen(''); setWatch(''); }, 'Routine added')} />
-            <Btn ghost label="Cancel" onPress={() => setAdding(false)} />
-          </View>
-        </Card>
-      ) : crew.length ? <Btn go label="＋ Add a routine" onPress={() => setAdding(true)} /> : <Card><T tone="mute">Add a helper first; a routine gives one of them a job on a schedule.</T></Card>)}
+      {canAct && !bot && <Card ask>
+        <View style={s.row}>
+          <Face who="chief" size={36} />
+          <View style={{ flex: 1 }}><T style={s.b}>Tell Chief what should happen regularly</T>
+            <T tone="mute" style={s.small}>In your own words. He brings it back as a card to start.</T></View>
+        </View>
+        <View style={{ flexDirection: 'row', gap: 8, marginTop: 10, alignItems: 'center' }}>
+          <TextInput style={[s.input, { flex: 1, color: t.ink, borderColor: t.line }]} value={text} onChangeText={setText}
+            placeholder="Plan the week's dinners every Saturday morning" placeholderTextColor={t.mute} accessibilityLabel="Tell Chief what should happen regularly" />
+          <Btn go label="Send" disabled={!text.trim()} onPress={() => void ask()} />
+        </View>
+      </Card>}
+      {list.map((r: Json) => <RoutineRow key={r.id} r={r} h={crew.find((h) => h.id === r.helper)} act={act} go={go} canAct={canAct} />)}
+      {!list.length && <Card><T tone="mute">Nothing on a schedule yet.</T></Card>}
     </>
+  );
+}
+
+/** One routine: tap its time line to move it (the same preview Chief's card uses); See result opens the last run. */
+function RoutineRow({ r, h, act, go, canAct }: { r: Json; h: A.Helper | undefined; act: (fn: () => Promise<unknown>, ok?: string) => Promise<boolean>; go: (r: Route, replace?: boolean) => void; canAct: boolean }) {
+  const t = useLook();
+  const [moving, setMoving] = useState(false);
+  const [when, setWhen] = useState('');
+  const [preview, setPreview] = useState<Json>(null);
+  useEffect(() => {
+    if (!moving || !when.trim()) { setPreview(null); return; }
+    const x = setTimeout(() => api.schedule(when).then(setPreview).catch(() => setPreview({ bad: true })), 250);
+    return () => clearTimeout(x);
+  }, [when, moving]);
+  const save = async () => { if (await act(() => api.routine(r.id, { schedule: when.trim() }), 'Time changed')) setMoving(false); };
+  const open = () => go(r.result.thing ? { view: 'things' } : r.helper === 'chief' ? { view: 'chief', m: r.result.msg } : { view: 'helper', id: r.helper, m: r.result.msg });
+  return (
+    <Card style={r.paused && { opacity: 0.7 }}>
+      <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
+        <Face who={h ?? 'chief'} size={40} />
+        <View style={{ flex: 1 }}><T style={s.b}>{r.name}</T>
+          {canAct ? <Pressable onPress={() => { setWhen(r.when); setMoving(true); }} accessibilityLabel="Change when it runs">
+            <T tone="mute" style={s.small}>{`${r.watching ? `Keeps an eye on ${r.watching} · ` : ''}${r.when}${r.paused ? ' · paused' : ` · next ${r.next}`}`}</T>
+          </Pressable> : <T tone="mute" style={s.small}>{`${r.watching ? `Keeps an eye on ${r.watching} · ` : ''}${r.when}${r.paused ? ' · paused' : ` · next ${r.next}`}`}</T>}
+          {!!r.last && (r.result ? <Pressable onPress={open} accessibilityLabel="See result"><T tone="pinkInk" style={s.small}>{`${r.last} · See result`}</T></Pressable>
+            : <T tone="mute" style={s.small}>{r.last}</T>)}</View>
+      </View>
+      {moving && <View style={{ marginTop: 8, gap: 6 }}>
+        <TextInput style={[s.input, { color: t.ink, borderColor: t.line }]} value={when} onChangeText={setWhen} autoFocus
+          placeholder="When? For example: every Saturday 10am" placeholderTextColor={t.mute} accessibilityLabel="When" autoCapitalize="none" />
+        {!!preview && <T tone="mute" style={s.small}>{preview.bad ? "I didn't catch that time. Try “every Monday 9:00”." : `${preview.words}. First time ${preview.first}.`}</T>}
+        <View style={s.chips}>
+          <Btn go label="Save" disabled={!when.trim() || !preview || preview.bad} onPress={() => void save()} />
+          <Btn ghost label="Cancel" onPress={() => setMoving(false)} />
+        </View>
+      </View>}
+      {canAct && <View style={s.chips}>
+        <Btn label="Do it now" onPress={() => act(() => api.runRoutine(r.id), 'Started')} />
+        <Btn label={r.paused ? 'Resume' : 'Pause'} onPress={() => act(() => api.routine(r.id, { state: r.paused ? 'on' : 'paused' }))} />
+        {!r.digest && <Btn ghost label="Remove" onPress={() => act(() => api.removeRoutine(r.id), 'Removed')} />}
+      </View>}
+    </Card>
   );
 }
 

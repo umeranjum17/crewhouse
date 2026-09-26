@@ -12,8 +12,11 @@ export type Helper = {
 };
 export type Choice = { label: string; body: Json; primary?: boolean };
 export type Card = {
-  id: number; helper: string; kind: 'ok' | 'spend' | 'question' | 'connect'; head: string; words: string;
+  id: number; helper: string; kind: 'ok' | 'spend' | 'question' | 'connect' | 'routine'; head: string; words: string;
   preview?: { head?: string; body: string }; choices: Choice[]; reply: boolean; app?: App; at: number;
+  /** Chief's offered routine: the lines to confirm (cadence, what, quiet, first run), the schedule words to edit, and
+   *  the time-zone line when the home computer's clock sits in another zone from this device's. */
+  lines?: string[]; schedule?: string; zoneNote?: string;
   /** A checkout: the inbox opens the review before any yes, and the sheet's yes names the order.
    *  `known`: crewd could read the total. Without it, the safe way out is the person buying it themselves. */
   review?: boolean; order?: { shown: string; known: boolean; dollars: boolean };
@@ -55,13 +58,18 @@ export function fileView(bot: string, path: string): FileView {
  * A helper's own words, scrubbed of the machinery: code spans, fenced blocks, file paths and the names of engines.
  * ponytail: a pattern scrub, not a guarantee; the engine's prompts keep bots in plain words (docs/ui-contract.md).
  */
+const TOOL_CALL = /\[tool \w+ [^\]]*\]/g; // a tool call is an engine event, never a sentence
+const TOOL_FRAGMENT = /\[tool\b[\s\S]*$/i; // ...and a cut-off one (task titles are trimmed) still isn't
+const JSON_BLOB = /\{(?:[^{}]|\{[^{}]*\})*\}/g; // nor is a raw JSON object, one nesting level deep
+export const noTools = (text = '') => text.replace(TOOL_CALL, ' ').replace(JSON_BLOB, ' ').replace(TOOL_FRAGMENT, '').replace(/\s{2,}/g, ' ').trim();
+
 export function plain(text = '') {
-  return text
+  return noTools(text)
     .replace(/```[\s\S]*?```/g, '')
     .replace(/`([^`\n]*)`/g, (_, s: string) => (/^[\w.\-~\/]+\.[a-z0-9]{2,4}$/i.test(s) ? `“${pretty(s)}”` : /[\/\\$|]|--?\w/.test(s) ? '' : s))
     .replace(/(^|[\s(“"'])((~|\.{1,2})?\/[\w.\-~]+)+\/?(?=[\s).,;:!?”"']|$)/g, (_, pre: string, p: string) => `${pre}${/\.[a-z0-9]{2,4}$/i.test(p) ? `“${pretty(p)}”` : 'its folder'}`)
     .replace(/\bfiles\/([\w.\-]+)/g, (_, f: string) => `“${pretty(f)}”`)
-    .replace(/\b(claude(\s+code)?|anthropic|codex|sonnet|opus|haiku|gpt-[\w.]+|herdr|mcp__\w+)\b/gi, 'the crew')
+    .replace(/\b(claude(\s+code)?|anthropic|codex|sonnet|opus|haiku|gpt-[\w.]+|herdr|mcp__\w+|crew_[a-z_]+)\b/gi, 'the crew')
     .replace(/\s{2,}/g, ' ')
     .trim();
 }
@@ -302,6 +310,13 @@ function chiefRow(state: Json, local: ChiefLocal): ChiefView {
 }
 const crewName = (state: Json, id: string) => state.bots.find((b: Json) => b.id === id)?.display ?? 'The crew';
 
+/** Named only when the home computer's clock sits in a different zone from this device's: routine times are home time. */
+export function zoneNote(state: Json) {
+  const z = state.zone as string | undefined;
+  const mine = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : '';
+  return z && mine && z !== mine ? `Times follow the home computer's clock (${z}).` : '';
+}
+
 /** The helpers this person sees: everyone's, less the owner-only ones unless it's the owner. */
 export function crew(state: Json) {
   const owner = state.person.id === OWNER;
@@ -379,6 +394,15 @@ export function card(a: Json, state: Json): Card {
     const app = apps(state).find((x) => x.id === d.app) ?? APPS[0];
     return { ...base, kind: 'connect', app, head: `${name} could use ${app.name}`, words: plain(d.words ?? `${name} can do this with your ${app.name}. Connect it?`),
       choices: [{ label: `Connect ${app.name}`, body: { answer: 'allow' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
+  }
+  if (a.kind === 'propose' && d.routine) {
+    // Chief's offered routine: the lines are the whole confirmation (cadence, what, quiet behaviour, first run). It
+    // stays off Home like every suggestion, and nothing runs until the person starts it.
+    const note = zoneNote(state);
+    return { ...base, kind: 'routine', head: 'A new routine', words: plain(d.words ?? a.title),
+      lines: String(d.preview?.body ?? '').split('\n').map((l: string) => plain(l)).filter(Boolean).concat(note ? [note] : []),
+      schedule: String(d.routine.schedule ?? ''), zoneNote: note,
+      choices: [{ label: 'Start it', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
   }
   if (a.kind === 'propose') {
     // A suggestion: a skill a helper would like to keep, or a new personality from Chief. Nothing changes without a yes.
@@ -511,7 +535,7 @@ export function lines(page: Json, bot: string): Line[] {
     // Another helper handing this one a job: a note in its words, "Reel asked: …".
     if (!['person', 'bot', 'chief'].includes(m.author)) return { id: m.id, from: 'note', text: `${String(m.author).replace(/^./, (c) => c.toUpperCase())} asked: ${plain(text)}`, files: [], choices: [] };
     return { id: m.id, from: m.author === 'person' ? 'me' : m.author === 'chief' && bot !== 'chief' ? 'chief' : 'them',
-      text: m.author === 'person' ? (pics.length && /^Here (is a photo|are some photos)\.$/.test(text) ? '' : text) : plain(text), files: pics, choices: (m.choices ?? []).map(plain), unsure: m.author === 'bot' && /^Not sure it worked:|^[^.]{1,40} isn't sure “/.test(text) };
+      text: m.author === 'person' ? (pics.length && /^Here (is a photo|are some photos)\.$/.test(text) ? '' : noTools(text)) : plain(text), files: pics, choices: (m.choices ?? []).map(plain), unsure: m.author === 'bot' && /^Not sure it worked:|^[^.]{1,40} isn't sure “/.test(text) };
   }).filter((l: Line) => l.text || l.files.length);
 }
 
@@ -562,6 +586,8 @@ export function routines(state: Json, bot?: string) {
     id: r.id, name: plain(r.name), helper: r.kind === 'digest' ? 'chief' : r.bot, when: r.words, paused: r.state === 'paused', next: clock(r.next_at), digest: r.kind === 'digest',
     quiet: !!r.quiet, watching: r.watch ? host(r.watch) : '',
     last: r.history?.[0] ? lastRun(r.history[0]) : '',
+    // Where the last run ended up: the thing it made, else its line in the helper's chat. A skipped run has neither.
+    result: r.history?.[0]?.thing ? { thing: r.history[0].thing } : r.history?.[0]?.msg ? { msg: r.history[0].msg } : null,
     changes: (r.history ?? []).filter((h: Json) => h.watch === 'changed').length,
   }));
 }

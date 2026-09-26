@@ -9,6 +9,7 @@ import type { Crew } from './crew.ts';
 import * as disk from './bots.ts';
 import { toolStatus } from './tools.ts';
 import { OWNER, PROVIDERS, callbackPage, provider } from './accounts.ts';
+import { clock } from '@byokit/accounts';
 import { coversOf } from './policy.ts';
 import { describe, nextRun, parseSchedule } from './routines.ts';
 import { Link } from './link.ts';
@@ -152,7 +153,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
   async function api(m: string, p: string, q: URLSearchParams, body: any, me: number) {
     let r: RegExpMatchArray | null;
     // What is installing now, and (for the owner) a newer Crewhouse to download.
-    if (m === 'GET' && p === '/api/state') return { ...crew.snapshot(me), installing: [...installing], showing: teacher.showing(), ...(update && me === OWNER ? { update } : {}) };
+    if (m === 'GET' && p === '/api/state') return { ...crew.snapshot(me), zone: Intl.DateTimeFormat().resolvedOptions().timeZone, installing: [...installing], showing: teacher.showing(), ...(update && me === OWNER ? { update } : {}) };
     if (m === 'GET' && p === '/api/events') return db.events(Number(q.get('after') || 0));
     // A sent photo for the phone, which can't open this computer's /files address: small enough for one link frame.
     if (m === 'GET' && p === '/api/photo') {
@@ -311,7 +312,10 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/reset$/)) && m === 'POST') { await crew.resetBot(r[1]); return { ok: true }; }
     if (m === 'GET' && p === '/api/schedule') {
       const when = parseSchedule(q.get('text') ?? '');
-      return { words: describe(when), next: nextRun(when, Date.now()) };
+      const next = nextRun(when, Date.now());
+      // `first` is the computer's own clock, so the card and the preview read the same words everywhere; `zone` lets a
+      // screen away from home name the time zone (and only then).
+      return { words: describe(when), next, first: clock(next), zone: Intl.DateTimeFormat().resolvedOptions().timeZone };
     }
     if (m === 'POST' && p === '/api/routines') { const row = crew.addRoutine(body, 'person', me); return crew.routines(me).find((x) => x.id === row.id); }
     if ((r = p.match(/^\/api\/routines\/(\d+)$/)) && m === 'PUT') { crew.updateRoutine(Number(r[1]), body); return { ok: true }; }

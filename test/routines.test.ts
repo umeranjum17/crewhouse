@@ -291,7 +291,7 @@ test('watches: crewd reads the page, says nothing and uses no AI while it is the
   try {
     assert.throws(() => crew.addRoutine({ bot: 'reel', schedule: 'every hour', watch: 'file:///etc/passwd' }, 'person'), /starts with https/);
     const r = crew.addRoutine({ bot: 'reel', schedule: 'every hour', watch: url }, 'person');
-    assert.equal(r.name, 'Watch 127.0.0.1');
+    assert.equal(r.name, '127.0.0.1', 'a watch keeps the one word: routine; the line says "Keeps an eye on …"');
     assert.equal(r.quiet, 1, 'a watch is a quiet check-in');
     const prompts = () => db.get("SELECT COUNT(*) AS n FROM events WHERE kind = 'run.prompted'")!.n;
     const watched = async (n: number) => { await until(`check ${n}`, () => fired(db, r.id).length >= n); return fired(db, r.id).at(-1); };

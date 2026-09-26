@@ -148,17 +148,36 @@ test('screen: take over and give back through the API; watching needs the Comput
   assert.equal(await new Promise((r) => { foreign.once('open', () => r('open')); foreign.once('error', () => r('refused')); }), 'refused');
 });
 
-test('routines: Chief sets one up from chat, it fires on schedule through the daemon, the person manages it', async () => {
+test('routines: Chief offers one as a card, the person starts it (or changes the time), it fires on schedule, the person manages it', async () => {
   await ready();
-  assert.equal((await api('GET', '/api/schedule?text=' + encodeURIComponent('weekdays at 8am'))).body.words, 'Weekdays at 8:00 am');
+  const sched = (await api('GET', '/api/schedule?text=' + encodeURIComponent('weekdays at 8am'))).body;
+  assert.equal(sched.words, 'Weekdays at 8:00 am');
+  assert.match(sched.first, /am|pm/, "the first run in the computer's own words, so every screen reads the same");
+  assert.equal(typeof sched.zone, 'string', 'the computer names its zone, so a screen away from home can too');
   assert.equal((await api('GET', '/api/schedule?text=someday')).status, 400);
 
+  // Chief's crew_routine is a confirmed request now: a card with cadence, what, quiet and first run — no routine yet.
   const t = (await say('chief', `every friday ${call('crew_routine', { bot: 'reel', when: 'every Friday 17:00', task: 'Make a demo of what shipped this week' })}`)).body.task;
   await done('chief', t);
+  const card = await until(async () => (await api('GET', '/api/state')).body.asks.find((a: any) => a.kind === 'propose' && a.detail.routine));
+  assert.equal(card.detail.words, 'Every Friday at 5:00 pm, Reel will make a demo of what shipped this week.');
+  assert.equal(card.detail.preview.head, 'A new routine');
+  assert.equal(card.detail.preview.body.split('\n')[0], 'Every Friday at 5:00 pm');
+  assert.match(card.detail.preview.body, /Reel will make a demo of what shipped this week/);
+  assert.equal((await api('GET', '/api/state')).body.routines.some((x: any) => x.name === 'Make a demo of what shipped this week'), false, 'nothing runs before the yes');
+
+  // The person changes the time on the card, then starts it: the routine takes the new time.
+  assert.equal((await api('POST', `/api/asks/${card.id}/answer`, { answer: 'allow', scope: 'once', schedule: 'every Friday 9am' })).status, 200);
   const chiefSays = (await api('GET', '/api/bots/chief')).body.messages.map((m: any) => m.text);
-  assert.ok(chiefSays.some((x: string) => /^Routine added: “Make a demo of what shipped this week” for Reel, every friday at 5:00 pm\. First run/.test(x)));
+  assert.ok(chiefSays.some((x: string) => /^Routine added: “Make a demo of what shipped this week” for Reel, Every Friday at 9:00 am\. First run/.test(x)));
   let r = (await api('GET', '/api/state')).body.routines.find((x: any) => x.name === 'Make a demo of what shipped this week');
-  assert.equal(r.words, 'Every Friday at 5:00 pm');
+  assert.equal(r.words, 'Every Friday at 9:00 am');
+
+  // Chief offers another; "Not now" leaves nothing behind.
+  await done('chief', (await say('chief', `and ${call('crew_routine', { bot: 'reel', when: 'every Friday 17:00', task: 'Tidy the screenshots folder' })}`)).body.task);
+  const again = await until(async () => (await api('GET', '/api/state')).body.asks.find((a: any) => a.kind === 'propose' && a.detail.routine));
+  assert.equal((await api('POST', `/api/asks/${again.id}/answer`, { answer: 'deny' })).status, 200);
+  assert.equal((await api('GET', '/api/state')).body.routines.some((x: any) => x.name === 'Tidy the screenshots folder'), false);
 
   // Its time comes (moved into the past, as after a sleep): crewd's own clock fires it and Reel does the work.
   new DatabaseSync(join(root, 'state', 'crew.db')).prepare('UPDATE routines SET next_at = ? WHERE id = ?').run(Date.now() - 1000, r.id);

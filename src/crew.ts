@@ -301,7 +301,7 @@ export class Crew {
     const d = JSON.parse(detail || '{}');
     const covers = d.key ? coversOf(d.key) : null;
     if (a.kind === 'connect') return { ...a, detail: { app: d.app, words: d.words } };
-    if (a.kind === 'propose') return { ...a, detail: { words: a.title, preview: d.preview, ...(d.create ? { yes: `Yes, take ${d.create.name} on` } : d.draft ? { yes: 'Approve' } : {}) } };
+    if (a.kind === 'propose') return { ...a, detail: { words: a.title, preview: d.preview, ...(d.create ? { yes: `Yes, take ${d.create.name} on` } : d.draft ? { yes: 'Approve' } : {}), ...(d.routine ? { routine: d.routine } : {}) } };
     return { ...a, detail: { effect: d.effect, words: a.title, spends: d.effect === 'spend', covers, ...(covers ? { always: covers } : {}), ...(d.preview ? { preview: d.preview } : {}),
       ...(d.checkout ? { order: { shown: d.checkout.shown ?? '', known: Number.isFinite(d.checkout.total), dollars: d.checkout.currency === '$' } } : {}) } };
   }
@@ -425,7 +425,10 @@ export class Crew {
         .map((e) => {
           const d = JSON.parse(e.data);
           const t = d.task ? this.db.get('SELECT state, result FROM tasks WHERE id = ?', d.task) : undefined;
-          return { at: e.at, kind: e.kind, ...d, state: t?.state, ...(t?.result === ALL_CLEAR_RESULT ? { clear: true } : {}) };
+          const line = d.task ? this.db.get("SELECT id FROM messages WHERE task_id = ? AND author = 'bot' ORDER BY id DESC LIMIT 1", d.task) : undefined;
+          const made = d.task && this.db.get("SELECT 1 FROM events WHERE kind = 'file.delivered' AND json_extract(data, '$.task') = ?", d.task);
+          return { at: e.at, kind: e.kind, ...d, state: t?.state, ...(t?.result === ALL_CLEAR_RESULT ? { clear: true } : {}),
+            ...(made ? { thing: d.task } : {}), ...(line ? { msg: line.id } : {}) };
         }),
     }));
   }
@@ -443,8 +446,8 @@ export class Crew {
       CHIEF, member, nextRun(parseSchedule('every day 8:00'), Date.now()), Date.now());
   }
 
-  /** A routine is its setter's: the member who added it, or the one Chief set it up for. Its runs use their accounts. */
-  addRoutine(b: { bot?: string; schedule?: string; task?: string; model?: string; name?: string; quiet?: boolean; watch?: string }, by: string, member = by === CHIEF ? this.chiefFor() : OWNER) {
+  /** Check a routine request and fill in its defaults — the one plan behind Chief's confirmation card and the person's own add. */
+  private planRoutine(b: { bot?: string; schedule?: string; task?: string; model?: string; name?: string; quiet?: boolean; watch?: string }) {
     const bot = this.bot(String(b.bot ?? '').toLowerCase());
     if (!bot || bot.id === CHIEF) throw Object.assign(new Error(`no bot called ${b.bot}; a routine hands a task to one of the crew`), { status: 404 });
     // A watch: crewd reads the page on schedule and wakes the helper only when it changed.
@@ -456,15 +459,36 @@ export class Crew {
     const brain = b.model ? disk.brainKey(disk.parseBrain(b.model)) : null;
     // Unnamed routines take the task's first sentence: "Make a demo of this week's screenshots".
     const first = body.split(/\n|(?<=[.!?])\s/)[0].replace(/[.!?]$/, '');
-    const name = String(b.name ?? '').trim().slice(0, 60) || (watch && !b.task ? `Watch ${new URL(watch).hostname}` : short(first, 60));
+    const name = String(b.name ?? '').trim().slice(0, 60) || (watch && !b.task ? new URL(watch).hostname.replace(/^www\./, '') : short(first, 60));
+    return { bot, watch, body, when, brain, first, name, quiet: b.quiet === true || !!watch };
+  }
+
+  /** A routine is its setter's: the member who added it, or the one Chief set it up for. Its runs use their accounts. */
+  addRoutine(b: { bot?: string; schedule?: string; task?: string; model?: string; name?: string; quiet?: boolean; watch?: string }, by: string, member = by === CHIEF ? this.chiefFor() : OWNER) {
+    const plan = this.planRoutine(b);
     return this.db.tx(() => {
-      // A watch is always a quiet check-in: a change that doesn't matter to the person stays quiet.
       const r = this.db.run('INSERT INTO routines (bot, name, schedule, body, brain, member, quiet, watch, next_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        bot.id, name, String(b.schedule).trim(), body, brain, member, b.quiet === true || watch ? 1 : 0, watch, nextRun(when, Date.now()), Date.now());
+        plan.bot.id, plan.name, String(b.schedule).trim(), plan.body, plan.brain, member, plan.quiet ? 1 : 0, plan.watch, nextRun(plan.when, Date.now()), Date.now());
       const row = this.routine(Number(r.lastInsertRowid));
-      this.db.event('routine.created', bot.id, { routine: row.id, name, words: describe(when), by, member });
-      if (by === CHIEF) this.say(CHIEF, 'system', `Routine added: “${name}” for ${bot.display}, ${describe(when).toLowerCase()}. First run ${clock(row.next_at)}.`, null, member);
+      this.db.event('routine.created', plan.bot.id, { routine: row.id, name: plan.name, words: describe(plan.when), by, member });
+      if (by === CHIEF) this.say(CHIEF, 'system', `Routine added: “${plan.name}” for ${plan.bot.display}, ${describe(plan.when)}. First run ${clock(row.next_at)}.`, null, member);
       return row;
+    });
+  }
+
+  /** Chief's offer, in the person's plain words: cadence, what happens, quiet behaviour, first run. The routine is made
+   *  only when the person says yes (`adopt`); `answer` applies a changed time first. */
+  private offerRoutine(p: Parameters<Crew['planRoutine']>[0]) {
+    const plan = this.planRoutine(p);
+    const host = plan.watch ? new URL(plan.watch).hostname.replace(/^www\./, '') : '';
+    const what = plan.watch ? `Keeps an eye on ${host}` : `${plan.bot.display} will ${plan.first.charAt(0).toLowerCase()}${plan.first.slice(1)}`;
+    const lines = [describe(plan.when), what,
+      plan.watch ? 'Tells you only when the page changes' : plan.quiet ? 'Tells you only when something changed' : 'Tells you each time it runs',
+      `First time: ${clock(nextRun(plan.when, Date.now()))}`];
+    const words = `${describe(plan.when)}, ${what}.`;
+    return this.propose(CHIEF, words, {
+      routine: { bot: plan.bot.id, schedule: String(p.schedule ?? '').trim(), task: p.task, name: p.name, model: p.model, quiet: p.quiet, watch: p.watch },
+      preview: { head: 'A new routine', body: lines.join('\n') },
     });
   }
 
@@ -1282,7 +1306,7 @@ export class Crew {
   }
 
   /** Allow once, for this task, or always for the bot; or not now. Spending is never more than once. */
-  async answer(askId: number, body: { answer?: string; scope?: string }) {
+  async answer(askId: number, body: { answer?: string; scope?: string; schedule?: string }) {
     const ask = this.db.get("SELECT * FROM asks WHERE id = ? AND state = 'open'", askId);
     if (!ask) throw fail('that question is already settled', 409);
     const detail = JSON.parse(ask.detail || '{}');
@@ -1290,7 +1314,9 @@ export class Crew {
     const scope = body.answer === 'allow' ? body.scope ?? 'once' : 'once';
     if (!['once', 'task', 'always'].includes(scope) || (scope !== 'once' && !detail.key) || (scope === 'task' && !ask.task_id)) throw fail('allow once, for this task, or always');
     const who = this.bot(ask.bot)?.display ?? ask.bot;
-    // A suggestion takes effect on yes, before the card closes: if it can't, the card stays open.
+    // A suggestion takes effect on yes, before the card closes: if it can't, the card stays open. A routine offered by
+    // Chief takes the time the person changed on the card ("Change time"), then the same yes.
+    if (body.schedule && ask.kind === 'propose' && detail.routine) detail.routine.schedule = String(body.schedule);
     if (ask.kind === 'propose' && body.answer === 'allow') this.adopt(ask.bot, detail, ask.member ?? OWNER);
     if (ask.kind === 'propose' && body.answer === 'deny' && detail.draft) this.db.event('draft.rejected', ask.bot, { ...detail.draft, task: detail.task });
     const shown = body.answer === 'deny' ? 'not now' : scope === 'task' ? 'allowed for this task' : scope === 'always' ? `always allowed for ${who}` : 'allowed once';
@@ -1431,11 +1457,12 @@ export class Crew {
         (p) => { const n = this.recruit(p.template, p.name, CHIEF); return { recruited: { id: n.id, name: n.display } }; }),
       tool('crew_assign', `Hand a bot a task: the person's words, then one line "Done means: …". \`account\` (${accounts}) only when a task plainly suits another AI.`,
         { bot: Type.String(), task: Type.String(), account: Type.Optional(Type.String()) }, (p) => this.assign(String(p.bot).toLowerCase(), p.task ?? '', CHIEF, p.account)),
-      tool('crew_routine', 'Hand a bot the same task on a schedule. `when` is plain words in local time: "every Monday 9:00", "weekdays 8am", "every 2 hours". ' +
+      tool('crew_routine', 'Offer the person a routine: the same task on a schedule, for them to say yes or no. `when` is plain words in local time: "every Monday 9:00", "weekdays 8am", "every 2 hours". ' +
         '`quiet`: a check-in that only speaks up when something needs the person. `watch`: a page address to keep an eye on; Crewhouse reads it on ' +
-        'schedule and wakes the bot only when it changed, and `task` says what matters ("tell me if the price drops below $900").',
+        'schedule and wakes the bot only when it changed, and `task` says what matters ("tell me if the price drops below $900"). ' +
+        'The person sees a card with the cadence and first run; nothing runs until they start it.',
         { bot: Type.String(), when: Type.String(), task: Type.String(), name: Type.Optional(Type.String()), account: Type.Optional(Type.String()), quiet: Type.Optional(Type.Boolean()), watch: Type.Optional(Type.String()) },
-        (p) => { const x = this.addRoutine({ bot: p.bot, schedule: p.when, task: p.task, name: p.name, model: p.account, quiet: p.quiet, watch: p.watch }, CHIEF); return { routine: { id: x.id, name: x.name, next: new Date(x.next_at).toString() } }; }),
+        (p) => this.offerRoutine({ bot: p.bot, schedule: p.when, task: p.task, name: p.name, model: p.account, quiet: p.quiet, watch: p.watch })),
       tool('crew_routines', 'The routines and when each runs next.', {}, () => this.routines(this.chiefFor()).map((x) => ({ id: x.id, bot: x.bot, name: x.name, when: x.words, state: x.state, next: new Date(x.next_at).toString() }))),
       tool('crew_status', 'Open tasks.', {}, () => this.db.all("SELECT id, bot, title, state FROM tasks WHERE state IN ('queued','working','needs_you','paused') ORDER BY id")),
       tool('crew_suggest', 'Suggest a change to how a helper comes across (its personality), when the person asks for one. ' +
@@ -1502,7 +1529,8 @@ export class Crew {
     } else if (d.soul) {
       disk.writeSoul(this.cfg, d.soul.bot, d.soul.text, 'Personality changed, as Chief suggested');
       this.db.event('soul.changed', d.soul.bot, { by: CHIEF, member });
-    } else if (d.create) this.create(d.create, member);
+    } else if (d.routine) this.addRoutine(d.routine, CHIEF, member);
+    else if (d.create) this.create(d.create, member);
     else if (d.draft) this.db.event('draft.approved', botId, { ...d.draft, task: d.task, member });
   }
 
