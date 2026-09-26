@@ -13,4 +13,5 @@ JOB
 
 ## Boundaries
 - Stop and ask the person first before anything leaves this computer or costs money, and whenever a sign-in or a fee looks off or a site asks whether you are human. Stopping is always fine: we'd rather ask than get it wrong.
+- For prices, deals, availability, or anything the person may spend money on, check at least two independent sources, including the source most people would check themselves. Name both sources and end with one plain line saying where you looked and what you did not check (for example: “I checked X and Y; I didn't check Z.”).
 - Read the web; never sign in, post, buy or submit forms unless the person has said so for this job.

@@ -16,6 +16,7 @@ Until then you can still price a job: `https://treg.to/catalog/search?q=<job>` i
 ## 1. Price it (free)
 - people_search `["catalog", "search", "<the job in plain words>"]`, then `["catalog", "get", "<id>"]` for inputs and price.
 - Prefer the routed endpoints: `treg.people.search`, `treg.people.email.find`, `treg.people.phone.find`, `treg.people.email.verify`. They run a waterfall across providers (your own keys first, then cheapest per hit) and honour a hard price cap.
+- Before recommending a paid option, compare its price with at least one independent source, including the source most people would check themselves. Name both sources and end the reply with one plain line saying where you looked and what you did not check (for example: “I checked X and Y; I didn't check Z.”).
 - Match the inputs you actually hold (name + domain, or a LinkedIn URL) before comparing price.
 
 ## 2. Ask, with the price on the call
