@@ -67,21 +67,8 @@ export function Dots({ rows, pal, d = 6, label }: { rows: art.Bitmap; pal: art.P
   );
 }
 
-/** Blinks now and then (Chief's moustache twitches too), so the crew feels alive; still when the person prefers less motion.
- *  Only the hero does this: it blinks in content, work and listen, and twitches in content only. */
-function useBlink(on: boolean, twitch = false) {
-  const [beat, setBeat] = useState<'' | 'blink' | 'twitch'>('');
-  useEffect(() => {
-    if (!on || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    let t: any;
-    const next = () => { t = setTimeout(() => { setBeat(twitch && Math.random() < 0.3 ? 'twitch' : 'blink'); t = setTimeout(() => { setBeat(''); next(); }, 170); }, 2600 + Math.random() * 2600); };
-    next();
-    return () => clearTimeout(t);
-  }, [on, twitch]);
-  return beat;
-}
-
-/** One 170 ms blink frame when the mood changes, then the new face. No tween, no slide; Reduce Motion changes at once. */
+/** One 170 ms blink frame when the mood changes, then the new face. No tween, no slide; Reduce Motion changes at once.
+ *  The face is otherwise still — no idle blink, no twitch (the calmer-look pass removed them). */
 function useChangeBlink(on: boolean, mood: art.Mood) {
   const [flash, setFlash] = useState(false);
   const prev = useRef(mood);
@@ -133,15 +120,13 @@ export const setChiefMood = (m: art.Mood) => { chiefMood = m; };
 /** Chief. `d` is sized for the old 14-dot head, so callers keep their footprint; small sizes get the 12-dot cut.
  *  `hero` marks the one face on screen that lives: it blinks and shows the 170 ms change-blink. */
 export function ChiefArt({ mood = 'idle', d = 6, dark, hero }: { mood?: art.Mood; d?: number; dark?: boolean; hero?: boolean }) {
-  const beat = useBlink(!!hero && ['idle', 'work', 'listen'].includes(mood), hero && mood === 'idle');
   const flash = useChangeBlink(!!hero, mood);
-  const m = beat || (flash ? 'blink' : mood);
+  const m = flash ? 'blink' : mood;
   const dd = (d * 14) / 22, small = dd < 2.4;
   return <Dots rows={small ? art.chiefSmall(m) : art.chief(m)} pal={dark ?? night ? art.CHIEF_PAL_NIGHT : art.CHIEF_PAL} d={small ? (dd * 22) / 12 : dd} label="Chief" />;
 }
 export function PalArt({ kind, mood = 'idle', d = 4, name }: { kind: art.Kind; mood?: art.Mood; d?: number; name?: string }) {
-  const beat = useBlink(mood === 'idle' || mood === 'work');
-  return <Dots rows={art.pal(kind, beat === 'blink' ? 'blink' : mood)} pal={art.palPalette(kind)} d={(d * 12) / 18} label={name} />;
+  return <Dots rows={art.pal(kind, mood)} pal={art.palPalette(kind)} d={(d * 12) / 18} label={name} />;
 }
 
 /** A round face: Chief or a pal, with a ring when it's working (green) or needs you (amber). */
@@ -205,22 +190,10 @@ export function Splash({ done }: { done: boolean }) {
   );
 }
 
-/** A finished job: ASCII confetti and a happy Chief, for a couple of seconds. */
-export function Celebrate({ title, onDone }: { title: string; onDone: () => void }) {
-  const t = useTicker(90);
-  useEffect(() => { const x = setTimeout(onDone, 2600); return () => clearTimeout(x); }, [onDone]);
-  return (
-    <div className="celebrate" onClick={onDone} role="status">
-      <pre className="art confetti" aria-hidden>
-        {art.confetti(t).map((r, y) => <div key={y}>{[...r].map((c, x) => <i key={x} style={{ color: art.CONFETTI_COLORS[(x + y) % art.CONFETTI_COLORS.length] }}>{c}</i>)}</div>)}
-      </pre>
-      <div className="celebrate-card">
-        <ChiefArt mood="happy" d={6} />
-        <b>Done!</b>
-        <span>{title}</span>
-      </div>
-    </div>
-  );
+/** A finished job, said once: a calm toast with a way in — never a full-screen party. Gone within 4 s. */
+export function Celebrate({ title, href, onDone }: { title: string; href: string; onDone: () => void }) {
+  useEffect(() => { const x = setTimeout(onDone, 4000); return () => clearTimeout(x); }, [onDone]);
+  return <div className="toast celebrate-toast" role="status">✓ {title} · <a href={href} onClick={onDone}>Open</a></div>;
 }
 
 // ---------- small things ----------
@@ -401,8 +374,8 @@ export function AskSheet({ c, who, chiefSays, onClose }: { c: Card; who: Helper 
         {oops && <div className="send-failed" role="alert">That didn't go through. <button type="button" className="link inline" onClick={() => last.current && act(last.current)}>Try again</button></div>}
         <div className="approve-btns">
           {c.kind === 'setup' && <><a className="btn go big" href="#/settings" onClick={onClose}>Open Home setup</a>
-            <button className="btn" onClick={() => act({ answer: 'deny' })}>Not now</button></>}
-          {c.kind !== 'setup' && c.choices.map((x, i) => <button key={x.label} className={`btn ${i === 0 ? 'go big' : ''}`} onClick={() => act(x.body)}>{x.label}</button>)}
+            <button className="link" onClick={() => act({ answer: 'deny' })}>Not now</button></>}
+          {c.kind !== 'setup' && c.choices.map((x, i) => <button key={x.label} className={i === 0 ? 'btn go big' : 'link'} onClick={() => act(x.body)}>{x.label}</button>)}
         </div>
       </div>
     </div>
