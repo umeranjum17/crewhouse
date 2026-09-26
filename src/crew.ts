@@ -1446,7 +1446,7 @@ export class Crew {
         'paths in the patch that test the fix) to `base` and runs `command`, which must fail; then the whole patch, which must pass; it runs in a ' +
         'fresh copy seeded with the dependencies your checkout already has installed. A check that failed before only on a missing module proves nothing, and a patch you deliver unproven ends as not sure.',
         { repo: Type.String(), base: Type.String(), patch: Type.String(), tests: Type.Array(Type.String()), command: Type.String() }, (p) => this.verify(botId, p)),
-      tool('crew_learn', 'Ask the person to let you keep a way of doing something you will need again (a job you have now done at least twice). ' +
+      tool('crew_learn', 'When the person explicitly says to follow a way of working from now on, ask to keep it as a skill—even the first time. Do not propose a skill for an ordinary one-off job. ' +
         '`name`: two to four words; `description`: when to use it; `says`: what it does, in the person\'s plain words; `steps`: the steps, short and in plain words, as the person sees them. ' +
         'The person sees a card; it becomes one of your skills only if they say yes.',
         { name: Type.String(), description: Type.String(), says: Type.String(), steps: Type.String() }, (p) => {

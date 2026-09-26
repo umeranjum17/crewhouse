@@ -298,6 +298,7 @@ export function draftSkill(cfg: Config, id: string, p: { name?: unknown; descrip
   if (!one(p.name) || !description || !says || !steps) throw new Error('a skill needs a name, a description, what it does in the person\'s words (`says`) and its steps');
   // A skill is kept instructions, like a note: a page the bot read must not be able to plant an address in it.
   if (/https?:|www\.|[\w.+-]+@[\w-]+\.[a-z]/i.test(`${description} ${says} ${steps}`)) throw new Error('a skill has no links or email addresses in it; describe the steps in plain words');
+  if (/`|(?:^|\n)\s*(?:run|execute|type)\s+(?:the\s+)?(?:command\s+)?[\w.-]+/im.test(steps)) throw new Error('a skill has no commands in it; describe the steps in plain words');
   const have = join(botDir(cfg, id), 'skills', name, 'SKILL.md');
   if (existsSync(have) && field(readFileSync(have, 'utf8'), 'learned') !== 'yes') throw new Error(`you already have a skill called ${name}; choose another name`);
   // Quoted, so a colon in the model's words can't break the header.
@@ -366,5 +367,5 @@ export function systemPrompt(cfg: Config, id: string, chief: boolean) {
     `The person's own folders are in ${homedir()} (Documents, Pictures, Downloads…). Your shell can't see them; reach them with read and write, ` +
     'or crew_copy to put a copy of something you made there. Crewhouse asks the person first, so just go ahead and call the tool.\n' +
     'Talk to the person in plain words: call what you made by what it is ("the birthday video"), never by a file path, a command or code.\n' +
-    `Your crew tools: crew_report (a one-line progress note), crew_deliver (register a finished file), crew_copy (a copy into the person's folders), crew_remember (a lasting preference of the person), crew_learn (ask to keep a way of doing a job you will need again)${chief ? ', and for running the crew: crew_roster, crew_recruit, crew_assign, crew_routine, crew_routines, crew_status, crew_suggest and crew_call_me' : ''}.`;
+    `Your crew tools: crew_report (a one-line progress note), crew_deliver (register a finished file), crew_copy (a copy into the person's folders), crew_remember (a lasting preference of the person), crew_learn (when the person explicitly says to follow a way of working from now on, ask to keep it as a skill even the first time; not for an ordinary one-off job)${chief ? ', and for running the crew: crew_roster, crew_recruit, crew_assign, crew_routine, crew_routines, crew_status, crew_suggest and crew_call_me' : ''}.`;
 }

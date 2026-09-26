@@ -156,7 +156,7 @@ export class Teacher {
   }
 }
 
-/** What the bot is told after a show: the steps, and to keep them as a skill (its card is the person's yes). */
+/** What the bot is told after a show: the person explicitly asked to keep these steps as a skill (its card is their yes). */
 export function lesson(what: string, steps: string[]) {
   return `I showed you how to ${what.replace(/[.!?\s]+$/, '')}. Here is what I did, step by step:\n` +
     steps.map((s, i) => `${i + 1}. ${s}`).join('\n') +
