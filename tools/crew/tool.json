@@ -1,7 +1,7 @@
 {
   "id": "crew",
   "name": "Crew tool",
-  "provides": "Report progress, deliver files, make spreadsheets, remember preferences (Chief also recruits and assigns)",
+  "provides": "Report progress, deliver files, make spreadsheets and documents, remember preferences (Chief also recruits and assigns)",
   "kind": "core",
   "bins": [],
   "license": "Apache-2.0",

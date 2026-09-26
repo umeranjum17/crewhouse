@@ -170,6 +170,12 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       if (!/^files\/[\w./-]+\.xlsx$/i.test(rel)) throw Object.assign(new Error('not a spreadsheet'), { status: 404 });
       return await crew.workbookView(String(q.get('bot') ?? ''), rel, me);
     }
+    // A delivered document, as plain parts for the app's read-only preview: crewd parses it (docx), the app never does.
+    if (m === 'GET' && p === '/api/document') {
+      const rel = String(q.get('path') ?? '');
+      if (!/^files\/[\w./-]+\.docx$/i.test(rel)) throw Object.assign(new Error('not a document'), { status: 404 });
+      return await crew.documentView(String(q.get('bot') ?? ''), rel, me);
+    }
     if (m === 'POST' && p === '/api/onboard') { const b = body; return crew.onboard(b.address ?? '', me, b.ask) ?? { ok: true }; }
     if (m === 'POST' && p === '/api/recruit') { const b = body; const { token, ...bot } = crew.recruit(b.template, b.name, 'person', me); return bot; }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)$/)) && m === 'GET') return crew.botPage(r[1], me, Number(q.get('around')) || undefined);

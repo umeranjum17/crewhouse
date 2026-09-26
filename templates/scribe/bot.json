@@ -16,7 +16,8 @@
     "write-draft",
     "write-article",
     "summarize-document",
-    "make-spreadsheet"
+    "make-spreadsheet",
+    "make-document"
   ],
   "ideas": [
     {

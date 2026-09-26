@@ -679,10 +679,10 @@ test('a delivered workbook is a card in the chat, and opens as a read-only sheet
   assert.equal(thing.files[0].kind, 'sheet', 'Things opens it the same way');
 
   const parts = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'parts.tsx'), 'utf8');
-  const panel = parts.slice(parts.indexOf('export function WorkbookPanel'), parts.indexOf('export function Steps', parts.indexOf('export function WorkbookPanel')));
-  assert.match(parts, /f\.kind === 'sheet'\) return <WorkbookCard/, 'a workbook is a card, not a plain file row');
-  assert.match(parts, /<b>\{f\.name\}<\/b>[\s\S]{0,300}sheetWords\(/, 'the card: its name and how many sheets');
-  assert.match(parts, /className="wb-thumb"[\s\S]{0,120}<i key=\{i\}>\{h\}<\/i>/, 'a peek at the first sheet\u2019s headings');
+  const panel = parts.slice(parts.indexOf('export function PreviewPanel'), parts.indexOf('export function Steps', parts.indexOf('export function PreviewPanel')));
+  assert.match(parts, /f\.kind === 'sheet' \|\| f\.kind === 'page'\) return <PreviewCard/, 'a finished file is a card, not a plain file row');
+  assert.match(parts, /<b>\{f\.name\}<\/b>[\s\S]{0,300}\{about\}/, 'the card: its name and a line about it');
+  assert.match(parts, /className="wb-thumb"[\s\S]{0,120}<i key=\{i\}>\{h\}<\/i>/, 'a peek inside the file');
   assert.match(parts, /<b className="wb-open">Open<\/b>/, 'and Open');
   assert.match(panel, /role="dialog" aria-modal aria-label=\{f\.name\}/, 'the panel is a dialog the keyboard belongs to');
   assert.match(panel, /<nav className="wb-tabs"[\s\S]{0,160}setTab\(i\)/, 'sheet tabs');
@@ -691,4 +691,41 @@ test('a delivered workbook is a card in the chat, and opens as a read-only sheet
   assert.match(panel, /more rows/, 'what is not shown is said, not hidden');
   assert.doesNotMatch(panel, /<input|<textarea|contentEditable|onClick=\{\(\) => (?!setTab\b)(set|edit)/, 'read-only: nothing to type into');
   assert.match(readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8'), /a === 'f' && b && c[\s\S]{0,120}file: decodeURIComponent\(c\)/, '#/f/<helper>/<file> opens the panel beside its chat');
+});
+
+// The same bar for a document: crewd writes the .docx (crew_document), the chat shows a card, and the panel is the
+// document itself — headings, paragraphs, lists and a table — read-only, words only.
+test('a delivered document is a card in the chat, and opens as a read-only document', () => {
+  const json = { parts: [
+    { kind: 'heading', text: 'Front-desk handbook' },
+    { kind: 'p', text: 'Count the till (see /home/umer/Crewhouse/bots/quill/files/notes.txt for yesterday).' },
+    { kind: 'li', text: 'Walk the free rooms' },
+    { kind: 'table', head: ['Shift', 'On the desk'], rows: [['Morning', 'Rani']] },
+    { kind: 'p', text: '' },
+    { kind: 'table', head: [], rows: [] },
+  ] };
+  const doc = A.document(json, 'Front-desk handbook');
+  assert.deepEqual(doc.parts[0], { kind: 'heading', text: 'Front-desk handbook' });
+  assert.doesNotMatch(doc.parts[1].text ?? '', /\/home|files\//, 'a paragraph is scrubbed like chat words: no paths');
+  assert.deepEqual(doc.parts[3].head, ['Shift', 'On the desk']);
+  assert.equal(doc.parts.length, 4, 'empty parts leave, a table needs its headings');
+  assert.deepEqual(A.document(null, 'Nothing').parts, []);
+  assert.equal(A.pageWords(3), '3 sections');
+  assert.equal(A.pageWords(1), 'One section');
+  assert.equal(A.pageWords(0), 'A document');
+
+  const [line] = A.lines({ messages: [{ id: 10, author: 'system', text: 'Delivered files/front-desk-handbook.docx: A document in 3 sections: Front-desk handbook' }] }, 'quill');
+  assert.equal(line.files[0].kind, 'page', 'a .docx is a page, opened like a workbook');
+  const [thing] = A.things({ tasks: [{ id: 2, bot: 'quill', title: 'Front-desk handbook', state: 'done', updated_at: now, files: ['files/front-desk-handbook.docx'] }] });
+  assert.equal(thing.files[0].kind, 'page');
+
+  const parts = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'parts.tsx'), 'utf8');
+  const panel = parts.slice(parts.indexOf('export function PreviewPanel'), parts.indexOf('export function Steps', parts.indexOf('export function PreviewPanel')));
+  assert.match(panel, /<DocBody doc=\{doc\} \/>/, 'the panel shows the document itself');
+  const body = parts.slice(parts.indexOf('function DocBody'), parts.indexOf('/**\n * A finished file'));
+  assert.match(body, /<h3 key=\{i\}>\{run\.text\}<\/h3>/, 'headings as headings');
+  assert.match(body, /<ul key=\{i\}>/, 'bullets as bullets');
+  assert.doesNotMatch(body, /\*\*|<w:/, 'no raw markup anywhere in the preview');
+  const api = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'api.ts'), 'utf8');
+  assert.match(api, /\/api\/document/, 'the app asks crewd to read the document, never parses it');
 });
