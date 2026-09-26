@@ -6,18 +6,20 @@ import QRCode from 'qrcode';
 import { api, demo, setMember, subscribe, type Json } from './api.ts';
 import * as A from './adapter.ts';
 type Helper = ReturnType<typeof A.crew>[number];
-import { AskCard, AskSheet, attempt, Celebrate, setChiefMood, setNight, ChiefArt, Composer, Face, Laptop, Logo, Media, PalArt, Pill, Splash, Steps, Toasts, toast, useHeld, useListen } from './parts.tsx';
+import { AskCard, AskSheet, attempt, Celebrate, setChiefMood, setNight, ChiefArt, Composer, Face, Laptop, Logo, Media, PalArt, Pill, Splash, Steps, Toasts, toast, useHeld, useListen, WorkbookPanel } from './parts.tsx';
 import { keepDraft } from './draft.ts';
 import { Screen } from './screen.tsx';
 import { AccountCard, ConnectApp, ConnectCard, openTab, sheet, SignIn, Unreachable } from './flows.tsx';
 
 type View = 'home' | 'chief' | 'crew' | 'add' | 'helper' | 'things' | 'routines' | 'settings' | 'apps' | 'ask' | 'share';
-type Route = { view: View; id?: string; tab?: string; m?: string };
+type Route = { view: View; id?: string; tab?: string; m?: string; file?: string };
 const ANCHOR = /^m(\d+)$/;
 function parseRoute(): Route {
   if (location.pathname === '/share') return { view: 'share' }; // the phone's Share sheet (web/manifest.webmanifest)
   const [a, b, c] = location.hash.replace(/^#\/?/, '').split('/');
   if (a === 'h' && b) return { view: 'helper', id: b, tab: ANCHOR.test(c) ? 'chat' : c || 'chat', m: ANCHOR.test(c) ? c : undefined };
+  // #/f/<helper>/<file>: the chat that delivered it, with the workbook open beside it (web/src/parts.tsx).
+  if (a === 'f' && b && c) return { view: 'helper', id: b, tab: 'chat', file: decodeURIComponent(c) };
   if (a === 'ask' && b) return { view: 'ask', id: b };
   if (a === 'chief' && ANCHOR.test(b ?? '')) return { view: 'chief', m: b };
   if (a === 'things' && /^t\d+$/.test(b ?? '')) return { view: 'things', id: b };
@@ -1051,6 +1053,7 @@ function App() {
   const crew = A.crew(ctx.state);
   const asks = A.needsYou(ctx.state).length; // the badge counts only what Needs you shows
   const sheet = route.view === 'ask' ? A.cards(ctx.state).find((c) => String(c.id) === route.id) : undefined;
+  const book = route.file && route.id ? { bot: route.id, path: route.file } : undefined;
   const nav: [string, string, string, number?][] = [['#/', 'Chats', '⌂'], ['#/crew', 'Crew', '☺'], ['#/things', 'Things', '▤'], ['#/routines', 'Routines', '↻'], ['#/settings', 'Settings', '✲']];
   const active = (h: string) => (h === '#/' ? ['home', 'helper', 'chief'].includes(v.view) : h === '#/crew' ? ['crew', 'add'].includes(v.view) : h === `#/${v.view}` || (h === '#/settings' && v.view === 'apps'));
   return (
@@ -1081,6 +1084,7 @@ function App() {
         <nav className="tabbar">{nav.map(([h, l, i]) => <a key={h} href={h} className={active(h) ? 'on' : ''}><span className="ic">{i}</span>{l}{h === '#/' && asks > 0 && <span className="badge">{asks}</span>}</a>)}</nav>
       </div>
       {sheet && <AskSheet c={sheet} who={crew.find((h) => h.id === sheet.helper)} chiefSays={ctx.state.asks.find((a: Json) => a.id === sheet.id)?.detail?.chief} onClose={() => history.length > 1 ? history.back() : go('#/')} />}
+      {book && <WorkbookPanel bot={book.bot} path={book.path} onClose={() => history.length > 1 ? history.back() : go('#/')} />}
       {party && <Celebrate title={party.title} href={hrefOf(party.helper)} onDone={() => setParty(null)} />}
       <Toasts />
     </>

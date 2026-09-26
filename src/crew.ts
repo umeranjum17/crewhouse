@@ -19,6 +19,7 @@ import { acts, coversOf, effectOf, orderOf, toolWords, type Effect } from './pol
 import { axiEnv, registry, resolveGrants, toolBin, which } from './tools.ts';
 import { stubModels } from './stub.ts';
 import { describe, nextRun, parseSchedule } from './routines.ts';
+import { buildWorkbook, readWorkbook } from './workbooks.ts';
 import { byModel, clarify, route, type Helper } from './route.ts';
 
 const HOLD_MS = Number(process.env.CREWHOUSE_HOLD_MS || 180_000); // how long a tool call waits for an answer before the turn parks
@@ -1419,6 +1420,11 @@ export class Crew {
         }),
       tool('crew_report', 'A one-line progress note the person sees.', { text: Type.String() }, (p) => { this.db.event('task.progress', botId, { task: task(), text: clean(p.text, 200) }); }),
       tool('crew_deliver', 'Register a finished file (a path in your folder, usually under files/).', { path: Type.String(), note: Type.Optional(Type.String()) }, (p) => this.deliver(botId, p.path, p.note)),
+      tool('crew_workbook', 'Make a real spreadsheet the person can use straight away (.xlsx), in your files/, and deliver it. `name` is the title; '
+        + '`sheets` is [{ name, columns: [{ header, width?, options? }], rows: [[cell, …], …] }]. `options` on a column makes it a dropdown; a cell that '
+        + 'starts with "=" is a formula. crewd writes the file, so never make the binary yourself. Make it finished: a real heading on every sheet and at '
+        + 'least one example row that shows the person how to fill it in.',
+        { name: Type.String(), sheets: Type.Any() }, (p) => this.workbook(botId, String(p.name ?? ''), p.sheets)),
       tool('crew_copy', "Put a copy of a file from your folder into the person's own folders. `to` is the full path of the new file.",
         { from: Type.String(), to: Type.String() }, (p) => {
           const from = disk.insideBot(this.cfg, botId, String(p.from ?? ''));
@@ -1615,6 +1621,28 @@ export class Crew {
       if (/\.(patch|diff)$/.test(path) && !(existsSync(full) && ok.has(sha(readFileSync(full, 'utf8'))))) return path;
     }
     return null;
+  }
+
+  /** crew_workbook: crewd writes the .xlsx itself (src/workbooks.ts) into the bot's files/ and delivers it like any other file. */
+  private async workbook(botId: string, name: string, sheets: unknown) {
+    const title = clean(name, 60) || 'Workbook';
+    const rel = join('files', `${disk.slug(title)}.xlsx`);
+    const full = disk.insideBot(this.cfg, botId, rel);
+    mkdirSync(dirname(full), { recursive: true });
+    const built = await buildWorkbook(full, { name: title, sheets } as any);
+    await this.deliver(botId, rel, `${built.sheets.length === 1 ? 'One sheet' : `${built.sheets.length} sheets`}: ${built.sheets.slice(0, 4).join(', ')}`);
+    return { ok: true, path: rel, sheets: built.sheets };
+  }
+
+  /** The app's read-only preview of a workbook the bot delivered to this member: words and counts, never the file or its path. */
+  async workbookView(botId: string, path: string, viewer: number) {
+    const rel = String(path ?? '');
+    const seen = this.db.get("SELECT 1 AS ok FROM events e JOIN tasks t ON t.id = json_extract(e.data, '$.task') " +
+      "WHERE e.bot = ? AND e.kind = 'file.delivered' AND json_extract(e.data, '$.path') = ? AND COALESCE(t.member, ?) = ?", botId, rel, viewer, viewer);
+    if (!seen) throw Object.assign(new Error('that spreadsheet was not delivered to you'), { status: 403 });
+    const full = disk.insideBot(this.cfg, botId, rel);
+    if (!/\.xlsx$/i.test(full) || !existsSync(full) || statSync(full).size > 20_000_000) throw Object.assign(new Error('no such spreadsheet'), { status: 404 });
+    return readWorkbook(full);
   }
 
   /** A finished file, registered once per task (a retried call is a no-op). Only inside the bot's own folder. */
