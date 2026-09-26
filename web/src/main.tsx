@@ -191,7 +191,7 @@ function SetupRow({ state, accounts, tick }: { state: Json; accounts: Json[] | n
 
 /** Needs you as one compact list: a number, the face, the subject, one plain line. A row opens the review sheet;
  *  nothing commits from Home. At most three rows, then "N more", which expands in place. */
-function NeedsRows({ state, cards }: { state: Json; cards: A.Card[] }) {
+function NeedsRows({ state, cards, quiet }: { state: Json; cards: A.Card[]; quiet?: boolean }) {
   const crew = A.crew(state);
   const [all, setAll] = useState(false);
   const shown = all ? cards : cards.slice(0, 3);
@@ -206,6 +206,7 @@ function NeedsRows({ state, cards }: { state: Json; cards: A.Card[] }) {
         </a>
       ))}
       {!all && cards.length > 3 && <button className="link needs-more" onClick={() => setAll(true)}>{cards.length - 3} more {cards.length - 3 === 1 ? 'needs' : 'need'} you</button>}
+      {quiet && (all || cards.length <= 3) && <div className="mute small needs-quiet">Nothing else needs you.</div>}
     </>
   );
 }
@@ -238,7 +239,7 @@ function Home({ state, me, refresh, tick, accounts, offline, night }: Ctx) {
         <div className="desk">
           <section className="frame needs">
             <div className="label ascii">Needs you</div>
-            {cards.length ? <NeedsRows state={state} cards={cards} /> : <div className="frame-empty">All clear. Nothing needs you.</div>}
+            {cards.length ? <NeedsRows state={state} cards={cards} quiet /> : <div className="frame-empty">All clear. Nothing needs you.</div>}
           </section>
           <div className="desk-side">
             <section className="frame working">
@@ -1048,7 +1049,7 @@ function App() {
   const crew = A.crew(ctx.state);
   const asks = A.needsYou(ctx.state).length; // the badge counts only what Needs you shows
   const sheet = route.view === 'ask' ? A.cards(ctx.state).find((c) => String(c.id) === route.id) : undefined;
-  const nav: [string, string, string, number?][] = [['#/', 'Chats', '⌂'], ['#/crew', 'Crew', '☺'], ['#/things', 'Things', '▤'], ['#/routines', 'Routines', '↻'], ['#/settings', 'Settings', '⚙']];
+  const nav: [string, string, string, number?][] = [['#/', 'Chats', '⌂'], ['#/crew', 'Crew', '☺'], ['#/things', 'Things', '▤'], ['#/routines', 'Routines', '↻'], ['#/settings', 'Settings', '⚙\ufe0e']];
   const active = (h: string) => (h === '#/' ? ['home', 'helper', 'chief'].includes(v.view) : h === '#/crew' ? ['crew', 'add'].includes(v.view) : h === `#/${v.view}` || (h === '#/settings' && v.view === 'apps'));
   return (
     <>

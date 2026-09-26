@@ -190,6 +190,7 @@ textarea.input { resize: vertical; }
 .needs-row b { font-size: 15.5px; display: block; }
 .needs-row .clamp1 { font-size: 13.5px; }
 .needs-more { margin: 2px 0 6px 23px; }
+.needs-quiet { margin-top: 8px; }
 /* The house's setup jobs: a tick ring, a plain line, and the panel it opens. */
 .setup-mark { font: 900 15px var(--ui); color: var(--mute); width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--shadow); display: inline-grid; place-items: center; flex: none; }
 .setup-mark.done { color: var(--ok-ink); border-color: var(--ok); background: color-mix(in srgb, var(--ok) 18%, transparent); }
@@ -352,21 +353,20 @@ input[role='switch']:checked::after { left: 21px; }
   .desk { display: grid; grid-template-columns: 1fr; gap: 28px; margin-top: 18px; align-items: start; }
   .desk .frame, .desk-side { min-width: 0; }
   .desk-side { display: grid; gap: 28px; align-content: start; }
-  .home .desk-side { display: flex; }
   .home { flex: 1; display: flex; flex-direction: column; }
   .home .dock { position: sticky; bottom: 0; margin-top: auto; }
-  /* the ASCII language at desk scale: mono section headers and glyph status marks stay */
+  /* the ASCII language at desk scale: mono section headers and glyph status marks stay, and the desk keeps its
+     dot-matrix weave - a step quieter than before, so it reads as texture, not pattern */
   .frame > .label.ascii, .chief-frame .label.ascii, .side .label.ascii { font-family: var(--art); font-weight: 700; letter-spacing: 1px; }
+  .home { --weave: radial-gradient(#eee7f2 1.6px, transparent 2.1px) 0 0 / 24px 24px; background: var(--weave); background-attachment: fixed; }
+  [data-theme='night'] .home { --weave: radial-gradient(#191427 1.6px, transparent 2.1px) 0 0 / 24px 24px; }
+  .home .dock { background: var(--weave), color-mix(in srgb, var(--bg) 60%, transparent); background-attachment: fixed; }
   .desk .ascii.mark-ok { font-size: 13px; color: var(--ok-ink); }
   .frame .step .ascii { background: none; transform: none; border: 0; }
   .frame .step .ascii::before { content: '●'; font-family: var(--art); font-size: 10px; color: var(--ok-ink); }
   .frame .step.asked .ascii::before { color: var(--wait); }
   .frame .step.now .ascii::before { content: '○'; }
-  /* the desk fills the space between greeting and composer: the trays are the lower half, their rows centred inside */
-  .home > .desk-col { flex: 1; display: flex; flex-direction: column; }
-  .home .desk { flex: 1; align-items: stretch; }
-  .home .frame.needs, .home .desk-side .frame { display: flex; flex-direction: column; }
-  .home .desk-side { display: flex; flex-direction: column; gap: 28px; }
+
 
   /* a chat is its own column: the header and dock stay put, the thread scrolls, no phone boxes */
   .page.chat-page { max-width: none; height: 100dvh; display: flex; flex-direction: column; padding-bottom: 0; }
