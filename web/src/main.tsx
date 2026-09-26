@@ -11,16 +11,22 @@ import { Screen } from './screen.tsx';
 import { AccountCard, ConnectApp, ConnectCard, openTab, sheet, SignIn, Unreachable } from './flows.tsx';
 
 type View = 'home' | 'chief' | 'crew' | 'add' | 'helper' | 'things' | 'routines' | 'settings' | 'apps' | 'ask' | 'share';
-type Route = { view: View; id?: string; tab?: string };
+type Route = { view: View; id?: string; tab?: string; m?: string };
+const ANCHOR = /^m(\d+)$/;
 function parseRoute(): Route {
   if (location.pathname === '/share') return { view: 'share' }; // the phone's Share sheet (web/manifest.webmanifest)
   const [a, b, c] = location.hash.replace(/^#\/?/, '').split('/');
-  if (a === 'h' && b) return { view: 'helper', id: b, tab: c || 'chat' };
+  if (a === 'h' && b) return { view: 'helper', id: b, tab: ANCHOR.test(c) ? 'chat' : c || 'chat', m: ANCHOR.test(c) ? c : undefined };
   if (a === 'ask' && b) return { view: 'ask', id: b };
+  if (a === 'chief' && ANCHOR.test(b ?? '')) return { view: 'chief', m: b };
+  if (a === 'things' && /^t\d+$/.test(b ?? '')) return { view: 'things', id: b };
   if (a === 'crew' && b === 'add') return { view: 'add' };
   return { view: (['chief', 'crew', 'things', 'routines', 'settings', 'apps'].includes(a) ? a : 'home') as View };
 }
 const go = (hash: string) => { location.hash = hash; };
+let moved = false; // this session has navigated inside the app, so Back has somewhere to go back to
+/** Back returns where you came from: the previous screen when there is one, else Chats. */
+const back = () => { if (moved && history.length > 1) history.back(); else go('#/'); };
 /** ?splash keeps the boot splash up, for design review. */
 const HOLD_SPLASH = new URLSearchParams(location.search).has('splash');
 const hrefOf = (id: string) => (id === 'chief' ? '#/chief' : `#/h/${id}`);
@@ -144,7 +150,7 @@ function Chats({ state, refresh }: { state: Json; refresh: () => void }) {
     <div className="card jobs chats">
       <input className="input search" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search your chats" aria-label="Search your chats" />
       {hits ? (found.length ? found.map((f) => (
-        <a key={f.key} className="job" href={hrefOf(f.bot)}>
+        <a key={f.key} className="job" href={f.msg ? (f.bot === 'chief' ? `#/chief/m${f.msg}` : `#/h/${f.bot}/chat/m${f.msg}`) : f.thing ? `#/things/t${f.thing}` : hrefOf(f.bot)}>
           {f.bot === 'chief' ? <Face who="chief" size={40} /> : <Face who={crew.find((h) => h.id === f.bot) ?? { kind: 'pip', name: f.name }} size={40} />}
           <div className="grow"><b>{f.name}</b><div className="mute clamp1">{f.text}</div></div>
           <span className="mute small">{A.clock(f.at)}</span>
@@ -264,21 +270,34 @@ function ChiefIdeas({ state, chat, picked }: { state: Json; chat: string; picked
 }
 
 // ---------- a chat ----------
-function Chat({ id, state, me, tick, refresh, accounts }: Ctx & { id: string }) {
+function Chat({ id, m, state, me, tick, refresh, accounts }: Ctx & { id: string; m?: string }) {
   const g = A.account(accounts, me);
   const [page, setPage] = useState<Json>(null);
   const [seed, setSeed] = useState(0); // a starter chip fills the box from outside; remount reads the draft back
-  const load = useCallback(() => api.bot(id).then(setPage).catch(() => {}), [id]);
+  // A search landing on an old line loads a window around it; once you send, the anchor goes and the thread reads to the end.
+  const [around, setAround] = useState(m ? Number(m.slice(1)) : 0);
+  const load = useCallback((ar = around) => api.bot(id, ar || undefined).then(setPage).catch(() => {}), [id, around]);
   useEffect(() => { void load(); }, [load, tick]);
   const end = useRef<HTMLDivElement>(null);
   const lines = A.lines(page, id);
   const box = useRef<HTMLDivElement>(null);
   // The thread scrolls by its own column on a desk (a scrollIntoView here once dragged the whole page up with it,
-  // leaving a dead band on top); the phone keeps the document scroll.
+  // leaving a dead band on top); the phone keeps the document scroll. An anchored landing scrolls to the line instead.
   useEffect(() => {
+    if (around) return;
     if (matchMedia('(min-width: 900px)').matches) { const el = box.current; if (el) el.scrollTop = el.scrollHeight; }
     else end.current?.scrollIntoView({ block: 'end' });
-  }, [lines.length]);
+  }, [lines.length, around]);
+  // The landing itself: the matched line, centred, with the one motion that explains where you are.
+  useEffect(() => {
+    if (!around || !lines.length) return;
+    const el = document.getElementById(`m${around}`);
+    if (!el) return;
+    el.scrollIntoView({ block: 'center' });
+    el.classList.add('land');
+    const t = setTimeout(() => el.classList.remove('land'), 1300);
+    return () => clearTimeout(t);
+  }, [around, lines.length]);
   const crew = A.crew(state);
   const h = crew.find((x) => x.id === id);
   const b = state.bots.find((x: Json) => x.id === id);
@@ -289,7 +308,7 @@ function Chat({ id, state, me, tick, refresh, accounts }: Ctx & { id: string }) 
   const trail = live && page ? A.steps(page.trail ?? [], live.id, true) : [];
   const cards = A.cards(state).filter((c) => c.helper === id);
   const last = lines.at(-1);
-  const send = async (t: string) => { const ok = await attempt(() => api.post(id, t), undefined, true); if (ok) { void load(); refresh(); } return ok; };
+  const send = async (t: string) => { const ok = await attempt(() => api.post(id, t), undefined, true); if (ok) { setAround(0); void load(0); refresh(); } return ok; };
   const name = h?.name ?? 'Chief';
   return (
     <div className={`chat${live && h ? ' with-live' : ''}`}>
@@ -298,7 +317,7 @@ function Chat({ id, state, me, tick, refresh, accounts }: Ctx & { id: string }) 
           {id === 'chief' && <ChiefIdeas state={state} chat={id} picked={() => setSeed((n) => n + 1)} />}
         </div>}
         {lines.map((l) => (
-          <div key={l.id} className={`line ${l.from}${l.unsure ? ' unsure' : ''}`}>
+          <div key={l.id} id={`m${l.id}`} className={`line ${l.from}${l.unsure ? ' unsure' : ''}`}>
             {l.from === 'chief' && <span className="who">Chief</span>}
             {l.text && <div className="bubble-text">{l.text}</div>}
             {l.files.map((f) => <Media key={f.url} f={f} big />)}
@@ -327,13 +346,13 @@ function Chat({ id, state, me, tick, refresh, accounts }: Ctx & { id: string }) 
   );
 }
 
-function ChiefPage(ctx: Ctx) {
-  const { mood, line, tone } = A.chief(ctx.state, chiefLocal(ctx, useListen()));
+function ChiefPage(ctx: Ctx & { m?: string }) {
+  const { mood, line } = A.chief(ctx.state, chiefLocal(ctx, useListen()));
   return (
     <div className="page chat-page">
-      <header className="chat-head sticky-top"><a href="#/" className="back" aria-label="Back">‹</a><span className="face" style={{ width: 44, height: 44, background: '#fff7e8' }}><ChiefArt mood={mood} d={2.1} /></span>
-        <div><b>Chief</b><div><Pill tone={tone}>{line}</Pill></div></div></header>
-      <Chat {...ctx} id="chief" />
+      <header className="chat-head sticky-top"><a href="#/" className="back" aria-label="Back" onClick={(e) => { e.preventDefault(); back(); }}>‹</a><span className="face" style={{ width: 44, height: 44, background: '#fff7e8' }}><ChiefArt mood={mood} d={2.1} /></span>
+        <div className="grow"><b>Chief</b><div className="mute small clamp1">{line}</div></div></header>
+      <Chat {...ctx} id="chief" m={ctx.m} />
     </div>
   );
 }
@@ -391,36 +410,68 @@ function AddHelper({ state, refresh }: Ctx) {
 }
 
 function HelperPage(ctx: Ctx & { id: string; tab: string }) {
-  const { id, tab, state, tick, refresh } = ctx;
+  const { id, tab, state, tick, refresh, offline } = ctx;
   const h = A.crew(state).find((x) => x.id === id);
   const [page, setPage] = useState<Json>(null);
   const load = useCallback(() => api.bot(id).then(setPage).catch(() => {}), [id]);
   useEffect(() => { void load(); }, [load, tick]);
   if (!h) return <div className="page mute">{state.bots.some((b: Json) => b.id === id) ? '' : 'This helper has left the crew.'}</div>;
   const b = state.bots.find((x: Json) => x.id === id);
-  const tabs: [string, string][] = [['chat', 'Chat'], ['did', 'What I did'], ['things', 'Things'], ['routines', 'Routines'], ...(h.computer ? [['screen', 'Screen'] as [string, string]] : []), ['me', 'About me'], ['remembers', 'Remembers']];
+  // The chat is the page; everything else lives behind Details. Old deep links to a section land on Details too.
+  const details = tab !== 'chat' && tab !== 'did' && tab !== 'screen';
+  const trail = page ? A.steps(page.trail ?? [], b?.task?.id, true) : [];
   return (
     <div className={`page helper ${tab === 'chat' ? 'chat-page' : ''}`}>
-      <div className="sticky-top">
-      <header className="chat-head">
-        <a href="#/crew" className="back" aria-label="Back">‹</a>
-        <Face who={h} size={48} ring={h.ring} />
-        <div className="grow"><b>{h.name}</b><div><Pill tone={h.ring === 'needs' ? 'wait' : h.ring ? 'ok' : 'off'}>{h.status}</Pill></div></div>
-        {b?.task && <button className="btn" onClick={() => confirm(`Stop ${h.name}'s job?`) && attempt(async () => { await api.reset(id); refresh(); }, `Stopped ${h.name}`)}>Stop</button>}
-      </header>
-      <nav className="tabs">{tabs.map(([k, l]) => <a key={k} className={k === tab ? 'on' : ''} href={`#/h/${id}/${k}`}>{l}</a>)}</nav>
-      </div>
-      {tab === 'chat' && <Chat key={id} {...ctx} id={id} />}
+      {tab === 'chat' && <>
+        <div className="sticky-top">
+          <header className="chat-head">
+            <a href="#/" className="back" aria-label="Back" onClick={(e) => { e.preventDefault(); back(); }}>‹</a>
+            <Face who={h} size={48} ring={h.ring} />
+            <div className="grow"><b>{h.name}</b><div className="mute small clamp1">{h.status}</div></div>
+            {b?.task && <button className="btn" onClick={() => confirm(`Stop ${h.name}'s job?`) && attempt(async () => { await api.reset(id); refresh(); }, `Stopped ${h.name}`)}>Stop</button>}
+            <button className="link" onClick={() => go(`#/h/${id}/details`)}>Details</button>
+          </header>
+        </div>
+        <Chat key={id} {...ctx} id={id} />
+      </>}
+      {details && <>
+        <div className="sticky-top">
+          <header className="chat-head">
+            <a href={`#/h/${id}/chat`} className="back" aria-label="Back" onClick={(e) => { e.preventDefault(); back(); }}>‹</a>
+            <Face who={h} size={40} ring={h.ring} />
+            <div className="grow"><b>{h.name}</b><div className="mute small clamp1">{h.status}</div></div>
+            <button className="link" onClick={() => go(`#/h/${id}/chat`)}>Chat</button>
+          </header>
+        </div>
+        <section className="detail">
+          <h2 className="plate">What {h.name} is doing</h2>
+          {b?.task ? (trail.length ? <Steps steps={trail} max={7} /> : <p className="mute">Working on “{A.plain(b.task.title)}”. Steps show as they happen.</p>)
+            : <p className="mute">Nothing right now.</p>}
+          <a className="link" href={`#/h/${id}/did`}>Every step</a>
+          <h2 className="plate">Things</h2>
+          <ThingsGrid list={A.things(state).filter((t) => t.helper === id)} state={state} empty={`${h.name}'s finished work shows up here.`} />
+          <h2 className="plate">Routines</h2>
+          <RoutineList {...ctx} bot={id} />
+          <h2 className="plate">About {h.name}</h2>
+          {page && <AboutMe id={id} name={h.name} page={page} reload={load} />}
+          <h2 className="plate">What {h.name} remembers</h2>
+          {page && <Remembers id={id} name={h.name} page={page} reload={load} />}
+          {h.computer && <>
+            <h2 className="plate">See {h.name}'s screen</h2>
+            <Screen bot={{ ...page?.bot, ...b }} showing={A.showing(state, id)} refresh={() => { refresh(); void load(); }} />
+          </>}
+        </section>
+      </>}
       {tab === 'did' && (page ? <>
+        <div className="sticky-top"><header className="chat-head">
+          <a href={`#/h/${id}/details`} className="back" aria-label="Back" onClick={(e) => { e.preventDefault(); back(); }}>‹</a>
+          <div className="grow"><b>Every step</b></div>
+        </header></div>
         <p className="lead">Every step {h.name} takes, as it happens. Recorded by Crewhouse, not remembered by {h.name}.</p>
         {A.steps(page.trail ?? []).length ? <Steps steps={A.steps(page.trail ?? [])} max={40} onUndo={(s) => attempt(async () => { await api.undoMemory(id, s.seq); void load(); }, 'Forgotten')} />
           : <div className="card empty">Nothing yet. Give {h.name} something to do.</div>}
       </> : null)}
-      {tab === 'things' && <ThingsGrid list={A.things(state).filter((t) => t.helper === id)} state={state} empty={`${h.name}'s finished work shows up here.`} />}
-      {tab === 'routines' && <RoutineList {...ctx} bot={id} />}
       {tab === 'screen' && <Screen bot={{ ...page?.bot, ...b }} showing={A.showing(state, id)} refresh={() => { refresh(); void load(); }} />}
-      {tab === 'me' && page && <AboutMe id={id} name={h.name} page={page} reload={load} />}
-      {tab === 'remembers' && page && <Remembers id={id} name={h.name} page={page} reload={load} />}
     </div>
   );
 }
@@ -514,7 +565,7 @@ function ThingsGrid({ list, state, empty }: { list: A.Thing[]; state: Json; empt
       {list.map((t) => {
         const h = A.crew(state).find((x) => x.id === t.helper);
         return (
-          <div key={t.id} className="card thing">
+          <div key={t.id} id={`t${t.id}`} className="card thing">
             {t.files[0] && <Media f={t.files[0]} />}
             <b>{t.title}</b>
             {t.summary && <p className="mute clamp">{t.summary}</p>}
@@ -526,8 +577,20 @@ function ThingsGrid({ list, state, empty }: { list: A.Thing[]; state: Json; empt
     </div>
   );
 }
-function Things({ state }: Ctx) {
-  return (<div className="page"><h1>Things</h1><p className="lead">Everything the crew has made for you.</p><ThingsGrid list={A.things(state)} state={state} empty="Videos, lists, letters and plans the crew makes for you land here." /></div>);
+function Things({ state, id }: Ctx & { id?: string }) {
+  const list = A.things(state);
+  // A search hit for a finished thing lands on the result itself.
+  const want = id ? Number(id.slice(1)) : 0;
+  useEffect(() => {
+    if (!want) return;
+    const el = document.getElementById(`t${want}`);
+    if (!el) return;
+    el.scrollIntoView({ block: 'center' });
+    el.classList.add('land');
+    const t = setTimeout(() => el.classList.remove('land'), 1300);
+    return () => clearTimeout(t);
+  }, [want, list.length]);
+  return (<div className="page"><h1>Things</h1><p className="lead">Everything the crew has made for you.</p><ThingsGrid list={list} state={state} empty="Videos, lists, letters and plans the crew makes for you land here." /></div>);
 }
 
 // ---------- routines ----------
@@ -908,7 +971,7 @@ function App() {
     setTick((t) => t + 1);
   }, []);
   useEffect(() => {
-    const onHash = () => setRoute(parseRoute());
+    const onHash = () => { moved = true; setRoute(parseRoute()); };
     addEventListener('hashchange', onHash);
     refresh();
     let pending: any;
@@ -943,7 +1006,7 @@ function App() {
   const asks = A.needsYou(ctx.state).length; // the badge counts only what Needs you shows
   const sheet = route.view === 'ask' ? A.cards(ctx.state).find((c) => String(c.id) === route.id) : undefined;
   const nav: [string, string, string, number?][] = [['#/', 'Chats', '⌂'], ['#/crew', 'Crew', '☺'], ['#/things', 'Things', '▤'], ['#/routines', 'Routines', '↻'], ['#/settings', 'Settings', '⚙']];
-  const active = (h: string) => (h === '#/' ? v.view === 'home' : h === '#/crew' ? ['crew', 'add', 'helper', 'chief'].includes(v.view) : h === `#/${v.view}` || (h === '#/settings' && v.view === 'apps'));
+  const active = (h: string) => (h === '#/' ? ['home', 'helper', 'chief'].includes(v.view) : h === '#/crew' ? ['crew', 'add'].includes(v.view) : h === `#/${v.view}` || (h === '#/settings' && v.view === 'apps'));
   return (
     <>
       {splash}
@@ -959,11 +1022,11 @@ function App() {
         <main className="main">
           {offline && <div className="offline" role="status">The home computer isn't answering. If it's asleep, the crew has paused and carries on when it wakes. Last heard from it at {A.clock(heard.current)}. Reconnecting… <button className="link inline" onClick={refresh}>Try now</button></div>}
           {v.view === 'home' && <Home {...ctx} />}
-          {v.view === 'chief' && <ChiefPage {...ctx} />}
+          {v.view === 'chief' && <ChiefPage {...ctx} m={v.m} />}
           {v.view === 'crew' && <Crew {...ctx} />}
           {v.view === 'add' && <AddHelper {...ctx} />}
           {v.view === 'helper' && v.id && <HelperPage {...ctx} id={v.id} tab={v.tab!} />}
-          {v.view === 'things' && <Things {...ctx} />}
+          {v.view === 'things' && <Things {...ctx} id={v.id} />}
           {v.view === 'routines' && <Routines {...ctx} />}
           {v.view === 'settings' && <Settings {...ctx} look={look} setLook={setLook} switchTo={switchTo} />}
           {v.view === 'apps' && <Apps {...ctx} />}

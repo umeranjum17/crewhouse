@@ -595,14 +595,21 @@ export class Crew {
     return lines.join('\n');
   }
 
-  botPage(id: string, viewer = OWNER) {
+  botPage(id: string, viewer = OWNER, around?: number) {
     const b = this.bot(id);
     if (!b) throw Object.assign(new Error('no such bot'), { status: 404 });
     const undone = new Set(this.db.all("SELECT data FROM events WHERE bot = ? AND kind = 'memory.undone'", id).map((e) => JSON.parse(e.data).seq));
     return {
       bot: this.pub(b),
       // Each member has their own thread with a bot; notes to the whole house (member NULL) show to everyone.
-      messages: this.db.all('SELECT * FROM (SELECT * FROM messages WHERE bot = ? AND COALESCE(member, ?) = ? ORDER BY id DESC LIMIT 200) ORDER BY id', id, viewer, viewer),
+      // A search landing on an old line gets a window around it: the newest 200 would miss it entirely.
+      messages: around
+        ? this.db.all(`SELECT * FROM (
+            SELECT * FROM (SELECT * FROM messages WHERE bot = ? AND COALESCE(member, ?) = ? AND id >= ? ORDER BY id LIMIT 100)
+            UNION ALL
+            SELECT * FROM (SELECT * FROM messages WHERE bot = ? AND COALESCE(member, ?) = ? AND id < ? ORDER BY id DESC LIMIT 99)
+          ) ORDER BY id`, id, viewer, viewer, around, id, viewer, viewer, around)
+        : this.db.all('SELECT * FROM (SELECT * FROM messages WHERE bot = ? AND COALESCE(member, ?) = ? ORDER BY id DESC LIMIT 200) ORDER BY id', id, viewer, viewer),
       tasks: this.db.all('SELECT * FROM tasks WHERE bot = ? ORDER BY id DESC LIMIT 50', id).map((t) => this.task(t)),
       // What this helper learned about the viewer: never another member's notes.
       notes: disk.readNotes(this.cfg, { member: viewer, bot: id }),

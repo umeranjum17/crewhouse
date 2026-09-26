@@ -172,8 +172,16 @@ export async function demoCall(method: string, path: string, _body?: Json) {
   // "offline": the home computer never answers; "lost": it answers once, then goes quiet.
   if (variant === 'offline' || (variant === 'lost' && calls++ > 0)) throw new TypeError('Failed to fetch');
   if (method === 'GET' && path === '/api/state') return state;
-  const b = /^\/api\/bots\/([a-z0-9-]+)$/.exec(path);
+  const b = /^\/api\/bots\/([a-z0-9-]+)(?:\?.*)?$/.exec(path);
   if (method === 'GET' && b) return { ...pages[b[1]], bot: bots.find((x) => x.id === b[1]) };
+  // A word across the threads (the made-up household): what search needs to land on the matching line.
+  if (method === 'GET' && path.startsWith('/api/search')) {
+    const q = decodeURIComponent(path.split('q=')[1] ?? '').replace(/\+/g, ' ').toLowerCase();
+    const messages = Object.entries(pages).flatMap(([bot, p]) => ((p.messages ?? []) as Json[]).filter((m: Json) => String(m.text).toLowerCase().includes(q))
+      .map((m: Json, i: number) => ({ id: m.id, bot, author: m.author, text: String(m.text).slice(0, 200), at: now - (i + 1) * min })));
+    const things = state.tasks.filter((t: Json) => `${t.title} ${t.result ?? ''}`.toLowerCase().includes(q)).map((t: Json) => ({ id: t.id, bot: t.bot, title: t.title, at: t.updated_at }));
+    return { messages: messages.slice(0, 50), things: things.slice(0, 20) };
+  }
   if (method === 'GET' && path.startsWith('/api/accounts')) return accounts;
   if (method === 'GET' && path === '/api/about') return { notes: '- Vegetarian at home\n- Two children: Zara (9) and Ali (6)\n- Prefers weekend plans before Thursday' };
   // ?demo=home / ?demo=signin-again: Settings, Phones before Tailscale, and with it signed out.

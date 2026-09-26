@@ -7,7 +7,7 @@
   --ink: #2e2a40; --ink2: #4d4760; --mute: #6b6484; --card: #ffffffd9; --solid: #fff; --line: #eee6f6; --soft: #f8f4fc;
   --pink: #ff7aa2; --pink-ink: #c9356b; --peach: #ffb199; --amber: #ffc27a; --sky: #a9cbff; --mint: #b5ecc4; --lilac: #d9c2ff;
   --ok: #3ccf7e; --ok-ink: #177a47; --wait: #ffae3c; --bg: #fff7f2; --go: #2e2a40; --go-ink: #fff; --halo: #fff; --off: rgba(59, 53, 82, .07);
->  --shadow: #e3dcf0; --lift: 0 1px 0 #fff inset, 0 10px 30px -12px #6a4f9a40; --chip: 0 0 0 1.5px #e6def4 inset;
+  --shadow: #e3dcf0; --lift: 0 1px 0 #fff inset, 0 10px 30px -12px #6a4f9a40; --chip: 0 0 0 1.5px #e6def4 inset;
   --ui: 'Nunito', ui-rounded, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --art: 'JetBrains Mono', ui-monospace, monospace;
   --wash: radial-gradient(600px 400px at 0 0, #ffe3d6, transparent 70%), radial-gradient(600px 500px at 100% 30%, #e6dcff, transparent 70%), radial-gradient(500px 400px at 30% 100%, #d7ecff, transparent 70%), var(--bg);
@@ -205,7 +205,11 @@ textarea.input { resize: vertical; }
 
 /* chat */
 .chat-head { display: flex; gap: 12px; align-items: center; padding: 4px 0 8px; }
-.chat-head .pill { box-shadow: none; background: color-mix(in srgb, var(--solid) 70%, transparent); font-size: 12.5px; margin-top: 2px; }
+.chat-head .link { flex: none; }
+/* Details, one scrolling page behind a chat. */
+.detail { padding-bottom: 24px; }
+.detail .plate { margin: 22px 0 4px; }
+.detail > .link { margin-bottom: 8px; }
 .back { color: var(--mute); font: 800 22px var(--ui); padding: 4px 8px 4px 0; display: inline-block; }
 a.back:not([aria-label]) { font-size: 15px; margin-bottom: 6px; }
 .chat { display: flex; flex-direction: column; min-height: calc(100dvh - 190px); }
@@ -219,9 +223,10 @@ a.back:not([aria-label]) { font-size: 15px; margin-bottom: 6px; }
 .line.unsure .bubble-text { box-shadow: 0 0 0 2px var(--wait) inset; }
 .line.note .bubble-text { background: var(--card); border-radius: 22px; box-shadow: var(--lift); }
 .line .who { font: 800 12px var(--ui); color: var(--pink-ink); margin-left: 10px; }
-.tabs { display: flex; gap: 6px; overflow-x: auto; padding: 4px 0 10px; scrollbar-width: none; }
-.tabs a { font: 800 14px var(--ui); padding: 8px 14px; border-radius: 999px; color: var(--mute); white-space: nowrap; }
-.tabs a.on { background: var(--solid); color: var(--ink); box-shadow: var(--chip); }
+/* A search landing: the matched line glows once, then fades — the one motion that explains where you are. */
+.line.land { scroll-margin: 40vh 0 60vh; }
+.line.land .bubble-text { animation: land 1.2s ease; }
+@keyframes land { from { background: color-mix(in srgb, var(--wait) 45%, var(--solid)); box-shadow: 0 0 0 2px var(--wait) inset; } }
 
 /* crew, things */
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)); gap: 12px; margin-top: 8px; }
@@ -422,6 +427,8 @@ button.code { border: 0; color: var(--ink); cursor: pointer; display: grid; gap:
 .tips > div { display: flex; gap: 12px; align-items: center; }
 
 .sticky-top { position: sticky; top: 0; z-index: 5; margin: -18px -18px 0; padding: 14px 18px 0; background: color-mix(in srgb, var(--bg) 78%, transparent); backdrop-filter: blur(14px); }
+/* A chat's header is an opaque band: lines scroll under it, never half-show through. */
+.chat-page .sticky-top { background: var(--bg); backdrop-filter: none; }
 .lines .end { scroll-margin-bottom: 140px; }
 @media (min-width: 900px) { .sticky-top { margin: -32px -36px 0; padding: 24px 36px 0; } }
 
