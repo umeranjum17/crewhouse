@@ -11,11 +11,11 @@ import type { Row, Store } from './db.ts';
 import * as disk from './bots.ts';
 import { Desktops, browserBin, missing as desktopMissing, type Watcher } from './desktop.ts';
 import { Accounts, OWNER, PROVIDERS } from './accounts.ts';
-import { Connections, type AppTool } from './connections.ts';
+import { Connections, type AppTool, APPS } from './connections.ts';
 import { axiTool, cliTool, openSession, readPage, runAxi, runSandboxed, sandboxBash, q, sandboxReady, webTools } from './engine.ts';
 import { allowed, proxy } from './net.ts';
 import type { Server } from 'node:net';
-import { acts, coversOf, effectOf, orderOf, toolWords, type Effect } from './policy.ts';
+import { acts, claimOf, coversOf, effectOf, orderOf, pressOf, toolWords, type Effect } from './policy.ts';
 import { axiEnv, registry, resolveGrants, toolBin, which } from './tools.ts';
 import { stubModels } from './stub.ts';
 import { describe, nextRun, parseSchedule } from './routines.ts';
@@ -274,13 +274,22 @@ export class Crew {
     return { step: step ? { ...step, data: JSON.parse(step.data) } : null, quietSince, stuck: task.state === 'working' && Date.now() - quietSince > STUCK_MS };
   }
 
-  /** Ideas are promises a hired bot can keep: each needs tools the bot is granted and that work on this computer. */
-  private ideas() {
-    return this.bots().filter((b) => b.id !== CHIEF).flatMap((b) => {
+  /** Ideas are promises a hired bot can keep: each needs tools the bot is granted and that work on this computer, and
+   *  the apps the person has connected (`needs` may name either). A job whose app is not connected yet is still shown,
+   *  saying what it would need first — a standing list they can browse, not a dead end (docs/ui-contract.md). */
+  private ideas(member = OWNER) {
+    const on = new Set(this.connections.on(member));
+    const house = this.connections.houseGoogle();
+    const rows = this.bots().filter((b) => b.id !== CHIEF).flatMap((b) => {
       const ready = new Set(disk.botTools(this.cfg, b.id).filter((t) => t.granted && t.ready).map((t) => t.id));
-      return (disk.botConfig(this.cfg, b.id).ideas ?? []).filter((i) => i.needs.every((t) => ready.has(t)))
-        .map((i) => ({ bot: b.id, promise: i.promise, ask: i.ask }));
-    }).slice(0, 6);
+      // A tool the bot does not have: the promise is not made. An app they haven't connected: it is, with what's missing.
+      return (disk.botConfig(this.cfg, b.id).ideas ?? []).filter((i) => i.needs.every((n) => ready.has(n) || APPS[n]))
+        .map((i) => ({ bot: b.id, promise: i.promise, ask: i.ask, group: i.group ?? 'life',
+          needs: i.needs.filter((n) => !ready.has(n) && !on.has(n)).map((n) => (APPS[n] ? (APPS[n].google && !house ? 'Google' : APPS[n].name) : '')) }));
+    });
+    // The six-row cap counts the jobs they can hand over now; what they would need first rides along beside them.
+    // ponytail: waiting rows are uncapped because no template set has more than a screenful; cap them when one does.
+    return [...rows.filter((r) => !r.needs.length).slice(0, 6), ...rows.filter((r) => r.needs.length)];
   }
 
   /** A bot as the app sees it: no token, no model, nothing technical. */
@@ -306,7 +315,7 @@ export class Crew {
     if (a.kind === 'connect') return { ...a, detail: { app: d.app, words: d.words } };
     if (a.kind === 'setup') return { ...a, detail: { app: d.app, person: d.person } };
     if (a.kind === 'propose') return { ...a, detail: { words: a.title, preview: d.preview, ...(d.create ? { yes: `Yes, take ${d.create.name} on` } : d.draft ? { yes: 'Approve' } : {}), ...(d.routine ? { routine: d.routine } : {}) } };
-    return { ...a, detail: { effect: d.effect, words: a.title, spends: d.effect === 'spend', covers, ...(covers ? { always: covers } : {}), ...(d.preview ? { preview: d.preview } : {}),
+    return { ...a, detail: { effect: d.effect, words: a.title, spends: d.effect === 'spend', covers, ...(covers ? { always: covers } : {}), ...(d.preview ? { preview: d.preview } : {}), ...(d.press ? { press: true } : {}),
       ...(d.checkout ? { order: { shown: d.checkout.shown ?? '', known: Number.isFinite(d.checkout.total), dollars: d.checkout.currency === '$' } } : {}) } };
   }
 
@@ -339,7 +348,7 @@ export class Crew {
       bots: this.bots().map((b) => ({ ...this.pub(b), ...this.chat(b.id, me.id) })),
       templates: disk.listTemplates(this.cfg).map((t) => ({ id: t.id, display: t.display, role: t.role, color: t.color, kit: disk.templateKit(this.cfg, t) })),
       tasks: this.db.all('SELECT * FROM tasks WHERE bot != ? AND member = ? ORDER BY id DESC LIMIT 50', CHIEF, me.id).map((t) => ({ ...this.task(t), files: t.state === 'done' ? files(t.id) : [] })),
-      ideas: this.ideas(),
+      ideas: this.ideas(me.id),
       asks: this.db.all("SELECT * FROM asks WHERE state = 'open' AND COALESCE(member, ?) = ? ORDER BY id", OWNER, me.id).map((a) => this.askView(a)),
       events: this.db.events(0, 80),
       /** This member's AI accounts that are resting now, and until when (docs/ui-contract.md). */
@@ -500,8 +509,9 @@ export class Crew {
   }
 
   /** Chief's offer, in the person's plain words: cadence, what happens, quiet behaviour, first run. The routine is made
-   *  only when the person says yes (`adopt`); `answer` applies a changed time first. */
-  private offerRoutine(p: Parameters<Crew['planRoutine']>[0]) {
+   *  only when the person says yes (`adopt`); `answer` applies a changed time first. A helper offers its own check-ins
+   *  the same way, for the member the running task belongs to. */
+  private offerRoutine(p: Parameters<Crew['planRoutine']>[0], member?: number) {
     const plan = this.planRoutine(p);
     const host = plan.watch ? new URL(plan.watch).hostname.replace(/^www\./, '') : '';
     const what = plan.watch ? `Keeps an eye on ${host}` : `${plan.bot.display} will ${plan.first.charAt(0).toLowerCase()}${plan.first.slice(1)}`;
@@ -512,7 +522,7 @@ export class Crew {
     return this.propose(CHIEF, words, {
       routine: { bot: plan.bot.id, schedule: String(p.schedule ?? '').trim(), task: p.task, name: p.name, model: p.model, quiet: p.quiet, watch: p.watch },
       preview: { head: 'A new routine', body: lines.join('\n') },
-    });
+    }, member);
   }
 
   /** Pause, resume or move a routine, or make it a quiet check-in. Resuming counts from now: a paused routine never catches up. */
@@ -1266,6 +1276,13 @@ export class Crew {
         return undefined;
       }
     }
+    if (e.kind === 'send' && tool === 'browser') {
+      // Pressing something on a site the person signed the bot in to (a shop's claim button) is its own card every
+      // time, and the card is read from the page: which button, the page's own words around it, any money it shows.
+      const l = this.live.get(botId);
+      if (l?.browser) l.snapshot = await l.browser.run(['snapshot', '--full']);
+      e = this.press(botId, e, input);
+    }
     if (e.kind === 'spend' && e.cost !== undefined && this.spentThisMonth() + e.cost > this.moneyCap()) {
       this.db.event('money.refused', botId, { task: task?.id, cost: e.cost });
       return { block: true, reason: `That would take this month's spending past the $${this.moneyCap()} the household set. Tell the person, in one line; the owner can raise the limit in Settings.` };
@@ -1301,10 +1318,29 @@ export class Crew {
     return { effect: { ...e, words, ...(o.capped ? { cost: o.total! } : {}), preview: { head: `The order at ${host}`, body } }, checkout: { page, total: o.total, shown: o.shown, currency: o.currency } };
   }
 
+  /** The card for acting as the person on a site they signed the bot in to: the button it will press, the host, the
+   *  page's own lines around it, and the money the page shows — all read by crewd from the page as the browser tool
+   *  itself reports it, never from what the model says it was about to press. */
+  private press(botId: string, e: Extract<Effect, { words: string }>, input: Record<string, any>) {
+    const l = this.live.get(botId);
+    const name = this.bot(botId)?.display ?? botId;
+    let host = 'a site';
+    try { host = new URL(l?.page ?? '').hostname.replace(/^www\./, '') || host; } catch { /* no page yet */ }
+    const p = pressOf(l?.snapshot ?? '', String(input.args?.[1] ?? '').replace(/^@/, ''));
+    if (!p) return e;
+    const shown = orderOf(l?.snapshot ?? '').shown;
+    const back = claimOf(l?.snapshot ?? '');
+    return { ...e,
+      words: `${name} wants to press “${p.label}” on ${host}, a site you signed it in to${shown ? `. The page shows ${shown}.` : '.'}`,
+      // One plain money line first, only when the page itself writes both prices (the preview clamps); otherwise the
+      // card says nothing about money at all.
+      preview: { head: `What ${name} will press on ${host}`, body: back ? `You'd get ${back.shown} back.\n${p.body}` : p.body } };
+  }
+
   private async ask(botId: string, task: Row | undefined, e: Extract<Effect, { words: string }>, checkout?: { page: string; total: number | null }): Promise<string | null> {
     // The same call asked again (the bot resumed after a restart) takes over the card already shown.
     const same = this.db.all("SELECT id FROM asks WHERE bot = ? AND kind = 'permission' AND state = 'open' AND title = ?", botId, e.words).find((a) => !this.holds.has(a.id));
-    const askId = same ? same.id : this.openAsk(botId, task, e.words, { effect: e.kind, key: e.key, ...(e.cost !== undefined ? { cost: e.cost } : {}), ...(e.preview ? { preview: e.preview } : {}), ...(checkout ? { checkout } : {}) });
+    const askId = same ? same.id : this.openAsk(botId, task, e.words, { effect: e.kind, key: e.key, ...(e.cost !== undefined ? { cost: e.cost } : {}), ...(e.preview ? { preview: e.preview } : {}), ...(checkout ? { checkout } : {}), ...(e.press ? { press: true } : {}) });
     if (same && task) this.setTask(task, 'needs_you');
     // In their quiet hours nobody will answer soon: park at once instead of holding the bot.
     const quiet = quietNow(this.member(task?.member ?? this.bot(botId)?.member ?? OWNER).quiet);
@@ -1473,6 +1509,14 @@ export class Crew {
         }),
     ];
     if (botId !== CHIEF) {
+      // A helper can ask for its own recurring check — a watch on a page, or a quiet look that needs its own browser.
+      // It is the same card as Chief's: nothing runs until the person says yes on it.
+      own.push(tool('crew_routine', 'Offer the person a recurring check of your own: the same task on a schedule, which nothing runs until they say ' +
+        'yes on a card. `when` is plain words in local time: "every day 9:00", "every 2 hours". `watch`: a page address Crewhouse reads itself, waking ' +
+        'you only when it changed, so a quiet day costs the person no AI — prefer it. `quiet`: you look each time but speak only when something ' +
+        'changed; use it when the page draws what matters with JavaScript, so only your own browser can read it. Say in `task` what you are looking for.',
+        { when: Type.String(), task: Type.String(), name: Type.Optional(Type.String()), quiet: Type.Optional(Type.Boolean()), watch: Type.Optional(Type.String()) },
+        (p) => this.offerRoutine({ bot: botId, schedule: p.when, task: p.task, name: p.name, quiet: p.quiet, watch: p.watch }, this.activeTask(botId)?.member)));
       const others = this.bots().filter((b) => b.id !== CHIEF && b.id !== botId).map((b) => `${b.id} (${b.role})`).join('; ');
       if (!others) return own;
       return [...own, tool('crew_pass', `Hand the next step to another helper, for the same person: ${others}. Write what they should do and what "done" means; ` +
@@ -1544,11 +1588,11 @@ export class Crew {
   }
 
   /** A suggestion card: nothing changes until the person says yes, and the bot carries on meanwhile. */
-  private propose(botId: string, title: string, detail: Row) {
+  private propose(botId: string, title: string, detail: Row, member?: number) {
     const t = this.activeTask(botId);
-    const member = t?.member ?? this.bot(botId)?.member ?? OWNER;
-    if (!this.db.get("SELECT 1 FROM asks WHERE bot = ? AND kind = 'propose' AND state = 'open' AND title = ? AND member = ?", botId, title, member)) {
-      this.openAsk(botId, undefined, title, { ...detail, task: t?.id }, 'propose', member);
+    const who = member ?? t?.member ?? this.bot(botId)?.member ?? OWNER;
+    if (!this.db.get("SELECT 1 FROM asks WHERE bot = ? AND kind = 'propose' AND state = 'open' AND title = ? AND member = ?", botId, title, who)) {
+      this.openAsk(botId, undefined, title, { ...detail, task: t?.id }, 'propose', who);
     }
     return { asked: true, note: 'The person sees your suggestion on a card. Carry on; nothing changes unless they say yes.' };
   }

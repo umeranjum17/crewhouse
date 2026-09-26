@@ -237,7 +237,7 @@ function Home({ state, me, refresh, tick, accounts, offline, night }: Ctx) {
         {A.gettingReady(state) && <div className="card nudge"><span className="grow">{A.gettingReady(state)}</span></div>}
         {A.update(state) && <div className="card nudge"><span className="grow">{A.update(state)!.words}</span><a className="btn go" href={A.update(state)!.url} target="_blank" rel="noreferrer">Download</a></div>}
         {cards.length > 0 && <section className="card needs-card phone-only" aria-label="Needs you"><NeedsRows state={state} cards={cards} /></section>}
-        <div className="phone-only"><Chats state={state} refresh={refresh} /></div>
+        <div className="phone-only"><Chats state={state} refresh={refresh} /><JobList state={state} phone /></div>
         <h1 className="hi desk-only">{A.greeting()}, {state.person.address ?? state.person.name}</h1>
         <div className="desk">
           <section className="frame needs">
@@ -271,6 +271,7 @@ function Home({ state, me, refresh, tick, accounts, offline, night }: Ctx) {
                 );
               }) : <div className="frame-empty">Nothing yet today.</div>}
             </section>
+            <JobList state={state} />
           </div>
         </div>
       </div>
@@ -283,6 +284,30 @@ function Home({ state, me, refresh, tick, accounts, offline, night }: Ctx) {
   );
 }
 const ownerName = (state: Json) => state.members.find((m: Json) => m.id === A.OWNER)?.name ?? 'the owner';
+
+/** The standing "hand me a job" list (docs/ui-contract.md, `ideas[]`): what the crew offers to do end to end, money back
+ *  first. A row fills Chief's box with the words and never sends; a job still waiting on an app says what it needs and
+ *  leads to the apps screen instead of dead-ending. The same rows sit in the desk's third frame and under the chats on a phone. */
+function JobList({ state, phone }: { state: Json; phone?: boolean }) {
+  const crew = A.crew(state);
+  const rows = A.jobs(state);
+  const hand = (ask: string) => { keepDraft('chief', ask); go('#/chief'); };
+  return (
+    <section className={phone ? 'card jobs phone-only' : 'frame jobs'} aria-label="Hand me a job">
+      <div className="label ascii">Hand me a job</div>
+      {rows.length ? rows.map((j) => {
+        const h = crew.find((x) => x.id === j.bot);
+        const body = <><Face who={h ?? { kind: 'pip', name: j.bot }} size={phone ? 24 : 26} />
+          <span className="grow"><b>{j.label}</b>{j.needs.length > 0 && <div className="mute small clamp1">{A.jobNeeds(j.needs)}</div>}</span>
+          {j.needs.length ? <span className="mute" aria-hidden>›</span> : <button className="btn" onClick={() => hand(j.ask)}>Hand it over</button>}</>;
+        const row = phone ? 'job' : 'frame-row';
+        return j.needs.length
+          ? <a key={j.bot + j.label} className={row} href="#/apps">{body}</a>
+          : <div key={j.bot + j.label} className={row}>{body}</div>;
+      }) : <div className="frame-empty">Nothing to hand over yet. Hire a helper, and this fills up.</div>}
+    </section>
+  );
+}
 
 /** The starters live in Chief's empty chat: a tap fills the box with the words, it never sends. */
 function ChiefIdeas({ state, chat, picked }: { state: Json; chat: string; picked: () => void }) {

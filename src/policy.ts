@@ -8,7 +8,8 @@ export type Effect =
   | { kind: 'refuse'; why: string }
   /** `key` is what "For this task" and "Always" remember; spending has none, so it asks every time. */
   /** `cost` is the most a spend can cost, in dollars, when the tool says so up front. */
-  | { kind: 'files' | 'send' | 'spend' | 'delete'; words: string; key?: string; covers?: string; cost?: number; preview?: { head: string; body: string } };
+  | { kind: 'files' | 'send' | 'spend' | 'delete'; words: string; key?: string; covers?: string; cost?: number;
+      preview?: { head: string; body: string }; press?: boolean };
 
 export interface Seen {
   bot: string;
@@ -51,7 +52,8 @@ const valuesOf = (args: string[], flag: string) => args.flatMap((a, i) => (a ===
 export function browserAsk(command: string, url: string, signedIn: string[]): { spend: boolean; host: string } | null {
   if (!BROWSER_ACTS.has(command)) return null;
   let host = '';
-  try { host = new URL(url).hostname; } catch { /* no page yet */ }
+  // The card names the shop the way a person would: no www, no path.
+  try { host = new URL(url).hostname.replace(/^www\./, ''); } catch { /* no page yet */ }
   if (PAYMENT.test(url)) return { spend: true, host: host || 'a shop' };
   if (host && signedIn.some((d) => host === d || host.endsWith(`.${d}`))) return { spend: false, host };
   return null;
@@ -97,8 +99,11 @@ export function effectOf(tool: string, input: Record<string, any>, s: Seen): Eff
     if (files.some((f) => !inside(s.space, resolve(s.space, f)))) return { kind: 'refuse', why: 'Browser files stay in your own space: use work/ or files/.' };
     const act = browserAsk(cmd, s.page ?? '', s.signedIn ?? []);
     if (!act) return { kind: 'safe' };
+    // Acting as the person on a site they signed the bot in to (a claim button, a returns form) has no key, the way
+    // spending has none: every press is its own card, and there is no standing answer for it. The card's own words,
+    // read from the page by crewd, are added in the gate (src/crew.ts `press`).
     return act.spend ? { kind: 'spend', words: `${s.bot} wants to act on a checkout or payment page at ${act.host}.` }
-      : { kind: 'send', words: `${s.bot} wants to act as you on ${act.host}, a site you signed it in to.`, key: `send:${act.host}`, covers: `acting as you on ${act.host}` };
+      : { kind: 'send', press: true, words: `${s.bot} wants to act as you on ${act.host}, a site you signed it in to.` };
   }
   if (tool === 'calendar') {
     // calendar-axi (src/calendar.ts): the card says what and when from the command itself.
@@ -161,12 +166,38 @@ export function orderOf(snapshot: string): { items: string[]; more: number; tota
   return { items: items.slice(0, 8), more: Math.max(0, items.length - 8), total: m ? Number(m[2].replace(/,/g, '')) : null, shown: m ? `${m[1]}${m[2]}` : '', currency, capped: !!m && m[1] === '$' };
 }
 
+/** What the shop's own page says the person would get back: the money on its "paid" line minus the price it shows
+ *  today, both read by crewd from the page. null when the page doesn't write both — then the card says nothing about
+ *  money at all (src/crew.ts `press` puts this line on the claim card). */
+export function claimOf(snapshot: string): { shown: string } | null {
+  const lines = snapshot.split('\n').map(readable).filter((t) => t.length > 0 && t.length < 200);
+  const amount = (t: string) => { const m = MONEY.exec(t); return m ? { sign: m[1], n: Number(m[2].replace(/,/g, '')) } : null; };
+  const sum = (re: RegExp) => { const t = lines.find((l) => re.test(l)); return t ? amount(t) : null; };
+  const paid = sum(/\bpaid\b|you paid|bought for|price paid/i);
+  const today = sum(/\btoday\b|now |current price|price now|item total/i);
+  if (!paid || !today || paid.sign !== today.sign || today.n >= paid.n || today.n <= 0) return null;
+  return { shown: `${paid.sign}${(paid.n - today.n).toFixed(2)}` };
+}
+
 /** What "For this task" or "Always" covers, from the gate's key, in plain words. */
 export function coversOf(key: string) {
   const [kind, ...rest] = key.split(':');
   const what = rest.join(':');
   if (kind === 'app') { const [app, ...title] = rest; return `“${title.join(':')}” in your ${app}`; }
-  return kind === 'files' ? folderWords(what + '/x') : kind === 'send' ? `acting as you on ${what}` : 'this';
+  return kind === 'files' ? folderWords(what + '/x') : 'this';
+}
+
+/** The element a browser press targets, read out of the page's own snapshot: its name as the page writes it, and the
+ *  page's lines around it. crewd puts these on the card (the model's words about the button are never the preview).
+ *  Returns null when the snapshot says nothing about that target — a selector, or a page crewd hasn't read. */
+export function pressOf(snapshot: string, target: string): { label: string; body: string } | null {
+  if (!target) return null;
+  const lines = snapshot.split('\n');
+  const at = lines.findIndex((l) => l.includes(`[ref=${target}]`));
+  if (at < 0) return null;
+  const label = (/"((?:[^"\\]|\\.)*)"/.exec(lines[at])?.[1] ?? readable(lines[at])).replace(/\\"/g, '"').trim();
+  const here = lines.slice(Math.max(0, at - 3), at + 1).map(readable).filter(Boolean);
+  return { label, body: [...new Set(here)].join('\n') };
 }
 
 const PROGRAMS: Record<string, string> = { ffmpeg: 'Worked on a video', ffprobe: 'Checked a video', magick: 'Worked on an image', markitdown: 'Read a document',

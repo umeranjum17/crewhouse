@@ -18,7 +18,8 @@
   "skills": [
     "research-report",
     "summarize-document",
-    "use-the-browser"
+    "use-the-browser",
+    "claim-a-price-drop"
   ],
   "ideas": [
     {
@@ -34,6 +35,16 @@
       ],
       "promise": "Give me a PDF or Word file and I'll tell you what's in it in five lines.",
       "ask": "Summarise this document in five lines: "
+    },
+    {
+      "needs": [
+        "web",
+        "documents",
+        "gmail"
+      ],
+      "group": "money",
+      "promise": "I'll keep an eye on what you just bought, and tell you the day you can claim the money back. I'll do it end to end — you just tap approve.",
+      "ask": "Watch something I bought and tell me when I can claim the difference back"
     }
   ]
 }

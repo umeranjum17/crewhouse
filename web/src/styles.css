@@ -191,6 +191,13 @@ textarea.input { resize: vertical; }
 .needs-row .clamp1 { font-size: 13.5px; }
 .needs-more { margin: 2px 0 6px 23px; }
 .needs-quiet { margin-top: 8px; }
+/* The phone's standing job list (Home, under the chats): the chats' own row — a small face and the promise as body text,
+   not a heading — with the button on its own line under the words, and the list ending above the sticky composer. */
+.jobs.phone-only .job { flex-wrap: wrap; align-items: flex-start; padding: 12px 0; }
+.jobs.phone-only > .label + .job { border-top: 0; }
+.jobs.phone-only .job b { font: 400 13.5px var(--ui); }
+.jobs.phone-only .job .btn { flex-basis: 100%; width: max-content; margin: 9px 0 0 auto; }
+.jobs.phone-only { padding-bottom: 83px; } /* the sticky composer's own box at 390, so the last row clears it */
 /* The house's setup jobs: a tick ring, a plain line, and the panel it opens. */
 .setup-mark { font: 900 15px var(--ui); color: var(--mute); width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--shadow); display: inline-grid; place-items: center; flex: none; }
 .setup-mark.done { color: var(--ok-ink); border-color: var(--ok); background: color-mix(in srgb, var(--ok) 18%, transparent); }
