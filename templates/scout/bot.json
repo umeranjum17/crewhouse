@@ -19,7 +19,8 @@
     "research-report",
     "summarize-document",
     "use-the-browser",
-    "claim-a-price-drop"
+    "claim-a-price-drop",
+    "unclaimed-money"
   ],
   "ideas": [
     {
@@ -45,6 +46,14 @@
       "group": "money",
       "promise": "I'll keep an eye on what you just bought, and tell you the day you can claim the money back. I'll do it end to end — you just tap approve.",
       "ask": "Watch something I bought and tell me when I can claim the difference back"
+    },
+    {
+      "needs": [
+        "web"
+      ],
+      "group": "money",
+      "promise": "I'll search the government's unclaimed-money registers for our family's names and get the claims ready to file. I'll file it end to end — you just tap approve.",
+      "ask": "Search for money owed to us that nobody has claimed"
     }
   ]
 }

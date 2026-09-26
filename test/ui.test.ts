@@ -133,14 +133,15 @@ test('Home commits nothing: a row opens the review sheet, and a starter fills th
 
 test('Home keeps a standing "hand me a job" list, straight from crewd\'s ideas: money back first, and a job that needs an app says so', () => {
   const withJobs = { ...state, ideas: [
+    { bot: 'scout', promise: 'I\'ll search the government\'s unclaimed-money registers for our family\'s names and get the claims ready to file. I\'ll file it end to end — you just tap approve.', ask: 'Search for money owed to us that nobody has claimed', group: 'money', needs: [] },
     { bot: 'scout', promise: 'I\'ll claim the money back the day the price drops. I\'ll do it end to end — you just tap approve.', ask: 'Watch something I bought', group: 'money', needs: ['Gmail'] },
     { bot: 'scribe', promise: 'Say who it is for and the email is written', ask: 'Write an email to ' },
     { bot: 'reel', promise: 'Turn photos into a short video', ask: 'Make a video from these photos: ' },
   ] };
   const rows = A.jobs(withJobs);
-  assert.deepEqual(rows.map((r) => [r.bot, r.needs.length]), [['scout', 1], ['scribe', 0], ['reel', 0]], 'money back leads, and a waiting row keeps its needs');
-  assert.deepEqual(A.ideas(withJobs).map((i: any) => i.bot), ['scribe', 'reel'], 'Chief\'s chips stay jobs the crew can run now');
-  assert.match(A.jobNeeds(rows[0].needs), /^Needs Gmail first\.$/);
+  assert.deepEqual(rows.map((r) => [r.bot, r.needs.length]), [['scout', 0], ['scout', 1], ['scribe', 0], ['reel', 0]], 'money back leads — the job that waits on nothing first — and a waiting row keeps its needs');
+  assert.deepEqual(A.ideas(withJobs).map((i: any) => i.bot), ['scout', 'scribe', 'reel'], 'Chief\'s chips stay jobs the crew can run now — the unclaimed search needs nothing, so it chips too');
+  assert.match(A.jobNeeds(rows.find((r) => r.needs.length)!.needs), /^Needs Gmail first\.$/);
   assert.doesNotMatch(shown(rows), FORBIDDEN, 'the list is a person\'s sentence, not a screen of details');
   // The claim card is a press, not a message going out: it says acting on a site, and names the page's own button.
   const press = A.card({ id: 9, bot: 'scout', kind: 'permission', state: 'open',
@@ -153,6 +154,23 @@ test('Home keeps a standing "hand me a job" list, straight from crewd\'s ideas: 
   assert.match(press.preview!.body, /Request price adjustment/, 'the button, as the page writes it');
   assert.match(press.preview!.body, /You'd get \$50\.00 back\./, 'and what they get back, when the page wrote both prices');
   assert.equal(press.choices.find((c: any) => c.body.scope === 'always'), undefined, 'no standing answer for acting as the person');
+  // A form line being filled is a fill card, not a press: "Yes, fill it in" — "these in" for more than one line — and
+  // the family's data sits in the preview and nowhere else.
+  const fill = A.card({ id: 10, bot: 'scout', kind: 'permission', state: 'open',
+    title: 'Scout wants to fill “Owner\'s full name” on unclaimed.example, a site you signed it in to.',
+    detail: { effect: 'send', press: true, fill: true, spends: false,
+      words: 'Scout wants to fill “Owner\'s full name” on unclaimed.example, a site you signed it in to.',
+      preview: { head: 'What Scout will fill in on unclaimed.example', body: "Owner's full name: Ada Lovelace" } } }, withJobs);
+  assert.equal(fill.head, 'Scout wants to act on a site', 'a form line is the same acting-on-a-site card');
+  assert.match(fill.preview!.body, /Owner's full name: Ada Lovelace/, 'the line, label then value');
+  assert.equal(fill.choices[0].label, 'Yes, fill it in');
+  const these = A.card({ id: 11, bot: 'scout', kind: 'permission', state: 'open',
+    title: 'Scout wants to fill in 3 lines on the claim form at unclaimed.example.',
+    detail: { effect: 'send', press: true, fill: true, spends: false,
+      words: 'Scout wants to fill in 3 lines on the claim form at unclaimed.example.',
+      preview: { head: 'What Scout will fill in on unclaimed.example', body: "Owner's full name: Ada Lovelace\nAddress the money was owed at: 12 Lovelace Lane\nEmail for this claim: ada@example.net" } } }, withJobs);
+  assert.equal(these.choices[0].label, 'Yes, fill these in', 'more than one line, these in');
+  assert.equal(fill.choices.find((c: any) => c.body.scope === 'always'), undefined, 'and still no standing answer');
   const src = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
   const home = src.slice(src.indexOf('function Home('), src.indexOf('const ownerName'));
   assert.match(home, /<JobList state=\{state\} \/>/, 'the desk\'s frame beside Working now and Done today');

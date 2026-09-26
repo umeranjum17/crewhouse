@@ -496,8 +496,12 @@ export function card(a: Json, state: Json): Card {
       preview: d.preview ? { head: d.preview.head ? plain(d.preview.head) : undefined, body: plain(d.preview.body ?? '') } : undefined };
   }
   // A press on a site they signed the bot in to is not a message going out: the card says acting, not sending. (docs/ui-contract.md)
+  // A form the helper fills (a claim's lines) fills, it does not press: "Yes, fill it in" — "these in" when the card
+  // lists more than one line.
   const press = d.effect === 'send' && d.press === true;
-  const choices: Choice[] = [{ label: spend ? 'OK, spend it' : press ? 'Yes, press it' : d.effect === 'send' ? 'Send' : 'Yes, go ahead', body: { answer: 'allow', scope: 'once' }, primary: true }];
+  const fill = press && d.fill === true;
+  const fillLines = String(d.preview?.body ?? '').split('\n').filter(Boolean).length;
+  const choices: Choice[] = [{ label: spend ? 'OK, spend it' : fill ? (fillLines > 1 ? 'Yes, fill these in' : 'Yes, fill it in') : press ? 'Yes, press it' : d.effect === 'send' ? 'Send' : 'Yes, go ahead', body: { answer: 'allow', scope: 'once' }, primary: true }];
   // "Always" is a relationship ("Always OK for Aunty Sara"), and money never gets one.
   if (!spend && (d.always || d.rule)) choices.push({ label: `Always OK for ${d.always ?? name}`, body: { answer: 'allow', scope: 'always' } });
   choices.push({ label: 'Not now', body: { answer: 'deny' } });
