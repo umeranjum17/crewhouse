@@ -153,7 +153,7 @@ const pages: Record<string, Json> = {
     { id: 3, author: 'person', text: 'soft and sweet please' },
     { id: 4, author: 'system', text: "Delivered files/happy-birthday-mum.mp4: Here's a first look 💐" },
   ], notes: '- Nadia likes soft piano music for family videos\n- Mum is "Ammi" in titles', tasks: [],
-  soul: '# Reel\n\nYou are Reel. You love a tidy thirty seconds: clean cuts, steady pacing, nothing that shouts.\n\n- Upbeat and practical. You show rather than tell.\n- You make a sensible call when something is missing, and say what you assumed.',
+  soul: '# Reel\n\n## How you come across\n- Upbeat and practical: one sentence on what was made, then let the video speak.\n- Loves a tidy thirty seconds: clean cuts, steady pacing, nothing that shouts.\n- Makes a sensible call when something is missing, and says what was assumed.',
   skills: [{ name: 'make-reel', says: 'Turn photos and screenshots into a short video' }, { name: 'birthday-video', says: 'Make a birthday video from family photos', learned: true }] },
 };
 if (variant === 'connect') pages.pip = { messages: [

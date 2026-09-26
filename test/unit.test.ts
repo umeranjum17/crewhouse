@@ -378,7 +378,7 @@ test('bots on disk: persona rename, capped notes, folder confinement, slugs', ()
     assert.throws(() => disk.remember(cfg, mine, bad), /plain words/, bad);
   assert.throws(() => disk.remember(cfg, { member: 1, bot: null }, 'x'.repeat(disk.ABOUT_CAP)), /notes are full/);
   // The soul: renamed like the job, first in the prompt, written only by the person, and put back from the template.
-  assert.match(disk.readSoul(cfg, 'frames'), /^# Frames[\s\S]*You are Frames/);
+  assert.match(disk.readSoul(cfg, "frames"), /^# Frames[\s\S]*How you come across/);
   const prompt = disk.systemPrompt(cfg, 'frames', false);
   assert.ok(prompt.indexOf(disk.readSoul(cfg, 'frames').trim()) === 0 && prompt.indexOf('## How you work') > 0, 'soul, then job');
   disk.writeSoul(cfg, 'frames', '# Frames\n\nYou are Frames. Cheerful and quick.');

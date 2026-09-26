@@ -231,7 +231,7 @@ test('memory: the bot proposes a note, crewd caps and commits it, Undo reverts i
 
   // Who Quill is: the person writes it, and can put back how it started.
   const soul = (await api('GET', '/api/bots/quill')).body.soul;
-  assert.match(soul, /^# Quill[\s\S]*You are Quill/);
+  assert.match(soul, /^# Quill[\s\S]*How you come across/);
   assert.equal((await api('PUT', '/api/bots/quill/soul', { text: '# Quill\n\nYou are Quill. Terse.' })).status, 200);
   assert.equal((await api('GET', '/api/bots/quill')).body.soul, '# Quill\n\nYou are Quill. Terse.\n');
   assert.equal((await api('PUT', '/api/bots/quill/soul', { text: 'x' }, {})).status, 403, 'cross-site pages cannot change it');

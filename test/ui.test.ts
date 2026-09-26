@@ -71,8 +71,10 @@ test('nothing technical survives the adapter', () => {
   for (const [name, v] of Object.entries(views)) assert.doesNotMatch(shown(v), FORBIDDEN, name);
   assert.equal(h.signing?.code, 'AB12-CDE34', 'the one-time code reaches the sign-in sheet');
   assert.deepEqual(A.knows(page.skills).map((k) => k.says), ['Turn photos into a short video', 'plan dinners'], 'the person\'s words, never the model\'s');
-  assert.equal(A.personality(page.soul)[0], 'You are Reel.', 'the name heading is not repeated');
-  assert.equal(A.soulText('Reel', A.soulDraft(page.soul)), page.soul + '\n', 'editing keeps the name heading');
+  const aboutSoul = A.soulText('Reel', 'Upbeat and practical\nLoves a tidy thirty seconds');
+  assert.match(aboutSoul, /^# Reel\n\n## How you come across\n- Upbeat and practical\n- Loves a tidy thirty seconds\n$/, 'the family\'s words become the helper\'s instructions');
+  assert.deepEqual(A.aboutTraits('Reel', aboutSoul), ['Upbeat and practical', 'Loves a tidy thirty seconds'], 'the family reads traits, not instructions');
+  assert.ok(!/\byou\b/i.test(A.aboutDraft('Reel', page.soul)), 'no second-person prompt text reaches the family');
   assert.equal(A.withoutMemory(A.withMemory('- One\n', 'Two'), 0), '- Two\n');
 });
 
