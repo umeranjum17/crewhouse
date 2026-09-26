@@ -106,6 +106,21 @@ test('Needs you: spending and sending first, then questions; a suggestion waits 
   assert.equal(A.chats(state).find((c) => c.id === 'scout')?.unread, 0, 'nobody else\'s dot moves');
 });
 
+test('a helper\'s draft waits in Needs you, named for who it goes to; the row\'s tap opens the review, and approving never sends', () => {
+  const draft = { id: 9, bot: 'reel', task_id: null, kind: 'propose', at: now,
+    title: 'Reel drafted something for muxr issue #208. Nothing is sent: you post it yourself.',
+    detail: { draft: { to: 'muxr issue #208', path: 'files/draft.md', sha: 'abc' }, task: null,
+      preview: { head: 'Draft for muxr issue #208', body: 'Please keep this draft.' }, yes: 'Approve' } };
+  const s = { ...state, asks: [...state.asks, draft] };
+  const c = A.card(draft, s);
+  assert.equal(c.head, 'Reel drafted a message for muxr issue #208', 'the card says what it is and who it is for, never "learned something"');
+  assert.deepEqual(c.choices.map((x: any) => x.label), ['Approve', 'Not now'], 'the no-send approval stays');
+  assert.equal(c.preview?.body, 'Please keep this draft.', 'the sheet the row opens shows the words');
+  const rows = A.needsYou(s);
+  assert.equal(rows.find((r) => r.id === 9)?.head, 'Reel drafted a message for muxr issue #208', 'the draft is a Needs-you row, ready to tap');
+  assert.ok(!rows.some((r) => /learned something/.test(r.head)));
+});
+
 test('Home commits nothing: a row opens the review sheet, and a starter fills the box without sending', () => {
   const src = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
   const home = src.slice(src.indexOf('function NeedsRows('), src.indexOf("const ownerName"));

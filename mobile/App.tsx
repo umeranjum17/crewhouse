@@ -83,10 +83,10 @@ function ChiefArt({ mood = 'idle', size }: { mood?: art.Mood; size: number }) {
   return <Dots rows={rows} pal={useLook().night ? art.CHIEF_PAL_NIGHT : art.CHIEF_PAL} d={size / rows[0].length} />;
 }
 /** A round face: Chief or a pal, with a ring when it's working (green) or needs you (amber). */
-function Face({ who, size = 44, mood }: { who: A.Helper | 'chief'; size?: number; mood?: art.Mood }) {
+function Face({ who, size = 44, mood }: { who: A.Helper | 'chief' | { kind: art.Kind; name: string; mood?: art.Mood }; size?: number; mood?: art.Mood }) {
   const t = useLook();
   const chief = who === 'chief';
-  const ring = chief ? '' : who.ring;
+  const ring = chief || !('ring' in who) ? '' : who.ring;
   const rows = chief ? [] : art.pal(who.kind, who.mood);
   return (
     <View style={{ width: size, height: size, borderRadius: size, alignItems: 'center', justifyContent: 'center', overflow: 'hidden',

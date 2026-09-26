@@ -352,12 +352,13 @@ export function chats(state: Json): Chat[] {
 export const unreadBadge = (n: number) => (n > 9 ? '9+' : String(n));
 
 /** Home's Needs you, one compact list: spending and sending first, then questions, newest first inside each group.
- *  A suggestion or an app connection stays in its helper's chat instead — nothing to act on from Home itself. */
+ *  A draft for the person to send belongs here; a plain suggestion or an app connection stays in its helper's chat — nothing to act on from Home itself. */
 export function needsYou(state: Json): Card[] {
   const rank = (a: Json) => {
     const d = a.detail ?? {};
     if (a.kind === 'setup') return state.person.id === OWNER ? 1 : 3; // the owner's to-do, not the asker's
-    if (a.kind === 'propose' || a.kind === 'connect' || d.app) return 3;
+    if (a.kind === 'propose') return d.draft ? 1 : 3; // a draft needs the person's yes; other suggestions live in the chat
+    if (a.kind === 'connect' || d.app) return 3;
     if (d.spends || d.effect === 'spend' || d.effect === 'send') return 0;
     return a.kind === 'permission' ? 1 : 2;
   };
@@ -413,7 +414,8 @@ export function card(a: Json, state: Json): Card {
   }
   if (a.kind === 'propose') {
     // A suggestion: a skill a helper would like to keep, or a new personality from Chief. Nothing changes without a yes.
-    return { ...base, kind: 'ok', head: a.bot === 'chief' ? 'Chief has a suggestion' : `${name} learned something`, words: plain(d.words ?? `${name} has a suggestion.`),
+    // A helper's draft is a message in the person's name: the card says who it's for, and approving never sends it.
+    return { ...base, kind: 'ok', head: d.draft ? `${name} drafted a message for ${plain(d.draft.to)}` : a.bot === 'chief' ? 'Chief has a suggestion' : `${name} learned something`, words: plain(d.words ?? `${name} has a suggestion.`),
       preview: d.preview ? { head: d.preview.head ? plain(d.preview.head) : undefined, body: plain(d.preview.body ?? '') } : undefined,
       choices: [{ label: d.yes ? plain(d.yes) : a.bot === 'chief' ? 'Yes, change it' : 'Yes, keep it', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
   }

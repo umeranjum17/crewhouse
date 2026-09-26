@@ -192,7 +192,8 @@ export class Crew {
       if (!this.bot(CHIEF)) this.addBot(disk.loadTemplate(this.cfg, 'chief'), 'Chief', CHIEF, 'system');
       // Questions whose task is over have no one left to answer them.
       // A suggestion (a skill to keep, a new personality) belongs to no running task, so it waits for its answer across restarts.
-      this.db.run("UPDATE asks SET state = 'withdrawn' WHERE state = 'open' AND kind != 'propose' AND (task_id IS NULL OR task_id NOT IN (SELECT id FROM tasks WHERE state IN ('working', 'needs_you')))");
+      // So does a setup ask: the house's to-do, not any task's.
+      this.db.run("UPDATE asks SET state = 'withdrawn' WHERE state = 'open' AND kind NOT IN ('propose', 'setup') AND (task_id IS NULL OR task_id NOT IN (SELECT id FROM tasks WHERE state IN ('working', 'needs_you')))");
       this.db.run("UPDATE bots SET state = 'off'");
       this.db.event('system.started', null, {});
       // Chats were unread-less before: an existing house starts with everything already seen.
@@ -315,10 +316,14 @@ export class Crew {
     const existing = this.db.get("SELECT * FROM asks WHERE kind = 'setup' AND state = 'open' AND json_extract(detail, '$.app') = ?", app);
     if (existing) return this.askView(existing);
     const person = String(me.address || me.name || 'Someone');
-    this.db.tx(() => this.db.run("INSERT INTO asks (bot, kind, title, detail, at) VALUES ('chief', 'setup', ?, ?, ?)",
-      `${person} would like ${app}`, JSON.stringify({ app, person }), Date.now()));
-    this.db.event('ask.opened', 'chief', { kind: 'setup', app });
-    return this.askView(this.db.get("SELECT * FROM asks WHERE kind = 'setup' AND state = 'open' AND json_extract(detail, '$.app') = ?", app)!);
+    // The event carries the ask's id like every ask.opened: phones fan the news out by it.
+    const id = this.db.tx(() => {
+      const r = this.db.run("INSERT INTO asks (bot, kind, title, detail, at) VALUES ('chief', 'setup', ?, ?, ?)",
+        `${person} would like ${app}`, JSON.stringify({ app, person }), Date.now());
+      this.db.event('ask.opened', 'chief', { kind: 'setup', app, ask: Number(r.lastInsertRowid) });
+      return Number(r.lastInsertRowid);
+    });
+    return this.askView(this.db.get('SELECT * FROM asks WHERE id = ?', id)!);
   }
 
   snapshot(viewer = OWNER) {
