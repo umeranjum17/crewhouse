@@ -301,13 +301,29 @@ export class Crew {
     const d = JSON.parse(detail || '{}');
     const covers = d.key ? coversOf(d.key) : null;
     if (a.kind === 'connect') return { ...a, detail: { app: d.app, words: d.words } };
+    if (a.kind === 'setup') return { ...a, detail: { app: d.app, person: d.person } };
     if (a.kind === 'propose') return { ...a, detail: { words: a.title, preview: d.preview, ...(d.create ? { yes: `Yes, take ${d.create.name} on` } : d.draft ? { yes: 'Approve' } : {}), ...(d.routine ? { routine: d.routine } : {}) } };
     return { ...a, detail: { effect: d.effect, words: a.title, spends: d.effect === 'spend', covers, ...(covers ? { always: covers } : {}), ...(d.preview ? { preview: d.preview } : {}),
       ...(d.checkout ? { order: { shown: d.checkout.shown ?? '', known: Number.isFinite(d.checkout.total), dollars: d.checkout.currency === '$' } } : {}) } };
   }
 
   /** What one member sees: the whole crew, but their own tasks, questions and accounts. */
+  /** A family member asks the owner to switch Google on for the house: one ask on the owner's list (the asker sees
+   *  it too, as the 'Asked {owner}' state on her card). It closes itself the moment the house is ready. */
+  askSetup(app: string, viewer: number) {
+    const me = this.viewer(viewer);
+    const existing = this.db.get("SELECT * FROM asks WHERE kind = 'setup' AND state = 'open' AND json_extract(detail, '$.app') = ?", app);
+    if (existing) return this.askView(existing);
+    const person = String(me.address || me.name || 'Someone');
+    this.db.tx(() => this.db.run("INSERT INTO asks (bot, kind, title, detail, at) VALUES ('chief', 'setup', ?, ?, ?)",
+      `${person} would like ${app}`, JSON.stringify({ app, person }), Date.now()));
+    this.db.event('ask.opened', 'chief', { kind: 'setup', app });
+    return this.askView(this.db.get("SELECT * FROM asks WHERE kind = 'setup' AND state = 'open' AND json_extract(detail, '$.app') = ?", app)!);
+  }
+
   snapshot(viewer = OWNER) {
+    // The house being ready settles every outstanding 'set it up' ask by itself.
+    if (this.connections.houseGoogle()) this.db.run("UPDATE asks SET state = 'withdrawn', answer = 'house-ready' WHERE kind = 'setup' AND state = 'open'");
     const files = (task: number) => this.db.all(`SELECT data FROM events WHERE kind = 'file.delivered' AND json_extract(data, '$.task') = ?`, task).map((e) => JSON.parse(e.data).path);
     const me = this.viewer(viewer);
     return {

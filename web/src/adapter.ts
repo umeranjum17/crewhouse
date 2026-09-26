@@ -12,7 +12,7 @@ export type Helper = {
 };
 export type Choice = { label: string; body: Json; primary?: boolean };
 export type Card = {
-  id: number; helper: string; kind: 'ok' | 'spend' | 'question' | 'connect' | 'routine'; head: string; words: string;
+  id: number; helper: string; kind: 'ok' | 'spend' | 'question' | 'connect' | 'routine' | 'setup'; head: string; words: string;
   preview?: { head?: string; body: string }; choices: Choice[]; reply: boolean; app?: App; at: number;
   /** Chief's offered routine: the lines to confirm (cadence, what, quiet, first run), the schedule words to edit, and
    *  the time-zone line when the home computer's clock sits in another zone from this device's. */
@@ -356,6 +356,7 @@ export const unreadBadge = (n: number) => (n > 9 ? '9+' : String(n));
 export function needsYou(state: Json): Card[] {
   const rank = (a: Json) => {
     const d = a.detail ?? {};
+    if (a.kind === 'setup') return state.person.id === OWNER ? 1 : 3; // the owner's to-do, not the asker's
     if (a.kind === 'propose' || a.kind === 'connect' || d.app) return 3;
     if (d.spends || d.effect === 'spend' || d.effect === 'send') return 0;
     return a.kind === 'permission' ? 1 : 2;
@@ -364,7 +365,6 @@ export function needsYou(state: Json): Card[] {
     .sort((x, y) => rank(x.a) - rank(y.a) || y.c.at - x.c.at).map((x) => x.c);
 }
 
-/** What Search found: lines from the member's chats and finished things, each opening its chat. */
 /** What Search found: lines from the member's chats (with the line to land on) and finished things (with the result). */
 export function found(state: Json, r: Json | null) {
   if (!r) return [];
@@ -390,6 +390,13 @@ export function card(a: Json, state: Json): Card {
   const name = crewName(state, a.bot);
   const d = a.detail ?? {};
   const base = { id: a.id, helper: a.bot, at: a.at, reply: false };
+  if (a.kind === 'setup') {
+    // The house isn't ready for this app: the ask on the owner's list, and how the asker sees it afterwards.
+    const app = apps(state).find((x) => x.id === d.app);
+    return { ...base, kind: 'setup', head: `${d.person ?? 'Someone'} would like ${app?.name ?? 'an app'}`,
+      words: `${d.person ?? 'Someone'} would like ${app?.name ?? 'an app'} in this house. Setting Google up is a one-time job, about 20 minutes, and then everyone can use it.`,
+      choices: [] };
+  }
   if (a.kind === 'connect' || d.app) {
     const app = apps(state).find((x) => x.id === d.app) ?? APPS[0];
     return { ...base, kind: 'connect', app, head: `${name} could use ${app.name}`, words: plain(d.words ?? `${name} can do this with your ${app.name}. Connect it?`),
@@ -461,6 +468,24 @@ export const FIRST_IDEAS = [
   { icon: '🎂', label: 'Write a birthday message for Mum' },
   { icon: '📅', label: "What's on this week?" },
 ];
+
+/** The starters Hello offers: useful from the first tap, and never one that dead-ends in a connection. With Google
+ *  not on for the house, the calendar starter sits out; a party plan takes its place. */
+export function firstIdeas(state: Json) {
+  if (state.house?.google !== false) return FIRST_IDEAS;
+  return FIRST_IDEAS.filter((i) => !i.label.startsWith("What's on this week")).concat({ icon: '🎈', label: 'Help me plan a birthday party' });
+}
+
+/** The owner's three setup jobs: what the crew thinks with, the phones reaching it, and Google for the house.
+ *  Until all three are done, the owner's Home says how many are left. */
+export function homeSetup(state: Json, g: Json | null, link: Json | null) {
+  const rows = [
+    { key: 'chatgpt', says: 'ChatGPT signed in', done: g?.state === 'ready' && !g?.notIncluded },
+    { key: 'phones', says: 'Phones can reach the crew from anywhere', done: link?.anywhere === 'anywhere' },
+    { key: 'google', says: 'Google for the house', done: state.house?.google !== false },
+  ];
+  return { rows, left: rows.filter((r) => !r.done).length };
+}
 
 /** Ideas are promises from a named helper; Chief offers three of his own when the crew has none. */
 export function ideas(state: Json) {
