@@ -147,10 +147,11 @@ test('Home keeps a standing "hand me a job" list, straight from crewd\'s ideas: 
     title: 'Scout wants to press “Request price adjustment” on shop.example, a site you signed it in to. The page shows $999.00.',
     detail: { effect: 'send', press: true, spends: false,
       words: 'Scout wants to press “Request price adjustment” on shop.example, a site you signed it in to. The page shows $999.00.',
-      preview: { head: 'What Scout will press on shop.example', body: 'Paid on 12 March: $999.00\nRequest price adjustment' } } }, withJobs);
+      preview: { head: 'What Scout will press on shop.example', body: "You'd get $50.00 back.\nPaid on 12 March: $999.00\nRequest price adjustment" } } }, withJobs);
   assert.equal(press.head, 'Scout wants to act on a site', 'a press is not called a message ready to send');
   assert.match(press.choices[0].label, /press it/i);
   assert.match(press.preview!.body, /Request price adjustment/, 'the button, as the page writes it');
+  assert.match(press.preview!.body, /You'd get \$50\.00 back\./, 'and what they get back, when the page wrote both prices');
   assert.equal(press.choices.find((c: any) => c.body.scope === 'always'), undefined, 'no standing answer for acting as the person');
   const src = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
   const home = src.slice(src.indexOf('function Home('), src.indexOf('const ownerName'));
@@ -159,7 +160,7 @@ test('Home keeps a standing "hand me a job" list, straight from crewd\'s ideas: 
   const list = src.slice(src.indexOf('function JobList('), src.indexOf('function JobList(') + 1800);
   assert.match(list, /A\.jobs\(state\)/, 'the rows are the ideas, not a list written in the app');
   assert.match(list, /keepDraft\('chief', ask\)/, 'a tap fills Chief\'s box; it never sends');
-  assert.match(list, /className="frame-row"/, 'Home\'s own row shape, with the helper\'s face');
+  assert.match(list, /phone \? 'job' : 'frame-row'/, "Home's own row shape on the desk, the chats' row shape on a phone, both with the helper's face");
   assert.doesNotMatch(list, /api\.post/, 'nothing is handed over by itself');
 });
 

@@ -293,16 +293,17 @@ function JobList({ state, phone }: { state: Json; phone?: boolean }) {
   const rows = A.jobs(state);
   const hand = (ask: string) => { keepDraft('chief', ask); go('#/chief'); };
   return (
-    <section className={phone ? 'card needs-card phone-only jobs-list' : 'frame jobs'} aria-label="Hand me a job">
+    <section className={phone ? 'card jobs phone-only' : 'frame jobs'} aria-label="Hand me a job">
       <div className="label ascii">Hand me a job</div>
       {rows.length ? rows.map((j) => {
         const h = crew.find((x) => x.id === j.bot);
-        const body = <><Face who={h ?? { kind: 'pip', name: j.bot }} size={26} />
+        const body = <><Face who={h ?? { kind: 'pip', name: j.bot }} size={phone ? 24 : 26} />
           <span className="grow"><b>{j.label}</b>{j.needs.length > 0 && <div className="mute small clamp1">{A.jobNeeds(j.needs)}</div>}</span>
           {j.needs.length ? <span className="mute" aria-hidden>›</span> : <button className="btn" onClick={() => hand(j.ask)}>Hand it over</button>}</>;
+        const row = phone ? 'job' : 'frame-row';
         return j.needs.length
-          ? <a key={j.bot + j.label} className="frame-row" href="#/apps">{body}</a>
-          : <div key={j.bot + j.label} className="frame-row">{body}</div>;
+          ? <a key={j.bot + j.label} className={row} href="#/apps">{body}</a>
+          : <div key={j.bot + j.label} className={row}>{body}</div>;
       }) : <div className="frame-empty">Nothing to hand over yet. Hire a helper, and this fills up.</div>}
     </section>
   );

@@ -126,6 +126,7 @@ test('the watch sees the price go under what they paid; the claim press asks wit
     assert.equal(card.detail.words, 'Scout wants to press “Request price adjustment” on shop.example, a site you signed it in to. The page shows $949.00.');
     assert.equal(card.detail.preview.head, 'What Scout will press on shop.example');
     assert.match(card.detail.preview.body, /Paid on 12 March: \$999\.00\nToday from this shop: \$949\.00\nItem total: \$949\.00\nRequest price adjustment/);
+    assert.match(card.detail.preview.body, /^You'd get \$50\.00 back\.\n/, "what they get back, from the page's two prices, first: the preview clamps");
     assert.doesNotMatch(JSON.stringify(card.detail), /98765|price-adjustment/, 'the host only, never the page address');
     assert.equal(JSON.parse(open()!.detail).key, undefined, 'a press carries no key: there is no standing answer for it');
     assert.equal(card.detail.always, undefined, 'so the card offers no “Always OK”');
@@ -155,6 +156,17 @@ test('a press the page cannot name still asks, in the plain sentence', async () 
   assert.equal(db.get("SELECT title FROM asks WHERE bot = 'scout' AND state = 'open'")!.title, 'Scout wants to act as you on shop.example, a site you signed it in to.');
   await crew.answer(db.get("SELECT id FROM asks WHERE bot = 'scout' AND state = 'open'")!.id, { answer: 'deny' });
   assert.equal((await gated).block, true, 'not now keeps the press unpressed');
+
+  // A page that never writes what they paid: the card names the button and says nothing about money.
+  const first = db.get("SELECT MAX(id) AS id FROM asks")!.id;
+  live.snapshot = shop.replace('Paid on 12 March: $999.00', 'Order 98765');
+  const named = (crew as any).gate('scout', 'browser', { args: ['click', 'e7'] });
+  await until('the named press', () => db.get("SELECT * FROM asks WHERE bot = 'scout' AND state = 'open' AND id > ?", first));
+  const shown = crew.snapshot().asks.find((a: any) => a.id === db.get("SELECT MAX(id) AS id FROM asks WHERE state = 'open'")!.id)!;
+  assert.match(shown.detail.preview.body, /Request price adjustment/, 'the button, as the page writes it');
+  assert.doesNotMatch(JSON.stringify(shown.detail), /\bback\b|refund|save/i, 'one price only: the card says nothing about money');
+  await crew.answer(shown.id, { answer: 'deny' });
+  assert.equal((await named).block, true);
   await release(crew, 'scout', 'Not without the OK.');
   await settled(db, t);
   done();

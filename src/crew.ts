@@ -15,7 +15,7 @@ import { Connections, type AppTool, APPS } from './connections.ts';
 import { axiTool, cliTool, openSession, readPage, runAxi, runSandboxed, sandboxBash, q, sandboxReady, webTools } from './engine.ts';
 import { allowed, proxy } from './net.ts';
 import type { Server } from 'node:net';
-import { acts, coversOf, effectOf, orderOf, pressOf, toolWords, type Effect } from './policy.ts';
+import { acts, claimOf, coversOf, effectOf, orderOf, pressOf, toolWords, type Effect } from './policy.ts';
 import { axiEnv, registry, resolveGrants, toolBin, which } from './tools.ts';
 import { stubModels } from './stub.ts';
 import { describe, nextRun, parseSchedule } from './routines.ts';
@@ -1329,9 +1329,12 @@ export class Crew {
     const p = pressOf(l?.snapshot ?? '', String(input.args?.[1] ?? '').replace(/^@/, ''));
     if (!p) return e;
     const shown = orderOf(l?.snapshot ?? '').shown;
+    const back = claimOf(l?.snapshot ?? '');
     return { ...e,
       words: `${name} wants to press “${p.label}” on ${host}, a site you signed it in to${shown ? `. The page shows ${shown}.` : '.'}`,
-      preview: { head: `What ${name} will press on ${host}`, body: p.body } };
+      // One plain money line first, only when the page itself writes both prices (the preview clamps); otherwise the
+      // card says nothing about money at all.
+      preview: { head: `What ${name} will press on ${host}`, body: back ? `You'd get ${back.shown} back.\n${p.body}` : p.body } };
   }
 
   private async ask(botId: string, task: Row | undefined, e: Extract<Effect, { words: string }>, checkout?: { page: string; total: number | null }): Promise<string | null> {

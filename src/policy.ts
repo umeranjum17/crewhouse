@@ -166,6 +166,19 @@ export function orderOf(snapshot: string): { items: string[]; more: number; tota
   return { items: items.slice(0, 8), more: Math.max(0, items.length - 8), total: m ? Number(m[2].replace(/,/g, '')) : null, shown: m ? `${m[1]}${m[2]}` : '', currency, capped: !!m && m[1] === '$' };
 }
 
+/** What the shop's own page says the person would get back: the money on its "paid" line minus the price it shows
+ *  today, both read by crewd from the page. null when the page doesn't write both — then the card says nothing about
+ *  money at all (src/crew.ts `press` puts this line on the claim card). */
+export function claimOf(snapshot: string): { shown: string } | null {
+  const lines = snapshot.split('\n').map(readable).filter((t) => t.length > 0 && t.length < 200);
+  const amount = (t: string) => { const m = MONEY.exec(t); return m ? { sign: m[1], n: Number(m[2].replace(/,/g, '')) } : null; };
+  const sum = (re: RegExp) => { const t = lines.find((l) => re.test(l)); return t ? amount(t) : null; };
+  const paid = sum(/\bpaid\b|you paid|bought for|price paid/i);
+  const today = sum(/\btoday\b|now |current price|price now|item total/i);
+  if (!paid || !today || paid.sign !== today.sign || today.n >= paid.n || today.n <= 0) return null;
+  return { shown: `${paid.sign}${(paid.n - today.n).toFixed(2)}` };
+}
+
 /** What "For this task" or "Always" covers, from the gate's key, in plain words. */
 export function coversOf(key: string) {
   const [kind, ...rest] = key.split(':');
