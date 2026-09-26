@@ -1068,3 +1068,14 @@ test('a search landing on an old line: botPage opens a window around it', async 
   assert.deepEqual(ids.filter((n: number) => n < 5), [1, 2, 3, 4], 'a little before');
   assert.ok(ids.includes(104), 'a little after');
 });
+
+test('a family member asks the owner for the house setup; one ask, on the owner\u0019s list, for everyone to see', () => {
+  const { crew } = setup();
+  crew.askSetup('calendar', 1);
+  crew.askSetup('calendar', 1); // however many taps, one ask
+  const asks = crew.snapshot(1).asks.filter((a: any) => a.kind === 'setup');
+  assert.equal(asks.length, 1);
+  assert.equal(asks[0].detail.app, 'calendar');
+  assert.equal(asks[0].detail.person, 'Owner');
+  assert.equal(asks[0].state, 'open', 'the owner sees it in Needs you');
+});

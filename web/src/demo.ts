@@ -64,7 +64,9 @@ const asks = [
     routine: { bot: 'pip', schedule: 'weekdays 8am', task: "Plan the week's dinners and make the shopping list", quiet: true },
     preview: { head: 'A new routine', body: "Every weekday at 8:00 am\nPip will plan the week's dinners\nTells you only when something changed\nFirst time: Mon 8:00 am" } } },
   ...(me === 1 ? [{ id: 9, bot: 'tracer', task_id: 44, kind: 'permission', at: now - 2 * min, member: 1, title: '', detail: {
-    effect: 'spend', spends: true, words: "Tracer wants to spend about $0.50 to find Sara Malik's work email. OK?" } }] : []),
+    effect: 'spend', spends: true, words: "Tracer wants to spend about $0.50 to find Sara Malik's work email. OK?" } },
+  ...(new URLSearchParams(location.search).has('nohouse') ? [{ id: 46, bot: 'chief', task_id: null, kind: 'setup', at: now - 8 * min, member: 1, title: 'Sara would like Calendar', detail: { app: 'calendar', person: 'Sara' } }] : [])] : []),
+  ...(variant === 'nogoogle' && me === 2 ? [{ id: 45, bot: 'pip', task_id: null, kind: 'connect', at: now, member: me, title: 'Connect Google Calendar', detail: { app: 'calendar', words: 'Let Pip use your Google Calendar' } }] : []),
 ];
 
 function routine(id: number, b: string, name: string, schedule: string, st: string, kind = 'task') {
@@ -194,6 +196,7 @@ export async function demoCall(method: string, path: string, _body?: Json) {
   if (method === 'GET' && path === '/api/phones/link') return { on: true, lan: false, pinned: false, tailscale: variant !== 'home', relay: '', relayStatus: 'off', asking: [], push: variant === 'home' ? 'missing' : 'ready',
     anywhere: variant === 'home' ? 'home' : variant === 'signin-again' ? 'signin' : 'anywhere' };
   if (method === 'POST' && path === '/api/phones/pair') return { qr: 'crewhouse-demo', expires: Date.now() + 120_000 };
+  if (method === 'POST' && path === '/api/house/ask') return { ok: true };
   if (method === 'GET' && path === '/api/phones') return [{ id: 1, name: "Nadia's phone", member: 2, seen: now - 5 * min, reached: { home: now - 5 * min }, push: 'on' },
     { id: 2, name: "Umer's phone", member: 1, seen: now - 2 * 60 * min, reached: { home: now - 26 * 60 * min, tailscale: now - 2 * 60 * min }, push: 'off' }];
   if (method === 'POST' && path.startsWith('/api/connections/')) return { url: 'https://accounts.google.com/' };

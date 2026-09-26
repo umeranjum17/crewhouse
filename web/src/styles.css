@@ -195,6 +195,12 @@ textarea.input { resize: vertical; }
 .needs-row b { font-size: 15.5px; display: block; }
 .needs-row .clamp1 { font-size: 13.5px; }
 .needs-more { margin: 2px 0 6px 23px; }
+/* The house's setup jobs: a tick ring, a plain line, and the panel it opens. */
+.setup-mark { font: 900 15px var(--ui); color: var(--mute); width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--shadow); display: inline-grid; place-items: center; flex: none; }
+.setup-mark.done { color: var(--ok-ink); border-color: var(--ok); background: color-mix(in srgb, var(--ok) 18%, transparent); }
+/* Hello's own-words ask: one field, one send. */
+.own-ask { display: flex; gap: 8px; margin-top: 10px; }
+.own-ask .input { flex: 1; }
 .hi { text-align: center; font-size: 28px; margin-top: 10px; }
 .bubbles { display: flex; gap: 14px; overflow-x: auto; padding: 8px 4px 4px; scrollbar-width: none; justify-content: safe center; }
 .bubble { display: grid; justify-items: center; gap: 4px; font: 800 13.5px var(--ui); flex: none; }
