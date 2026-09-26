@@ -39,6 +39,18 @@ export const clock = (t: number) => {
 const at = (t: number | string) => (typeof t === 'number' ? (t < 1e12 ? t * 1000 : t) : Date.parse(t));
 export const greeting = (h = new Date().getHours()) => (h < 5 ? 'Good evening' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening');
 
+/**
+ * The runs-at-home promise, said once and read in three places: Hello, Settings, and the phone's This phone.
+ * Each part is true of the code as it ships — the database, the crew's notes and everyone's sign-ins live on this
+ * machine and crewd has no server of its own (README); a job's own words are the only thing sent to ChatGPT or a
+ * connected app (src/engine.ts, src/connections.ts); a phone notification carries no words at all (src/link.ts).
+ * `home` names the machine from wherever the line is read. Keep it free of technical words; test/ui.test.ts pins it.
+ */
+export const atHome = (home = 'this computer') => [
+  `Your helpers live on ${home} and use your own sign-ins.`,
+  "Nothing you tell them is kept anywhere else — only what a job needs goes to ChatGPT or the app it's using.",
+];
+
 /** A file's name as a person would say it: "files/mum-birthday_v2.mp4" → "Mum birthday v2". */
 export function pretty(path: string) {
   const b = (path.split('/').pop() ?? path).replace(/\.[a-z0-9]+$/i, '').replace(/[-_.]+/g, ' ').trim();

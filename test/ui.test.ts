@@ -161,6 +161,23 @@ test('first success: starters never dead-end, and the house setup is the owner\'
   assert.deepEqual(half.rows.filter((r) => !r.done).map((r) => r.key), ['google']);
 });
 
+test('the runs-at-home line is said once, in the same plain words, in all three places a family meets it', () => {
+  const [here, only] = A.atHome();
+  assert.equal(here, 'Your helpers live on this computer and use your own sign-ins.', 'no technical words, no vendor voice');
+  // honest about what does leave: what a job needs, to ChatGPT or the app it's using (README, "Nothing leaves your machine…")
+  assert.equal(only, "Nothing you tell them is kept anywhere else — only what a job needs goes to ChatGPT or the app it's using.");
+  assert.doesNotMatch(`${here} ${only}`, FORBIDDEN);
+  assert.match(A.atHome('the home computer')[0], /^Your helpers live on the home computer and use your own sign-ins\.$/, 'the phone names the home computer');
+  const web = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
+  assert.equal([...web.matchAll(/A\.atHome\(/g)].length, 2, 'Hello and Settings both quote it; nobody paraphrases it');
+  assert.match(web, /<div>› \{A\.atHome\(\)\[1\]\}<\/div>/, "it sits in Hello's promises, the same three rows as before");
+  assert.match(web, /<h1>Settings<\/h1>\s+<p className="mute small">\{A\.atHome\(\)\.join\(' '\)\}<\/p>/, 'Settings says it under the title, in the quiet style');
+  const app = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
+  assert.equal([...app.matchAll(/A\.atHome\('the home computer'\)/g)].length, 3, 'the phone quotes it at first run (two lines) and on This phone');
+  assert.match(app, /\{A\.atHome\('the home computer'\)\.join\(' '\)\}<\/T>\s+<T tone="mute" style=\{s\.small\}>🔒/, 'on This phone it sits above the lock line');
+  assert.doesNotMatch(app, /I run the crew on this computer/, 'the phone never calls the family computer "this computer"');
+});
+
 test('owner-only helpers stay with the owner', () => {
   assert.ok(!A.crew(state).some((h) => h.id === 'tracer'));
   assert.ok(!A.gallery(state).some((t: any) => t.id === 'tracer'));

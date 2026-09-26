@@ -82,7 +82,8 @@ function Hello({ state, refresh, night }: Ctx) {
       <h1>{A.greeting()}{address.trim() ? `, ${address.trim()}` : ''}</h1>
       <p className="lead">I'm Chief. I run the crew in this house{isOwner ? '.' : `; ${owner} set me up for you.`}</p>
       <div className="promises">
-        <div>› Your crew runs on this computer, using your ChatGPT to help with the work.</div>
+        <div>› Your helpers live on this computer, and think with your own ChatGPT.</div>
+        <div>› {A.atHome()[1]}</div>
         <div>› I'll ask before sending messages, deleting things or spending money.</div>
       </div>
       <h2 className="plate">What can I take off your plate?</h2>
@@ -801,6 +802,7 @@ function Settings({ state, me, refresh, tick, accounts, look, setLook, switchTo 
   return (
     <div className="page settings">
       <h1>Settings</h1>
+      <p className="mute small">{A.atHome().join(' ')}</p>
       {owner && <HomeSetup state={state} accounts={accounts} tick={tick} />}
       {state.members.length > 1 && (<><div className="label">Who's using this screen</div>
         <div className="chips">{state.members.map((m: Json) => <button key={m.id} className={`chip ${m.id === me ? 'on' : ''}`} onClick={() => switchTo(m.id)}>{m.name}</button>)}</div></>)}

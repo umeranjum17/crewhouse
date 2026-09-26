@@ -509,7 +509,9 @@ function Hello({ state, refresh, go }: Ctx) {
     <Page>
       <View style={{ alignItems: 'center' }}><ChiefArt mood="hello" size={150} /></View>
       <T style={[s.h1, s.centerText]}>{A.greeting()}{address.trim() ? `, ${address.trim()}` : ''}</T>
-      <T tone="ink2" style={s.centerText}>I'm Chief. I run the crew on this computer, using your ChatGPT to help with the work. I'll ask before sending messages, deleting things or spending money.</T>
+      <T tone="ink2" style={s.centerText}>I'm Chief. {A.atHome('the home computer')[0]}</T>
+      <T tone="mute" style={s.centerText}>{A.atHome('the home computer')[1]}</T>
+      <T tone="ink2" style={s.centerText}>I'll ask before sending messages, deleting things or spending money.</T>
       <TextInput style={[s.input, { color: useLook().ink, borderColor: useLook().line }]} value={address} onChangeText={setAddress} placeholder="What shall I call you?" placeholderTextColor={useLook().mute} />
       <View style={s.chips}>{['Sir', "Ma'am", ...(named ? [named] : [])].map((q) => <Btn key={q} label={q} onPress={() => setAddress(q)} />)}</View>
       <Label>What can I take off your plate?</Label>
@@ -1141,6 +1143,7 @@ function ThisPhone({ grant, status, onForget, onClear }: { grant: Grant; status:
         <T tone="mute">This phone keeps the last week of your chats, so you can read them while the home computer is off. Clearing removes them from this phone only; unpairing clears them too.</T>
         <View style={s.row}><Btn label="Clear" onPress={onClear} /></View>
       </Card>
+      <T tone="mute" style={s.small}>{A.atHome('the home computer').join(' ')}</T>
       <T tone="mute" style={s.small}>🔒 Only the computer this phone was paired with can read what it sends.</T>
       <Btn label="Unpair this phone" onPress={onForget} />
       <T tone="mute" style={s.small}>To take a phone's access away for good, remove it on the computer too: Settings, Phones.</T>
