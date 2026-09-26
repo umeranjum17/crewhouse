@@ -177,8 +177,17 @@ textarea.input { resize: vertical; }
 
 /* home */
 .home, .page { max-width: 760px; margin: 0 auto; padding: 18px 18px 40px; }
-.beat { display: grid; justify-items: center; }
-.beat .pill { margin-top: -6px; }
+/* The phone's header row: his face at 32, her greeting at 22, left. */
+.home-head { display: flex; gap: 12px; align-items: center; margin: 2px 0 10px; }
+.home-head h1 { font-size: 22px; letter-spacing: -.3px; margin: 0; }
+/* Needs you as one compact card: a number, the face, the subject, one plain line; a row opens the review sheet. */
+.needs-card { padding: 6px 16px; }
+.needs-row { display: flex; gap: 10px; align-items: center; padding: 11px 0; border-top: 1px solid var(--line); }
+.needs-row:first-child { border-top: 0; }
+.needs-row .n { font: 800 13px var(--ui); color: var(--mute); width: 13px; text-align: right; flex: none; }
+.needs-row b { font-size: 15.5px; display: block; }
+.needs-row .clamp1 { font-size: 13.5px; }
+.needs-more { margin: 2px 0 6px 23px; }
 .hi { text-align: center; font-size: 28px; margin-top: 10px; }
 .bubbles { display: flex; gap: 14px; overflow-x: auto; padding: 8px 4px 4px; scrollbar-width: none; justify-content: safe center; }
 .bubble { display: grid; justify-items: center; gap: 4px; font: 800 13.5px var(--ui); flex: none; }
@@ -291,7 +300,8 @@ input[role='switch']:checked::after { left: 21px; }
   .side-nav .ic { width: 20px; text-align: center; }
   .home, .page { padding: 32px 36px 40px; }
   .home { max-width: none; }
-  .desk-col { max-width: 944px; margin: 0 auto; }
+  /* The desk never grows past its column: 900–1199 px must not scroll sideways. */
+  .desk-col { width: 100%; max-width: 944px; margin: 0 auto; min-width: 0; }
   .phone-only { display: none; }
   .desk, .desk-only { display: block; }
   .home-top { display: none; }
@@ -320,8 +330,6 @@ input[role='switch']:checked::after { left: 21px; }
   .frame-row { display: flex; gap: 12px; align-items: center; padding: 11px 0; }
   .frame-row + .frame-row, .frame-row + .steps, .frame .steps + .frame-row, .frame .steps + *, .frame .card + .frame-row { border-top: 1px dashed var(--line); }
   .frame-empty { color: var(--mute); padding: 12px 0 6px; }
-  .frame .cards { display: grid; gap: 2px; }
-  .frame .cards .ask { margin: 10px 0 4px; }
   .frame .steps { background: transparent; box-shadow: none; border-radius: 0; padding: 6px 0; margin: 0; }
   .frame .ask { box-shadow: none; border: 1.5px solid var(--line); margin-top: 10px; }
   [data-theme='night'] .frame .ask { border-color: var(--shadow); }
@@ -329,6 +337,7 @@ input[role='switch']:checked::after { left: 21px; }
 
   /* the desk: NEEDS YOU, and the live + finished frames stacked beside it (one column until the desk is wide enough for two) */
   .desk { display: grid; grid-template-columns: 1fr; gap: 28px; margin-top: 18px; align-items: start; }
+  .desk .frame, .desk-side { min-width: 0; }
   .desk-side { display: grid; gap: 28px; align-content: start; }
   .home { flex: 1; display: flex; flex-direction: column; }
   .home .dock { position: sticky; bottom: 0; margin-top: auto; }
@@ -358,8 +367,6 @@ input[role='switch']:checked::after { left: 21px; }
   .home, .page { padding: 36px 40px 40px; }
   .dock { padding: 18px 40px 16px; margin: 8px -40px 0; }
   .desk { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 28px 32px; }
-  .desk .frame, .desk-side { min-width: 0; }
-  .frame .cards .ask { min-width: 340px; }
 }
 @media (min-width: 1440px) {
   .shell { grid-template-columns: 272px minmax(0, 1fr); }

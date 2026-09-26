@@ -323,16 +323,31 @@ export function preview(last: Json | null | undefined, status = '') {
 export function chats(state: Json): Chat[] {
   const bot = (id: string) => state.bots.find((b: Json) => b.id === id) ?? {};
   const c = chief(state);
-  const lead: Chat = { id: 'chief', name: 'Chief', who: 'chief', line: preview(bot('chief').last, c.line), at: at(bot('chief').last?.at ?? 0) || 0, unread: bot('chief').unread ?? 0, ring: c.mood === 'ask' ? 'needs' : '' };
+  // A helper's suggestion ("learned something", Chief has a suggestion) lives in its chat; its row carries the dot.
+  const suggested = new Set((state.asks as Json[]).filter((a) => a.kind === 'propose').map((a) => a.bot as string));
+  const lead: Chat = { id: 'chief', name: 'Chief', who: 'chief', line: preview(bot('chief').last, c.line), at: at(bot('chief').last?.at ?? 0) || 0, unread: (bot('chief').unread ?? 0) + (suggested.has('chief') && !(bot('chief').unread ?? 0) ? 1 : 0), ring: c.mood === 'ask' ? 'needs' : '' };
   const rest = crew(state).map((h): Chat => {
     const b = bot(h.id);
     // Working or waiting on the person says more than the last line did.
     const line = h.ring === 'needs' ? 'Needs you' : h.driving ? h.status : h.ring === 'working' ? `Working on: ${h.status}` : preview(b.last, h.role);
-    return { id: h.id, name: h.name, who: h, line, at: at(b.last?.at ?? 0) || 0, unread: b.unread ?? 0, ring: h.ring };
+    return { id: h.id, name: h.name, who: h, line, at: at(b.last?.at ?? 0) || 0, unread: (b.unread ?? 0) + (suggested.has(h.id) && !(b.unread ?? 0) ? 1 : 0), ring: h.ring };
   }).sort((a, b) => b.at - a.at);
   return [lead, ...rest];
 }
 export const unreadBadge = (n: number) => (n > 9 ? '9+' : String(n));
+
+/** Home's Needs you, one compact list: spending and sending first, then questions, newest first inside each group.
+ *  A suggestion or an app connection stays in its helper's chat instead — nothing to act on from Home itself. */
+export function needsYou(state: Json): Card[] {
+  const rank = (a: Json) => {
+    const d = a.detail ?? {};
+    if (a.kind === 'propose' || a.kind === 'connect' || d.app) return 3;
+    if (d.spends || d.effect === 'spend' || d.effect === 'send') return 0;
+    return a.kind === 'permission' ? 1 : 2;
+  };
+  return (state.asks as Json[]).map((a) => ({ a, c: card(a, state) })).filter((x) => rank(x.a) < 3)
+    .sort((x, y) => rank(x.a) - rank(y.a) || y.c.at - x.c.at).map((x) => x.c);
+}
 
 /** What Search found: lines from the member's chats and finished things, each opening its chat. */
 export function found(state: Json, r: Json | null) {

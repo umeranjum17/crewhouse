@@ -83,7 +83,7 @@ function ChiefArt({ mood = 'idle', size }: { mood?: art.Mood; size: number }) {
   return <Dots rows={rows} pal={useLook().night ? art.CHIEF_PAL_NIGHT : art.CHIEF_PAL} d={size / rows[0].length} />;
 }
 /** A round face: Chief or a pal, with a ring when it's working (green) or needs you (amber). */
-function Face({ who, size = 44 }: { who: A.Helper | 'chief'; size?: number }) {
+function Face({ who, size = 44, mood }: { who: A.Helper | 'chief'; size?: number; mood?: art.Mood }) {
   const t = useLook();
   const chief = who === 'chief';
   const ring = chief ? '' : who.ring;
@@ -91,7 +91,7 @@ function Face({ who, size = 44 }: { who: A.Helper | 'chief'; size?: number }) {
   return (
     <View style={{ width: size, height: size, borderRadius: size, alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
       backgroundColor: chief ? '#fff7e8' : art.PALS[who.kind].soft, borderWidth: ring ? 3 : 0, borderColor: ring === 'needs' ? t.wait : t.ok }}>
-      {chief ? <ChiefArt size={size * 0.72} /> : <Dots rows={rows} pal={art.palPalette(who.kind)} d={(size * 0.78) / rows[0].length} />}
+      {chief ? <ChiefArt mood={mood ?? 'idle'} size={size * 0.72} /> : <Dots rows={rows} pal={art.palPalette(who.kind)} d={(size * 0.78) / rows[0].length} />}
     </View>
   );
 }
@@ -570,31 +570,46 @@ function HelperPill({ h, offline }: { h: A.Helper; offline: boolean }) {
   return offline ? <Pill tone="off">{OUT}</Pill> : <Pill tone={h.ring === 'needs' ? 'wait' : h.ring ? 'ok' : 'off'}>{h.status}</Pill>;
 }
 
-function Heartbeat({ state, offline }: { state: Json; offline: boolean }) {
-  const { mood, line } = chiefNow(state, offline);
-  return <View style={{ alignItems: 'center', gap: 8 }}><ChiefArt mood={mood} size={120} /><Pill tone={mood === 'ask' ? 'wait' : mood === 'rest' ? 'off' : 'ok'}>{line}</Pill></View>;
+/** Needs you as one compact list: a number, the face, the subject, one plain line; a row opens the review sheet.
+ *  Nothing commits from Home. At most three rows, then "N more", which expands in place. */
+function NeedsRows({ state, cards, open }: { state: Json; cards: A.Card[]; open: (c: A.Card) => void }) {
+  const t = useLook();
+  const crew = A.crew(state);
+  const [all, setAll] = useState(false);
+  const shown = all ? cards : cards.slice(0, 3);
+  const more = cards.length - 3;
+  return (
+    <View>
+      {shown.map((c, i) => (
+        <Pressable key={c.id} style={[s.row, { paddingVertical: 10, borderTopWidth: i ? StyleSheet.hairlineWidth : 0, borderTopColor: t.line }]}
+          onPress={() => open(c)} accessibilityLabel={c.head}>
+          <T tone="mute" style={s.small}>{i + 1}</T>
+          <Face who={crew.find((h) => h.id === c.helper) ?? { kind: 'pip', name: c.helper }} size={24} />
+          <View style={{ flex: 1 }}><T style={s.b}>{c.head}</T><T tone="mute" style={s.small} lines={1}>{c.words}</T></View>
+          <T tone="mute">›</T>
+        </Pressable>
+      ))}
+      {!all && more > 0 && <Btn ghost label={`${more} more ${more === 1 ? 'needs' : 'need'} you`} onPress={() => setAll(true)} />}
+    </View>
+  );
 }
 
 function Home(ctx: Ctx) {
   const { state, go, refresh, canAct, offline, open } = ctx;
-  const crew = A.crew(state);
-  const who = (id: string) => crew.find((h) => h.id === id);
-  const cards = A.cards(state);
+  const needs = A.needsYou(state);
+  const chief = chiefNow(state, offline);
   const toChief = async (x: string, p: Photo[] = []) => { const ok = await attempt(() => api.post('chief', x, p.map(({ type, data }) => ({ type, data }))), undefined, true); if (ok) { refresh(); go({ view: 'chief' }); } return ok; };
-  const helperRoute = (id: string): Route => (id === 'chief' ? { view: 'chief' } : { view: 'helper', id });
   return (
     <View style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={s.page} keyboardShouldPersistTaps="handled">
-        <Pressable onPress={() => go({ view: 'chief' })}><Heartbeat state={state} offline={offline} /></Pressable>
-        <T style={[s.h1, s.centerText]}>{A.greeting()}, {state.person.address ?? state.person.name}</T>
+        {/* One header row: his face carries his mood, her greeting opens the list below. */}
+        <View style={s.row}>
+          <Face who="chief" size={32} mood={chief.mood} />
+          <T style={[s.h1, { fontSize: 22, lineHeight: 28, marginVertical: 0, flex: 1 }]}>{A.greeting()}, {state.person.address ?? state.person.name}</T>
+        </View>
         {!!A.resting(state) && <Card><T>{A.resting(state)}. I'll pick things back up then.</T></Card>}
-        {cards.map((c) => <AskCard key={c.id} c={c} who={who(c.helper)} onDone={refresh} canAct={canAct} offline={offline} open={open} />)}
-        <ChatList state={state} go={go} />
-        {canAct && (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
-            {A.ideas(state).map((i: Json) => <Btn key={i.bot + i.label} label={`✦ ${i.label}`} onPress={() => attempt(async () => { await api.post(i.bot, i.ask); refresh(); go(helperRoute(i.bot)); })} />)}
-          </ScrollView>
-        )}
+        {needs.length > 0 && <Card><NeedsRows state={state} cards={needs} open={open} /></Card>}
+        <ChatList state={state} go={go} mood={chief.mood} />
       </ScrollView>
       {canAct && <View style={s.dock}><Composer placeholder="Ask Chief anything…" onSend={toChief} chat="chief" /></View>}
     </View>
@@ -602,7 +617,7 @@ function Home(ctx: Ctx) {
 }
 
 /** Every chat, like a messaging app: Chief on top, then whoever spoke last; search finds words across them. */
-function ChatList({ state, go }: { state: Json; go: Ctx['go'] }) {
+function ChatList({ state, go, mood }: { state: Json; go: Ctx['go']; mood?: art.Mood }) {
   const t = useLook();
   const [q, setQ] = useState('');
   const [hits, setHits] = useState<Json | null>(null);
@@ -613,7 +628,7 @@ function ChatList({ state, go }: { state: Json; go: Ctx['go'] }) {
   }, [q]);
   const crew = A.crew(state);
   const to = (id: string): Route => (id === 'chief' ? { view: 'chief' } : { view: 'helper', id });
-  const face = (id: string) => (id === 'chief' ? <Face who="chief" size={46} /> : <Face who={crew.find((h) => h.id === id) ?? 'chief'} size={46} />);
+  const face = (id: string) => (id === 'chief' ? <Face who="chief" size={46} mood={mood} /> : <Face who={crew.find((h) => h.id === id) ?? 'chief'} size={46} />);
   const row = (key: string, id: string, name: string, line: string, at: number, unread = 0) => (
     <Pressable key={key} style={s.job} onPress={() => go(to(id))} accessibilityLabel={`${name}${unread ? `, ${unread} new` : ''}`}>
       {face(id)}
@@ -643,6 +658,7 @@ function Chat({ id, state, tick, refresh, canAct, offline, open }: Ctx & { id: s
   useEffect(() => { void load(); }, [load, tick]);
   const scroll = useRef<ScrollView>(null);
   const lines = A.lines(page, id);
+  const [seed, setSeed] = useState(0); // a starter chip fills the box from outside; remount reads the draft back
   const h = A.crew(state).find((x) => x.id === id);
   const b = state.bots.find((x: Json) => x.id === id);
   const trail = b?.task && page ? A.steps(page.trail ?? [], b.task.id, true) : [];
@@ -656,7 +672,12 @@ function Chat({ id, state, tick, refresh, canAct, offline, open }: Ctx & { id: s
   return (
     <View style={{ flex: 1 }}>
       <ScrollView ref={scroll} style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 10 }} onContentSizeChange={() => scroll.current?.scrollToEnd({ animated: false })}>
-        {!lines.length && page && <T tone="mute" style={s.centerText}>Say hello to {name}. Ask for anything, in your own words.</T>}
+        {!lines.length && page && <View style={{ alignItems: 'center', gap: 10 }}>
+          <T tone="mute" style={s.centerText}>Say hello to {name}. Ask for anything, in your own words.</T>
+          {id === 'chief' && canAct && <View style={[s.chips, { justifyContent: 'center' }]}>
+            {A.ideas(state).map((i: Json) => <Btn key={i.bot + i.label} label={`✦ ${i.label}`} onPress={() => { keepDraft(id, i.ask); setSeed((n) => n + 1); }} />)}
+          </View>}
+        </View>}
         {lines.map((l) => (
           <View key={l.id} style={[s.line, l.from === 'me' && { alignSelf: 'flex-end' }, l.from === 'note' && { maxWidth: '92%' }]}>
             {l.from === 'chief' && <T tone="pinkInk" style={[s.small, s.b, { marginLeft: 10 }]}>Chief</T>}
@@ -673,7 +694,7 @@ function Chat({ id, state, tick, refresh, canAct, offline, open }: Ctx & { id: s
         <Steps steps={trail} />
         {cards.map((c) => <AskCard key={c.id} c={c} who={h} onDone={refresh} canAct={canAct} offline={offline} open={open} />)}
       </ScrollView>
-      {canAct ? <View style={s.dock}><Composer placeholder={id === 'chief' ? 'Ask Chief anything…' : `Message ${name}…`} onSend={send} chat={id} /></View>
+      {canAct ? <View style={s.dock}><Composer key={seed} placeholder={id === 'chief' ? 'Ask Chief anything…' : `Message ${name}…`} onSend={send} chat={id} /></View>
         : <T tone="mute" style={[s.small, { padding: 16 }]}>{offline ? "You can reply once the home computer is back." : "This phone watches the crew; it can't send messages."}</T>}
     </View>
   );
