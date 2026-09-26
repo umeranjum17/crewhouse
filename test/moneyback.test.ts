@@ -26,6 +26,16 @@ function setup() {
 }
 const row = (crew: any) => crew.snapshot().ideas.find((i: any) => /claim the money back/.test(i.promise));
 
+const unclaimed = (crew: any) => crew.snapshot().ideas.find((i: any) => /unclaimed-money registers/.test(i.promise));
+
+test('Home lists the unclaimed-money job too: it waits on nothing, because searching needs no sign-in', async () => {
+  const { crew, done } = setup();
+  assert.equal(unclaimed(crew).group, 'money', 'money back leads the list');
+  assert.deepEqual(unclaimed(crew).needs, [], 'the registers are read without an account, so the row is ready to hand over');
+  assert.match(unclaimed(crew).ask, /money owed to us/);
+  done();
+});
+
 test('Home lists the price-drop job, and says what it waits on rather than dead-ending', async () => {
   const { crew, cfg, done } = setup();
   assert.match(row(crew).ask, /claim the difference back/);
@@ -77,6 +87,85 @@ test('a helper asks for its own check-in: a watch when the page can be read, a q
   r = db.get("SELECT * FROM routines WHERE bot = 'scout' AND kind = 'task' AND watch IS NULL")!;
   assert.equal(r.quiet, 1, 'a browser check-in speaks up only when something changed');
   assert.match(r.body, /your own browser/);
+  done();
+});
+
+const register = `### Page state
+- Page URL: https://unclaimed.example/claim/PA-88231
+- Page Snapshot:
+\`\`\`yaml
+- main [ref=e1]:
+  - heading "Claim for property PA-88231" [level=1] [ref=e2]
+  - text: "Wages — Acme Corp — $1,240.00"
+  - textbox "Owner's full name" [ref=e5]
+  - textbox "Address the money was owed at" [ref=e6]
+  - textbox "Email for this claim" [ref=e7]
+  - button "Submit claim" [ref=e9]
+\`\`\``;
+
+test('filing a claim asks on a card that lists every line about to be filled, and the job never says filed', async () => {
+  const { db, crew, cfg, done } = setup();
+  // The person signed Scout in to the register's own site: every fill and press there is its own card.
+  const file = join(cfg.crewDir, 'bots', 'scout', 'bot.json');
+  writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, 'utf8')), signedIn: ['unclaimed.example'] }, null, 2));
+  const { task: t } = (await crew.post('scout', 'ask permission: file the claim for property PA-88231'))!;
+  await until('working', () => crew.sessionOf('scout'));
+  const live = (crew as any).live.get('scout');
+  live.page = 'https://unclaimed.example/claim/PA-88231';
+  live.snapshot = register;
+  const open = () => db.get("SELECT * FROM asks WHERE bot = 'scout' AND state = 'open'");
+  // One card per line of the form, read from the page: the label as the register writes it, the value from the call.
+  const line = async (label: string, ref: string, value: string) => {
+    const gated = (crew as any).gate('scout', 'browser', { args: ['fill', ref, value] });
+    await until('asked', open);
+    const ask = open()!;
+    const card = crew.snapshot().asks.find((a: any) => a.id === ask.id)!;
+    assert.equal(card.detail.effect, 'send');
+    assert.equal(JSON.parse(ask.detail).key, undefined, 'a fill carries no key: asked every time');
+    assert.equal(card.detail.always, undefined, 'and no Always OK: the family’s identity is in these lines');
+    assert.equal(card.detail.words, `Scout wants to fill “${label}” on unclaimed.example, a site you signed it in to.`);
+    assert.equal(card.detail.preview.head, 'What Scout will fill on unclaimed.example');
+    assert.match(card.detail.preview.body, new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}: ${value}$`));
+    await crew.answer(ask.id, { answer: 'allow' });
+    assert.equal(await gated, undefined, 'the yes lets the fill through');
+  };
+  await line("Owner's full name", 'e5', 'Ada Lovelace');
+  await line('Address the money was owed at', 'e6', '12 Lovelace Lane');
+  await line('Email for this claim', 'e7', 'ada@example.net');
+
+  // The submit press is the price-drop card again: the button as the page writes it, and no standing answer.
+  const gated = (crew as any).gate('scout', 'browser', { args: ['click', 'e9'] });
+  await until('asked', open);
+  const card = crew.snapshot().asks.find((a: any) => a.id === open()!.id)!;
+  assert.equal(card.detail.words, 'Scout wants to press “Submit claim” on unclaimed.example, a site you signed it in to.');
+  assert.equal(card.detail.preview.head, 'What Scout will press on unclaimed.example');
+  assert.match(card.detail.preview.body, /Email for this claim/, 'the page’s own lines around the button');
+  assert.match(card.detail.preview.body, /Submit claim/);
+  await crew.answer(open()!.id, { answer: 'allow' });
+  assert.equal(await gated, undefined);
+  await release(crew, 'scout', 'I filled the claim from the pack and pressed Submit claim; the register’s page said it was received.');
+  await settled(db, t);
+  assert.equal(state(db, t), 'unsure', 'it acted in the world and never saw the state pay out');
+  assert.match(lastSaid(db, 'scout')!, /Not sure it worked:/, 'unsure is its own kind of line, never a done');
+  assert.doesNotMatch(lastSaid(db, 'scout')!, /\bfiled\b|submitted/i, 'nothing says the claim was filed');
+  done();
+});
+
+test('a claim that asks for an upload or a signature stops with the pack ready and never says filed', async () => {
+  const { db, crew, done } = setup();
+  const pack = 'Claim pack for property PA-88231: wages held by Acme Corp, $1,240.00, owed at 12 Lovelace Lane. Proof the register asks for: a passport. The form stops at Upload ID — that line is the person\'s.';
+  const { task: t } = (await crew.post('scout', 'Get the claim for PA-88231 ready and ask permission before anything more. '
+    + `[tool write {"path":"files/claim-pa-88231.md","content":"${pack}"}] `
+    + '[tool crew_deliver {"path":"files/claim-pa-88231.md"}] '
+    + '[tool crew_outcome {"worked": false, "seen": "I stopped where the form asks for a passport upload. The pack is ready in files/claim-pa-88231.md; the upload line is yours to do."}]'))!;
+  await until('working', () => crew.sessionOf('scout'));
+  await release(crew, 'scout', 'The claim needs a passport upload, so I stopped with the pack ready; the upload line is yours.');
+  await settled(db, t);
+  assert.equal(state(db, t), 'unsure', 'stopped at the upload is not a claim filed');
+  assert.match(task(db, t).result!, /pack is ready/, 'the exact line to act on, in the job’s own words');
+  assert.ok(db.get("SELECT 1 FROM events WHERE kind = 'file.delivered' AND json_extract(data, '$.task') = ?", t), 'the pack is delivered');
+  assert.match(lastSaid(db, 'scout')!, /Not sure it worked: .*pack is ready/, 'the job says what is left, in crewd’s own unsure words');
+  assert.doesNotMatch(lastSaid(db, 'scout')!, /\bfiled\b/i, 'nothing says the claim was filed');
   done();
 });
 

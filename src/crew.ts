@@ -1318,23 +1318,28 @@ export class Crew {
     return { effect: { ...e, words, ...(o.capped ? { cost: o.total! } : {}), preview: { head: `The order at ${host}`, body } }, checkout: { page, total: o.total, shown: o.shown, currency: o.currency } };
   }
 
-  /** The card for acting as the person on a site they signed the bot in to: the button it will press, the host, the
-   *  page's own lines around it, and the money the page shows — all read by crewd from the page as the browser tool
-   *  itself reports it, never from what the model says it was about to press. */
+  /** The card for acting as the person on a site they signed the bot in to: the button it will press, or the form line
+   *  it will fill, the host, the page's own lines around it, and the money the page shows — all read by crewd from the
+   *  page as the browser tool itself reports it, never from what the model says it was about to do. A filled line is
+   *  shown as `label: value` — the label from the page, the value from the call — since this is the one card that
+   *  carries the family's own words (an unclaimed-money claim). */
   private press(botId: string, e: Extract<Effect, { words: string }>, input: Record<string, any>) {
     const l = this.live.get(botId);
     const name = this.bot(botId)?.display ?? botId;
     let host = 'a site';
     try { host = new URL(l?.page ?? '').hostname.replace(/^www\./, '') || host; } catch { /* no page yet */ }
+    const value = ['fill', 'select'].includes(String(input.args?.[0] ?? '')) && input.args?.[2] !== undefined ? String(input.args[2]) : null;
     const p = pressOf(l?.snapshot ?? '', String(input.args?.[1] ?? '').replace(/^@/, ''));
     if (!p) return e;
     const shown = orderOf(l?.snapshot ?? '').shown;
-    const back = claimOf(l?.snapshot ?? '');
+    const back = value === null ? claimOf(l?.snapshot ?? '') : null;
     return { ...e,
-      words: `${name} wants to press “${p.label}” on ${host}, a site you signed it in to${shown ? `. The page shows ${shown}.` : '.'}`,
-      // One plain money line first, only when the page itself writes both prices (the preview clamps); otherwise the
-      // card says nothing about money at all.
-      preview: { head: `What ${name} will press on ${host}`, body: back ? `You'd get ${back.shown} back.\n${p.body}` : p.body } };
+      words: value !== null ? `${name} wants to fill “${p.label}” on ${host}, a site you signed it in to.`
+        : `${name} wants to press “${p.label}” on ${host}, a site you signed it in to${shown ? `. The page shows ${shown}.` : '.'}`,
+      // One plain money line first on a press, only when the page itself writes both prices (the preview clamps);
+      // a filled line reads `label: value`, and the card says nothing about money it did not read.
+      preview: { head: `What ${name} will ${value !== null ? 'fill' : 'press'} on ${host}`,
+        body: value !== null ? `${p.label}: ${value}` : back ? `You'd get ${back.shown} back.\n${p.body}` : p.body } };
   }
 
   private async ask(botId: string, task: Row | undefined, e: Extract<Effect, { words: string }>, checkout?: { page: string; total: number | null }): Promise<string | null> {

@@ -1,7 +1,7 @@
 // A made-up household in crewd's own shape, plus the fields the engine rework will add (docs/ui-contract.md).
 // Open the app with ?demo (Nadia's phone), ?demo=umer (the owner), ?demo=hello (first run), ?demo=first (her first
 // request, waiting for her sign-in), ?demo=answer (Chief's first answer), ?demo=plan (a plan without helpers),
-// ?demo=resting, ?demo=connect (a helper asks for Google Calendar in chat), ?demo=nogoogle (Google not on for the house), ?demo=share (the crew's share used up today, $4 spent).
+// ?demo=resting, ?demo=connect (a helper asks for Google Calendar in chat), ?demo=nogoogle (Google not on for the house), ?demo=share (the crew's share used up today, $4 spent), ?demo=claim (Scout asks to fill a line of an unclaimed-money claim).
 // &sheet=signin or &sheet=connect opens that sheet, and &phase=… pins it to one state.
 import type { Json } from './api.ts';
 import { describe, nextRun, parseSchedule } from '../../src/routines.ts';
@@ -116,11 +116,16 @@ const state = {
   ],
   ideas: [
     { bot: 'scout', promise: "I'll keep an eye on what you just bought, and tell you the day you can claim the money back. I'll do it end to end — you just tap approve.", ask: 'Watch something I bought and tell me when I can claim the difference back', group: 'money', needs: ['Gmail'] },
+    { bot: 'scout', promise: "I'll search the government's unclaimed-money registers for our family's names and get the claims ready to file. I'll file it end to end — you just tap approve.", ask: 'Search for money owed to us that nobody has claimed', group: 'money', needs: [] },
     { bot: 'pip', promise: 'Plan a birthday party', ask: 'Plan a birthday party for ' },
     { bot: 'chief', promise: "What's on this week?", ask: "What's on this week?" },
     { bot: 'reel', promise: 'Make a poster from photos', ask: 'Make a poster from these photos: ' },
   ],
   asks: variant === 'connect' ? [{ id: 11, bot: 'pip', task_id: 45, kind: 'connect', at: now, member: me, title: 'Connect Google Calendar', detail: { app: 'calendar', words: 'Let Pip use your Google Calendar' } }]
+    : variant === 'claim' ? [{ id: 13, bot: 'scout', task_id: 42, kind: 'permission', at: now - 30_000, member: me, title: '', detail: {
+        effect: 'send', press: true, spends: false,
+        words: 'Scout wants to fill “Owner’s full name” on unclaimed.example, a site you signed it in to.',
+        preview: { head: 'What Scout will fill on unclaimed.example', body: 'Owner’s full name: Nadia Ali\nAddress the money was owed at: 14 Carter Road, Lahore\nEmail for this claim: nadia@example.net' } } }]
     : firstRun ? [] : asks.filter((a) => a.member === me),
   events,
   resting: variant === 'resting' ? { chatgpt: now + 95 * min } : {},
