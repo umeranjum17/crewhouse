@@ -112,6 +112,7 @@ const state = {
     task(38, 'reel', 'Eid photo collage', 'done', { updated_at: now - 26 * 60 * min, result: 'A collage of the twelve best Eid photos, sized for WhatsApp.', files: [svg('#ffc27a', '#ff7aa2', 'Eid Mubarak ♡')] }),
     task(36, 'scribe', 'Letter to the school about the trip', 'done', { updated_at: now - 50 * 60 * min, result: 'A short, polite letter asking to move Ayaan to the Friday group.', files: ['files/letter-to-school.pdf'] }),
     task(35, 'pip', 'Sports day in the calendar', 'done', { updated_at: now - 3 * 24 * 60 * min, result: 'Added sports day, Friday 9 am, with a reminder the night before.' }),
+    task(46, 'scribe', 'Hotel guest reception', 'done', { updated_at: now - 22 * min, result: 'A workbook the front desk can run the day on: the dashboard, the booking log, the room board and the payments.', files: ['files/hotel-guest-reception.xlsx'] }),
   ],
   ideas: [
     { bot: 'pip', promise: 'Plan a birthday party', ask: 'Plan a birthday party for ' },
@@ -168,6 +169,36 @@ if (variant === 'connect') pages.pip = { messages: [
   { id: 1, author: 'person', text: "What's on this week?" },
   { id: 2, author: 'bot', text: 'I can do this with your Google Calendar.' },
 ] };
+// A workbook, asked for in one line: one question back, then the finished file. The screens show what crewd read out of it.
+pages.scribe = { messages: [
+  { id: 1, author: 'person', text: 'create an excel for reception at the hotel' },
+  { id: 2, author: 'bot', text: 'One thing before I build it: is this the desk\u2019s own day sheet, or the manager\u2019s log of every booking?' },
+  { id: 3, author: 'person', text: "the desk's own day sheet" },
+  { id: 4, author: 'bot', text: 'Then one workbook, ready to use: a dashboard for today, the booking and check-in log, the room and housekeeping board, and the payments. Each has an example row and dropdowns where you need them.' },
+  { id: 5, author: 'system', text: 'Delivered files/hotel-guest-reception.xlsx: 4 sheets: Daily dashboard, Booking & check-in, Rooms & housekeeping, Payments' },
+] };
+/** What crewd read out of that workbook (src/workbooks.ts): the demo\u2019s own copy, in crewd\u2019s shape. */
+const book = {
+  sheets: [
+    { name: 'Daily dashboard', total: 6, rows: [
+      ['Today', 'Number', 'Notes'], ['Arrivals', '6', 'Two early, one at 4pm'], ['Departures', '4', 'One late checkout agreed'], ['Walk-ins so far', '1', 'Room 204 taken'], ['Rooms ready', '=COUNTIF(\'Rooms & housekeeping\'!D2:D40,"Ready")', 'Counted off the room board']] },
+    { name: 'Booking & check-in', total: 34, rows: [
+      ['Guest', 'Room', 'Arrival', 'Departure', 'Nights', 'Status', 'Rate', 'Paid'],
+      ['Amina Khan', '204', '11 Oct', '14 Oct', '3', 'Checked in', '285', '285'],
+      ['Bilal Sheikh', '108', '12 Oct', '13 Oct', '1', 'Booked', '120', '40'],
+      ['Family Nazir', '301', '12 Oct', '16 Oct', '4', 'Waitlist', '520', '0']] },
+    { name: 'Rooms & housekeeping', total: 40, rows: [
+      ['Room', 'Type', 'Guest', 'State', 'Checked by', 'Notes'],
+      ['204', 'Sea view double', 'Amina Khan', 'Checked in', 'Rani', 'Extra pillow asked for'],
+      ['108', 'Standard single', '', 'Cleaning', '', 'Start after 11'],
+      ['301', 'Family suite', '', 'To do', '', 'Hairdryer missing']] },
+    { name: 'Payments', total: 12, rows: [
+      ['Guest', 'Room', 'Bill', 'Paid', 'To pay', 'Way paid'],
+      ['Amina Khan', '204', '285', '285', '=C2-D2', 'Card'],
+      ['Bilal Sheikh', '108', '120', '40', '=C3-D3', 'Cash'],
+      ['Family Nazir', '301', '520', '0', '=C4-D4', 'Not paid yet']] },
+  ],
+};
 for (const b of bots) pages[b.id] ??= { messages: [], notes: '', tasks: [] };
 for (const [id, p] of Object.entries(pages)) p.trail = events.filter((e) => e.bot === id);
 
@@ -191,6 +222,8 @@ export async function demoCall(method: string, path: string, _body?: Json) {
     return { messages: messages.slice(0, 50), things: things.slice(0, 20) };
   }
   if (method === 'GET' && path.startsWith('/api/accounts')) return accounts;
+  // The workbook crewd reads for the card and the panel (src/workbooks.ts): the tabs, headings and first rows.
+  if (method === 'GET' && path.startsWith('/api/workbook')) return book;
   if (method === 'GET' && path === '/api/about') return { notes: '- Vegetarian at home\n- Two children: Zara (9) and Ali (6)\n- Prefers weekend plans before Thursday' };
   // ?demo=home / ?demo=signin-again: Settings, Phones before Tailscale, and with it signed out.
   if (method === 'GET' && path === '/api/phones/link') return { on: true, lan: false, pinned: false, tailscale: variant !== 'home', relay: '', relayStatus: 'off', asking: [], push: variant === 'home' ? 'missing' : 'ready',

@@ -23,7 +23,10 @@ export type Card = {
 };
 export type Work = { helper: string; title: string; line: string; waiting: boolean };
 export type Thing = { id: number; helper: string; title: string; at: number; summary: string; files: FileView[] };
-export type FileView = { url: string; kind: 'video' | 'image' | 'doc'; name: string };
+export type FileView = { url: string; kind: 'video' | 'image' | 'doc' | 'sheet'; name: string };
+/** One tab of a delivered workbook, read back by crewd: its headings, its first rows, and how many it has. */
+export type Sheet = { name: string; head: string[]; rows: string[][]; total: number };
+export type Workbook = { name: string; sheets: Sheet[] };
 export type Step = { at: number; text: string; now?: boolean; asked?: boolean; seq: number; undo?: boolean };
 /** `unsure`: crewd's line for a job that acted but couldn't confirm it worked, shown apart from the helper's own words. */
 export type Line = { id: number; from: 'me' | 'them' | 'chief' | 'note'; text: string; files: FileView[]; choices: string[]; unsure?: boolean };
@@ -51,8 +54,25 @@ export function fileView(bot: string, path: string): FileView {
   const rel = path.replace(/^files\//, '');
   const url = /^(data:|\/)/.test(path) ? path : `/files/${bot}/${rel.split('/').map(encodeURIComponent).join('/')}`;
   if (path.startsWith('data:image/')) return { url, name: 'A picture', kind: 'image' };
-  return { url, name: pretty(rel), kind: /\.(mp4|webm|mov)$/i.test(rel) ? 'video' : /\.(png|jpe?g|webp|gif)$/i.test(rel) ? 'image' : 'doc' };
+  return { url, name: pretty(rel), kind: /\.(mp4|webm|mov)$/i.test(rel) ? 'video' : /\.(png|jpe?g|webp|gif)$/i.test(rel) ? 'image' : /\.xlsx?$/i.test(rel) ? 'sheet' : 'doc' };
 }
+
+/**
+ * A workbook crewd read for the app (docs/ui-contract.md): the tabs, the heading row, and the first rows as a read-only
+ * table. What is in a sheet is the helper's own doing, so every cell is read the way its chat words are.
+ */
+export function workbook(json: Json, name: string): Workbook {
+  return {
+    name,
+    sheets: (Array.isArray(json?.sheets) ? json.sheets : []).slice(0, 12).map((s: Json) => {
+      const rows = (Array.isArray(s?.rows) ? s.rows : []).slice(0, 40)
+        .map((r: Json) => (Array.isArray(r) ? r : []).slice(0, 14).map((c: Json) => plain(String(c ?? '')).slice(0, 160)));
+      return { name: plain(String(s?.name ?? '').trim()) || 'Sheet', head: rows[0] ?? [], rows: rows.slice(1), total: Number(s?.total) || rows.length };
+    }),
+  };
+}
+/** How many tabs a workbook has, said the way a person would: "One sheet", "4 sheets". */
+export const sheetWords = (n: number) => (n === 1 ? 'One sheet' : n > 1 ? `${n} sheets` : 'A spreadsheet');
 
 /**
  * A helper's own words, scrubbed of the machinery: code spans, fenced blocks, file paths and the names of engines.

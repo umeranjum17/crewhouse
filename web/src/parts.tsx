@@ -5,7 +5,7 @@ import { draftOf, keepDraft, sent } from './draft.ts';
 import { cycle, type Focused } from './dialog.ts';
 import * as art from './art.ts';
 import { bannerStops } from './tokens.ts';
-import { clock, type Card, type FileView, type Helper, type Step } from './adapter.ts';
+import { clock, fileSource, fileView, sheetWords, workbook, type Card, type FileView, type Helper, type Step, type Workbook } from './adapter.ts';
 
 // ---------- toasts ----------
 const listeners = new Set<(m: string) => void>();
@@ -204,12 +204,87 @@ export function Pill({ tone = 'ok', live, children }: { tone?: 'ok' | 'wait' | '
 export function Media({ f, big }: { f: FileView; big?: boolean }) {
   const [play, setPlay] = useState(false);
   if (f.kind === 'image') return <a href={f.url} target="_blank" rel="noreferrer" className="media"><img src={f.url} alt={f.name} /></a>;
+  if (f.kind === 'sheet') return <WorkbookCard f={f} big={big} />;
   if (f.kind === 'video') {
     return play
       ? <video className="media" src={f.url} controls autoPlay />
       : <button className={`media cover ${big ? 'big' : ''}`} onClick={() => setPlay(true)} aria-label={`Play ${f.name}`}><span>{f.name}</span><i>▶</i></button>;
   }
   return <a href={f.url} target="_blank" rel="noreferrer" className="doc"><span className="doc-ic">▤</span><span className="grow">{f.name}</span><b>Open</b></a>;
+}
+
+// ---------- spreadsheets ----------
+/** crewd reads a workbook with its own copy of the library (web/src/adapter.ts, docs/ui-contract.md); the card and the
+ *  panel open the same file, so they share one read instead of asking the home computer twice. */
+const books = new Map<string, Promise<Json>>();
+function useBook(f: FileView) {
+  const [book, setBook] = useState<Workbook | null>(null);
+  useEffect(() => {
+    const src = fileSource(f.url);
+    if (!src) return;
+    let on = true;
+    let read = books.get(f.url);
+    if (!read) books.set(f.url, read = api.workbook(src.bot, src.path));
+    read.then((j) => on && setBook(workbook(j, f.name))).catch(() => on && setBook(null));
+    return () => { on = false; };
+  }, [f.url, f.name]);
+  return book;
+}
+
+/** A workbook the helper made, in the chat: its name, how many sheets, a peek at the first sheet's headings, and Open. */
+export function WorkbookCard({ f, big }: { f: FileView; big?: boolean }) {
+  const book = useBook(f);
+  const src = fileSource(f.url);
+  const head = book?.sheets[0]?.head ?? [];
+  return (
+    <a className={`wb-card${big ? ' big' : ''}`} href={`#/f/${src?.bot ?? ''}/${encodeURIComponent(src?.path ?? '')}`} aria-label={`Open ${f.name}`}>
+      <span className="wb-ic" aria-hidden>▦</span>
+      <span className="grow wb-what">
+        <b>{f.name}</b>
+        <span className="mute small">{sheetWords(book?.sheets.length ?? 0)}</span>
+      </span>
+      <span className="wb-thumb" aria-hidden>{head.slice(0, 4).map((h, i) => <i key={i}>{h}</i>)}</span>
+      <b className="wb-open">Open</b>
+    </a>
+  );
+}
+
+/**
+ * The workbook itself, read-only: sheet tabs along the top, its rows as a table. On a desk it is a panel beside the
+ * chat it came from; on a phone it is the whole screen. Reading a cell edits nothing, and Download hands over the file.
+ */
+export function WorkbookPanel({ bot, path, onClose }: { bot: string; path: string; onClose: () => void }) {
+  const box = useRef<HTMLDivElement>(null);
+  const [tab, setTab] = useState(0);
+  useDialogOwn(box, onClose);
+  const f = fileView(bot, path);
+  const book = useBook(f);
+  const sheets = book?.sheets ?? [];
+  const s = sheets[Math.min(tab, Math.max(0, sheets.length - 1))];
+  return (
+    <div className="scrim wb-scrim" onClick={onClose}>
+      <div ref={box} className="wb-panel" role="dialog" aria-modal aria-label={f.name} onClick={(e) => e.stopPropagation()}>
+        <header className="wb-head">
+          <span className="wb-ic" aria-hidden>▦</span>
+          <span className="grow wb-what"><b>{f.name}</b><span className="mute small">{sheetWords(sheets.length)}</span></span>
+          <a className="btn" href={f.url} target="_blank" rel="noreferrer">Download</a>
+          <button className="link" onClick={onClose} aria-label="Close">✕</button>
+        </header>
+        {!book && <div className="mute">Opening “{f.name}”…</div>}
+        {book && !sheets.length && <div className="mute">There is nothing in it to show yet.</div>}
+        {sheets.length > 1 && <nav className="wb-tabs" aria-label="Sheets">
+          {sheets.map((x, i) => <button key={`${x.name}-${i}`} className={`wb-tab${i === tab ? ' on' : ''}`} onClick={() => setTab(i)}>{x.name}</button>)}
+        </nav>}
+        {s && <div className="wb-rows">
+          <table className="wb-grid">
+            <thead><tr>{s.head.map((h, i) => <th key={i}>{h}</th>)}</tr></thead>
+            <tbody>{s.rows.map((r, i) => <tr key={i}>{s.head.map((_, c) => <td key={c}>{r[c] ?? ''}</td>)}</tr>)}</tbody>
+          </table>
+          {s.total > s.rows.length + 1 && <div className="mute small">…and {s.total - s.rows.length - 1} more rows. Download it to see the whole sheet.</div> }
+        </div>}
+      </div>
+    </div>
+  );
 }
 
 /** "Show the work", as a friendly list of steps. */

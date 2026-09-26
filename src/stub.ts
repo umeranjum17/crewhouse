@@ -2,7 +2,7 @@
 // and session files are all the engine's own code path. No network, no account, no quota.
 // Script, read from the latest message:
 //   [tool NAME {json}]   call that tool once, then reply with what it returned; several are called in turn, the reply
-//                        saying what the last one returned
+//                        saying what the last one returned (the json may nest: braces are matched, not guessed)
 //   hit the limit        on ChatGPT, answer with ChatGPT's own usage-limit error
 //   no helpers in plan   on ChatGPT, answer as a plan without helpers does (the same words, with no time to come back)
 //   sign me out          answer as an account whose sign-in stopped working does
@@ -28,6 +28,26 @@ async function hold(said: string, sessionId: string | undefined, signal: AbortSi
   return (await new Promise<string | undefined>((r) => { holds.set(sessionId, r); signal?.addEventListener('abort', () => r(undefined)); })) ?? reply;
 }
 
+/** The tool calls in the script, each with its arguments. Braces are balanced, so a spec may nest (crew_workbook does). */
+function toolCalls(said: string) {
+  const out: { name: string; input: any }[] = [];
+  for (const m of said.matchAll(/\[tool (\w+) \{/g)) {
+    const from = m.index! + m[0].length - 1;
+    let depth = 0, i = from, quote = false, esc = false;
+    for (; i < said.length; i++) {
+      const c = said[i];
+      if (esc) { esc = false; continue; }
+      if (c === '\\') { esc = true; continue; }
+      if (c === '"') { quote = !quote; continue; }
+      if (quote) continue;
+      if (c === '{') depth++;
+      else if (c === '}' && !--depth) break;
+    }
+    out.push({ name: m[1], input: JSON.parse(said.slice(from, i + 1)) });
+  }
+  return out;
+}
+
 const step: FauxResponseFactory = async (ctx, options, _state, model): Promise<AssistantMessage> => {
   const msgs: any[] = ctx.messages;
   const bot = /Your id in Crewhouse is ([a-z0-9-]+)\./.exec(msgs.filter((m) => m.role === 'system').map(getSystemMessageText).join('\n'))?.[1] ?? 'bot';
@@ -38,9 +58,9 @@ const step: FauxResponseFactory = async (ctx, options, _state, model): Promise<A
     const pick = /\[route ([a-z0-9-]+|\?)\]/.exec(said)?.[1] ?? 'chief';
     return fauxAssistantMessage(JSON.stringify(Object.fromEntries(options.map((o) => [o, pick === '?' ? 1 / options.length : o === pick ? 0.9 : 0.1 / (options.length - 1)]))));
   }
-  const calls = [...said.matchAll(/\[tool (\w+) (\{.*?\})\]/g)];
+  const calls = toolCalls(said);
   const next = calls[msgs.slice(msgs.findLastIndex((m) => m.role === 'user') + 1).filter((m) => m.role === 'toolResult').length];
-  if (next) return fauxAssistantMessage([fauxToolCall(next[1], JSON.parse(next[2]))], { stopReason: 'toolUse' });
+  if (next) return fauxAssistantMessage([fauxToolCall(next.name, next.input)], { stopReason: 'toolUse' });
   if (last?.role === 'toolResult') {
     const reply = /\[two-fare-backtest\]/.test(said)
       ? 'I recommend the lower fare from Fareboard. I checked Fareboard and Narrowfare; I didn\'t check baggage fees or live inventory.'

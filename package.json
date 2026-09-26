@@ -22,6 +22,7 @@
     "@byokit/relay": "0.1.1",
     "@desklink/host": "^0.1.0",
     "@earendil-works/pi-coding-agent": "0.87.1",
+    "exceljs": "4.4.0",
     "ws": "^8.18.0"
   },
   "devDependencies": {

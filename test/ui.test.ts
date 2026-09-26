@@ -618,3 +618,45 @@ test('a photo in a message is a picture, not words', () => {
   assert.equal(A.preview({ author: 'person', text: 'Here is a photo.\n[photo reel] files/photos/5-1.png' }), 'You: Photo');
   assert.doesNotMatch(shown([l, c]), FORBIDDEN);
 });
+
+// The bar the captain set: a helper makes the workbook, and it arrives as a card you can open. The file itself never
+// reaches a screen — crewd reads it (src/workbooks.ts) and the app renders these words.
+test('a delivered workbook is a card in the chat, and opens as a read-only sheet with tabs', () => {
+  const json = { sheets: [
+    { name: 'Daily dashboard', total: 6, rows: [['Today', 'Number', 'Notes'], ['Arrivals', '6', 'from /home/umer/Crewhouse/bots/quill/files/log.xlsx'], ['Rooms ready', '=COUNTIF(Rooms!D2:D40,"Ready")', '']] },
+    { name: 'Rooms & housekeeping', total: 40, rows: [['Room', 'State', 'Checked by'], ['204', 'Ready', 'Rani']] },
+  ] };
+  const book = A.workbook(json, 'Hotel guest reception');
+  assert.deepEqual(book.name, 'Hotel guest reception');
+  assert.deepEqual(book.sheets.map((s) => s.name), ['Daily dashboard', 'Rooms & housekeeping']);
+  assert.deepEqual(book.sheets[0].head, ['Today', 'Number', 'Notes']);
+  assert.deepEqual(book.sheets[1].rows, [['204', 'Ready', 'Rani']]);
+  assert.equal(book.sheets[1].total, 40, 'how many rows the sheet really has, not just the ones shown');
+  assert.deepEqual(A.workbook({ sheets: [{ name: '', total: 0, rows: [['a']] }] }, 'Empty').sheets[0].name, 'Sheet');
+  assert.deepEqual(A.workbook(null, 'Nothing').sheets, []);
+  assert.doesNotMatch(shown(book), FORBIDDEN, 'a sheet is words and counts, never a path or the file');
+  assert.equal(A.sheetWords(4), '4 sheets');
+  assert.equal(A.sheetWords(1), 'One sheet');
+  assert.equal(A.sheetWords(0), 'A spreadsheet');
+
+  const [line] = A.lines({ messages: [{ id: 9, author: 'system', text: 'Delivered files/hotel-guest-reception.xlsx: 4 sheets: Daily dashboard, Booking & check-in' }] }, 'quill');
+  assert.equal(line.files[0].kind, 'sheet');
+  assert.equal(line.text, '4 sheets: Daily dashboard, Booking & check-in');
+  assert.deepEqual(A.fileSource(line.files[0].url), { bot: 'quill', path: 'files/hotel-guest-reception.xlsx' }, 'what the app asks crewd to read');
+  const [thing] = A.things({ tasks: [{ id: 1, bot: 'quill', title: 'Hotel guest reception', state: 'done', updated_at: now, files: ['files/hotel-guest-reception.xlsx'] }] });
+  assert.equal(thing.files[0].kind, 'sheet', 'Things opens it the same way');
+
+  const parts = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'parts.tsx'), 'utf8');
+  const panel = parts.slice(parts.indexOf('export function WorkbookPanel'), parts.indexOf('export function Steps', parts.indexOf('export function WorkbookPanel')));
+  assert.match(parts, /f\.kind === 'sheet'\) return <WorkbookCard/, 'a workbook is a card, not a plain file row');
+  assert.match(parts, /<b>\{f\.name\}<\/b>[\s\S]{0,300}sheetWords\(/, 'the card: its name and how many sheets');
+  assert.match(parts, /className="wb-thumb"[\s\S]{0,120}<i key=\{i\}>\{h\}<\/i>/, 'a peek at the first sheet\u2019s headings');
+  assert.match(parts, /<b className="wb-open">Open<\/b>/, 'and Open');
+  assert.match(panel, /role="dialog" aria-modal aria-label=\{f\.name\}/, 'the panel is a dialog the keyboard belongs to');
+  assert.match(panel, /<nav className="wb-tabs"[\s\S]{0,160}setTab\(i\)/, 'sheet tabs');
+  assert.match(panel, /<table className="wb-grid">[\s\S]{0,220}<tbody>/, 'its cells as a table');
+  assert.match(panel, /className="btn" href=\{f\.url\}[^>]*>Download</, 'Download hands over the file');
+  assert.match(panel, /more rows/, 'what is not shown is said, not hidden');
+  assert.doesNotMatch(panel, /<input|<textarea|contentEditable|onClick=\{\(\) => (?!setTab\b)(set|edit)/, 'read-only: nothing to type into');
+  assert.match(readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8'), /a === 'f' && b && c[\s\S]{0,120}file: decodeURIComponent\(c\)/, '#/f/<helper>/<file> opens the panel beside its chat');
+});

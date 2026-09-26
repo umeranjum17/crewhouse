@@ -164,6 +164,12 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       const ext = extname(full).slice(1);
       return { type: ext === 'jpg' ? 'image/jpeg' : `image/${ext}`, data: readFileSync(full).toString('base64') };
     }
+    // A delivered spreadsheet, as words for the app's read-only preview: crewd parses it (exceljs), the app never does.
+    if (m === 'GET' && p === '/api/workbook') {
+      const rel = String(q.get('path') ?? '');
+      if (!/^files\/[\w./-]+\.xlsx$/i.test(rel)) throw Object.assign(new Error('not a spreadsheet'), { status: 404 });
+      return await crew.workbookView(String(q.get('bot') ?? ''), rel, me);
+    }
     if (m === 'POST' && p === '/api/onboard') { const b = body; return crew.onboard(b.address ?? '', me, b.ask) ?? { ok: true }; }
     if (m === 'POST' && p === '/api/recruit') { const b = body; const { token, ...bot } = crew.recruit(b.template, b.name, 'person', me); return bot; }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)$/)) && m === 'GET') return crew.botPage(r[1], me, Number(q.get('around')) || undefined);
