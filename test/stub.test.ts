@@ -7,6 +7,7 @@ import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { temp } from './tmp.ts';
 import { createServer, type AddressInfo } from 'node:net';
+import { createServer as createHttpServer } from 'node:http';
 import { DatabaseSync } from 'node:sqlite';
 import { WebSocket } from 'ws';
 
@@ -80,6 +81,32 @@ test('chief onboarding, recruit, assign, grants', async () => {
   assert.deepEqual((await api('GET', '/api/bots/reel')).body.tools.filter((x: any) => x.granted).map((x: any) => x.id).sort(), ['crew', 'files', 'github']);
   await api('PUT', '/api/bots/reel/tools', { tools: ['files', 'media', 'images'] });
 
+});
+
+// This verifies the real tool-fetch mechanics and scripted wording contract, not model judgement.
+test('two-source fare backtest: both local sources fetched and the reply names them plus an unchecked item', async () => {
+  await ready();
+  await api('PUT', '/api/bots/chief/tools', { tools: ['crew', 'web'] });
+  const fetched = new Set<string>();
+  const source = (name: string, fare: number) => createHttpServer((_req, res) => {
+    fetched.add(name);
+    res.writeHead(200, { 'content-type': 'text/plain' });
+    res.end(`${name}: fare $${fare}`);
+  }).listen(0, '127.0.0.1');
+  const narrow = source('Narrowfare', 1999), fareboard = source('Fareboard', 799);
+  try {
+    await Promise.all([narrow, fareboard].map((s) => new Promise<void>((resolve) => s.once('listening', resolve))));
+    const url = (s: ReturnType<typeof createHttpServer>) => `http://127.0.0.1:${(s.address() as AddressInfo).port}/fare`;
+    const text = `[two-fare-backtest] Compare these fares. ${call('web_fetch', { url: url(narrow) })} ${call('web_fetch', { url: url(fareboard) })}`;
+    const task = (await say('chief', text)).body.task;
+    await done('chief', task);
+    assert.deepEqual([...fetched].sort(), ['Fareboard', 'Narrowfare']);
+    const messages = (await api('GET', '/api/bots/chief')).body.messages;
+    const reply = messages.findLast((m: any) => m.author === 'bot' && /Fareboard/.test(m.text))?.text;
+    assert.ok(reply);
+    assert.match(reply, /Fareboard.*Narrowfare|Narrowfare.*Fareboard/);
+    assert.match(reply, /didn't check/);
+  } finally { narrow.close(); fareboard.close(); }
 });
 
 test('nothing technical reaches the app; the person\'s own files ask in one plain sentence', async () => {

@@ -41,7 +41,12 @@ const step: FauxResponseFactory = async (ctx, options, _state, model): Promise<A
   const calls = [...said.matchAll(/\[tool (\w+) (\{.*?\})\]/g)];
   const next = calls[msgs.slice(msgs.findLastIndex((m) => m.role === 'user') + 1).filter((m) => m.role === 'toolResult').length];
   if (next) return fauxAssistantMessage([fauxToolCall(next[1], JSON.parse(next[2]))], { stopReason: 'toolUse' });
-  if (last?.role === 'toolResult') return fauxAssistantMessage(await hold(said, options?.sessionId, options?.signal, `stub ${bot}: ${last.toolName} said ${words(last).slice(0, 300)}`));
+  if (last?.role === 'toolResult') {
+    const reply = /\[two-fare-backtest\]/.test(said)
+      ? 'I recommend the lower fare from Fareboard. I checked Fareboard and Narrowfare; I didn\'t check baggage fees or live inventory.'
+      : `stub ${bot}: ${last.toolName} said ${words(last).slice(0, 300)}`;
+    return fauxAssistantMessage(await hold(said, options?.sessionId, options?.signal, reply));
+  }
   if (/hit the limit/i.test(said) && model.provider === 'openai-codex') {
     return fauxAssistantMessage('', { stopReason: 'error', errorMessage: 'You have hit your ChatGPT usage limit (plus plan). Try again in ~30 min.' });
   }
