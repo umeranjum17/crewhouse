@@ -498,6 +498,13 @@ details.card[open] > summary { margin-bottom: 10px; }
 .wb-grid th, .wb-grid td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); max-width: 260px; overflow-wrap: normal; word-break: normal; }
 .wb-grid th { font: 800 11.5px/1.3 var(--ui); text-transform: uppercase; letter-spacing: .6px; color: var(--mute); background: var(--solid); }
 .wb-grid td { color: var(--ink2); background: var(--solid); }
+/* A document's preview body: the helper's own headings, words, lists and tables, read-only. */
+.doc-rows h3 { margin: 12px 0 0; font: 800 15px/1.3 var(--ui); color: var(--ink); }
+.doc-rows h3:first-child { margin-top: 0; }
+.doc-rows p, .doc-rows li { margin: 0; font-size: 14.5px; line-height: 1.55; color: var(--ink2); }
+.doc-rows p.strong { font-weight: 700; color: var(--ink); }
+.doc-rows ul { margin: 2px 0; padding-left: 20px; display: grid; gap: 4px; }
+.doc-rows .wb-grid { margin: 4px 0; }
 @media (min-width: 900px) {
   /* a desk opens the workbook beside the chat it came from; a phone gets the whole screen */
   .wb-scrim { align-items: stretch; justify-items: end; padding: 0; }

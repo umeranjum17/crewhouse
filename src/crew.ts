@@ -20,6 +20,7 @@ import { axiEnv, registry, resolveGrants, toolBin, which } from './tools.ts';
 import { stubModels } from './stub.ts';
 import { describe, nextRun, parseSchedule } from './routines.ts';
 import { buildWorkbook, readWorkbook } from './workbooks.ts';
+import { buildDocument, readDocument } from './documents.ts';
 import { byModel, clarify, route, type Helper } from './route.ts';
 
 const HOLD_MS = Number(process.env.CREWHOUSE_HOLD_MS || 180_000); // how long a tool call waits for an answer before the turn parks
@@ -1425,6 +1426,10 @@ export class Crew {
         + 'starts with "=" is a formula. crewd writes the file, so never make the binary yourself. Make it finished: a real heading on every sheet and at '
         + 'least one example row that shows the person how to fill it in.',
         { name: Type.String(), sheets: Type.Any() }, (p) => this.workbook(botId, String(p.name ?? ''), p.sheets)),
+      tool('crew_document', 'Write a real document the person can open and edit (.docx), in your files/, and deliver it. `name` is the title; '
+        + '`blocks` is the document in order: {heading}, {text, bold?, italic?}, {bullets: […]} or {table: {head: […], rows: [[cell, …], …]}}. '
+        + 'crewd writes the file, so never make the binary yourself. Make it finished: a title, short paragraphs and a table where rows help.',
+        { name: Type.String(), blocks: Type.Any() }, (p) => this.document(botId, String(p.name ?? ''), p.blocks)),
       tool('crew_copy', "Put a copy of a file from your folder into the person's own folders. `to` is the full path of the new file.",
         { from: Type.String(), to: Type.String() }, (p) => {
           const from = disk.insideBot(this.cfg, botId, String(p.from ?? ''));
@@ -1643,6 +1648,29 @@ export class Crew {
     const full = disk.insideBot(this.cfg, botId, rel);
     if (!/\.xlsx$/i.test(full) || !existsSync(full) || statSync(full).size > 20_000_000) throw Object.assign(new Error('no such spreadsheet'), { status: 404 });
     return readWorkbook(full);
+  }
+
+  /** crew_document: crewd writes the .docx itself (src/documents.ts) into the bot's files/ and delivers it like any other file. */
+  private async document(botId: string, name: string, blocks: unknown) {
+    const title = clean(name, 60) || 'Document';
+    const rel = join('files', `${disk.slug(title)}.docx`);
+    const full = disk.insideBot(this.cfg, botId, rel);
+    mkdirSync(dirname(full), { recursive: true });
+    await buildDocument(full, { name: title, blocks } as any);
+    const sections = Math.max(1, (Array.isArray(blocks) ? blocks : []).filter((b: any) => typeof b?.heading === 'string').length);
+    await this.deliver(botId, rel, `A document in ${sections} section${sections === 1 ? '' : 's'}: ${title}`);
+    return { ok: true, path: rel, sections };
+  }
+
+  /** The app's read-only preview of a document the bot delivered to this member: plain parts, never the file or its path. */
+  async documentView(botId: string, path: string, viewer: number) {
+    const rel = String(path ?? '');
+    const seen = this.db.get("SELECT 1 AS ok FROM events e JOIN tasks t ON t.id = json_extract(e.data, '$.task') " +
+      "WHERE e.bot = ? AND e.kind = 'file.delivered' AND json_extract(e.data, '$.path') = ? AND COALESCE(t.member, ?) = ?", botId, rel, viewer, viewer);
+    if (!seen) throw Object.assign(new Error('that document was not delivered to you'), { status: 403 });
+    const full = disk.insideBot(this.cfg, botId, rel);
+    if (!/\.docx$/i.test(full) || !existsSync(full) || statSync(full).size > 20_000_000) throw Object.assign(new Error('no such document'), { status: 404 });
+    return readDocument(full);
   }
 
   /** A finished file, registered once per task (a retried call is a no-op). Only inside the bot's own folder. */

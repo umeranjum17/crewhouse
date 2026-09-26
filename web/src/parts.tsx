@@ -5,7 +5,7 @@ import { draftOf, keepDraft, sent } from './draft.ts';
 import { cycle, type Focused } from './dialog.ts';
 import * as art from './art.ts';
 import { bannerStops } from './tokens.ts';
-import { clock, fileSource, fileView, sheetWords, workbook, type Card, type FileView, type Helper, type Step, type Workbook } from './adapter.ts';
+import { clock, document as docView, fileSource, fileView, pageWords, sheetWords, workbook, type Card, type DocPart, type DocView, type FileView, type Helper, type Step, type Workbook } from './adapter.ts';
 
 // ---------- toasts ----------
 const listeners = new Set<(m: string) => void>();
@@ -204,7 +204,7 @@ export function Pill({ tone = 'ok', live, children }: { tone?: 'ok' | 'wait' | '
 export function Media({ f, big }: { f: FileView; big?: boolean }) {
   const [play, setPlay] = useState(false);
   if (f.kind === 'image') return <a href={f.url} target="_blank" rel="noreferrer" className="media"><img src={f.url} alt={f.name} /></a>;
-  if (f.kind === 'sheet') return <WorkbookCard f={f} big={big} />;
+  if (f.kind === 'sheet' || f.kind === 'page') return <PreviewCard f={f} big={big} />;
   if (f.kind === 'video') {
     return play
       ? <video className="media" src={f.url} controls autoPlay />
@@ -213,35 +213,37 @@ export function Media({ f, big }: { f: FileView; big?: boolean }) {
   return <a href={f.url} target="_blank" rel="noreferrer" className="doc"><span className="doc-ic">▤</span><span className="grow">{f.name}</span><b>Open</b></a>;
 }
 
-// ---------- spreadsheets ----------
-/** crewd reads a workbook with its own copy of the library (web/src/adapter.ts, docs/ui-contract.md); the card and the
- *  panel open the same file, so they share one read instead of asking the home computer twice. */
-const books = new Map<string, Promise<Json>>();
-function useBook(f: FileView) {
-  const [book, setBook] = useState<Workbook | null>(null);
+// ---------- previews: spreadsheets and documents crewd read for the app ----------
+/** crewd reads a delivered file with its own copy of the library (web/src/adapter.ts, docs/ui-contract.md); the card and
+ *  the panel open the same file, so they share one read instead of asking the home computer twice. */
+const previews = new Map<string, Promise<Json>>();
+function usePreview(f: FileView) {
+  const [read, setRead] = useState<{ book: Workbook | null; doc: DocView | null }>({ book: null, doc: null });
   useEffect(() => {
     const src = fileSource(f.url);
     if (!src) return;
     let on = true;
-    let read = books.get(f.url);
-    if (!read) books.set(f.url, read = api.workbook(src.bot, src.path));
-    read.then((j) => on && setBook(workbook(j, f.name))).catch(() => on && setBook(null));
+    let got = previews.get(f.url);
+    if (!got) previews.set(f.url, got = f.kind === 'page' ? api.document(src.bot, src.path) : api.workbook(src.bot, src.path));
+    got.then((j) => on && setRead(f.kind === 'page' ? { book: null, doc: docView(j, f.name) } : { book: workbook(j, f.name), doc: null }))
+      .catch(() => on && setRead({ book: null, doc: null }));
     return () => { on = false; };
   }, [f.url, f.name]);
-  return book;
+  return read;
 }
 
-/** A workbook the helper made, in the chat: its name, how many sheets, a peek at the first sheet's headings, and Open. */
-export function WorkbookCard({ f, big }: { f: FileView; big?: boolean }) {
-  const book = useBook(f);
+/** A finished file the helper made — a workbook or a document — in the chat: its name, a line about it, a peek inside, Open. */
+export function PreviewCard({ f, big }: { f: FileView; big?: boolean }) {
+  const { book, doc } = usePreview(f);
   const src = fileSource(f.url);
-  const head = book?.sheets[0]?.head ?? [];
+  const head = book?.sheets[0]?.head ?? doc?.parts.find((p) => p.kind === 'heading')?.text?.split(/[:—] |, /).slice(0, 3) ?? [];
+  const about = book ? sheetWords(book.sheets.length) : pageWords(doc?.parts.filter((p) => p.kind === 'heading').length ?? 0);
   return (
     <a className={`wb-card${big ? ' big' : ''}`} href={`#/f/${src?.bot ?? ''}/${encodeURIComponent(src?.path ?? '')}`} aria-label={`Open ${f.name}`}>
-      <span className="wb-ic" aria-hidden>▦</span>
+      <span className="wb-ic" aria-hidden>{f.kind === 'page' ? '▤' : '▦'}</span>
       <span className="grow wb-what">
         <b>{f.name}</b>
-        <span className="mute small">{sheetWords(book?.sheets.length ?? 0)}</span>
+        <span className="mute small">{about}</span>
       </span>
       <span className="wb-thumb" aria-hidden>{head.slice(0, 4).map((h, i) => <i key={i}>{h}</i>)}</span>
       <b className="wb-open">Open</b>
@@ -249,29 +251,52 @@ export function WorkbookCard({ f, big }: { f: FileView; big?: boolean }) {
   );
 }
 
+/** The body of a document preview: its headings, paragraphs, bullet lists and tables, read-only. */
+function DocBody({ doc }: { doc: DocView }) {
+  const runs: (DocPart | DocPart[])[] = [];
+  doc.parts.forEach((p) => {
+    const last = runs.at(-1);
+    if (p.kind === 'li' && Array.isArray(last)) last.push(p);
+    else if (p.kind === 'li') runs.push([p]);
+    else runs.push(p);
+  });
+  return <div className="wb-rows doc-rows">
+    {runs.map((run, i) => Array.isArray(run) ? <ul key={i}>{run.map((li, j) => <li key={j}>{li.text}</li>)}</ul>
+      : run.kind === 'heading' ? <h3 key={i}>{run.text}</h3>
+      : run.kind === 'table' ? <table key={i} className="wb-grid">
+          <thead><tr>{run.head?.map((h, c) => <th key={c}>{h}</th>)}</tr></thead>
+          <tbody>{run.rows?.map((r, k) => <tr key={k}>{run.head?.map((_, c) => <td key={c}>{r[c] ?? ''}</td>)}</tr>)}</tbody>
+        </table>
+      : <p key={i} className={run.bold ? 'strong' : undefined}>{run.text}</p>)}
+  </div>;
+}
+
 /**
- * The workbook itself, read-only: sheet tabs along the top, its rows as a table. On a desk it is a panel beside the
- * chat it came from; on a phone it is the whole screen. Reading a cell edits nothing, and Download hands over the file.
+ * A finished file read-only: a workbook is sheet tabs over a table; a document is its headings, paragraphs, lists and
+ * tables. On a desk it is a panel beside the chat it came from; on a phone it is the whole screen. Reading edits
+ * nothing, and Download hands over the file itself.
  */
-export function WorkbookPanel({ bot, path, onClose }: { bot: string; path: string; onClose: () => void }) {
+export function PreviewPanel({ bot, path, onClose }: { bot: string; path: string; onClose: () => void }) {
   const box = useRef<HTMLDivElement>(null);
   const [tab, setTab] = useState(0);
   useDialogOwn(box, onClose);
   const f = fileView(bot, path);
-  const book = useBook(f);
+  const { book, doc } = usePreview(f);
   const sheets = book?.sheets ?? [];
   const s = sheets[Math.min(tab, Math.max(0, sheets.length - 1))];
+  const about = f.kind === 'page' ? pageWords(doc?.parts.filter((p) => p.kind === 'heading').length ?? 0) : sheetWords(sheets.length);
   return (
     <div className="scrim wb-scrim" onClick={onClose}>
       <div ref={box} className="wb-panel" role="dialog" aria-modal aria-label={f.name} onClick={(e) => e.stopPropagation()}>
         <header className="wb-head">
-          <span className="wb-ic" aria-hidden>▦</span>
-          <span className="grow wb-what"><b>{f.name}</b><span className="mute small">{sheetWords(sheets.length)}</span></span>
+          <span className="wb-ic" aria-hidden>{f.kind === 'page' ? '▤' : '▦'}</span>
+          <span className="grow wb-what"><b>{f.name}</b><span className="mute small">{about}</span></span>
           <a className="btn" href={f.url} target="_blank" rel="noreferrer">Download</a>
           <button className="link" onClick={onClose} aria-label="Close">✕</button>
         </header>
-        {!book && <div className="mute">Opening “{f.name}”…</div>}
+        {!book && !doc && <div className="mute">Opening “{f.name}”…</div>}
         {book && !sheets.length && <div className="mute">There is nothing in it to show yet.</div>}
+        {doc && !doc.parts.length && <div className="mute">There is nothing in it to show yet.</div>}
         {sheets.length > 1 && <nav className="wb-tabs" aria-label="Sheets">
           {sheets.map((x, i) => <button key={`${x.name}-${i}`} className={`wb-tab${i === tab ? ' on' : ''}`} onClick={() => setTab(i)}>{x.name}</button>)}
         </nav>}
@@ -282,6 +307,7 @@ export function WorkbookPanel({ bot, path, onClose }: { bot: string; path: strin
           </table>
           {s.total > s.rows.length + 1 && <div className="mute small">…and {s.total - s.rows.length - 1} more rows. Download it to see the whole sheet.</div> }
         </div>}
+        {doc && doc.parts.length > 0 && <DocBody doc={doc} />}
       </div>
     </div>
   );
