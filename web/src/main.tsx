@@ -347,11 +347,11 @@ function Chat({ id, m, state, me, tick, refresh, accounts }: Ctx & { id: string;
 }
 
 function ChiefPage(ctx: Ctx & { m?: string }) {
-  const { mood, line, tone } = A.chief(ctx.state, chiefLocal(ctx, useListen()));
+  const { mood, line } = A.chief(ctx.state, chiefLocal(ctx, useListen()));
   return (
     <div className="page chat-page">
       <header className="chat-head sticky-top"><a href="#/" className="back" aria-label="Back" onClick={(e) => { e.preventDefault(); back(); }}>‹</a><span className="face" style={{ width: 44, height: 44, background: '#fff7e8' }}><ChiefArt mood={mood} d={2.1} /></span>
-        <div><b>Chief</b><div><Pill tone={tone}>{line}</Pill></div></div></header>
+        <div className="grow"><b>Chief</b><div className="mute small clamp1">{line}</div></div></header>
       <Chat {...ctx} id="chief" m={ctx.m} />
     </div>
   );
@@ -427,7 +427,7 @@ function HelperPage(ctx: Ctx & { id: string; tab: string }) {
           <header className="chat-head">
             <a href="#/" className="back" aria-label="Back" onClick={(e) => { e.preventDefault(); back(); }}>‹</a>
             <Face who={h} size={48} ring={h.ring} />
-            <div className="grow"><b>{h.name}</b><div><Pill tone={h.ring === 'needs' ? 'wait' : h.ring ? 'ok' : 'off'}>{h.status}</Pill></div></div>
+            <div className="grow"><b>{h.name}</b><div className="mute small clamp1">{h.status}</div></div>
             {b?.task && <button className="btn" onClick={() => confirm(`Stop ${h.name}'s job?`) && attempt(async () => { await api.reset(id); refresh(); }, `Stopped ${h.name}`)}>Stop</button>}
             <button className="link" onClick={() => go(`#/h/${id}/details`)}>Details</button>
           </header>
@@ -445,7 +445,7 @@ function HelperPage(ctx: Ctx & { id: string; tab: string }) {
         </div>
         <section className="detail">
           <h2 className="plate">What {h.name} is doing</h2>
-          {b?.task ? (trail.length ? <div className="card"><Steps steps={trail} max={7} /></div> : <p className="mute">Working on “{A.plain(b.task.title)}”. Steps show as they happen.</p>)
+          {b?.task ? (trail.length ? <Steps steps={trail} max={7} /> : <p className="mute">Working on “{A.plain(b.task.title)}”. Steps show as they happen.</p>)
             : <p className="mute">Nothing right now.</p>}
           <a className="link" href={`#/h/${id}/did`}>Every step</a>
           <h2 className="plate">Things</h2>
