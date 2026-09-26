@@ -104,7 +104,7 @@ textarea.input { resize: vertical; }
 .routine-edit { margin-top: 10px; }
 .routine-note { margin-top: 6px; }
 .routine-ask form { margin-top: 12px; }
-.line-when { padding: 0; font: 400 13px/1.45 var(--ui); text-align: left; text-decoration: none; }
+.line-when { display: block; padding: 0; font: 400 13px/1.45 var(--ui); text-align: left; text-decoration: none; }
 .line-when:hover, .line-when:focus-visible { text-decoration: underline; }
 .connect { display: flex; gap: 12px; align-items: center; }
 .app-ic { width: 40px; height: 40px; border-radius: 12px; display: inline-grid; place-items: center; color: #fff; font: 900 18px var(--ui); flex: none; }
