@@ -137,7 +137,9 @@ function inhibitor() {
 /** The bot's browser while a task runs: its AXI; letting go of the browser when the task ends, or for a while (`release`:
  *  the person takes the wheel, and the recorder may need the browser's one DevTools connection; the next call re-attaches). */
 interface Browser { run: (args: string[], signal?: AbortSignal) => Promise<string>; end: () => void; release: () => void }
-interface Live { session: AgentSession; task: number; member: number; brain: disk.Brain; browser?: Browser; page?: string; snapshot?: string; apps?: Record<string, AppTool>; counted: number }
+interface Live { session: AgentSession; task: number; member: number; brain: disk.Brain; browser?: Browser; page?: string; snapshot?: string; apps?: Record<string, AppTool>; counted: number;
+  /** Lines the helper typed on this page that no card has shown yet (an unsigned register's claim form). */
+  fills?: { label: string; value: string }[] }
 
 /** The deterministic half: people, bots, tasks, the per-bot queue, asks. Models only ever see prompts. */
 export class Crew {
@@ -315,7 +317,7 @@ export class Crew {
     if (a.kind === 'connect') return { ...a, detail: { app: d.app, words: d.words } };
     if (a.kind === 'setup') return { ...a, detail: { app: d.app, person: d.person } };
     if (a.kind === 'propose') return { ...a, detail: { words: a.title, preview: d.preview, ...(d.create ? { yes: `Yes, take ${d.create.name} on` } : d.draft ? { yes: 'Approve' } : {}), ...(d.routine ? { routine: d.routine } : {}) } };
-    return { ...a, detail: { effect: d.effect, words: a.title, spends: d.effect === 'spend', covers, ...(covers ? { always: covers } : {}), ...(d.preview ? { preview: d.preview } : {}), ...(d.press ? { press: true } : {}),
+    return { ...a, detail: { effect: d.effect, words: a.title, spends: d.effect === 'spend', covers, ...(covers ? { always: covers } : {}), ...(d.preview ? { preview: d.preview } : {}), ...(d.press ? { press: true } : {}), ...(d.fill ? { fill: true } : {}),
       ...(d.checkout ? { order: { shown: d.checkout.shown ?? '', known: Number.isFinite(d.checkout.total), dollars: d.checkout.currency === '$' } } : {}) } };
   }
 
@@ -1227,6 +1229,7 @@ export class Crew {
     const granted = new Set(conf.tools ?? []);
     return {
       bot: this.bot(botId)!.display, space: disk.botDir(this.cfg, botId), page: this.live.get(botId)?.page, signedIn: conf.signedIn ?? [], apps: this.live.get(botId)?.apps,
+      filledHost: this.live.get(botId)?.fills?.length ? this.hostOf(this.live.get(botId)?.page) : undefined,
       run: Object.fromEntries(registry(this.cfg).filter((t) => t.run && granted.has(t.id)).map((t) => [t.id.replace(/-/g, '_'), { name: t.name, ...t.run! }])),
       // Sign-ins and keys: every member's, the engine's, and other programs'. Nothing reads them through a bot.
       secret: [this.cfg.stateDir, this.cfg.toolsDir, ...['.pi', '.ssh', '.gnupg', '.aws', '.config/gh', '.treg', '.codex', '.claude', '.claude.json'].map((d) => join(homedir(), d))],
@@ -1260,6 +1263,17 @@ export class Crew {
     let e = effectOf(tool, input, this.seen(botId));
     const words = toolWords(tool, input);
     if (words) this.db.event('run.tool', botId, { task: task?.id, words });
+    // Lines the helper types on a page nobody has approved yet (an unsigned register's form) are remembered for the
+    // card of the press that sends them; a new page starts a new form.
+    if (tool === 'browser' && e.kind === 'safe') {
+      const l = this.live.get(botId);
+      const cmd = String(Array.isArray(input.args) ? input.args[0] ?? '' : '');
+      if (l && ['goto', 'tab-new', 'reload'].includes(cmd)) l.fills = undefined;
+      if (l && cmd === 'fill') {
+        const label = pressOf(l.snapshot ?? '', String(input.args?.[1] ?? '').replace(/^@/, ''))?.label ?? String(input.args?.[1] ?? '');
+        l.fills = [...(l.fills ?? []), { label, value: String(input.args?.[2] ?? '') }];
+      }
+    }
     if (e.kind === 'safe') return undefined;
     if (e.kind === 'refuse') return { block: true, reason: e.why };
     let checkout: { page: string; total: number | null } | undefined;
@@ -1318,22 +1332,36 @@ export class Crew {
     return { effect: { ...e, words, ...(o.capped ? { cost: o.total! } : {}), preview: { head: `The order at ${host}`, body } }, checkout: { page, total: o.total, shown: o.shown, currency: o.currency } };
   }
 
+  /** The host of a page, named the way a person would: no www, no path. */
+  private hostOf(page?: string) {
+    try { return new URL(page ?? '').hostname.replace(/^www\./, ''); } catch { return ''; }
+  }
+
   /** The card for acting as the person on a site they signed the bot in to: the button it will press, or the form line
    *  it will fill, the host, the page's own lines around it, and the money the page shows — all read by crewd from the
    *  page as the browser tool itself reports it, never from what the model says it was about to do. A filled line is
    *  shown as `label: value` — the label from the page, the value from the call — since this is the one card that
-   *  carries the family's own words (an unclaimed-money claim). */
+   *  carries the family's own words (an unclaimed-money claim). A press that submits a form the helper typed lines
+   *  into asks wherever it is, and its card lists every line it will fill in. */
   private press(botId: string, e: Extract<Effect, { words: string }>, input: Record<string, any>) {
     const l = this.live.get(botId);
     const name = this.bot(botId)?.display ?? botId;
-    let host = 'a site';
-    try { host = new URL(l?.page ?? '').hostname.replace(/^www\./, '') || host; } catch { /* no page yet */ }
+    const host = this.hostOf(l?.page) || 'a site';
     const value = ['fill', 'select'].includes(String(input.args?.[0] ?? '')) && input.args?.[2] !== undefined ? String(input.args[2]) : null;
+    // The lines typed on this page that no card has shown yet ride the card for the press that sends them.
+    const pending = value === null ? l?.fills ?? [] : [];
+    if (pending.length) {
+      const signed = (disk.botConfig(this.cfg, botId).signedIn ?? []).some((d) => host === d || host.endsWith(`.${d}`));
+      const n = pending.length;
+      return { ...e, fill: true,
+        words: `${name} wants to fill in ${n} ${n === 1 ? 'line' : 'lines'} on the claim form at ${host}${signed ? ', a site you signed it in to' : ''}.`,
+        preview: { head: `What ${name} will fill in on ${host}`, body: pending.map((f) => `${f.label}: ${f.value}`).join('\n') } };
+    }
     const p = pressOf(l?.snapshot ?? '', String(input.args?.[1] ?? '').replace(/^@/, ''));
     if (!p) return e;
     const shown = orderOf(l?.snapshot ?? '').shown;
     const back = value === null ? claimOf(l?.snapshot ?? '') : null;
-    return { ...e,
+    return { ...e, ...(value !== null ? { fill: true } : {}),
       words: value !== null ? `${name} wants to fill “${p.label}” on ${host}, a site you signed it in to.`
         : `${name} wants to press “${p.label}” on ${host}, a site you signed it in to${shown ? `. The page shows ${shown}.` : '.'}`,
       // One plain money line first on a press, only when the page itself writes both prices (the preview clamps);
@@ -1345,7 +1373,7 @@ export class Crew {
   private async ask(botId: string, task: Row | undefined, e: Extract<Effect, { words: string }>, checkout?: { page: string; total: number | null }): Promise<string | null> {
     // The same call asked again (the bot resumed after a restart) takes over the card already shown.
     const same = this.db.all("SELECT id FROM asks WHERE bot = ? AND kind = 'permission' AND state = 'open' AND title = ?", botId, e.words).find((a) => !this.holds.has(a.id));
-    const askId = same ? same.id : this.openAsk(botId, task, e.words, { effect: e.kind, key: e.key, ...(e.cost !== undefined ? { cost: e.cost } : {}), ...(e.preview ? { preview: e.preview } : {}), ...(checkout ? { checkout } : {}), ...(e.press ? { press: true } : {}) });
+    const askId = same ? same.id : this.openAsk(botId, task, e.words, { effect: e.kind, key: e.key, ...(e.cost !== undefined ? { cost: e.cost } : {}), ...(e.preview ? { preview: e.preview } : {}), ...(checkout ? { checkout } : {}), ...(e.press ? { press: true } : {}), ...(e.fill ? { fill: true } : {}) });
     if (same && task) this.setTask(task, 'needs_you');
     // In their quiet hours nobody will answer soon: park at once instead of holding the bot.
     const quiet = quietNow(this.member(task?.member ?? this.bot(botId)?.member ?? OWNER).quiet);

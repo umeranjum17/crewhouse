@@ -9,7 +9,7 @@ export type Effect =
   /** `key` is what "For this task" and "Always" remember; spending has none, so it asks every time. */
   /** `cost` is the most a spend can cost, in dollars, when the tool says so up front. */
   | { kind: 'files' | 'send' | 'spend' | 'delete'; words: string; key?: string; covers?: string; cost?: number;
-      preview?: { head: string; body: string }; press?: boolean };
+      preview?: { head: string; body: string }; press?: boolean; fill?: boolean };
 
 export interface Seen {
   bot: string;
@@ -18,6 +18,8 @@ export interface Seen {
   page?: string;
   /** Sites the person signed the bot in to (its browser acts there as them). */
   signedIn?: string[];
+  /** The host of the page where the helper typed lines nobody has approved yet (a claim form waiting for its submit). */
+  filledHost?: string;
   /** Command-line tools that run with the person's own sign-in: argument prefixes that are free, and those that spend. */
   run?: Record<string, { name: string; free: string[]; spend: string[] }>;
   /** Folders no bot may open at all: sign-ins and keys, the engine's own and every other program's. */
@@ -49,13 +51,16 @@ const PAYMENT = /checkout|payment|billing|purchase|\/cart\b|\/pay\b|paypal\.|pay
 const valuesOf = (args: string[], flag: string) => args.flatMap((a, i) => (a === flag ? [args[i + 1] ?? ''] : a.startsWith(flag + '=') ? [a.slice(flag.length + 1)] : []));
 
 /** The browser's "asks first" rules for one command, as a reason to ask, or null to let the call through. */
-export function browserAsk(command: string, url: string, signedIn: string[]): { spend: boolean; host: string } | null {
+export function browserAsk(command: string, url: string, signedIn: string[], filledHost?: string): { spend: boolean; host: string } | null {
   if (!BROWSER_ACTS.has(command)) return null;
   let host = '';
   // The card names the shop the way a person would: no www, no path.
   try { host = new URL(url).hostname.replace(/^www\./, ''); } catch { /* no page yet */ }
   if (PAYMENT.test(url)) return { spend: true, host: host || 'a shop' };
   if (host && signedIn.some((d) => host === d || host.endsWith(`.${d}`))) return { spend: false, host };
+  // Submitting a form the helper typed into asks wherever it is, signed in or not: it files the family's own words.
+  // More typing on that same form stays free — the lines ride the submit card.
+  if (host && host === filledHost && /^(click|dblclick|press)$/.test(command)) return { spend: false, host };
   return null;
 }
 
@@ -97,7 +102,7 @@ export function effectOf(tool: string, input: Record<string, any>, s: Seen): Eff
     // Files it uploads or saves stay in its own space: the person's folders are reached only through the files asks.
     const files = cmd === 'upload' ? rest.filter((a) => !a.startsWith('-')) : valuesOf(rest, cmd === 'drop' ? '--path' : '--filename');
     if (files.some((f) => !inside(s.space, resolve(s.space, f)))) return { kind: 'refuse', why: 'Browser files stay in your own space: use work/ or files/.' };
-    const act = browserAsk(cmd, s.page ?? '', s.signedIn ?? []);
+    const act = browserAsk(cmd, s.page ?? '', s.signedIn ?? [], s.filledHost);
     if (!act) return { kind: 'safe' };
     // Acting as the person on a site they signed the bot in to (a claim button, a returns form) has no key, the way
     // spending has none: every press is its own card, and there is no standing answer for it. The card's own words,

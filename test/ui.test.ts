@@ -154,16 +154,22 @@ test('Home keeps a standing "hand me a job" list, straight from crewd\'s ideas: 
   assert.match(press.preview!.body, /Request price adjustment/, 'the button, as the page writes it');
   assert.match(press.preview!.body, /You'd get \$50\.00 back\./, 'and what they get back, when the page wrote both prices');
   assert.equal(press.choices.find((c: any) => c.body.scope === 'always'), undefined, 'no standing answer for acting as the person');
-  // A form line being filled is the same acting card, its preview the line as `label: value` — the family's data,
-  // on the card and nowhere else.
+  // A form line being filled is a fill card, not a press: "Yes, fill it in" — "these in" for more than one line — and
+  // the family's data sits in the preview and nowhere else.
   const fill = A.card({ id: 10, bot: 'scout', kind: 'permission', state: 'open',
     title: 'Scout wants to fill “Owner\'s full name” on unclaimed.example, a site you signed it in to.',
-    detail: { effect: 'send', press: true, spends: false,
+    detail: { effect: 'send', press: true, fill: true, spends: false,
       words: 'Scout wants to fill “Owner\'s full name” on unclaimed.example, a site you signed it in to.',
-      preview: { head: 'What Scout will fill on unclaimed.example', body: "Owner's full name: Ada Lovelace" } } }, withJobs);
+      preview: { head: 'What Scout will fill in on unclaimed.example', body: "Owner's full name: Ada Lovelace" } } }, withJobs);
   assert.equal(fill.head, 'Scout wants to act on a site', 'a form line is the same acting-on-a-site card');
   assert.match(fill.preview!.body, /Owner's full name: Ada Lovelace/, 'the line, label then value');
-  assert.equal(fill.choices[0].label, 'Yes, press it');
+  assert.equal(fill.choices[0].label, 'Yes, fill it in');
+  const these = A.card({ id: 11, bot: 'scout', kind: 'permission', state: 'open',
+    title: 'Scout wants to fill in 3 lines on the claim form at unclaimed.example.',
+    detail: { effect: 'send', press: true, fill: true, spends: false,
+      words: 'Scout wants to fill in 3 lines on the claim form at unclaimed.example.',
+      preview: { head: 'What Scout will fill in on unclaimed.example', body: "Owner's full name: Ada Lovelace\nAddress the money was owed at: 12 Lovelace Lane\nEmail for this claim: ada@example.net" } } }, withJobs);
+  assert.equal(these.choices[0].label, 'Yes, fill these in', 'more than one line, these in');
   assert.equal(fill.choices.find((c: any) => c.body.scope === 'always'), undefined, 'and still no standing answer');
   const src = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
   const home = src.slice(src.indexOf('function Home('), src.indexOf('const ownerName'));

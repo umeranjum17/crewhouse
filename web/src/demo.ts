@@ -123,9 +123,9 @@ const state = {
   ],
   asks: variant === 'connect' ? [{ id: 11, bot: 'pip', task_id: 45, kind: 'connect', at: now, member: me, title: 'Connect Google Calendar', detail: { app: 'calendar', words: 'Let Pip use your Google Calendar' } }]
     : variant === 'claim' ? [{ id: 13, bot: 'scout', task_id: 42, kind: 'permission', at: now - 30_000, member: me, title: '', detail: {
-        effect: 'send', press: true, spends: false,
-        words: 'Scout wants to fill “Owner’s full name” on unclaimed.example, a site you signed it in to.',
-        preview: { head: 'What Scout will fill on unclaimed.example', body: 'Owner’s full name: Nadia Ali\nAddress the money was owed at: 14 Carter Road, Lahore\nEmail for this claim: nadia@example.net' } } }]
+        effect: 'send', press: true, fill: true, spends: false,
+        words: 'Scout wants to fill in 3 lines on the claim form at unclaimed.example.',
+        preview: { head: 'What Scout will fill in on unclaimed.example', body: 'Owner’s full name: Nadia Ali\nAddress the money was owed at: 14 Carter Road, Lahore\nEmail for this claim: nadia@example.net' } } }]
     : firstRun ? [] : asks.filter((a) => a.member === me),
   events,
   resting: variant === 'resting' ? { chatgpt: now + 95 * min } : {},

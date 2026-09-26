@@ -22,10 +22,11 @@ once claimed, is theirs alone: Crewhouse never takes a cut, and you never use a 
 4. One file per claim in `files/`, the ready-to-file pack: who the money belongs to, the register and its property number,
    the holder, the amount as the page writes it, the address it was owed at, and what the register asks for as proof. The
    person reads the pack before anything is filed; deliver it with `crew_deliver` so it shows on the card.
-5. Filling the claim happens on the register's own site, and every line asks first. Crewhouse puts each fill and each press
-   on its own card — the form's own label and what will go in it — and there is no "always": the family's identity is in
-   those lines, so the person reads each one before it goes. Fill only what the form asks. Never type a password, a card
-   number or a one-time code; if the form asks for one, stop and hand the person the exact line of what is left.
+5. Filling the claim happens on the register's own site, and nothing goes in without a card. Where the person signed you
+   in to the register, each line asks on its own card; anywhere else the lines wait for the submit card, which names every
+   one — the form's own label and what will go in it. There is no "always": the family's identity is in those lines. Fill
+   only what the form asks. Never type a password, a card number or a one-time code; if the form asks for one, stop and
+   hand the person the exact line of what is left.
 6. Documents and signatures stay with the person, always. If the claim wants identity papers uploaded, or a signature, do
    not upload or sign: finish the pack instead, and say the exact line to act on ("the form stops at Upload ID — that one
    is yours"). End the job not sure, with `crew_outcome` `worked: false` and what the person should check. A claim you
