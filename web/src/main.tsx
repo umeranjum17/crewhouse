@@ -112,17 +112,6 @@ function Share({ refresh }: Ctx) {
 }
 
 // ---------- home ----------
-function Heartbeat({ state, big, local }: { state: Json; big?: boolean; local?: A.ChiefLocal }) {
-  const { mood, line, tone } = useHeld(A.chief(state, local));
-  return (
-    <div className="beat">
-      <span className="halo"><ChiefArt mood={mood} d={big ? 6 : 5} hero /></span>
-      {mood === 'work' && <Laptop />}
-      <Pill tone={tone} live={mood === 'work'}>{line}</Pill>
-    </div>
-  );
-}
-
 /** A helper that has gone quiet: stop it, take the wheel, or leave it be. */
 const leftAlone = new Map<string, number>();
 function Stuck({ h, refresh }: { h: A.Helper; refresh: () => void }) {
@@ -177,40 +166,61 @@ function Chats({ state, refresh }: { state: Json; refresh: () => void }) {
   );
 }
 
+/** Needs you as one compact list: a number, the face, the subject, one plain line. A row opens the review sheet;
+ *  nothing commits from Home. At most three rows, then "N more", which expands in place. */
+function NeedsRows({ state, cards }: { state: Json; cards: A.Card[] }) {
+  const crew = A.crew(state);
+  const [all, setAll] = useState(false);
+  const shown = all ? cards : cards.slice(0, 3);
+  return (
+    <>
+      {shown.map((c, i) => (
+        <a key={c.id} className="needs-row" href={`#/ask/${c.id}`}>
+          <span className="n" aria-hidden>{i + 1}</span>
+          <Face who={crew.find((h) => h.id === c.helper) ?? { kind: 'pip', name: c.helper }} size={24} />
+          <span className="grow"><b>{c.head}</b><span className="mute small clamp1">{c.words}</span></span>
+          <span className="mute" aria-hidden>›</span>
+        </a>
+      ))}
+      {!all && cards.length > 3 && <button className="link needs-more" onClick={() => setAll(true)}>{cards.length - 3} more {cards.length - 3 === 1 ? 'needs' : 'need'} you</button>}
+    </>
+  );
+}
+
 function Home({ state, me, refresh, tick, accounts, offline, night }: Ctx) {
   const listen = useListen();
   const ctx: Ctx = { state, me, tick, refresh, night, offline, accounts };
-  const crew = A.crew(state);
-  const cards = A.cards(state).filter((c) => c.kind !== 'connect');
+  const cards = A.needsYou(state);
   const works = A.work(state).filter((w) => !w.waiting);
   const day = new Date(); day.setHours(0, 0, 0, 0);
   const todays = A.things(state).filter((t) => t.at >= day.getTime());
   const g = A.account(accounts, me);
   const toChief = async (t: string) => { const ok = await attempt(() => api.post('chief', t), undefined, true); if (ok) { refresh(); go('#/chief'); } return ok; };
-  const card = (c: A.Card) => <AskCard key={c.id} c={c} who={crew.find((h) => h.id === c.helper)} onDone={refresh} />;
   return (
     <div className="home">
-      <div className="home-top"><Heartbeat state={state} local={chiefLocal(ctx, listen)} /></div>
       <div className="desk-col">
-        <h1 className="hi">{A.greeting()}, {state.person.address ?? state.person.name}</h1>
+        {/* The phone's Home is Chats: one header row — his face, her greeting — then Needs you, search, the list. */}
+        <header className="home-head phone-only">
+          <span className="face" style={{ width: 32, height: 32, background: '#fff7e8' }}><ChiefArt mood={A.chief(state, chiefLocal(ctx, listen)).mood} d={1.6} /></span>
+          <h1>{A.greeting()}, {state.person.address ?? state.person.name}</h1>
+        </header>
         {(g.state === 'signed-out' || g.notIncluded) && <AccountCard me={me} owner={ownerName(state)} isOwner={me === A.OWNER} g={g} onReady={refresh} />}
         {A.resting(state) && <div className="card nudge"><span className="grow">{A.resting(state)}. I'll pick things back up then.</span></div>}
         {A.gettingReady(state) && <div className="card nudge"><span className="grow">{A.gettingReady(state)}</span></div>}
         {A.update(state) && <div className="card nudge"><span className="grow">{A.update(state)!.words}</span><a className="btn go" href={A.update(state)!.url} target="_blank" rel="noreferrer">Download</a></div>}
-        <div className="phone-only">
-          {cards.map(card)}
-          <Chats state={state} refresh={refresh} />
-        </div>
+        {cards.length > 0 && <section className="card needs-card phone-only" aria-label="Needs you"><NeedsRows state={state} cards={cards} /></section>}
+        <div className="phone-only"><Chats state={state} refresh={refresh} /></div>
+        <h1 className="hi desk-only">{A.greeting()}, {state.person.address ?? state.person.name}</h1>
         <div className="desk">
           <section className="frame needs">
             <div className="label ascii">Needs you</div>
-            {cards.length ? <div className="cards">{cards.map(card)}</div> : <div className="frame-empty">All clear. Nothing needs you.</div>}
+            {cards.length ? <NeedsRows state={state} cards={cards} /> : <div className="frame-empty">All clear. Nothing needs you.</div>}
           </section>
           <div className="desk-side">
             <section className="frame working">
               <div className="label ascii">Working now</div>
               {works.length ? works.map((w) => {
-                const h = crew.find((x) => x.id === w.helper);
+                const h = A.crew(state).find((x) => x.id === w.helper);
                 return (
                   <a key={w.helper} className="frame-row" href={hrefOf(w.helper)}>
                     {h && <Face who={h} size={40} ring={h.ring} />}
@@ -223,7 +233,7 @@ function Home({ state, me, refresh, tick, accounts, offline, night }: Ctx) {
             <section className="frame done">
               <div className="label ascii">Done today</div>
               {todays.length ? todays.map((t) => {
-                const h = crew.find((x) => x.id === t.helper);
+                const h = A.crew(state).find((x) => x.id === t.helper);
                 return (
                   <div key={t.id} className="frame-row">
                     {h && <Face who={h} size={26} />}
@@ -238,11 +248,6 @@ function Home({ state, me, refresh, tick, accounts, offline, night }: Ctx) {
       </div>
       <div className="dock">
         <div className="desk-col">
-          <div className="chips">
-            {A.ideas(state).map((i: Json) => (
-              <button key={i.bot + i.label} className="chip" onClick={() => { keepDraft(i.bot, i.ask); go(hrefOf(i.bot)); }}>✦ {i.label}</button>
-            ))}
-          </div>
           <Composer placeholder="Ask Chief anything…" onSend={toChief} {...typeInto('chief')} />
         </div>
       </div>
@@ -251,10 +256,18 @@ function Home({ state, me, refresh, tick, accounts, offline, night }: Ctx) {
 }
 const ownerName = (state: Json) => state.members.find((m: Json) => m.id === A.OWNER)?.name ?? 'the owner';
 
+/** The starters live in Chief's empty chat: a tap fills the box with the words, it never sends. */
+function ChiefIdeas({ state, chat, picked }: { state: Json; chat: string; picked: () => void }) {
+  return <div className="chips center">{A.ideas(state).map((i: Json) => (
+    <button key={i.bot + i.label} className="chip" onClick={() => { keepDraft(chat, i.ask); picked(); }}>✦ {i.label}</button>
+  ))}</div>;
+}
+
 // ---------- a chat ----------
 function Chat({ id, state, me, tick, refresh, accounts }: Ctx & { id: string }) {
   const g = A.account(accounts, me);
   const [page, setPage] = useState<Json>(null);
+  const [seed, setSeed] = useState(0); // a starter chip fills the box from outside; remount reads the draft back
   const load = useCallback(() => api.bot(id).then(setPage).catch(() => {}), [id]);
   useEffect(() => { void load(); }, [load, tick]);
   const end = useRef<HTMLDivElement>(null);
@@ -281,7 +294,9 @@ function Chat({ id, state, me, tick, refresh, accounts }: Ctx & { id: string }) 
   return (
     <div className={`chat${live && h ? ' with-live' : ''}`}>
       <div className="lines" ref={box}>
-        {!lines.length && page && <div className="mute center empty">Say hello to {name}. Ask for anything, in your own words.</div>}
+        {!lines.length && page && <div className="mute center empty">Say hello to {name}. Ask for anything, in your own words.
+          {id === 'chief' && <ChiefIdeas state={state} chat={id} picked={() => setSeed((n) => n + 1)} />}
+        </div>}
         {lines.map((l) => (
           <div key={l.id} className={`line ${l.from}${l.unsure ? ' unsure' : ''}`}>
             {l.from === 'chief' && <span className="who">Chief</span>}
@@ -307,7 +322,7 @@ function Chat({ id, state, me, tick, refresh, accounts }: Ctx & { id: string }) 
           {cards.map((c) => c.kind === 'connect' ? <ConnectCard key={c.id} c={c} helper={h?.name} state={state} onDone={refresh} /> : <AskCard key={c.id} c={c} who={h} onDone={refresh} />)}
         </section>}
       </aside>
-      <div className="dock"><Composer placeholder={id === 'chief' ? 'Ask Chief anything…' : `Message ${name}…`} onSend={send} {...typeInto(id)} /></div>
+      <div className="dock"><Composer key={seed} placeholder={id === 'chief' ? 'Ask Chief anything…' : `Message ${name}…`} onSend={send} {...typeInto(id)} /></div>
     </div>
   );
 }
@@ -497,7 +512,7 @@ function ThingsGrid({ list, state, empty }: { list: A.Thing[]; state: Json; empt
   return (
     <div className="grid things">
       {list.map((t) => {
-        const h = crew.find((x) => x.id === t.helper);
+        const h = A.crew(state).find((x) => x.id === t.helper);
         return (
           <div key={t.id} className="card thing">
             {t.files[0] && <Media f={t.files[0]} />}
@@ -925,7 +940,7 @@ function App() {
   if (!ctx.state.person.onboarded) return <>{splash}<Hello {...ctx} /><Toasts /></>;
   const v = under.current;
   const crew = A.crew(ctx.state);
-  const asks = ctx.state.asks.length;
+  const asks = A.needsYou(ctx.state).length; // the badge counts only what Needs you shows
   const sheet = route.view === 'ask' ? A.cards(ctx.state).find((c) => String(c.id) === route.id) : undefined;
   const nav: [string, string, string, number?][] = [['#/', 'Chats', '⌂'], ['#/crew', 'Crew', '☺'], ['#/things', 'Things', '▤'], ['#/routines', 'Routines', '↻'], ['#/settings', 'Settings', '⚙']];
   const active = (h: string) => (h === '#/' ? v.view === 'home' : h === '#/crew' ? ['crew', 'add', 'helper', 'chief'].includes(v.view) : h === `#/${v.view}` || (h === '#/settings' && v.view === 'apps'));

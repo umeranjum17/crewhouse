@@ -57,6 +57,8 @@ const asks = [
       order: { shown: '$43.10', known: true, dollars: true },
     }) } },
   { id: 8, bot: 'reel', task_id: 41, kind: 'connect', at: now - min, member: me, title: '', detail: { app: 'drive', words: 'Want a copy in the family Drive too?' } },
+  { id: 12, bot: 'reel', task_id: 41, kind: 'question', at: now - 2 * min, member: me, title: '', detail: { question: 'Include the baby photos Mum sent, or just the recent ones?' } },
+  { id: 13, bot: 'pip', task_id: null, kind: 'question', at: now - 6 * min, member: me, title: '', detail: { question: 'Sports day and the dentist trip are both on Friday morning. Keep both?' } },
   ...(me === 1 ? [{ id: 9, bot: 'tracer', task_id: 44, kind: 'permission', at: now - 2 * min, member: 1, title: '', detail: {
     effect: 'spend', spends: true, words: "Tracer wants to spend about $0.50 to find Sara Malik's work email. OK?" } }] : []),
 ];

@@ -94,6 +94,25 @@ test('asks become plain cards: money never gets "always", a blocked terminal bec
   assert.equal(A.card({ id: 8, bot: 'reel', kind: 'connect', at: now, detail: { app: 'drive' } }, state).app?.name, 'Google Drive');
 });
 
+test('Needs you: spending and sending first, then questions; a suggestion waits in its helper\'s chat', () => {
+  const rows = A.needsYou(state);
+  assert.deepEqual(rows.map((c) => c.kind), ['spend', 'ok', 'question'], 'money and messages, then OKs, then questions');
+  assert.ok(!rows.some((c) => /learned something/.test(c.head)), 'a proposal never sits on Home; it lives in the helper\'s chat');
+  // and the proposal's dot moves to that helper's row in the list
+  assert.equal(A.chats(state).find((c) => c.id === 'reel')?.unread, 1, 'the unread dot carries the suggestion');
+  assert.equal(A.chats(state).find((c) => c.id === 'scout')?.unread, 0, 'nobody else\'s dot moves');
+});
+
+test('Home commits nothing: a row opens the review sheet, and a starter fills the box without sending', () => {
+  const src = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
+  const home = src.slice(src.indexOf('function NeedsRows('), src.indexOf("const ownerName"));
+  assert.ok(!home.includes('<AskCard'), 'ask cards with buttons sat right on Home; a row opens the sheet instead');
+  assert.match(home, /needs-row/, 'the compact Needs-you rows');
+  assert.match(home, /href=\{`#\/ask\/\$\{c\.id\}`\}/, 'every row opens the existing review sheet');
+  const app = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
+  assert.doesNotMatch(app, /api\.post\(i\.bot/, 'an idea chip fills the draft, it never sends');
+});
+
 test('owner-only helpers stay with the owner', () => {
   assert.ok(!A.crew(state).some((h) => h.id === 'tracer'));
   assert.ok(!A.gallery(state).some((t: any) => t.id === 'tracer'));
