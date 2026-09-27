@@ -3,7 +3,8 @@
 // request, waiting for her sign-in), ?demo=answer (Chief's first answer), ?demo=plan (a plan without helpers),
 // ?demo=resting, ?demo=connect (a helper asks for Google Calendar in chat), ?demo=nogoogle (Google not on for the house), ?demo=share (the crew's share used up today, $4 spent), ?demo=claim (Scout asks to fill a line of an unclaimed-money claim),
 // ?demo=return (Scout asks to press a shop's Start return), ?demo=chase (Scout's chase email as a draft to send), ?demo=renewal (Scout's renewal warning and the cancellation email as a draft to send), ?demo=day (Scout's plan of the day, three things in order),
-// ?demo=paper (Scout's reply to the school as a draft to approve — the paper, sorted), ?demo=meals (this week's dinners shopped into a cart, waiting on its checkout card).
+// ?demo=paper (Scout's reply to the school as a draft to approve — the paper, sorted), ?demo=meals (this week's dinners shopped into a cart, waiting on its checkout card),
+// ?demo=watch (the name watch heard: one source-linked line), ?demo=neighbour (the weekly brief as a document), ?demo=brief (the month in brief as a document).
 // &sheet=signin or &sheet=connect opens that sheet, and &phase=… pins it to one state.
 import type { Json } from './api.ts';
 import { describe, nextRun, parseSchedule } from '../../src/routines.ts';
@@ -131,6 +132,9 @@ const state = {
     { bot: 'scout', promise: "I'll turn your mail, your calendar and what's still open into what today actually is.", ask: "Give me my day: what's on, what's waiting on me, what to do first", needs: dayNeeds },
     { bot: 'scout', promise: "I'll read the letters and forms coming into your mail, put what's due on your calendar, and draft every reply — you read, tap approve, and send.", ask: "Sort the paperwork: what's due, and draft the replies", needs: paperNeeds },
     { bot: 'scout', promise: "Once a week I'll plan seven dinners everyone will actually eat, write the shopping list sorted by aisle, and put the shop day on your calendar. If you want, I'll fill the cart too — you approve it like any purchase.", ask: "Plan our dinners for the week and write the shopping list", needs: [] },
+    { bot: 'scout', promise: "I'll keep an ear out for your name and anything you told me to listen for — across Reddit, Hacker News, news sites and X — and send you one source-linked line when something shows up. Quiet otherwise.", ask: 'Watch for my name online and tell me when something shows up', needs: [] },
+    { bot: 'scout', promise: "Give me the names of the others doing what you do. I'll watch their pages and newsletters, and once a week you get one short brief: what changed, what it means, what you could do about it. I never contact anyone.", ask: 'Watch my competitors and give me a weekly brief', needs: [] },
+    { bot: 'scout', promise: "Once a month I'll write the short story of what happened in our world — the topics, names and places you care about — with a link for every claim, as a document you keep.", ask: 'Write me the month in brief', needs: [] },
     { bot: 'scout', promise: "I'll catch a renewal or a price rise before it's charged, and have the cancellation email ready. Every step asks you first, on its own card.", ask: 'Watch my subscriptions so nothing gets renewed without me hearing about it first', group: 'money', needs: houseGoogle ? [] : ['Google'] },
     { bot: 'pip', promise: 'Plan a birthday party', ask: 'Plan a birthday party for ' },
     { bot: 'chief', promise: "What's on this week?", ask: "What's on this week?" },
@@ -244,6 +248,24 @@ if (variant === 'meals') pages.scout = { messages: [
   { id: 2, author: 'bot', text: 'Seven dinners, one line each, nothing over forty minutes on a school night — Friday stays pizza night, and Sunday\'s roast covers Monday\'s leftovers.\nThe list is below, sorted the way you walk the shop: produce first, then chilled, pantry, freezer. The shop day is on your calendar for Saturday morning.\nYou asked me to fill the cart too: it\'s at the checkout on a card, every item and the total. Placing the order is yours.' },
   { id: 3, author: 'system', text: 'Delivered files/dinners-and-shopping-list.md: Seven dinners and the list, sorted by aisle' },
 ], notes: '', tasks: [] };
+// The name watch, heard (?demo=watch): one source-linked line on the morning something showed up — and nothing on the quiet days.
+if (variant === 'watch') pages.scout = { messages: [
+  { id: 1, author: 'person', text: 'Watch for my name online and tell me when something shows up' },
+  { id: 2, author: 'bot', text: 'Set up: Ada Ali, @adaali, and the name of the market stall — across Reddit, Hacker News, news sites and X. I\'ll say one line with the link when something shows up, and nothing on the quiet days.' },
+  { id: 3, author: 'bot', text: 'This morning, a Reddit thread in r/lahore mentions the stall by name: "Has anyone been to the Ali family stall at Liberty market lately? Went back after two years." — reddit.com/r/lahore/comments/ada_stall. Nothing else this week; the day the thread turns sour, that line comes too.' },
+], notes: '', tasks: [] };
+// The neighbours, watched (?demo=neighbour): the week's brief as a finished document — what changed, what it means, what to do.
+if (variant === 'neighbour') pages.scout = { messages: [
+  { id: 1, author: 'person', text: 'Watch my competitors and give me a weekly brief' },
+  { id: 2, author: 'bot', text: 'Watching three stalls on Liberty market: their pages and their price lists, every Monday morning. I never contact anyone — I only read.\nThis week\'s brief is below: one price moved, one stall closed Mondays. Prices are read off their own pages, two sources each.' },
+  { id: 3, author: 'system', text: 'Delivered files/neighbour-brief.docx: A document in 3 sections: The neighbours, this week' },
+], notes: '', tasks: [] };
+// The month in brief (?demo=brief): the month's short story as a document, with a link for every claim.
+if (variant === 'brief') pages.scout = { messages: [
+  { id: 1, author: 'person', text: 'Write me the month in brief' },
+  { id: 2, author: 'bot', text: 'Three paragraphs: what happened in the market this month, why it matters to the stall, and the one thing to watch next month. Every claim carries its link, and the two numbers that matter were each checked against a second source.\nIt\'s below as a document, so it keeps — next month\'s sits beside it. Say the word and I\'ll bring it every month.' },
+  { id: 3, author: 'system', text: 'Delivered files/month-in-brief.docx: A document in 3 sections: The month in brief' },
+], notes: '', tasks: [] };
 // The day, planned, answered where the job was handed over (?demo=day): one message, three things, in order, at times.
 if (variant === 'day') pages.scout = { messages: [
   { id: 1, author: 'person', text: "Give me my day: what's on, what's waiting on me, what to do first" },
@@ -271,8 +293,27 @@ const book = {
       ['Family Nazir', '301', '520', '0', '520', 'Not paid yet']] },
   ],
 };
-/** What crewd read out of the handbook (src/documents.ts): plain parts, never the file. */
-const doc = {
+/** What crewd read out of a watch brief (?demo=neighbour, ?demo=brief, src/documents.ts): plain parts, never the file. */
+const briefDoc = (title: string, parts: Json[]) => ({ parts: [{ kind: 'heading', text: title }, ...parts] });
+const doc = variant === 'neighbour' ? briefDoc('The neighbours, this week', [
+  { kind: 'p', text: 'What changed on the three stalls we watch, read off their own pages this Monday, and what it means for yours.' },
+  { kind: 'heading', text: 'What changed' },
+  { kind: 'li', text: 'Karak Chai House put its doodh patti up from 120 to 150 rupees — their prices page and their Instagram both say 150 now.' },
+  { kind: 'li', text: 'The Liberty juice counter now closes Mondays; its own notice says so, dated last week.' },
+  { kind: 'li', text: 'Nothing moved on the kebab grill\'s page — same menu, same prices as last Monday.' },
+  { kind: 'heading', text: 'What it means' },
+  { kind: 'p', text: 'You are now the cheaper doodh patti on the strip by 30 rupees, and the Monday crowd has nowhere else inside the market.' },
+  { kind: 'heading', text: 'What you could do' },
+  { kind: 'p', text: 'Hold your price through the month and put a Monday-only tea deal on the board; the juice counter\'s closure is the opening.' },
+]) : variant === 'brief' ? briefDoc('The month in brief', [
+  { kind: 'p', text: 'September around Liberty market, in three paragraphs — every claim carries where it was read, and the two numbers were each checked against a second source.' },
+  { kind: 'heading', text: 'The month' },
+  { kind: 'p', text: 'Footfall came back after the rains: the market association\'s own notice counts twelve new stalls since June, four of them tea carts. The juice counter lost its Monday licence fight and closed Mondays; two neighbouring shops followed.' },
+  { kind: 'heading', text: 'Why it matters here' },
+  { kind: 'p', text: 'Tea is becoming the street\'s drink, and yours is still the cheapest doodh patti on the strip — the price boards say 120 against their 150.' },
+  { kind: 'heading', text: 'Watch next month' },
+  { kind: 'p', text: 'The association meets on the 9th to set winter hours; whatever it decides, the Monday gap is yours until it does.' },
+]) : {
   parts: [
     { kind: 'heading', text: 'Front-desk handbook' },
     { kind: 'p', text: 'How the desk runs on an ordinary day, and what to do on a day that is not ordinary.' },
