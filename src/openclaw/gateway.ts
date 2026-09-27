@@ -2,7 +2,7 @@ import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, randomBytes, sign } from 'node:crypto';
 import { createWriteStream, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { createRequire } from 'node:module';
 import { GatewayClient } from '@openclaw/gateway-client';
 
@@ -50,6 +50,8 @@ export class OpenClawGateway {
   onEvent(listener: (event: { event: string; payload?: any }) => void) { this.listeners.add(listener); return () => this.listeners.delete(listener); }
   readonly root: string;
   readonly stateDir: string;
+  /** Where the household's crew folder lives, so the install policy recognizes the bots' own skills. */
+  crewDir = '';
   constructor(stateDir: string) { this.stateDir = stateDir; this.root = join(stateDir, 'openclaw'); }
 
   async start(): Promise<GatewayClient> {
@@ -95,8 +97,14 @@ export class OpenClawGateway {
           'memory-core': { config: { dreaming: { enabled: false } } },
         },
       },
-      // The weekly review can delete skills. Enable auto only after the pre-review history gate exists.
-      skills: { workshop: { autonomous: { mode: 'off' } } },
+      // Only skills reviewed against the tarball and this repo's own content may exist; installs go through the
+      // operator policy (src/openclaw/policy.mjs) and fail closed without it.
+      skills: { allowBundled: ['video-frames', 'openai-whisper', 'summarize', 'nano-pdf', 'diagram-maker'], workshop: { autonomous: { mode: 'off' } } },
+      security: { installPolicy: { enabled: true, exec: {
+        source: 'exec', command: process.execPath, args: [join(repo, 'src/openclaw/policy.mjs')],
+        trustedDirs: [dirname(process.execPath), join(repo, 'src/openclaw')], timeoutMs: 10_000,
+        passEnv: ['OPENCLAW_STATE_DIR'], env: { CREWHOUSE_CREW_DIR: this.crewDir },
+      } } },
       channels: {},
     };
     const configPath = join(this.root, 'openclaw.json');

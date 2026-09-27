@@ -20,7 +20,10 @@ export class OpenClawRuntime implements AgentRuntime {
   private agents = new Set<number>();
   readonly stateDir: string;
   constructor(stateDir: string) { this.stateDir = stateDir; this.gateway = new OpenClawGateway(stateDir); }
+  /** The crew folder, for the install policy's own-content roots. Set before start(). */
+  crewDir = '';
   async start(host: ToolHost) {
+    this.gateway.crewDir = this.crewDir;
     this.bridge = new ToolBridge(this.stateDir, host);
     await this.bridge.start();
     try { this.client = await this.gateway.start(); }

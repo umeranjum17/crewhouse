@@ -38,7 +38,7 @@ export function acts(tool: string, input: Record<string, any>, e: Effect) {
 
 /** Always safe: they only touch the bot's own space, the web, or Crewhouse itself. bash runs in the sandbox. The
  *  crew's file tools are NOT here: a write outside the bot's folder asks, exactly as it always did. */
-const SAFE = new Set(['bash', 'web_search', 'web_fetch', 'crew_web_search', 'crew_web_fetch',
+const SAFE = new Set(['bash', 'web_search', 'web_fetch', 'crew_web_search', 'crew_web_fetch', 'memory_search', 'memory_get', 'view_image', 'pdf', 'image_generate',
   'crew_connect', 'crew_outcome', 'crew_report', 'crew_deliver', 'crew_workbook', 'crew_document', 'crew_remember', 'crew_draft',
   'crew_verify', 'crew_learn', 'crew_routine', 'crew_pass', 'crew_add_phone', 'crew_roster', 'crew_recruit', 'crew_assign',
   'crew_routines', 'crew_status', 'crew_suggest', 'crew_create', 'crew_job', 'crew_call_me']);

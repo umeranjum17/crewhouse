@@ -36,6 +36,10 @@ const HOLD_MS = Number(process.env.CREWHOUSE_HOLD_MS || 180_000); // how long a 
 const TASK_TIMEOUT_MS = 60 * 60_000;
 import { classifyText } from './failures.ts';
 import { clock } from './accounts.ts';
+
+/** OpenClaw's own tools crewhouse adopts once their policy effects are reviewed: reads, recall and media on the
+ *  member's own sign-in. Any future native tool not reviewed here fails closed until a bump reviews it. */
+const NATIVE_TOOLS = new Set(['web_search', 'web_fetch', 'memory_search', 'memory_get', 'view_image', 'pdf', 'image_generate']);
 export { clock };
 
 /** At most n characters, cut at a word boundary with an ellipsis: titles on cards and in the digest. */
@@ -253,6 +257,7 @@ export class Crew {
     this.recover();
     void this.migrateMembers().finally(() => {
       // The engine comes up in the background: a first install can take minutes, and crewd boots without it.
+      if ('crewDir' in this.runtime) (this.runtime as { crewDir: string }).crewDir = this.cfg.crewDir;
       void this.runtime.start(this.toolHost()).catch((e) => {
         console.error('engine start:', e);
         this.db.event('system.engine', null, { error: String(e).slice(0, 300) });
@@ -1432,14 +1437,14 @@ export class Crew {
         try {
           const task = own(run);
           const [name, input] = this.unwrap(tool, rawInput);
-          // crew_app rides on the inner tool being one of this run's connected apps; everything else by grant.
-          const ok = tool === 'crew_app' ? (this.live.get(run.bot)?.appTools?.has(name) ?? false)
-            : this.toolAllowed(run.bot, name);
-          if (!ok) return { allow: false, reason: 'This run does not have that tool.' };
           if (this.netOf(run.bot) && (name === 'web_fetch' || name === 'web_search')) {
             this.refusedNet(run.bot, name);
             return { allow: false, reason: 'This helper can read only the places on its list. Use its checked web tool.' };
           }
+          // crew_app rides on the inner tool being one of this run's connected apps; everything else by grant.
+          const ok = tool === 'crew_app' ? (this.live.get(run.bot)?.appTools?.has(name) ?? false)
+            : this.toolAllowed(run.bot, name);
+          if (!ok) return { allow: false, reason: 'This run does not have that tool.' };
           const result = await this.gate(run.bot, name, input);
           if (result) {
             if (result.terminate) { // the person hasn't answered: stop the run here; the answer arrives as the next prompt
@@ -1509,6 +1514,8 @@ export class Crew {
     const l = this.live.get(botId);
     if (!l) return false;
     const grants = l.grants ?? [];
+    // OpenClaw's own read/recall/media tools, adopted for unfenced runs; a fenced helper's way out stays crewd's.
+    if (NATIVE_TOOLS.has(name)) return !this.netOf(botId);
     if (/^crew_(read|write|edit|ls|grep|find)$/.test(name)) return grants.includes('files');
     if (name === 'bash') return grants.includes('files') && sandboxReady();
     if (name === 'crew_web_fetch' || name === 'crew_web_search') return grants.includes('web');

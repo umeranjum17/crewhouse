@@ -77,6 +77,12 @@ test('pinned engine uses isolated home, loopback token and no Control UI', { tim
       if (!finished) await new Promise((resolve) => setTimeout(resolve, 100));
     }
     assert.ok(finished, 'system-owned review did not complete in empty fixture');
+    // A9: the reviewed bundled list is the one the agent sees; a bundled skill outside it is blocked by allowlist.
+    const skills = await client.request<{ skills?: Record<string, unknown>[] }>('skills.status', { agentId: 'm1' }, { timeoutMs: 30000 });
+    const byName = Object.fromEntries((skills.skills ?? []).map((s) => [s.name, s]));
+    assert.equal(byName.weather?.blockedByAllowlist, true, 'a bundled skill outside the reviewed list is blocked');
+    for (const allowed of ['video-frames', 'summarize', 'diagram-maker'])
+      assert.equal(byName[allowed]?.blockedByAllowlist, false, `${allowed} stays eligible`);
     assert.deepEqual(readdirSync(owner).sort(), ['.clawdbot', '.codex', '.openclaw', '.pi']);
     for (const name of readdirSync(owner)) assert.equal(readFileSync(join(owner, name, 'decoy'), 'utf8'), 'unchanged');
   } finally {
