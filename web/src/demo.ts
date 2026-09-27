@@ -132,9 +132,9 @@ const state = {
     { bot: 'scout', promise: "I'll turn your mail, your calendar and what's still open into what today actually is.", ask: "Give me my day: what's on, what's waiting on me, what to do first", needs: dayNeeds },
     { bot: 'scout', promise: "I'll read the letters and forms coming into your mail, put what's due on your calendar, and draft every reply — you read, tap approve, and send.", ask: "Sort the paperwork: what's due, and draft the replies", needs: paperNeeds },
     { bot: 'scout', promise: "Once a week I'll plan seven dinners everyone will actually eat, write the shopping list sorted by aisle, and put the shop day on your calendar. If you want, I'll fill the cart too — you approve it like any purchase.", ask: "Plan our dinners for the week and write the shopping list", needs: [] },
-    { bot: 'scout', promise: "I'll keep an ear out for your name and anything you told me to listen for — across Reddit, Hacker News, news sites and X — and send you one source-linked line when something shows up. Quiet otherwise.", ask: 'Watch for my name online and tell me when something shows up', needs: [] },
+    { bot: 'scout', promise: "I'll keep an ear out for your name and anything you told me to listen for — across Reddit, Hacker News, news sites and X — and send you one line saying where it came from when something shows up. Quiet otherwise.", ask: 'Watch for my name online and tell me when something shows up', needs: [] },
     { bot: 'scout', promise: "Give me the names of the others doing what you do. I'll watch their pages and newsletters, and once a week you get one short brief: what changed, what it means, what you could do about it. I never contact anyone.", ask: 'Watch my competitors and give me a weekly brief', needs: [] },
-    { bot: 'scout', promise: "Once a month I'll write the short story of what happened in our world — the topics, names and places you care about — with a link for every claim, as a document you keep.", ask: 'Write me the month in brief', needs: [] },
+    { bot: 'scout', promise: "Once a month I'll write the short story of what happened in our world — the topics, names and places you care about — with a note on where every claim came from, as a document you keep.", ask: 'Write me the month in brief', needs: [] },
     { bot: 'scout', promise: "I'll catch a renewal or a price rise before it's charged, and have the cancellation email ready. Every step asks you first, on its own card.", ask: 'Watch my subscriptions so nothing gets renewed without me hearing about it first', group: 'money', needs: houseGoogle ? [] : ['Google'] },
     { bot: 'pip', promise: 'Plan a birthday party', ask: 'Plan a birthday party for ' },
     { bot: 'chief', promise: "What's on this week?", ask: "What's on this week?" },
@@ -270,7 +270,7 @@ if (variant === 'meals') pages.scout = { messages: [
 // The name watch, heard (?demo=watch): one source-linked line on the morning something showed up — and nothing on the quiet days.
 if (variant === 'watch') pages.scout = { messages: [
   { id: 1, author: 'person', text: 'Watch for my name online and tell me when something shows up' },
-  { id: 2, author: 'bot', text: 'Set up: Ada Ali, @adaali, and the name of the market stall — across Reddit, Hacker News, news sites and X. I\'ll say one line with the link when something shows up, and nothing on the quiet days.' },
+  { id: 2, author: 'bot', text: 'Set up: Ada Ali, @adaali, and the name of the market stall — across Reddit, Hacker News, news sites and X. I\'ll say one line, with where it came from, when something shows up, and nothing on the quiet days.' },
   { id: 3, author: 'bot', text: 'This morning, a Reddit thread in r/lahore mentions the stall by name: "Has anyone been to the Ali family stall at Liberty market lately? Went back after two years." — reddit.com/r/lahore/comments/ada_stall. Nothing else this week; the day the thread turns sour, that line comes too.' },
 ], notes: '', tasks: [] };
 // The neighbours, watched (?demo=neighbour): the week's brief as a finished document — what changed, what it means, what to do.
@@ -282,7 +282,7 @@ if (variant === 'neighbour') pages.scout = { messages: [
 // The month in brief (?demo=brief): the month's short story as a document, with a link for every claim.
 if (variant === 'brief') pages.scout = { messages: [
   { id: 1, author: 'person', text: 'Write me the month in brief' },
-  { id: 2, author: 'bot', text: 'Three paragraphs: what happened in the market this month, why it matters to the stall, and the one thing to watch next month. Every claim carries its link, and the two numbers that matter were each checked against a second source.\nIt\'s below as a document, so it keeps — next month\'s sits beside it. Say the word and I\'ll bring it every month.' },
+  { id: 2, author: 'bot', text: 'Three paragraphs: what happened in the market this month, why it matters to the stall, and the one thing to watch next month. Every claim says where it came from, and the two numbers that matter were each checked against a second source.\nIt\'s below as a document, so it keeps — next month\'s sits beside it. Say the word and I\'ll bring it every month.' },
   { id: 3, author: 'system', text: 'Delivered files/month-in-brief.docx: A document in 3 sections: The month in brief' },
 ], notes: '', tasks: [] };
 // The day, planned, answered where the job was handed over (?demo=day): one message, three things, in order, at times.

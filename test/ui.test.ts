@@ -6,6 +6,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Json } from '../web/src/api.ts';
 import * as A from '../web/src/adapter.ts';
+import { readTyped } from '../mobile/src/typed.ts';
 import { draftOf, keepDraft, sent } from '../web/src/draft.ts';
 import { chatTokens, safeLink } from '../web/src/chat-md.ts';
 import { color } from '../web/src/tokens.ts';
@@ -500,6 +501,61 @@ test('reach from anywhere: one plain sentence per relay state, naming only the r
     assert.doesNotMatch(r.words, /https?:|wss?:|\/relay\/v1|undefined/, st);
   }
   assert.equal(A.reach({ relay: 'https://relay.example.com', relayStatus: 'online' }).online, true);
+});
+
+test('no jargon anywhere: the machinery\'s words never reach a person', () => {
+  // The captain's sweep (CREWHOUSE-APK-04): relay, link, Noise, ticket, grant, host, daemon, crewd, engine, token,
+  // port and stub never show in the screens' own words or the adapter's views. Tailscale is the one allowed name,
+  // and only in the two places a person is asked to set it up or switch it on (adapter.anywhere/away).
+  const JARGON = /\b(relay|noise|tickets?|grants?|daemon|crewd|engine|tokens?|ports?|stub|hosted?|links?|host)\b/i;
+  // A literal of all lower-case tokens (class names, import paths, hrefs) is never read as words on a screen.
+  const TOKENY = /^[a-z0-9-./:]+( [a-z0-9-./:]+)*$/;
+  const prose = (src: string) => {
+    const bare = src.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^[ \t]*\/\/.*$/gm, ' '); // comments are for us
+    const lits = [...bare.matchAll(/(['"])((?:\\.|(?!\1)[^\\\n])*)\1/g)].map((m) => m[2]).filter((l) => !/^https?:/i.test(l.trim()));
+    // JSX text: anything between tags that is not an expression fragment (&&, ===, x.y, "?) :" are code, not copy).
+    const jsx = [...bare.matchAll(/>([^<>{}\n]{3,})</g)].map((m) => m[1]).filter((t) => !/&&|\?\?|===|\.\w|\)\s*[?:]/.test(t));
+    return [...lits, ...jsx].filter((l) => !TOKENY.test(l.trim()));
+  };
+  const srcDir = join(import.meta.dirname, '..', 'web', 'src');
+  for (const f of ['main.tsx', 'parts.tsx', 'flows.tsx', 'dialog.ts', 'draft.ts', 'kept.ts', 'chat-md.ts', 'demo.ts', 'adapter.ts'])
+    for (const w of prose(readFileSync(join(srcDir, f), 'utf8')))
+      assert.doesNotMatch(w, JARGON, `${f} shows: ${w.trim().slice(0, 80)}`);
+  const app = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
+  for (const w of prose(app)) assert.doesNotMatch(w, JARGON, `App.tsx shows: ${w.trim().slice(0, 80)}`);
+  assert.doesNotMatch(app, /Use a relay code|Relay address|Short relay code|legacy/, 'the phone pairs through one code box; no relay toggle');
+  // The adapter is everything a person reads: no view says a machinery word, and Tailscale appears only in the
+  // anywhere setup and the away explainer.
+  const linkView = { on: true, lan: false, pinned: false, tailscale: false, hosts: ['127.0.0.1'], relay: 'https://go.example.com', relayStatus: 'online', push: 'ready', asking: [] };
+  const views: Record<string, unknown> = {
+    crew: A.crew(state), cards: A.cards(state), chats: A.chats(state), things: A.things(state), ideas: A.ideas(state), jobs: A.jobs(state),
+    reach: A.reach(linkView), reached: A.reached({ reached: { home: now, tailscale: now - 9e6, relay: now - 5e6 } }),
+    push: A.pushWords(linkView), typed: A.phoneTyped({ short: 'K7M2QX', code: '7KQ4-M2XP-9RTH', relay: 'https://go.example.com' }),
+    anywhere: A.anywhere(linkView), away: A.away({ tailnet: true, vpn: true, knock: 'timeout', reached: { tailscale: now - 3.6e6 } }),
+  };
+  const words = (x: unknown): string => typeof x === 'string' ? x : Array.isArray(x) ? x.map(words).join(' ')
+    : x && typeof x === 'object' ? Object.entries(x).filter(([k]) => k !== 'url' && k !== 'at').map(([, v]) => words(v)).join(' ') : '';
+  for (const [name, v] of Object.entries(views)) assert.doesNotMatch(words(v), JARGON, name);
+  assert.match(words(views.typed), /^K7M2QX-7KQ4-M2XP-9RTH@go\.example\.com$/, 'the typed code is one string, the go-between carried inside it');
+  assert.doesNotMatch(words(views.reach) + words(views.reached) + words(views.push) + words(views.typed), /tailscale/i, 'Tailscale is named only where it is set up');
+  for (const name of ['anywhere', 'away'] as const) assert.match(words(views[name]), /Tailscale/, `${name} may name Tailscale`);
+  // The failure words are people words too: the phone's pairing lines and the toasts on both ends.
+  for (const w of ["That code has run out. Show a new one on your computer, then try again.", "That code didn't match. Show a fresh one and try again.",
+    "Couldn't reach your computer. Check it's awake, then try again.", "That didn't go through. Check the code, then try again.",
+    'That code is missing where to look it up. Copy the whole code from your computer, then try again.',
+    "Can't reach the home computer right now. Check it's on, then try again.", 'That didn’t work. Please try again.'])
+    assert.doesNotMatch(w, JARGON);
+});
+
+test('the phone\'s one code box reads either kind by its shape, and rejects what it cannot dial', () => {
+  assert.equal(readTyped('23456-789ABCDE-FGHJKMNPQR-S023456-789ABCDE-FGHJKMN').kind, 'direct', 'the long letter envelope, case and dashes aside');
+  assert.equal(readTyped('xxxxx-'.repeat(20)).kind, 'direct');
+  assert.deepEqual(readTyped('k7m2qx 7kq4 m2xp 9rth @ go.example.com'), { kind: 'relay', short: 'K7M2QX', code: '7KQ4M2XP9RTH', base: 'https://go.example.com' });
+  assert.deepEqual(readTyped('K7M2QX-7KQ4-M2XP-9RTH@https://go.example.com'), { kind: 'relay', short: 'K7M2QX', code: '7KQ4M2XP9RTH', base: 'https://go.example.com' });
+  assert.equal(readTyped('7KQ4-M2XP-9RTH').kind, 'unknown', 'a code that names no relay has nowhere to dial');
+  assert.equal(readTyped('K7M2QX-7KQ4-M2XP-9RTH@example').kind, 'unknown', 'no address to look it up');
+  assert.equal(readTyped('K7M2QX-7KQ4@go.example.com').kind, 'unknown', 'half the codes is not a code');
+  assert.equal(readTyped('').kind, 'unknown');
 });
 
 test('reach it from anywhere: three plain states and numbered steps, and the phone says which step is missing', () => {

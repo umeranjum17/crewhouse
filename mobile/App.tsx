@@ -23,7 +23,7 @@ import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { useShareIntent } from 'expo-share-intent';
 import QRCode from 'qrcode';
 import * as motion from './src/motion';
-import { connect, desktopSignaling, forgetGrant, kept, loadGrant, onLive, pair, pairDirectTyped, pairTyped, type Grant, type Status } from './src/link';
+import { connect, desktopSignaling, forgetGrant, kept, loadGrant, onLive, pair, pairTypedCode, type Grant, type Status } from './src/link';
 
 // ---------- look ----------
 type Look = typeof color.day & { go: string; goInk: string; solid: string; soft: string; card: string; ok: string; wait: string; pinkInk: string; night: boolean };
@@ -296,6 +296,7 @@ function DocSheet({ f, onClose }: { f: A.FileView; onClose: () => void }) {
 const pairWords = (e: any): string => {
   const m = String(e?.message ?? e ?? '');
   if (/run out|expired/i.test(m)) return 'That code has run out. Show a new one on your computer, then try again.';
+  if (/copy the whole code/i.test(m)) return m; // already said for the person
   if (/match|refus|wrong|no such|not found|unknown/i.test(m)) return "That code didn't match. Show a fresh one and try again.";
   if (/reach|network|timeout|address|relay|host/i.test(m)) return "Couldn't reach your computer. Check it's awake, then try again.";
   return 'That didn\'t go through. Check the code, then try again.';
@@ -326,15 +327,12 @@ function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
   const [done, setDone] = useState<Grant | null>(null);
   const [words, setWords] = useState('');
   const [typing, setTyping] = useState(false);
-  const [legacy, setLegacy] = useState(false);
-  const [relay, setRelay] = useState('');
-  const [short, setShort] = useState('');
   const [code, setCode] = useState('');
   const seen = useRef('');
   const typed = async () => {
     setBusy(true);
     setErr('');
-    try { setDone(await (legacy ? pairTyped(relay, short, code, setWords) : pairDirectTyped(code, setWords))); } catch (e: any) { setErr(pairWords(e)); }
+    try { setDone(await pairTypedCode(code, setWords)); } catch (e: any) { setErr(pairWords(e)); }
     setWords('');
     setBusy(false);
   };
@@ -385,21 +383,15 @@ function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
     );
   }
   if (typing) {
-    const input = (value: string, set: (v: string) => void, placeholder: string, label: string) => (
-      <TextInput style={[s.input, { alignSelf: 'stretch', color: t.ink, borderColor: t.line }]} value={value} onChangeText={set} placeholder={placeholder} placeholderTextColor={t.mute}
-        accessibilityLabel={label} autoCapitalize={label === 'Relay address' ? 'none' : 'characters'} autoCorrect={false} />
-    );
     return (
       <Center>
         <ChiefArt mood="listen" size={120} />
         <T style={s.h1}>Type a code</T>
         <T tone="ink2" style={s.centerText}>Enter the code under Add a phone on your computer, or one someone there sent you.</T>
-        {legacy && input(relay, setRelay, 'Your relay, like relay.example.com', 'Relay address')}
-        {legacy && input(short, setShort, 'Short relay code', 'Short code')}
-        {input(code, setCode, legacy ? 'Relay pairing code' : 'Type or paste the code', 'Pairing code')}
-        {busy ? <ActivityIndicator color={t.pink} style={{ margin: 20 }} /> : <Btn go big label="Pair" disabled={!code.trim() || (legacy && (!relay.trim() || !short.trim()))} onPress={typed} />}
+        <TextInput style={[s.input, { alignSelf: 'stretch', color: t.ink, borderColor: t.line }]} value={code} onChangeText={setCode} placeholder="Type or paste the code" placeholderTextColor={t.mute}
+          accessibilityLabel="Pairing code" autoCapitalize="characters" autoCorrect={false} />
+        {busy ? <ActivityIndicator color={t.pink} style={{ margin: 20 }} /> : <Btn go big label="Pair" disabled={!code.trim()} onPress={typed} />}
         {!!err && <T tone="pinkInk" style={s.centerText}>{err}</T>}
-        <Btn label={legacy ? 'Use a direct code' : 'Use a relay code'} onPress={() => { setLegacy(!legacy); setCode(''); setErr(''); }} />
         <Btn label="Scan instead" onPress={() => { setTyping(false); setErr(''); }} />
       </Center>
     );
@@ -418,7 +410,7 @@ function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
       {!!err && <T tone="pinkInk" style={s.centerText}>{err}</T>}
       {!!err && /camera/.test(err) && <Btn label="Open phone settings" onPress={() => void Linking.openSettings()} />}
       {!busy && <Btn label="Type a code" onPress={() => { setTyping(true); setErr(''); }} />}
-      <T tone="mute" style={[s.small, s.centerText, { marginTop: 20 }]}>🔒 Only your computer can read what this phone sends. A relay, if you use one, passes it along without being able to read it.</T>
+      <T tone="mute" style={[s.small, s.centerText, { marginTop: 20 }]}>🔒 Only your computer can read what this phone sends. Anything passing it along can't read it.</T>
     </Center>
   );
 }
