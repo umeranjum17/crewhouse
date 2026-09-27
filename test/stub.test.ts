@@ -42,7 +42,7 @@ test('chief onboarding, recruit, assign, grants', async () => {
   // Chief greets first and asks how to address the person; the first reply is stored as the address.
   let page = (await api('GET', '/api/bots/chief')).body;
   assert.match(page.messages[0].text, /I am Chief, of the Crewhouse/);
-  assert.match(page.messages[0].text, /how would you like me to address you/);
+  assert.match(page.messages[0].text, /What should I call you/);
   assert.match(page.messages[0].text, /stop and ask you first before anything leaves this house, costs money/, 'his stop-and-ask rules come first');
   assert.doesNotMatch(page.messages[0].text, /Master|aye/i);
   await say('chief', 'Sir');
@@ -69,10 +69,10 @@ test('chief onboarding, recruit, assign, grants', async () => {
   await done('chief', hand);
   const t = await until(async () => (await api('GET', '/api/bots/reel')).body.tasks.find((x: any) => x.title === 'Make a 10 second demo' && x.state === 'done'));
   page = (await api('GET', '/api/bots/chief')).body;
-  const said = page.messages.find((m: any) => m.author === 'bot' && m.text.startsWith('All done, Sir. Reel: stub reel: done'));
+  const said = page.messages.find((m: any) => m.author === 'bot' && m.text.startsWith('All done.'));
   assert.ok(said, 'Chief gives one wrap-up for the assigned work');
   assert.equal(said.task_id, hand);
-  assert.doesNotMatch(said.text, /#\d|has finished/, 'no task number or per-task completion line');
+  assert.doesNotMatch(said.text, /#\d|has finished|Sir/, 'no task number or honorific');
 
   // Grants: what the person ticks is what the bot gets.
   const tools = (await api('GET', '/api/bots/reel')).body.tools;
@@ -312,7 +312,7 @@ test('memory: the bot proposes a note, crewd caps and commits it, Undo reverts i
   assert.equal((await api('PUT', '/api/bots/quill/job', { ...recipe, great: 'x'.repeat(601) })).status, 400);
   const instructions = readFileSync(join(root, 'crew', 'bots', 'quill', 'AGENTS.md'), 'utf8');
   assert.match(instructions, /## Your job[\s\S]*### What it does[\s\S]*Keep notes tidy/);
-  assert.match(instructions, /## Boundaries\n- Stop and ask the person first/);
+  assert.match(instructions, /## Boundaries\n- Stop and ask first only/);
 });
 
 test('suggestions: a helper keeps a skill, and Chief changes a personality, only on the person\'s yes', async () => {

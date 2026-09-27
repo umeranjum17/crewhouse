@@ -302,10 +302,24 @@ export function upgradeFolder(cfg: Config, id: string, tpl: Template | null, dis
   if (tpl && !existsSync(join(dir, 'soul.md')) && templateSoul(cfg, tpl, display)) {
     writeFileSync(join(dir, 'soul.md'), templateSoul(cfg, tpl, display));
     const job = join(dir, 'AGENTS.md');
-    // Chief's voice used to be a section of his job; it is his soul now, so it is said once.
     if (existsSync(job)) writeFileSync(job, readFileSync(job, 'utf8').replace(/\n## Voice\n[\s\S]*?(?=\n## |$)/, ''));
     commit(dir, ['soul.md', 'AGENTS.md'], 'A soul of its own');
   }
+  if (!tpl) return;
+  // Only untouched template copies may move with a release; a person's edits and uncommitted changes win.
+  try {
+    const subjects = execFileSync('git', ['log', '--format=%s', '--', 'soul.md', 'AGENTS.md'], { cwd: dir, encoding: 'utf8' }).trim().split('\n');
+    const dirty = execFileSync('git', ['status', '--porcelain', '--', 'soul.md', 'AGENTS.md'], { cwd: dir, encoding: 'utf8' }).trim();
+    if (dirty || !subjects.length || subjects.some((s) => !['Joined the crew', 'Updated to the new template'].includes(s))) return;
+    const files = ['soul.md', 'AGENTS.md'].filter((f) => existsSync(join(templatesDir(cfg), tpl.id, f)));
+    const changed = files.filter((f) => readFileSync(join(dir, f), 'utf8') !== renamed(readFileSync(join(templatesDir(cfg), tpl.id, f), 'utf8'), tpl.display, display));
+    for (const f of changed) writeFileSync(join(dir, f), renamed(readFileSync(join(templatesDir(cfg), tpl.id, f), 'utf8'), tpl.display, display));
+    for (const sk of tpl.skills ?? []) {
+      const dest = join(dir, 'skills', sk);
+      if (!existsSync(dest)) cpSync(join(cfg.repoDir, 'skills', sk), dest, { recursive: true });
+    }
+    if (changed.length) commit(dir, changed, 'Updated to the new template');
+  } catch { /* Older folders may not have git; leave them as they are. */ }
 }
 
 /** A frontmatter value: plain, or quoted as a learned skill writes it. */
@@ -388,10 +402,8 @@ export function insideBot(cfg: Config, id: string, p: string) {
 
 /** How every model turn is told to address the person. A chosen name must not drift back to "sir". */
 export function addressLine(address: string | null) {
-  if (!address) return 'You do not yet know how to address the person; use no honorific.';
-  return /^(sir|ma'?am)$/i.test(address)
-    ? `Address the person as "${address.toLowerCase()}".`
-    : `Address the person by their chosen name, "${address}", never as "sir" or "ma'am".`;
+  if (!address) return 'You do not know what to call the person yet; use no name or title.';
+  return `The person likes to be called "${address}". Use it at most once, when greeting them; never in an ordinary reply.${/^(sir|ma'?am)$/i.test(address) ? '' : ' Never use sir or ma’am instead of their name.'}`;
 }
 
 /** What the engine is told about the bot for a whole session: who it is (its soul), its job, then how Crewhouse works. */
@@ -403,6 +415,12 @@ export function systemPrompt(cfg: Config, id: string, chief: boolean) {
     'which the app asks for you. If a tool call is refused, adapt and carry on, or say plainly what you need.\n' +
     `The person's own folders are in ${homedir()} (Documents, Pictures, Downloads…). Your shell can't see them; reach them with read and write, ` +
     'or crew_copy to put a copy of something you made there. Crewhouse asks the person first, so just go ahead and call the tool.\n' +
-    'Talk to the person in plain words: call what you made by what it is ("the birthday video"), never by a file path, a command or code.\n' +
+    '## How you answer\n' +
+    '- Lead with the answer or the result, in one or two sentences. Nothing before it: no restating the request, no preamble.\n' +
+    '- Then at most five short bullets. Anything longer than about 120 words, or anything the person will keep, use or edit (a plan, a report, drafts, a table), goes in a document with crew_document; your reply is its headline and what to look at first.\n' +
+    '- Write for a chat bubble: plain sentences, "- " bullets, **bold** on one phrase at most. No headings, tables, code or links in chat; name a source in words ("Stripe\'s pricing page") and keep links in the document.\n' +
+    '- Be decisive: recommend one option and say why in a clause. When you must assume something, say it in a few words ("assuming two adults") and carry on.\n' +
+    '- A caveat only where being wrong costs the person: money, health, legal, safety, a price or date they will act on, or something about to be sent, paid or deleted. Then one specific line: what to check, and where. Never "I could not verify", "I did not test", "unverified" or "as an AI". Where you looked and what you skipped goes at the end of the document, not in chat.\n' +
+    '- Call what you made by what it is ("the launch plan"), never a file path, command or code.\n' +
     `Your crew tools: crew_report (a one-line progress note), crew_deliver (register a finished file), crew_workbook (a finished spreadsheet, which Crewhouse writes itself from your spec \u2014 never make the file yourself), crew_document (a finished document, same rule), crew_copy (a copy into the person's folders), crew_remember (a lasting preference of the person), crew_learn (ask to keep a skill when the person explicitly says to follow a way of working from now on, even the first time, or after doing the same kind of job at least twice; never for an ordinary one-off)${chief ? ', and for running the crew: crew_roster, crew_recruit, crew_assign, crew_routine, crew_routines, crew_status, crew_suggest and crew_call_me' : ''}.`;;
 }

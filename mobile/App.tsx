@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import * as A from '../web/src/adapter.ts';
+import { chatTokens, safeLink } from '../web/src/chat-md.ts';
 import { api, setTransport, trouble, type Json } from '../web/src/api.ts';
 import { draftOf, keepDraft, sent } from '../web/src/draft.ts';
 import * as art from '../web/src/art.ts';
@@ -126,6 +127,24 @@ function Btn({ label, onPress, go, ghost, big, disabled }: { label: string; onPr
     </Pressable>
   );
 }
+function ChatText({ text }: { text: string }) {
+  const t = useLook();
+  const [more, setMore] = useState(false);
+  const long = text.length > 700 || text.split('\n').length > 10;
+  const shown = long && !more ? text.slice(0, 650).replace(/\s+\S*$/, '') : text;
+  const inline = (tokens: any[]): ReactNode => tokens.map((x, i) => x.type === 'strong' ? <Text key={i} style={s.b}>{inline(x.tokens)}</Text>
+    : x.type === 'em' ? <Text key={i} style={{ fontStyle: 'italic' }}>{inline(x.tokens)}</Text>
+    : x.type === 'link' && safeLink(x.href) ? <Text key={i} accessibilityRole="link" onPress={() => void Linking.openURL(safeLink(x.href))} style={{ textDecorationLine: 'underline', backgroundColor: t.soft, color: t.ink }}>{inline(x.tokens)}</Text>
+    : x.type === 'html' ? x.raw : x.tokens ? <Text key={i}>{inline(x.tokens)}</Text> : x.text ?? x.raw);
+  const blocks = (tokens: any[]): ReactNode => tokens.map((x, i) => x.type === 'heading' ? <T key={i} style={{ fontSize: 18, lineHeight: 25, fontWeight: '600', marginTop: 8 }}>{inline(x.tokens)}</T>
+    : x.type === 'paragraph' || x.type === 'text' ? <T key={i}>{inline(x.tokens ?? [{ text: x.text }])}</T>
+    : x.type === 'list' ? <View key={i} style={{ gap: 5 }}>{x.items.map((item: any, j: number) => <View key={j} style={{ flexDirection: 'row', gap: 6 }}><T>{item.task ? item.checked ? '☑' : '☐' : '•'}</T><View style={{ flex: 1 }}>{blocks(item.tokens.filter((y: any) => y.type !== 'checkbox'))}</View></View>)}</View>
+    : x.type === 'table' ? <ScrollView horizontal key={i}><View>{[x.header, ...x.rows].map((row: any[], j: number) => <View key={j} style={{ flexDirection: 'row' }}>{row.map((c, k) => <View key={k} style={{ minWidth: 90, maxWidth: 200, padding: 6, borderWidth: 1, borderColor: t.line }}><T style={j ? undefined : s.b}>{inline(c.tokens)}</T></View>)}</View>)}</View></ScrollView>
+    : x.type === 'code' ? <T key={i} style={{ backgroundColor: t.soft }}>{x.text}</T>
+    : x.type === 'html' ? <T key={i}>{x.raw}</T> : null);
+  return <View style={{ gap: 10, maxWidth: 560 }}>{blocks(chatTokens(shown))}{long && <Pressable onPress={() => setMore(!more)} accessibilityRole="button"><T style={s.b}>{more ? 'Less' : 'More'}</T></Pressable>}</View>;
+}
+
 function Card({ children, style, ask }: { children: ReactNode; style?: any; ask?: boolean }) {
   const t = useLook();
   return <View style={[s.card, { backgroundColor: t.card, borderColor: ask ? t.pink : t.line, borderWidth: 1 }, style]}>{children}</View>;
@@ -777,7 +796,7 @@ function Chat({ id, m, state, tick, refresh, canAct, offline, open }: Ctx & { id
             style={[s.line, l.from === 'me' && { alignSelf: 'flex-end' }, l.from === 'note' && { maxWidth: '92%' }]}>
             {l.from !== 'me' && l.from !== 'note' && !(i && lines[i - 1].from === l.from) && <View style={s.row}><Face who={l.from === 'chief' ? 'chief' : h ?? 'chief'} size={28} /><T style={[s.small, s.b]}>{l.from === 'chief' ? 'Chief' : name}</T><T tone="mute" style={s.label}>{l.at ? A.clock(l.at) : ''}</T></View>}
             {!!l.text && <View style={l.from === 'me' ? [s.bubbleText, { backgroundColor: t.soft, borderColor: t.line, borderWidth: 1, borderBottomRightRadius: 6 }] : { paddingLeft: 36 }}>
-              <T>{l.text}</T></View>}
+              <ChatText text={l.text} /></View>}
             {l.files.map((f) => <Card key={f.url}><FileRow f={f} /></Card>)}
             {cards.filter((c) => lines.findLastIndex((x) => (x.at ?? 0) <= c.at) === i).map((c) => <AskCard key={c.id} c={c} who={h} state={state} onDone={refresh} canAct={canAct} offline={offline} open={open} />)}
           </View>
@@ -828,7 +847,7 @@ function Room(ctx: Ctx) {
   return <View style={{ flex: 1 }}><Head onBack={ctx.back}><View style={{ width: 40, flexDirection: 'row' }}>{crew.slice(0, 2).map((h, i) => <View key={h.id} style={{ marginLeft: i ? -12 : 0 }}><Face who={h} size={26} /></View>)}</View><View style={{ flex: 1 }}><T style={s.rowTitle}>The crew</T><T tone="ink2" style={s.small}>Work handed between helpers</T></View></Head>
     <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>{lines.map((l: { id: number; who?: A.Helper; from?: string; to?: string; text: string; at: number; author: string; files: A.FileView[] }) => <View key={l.id} style={{ maxWidth: '92%', alignSelf: l.author === 'person' ? 'flex-end' : 'flex-start' }}>
       {l.who && <View style={s.row}><Face who={l.who} size={28} /><T style={s.rowTitle}>{l.from && l.to ? `${l.from} → ${l.to}` : l.who.name}</T><T tone="mute" style={s.label}>{A.clock(l.at)}</T></View>}
-      <T style={{ paddingLeft: l.author === 'person' ? 0 : 36 }}>{l.text}</T>{l.files.map((f) => <Card key={f.url}><FileRow f={f} /></Card>)}
+      <View style={{ paddingLeft: l.author === 'person' ? 0 : 36 }}><ChatText text={l.text} /></View>{l.files.map((f) => <Card key={f.url}><FileRow f={f} /></Card>)}
     </View>)}{!lines.length && <T tone="mute">Start a job here and follow along as the crew works together.</T>}</ScrollView>
     {canAct ? <View style={s.dock}><Composer placeholder="Message the crew" onSend={send} chat="room" /></View> : <T tone="mute" style={[s.small, { padding: 16 }]}>{offline ? "You can reply once the home computer is back." : "This phone watches the crew; it can't send messages."}</T>}
   </View>;

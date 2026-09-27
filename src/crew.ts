@@ -69,17 +69,27 @@ export function quietNow(quiet: string | null | undefined, at = new Date()) {
 const sha = (s: string) => createHash('sha256').update(s).digest('hex');
 const clean = (s: unknown, n: number) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n);
 const fail = (message: string, status = 400) => Object.assign(new Error(message), { status });
+/** A URL is context for a job, never its name. */
+export function taskTitle(body: string) {
+  const first = body.split('\n')[0].trim();
+  if (!/^https?:\/\/\S+$/i.test(first)) return short(first, 80);
+  try { return `Work on ${new URL(first).hostname.replace(/^www\./, '')}`; } catch { return 'Work on the site'; }
+}
+/** A relay is the answer, not a quoted chunk of the helper's raw markdown. */
+export function relayResult(name: string, reply: string, note = '') {
+  const source = note || reply;
+  const clean = source.replace(/\[([^\]]+)\]\(https?:\/\/[^)]+\)/g, '$1').replace(/\*\*|^\s*[-*]\s*/gm, '').replace(/\b(sir|ma'am)\b[,.]?\s*/gi, '').replace(/^\w+:\s*/, '').replace(/https?:\/\/\S+/g, '').trim();
+  return `${name}: ${short(clean.split(/[.!?](?:\s|$)/)[0] || 'The result is ready', 160).replace(/[.:;]+$/, '')}.`;
+}
 
 const partOfDay = () => { const h = new Date().getHours(); return h >= 5 && h < 12 ? 'morning' : h >= 12 && h < 18 ? 'afternoon' : 'evening'; };
 /** Chief's first words (plan 3, section 3.13). Deterministic: no model call before we know how to address the person. */
 export const chiefGreeting = () =>
-  `Good ${partOfDay()}. I am Chief, of the Crewhouse, and I'm at your service.\n\n` +
-  'A word on how we work. The crew works here, on this computer, while you get on with your day. ' +
-  'When the computer sleeps we pause, and we pick up where we left off the moment it wakes. ' +
-  'We stop and ask you first before anything leaves this house, costs money or touches your own files, ' +
-  "and whenever a sign-in or a fee looks off. We'd rather ask than get it wrong. " +
-  'Nothing you tell us leaves this computer, apart from what the crew sends your own AI account to do the work.\n\n' +
-  'Before we begin, how would you like me to address you? "Sir", "ma\'am", or by name, as you prefer.';
+  `Good ${partOfDay()}. I am Chief, of the Crewhouse. I help get things done with your crew.\n\n` +
+  '- The crew works on this computer and pauses when it sleeps.\n' +
+  '- We stop and ask you first before anything leaves this house, costs money or touches your own files.\n' +
+  '- Your AI account does the thinking; your sign-ins stay yours.\n\n' +
+  'What should I call you?';
 
 /** A sign-in that stopped working (a password change, usually), and what happens next. */
 const signedOutWords = (name: string) => `${name} signed you out. That happens after a password change. Sign in again and the crew picks up where it left off.`;
@@ -183,7 +193,7 @@ export class Crew {
     this.accounts = new Accounts(cfg);
     if (cfg.engine === 'stub') this.accounts.prepare = stubModels;
     this.accounts.onChange = (member, key) => this.db.event('account.changed', null, { member, account: key });
-    this.accounts.onSignedIn = (member) => this.wake(member, `You're signed in. Thank you, ${this.called(member)}. On it now.`);
+    this.accounts.onSignedIn = (member) => this.wake(member, `You're signed in. I'll start now.`);
     this.accounts.onExpired = (member, key) => this.say(CHIEF, 'system', signedOutWords(PROVIDERS[key].name), null, member);
     this.connections = new Connections(cfg, `http://${cfg.host}:${cfg.port}/connect/callback`);
     this.connections.onChange = (member, app) => this.db.event('app.changed', null, { member, app });
@@ -246,7 +256,7 @@ export class Crew {
   /** Who is looking. The web app says so in a header; an unknown id falls back to the owner (a view, never an authorization). */
   viewer(id: unknown) { return this.db.get('SELECT * FROM people WHERE id = ?', Number(id) || OWNER) ?? this.member(OWNER); }
   /** "sir", "Sam", or "the person": how a member is named in prompts. */
-  private called(member: number) { const m = this.member(member); return m.address || (this.members().length > 1 ? m.name : '') || 'the person'; }
+  private called(member: number) { return this.member(member).name || 'the person'; }
   bot(id: string) { return this.db.get('SELECT rowid + 100 AS n, * FROM bots WHERE id = ?', id); }
   bots() { return this.db.all('SELECT * FROM bots ORDER BY created_at'); }
   activeTask(bot: string) { return this.db.get("SELECT * FROM tasks WHERE bot = ? AND state IN ('working', 'needs_you') ORDER BY id LIMIT 1", bot); }
@@ -389,8 +399,10 @@ export class Crew {
       this.db.get("SELECT 1 FROM asks WHERE state = 'open' AND json_extract(detail, '$.pass.root') = ?", root) ||
       this.db.get("SELECT 1 FROM events WHERE kind = 'room.wrap' AND json_extract(data, '$.root') = ?", root)) return;
     const member = tasks[0].member ?? OWNER;
-    const parts = tasks.filter((t) => t.bot !== CHIEF).map((t) => `${this.bot(t.bot)?.display ?? t.bot}: ${t.state === 'done' ? short(t.result || 'done', 90) : t.state === 'unsure' ? 'not sure it worked' : 'could not finish'}`);
-    const text = `${tasks.some((t) => t.state !== 'done') ? 'The crew has stopped' : 'All done'}, ${this.called(member)}. ${parts.join('. ')}.`;
+    const parts = tasks.filter((t) => t.bot !== CHIEF).map((t) => t.state === 'done'
+      ? relayResult(this.bot(t.bot)?.display ?? t.bot, t.result || 'Done')
+      : `${this.bot(t.bot)?.display ?? t.bot}: ${t.state === 'unsure' ? 'not sure it worked' : "couldn't finish"}.`);
+    const text = `${tasks.some((t) => t.state !== 'done') ? 'The crew has stopped.' : 'All done.'}\n${parts.join('\n')}`;
     this.say(CHIEF, 'bot', text, root, member);
     this.db.event('room.wrap', CHIEF, { root, member });
   }
@@ -459,7 +471,7 @@ export class Crew {
       this.setTask(task, 'paused', 'Waiting for tomorrow: the crew has had its share of your AI today.');
       if (this.db.get("SELECT 1 FROM events WHERE kind = 'share.reached' AND json_extract(data, '$.member') = ? AND json_extract(data, '$.day') = ?", member, dayOf())) return;
       this.db.event('share.reached', null, { member, day: dayOf() });
-      this.say(CHIEF, 'bot', `I've stopped the routines and check-ins for today, ${this.called(member)}, so your ${PROVIDERS.chatgpt.name} stays free for you. ` +
+      this.say(CHIEF, 'bot', `I've stopped the routines and check-ins for today so your ${PROVIDERS.chatgpt.name} stays free for you. ` +
         'They start again tomorrow morning. Anything you ask for yourself still goes ahead.', null, member);
     });
   }
@@ -689,13 +701,16 @@ export class Crew {
       job: disk.readJob(this.cfg, id),
       // Each member has their own thread with a bot; notes to the whole house (member NULL) show to everyone.
       // A search landing on an old line gets a window around it: the newest 200 would miss it entirely.
-      messages: around
+      messages: (around
         ? this.db.all(`SELECT * FROM (
             SELECT * FROM (SELECT * FROM messages WHERE bot = ? AND COALESCE(member, ?) = ? AND id >= ? ORDER BY id LIMIT 100)
             UNION ALL
             SELECT * FROM (SELECT * FROM messages WHERE bot = ? AND COALESCE(member, ?) = ? AND id < ? ORDER BY id DESC LIMIT 99)
           ) ORDER BY id`, id, viewer, viewer, around, id, viewer, viewer, around)
-        : this.db.all('SELECT * FROM (SELECT * FROM messages WHERE bot = ? AND COALESCE(member, ?) = ? ORDER BY id DESC LIMIT 200) ORDER BY id', id, viewer, viewer),
+        : this.db.all('SELECT * FROM (SELECT * FROM messages WHERE bot = ? AND COALESCE(member, ?) = ? ORDER BY id DESC LIMIT 200) ORDER BY id', id, viewer, viewer))
+        .map((m: Row): Row => ({ ...m, files: id === CHIEF && m.author === 'bot' && m.task_id
+          ? this.db.all("SELECT bot, data FROM events WHERE kind = 'file.delivered' AND json_extract(data, '$.task') = ?", m.task_id)
+            .map((e) => ({ bot: e.bot, path: JSON.parse(e.data).path })) : [] })),
       tasks: this.db.all('SELECT * FROM tasks WHERE bot = ? ORDER BY id DESC LIMIT 50', id).map((t) => this.task(t)),
       // What this helper learned about the viewer: never another member's notes.
       notes: disk.readNotes(this.cfg, { member: viewer, bot: id }),
@@ -741,9 +756,7 @@ export class Crew {
     this.db.tx(() => {
       this.db.run('UPDATE people SET address = ?, onboarded = 1 WHERE id = ?', a, member);
       this.say(CHIEF, 'person', a, null, member);
-      this.say(CHIEF, 'bot', `Very good, ${a}. The whole crew will know it. ` +
-        'Tell me what needs doing and I shall see it into the right hands. ' + (empty ? 'The crew is empty for now; I can recruit ' +
-        'Reel for demo videos, Scout for research, Scribe for drafts, or Tracer for leads, whenever you wish.' : 'I can also recruit someone new, whenever you wish.'), null, member);
+      this.say(CHIEF, 'bot', `Thanks, ${a}. What would you like to work on?` + (empty ? ' I can bring in Scout for research, Scribe for writing or Reel for videos.' : ''), null, member);
       this.db.event('person.onboarded', null, { member, address: a });
     });
   }
@@ -844,9 +857,15 @@ export class Crew {
    *  a message and an event, so an answer after a restart still finds them. */
   private async route(text: string, model: string | undefined, member: number, pics: Photo[] = [], room = false) {
     const helpers = this.bots().filter((b) => b.id !== CHIEF) as Helper[];
+    const lastBot = this.db.get("SELECT text, task_id, at FROM messages WHERE bot = ? AND member = ? AND author = 'bot' ORDER BY id DESC LIMIT 1", CHIEF, member);
+    const replying = text.length < 120 && !/\[tool\b/.test(text) && lastBot?.task_id && lastBot.at > Date.now() - 30 * 60_000 && /\?\s*$/.test(lastBot.text)
+      && this.db.get('SELECT bot FROM tasks WHERE id = ?', lastBot.task_id)?.bot === CHIEF;
+    if (replying) return this.addTask(CHIEF, text, 'person', model, member, undefined, text, pics, { room });
     const last = this.db.get('SELECT id FROM messages WHERE bot = ? AND member = ? ORDER BY id DESC LIMIT 1', CHIEF, member)?.id;
     const asked = this.db.get("SELECT data FROM events WHERE kind = 'route.asked' AND json_extract(data, '$.member') = ? ORDER BY seq DESC LIMIT 1", member);
-    const earlier: string | undefined = asked && JSON.parse(asked.data).message === last ? JSON.parse(asked.data).text : undefined;
+    const previous = this.db.get("SELECT text FROM messages WHERE bot = ? AND member = ? AND author = 'person' ORDER BY id DESC LIMIT 1", CHIEF, member)?.text as string | undefined;
+    const earlier: string | undefined = asked && JSON.parse(asked.data).message === last ? JSON.parse(asked.data).text
+      : /^https?:\/\/\S+$/i.test(text) && previous && /\b(market|marketing|promote|launch)\b/i.test(previous) ? previous : undefined;
     const brain = await this.usable(member, this.choices({ bot: CHIEF, brain: model ? disk.brainKey(disk.parseBrain(model)) : null }));
     const answerer = brain && byModel(await this.accounts.runtime(member), PROVIDERS[brain.provider].pi, brain.model ?? PROVIDERS[brain.provider].models.strong);
     const to = await route({ text, earlier }, helpers, answerer);
@@ -854,7 +873,7 @@ export class Crew {
     if (to.abstained && to.probabilities && !earlier && !pics.length) {
       return void this.db.tx(() => {
         this.say(CHIEF, 'person', text, null, member);
-        const message = this.say(CHIEF, 'bot', clarify(to, helpers, this.member(member).address ?? ''), null, member);
+        const message = this.say(CHIEF, 'bot', clarify(to, helpers, ''), null, member);
         this.db.event('route.asked', CHIEF, { member, message, text });
       });
     }
@@ -868,17 +887,17 @@ export class Crew {
   }
 
   /** `model` picks the AI account for this one task (a cheap one for bulk steps, a strong one for judgment). */
-  assign(botId: string, text: string, by: string, model?: string) {
+  assign(botId: string, text: string, by: string, model?: string, title?: string) {
     if (!this.bot(botId)) throw Object.assign(new Error(`no bot called ${botId}; see crew roster`), { status: 404 });
     if (botId === CHIEF) throw Object.assign(new Error('Chief cannot assign to himself'), { status: 400 });
     // Chief's hand-offs are for whoever asked Chief, and run on that member's own accounts.
-    return this.addTask(botId, text.trim(), by, model, by === CHIEF ? this.chiefFor() : this.bot(botId)!.member ?? OWNER, undefined, text.trim(), [], { parent: by === CHIEF ? this.activeTask(CHIEF)?.id : undefined });
+    return this.addTask(botId, text.trim(), by, model, by === CHIEF ? this.chiefFor() : this.bot(botId)!.member ?? OWNER, undefined, text.trim(), [], { parent: by === CHIEF ? this.activeTask(CHIEF)?.id : undefined, title });
   }
 
   /** `said` is what the thread shows, when it isn't the whole body. */
-  private addTask(bot: string, body: string, origin: string, model: string | undefined, member: number, routine?: Row, said = body, pics: Photo[] = [], link: { parent?: number; root?: number; room?: boolean; hops?: number } = {}) {
+  private addTask(bot: string, body: string, origin: string, model: string | undefined, member: number, routine?: Row, said = body, pics: Photo[] = [], link: { parent?: number; root?: number; room?: boolean; hops?: number; title?: string } = {}) {
     const brain = model ? disk.brainKey(disk.parseBrain(model)) : null;
-    const title = short(routine?.name ?? body.split('\n')[0], 80);
+    const title = routine?.name ? short(routine.name, 80) : link.title ? taskTitle(link.title) : taskTitle(body);
     let shown = '';
     const id = this.db.tx(() => {
       const now = Date.now();
@@ -969,7 +988,9 @@ export class Crew {
       .map((b) => `${b.display} (id ${b.id}, ${b.template}, ${this.activeTask(b.id) ? 'busy' : 'free'})`).join('; ') || 'nobody yet';
     const tpls = disk.listTemplates(this.cfg).map((t) => `${t.id}: ${t.role}`).join('; ');
     const house = this.members().length > 1 ? ` You are speaking with ${member.name}, one of the household; each person has their own crew thread and AI accounts.` : '';
-    return `${this.memory(task.bot, member.id)}[Crewhouse]${house} Crew: ${crew}. Templates: ${tpls}.\nThe person says: ${task.body}`;
+    const history = this.db.all("SELECT author, text FROM messages WHERE bot = ? AND member = ? AND id < (SELECT MIN(id) FROM messages WHERE task_id = ?) ORDER BY id DESC LIMIT 6", CHIEF, member.id, task.id)
+      .reverse().map((m) => `${m.author === 'person' ? 'Person' : 'Chief'}: ${short(String(m.text).split('[tool ')[0], 300)}`).join('\n').slice(0, 1500);
+    return `${this.memory(task.bot, member.id)}[Crewhouse]${house} Crew: ${crew}. Templates: ${tpls}.\n${history ? `Earlier in this chat:\n${history}\n` : ''}The person says: ${task.body}`;
   }
 
   /** How to address the person, what the whole crew knows about them, and this bot's own notes on them: read at the start of
@@ -1167,7 +1188,7 @@ export class Crew {
       const first = !this.db.get("SELECT 1 FROM tasks WHERE member = ? AND id != ? AND state != 'paused'", member, task.id);
       const words = plan ? `Your ${name} plan doesn't include helpers yet. Everything else in ${name} is fine. ${name} Plus includes it${owner ? `, or you can ask ${owner} to cover it` : ''}.`
         : /sign in again/.test(handoff) ? signedOutWords(name)
-        : first && task.bot === CHIEF ? `Delighted, ${this.called(member)}. To think, the crew uses your own ${name}, the same one you already use.`
+        : first && task.bot === CHIEF ? `The crew uses your ${name} account. Sign in when you're ready and I'll start.`
         : `${task.bot === CHIEF ? 'I' : who} will start the moment you sign in with ${name}.`;
       this.db.tx(() => {
         this.db.run('UPDATE tasks SET wake_at = NULL WHERE id = ?', task.id);
@@ -1268,8 +1289,9 @@ export class Crew {
       this.setTask(task, 'done', clear ? ALL_CLEAR_RESULT : text || 'Done.');
       if (task.origin === CHIEF && !this.teamJob(task)) {
         // In Chief's own voice, written by crewd: no model call, no task number.
-        const address = this.member(task.member ?? OWNER).address;
-        this.say(CHIEF, 'bot', `${b.display} has finished “${short(task.title, 60)}”${address ? `, ${address}` : ''}. It's in ${b.display}'s chat${text ? `: “${short(text.replace(/\s+/g, ' '), 200)}”` : '.'}`.replace(/\s+/g, ' ').trim(), null, task.member ?? OWNER);
+        const files = this.db.all("SELECT data FROM events WHERE kind = 'file.delivered' AND bot = ? AND json_extract(data, '$.task') = ?", botId, task.id);
+        const note = files.map((e) => JSON.parse(e.data).note as string).find(Boolean) ?? '';
+        this.say(CHIEF, 'bot', relayResult(b.display, text, note), files.length ? task.id : null, task.member ?? OWNER);
       }
     });
     if (task && !parked && !this.held.has(botId)) this.close(botId);
@@ -1620,8 +1642,8 @@ export class Crew {
       })),
       tool('crew_recruit', 'Recruit a bot from a template.', { template: Type.String(), name: Type.Optional(Type.String()) },
         (p) => { const n = this.recruit(p.template, p.name, CHIEF); return { recruited: { id: n.id, name: n.display } }; }),
-      tool('crew_assign', `Hand a bot a task: the person's words, then one line "Done means: …". \`account\` (${accounts}) only when a task plainly suits another AI.`,
-        { bot: Type.String(), task: Type.String(), account: Type.Optional(Type.String()) }, (p) => this.assign(String(p.bot).toLowerCase(), p.task ?? '', CHIEF, p.account)),
+      tool('crew_assign', `Hand a bot a task. Give it a short descriptive title, never a URL. \`account\` (${accounts}) only when a task plainly suits another AI.`,
+        { bot: Type.String(), task: Type.String(), title: Type.Optional(Type.String()), account: Type.Optional(Type.String()) }, (p) => this.assign(String(p.bot).toLowerCase(), p.task ?? '', CHIEF, p.account, p.title)),
       tool('crew_routine', 'Offer the person a routine: the same task on a schedule, for them to say yes or no. `when` is plain words in local time: "every Monday 9:00", "weekdays 8am", "every 2 hours". ' +
         '`quiet`: a check-in that only speaks up when something needs the person. `watch`: a page address to keep an eye on; Crewhouse reads it on ' +
         'schedule and wakes the bot only when it changed, and `task` says what matters ("tell me if the price drops below $900"). ' +
@@ -1754,8 +1776,7 @@ export class Crew {
     });
     disk.writeJob(this.cfg, id, c.job);
     disk.writeSoul(this.cfg, id, c.soul, 'Who it is, as Chief suggested and the person agreed');
-    const address = this.member(member).address;
-    this.say(CHIEF, 'bot', `${c.name} has joined the crew${address ? `, ${address}` : ''}.${c.first ? ` I've handed ${c.name} your request; results will reach you in ${c.name}'s chat.` : ''}`, null, member);
+    this.say(CHIEF, 'bot', `${c.name} has joined the crew.${c.first ? ` I've handed ${c.name} your request; results will reach you in ${c.name}'s chat.` : ''}`, null, member);
     if (c.first?.trim()) this.addTask(id, c.first.trim(), CHIEF, undefined, member);
   }
 

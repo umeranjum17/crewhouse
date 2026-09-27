@@ -77,7 +77,13 @@ const step: FauxResponseFactory = async (ctx, options, _state, model): Promise<A
   if (/sign me out/i.test(said)) return fauxAssistantMessage('', { stopReason: 'error', errorMessage: '401 Unauthorized: your sign-in has expired' });
   // Its own words, not Crewhouse's framing around them: a real model doesn't read its prompt back either.
   const asked = said.split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('[Crewhouse')).pop() ?? '';
-  return fauxAssistantMessage(await hold(said, options?.sessionId, options?.signal, `stub ${bot}: done with "${asked.slice(0, 60)}"`));
+  const scripted = process.env.CREWHOUSE_STUB_GOLDEN && bot === 'chief' ? ({
+    hi: 'Hi. What would you like to work on?',
+    'how do i pair my computer with you?': 'Open Add a phone on your computer and scan its code with your phone.',
+    'i want to market my app': 'I can help market it. Send the site so I can see the product and audience before drafting a plan.',
+    'https://trymuxr.com/': 'muxr lets developers manage coding agents from their phone. I’ll map the audience, focus on developer communities and founder posts, then ask Scout and Scribe for first drafts. Nothing will be posted.',
+  } as Record<string, string>)[asked.replace(/^The person says: /, '')] : undefined;
+  return fauxAssistantMessage(await hold(said, options?.sessionId, options?.signal, scripted ?? `stub ${bot}: done with "${asked.slice(0, 60)}"`));
 };
 
 /** Every AI account, answered by the script. */

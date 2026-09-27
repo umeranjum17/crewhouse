@@ -7,7 +7,7 @@ import { api, demo, setMember, subscribe, type Json } from './api.ts';
 import * as A from './adapter.ts';
 import * as art from './art.ts';
 type Helper = ReturnType<typeof A.crew>[number];
-import { AskCard, AskSheet, attempt, Celebrate, setChiefMood, setNight, ChiefArt, Composer, Face, Dots, Logo, Media, PalArt, Pill, Splash, Steps, Toasts, toast, useListen, PreviewPanel } from './parts.tsx';
+import { AskCard, AskSheet, attempt, Celebrate, setChiefMood, setNight, ChiefArt, Composer, Face, Dots, Logo, Media, ChatText, PalArt, Pill, Splash, Steps, Toasts, toast, useListen, PreviewPanel } from './parts.tsx';
 import { keepDraft } from './draft.ts';
 import { Screen } from './screen.tsx';
 import { AccountCard, ConnectApp, ConnectCard, openTab, sheet, SignIn, Unreachable } from './flows.tsx';
@@ -327,7 +327,7 @@ function Chat({ id, m, state, me, tick, refresh, accounts }: Ctx & { id: string;
         {lines.map((l, i) => (
           <div key={l.id} id={`m${l.id}`} className={`line ${l.from}${l.unsure ? ' unsure' : ''}${i && lines[i - 1].from === l.from && l.from !== 'me' ? ' consecutive' : ''}`}>
             {l.from !== 'me' && l.from !== 'note' && <div className="line-by"><Face who={l.from === 'chief' ? 'chief' : h ?? 'chief'} size={28} /><span className="who">{l.from === 'chief' ? 'Chief' : name}</span><time>{l.at ? A.clock(l.at) : ''}</time></div>}
-            {l.text && <div className="bubble-text">{l.text}</div>}
+            {l.text && <div className="bubble-text"><ChatText text={l.text} /></div>}
             {l.files.map((f) => <Media key={f.url} f={f} big />)}
             {cards.filter((c) => lines.findLastIndex((x) => (x.at ?? 0) <= c.at) === i).map((c) => c.kind === 'connect' ? <ConnectCard key={c.id} c={c} helper={h?.name} state={state} onDone={refresh} /> : <AskCard key={c.id} c={c} who={h} onDone={refresh} />)}
           </div>
@@ -366,7 +366,7 @@ function Room(ctx: Ctx) {
   return <div className="page chat-page"><header className="chat-head sticky-top"><a href="#/" className="back">‹</a><span className="row">{helpers.slice(0, 3).map((h) => <Face key={h.id} who={h} size={30} ring={h.ring} />)}</span><div className="grow"><b>The crew</b><div className="mute small">Work handed between helpers</div></div></header>
     <div className="chat"><div className="lines">{lines.length ? lines.map((l: ReturnType<typeof A.room>[number]) => <div className={`line ${l.author === 'person' ? 'me' : 'them'}`} key={l.id}>
       {l.who && <div className="row"><Face who={l.who} size={30} ring={l.who.ring} /><b>{l.from && l.to ? `${l.from} → ${l.to}` : l.author === 'person' ? 'You → ' + l.who.name : l.who.name}</b></div>}
-      {l.text && <div className="bubble-text">{l.text}</div>}{l.files.map((f: ReturnType<typeof A.room>[number]['files'][number]) => <Media key={f.url} f={f} big />)}
+      {l.text && <div className="bubble-text"><ChatText text={l.text} /></div>}{l.files.map((f: ReturnType<typeof A.room>[number]['files'][number]) => <Media key={f.url} f={f} big />)}
     </div>) : <div className="mute center empty">Start a job here and follow along as the crew works together.</div>}
       {cards.map((c) => <AskCard key={c.id} c={c} who={helpers.find((h) => h.id === c.helper)} onDone={() => { void load(); refresh(); }} />)}</div>
       <aside className="working-on">{(page?.busy ?? []).length > 0 && <section className="frame working-on-frame"><div className="label ascii">Working on</div>{(page.busy as string[]).map((id) => { const h = helpers.find((x) => x.id === id); return h && <div className="frame-row head" key={id}><Face who={h} size={32} ring={h.ring} /><b>{h.name}</b></div>; })}</section>}</aside>

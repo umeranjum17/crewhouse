@@ -3,8 +3,29 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefO
 import { api, trouble, type Json } from './api.ts';
 import { draftOf, keepDraft, sent } from './draft.ts';
 import { cycle, type Focused } from './dialog.ts';
+import { chatTokens, safeLink } from './chat-md.ts';
 import * as art from './art.ts';
 import { clock, document as docView, fileSource, fileView, pageWords, sheetWords, workbook, type Card, type DocPart, type DocView, type FileView, type Helper, type Step, type Workbook } from './adapter.ts';
+
+/** Chat markdown without raw HTML or arbitrary URL schemes. Long answers stay available behind More. */
+export function ChatText({ text }: { text: string }) {
+  const [more, setMore] = useState(false);
+  const long = text.length > 700 || text.split('\n').length > 10;
+  const shown = long && !more ? text.slice(0, 650).replace(/\s+\S*$/, '') : text;
+  const inline = (tokens: any[]): ReactNode => tokens.map((t, i) => t.type === 'strong' ? <strong key={i}>{inline(t.tokens)}</strong>
+    : t.type === 'em' ? <em key={i}>{inline(t.tokens)}</em>
+    : t.type === 'link' && safeLink(t.href) ? <a className="chat-link" key={i} href={safeLink(t.href)} target="_blank" rel="noopener noreferrer">{inline(t.tokens)}</a>
+    : t.type === 'codespan' ? <span key={i}>{t.text}</span>
+    : t.type === 'br' ? <br key={i} />
+    : t.type === 'html' ? t.raw : t.tokens ? <span key={i}>{inline(t.tokens)}</span> : t.text ?? t.raw);
+  const blocks = (tokens: any[]): ReactNode => tokens.map((t, i) => t.type === 'heading' ? <h3 key={i}>{inline(t.tokens)}</h3>
+    : t.type === 'paragraph' || t.type === 'text' ? <p key={i}>{inline(t.tokens ?? [{ text: t.text }])}</p>
+    : t.type === 'list' ? <ul key={i}>{t.items.map((item: any, j: number) => <li key={j}>{item.task && <input type="checkbox" checked={item.checked} readOnly aria-label={item.checked ? 'Done' : 'Not done'} />} {blocks(item.tokens.filter((x: any) => x.type !== 'checkbox'))}</li>)}</ul>
+    : t.type === 'table' ? <div className="chat-table" key={i}><table><thead><tr>{t.header.map((c: any, j: number) => <th key={j}>{inline(c.tokens)}</th>)}</tr></thead><tbody>{t.rows.map((row: any[], j: number) => <tr key={j}>{row.map((c, k) => <td key={k}>{inline(c.tokens)}</td>)}</tr>)}</tbody></table></div>
+    : t.type === 'code' ? <p key={i}>{t.text}</p>
+    : t.type === 'html' ? <p key={i}>{t.raw}</p> : null);
+  return <div className="chat-md">{blocks(chatTokens(shown))}{long && <button className="chat-more" onClick={() => setMore(!more)}>{more ? 'Less' : 'More'}</button>}</div>;
+}
 
 // ---------- toasts ----------
 const listeners = new Set<(m: string) => void>();
