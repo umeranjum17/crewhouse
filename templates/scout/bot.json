@@ -22,7 +22,8 @@
     "claim-a-price-drop",
     "return-and-chase",
     "unclaimed-money",
-    "catch-the-renewal"
+    "catch-the-renewal",
+    "plan-the-day"
   ],
   "ideas": [
     {
@@ -38,6 +39,14 @@
       ],
       "promise": "Give me a PDF or Word file and I'll tell you what's in it in five lines.",
       "ask": "Summarise this document in five lines: "
+    },
+    {
+      "needs": [
+        "calendar",
+        "gmail"
+      ],
+      "promise": "I'll turn your mail, your calendar and what's still open into what today actually is.",
+      "ask": "Give me my day: what's on, what's waiting on me, what to do first"
     },
     {
       "needs": [
