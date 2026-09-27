@@ -163,6 +163,8 @@ test('Home keeps a standing "hand me a job" list, straight from crewd\'s ideas: 
   ] };
   const rows = A.jobs(withJobs);
   assert.deepEqual(rows.map((r) => [r.bot, r.needs.length]), [['scout', 0], ['scout', 1], ['scribe', 0], ['reel', 0]], 'money back leads — the job that waits on nothing first — and a waiting row keeps its needs');
+  assert.equal(rows[0].label, withJobs.ideas[0].ask, 'Home uses the short ask, never the four-line promise');
+  assert.match(A.homeSummary({ ...withJobs, asks: [], bots: [] }), /0 things need you · 0 helpers working/, 'the summary follows the rows, not demo copy');
   assert.deepEqual(A.ideas(withJobs).map((i: any) => i.bot), ['scout', 'scribe', 'reel'], 'Chief\'s chips stay jobs the crew can run now — the unclaimed search needs nothing, so it chips too');
   assert.match(A.jobNeeds(rows.find((r) => r.needs.length)!.needs), /^Needs Gmail first\.$/);
   assert.doesNotMatch(shown(rows), FORBIDDEN, 'the list is a person\'s sentence, not a screen of details');
@@ -201,11 +203,12 @@ test('Home keeps a standing "hand me a job" list, straight from crewd\'s ideas: 
   const list = src.slice(src.indexOf('function JobList('), src.indexOf('function JobList(') + 1800);
   assert.match(list, /A\.jobs\(state\)/, 'the rows are the ideas, not a list written in the app');
   assert.match(list, /keepDraft\('chief', ask\)/, 'a tap fills Chief\'s box; it never sends');
-  assert.match(list, /phone \? 'job' : 'frame-row'/, "Home's own row shape on the desk, the chats' row shape on a phone, both with the helper's face");
+  assert.match(list, /className="list-row"/, 'Home uses a whole-row target on both widths');
   assert.doesNotMatch(list, /api\.post/, 'nothing is handed over by itself');
 });
 
 test('chat navigation acts like chat: no tab scroller, Details behind the header, Back by history', () => {
+  assert.equal(A.lines({ messages: [{ id: 1, author: 'bot', text: 'Hello' }] }, 'scout')[0].at, undefined, 'old lines without timestamps keep asks in the thread');
   const src = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
   assert.doesNotMatch(src, /className="tabs"/, 'the seven-tab scroller is gone; the chat is the page and Details is one link');
   assert.match(src, /Details<\/button>/, 'Details is a text button in the chat header');

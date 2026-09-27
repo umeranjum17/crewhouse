@@ -147,41 +147,23 @@ function Stuck({ h, refresh }: { h: A.Helper; refresh: () => void }) {
   );
 }
 
-/** Every chat, like a messaging app: Chief on top, then whoever spoke last. A search box finds words across them. */
+/** The phone's chats, with Chief and the crew pinned before the recent helpers. */
 function Chats({ state, refresh }: { state: Json; refresh: () => void }) {
-  const [q, setQ] = useState('');
-  const [hits, setHits] = useState<Json | null>(null);
-  useEffect(() => {
-    if (q.trim().length < 2) return setHits(null);
-    const t = setTimeout(() => api.search(q.trim()).then(setHits).catch(() => {}), 250);
-    return () => clearTimeout(t);
-  }, [q]);
   const crew = A.crew(state);
-  const found = A.found(state, hits);
-  return (
-    <div className="card jobs chats">
-      <input className="input search" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search your chats" aria-label="Search your chats" />
-      {hits ? (found.length ? found.map((f) => (
-        <a key={f.key} className="job" href={f.msg ? (f.bot === 'chief' ? `#/chief/m${f.msg}` : `#/h/${f.bot}/chat/m${f.msg}`) : f.thing ? `#/things/t${f.thing}` : hrefOf(f.bot)}>
-          {f.bot === 'chief' ? <Face who="chief" size={40} /> : <Face who={crew.find((h) => h.id === f.bot) ?? { kind: 'pip', name: f.name }} size={40} />}
-          <div className="grow"><b>{f.name}</b><div className="mute clamp1">{f.text}</div></div>
-          <span className="mute small">{A.clock(f.at)}</span>
-        </a>
-      )) : <div className="mute center empty">Nothing matches “{q.trim()}”.</div>) : A.chats(state).map((c) => {
+  return <section className="home-section phone-only" aria-label="Chats">
+    <div className="label">Chats</div><div className="list-group chats">
+      {A.chats(state).map((c) => {
         const h = c.who === 'chief' ? undefined : c.who;
-        return (
-          <div key={c.id}>
-            <a className="job" href={hrefOf(c.id)}>
-              {c.id === 'room' ? <span className="row">{A.crew(state).slice(0, 3).map((h) => <Face key={h.id} who={h} size={30} ring={h.ring} />)}</span> : c.who === 'chief' ? <span className="face" style={{ width: 46, height: 46, background: '#fff7e8' }}><ChiefArt mood={A.chief(state).mood} d={2.2} /></span> : <Face who={c.who} size={46} ring={c.ring} />}
-              <div className="grow"><b>{c.name}</b><div className={`clamp1 ${c.unread ? '' : 'mute'}`}>{c.line}</div></div>
-              <span className="chat-end"><span className="mute small">{c.at ? A.clock(c.at) : ''}</span>{c.unread > 0 && <span className="badge" aria-label={`${c.unread} new`}>{A.unreadBadge(c.unread)}</span>}</span>
-            </a>
-            {h && <Stuck h={h} refresh={refresh} />}
-          </div>
-        );
+        return <div key={c.id}>
+          <a className="list-row" href={hrefOf(c.id)}>
+            {c.id === 'room' ? <span className="stack-faces">{crew.slice(0, 2).map((x) => <Face key={x.id} who={x} size={26} />)}</span> : <Face who={c.who} size={40} ring={c.ring} />}
+            <span className="grow"><b className="clamp1">{c.name}</b><span className="small clamp1">{c.line}</span></span>
+            <span className="chat-end"><time>{c.at ? A.clock(c.at) : ''}</time>{c.unread > 0 && <span className="badge" aria-label={`${c.unread} new`}>{A.unreadBadge(c.unread)}</span>}</span>
+          </a>{h && <Stuck h={h} refresh={refresh} />}
+        </div>;
       })}
     </div>
-  );
+  </section>;
 }
 
 /** The owner's row until the house is fully set up: how many of the three jobs are left. */
@@ -193,32 +175,27 @@ function SetupRow({ state, accounts, tick }: { state: Json; accounts: Json[] | n
   return <a className="card nudge" href="#/settings"><span className="grow">Home setup: {left} {left === 1 ? 'thing' : 'things'} left</span><b>›</b></a>;
 }
 
-/** Needs you as one compact list: a number, the face, the subject, one plain line. A row opens the review sheet;
- *  nothing commits from Home. At most three rows, then "N more", which expands in place. */
-function NeedsRows({ state, cards, quiet }: { state: Json; cards: A.Card[]; quiet?: boolean }) {
+/** Needs-you rows only open the review sheet; nothing commits from Home. */
+function NeedsRows({ state, cards, quiet, all = false }: { state: Json; cards: A.Card[]; quiet?: boolean; all?: boolean }) {
   const crew = A.crew(state);
-  const [all, setAll] = useState(false);
   const shown = all ? cards : cards.slice(0, 3);
   return (
     <>
-      {shown.map((c, i) => (
-        <a key={c.id} className="needs-row" href={`#/ask/${c.id}`}>
-          <span className="n" aria-hidden>{i + 1}</span>
-          <Face who={crew.find((h) => h.id === c.helper) ?? { kind: 'pip', name: c.helper }} size={24} />
-          <span className="grow"><b>{c.head}</b><span className="mute small clamp1">{c.words}</span></span>
-          <span className="mute" aria-hidden>›</span>
+      {shown.map((c) => (
+        <a key={c.id} className="needs-row list-row" href={`#/ask/${c.id}`}>
+          <Face who={crew.find((h) => h.id === c.helper) ?? { kind: 'pip', name: c.helper }} size={36} />
+          <span className="grow"><b className="clamp1">{c.head}</b><span className="small clamp1">{c.words}</span></span>
+          <span className="chat-end"><time>{A.briefTime(c.at)}</time><i className="need-dot" /></span>
         </a>
       ))}
-      {!all && cards.length > 3 && <button className="link needs-more" onClick={() => setAll(true)}>{cards.length - 3} more {cards.length - 3 === 1 ? 'needs' : 'need'} you</button>}
-      {quiet && (all || cards.length <= 3) && <div className="mute small needs-quiet">Nothing else needs you.</div>}
+      {quiet && !cards.length && <div className="mute small needs-quiet">Nothing else needs you.</div>}
     </>
   );
 }
 
 function Home({ state, me, refresh, tick, accounts, offline, night }: Ctx) {
-  const listen = useListen();
-  const ctx: Ctx = { state, me, tick, refresh, night, offline, accounts };
   const cards = A.needsYou(state);
+  const [allNeeds, setAllNeeds] = useState(false);
   const works = A.work(state).filter((w) => !w.waiting);
   const day = new Date(); day.setHours(0, 0, 0, 0);
   const todays = A.things(state).filter((t) => t.at >= day.getTime());
@@ -227,60 +204,31 @@ function Home({ state, me, refresh, tick, accounts, offline, night }: Ctx) {
   return (
     <div className="home">
       <div className="desk-col">
-        {/* The phone's Home is Chats: one header row — his face, her greeting — then Needs you, search, the list. */}
-        <header className="home-head phone-only">
-          <span className="face" style={{ width: 32, height: 32, background: '#fff7e8' }}><ChiefArt mood={A.chief(state, chiefLocal(ctx, listen)).mood} d={1.6} /></span>
-          <h1>{A.greeting()}, {state.person.address ?? state.person.name}</h1>
-        </header>
+        <header className="home-head phone-only"><h1>{A.greeting()}, {state.person.address ?? state.person.name}</h1><p>{A.homeSummary(state)}</p></header>
         {(g.state === 'signed-out' || g.notIncluded) && <AccountCard me={me} owner={ownerName(state)} isOwner={me === A.OWNER} g={g} onReady={refresh} />}
         {state.person.id === A.OWNER && <SetupRow state={state} accounts={accounts} tick={tick} />}
         {A.resting(state) && <div className="card nudge"><span className="grow">{A.resting(state)}. I'll pick things back up then.</span></div>}
         {A.gettingReady(state) && <div className="card nudge"><span className="grow">{A.gettingReady(state)}</span></div>}
         {A.update(state) && <div className="card nudge"><span className="grow">{A.update(state)!.words}</span><a className="btn go" href={A.update(state)!.url} target="_blank" rel="noreferrer">Download</a></div>}
-        {cards.length > 0 && <section className="card needs-card phone-only" aria-label="Needs you"><NeedsRows state={state} cards={cards} /></section>}
-        <div className="phone-only"><Chats state={state} refresh={refresh} /><JobList state={state} phone /></div>
-        <h1 className="hi desk-only">{A.greeting()}, {state.person.address ?? state.person.name}</h1>
+        <section className="home-section phone-only" aria-label="Needs you"><div className="section-head"><span className="label">Needs you</span>{cards.length > 3 && <button className="link" onClick={() => setAllNeeds(!allNeeds)}>{allNeeds ? 'Show less' : `See all ${cards.length}`}</button>}</div><div className="list-group needs-card"><NeedsRows state={state} cards={cards} all={allNeeds} /></div></section>
+        <Chats state={state} refresh={refresh} /><JobList state={state} phone />
         <div className="desk">
-          <section className="frame needs">
-            <div className="label">Needs you</div>
-            {cards.length ? <NeedsRows state={state} cards={cards} quiet /> : <div className="frame-empty">All clear. Nothing needs you.</div>}
-          </section>
-          <div className="desk-side">
-            <section className="frame working">
-              <div className="label">Working now</div>
-              {works.length ? works.map((w) => {
-                const h = A.crew(state).find((x) => x.id === w.helper);
-                return (
-                  <a key={w.helper} className="frame-row" href={hrefOf(w.helper)}>
-                    {h && <Face who={h} size={40} ring={h.ring} />}
-                    <span className="grow"><b>{w.title}</b><div className="mute small clamp1">{w.line}</div></span>
-                    <span className="mark-ok" aria-label="working">●</span>
-                  </a>
-                );
-              }) : <div className="frame-empty">Nothing right now.</div>}
-            </section>
-            <section className="frame done">
-              <div className="label">Done today</div>
-              {todays.length ? todays.map((t) => {
-                const h = A.crew(state).find((x) => x.id === t.helper);
-                return (
-                  <div key={t.id} className="frame-row">
-                    {h && <Face who={h} size={26} />}
-                    <span className="grow"><b>{t.title}</b><div className="mute small clamp1">{t.summary}</div></span>
-                    {t.files[0] ? <a className="btn" href={t.files[0].url} target="_blank" rel="noreferrer">Open</a> : <a className="btn" href={hrefOf(t.helper)}>Open</a>}
-                  </div>
-                );
-              }) : <div className="frame-empty">Nothing yet today.</div>}
-            </section>
-            <JobList state={state} />
+          <div className="desk-main">
+            <header className="home-head desk-only"><h1>{A.greeting()}, {state.person.address ?? state.person.name}</h1><p>{A.homeSummary(state)}</p></header>
+            <section className="home-section needs"><div className="section-head"><span className="label">Needs you</span>{cards.length > 3 && <button className="link" onClick={() => setAllNeeds(!allNeeds)}>{allNeeds ? 'Show less' : `See all ${cards.length}`}</button>}</div><div className="list-group"><NeedsRows state={state} cards={cards} quiet all={allNeeds} /></div></section>
+            <section className="home-section working"><div className="label">Working now</div><div className="list-group">
+              {works.length ? works.map((w) => { const h = A.crew(state).find((x) => x.id === w.helper); return <a key={w.helper} className="list-row" href={hrefOf(w.helper)}>
+                {h && <Face who={h} size={40} ring="working" />}<span className="grow"><b className="clamp1">{w.title}</b><span className="small clamp1">{h?.name} · {w.line}</span></span>
+              </a>; }) : <div className="frame-empty">Nothing right now.</div>}
+            </div></section>
+            <section className="home-section done"><div className="label">Done today</div><div className="list-group">
+              {todays.length ? todays.map((t) => <div key={t.id} className="list-row"><span className="file-chip">{t.files[0]?.kind === 'sheet' ? 'XLSX' : t.files[0]?.url.endsWith('.pdf') ? 'PDF' : 'DOCX'}</span><span className="grow"><b className="clamp1">{t.title}</b><span className="small clamp1">{t.summary}</span></span><a className="btn sm" href={t.files[0]?.url ?? hrefOf(t.helper)}>Open</a></div>) : <div className="frame-empty">Nothing yet today.</div>}
+            </div></section>
           </div>
+          <div className="desk-side"><JobList state={state} /><p className="small mute">Tap one and Chief gets it ready. Nothing starts until you send.</p></div>
         </div>
       </div>
-      <div className="dock">
-        <div className="desk-col">
-          <Composer placeholder="Ask Chief anything…" onSend={toChief} {...typeInto('chief')} />
-        </div>
-      </div>
+      <div className="dock"><div className="desk-col"><Composer placeholder="Ask Chief anything" onSend={toChief} {...typeInto('chief')} /></div></div>
     </div>
   );
 }
@@ -294,18 +242,16 @@ function JobList({ state, phone }: { state: Json; phone?: boolean }) {
   const rows = A.jobs(state);
   const hand = (ask: string) => { keepDraft('chief', ask); go('#/chief'); };
   return (
-    <section className={phone ? 'card jobs phone-only' : 'frame jobs'} aria-label="Hand me a job">
-      <div className="label">Hand me a job</div>
-      {rows.length ? rows.map((j) => {
+    <section className={`home-section jobs${phone ? ' phone-only' : ''}`} aria-label="Hand the crew a job">
+      <div className="label">Hand the crew a job</div><div className="list-group">
+      {(phone ? rows.slice(0, 3) : rows).length ? (phone ? rows.slice(0, 3) : rows).map((j) => {
         const h = crew.find((x) => x.id === j.bot);
-        const body = <><Face who={h ?? { kind: 'pip', name: j.bot }} size={phone ? 24 : 26} />
-          <span className="grow"><b>{j.label}</b>{j.needs.length > 0 && <div className="mute small clamp1">{A.jobNeeds(j.needs)}</div>}</span>
-          {j.needs.length ? <span className="mute" aria-hidden>›</span> : <button className="btn" onClick={() => hand(j.ask)}>Hand it over</button>}</>;
-        const row = phone ? 'job' : 'frame-row';
-        return j.needs.length
-          ? <a key={j.bot + j.label} className={row} href="#/apps">{body}</a>
-          : <div key={j.bot + j.label} className={row}>{body}</div>;
+        const body = <><Face who={h ?? { kind: 'pip', name: j.bot }} size={phone ? 28 : 36} />
+          <span className="grow"><b className={phone ? 'clamp1' : 'clamp'}>{j.label}</b>{j.needs.length > 0 && <span className="small clamp1">{A.jobNeeds(j.needs)}</span>}</span><span className="mute" aria-hidden>›</span></>;
+        return j.needs.length ? <a key={j.bot + j.label} className="list-row" href="#/apps">{body}</a>
+          : <button key={j.bot + j.label} className="list-row" onClick={() => hand(j.ask)}>{body}</button>;
       }) : <div className="frame-empty">Nothing to hand over yet. Hire a helper, and this fills up.</div>}
+      </div>
     </section>
   );
 }
@@ -361,33 +307,25 @@ function Chat({ id, m, state, me, tick, refresh, accounts }: Ctx & { id: string;
   return (
     <div className={`chat${live && h ? ' with-live' : ''}`}>
       <div className="lines" ref={box}>
-        {!lines.length && page && <div className="mute center empty">Say hello to {name}. Ask for anything, in your own words.
-          {id === 'chief' && <ChiefIdeas state={state} chat={id} picked={() => setSeed((n) => n + 1)} />}
-        </div>}
-        {lines.map((l) => (
-          <div key={l.id} id={`m${l.id}`} className={`line ${l.from}${l.unsure ? ' unsure' : ''}`}>
-            {l.from === 'chief' && <span className="who">Chief</span>}
+        {!lines.length && page && id === 'chief' && <ChiefIdeas state={state} chat={id} picked={() => setSeed((n) => n + 1)} />}
+        {lines.map((l, i) => (
+          <div key={l.id} id={`m${l.id}`} className={`line ${l.from}${l.unsure ? ' unsure' : ''}${i && lines[i - 1].from === l.from && l.from !== 'me' ? ' consecutive' : ''}`}>
+            {l.from !== 'me' && l.from !== 'note' && <div className="line-by"><Face who={l.from === 'chief' ? 'chief' : h ?? 'chief'} size={28} /><span className="who">{l.from === 'chief' ? 'Chief' : name}</span><time>{l.at ? A.clock(l.at) : ''}</time></div>}
             {l.text && <div className="bubble-text">{l.text}</div>}
             {l.files.map((f) => <Media key={f.url} f={f} big />)}
+            {cards.filter((c) => lines.findLastIndex((x) => (x.at ?? 0) <= c.at) === i).map((c) => c.kind === 'connect' ? <ConnectCard key={c.id} c={c} helper={h?.name} state={state} onDone={refresh} /> : <AskCard key={c.id} c={c} who={h} onDone={refresh} />)}
           </div>
         ))}
         {last?.choices.length ? <div className="chips">{last.choices.map((c) => <button key={c} className="chip" onClick={() => send(c)}>{c}</button>)}</div> : null}
-        <div className="thread-side">
-          {trail.length > 0 && <Steps steps={trail} />}
-          {cards.map((c) => c.kind === 'connect' ? <ConnectCard key={c.id} c={c} helper={h?.name} state={state} onDone={refresh} /> : <AskCard key={c.id} c={c} who={h} onDone={refresh} />)}
-        </div>
+        {cards.filter((c) => !lines.length || lines.every((x) => (x.at ?? 0) > c.at)).map((c) => c.kind === 'connect' ? <ConnectCard key={c.id} c={c} helper={h?.name} state={state} onDone={refresh} /> : <AskCard key={c.id} c={c} who={h} onDone={refresh} />)}
         {h && <Stuck h={h} refresh={refresh} />}
         {(g.state === 'signed-out' || g.notIncluded) && <AccountCard me={me} owner={ownerName(state)} isOwner={me === A.OWNER} g={g} inChat onReady={() => { void load(); refresh(); }} />}
         {g.state === 'ready' && !g.notIncluded && A.resting(state) && <div className="card nudge"><span className="grow">{A.resting(state)}. {name === 'Chief' ? "I'll" : `${name} will`} finish then.</span></div>}
         <div ref={end} className="end" />
       </div>
       <aside className="working-on">
-        {live && h && <section className="frame working-on-frame">
-          <div className="label">Working on</div>
-          <div className="frame-row head"><Face who={h} size={32} ring={h.ring} /><span className="grow"><b>{h.name}</b><div className="mute small clamp1">{A.plain(live.title)}</div></span></div>
-          {trail.length > 0 && <Steps steps={trail} max={7} />}
-          {cards.map((c) => c.kind === 'connect' ? <ConnectCard key={c.id} c={c} helper={h?.name} state={state} onDone={refresh} /> : <AskCard key={c.id} c={c} who={h} onDone={refresh} />)}
-        </section>}
+        {live && h && <section className="working-on-frame"><div className="label">Working on</div><div className="list-group"><div className="work-title"><b>{A.plain(live.title)}</b><span className="small">{h.status}</span></div>{trail.length > 0 && <Steps steps={trail} max={3} />}<a className="link" href={`#/h/${id}/did`}>Every step ›</a></div></section>}
+        {A.things(state).filter((x) => x.helper === id).length > 0 && <section className="home-section"><div className="label">Made in this chat</div><div className="list-group">{A.things(state).filter((x) => x.helper === id).map((x) => <a className="list-row" key={x.id} href={`#/things/t${x.id}`}><span className="file-chip">{x.files[0]?.kind === 'sheet' ? 'XLSX' : x.files[0]?.url.endsWith('.pdf') ? 'PDF' : 'DOCX'}</span><span className="grow"><b className="clamp1">{x.title}</b><span className="small clamp1">{x.summary}</span></span></a>)}</div></section>}
       </aside>
       <div className="dock"><Composer key={seed} placeholder={id === 'chief' ? 'Ask Chief anything…' : `Message ${name}…`} onSend={send} {...typeInto(id)} /></div>
     </div>
@@ -421,7 +359,7 @@ function ChiefPage(ctx: Ctx & { m?: string }) {
   const { mood, line } = A.chief(ctx.state, chiefLocal(ctx, useListen()));
   return (
     <div className="page chat-page">
-      <header className="chat-head sticky-top"><a href="#/" className="back" aria-label="Back" onClick={(e) => { e.preventDefault(); back(); }}>‹</a><span className="face" style={{ width: 44, height: 44, background: '#fff7e8' }}><ChiefArt mood={mood} d={2.1} /></span>
+      <header className="chat-head sticky-top"><a href="#/" className="back" aria-label="Back" onClick={(e) => { e.preventDefault(); back(); }}>‹</a><Face who="chief" size={32} />
         <div className="grow"><b>Chief</b><div className="mute small clamp1">{line}</div></div></header>
       <Chat {...ctx} id="chief" m={ctx.m} />
     </div>
@@ -497,7 +435,7 @@ function HelperPage(ctx: Ctx & { id: string; tab: string }) {
         <div className="sticky-top">
           <header className="chat-head">
             <a href="#/" className="back" aria-label="Back" onClick={(e) => { e.preventDefault(); back(); }}>‹</a>
-            <Face who={h} size={48} ring={h.ring} />
+            <Face who={h} size={32} ring={h.ring} />
             <div className="grow"><b>{h.name}</b><div className="mute small clamp1">{h.status}</div></div>
             {b?.task && <button className="btn" onClick={() => confirm(`Stop ${h.name}'s job?`) && attempt(async () => { await api.reset(id); refresh(); }, `Stopped ${h.name}`)}>Stop</button>}
             <button className="link" onClick={() => go(`#/h/${id}/details`)}>Details</button>
