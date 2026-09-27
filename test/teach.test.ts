@@ -78,7 +78,7 @@ test('a real show: what was clicked and which box was typed in, never the words,
   await act(`document.getElementById('save').click()`);
   await act(`document.querySelector('a').click()`);
   await until('the next page', () => teacher.showing().reel?.steps >= 5);
-  await new Promise((r) => setTimeout(r, 1500)); // one picture per page, taken once it has drawn
+  await until('a picture of the pages', () => teacher.pictures('reel') >= 1); // capture may finish well after the page draws
   ws.close();
 
   const out = teacher.stop('reel')!;
