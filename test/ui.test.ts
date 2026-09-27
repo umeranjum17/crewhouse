@@ -79,6 +79,8 @@ test('nothing technical survives the adapter', () => {
     resting: A.resting(state), apps: A.apps(state), chatgpt: { ...h, signing: { code: h.signing?.code } },
   };
   for (const [name, v] of Object.entries(views)) assert.doesNotMatch(shown(v), FORBIDDEN, name);
+  const jobView = A.jobParts({ does: 'Compare prices.', aim: 'Find a fair option.', gets: 'The person’s budget.', how: 'Check two sources.', great: 'A sourced comparison with totals.', prompt: 'You are Quill. Read /home/umer/private/AGENTS.md' });
+  assert.doesNotMatch(shown(jobView), /You are|\/home\/|AGENTS\.md/, 'job view contains only the five plain recipe parts, never prompt text or paths');
   assert.equal(h.signing?.code, 'AB12-CDE34', 'the one-time code reaches the sign-in sheet');
   assert.deepEqual(A.knows(page.skills).map((k) => k.says), ['Turn photos into a short video', 'plan dinners'], 'the person\'s words, never the model\'s');
   const aboutSoul = A.soulText('Reel', 'Upbeat and practical\nLoves a tidy thirty seconds');

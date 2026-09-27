@@ -522,6 +522,8 @@ function HelperPage(ctx: Ctx & { id: string; tab: string }) {
           <ThingsGrid list={A.things(state).filter((t) => t.helper === id)} state={state} empty={`${h.name}'s finished work shows up here.`} />
           <h2 className="plate">Routines</h2>
           <RoutineList {...ctx} bot={id} />
+          <h2 className="plate">{h.name}'s job</h2>
+          {page && <JobSection id={id} name={h.name} page={page} reload={load} />}
           <h2 className="plate">About {h.name}</h2>
           {page && <AboutMe id={id} name={h.name} page={page} reload={load} />}
           <h2 className="plate">What {h.name} remembers</h2>
@@ -574,6 +576,26 @@ function Remembers({ id, name, page, reload }: { id: string; name: string; page:
         empty={`Nothing yet. ${name} adds a line when it learns something you like.`} placeholder={`Tell ${name} something to keep in mind`} />
     </>
   );
+}
+
+/** The person's five-part job recipe. Chief may draft it, but only the person's yes changes it. */
+function JobSection({ id, name, page, reload }: { id: string; name: string; page: Json; reload: () => void }) {
+  const labels = ['What it does', "What it's aiming for", 'What it gets from others', 'How it goes about it', 'What great looks like, with an example'];
+  const keys = ['does', 'aim', 'gets', 'how', 'great'];
+  const view = A.jobParts(page.job);
+  const [edit, setEdit] = useState(false), [idea, setIdea] = useState(''), [parts, setParts] = useState<Json>(page.job ?? {});
+  const [writing, setWriting] = useState(false);
+  return <>
+    <div className="card">
+      {view.map((part, i) => <p key={part.label}><b>{part.label}</b><br />{part.text || <span className="mute">Not set yet.</span>}</p>)}
+      <div className="btns"><button className="btn" onClick={() => { setParts({ ...page.job }); setEdit(!edit); }}>Change</button><button className="btn ghost" onClick={() => setWriting(!writing)}>Write it for me</button></div>
+    </div>
+    {edit && <div className="card form">{labels.map((label, i) => <label key={label}><b>{label}</b><textarea className="input" rows={3} maxLength={600} value={parts[keys[i]] ?? ''} onChange={(e) => setParts({ ...parts, [keys[i]]: e.target.value })} /></label>)}
+      <div className="btns"><button className="btn go" onClick={() => attempt(async () => { await api.job(id, parts); setEdit(false); reload(); }, 'Job saved')}>Save</button><button className="btn ghost" onClick={() => setEdit(false)}>Cancel</button></div>
+    </div>}
+    {writing && <div className="card form"><b>Tell me roughly what {name} should do</b><textarea className="input" rows={3} maxLength={600} value={idea} onChange={(e) => setIdea(e.target.value)} />
+      <button className="btn go" disabled={!idea.trim()} onClick={() => attempt(async () => { await api.draftJob(id, idea); setWriting(false); setIdea(''); reload(); }, 'Asked Chief to write it')}>Ask Chief</button></div>}
+  </>;
 }
 
 /** Who a helper is, in plain words, and what it knows how to do. The person changes it; the helper never does. */

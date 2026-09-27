@@ -54,6 +54,8 @@ export const api = {
   about: () => call('GET', '/api/about'),
   setAbout: (text: string) => call('PUT', '/api/about', { text }),
   /** Who a helper is, in the person's words; `soulReset` puts back how it started. */
+  job: (id: string, parts: Json) => call('PUT', `/api/bots/${id}/job`, parts),
+  draftJob: (id: string, idea: string) => call('POST', `/api/bots/${id}/job/draft`, { idea }),
   soul: (id: string, text: string) => call('PUT', `/api/bots/${id}/soul`, { text }),
   soulReset: (id: string) => call('POST', `/api/bots/${id}/soul/reset`),
   /** Put away a skill a helper learned (it is kept, just no longer used). */

@@ -159,11 +159,38 @@ function commit(dir: string, files: string[], message: string): string | null {
   } catch { return null; }
 }
 
-/** A made-up helper's job, in its AGENTS.md: the words the person said yes to on Chief's card. */
-export function setJob(cfg: Config, id: string, job: string) {
+export const JOB_LABELS = ['What it does', "What it's aiming for", 'What it gets from others', 'How it goes about it', 'What great looks like'] as const;
+export type Job = { does: string; aim: string; gets: string; how: string; great: string };
+const jobKeys = ['does', 'aim', 'gets', 'how', 'great'] as const;
+const jobText = (j: Job) => JOB_LABELS.map((label, i) => `### ${label}\n${j[jobKeys[i]]}`).join('\n\n');
+export const jobPreview = (j: Job) => jobText(j);
+export function validateJob(j: Record<string, string>) {
+  if (jobKeys.some((k) => !j[k] || j[k].length > 600)) throw Object.assign(new Error('each part needs words, under 600 characters'), { status: 400 });
+  if (jobText(j as Job).length > 3000) throw Object.assign(new Error('the whole job must be under 3,000 characters'), { status: 400 });
+}
+export function readJob(cfg: Config, id: string): Job {
+  const text = readFileSync(join(botDir(cfg, id), 'AGENTS.md'), 'utf8');
+  const section = text.match(/^## Your job\s*\n([\s\S]*?)(?=^## |$(?![\s\S]))/m)?.[1] ?? '';
+  const parts = section.split(/^### /m).slice(1);
+  const values = JOB_LABELS.map((label, i) => parts.find((p) => p.startsWith(`${label}\n`))?.slice(label.length + 1).trim() ?? (i === 0 ? section.replace(/^JOB\s*$/m, '').trim() : ''));
+  return Object.fromEntries(jobKeys.map((k, i) => [k, values[i]])) as Job;
+}
+export function writeJob(cfg: Config, id: string, value: Job) {
+  const clean = Object.fromEntries(jobKeys.map((k) => [k, String(value[k] ?? '').replace(/\r/g, '').trim()]));
+  if (jobKeys.some((k) => !clean[k] || clean[k].length > 600)) throw Object.assign(new Error('each part needs words, under 600 characters'), { status: 400 });
+  const section = jobText(clean as Job);
+  if (section.length > 3000) throw Object.assign(new Error('the whole job must be under 3,000 characters'), { status: 400 });
   const p = join(botDir(cfg, id), 'AGENTS.md');
-  writeFileSync(p, readFileSync(p, 'utf8').replace(/^JOB$/m, () => job.replace(/\r/g, '').trim()));
-  return commit(botDir(cfg, id), ['AGENTS.md'], 'Took on its job');
+  let text = readFileSync(p, 'utf8');
+  const replacement = `## Your job\n${section}\n\n`;
+  if (/^## Your job\s*$/m.test(text)) text = text.replace(/^## Your job\s*\n[\s\S]*?(?=^## |$(?![\s\S]))/m, replacement);
+  else {
+    const headingEnd = text.match(/^#[^\n]*\n+/)?.[0].length ?? 0;
+    const boundary = text.indexOf('\n\n', headingEnd);
+    text = boundary < 0 ? `${text.trimEnd()}\n\n${replacement}` : `${text.slice(0, boundary)}\n\n${replacement}${text.slice(boundary + 2)}`;
+  }
+  writeFileSync(p, text);
+  return commit(botDir(cfg, id), ['AGENTS.md'], 'Job changed by the person');
 }
 
 // ---- the soul: who the bot is, in its own file, written by the person, never by the bot ----

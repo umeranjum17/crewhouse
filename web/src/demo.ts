@@ -131,7 +131,9 @@ const state = {
     { bot: 'chief', promise: "What's on this week?", ask: "What's on this week?" },
     { bot: 'reel', promise: 'Make a poster from photos', ask: 'Make a poster from these photos: ' },
   ],
-  asks: variant === 'room' ? [{ id: 90, bot: 'scout', task_id: null, kind: 'propose', at: now - min, title: 'Scout wants to hand this to Scribe: draft the story', detail: { words: 'Scout wants to hand this to Scribe: draft the story, with stories.md', pass: { root: 70, files: ['stories.md'] }, preview: { head: 'Scout → Scribe', body: 'Draft the story for the family newsletter.' } } }] : variant === 'connect' ? [{ id: 11, bot: 'pip', task_id: 45, kind: 'connect', at: now, member: me, title: 'Connect Google Calendar', detail: { app: 'calendar', words: 'Let Pip use your Google Calendar' } }]
+  asks: variant === 'room' ? [{ id: 90, bot: 'scout', task_id: null, kind: 'propose', at: now - min, title: 'Scout wants to hand this to Scribe: draft the story', detail: { words: 'Scout wants to hand this to Scribe: draft the story, with stories.md', pass: { root: 70, files: ['stories.md'] }, preview: { head: 'Scout → Scribe', body: 'Draft the story for the family newsletter.' } } }]
+    : variant === 'job-card' ? [{ id: 21, bot: 'chief', task_id: null, kind: 'propose', at: now, member: me, title: "Chief wrote Pip's job", detail: { job: { bot: 'pip', does: 'Keep Nadia’s family calendar in order.', aim: 'Help the family know what is coming.', gets: 'Events and reminders from the person.', how: 'Check dates, add reminders only when asked, and explain changes.', great: 'A clear, accurate week; for example, sports day with a reminder the evening before.' }, preview: { head: "Pip's job", body: 'What it does: Keep Nadia’s family calendar in order.\n\nWhat it’s aiming for: Help the family know what is coming.\n\nWhat it gets from others: Events and reminders from the person.\n\nHow it goes about it: Check dates, add reminders only when asked, and explain changes.\n\nWhat great looks like: A clear, accurate week; for example, sports day with a reminder the evening before.' } } }]
+    : variant === 'connect' ? [{ id: 11, bot: 'pip', task_id: 45, kind: 'connect', at: now, member: me, title: 'Connect Google Calendar', detail: { app: 'calendar', words: 'Let Pip use your Google Calendar' } }]
     : variant === 'claim' ? [{ id: 13, bot: 'scout', task_id: 42, kind: 'permission', at: now - 30_000, member: me, title: '', detail: {
         effect: 'send', press: true, fill: true, spends: false,
         words: 'Scout wants to fill in 3 lines on the claim form at unclaimed.example.',
@@ -260,6 +262,7 @@ const doc = {
   ],
 };
 for (const b of bots) pages[b.id] ??= { messages: [], notes: '', tasks: [] };
+if (variant.startsWith('job')) pages.pip.job = { does: 'Keep Nadia’s family calendar in order.', aim: 'Help the family know what is coming.', gets: 'Events and reminders from the person.', how: 'Check dates, add reminders only when asked, and explain changes.', great: 'A clear, accurate week; for example, sports day with a reminder the evening before.' };
 for (const [id, p] of Object.entries(pages)) p.trail = events.filter((e) => e.bot === id);
 
 const accounts = [1, 2, 3].map((m) => ({ member: m, account: 'chatgpt', name: 'ChatGPT', signedIn: !(signin && m === me) || (variant === 'work' && m === me),

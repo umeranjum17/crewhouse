@@ -282,6 +282,15 @@ test('memory: the bot proposes a note, crewd caps and commits it, Undo reverts i
   assert.equal((await api('GET', '/api/bots/quill')).body.soul, '# Quill\n\nYou are Quill. Terse.\n');
   assert.equal((await api('PUT', '/api/bots/quill/soul', { text: 'x' }, {})).status, 403, 'cross-site pages cannot change it');
   assert.equal((await api('POST', '/api/bots/quill/soul/reset')).body.soul, soul);
+
+  // Helper job editing is structured, and the HTTP trust boundary enforces the part cap.
+  const recipe = { does: 'Keep notes tidy.', aim: 'Make useful notes.', gets: 'The person’s details.', how: 'Group facts and check spelling.', great: 'A clear note; for example, the school dates together.' };
+  assert.equal((await api('PUT', '/api/bots/quill/job', recipe)).status, 200);
+  assert.deepEqual((await api('GET', '/api/bots/quill')).body.job, recipe);
+  assert.equal((await api('PUT', '/api/bots/quill/job', { ...recipe, great: 'x'.repeat(601) })).status, 400);
+  const instructions = readFileSync(join(root, 'crew', 'bots', 'quill', 'AGENTS.md'), 'utf8');
+  assert.match(instructions, /## Your job[\s\S]*### What it does[\s\S]*Keep notes tidy/);
+  assert.match(instructions, /## Boundaries\n- Stop and ask the person first/);
 });
 
 test('suggestions: a helper keeps a skill, and Chief changes a personality, only on the person\'s yes', async () => {
