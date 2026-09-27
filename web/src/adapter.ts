@@ -33,6 +33,8 @@ export type DocView = { name: string; parts: DocPart[] };
 export type Step = { at: number; text: string; now?: boolean; asked?: boolean; seq: number; undo?: boolean };
 /** `unsure`: crewd's line for a job that acted but couldn't confirm it worked, shown apart from the helper's own words. */
 export type Line = { id: number; from: 'me' | 'them' | 'chief' | 'note'; text: string; files: FileView[]; choices: string[]; at?: number; unsure?: boolean };
+/** The one-use pairing ticket is rendered only in the owner's Chief chat, never as chat text. */
+export const phoneOffer = (page: Json, member: number): { qr: string; typed: string; expires: number; message: number } | null => member === OWNER ? page?.phoneOffer ?? null : null;
 export type App = { id: string; name: string; mark: string; bg: string; on: boolean; does: string; warns?: boolean };
 
 // ---------- words ----------

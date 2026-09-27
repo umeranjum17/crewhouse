@@ -215,17 +215,19 @@ test('pairing with a yes at the computer, grants, approvals from the phone, and 
   await until(async () => (await http('GET', '/api/bots/reel')).body.tasks.find((x: any) => x.id === job && x.state === 'done'));
   assert.equal(readFileSync(outside, 'utf8'), 'from the phone');
 
-  // Paired from Sam's screen, the view-only tablet is Sam's: his thread, his questions, and it can only watch.
+  // Another member cannot mint a code; the owner's view-only tablet can watch but not answer.
   const sam = (await http('POST', '/api/people', { name: 'Sam' })).body;
-  const offer = (await http('POST', '/api/phones/pair', { role: 'view' }, { 'x-crewhouse': '1', 'x-crewhouse-member': String(sam.id) })).body;
+  assert.equal((await http('POST', '/api/phones/pair', { role: 'view' }, { 'x-crewhouse': '1', 'x-crewhouse-member': String(sam.id) })).status, 403);
+  assert.equal((await http('POST', '/api/phones/code', { role: 'view' }, { 'x-crewhouse': '1', 'x-crewhouse-member': String(sam.id) })).status, 403);
+  const offer = (await http('POST', '/api/phones/pair', { role: 'view' })).body;
   const watcher = open(await pairPhone(offer.qr, 'Tablet'));
   assert.equal(watcher.link.grant.device.role, 'view');
-  assert.equal((await watcher.req('GET', '/api/state')).body.person.id, sam.id);
+  assert.equal((await watcher.req('GET', '/api/state')).body.person.id, 1);
   assert.equal((await watcher.req('POST', '/api/bots/chief/messages', { text: 'hi' })).status, 403);
 
   // Settings lists both; removing one closes its link, the phone forgets its grant, and its key is refused.
   const phones = (await http('GET', '/api/phones')).body;
-  assert.deepEqual(phones.map((d: any) => [d.name, d.role, d.member, d.online]), [['Pixel', 'control', 1, true], ['Tablet', 'view', sam.id, true]]);
+  assert.deepEqual(phones.map((d: any) => [d.name, d.role, d.member, d.online]), [['Pixel', 'control', 1, true], ['Tablet', 'view', 1, true]]);
   assert.equal((await http('DELETE', `/api/phones/${phones[0].id}`)).status, 200);
   await until(async () => a.status() === 'removed');
   const again = open(grant);

@@ -264,6 +264,22 @@ function ChiefIdeas({ state, chat, picked }: { state: Json; chat: string; picked
 }
 
 // ---------- a chat ----------
+function PhoneCard({ offer }: { offer: Json }) {
+  const [svg, setSvg] = useState('');
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => { void QRCode.toString(offer.qr, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' }).then(setSvg); }, [offer.qr]);
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
+  const left = Math.max(0, Math.ceil((offer.expires - now) / 1000));
+  return <div className="card pair" aria-label="Add a phone">
+    {left ? <div className="qr" dangerouslySetInnerHTML={{ __html: svg }} /> : <div className="qr expired">This code ran out.</div>}
+    <div className="grow"><b>Add a phone</b>
+      <p className="small">1. Scan this in the phone app, or type the code.</p>
+      <p className="small">2. Check the two words on both screens.</p>
+      <p className="small">3. Approve in Needs you or Settings.</p>
+      {left > 0 && <><p className="small">Type this code: <b style={{ overflowWrap: 'anywhere', userSelect: 'all' }}>{offer.typed}</b> <button className="btn ghost" onClick={() => void navigator.clipboard.writeText(offer.typed)}>Copy</button></p><p className="mute small">Works once, for {left} more seconds.</p></>}
+    </div>
+  </div>;
+}
 function Chat({ id, m, state, me, tick, refresh, accounts }: Ctx & { id: string; m?: string }) {
   const g = A.account(accounts, me);
   const [page, setPage] = useState<Json>(null);
@@ -284,6 +300,7 @@ function Chat({ id, m, state, me, tick, refresh, accounts }: Ctx & { id: string;
     if (e.kind === 'message' && e.data?.author === 'bot') setPartial('');
   }), [id, me]);
   useEffect(() => { if ((page?.messages ?? []).some((x: Json) => x.author === 'bot' && x.text === partial)) setPartial(''); }, [page, partial]);
+  const phoneOffer = id === 'chief' ? A.phoneOffer(page, me) : null;
   const box = useRef<HTMLDivElement>(null);
   // The thread scrolls by its own column on a desk (a scrollIntoView here once dragged the whole page up with it,
   // leaving a dead band on top); the phone keeps the document scroll. An anchored landing scrolls to the line instead.
@@ -329,6 +346,7 @@ function Chat({ id, m, state, me, tick, refresh, accounts }: Ctx & { id: string;
             {l.from !== 'me' && l.from !== 'note' && <div className="line-by"><Face who={l.from === 'chief' ? 'chief' : h ?? 'chief'} size={28} /><span className="who">{l.from === 'chief' ? 'Chief' : name}</span><time>{l.at ? A.clock(l.at) : ''}</time></div>}
             {l.text && <div className="bubble-text"><ChatText text={l.text} /></div>}
             {l.files.map((f) => <Media key={f.url} f={f} big />)}
+            {phoneOffer?.message === l.id && <PhoneCard offer={phoneOffer} />}
             {cards.filter((c) => lines.findLastIndex((x) => (x.at ?? 0) <= c.at) === i).map((c) => c.kind === 'connect' ? <ConnectCard key={c.id} c={c} helper={h?.name} state={state} onDone={refresh} /> : <AskCard key={c.id} c={c} who={h} onDone={refresh} />)}
           </div>
         ))}
