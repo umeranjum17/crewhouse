@@ -13,7 +13,7 @@ export interface Request { text: string; earlier?: string }
 const ROUTE_MS = Number(process.env.CREWHOUSE_ROUTE_MS || 20_000);
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 /** Chief's own work, whoever it mentions: routines and check-ins, memory, how to be addressed, hiring. */
-const chiefWork = /^(remember|call me)\b|\bevery\b|\beach (day|morning|evening|night|week|month)\b|\bweekdays\b|\bkeep an eye on\b|\blet me know if\b|\b(recruit|hire)\b|\b(market|marketing|promote|launch)\b/i;
+const chiefWork = /^(remember|call me)\b|\bevery\b|\beach (day|morning|evening|night|week|month)\b|\bweekdays\b|\bkeep an eye on\b|\blet me know if\b|\b(recruit|hire)\b|\b(market|marketing|promote|launch|paperwork)\b/i;
 
 function question(helpers: Helper[]): Question {
   return {
