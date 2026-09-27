@@ -19,6 +19,7 @@ const bad = (text: string) => {
 test('Chief: the four turns stay in Chief, URLs are context not task names, relays are his words', async () => {
   const { crew, db, done } = setup();
   process.env.CREWHOUSE_STUB_GOLDEN = '1';
+  crew.phoneLink = { offer: async () => ({ qr: 'byokit-link:1:demo', typed: '23456-789AB', expires: Date.now() + 120_000, urls: [] }) };
   crew.onboard('Umer');
   crew.recruit('scout', 'Scout', 'person');
   for (const text of turns) {
@@ -26,7 +27,8 @@ test('Chief: the four turns stay in Chief, URLs are context not task names, rela
     if (r?.task) await settled(db, r.task);
   }
   const chiefTasks = db.all("SELECT * FROM tasks WHERE bot = 'chief' ORDER BY id");
-  assert.equal(chiefTasks.length, 4, 'marketing intent stays with Chief even with Scout in the roster');
+  assert.equal(chiefTasks.length, 3, 'pairing needs no model task; marketing intent stays with Chief even with Scout in the roster');
+  assert.equal(crew.botPage('chief').phoneOffer?.typed, '23456-789AB');
   assert.equal(chiefTasks.at(-1)!.title, 'i want to market my app');
   assert.match(chiefTasks.at(-1)!.body, /i want to market my app\nhttps:\/\/trymuxr.com\//);
   assert.match((crew as any).prompt(chiefTasks.at(-1)), /Earlier in this chat:[\s\S]*market my app/);
