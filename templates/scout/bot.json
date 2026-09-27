@@ -23,7 +23,9 @@
     "return-and-chase",
     "unclaimed-money",
     "catch-the-renewal",
-    "plan-the-day"
+    "plan-the-day",
+    "sort-the-paper",
+    "plan-meals"
   ],
   "ideas": [
     {
@@ -42,11 +44,40 @@
     },
     {
       "needs": [
+        "web"
+      ],
+      "group": "life",
+      "promise": "Once a week I'll plan seven dinners everyone will actually eat, write the shopping list sorted by aisle, and put the shop day on your calendar. If you want, I'll fill the cart too — you approve it like any purchase.",
+      "ask": "Plan our dinners for the week and write the shopping list"
+    },
+    {
+      "needs": [
+        "web",
+        "documents",
+        "gmail",
+        "calendar"
+      ],
+      "group": "life",
+      "promise": "I'll read the letters and forms coming into your mail, put what's due on your calendar, and draft every reply — you read, tap approve, and send.",
+      "ask": "Sort the paperwork: what's due, and draft the replies"
+    },
+    {
+      "needs": [
         "calendar",
         "gmail"
       ],
       "promise": "I'll turn your mail, your calendar and what's still open into what today actually is.",
       "ask": "Give me my day: what's on, what's waiting on me, what to do first"
+    },
+    {
+      "needs": [
+        "web",
+        "documents",
+        "gmail"
+      ],
+      "group": "money",
+      "promise": "I'll catch a renewal or a price rise before it's charged, and have the cancellation email ready. Every step asks you first, on its own card.",
+      "ask": "Watch my subscriptions so nothing gets renewed without me hearing about it first"
     },
     {
       "needs": [
@@ -73,16 +104,6 @@
       "group": "money",
       "promise": "I'll set up the return, keep the label, and keep checking until the shop says the refund is on its way. Every step asks you first, on its own card.",
       "ask": "Help me return this and get the refund"
-    },
-    {
-      "needs": [
-        "web",
-        "documents",
-        "gmail"
-      ],
-      "group": "money",
-      "promise": "I'll catch a renewal or a price rise before it's charged, and have the cancellation email ready. Every step asks you first, on its own card.",
-      "ask": "Watch my subscriptions so nothing gets renewed without me hearing about it first"
     }
   ]
 }
