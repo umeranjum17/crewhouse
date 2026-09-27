@@ -25,7 +25,10 @@
     "catch-the-renewal",
     "plan-the-day",
     "sort-the-paper",
-    "plan-meals"
+    "plan-meals",
+    "watch-my-name",
+    "watch-competitors",
+    "month-in-brief"
   ],
   "ideas": [
     {
@@ -49,6 +52,14 @@
       "group": "life",
       "promise": "Once a week I'll plan seven dinners everyone will actually eat, write the shopping list sorted by aisle, and put the shop day on your calendar. If you want, I'll fill the cart too — you approve it like any purchase.",
       "ask": "Plan our dinners for the week and write the shopping list"
+    },
+    {
+      "needs": [
+        "web"
+      ],
+      "group": "life",
+      "promise": "I'll keep an ear out for your name and anything you told me to listen for — across Reddit, Hacker News, news sites and X — and send you one source-linked line when something shows up. Quiet otherwise.",
+      "ask": "Watch for my name online and tell me when something shows up"
     },
     {
       "needs": [
@@ -104,6 +115,22 @@
       "group": "money",
       "promise": "I'll set up the return, keep the label, and keep checking until the shop says the refund is on its way. Every step asks you first, on its own card.",
       "ask": "Help me return this and get the refund"
+    },
+    {
+      "needs": [
+        "web"
+      ],
+      "group": "life",
+      "promise": "Give me the names of the others doing what you do. I'll watch their pages and newsletters, and once a week you get one short brief: what changed, what it means, what you could do about it. I never contact anyone.",
+      "ask": "Watch my competitors and give me a weekly brief"
+    },
+    {
+      "needs": [
+        "web"
+      ],
+      "group": "life",
+      "promise": "Once a month I'll write the short story of what happened in our world — the topics, names and places you care about — with a link for every claim, as a document you keep.",
+      "ask": "Write me the month in brief"
     }
   ]
 }
