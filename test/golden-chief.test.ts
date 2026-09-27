@@ -42,6 +42,7 @@ test('Chief: the four turns stay in Chief, URLs are context not task names, rela
   assert.doesNotMatch(words.at(-1)!, /stub scout|Sir:|“/);
   const relay = crew.botPage('chief').messages.findLast((m) => m.author === 'bot' && m.text.startsWith('The muxr launch plan is ready'));
   assert.equal(relay?.files.length, 1, 'the delivered document is attached to the relay');
+  assert.equal(words.filter((w) => w.startsWith('The muxr launch plan is ready')).length, 1, 'a finished single-helper job has exactly one Chief closing line');
   assert.match(relay?.files[0].path ?? '', /\.docx$/);
   delete process.env.CREWHOUSE_STUB_GOLDEN;
   done();
@@ -56,6 +57,9 @@ test('title, relay and markdown trust boundary', () => {
   assert.equal(relayResult('done', 'A document in 2 sections: muxr launch plan'), 'The muxr launch plan is ready.');
   assert.equal(relayResult('The full investment brief is ready.', 'A document in 6 sections: How can $50,000 for a home down payment in fi, answer, findings, strategies and caveats'.repeat(2)), 'The full investment brief is ready.', 'long delivery notes never create a cut-off title');
   assert.doesNotMatch(relayResult('done', 'The launch plan is ready: audience and first posts.'), /A document in|\b\d+ sections?\b|^\w+: /i);
+  assert.equal(relayResult('Start with this pitch: “' + 'a'.repeat(175) + '.” The two-week launch plan and first drafts are ready.'), 'The two-week launch plan and first drafts are ready.');
+  assert.equal(relayResult('A very long unfinished headline ' + 'words '.repeat(40)), 'The result is ready.');
+  assert.doesNotMatch(relayResult('A long ' + 'word '.repeat(40) + '. The plan is ready.'), /…|\.\.\./);
   assert.equal(safeLink('javascript:alert(1)'), '');
   assert.equal(safeLink('https://trymuxr.com/'), 'https://trymuxr.com/');
   for (const mark of ['”', '’', ')', ']', '.', ',', ';', ':']) assert.equal(safeLink(`https://trymuxr.com/quickstart${mark}`), 'https://trymuxr.com/quickstart');
