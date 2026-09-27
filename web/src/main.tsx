@@ -468,26 +468,13 @@ function ChiefPage(ctx: Ctx & { m?: string }) {
 // ---------- the crew ----------
 function Crew(ctx: Ctx) {
   const { state } = ctx;
-  const c = A.chief(state, chiefLocal(ctx));
-  return (
-    <div className="page">
-      <h1>Your crew</h1>
-      <p className="lead">Everyone answers to Chief. Tap a helper to chat, or add one for something new.</p>
-      <div className="grid crew-grid">
-        <a className="card pal-card" href="#/chief"><span className="halo"><ChiefArt mood={c.mood} d={4} /></span><b>Chief</b><Pill tone={c.tone}>{c.line}</Pill><span className="mute small">Runs the crew and answers to you</span></a>
-        {A.crew(state).map((h) => (
-          <a key={h.id} className="card pal-card" href={hrefOf(h.id)}>
-            <span className="halo"><PalArt kind={h.kind} mood={h.mood} d={5} name={h.name} /></span>
-            <b>{h.name}</b>
-            <Pill tone={h.ring === 'needs' ? 'wait' : h.ring ? 'ok' : 'off'}>{h.status}</Pill>
-            <span className="mute small">{h.role}</span>
-          </a>
-        ))}
-        <a className="card pal-card add" href="#/crew/add"><span className="face add" style={{ width: 64, height: 64 }}>+</span><b>Add a helper</b><span className="mute small">Pick one, or tell Chief what you need</span></a>
-      </div>
-    </div>
-  );
-}
+  const chief = A.chief(state, chiefLocal(ctx));
+  const helpers = A.crew(state);
+  return <div className="page rest-screen"><h1>Your crew</h1><p className="lead">Everyone answers to Chief.</p><div className="card list">
+    <a className="row-item crew-row" href="#/chief"><Face who="chief" size={44} ring={chief.tone === 'wait' ? 'needs' : undefined} /><span className="grow"><b>Chief</b><span className="mute small clamp1">Runs the crew and answers to you</span></span><span className="status-word">{chief.line}</span></a>
+    {helpers.map((h) => <a key={h.id} className="row-item crew-row" href={hrefOf(h.id)}><Face who={h} size={44} ring={h.ring} /><span className="grow"><b>{h.name}</b><span className="mute small clamp1">{h.role}</span></span><span className={`status-word ${h.ring === 'needs' ? 'bad' : ''}`}><i className={h.ring === 'needs' ? 'needs' : h.ring ? 'working' : ''} />{h.status}</span></a>)}
+    <a className="row-item crew-row" href="#/crew/add"><span className="face add" style={{ width: 44, height: 44 }}>+</span><span className="grow">Add a helper</span><span className="mute">›</span></a>
+  </div></div>;}
 
 function AddHelper({ state, refresh }: Ctx) {
   const [names, setNames] = useState<Record<string, string>>({});
@@ -497,22 +484,12 @@ function AddHelper({ state, refresh }: Ctx) {
     if (await attempt(async () => { id = (await api.recruit(t.id, name)).id; }, `${name} joined the crew`)) { refresh(); go(`#/h/${id}`); }
   };
   return (
-    <div className="page">
-      <a href="#/crew" className="back">‹ Crew</a>
-      <h1>Add a helper</h1>
-      <p className="lead">Each helper has its own little computer at home and gets better as it learns what you like. It always asks before sending, paying or deleting anything.</p>
-      <div className="grid">
-        {A.gallery(state).map((t: Json) => (
-          <div key={t.id} className="card pal-card">
-            <span className="halo"><PalArt kind={t.kind} mood="happy" d={5} name={t.name} /></span>
-            <span className="mute">{t.does}</span>
-            <input className="input center" value={names[t.id] ?? t.name} onChange={(e) => setNames({ ...names, [t.id]: e.target.value })} aria-label={`Name for ${t.name}`} />
-            <button className="btn go" onClick={() => welcome(t)}>Welcome {(names[t.id] ?? t.name) || t.name}</button>
-          </div>
-        ))}
+    <div className="page rest-screen">
+      <a href="#/crew" className="back">‹ Crew</a><h1>Add a helper</h1><p className="lead">Pick a starter, or tell Chief what you need.</p>
+      <div className="label">Starters</div><div className="card list">
+        {A.gallery(state).map((t: Json) => <div key={t.id} className="row-item starter-row"><Face who={{ kind: t.kind, name: t.name }} size={44} /><span className="grow"><input className="starter-name" value={names[t.id] ?? t.name} onChange={(e) => setNames({ ...names, [t.id]: e.target.value })} aria-label={`Name for ${t.name}`} /><span className="mute small clamp">{t.does}</span></span><button className="btn" onClick={() => welcome(t)}>Add</button></div>)}
       </div>
-      <div className="card"><b>Need something else?</b><p className="mute">Tell Chief in your own words, like "I need help with the kids' school stuff", and he'll find the right helper.</p>
-        <Composer placeholder="Tell Chief what you need help with…" onSend={async (t) => { const ok = await attempt(() => api.post('chief', t), undefined, true); if (ok) go('#/chief'); return ok; }} {...typeInto('chief')} /></div>
+      <div className="label">Something else</div><div className="card"><p className="mute small">Tell Chief what you need help with.</p><Composer placeholder="Tell Chief what you need help with" onSend={async (t) => { const ok = await attempt(() => api.post('chief', t), undefined, true); if (ok) go('#/chief'); return ok; }} {...typeInto('chief')} /></div>
     </div>
   );
 }
@@ -553,8 +530,9 @@ function HelperPage(ctx: Ctx & { id: string; tab: string }) {
             <button className="link" onClick={() => go(`#/h/${id}/chat`)}>Chat</button>
           </header>
         </div>
-        <section className="detail">
-          <h2 className="plate">What {h.name} is doing</h2>
+        <section className="detail rest-screen">
+          <div className="helper-intro"><Face who={h} size={64} ring={h.ring} /><div><h1>{h.name}</h1><p className="lead">{h.role}</p></div></div>
+          <h2 className="plate">Now</h2>
           {b?.task ? (trail.length ? <Steps steps={trail} max={7} /> : <p className="mute">Working on “{A.plain(b.task.title)}”. Steps show as they happen.</p>)
             : <p className="mute">Nothing right now.</p>}
           <a className="link" href={`#/h/${id}/did`}>Every step</a>
@@ -749,7 +727,13 @@ function Things({ state, id }: Ctx & { id?: string }) {
     const t = setTimeout(() => el.classList.remove('land'), 1300);
     return () => clearTimeout(t);
   }, [want, list.length]);
-  return (<div className="page"><h1>Things</h1><p className="lead">Everything the crew has made for you.</p><ThingsGrid list={list} state={state} empty="Videos, lists, letters and plans the crew makes for you land here." /></div>);
+  return <div className="page rest-screen"><h1>Things</h1><p className="lead">Everything the crew has made for you.</p>{(['Today', 'Yesterday', 'Earlier'] as const).map((group) => {
+    const now = new Date(); now.setHours(0, 0, 0, 0);
+    const start = group === 'Today' ? now.getTime() : group === 'Yesterday' ? now.getTime() - 86400000 : 0;
+    const end = group === 'Today' ? now.getTime() + 86400000 : now.getTime();
+    const items = list.filter((t) => group === 'Earlier' ? t.at < now.getTime() - 86400000 : t.at >= start && t.at < end);
+    return items.length ? <section key={group}><div className="label">{group}</div><div className="card list thing-list">{items.map((t) => { const h = A.crew(state).find((x) => x.id === t.helper); const f = t.files[0]; return <a key={t.id} id={`t${t.id}`} className="row-item file-row" href={f?.url ?? `#/h/${t.helper}`} target={f?.url ? '_blank' : undefined} rel={f?.url ? 'noreferrer' : undefined}>{f ? <Media f={f} /> : <span className="file-chip">FILE</span>}<span className="grow"><b className="clamp1">{t.title}</b><span className="mute small">{h?.name ?? 'The crew'} · {A.clock(t.at)}</span></span><span className="mute">›</span></a>; })}</div></section> : null;
+  })}{!list.length && <div className="card empty">Videos, lists, letters and plans the crew makes for you land here.</div>}</div>;
 }
 
 // ---------- routines ----------
@@ -796,8 +780,7 @@ function RoutineRow({ r, h, act }: { r: Json; h: Helper | undefined; act: (fn: (
       {when !== null && preview?.bad && <div className="mute small">I didn't catch that time. Try “every Monday 9:00”.</div>}
       <div className="btns">
         <button className="btn" onClick={() => act(() => api.runRoutine(r.id), 'Asked to run')}>Do it now</button>
-        <button className="btn" onClick={() => act(() => api.routine(r.id, { state: r.paused ? 'on' : 'paused' }))}>{r.paused ? 'Resume' : 'Pause'}</button>
-        {!r.digest && !r.watching && <button className={`chip ${r.quiet ? 'on' : ''}`} aria-pressed={r.quiet} onClick={() => act(() => api.routine(r.id, { quiet: !r.quiet }), r.quiet ? 'It will always report back' : "It will only speak up when something's up")}>Only tell me if something's up</button>}
+        <label className="routine-switch"><input type="checkbox" role="switch" checked={!r.paused} aria-label={`${r.paused ? 'Resume' : 'Pause'} ${r.name}`} onChange={(e) => act(() => api.routine(r.id, { state: e.target.checked ? 'on' : 'paused' }))} /><span>{r.paused ? 'Paused' : 'On'}</span></label>        {!r.digest && !r.watching && <button className={`chip ${r.quiet ? 'on' : ''}`} aria-pressed={r.quiet} onClick={() => act(() => api.routine(r.id, { quiet: !r.quiet }), r.quiet ? 'It will always report back' : "It will only speak up when something's up")}>Only tell me if something's up</button>}
         {!r.digest && <button className="btn ghost" onClick={() => confirm(`Remove “${r.name}”?`) && act(() => api.removeRoutine(r.id))}>Remove</button>}
       </div>
     </div>
@@ -822,7 +805,7 @@ function RoutineAsk() {
   );
 }
 function Routines(ctx: Ctx) {
-  return (<div className="page"><h1>Routines</h1><RoutineAsk /><RoutineList {...ctx} /></div>);
+  return <div className="page rest-screen"><h1>Routines</h1><p className="lead">What the crew does on a schedule, and whether it's on.</p><RoutineList {...ctx} /><p className="mute small routine-footnote">The crew only runs routines you have approved.</p><div className="label">New routine</div><RoutineAsk /></div>;
 }
 
 // ---------- settings ----------
@@ -1078,23 +1061,17 @@ function Person({ m, you, act }: { m: Json; you: boolean; act: (fn: () => Promis
 
 function Apps({ state, refresh }: Ctx) {
   const list = A.apps(state);
-  const on = list.filter((a) => a.on);
   const [connecting, setConnecting] = useState<{ app: A.App; tab: Window | null } | null>(null);
   return (
     <div className="page">
       <a href="#/settings" className="back">‹ Settings</a>
       <h1>Your apps</h1>
-      <div className="chief-says"><Face who="chief" size={34} /><span>No need to do this now. When a helper needs an app, it will ask right there in the chat.</span></div>
-      <div className="apps">
-        {list.map((a) => (
-          <button key={a.id} className={`card app ${a.on ? 'on' : ''}`} onClick={() => a.on
-            ? confirm(`Disconnect ${a.name}? Your helpers will stop using it.`) && attempt(async () => { await api.disconnect(a.id); refresh(); }, `${a.name} disconnected`)
-            : setConnecting({ app: a, tab: A.needsHouse(state, a) ? null : openTab() })}>
-            <span className="app-ic" style={{ background: a.bg }}>{a.mark}</span><b>{a.name}</b><span className={a.on ? 'ok' : 'mute'}>{a.on ? '✓ On' : 'Tap to add'}</span>
-          </button>
-        ))}
+      <p className="lead">Connect an app when a helper asks for it.</p>
+      <div className="label">Apps</div><div className="card list apps-list">
+        {list.map((a) => <div key={a.id} className="row-item app-row-item"><span className="app-ic" style={{ background: a.bg }}>{a.mark}</span><span className="grow"><b>{a.name}</b><span className="mute small">{a.on ? 'On · read only' : 'Not connected'}</span></span>
+          {a.on ? <button className="link" onClick={() => confirm(`Disconnect ${a.name}? Your helpers will stop using it.`) && attempt(async () => { await api.disconnect(a.id); refresh(); }, `${a.name} disconnected`)}>Turn off</button>
+            : <button className="btn" onClick={() => setConnecting({ app: a, tab: A.needsHouse(state, a) ? null : openTab() })}>Connect</button>}</div>)}
       </div>
-      {on.map((a) => <div key={a.id} className="card"><b>{a.name} is on.</b> {a.does} <span className="mute">Turn it off any time.</span></div>)}
       <div className="card row"><span className="app-ic" style={{ background: 'linear-gradient(135deg,#ffc27a,#ff7aa2)' }}>↗</span>
         <span className="grow"><b>Share to Crewhouse</b><div className="mute small">On your phone, tap Share in any app (WhatsApp, Photos, a web page), then Crewhouse. Nothing to connect.</div></span></div>
       <p className="mute small center">Connecting opens the app's own sign-in page. That's all.</p>
