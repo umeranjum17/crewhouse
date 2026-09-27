@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { setup } from './lab.ts';
 import { asksForPhone } from '../src/crew.ts';
 import { systemPrompt } from '../src/bots.ts';
+import { phoneOffer } from '../web/src/adapter.ts';
 
 const phrases = ['pair my phone', 'pair my computer with you', 'connect my phone', 'add my phone', 'use crewhouse on my phone', 'install on my phone'];
 
@@ -26,6 +27,8 @@ test('Chief offers every phone phrasing to the owner, never another member', asy
     assert.equal(page.phoneOffer.typed, offer.typed);
     assert.ok(page.phoneOffer.expires > Date.now());
     assert.equal(page.messages.at(-1)!.id, page.phoneOffer.message);
+    assert.equal(phoneOffer(page, 1)?.message, page.messages.at(-1)!.id, 'phone card attaches to this reply');
+    assert.equal(phoneOffer(page, member.id), null, 'another member never gets the card');
     assert.ok(!JSON.stringify(page.messages).includes(offer.qr), 'ticket is not in chat text');
     await crew.post('chief', phrase, undefined, member.id);
     const other = crew.botPage('chief', member.id);

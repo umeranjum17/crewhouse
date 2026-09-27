@@ -5,7 +5,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useFonts } from 'expo-font';
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
-  ActivityIndicator, AppState, BackHandler, Image, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, useColorScheme, View,
+  ActivityIndicator, AppState, BackHandler, Clipboard, Image, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, useColorScheme, View,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import * as A from '../web/src/adapter.ts';
@@ -148,6 +148,19 @@ function ChatText({ text }: { text: string }) {
 function Card({ children, style, ask }: { children: ReactNode; style?: any; ask?: boolean }) {
   const t = useLook();
   return <View style={[s.card, { backgroundColor: t.card, borderColor: ask ? t.pink : t.line, borderWidth: 1 }, style]}>{children}</View>;
+}
+function PhoneCard({ offer }: { offer: NonNullable<ReturnType<typeof A.phoneOffer>> }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer); }, []);
+  const left = Math.max(0, Math.ceil((offer.expires - now) / 1000));
+  return <Card style={{ gap: 10, marginLeft: 36 }}>
+    <T style={s.b}>Add a phone</T>
+    <T>1. On the other phone, open Crewhouse and tap Type a code.</T>
+    <T>2. Enter this code and check the two words on both screens.</T>
+    <T>3. Approve in Needs you or Settings on the computer.</T>
+    {left ? <><T style={s.b}>{offer.typed}</T><Btn label="Copy code" onPress={() => { Clipboard.setString(offer.typed); say('Code copied'); }} /><T tone="mute">Works once, for {left} more seconds.</T></>
+      : <T tone="mute">This code ran out. Ask Chief for a new one.</T>}
+  </Card>;
 }
 const Label = ({ children }: { children: ReactNode }) => <T tone="mute" style={s.label}>{children}</T>;
 function Page({ title, lead, children }: { title?: string; lead?: string; children: ReactNode }) {
@@ -789,6 +802,7 @@ function Chat({ id, m, state, tick, refresh, canAct, offline, open }: Ctx & { id
   const landed = useRef(0); // the anchor we already landed on: once per line, never again on every tick
 
   const lines = A.lines(page, id);
+  const phoneOffer = id === 'chief' ? A.phoneOffer(page, state.person?.id ?? 0) : null;
   const echoed = pending && !(page?.messages ?? []).some((x: Json) => x.author === 'person' && x.id > pending.after && A.plain(x.text) === A.plain(pending.text));
   const waiting = pending && !partial && !(page?.messages ?? []).some((x: Json) => x.author === 'bot' && x.id > pending.after);
   const [seed, setSeed] = useState(0); // a starter chip fills the box from outside; remount reads the draft back
@@ -831,6 +845,7 @@ function Chat({ id, m, state, tick, refresh, canAct, offline, open }: Ctx & { id
             {!!l.text && <View style={l.from === 'me' ? [s.bubbleText, { backgroundColor: t.soft, borderColor: t.line, borderWidth: 1, borderBottomRightRadius: 6 }] : { paddingLeft: 36 }}>
               <ChatText text={l.text} /></View>}
             {l.files.map((f) => <Card key={f.url}><FileRow f={f} /></Card>)}
+            {phoneOffer?.message === l.id && <PhoneCard offer={phoneOffer} />}
             {cards.filter((c) => lines.findLastIndex((x) => (x.at ?? 0) <= c.at) === i).map((c) => <AskCard key={c.id} c={c} who={h} state={state} onDone={refresh} canAct={canAct} offline={offline} open={open} />)}
           </View>
         ))}
