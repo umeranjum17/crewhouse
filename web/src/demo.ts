@@ -218,7 +218,7 @@ if (variant === 'renewal') pages.scout = { messages: [
 // The day, planned, answered where the job was handed over (?demo=day): one message, three things, in order, at times.
 if (variant === 'day') pages.scout = { messages: [
   { id: 1, author: 'person', text: "Give me my day: what's on, what's waiting on me, what to do first" },
-  { id: 2, author: 'bot', text: 'Two fixed things today, and one form to sign.\n1. 8:40 am \u2014 Sign Ayaan\u2019s trip form, the school office wants it before the run.\n2. 1:15 pm \u2014 Call the shop back about the espresso machine, the refund waits on what you tell them.\n3. 6:30 pm \u2014 Pack the kit bag for tomorrow\u2019s sports day, it goes in the car.\n\nThe rest of the mail can wait until tomorrow. Want me to bring you a list like this every weekday morning?' },
+  { id: 2, author: 'bot', text: 'Two fixed things today, and one form to sign.\n1. 8:40 am \u2014 Sign Ayaan\u2019s trip form, the school office wants it before the run.\n2. 1:15 pm \u2014 Call the shop back about the espresso machine, the refund waits on what you tell them.\n3. 6:30 pm \u2014 Pack the kit bag for tomorrow\u2019s sports day, it goes in the car.\nThe rest of the mail can wait until tomorrow. Want me to bring you a list like this every weekday morning?' },
 ] };
 /** What crewd read out of that workbook (src/workbooks.ts): the demo\u2019s own copy, in crewd\u2019s shape. */
 const book = {
