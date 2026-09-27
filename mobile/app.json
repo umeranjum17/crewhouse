@@ -28,7 +28,8 @@
       "package": "dev.crewhouse.app",
       "permissions": [
         "android.permission.ACCESS_WIFI_STATE",
-        "android.permission.CHANGE_WIFI_MULTICAST_STATE"
+        "android.permission.CHANGE_WIFI_MULTICAST_STATE",
+        "android.permission.CAMERA"
       ]
     },
     "plugins": [
@@ -66,7 +67,6 @@
         "expo-image-picker",
         {
           "photosPermission": "Crewhouse lets you send a photo to a helper.",
-          "cameraPermission": false,
           "microphonePermission": false
         }
       ],
