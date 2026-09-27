@@ -159,9 +159,10 @@ export const noTools = (text = '') => text.replace(TOOL_CALL, ' ').replace(JSON_
 
 export function plain(text = '') {
   if (/\bstub [\w-]+:/.test(text)) return 'On it.';
-  return noTools(text)
+  // Heading markers strip before noTools collapses whitespace (D23): a later heading must still sit at a line
+  // start to be found — after the collapse every ### but the first survives mid-line as literal markup.
+  return noTools(text.replace(/(^|\n)#{1,6}\s+/g, '$1'))
     .replace(/```[\s\S]*?```/g, '')
-    .replace(/(^|\n)#{1,6}\s+/g, '$1') // a heading's markers are markup, never words: the person reads the words (D23)
     .replace(/`([^`\n]*)`/g, (_, s: string) => (/^[\w.\-~\/]+\.[a-z0-9]{2,4}$/i.test(s) ? `“${pretty(s)}”` : /[\/\\$|]|--?\w/.test(s) ? '' : s))
     .replace(/(^|[\s(“"'])((~|\.{1,2})?\/[\w.\-~]+)+\/?(?=[\s).,;:!?”"']|$)/g, (_, pre: string, p: string) => `${pre}${/\.[a-z0-9]{2,4}$/i.test(p) ? `“${pretty(p)}”` : 'its folder'}`)
     .replace(/\bfiles\/([\w.\-]+)/g, (_, f: string) => `“${pretty(f)}”`)

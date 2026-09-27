@@ -715,6 +715,22 @@ test('no raw heading markers reach the ask card or its Read-all view', () => {
   const offered = A.card({ id: 10, bot: 'scout', kind: 'propose', at: now,
     detail: { words: 'Scout has an idea', preview: { head: 'How Scout would do it', body: '### Step one\nPick the pages' } } }, s);
   assert.ok(!offered.preview!.body.includes('#'), offered.preview!.body);
+  // The .8 smoke leak (CREWHOUSE-APK-20): a draft with SEVERAL headings kept every ### but the first, because the
+  // strip ran after noTools had folded the blank lines away, so only the opening heading still sat at a line start.
+  const draft = ['### Trip plan', '', '### Costs', '', 'Hotel for two nights', 'Train tickets there and back', '', '### Next step', '',
+    'Say the word and I book the morning train.'].join('\n');
+  const leak = A.card({ id: 11, bot: 'scout', kind: 'propose', at: now,
+    detail: { words: 'Scout drafted something for the trip thread. Nothing is sent: you post it yourself.',
+      preview: { head: 'Draft for the trip thread', body: draft } } }, s);
+  assert.doesNotMatch(leak.preview!.body, /#{1,6}\s/, leak.preview!.body);
+  assert.match(leak.preview!.body, /^Trip plan Costs Hotel/);
+  // Variation without blank lines: every heading still strips, however many.
+  assert.ok(!A.plain('### Plan\n### Costs\nHotel\n### Next\nGo').includes('#'));
+  // A hash that is not a heading is content and stays: only line-start heading markers go, never inline ones.
+  assert.match(A.plain('Tag it # Fun Friday, see issue C-###-12, topic #fun'), /# Fun Friday, see issue C-###-12, topic #fun/);
+  // The phone sheet renders this same view model verbatim (mobile/App.tsx), so the web assertion is the phone's too.
+  const app = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
+  assert.match(app, /\{c\.preview\.body\}/);
 });
 
 test('not sure it worked stands apart: in the chat, in Chief\'s thread and in the trail', () => {
