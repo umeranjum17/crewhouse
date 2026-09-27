@@ -185,8 +185,9 @@ export function writeJob(cfg: Config, id: string, value: Job) {
   const replacement = `## Your job\n${section}\n\n`;
   if (/^## Your job\s*$/m.test(text)) text = text.replace(/^## Your job\s*\n[\s\S]*?(?=^## |$(?![\s\S]))/m, replacement);
   else {
-    const firstParagraph = text.search(/\n\s*\n/);
-    text = firstParagraph < 0 ? `${text.trimEnd()}\n\n${replacement}` : `${text.slice(0, firstParagraph)}\n\n${replacement}${text.slice(firstParagraph + 2)}`;
+    const headingEnd = text.match(/^#[^\n]*\n+/)?.[0].length ?? 0;
+    const boundary = text.indexOf('\n\n', headingEnd);
+    text = boundary < 0 ? `${text.trimEnd()}\n\n${replacement}` : `${text.slice(0, boundary)}\n\n${replacement}${text.slice(boundary + 2)}`;
   }
   writeFileSync(p, text);
   return commit(botDir(cfg, id), ['AGENTS.md'], 'Job changed by the person');

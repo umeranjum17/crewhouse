@@ -10,6 +10,7 @@ import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { temp } from './tmp.ts';
 import { setup, sleep, task, until, prompted, settled, holding, release, lastSaid } from './lab.ts';
+import * as A from '../web/src/adapter.ts';
 
 const { Crew, quietNow, short } = await import('../src/crew.ts');
 const { classify } = await import('@byokit/accounts');
@@ -1006,6 +1007,39 @@ test('Chief makes up a new helper on a card: nothing until the person says yes, 
   await settled(db, t3);
   assert.equal(card(), undefined);
   assert.match(lastSaid(db, 'chief')!, /already a helper called Pip/);
+  done();
+});
+
+test('Chief proposes helper job recipes; nothing writes until Use it, and crew_job belongs only to Chief', async () => {
+  const { db, crew, done } = setup();
+  crew.onboard('sir');
+  crew.recruit('scout', 'Scout', 'person');
+  crew.recruit('helper', 'Pip', 'person');
+  const botDir = join(crew['cfg'].crewDir, 'bots', 'scout');
+  const before = readFileSync(join(botDir, 'AGENTS.md'), 'utf8');
+  const chiefTools = (crew as any).crewTools('chief').map((t: any) => t.name);
+  assert.ok(chiefTools.includes('crew_job'));
+  for (const id of ['scout', 'scribe', 'pip']) assert.ok(!(crew as any).crewTools(id).some((t: any) => t.name === 'crew_job'), `${id} cannot write helper jobs`);
+  const job = { bot: 'scout', does: 'Find reliable answers.', aim: 'Give a concise answer.', gets: 'The person’s question.', how: 'Check trustworthy sources.', great: 'A sourced answer; for example, three clear findings.' };
+  const askJob = async () => {
+    const { task: id } = (await crew.post('chief', `Please ${call('crew_job', job)}`))!;
+    await settled(db, id);
+    return db.get("SELECT * FROM asks WHERE bot = 'chief' AND kind = 'propose' AND state = 'open'");
+  };
+  let ask = await askJob();
+  assert.ok(ask);
+  assert.deepEqual(JSON.parse(ask!.detail).job, job);
+  assert.equal(readFileSync(join(botDir, 'AGENTS.md'), 'utf8'), before, 'suggesting a recipe does not write it');
+  assert.equal(A.card({ ...ask, detail: JSON.parse(ask!.detail) }, crew.snapshot()).choices.some((c: any) => /always/i.test(c.label)), false);
+  await crew.answer(ask!.id, { answer: 'deny' });
+  assert.equal(readFileSync(join(botDir, 'AGENTS.md'), 'utf8'), before, 'Not now leaves the file alone');
+  ask = await askJob();
+  await crew.answer(ask!.id, { answer: 'allow' });
+  assert.deepEqual(disk.readJob(crew['cfg'], 'scout'), { does: job.does, aim: job.aim, gets: job.gets, how: job.how, great: job.great });
+  const after = readFileSync(join(botDir, 'AGENTS.md'), 'utf8');
+  assert.match(after, /## Your job[\s\S]*### What great looks like[\s\S]*three clear findings/);
+  assert.match(after, /## Boundaries[\s\S]*never sign in/, 'outside sections are retained');
+  assert.throws(() => disk.writeJob(crew['cfg'], 'scout', { does: job.does, aim: job.aim, gets: job.gets, how: job.how, great: 'x'.repeat(601) }), /600/);
   done();
 });
 

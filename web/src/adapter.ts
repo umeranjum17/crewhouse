@@ -438,6 +438,12 @@ export function found(state: Json, r: Json | null) {
   ];
 }
 
+export function jobParts(job: Json) {
+  const labels = ['What it does', "What it's aiming for", 'What it gets from others', 'How it goes about it', 'What great looks like, with an example'];
+  const keys = ['does', 'aim', 'gets', 'how', 'great'];
+  return keys.map((key, i) => ({ label: labels[i], text: plain(job?.[key] ?? '') }));
+}
+
 export function gallery(state: Json) {
   const owner = state.person.id === OWNER;
   return state.templates.filter((t: Json) => t.id !== 'chief' && (owner || !(t.ownerOnly || OWNER_ONLY.has(t.id))))

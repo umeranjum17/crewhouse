@@ -582,11 +582,12 @@ function Remembers({ id, name, page, reload }: { id: string; name: string; page:
 function JobSection({ id, name, page, reload }: { id: string; name: string; page: Json; reload: () => void }) {
   const labels = ['What it does', "What it's aiming for", 'What it gets from others', 'How it goes about it', 'What great looks like, with an example'];
   const keys = ['does', 'aim', 'gets', 'how', 'great'];
+  const view = A.jobParts(page.job);
   const [edit, setEdit] = useState(false), [idea, setIdea] = useState(''), [parts, setParts] = useState<Json>(page.job ?? {});
   const [writing, setWriting] = useState(false);
   return <>
     <div className="card">
-      {labels.map((label, i) => <p key={label}><b>{label}</b><br />{A.plain(parts[keys[i]] ?? '') || <span className="mute">Not set yet.</span>}</p>)}
+      {view.map((part, i) => <p key={part.label}><b>{part.label}</b><br />{part.text || <span className="mute">Not set yet.</span>}</p>)}
       <div className="btns"><button className="btn" onClick={() => { setParts({ ...page.job }); setEdit(!edit); }}>Change</button><button className="btn ghost" onClick={() => setWriting(!writing)}>Write it for me</button></div>
     </div>
     {edit && <div className="card form">{labels.map((label, i) => <label key={label}><b>{label}</b><textarea className="input" rows={3} maxLength={600} value={parts[keys[i]] ?? ''} onChange={(e) => setParts({ ...parts, [keys[i]]: e.target.value })} /></label>)}
