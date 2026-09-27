@@ -53,7 +53,7 @@ function Toast() {
 
 export default function App() {
   const t = look(useColorScheme() === 'dark');
-  const [fontsReady, fontError] = useFonts({ Inter: require('./assets/fonts/InterVariable.woff2') });
+  const [fontsReady, fontError] = useFonts({ Inter: require('./assets/fonts/InterVariable.ttf') });
   const [grant, setGrant] = useState<Grant | null | undefined>(undefined);
   useEffect(() => { loadGrant().then(setGrant).catch(() => setGrant(null)); }, []);
   return (
