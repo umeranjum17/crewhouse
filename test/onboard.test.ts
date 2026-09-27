@@ -178,7 +178,7 @@ test('first run: her first request waits for her own sign-in, Chief says why in 
 
 test('a ChatGPT plan without helpers: said plainly with the way forward; "ask the owner" and "I changed my plan"', async () => {
   const { cfg, db, crew, done } = setup();
-  assert.equal(classify('You have hit your ChatGPT usage limit (free plan).')?.kind, 'not_included');
+  assert.equal(classify("Your plan doesn't include this model.")?.kind, 'not_included');
   assert.equal(classify('You have hit your ChatGPT usage limit (plus plan). Try again in ~30 min.')?.kind, 'rate_limit');
   const sara = crew.addMember('Sara').id;
   crew.onboard('Sara', sara);
