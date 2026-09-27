@@ -44,6 +44,8 @@ export class OpenClawGateway {
   private closing = false;
   private restart?: NodeJS.Timeout;
   private failures = 0;
+  private listeners = new Set<(event: { event: string; payload?: any }) => void>();
+  onEvent(listener: (event: { event: string; payload?: any }) => void) { this.listeners.add(listener); return () => this.listeners.delete(listener); }
   readonly root: string;
   readonly stateDir: string;
   constructor(stateDir: string) { this.stateDir = stateDir; this.root = join(stateDir, 'openclaw'); }
@@ -74,13 +76,23 @@ export class OpenClawGateway {
     const port = existsSync(portPath) ? Number(readFileSync(portPath, 'utf8')) : await freePort();
     if (!port || port === 18789) throw new Error('Invalid engine port');
     writeFileSync(portPath, `${port}\n`, { mode: 0o600 });
+    const crewTools: string[] = JSON.parse(readFileSync(join(repo, 'src/openclaw/plugin/openclaw.plugin.json'), 'utf8')).contracts.tools;
     const config = {
       logging: { file: join(this.stateDir, 'logs/openclaw-events.log') },
+      models: { catalogRefresh: { enabled: false } },
+      update: { checkOnStart: false, auto: { enabled: false } },
+      telemetry: { enabled: false },
       gateway: { mode: 'local', bind: 'loopback', port, auth: { mode: 'token', token: { source: 'env', provider: 'default', id: 'OPENCLAW_GATEWAY_TOKEN' } }, controlUi: { enabled: false }, tailscale: { mode: 'off' } },
       discovery: { mdns: { mode: 'off' } }, env: { shellEnv: { enabled: false } },
       agents: { defaults: { sandbox: { mode: 'off' } } },
-      tools: { profile: 'coding', deny: ['group:runtime', 'group:automation', 'group:messaging', 'group:nodes', 'group:ui', 'sessions_send', 'sessions_spawn', 'conversations_send', 'conversations_turn', 'subagents', 'code_execution', 'gateway', 'openclaw', 'plugins', 'cron', 'ask_user', 'suggest_task'], fs: { workspaceOnly: true }, exec: { security: 'deny', ask: 'always' }, elevated: { enabled: false }, agentToAgent: { enabled: false }, sessions: { visibility: 'agent' } },
-      plugins: { allow: ['memory-core', 'openai'], entries: { 'memory-core': { config: { dreaming: { enabled: false } } } } },
+      tools: { profile: 'coding', alsoAllow: crewTools, deny: ['group:fs', 'group:runtime', 'group:automation', 'group:messaging', 'group:nodes', 'group:ui', 'sessions_send', 'sessions_spawn', 'conversations_send', 'conversations_turn', 'subagents', 'code_execution', 'gateway', 'openclaw', 'plugins', 'cron', 'ask_user', 'suggest_task'], fs: { workspaceOnly: true }, exec: { security: 'deny', ask: 'always' }, elevated: { enabled: false }, agentToAgent: { enabled: false }, sessions: { visibility: 'agent' } },
+      plugins: {
+        load: { paths: [join(repo, 'src/openclaw/plugin')] }, allow: ['crewhouse', 'memory-core', 'openai'],
+        entries: {
+          crewhouse: { hooks: { timeouts: { before_tool_call: 200_000 } } },
+          'memory-core': { config: { dreaming: { enabled: false } } },
+        },
+      },
       // The weekly review can delete skills. Enable auto only after the pre-review history gate exists.
       skills: { workshop: { autonomous: { mode: 'off' } } },
       channels: {},
@@ -126,6 +138,8 @@ export class OpenClawGateway {
         signDevicePayload: (pem, payload) => sign(null, Buffer.from(payload), createPrivateKey(pem)).toString('base64url'),
         publicKeyRawBase64UrlFromPem: (pem) => createPublicKey(pem).export({ type: 'spki', format: 'der' }).subarray(-32).toString('base64url'),
       },
+      caps: ['tool-events'],
+      onEvent: (event) => { for (const listener of this.listeners) listener(event); },
       onHelloOk: () => { this.client = client; },
       onClose: () => { if (!this.closing) this.client = undefined; },
     });

@@ -121,6 +121,7 @@ test('policy: own space and the sandboxed shell run silently; the person\'s file
   assert.deepEqual(effectOf('browser', { args: ['screenshot', '--filename', 'files/page.png'] }, s), { kind: 'safe' });
   assert.equal(effectOf('browser', { args: ['upload', 'files/form.pdf'] }, s).kind, 'send', 'its own file, on a signed-in site: asks');
   assert.equal(effectOf('teleport', {}, s).kind, 'refuse', 'unknown tools fail closed');
+  assert.equal(effectOf('crew_unknown', {}, s).kind, 'refuse', 'a crew_ prefix cannot grant authority');
   assert.equal(toolWords('bash', { command: 'ffmpeg -y -i a.png out.mp4' }), 'Worked on a video');
   assert.equal(toolWords('bash', { command: 'fc-list | head' }), 'Worked in its own space', 'the trail never shows a command');
   assert.equal(toolWords('write', { path: '/data/bots/maya/files/list.txt' }), 'Saved list.txt');

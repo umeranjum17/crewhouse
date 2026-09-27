@@ -25,7 +25,9 @@ test('pinned engine uses isolated home, loopback token and no Control UI', { tim
     assert.equal(env.HOME, join(gateway.root, 'home'));
     assert.equal(env.OPENAI_API_KEY, undefined);
     const client = await gateway.start();
-    assert.equal((await client.request<{ ok: boolean }>('health')).ok, true);
+    const health = await client.request<{ ok: boolean; plugins: { loaded: string[] } }>('health');
+    assert.equal(health.ok, true);
+    assert.ok(health.plugins.loaded.includes('crewhouse'), 'fail-closed hook did not load');
     const port = Number(readFileSync(join(gateway.root, 'port'), 'utf8'));
     assert.notEqual(port, 18789);
     const pid = Number(readFileSync(join(gateway.root, 'gateway.pid'), 'utf8'));

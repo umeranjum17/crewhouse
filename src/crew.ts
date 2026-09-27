@@ -23,6 +23,8 @@ import { buildWorkbook, readWorkbook } from './workbooks.ts';
 import { buildDocument, readDocument } from './documents.ts';
 import { byModel, clarify, route, type Helper } from './route.ts';
 import type { Link } from './link.ts';
+import type { ToolHost, RunRef } from './runtime.ts';
+import { fileTool } from './openclaw/files.ts';
 
 /** Phone pairing stays with Chief, including 'pair my computer with you' said on the home computer. */
 export const asksForPhone = (text: string) => /\b(pair|connect|link|add|use|install)\b[\s\S]{0,65}\b(phone|mobile|computer|crewhouse app)\b|\b(phone|mobile|computer)\b[\s\S]{0,35}\b(pair|connect|link)\b/i.test(text);
@@ -1384,6 +1386,49 @@ export class Crew {
     });
     if (task && !parked && !this.held.has(botId)) this.close(botId);
     this.dispatch();
+  }
+
+  /** Host half of the replaceable agent runtime. The task id and member are checked before any tool is considered. */
+  toolHost(): ToolHost {
+    const own = (run: RunRef) => {
+      const task = this.activeTask(run.bot);
+      if (!task || task.id !== run.task || (task.member ?? OWNER) !== run.member || this.live.get(run.bot)?.task !== run.task)
+        throw new Error('Unknown or stale task');
+      return task;
+    };
+    return {
+      tools: (run) => {
+        own(run);
+        return this.crewTools(run.bot).map((tool) => ({ name: tool.name, description: tool.description, parameters: tool.parameters }));
+      },
+      gate: async (run, tool, input) => {
+        try {
+          own(run);
+          if (this.netOf(run.bot) && (tool === 'web_fetch' || tool === 'web_search')) {
+            this.refusedNet(run.bot, tool);
+            return { allow: false, reason: 'This helper can read only the places on its list. Use its checked web tool.' };
+          }
+          const result = await this.gate(run.bot, tool, input);
+          return result ? { allow: false, reason: result.reason ?? 'Not allowed', park: result.terminate } : { allow: true };
+        } catch { return { allow: false, reason: 'Crewhouse could not check this call.' }; }
+      },
+      call: async (run, tool, input, signal) => {
+        own(run);
+        const space = disk.botDir(this.cfg, run.bot);
+        if (/^crew_(read|write|edit|ls|grep|find)$/.test(tool)) return fileTool(space, tool, input);
+        if (tool === 'crew_web_fetch' || tool === 'crew_web_search') {
+          const net = this.netOf(run.bot);
+          const selected = webTools(net?.may).find((entry) => entry.name === tool.slice(5));
+          if (!selected) throw new Error('Unknown web tool');
+          const result = await (selected.execute as any)(randomBytes(8).toString('hex'), input, signal);
+          return result.content?.filter((part: any) => part.type === 'text').map((part: any) => part.text).join('\n') ?? '';
+        }
+        const candidate = this.crewTools(run.bot).find((entry) => entry.name === tool);
+        if (!candidate) throw new Error('Unknown tool');
+        const value = await (candidate.execute as any)(randomBytes(8).toString('hex'), input, signal);
+        return value.content?.filter((part: any) => part.type === 'text').map((part: any) => part.text).join('\n') ?? '';
+      },
+    };
   }
 
   // ---- the gate: every tool call, before it runs ----
