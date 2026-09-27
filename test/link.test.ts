@@ -205,6 +205,25 @@ test('pairing with a yes at the computer, grants, approvals from the phone, and 
   await a.req('POST', '/api/onboard', { address: 'Sir' });
   await until(async () => a.events.find((e) => e.kind === 'person.onboarded'));
 
+  await http('POST', '/api/bots/chief/messages', { text: 'pair my phone' });
+  const card = (await http('GET', '/api/bots/chief')).body.phoneOffer;
+  assert.ok(card.token && card.qr);
+  const pairing = pairWithOffer(card.qr, { name: 'Inline phone', onWords: () => {} });
+  const waiting = await until(async () => (await http('GET', '/api/bots/chief')).body.phoneOffer.waiting);
+  assert.equal(waiting.name, 'Inline phone');
+  assert.equal((await http('POST', '/api/phones/answer', { id: waiting.id, yes: true, offer: 'wrong' })).status, 403);
+  assert.equal((await a.req('POST', '/api/phones/answer', { id: waiting.id, yes: true, offer: card.token })).status, 403, 'phone cannot approve itself');
+  const sam = (await http('POST', '/api/people', { name: 'Sam' })).body;
+  assert.equal((await http('POST', '/api/phones/answer', { id: waiting.id, yes: true, offer: card.token }, { 'x-crewhouse': '1', 'x-crewhouse-member': String(sam.id) })).status, 403);
+  assert.equal((await http('POST', '/api/phones/answer', { id: waiting.id, yes: true, offer: card.token })).status, 200);
+  await pairing;
+  await until(async () => (await http('GET', '/api/bots/chief')).body.phoneOffer.joined === 'Inline phone');
+  const refreshed = (await http('POST', '/api/phones/refresh', { message: card.message })).body;
+  assert.notEqual(refreshed.token, card.token);
+  assert.equal((await a.req('POST', '/api/phones/refresh', { message: card.message })).status, 403);
+  const inline = (await http('GET', '/api/phones')).body.find((p: any) => p.name === 'Inline phone');
+  await http('DELETE', `/api/phones/${inline.id}`);
+
   // An approval answered from the phone: the gate holds the bot's write until the phone says yes.
   await http('POST', '/api/recruit', { template: 'reel', name: 'Reel' });
   const outside = join(root, 'Documents', 'from-phone.txt');
@@ -216,7 +235,6 @@ test('pairing with a yes at the computer, grants, approvals from the phone, and 
   assert.equal(readFileSync(outside, 'utf8'), 'from the phone');
 
   // Another member cannot mint a code; the owner's view-only tablet can watch but not answer.
-  const sam = (await http('POST', '/api/people', { name: 'Sam' })).body;
   assert.equal((await http('POST', '/api/phones/pair', { role: 'view' }, { 'x-crewhouse': '1', 'x-crewhouse-member': String(sam.id) })).status, 403);
   assert.equal((await http('POST', '/api/phones/code', { role: 'view' }, { 'x-crewhouse': '1', 'x-crewhouse-member': String(sam.id) })).status, 403);
   const offer = (await http('POST', '/api/phones/pair', { role: 'view' })).body;

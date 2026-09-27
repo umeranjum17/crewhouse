@@ -21,6 +21,7 @@ import * as Linking from 'expo-linking';
 import * as Notifications from 'expo-notifications';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { useShareIntent } from 'expo-share-intent';
+import QRCode from 'qrcode';
 import * as motion from './src/motion';
 import { connect, desktopSignaling, forgetGrant, kept, loadGrant, onLive, pair, pairDirectTyped, pairTyped, type Grant, type Status } from './src/link';
 
@@ -153,13 +154,12 @@ function PhoneCard({ offer }: { offer: NonNullable<ReturnType<typeof A.phoneOffe
   const [now, setNow] = useState(Date.now());
   useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer); }, []);
   const left = Math.max(0, Math.ceil((offer.expires - now) / 1000));
+  const qr = offer.qr.startsWith('byokit-link:') ? QRCode.create(offer.qr, { errorCorrectionLevel: 'M' }).modules : null;
   return <Card style={{ gap: 10, marginLeft: 36 }}>
     <T style={s.b}>Add a phone</T>
-    <T>1. On the other phone, open Crewhouse and tap Type a code.</T>
-    <T>2. Enter this code and check the two words on both screens.</T>
-    <T>3. Approve in Needs you or Settings on the computer.</T>
-    {left ? <><T style={s.b}>{offer.typed}</T><Btn label="Copy code" onPress={() => { Clipboard.setString(offer.typed); say('Code copied'); }} /><T tone="mute">Works once, for {left} more seconds.</T></>
-      : <T tone="mute">This code ran out. Ask Chief for a new one.</T>}
+    {!offer.joined && !offer.waiting && left > 0 && qr && <View accessibilityLabel="Scan to pair another phone" style={{ width: 220, height: 220, backgroundColor: 'white', padding: 8 }}><View style={{ flex: 1 }}>{Array.from({ length: qr.size }, (_, y) => <View key={y} style={{ flex: 1, flexDirection: 'row' }}>{Array.from({ length: qr.size }, (_, x) => <View key={x} style={{ flex: 1, backgroundColor: qr.get(x, y) ? 'black' : 'white' }} />)}</View>)}</View></View>}
+    {offer.joined ? <T style={s.b}>Paired: {offer.joined}</T> : offer.waiting ? <><T>{offer.waiting.name} is waiting. Check these two words: {offer.waiting.words}</T><T tone="mute">For your safety, approve on the computer where this code was shown.</T></> : left ? <><T>Scan this with the other phone, or type this code there. Approve on the computer.</T><T style={s.b}>{offer.typed}</T><Btn label="Copy code" onPress={() => { Clipboard.setString(offer.typed); say('Code copied'); }} /><T tone="mute">Works once · {Math.floor(left / 60)}:{String(left % 60).padStart(2, '0')} left</T></>
+      : <T tone="mute">Code expired. Show a new code on the computer.</T>}
   </Card>;
 }
 const Label = ({ children }: { children: ReactNode }) => <T tone="mute" style={s.label}>{children}</T>;
@@ -790,7 +790,7 @@ function Chat({ id, m, state, tick, refresh, canAct, offline, open }: Ctx & { id
   const [partial, setPartial] = useState('');
   useEffect(() => onLive((e) => {
     if (e.bot !== id) return;
-    if (e.kind === 'reply.partial' && e.data?.member === state.person?.id) setPartial(e.data.text);
+    if (e.kind === 'reply.partial' && e.data?.member === state.person?.id) setPartial(/\bstub [\w-]+:/.test(e.data.text) ? '' : e.data.text);
     if (e.kind === 'message' && e.data?.author === 'bot') setPartial('');
   }), [id, state.person?.id]);
   // A search landing on an old line loads a window around it; once you send, the anchor goes and the thread reads to the end.

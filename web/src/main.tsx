@@ -264,20 +264,29 @@ function ChiefIdeas({ state, chat, picked }: { state: Json; chat: string; picked
 }
 
 // ---------- a chat ----------
-function PhoneCard({ offer }: { offer: Json }) {
+function PhoneCard({ offer, reload }: { offer: Json; reload: () => void }) {
+  const [current, setCurrent] = useState<Json>(offer);
   const [svg, setSvg] = useState('');
   const [now, setNow] = useState(Date.now());
-  useEffect(() => { void QRCode.toString(offer.qr, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' }).then(setSvg); }, [offer.qr]);
+  const active = useRef(Date.now());
+  const busy = useRef(false);
+  useEffect(() => { if (offer.token !== current.token) setCurrent(offer); }, [offer.token]);
+  useEffect(() => { void QRCode.toString(current.qr, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' }).then(setSvg); }, [current.qr]);
+  const renew = async () => {
+    if (busy.current) return;
+    busy.current = true;
+    try { setCurrent(await api.refreshPhone(current.message)); reload(); } catch { active.current = 0; toast('Could not show a new code'); }
+    finally { busy.current = false; }
+  };
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
-  const left = Math.max(0, Math.ceil((offer.expires - now) / 1000));
-  return <div className="card pair" aria-label="Add a phone">
-    {left ? <div className="qr" dangerouslySetInnerHTML={{ __html: svg }} /> : <div className="qr expired">This code ran out.</div>}
-    <div className="grow"><b>Add a phone</b>
-      <p className="small">1. Scan this in the phone app, or type the code.</p>
-      <p className="small">2. Check the two words on both screens.</p>
-      <p className="small">3. Approve in Needs you or Settings.</p>
-      {left > 0 && <><p className="small">Type this code: <b style={{ overflowWrap: 'anywhere', userSelect: 'all' }}>{offer.typed}</b> <button className="btn ghost" onClick={() => void navigator.clipboard.writeText(offer.typed)}>Copy</button></p><p className="mute small">Works once, for {left} more seconds.</p></>}
-    </div>
+  useEffect(() => { if (now >= current.expires && now - active.current < 10 * 60_000 && !offer.waiting && !offer.joined) void renew(); }, [now, current.expires, offer.waiting, offer.joined]);
+  const left = Math.max(0, Math.ceil((current.expires - now) / 1000));
+  return <div className="card pair" aria-label="Add a phone" onPointerDown={() => { active.current = Date.now(); }}>
+    {offer.joined ? <b>Paired: {offer.joined}</b> : offer.waiting ? <div className="grow"><b>{offer.waiting.name} would like to join</b><p>Do these two words match the phone? <b>{offer.waiting.words}</b></p><div className="btns"><button className="btn go" onClick={() => attempt(async () => { await api.answerPhone(offer.waiting.id, true, offer.token); reload(); })}>Yes, they match</button><button className="btn" onClick={() => attempt(async () => { await api.answerPhone(offer.waiting.id, false, offer.token); reload(); })}>No</button></div></div> : <>
+      {left ? <div className="qr" dangerouslySetInnerHTML={{ __html: svg }} /> : <div className="qr expired">Code expired</div>}
+      <div className="grow"><b>Add a phone</b><p className="small">Scan this in the phone app or type the code.</p>
+        {left > 0 ? <><p className="small">Type this code: <b style={{ overflowWrap: 'anywhere', userSelect: 'all' }}>{current.typed}</b> <button className="btn ghost" onClick={() => void navigator.clipboard.writeText(current.typed)}>Copy</button></p><p className="mute small">Works once · {Math.floor(left / 60)}:{String(left % 60).padStart(2, '0')} left</p></> : <button className="btn go" onClick={() => { active.current = Date.now(); void renew(); }}>Show a new code</button>}
+      </div></>}
   </div>;
 }
 function Chat({ id, m, state, me, tick, refresh, accounts }: Ctx & { id: string; m?: string }) {
@@ -296,7 +305,7 @@ function Chat({ id, m, state, me, tick, refresh, accounts }: Ctx & { id: string;
   const waiting = pending && !partial && !(page?.messages ?? []).some((x: Json) => x.author === 'bot' && x.id > pending.after);
   useEffect(() => subscribe((e) => {
     if (e.bot !== id) return;
-    if (e.kind === 'reply.partial' && e.data?.member === me) setPartial(e.data.text);
+    if (e.kind === 'reply.partial' && e.data?.member === me) setPartial(/\bstub [\w-]+:/.test(e.data.text) ? '' : e.data.text);
     if (e.kind === 'message' && e.data?.author === 'bot') setPartial('');
   }), [id, me]);
   useEffect(() => { if ((page?.messages ?? []).some((x: Json) => x.author === 'bot' && x.text === partial)) setPartial(''); }, [page, partial]);
@@ -345,8 +354,9 @@ function Chat({ id, m, state, me, tick, refresh, accounts }: Ctx & { id: string;
           <div key={l.id} id={`m${l.id}`} className={`line ${l.from}${l.unsure ? ' unsure' : ''}${i && lines[i - 1].from === l.from && l.from !== 'me' ? ' consecutive' : ''}`}>
             {l.from !== 'me' && l.from !== 'note' && <div className="line-by"><Face who={l.from === 'chief' ? 'chief' : h ?? 'chief'} size={28} /><span className="who">{l.from === 'chief' ? 'Chief' : name}</span><time>{l.at ? A.clock(l.at) : ''}</time></div>}
             {l.text && <div className="bubble-text"><ChatText text={l.text} /></div>}
+            {id === 'chief' && l.text === 'Sign in with ChatGPT.' && <AccountCard me={me} owner={ownerName(state)} isOwner={me === A.OWNER} g={{ ...g, state: 'signed-out' }} inChat onReady={() => { void load(); refresh(); }} />}
             {l.files.map((f) => <Media key={f.url} f={f} big />)}
-            {phoneOffer?.message === l.id && <PhoneCard offer={phoneOffer} />}
+            {phoneOffer?.message === l.id && <PhoneCard offer={phoneOffer} reload={() => void load()} />}
             {cards.filter((c) => lines.findLastIndex((x) => (x.at ?? 0) <= c.at) === i).map((c) => c.kind === 'connect' ? <ConnectCard key={c.id} c={c} helper={h?.name} state={state} onDone={refresh} /> : <AskCard key={c.id} c={c} who={h} onDone={refresh} />)}
           </div>
         ))}
