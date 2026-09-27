@@ -71,7 +71,8 @@ const step: FauxResponseFactory = async (ctx, options, _state, model): Promise<A
     return fauxAssistantMessage('', { stopReason: 'error', errorMessage: 'You have hit your ChatGPT usage limit (plus plan). Try again in ~30 min.' });
   }
   if (/no helpers in plan/i.test(said) && model.provider === 'openai-codex') {
-    return fauxAssistantMessage('', { stopReason: 'error', errorMessage: 'You have hit your ChatGPT usage limit (free plan).' });
+    // @byokit/accounts 0.3 reads a plan that lacks helpers from the words "your plan doesn't include", not "usage limit".
+    return fauxAssistantMessage('', { stopReason: 'error', errorMessage: "Your plan doesn't include this model." });
   }
   if (/sign me out/i.test(said)) return fauxAssistantMessage('', { stopReason: 'error', errorMessage: '401 Unauthorized: your sign-in has expired' });
   // Its own words, not Crewhouse's framing around them: a real model doesn't read its prompt back either.
