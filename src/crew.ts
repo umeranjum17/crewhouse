@@ -22,6 +22,10 @@ import { describe, nextRun, parseSchedule } from './routines.ts';
 import { buildWorkbook, readWorkbook } from './workbooks.ts';
 import { buildDocument, readDocument } from './documents.ts';
 import { byModel, clarify, route, type Helper } from './route.ts';
+import type { Link } from './link.ts';
+
+/** Phone pairing stays with Chief, including 'pair my computer with you' said on the home computer. */
+export const asksForPhone = (text: string) => /\b(pair|connect|link|add|use|install)\b[\s\S]{0,65}\b(phone|mobile|computer|crewhouse app)\b|\b(phone|mobile|computer)\b[\s\S]{0,35}\b(pair|connect|link)\b/i.test(text);
 
 const HOLD_MS = Number(process.env.CREWHOUSE_HOLD_MS || 180_000); // how long a tool call waits for an answer before the turn parks
 const TASK_TIMEOUT_MS = 60 * 60_000;
@@ -170,6 +174,7 @@ export class Crew {
   readonly desktops: Desktops;
   readonly accounts: Accounts;
   readonly connections: Connections;
+  phoneLink?: Pick<Link, 'offer'>;
   private freshAt = 0;
   private lastTick = 0;
   /** Keeps idle sleep away while a helper is working, and only then. Never the lid. Tests replace it. */
@@ -701,6 +706,12 @@ export class Crew {
       job: disk.readJob(this.cfg, id),
       // Each member has their own thread with a bot; notes to the whole house (member NULL) show to everyone.
       // A search landing on an old line gets a window around it: the newest 200 would miss it entirely.
+      phoneOffer: id === CHIEF && viewer === OWNER && !around ? (() => {
+        const value = this.db.get("SELECT value FROM settings WHERE key = 'phone.offer.1'")?.value;
+        if (!value) return null;
+        const offer = JSON.parse(value);
+        return offer.expires + 10 * 60_000 > Date.now() ? offer : null;
+      })() : null,
       messages: (around
         ? this.db.all(`SELECT * FROM (
             SELECT * FROM (SELECT * FROM messages WHERE bot = ? AND COALESCE(member, ?) = ? AND id >= ? ORDER BY id LIMIT 100)
@@ -841,9 +852,27 @@ export class Crew {
     if (!text.trim() && !pics.length) throw Object.assign(new Error('empty message'), { status: 400 });
     const words = text.trim() || (pics.length === 1 ? 'Here is a photo.' : 'Here are some photos.');
     if (botId === CHIEF && !this.member(member).onboarded) return this.onboard(words, member);
+    if (botId === CHIEF && asksForPhone(words) && !pics.length) {
+      this.say(CHIEF, 'person', words, null, member);
+      await this.addPhone(member);
+      return;
+    }
     if (botId === CHIEF) return this.route(words, model, member, pics, room);
     const latest = room ? this.db.get('SELECT root FROM tasks WHERE room = 1 AND member = ? AND bot = ? ORDER BY id DESC LIMIT 1', member, botId) : undefined;
     return this.addTask(botId, words, 'person', model, member, undefined, words, pics, { room, root: latest?.root });
+  }
+
+  /** One pairing offer, using the same one-use code as Settings. Never give its ticket to a model or another member. */
+  private async addPhone(member: number) {
+    if (member !== OWNER) {
+      this.say(CHIEF, 'bot', 'Ask the owner to add your phone under Settings > Phones > Add a phone.', null, member);
+      return { available: false };
+    }
+    if (!this.phoneLink) throw fail('Phone pairing is not ready yet', 503);
+    const { qr, typed, expires } = await this.phoneLink.offer('control', member);
+    const message = this.say(CHIEF, 'bot', 'Here is your Add a phone code.', null, member);
+    this.db.run("INSERT INTO settings (key, value) VALUES ('phone.offer.1', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", JSON.stringify({ qr, typed, expires, message }));
+    return { shown: true }; // the model never sees the one-use ticket
   }
 
   /** A targeted request that must stay with Chief rather than pass through helper routing. */
@@ -1635,6 +1664,7 @@ export class Crew {
     }
     const accounts = Object.keys(PROVIDERS).join(', ');
     return [...own,
+      tool('crew_add_phone', 'Show the owner an Add a phone card in this chat with a fresh QR and code. Only the owner can add phones.', {}, () => this.addPhone(this.chiefFor())),
       tool('crew_roster', 'Who is on the crew, and the templates you can recruit from.', {}, () => ({
         crew: this.bots().filter((x) => x.id !== CHIEF).map((x) => ({ id: x.id, name: x.display, role: x.role, busy: !!this.activeTask(x.id),
           knows: disk.listSkills(this.cfg, x.id).map((k) => k.description || k.name) })),

@@ -12,7 +12,7 @@ import { describe, nextRun, parseSchedule } from '../../src/routines.ts';
 const variant = new URLSearchParams(typeof location === 'undefined' ? '' : location.search).get('demo') || 'nadia';
 const now = Date.now();
 const min = 60_000;
-const me = variant === 'umer' ? 1 : 2;
+const me = ['umer', 'phone'].includes(variant) ? 1 : 2;
 const signin = ['signin', 'hello', 'first', 'work'].includes(variant);
 const firstRun = ['first', 'answer', 'plan', 'work'].includes(variant);
 // Google for the whole house: what crewd's ideas[] says a job waits on when the house's Google is off (docs/ui-contract.md).
@@ -101,7 +101,7 @@ const events = [
 ];
 
 const state = {
-  person: variant === 'umer' ? { id: 1, name: 'Umer', address: 'sir', onboarded: 1 }
+  person: me === 1 ? { id: 1, name: 'Umer', address: 'sir', onboarded: 1 }
     : { id: 2, name: 'Nadia', address: 'Nadia', onboarded: variant === 'hello' || variant === 'signin' ? 0 : 1 },
   members: [
     { id: 1, name: 'Umer', address: 'sir', quiet: '23:00-07:00' },
@@ -140,7 +140,7 @@ const state = {
     { bot: 'chief', promise: "What's on this week?", ask: "What's on this week?" },
     { bot: 'reel', promise: 'Make a poster from photos', ask: 'Make a poster from these photos: ' },
   ],
-  asks: variant === 'room' ? [{ id: 90, bot: 'scout', task_id: null, kind: 'propose', at: now - min, title: 'Scout wants to hand this to Scribe: draft the story', detail: { words: 'Scout wants to hand this to Scribe: draft the story, with stories.md', pass: { root: 70, files: ['stories.md'] }, preview: { head: 'Scout → Scribe', body: 'Draft the story for the family newsletter.' } } }]
+  asks: variant === 'phone' ? [] : variant === 'room' ? [{ id: 90, bot: 'scout', task_id: null, kind: 'propose', at: now - min, title: 'Scout wants to hand this to Scribe: draft the story', detail: { words: 'Scout wants to hand this to Scribe: draft the story, with stories.md', pass: { root: 70, files: ['stories.md'] }, preview: { head: 'Scout → Scribe', body: 'Draft the story for the family newsletter.' } } }]
     : variant === 'job-card' ? [{ id: 21, bot: 'chief', task_id: null, kind: 'propose', at: now, member: me, title: "Chief wrote Pip's job", detail: { job: { bot: 'pip', does: 'Keep Nadia’s family calendar in order.', aim: 'Help the family know what is coming.', gets: 'Events and reminders from the person.', how: 'Check dates, add reminders only when asked, and explain changes.', great: 'A clear, accurate week; for example, sports day with a reminder the evening before.' }, preview: { head: "Pip's job", body: 'What it does: Keep Nadia’s family calendar in order.\n\nWhat it’s aiming for: Help the family know what is coming.\n\nWhat it gets from others: Events and reminders from the person.\n\nHow it goes about it: Check dates, add reminders only when asked, and explain changes.\n\nWhat great looks like: A clear, accurate week; for example, sports day with a reminder the evening before.' } } }]
     : variant === 'connect' ? [{ id: 11, bot: 'pip', task_id: 45, kind: 'connect', at: now, member: me, title: 'Connect Google Calendar', detail: { app: 'calendar', words: 'Let Pip use your Google Calendar' } }]
     : variant === 'claim' ? [{ id: 13, bot: 'scout', task_id: 42, kind: 'permission', at: now - 30_000, member: me, title: '', detail: {
@@ -350,6 +350,14 @@ const doc = variant === 'voice-after' ? briefDoc('muxr launch plan', [
     { kind: 'heading', text: 'Today' },
     { kind: 'table', head: ['Shift', 'On the desk', 'Notes'], rows: [['Morning', 'Rani', 'Two early arrivals'], ['Evening', 'Yusuf', 'Late checkout, room 204']] },
   ],
+};
+if (variant === 'phone') pages.chief = {
+  messages: [
+    { id: 400, author: 'person', text: 'how do i pair my computer with you?', at: now - 10_000 },
+    { id: 401, author: 'bot', text: 'Here is your Add a phone code.', at: now },
+  ],
+  // A demonstration ticket; no device accepts it. The real card is issued by src/link.ts.
+  phoneOffer: { message: 401, qr: 'crewhouse-demo-phone-pairing', typed: '23456-789AB-CDEFG-HJKMN-PQRST', expires: now + 120_000 },
 };
 for (const b of bots) pages[b.id] ??= { messages: [], notes: '', tasks: [] };
 if (variant.startsWith('job')) pages.pip.job = { does: 'Keep Nadia’s family calendar in order.', aim: 'Help the family know what is coming.', gets: 'Events and reminders from the person.', how: 'Check dates, add reminders only when asked, and explain changes.', great: 'A clear, accurate week; for example, sports day with a reminder the evening before.' };
