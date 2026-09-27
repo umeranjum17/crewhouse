@@ -297,7 +297,7 @@ export async function demoCall(method: string, path: string, _body?: Json) {
   // ?demo=home / ?demo=signin-again: Settings, Phones before Tailscale, and with it signed out.
   if (method === 'GET' && path === '/api/phones/link') return { on: true, lan: false, pinned: false, tailscale: variant !== 'home', relay: '', relayStatus: 'off', asking: [], push: variant === 'home' ? 'missing' : 'ready',
     anywhere: variant === 'home' ? 'home' : variant === 'signin-again' ? 'signin' : 'anywhere' };
-  if (method === 'POST' && path === '/api/phones/pair') return { qr: 'crewhouse-demo', expires: Date.now() + 120_000 };
+  if (method === 'POST' && path === '/api/phones/pair') return { qr: 'crewhouse-demo', typed: '7KQ4-M2XP-9RTH-6N5B-8V3C', expires: Date.now() + 120_000 };
   if (method === 'POST' && path === '/api/house/ask') return { ok: true };
   if (method === 'GET' && path === '/api/phones') return [{ id: 1, name: "Nadia's phone", member: 2, seen: now - 5 * min, reached: { home: now - 5 * min }, push: 'on' },
     { id: 2, name: "Umer's phone", member: 1, seen: now - 2 * 60 * min, reached: { home: now - 26 * 60 * min, tailscale: now - 2 * 60 * min }, push: 'off' }];

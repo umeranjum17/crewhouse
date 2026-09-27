@@ -103,7 +103,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     const p = url.pathname;
     try {
       // DNS-rebinding guard: only answer requests addressed to loopback.
-      if (!localHost(req.headers.host)) return send(res, 403, { error: 'loopback only' });
+      if (!localHost(req.headers.host) || !/^(127\.0\.0\.1|::1|::ffff:127\.0\.0\.1)$/.test(req.socket.remoteAddress ?? '')) return send(res, 403, { error: 'loopback only' });
 
       if (p.startsWith('/api/')) {
         // Mutations need a custom header, which a cross-site page cannot send without a preflight we never allow.
@@ -114,6 +114,8 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
         if (p === '/api/phones' && req.method === 'GET') return send(res, 200, link.devices());
         if (p === '/api/phones/link' && req.method === 'GET') return send(res, 200, link.status());
         if (p === '/api/phones/pair' && req.method === 'POST') return send(res, 200, await link.offer((await readJson(req)).role ?? 'control', me));
+        if (p === '/api/phones/pending' && req.method === 'GET') return send(res, 200, link.status().asking);
+        if (p === '/api/phones/approve' && req.method === 'POST') { link.approve(String((await readJson(req)).words ?? '')); return send(res, 200, { ok: true }); }
         if (p === '/api/phones/lan' && req.method === 'PUT') { await link.setLan(!!(await readJson(req)).on); return send(res, 200, link.status()); }
         if (p === '/api/phones/relay' && req.method === 'PUT') { const b = await readJson(req); link.setRelay(typeof b.url === 'string' ? b.url.trim() : null, typeof b.enrol === 'string' ? b.enrol : undefined); return send(res, 200, link.status()); }
         if (p === '/api/phones/code' && req.method === 'POST') return send(res, 200, await link.typed((await readJson(req)).role ?? 'control', me));

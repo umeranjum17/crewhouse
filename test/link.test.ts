@@ -2,15 +2,27 @@
 // daemon, with @byokit/link's own device side as the phone. The Noise handshake and frames are the package's, tested there.
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { readFileSync, statSync, writeFileSync } from 'node:fs';
-import { createServer as http1 } from 'node:http';
+import { createServer as http1, request as http1Request } from 'node:http';
 import { createServer, type AddressInfo } from 'node:net';
 import { join } from 'node:path';
 import { temp } from './tmp.ts';
 import { DeviceLink, pairWithOffer, type DeviceGrant, type LinkStatus } from '@byokit/link';
 import { Link, NEWS, linkHosts, phoneAddresses, tailscalePeer } from '../src/link.ts';
 import { Store } from '../src/db.ts';
+import { decodeTyped, encodeTyped } from '../web/src/typed-code.ts';
+import { b64url } from '@byokit/link';
+
+test('typed envelope carries addresses, port, key and one-use secret; errors are plain', () => {
+  const o = { v: 1 as const, host: b64url(new Uint8Array(32).fill(3)), ticket: b64url(new Uint8Array(16).fill(7)),
+    name: 'your computer', role: 'control' as const, expires: Date.now() + 120_000,
+    urls: ['ws://192.168.1.2:9443/link', 'ws://100.101.2.3:9443/link'] };
+  const code = encodeTyped(o);
+  assert.deepEqual({ ...decodeTyped(code), name: o.name }, { ...o, expires: Math.floor(o.expires / 1000) * 1000 });
+  assert.throws(() => decodeTyped(code.replace(/[23456789ABCDEFGHJKMNPQRSTUVWXYZ]/, 'Z')), /match/);
+  assert.throws(() => decodeTyped(code, o.expires + 1000), /run out/);
+});
 
 test('the link binds loopback and Tailscale by default; the home network only when turned on', () => {
   const at = (address: string, internal = false) => [{ address, family: 'IPv4', internal, netmask: '', mac: '', cidr: null }] as any;
@@ -220,6 +232,34 @@ test('pairing with a yes at the computer, grants, approvals from the phone, and 
   await until(async () => again.status() === 'removed', 15_000);
   assert.equal((await watcher.req('GET', '/api/state')).status, 200, 'other phones are untouched');
   watcher.link.stop();
+});
+
+test('a direct typed code and exact local CLI words pair once', async () => {
+  await until(async () => (await fetch(`${base}/api/state`).catch(() => null))?.ok);
+  const cli = (...args: string[]) => execFileSync(join(import.meta.dirname, '..', 'crewhouse'), ['phones', ...args],
+    { encoding: 'utf8', env: { ...process.env, CREWHOUSE_PORT: String(port) } });
+  const offer = (await http('POST', '/api/phones/pair', { role: 'control' })).body;
+  const typed = decodeTyped(offer.typed);
+  assert.deepEqual(typed.urls, offer.urls);
+  const qr = `byokit-link:1:${b64url(new TextEncoder().encode(JSON.stringify(typed)))}`;
+  let words = '';
+  const pairing = pairWithOffer(qr, { name: 'Typed phone', onWords: (w) => { words = w; } });
+  await until(async () => (await http('GET', '/api/phones/pending')).body.find((a: any) => a.name === 'Typed phone'));
+  assert.match(cli('pending'), /Typed phone/);
+  assert.throws(() => cli('approve', 'wrong words'), /Command failed/);
+  assert.equal((await http('GET', '/api/phones/pending')).body.length, 1);
+  assert.match(cli('approve', words), /approved/);
+  const grant = await pairing;
+  assert.equal(grant.device.role, 'control');
+  await assert.rejects(pairWithOffer(qr, { name: 'Again', onWords: () => {} }), /code|used|match|run out/i);
+  assert.equal((await http('POST', '/api/phones/approve', { words }, {})).status, 403);
+  const lan = await new Promise<number>((resolve, reject) => {
+    const req = http1Request({ hostname: '127.0.0.1', port, path: '/api/phones/approve', method: 'POST',
+      headers: { host: '192.168.1.2:7711', 'x-crewhouse': '1', 'content-type': 'application/json' } }, (res) => { res.resume(); resolve(res.statusCode!); });
+    req.on('error', reject); req.end(JSON.stringify({ words }));
+  });
+  assert.equal(lan, 403, 'a LAN-addressed request cannot approve');
+  assert.match(cli('code'), /Works once; expires/);
 });
 
 test('the relay address: none built in, the family can set their own, and phones cannot', async () => {

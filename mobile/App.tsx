@@ -20,7 +20,7 @@ import * as Notifications from 'expo-notifications';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { useShareIntent } from 'expo-share-intent';
 import * as motion from './src/motion';
-import { connect, desktopSignaling, forgetGrant, kept, loadGrant, pair, pairTyped, type Grant, type Status } from './src/link';
+import { connect, desktopSignaling, forgetGrant, kept, loadGrant, pair, pairDirectTyped, pairTyped, type Grant, type Status } from './src/link';
 
 // ---------- look ----------
 type Look = typeof color.day & { go: string; goInk: string; night: boolean };
@@ -255,6 +255,7 @@ function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
   const [done, setDone] = useState<Grant | null>(null);
   const [words, setWords] = useState('');
   const [typing, setTyping] = useState(false);
+  const [legacy, setLegacy] = useState(false);
   const [relay, setRelay] = useState('');
   const [short, setShort] = useState('');
   const [code, setCode] = useState('');
@@ -262,7 +263,7 @@ function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
   const typed = async () => {
     setBusy(true);
     setErr('');
-    try { setDone(await pairTyped(relay, short, code, setWords)); } catch (e: any) { setErr(pairWords(e)); }
+    try { setDone(await (legacy ? pairTyped(relay, short, code, setWords) : pairDirectTyped(code, setWords))); } catch (e: any) { setErr(pairWords(e)); }
     setWords('');
     setBusy(false);
   };
@@ -321,12 +322,13 @@ function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
       <Center>
         <ChiefArt mood="listen" size={120} />
         <T style={s.h1}>Type a code</T>
-        <T tone="ink2" style={s.centerText}>On your computer, Settings, Phones, Add a phone, then “Can't scan? Type a code instead”.</T>
-        {input(relay, setRelay, 'Your relay, like relay.example.com', 'Relay address')}
-        {input(short, setShort, 'Short code, like K7M2QX', 'Short code')}
-        {input(code, setCode, 'Pairing code, like 7KQ4-M2XP-9RTH', 'Pairing code')}
-        {busy ? <ActivityIndicator color={t.pink} style={{ margin: 20 }} /> : <Btn go big label="Pair" disabled={!relay.trim() || !short.trim() || !code.trim()} onPress={typed} />}
+        <T tone="ink2" style={s.centerText}>Enter the code under Add a phone on your computer, or one someone there sent you.</T>
+        {legacy && input(relay, setRelay, 'Your relay, like relay.example.com', 'Relay address')}
+        {legacy && input(short, setShort, 'Short relay code', 'Short code')}
+        {input(code, setCode, legacy ? 'Relay pairing code' : 'Type or paste the code', 'Pairing code')}
+        {busy ? <ActivityIndicator color={t.pink} style={{ margin: 20 }} /> : <Btn go big label="Pair" disabled={!code.trim() || (legacy && (!relay.trim() || !short.trim()))} onPress={typed} />}
         {!!err && <T tone="pinkInk" style={s.centerText}>{err}</T>}
+        <Btn label={legacy ? 'Use a direct code' : 'Use a relay code'} onPress={() => { setLegacy(!legacy); setCode(''); setErr(''); }} />
         <Btn label="Scan instead" onPress={() => { setTyping(false); setErr(''); }} />
       </Center>
     );

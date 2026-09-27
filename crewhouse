@@ -159,6 +159,28 @@ case "${1:-}" in
     [ -n "$all" ] && remove "$CREW"
     echo "Crewhouse is uninstalled. To remove the code as well, delete $(pwd)."
     ;;
+  phones)
+    need_node
+    action="${2:-}"; shift 2 || true
+    case "$action" in code|pending|approve) ;; *) echo 'usage: ./crewhouse phones code | pending | approve <two words>' >&2; exit 2 ;; esac
+    [ "$action" != approve ] || [ "$#" -gt 0 ] || { echo 'Give the exact two words shown on the phone.' >&2; exit 2; }
+    node --input-type=module - "$action" "$*" <<'NODE'
+const [action, words] = process.argv.slice(2);
+const port = Number(process.env.CREWHOUSE_PORT || 7711);
+const path = action === 'code' ? 'pair' : action;
+try {
+  const res = await fetch(`http://127.0.0.1:${port}/api/phones/${path}`, {
+    method: action === 'pending' ? 'GET' : 'POST', headers: { 'x-crewhouse': '1', 'content-type': 'application/json' },
+    body: action === 'pending' ? undefined : JSON.stringify(action === 'approve' ? { words } : { role: 'control' }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Could not reach Crewhouse');
+  if (action === 'code') console.log(`${data.typed}\nWorks once; expires ${new Date(data.expires).toLocaleString()}.`);
+  else if (action === 'pending') console.log(data.length ? data.map((a) => `${a.name}: ${a.words}`).join('\n') : 'No phone waiting.');
+  else console.log('Phone approved.');
+} catch (e) { console.error(e.message); process.exitCode = 1; }
+NODE
+    ;;
   doctor)
     need_node
     exec node src/doctor.ts
