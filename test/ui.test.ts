@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import type { Json } from '../web/src/api.ts';
 import * as A from '../web/src/adapter.ts';
 import { draftOf, keepDraft, sent } from '../web/src/draft.ts';
+import { chatTokens, safeLink } from '../web/src/chat-md.ts';
 import { color } from '../web/src/tokens.ts';
 import { cycle } from '../web/src/dialog.ts';
 
@@ -801,9 +802,52 @@ test('a delivered document is a card in the chat, and opens as a read-only docum
   const panel = parts.slice(parts.indexOf('export function PreviewPanel'), parts.indexOf('export function Steps', parts.indexOf('export function PreviewPanel')));
   assert.match(panel, /<DocBody doc=\{doc\} \/>/, 'the panel shows the document itself');
   const body = parts.slice(parts.indexOf('function DocBody'), parts.indexOf('/**\n * A finished file'));
-  assert.match(body, /<h3 key=\{i\}>\{run\.text\}<\/h3>/, 'headings as headings');
+  assert.match(body, /run\.kind === 'heading' \? <h3 key=\{i\}>/, 'headings as headings');
   assert.match(body, /<ul key=\{i\}>/, 'bullets as bullets');
   assert.doesNotMatch(body, /\*\*|<w:/, 'no raw markup anywhere in the preview');
   const api = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'api.ts'), 'utf8');
   assert.match(api, /\/api\/document/, 'the app asks crewd to read the document, never parses it');
+});
+
+// The owner's screenshot, fixed: a meal plan delivered as .md must open as a rendered page in the read-only panel —
+// never the raw file at its /files/ address — through the shared safe markdown renderer the chat already uses.
+test('a delivered markdown file opens rendered, and no screen leads to the raw file', () => {
+  const [line] = A.lines({ messages: [{ id: 12, author: 'system', text: 'Delivered files/dinners-and-shopping-list.md: Seven dinners and the list, sorted by aisle' }] }, 'scout');
+  assert.equal(line.files[0].kind, 'page', 'a .md opens like a document: card, then the rendered panel');
+  const target = A.fileTarget(line.files[0]);
+  assert.match(target!.href, /^#\/f\/scout\//, 'the tap opens the read-only view');
+  assert.doesNotMatch(target!.href, /\/files\//, 'never the raw file address');
+  assert.equal(target!.chip, 'MD');
+  assert.equal(A.fileTarget({ url: '/files/scout/files/scan.pdf', kind: 'doc', name: 'Scan' })!.href, '/files/scout/files/scan.pdf', 'a PDF keeps its own way');
+  assert.equal(A.fileTarget({ url: '/files/scout/files/plan.txt', kind: 'page', name: 'Plan' })!.href.startsWith('#/f/'), true, 'a .txt renders the same way');
+
+  // The page's own words, scrubbed like chat words line by line — the markdown structure survives, the machinery goes.
+  const clean = A.mdPlain('# Plan\n\n- [x] Rice\n- [ ] Yoghurt\n\nFrom /home/umer/Crewhouse/bots/scout/files/list.md with `ffmpeg -i x`.');
+  assert.equal(clean.split('\n').length, 6, 'the blank lines that structure the page survive');
+  assert.equal(clean.split('\n')[0], '# Plan', 'headings stay headings');
+  assert.doesNotMatch(clean, /\/home\/|ffmpeg|\.md\b/, 'no paths or engines ride along');
+
+  const parts = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'parts.tsx'), 'utf8');
+  const panel = parts.slice(parts.indexOf('export function PreviewPanel'), parts.indexOf('/** "Show the work"'));
+  assert.match(panel, /\{mdBlocks\(chatTokens\(text\)\)\}/, 'a delivered .md renders through the shared safe tokens');
+  assert.match(parts, /type="checkbox" checked=\{item.checked\} readOnly/, 'a task-list tick shows read-only');
+  assert.doesNotMatch(parts, /dangerouslySetInnerHTML/, 'the preview renders text nodes, never markup');
+  const safe = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'chat-md.ts'), 'utf8');
+  assert.match(safe, /\/\^https\?:\$\/\.test\(url\.protocol\)/, 'a link opens only for http(s)');
+
+  // What the renderer receives for a meal plan, without a browser: a heading, a table, a ticked list — and nothing
+  // that could execute. The same tokens the chat renderer was already trusted with.
+  const plan = '# Dinners\n\n| Day | Dinner |\n|-----|--------|\n| Monday | Pilaf |\n\n- [x] Rice\n- [ ] Yoghurt\n\nA [trick](javascript:alert(1)) and an [ok](https://cook.example) link.';
+  const tokens = chatTokens(A.mdPlain(plan)) as any[];
+  assert.equal(tokens[0].type, 'heading');
+  assert.equal(tokens.find((t) => t.type === 'table')?.header.length, 2, 'the table renders as a table');
+  const list = tokens.find((t) => t.type === 'list') as any;
+  assert.deepEqual(list.items.map((i: any) => [i.task, i.checked]), [[true, true], [true, false]], 'the ticks arrive as read-only data');
+  assert.equal(safeLink('javascript:alert(1)'), '', 'a javascript link never opens');
+  assert.match(safeLink('https://cook.example'), /^https:/, 'an http(s) link does');
+  const demo = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'demo.ts'), 'utf8');
+  assert.match(demo, /dinners-and-shopping-list\.md'\) \? \{ text:/, 'the demo serves the plan the way crewd does: its own words');
+  const main = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
+  assert.match(main, /A\.fileTarget\(t\.files\[0\]\)/, 'Home opens a finished thing the same rendered way');
+  assert.doesNotMatch(main, /files\[0\]\?\.url/, 'no raw file address on a Home row');
 });

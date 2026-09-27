@@ -403,8 +403,35 @@ export async function demoCall(method: string, path: string, _body?: Json) {
   if (method === 'GET' && path.startsWith('/api/accounts')) return accounts;
   // The workbook crewd reads for the card and the panel (src/workbooks.ts): the tabs, headings and first rows.
   if (method === 'GET' && path.startsWith('/api/workbook')) return book;
-  // The document crewd reads for its card and panel (src/documents.ts): the headings, paragraphs, lists and tables.
-  if (method === 'GET' && path.startsWith('/api/document')) return doc;
+  // The document crewd reads for its card and panel (src/documents.ts): the headings, paragraphs, lists and tables —
+  // a delivered .md is read the same way (the meals demo's plan and list), never opened as the raw file.
+  if (method === 'GET' && path.startsWith('/api/document')) return path.includes('dinners-and-shopping-list.md') ? { text: [
+    "# This week's dinners",
+    '',
+    'Seven dinners, nothing over forty minutes on a school night. Friday stays pizza night.',
+    '',
+    '## The week',
+    '',
+    '| Day | Dinner | From the list |',
+    '|-----|--------|---------------|',
+    '| Monday | Chicken pilaf | Basmati rice, yoghurt |',
+    '| Tuesday | Aloo keema and roti | Minced beef, potatoes |',
+    '| Wednesday | Pasta with the green chutney twist | Fusilli, coriander, mint |',
+    '| Thursday | Chana chaat bowls | Chickpeas, tamarind, onion |',
+    '| Friday | Pizza night | Ready dough, mozzarella |',
+    '| Saturday | Grilled fish and salad | River fish, cucumber, lemon |',
+    '| Sunday | Roast chicken — Monday\u2019s leftovers too | Whole chicken, garlic |',
+    '',
+    '## Shopping list, sorted by aisle',
+    '',
+    '- [x] Basmati rice (2 kg)',
+    '- [x] Yoghurt (1 kg)',
+    '- [ ] Minced beef (750 g)',
+    '- [ ] Potatoes, onions, tomatoes',
+    '- [ ] Mozzarella and ready pizza dough',
+    '',
+    'The shop day is on your calendar for Saturday morning. Anything ticked was already in the cupboard.',
+  ].join('\n') } : doc;
   if (method === 'GET' && path === '/api/about') return { notes: '- Vegetarian at home\n- Two children: Zara (9) and Ali (6)\n- Prefers weekend plans before Thursday' };
   // ?demo=home / ?demo=signin-again: Settings, Phones before Tailscale, and with it signed out.
   if (method === 'GET' && path === '/api/phones/link') return { on: true, lan: false, pinned: false, tailscale: variant !== 'home', relay: '', relayStatus: 'off', asking: [], push: variant === 'home' ? 'missing' : 'ready',

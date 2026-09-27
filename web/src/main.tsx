@@ -222,7 +222,7 @@ function Home({ state, me, refresh, tick, accounts, offline, night }: Ctx) {
               </a>; }) : <div className="frame-empty">Nothing right now.</div>}
             </div></section>
             <section className="home-section done"><div className="label">Done today</div><div className="list-group">
-              {todays.length ? todays.map((t) => <div key={t.id} className="list-row"><span className="file-chip">{t.files[0]?.kind === 'sheet' ? 'XLSX' : t.files[0]?.url.endsWith('.pdf') ? 'PDF' : 'DOCX'}</span><span className="grow"><b className="clamp1">{t.title}</b><span className="small clamp1">{t.summary}</span></span><a className="btn sm" href={t.files[0]?.url ?? hrefOf(t.helper)}>Open</a></div>) : <div className="frame-empty">Nothing yet today.</div>}
+              {todays.length ? todays.map((t) => { const target = A.fileTarget(t.files[0]); return <div key={t.id} className="list-row"><span className="file-chip">{target?.chip ?? '—'}</span><span className="grow"><b className="clamp1">{t.title}</b><span className="small clamp1">{t.summary}</span></span><a className="btn sm" href={target?.href ?? hrefOf(t.helper)}>Open</a></div>; }) : <div className="frame-empty">Nothing yet today.</div>}
             </div></section>
           </div>
           <div className="desk-side"><JobList state={state} /><p className="small mute">Tap one and Chief gets it ready. Nothing starts until you send.</p></div>
@@ -362,7 +362,7 @@ function Chat({ id, m, state, me, tick, refresh, accounts }: Ctx & { id: string;
       </div>
       <aside className="working-on">
         {live && h && <section className="working-on-frame"><div className="label">Working on</div><div className="list-group"><div className="work-title"><b>{A.plain(live.title)}</b><span className="small">{h.status}</span></div>{trail.length > 0 && <Steps steps={trail} max={3} />}<a className="link" href={`#/h/${id}/did`}>Every step ›</a></div></section>}
-        {A.things(state).filter((x) => x.helper === id).length > 0 && <section className="home-section"><div className="label">Made in this chat</div><div className="list-group">{A.things(state).filter((x) => x.helper === id).map((x) => <a className="list-row" key={x.id} href={`#/things/t${x.id}`}><span className="file-chip">{x.files[0]?.kind === 'sheet' ? 'XLSX' : x.files[0]?.url.endsWith('.pdf') ? 'PDF' : 'DOCX'}</span><span className="grow"><b className="clamp1">{x.title}</b><span className="small clamp1">{x.summary}</span></span></a>)}</div></section>}
+        {A.things(state).filter((x) => x.helper === id).length > 0 && <section className="home-section"><div className="label">Made in this chat</div><div className="list-group">{A.things(state).filter((x) => x.helper === id).map((x) => <a className="list-row" key={x.id} href={`#/things/t${x.id}`}><span className="file-chip">{A.fileTarget(x.files[0])?.chip ?? '—'}</span><span className="grow"><b className="clamp1">{x.title}</b><span className="small clamp1">{x.summary}</span></span></a>)}</div></section>}
       </aside>
       <div className="dock"><Composer key={seed} placeholder={id === 'chief' ? 'Ask Chief anything…' : `Message ${name}…`} onSend={send} {...typeInto(id)} /></div>
     </div>

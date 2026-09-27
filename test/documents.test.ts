@@ -73,9 +73,19 @@ test('a helper makes one in its own chat: the file lands in files/, is delivered
   await assert.rejects(() => crew.documentView('quill', rel, 2), /not delivered to you/, 'another member screen never sees it');
   await assert.rejects(() => crew.documentView('quill', 'work/draft.md', 1), /not delivered to you/, 'a path nobody delivered is no window into the folder');
 
-  // A delivered file that is not a document is not read as one.
-  writeFileSync(join(disk.botDir(cfg, 'quill'), 'files', 'notes.txt'), 'a note instead');
-  const other = (await crew.post('quill', `and a note ${call('crew_deliver', { path: 'files/notes.txt' })}`))!.task;
+  // A delivered .md leaves as its own words for the app's shared safe renderer — never opened as the raw file.
+  writeFileSync(join(disk.botDir(cfg, 'quill'), 'files', 'weekly-dinners.md'),
+    '# This week\'s dinners\n\n- [x] Basmati rice\n- [ ] Yoghurt\n');
+  const listed = (await crew.post('quill', `and the dinners list ${call('crew_deliver', { path: 'files/weekly-dinners.md' })}`))!.task;
+  await settled(db, listed);
+  const md = await crew.documentView('quill', 'files/weekly-dinners.md', 1) as any;
+  assert.equal(md.text, "# This week's dinners\n\n- [x] Basmati rice\n- [ ] Yoghurt\n");
+  await assert.rejects(() => crew.documentView('quill', 'files/weekly-dinners.md', 2), /not delivered to you/);
+
+  // A delivered file that is not a readable page is still not read as one.
+  writeFileSync(join(disk.botDir(cfg, 'quill'), 'files', 'table.csv'), 'a,b\n1,2');
+  const other = (await crew.post('quill', `and a table ${call('crew_deliver', { path: 'files/table.csv' })}`))!.task;
   await settled(db, other);
-  await assert.rejects(() => crew.documentView('quill', 'files/notes.txt', 1), /no such document/, 'only a document is read as one');
+  await assert.rejects(() => crew.documentView('quill', 'files/table.csv', 1), /no such document/, 'only a page is read as one');
 });
+

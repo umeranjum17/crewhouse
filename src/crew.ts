@@ -1892,15 +1892,18 @@ export class Crew {
     return { ok: true, path: rel, sections };
   }
 
-  /** The app's read-only preview of a document the bot delivered to this member: plain parts, never the file or its path. */
+  /** The app's read-only preview of a document the bot delivered to this member: plain parts for a .docx, the file's
+   *  own words for a delivered .md or .txt (for the shared safe renderer) — never a path, only to the member it went to. */
   async documentView(botId: string, path: string, viewer: number) {
     const rel = String(path ?? '');
     const seen = this.db.get("SELECT 1 AS ok FROM events e JOIN tasks t ON t.id = json_extract(e.data, '$.task') " +
       "WHERE e.bot = ? AND e.kind = 'file.delivered' AND json_extract(e.data, '$.path') = ? AND COALESCE(t.member, ?) = ?", botId, rel, viewer, viewer);
     if (!seen) throw Object.assign(new Error('that document was not delivered to you'), { status: 403 });
     const full = disk.insideBot(this.cfg, botId, rel);
-    if (!/\.docx$/i.test(full) || !existsSync(full) || statSync(full).size > 20_000_000) throw Object.assign(new Error('no such document'), { status: 404 });
-    return readDocument(full);
+    if (!/\.(docx|md|txt)$/i.test(full) || !existsSync(full) || statSync(full).size > 20_000_000) throw Object.assign(new Error('no such document'), { status: 404 });
+    // A delivered .md or .txt leaves as its own words (capped), read by the app's shared safe markdown renderer;
+    // a .docx leaves as plain parts. Either way crewd reads the file, only for the member it was delivered to.
+    return /\.(md|txt)$/i.test(full) ? { text: readFileSync(full, 'utf8').slice(0, 100_000) } : readDocument(full);
   }
 
   /** A finished file, registered once per task (a retried call is a no-op). Only inside the bot's own folder. */

@@ -174,10 +174,11 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       if (!/^files\/[\w./-]+\.xlsx$/i.test(rel)) throw Object.assign(new Error('not a spreadsheet'), { status: 404 });
       return await crew.workbookView(String(q.get('bot') ?? ''), rel, me);
     }
-    // A delivered document, as plain parts for the app's read-only preview: crewd parses it (docx), the app never does.
+    // A delivered document (or a delivered .md/.txt, read the same way), as plain parts for the app's read-only
+    // preview: crewd parses it, the app never does — and never opens the raw file.
     if (m === 'GET' && p === '/api/document') {
       const rel = String(q.get('path') ?? '');
-      if (!/^files\/[\w./-]+\.docx$/i.test(rel)) throw Object.assign(new Error('not a document'), { status: 404 });
+      if (!/^files\/[\w./-]+\.(docx|md|txt)$/i.test(rel)) throw Object.assign(new Error('not a document'), { status: 404 });
       return await crew.documentView(String(q.get('bot') ?? ''), rel, me);
     }
     if (m === 'POST' && p === '/api/onboard') { const b = body; return crew.onboard(b.address ?? '', me, b.ask) ?? { ok: true }; }

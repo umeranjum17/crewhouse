@@ -231,7 +231,6 @@ function Steps({ steps, max = 6 }: { steps: A.Step[]; max?: number }) {
     </Card>
   );
 }
-/** Files open on the home computer; the phone shows what they are. */
 /** A photo someone sent: fetched over the link as data (this computer's /files address isn't reachable from the phone). */
 function PhotoView({ f }: { f: A.FileView }) {
   const [uri, setUri] = useState('');
@@ -240,9 +239,43 @@ function PhotoView({ f }: { f: A.FileView }) {
   return uri ? <Image source={{ uri }} style={{ width: 240, height: 240, borderRadius: 16 }} resizeMode="contain" accessibilityLabel="A photo" /> : <FileRow f={f} plain />;
 }
 
+/** Files open on the home computer; the phone shows what they are — except a written page (.md, .txt), which crewd
+ *  reads over the link and the phone shows right here, rendered: headings, lists with their ticks, tables, words. */
 function FileRow({ f, plain }: { f: A.FileView; plain?: boolean }) {
+  const [read, setRead] = useState(false);
   if (!plain && f.kind === 'image' && /\/photos\//.test(f.url)) return <PhotoView f={f} />;
-  return <View style={s.row}><T tone="mute">{f.kind === 'video' ? '▶' : f.kind === 'image' ? '▣' : '▤'}</T><T style={{ flex: 1 }}>{f.name}</T><T tone="mute" style={s.small}>on your computer</T></View>;
+  const readable = f.kind === 'page' && /\.(md|txt)$/i.test(f.url);
+  const row = <View style={s.row}><T tone="mute">{f.kind === 'video' ? '▶' : f.kind === 'image' ? '▣' : '▤'}</T><T style={{ flex: 1 }}>{f.name}</T><T tone="mute" style={s.small}>{readable ? 'Read' : 'on your computer'}</T></View>;
+  if (!readable) return row;
+  return <View>
+    <Pressable accessibilityRole="button" accessibilityLabel={`Read ${f.name}`} onPress={() => setRead(true)}
+      style={({ pressed }) => [pressed && { opacity: 0.55 }]}>{row}</Pressable>
+    {read && <DocSheet f={f} onClose={() => setRead(false)} />}
+  </View>;
+}
+
+/** One rendered page over the link: crewd reads the file and the phone shows its own words through the shared safe
+ *  markdown renderer — headings, ticks, tables — the same piece the chat uses. */
+function DocSheet({ f, onClose }: { f: A.FileView; onClose: () => void }) {
+  const t = useLook();
+  const reduce = motion.useReduceMotion();
+  const [text, setText] = useState<string | null>(null);
+  useEffect(() => {
+    const src = A.fileSource(f.url);
+    if (src) void api.document(src.bot, src.path).then((j) => setText(A.mdPlain(String(j?.text ?? '')))).catch(() => {});
+  }, [f.url]);
+  return <Modal visible transparent animationType={motion.sheet(reduce)} onRequestClose={onClose}>
+    <Pressable style={s.scrim} onPress={onClose}>
+      <Pressable style={[s.sheet, { backgroundColor: t.bg, maxHeight: '88%' }]} onPress={() => {}}>
+        <View style={s.row}><T tone="mute">▤</T><T style={[s.h2, { flex: 1 }]}>{f.name}</T><Btn label="Close" onPress={onClose} /></View>
+        <ScrollView>
+          {text === null && <T tone="mute">Opening “{f.name}”…</T>}
+          {text === '' && <T tone="mute">There is nothing in it to show yet.</T>}
+          {text !== null && text !== '' && <ChatText text={text} />}
+        </ScrollView>
+      </Pressable>
+    </Pressable>
+  </Modal>;
 }
 
 // ---------- pairing ----------
