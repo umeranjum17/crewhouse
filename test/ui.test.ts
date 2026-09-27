@@ -663,9 +663,9 @@ test('a routine offered by Chief is a confirmation card: lines, Start it / Not n
   // Stays off Home like every suggestion, and the last run links out.
   assert.equal(A.needsYou(s).length, 0);
   const rs = { routines: [{ id: 2, bot: 'reel', name: 'Weekly demo', words: 'Every Monday at 9:00', next_at: now, state: 'on', kind: 'task',
-    history: [{ at: now, kind: 'routine.fired', task: 7, thing: 7, msg: 21 }] }] };
+    history: [{ at: now, kind: 'routine.fired', state: 'done', task: 7, thing: 7, msg: 21 }] }] };
   assert.deepEqual(A.routines(rs)[0].result, { thing: 7 }, 'the last run opens the thing it made');
-  const said = { routines: [{ ...rs.routines[0], history: [{ at: now, kind: 'routine.fired', task: 7, msg: 21 }] }] };
+  const said = { routines: [{ ...rs.routines[0], history: [{ at: now, kind: 'routine.fired', state: 'done', task: 7, msg: 21 }] }] };
   assert.deepEqual(A.routines(said)[0].result, { msg: 21 }, 'or lands on its line in the helper\'s chat');
   const skipped = { routines: [{ ...rs.routines[0], history: [{ at: now, kind: 'routine.skipped', why: 'overlap' }] }] };
   assert.equal(A.routines(skipped)[0].result, null, 'a skipped run has no result to see');

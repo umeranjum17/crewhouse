@@ -521,8 +521,10 @@ export class Crew {
           const t = d.task ? this.db.get('SELECT state, result FROM tasks WHERE id = ?', d.task) : undefined;
           const line = d.task ? this.db.get("SELECT id FROM messages WHERE task_id = ? AND author = 'bot' ORDER BY id DESC LIMIT 1", d.task) : undefined;
           const made = d.task && this.db.get("SELECT 1 FROM events WHERE kind = 'file.delivered' AND json_extract(data, '$.task') = ?", d.task);
-          return { at: e.at, kind: e.kind, ...d, state: t?.state, ...(t?.result === ALL_CLEAR_RESULT ? { clear: true } : {}),
-            ...(made ? { thing: d.task } : {}), ...(line ? { msg: line.id } : {}) };
+          return { at: e.at, kind: e.kind, ...d, state: t?.state,
+            ...(t?.state === 'paused' || t?.state === 'failed' || t?.state === 'unsure' ? { reason: t.result } : {}),
+            ...(t?.result === ALL_CLEAR_RESULT ? { clear: true } : {}),
+            ...(t?.state === 'done' && made ? { thing: d.task } : {}), ...(t?.state === 'done' && line ? { msg: line.id } : {}) };
         }),
     }));
   }
@@ -639,13 +641,19 @@ export class Crew {
       return this.sendDigest(r, why, now);
     }
     // Overlap: the last run is still going (or waiting on the person), so this one is skipped, not stacked.
-    const open = r.last_task && this.db.get("SELECT id FROM tasks WHERE id = ? AND state IN ('queued', 'working', 'needs_you', 'paused')", r.last_task);
+    const open = r.last_task && this.db.get("SELECT * FROM tasks WHERE id = ? AND state IN ('queued', 'working', 'needs_you', 'paused')", r.last_task);
     if (open) {
+      if (why === 'now' && open.state === 'paused' && open.result === 'Waiting for tomorrow: the crew has had its share of your AI today.') {
+        this.db.run("UPDATE tasks SET origin = 'routine.now', wake_at = NULL WHERE id = ?", open.id);
+        this.setTask(open, 'queued');
+        this.dispatch();
+        return;
+      }
       this.db.event('routine.skipped', r.bot, { routine: r.id, name: r.name, why: 'overlap', task: r.last_task });
       return;
     }
     if (r.watch) return void this.check(r, why);
-    const { task } = this.addTask(r.bot, r.body, 'routine', r.brain ?? undefined, r.member, r);
+    const { task } = this.addTask(r.bot, r.body, why === 'now' ? 'routine.now' : 'routine', r.brain ?? undefined, r.member, r);
     this.db.tx(() => {
       this.db.run('UPDATE routines SET last_at = ?, last_task = ? WHERE id = ?', now, task, r.id);
       this.db.event('routine.fired', r.bot, { routine: r.id, name: r.name, why, task });
@@ -674,7 +682,7 @@ export class Crew {
       if (before === null) return seen('started');
       if (before === now) return seen('same');
       const { task } = this.addTask(r.bot, `${r.body}\n\n[Crewhouse] The page you watch (${r.watch}) changed since the last check.\n${changed(before, now)}`,
-        'routine', r.brain ?? undefined, r.member, r);
+        why === 'now' ? 'routine.now' : 'routine', r.brain ?? undefined, r.member, r);
       seen('changed', task);
     } finally { this.checking.delete(r.id); }
   }
