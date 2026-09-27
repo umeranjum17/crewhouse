@@ -414,7 +414,8 @@ function ChiefPage(ctx: Ctx & { m?: string }) {
   return (
     <div className="page chat-page">
       <header className="chat-head sticky-top"><a href="#/" className="back" aria-label="Back" onClick={(e) => { e.preventDefault(); back(); }}>‹</a><Face who="chief" size={32} />
-        <div className="grow"><b>Chief</b><div className="mute small clamp1">{line}</div></div></header>
+        <div className="grow"><b>Chief</b><div className="mute small clamp1">{line}</div></div>
+        <button className="link" onClick={() => go('#/h/chief/did')}>Every step</button></header>
       <Chat {...ctx} id="chief" m={ctx.m} />
     </div>
   );
@@ -478,14 +479,16 @@ function HelperPage(ctx: Ctx & { id: string; tab: string }) {
   const [page, setPage] = useState<Json>(null);
   const load = useCallback(() => api.bot(id).then(setPage).catch(() => {}), [id]);
   useEffect(() => { void load(); }, [load, tick]);
-  if (!h) return <div className="page mute">{state.bots.some((b: Json) => b.id === id) ? '' : 'This helper has left the crew.'}</div>;
+  // Chief has no helper card, but his Every-step trail (with Undo for what he learned) is the same view: admit him for it.
+  if (!h && id !== 'chief') return <div className="page mute">{state.bots.some((b: Json) => b.id === id) ? '' : 'This helper has left the crew.'}</div>;
   const b = state.bots.find((x: Json) => x.id === id);
+  const name = h?.name ?? 'Chief';
   // The chat is the page; everything else lives behind Details. Old deep links to a section land on Details too.
   const details = tab !== 'chat' && tab !== 'did' && tab !== 'screen';
   const trail = page ? A.steps(page.trail ?? [], b?.task?.id, true) : [];
   return (
     <div className={`page helper ${tab === 'chat' ? 'chat-page' : ''}`}>
-      {tab === 'chat' && <>
+      {tab === 'chat' && h && <>
         <div className="sticky-top">
           <header className="chat-head">
             <a href="#/" className="back" aria-label="Back" onClick={(e) => { e.preventDefault(); back(); }}>‹</a>
@@ -497,7 +500,7 @@ function HelperPage(ctx: Ctx & { id: string; tab: string }) {
         </div>
         <Chat key={id} {...ctx} id={id} />
       </>}
-      {details && <>
+      {details && h && <>
         <div className="sticky-top">
           <header className="chat-head">
             <a href={`#/h/${id}/chat`} className="back" aria-label="Back" onClick={(e) => { e.preventDefault(); back(); }}>‹</a>
@@ -536,14 +539,14 @@ function HelperPage(ctx: Ctx & { id: string; tab: string }) {
       </>}
       {tab === 'did' && (page ? <>
         <div className="sticky-top"><header className="chat-head">
-          <a href={`#/h/${id}/details`} className="back" aria-label="Back" onClick={(e) => { e.preventDefault(); back(); }}>‹</a>
+          <a href={id === 'chief' ? '#/chief' : `#/h/${id}/details`} className="back" aria-label="Back" onClick={(e) => { e.preventDefault(); back(); }}>‹</a>
           <div className="grow"><b>Every step</b></div>
         </header></div>
-        <p className="lead">Every step {h.name} takes, as it happens. Recorded by Crewhouse, not remembered by {h.name}.</p>
+        <p className="lead">Every step {name} takes, as it happens. Recorded by Crewhouse, not remembered by {name}.</p>
         {A.steps(page.trail ?? []).length ? <Steps steps={A.steps(page.trail ?? [])} max={40} onUndo={(s) => attempt(async () => { await api.undoMemory(id, s.seq); void load(); }, 'Forgotten')} />
-          : <div className="card empty">Nothing yet. Give {h.name} something to do.</div>}
+          : <div className="card empty">Nothing yet. Give {name} something to do.</div>}
       </> : null)}
-      {tab === 'screen' && <Screen bot={{ ...page?.bot, ...b }} showing={A.showing(state, id)} refresh={() => { refresh(); void load(); }} />}
+      {tab === 'screen' && h && <Screen bot={{ ...page?.bot, ...b }} showing={A.showing(state, id)} refresh={() => { refresh(); void load(); }} />}
     </div>
   );
 }

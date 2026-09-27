@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { setup as lab, settled, release, until, lastSaid } from './lab.ts';
+import { setup as lab, settled, release, holding, until, lastSaid } from './lab.ts';
 import * as A from '../web/src/adapter.ts';
 import type { Store } from '../src/db.ts';
 const { describe, nextRun, parseSchedule } = await import('../src/routines.ts');
@@ -262,6 +262,36 @@ test('the crew\'s share: routines wait for tomorrow once it is used up, what the
     assert.throws(() => crew.updateMember(1, { share: 'lots' }), /light, normal or full/);
     crew.updateMember(1, { share: 'full' });
     assert.deepEqual(crew.snapshot().share, { choice: 'full', used: false, week: null });
+  } finally {
+    if (before === undefined) delete process.env.CREWHOUSE_DAY_TOKENS; else process.env.CREWHOUSE_DAY_TOKENS = before;
+  }
+  done();
+});
+
+test('Do it now on a share-parked routine restarts the run clock: an hour-old task runs, and never fails with a false long-run', async () => {
+  const { db, crew, done } = setup();
+  const r = crew.addRoutine({ bot: 'reel', schedule: 'every day 7:00', task: 'ask permission: check the deals', name: 'Deal check' }, 'person');
+  const before = process.env.CREWHOUSE_DAY_TOKENS;
+  process.env.CREWHOUSE_DAY_TOKENS = '1'; // any turn at all uses up a Light share
+  try {
+    // The person's own ask uses up the day's share, so the routine's own run parks for tomorrow.
+    const { task: asked } = (crew as any).addTask('reel', 'make the card', 'person', undefined, 1);
+    await settled(db, asked);
+    db.run('UPDATE routines SET next_at = ? WHERE id = ?', Date.now() - 1000, r.id);
+    crew.schedule();
+    const t = db.get('SELECT * FROM tasks WHERE routine = ? ORDER BY id DESC', r.id)!;
+    await until('waiting for tomorrow', () => state(db, t.id) === 'paused');
+    // In a real day the parked run began over an hour before the person taps Do it now: the routine fired that morning.
+    db.run('UPDATE tasks SET created_at = ? WHERE id = ?', Date.now() - 2 * 3_600_000, t.id);
+    crew.runRoutine(r.id); // the tap: the same task, run now, above the share (origin routine.now)
+    await holding(crew, 'reel'); // the manual run is genuinely under way
+    (crew as any).tick(); // the engine's own clock passes over it
+    assert.equal(state(db, t.id), 'working', 'a manual run is a new run: its hour starts at the tap');
+    await release(crew, 'reel', 'Prices checked.');
+    await settled(db, t.id);
+    assert.equal(state(db, t.id), 'done');
+    assert.equal(db.get("SELECT COUNT(*) AS n FROM events WHERE kind = 'task.failed' AND json_extract(data, '$.task') = ?", t.id)!.n, 0,
+      'no false "took longer than an hour" told to the person');
   } finally {
     if (before === undefined) delete process.env.CREWHOUSE_DAY_TOKENS; else process.env.CREWHOUSE_DAY_TOKENS = before;
   }

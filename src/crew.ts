@@ -644,7 +644,9 @@ export class Crew {
     const open = r.last_task && this.db.get("SELECT * FROM tasks WHERE id = ? AND state IN ('queued', 'working', 'needs_you', 'paused')", r.last_task);
     if (open) {
       if (why === 'now' && open.state === 'paused' && open.result === 'Waiting for tomorrow: the crew has had its share of your AI today.') {
-        this.db.run("UPDATE tasks SET origin = 'routine.now', wake_at = NULL WHERE id = ?", open.id);
+        // A manual run is a new run: the one-hour clock restarts, or an hour-old task is killed the moment it starts,
+        // told to the person as a false "took longer than an hour". The origin keeps the documented share bypass.
+        this.db.run("UPDATE tasks SET origin = 'routine.now', wake_at = NULL, created_at = ? WHERE id = ?", Date.now(), open.id);
         this.setTask(open, 'queued');
         this.dispatch();
         return;

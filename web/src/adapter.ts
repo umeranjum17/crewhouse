@@ -161,6 +161,7 @@ export function plain(text = '') {
   if (/\bstub [\w-]+:/.test(text)) return 'On it.';
   return noTools(text)
     .replace(/```[\s\S]*?```/g, '')
+    .replace(/(^|\n)#{1,6}\s+/g, '$1') // a heading's markers are markup, never words: the person reads the words (D23)
     .replace(/`([^`\n]*)`/g, (_, s: string) => (/^[\w.\-~\/]+\.[a-z0-9]{2,4}$/i.test(s) ? `“${pretty(s)}”` : /[\/\\$|]|--?\w/.test(s) ? '' : s))
     .replace(/(^|[\s(“"'])((~|\.{1,2})?\/[\w.\-~]+)+\/?(?=[\s).,;:!?”"']|$)/g, (_, pre: string, p: string) => `${pre}${/\.[a-z0-9]{2,4}$/i.test(p) ? `“${pretty(p)}”` : 'its folder'}`)
     .replace(/\bfiles\/([\w.\-]+)/g, (_, f: string) => `“${pretty(f)}”`)
@@ -533,7 +534,7 @@ export function card(a: Json, state: Json): Card {
     const labels = ['What it does', "What it's aiming for", 'What it gets from others', 'How it goes about it', 'What great looks like'];
     const keys = ['does', 'aim', 'gets', 'how', 'great'];
     return { ...base, kind: 'ok', head: `Chief wrote ${crewName(state, d.job.bot)}'s job`, words: 'Take a look. Nothing changes until you use it.',
-      preview: { head: `${crewName(state, d.job.bot)}'s job`, body: labels.map((label, i) => `${label}: ${plain(d.job[keys[i]])}`).join('\\n\\n') },
+      preview: { head: `${crewName(state, d.job.bot)}'s job`, body: labels.map((label, i) => `${label}: ${plain(d.job[keys[i]])}`).join('\n\n') },
       choices: [{ label: 'Use it', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
   }
   if (a.kind === 'propose') {

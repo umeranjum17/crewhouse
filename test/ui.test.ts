@@ -9,6 +9,7 @@ import * as A from '../web/src/adapter.ts';
 import { readTyped } from '../mobile/src/typed.ts';
 import { draftOf, keepDraft, sent } from '../web/src/draft.ts';
 import { chatTokens, safeLink } from '../web/src/chat-md.ts';
+import { api, setTransport } from '../web/src/api.ts';
 import { color } from '../web/src/tokens.ts';
 import { cycle } from '../web/src/dialog.ts';
 
@@ -687,6 +688,33 @@ test('a routine offered by Chief is a confirmation card: lines, Start it / Not n
   assert.deepEqual(A.routines(said)[0].result, { msg: 21 }, 'or lands on its line in the helper\'s chat');
   const skipped = { routines: [{ ...rs.routines[0], history: [{ at: now, kind: 'routine.skipped', why: 'overlap' }] }] };
   assert.equal(A.routines(skipped)[0].result, null, 'a skipped run has no result to see');
+});
+
+test('Chief-learned memories can be undone from his own page: the same trail, the same endpoint', async () => {
+  // The Every-step view admits Chief (he has no card in the crew list), and his own page links to it.
+  const src = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
+  assert.match(src, /!h && id !== 'chief'/);
+  assert.match(src, /'#\/h\/chief\/did'/);
+  // The trail shows a learned line with its Undo, and that undo posts where the helpers' trail posts.
+  const steps = A.steps([{ seq: 3, at: now, kind: 'memory.learned', bot: 'chief', data: { task: 2, text: 'Nobody in the household eats pork.' } }]);
+  assert.deepEqual(steps.map((s) => [s.undo, s.seq]), [[true, 3]]);
+  const calls: string[] = [];
+  setTransport((method, path) => { calls.push(`${method} ${path}`); return Promise.resolve({ ok: true }); });
+  await api.undoMemory('chief', 3);
+  assert.deepEqual(calls, ['POST /api/bots/chief/memory/3/undo']);
+});
+
+test('no raw heading markers reach the ask card or its Read-all view', () => {
+  const s = { bots: [{ id: 'chief', display: 'Chief' }, { id: 'scout', display: 'Scout' }], asks: [] };
+  const job = { bot: 'scout', does: '### Registry checks\nScout reads the public register', aim: '## Peace of mind about names',
+    gets: 'nothing', how: '### Gently, one page a day', great: '### Quiet weeks, a word when something changed' };
+  const c = A.card({ id: 9, bot: 'chief', kind: 'propose', at: now, detail: { job } }, s);
+  assert.equal(c.head, `Chief wrote Scout's job`);
+  assert.doesNotMatch(c.preview!.body, /#|\\\\n/, c.preview!.body);
+  assert.match(c.preview!.body, /What it does: Registry checks\nScout reads the public register/);
+  const offered = A.card({ id: 10, bot: 'scout', kind: 'propose', at: now,
+    detail: { words: 'Scout has an idea', preview: { head: 'How Scout would do it', body: '### Step one\nPick the pages' } } }, s);
+  assert.ok(!offered.preview!.body.includes('#'), offered.preview!.body);
 });
 
 test('not sure it worked stands apart: in the chat, in Chief\'s thread and in the trail', () => {
