@@ -29,10 +29,12 @@ test('the document reader preserves a long paragraph and source URL', async () =
   const file = join(temp('long-doc'), 'brief.docx');
   const paragraph = 'Claude Code and Codex ' + 'a'.repeat(591);
   assert.equal(paragraph.length, 613);
-  await buildDocument(file, { name: 'Brief', blocks: [{ text: paragraph }, { text: 'Source: https://www.sec.gov/rules/' }] });
+  const citation = 'Rates: [SEC](https://www.sec.gov/x)';
+  await buildDocument(file, { name: 'Brief', blocks: [{ text: paragraph }, { text: 'Source: https://www.sec.gov/rules/' }, { text: citation }] });
   const read = await readDocument(file);
   assert.equal(read.parts[0].text, paragraph);
   assert.equal(read.parts[1].text, 'Source: https://www.sec.gov/rules/');
+  assert.equal(read.parts[2].text, citation, 'a written citation survives the .docx verbatim, ready to render as a link');
 });
 
 test('the document crewd writes is a real .docx: its headings, lists, table and bold, read back as plain parts', async () => {

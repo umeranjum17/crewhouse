@@ -850,6 +850,14 @@ test('a delivered document is a card in the chat, and opens as a read-only docum
   assert.equal(links.map((p) => p.text).join(''), source, 'reader never changes the source text');
   assert.deepEqual(links.filter((p) => p.href).map((p) => p.href), ['https://www.sec.gov/rules/'], 'source URLs link without the smart quote');
   assert.equal(A.docLinks('javascript:alert(1) and ftp://example.org').some((p) => p.href), false, 'only http(s) is linked');
+  assert.deepEqual(A.docLinks('[SEC](https://www.sec.gov/x)'), [{ text: 'SEC', href: 'https://www.sec.gov/x' }],
+    'a written citation renders as its link text, never raw brackets');
+  const cited = A.docLinks('From [SEC, accessed Sept. 27, 2026](https://www.investor.gov/) and [FDIC EDIE](https://edie.fdic.gov/).');
+  assert.deepEqual(cited, [
+    { text: 'From ' }, { text: 'SEC, accessed Sept. 27, 2026', href: 'https://www.investor.gov/' }, { text: ' and ' },
+    { text: 'FDIC EDIE', href: 'https://edie.fdic.gov/' }, { text: '.' },
+  ], 'citations in prose keep their words and lose the bracket syntax');
+  assert.equal(A.docLinks('[note](javascript:alert(1))').some((p) => p.href), false, 'a citation to another scheme stays plain text');
   assert.equal(A.pageWords(3), '3 sections');
   assert.equal(A.pageWords(1), 'One section');
   assert.equal(A.pageWords(0), 'A document');
