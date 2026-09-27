@@ -105,6 +105,24 @@ test('a Chief reply streams partial words before its durable message', async () 
   } finally { ws.close(); }
 });
 
+test('Chief streams substantive prose before his tool runs', async () => {
+  await ready();
+  if (!(await api('GET', '/api/state')).body.person.onboarded) await say('chief', 'Alex');
+  const events: any[] = [];
+  const ws = new WebSocket(base.replace('http:', 'ws:') + '/ws');
+  await new Promise<void>((resolve) => ws.on('open', () => resolve()));
+  ws.on('message', (raw) => events.push(JSON.parse(String(raw))));
+  try {
+    const { body } = await say('chief', `Sort this first [first words] ${call('crew_report', { text: 'started' })}`);
+    await done('chief', body.task);
+    await until(async () => events.find((e) => e.kind === 'task.progress' && e.data.task === body.task));
+    const trace = events.filter((e) => e.bot === 'chief' && e.data?.task === body.task);
+    const first = trace.findIndex((e) => e.kind === 'reply.partial' && e.data.text.includes('checking the next step'));
+    const tool = trace.findIndex((e) => e.kind === 'task.progress');
+    assert.ok(first >= 0 && tool > first, 'the first streamed words precede tool execution');
+  } finally { ws.close(); }
+});
+
 // This verifies the real tool-fetch mechanics and scripted wording contract, not model judgement.
 test('two-source fare backtest: both local sources fetched and the reply names them plus an unchecked item', async () => {
   await ready();

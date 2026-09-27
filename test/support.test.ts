@@ -231,14 +231,21 @@ Also \`src/a.ts:2-3@${at}\`.\n`);
     new RegExp(`${route.replace(/[()[\]]/g, '\\$&')}:1-99`), 'the whole route path is named, not a truncated tail');
 
   // Blindness asks where it went, not what it wrote: naming the answer inside a heredoc is clean; fetching it is not.
-  const leak = await run(7, [
-    call('bash', { command: `cat > files/support/7/scratch.md <<'EOF'\nraw status snapshots/events for the same pane\nEOF` }),
-    call('web_fetch', { url: `${issue}/comments` }),
-    call('bash', { command: `curl -s ${issue}/comments` }),
-    call('bash', { command: 'git fetch http://127.0.0.1:1/o/app.git fix-208' }),
-    call('bash', { command: `node -e "fetch('${issue}/comments?per_page=30').catch(() => {})"` }),
-    call('web_search', { query: 'merged fix pull request for the bug answer-key' }),
-  ].join(' '));
+  // Search is part of the attempted-access record, not a live-network integration check.
+  const fetchBefore = globalThis.fetch;
+  globalThis.fetch = (input, init) => String(input).startsWith('https://html.duckduckgo.com/')
+    ? Promise.resolve(new Response('No results', { status: 200 })) : fetchBefore(input, init);
+  let leak: number;
+  try {
+    leak = await run(7, [
+      call('bash', { command: `cat > files/support/7/scratch.md <<'EOF'\nraw status snapshots/events for the same pane\nEOF` }),
+      call('web_fetch', { url: `${issue}/comments` }),
+      call('bash', { command: `curl -s ${issue}/comments` }),
+      call('bash', { command: 'git fetch http://127.0.0.1:1/o/app.git fix-208' }),
+      call('bash', { command: `node -e "fetch('${issue}/comments?per_page=30').catch(() => {})"` }),
+      call('web_search', { query: 'merged fix pull request for the bug answer-key' }),
+    ].join(' '));
+  } finally { globalThis.fetch = fetchBefore; }
   assert.equal(rowOf(leak, 'blind', ['/events']).verdict, 'PASS', 'words it wrote are not places it went');
   const reached = rowOf(leak, 'blind', ['/comments']);
   assert.equal(reached.verdict, 'FAIL', 'web_fetch and curl fetched the comments');

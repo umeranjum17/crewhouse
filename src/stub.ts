@@ -60,7 +60,7 @@ const step: FauxResponseFactory = async (ctx, options, _state, model): Promise<A
   }
   const calls = toolCalls(said);
   const next = calls[msgs.slice(msgs.findLastIndex((m) => m.role === 'user') + 1).filter((m) => m.role === 'toolResult').length];
-  if (next) return fauxAssistantMessage([fauxToolCall(next.name, next.input)], { stopReason: 'toolUse' });
+  if (next) return fauxAssistantMessage([...(bot === 'chief' && /\[first words\]/.test(said) ? [{ type: 'text' as const, text: 'I’ll start by checking the next step.' }] : []), fauxToolCall(next.name, next.input)], { stopReason: 'toolUse' });
   if (last?.role === 'toolResult') {
     const reply = /\[two-fare-backtest\]/.test(said)
       ? 'I recommend the lower fare from Fareboard. I checked Fareboard and Narrowfare; I didn\'t check baggage fees or live inventory.'
