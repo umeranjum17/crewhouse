@@ -11,6 +11,15 @@ import { color } from '../web/src/tokens.ts';
 import { cycle } from '../web/src/dialog.ts';
 
 const now = Date.now();
+
+test('crew room lines and handoff checks hide machinery', () => {
+  const s: Json = { bots: [{ id: 'scout', display: 'Scout', template: 'scout', task: null }], events: [], asks: [] };
+  const lines = A.room({ lines: [{ id: 1, bot: 'scout', author: 'bot', text: 'See /home/umer/files/story.md and `ffmpeg -i x` from sonnet', files: [{ bot: 'scout', path: 'files/story.md' }], at: now }] }, s);
+  assert.ok(!/\/home\/|ffmpeg|sonnet|files\//i.test(lines[0].text));
+  assert.equal(lines[0].files.length, 1);
+  const c = A.card({ id: 2, bot: 'scout', kind: 'propose', at: now, detail: { pass: { files: ['story.md'] }, words: 'Scout wants to hand this to Scribe' } }, s);
+  assert.deepEqual(c.choices?.map((x) => x.label), ['Hand it on', 'Not now']);
+});
 const bot = (id: string, extra = {}) => ({ id, display: id[0].toUpperCase() + id.slice(1), role: 'Makes demo videos from screenshots', template: id, runtime: 'claude', model: 'sonnet',
   thinks: [{ key: 'claude:sonnet', name: 'Claude Sonnet' }], state: 'on', computer: true, controls: 'bot', task: null, queued: 0, pausedUntil: null, ...extra });
 // The owner's screenshot, as crewd sends it today: a raw fc-list approval, "Claude · 9% of 5h used", the prompt as the task.
@@ -451,12 +460,13 @@ test('chats: Chief first, then the latest talk; last lines in plain words, never
     ],
   };
   const c = A.chats(s);
-  assert.deepEqual(c.map((x) => x.id), ['chief', 'reel', 'scout', 'pip', 'scribe']);
-  assert.equal(c[1].line, 'Sent “Mum birthday v2”');
-  assert.equal(c[2].line, 'You: find rentals in Phuket');
-  assert.equal(c[3].line, 'Working on: Plan the week');
-  assert.equal(c[4].line, 'Drafts letters', 'nothing said yet: what it does');
-  assert.equal(A.unreadBadge(c[1].unread), '9+');
+  assert.deepEqual(c.map((x) => x.id), ['chief', 'room', 'reel', 'scout', 'pip', 'scribe']);
+  assert.equal(c[1].line, 'Watch the crew work together');
+  assert.equal(c[2].line, 'Sent “Mum birthday v2”');
+  assert.equal(c[3].line, 'You: find rentals in Phuket');
+  assert.equal(c[4].line, 'Working on: Plan the week');
+  assert.equal(c[5].line, 'Drafts letters', 'nothing said yet: what it does');
+  assert.equal(A.unreadBadge(c[2].unread), '9+');
   assert.doesNotMatch(shown(c), FORBIDDEN);
   const f = A.found(s, { messages: [{ id: 3, bot: 'reel', author: 'system', text: 'Delivered files/x.mp4', at: now }], things: [{ id: 4, bot: 'scout', title: 'Rentals in Phuket', at: now }] });
   assert.deepEqual(f.map((x) => [x.name, x.text]), [['Scout', 'Made “Rentals in Phuket”'], ['Reel', 'Sent “X”']]);

@@ -30,6 +30,7 @@ export const trouble = (e: any): 'offline' | 'missing' | 'failed' => (e?.status 
 
 export const api = {
   state: () => call('GET', '/api/state'),
+  room: (before?: number) => call('GET', `/api/room${before ? `?before=${before}` : ''}`),
   bot: (id: string, around?: number) => call('GET', `/api/bots/${id}${around ? `?around=${around}` : ''}`),
   /** The person has read this chat up to now: its unread dot goes. */
   read: (id: string) => call('POST', `/api/bots/${id}/read`),
@@ -44,7 +45,7 @@ export const api = {
   workbook: (bot: string, path: string) => call('GET', `/api/workbook?bot=${encodeURIComponent(bot)}&path=${encodeURIComponent(path)}`) as Promise<Json>,
   /** A delivered document, read by crewd itself: its headings, paragraphs, lists and tables, as words only. */
   document: (bot: string, path: string) => call('GET', `/api/document?bot=${encodeURIComponent(bot)}&path=${encodeURIComponent(path)}`) as Promise<Json>,
-  post: (id: string, text: string, photos?: { type: string; data: string }[]) => call('POST', `/api/bots/${id}/messages`, { text, ...(photos?.length ? { photos } : {}) }),
+  post: (id: string, text: string, photos?: { type: string; data: string }[] | { room: boolean }) => call('POST', `/api/bots/${id}/messages`, { text, ...(Array.isArray(photos) && photos.length ? { photos } : {}), ...(!Array.isArray(photos) && photos ? photos : {}) }),
   /** First run: how Chief addresses the person, and (from an idea card) their first request, in one tap. */
   onboard: (address: string, ask?: string) => call('POST', '/api/onboard', { address, ask }),
   recruit: (template: string, name: string) => call('POST', '/api/recruit', { template, name }),
@@ -57,7 +58,7 @@ export const api = {
   soulReset: (id: string) => call('POST', `/api/bots/${id}/soul/reset`),
   /** Put away a skill a helper learned (it is kept, just no longer used). */
   removeSkill: (id: string, name: string) => call('DELETE', `/api/bots/${id}/skills/${name}`),
-  settings: (id: string, body: { allow?: string[]; memory?: boolean }) => call('PUT', `/api/bots/${id}/settings`, body),
+  settings: (id: string, body: { allow?: string[]; memory?: boolean; handoff?: 'ask' | 'go' }) => call('PUT', `/api/bots/${id}/settings`, body),
   reset: (id: string) => call('POST', `/api/bots/${id}/reset`),
   undoMemory: (id: string, seq: number) => call('POST', `/api/bots/${id}/memory/${seq}/undo`),
   takeOver: (id: string) => call('POST', `/api/bots/${id}/takeover`),

@@ -51,6 +51,10 @@ Pressing something on a site the person signed the bot in to (a `send` from the 
 A connection a task needs is an ask with `kind: 'connect'` and `detail.{app, words}` ("Let Pip use your Google Calendar"), opened by the helper's `crew_connect` tool.
 It shows as a card in that helper's chat, never on Home. Answer `allow` once connected (the app does it by itself), `deny` for Not now; the task carries on either way.
 
+## The crew room
+
+`#/room` is a view of existing task messages, not a second chat. `GET /api/room?before=` returns the viewer's qualifying job lines `{id,bot,author,to?,from?,text,at,files:[{bot,path}]}`, open asks and busy bot ids. Qualifying means a room-started job or a helper-to-helper handoff (including one waiting on a check). `state.room` provides the pinned Chats row's last line and busy ids. `POST /api/bots/:id/messages {text,room:true}` starts in the room and rejoins that helper's latest room job; Chief still routes normally. The per-helper `handoff` setting is `go` (default) or `ask`; `ask` opens a proposal with Hand it on / Not now, never Always. A multi-part job gets one deterministic Chief wrap-up linked to its root task when all parts and handoff cards settle. The room shows only this member's tasks and cards.
+
 ## Messages: `GET /api/bots/:id` (today)
 
 `POST /api/bots/:id/messages {text, photos?}`: `photos` is up to four `{type: 'image/jpeg' | 'image/png' | 'image/webp', data: base64}` (5 MB each; the phone sends about 1280 px JPEG so it fits one link frame). They are kept in the helper's `files/photos/` (so they show in Things), given to the model with the words, and ride in the chat line as `[photo <bot>] files/photos/…`, which `adapter.lines()` turns into pictures. `GET /api/photo?bot&path` returns one such photo as `{type, data}` for the phone, which can't open this computer's `/files` address.
