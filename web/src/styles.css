@@ -178,32 +178,41 @@ textarea.input { resize: vertical; }
 
 /* home */
 .home, .page { max-width: 720px; margin: 0 auto; padding: 20px 16px 40px; }
-/* The phone's header row: his face at 32, her greeting at 22, left. */
-.home-head { display: flex; gap: 12px; align-items: center; margin: 2px 0 10px; }
-.home-head h1 { font-size: 22px; letter-spacing: -.3px; margin: 0; }
-/* Needs you as one compact card: a number, the face, the subject, one plain line; a row opens the review sheet. */
-.needs-card { padding: 6px 16px; }
-.needs-row { display: flex; gap: 10px; align-items: center; padding: 11px 0; border-top: 1px solid var(--line); }
-.needs-row:first-child { border-top: 0; }
-.needs-row .n { font: 800 13px var(--ui); color: var(--mute); width: 13px; text-align: right; flex: none; }
-.needs-row b { font-size: 15.5px; display: block; }
-.needs-row .clamp1 { font-size: 13.5px; }
-.needs-more { margin: 2px 0 6px 23px; }
-.needs-quiet { margin-top: 8px; }
-/* The phone's standing job list (Home, under the chats): the chats' own row — a small face and the promise as body text,
-   not a heading — with the button on its own line under the words, and the list ending above the sticky composer. */
-.jobs.phone-only .job { flex-wrap: wrap; align-items: flex-start; padding: 12px 0; }
-.jobs.phone-only > .label + .job { border-top: 0; }
-.jobs.phone-only .job b { font: 400 13.5px var(--ui); }
-.jobs.phone-only .job .btn { flex-basis: 100%; width: max-content; margin: 9px 0 0 auto; }
-.jobs.phone-only { padding-bottom: 83px; } /* the sticky composer's own box at 390, so the last row clears it */
+/* Home's single column and grouped rows. */
+.home-head { margin-bottom: 32px; }
+.home-head h1 { margin: 0; }
+.home-head p { color: var(--ink2); font-size: 13px; margin: 0; }
+.home-section { margin-bottom: 24px; }
+.home-section > .label, .section-head .label { margin: 0 4px 8px; }
+.section-head { display: flex; align-items: center; justify-content: space-between; }
+.section-head .link { font-size: 13px; padding: 0; margin-bottom: 8px; }
+.list-group { overflow: hidden; background: var(--solid); border: 1px solid var(--line); border-radius: 14px; }
+.list-row { display: flex; width: 100%; min-height: 56px; gap: 12px; align-items: center; text-align: left; padding: 10px 14px; border: 0; background: none; color: var(--ink); font: inherit; }
+.list-row + .list-row, .list-group > div + div > .list-row, .list-group > div + .list-row, .list-group > .list-row + div > .list-row { border-top: 1px solid var(--line); }
+.list-row:hover, .list-row:active { background: var(--soft); }
+.list-row b { display: block; font-weight: 500; }
+.list-row b.clamp { display: -webkit-box; }
+.list-row .small { color: var(--ink2); display: block; }
+.list-row .mute { color: var(--mute); }
+.chat-end { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; min-width: 36px; color: var(--mute); font-size: 12px; }
+.chat-end .badge { margin: 0; }
+.need-dot { width: 6px; height: 6px; background: var(--pink); border-radius: 50%; }
+.stack-faces { display: flex; align-items: center; width: 40px; flex: none; }
+.stack-faces .face + .face { margin-left: -12px; box-shadow: 0 0 0 2px var(--solid); }
+.needs-more { display: none; }
+.needs-quiet, .frame-empty { padding: 16px; color: var(--mute); }
+.jobs.phone-only { padding-bottom: 48px; }
+.home > .dock { margin-left: -16px; margin-right: -16px; }
+.home .section-head .label { margin-bottom: 8px; }
+.file-chip { width: 36px; height: 40px; border-radius: 6px; background: var(--soft); color: var(--ink2); display: grid; place-items: center; font: 600 11px/14px var(--ui); flex: none; }
+.btn.sm { min-height: 32px; padding: 4px 12px; font-size: 13px; border-radius: 8px; }
 /* The house's setup jobs: a tick ring, a plain line, and the panel it opens. */
 .setup-mark { font: 900 15px var(--ui); color: var(--mute); width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--shadow); display: inline-grid; place-items: center; flex: none; }
 .setup-mark.done { color: var(--ok-ink); border-color: var(--ok); background: color-mix(in srgb, var(--ok) 18%, transparent); }
 /* Hello's own-words ask: one field, one send. */
 .own-ask { display: flex; gap: 8px; margin-top: 10px; }
 .own-ask .input { flex: 1; }
-.hi { text-align: center; font-size: 28px; margin-top: 10px; }
+
 .bubbles { display: flex; gap: 14px; overflow-x: auto; padding: 8px 4px 4px; scrollbar-width: none; justify-content: safe center; }
 .bubble { display: grid; justify-items: center; gap: 4px; font: 800 13.5px var(--ui); flex: none; }
 .bubble.dim { color: var(--mute); font-weight: 700; }
@@ -219,7 +228,8 @@ textarea.input { resize: vertical; }
 .send:disabled { background: var(--soft); color: var(--mute); cursor: default; }
 
 /* chat */
-.chat-head { display: flex; gap: 12px; align-items: center; padding: 4px 0 8px; }
+.chat-head { display: flex; gap: 12px; align-items: center; min-height: 44px; padding: 4px 0 8px; }
+.chat-head b { font-weight: 500; }
 .chat-head .link { flex: none; }
 /* Details, one scrolling page behind a chat. */
 .detail { padding-bottom: 24px; }
@@ -228,16 +238,24 @@ textarea.input { resize: vertical; }
 .back { color: var(--mute); font: 800 22px var(--ui); padding: 4px 8px 4px 0; display: inline-block; }
 a.back:not([aria-label]) { font-size: 15px; margin-bottom: 6px; }
 .chat { display: flex; flex-direction: column; min-height: calc(100dvh - 190px); }
+.chat > .dock { margin-left: -16px; margin-right: -16px; }
 .lines { flex: 1; display: flex; flex-direction: column; padding-bottom: 6px; }
-.line { max-width: 84%; margin-top: 10px; }
-.line .bubble-text { padding: 10px 15px; white-space: pre-wrap; overflow-wrap: anywhere; }
-.line.me { margin-left: auto; }
-.line.me .bubble-text { background: var(--soft); color: var(--ink); border: 1px solid var(--line); border-radius: 18px 18px 6px 18px; }
-.line.them .bubble-text, .line.chief .bubble-text { background: transparent; padding: 0; }
+.line { max-width: 560px; margin-top: 20px; }
+.line.consecutive { margin-top: 12px; }
+.line-by { display: flex; gap: 8px; align-items: center; margin-bottom: 4px; }
+.line.consecutive .line-by { display: none; }
+.line-by .who { font: 600 13px/18px var(--ui); color: var(--ink); }
+.line-by time { font-size: 12px; color: var(--mute); }
+.line .bubble-text { margin-left: 36px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.line.me { margin-left: auto; max-width: 78%; }
+.line.me .bubble-text { margin: 0; padding: 10px 15px; background: var(--soft); border: 1px solid var(--line); border-radius: 18px 18px 6px 18px; }
 .line.note { max-width: 92%; }
-.line.unsure .bubble-text { box-shadow: 0 0 0 2px var(--wait) inset; }
-.line.note .bubble-text { background: var(--card); border-radius: 22px; }
-.line .who { font: 800 12px var(--ui); color: var(--pink-ink); margin-left: 10px; }
+.line.unsure .bubble-text { border-left: 2px solid var(--amber); padding-left: 12px; }
+.lines > .ask, .line .ask { max-width: 440px; margin: 12px 0 0 36px; }
+.work-title { display: grid; gap: 4px; padding: 16px; }
+.work-title .small { color: var(--ink2); }
+.working-on-frame .steps { border: 0; margin: 0; padding: 0 16px; }
+.working-on-frame .link { margin: 8px 16px; font-size: 13px; }
 /* A search landing: the matched line glows once, then fades — the one motion that explains where you are. */
 .line.land { scroll-margin: 40vh 0 60vh; }
 .line.land .bubble-text { animation: land 1.2s ease; }
@@ -318,74 +336,69 @@ input[role='switch']:checked::after { left: 19px; }
   .side-nav { display: flex; gap: 12px; align-items: center; padding: 7px 12px; border-radius: 8px; font: 500 14px/20px var(--ui); color: var(--ink2); min-height: 34px; }
   .side-nav.on { background: var(--solid); color: var(--ink); box-shadow: 0 0 0 1px var(--line); }
   .side-nav .ic { width: 16px; height: 16px; flex: none; }
-  .home, .page { padding: 32px 36px 40px; }
-  .home { max-width: none; }
-  /* The desk never grows past its column: 900–1199 px must not scroll sideways. */
-  .desk-col { width: 100%; max-width: 944px; margin: 0 auto; min-width: 0; }
+  .home, .page { padding: 32px; }
+  .home { max-width: none; padding-right: 0; }
+  .desk-col { width: 100%; min-width: 0; }
   .phone-only { display: none; }
-  .desk, .desk-only { display: block; }
-  .home-top { display: none; }
-  .dock { padding: 18px 36px 16px; margin: 8px -36px 0; }
-  .hi { text-align: left; font-size: 34px; }
+  .desk-only { display: block; }
+  .desk { display: grid; grid-template-columns: minmax(0, 720px); gap: 32px; }
+  .home-head h1 { font-size: 28px; line-height: 34px; letter-spacing: -.02em; }
+  .home > .dock { margin: auto 0 0; padding: 20px 0; background: var(--bg); max-width: 720px; }
+  .dock { padding: 18px 32px 16px; margin: 8px -32px 0; }
   .bubbles { justify-content: flex-start; }
   .page:not(.chat-page) { max-width: 720px; }
   .page.settings { max-width: 640px; }
   .scrim { align-items: center; padding: 24px; }
   .sheet { border-radius: 16px; padding: 24px; }
 
-  /* frames are the ASCII language at desk scale: title set into the top border, rows split by dashed rules */
-  .frame { position: relative; border: 1px solid var(--line); border-radius: 14px; background: var(--solid); padding: 8px 16px 12px; }
-  .frame > .label { position: static; margin: 8px 4px; }
+  .frame { border: 1px solid var(--line); border-radius: 14px; background: var(--solid); padding: 8px 16px 12px; }
+  .frame > .label { margin: 8px 4px; }
   .frame-row { display: flex; gap: 12px; align-items: center; padding: 11px 0; }
-  .frame-row + .frame-row, .frame-row + .steps, .frame .steps + .frame-row, .frame .steps + *, .frame .card + .frame-row { border-top: 1px solid var(--line); }
-  .frame-empty { color: var(--mute); padding: 12px 0 6px; }
+  .frame-row + .frame-row { border-top: 1px solid var(--line); }
   .frame .steps { background: transparent; box-shadow: none; border-radius: 0; padding: 6px 0; margin: 0; }
-  .frame .ask { border-color: color-mix(in srgb, var(--pink) 40%, var(--line)); margin-top: 10px; }
-
-  /* the desk: NEEDS YOU, and the live + finished frames stacked beside it (one column until the desk is wide enough for two) */
-  .desk { display: grid; grid-template-columns: 1fr; gap: 28px; margin-top: 18px; align-items: start; }
-  .desk .frame, .desk-side { min-width: 0; }
-  .desk-side { display: grid; gap: 28px; align-content: start; }
+  .desk-side { min-width: 0; }
+  .desk-side > p { margin: 12px 4px; }
   .home { flex: 1; display: flex; flex-direction: column; }
-  .home .dock { position: sticky; bottom: 0; margin-top: auto; }
-  .home .dock { background: var(--bg); }
+  .home .dock { position: sticky; bottom: 0; }
   .frame .step .ascii { color: var(--ok); }
 
 
   /* a chat is its own column: the header and dock stay put, the thread scrolls, no phone boxes */
   .page.chat-page { max-width: none; height: 100dvh; display: flex; flex-direction: column; padding-bottom: 0; }
-  .chat-page .sticky-top { position: static; margin: 0; padding: 20px 0 0; background: none; backdrop-filter: none; }
+  .chat-page .sticky-top { position: static; margin: 0; padding: 0; background: none; backdrop-filter: none; }
+  .chat-page .chat-head { min-height: 56px; max-width: 1072px; border-bottom: 1px solid var(--line); }
   .chat-page .back { display: none; }
   .chat-page .chat, .helper.chat-page .chat { min-height: 0; flex: 1; display: flex; flex-direction: column; }
   .chat-page .lines { flex: 1; overflow-y: auto; min-height: 0; max-width: 720px; padding-bottom: 10px; }
   .chat-page .dock { position: static; margin: 0; padding: 10px 0 18px; background: none; backdrop-filter: none; mask-image: none; max-width: 720px; }
-  .thread-side { display: contents; }
+  .working-on { display: block; width: 320px; }
 }
 @media (min-width: 1200px) {
   .shell { grid-template-columns: 248px minmax(0, 1fr); }
   .home, .page { padding: 36px 40px 40px; }
+  .home { padding-right: 20px; }
   .dock { padding: 18px 40px 16px; margin: 8px -40px 0; }
-  .desk { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 28px 32px; }
+  .home .dock { padding: 20px 0; }
 }
 @media (min-width: 1440px) {
   .shell { grid-template-columns: 248px minmax(0, 1fr); }
   .home, .page { padding: 40px 48px 44px; }
+  .home { padding-left: 32px; padding-right: 20px; }
+  .desk { grid-template-columns: minmax(0, 720px) 320px; max-width: 1072px; margin-left: auto; }
+  .home > .dock { width: calc(100% - 352px); max-width: 720px; flex: none; margin-left: 0; margin-right: 352px; }
   .dock { padding: 18px 48px 16px; margin: 8px -48px 0; }
-  .desk-col { max-width: 1040px; }
-  .desk { grid-template-columns: 1.2fr 1fr; }
-  /* a live task's trail and its asks step out of the thread, into the frame on the right */
-  .page.chat-page .chat.with-live { display: grid; grid-template-columns: minmax(0, 720px) 320px; gap: 0 32px; grid-template-rows: minmax(0, 1fr) auto; justify-content: start; }
-  .page.chat-page .chat.with-live .lines { grid-column: 1; grid-row: 1; }
-  .page.chat-page .chat.with-live .dock { grid-column: 1; grid-row: 2; max-width: none; }
-  .page.chat-page .chat.with-live .working-on { display: block; grid-column: 2; grid-row: 1 / 3; min-height: 0; overflow-y: auto; padding-top: 6px; }
-  .page.chat-page .chat.with-live .thread-side { display: none; }
-  .page.chat-page .dock { margin: 0; }
+  .home .dock { padding: 20px 0; }
+  .page.chat-page .chat { display: grid; grid-template-columns: minmax(0, 720px) 320px; gap: 0 32px; grid-template-rows: minmax(0, 1fr) auto; justify-content: space-between; }
+  .page.chat-page .chat .lines { grid-column: 1; grid-row: 1; }
+  .page.chat-page .chat .dock { grid-column: 1; grid-row: 2; max-width: none; margin: 0; }
+  .page.chat-page .chat .working-on { grid-column: 2; grid-row: 1 / 3; min-height: 0; overflow-y: auto; padding-top: 6px; }
 }
 @media (min-width: 1920px) {
   .shell { grid-template-columns: 248px minmax(0, 1fr); }
   .home, .page { padding: 44px 64px 48px; }
+  .home { padding-right: 20px; }
   .dock { padding: 18px 64px 16px; margin: 8px -64px 0; }
-  .desk-col { max-width: 1200px; }
+  .home .dock { padding: 20px 0; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 
@@ -418,9 +431,9 @@ button.code { border: 0; color: var(--ink); cursor: pointer; display: grid; gap:
 
 .sticky-top { position: sticky; top: 0; z-index: 5; margin: -18px -18px 0; padding: 14px 18px 0; background: color-mix(in srgb, var(--bg) 78%, transparent); backdrop-filter: blur(14px); }
 /* A chat's header is an opaque band: lines scroll under it, never half-show through. */
-.chat-page .sticky-top { background: var(--bg); backdrop-filter: none; }
+.chat-page .sticky-top { margin: -16px -16px 0; padding: 16px; background: var(--bg); backdrop-filter: none; }
 .lines .end { scroll-margin-bottom: 140px; }
-@media (min-width: 900px) { .sticky-top { margin: -32px -36px 0; padding: 24px 36px 0; } }
+@media (min-width: 900px) { .sticky-top { margin: -32px -36px 0; padding: 24px 36px 0; } .chat-page .sticky-top { margin: 0; padding: 0; } }
 
 /* ---------- first run, sign-in and connect cards (the onboarding prototype) ---------- */
 .hello-brand { justify-self: start; margin-bottom: 4px; }
@@ -446,10 +459,7 @@ button.code { border: 0; color: var(--ink); cursor: pointer; display: grid; gap:
 .qr.expired { display: grid; place-items: center; color: var(--mute); border: 1px dashed var(--line); background: none; }
 
 /* The chat list: a search box on top, then each thread's last line, time and unread count. */
-.chats .search { margin: 8px 0 4px; }
-.chat-end { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; min-width: 52px; }
-.chat-end .badge { margin-left: 0; }
-.chats .job .grow { min-width: 0; }
+
 .side-row .grow { min-width: 0; }
 .side-meter { display: block; padding: 6px 10px 10px; line-height: 1.3; }
 .how { margin: 8px 0; padding-left: 22px; display: grid; gap: 6px; font-size: 14px; }

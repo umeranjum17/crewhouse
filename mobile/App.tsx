@@ -359,7 +359,7 @@ function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
 }
 
 // ---------- the app ----------
-type Route = { view: 'home' | 'chief' | 'crew' | 'helper' | 'things' | 'routines' | 'add' | 'phone'; id?: string; tab?: string; m?: number };
+type Route = { view: 'home' | 'chief' | 'room' | 'crew' | 'helper' | 'things' | 'routines' | 'add' | 'phone'; id?: string; tab?: string; m?: number };
 /** `offline`: the screens show what this phone kept, read-only, until the home computer answers again. */
 type Ctx = { state: Json; tick: number; refresh: () => void; go: (r: Route, replace?: boolean) => void; back: () => void; canAct: boolean; offline: boolean; open: (c: A.Card) => void };
 
@@ -458,7 +458,7 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
   if (!state.person.onboarded && canAct) return <Hello {...ctx} />;
   const nav: [Route['view'], string, art.Tab][] = [['home', 'Home', 'home'], ['crew', 'Crew', 'crew'], ['things', 'Things', 'things'], ['routines', 'Routines', 'routines'], ['phone', 'Settings', 'settings']];
   // In any chat Chats is lit; Crew is lit only on Crew and Add.
-  const active = route.view === 'add' ? 'crew' : ['chief', 'helper'].includes(route.view) ? 'home' : route.view;
+  const active = route.view === 'add' ? 'crew' : ['chief', 'helper', 'room'].includes(route.view) ? 'home' : route.view;
   const live = sheet && A.cards(state).find((c) => c.id === sheet.id);
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior="height">
@@ -481,6 +481,7 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
       <View style={{ flex: 1 }}>
         {route.view === 'home' && <Home {...ctx} />}
         {route.view === 'chief' && <ChiefPage {...ctx} m={route.m} />}
+        {route.view === 'room' && <Room {...ctx} />}
         {route.view === 'crew' && <Crew {...ctx} />}
         {route.view === 'helper' && <HelperPage {...ctx} id={route.id!} tab={route.tab ?? 'chat'} m={route.m} setTab={(tab) => setStack((st) => [...st.slice(0, -1), { ...route, tab }])} />}
         {route.view === 'routines' && <Page title="Routines" lead="Jobs the crew does on a schedule."><RoutineList {...ctx} /></Page>}
@@ -657,20 +658,20 @@ function NeedsRows({ state, cards, open }: { state: Json; cards: A.Card[]; open:
   return (
     <View>
       {shown.map((c, i) => (
-        <Pressable key={c.id} style={[s.row, { paddingVertical: 10, borderTopWidth: i ? StyleSheet.hairlineWidth : 0, borderTopColor: t.line }]}
+        <Pressable key={c.id} style={[s.listRow, { borderTopWidth: i ? StyleSheet.hairlineWidth : 0, borderTopColor: t.line }]}
           onPress={() => open(c)} accessibilityLabel={c.head}>
-          <T tone="mute" style={s.small}>{i + 1}</T>
-          <Face who={crew.find((h) => h.id === c.helper) ?? { kind: 'pip', name: c.helper }} size={24} />
-          <View style={{ flex: 1 }}><T style={s.b}>{c.head}</T><T tone="mute" style={s.small} lines={1}>{c.words}</T></View>
-          <T tone="mute">›</T>
+          <Face who={crew.find((h) => h.id === c.helper) ?? { kind: 'pip', name: c.helper }} size={36} />
+          <View style={{ flex: 1 }}><T style={s.rowTitle} lines={1}>{c.head}</T><T tone="ink2" style={s.small} lines={1}>{c.words}</T></View>
+          <View style={{ alignItems: 'flex-end', gap: 4 }}><T tone="mute" style={s.label}>{A.briefTime(c.at)}</T><View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: t.pink }} /></View>
         </Pressable>
       ))}
-      {!all && more > 0 && <Btn ghost label={`${more} more ${more === 1 ? 'needs' : 'need'} you`} onPress={() => setAll(true)} />}
+      {!all && more > 0 && <Btn ghost label={`See all ${cards.length}`} onPress={() => setAll(true)} />}
     </View>
   );
 }
 
 function Home(ctx: Ctx) {
+  const t = useLook();
   const { state, go, refresh, canAct, offline, open } = ctx;
   const needs = A.needsYou(state);
   const chief = chiefNow(state, offline);
@@ -678,51 +679,41 @@ function Home(ctx: Ctx) {
   return (
     <View style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={s.page} keyboardShouldPersistTaps="handled">
-        {/* One header row: his face carries his mood, her greeting opens the list below. */}
-        <View style={s.row}>
-          <Face who="chief" size={32} mood={chief.mood} />
-          <T style={[s.h1, { fontSize: 22, lineHeight: 28, marginVertical: 0, flex: 1 }]}>{A.greeting()}, {state.person.address ?? state.person.name}</T>
-        </View>
+        <View style={{ marginBottom: 20 }}><T style={s.h1}>{A.greeting()}, {state.person.address ?? state.person.name}</T><T tone="ink2" style={s.small}>{A.homeSummary(state)}</T></View>
         {!!A.resting(state) && <Card><T>{A.resting(state)}. I'll pick things back up then.</T></Card>}
-        {needs.length > 0 && <Card><NeedsRows state={state} cards={needs} open={open} /></Card>}
+        {needs.length > 0 && <View><Label>Needs you</Label><View style={[s.listGroup, { backgroundColor: t.solid, borderColor: t.line }]}><NeedsRows state={state} cards={needs} open={open} /></View></View>}
         <ChatList state={state} go={go} mood={chief.mood} />
+        <JobList state={state} go={go} />
       </ScrollView>
-      {canAct && <View style={s.dock}><Composer placeholder="Ask Chief anything…" onSend={toChief} chat="chief" /></View>}
+      {canAct && <View style={s.dock}><Composer placeholder="Ask Chief anything" onSend={toChief} chat="chief" /></View>}
     </View>
   );
 }
 
-/** Every chat, like a messaging app: Chief on top, then whoever spoke last; search finds words across them. */
 function ChatList({ state, go, mood }: { state: Json; go: Ctx['go']; mood?: art.Mood }) {
   const t = useLook();
-  const [q, setQ] = useState('');
-  const [hits, setHits] = useState<Json | null>(null);
-  useEffect(() => {
-    if (q.trim().length < 2) { setHits(null); return; }
-    const x = setTimeout(() => api.search(q.trim()).then(setHits).catch(() => {}), 250);
-    return () => clearTimeout(x);
-  }, [q]);
   const crew = A.crew(state);
-  const to = (id: string): Route => (id === 'chief' ? { view: 'chief' } : { view: 'helper', id });
-  const face = (id: string) => (id === 'chief' ? <Face who="chief" size={46} mood={mood} /> : <Face who={crew.find((h) => h.id === id) ?? 'chief'} size={46} />);
-  const row = (key: string, id: string, name: string, line: string, at: number, unread = 0, msg?: number) => (
-    <Pressable key={key} style={s.job} onPress={() => go(msg ? (id === 'chief' ? { view: 'chief', m: msg } : { view: 'helper', id, m: msg }) : to(id))} accessibilityLabel={`${name}${unread ? `, ${unread} new` : ''}`}>
-      {face(id)}
-      <View style={{ flex: 1 }}><T style={s.b}>{name}</T><T tone={unread ? 'ink' : 'mute'} lines={1}>{line}</T></View>
-      <View style={{ alignItems: 'flex-end', gap: 4 }}>
-        <T tone="mute" style={s.small}>{at ? A.clock(at) : ''}</T>
-        {unread > 0 && <Text style={[s.unread, { backgroundColor: t.wait }]}>{A.unreadBadge(unread)}</Text>}
-      </View>
-    </Pressable>
-  );
-  const found = A.found(state, hits);
-  return (
-    <Card>
-      <TextInput style={[s.input, { color: t.ink, borderColor: t.line }]} value={q} onChangeText={setQ} placeholder="Search your chats" placeholderTextColor={t.mute} accessibilityLabel="Search your chats" />
-      {hits ? (found.length ? found.map((f) => row(f.key, f.bot, f.name, f.text, f.at, 0, 'msg' in f ? f.msg : undefined)) : <T tone="mute" style={s.centerText}>Nothing matches “{q.trim()}”.</T>)
-        : A.chats(state).map((c) => row(c.id, c.id, c.name, c.line, c.at, c.unread))}
-    </Card>
-  );
+  return <View><Label>Chats</Label><View style={[s.listGroup, { backgroundColor: t.solid, borderColor: t.line }]}>
+    {A.chats(state).map((c, i) => <Pressable key={c.id} style={[s.listRow, { borderTopColor: t.line, borderTopWidth: i ? StyleSheet.hairlineWidth : 0 }]}
+      onPress={() => go(c.id === 'chief' ? { view: 'chief' } : c.id === 'room' ? { view: 'room' } : { view: 'helper', id: c.id })} accessibilityLabel={`${c.name}${c.unread ? `, ${c.unread} new` : ''}`}>
+      {c.id === 'room' ? <View style={{ width: 40, flexDirection: 'row' }}>{crew.slice(0, 2).map((h, n) => <View key={h.id} style={{ marginLeft: n ? -12 : 0 }}><Face who={h} size={26} /></View>)}</View>
+        : <Face who={c.who} size={40} mood={c.id === 'chief' ? mood : undefined} />}
+      <View style={{ flex: 1 }}><T style={s.rowTitle} lines={1}>{c.name}</T><T tone="ink2" style={s.small} lines={1}>{c.line}</T></View>
+      <View style={{ alignItems: 'flex-end', gap: 4 }}><T tone="mute" style={s.label}>{c.at ? A.clock(c.at) : ''}</T>
+        {c.unread > 0 && <Text style={[s.unread, { backgroundColor: t.pink, color: t.surface }]}>{A.unreadBadge(c.unread)}</Text>}</View>
+    </Pressable>)}
+  </View></View>;
+}
+
+function JobList({ state, go }: { state: Json; go: Ctx['go'] }) {
+  const t = useLook();
+  return <View><Label>Hand the crew a job</Label><View style={[s.listGroup, { backgroundColor: t.solid, borderColor: t.line }]}>
+    {A.jobs(state).slice(0, 3).map((j, i) => <Pressable key={j.bot + j.label} style={[s.listRow, { borderTopColor: t.line, borderTopWidth: i ? StyleSheet.hairlineWidth : 0 }]}
+      onPress={() => { if (j.needs.length) go({ view: 'phone' }); else { keepDraft('chief', j.ask); go({ view: 'chief' }); } }}>
+      <Face who={A.crew(state).find((h) => h.id === j.bot) ?? { kind: 'pip', name: j.bot }} size={28} />
+      <View style={{ flex: 1 }}><T style={s.rowTitle} lines={1}>{j.label}</T>{!!j.needs.length && <T tone="mute" style={s.small}>{A.jobNeeds(j.needs)}</T>}</View><T tone="mute">›</T>
+    </Pressable>)}
+  </View></View>;
 }
 
 // ---------- a chat ----------
@@ -737,7 +728,7 @@ function Chat({ id, m, state, tick, refresh, canAct, offline, open }: Ctx & { id
   const scroll = useRef<ScrollView>(null);
   const ys = useRef(new Map<number, number>()); // each line's y, for landing on the matched one
   const landed = useRef(0); // the anchor we already landed on: once per line, never again on every tick
-  const [land, setLand] = useState(0);
+
   const lines = A.lines(page, id);
   const [seed, setSeed] = useState(0); // a starter chip fills the box from outside; remount reads the draft back
   const h = A.crew(state).find((x) => x.id === id);
@@ -757,37 +748,27 @@ function Chat({ id, m, state, tick, refresh, canAct, offline, open }: Ctx & { id
     if (y === undefined) return;
     landed.current = around;
     scroll.current?.scrollTo({ y: Math.max(0, y - 240), animated: false });
-    setLand(around);
-    const timer = setTimeout(() => setLand(0), 1300);
-    return () => clearTimeout(timer);
+
   }, [around, lines.length]);
   return (
     <View style={{ flex: 1 }}>
       <ScrollView ref={scroll} style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 10 }}
         onContentSizeChange={() => { if (!around) scroll.current?.scrollToEnd({ animated: false }); }}>
-        {!lines.length && page && <View style={{ alignItems: 'center', gap: 10 }}>
-          <T tone="mute" style={s.centerText}>Say hello to {name}. Ask for anything, in your own words.</T>
-          {id === 'chief' && canAct && <View style={[s.chips, { justifyContent: 'center' }]}>
+        {!lines.length && page && id === 'chief' && canAct && <View style={[s.chips, { justifyContent: 'center' }]}>
             {A.ideas(state).map((i: Json) => <Btn key={i.bot + i.label} label={`✦ ${i.label}`} onPress={() => { keepDraft(id, i.ask); setSeed((n) => n + 1); }} />)}
           </View>}
-        </View>}
-        {lines.map((l) => (
+        {lines.map((l, i) => (
           <View key={l.id} onLayout={(e) => ys.current.set(l.id, e.nativeEvent.layout.y)}
             style={[s.line, l.from === 'me' && { alignSelf: 'flex-end' }, l.from === 'note' && { maxWidth: '92%' }]}>
-            {l.from === 'chief' && <T tone="pinkInk" style={[s.small, s.b, { marginLeft: 10 }]}>Chief</T>}
-            {!!l.text && (
-              <View style={[s.bubbleText, l.from === 'me' ? { backgroundColor: t.night ? '#2a2340' : t.go, borderBottomRightRadius: 6 }
-                : l.from === 'note' ? { backgroundColor: t.card } : { backgroundColor: t.solid, borderTopLeftRadius: 6 },
-                land === l.id && { backgroundColor: t.night ? '#3a3152' : '#ffe9c4' }]}>
-                <Text style={[s.text, { color: l.from === 'me' && !t.night ? t.goInk : t.ink }]}>{l.text}</Text>
-              </View>
-            )}
+            {l.from !== 'me' && l.from !== 'note' && !(i && lines[i - 1].from === l.from) && <View style={s.row}><Face who={l.from === 'chief' ? 'chief' : h ?? 'chief'} size={28} /><T style={[s.small, s.b]}>{l.from === 'chief' ? 'Chief' : name}</T><T tone="mute" style={s.label}>{l.at ? A.clock(l.at) : ''}</T></View>}
+            {!!l.text && <View style={l.from === 'me' ? [s.bubbleText, { backgroundColor: t.soft, borderColor: t.line, borderWidth: 1, borderBottomRightRadius: 6 }] : { paddingLeft: 36 }}>
+              <T>{l.text}</T></View>}
             {l.files.map((f) => <Card key={f.url}><FileRow f={f} /></Card>)}
+            {cards.filter((c) => lines.findLastIndex((x) => (x.at ?? 0) <= c.at) === i).map((c) => <AskCard key={c.id} c={c} who={h} state={state} onDone={refresh} canAct={canAct} offline={offline} open={open} />)}
           </View>
         ))}
         {canAct && !!last?.choices.length && <View style={s.chips}>{last.choices.map((c) => <Btn key={c} label={c} onPress={() => send(c)} />)}</View>}
-        <Steps steps={trail} />
-        {cards.map((c) => <AskCard key={c.id} c={c} who={h} state={state} onDone={refresh} canAct={canAct} offline={offline} open={open} />)}
+        {cards.filter((c) => !lines.length || lines.every((x) => (x.at ?? 0) > c.at)).map((c) => <AskCard key={c.id} c={c} who={h} state={state} onDone={refresh} canAct={canAct} offline={offline} open={open} />)}
       </ScrollView>
       {canAct ? <View style={s.dock}><Composer key={seed} placeholder={id === 'chief' ? 'Ask Chief anything…' : `Message ${name}…`} onSend={send} chat={id} /></View>
         : <T tone="mute" style={[s.small, { padding: 16 }]}>{offline ? "You can reply once the home computer is back." : "This phone watches the crew; it can't send messages."}</T>}
@@ -810,12 +791,29 @@ function ChiefPage(ctx: Ctx & { m?: number }) {
   return (
     <View style={{ flex: 1 }}>
       <Head onBack={ctx.back}>
-        <Face who="chief" size={44} />
-        <View style={{ flex: 1, gap: 4, alignItems: 'flex-start' }}><T style={s.b}>Chief</T><Pill tone={mood === 'ask' ? 'wait' : mood === 'rest' ? 'off' : 'ok'}>{line}</Pill></View>
+        <Face who="chief" size={32} mood={mood} />
+        <View style={{ flex: 1 }}><T style={s.rowTitle}>Chief</T><T tone="ink2" style={s.small} lines={1}>{line}</T></View>
       </Head>
       <Chat {...ctx} id="chief" m={ctx.m} />
     </View>
   );
+}
+
+function Room(ctx: Ctx) {
+  const { state, tick, refresh, canAct, offline } = ctx;
+  const [page, setPage] = useState<Json>(null);
+  const load = useCallback(() => api.room().then(setPage).catch(() => {}), []);
+  useEffect(() => { void load(); }, [load, tick]);
+  const crew = A.crew(state);
+  const lines = A.room(page, state);
+  const send = async (text: string) => { const ok = await attempt(() => api.post('chief', text, { room: true }), undefined, true); if (ok) { void load(); refresh(); } return ok; };
+  return <View style={{ flex: 1 }}><Head onBack={ctx.back}><View style={{ width: 40, flexDirection: 'row' }}>{crew.slice(0, 2).map((h, i) => <View key={h.id} style={{ marginLeft: i ? -12 : 0 }}><Face who={h} size={26} /></View>)}</View><View style={{ flex: 1 }}><T style={s.rowTitle}>The crew</T><T tone="ink2" style={s.small}>Work handed between helpers</T></View></Head>
+    <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>{lines.map((l: { id: number; who?: A.Helper; from?: string; to?: string; text: string; at: number; author: string; files: A.FileView[] }) => <View key={l.id} style={{ maxWidth: '92%', alignSelf: l.author === 'person' ? 'flex-end' : 'flex-start' }}>
+      {l.who && <View style={s.row}><Face who={l.who} size={28} /><T style={s.rowTitle}>{l.from && l.to ? `${l.from} → ${l.to}` : l.who.name}</T><T tone="mute" style={s.label}>{A.clock(l.at)}</T></View>}
+      <T style={{ paddingLeft: l.author === 'person' ? 0 : 36 }}>{l.text}</T>{l.files.map((f) => <Card key={f.url}><FileRow f={f} /></Card>)}
+    </View>)}{!lines.length && <T tone="mute">Start a job here and follow along as the crew works together.</T>}</ScrollView>
+    {canAct ? <View style={s.dock}><Composer placeholder="Message the crew" onSend={send} chat="room" /></View> : <T tone="mute" style={[s.small, { padding: 16 }]}>{offline ? "You can reply once the home computer is back." : "This phone watches the crew; it can't send messages."}</T>}
+  </View>;
 }
 
 // ---------- the crew ----------
@@ -855,8 +853,8 @@ function HelperPage(ctx: Ctx & { id: string; tab: string; m?: number; setTab: (t
     <View style={{ flex: 1 }}>
       {tab === 'chat' ? <>
         <Head onBack={back}>
-          <Face who={h} size={48} />
-          <View style={{ flex: 1, gap: 4, alignItems: 'flex-start' }}><T style={s.b}>{h.name}</T><HelperPill h={h} offline={ctx.offline} /></View>
+          <Face who={h} size={32} />
+          <View style={{ flex: 1 }}><T style={s.rowTitle}>{h.name}</T><T tone="ink2" style={s.small} lines={1}>{ctx.offline ? OUT : h.status}</T></View>
           {b?.task && canAct && <Btn label="Stop" onPress={() => attempt(async () => { await api.reset(id); refresh(); }, `Stopped ${h.name}`)} />}
           <Btn ghost label="Details" onPress={() => setTab('details')} />
         </Head>
@@ -1210,8 +1208,11 @@ const s = StyleSheet.create({
   job: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 },
   step: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 5 },
   stepDot: { width: 10, height: 10, borderRadius: 5 },
-  line: { maxWidth: '84%', gap: 4, alignSelf: 'flex-start' },
+  line: { maxWidth: '92%', gap: 4, alignSelf: 'flex-start' },
   bubbleText: { paddingHorizontal: 15, paddingVertical: 10, borderRadius: 18 },
+  listGroup: { borderWidth: 1, borderRadius: radius.card, overflow: 'hidden' },
+  listRow: { flexDirection: 'row', alignItems: 'center', minHeight: 56, paddingHorizontal: 14, paddingVertical: 10, gap: 12 },
+  rowTitle: { fontSize: 15, lineHeight: 22, fontWeight: '500' },
   head: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, justifyContent: 'space-between' },
   palCard: { width: '48%', borderRadius: radius.card, borderWidth: 1, padding: 14, alignItems: 'center', gap: 8 },

@@ -32,7 +32,7 @@ export type DocPart = { kind: 'heading' | 'p' | 'li' | 'table'; text?: string; b
 export type DocView = { name: string; parts: DocPart[] };
 export type Step = { at: number; text: string; now?: boolean; asked?: boolean; seq: number; undo?: boolean };
 /** `unsure`: crewd's line for a job that acted but couldn't confirm it worked, shown apart from the helper's own words. */
-export type Line = { id: number; from: 'me' | 'them' | 'chief' | 'note'; text: string; files: FileView[]; choices: string[]; unsure?: boolean };
+export type Line = { id: number; from: 'me' | 'them' | 'chief' | 'note'; text: string; files: FileView[]; choices: string[]; at?: number; unsure?: boolean };
 export type App = { id: string; name: string; mark: string; bg: string; on: boolean; does: string; warns?: boolean };
 
 // ---------- words ----------
@@ -412,6 +412,7 @@ export function chats(state: Json): Chat[] {
   return [lead, pin, ...rest];
 }
 export const unreadBadge = (n: number) => (n > 9 ? '9+' : String(n));
+export const briefTime = (t: number) => { const m = Math.floor((Date.now() - t) / 60_000); return m >= 0 && m < 60 ? `${Math.max(1, m)}m` : clock(t); };
 
 /** Home's Needs you, one compact list: spending and sending first, then questions, newest first inside each group.
  *  A draft for the person to send belongs here; a plain suggestion or an app connection stays in its helper's chat — nothing to act on from Home itself. */
@@ -550,12 +551,19 @@ export function things(state: Json): Thing[] {
 
 export type Job = { bot: string; label: string; ask: string; money: boolean; needs: string[] };
 
+/** Home's one-line state, from the same needs and work rows shown below it. */
+export function homeSummary(state: Json) {
+  const needs = needsYou(state).length;
+  const working = work(state).filter((w) => !w.waiting).length;
+  return `${needs} ${needs === 1 ? 'thing needs' : 'things need'} you · ${working} ${working === 1 ? 'helper' : 'helpers'} working`;
+}
+
 /** Home's standing "hand me a job" list: the jobs the crew offers to do end to end, from crewd's `ideas[]` — which is
  *  already only what this crew can do. Money back first, then the everyday jobs. A row that needs an app the person
  *  hasn't connected says what it needs instead of dead-ending, and never fills the box. (docs/ui-contract.md) */
 export function jobs(state: Json): Job[] {
   const rows: Job[] = (state.ideas ?? []).map((i: Json) => ({
-    bot: String(i.bot ?? 'chief'), label: plain(i.promise ?? ''), ask: String(i.ask ?? ''),
+    bot: String(i.bot ?? 'chief'), label: plain(i.ask ?? ''), ask: String(i.ask ?? ''),
     money: i.group === 'money', needs: ((i.needs ?? []) as string[]).map((w) => plain(w)).filter(Boolean),
   }));
   return rows.sort((a, b) => Number(b.money) - Number(a.money) || a.needs.length - b.needs.length);
@@ -670,7 +678,7 @@ export function lines(page: Json, bot: string): Line[] {
     // Another helper handing this one a job: a note in its words, "Reel asked: …".
     if (!['person', 'bot', 'chief'].includes(m.author)) return { id: m.id, from: 'note', text: `${String(m.author).replace(/^./, (c) => c.toUpperCase())} asked: ${plain(text)}`, files: [], choices: [] };
     return { id: m.id, from: m.author === 'person' ? 'me' : m.author === 'chief' && bot !== 'chief' ? 'chief' : 'them',
-      text: m.author === 'person' ? (pics.length && /^Here (is a photo|are some photos)\.$/.test(text) ? '' : noTools(text)) : plain(text), files: pics, choices: (m.choices ?? []).map(plain), unsure: m.author === 'bot' && /^Not sure it worked:|^[^.]{1,40} isn't sure “/.test(text) };
+      text: m.author === 'person' ? (pics.length && /^Here (is a photo|are some photos)\.$/.test(text) ? '' : noTools(text)) : plain(text), files: pics, choices: (m.choices ?? []).map(plain), at: m.at ? at(m.at) : undefined, unsure: m.author === 'bot' && /^Not sure it worked:|^[^.]{1,40} isn't sure “/.test(text) };
   }).filter((l: Line) => l.text || l.files.length);
 }
 
