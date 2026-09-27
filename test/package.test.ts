@@ -84,7 +84,11 @@ test('the downloaded app keeps answering while it fetches the helpers\' tools on
   assert.ok(r.ok && Date.now() - t0 < 1000, 'and crewd answers at once meanwhile');
   assert.match(A.gettingReady(await r.json()), /getting|Getting/);
   for (let i = 0; i < 50 && !existsSync(join(root, 'install-env')); i++) await sleep(100);
-  const env = readFileSync(join(root, 'install-env'), 'utf8');
+  // The installers run one after another and each re-opens the file with `>` (truncating) before `env` writes, so wait
+  // for words in it, not mere existence: a busy CI box reads between the truncate and the write and sees nothing.
+  const envFile = join(root, 'install-env');
+  let env = '';
+  for (let i = 0; i < 100; i++) { if (existsSync(envFile) && (env = readFileSync(envFile, 'utf8'))) break; await sleep(100); }
   assert.doesNotMatch(env, /^(XDG_|WAYLAND_DISPLAY=)/m, 'the installers see none of the owner\'s desktop session');
   assert.match(env, new RegExp(`^CREWHOUSE_TOOLS_DIR=${join(root, 'first', 'tools')}$`, 'm'));
 });

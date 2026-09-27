@@ -104,12 +104,18 @@ export const sheetWords = (n: number) => (n === 1 ? 'One sheet' : n > 1 ? `${n} 
 /** How many sections a document has, said the way a person would: "3 sections", "One section", "A document". */
 export const pageWords = (n: number) => (n === 1 ? 'One section' : n > 1 ? `${n} sections` : 'A document');
 
-/** Link only web URLs in document text, leaving punctuation and unsafe-looking strings as literal text. */
+/** Link only web URLs in document text — bare, or a written citation like [SEC](https://…) whose label becomes the
+ *  link text — leaving punctuation, other schemes and unsafe-looking strings as literal text. */
 export function docLinks(text: string): { text: string; href?: string }[] {
-  return text.split(/(https?:\/\/[^\s<>]+)/g).flatMap((part) => {
+  return text.split(/(\[[^\]\n]+\]\(https?:\/\/[^)\s]+\)|https?:\/\/[^\s<>]+)/g).flatMap((part) => {
+    const md = /^\[([^\]\n]+)\]\((https?:\/\/[^)\s]+)\)$/.exec(part);
+    if (md) {
+      const href = safeLink(md[2]);
+      return href ? [{ text: md[1], href }] : part ? [{ text: part }] : [];
+    }
     const url = part.replace(/[”’"')\].,;:]+$/g, '');
     const href = /^https?:\/\//.test(part) ? safeLink(url) : '';
-    return href ? [{ text: url, href }, { text: part.slice(url.length) }] : [{ text: part }];
+    return href ? [{ text: url, href }, ...(part.slice(url.length) ? [{ text: part.slice(url.length) }] : [])] : part ? [{ text: part }] : [];
   });
 }
 
