@@ -2,7 +2,8 @@
 // Open the app with ?demo (Nadia's phone), ?demo=umer (the owner), ?demo=hello (first run), ?demo=first (her first
 // request, waiting for her sign-in), ?demo=answer (Chief's first answer), ?demo=plan (a plan without helpers),
 // ?demo=resting, ?demo=connect (a helper asks for Google Calendar in chat), ?demo=nogoogle (Google not on for the house), ?demo=share (the crew's share used up today, $4 spent), ?demo=claim (Scout asks to fill a line of an unclaimed-money claim),
-// ?demo=return (Scout asks to press a shop's Start return), ?demo=chase (Scout's chase email as a draft to send), ?demo=renewal (Scout's renewal warning and the cancellation email as a draft to send), ?demo=day (Scout's plan of the day, three things in order).
+// ?demo=return (Scout asks to press a shop's Start return), ?demo=chase (Scout's chase email as a draft to send), ?demo=renewal (Scout's renewal warning and the cancellation email as a draft to send), ?demo=day (Scout's plan of the day, three things in order),
+// ?demo=paper (Scout's reply to the school as a draft to approve — the paper, sorted), ?demo=meals (this week's dinners shopped into a cart, waiting on its checkout card).
 // &sheet=signin or &sheet=connect opens that sheet, and &phase=… pins it to one state.
 import type { Json } from './api.ts';
 import { describe, nextRun, parseSchedule } from '../../src/routines.ts';
@@ -18,6 +19,8 @@ const houseGoogle = variant !== 'nogoogle' && !new URLSearchParams(location.sear
 // The day, planned waits on the person's own calendar and mail (?demo=day has both on, ?demo=nogoogle neither).
 const connected = variant === 'connect' ? [] : ['drive', 'gmail', ...(variant === 'day' ? ['calendar'] : [])];
 const dayNeeds = !houseGoogle ? ['Google'] : connected.includes('calendar') ? [] : ['Google Calendar'];
+// The family desk reads the mail and writes the calendar, so it waits on both of the person's own Google apps.
+const paperNeeds = !houseGoogle ? ['Google'] : connected.includes('gmail') ? (connected.includes('calendar') ? [] : ['Google Calendar']) : ['Gmail', 'Google Calendar'];
 
 const svg = (a: string, b: string, label: string) => `data:image/svg+xml,${encodeURIComponent(
   `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="400"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient></defs><rect width="640" height="400" fill="url(#g)"/><text x="320" y="215" font-family="Nunito,sans-serif" font-weight="900" font-size="46" fill="#fff" text-anchor="middle">${label}</text></svg>`)}`;
@@ -126,6 +129,8 @@ const state = {
     { bot: 'scout', promise: "I'll search the government's unclaimed-money registers for our family's names and get the claims ready to file. I'll file it end to end — you just tap approve.", ask: 'Search for money owed to us that nobody has claimed', group: 'money', needs: [] },
     { bot: 'scout', promise: "I'll set up the return, keep the label, and keep checking until the shop says the refund is on its way. Every step asks you first, on its own card.", ask: 'Help me return this and get the refund', group: 'money', needs: [] },
     { bot: 'scout', promise: "I'll turn your mail, your calendar and what's still open into what today actually is.", ask: "Give me my day: what's on, what's waiting on me, what to do first", needs: dayNeeds },
+    { bot: 'scout', promise: "I'll read the letters and forms coming into your mail, put what's due on your calendar, and draft every reply — you read, tap approve, and send.", ask: "Sort the paperwork: what's due, and draft the replies", needs: paperNeeds },
+    { bot: 'scout', promise: "Once a week I'll plan seven dinners everyone will actually eat, write the shopping list sorted by aisle, and put the shop day on your calendar. If you want, I'll fill the cart too — you approve it like any purchase.", ask: "Plan our dinners for the week and write the shopping list", needs: [] },
     { bot: 'scout', promise: "I'll catch a renewal or a price rise before it's charged, and have the cancellation email ready. Every step asks you first, on its own card.", ask: 'Watch my subscriptions so nothing gets renewed without me hearing about it first', group: 'money', needs: houseGoogle ? [] : ['Google'] },
     { bot: 'pip', promise: 'Plan a birthday party', ask: 'Plan a birthday party for ' },
     { bot: 'chief', promise: "What's on this week?", ask: "What's on this week?" },
@@ -150,6 +155,15 @@ const state = {
         words: 'Scout drafted something for the streaming service’s support inbox. Nothing is sent: you post it yourself.',
         draft: { to: 'the streaming service’s support inbox', path: 'files/cancel-family-plan.md', sha: 'demo' },
         preview: { head: 'Draft for the streaming service’s support inbox', body: 'Subject: Family plan — please cancel before 14 June\n\nHello, my Family plan renews on 14 June at $18.99. Please cancel it from that date and confirm in writing that nothing further will be charged to my card.\n\nRegards,\nNadia' } } }]
+    : variant === 'paper' ? [{ id: 19, bot: 'scout', task_id: 50, kind: 'propose', at: now - 30_000, member: me, title: 'Scout drafted something for the school office. Nothing is sent: you post it yourself.', detail: {
+        words: 'Scout drafted something for the school office. Nothing is sent: you post it yourself.',
+        draft: { to: 'the school office', path: 'files/reply-trip-form.md', sha: 'demo' },
+        preview: { head: 'Draft for the school office', body: 'Subject: Ayaan’s trip form — Friday\n\nHello, the signed trip form is in Ayaan’s bag this morning. He takes the packed-lunch option, and I can walk with the group if you are still short of adults.\n\nThank you,\nNadia' } } }]
+    : variant === 'meals' ? [{ id: 20, bot: 'scout', task_id: 51, kind: 'permission', at: now - 30_000, member: me, title: '', detail: {
+        effect: 'spend', spends: true,
+        words: 'Scout wants to place this order at grocer.example: Basmati rice 10 lb, Whole milk (1 gal) x2, Garlic, 2 kg. Total $43.10.',
+        preview: { head: 'The order at grocer.example', body: 'Basmati rice 10 lb — $24.00\nWhole milk (1 gal) x2 — $7.90\nGarlic, 2 kg — $6.20\nTotal $43.10' },
+        order: { shown: '$43.10', known: true, dollars: true } } }]
     : firstRun ? [] : asks.filter((a) => a.member === me),
   events,
   resting: variant === 'resting' ? { chatgpt: now + 95 * min } : {},
@@ -218,6 +232,17 @@ if (variant === 'renewal') pages.scout = { messages: [
   { id: 1, author: 'person', text: 'watch my subscriptions so nothing gets renewed without me hearing about it first' },
   { id: 2, author: 'bot', text: 'Your streaming Family plan renews on 14 June at $18.99 — read off your own account page, not the page new customers see. Ten days ahead of the bill, so you hear it now.' },
   { id: 3, author: 'bot', text: 'The cancellation email is on a card below, in your name. Nothing is sent and nothing is cancelled yet: you read it and post it yourself. If you would rather I pressed Cancel on your account page, say so — I’ll ask you again on a card naming the button and what it changes.' },
+], notes: '', tasks: [] };
+// The paper, sorted (?demo=paper): the week's letters in one line, and the reply sitting below as a draft to approve.
+if (variant === 'paper') pages.scout = { messages: [
+  { id: 1, author: 'person', text: "Sort the paperwork: what's due, and draft the replies" },
+  { id: 2, author: 'bot', text: 'Four letters came in. Two are done: the dentist letter needs nothing, and the trip form is filled in on the school\'s page — its card asked you first.\nDue this week: the club payment by Thursday (I\'ve put it on your calendar), and the doctor\'s form to sign at the desk.\nThe reply to the school office is on a card below, in your name. Nothing is sent: you read it and post it yourself.' },
+], notes: '', tasks: [] };
+// The meals, planned (?demo=meals): the week's dinners and the list, and the cart waiting on its checkout card.
+if (variant === 'meals') pages.scout = { messages: [
+  { id: 1, author: 'person', text: 'Plan our dinners for the week and write the shopping list' },
+  { id: 2, author: 'bot', text: 'Seven dinners, one line each, nothing over forty minutes on a school night — Friday stays pizza night, and Sunday\'s roast covers Monday\'s leftovers.\nThe list is below, sorted the way you walk the shop: produce first, then chilled, pantry, freezer. The shop day is on your calendar for Saturday morning.\nYou asked me to fill the cart too: it\'s at the checkout on a card, every item and the total. Placing the order is yours.' },
+  { id: 3, author: 'system', text: 'Delivered files/dinners-and-shopping-list.md: Seven dinners and the list, sorted by aisle' },
 ], notes: '', tasks: [] };
 // The day, planned, answered where the job was handed over (?demo=day): one message, three things, in order, at times.
 if (variant === 'day') pages.scout = { messages: [
