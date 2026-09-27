@@ -269,3 +269,104 @@ test('a press the page cannot name still asks, in the plain sentence', async () 
   await settled(db, t);
   done();
 });
+
+// ---- the return-and-chase job: the same Home list, the same press card, a chase that is only ever a draft ----
+
+const returns = (crew: any) => crew.snapshot().ideas.find((i: any) => /return this and get the refund/.test(i.ask));
+
+const order = `### Page state
+- Page URL: https://www.shop.example/orders/98765/return
+- Page Snapshot:
+\`\`\`yaml
+- main [ref=e1]:
+  - heading "Order 98765" [level=1] [ref=e2]
+  - text: "Espresso machine — delivered 12 May"
+  - text: "Returns are free within 30 days. Starting a return books a collection and tells the shop to expect the item."
+  - button "Start return" [ref=e8]
+\`\`\``;
+
+test('Home lists the return job beside the other two: the web is enough, and every step says it asks first', async () => {
+  const { crew, done } = setup();
+  assert.equal(returns(crew).group, 'money', 'money back leads the list');
+  assert.deepEqual(returns(crew).needs, [], 'a guest return waits on nothing: the shop page is read without an account');
+  assert.match(returns(crew).promise, /Every step asks you first, on its own card/);
+  assert.match(returns(crew).ask, /return this and get the refund/);
+  done();
+});
+
+test('starting a return: the press asks first, on a card naming the button, the site and what it changes', async () => {
+  const { db, crew, cfg, done } = setup();
+  const file = join(cfg.crewDir, 'bots', 'scout', 'bot.json');
+  writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, 'utf8')), signedIn: ['shop.example'] }, null, 2));
+  const { task: t } = (await crew.post('scout', 'ask permission: start the return for order 98765'))!;
+  await until('working', () => crew.sessionOf('scout'));
+  const live = (crew as any).live.get('scout');
+  live.page = 'https://www.shop.example/orders/98765/return';
+  live.snapshot = order;
+  const open = () => db.get("SELECT * FROM asks WHERE bot = 'scout' AND state = 'open'");
+  const press = (crew as any).gate('scout', 'browser', { args: ['click', 'e8'] });
+  await until('asked', open);
+  assert.equal(state(db, t), 'needs_you', 'the return is not started while the card waits');
+  const card = crew.snapshot().asks.find((a: any) => a.id === open()!.id)!;
+  assert.equal(card.detail.effect, 'send');
+  assert.equal(card.detail.press, true, 'acting on a site, never a message ready to send');
+  assert.equal(card.detail.words, 'Scout wants to press “Start return” on shop.example, a site you signed it in to.');
+  assert.equal(card.detail.preview.head, 'What Scout will press on shop.example');
+  assert.match(card.detail.preview.body, /Returns are free within 30 days/, "what it changes, in the page's own words");
+  assert.match(card.detail.preview.body, /Start return/, 'the button, as the page writes it');
+  assert.equal(JSON.parse(open()!.detail).key, undefined, 'a press carries no key: asked every time');
+  assert.equal(card.detail.always, undefined, 'so the card offers no Always OK');
+  await crew.answer(open()!.id, { answer: 'allow' });
+  assert.equal(await press, undefined, 'the yes starts the return');
+
+  // The next press on the same page is its own card again: no standing answer for acting as the person.
+  const again = (crew as any).gate('scout', 'browser', { args: ['click', 'e8'] });
+  await until('asked again', open);
+  assert.notEqual(crew.snapshot().asks.find((a: any) => a.id === open()!.id), card, 'a new card, not the old one');
+  await crew.answer(open()!.id, { answer: 'deny' });
+  assert.equal((await again).block, true, 'the second yes was only ever for the first press');
+  await release(crew, 'scout', 'The return is started; the rest waits on its own cards.');
+  await settled(db, t);
+  done();
+});
+
+test('the chase email is a draft in the person\u2019s name: the yes records the approval, and nothing is sent', async () => {
+  const { db, crew, done } = setup();
+  const chase = 'Subject: Order 98765 — returned 16 May, no refund yet.\n\nHello, my return reached you on 16 May, inside your own 30-day window. The order page still shows no refund. Please confirm the payment. Regards,';
+  const { task: t } = (await crew.post('scout', 'The shop is past its own window. Write the chase email, put it in front of me, and ask permission before anything more. '
+    + `[tool write {"path":"files/chase-order-98765.md","content":"${chase.replace(/\n/g, '\\n')}"}] `
+    + '[tool crew_draft {"path":"files/chase-order-98765.md","to":"the shop\u2019s support inbox"}] '
+    + '[tool crew_outcome {"worked": false, "seen": "The chase email is a draft on your card; reading it and sending it is yours."}]'))!;
+  await until('working', () => crew.sessionOf('scout'));
+  await until('the draft card', () => db.get("SELECT * FROM asks WHERE bot = 'scout' AND kind = 'propose' AND state = 'open'"));
+  const ask = db.get("SELECT * FROM asks WHERE bot = 'scout' AND kind = 'propose' AND state = 'open'")!;
+  assert.match(ask.title, /drafted something for the shop.s support inbox/);
+  assert.match(ask.title, /Nothing is sent: you post it yourself/);
+  const d = JSON.parse(ask.detail);
+  assert.equal(d.draft.to, 'the shop\u2019s support inbox');
+  assert.match(d.preview.body, /Order 98765/, 'the card shows the whole draft before any yes');
+  const view = crew.snapshot().asks.find((a: any) => a.id === ask.id)!;
+  assert.equal(view.detail.yes, 'Approve', 'the yes approves the draft; it is never a send');
+  await crew.answer(ask.id, { answer: 'allow' });
+  await release(crew, 'scout', 'The chase email is a draft on your card; sending it is yours.');
+  await settled(db, t);
+  assert.ok(db.get("SELECT 1 FROM events WHERE kind = 'draft.approved' AND json_extract(data, '$.task') = ?", t), 'the yes is kept as an approval, nothing more');
+  assert.equal(state(db, t), 'unsure', 'a drafted chase is not a sent one: the job is not sure');
+  assert.equal(db.get("SELECT COUNT(*) AS n FROM events WHERE kind = 'mail.sent'")!.n, 0, 'nothing went out');
+  assert.equal((await (crew as any).gate('scout', 'mail', { args: ['send'] })).block, true, 'the mail tool cannot send at all');
+  done();
+});
+
+test('the order page not saying refunded ends the chase not sure, whatever else it says', async () => {
+  const { db, crew, done } = setup();
+  const { task: t } = (await crew.post('scout', 'ask permission: check the order page for order 98765 and tell me whether the refund has landed. '
+    + '[tool crew_outcome {"worked": false, "seen": "The shop\u2019s order page says Return received and shows no refund, so I can\u2019t say the money is on its way."}]'))!;
+  await until('working', () => crew.sessionOf('scout'));
+  await release(crew, 'scout', 'The order page says Return received and shows no refund. I can\u2019t say the money is on its way.');
+  await settled(db, t);
+  assert.equal(state(db, t), 'unsure', 'without the page saying so, the job is not sure');
+  assert.match(lastSaid(db, 'scout')!, /Not sure it worked: .*Return received/);
+  assert.doesNotMatch(lastSaid(db, 'scout')!, /refund (is|has|was) (here|arrived|issued|on its way)|refunded|money is back/i,
+    'the page never said refunded, so nothing does');
+  done();
+});

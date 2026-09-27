@@ -20,6 +20,7 @@
     "summarize-document",
     "use-the-browser",
     "claim-a-price-drop",
+    "return-and-chase",
     "unclaimed-money"
   ],
   "ideas": [
@@ -54,6 +55,14 @@
       "group": "money",
       "promise": "I'll search the government's unclaimed-money registers for our family's names and get the claims ready to file. I'll file it end to end — you just tap approve.",
       "ask": "Search for money owed to us that nobody has claimed"
+    },
+    {
+      "needs": [
+        "web"
+      ],
+      "group": "money",
+      "promise": "I'll set up the return, keep the label, and keep checking until the shop says the refund is on its way. Every step asks you first, on its own card.",
+      "ask": "Help me return this and get the refund"
     }
   ]
 }

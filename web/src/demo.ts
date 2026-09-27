@@ -1,7 +1,8 @@
 // A made-up household in crewd's own shape, plus the fields the engine rework will add (docs/ui-contract.md).
 // Open the app with ?demo (Nadia's phone), ?demo=umer (the owner), ?demo=hello (first run), ?demo=first (her first
 // request, waiting for her sign-in), ?demo=answer (Chief's first answer), ?demo=plan (a plan without helpers),
-// ?demo=resting, ?demo=connect (a helper asks for Google Calendar in chat), ?demo=nogoogle (Google not on for the house), ?demo=share (the crew's share used up today, $4 spent), ?demo=claim (Scout asks to fill a line of an unclaimed-money claim).
+// ?demo=resting, ?demo=connect (a helper asks for Google Calendar in chat), ?demo=nogoogle (Google not on for the house), ?demo=share (the crew's share used up today, $4 spent), ?demo=claim (Scout asks to fill a line of an unclaimed-money claim),
+// ?demo=return (Scout asks to press a shop's Start return), ?demo=chase (Scout's chase email as a draft to send).
 // &sheet=signin or &sheet=connect opens that sheet, and &phase=… pins it to one state.
 import type { Json } from './api.ts';
 import { describe, nextRun, parseSchedule } from '../../src/routines.ts';
@@ -117,6 +118,7 @@ const state = {
   ideas: [
     { bot: 'scout', promise: "I'll keep an eye on what you just bought, and tell you the day you can claim the money back. I'll do it end to end — you just tap approve.", ask: 'Watch something I bought and tell me when I can claim the difference back', group: 'money', needs: ['Gmail'] },
     { bot: 'scout', promise: "I'll search the government's unclaimed-money registers for our family's names and get the claims ready to file. I'll file it end to end — you just tap approve.", ask: 'Search for money owed to us that nobody has claimed', group: 'money', needs: [] },
+    { bot: 'scout', promise: "I'll set up the return, keep the label, and keep checking until the shop says the refund is on its way. Every step asks you first, on its own card.", ask: 'Help me return this and get the refund', group: 'money', needs: [] },
     { bot: 'pip', promise: 'Plan a birthday party', ask: 'Plan a birthday party for ' },
     { bot: 'chief', promise: "What's on this week?", ask: "What's on this week?" },
     { bot: 'reel', promise: 'Make a poster from photos', ask: 'Make a poster from these photos: ' },
@@ -126,6 +128,14 @@ const state = {
         effect: 'send', press: true, fill: true, spends: false,
         words: 'Scout wants to fill in 3 lines on the claim form at unclaimed.example.',
         preview: { head: 'What Scout will fill in on unclaimed.example', body: 'Owner’s full name: Nadia Ali\nAddress the money was owed at: 14 Carter Road, Lahore\nEmail for this claim: nadia@example.net' } } }]
+    : variant === 'return' ? [{ id: 16, bot: 'scout', task_id: 47, kind: 'permission', at: now - 30_000, member: me, title: '', detail: {
+        effect: 'send', press: true, spends: false,
+        words: 'Scout wants to press “Start return” on shop.example, a site you signed it in to.',
+        preview: { head: 'What Scout will press on shop.example', body: 'Espresso machine — delivered 12 May\nReturns are free within 30 days. Starting a return books a collection and tells the shop to expect the item.\nStart return' } } }]
+    : variant === 'chase' ? [{ id: 17, bot: 'scout', task_id: 48, kind: 'propose', at: now - 30_000, member: me, title: 'Scout drafted something for the shop’s support inbox. Nothing is sent: you post it yourself.', detail: {
+        words: 'Scout drafted something for the shop’s support inbox. Nothing is sent: you post it yourself.',
+        draft: { to: 'the shop’s support inbox', path: 'files/chase-order-98765.md', sha: 'demo' },
+        preview: { head: 'Draft for the shop’s support inbox', body: 'Subject: Order 98765 — returned 16 May, no refund yet\n\nHello, my return reached you on 16 May, inside your own 30-day window. The order page still shows no refund.\n\nPlease confirm when the refund goes back to my card. Regards,\nNadia' } } }]
     : firstRun ? [] : asks.filter((a) => a.member === me),
   events,
   resting: variant === 'resting' ? { chatgpt: now + 95 * min } : {},
