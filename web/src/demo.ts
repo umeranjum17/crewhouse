@@ -358,7 +358,7 @@ const doc = variant === 'voice-after' ? briefDoc('muxr launch plan', [
 if (variant.startsWith('phone')) pages.chief = {
   messages: [
     { id: 400, author: 'person', text: 'how do i pair my computer with you?', at: now - 10_000 },
-    { id: 401, author: 'bot', text: 'Here is your Add a phone code.', at: now },
+    { id: 401, author: 'bot', text: 'Open Crewhouse on your phone and scan this, or type the code.', at: now },
   ],
   // A demonstration ticket; no device accepts it. The real card is issued by src/link.ts.
   phoneOffer: { message: 401, token: 'demo-phone', qr: 'crewhouse-demo-phone-pairing', typed: '23456-789AB-CDEFG-HJKMN-PQRST', expires: now + 120_000,

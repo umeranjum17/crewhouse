@@ -27,6 +27,7 @@ test('Chief offers every phone phrasing to the owner, never another member', asy
     assert.equal(page.phoneOffer.typed, offer.typed);
     assert.ok(page.phoneOffer.expires > Date.now());
     assert.equal(page.messages.at(-1)!.id, page.phoneOffer.message);
+    assert.equal(page.messages.at(-1)!.text, 'Open Crewhouse on your phone and scan this, or type the code.');
     assert.equal(phoneOffer(page, 1)?.message, page.messages.at(-1)!.id, 'phone card attaches to this reply');
     assert.equal(phoneOffer(page, member.id), null, 'another member never gets the card');
     assert.ok(!JSON.stringify(page.messages).includes(offer.qr), 'ticket is not in chat text');

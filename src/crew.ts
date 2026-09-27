@@ -889,7 +889,7 @@ export class Crew {
     if (!this.phoneLink) throw fail('Phone pairing is not ready yet', 503);
     const token = randomBytes(16).toString('hex');
     const { qr, typed, expires } = await this.phoneLink.offer('control', member, token);
-    const message = this.say(CHIEF, 'bot', 'Here is your Add a phone code.', null, member);
+    const message = this.say(CHIEF, 'bot', 'Open Crewhouse on your phone and scan this, or type the code.', null, member);
     this.db.run("INSERT INTO settings (key, value) VALUES ('phone.offer.1', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", JSON.stringify({ qr, typed, expires, message, token }));
     return { shown: true }; // the model never sees the one-use ticket
   }
