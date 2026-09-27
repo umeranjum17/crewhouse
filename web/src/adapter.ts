@@ -775,7 +775,7 @@ export function routines(state: Json, bot?: string) {
     quiet: !!r.quiet, watching: r.watch ? host(r.watch) : '',
     last: r.history?.[0] ? lastRun(r.history[0]) : '',
     // Where the last run ended up: the thing it made, else its line in the helper's chat. A skipped run has neither.
-    result: r.history?.[0]?.thing ? { thing: r.history[0].thing } : r.history?.[0]?.msg ? { msg: r.history[0].msg } : null,
+    result: r.history?.[0]?.state === 'done' && r.history[0].thing ? { thing: r.history[0].thing } : r.history?.[0]?.state === 'done' && r.history[0].msg ? { msg: r.history[0].msg } : null,
     changes: (r.history ?? []).filter((h: Json) => h.watch === 'changed').length,
   }));
 }
@@ -783,7 +783,10 @@ const host = (url: string) => { try { return new URL(url).hostname.replace(/^www
 /** A routine's latest run in words; a watch says whether the page changed. */
 function lastRun(h: Json) {
   const at = clock(h.at);
-  if (h.kind === 'routine.skipped') return `Last ran ${at}, skipped while busy`;
+  if (h.state === 'paused') return h.reason?.includes('share of your AI today') ? "Waiting until tomorrow: today's share for background jobs is used up. Tap Do it now to run it anyway." : `Waiting: ${plain(h.reason ?? 'the crew cannot start yet')}`;
+  if (h.kind === 'routine.skipped') return `Didn't start ${at}: another run is still in progress`;
+  if (h.state === 'failed' || h.state === 'unsure') return `Didn't finish: ${plain(h.reason ?? 'please try again')}`;
+  if (h.task && h.state !== 'done') return `Waiting for a result from ${at}`;
   if (h.watch === 'same') return `Checked ${at}, no change`;
   if (h.watch === 'started') return `Started watching ${at}`;
   if (h.watch === 'unreachable') return `Couldn't open the page ${at}; I'll try again next time`;

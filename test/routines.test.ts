@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { setup as lab, settled, release, until, lastSaid } from './lab.ts';
+import * as A from '../web/src/adapter.ts';
 import type { Store } from '../src/db.ts';
 const { describe, nextRun, parseSchedule } = await import('../src/routines.ts');
 
@@ -220,8 +221,9 @@ test('the crew\'s share: routines wait for tomorrow once it is used up, what the
     assert.ok(db.get('SELECT tokens FROM usage WHERE member = 1')!.tokens > 0, 'the turn was counted');
     assert.deepEqual([crew.snapshot().share.choice, crew.snapshot().share.used, crew.snapshot().share.week], ['light', true, 'most']);
 
-    // The routine's run waits for local midnight, and Chief says so once.
-    crew.runRoutine(r.id);
+    // An unattended run waits for local midnight, and Chief says so once.
+    db.run('UPDATE routines SET next_at = ? WHERE id = ?', Date.now() - 1000, r.id);
+    crew.schedule();
     const t = db.get('SELECT * FROM tasks WHERE routine = ? ORDER BY id DESC', r.id)!;
     await until('waiting for tomorrow', () => state(db, t.id) === 'paused');
     const wake = db.get('SELECT wake_at FROM tasks WHERE id = ?', t.id)!.wake_at;
@@ -229,8 +231,27 @@ test('the crew\'s share: routines wait for tomorrow once it is used up, what the
     assert.ok(wake > Date.now() && wake - Date.now() <= 86_400_000);
     const chief = () => db.all("SELECT text FROM messages WHERE bot = 'chief' AND text LIKE 'I''ve stopped the routines%'");
     assert.equal(chief().length, 1);
-    crew.runRoutine(r.id); // still waiting: skipped, not stacked, and no second word from Chief
+    const parked = crew.routines().find((x) => x.id === r.id)!.history[0];
+    assert.doesNotMatch(A.routines(crew.snapshot()).find((x: any) => x.id === r.id)!.last, /Last ran/);
+    assert.match(A.routines(crew.snapshot()).find((x: any) => x.id === r.id)!.last, /Waiting until tomorrow/);
+    assert.equal(parked.state, 'paused');
+    assert.equal(db.get("SELECT COUNT(*) AS n FROM events WHERE kind = 'task.done' AND json_extract(data, '$.task') = ?", t.id)!.n, 0, 'no completion event for the phone');
+    assert.equal(A.work(crew.snapshot()).some((w) => w.title === 'Deal check'), false, 'Home does not claim parked work is running');
+    crew.runRoutine(r.id); // the person's tap resumes the parked job, rather than stacking a second one
+    await settled(db, t.id);
+    assert.equal(state(db, t.id), 'done');
+    assert.equal(db.get("SELECT COUNT(*) AS n FROM events WHERE kind = 'task.done' AND json_extract(data, '$.task') = ?", t.id)!.n, 1);
+    assert.equal(db.get('SELECT COUNT(*) AS n FROM tasks WHERE routine = ?', r.id)!.n, 1);
+    assert.match(A.routines(crew.snapshot()).find((x: any) => x.id === r.id)!.last, /Last ran/);
     assert.equal(chief().length, 1);
+
+    // A fresh Do it now also goes ahead above the share; no claim of completion while queued.
+    crew.runRoutine(r.id);
+    const direct = db.get('SELECT * FROM tasks WHERE routine = ? ORDER BY id DESC', r.id)!;
+    assert.equal(direct.origin, 'routine.now');
+    assert.doesNotMatch(A.routines(crew.snapshot()).find((x: any) => x.id === r.id)!.last, /Last ran/);
+    await settled(db, direct.id);
+    assert.equal(state(db, direct.id), 'done');
 
     // What the person asks for goes ahead anyway.
     const { task: again } = (crew as any).addTask('reel', 'one more card', 'person', undefined, 1);
@@ -360,6 +381,9 @@ test('tell me when something\'s wrong: a routine that fails says so in Chief\'s 
   crew.runRoutine(r.id);
   await timeOut(db.get('SELECT id FROM tasks WHERE routine = ?', r.id)!.id);
   assert.match(lastSaid(db, 'chief')!, /^Reel couldn't finish “Deal check”\. Took longer than an hour, so I stopped it\. It will try again .*\.$/);
+  const last = A.routines(crew.snapshot()).find((x: any) => x.id === r.id)!.last;
+  assert.match(last, /^Didn't finish: Took longer than an hour, so I stopped it\.$/);
+  assert.doesNotMatch(last, /Last ran|token|engine/);
 
   const { task: t } = (await crew.post('reel', 'ask permission: make the card'))!;
   await timeOut(t);

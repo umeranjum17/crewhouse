@@ -1144,7 +1144,7 @@ function RoutineRow({ r, h, act, go, canAct }: { r: Json; h: A.Helper | undefine
         </View>
       </View>}
       {canAct && <View style={s.chips}>
-        <Btn label="Do it now" onPress={() => act(() => api.runRoutine(r.id), 'Started')} />
+        <Btn label="Do it now" onPress={() => act(() => api.runRoutine(r.id), 'Asked to run')} />
         <Btn label={r.paused ? 'Resume' : 'Pause'} onPress={() => act(() => api.routine(r.id, { state: r.paused ? 'on' : 'paused' }))} />
         {!r.digest && <Btn ghost label="Remove" onPress={() => act(() => api.removeRoutine(r.id), 'Removed')} />}
       </View>}
