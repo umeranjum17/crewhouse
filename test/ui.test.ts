@@ -935,3 +935,15 @@ test('a delivered markdown file opens rendered, and no screen leads to the raw f
   assert.match(main, /A\.fileTarget\(t\.files\[0\]\)/, 'Home opens a finished thing the same rendered way');
   assert.doesNotMatch(main, /files\[0\]\?\.url/, 'no raw file address on a Home row');
 });
+
+// The head-to-head's false label: a delivered MP4 wore a DOCX badge because the chip was a hardcoded
+// fallback (XLSX/PDF/else DOCX). Every badge now comes from the file itself; this pins it.
+test('a delivered .mp4 shows a video badge, never DOCX', () => {
+  const f = A.fileView('reel', 'files/mum-birthday_v2.mp4');
+  assert.equal(f.kind, 'video', 'the chat card plays it as a video');
+  assert.equal(A.fileTarget(f)!.chip, 'MP4', 'the chip names the real kind');
+  const [thing] = A.things({ tasks: [{ id: 9, bot: 'reel', title: "Mum's birthday film", state: 'done', updated_at: now, files: ['files/mum-birthday_v2.mp4'] }] });
+  assert.equal(A.fileTarget(thing.files[0])!.chip, 'MP4', 'Home "Done today" and Things show the same file-derived chip');
+  const app = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
+  assert.doesNotMatch(app, /'DOCX'|'XLSX'|'PDF'/, 'no badge is a hardcoded default; every chip comes from the file');
+});
