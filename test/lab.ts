@@ -11,7 +11,7 @@ process.env.CREWHOUSE_SIGNIN_MS ??= '1500';
 const { Store } = await import('../src/db.ts');
 const { Crew } = await import('../src/crew.ts');
 const { loadConfig } = await import('../src/config.ts');
-const stub = await import('../src/stub.ts');
+import type { StubRuntime } from '../src/stub-runtime.ts';
 
 export type Lab = ReturnType<typeof setup>;
 let n = 0;
@@ -39,10 +39,10 @@ export const prompted = (db: any, t: number, n = 1) => until(`task #${t} prompte
 /** The task is past queued and working: done, failed, paused or waiting on the person. */
 export const settled = (db: any, t: number) => until(`task #${t} settled`, () => !['queued', 'working'].includes(task(db, t).state));
 /** The stub model is holding the bot's turn ("ask permission"). */
-export const holding = (crew: any, bot: string) => until(`${bot} holding`, () => { const s = crew.sessionOf(bot); return s && stub.holding(s.sessionId); });
+export const holding = (crew: any, bot: string) => until(`${bot} holding`, () => { const l = crew.sessionOf(bot); return l && (crew.runtime as StubRuntime).holding(l.key); });
 /** Finish a held turn with this reply, as the model would. */
 export async function release(crew: any, bot: string, reply?: string) {
   await holding(crew, bot);
-  stub.release(crew.sessionOf(bot).sessionId, reply);
+  (crew.runtime as StubRuntime).release(crew.sessionOf(bot).key, reply);
 }
 export const lastSaid = (db: any, bot: string) => db.get("SELECT text FROM messages WHERE bot = ? AND author = 'bot' ORDER BY id DESC", bot)?.text;

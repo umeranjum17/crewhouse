@@ -3,7 +3,7 @@
 // token never leaves crewd. Answers are short TOON (`name[N]{fields}:` then rows). The gate reads the command
 // (src/policy.ts): looking is free, adding and moving ask, cancelling asks as a delete.
 import { createHash } from 'node:crypto';
-import { axiTool } from './engine.ts';
+import { tool } from './engine.ts';
 
 /** Google Calendar's REST API; its events scope is the one a Calendar connection already has. */
 export const CALENDAR = 'https://www.googleapis.com/calendar/v3';
@@ -154,5 +154,6 @@ export async function runCalendar(token: Token, args: string[]): Promise<string>
 }
 
 export const calendarTool = (token: Token) =>
-  axiTool('calendar', "The person's own Google Calendar (calendar-axi): see the day or week, find free time, add, move or cancel events",
-    (args) => runCalendar(token, args).catch((e) => `error: ${e.message}`));
+  tool('calendar', "The person's own Google Calendar (calendar-axi): see the day or week, find free time, add, move or cancel events. Pass the command's arguments as a list, without the program name.",
+    { type: 'object', properties: { args: { type: 'array', items: { type: 'string' } } }, required: ['args'], additionalProperties: false },
+    (p) => runCalendar(token, (p.args ?? []).map(String)).catch((e) => `error: ${e.message}`));

@@ -164,7 +164,7 @@ test('quiet check-ins: all clear says nothing and stays out of the digest; anyth
     return t;
   };
   const first = await run('ALL-CLEAR');
-  assert.match(readFileSync(db.get('SELECT session FROM tasks WHERE id = ?', first)!.session, 'utf8'), /This is a check-in\. If nothing needs [^,]+, reply exactly ALL-CLEAR/);
+  assert.match((crew.runtime as any).specOf(db.get('SELECT session FROM tasks WHERE id = ?', first)!.session)?.message ?? '', /This is a check-in\. If nothing needs [^,]+, reply exactly ALL-CLEAR/);
   assert.deepEqual(said(), [], 'all clear: nothing in the thread');
   assert.equal(db.get('SELECT result FROM tasks WHERE id = ?', first)!.result, 'All clear');
   assert.equal(crew.routines().find((x) => x.id === r.id)!.history[0].clear, true);

@@ -5,11 +5,11 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { OpenClawGateway } from '../src/openclaw/gateway.ts';
 import { ToolBridge } from '../src/openclaw/bridge.ts';
-import { modelStub } from './openclaw-model.ts';
+import { startModelStub } from './openclaw-stub.ts';
 
 test('real Gateway tool call crosses fail-closed Crewhouse gate', { timeout: 120_000 }, async () => {
   const state = mkdtempSync(join(tmpdir(), 'crewhouse-run-'));
-  const stub = await modelStub();
+  const stub = await startModelStub();
   let gated = 0, called = 0;
   const bridge = new ToolBridge(state, {
     tools: () => [],

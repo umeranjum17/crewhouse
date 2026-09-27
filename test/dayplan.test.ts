@@ -81,7 +81,7 @@ test('the day, planned reads the calendar and the mail for free, answers once wi
   asked.length = 0;
   const t = crew.assign('scout', 'give me my day [tool calendar {"args":["today"]}] [tool calendar {"args":["week"]}] [tool mail {"args":["inbox"]}] ask permission', 'chief').task;
   await holding(crew, 'scout');
-  const seen = JSON.stringify(crew.sessionOf('scout')?.messages ?? ''); // the session closes when the answer is in
+  const seen = (crew.runtime as any).transcript(crew.sessionOf('scout')!.key); // what the helper's tools said
   await release(crew, 'scout', PLAN);
   await settled(db, t);
   assert.equal(db.get('SELECT COUNT(*) AS n FROM asks')!.n, 0, 'reading the person’s own calendar and mail never asks');

@@ -41,7 +41,7 @@ test('a fenced helper: web reads off its list and tools that go elsewhere are re
   const conf = disk.botConfig(cfg, 'desk');
   writeFileSync(join(disk.botDir(cfg, 'desk'), 'bot.json'), JSON.stringify({ ...conf, tools: [...conf.tools, 'github'] }));
   const call = (name: string, args: object) => `[tool ${name} ${JSON.stringify(args)}]`;
-  const t = (await crew.post('desk', `look ${call('web_fetch', { url: 'https://example.com/x' })} ${call('web_search', { query: 'muxr' })} ${call('github', { args: ['issue', 'list'] })}`))!.task;
+  const t = (await crew.post('desk', `look ${call('crew_web_fetch', { url: 'https://example.com/x' })} ${call('crew_web_search', { query: 'muxr' })} ${call('github', { args: ['issue', 'list'] })}`))!.task;
   await settled(db, t);
   const seen = db.all("SELECT data FROM events WHERE kind = 'net.refused' ORDER BY seq").map((e: any) => JSON.parse(e.data));
   assert.deepEqual(seen.map((e: any) => e.to), ['example.com', 'html.duckduckgo.com', 'github']);

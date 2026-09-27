@@ -4,9 +4,8 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { defineTool, type ToolDefinition } from '@earendil-works/pi-coding-agent';
-import { Type } from '@earendil-works/pi-ai';
 import type { Config } from './config.ts';
+import { tool, type CrewTool } from './engine.ts';
 import { CALENDAR, calendarTool, events } from './calendar.ts';
 import { GMAIL, mailTool } from './mail.ts';
 
@@ -21,7 +20,7 @@ export interface App {
   /** The app's MCP servers: their tools become the bots' tools, named `<app>_<tool>`. */
   servers: string[];
   /** Or crewd's own one-tool AXI for it, on the member's token (its commands are gated in src/policy.ts). */
-  tool?: (token: () => Promise<string | null>) => ToolDefinition;
+  tool?: (token: () => Promise<string | null>) => CrewTool;
   /** Where OAuth is discovered (RFC 8414) and clients register themselves (RFC 7591): nothing to set up. */
   issuer?: string;
   /** Or fixed endpoints with the household's own registered app (Google), read from <state>/apps.json. */
@@ -344,8 +343,8 @@ export class Connections {
   }
 
   /** The member's connected apps as bot tools, with what each tool does to the world (for the gate). */
-  async tools(member: number): Promise<{ tools: ToolDefinition[]; effects: Record<string, AppTool> }> {
-    const tools: ToolDefinition[] = [];
+  async tools(member: number): Promise<{ tools: CrewTool[]; effects: Record<string, AppTool> }> {
+    const tools: CrewTool[] = [];
     const effects: Record<string, AppTool> = {};
     for (const id of Object.keys(this.read(member))) {
       const a = this.apps[id];
@@ -359,13 +358,11 @@ export class Connections {
           for (const t of list) {
             const name = `${id}_${t.name}`.replace(/[^A-Za-z0-9_]/g, '_').slice(0, 64);
             effects[name] = { app: a.name, title: String(t.annotations?.title ?? t.title ?? t.name).replace(/[-_]/g, ' '), readOnly: t.annotations?.readOnlyHint === true, destructive: t.annotations?.destructiveHint === true };
-            tools.push(defineTool({
-              name, label: `${a.name}: ${t.title ?? t.name}`, description: `${a.name}: ${t.description ?? t.name}`, parameters: Type.Unsafe(t.inputSchema ?? { type: 'object' }),
-              execute: async (_id, args) => {
+            tools.push(tool(name, `${a.name}: ${t.description ?? t.title ?? t.name}`, t.inputSchema ?? { type: 'object' },
+              async (args) => {
                 const r = await mcp.request('tools/call', { name: t.name, arguments: args });
-                return { content: (r.content ?? []).filter((c: any) => c.type === 'text').map((c: any) => ({ type: 'text', text: c.text })), details: {} };
-              },
-            }) as ToolDefinition);
+                return (r.content ?? []).filter((c: any) => c.type === 'text').map((c: any) => c.text).join('\n');
+              }));
           }
         } catch (e) { console.error(`${id} tools for member ${member}:`, e); }
       }

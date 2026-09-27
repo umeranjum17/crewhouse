@@ -201,7 +201,7 @@ test('the validator checks a run against crewd\'s record: issues read, citations
 src/a.ts:1-2@${at}
 \`\`\`
 Also \`src/a.ts:2-3@${at}\`.\n`);
-  const good = await run(7, call('web_fetch', { url: issue }));
+  const good = await run(7, call('crew_web_fetch', { url: issue }));
   assert.equal(verdicts(good)['answer on files/support/7/reply.md'], 'UNKNOWN', 'on a card, not answered yet');
   await crew.answer(db.get("SELECT id FROM asks WHERE kind = 'propose' AND state = 'open'")!.id, { answer: 'allow' });
   assert.deepEqual(verdicts(good), { ended: 'PASS', 'issues read': 'PASS', 'citations in files/support/7/triage.md': 'PASS', 'citations in files/support/7/reply.md': 'PASS',
@@ -239,11 +239,11 @@ Also \`src/a.ts:2-3@${at}\`.\n`);
   try {
     leak = await run(7, [
       call('bash', { command: `cat > files/support/7/scratch.md <<'EOF'\nraw status snapshots/events for the same pane\nEOF` }),
-      call('web_fetch', { url: `${issue}/comments` }),
+      call('crew_web_fetch', { url: `${issue}/comments` }),
       call('bash', { command: `curl -s ${issue}/comments` }),
       call('bash', { command: 'git fetch http://127.0.0.1:1/o/app.git fix-208' }),
       call('bash', { command: `node -e "fetch('${issue}/comments?per_page=30').catch(() => {})"` }),
-      call('web_search', { query: 'merged fix pull request for the bug answer-key' }),
+      call('crew_web_search', { query: 'merged fix pull request for the bug answer-key' }),
     ].join(' '));
   } finally { globalThis.fetch = fetchBefore; }
   assert.equal(rowOf(leak, 'blind', ['/events']).verdict, 'PASS', 'words it wrote are not places it went');

@@ -9,7 +9,7 @@ export interface ToolHost {
   call(run: RunRef, tool: string, input: Record<string, unknown>, signal: AbortSignal): Promise<string>;
 }
 export interface RunSpec extends RunRef {
-  cwd: string; system: string; message: string;
+  cwd: string; system: string; message: string; account: string;
   images?: { data: string; mimeType: string }[];
   thinking?: 'low'; builtins: string[];
 }

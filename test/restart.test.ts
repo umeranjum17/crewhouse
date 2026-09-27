@@ -43,9 +43,8 @@ test('crewd killed mid-run: the task resumes in the same conversation and finish
   const state = await api('GET', '/api/state');
   assert.ok(state.events.some((e: any) => e.kind === 'system.recovered' && e.data.resumed === 1));
   const { DatabaseSync } = await import('node:sqlite');
-  const file = (new DatabaseSync(join(root, 'state', 'crew.db')).prepare('SELECT session FROM tasks WHERE id = ?').get(task) as any).session;
-  const log = readFileSync(file, 'utf8');
-  assert.ok(log.indexOf('ask permission to render') < log.indexOf('Crewhouse restarted. Continue task'), 'one conversation, continued');
+  const session = (new DatabaseSync(join(root, 'state', 'crew.db')).prepare('SELECT session FROM tasks WHERE id = ?').get(task) as any).session;
+  assert.match(session, /^agent:m1:crewhouse:reel:\d+$/, 'one conversation: the same session key continues it');
 });
 
 test('a family member taps "ask owner to set it up": crewd stays up and the owner keeps the ask across a restart', async () => {

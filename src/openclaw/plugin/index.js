@@ -26,6 +26,23 @@ function relay(message, signal) {
   });
 }
 
+// The model-visible schemas. Names are Crewhouse's: `bash` is crewd's sandboxed shell, `browser` the bot's own browser,
+// `calendar`/`mail` the two read-mostly app AXIs, `crew_app` a remote app's tools, `crew_*` the crew's own.
+const SCHEMAS = {
+  bash: { type: 'object', properties: { command: { type: 'string' } }, required: ['command'], additionalProperties: false },
+  browser: { type: 'object', properties: { args: { type: 'array', items: { type: 'string' } } }, required: ['args'], additionalProperties: false },
+  calendar: { type: 'object', properties: { args: { type: 'array', items: { type: 'string' } } }, required: ['args'], additionalProperties: false },
+  mail: { type: 'object', properties: { args: { type: 'array', items: { type: 'string' } } }, required: ['args'], additionalProperties: false },
+  crew_app: { type: 'object', properties: { tool: { type: 'string' }, input: { type: 'object', additionalProperties: true } }, required: ['tool'], additionalProperties: false },
+};
+const ABOUT = {
+  bash: 'Run a shell command in your own space (a sandbox: your folder is the only writable part of the disk). Long output is cut to the last lines.',
+  browser: 'Your own browser (playwright-axi): goto <url>, snapshot, find <text>, click <ref>, fill <ref> <text>, press <key>, go-back.',
+  calendar: "The person's own Google Calendar: see the day or week, find free time, add, move or cancel events, as `args`.",
+  mail: "The person's own Gmail, read-only: what is new, search it, read a conversation, as `args`. It cannot send or change mail.",
+  crew_app: "Use one of the person's connected apps' tools: `tool` names it (the run's prompt lists them) and `input` carries its arguments.",
+};
+
 export default {
   id: 'crewhouse', name: 'Crewhouse',
   register(api) {
@@ -40,13 +57,15 @@ export default {
     });
     const manifest = JSON.parse(readFileSync(new URL('./openclaw.plugin.json', import.meta.url), 'utf8'));
     for (const name of manifest.contracts.tools) api.registerTool({
-      name, description: `Crewhouse ${name.slice(5).replaceAll('_', ' ')}. The person sees the result in their crew.`,
-      parameters: name === 'crew_report'
+      name,
+      description: ABOUT[name] ?? `Crewhouse ${name.slice(5).replaceAll('_', ' ')}. The person sees the result in their crew.`,
+      parameters: SCHEMAS[name] ?? (name === 'crew_report'
         ? { type: 'object', properties: { text: { type: 'string' } }, required: ['text'], additionalProperties: false }
-        : { type: 'object', additionalProperties: true },
+        : { type: 'object', additionalProperties: true }),
       async execute(_id, params) {
         const { __crewhouse_run: key, __crewhouse_permit: permit, ...input } = params;
-        if (!key || !permit) throw new Error('Missing Crewhouse permission');
+        // crew_* tools carry a one-use permit from their gate; crewd's own tools were gated by the hook just now.
+        if (name.startsWith('crew_') && (!key || !permit)) throw new Error('Missing Crewhouse permission');
         const result = await relay({ kind: 'call', key, permit, tool: name, input });
         if (typeof result.text !== 'string') throw new Error('Crewhouse refused the call');
         return { content: [{ type: 'text', text: result.text }] };

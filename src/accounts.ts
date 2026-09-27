@@ -1,19 +1,19 @@
-// Per-person AI accounts (plan 3, 4.3): sharing one person's ChatGPT or Grok breaks the vendors' terms, so each member
-// signs in to their own, from inside the app, into their own credential file under Crewhouse's folders.
-// @byokit/accounts does the signing in (ChatGPT's page straight back here, the code as fallback), resting and
-// refreshing; this file says which accounts Crewhouse offers and where each member's sign-ins live.
-import './isolate.ts';
-import { join } from 'node:path';
-import { ModelRuntime } from '@earendil-works/pi-coding-agent';
-import { Accounts as Kit, fileStore, offered, type AuthHost } from '@byokit/accounts';
-import type { Config } from './config.ts';
+// Per-person AI accounts: each member signs in to their own, from inside the app, and nothing ever falls back to
+// another member's account (vendor terms). The engine (OpenClaw) holds the credentials, the sign-in wizard and the
+// cooldowns; this file says which accounts Crewhouse offers, keeps the person-facing sign-in view, and tracks the
+// states the product words are built from (signed out, plan without helpers, resting until).
+import { REST_MS, classifyText } from './failures.ts';
+import type { AgentRuntime, Member, SignInStep } from './runtime.ts';
 
-export { callbackPage, planOf, signInError } from '@byokit/accounts';
 export const OWNER = 1;
 
-/** ChatGPT is the one front door the app shows; the rest are quiet "more options" paths the app doesn't offer yet.
- *  No Claude (Anthropic allows its subscriptions only in its own apps) and no Meta (the owner's choice): the kit has neither. */
-export const PROVIDERS = Object.fromEntries(offered(['chatgpt', 'grok', 'copilot', 'openrouter']).map((p) => [p.key, p]));
+/** The offered accounts. ChatGPT is the one front door the app shows; the rest are quiet "more options" paths. */
+export const PROVIDERS: Record<string, { key: string; name: string }> = {
+  chatgpt: { key: 'chatgpt', name: 'ChatGPT' },
+  grok: { key: 'grok', name: 'Grok' },
+  copilot: { key: 'copilot', name: 'GitHub Copilot' },
+  openrouter: { key: 'openrouter', name: 'OpenRouter' },
+};
 
 export function provider(key: string) {
   const p = PROVIDERS[key];
@@ -21,32 +21,106 @@ export function provider(key: string) {
   return p;
 }
 
-/** ChatGPT sends the browser back here, on this computer, and nowhere else: it is fixed for the client the engine signs in as. */
-export const CALLBACK_PORT = Number(process.env.CREWHOUSE_CALLBACK_PORT || 1455);
+/** A time in the person's own words: "9:08 pm". Never a raw stamp. */
+export const clock = (at: number) => new Date(at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).replace(/\s([AP])M$/, (m) => m.toLowerCase());
 
-export class Accounts extends Kit<ModelRuntime & AuthHost, number> {
-  private cfg: Config;
-  /** Set by the stub engine: its scripted model stands in for every provider. */
-  prepare?: (runtime: ModelRuntime) => void;
+export const signInError = (name: string) => `${name} didn't finish the sign-in. Tap Sign in with ${name} to try again.`;
 
-  constructor(cfg: Config) {
-    super({
-      app: 'Crewhouse', offer: Object.keys(PROVIDERS), store: (m) => fileStore(this.authPath(m)), callbackPort: CALLBACK_PORT,
-      signInMs: Number(process.env.CREWHOUSE_SIGNIN_MS || 15 * 60_000), redirectMs: Number(process.env.CREWHOUSE_REDIRECT_MS || 3 * 60_000),
-    });
-    this.cfg = cfg;
+type View = { state: 'waiting' | 'done' | 'failed'; via: 'browser' | 'code'; url?: string; code?: string; error?: string; why?: string };
+
+/** The person-facing half of the engine's sign-in: who is signed in to what, and the one card that drives the
+ *  engine's own wizard. The credentials themselves never pass through here. */
+export class Accounts {
+  /** Which member has which account ready. Undefined means ask the engine (its own sign-in state). */
+  readonly ready = new Map<string, boolean>();
+  /** States the product words come from: a sign-in that stopped working, a plan without helpers, a cooldown. */
+  readonly expired = new Set<string>();
+  readonly excluded = new Set<string>();
+  private rests = new Map<string, number>();
+  private views = new Map<string, View>();
+  private running = new Map<string, { paste(text: string): void; cancel(): void; finished: Promise<void> }>();
+  /** Set by Crew: a member signed in, so what was waiting for them starts now. */
+  onSignedIn?: (member: Member) => void;
+
+  private runtime: AgentRuntime;
+  constructor(runtime: AgentRuntime) {
+    this.runtime = runtime;
+    // The methods are handed around (server handlers, tests that stand in for signedIn): they must survive losing `this`.
+    for (const k of Object.getOwnPropertyNames(Accounts.prototype)) if (k !== 'constructor') (this as any)[k] = (this as any)[k].bind(this);
+  }
+  private key(member: Member, account: string) { return `${member}:${account}`; }
+
+  async signedIn(member: Member, account: string) {
+    const k = this.key(member, account);
+    if (this.expired.has(k) || this.excluded.has(k)) return false;
+    const r = this.ready.get(k);
+    if (r !== undefined) return r;
+    return this.runtime.signedIn(member, account).catch(() => false);
+  }
+  restingUntil(member: Member, account: string) { return this.rests.get(this.key(member, account)) ?? 0; }
+  /** An account this member doesn't have: never signed in, or a sign-in that stopped working. */
+  unready(member: Member, account: string) {
+    const k = this.key(member, account);
+    return this.expired.has(k) || this.ready.get(k) === false;
+  }
+  /** The account hit trouble: rest it, flag it signed out, or mark the plan. Null: not about the account. */
+  failed(member: Member, account: string, error: string) {
+    const k = this.key(member, account);
+    const f = classifyText(error);
+    if (!f) return null;
+    if (f.kind === 'not_included') this.excluded.add(k);
+    else if (f.kind === 'signed_out') this.expired.add(k);
+    else if (f.kind !== 'network') this.rests.set(k, f.until || Date.now() + REST_MS[f.kind]);
+    return f;
+  }
+  rest(member: Member, account: string, until: number) { this.rests.set(this.key(member, account), until); }
+  cleared(member: Member, account: string) { this.rests.delete(this.key(member, account)); this.expired.delete(this.key(member, account)); }
+  notIncluded(member: Member, account: string, on?: boolean) {
+    const k = this.key(member, account);
+    if (on !== undefined) on ? this.excluded.add(k) : this.excluded.delete(k);
+    return this.excluded.has(k);
   }
 
-  /** A member's own credential file. The owner has one too: nothing falls back to another sign-in on this computer. */
-  authPath(member: number) { return join(this.cfg.stateDir, 'people', String(member), 'engine', 'auth.json'); }
-
-  /** One engine runtime per member, holding only their own sign-ins. */
-  protected open(member: number) {
-    const credentials = this.store(member);
-    return ModelRuntime.create({ credentials, modelsPath: null, refreshOnCreate: false }).then((rt) => {
-      Object.assign(rt, { credentialStore: credentials, readCredential: (id: string) => credentials.read(id) });
-      this.prepare?.(rt);
-      return rt as ModelRuntime & AuthHost;
+  /** Start the engine's sign-in for this member's account; the wizard's steps become the card's words. */
+  async login(member: Member, account: string, via: 'browser' | 'code' = 'browser', fresh = false) {
+    if (!PROVIDERS[account]) throw Object.assign(new Error('no such AI account'), { status: 404 });
+    const k = this.key(member, account);
+    if (this.running.has(k)) return this.view(member, account);
+    const view: View = { state: 'waiting', via };
+    this.views.set(k, view);
+    let over: () => void = () => {};
+    const finished = new Promise<void>((yes) => { over = yes; });
+    const done = (ok: boolean) => {
+      if (view.state !== 'waiting') return;
+      view.state = ok ? 'done' : 'failed';
+      if (ok) { this.ready.set(k, true); this.expired.delete(k); this.excluded.delete(k); this.rests.delete(k); this.onSignedIn?.(member); }
+      over();
+    };
+    const handle = this.runtime.signIn(member, account, via, (step: SignInStep) => {
+      if (step.url) view.url = step.url;
+      if (step.code) view.code = step.code;
+      if (step.error) view.error = step.error;
+      if (step.done) done(true);
+      else if (step.error && step.waiting === false) done(false);
     });
+    this.running.set(k, {
+      paste: (t) => handle.paste(t),
+      cancel: () => { handle.cancel(); done(false); this.views.delete(k); this.running.delete(k); },
+      finished,
+    });
+    return this.view(member, account);
   }
+  paste(member: Member, account: string, text: string) { this.running.get(this.key(member, account))?.paste(text); }
+  cancel(member: Member, account: string) { this.running.get(this.key(member, account))?.cancel(); }
+  async logout(member: Member, account: string) {
+    const k = this.key(member, account);
+    this.views.delete(k);
+    await this.runtime.signOut(member, account).catch(() => {});
+    this.ready.delete(k);
+    this.expired.add(k);
+  }
+  /** The sign-in is over (either way): the card's last word is in. */
+  async finished(member: Member, account: string) { await this.running.get(this.key(member, account))?.finished.catch(() => {}); }
+  view(member: Member, account: string) { return this.views.get(this.key(member, account)) ?? null; }
+  stop() { for (const [, handle] of this.running) handle.cancel(); this.running.clear(); }
 }

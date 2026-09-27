@@ -163,7 +163,7 @@ test('two-source fare backtest: both local sources fetched and the reply names t
   try {
     await Promise.all([narrow, fareboard].map((s) => new Promise<void>((resolve) => s.once('listening', resolve))));
     const url = (s: ReturnType<typeof createHttpServer>) => `http://127.0.0.1:${(s.address() as AddressInfo).port}/fare`;
-    const text = `[two-fare-backtest] Compare these fares. ${call('web_fetch', { url: url(narrow) })} ${call('web_fetch', { url: url(fareboard) })}`;
+    const text = `[two-fare-backtest] Compare these fares. ${call('crew_web_fetch', { url: url(narrow) })} ${call('crew_web_fetch', { url: url(fareboard) })}`;
     const task = (await say('chief', text)).body.task;
     await done('chief', task);
     assert.deepEqual([...fetched].sort(), ['Fareboard', 'Narrowfare']);
@@ -187,7 +187,7 @@ test('nothing technical reaches the app; the person\'s own files ask in one plai
 
   // Touching the person's own files asks, in one plain sentence; the answer comes from the app.
   const outside = join(root, 'Documents', 'plan.txt');
-  const w = (await say('reel', `save the plan ${call('write', { path: outside, content: 'plan' })}`)).body.task;
+  const w = (await say('reel', `save the plan ${call('crew_write', { path: outside, content: 'plan' })}`)).body.task;
   const ask = await until(async () => (await api('GET', '/api/state')).body.asks[0]);
   assert.equal(ask.title, 'Reel wants to change a file in a folder outside your home: “plan.txt”.');
   assert.deepEqual(ask.detail, { effect: 'files', words: ask.title, spends: false, covers: 'a folder outside your home', always: 'a folder outside your home' });
@@ -302,8 +302,9 @@ test('memory: the bot proposes a note, crewd caps and commits it, Undo reverts i
   // The debrief asks for it at the end of every task.
   const first = (await say('quill', 'Draft a note')).body.task;
   await done('quill', first);
+  // The debrief travels in the run's prompt; the engine keeps the conversation itself (its key is on the task).
   const session = new DatabaseSync(join(root, 'state', 'crew.db')).prepare('SELECT session FROM tasks WHERE id = ?').get(first) as any;
-  assert.match(readFileSync(session.session, 'utf8'), /When you finish: if this task showed/);
+  assert.match(session.session, /^agent:m1:crewhouse:quill:\d+$/, 'the run has its own session key');
 
   await remember({ text: 'Prefers 0.5 s transitions' });
   await remember({ text: 'Signs off with "Best"' });

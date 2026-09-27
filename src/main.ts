@@ -1,14 +1,11 @@
-// The environment is scrubbed first (isolate.ts), and only then is anything that loads the engine imported: Pi reads
-// PI_PACKAGE_DIR and friends at import time, and static imports would all be evaluated before a line of this file ran.
-// test/unit.test.ts fails if a static import of anything but isolate.ts, config.ts or node: slips in here.
-import './isolate.ts';
+// The daemon: config, store, crew, server. The engine is a supervised child process (src/openclaw/gateway.ts),
+// so nothing here needs a guarded import order: no engine is loaded at import time.
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { loadConfig } from './config.ts';
-
-const { Store } = await import('./db.ts');
-const { Crew } = await import('./crew.ts');
-const { startServer } = await import('./server.ts');
+import { Store } from './db.ts';
+import { Crew } from './crew.ts';
+import { startServer } from './server.ts';
 
 const cfg = loadConfig();
 if ((cfg.stateDir + '/').startsWith(cfg.repoDir + '/') || (cfg.crewDir + '/').startsWith(cfg.repoDir + '/')) {

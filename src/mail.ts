@@ -1,7 +1,7 @@
 // mail-axi: the person's own Gmail, read-only, as one small command-shaped tool in place of Google's hosted Gmail MCP
 // server (23 tool schemas, about 8,900 tokens on every turn). crewd runs it on the member's Gmail connection
 // (`gmail.readonly`): the token never leaves crewd, and nothing here can send, change or delete mail.
-import { axiTool } from './engine.ts';
+import { tool } from './engine.ts';
 import { options, table } from './calendar.ts';
 
 export const GMAIL = 'https://gmail.googleapis.com/gmail/v1/users/me';
@@ -89,5 +89,6 @@ export async function runMail(token: Token, args: string[]): Promise<string> {
 }
 
 export const mailTool = (token: Token) =>
-  axiTool('mail', "The person's own Gmail, read-only (mail-axi): what is new, search it, read a conversation. It cannot send, change or delete mail",
-    (args) => runMail(token, args).catch((e) => `error: ${e.message}`));
+  tool('mail', "The person's own Gmail, read-only (mail-axi): what is new, search it, read a conversation. It cannot send, change or delete mail. Pass the command's arguments as a list, without the program name.",
+    { type: 'object', properties: { args: { type: 'array', items: { type: 'string' } } }, required: ['args'], additionalProperties: false },
+    (p) => runMail(token, (p.args ?? []).map(String)).catch((e) => `error: ${e.message}`));

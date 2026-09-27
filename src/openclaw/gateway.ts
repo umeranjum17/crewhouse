@@ -8,6 +8,8 @@ import { GatewayClient } from '@openclaw/gateway-client';
 
 const repo = resolve(import.meta.dirname, '../..');
 const runtime = join(repo, 'runtime/openclaw');
+/** The pinned engine, installed scripts-off into runtime/openclaw (spec §3.1). Bump it like any dependency, with the tests as the gate. */
+export const ENGINE_VERSION = '2026.8.1';
 
 export function isolatedEnv(stateDir: string, token: string): NodeJS.ProcessEnv {
   const root = join(stateDir, 'openclaw');

@@ -71,8 +71,8 @@ export class OpenClawRuntime implements AgentRuntime {
   async abort(key: string) { await this.connected().request('chat.abort', { sessionKey: key }); }
   async trail(_key: string) { return []; }
   async ask(member: number, prompt: string) {
-    const end = await this.run({ key: `agent:m${member}:crewhouse:route:${randomUUID()}`, member, bot: 'chief', task: 0,
-      cwd: '', system: 'Answer with only the requested JSON. Do not call tools.', message: prompt, builtins: [] }, () => {});
+    const end = await this.run({ key: `agent:m${member}:crewhouse:route:${randomUUID()}`, member, bot: 'chief', task: 0, account: 'chatgpt',
+      cwd: '', system: 'You route requests in a family\'s crew of helpers. Answer with one JSON object and nothing else.', message: prompt, builtins: [] }, () => {});
     if (!end.ok) throw new Error('Routing unavailable');
     return end.text;
   }

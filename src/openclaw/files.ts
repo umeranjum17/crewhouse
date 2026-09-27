@@ -1,7 +1,9 @@
-import { constants, closeSync, existsSync, fstatSync, ftruncateSync, mkdirSync, openSync, readFileSync, readdirSync, writeSync } from 'node:fs';
+import { constants, closeSync, existsSync, fstatSync, ftruncateSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, writeSync } from 'node:fs';
 import { relative, resolve, sep } from 'node:path';
 
-// Linux dirfds pin each ancestor: a bot swapping a directory for a symlink cannot race a file operation into the host.
+// Linux dirfds pin each ancestor with O_NOFOLLOW: a bot swapping any component for a symlink cannot race an operation
+// onto another file. Paths outside the bot's folder are fine — the gate asked for them (src/policy.ts) and the person
+// answered; the pinned walk still refuses to travel through a symlink, so nothing reaches a place the gate didn't see.
 function writeAll(fd: number, text: string) {
   const bytes = Buffer.from(text);
   if (bytes.length > 1_000_000) throw new Error('file is too large');
@@ -9,14 +11,17 @@ function writeAll(fd: number, text: string) {
 }
 function within<T>(root: string, path: string, create: boolean, run: (parent: number, leaf: string) => T): T {
   const base = resolve(root), full = resolve(base, path);
-  if (full !== base && !full.startsWith(base + sep)) throw new Error('path is outside the bot folder');
   const names = relative(base, full).split(sep).filter((name) => name && name !== '.');
   const leaf = names.pop() ?? '.';
   let dir = openSync(base, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
   try {
     for (const name of names) {
       const child = `/proc/self/fd/${dir}/${name}`;
-      if (create && !existsSync(child)) mkdirSync(child);
+      if (create && !existsSync(child)) {
+        // No symlink may stand in for the directory we are about to create: check, make, and the O_NOFOLLOW open below.
+        if (lstatSync(child, { throwIfNoEntry: false })?.isSymbolicLink()) throw new Error('symlinks are not followed');
+        mkdirSync(child);
+      }
       const next = openSync(child, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
       closeSync(dir);
       dir = next;

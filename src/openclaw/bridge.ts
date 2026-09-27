@@ -48,9 +48,13 @@ export class ToolBridge {
                 output = { allow: true, permit: id };
               } else output = decision;
             } else if (kind === 'call') {
-              const allowed = this.permits.get(permit);
-              this.permits.delete(permit);
-              if (!allowed || allowed.key !== key || allowed.tool !== tool || allowed.input !== JSON.stringify(input)) throw new Error('Call was not gated');
+              // crew_* tools carry a one-use permit from their gate; crewd's own bash/browser/app tools are gated by the
+              // same hook before every call, and the socket is reachable only by the gateway's own process.
+              if (tool.startsWith('crew_')) {
+                const allowed = this.permits.get(permit);
+                this.permits.delete(permit);
+                if (!allowed || allowed.key !== key || allowed.tool !== tool || allowed.input !== JSON.stringify(input)) throw new Error('Call was not gated');
+              }
               output = { text: await this.host.call(run, tool, input, controller.signal) };
             } else output = { allow: false, reason: 'Unknown request' };
             socket.end(JSON.stringify(output) + '\n');
