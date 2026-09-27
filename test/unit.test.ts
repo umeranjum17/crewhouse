@@ -14,7 +14,7 @@ import * as A from '../web/src/adapter.ts';
 
 const { Crew, quietNow, short } = await import('../src/crew.ts');
 const { classifyText } = await import('../src/failures.ts');
-const { OWNER } = await import('../src/accounts.ts');
+const { Accounts, OWNER } = await import('../src/accounts.ts');
 const { effectOf, browserAsk, coversOf, toolWords, orderOf } = await import('../src/policy.ts');
 const kit = await import('../src/tools.ts');
 const disk = await import('../src/bots.ts');
@@ -804,6 +804,39 @@ test('sign-in: one button shows a code, finishes by itself, and is that person\'
   await crew.accounts.logout(OWNER, 'grok');
   assert.equal(await crew.accounts.signedIn(OWNER, 'grok'), false);
   await assert.rejects(crew.accounts.login(OWNER, 'muse'), /no such AI account/, 'no Meta');
+  done();
+});
+
+test('sign-in: the browser comes back to crewd\'s own page and the address is pasted into the wizard', async () => {
+  const { db, crew, done } = setup();
+  // A fake wizard: it waits on the paste step until the callback page hands the address over.
+  let pasteIn: ((text: string) => void) | undefined;
+  const pasted = new Promise<string>((resolve) => { pasteIn = resolve; });
+  const fake = {
+    signedIn: async () => false,
+    signIn: (_m: number, _a: string, via: 'browser' | 'code', on: (s: any) => void) => {
+      if (via !== 'browser') return { paste: () => {}, cancel: () => {} };
+      on({ url: 'https://auth.openai.com/oauth/authorize?x=1' });
+      void pasted.then((address) => on({ done: true, url: address }));
+      return { paste: (t: string) => pasteIn?.(t), cancel: () => {} };
+    },
+    signOut: async () => {},
+  };
+  const realAccounts = crew.accounts;
+  (crew as any).accounts = new Accounts(fake as any);
+  const shown = await crew.accounts.login(OWNER, 'chatgpt', 'browser');
+  assert.equal(shown?.state, 'waiting');
+  assert.match(shown?.url ?? '', /auth\.openai\.com/);
+  const { CALLBACK_PORT } = await import('../src/callback-port.ts');
+  const back = await fetch(`http://127.0.0.1:${CALLBACK_PORT}/auth/callback?code=good&state=st`);
+  const page = await back.text();
+  assert.match(page, /back to Crewhouse now/, 'the tab shows the crew\'s own words');
+  const address = await pasted;
+  assert.match(address, /code=good&state=st/, 'the full redirect address went to the wizard');
+  await crew.accounts.finished(OWNER, 'chatgpt');
+  assert.equal(await crew.accounts.signedIn(OWNER, 'chatgpt'), true);
+  assert.equal(crew.accounts.view(OWNER, 'chatgpt')!.state, 'done');
+  (crew as any).accounts = realAccounts;
   done();
 });
 

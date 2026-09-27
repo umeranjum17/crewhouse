@@ -3,9 +3,16 @@
 // cooldowns; this file says which accounts Crewhouse offers, keeps the person-facing sign-in view, and tracks the
 // states the product words are built from (signed out, plan without helpers, resting until).
 import { REST_MS, classifyText } from './failures.ts';
+import { createServer, type Server } from 'node:http';
+import { CALLBACK_PORT } from './callback-port.ts';
 import type { AgentRuntime, Member, SignInStep } from './runtime.ts';
 
+export { CALLBACK_PORT } from './callback-port.ts';
 export const OWNER = 1;
+
+/** ChatGPT's redirect lands on the fixed port (src/callback-port.ts); crewd holds it during sign-in and pastes the
+ *  address into the engine's wizard, so the tab shows Crewhouse's own page and the flow finishes even when the engine
+ *  cannot bind the port first. Tests take a free port via CREWHOUSE_CALLBACK_PORT.
 
 /** The offered accounts. ChatGPT is the one front door the app shows; the rest are quiet "more options" paths. */
 export const PROVIDERS: Record<string, { key: string; name: string }> = {
@@ -39,6 +46,8 @@ export class Accounts {
   private rests = new Map<string, number>();
   private views = new Map<string, View>();
   private running = new Map<string, { paste(text: string): void; cancel(): void; finished: Promise<void> }>();
+  /** The one 1455 listener while a browser sign-in is running. */
+  private callback?: Server;
   /** Set by Crew: a member signed in, so what was waiting for them starts now. */
   onSignedIn?: (member: Member) => void;
 
@@ -94,23 +103,54 @@ export class Accounts {
       if (view.state !== 'waiting') return;
       view.state = ok ? 'done' : 'failed';
       if (ok) { this.ready.set(k, true); this.expired.delete(k); this.excluded.delete(k); this.rests.delete(k); this.onSignedIn?.(member); }
+      this.running.delete(k);
+      if (!this.running.size) this.closeCallback();
       over();
     };
+    if (via === 'browser') this.holdCallbackPort(member, account);
     const handle = this.runtime.signIn(member, account, via, (step: SignInStep) => {
       if (step.url) view.url = step.url;
       if (step.code) view.code = step.code;
       if (step.error) view.error = step.error;
       if (step.done) done(true);
       else if (step.error && step.waiting === false) done(false);
+      if ((step.done || (step.error && step.waiting === false)) && !this.running.size) this.closeCallback();
     });
     this.running.set(k, {
       paste: (t) => handle.paste(t),
-      cancel: () => { handle.cancel(); done(false); this.views.delete(k); this.running.delete(k); },
+      cancel: () => { handle.cancel(); done(false); this.views.delete(k); },
       finished,
     });
     return this.view(member, account);
   }
   paste(member: Member, account: string, text: string) { this.running.get(this.key(member, account))?.paste(text); }
+
+  /** The sign-in browser comes back here: crewd's own page, in plain words, and the address is pasted into the
+   *  engine's wizard. Kept until the sign-in ends; if something else already holds the port, the sign-in fails honestly. */
+  private holdCallbackPort(member: Member, account: string) {
+    if (this.callback) return;
+    const k = this.key(member, account);
+    const server = createServer((req, res) => {
+      const host = req.headers.host ?? `localhost:${CALLBACK_PORT}`;
+      const address = `http://${host}${req.url}`;
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
+      res.end('<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Crewhouse</title>' +
+        '<body style="font:18px system-ui;margin:3em auto;max-width:26em;padding:0 1em;text-align:center;color:#2e2a40">' +
+        'Thanks. Finishing the sign-in — you can go back to Crewhouse now.</body>');
+      this.paste(member, account, address);
+    });
+    server.on('error', () => {
+      const view = this.views.get(k);
+      if (view && view.state === 'waiting') { view.state = 'failed'; view.error = 'Something else on this computer is signing in to ChatGPT. Try again in a minute.'; }
+      this.callback = undefined;
+    });
+    server.listen(CALLBACK_PORT, '127.0.0.1');
+    this.callback = server;
+  }
+  private closeCallback() {
+    this.callback?.close();
+    this.callback = undefined;
+  }
   cancel(member: Member, account: string) { this.running.get(this.key(member, account))?.cancel(); }
   async logout(member: Member, account: string) {
     const k = this.key(member, account);

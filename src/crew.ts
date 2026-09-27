@@ -251,12 +251,27 @@ export class Crew {
     if (!this.member(OWNER).onboarded && !this.db.get('SELECT 1 FROM messages WHERE bot = ?', CHIEF)) this.say(CHIEF, 'bot', chiefGreeting(), null, OWNER);
     this.timer = setInterval(() => this.tick(), 1500);
     this.recover();
-    // The engine comes up in the background: a first install can take minutes, and crewd boots without it.
-    void this.runtime.start(this.toolHost()).catch((e) => {
-      console.error('engine start:', e);
-      this.db.event('system.engine', null, { error: String(e).slice(0, 300) });
+    void this.migrateMembers().finally(() => {
+      // The engine comes up in the background: a first install can take minutes, and crewd boots without it.
+      void this.runtime.start(this.toolHost()).catch((e) => {
+        console.error('engine start:', e);
+        this.db.event('system.engine', null, { error: String(e).slice(0, 300) });
+      });
     });
     this.dispatch();
+  }
+
+  /** One-time per member: hand the member's old engine sign-in to the new engine's doctor (spec §6). crewhouse's copy
+   *  is retired either way; a failed import just means the member signs in again, on the card that already exists. */
+  private async migrateMembers() {
+    const migrate = (this.runtime as { migrate?: (member: number, path: string) => Promise<boolean> }).migrate;
+    if (!migrate) return;
+    for (const m of this.members()) {
+      const legacy = join(this.cfg.stateDir, 'people', String(m.id), 'engine', 'auth.json');
+      if (!existsSync(legacy)) continue;
+      try { await migrate.call(this.runtime, m.id, legacy); }
+      catch (e) { console.error(`engine migration m${m.id}:`, e); }
+    }
   }
 
   /** A restart is a non-event: every task that was running continues in its own session, from its session file.

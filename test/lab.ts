@@ -1,5 +1,6 @@
 // Shared test setup: a Crew on a temp data dir, running the real engine on the stub model. No network, no quota.
 import { after } from 'node:test';
+import { createServer } from 'node:http';
 import { join } from 'node:path';
 import { temp } from './tmp.ts';
 
@@ -8,6 +9,8 @@ process.env.CREWHOUSE_STATE_DIR ??= join(root, 'state'); // the engine's own fol
 process.env.CREWHOUSE_HOLD_MS ??= '300';
 process.env.CREWHOUSE_STUCK_MS ??= '5000';
 process.env.CREWHOUSE_SIGNIN_MS ??= '1500';
+// The sign-in callback port is ChatGPT's fixed 1455 in the product; the tests take a free one so they never meet a real sign-in.
+process.env.CREWHOUSE_CALLBACK_PORT ??= String(await new Promise<number>((r) => { const s = createServer().listen(0, '127.0.0.1', () => { const { port } = s.address() as { port: number }; s.close(() => r(port)); }); }));
 const { Store } = await import('../src/db.ts');
 const { Crew } = await import('../src/crew.ts');
 const { loadConfig } = await import('../src/config.ts');

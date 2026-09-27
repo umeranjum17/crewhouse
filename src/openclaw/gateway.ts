@@ -172,6 +172,13 @@ export class OpenClawGateway {
     } catch (error) { await this.stop(); throw error; }
   }
 
+  /** The context for an offline doctor run against the isolated state (the sign-in migration, exit-78 repair). */
+  doctorContext(): { entry: string; env: NodeJS.ProcessEnv } {
+    const entry = resolve(createRequire(join(runtime, 'package.json')).resolve('openclaw'), '../../openclaw.mjs');
+    const token = readFileSync(join(this.root, 'token'), 'utf8').trim();
+    return { entry, env: isolatedEnv(this.stateDir, token) };
+  }
+
   async stop(): Promise<void> {
     this.closing = true;
     clearTimeout(this.restart);

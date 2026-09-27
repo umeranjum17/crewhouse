@@ -52,6 +52,27 @@ test('real Gateway tool call crosses fail-closed Crewhouse gate', { timeout: 120
     assert.ok(readDone.terminalReceipt?.successfulToolNames?.includes('crew_web_fetch'), JSON.stringify(readDone).slice(0, 600));
     assert.equal(called, 2, 'fenced web read did not use the Crewhouse copy');
     assert.ok(streams.some((event) => event.runId === run.runId && event.stream === 'tool'));
+
+    // A5: a second member's agent carries its own credential; no request of its session ever uses member 1's key.
+    await client.request('agents.create', { name: 'm2', workspace: join(state, 'ws2') });
+    const cfgTwo = await client.request<{ hash: string }>('config.get');
+    await client.request('config.patch', { baseHash: cfgTwo.hash, raw: JSON.stringify({
+      models: { providers: { 'crewhouse-stub-two': {
+        baseUrl: stub.url, apiKey: 'stub-m2', api: 'openai-completions',
+        models: [{ id: 'test', name: 'Test', reasoning: false, input: ['text'],
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 32000, maxTokens: 2048 }],
+      } } },
+      agents: { entries: { m2: { model: { primary: 'crewhouse-stub-two/test' } } } },
+    }) });
+    const stubCallsBefore = stub.calls.length;
+    bridge.register({ key: 'agent:m2:crewhouse:scout:9', member: 2, bot: 'scout', task: 9 });
+    const m2 = await client.request<any>('agent', { agentId: 'm2', sessionKey: 'agent:m2:crewhouse:scout:9',
+      message: 'hello from member two', idempotencyKey: 'm2-1' });
+    await client.request('agent.wait', { runId: m2.runId, timeoutMs: 60_000 });
+    const m2Keys = stub.calls.slice(stubCallsBefore).map((c) => c.authorization);
+    assert.ok(m2Keys.length > 0, "member two's run reached the stub provider");
+    assert.ok(m2Keys.every((k) => k === 'Bearer stub-m2'), `member two's session only ever used its own key: ${m2Keys.join()}`);
+
     unsubscribe();
     bridge.unregister(key);
     const denied = await client.request<any>('agent', { agentId: 'm1', sessionKey: 'agent:m1:crewhouse:chief:2',

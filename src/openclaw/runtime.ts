@@ -1,9 +1,17 @@
 import { randomUUID } from 'node:crypto';
-import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { copyFileSync, existsSync, mkdirSync, renameSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { GatewayClient } from '@openclaw/gateway-client';
-import type { AgentRuntime, RunEnd, RunEvent, RunSpec, ToolHost } from '../runtime.ts';
+import type { AgentRuntime, Member, RunEnd, RunEvent, RunSpec, SignInStep, ToolHost } from '../runtime.ts';
 import { OpenClawGateway } from './gateway.ts';
 import { ToolBridge } from './bridge.ts';
+
+/** Crewhouse account key → OpenClaw provider id. ChatGPT is the one front door; the rest are quiet options. */
+const PROVIDER_OF: Record<string, string> = { chatgpt: 'openai', grok: 'xai', copilot: 'github-copilot', openrouter: 'openrouter' };
+const AUTH_CHOICE: Record<string, string> = { chatgpt: 'openai' };
+const CODE_CHOICE: Record<string, string> = { chatgpt: 'openai-device-code' };
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export class OpenClawRuntime implements AgentRuntime {
   private gateway: OpenClawGateway;
@@ -30,6 +38,117 @@ export class OpenClawRuntime implements AgentRuntime {
     this.agents.add(member);
     return id;
   }
+
+  // ---- accounts: the engine owns credentials; crewd drives its wizard and reads its status ----
+
+  async signedIn(member: number, account: string) {
+    const provider = PROVIDER_OF[account];
+    if (!provider) return false;
+    const id = await this.agent(member);
+    const status = await this.connected().request<{ providers?: unknown[] }>('models.authStatus', { agentId: id }, { timeoutMs: 20_000 }).catch(() => undefined);
+    return (status?.providers ?? []).some((p: any) => (typeof p === 'string' ? p : p?.provider) === provider);
+  }
+
+  /** Drive the engine's provider-owned login and tell the person's card what to show. ChatGPT: the redirect lands on
+   *  crewd's own 1455 listener and crewd pastes the address into the wizard (the engine cannot bind it first); the
+   *  device code covers the phone and the no-browser path. Other providers' wizards are wired as they are reviewed. */
+  signIn(member: number, account: string, via: 'browser' | 'code', on: (step: SignInStep) => void): { paste(text: string): void; cancel(): void } {
+    const controller = new AbortController();
+    const signal = controller.signal;
+    let pasteIn: ((text: string) => void) | undefined;
+    const paste = (text: string) => pasteIn?.(text);
+    const cancel = () => controller.abort();
+    void (async () => {
+      try {
+        const client = this.connected();
+        const agentId = await this.agent(member);
+        const authChoice = via === 'code' ? CODE_CHOICE[account] : AUTH_CHOICE[account];
+        if (!authChoice) throw new Error(`Sign-in for ${account} is not connected yet`);
+        const say = (s: Omit<SignInStep, 'waiting'> & { waiting?: boolean }) => on({ waiting: true, ...s });
+        const started = await client.request<{ sessionId: string; done?: boolean; step?: any }>('openclaw.setup.auth.start',
+          { sessionId: `crewhouse-${randomUUID()}`, agentId, authChoice }, { timeoutMs: 60_000, signal: controller.signal });
+        let sessionId = started.sessionId, step = started.step, done = !!started.done;
+        for (let turns = 0; !done && !signal.aborted && turns < 200; turns++) {
+          if (!step) {
+            const s = await client.request<{ done?: boolean; step?: any }>('wizard.status', { sessionId }, { timeoutMs: 20_000, signal: controller.signal }).catch(() => undefined);
+            if (!s) { await sleep(500); continue; }
+            if (s.done) break;
+            if (!s.step) { await sleep(500); continue; }
+            step = s.step;
+          }
+          const st = step;
+          if (st.type === 'text' && !st.sensitive) {
+            // The paste step: the person's browser came back to crewd's own page; crewd hands the address over.
+            say({});
+            const value = await new Promise<string | undefined>((resolve) => {
+              pasteIn = resolve;
+              const giveUp = setTimeout(() => { pasteIn = undefined; resolve(undefined); }, 15 * 60_000);
+              signal.addEventListener('abort', () => { clearTimeout(giveUp); pasteIn = undefined; resolve(undefined); }, { once: true });
+            });
+            if (value === undefined) break;
+            const n = await client.request<{ done?: boolean; step?: any; error?: string }>('wizard.next', { sessionId, answer: { stepId: st.id, value } }, { timeoutMs: 120_000, signal: controller.signal });
+            done = !!n.done; step = n.step;
+            if (n.error) say({ error: n.error });
+            continue;
+          }
+          if (st.type === 'note' || st.type === 'confirm' || st.type === 'select' || st.type === 'action') {
+            if (st.externalUrl) say({ url: st.externalUrl });
+            say({}); // the card says what to do while the engine drives
+            const n = await client.request<{ done?: boolean; step?: any; error?: string }>('wizard.next', { sessionId, answer: { stepId: st.id } }, { timeoutMs: 120_000, signal: controller.signal });
+            done = !!n.done; step = n.step;
+            if (n.error) say({ error: n.error });
+            continue;
+          }
+          if (st.deviceCode) {
+            say({ code: st.deviceCode.code, url: st.externalUrl });
+            // The engine polls the provider itself; wait for it to finish.
+            for (let i = 0; i < 300 && !signal.aborted; i++) {
+              await sleep(2000);
+              const s = await client.request<{ done?: boolean; error?: string }>('wizard.status', { sessionId }, { timeoutMs: 20_000, signal: controller.signal }).catch(() => undefined);
+              if (!s) continue;
+              if (s.done) { done = true; break; }
+              if (s.error) { on({ waiting: false, error: s.error }); return; }
+            }
+            break;
+          }
+          // progress and anything gateway-driven: it advances by itself
+          const n = await client.request<{ done?: boolean; step?: any; error?: string }>('wizard.next', { sessionId }, { timeoutMs: 120_000, signal: controller.signal }).catch(() => undefined);
+          if (!n) { await sleep(500); continue; }
+          done = !!n.done; step = n.step;
+          if (n.error) say({ error: n.error });
+        }
+        if (signal.aborted) { await client.request('wizard.cancel', { sessionId }, { timeoutMs: 10_000 }).catch(() => {}); return; }
+        if (done) on({ waiting: false, done: true });
+        else on({ waiting: false, error: 'The sign-in took too long. Tap Sign in with ChatGPT to start again.' });
+      } catch (e: any) {
+        on({ waiting: false, error: String(e?.message ?? e).slice(0, 200) });
+      }
+    })();
+    return { paste, cancel };
+  }
+
+  async signOut(member: number, account: string) {
+    const provider = PROVIDER_OF[account];
+    if (!provider) throw new Error(`no such AI account`);
+    const id = await this.agent(member);
+    await this.connected().request('models.authLogout', { provider, agentId: id }, { timeoutMs: 20_000 });
+  }
+
+  /** One-time per member (spec §6): place the member's old engine sign-in where the engine's doctor imports it, run
+   *  doctor once against the isolated state, and retire crewhouse's copy. Never run while the gateway is up. */
+  async migrate(member: Member, legacyAuthPath: string) {
+    const moved = `${legacyAuthPath}.moved-to-engine`;
+    if (!existsSync(legacyAuthPath) || existsSync(moved)) return false;
+    const agentDir = join(this.gateway.root, 'state', 'agents', `m${member}`, 'agent');
+    mkdirSync(agentDir, { recursive: true });
+    const staged = join(agentDir, 'auth.json');
+    if (!existsSync(staged)) copyFileSync(legacyAuthPath, staged);
+    const { entry, env } = this.gateway.doctorContext();
+    spawnSync(process.execPath, [entry, 'doctor', '--fix', '--yes', '--non-interactive'], { env, cwd: env.HOME as string, timeout: 120_000, stdio: 'pipe' });
+    renameSync(legacyAuthPath, moved);
+    return true;
+  }
+
   async run(spec: RunSpec, on: (event: RunEvent) => void): Promise<RunEnd> {
     const client = this.connected();
     const agentId = await this.agent(spec.member);
@@ -62,11 +181,6 @@ export class OpenClawRuntime implements AgentRuntime {
     } catch (error) { return { ok: false, kind: 'other', message: String(error) }; }
     finally { unsubscribe(); this.bridge?.unregister(spec.key); }
   }
-  async signedIn(member: number, _account: string) { await this.agent(member); return false; }
-  signIn(_member: number, _account: string, _via: 'browser' | 'code', _on: (step: any) => void): { paste(text: string): void; cancel(): void } {
-    throw new Error('Sign-in is not connected yet');
-  }
-  async signOut(_member: number, _account: string) { throw new Error('Sign-out is not connected yet'); }
   async steer(key: string, text: string) { await this.connected().request('sessions.steer', { sessionKey: key, message: text }); }
   async abort(key: string) { await this.connected().request('chat.abort', { sessionKey: key }); }
   async trail(_key: string) { return []; }
