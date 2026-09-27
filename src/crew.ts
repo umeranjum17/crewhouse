@@ -85,10 +85,22 @@ export function taskTitle(body: string) {
 }
 /** A relay is the answer, not a quoted chunk of the helper's raw markdown. */
 export function relayResult(reply: string, note = '') {
-  // A long delivery note is a file description, not a safe relay title; use the helper's answer instead.
-  const source = (note && note.length < 140 ? note : reply).replace(/^A document in \d+ sections?:\s*(.+)$/i, 'The $1 is ready.');
-  const clean = source.replace(/\[([^\]]+)\]\(https?:\/\/[^)]+\)/g, '$1').replace(/\*\*|^\s*[-*]\s*/gm, '').replace(/\b(sir|ma'am)\b[,.]?\s*/gi, '').replace(/^\w+:\s*/, '').replace(/https?:\/\/\S+/g, '').trim();
-  return `${short(clean.split(/[.!?](?:\s|$)/)[0] || 'The result is ready', 160).replace(/[.:;]+$/, '')}.`;
+  const tidy = (s: string) => s.replace(/^A document in \d+ sections?:\s*(.+)$/i, 'The $1 is ready.')
+    .replace(/\[([^\]]+)\]\(https?:\/\/[^)]+\)/g, '$1').replace(/\*\*|^\s*[-*]\s*/gm, '')
+    .replace(/\b(sir|ma'am)\b[,.]?\s*/gi, '').replace(/^\w+:\s*/, '').replace(/https?:\/\/\S+/g, '').trim();
+  // Only complete sentences fit for a headline; never apply short(), which adds a cut-off ellipsis.
+  for (const source of [note.length < 140 ? note : '', reply]) {
+    const sentences = tidy(source).match(/[^.!?]+[.!?][”"']?(?=\s|$)/g) ?? [];
+    const full = sentences.map((s) => s.trim()).find((s) => s.length <= 160 && !/(?:…|\.{2,})[”"']?$/.test(s));
+    if (full) return `${full.replace(/[.!?][”"']?$/, '').trim()}.`;
+  }
+  return 'The result is ready.';
+}
+
+function chiefFirst(body: string) {
+  const url = /https?:\/\/[^\s]+/i.exec(body)?.[0];
+  if (url) { try { return `Looking at ${new URL(url).hostname.replace(/^www\./, '')} now.`; } catch { /* malformed address */ } }
+  return /\b(market|marketing|promote|launch)\b/i.test(body) ? "I'll work out the next step for your app." : "I'll look into that now.";
 }
 
 const partOfDay = () => { const h = new Date().getHours(); return h >= 5 && h < 12 ? 'morning' : h >= 12 && h < 18 ? 'afternoon' : 'evening'; };
@@ -983,6 +995,7 @@ export class Crew {
       this.db.event('task.created', bot, { task: id, origin, member, title });
       return id;
     });
+    if (bot === CHIEF) this.db.live('reply.partial', CHIEF, { task: id, member, text: chiefFirst(body) });
     queueMicrotask(() => this.dispatch());
     return { task: id, shown };
   }

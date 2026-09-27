@@ -915,7 +915,7 @@ test('routing: a plain request goes straight to its helper, the member\'s AI pla
   assert.equal(task(db, a).body, 'Reel, make a 10 second demo of the signup screen');
   assert.equal(chiefSaid(), 'Reel is on it.');
   await settled(db, a);
-  assert.match(db.get("SELECT text FROM messages WHERE bot = 'chief' ORDER BY id DESC")!.text, /^stub reel: /);
+  assert.equal(db.get("SELECT text FROM messages WHERE bot = 'chief' ORDER BY id DESC")!.text, 'The result is ready.', 'an incomplete helper reply is not cut into a headline');
 
   // "@Scout" anywhere is a rule too: the member's AI (here set to say Reel) is never asked.
   const m = (await crew.post('chief', 'could you look into standing desks for me @Scout [route reel]'))!.task;

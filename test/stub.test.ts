@@ -71,6 +71,7 @@ test('chief onboarding, recruit, assign, grants', async () => {
   page = (await api('GET', '/api/bots/chief')).body;
   const said = page.messages.find((m: any) => m.author === 'bot' && m.text.startsWith('All done.'));
   assert.ok(said, 'Chief gives one wrap-up for the assigned work');
+  assert.equal(page.messages.filter((m: any) => m.author === 'bot' && m.text.startsWith('All done.') && m.task_id === hand).length, 1, 'the finished helper job closes exactly once');
   assert.equal(said.task_id, hand);
   assert.doesNotMatch(said.text, /#\d|has finished|Sir/, 'no task number or honorific');
 
@@ -102,6 +103,31 @@ test('a Chief reply streams partial words before its durable message', async () 
     assert.equal(partial.data.member, 1);
     assert.ok(events.find((e) => e.kind === 'message' && e.data.author === 'person'), 'the send is persisted');
     console.log(`lab send→reply.partial ${partial.at - started}ms; send→first complete words ${final.at - started}ms`);
+  } finally { ws.close(); }
+});
+
+test('marketing and URL follow-up show Chief words before a model tool or result', async () => {
+  await ready();
+  if (!(await api('GET', '/api/state')).body.person.onboarded) await say('chief', 'Alex');
+  const events: any[] = [];
+  const ws = new WebSocket(base.replace('http:', 'ws:') + '/ws');
+  await new Promise<void>((resolve) => ws.on('open', resolve));
+  ws.on('message', (raw) => events.push(JSON.parse(String(raw))));
+  try {
+    for (const text of [`I want to market my app [first words] ${call('crew_report', { text: 'started' })}`, 'https://trymuxr.com/']) {
+      const started = Date.now();
+      const { body } = await say('chief', text);
+      const first = await until(async () => events.find((e) => e.kind === 'reply.partial' && e.bot === 'chief' && e.data.task === body.task));
+      assert.ok(first.at - started < 3000, 'a first line does not wait for the model');
+      assert.match(first.data.text, text.startsWith('https:') ? /Looking at trymuxr\.com now\./ : /next step for your app/);
+      await done('chief', body.task);
+      const trace = events.filter((e) => e.bot === 'chief' && e.data?.task === body.task);
+      assert.ok(trace.findIndex((e) => e.kind === 'reply.partial') < trace.findIndex((e) => e.kind === 'run.prompted'), 'the acknowledgement precedes the model');
+      if (!text.startsWith('https:')) {
+        assert.ok(trace.some((e) => e.kind === 'reply.partial' && e.data.text.includes('checking the next step')), 'the model prose also streams');
+        assert.ok(trace.findIndex((e) => e.kind === 'reply.partial') < trace.findIndex((e) => e.kind === 'task.progress'));
+      }
+    }
   } finally { ws.close(); }
 });
 
