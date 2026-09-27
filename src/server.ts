@@ -33,6 +33,11 @@ async function readJson(req: IncomingMessage): Promise<any> {
   try { return raw ? JSON.parse(raw) : {}; } catch { throw Object.assign(new Error('bad json'), { status: 400 }); }
 }
 
+/** Weak validator: same file (size and mtime) → the browser's copy is still good and the answer is a 304. */
+const etagOf = (path: string) => { const st = statSync(path); return `W/"${st.size.toString(16)}.${Math.floor(st.mtimeMs).toString(16)}"`; };
+/** Content-named bundles (scripts/build-web.mjs) never change, so they cache forever; the shell is revalidated each load. */
+const FRESH_BUNDLE = /-[\w-]{8}\.(?:js|css)$/;
+
 function sendFile(req: IncomingMessage, res: ServerResponse, path: string) {
   const size = statSync(path).size;
   const type = TYPES[extname(path).toLowerCase()] ?? 'application/octet-stream';
@@ -43,7 +48,10 @@ function sendFile(req: IncomingMessage, res: ServerResponse, path: string) {
     res.writeHead(206, { 'content-type': type, 'content-range': `bytes ${start}-${end}/${size}`, 'accept-ranges': 'bytes', 'content-length': end - start + 1 });
     return createReadStream(path, { start, end }).pipe(res);
   }
-  res.writeHead(200, { 'content-type': type, 'content-length': size, 'accept-ranges': 'bytes', 'cache-control': 'no-cache' });
+  const etag = etagOf(path);
+  if (req.headers['if-none-match'] === etag) { res.writeHead(304, { etag }); return res.end(); }
+  res.writeHead(200, { 'content-type': type, 'content-length': size, 'accept-ranges': 'bytes', etag,
+    'cache-control': FRESH_BUNDLE.test(path) ? 'public, max-age=31536000, immutable' : 'no-cache' });
   createReadStream(path).pipe(res);
 }
 
@@ -151,7 +159,10 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       if (existsSync(asset) && statSync(asset).isFile()) return sendFile(req, res, asset);
       const index = join(dist, 'index.html');
       if (!existsSync(index)) return send(res, 503, { error: 'web UI not built: run ./crewhouse setup' });
-      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache' });
+      // A deep link serves the shell, which the browser revalidates on every load so an update shows on the next visit.
+      const etag = etagOf(index);
+      if (req.headers['if-none-match'] === etag) { res.writeHead(304, { etag }); return res.end(); }
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache', etag });
       res.end(readFileSync(index));
     } catch (e: any) {
       send(res, e.status ?? 400, { error: e.message });
