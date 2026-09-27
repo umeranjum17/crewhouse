@@ -11,7 +11,7 @@ import { temp } from './tmp.ts';
 import { DeviceLink, pairWithOffer, type DeviceGrant, type LinkStatus } from '@byokit/link';
 import { Link, NEWS, linkHosts, phoneAddresses, tailscalePeer } from '../src/link.ts';
 import { Store } from '../src/db.ts';
-import { decodeTyped, encodeTyped } from '../web/src/typed-code.ts';
+import { decodeTyped, encodeTyped } from '../src/typed-code.ts';
 import { b64url } from '@byokit/link';
 
 test('typed envelope carries addresses, port, key and one-use secret; errors are plain', () => {

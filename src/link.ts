@@ -9,7 +9,7 @@ import { networkInterfaces } from 'node:os';
 import { join } from 'node:path';
 import { WebSocketServer } from 'ws';
 import { Host, keyPair, keyPairFrom, unb64url, type Grant, type PairRequest, type Role } from '@byokit/link';
-import { encodeTyped } from '../web/src/typed-code.ts';
+import { encodeTyped } from './typed-code.ts';
 import { advertise, type Bonjour } from '@byokit/reach';
 import { RelayClient, isExpoToken, type RelayStatus } from '@byokit/relay';
 import type { Config } from './config.ts';

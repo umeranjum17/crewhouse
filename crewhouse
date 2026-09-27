@@ -160,7 +160,7 @@ case "${1:-}" in
     echo "Crewhouse is uninstalled. To remove the code as well, delete $(pwd)."
     ;;
   phones)
-    need_node
+    # A local HTTP client only; unlike crewd, it does not need the engine's Node floor.
     action="${2:-}"; shift 2 || true
     case "$action" in code|pending|approve) ;; *) echo 'usage: ./crewhouse phones code | pending | approve <two words>' >&2; exit 2 ;; esac
     [ "$action" != approve ] || [ "$#" -gt 0 ] || { echo 'Give the exact two words shown on the phone.' >&2; exit 2; }

@@ -1,7 +1,7 @@
 // The phone's end of the link: @byokit/link's device side, its grant in secure storage, and the transport that
 // web/src/api.ts calls through. Each call is one request, `METHOD /path`, answered like HTTP (src/link.ts).
 import { DeviceLink, LinkError, hostId, pairWithCode, pairWithOffer, b64url, unb64url, type DeviceGrant, type LinkStatus } from '@byokit/link';
-import { decodeTyped } from '../../web/src/typed-code.ts';
+import { decodeTyped } from '../../src/typed-code.ts';
 import { findHost } from '@byokit/relay/device';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
