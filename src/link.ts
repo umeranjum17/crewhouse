@@ -432,7 +432,10 @@ export class Link {
       return { status: 200, body: { ok: true } };
     }
     // Household admin stays on the computer: AI account sign-ins, people, the house's Google app, connecting apps
-    // (their sign-in pages come back to this computer's own address), and the phones themselves.
+    // (their sign-in pages come back to this computer's own address), and the phones themselves — except the owner's
+    // phone renewing a code it is looking at, so the pairing card on the phone refreshes itself like the web card's.
+    if (op === 'POST /api/phones/refresh' && memberOf(g) === 1) return this.handle(method, path, body ?? {}, memberOf(g)).then(
+      (r) => ({ status: 200, body: r }), (e: any) => ({ status: e.status ?? 400, body: { error: e.message } }));
     if (/^\/api\/(accounts|house|phones)\b/.test(path) || (/^\/api\/(people|connections)\b/.test(path) && method !== 'GET')) return { status: 403, body: { error: 'do that on the computer' } };
     try { return { status: 200, body: await this.handle(method, path, body ?? {}, memberOf(g)) }; }
     catch (e: any) { return { status: e.status ?? 400, body: { error: e.message } }; }

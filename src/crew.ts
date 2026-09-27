@@ -745,9 +745,12 @@ export class Crew {
             SELECT * FROM (SELECT * FROM messages WHERE bot = ? AND COALESCE(member, ?) = ? AND id < ? ORDER BY id DESC LIMIT 99)
           ) ORDER BY id`, id, viewer, viewer, around, id, viewer, viewer, around)
         : this.db.all('SELECT * FROM (SELECT * FROM messages WHERE bot = ? AND COALESCE(member, ?) = ? ORDER BY id DESC LIMIT 200) ORDER BY id', id, viewer, viewer))
-        .map((m: Row): Row => ({ ...m, files: id === CHIEF && m.author === 'bot' && m.task_id
-          ? this.db.all("SELECT bot, data FROM events WHERE kind = 'file.delivered' AND json_extract(data, '$.task') = ?", m.task_id)
-            .map((e) => ({ bot: e.bot, path: JSON.parse(e.data).path })) : [] })),
+        .map((m: Row): Row => ({ ...m,
+          files: id === CHIEF && m.author === 'bot' && m.task_id
+            ? this.db.all("SELECT bot, data FROM events WHERE kind = 'file.delivered' AND json_extract(data, '$.task') = ?", m.task_id)
+              .map((e) => ({ bot: e.bot, path: JSON.parse(e.data).path })) : [],
+          // Chief's hand-off in a helper's chat collapses to its task's title, with the full words behind Show details.
+          ...(id !== CHIEF && m.author === 'chief' && m.task_id ? { title: this.db.get('SELECT title FROM tasks WHERE id = ?', m.task_id)?.title } : {}) })),
       tasks: this.db.all('SELECT * FROM tasks WHERE bot = ? ORDER BY id DESC LIMIT 50', id).map((t) => this.task(t)),
       // What this helper learned about the viewer: never another member's notes.
       notes: disk.readNotes(this.cfg, { member: viewer, bot: id }),
@@ -1657,7 +1660,8 @@ export class Crew {
         { name: Type.String(), sheets: Type.Any() }, (p) => this.workbook(botId, String(p.name ?? ''), p.sheets)),
       tool('crew_document', 'Write a real document the person can open and edit (.docx), in your files/, and deliver it. `name` is the title; '
         + '`blocks` is the document in order: {heading}, {text, bold?, italic?}, {bullets: […]} or {table: {head: […], rows: [[cell, …], …]}}. '
-        + 'crewd writes the file, so never make the binary yourself. Make it finished: a title, short paragraphs and a table where rows help.',
+        + 'crewd writes the file, so never make the binary yourself. Make it finished: a title, short paragraphs and a table where rows help. '
+        + 'They read it right in Crewhouse on the web and on their phone, so one finished document is enough — never a shorter companion copy of it.',
         { name: Type.String(), blocks: Type.Any() }, (p) => this.document(botId, String(p.name ?? ''), p.blocks)),
       tool('crew_copy', "Put a copy of a file from your folder into the person's own folders. `to` is the full path of the new file.",
         { from: Type.String(), to: Type.String() }, (p) => {
@@ -1960,6 +1964,20 @@ export class Crew {
     // A delivered .md or .txt leaves as its own words (capped), read by the app's shared safe markdown renderer;
     // a .docx leaves as plain parts. Either way crewd reads the file, only for the member it was delivered to.
     return /\.(md|txt)$/i.test(full) ? { text: readFileSync(full, 'utf8').slice(0, 100_000) } : readDocument(full);
+  }
+
+  /** A delivered video, in base64 slices (a phone fetches it piece by piece over the link), only for the member it was delivered to. */
+  async videoSlice(botId: string, path: string, after: number, viewer: number) {
+    const rel = String(path ?? '');
+    const seen = this.db.get("SELECT 1 AS ok FROM events e JOIN tasks t ON t.id = json_extract(e.data, '$.task') " +
+      "WHERE e.bot = ? AND e.kind = 'file.delivered' AND json_extract(e.data, '$.path') = ? AND COALESCE(t.member, ?) = ?", botId, rel, viewer, viewer);
+    if (!seen) throw Object.assign(new Error('that video was not delivered to you'), { status: 403 });
+    const full = disk.insideBot(this.cfg, botId, rel);
+    if (!/\.(mp4|webm|mov)$/i.test(rel) || !existsSync(full) || !statSync(full).isFile()) throw Object.assign(new Error('no such video'), { status: 404 });
+    const size = statSync(full).size;
+    const start = Math.max(0, Math.min(after, size));
+    const end = Math.min(size, start + 600_000); // one link frame's worth, like the photo cap
+    return { size, more: end < size, data: readFileSync(full).subarray(start, end).toString('base64') };
   }
 
   /** A finished file, registered once per task (a retried call is a no-op). Only inside the bot's own folder. */

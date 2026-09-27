@@ -33,7 +33,9 @@ export type DocPart = { kind: 'heading' | 'p' | 'li' | 'table'; text?: string; b
 export type DocView = { name: string; parts: DocPart[] };
 export type Step = { at: number; text: string; now?: boolean; asked?: boolean; seq: number; undo?: boolean };
 /** `unsure`: crewd's line for a job that acted but couldn't confirm it worked, shown apart from the helper's own words. */
-export type Line = { id: number; from: 'me' | 'them' | 'chief' | 'note'; text: string; files: FileView[]; choices: string[]; at?: number; unsure?: boolean };
+export type Line = { id: number; from: 'me' | 'them' | 'chief' | 'note'; text: string; files: FileView[]; choices: string[]; at?: number; unsure?: boolean;
+  /** Chief's full assignment in a helper's chat, behind Show details: the line itself stays one short ask. */
+  detail?: string };
 /** The one-use pairing ticket is rendered only in the owner's Chief chat, never as chat text. */
 export const phoneOffer = (page: Json, member: number): { qr: string; typed: string; expires: number; message: number; token?: string; waiting?: { id: number; name: string; words: string }; joined?: string } | null => member === OWNER ? page?.phoneOffer ?? null : null;
 export type App = { id: string; name: string; mark: string; bg: string; on: boolean; does: string; warns?: boolean };
@@ -84,6 +86,10 @@ export function fileTarget(f?: FileView): { href: string; chip: string } | null 
   return { href: panel ? `#/f/${src.bot}/${encodeURIComponent(src.path)}` : f.url,
     chip: (f.url.split('?')[0].match(/\.([a-z0-9]+)$/i)?.[1] ?? 'file').toUpperCase() };
 }
+
+/** What a phone opens in its own reader: the same crewd-parsed words the web's panel shows — a document, a written
+ *  page, a spreadsheet — and a video, fetched over the link in pieces. Any other file really is on the computer. */
+export const phoneReadable = (f: FileView) => !!fileSource(f.url) && (f.kind === 'page' || f.kind === 'sheet' || f.kind === 'video');
 
 /**
  * A workbook crewd read for the app (docs/ui-contract.md): the tabs, the heading row, and the first rows as a read-only
@@ -162,6 +168,8 @@ export function plain(text = '') {
     .replace(/\s{2,}/g, ' ')
     .trim();
 }
+/** A teaser line (a chat list row, a Things summary): plain words, no raw ** emphasis marks — those render only in a chat bubble. */
+export const teaser = (text: string) => plain(text).replace(/(\*\*|\*)(?=[^\s*])([^*]*[^\s*])\1/g, '$2');
 
 // ---------- the crew ----------
 const KINDS = Object.keys(PALS) as Kind[];
@@ -430,7 +438,7 @@ export function preview(last: Json | null | undefined, status = '') {
   const text = n && (!said || /^Here (is a photo|are some photos)\.$/.test(said)) ? (n === 1 ? 'Photo' : `${n} photos`) : said;
   const f = /^Delivered (files\/.+?)(?::\s|$)/.exec(text);
   if (f) return `Sent “${pretty(f[1])}”`;
-  return last.author === 'person' ? `You: ${text.replace(/\s+/g, ' ')}` : plain(text.replace(/\s+/g, ' '));
+  return last.author === 'person' ? `You: ${text.replace(/\s+/g, ' ')}` : teaser(text.replace(/\s+/g, ' '));
 }
 export function chats(state: Json): Chat[] {
   const bot = (id: string) => state.bots.find((b: Json) => b.id === id) ?? {};
@@ -581,7 +589,7 @@ export function work(state: Json): Work[] {
 
 export function things(state: Json): Thing[] {
   return state.tasks.filter((t: Json) => t.state === 'done').map((t: Json) => ({
-    id: t.id, helper: t.bot, title: plain(t.title), at: t.updated_at, summary: plain(t.result ?? '').slice(0, 220),
+    id: t.id, helper: t.bot, title: plain(t.title), at: t.updated_at, summary: teaser(t.result ?? '').slice(0, 220),
     files: (t.files ?? []).map((f: string) => fileView(t.bot, f)),
   }));
 }
@@ -716,7 +724,12 @@ export function lines(page: Json, bot: string): Line[] {
     }
     // Another helper handing this one a job: a note in its words, "Reel asked: …".
     if (!['person', 'bot', 'chief'].includes(m.author)) return { id: m.id, from: 'note', text: `${String(m.author).replace(/^./, (c) => c.toUpperCase())} asked: ${plain(text)}`, files: [], choices: [] };
-    return { id: m.id, from: m.author === 'person' ? 'me' : m.author === 'chief' && bot !== 'chief' ? 'chief' : 'them',
+    // Chief's hand-off to a helper: one short collapsed line — the ask, not the internal assignment prose — with the
+    // result and the full words (Show details) behind it.
+    if (m.author === 'chief' && bot !== 'chief') return { id: m.id, from: 'chief',
+      text: `Chief asked: ${plain(String(m.title ?? text.split('\n')[0])).slice(0, 80)}`, detail: chatWords(text),
+      files: [...pics, ...(m.files ?? []).map((f: Json) => fileView(f.bot, f.path))], choices: [] };
+    return { id: m.id, from: m.author === 'person' ? 'me' : 'them',
       text: m.author === 'person' ? (pics.length && /^Here (is a photo|are some photos)\.$/.test(text) ? '' : noTools(text)) : chatWords(text), files: [...pics, ...(m.files ?? []).map((f: Json) => fileView(f.bot, f.path))], choices: (m.choices ?? []).map(plain), at: m.at ? at(m.at) : undefined, unsure: m.author === 'bot' && /^Not sure it worked:|^[^.]{1,40} isn't sure “/.test(text) };
   }).filter((l: Line) => l.text || l.files.length);
 }

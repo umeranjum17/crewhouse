@@ -19,6 +19,8 @@ import { desktopAvailable } from '@desklink/react-native/availability';
 import * as ImagePicker from 'expo-image-picker';
 import * as Linking from 'expo-linking';
 import * as Notifications from 'expo-notifications';
+import { File, Paths } from 'expo-file-system';
+import { VideoView, useVideoPlayer } from 'expo-video';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { useShareIntent } from 'expo-share-intent';
 import QRCode from 'qrcode';
@@ -140,26 +142,50 @@ function ChatText({ text }: { text: string }) {
   const blocks = (tokens: any[]): ReactNode => tokens.map((x, i) => x.type === 'heading' ? <T key={i} style={{ fontSize: 18, lineHeight: 25, fontWeight: '600', marginTop: 8 }}>{inline(x.tokens)}</T>
     : x.type === 'paragraph' || x.type === 'text' ? <T key={i}>{inline(x.tokens ?? [{ text: x.text }])}</T>
     : x.type === 'list' ? <View key={i} style={{ gap: 5 }}>{x.items.map((item: any, j: number) => <View key={j} style={{ flexDirection: 'row', gap: 6 }}><T>{item.task ? item.checked ? '☑' : '☐' : '•'}</T><View style={{ flex: 1 }}>{blocks(item.tokens.filter((y: any) => y.type !== 'checkbox'))}</View></View>)}</View>
-    : x.type === 'table' ? <ScrollView horizontal key={i}><View>{[x.header, ...x.rows].map((row: any[], j: number) => <View key={j} style={{ flexDirection: 'row' }}>{row.map((c, k) => <View key={k} style={{ minWidth: 90, maxWidth: 200, padding: 6, borderWidth: 1, borderColor: t.line }}><T style={j ? undefined : s.b}>{inline(c.tokens)}</T></View>)}</View>)}</View></ScrollView>
+    : x.type === 'table' ? <Wide key={i}><View>{[x.header, ...x.rows].map((row: any[], j: number) => <View key={j} style={{ flexDirection: 'row' }}>{row.map((c, k) => <View key={k} style={{ minWidth: 90, maxWidth: 200, padding: 6, borderWidth: 1, borderColor: t.line }}><T style={j ? undefined : s.b}>{inline(c.tokens)}</T></View>)}</View>)}</View></Wide>
     : x.type === 'code' ? <T key={i} style={{ backgroundColor: t.soft }}>{x.text}</T>
     : x.type === 'html' ? <T key={i}>{x.raw}</T> : null);
   return <View style={{ gap: 10, maxWidth: 560 }}>{blocks(chatTokens(shown))}{long && <Pressable onPress={() => setMore(!more)} accessibilityRole="button"><T style={s.b}>{more ? 'Less' : 'More'}</T></Pressable>}</View>;
 }
 
-function Card({ children, style, ask }: { children: ReactNode; style?: any; ask?: boolean }) {
-  const t = useLook();
-  return <View style={[s.card, { backgroundColor: t.card, borderColor: ask ? t.pink : t.line, borderWidth: 1 }, style]}>{children}</View>;
+function ChiefAsk({ l }: { l: { text: string; detail: string } }) {
+  const [open, setOpen] = useState(false);
+  return <View style={{ paddingLeft: 36, gap: 4 }}>
+    <T>{l.text}</T>
+    <Pressable onPress={() => setOpen(!open)} accessibilityRole="button" accessibilityLabel={open ? 'Hide details' : 'Show details'} hitSlop={6}>
+      <T style={s.b}>{open ? 'Hide details' : 'Show details'}</T>
+    </Pressable>
+    {open && <ChatText text={l.detail} />}
+  </View>;
 }
-function PhoneCard({ offer }: { offer: NonNullable<ReturnType<typeof A.phoneOffer>> }) {
+
+function Card({ children, style, ask, onTouchStart }: { children: ReactNode; style?: any; ask?: boolean; onTouchStart?: () => void }) {
+  const t = useLook();
+  return <View onTouchStart={onTouchStart} style={[s.card, { backgroundColor: t.card, borderColor: ask ? t.pink : t.line, borderWidth: 1 }, style]}>{children}</View>;
+}
+/** The Add-a-phone card in Chief's chat, on the phone. It refreshes itself like the computer's card: a new code while
+ *  it is on screen and someone is about (ten minutes), then a Show-a-new-code button — never directions to go elsewhere. */
+function PhoneCard({ offer, reload }: { offer: NonNullable<ReturnType<typeof A.phoneOffer>>; reload: () => void }) {
+  const [current, setCurrent] = useState(offer);
   const [now, setNow] = useState(Date.now());
+  const active = useRef(Date.now());
+  const busy = useRef(false);
+  useEffect(() => { if (offer.token !== current.token) setCurrent(offer); }, [offer.token]);
+  const renew = async () => {
+    if (busy.current) return;
+    busy.current = true;
+    try { setCurrent(await api.refreshPhone(current.message)); reload(); } catch { active.current = 0; say('Could not show a new code'); }
+    finally { busy.current = false; }
+  };
   useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer); }, []);
-  const left = Math.max(0, Math.ceil((offer.expires - now) / 1000));
-  const qr = offer.qr.startsWith('byokit-link:') ? QRCode.create(offer.qr, { errorCorrectionLevel: 'M' }).modules : null;
-  return <Card style={{ gap: 10, marginLeft: 36 }}>
+  useEffect(() => { if (now >= current.expires && now - active.current < 10 * 60_000 && !offer.waiting && !offer.joined) void renew(); }, [now, current.expires, offer.waiting, offer.joined]);
+  const left = Math.max(0, Math.ceil((current.expires - now) / 1000));
+  const qr = current.qr.startsWith('byokit-link:') ? QRCode.create(current.qr, { errorCorrectionLevel: 'M' }).modules : null;
+  return <Card style={{ gap: 10, marginLeft: 36 }} onTouchStart={() => { active.current = Date.now(); }}>
     <T style={s.b}>Add a phone</T>
     {!offer.joined && !offer.waiting && left > 0 && qr && <View accessibilityLabel="Scan to pair another phone" style={{ width: 220, height: 220, backgroundColor: 'white', padding: 8 }}><View style={{ flex: 1 }}>{Array.from({ length: qr.size }, (_, y) => <View key={y} style={{ flex: 1, flexDirection: 'row' }}>{Array.from({ length: qr.size }, (_, x) => <View key={x} style={{ flex: 1, backgroundColor: qr.get(x, y) ? 'black' : 'white' }} />)}</View>)}</View></View>}
-    {offer.joined ? <T style={s.b}>Paired: {offer.joined}</T> : offer.waiting ? <><T>{offer.waiting.name} is waiting. Check these two words: {offer.waiting.words}</T><T tone="mute">For your safety, approve on the computer where this code was shown.</T></> : left ? <><T>Scan this with the other phone, or type this code there. Approve on the computer.</T><T style={s.b}>{offer.typed}</T><Btn label="Copy code" onPress={() => { Clipboard.setString(offer.typed); say('Code copied'); }} /><T tone="mute">Works once · {Math.floor(left / 60)}:{String(left % 60).padStart(2, '0')} left</T></>
-      : <T tone="mute">Code expired. Show a new code on the computer.</T>}
+    {offer.joined ? <T style={s.b}>Paired: {offer.joined}</T> : offer.waiting ? <><T>{offer.waiting.name} is waiting. Check these two words: {offer.waiting.words}</T><T tone="mute">For your safety, approve on the computer where this code was shown.</T></> : left ? <><T>Scan this with the other phone, or type this code there. Approve on the computer.</T><T style={s.b}>{current.typed}</T><Btn label="Copy code" onPress={() => { Clipboard.setString(current.typed); say('Code copied'); }} /><T tone="mute">Works once · {Math.floor(left / 60)}:{String(left % 60).padStart(2, '0')} left</T></>
+      : <><T tone="mute">That code has run out.</T><Btn go label="Show a new code" onPress={() => { active.current = Date.now(); void renew(); }} /></>}
   </Card>;
 }
 const Label = ({ children }: { children: ReactNode }) => <T tone="mute" style={s.label}>{children}</T>;
@@ -252,40 +278,127 @@ function PhotoView({ f }: { f: A.FileView }) {
   return uri ? <Image source={{ uri }} style={{ width: 240, height: 240, borderRadius: 16 }} resizeMode="contain" accessibilityLabel="A photo" /> : <FileRow f={f} plain />;
 }
 
-/** Files open on the home computer; the phone shows what they are — except a written page (.md, .txt), which crewd
- *  reads over the link and the phone shows right here, rendered: headings, lists with their ticks, tables, words. */
+/** Files open right here, through the same crewd-parsed words the web's reader shows — a document (.docx, .md, .txt),
+ *  a spreadsheet (.xlsx), a video fetched in pieces over the link. Anything else really is on the computer. */
 function FileRow({ f, plain }: { f: A.FileView; plain?: boolean }) {
-  const [read, setRead] = useState(false);
+  const [open, setOpen] = useState(false);
   if (!plain && f.kind === 'image' && /\/photos\//.test(f.url)) return <PhotoView f={f} />;
-  const readable = f.kind === 'page' && /\.(md|txt)$/i.test(f.url);
-  const row = <View style={s.row}><T tone="mute">{f.kind === 'video' ? '▶' : f.kind === 'image' ? '▣' : '▤'}</T><T style={{ flex: 1 }}>{f.name}</T><T tone="mute" style={s.small}>{readable ? 'Read' : 'on your computer'}</T></View>;
+  const readable = A.phoneReadable(f);
+  const word = f.kind === 'video' ? 'Play' : 'Read';
+  const row = <View style={s.row}><T tone="mute">{f.kind === 'video' ? '▶' : f.kind === 'image' ? '▣' : '▤'}</T><T style={{ flex: 1 }}>{f.name}</T><T tone="mute" style={s.small}>{readable ? word : 'on your computer'}</T></View>;
   if (!readable) return row;
   return <View>
-    <Pressable accessibilityRole="button" accessibilityLabel={`Read ${f.name}`} onPress={() => setRead(true)}
+    <Pressable accessibilityRole="button" accessibilityLabel={`${word} ${f.name}`} onPress={() => setOpen(true)}
       style={({ pressed }) => [pressed && { opacity: 0.55 }]}>{row}</Pressable>
-    {read && <DocSheet f={f} onClose={() => setRead(false)} />}
+    {open && (f.kind === 'video'
+      ? <VideoSheet f={f} onClose={() => setOpen(false)} />
+      : <DocSheet f={f} onClose={() => setOpen(false)} />)}
   </View>;
 }
 
-/** One rendered page over the link: crewd reads the file and the phone shows its own words through the shared safe
- *  markdown renderer — headings, ticks, tables — the same piece the chat uses. */
+/** A wide table on a narrow screen: the columns are reachable, so say how — a quiet line under the table. */
+function Wide({ children }: { children: ReactNode }) {
+  const [box, setBox] = useState(0);
+  const [wide, setWide] = useState(false);
+  return <View>
+    <View onLayout={(e) => setBox(e.nativeEvent.layout.width)}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} onContentSizeChange={(w) => setWide(w > box + 8)}>{children}</ScrollView>
+    </View>
+    {wide && <T tone="mute" style={[s.small, { textAlign: 'right' }]}>Swipe sideways to see it all ›</T>}
+  </View>;
+}
+
+function SheetGrid({ head, rows }: { head: string[]; rows: string[][] }) {
+  const t = useLook();
+  return <View>{[head, ...rows].map((row, j) => <View key={j} style={{ flexDirection: 'row' }}>{row.map((c, k) =>
+    <View key={k} style={{ minWidth: 90, maxWidth: 200, padding: 6, borderWidth: 1, borderColor: t.line }}><T style={j ? undefined : s.b}>{c}</T></View>)}</View>)}</View>;
+}
+
+/** A document's parts as the web's reader shows them: headings, paragraphs, bullets and tables. */
+function DocParts({ parts }: { parts: A.DocPart[] }) {
+  const runs: (A.DocPart | A.DocPart[])[] = [];
+  parts.forEach((p) => { const last = runs.at(-1); if (p.kind === 'li' && Array.isArray(last)) last.push(p); else if (p.kind === 'li') runs.push([p]); else runs.push(p); });
+  return <View style={{ gap: 10 }}>{runs.map((run, i) => Array.isArray(run)
+    ? <View key={i} style={{ gap: 5 }}>{run.map((li, j) => <View key={j} style={{ flexDirection: 'row', gap: 6 }}><T>•</T><T style={{ flex: 1 }}>{li.text}</T></View>)}</View>
+    : run.kind === 'heading' ? <T key={i} style={{ fontSize: 18, lineHeight: 25, fontWeight: '600' }}>{run.text}</T>
+    : run.kind === 'table' ? <Wide key={i}><SheetGrid head={run.head ?? []} rows={run.rows ?? []} /></Wide>
+    : <T key={i} style={run.bold ? s.b : undefined}>{run.text}</T>)}</View>;
+}
+
+/** One rendered file over the link, read-only: a spreadsheet is its sheets as tables, a document its headings,
+ *  paragraphs and tables, a written page its own words through the shared safe markdown renderer. */
 function DocSheet({ f, onClose }: { f: A.FileView; onClose: () => void }) {
   const t = useLook();
   const reduce = motion.useReduceMotion();
-  const [text, setText] = useState<string | null>(null);
+  const [page, setPage] = useState<Json | null>(null);
+  const [tab, setTab] = useState(0);
   useEffect(() => {
     const src = A.fileSource(f.url);
-    if (src) void api.document(src.bot, src.path).then((j) => setText(A.mdPlain(String(j?.text ?? '')))).catch(() => {});
+    if (src) void (f.kind === 'sheet' ? api.workbook(src.bot, src.path) : api.document(src.bot, src.path)).then(setPage).catch(() => {});
   }, [f.url]);
+  const book = f.kind === 'sheet' && page ? A.workbook(page, f.name) : null;
+  const doc = f.kind === 'page' && page && Array.isArray(page?.parts) ? A.document(page, f.name) : null;
+  const text = page && !book && !doc ? A.mdPlain(String(page?.text ?? '')) : null;
+  const sheets = book?.sheets ?? [];
+  const sNow = sheets[Math.min(tab, Math.max(0, sheets.length - 1))];
   return <Modal visible transparent animationType={motion.sheet(reduce)} onRequestClose={onClose}>
     <Pressable style={s.scrim} onPress={onClose}>
       <Pressable style={[s.sheet, { backgroundColor: t.bg, maxHeight: '88%' }]} onPress={() => {}}>
         <View style={s.row}><T tone="mute">▤</T><T style={[s.h2, { flex: 1 }]}>{f.name}</T><Btn label="Close" onPress={onClose} /></View>
         <ScrollView>
-          {text === null && <T tone="mute">Opening “{f.name}”…</T>}
-          {text === '' && <T tone="mute">There is nothing in it to show yet.</T>}
-          {text !== null && text !== '' && <ChatText text={text} />}
+          {page === null && <T tone="mute">Opening “{f.name}”…</T>}
+          {page !== null && !book && !doc && !text && <T tone="mute">There is nothing in it to show yet.</T>}
+          {sheets.length > 1 && <View style={s.chips}>{sheets.map((x, i) => <Btn key={`${x.name}-${i}`} go={i === tab} label={x.name} onPress={() => setTab(i)} />)}</View>}
+          {sNow && <>{book && sheets.length === 1 && <T style={s.b}>{sNow.name}</T>}<Wide><SheetGrid head={sNow.head} rows={sNow.rows} /></Wide>
+            {sNow.total > sNow.rows.length + 1 && <T tone="mute" style={s.small}>{`…and ${sNow.total - sNow.rows.length - 1} more rows. Open it on the computer to see the whole sheet.`}</T>}</>}
+          {doc && (doc.parts.length ? <DocParts parts={doc.parts} /> : <T tone="mute">There is nothing in it to show yet.</T>)}
+          {text != null && text !== '' && <ChatText text={text} />}
         </ScrollView>
+      </Pressable>
+    </Pressable>
+  </Modal>;
+}
+
+/** A finished video, brought over the link in pieces and played here — the phone can't reach the computer's own address. */
+function VideoSheet({ f, onClose }: { f: A.FileView; onClose: () => void }) {
+  const t = useLook();
+  const reduce = motion.useReduceMotion();
+  const [part, setPart] = useState(0); // bytes fetched so far
+  const [size, setSize] = useState(0);
+  const [uri, setUri] = useState('');
+  const [err, setErr] = useState('');
+  const player = useVideoPlayer(uri ? { uri } : null);
+  useEffect(() => {
+    const src = A.fileSource(f.url);
+    if (!src) { setErr("This video can't open here."); return; }
+    let on = true;
+    const file = new File(Paths.cache, `crewhouse-video-${Date.now()}${(f.url.match(/\.(mp4|webm|mov)$/i) ?? ['.mp4'])[0]}`);
+    (async () => {
+      try {
+        file.create();
+        let after = 0;
+        for (;;) {
+          const chunk = await api.video(src.bot, src.path, after);
+          if (!on) return;
+          file.write(chunk.data, { encoding: 'base64', append: after > 0 });
+          after += Math.floor(chunk.data.length * 3 / 4);
+          setSize(chunk.size);
+          setPart(after);
+          if (!chunk.more) break;
+        }
+        if (on) setUri(file.uri);
+      } catch { if (on) setErr("Couldn't bring it over. Check the home computer is awake, then try again."); }
+    })();
+    return () => { on = false; file.delete(); };
+  }, [f.url]);
+  useEffect(() => { if (uri) player.play(); }, [uri]);
+  return <Modal visible transparent animationType={motion.sheet(reduce)} onRequestClose={onClose}>
+    <Pressable style={s.scrim} onPress={onClose}>
+      <Pressable style={[s.sheet, { backgroundColor: t.bg }]} onPress={() => {}}>
+        <View style={s.row}><T tone="mute">▶</T><T style={[s.h2, { flex: 1 }]}>{f.name}</T><Btn label="Close" onPress={onClose} /></View>
+        {uri ? <VideoView player={player} contentFit="contain" style={{ width: '100%', aspectRatio: 16 / 9, borderRadius: 12, backgroundColor: '#000' }} accessibilityLabel={`Playing ${f.name}`} />
+          : err ? <T tone="pinkInk">{err}</T>
+          : <T tone="mute">Getting it from your computer… {size ? `${Math.min(100, Math.round((part / size) * 100))}%` : ''}</T>}
       </Pressable>
     </Pressable>
   </Modal>;
@@ -834,10 +947,10 @@ function Chat({ id, m, state, tick, refresh, canAct, offline, open }: Ctx & { id
           <View key={l.id} onLayout={(e) => ys.current.set(l.id, e.nativeEvent.layout.y)}
             style={[s.line, l.from === 'me' && { alignSelf: 'flex-end' }, l.from === 'note' && { maxWidth: '92%' }]}>
             {l.from !== 'me' && l.from !== 'note' && !(i && lines[i - 1].from === l.from) && <View style={s.row}><Face who={l.from === 'chief' ? 'chief' : h ?? 'chief'} size={28} /><T style={[s.small, s.b]}>{l.from === 'chief' ? 'Chief' : name}</T><T tone="mute" style={s.label}>{l.at ? A.clock(l.at) : ''}</T></View>}
-            {!!l.text && <View style={l.from === 'me' ? [s.bubbleText, { backgroundColor: t.soft, borderColor: t.line, borderWidth: 1, borderBottomRightRadius: 6 }] : { paddingLeft: 36 }}>
-              <ChatText text={l.text} /></View>}
+            {!!l.text && (l.detail ? <ChiefAsk l={{ text: l.text, detail: l.detail }} /> : <View style={l.from === 'me' ? [s.bubbleText, { backgroundColor: t.soft, borderColor: t.line, borderWidth: 1, borderBottomRightRadius: 6 }] : { paddingLeft: 36 }}>
+              <ChatText text={l.text} /></View>)}
             {l.files.map((f) => <Card key={f.url}><FileRow f={f} /></Card>)}
-            {phoneOffer?.message === l.id && <PhoneCard offer={phoneOffer} />}
+            {phoneOffer?.message === l.id && <PhoneCard offer={phoneOffer} reload={() => void load()} />}
             {cards.filter((c) => lines.findLastIndex((x) => (x.at ?? 0) <= c.at) === i).map((c) => <AskCard key={c.id} c={c} who={h} state={state} onDone={refresh} canAct={canAct} offline={offline} open={open} />)}
           </View>
         ))}
