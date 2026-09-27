@@ -68,6 +68,12 @@ export class Store {
     return e;
   }
 
+  /** Ephemeral updates for a live reply: fan out without filling the durable event log with tokens. */
+  live(kind: string, bot: string, data: Row) {
+    const e = { at: Date.now(), kind, bot, data };
+    queueMicrotask(() => this.listeners.forEach((l) => l(e)));
+  }
+
   onEvent(l: (e: Row) => void) { this.listeners.add(l); return () => this.listeners.delete(l); }
 
   events(after = 0, limit = 200): Row[] {

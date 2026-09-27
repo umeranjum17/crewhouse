@@ -21,7 +21,7 @@ import * as Notifications from 'expo-notifications';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { useShareIntent } from 'expo-share-intent';
 import * as motion from './src/motion';
-import { connect, desktopSignaling, forgetGrant, kept, loadGrant, pair, pairDirectTyped, pairTyped, type Grant, type Status } from './src/link';
+import { connect, desktopSignaling, forgetGrant, kept, loadGrant, onLive, pair, pairDirectTyped, pairTyped, type Grant, type Status } from './src/link';
 
 // ---------- look ----------
 type Look = typeof color.day & { go: string; goInk: string; solid: string; soft: string; card: string; ok: string; wait: string; pinkInk: string; night: boolean };
@@ -721,6 +721,13 @@ function Chat({ id, m, state, tick, refresh, canAct, offline, open }: Ctx & { id
   const t = useLook();
   // The computer's page when it answers; otherwise the lines this phone kept, until it does.
   const [page, setPage] = useState<Json>(() => kept.page(id));
+  const [pending, setPending] = useState<{ text: string; after: number } | null>(null);
+  const [partial, setPartial] = useState('');
+  useEffect(() => onLive((e) => {
+    if (e.bot !== id) return;
+    if (e.kind === 'reply.partial' && e.data?.member === state.person?.id) setPartial(e.data.text);
+    if (e.kind === 'message' && e.data?.author === 'bot') setPartial('');
+  }), [id, state.person?.id]);
   // A search landing on an old line loads a window around it; once you send, the anchor goes and the thread reads to the end.
   const [around, setAround] = useState(m ?? 0);
   const load = useCallback((ar = around) => api.bot(id, ar || undefined).then((p) => { setPage(p); kept.chat(id, p); }).catch(() => {}), [id, around]);
@@ -730,6 +737,8 @@ function Chat({ id, m, state, tick, refresh, canAct, offline, open }: Ctx & { id
   const landed = useRef(0); // the anchor we already landed on: once per line, never again on every tick
 
   const lines = A.lines(page, id);
+  const echoed = pending && !(page?.messages ?? []).some((x: Json) => x.author === 'person' && x.id > pending.after && A.plain(x.text) === A.plain(pending.text));
+  const waiting = pending && !partial && !(page?.messages ?? []).some((x: Json) => x.author === 'bot' && x.id > pending.after);
   const [seed, setSeed] = useState(0); // a starter chip fills the box from outside; remount reads the draft back
   const h = A.crew(state).find((x) => x.id === id);
   const b = state.bots.find((x: Json) => x.id === id);
@@ -740,7 +749,13 @@ function Chat({ id, m, state, tick, refresh, canAct, offline, open }: Ctx & { id
   // Seen: the chat's unread count goes once its newest line is on screen (a watch-only phone can't mark it).
   const newest = last?.id;
   useEffect(() => { if (canAct && newest && b?.unread) void api.read(id).then(refresh).catch(() => {}); }, [canAct, newest, b?.unread, id, refresh]);
-  const send = async (x: string, p: Photo[] = []) => { const ok = await attempt(() => api.post(id, x, p.map(({ type, data }) => ({ type, data }))), undefined, true); if (ok) { setAround(0); void load(0); refresh(); } return ok; };
+  const send = async (x: string, p: Photo[] = []) => {
+    setPending({ text: x, after: page?.messages?.at(-1)?.id ?? 0 });
+    setPartial('');
+    const ok = await attempt(() => api.post(id, x, p.map(({ type, data }) => ({ type, data }))), undefined, true);
+    if (ok) { setAround(0); void load(0); refresh(); } else setPending(null);
+    return ok;
+  };
   // The landing: the matched line, brought to view and marked for a moment — where you are, said once.
   useEffect(() => {
     if (!around || !lines.length || landed.current === around) return;
@@ -767,6 +782,9 @@ function Chat({ id, m, state, tick, refresh, canAct, offline, open }: Ctx & { id
             {cards.filter((c) => lines.findLastIndex((x) => (x.at ?? 0) <= c.at) === i).map((c) => <AskCard key={c.id} c={c} who={h} state={state} onDone={refresh} canAct={canAct} offline={offline} open={open} />)}
           </View>
         ))}
+        {echoed && <View style={[s.line, { alignSelf: 'flex-end' }]}><T>{pending.text}</T></View>}
+        {waiting && id === 'chief' && <View style={s.line} accessibilityLiveRegion="polite"><T>Chief is on it…</T></View>}
+        {!!partial && <View style={s.line} accessibilityLiveRegion="polite"><T>{partial}</T></View>}
         {canAct && !!last?.choices.length && <View style={s.chips}>{last.choices.map((c) => <Btn key={c} label={c} onPress={() => send(c)} />)}</View>}
         {cards.filter((c) => !lines.length || lines.every((x) => (x.at ?? 0) > c.at)).map((c) => <AskCard key={c.id} c={c} who={h} state={state} onDone={refresh} canAct={canAct} offline={offline} open={open} />)}
       </ScrollView>

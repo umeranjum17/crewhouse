@@ -267,6 +267,8 @@ function ChiefIdeas({ state, chat, picked }: { state: Json; chat: string; picked
 function Chat({ id, m, state, me, tick, refresh, accounts }: Ctx & { id: string; m?: string }) {
   const g = A.account(accounts, me);
   const [page, setPage] = useState<Json>(null);
+  const [pending, setPending] = useState<{ text: string; after: number } | null>(null);
+  const [partial, setPartial] = useState('');
   const [seed, setSeed] = useState(0); // a starter chip fills the box from outside; remount reads the draft back
   // A search landing on an old line loads a window around it; once you send, the anchor goes and the thread reads to the end.
   const [around, setAround] = useState(m ? Number(m.slice(1)) : 0);
@@ -274,6 +276,14 @@ function Chat({ id, m, state, me, tick, refresh, accounts }: Ctx & { id: string;
   useEffect(() => { void load(); }, [load, tick]);
   const end = useRef<HTMLDivElement>(null);
   const lines = A.lines(page, id);
+  const echoed = pending && !(page?.messages ?? []).some((x: Json) => x.author === 'person' && x.id > pending.after && A.plain(x.text) === A.plain(pending.text));
+  const waiting = pending && !partial && !(page?.messages ?? []).some((x: Json) => x.author === 'bot' && x.id > pending.after);
+  useEffect(() => subscribe((e) => {
+    if (e.bot !== id) return;
+    if (e.kind === 'reply.partial' && e.data?.member === me) setPartial(e.data.text);
+    if (e.kind === 'message' && e.data?.author === 'bot') setPartial('');
+  }), [id, me]);
+  useEffect(() => { if ((page?.messages ?? []).some((x: Json) => x.author === 'bot' && x.text === partial)) setPartial(''); }, [page, partial]);
   const box = useRef<HTMLDivElement>(null);
   // The thread scrolls by its own column on a desk (a scrollIntoView here once dragged the whole page up with it,
   // leaving a dead band on top); the phone keeps the document scroll. An anchored landing scrolls to the line instead.
@@ -302,7 +312,13 @@ function Chat({ id, m, state, me, tick, refresh, accounts }: Ctx & { id: string;
   const trail = live && page ? A.steps(page.trail ?? [], live.id, true) : [];
   const cards = A.cards(state).filter((c) => c.helper === id);
   const last = lines.at(-1);
-  const send = async (t: string) => { const ok = await attempt(() => api.post(id, t), undefined, true); if (ok) { setAround(0); void load(0); refresh(); } return ok; };
+  const send = async (t: string) => {
+    setPending({ text: t, after: page?.messages?.at(-1)?.id ?? 0 });
+    setPartial('');
+    const ok = await attempt(() => api.post(id, t), undefined, true);
+    if (ok) { setAround(0); void load(0); refresh(); } else setPending(null);
+    return ok;
+  };
   const name = h?.name ?? 'Chief';
   return (
     <div className={`chat${live && h ? ' with-live' : ''}`}>
@@ -316,6 +332,9 @@ function Chat({ id, m, state, me, tick, refresh, accounts }: Ctx & { id: string;
             {cards.filter((c) => lines.findLastIndex((x) => (x.at ?? 0) <= c.at) === i).map((c) => c.kind === 'connect' ? <ConnectCard key={c.id} c={c} helper={h?.name} state={state} onDone={refresh} /> : <AskCard key={c.id} c={c} who={h} onDone={refresh} />)}
           </div>
         ))}
+        {echoed && <div className="line me"><div className="bubble-text">{pending.text}</div></div>}
+        {waiting && id === 'chief' && <div className="line them" role="status"><div className="line-by"><Face who="chief" size={28} /><span className="who">Chief</span></div><div className="bubble-text">On it…</div></div>}
+        {!!partial && <div className="line them" aria-live="polite"><div className="bubble-text">{partial}</div></div>}
         {last?.choices.length ? <div className="chips">{last.choices.map((c) => <button key={c} className="chip" onClick={() => send(c)}>{c}</button>)}</div> : null}
         {cards.filter((c) => !lines.length || lines.every((x) => (x.at ?? 0) > c.at)).map((c) => c.kind === 'connect' ? <ConnectCard key={c.id} c={c} helper={h?.name} state={state} onDone={refresh} /> : <AskCard key={c.id} c={c} who={h} onDone={refresh} />)}
         {h && <Stuck h={h} refresh={refresh} />}

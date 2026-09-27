@@ -1099,6 +1099,14 @@ export class Crew {
     });
     l.counted = l.session.messages.length; // a resumed session's earlier turns were counted when they ran
     this.live.set(bot.id, l);
+    // Only assistant prose is visible; tool arguments and reasoning never ride the live feed.
+    let partial = '';
+    l.session.subscribe((e) => {
+      if (e.type === 'message_start') partial = '';
+      if (e.type !== 'message_update' || e.assistantMessageEvent.type !== 'text_delta' || this.live.get(bot.id) !== l) return;
+      partial += e.assistantMessageEvent.delta;
+      this.db.live('reply.partial', bot.id, { task: task.id, member, text: partial.slice(0, 280) });
+    });
     this.db.run('UPDATE tasks SET session = ? WHERE id = ?', l.session.sessionFile ?? null, task.id);
     return l;
   }
