@@ -6,7 +6,7 @@ import { cycle, type Focused } from './dialog.ts';
 import { chatTokens, safeLink } from './chat-md.ts';
 import * as art from './art.ts';
 import { MARKS } from './logos.ts';
-import { askTag, clock, docLinks, document as docView, fileSource, fileView, mdPlain, pageWords, sheetWords, workbook, type Card, type DocPart, type DocView, type FileView, type Helper, type Step, type Workbook } from './adapter.ts';
+import { clock, docLinks, document as docView, fileSource, fileView, mdPlain, pageWords, sheetWords, workbook, type Card, type DocPart, type DocView, type FileView, type Helper, type Step, type Workbook } from './adapter.ts';
 
 /** Markdown inline runs, from the shared safe tokens (web/src/chat-md.ts): no raw HTML, http(s) links only. */
 const mdInline = (tokens: any[]): ReactNode => tokens.map((t, i) => t.type === 'strong' ? <strong key={i}>{mdInline(t.tokens)}</strong>
@@ -441,14 +441,65 @@ function useSchedule(text: string | null) {
   return preview;
 }
 
-/** The plain-language ask card on Home and in a chat. A checkout opens the review before any yes. */
+/** An order line as the page wrote it, laid out as its words and its amount at the edge. No word changes —
+ *  the money is crewd's read of the page, and the rest of the line is the page's own. */
+const splitAmount = (l: string): [string, string] => {
+  const m = l.match(/^(.*?)[\s—]+(\$[\d.,]+)$/);
+  return m ? [m[1], m[2]] : [l, ''];
+};
+
+/** The ask's evidence in the sunken block (§4.4): an order's lines with the total above a hairline, a form's or a
+ *  job's label-over-value lines, a draft's to/subject/body, Chief's routine confirmation lines, or exactly what
+ *  goes out. Long bodies clamp until `open`; `readAll` is the card's or the sheet's own way of opening them. */
+function AskEvidence({ c, open, readAll }: { c: Card; open: boolean; readAll: ReactNode }) {
+  const body = c.preview?.body ?? '';
+  if (c.review) return <div className="ev">{body.split('\n').map((l, i) => {
+    const [text, amount] = splitAmount(l);
+    return <div key={i} className={`order-row${/^Total/.test(l) ? ' total' : ''}`}>{amount ? <><span className="grow">{text}</span><span>{amount}</span></> : text}</div>;
+  })}</div>;
+  if (c.evidence === 'lines') return <div className="ev">{body.split('\n').filter(Boolean).map((l, i) => {
+    const at = l.indexOf(': ');
+    return at > 0 ? <div key={i} className="ev-line"><span>{l.slice(0, at)}</span><b>{l.slice(at + 2)}</b></div> : <div key={i}>{l}</div>;
+  })}</div>;
+  if (c.evidence === 'draft') {
+    const at = body.indexOf('\n');
+    return <div className="ev">
+      {c.draftTo && <div className="ev-to">To {c.draftTo}</div>}
+      <b className="ev-subject">{(at < 0 ? body : body.slice(0, at)).replace(/^Subject: /, '')}</b>
+      <div className={`ev-body${open ? '' : ' clamp4'}`}>{(at < 0 ? '' : body.slice(at + 1)).trim()}</div>
+      {!open && readAll}
+    </div>;
+  }
+  if (c.lines) return <div className="ev">{c.lines.map((l, i) => <div key={i} className={i && c.kind === 'routine' ? 'ev-quiet' : undefined}>{l}</div>)}</div>;
+  if (c.preview) return <div className="ev">
+    {c.preview.head && <div className="ev-to">{c.preview.head}</div>}
+    <div className={`ev-body${open ? '' : ' clamp3'}`}>{c.preview.body}</div>
+    {!open && readAll}
+  </div>;
+  return null;
+}
+
+/** The ask card's head: the asker's face and name, the status line with the pink dot, the time on the right. */
+function AskHead({ c, who }: { c: Card; who: Helper | undefined }) {
+  const name = c.helper === 'chief' ? 'Chief' : who?.name ?? c.head;
+  return <div className="ask-head">
+    {c.helper === 'chief' ? <Face who="chief" size={28} /> : who ? <Face who={{ ...who, mood: 'ask' }} size={28} /> : null}
+    <div className="grow"><b>{name}</b><div className="ask-status"><i />{c.status}</div></div>
+    <time className="mute small">{clock(c.at)}</time>
+  </div>;
+}
+
+/** The plain-language ask card, in the thread: one decision with the evidence in front of you. A checkout opens the
+ *  review before any yes; spending always says the footer note. */
 export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; onDone: () => void }) {
   const [reply, setReply] = useState('');
   const [oops, setOops] = useState(false);
   const last = useRef<Json | null>(null);
   const act = async (body: Json) => { last.current = body; setOops(false); if (await answer(c, body)) onDone(); else setOops(true); };
-  const [yes, ...rest] = c.choices;
-  const deny = c.choices.find((x) => x.body.answer === 'deny');
+  const yes = c.choices[0];
+  const deny = c.choices.find((x) => x.body.answer === 'deny' && x !== yes);
+  const always = c.choices.find((x) => x.body.scope === 'always');
+  const question = c.review && c.preview?.head ? c.preview.head : c.words;
   // A routine offered by Chief: the lines are the confirmation, and changing the time is an edit before the yes.
   const [when, setWhen] = useState<string | null>(null);
   const preview = useSchedule(when);
@@ -456,13 +507,9 @@ export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; 
   const stuck = when !== null && (!when.trim() || !preview || preview.bad);
   return (
     <div className="card ask">
-      <div className="ask-head">
-        {who && <Face who={{ ...who, mood: 'ask' }} size={32} />}
-        <div className="grow"><div className="ask-tag"><i />{askTag(c)} · {clock(c.at)}</div><b>{c.head}</b></div>
-      </div>
-      {c.kind === 'routine' && c.lines ? <div className="routine-lines">{c.lines.map((l, i) => <div key={i} className={i ? 'mute' : ''}>{l}</div>)}</div>
-        : <p className="ask-words">{c.words}</p>}
-      {c.preview && !c.review && c.kind !== 'routine' && <div className="ask-peek">{c.preview.head && <div className="mute small">{c.preview.head}</div>}<div className="clamp3">{c.preview.body}</div></div>}
+      <AskHead c={c} who={who} />
+      <p className="ask-words">{question}</p>
+      <AskEvidence c={c} open={false} readAll={<a className="link" href={`#/ask/${c.id}`}>Read all</a>} />
       {oops && <div className="send-failed" role="alert">That didn't go through. <button type="button" className="link inline" onClick={() => last.current && act(last.current)}>Try again</button></div>}
       {c.kind === 'routine' ? (
         <>
@@ -474,7 +521,7 @@ export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; 
           <div className="btns">
             <button className="btn go" disabled={stuck} onClick={start}>Start it</button>
             <button className="btn" aria-pressed={when !== null} onClick={() => { setWhen(when === null ? c.schedule || '' : null); }}>{when === null ? 'Change time' : 'Keep the time'}</button>
-            <button className="btn ghost" onClick={() => act({ answer: 'deny' })}>Not now</button>
+            {deny && <button className="btn" onClick={() => act(deny.body)}>{deny.label}</button>}
           </div>
         </>
       ) : c.reply ? (
@@ -487,20 +534,21 @@ export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; 
           <a className="btn go" href={`#/ask/${c.id}`}>Review order</a>
           {deny && <button className="btn ghost" onClick={() => act(deny.body)}>{deny.label}</button>}
         </div>
-      ) : (
+      ) : yes ? (
         <div className="btns">
           <button className="btn go" onClick={() => act(yes.body)}>{yes.label}</button>
-          {c.preview && <a className="btn" href={`#/ask/${c.id}`}>Read it first</a>}
-          {!c.preview && rest.length > 1 && <a className="btn" href={`#/ask/${c.id}`}>More</a>}
-          <button className="btn ghost" onClick={() => act({ answer: 'deny' })}>Not now</button>
+          {deny && <button className="btn" onClick={() => act(deny.body)}>{deny.label}</button>}
+          {always && <button className="btn ghost always" onClick={() => act(always.body)}>{always.label}</button>}
         </div>
-      )}
+      ) : null}
+      {c.kind === 'spend' && <p className="ask-note">Anything that costs money asks you every time.</p>}
     </div>
   );
 }
 
-/** The approval moment: who, what and where, exactly what goes out, and the choices. A checkout reviews the whole
- *  order here, with a yes that names it; an order without a readable total offers no yes at all. */
+/** The approval moment: who, the status, exactly what goes out, and the choices — a centred dialog on a desk,
+ *  a bottom sheet on a phone. A checkout reviews the whole order here, with a yes that names the order; an order
+ *  without a readable total offers no yes at all. */
 export function AskSheet({ c, who, chiefSays, onClose }: { c: Card; who: Helper | undefined; chiefSays?: string; onClose: () => void }) {
   const [open, setOpen] = useState(false);
   const [oops, setOops] = useState(false);
@@ -508,36 +556,31 @@ export function AskSheet({ c, who, chiefSays, onClose }: { c: Card; who: Helper 
   const box = useRef<HTMLDivElement>(null);
   useDialogOwn(box, onClose);
   const act = async (body: Json) => { last.current = body; setOops(false); if (await answer(c, body)) onClose(); else setOops(true); };
-  const heading = c.review && c.preview?.head ? c.preview.head : c.words;
-  const lines = c.review && c.preview?.body ? c.preview.body.split('\n') : [];
+  const question = c.review && c.preview?.head ? c.preview.head : c.words;
+  const yes = c.choices[0]?.body.answer === 'allow' ? c.choices[0] : null;
+  // Every way out that isn't the one yes — an unpriced order has two, and neither is a yes.
+  const rest = c.choices.filter((x) => x !== yes && x.body.scope !== 'always');
+  const always = c.choices.find((x) => x.body.scope === 'always');
   return (
     <div className="scrim" onClick={onClose}>
       <div ref={box} className="sheet approve" role="dialog" aria-modal aria-label={c.head} onClick={(e) => e.stopPropagation()}>
-        <div className="approve-head">
-          {who ? <Face who={{ ...who, mood: 'ask' }} size={48} /> : <Face who="chief" size={48} />}
-          <div><b>{who?.name ?? 'The crew'}</b><div className="ask-tag"><i />{askTag(c)} · {clock(c.at)}</div></div>
-        </div>
-        <h2>{heading}</h2>
-        {c.review ? (
-          <div className="order">
-            {lines.map((l, i) => /^Total/.test(l) ? <b key={i} className="order-total">{l}</b> : <div key={i}>{l}</div>)}
-            {c.order && !c.order.known && <div className="mute small">So nothing is counted against the monthly limit.</div>}
-          </div>
-        ) : c.preview && (
-          <div className={`preview ${open ? 'open' : ''}`}>
-            {c.preview.head && <div className="mute small">{c.preview.head}</div>}
-            <div>{c.preview.body}</div>
-            {!open && <button className="link" onClick={() => setOpen(true)}>Read all</button>}
-          </div>
-        )}
-        {chiefSays && <div className="chief-says"><Face who="chief" size={30} /><span><b>Chief:</b> {chiefSays}</span></div>}
-        {c.kind === 'spend' && <p className="mute small">Anything that costs money asks you every time.</p>}
+        <AskHead c={c} who={who} />
+        <h2 className="ask-words">{question}</h2>
+        <AskEvidence c={c} open={open} readAll={<button className="link" onClick={() => setOpen(true)}>Read all</button>} />
+        {c.review && c.order && !c.order.known && <div className="mute small">So nothing is counted against the monthly limit.</div>}
+        {chiefSays && <div className="chief-says"><Face who="chief" size={20} /><span><b>Chief:</b> {chiefSays}</span></div>}
         {oops && <div className="send-failed" role="alert">That didn't go through. <button type="button" className="link inline" onClick={() => last.current && act(last.current)}>Try again</button></div>}
         <div className="approve-btns">
-          {c.kind === 'setup' && <><a className="btn go big" href="#/settings" onClick={onClose}>Open Home setup</a>
-            <button className="link" onClick={() => act({ answer: 'deny' })}>Not now</button></>}
-          {c.kind !== 'setup' && c.choices.map((x, i) => <button key={x.label} className={i === 0 ? 'btn go big' : x.body.answer === 'deny' ? 'link' : 'btn big'} onClick={() => act(x.body)}>{x.label}</button>)}
+          {c.kind === 'setup' ? <>
+            <a className="btn go big" href="#/settings" onClick={onClose}>Open Home setup</a>
+            <button className="btn big" onClick={() => act({ answer: 'deny' })}>Not now</button>
+          </> : <>
+            {rest.map((x) => <button key={x.label} className="btn big" onClick={() => act(x.body)}>{x.label}</button>)}
+            {yes && <button className="btn go big" onClick={() => act(yes.body)}>{yes.label}</button>}
+          </>}
         </div>
+        {always && <button className="btn ghost always" onClick={() => act(always.body)}>{always.label}</button>}
+        {c.kind === 'spend' && <p className="ask-note">Anything that costs money asks you every time.</p>}
       </div>
     </div>
   );

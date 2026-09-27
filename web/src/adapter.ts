@@ -21,6 +21,10 @@ export type Card = {
   /** A checkout: the inbox opens the review before any yes, and the sheet's yes names the order.
    *  `known`: crewd could read the total. Without it, the safe way out is the person buying it themselves. */
   review?: boolean; order?: { shown: string; known: boolean; dollars: boolean };
+  /** One ask-card layout for every kind (§4.4): the kind changes only the status line under the helper's name,
+   *  the evidence block and the button words. `evidence` picks the sunken block — a form's or a job's
+   *  label-over-value lines, or a draft's to/subject/body — an order is a `review`, anything else a plain preview. */
+  status: string; evidence?: 'lines' | 'draft'; draftTo?: string;
 };
 /** The small line above an ask's title: what kind of yes it wants, so the title itself can stay plain. */
 export const askTag = (c: Card) => ({ spend: 'Wants to spend money', question: 'Has a question', routine: 'A routine to start', setup: 'Home setup', connect: 'Wants an app' } as Record<string, string>)[c.kind] ?? 'Needs your OK';
@@ -520,43 +524,44 @@ export function card(a: Json, state: Json): Card {
   if (a.kind === 'setup') {
     // The house isn't ready for this app: the ask on the owner's list, and how the asker sees it afterwards.
     const app = apps(state).find((x) => x.id === d.app);
-    return { ...base, kind: 'setup', head: `${d.person ?? 'Someone'} would like ${app?.name ?? 'an app'}`,
+    return { ...base, kind: 'setup', status: 'Home setup', head: `${d.person ?? 'Someone'} would like ${app?.name ?? 'an app'}`,
       words: `${d.person ?? 'Someone'} would like ${app?.name ?? 'an app'} in this house. Setting Google up is a one-time job, about 20 minutes, and then everyone can use it.`,
       choices: [] };
   }
   if (a.kind === 'connect' || d.app) {
     const app = apps(state).find((x) => x.id === d.app) ?? APPS[0];
-    return { ...base, kind: 'connect', app, head: `${name} could use ${app.name}`, words: plain(d.words ?? `${name} can do this with your ${app.name}. Connect it?`),
+    return { ...base, kind: 'connect', app, status: `Wants to use ${app.name}`, head: `${name} could use ${app.name}`, words: plain(d.words ?? `${name} can do this with your ${app.name}. Connect it?`),
       choices: [{ label: `Connect ${app.name}`, body: { answer: 'allow' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
   }
   if (a.kind === 'propose' && d.routine) {
     // Chief's offered routine: the lines are the whole confirmation (cadence, what, quiet behaviour, first run). It
     // stays off Home like every suggestion, and nothing runs until the person starts it.
     const note = zoneNote(state);
-    return { ...base, kind: 'routine', head: 'A new routine', words: plain(d.words ?? a.title),
+    return { ...base, kind: 'routine', status: 'A new routine', head: 'A new routine', words: plain(d.words ?? a.title),
       lines: String(d.preview?.body ?? '').split('\n').map((l: string) => plain(l)).filter(Boolean).concat(note ? [note] : []),
       schedule: String(d.routine.schedule ?? ''), zoneNote: note,
       choices: [{ label: 'Start it', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
   }
-  if (a.kind === 'propose' && d.pass) return { ...base, kind: 'ok', head: `${name} wants to hand work on`, words: plain(d.words ?? a.title),
+  if (a.kind === 'propose' && d.pass) return { ...base, kind: 'ok', status: 'Wants to hand work on', head: `${name} wants to hand work on`, words: plain(d.words ?? a.title),
     lines: (d.pass.files ?? []).map((f: string) => `With “${pretty(f)}”`),
     choices: [{ label: 'Hand it on', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
   if (a.kind === 'propose' && d.job) {
     const labels = ['What it does', "What it's aiming for", 'What it gets from others', 'How it goes about it', 'What great looks like'];
     const keys = ['does', 'aim', 'gets', 'how', 'great'];
-    return { ...base, kind: 'ok', head: `Chief wrote ${crewName(state, d.job.bot)}'s job`, words: 'Take a look. Nothing changes until you use it.',
+    return { ...base, kind: 'ok', status: `Chief wrote ${crewName(state, d.job.bot)}'s job`, head: `Chief wrote ${crewName(state, d.job.bot)}'s job`, words: 'Take a look. Nothing changes until you use it.', evidence: 'lines',
       preview: { head: `${crewName(state, d.job.bot)}'s job`, body: labels.map((label, i) => `${label}: ${plain(d.job[keys[i]])}`).join('\n\n') },
       choices: [{ label: 'Use it', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
   }
   if (a.kind === 'propose') {
     // A suggestion: a skill a helper would like to keep, or a new personality from Chief. Nothing changes without a yes.
     // A helper's draft is a message in the person's name: the card says who it's for, and approving never sends it.
-    return { ...base, kind: 'ok', head: d.draft ? `${name} drafted a message for ${plain(d.draft.to)}` : a.bot === 'chief' ? 'Chief has a suggestion' : `${name} learned something`, words: plain(d.words ?? `${name} has a suggestion.`),
+    return { ...base, kind: 'ok', status: d.draft ? 'A draft for you to send · nothing is sent' : 'Would like to remember this', evidence: d.draft ? 'draft' : undefined, draftTo: d.draft ? plain(d.draft.to) : undefined,
+      head: d.draft ? `${name} drafted a message for ${plain(d.draft.to)}` : a.bot === 'chief' ? 'Chief has a suggestion' : `${name} learned something`, words: plain(d.words ?? `${name} has a suggestion.`),
       preview: d.preview ? { head: d.preview.head ? plain(d.preview.head) : undefined, body: plain(d.preview.body ?? '') } : undefined,
       choices: [{ label: d.yes ? plain(d.yes) : a.bot === 'chief' ? 'Yes, change it' : 'Yes, keep it', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
   }
   if (a.kind !== 'permission') {
-    return { ...base, kind: 'question', reply: true, head: `${name} has a question`,
+    return { ...base, kind: 'question', reply: true, status: 'Has a question', head: `${name} has a question`,
       words: d.question ? plain(d.question) : `${name} stopped to check something with you. Tell ${name} what to do:`, choices: [] };
   }
   const spend = !!d.spends || d.effect === 'spend';
@@ -568,7 +573,7 @@ export function card(a: Json, state: Json): Card {
     const choices: Choice[] = order.known
       ? [{ label: `Place order · ${order.shown}`, body: { answer: 'allow', scope: 'once' } }, { label: "Don't place order", body: { answer: 'deny' } }]
       : [{ label: "Don't place order", body: { answer: 'deny' } }, { label: "I'll buy it myself", body: { answer: 'deny' } }];
-    return { ...base, kind: 'spend', review: true, order, words, choices, head: `Review ${name}'s order`,
+    return { ...base, kind: 'spend', review: true, order, status: 'Wants to spend money', words, choices, head: `Review ${name}'s order`,
       preview: d.preview ? { head: d.preview.head ? plain(d.preview.head) : undefined, body: plain(d.preview.body ?? '') } : undefined };
   }
   // A press on a site they signed the bot in to is not a message going out: the card says acting, not sending. (docs/ui-contract.md)
@@ -582,7 +587,8 @@ export function card(a: Json, state: Json): Card {
   if (!spend && (d.always || d.rule)) choices.push({ label: `Always OK for ${d.always ?? name}`, body: { answer: 'allow', scope: 'always' } });
   choices.push({ label: 'Not now', body: { answer: 'deny' } });
   return {
-    ...base, kind: spend ? 'spend' : 'ok', words, choices,
+    ...base, kind: spend ? 'spend' : 'ok', status: spend ? 'Wants to spend money' : fill ? 'Wants to fill in a form' : press ? 'Wants to press a button' : d.effect === 'send' ? 'Wants to send an email' : 'Needs your OK',
+    evidence: fill ? 'lines' : undefined, words, choices,
     head: spend ? `${name} needs your OK to spend` : press ? `${name} wants to act on a site` : d.effect === 'send' ? `${name}'s ${d.thing ?? 'message'} is ready to send` : `${name} would like your OK`,
     preview: d.preview ? { head: d.preview.head ? plain(d.preview.head) : undefined, body: plain(d.preview.body ?? '') } : undefined,
   };
