@@ -777,7 +777,7 @@ test('a delivered workbook is a card in the chat, and opens as a read-only sheet
 test('a delivered document is a card in the chat, and opens as a read-only document', () => {
   const json = { parts: [
     { kind: 'heading', text: 'Front-desk handbook' },
-    { kind: 'p', text: 'Count the till (see /home/umer/Crewhouse/bots/quill/files/notes.txt for yesterday).' },
+    { kind: 'p', text: 'Claude Code and Codex: see https://www.sec.gov/rules/” for details.' },
     { kind: 'li', text: 'Walk the free rooms' },
     { kind: 'table', head: ['Shift', 'On the desk'], rows: [['Morning', 'Rani']] },
     { kind: 'p', text: '' },
@@ -785,13 +785,21 @@ test('a delivered document is a card in the chat, and opens as a read-only docum
   ] };
   const doc = A.document(json, 'Front-desk handbook');
   assert.deepEqual(doc.parts[0], { kind: 'heading', text: 'Front-desk handbook' });
-  assert.doesNotMatch(doc.parts[1].text ?? '', /\/home|files\//, 'a paragraph is scrubbed like chat words: no paths');
+  assert.equal(doc.parts[1].text, json.parts[1].text, 'document content is not rewritten like bot chatter');
   assert.deepEqual(doc.parts[3].head, ['Shift', 'On the desk']);
   assert.equal(doc.parts.length, 4, 'empty parts leave, a table needs its headings');
   assert.deepEqual(A.document(null, 'Nothing').parts, []);
+  const source = doc.parts[1].text!;
+  const links = A.docLinks(source);
+  assert.equal(links.map((p) => p.text).join(''), source, 'reader never changes the source text');
+  assert.deepEqual(links.filter((p) => p.href).map((p) => p.href), ['https://www.sec.gov/rules/'], 'source URLs link without the smart quote');
+  assert.equal(A.docLinks('javascript:alert(1) and ftp://example.org').some((p) => p.href), false, 'only http(s) is linked');
   assert.equal(A.pageWords(3), '3 sections');
   assert.equal(A.pageWords(1), 'One section');
   assert.equal(A.pageWords(0), 'A document');
+  const long = 'Claude Code and Codex ' + 'a'.repeat(591);
+  assert.equal(long.length, 613);
+  assert.equal(A.document({ parts: [{ kind: 'p', text: long }] }, 'Brief').parts[0].text, long, '613 characters survive the adapter');
 
   const [line] = A.lines({ messages: [{ id: 10, author: 'system', text: 'Delivered files/front-desk-handbook.docx: A document in 3 sections: Front-desk handbook' }] }, 'quill');
   assert.equal(line.files[0].kind, 'page', 'a .docx is a page, opened like a workbook');
@@ -804,6 +812,9 @@ test('a delivered document is a card in the chat, and opens as a read-only docum
   const body = parts.slice(parts.indexOf('function DocBody'), parts.indexOf('/**\n * A finished file'));
   assert.match(body, /run\.kind === 'heading' \? <h3 key=\{i\}>/, 'headings as headings');
   assert.match(body, /<ul key=\{i\}>/, 'bullets as bullets');
+  assert.match(body, /<DocText text=\{run\.text\} \/>/, 'paragraphs render through the URL linker');
+  assert.match(body, /<DocText text=\{r\[c\] \?\? ''\} \/>/, 'table citations are linked too');
+  assert.match(parts, /href=\{part\.href\} target="_blank" rel="noopener noreferrer">\{part\.text\}<\/a>/, 'only safe links are tappable');
   assert.doesNotMatch(body, /\*\*|<w:/, 'no raw markup anywhere in the preview');
   const api = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'api.ts'), 'utf8');
   assert.match(api, /\/api\/document/, 'the app asks crewd to read the document, never parses it');
@@ -811,6 +822,16 @@ test('a delivered document is a card in the chat, and opens as a read-only docum
 
 // The owner's screenshot, fixed: a meal plan delivered as .md must open as a rendered page in the read-only panel —
 // never the raw file at its /files/ address — through the shared safe markdown renderer the chat already uses.
+test('inline video uses intrinsic portrait aspect without cropping', () => {
+  const css = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'styles.css'), 'utf8');
+  const rule = css.match(/video\.media\s*\{([^}]+)\}/)?.[1] ?? '';
+  assert.match(rule, /width:\s*auto/);
+  assert.match(rule, /max-width:\s*100%/);
+  assert.match(rule, /height:\s*auto/);
+  assert.match(rule, /object-fit:\s*contain/);
+  assert.doesNotMatch(rule, /aspect-ratio|object-fit:\s*cover/);
+});
+
 test('a delivered markdown file opens rendered, and no screen leads to the raw file', () => {
   const [line] = A.lines({ messages: [{ id: 12, author: 'system', text: 'Delivered files/dinners-and-shopping-list.md: Seven dinners and the list, sorted by aisle' }] }, 'scout');
   assert.equal(line.files[0].kind, 'page', 'a .md opens like a document: card, then the rendered panel');
@@ -821,11 +842,9 @@ test('a delivered markdown file opens rendered, and no screen leads to the raw f
   assert.equal(A.fileTarget({ url: '/files/scout/files/scan.pdf', kind: 'doc', name: 'Scan' })!.href, '/files/scout/files/scan.pdf', 'a PDF keeps its own way');
   assert.equal(A.fileTarget({ url: '/files/scout/files/plan.txt', kind: 'page', name: 'Plan' })!.href.startsWith('#/f/'), true, 'a .txt renders the same way');
 
-  // The page's own words, scrubbed like chat words line by line — the markdown structure survives, the machinery goes.
-  const clean = A.mdPlain('# Plan\n\n- [x] Rice\n- [ ] Yoghurt\n\nFrom /home/umer/Crewhouse/bots/scout/files/list.md with `ffmpeg -i x`.');
-  assert.equal(clean.split('\n').length, 6, 'the blank lines that structure the page survive');
-  assert.equal(clean.split('\n')[0], '# Plan', 'headings stay headings');
-  assert.doesNotMatch(clean, /\/home\/|ffmpeg|\.md\b/, 'no paths or engines ride along');
+  // A delivered page is content, not chatter; its exact text goes to the escaping renderer.
+  const page = '# Plan\n\n- [x] Rice\n- [ ] Yoghurt\n\nClaude Code and Codex wrote this.';
+  assert.equal(A.mdPlain(page), page);
 
   const parts = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'parts.tsx'), 'utf8');
   const panel = parts.slice(parts.indexOf('export function PreviewPanel'), parts.indexOf('/** "Show the work"'));

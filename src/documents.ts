@@ -12,7 +12,7 @@ export type BlockSpec =
 export type DocumentSpec = { name: string; blocks: BlockSpec[] };
 
 // Bounds on what a model can ask for: a 10,000-block letter is a mistake, not a document.
-const MAX = { blocks: 300, bullets: 50, rows: 200, cols: 12, text: 8000, parts: 150, shown: 600 };
+const MAX = { blocks: 300, bullets: 50, rows: 200, cols: 12, text: 8000, parts: 150 };
 
 /** The writer is CommonJS-shaped and only worth loading for the seconds it is used. */
 const docx = () => import('docx').then((m: any) => m.default ?? m);
@@ -78,7 +78,7 @@ export async function readDocument(file: string) {
         walk(c.elements, (t) => { if (t.name === 'w:t') text += (t.elements ?? []).map((x: any) => x.text ?? '').join(''); });
       }
     });
-    return { text: text.replace(/\s+/g, ' ').trim().slice(0, MAX.shown), bold };
+    return { text: text.replace(/\s+/g, ' ').trim(), bold };
   };
   const cellText = (tc: any) => {
     const out: string[] = [];
@@ -95,7 +95,7 @@ export async function readDocument(file: string) {
       walk(el.elements, (tr) => {
         if (tr.name !== 'w:tr' || rows.length >= 40) return;
         const row: string[] = [];
-        walk(tr.elements, (tc) => { if (tc.name === 'w:tc') row.push(cellText(tc).slice(0, 160)); });
+        walk(tr.elements, (tc) => { if (tc.name === 'w:tc') row.push(cellText(tc)); });
         if (row.some((c) => c)) rows.push(row);
       });
       if (rows.length) push({ kind: 'table', head: rows[0], rows: rows.slice(1) });

@@ -54,9 +54,12 @@ test('title, relay and markdown trust boundary', () => {
   bad(relayResult('**Your launch plan is ready:** lead with X.\n- more'));
   assert.equal(relayResult('**Your launch plan is ready:** lead with X.\n- more'), 'Your launch plan is ready: lead with X.');
   assert.equal(relayResult('done', 'A document in 2 sections: muxr launch plan'), 'The muxr launch plan is ready.');
+  assert.equal(relayResult('The full investment brief is ready.', 'A document in 6 sections: How can $50,000 for a home down payment in fi, answer, findings, strategies and caveats'.repeat(2)), 'The full investment brief is ready.', 'long delivery notes never create a cut-off title');
   assert.doesNotMatch(relayResult('done', 'The launch plan is ready: audience and first posts.'), /A document in|\b\d+ sections?\b|^\w+: /i);
   assert.equal(safeLink('javascript:alert(1)'), '');
   assert.equal(safeLink('https://trymuxr.com/'), 'https://trymuxr.com/');
+  for (const mark of ['”', '’', ')', ']', '.', ',', ';', ':']) assert.equal(safeLink(`https://trymuxr.com/quickstart${mark}`), 'https://trymuxr.com/quickstart');
+  assert.equal(safeLink('javascript:alert(1)”'), '');
   assert.deepEqual(chatTokens('## Plan\n\n- [x] **Draft** [site](https://trymuxr.com/)\n\n| A | B |\n|---|---|\n| 1 | 2 |').filter((t) => !['space'].includes(t.type)).map((t) => t.type), ['heading', 'list', 'table']);
 });
 

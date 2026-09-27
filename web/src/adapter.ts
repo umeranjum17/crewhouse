@@ -2,6 +2,7 @@
 // so the engine underneath can change (docs/ui-contract.md) without the screens changing, and nothing technical
 // (commands, file paths, model names, percentages, raw prompts) can reach a person. test/ui.test.ts holds this.
 import type { Json } from './api.ts';
+import { safeLink } from './chat-md.ts';
 import { PALS, type Kind, type Mood } from './art.ts';
 
 export const OWNER = 1;
@@ -103,13 +104,19 @@ export const sheetWords = (n: number) => (n === 1 ? 'One sheet' : n > 1 ? `${n} 
 /** How many sections a document has, said the way a person would: "3 sections", "One section", "A document". */
 export const pageWords = (n: number) => (n === 1 ? 'One section' : n > 1 ? `${n} sections` : 'A document');
 
-/**
- * A document crewd read for the app (docs/ui-contract.md): its headings, paragraphs, bullet lists and tables as plain
- * read-only parts. What the helper wrote is read the way its chat words are, so no machinery rides along.
- */
+/** Link only web URLs in document text, leaving punctuation and unsafe-looking strings as literal text. */
+export function docLinks(text: string): { text: string; href?: string }[] {
+  return text.split(/(https?:\/\/[^\s<>]+)/g).flatMap((part) => {
+    const url = part.replace(/[”’"')\].,;:]+$/g, '');
+    const href = /^https?:\/\//.test(part) ? safeLink(url) : '';
+    return href ? [{ text: url, href }, { text: part.slice(url.length) }] : [{ text: part }];
+  });
+}
+
+/** A delivered document is the person's file, not bot chatter: preserve its words, including URLs and product names. */
 export function document(json: Json, name: string): DocView {
-  const words = (v: Json) => plain(String(v ?? '')).slice(0, 400);
-  const cells = (r: Json) => (Array.isArray(r) ? r : []).slice(0, 14).map((c: Json) => plain(String(c ?? '')).slice(0, 160));
+  const words = (v: Json) => String(v ?? '');
+  const cells = (r: Json) => (Array.isArray(r) ? r : []).slice(0, 14).map(words);
   return {
     name,
     parts: (Array.isArray(json?.parts) ? json.parts : []).slice(0, 150).map((p: Json): DocPart | null => {
@@ -126,11 +133,8 @@ export function document(json: Json, name: string): DocView {
   };
 }
 
-/**
- * A delivered page's own words (.md, .txt), scrubbed the way its chat words are — line by line, so the blank lines
- * that structure the markdown survive. What rides to the safe renderer is words, never machinery.
- */
-export const mdPlain = (text = '') => text.split(/\r?\n/).map((l) => plain(l)).join('\n');
+/** A delivered page's own text is content, not bot chatter; the renderer escapes markup. */
+export const mdPlain = (text = '') => text;
 
 /**
  * A helper's own words, scrubbed of the machinery: code spans, fenced blocks, file paths and the names of engines.
