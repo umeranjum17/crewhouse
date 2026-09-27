@@ -4,15 +4,23 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 need_node() {
-  command -v node >/dev/null || { echo "Crewhouse needs Node 22.19 or later: https://nodejs.org" >&2; exit 1; }
-  node -e 'const [a,b]=process.versions.node.split(".").map(Number); process.exit(a>22||(a===22&&b>=19)?0:1)' \
-    || { echo "Crewhouse needs Node 22.19 or later (found $(node --version))" >&2; exit 1; }
+  command -v node >/dev/null || { echo "Crewhouse needs Node 22.22.3 or later: https://nodejs.org" >&2; exit 1; }
+  node -e 'const [a,b,c]=process.versions.node.split(".").map(Number); process.exit(a>22||(a===22&&(b>22||(b===22&&c>=3)))?0:1)' \
+    || { echo "Crewhouse needs Node 22.22.3 or later (found $(node --version))" >&2; exit 1; }
 }
 
 # Where this Crewhouse keeps things, from the same config crewd reads (so env overrides agree).
 paths() {
   IFS=$'\t' read -r STATE CREW TOOLS < <(node --input-type=module -e \
     "const { loadConfig } = await import('./src/config.ts'); const c = loadConfig(); console.log([c.stateDir, c.crewDir, c.toolsDir].join('\t'))")
+}
+
+install_engine() {
+  paths
+  mkdir -p "$STATE/openclaw/install-home" "$STATE/openclaw/npm-cache"
+  HOME="$STATE/openclaw/install-home" npm_config_cache="$STATE/openclaw/npm-cache" \
+    OPENCLAW_DISABLE_BUNDLED_PLUGIN_POSTINSTALL=1 \
+    npm ci --ignore-scripts --no-audit --no-fund --prefix runtime/openclaw
 }
 
 # crewd's pid, only if that process really is this checkout's crewd.
@@ -73,6 +81,7 @@ case "${1:-}" in
   setup)
     need_node
     npm ci --no-audit --no-fund
+    install_engine
     npm run build:web
     # Detect, explain, ask, then install: pinned tools go into Crewhouse's own folder, never global, never sudo.
     node src/tools.ts
@@ -116,6 +125,7 @@ case "${1:-}" in
     git pull --ff-only
     if [ "$(git rev-parse HEAD)" = "$before" ]; then echo "Already up to date."; exit 0; fi
     npm ci --no-audit --no-fund
+    install_engine
     npm run build:web
     paths
     # A tool whose pin moved (a new version, or a new program) is reinstalled now, before crewd comes back.

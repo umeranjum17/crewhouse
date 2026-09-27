@@ -13,8 +13,8 @@ const line = (ok: boolean | null, what: string, detail = '') => {
   console.log(`${ok === null ? '·' : ok ? '✓' : '✗'} ${what}${detail ? ` — ${detail}` : ''}`);
 };
 
-const [maj, min] = process.versions.node.split('.').map(Number);
-line(maj > 22 || (maj === 22 && min >= 19), `Node ${process.versions.node}`, 'needs 22.19 or later (built-in TypeScript and node:sqlite)');
+const [maj, min, patch] = process.versions.node.split('.').map(Number);
+line(maj > 22 || (maj === 22 && (min > 22 || (min === 22 && patch >= 3))), `Node ${process.versions.node}`, 'needs 22.22.3 or later');
 line(true, `Engine: Pi ${VERSION}, bundled`, `its own folder in ${cfg.stateDir}/engine; your own pi and ~/.pi are never used`);
 line(sandboxReady() || null, sandboxReady() ? "Bots' shell runs in a sandbox (bubblewrap)" : 'no sandbox here: bots work without a shell',
   sandboxReady() ? '' : 'install bubblewrap (apt install bubblewrap, dnf install bubblewrap, pacman -S bubblewrap), and allow unprivileged user namespaces');
