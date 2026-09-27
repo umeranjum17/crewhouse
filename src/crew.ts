@@ -1972,20 +1972,23 @@ export class Crew {
     return this.held.has(botId) ? this.desktops.pages(botId) : Promise.resolve([] as string[]);
   }
 
-  /** The person takes a site back off the list, and its cookies and storage go from the bot's own browser. */
+  /** The person takes a site back off the list. Its cookies and storage go from the bot's own browser FIRST: only a
+   *  successful clear removes the host, because a host off the list with cookies still in its browser would let
+   *  presses there run silently — exactly the gap this closes. No computer granted means there is no browser and
+   *  nothing to clear, so the host goes. */
   async forget(botId: string, host: string) {
     const bot = this.bot(botId);
     if (!bot) throw fail('no such bot', 404);
-    disk.setSignedIn(this.cfg, botId, (disk.botConfig(this.cfg, botId).signedIn ?? []).filter((d) => d !== host));
-    this.db.event('signin.forgot', botId, { host });
-    // Best effort: with no computer granted there is no browser to clear. The browser is started if it takes it,
-    // so the site's cookies really leave the profile; the idle sweep closes it again afterwards.
     try {
       if (disk.canUse(this.cfg, botId, 'computer')) {
         await this.desktops.ensure(botId, bot.n, disk.botDir(this.cfg, botId));
         await this.desktops.clearSite(botId, host);
       }
-    } catch { /* the browser would not open; the list is already clear, so presses there ask again */ }
+    } catch {
+      throw Object.assign(new Error(`Couldn't sign ${bot.display} out of ${host} just now; it still asks before acting there`), { status: 409 });
+    }
+    disk.setSignedIn(this.cfg, botId, (disk.botConfig(this.cfg, botId).signedIn ?? []).filter((d) => d !== host));
+    this.db.event('signin.forgot', botId, { host });
   }
 
   /** The engine session a bot is working in, for tests. */

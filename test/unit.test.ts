@@ -545,8 +545,13 @@ test('give back keeps the sites the person ticked, and Forget takes one back', a
   await crew.giveBack('reel', '', ['shop.example', 'mail.example']);
   assert.deepEqual(signedIn('reel'), ['shop.example', 'mail.example'], 'a second sign-in is kept, no duplicates');
 
+  // Forget clears the site's data before it takes the host off the list: a failed clear keeps the site asking.
+  await assert.rejects(crew.forget('reel', 'shop.example'), /Couldn't sign Reel out of shop\.example just now; it still asks/);
+  assert.deepEqual(signedIn('reel'), ['shop.example', 'mail.example'], 'a failed clear keeps the site on the list');
+  (crew.desktops as any).ensure = async () => ({});
+  (crew.desktops as any).clearSite = async () => {};
   await crew.forget('reel', 'shop.example');
-  assert.deepEqual(signedIn('reel'), ['mail.example'], 'Forget drops the site from Details');
+  assert.deepEqual(signedIn('reel'), ['mail.example'], 'Forget drops the site once its data is cleared');
   assert.ok(db.get("SELECT 1 FROM events WHERE kind = 'signin.forgot' AND bot = 'reel'"));
   done();
 });
