@@ -41,7 +41,7 @@ test('two passes settle into exactly one wrap-up without per-task completions', 
   await settled(db, first); for (const p of parts) await settled(db, p.id);
   assert.equal(db.all("SELECT seq FROM events WHERE kind = 'room.wrap' AND json_extract(data, '$.root') = ?", first).length, 1);
   assert.equal(db.all("SELECT id FROM messages WHERE bot = 'chief' AND text LIKE '%has finished%' AND task_id = ?", first).length, 0);
-  assert.match(db.get("SELECT text FROM messages WHERE bot = 'chief' AND task_id = ? AND text LIKE 'All done.%'", first)?.text ?? '', /Scout:.*\nScout:/);
+  assert.match(db.get("SELECT text FROM messages WHERE bot = 'chief' AND task_id = ? AND text LIKE 'All done.%'", first)?.text ?? '', /Scout finished\..*\nScout finished\./);
   done();
 });
 
@@ -95,7 +95,7 @@ test('wrap-up reports an unsure part without saying all done', async () => {
   await settled(db, next); await settled(db, first);
   assert.equal(task(db, next).state, 'unsure');
   const wrap = db.get("SELECT text FROM messages WHERE bot = 'chief' AND task_id = ? AND text LIKE 'The crew has stopped.%'", first);
-  assert.match(wrap?.text ?? '', /Scout: not sure it worked/);
+  assert.match(wrap?.text ?? '', /Scout isn't sure it worked/);
   done();
 });
 

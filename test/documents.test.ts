@@ -65,7 +65,8 @@ test('a helper makes one in its own chat: the file lands in files/, is delivered
   assert.ok(existsSync(full), 'the document is in the helper folder');
   const delivered = db.all("SELECT data FROM events WHERE kind = 'file.delivered'").map((e: any) => JSON.parse(e.data));
   assert.deepEqual(delivered.map((d) => d.path), [rel]);
-  assert.match(delivered[0].note, /^A document in 3 sections: Front-desk handbook$/, 'the card line says what is in it');
+  assert.match(delivered[0].note, /^The Front-desk handbook is ready: /, 'the card line names the result, not a section count');
+  assert.doesNotMatch(delivered[0].note, /A document in|\b\d+ sections?\b/);
 
   const view = await crew.documentView('quill', rel, 1);
   assert.equal((view as any).parts.length, 9);

@@ -206,7 +206,7 @@ const pages: Record<string, Json> = {
     { id: 6, author: 'bot', text: 'I can help market it. Send the site so I can see the product and audience before drafting a plan.' },
     { id: 7, author: 'person', text: 'https://trymuxr.com/' },
     { id: 8, author: 'bot', text: 'muxr lets developers manage coding agents from their phone. I’ll map the audience, focus on developer communities and founder posts, then ask Scout and Scribe for first drafts. Nothing will be posted.' },
-    { id: 9, author: 'bot', text: 'Scout: A document in 1 section: muxr launch plan.', files: [{ bot: 'scout', path: 'files/muxr-launch-plan.docx' }] },
+    { id: 9, author: 'bot', text: 'The muxr launch plan is ready: audience, three channels, first week of posts.', files: [{ bot: 'scout', path: 'files/muxr-launch-plan.docx' }] },
   ] } : firstRun ? { messages: [
     { id: 1, author: 'person', text: first },
     { id: 2, author: 'chief', text: 'Delighted, Nadia. To think, the crew uses your own ChatGPT, the same one you already use.' },
@@ -316,9 +316,13 @@ const book = {
 const briefDoc = (title: string, parts: Json[]) => ({ parts: [{ kind: 'heading', text: title }, ...parts] });
 const doc = variant === 'voice-after' ? briefDoc('muxr launch plan', [
   { kind: 'p', text: 'Run your coding agents from your phone. For developers who keep multiple agents working while they step away.' },
-  { kind: 'heading', text: 'First moves' },
+  { kind: 'heading', text: 'Audience' },
+  { kind: 'p', text: 'Developers who keep coding agents working while they step away.' },
+  { kind: 'heading', text: 'Three channels' },
   { kind: 'li', text: 'X: share a short product clip showing the phone view.' },
   { kind: 'li', text: 'Developer communities: lead with a useful workflow, not a pitch.' },
+  { kind: 'heading', text: 'First week of posts' },
+  { kind: 'p', text: 'Draft two founder posts and one workflow story; nothing posts without your approval.' },
 ]) : variant === 'neighbour' ? briefDoc('The neighbours, this week', [
   { kind: 'p', text: 'What changed on the three stalls we watch, read off their own pages this Monday, and what it means for yours.' },
   { kind: 'heading', text: 'What changed' },

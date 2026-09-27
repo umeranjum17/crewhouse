@@ -76,10 +76,10 @@ export function taskTitle(body: string) {
   try { return `Work on ${new URL(first).hostname.replace(/^www\./, '')}`; } catch { return 'Work on the site'; }
 }
 /** A relay is the answer, not a quoted chunk of the helper's raw markdown. */
-export function relayResult(name: string, reply: string, note = '') {
-  const source = note || reply;
+export function relayResult(reply: string, note = '') {
+  const source = (note || reply).replace(/^A document in \d+ sections?:\s*(.+)$/i, 'The $1 is ready.');
   const clean = source.replace(/\[([^\]]+)\]\(https?:\/\/[^)]+\)/g, '$1').replace(/\*\*|^\s*[-*]\s*/gm, '').replace(/\b(sir|ma'am)\b[,.]?\s*/gi, '').replace(/^\w+:\s*/, '').replace(/https?:\/\/\S+/g, '').trim();
-  return `${name}: ${short(clean.split(/[.!?](?:\s|$)/)[0] || 'The result is ready', 160).replace(/[.:;]+$/, '')}.`;
+  return `${short(clean.split(/[.!?](?:\s|$)/)[0] || 'The result is ready', 160).replace(/[.:;]+$/, '')}.`;
 }
 
 const partOfDay = () => { const h = new Date().getHours(); return h >= 5 && h < 12 ? 'morning' : h >= 12 && h < 18 ? 'afternoon' : 'evening'; };
@@ -400,8 +400,8 @@ export class Crew {
       this.db.get("SELECT 1 FROM events WHERE kind = 'room.wrap' AND json_extract(data, '$.root') = ?", root)) return;
     const member = tasks[0].member ?? OWNER;
     const parts = tasks.filter((t) => t.bot !== CHIEF).map((t) => t.state === 'done'
-      ? relayResult(this.bot(t.bot)?.display ?? t.bot, t.result || 'Done')
-      : `${this.bot(t.bot)?.display ?? t.bot}: ${t.state === 'unsure' ? 'not sure it worked' : "couldn't finish"}.`);
+      ? `${this.bot(t.bot)?.display ?? t.bot} finished. ${relayResult(t.result || 'Done')}`
+      : `${this.bot(t.bot)?.display ?? t.bot} ${t.state === 'unsure' ? "isn't sure it worked" : "couldn't finish"}.`);
     const text = `${tasks.some((t) => t.state !== 'done') ? 'The crew has stopped.' : 'All done.'}\n${parts.join('\n')}`;
     this.say(CHIEF, 'bot', text, root, member);
     this.db.event('room.wrap', CHIEF, { root, member });
@@ -1291,7 +1291,7 @@ export class Crew {
         // In Chief's own voice, written by crewd: no model call, no task number.
         const files = this.db.all("SELECT data FROM events WHERE kind = 'file.delivered' AND bot = ? AND json_extract(data, '$.task') = ?", botId, task.id);
         const note = files.map((e) => JSON.parse(e.data).note as string).find(Boolean) ?? '';
-        this.say(CHIEF, 'bot', relayResult(b.display, text, note), files.length ? task.id : null, task.member ?? OWNER);
+        this.say(CHIEF, 'bot', relayResult(text, note), files.length ? task.id : null, task.member ?? OWNER);
       }
     });
     if (task && !parked && !this.held.has(botId)) this.close(botId);
@@ -1854,8 +1854,11 @@ export class Crew {
     const full = disk.insideBot(this.cfg, botId, rel);
     mkdirSync(dirname(full), { recursive: true });
     await buildDocument(full, { name: title, blocks } as any);
-    const sections = Math.max(1, (Array.isArray(blocks) ? blocks : []).filter((b: any) => typeof b?.heading === 'string').length);
-    await this.deliver(botId, rel, `A document in ${sections} section${sections === 1 ? '' : 's'}: ${title}`);
+    const headings = (Array.isArray(blocks) ? blocks : []).filter((b: any) => typeof b?.heading === 'string')
+      .map((b: any) => clean(b.heading, 45).replace(/[.!?:;]+$/, '').toLowerCase()).filter(Boolean);
+    const sections = Math.max(1, headings.length);
+    const headline = `The ${title} is ready${headings.length ? `: ${headings.slice(0, 3).join(', ')}` : ''}.`;
+    await this.deliver(botId, rel, headline);
     return { ok: true, path: rel, sections };
   }
 
