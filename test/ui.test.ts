@@ -645,6 +645,24 @@ test('watches and hand-offs read as plain words, with only the page\'s host', ()
   assert.deepEqual([l.from, l.text], ['note', 'Reel asked: find three songs']);
 });
 
+test('Chief\'s hand-off in a helper chat is one short ask with the whole words behind Show details; teasers carry no markdown marks', () => {
+  const [l] = A.lines({ messages: [{ id: 1, author: 'chief', task_id: 9, title: 'Plan the week\'s dinners',
+    text: 'The person says: plan dinners for four. Done means: a plan document with seven meals and one shopping list.' }] }, 'scribe');
+  assert.equal(l.from, 'chief');
+  assert.equal(l.text, 'Chief asked: Plan the week\'s dinners', 'the ask, not the assignment prose');
+  assert.match(l.detail!, /Done means/);
+  const [f] = A.lines({ messages: [{ id: 2, author: 'chief', text: 'First line stands in\nwhen no title came with it' }] }, 'scribe');
+  assert.equal(f.text, 'Chief asked: First line stands in');
+  assert.equal(A.lines({ messages: [{ id: 3, author: 'person', text: 'hello there' }] }, 'chief')[0].detail, undefined, 'Chief\'s own thread keeps whole lines');
+  // Teasers: a Things row and a chat list line read as words, never raw ** emphasis.
+  assert.equal(A.teaser('The **dinner plan** is ready — see *the timing*'), 'The dinner plan is ready — see the timing');
+  assert.equal(A.things({ tasks: [{ id: 1, bot: 'scribe', state: 'done', title: 'Dinners', updated_at: now, result: 'A **complete** plan' }] })[0].summary, 'A complete plan');
+  // What the phone opens itself: the parsed files the web shows — documents, pages, sheets, videos — nothing else.
+  for (const [path, readable] of [['files/plan.docx', true], ['files/plan.md', true], ['files/plan.txt', true], ['files/plan.xlsx', true], ['files/demo.mp4', true], ['files/demo.mov', true], ['files/scan.pdf', false], ['files/photo.png', false]] as const) {
+    assert.equal(A.phoneReadable(A.fileView('scribe', path)), readable, path);
+  }
+});
+
 test('a routine offered by Chief is a confirmation card: lines, Start it / Not now, the schedule words to edit, and the zone named only away from home', () => {
   const s = { bots: [{ id: 'chief', display: 'Chief' }], asks: [{ id: 1, bot: 'chief', kind: 'propose', at: now, title: 'Every weekday at 8:00 am, Pip will plan the week\'s dinners.', detail: {
     words: 'Every weekday at 8:00 am, Pip will plan the week\'s dinners.',

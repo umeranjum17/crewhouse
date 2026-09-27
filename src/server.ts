@@ -165,6 +165,9 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     if (m === 'GET' && p === '/api/state') return { ...crew.snapshot(me), zone: Intl.DateTimeFormat().resolvedOptions().timeZone, installing: [...installing], showing: teacher.showing(), ...(update && me === OWNER ? { update } : {}) };
     if (m === 'GET' && p === '/api/events') return db.events(Number(q.get('after') || 0));
     if (m === 'GET' && p === '/api/room') return crew.room(me, Number(q.get('before')) || undefined);
+    // The one phone-admin call a paired phone makes itself: renewing the Add-a-phone code it is looking at, so the
+    // card on the phone refreshes like the web card's (crew.refreshPhone answers only the owner).
+    if (m === 'POST' && p === '/api/phones/refresh') return crew.refreshPhone(Number(body?.message), me);
     // A sent photo for the phone, which can't open this computer's /files address: small enough for one link frame.
     if (m === 'GET' && p === '/api/photo') {
       const rel = String(q.get('path') ?? '');
@@ -186,6 +189,12 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       const rel = String(q.get('path') ?? '');
       if (!/^files\/[\w./-]+\.(docx|md|txt)$/i.test(rel)) throw Object.assign(new Error('not a document'), { status: 404 });
       return await crew.documentView(String(q.get('bot') ?? ''), rel, me);
+    }
+    // A finished video in pieces for the phone, which can't reach this computer's /files address: one base64 slice per ask.
+    if (m === 'GET' && p === '/api/video') {
+      const rel = String(q.get('path') ?? '');
+      if (!/^files\/[\w./-]+\.(mp4|webm|mov)$/i.test(rel)) throw Object.assign(new Error('not a video'), { status: 404 });
+      return await crew.videoSlice(String(q.get('bot') ?? ''), rel, Number(q.get('after')) || 0, me);
     }
     if (m === 'POST' && p === '/api/onboard') { const b = body; return crew.onboard(b.address ?? '', me, b.ask) ?? { ok: true }; }
     if (m === 'POST' && p === '/api/recruit') { const b = body; const { token, ...bot } = crew.recruit(b.template, b.name, 'person', me); return bot; }

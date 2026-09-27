@@ -263,6 +263,13 @@ function ChiefIdeas({ state, chat, picked }: { state: Json; chat: string; picked
   ))}</div>;
 }
 
+/** Chief's hand-off in a helper's chat: the collapsed ask, with the full assignment words behind Show details. */
+function ChiefAsk({ l }: { l: { text: string; detail: string } }) {
+  const [open, setOpen] = useState(false);
+  return <div className="bubble-text"><ChatText text={l.text} /> <button className="link inline" onClick={() => setOpen(!open)}>{open ? 'Hide details' : 'Show details'}</button>
+    {open && <ChatText text={l.detail} />}</div>;
+}
+
 // ---------- a chat ----------
 function PhoneCard({ offer, reload }: { offer: Json; reload: () => void }) {
   const [current, setCurrent] = useState<Json>(offer);
@@ -353,7 +360,7 @@ function Chat({ id, m, state, me, tick, refresh, accounts }: Ctx & { id: string;
         {lines.map((l, i) => (
           <div key={l.id} id={`m${l.id}`} className={`line ${l.from}${l.unsure ? ' unsure' : ''}${i && lines[i - 1].from === l.from && l.from !== 'me' ? ' consecutive' : ''}`}>
             {l.from !== 'me' && l.from !== 'note' && <div className="line-by"><Face who={l.from === 'chief' ? 'chief' : h ?? 'chief'} size={28} /><span className="who">{l.from === 'chief' ? 'Chief' : name}</span><time>{l.at ? A.clock(l.at) : ''}</time></div>}
-            {l.text && <div className="bubble-text"><ChatText text={l.text} /></div>}
+            {l.text && (l.detail ? <ChiefAsk l={{ text: l.text, detail: l.detail }} /> : <div className="bubble-text"><ChatText text={l.text} /></div>)}
             {id === 'chief' && l.text === 'Sign in with ChatGPT.' && <AccountCard me={me} owner={ownerName(state)} isOwner={me === A.OWNER} g={{ ...g, state: 'signed-out' }} inChat onReady={() => { void load(); refresh(); }} />}
             {l.files.map((f) => <Media key={f.url} f={f} big />)}
             {phoneOffer?.message === l.id && <PhoneCard offer={phoneOffer} reload={() => void load()} />}

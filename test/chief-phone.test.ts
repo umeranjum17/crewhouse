@@ -1,10 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { setup } from './lab.ts';
+import { setup, settled } from './lab.ts';
 import { asksForPhone, inlineHowTo } from '../src/crew.ts';
-import { systemPrompt } from '../src/bots.ts';
+import { botDir, systemPrompt } from '../src/bots.ts';
 import { phoneOffer, lines } from '../web/src/adapter.ts';
 
 const phrases = ['pair my phone', 'pair my computer with you', 'connect my phone', 'add my phone', 'use crewhouse on my phone', 'install on my phone'];
@@ -45,6 +45,39 @@ test('Chief offers every phone phrasing to the owner, never another member', asy
   await assert.rejects(crew.refreshPhone(page.phoneOffer.message, member.id), /owner/);
   await assert.rejects(crew.refreshPhone(0, 1), /no longer showing/);
   assert.ok(!JSON.stringify(crew.snapshot(member.id)).includes(offer.qr), 'ticket never enters public state');
+});
+
+test('a Chief hand-off in a helper chat carries its task title, for the collapsed Chief asked line', async () => {
+  const { crew, db } = setup();
+  crew.onboard('Owner');
+  crew.recruit('scribe', 'Scribe', 'system');
+  const r = crew.assign('scribe', 'The person says: plan dinners for four.\nDone means: a plan document with the full cooking steps.', 'chief', undefined, 'Plan the dinners');
+  await settled(db, r.task);
+  const m = crew.botPage('scribe').messages.find((x: any) => x.author === 'chief')!;
+  assert.equal(m.title, 'Plan the dinners');
+  const [l] = lines({ messages: [m] }, 'scribe');
+  assert.equal(l.text, 'Chief asked: Plan the dinners');
+  assert.match(l.detail!, /Done means/);
+});
+
+test('a delivered video comes over in slices for its member, and nobody else', async () => {
+  const { crew, db, cfg } = setup();
+  crew.onboard('Owner');
+  crew.recruit('reel', 'Reel', 'system');
+  const r = crew.assign('reel', 'make a short demo', 'chief');
+  await settled(db, r.task);
+  mkdirSync(join(botDir(cfg, 'reel'), 'files'), { recursive: true });
+  writeFileSync(join(botDir(cfg, 'reel'), 'files', 'demo.mp4'), Buffer.alloc(700_000, 7));
+  db.event('file.delivered', 'reel', { task: r.task, path: 'files/demo.mp4', size: 700_000 });
+  const first = await crew.videoSlice('reel', 'files/demo.mp4', 0, 1);
+  assert.equal(first.size, 700_000);
+  assert.equal(Buffer.from(first.data, 'base64').length, 600_000, 'one link frame\'s worth at a time');
+  assert.equal(first.more, true);
+  const last = await crew.videoSlice('reel', 'files/demo.mp4', 600_000, 1);
+  assert.equal(last.more, false);
+  assert.equal(Buffer.from(last.data, 'base64').length, 100_000);
+  await assert.rejects(crew.videoSlice('reel', 'files/demo.mp4', 0, 2), /delivered to you/);
+  await assert.rejects(crew.videoSlice('reel', 'files/notes.txt', 0, 1), /delivered to you/, 'only what was delivered, whatever it is');
 });
 
 test('Chief offers actions rather than directions for sign-in, apps and routines', async () => {

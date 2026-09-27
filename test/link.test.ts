@@ -115,6 +115,20 @@ test('the computer tells a phone whether its Tailscale has that phone as a peer'
   assert.equal(await tailscalePeer('100.90.1.1', cli('broken', 'no')), undefined, 'no Tailscale here to ask');
 });
 
+test('a paired phone renews the Add-a-phone code it is looking at; the rest of phone admin stays on the computer', async () => {
+  const db = new Store(temp('crewhouse-renew'));
+  const seen: string[] = [];
+  const link = new Link({} as any, db, async (m: string, path: string) => { seen.push(`${m} ${path}`); return { message: 7, token: 'fresh' }; });
+  const owner = { id: 'pixel', meta: { member: 1 } };
+  const renew = (g: { id: string; meta: { member: number } }, op: string) => (link as any).request(op, { message: 7 }, g);
+  assert.deepEqual(await renew(owner, 'POST /api/phones/refresh'), { status: 200, body: { message: 7, token: 'fresh' } }, "the owner's phone asks for its own fresh code");
+  assert.deepEqual(seen, ['POST /api/phones/refresh'], 'the ask reaches crewd, which answers only the owner');
+  assert.equal((await renew(owner, 'POST /api/phones/pair')).status, 403, 'minting a first code stays on the computer');
+  assert.equal((await renew(owner, 'DELETE /api/phones/pixel')).status, 403, 'removing a phone stays on the computer');
+  assert.equal((await renew({ id: 'ipad', meta: { member: 2 } }, 'POST /api/phones/refresh')).status, 403, 'another member administers nothing');
+  db.close();
+});
+
 const root = temp('crewhouse-link');
 // Ports the OS says are free, not random guesses that another run may hold.
 const free = () => new Promise<number>((r) => { const s = createServer().listen(0, '127.0.0.1', () => { const { port } = s.address() as AddressInfo; s.close(() => r(port)); }); });
@@ -219,8 +233,7 @@ test('pairing with a yes at the computer, grants, approvals from the phone, and 
   await pairing;
   await until(async () => (await http('GET', '/api/bots/chief')).body.phoneOffer.joined === 'Inline phone');
   const refreshed = (await http('POST', '/api/phones/refresh', { message: card.message })).body;
-  assert.notEqual(refreshed.token, card.token);
-  assert.equal((await a.req('POST', '/api/phones/refresh', { message: card.message })).status, 403);
+  assert.notEqual(refreshed.token, card.token, 'a card whose phone already joined is done: it does not refresh');
   const inline = (await http('GET', '/api/phones')).body.find((p: any) => p.name === 'Inline phone');
   await http('DELETE', `/api/phones/${inline.id}`);
 
@@ -242,6 +255,13 @@ test('pairing with a yes at the computer, grants, approvals from the phone, and 
   assert.equal(watcher.link.grant.device.role, 'view');
   assert.equal((await watcher.req('GET', '/api/state')).body.person.id, 1);
   assert.equal((await watcher.req('POST', '/api/bots/chief/messages', { text: 'hi' })).status, 403);
+
+  // The owner's paired phone renews a code that is showing, so its card refreshes itself (docs/ui-contract.md).
+  await http('POST', '/api/bots/chief/messages', { text: 'pair my phone' });
+  const live = (await http('GET', '/api/bots/chief')).body.phoneOffer;
+  const fromPhone = await a.req('POST', '/api/phones/refresh', { message: live.message });
+  assert.equal(fromPhone.status, 200);
+  assert.ok(fromPhone.body.token && fromPhone.body.token !== live.token, 'a fresh code, minted at the phone\'s ask');
 
   // Settings lists both; removing one closes its link, the phone forgets its grant, and its key is refused.
   const phones = (await http('GET', '/api/phones')).body;
