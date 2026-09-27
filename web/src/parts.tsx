@@ -5,7 +5,7 @@ import { draftOf, keepDraft, sent } from './draft.ts';
 import { cycle, type Focused } from './dialog.ts';
 import { chatTokens, safeLink } from './chat-md.ts';
 import * as art from './art.ts';
-import { clock, document as docView, fileSource, fileView, mdPlain, pageWords, sheetWords, workbook, type Card, type DocPart, type DocView, type FileView, type Helper, type Step, type Workbook } from './adapter.ts';
+import { clock, docLinks, document as docView, fileSource, fileView, mdPlain, pageWords, sheetWords, workbook, type Card, type DocPart, type DocView, type FileView, type Helper, type Step, type Workbook } from './adapter.ts';
 
 /** Markdown inline runs, from the shared safe tokens (web/src/chat-md.ts): no raw HTML, http(s) links only. */
 const mdInline = (tokens: any[]): ReactNode => tokens.map((t, i) => t.type === 'strong' ? <strong key={i}>{mdInline(t.tokens)}</strong>
@@ -276,6 +276,12 @@ export function PreviewCard({ f, big }: { f: FileView; big?: boolean }) {
   );
 }
 
+/** Link bare source URLs without changing the document's visible text. React escapes everything else. */
+function DocText({ text = '' }: { text?: string }) {
+  return <>{docLinks(text).map((part, i) => part.href
+    ? <a key={i} href={part.href} target="_blank" rel="noopener noreferrer">{part.text}</a> : part.text)}</>;
+}
+
 /** The body of a document preview: its headings, paragraphs, bullet lists and tables, read-only. */
 function DocBody({ doc }: { doc: DocView }) {
   const runs: (DocPart | DocPart[])[] = [];
@@ -286,13 +292,13 @@ function DocBody({ doc }: { doc: DocView }) {
     else runs.push(p);
   });
   return <div className="wb-rows doc-rows">
-    {runs.map((run, i) => Array.isArray(run) ? <ul key={i}>{run.map((li, j) => <li key={j}>{li.text}</li>)}</ul>
-      : run.kind === 'heading' ? <h3 key={i}>{run.text}</h3>
+    {runs.map((run, i) => Array.isArray(run) ? <ul key={i}>{run.map((li, j) => <li key={j}><DocText text={li.text} /></li>)}</ul>
+      : run.kind === 'heading' ? <h3 key={i}><DocText text={run.text} /></h3>
       : run.kind === 'table' ? <table key={i} className="wb-grid">
-          <thead><tr>{run.head?.map((h, c) => <th key={c}>{h}</th>)}</tr></thead>
-          <tbody>{run.rows?.map((r, k) => <tr key={k}>{run.head?.map((_, c) => <td key={c}>{r[c] ?? ''}</td>)}</tr>)}</tbody>
+          <thead><tr>{run.head?.map((h, c) => <th key={c}><DocText text={h} /></th>)}</tr></thead>
+          <tbody>{run.rows?.map((r, k) => <tr key={k}>{run.head?.map((_, c) => <td key={c}><DocText text={r[c] ?? ''} /></td>)}</tr>)}</tbody>
         </table>
-      : <p key={i} className={run.bold ? 'strong' : undefined}>{run.text}</p>)}
+      : <p key={i} className={run.bold ? 'strong' : undefined}><DocText text={run.text} /></p>)}
   </div>;
 }
 

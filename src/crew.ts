@@ -81,7 +81,8 @@ export function taskTitle(body: string) {
 }
 /** A relay is the answer, not a quoted chunk of the helper's raw markdown. */
 export function relayResult(reply: string, note = '') {
-  const source = (note || reply).replace(/^A document in \d+ sections?:\s*(.+)$/i, 'The $1 is ready.');
+  // A long delivery note is a file description, not a safe relay title; use the helper's answer instead.
+  const source = (note && note.length < 140 ? note : reply).replace(/^A document in \d+ sections?:\s*(.+)$/i, 'The $1 is ready.');
   const clean = source.replace(/\[([^\]]+)\]\(https?:\/\/[^)]+\)/g, '$1').replace(/\*\*|^\s*[-*]\s*/gm, '').replace(/\b(sir|ma'am)\b[,.]?\s*/gi, '').replace(/^\w+:\s*/, '').replace(/https?:\/\/\S+/g, '').trim();
   return `${short(clean.split(/[.!?](?:\s|$)/)[0] || 'The result is ready', 160).replace(/[.:;]+$/, '')}.`;
 }
@@ -1916,7 +1917,7 @@ export class Crew {
     const rel = full.slice(disk.botDir(this.cfg, botId).length + 1);
     const task = this.activeTask(botId)?.id;
     if (task && this.db.get(`SELECT 1 FROM events WHERE kind = 'file.delivered' AND bot = ? AND json_extract(data, '$.task') = ? AND json_extract(data, '$.path') = ?`, botId, task, rel)) return { ok: true, already: true };
-    this.db.event('file.delivered', botId, { task, path: rel, note: clean(note, 200), size: statSync(full).size });
+    this.db.event('file.delivered', botId, { task, path: rel, note: short(clean(note, 1000), 200), size: statSync(full).size });
     // A patch is only ever a suggested change for the maintainer to review, in crewd's own words, never the model's.
     this.say(botId, 'system', /\.(patch|diff)$/.test(rel) ? `Delivered ${rel}: Suggested change (for the maintainer to review)${this.db.get("SELECT 1 FROM events WHERE kind = 'verify.result' AND bot = ? AND json_extract(data, '$.passed') AND json_extract(data, '$.sha') = ?", botId, sha(readFileSync(full, 'utf8'))) ? ': passed its own check' : ''}` : `Delivered ${rel}${note ? `: ${note}` : ''}`, task ?? null);
     return { ok: true };

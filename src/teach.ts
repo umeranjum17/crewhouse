@@ -63,6 +63,7 @@ export class Teacher {
   has(bot: string) { return this.shows.has(bot); }
   /** The steps so far, while the show is still on — for waiting on one to land. */
   steps(bot: string) { return stepsOf(this.shows.get(bot)?.raw ?? []); }
+  pictures(bot: string) { return this.shows.get(bot)?.shots.length ?? 0; }
 
   /** Start watching the bot's browser at its DevTools endpoint (a browser-level WebSocket). `onTimeout` ends a show
    *  left running for 15 minutes. */
