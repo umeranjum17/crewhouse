@@ -1,23 +1,21 @@
-// Design tokens for direction C, "Pocket Pals", with A's night mode. Plain values so the Expo app imports this
-// file unchanged; web/src/styles.css mirrors them as CSS variables.
+// Shared web/phone values; styles.css mirrors these as custom properties.
 export const color = {
   day: {
-    ink: '#2e2a40', ink2: '#4d4760', mute: '#6b6484', card: '#ffffffd9', solid: '#ffffff', line: '#eee6f6', soft: '#f8f4fc',
-    pink: '#ff7aa2', pinkInk: '#c9356b', peach: '#ffb199', amber: '#ffc27a', sky: '#a9cbff', mint: '#b5ecc4', lilac: '#d9c2ff',
-    ok: '#3ccf7e', okInk: '#177a47', wait: '#ffae3c', bg: '#fff7f2',
+    bg: '#FAF9F7', surface: '#FFFFFF', sunken: '#F3F1EE', line: '#E7E4DF', line2: '#D9D5CF',
+    ink: '#1B1A1F', ink2: '#56525D', mute: '#8B8792', accent: '#1B1A1F', onAccent: '#FFFFFF',
+    pink: '#D23369', green: '#1E9A58', amber: '#B86E00', danger: '#C4372C',
   },
-  // A · Night Shift: ink #0d0b14, phosphor, amber, pink, violet.
   night: {
-    ink: '#efe9dc', ink2: '#cfc8dc', mute: '#8a83a3', card: '#1d1929e6', solid: '#15121f', line: '#2e2842', soft: '#221d31',
-    pink: '#ff5f87', pinkInk: '#ff7aa2', peach: '#ff8a5c', amber: '#ffb45c', sky: '#6aa8ff', mint: '#8dffc0', lilac: '#b58cff',
-    ok: '#8dffc0', okInk: '#8dffc0', wait: '#ffb45c', bg: '#0d0b14',
+    bg: '#111014', surface: '#1A191E', sunken: '#151418', line: '#2A2830', line2: '#36333D',
+    ink: '#F1EFEA', ink2: '#ABA7B1', mute: '#78747E', accent: '#F1EFEA', onAccent: '#111014',
+    pink: '#FF6B9A', green: '#4BD08A', amber: '#F2B04B', danger: '#FF6B5E',
   },
 };
-export const radius = { chip: 999, card: 24, sheet: 32, icon: 14 };
-export const font = {
-  // Nunito for everything people read. The mono face draws ASCII art only, never text to read.
-  ui: "'Nunito', ui-rounded, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
-  art: "'JetBrains Mono', ui-monospace, monospace",
-};
-/** The splash banner's gradient, amber → pink → violet. */
-export const bannerStops = ['#ffb45c', '#ff5f87', '#b58cff'];
+export const spacing = [4, 8, 12, 16, 20, 24, 32, 48] as const;
+export const radius = { control: 10, card: 14, sheet: 20, pill: 999 };
+export const type = {
+  display: [28, 34, 600], title: [22, 28, 600], headline: [17, 24, 600], body: [15, 22, 400],
+  rowTitle: [15, 22, 500], small: [13, 18, 400], label: [12, 16, 500], micro: [11, 14, 500],
+} as const;
+export const motion = { fast: 120, base: 200, slow: 280, exit: 160 };
+export const font = { ui: "'Inter', system-ui, sans-serif", art: "'JetBrains Mono', ui-monospace, monospace" };

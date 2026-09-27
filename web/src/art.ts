@@ -146,29 +146,14 @@ export const HOUSE: Bitmap = [
 export const HOUSE_PAL: Palette = { r: '#ff7aa2', p: '#ffc27a', e: '#3b3552', m: '#3b3552' };
 
 /** The phone's tab bar, 9×9 dots each, one colour (the tab's ink): the same on every phone, unlike a font's glyphs. */
-export type Tab = 'chats' | 'crew' | 'things' | 'routines' | 'phone';
+export type Tab = 'home' | 'crew' | 'things' | 'routines' | 'settings';
 export const TABS: Record<Tab, Bitmap> = {
-  chats: ['....x....', '...x.x...', '..x...x..', '.x.....x.', 'xxxxxxxxx', '.x.....x.', '.x.xxx.x.', '.x.x.x.x.', '.xxx.xxx.'],
+  home: ['....x....', '...x.x...', '..x...x..', '.x.....x.', 'xxxxxxxxx', '.x.....x.', '.x.xxx.x.', '.x.x.x.x.', '.xxx.xxx.'],
   crew: ['..xxxxx..', '.x.....x.', 'x..x.x..x', 'x..x.x..x', 'x.......x', 'x.x...x.x', 'x..xxx..x', '.x.....x.', '..xxxxx..'],
   things: ['xxxxxxxxx', 'x.......x', 'x.xxxxx.x', 'x.......x', 'x.xxxxx.x', 'x.......x', 'x.xxx...x', 'x.......x', 'xxxxxxxxx'],
   routines: ['..xxxxx.x', '.x.....xx', 'x.....xxx', 'x........', 'x.......x', '........x', 'xxx.....x', 'xx.....x.', 'x.xxxxx..'],
-  phone: ['..xxxxx..', '..x...x..', '..x...x..', '..x...x..', '..x...x..', '..x...x..', '..xxxxx..', '..x.x.x..', '..xxxxx..'],
+  settings: ['....x....', '.x.xxx.x.', '..xxxxx..', '.xxx.xxx.', 'xxx...xxx', '.xxx.xxx.', '..xxxxx..', '.x.xxx.x.', '....x....'],
 };
-
-const DOTFONT: Record<string, string[]> = {
-  c: ['.....', '.....', '.###.', '#....', '#....', '#....', '.###.'],
-  r: ['.....', '.....', '#.##.', '##..#', '#....', '#....', '#....'],
-  e: ['.....', '.....', '.###.', '#...#', '#####', '#....', '.###.'],
-  w: ['.....', '.....', '#...#', '#...#', '#.#.#', '#.#.#', '.#.#.'],
-  h: ['#....', '#....', '#.##.', '##..#', '#...#', '#...#', '#...#'],
-  o: ['.....', '.....', '.###.', '#...#', '#...#', '#...#', '.###.'],
-  u: ['.....', '.....', '#...#', '#...#', '#...#', '#..##', '.##.#'],
-  s: ['.....', '.....', '.####', '#....', '.###.', '....#', '####.'],
-};
-/** "crew" in ink, "house" in pink. */
-export const WORD: Bitmap = [0, 1, 2, 3, 4, 5, 6].map((y) => [...'crewhouse'].map((ch, i) => DOTFONT[ch][y].replace(/#/g, i < 4 ? 'a' : 'b')).join('.'));
-export const WORD_PAL: Palette = { a: '#2e2a40', b: '#ff7aa2' };
-export const WORD_PAL_NIGHT: Palette = { a: '#efe9dc', b: '#ff7aa2' };
 
 // ── ASCII moments ──
 const SHADOW: Record<string, string[]> = {
@@ -183,14 +168,6 @@ const SHADOW: Record<string, string[]> = {
 };
 /** The block-letter CREWHOUSE of the boot splash: six lines of characters. */
 export const BANNER: string[] = [0, 1, 2, 3, 4, 5].map((y) => [...'CREWHOUSE'].map((ch) => SHADOW[ch][y]).join(''));
-
-/** Blend a gradient of hex stops at t in [0, 1]. */
-export function mix(stops: string[], t: number) {
-  const seg = Math.min(stops.length - 2, Math.floor(t * (stops.length - 1)));
-  const u = t * (stops.length - 1) - seg;
-  const a = parseInt(stops[seg].slice(1), 16), b = parseInt(stops[seg + 1].slice(1), 16);
-  return '#' + [16, 8, 0].map((s) => Math.round(((a >> s) & 255) * (1 - u) + ((b >> s) & 255) * u).toString(16).padStart(2, '0')).join('');
-}
 
 /** A slow plasma of glyphs behind the splash (Ghostty's living ASCII). */
 export function field(t: number, w = 72, h = 48) {

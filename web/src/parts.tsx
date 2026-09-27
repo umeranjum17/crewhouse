@@ -4,7 +4,6 @@ import { api, trouble, type Json } from './api.ts';
 import { draftOf, keepDraft, sent } from './draft.ts';
 import { cycle, type Focused } from './dialog.ts';
 import * as art from './art.ts';
-import { bannerStops } from './tokens.ts';
 import { clock, document as docView, fileSource, fileView, pageWords, sheetWords, workbook, type Card, type DocPart, type DocView, type FileView, type Helper, type Step, type Workbook } from './adapter.ts';
 
 // ---------- toasts ----------
@@ -59,9 +58,9 @@ export function useDialogOwn(box: RefObject<HTMLElement | null>, onClose: () => 
 }
 
 // ---------- dot art ----------
-export function Dots({ rows, pal, d = 6, label }: { rows: art.Bitmap; pal: art.Palette; d?: number; label?: string }) {
+export function Dots({ rows, pal, d = 6, label, crisp = false }: { rows: art.Bitmap; pal: art.Palette; d?: number; label?: string; crisp?: boolean }) {
   return (
-    <div className="dots" style={{ ['--w' as any]: rows[0].length, ['--d' as any]: `${d}px` }} role={label ? 'img' : undefined} aria-label={label} aria-hidden={label ? undefined : true}>
+    <div className={`dots${crisp ? ' crisp' : ''}`} style={{ ['--w' as any]: rows[0].length, ['--d' as any]: `${d}px` }} role={label ? 'img' : undefined} aria-label={label} aria-hidden={label ? undefined : true}>
       {rows.flatMap((r, y) => [...r].map((k, x) => <b key={`${y}.${x}`} className={pal[k] ? 'on' : undefined} style={pal[k] ? { background: pal[k] } : undefined} />))}
     </div>
   );
@@ -122,30 +121,30 @@ export const setChiefMood = (m: art.Mood) => { chiefMood = m; };
 export function ChiefArt({ mood = 'idle', d = 6, dark, hero }: { mood?: art.Mood; d?: number; dark?: boolean; hero?: boolean }) {
   const flash = useChangeBlink(!!hero, mood);
   const m = flash ? 'blink' : mood;
-  const dd = (d * 14) / 22, small = dd < 2.4;
-  return <Dots rows={small ? art.chiefSmall(m) : art.chief(m)} pal={dark ?? night ? art.CHIEF_PAL_NIGHT : art.CHIEF_PAL} d={small ? (dd * 22) / 12 : dd} label="Chief" />;
+  const dd = (d * 14) / 22, small = d * 14 < 24;
+  return <Dots rows={small ? art.chiefSmall(m) : art.chief(m)} pal={dark ?? night ? art.CHIEF_PAL_NIGHT : art.CHIEF_PAL} d={small ? (dd * 22) / 12 : dd} label="Chief" crisp={d * 14 < 96} />;
 }
-export function PalArt({ kind, mood = 'idle', d = 4, name }: { kind: art.Kind; mood?: art.Mood; d?: number; name?: string }) {
-  return <Dots rows={art.pal(kind, mood)} pal={art.palPalette(kind)} d={(d * 12) / 18} label={name} />;
+export function PalArt({ kind, mood = 'idle', d = 4, name, crisp = false }: { kind: art.Kind; mood?: art.Mood; d?: number; name?: string; crisp?: boolean }) {
+  return <Dots rows={art.pal(kind, mood)} pal={art.palPalette(kind)} d={(d * 12) / 18} label={name} crisp={crisp} />;
 }
 
-/** A round face: Chief or a pal, with a ring when it's working (green) or needs you (amber). */
+/** A round face: Chief or a pal, with a ring when it's working or needs you. */
 export function Face({ who, size = 44, ring = '' }: { who: Helper | 'chief' | { kind: art.Kind; name: string; mood?: art.Mood }; size?: number; ring?: string }) {
   const chief = who === 'chief';
-  const soft = chief ? '#fff7e8' : art.PALS[who.kind].soft;
+  const soft = chief ? (night ? '#2A2622' : '#FFF3E0') : art.PALS[who.kind].soft;
   return (
-    <span className={`face ${ring}`} style={{ width: size, height: size, background: soft }}>
-      {chief ? <ChiefArt d={size / 22} mood={chiefMood} /> : <PalArt kind={who.kind} mood={who.mood} d={size / 17} name={who.name} />}
+    <span className={`face ${ring}`} style={{ width: size, height: size, background: night && !chief ? `color-mix(in srgb, ${soft} 16%, var(--solid))` : soft }}>
+      {chief ? <ChiefArt d={size * .74 / 14} mood={chiefMood} /> : <PalArt kind={who.kind} mood={who.mood} d={size * .74 / 12} name={who.name} crisp={size < 96} />}
     </span>
   );
 }
 
-/** The mark is Chief himself (the app icon's 12-dot cut), then the dot wordmark. */
+/** The mark is Chief himself (the app icon's 12-dot cut), then the wordmark. */
 export function Logo({ night }: { night?: boolean }) {
   return (
     <span className="logo" aria-label="Crewhouse">
-      <Dots rows={art.chiefSmall()} pal={night ? art.CHIEF_PAL_NIGHT : art.CHIEF_PAL} d={2.3} />
-      <Dots rows={art.WORD} pal={night ? art.WORD_PAL_NIGHT : art.WORD_PAL} d={2.3} />
+      <Dots rows={art.chiefSmall()} pal={night ? art.CHIEF_PAL_NIGHT : art.CHIEF_PAL} d={1.8} crisp />
+      <span>Crewhouse</span>
     </span>
   );
 }
@@ -180,7 +179,7 @@ export function Splash({ done }: { done: boolean }) {
       <pre className="art field" aria-hidden>{art.field(t, 200, 72)}</pre>
       <div className="splash-in">
         <pre className="art banner" aria-hidden>
-          {art.BANNER.map((line, y) => <div key={y}>{[...line].map((c, x) => <i key={x} style={{ color: c === '█' ? art.mix(bannerStops, x / w) : 'var(--shadow)' }}>{c}</i>)}</div>)}
+          {art.BANNER.map((line, y) => <div key={y}>{[...line].map((c, x) => <i key={x} style={{ color: c === '█' ? 'var(--ink)' : 'var(--shadow)' }}>{c}</i>)}</div>)}
         </pre>
         <ChiefArt mood="work" d={7} dark />
         <Laptop />

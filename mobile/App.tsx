@@ -2,6 +2,7 @@
 // Everything a person reads comes through web/src/adapter.ts, the same plain-words view models as the web app
 // (docs/ui-contract.md); the colours are web/src/tokens.ts and the mascots are web/src/art.ts, drawn as dots.
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import { useFonts } from 'expo-font';
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator, AppState, BackHandler, Image, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, useColorScheme, View,
@@ -23,8 +24,11 @@ import * as motion from './src/motion';
 import { connect, desktopSignaling, forgetGrant, kept, loadGrant, pair, pairTyped, type Grant, type Status } from './src/link';
 
 // ---------- look ----------
-type Look = typeof color.day & { go: string; goInk: string; night: boolean };
-const look = (night: boolean): Look => (night ? { ...color.night, go: color.night.ok, goInk: '#07140e', night } : { ...color.day, go: color.day.ink, goInk: '#fff', night });
+type Look = typeof color.day & { go: string; goInk: string; solid: string; soft: string; card: string; ok: string; wait: string; pinkInk: string; night: boolean };
+const look = (night: boolean): Look => {
+  const c = night ? color.night : color.day;
+  return { ...c, go: c.accent, goInk: c.onAccent, solid: c.surface, soft: c.sunken, card: c.surface, ok: c.green, wait: c.pink, pinkInk: c.pink, night };
+};
 const Theme = createContext<Look>(look(false));
 const useLook = () => useContext(Theme);
 
@@ -49,13 +53,15 @@ function Toast() {
 
 export default function App() {
   const t = look(useColorScheme() === 'dark');
+  const [fontsReady, fontError] = useFonts({ Inter: require('./assets/fonts/InterVariable.woff2') });
   const [grant, setGrant] = useState<Grant | null | undefined>(undefined);
   useEffect(() => { loadGrant().then(setGrant).catch(() => setGrant(null)); }, []);
   return (
     <Theme.Provider value={t}>
       <SafeAreaProvider>
         <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }} edges={['top', 'bottom']}>
-          {grant === undefined ? <Center><ActivityIndicator color={t.pink} /></Center>
+          {!fontsReady && !fontError ? <Center><ActivityIndicator color={t.ink} /></Center>
+            : grant === undefined ? <Center><ActivityIndicator color={t.ink} /></Center>
             : grant === null ? <Pair onPaired={setGrant} />
             : <Crewhouse grant={grant} onRemoved={() => setGrant(null)} />}
           <Toast />
@@ -66,23 +72,23 @@ export default function App() {
 }
 
 // ---------- the mascots, as dots ----------
-function Dots({ rows, pal, d }: { rows: art.Bitmap; pal: art.Palette; d: number }) {
+function Dots({ rows, pal, d, crisp = false }: { rows: art.Bitmap; pal: art.Palette; d: number; crisp?: boolean }) {
   return (
     <View accessible={false}>
       {rows.map((r, y) => (
         <View key={y} style={{ flexDirection: 'row' }}>
-          {[...r].map((k, x) => <View key={x} style={{ width: d, height: d, padding: d * 0.06 }}>{pal[k] ? <View style={{ flex: 1, borderRadius: d, backgroundColor: pal[k] }} /> : null}</View>)}
+          {[...r].map((k, x) => <View key={x} style={{ width: d, height: d, padding: crisp ? 0 : d * 0.06 }}>{pal[k] ? <View style={{ flex: 1, borderRadius: crisp ? 0 : d, backgroundColor: pal[k] }} /> : null}</View>)}
         </View>
       ))}
     </View>
   );
 }
 function ChiefArt({ mood = 'idle', size }: { mood?: art.Mood; size: number }) {
-  const small = size < 60;
+  const small = size < 24;
   const rows = small ? art.chiefSmall(mood) : art.chief(mood);
-  return <Dots rows={rows} pal={useLook().night ? art.CHIEF_PAL_NIGHT : art.CHIEF_PAL} d={size / rows[0].length} />;
+  return <Dots rows={rows} pal={useLook().night ? art.CHIEF_PAL_NIGHT : art.CHIEF_PAL} d={size / rows[0].length} crisp={size < 96} />;
 }
-/** A round face: Chief or a pal, with a ring when it's working (green) or needs you (amber). */
+/** A round face: Chief or a pal, with a ring when it's working or needs you. */
 function Face({ who, size = 44, mood }: { who: A.Helper | 'chief' | { kind: art.Kind; name: string; mood?: art.Mood }; size?: number; mood?: art.Mood }) {
   const t = useLook();
   const chief = who === 'chief';
@@ -90,8 +96,8 @@ function Face({ who, size = 44, mood }: { who: A.Helper | 'chief' | { kind: art.
   const rows = chief ? [] : art.pal(who.kind, who.mood);
   return (
     <View style={{ width: size, height: size, borderRadius: size, alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
-      backgroundColor: chief ? '#fff7e8' : art.PALS[who.kind].soft, borderWidth: ring ? 3 : 0, borderColor: ring === 'needs' ? t.wait : t.ok }}>
-      {chief ? <ChiefArt mood={mood ?? 'idle'} size={size * 0.72} /> : <Dots rows={rows} pal={art.palPalette(who.kind)} d={(size * 0.78) / rows[0].length} />}
+      backgroundColor: chief ? (t.night ? '#2A2622' : '#FFF3E0') : t.night ? t.surface : art.PALS[who.kind].soft, borderWidth: ring ? 2 : 0, borderColor: ring === 'needs' ? t.pink : t.green }}>
+      {chief ? <ChiefArt mood={mood ?? 'idle'} size={size * 0.74} /> : <Dots rows={rows} pal={art.palPalette(who.kind)} d={(size * 0.74) / rows[0].length} crisp={size < 96} />}
     </View>
   );
 }
@@ -116,13 +122,13 @@ function Btn({ label, onPress, go, ghost, big, disabled }: { label: string; onPr
     <Pressable onPress={onPress} disabled={disabled} accessibilityRole="button" accessibilityLabel={label}
       style={({ pressed }) => [s.btn, { backgroundColor: go ? t.go : ghost ? 'transparent' : t.solid, borderColor: go || ghost ? 'transparent' : t.line },
         big && s.btnBig, (pressed || disabled) && { opacity: 0.55 }]}>
-      <Text style={[s.btnText, { color: go ? t.goInk : ghost ? t.mute : t.ink }]}>{label}</Text>
+      <Text style={[s.btnText, { color: go ? t.goInk : ghost ? t.ink2 : t.ink }]}>{label}</Text>
     </Pressable>
   );
 }
 function Card({ children, style, ask }: { children: ReactNode; style?: any; ask?: boolean }) {
   const t = useLook();
-  return <View style={[s.card, { backgroundColor: t.card, borderColor: ask ? '#ffcf8f' : t.line, borderWidth: ask ? 2 : 1 }, style]}>{children}</View>;
+  return <View style={[s.card, { backgroundColor: t.card, borderColor: ask ? t.pink : t.line, borderWidth: 1 }, style]}>{children}</View>;
 }
 const Label = ({ children }: { children: ReactNode }) => <T tone="mute" style={s.label}>{children}</T>;
 function Page({ title, lead, children }: { title?: string; lead?: string; children: ReactNode }) {
@@ -448,7 +454,7 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
     ? { text: [shareIntent.text, shareIntent.webUrl].filter((x, i, a) => x && a.indexOf(x) === i).join('\n'), files: (shareIntent.files ?? []).map((f) => ({ path: f.path, mimeType: f.mimeType })) } : null;
   if (shared) return <ShareIn state={state} shared={shared} go={go} onDone={() => resetShareIntent()} />;
   if (!state.person.onboarded && canAct) return <Hello {...ctx} />;
-  const nav: [Route['view'], string, art.Tab][] = [['home', 'Chats', 'chats'], ['crew', 'Crew', 'crew'], ['things', 'Things', 'things'], ['routines', 'Routines', 'routines'], ['phone', 'This phone', 'phone']];
+  const nav: [Route['view'], string, art.Tab][] = [['home', 'Home', 'home'], ['crew', 'Crew', 'crew'], ['things', 'Things', 'things'], ['routines', 'Routines', 'routines'], ['phone', 'Settings', 'settings']];
   // In any chat Chats is lit; Crew is lit only on Crew and Add.
   const active = route.view === 'add' ? 'crew' : ['chief', 'helper'].includes(route.view) ? 'home' : route.view;
   const live = sheet && A.cards(state).find((c) => c.id === sheet.id);
@@ -480,12 +486,12 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
         {route.view === 'things' && <Page title="Things" lead="Everything the crew has made for you."><ThingsList list={A.things(state)} state={state} empty="Videos, lists, letters and plans the crew makes for you land here." /></Page>}
         {route.view === 'phone' && <ThisPhone grant={grant} status={status} onForget={forget} onClear={() => { kept.clear(); say('Cleared from this phone ✓'); }} />}
       </View>
-      <View style={[s.tabbar, { backgroundColor: t.bg, borderColor: t.line }]}>
+      <View style={[s.tabbar, { backgroundColor: t.surface, borderColor: t.line }]}>
         {nav.map(([v, label, icon]) => (
           <Pressable key={v} style={s.tab} onPress={() => go({ view: v }, true)} accessibilityRole="tab" accessibilityLabel={label}>
-            <View style={s.tabIcon}><Dots rows={art.TABS[icon]} pal={{ x: active === v ? t.ink : t.mute }} d={3} /></View>
+            <View style={s.tabIcon}><Dots rows={art.TABS[icon]} pal={{ x: active === v ? t.ink : t.mute }} d={22 / 9} crisp /></View>
             <Text style={[s.tabLabel, { color: active === v ? t.ink : t.mute }]}>{label}</Text>
-            {v === 'home' && A.needsYou(state).length > 0 && <Text style={[s.badge, { backgroundColor: t.wait }]}>{A.needsYou(state).length}</Text>}
+            {v === 'home' && A.needsYou(state).length > 0 && <Text style={[s.badge, { backgroundColor: t.pink }]}>{A.needsYou(state).length}</Text>}
           </Pressable>
         ))}
       </View>
@@ -1148,7 +1154,8 @@ function ThisPhone({ grant, status, onForget, onClear }: { grant: Grant; status:
   const [push, setPush] = useState<'on' | 'off' | 'missing' | null>(null);
   useEffect(() => { void pushState().then(setPush).catch(() => {}); }, []);
   return (
-    <Page title="This phone">
+    <Page title="Settings">
+      <Label>This phone</Label>
       <Card>
         <T style={s.b}>{grant.device.name}</T>
         <T tone="mute">{grant.device.role === 'view' ? 'Watches the crew; can’t answer or give jobs.' : 'Answers the crew and gives them jobs, as you.'}</T>
@@ -1178,43 +1185,43 @@ const s = StyleSheet.create({
   page: { padding: 16, gap: 12, paddingBottom: 32 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  text: { fontSize: 16, lineHeight: 22 },
-  h1: { fontSize: 28, lineHeight: 36, fontWeight: '900', letterSpacing: -0.5, marginVertical: 4 },
-  h2: { fontSize: 20, fontWeight: '800', lineHeight: 27 },
-  b: { fontWeight: '800' },
+  text: { fontFamily: 'Inter', fontSize: 15, lineHeight: 22, fontVariant: ['tabular-nums'] },
+  h1: { fontSize: 22, lineHeight: 28, fontWeight: '600', letterSpacing: -0.33, marginVertical: 4 },
+  h2: { fontSize: 17, fontWeight: '600', lineHeight: 24 },
+  b: { fontWeight: '600' },
   small: { fontSize: 13, lineHeight: 18 },
-  label: { fontSize: 12, fontWeight: '800', letterSpacing: 1.2, textTransform: 'uppercase', marginTop: 14 },
-  fp: { fontSize: 22, fontWeight: '800', letterSpacing: 2.5, fontVariant: ['tabular-nums'], marginVertical: 8, textAlign: 'center' },
+  label: { fontSize: 12, lineHeight: 16, fontWeight: '500', marginTop: 24 },
+  fp: { fontSize: 22, fontWeight: '600', fontVariant: ['tabular-nums'], marginVertical: 8, textAlign: 'center' },
   card: { borderRadius: radius.card, padding: 16 },
-  pill: { flexDirection: 'row', alignItems: 'center', gap: 7, borderRadius: radius.chip, paddingVertical: 5, paddingLeft: 9, paddingRight: 12, maxWidth: '100%', elevation: 2 },
+  pill: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: radius.pill, paddingVertical: 4, paddingHorizontal: 8, maxWidth: '100%' },
   pillDot: { width: 8, height: 8, borderRadius: 4 },
-  pillText: { fontSize: 13, fontWeight: '700', flexShrink: 1 },
-  btn: { borderRadius: radius.chip, paddingVertical: 11, paddingHorizontal: 18, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', minHeight: 44 },
-  btnBig: { alignSelf: 'stretch', paddingVertical: 15 },
-  btnText: { fontSize: 15, fontWeight: '800' },
-  input: { borderWidth: 1.5, borderRadius: 18, paddingHorizontal: 14, paddingVertical: 10, fontSize: 16 },
-  composer: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, borderRadius: 28, borderWidth: 1.5, paddingVertical: 6, paddingRight: 6, paddingLeft: 18 },
-  composerInput: { flex: 1, fontSize: 16, paddingVertical: 8, maxHeight: 140 },
-  send: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  pillText: { fontFamily: 'Inter', fontSize: 13, fontWeight: '500', flexShrink: 1 },
+  btn: { borderRadius: radius.control, paddingVertical: 8, paddingHorizontal: 16, borderWidth: 1, alignItems: 'center', justifyContent: 'center', minHeight: 40 },
+  btnBig: { alignSelf: 'stretch', minHeight: 48 },
+  btnText: { fontFamily: 'Inter', fontSize: 14, fontWeight: '600' },
+  input: { fontFamily: 'Inter', borderWidth: 1, borderRadius: radius.control, paddingHorizontal: 14, paddingVertical: 10, fontSize: 15 },
+  composer: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, borderRadius: radius.pill, borderWidth: 1, paddingVertical: 6, paddingRight: 6, paddingLeft: 18, minHeight: 48 },
+  composerInput: { fontFamily: 'Inter', flex: 1, fontSize: 15, paddingVertical: 8, maxHeight: 140 },
+  send: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   dock: { paddingHorizontal: 12, paddingVertical: 8 },
   bubble: { alignItems: 'center', gap: 4, width: 64 },
   job: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 },
   step: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 5 },
   stepDot: { width: 10, height: 10, borderRadius: 5 },
   line: { maxWidth: '84%', gap: 4, alignSelf: 'flex-start' },
-  bubbleText: { paddingHorizontal: 15, paddingVertical: 10, borderRadius: 22 },
+  bubbleText: { paddingHorizontal: 15, paddingVertical: 10, borderRadius: 18 },
   head: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, justifyContent: 'space-between' },
   palCard: { width: '48%', borderRadius: radius.card, borderWidth: 1, padding: 14, alignItems: 'center', gap: 8 },
-  tabbar: { flexDirection: 'row', borderTopWidth: 1, paddingVertical: 6 },
-  tab: { flex: 1, alignItems: 'center', gap: 1, minHeight: 48, justifyContent: 'center' },
-  tabIcon: { height: 30, justifyContent: 'center' },
-  tabLabel: { fontSize: 11.5, fontWeight: '700' },
+  tabbar: { flexDirection: 'row', borderTopWidth: 1, minHeight: 82, paddingVertical: 8 },
+  tab: { flex: 1, alignItems: 'center', gap: 4, justifyContent: 'flex-start' },
+  tabIcon: { height: 22, justifyContent: 'center' },
+  tabLabel: { fontFamily: 'Inter', fontSize: 11, fontWeight: '500' },
   unread: { minWidth: 20, height: 20, borderRadius: 10, color: '#2e2a40', fontSize: 12, fontWeight: '900', textAlign: 'center', overflow: 'hidden', paddingHorizontal: 5, lineHeight: 20 },
   badge: { position: 'absolute', top: 0, left: '58%', minWidth: 18, height: 18, borderRadius: 9, color: '#fff', fontSize: 11, fontWeight: '800', textAlign: 'center', overflow: 'hidden', paddingHorizontal: 4 },
   offline: { paddingVertical: 7, paddingHorizontal: 16 },
   offlineText: { textAlign: 'center', fontSize: 13, fontWeight: '700' },
-  toast: { position: 'absolute', bottom: 84, alignSelf: 'center', paddingHorizontal: 16, paddingVertical: 10, borderRadius: radius.chip, fontWeight: '700', overflow: 'hidden', maxWidth: '90%' },
+  toast: { position: 'absolute', bottom: 84, alignSelf: 'center', paddingHorizontal: 16, paddingVertical: 10, borderRadius: radius.pill, fontWeight: '500', overflow: 'hidden', maxWidth: '90%' },
   scanHint: { position: 'absolute', left: 0, right: 0, bottom: 0, padding: 20, gap: 12, backgroundColor: '#000a' },
   scrim: { flex: 1, backgroundColor: '#0006', justifyContent: 'flex-end' },
   sheet: { padding: 22, gap: 12, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet },
