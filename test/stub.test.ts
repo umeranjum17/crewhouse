@@ -69,10 +69,10 @@ test('chief onboarding, recruit, assign, grants', async () => {
   await done('chief', hand);
   const t = await until(async () => (await api('GET', '/api/bots/reel')).body.tasks.find((x: any) => x.title === 'Make a 10 second demo' && x.state === 'done'));
   page = (await api('GET', '/api/bots/chief')).body;
-  const said = page.messages.find((m: any) => m.author === 'bot' && m.text.startsWith('Reel has finished “Make a 10 second demo”'));
-  assert.ok(said, 'Chief says it himself');
-  assert.doesNotMatch(said.text, /#\d/, 'no task number');
-  assert.match(said.text, /It's in Reel's chat: “stub reel: done/);
+  const said = page.messages.find((m: any) => m.author === 'bot' && m.text.startsWith('All done, Sir. Reel: stub reel: done'));
+  assert.ok(said, 'Chief gives one wrap-up for the assigned work');
+  assert.equal(said.task_id, hand);
+  assert.doesNotMatch(said.text, /#\d|has finished/, 'no task number or per-task completion line');
 
   // Grants: what the person ticks is what the bot gets.
   const tools = (await api('GET', '/api/bots/reel')).body.tools;
@@ -333,4 +333,18 @@ test('suggestions: a helper keeps a skill, and Chief changes a personality, only
   assert.equal((await api('GET', '/api/bots/reel')).body.soul, soul);
   await answer((await suggest()).id, 'allow');
   assert.equal((await api('GET', '/api/bots/reel')).body.soul, '# Reel\n\nYou are Reel. Brief and cheerful.\n');
+});
+
+test('room API: a message starts and rejoins the member’s room job', async () => {
+  await ready();
+  const first = (await api('POST', '/api/bots/reel/messages', { text: 'A room job', room: true })).body.task;
+  await done('reel', first);
+  const second = (await api('POST', '/api/bots/reel/messages', { text: 'More on that room job', room: true })).body.task;
+  await done('reel', second);
+  const room = (await api('GET', '/api/room')).body;
+  assert.ok(room.lines.some((l: any) => l.text === 'More on that room job'));
+  assert.equal(room.lines.filter((l: any) => l.text === 'A room job').length, 1);
+  const db = new DatabaseSync(join(root, 'state', 'crew.db'));
+  assert.equal(db.prepare('SELECT root FROM tasks WHERE id = ?').get(second)?.root, first);
+  db.close();
 });

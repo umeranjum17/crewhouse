@@ -27,7 +27,7 @@ export interface Template {
 }
 
 /** `allow` holds the person's standing answers ("Always for Reel"), as the gate's keys. */
-type BotConfig = { tools: string[]; allow?: string[]; signedIn?: string[]; models?: string[]; memory?: boolean; ideas?: Template['ideas'] };
+type BotConfig = { tools: string[]; allow?: string[]; signedIn?: string[]; models?: string[]; memory?: boolean; handoff?: 'ask' | 'go'; ideas?: Template['ideas'] };
 
 export function botConfig(cfg: Config, id: string): BotConfig {
   const p = join(botDir(cfg, id), 'bot.json');
@@ -78,10 +78,11 @@ export function setBrains(cfg: Config, id: string, models: string[]) {
   return list;
 }
 /** The person's standing answers for a bot ("Always for Reel") and its memory switch. */
-export function setSettings(cfg: Config, id: string, s: { allow?: unknown; memory?: unknown }) {
+export function setSettings(cfg: Config, id: string, s: { allow?: unknown; memory?: unknown; handoff?: unknown }) {
   if (s.allow !== undefined && !(Array.isArray(s.allow) && s.allow.every((a) => typeof a === 'string'))) throw new Error('allow must be a list');
   if (s.memory !== undefined && typeof s.memory !== 'boolean') throw new Error('memory is on or off');
-  patchConfig(cfg, id, { ...(s.allow ? { allow: [...new Set(s.allow as string[])] } : {}), ...(s.memory !== undefined ? { memory: s.memory } : {}) });
+  if (s.handoff !== undefined && s.handoff !== 'ask' && s.handoff !== 'go') throw new Error('handoff must be ask or go');
+  patchConfig(cfg, id, { ...(s.allow ? { allow: [...new Set(s.allow as string[])] } : {}), ...(s.memory !== undefined ? { memory: s.memory } : {}), ...(s.handoff !== undefined ? { handoff: s.handoff } : {}) });
 }
 
 /** A bot's tools, each with whether it is granted and ready here: plain words only, no commands or paths. */

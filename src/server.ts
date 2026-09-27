@@ -155,6 +155,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     // What is installing now, and (for the owner) a newer Crewhouse to download.
     if (m === 'GET' && p === '/api/state') return { ...crew.snapshot(me), zone: Intl.DateTimeFormat().resolvedOptions().timeZone, installing: [...installing], showing: teacher.showing(), ...(update && me === OWNER ? { update } : {}) };
     if (m === 'GET' && p === '/api/events') return db.events(Number(q.get('after') || 0));
+    if (m === 'GET' && p === '/api/room') return crew.room(me, Number(q.get('before')) || undefined);
     // A sent photo for the phone, which can't open this computer's /files address: small enough for one link frame.
     if (m === 'GET' && p === '/api/photo') {
       const rel = String(q.get('path') ?? '');
@@ -179,7 +180,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     if (m === 'POST' && p === '/api/onboard') { const b = body; return crew.onboard(b.address ?? '', me, b.ask) ?? { ok: true }; }
     if (m === 'POST' && p === '/api/recruit') { const b = body; const { token, ...bot } = crew.recruit(b.template, b.name, 'person', me); return bot; }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)$/)) && m === 'GET') return crew.botPage(r[1], me, Number(q.get('around')) || undefined);
-    if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/messages$/)) && m === 'POST') { const b = body; return crew.post(r[1], b.text ?? '', b.model, me, b.photos); }
+    if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/messages$/)) && m === 'POST') { const b = body; return crew.post(r[1], b.text ?? '', b.model, me, b.photos, b.room === true); }
     if (m === 'GET' && p === '/api/people') return crew.members();
     if (m === 'POST' && p === '/api/people') return crew.addMember(body.name);
     if ((r = p.match(/^\/api\/people\/(\d+)$/)) && m === 'PUT') return crew.updateMember(Number(r[1]), body);

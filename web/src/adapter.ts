@@ -407,7 +407,9 @@ export function chats(state: Json): Chat[] {
     const line = h.ring === 'needs' ? 'Needs you' : h.driving ? h.status : h.ring === 'working' ? `Working on: ${h.status}` : preview(b.last, h.role);
     return { id: h.id, name: h.name, who: h, line, at: at(b.last?.at ?? 0) || 0, unread: (b.unread ?? 0) + (suggested.has(h.id) && !(b.unread ?? 0) ? 1 : 0), ring: h.ring };
   }).sort((a, b) => b.at - a.at);
-  return [lead, ...rest];
+  const room = state.room ?? {};
+  const pin: Chat = { id: 'room', name: 'The crew', who: 'chief', line: room.last ? plain(room.last.text) : 'Watch the crew work together', at: at(room.last?.at ?? 0), unread: 0, ring: room.busy?.length ? 'working' : '' };
+  return [lead, pin, ...rest];
 }
 export const unreadBadge = (n: number) => (n > 9 ? '9+' : String(n));
 
@@ -472,6 +474,9 @@ export function card(a: Json, state: Json): Card {
       schedule: String(d.routine.schedule ?? ''), zoneNote: note,
       choices: [{ label: 'Start it', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
   }
+  if (a.kind === 'propose' && d.pass) return { ...base, kind: 'ok', head: `${name} wants to hand work on`, words: plain(d.words ?? a.title),
+    lines: (d.pass.files ?? []).map((f: string) => `With “${pretty(f)}”`),
+    choices: [{ label: 'Hand it on', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
   if (a.kind === 'propose') {
     // A suggestion: a skill a helper would like to keep, or a new personality from Chief. Nothing changes without a yes.
     // A helper's draft is a message in the person's name: the card says who it's for, and approving never sends it.
@@ -631,6 +636,14 @@ export function steps(events: Json[], task?: number, live = false): Step[] {
 /** Photos sent with a message ride in its text as `[photo <bot>] files/photos/…` lines: pictures, not words. */
 const PHOTO = /\n?\[photo ([a-z0-9-]+)\] (files\/\S+)/g;
 const photos = (text: string) => [...text.matchAll(PHOTO)].map((m) => fileView(m[1], m[2]));
+
+export function room(page: Json, state: Json) {
+  const people = new Map((state.bots ?? []).map((b: Json) => [b.id, helper(b, state.events ?? [])]));
+  return (page?.lines ?? []).map((m: Json) => ({ id: m.id as number, who: people.get(m.bot) as Helper | undefined,
+    to: m.to ? (people.get(m.to) as Helper | undefined)?.name : undefined,
+    from: m.from ? (people.get(m.from) as Helper | undefined)?.name : undefined,
+    text: plain(m.text ?? ''), files: (m.files ?? []).map((f: Json) => fileView(f.bot, f.path)), at: at(m.at), author: m.author }));
+}
 
 export function lines(page: Json, bot: string): Line[] {
   return (page?.messages ?? []).map((m: Json) => {

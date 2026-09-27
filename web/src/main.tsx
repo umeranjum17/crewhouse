@@ -11,7 +11,7 @@ import { keepDraft } from './draft.ts';
 import { Screen } from './screen.tsx';
 import { AccountCard, ConnectApp, ConnectCard, openTab, sheet, SignIn, Unreachable } from './flows.tsx';
 
-type View = 'home' | 'chief' | 'crew' | 'add' | 'helper' | 'things' | 'routines' | 'settings' | 'apps' | 'ask' | 'share';
+type View = 'home' | 'chief' | 'room' | 'crew' | 'add' | 'helper' | 'things' | 'routines' | 'settings' | 'apps' | 'ask' | 'share';
 type Route = { view: View; id?: string; tab?: string; m?: string; file?: string };
 const ANCHOR = /^m(\d+)$/;
 function parseRoute(): Route {
@@ -24,14 +24,14 @@ function parseRoute(): Route {
   if (a === 'chief' && ANCHOR.test(b ?? '')) return { view: 'chief', m: b };
   if (a === 'things' && /^t\d+$/.test(b ?? '')) return { view: 'things', id: b };
   if (a === 'crew' && b === 'add') return { view: 'add' };
-  return { view: (['chief', 'crew', 'things', 'routines', 'settings', 'apps'].includes(a) ? a : 'home') as View };
+  return { view: (['chief', 'room', 'crew', 'things', 'routines', 'settings', 'apps'].includes(a) ? a : 'home') as View };
 }
 const go = (hash: string) => { location.hash = hash; };
 let moved = false; // this session has navigated inside the app, so Back has somewhere to go back to
 /** Back returns where you came from: the previous screen when there is one, else Chats. */
 const back = () => { if (moved && history.length > 1) history.back(); else go('#/'); };
 /** ?splash keeps the boot splash up, for design review. */
-const hrefOf = (id: string) => (id === 'chief' ? '#/chief' : `#/h/${id}`);
+const hrefOf = (id: string) => (id === 'chief' ? '#/chief' : id === 'room' ? '#/room' : `#/h/${id}`);
 /** Which chat each composer writes into: its held draft lives in web/src/draft.ts. */
 const typeInto = (id: string) => ({ chat: id });
 
@@ -171,7 +171,7 @@ function Chats({ state, refresh }: { state: Json; refresh: () => void }) {
         return (
           <div key={c.id}>
             <a className="job" href={hrefOf(c.id)}>
-              {c.who === 'chief' ? <span className="face" style={{ width: 46, height: 46, background: '#fff7e8' }}><ChiefArt mood={A.chief(state).mood} d={2.2} /></span> : <Face who={c.who} size={46} ring={c.ring} />}
+              {c.id === 'room' ? <span className="row">{A.crew(state).slice(0, 3).map((h) => <Face key={h.id} who={h} size={30} ring={h.ring} />)}</span> : c.who === 'chief' ? <span className="face" style={{ width: 46, height: 46, background: '#fff7e8' }}><ChiefArt mood={A.chief(state).mood} d={2.2} /></span> : <Face who={c.who} size={46} ring={c.ring} />}
               <div className="grow"><b>{c.name}</b><div className={`clamp1 ${c.unread ? '' : 'mute'}`}>{c.line}</div></div>
               <span className="chat-end"><span className="mute small">{c.at ? A.clock(c.at) : ''}</span>{c.unread > 0 && <span className="badge" aria-label={`${c.unread} new`}>{A.unreadBadge(c.unread)}</span>}</span>
             </a>
@@ -393,6 +393,29 @@ function Chat({ id, m, state, me, tick, refresh, accounts }: Ctx & { id: string;
   );
 }
 
+function Room(ctx: Ctx) {
+  const { state, tick, refresh } = ctx;
+  const [page, setPage] = useState<Json>(null);
+  const [to, setTo] = useState('');
+  const load = useCallback(() => api.room().then(setPage).catch(() => {}), []);
+  useEffect(() => { void load(); }, [load, tick]);
+  const lines = A.room(page, state);
+  const helpers = A.crew(state);
+  const latest = [...lines].reverse().find((l) => l.who && l.who.id !== 'chief' && l.author !== 'person');
+  const target = to || latest?.who?.id || helpers[0]?.id || 'chief';
+  const cards = A.cards(state).filter((c) => (page?.asks ?? []).some((a: Json) => a.id === c.id));
+  const send = async (text: string) => { const ok = await attempt(() => api.post(target, text, { room: true }), undefined, true); if (ok) { await load(); refresh(); } return ok; };
+  return <div className="page chat-page"><header className="chat-head sticky-top"><a href="#/" className="back">‹</a><span className="row">{helpers.slice(0, 3).map((h) => <Face key={h.id} who={h} size={30} ring={h.ring} />)}</span><div className="grow"><b>The crew</b><div className="mute small">Work handed between helpers</div></div></header>
+    <div className="chat"><div className="lines">{lines.length ? lines.map((l: ReturnType<typeof A.room>[number]) => <div className={`line ${l.author === 'person' ? 'me' : 'them'}`} key={l.id}>
+      {l.who && <div className="row"><Face who={l.who} size={30} ring={l.who.ring} /><b>{l.from && l.to ? `${l.from} → ${l.to}` : l.author === 'person' ? 'You → ' + l.who.name : l.who.name}</b></div>}
+      {l.text && <div className="bubble-text">{l.text}</div>}{l.files.map((f: ReturnType<typeof A.room>[number]['files'][number]) => <Media key={f.url} f={f} big />)}
+    </div>) : <div className="mute center empty">Start a job here and follow along as the crew works together.</div>}
+      {cards.map((c) => <AskCard key={c.id} c={c} who={helpers.find((h) => h.id === c.helper)} onDone={() => { void load(); refresh(); }} />)}</div>
+      <aside className="working-on">{(page?.busy ?? []).length > 0 && <section className="frame working-on-frame"><div className="label ascii">Working on</div>{(page.busy as string[]).map((id) => { const h = helpers.find((x) => x.id === id); return h && <div className="frame-row head" key={id}><Face who={h} size={32} ring={h.ring} /><b>{h.name}</b></div>; })}</section>}</aside>
+      <div className="dock"><label className="small" htmlFor="room-to">Message </label><select id="room-to" className="input" value={target} onChange={(e) => setTo(e.target.value)}><option value="chief">Chief</option>{helpers.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}</select><Composer placeholder={`Message ${target === 'chief' ? 'Chief' : helpers.find((h) => h.id === target)?.name ?? 'the crew'}…`} onSend={send} {...typeInto('room')} /></div>
+    </div></div>;
+}
+
 function ChiefPage(ctx: Ctx & { m?: string }) {
   const { mood, line } = A.chief(ctx.state, chiefLocal(ctx, useListen()));
   return (
@@ -545,6 +568,8 @@ function Remembers({ id, name, page, reload }: { id: string; name: string; page:
       <p className="lead">What {name} has learned about how you like its work. It reads this every time it starts a job for you. Others in the house have their own.</p>
       <label className="card toggle"><span className="grow"><b>Remember things</b><div className="mute small">{page.memory === false ? `${name} starts fresh every time.` : `${name} keeps notes on what you like.`}</div></span>
         <input type="checkbox" role="switch" checked={page.memory !== false} onChange={(e) => attempt(async () => { await api.settings(id, { memory: e.target.checked }); reload(); })} /></label>
+      <label className="card toggle"><span className="grow"><b>Check with me before {name} hands work on</b></span>
+        <input type="checkbox" role="switch" checked={page.handoff === 'ask'} onChange={(e) => attempt(async () => { await api.settings(id, { handoff: e.target.checked ? 'ask' : 'go' }); reload(); })} /></label>
       <MemoryList notes={page.notes ?? ''} save={async (t) => { await api.notes(id, t); reload(); }}
         empty={`Nothing yet. ${name} adds a line when it learns something you like.`} placeholder={`Tell ${name} something to keep in mind`} />
     </>
@@ -1080,14 +1105,15 @@ function App() {
   const sheet = route.view === 'ask' ? A.cards(ctx.state).find((c) => String(c.id) === route.id) : undefined;
   const book = route.file && route.id ? { bot: route.id, path: route.file } : undefined;
   const nav: [string, string, string, number?][] = [['#/', 'Chats', '⌂'], ['#/crew', 'Crew', '☺'], ['#/things', 'Things', '▤'], ['#/routines', 'Routines', '↻'], ['#/settings', 'Settings', '✲']];
-  const active = (h: string) => (h === '#/' ? ['home', 'helper', 'chief'].includes(v.view) : h === '#/crew' ? ['crew', 'add'].includes(v.view) : h === `#/${v.view}` || (h === '#/settings' && v.view === 'apps'));
+  const active = (h: string) => (h === '#/' ? ['home', 'helper', 'chief', 'room'].includes(v.view) : h === '#/crew' ? ['crew', 'add'].includes(v.view) : h === `#/${v.view}` || (h === '#/settings' && v.view === 'apps'));
   return (
     <>
       {splash}
-      <div className={`shell ${['chief', 'helper'].includes(v.view) ? 'is-chat' : ''}`}>
+      <div className={`shell ${['chief', 'helper', 'room'].includes(v.view) ? 'is-chat' : ''}`}>
         <aside className="side">
           <a href="#/" className="brand"><Logo night={night} /></a>
           <ChiefFrame ctx={ctx} on={v.view === 'chief'} />
+          <a className={`side-nav ${v.view === 'room' ? 'on' : ''}`} href="#/room">☺ The crew</a>
           <SideCrew state={ctx.state} view={v.view} id={v.id} />
           <div className="grow" />
           <a href="#/settings" className="side-meter mute small">{A.meter(ctx.state)}</a>
@@ -1097,6 +1123,7 @@ function App() {
           {offline && <div className="offline" role="status">The home computer isn't answering. If it's asleep, the crew has paused and carries on when it wakes. Last heard from it at {A.clock(heard.current)}. Reconnecting… <button className="link inline" onClick={refresh}>Try now</button></div>}
           {v.view === 'home' && <Home {...ctx} />}
           {v.view === 'chief' && <ChiefPage {...ctx} m={v.m} />}
+          {v.view === 'room' && <Room {...ctx} />}
           {v.view === 'crew' && <Crew {...ctx} />}
           {v.view === 'add' && <AddHelper {...ctx} />}
           {v.view === 'helper' && v.id && <HelperPage {...ctx} id={v.id} tab={v.tab!} />}
