@@ -3,6 +3,7 @@
 import { DeviceLink, LinkError, hostId, pairWithCode, pairWithOffer, b64url, unb64url, type DeviceGrant, type LinkStatus } from '@byokit/link';
 import { decodeTyped } from '../../src/typed-code.ts';
 import { findHost } from '@byokit/relay/device';
+import { readTyped } from './typed.ts';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { File, Paths } from 'expo-file-system';
@@ -57,11 +58,14 @@ export async function pairDirectTyped(text: string, onWords: (w: string) => void
   return pair(`byokit-link:1:${b64url(new TextEncoder().encode(JSON.stringify(offer)))}`, onWords);
 }
 
-/** Typed instead of scanned, through the family's relay: its address, the relay's short code, then the pairing code. */
-export async function pairTyped(relay: string, short: string, code: string, onWords: (w: string) => void): Promise<Grant> {
+/** Typed instead of scanned: one box takes any code. A direct code is the long envelope; a relay code names its
+ *  relay inside itself (readTyped), so the address is never typed by the person. */
+export async function pairTypedCode(text: string, onWords: (w: string) => void): Promise<Grant> {
+  const t = readTyped(text);
+  if (t.kind === 'direct') return pairDirectTyped(t.text, onWords);
+  if (t.kind === 'unknown') throw new Error('That code is missing where to look it up. Copy the whole code from your computer, then try again.');
   const name = (Device.deviceName || Device.modelName || 'Phone').slice(0, 40);
-  const base = /^[a-z]+:\/\//i.test(relay.trim()) ? relay.trim() : `https://${relay.trim()}`;
-  const g = await pairWithCode(await findHost(base, short.toUpperCase()), code.toUpperCase(), { name, onWords });
+  const g = await pairWithCode(await findHost(t.base, t.short), t.code, { name, onWords });
   await store.save(g);
   return g;
 }

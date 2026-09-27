@@ -802,8 +802,8 @@ function Phones({ tick }: { tick: number }) {
             <p className="mute small">Then check the two words the phone shows against the ones that appear here.</p>
             <p className="mute small">{left > 0 ? `Works once, for ${left} more seconds.` : 'Make a new one when the phone is ready.'}</p>
             {left > 0 && <p className="small">Can't scan? Type this code on the phone (or copy it to someone you trust): <b style={{ overflowWrap: 'anywhere', userSelect: 'all' }}>{offer.typed}</b></p>}
-            {left > 0 && A.reach(link).online && (typed ? <p className="small">Relay code: <b>{typed.short}</b>, then <b>{typed.code}</b>.</p>
-              : <button className="link inline small" onClick={() => attempt(async () => setTyped(await api.phoneCode(offer.role)))}>Use a relay code instead</button>)}
+            {left > 0 && A.reach(link).online && (typed ? <p className="small">If the phone is away from home, type this one instead: <b style={{ overflowWrap: 'anywhere', userSelect: 'all' }}>{A.phoneTyped(typed)}</b></p>
+              : <button className="link inline small" onClick={() => attempt(async () => setTyped(await api.phoneCode(offer.role)))}>Show a code that works from anywhere</button>)}
             <div className="btns">{left <= 0 && <button className="btn go" onClick={() => show(offer.role)}>New code</button>}<button className="btn ghost" onClick={() => setOffer(null)}>Close</button></div>
           </div>
         </div>
@@ -819,12 +819,12 @@ function Phones({ tick }: { tick: number }) {
         {!!A.anywhere(link).steps.length && <ol className="how">{A.anywhere(link).steps.map((s) => <li key={s}>{s}</li>)}</ol>}
         <p className="mute small"><a href="https://tailscale.com/download" target="_blank" rel="noreferrer">Get Tailscale ↗</a> · Free for a family. Tailscale sees which devices are yours, never what they say.</p>
       </div>
-      <details className="card" open={!!link.relay}><summary className="small">Other ways: a relay you run yourself</summary>
+      <details className="card" open={!!link.relay}><summary className="small">Another way in: run your own go-between</summary>
       <form className="form" onSubmit={(e) => { e.preventDefault(); void attempt(async () => { setLink(await api.phoneRelay((relay ?? link.relay).trim(), enrol)); setRelay(null); setEnrol(''); }, 'Saved'); }}>
         <p className="mute small">{A.reach(link).words}</p>
-        <p className="mute small">A relay passes messages between your phones and this computer, so this computer opens nothing to the internet. <a href="https://github.com/umeranjum17/crewhouse/blob/main/relay/README.md" target="_blank" rel="noreferrer">Run your own ↗</a></p>
-        <input className="input" value={relay ?? link.relay ?? ''} onChange={(e) => setRelay(e.target.value)} placeholder="Relay address, like https://relay.example.com" aria-label="Relay address" autoComplete="off" />
-        <input className="input" value={enrol} onChange={(e) => setEnrol(e.target.value)} placeholder="Invitation, if the relay gave you one" aria-label="Invitation" autoComplete="off" />
+        <p className="mute small">A go-between passes messages between your phones and this computer, so this computer opens nothing to the internet. <a href="https://github.com/umeranjum17/crewhouse/blob/main/relay/README.md" target="_blank" rel="noreferrer">Run your own ↗</a></p>
+        <input className="input" value={relay ?? link.relay ?? ''} onChange={(e) => setRelay(e.target.value)} placeholder="Go-between address, like https://go.example.com" aria-label="Go-between address" autoComplete="off" />
+        <input className="input" value={enrol} onChange={(e) => setEnrol(e.target.value)} placeholder="Invitation, if your go-between gave you one" aria-label="Invitation" autoComplete="off" />
         <div className="btns"><button className="btn go" disabled={relay === null && !enrol}>Save</button>
           {!!link.relay && <button type="button" className="btn ghost" onClick={() => attempt(async () => setLink(await api.phoneRelay('')), 'Turned off')}>Turn off</button>}</div>
       </form></details>

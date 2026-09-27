@@ -207,8 +207,8 @@ export function anywhere(link: Json) {
   }[state];
   const steps = [
     'Install Tailscale on this computer and sign in with Google.',
-    'For each person, open this computer in Tailscale, tap Share, and send them the link.',
-    'On their phone: install Tailscale, sign in with Google, and tap Accept on the link. Then pair the phone here.',
+    'For each person, open this computer in Tailscale, tap Share, and send them the invitation.',
+    'On their phone: install Tailscale, sign in with Google, and tap Accept on the invitation. Then pair the phone here.',
   ];
   return { state, words, steps: state === 'home' ? steps : state === 'anywhere' ? steps.slice(1) : [] };
 }
@@ -253,7 +253,7 @@ export function away(f: { home?: boolean; tailnet?: boolean; vpn?: boolean; anyw
  *  away says so, since that is the route that fails unseen. */
 export function reached(p: Json) {
   const r: Record<string, number> = p?.reached ?? {};
-  const names: Record<string, string> = { home: 'home Wi-Fi', tailscale: 'Tailscale', relay: 'your relay' };
+  const names: Record<string, string> = { home: 'home Wi-Fi', tailscale: 'Tailscale', relay: 'your go-between' };
   const [via, t] = Object.entries(r).filter(([k]) => names[k]).sort((a, b) => b[1] - a[1])[0] ?? [];
   if (!via) return 'Not in touch yet';
   const last = `Last reached it ${clock(t)} over ${names[via]}`;
@@ -295,6 +295,14 @@ export const googleHeadline = (steps?: GoogleStep[] | null) => {
   const missing = steps?.findIndex((s) => s.state === 'missing') ?? -1;
   if (missing >= 0) return `Step ${missing + 1} is missing`;
   return steps?.every((s) => s.state === 'checked') ? 'Google is on for the house ✓' : 'Google key saved and checked by Google';
+};
+
+/** The one code a phone away from home types: the short code and the pairing code, with the go-between's own
+ *  address carried inside it, so the phone knows where to look and nobody types an address. Empty when there is none. */
+export const phoneTyped = (t: Json) => {
+  if (!t?.short || !t?.code) return '';
+  let at = ''; try { at = new URL(t.relay).host; } catch { at = String(t.relay ?? ''); }
+  return `${t.short}-${t.code}${at ? `@${at}` : ''}`;
 };
 
 /** Settings, Phones: whether phones reach this computer from anywhere, in one sentence. */
