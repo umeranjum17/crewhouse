@@ -254,8 +254,10 @@ a.back:not([aria-label]) { font-size: 15px; margin-bottom: 6px; }
 .lines > .ask, .line .ask { max-width: 440px; margin: 12px 0 0 36px; }
 .work-title { display: grid; gap: 4px; padding: 16px; }
 .work-title .small { color: var(--ink2); }
+.working-on-frame { margin-bottom: 32px; }
+.working-on-frame > .label { margin: 0 4px 8px; }
 .working-on-frame .steps { border: 0; margin: 0; padding: 0 16px; }
-.working-on-frame .link { margin: 8px 16px; font-size: 13px; }
+.working-on-frame .link { display: block; width: max-content; margin: 8px 16px 16px; font-size: 13px; }
 /* A search landing: the matched line glows once, then fades — the one motion that explains where you are. */
 .line.land { scroll-margin: 40vh 0 60vh; }
 .line.land .bubble-text { animation: land 1.2s ease; }
