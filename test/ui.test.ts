@@ -90,6 +90,18 @@ test('nothing technical survives the adapter', () => {
   assert.equal(A.withoutMemory(A.withMemory('- One\n', 'Two'), 0), '- Two\n');
 });
 
+test('the give-back sheet and the signed-in list name bare hosts, never paths or pages', () => {
+  const tick = A.signTick('Reel', 'shop.example/claim');
+  assert.match(tick, /^I signed Reel in to /, 'the person\'s own say-so, one per tab host');
+  assert.doesNotMatch(tick, FORBIDDEN);
+  const sites = A.signedIn({ signedIn: ['mail.example', 'www.shop.example', 'shop.example'] });
+  assert.deepEqual(sites, ['mail.example', 'shop.example'], 'www folded away, no duplicates, steady order');
+  for (const h of sites) assert.doesNotMatch(h, /[/\\?#=]/);
+  assert.deepEqual(A.signedIn(null), [], 'no list yet: nothing shows');
+  assert.deepEqual(A.signTicks(['shop.example', 'mail.example']), ['shop.example'], 'the tab on screen starts ticked');
+  assert.deepEqual(A.signTicks([]), [], 'no tabs: nothing ticked');
+});
+
 test('asks become plain cards: money never gets "always", a blocked terminal becomes a question', () => {
   const [run, spend, question, keep] = A.cards(state);
   assert.equal(keep.head, 'Reel learned something');

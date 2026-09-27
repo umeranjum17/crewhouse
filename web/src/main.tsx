@@ -528,6 +528,13 @@ function HelperPage(ctx: Ctx & { id: string; tab: string }) {
           {page && <AboutMe id={id} name={h.name} page={page} reload={load} />}
           <h2 className="plate">What {h.name} remembers</h2>
           {page && <Remembers id={id} name={h.name} page={page} reload={load} />}
+          {A.signedIn(page).length > 0 && <>
+            <h2 className="plate">Signed in to</h2>
+            <div className="card list">
+              {A.signedIn(page).map((h) => <div key={h} className="row-item"><span className="grow">{h}</span>
+                <button className="link" onClick={() => attempt(async () => { await api.forget(id, h); load(); }, 'Forgotten')}>Forget</button></div>)}
+            </div>
+          </>}
           {h.computer && <>
             <h2 className="plate">See {h.name}'s screen</h2>
             <Screen bot={{ ...page?.bot, ...b }} showing={A.showing(state, id)} refresh={() => { refresh(); void load(); }} />

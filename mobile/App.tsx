@@ -875,6 +875,14 @@ function HelperPage(ctx: Ctx & { id: string; tab: string; m?: number; setTab: (t
           <T style={s.b}>{`What ${h.name} remembers`}</T>
           {A.memories(page?.notes).length ? <Card>{A.memories(page?.notes).map((mm, i) => <T key={i} style={{ paddingVertical: 6 }}>{mm}</T>)}</Card>
             : <Card><T tone="mute">Nothing yet. {h.name} adds a line when it learns something you like.</T></Card>}
+          {A.signedIn(page).length > 0 && <>
+            <T style={s.b}>Signed in to</T>
+            <Card>{A.signedIn(page).map((h) => (
+              <View key={h} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 }}>
+                <T style={{ flex: 1 }}>{h}</T>
+                <Btn ghost label="Forget" onPress={() => attempt(async () => { await api.forget(id, h); load(); }, 'Forgotten')} />
+              </View>))}</Card>
+          </>}
           {h.computer && desktopAvailable && <>
             <T style={s.b}>{`See ${h.name}'s screen`}</T>
             <Screen bot={{ ...page?.bot, ...b }} canAct={canAct} showing={A.showing(state, id)} refresh={() => { refresh(); void load(); }} />
@@ -898,6 +906,15 @@ function Screen({ bot, canAct, refresh, showing }: { bot: Json; canAct: boolean;
   const [err, setErr] = useState('');
   const [note, setNote] = useState('');
   const [what, setWhat] = useState<string | null>(null);
+  // The give-back ticks: hosts crewd read off its own tabs while the wheel is held — the tab on screen starts ticked.
+  const [tabs, setTabs] = useState<string[]>([]);
+  const [keep, setKeep] = useState<string[]>([]);
+  useEffect(() => {
+    if (!(canAct && control)) { setTabs([]); setKeep([]); return; }
+    let on = true;
+    api.pages(bot.id).then((p) => { if (on) { setTabs(p); setKeep(A.signTicks(p)); } }).catch(() => { if (on) setTabs([]); });
+    return () => { on = false; };
+  }, [control, canAct, bot.id]);
   const session = useDesktopSession({
     authorize: async () => {
       sig.current?.close();
@@ -930,8 +947,12 @@ function Screen({ bot, canAct, refresh, showing }: { bot: Json; canAct: boolean;
           {idle && <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center', padding: 16 }]}><T tone="mute" style={s.centerText}>{live === 'failed' ? "Couldn't open it. Try again in a moment." : `Opening ${bot.display}'s screen…`}</T></View>}
         </View>
         <View style={{ padding: 12, gap: 8 }}>
+          {tabs.length > 0 && <View style={s.chips}>
+            {tabs.map((h) => <Btn key={h} go={keep.includes(h)} ghost={!keep.includes(h)} label={`${keep.includes(h) ? '✓ ' : ''}${A.signTick(bot.display, h)}`}
+              onPress={() => setKeep(keep.includes(h) ? keep.filter((x) => x !== h) : [...keep, h])} />)}
+          </View>}
           <TextInput style={[s.input, { color: t.ink, borderColor: t.line }]} value={note} onChangeText={setNote} placeholder={`What did you do? ${bot.display} reads this`} placeholderTextColor={t.mute} accessibilityLabel="What did you do" />
-          <Btn go big label="Hand it back" onPress={act(async () => { await api.giveBack(bot.id, note); setNote(''); })} />
+          <Btn go big label="Hand it back" onPress={act(async () => { await api.giveBack(bot.id, note, keep); setNote(''); })} />
           <View style={[s.chips, { justifyContent: 'center' }]}>
             <Btn label="Keyboard" onPress={() => session.showKeyboard()} />
             <Btn ghost label="?" onPress={() => setHelp((v) => !v)} />

@@ -67,7 +67,11 @@ export const api = {
   /** Teach by showing: take the wheel with a recorder on; then Done (the bot keeps it as a skill) or Cancel. */
   show: (id: string, what: string) => call('POST', `/api/bots/${id}/show`, { what }),
   shown: (id: string, keep: boolean) => call('POST', `/api/bots/${id}/shown`, { keep }),
-  giveBack: (id: string, note: string) => call('POST', `/api/bots/${id}/giveback`, { note }),
+  giveBack: (id: string, note: string, keep?: string[]) => call('POST', `/api/bots/${id}/giveback`, { note, keep }),
+  /** The hosts on its tabs, for the give-back sheet — only while the person holds the wheel. */
+  pages: async (id: string): Promise<string[]> => (await call('GET', `/api/bots/${id}/screen`)).pages ?? [],
+  /** Take a site back off its signed-in list, and clear it from its browser. */
+  forget: (id: string, host: string) => call('POST', `/api/bots/${id}/forget`, { host }),
   people: () => call('GET', '/api/people'),
   addPerson: (name: string) => call('POST', '/api/people', { name }),
   person: (id: number, body: { name?: string; address?: string; quiet?: string | null; share?: string }) => call('PUT', `/api/people/${id}`, body),

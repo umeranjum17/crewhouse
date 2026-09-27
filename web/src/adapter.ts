@@ -676,6 +676,12 @@ export function lines(page: Json, bot: string): Line[] {
 
 /** What a helper remembers about you (or the whole crew knows about you), one line each, from its notes. */
 export const memories = (notes = '') => notes.split('\n').map((l) => l.replace(/^[-*]\s*/, '').trim()).filter((l) => l && !l.startsWith('#')).map(plain);
+/** The sites the person signed a helper in to, bare hosts, sorted for a steady list — each with a Forget in Details. */
+export const signedIn = (page: Json) => [...new Set((((page?.signedIn as string[]) ?? [])).map((h) => String(h).replace(/^www\./, '')))].sort();
+/** The tick on the give-back sheet, one per tab host crewd read itself: the person's own say-so, never the bot's. */
+export const signTick = (name: string, host: string) => `I signed ${name} in to ${host}`;
+/** Which ticks start on: the tab on screen (crewd lists it first) — off by default, the person turns the rest on. */
+export const signTicks = (pages: string[]) => (pages.length ? [pages[0]] : []);
 /** The notes with one more line, or without the i-th: what Add and Forget send back. */
 export const withMemory = (notes = '', line: string) => `${notes.replace(/\n*$/, '\n').replace(/^\n$/, '')}- ${line.replace(/\s+/g, ' ').trim()}\n`;
 export function withoutMemory(notes = '', i: number) {

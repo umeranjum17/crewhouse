@@ -85,6 +85,13 @@ export function setSettings(cfg: Config, id: string, s: { allow?: unknown; memor
   patchConfig(cfg, id, { ...(s.allow ? { allow: [...new Set(s.allow as string[])] } : {}), ...(s.memory !== undefined ? { memory: s.memory } : {}), ...(s.handoff !== undefined ? { handoff: s.handoff } : {}) });
 }
 
+/** The sites the person signed this bot in to, by bare host: a press there asks first (src/policy.ts). */
+export function setSignedIn(cfg: Config, id: string, hosts: string[]) {
+  const bad = hosts.find((h) => !/^[a-z0-9.-]+$/i.test(h));
+  if (bad) throw Object.assign(new Error(`not a site: ${bad}`), { status: 400 });
+  patchConfig(cfg, id, { signedIn: [...new Set(hosts)] });
+}
+
 /** A bot's tools, each with whether it is granted and ready here: plain words only, no commands or paths. */
 export function botTools(cfg: Config, id: string) {
   const grants = new Set(botConfig(cfg, id).tools ?? []);
