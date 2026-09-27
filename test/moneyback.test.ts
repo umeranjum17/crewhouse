@@ -370,3 +370,99 @@ test('the order page not saying refunded ends the chase not sure, whatever else 
     'the page never said refunded, so nothing does');
   done();
 });
+
+// ---- the renewal catch: the same Home list, the warning days ahead, a cancellation that is only ever a draft ----
+
+const renewal = (crew: any) => crew.snapshot().ideas.find((i: any) => /renewed without me hearing/.test(i.ask));
+
+const plan = `### Page state
+- Page URL: https://www.stream.example/account/plan
+- Page Snapshot:
+\`\`\`yaml
+- main [ref=e1]:
+  - heading "Your plan" [level=1] [ref=e2]
+  - text: "Family plan — renews 14 June"
+  - text: "$18.99 monthly, charged to the card ending 4421"
+  - button "Cancel subscription" [ref=e9]
+\`\`\``;
+
+test('Home lists the renewal job with the money-back three, and says what it waits on instead of dead-ending', async () => {
+  const { crew, cfg, done } = setup();
+  assert.equal(renewal(crew).group, 'money', 'money back leads the list');
+  assert.match(renewal(crew).promise, /have the cancellation email ready/, 'the promise is a ready draft, never a cancellation already made');
+  assert.match(renewal(crew).promise, /Every step asks you first, on its own card/);
+  assert.deepEqual(renewal(crew).needs, ['Google'], 'Google is not on for the house: the row says what it needs first');
+  writeFileSync(join(cfg.stateDir, 'apps.json'), JSON.stringify({ google: { id: 'crew.apps', secret: 'pasted' } }), { mode: 0o600 });
+  assert.deepEqual(renewal(crew).needs, ['Gmail'], 'Google is on; now it waits on this person’s own Gmail');
+  mkdirSync(join(cfg.stateDir, 'people', '1'), { recursive: true });
+  writeFileSync(join(cfg.stateDir, 'people', '1', 'connections.json'), JSON.stringify({ gmail: { access: 'tok', expires: Date.now() + 3_600_000 } }));
+  assert.deepEqual(renewal(crew).needs, [], 'Gmail connected: the job can be handed over');
+  done();
+});
+
+test('a renewal caught ahead of the bill: the warning plus a cancellation email that stays a draft', async () => {
+  const { db, crew, done } = setup();
+  const letter = 'Subject: Family plan — please cancel before 14 June\n\nHello, my Family plan renews on 14 June at $18.99. Please cancel it from that date and confirm in writing that nothing further will be charged to my card. Regards, Nadia';
+  const { task: t } = (await crew.post('scout', 'ask permission: my streaming plan renews 14 June, write the cancellation and put it in front of me. '
+    + `[tool write {"path":"files/cancel-family-plan.md","content":"${letter.replace(/\n/g, '\\n')}"}] `
+    + '[tool crew_draft {"path":"files/cancel-family-plan.md","to":"the streaming service’s support inbox"}] '
+    + '[tool crew_outcome {"worked": false, "seen": "Your Family plan renews 14 June at $18.99, ten days ahead; the cancellation is a draft on your card, so reading it and sending it is yours."}]'))!;
+  await until('working', () => crew.sessionOf('scout'));
+  await until('the draft card', () => db.get("SELECT * FROM asks WHERE bot = 'scout' AND kind = 'propose' AND state = 'open'"));
+  const ask = db.get("SELECT * FROM asks WHERE bot = 'scout' AND kind = 'propose' AND state = 'open'")!;
+  assert.match(ask.title, /drafted something for the streaming service.s support inbox/);
+  assert.match(ask.title, /Nothing is sent: you post it yourself/);
+  const d = JSON.parse(ask.detail);
+  assert.match(d.preview.body, /renews on 14 June at \$18\.99/, 'the card holds the letter ahead of any yes');
+  assert.match(d.preview.body, /confirm in writing/, 'it asks for the line that protects the person');
+  const view = crew.snapshot().asks.find((a: any) => a.id === ask.id)!;
+  assert.equal(view.detail.yes, 'Approve', 'the yes approves the draft; it is never a send');
+  await crew.answer(ask.id, { answer: 'allow' });
+  await release(crew, 'scout', 'Your plan renews 14 June at $18.99 — ten days ahead, so you hear it now; the cancellation email is a draft on your card.');
+  await settled(db, t);
+  assert.match(lastSaid(db, 'scout')!, /renews 14 June at \$18\.99/, 'the warning names the day and the money');
+  assert.doesNotMatch(lastSaid(db, 'scout')!, /\bcancelled\b|no longer charged|you saved/i, 'a drafted cancellation is never reported as one made');
+  assert.ok(db.get("SELECT 1 FROM events WHERE kind = 'draft.approved' AND json_extract(data, '$.task') = ?", t), 'the yes is kept as an approval, nothing more');
+  assert.equal(state(db, t), 'unsure', 'nothing in the world was seen to change: the job is not sure');
+  assert.equal(db.get("SELECT COUNT(*) AS n FROM events WHERE kind = 'mail.sent'")!.n, 0, 'nothing went out');
+  assert.equal((await (crew as any).gate('scout', 'mail', { args: ['send'] })).block, true, 'the mail tool cannot send at all');
+  done();
+});
+
+test('cancelling inside the account is its own card every time, naming the button and what the page says', async () => {
+  const { db, crew, cfg, done } = setup();
+  const file = join(cfg.crewDir, 'bots', 'scout', 'bot.json');
+  writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, 'utf8')), signedIn: ['stream.example'], allow: ['send:stream.example'] }, null, 2));
+  const { task: t } = (await crew.post('scout', 'ask permission: cancel my streaming plan in my account'))!;
+  await until('working', () => crew.sessionOf('scout'));
+  const live = (crew as any).live.get('scout');
+  live.page = 'https://www.stream.example/account/plan';
+  live.snapshot = plan;
+  const open = () => db.get("SELECT * FROM asks WHERE bot = 'scout' AND state = 'open'");
+  const cancel = (crew as any).gate('scout', 'browser', { args: ['click', 'e9'] });
+  await until('asked', open);
+  assert.equal(state(db, t), 'needs_you', 'nothing is cancelled while the card waits');
+  const card = crew.snapshot().asks.find((a: any) => a.id === open()!.id)!;
+  assert.equal(card.detail.effect, 'send');
+  assert.equal(card.detail.press, true, 'acting on the account, never a message ready to send');
+  assert.equal(card.detail.words, 'Scout wants to press “Cancel subscription” on stream.example, a site you signed it in to.');
+  assert.equal(card.detail.preview.head, 'What Scout will press on stream.example');
+  assert.match(card.detail.preview.body, /Family plan — renews 14 June/, "what it changes, in the page's own words");
+  assert.match(card.detail.preview.body, /Cancel subscription$/, 'the button, as the page writes it');
+  assert.equal(JSON.parse(open()!.detail).key, undefined, 'a cancellation carries no key: there is no standing answer for it');
+  assert.equal(card.detail.always, undefined, 'so the card offers no Always OK, however friendly the site');
+  await crew.answer(open()!.id, { answer: 'deny' });
+  assert.equal((await cancel).block, true, 'not now keeps the plan running');
+
+  // The person's word alone never cancels: the next press is a fresh card, asked again on the same page.
+  const again = (crew as any).gate('scout', 'browser', { args: ['click', 'e9'] });
+  await until('asked again', open);
+  assert.notEqual(crew.snapshot().asks.find((a: any) => a.id === open()!.id)!.id, card.id, 'a new card, not the old one');
+  await crew.answer(open()!.id, { answer: 'allow' });
+  assert.equal(await again, undefined, 'the card’s yes is the only thing that presses');
+  await release(crew, 'scout', 'I pressed Cancel subscription on your account page; the page has to say it stopped.');
+  await settled(db, t);
+  assert.equal(state(db, t), 'unsure', 'it acted in the world and never saw the plan cancelled');
+  assert.doesNotMatch(lastSaid(db, 'scout')!, /\bcancelled\b.*(?:✓|done)|you.*(saved|stopped paying)/i, 'no claim that the plan is gone');
+  done();
+});
