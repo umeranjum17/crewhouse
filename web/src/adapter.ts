@@ -71,7 +71,17 @@ export function fileView(bot: string, path: string): FileView {
   const rel = path.replace(/^files\//, '');
   const url = /^(data:|\/)/.test(path) ? path : `/files/${bot}/${rel.split('/').map(encodeURIComponent).join('/')}`;
   if (path.startsWith('data:image/')) return { url, name: 'A picture', kind: 'image' };
-  return { url, name: pretty(rel), kind: /\.(mp4|webm|mov)$/i.test(rel) ? 'video' : /\.(png|jpe?g|webp|gif)$/i.test(rel) ? 'image' : /\.xlsx?$/i.test(rel) ? 'sheet' : /\.docx?$/i.test(rel) ? 'page' : 'doc' };
+  return { url, name: pretty(rel), kind: /\.(mp4|webm|mov)$/i.test(rel) ? 'video' : /\.(png|jpe?g|webp|gif)$/i.test(rel) ? 'image' : /\.xlsx?$/i.test(rel) ? 'sheet' : /(\.docx?|\.md|\.txt)$/i.test(rel) ? 'page' : 'doc' };
+}
+
+/** Where a tap on a delivered file goes: the read-only panel for a page or sheet, the file itself (a PDF, a download)
+ *  otherwise — a written page never opens as the raw file. The chip is the kind of thing it is, as a person meets it. */
+export function fileTarget(f?: FileView): { href: string; chip: string } | null {
+  if (!f) return null;
+  const src = fileSource(f.url);
+  const panel = (f.kind === 'sheet' || f.kind === 'page') && src;
+  return { href: panel ? `#/f/${src.bot}/${encodeURIComponent(src.path)}` : f.url,
+    chip: (f.url.split('?')[0].match(/\.([a-z0-9]+)$/i)?.[1] ?? 'file').toUpperCase() };
 }
 
 /**
@@ -115,6 +125,12 @@ export function document(json: Json, name: string): DocView {
     }).filter((p: DocPart | null): p is DocPart => p !== null),
   };
 }
+
+/**
+ * A delivered page's own words (.md, .txt), scrubbed the way its chat words are — line by line, so the blank lines
+ * that structure the markdown survive. What rides to the safe renderer is words, never machinery.
+ */
+export const mdPlain = (text = '') => text.split(/\r?\n/).map((l) => plain(l)).join('\n');
 
 /**
  * A helper's own words, scrubbed of the machinery: code spans, fenced blocks, file paths and the names of engines.

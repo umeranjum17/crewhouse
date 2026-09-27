@@ -5,26 +5,29 @@ import { draftOf, keepDraft, sent } from './draft.ts';
 import { cycle, type Focused } from './dialog.ts';
 import { chatTokens, safeLink } from './chat-md.ts';
 import * as art from './art.ts';
-import { clock, document as docView, fileSource, fileView, pageWords, sheetWords, workbook, type Card, type DocPart, type DocView, type FileView, type Helper, type Step, type Workbook } from './adapter.ts';
+import { clock, document as docView, fileSource, fileView, mdPlain, pageWords, sheetWords, workbook, type Card, type DocPart, type DocView, type FileView, type Helper, type Step, type Workbook } from './adapter.ts';
+
+/** Markdown inline runs, from the shared safe tokens (web/src/chat-md.ts): no raw HTML, http(s) links only. */
+const mdInline = (tokens: any[]): ReactNode => tokens.map((t, i) => t.type === 'strong' ? <strong key={i}>{mdInline(t.tokens)}</strong>
+  : t.type === 'em' ? <em key={i}>{mdInline(t.tokens)}</em>
+  : t.type === 'link' && safeLink(t.href) ? <a className="chat-link" key={i} href={safeLink(t.href)} target="_blank" rel="noopener noreferrer">{mdInline(t.tokens)}</a>
+  : t.type === 'codespan' ? <span key={i}>{t.text}</span>
+  : t.type === 'br' ? <br key={i} />
+  : t.type === 'html' ? t.raw : t.tokens ? <span key={i}>{mdInline(t.tokens)}</span> : t.text ?? t.raw);
+/** Markdown blocks from the same tokens: headings, paragraphs, task lists with read-only ticks, tables. */
+const mdBlocks = (tokens: any[]): ReactNode => tokens.map((t, i) => t.type === 'heading' ? <h3 key={i}>{mdInline(t.tokens)}</h3>
+  : t.type === 'paragraph' || t.type === 'text' ? <p key={i}>{mdInline(t.tokens ?? [{ text: t.text }])}</p>
+  : t.type === 'list' ? <ul key={i}>{t.items.map((item: any, j: number) => <li key={j}>{item.task && <input type="checkbox" checked={item.checked} readOnly aria-label={item.checked ? 'Done' : 'Not done'} />} {mdBlocks(item.tokens.filter((x: any) => x.type !== 'checkbox'))}</li>)}</ul>
+  : t.type === 'table' ? <div className="chat-table" key={i}><table><thead><tr>{t.header.map((c: any, j: number) => <th key={j}>{mdInline(c.tokens)}</th>)}</tr></thead><tbody>{t.rows.map((row: any[], j: number) => <tr key={j}>{row.map((c, k) => <td key={k}>{mdInline(c.tokens)}</td>)}</tr>)}</tbody></table></div>
+  : t.type === 'code' ? <p key={i}>{t.text}</p>
+  : t.type === 'html' ? <p key={i}>{t.raw}</p> : null);
 
 /** Chat markdown without raw HTML or arbitrary URL schemes. Long answers stay available behind More. */
 export function ChatText({ text }: { text: string }) {
   const [more, setMore] = useState(false);
   const long = text.length > 700 || text.split('\n').length > 10;
   const shown = long && !more ? text.slice(0, 650).replace(/\s+\S*$/, '') : text;
-  const inline = (tokens: any[]): ReactNode => tokens.map((t, i) => t.type === 'strong' ? <strong key={i}>{inline(t.tokens)}</strong>
-    : t.type === 'em' ? <em key={i}>{inline(t.tokens)}</em>
-    : t.type === 'link' && safeLink(t.href) ? <a className="chat-link" key={i} href={safeLink(t.href)} target="_blank" rel="noopener noreferrer">{inline(t.tokens)}</a>
-    : t.type === 'codespan' ? <span key={i}>{t.text}</span>
-    : t.type === 'br' ? <br key={i} />
-    : t.type === 'html' ? t.raw : t.tokens ? <span key={i}>{inline(t.tokens)}</span> : t.text ?? t.raw);
-  const blocks = (tokens: any[]): ReactNode => tokens.map((t, i) => t.type === 'heading' ? <h3 key={i}>{inline(t.tokens)}</h3>
-    : t.type === 'paragraph' || t.type === 'text' ? <p key={i}>{inline(t.tokens ?? [{ text: t.text }])}</p>
-    : t.type === 'list' ? <ul key={i}>{t.items.map((item: any, j: number) => <li key={j}>{item.task && <input type="checkbox" checked={item.checked} readOnly aria-label={item.checked ? 'Done' : 'Not done'} />} {blocks(item.tokens.filter((x: any) => x.type !== 'checkbox'))}</li>)}</ul>
-    : t.type === 'table' ? <div className="chat-table" key={i}><table><thead><tr>{t.header.map((c: any, j: number) => <th key={j}>{inline(c.tokens)}</th>)}</tr></thead><tbody>{t.rows.map((row: any[], j: number) => <tr key={j}>{row.map((c, k) => <td key={k}>{inline(c.tokens)}</td>)}</tr>)}</tbody></table></div>
-    : t.type === 'code' ? <p key={i}>{t.text}</p>
-    : t.type === 'html' ? <p key={i}>{t.raw}</p> : null);
-  return <div className="chat-md">{blocks(chatTokens(shown))}{long && <button className="chat-more" onClick={() => setMore(!more)}>{more ? 'Less' : 'More'}</button>}</div>;
+  return <div className="chat-md">{mdBlocks(chatTokens(shown))}{long && <button className="chat-more" onClick={() => setMore(!more)}>{more ? 'Less' : 'More'}</button>}</div>;
 }
 
 // ---------- toasts ----------
@@ -238,15 +241,17 @@ export function Media({ f, big }: { f: FileView; big?: boolean }) {
  *  the panel open the same file, so they share one read instead of asking the home computer twice. */
 const previews = new Map<string, Promise<Json>>();
 function usePreview(f: FileView) {
-  const [read, setRead] = useState<{ book: Workbook | null; doc: DocView | null }>({ book: null, doc: null });
+  const [read, setRead] = useState<{ book: Workbook | null; doc: DocView | null; text: string | null }>({ book: null, doc: null, text: null });
   useEffect(() => {
     const src = fileSource(f.url);
     if (!src) return;
     let on = true;
     let got = previews.get(f.url);
     if (!got) previews.set(f.url, got = f.kind === 'page' ? api.document(src.bot, src.path) : api.workbook(src.bot, src.path));
-    got.then((j) => on && setRead(f.kind === 'page' ? { book: null, doc: docView(j, f.name) } : { book: workbook(j, f.name), doc: null }))
-      .catch(() => on && setRead({ book: null, doc: null }));
+    got.then((j) => on && setRead(f.kind === 'page'
+      ? (typeof j?.text === 'string' ? { book: null, doc: null, text: mdPlain(j.text) } : { book: null, doc: docView(j, f.name), text: null })
+      : { book: workbook(j, f.name), doc: null, text: null }))
+      .catch(() => on && setRead({ book: null, doc: null, text: null }));
     return () => { on = false; };
   }, [f.url, f.name]);
   return read;
@@ -301,7 +306,7 @@ export function PreviewPanel({ bot, path, onClose }: { bot: string; path: string
   const [tab, setTab] = useState(0);
   useDialogOwn(box, onClose);
   const f = fileView(bot, path);
-  const { book, doc } = usePreview(f);
+  const { book, doc, text } = usePreview(f);
   const sheets = book?.sheets ?? [];
   const s = sheets[Math.min(tab, Math.max(0, sheets.length - 1))];
   const about = f.kind === 'page' ? pageWords(doc?.parts.filter((p) => p.kind === 'heading').length ?? 0) : sheetWords(sheets.length);
@@ -314,7 +319,7 @@ export function PreviewPanel({ bot, path, onClose }: { bot: string; path: string
           <a className="btn" href={f.url} target="_blank" rel="noreferrer">Download</a>
           <button className="link" onClick={onClose} aria-label="Close">✕</button>
         </header>
-        {!book && !doc && <div className="mute">Opening “{f.name}”…</div>}
+        {!book && !doc && text === null && <div className="mute">Opening “{f.name}”…</div>}
         {book && !sheets.length && <div className="mute">There is nothing in it to show yet.</div>}
         {doc && !doc.parts.length && <div className="mute">There is nothing in it to show yet.</div>}
         {sheets.length > 1 && <nav className="wb-tabs" aria-label="Sheets">
@@ -328,6 +333,7 @@ export function PreviewPanel({ bot, path, onClose }: { bot: string; path: string
           {s.total > s.rows.length + 1 && <div className="mute small">…and {s.total - s.rows.length - 1} more rows. Download it to see the whole sheet.</div> }
         </div>}
         {doc && doc.parts.length > 0 && <DocBody doc={doc} />}
+        {text !== null && <div className="wb-rows"><div className="chat-md">{mdBlocks(chatTokens(text))}</div></div>}
       </div>
     </div>
   );
