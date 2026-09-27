@@ -477,6 +477,13 @@ export function card(a: Json, state: Json): Card {
   if (a.kind === 'propose' && d.pass) return { ...base, kind: 'ok', head: `${name} wants to hand work on`, words: plain(d.words ?? a.title),
     lines: (d.pass.files ?? []).map((f: string) => `With “${pretty(f)}”`),
     choices: [{ label: 'Hand it on', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
+  if (a.kind === 'propose' && d.job) {
+    const labels = ['What it does', "What it's aiming for", 'What it gets from others', 'How it goes about it', 'What great looks like'];
+    const keys = ['does', 'aim', 'gets', 'how', 'great'];
+    return { ...base, kind: 'ok', head: `Chief wrote ${crewName(state, d.job.bot)}'s job`, words: 'Take a look. Nothing changes until you use it.',
+      preview: { head: `${crewName(state, d.job.bot)}'s job`, body: labels.map((label, i) => `${label}: ${plain(d.job[keys[i]])}`).join('\\n\\n') },
+      choices: [{ label: 'Use it', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
+  }
   if (a.kind === 'propose') {
     // A suggestion: a skill a helper would like to keep, or a new personality from Chief. Nothing changes without a yes.
     // A helper's draft is a message in the person's name: the card says who it's for, and approving never sends it.

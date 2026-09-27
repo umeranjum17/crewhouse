@@ -967,7 +967,7 @@ test('Chief makes up a new helper on a card: nothing until the person says yes, 
   const { db, crew, done } = setup();
   crew.onboard('sir');
   const create = (args: object) => `[tool crew_create ${JSON.stringify(args)}]`;
-  const pip = { name: 'Pip', job: 'Watches rental listings in Phuket. Tells you about new flats under $900 a month.', personality: 'You are Pip. Cheerful and quick.', first: 'find me flats in Phuket under $900' };
+  const pip = { name: 'Pip', job: { does: 'Watches rental listings in Phuket.', aim: 'Find new flats under $900 a month.', gets: 'Your budget and preferred area.', how: 'Check current listings and compare the details.', great: 'A shortlist with links and prices; for example, two verified flats under $900.' }, personality: 'You are Pip. Cheerful and quick.', first: 'find me flats in Phuket under $900' };
   const { task: t } = (await crew.post('chief', `please ${create(pip)}`))!;
   await settled(db, t);
   const card = () => db.get("SELECT * FROM asks WHERE bot = 'chief' AND kind = 'propose' AND state = 'open'");
@@ -990,7 +990,11 @@ test('Chief makes up a new helper on a card: nothing until the person says yes, 
   assert.equal(b.role, 'Watches rental listings in Phuket');
   assert.equal(b.template, 'helper');
   const dir = join(crew['cfg'].crewDir, 'bots', 'pip');
-  assert.match(readFileSync(join(dir, 'AGENTS.md'), 'utf8'), /^# Pip[\s\S]*## Your job\nWatches rental listings in Phuket\. Tells you/);
+  const instructions = readFileSync(join(dir, 'AGENTS.md'), 'utf8');
+  assert.match(instructions, /^# Pip[\s\S]*## Your job\n### What it does\nWatches rental listings in Phuket\./);
+  assert.equal(disk.readJob(crew['cfg'], 'pip').great, pip.job.great);
+  assert.match(instructions, /## Boundaries[\s\S]*never sign in/);
+  assert.throws(() => disk.writeJob(crew['cfg'], 'pip', { ...pip.job, aim: 'x'.repeat(601) }), /600/);
   assert.equal(readFileSync(join(dir, 'soul.md'), 'utf8'), '# Pip\n\nYou are Pip. Cheerful and quick.\n');
   assert.match(lastSaid(db, 'chief'), /^Pip has joined the crew, sir\. I've handed Pip your request/);
   const first = db.get("SELECT * FROM tasks WHERE bot = 'pip'")!;

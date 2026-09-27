@@ -73,9 +73,11 @@ A job ends `done`, `failed` or `unsure`: it acted out in the world (sent, bought
 
 `GET /api/bots/:id` also carries `soul` (who the helper is, in plain sentences under a `# Name` heading), `soulCap`, `skills[]` `{name, says}` (`says` is the skill in the person's words; the app never shows `description`), and `notes`: what that helper learned about **the viewer**, never another member.
 `PUT /api/bots/:id/soul` `{text}` saves the person's words (the app keeps the `# Name` heading); `POST /api/bots/:id/soul/reset` puts back how it started. No bot can change its own.
+`PUT /api/bots/:id/job` `{does, aim, gets, how, great}` changes a helper's five-part job; each part is capped at 600 characters and the total at 3,000. The job is only the `## Your job` section of its `AGENTS.md`. `POST /api/bots/:id/job/draft` `{idea}` asks Chief to propose the five parts on a yes/no card; nothing changes until Use it.
+
 `PUT /api/bots/:id/notes` `{text}` is the viewer's own notes with that helper. `GET`/`PUT /api/about` `{notes, cap}` is what the whole crew knows about the viewer: every helper reads it before a job for them. A `memory.learned` step with `everyone` went there; Undo works on the viewer's own only.
 
-A **suggestion** is an ask with `kind: 'propose'` and `detail.{words, preview: {head, body}}`: a skill a helper would like to keep (from `crew_learn`), or a new personality Chief suggests for a helper (from `crew_suggest`). It is a yes-or-no card ("Yes, keep it" / "Not now"), never "always"; nothing changes until `allow`, and it belongs to no running job, so it waits across restarts.
+A **suggestion** is an ask with `kind: 'propose'` and `detail.{words, preview: {head, body}}`: a skill a helper would like to keep (from `crew_learn`), a new personality Chief suggests (from `crew_suggest`), or a five-part job draft (`detail.job`). A job draft offers Use it / Not now and writes only the target helper's `## Your job` after approval. Suggestions are yes-or-no cards, never "always"; nothing changes until `allow`, and they wait across restarts.
 `skills[]` rows carry `learned`; `DELETE /api/bots/:id/skills/:name` puts a learned one away (kept, no longer used). A skill it came with can't be removed.
 
 ## First run (today)

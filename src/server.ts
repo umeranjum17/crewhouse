@@ -235,6 +235,19 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       db.event('bot.models', r[1], { by: 'person', models });
       return { thinks: crew.thinks(r[1]) };
     }
+    if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/job$/)) && m === 'PUT') {
+      crew.botPage(r[1]);
+      disk.writeJob(cfg, r[1], body);
+      db.event('job.changed', r[1], { by: 'person', member: me });
+      return { job: disk.readJob(cfg, r[1]) };
+    }
+    if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/job\/draft$/)) && m === 'POST') {
+      const b = crew.botPage(r[1]).bot;
+      const idea = String(body.idea ?? '').replace(/\r/g, '').trim();
+      if (!idea || idea.length > 600) throw Object.assign(new Error('describe the job in under 600 characters'), { status: 400 });
+      crew.requestChief(`Write ${b.display}'s job from: ${idea}. Use crew_job.`, me);
+      return { ok: true };
+    }
     // What a helper learned about the viewer, and what the whole crew knows about them: each person edits only their own.
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/notes$/)) && m === 'PUT') {
       crew.botPage(r[1]); // 404 for unknown bots
