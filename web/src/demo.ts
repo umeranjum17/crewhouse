@@ -2,7 +2,7 @@
 // Open the app with ?demo (Nadia's phone), ?demo=umer (the owner), ?demo=hello (first run), ?demo=first (her first
 // request, waiting for her sign-in), ?demo=answer (Chief's first answer), ?demo=plan (a plan without helpers),
 // ?demo=resting, ?demo=connect (a helper asks for Google Calendar in chat), ?demo=nogoogle (Google not on for the house), ?demo=share (the crew's share used up today, $4 spent), ?demo=claim (Scout asks to fill a line of an unclaimed-money claim),
-// ?demo=return (Scout asks to press a shop's Start return), ?demo=chase (Scout's chase email as a draft to send), ?demo=renewal (Scout's renewal warning and the cancellation email as a draft to send).
+// ?demo=return (Scout asks to press a shop's Start return), ?demo=chase (Scout's chase email as a draft to send), ?demo=renewal (Scout's renewal warning and the cancellation email as a draft to send), ?demo=day (Scout's plan of the day, three things in order).
 // &sheet=signin or &sheet=connect opens that sheet, and &phase=… pins it to one state.
 import type { Json } from './api.ts';
 import { describe, nextRun, parseSchedule } from '../../src/routines.ts';
@@ -15,6 +15,9 @@ const signin = ['signin', 'hello', 'first', 'work'].includes(variant);
 const firstRun = ['first', 'answer', 'plan', 'work'].includes(variant);
 // Google for the whole house: what crewd's ideas[] says a job waits on when the house's Google is off (docs/ui-contract.md).
 const houseGoogle = variant !== 'nogoogle' && !new URLSearchParams(location.search).has('nohouse');
+// The day, planned waits on the person's own calendar and mail (?demo=day has both on, ?demo=nogoogle neither).
+const connected = variant === 'connect' ? [] : ['drive', 'gmail', ...(variant === 'day' ? ['calendar'] : [])];
+const dayNeeds = !houseGoogle ? ['Google'] : connected.includes('calendar') ? [] : ['Google Calendar'];
 
 const svg = (a: string, b: string, label: string) => `data:image/svg+xml,${encodeURIComponent(
   `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="400"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient></defs><rect width="640" height="400" fill="url(#g)"/><text x="320" y="215" font-family="Nunito,sans-serif" font-weight="900" font-size="46" fill="#fff" text-anchor="middle">${label}</text></svg>`)}`;
@@ -121,6 +124,7 @@ const state = {
     { bot: 'scout', promise: "I'll keep an eye on what you just bought, and tell you the day you can claim the money back. I'll do it end to end — you just tap approve.", ask: 'Watch something I bought and tell me when I can claim the difference back', group: 'money', needs: ['Gmail'] },
     { bot: 'scout', promise: "I'll search the government's unclaimed-money registers for our family's names and get the claims ready to file. I'll file it end to end — you just tap approve.", ask: 'Search for money owed to us that nobody has claimed', group: 'money', needs: [] },
     { bot: 'scout', promise: "I'll set up the return, keep the label, and keep checking until the shop says the refund is on its way. Every step asks you first, on its own card.", ask: 'Help me return this and get the refund', group: 'money', needs: [] },
+    { bot: 'scout', promise: "I'll turn your mail, your calendar and what's still open into what today actually is.", ask: "Give me my day: what's on, what's waiting on me, what to do first", needs: dayNeeds },
     { bot: 'scout', promise: "I'll catch a renewal or a price rise before it's charged, and have the cancellation email ready. Every step asks you first, on its own card.", ask: 'Watch my subscriptions so nothing gets renewed without me hearing about it first', group: 'money', needs: houseGoogle ? [] : ['Google'] },
     { bot: 'pip', promise: 'Plan a birthday party', ask: 'Plan a birthday party for ' },
     { bot: 'chief', promise: "What's on this week?", ask: "What's on this week?" },
@@ -151,7 +155,7 @@ const state = {
     routine(2, 'scout', 'Plan the week’s dinners', 'every Saturday 10:00', 'on'),
     { ...routine(3, 'pip', 'Check the school newsletter', 'every Friday 16:00', 'paused'), quiet: 1 },
   ],
-  connections: variant === 'connect' ? [] : ['drive', 'gmail'],
+  connections: connected,
   share: { choice: 'light', used: variant === 'share' },
   money: { cap: 20, spent: variant === 'share' ? 4 : 0 },
   house: { google: houseGoogle, steps: [
@@ -211,6 +215,11 @@ if (variant === 'renewal') pages.scout = { messages: [
   { id: 2, author: 'bot', text: 'Your streaming Family plan renews on 14 June at $18.99 — read off your own account page, not the page new customers see. Ten days ahead of the bill, so you hear it now.' },
   { id: 3, author: 'bot', text: 'The cancellation email is on a card below, in your name. Nothing is sent and nothing is cancelled yet: you read it and post it yourself. If you would rather I pressed Cancel on your account page, say so — I’ll ask you again on a card naming the button and what it changes.' },
 ], notes: '', tasks: [] };
+// The day, planned, answered where the job was handed over (?demo=day): one message, three things, in order, at times.
+if (variant === 'day') pages.scout = { messages: [
+  { id: 1, author: 'person', text: "Give me my day: what's on, what's waiting on me, what to do first" },
+  { id: 2, author: 'bot', text: 'Two fixed things today, and one form to sign.\n1. 8:40 am \u2014 Sign Ayaan\u2019s trip form, the school office wants it before the run.\n2. 1:15 pm \u2014 Call the shop back about the espresso machine, the refund waits on what you tell them.\n3. 6:30 pm \u2014 Pack the kit bag for tomorrow\u2019s sports day, it goes in the car.\nThe rest of the mail can wait until tomorrow. Want me to bring you a list like this every weekday morning?' },
+] };
 /** What crewd read out of that workbook (src/workbooks.ts): the demo\u2019s own copy, in crewd\u2019s shape. */
 const book = {
   sheets: [
