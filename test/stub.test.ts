@@ -83,6 +83,28 @@ test('chief onboarding, recruit, assign, grants', async () => {
 
 });
 
+test('a Chief reply streams partial words before its durable message', async () => {
+  await ready();
+  if (!(await api('GET', '/api/state')).body.person.onboarded) await say('chief', 'Sir');
+  const events: any[] = [];
+  const ws = new WebSocket(base.replace('http:', 'ws:') + '/ws');
+  await new Promise<void>((resolve) => ws.on('open', () => resolve()));
+  ws.on('message', (raw) => events.push(JSON.parse(String(raw))));
+  try {
+    const started = Date.now();
+    const { body } = await say('chief', 'Tell me something quick');
+    await until(async () => events.find((e) => e.kind === 'reply.partial' && e.bot === 'chief' && e.data.text.includes('stub chief:')));
+    await done('chief', body.task);
+    const trace = events.filter((e) => e.bot === 'chief');
+    const partial = trace.find((e) => e.kind === 'reply.partial');
+    const final = trace.find((e) => e.kind === 'message' && e.data.author === 'bot');
+    assert.ok(partial && final && trace.indexOf(partial) < trace.indexOf(final), 'partial text arrives before the completed reply');
+    assert.equal(partial.data.member, 1);
+    assert.ok(events.find((e) => e.kind === 'message' && e.data.author === 'person'), 'the send is persisted');
+    console.log(`lab send→reply.partial ${partial.at - started}ms; send→first complete words ${final.at - started}ms`);
+  } finally { ws.close(); }
+});
+
 // This verifies the real tool-fetch mechanics and scripted wording contract, not model judgement.
 test('two-source fare backtest: both local sources fetched and the reply names them plus an unchecked item', async () => {
   await ready();

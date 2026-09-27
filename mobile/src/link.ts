@@ -103,9 +103,12 @@ export function desktopSignaling(bot: string) {
   };
 }
 
+const liveListeners = new Set<(e: any) => void>();
+export const onLive = (fn: (e: any) => void) => { liveListeners.add(fn); return () => { liveListeners.delete(fn); }; };
+
 export function connect(grant: Grant, onEvent: (e: any) => void, onStatus: (s: Status) => void) {
   // The computer says where else it can be reached (Tailscale came up, its home address moved): remember each one.
-  const heard = (e: any) => { if (e?.kind === 'link.urls') (e.data?.urls ?? []).forEach((u: string) => link.addUrl(u)); else onEvent(e); };
+  const heard = (e: any) => { if (e?.kind === 'link.urls') (e.data?.urls ?? []).forEach((u: string) => link.addUrl(u)); else { liveListeners.forEach((fn) => fn(e)); onEvent(e); } };
   // Out of touch: look for this phone's own computer on the Wi-Fi (the router may have given it a new address).
   let looking: (() => void) | undefined;
   const status = (st: Status) => {
