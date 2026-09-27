@@ -826,8 +826,9 @@ function Phones({ tick }: { tick: number }) {
             <p className="mute small">{offer.role === 'view' ? 'This phone will watch the crew but not answer or give jobs.' : 'This phone will answer the crew and give them jobs, as you.'}</p>
             <p className="mute small">Then check the two words the phone shows against the ones that appear here.</p>
             <p className="mute small">{left > 0 ? `Works once, for ${left} more seconds.` : 'Make a new one when the phone is ready.'}</p>
-            {left > 0 && A.reach(link).online && (typed ? <p className="small">On the phone, tap <b>Type a code</b> and enter <b>{typed.short}</b>, then <b>{typed.code}</b>.</p>
-              : <button className="link inline small" onClick={() => attempt(async () => setTyped(await api.phoneCode(offer.role)))}>Can't scan? Type a code instead</button>)}
+            {left > 0 && <p className="small">Can't scan? Type this code on the phone (or copy it to someone you trust): <b style={{ overflowWrap: 'anywhere', userSelect: 'all' }}>{offer.typed}</b></p>}
+            {left > 0 && A.reach(link).online && (typed ? <p className="small">Relay code: <b>{typed.short}</b>, then <b>{typed.code}</b>.</p>
+              : <button className="link inline small" onClick={() => attempt(async () => setTyped(await api.phoneCode(offer.role)))}>Use a relay code instead</button>)}
             <div className="btns">{left <= 0 && <button className="btn go" onClick={() => show(offer.role)}>New code</button>}<button className="btn ghost" onClick={() => setOffer(null)}>Close</button></div>
           </div>
         </div>

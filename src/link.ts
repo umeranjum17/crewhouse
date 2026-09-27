@@ -8,7 +8,8 @@ import { createServer, type Server } from 'node:http';
 import { networkInterfaces } from 'node:os';
 import { join } from 'node:path';
 import { WebSocketServer } from 'ws';
-import { Host, keyPair, keyPairFrom, type Grant, type PairRequest, type Role } from '@byokit/link';
+import { Host, keyPair, keyPairFrom, unb64url, type Grant, type PairRequest, type Role } from '@byokit/link';
+import { encodeTyped } from './typed-code.ts';
 import { advertise, type Bonjour } from '@byokit/reach';
 import { RelayClient, isExpoToken, type RelayStatus } from '@byokit/relay';
 import type { Config } from './config.ts';
@@ -165,6 +166,11 @@ export class Link {
     const a = this.asking.get(id);
     if (!a) throw Object.assign(new Error('that phone stopped waiting'), { status: 404 });
     a.answer(yes);
+  }
+  approve(words: string) {
+    const a = [...this.asking.values()].find((a) => a.words === words.trim());
+    if (!a) throw Object.assign(new Error('those words do not match a waiting phone'), { status: 404 });
+    a.answer(true);
   }
 
   private setting(key: string): string | undefined { return this.db.get('SELECT value FROM settings WHERE key = ?', key)?.value; }
@@ -359,7 +365,7 @@ export class Link {
   }
 
   /** A single-use QR for a phone that will act as `member`. */
-  async offer(role: string, member: number): Promise<{ qr: string; expires: number; urls: string[] }> {
+  async offer(role: string, member: number): Promise<{ qr: string; typed: string; expires: number; urls: string[] }> {
     if (role !== 'control' && role !== 'view') throw Object.assign(new Error('role is control or view'), { status: 400 });
     // The home network opens for as long as the code lasts (and a phone that joins keeps its socket); Tailscale may have
     // come up since crewd started.
@@ -369,7 +375,8 @@ export class Link {
     await this.bind();
     const urls = this.urls();
     const { text, expires } = this.host.offer({ role, urls, meta: { member } });
-    return { qr: text, expires, urls };
+    const raw = JSON.parse(new TextDecoder().decode(unb64url(text.slice('byokit-link:1:'.length))));
+    return { qr: text, typed: encodeTyped(raw), expires, urls };
   }
 
   /** Codes to type instead of scanning, through the relay: its short code (which computer) and link's pairing code. */

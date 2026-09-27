@@ -1,6 +1,7 @@
 // The phone's end of the link: @byokit/link's device side, its grant in secure storage, and the transport that
 // web/src/api.ts calls through. Each call is one request, `METHOD /path`, answered like HTTP (src/link.ts).
-import { DeviceLink, LinkError, hostId, pairWithCode, pairWithOffer, unb64url, type DeviceGrant, type LinkStatus } from '@byokit/link';
+import { DeviceLink, LinkError, hostId, pairWithCode, pairWithOffer, b64url, unb64url, type DeviceGrant, type LinkStatus } from '@byokit/link';
+import { decodeTyped } from '../../src/typed-code.ts';
 import { findHost } from '@byokit/relay/device';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
@@ -48,6 +49,12 @@ export async function pair(scanned: string, onWords: (w: string) => void): Promi
   const g = await pairWithOffer(scanned, { name, onWords });
   await store.save(g);
   return g;
+}
+
+/** The typed envelope contains the same one-use QR ticket, addresses and pinned Noise host key. */
+export async function pairDirectTyped(text: string, onWords: (w: string) => void): Promise<Grant> {
+  const offer = decodeTyped(text);
+  return pair(`byokit-link:1:${b64url(new TextEncoder().encode(JSON.stringify(offer)))}`, onWords);
 }
 
 /** Typed instead of scanned, through the family's relay: its address, the relay's short code, then the pairing code. */
