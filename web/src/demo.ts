@@ -263,6 +263,9 @@ const doc = {
 };
 for (const b of bots) pages[b.id] ??= { messages: [], notes: '', tasks: [] };
 if (variant.startsWith('job')) pages.pip.job = { does: 'Keep Nadia’s family calendar in order.', aim: 'Help the family know what is coming.', gets: 'Events and reminders from the person.', how: 'Check dates, add reminders only when asked, and explain changes.', great: 'A clear, accurate week; for example, sports day with a reminder the evening before.' };
+// "Wheeled": the person is holding Scout's controls at its screen, signed it in to a shop, and is about to hand
+// the wheel back — the give-back sheet lists the tabs crewd read itself, and Details lists what it is signed in to.
+if (variant === 'wheeled') { Object.assign(bots.find((b) => b.id === 'scout')!, { controls: 'person' }); pages.scout = { ...pages.scout, signedIn: ['shop.example'] }; }
 for (const [id, p] of Object.entries(pages)) p.trail = events.filter((e) => e.bot === id);
 
 const accounts = [1, 2, 3].map((m) => ({ member: m, account: 'chatgpt', name: 'ChatGPT', signedIn: !(signin && m === me) || (variant === 'work' && m === me),
@@ -274,6 +277,10 @@ export async function demoCall(method: string, path: string, _body?: Json) {
   // "offline": the home computer never answers; "lost": it answers once, then goes quiet.
   if (variant === 'offline' || (variant === 'lost' && calls++ > 0)) throw new TypeError('Failed to fetch');
   if (method === 'GET' && path === '/api/state') return state;
+  // The give-back sheet's ticks: the hosts on its tabs, only while the person holds the wheel.
+  const scr = /^\/api\/bots\/([a-z0-9-]+)\/screen$/.exec(path);
+  if (method === 'GET' && scr) return { pages: variant === 'wheeled' && scr[1] === 'scout' ? ['shop.example', 'mail.example'] : [] };
+  if (method === 'POST' && /^\/api\/bots\/([a-z0-9-]+)\/forget$/.test(path)) return { ok: true };
   if (method === 'GET' && path.startsWith('/api/room')) return { lines: [
     { id: 81, bot: 'scout', author: 'person', text: 'Find three stories about the neighbourhood.', at: now - 5 * min },
     { id: 82, bot: 'scout', author: 'bot', text: 'Three stories worth telling: a new park, a school garden, and a night market.', at: now - 4 * min },

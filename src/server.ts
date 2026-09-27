@@ -335,7 +335,13 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       return out;
     }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/takeover$/)) && m === 'POST') { await crew.takeOver(r[1]); return { ok: true }; }
-    if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/giveback$/)) && m === 'POST') { await crew.giveBack(r[1], String(body.note ?? '')); return { ok: true }; }
+    if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/giveback$/)) && m === 'POST') {
+      await crew.giveBack(r[1], String(body.note ?? ''), Array.isArray(body.keep) ? body.keep.map(String) : undefined);
+      return { ok: true };
+    }
+    // The give-back sheet's ticks: the hosts on its tabs, read only while the person holds the wheel.
+    if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/screen$/)) && m === 'GET') return { pages: await crew.tabHosts(r[1]) };
+    if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/forget$/)) && m === 'POST') { await crew.forget(r[1], String(body.host ?? '')); return { ok: true }; }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/reset$/)) && m === 'POST') { await crew.resetBot(r[1]); return { ok: true }; }
     if (m === 'GET' && p === '/api/schedule') {
       const when = parseSchedule(q.get('text') ?? '');

@@ -6,7 +6,7 @@ import type { AddressInfo } from 'node:net';
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { EngineClient, resolveEngine, explainMissingEngine, type EngineEvent } from '@desklink/host';
-import { WebSocketServer, type WebSocket } from 'ws';
+import { WebSocket, WebSocketServer } from 'ws';
 
 export const WIDTH = 1280, HEIGHT = 800;
 const IDLE_MS = Number(process.env.CREWHOUSE_DESKTOP_IDLE_MS || 10 * 60_000);
@@ -230,6 +230,52 @@ export class Desktops {
   async revokeControl(bot: string) {
     const d = this.desks.get(bot);
     if (d?.session?.control) await this.closeSession(d, 'The controls went back to the bot');
+  }
+
+  /** One round of commands over crewd's own relay. Only one client fits the pipe at a time, so this is for while the
+   *  person holds the wheel and the bot's own browser tool is off it (Take over releases the tool's attach). */
+  private async withPipe<T>(bot: string, run: (call: (method: string, params?: Record<string, unknown>, sessionId?: string) => Promise<any>) => Promise<T>): Promise<T> {
+    const d = this.desks.get(bot);
+    if (!d?.cdp || !d.chrome || d.chrome.exitCode !== null) throw new Error("the bot's browser is not running");
+    const ws = new WebSocket(d.cdp, { perMessageDeflate: false });
+    let n = 0;
+    try {
+      await new Promise((r, j) => { ws.once('open', r); ws.once('error', j); });
+      const call = (method: string, params: Record<string, unknown> = {}, sessionId?: string) => new Promise<any>((r) => {
+        const id = ++n;
+        ws.on('message', function back(m) { const x = JSON.parse(String(m)); if (x.id === id) { ws.off('message', back); r(x.result); } });
+        ws.send(JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) }));
+      });
+      return await run(call);
+    } finally { ws.close(); }
+  }
+
+  /** The hosts on its tabs, the one on screen first: the give-back sheet asks "did you sign it in here?" from this list,
+   *  read by crewd itself, never from the note or what the bot says. Hosts only — `www.` stripped, no path, the same
+   *  words the gate compares (src/policy.ts). */
+  async pages(bot: string): Promise<string[]> {
+    const host = (url: string) => { try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return ''; } };
+    const out: { host: string; on: boolean }[] = [];
+    try {
+      await this.withPipe(bot, async (call) => {
+        const { targetInfos } = await call('Target.getTargets');
+        const tabs = (targetInfos as { type: string; url: string; targetId: string }[]).filter((t) => t.type === 'page' && /^https?:/.test(t.url));
+        for (const t of tabs) {
+          try {
+            const { sessionId } = await call('Target.attachToTarget', { targetId: t.targetId, flatten: true });
+            const v = await call('Runtime.evaluate', { expression: 'document.visibilityState', returnByValue: true }, sessionId);
+            out.push({ host: host(t.url), on: v?.result?.value === 'visible' });
+          } catch { out.push({ host: host(t.url), on: false }); } // the tab went away while we read
+        }
+      });
+    } catch { /* no browser to read: an empty list, nothing to tick */ }
+    const hosts = [...out.filter((o) => o.on), ...out.filter((o) => !o.on)].map((o) => o.host).filter(Boolean);
+    return [...new Set(hosts)];
+  }
+
+  /** Clear one site's cookies and storage out of the bot's running browser (Forget). */
+  async clearSite(bot: string, host: string) {
+    await this.withPipe(bot, (call) => call('Storage.clearDataForOrigin', { origin: `https://${host}`, storageTypes: ['all'] }));
   }
 
   /** Stop desktops nobody is watching and no task needs, after the idle window. */

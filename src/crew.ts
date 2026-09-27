@@ -712,6 +712,8 @@ export class Crew {
       allow: (disk.botConfig(this.cfg, id).allow ?? []).map(coversOf),
       memory: disk.botConfig(this.cfg, id).memory !== false,
       handoff: disk.botConfig(this.cfg, id).handoff ?? 'go',
+      // The sites the person signed it in to (bare hosts), shown in Details, each with Forget.
+      signedIn: disk.botConfig(this.cfg, id).signedIn ?? [],
     };
   }
 
@@ -1922,16 +1924,28 @@ export class Crew {
     await this.live.get(botId)?.session.abort();
   }
 
-  /** The person hands the controls back; the bot resumes its task with a note of what they did. */
-  async giveBack(botId: string, note = '') {
+  /** The person hands the controls back; the bot resumes its task with a note of what they did.
+   *  `keep` names the sites they ticked on the give-back sheet — hosts crewd read itself off the bot's own tabs
+   *  (`tabHosts`), so a sign-in the person does while holding the wheel is remembered and its presses ask. */
+  async giveBack(botId: string, note = '', keep?: string[]) {
     const bot = this.bot(botId);
     if (!bot) throw fail('no such bot', 404);
-    if (!this.held.delete(botId)) throw fail(`${bot.display} already has the controls`, 409);
+    if (!this.held.has(botId)) throw fail(`${bot.display} already has the controls`, 409);
+    let kept: string[] = [];
+    if (keep?.length) {
+      const tabs = await this.desktops.pages(botId);
+      const bad = keep.find((h) => !tabs.includes(h));
+      if (bad) throw Object.assign(new Error(`${bot.display}'s screen has no tab on ${bad}`), { status: 400 });
+      disk.setSignedIn(this.cfg, botId, [...(disk.botConfig(this.cfg, botId).signedIn ?? []), ...keep]);
+      kept = keep;
+    }
+    this.held.delete(botId);
     await this.desktops.revokeControl(botId);
     const did = clean(note, 500);
     const task = this.activeTask(botId);
     this.db.tx(() => {
       this.db.event('desktop.giveback', botId, { task: task?.id ?? null, note: did });
+      if (kept.length) this.db.event('signin.kept', botId, { hosts: kept });
       if (task) this.say(botId, 'system', `You gave the controls back${did ? `: ${did}` : '.'}`, task.id);
     });
     const l = this.live.get(botId);
@@ -1951,6 +1965,27 @@ export class Crew {
       this.db.run("UPDATE asks SET state = 'withdrawn' WHERE bot = ? AND state = 'open'", id);
       this.db.run("UPDATE bots SET state = 'off' WHERE id = ?", id);
     });
+  }
+
+  /** The hosts on its tabs, for the give-back sheet — read only while the person holds the wheel. */
+  tabHosts(botId: string) {
+    return this.held.has(botId) ? this.desktops.pages(botId) : Promise.resolve([] as string[]);
+  }
+
+  /** The person takes a site back off the list, and its cookies and storage go from the bot's own browser. */
+  async forget(botId: string, host: string) {
+    const bot = this.bot(botId);
+    if (!bot) throw fail('no such bot', 404);
+    disk.setSignedIn(this.cfg, botId, (disk.botConfig(this.cfg, botId).signedIn ?? []).filter((d) => d !== host));
+    this.db.event('signin.forgot', botId, { host });
+    // Best effort: with no computer granted there is no browser to clear. The browser is started if it takes it,
+    // so the site's cookies really leave the profile; the idle sweep closes it again afterwards.
+    try {
+      if (disk.canUse(this.cfg, botId, 'computer')) {
+        await this.desktops.ensure(botId, bot.n, disk.botDir(this.cfg, botId));
+        await this.desktops.clearSite(botId, host);
+      }
+    } catch { /* the browser would not open; the list is already clear, so presses there ask again */ }
   }
 
   /** The engine session a bot is working in, for tests. */

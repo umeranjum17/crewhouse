@@ -509,6 +509,48 @@ test('take over: the bot pauses while the person drives; give back resumes it wi
   done();
 });
 
+test('give back keeps the sites the person ticked, and Forget takes one back', async () => {
+  const { db, crew, cfg, done } = setup();
+  crew.onboard('sir');
+  crew.recruit('reel', 'Reel', 'person');
+  crew.recruit('scout', 'Scout', 'person');
+  const signedIn = (id: string) => crew.botPage(id).signedIn as string[];
+  // The real tabs read is desktop.test.ts's; here a stub stands in for the person's own tabs.
+  (crew.desktops as any).pages = async () => ['shop.example', 'mail.example'];
+  (crew.desktops as any).ensure = async () => { throw new Error('no desktop in unit tests'); };
+
+  const t = crew.assign('reel', 'ask permission to open the site', 'chief').task;
+  await holding(crew, 'reel');
+  await crew.takeOver('reel');
+  // A tick names a host among the tabs, and it is the person's tap that writes the list — one bot's list is its own.
+  await crew.giveBack('reel', 'signed you in', ['shop.example']);
+  await settled(db, t);
+  assert.deepEqual(signedIn('reel'), ['shop.example']);
+  assert.deepEqual(signedIn('scout'), [], 'another bot stays signed in to nothing');
+  assert.ok(db.get("SELECT 1 FROM events WHERE kind = 'signin.kept' AND bot = 'reel'"));
+  // And from then on a press there is a send with no key, worded as a site you signed it in to: asked every time.
+  const press = effectOf('browser', { args: ['click', 'e5'] },
+    { bot: 'Reel', space: disk.botDir(cfg, 'reel'), secret: [], page: 'https://shop.example/claim', signedIn: signedIn('reel') });
+  assert.equal(press.kind, 'send');
+  assert.match(press.words, /a site you signed it in to/);
+  assert.equal((press as any).key, undefined, 'no key: never "always" on a site you signed it in to');
+
+  // Handing back with no tick adds nothing; a host with no tab is refused and the wheel stays held.
+  await crew.takeOver('reel');
+  await crew.giveBack('reel', 'just looked around');
+  assert.deepEqual(signedIn('reel'), ['shop.example']);
+  await crew.takeOver('reel');
+  await assert.rejects(crew.giveBack('reel', '', ['else.example']), (e: any) => e.status === 400);
+  assert.equal(crew.snapshot().bots.find((b: any) => b.id === 'reel')?.controls, 'person', 'the person still holds the wheel');
+  await crew.giveBack('reel', '', ['shop.example', 'mail.example']);
+  assert.deepEqual(signedIn('reel'), ['shop.example', 'mail.example'], 'a second sign-in is kept, no duplicates');
+
+  await crew.forget('reel', 'shop.example');
+  assert.deepEqual(signedIn('reel'), ['mail.example'], 'Forget drops the site from Details');
+  assert.ok(db.get("SELECT 1 FROM events WHERE kind = 'signin.forgot' AND bot = 'reel'"));
+  done();
+});
+
 test('steer: a word from the person reaches the bot mid-task without starting over', async () => {
   const { db, crew, done } = setup();
   crew.onboard('sir');

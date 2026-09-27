@@ -12,6 +12,7 @@ import { temp } from './tmp.ts';
 import { EngineClient, resolveEngine } from '@desklink/host';
 import { browserBin, deskFor, Desktops, missing, type DeskEvent } from '../src/desktop.ts';
 import { sandboxBash, sandboxReady } from '../src/engine.ts';
+import { setup } from './lab.ts';
 import { Teacher } from '../src/teach.ts';
 import { effectOf } from '../src/policy.ts';
 
@@ -227,6 +228,56 @@ test("a show is recorded through crewd's own endpoint to the bot's browser", { s
   const out = teacher.stop('reel')!;
   assert.deepEqual(out.steps.slice(0, 4), ['Opened 127.0.0.1/search', 'Typed in “Search”', 'Clicked “Find”', 'Opened 127.0.0.1/results']);
   assert.doesNotMatch(JSON.stringify(out), /private words/, 'never what was typed');
+});
+
+// Give back keeps the sites the person ticked, from hosts crewd read itself off the bot's own tabs: the real read
+// over its own pipe, then the whole flow — keep writes bot.json, a press there asks, an unknown host is a 400, Forget.
+test('give back reads its tabs and keeps what the person ticked', { skip: noXvfb || (!browserBin() && 'no Chromium here') }, async (t) => {
+  const front = createServer((_q, r) => r.end('<p>front page</p>')).listen(0, '127.0.0.1');
+  const behind = createServer((_q, r) => r.end('<p>behind</p>')).listen(0, '127.0.0.1');
+  await Promise.all([front, behind].map((s) => new Promise((r) => s.once('listening', r))));
+  const { cfg, db, crew, done } = setup();
+  crew.onboard('sir');
+  crew.recruit('reel', 'Reel', 'person');
+  const space = join(cfg.crewDir, 'bots', 'reel');
+  const host = (s: any) => `http://127.0.0.1:${(s.address() as AddressInfo).port}`;
+  let m = n + 1;
+  while (existsSync(`/tmp/.X${m}-lock`) || existsSync(`/tmp/.X11-unix/X${m}`)) m++;
+  const desk = await crew.desktops.ensure('reel', m, space);
+  t.after(async () => { front.close(); behind.close(); await crew.desktops.stopAll(); done(); });
+  assert.deepEqual(await crew.desktops.pages('reel'), [], 'nothing signed in to yet: no tabs at all');
+
+  // Two tabs. The one opened last would be on screen, but a window-managerless Xvfb puts each createTarget in its
+  // own window, so which tab reports visible is not stable here. The list itself is: every tab, bare hosts, no
+  // paths — the visible-tab-first ordering the sheet pre-ticks is A.signTicks, proven in ui.test.ts.
+  const ws = new WebSocket(desk.cdp!);
+  await new Promise((r, j) => { ws.once('open', r); ws.once('error', j); });
+  const open = (id: number, url: string, background = false) => new Promise((r) => {
+    ws.send(JSON.stringify({ id, method: 'Target.createTarget', params: background ? { url, background: true } : { url } }));
+    ws.on('message', function back(raw) { if (JSON.parse(String(raw)).id === id) { ws.off('message', back); r(0); } });
+  });
+  await open(1, `http://localhost:${(behind.address() as AddressInfo).port}/behind`);
+  await open(2, `${host(front)}/front`);
+  ws.close();
+  await until('crewd read both tabs', () => crew.desktops.pages('reel').then((p) => p.length === 2));
+  assert.deepEqual([...(await crew.desktops.pages('reel'))].sort(), ['127.0.0.1', 'localhost'], 'bare hosts, deduped, no paths');
+
+  await crew.takeOver('reel');
+  await crew.giveBack('reel', '', ['127.0.0.1']);
+  assert.deepEqual(crew.botPage('reel').signedIn, ['127.0.0.1'], 'the tick is kept in bot.json');
+  assert.ok(db.get("SELECT 1 FROM events WHERE kind = 'signin.kept' AND bot = 'reel'"));
+  const press = effectOf('browser', { args: ['click', 'e5'] },
+    { bot: 'Reel', space, secret: [], page: 'http://127.0.0.1:1/claim', signedIn: crew.botPage('reel').signedIn });
+  assert.equal(press.kind, 'send', 'a press on a kept site asks');
+
+  // A host with no tab is refused, and the wheel stays held for a corrected tick.
+  await crew.takeOver('reel');
+  await assert.rejects(crew.giveBack('reel', '', ['gone.example']), (e: any) => e.status === 400);
+  await crew.giveBack('reel', '', []);
+  assert.deepEqual(crew.botPage('reel').signedIn, ['127.0.0.1'], 'an empty sheet keeps the list as it was');
+
+  await crew.forget('reel', '127.0.0.1');
+  assert.deepEqual(crew.botPage('reel').signedIn, [], 'Forget takes the site back off the list');
 });
 
 async function until(what: string, fn: () => unknown, ms = 15_000) {

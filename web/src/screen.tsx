@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { CONTROL_PERMISSIONS, DesktopView, useDesktopSession } from '@desklink/react-native';
 import { api, desktopSignaling, type Json } from './api.ts';
+import * as A from './adapter.ts';
 import { attempt, Pill } from './parts.tsx';
 
 const STATUS: Record<string, string> = {
@@ -17,6 +18,16 @@ export function Screen({ bot, refresh, showing }: { bot: Json; refresh: () => vo
   const [err, setErr] = useState('');
   const [note, setNote] = useState('');
   const [what, setWhat] = useState<string | null>(null); // "Show Reel how": what it is, before the recorder starts
+  // The give-back sheet's ticks: the hosts crewd read off its own tabs while the wheel is held — never what the bot
+  // or the note claims. The tab on screen comes first and starts ticked; the rest start clear.
+  const [tabs, setTabs] = useState<string[]>([]);
+  const [keep, setKeep] = useState<string[]>([]);
+  useEffect(() => {
+    if (!control) { setTabs([]); setKeep([]); return; }
+    let on = true;
+    api.pages(bot.id).then((p) => { if (on) { setTabs(p); setKeep(A.signTicks(p)); } }).catch(() => { if (on) setTabs([]); });
+    return () => { on = false; };
+  }, [control, bot.id]);
 
   const session = useDesktopSession({
     authorize: async () => {
@@ -76,10 +87,21 @@ export function Screen({ bot, refresh, showing }: { bot: Json; refresh: () => vo
           <button className="btn ghost" onClick={act(() => api.shown(bot.id, false))}>Cancel</button></div>
       )}
       {control && !showing && (
-        <form className="row" onSubmit={(e) => { e.preventDefault(); void act(async () => { await api.giveBack(bot.id, note); setNote(''); })(); }}>
+        <form className="row" onSubmit={(e) => { e.preventDefault(); void act(async () => { await api.giveBack(bot.id, note, keep); setNote(''); })(); }}>
           <input className="input grow" value={note} onChange={(e) => setNote(e.target.value)} placeholder={`What did you do? ${bot.display} reads this when it carries on`} />
           <button className="btn go">Hand it back</button>
         </form>
+      )}
+      {control && !showing && tabs.length > 0 && (
+        <div className="card list">
+          {tabs.map((h) => (
+            <label key={h} className="row-item">
+              <input type="checkbox" checked={keep.includes(h)} aria-label={A.signTick(bot.display, h)}
+                onChange={(e) => setKeep(e.target.checked ? [...keep, h] : keep.filter((x) => x !== h))} />
+              <span className="grow">{A.signTick(bot.display, h)}</span>
+            </label>
+          ))}
+        </div>
       )}
       <p className="mute small">{bot.display} has its own computer at home, separate from yours. Taking the wheel pauses it; handing back lets it carry on.</p>
     </div>
