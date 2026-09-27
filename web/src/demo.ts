@@ -168,7 +168,7 @@ const state = {
         words: 'Scout wants to place this order at grocer.example: Basmati rice 10 lb, Whole milk (1 gal) x2, Garlic, 2 kg. Total $43.10.',
         preview: { head: 'The order at grocer.example', body: 'Basmati rice 10 lb — $24.00\nWhole milk (1 gal) x2 — $7.90\nGarlic, 2 kg — $6.20\nTotal $43.10' },
         order: { shown: '$43.10', known: true, dollars: true } } }]
-    : firstRun ? [] : asks.filter((a) => a.member === me),
+    : firstRun || variant.startsWith('voice-') ? [] : asks.filter((a) => a.member === me),
   events,
   resting: variant === 'resting' ? { chatgpt: now + 95 * min } : {},
   routines: [
@@ -188,7 +188,26 @@ const state = {
 // ?demo=unknown puts an order crewd couldn't price on Scout's card instead: no yes, the person finishes it themselves.
 const first = "Plan this week's dinners, with a shopping list";
 const pages: Record<string, Json> = {
-  chief: firstRun ? { messages: [
+  chief: variant === 'voice-before' || variant === 'voice-after' ? { messages: variant === 'voice-before' ? [
+    { id: 1, author: 'person', text: 'hi' },
+    { id: 2, author: 'bot', text: 'Delighted, Sir. To think, the crew uses your own ChatGPT, the same one you already use.' },
+    { id: 3, author: 'person', text: 'how do i pair my computer with you?' },
+    { id: 4, author: 'bot', text: "You're already connected to me here in Crewhouse, sir. Do you mean giving me access to files on this computer, or pairing a different computer?" },
+    { id: 5, author: 'person', text: 'i want to market my app' },
+    { id: 6, author: 'bot', text: "I can help with that, sir. What's the app called, and what does it do?" },
+    { id: 7, author: 'person', text: 'https://trymuxr.com/' },
+    { id: 8, author: 'bot', text: 'Scout has finished “https://trymuxr.com/”, Sir. It’s in Scout’s chat: “Sir, [muxr](https://trymuxr.com/) lets you monitor and control coding agents on your computer from a phone…”' },
+  ] : [
+    { id: 1, author: 'person', text: 'hi' },
+    { id: 2, author: 'bot', text: 'Hi. What would you like to work on?' },
+    { id: 3, author: 'person', text: 'how do i pair my computer with you?' },
+    { id: 4, author: 'bot', text: 'Open Settings › Phones › Add a phone on your computer, then scan the code with your phone.' },
+    { id: 5, author: 'person', text: 'i want to market my app' },
+    { id: 6, author: 'bot', text: 'I can help market it. Send the site so I can see the product and audience before drafting a plan.' },
+    { id: 7, author: 'person', text: 'https://trymuxr.com/' },
+    { id: 8, author: 'bot', text: 'muxr lets developers manage coding agents from their phone. I’ll map the audience, focus on developer communities and founder posts, then ask Scout and Scribe for first drafts. Nothing will be posted.' },
+    { id: 9, author: 'bot', text: 'Scout: A document in 1 section: muxr launch plan.', files: [{ bot: 'scout', path: 'files/muxr-launch-plan.docx' }] },
+  ] } : firstRun ? { messages: [
     { id: 1, author: 'person', text: first },
     { id: 2, author: 'chief', text: 'Delighted, Nadia. To think, the crew uses your own ChatGPT, the same one you already use.' },
     ...(variant === 'plan' ? [{ id: 3, author: 'chief', text: "Your ChatGPT plan doesn't include helpers yet. Everything else in ChatGPT is fine. ChatGPT Plus includes it, or you can ask Umer to cover it." }] : []),
@@ -295,7 +314,12 @@ const book = {
 };
 /** What crewd read out of a watch brief (?demo=neighbour, ?demo=brief, src/documents.ts): plain parts, never the file. */
 const briefDoc = (title: string, parts: Json[]) => ({ parts: [{ kind: 'heading', text: title }, ...parts] });
-const doc = variant === 'neighbour' ? briefDoc('The neighbours, this week', [
+const doc = variant === 'voice-after' ? briefDoc('muxr launch plan', [
+  { kind: 'p', text: 'Run your coding agents from your phone. For developers who keep multiple agents working while they step away.' },
+  { kind: 'heading', text: 'First moves' },
+  { kind: 'li', text: 'X: share a short product clip showing the phone view.' },
+  { kind: 'li', text: 'Developer communities: lead with a useful workflow, not a pitch.' },
+]) : variant === 'neighbour' ? briefDoc('The neighbours, this week', [
   { kind: 'p', text: 'What changed on the three stalls we watch, read off their own pages this Monday, and what it means for yours.' },
   { kind: 'heading', text: 'What changed' },
   { kind: 'li', text: 'Karak Chai House put its doodh patti up from 120 to 150 rupees — their prices page and their Instagram both say 150 now.' },

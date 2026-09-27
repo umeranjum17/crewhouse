@@ -663,8 +663,10 @@ export function room(page: Json, state: Json) {
   return (page?.lines ?? []).map((m: Json) => ({ id: m.id as number, who: people.get(m.bot) as Helper | undefined,
     to: m.to ? (people.get(m.to) as Helper | undefined)?.name : undefined,
     from: m.from ? (people.get(m.from) as Helper | undefined)?.name : undefined,
-    text: plain(m.text ?? ''), files: (m.files ?? []).map((f: Json) => fileView(f.bot, f.path)), at: at(m.at), author: m.author }));
+    text: chatWords(m.text ?? ''), files: (m.files ?? []).map((f: Json) => fileView(f.bot, f.path)), at: at(m.at), author: m.author }));
 }
+
+const chatWords = (text: string) => text.replace(/```[\s\S]*?```/g, '').split('\n').map(plain).join('\n').trim();
 
 export function lines(page: Json, bot: string): Line[] {
   return (page?.messages ?? []).map((m: Json) => {
@@ -678,7 +680,7 @@ export function lines(page: Json, bot: string): Line[] {
     // Another helper handing this one a job: a note in its words, "Reel asked: …".
     if (!['person', 'bot', 'chief'].includes(m.author)) return { id: m.id, from: 'note', text: `${String(m.author).replace(/^./, (c) => c.toUpperCase())} asked: ${plain(text)}`, files: [], choices: [] };
     return { id: m.id, from: m.author === 'person' ? 'me' : m.author === 'chief' && bot !== 'chief' ? 'chief' : 'them',
-      text: m.author === 'person' ? (pics.length && /^Here (is a photo|are some photos)\.$/.test(text) ? '' : noTools(text)) : plain(text), files: pics, choices: (m.choices ?? []).map(plain), at: m.at ? at(m.at) : undefined, unsure: m.author === 'bot' && /^Not sure it worked:|^[^.]{1,40} isn't sure “/.test(text) };
+      text: m.author === 'person' ? (pics.length && /^Here (is a photo|are some photos)\.$/.test(text) ? '' : noTools(text)) : chatWords(text), files: [...pics, ...(m.files ?? []).map((f: Json) => fileView(f.bot, f.path))], choices: (m.choices ?? []).map(plain), at: m.at ? at(m.at) : undefined, unsure: m.author === 'bot' && /^Not sure it worked:|^[^.]{1,40} isn't sure “/.test(text) };
   }).filter((l: Line) => l.text || l.files.length);
 }
 

@@ -164,7 +164,7 @@ test('first run: her first request waits for her own sign-in, Chief says why in 
   assert.equal(task(db, t).state, 'paused');
   assert.equal(task(db, t).member, sara);
   const said = () => db.all("SELECT text FROM messages WHERE bot = 'chief' AND member = ? AND author = 'bot'", sara).map((m: any) => m.text);
-  assert.ok(said().includes('Delighted, Sara. To think, the crew uses your own ChatGPT, the same one you already use.'), said().join('\n'));
+  assert.ok(said().includes("The crew uses your ChatGPT account. Sign in when you're ready and I'll start."), said().join('\n'));
   assert.equal(db.get("SELECT 1 FROM events WHERE kind = 'run.started'"), undefined, 'nothing ran on anyone else\'s account');
   // She signs in: it starts by itself, and Chief thanks her.
   crew.accounts.signedIn = real;
@@ -172,7 +172,7 @@ test('first run: her first request waits for her own sign-in, Chief says why in 
   crew.accounts.onSignedIn!(sara, 'chatgpt');
   await settled(db, t);
   assert.equal(task(db, t).state, 'done');
-  assert.ok(said().includes("You're signed in. Thank you, Sara. On it now."));
+  assert.ok(said().includes("You're signed in. I'll start now."));
   done();
 });
 

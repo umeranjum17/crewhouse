@@ -389,8 +389,8 @@ test('bots on disk: persona rename, capped notes, folder confinement, slugs', ()
   assert.deepEqual(execFileSync('git', ['log', '--format=%s'], { cwd: dir }).toString().trim().split('\n'), ['Personality changed by the person', 'Joined the crew']);
   assert.throws(() => disk.insideBot(cfg, 'frames', '../chief/notes.md'), /outside/);
   assert.equal(disk.slug('Ma Reel 2!'), 'ma-reel-2');
-  assert.match(disk.addressLine('Umer'), /chosen name, "Umer", never as "sir"/);
-  assert.equal(disk.addressLine("Ma'am"), 'Address the person as "ma\'am".');
+  assert.match(disk.addressLine('Umer'), /likes to be called "Umer".*at most once/);
+  assert.match(disk.addressLine("Ma'am"), /at most once/);
   done();
 });
 
@@ -476,7 +476,7 @@ test('limits: a limit rests that account and the task carries on in the same con
   crew.accounts.onSignedIn!(OWNER, 'grok');
   await settled(db, d);
   assert.equal(task(db, d).state, 'done');
-  assert.ok(db.get("SELECT 1 FROM messages WHERE bot = 'chief' AND text = ?", "You're signed in. Thank you, sir. On it now."));
+  assert.ok(db.get("SELECT 1 FROM messages WHERE bot = 'chief' AND text = ?", "You're signed in. I'll start now."));
   done();
 });
 
@@ -669,7 +669,7 @@ test('household: bots and tasks belong to a member and run on that member\'s own
   assert.notEqual(await crew.accounts.runtime(sam), await crew.accounts.runtime(OWNER));
 
   // Sam meets Chief in their own thread; the owner's conversation isn't in it.
-  assert.match(crew.botPage('chief', sam).messages.map((m: any) => m.text).join('\n'), /how would you like me to address you/);
+  assert.match(crew.botPage('chief', sam).messages.map((m: any) => m.text).join('\n'), /What should I call you/);
   assert.ok(!crew.botPage('chief', sam).messages.some((m: any) => m.text === 'sir'));
   crew.post('chief', 'Sam', undefined, sam);
   assert.equal(crew.member(sam).address, 'Sam');
@@ -686,7 +686,7 @@ test('household: bots and tasks belong to a member and run on that member\'s own
   assert.equal(task(db, a).state, 'done');
   assert.equal(JSON.parse(db.get("SELECT data FROM events WHERE kind = 'run.started' ORDER BY seq DESC")!.data).member, sam);
   assert.match(readFileSync(task(db, a).session, 'utf8'), /task #\d+ from Sam\]/);
-  assert.match(readFileSync(task(db, a).session, 'utf8'), /chosen name, \\"Sam\\"/);
+  assert.match(readFileSync(task(db, a).session, 'utf8'), /likes to be called \\"Sam\\"/);
   const b = (await crew.post('reel', 'owner demo', undefined, OWNER))!.task;
   await settled(db, b);
   const ran = JSON.parse(db.get("SELECT data FROM events WHERE kind = 'run.started' ORDER BY seq DESC")!.data);
@@ -915,7 +915,7 @@ test('routing: a plain request goes straight to its helper, the member\'s AI pla
   assert.equal(task(db, a).body, 'Reel, make a 10 second demo of the signup screen');
   assert.equal(chiefSaid(), 'Reel is on it.');
   await settled(db, a);
-  assert.match(db.get("SELECT text FROM messages WHERE bot = 'chief' ORDER BY id DESC")!.text, /^Reel has finished “Reel, make a 10 second demo of the/);
+  assert.match(db.get("SELECT text FROM messages WHERE bot = 'chief' ORDER BY id DESC")!.text, /^Reel: /);
 
   // "@Scout" anywhere is a rule too: the member's AI (here set to say Reel) is never asked.
   const m = (await crew.post('chief', 'could you look into standing desks for me @Scout [route reel]'))!.task;
@@ -938,7 +938,7 @@ test('routing: a plain request goes straight to its helper, the member\'s AI pla
   const n = db.get('SELECT COUNT(*) AS n FROM tasks')!.n;
   assert.equal(await crew.post('chief', 'something about the screenshots [route ?]'), undefined);
   assert.equal(db.get('SELECT COUNT(*) AS n FROM tasks')!.n, n, 'nothing starts on a guess');
-  assert.match(chiefSaid(), /^Just so this goes to the right hands, sir: shall (Reel|Scout) take it, or (Scout|Reel|shall I see to it myself)\?$/);
+  assert.match(chiefSaid(), /^Just so this goes to the right hands: shall (Reel|Scout) take it, or (Scout|Reel|shall I see to it myself)\?$/);
   const d = (await crew.post('chief', 'Reel please'))!.task;
   assert.equal(task(db, d).bot, 'reel');
   assert.equal(task(db, d).body, 'something about the screenshots [route ?]\nReel please');
@@ -1044,7 +1044,7 @@ test('Chief makes up a new helper on a card: nothing until the person says yes, 
   assert.match(instructions, /## Boundaries[\s\S]*never sign in/);
   assert.throws(() => disk.writeJob(crew['cfg'], 'pip', { ...pip.job, aim: 'x'.repeat(601) }), /600/);
   assert.equal(readFileSync(join(dir, 'soul.md'), 'utf8'), '# Pip\n\nYou are Pip. Cheerful and quick.\n');
-  assert.match(lastSaid(db, 'chief'), /^Pip has joined the crew, sir\. I've handed Pip your request/);
+  assert.match(lastSaid(db, 'chief'), /^Pip has joined the crew\. I've handed Pip your request/);
   const first = db.get("SELECT * FROM tasks WHERE bot = 'pip'")!;
   assert.deepEqual([first.origin, first.body], ['chief', 'find me flats in Phuket under $900']);
   await settled(db, first.id);

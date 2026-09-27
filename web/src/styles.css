@@ -246,7 +246,20 @@ a.back:not([aria-label]) { font-size: 15px; margin-bottom: 6px; }
 .line.consecutive .line-by { display: none; }
 .line-by .who { font: 600 13px/18px var(--ui); color: var(--ink); }
 .line-by time { font-size: 12px; color: var(--mute); }
-.line .bubble-text { margin-left: 36px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.line .bubble-text { margin-left: 36px; overflow-wrap: anywhere; font: 400 16px/1.5 var(--ui); max-width: 62ch; }
+.chat-md > :first-child { margin-top: 0; }
+.chat-md > :last-child { margin-bottom: 0; }
+.chat-md p, .chat-md ul, .chat-md pre { margin: 0 0 12px; }
+.chat-md h3 { font: 600 18px/1.35 var(--ui); margin: 16px 0 8px; }
+.chat-md ul { padding-left: 22px; }
+.chat-md li { margin: 4px 0; }
+.chat-md li p { display: inline; }
+.chat-md .chat-link { display: inline-block; color: var(--ink); background: var(--soft); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; text-decoration: underline; text-underline-offset: 2px; }
+.chat-table { overflow-x: auto; margin-bottom: 12px; }
+.chat-table table { border-collapse: collapse; }
+.chat-table th, .chat-table td { padding: 6px 10px; border: 1px solid var(--line); text-align: left; }
+.chat-md pre { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--soft); padding: 10px; border-radius: 8px; }
+.chat-more { border: 0; background: none; color: var(--ink); text-decoration: underline; cursor: pointer; font: 600 14px/1.5 var(--ui); padding: 4px 0; }
 .line.me { margin-left: auto; max-width: 78%; }
 .line.me .bubble-text { margin: 0; padding: 10px 15px; background: var(--soft); border: 1px solid var(--line); border-radius: 18px 18px 6px 18px; }
 .line.note { max-width: 92%; }

@@ -25,7 +25,7 @@ test('handoff copies only the passer’s files and the room is member-scoped', a
   await release(crew, 'reel', 'Passed it on.'); await settled(db, first); await settled(db, next.id);
   const wraps = db.all("SELECT * FROM events WHERE kind = 'room.wrap' AND json_extract(data, '$.root') = ?", first);
   assert.equal(wraps.length, 1);
-  assert.ok(db.get("SELECT text FROM messages WHERE bot = 'chief' AND task_id = ? AND text LIKE 'All done%'", first));
+  assert.ok(db.get("SELECT text FROM messages WHERE bot = 'chief' AND task_id = ? AND text LIKE 'All done.%'", first));
   done();
 });
 
@@ -41,7 +41,7 @@ test('two passes settle into exactly one wrap-up without per-task completions', 
   await settled(db, first); for (const p of parts) await settled(db, p.id);
   assert.equal(db.all("SELECT seq FROM events WHERE kind = 'room.wrap' AND json_extract(data, '$.root') = ?", first).length, 1);
   assert.equal(db.all("SELECT id FROM messages WHERE bot = 'chief' AND text LIKE '%has finished%' AND task_id = ?", first).length, 0);
-  assert.match(db.get("SELECT text FROM messages WHERE bot = 'chief' AND task_id = ? AND text LIKE 'All done%'", first)?.text ?? '', /Scout:.*Scout:/);
+  assert.match(db.get("SELECT text FROM messages WHERE bot = 'chief' AND task_id = ? AND text LIKE 'All done.%'", first)?.text ?? '', /Scout:.*\nScout:/);
   done();
 });
 
@@ -94,7 +94,7 @@ test('wrap-up reports an unsure part without saying all done', async () => {
   const next = db.get("SELECT id FROM tasks WHERE bot = 'scout'")!.id;
   await settled(db, next); await settled(db, first);
   assert.equal(task(db, next).state, 'unsure');
-  const wrap = db.get("SELECT text FROM messages WHERE bot = 'chief' AND task_id = ? AND text LIKE 'The crew has stopped%'", first);
+  const wrap = db.get("SELECT text FROM messages WHERE bot = 'chief' AND task_id = ? AND text LIKE 'The crew has stopped.%'", first);
   assert.match(wrap?.text ?? '', /Scout: not sure it worked/);
   done();
 });
