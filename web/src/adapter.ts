@@ -35,7 +35,7 @@ export type Step = { at: number; text: string; now?: boolean; asked?: boolean; s
 /** `unsure`: crewd's line for a job that acted but couldn't confirm it worked, shown apart from the helper's own words. */
 export type Line = { id: number; from: 'me' | 'them' | 'chief' | 'note'; text: string; files: FileView[]; choices: string[]; at?: number; unsure?: boolean };
 /** The one-use pairing ticket is rendered only in the owner's Chief chat, never as chat text. */
-export const phoneOffer = (page: Json, member: number): { qr: string; typed: string; expires: number; message: number } | null => member === OWNER ? page?.phoneOffer ?? null : null;
+export const phoneOffer = (page: Json, member: number): { qr: string; typed: string; expires: number; message: number; token?: string; waiting?: { id: number; name: string; words: string }; joined?: string } | null => member === OWNER ? page?.phoneOffer ?? null : null;
 export type App = { id: string; name: string; mark: string; bg: string; on: boolean; does: string; warns?: boolean };
 
 // ---------- words ----------
@@ -146,6 +146,7 @@ const JSON_BLOB = /\{(?:[^{}]|\{[^{}]*\})*\}/g; // nor is a raw JSON object, one
 export const noTools = (text = '') => text.replace(TOOL_CALL, ' ').replace(JSON_BLOB, ' ').replace(TOOL_FRAGMENT, '').replace(/\s{2,}/g, ' ').trim();
 
 export function plain(text = '') {
+  if (/\bstub [\w-]+:/.test(text)) return 'On it.';
   return noTools(text)
     .replace(/```[\s\S]*?```/g, '')
     .replace(/`([^`\n]*)`/g, (_, s: string) => (/^[\w.\-~\/]+\.[a-z0-9]{2,4}$/i.test(s) ? `“${pretty(s)}”` : /[\/\\$|]|--?\w/.test(s) ? '' : s))
@@ -691,7 +692,7 @@ export function room(page: Json, state: Json) {
 const chatWords = (text: string) => text.replace(/```[\s\S]*?```/g, '').split('\n').map(plain).join('\n').trim();
 
 export function lines(page: Json, bot: string): Line[] {
-  return (page?.messages ?? []).map((m: Json) => {
+  return (page?.messages ?? []).filter((m: Json) => !/\bstub [\w-]+:/.test(String(m.text ?? ''))).map((m: Json) => {
     const pics = photos(String(m.text ?? ''));
     const text = String(m.text ?? '').replace(PHOTO, '').trim();
     if (m.author === 'system') {

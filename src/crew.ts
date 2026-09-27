@@ -26,6 +26,10 @@ import type { Link } from './link.ts';
 
 /** Phone pairing stays with Chief, including 'pair my computer with you' said on the home computer. */
 export const asksForPhone = (text: string) => /\b(pair|connect|link|add|use|install)\b[\s\S]{0,65}\b(phone|mobile|computer|crewhouse app)\b|\b(phone|mobile|computer)\b[\s\S]{0,35}\b(pair|connect|link)\b/i.test(text);
+export const inlineHowTo = (text: string): 'signin' | 'app' | 'routine' | null =>
+  /\b(sign[ -]?in|log[ -]?in)\b/i.test(text) && /\b(chatgpt|ai account|crewhouse)\b/i.test(text) ? 'signin' :
+  /\b(connect|link|add)\b[\s\S]{0,45}\b(google calendar|calendar|gmail|drive|notion|canva)\b/i.test(text) ? 'app' :
+  /\b(every|each|weekday|routine|schedule)\b/i.test(text) ? 'routine' : null;
 
 const HOLD_MS = Number(process.env.CREWHOUSE_HOLD_MS || 180_000); // how long a tool call waits for an answer before the turn parks
 const TASK_TIMEOUT_MS = 60 * 60_000;
@@ -175,7 +179,7 @@ export class Crew {
   readonly desktops: Desktops;
   readonly accounts: Accounts;
   readonly connections: Connections;
-  phoneLink?: Pick<Link, 'offer'>;
+  phoneLink?: Pick<Link, 'offer' | 'status'>;
   private freshAt = 0;
   private lastTick = 0;
   /** Keeps idle sleep away while a helper is working, and only then. Never the lid. Tests replace it. */
@@ -711,7 +715,8 @@ export class Crew {
         const value = this.db.get("SELECT value FROM settings WHERE key = 'phone.offer.1'")?.value;
         if (!value) return null;
         const offer = JSON.parse(value);
-        return offer.expires + 10 * 60_000 > Date.now() ? offer : null;
+        const waiting = this.phoneLink?.status().asking.find((a) => a.offer === offer.token);
+        return { ...offer, waiting };
       })() : null,
       messages: (around
         ? this.db.all(`SELECT * FROM (
@@ -858,6 +863,18 @@ export class Crew {
       await this.addPhone(member);
       return;
     }
+    if (botId === CHIEF && !pics.length && inlineHowTo(words) === 'signin') {
+      this.say(CHIEF, 'person', words, null, member);
+      this.say(CHIEF, 'bot', 'Sign in with ChatGPT.', null, member);
+      return;
+    }
+    if (botId === CHIEF && !pics.length && inlineHowTo(words) === 'app') {
+      this.say(CHIEF, 'person', words, null, member);
+      const app = /\b(calendar|gmail|drive|notion|canva)\b/i.exec(words)?.[1].toLowerCase() ?? 'calendar';
+      this.say(CHIEF, 'bot', `Connect ${this.connections.apps[app].name}.`, null, member);
+      if (!this.connections.connected(member, app)) this.openAsk(CHIEF, undefined, `Connect ${this.connections.apps[app].name}`, { app, words: `Connect your ${this.connections.apps[app].name}` }, 'connect', member);
+      return;
+    }
     if (botId === CHIEF) return this.route(words, model, member, pics, room);
     const latest = room ? this.db.get('SELECT root FROM tasks WHERE room = 1 AND member = ? AND bot = ? ORDER BY id DESC LIMIT 1', member, botId) : undefined;
     return this.addTask(botId, words, 'person', model, member, undefined, words, pics, { room, root: latest?.root });
@@ -870,10 +887,24 @@ export class Crew {
       return { available: false };
     }
     if (!this.phoneLink) throw fail('Phone pairing is not ready yet', 503);
-    const { qr, typed, expires } = await this.phoneLink.offer('control', member);
+    const token = randomBytes(16).toString('hex');
+    const { qr, typed, expires } = await this.phoneLink.offer('control', member, token);
     const message = this.say(CHIEF, 'bot', 'Here is your Add a phone code.', null, member);
-    this.db.run("INSERT INTO settings (key, value) VALUES ('phone.offer.1', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", JSON.stringify({ qr, typed, expires, message }));
+    this.db.run("INSERT INTO settings (key, value) VALUES ('phone.offer.1', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", JSON.stringify({ qr, typed, expires, message, token }));
     return { shown: true }; // the model never sees the one-use ticket
+  }
+
+  /** Refresh only the owner's currently displayed offer; an old card cannot replace a newer one. */
+  async refreshPhone(message: number, member: number) {
+    if (member !== OWNER) throw fail('ask the owner to add a phone', 403);
+    const old = JSON.parse(this.db.get("SELECT value FROM settings WHERE key = 'phone.offer.1'")?.value ?? 'null');
+    if (!old || old.message !== message || old.joined) throw fail('that code is no longer showing', 409);
+    if (!this.phoneLink) throw fail('Phone pairing is not ready yet', 503);
+    const token = randomBytes(16).toString('hex');
+    const { qr, typed, expires } = await this.phoneLink.offer('control', member, token);
+    const offer = { qr, typed, expires, message, token };
+    this.db.run("UPDATE settings SET value = ? WHERE key = 'phone.offer.1'", JSON.stringify(offer));
+    return offer;
   }
 
   /** A targeted request that must stay with Chief rather than pass through helper routing. */

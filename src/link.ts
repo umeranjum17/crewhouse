@@ -80,7 +80,7 @@ const pushOf = (v?: string) => (v === 'missing' || v === 'off' ? v : v ? 'on' : 
 const memberOf = (g: Grant) => (g.meta as { member?: number } | undefined)?.member ?? 1;
 
 /** A phone waiting at the computer for the person's yes: its name and the two words both screens show. */
-type Asking = { id: number; name: string; words: string; role: Role; member: number; answer: (yes: boolean) => void };
+type Asking = { id: number; name: string; words: string; role: Role; member: number; offer?: string; answer: (yes: boolean) => void };
 
 export class Link {
   host!: Host;
@@ -144,7 +144,14 @@ export class Link {
     this.db.tx(() => {
       this.db.run('DELETE FROM devices');
       for (const g of grants) this.db.run('INSERT INTO devices (id, name, pk, role, member, created_at, last_seen) VALUES (?, ?, ?, ?, ?, ?, ?)', g.id, g.name, g.key, g.role, memberOf(g), g.created, g.lastSeen ?? null);
-      for (const g of grants) if (!before.has(g.id)) this.db.event('device.paired', null, { id: g.id, name: g.name, role: g.role, member: memberOf(g) });
+      for (const g of grants) if (!before.has(g.id)) {
+        this.db.event('device.paired', null, { id: g.id, name: g.name, role: g.role, member: memberOf(g) });
+        const value = this.db.get("SELECT value FROM settings WHERE key = 'phone.offer.1'")?.value;
+        if (value && (g.meta as any)?.offer) {
+          const card = JSON.parse(value);
+          if (card.token === (g.meta as any).offer) this.db.run("UPDATE settings SET value = ? WHERE key = 'phone.offer.1'", JSON.stringify({ ...card, joined: g.name }));
+        }
+      }
       for (const [id, g] of before) if (!grants.some((x) => x.id === id)) {
         this.db.run("DELETE FROM settings WHERE key IN (?, ?)", `phone.push.${id}`, `phone.reach.${id}`);
         this.db.event('device.revoked', null, { id, name: g.name });
@@ -157,7 +164,7 @@ export class Link {
     return new Promise<boolean>((resolve) => {
       const id = ++this.n;
       const done = (yes: boolean) => { if (this.asking.delete(id)) { this.db.event('device.asked', null, { id, done: true }); resolve(yes); } };
-      this.asking.set(id, { id, name: p.name, words: p.words, role: p.role, member: (p.meta as any)?.member ?? 1, answer: done });
+      this.asking.set(id, { id, name: p.name, words: p.words, role: p.role, member: (p.meta as any)?.member ?? 1, offer: (p.meta as any)?.offer, answer: done });
       this.db.event('device.asked', null, { id, name: p.name }); // Settings shows the question
       setTimeout(() => done(false), PAIR_MS).unref();
     });
@@ -361,11 +368,11 @@ export class Link {
     const missing = this.setting('push.refused') || this.host?.devices().some((g) => this.setting(`phone.push.${g.id}`) === 'missing');
     return { on: this.cfg.linkPort > 0, lan: this.lan, pinned: !!this.cfg.linkHost, hosts: [...this.servers.keys()], tailscale: ipv4(this.ifaces()).some(tailscale), anywhere: this.anywhere,
       relay: this.relay, relayStatus: this.relayStatus, push: missing ? 'missing' : 'ready',
-      asking: [...this.asking.values()].map(({ id, name, words, role }) => ({ id, name, words, role })) };
+      asking: [...this.asking.values()].map(({ id, name, words, role, member, offer }) => ({ id, name, words, role, member, offer })) };
   }
 
   /** A single-use QR for a phone that will act as `member`. */
-  async offer(role: string, member: number): Promise<{ qr: string; typed: string; expires: number; urls: string[] }> {
+  async offer(role: string, member: number, offer?: string): Promise<{ qr: string; typed: string; expires: number; urls: string[] }> {
     if (role !== 'control' && role !== 'view') throw Object.assign(new Error('role is control or view'), { status: 400 });
     // The home network opens for as long as the code lasts (and a phone that joins keeps its socket); Tailscale may have
     // come up since crewd started.
@@ -374,7 +381,7 @@ export class Link {
     this.shut = setTimeout(() => void this.bind(), PAIR_MS + 100).unref();
     await this.bind();
     const urls = this.urls();
-    const { text, expires } = this.host.offer({ role, urls, meta: { member } });
+    const { text, expires } = this.host.offer({ role, urls, meta: { member, offer } });
     const raw = JSON.parse(new TextDecoder().decode(unb64url(text.slice('byokit-link:1:'.length))));
     return { qr: text, typed: encodeTyped(raw), expires, urls };
   }

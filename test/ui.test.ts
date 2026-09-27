@@ -865,6 +865,7 @@ test('a delivered markdown file opens rendered, and no screen leads to the raw f
   assert.equal(safeLink('javascript:alert(1)'), '', 'a javascript link never opens');
   assert.match(safeLink('https://cook.example'), /^https:/, 'an http(s) link does');
   const demo = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'demo.ts'), 'utf8');
+  assert.doesNotMatch(demo, /stub [\w-]+:/i, 'demo replies never expose the test model');
   assert.match(demo, /dinners-and-shopping-list\.md'\) \? \{ text:/, 'the demo serves the plan the way crewd does: its own words');
   const main = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
   assert.match(main, /A\.fileTarget\(t\.files\[0\]\)/, 'Home opens a finished thing the same rendered way');
