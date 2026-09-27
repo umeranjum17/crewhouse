@@ -21,7 +21,8 @@
     "use-the-browser",
     "claim-a-price-drop",
     "return-and-chase",
-    "unclaimed-money"
+    "unclaimed-money",
+    "catch-the-renewal"
   ],
   "ideas": [
     {
@@ -63,6 +64,16 @@
       "group": "money",
       "promise": "I'll set up the return, keep the label, and keep checking until the shop says the refund is on its way. Every step asks you first, on its own card.",
       "ask": "Help me return this and get the refund"
+    },
+    {
+      "needs": [
+        "web",
+        "documents",
+        "gmail"
+      ],
+      "group": "money",
+      "promise": "I'll catch a renewal or a price rise before it's charged, and have the cancellation email ready. Every step asks you first, on its own card.",
+      "ask": "Watch my subscriptions so nothing gets renewed without me hearing about it first"
     }
   ]
 }

@@ -2,7 +2,7 @@
 // Open the app with ?demo (Nadia's phone), ?demo=umer (the owner), ?demo=hello (first run), ?demo=first (her first
 // request, waiting for her sign-in), ?demo=answer (Chief's first answer), ?demo=plan (a plan without helpers),
 // ?demo=resting, ?demo=connect (a helper asks for Google Calendar in chat), ?demo=nogoogle (Google not on for the house), ?demo=share (the crew's share used up today, $4 spent), ?demo=claim (Scout asks to fill a line of an unclaimed-money claim),
-// ?demo=return (Scout asks to press a shop's Start return), ?demo=chase (Scout's chase email as a draft to send).
+// ?demo=return (Scout asks to press a shop's Start return), ?demo=chase (Scout's chase email as a draft to send), ?demo=renewal (Scout's renewal warning and the cancellation email as a draft to send).
 // &sheet=signin or &sheet=connect opens that sheet, and &phase=… pins it to one state.
 import type { Json } from './api.ts';
 import { describe, nextRun, parseSchedule } from '../../src/routines.ts';
@@ -13,6 +13,8 @@ const min = 60_000;
 const me = variant === 'umer' ? 1 : 2;
 const signin = ['signin', 'hello', 'first', 'work'].includes(variant);
 const firstRun = ['first', 'answer', 'plan', 'work'].includes(variant);
+// Google for the whole house: what crewd's ideas[] says a job waits on when the house's Google is off (docs/ui-contract.md).
+const houseGoogle = variant !== 'nogoogle' && !new URLSearchParams(location.search).has('nohouse');
 
 const svg = (a: string, b: string, label: string) => `data:image/svg+xml,${encodeURIComponent(
   `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="400"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient></defs><rect width="640" height="400" fill="url(#g)"/><text x="320" y="215" font-family="Nunito,sans-serif" font-weight="900" font-size="46" fill="#fff" text-anchor="middle">${label}</text></svg>`)}`;
@@ -119,6 +121,7 @@ const state = {
     { bot: 'scout', promise: "I'll keep an eye on what you just bought, and tell you the day you can claim the money back. I'll do it end to end — you just tap approve.", ask: 'Watch something I bought and tell me when I can claim the difference back', group: 'money', needs: ['Gmail'] },
     { bot: 'scout', promise: "I'll search the government's unclaimed-money registers for our family's names and get the claims ready to file. I'll file it end to end — you just tap approve.", ask: 'Search for money owed to us that nobody has claimed', group: 'money', needs: [] },
     { bot: 'scout', promise: "I'll set up the return, keep the label, and keep checking until the shop says the refund is on its way. Every step asks you first, on its own card.", ask: 'Help me return this and get the refund', group: 'money', needs: [] },
+    { bot: 'scout', promise: "I'll catch a renewal or a price rise before it's charged, and have the cancellation email ready. Every step asks you first, on its own card.", ask: 'Watch my subscriptions so nothing gets renewed without me hearing about it first', group: 'money', needs: houseGoogle ? [] : ['Google'] },
     { bot: 'pip', promise: 'Plan a birthday party', ask: 'Plan a birthday party for ' },
     { bot: 'chief', promise: "What's on this week?", ask: "What's on this week?" },
     { bot: 'reel', promise: 'Make a poster from photos', ask: 'Make a poster from these photos: ' },
@@ -136,6 +139,10 @@ const state = {
         words: 'Scout drafted something for the shop’s support inbox. Nothing is sent: you post it yourself.',
         draft: { to: 'the shop’s support inbox', path: 'files/chase-order-98765.md', sha: 'demo' },
         preview: { head: 'Draft for the shop’s support inbox', body: 'Subject: Order 98765 — returned 16 May, no refund yet\n\nHello, my return reached you on 16 May, inside your own 30-day window. The order page still shows no refund.\n\nPlease confirm when the refund goes back to my card. Regards,\nNadia' } } }]
+    : variant === 'renewal' ? [{ id: 18, bot: 'scout', task_id: 49, kind: 'propose', at: now - 30_000, member: me, title: 'Scout drafted something for the streaming service’s support inbox. Nothing is sent: you post it yourself.', detail: {
+        words: 'Scout drafted something for the streaming service’s support inbox. Nothing is sent: you post it yourself.',
+        draft: { to: 'the streaming service’s support inbox', path: 'files/cancel-family-plan.md', sha: 'demo' },
+        preview: { head: 'Draft for the streaming service’s support inbox', body: 'Subject: Family plan — please cancel before 14 June\n\nHello, my Family plan renews on 14 June at $18.99. Please cancel it from that date and confirm in writing that nothing further will be charged to my card.\n\nRegards,\nNadia' } } }]
     : firstRun ? [] : asks.filter((a) => a.member === me),
   events,
   resting: variant === 'resting' ? { chatgpt: now + 95 * min } : {},
@@ -147,7 +154,7 @@ const state = {
   connections: variant === 'connect' ? [] : ['drive', 'gmail'],
   share: { choice: 'light', used: variant === 'share' },
   money: { cap: 20, spent: variant === 'share' ? 4 : 0 },
-  house: { google: variant !== 'nogoogle' && !new URLSearchParams(location.search).has('nohouse'), steps: [
+  house: { google: houseGoogle, steps: [
     { state: 'checked', note: 'Google knows the project.' }, { state: 'missing', note: 'Gmail API is still off. Enable it.' },
     { state: 'said', note: 'Checked the first time someone connects.' }, { state: 'checked', note: 'Google took the key.' }] },
   desktops: { missing: [] },
@@ -198,6 +205,12 @@ pages.scribe = { messages: [
   { id: 9, author: 'bot', text: 'Done: the front-desk handbook. How the day opens, check-ins, payments, and what to do when the power goes. Say the word and I’ll change anything in it.' },
   { id: 10, author: 'system', text: 'Delivered files/front-desk-handbook.docx: A document in 3 sections: Front-desk handbook' },
 ] };
+// A renewal caught ahead of the bill: the warning in Scout's chat, and the cancellation sitting below it as a draft.
+if (variant === 'renewal') pages.scout = { messages: [
+  { id: 1, author: 'person', text: 'watch my subscriptions so nothing gets renewed without me hearing about it first' },
+  { id: 2, author: 'bot', text: 'Your streaming Family plan renews on 14 June at $18.99 — read off your own account page, not the page new customers see. Ten days ahead of the bill, so you hear it now.' },
+  { id: 3, author: 'bot', text: 'The cancellation email is on a card below, in your name. Nothing is sent and nothing is cancelled yet: you read it and post it yourself. If you would rather I pressed Cancel on your account page, say so — I’ll ask you again on a card naming the button and what it changes.' },
+], notes: '', tasks: [] };
 /** What crewd read out of that workbook (src/workbooks.ts): the demo\u2019s own copy, in crewd\u2019s shape. */
 const book = {
   sheets: [
