@@ -927,6 +927,11 @@ test('routing: a plain request goes straight to its helper, the member\'s AI pla
   assert.equal(task(db, b).bot, 'chief');
   await settled(db, b);
 
+  // Paperwork is Chief's coordination goal; no extra routing model call delays his first words.
+  const p = (await crew.post('chief', 'Help me sort my paperwork [route scout]'))!.task;
+  assert.equal(task(db, p).bot, 'chief');
+  await settled(db, p);
+
   // No rule places it: the member's own AI (the stub) does, and Scout takes it.
   const before = models();
   const c = (await crew.post('chief', 'what do people say about standing desks? [route scout]'))!.task;
@@ -1057,6 +1062,18 @@ test('Chief makes up a new helper on a card: nothing until the person says yes, 
   done();
 });
 
+test('Chief uses low effort for the first coordination turn', async () => {
+  const { db, crew, done } = setup();
+  crew.onboard('Alex');
+  const { task: id } = (await crew.post('chief', 'ask permission'))!;
+  await holding(crew, 'chief');
+  // The no-reasoning stub clamps the requested low effort to off; the real model accepts low.
+  assert.equal(crew.sessionOf('chief')!.thinkingLevel, 'off');
+  await release(crew, 'chief');
+  await settled(db, id);
+  done();
+});
+
 test('Chief proposes helper job recipes; nothing writes until Use it, and crew_job belongs only to Chief', async () => {
   const { db, crew, done } = setup();
   crew.onboard('sir');
@@ -1066,6 +1083,8 @@ test('Chief proposes helper job recipes; nothing writes until Use it, and crew_j
   const before = readFileSync(join(botDir, 'AGENTS.md'), 'utf8');
   const chiefTools = (crew as any).crewTools('chief').map((t: any) => t.name);
   assert.ok(chiefTools.includes('crew_job'));
+  for (const name of ['crew_deliver', 'crew_workbook', 'crew_document', 'crew_copy', 'crew_draft', 'crew_verify'])
+    assert.ok(!chiefTools.includes(name), `${name} belongs to helpers, not Chief's coordination turn`);
   for (const id of ['scout', 'scribe', 'pip']) assert.ok(!(crew as any).crewTools(id).some((t: any) => t.name === 'crew_job'), `${id} cannot write helper jobs`);
   const job = { bot: 'scout', does: 'Find reliable answers.', aim: 'Give a concise answer.', gets: 'The person’s question.', how: 'Check trustworthy sources.', great: 'A sourced answer; for example, three clear findings.' };
   const askJob = async () => {

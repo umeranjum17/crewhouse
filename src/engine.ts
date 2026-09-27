@@ -26,6 +26,8 @@ export interface SessionSpec {
   gate: Gate;
   /** Automatic retries on a passing hiccup; the stub model wants every answer exactly once. */
   retry: boolean;
+  /** Chief coordinates quickly; helpers keep the engine's default effort for their work. */
+  thinking?: 'low';
 }
 
 export async function openSession(s: SessionSpec): Promise<AgentSession> {
@@ -49,6 +51,7 @@ export async function openSession(s: SessionSpec): Promise<AgentSession> {
     cwd: s.space, agentDir: engineDir, modelRuntime: s.runtime, model, resourceLoader, settingsManager, tools, customTools: s.tools,
     sessionManager: s.file ? SessionManager.open(s.file, s.sessionsDir, s.space) : SessionManager.create(s.space, s.sessionsDir),
   });
+  if (s.thinking) session.setThinkingLevel(s.thinking);
   return session;
 }
 

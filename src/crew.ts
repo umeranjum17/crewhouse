@@ -1146,6 +1146,7 @@ export class Crew {
       runtime: await this.accounts.runtime(member), provider: PROVIDERS[brain.provider].pi, model: brain.model ?? PROVIDERS[brain.provider].models.strong,
       space, file, sessionsDir: join(this.cfg.stateDir, 'sessions', bot.id), system: disk.systemPrompt(this.cfg, bot.id, bot.id === CHIEF),
       skills: join(space, 'skills'), builtins, tools, gate: (tool, input) => this.gate(bot.id, tool, input), retry: this.cfg.engine === 'pi',
+      thinking: bot.id === CHIEF ? 'low' : undefined,
     });
     l.counted = l.session.messages.length; // a resumed session's earlier turns were counted when they ran
     this.live.set(bot.id, l);
@@ -1663,7 +1664,9 @@ export class Crew {
         { bot: Type.String(), task: Type.String(), files: Type.Optional(Type.Array(Type.String())) }, (p) => this.pass(botId, String(p.bot ?? '').toLowerCase(), String(p.task ?? ''), p.files ?? []))];
     }
     const accounts = Object.keys(PROVIDERS).join(', ');
-    return [...own,
+    // Chief coordinates and delegates finished files to helpers; their artifact tools need not occupy his first model call.
+    const chiefTools = own.filter((t) => !['crew_deliver', 'crew_workbook', 'crew_document', 'crew_copy', 'crew_draft', 'crew_verify'].includes(t.name));
+    return [...chiefTools,
       tool('crew_add_phone', 'Show the owner an Add a phone card in this chat with a fresh QR and code. Only the owner can add phones.', {}, () => this.addPhone(this.chiefFor())),
       tool('crew_roster', 'Who is on the crew, and the templates you can recruit from.', {}, () => ({
         crew: this.bots().filter((x) => x.id !== CHIEF).map((x) => ({ id: x.id, name: x.display, role: x.role, busy: !!this.activeTask(x.id),
