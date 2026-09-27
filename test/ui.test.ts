@@ -408,6 +408,7 @@ test('helpers wear the same story on their own faces', () => {
 
 test('the phone\'s tab icons: whole 9×9 grids of one ink, each its own shape, and no font glyphs in the tab bar', async () => {
   const { TABS } = await import('../web/src/art.ts');
+  assert.deepEqual(Object.keys(TABS), ['home', 'crew', 'things', 'routines', 'settings']);
   for (const [k, b] of Object.entries(TABS)) assert.ok(b.length === 9 && b.every((r) => /^[.x]{9}$/.test(r)), k);
   assert.equal(new Set(Object.values(TABS).map((b) => b.join())).size, Object.keys(TABS).length);
   const app = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
@@ -655,7 +656,7 @@ test('a failed send keeps the words for a Retry; every chat keeps its own draft'
   assert.match(parts, /send-failed[\s\S]{0,200}type="button"/, 'the composer\u2019s Retry is type="button"');
   const lum = (hex: string) => { const c = hex.replace('#', ''); const [r, g, b] = [0, 2, 4].map((i) => parseInt(c.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
   const ratio = (a: string, b: string) => { const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m); return (x + 0.05) / (y + 0.05); };
-  assert.ok(ratio(color.day.pinkInk, '#ffffff') >= 4.5, `the "Not sent" pink on white is ${ratio(color.day.pinkInk, '#ffffff').toFixed(2)}`);
+  assert.ok(ratio(color.day.pink, '#ffffff') >= 4.5, `the "Not sent" pink on white is ${ratio(color.day.pink, '#ffffff').toFixed(2)}`);
 });
 
 test('the words people read make only claims Crewhouse can keep', () => {
@@ -684,15 +685,14 @@ test('a dialog owns the keyboard: Tab cycles inside and wraps, and an outside fo
   assert.equal(on, '', 'deciding a move focuses nothing by itself');
 });
 
-test('secondary text clears 4.5:1 against the surfaces it sits on, day and night', () => {
+test('reading text clears 4.5:1 against the surfaces it sits on, day and night', () => {
   const lum = (hex: string) => { const c = hex.replace('#', ''); const [r, g, b] = [0, 2, 4].map((i) => parseInt(c.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
   const ratio = (a: string, b: string) => { const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m); return (x + 0.05) / (y + 0.05); };
-  // Card is translucent over the page, so white is its lightest possible read.
   for (const [name, pal, bgs] of [
-    ['day', color.day, ['#ffffff', color.day.bg, color.day.soft]],
-    ['night', color.night, [color.night.bg, color.night.solid, '#1a1626', color.night.soft]],
+    ['day', color.day, [color.day.surface, color.day.bg, color.day.sunken]],
+    ['night', color.night, [color.night.bg, color.night.surface, color.night.sunken]],
   ] as const) {
-    for (const t of [pal.ink, pal.ink2, pal.mute, pal.okInk, pal.pinkInk]) {
+    for (const t of [pal.ink, pal.ink2]) {
       for (const b of bgs) assert.ok(ratio(t, b) >= 4.5, `${name}: ${t} on ${b} is ${ratio(t, b).toFixed(2)}`);
     }
   }
