@@ -179,7 +179,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     let r: RegExpMatchArray | null;
     // What is installing now, and (for the owner) a newer Crewhouse to download.
     if (m === 'GET' && p === '/api/state') return { ...crew.snapshot(me), zone: Intl.DateTimeFormat().resolvedOptions().timeZone, installing: [...installing], showing: teacher.showing(), ...(update && me === OWNER ? { update } : {}) };
-    if (m === 'GET' && p === '/api/events') return db.events(Number(q.get('after') || 0));
+    if (m === 'GET' && p === '/api/events') return db.events(Number(q.get('after') || 0), 200, me);
     if (m === 'GET' && p === '/api/room') return crew.room(me, Number(q.get('before')) || undefined);
     // The one phone-admin call a paired phone makes itself: renewing the Add-a-phone code it is looking at, so the
     // card on the phone refreshes like the web card's (crew.refreshPhone answers only the owner).
@@ -406,7 +406,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     if ((r = p.match(/^\/api\/routines\/(\d+)$/)) && m === 'PUT') { crew.updateRoutine(Number(r[1]), body); return { ok: true }; }
     if ((r = p.match(/^\/api\/routines\/(\d+)$/)) && m === 'DELETE') { crew.deleteRoutine(Number(r[1])); return { ok: true }; }
     if ((r = p.match(/^\/api\/routines\/(\d+)\/run$/)) && m === 'POST') { crew.runRoutine(Number(r[1])); return { ok: true }; }
-    if ((r = p.match(/^\/api\/asks\/(\d+)\/answer$/)) && m === 'POST') { await crew.answer(Number(r[1]), body); return { ok: true }; }
+    if ((r = p.match(/^\/api\/asks\/(\d+)\/answer$/)) && m === 'POST') { await crew.answer(Number(r[1]), body, me); return { ok: true }; }
     throw Object.assign(new Error('not found'), { status: 404 });
   }
 
@@ -417,7 +417,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     if (!localHost(req.headers.host) || (origin && !localHost(new URL(origin).host)) || !req.url?.startsWith('/ws')) return socket.destroy();
     const bot = /^\/ws\/desktop\/([a-z0-9-]+)$/.exec(req.url)?.[1];
     if (bot) return desk.handleUpgrade(req, socket, head, (ws) => watch(ws, bot));
-    wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws));
+    wss.handleUpgrade(req, socket, head, (ws) => { (ws as any).member = crew.viewer(new URL(req.url!, 'http://x').searchParams.get('member')).id; wss.emit('connection', ws); });
   });
 
   /** One socket per watching screen: desklink signaling in, desktop events out. Closing it ends the session. */
@@ -435,7 +435,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     });
     ws.on('close', () => crew.desktops.release(watcher));
   }
-  db.onEvent((e) => { const s = JSON.stringify(e); for (const c of wss.clients) if (c.readyState === 1) c.send(s); });
+  db.onEvent((e) => { const s = JSON.stringify(e); for (const c of wss.clients) if (c.readyState === 1 && db.visibleEvent(e, (c as any).member)) c.send(s); });
 
   await link.listen();
   server.on('close', () => link.close());

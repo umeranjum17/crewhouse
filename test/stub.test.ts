@@ -2,7 +2,7 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
-import { existsSync,  readdirSync, readFileSync } from 'node:fs';
+import { existsSync,  readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { temp } from './tmp.ts';
@@ -461,5 +461,42 @@ test('room API: a message starts and rejoins the member’s room job', async () 
   assert.equal(room.lines.filter((l: any) => l.text === 'A room job').length, 1);
   const db = new DatabaseSync(join(root, 'state', 'crew.db'));
   assert.equal(db.prepare('SELECT root FROM tasks WHERE id = ?').get(second)?.root, first);
+  db.close();
+});
+
+test('the web API scopes bot pages and activity to the selected real member', async () => {
+  await ready();
+  await api('POST', '/api/recruit', { template: 'reel', name: 'Reel' });
+  const guest = (await api('POST', '/api/people', { name: 'Privacy Guest' })).body.id;
+  const asGuest = { 'x-crewhouse': '1', 'x-crewhouse-member': String(guest) };
+  const db = new DatabaseSync(join(root, 'state', 'crew.db'));
+  const owner = Number(db.prepare("INSERT INTO tasks (bot, title, body, result, state, member) VALUES ('reel', 'private owner', 'private owner body', 'private owner result', 'done', 1)").run().lastInsertRowid);
+  const mine = Number(db.prepare("INSERT INTO tasks (bot, title, body, result, state, member) VALUES ('reel', 'guest work', 'guest body', 'guest result', 'done', ?)").run(guest).lastInsertRowid);
+  for (const [id, label] of [[owner, 'owner'], [mine, 'guest']] as const) {
+    db.prepare('INSERT INTO events (at, kind, bot, data) VALUES (?, ?, ?, ?)').run(Date.now(), 'task.done', 'reel', JSON.stringify({ task: id, title: `${label} activity` }));
+    db.prepare('INSERT INTO events (at, kind, bot, data) VALUES (?, ?, ?, ?)').run(Date.now(), 'file.delivered', 'reel', JSON.stringify({ task: id, path: `files/${label}.txt`, note: `${label} metadata` }));
+    writeFileSync(join(root, 'crew', 'bots', 'reel', 'files', `${label}.txt`), label);
+  }
+  const page = (await api('GET', '/api/bots/reel', undefined, asGuest)).body;
+  assert.deepEqual(page.tasks.filter((t: any) => [owner, mine].includes(t.id)).map((t: any) => t.id), [mine]);
+  assert.ok(page.files.some((f: any) => f.path === 'guest.txt'));
+  assert.ok(!page.files.some((f: any) => f.path === 'owner.txt'));
+  assert.ok(!JSON.stringify(page.trail).includes('owner activity'));
+  const state = (await api('GET', '/api/state', undefined, asGuest)).body;
+  assert.ok(!JSON.stringify(state.events).includes('owner activity'));
+  assert.ok(!JSON.stringify((await api('GET', '/api/events', undefined, asGuest)).body).includes('owner activity'));
+  assert.ok((await api('GET', '/api/bots/reel')).body.tasks.some((t: any) => t.id === owner));
+  const socket = new WebSocket(`ws://127.0.0.1:${port}/ws?member=${guest}`);
+  const received: any[] = [];
+  socket.on('message', (raw) => received.push(JSON.parse(String(raw))));
+  await new Promise<void>((resolve) => socket.once('open', () => resolve()));
+  await api('PUT', '/api/bots/reel/notes', { text: 'owner websocket secret' });
+  await api('PUT', '/api/bots/reel/notes', { text: 'guest websocket line' }, asGuest);
+  await until(async () => received.find((e) => e.kind === 'memory.edited' && e.data.member === guest));
+  assert.ok(received.every((e) => e.data?.member !== 1 && !JSON.stringify(e).includes('owner websocket secret')));
+  socket.close();
+  const ask = Number(db.prepare("INSERT INTO asks (bot, kind, title, detail, state, member) VALUES ('reel', 'permission', 'owner-only', '{}', 'open', 1)").run().lastInsertRowid);
+  assert.equal((await api('POST', `/api/asks/${ask}/answer`, { answer: 'deny' }, asGuest)).status, 403);
+  assert.equal(db.prepare('SELECT state FROM asks WHERE id = ?').get(ask)?.state, 'open');
   db.close();
 });

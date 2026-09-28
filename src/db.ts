@@ -76,8 +76,26 @@ export class Store {
 
   onEvent(l: (e: Row) => void) { this.listeners.add(l); return () => this.listeners.delete(l); }
 
-  events(after = 0, limit = 200): Row[] {
-    return this.all('SELECT * FROM events WHERE seq > ? ORDER BY seq DESC LIMIT ?', after, limit)
+  /** An event belongs to its task or ask first, then its explicit member. Unattributed events aren't private activity. */
+  private static readonly eventMember = `CASE
+    WHEN events.kind = 'system.recovered' THEN 1
+    WHEN json_type(events.data, '$.task') = 'integer' THEN (SELECT COALESCE(member, 1) FROM tasks WHERE id = json_extract(events.data, '$.task'))
+    WHEN json_type(events.data, '$.ask') = 'integer' THEN (SELECT COALESCE(member, 1) FROM asks WHERE id = json_extract(events.data, '$.ask'))
+    ELSE json_extract(events.data, '$.member') END`;
+
+  visibleEvent(e: Row, member: number): boolean {
+    if (!e.seq) return e.data?.member === member; // live stream events have no durable task row
+    return !!this.get(`SELECT 1 FROM events WHERE seq = ? AND (${Store.eventMember}) = ?`, e.seq, member);
+  }
+
+  eventsForBot(bot: string, kinds: string[], member: number, limit = 300): Row[] {
+    return this.all(`SELECT * FROM events WHERE bot = ? AND kind IN (${kinds.map(() => '?').join(', ')}) AND (${Store.eventMember}) = ? ORDER BY seq DESC LIMIT ?`,
+      bot, ...kinds, member, limit).map((e) => ({ ...e, data: JSON.parse(e.data) }));
+  }
+
+  events(after = 0, limit = 200, member?: number): Row[] {
+    return this.all(`SELECT * FROM events WHERE seq > ? ${member === undefined ? '' : `AND (${Store.eventMember}) = ?`} ORDER BY seq DESC LIMIT ?`,
+      ...(member === undefined ? [after, limit] : [after, member, limit]))
       .map((e) => ({ ...e, data: JSON.parse(e.data) })).reverse();
   }
 

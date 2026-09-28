@@ -1111,7 +1111,7 @@ function App() {
     const poll = setInterval(refresh, 15000); // belt and braces if the socket is quietly gone
     if (new URLSearchParams(location.search).has('celebrate')) setParty({ title: "Mum's birthday video", helper: 'reel' });
     return () => { removeEventListener('hashchange', onHash); stop(); clearInterval(poll); };
-  }, [refresh]);
+  }, [refresh, me]);
   useEffect(() => { refresh(); }, [me, refresh]);
   const wasOffline = useRef(false);
   useEffect(() => { if (wasOffline.current && !offline && state) toast('Back in touch with the home computer ✓'); wasOffline.current = offline; }, [offline]);
