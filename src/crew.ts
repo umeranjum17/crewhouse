@@ -1160,7 +1160,7 @@ export class Crew {
     const quiet = r?.quiet ? `\n\n[Crewhouse] This is a check-in. If nothing needs ${who}, reply exactly ${ALL_CLEAR} and nothing else.` : '';
     // The debrief: the bot proposes what to keep; crewd caps it, commits it and offers Undo.
     const debrief = disk.botConfig(this.cfg, task.bot).memory === false ? '' : `\n\n[Crewhouse] When you finish: if this task showed you a lasting preference of ${who} (not how to address them; Crewhouse keeps that), ` +
-      'save it with crew_remember (one short line; name the old note in `replaces` to correct one). Set `everyone` when every helper should know it ' +
+      'call crew_remember with `text` set to one short line (and `replaces` naming an old note to correct one). Set `everyone` when every helper should know it ' +
       '(family, diet, units, where they live); leave it out for how they like your own work. Otherwise save nothing.';
     // A new job in a chat often answers the last thing said there ("OK, post it"): a new session carries that line.
     const said = task.origin === 'person' && task.bot !== CHIEF && this.db.get("SELECT text FROM messages WHERE bot = ? AND author = 'bot' AND COALESCE(member, ?) = ? AND COALESCE(task_id, 0) != ? AND at > ? ORDER BY id DESC LIMIT 1",
