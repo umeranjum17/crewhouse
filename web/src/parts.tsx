@@ -257,21 +257,31 @@ function usePreview(f: FileView) {
   return read;
 }
 
+const bare = (t: string) => t.toLowerCase().replace(/^the\s+|[^a-z0-9]/g, '');
+/** The line under a file's name: what kind of thing it is, and how much is in it. */
+function aboutFile(f: FileView, book: Workbook | null, doc: DocView | null) {
+  const kind = f.kind === 'page' ? 'Document' : 'Spreadsheet';
+  const count = book ? book.sheets.length : doc?.parts.filter((p) => p.kind === 'heading').length ?? 0;
+  return count ? `${kind} · ${book ? sheetWords(count) : pageWords(count)}` : kind;
+}
+
 /** A finished file the helper made — a workbook or a document — in the chat: its name, a line about it, a peek inside, Open. */
 export function PreviewCard({ f, big }: { f: FileView; big?: boolean }) {
   const { book, doc } = usePreview(f);
   const src = fileSource(f.url);
-  const head = book?.sheets[0]?.head ?? doc?.parts.find((p) => p.kind === 'heading')?.text?.split(/[:—] |, /).slice(0, 3) ?? [];
-  const about = book ? sheetWords(book.sheets.length) : pageWords(doc?.parts.filter((p) => p.kind === 'heading').length ?? 0);
+  // The peek: a sheet's column names, a document's section headings — never the title said twice.
+  const head = (book?.sheets[0]?.head ?? doc?.parts.filter((p) => p.kind === 'heading').map((p) => p.text ?? '') ?? [])
+    .filter((h) => h && bare(h) !== bare(f.name));
+  const about = aboutFile(f, book, doc);
   return (
     <a className={`wb-card${big ? ' big' : ''}`} href={`#/f/${src?.bot ?? ''}/${encodeURIComponent(src?.path ?? '')}`} aria-label={`Open ${f.name}`}>
-      <span className="wb-ic" aria-hidden>{f.kind === 'page' ? '▤' : '▦'}</span>
+      <span className={`wb-ic wb-${f.kind}`} aria-hidden>{f.kind === 'page' ? '▤' : '▦'}</span>
       <span className="grow wb-what">
         <b>{f.name}</b>
         <span className="mute small">{about}</span>
       </span>
-      <span className="wb-thumb" aria-hidden>{head.slice(0, 4).map((h, i) => <i key={i}>{h}</i>)}</span>
       <b className="wb-open">Open</b>
+      {head.length > 0 && <span className="wb-thumb" aria-hidden>{head.slice(0, 4).map((h, i) => <i key={i}>{h}</i>)}</span>}
     </a>
   );
 }
@@ -315,15 +325,15 @@ export function PreviewPanel({ bot, path, onClose }: { bot: string; path: string
   const { book, doc, text } = usePreview(f);
   const sheets = book?.sheets ?? [];
   const s = sheets[Math.min(tab, Math.max(0, sheets.length - 1))];
-  const about = f.kind === 'page' ? pageWords(doc?.parts.filter((p) => p.kind === 'heading').length ?? 0) : sheetWords(sheets.length);
+  const about = aboutFile(f, book, doc);
   return (
     <div className="scrim wb-scrim" onClick={onClose}>
       <div ref={box} className="wb-panel" role="dialog" aria-modal aria-label={f.name} onClick={(e) => e.stopPropagation()}>
         <header className="wb-head">
-          <span className="wb-ic" aria-hidden>{f.kind === 'page' ? '▤' : '▦'}</span>
+          <span className={`wb-ic wb-${f.kind}`} aria-hidden>{f.kind === 'page' ? '▤' : '▦'}</span>
           <span className="grow wb-what"><b>{f.name}</b><span className="mute small">{about}</span></span>
           <a className="btn" href={f.url} target="_blank" rel="noreferrer">Download</a>
-          <button className="link" onClick={onClose} aria-label="Close">✕</button>
+          <button className="icon-btn" onClick={onClose} aria-label="Close">✕</button>
         </header>
         {!book && !doc && text === null && <div className="mute">Opening “{f.name}”…</div>}
         {book && !sheets.length && <div className="mute">There is nothing in it to show yet.</div>}
@@ -339,7 +349,7 @@ export function PreviewPanel({ bot, path, onClose }: { bot: string; path: string
           {s.total > s.rows.length + 1 && <div className="mute small">…and {s.total - s.rows.length - 1} more rows. Download it to see the whole sheet.</div> }
         </div>}
         {doc && doc.parts.length > 0 && <DocBody doc={doc} />}
-        {text !== null && <div className="wb-rows"><div className="chat-md">{mdBlocks(chatTokens(text))}</div></div>}
+        {text !== null && <div className="wb-rows doc-rows"><div className="chat-md">{mdBlocks(chatTokens(text))}</div></div>}
       </div>
     </div>
   );

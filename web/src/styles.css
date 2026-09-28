@@ -37,7 +37,7 @@ b { font-weight: 600; }
 .add-row { margin-top: 10px; }
 .center { text-align: center; }
 .lead { color: var(--ink2); margin: 0 0 16px; max-width: 640px; }
-.label { font: 500 12px/16px var(--ui); color: var(--mute); margin: 24px 4px 8px; }
+.label { font: 600 13px/18px var(--ui); color: var(--ink2); margin: 24px 4px 8px; }
 .clamp { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .clamp1 { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .row { display: flex; gap: 12px; align-items: center; }
@@ -104,7 +104,7 @@ textarea.input { resize: vertical; }
 .routine-edit { margin-top: 10px; }
 .routine-note { margin-top: 6px; }
 .routine-ask form { margin-top: 12px; }
-.line-when { display: block; padding: 0; font: 400 13px/1.45 var(--ui); text-align: left; text-decoration: none; }
+.line-when { display: block; padding: 3px 0; font: 400 13px/1.45 var(--ui); text-align: left; text-decoration: none; }
 .line-when:hover, .line-when:focus-visible { text-decoration: underline; }
 .connect { display: flex; gap: 12px; align-items: center; }
 .app-ic { width: 40px; height: 40px; border-radius: 12px; display: inline-grid; place-items: center; color: #fff; font: 900 18px var(--ui); flex: none; }
@@ -131,8 +131,9 @@ video.media { width: auto; max-width: 100%; max-height: 360px; height: auto; obj
 .cover span { position: absolute; inset: 0; display: grid; place-items: center; font: 900 24px/1.1 var(--ui); text-shadow: 0 2px 12px #0003; padding: 0 60px; }
 .cover i { position: absolute; left: 12px; bottom: 12px; width: 38px; height: 38px; border-radius: 50%; background: #fff; color: #2e2a40; display: grid; place-items: center; font-style: normal; font-size: 14px; }
 .cover.big span { font-size: 28px; }
-.doc { display: flex; gap: 12px; align-items: center; background: var(--soft); border-radius: 16px; padding: 10px 14px; margin-top: 10px; }
-.doc-ic { width: 36px; height: 40px; border-radius: 6px; background: var(--soft); display: grid; place-items: center; color: var(--danger); }
+.doc { display: flex; gap: 12px; align-items: center; background: var(--soft); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; margin-top: 10px; max-width: 480px; }
+.doc .grow { font-weight: 600; overflow-wrap: anywhere; }
+.doc-ic { width: 44px; height: 44px; border-radius: 10px; background: var(--solid); box-shadow: inset 0 0 0 1px var(--line); display: grid; place-items: center; color: var(--danger); font-size: 22px; flex: none; }
 
 /* splash and party (A's ASCII moments, always on the night palette) */
 .splash { position: fixed; inset: 0; z-index: 50; background: var(--bg); display: grid; place-items: center; overflow: hidden; transition: opacity 200ms var(--ease); }
@@ -186,7 +187,7 @@ video.media { width: auto; max-width: 100%; max-height: 360px; height: auto; obj
 .home-section { margin-bottom: 24px; }
 .home-section > .label, .section-head .label { margin: 0 4px 8px; }
 .section-head { display: flex; align-items: center; justify-content: space-between; }
-.section-head .link { font-size: 13px; padding: 0; margin-bottom: 8px; }
+.section-head .link { font-size: 13px; padding: 6px 4px; margin-bottom: 2px; }
 .list-group { overflow: hidden; background: var(--solid); border: 1px solid var(--line); border-radius: 14px; }
 .list-row { display: flex; width: 100%; min-height: 56px; gap: 12px; align-items: center; text-align: left; padding: 10px 14px; border: 0; background: none; color: var(--ink); font: inherit; }
 .list-row + .list-row, .list-group > div + div > .list-row, .list-group > div + .list-row, .list-group > .list-row + div > .list-row { border-top: 1px solid var(--line); }
@@ -236,8 +237,9 @@ video.media { width: auto; max-width: 100%; max-height: 360px; height: auto; obj
 .detail { padding-bottom: 24px; }
 .detail .plate { margin: 22px 0 4px; }
 .detail > .link { margin-bottom: 8px; }
-.back { color: var(--mute); font: 800 22px var(--ui); padding: 4px 8px 4px 0; display: inline-block; }
-a.back:not([aria-label]) { font-size: 15px; margin-bottom: 6px; }
+.back { color: var(--ink2); font: 400 28px/1 var(--ui); display: inline-flex; align-items: center; justify-content: center; min-width: 40px; min-height: 40px; margin-left: -8px; padding: 0 8px 4px; border-radius: 10px; flex: none; }
+.back:hover { background: var(--soft); }
+a.back:not([aria-label]) { font: 500 15px/20px var(--ui); padding: 0 8px; margin-bottom: 6px; justify-content: flex-start; }
 .chat { display: flex; flex-direction: column; min-height: calc(100dvh - 190px); }
 .chat > .dock { margin-left: -16px; margin-right: -16px; }
 .lines { flex: 1; display: flex; flex-direction: column; padding-bottom: 6px; }
@@ -283,6 +285,7 @@ a.back:not([aria-label]) { font-size: 15px; margin-bottom: 6px; }
 .pal-card.add { border: 2px dashed var(--shadow); background: transparent; box-shadow: none; align-content: center; }
 .grid.things { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
 .thing .media { margin: 0 0 10px; }
+.thing .wb-card, .thing .doc { margin: 0 0 12px; max-width: none; }
 .thing .cover span { font-size: 20px; padding: 0 40px; }
 .thing p { margin: 4px 0; font-size: 14px; }
 .by { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
@@ -486,18 +489,26 @@ details.card > summary { cursor: pointer; }
 details.card[open] > summary { margin-bottom: 10px; }
 
 /* Spreadsheets: the card a delivered workbook leaves in the chat, and the read-only panel crewd reads it into (parts.tsx). */
-.wb-card { display: flex; gap: 12px; align-items: center; background: var(--soft); border-radius: 16px; padding: 10px 14px; margin-top: 10px; }
-.wb-card.big { padding: 14px 16px; }
+/* The name gets the room: icon, name (two lines at most) and its kind, Open; the peek is one quiet line under them. */
+.wb-card { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; column-gap: 12px; row-gap: 8px; align-items: center; background: var(--soft); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; margin-top: 10px; max-width: 480px; transition: background 120ms var(--ease); }
+.wb-card:hover { background: color-mix(in srgb, var(--soft) 60%, var(--line)); }
 .wb-card:hover .wb-open { text-decoration: underline; text-underline-offset: 3px; }
-.wb-ic { width: 36px; height: 40px; border-radius: 6px; background: var(--soft); display: grid; place-items: center; color: var(--ok); font: 600 13px var(--ui); flex: 0 0 auto; }
-.wb-what { display: grid; gap: 1px; min-width: 0; }
-.wb-thumb { display: flex; gap: 4px; min-width: 0; overflow: hidden; flex: 0 1 auto; }
-.wb-thumb i { font: 500 11px/14px var(--ui); font-style: normal; color: var(--mute); background: var(--soft); border-radius: 6px; padding: 4px 6px; max-width: 84px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.wb-open { color: var(--pink-ink); font-weight: 800; flex: 0 0 auto; }
+.wb-ic { width: 44px; height: 44px; border-radius: 10px; background: var(--solid); box-shadow: inset 0 0 0 1px var(--line); display: grid; place-items: center; color: var(--ink2); font: 400 22px/1 var(--ui); flex: 0 0 auto; }
+.wb-ic.wb-sheet { color: var(--ok); }
+.wb-what { display: grid; gap: 2px; min-width: 0; }
+.wb-what b { font: 600 15px/20px var(--ui); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.wb-what .small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wb-thumb { grid-column: 2 / -1; display: block; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font: 400 13px/18px var(--ui); color: var(--mute); }
+.wb-thumb i { font-style: normal; }
+.wb-thumb i + i::before { content: ' · '; }
+.wb-open { color: var(--ink); font: 600 14px/20px var(--ui); padding: 8px 14px; border-radius: 10px; background: var(--solid); border: 1px solid var(--line2); flex: 0 0 auto; }
+.icon-btn { width: 40px; height: 40px; flex: none; display: inline-grid; place-items: center; border: 0; border-radius: 10px; background: transparent; color: var(--ink2); font: 500 18px/1 var(--ui); }
+.icon-btn:hover { background: var(--soft); }
 .wb-scrim { align-items: stretch; justify-items: stretch; }
 .wb-panel { background: var(--solid); width: 100%; height: 100%; padding: 18px 16px 24px; display: flex; flex-direction: column; gap: 12px; overflow: hidden; animation: up 280ms var(--ease); }
-.wb-head { display: flex; gap: 10px; align-items: center; }
-.wb-head .btn { min-height: 38px; padding: 6px 14px; font-size: 14px; }
+.wb-head { display: flex; gap: 12px; align-items: center; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.wb-head .btn { min-height: 40px; padding: 6px 14px; font-size: 14px; }
+.wb-head .wb-what b { font-size: 17px; line-height: 22px; }
 .wb-tabs { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
 .wb-tab { font: 800 13px var(--ui); background: var(--soft); border: 0; border-radius: 999px; padding: 7px 12px; color: var(--mute); white-space: nowrap; }
 .wb-tab.on { background: color-mix(in srgb, var(--pink) 16%, var(--solid)); color: var(--ink); box-shadow: 0 0 0 1.5px var(--pink) inset; }
@@ -506,15 +517,24 @@ details.card[open] > summary { margin-bottom: 10px; }
 .wb-grid th, .wb-grid td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); max-width: 260px; overflow-wrap: normal; word-break: normal; }
 .wb-grid th { font: 500 12px/16px var(--ui); color: var(--mute); background: var(--solid); }
 .wb-grid td { color: var(--ink2); background: var(--solid); }
-/* A document's preview body: the helper's own headings, words, lists and tables, read-only. */
-.doc-rows h3 { margin: 12px 0 0; font: 800 15px/1.3 var(--ui); color: var(--ink); }
+/* A document's preview body: the helper's own headings, words, lists and tables, read-only — set as a page to read. */
+.wb-rows.doc-rows { background: transparent; padding: 4px 2px 24px; gap: 12px; }
+.doc-rows > * { max-width: 64ch; }
+.doc-rows h3 { margin: 16px 0 0; font: 600 18px/1.35 var(--ui); letter-spacing: -.01em; color: var(--ink); }
 .doc-rows h3:first-child { margin-top: 0; }
-.doc-rows p, .doc-rows li { margin: 0; font-size: 14.5px; line-height: 1.55; color: var(--ink2); }
-.doc-rows p.strong { font-weight: 700; color: var(--ink); }
-.doc-rows ul { margin: 2px 0; padding-left: 20px; display: grid; gap: 4px; }
-.doc-rows .wb-grid { margin: 4px 0; }
+.doc-rows p, .doc-rows li { margin: 0; font-size: 16px; line-height: 1.55; color: var(--ink); }
+.doc-rows p.strong { font-weight: 600; }
+.doc-rows ul { margin: 0; padding-left: 22px; display: grid; gap: 6px; }
+.doc-rows a { text-decoration: underline; text-underline-offset: 2px; overflow-wrap: anywhere; }
+.doc-rows .wb-grid { margin: 4px 0; max-width: none; }
 @media (min-width: 900px) {
   /* a desk opens the workbook beside the chat it came from; a phone gets the whole screen */
   .wb-scrim { align-items: stretch; justify-items: end; padding: 0; }
   .wb-panel { width: min(660px, 48vw); height: 100%; border-radius: 24px 0 0 24px; box-shadow: -24px 0 60px -18px #0006; padding: 24px; }
 }
+
+/* An account row on a narrow screen: the words keep the width, the button drops under them. */
+.account-row { flex-wrap: wrap; row-gap: 10px; }
+.account-row > .grow { flex: 1 1 200px; }
+.account-row > .btn { margin-left: 52px; }
+@media (min-width: 600px) { .account-row > .btn { margin-left: 0; } }

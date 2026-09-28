@@ -188,7 +188,7 @@ function PhoneCard({ offer, reload }: { offer: NonNullable<ReturnType<typeof A.p
       : <><T tone="mute">That code has run out.</T><Btn go label="Show a new code" onPress={() => { active.current = Date.now(); void renew(); }} /></>}
   </Card>;
 }
-const Label = ({ children }: { children: ReactNode }) => <T tone="mute" style={s.label}>{children}</T>;
+const Label = ({ children }: { children: ReactNode }) => <T tone="ink2" style={s.label}>{children}</T>;
 function Page({ title, lead, children }: { title?: string; lead?: string; children: ReactNode }) {
   return (
     <ScrollView contentContainerStyle={s.page} keyboardShouldPersistTaps="handled">
@@ -283,9 +283,16 @@ function PhotoView({ f }: { f: A.FileView }) {
 function FileRow({ f, plain }: { f: A.FileView; plain?: boolean }) {
   const [open, setOpen] = useState(false);
   if (!plain && f.kind === 'image' && /\/photos\//.test(f.url)) return <PhotoView f={f} />;
+  const t = useLook();
   const readable = A.phoneReadable(f);
   const word = f.kind === 'video' ? 'Play' : 'Read';
-  const row = <View style={s.row}><T tone="mute">{f.kind === 'video' ? '▶' : f.kind === 'image' ? '▣' : '▤'}</T><T style={{ flex: 1 }}>{f.name}</T><T tone="mute" style={s.small}>{readable ? word : 'on your computer'}</T></View>;
+  const kind = f.kind === 'video' ? 'Video' : f.kind === 'image' ? 'Picture' : f.kind === 'sheet' ? 'Spreadsheet' : 'Document';
+  // The name gets the room: a tile, the name on up to two lines with its kind under it, then Read or Play.
+  const row = <View style={s.row}>
+    <View style={[s.fileIc, { backgroundColor: t.solid, borderColor: t.line }]}><T tone={f.kind === 'sheet' ? undefined : 'ink2'} style={[s.fileGlyph, f.kind === 'sheet' && { color: t.ok }]}>{f.kind === 'video' ? '▶' : f.kind === 'image' ? '▣' : f.kind === 'sheet' ? '▦' : '▤'}</T></View>
+    <View style={{ flex: 1, gap: 2 }}><T style={[s.rowTitle, s.b]} lines={2}>{f.name}</T><T tone="mute" style={s.small} lines={1}>{readable ? kind : `${kind} · on your computer`}</T></View>
+    {readable && <View style={[s.fileOpen, { backgroundColor: t.solid, borderColor: t.line2 }]}><T style={s.btnText}>{word}</T></View>}
+  </View>;
   if (!readable) return row;
   return <View>
     <Pressable accessibilityRole="button" accessibilityLabel={`${word} ${f.name}`} onPress={() => setOpen(true)}
@@ -318,11 +325,11 @@ function SheetGrid({ head, rows }: { head: string[]; rows: string[][] }) {
 function DocParts({ parts }: { parts: A.DocPart[] }) {
   const runs: (A.DocPart | A.DocPart[])[] = [];
   parts.forEach((p) => { const last = runs.at(-1); if (p.kind === 'li' && Array.isArray(last)) last.push(p); else if (p.kind === 'li') runs.push([p]); else runs.push(p); });
-  return <View style={{ gap: 10 }}>{runs.map((run, i) => Array.isArray(run)
-    ? <View key={i} style={{ gap: 5 }}>{run.map((li, j) => <View key={j} style={{ flexDirection: 'row', gap: 6 }}><T>•</T><T style={{ flex: 1 }}>{li.text}</T></View>)}</View>
-    : run.kind === 'heading' ? <T key={i} style={{ fontSize: 18, lineHeight: 25, fontWeight: '600' }}>{run.text}</T>
+  return <View style={{ gap: 12, paddingTop: 12, paddingBottom: 24 }}>{runs.map((run, i) => Array.isArray(run)
+    ? <View key={i} style={{ gap: 6 }}>{run.map((li, j) => <View key={j} style={{ flexDirection: 'row', gap: 8 }}><T style={s.read}>•</T><T style={[s.read, { flex: 1 }]}>{li.text}</T></View>)}</View>
+    : run.kind === 'heading' ? <T key={i} style={{ fontSize: 18, lineHeight: 25, fontWeight: '600', marginTop: i ? 6 : 0 }}>{run.text}</T>
     : run.kind === 'table' ? <Wide key={i}><SheetGrid head={run.head ?? []} rows={run.rows ?? []} /></Wide>
-    : <T key={i} style={run.bold ? s.b : undefined}>{run.text}</T>)}</View>;
+    : <T key={i} style={[s.read, run.bold && s.b]}>{run.text}</T>)}</View>;
 }
 
 /** One rendered file over the link, read-only: a spreadsheet is its sheets as tables, a document its headings,
@@ -344,7 +351,9 @@ function DocSheet({ f, onClose }: { f: A.FileView; onClose: () => void }) {
   return <Modal visible transparent animationType={motion.sheet(reduce)} onRequestClose={onClose}>
     <Pressable style={s.scrim} onPress={onClose}>
       <Pressable style={[s.sheet, { backgroundColor: t.bg, maxHeight: '88%' }]} onPress={() => {}}>
-        <View style={s.row}><T tone="mute">▤</T><T style={[s.h2, { flex: 1 }]}>{f.name}</T><Btn label="Close" onPress={onClose} /></View>
+        <View style={[s.row, { paddingBottom: 12, borderBottomWidth: 1, borderColor: t.line }]}>
+          <View style={[s.fileIc, { backgroundColor: t.solid, borderColor: t.line }]}><T tone={f.kind === 'sheet' ? undefined : 'ink2'} style={[s.fileGlyph, f.kind === 'sheet' && { color: t.ok }]}>{f.kind === 'sheet' ? '▦' : '▤'}</T></View>
+          <T style={[s.h2, { flex: 1 }]} lines={2}>{f.name}</T><Btn label="Close" onPress={onClose} /></View>
         <ScrollView>
           {page === null && <T tone="mute">Opening “{f.name}”…</T>}
           {page !== null && !book && !doc && !text && <T tone="mute">There is nothing in it to show yet.</T>}
@@ -832,7 +841,7 @@ function NeedsRows({ state, cards, open }: { state: Json; cards: A.Card[]; open:
           onPress={() => open(c)} accessibilityLabel={c.head}>
           <Face who={crew.find((h) => h.id === c.helper) ?? { kind: 'pip', name: c.helper }} size={36} />
           <View style={{ flex: 1 }}><T style={s.rowTitle} lines={1}>{c.head}</T><T tone="ink2" style={s.small} lines={1}>{c.words}</T></View>
-          <View style={{ alignItems: 'flex-end', gap: 4 }}><T tone="mute" style={s.label}>{A.briefTime(c.at)}</T><View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: t.pink }} /></View>
+          <View style={{ alignItems: 'flex-end', gap: 4 }}><T tone="mute" style={s.time}>{A.briefTime(c.at)}</T><View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: t.pink }} /></View>
         </Pressable>
       ))}
       {!all && more > 0 && <Btn ghost label={`See all ${cards.length}`} onPress={() => setAll(true)} />}
@@ -872,7 +881,7 @@ function ChatList({ state, go, mood }: { state: Json; go: Ctx['go']; mood?: art.
       {c.id === 'room' ? <View style={{ width: 40, flexDirection: 'row' }}>{crew.slice(0, 2).map((h, n) => <View key={h.id} style={{ marginLeft: n ? -12 : 0 }}><Face who={h} size={26} /></View>)}</View>
         : <Face who={c.who} size={40} mood={c.id === 'chief' ? mood : undefined} />}
       <View style={{ flex: 1 }}><T style={s.rowTitle} lines={1}>{c.name}</T><T tone="ink2" style={s.small} lines={1}>{c.line}</T></View>
-      <View style={{ alignItems: 'flex-end', gap: 4 }}><T tone="mute" style={s.label}>{c.at ? A.clock(c.at) : ''}</T>
+      <View style={{ alignItems: 'flex-end', gap: 4 }}><T tone="mute" style={s.time}>{c.at ? A.clock(c.at) : ''}</T>
         {c.unread > 0 && <Text style={[s.unread, { backgroundColor: t.pink, color: t.surface }]}>{A.unreadBadge(c.unread)}</Text>}</View>
     </Pressable>)}
   </View></View>;
@@ -884,7 +893,7 @@ function JobList({ state, go }: { state: Json; go: Ctx['go'] }) {
     {A.jobs(state).slice(0, 3).map((j, i) => <Pressable key={j.bot + j.label} style={[s.listRow, { borderTopColor: t.line, borderTopWidth: i ? StyleSheet.hairlineWidth : 0 }]}
       onPress={() => { if (j.needs.length) go({ view: 'phone' }); else { keepDraft('chief', j.ask); go({ view: 'chief' }); } }}>
       <Face who={A.crew(state).find((h) => h.id === j.bot) ?? { kind: 'pip', name: j.bot }} size={28} />
-      <View style={{ flex: 1 }}><T style={s.rowTitle} lines={1}>{j.label}</T>{!!j.needs.length && <T tone="mute" style={s.small}>{A.jobNeeds(j.needs)}</T>}</View><T tone="mute">›</T>
+      <View style={{ flex: 1 }}><T style={s.rowTitle} lines={2}>{j.label}</T>{!!j.needs.length && <T tone="mute" style={s.small}>{A.jobNeeds(j.needs)}</T>}</View><T tone="mute">›</T>
     </Pressable>)}
   </View></View>;
 }
@@ -949,7 +958,7 @@ function Chat({ id, m, state, tick, refresh, canAct, offline, open }: Ctx & { id
         {lines.map((l, i) => (
           <View key={l.id} onLayout={(e) => ys.current.set(l.id, e.nativeEvent.layout.y)}
             style={[s.line, l.from === 'me' && { alignSelf: 'flex-end' }, l.from === 'note' && { maxWidth: '92%' }]}>
-            {l.from !== 'me' && l.from !== 'note' && !(i && lines[i - 1].from === l.from) && <View style={s.row}><Face who={l.from === 'chief' ? 'chief' : h ?? 'chief'} size={28} /><T style={[s.small, s.b]}>{l.from === 'chief' ? 'Chief' : name}</T><T tone="mute" style={s.label}>{l.at ? A.clock(l.at) : ''}</T></View>}
+            {l.from !== 'me' && l.from !== 'note' && !(i && lines[i - 1].from === l.from) && <View style={s.row}><Face who={l.from === 'chief' ? 'chief' : h ?? 'chief'} size={28} /><T style={[s.small, s.b]}>{l.from === 'chief' ? 'Chief' : name}</T><T tone="mute" style={s.time}>{l.at ? A.clock(l.at) : ''}</T></View>}
             {!!l.text && (l.detail ? <ChiefAsk l={{ text: l.text, detail: l.detail }} /> : <View style={l.from === 'me' ? [s.bubbleText, { backgroundColor: t.soft, borderColor: t.line, borderWidth: 1, borderBottomRightRadius: 6 }] : { paddingLeft: 36 }}>
               <ChatText text={l.text} /></View>)}
             {l.files.map((f) => <Card key={f.url}><FileRow f={f} /></Card>)}
@@ -1002,7 +1011,7 @@ function Room(ctx: Ctx) {
   const send = async (text: string) => { const ok = await attempt(() => api.post('chief', text, { room: true }), undefined, true); if (ok) { void load(); refresh(); } return ok; };
   return <View style={{ flex: 1 }}><Head onBack={ctx.back}><View style={{ width: 40, flexDirection: 'row' }}>{crew.slice(0, 2).map((h, i) => <View key={h.id} style={{ marginLeft: i ? -12 : 0 }}><Face who={h} size={26} /></View>)}</View><View style={{ flex: 1 }}><T style={s.rowTitle}>The crew</T><T tone="ink2" style={s.small}>Work handed between helpers</T></View></Head>
     <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>{lines.map((l: { id: number; who?: A.Helper; from?: string; to?: string; text: string; at: number; author: string; files: A.FileView[] }) => <View key={l.id} style={{ maxWidth: '92%', alignSelf: l.author === 'person' ? 'flex-end' : 'flex-start' }}>
-      {l.who && <View style={s.row}><Face who={l.who} size={28} /><T style={s.rowTitle}>{l.from && l.to ? `${l.from} → ${l.to}` : l.who.name}</T><T tone="mute" style={s.label}>{A.clock(l.at)}</T></View>}
+      {l.who && <View style={s.row}><Face who={l.who} size={28} /><T style={s.rowTitle}>{l.from && l.to ? `${l.from} → ${l.to}` : l.who.name}</T><T tone="mute" style={s.time}>{A.clock(l.at)}</T></View>}
       <View style={{ paddingLeft: l.author === 'person' ? 0 : 36 }}><ChatText text={l.text} /></View>{l.files.map((f) => <Card key={f.url}><FileRow f={f} /></Card>)}
     </View>)}{!lines.length && <T tone="mute">Start a job here and follow along as the crew works together.</T>}</ScrollView>
     {canAct ? <View style={s.dock}><Composer placeholder="Message the crew" onSend={send} chat="room" /></View> : <T tone="mute" style={[s.small, { padding: 16 }]}>{offline ? "You can reply once the home computer is back." : "This phone watches the crew; it can't send messages."}</T>}
@@ -1389,9 +1398,11 @@ const s = StyleSheet.create({
   h2: { fontSize: 17, fontWeight: '600', lineHeight: 24 },
   b: { fontWeight: '600' },
   small: { fontSize: 13, lineHeight: 18 },
-  label: { fontSize: 12, lineHeight: 16, fontWeight: '500', marginTop: 24 },
+  read: { fontSize: 16, lineHeight: 24 },
+  label: { fontSize: 13, lineHeight: 18, fontWeight: '600', marginTop: 24, marginBottom: 6, marginHorizontal: 4 },
+  time: { fontSize: 12, lineHeight: 16 },
   fp: { fontSize: 22, fontWeight: '600', fontVariant: ['tabular-nums'], marginVertical: 8, textAlign: 'center' },
-  card: { borderRadius: radius.card, padding: 16 },
+  card: { borderRadius: radius.card, padding: 16, gap: 8 },
   pill: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: radius.pill, paddingVertical: 4, paddingHorizontal: 8, maxWidth: '100%' },
   pillDot: { width: 8, height: 8, borderRadius: 4 },
   pillText: { fontFamily: 'Inter', fontSize: 13, fontWeight: '500', flexShrink: 1 },
@@ -1412,6 +1423,9 @@ const s = StyleSheet.create({
   listGroup: { borderWidth: 1, borderRadius: radius.card, overflow: 'hidden' },
   listRow: { flexDirection: 'row', alignItems: 'center', minHeight: 56, paddingHorizontal: 14, paddingVertical: 10, gap: 12 },
   rowTitle: { fontSize: 15, lineHeight: 22, fontWeight: '500' },
+  fileIc: { width: 44, height: 44, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  fileGlyph: { fontSize: 20, lineHeight: 24 },
+  fileOpen: { borderRadius: radius.control, borderWidth: 1, paddingVertical: 7, paddingHorizontal: 14 },
   head: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, justifyContent: 'space-between' },
   palCard: { width: '48%', borderRadius: radius.card, borderWidth: 1, padding: 14, alignItems: 'center', gap: 8 },
