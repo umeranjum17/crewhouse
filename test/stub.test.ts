@@ -94,7 +94,7 @@ test('a Chief reply streams partial words before its durable message', async () 
   ws.on('message', (raw) => events.push(JSON.parse(String(raw))));
   try {
     const started = Date.now();
-    const { body } = await say('chief', 'Tell me something quick');
+    const { body } = await say('chief', 'What is 17 + 29?');
     await until(async () => events.find((e) => e.kind === 'reply.partial' && e.bot === 'chief' && e.data.text.includes('stub chief:')));
     await done('chief', body.task);
     const trace = events.filter((e) => e.bot === 'chief');
@@ -103,7 +103,11 @@ test('a Chief reply streams partial words before its durable message', async () 
     assert.ok(partial && final && trace.indexOf(partial) < trace.indexOf(final), 'partial text arrives before the completed reply');
     assert.equal(partial.data.member, 1);
     assert.ok(events.find((e) => e.kind === 'message' && e.data.author === 'person'), 'the send is persisted');
-    console.log(`lab send→reply.partial ${partial.at - started}ms; send→first complete words ${final.at - started}ms`);
+    const created = trace.find((e) => e.kind === 'task.created' && e.data.task === body.task);
+    const prompted = trace.find((e) => e.kind === 'run.prompted' && e.data.task === body.task);
+    const substantive = trace.find((e) => e.kind === 'reply.partial' && e.data.task === body.task && e.data.text.includes('stub chief:'));
+    assert.ok(created && prompted && substantive, 'the real HTTP send reached a task, prompt and stub model words');
+    console.log(`stub HTTP arithmetic send→task ${created.at - started}ms; task→prompt ${prompted.at - created.at}ms; prompt→model text ${substantive.at - prompted.at}ms`);
   } finally { ws.close(); }
 });
 

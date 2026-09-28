@@ -14,6 +14,7 @@ const ROUTE_MS = Number(process.env.CREWHOUSE_ROUTE_MS || 20_000);
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 /** Chief's own work, whoever it mentions: routines and check-ins, memory, how to be addressed, hiring. */
 const chiefWork = /^(remember|call me)\b|\bevery\b|\beach (day|morning|evening|night|week|month)\b|\bweekdays\b|\bkeep an eye on\b|\blet me know if\b|\b(recruit|hire)\b|\b(market|marketing|promote|launch|paperwork)\b/i;
+const arithmetic = /^(?:(?:what(?:'s| is)|calculate|solve|work out)\s+)?\d+(?:\s*(?:[+*\/×÷−-]|plus|minus|times|divided by)\s*\d+)+(?:\s*\?)?$/i;
 
 function question(helpers: Helper[]): Question {
   return {
@@ -27,7 +28,7 @@ function question(helpers: Helper[]): Question {
 export function byRule(helpers: Helper[]) {
   return rules((s: Request) => {
     if (!helpers.length) return CHIEF;
-    if (/^chief\s*[,!:]/i.test(s.text) || chiefWork.test(s.text) || (s.earlier && chiefWork.test(s.earlier))) return CHIEF;
+    if (/^chief\s*[,!:]/i.test(s.text) || arithmetic.test(s.text.trim()) || chiefWork.test(s.text) || (s.earlier && chiefWork.test(s.earlier))) return CHIEF;
     const named = (re: (name: string) => string) => helpers.find((h) => new RegExp(re(esc(h.display)), 'i').test(s.text))?.id;
     // The answer to Chief's question: a name is enough.
     if (s.earlier) return /^(you|yourself|chief)\b/i.test(s.text) ? CHIEF : named((n) => `\\b${n}\\b`);

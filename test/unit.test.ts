@@ -900,15 +900,22 @@ test('routing: a plain request goes straight to its helper, the member\'s AI pla
   runtime.ask = async (...args: Parameters<typeof ask>) => { routingCalls++; return ask(...args); };
   const signedIn = crew.accounts.signedIn;
   let routeChecks = 0;
+  let pendingBody = 'Chief, help me think through this decision';
   crew.accounts.signedIn = async (...args) => {
-    if (!db.get("SELECT 1 FROM tasks WHERE bot = 'chief' AND body = 'Chief, help me think through this decision'")) routeChecks++;
+    if (!db.get('SELECT 1 FROM tasks WHERE bot = ? AND body = ?', 'chief', pendingBody)) routeChecks++;
     return signedIn(...args);
   };
-  const direct = (await crew.post('chief', 'Chief, help me think through this decision'))!.task;
+  const direct = (await crew.post('chief', pendingBody))!.task;
   assert.equal(task(db, direct).bot, 'chief');
   assert.equal(routingCalls, 0, 'an explicitly addressed Chief request needs no routing model');
   assert.equal(routeChecks, 0, 'routing a clear request need not query the account before task creation');
   await settled(db, direct);
+  pendingBody = 'What is 17 + 29?';
+  const math = (await crew.post('chief', pendingBody))!.task;
+  assert.equal(task(db, math).bot, 'chief');
+  assert.equal(routeChecks, 0, 'plain arithmetic creates a task before probing the account');
+  assert.equal(routingCalls, 0, 'plain arithmetic does not wait for a routing model turn');
+  await settled(db, math);
 
   // A routine is Chief's own work, even with Reel in it.
   const b = (await crew.post('chief', 'ask Reel to make a demo every Friday'))!.task;
