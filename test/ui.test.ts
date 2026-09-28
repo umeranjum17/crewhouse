@@ -109,7 +109,8 @@ test('the account list is the one crewd really serves: every route, none made up
   assert.match(A.AI_ROUTES, /API key/);
   const phone = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
   assert.match(phone, /<Label>Your AI accounts<\/Label>/);
-  assert.match(phone, /A\.AIS\.map\(\(ai\) =>/, 'the phone shows the same six routes, not a second list');
+  assert.match(phone, /\{row\(A\.AIS\[0\]\)\}/, 'ChatGPT, the front door, is named first');
+  assert.match(phone, /\{A\.AIS\.slice\(1\)\.map\(row\)\}/, 'the phone shows the same six routes, not a second list');
   assert.match(phone, /\{A\.AI_ROUTES\}/, 'API-key limitation reaches the phone');
   assert.match(phone, /live account status are shown only on the home computer/, 'no invented phone sign-in state');
   assert.match(phone, /onPress=\{\(\) => go\(\{ view: 'phone' \}\)\} accessibilityRole="button" accessibilityLabel="Check AI account sign-in/, 'Home leads to the disclosure');
