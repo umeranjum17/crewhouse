@@ -938,7 +938,7 @@ function Home(ctx: Ctx) {
         {!!A.resting(state) && <Card><T>{A.resting(state)}. I'll pick things back up then.</T></Card>}
         <Pressable onPress={() => go({ view: 'phone' })} accessibilityRole="button" accessibilityLabel="Check AI account sign-in on the home computer" style={({ pressed }) => [s.listRow, s.listGroup, { backgroundColor: t.solid, borderColor: t.line }, pressed && { opacity: 0.6 }]}>
           <AiMark ai={A.AIS[0]} size={30} />
-          <View style={{ flex: 1 }}><T style={s.rowTitle}>Your AI accounts</T><T tone="ink2" style={s.small} lines={1}>You sign in on the home computer, in Settings.</T></View><T tone="mute">›</T>
+          <View style={{ flex: 1 }}><T style={s.rowTitle}>Your AI accounts</T><T tone="ink2" style={s.small} lines={2}>You sign in on the home computer, in Settings.</T></View><T tone="mute">›</T>
         </Pressable>
         {needs.length > 0 && <View><Label count={needs.length}>Needs you</Label><View style={[s.listGroup, { backgroundColor: t.solid, borderColor: t.line }]}><NeedsRows state={state} cards={needs} open={open} /></View></View>}
         <ChatList state={state} go={go} mood={chief.mood} />
