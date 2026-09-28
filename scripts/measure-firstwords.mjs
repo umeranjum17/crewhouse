@@ -6,6 +6,8 @@
 //                                       [--body "Plan dinners for the week."] [--wait 120000] [--out report.md]
 //
 // Each run gets its own session key under a fresh --tag, so a repeat run is a fresh first turn, not a warm session.
+// The variants are interleaved (tiny, chief, tiny, chief…) rather than measured in two blocks, so a slow stretch of
+// the route lands on both and the per-run table shows it.
 //
 // The state's crewd MUST be stopped: this starts its own pinned Gateway on that state dir (the engine admits one at a
 // time), so a live crewd would be taken over. It refuses rather than doing that. `--provider <baseUrl> <apiKey>`
@@ -77,6 +79,8 @@ export function variants(argv, cfg, body, address = '') {
     return { name, ...v, systemChars: v.system.length, messageChars: v.message.length };
   });
 }
+/** What actually differs between the variants, so a difference is never read as context size alone. */
+const difference = (vs) => vs.map((v) => `${v.name}: ${v.systemChars} char system, thinking ${v.thinking ?? 'off/default'}`).join(' · ');
 const tokens = (chars) => Math.round(chars / 4);
 
 /** A crewd that is already up owns this state's Gateway. Starting ours would take it over, so this refuses. */
@@ -139,7 +143,8 @@ export async function measure(opts) {
     if (!opts.provider && !providers.includes('openai')) throw new Error(`no ChatGPT sign-in on this state (signed in: ${providers.join(', ') || 'nobody'}); nothing was measured`);
     const cfgNow = await client.request('config.get', {}, { timeoutMs: 20_000 }).catch(() => undefined);
     const model = String(cfgNow?.config?.agents?.defaults?.model?.primary ?? "the account's own default");
-    for (const v of vs) for (let i = 0; i < opts.runs; i++) rows.push({ variant: v.name, run: i + 1, ...(await oneRun(gateway, client, 'm1', v, `${opts.tag}:${v.name}:${i + 1}`, opts.wait)) });
+    // Interleaved, not blocked: provider-side drift then shows up in both variants instead of on whichever ran last.
+    for (let i = 0; i < opts.runs; i++) for (const v of vs) rows.push({ variant: v.name, run: i + 1, ...(await oneRun(gateway, client, 'm1', v, `${opts.tag}:${v.name}:${i + 1}`, opts.wait)) });
     return { variants: vs, rows, meta: { state: opts.state, crew: opts.crew, model, body: opts.body, runs: opts.runs, providers, head: headOf(cfg.repoDir) } };
   } finally { await gateway.stop(); }
 }
@@ -163,6 +168,8 @@ export function report({ variants: vs, rows, meta = {} }) {
     `| crew | ${meta.crew ?? '?'} |`,
     `| model route | ${meta.model ?? '?'} |`,
     `| signed in | ${(meta.providers ?? []).join(', ') || 'nobody'} |`,
+    `| what the variants differ by | ${difference(vs)} |`,
+    '| run order | interleaved, so route drift lands on every variant |',
     `| prompt under test | ${meta.body ?? '?'} |`];
   const lines = ['| variant | prompt (chars ≈ tokens) | system | runs | min | median | p90 | max | no words |', '|---|---|---|---|---|---|---|---|---|'];
   const summary = {};  for (const v of vs) {

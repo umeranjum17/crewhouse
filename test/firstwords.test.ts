@@ -46,8 +46,9 @@ test('crewd already up: the harness refuses instead of taking over its Gateway',
 test('one raw turn per variant, timed off the engine\'s own stream, with per-run values in the report', { timeout: 420_000 }, async () => {
   const stub = await startModelStub();
   try {
-    const out = await measure(opts({ runs: 1, provider: { baseUrl: stub.url, apiKey: 'stub' } }));
-    assert.equal(out.rows.length, 2, 'one run per variant');    for (const row of out.rows) {      assert.ok(typeof row.firstWordsMs === 'number' && row.firstWordsMs > 0, `${row.variant}: first real words timed (${row.firstWordsMs}ms)`);
+    const out = await measure(opts({ runs: 2, provider: { baseUrl: stub.url, apiKey: 'stub' } }));
+    assert.equal(out.rows.length, 4, 'two runs per variant');
+    assert.deepEqual(out.rows.map((r: any) => r.variant), ['tiny', 'chief', 'tiny', 'chief'], 'the variants are interleaved, not measured in blocks');    for (const row of out.rows) {      assert.ok(typeof row.firstWordsMs === 'number' && row.firstWordsMs > 0, `${row.variant}: first real words timed (${row.firstWordsMs}ms)`);
       assert.equal(row.status, 'ok', `${row.variant}: the run finished (${row.status} ${row.error})`);
     }
     assert.match(out.rows.find((r: any) => r.variant === 'chief')!.reply, /stub chief: done with/);
@@ -55,5 +56,6 @@ test('one raw turn per variant, timed off the engine\'s own stream, with per-run
     assert.match(text, /\| chief \| \d+ ≈ \d+ tok \|/);
     assert.match(text, /Raw first-real-word floor \(best variant median\): \d+ ms; target 3000 ms\./);
     assert.match(text, /first real words \(ms\)/);
+    assert.match(text, /what the variants differ by \| tiny: 23 char system, thinking off\/default · chief: \d+ char system, thinking low \|/);
   } finally { await stub.close(); }
 });
