@@ -37,6 +37,8 @@ export interface AgentRuntime {
   /** The "Learn from how I work" switch: the engine's learning mode, auto or off. Optional: the stub may ignore it. */
   setLearning?(on: boolean): Promise<void>;
   learning?(): Promise<boolean> | boolean;
+  /** Whether this engine has only keyword memory search available. */
+  memoryLimited?(member: Member): boolean;
   /** Point the engine at a custom OpenAI-compatible model provider. Optional: only the real engine offers it. */
   configureModelProvider?(baseUrl: string, apiKey: string): Promise<void>;
 }

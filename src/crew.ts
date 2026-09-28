@@ -1211,6 +1211,13 @@ export class Crew {
       if (!account) return this.pause(task, choices);
       if (task.origin === 'routine' && this.overShare(member)) return this.waitForTomorrow(task);
       this.setTask(task, 'working');
+      if (this.runtime.memoryLimited?.(member)) {
+        const key = `memory.limited.${member}`;
+        if (!this.db.get('SELECT 1 FROM settings WHERE key = ?', key)) {
+          this.say(bot.id, 'system', 'Memory features are limited: no subscription-backed or local search is set up. Keyword search still works; no paid search was tried.', task.id);
+          this.db.run('INSERT INTO settings (key, value) VALUES (?, ?)', key, 'shown');
+        }
+      }
       const handoff = this.handoffs.get(task.id);
       this.handoffs.delete(task.id);
       const resumes = !!task.session && task.session.startsWith('agent:m');

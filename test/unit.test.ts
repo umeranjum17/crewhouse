@@ -72,6 +72,21 @@ test('queue: one task at a time per bot, and a global cap across bots', async ()
   done();
 });
 
+test('limited memory is disclosed once in the person-visible thread', async () => {
+  const { db, crew, done } = setup();
+  crew.onboard('sir');
+  (crew.runtime as any).memoryLimited = () => true;
+  crew.recruit('reel', 'Reel', 'person');
+  const first = crew.assign('reel', 'first request', 'chief').task;
+  await settled(db, first);
+  const second = crew.assign('reel', 'second request', 'chief').task;
+  await settled(db, second);
+  const notices = db.all("SELECT text FROM messages WHERE author = 'system' AND text LIKE 'Memory features are limited:%'");
+  assert.equal(notices.length, 1);
+  assert.match(notices[0].text, /no paid search was tried/i);
+  done();
+});
+
 test('task titles are cut at a word, never mid-word', async () => {
   assert.equal(short('  Make a demo  ', 80), 'Make a demo');
   assert.equal(short('Open wikipedia.org in your browser, search for Herdr, then read the top 5 results slowly', 80),

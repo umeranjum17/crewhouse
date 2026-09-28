@@ -40,6 +40,7 @@ export class OpenClawRuntime implements AgentRuntime {
     return this.client;
   }
   async stop() { await this.gateway.stop(); this.bridge?.stop(); this.client = undefined; }
+  memoryLimited(member: number) { return this.gateway.memoryLimited(member); }
   private connected() { if (!this.client) throw new Error('Crewhouse engine is not ready'); return this.client; }
   private async agent(member: number) {
     if (this.agents.has(member)) return `m${member}`;
