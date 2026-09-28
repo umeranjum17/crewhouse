@@ -836,7 +836,7 @@ function AskSheet({ c, who, chiefSays, canAct, onClose }: { c: A.Card; who: A.He
           </View>
           <T style={s.sheetHead}>{heading}</T>
           {c.review ? <>
-            {c.preview && <Card>{c.preview.body.split('\n').map((l, i) => /^Total/.test(l) ? <T key={i} style={s.b}>{l}</T> : <T key={i}>{l}</T>)}</Card>}
+            {c.preview && <View style={[s.peek, { backgroundColor: t.soft, gap: 4 }]}>{c.preview.body.split('\n').map((l, i) => /^Total/.test(l) ? <T key={i} style={s.total}>{l}</T> : <T key={i}>{l}</T>)}</View>}
             {c.order && !c.order.known && <T tone="mute" style={s.small}>So nothing is counted against the monthly limit.</T>}
           </> : c.preview && <View style={[s.peek, { backgroundColor: t.soft }]}>{!!c.preview.head && <T tone="mute" style={s.small}>{c.preview.head}</T>}<T style={s.peekText}>{c.preview.body}</T></View>}
           {!!chiefSays && <View style={s.row}><Face who="chief" size={30} /><T style={{ flex: 1 }}><Text style={s.b}>Chief:</Text> {A.plain(chiefSays)}</T></View>}
@@ -1459,6 +1459,7 @@ const s = StyleSheet.create({
   row6: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   peek: { borderRadius: 10, paddingVertical: 10, paddingHorizontal: 12, gap: 2 },
   peekText: { fontSize: 14.5, lineHeight: 21 },
+  total: { fontSize: 18, lineHeight: 25, fontWeight: '700', marginTop: 4 },
   handle: { alignSelf: 'center', width: 36, height: 4, borderRadius: 4, marginTop: -8 },
   sheetHead: { fontSize: 19, lineHeight: 26, fontWeight: '600', letterSpacing: -0.2 },
   halo: { padding: 14, borderRadius: 999 },
