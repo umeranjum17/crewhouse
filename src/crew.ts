@@ -18,7 +18,7 @@ import { axiEnv, registry, resolveGrants, toolBin, which } from './tools.ts';
 import { describe, nextRun, parseSchedule } from './routines.ts';
 import { buildWorkbook, readWorkbook } from './workbooks.ts';
 import { buildDocument, readDocument } from './documents.ts';
-import { byRuntime, clarify, route, type Backend, type Helper } from './route.ts';
+import { byRuntime, clarify, route, type Helper } from './route.ts';
 import type { Link } from './link.ts';
 import type { AgentRuntime, RunEnd, RunEvent, RunRef, RunSpec, ToolHost } from './runtime.ts';
 import { OpenClawRuntime } from './openclaw/runtime.ts';
@@ -1048,9 +1048,10 @@ export class Crew {
     const previous = this.db.get("SELECT text FROM messages WHERE bot = ? AND member = ? AND author = 'person' ORDER BY id DESC LIMIT 1", CHIEF, member)?.text as string | undefined;
     const earlier: string | undefined = asked && JSON.parse(asked.data).message === last ? JSON.parse(asked.data).text
       : /^https?:\/\/\S+$/i.test(text) && previous && /\b(market|marketing|promote|launch)\b/i.test(previous) ? previous : undefined;
-    const brain = await this.usable(member, this.choices({ bot: CHIEF, brain: model ? disk.brainKey(disk.parseBrain(model)) : null }));
-    const answerer: Backend | undefined = brain ? byRuntime(this.runtime, member) : undefined;
-    const to = await route({ text, earlier }, helpers, answerer);
+    const request = { text, earlier };
+    const ruled = await route(request, helpers);
+    const brain = ruled.abstained ? await this.usable(member, this.choices({ bot: CHIEF, brain: model ? disk.brainKey(disk.parseBrain(model)) : null })) : undefined;
+    const to = brain ? await route(request, helpers, byRuntime(this.runtime, member)) : ruled;
     // Torn with photos in hand: Chief takes it himself rather than ask, so the photos go with the request.
     if (to.abstained && to.probabilities && !earlier && !pics.length) {
       return void this.db.tx(() => {

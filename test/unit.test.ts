@@ -893,6 +893,23 @@ test('routing: a plain request goes straight to its helper, the member\'s AI pla
   assert.equal(task(db, m).bot, 'scout');
   await settled(db, m);
 
+  // Addressing Chief is a direct task, not a second subscription turn spent asking who should take it.
+  const runtime = (crew as any).runtime;
+  const ask = runtime.ask.bind(runtime);
+  let routingCalls = 0;
+  runtime.ask = async (...args: Parameters<typeof ask>) => { routingCalls++; return ask(...args); };
+  const signedIn = crew.accounts.signedIn;
+  let routeChecks = 0;
+  crew.accounts.signedIn = async (...args) => {
+    if (!db.get("SELECT 1 FROM tasks WHERE bot = 'chief' AND body = 'Chief, help me think through this decision'")) routeChecks++;
+    return signedIn(...args);
+  };
+  const direct = (await crew.post('chief', 'Chief, help me think through this decision'))!.task;
+  assert.equal(task(db, direct).bot, 'chief');
+  assert.equal(routingCalls, 0, 'an explicitly addressed Chief request needs no routing model');
+  assert.equal(routeChecks, 0, 'routing a clear request need not query the account before task creation');
+  await settled(db, direct);
+
   // A routine is Chief's own work, even with Reel in it.
   const b = (await crew.post('chief', 'ask Reel to make a demo every Friday'))!.task;
   assert.equal(task(db, b).bot, 'chief');
@@ -908,6 +925,7 @@ test('routing: a plain request goes straight to its helper, the member\'s AI pla
   const c = (await crew.post('chief', 'what do people say about standing desks? [route scout]'))!.task;
   assert.equal(task(db, c).bot, 'scout');
   assert.equal(models(), before, 'the routing question is not a crew turn');
+  assert.equal(routingCalls, 1, 'an unplaced request still uses the member\'s routing model');
   await settled(db, c);
 
   // The AI is torn: no task, one plain question, and the answer sends the request where it belongs.
