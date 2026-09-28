@@ -45,6 +45,24 @@ test('ChatGPT uses the gateway auth provider for status, logout and migration co
   } finally { await stop(); }
 });
 
+test('existing gateway config gains only the subscription runtime rule', async () => {
+  const { stateDir, runtime, stop } = await house();
+  try {
+    const gateway = (runtime as any).gateway;
+    await gateway.prepare();
+    const path = join(stateDir, 'openclaw/openclaw.json');
+    const config = JSON.parse(readFileSync(path, 'utf8'));
+    config.agents.defaults.modelPolicy = { allow: ['anthropic/*'] };
+    writeFileSync(path, JSON.stringify(config));
+    await gateway.prepare();
+    const updated = JSON.parse(readFileSync(path, 'utf8'));
+    assert.deepEqual(updated.agents.defaults.modelPolicy.allow, ['anthropic/*', 'openai/*']);
+    assert.equal(updated.agents.defaults.models['openai/*'].agentRuntime.id, 'openclaw');
+    assert.deepEqual(updated.tools.exec, { security: 'deny', ask: 'always' });
+    assert.equal(updated.plugins.entries.codex.enabled, false);
+  } finally { await stop(); }
+});
+
 test('a preserved sign-in survives the upgrade, a failed import stays recoverable', { timeout: 600_000 }, async () => {
   // The upgrade: crewhouse's copy is retired only after the gateway itself reports the member signed in.
   {
@@ -58,6 +76,14 @@ test('a preserved sign-in survives the upgrade, a failed import stays recoverabl
       assert.ok(!existsSync(legacy), 'only a confirmed import retires crewhouse\u2019s copy');
       assert.ok(readFileSync(`${legacy}.moved-to-engine`, 'utf8').includes('a-preserved'), 'the retire is a rename, not a rewrite');
       assert.equal(await runtime.signedIn(1, 'chatgpt'), true, 'the gateway reports the member signed in — no second login asked');
+      const config = await (runtime as any).client.request('config.get');
+      assert.equal(config.config.agents.defaults.models['openai/*'].agentRuntime.id, 'openclaw');
+      assert.deepEqual(config.config.agents.defaults.modelPolicy.allow, [], 'other members’ models remain selectable');
+      const end = await runtime.run({ key: 'agent:m1:crewhouse:chief:migration', member: 1, bot: 'chief', task: 1,
+        account: 'chatgpt', cwd: '', system: 'Be brief.', message: 'Hello', builtins: [] }, () => {});
+      assert.ok(!end.ok && 'message' in end, 'the dummy OAuth token cannot produce a model reply');
+      assert.match(end.message, /No route-compatible authentication source is configured for openai/);
+      assert.doesNotMatch(end.message, /harness plugin registration missing/);
     } finally { await stop(); }
   }
   // A failed import (the engine was never up to confirm) leaves the original intact; the retry then succeeds.
