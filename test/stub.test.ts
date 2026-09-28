@@ -111,6 +111,39 @@ test('a Chief reply streams partial words before its durable message', async () 
   } finally { ws.close(); }
 });
 
+test('household asks reach Chief words before the model, including ambiguous asks', async () => {
+  await ready();
+  if (!(await api('GET', '/api/state')).body.person.onboarded) await say('chief', 'Alex');
+  const events: any[] = [];
+  const ws = new WebSocket(base.replace('http:', 'ws:') + '/ws');
+  await new Promise<void>((resolve) => ws.on('open', resolve));
+  ws.on('message', (raw) => events.push(JSON.parse(String(raw))));
+  try {
+    for (const [label, words, expected] of [
+      ['dinner', 'Plan dinner for tonight', /dinner plan/],
+      ['research', 'What do people say about standing desks?', /check the question/],
+      ['reminder', 'Remind me about the meeting tomorrow', /reminder/],
+      ['ambiguous', 'Could you handle the screenshots?', /look into that/],
+      ['Chief', 'Chief, help me think through this choice', /look into that/],
+    ] as const) {
+      const started = Date.now();
+      const { body } = await say('chief', words);
+      assert.ok(body.task, `${label} starts a task, not a blocking routing question`);
+      const first = await until(async () => events.find((e) => e.kind === 'reply.partial' && e.data?.task === body.task));
+      await done('chief', body.task);
+      const trace = events.filter((e) => e.bot === 'chief' && e.data?.task === body.task);
+      const created = trace.find((e) => e.kind === 'task.created');
+      const prompted = trace.find((e) => e.kind === 'run.prompted');
+      const model = trace.find((e) => e.kind === 'reply.partial' && e.data.text.includes('stub chief:'));
+      assert.ok(created && prompted && model, `${label}: task, prompt and model words observed`);
+      assert.match(first.data.text, expected);
+      assert.ok(first.at <= prompted.at, `${label}: first words precede the model turn`);
+      assert.equal(first.data.member, 1);
+      console.log(`stub HTTP ${label}: send→task ${created.at - started}ms; task→first words ${first.at - created.at}ms; model wait ${model.at - prompted.at}ms`);
+    }
+  } finally { ws.close(); }
+});
+
 test('marketing and URL follow-up show Chief words before a model tool or result', async () => {
   await ready();
   if (!(await api('GET', '/api/state')).body.person.onboarded) await say('chief', 'Alex');
