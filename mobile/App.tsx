@@ -25,6 +25,7 @@ import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { useShareIntent } from 'expo-share-intent';
 import QRCode from 'qrcode';
 import * as motion from './src/motion';
+import { MARKS } from './src/marks';
 import { connect, desktopSignaling, forgetGrant, kept, loadGrant, onLive, pair, pairTypedCode, type Grant, type Status } from './src/link';
 
 // ---------- look ----------
@@ -115,6 +116,18 @@ function Pill({ tone = 'ok', children }: { tone?: 'ok' | 'wait' | 'off'; childre
   );
 }
 
+/** The small line above an ask's title: what kind of yes it wants, with the only pink on the card. */
+function AskTag({ c }: { c: A.Card }) {
+  const t = useLook();
+  return <View style={s.row6}><View style={[s.pillDot, { backgroundColor: t.pink }]} /><T tone="mute" style={s.small}>{A.askTag(c)} · {A.clock(c.at)}</T></View>;
+}
+/** An AI account's own mark, white on its brand tile. */
+function AiMark({ ai, size = 32 }: { ai: { key: string; bg: string }; size?: number }) {
+  return <View style={{ width: size, height: size, borderRadius: size * 0.28, backgroundColor: ai.bg, alignItems: 'center', justifyContent: 'center' }}>
+    <Image source={MARKS[ai.key]} style={{ width: size * 0.56, height: size * 0.56 }} accessibilityIgnoresInvertColors />
+  </View>;
+}
+
 // ---------- small pieces ----------
 function Center({ children }: { children: ReactNode }) { return <View style={s.center}>{children}</View>; }
 function T({ children, style, tone = 'ink', lines }: { children: ReactNode; style?: any; tone?: 'ink' | 'ink2' | 'mute' | 'pinkInk'; lines?: number }) {
@@ -161,7 +174,7 @@ function ChiefAsk({ l }: { l: { text: string; detail: string } }) {
 
 function Card({ children, style, ask, onTouchStart }: { children: ReactNode; style?: any; ask?: boolean; onTouchStart?: () => void }) {
   const t = useLook();
-  return <View onTouchStart={onTouchStart} style={[s.card, { backgroundColor: t.card, borderColor: ask ? t.pink : t.line, borderWidth: 1 }, style]}>{children}</View>;
+  return <View onTouchStart={onTouchStart} style={[s.card, { backgroundColor: t.card, borderColor: t.line, borderWidth: 1 }, ask && s.askCard, style]}>{children}</View>;
 }
 /** The Add-a-phone card in Chief's chat, on the phone. It refreshes itself like the computer's card: a new code while
  *  it is on screen and someone is about (ten minutes), then a Show-a-new-code button — never directions to go elsewhere. */
@@ -689,25 +702,38 @@ function Hello({ state, refresh, go }: Ctx) {
   const [address, setAddress] = useState<string>(me.address || named);
   const [own, setOwn] = useState(false);
   const [words, setWords] = useState('');
+  const t = useLook();
+  // Named by the owner: the ideas come first and the name waits at the bottom; nameless, the name comes first.
+  const name = <>
+    <Label>What shall I call you?</Label>
+    <TextInput style={[s.input, { color: t.ink, borderColor: t.line }]} value={address} onChangeText={setAddress} placeholder="What shall I call you?" placeholderTextColor={t.mute} accessibilityLabel="What shall I call you?" />
+    <View style={s.chips}>{['Sir', "Ma'am", ...(named ? [named] : [])].map((q) => <Btn key={q} label={q} onPress={() => setAddress(q)} />)}</View>
+  </>;
   const pick = (ask?: string) => {
     if (!address.trim()) return say('First, what shall I call you?');
     void attempt(async () => { await api.onboard(address.trim(), ask); refresh(); go({ view: 'chief' }, true); });
   };
   return (
     <Page>
-      <View style={{ alignItems: 'center' }}><ChiefArt mood="hello" size={150} /></View>
-      <T style={[s.h1, s.centerText]}>{A.greeting()}{address.trim() ? `, ${address.trim()}` : ''}</T>
-      <T tone="ink2" style={s.centerText}>I'm Chief. {A.atHome('the home computer')[0]}</T>
-      <T tone="mute" style={s.centerText}>{A.atHome('the home computer')[1]}</T>
-      <T tone="ink2" style={s.centerText}>I'll ask before sending messages, deleting things or spending money.</T>
-      <TextInput style={[s.input, { color: useLook().ink, borderColor: useLook().line }]} value={address} onChangeText={setAddress} placeholder="What shall I call you?" placeholderTextColor={useLook().mute} />
-      <View style={s.chips}>{['Sir', "Ma'am", ...(named ? [named] : [])].map((q) => <Btn key={q} label={q} onPress={() => setAddress(q)} />)}</View>
+      <View style={{ alignItems: 'center' }}><View style={[s.halo, { backgroundColor: t.soft }]}><ChiefArt mood="hello" size={96} /></View></View>
+      <T style={[s.h1, s.centerText, { fontSize: 26, lineHeight: 32 }]}>{A.greeting()}{address.trim() ? `, ${address.trim()}` : ''}</T>
+      <T tone="ink2" style={s.centerText}>I'm Chief. I run the crew in this house.</T>
+      <Card style={{ gap: 10 }}>
+        {[A.atHome('the home computer')[0], A.atHome('the home computer')[1], "I'll ask before sending messages, deleting things or spending money."].map((l) =>
+          <View key={l} style={[s.row, { alignItems: 'flex-start' }]}><T style={{ color: t.ok, fontWeight: '700' }}>✓</T><T tone="ink2" style={{ flex: 1 }}>{l}</T></View>)}
+      </Card>
+      {!named && name}
       <Label>What can I take off your plate?</Label>
-      {A.firstIdeas(state).map((i) => <Btn key={i.label} label={`${i.icon}  ${i.label}`} onPress={() => pick(i.label)} />)}
+      {A.firstIdeas(state).map((i) => <Pressable key={i.label} onPress={() => pick(i.label)} accessibilityRole="button" accessibilityLabel={i.label}
+        style={({ pressed }) => [s.idea, { backgroundColor: t.card, borderColor: t.line }, pressed && { opacity: 0.6 }]}>
+        <View style={[s.ideaIcon, { backgroundColor: t.soft }]}><Text style={{ fontSize: 18 }}>{i.icon}</Text></View>
+        <T style={{ flex: 1, fontWeight: '500' }}>{i.label}</T><T tone="mute">›</T>
+      </Pressable>)}
       {own ? <>
         <TextInput style={[s.input, { color: useLook().ink, borderColor: useLook().line }]} value={words} onChangeText={setWords} placeholder="Ask for anything…" placeholderTextColor={useLook().mute} accessibilityLabel="Your first ask" />
         <Btn go big label="Send" disabled={!words.trim()} onPress={() => pick(words.trim())} />
-      </> : <Btn label="Or ask in your own words" onPress={() => setOwn(true)} />}
+      </> : <Btn ghost label="Or ask in your own words" onPress={() => setOwn(true)} />}
+      {!!named && name}
     </Page>
   );
 }
@@ -736,13 +762,17 @@ function AskCard({ c, who, state, onDone, canAct, offline, open }: { c: A.Card; 
   const stuck = when !== null && (!when.trim() || !sched || sched.bad);
   return (
     <Card ask>
-      <View style={s.row}>
-        {who && <Face who={{ ...who, mood: 'ask' }} size={36} />}
-        <View style={{ flex: 1 }}><T style={s.b}>{c.head}</T><T tone="mute" style={s.small}>{A.clock(c.at)}</T></View>
+      <View style={[s.row, { alignItems: 'flex-start' }]}>
+        {who && <Face who={{ ...who, mood: 'ask' }} size={32} />}
+        <View style={{ flex: 1, gap: 2 }}><AskTag c={c} /><T style={s.askHead}>{c.head}</T></View>
       </View>
       {c.kind === 'routine' && c.lines ? <View style={{ gap: 3 }}>
-        {c.lines.map((l, i) => <T key={i} tone={i ? 'ink2' : undefined} style={i ? undefined : s.askWords}>{l}</T>)}
-      </View> : <T style={s.askWords}>{c.words}</T>}
+        {c.lines.map((l, i) => <T key={i} tone={i ? 'ink2' : undefined} style={i ? undefined : s.askLine}>{l}</T>)}
+      </View> : <T tone="ink2">{c.words}</T>}
+      {c.preview && !c.review && c.kind !== 'routine' && <View style={[s.peek, { backgroundColor: t.soft }]}>
+        {!!c.preview.head && <T tone="mute" style={s.small} lines={1}>{c.preview.head}</T>}
+        <T lines={3} style={s.peekText}>{c.preview.body}</T>
+      </View>}
       {oops && <T tone="pinkInk" style={s.small}>That didn't go through. Try again.</T>}
       {offline ? <T tone="mute" style={s.small}>You can answer once the home computer is back.</T>
         : !canAct ? <T tone="mute" style={s.small}>This phone watches; answer on another phone or the computer.</T> : c.kind === 'connect' ? (
@@ -762,7 +792,7 @@ function AskCard({ c, who, state, onDone, canAct, offline, open }: { c: A.Card; 
           <View style={s.chips}>
             <Btn go label="Start it" disabled={stuck} onPress={() => act({ answer: 'allow', scope: 'once', ...(when !== null && when.trim() && when.trim() !== c.schedule ? { schedule: when.trim() } : {}) })} />
             <Btn label={when === null ? 'Change time' : 'Keep the time'} onPress={() => setWhen(when === null ? c.schedule || '' : null)} />
-            <Btn label="Not now" onPress={() => act({ answer: 'deny' })} />
+            <Btn ghost label="Not now" onPress={() => act({ answer: 'deny' })} />
           </View>
         </>
       ) : c.reply ? (
@@ -773,13 +803,13 @@ function AskCard({ c, who, state, onDone, canAct, offline, open }: { c: A.Card; 
       ) : c.review ? (
         <View style={s.chips}>
           <Btn go label="Review order" onPress={() => open(c)} />
-          {deny && <Btn label={deny.label} onPress={() => act(deny.body)} />}
+          {deny && <Btn ghost label={deny.label} onPress={() => act(deny.body)} />}
         </View>
       ) : (
         <View style={s.chips}>
           <Btn go label={yes.label} onPress={() => act(yes.body)} />
           {(c.preview || rest.length > 1) && <Btn label={c.preview ? 'Read it first' : 'More'} onPress={() => open(c)} />}
-          <Btn label="Not now" onPress={() => act({ answer: 'deny' })} />
+          <Btn ghost label="Not now" onPress={() => act({ answer: 'deny' })} />
         </View>
       )}
     </Card>
@@ -799,19 +829,20 @@ function AskSheet({ c, who, chiefSays, canAct, onClose }: { c: A.Card; who: A.He
     <Modal visible transparent animationType={motion.sheet(reduce)} onRequestClose={onClose}>
       <Pressable style={s.scrim} onPress={onClose}>
         <Pressable style={[s.sheet, { backgroundColor: t.bg }]} onPress={() => {}}>
-          <View style={{ alignItems: 'center', gap: 10 }}>
-            {who && <Face who={{ ...who, mood: 'ask' }} size={84} />}
-            <Pill tone="wait">{who?.name ?? 'The crew'} · {c.kind === 'spend' ? 'wants to spend money' : c.kind === 'setup' ? 'Home setup' : 'needs your OK'}</Pill>
+          <View style={[s.handle, { backgroundColor: t.line }]} />
+          <View style={[s.row, { gap: 12 }]}>
+            {who ? <Face who={{ ...who, mood: 'ask' }} size={48} /> : <Face who="chief" size={48} />}
+            <View style={{ flex: 1, gap: 2 }}><T style={s.b}>{who?.name ?? 'The crew'}</T><AskTag c={c} /></View>
           </View>
-          <T style={s.h2}>{heading}</T>
+          <T style={s.sheetHead}>{heading}</T>
           {c.review ? <>
-            {c.preview && <Card>{c.preview.body.split('\n').map((l, i) => /^Total/.test(l) ? <T key={i} style={s.b}>{l}</T> : <T key={i}>{l}</T>)}</Card>}
+            {c.preview && <View style={[s.peek, { backgroundColor: t.soft, gap: 4 }]}>{c.preview.body.split('\n').map((l, i) => /^Total/.test(l) ? <T key={i} style={s.total}>{l}</T> : <T key={i}>{l}</T>)}</View>}
             {c.order && !c.order.known && <T tone="mute" style={s.small}>So nothing is counted against the monthly limit.</T>}
-          </> : c.preview && <Card>{!!c.preview.head && <T tone="mute" style={s.small}>{c.preview.head}</T>}<T>{c.preview.body}</T></Card>}
+          </> : c.preview && <View style={[s.peek, { backgroundColor: t.soft }]}>{!!c.preview.head && <T tone="mute" style={s.small}>{c.preview.head}</T>}<T style={s.peekText}>{c.preview.body}</T></View>}
           {!!chiefSays && <View style={s.row}><Face who="chief" size={30} /><T style={{ flex: 1 }}><Text style={s.b}>Chief:</Text> {A.plain(chiefSays)}</T></View>}
           {c.kind === 'spend' && <T tone="mute" style={s.small}>Anything that costs money asks you every time.</T>}
           {oops && <T tone="pinkInk" style={s.small}>That didn't go through. Try again.</T>}
-          {canAct ? c.choices.map((x, i) => <Btn key={x.label} go={i === 0} big label={x.label} onPress={() => act(x.body)} />) : <Btn big label="Close" onPress={onClose} />}
+          {canAct ? c.choices.map((x, i) => <Btn key={x.label} go={i === 0} ghost={i > 0 && x.body.answer === 'deny'} big label={x.label} onPress={() => act(x.body)} />) : <Btn big label="Close" onPress={onClose} />}
         </Pressable>
       </Pressable>
     </Modal>
@@ -1024,15 +1055,17 @@ function Crew(ctx: Ctx) {
   const t = useLook();
   const chief = chiefNow(state, ctx.offline);
   const tile = (key: string, face: ReactNode, name: string, pill: ReactNode, role: string, r: Route) => (
-    <Pressable key={key} style={[s.palCard, { backgroundColor: t.card, borderColor: t.line }]} onPress={() => go(r)}>
-      {face}<T style={s.b}>{name}</T>{pill}<T tone="mute" style={[s.small, s.centerText]} lines={2}>{role}</T>
+    <Pressable key={key} style={({ pressed }) => [s.palRow, { backgroundColor: t.card, borderColor: t.line }, pressed && { opacity: 0.6 }]} onPress={() => go(r)} accessibilityRole="button" accessibilityLabel={name}>
+      {face}
+      <View style={{ flex: 1, gap: 3, alignItems: 'flex-start' }}><T style={[s.b, { fontSize: 16 }]}>{name}</T>{pill}<T tone="mute" style={s.small} lines={1}>{role}</T></View>
+      <T tone="mute">›</T>
     </Pressable>
   );
   return (
     <Page title="Your crew" lead="Everyone answers to Chief. Tap a helper to chat.">
-      <View style={s.grid}>
-        {tile('chief', <ChiefArt mood={chief.mood} size={84} />, 'Chief', <Pill tone={chief.mood === 'rest' ? 'off' : 'ok'}>{chief.line}</Pill>, 'Runs the crew and answers to you', { view: 'chief' })}
-        {A.crew(state).map((h) => tile(h.id, <Face who={h} size={84} />, h.name, <HelperPill h={h} offline={ctx.offline} />, h.role, { view: 'helper', id: h.id }))}
+      <View style={{ gap: 8 }}>
+        {tile('chief', <Face who="chief" size={56} mood={chief.mood} />, 'Chief', <Pill tone={chief.mood === 'rest' ? 'off' : 'ok'}>{chief.line}</Pill>, 'Runs the crew and answers to you', { view: 'chief' })}
+        {A.crew(state).map((h) => tile(h.id, <Face who={h} size={56} />, h.name, <HelperPill h={h} offline={ctx.offline} />, h.role, { view: 'helper', id: h.id }))}
       </View>
       {ctx.canAct ? <Btn go label="Add a helper" onPress={() => go({ view: 'add' })} /> : null}
     </Page>
@@ -1350,6 +1383,31 @@ function ThingsList({ list, state, empty }: { list: A.Thing[]; state: Json; empt
   );
 }
 
+/** The accounts the crew can think with, as the phone may say them: this phone can't see who is signed in, so it names
+ *  ChatGPT (the front door) and folds the other routes under "More ways to sign in", each with its own mark. */
+function PhoneAccounts() {
+  const t = useLook();
+  const [more, setMore] = useState(false);
+  const row = (ai: (typeof A.AIS)[number]) => <View key={ai.key} style={[s.row, { gap: 12, paddingVertical: 10 }]}>
+    <AiMark ai={ai} />
+    <View style={{ flex: 1 }}><T style={s.b}>{ai.name}</T>{!!ai.cli && <T tone="mute" style={s.small}>Needs {ai.cli} first.</T>}</View>
+  </View>;
+  return <>
+    <Card style={{ gap: 0, paddingVertical: 6 }}>
+      {row(A.AIS[0])}
+      <T tone="mute" style={[s.small, { paddingBottom: 10 }]}>Sign-in and live account status are shown only on the home computer, in Settings. This phone can't tell whether an account is signed in.</T>
+    </Card>
+    <Pressable onPress={() => setMore(!more)} accessibilityRole="button" accessibilityState={{ expanded: more }} accessibilityLabel="More ways to sign in"
+      style={[s.row, { minHeight: 48, paddingHorizontal: 4, marginTop: 8 }]}>
+      <T tone="ink2" style={{ flex: 1, fontWeight: '500' }}>More ways to sign in</T>
+      {!more && <View style={[s.row, { gap: 4 }]}>{A.AIS.slice(1).map((ai) => <AiMark key={ai.key} ai={ai} size={22} />)}</View>}
+      <T tone="mute">{more ? '⌄' : '›'}</T>
+    </Pressable>
+    {more && <Card style={{ gap: 0, paddingVertical: 6 }}>{A.AIS.slice(1).map(row)}</Card>}
+    <T tone="mute" style={[s.small, { marginTop: 6, marginHorizontal: 4 }]}>{A.AI_ROUTES}</T>
+  </>;
+}
+
 // ---------- this phone ----------
 function ThisPhone({ grant, status, onForget, onClear }: { grant: Grant; status: Status; onForget: () => void; onClear: () => void }) {
   // This phone knows its own news state: allowed and working, said no, or this build can't push at all.
@@ -1364,11 +1422,7 @@ function ThisPhone({ grant, status, onForget, onClear }: { grant: Grant; status:
         <View style={[s.row, { marginTop: 6 }]}><Pill tone={status === 'online' ? 'ok' : 'wait'}>{status === 'online' ? 'With the home computer' : 'Looking for the home computer…'}</Pill></View>
       </Card>
       <Label>Your AI accounts</Label>
-      <Card>
-        <T tone="mute">Sign-in and live account status are shown only on the home computer: Crewhouse, Settings, Your AI accounts. This phone cannot tell whether a route is signed in. A route without your account there is untested, not connected.</T>
-        <T tone="mute">{A.AI_ROUTES}</T>
-        {A.AIS.map((ai) => <View key={ai.key}><T style={s.b}>{ai.name}</T><T tone="mute" style={s.small}>Check sign-in status on the home computer{ai.cli ? `; this route needs ${ai.cli} first` : ''}.</T></View>)}
-      </Card>
+      <PhoneAccounts />
       <Card>
         <T style={s.b}>News</T>
         <T tone={push === 'on' ? 'ink' : 'mute'}>{push ? PUSH_WORDS[push] : 'Checking…'}</T>
@@ -1399,7 +1453,19 @@ const s = StyleSheet.create({
   b: { fontWeight: '600' },
   small: { fontSize: 13, lineHeight: 18 },
   read: { fontSize: 16, lineHeight: 24 },
-  askWords: { fontSize: 16, lineHeight: 23, fontWeight: '600' },
+  askCard: { shadowColor: '#14121a', shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
+  askHead: { fontSize: 15.5, lineHeight: 21, fontWeight: '600' },
+  askLine: { fontSize: 15.5, lineHeight: 22, fontWeight: '500' },
+  row6: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  peek: { borderRadius: 10, paddingVertical: 10, paddingHorizontal: 12, gap: 2 },
+  peekText: { fontSize: 14.5, lineHeight: 21 },
+  total: { fontSize: 18, lineHeight: 25, fontWeight: '700', marginTop: 4 },
+  handle: { alignSelf: 'center', width: 36, height: 4, borderRadius: 4, marginTop: -8 },
+  sheetHead: { fontSize: 19, lineHeight: 26, fontWeight: '600', letterSpacing: -0.2 },
+  halo: { padding: 14, borderRadius: 999 },
+  idea: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderRadius: radius.card, paddingVertical: 10, paddingHorizontal: 14, minHeight: 56 },
+  ideaIcon: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  palRow: { flexDirection: 'row', alignItems: 'center', gap: 14, borderRadius: radius.card, borderWidth: 1, paddingVertical: 12, paddingHorizontal: 14 },
   label: { fontSize: 13, lineHeight: 18, fontWeight: '600', marginTop: 24, marginBottom: 6, marginHorizontal: 4 },
   time: { fontSize: 12, lineHeight: 16 },
   fp: { fontSize: 22, fontWeight: '600', fontVariant: ['tabular-nums'], marginVertical: 8, textAlign: 'center' },
@@ -1428,8 +1494,6 @@ const s = StyleSheet.create({
   fileGlyph: { fontSize: 20, lineHeight: 24 },
   fileOpen: { borderRadius: radius.control, borderWidth: 1, paddingVertical: 7, paddingHorizontal: 14 },
   head: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, justifyContent: 'space-between' },
-  palCard: { width: '48%', borderRadius: radius.card, borderWidth: 1, padding: 14, alignItems: 'center', gap: 8 },
   tabbar: { flexDirection: 'row', borderTopWidth: 1, minHeight: 82, paddingVertical: 8 },
   tab: { flex: 1, alignItems: 'center', gap: 4, justifyContent: 'flex-start' },
   tabIcon: { height: 22, justifyContent: 'center' },

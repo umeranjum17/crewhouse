@@ -1,9 +1,10 @@
 // Draws Crewhouse's icons from the mascot bitmaps in web/src/art.ts, so the icon can never drift from Chief:
 // the app icon, the maskable icon, the favicon (his 12-dot cut) and the alpha-only notification glyph.
-// Run after changing Chief: `node scripts/icons.mjs` (the PNGs need ImageMagick's `magick`). The outputs are committed.
-import { writeFileSync } from 'node:fs';
+// Run after changing Chief or an AI account's mark (web/src/logos.ts): `node scripts/icons.mjs` (the PNGs need ImageMagick's `magick`). The outputs are committed.
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { chief, chiefSmall, CHIEF_PAL, NOTIFY } from '../web/src/art.ts';
+import { MARKS } from '../web/src/logos.ts';
 
 const web = new URL('../web/', import.meta.url).pathname;
 const BG = '<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffd6c7"/><stop offset=".6" stop-color="#e6d6ff"/><stop offset="1" stop-color="#cfe4ff"/></linearGradient></defs>';
@@ -38,4 +39,12 @@ png('icon.svg', 'icon-512.png', 512);
 png('icon-maskable.svg', 'icon-maskable-512.png', 512);
 png('icon-maskable.svg', 'apple-touch-icon.png', 180);
 png('notify.svg', 'notify-96.png', 96);
-console.log('icons written into web/');
+// The AI account marks for the phone, which draws no SVG: white on transparent, laid on each account's tile.
+const ai = new URL('../mobile/assets/ai/', import.meta.url).pathname;
+mkdirSync(ai, { recursive: true });
+for (const [key, d] of Object.entries(MARKS)) {
+  writeFileSync(`${ai}${key}.svg`, `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="${d}" fill="#fff"/></svg>\n`);
+  execFileSync('magick', ['-background', 'none', '-density', '1200', `${ai}${key}.svg`, '-resize', '96x96', '-depth', '8', '-strip', `PNG32:${ai}${key}.png`]);
+  rmSync(`${ai}${key}.svg`);
+}
+console.log('icons written into web/ and mobile/assets/ai/');

@@ -109,7 +109,8 @@ test('the account list is the one crewd really serves: every route, none made up
   assert.match(A.AI_ROUTES, /API key/);
   const phone = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
   assert.match(phone, /<Label>Your AI accounts<\/Label>/);
-  assert.match(phone, /A\.AIS\.map\(\(ai\) =>/, 'the phone shows the same six routes, not a second list');
+  assert.match(phone, /\{row\(A\.AIS\[0\]\)\}/, 'ChatGPT, the front door, is named first');
+  assert.match(phone, /\{A\.AIS\.slice\(1\)\.map\(row\)\}/, 'the phone shows the same six routes, not a second list');
   assert.match(phone, /\{A\.AI_ROUTES\}/, 'API-key limitation reaches the phone');
   assert.match(phone, /live account status are shown only on the home computer/, 'no invented phone sign-in state');
   assert.match(phone, /onPress=\{\(\) => go\(\{ view: 'phone' \}\)\} accessibilityRole="button" accessibilityLabel="Check AI account sign-in/, 'Home leads to the disclosure');
@@ -286,7 +287,7 @@ test('the runs-at-home line is said once, in the same plain words, in all three 
   assert.match(A.atHome('the home computer')[0], /^Your helpers live on the home computer and use your own sign-ins\.$/, 'the phone names the home computer');
   const web = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
   assert.equal([...web.matchAll(/A\.atHome\(/g)].length, 2, 'Hello and Settings both quote it; nobody paraphrases it');
-  assert.match(web, /<div>› \{A\.atHome\(\)\[1\]\}<\/div>/, "it sits in Hello's promises, the same three rows as before");
+  assert.match(web, /<ul className="promises">\s+<li>[^<]+<\/li>\s+<li>\{A\.atHome\(\)\[1\]\}<\/li>\s+<li>[^<]+<\/li>\s+<\/ul>/, "it sits in Hello's promises, the same three rows as before");
   assert.match(web, /<h1>Settings<\/h1>\s+<p className="mute small">\{A\.atHome\(\)\.join\(' '\)\}<\/p>/, 'Settings says it under the title, in the quiet style');
   const app = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
   assert.equal([...app.matchAll(/A\.atHome\('the home computer'\)/g)].length, 3, 'the phone quotes it at first run (two lines) and on This phone');
