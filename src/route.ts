@@ -29,6 +29,11 @@ export function byRule(helpers: Helper[]) {
   return rules((s: Request) => {
     if (!helpers.length) return CHIEF;
     if (/^chief\s*[,!:]/i.test(s.text) || arithmetic.test(s.text.trim()) || chiefWork.test(s.text) || (s.earlier && chiefWork.test(s.earlier))) return CHIEF;
+    // An explicit research job has one obvious owner; don't spend a Chief model turn just to hand it to Scout.
+    if (!s.earlier && /^(?:please\s+)?(?:research|compare|look into)\s+\S/i.test(s.text)) {
+      const scout = helpers.find((h) => h.id === 'scout');
+      if (scout) return scout.id;
+    }
     const named = (re: (name: string) => string) => helpers.find((h) => new RegExp(re(esc(h.display)), 'i').test(s.text))?.id;
     // The answer to Chief's question: a name is enough.
     if (s.earlier) return /^(you|yourself|chief)\b/i.test(s.text) ? CHIEF : named((n) => `\\b${n}\\b`);

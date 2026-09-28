@@ -285,6 +285,8 @@ test('tool grants: a session gets only granted, installed tools; command-line to
     const t = crew.assign('tracer', `price it ${call('people_search', { args: ['catalog', 'search', 'phone'] })}`, 'chief').task;
     await settled(db, t);
     assert.match(task(db, t).result, /people_search said fake .*treg catalog search phone/, 'free calls run at once, with a fixed argv');
+    const timed = JSON.parse(db.get("SELECT data FROM events WHERE kind = 'run.call' AND json_extract(data, '$.task') = ?", t)!.data);
+    assert.ok(timed.started > 0 && timed.durationMs >= 0, 'the host records each tool duration for real-path timelines');
     const h = crew.assign('tracer', 'ask permission so I can look at the tools', 'chief').task;
     await holding(crew, 'tracer');
     const allowed = (n: string) => crew.toolAllowed('tracer', n);
@@ -915,6 +917,10 @@ test('routing: explicit helpers are direct; uncertain requests start Chief witho
   const m = (await crew.post('chief', 'could you look into standing desks for me @Scout [route reel]'))!.task;
   assert.equal(task(db, m).bot, 'scout');
   await settled(db, m);
+
+  const research = (await crew.post('chief', 'Research standing desks and make a comparison'))!.task;
+  assert.equal(task(db, research).bot, 'scout', 'an obvious research job does not wait for Chief to hand it off');
+  await settled(db, research);
 
   // Addressing Chief is a direct task, not a second subscription turn spent asking who should take it.
   const runtime = (crew as any).runtime;

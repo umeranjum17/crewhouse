@@ -1548,6 +1548,7 @@ export class Crew {
       call: async (run, tool, rawInput, signal) => {
         own(run);
         let ok = true, text = '';
+        const started = Date.now();
         try {
           text = await this.toolCall(run, tool, rawInput, signal);
         } catch (e: any) {
@@ -1557,7 +1558,7 @@ export class Crew {
         }
         // crewd's own record of what the run did: the drawer and the validator read this, never the engine's word.
         const [name] = this.unwrap(tool, rawInput);
-        this.db.event('run.call', run.bot, { task: run.task, tool: name, input: JSON.stringify(rawInput).slice(0, 1000), ok, head: text.split('\n')[0].slice(0, 160) });
+        this.db.event('run.call', run.bot, { task: run.task, tool: name, input: JSON.stringify(rawInput).slice(0, 1000), ok, head: text.split('\n')[0].slice(0, 160), started, durationMs: Date.now() - started });
         return text;
       },
     };
