@@ -156,6 +156,8 @@ export const TABS: Record<Tab, Bitmap> = {
 };
 
 // ── ASCII moments ──
+/** The quiet mark beside an empty list, and the one ornament the ASCII moments share. */
+export const ORNAMENT = '·  ✦  ·';
 const SHADOW: Record<string, string[]> = {
   C: [' ██████╗', '██╔════╝', '██║     ', '██║     ', '╚██████╗', ' ╚═════╝'],
   R: ['██████╗ ', '██╔══██╗', '██████╔╝', '██╔══██╗', '██║  ██║', '╚═╝  ╚═╝'],

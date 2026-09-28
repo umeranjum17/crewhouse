@@ -116,9 +116,9 @@ export function SignIn({ me, owner, ai = A.AIS[0], tab: first, onReady, onClose 
       {phase === 'opening' && <><h2>Opening {name}…</h2><div className="dotdot" aria-hidden><i /><i /><i /></div><button className="link" onClick={cancel}>Cancel</button></>}
       {phase === 'waiting' && <>
         <h2>Say yes on {name}'s page</h2>
-        <p className="mute">{ai.key === 'chatgpt' ? <>Pick your account, then tap <b>Continue</b>. {name} calls the access your helpers use <b>“Codex”</b>.</> : <>Follow {name}'s instructions on its page.</>} Come back here after; this moves on by itself.</p>
+        <p className="mute">{ai.key === 'chatgpt' ? <>Pick your account, then tap <b>Continue</b>. If {name} mentions <b>“Codex”</b>, that's the part your helpers use.</> : <>Follow {name}'s instructions on its page.</>} Come back here after; this moves on by itself.</p>
         {!tab.open() && <a className="btn go big" href={g.page || '#'} target="_blank" rel="noreferrer">Open {name} ↗</a>}
-        <Pill tone="wait">Waiting for {name}…</Pill>
+        <Pill tone="wait" live>Waiting for {name}…</Pill>
         {ai.key === 'chatgpt' && <button className="link" onClick={() => start({ via: 'code' })}>Having trouble? Use a code instead</button>}
         <button className="link" onClick={cancel}>Cancel</button>
       </>}
@@ -168,8 +168,8 @@ export function AccountCard({ me, owner, isOwner, g, inChat, onReady }: { me: nu
   );
   return (
     <div className="card account-card">
-      <p>{ai.name} will ask you once; it calls the access your helpers use <b>“Codex”</b>.</p>
-      <button className="btn go big" onClick={() => setSigning(openTab())}><span className="gpt">◎</span>Sign in with {ai.name}</button>
+      <p>{ai.name} asks you once. If it mentions <b>“Codex”</b>, that's the part your helpers use.</p>
+      <button className="btn go big" onClick={() => setSigning(openTab())}><AiMark ai={ai} size={24} />Sign in with {ai.name}</button>
       <button className="link" onClick={() => { setNoAccount(true); window.open('https://chatgpt.com/', '_blank'); }}>No {ai.name} account? Make a free one</button>
       {noAccount && <p className="mute small">{ai.name} opened in a new tab: sign up with Google or Apple in a few taps, then come straight back and tap Sign in.</p>}
       {signing !== false && <SignIn me={me} owner={owner} tab={signing} onReady={() => { setSigning(false); onReady(); }} onClose={() => setSigning(false)} />}
@@ -222,7 +222,7 @@ export function ConnectApp({ app, helper, state, tab: first, ask, onConnected, o
         <p className="mute">Pick your account, then tap <b>{who === 'Google' ? 'Continue' : 'Allow'}</b>. It's {who}'s own page, so your password stays with them.</p>
         {warn}
         {!tab.open() && url && <a className="btn go big" href={url} target="_blank" rel="noreferrer">Open {who} ↗</a>}
-        <Pill tone="wait">Waiting for {who}…</Pill>
+        <Pill tone="wait" live>Waiting for {who}…</Pill>
         <button className="link" onClick={cancel}>Cancel</button>
       </>}
       {phase === 'done' && <><h2>{app.name} is connected</h2><p>{app.does}</p>{helper && <p className="mute">{helper} is carrying on with it now.</p>}

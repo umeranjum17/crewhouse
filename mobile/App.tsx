@@ -5,7 +5,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useFonts } from 'expo-font';
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
-  ActivityIndicator, AppState, BackHandler, Clipboard, Image, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, useColorScheme, View,
+  ActivityIndicator, AppState, BackHandler, Clipboard, Image, KeyboardAvoidingView, Modal, Pressable, ScrollView, StatusBar, StyleSheet, Text, TextInput, useColorScheme, View,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import * as A from '../web/src/adapter.ts';
@@ -64,6 +64,7 @@ export default function App() {
   return (
     <Theme.Provider value={t}>
       <SafeAreaProvider>
+        <StatusBar barStyle={t.night ? 'light-content' : 'dark-content'} backgroundColor={t.bg} />
         <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }} edges={['top', 'bottom']}>
           {!fontsReady && !fontError ? <Center><ActivityIndicator color={t.ink} /></Center>
             : grant === undefined ? <Center><ActivityIndicator color={t.ink} /></Center>
@@ -129,6 +130,11 @@ function AiMark({ ai, size = 32 }: { ai: { key: string; bg: string }; size?: num
 }
 
 // ---------- small pieces ----------
+/** Chief's warm halo, where he greets you: first run, pairing, the words to check. */
+function Halo({ children }: { children: ReactNode }) {
+  const t = useLook();
+  return <View style={[s.halo, s.warmRing, { backgroundColor: t.night ? '#2B2319' : '#FFF1DC', borderColor: t.night ? '#221C15' : '#FFF7EC' }]}>{children}</View>;
+}
 function Center({ children }: { children: ReactNode }) { return <View style={s.center}>{children}</View>; }
 function T({ children, style, tone = 'ink', lines }: { children: ReactNode; style?: any; tone?: 'ink' | 'ink2' | 'mute' | 'pinkInk'; lines?: number }) {
   return <Text style={[s.text, { color: useLook()[tone] }, style]} numberOfLines={lines}>{children}</Text>;
@@ -172,6 +178,10 @@ function ChiefAsk({ l }: { l: { text: string; detail: string } }) {
   </View>;
 }
 
+/** An empty list, said warmly: the shared ornament and a plain line, never a blank box. */
+function Empty({ children }: { children: ReactNode }) {
+  return <Card style={{ alignItems: 'center', paddingVertical: 22 }}><T tone="mute" style={s.small}>{art.ORNAMENT}</T><T tone="ink2" style={s.centerText}>{children}</T></Card>;
+}
 function Card({ children, style, ask, onTouchStart }: { children: ReactNode; style?: any; ask?: boolean; onTouchStart?: () => void }) {
   const t = useLook();
   return <View onTouchStart={onTouchStart} style={[s.card, { backgroundColor: t.card, borderColor: t.line, borderWidth: 1 }, ask && s.askCard, style]}>{children}</View>;
@@ -201,7 +211,11 @@ function PhoneCard({ offer, reload }: { offer: NonNullable<ReturnType<typeof A.p
       : <><T tone="mute">That code has run out.</T><Btn go label="Show a new code" onPress={() => { active.current = Date.now(); void renew(); }} /></>}
   </Card>;
 }
-const Label = ({ children }: { children: ReactNode }) => <T tone="ink2" style={s.label}>{children}</T>;
+/** A section's name, in small capitals; `count` is the pink number beside Needs you. */
+function Label({ children, count }: { children: ReactNode; count?: number }) {
+  const t = useLook();
+  return <View style={s.labelRow}><T tone="ink2" style={s.label}>{children}</T>{!!count && <Text style={[s.count, { backgroundColor: t.pink, color: t.night ? '#1A0F14' : '#fff' }]}>{count}</Text>}</View>;
+}
 function Page({ title, lead, children }: { title?: string; lead?: string; children: ReactNode }) {
   return (
     <ScrollView contentContainerStyle={s.page} keyboardShouldPersistTaps="handled">
@@ -487,8 +501,8 @@ function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
   if (done) {
     return (
       <Center>
-        <ChiefArt mood="happy" size={150} />
-        <T style={s.h1}>You're in</T>
+        <Halo><ChiefArt mood="happy" size={120} /></Halo>
+        <T style={s.display}>You're in</T>
         <T tone="ink2" style={s.centerText}>This phone is paired with your computer{done.device.role === 'view' ? '. It can watch the crew, not answer' : ''}.</T>
         {checked && push === 'missing' && <T tone="mute" style={s.centerText}>{PUSH_WORDS.missing}</T>}
         <Btn go big label="Open Crewhouse" onPress={() => onPaired(done)} />
@@ -498,8 +512,8 @@ function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
   if (words) {
     return (
       <Center>
-        <ChiefArt mood="listen" size={150} />
-        <T style={s.h1}>Check the words</T>
+        <Halo><ChiefArt mood="listen" size={120} /></Halo>
+        <T style={s.display}>Check the words</T>
         <T tone="ink2" style={s.centerText}>Your computer is asking whether this phone may join. Say yes there only if it shows these same two words:</T>
         <Text style={[s.fp, { color: t.pinkInk }]}>{words}</Text>
         <ActivityIndicator color={t.pink} />
@@ -533,9 +547,13 @@ function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
   }
   return (
     <Center>
-      <ChiefArt mood="hello" size={170} />
-      <T style={s.h1}>Crewhouse</T>
-      <T tone="ink2" style={s.centerText}>Your crew, in your pocket. On your computer, open Crewhouse, then Settings, Phones, Add a phone.</T>
+      <Halo><ChiefArt mood="hello" size={120} /></Halo>
+      <T style={s.display}>Crewhouse</T>
+      <T tone="ink2" style={[s.centerText, { marginTop: -6 }]}>Your crew, in your pocket.</T>
+      <Card style={{ alignSelf: 'stretch', gap: 10, marginVertical: 6 }}>
+        {['On your computer, open Crewhouse, then Settings, Phones, Add a phone.', 'Scan the code it shows, or type it in here.'].map((l, i) =>
+          <View key={l} style={[s.row, { alignItems: 'flex-start' }]}><Text style={[s.stepNum, { backgroundColor: t.soft, color: t.ink }]}>{i + 1}</Text><T tone="ink2" style={{ flex: 1 }}>{l}</T></View>)}
+      </Card>
       {busy ? <ActivityIndicator color={t.pink} style={{ margin: 20 }} /> : (
         <Btn go big label="Scan the code" onPress={async () => {
           const p = perm?.granted ? perm : await askPerm();
@@ -684,7 +702,7 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
       <View style={[s.tabbar, { backgroundColor: t.surface, borderColor: t.line }]}>
         {nav.map(([v, label, icon]) => (
           <Pressable key={v} style={s.tab} onPress={() => go({ view: v }, true)} accessibilityRole="tab" accessibilityLabel={label}>
-            <View style={s.tabIcon}><Dots rows={art.TABS[icon]} pal={{ x: active === v ? t.ink : t.mute }} d={22 / 9} crisp /></View>
+            <View style={[s.tabIcon, active === v && { backgroundColor: t.soft }]}><Dots rows={art.TABS[icon]} pal={{ x: active === v ? t.ink : t.mute }} d={22 / 9} crisp /></View>
             <Text style={[s.tabLabel, { color: active === v ? t.ink : t.mute }]}>{label}</Text>
             {v === 'home' && A.needsYou(state).length > 0 && <Text style={[s.badge, { backgroundColor: t.pink }]}>{A.needsYou(state).length}</Text>}
           </Pressable>
@@ -713,15 +731,19 @@ function Hello({ state, refresh, go }: Ctx) {
     if (!address.trim()) return say('First, what shall I call you?');
     void attempt(async () => { await api.onboard(address.trim(), ask); refresh(); go({ view: 'chief' }, true); });
   };
+  const reduce = motion.useReduceMotion();
   return (
     <Page>
-      <View style={{ alignItems: 'center' }}><View style={[s.halo, { backgroundColor: t.soft }]}><ChiefArt mood="hello" size={96} /></View></View>
-      <T style={[s.h1, s.centerText, { fontSize: 26, lineHeight: 32 }]}>{A.greeting()}{address.trim() ? `, ${address.trim()}` : ''}</T>
-      <T tone="ink2" style={s.centerText}>I'm Chief. I run the crew in this house.</T>
-      <Card style={{ gap: 10 }}>
+      <motion.Rise reduce={reduce}><View style={{ alignItems: 'center', paddingTop: 8 }}><Halo><ChiefArt mood="hello" size={104} /></Halo></View></motion.Rise>
+      <motion.Rise reduce={reduce} delay={80}><View style={[s.speech, { backgroundColor: t.solid, borderColor: t.line }]}>
+        <View style={[s.speechTail, { backgroundColor: t.solid, borderColor: t.line }]} />
+        <T style={[s.h1, s.centerText, { fontSize: 26, lineHeight: 32, marginVertical: 0 }]}>{A.greeting()}{address.trim() ? `, ${address.trim()}` : ''}</T>
+        <T tone="ink2" style={s.centerText}>I'm Chief. I run the crew in this house.</T>
+      </View></motion.Rise>
+      <motion.Rise reduce={reduce} delay={160}><Card style={{ gap: 10 }}>
         {[A.atHome('the home computer')[0], A.atHome('the home computer')[1], "I'll ask before sending messages, deleting things or spending money."].map((l) =>
           <View key={l} style={[s.row, { alignItems: 'flex-start' }]}><T style={{ color: t.ok, fontWeight: '700' }}>✓</T><T tone="ink2" style={{ flex: 1 }}>{l}</T></View>)}
-      </Card>
+      </Card></motion.Rise>
       {!named && name}
       <Label>What can I take off your plate?</Label>
       {A.firstIdeas(state).map((i) => <Pressable key={i.label} onPress={() => pick(i.label)} accessibilityRole="button" accessibilityLabel={i.label}
@@ -880,6 +902,29 @@ function NeedsRows({ state, cards, open }: { state: Json; cards: A.Card[]; open:
   );
 }
 
+/** Home's first impression: the day, the greeting, Chief's one line beside his face, and the three counts the rows
+ *  below add up to (web/src/main.tsx HomeHero is the same). */
+function HomeHero({ state, offline, go }: { state: Json; offline: boolean; go: Ctx['go'] }) {
+  const t = useLook();
+  const c = chiefNow(state, offline);
+  const n = A.homeCounts(state);
+  return (
+    <View style={[s.hero, { backgroundColor: t.solid, borderColor: t.line }]}>
+      {[300, 240, 180, 120].map((r) => <View key={r} style={[s.heroWarm, { width: r * 2, height: r * 2, borderRadius: r, top: -r - 30, left: -r + 10, backgroundColor: t.night ? '#2B2319' : '#FFF1DC' }]} />)}
+      <T tone="ink2" style={s.eyebrow}>{A.today().toUpperCase()}</T>
+      <T style={s.heroH1}>{A.greeting()}, {state.person.address ?? state.person.name}</T>
+      <Pressable onPress={() => go({ view: 'chief' })} accessibilityRole="button" accessibilityLabel={`Chief: ${c.line}`} style={s.heroChief}>
+        <Face who="chief" size={36} mood={c.mood} />
+        <View style={[s.says, { backgroundColor: t.bg, borderColor: t.line }]}><T style={s.saysText} lines={2}>{c.line}</T></View>
+      </Pressable>
+      <View style={s.stats} accessible accessibilityLabel={A.homeSummary(state)}>
+        {([[n.needs, n.needs === 1 ? 'needs you' : 'need you', true], [n.working, 'working', false], [n.done, 'done today', false]] as const).map(([k, l, hot]) =>
+          <View key={l} style={[s.stat, { backgroundColor: t.soft }]}><T style={[s.statNum, hot && k > 0 && { color: t.pinkInk }]}>{k}</T><T tone="ink2" style={s.statLabel}>{l}</T></View>)}
+      </View>
+    </View>
+  );
+}
+
 function Home(ctx: Ctx) {
   const t = useLook();
   const { state, go, refresh, canAct, offline, open } = ctx;
@@ -889,12 +934,13 @@ function Home(ctx: Ctx) {
   return (
     <View style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={s.page} keyboardShouldPersistTaps="handled">
-        <View style={{ marginBottom: 20 }}><T style={s.h1}>{A.greeting()}, {state.person.address ?? state.person.name}</T><T tone="ink2" style={s.small}>{A.homeSummary(state)}</T></View>
+        <HomeHero state={state} offline={offline} go={go} />
         {!!A.resting(state) && <Card><T>{A.resting(state)}. I'll pick things back up then.</T></Card>}
-        <Pressable onPress={() => go({ view: 'phone' })} accessibilityRole="button" accessibilityLabel="Check AI account sign-in on the home computer" style={[s.card, { backgroundColor: t.solid }]}>
-          <T style={s.b}>AI account sign-in →</T><T tone="mute" style={s.small}>Check Settings for routes and where to see your sign-in status.</T>
+        <Pressable onPress={() => go({ view: 'phone' })} accessibilityRole="button" accessibilityLabel="Check AI account sign-in on the home computer" style={({ pressed }) => [s.listRow, s.listGroup, { backgroundColor: t.solid, borderColor: t.line }, pressed && { opacity: 0.6 }]}>
+          <AiMark ai={A.AIS[0]} size={30} />
+          <View style={{ flex: 1 }}><T style={s.rowTitle}>Your AI accounts</T><T tone="ink2" style={s.small} lines={1}>You sign in on the home computer, in Settings.</T></View><T tone="mute">›</T>
         </Pressable>
-        {needs.length > 0 && <View><Label>Needs you</Label><View style={[s.listGroup, { backgroundColor: t.solid, borderColor: t.line }]}><NeedsRows state={state} cards={needs} open={open} /></View></View>}
+        {needs.length > 0 && <View><Label count={needs.length}>Needs you</Label><View style={[s.listGroup, { backgroundColor: t.solid, borderColor: t.line }]}><NeedsRows state={state} cards={needs} open={open} /></View></View>}
         <ChatList state={state} go={go} mood={chief.mood} />
         <JobList state={state} go={go} />
       </ScrollView>
@@ -979,27 +1025,46 @@ function Chat({ id, m, state, tick, refresh, canAct, offline, open }: Ctx & { id
     scroll.current?.scrollTo({ y: Math.max(0, y - 240), animated: false });
 
   }, [around, lines.length]);
+  // Lines that arrive while you watch rise in; the thread you open with is simply there.
+  const opened = useRef<number | null>(null);
+  if (opened.current === null && page) opened.current = page.messages?.at(-1)?.id ?? 0;
+  // The top of the thread (the computer sends the newest 200): who this is, before the first line.
+  const start = !!page && !around && (page.messages?.length ?? 0) < 200;
+  const reduce = motion.useReduceMotion();
+  const beat = motion.useBeat(360, reduce);
+  let day = '';
+  const dayOf = (at?: number) => { if (!at) return null; const d = A.dayLabel(at); if (d === day) return null; day = d; return <View style={s.day} accessibilityRole="header"><T tone="ink2" style={[s.dayText, { backgroundColor: t.bg, borderColor: t.line }]}>{d.toUpperCase()}</T></View>; };
+  const mine = { ...t, ink: t.goInk, ink2: t.goInk, soft: 'transparent' };
+  const who = (f: string) => <View style={s.row}><Face who={f === 'chief' ? 'chief' : h ?? 'chief'} size={28} /><T style={[s.small, s.b]}>{f === 'chief' ? 'Chief' : name}</T></View>;
   return (
     <View style={{ flex: 1 }}>
       <ScrollView ref={scroll} style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 10 }}
         onContentSizeChange={() => { if (!around) scroll.current?.scrollToEnd({ animated: false }); }}>
+        {start && <View style={s.intro}>
+          <View style={[s.halo, { backgroundColor: t.soft }]}>{h ? <Dots rows={art.pal(h.kind, h.mood)} pal={art.palPalette(h.kind)} d={72 / 18} /> : <ChiefArt size={72} />}</View>
+          <T style={s.introName}>{name}</T><T tone="ink2" style={[s.centerText, { maxWidth: 300 }]}>{h ? h.role : 'Runs the crew and answers to you'}</T>
+        </View>}
+        {!page && <View style={{ gap: 12, paddingLeft: 36, paddingTop: 20 }} accessibilityLabel="Opening the chat">{['62%', '84%', '40%'].map((w) => <View key={w} style={[s.bar, { width: w as any, backgroundColor: t.soft }]} />)}</View>}
         {!lines.length && page && id === 'chief' && canAct && <View style={[s.chips, { justifyContent: 'center' }]}>
             {A.ideas(state).map((i: Json) => <Btn key={i.bot + i.label} label={`✦ ${i.label}`} onPress={() => { keepDraft(id, i.ask); setSeed((n) => n + 1); }} />)}
           </View>}
-        {lines.map((l, i) => (
-          <View key={l.id} onLayout={(e) => ys.current.set(l.id, e.nativeEvent.layout.y)}
-            style={[s.line, l.from === 'me' && { alignSelf: 'flex-end' }, l.from === 'note' && { maxWidth: '92%' }]}>
+        {lines.map((l, i) => start && i === 0 && l.from === 'note' && l.text.startsWith(`${name} joined the crew`) ? null : <View key={l.id} style={{ gap: 10 }}>{dayOf(l.at)}<motion.Rise reduce={reduce || l.id <= (opened.current ?? Infinity)}>
+          <View onLayout={(e) => ys.current.set(l.id, e.nativeEvent.layout.y)}
+            style={[s.line, l.from === 'me' && { alignSelf: 'flex-end', maxWidth: '82%' }, l.from === 'note' && { maxWidth: '92%' }]}>
             {l.from !== 'me' && l.from !== 'note' && !(i && lines[i - 1].from === l.from) && <View style={s.row}><Face who={l.from === 'chief' ? 'chief' : h ?? 'chief'} size={28} /><T style={[s.small, s.b]}>{l.from === 'chief' ? 'Chief' : name}</T><T tone="mute" style={s.time}>{l.at ? A.clock(l.at) : ''}</T></View>}
-            {!!l.text && (l.detail ? <ChiefAsk l={{ text: l.text, detail: l.detail }} /> : <View style={l.from === 'me' ? [s.bubbleText, { backgroundColor: t.soft, borderColor: t.line, borderWidth: 1, borderBottomRightRadius: 6 }] : { paddingLeft: 36 }}>
-              <ChatText text={l.text} /></View>)}
+            {!!l.text && (l.detail ? <ChiefAsk l={{ text: l.text, detail: l.detail }} /> : l.from === 'me'
+              ? <View style={[s.bubbleText, { backgroundColor: t.go, borderBottomRightRadius: 6 }]}><Theme.Provider value={mine}><ChatText text={l.text} /></Theme.Provider></View>
+              : <View style={{ paddingLeft: 36 }}><ChatText text={l.text} /></View>)}
             {l.files.map((f) => <Card key={f.url}><FileRow f={f} /></Card>)}
             {phoneOffer?.message === l.id && <PhoneCard offer={phoneOffer} reload={() => void load()} />}
             {cards.filter((c) => lines.findLastIndex((x) => (x.at ?? 0) <= c.at) === i).map((c) => <AskCard key={c.id} c={c} who={h} state={state} onDone={refresh} canAct={canAct} offline={offline} open={open} />)}
-          </View>
-        ))}
-        {echoed && <View style={[s.line, { alignSelf: 'flex-end' }]}><T>{pending.text}</T></View>}
-        {waiting && id === 'chief' && <View style={s.line} accessibilityLiveRegion="polite"><T>Chief is on it…</T></View>}
-        {!!partial && <View style={s.line} accessibilityLiveRegion="polite"><T>{partial}</T></View>}
+          </View></motion.Rise></View>
+        )}
+        {echoed && <motion.Rise reduce={reduce}><View style={[s.line, s.bubbleText, { alignSelf: 'flex-end', maxWidth: '82%', backgroundColor: t.go, borderBottomRightRadius: 6 }]}><T style={{ color: t.goInk }}>{pending.text}</T></View></motion.Rise>}
+        {waiting && id === 'chief' && <motion.Rise reduce={reduce}><View style={s.line} accessible accessibilityLabel="Chief is on it" accessibilityLiveRegion="polite">{who('chief')}
+          <View style={s.typing}>{[0, 1, 2].map((k) => <View key={k} style={[s.typingDot, { backgroundColor: t.ink2, opacity: reduce ? 0.6 : beat % 3 === k ? 1 : 0.3, transform: [{ translateY: !reduce && beat % 3 === k ? -3 : 0 }] }]} />)}</View>
+        </View></motion.Rise>}
+        {!!partial && <View style={s.line} accessibilityLiveRegion="polite">{who(id)}<View style={{ paddingLeft: 36 }}><T>{partial}<Text style={{ color: t.pink, opacity: reduce || beat % 2 === 0 ? 1 : 0 }}> ▍</Text></T></View></View>}
         {canAct && !!last?.choices.length && <View style={s.chips}>{last.choices.map((c) => <Btn key={c} label={c} onPress={() => send(c)} />)}</View>}
         {cards.filter((c) => !lines.length || lines.every((x) => (x.at ?? 0) > c.at)).map((c) => <AskCard key={c.id} c={c} who={h} state={state} onDone={refresh} canAct={canAct} offline={offline} open={open} />)}
       </ScrollView>
@@ -1263,7 +1328,7 @@ function RoutineList({ state, refresh, canAct, bot, go }: Ctx & { bot?: string; 
         </View>
       </Card>}
       {list.map((r: Json) => <RoutineRow key={r.id} r={r} h={crew.find((h) => h.id === r.helper)} act={act} go={go} canAct={canAct} />)}
-      {!list.length && <Card><T tone="mute">Nothing on a schedule yet.</T></Card>}
+      {!list.length && <Empty>Nothing on a schedule yet.</Empty>}
     </>
   );
 }
@@ -1365,7 +1430,7 @@ function AddHelper({ state, refresh, go }: Ctx) {
 
 function ThingsList({ list, state, empty }: { list: A.Thing[]; state: Json; empty: string }) {
   const crew = A.crew(state);
-  if (!list.length) return <Card><T tone="mute" style={s.centerText}>{empty}</T></Card>;
+  if (!list.length) return <Empty>{empty}</Empty>;
   return (
     <>
       {list.map((x) => {
@@ -1448,7 +1513,9 @@ const s = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   text: { fontFamily: 'Inter', fontSize: 15, lineHeight: 22, fontVariant: ['tabular-nums'] },
-  h1: { fontSize: 22, lineHeight: 28, fontWeight: '600', letterSpacing: -0.33, marginVertical: 4 },
+  h1: { fontSize: 26, lineHeight: 32, fontWeight: '700', letterSpacing: -0.6, marginVertical: 4 },
+  display: { fontSize: 32, lineHeight: 38, fontWeight: '700', letterSpacing: -0.9, textAlign: 'center' },
+  stepNum: { width: 22, height: 22, borderRadius: 11, textAlign: 'center', lineHeight: 22, fontSize: 12, fontWeight: '700', overflow: 'hidden', marginTop: 0 },
   h2: { fontSize: 17, fontWeight: '600', lineHeight: 24 },
   b: { fontWeight: '600' },
   small: { fontSize: 13, lineHeight: 18 },
@@ -1463,10 +1530,26 @@ const s = StyleSheet.create({
   handle: { alignSelf: 'center', width: 36, height: 4, borderRadius: 4, marginTop: -8 },
   sheetHead: { fontSize: 19, lineHeight: 26, fontWeight: '600', letterSpacing: -0.2 },
   halo: { padding: 14, borderRadius: 999 },
+  warmRing: { borderWidth: 10, padding: 16 },
+  speech: { borderWidth: 1, borderRadius: 20, paddingVertical: 16, paddingHorizontal: 18, gap: 4, marginTop: 6, shadowColor: '#14121a', shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
+  speechTail: { position: 'absolute', top: -8, left: '50%', marginLeft: -7, width: 14, height: 14, borderLeftWidth: 1, borderTopWidth: 1, borderTopLeftRadius: 3, transform: [{ rotate: '45deg' }] },
   idea: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderRadius: radius.card, paddingVertical: 10, paddingHorizontal: 14, minHeight: 56 },
   ideaIcon: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   palRow: { flexDirection: 'row', alignItems: 'center', gap: 14, borderRadius: radius.card, borderWidth: 1, paddingVertical: 12, paddingHorizontal: 14 },
-  label: { fontSize: 13, lineHeight: 18, fontWeight: '600', marginTop: 24, marginBottom: 6, marginHorizontal: 4 },
+  labelRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 24, marginBottom: 8, marginHorizontal: 4 },
+  label: { fontSize: 12, lineHeight: 16, fontWeight: '600', letterSpacing: 0.7, textTransform: 'uppercase' },
+  count: { minWidth: 18, height: 18, borderRadius: 9, paddingHorizontal: 5, fontSize: 11, lineHeight: 18, fontWeight: '700', textAlign: 'center', overflow: 'hidden' },
+  hero: { borderWidth: 1, borderRadius: 20, padding: 18, overflow: 'hidden', shadowColor: '#14121a', shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
+  heroWarm: { position: 'absolute', opacity: 0.3 },
+  eyebrow: { fontSize: 11.5, lineHeight: 16, fontWeight: '600', letterSpacing: 0.9 },
+  heroH1: { fontSize: 29, lineHeight: 35, fontWeight: '700', letterSpacing: -0.8, marginTop: 6, marginBottom: 14 },
+  heroChief: { flexDirection: 'row', alignItems: 'flex-end', gap: 10, alignSelf: 'flex-start', maxWidth: '100%' },
+  says: { borderWidth: 1, borderRadius: 16, borderBottomLeftRadius: 4, paddingVertical: 7, paddingHorizontal: 12, flexShrink: 1 },
+  saysText: { fontSize: 14.5, lineHeight: 20, fontWeight: '500' },
+  stats: { flexDirection: 'row', gap: 6, marginTop: 14 },
+  stat: { flex: 1, borderRadius: 10, paddingVertical: 6, paddingHorizontal: 10 },
+  statNum: { fontSize: 18, lineHeight: 22, fontWeight: '700', letterSpacing: -0.3 },
+  statLabel: { fontSize: 12, lineHeight: 16 },
   time: { fontSize: 12, lineHeight: 16 },
   fp: { fontSize: 22, fontWeight: '600', fontVariant: ['tabular-nums'], marginVertical: 8, textAlign: 'center' },
   card: { borderRadius: radius.card, padding: 16, gap: 8 },
@@ -1477,16 +1560,23 @@ const s = StyleSheet.create({
   btnBig: { alignSelf: 'stretch', minHeight: 48 },
   btnText: { fontFamily: 'Inter', fontSize: 14, fontWeight: '600' },
   input: { fontFamily: 'Inter', borderWidth: 1, borderRadius: radius.control, paddingHorizontal: 14, paddingVertical: 10, fontSize: 15 },
-  composer: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, borderRadius: radius.pill, borderWidth: 1, paddingVertical: 6, paddingRight: 6, paddingLeft: 18, minHeight: 48 },
+  composer: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, borderRadius: radius.pill, borderWidth: 1, paddingVertical: 7, paddingRight: 7, paddingLeft: 14, minHeight: 52, shadowColor: '#14121a', shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
   composerInput: { fontFamily: 'Inter', flex: 1, fontSize: 15, paddingVertical: 8, maxHeight: 140 },
-  send: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  send: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
   dock: { paddingHorizontal: 12, paddingVertical: 8 },
   bubble: { alignItems: 'center', gap: 4, width: 64 },
   job: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 },
   step: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 5 },
   stepDot: { width: 10, height: 10, borderRadius: 5 },
   line: { maxWidth: '92%', gap: 4, alignSelf: 'flex-start' },
-  bubbleText: { paddingHorizontal: 15, paddingVertical: 10, borderRadius: 18 },
+  bubbleText: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20 },
+  intro: { alignItems: 'center', gap: 2, paddingTop: 12, paddingBottom: 6 },
+  introName: { fontSize: 20, lineHeight: 26, fontWeight: '700', letterSpacing: -0.3, marginTop: 8 },
+  day: { alignItems: 'center', marginTop: 10 },
+  dayText: { fontSize: 11, lineHeight: 16, fontWeight: '600', letterSpacing: 0.7, borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3, overflow: 'hidden' },
+  typing: { flexDirection: 'row', gap: 5, paddingLeft: 36, paddingVertical: 8 },
+  typingDot: { width: 7, height: 7, borderRadius: 4 },
+  bar: { height: 14, borderRadius: 7 },
   listGroup: { borderWidth: 1, borderRadius: radius.card, overflow: 'hidden' },
   listRow: { flexDirection: 'row', alignItems: 'center', minHeight: 56, paddingHorizontal: 14, paddingVertical: 10, gap: 12 },
   rowTitle: { fontSize: 15, lineHeight: 22, fontWeight: '500' },
@@ -1496,7 +1586,7 @@ const s = StyleSheet.create({
   head: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1 },
   tabbar: { flexDirection: 'row', borderTopWidth: 1, minHeight: 82, paddingVertical: 8 },
   tab: { flex: 1, alignItems: 'center', gap: 4, justifyContent: 'flex-start' },
-  tabIcon: { height: 22, justifyContent: 'center' },
+  tabIcon: { height: 30, width: 54, borderRadius: 15, alignItems: 'center', justifyContent: 'center', marginTop: -4 },
   tabLabel: { fontFamily: 'Inter', fontSize: 11, fontWeight: '500' },
   unread: { minWidth: 20, height: 20, borderRadius: 10, color: '#2e2a40', fontSize: 12, fontWeight: '900', textAlign: 'center', overflow: 'hidden', paddingHorizontal: 5, lineHeight: 20 },
   badge: { position: 'absolute', top: 0, left: '58%', minWidth: 18, height: 18, borderRadius: 9, color: '#fff', fontSize: 11, fontWeight: '800', textAlign: 'center', overflow: 'hidden', paddingHorizontal: 4 },
