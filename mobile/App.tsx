@@ -1395,7 +1395,7 @@ function PhoneAccounts() {
   return <>
     <Card style={{ gap: 0, paddingVertical: 6 }}>
       {row(A.AIS[0])}
-      <T tone="mute" style={[s.small, { paddingBottom: 10 }]}>Sign-in and live account status are shown only on the home computer, in Settings. This phone can't tell whether an account is signed in.</T>
+      <T tone="mute" style={[s.small, { paddingBottom: 10 }]}>Signing in happens on the home computer, in Settings. This phone can't tell whether an account is signed in.</T>
     </Card>
     <Pressable onPress={() => setMore(!more)} accessibilityRole="button" accessibilityState={{ expanded: more }} accessibilityLabel="More ways to sign in"
       style={[s.row, { minHeight: 48, paddingHorizontal: 4, marginTop: 8 }]}>

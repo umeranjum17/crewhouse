@@ -416,9 +416,9 @@ test('accounts a bot thinks with: fallback order by name only, a per-task choice
   crew.onboard('sir');
   crew.recruit('reel', 'Reel', 'person');
   assert.deepEqual(crew.thinks('reel').map((b) => b.name), ['ChatGPT']);
-  // Claude is offered through the engine's own route; its sign-in says plainly it needs the Claude CLI on this computer.
+  // Claude is offered through the engine's own route; its sign-in says plainly it needs Claude Code on this computer.
   assert.equal(disk.setBrains(cfg, 'reel', ['claude']).includes('claude'), true, 'Claude is offered now');
-  assert.equal(PROVIDERS.claude.cli !== undefined, true, 'its CLI prerequisite is labelled');
+  assert.equal(PROVIDERS.claude.cli !== undefined, true, 'its prerequisite is labelled');
   disk.setBrains(cfg, 'reel', ['chatgpt']);
   assert.throws(() => disk.setBrains(cfg, 'reel', ['chatgpt:$(rm -rf ~)']), /not an AI account/);
   assert.throws(() => disk.setBrains(cfg, 'reel', []), /at least one/);

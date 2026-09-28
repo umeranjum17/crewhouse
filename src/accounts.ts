@@ -22,7 +22,7 @@ export const PROVIDERS: Record<string, { key: string; name: string; cli?: string
   copilot: { key: 'copilot', name: 'GitHub Copilot' },
   openrouter: { key: 'openrouter', name: 'OpenRouter' },
   minimax: { key: 'minimax', name: 'MiniMax' },
-  claude: { key: 'claude', name: 'Claude', cli: 'the Claude CLI, installed and signed in on this computer' },
+  claude: { key: 'claude', name: 'Claude', cli: 'Claude Code, installed and signed in on this computer' },
 };
 
 export function provider(key: string) {

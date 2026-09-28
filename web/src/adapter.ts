@@ -821,11 +821,11 @@ export const AIS = [
   { key: 'copilot', name: 'GitHub Copilot', bg: '#24292f' },
   { key: 'openrouter', name: 'OpenRouter', bg: '#8b5cf6' },
   { key: 'minimax', name: 'MiniMax', bg: '#e11d48' },
-  { key: 'claude', name: 'Claude', bg: '#d97757', cli: 'the Claude CLI, installed and signed in on this computer' },
+  { key: 'claude', name: 'Claude', bg: '#d97757', cli: 'Claude Code, installed and signed in on this computer' },
 ];
-/** The honest word under the account list: these routes sign in with the person's own subscription; none of the
- *  pay-per-use API-key routes are set up, and a route without an account here is untested, never a green light. */
-export const AI_ROUTES = 'Each one signs in with your own subscription. Routes billed by API key aren\u2019t set up.';
+/** The honest word under the account list: every one takes a plan the person already pays for; the pay-for-each-use
+ *  accounts are not set up, and one nobody has signed in to here is untested, never a green light. */
+export const AI_ROUTES = 'Each one uses a plan you already pay for. Paying for each use isn\u2019t set up.';
 
 /** One of the person's own AI accounts: signed in; a sign-in in progress (ChatGPT's page to say yes on, or the fallback
  *  code); how a sign-in ended (declined, the port busy, expired, failed); a plan without helpers; a work account. */
