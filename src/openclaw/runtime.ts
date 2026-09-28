@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { commit } from './bots_git.ts';
 import { dirname, join } from 'node:path';
@@ -10,7 +10,7 @@ import { OpenClawGateway } from './gateway.ts';
 import { ToolBridge } from './bridge.ts';
 
 /** Crewhouse account key → OpenClaw provider id. ChatGPT is the one front door; the rest are quiet options. */
-const PROVIDER_OF: Record<string, string> = { chatgpt: 'openai-codex', grok: 'xai', copilot: 'github-copilot', openrouter: 'openrouter', minimax: 'minimax', claude: 'anthropic' };
+const PROVIDER_OF: Record<string, string> = { chatgpt: 'openai', grok: 'xai', copilot: 'github-copilot', openrouter: 'openrouter', minimax: 'minimax', claude: 'anthropic' };
 /** The engine's own sign-in route per account (the pin's wizard choices). A CLI prerequisite is labelled where it exists. */
 const AUTH_CHOICE: Record<string, string> = {
   chatgpt: 'openai', grok: 'xai-oauth', copilot: 'github-copilot', openrouter: 'openrouter-oauth', minimax: 'minimax-global-oauth', claude: 'anthropic-cli',
@@ -164,12 +164,20 @@ export class OpenClawRuntime implements AgentRuntime {
    *  retired here either way: the copy only moves aside once the gateway confirms the import (confirm). */
   async migrate(member: Member, legacyAuthPath: string) {
     const moved = `${legacyAuthPath}.moved-to-engine`;
-    if (!existsSync(legacyAuthPath) || existsSync(moved)) return false;
+    const source = existsSync(legacyAuthPath) ? legacyAuthPath : existsSync(moved) && !existsSync(`${moved}.canonicalized`) ? moved : '';
+    if (!source) return false;
     await this.gateway.prepare();
     const agentDir = join(this.gateway.root, 'state', 'agents', `m${member}`, 'agent');
     mkdirSync(agentDir, { recursive: true });
-    const staged = join(agentDir, 'auth.json');
-    if (!existsSync(staged)) copyFileSync(legacyAuthPath, staged);
+    // Doctor canonicalizes legacy provider ids in auth-profiles.json before importing it into SQLite; staging
+    // auth.json instead imports the old id as-is, which looks signed in but cannot authenticate openai/* turns.
+    const staged = join(agentDir, 'auth-profiles.json');
+    if (!existsSync(staged)) {
+      const legacy = JSON.parse(readFileSync(source, 'utf8'));
+      if (source === moved && !legacy['openai-codex']) return false;
+      writeFileSync(staged, JSON.stringify({ version: 1, profiles: Object.fromEntries(
+        Object.entries(legacy).map(([provider, credential]) => [`${provider}:default`, credential])) }), { mode: 0o600 });
+    }
     const { entry, env } = this.gateway.doctorContext();
     const ran = spawnSync(process.execPath, [entry, 'doctor', '--fix', '--yes', '--non-interactive'], { env, cwd: env.HOME as string, timeout: 120_000, stdio: 'pipe' });
     // The doctor's exit code is a weak yes (it exits 0 even when it imports nothing), so a failed run only clears
@@ -184,15 +192,20 @@ export class OpenClawRuntime implements AgentRuntime {
    *  without asking the person to sign in again. */
   async confirm(member: Member, legacyAuthPath: string) {
     const moved = `${legacyAuthPath}.moved-to-engine`;
-    if (!existsSync(legacyAuthPath) || existsSync(moved)) return false;
+    const source = existsSync(legacyAuthPath) ? legacyAuthPath : existsSync(moved) && !existsSync(`${moved}.canonicalized`) ? moved : '';
+    if (!source) return false;
     try {
-      const wanted = Object.keys(JSON.parse(readFileSync(legacyAuthPath, 'utf8'))).map((key) => PROVIDER_OF[key] ?? key.toLowerCase());
+      const wanted = Object.keys(JSON.parse(readFileSync(source, 'utf8'))).map((key) => key === 'openai-codex' ? 'openai' : PROVIDER_OF[key] ?? key.toLowerCase());
       if (!wanted.length) return false; // nothing recognizable to verify: never retire on a guess
       const id = await this.agent(member);
       for (let tries = 0; tries < 3; tries++) {
         const status = await this.connected().request<{ providers?: unknown[] }>('models.authStatus', { agentId: id, refresh: true }, { timeoutMs: 20_000 }).catch(() => undefined);
         const have = new Set((status?.providers ?? []).map((p: any) => (typeof p === 'string' ? p : p?.provider)));
-        if (wanted.every((provider) => have.has(provider))) { renameSync(legacyAuthPath, moved); return true; }
+        if (wanted.every((provider) => have.has(provider))) {
+          if (source === legacyAuthPath) renameSync(legacyAuthPath, moved);
+          writeFileSync(`${moved}.canonicalized`, '', { mode: 0o600 });
+          return true;
+        }
         await sleep(1500);
       }
     } catch { /* the engine is down or the file unreadable: the original stays */ }
