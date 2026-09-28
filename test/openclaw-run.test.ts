@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -13,13 +13,13 @@ test('real Gateway tool call crosses fail-closed Crewhouse gate', { timeout: 420
   let gated = 0, called = 0;
   const bridge = new ToolBridge(state, {
     tools: () => [],
-    gate: async (_run, tool) => { gated++; return ['crew_report', 'crew_web_fetch'].includes(tool) ? { allow: true } : { allow: false, reason: 'Unknown tool' }; },
+    gate: async (_run, tool) => { gated++; return ['crew_report', 'crew_web_fetch', 'memory_search'].includes(tool) ? { allow: true } : { allow: false, reason: 'Unknown tool' }; },
     call: async (_run, tool, input) => { called++; return tool === 'crew_report' ? `Progress: ${input.text}` : 'Safe page'; },
   });
   const gateway = new OpenClawGateway(state);
   try {
     await bridge.start();
-    const client = await gateway.start();
+    let client = await gateway.start();
     const before = await client.request<{ hash: string }>('config.get');
     await client.request('config.patch', { baseHash: before.hash, raw: JSON.stringify({
       models: { catalogRefresh: { enabled: false }, providers: { 'crewhouse-stub': {
@@ -30,6 +30,8 @@ test('real Gateway tool call crosses fail-closed Crewhouse gate', { timeout: 420
       agents: { defaults: { model: { primary: 'crewhouse-stub/test' } } },
     }) });
     await client.request('agents.create', { name: 'm1', workspace: join(state, 'workspace') });
+    writeFileSync(join(state, 'workspace', 'MEMORY.md'), 'The blue lantern marks the kitchen door.');
+    assert.equal(JSON.parse(readFileSync(join(state, 'openclaw/openclaw.json'), 'utf8')).memory.search.provider, 'none');
     await assert.rejects(client.request('agent', { agentId: 'm1', sessionKey: 'agent:m1:crewhouse:cwd-probe',
       message: 'hello', cwd: join(state, 'bot'), idempotencyKey: 'cwd-probe' }), /cwd is reserved for plugin-owned subagent runs/);
     const key = 'agent:m1:crewhouse:chief:1';
@@ -45,6 +47,12 @@ test('real Gateway tool call crosses fail-closed Crewhouse gate', { timeout: 420
     assert.ok(gated > 0, 'the hook was skipped');
     assert.equal(called, 1, 'tool bypassed the gate or failed to execute');
     assert.ok(stub.calls.length > 0);
+    const memoryKey = 'agent:m1:crewhouse:chief:memory';
+    bridge.register({ key: memoryKey, member: 1, bot: 'chief', task: 4 });
+    const keyword = await client.request<any>('tools.invoke', { agentId: 'm1', sessionKey: memoryKey, name: 'memory_search', args: { query: 'blue lantern' } });
+    assert.equal(keyword.ok, true, JSON.stringify(keyword).slice(0, 500));
+    assert.ok(JSON.stringify(keyword.output).includes('blue lantern'), JSON.stringify(keyword).slice(0, 600));
+    assert.ok(stub.calls.every((call) => !/embeddings/.test(call.path)), 'keyword-only memory attempted a paid embedding request');
     bridge.register({ key: 'agent:m1:crewhouse:scout:3', member: 1, bot: 'scout', task: 3 });
     const read = await client.request<any>('agent', { agentId: 'm1', sessionKey: 'agent:m1:crewhouse:scout:3',
       message: '[tool crew_web_fetch {"url":"https://example.test/"}]', idempotencyKey: 'fetch-3' });
@@ -72,6 +80,22 @@ test('real Gateway tool call crosses fail-closed Crewhouse gate', { timeout: 420
     const m2Keys = stub.calls.slice(stubCallsBefore).map((c) => c.authorization);
     assert.ok(m2Keys.length > 0, "member two's run reached the stub provider");
     assert.ok(m2Keys.every((k) => k === 'Bearer stub-m2'), `member two's session only ever used its own key: ${m2Keys.join()}`);
+
+    const localConfig = await client.request<{ hash: string }>('config.get');
+    await client.request('config.patch', { baseHash: localConfig.hash, raw: JSON.stringify({
+      memory: { search: { provider: 'ollama', model: 'local-test', remote: { baseUrl: stub.url.replace(/\/v1$/, '') } } },
+    }) });
+    await gateway.stop();
+    client = await gateway.start();
+    await client.request('agents.create', { name: 'm3', workspace: join(state, 'ws3') });
+    writeFileSync(join(state, 'ws3', 'MEMORY.md'), 'A green umbrella is by the door.');
+    const localKey = 'agent:m3:crewhouse:scout:local';
+    bridge.register({ key: localKey, member: 3, bot: 'scout', task: 10 });
+    const local = await client.request<any>('tools.invoke', { agentId: 'm3', sessionKey: localKey, name: 'memory_search', args: { query: 'green umbrella' } });
+    assert.equal(local.ok, true, JSON.stringify(local).slice(0, 500));
+    assert.ok(JSON.stringify(local.output).includes('green umbrella'), JSON.stringify(local).slice(0, 600));
+    assert.ok(stub.calls.some((call) => call.path === '/api/embed'), `configured local embedding route was not used: ${JSON.stringify(local).slice(0, 500)}; paths ${stub.calls.map((c) => c.path).join(',')}`);
+    assert.ok(stub.calls.every((call) => !/\/v1\/embeddings/.test(call.path)), 'API-billed embeddings were requested');
 
     unsubscribe();
     bridge.unregister(key);

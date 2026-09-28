@@ -42,13 +42,17 @@ const words = (m: any) => typeof m?.content === 'string' ? m.content : Array.isA
 
 /** One loopback HTTP server that speaks the script. `keyFor` names the hold a request's body waits on. */
 export function startModelStub() {
-  const calls: { authorization: string; body: any }[] = [];
+  const calls: { authorization: string; path: string; body: any }[] = [];
   const server: Server = createServer(async (req, res) => {
     const chunks: Buffer[] = [];
     for await (const chunk of req) chunks.push(chunk);
     let body: any;
     try { body = JSON.parse(Buffer.concat(chunks).toString()); } catch { res.writeHead(400).end(); return; }
-    calls.push({ authorization: String(req.headers.authorization ?? ''), body });
+    calls.push({ authorization: String(req.headers.authorization ?? ''), path: req.url ?? '', body });
+    if (req.url === '/api/embed' || req.url === '/api/embeddings') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      return res.end(JSON.stringify({ embeddings: (Array.isArray(body.input) ? body.input : [body.input]).map(() => [0.1, 0.2, 0.3]) }));
+    }
     const messages: any[] = body.messages ?? [];
     const system = messages.filter((m: any) => m.role === 'system').map((m: any) => words(m)).join('\n');
     const bot = /Your id in Crewhouse is ([a-z0-9-]+)\./.exec(system)?.[1] ?? 'bot';

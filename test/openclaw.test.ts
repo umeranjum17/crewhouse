@@ -21,6 +21,18 @@ test('pinned engine uses isolated home, loopback token and no Control UI', { tim
   process.env.OPENAI_API_KEY = 'decoy-secret';
   const gateway = new OpenClawGateway(join(root, 'state'));
   try {
+    await gateway.prepare();
+    const configPath = join(gateway.root, 'openclaw.json');
+    const oldConfig = JSON.parse(readFileSync(configPath, 'utf8'));
+    oldConfig.memory = { search: { provider: 'auto', fallback: 'openai' } };
+    oldConfig.agents.entries = { m9: { memory: { search: { provider: 'openai' } } } };
+    writeFileSync(configPath, JSON.stringify(oldConfig));
+    await gateway.prepare();
+    const safeConfig = JSON.parse(readFileSync(configPath, 'utf8'));
+    assert.equal(safeConfig.memory.search.provider, 'none');
+    assert.equal(safeConfig.memory.search.fallback, 'none');
+    assert.equal(safeConfig.agents.entries.m9.memory.search.provider, 'none');
+    assert.equal(gateway.memoryLimited(9), true);
     const env = isolatedEnv(gateway.stateDir, 'test');
     assert.equal(env.HOME, join(gateway.root, 'home'));
     assert.equal(env.OPENAI_API_KEY, undefined);

@@ -112,19 +112,40 @@ export class OpenClawGateway {
       channels: {},
     };
     const configPath = join(this.root, 'openclaw.json');
-    if (!existsSync(configPath)) writeFileSync(configPath, JSON.stringify(config, null, 2), { mode: 0o600 });
-    else {
-      const saved = JSON.parse(readFileSync(configPath, 'utf8'));
-      const before = JSON.stringify(saved);
-      saved.agents ??= {};
-      const defaults = saved.agents.defaults ??= {};
-      defaults.models ??= {};
-      defaults.models['openai/*'] = { ...defaults.models['openai/*'], agentRuntime: { id: 'openclaw' } };
-      // An explicit model map must not narrow the family's other signed-in providers.
-      defaults.modelPolicy ??= { allow: [] };
-      if (defaults.modelPolicy.allow?.length && !defaults.modelPolicy.allow.includes('openai/*')) defaults.modelPolicy.allow.push('openai/*');
-      if (JSON.stringify(saved) !== before) writeFileSync(configPath, JSON.stringify(saved, null, 2), { mode: 0o600 });
-    }
+    const saved: any = existsSync(configPath) ? JSON.parse(readFileSync(configPath, 'utf8')) : config;
+    const before = JSON.stringify(saved);
+    saved.agents ??= {};
+    const defaults = saved.agents.defaults ??= {};
+    defaults.models ??= {};
+    defaults.models['openai/*'] = { ...defaults.models['openai/*'], agentRuntime: { id: 'openclaw' } };
+    // An explicit model map must not narrow the family's other signed-in providers.
+    defaults.modelPolicy ??= { allow: [] };
+    if (defaults.modelPolicy.allow?.length && !defaults.modelPolicy.allow.includes('openai/*')) defaults.modelPolicy.allow.push('openai/*');
+    // The pin defaults unset/auto memory search to API-billed OpenAI embeddings. Never inherit it,
+    // including from a pre-existing state or a per-member override. No paid fallback either.
+    const safe = new Set(['none', 'local', 'ollama', 'lmstudio', 'github-copilot']);
+    const search = (owner: any) => {
+      owner.memory ??= {};
+      owner.memory.search ??= {};
+      const settings = owner.memory.search;
+      let local = true;
+      if (settings.provider === 'ollama' || settings.provider === 'lmstudio') {
+        try {
+          const host = new URL(settings.remote?.baseUrl ?? 'http://127.0.0.1').hostname;
+          local = ['127.0.0.1', 'localhost', '[::1]'].includes(host) && !settings.remote?.apiKey;
+        } catch { local = false; }
+      }
+      if (!safe.has(settings.provider) || !local) settings.provider = 'none';
+      settings.fallback = 'none';
+    };
+    search(saved);
+    for (const agent of Object.values(saved.agents.entries ?? {}) as any[]) if (agent.memory?.search) search(agent);
+    if (!existsSync(configPath) || JSON.stringify(saved) !== before) writeFileSync(configPath, JSON.stringify(saved, null, 2), { mode: 0o600 });
+  }
+
+  memoryLimited(member: number): boolean {
+    const cfg = JSON.parse(readFileSync(join(this.root, 'openclaw.json'), 'utf8'));
+    return (cfg.agents?.entries?.[`m${member}`]?.memory?.search?.provider ?? cfg.memory?.search?.provider) === 'none';
   }
 
   async start(): Promise<GatewayClient> {
