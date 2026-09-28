@@ -106,13 +106,16 @@ test('the account list is the one crewd really serves: every route, none made up
     assert.equal(g.state, 'signed-out');
     assert.ok(!/connected|ready/i.test(JSON.stringify(g)), 'a route without an account never reads as tested');
   }
-  assert.match(A.AI_ROUTES, /API key/);
+  // The honest word under the list: a plan they already pay for, and the pay-for-each-use kind is not set up here.
+  assert.match(A.AI_ROUTES, /plan you already pay for/, 'the limitation is a person\'s words');
+  assert.doesNotMatch(A.AI_ROUTES, /API key|bill|\broutes?\b|provider/i, 'no billing or machinery words under the account list');
+  for (const ai of A.AIS) assert.doesNotMatch(ai.cli ?? '', /\bCLI\b/, `${ai.name}'s prerequisite names a product, never an acronym`);
   const phone = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
   assert.match(phone, /<Label>Your AI accounts<\/Label>/);
   assert.match(phone, /\{row\(A\.AIS\[0\]\)\}/, 'ChatGPT, the front door, is named first');
   assert.match(phone, /\{A\.AIS\.slice\(1\)\.map\(row\)\}/, 'the phone shows the same six routes, not a second list');
-  assert.match(phone, /\{A\.AI_ROUTES\}/, 'API-key limitation reaches the phone');
-  assert.match(phone, /live account status are shown only on the home computer/, 'no invented phone sign-in state');
+  assert.match(phone, /\{A\.AI_ROUTES\}/, 'the pay-for-each-use limitation reaches the phone');
+  assert.match(phone, /Signing in happens on the home computer, in Settings\. This phone can't tell whether an account is signed in\./, 'no invented phone sign-in state');
   assert.match(phone, /onPress=\{\(\) => go\(\{ view: 'phone' \}\)\} accessibilityRole="button" accessibilityLabel="Check AI account sign-in/, 'Home leads to the disclosure');
   // The resting sentence names the account when it can and stays generic when it can't — both machinery-free.
   assert.match(A.resting({ resting: { chatgpt: now + 60_000 } }), /^Your ChatGPT is resting until /);

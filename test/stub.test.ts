@@ -249,8 +249,8 @@ test('sign in from the app: a code to show and a page to open, then signed in', 
   await ready();
   const grok = async () => (await api('GET', '/api/accounts')).body.find((a: any) => a.member === 1 && a.account === 'grok');
   assert.equal((await grok()).signedIn, false);
-  // Claude is offered through the engine's own route; the card labels its CLI prerequisite.
-  assert.equal((PROVIDERS.claude?.cli ?? '').includes('Claude CLI'), true, 'the CLI prerequisite is said plainly');
+  // Claude is offered through the engine's own route; the card labels its prerequisite as a product name, not an acronym.
+  assert.equal((PROVIDERS.claude?.cli ?? '').includes('Claude Code'), true, 'the prerequisite is said plainly');
   assert.equal((await api('POST', '/api/accounts/1/grok/login', { via: 'code' }, {})).status, 403, 'cross-site pages cannot start a sign-in');
   const started = await api('POST', '/api/accounts/1/grok/login', { via: 'code' });
   assert.equal(started.status, 200);
