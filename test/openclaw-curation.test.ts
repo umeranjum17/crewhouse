@@ -185,6 +185,39 @@ test('the current review end to end: one window allows one reviewer call, and it
   }
 });
 
+test('round-3 reproduction: the armed window binds to FIRST arrival, not the current review', async () => {
+  // Main's predicate probe of the round-2 merge (https://github.com/umeranjum17/crewhouse/pull/131): the engine mints
+  // the reviewer session key fresh per run (`agent:<agent>:skill-collection-review:incognito-<uuid>`, minted inside
+  // runSkillCollectionReview), so crewd cannot arm for the CURRENT review's key in advance. The window is therefore
+  // prefix-bound first-arrival — which the probes below show is not a binding to the current review at all:
+  // a stale same-prefix key arriving first consumes the slot, the intended review is then denied, and re-arming
+  // re-admits the SAME stale key. Kept as the standing reproduction for the capability decision.
+  const state = mkdtempSync(join(tmpdir(), 'crewhouse-curation-fix3-'));
+  const bridge = new ToolBridge(state, { tools: () => [], gate: async () => ({ allow: false, reason: 'no runs here' }), call: async () => { throw new Error('no calls in this test'); } });
+  const ask = (frame: object): Promise<any> => new Promise((resolve, reject) => {
+    const socket = connect(bridge.path);
+    let text = '';
+    socket.on('error', reject);
+    socket.on('data', (chunk) => { text += chunk; if (text.includes('\n')) { resolve(JSON.parse(text)); socket.end(); } });
+    socket.on('connect', () => socket.write(JSON.stringify(frame) + '\n'));
+  });
+  try {
+    await bridge.start();
+    const stale = `agent:m1:skill-collection-review:incognito-${randomUUID()}`; // a PREVIOUS review's key, minted before arming
+    const current = `agent:m1:skill-collection-review:incognito-${randomUUID()}`; // the run crewd is about to kick
+    const reconcile = { kind: 'gate', tool: 'skill_workshop', input: { action: 'reconcile' } };
+    bridge.armCuration({ member: 1, review: 'skill-collection-review', action: 'reconcile' }, 10 * 60_000);
+    assert.equal((await ask({ ...reconcile, key: stale })).allow, true, 'the bug: a stale same-prefix key arriving FIRST is admitted as "the" reviewer');
+    assert.equal((await ask({ ...reconcile, key: current })).allow, false, 'the intended current review is denied — its slot was consumed');
+    bridge.disarmCuration();
+    bridge.armCuration({ member: 1, review: 'skill-collection-review', action: 'reconcile' }, 10 * 60_000);
+    assert.equal((await ask({ ...reconcile, key: stale })).allow, true, 're-arming re-admits the SAME stale key: nothing binds the current review');
+  } finally {
+    bridge.stop();
+    rmSync(state, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+  }
+});
+
 test('curation trigger: a refused capture never opens the workshop window', async () => {
   const state = mkdtempSync(join(tmpdir(), 'crewhouse-curation-run-'));
   const runtime = new OpenClawRuntime(state);

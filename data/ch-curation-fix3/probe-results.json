@@ -1,0 +1,112 @@
+{
+  "events": [
+    {
+      "t": 7,
+      "event": "cron"
+    },
+    {
+      "t": 10,
+      "event": "task"
+    },
+    {
+      "t": 173,
+      "event": "chat.metadata.changed"
+    },
+    {
+      "t": 241,
+      "event": "agent",
+      "runId": "skill-collection-review:d938f02d-f3a4-46b9-9856-a6dd9a1fb9b8",
+      "sessionKey": "agent:m1:skill-collection-review:incognito-343e3371-f1ea-4099-b6e8-ad3cd70274ed",
+      "stream": "lifecycle"
+    },
+    {
+      "t": 263,
+      "event": "agent",
+      "runId": "skill-collection-review:d938f02d-f3a4-46b9-9856-a6dd9a1fb9b8",
+      "sessionKey": "agent:m1:skill-collection-review:incognito-343e3371-f1ea-4099-b6e8-ad3cd70274ed",
+      "stream": "item"
+    },
+    {
+      "t": 281,
+      "event": "agent",
+      "runId": "skill-collection-review:d938f02d-f3a4-46b9-9856-a6dd9a1fb9b8",
+      "sessionKey": "agent:m1:skill-collection-review:incognito-343e3371-f1ea-4099-b6e8-ad3cd70274ed",
+      "stream": "item"
+    },
+    {
+      "t": 294,
+      "event": "agent",
+      "runId": "skill-collection-review:d938f02d-f3a4-46b9-9856-a6dd9a1fb9b8",
+      "sessionKey": "agent:m1:skill-collection-review:incognito-343e3371-f1ea-4099-b6e8-ad3cd70274ed",
+      "stream": "assistant"
+    },
+    {
+      "t": 295,
+      "event": "chat",
+      "runId": "skill-collection-review:d938f02d-f3a4-46b9-9856-a6dd9a1fb9b8",
+      "sessionKey": "agent:m1:skill-collection-review:incognito-343e3371-f1ea-4099-b6e8-ad3cd70274ed"
+    },
+    {
+      "t": 303,
+      "event": "agent",
+      "runId": "skill-collection-review:d938f02d-f3a4-46b9-9856-a6dd9a1fb9b8",
+      "sessionKey": "agent:m1:skill-collection-review:incognito-343e3371-f1ea-4099-b6e8-ad3cd70274ed",
+      "stream": "lifecycle"
+    },
+    {
+      "t": 304,
+      "event": "chat",
+      "runId": "skill-collection-review:d938f02d-f3a4-46b9-9856-a6dd9a1fb9b8",
+      "sessionKey": "agent:m1:skill-collection-review:incognito-343e3371-f1ea-4099-b6e8-ad3cd70274ed"
+    },
+    {
+      "t": 327,
+      "event": "task"
+    },
+    {
+      "t": 330,
+      "event": "cron",
+      "runId": "manual:4a21846b-b920-4167-8669-37b43b075568:1790567505319:1"
+    }
+  ],
+  "sessionsSeen": [],
+  "sessionsGone": [],
+  "frames": [
+    {
+      "t": 267,
+      "key": "agent:m1:skill-collection-review:incognito-343e3371-f1ea-4099-b6e8-ad3cd70274ed",
+      "tool": "skill_workshop",
+      "input": {
+        "action": "reconcile",
+        "collection": []
+      }
+    }
+  ],
+  "cron": {
+    "kickedRunId": "manual:4a21846b-b920-4167-8669-37b43b075568:1790567505319:1",
+    "entry": {
+      "ts": 1790567505636,
+      "jobId": "4a21846b-b920-4167-8669-37b43b075568",
+      "action": "finished",
+      "status": "ok",
+      "completionStatus": "succeeded",
+      "summary": "skill collection review completed",
+      "runId": "manual:4a21846b-b920-4167-8669-37b43b075568:1790567505319:1",
+      "runAtMs": 1790567505323,
+      "durationMs": 313,
+      "nextRunAtMs": 1790586416766,
+      "deliveryStatus": "not-requested",
+      "jobName": "skill-collection-review-m1"
+    }
+  },
+  "verdict": {
+    "framesArrived": 1,
+    "identityEventBeforeFirstFrame": true,
+    "identityEventKeyEqualsFrameKey": true,
+    "sessionsListEverExposedKey": false,
+    "observedKeys": [],
+    "frameKeys": [
+      "agent:m1:skill-collection-review:incognito-343e3371-f1ea-4099-b6e8-ad3cd70274ed"
+    ]
+  }
+}
