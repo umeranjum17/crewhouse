@@ -71,6 +71,7 @@ export class OpenClawRuntime implements AgentRuntime {
     let pasteIn: ((text: string) => void) | undefined;
     const paste = (text: string) => pasteIn?.(text);
     const cancel = () => controller.abort();
+    let sessionId = '';
     void (async () => {
       try {
         const client = this.connected();
@@ -80,16 +81,32 @@ export class OpenClawRuntime implements AgentRuntime {
         const say = (s: Omit<SignInStep, 'waiting'> & { waiting?: boolean }) => on({ waiting: true, ...s });
         const started = await client.request<{ sessionId: string; done?: boolean; step?: any }>('openclaw.setup.auth.start',
           { sessionId: `crewhouse-${randomUUID()}`, agentId, authChoice }, { timeoutMs: 60_000, signal: controller.signal });
-        let sessionId = started.sessionId, step = started.step, done = !!started.done;
+        // The wizard hands over steps only when pulled with wizard.next (the engine's own Control UI drives it the
+        // same way); wizard.status answers {status, error} and never carries a step. A session left running holds the
+        // engine's single setup admission, so every exit short of done cancels this session (never another's).
+        sessionId = started.sessionId;
+        const release = () => client.request('wizard.cancel', { sessionId }, { timeoutMs: 10_000 }).catch(() => {});
+        let step: any, terminal: any, done = !!started.done;
         for (let turns = 0; !done && !signal.aborted && turns < 200; turns++) {
           if (!step) {
-            const s = await client.request<{ done?: boolean; step?: any }>('wizard.status', { sessionId }, { timeoutMs: 20_000, signal: controller.signal }).catch(() => undefined);
-            if (!s) { await sleep(500); continue; }
-            if (s.done) break;
-            if (!s.step) { await sleep(500); continue; }
-            step = s.step;
+            const n = await client.request<{ done?: boolean; step?: any; error?: string }>('wizard.next', { sessionId }, { timeoutMs: 120_000, signal: controller.signal }).catch(() => undefined);
+            if (!n) { await sleep(500); continue; }
+            if (n.done) { terminal = n; done = true; break; }
+            step = n.step;
+            continue;
           }
           const st = step;
+          step = undefined;
+          if (st.deviceCode) {
+            say({ code: st.deviceCode.code, url: st.externalUrl });
+            // The engine polls the provider itself once the shown code is acknowledged.
+            const n = await client.request<{ done?: boolean; step?: any; error?: string }>('wizard.next', { sessionId, answer: { stepId: st.id } }, { timeoutMs: 120_000, signal: controller.signal }).catch(() => undefined);
+            if (n) {
+              if (n.done) { terminal = n; done = true; break; }
+              step = n.step;
+            }
+            continue;
+          }
           if (st.type === 'text' && !st.sensitive) {
             // The paste step: the person's browser came back to crewd's own page; crewd hands the address over.
             say({});
@@ -100,7 +117,8 @@ export class OpenClawRuntime implements AgentRuntime {
             });
             if (value === undefined) break;
             const n = await client.request<{ done?: boolean; step?: any; error?: string }>('wizard.next', { sessionId, answer: { stepId: st.id, value } }, { timeoutMs: 120_000, signal: controller.signal });
-            done = !!n.done; step = n.step;
+            if (n.done) { terminal = n; done = true; break; }
+            step = n.step;
             if (n.error) say({ error: n.error });
             continue;
           }
@@ -108,32 +126,24 @@ export class OpenClawRuntime implements AgentRuntime {
             if (st.externalUrl) say({ url: st.externalUrl });
             say({}); // the card says what to do while the engine drives
             const n = await client.request<{ done?: boolean; step?: any; error?: string }>('wizard.next', { sessionId, answer: { stepId: st.id } }, { timeoutMs: 120_000, signal: controller.signal });
-            done = !!n.done; step = n.step;
+            if (n.done) { terminal = n; done = true; break; }
+            step = n.step;
             if (n.error) say({ error: n.error });
             continue;
-          }
-          if (st.deviceCode) {
-            say({ code: st.deviceCode.code, url: st.externalUrl });
-            // The engine polls the provider itself; wait for it to finish.
-            for (let i = 0; i < 300 && !signal.aborted; i++) {
-              await sleep(2000);
-              const s = await client.request<{ done?: boolean; error?: string }>('wizard.status', { sessionId }, { timeoutMs: 20_000, signal: controller.signal }).catch(() => undefined);
-              if (!s) continue;
-              if (s.done) { done = true; break; }
-              if (s.error) { on({ waiting: false, error: s.error }); return; }
-            }
-            break;
           }
           // progress and anything gateway-driven: it advances by itself
           const n = await client.request<{ done?: boolean; step?: any; error?: string }>('wizard.next', { sessionId }, { timeoutMs: 120_000, signal: controller.signal }).catch(() => undefined);
           if (!n) { await sleep(500); continue; }
-          done = !!n.done; step = n.step;
-          if (n.error) say({ error: n.error });
+          if (n.done) { terminal = n; done = true; break; }
+          step = n.step;
         }
-        if (signal.aborted) { await client.request('wizard.cancel', { sessionId }, { timeoutMs: 10_000 }).catch(() => {}); return; }
-        if (done) on({ waiting: false, done: true });
-        else on({ waiting: false, error: 'The sign-in took too long. Tap Sign in with ChatGPT to start again.' });
+        if (signal.aborted) { await release(); return; }
+        const failed = done && terminal ? String(terminal.error ?? (terminal.status === 'error' ? 'Sign-in failed' : '')) : '';
+        if (!done) { await release(); on({ waiting: false, error: 'The sign-in took too long. Tap Sign in with ChatGPT to start again.' }); }
+        else if (failed) { await release(); on({ waiting: false, error: failed.slice(0, 200) }); }
+        else on({ waiting: false, done: true });
       } catch (e: any) {
+        if (sessionId) void this.client?.request('wizard.cancel', { sessionId }, { timeoutMs: 10_000 }).catch(() => {});
         on({ waiting: false, error: String(e?.message ?? e).slice(0, 200) });
       }
     })();
