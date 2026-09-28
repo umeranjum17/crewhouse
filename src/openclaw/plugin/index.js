@@ -34,6 +34,16 @@ const SCHEMAS = {
   calendar: { type: 'object', properties: { args: { type: 'array', items: { type: 'string' } } }, required: ['args'], additionalProperties: false },
   mail: { type: 'object', properties: { args: { type: 'array', items: { type: 'string' } } }, required: ['args'], additionalProperties: false },
   crew_app: { type: 'object', properties: { tool: { type: 'string' }, input: { type: 'object', additionalProperties: true } }, required: ['tool'], additionalProperties: false },
+  crew_remember: { type: 'object', properties: {
+    text: { type: 'string', description: 'One short line stating the lasting preference to save.' },
+    replaces: { type: 'string', description: 'Words of an old note this corrects, if any.' },
+    everyone: { type: 'boolean', description: 'True if every helper should know it; otherwise it stays in your notes.' },
+  }, required: ['text'], additionalProperties: false },
+  crew_document: { type: 'object', properties: {
+    name: { type: 'string', description: 'Title of the finished document.' },
+    blocks: { type: 'array', description: 'Document content in order: {heading}, {text}, {bullets: [strings]} or {table: {head: [cells], rows: [[cells]]}}.',
+      items: { type: 'object', additionalProperties: true }, minItems: 1 },
+  }, required: ['name', 'blocks'], additionalProperties: false },
 };
 const ABOUT = {
   bash: 'Run a shell command in your own space (a sandbox: your folder is the only writable part of the disk). Long output is cut to the last lines.',
@@ -41,6 +51,8 @@ const ABOUT = {
   calendar: "The person's own Google Calendar: see the day or week, find free time, add, move or cancel events, as `args`.",
   mail: "The person's own Gmail, read-only: what is new, search it, read a conversation, as `args`. It cannot send or change mail.",
   crew_app: "Use one of the person's connected apps' tools: `tool` names it (the run's prompt lists them) and `input` carries its arguments.",
+  crew_remember: 'Save a lasting preference: pass {text: "one short line"}; optionally replaces and everyone. Do not save how to address the person.',
+  crew_document: 'Write and deliver an editable document: pass {name: "title", blocks: [{heading: "Title"}, {text: "Paragraph"}, {bullets: ["Item"]}]}. Crewhouse writes the file; do not make it yourself.',
 };
 
 export default {
