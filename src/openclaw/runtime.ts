@@ -254,12 +254,13 @@ export class OpenClawRuntime implements AgentRuntime {
   /** Bring one learned skill back from the capture history, even after later edits or reviews. The target is the
    *  real workspace layout the engine reads: workspaceOf() is the skills root itself, so the skill sits directly
    *  inside it (`<name>/SKILL.md`, never `skills/<name>/SKILL.md`). The capture is read before anything is written —
-   *  a restore that cannot be verified throws and leaves the workspace untouched. */
+   *  a restore that cannot be verified throws and leaves the workspace untouched. The blob is written as raw bytes,
+   *  so the restore is byte-for-byte: leading and trailing whitespace and the final newline all survive. */
   restoreLearned(member: number, name: string, hash?: string) {
     const dir = this.workspaceOf(member);
-    const git = (args: string[]) => execFileSync('git', ['-c', 'user.name=Crewhouse', '-c', 'user.email=crewhouse@localhost', ...args], { cwd: dir, stdio: 'pipe' }).toString().trim();
-    const at = hash ?? git(['rev-parse', '--short', 'HEAD']);
-    let body: string;
+    const git = (args: string[]) => execFileSync('git', ['-c', 'user.name=Crewhouse', '-c', 'user.email=crewhouse@localhost', ...args], { cwd: dir, stdio: 'pipe' });
+    const at = (hash ?? git(['rev-parse', '--short', 'HEAD'])).toString().trim();
+    let body: Buffer;
     try { body = git(['show', `${at}:${name}/SKILL.md`]); }
     catch { throw new Error(`no learned-skill capture holds "${name}"; nothing was restored`); }
     mkdirSync(join(dir, name), { recursive: true });

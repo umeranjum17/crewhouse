@@ -39,8 +39,15 @@ test('an unknown run and an ungated call fail closed; a permit works once', asyn
     // and the real reviewer session is keyed `agent:<agentId>:skill-collection-review:incognito-<uuid>`.
     const shop = { kind: 'gate', key: 'agent:m1:skill-collection-review:incognito-abc', tool: 'skill_workshop', input: { action: 'reconcile' } };
     assert.equal((await ask(shop)).allow, false, 'unregistered workshop calls are denied');
+    bridge.armCuration({ member: 1, review: 'skill-collection-review', action: 'reconcile' }, -1);
+    assert.equal((await ask(shop)).allow, false, 'outside the window (expired) everything is denied');
     bridge.armCuration({ member: 1, review: 'skill-collection-review', action: 'reconcile' }, 60_000);
     assert.equal((await ask(shop)).allow, true, 'armed: the exact captured review call may run');
+    // The window is one call wide: an identical replay inside the window is denied ...
+    assert.equal((await ask(shop)).allow, false, 'armed: the window allowed its one call; a replay is denied');
+    // ... and so is a different review whose key merely shares the member/review prefix.
+    const twin = { kind: 'gate', key: 'agent:m1:skill-collection-review:incognito-a-different-review', tool: 'skill_workshop', input: { action: 'reconcile' } };
+    assert.equal((await ask(twin)).allow, false, 'armed: a different review sharing the prefix is denied');
     // Bound to the captured member: a different member's workshop call inside the window is denied.
     const outsider = { kind: 'gate', key: 'agent:m2:skill-collection-review:incognito-def', tool: 'skill_workshop', input: { action: 'reconcile' } };
     assert.equal((await ask(outsider)).allow, false, 'armed: another member is denied, their capture was never verified');

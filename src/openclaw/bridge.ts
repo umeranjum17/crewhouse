@@ -10,9 +10,11 @@ export class ToolBridge {
   private runs = new Map<string, RunRef>();
   private permits = new Map<string, { key: string; tool: string; input: string }>();
   /** While armed, ONLY the captured review — the member's own collection-review session, for the captured action —
-   *  may run the workshop (crewhouse armed it around a capture it verified). Unarmed — the default — every session
-   *  crewhouse did not register fails closed, the workshop included. */
-  private armed?: { member: number; review: string; action: string; until: number };
+   *  may run the workshop, and only ONCE: the engine mints the reviewer's session key fresh per run
+   *  (`incognito-<uuid>`), so the first qualifying call is the captured call, the window closes behind it, and no
+   *  replay or same-prefix different review gets a second pass. Unarmed — the default — every session crewhouse did
+   *  not register fails closed, the workshop included. */
+  private armed?: { member: number; review: string; action: string; until: number; used?: boolean };
   readonly path: string;
   private readonly host: ToolHost;
   constructor(stateDir: string, host: ToolHost) {
@@ -28,8 +30,10 @@ export class ToolBridge {
   get curationArmed() { return !!this.armed && Date.now() < this.armed.until; }
   private curationAllowed(key: unknown, tool: string, input: any) {
     const a = this.armed;
-    return !!a && Date.now() < a.until && tool === 'skill_workshop' && input?.action === a.action
-      && typeof key === 'string' && key.startsWith(`agent:m${a.member}:${a.review}:`);
+    if (!a || a.used || Date.now() >= a.until || tool !== 'skill_workshop' || input?.action !== a.action) return false;
+    if (typeof key !== 'string' || !key.startsWith(`agent:m${a.member}:${a.review}:`)) return false;
+    a.used = true;
+    return true;
   }
   unregister(key: string) {
     this.runs.delete(key);
