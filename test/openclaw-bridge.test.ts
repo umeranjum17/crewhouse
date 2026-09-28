@@ -35,5 +35,14 @@ test('an unknown run and an ungated call fail closed; a permit works once', asyn
     assert.equal((await ask({ kind: 'call', ...frame, permit: granted.permit })).text, 'done');
     assert.equal((await ask({ kind: 'call', ...frame, permit: granted.permit })).allow, false);
     assert.equal(calls, 1);
+    // An engine-internal session fails closed by default; the workshop runs only inside a crewhouse-armed window.
+    const shop = { kind: 'gate', key: 'agent:m1:cron:skill-collection-review-m1', tool: 'skill_workshop', input: { action: 'list' } };
+    assert.equal((await ask(shop)).allow, false, 'unregistered workshop calls are denied');
+    bridge.armCuration(60_000);
+    assert.equal((await ask(shop)).allow, true, 'armed: the reviewer may run');
+    const other = { kind: 'gate', key: 'agent:m1:cron:other', tool: 'bash', input: { command: 'ls' } };
+    assert.equal((await ask(other)).allow, false, 'armed still fails closed for every other tool and session');
+    bridge.disarmCuration();
+    assert.equal((await ask(shop)).allow, false, 'disarmed: denied again');
   } finally { bridge.stop(); rmSync(state, { recursive: true, force: true }); }
 });

@@ -11,7 +11,7 @@ const disk = await import('../src/bots.ts');
 const call = (tool: string, input: object) => `[tool ${tool} ${JSON.stringify(input)}]`;
 /** Only the named accounts count as signed in for this member; the rest wait for their own sign-in. */
 function only(crew: any, member: number, keys: string[]) {
-  for (const k of ['chatgpt', 'grok', 'copilot', 'openrouter']) {
+  for (const k of ['chatgpt', 'grok', 'copilot', 'openrouter', 'minimax', 'claude']) {
     if (!keys.includes(k)) (crew.accounts as any).ready.set(`${member}:${k}`, false);
   }
 }

@@ -14,12 +14,15 @@ export const OWNER = 1;
  *  address into the engine's wizard, so the tab shows Crewhouse's own page and the flow finishes even when the engine
  *  cannot bind the port first. Tests take a free port via CREWHOUSE_CALLBACK_PORT.
 
-/** The offered accounts. ChatGPT is the one front door the app shows; the rest are quiet "more options" paths. */
-export const PROVIDERS: Record<string, { key: string; name: string }> = {
+/** The offered accounts: every subscription route the pinned engine supports. ChatGPT is the one front door; the
+ *  rest are quiet "more options" paths. `cli`: the sign-in needs a tool installed and logged in on this computer. */
+export const PROVIDERS: Record<string, { key: string; name: string; cli?: string }> = {
   chatgpt: { key: 'chatgpt', name: 'ChatGPT' },
   grok: { key: 'grok', name: 'Grok' },
   copilot: { key: 'copilot', name: 'GitHub Copilot' },
   openrouter: { key: 'openrouter', name: 'OpenRouter' },
+  minimax: { key: 'minimax', name: 'MiniMax' },
+  claude: { key: 'claude', name: 'Claude', cli: 'the Claude CLI, installed and signed in on this computer' },
 };
 
 export function provider(key: string) {

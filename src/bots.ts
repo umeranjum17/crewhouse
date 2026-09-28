@@ -154,7 +154,7 @@ export function createBotFolder(cfg: Config, id: string, tpl: Template, display:
 }
 
 /** A folder that is its own git repository, where every change to the files that matter is a commit. Without git there is simply no history. */
-function commit(dir: string, files: string[], message: string): string | null {
+export function commit(dir: string, files: string[], message: string): string | null {
   const git = (...args: string[]) => execFileSync('git', ['-c', 'user.name=Crewhouse', '-c', 'user.email=crewhouse@localhost', '-c', 'commit.gpgsign=false',
     '-c', 'core.hooksPath=/dev/null', ...args], { cwd: dir, stdio: 'pipe' }).toString().trim();
   try {

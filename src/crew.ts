@@ -199,6 +199,9 @@ export class Crew {
   readonly busy = new Set<string>();
   /** Applied learning the person has already been told about, keyed member:id. */
   private seenLearned = new Set<string>();
+  /** When to next check the engine's collection-review job (the weekly tidy, run on crewhouse's own boundary). */
+  private curationAt = 0;
+  private curationBusy = false;
   /** Bots whose screen the person is driving: the bot is paused until they give the controls back. */
   private held = new Set<string>();
   readonly desktops: Desktops;
@@ -270,7 +273,10 @@ export class Crew {
       if (this.cfg.engineProvider && this.runtime.configureModelProvider)
         await this.runtime.configureModelProvider(this.cfg.engineProvider.baseUrl, this.cfg.engineProvider.apiKey).catch((e: unknown) => console.error('engine provider:', e));
       if (this.stopped) return;
-      if (this.learningOn()) await this.runtime.setLearning?.(true).catch((e: unknown) => console.error('learning:', e));
+      if (this.learningOn()) {
+        await this.runtime.setLearning?.(true).catch((e: unknown) => console.error('learning:', e));
+        this.curationAt = Date.now() + 60_000; // first look a minute after the engine is up, then weekly from the job
+      }
     });
     this.dispatch();
   }
@@ -294,6 +300,34 @@ export class Crew {
   async setLearning(on: boolean) {
     this.db.run("INSERT INTO settings (key, value) VALUES ('learning', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", on ? 'on' : 'off');
     await this.runtime.setLearning?.(on);
+  }
+
+  /** The weekly tidy of what was learned, on crewhouse's own boundary: capture first — refusing the whole review if
+   *  the capture cannot be verified — then the engine's review inside the armed window, then the plain-words record.
+   *  Runs weekly per member; every path goes through this one pre-change step (handled inbox 003, option B). */
+  private async weeklyCuration() {
+    this.curationAt = Date.now() + 7 * 86_400_000;
+    for (const m of this.members()) {
+      const runtime = this.runtime as { runCollectionReview?: (member: number) => Promise<{ capture: string; kept: string[]; written: string[]; dropped: string[] }> };
+      if (!runtime.runCollectionReview) continue;
+      try {
+        const outcome = await runtime.runCollectionReview(m.id);
+        const parts = [outcome.written.length ? `rewrote ${outcome.written.join(', ')}` : '',
+          outcome.dropped.length ? `set aside ${outcome.dropped.join(', ')}` : '',
+          !outcome.written.length && !outcome.dropped.length ? 'nothing needed changing' : ''].filter(Boolean);
+        this.db.tx(() => {
+          this.say(CHIEF, 'bot', `Tidied what ${this.member(m.id).name}'s crew learned: ${parts.join('; ')}. Set-aside skills can come back.`, null, m.id);
+          this.db.event('learn.curated', CHIEF, { member: m.id, capture: outcome.capture, kept: outcome.kept, written: outcome.written, dropped: outcome.dropped });
+        });
+      } catch (e) {
+        // Refused (usually the capture): the data stays exactly as it was, and the person hears why.
+        console.error(`curation m${m.id}:`, e);
+        this.db.tx(() => {
+          this.db.event('learn.curated', CHIEF, { member: m.id, refused: String(e).slice(0, 200) });
+          this.say(CHIEF, 'system', `I left ${this.member(m.id).name}'s learned skills untouched this week — tidying them didn't feel safe just now.`, null, m.id);
+        });
+      }
+    }
   }
 
   /** A restart is a non-event: every task that was running continues in its own session, from its session file.
@@ -2180,6 +2214,10 @@ export class Crew {
       this.schedule();
       const working = !!this.db.get("SELECT 1 FROM tasks WHERE state = 'working' LIMIT 1");
       if (working !== this.awake) { this.awake = working; this.keepAwake(working); }
+      if (this.learningOn() && this.curationAt && now >= this.curationAt && !this.curationBusy) {
+        this.curationBusy = true;
+        void this.weeklyCuration().finally(() => { this.curationBusy = false; });
+      }
       for (const task of this.db.all("SELECT * FROM tasks WHERE state IN ('working', 'needs_you') AND created_at < ?", Date.now() - TASK_TIMEOUT_MS)) {
         this.close(task.bot);
         this.setTask(task, 'failed', 'Took longer than an hour, so I stopped it.');

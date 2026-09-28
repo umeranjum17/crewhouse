@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, renameSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, renameSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { commit } from './bots_git.ts';
 import { dirname, join } from 'node:path';
 import { GatewayClient } from '@openclaw/gateway-client';
 import type { AgentRuntime, Member, RunEnd, RunEvent, RunSpec, SignInStep, ToolHost } from '../runtime.ts';
@@ -8,14 +10,21 @@ import { OpenClawGateway } from './gateway.ts';
 import { ToolBridge } from './bridge.ts';
 
 /** Crewhouse account key → OpenClaw provider id. ChatGPT is the one front door; the rest are quiet options. */
-const PROVIDER_OF: Record<string, string> = { chatgpt: 'openai', grok: 'xai', copilot: 'github-copilot', openrouter: 'openrouter' };
-const AUTH_CHOICE: Record<string, string> = { chatgpt: 'openai' };
-const CODE_CHOICE: Record<string, string> = { chatgpt: 'openai-device-code' };
+const PROVIDER_OF: Record<string, string> = { chatgpt: 'openai', grok: 'xai', copilot: 'github-copilot', openrouter: 'openrouter', minimax: 'minimax', claude: 'anthropic' };
+/** The engine's own sign-in route per account (the pin's wizard choices). A CLI prerequisite is labelled where it exists. */
+const AUTH_CHOICE: Record<string, string> = {
+  chatgpt: 'openai', grok: 'xai-oauth', copilot: 'github-copilot', openrouter: 'openrouter-oauth', minimax: 'minimax-global-oauth', claude: 'anthropic-cli',
+};
+const CODE_CHOICE: Record<string, string> = {
+  chatgpt: 'openai-device-code', grok: 'xai-device-code', openrouter: 'openrouter-oauth', minimax: 'minimax-global-oauth',
+};
+/** Accounts whose sign-in needs a tool installed and logged in on this computer (said plainly on the card). */
+export const CLI_PREREQUISITE: Record<string, string> = { claude: 'the Claude CLI, signed in inside the engine\'s own folder' };
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export class OpenClawRuntime implements AgentRuntime {
   private gateway: OpenClawGateway;
-  private bridge?: ToolBridge;
+  bridge?: ToolBridge;
   private client?: GatewayClient;
   private agents = new Set<number>();
   readonly stateDir: string;
@@ -66,7 +75,7 @@ export class OpenClawRuntime implements AgentRuntime {
       try {
         const client = this.connected();
         const agentId = await this.agent(member);
-        const authChoice = via === 'code' ? CODE_CHOICE[account] : AUTH_CHOICE[account];
+        const authChoice = via === 'code' ? CODE_CHOICE[account] ?? AUTH_CHOICE[account] : AUTH_CHOICE[account];
         if (!authChoice) throw new Error(`Sign-in for ${account} is not connected yet`);
         const say = (s: Omit<SignInStep, 'waiting'> & { waiting?: boolean }) => on({ waiting: true, ...s });
         const started = await client.request<{ sessionId: string; done?: boolean; step?: any }>('openclaw.setup.auth.start',
@@ -230,6 +239,51 @@ export class OpenClawRuntime implements AgentRuntime {
       at: Date.parse(p.updatedAt ?? p.createdAt ?? '') || 0,
       state: String(p.status ?? ''),
     })).filter((p) => p.id);
+  }
+
+  /** The member's learned-skills folder, and its pre-change capture: crewhouse's own git versioning. A capture that
+   *  cannot be verified throws, and the caller must refuse the review — the data stays. */
+  workspaceOf(member: number) { return join(this.stateDir, 'openclaw/workspaces', `m${member}`, 'skills'); }
+  captureLearned(member: number): string {
+    const dir = this.workspaceOf(member);
+    if (!existsSync(join(dir, '.git'))) mkdirSync(dir, { recursive: true });
+    const hash = commit(dir, ['.'], 'Before the skill collection review');
+    if (!hash) throw new Error('the learned-skills capture failed; the review was refused');
+    return hash;
+  }
+  /** Bring one learned skill back from the capture history, even after later edits or reviews. */
+  restoreLearned(member: number, name: string, hash?: string) {
+    const dir = this.workspaceOf(member);
+    const git = (args: string[]) => execFileSync('git', ['-c', 'user.name=Crewhouse', '-c', 'user.email=crewhouse@localhost', ...args], { cwd: dir, stdio: 'pipe' }).toString().trim();
+    const at = hash ?? git(['rev-parse', '--short', 'HEAD']);
+    const body = git(['show', `${at}:skills/${name}/SKILL.md`]);
+    mkdirSync(join(dir, 'skills', name), { recursive: true });
+    writeFileSync(join(dir, 'skills', name, 'SKILL.md'), body);
+    commit(dir, ['.'], `Restored ${name} from ${at}`);
+    return at;
+  }
+
+  /** The collection review, on crewhouse's own boundary: capture first (refusing everything on failure), open the
+   *  workshop window only for the engine's reviewer, run the review, close it, and report kept/rewritten/dropped. */
+  async runCollectionReview(member: number) {
+    const agentId = await this.agent(member);
+    const capture = this.captureLearned(member);
+    const jobs = await this.connected().request<{ jobs: { id: string; name: string; enabled: boolean }[] }>('cron.list', { limit: 100 }, { timeoutMs: 20_000 });
+    const job = jobs.jobs?.find((j) => j.name === `skill-collection-review-m${member}`);
+    if (!job?.enabled) throw new Error('the collection review is not enabled');
+    this.bridge?.armCuration(10 * 60_000);
+    try {
+      const kicked = await this.connected().request<{ runId: string }>('cron.run', { id: job.id, mode: 'force' }, { timeoutMs: 30_000 });
+      for (const end = Date.now() + 240_000; Date.now() < end;) {
+        await sleep(2000);
+        const runs = await this.connected().request<{ entries: { runId: string; status: string }[] }>('cron.runs', { id: job.id }, { timeoutMs: 20_000 }).catch(() => undefined);
+        if (runs?.entries?.some((e) => e.runId === kicked.runId && e.status === 'ok')) break;
+      }
+      const curator = await this.connected().request<any>('skills.curator.status', {}, { timeoutMs: 20_000 }).catch(() => undefined);
+      const outcome = curator?.collectionReview ?? {};
+      const names = (v: any) => Array.isArray(v) ? v.map((x: any) => x?.name ?? x?.skill ?? x).filter(Boolean) : [];
+      return { capture, kept: names(outcome.kept), written: names(outcome.written), dropped: names(outcome.dropped) };
+    } finally { this.bridge?.disarmCuration(); }
   }
 
   /** Forget one learned skill. Pending proposals are rejected directly; an applied one is restored by a one-shot

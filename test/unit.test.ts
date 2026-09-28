@@ -14,7 +14,7 @@ import * as A from '../web/src/adapter.ts';
 
 const { Crew, quietNow, short } = await import('../src/crew.ts');
 const { classifyText } = await import('../src/failures.ts');
-const { Accounts, OWNER } = await import('../src/accounts.ts');
+const { Accounts, OWNER, PROVIDERS } = await import('../src/accounts.ts');
 const { effectOf, browserAsk, coversOf, toolWords, orderOf } = await import('../src/policy.ts');
 const kit = await import('../src/tools.ts');
 const disk = await import('../src/bots.ts');
@@ -395,12 +395,15 @@ test('bots on disk: persona rename, capped notes, folder confinement, slugs', ()
   done();
 });
 
-test('accounts a bot thinks with: fallback order by name only, a per-task choice, no Claude', async () => {
+test('accounts a bot thinks with: fallback order by name only, a per-task choice, Claude via the engine', async () => {
   const { cfg, db, crew, done } = setup();
   crew.onboard('sir');
   crew.recruit('reel', 'Reel', 'person');
   assert.deepEqual(crew.thinks('reel').map((b) => b.name), ['ChatGPT']);
-  assert.throws(() => disk.setBrains(cfg, 'reel', ['claude']), /not an AI account/, 'Claude is not offered');
+  // Claude is offered through the engine's own route; its sign-in says plainly it needs the Claude CLI on this computer.
+  assert.equal(disk.setBrains(cfg, 'reel', ['claude']).includes('claude'), true, 'Claude is offered now');
+  assert.equal(PROVIDERS.claude.cli !== undefined, true, 'its CLI prerequisite is labelled');
+  disk.setBrains(cfg, 'reel', ['chatgpt']);
   assert.throws(() => disk.setBrains(cfg, 'reel', ['chatgpt:$(rm -rf ~)']), /not an AI account/);
   assert.throws(() => disk.setBrains(cfg, 'reel', []), /at least one/);
   assert.deepEqual(disk.setBrains(cfg, 'reel', ['copilot', 'chatgpt:gpt-5.5', 'copilot']), ['copilot', 'chatgpt:gpt-5.5']);
@@ -441,7 +444,7 @@ test('limits: a limit rests that account and the task carries on in the same con
   assert.deepEqual(crew.snapshot().resting, { chatgpt: until });
 
   // Every account resting: the task pauses with a wake-up time, and resumes when it passes.
-  const others = ['copilot', 'openrouter']; // the stub counts these as signed in; Grok is not
+  const others = ['copilot', 'openrouter', 'minimax', 'claude']; // the stub counts these as signed in; Grok is not
   for (const k of others) await crew.accounts.failed(OWNER, k, `usage limit, try again in ${k === 'copilot' ? 1 : 2} min`);
   const b = crew.assign('scout', 'look it up again', 'chief').task;
   await settled(db, b);
@@ -703,7 +706,7 @@ test('household: bots and tasks belong to a member and run on that member\'s own
 
   // One person's limit rests only their own account.
   disk.setBrains(cfg, 'reel', ['chatgpt']);
-  for (const k of ['chatgpt', 'grok', 'copilot', 'openrouter']) await crew.accounts.failed(sam, k, 'usage limit, try again in 1 min');
+  for (const k of ['chatgpt', 'grok', 'copilot', 'openrouter', 'minimax', 'claude']) await crew.accounts.failed(sam, k, 'usage limit, try again in 1 min');
   assert.equal(crew.restingUntil('chatgpt', OWNER), 0);
   const e = (await crew.post('reel', 'another for Sam', undefined, sam))!.task;
   const f = (await crew.post('scout', 'owner lookup', undefined, OWNER))!.task;

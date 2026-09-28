@@ -12,14 +12,21 @@ tools.
 
 ## Subscription-backed routes (the person's plan pays)
 
+Status vocabulary: **WIRED** = the route is implemented through the gateway's own wizard and usable from the app;
+**UNTESTED-no-account** = implemented through the same wizard drive, but no account of that kind exists in this
+build's household, so only the route's presence and choice ids are verified (against the pinned tarball's provider
+contracts and a live wizard probe) — never a claim that a login was exercised. The QA gate signs in what the QA
+home actually holds.
+
 | Crewhouse account | Provider id | Auth choice (wizard) | Prerequisites | Crewhouse availability | Verification |
 |---|---|---|---|---|---|
-| ChatGPT (Plus/Pro/Go; Business/Enterprise/Edu flagged as work) | `openai` | `openai` — Codex OAuth (PKCE, redirect to `localhost:1455`, paste fallback) | None: one button in the app; crewd holds 1455 and pastes the redirect into the wizard | **Wired** (sign-in step of this build) | Wizard steps probed live on the pinned version; live-model proof is the QA gate's (spec §7.4) |
-| ChatGPT (device pairing: phone, no browser on the computer) | `openai` | `openai-device-code` | None: the code is shown on the card | **Wired** (code path of the one button) | Choice id verified in the pinned provider contract; wizard drive shared with `openai` |
-| GitHub Copilot | `github-copilot` | `github-copilot`, `github-copilot-enterprise` | Upstream documents VS Code's client as the sanctioned route; sign-in happens in the engine's own isolated home | Available upstream on this pin; Crewhouse wiring lands with the §12 review of each publisher's terms | Choice ids verified in the tarball; **not yet wired** |
-| OpenRouter | `openrouter` | `openrouter-oauth` | OpenRouter documents sign-in for any app; pay-as-you-go credits, not a plan | Available upstream; wiring pending the same review | Choice id verified in the tarball; **not yet wired** |
-| Claude (subscription) | `anthropic` | `anthropic-cli` — Claude CLI reuse; `setup-token` | The `claude` CLI installed **and** logged in inside Crewhouse's isolated home (a terminal login — fails the naive bar; disclosed honestly in onboarding) | Available upstream; wiring pending the terms check the spec records for Anthropic | Choice ids verified in the tarball; **not yet wired** |
-| MiniMax (CN and global) | `minimax` | `minimax-cn-oauth`, `minimax-global-oauth` | None beyond the provider's own page | Available upstream; wiring pending review | Choice ids verified in the tarball; **not yet wired** |
+| ChatGPT (Plus/Pro/Go; Business/Enterprise/Edu flagged as work) | `openai` | `openai` — Codex OAuth (PKCE, redirect to `localhost:1455`, paste fallback) | None: one button in the app; crewd holds 1455 and pastes the redirect into the wizard | **WIRED** | Wizard steps probed live on the pinned version; live-model proof is the QA gate's (spec §7.4) |
+| ChatGPT (device pairing: phone, no browser on the computer) | `openai` | `openai-device-code` | None: the code is shown on the card | **WIRED** (code path of the one button) | Choice id verified in the pinned provider contract; wizard drive shared with `openai` |
+| Grok | `xai` | `xai-oauth`; `xai-device-code` for the code path | xai's own terms for app sign-in | **WIRED** | Choice ids verified in the tarball; **UNTESTED-no-account** |
+| GitHub Copilot | `github-copilot` | `github-copilot` (+ `github-copilot-enterprise` where the plan is enterprise) | Upstream documents VS Code's client as the sanctioned route; sign-in happens in the engine's own isolated home | **WIRED** | Choice ids verified in the tarball; **UNTESTED-no-account** |
+| OpenRouter | `openrouter` | `openrouter-oauth` | OpenRouter documents sign-in for any app; pay-as-you-go credits, not a plan | **WIRED** | Choice id verified in the tarball; **UNTESTED-no-account** |
+| MiniMax (global / CN) | `minimax` | `minimax-global-oauth` / `minimax-cn-oauth` | None beyond the provider's own page | **WIRED** | Choice ids verified in the tarball; **UNTESTED-no-account** |
+| Claude (subscription) | `anthropic` | `anthropic-cli` — Claude CLI reuse; `setup-token` | The `claude` CLI installed **and** logged in inside the engine's own folder — said plainly on the card (`PROVIDERS.claude.cli`), which fails the naive bar until that flow is improved | **WIRED** (route) — **UNTESTED-no-account** | Choice ids verified in the tarball; the CLI prerequisite is labelled in the offered-account record |
 
 ## API-key routes (not subscriptions; shown, never substituted)
 
@@ -33,10 +40,10 @@ key when a subscription route exists; they surface only as explicit "more option
 
 - The pin (2026.8.1) carries every subscription route OpenClaw documents as of 2026-09-27; nothing supported
   upstream is missing from the pin, so no compatible-tested-pin move is required.
-- The gap is Crewhouse-side wiring: ChatGPT (browser + device code) is wired; every other subscription route is
-  disclosed here as upstream-available and pending its per-publisher terms review. Wiring a route is a reviewed
-  code change on this pin, never an in-app toggle.
-- Claude's routes carry a terminal-login prerequisite that fails the naive-user bar; onboarding labels that
-  honestly instead of hiding it.
+- Every route is now reachable through the same sign-in drive (`src/openclaw/runtime.ts` auth-choice table); the
+  distinction that remains is verified-login (ChatGPT) versus **UNTESTED-no-account** (the rest), which only the
+  QA home's real accounts can close.
+- Claude's routes carry a terminal-login prerequisite that fails the naive-user bar; the offered-account record
+  labels that honestly instead of hiding it.
 - Not subscriptions and deliberately absent: channels, Control UI, Tailscale serve, cloud workers — unchanged by
   this matrix (spec §4.6).

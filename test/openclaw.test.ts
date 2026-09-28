@@ -89,6 +89,6 @@ test('pinned engine uses isolated home, loopback token and no Control UI', { tim
     await gateway.stop();
     if (original === undefined) delete process.env.HOME; else process.env.HOME = original;
     if (oldKey === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = oldKey;
-    rmSync(root, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 200 });
   }
 });

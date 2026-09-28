@@ -6,6 +6,7 @@ import { dirname, join, resolve } from 'node:path';
 import { createRequire } from 'node:module';
 import { GatewayClient } from '@openclaw/gateway-client';
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const repo = resolve(import.meta.dirname, '../..');
 const runtime = join(repo, 'runtime/openclaw');
 /** The pinned engine, installed scripts-off into runtime/openclaw (spec §3.1). Bump it like any dependency, with the tests as the gate. */
@@ -194,7 +195,19 @@ export class OpenClawGateway {
     this.closing = true;
     clearTimeout(this.restart);
     this.client?.stop(); this.client = undefined;
-    if (this.child?.pid) try { process.kill(-this.child.pid, 'SIGTERM'); } catch { /* already gone */ }
+    const child = this.child;
     this.child = undefined;
+    if (!child?.pid) return;
+    try { process.kill(-child.pid, 'SIGTERM'); } catch { /* already gone */ }
+    // The fixture teardown (and crewd's own shutdown) must not race a child that is still writing its state dir:
+    // wait for the exit, then escalate.
+    const gone = new Promise<void>((yes) => child.once('exit', () => yes()));
+    const pid = child.pid;
+    const kill = (sig: NodeJS.Signals) => { try { process.kill(-pid, sig); } catch { /* already gone */ } };
+    for (const [sig, ms] of [['SIGTERM', 3000], ['SIGKILL', 3000]] as [NodeJS.Signals, number][]) {
+      if (await Promise.race([gone, sleep(ms)])) return;
+      kill(sig);
+    }
+    await gone.catch(() => {});
   }
 }

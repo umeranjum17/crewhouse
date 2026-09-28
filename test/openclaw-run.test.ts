@@ -80,5 +80,5 @@ test('real Gateway tool call crosses fail-closed Crewhouse gate', { timeout: 420
     const stopped = await client.request<any>('agent.wait', { runId: denied.runId, timeoutMs: 240_000 }, { timeoutMs: 250_000 });
     assert.deepEqual(stopped.terminalReceipt?.successfulToolNames ?? [], []);
     assert.equal(called, 2);
-  } finally { await gateway.stop(); bridge.stop(); await stub.close(); rmSync(state, { recursive: true, force: true }); }
+  } finally { await gateway.stop(); bridge.stop(); await stub.close(); rmSync(state, { recursive: true, force: true, maxRetries: 20, retryDelay: 200 }); }
 });
