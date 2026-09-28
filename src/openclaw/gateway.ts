@@ -1,6 +1,6 @@
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, randomBytes, sign } from 'node:crypto';
-import { createWriteStream, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { createWriteStream, existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { dirname, join, resolve } from 'node:path';
 import { createRequire } from 'node:module';
@@ -71,6 +71,11 @@ export class OpenClawGateway {
       });
       if (result.status !== 0) throw new Error(`Engine install failed: ${result.stderr?.toString().slice(-500)}`);
     }
+    // Experimental only: loading from this symlink did not provide trusted Codex registration.
+    const extensions = join(this.root, 'extensions');
+    mkdirSync(extensions, { recursive: true });
+    const codex = join(extensions, 'codex');
+    if (!existsSync(codex)) symlinkSync(join(runtime, 'node_modules/@openclaw/codex'), codex, 'dir');
     mkdirSync(join(this.root, 'state'), { recursive: true });
     mkdirSync(join(this.root, 'tmp'), { recursive: true });
     mkdirSync(join(this.stateDir, 'logs'), { recursive: true });
@@ -92,12 +97,12 @@ export class OpenClawGateway {
       agents: { defaults: { sandbox: { mode: 'off' }, models: { 'openai/*': { agentRuntime: { id: 'openclaw' } } }, modelPolicy: { allow: [] } } },
       tools: { profile: 'coding', alsoAllow: crewTools, deny: ['group:fs', 'group:runtime', 'group:automation', 'group:messaging', 'group:nodes', 'group:ui', 'sessions_send', 'sessions_spawn', 'conversations_send', 'conversations_turn', 'subagents', 'code_execution', 'gateway', 'openclaw', 'plugins', 'cron', 'ask_user', 'suggest_task'], fs: { workspaceOnly: true }, exec: { security: 'deny', ask: 'always' }, elevated: { enabled: false }, agentToAgent: { enabled: false }, sessions: { visibility: 'agent' } },
       plugins: {
-        load: { paths: [join(repo, 'src/openclaw/plugin')] }, allow: ['crewhouse', 'memory-core', 'openai'],
+        load: { paths: [join(repo, 'src/openclaw/plugin')] }, allow: ['crewhouse', 'memory-core', 'openai', 'codex'],
         entries: {
           crewhouse: { hooks: { timeouts: { before_tool_call: 200_000 } } },
           'memory-core': { config: { dreaming: { enabled: false } } },
-          // The Codex app-server harness is deferred (spec §5.1): leaving it unconfigured keeps its install off.
-          codex: { enabled: false },
+          // Experimental only: native harness needs broader exec permission and lacks Crewhouse's gate.
+          codex: { enabled: true },
         },
       },
       // Only skills reviewed against the tarball and this repo's own content may exist; installs go through the

@@ -2,5 +2,8 @@
   "name": "crewhouse-openclaw-runtime",
   "private": true,
   "version": "0.0.0",
-  "dependencies": { "openclaw": "2026.8.1" }
+  "dependencies": {
+    "@openclaw/codex": "2026.8.1",
+    "openclaw": "2026.8.1"
+  }
 }
