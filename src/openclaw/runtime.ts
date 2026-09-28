@@ -251,14 +251,19 @@ export class OpenClawRuntime implements AgentRuntime {
     if (!hash) throw new Error('the learned-skills capture failed; the review was refused');
     return hash;
   }
-  /** Bring one learned skill back from the capture history, even after later edits or reviews. */
+  /** Bring one learned skill back from the capture history, even after later edits or reviews. The target is the
+   *  real workspace layout the engine reads: workspaceOf() is the skills root itself, so the skill sits directly
+   *  inside it (`<name>/SKILL.md`, never `skills/<name>/SKILL.md`). The capture is read before anything is written —
+   *  a restore that cannot be verified throws and leaves the workspace untouched. */
   restoreLearned(member: number, name: string, hash?: string) {
     const dir = this.workspaceOf(member);
     const git = (args: string[]) => execFileSync('git', ['-c', 'user.name=Crewhouse', '-c', 'user.email=crewhouse@localhost', ...args], { cwd: dir, stdio: 'pipe' }).toString().trim();
     const at = hash ?? git(['rev-parse', '--short', 'HEAD']);
-    const body = git(['show', `${at}:skills/${name}/SKILL.md`]);
-    mkdirSync(join(dir, 'skills', name), { recursive: true });
-    writeFileSync(join(dir, 'skills', name, 'SKILL.md'), body);
+    let body: string;
+    try { body = git(['show', `${at}:${name}/SKILL.md`]); }
+    catch { throw new Error(`no learned-skill capture holds "${name}"; nothing was restored`); }
+    mkdirSync(join(dir, name), { recursive: true });
+    writeFileSync(join(dir, name, 'SKILL.md'), body);
     commit(dir, ['.'], `Restored ${name} from ${at}`);
     return at;
   }
@@ -271,7 +276,7 @@ export class OpenClawRuntime implements AgentRuntime {
     const jobs = await this.connected().request<{ jobs: { id: string; name: string; enabled: boolean }[] }>('cron.list', { limit: 100 }, { timeoutMs: 20_000 });
     const job = jobs.jobs?.find((j) => j.name === `skill-collection-review-m${member}`);
     if (!job?.enabled) throw new Error('the collection review is not enabled');
-    this.bridge?.armCuration(10 * 60_000);
+    this.bridge?.armCuration({ member, review: 'skill-collection-review', action: 'reconcile' }, 10 * 60_000);
     try {
       const kicked = await this.connected().request<{ runId: string }>('cron.run', { id: job.id, mode: 'force' }, { timeoutMs: 30_000 });
       for (const end = Date.now() + 240_000; Date.now() < end;) {

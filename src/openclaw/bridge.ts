@@ -9,9 +9,10 @@ export class ToolBridge {
   private server?: Server;
   private runs = new Map<string, RunRef>();
   private permits = new Map<string, { key: string; tool: string; input: string }>();
-  /** While armed, the engine's own reviewer may run the workshop (crewhouse armed it around a capture it verified).
-   *  Unarmed — the default — every session crewhouse did not register fails closed, the workshop included. */
-  private armedUntil = 0;
+  /** While armed, ONLY the captured review — the member's own collection-review session, for the captured action —
+   *  may run the workshop (crewhouse armed it around a capture it verified). Unarmed — the default — every session
+   *  crewhouse did not register fails closed, the workshop included. */
+  private armed?: { member: number; review: string; action: string; until: number };
   readonly path: string;
   private readonly host: ToolHost;
   constructor(stateDir: string, host: ToolHost) {
@@ -19,10 +20,17 @@ export class ToolBridge {
     this.host = host;
   }
   register(run: RunRef) { this.runs.set(run.key, run); }
-  /** Open the workshop window for the engine's own reviewer (crewd arms it only after a verified capture). */
-  armCuration(ms: number) { this.armedUntil = Date.now() + ms; }
-  disarmCuration() { this.armedUntil = 0; }
-  get curationArmed() { return Date.now() < this.armedUntil; }
+  /** Open the workshop window for the engine's own reviewer (crewd arms it only after a verified capture), bound to
+   *  the exact captured member, review and action — the same member's same action passes, everything else is denied
+   *  even inside the window. */
+  armCuration(scope: { member: number; review: string; action: string }, ms: number) { this.armed = { ...scope, until: Date.now() + ms }; }
+  disarmCuration() { this.armed = undefined; }
+  get curationArmed() { return !!this.armed && Date.now() < this.armed.until; }
+  private curationAllowed(key: unknown, tool: string, input: any) {
+    const a = this.armed;
+    return !!a && Date.now() < a.until && tool === 'skill_workshop' && input?.action === a.action
+      && typeof key === 'string' && key.startsWith(`agent:m${a.member}:${a.review}:`);
+  }
   unregister(key: string) {
     this.runs.delete(key);
     for (const [permit, value] of this.permits) if (value.key === key) this.permits.delete(permit);
@@ -48,9 +56,9 @@ export class ToolBridge {
             const run = this.runs.get(key);
             let output;
             if (kind === 'gate' && !run) {
-              // The engine's own reviewer (the collection review crewhouse triggered) is not a crew run: while crewd
-              // holds the capture-verified window open, its one tool may run; at any other time, fail closed.
-              if (tool === 'skill_workshop' && Date.now() < this.armedUntil) output = { allow: true };
+              // The engine's own reviewer (the collection review crewhouse triggered) is not a crew run: only the
+              // captured review's own session, for the captured action, inside the window; everything else fails closed.
+              if (this.curationAllowed(key, tool, input)) output = { allow: true };
               else throw new Error('Unknown run');
             } else if (kind === 'gate') {
               const decision = await this.host.gate(run!, tool, input);
