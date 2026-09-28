@@ -22,7 +22,7 @@ export type RunEnd = { ok: true; text: string } | { ok: false; aborted: true } |
   { ok: false; kind: 'signed-out' | 'resting' | 'plan' | 'network' | 'other'; until?: number; message: string };
 export type SignInStep = { url?: string; code?: string; waiting: boolean; done?: boolean; error?: string };
 export interface AgentRuntime {
-  start(host: ToolHost): Promise<void>;
+  start(host: ToolHost): Promise<unknown>;
   stop(): Promise<void>;
   signedIn(member: Member, account: string): Promise<boolean>;
   signIn(member: Member, account: string, via: 'browser' | 'code', on: (step: SignInStep) => void): { paste(text: string): void; cancel(): void };
@@ -33,5 +33,10 @@ export interface AgentRuntime {
   trail(key: string): Promise<{ tool: string; input: string; output: string; at: number }[]>;
   ask(member: Member, prompt: string): Promise<string>;
   learned(member: Member): Promise<{ id: string; skill: string; at: number; state: string }[]>;
-  forget(member: Member, id: string): Promise<void>;
+  forget(member: Member, id: string, skill?: string): Promise<void>;
+  /** The "Learn from how I work" switch: the engine's learning mode, auto or off. Optional: the stub may ignore it. */
+  setLearning?(on: boolean): Promise<void>;
+  learning?(): Promise<boolean> | boolean;
+  /** Point the engine at a custom OpenAI-compatible model provider. Optional: only the real engine offers it. */
+  configureModelProvider?(baseUrl: string, apiKey: string): Promise<void>;
 }

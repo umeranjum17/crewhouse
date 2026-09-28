@@ -28,6 +28,14 @@ process.stdin.on('end', () => {
       return process.stdout.write(JSON.stringify({ protocolVersion: 1, decision: 'allow' }));
     }
     if ((req.request?.kind ?? '').includes('depend')) return block('Crewhouse does not run skill dependency installers');
+    // The reserved @openclaw scope (bundled plugin repairs, official releases) is trusted by provenance: the
+    // registry's attestation plus the pin's own integrity cover it (spec §5.2). Nothing else from ClawHub passes.
+    const officialPackage = req.origin?.packageName === 'string' && req.origin.packageName.startsWith('@openclaw/')
+      || typeof req.origin?.slug === 'string' && req.origin.slug.startsWith('@openclaw/')
+      || typeof req.request?.requestedSpecifier === 'string' && req.request.requestedSpecifier.startsWith('@openclaw/');
+    if (officialPackage) {
+      return process.stdout.write(JSON.stringify({ protocolVersion: 1, decision: 'allow' }));
+    }
     // A ClawHub/Git/uploaded skill passes only with an exact entry: id, version and content hash all matching.
     const id = req.targetName ?? req.origin?.slug;
     const version = req.origin?.version;

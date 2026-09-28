@@ -132,6 +132,12 @@ export function effectOf(tool: string, input: Record<string, any>, s: Seen): Eff
   if (tool === 'mail') {
     return ['inbox', 'search', 'read'].includes(String(input.args?.[0] ?? 'inbox')) ? { kind: 'safe' } : { kind: 'refuse', why: 'Your email can: search or read (it cannot send or change mail).' };
   }
+  // The engine's skill workshop writes skills; that is the reviewer's job, not a run's. A run may read.
+  if (tool === 'skill_workshop') {
+    const action = String(input.action ?? '');
+    if (['read', 'list', 'status'].includes(action)) return { kind: 'safe' };
+    return { kind: 'refuse', why: 'Skills that write come from how you work, reviewed between jobs; keep one with crew_learn.' };
+  }
   const app = s.apps?.[tool];
   if (app) {
     if (app.readOnly) return { kind: 'safe' };

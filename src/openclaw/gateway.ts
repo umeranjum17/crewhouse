@@ -95,11 +95,14 @@ export class OpenClawGateway {
         entries: {
           crewhouse: { hooks: { timeouts: { before_tool_call: 200_000 } } },
           'memory-core': { config: { dreaming: { enabled: false } } },
+          // The Codex app-server harness is deferred (spec §5.1): leaving it unconfigured keeps its install off.
+          codex: { enabled: false },
         },
       },
       // Only skills reviewed against the tarball and this repo's own content may exist; installs go through the
-      // operator policy (src/openclaw/policy.mjs) and fail closed without it.
-      skills: { allowBundled: ['video-frames', 'openai-whisper', 'summarize', 'nano-pdf', 'diagram-maker'], workshop: { autonomous: { mode: 'off' } } },
+      // operator policy (src/openclaw/policy.mjs) and fail closed without it. Learning ships off here; crewd flips it
+      // to auto when the household's "Learn from how I work" is on (Crew.setLearning), which is its default.
+      skills: { allowBundled: ['video-frames', 'openai-whisper', 'summarize', 'nano-pdf', 'diagram-maker'], workshop: { autonomous: { mode: 'off' }, approvalPolicy: 'auto' } },
       security: { installPolicy: { enabled: true, exec: {
         source: 'exec', command: process.execPath, args: [join(repo, 'src/openclaw/policy.mjs')],
         trustedDirs: [dirname(process.execPath), join(repo, 'src/openclaw')], timeoutMs: 10_000,

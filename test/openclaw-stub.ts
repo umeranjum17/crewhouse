@@ -66,6 +66,16 @@ export function startModelStub() {
       const asked = said.split('\n').map((l: string) => l.trim()).filter((l: string) => l && !l.startsWith('[Crewhouse')).pop() ?? '';
       return `stub ${bot}: done with "${asked.slice(0, 60)}"`;
     };
+    // A forget turn: the scripted restore call, then a plain reply.
+    if (/restore_collection/.test(said) && !results.length) {
+      const id = randomUUID();
+      res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' });
+      const send = (delta: object, finish: string | null = null) =>
+        res.write(`data: ${JSON.stringify({ id, object: 'chat.completion.chunk', created: Math.floor(Date.now() / 1000), model: body.model, choices: [{ index: 0, delta, finish_reason: finish }] })}\n\n`);
+      send({ role: 'assistant', tool_calls: [{ index: 0, id: `call_${id}`, type: 'function', function: { name: 'skill_workshop', arguments: '{"action":"restore_collection"}' } }] });
+      send({}, 'tool_calls');
+      return void res.end('data: [DONE]\n\n');
+    }
     // Routing asks who takes a request; the script answers in the kit's own shape.
     if (said.startsWith('[Crewhouse routing]')) {
       const options = [...said.matchAll(/^- ([a-z0-9-]+):/gm)].map((m) => m[1]);
@@ -85,6 +95,7 @@ export function startModelStub() {
       return res.end(JSON.stringify({ error: { message: "Your plan doesn't include this model." } }));
     }
     const next = scripted[results.length];
+    if (process.env.CREWHOUSE_STUB_DEBUG) console.log('STUB req', calls.length, 'roles', messages.map((m: any) => m.role).join(',').slice(0, 60), 'rss', Math.round(process.memoryUsage().rss / 1e6));
     const id = randomUUID();
     res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' });
     const send = (delta: object, finish: string | null = null) =>

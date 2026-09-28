@@ -10,7 +10,7 @@ import * as disk from './bots.ts';
 import { toolStatus } from './tools.ts';
 import { OWNER, PROVIDERS, provider } from './accounts.ts';
 import { clock } from './accounts.ts';
-import { coversOf } from './policy.ts';
+import { coversOf, toolWords } from './policy.ts';
 import { describe, nextRun, parseSchedule } from './routines.ts';
 import { Link } from './link.ts';
 import { lesson, Teacher } from './teach.ts';
@@ -244,6 +244,24 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     }
     // Connections: the viewer's own apps (Notion, Canva, Google…), connected on the app's own page (docs/ui-contract.md).
     if (m === 'GET' && p === '/api/connections') return crew.connections.list(me);
+    // The "How I did it" drawer: one plain row per tool call of a task, recorded by crewd, redacted to words.
+    if ((r = p.match(/^\/api\/task\/(\d+)\/trail$/)) && m === 'GET') {
+      const id = Number(r[1]);
+      const task = db.get('SELECT * FROM tasks WHERE id = ?', id);
+      if (!task) throw Object.assign(new Error('no such task'), { status: 404 });
+      if ((task.member ?? OWNER) !== me && me !== OWNER) throw Object.assign(new Error('not yours'), { status: 403 });
+      return db.all("SELECT at, data FROM events WHERE kind = 'run.call' AND json_extract(data, '$.task') = ? ORDER BY seq", id)
+        .map((e: any) => { const d = JSON.parse(e.data); let input = {}; try { input = JSON.parse(d.input ?? '{}'); } catch { /* unreadable input: words only */ }
+          return { at: e.at, words: toolWords(d.tool, input) || `Used ${String(d.tool).replace(/_/g, ' ')}`, ok: d.ok !== false && !String(d.head ?? '').startsWith('error:') }; });
+    }
+    // What the engine learned from this member's work, and Forget.
+    if (m === 'GET' && p === '/api/learned') return crew.runtime.learned ? crew.runtime.learned(me) : [];
+    if ((r = p.match(/^\/api\/learned\/forget$/)) && m === 'POST') {
+      if (body.id) await crew.runtime.forget?.(me, String(body.id), String(body.skill ?? ''));
+      return { ok: true };
+    }
+    if (m === 'GET' && p === '/api/learning') return { on: await Promise.resolve(crew.learningOn()) };
+    if ((r = p.match(/^\/api\/learning$/)) && m === 'POST') { await crew.setLearning(body.on === true); return { ok: true, on: body.on === true }; }
     // The owner switches Google on for the house, once: the household Google app's client ID and secret.
     if (m === 'PUT' && p === '/api/house/google') {
       if (me !== OWNER) throw Object.assign(new Error('only the owner sets this up'), { status: 403 });

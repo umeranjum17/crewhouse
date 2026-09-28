@@ -28,6 +28,7 @@ export class OpenClawRuntime implements AgentRuntime {
     await this.bridge.start();
     try { this.client = await this.gateway.start(); }
     catch (error) { this.bridge.stop(); throw error; }
+    return this.client;
   }
   async stop() { await this.gateway.stop(); this.bridge?.stop(); this.client = undefined; }
   private connected() { if (!this.client) throw new Error('Crewhouse engine is not ready'); return this.client; }
@@ -152,10 +153,36 @@ export class OpenClawRuntime implements AgentRuntime {
     return true;
   }
 
-  async run(spec: RunSpec, on: (event: RunEvent) => void): Promise<RunEnd> {
+  /** Point this engine at a custom OpenAI-compatible provider (the tests' scripted model; a self-hosted gateway later).
+   *  Sets the provider and makes it every agent's primary model. */
+  async configureModelProvider(baseUrl: string, apiKey: string, modelRef = 'crewhouse-stub/test') {
+    const client = this.connected();
+    const cur = await client.request<{ hash: string }>('config.get');
+    await client.request('config.patch', { baseHash: cur.hash, raw: JSON.stringify({
+      models: { providers: { 'crewhouse-stub': {
+        baseUrl, apiKey, api: 'openai-completions',
+        models: [{ id: 'test', name: 'Test', reasoning: true, input: ['text'],
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 32000, maxTokens: 2048,
+          compat: { supportsReasoningEffort: true, supportedReasoningEfforts: ['off', 'low', 'medium', 'high'] } }],
+      } } },
+      agents: { defaults: { model: { primary: modelRef } } },
+    }) });
+  }
+
+  async setLearning(on: boolean) {
+    const client = this.connected();
+    const cur = await client.request<{ hash: string }>('config.get');
+    await client.request('config.patch', { baseHash: cur.hash, raw: JSON.stringify({ skills: { workshop: { autonomous: { mode: on ? 'auto' : 'off' } } } }) });
+  }
+  async learning() {
+    const id = await this.agent(1).catch(() => '');
+    const s = await this.connected().request<{ config?: any }>('config.get', id ? { agentId: id } : {}, { timeoutMs: 20_000 }).catch(() => undefined);
+    return s?.config?.skills?.workshop?.autonomous?.mode !== 'off';
+  }
+  async run(spec: RunSpec, on: (event: RunEvent) => void, opts?: { register?: boolean }): Promise<RunEnd> {
     const client = this.connected();
     const agentId = await this.agent(spec.member);
-    this.bridge?.register(spec);
+    if (opts?.register !== false) this.bridge?.register(spec);
     let runId: string | undefined;
     let text = '';
     const unsubscribe = this.gateway.onEvent((event) => {
@@ -193,6 +220,30 @@ export class OpenClawRuntime implements AgentRuntime {
     if (!end.ok) throw new Error('Routing unavailable');
     return end.text;
   }
-  async learned(_member: number) { return []; }
-  async forget(_member: number, _id: string) { throw new Error('Learning is not connected yet'); }
+  /** The member's applied learned skills (the workshop's proposals, applied state last). */
+  async learned(member: number) {
+    const id = await this.agent(member);
+    const list = await this.connected().request<{ proposals?: any[] }>('skills.proposals.list', { agentId: id }, { timeoutMs: 20_000 }).catch(() => undefined);
+    return (list?.proposals ?? []).map((p) => ({
+      id: String(p.id ?? ''),
+      skill: String(p.skillName ?? p.title ?? ''),
+      at: Date.parse(p.updatedAt ?? p.createdAt ?? '') || 0,
+      state: String(p.status ?? ''),
+    })).filter((p) => p.id);
+  }
+
+  /** Forget one learned skill. Pending proposals are rejected directly; an applied one is restored by a one-shot
+   *  turn whose only possible tool is the workshop's own restore (spec §5.4) — no other tool can run on it. */
+  async forget(member: number, id: string, skill = '') {
+    const agentId = await this.agent(member);
+    const client = this.connected();
+    for (const method of ['skills.proposals.reject', 'skills.proposals.quarantine']) {
+      const ok = await client.request(method, { agentId, proposalId: id }, { timeoutMs: 20_000 }).then(() => true).catch(() => false);
+      if (ok) return;
+    }
+    // Applied: a one-shot turn, unregistered (so the gate allows only the workshop's restore), then forgotten for good.
+    const end = await this.run({ key: `agent:m${member}:crewhouse:forget:${randomUUID()}`, member, bot: 'chief', task: 0, account: 'chatgpt',
+      cwd: '', system: 'You are the crew\'s own workshop assistant. Use skill_workshop with action "restore_collection" and nothing else.', message: `Forget the learned skill "${skill}" (proposal ${id}): use skill_workshop with action "restore_collection" and nothing else.`, builtins: [] }, () => {}, { register: false });
+    if (!end.ok) throw new Error('Forget failed');
+  }
 }

@@ -17,7 +17,8 @@ const before = new Set(readdirSync(scratch));
 const cleanup = () => rmSync(root, { recursive: true, force: true });
 for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => { cleanup(); process.kill(process.pid, signal); });
 const files = readdirSync('test').filter((name) => name.endsWith('.test.ts')).map((name) => join('test', name));
-const result = spawnSync(process.execPath, ['--test', ...files], {
+// Serial files: the engine tests each spawn a real gateway; parallel runs starve them past their timeouts.
+const result = spawnSync(process.execPath, ['--test', '--test-concurrency=1', ...files], {
   stdio: 'inherit', env: { ...process.env, HOME: join(root, 'home'), TMPDIR: join(root, 'tmp') },
 });
 const leaked = readdirSync(scratch).filter((name) => name.startsWith(prefix) && !before.has(name));

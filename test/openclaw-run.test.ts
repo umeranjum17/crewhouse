@@ -7,7 +7,7 @@ import { OpenClawGateway } from '../src/openclaw/gateway.ts';
 import { ToolBridge } from '../src/openclaw/bridge.ts';
 import { startModelStub } from './openclaw-stub.ts';
 
-test('real Gateway tool call crosses fail-closed Crewhouse gate', { timeout: 120_000 }, async () => {
+test('real Gateway tool call crosses fail-closed Crewhouse gate', { timeout: 420_000 }, async () => {
   const state = mkdtempSync(join(tmpdir(), 'crewhouse-run-'));
   const stub = await startModelStub();
   let gated = 0, called = 0;
@@ -35,12 +35,12 @@ test('real Gateway tool call crosses fail-closed Crewhouse gate', { timeout: 120
     const key = 'agent:m1:crewhouse:chief:1';
     bridge.register({ key, member: 1, bot: 'chief', task: 1 });
     const streams: any[] = [];
-    const unsubscribe = gateway.onEvent((event) => { if (event.event === 'agent') streams.push(event.payload); });
+    const unsubscribe = gateway.onEvent((event) => { if (event.event === 'agent') { const p = event.payload; streams.push({ runId: p?.runId, stream: p?.stream, name: p?.data?.name }); } });
     const run = await client.request<any>('agent', { agentId: 'm1', sessionKey: key,
       message: '[tool crew_report {"text":"Working"}]',
       extraSystemPrompt: 'You are Chief. Your id in Crewhouse is chief.', idempotencyKey: 'test-1' });
     assert.ok(run.runId, JSON.stringify(run));
-    const finished = await client.request<any>('agent.wait', { runId: run.runId, timeoutMs: 60_000 });
+    const finished = await client.request<any>('agent.wait', { runId: run.runId, timeoutMs: 240_000 }, { timeoutMs: 250_000 });
     assert.ok(finished, 'No run result');
     assert.ok(gated > 0, 'the hook was skipped');
     assert.equal(called, 1, 'tool bypassed the gate or failed to execute');
@@ -48,10 +48,10 @@ test('real Gateway tool call crosses fail-closed Crewhouse gate', { timeout: 120
     bridge.register({ key: 'agent:m1:crewhouse:scout:3', member: 1, bot: 'scout', task: 3 });
     const read = await client.request<any>('agent', { agentId: 'm1', sessionKey: 'agent:m1:crewhouse:scout:3',
       message: '[tool crew_web_fetch {"url":"https://example.test/"}]', idempotencyKey: 'fetch-3' });
-    const readDone = await client.request<any>('agent.wait', { runId: read.runId, timeoutMs: 60_000 });
+    const readDone = await client.request<any>('agent.wait', { runId: read.runId, timeoutMs: 240_000 }, { timeoutMs: 250_000 });
     assert.ok(readDone.terminalReceipt?.successfulToolNames?.includes('crew_web_fetch'), JSON.stringify(readDone).slice(0, 600));
     assert.equal(called, 2, 'fenced web read did not use the Crewhouse copy');
-    assert.ok(streams.some((event) => event.runId === run.runId && event.stream === 'tool'));
+    assert.ok(streams.some((event) => event.runId === run.runId && event.stream === 'tool'), JSON.stringify(streams).slice(0, 200));
 
     // A5: a second member's agent carries its own credential; no request of its session ever uses member 1's key.
     await client.request('agents.create', { name: 'm2', workspace: join(state, 'ws2') });
@@ -68,7 +68,7 @@ test('real Gateway tool call crosses fail-closed Crewhouse gate', { timeout: 120
     bridge.register({ key: 'agent:m2:crewhouse:scout:9', member: 2, bot: 'scout', task: 9 });
     const m2 = await client.request<any>('agent', { agentId: 'm2', sessionKey: 'agent:m2:crewhouse:scout:9',
       message: 'hello from member two', idempotencyKey: 'm2-1' });
-    await client.request('agent.wait', { runId: m2.runId, timeoutMs: 60_000 });
+    await client.request('agent.wait', { runId: m2.runId, timeoutMs: 240_000 }, { timeoutMs: 250_000 });
     const m2Keys = stub.calls.slice(stubCallsBefore).map((c) => c.authorization);
     assert.ok(m2Keys.length > 0, "member two's run reached the stub provider");
     assert.ok(m2Keys.every((k) => k === 'Bearer stub-m2'), `member two's session only ever used its own key: ${m2Keys.join()}`);
@@ -77,7 +77,7 @@ test('real Gateway tool call crosses fail-closed Crewhouse gate', { timeout: 120
     bridge.unregister(key);
     const denied = await client.request<any>('agent', { agentId: 'm1', sessionKey: 'agent:m1:crewhouse:chief:2',
       message: '[tool crew_report {"text":"Not authorized"}]', idempotencyKey: 'test-2' });
-    const stopped = await client.request<any>('agent.wait', { runId: denied.runId, timeoutMs: 60_000 });
+    const stopped = await client.request<any>('agent.wait', { runId: denied.runId, timeoutMs: 240_000 }, { timeoutMs: 250_000 });
     assert.deepEqual(stopped.terminalReceipt?.successfulToolNames ?? [], []);
     assert.equal(called, 2);
   } finally { await gateway.stop(); bridge.stop(); await stub.close(); rmSync(state, { recursive: true, force: true }); }

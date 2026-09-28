@@ -197,6 +197,8 @@ export class Crew {
   private timer?: NodeJS.Timeout;
   /** Bots with a run in flight (the engine is working). */
   readonly busy = new Set<string>();
+  /** Applied learning the person has already been told about, keyed member:id. */
+  private seenLearned = new Set<string>();
   /** Bots whose screen the person is driving: the bot is paused until they give the controls back. */
   private held = new Set<string>();
   readonly desktops: Desktops;
@@ -227,6 +229,8 @@ export class Crew {
     this.keepAwake = cfg.engine === 'stub' ? () => {} : inhibitor();
     this.runtime = cfg.engine === 'stub' ? new StubRuntime() : new OpenClawRuntime(cfg.stateDir);
     this.accounts = new Accounts(this.runtime);
+    // A scripted/custom model provider stands in for the person's own ChatGPT, exactly as the stub model always did.
+    if (cfg.engineProvider) this.accounts.ready.set(`${OWNER}:chatgpt`, true);
     this.accounts.onSignedIn = (member) => this.wake(member, `You're signed in. I'll start now.`);
     this.connections = new Connections(cfg, `http://${cfg.host}:${cfg.port}/connect/callback`);
     this.connections.onChange = (member, app) => this.db.event('app.changed', null, { member, app });
@@ -255,13 +259,18 @@ export class Crew {
     if (!this.member(OWNER).onboarded && !this.db.get('SELECT 1 FROM messages WHERE bot = ?', CHIEF)) this.say(CHIEF, 'bot', chiefGreeting(), null, OWNER);
     this.timer = setInterval(() => this.tick(), 1500);
     this.recover();
-    void this.migrateMembers().finally(() => {
+    void this.migrateMembers().then(async () => {
+      if (this.stopped) return; // crewd stopped before the engine came up
       // The engine comes up in the background: a first install can take minutes, and crewd boots without it.
       if ('crewDir' in this.runtime) (this.runtime as { crewDir: string }).crewDir = this.cfg.crewDir;
-      void this.runtime.start(this.toolHost()).catch((e) => {
+      await this.runtime.start(this.toolHost()).catch((e) => {
         console.error('engine start:', e);
         this.db.event('system.engine', null, { error: String(e).slice(0, 300) });
       });
+      if (this.cfg.engineProvider && this.runtime.configureModelProvider)
+        await this.runtime.configureModelProvider(this.cfg.engineProvider.baseUrl, this.cfg.engineProvider.apiKey).catch((e: unknown) => console.error('engine provider:', e));
+      if (this.stopped) return;
+      if (this.learningOn()) await this.runtime.setLearning?.(true).catch((e: unknown) => console.error('learning:', e));
     });
     this.dispatch();
   }
@@ -277,6 +286,14 @@ export class Crew {
       try { await migrate.call(this.runtime, m.id, legacy); }
       catch (e) { console.error(`engine migration m${m.id}:`, e); }
     }
+  }
+
+  /** The "Learn from how I work" switch: the household's choice, kept in crewhouse's own db (default on), applied to
+   *  the engine's learning mode whenever the engine comes up. */
+  learningOn() { try { return this.db.get("SELECT value FROM settings WHERE key = 'learning'")?.value !== 'off'; } catch { return true; } }
+  async setLearning(on: boolean) {
+    this.db.run("INSERT INTO settings (key, value) VALUES ('learning', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", on ? 'on' : 'off');
+    await this.runtime.setLearning?.(on);
   }
 
   /** A restart is a non-event: every task that was running continues in its own session, from its session file.
@@ -1277,7 +1294,10 @@ export class Crew {
     if (this.stopped) return; // a turn cut short by shutdown settles after the store has closed
     this.busy.delete(botId);
     if (this.live.get(botId) !== l) return; // replaced or reset
-    if (end.ok) return this.finish(botId, end.text); // a rest expires by its own time; a success never clears one early
+    if (end.ok) {
+      void this.surfaceLearned(botId, l).catch(() => {});
+      return this.finish(botId, end.text); // a rest expires by its own time; a success never clears one early
+    }
     if ('aborted' in end) return; // stopped on purpose: Take over, Stop, or a parked question
     const name = disk.brainName({ provider: l.account });
     const words = end.kind === 'resting' ? `${name} is resting until ${clock(end.until ?? Date.now() + 60 * 60_000)}`
@@ -1382,6 +1402,21 @@ export class Crew {
     const root = task.root ?? task.id;
     return !!this.db.get('SELECT 1 FROM tasks WHERE root = ? AND id != ?', root, task.id) ||
       !!this.db.get("SELECT 1 FROM asks WHERE state = 'open' AND json_extract(detail, '$.pass.root') = ?", root);
+  }
+
+  /** After a real engine run: any skill the engine's reviewer applied lands as one plain line with a Forget. */
+  private async surfaceLearned(botId: string, l: Live) {
+    if (this.cfg.engine === 'stub') return;
+    const learned = await this.runtime.learned(l.member).catch(() => [] as { id: string; skill: string; at: number; state: string }[]);
+    const applied = learned.filter((p) => p.state === 'applied');
+    for (const p of applied) {
+      if (this.seenLearned.has(`${l.member}:${p.id}`)) continue;
+      this.seenLearned.add(`${l.member}:${p.id}`);
+      this.db.tx(() => {
+        this.say(botId, 'system', `Learned: ${p.skill} — I'll do it this way next time. You can Forget it on ${this.bot(botId)?.display ?? 'its'} page.`, l.task);
+        this.db.event('learn.applied', botId, { task: l.task, member: l.member, id: p.id, skill: p.skill });
+      });
+    }
   }
 
   /** A turn finished with a reply. */

@@ -37,11 +37,16 @@ export class ToolBridge {
         void (async () => {
           try {
             const { kind, key, tool, input, permit } = JSON.parse(frame);
+            if (typeof tool !== 'string' || !input || typeof input !== 'object' || Array.isArray(input)) throw new Error('Unknown run or invalid call');
             const run = this.runs.get(key);
-            if (!run || typeof tool !== 'string' || !input || typeof input !== 'object' || Array.isArray(input)) throw new Error('Unknown run or invalid call');
             let output;
-            if (kind === 'gate') {
-              const decision = await this.host.gate(run, tool, input);
+            if (kind === 'gate' && !run) {
+              // The engine's own reviewer (the weekly collection review) is not a crew run: its only writable tool is
+              // the workshop itself, upstream scanner-gated and backed up before changes. Everything else fails closed.
+              if (tool === 'skill_workshop') output = { allow: true };
+              else throw new Error('Unknown run');
+            } else if (kind === 'gate') {
+              const decision = await this.host.gate(run!, tool, input);
               if (decision.allow && tool.startsWith('crew_')) {
                 const id = randomUUID();
                 this.permits.set(id, { key, tool, input: JSON.stringify(input) });
@@ -55,7 +60,7 @@ export class ToolBridge {
                 this.permits.delete(permit);
                 if (!allowed || allowed.key !== key || allowed.tool !== tool || allowed.input !== JSON.stringify(input)) throw new Error('Call was not gated');
               }
-              output = { text: await this.host.call(run, tool, input, controller.signal) };
+              output = { text: await this.host.call(run!, tool, input, controller.signal) };
             } else output = { allow: false, reason: 'Unknown request' };
             socket.end(JSON.stringify(output) + '\n');
           } catch { socket.end(JSON.stringify({ allow: false, reason: 'Crewhouse could not check this call.' }) + '\n'); }
