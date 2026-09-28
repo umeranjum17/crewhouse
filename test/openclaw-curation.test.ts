@@ -6,10 +6,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { connect } from 'node:net';
 import { OpenClawRuntime } from '../src/openclaw/runtime.ts';
+import { ToolBridge } from '../src/openclaw/bridge.ts';
 
 const fixture = () => {
   const state = mkdtempSync(join(tmpdir(), 'crewhouse-curation-'));
@@ -109,6 +112,77 @@ test('curation restore: unrelated members are byte-identical across a restore', 
     assert.equal(f.read(2, 'printer-spirit'), '# Printer Spirit', "member 2's skill is byte-identical");
     assert.equal(f.git(2, 'rev-parse', '--short', 'HEAD'), otherCapture, "member 2's history did not move");
   } finally { f.done(); }
+});
+
+test('curation restore: is byte-for-byte, keeping leading and trailing whitespace, indentation and the final newline', async () => {
+  const f = fixture();
+  try {
+    // No final newline, leading indentation, blank lines and trailing spaces: everything a trim would quietly drop.
+    const tricky = '   leading spaces line\n\ttab-indented line with trailing spaces   \n\n\t\nlast line without a newline   ';
+    f.skill(1, 'fare-check', tricky);
+    const original = readFileSync(join(f.ws(1), 'fare-check', 'SKILL.md'));
+    const capture = f.runtime.captureLearned(1);
+    rmSync(join(f.ws(1), 'fare-check'), { recursive: true, force: true });
+    f.runtime.restoreLearned(1, 'fare-check', capture);
+    const restored = readFileSync(join(f.ws(1), 'fare-check', 'SKILL.md'));
+    assert.ok(restored.equals(original), `the restored file is byte-identical to the captured blob (${restored.length} vs ${original.length} bytes)`);
+  } finally { f.done(); }
+});
+
+test('the current review end to end: one window allows one reviewer call, and its cleanup restores byte-faithfully', async () => {
+  const state = mkdtempSync(join(tmpdir(), 'crewhouse-curation-e2e-'));
+  const runtime = new OpenClawRuntime(state);
+  const bridge = new ToolBridge(state, { tools: () => [], gate: async () => ({ allow: false, reason: 'no runs here' }), call: async () => { throw new Error('no calls in this test'); } });
+  const ask = (frame: object): Promise<any> => new Promise((resolve, reject) => {
+    const socket = connect(bridge.path);
+    let text = '';
+    socket.on('error', reject);
+    socket.on('data', (chunk) => { text += chunk; if (text.includes('\n')) { resolve(JSON.parse(text)); socket.end(); } });
+    socket.on('connect', () => socket.write(JSON.stringify(frame) + '\n'));
+  });
+  try {
+    await bridge.start();
+    // The real layout and real executable paths: the runtime's own skills roots, its own git capture, and the
+    // bridge socket the engine's reviewer speaks on. The engine keys the reviewer session
+    // `agent:<agentId>:skill-collection-review:incognito-<uuid>`, minted fresh per run — unknowable beforehand.
+    const tricky = '\n  # Fare Check\n\n\tKeeps its indentation, trailing spaces   \nand final newline.\n';
+    mkdirSync(join(runtime.workspaceOf(1), 'fare-check'), { recursive: true });
+    writeFileSync(join(runtime.workspaceOf(1), 'fare-check', 'SKILL.md'), tricky);
+    mkdirSync(join(runtime.workspaceOf(2), 'printer-spirit'), { recursive: true });
+    writeFileSync(join(runtime.workspaceOf(2), 'printer-spirit', 'SKILL.md'), '# Printer Spirit\n');
+    const original = readFileSync(join(runtime.workspaceOf(1), 'fare-check', 'SKILL.md'));
+    // The CURRENT review's coverage, per member: captured before the window opens, like runCollectionReview does.
+    const capture = runtime.captureLearned(1);
+    const capture2 = runtime.captureLearned(2);
+    bridge.armCuration({ member: 1, review: 'skill-collection-review', action: 'reconcile' }, 10 * 60_000);
+    // (b) The window is one call wide: the current review's own reconcile passes, then nothing does — no replay,
+    // no old or different review re-running under a fresh incognito key, no other member, no other tool, and
+    // after the disarm in runCollectionReview's finally, not even the reviewer again.
+    const reviewer = { kind: 'gate', key: `agent:m1:skill-collection-review:incognito-${randomUUID()}`, tool: 'skill_workshop', input: { action: 'reconcile' } };
+    assert.equal((await ask(reviewer)).allow, true, 'the current review may run its one reconcile');
+    assert.equal((await ask(reviewer)).allow, false, 'no replay of the allowed call');
+    const rerun = { kind: 'gate', key: `agent:m1:skill-collection-review:incognito-${randomUUID()}`, tool: 'skill_workshop', input: { action: 'reconcile' } };
+    assert.equal((await ask(rerun)).allow, false, 'an old or different review cannot reuse the window via its prefix');
+    assert.equal((await ask({ kind: 'gate', key: `agent:m2:skill-collection-review:incognito-${randomUUID()}`, tool: 'skill_workshop', input: { action: 'reconcile' } })).allow, false, 'another member was never covered by this window');
+    assert.equal((await ask({ kind: 'gate', key: reviewer.key, tool: 'bash', input: { command: 'ls' } })).allow, false, 'the window is workshop-only');
+    bridge.disarmCuration();
+    assert.equal((await ask(reviewer)).allow, false, 'a stale window denies everything');
+    // (a) The review's cleanup lands on the covered member: the skill is dropped, and unrelated later work
+    // happens on top before anyone notices.
+    rmSync(join(runtime.workspaceOf(1), 'fare-check'), { recursive: true, force: true });
+    mkdirSync(join(runtime.workspaceOf(1), 'later-thing'), { recursive: true });
+    writeFileSync(join(runtime.workspaceOf(1), 'later-thing', 'SKILL.md'), '# Later\n');
+    // (c) The current capture brings the cleanup back byte for byte; nothing unrelated moves, on either member.
+    runtime.restoreLearned(1, 'fare-check', capture);
+    assert.ok(readFileSync(join(runtime.workspaceOf(1), 'fare-check', 'SKILL.md')).equals(original), 'the restore is byte-identical, whitespace included');
+    assert.equal(readFileSync(join(runtime.workspaceOf(1), 'later-thing', 'SKILL.md'), 'utf8'), '# Later\n', 'unrelated later edits stay intact');
+    assert.equal(readFileSync(join(runtime.workspaceOf(2), 'printer-spirit', 'SKILL.md'), 'utf8'), '# Printer Spirit\n', "member 2's data is untouched");
+    assert.equal(spawnSync('git', ['-C', runtime.workspaceOf(2), 'rev-parse', '--short', 'HEAD'], { encoding: 'utf8' }).stdout.trim(), capture2, "member 2's history did not move");
+  } finally {
+    bridge.stop();
+    await runtime.stop().catch(() => {});
+    rmSync(state, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+  }
 });
 
 test('curation trigger: a refused capture never opens the workshop window', async () => {
