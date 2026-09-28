@@ -5,7 +5,7 @@
   --bg: #FAF9F7; --solid: #FFFFFF; --soft: #F3F1EE; --line: #E7E4DF; --line2: #D9D5CF;
   --ink: #1B1A1F; --ink2: #56525D; --mute: #8B8792; --go: #1B1A1F; --go-ink: #FFFFFF;
   --pink: #D23369; --ok: #1E9A58; --amber: #B86E00; --danger: #C4372C;
-  --card: var(--solid); --pink-ink: var(--pink); --ok-ink: var(--ok); --wait: var(--pink); --shadow: var(--line2);
+  --card: var(--solid); --warm: #FFF1DC; --on-pink: #FFFFFF; --pink-ink: var(--pink); --ok-ink: var(--ok); --wait: var(--pink); --shadow: var(--line2);
   --e1: 0 1px 2px rgba(20,18,26,.04), 0 4px 16px rgba(20,18,26,.06);
   --e2: 0 16px 48px rgba(20,18,26,.16), 0 2px 6px rgba(20,18,26,.06);
   --ui: Inter, system-ui, sans-serif; --art: 'JetBrains Mono', ui-monospace, monospace;
@@ -17,6 +17,7 @@
   --pink: #FF6B9A; --ok: #4BD08A; --amber: #F2B04B; --danger: #FF6B5E;
   --e1: 0 0 0 1px var(--line), 0 4px 16px #0003;
   --e2: 0 0 0 1px var(--line2), 0 16px 48px #0008;
+  --warm: #2B2319; --on-pink: #1A0F14;
   color-scheme: dark;
 }
 
@@ -37,7 +38,9 @@ b { font-weight: 600; }
 .add-row { margin-top: 10px; }
 .center { text-align: center; }
 .lead { color: var(--ink2); margin: 0 0 16px; max-width: 640px; }
-.label { font: 600 13px/18px var(--ui); color: var(--ink2); margin: 24px 4px 8px; }
+/* Section labels are small capitals: they name a group, the rows carry the reading. */
+.label { font: 600 12px/16px var(--ui); letter-spacing: .06em; text-transform: uppercase; color: var(--ink2); margin: 28px 4px 10px; }
+.label .count { display: inline-block; margin-left: 8px; min-width: 18px; padding: 0 6px; border-radius: 999px; background: var(--pink); color: var(--on-pink); font: 600 11px/18px var(--ui); letter-spacing: 0; text-align: center; vertical-align: 1px; }
 .clamp { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .clamp1 { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .row { display: flex; gap: 12px; align-items: center; }
@@ -82,7 +85,7 @@ b { font-weight: 600; }
 .link.inline { padding: 0; }
 .link.pink { color: var(--pink-ink); text-decoration: none; }
 .tag { font: 500 11px/14px var(--ui); background: var(--soft); color: var(--mute); border-radius: 999px; padding: 2px 8px; margin-left: 6px; }
-.badge { background: var(--pink); color: #fff; font: 500 11px/14px var(--ui); border-radius: 999px; padding: 1px 6px; margin-left: auto; }
+.badge { background: var(--pink); color: var(--on-pink); font: 500 11px/14px var(--ui); border-radius: 999px; padding: 1px 6px; margin-left: auto; }
 .input { width: 100%; background: var(--solid); border: 1px solid var(--line2); border-radius: 10px; padding: 12px 16px; font-size: 15px; }
 .input.center { text-align: center; font-weight: 600; }
 textarea.input { resize: vertical; }
@@ -171,7 +174,6 @@ video.media { width: auto; max-width: 100%; max-height: 360px; height: auto; obj
 .promises li { display: grid; grid-template-columns: 16px 1fr; gap: 10px; }
 .promises li::before { content: '✓'; color: var(--ok); font-weight: 700; }
 .hello .btn.big { margin-top: 12px; }
-.gpt { width: 22px; height: 22px; border-radius: 50%; background: var(--go-ink); color: var(--go); display: grid; place-items: center; font-size: 13px; }
 
 /* sheets */
 .scrim { position: fixed; inset: 0; z-index: 30; background: rgba(12,10,16,.32); display: grid; align-items: end; justify-items: center; }
@@ -222,7 +224,10 @@ video.media { width: auto; max-width: 100%; max-height: 360px; height: auto; obj
 .stack-faces { display: flex; align-items: center; width: 40px; flex: none; }
 .stack-faces .face + .face { margin-left: -12px; box-shadow: 0 0 0 2px var(--solid); }
 .needs-more { display: none; }
-.needs-quiet, .frame-empty { padding: 16px; color: var(--mute); }
+.needs-quiet { padding: 16px; color: var(--ink2); }
+/* An empty list: a small mark and a plain line, never a blank box. */
+.frame-empty { display: flex; gap: 12px; align-items: center; padding: 16px; color: var(--ink2); font-size: 14px; }
+.frame-empty .orn { color: var(--mute); font-size: 12px; flex: none; }
 .jobs.phone-only { padding-bottom: 48px; }
 .home > .dock { margin-left: -16px; margin-right: -16px; }
 .home .section-head .label { margin-bottom: 8px; }
@@ -241,13 +246,15 @@ video.media { width: auto; max-width: 100%; max-height: 360px; height: auto; obj
 .bubble .face { background: var(--solid) !important; }
 .dock { position: sticky; bottom: 0; padding: 18px 18px 12px; margin: 8px -18px 0; z-index: 3; background: color-mix(in srgb, var(--bg) 60%, transparent); mask-image: linear-gradient(transparent, #000 16px); }
 .dock .chips { flex-wrap: nowrap; overflow-x: auto; margin: 0 0 8px; scrollbar-width: none; }
-.composer { display: flex; gap: 8px; align-items: flex-end; background: var(--solid); border: 1px solid var(--line); border-radius: 999px; padding: 6px 6px 6px 18px; box-shadow: var(--e1); min-height: 48px; }
+.composer { display: flex; gap: 8px; align-items: flex-end; background: var(--solid); border: 1px solid var(--line); border-radius: 999px; padding: 7px 7px 7px 20px; box-shadow: var(--e1); min-height: 52px; transition: border-color 120ms var(--ease), box-shadow 160ms var(--ease); }
+.composer:focus-within { border-color: var(--line2); box-shadow: var(--e1), 0 0 0 4px color-mix(in srgb, var(--ink) 8%, transparent); }
 .composer textarea { flex: 1; border: 0; background: transparent; resize: none; padding: 9px 0; font-size: 16px; outline: none; max-height: 160px; field-sizing: content; }
 /* A send that didn't go through stays with its words until the Retry works. */
 .composer:has(.send-failed) { flex-wrap: wrap; border-radius: 22px; }
 .send-failed { flex-basis: 100%; font-size: 13.5px; font-weight: 700; color: var(--pink-ink); padding: 8px 12px 2px; }
-.send { width: 36px; height: 36px; border-radius: 50%; border: 0; background: var(--go); color: var(--go-ink); font: 600 17px var(--ui); flex: none; }
-.send:disabled { background: var(--soft); color: var(--mute); cursor: default; }
+.send { width: 38px; height: 38px; border-radius: 50%; border: 0; background: var(--go); color: var(--go-ink); font: 600 17px var(--ui); flex: none; transition: transform 160ms var(--ease), background 120ms var(--ease); }
+.send:disabled { background: var(--soft); color: var(--mute); cursor: default; transform: scale(.9); }
+.send:not(:disabled):active { transform: scale(.92); }
 
 /* chat */
 .chat-head { display: flex; gap: 12px; align-items: center; min-height: 44px; padding: 4px 0 8px; }
@@ -284,7 +291,9 @@ a.back:not([aria-label]) { font: 500 15px/20px var(--ui); padding: 0 8px; margin
 .chat-md pre { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--soft); padding: 10px; border-radius: 8px; }
 .chat-more { border: 0; background: none; color: var(--ink); text-decoration: underline; cursor: pointer; font: 600 14px/1.5 var(--ui); padding: 4px 0; }
 .line.me { margin-left: auto; max-width: 78%; }
-.line.me .bubble-text { margin: 0; padding: 10px 15px; background: var(--soft); border: 1px solid var(--line); border-radius: 18px 18px 6px 18px; }
+/* Your own words sit in ink, the one filled bubble in the thread; the crew's replies are open text beside a face. */
+.line.me .bubble-text { margin: 0; padding: 10px 16px; background: var(--go); color: var(--go-ink); border-radius: 20px 20px 6px 20px; }
+.line.me .chat-md .chat-link { color: inherit; background: transparent; border-color: currentColor; }
 .line.note { max-width: 92%; }
 .line.unsure .bubble-text { border-left: 2px solid var(--amber); padding-left: 12px; }
 .lines > .ask, .line .ask { max-width: 440px; margin: 12px 0 0 36px; }
@@ -600,3 +609,106 @@ details.card[open] > summary { margin-bottom: 10px; }
 .more-ways .ai-stack { display: inline-flex; gap: 4px; }
 .more-ways[open] .ai-stack { display: none; }
 .more-ways .card { margin-top: 4px; }
+
+/* ---------- third pass: Chief's desk, a living thread, first light ---------- */
+/* Motion is one vocabulary: things arrive by rising a few pixels (rise), Chief's face pops in (pop), waiting breathes
+   (dot, pulse, caret, shimmer). Every one of them is off under Reduce Motion (the rule above). */
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } }
+@keyframes pop { from { opacity: 0; transform: scale(.92); } }
+@keyframes fade { from { opacity: 0; } }
+@keyframes dot { 0%, 60%, 100% { transform: translateY(0); opacity: .4; } 30% { transform: translateY(-4px); opacity: 1; } }
+@keyframes caret { 50% { opacity: 0; } }
+@keyframes shimmer { to { background-position: -200% 0; } }
+@keyframes pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--pink) 45%, transparent); } 70%, 100% { box-shadow: 0 0 0 6px transparent; } }
+.main > .page, .main > .home { animation: fade 200ms var(--ease) both; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* Home's hero: the day, the greeting, Chief's line beside his face, three counts. The splash's glyph field, frozen,
+   sits faintly in the corner; it is texture, never words. */
+.hero { position: relative; isolation: isolate; overflow: hidden; background: var(--solid); border: 1px solid var(--line); border-radius: 20px; padding: 18px 18px 16px; margin: 0 0 8px; box-shadow: var(--e1); }
+.hero::before { content: ''; position: absolute; inset: 0; z-index: -1; background: radial-gradient(90% 130% at 0% 0%, var(--warm) 0%, transparent 65%); }
+.hero-field { position: absolute; right: -6px; top: -2px; z-index: -1; font-size: 11px; line-height: 1.12; color: var(--pink); opacity: .16; pointer-events: none; user-select: none;
+  mask-image: radial-gradient(130% 110% at 100% 0%, #000 0%, transparent 62%); }
+.eyebrow { font: 600 11.5px/16px var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--ink2); }
+.hero h1 { font: 650 30px/36px var(--ui); letter-spacing: -.028em; margin: 6px 0 14px; text-wrap: balance; }
+.hero-chief { display: flex; gap: 10px; align-items: flex-end; width: fit-content; max-width: 100%; border-radius: 16px; }
+.hero-chief .face { flex: none; }
+.hero-chief .says { background: var(--bg); border: 1px solid var(--line); border-radius: 16px 16px 16px 4px; padding: 7px 12px; font: 500 14.5px/20px var(--ui); color: var(--ink); min-width: 0; transition: border-color 120ms var(--ease); }
+.hero-chief:hover .says { border-color: var(--line2); }
+.stats { display: flex; gap: 8px; margin-top: 16px; }
+.stat { flex: 1 1 0; min-width: 0; display: grid; padding: 8px 12px 9px; border-radius: 12px; background: var(--soft); font: 500 12.5px/16px var(--ui); color: var(--ink2); }
+.stat b { font: 650 22px/28px var(--ui); letter-spacing: -.02em; color: var(--ink); }
+.stat.hot b { color: var(--pink-ink); }
+.hero-ask { margin-top: 18px; }
+@media (max-width: 899px) {
+  /* On a phone the counts stay one quiet row, so the first rows that need you are on the first screen. */
+  .stats { gap: 6px; margin-top: 14px; }
+  .stat { padding: 6px 10px 7px; font-size: 12px; border-radius: 10px; }
+  .stat b { font-size: 18px; line-height: 22px; }
+  .home .phone-only + .home-section, .home .phone-only + .chats-section { margin-top: 22px; }
+}
+.hero-ask .composer { box-shadow: none; background: var(--bg); }
+.home .card.nudge { margin-top: 8px; }
+.list-row { transition: background 120ms var(--ease); }
+
+/* The phone's tab bar marks where you are with a soft pill behind the icon. */
+.tabbar a { isolation: isolate; }
+.tabbar a.on::before { content: ''; position: absolute; z-index: -1; top: 1px; left: 50%; width: 54px; height: 30px; margin-left: -27px; border-radius: 15px; background: var(--soft); }
+
+/* A chat: who this is at the top of the thread, a quiet day marker between days, new lines rising in, Chief's dots
+   while he thinks and a caret while words are still arriving, and grey bars while the thread opens. */
+.line-wrap { display: flex; flex-direction: column; }
+.line.fresh { animation: rise 260ms var(--ease) both; }
+.day { display: flex; justify-content: center; margin: 24px 0 0; }
+.day span { font: 600 11px/16px var(--ui); letter-spacing: .06em; text-transform: uppercase; color: var(--ink2); background: var(--bg); border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; }
+.chat-intro { display: grid; justify-items: center; text-align: center; gap: 2px; padding: 20px 16px 6px; }
+.chat-intro .halo { padding: 14px; margin-bottom: 8px; animation: pop 320ms var(--ease) both; }
+.chat-intro b { font: 650 20px/26px var(--ui); letter-spacing: -.015em; }
+.chat-intro span:last-child { color: var(--ink2); font-size: 14px; line-height: 1.45; max-width: 36ch; }
+.typing { display: inline-flex; gap: 5px; padding: 8px 0 6px; }
+.typing i { width: 7px; height: 7px; border-radius: 50%; background: var(--ink2); animation: dot 1.2s ease-in-out infinite; }
+.typing i:nth-child(2) { animation-delay: .15s; }
+.typing i:nth-child(3) { animation-delay: .3s; }
+.streaming .chat-md > :last-child::after { content: ''; display: inline-block; width: .45em; height: 1.05em; margin-left: 3px; vertical-align: -.18em; border-radius: 2px; background: var(--pink); animation: caret 1s steps(1) infinite; }
+.skeleton { display: grid; gap: 12px; padding: 28px 0 0 36px; }
+.skeleton i { height: 14px; border-radius: 7px; background: linear-gradient(90deg, var(--soft) 20%, var(--line) 50%, var(--soft) 80%); background-size: 200% 100%; animation: shimmer 1.4s linear infinite; }
+.skeleton i:nth-child(1) { width: 62%; } .skeleton i:nth-child(2) { width: 84%; } .skeleton i:nth-child(3) { width: 40%; }
+.pill.live i { animation: pulse 1.8s ease-out infinite; }
+
+/* First light (Hello): the block-letter name, Chief in a warm halo, and his words in a speech bubble, arriving in order. */
+.hello-brand { justify-self: center; margin: 2px 0 20px; }
+.hello-brand .banner { font-size: clamp(4px, 1.15vw, 6.5px); line-height: 1.02; }
+.banner i { color: var(--line2); }
+.banner i.ink { color: var(--ink); }
+.hello > .halo { background: var(--warm); box-shadow: 0 0 0 10px color-mix(in srgb, var(--warm) 45%, transparent); }
+.speech { position: relative; width: 100%; margin-top: 18px; background: var(--solid); border: 1px solid var(--line); border-radius: 20px; padding: 16px 18px 14px; box-shadow: var(--e1); }
+.speech::before { content: ''; position: absolute; top: -8px; left: 50%; width: 14px; height: 14px; margin-left: -7px; background: var(--solid); border-left: 1px solid var(--line); border-top: 1px solid var(--line); border-top-left-radius: 3px; transform: rotate(45deg); }
+.speech h1 { margin: 0 0 4px; text-wrap: balance; }
+.speech .lead { margin: 0 auto; }
+.hello > * { animation: rise 420ms var(--ease) both; }
+.hello > .halo { animation-name: pop; animation-delay: 60ms; }
+.hello > .speech { animation-delay: 140ms; }
+.hello > .promises { animation-delay: 220ms; }
+.hello > .plate, .hello > .ideas { animation-delay: 300ms; }
+.idea { transition: border-color 120ms var(--ease), transform 160ms var(--ease), box-shadow 160ms var(--ease); }
+.idea:hover { border-color: var(--line2); box-shadow: var(--e1); }
+.idea:active { transform: scale(.985); }
+
+@media (min-width: 900px) {
+  .hero { padding: 28px 28px 24px; margin-bottom: 12px; }
+  .hero-field { font-size: 12px; }
+  .hero h1 { font-size: 40px; line-height: 46px; letter-spacing: -.032em; margin: 8px 0 16px; }
+  .stats { max-width: 520px; }
+  .desk-main .home-section { margin-top: 28px; margin-bottom: 0; }
+  .desk-side .label { margin-top: 4px; }
+}
+/* A page's title is the page's one display line, the same voice as Home's greeting. */
+.page > h1 { font: 650 28px/34px var(--ui); letter-spacing: -.025em; margin: 4px 0 6px; }
+.page > .lead { font-size: 15.5px; }
+.unreachable > * { animation: rise 420ms var(--ease) both; }
+.unreachable > .asleep { animation-name: pop; }
+@media (min-width: 900px) { .page > h1 { font-size: 34px; line-height: 40px; letter-spacing: -.03em; } }
+.btn .ai-mark { border-radius: 7px; box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--go-ink) 70%, transparent); }
+/* A desk chat is exactly one screen tall, so the thread scrolls in its own column and a reply arriving at the bottom
+   is always in view (flex: 1 let a long thread stretch the page past the screen). */
+@media (min-width: 900px) { .main > .page.chat-page { flex: none; height: 100dvh; } }

@@ -200,21 +200,28 @@ export function Laptop() {
   return <pre className="art laptop" aria-hidden>{art.laptop(t)}</pre>;
 }
 
+/** The block-letter CREWHOUSE: solid strokes in ink, their shadow in the quiet line colour. */
+export function Banner() {
+  return <pre className="art banner" aria-hidden>
+    {art.BANNER.map((line, y) => <div key={y}>{line.split(/(█+)/).map((run, x) => <i key={x} className={run.startsWith('█') ? 'ink' : undefined}>{run}</i>)}</div>)}
+  </pre>;
+}
+
+/** ?splash keeps the boot splash up, for design review. */
+const holdSplash = typeof location !== 'undefined' && new URLSearchParams(location.search).has('splash');
 /** The boot splash: block letters over a living field of glyphs, and Chief waking the crew. */
-export function Splash({ done }: { done: boolean }) {
+export function Splash({ done: ready }: { done: boolean }) {
+  const done = ready && !holdSplash;
   const t = useTicker(110);
   const [gone, setGone] = useState(false);
   useEffect(() => { if (done) { const x = setTimeout(() => setGone(true), 450); return () => clearTimeout(x); } }, [done]);
   if (gone) return null;
-  const w = art.BANNER[0].length;
   const words = 'Waking the crew…';
   return (
     <div className={`splash ${done ? 'out' : ''}`} role="status" aria-label="Opening Crewhouse">
       <pre className="art field" aria-hidden>{art.field(t, 200, 72)}</pre>
       <div className="splash-in">
-        <pre className="art banner" aria-hidden>
-          {art.BANNER.map((line, y) => <div key={y}>{[...line].map((c, x) => <i key={x} style={{ color: c === '█' ? 'var(--ink)' : 'var(--shadow)' }}>{c}</i>)}</div>)}
-        </pre>
+        <Banner />
         <ChiefArt mood="work" d={7} dark />
         <Laptop />
         <div className="splash-line">{words.slice(0, Math.min(words.length, 4 + t))}<span className="cur" /></div>

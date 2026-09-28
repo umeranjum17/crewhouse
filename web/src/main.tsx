@@ -1,13 +1,13 @@
 // Crewhouse, direction C "Pocket Pals" with A's night mode and ASCII moments. Every screen reads the adapter's
 // plain-words view models (adapter.ts), never crewd's raw rows.
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import QRCode from 'qrcode';
 import { api, demo, setMember, subscribe, type Json } from './api.ts';
 import * as A from './adapter.ts';
 import * as art from './art.ts';
 type Helper = ReturnType<typeof A.crew>[number];
-import { AiMark, AskCard, AskSheet, attempt, Celebrate, setChiefMood, setNight, ChiefArt, Composer, Face, Dots, Logo, Media, ChatText, PalArt, Pill, Splash, Steps, Toasts, toast, useListen, PreviewPanel } from './parts.tsx';
+import { AiMark, AskCard, Banner, AskSheet, attempt, Celebrate, setChiefMood, setNight, ChiefArt, Composer, Face, Dots, Logo, Media, ChatText, PalArt, Pill, Splash, Steps, Toasts, toast, useListen, PreviewPanel } from './parts.tsx';
 import { keepDraft } from './draft.ts';
 import { Screen } from './screen.tsx';
 import { AccountCard, ConnectApp, ConnectCard, openTab, sheet, SignIn, Unreachable } from './flows.tsx';
@@ -80,10 +80,12 @@ function Hello({ state, refresh, night }: Ctx) {
   };
   return (
     <div className="hello">
-      <div className="hello-brand"><Logo night={night} /></div>
-      <span className="halo"><ChiefArt mood={tipped ? 'idle' : 'hello'} d={8.5} /></span>
-      <h1>{A.greeting()}{address.trim() ? `, ${address.trim()}` : ''}</h1>
-      <p className="lead">I'm Chief. I run the crew in this house{isOwner ? '.' : `; ${owner} set me up for you.`}</p>
+      <div className="hello-brand" role="img" aria-label="Crewhouse"><Banner /></div>
+      <span className="halo"><ChiefArt mood={tipped ? 'idle' : 'hello'} d={8.5} hero /></span>
+      <div className="speech">
+        <h1>{A.greeting()}{address.trim() ? `, ${address.trim()}` : ''}</h1>
+        <p className="lead">I'm Chief. I run the crew in this house{isOwner ? '.' : `; ${owner} set me up for you.`}</p>
+      </div>
       <ul className="promises">
         <li>Your helpers live on this computer, and think with your own ChatGPT.</li>
         <li>{A.atHome()[1]}</li>
@@ -193,7 +195,34 @@ function NeedsRows({ state, cards, quiet, all = false }: { state: Json; cards: A
   );
 }
 
-function Home({ state, me, refresh, tick, accounts, offline, night }: Ctx) {
+/** Home's first impression: the day, the greeting, Chief's one line for the whole crew beside his face, and the three
+ *  counts the rows below add up to. A still glyph field (the splash's, frozen) sits faintly in the corner. */
+function HomeHero({ ctx, children }: { ctx: Ctx; children?: ReactNode }) {
+  const { state } = ctx;
+  const c = A.chief(state, chiefLocal(ctx));
+  const n = A.homeCounts(state);
+  const texture = useMemo(() => art.field(9, 64, 12), []);
+  return (
+    <header className="hero">
+      <pre className="art hero-field" aria-hidden>{texture}</pre>
+      <div className="eyebrow">{A.today()}</div>
+      <h1>{A.greeting()}, {state.person.address ?? state.person.name}</h1>
+      <a className="hero-chief" href="#/chief" aria-label={`Chief: ${c.line}`}><Face who="chief" size={36} /><span className="says">{c.line}</span></a>
+      <div className="stats" aria-label={A.homeSummary(state)}>
+        <span className={`stat${n.needs ? ' hot' : ''}`}><b>{n.needs}</b>{n.needs === 1 ? 'needs you' : 'need you'}</span>
+        <span className="stat"><b>{n.working}</b>working</span>
+        <span className="stat"><b>{n.done}</b>done today</span>
+      </div>
+      {children}
+    </header>
+  );
+}
+
+/** An empty list, said warmly: a small mark and a plain line, never a blank box. */
+const Empty = ({ children }: { children: ReactNode }) => <div className="frame-empty"><span className="art orn" aria-hidden>{art.ORNAMENT}</span>{children}</div>;
+
+function Home(ctx: Ctx) {
+  const { state, me, refresh, tick, accounts } = ctx;
   const cards = A.needsYou(state);
   const [allNeeds, setAllNeeds] = useState(false);
   const works = A.work(state).filter((w) => !w.waiting);
@@ -201,34 +230,37 @@ function Home({ state, me, refresh, tick, accounts, offline, night }: Ctx) {
   const todays = A.things(state).filter((t) => t.at >= day.getTime());
   const g = A.account(accounts, me);
   const toChief = async (t: string) => { const ok = await attempt(() => api.post('chief', t), undefined, true); if (ok) { refresh(); go('#/chief'); } return ok; };
+  const needsHead = <div className="section-head"><span className="label">Needs you{cards.length > 0 && <span className="count">{cards.length}</span>}</span>{cards.length > 3 && <button className="link" onClick={() => setAllNeeds(!allNeeds)}>{allNeeds ? 'Show less' : `See all ${cards.length}`}</button>}</div>;
+  const nudges = <>
+    {(g.state === 'signed-out' || g.notIncluded) && <AccountCard me={me} owner={ownerName(state)} isOwner={me === A.OWNER} g={g} onReady={refresh} />}
+    {state.person.id === A.OWNER && <SetupRow state={state} accounts={accounts} tick={tick} />}
+    {A.resting(state) && <div className="card nudge"><span className="grow">{A.resting(state)}. I'll pick things back up then.</span></div>}
+    {A.gettingReady(state) && <div className="card nudge"><span className="grow">{A.gettingReady(state)}</span></div>}
+    {A.update(state) && <div className="card nudge"><span className="grow">{A.update(state)!.words}</span><a className="btn go" href={A.update(state)!.url} target="_blank" rel="noreferrer">Download</a></div>}
+  </>;
   return (
     <div className="home">
       <div className="desk-col">
-        <header className="home-head phone-only"><h1>{A.greeting()}, {state.person.address ?? state.person.name}</h1><p>{A.homeSummary(state)}</p></header>
-        {(g.state === 'signed-out' || g.notIncluded) && <AccountCard me={me} owner={ownerName(state)} isOwner={me === A.OWNER} g={g} onReady={refresh} />}
-        {state.person.id === A.OWNER && <SetupRow state={state} accounts={accounts} tick={tick} />}
-        {A.resting(state) && <div className="card nudge"><span className="grow">{A.resting(state)}. I'll pick things back up then.</span></div>}
-        {A.gettingReady(state) && <div className="card nudge"><span className="grow">{A.gettingReady(state)}</span></div>}
-        {A.update(state) && <div className="card nudge"><span className="grow">{A.update(state)!.words}</span><a className="btn go" href={A.update(state)!.url} target="_blank" rel="noreferrer">Download</a></div>}
-        <section className="home-section phone-only" aria-label="Needs you"><div className="section-head"><span className="label">Needs you</span>{cards.length > 3 && <button className="link" onClick={() => setAllNeeds(!allNeeds)}>{allNeeds ? 'Show less' : `See all ${cards.length}`}</button>}</div><div className="list-group needs-card"><NeedsRows state={state} cards={cards} all={allNeeds} /></div></section>
+        <div className="phone-only"><HomeHero ctx={ctx} />{nudges}</div>
+        {cards.length > 0 && <section className="home-section phone-only" aria-label="Needs you">{needsHead}<div className="list-group needs-card"><NeedsRows state={state} cards={cards} all={allNeeds} /></div></section>}
         <Chats state={state} refresh={refresh} /><JobList state={state} phone />
         <div className="desk">
           <div className="desk-main">
-            <header className="home-head desk-only"><h1>{A.greeting()}, {state.person.address ?? state.person.name}</h1><p>{A.homeSummary(state)}</p></header>
-            <section className="home-section needs"><div className="section-head"><span className="label">Needs you</span>{cards.length > 3 && <button className="link" onClick={() => setAllNeeds(!allNeeds)}>{allNeeds ? 'Show less' : `See all ${cards.length}`}</button>}</div><div className="list-group"><NeedsRows state={state} cards={cards} quiet all={allNeeds} /></div></section>
+            <div className="desk-only"><HomeHero ctx={ctx}><div className="hero-ask"><Composer placeholder="Ask Chief anything" onSend={toChief} {...typeInto('chief')} /></div></HomeHero>{nudges}</div>
+            <section className="home-section needs">{needsHead}<div className="list-group">{cards.length ? <NeedsRows state={state} cards={cards} all={allNeeds} /> : <Empty>All clear. Nothing needs you.</Empty>}</div></section>
             <section className="home-section working"><div className="label">Working now</div><div className="list-group">
               {works.length ? works.map((w) => { const h = A.crew(state).find((x) => x.id === w.helper); return <a key={w.helper} className="list-row" href={hrefOf(w.helper)}>
-                {h && <Face who={h} size={40} ring="working" />}<span className="grow"><b className="clamp1">{w.title}</b><span className="small clamp1">{h?.name} · {w.line}</span></span>
-              </a>; }) : <div className="frame-empty">Nothing right now.</div>}
+                {h && <Face who={h} size={40} ring="working" />}<span className="grow"><b className="clamp1">{w.title}</b><span className="small clamp1">{h?.name} · {w.line}</span></span><span className="mute" aria-hidden>›</span>
+              </a>; }) : <Empty>Nothing right now. The crew is free.</Empty>}
             </div></section>
             <section className="home-section done"><div className="label">Done today</div><div className="list-group">
-              {todays.length ? todays.map((t) => { const target = A.fileTarget(t.files[0]); return <div key={t.id} className="list-row"><span className="file-chip">{target?.chip ?? '—'}</span><span className="grow"><b className="clamp1">{t.title}</b><span className="small clamp1">{t.summary}</span></span><a className="btn sm" href={target?.href ?? hrefOf(t.helper)}>Open</a></div>; }) : <div className="frame-empty">Nothing yet today.</div>}
+              {todays.length ? todays.map((t) => { const target = A.fileTarget(t.files[0]); return <div key={t.id} className="list-row"><span className="file-chip">{target?.chip ?? '—'}</span><span className="grow"><b className="clamp1">{t.title}</b><span className="small clamp1">{t.summary}</span></span><a className="btn sm" href={target?.href ?? hrefOf(t.helper)}>Open</a></div>; }) : <Empty>Nothing yet today.</Empty>}
             </div></section>
           </div>
           <div className="desk-side"><JobList state={state} /><p className="small mute">Tap one and Chief gets it ready. Nothing starts until you send.</p></div>
         </div>
       </div>
-      <div className="dock"><div className="desk-col"><Composer placeholder="Ask Chief anything" onSend={toChief} {...typeInto('chief')} /></div></div>
+      <div className="dock phone-only"><Composer placeholder="Ask Chief anything" onSend={toChief} {...typeInto('chief')} /></div>
     </div>
   );
 }
@@ -324,7 +356,7 @@ function Chat({ id, m, state, me, tick, refresh, accounts }: Ctx & { id: string;
     if (around) return;
     if (matchMedia('(min-width: 900px)').matches) { const el = box.current; if (el) el.scrollTop = el.scrollHeight; }
     else end.current?.scrollIntoView({ block: 'end' });
-  }, [lines.length, around]);
+  }, [lines.length, around, !!echoed, !!waiting, partial]);
   // The landing itself: the matched line, centred, with the one motion that explains where you are.
   useEffect(() => {
     if (!around || !lines.length) return;
@@ -353,23 +385,35 @@ function Chat({ id, m, state, me, tick, refresh, accounts }: Ctx & { id: string;
     return ok;
   };
   const name = h?.name ?? 'Chief';
+  // Lines that arrive while you watch rise in; the thread you open with is simply there.
+  const opened = useRef<number | null>(null);
+  if (opened.current === null && page) opened.current = page.messages?.at(-1)?.id ?? 0;
+  // The top of the thread (crewd sends the newest 200): who this is, before the first line.
+  const start = !!page && !around && (page.messages?.length ?? 0) < 200;
+  let day = '';
+  const dayOf = (t?: number) => { if (!t) return null; const d = A.dayLabel(t); if (d === day) return null; day = d; return <div className="day" role="separator"><span>{d}</span></div>; };
   return (
     <div className={`chat${live && h ? ' with-live' : ''}`}>
       <div className="lines" ref={box}>
+        {start && <div className="chat-intro">
+          <span className="halo">{h ? <PalArt kind={h.kind} mood={h.mood} d={4.4} name={h.name} /> : <ChiefArt mood="idle" d={3.6} />}</span>
+          <b>{name}</b><span>{h ? h.role : 'Runs the crew and answers to you'}</span>
+        </div>}
+        {!page && <div className="skeleton" aria-busy="true" aria-label="Opening the chat"><i /><i /><i /></div>}
         {!lines.length && page && id === 'chief' && <ChiefIdeas state={state} chat={id} picked={() => setSeed((n) => n + 1)} />}
-        {lines.map((l, i) => (
-          <div key={l.id} id={`m${l.id}`} className={`line ${l.from}${l.unsure ? ' unsure' : ''}${i && lines[i - 1].from === l.from && l.from !== 'me' ? ' consecutive' : ''}`}>
+        {lines.map((l, i) => start && i === 0 && l.from === 'note' && l.text.startsWith(`${name} joined the crew`) ? null : <div key={l.id} className="line-wrap">{dayOf(l.at)}
+          <div id={`m${l.id}`} className={`line ${l.from}${l.unsure ? ' unsure' : ''}${l.id > (opened.current ?? Infinity) ? ' fresh' : ''}${i && lines[i - 1].from === l.from && l.from !== 'me' ? ' consecutive' : ''}`}>
             {l.from !== 'me' && l.from !== 'note' && <div className="line-by"><Face who={l.from === 'chief' ? 'chief' : h ?? 'chief'} size={28} /><span className="who">{l.from === 'chief' ? 'Chief' : name}</span><time>{l.at ? A.clock(l.at) : ''}</time></div>}
             {l.text && (l.detail ? <ChiefAsk l={{ text: l.text, detail: l.detail }} /> : <div className="bubble-text"><ChatText text={l.text} /></div>)}
             {id === 'chief' && l.text === 'Sign in with ChatGPT.' && <AccountCard me={me} owner={ownerName(state)} isOwner={me === A.OWNER} g={{ ...g, state: 'signed-out' }} inChat onReady={() => { void load(); refresh(); }} />}
             {l.files.map((f) => <Media key={f.url} f={f} big />)}
             {phoneOffer?.message === l.id && <PhoneCard offer={phoneOffer} reload={() => void load()} />}
             {cards.filter((c) => lines.findLastIndex((x) => (x.at ?? 0) <= c.at) === i).map((c) => c.kind === 'connect' ? <ConnectCard key={c.id} c={c} helper={h?.name} state={state} onDone={refresh} /> : <AskCard key={c.id} c={c} who={h} onDone={refresh} />)}
-          </div>
-        ))}
-        {echoed && <div className="line me"><div className="bubble-text">{pending.text}</div></div>}
-        {waiting && id === 'chief' && <div className="line them" role="status"><div className="line-by"><Face who="chief" size={28} /><span className="who">Chief</span></div><div className="bubble-text">On it…</div></div>}
-        {!!partial && <div className="line them" aria-live="polite"><div className="bubble-text">{partial}</div></div>}
+          </div></div>
+        )}
+        {echoed && <div className="line me fresh"><div className="bubble-text">{pending.text}</div></div>}
+        {waiting && id === 'chief' && <div className="line them fresh" role="status"><div className="line-by"><Face who="chief" size={28} /><span className="who">Chief</span></div><div className="bubble-text"><span className="typing" aria-hidden><i /><i /><i /></span><span className="sr">Chief is on it</span></div></div>}
+        {!!partial && <div className="line them streaming" aria-live="polite"><div className="line-by"><Face who={h ?? 'chief'} size={28} /><span className="who">{name}</span></div><div className="bubble-text"><ChatText text={partial} /></div></div>}
         {last?.choices.length ? <div className="chips">{last.choices.map((c) => <button key={c} className="chip" onClick={() => send(c)}>{c}</button>)}</div> : null}
         {cards.filter((c) => !lines.length || lines.every((x) => (x.at ?? 0) > c.at)).map((c) => c.kind === 'connect' ? <ConnectCard key={c.id} c={c} helper={h?.name} state={state} onDone={refresh} /> : <AskCard key={c.id} c={c} who={h} onDone={refresh} />)}
         {h && <Stuck h={h} refresh={refresh} />}

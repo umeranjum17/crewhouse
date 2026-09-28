@@ -51,6 +51,14 @@ export const clock = (t: number) => {
 };
 const at = (t: number | string) => (typeof t === 'number' ? (t < 1e12 ? t * 1000 : t) : Date.parse(t));
 export const greeting = (h = new Date().getHours()) => (h < 5 ? 'Good evening' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening');
+/** The small line over Home's greeting: the day, in the reader's own words ("Sunday 28 September"). */
+export const today = (d = new Date()) => d.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' });
+/** The marker between chat lines from different days: Today, Yesterday, or the date. */
+export const dayLabel = (t: number, now = new Date()) => {
+  const d = new Date(t), day = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const ago = Math.round((day(now) - day(d)) / 86_400_000);
+  return ago === 0 ? 'Today' : ago === 1 ? 'Yesterday' : d.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' });
+};
 
 /**
  * The runs-at-home promise, said once and read in three places: Hello, Settings, and the phone's This phone.
@@ -600,10 +608,14 @@ export function things(state: Json): Thing[] {
 
 export type Job = { bot: string; label: string; ask: string; money: boolean; needs: string[] };
 
+/** Home's three counts, from the same rows shown below them: what needs you, who is working, what got done today. */
+export function homeCounts(state: Json) {
+  const day = new Date(); day.setHours(0, 0, 0, 0);
+  return { needs: needsYou(state).length, working: work(state).filter((w) => !w.waiting).length, done: things(state).filter((t) => t.at >= day.getTime()).length };
+}
 /** Home's one-line state, from the same needs and work rows shown below it. */
 export function homeSummary(state: Json) {
-  const needs = needsYou(state).length;
-  const working = work(state).filter((w) => !w.waiting).length;
+  const { needs, working } = homeCounts(state);
   return `${needs} ${needs === 1 ? 'thing needs' : 'things need'} you · ${working} ${working === 1 ? 'helper' : 'helpers'} working`;
 }
 
