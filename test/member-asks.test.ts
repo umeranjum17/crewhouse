@@ -23,6 +23,8 @@ test('a family setup ask is the owner\u2019s to-do and the asker\u2019s Asked st
   assert.ok(ownerSees, 'the owner sees the to-do');
   assert.ok(samSees, 'the asker keeps the Asked state on her own card');
   assert.equal(samSees.detail.app, 'calendar');
+  const alex = crew.addMember('Alex').id as number;
+  assert.equal(crew.snapshot(alex).asks.some((a: any) => a.kind === 'setup'), false, 'an uninvolved member sees neither the asker nor the app');
   await assert.rejects(crew.answer(ask.id, { answer: 'allow' }, sam), /someone else/, 'the asker cannot decide it');
   assert.equal((await crew.answer(ask.id, { answer: 'allow' }, 1)) ?? null, null, 'the owner decides');
   assert.equal(db.get('SELECT state FROM asks WHERE id = ?', ask.id)?.state, 'answered');

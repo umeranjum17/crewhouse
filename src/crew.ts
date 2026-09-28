@@ -471,11 +471,11 @@ export class Crew {
     if (existing) return this.askView(existing);
     const person = String(me.address || me.name || 'Someone');
     // The event carries the ask's id like every ask.opened: phones fan the news out by it.
-    // The card is the owner's to-do (member 1), and every member's snapshot carries open setup
-    // asks, so the asker keeps the 'Asked {owner}' state on her own card; answering stays owner's.
+    // The card is the owner's to-do (member 1); the asker's id rides the detail so her own
+    // snapshot keeps the 'Asked {owner}' state while uninvolved members see nothing; answering stays owner's.
     const id = this.db.tx(() => {
       const r = this.db.run("INSERT INTO asks (bot, kind, title, detail, at, member) VALUES ('chief', 'setup', ?, ?, ?, ?)",
-        `${person} would like ${app}`, JSON.stringify({ app, person }), Date.now(), OWNER);
+        `${person} would like ${app}`, JSON.stringify({ app, person, asker: me.id }), Date.now(), OWNER);
       this.db.event('ask.opened', 'chief', { kind: 'setup', app, ask: Number(r.lastInsertRowid) });
       return Number(r.lastInsertRowid);
     });
@@ -495,7 +495,7 @@ export class Crew {
       tasks: this.db.all('SELECT * FROM tasks WHERE bot != ? AND member = ? ORDER BY id DESC LIMIT 50', CHIEF, me.id).map((t) => ({ ...this.task(t), files: t.state === 'done' ? files(t.id) : [] })),
       ideas: this.ideas(me.id),
       room: (() => { const r = this.room(me.id); return { last: r.lines.at(-1) ?? null, busy: r.busy }; })(),
-      asks: this.db.all("SELECT * FROM asks WHERE state = 'open' AND (COALESCE(member, ?) = ? OR kind = 'setup') ORDER BY id", OWNER, me.id).map((a) => this.askView(a)),
+      asks: this.db.all("SELECT * FROM asks WHERE state = 'open' AND (COALESCE(member, ?) = ? OR (kind = 'setup' AND json_extract(detail, '$.asker') = ?)) ORDER BY id", OWNER, me.id, me.id).map((a) => this.askView(a)),
       events: this.db.events(0, 80, me.id),
       /** This member's AI accounts that are resting now, and until when (docs/ui-contract.md). */
       resting: Object.fromEntries(Object.keys(PROVIDERS).map((k) => [k, this.restingUntil(k, me.id)]).filter(([, t]) => t)),
