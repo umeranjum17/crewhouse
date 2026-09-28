@@ -810,8 +810,20 @@ function lastRun(h: Json) {
   return `Last ran ${at}${h.clear ? ', all clear' : ''}`;
 }
 
-/** The AI accounts a person can think with, in the order the app offers them. Never another brand, and never Claude. */
-export const AIS = [{ key: 'chatgpt', name: 'ChatGPT' }]; // the one front door; crewd keeps other accounts as quiet paths
+/** The AI accounts a person can think with, in the order the app offers them: every subscription route the engine
+ *  supports, ChatGPT first (the one front door; the rest are quiet paths). `cli`: signing in needs a tool installed
+ *  and signed in on this computer first. Kept in step with crewd's own list by test/ui.test.ts. */
+export const AIS = [
+  { key: 'chatgpt', name: 'ChatGPT', bg: '#10a37f' },
+  { key: 'grok', name: 'Grok', bg: '#1d1d1f' },
+  { key: 'copilot', name: 'GitHub Copilot', bg: '#24292f' },
+  { key: 'openrouter', name: 'OpenRouter', bg: '#8b5cf6' },
+  { key: 'minimax', name: 'MiniMax', bg: '#e11d48' },
+  { key: 'claude', name: 'Claude', bg: '#d97757', cli: 'the Claude CLI, installed and signed in on this computer' },
+];
+/** The honest word under the account list: these routes sign in with the person's own subscription; none of the
+ *  pay-per-use API-key routes are set up, and a route without an account here is untested, never a green light. */
+export const AI_ROUTES = 'Each one signs in with your own subscription. Routes billed by API key aren\u2019t set up.';
 
 /** One of the person's own AI accounts: signed in; a sign-in in progress (ChatGPT's page to say yes on, or the fallback
  *  code); how a sign-in ended (declined, the port busy, expired, failed); a plan without helpers; a work account. */

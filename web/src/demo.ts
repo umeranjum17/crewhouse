@@ -7,6 +7,7 @@
 // ?demo=watch (the name watch heard: one source-linked line), ?demo=neighbour (the weekly brief as a document), ?demo=brief (the month in brief as a document).
 // &sheet=signin or &sheet=connect opens that sheet, and &phase=… pins it to one state.
 import type { Json } from './api.ts';
+import { AIS } from './adapter.ts';
 import { describe, nextRun, parseSchedule } from '../../src/routines.ts';
 
 const variant = new URLSearchParams(typeof location === 'undefined' ? '' : location.search).get('demo') || 'nadia';
@@ -371,9 +372,14 @@ if (variant.startsWith('job')) pages.pip.job = { does: 'Keep Nadia’s family ca
 if (variant === 'wheeled') { Object.assign(bots.find((b) => b.id === 'scout')!, { controls: 'person' }); pages.scout = { ...pages.scout, signedIn: ['shop.example'] }; }
 for (const [id, p] of Object.entries(pages)) p.trail = events.filter((e) => e.bot === id);
 
-const accounts = [1, 2, 3].map((m) => ({ member: m, account: 'chatgpt', name: 'ChatGPT', signedIn: !(signin && m === me) || (variant === 'work' && m === me),
-  restingUntil: variant === 'resting' && m === me ? now + 95 * min : 0, notIncluded: variant === 'plan' && m === me, work: variant === 'work' && m === me ? 'nadia@acme.com' : false,
-  signIn: variant === 'signin' && m === me ? { state: 'waiting', via: 'browser', url: 'https://auth.openai.com/oauth/authorize' } : null }));
+// Every subscription route the app really offers, so the demo's Settings shows the honest matrix: ChatGPT carries
+// the sign-in states, the rest stand there untested until this household signs in to one.
+const accounts = [1, 2, 3].flatMap((m) => AIS.map((ai) => ({ member: m, account: ai.key, name: ai.name,
+  signedIn: ai.key === 'chatgpt' && (!(signin && m === me) || (variant === 'work' && m === me)),
+  restingUntil: ai.key === 'chatgpt' && variant === 'resting' && m === me ? now + 95 * min : 0,
+  notIncluded: ai.key === 'chatgpt' && variant === 'plan' && m === me,
+  work: ai.key === 'chatgpt' && variant === 'work' && m === me ? 'nadia@acme.com' : false,
+  signIn: ai.key === 'chatgpt' && variant === 'signin' && m === me ? { state: 'waiting', via: 'browser', url: 'https://auth.openai.com/oauth/authorize' } : null })));
 
 let calls = 0;
 export async function demoCall(method: string, path: string, _body?: Json) {

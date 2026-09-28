@@ -890,7 +890,7 @@ function HomeSetup({ state, accounts, tick }: { state: Json; accounts: Json[] | 
 }
 
 function Settings({ state, me, refresh, tick, accounts, look, setLook, switchTo }: Ctx & { look: string; setLook: (l: string) => void; switchTo: (id: number) => void }) {
-  const [signing, setSigning] = useState<Window | null | false>(sheet === 'signin' ? null : false);
+  const [signing, setSigning] = useState<{ ai: (typeof A.AIS)[number]; tab: Window | null } | null | false>(sheet === 'signin' ? null : false);
   const [adding, setAdding] = useState('');
   const owner = state.person.id === A.OWNER;
   const act = (fn: () => Promise<unknown>, ok?: string) => attempt(async () => { await fn(); refresh(); }, ok);
@@ -902,16 +902,20 @@ function Settings({ state, me, refresh, tick, accounts, look, setLook, switchTo 
       {state.members.length > 1 && (<><div className="label">Who's using this screen</div>
         <div className="chips">{state.members.map((m: Json) => <button key={m.id} className={`chip ${m.id === me ? 'on' : ''}`} onClick={() => switchTo(m.id)}>{m.name}</button>)}</div></>)}
 
-      <div className="label">Your ChatGPT</div>
+      <div className="label">Your AI accounts</div>
+      <p className="mute small">{A.AI_ROUTES}</p>
       {A.AIS.map((ai) => {
         const g = A.account(accounts, me, ai.key);
         return (
           <div key={ai.key} className="card row">
-            <span className="app-ic" style={{ background: '#10a37f' }}>◎</span>
+            <span className="app-ic" style={{ background: ai.bg }}>◎</span>
             <div className="grow"><b>{ai.name}</b><div className="mute small">{g.state === 'ready'
               ? g.notIncluded ? "Your plan doesn't include helpers yet." : `Connected${g.work ? ` as ${g.work}, a work account` : ''}. The crew can think with it.${g.resting ? ` ${g.resting}.` : ''}`
-              : g.state === 'checking' ? 'Checking…' : `Not signed in. You'll say yes once on ${ai.name}; it calls the access your helpers use “Codex”.`}</div></div>
-            {g.state === 'signed-out' && <button className="btn go" onClick={() => setSigning(openTab())}>Sign in</button>}
+              : g.state === 'checking' ? 'Checking…'
+              : ai.key === 'chatgpt' ? `Not signed in. You'll say yes once on ${ai.name}; it calls the access your helpers use “Codex”.`
+              : ai.cli ? `Untested here — no account yet. Needs ${ai.cli} first.`
+              : `Untested here — no account yet. Signing in uses your own ${ai.name}.`}</div></div>
+            {g.state === 'signed-out' && <button className="btn go" onClick={() => setSigning({ ai, tab: openTab() })}>Sign in</button>}
             {g.state === 'ready' && <button className="btn" onClick={() => attempt(async () => { await api.signOut(me, ai.key); refresh(); }, `Signed out of ${ai.name}`)}>Sign out</button>}
           </div>
         );
@@ -942,7 +946,7 @@ function Settings({ state, me, refresh, tick, accounts, look, setLook, switchTo 
       <div className="seg">{[['auto', 'Evenings dark'], ['day', 'Day'], ['night', 'Night']].map(([k, l]) => <button key={k} className={look === k ? 'on' : ''} onClick={() => setLook(k)}>{l}</button>)}</div>
       {owner && <Money state={state} refresh={refresh} />}
       {owner && <HouseGoogle on={!!state.house?.google} steps={state.house?.steps} refresh={refresh} />}
-      {signing !== false && <SignIn me={me} owner={ownerName(state)} tab={signing} onReady={() => { setSigning(false); refresh(); }} onClose={() => setSigning(false)} />}
+      {signing !== false && <SignIn me={me} owner={ownerName(state)} ai={signing?.ai} tab={signing?.tab} onReady={() => { setSigning(false); refresh(); }} onClose={() => setSigning(false)} />}
     </div>
   );
 }

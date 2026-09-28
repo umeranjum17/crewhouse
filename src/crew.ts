@@ -266,10 +266,13 @@ export class Crew {
       if (this.stopped) return; // crewd stopped before the engine came up
       // The engine comes up in the background: a first install can take minutes, and crewd boots without it.
       if ('crewDir' in this.runtime) (this.runtime as { crewDir: string }).crewDir = this.cfg.crewDir;
-      await this.runtime.start(this.toolHost()).catch((e) => {
+      const up = await this.runtime.start(this.toolHost()).then(() => true).catch((e) => {
         console.error('engine start:', e);
         this.db.event('system.engine', null, { error: String(e).slice(0, 300) });
+        return false;
       });
+      // The gateway is the witness: only a sign-in it reports retires crewhouse's staged copy.
+      if (up && !this.stopped) await this.confirmMigrations();
       if (this.cfg.engineProvider && this.runtime.configureModelProvider)
         await this.runtime.configureModelProvider(this.cfg.engineProvider.baseUrl, this.cfg.engineProvider.apiKey).catch((e: unknown) => console.error('engine provider:', e));
       if (this.stopped) return;
@@ -281,18 +284,35 @@ export class Crew {
     this.dispatch();
   }
 
-  /** One-time per member: hand the member's old engine sign-in to the new engine's doctor (spec §6). crewhouse's copy
-   *  is retired either way; a failed import just means the member signs in again, on the card that already exists. */
+  /** One-time per member: stage the member's old engine sign-in where the engine's doctor imports it (spec §6).
+   *  Runs while the gateway is still down — the engine refuses doctor runs otherwise — and retires nothing: the
+   *  copy moves aside only after the gateway itself reports the member signed in (confirmMigrations below). */
   private async migrateMembers() {
     const migrate = (this.runtime as { migrate?: (member: number, path: string) => Promise<boolean> }).migrate;
     if (!migrate) return;
     for (const m of this.members()) {
-      const legacy = join(this.cfg.stateDir, 'people', String(m.id), 'engine', 'auth.json');
+      const legacy = this.legacyAuth(m.id);
       if (!existsSync(legacy)) continue;
       try { await migrate.call(this.runtime, m.id, legacy); }
       catch (e) { console.error(`engine migration m${m.id}:`, e); }
     }
   }
+
+  /** The gateway came up: retire each member's staged sign-in copy only when the gateway reports the member
+   *  signed in to every account the old auth held. Anything else stays put and retries on the next boot — never
+   *  a second sign-in for the person. */
+  private async confirmMigrations() {
+    const confirm = (this.runtime as { confirm?: (member: number, path: string) => Promise<boolean> }).confirm;
+    if (!confirm) return;
+    for (const m of this.members()) {
+      const legacy = this.legacyAuth(m.id);
+      if (!existsSync(legacy)) continue;
+      try { await confirm.call(this.runtime, m.id, legacy); }
+      catch (e) { console.error(`engine migration m${m.id}:`, e); }
+    }
+  }
+
+  private legacyAuth(id: number) { return join(this.cfg.stateDir, 'people', String(id), 'engine', 'auth.json'); }
 
   /** The "Learn from how I work" switch: the household's choice, kept in crewhouse's own db (default on), applied to
    *  the engine's learning mode whenever the engine comes up. */
