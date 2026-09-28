@@ -158,11 +158,11 @@ test('a connected app\'s tools: reading runs silently, changing something asks i
   crew.recruit('scribe', 'Quill', 'person');
   const v = await crew.connections.connect(OWNER, 'mocknote');
   await back(crew, v.url!, { code: 'good' });
-  const t = crew.assign('quill', 'find it [tool mocknote_search {"q":"school trip"}]', 'chief').task;
+  const t = crew.assign('quill', 'find it [tool crew_app {"tool":"mocknote_search","input":{"q":"school trip"}}]', 'chief').task;
   await settled(db, t);
   assert.match(task(db, t).result, /did search \{"q":"school trip"\}/);
   assert.equal(db.all('SELECT * FROM asks').length, 0);
-  const u = crew.assign('quill', 'write it up [tool mocknote_create_page {"title":"Trip"}]', 'chief').task;
+  const u = crew.assign('quill', 'write it up [tool crew_app {"tool":"mocknote_create_page","input":{"title":"Trip"}}]', 'chief').task;
   await until('ask', () => db.get("SELECT * FROM asks WHERE state = 'open'"));
   const ask = db.get("SELECT * FROM asks WHERE state = 'open'")!;
   assert.equal(ask.title, 'Quill wants to use your Mocknote: create a page.');
@@ -319,7 +319,7 @@ test('done needs proof: a job that acts but sees no confirmation, or says nothin
   crew.recruit('scribe', 'Quill', 'person');
   await back(crew, await start(crew), { code: 'good' });
   disk.setSettings(cfg, 'quill', { allow: ['app:Mocknote:create a page'] }); // "Always": no card, so the call goes straight through
-  const book = '[tool mocknote_create_page {"title":"Dentist"}]';
+  const book = '[tool crew_app {"tool":"mocknote_create_page","input":{"title":"Dentist"}}]';
   const outcome = (worked: boolean, seen: string) => `[tool crew_outcome ${JSON.stringify({ worked, seen })}]`;
   const alerts = () => db.get("SELECT COUNT(*) AS n FROM events WHERE kind = 'alert'")!.n as number;
   const job = async (text: string) => {

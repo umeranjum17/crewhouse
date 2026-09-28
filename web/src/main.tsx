@@ -577,8 +577,25 @@ function Remembers({ id, name, page, reload }: { id: string; name: string; page:
         <input type="checkbox" role="switch" checked={page.handoff === 'ask'} onChange={(e) => attempt(async () => { await api.settings(id, { handoff: e.target.checked ? 'ask' : 'go' }); reload(); })} /></label>
       <MemoryList notes={page.notes ?? ''} save={async (t) => { await api.notes(id, t); reload(); }}
         empty={`Nothing yet. ${name} adds a line when it learns something you like.`} placeholder={`Tell ${name} something to keep in mind`} />
+      <LearnedRows name={name} />
     </>
   );
+}
+
+/** What the engine learned from this helper's work on its own, each with Forget. */
+function LearnedRows({ name }: { name: string }) {
+  const [rows, setRows] = useState<{ id: string; skill: string }[] | undefined>(undefined);
+  const [on, setOn] = useState(true);
+  const load = () => api.learned().then((r) => setRows(r ?? [] as any)).catch(() => setRows([] as any));
+  useEffect(() => { void load(); void api.learning().then((l) => setOn(l.on)).catch(() => {}); }, []);
+  return <>
+    <label className="card toggle"><span className="grow"><b>Learn from how I work</b><div className="mute small">{on ? `After a long job, ${name} reviews how it worked and keeps one skill.` : `${name} keeps no new skills from your jobs.`}</div></span>
+      <input type="checkbox" role="switch" checked={on} onChange={(e) => attempt(async () => { await api.setLearning(e.target.checked); setOn(e.target.checked); }, e.target.checked ? 'Learning on' : 'Learning off')} /></label>
+    {rows?.length ? <div className="card list">{rows.map((r: any) => (
+      <div key={r.id} className="row-item"><span className="grow"><b>Learned: {A.plain(r.skill)}</b><div className="mute small">{name} will work this way next time.</div></span>
+        <button className="btn ghost" onClick={() => attempt(async () => { await api.forgetLearned(r.id, r.skill); await load(); }, 'Forgotten')}>Forget</button></div>))}
+    </div> : null}
+  </>;
 }
 
 /** The person's five-part job recipe. Chief may draft it, but only the person's yes changes it. */

@@ -11,7 +11,7 @@ import { join } from 'node:path';
 import { temp } from './tmp.ts';
 import { EngineClient, resolveEngine } from '@desklink/host';
 import { browserBin, deskFor, Desktops, missing, type DeskEvent } from '../src/desktop.ts';
-import { sandboxBash, sandboxReady } from '../src/engine.ts';
+import { bashTool, sandboxReady } from '../src/engine.ts';
 import { setup } from './lab.ts';
 import { Teacher } from '../src/teach.ts';
 import { effectOf } from '../src/policy.ts';
@@ -176,8 +176,8 @@ test("a bot's shell cannot find or drive another bot's browser", { skip: noAttac
         [ "$code" = 101 ] && echo "websocket $p$path"
       done
     done; echo scanned`;
-  const r: any = await sandboxBash(space, [], {}).execute('attack', { command: attack }, undefined as any, undefined as any);
-  const out = r.content.map((c: any) => c.text).join('');
+  const r: any = await bashTool(space, [], {}).run({ command: attack });
+  const out = typeof r === 'string' ? r : r.content.map((c: any) => c.text).join('');
   assert.match(out, /scanned/, out);
   assert.deepEqual(out.match(/^devtools \d+$/gm), [`devtools ${decoyPort}`], "the shell found the decoy's DevTools, and no other");
   assert.doesNotMatch(out, /^websocket /m, 'no DevTools socket answers without its secret');

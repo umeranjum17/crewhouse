@@ -33,15 +33,10 @@ export function citeBad(text, clones) {
   }) };
 }
 
-/** Every tool call in a session file, with its result's first line and whether it errored. */
-export function calls(file) {
-  const out = new Map();
-  for (const l of readFileSync(file, 'utf8').split('\n').filter(Boolean)) {
-    const m = JSON.parse(l).message;
-    if (m?.role === 'assistant') for (const c of m.content ?? []) if (c.type === 'toolCall') out.set(c.id, { name: c.name, args: c.arguments ?? {} });
-    if (m?.role === 'toolResult' && out.has(m.toolCallId)) Object.assign(out.get(m.toolCallId), { error: m.isError, head: (m.content?.[0]?.text ?? '').split('\n')[0] });
-  }
-  return [...out.values()];
+/** Every tool call crewd recorded for a task, with its result's first line and whether it errored. */
+export function calls(db, id) {
+  return db.all("SELECT data FROM events WHERE kind = 'run.call' AND json_extract(data, '$.task') = ?", id)
+    .map((e) => { const d = JSON.parse(e.data); return { name: d.tool, args: JSON.parse(d.input ?? '{}'), error: !d.ok, head: d.head ?? '' }; });
 }
 
 // Blindness asks where a call went, not what it wrote: content being written never counts (write and edit); bash counts
@@ -50,9 +45,9 @@ export function calls(file) {
 // — a terminator with trailing text or a nested heredoc would need a real parse. Exported for the backtest kits.
 export function reaches(c) {
   const a = c.args ?? {};
-  if (c.name === 'write' || c.name === 'edit') return [];
-  if (c.name === 'web_fetch') return [String(a.url ?? '')];
-  if (/^(read|ls|grep|find)$/.test(c.name)) return [String(a.path ?? '')];
+  if (/^(crew_)?(write|edit)$/.test(c.name)) return [];
+  if (c.name === 'web_fetch' || c.name === 'crew_web_fetch') return [String(a.url ?? '')];
+  if (/^(crew_)?(read|ls|grep|find)$/.test(c.name)) return [String(a.path ?? '')];
   if (c.name !== 'bash') return [JSON.stringify(a)];
   const kept = [];
   let body = null;
@@ -71,12 +66,12 @@ export function validate({ db, crewDir }, id, forbid = []) {
   const bot = join(crewDir, 'bots', t.bot), rows = [], row = (verdict, what, detail) => rows.push({ verdict, what, detail });
   const ev = (kind) => db.all('SELECT data FROM events WHERE kind = ? AND json_extract(data, \'$.task\') = ?', kind, id).map((e) => JSON.parse(e.data));
   const delivered = ev('file.delivered').map((e) => e.path);
-  const all = t.session && existsSync(t.session) ? calls(t.session) : null;
+  const all = calls(db, id);
   row(t.state === 'done' ? 'PASS' : t.state === 'unsure' ? 'UNKNOWN' : 'FAIL', 'ended', t.state);
-  if (!all) return row('UNKNOWN', 'record', 'no session file: nothing it did can be checked'), rows;
+  if (!all.length) return row('UNKNOWN', 'record', 'no tool calls on record: nothing it did can be checked'), rows;
 
   // 1. Real input: every issue it wrote about was read, as crewd recorded it (2xx from web_fetch).
-  const read = new Set(all.filter((c) => c.name === 'web_fetch' && !c.error && /^2\d\d /.test(c.head ?? ''))
+  const read = new Set(all.filter((c) => /web_fetch$/.test(c.name) && !c.error && /^2\d\d /.test(c.head ?? ''))
     .map((c) => /\/issues\/(\d+)(?:$|[/?#])/.exec(String(c.args.url))?.[1]).filter(Boolean));
   const viaShell = all.filter((c) => c.name === 'bash' && /\/issues\/\d+/.test(String(c.args.command))).length;
   const about = [...new Set(delivered.map((p) => /^files\/support\/(\d+)\//.exec(p)?.[1]).filter(Boolean))];

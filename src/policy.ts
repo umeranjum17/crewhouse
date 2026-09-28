@@ -36,8 +36,14 @@ export function acts(tool: string, input: Record<string, any>, e: Effect) {
   return e.kind === 'send' || e.kind === 'spend' || e.kind === 'delete' || (tool === 'browser' && BROWSER_ACTS.has(String(input.args?.[0] ?? '')));
 }
 
-/** Always safe: they only touch the bot's own space, the web, or Crewhouse itself. bash runs in the sandbox. */
-const SAFE = /^(bash|web_search|web_fetch|crew_\w+)$/;
+/** Always safe: they only touch the bot's own space, the web, or Crewhouse itself. bash runs in the sandbox. The
+ *  crew's file tools are NOT here: a write outside the bot's folder asks, exactly as it always did. */
+const SAFE = new Set(['bash', 'web_search', 'web_fetch', 'crew_web_search', 'crew_web_fetch', 'memory_search', 'memory_get', 'view_image', 'pdf', 'image_generate',
+  'crew_connect', 'crew_outcome', 'crew_report', 'crew_deliver', 'crew_workbook', 'crew_document', 'crew_remember', 'crew_draft',
+  'crew_verify', 'crew_learn', 'crew_routine', 'crew_pass', 'crew_add_phone', 'crew_roster', 'crew_recruit', 'crew_assign',
+  'crew_routines', 'crew_status', 'crew_suggest', 'crew_create', 'crew_job', 'crew_call_me']);
+/** The file tools keep their old names' effects under their crew_ names: same asks, same keys, same words. */
+const baseName = (tool: string) => tool.startsWith('crew_') ? tool.slice(5) : tool;
 // The browser AXI's commands: looking never asks, acting follows the "asks first" rules, anything else is refused
 // (attaching elsewhere, running page scripts, reading or setting cookies and storage, the session's own lifecycle).
 const BROWSER_LOOKS = new Set(['goto', 'snapshot', 'find', 'go-back', 'go-forward', 'reload', 'tab-list', 'tab-new', 'tab-select', 'tab-close',
@@ -80,15 +86,16 @@ export function effectOf(tool: string, input: Record<string, any>, s: Seen): Eff
     const e = effectOf('write', { path: input.to }, s);
     return e.kind === 'files' ? { ...e, words: `${s.bot} wants to put a copy of “${basename(String(input.to))}” in ${e.covers}.` } : e;
   }
-  if (SAFE.test(tool)) return { kind: 'safe' };
-  if (READS.has(tool) || WRITES.has(tool)) {
+  if (SAFE.has(tool)) return { kind: 'safe' };
+  const base = baseName(tool);
+  if (READS.has(base) || WRITES.has(base)) {
     const path = resolve(s.space, String(input.path ?? '.'));
     if (inside(s.space, path)) return { kind: 'safe' };
     if (s.secret.some((d) => inside(d, path))) return { kind: 'refuse', why: 'That folder holds sign-ins and keys; no bot may open it.' };
     // A folder to look in (ls, grep, find) is the folder itself; a file is in its parent.
-    const folder = tool === 'read' || WRITES.has(tool) ? folderWords(path) : folderWords(path + '/x');
-    const key = `files:${tool === 'read' || WRITES.has(tool) ? dirname(path) : path}`;
-    const what = WRITES.has(tool) ? `change a file in ${folder}: “${basename(path)}”` : tool === 'read' ? `look at a file in ${folder}: “${basename(path)}”` : `look through ${folder}`;
+    const folder = base === 'read' || WRITES.has(base) ? folderWords(path) : folderWords(path + '/x');
+    const key = `files:${base === 'read' || WRITES.has(base) ? dirname(path) : path}`;
+    const what = WRITES.has(base) ? `change a file in ${folder}: “${basename(path)}”` : base === 'read' ? `look at a file in ${folder}: “${basename(path)}”` : `look through ${folder}`;
     return { kind: 'files', words: `${s.bot} wants to ${what}.`, key, covers: `${folder}` };
   }
   if (tool === 'browser') {
@@ -124,6 +131,12 @@ export function effectOf(tool: string, input: Record<string, any>, s: Seen): Eff
   // mail-axi (src/mail.ts) only reads: its token is gmail.readonly.
   if (tool === 'mail') {
     return ['inbox', 'search', 'read'].includes(String(input.args?.[0] ?? 'inbox')) ? { kind: 'safe' } : { kind: 'refuse', why: 'Your email can: search or read (it cannot send or change mail).' };
+  }
+  // The engine's skill workshop writes skills; that is the reviewer's job, not a run's. A run may read.
+  if (tool === 'skill_workshop') {
+    const action = String(input.action ?? '');
+    if (['read', 'list', 'status'].includes(action)) return { kind: 'safe' };
+    return { kind: 'refuse', why: 'Skills that write come from how you work, reviewed between jobs; keep one with crew_learn.' };
   }
   const app = s.apps?.[tool];
   if (app) {
@@ -211,6 +224,7 @@ const host = (u: unknown) => { try { return new URL(String(u)).hostname || 'a pa
 
 /** A line for the "What I did" trail. No commands, no paths: what a person would say they saw. Empty for the crew's own tools. */
 export function toolWords(tool: string, input: Record<string, any>): string {
+  tool = baseName(tool);
   const file = basename(String(input.path ?? ''));
   switch (tool) {
     case 'read': return `Read ${file}`;

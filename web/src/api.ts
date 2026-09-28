@@ -66,6 +66,14 @@ export const api = {
   settings: (id: string, body: { allow?: string[]; memory?: boolean; handoff?: 'ask' | 'go' }) => call('PUT', `/api/bots/${id}/settings`, body),
   reset: (id: string) => call('POST', `/api/bots/${id}/reset`),
   undoMemory: (id: string, seq: number) => call('POST', `/api/bots/${id}/memory/${seq}/undo`),
+  /** How one job was done, step by step, in plain words — recorded by crewd, on demand. */
+  taskTrail: (id: number) => call('GET', `/api/task/${id}/trail`) as Promise<{ at: number; words: string; ok: boolean }[]>,
+  /** What the engine learned from this member's work, and Forget for one of them. */
+  learned: () => call('GET', '/api/learned') as Promise<{ id: string; skill: string; at: number; state: string }[]>,
+  forgetLearned: (id: string, skill: string) => call('POST', '/api/learned/forget', { id, skill }),
+  /** "Learn from how I work": the engine's own learning switch. */
+  learning: () => call('GET', '/api/learning') as Promise<{ on: boolean }>,
+  setLearning: (on: boolean) => call('POST', '/api/learning', { on }),
   takeOver: (id: string) => call('POST', `/api/bots/${id}/takeover`),
   /** Teach by showing: take the wheel with a recorder on; then Done (the bot keeps it as a skill) or Cancel. */
   show: (id: string, what: string) => call('POST', `/api/bots/${id}/show`, { what }),

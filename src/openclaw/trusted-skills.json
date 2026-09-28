@@ -1,0 +1,11 @@
+{
+  "$comment": "Crewhouse's trusted skill sources (spec §5.2). A skill or plugin installs only when policy.mjs finds an exact entry here. Bundled entries pin the SKILL.md content hash inside the tarball, whose own integrity is in runtime/openclaw/package-lock.json. Adding an entry is a reviewed code change, never an in-app action.",
+  "version": 1,
+  "entries": [
+    { "source": "bundled", "id": "video-frames", "version": "2026.8.1", "sha256": "bdaaa9964db9584f6598e53fd025fad28d84a1e15859599f95180839fad05478", "requires": ["ffmpeg"], "reviewedBy": "crewhouse build (SKILL.md + metadata read)", "reviewedAt": "2026-09-27" },
+    { "source": "bundled", "id": "openai-whisper", "version": "2026.8.1", "sha256": "802e31d7310316fc25a5ec4fbe29308a0897c039cd2ae897f59fc25128ab4644", "requires": ["whisper"], "reviewedBy": "crewhouse build (SKILL.md + metadata read)", "reviewedAt": "2026-09-27" },
+    { "source": "bundled", "id": "summarize", "version": "2026.8.1", "sha256": "b6d9be0ff47e646280a0ff40203823d7ca36913ab1bea25575b2de4afb3cc0df", "requires": ["summarize"], "reviewedBy": "crewhouse build (SKILL.md + metadata read)", "reviewedAt": "2026-09-27" },
+    { "source": "bundled", "id": "nano-pdf", "version": "2026.8.1", "sha256": "d8ab6db7572b0df862820dd3481c14ae306173a1dbcad7f07f9e48ada8efbe91", "requires": ["nano-pdf"], "reviewedBy": "crewhouse build (SKILL.md + metadata read)", "reviewedAt": "2026-09-27" },
+    { "source": "bundled", "id": "diagram-maker", "version": "2026.8.1", "sha256": "6195e03fcb04a1a68c4af72165e0c85efcd2719af79380d82e42996ea89ad74a", "requires": [], "reviewedBy": "crewhouse build (SKILL.md + metadata read)", "reviewedAt": "2026-09-27" }
+  ]
+}

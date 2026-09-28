@@ -130,3 +130,9 @@ The phone app (`mobile/`) reads crewd through this same adapter and `web/src/api
 
 Any request that fails without an HTTP status is "the home computer isn't answering": a full screen before first load, a banner after.
 Both retry by themselves and say "Back in touch" when it answers again.
+
+## Learning and the work trail
+
+`GET /api/learned` → `[{id, skill, at, state}]` — the skills the engine learned from this member's own work (`state: 'applied'` is what the rows show); `POST /api/learned/forget {id, skill}` puts one back the way it was (the engine's own restore; nothing else runs). The bot page's settings show these as **Learned · Forget** rows under the **Learn from how I work** switch.
+`GET /api/learning` → `{on}` and `POST /api/learning {on}` are that switch: the engine's own learning mode, on by default. Both answer only for the viewer's own member.
+`GET /api/task/:id/trail` → `[{at, words, ok}]` — one plain-words row per tool call of one task, recorded by crewd itself (`run.call`), redacted to words; only the task's member (or the owner) may read it. The "How I did it" drawer renders it collapsed by default.

@@ -1,28 +1,29 @@
-import './isolate.ts'; // first: before anything loads the engine
 import { createHash, randomBytes } from 'node:crypto';
-import { spawn, type ChildProcess } from 'node:child_process';
+import { execFile, spawn, type ChildProcess } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
-import { defineTool, type AgentSession, type ToolDefinition } from '@earendil-works/pi-coding-agent';
-import { Type } from '@earendil-works/pi-ai';
+import { Type } from 'typebox';
 import { CHIEF, type Config } from './config.ts';
 import type { Row, Store } from './db.ts';
 import * as disk from './bots.ts';
 import { Desktops, browserBin, missing as desktopMissing, type Watcher } from './desktop.ts';
 import { Accounts, OWNER, PROVIDERS } from './accounts.ts';
 import { Connections, type AppTool, APPS } from './connections.ts';
-import { axiTool, cliTool, openSession, readPage, runAxi, runSandboxed, sandboxBash, q, sandboxReady, webTools } from './engine.ts';
+import { bashTool, readPage, runAxi, runSandboxed, q, sandboxReady, tool, webTools, type CrewTool } from './engine.ts';
 import { allowed, proxy } from './net.ts';
 import type { Server } from 'node:net';
 import { acts, claimOf, coversOf, effectOf, orderOf, pressOf, toolWords, type Effect } from './policy.ts';
 import { axiEnv, registry, resolveGrants, toolBin, which } from './tools.ts';
-import { stubModels } from './stub.ts';
 import { describe, nextRun, parseSchedule } from './routines.ts';
 import { buildWorkbook, readWorkbook } from './workbooks.ts';
 import { buildDocument, readDocument } from './documents.ts';
-import { byModel, clarify, route, type Helper } from './route.ts';
+import { byRuntime, clarify, route, type Backend, type Helper } from './route.ts';
 import type { Link } from './link.ts';
+import type { AgentRuntime, RunEnd, RunEvent, RunRef, RunSpec, ToolHost } from './runtime.ts';
+import { OpenClawRuntime } from './openclaw/runtime.ts';
+import { StubRuntime } from './stub-runtime.ts';
+import { fileTool } from './openclaw/files.ts';
 
 /** Phone pairing stays with Chief, including 'pair my computer with you' said on the home computer. */
 export const asksForPhone = (text: string) => /\b(pair|connect|link|add|use|install)\b[\s\S]{0,65}\b(phone|mobile|computer|crewhouse app)\b|\b(phone|mobile|computer)\b[\s\S]{0,35}\b(pair|connect|link)\b/i.test(text);
@@ -33,7 +34,12 @@ export const inlineHowTo = (text: string): 'signin' | 'app' | 'routine' | null =
 
 const HOLD_MS = Number(process.env.CREWHOUSE_HOLD_MS || 180_000); // how long a tool call waits for an answer before the turn parks
 const TASK_TIMEOUT_MS = 60 * 60_000;
-import { classify, clock } from '@byokit/accounts';
+import { classifyText } from './failures.ts';
+import { clock } from './accounts.ts';
+
+/** OpenClaw's own tools crewhouse adopts once their policy effects are reviewed: reads, recall and media on the
+ *  member's own sign-in. Any future native tool not reviewed here fails closed until a bump reviews it. */
+const NATIVE_TOOLS = new Set(['web_search', 'web_fetch', 'memory_search', 'memory_get', 'view_image', 'pdf', 'image_generate']);
 export { clock };
 
 /** At most n characters, cut at a word boundary with an ellipsis: titles on cards and in the digest. */
@@ -164,11 +170,14 @@ function inhibitor() {
   };
 }
 
-/** A bot at work: its task's engine session, on whose account and which AI, and the browser if it has one. */
 /** The bot's browser while a task runs: its AXI; letting go of the browser when the task ends, or for a while (`release`:
  *  the person takes the wheel, and the recorder may need the browser's one DevTools connection; the next call re-attaches). */
 interface Browser { run: (args: string[], signal?: AbortSignal) => Promise<string>; end: () => void; release: () => void }
-interface Live { session: AgentSession; task: number; member: number; brain: disk.Brain; browser?: Browser; page?: string; snapshot?: string; apps?: Record<string, AppTool>; counted: number;
+
+/** A run's place in the crew: which task, whose account, its session key, and the browser if it has one. */
+interface Live { key: string; task: number; member: number; account: string; grants: string[]; browser?: Browser; page?: string; snapshot?: string; apps?: Record<string, AppTool>;
+  /** The tools crewd runs for this run: the sandboxed shell, the browser AXI, the person's connected apps'. */
+  shell?: CrewTool; browserTool?: CrewTool; appTools?: Map<string, CrewTool>;
   /** Lines the helper typed on this page that no card has shown yet (an unsigned register's claim form). */
   fills?: { label: string; value: string }[] }
 
@@ -186,6 +195,13 @@ export class Crew {
   private taskGrants = new Map<number, string[]>();
   private starting = new Set<string>();
   private timer?: NodeJS.Timeout;
+  /** Bots with a run in flight (the engine is working). */
+  readonly busy = new Set<string>();
+  /** Applied learning the person has already been told about, keyed member:id. */
+  private seenLearned = new Set<string>();
+  /** When to next check the engine's collection-review job (the weekly tidy, run on crewhouse's own boundary). */
+  private curationAt = 0;
+  private curationBusy = false;
   /** Bots whose screen the person is driving: the bot is paused until they give the controls back. */
   private held = new Set<string>();
   readonly desktops: Desktops;
@@ -207,16 +223,18 @@ export class Crew {
 
   private cfg: Config;
   private db: Store;
+  /** The replaceable agent process: the real engine, or the scripted stub the tests run on. */
+  readonly runtime: AgentRuntime;
 
   constructor(cfg: Config, db: Store) {
     this.cfg = cfg; this.db = db;
     this.desktops = new Desktops(cfg.stateDir);
-    this.keepAwake = cfg.engine === 'pi' ? inhibitor() : () => {};
-    this.accounts = new Accounts(cfg);
-    if (cfg.engine === 'stub') this.accounts.prepare = stubModels;
-    this.accounts.onChange = (member, key) => this.db.event('account.changed', null, { member, account: key });
+    this.keepAwake = cfg.engine === 'stub' ? () => {} : inhibitor();
+    this.runtime = cfg.engine === 'stub' ? new StubRuntime() : new OpenClawRuntime(cfg.stateDir);
+    this.accounts = new Accounts(this.runtime);
+    // A scripted/custom model provider stands in for the person's own ChatGPT, exactly as the stub model always did.
+    if (cfg.engineProvider) this.accounts.ready.set(`${OWNER}:chatgpt`, true);
     this.accounts.onSignedIn = (member) => this.wake(member, `You're signed in. I'll start now.`);
-    this.accounts.onExpired = (member, key) => this.say(CHIEF, 'system', signedOutWords(PROVIDERS[key].name), null, member);
     this.connections = new Connections(cfg, `http://${cfg.host}:${cfg.port}/connect/callback`);
     this.connections.onChange = (member, app) => this.db.event('app.changed', null, { member, app });
     this.connections.onExpired = (member, app) => this.say(CHIEF, 'system', `Your ${this.connections.apps[app].name} connection has run out. Connect it again under Settings, Connections, whenever you like.`, null, member);
@@ -244,7 +262,72 @@ export class Crew {
     if (!this.member(OWNER).onboarded && !this.db.get('SELECT 1 FROM messages WHERE bot = ?', CHIEF)) this.say(CHIEF, 'bot', chiefGreeting(), null, OWNER);
     this.timer = setInterval(() => this.tick(), 1500);
     this.recover();
+    void this.migrateMembers().then(async () => {
+      if (this.stopped) return; // crewd stopped before the engine came up
+      // The engine comes up in the background: a first install can take minutes, and crewd boots without it.
+      if ('crewDir' in this.runtime) (this.runtime as { crewDir: string }).crewDir = this.cfg.crewDir;
+      await this.runtime.start(this.toolHost()).catch((e) => {
+        console.error('engine start:', e);
+        this.db.event('system.engine', null, { error: String(e).slice(0, 300) });
+      });
+      if (this.cfg.engineProvider && this.runtime.configureModelProvider)
+        await this.runtime.configureModelProvider(this.cfg.engineProvider.baseUrl, this.cfg.engineProvider.apiKey).catch((e: unknown) => console.error('engine provider:', e));
+      if (this.stopped) return;
+      if (this.learningOn()) {
+        await this.runtime.setLearning?.(true).catch((e: unknown) => console.error('learning:', e));
+        this.curationAt = Date.now() + 60_000; // first look a minute after the engine is up, then weekly from the job
+      }
+    });
     this.dispatch();
+  }
+
+  /** One-time per member: hand the member's old engine sign-in to the new engine's doctor (spec §6). crewhouse's copy
+   *  is retired either way; a failed import just means the member signs in again, on the card that already exists. */
+  private async migrateMembers() {
+    const migrate = (this.runtime as { migrate?: (member: number, path: string) => Promise<boolean> }).migrate;
+    if (!migrate) return;
+    for (const m of this.members()) {
+      const legacy = join(this.cfg.stateDir, 'people', String(m.id), 'engine', 'auth.json');
+      if (!existsSync(legacy)) continue;
+      try { await migrate.call(this.runtime, m.id, legacy); }
+      catch (e) { console.error(`engine migration m${m.id}:`, e); }
+    }
+  }
+
+  /** The "Learn from how I work" switch: the household's choice, kept in crewhouse's own db (default on), applied to
+   *  the engine's learning mode whenever the engine comes up. */
+  learningOn() { try { return this.db.get("SELECT value FROM settings WHERE key = 'learning'")?.value !== 'off'; } catch { return true; } }
+  async setLearning(on: boolean) {
+    this.db.run("INSERT INTO settings (key, value) VALUES ('learning', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", on ? 'on' : 'off');
+    await this.runtime.setLearning?.(on);
+  }
+
+  /** The weekly tidy of what was learned, on crewhouse's own boundary: capture first — refusing the whole review if
+   *  the capture cannot be verified — then the engine's review inside the armed window, then the plain-words record.
+   *  Runs weekly per member; every path goes through this one pre-change step (handled inbox 003, option B). */
+  private async weeklyCuration() {
+    this.curationAt = Date.now() + 7 * 86_400_000;
+    for (const m of this.members()) {
+      const runtime = this.runtime as { runCollectionReview?: (member: number) => Promise<{ capture: string; kept: string[]; written: string[]; dropped: string[] }> };
+      if (!runtime.runCollectionReview) continue;
+      try {
+        const outcome = await runtime.runCollectionReview(m.id);
+        const parts = [outcome.written.length ? `rewrote ${outcome.written.join(', ')}` : '',
+          outcome.dropped.length ? `set aside ${outcome.dropped.join(', ')}` : '',
+          !outcome.written.length && !outcome.dropped.length ? 'nothing needed changing' : ''].filter(Boolean);
+        this.db.tx(() => {
+          this.say(CHIEF, 'bot', `Tidied what ${this.member(m.id).name}'s crew learned: ${parts.join('; ')}. Set-aside skills can come back.`, null, m.id);
+          this.db.event('learn.curated', CHIEF, { member: m.id, capture: outcome.capture, kept: outcome.kept, written: outcome.written, dropped: outcome.dropped });
+        });
+      } catch (e) {
+        // Refused (usually the capture): the data stays exactly as it was, and the person hears why.
+        console.error(`curation m${m.id}:`, e);
+        this.db.tx(() => {
+          this.db.event('learn.curated', CHIEF, { member: m.id, refused: String(e).slice(0, 200) });
+          this.say(CHIEF, 'system', `I left ${this.member(m.id).name}'s learned skills untouched this week — tidying them didn't feel safe just now.`, null, m.id);
+        });
+      }
+    }
   }
 
   /** A restart is a non-event: every task that was running continues in its own session, from its session file.
@@ -262,7 +345,8 @@ export class Crew {
     this.stopped = true;
     clearInterval(this.timer);
     if (this.awake) this.keepAwake(false);
-    for (const [id, l] of this.live) { this.live.delete(id); l.browser?.end(); l.session.dispose(); }
+    for (const [id, l] of this.live) { this.live.delete(id); l.browser?.end(); }
+    void this.runtime.stop().catch(() => {});
     void this.desktops.stopAll();
     for (const n of this.nets.values()) n.close();
     this.accounts.stop();
@@ -336,7 +420,7 @@ export class Crew {
       pausedUntil: this.db.get("SELECT MIN(wake_at) AS w FROM tasks WHERE bot = ? AND state = 'paused'", b.id)!.w };
   }
 
-  private liveState(id: string) { const l = this.live.get(id); return !l ? 'off' : l.session.isStreaming ? 'working' : 'idle'; }
+  private liveState(id: string) { return !this.live.get(id) ? 'off' : this.busy.has(id) ? 'working' : 'idle'; }
 
   /** A task for the app: its words and state, not the AI it asked for or its session file. */
   private task({ brain, session, tokens: _, ...t }: Row) { return { ...t, thinks: brain ? disk.brainName(disk.parseBrain(brain)) : null }; }
@@ -457,16 +541,8 @@ export class Crew {
     };
   }
 
-  // ---- the crew's share of each member's AI, and the house's money cap ----
-  /** Add up what a live session's finished turns used, once each, into its member's day. */
-  private count(l: Live) {
-    const msgs = l.session.messages as any[];
-    let n = 0;
-    for (const m of msgs.slice(l.counted)) if (m.role === 'assistant' && m.usage) n += m.usage.input + m.usage.output + m.usage.cacheWrite + m.usage.cacheRead / 10;
-    l.counted = msgs.length;
-    if (n) this.db.run('UPDATE tasks SET tokens = tokens + ? WHERE id = ?', Math.round(n), l.task);
-    if (n) this.db.run('INSERT INTO usage (member, day, tokens) VALUES (?, ?, ?) ON CONFLICT(member, day) DO UPDATE SET tokens = tokens + excluded.tokens', l.member, dayOf(), Math.round(n));
-  }
+  // ---- the share: what a run used lands on its member's day ----
+  // Usage arrives as RunEvent 'usage' (handled in onEvent); per-run accounting stays where the event is.
 
   /** The member's routines and check-ins have had their share of today. Things they ask for directly never wait on it. */
   overShare(member: number) {
@@ -953,7 +1029,7 @@ export class Crew {
     const earlier: string | undefined = asked && JSON.parse(asked.data).message === last ? JSON.parse(asked.data).text
       : /^https?:\/\/\S+$/i.test(text) && previous && /\b(market|marketing|promote|launch)\b/i.test(previous) ? previous : undefined;
     const brain = await this.usable(member, this.choices({ bot: CHIEF, brain: model ? disk.brainKey(disk.parseBrain(model)) : null }));
-    const answerer = brain && byModel(await this.accounts.runtime(member), PROVIDERS[brain.provider].pi, brain.model ?? PROVIDERS[brain.provider].models.strong);
+    const answerer: Backend | undefined = brain ? byRuntime(this.runtime, member) : undefined;
     const to = await route({ text, earlier }, helpers, answerer);
     // Torn with photos in hand: Chief takes it himself rather than ask, so the photos go with the request.
     if (to.abstained && to.probabilities && !earlier && !pics.length) {
@@ -1111,18 +1187,18 @@ export class Crew {
     const member = task.member ?? OWNER;
     try {
       const choices = this.choices(task);
-      const brain = await this.usable(member, choices);
-      if (!brain) return this.pause(task, choices);
+      const account = await this.usable(member, choices);
+      if (!account) return this.pause(task, choices);
       if (task.origin === 'routine' && this.overShare(member)) return this.waitForTomorrow(task);
       this.setTask(task, 'working');
       const handoff = this.handoffs.get(task.id);
       this.handoffs.delete(task.id);
-      const resumes = !!task.session && existsSync(task.session);
-      const l = await this.open(bot, task, member, brain, resumes ? task.session : undefined);
+      const resumes = !!task.session && task.session.startsWith('agent:m');
+      const l = await this.open(bot, task, member, account);
       this.db.run("UPDATE bots SET state = 'on' WHERE id = ?", bot.id);
-      this.db.event('run.started', bot.id, { task: task.id, account: brain.provider, name: disk.brainName(brain), member });
+      this.db.event('run.started', bot.id, { task: task.id, account, name: disk.brainName({ provider: account }), member });
       if (handoff && resumes) this.db.event('run.resumed', bot.id, { task: task.id, why: handoff });
-      if (handoff && handoff !== 'Crewhouse restarted') this.say(bot.id, 'system', `${handoff}. ${bot.display} carries on${this.connected.delete(task.id) ? '' : ` with ${disk.brainName(brain)}`}.`, task.id);
+      if (handoff && handoff !== 'Crewhouse restarted') this.say(bot.id, 'system', `${handoff}. ${bot.display} carries on${this.connected.delete(task.id) ? '' : ` with ${disk.brainName({ provider: account })}`}.`, task.id);
       this.turn(bot.id, l, resumes ? `[Crewhouse] ${handoff ?? 'You were interrupted'}. Continue task #${task.id} where you left off; ` +
         'check work/ and files/ before redoing anything.' : this.prompt(task), resumes ? undefined : this.images(bot.id, task));
     } catch (e: any) {
@@ -1151,29 +1227,24 @@ export class Crew {
   }
   private refusedNet(botId: string, to: string) { this.db.event('net.refused', botId, { task: this.activeTask(botId)?.id, to: to.slice(0, 260) }); }
 
-  /** The engine session for a task: the bot's folder as its space, its granted tools, crewd's gate on every call. */
-  private async open(bot: Row, task: Row, member: number, brain: disk.Brain, file?: string) {
+  /** A run's setup: the bot's folder as its space, its granted tools behind crewd's gate, its own session key. */
+  private async open(bot: Row, task: Row, member: number, account: string) {
     this.close(bot.id);
     const space = disk.botDir(this.cfg, bot.id);
     const conf = disk.botConfig(this.cfg, bot.id);
     const g = resolveGrants(this.cfg, conf.tools ?? [], { 'bot.dir': space, 'bot.id': bot.id });
-    const tools: ToolDefinition[] = [...this.crewTools(bot.id)];
-    const builtins = g.tools.includes('files') ? ['read', 'write', 'edit', 'ls', 'grep', 'find'] : [];
-    const l = { task: task.id, member, brain, counted: 0 } as Live;
     const net = this.netOf(bot.id);
-    if (g.tools.includes('files') && sandboxReady()) tools.push(sandboxBash(space, [this.cfg.toolsDir], { ...g.env, PATH: toolBin(this.cfg) }, net?.sock) as ToolDefinition);
-    if (g.tools.includes('web')) tools.push(...webTools(net?.may));
-    for (const t of registry(this.cfg).filter((t) => t.run && g.tools.includes(t.id))) {
-      tools.push(cliTool(t.id.replace(/-/g, '_'), which(this.cfg, t.bins[0]) ?? t.bins[0], t.name, space, g.env));
-    }
+    const l = { key: `agent:m${member}:crewhouse:${bot.id}:${task.id}`, task: task.id, member, account, grants: g.tools } as Live;
+    // The bot's shell: bubblewrap, where its space is the only writable part of the disk.
+    if (g.tools.includes('files') && sandboxReady()) l.shell = bashTool(space, [this.cfg.toolsDir], { ...g.env, PATH: toolBin(this.cfg) }, net?.sock);
     // The person's connected apps (their Notion, their Google…): every helper working for them can use them, through the gate.
     const apps = await this.connections.tools(member);
-    tools.push(...apps.tools);
     l.apps = apps.effects;
+    l.appTools = new Map(apps.tools.map((t) => [t.name, t]));
     const axi = g.axi.browser;
     if (axi) {
       // With its own computer, the browser tool drives the visible Chromium crewd keeps on the bot's display.
-      const onScreen = g.tools.includes('computer') && !!browserBin() && this.cfg.engine === 'pi';
+      const onScreen = g.tools.includes('computer') && !!browserBin() && this.cfg.engine !== 'stub';
       if (onScreen) await this.desktops.ensure(bot.id, bot.n, space);
       // Its own HOME and XDG folders (the playwright daemon's state lives there), never the person's.
       const env = axiEnv(join(this.cfg.stateDir, 'homes', bot.id), { ...axi.env, PLAYWRIGHT_CLI_SESSION: bot.id });
@@ -1190,33 +1261,19 @@ export class Crew {
         end: () => { if (started) void run([onScreen ? 'detach' : 'close']); },
         release: () => { if (started && onScreen) { started = undefined; void run(['detach']); } },
       };
-      tools.push(axiTool('browser', 'Your own browser (playwright-axi): goto <url>, snapshot, find <text>, click <ref>, fill <ref> <text>, press <key>, go-back', async (args, signal) => {
-        started ??= start();
-        const opened = await started;
-        if (/^error:/m.test(opened)) { started = undefined; return opened; }
-        const out = await run(args, signal);
-        const page = /^page: \{url: ([^,}\s]+)/m.exec(out)?.[1];
-        if (page) l.page = page;
-        return out;
-      }) as ToolDefinition);
+      l.browserTool = tool('browser', 'Your own browser (playwright-axi): goto <url>, snapshot, find <text>, click <ref>, fill <ref> <text>, press <key>, go-back',
+        { type: 'object', properties: { args: { type: 'array', items: { type: 'string' } } }, required: ['args'], additionalProperties: false },
+        async (p, signal) => {
+          started ??= start();
+          const opened = await started;
+          if (/^error:/m.test(opened)) { started = undefined; return opened; }
+          const out = await run((p.args ?? []).map(String), signal);
+          const page = /^page: \{url: ([^,}\s]+)/m.exec(out)?.[1];
+          if (page) l.page = page;
+          return out;
+        });
     }
-    l.session = await openSession({
-      runtime: await this.accounts.runtime(member), provider: PROVIDERS[brain.provider].pi, model: brain.model ?? PROVIDERS[brain.provider].models.strong,
-      space, file, sessionsDir: join(this.cfg.stateDir, 'sessions', bot.id), system: disk.systemPrompt(this.cfg, bot.id, bot.id === CHIEF),
-      skills: join(space, 'skills'), builtins, tools, gate: (tool, input) => this.gate(bot.id, tool, input), retry: this.cfg.engine === 'pi',
-      thinking: bot.id === CHIEF ? 'low' : undefined,
-    });
-    l.counted = l.session.messages.length; // a resumed session's earlier turns were counted when they ran
     this.live.set(bot.id, l);
-    // Only assistant prose is visible; tool arguments and reasoning never ride the live feed.
-    let partial = '';
-    l.session.subscribe((e) => {
-      if (e.type === 'message_start') partial = '';
-      if (e.type !== 'message_update' || e.assistantMessageEvent.type !== 'text_delta' || this.live.get(bot.id) !== l) return;
-      partial += e.assistantMessageEvent.delta;
-      this.db.live('reply.partial', bot.id, { task: task.id, member, text: partial.slice(0, 280) });
-    });
-    this.db.run('UPDATE tasks SET session = ? WHERE id = ?', l.session.sessionFile ?? null, task.id);
     return l;
   }
 
@@ -1224,38 +1281,94 @@ export class Crew {
     const l = this.live.get(botId);
     if (!l) return;
     this.live.delete(botId);
+    this.busy.delete(botId);
     l.browser?.end();
-    l.session.dispose();
+    void this.runtime.abort(l.key).catch(() => {});
   }
 
-  /** One turn: the prompt goes in, and when the engine settles the reply (or the account's error) is handled. */
+  /** One turn: the prompt goes into the run's session, and when it settles the reply (or the account's error) is handled. */
   private turn(botId: string, l: Live, text: string, images?: { type: 'image'; data: string; mimeType: string }[]) {
+    const task = this.activeTask(botId);
+    if (!task) return;
+    this.db.run('UPDATE tasks SET session = ? WHERE id = ?', l.key, task.id); // the session key, so a resume continues it
     this.db.event('run.prompted', botId, { task: l.task, ...(images?.length ? { photos: images.length } : {}) });
-    const run = l.session.isStreaming ? l.session.followUp(text, images) : l.session.prompt(text, images?.length ? { images } : undefined);
-    run.then(() => this.settled(botId, l), (e) => this.settled(botId, l, e));
+    this.busy.add(botId);
+    const spec: RunSpec = {
+      key: l.key, member: l.member, bot: botId, task: l.task, account: l.account,
+      cwd: disk.botDir(this.cfg, botId), system: this.systemPromptFor(botId, l), message: text,
+      ...(images?.length ? { images } : {}),
+      thinking: botId === CHIEF ? 'low' : undefined, builtins: [],
+    };
+    void this.runtime.run(spec, (e) => this.onEvent(botId, l, e)).then(
+      (end) => this.settled(botId, task, l, end),
+      (e) => { console.error(`${botId}:`, e); this.settled(botId, task, l, { ok: false, kind: 'other', message: String(e) }); });
   }
 
-  private settled(botId: string, l: Live, err?: unknown) {
+  /** The bot's own words and job, its skills listed by name, and the connected app's tools it may call. */
+  private systemPromptFor(botId: string, l: Live) {
+    const skills = disk.listSkills(this.cfg, botId);
+    const apps = [...(l.appTools?.keys() ?? [])].filter((n) => n !== 'calendar' && n !== 'mail')
+      .map((n) => `${n} (${l.apps?.[n]?.app ?? 'app'})`);
+    return disk.systemPrompt(this.cfg, botId, botId === CHIEF)
+      + (skills.length ? `\n## Skills you follow\n${skills.map((s) => `- ${s.name}: ${s.description || 'how you do this kind of job'} (in ${join(disk.botDir(this.cfg, botId), 'skills', s.name)})`).join('\n')}\n` : '')
+      + (apps.length ? `\nThe person's connected apps give you more tools through crew_app: pass \`tool\` (one of ${apps.join(', ')}) and \`input\` (its arguments).\n` : '');
+  }
+
+  /** Only assistant prose is visible; tool arguments and reasoning never ride the live feed. */
+  private onEvent(botId: string, l: Live, e: RunEvent) {
+    if (this.live.get(botId) !== l) return;
+    if (e.type === 'text') this.db.live('reply.partial', botId, { task: l.task, member: l.member, text: e.text.slice(0, 280) });
+    else if (e.type === 'usage' && e.tokens) {
+      this.db.run('UPDATE tasks SET tokens = tokens + ? WHERE id = ?', Math.round(e.tokens), l.task);
+      this.db.run('INSERT INTO usage (member, day, tokens) VALUES (?, ?, ?) ON CONFLICT(member, day) DO UPDATE SET tokens = tokens + excluded.tokens', l.member, dayOf(), Math.round(e.tokens));
+    }
+  }
+
+  private settled(botId: string, task: Row, l: Live, end: RunEnd) {
     if (this.stopped) return; // a turn cut short by shutdown settles after the store has closed
-    this.count(l);
-    if (this.live.get(botId) !== l || l.session.isStreaming) return; // replaced, reset, or more work queued behind this turn
-    const last: any = [...l.session.messages].reverse().find((m: any) => m.role === 'assistant');
-    if (last?.stopReason === 'aborted') return; // stopped on purpose: Take over or Stop
-    const error = err ? String((err as Error).message ?? err) : last?.stopReason === 'error' ? String(last.errorMessage ?? 'error') : '';
-    if (!error) return this.finish(botId, l.session.getLastAssistantText() ?? '');
-    const kind = classify(error);
-    if (kind && kind.kind !== 'network') return void this.failover(botId, error);
-    console.error(`${botId}: ${error}`);
-    const task = this.activeTask(botId);
-    if (task) this.setTask(task, 'failed', `${PROVIDERS[l.brain.provider].name} couldn't finish this one. Try again.`);
+    this.busy.delete(botId);
+    if (this.live.get(botId) !== l) return; // replaced or reset
+    if (end.ok) {
+      void this.surfaceLearned(botId, l).catch(() => {});
+      return this.finish(botId, end.text); // a rest expires by its own time; a success never clears one early
+    }
+    if ('aborted' in end) return; // stopped on purpose: Take over, Stop, or a parked question
+    const name = disk.brainName({ provider: l.account });
+    const words = end.kind === 'resting' ? `${name} is resting until ${clock(end.until ?? Date.now() + 60 * 60_000)}`
+      : end.kind === 'signed-out' ? `${name} needs you to sign in again`
+      : end.kind === 'plan' ? `${name}'s plan doesn't include helpers` : '';
+    if (!words) {
+      console.error(`${botId}: ${end.message}`);
+      this.close(botId);
+      this.setTask(task, 'failed', `${name} couldn't finish this one. Try again.`);
+      return this.dispatch();
+    }
+    // The account hit its limit, needs signing in again, or its plan doesn't include helpers: rest or flag it, and the
+    // task continues in its own session on the next account, conversation and all.
+    if (end.kind === 'resting') {
+      const until = end.until ?? Date.now() + 60 * 60_000;
+      this.accounts.rest(l.member, l.account, until);
+      this.db.event('account.resting', null, { account: l.account, name, member: l.member, until });
+    } else if (end.kind === 'plan') this.accounts.notIncluded(l.member, l.account, true);
+    else this.accounts.expired.add(`${l.member}:${l.account}`);
     this.close(botId);
+    this.handoffs.set(task.id, words);
+    this.db.tx(() => {
+      this.db.run("UPDATE bots SET state = 'off' WHERE id = ?", botId);
+      this.setTask(task, 'queued');
+    });
     this.dispatch();
   }
 
-  /** The first of these accounts the member can think with now. */
+  /** The first of these accounts the member can think with now: signed in, and not resting. */
   private async usable(member: number, choices: disk.Brain[]) {
-    for (const b of choices) await this.accounts.signedIn(member, b.provider).catch(() => false);
-    return this.accounts.ladder(member, choices, (b) => b.provider);
+    for (const b of choices) {
+      if (!await this.accounts.signedIn(member, b.provider).catch(() => false)) continue;
+      const until = this.accounts.restingUntil(member, b.provider);
+      if (until && until > Date.now()) continue;
+      return b.provider;
+    }
+    return undefined;
   }
 
   /** Every account this task could use is resting: wait for the earliest. None usable yet (never signed in, signed out,
@@ -1325,29 +1438,19 @@ export class Crew {
       !!this.db.get("SELECT 1 FROM asks WHERE state = 'open' AND json_extract(detail, '$.pass.root') = ?", root);
   }
 
-  /** An account hit its limit, is overloaded or needs signing in again: rest it, and the task continues in its own
-   *  session on the next account, conversation and all. */
-  private async failover(botId: string, error: string) {
-    const l = this.live.get(botId);
-    const task = this.activeTask(botId);
-    if (!l || !task) return;
-    const name = PROVIDERS[l.brain.provider].name;
-    // A sign-in that still refreshes was only turned away in passing, so it rests a few minutes instead of looping.
-    const why = (await this.accounts.failed(l.member, l.brain.provider, error))!.kind;
-    let words = `${name} needs you to sign in again`;
-    if (why === 'not_included') words = `${name}'s plan doesn't include helpers`;
-    else if (why !== 'signed_out') {
-      const until = this.accounts.restingUntil(l.member, l.brain.provider);
-      this.db.event('account.resting', null, { account: l.brain.provider, name, member: l.member, until });
-      words = why === 'rate_limit' ? `${name} is resting until ${clock(until)}` : `${name} is busy right now`;
+  /** After a real engine run: any skill the engine's reviewer applied lands as one plain line with a Forget. */
+  private async surfaceLearned(botId: string, l: Live) {
+    if (this.cfg.engine === 'stub') return;
+    const learned = await this.runtime.learned(l.member).catch(() => [] as { id: string; skill: string; at: number; state: string }[]);
+    const applied = learned.filter((p) => p.state === 'applied');
+    for (const p of applied) {
+      if (this.seenLearned.has(`${l.member}:${p.id}`)) continue;
+      this.seenLearned.add(`${l.member}:${p.id}`);
+      this.db.tx(() => {
+        this.say(botId, 'system', `Learned: ${p.skill} — I'll do it this way next time. You can Forget it on ${this.bot(botId)?.display ?? 'its'} page.`, l.task);
+        this.db.event('learn.applied', botId, { task: l.task, member: l.member, id: p.id, skill: p.skill });
+      });
     }
-    this.close(botId);
-    this.handoffs.set(task.id, words);
-    this.db.tx(() => {
-      this.db.run("UPDATE bots SET state = 'off' WHERE id = ?", botId);
-      this.setTask(task, 'queued');
-    });
-    this.dispatch();
   }
 
   /** A turn finished with a reply. */
@@ -1384,6 +1487,113 @@ export class Crew {
     });
     if (task && !parked && !this.held.has(botId)) this.close(botId);
     this.dispatch();
+  }
+
+  /** Host half of the replaceable agent runtime. The task id and member are checked before any tool is considered. */
+  toolHost(): ToolHost {
+    const own = (run: RunRef) => {
+      const task = this.activeTask(run.bot);
+      if (!task || task.id !== run.task || (task.member ?? OWNER) !== run.member || this.live.get(run.bot)?.task !== run.task)
+        throw new Error('Unknown or stale task');
+      return task;
+    };
+    return {
+      tools: (run) => {
+        own(run);
+        return this.crewTools(run.bot).map((t) => ({ name: t.name, description: t.description, parameters: t.parameters }));
+      },
+      gate: async (run, tool, rawInput) => {
+        try {
+          const task = own(run);
+          const [name, input] = this.unwrap(tool, rawInput);
+          if (this.netOf(run.bot) && (name === 'web_fetch' || name === 'web_search')) {
+            this.refusedNet(run.bot, name);
+            return { allow: false, reason: 'This helper can read only the places on its list. Use its checked web tool.' };
+          }
+          // crew_app rides on the inner tool being one of this run's connected apps; everything else by grant.
+          const ok = tool === 'crew_app' ? (this.live.get(run.bot)?.appTools?.has(name) ?? false)
+            : this.toolAllowed(run.bot, name);
+          if (!ok) return { allow: false, reason: 'This run does not have that tool.' };
+          const result = await this.gate(run.bot, name, input);
+          if (result) {
+            if (result.terminate) { // the person hasn't answered: stop the run here; the answer arrives as the next prompt
+              this.db.tx(() => this.setTask(task, 'needs_you', 'Waiting for you.'));
+              void this.runtime.abort(run.key).catch(() => {});
+            }
+            return { allow: false, reason: result.reason ?? 'Not allowed', park: result.terminate };
+          }
+          return { allow: true };
+        } catch { return { allow: false, reason: 'Crewhouse could not check this call.' }; }
+      },
+      call: async (run, tool, rawInput, signal) => {
+        own(run);
+        let ok = true, text = '';
+        try {
+          text = await this.toolCall(run, tool, rawInput, signal);
+        } catch (e: any) {
+          // A refused tool is a result the model reads and adapts to, never a crashed run.
+          ok = false;
+          text = `error: ${String(e?.message ?? e).slice(0, 300)}`;
+        }
+        // crewd's own record of what the run did: the drawer and the validator read this, never the engine's word.
+        const [name] = this.unwrap(tool, rawInput);
+        this.db.event('run.call', run.bot, { task: run.task, tool: name, input: JSON.stringify(rawInput).slice(0, 1000), ok, head: text.split('\n')[0].slice(0, 160) });
+        return text;
+      },
+    };
+  }
+
+  // A remote app's tool rides inside crew_app; the gate and the card see the real tool and its input.
+  private unwrap(tool: string, input: Record<string, unknown>): [string, Record<string, unknown>] {
+    return tool === 'crew_app' ? [String(input.tool ?? ''), (input.input ?? {}) as Record<string, unknown>] : [tool, input];
+  }
+
+  /** The crew's half of a tool call, after the gate said yes. */
+  private async toolCall(run: RunRef, tool: string, rawInput: Record<string, unknown>, signal?: AbortSignal): Promise<string> {
+    const l = this.live.get(run.bot);
+    const space = disk.botDir(this.cfg, run.bot);
+    const [name, input] = this.unwrap(tool, rawInput);
+        if (l?.shell && name === 'bash') return String(await l.shell.run(input, signal));
+        if (l?.browserTool && name === 'browser') return String(await l.browserTool.run(input, signal));
+        if (/^crew_(read|write|edit|ls|grep|find)$/.test(name)) return fileTool(space, name, input);
+        if (name === 'crew_web_fetch' || name === 'crew_web_search') {
+          const net = this.netOf(run.bot);
+          const selected = webTools(net?.may).find((entry) => entry.name === name.slice(5));
+          if (!selected) throw new Error('Unknown web tool');
+          return String(await selected.run(input, signal));
+        }
+        if ((name === 'calendar' || name === 'mail' || tool === 'crew_app') && l?.appTools?.has(name)) {
+          const app = l.appTools.get(name)!;
+          return String(await app.run(input, signal));
+        }
+        // Command-line tools that need the person's own sign-in: fixed argv on this computer, outside the sandbox.
+        const runTool = registry(this.cfg).find((t) => t.run && (l?.grants ?? []).includes(t.id) && t.id.replace(/-/g, '_') === name);
+        if (runTool) return await new Promise<string>((resolve) => {
+          execFile(which(this.cfg, runTool.bins[0]) ?? runTool.bins[0], ((input.args as string[]) ?? []).map(String),
+            { cwd: space, env: { ...process.env, ...(this.live.get(run.bot) ? resolveGrants(this.cfg, disk.botConfig(this.cfg, run.bot).tools ?? [], { 'bot.dir': space, 'bot.id': run.bot }).env : {}), NO_COLOR: '1' }, timeout: 120_000, maxBuffer: 8 << 20, signal },
+            (err, out, errOut) => resolve(`${out}${errOut}${err && !out ? `\n(exit: ${err.message})` : ''}`.slice(0, 30_000)));
+        });
+        const candidate = this.crewTools(run.bot).find((entry) => entry.name === name);
+        if (!candidate) throw new Error('Unknown tool');
+        return String(await candidate.run(input, signal));
+  }
+
+  /** Whether this run may even consider the tool: grants first, then the policy decides what a call means. */
+  toolAllowed(botId: string, name: string) {
+    const l = this.live.get(botId);
+    if (!l) return false;
+    const grants = l.grants ?? [];
+    // OpenClaw's own read/recall/media tools, adopted for unfenced runs; a fenced helper's way out stays crewd's.
+    if (NATIVE_TOOLS.has(name)) return !this.netOf(botId);
+    if (/^crew_(read|write|edit|ls|grep|find)$/.test(name)) return grants.includes('files');
+    if (name === 'bash') return grants.includes('files') && sandboxReady();
+    if (name === 'crew_web_fetch' || name === 'crew_web_search') return grants.includes('web');
+    if (name === 'browser') return !!l.browserTool;
+    if (name === 'calendar' || name === 'mail') return l.appTools?.has(name) ?? false;
+    if (name === 'crew_app') return true; // the inner tool is checked inside the gate and again in call
+    if (name.startsWith('crew_')) return this.crewTools(botId).some((t) => t.name === name);
+    // Command-line tools that need the person's own sign-in (a kit tool's run grant).
+    return registry(this.cfg).some((t) => t.run && grants.includes(t.id) && t.id.replace(/-/g, '_') === name);
   }
 
   // ---- the gate: every tool call, before it runs ----
@@ -1624,18 +1834,18 @@ export class Crew {
   steer(botId: string, text: string, member = OWNER) {
     const l = this.live.get(botId);
     if (!text.trim()) throw fail('empty message');
-    if (!l?.session.isStreaming) throw fail(`${this.bot(botId)?.display ?? 'That bot'} isn't working on anything right now; send it as a message`, 409);
-    void l.session.steer(text.trim());
+    if (!l || !this.busy.has(botId)) throw fail(`${this.bot(botId)?.display ?? 'That bot'} isn't working on anything right now; send it as a message`, 409);
+    void this.runtime.steer(l.key, text.trim()).catch(() => {});
     this.say(botId, 'person', text.trim(), l.task, member);
     this.db.event('run.typed', botId, { task: l.task });
   }
 
   // ---- the crew tools: how a bot reports, delivers and remembers, and how Chief runs the crew ----
-  private crewTools(botId: string): ToolDefinition[] {
-    const tool = (name: string, description: string, params: Record<string, any>, fn: (p: any) => unknown) => defineTool({
-      name, label: name, description, parameters: Type.Object(params),
-      execute: async (_id, p) => ({ content: [{ type: 'text', text: JSON.stringify(await fn(p) ?? { ok: true }) }], details: {} }),
-    }) as ToolDefinition;
+  private crewTools(botId: string): CrewTool[] {
+    const tool = (name: string, description: string, params: Record<string, any>, fn: (p: any) => unknown): CrewTool => ({
+      name, description, parameters: Type.Object(params),
+      run: async (p) => JSON.stringify(await fn(p) ?? { ok: true }),
+    });
     const task = () => this.activeTask(botId)?.id;
     const apps = Object.keys(this.connections.apps).join(', ');
     const own = [
@@ -2004,17 +2214,18 @@ export class Crew {
       this.schedule();
       const working = !!this.db.get("SELECT 1 FROM tasks WHERE state = 'working' LIMIT 1");
       if (working !== this.awake) { this.awake = working; this.keepAwake(working); }
+      if (this.learningOn() && this.curationAt && now >= this.curationAt && !this.curationBusy) {
+        this.curationBusy = true;
+        void this.weeklyCuration().finally(() => { this.curationBusy = false; });
+      }
       for (const task of this.db.all("SELECT * FROM tasks WHERE state IN ('working', 'needs_you') AND created_at < ?", Date.now() - TASK_TIMEOUT_MS)) {
-        void this.live.get(task.bot)?.session.abort();
         this.close(task.bot);
         this.setTask(task, 'failed', 'Took longer than an hour, so I stopped it.');
       }
       this.desktops.sweep((bot) => !!this.activeTask(bot) || this.held.has(bot));
       if (Date.now() - this.freshAt > 30 * 60_000) {
         this.freshAt = Date.now();
-        const members = this.members().map((m) => m.id);
-        void this.accounts.keepFresh(members).catch((e) => console.error('keep fresh', e));
-        void this.connections.keepFresh(members).catch((e) => console.error('keep fresh', e));
+        void this.connections.keepFresh(this.members().map((m) => m.id)).catch((e) => console.error('keep fresh', e));
       }
     } catch (e) { console.error('tick', e); }
     this.dispatch();
@@ -2062,7 +2273,8 @@ export class Crew {
       if (task) this.say(botId, 'system', `You have the controls. ${bot.display} is paused until you give them back.`, task.id);
     });
     this.live.get(botId)?.browser?.release();
-    await this.live.get(botId)?.session.abort();
+    const l = this.live.get(botId);
+    if (l) void this.runtime.abort(l.key).catch(() => {});
   }
 
   /** The person hands the controls back; the bot resumes its task with a note of what they did.
@@ -2133,5 +2345,6 @@ export class Crew {
   }
 
   /** The engine session a bot is working in, for tests. */
-  sessionOf(botId: string) { return this.live.get(botId)?.session; }
+  /** The run's live state, for tests and the room. */
+  sessionOf(botId: string) { return this.live.get(botId); }
 }

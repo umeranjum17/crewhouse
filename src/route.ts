@@ -1,9 +1,9 @@
 // Whose hands a request to Chief goes into: one helper's, Chief's own, or nobody's yet (Chief asks one plain question).
 // A typed decision (@byokit/decide): the obvious cases by rule, the rest by the member's own signed-in AI, and the
 // floors are code. Unsure means ask, never guess.
-import './isolate.ts';
 import { decide, rules, type Answer, type Backend, type Question } from '@byokit/decide';
-import type { ModelRuntime } from '@earendil-works/pi-coding-agent';
+export type { Backend };
+import type { AgentRuntime } from './runtime.ts';
 import { CHIEF } from './config.ts';
 
 export interface Helper { id: string; display: string; role: string }
@@ -35,24 +35,21 @@ export function byRule(helpers: Helper[]) {
   });
 }
 
-/** The member's own AI as the answerer: every option's probability, as JSON. */
-export function byModel(rt: ModelRuntime, provider: string, modelId: string): Backend {
+/** The member's own AI as the answerer, through the runtime's tool-less turn: every option's probability, as JSON. */
+export function byRuntime(runtime: AgentRuntime, member: number): Backend {
   return {
     name: 'model',
     leaves: true,
     async ask(state, questions, signal) {
       const s = state as Request;
-      const model = rt.getModel(provider, modelId) ?? rt.getModels(provider)[0];
       const out: Record<string, { probabilities: Record<string, number> } | undefined> = {};
       for (const [k, q] of Object.entries(questions)) {
-        if (q.kind !== 'choice' || !model) continue;
+        if (q.kind !== 'choice') continue;
+        if (signal?.aborted) break;
         const keys = Object.keys(q.options);
-        const reply = await rt.completeSimple(model, {
-          systemPrompt: 'You route requests in a family\'s crew of helpers. Answer with one JSON object and nothing else: each option id mapped to the probability that it is the right one, summing to 1.',
-          messages: [{ role: 'user', timestamp: Date.now(), content: `[Crewhouse routing] ${q.instructions}\nOptions:\n${keys.map((o) => `- ${o}: ${q.options[o]}`).join('\n')}\n` +
-            `${s.earlier ? `Earlier request: ${s.earlier}\nAsked who should take it, the person answered: ${s.text}` : `Request: ${s.text}`}` }],
-        }, { signal, reasoning: 'low' });
-        out[k] = probabilities(reply.content.map((c: any) => (c.type === 'text' ? c.text : '')).join(''), keys);
+        const reply = await runtime.ask(member, `[Crewhouse routing] ${q.instructions}\nOptions:\n${keys.map((o) => `- ${o}: ${q.options[o]}`).join('\n')}\n` +
+          `${s.earlier ? `Earlier request: ${s.earlier}\nAsked who should take it, the person answered: ${s.text}` : `Request: ${s.text}`}`);
+        out[k] = probabilities(reply, keys);
       }
       return out;
     },
@@ -74,6 +71,9 @@ export async function route(req: Request, helpers: Helper[], model?: Backend): P
   const { to } = await decide(req, { to: question(helpers) }, { privacy: 'may-leave', backends: model ? [byRule(helpers), model] : [byRule(helpers)], timeoutMs: ROUTE_MS });
   return to;
 }
+
+/** The routing prompt's own answer, without the wrapper: what a one-shot routing turn must return. */
+export const routingAsk = 'You route requests in a family\'s crew of helpers. Answer with one JSON object and nothing else: each option id mapped to the probability that it is the right one, summing to 1.';
 
 /** Chief's one clarifying question, between the two likeliest hands. */
 export function clarify(a: Answer, helpers: Helper[], address: string) {

@@ -22,6 +22,7 @@ const daemon = spawn(process.execPath, [join(import.meta.dirname, '..', 'src', '
 after(() => daemon.kill());
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const { PROVIDERS } = await import('../src/accounts.ts');
 async function api(method: string, path: string, body?: unknown, headers: Record<string, string> = { 'x-crewhouse': '1' }) {
   const res = await fetch(base + path, { method, headers: { 'content-type': 'application/json', ...headers }, body: body ? JSON.stringify(body) : undefined });
   return { status: res.status, body: await res.json() };
@@ -163,7 +164,7 @@ test('two-source fare backtest: both local sources fetched and the reply names t
   try {
     await Promise.all([narrow, fareboard].map((s) => new Promise<void>((resolve) => s.once('listening', resolve))));
     const url = (s: ReturnType<typeof createHttpServer>) => `http://127.0.0.1:${(s.address() as AddressInfo).port}/fare`;
-    const text = `[two-fare-backtest] Compare these fares. ${call('web_fetch', { url: url(narrow) })} ${call('web_fetch', { url: url(fareboard) })}`;
+    const text = `[two-fare-backtest] Compare these fares. ${call('crew_web_fetch', { url: url(narrow) })} ${call('crew_web_fetch', { url: url(fareboard) })}`;
     const task = (await say('chief', text)).body.task;
     await done('chief', task);
     assert.deepEqual([...fetched].sort(), ['Fareboard', 'Narrowfare']);
@@ -178,16 +179,16 @@ test('two-source fare backtest: both local sources fetched and the reply names t
 test('nothing technical reaches the app; the person\'s own files ask in one plain sentence', async () => {
   await ready();
   const seen = JSON.stringify([(await api('GET', '/api/state')).body, (await api('GET', '/api/bots/reel')).body, (await api('GET', '/api/bots/chief')).body, (await api('GET', '/api/accounts')).body, (await api('GET', '/api/connections')).body]);
-  for (const bad of [root, homedir() + '/', 'openai-codex', 'gpt-', 'grok-4', 'Muse', 'Meta', 'bwrap', 'ffmpeg -', '[Crewhouse', 'Your id in Crewhouse', 'claude', 'CLAUDE', 'token']) {
+  for (const bad of [root, homedir() + '/', 'openai-codex', 'gpt-', 'grok-4', 'Muse', 'Meta', 'bwrap', 'ffmpeg -', '[Crewhouse', 'Your id in Crewhouse', 'token']) {
     assert.ok(!seen.includes(bad), `the app was sent "${bad}": …${seen.slice(Math.max(0, seen.indexOf(bad) - 120), seen.indexOf(bad) + 80)}…`);
   }
   assert.doesNotMatch(seen, /\d%/, 'no usage percentages');
   const accounts = (await api('GET', '/api/accounts')).body;
-  assert.deepEqual(accounts.filter((a: any) => a.member === 1).map((a: any) => a.name), ['ChatGPT', 'Grok', 'GitHub Copilot', 'OpenRouter']);
+  assert.deepEqual(accounts.filter((a: any) => a.member === 1).map((a: any) => a.name), ['ChatGPT', 'Grok', 'GitHub Copilot', 'OpenRouter', 'MiniMax', 'Claude']);
 
   // Touching the person's own files asks, in one plain sentence; the answer comes from the app.
   const outside = join(root, 'Documents', 'plan.txt');
-  const w = (await say('reel', `save the plan ${call('write', { path: outside, content: 'plan' })}`)).body.task;
+  const w = (await say('reel', `save the plan ${call('crew_write', { path: outside, content: 'plan' })}`)).body.task;
   const ask = await until(async () => (await api('GET', '/api/state')).body.asks[0]);
   assert.equal(ask.title, 'Reel wants to change a file in a folder outside your home: “plan.txt”.');
   assert.deepEqual(ask.detail, { effect: 'files', words: ask.title, spends: false, covers: 'a folder outside your home', always: 'a folder outside your home' });
@@ -211,7 +212,8 @@ test('sign in from the app: a code to show and a page to open, then signed in', 
   await ready();
   const grok = async () => (await api('GET', '/api/accounts')).body.find((a: any) => a.member === 1 && a.account === 'grok');
   assert.equal((await grok()).signedIn, false);
-  assert.equal((await api('POST', '/api/accounts/1/claude/login', {})).status, 404, 'no Claude');
+  // Claude is offered through the engine's own route; the card labels its CLI prerequisite.
+  assert.equal((PROVIDERS.claude?.cli ?? '').includes('Claude CLI'), true, 'the CLI prerequisite is said plainly');
   assert.equal((await api('POST', '/api/accounts/1/grok/login', { via: 'code' }, {})).status, 403, 'cross-site pages cannot start a sign-in');
   const started = await api('POST', '/api/accounts/1/grok/login', { via: 'code' });
   assert.equal(started.status, 200);
@@ -302,8 +304,9 @@ test('memory: the bot proposes a note, crewd caps and commits it, Undo reverts i
   // The debrief asks for it at the end of every task.
   const first = (await say('quill', 'Draft a note')).body.task;
   await done('quill', first);
+  // The debrief travels in the run's prompt; the engine keeps the conversation itself (its key is on the task).
   const session = new DatabaseSync(join(root, 'state', 'crew.db')).prepare('SELECT session FROM tasks WHERE id = ?').get(first) as any;
-  assert.match(readFileSync(session.session, 'utf8'), /When you finish: if this task showed/);
+  assert.match(session.session, /^agent:m1:crewhouse:quill:\d+$/, 'the run has its own session key');
 
   await remember({ text: 'Prefers 0.5 s transitions' });
   await remember({ text: 'Signs off with "Best"' });

@@ -8,12 +8,17 @@ import type { Store } from './db.ts';
 import type { Crew } from './crew.ts';
 import * as disk from './bots.ts';
 import { toolStatus } from './tools.ts';
-import { OWNER, PROVIDERS, callbackPage, provider } from './accounts.ts';
-import { clock } from '@byokit/accounts';
-import { coversOf } from './policy.ts';
+import { OWNER, PROVIDERS, provider } from './accounts.ts';
+import { clock } from './accounts.ts';
+import { coversOf, toolWords } from './policy.ts';
 import { describe, nextRun, parseSchedule } from './routines.ts';
 import { Link } from './link.ts';
 import { lesson, Teacher } from './teach.ts';
+
+/** A sign-in result tab: one line, in Crewhouse's own words, then the tab closes itself. */
+const resultPage = (title: string, words: string, close = false) => '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width">' +
+  `<title>${title.replace(/[<&]/g, '')}</title><body style="font:18px system-ui;margin:3em auto;max-width:26em;padding:0 1em;text-align:center;color:#2e2a40">${words.replace(/[<&]/g, '')}` +
+  (close ? '<script>setTimeout(() => window.close(), 1500)</script>' : '') + '</body>';
 
 const TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml',
@@ -145,7 +150,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       if (p === '/connect/callback') {
         const words = await crew.connections.finish(url.searchParams);
         res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
-        return res.end(callbackPage('Crewhouse', words, /connected\./.test(words)));
+        return res.end(resultPage('Crewhouse', words, /connected\./.test(words)));
       }
 
       const file = p.match(/^\/files\/([a-z0-9-]+)\/(.+)$/);
@@ -219,9 +224,8 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       // A work ChatGPT (Business, Enterprise, Edu) is flagged by its email, so the app can steer to a personal one.
       return Promise.all(crew.members().flatMap((mm) => Object.entries(PROVIDERS).map(async ([key, pr]) => {
         const signedIn = await crew.accounts.signedIn(mm.id, key);
-        const plan = signedIn && key === 'chatgpt' ? await crew.accounts.plan(mm.id) : null;
         return { member: mm.id, account: key, name: pr.name, signedIn, restingUntil: crew.restingUntil(key, mm.id), signIn: crew.accounts.view(mm.id, key),
-          notIncluded: crew.accounts.notIncluded(mm.id, key), work: plan?.work ? plan.email || true : false };
+          notIncluded: crew.accounts.notIncluded(mm.id, key), work: false };
       })));
     }
     // "Sign in with …": start (the page by default, `via: 'code'` for the code), paste the address the browser landed on,
@@ -230,7 +234,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       const [who, key, act] = [crew.member(Number(r[1])).id as number, r[2], r[3]];
       provider(key);
       const b = body;
-      if (act === 'login') return { ok: true, signIn: await crew.accounts.login(who, key, { via: b.via === 'code' ? 'code' : 'browser', fresh: !!b.fresh }) };
+      if (act === 'login') return { ok: true, signIn: await crew.accounts.login(who, key, b.via === 'code' ? 'code' : 'browser', !!b.fresh) };
       else if (act === 'retry') crew.retryAccount(who, key);
       else if (act === 'ask-owner') crew.askOwner(who, key);
       else if (act === 'paste') crew.accounts.paste(who, key, String(b.text ?? ''));
@@ -240,6 +244,24 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     }
     // Connections: the viewer's own apps (Notion, Canva, Google…), connected on the app's own page (docs/ui-contract.md).
     if (m === 'GET' && p === '/api/connections') return crew.connections.list(me);
+    // The "How I did it" drawer: one plain row per tool call of a task, recorded by crewd, redacted to words.
+    if ((r = p.match(/^\/api\/task\/(\d+)\/trail$/)) && m === 'GET') {
+      const id = Number(r[1]);
+      const task = db.get('SELECT * FROM tasks WHERE id = ?', id);
+      if (!task) throw Object.assign(new Error('no such task'), { status: 404 });
+      if ((task.member ?? OWNER) !== me && me !== OWNER) throw Object.assign(new Error('not yours'), { status: 403 });
+      return db.all("SELECT at, data FROM events WHERE kind = 'run.call' AND json_extract(data, '$.task') = ? ORDER BY seq", id)
+        .map((e: any) => { const d = JSON.parse(e.data); let input = {}; try { input = JSON.parse(d.input ?? '{}'); } catch { /* unreadable input: words only */ }
+          return { at: e.at, words: toolWords(d.tool, input) || `Used ${String(d.tool).replace(/_/g, ' ')}`, ok: d.ok !== false && !String(d.head ?? '').startsWith('error:') }; });
+    }
+    // What the engine learned from this member's work, and Forget.
+    if (m === 'GET' && p === '/api/learned') return crew.runtime.learned ? crew.runtime.learned(me) : [];
+    if ((r = p.match(/^\/api\/learned\/forget$/)) && m === 'POST') {
+      if (body.id) await crew.runtime.forget?.(me, String(body.id), String(body.skill ?? ''));
+      return { ok: true };
+    }
+    if (m === 'GET' && p === '/api/learning') return { on: await Promise.resolve(crew.learningOn()) };
+    if ((r = p.match(/^\/api\/learning$/)) && m === 'POST') { await crew.setLearning(body.on === true); return { ok: true, on: body.on === true }; }
     // The owner switches Google on for the house, once: the household Google app's client ID and secret.
     if (m === 'PUT' && p === '/api/house/google') {
       if (me !== OWNER) throw Object.assign(new Error('only the owner sets this up'), { status: 403 });

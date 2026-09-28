@@ -19,10 +19,12 @@ export interface Config {
   /** A relay the family runs themselves (relay/), for phones away from home. None by default: there is no hosted one.
    *  Settings, Phones overrides it. */
   relay: string;
-  /** 'pi' for the real AI accounts, 'stub' for tests: a scripted model inside the same engine, no quota. */
-  engine: 'pi' | 'stub';
+  /** 'openclaw' for the real engine, 'stub' for tests: the scripted model, no quota. */
+  engine: 'openclaw' | 'stub';
   /** Max concurrent bot runs. */
   maxConcurrent: number;
+  /** A custom OpenAI-compatible model provider for the engine (the tests' scripted model; a self-hosted gateway later). */
+  engineProvider?: { baseUrl: string; apiKey: string };
   repoDir: string;
 }
 
@@ -43,8 +45,10 @@ export function loadConfig(): Config {
     linkHost: process.env.CREWHOUSE_LINK_HOST?.trim() || '',
     linkPort: Number(process.env.CREWHOUSE_LINK_PORT ?? 7712),
     relay: process.env.CREWHOUSE_RELAY?.trim() ?? '',
-    engine: process.env.CREWHOUSE_ENGINE === 'stub' ? 'stub' : 'pi',
+    engine: process.env.CREWHOUSE_ENGINE === 'stub' ? 'stub' : 'openclaw',
     maxConcurrent: Number(process.env.CREWHOUSE_MAX_CONCURRENT || 3),
+    engineProvider: process.env.CREWHOUSE_ENGINE_BASE_URL && process.env.CREWHOUSE_ENGINE_API_KEY
+      ? { baseUrl: process.env.CREWHOUSE_ENGINE_BASE_URL, apiKey: process.env.CREWHOUSE_ENGINE_API_KEY } : undefined,
     repoDir: resolve(import.meta.dirname, '..'),
   };
 }

@@ -164,7 +164,7 @@ test('a claim that asks for an upload or a signature stops with the pack ready a
   const { db, crew, done } = setup();
   const pack = 'Claim pack for property PA-88231: wages held by Acme Corp, $1,240.00, owed at 12 Lovelace Lane. Proof the register asks for: a passport. The form stops at Upload ID — that line is the person\'s.';
   const { task: t } = (await crew.post('scout', 'Get the claim for PA-88231 ready and ask permission before anything more. '
-    + `[tool write {"path":"files/claim-pa-88231.md","content":"${pack}"}] `
+    + `[tool crew_write {"path":"files/claim-pa-88231.md","content":"${pack}"}] `
     + '[tool crew_deliver {"path":"files/claim-pa-88231.md"}] '
     + '[tool crew_outcome {"worked": false, "seen": "I stopped where the form asks for a passport upload. The pack is ready in files/claim-pa-88231.md; the upload line is yours to do."}]'))!;
   await until('working', () => crew.sessionOf('scout'));
@@ -334,7 +334,7 @@ test('the chase email is a draft in the person\u2019s name: the yes records the 
   const { db, crew, done } = setup();
   const chase = 'Subject: Order 98765 — returned 16 May, no refund yet.\n\nHello, my return reached you on 16 May, inside your own 30-day window. The order page still shows no refund. Please confirm the payment. Regards,';
   const { task: t } = (await crew.post('scout', 'The shop is past its own window. Write the chase email, put it in front of me, and ask permission before anything more. '
-    + `[tool write {"path":"files/chase-order-98765.md","content":"${chase.replace(/\n/g, '\\n')}"}] `
+    + `[tool crew_write {"path":"files/chase-order-98765.md","content":"${chase.replace(/\n/g, '\\n')}"}] `
     + '[tool crew_draft {"path":"files/chase-order-98765.md","to":"the shop\u2019s support inbox"}] '
     + '[tool crew_outcome {"worked": false, "seen": "The chase email is a draft on your card; reading it and sending it is yours."}]'))!;
   await until('working', () => crew.sessionOf('scout'));
@@ -404,7 +404,7 @@ test('a renewal caught ahead of the bill: the warning plus a cancellation email 
   const { db, crew, done } = setup();
   const letter = 'Subject: Family plan — please cancel before 14 June\n\nHello, my Family plan renews on 14 June at $18.99. Please cancel it from that date and confirm in writing that nothing further will be charged to my card. Regards, Nadia';
   const { task: t } = (await crew.post('scout', 'ask permission: my streaming plan renews 14 June, write the cancellation and put it in front of me. '
-    + `[tool write {"path":"files/cancel-family-plan.md","content":"${letter.replace(/\n/g, '\\n')}"}] `
+    + `[tool crew_write {"path":"files/cancel-family-plan.md","content":"${letter.replace(/\n/g, '\\n')}"}] `
     + '[tool crew_draft {"path":"files/cancel-family-plan.md","to":"the streaming service’s support inbox"}] '
     + '[tool crew_outcome {"worked": false, "seen": "Your Family plan renews 14 June at $18.99, ten days ahead; the cancellation is a draft on your card, so reading it and sending it is yours."}]'))!;
   await until('working', () => crew.sessionOf('scout'));

@@ -56,7 +56,7 @@ const reply = 'Subject: Ayaan’s trip form — Friday\\n\\nHello, the signed tr
 test('a reply to the school is a draft card: the yes approves it, nothing is sent, and the job says so', async () => {
   const { db, crew, done } = setup();
   const { task: t } = (await crew.post('scout', 'The school wants the trip form back. Sort it: the reply on a card in front of me, and ask permission before anything more. '
-    + `[tool write {"path":"files/reply-trip-form.md","content":"${reply}"}] `
+    + `[tool crew_write {"path":"files/reply-trip-form.md","content":"${reply}"}] `
     + '[tool crew_draft {"path":"files/reply-trip-form.md","to":"the school office"}] '
     + '[tool crew_outcome {"worked": true, "seen": "The reply to the school office is a draft on your card; posting it is yours."}]'))!;
   await until('working', () => crew.sessionOf('scout'));

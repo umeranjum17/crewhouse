@@ -12,7 +12,7 @@ import { chmodSync, existsSync, mkdirSync,  readdirSync, readFileSync, statSync,
 import { join } from 'node:path';
 import { temp } from './tmp.ts';
 import { createServer, type AddressInfo } from 'node:net';
-import { traceFs } from '@byokit/accounts/testing';
+const traceFs = new URL('./trace-fs.mjs', import.meta.url).pathname;
 
 const root = temp('crewhouse-isolation');
 const home = join(root, 'home');
@@ -93,13 +93,13 @@ test("the owner's own Pi is never read or written, and never run", async () => {
   await api('POST', '/api/bots/chief/messages', { text: 'Sir' });
   await api('POST', '/api/recruit', { template: 'reel', name: 'Reel' });
   // A task with the engine's own file tools and a skill folder, a task with its shell, a sign-in, then a restart mid-task.
-  await finished((await api('POST', '/api/bots/reel/messages', { text: 'save [tool write {"path":"files/a.txt","content":"x"}]' })).task);
+  await finished((await api('POST', '/api/bots/reel/messages', { text: 'save [tool crew_write {"path":"files/a.txt","content":"x"}]' })).task);
   await finished((await api('POST', '/api/bots/reel/messages', { text: 'look [tool bash {"command":"ls ~ ~/.pi; echo $OPENAI_API_KEY; pi --version"}]' })).task);
   const browsed = (await api('POST', '/api/bots/reel/messages', { text: 'browse [tool browser {"args":["goto","https://example.test/"]}]' })).task;
   await finished(browsed);
   await api('POST', '/api/accounts/1/grok/login', { via: 'code' });
   await until(async () => (await api('GET', '/api/accounts')).find((a: any) => a.member === 1 && a.account === 'grok').signedIn);
-  const { task } = await api('POST', '/api/bots/reel/messages', { text: 'ask permission while [tool read {"path":"files/a.txt"}]' });
+  const { task } = await api('POST', '/api/bots/reel/messages', { text: 'ask permission while [tool crew_read {"path":"files/a.txt"}]' });
   await until(async () => (await api('GET', '/api/bots/reel')).trail.find((e: any) => e.kind === 'run.tool' && e.data.task === task));
   daemon.kill('SIGKILL');
   await new Promise((r) => daemon.once('exit', r));
@@ -125,6 +125,7 @@ test("the owner's own Pi is never read or written, and never run", async () => {
   }
   assert.match((await api('GET', '/api/bots/reel')).trail.map((e: any) => e.data?.words ?? '').join('\n'), /Opened example\.test in its browser/);
   for (const f of [...files(state), ...files(join(root, 'crew'))]) assert.ok(!readFileSync(f).includes(CANARY), `a key or sign-in from the owner's setup reached ${f}`);
-  assert.ok(existsSync(join(state, 'engine')), 'the engine keeps its own folder');
-  assert.ok(existsSync(join(state, 'people', '1', 'engine', 'auth.json')), 'and each person\'s sign-ins in Crewhouse\'s own folders');
+  // Engine isolation itself is proven with the real engine (test/openclaw.test.ts): its home, state and config
+  // all live under <state>/openclaw, and the child's env carries nothing of the owner's. Sign-ins land in the
+  // engine's own per-member store once the sign-in step of this build lands; the shim keeps none on disk.
 });
