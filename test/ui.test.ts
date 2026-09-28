@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Json } from '../web/src/api.ts';
+import { PROVIDERS } from '../src/accounts.ts';
 import * as A from '../web/src/adapter.ts';
 import { readTyped } from '../mobile/src/typed.ts';
 import { draftOf, keepDraft, sent } from '../web/src/draft.ts';
@@ -58,7 +59,7 @@ const state = {
     { seq: 7, at: now, kind: 'task.failed', bot: 'scout', data: { task: 3, title: 'Flights', result: 'Stopped on an error from claude' } },
   ],
   limits: { claude: { fiveHour: { used: 9, resetsAt: now + 3600_000 } } },
-  resting: { claude: now + 3600_000, codex: 0 },
+  resting: { codex: now + 3600_000, ollama: 0 },
   routines: [{ id: 1, bot: 'reel', kind: 'task', name: 'Weekly demo', words: 'Every Monday at 9:00', state: 'on', next_at: now, brain: 'claude:haiku', history: [] }],
 };
 const page = { messages: [
@@ -91,6 +92,24 @@ test('nothing technical survives the adapter', () => {
   assert.deepEqual(A.aboutTraits('Reel', aboutSoul), ['Upbeat and practical', 'Loves a tidy thirty seconds'], 'the family reads traits, not instructions');
   assert.ok(!/\byou\b/i.test(A.aboutDraft('Reel', page.soul)), 'no second-person prompt text reaches the family');
   assert.equal(A.withoutMemory(A.withMemory('- One\n', 'Two'), 0), '- Two\n');
+});
+
+test('the account list is the one crewd really serves: every route, none made up', () => {
+  // The honest matrix: every subscription route /api/accounts serves renders on Settings — no route hidden,
+  // none invented, and ChatGPT (the verified front door) first.
+  const providers = Object.keys(PROVIDERS);
+  assert.deepEqual(A.AIS.map((ai) => ai.key), providers);
+  assert.equal(A.AIS[0].key, 'chatgpt');
+  const rows = providers.flatMap((key) => [1, 2].map((member) => ({ member, account: key, name: key, signedIn: false, restingUntil: 0 })));
+  for (const ai of A.AIS) {
+    const g = A.account(rows, 1, ai.key);
+    assert.equal(g.state, 'signed-out');
+    assert.ok(!/connected|ready/i.test(JSON.stringify(g)), 'a route without an account never reads as tested');
+  }
+  assert.match(A.AI_ROUTES, /API key/);
+  // The resting sentence names the account when it can and stays generic when it can't — both machinery-free.
+  assert.match(A.resting({ resting: { chatgpt: now + 60_000 } }), /^Your ChatGPT is resting until /);
+  assert.match(A.resting({ resting: { notARoute: now + 60_000 } }), /^The crew is resting until /);
 });
 
 test('the give-back sheet and the signed-in list name bare hosts, never paths or pages', () => {

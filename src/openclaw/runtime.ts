@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, renameSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { commit } from './bots_git.ts';
 import { dirname, join } from 'node:path';
@@ -157,19 +157,46 @@ export class OpenClawRuntime implements AgentRuntime {
     await this.connected().request('models.authLogout', { provider, agentId: id }, { timeoutMs: 20_000 });
   }
 
-  /** One-time per member (spec §6): place the member's old engine sign-in where the engine's doctor imports it, run
-   *  doctor once against the isolated state, and retire crewhouse's copy. Never run while the gateway is up. */
+  /** One-time per member (spec §6): place the member's old engine sign-in where the engine's doctor imports it, and
+   *  run doctor once against the isolated state. Runs in the offline window before the gateway comes up — the
+   *  engine's doctor refuses to run while a gateway owns the state directory — and the engine installs first
+   *  (prepare), because an import without the engine is exactly how a preserved sign-in gets lost. Nothing is
+   *  retired here either way: the copy only moves aside once the gateway confirms the import (confirm). */
   async migrate(member: Member, legacyAuthPath: string) {
     const moved = `${legacyAuthPath}.moved-to-engine`;
     if (!existsSync(legacyAuthPath) || existsSync(moved)) return false;
+    await this.gateway.prepare();
     const agentDir = join(this.gateway.root, 'state', 'agents', `m${member}`, 'agent');
     mkdirSync(agentDir, { recursive: true });
     const staged = join(agentDir, 'auth.json');
     if (!existsSync(staged)) copyFileSync(legacyAuthPath, staged);
     const { entry, env } = this.gateway.doctorContext();
-    spawnSync(process.execPath, [entry, 'doctor', '--fix', '--yes', '--non-interactive'], { env, cwd: env.HOME as string, timeout: 120_000, stdio: 'pipe' });
-    renameSync(legacyAuthPath, moved);
-    return true;
+    const ran = spawnSync(process.execPath, [entry, 'doctor', '--fix', '--yes', '--non-interactive'], { env, cwd: env.HOME as string, timeout: 120_000, stdio: 'pipe' });
+    // The doctor's exit code is a weak yes (it exits 0 even when it imports nothing), so a failed run only clears
+    // the staging — the next boot stages the original again, byte for byte. Retiring stays confirm's job.
+    if (ran.status !== 0) rmSync(staged, { force: true });
+    return ran.status === 0;
+  }
+
+  /** After the gateway is up: the migration only counts when the gateway itself reports the member signed in to
+   *  every account their old auth held. Only a confirmed import retires crewhouse's copy (a rename — the original
+   *  bytes move aside whole); anything else leaves the sign-in exactly where it was, and the next boot retries it
+   *  without asking the person to sign in again. */
+  async confirm(member: Member, legacyAuthPath: string) {
+    const moved = `${legacyAuthPath}.moved-to-engine`;
+    if (!existsSync(legacyAuthPath) || existsSync(moved)) return false;
+    try {
+      const wanted = Object.keys(JSON.parse(readFileSync(legacyAuthPath, 'utf8'))).map((key) => PROVIDER_OF[key] ?? key.toLowerCase());
+      if (!wanted.length) return false; // nothing recognizable to verify: never retire on a guess
+      const id = await this.agent(member);
+      for (let tries = 0; tries < 3; tries++) {
+        const status = await this.connected().request<{ providers?: unknown[] }>('models.authStatus', { agentId: id, refresh: true }, { timeoutMs: 20_000 }).catch(() => undefined);
+        const have = new Set((status?.providers ?? []).map((p: any) => (typeof p === 'string' ? p : p?.provider)));
+        if (wanted.every((provider) => have.has(provider))) { renameSync(legacyAuthPath, moved); return true; }
+        await sleep(1500);
+      }
+    } catch { /* the engine is down or the file unreadable: the original stays */ }
+    return false;
   }
 
   /** Point this engine at a custom OpenAI-compatible provider (the tests' scripted model; a self-hosted gateway later).

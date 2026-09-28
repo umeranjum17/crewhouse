@@ -55,9 +55,10 @@ export class OpenClawGateway {
   crewDir = '';
   constructor(stateDir: string) { this.stateDir = stateDir; this.root = join(stateDir, 'openclaw'); }
 
-  async start(): Promise<GatewayClient> {
-    if (this.client) return this.client;
-    this.closing = false;
+  /** Install the pinned engine and lay the isolated state's base files, without launching. Idempotent, so the
+   *  sign-in migration can run the engine's doctor in the offline window between this and start(): the doctor
+   *  refuses to run while a gateway owns the state directory, and it is nothing without the installed engine. */
+  async prepare(): Promise<void> {
     mkdirSync(join(this.root, 'home'), { recursive: true });
     const install = join(runtime, 'node_modules/openclaw/openclaw.mjs');
     if (!existsSync(install)) {
@@ -76,7 +77,6 @@ export class OpenClawGateway {
     const tokenPath = join(this.root, 'token');
     if (!existsSync(tokenPath)) writeFileSync(tokenPath, randomBytes(32).toString('hex'), { mode: 0o600 });
     const token = readFileSync(tokenPath, 'utf8').trim();
-    const env = isolatedEnv(this.stateDir, token);
     const portPath = join(this.root, 'port');
     const port = existsSync(portPath) ? Number(readFileSync(portPath, 'utf8')) : await freePort();
     if (!port || port === 18789) throw new Error('Invalid engine port');
@@ -113,6 +113,15 @@ export class OpenClawGateway {
     };
     const configPath = join(this.root, 'openclaw.json');
     if (!existsSync(configPath)) writeFileSync(configPath, JSON.stringify(config, null, 2), { mode: 0o600 });
+  }
+
+  async start(): Promise<GatewayClient> {
+    if (this.client) return this.client;
+    this.closing = false;
+    await this.prepare();
+    const token = readFileSync(join(this.root, 'token'), 'utf8').trim();
+    const env = isolatedEnv(this.stateDir, token);
+    const port = Number(readFileSync(join(this.root, 'port'), 'utf8'));
     const entry = resolve(createRequire(join(runtime, 'package.json')).resolve('openclaw'), '../../openclaw.mjs');
     const pidfile = join(this.root, 'gateway.pid');
     if (existsSync(pidfile)) {
