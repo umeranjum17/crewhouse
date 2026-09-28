@@ -851,6 +851,9 @@ function Home(ctx: Ctx) {
       <ScrollView contentContainerStyle={s.page} keyboardShouldPersistTaps="handled">
         <View style={{ marginBottom: 20 }}><T style={s.h1}>{A.greeting()}, {state.person.address ?? state.person.name}</T><T tone="ink2" style={s.small}>{A.homeSummary(state)}</T></View>
         {!!A.resting(state) && <Card><T>{A.resting(state)}. I'll pick things back up then.</T></Card>}
+        <Pressable onPress={() => go({ view: 'phone' })} accessibilityRole="button" accessibilityLabel="Check AI account sign-in on the home computer" style={[s.card, { backgroundColor: t.solid }]}>
+          <T style={s.b}>AI account sign-in →</T><T tone="mute" style={s.small}>Check Settings for routes and where to see your sign-in status.</T>
+        </Pressable>
         {needs.length > 0 && <View><Label>Needs you</Label><View style={[s.listGroup, { backgroundColor: t.solid, borderColor: t.line }]}><NeedsRows state={state} cards={needs} open={open} /></View></View>}
         <ChatList state={state} go={go} mood={chief.mood} />
         <JobList state={state} go={go} />
@@ -1350,6 +1353,12 @@ function ThisPhone({ grant, status, onForget, onClear }: { grant: Grant; status:
         <T style={s.b}>{grant.device.name}</T>
         <T tone="mute">{grant.device.role === 'view' ? 'Watches the crew; can’t answer or give jobs.' : 'Answers the crew and gives them jobs, as you.'}</T>
         <View style={[s.row, { marginTop: 6 }]}><Pill tone={status === 'online' ? 'ok' : 'wait'}>{status === 'online' ? 'With the home computer' : 'Looking for the home computer…'}</Pill></View>
+      </Card>
+      <Label>Your AI accounts</Label>
+      <Card>
+        <T tone="mute">Sign-in and live account status are shown only on the home computer: Crewhouse, Settings, Your AI accounts. This phone cannot tell whether a route is signed in. A route without your account there is untested, not connected.</T>
+        <T tone="mute">{A.AI_ROUTES}</T>
+        {A.AIS.map((ai) => <View key={ai.key}><T style={s.b}>{ai.name}</T><T tone="mute" style={s.small}>Check sign-in status on the home computer{ai.cli ? `; this route needs ${ai.cli} first` : ''}.</T></View>)}
       </Card>
       <Card>
         <T style={s.b}>News</T>

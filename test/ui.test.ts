@@ -107,6 +107,12 @@ test('the account list is the one crewd really serves: every route, none made up
     assert.ok(!/connected|ready/i.test(JSON.stringify(g)), 'a route without an account never reads as tested');
   }
   assert.match(A.AI_ROUTES, /API key/);
+  const phone = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
+  assert.match(phone, /<Label>Your AI accounts<\/Label>/);
+  assert.match(phone, /A\.AIS\.map\(\(ai\) =>/, 'the phone shows the same six routes, not a second list');
+  assert.match(phone, /\{A\.AI_ROUTES\}/, 'API-key limitation reaches the phone');
+  assert.match(phone, /live account status are shown only on the home computer/, 'no invented phone sign-in state');
+  assert.match(phone, /onPress=\{\(\) => go\(\{ view: 'phone' \}\)\} accessibilityRole="button" accessibilityLabel="Check AI account sign-in/, 'Home leads to the disclosure');
   // The resting sentence names the account when it can and stays generic when it can't — both machinery-free.
   assert.match(A.resting({ resting: { chatgpt: now + 60_000 } }), /^Your ChatGPT is resting until /);
   assert.match(A.resting({ resting: { notARoute: now + 60_000 } }), /^The crew is resting until /);

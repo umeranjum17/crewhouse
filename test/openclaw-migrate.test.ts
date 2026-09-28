@@ -9,7 +9,7 @@ import { test } from 'node:test';
 import { OpenClawRuntime } from '../src/openclaw/runtime.ts';
 
 const legacyAuth = (extra: Record<string, unknown> = {}) => JSON.stringify({
-  openai: { type: 'oauth', provider: 'openai', access: 'a-preserved', refresh: 'r-preserved', expires: Date.now() + 30 * 86_400_000 },
+  'openai-codex': { type: 'oauth', provider: 'openai-codex', access: 'a-preserved', refresh: 'r-preserved', expires: Date.now() + 30 * 86_400_000 },
   ...extra,
 }, null, 2);
 
@@ -24,6 +24,26 @@ async function house() {
 }
 
 const host = { tools: () => [], gate: async () => ({ allow: true }) as const, call: async () => 'done' };
+
+test('ChatGPT uses the gateway auth provider for status, logout and migration confirmation', async () => {
+  const { legacy, runtime, stop } = await house();
+  const calls: { method: string; params: any }[] = [];
+  const client = { request: async (method: string, params: any) => {
+    calls.push({ method, params });
+    if (method === 'models.authStatus') return { providers: [{ provider: 'openai-codex' }] };
+  } };
+  // A scripted gateway response isolates the identity projection from doctor and network setup.
+  (runtime as any).client = client;
+  (runtime as any).agents.add(1);
+  try {
+    writeFileSync(legacy, legacyAuth());
+    assert.equal(await runtime.signedIn(1, 'chatgpt'), true);
+    await runtime.signOut(1, 'chatgpt');
+    assert.deepEqual(calls.find((c) => c.method === 'models.authLogout')?.params, { provider: 'openai-codex', agentId: 'm1' });
+    assert.equal(await runtime.confirm(1, legacy), true);
+    assert.ok(existsSync(`${legacy}.moved-to-engine`));
+  } finally { await stop(); }
+});
 
 test('a preserved sign-in survives the upgrade, a failed import stays recoverable', { timeout: 600_000 }, async () => {
   // The upgrade: crewhouse's copy is retired only after the gateway itself reports the member signed in.
