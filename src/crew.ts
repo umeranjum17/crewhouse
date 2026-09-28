@@ -292,7 +292,7 @@ export class Crew {
     if (!migrate) return;
     for (const m of this.members()) {
       const legacy = this.legacyAuth(m.id);
-      if (!existsSync(legacy)) continue;
+      if (!existsSync(legacy) && !existsSync(`${legacy}.moved-to-engine`)) continue;
       try { await migrate.call(this.runtime, m.id, legacy); }
       catch (e) { console.error(`engine migration m${m.id}:`, e); }
     }
@@ -306,7 +306,7 @@ export class Crew {
     if (!confirm) return;
     for (const m of this.members()) {
       const legacy = this.legacyAuth(m.id);
-      if (!existsSync(legacy)) continue;
+      if (!existsSync(legacy) && !existsSync(`${legacy}.moved-to-engine`)) continue;
       try { await confirm.call(this.runtime, m.id, legacy); }
       catch (e) { console.error(`engine migration m${m.id}:`, e); }
     }

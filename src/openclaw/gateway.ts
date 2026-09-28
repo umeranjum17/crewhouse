@@ -89,7 +89,7 @@ export class OpenClawGateway {
       telemetry: { enabled: false },
       gateway: { mode: 'local', bind: 'loopback', port, auth: { mode: 'token', token: { source: 'env', provider: 'default', id: 'OPENCLAW_GATEWAY_TOKEN' } }, controlUi: { enabled: false }, tailscale: { mode: 'off' } },
       discovery: { mdns: { mode: 'off' } }, env: { shellEnv: { enabled: false } },
-      agents: { defaults: { sandbox: { mode: 'off' } } },
+      agents: { defaults: { sandbox: { mode: 'off' }, models: { 'openai/*': { agentRuntime: { id: 'openclaw' } } }, modelPolicy: { allow: [] } } },
       tools: { profile: 'coding', alsoAllow: crewTools, deny: ['group:fs', 'group:runtime', 'group:automation', 'group:messaging', 'group:nodes', 'group:ui', 'sessions_send', 'sessions_spawn', 'conversations_send', 'conversations_turn', 'subagents', 'code_execution', 'gateway', 'openclaw', 'plugins', 'cron', 'ask_user', 'suggest_task'], fs: { workspaceOnly: true }, exec: { security: 'deny', ask: 'always' }, elevated: { enabled: false }, agentToAgent: { enabled: false }, sessions: { visibility: 'agent' } },
       plugins: {
         load: { paths: [join(repo, 'src/openclaw/plugin')] }, allow: ['crewhouse', 'memory-core', 'openai'],
@@ -113,6 +113,14 @@ export class OpenClawGateway {
     };
     const configPath = join(this.root, 'openclaw.json');
     const saved: any = existsSync(configPath) ? JSON.parse(readFileSync(configPath, 'utf8')) : config;
+    const before = JSON.stringify(saved);
+    saved.agents ??= {};
+    const defaults = saved.agents.defaults ??= {};
+    defaults.models ??= {};
+    defaults.models['openai/*'] = { ...defaults.models['openai/*'], agentRuntime: { id: 'openclaw' } };
+    // An explicit model map must not narrow the family's other signed-in providers.
+    defaults.modelPolicy ??= { allow: [] };
+    if (defaults.modelPolicy.allow?.length && !defaults.modelPolicy.allow.includes('openai/*')) defaults.modelPolicy.allow.push('openai/*');
     // The pin defaults unset/auto memory search to API-billed OpenAI embeddings. Never inherit it,
     // including from a pre-existing state or a per-member override. No paid fallback either.
     const safe = new Set(['none', 'local', 'ollama', 'lmstudio', 'github-copilot']);
@@ -131,8 +139,8 @@ export class OpenClawGateway {
       settings.fallback = 'none';
     };
     search(saved);
-    for (const agent of Object.values(saved.agents?.entries ?? {}) as any[]) if (agent.memory?.search) search(agent);
-    writeFileSync(configPath, JSON.stringify(saved, null, 2), { mode: 0o600 });
+    for (const agent of Object.values(saved.agents.entries ?? {}) as any[]) if (agent.memory?.search) search(agent);
+    if (!existsSync(configPath) || JSON.stringify(saved) !== before) writeFileSync(configPath, JSON.stringify(saved, null, 2), { mode: 0o600 });
   }
 
   memoryLimited(member: number): boolean {
