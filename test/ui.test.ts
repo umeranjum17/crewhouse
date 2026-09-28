@@ -132,19 +132,30 @@ test('Needs you: spending and sending first, then questions; a suggestion waits 
   assert.equal(A.chats(state).find((c) => c.id === 'scout')?.unread, 0, 'nobody else\'s dot moves');
 });
 
-test('a helper\'s draft waits in Needs you, named for who it goes to; the row\'s tap opens the review, and approving never sends', () => {
-  const draft = { id: 9, bot: 'reel', task_id: null, kind: 'propose', at: now,
-    title: 'Reel drafted something for muxr issue #208. Nothing is sent: you post it yourself.',
-    detail: { draft: { to: 'muxr issue #208', path: 'files/draft.md', sha: 'abc' }, task: null,
-      preview: { head: 'Draft for muxr issue #208', body: 'Please keep this draft.' }, yes: 'Approve' } };
-  const s = { ...state, asks: [...state.asks, draft] };
-  const c = A.card(draft, s);
-  assert.equal(c.head, 'Reel drafted a message for muxr issue #208', 'the card says what it is and who it is for, never "learned something"');
+test('a helper\'s draft waits in Needs you, named for who it goes to; the row\'s tap opens the review, and approving never sends', async () => {
+  // The real path: a scout job drafts a reply (crew_write then crew_draft) and the ask the app receives
+  // is crew.snapshot()\'s — every open ask already through Crew.askView. Web and the phone render from
+  // these same adapter calls (mobile/App.tsx imports adapter.ts), so this covers both view models.
+  const { setup: lab, until } = await import('./lab.ts');
+  const { crew, done } = lab();
+  crew.onboard('sir');
+  crew.recruit('scout', 'Scout', 'person');
+  await crew.post('scout', 'Draft the reply on a card in front of me. '
+    + '[tool crew_write {"path":"files/reply-trip-form.md","content":"Hello, the signed trip form is in Ayaan\'s bag this morning. Thank you, Nadia"}] '
+    + '[tool crew_draft {"path":"files/reply-trip-form.md","to":"the school office"}]');
+  await until('the draft ask in the served view', () => crew.snapshot().asks.some((a: any) => a.kind === 'propose' && a.detail.draft));
+  const s: Json = crew.snapshot();
+  const ask = s.asks.find((a: any) => a.kind === 'propose' && a.detail.draft)!;
+  assert.equal(ask.detail.draft.to, 'the school office', 'askView passes the draft through; without it Home drops the row');
+  assert.equal(ask.detail.yes, 'Approve', 'the yes approves the draft; it is never a send');
+  const c = A.card(ask, s);
+  assert.equal(c.head, 'Scout drafted a message for the school office', 'the card says what it is and who it is for, never "learned something"');
   assert.deepEqual(c.choices.map((x: any) => x.label), ['Approve', 'Not now'], 'the no-send approval stays');
-  assert.equal(c.preview?.body, 'Please keep this draft.', 'the sheet the row opens shows the words');
+  assert.match(c.preview?.body ?? '', /trip form/, 'the sheet the row opens shows the words');
   const rows = A.needsYou(s);
-  assert.equal(rows.find((r) => r.id === 9)?.head, 'Reel drafted a message for muxr issue #208', 'the draft is a Needs-you row, ready to tap');
-  assert.ok(!rows.some((r) => /learned something/.test(r.head)));
+  assert.equal(rows.find((r: any) => r.id === ask.id)?.head, 'Scout drafted a message for the school office', 'the draft is a Needs-you row, ready to tap');
+  assert.ok(!rows.some((r: any) => /learned something/.test(r.head)));
+  done();
 });
 
 test('Home commits nothing: a row opens the review sheet, and a starter fills the box without sending', () => {

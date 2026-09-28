@@ -77,7 +77,7 @@ A job ends `done`, `failed` or `unsure`: it acted out in the world (sent, bought
 
 `PUT /api/bots/:id/notes` `{text}` is the viewer's own notes with that helper. `GET`/`PUT /api/about` `{notes, cap}` is what the whole crew knows about the viewer: every helper reads it before a job for them. A `memory.learned` step with `everyone` went there; Undo works on the viewer's own only.
 
-A **suggestion** is an ask with `kind: 'propose'` and `detail.{words, preview: {head, body}}`: a skill a helper would like to keep (from `crew_learn`), a new personality Chief suggests (from `crew_suggest`), or a five-part job draft (`detail.job`). A job draft offers Use it / Not now and writes only the target helper's `## Your job` after approval. Suggestions are yes-or-no cards, never "always"; nothing changes until `allow`, and they wait across restarts.
+A **suggestion** is an ask with `kind: 'propose'` and `detail.{words, preview: {head, body}}`: a skill a helper would like to keep (from `crew_learn`), a new personality Chief suggests (from `crew_suggest`), or a five-part job draft (`detail.job`). A job draft offers Use it / Not now and writes only the target helper's `## Your job` after approval. Suggestions are yes-or-no cards, never "always"; nothing changes until `allow`, and they wait across restarts. A helper's draft in the person's name (`crew_draft`) is a propose ask too: its detail also carries `draft` (with `to`, the row Home ranks first), and its `yes` reads Approve.
 `skills[]` rows carry `learned`; `DELETE /api/bots/:id/skills/:name` puts a learned one away (kept, no longer used). A skill it came with can't be removed.
 
 ## First run (today)
