@@ -247,7 +247,7 @@ function JobList({ state, phone }: { state: Json; phone?: boolean }) {
       {(phone ? rows.slice(0, 3) : rows).length ? (phone ? rows.slice(0, 3) : rows).map((j) => {
         const h = crew.find((x) => x.id === j.bot);
         const body = <><Face who={h ?? { kind: 'pip', name: j.bot }} size={phone ? 28 : 36} />
-          <span className="grow"><b className={phone ? 'clamp1' : 'clamp'}>{j.label}</b>{j.needs.length > 0 && <span className="small clamp1">{A.jobNeeds(j.needs)}</span>}</span><span className="mute" aria-hidden>›</span></>;
+          <span className="grow"><b className="clamp">{j.label}</b>{j.needs.length > 0 && <span className="small clamp1">{A.jobNeeds(j.needs)}</span>}</span><span className="mute" aria-hidden>›</span></>;
         return j.needs.length ? <a key={j.bot + j.label} className="list-row" href="#/apps">{body}</a>
           : <button key={j.bot + j.label} className="list-row" onClick={() => hand(j.ask)}>{body}</button>;
       }) : <div className="frame-empty">Nothing to hand over yet. Hire a helper, and this fills up.</div>}
@@ -907,7 +907,7 @@ function Settings({ state, me, refresh, tick, accounts, look, setLook, switchTo 
       {A.AIS.map((ai) => {
         const g = A.account(accounts, me, ai.key);
         return (
-          <div key={ai.key} className="card row">
+          <div key={ai.key} className="card row stack-row">
             <span className="app-ic" style={{ background: ai.bg }}>◎</span>
             <div className="grow"><b>{ai.name}</b><div className="mute small">{g.state === 'ready'
               ? g.notIncluded ? "Your plan doesn't include helpers yet." : `Connected${g.work ? ` as ${g.work}, a work account` : ''}. The crew can think with it.${g.resting ? ` ${g.resting}.` : ''}`
@@ -982,7 +982,7 @@ function HouseGoogle({ on, steps, refresh }: { on: boolean; steps?: A.GoogleStep
     {on && !edit ? <div className="card">
         <div className="row"><span className="grow"><b>{A.googleHeadline(steps)}</b><div className="mute small">What Google itself has answered so far. Steps nobody has tried yet say “you said done”.</div></span>
           <button className="btn" onClick={() => { setEdit(true); setStep(A.GOOGLE_STEPS.length - 1); }}>Change key</button></div>
-        {steps?.map((m, i) => <div key={i} className="row">
+        {steps?.map((m, i) => <div key={i} className="row stack-row">
           <span className="grow"><b>{i + 1}. {A.GOOGLE_STEPS[i].title}</b> <span className={m.state === 'checked' ? 'ok' : m.state === 'missing' ? 'warn-line' : 'mute'}>{A.STEP_MARK[m.state]}</span><div className="mute small">{m.note}</div></span>
           {m.state === 'missing' && <a className="btn go" href={A.GOOGLE_STEPS[i].url} target="_blank" rel="noreferrer">Open Google's page</a>}
         </div>)}
