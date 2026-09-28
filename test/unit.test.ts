@@ -872,7 +872,7 @@ test('sign-in: a cancelled sign-in keeps nothing, signed in nothing', async () =
   done();
 });
 
-test('routing: a plain request goes straight to its helper, the member\'s AI places the rest, and a torn one gets one question', async () => {
+test('routing: explicit helpers are direct; uncertain requests start Chief without a blocking model turn', async () => {
   const { db, crew, done } = setup();
   crew.onboard('sir');
   crew.recruit('reel', 'Reel', 'person');
@@ -927,30 +927,30 @@ test('routing: a plain request goes straight to its helper, the member\'s AI pla
   assert.equal(task(db, p).bot, 'chief');
   await settled(db, p);
 
-  // No rule places it: the member's own AI (the stub) does, and Scout takes it.
+  // No rule places it: Chief begins now, without a separate routing model or account lookup.
   const before = models();
-  const c = (await crew.post('chief', 'what do people say about standing desks? [route scout]'))!.task;
-  assert.equal(task(db, c).bot, 'scout');
-  assert.equal(models(), before, 'the routing question is not a crew turn');
-  assert.equal(routingCalls, 1, 'an unplaced request still uses the member\'s routing model');
+  pendingBody = 'what do people say about standing desks? [route scout]';
+  const c = (await crew.post('chief', pendingBody))!.task;
+  assert.equal(task(db, c).bot, 'chief');
+  assert.equal(task(db, c).member, 1);
+  assert.equal(models(), before, 'the request is queued before any model turn');
+  assert.equal(routingCalls, 0);
+  assert.equal(routeChecks, 0);
   await settled(db, c);
 
-  // The AI is torn: no task, one plain question, and the answer sends the request where it belongs.
-  const n = db.get('SELECT COUNT(*) AS n FROM tasks')!.n;
-  assert.equal(await crew.post('chief', 'something about the screenshots [route ?]'), undefined);
-  assert.equal(db.get('SELECT COUNT(*) AS n FROM tasks')!.n, n, 'nothing starts on a guess');
-  assert.match(chiefSaid(), /^Just so this goes to the right hands: shall (Reel|Scout) take it, or (Scout|Reel|shall I see to it myself)\?$/);
-  const d = (await crew.post('chief', 'Reel please'))!.task;
-  assert.equal(task(db, d).bot, 'reel');
-  assert.equal(task(db, d).body, 'something about the screenshots [route ?]\nReel please');
+  // Ambiguity is not a guessed helper selection. Another household member retains their own task and account boundary.
+  const sara = crew.addMember('Sara').id;
+  crew.onboard('Sara', sara);
+  pendingBody = 'something about the screenshots [route ?]';
+  const d = (await crew.post('chief', pendingBody, undefined, sara))!.task;
+  assert.equal(task(db, d).bot, 'chief');
+  assert.equal(task(db, d).member, sara);
+  assert.equal(routingCalls, 0);
+  assert.equal(routeChecks, 0);
+  assert.equal(db.get("SELECT COUNT(*) AS n FROM events WHERE kind = 'route.asked'")!.n, 0);
+  assert.equal(db.get("SELECT member FROM messages WHERE task_id = ?", d)!.member, sara);
   await settled(db, d);
-
-  // Asked once only: torn again, it is Chief's to handle, not a second question.
-  await crew.post('chief', 'hmm [route ?]');
-  const e = (await crew.post('chief', 'not sure [route ?]'))!.task;
-  assert.equal(task(db, e).bot, 'chief');
-  assert.equal(task(db, e).body, 'hmm [route ?]\nnot sure [route ?]');
-  await settled(db, e);
+  assert.equal(JSON.parse(db.get("SELECT data FROM events WHERE kind = 'run.started' AND json_extract(data, '$.task') = ?", d)!.data).member, sara, 'the run uses Sara\'s account context');
   done();
 });
 

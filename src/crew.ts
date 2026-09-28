@@ -18,7 +18,7 @@ import { axiEnv, registry, resolveGrants, toolBin, which } from './tools.ts';
 import { describe, nextRun, parseSchedule } from './routines.ts';
 import { buildWorkbook, readWorkbook } from './workbooks.ts';
 import { buildDocument, readDocument } from './documents.ts';
-import { byRuntime, clarify, route, type Helper } from './route.ts';
+import { route, type Helper } from './route.ts';
 import type { Link } from './link.ts';
 import type { AgentRuntime, RunEnd, RunEvent, RunRef, RunSpec, ToolHost } from './runtime.ts';
 import { OpenClawRuntime } from './openclaw/runtime.ts';
@@ -106,7 +106,11 @@ export function relayResult(reply: string, note = '') {
 function chiefFirst(body: string) {
   const url = /https?:\/\/[^\s]+/i.exec(body)?.[0];
   if (url) { try { return `Looking at ${new URL(url).hostname.replace(/^www\./, '')} now.`; } catch { /* malformed address */ } }
-  return /\b(market|marketing|promote|launch)\b/i.test(body) ? "I'll work out the next step for your app." : "I'll look into that now.";
+  if (/\b(market|marketing|promote|launch)\b/i.test(body)) return "I'll work out the next step for your app.";
+  if (/\b(dinner|meal)\b/i.test(body)) return "I'll put together a dinner plan.";
+  if (/\b(remind|reminder)\b/i.test(body)) return "I'll work out the reminder and when it should run.";
+  if (/\b(research|look into|find out|what do people say)\b/i.test(body)) return "I'll check the question and what evidence would help.";
+  return "I'll look into that now.";
 }
 
 const partOfDay = () => { const h = new Date().getHours(); return h >= 5 && h < 12 ? 'morning' : h >= 12 && h < 18 ? 'afternoon' : 'evening'; };
@@ -1034,9 +1038,8 @@ export class Crew {
     return this.addTask(CHIEF, text.trim(), 'person', undefined, member);
   }
 
-  /** A request to Chief: plainly one helper's goes straight to them, Chief's own (or one nobody can place) is a Chief task,
-   *  and one the member's AI is torn over gets one plain question back. The question and the request it was about are
-   *  a message and an event, so an answer after a restart still finds them. */
+  /** Plainly addressed helper requests go straight there; unresolved requests become Chief tasks immediately.
+   *  Chief can ask or hand off in his task, without a separate model turn delaying the person's first words. */
   private async route(text: string, model: string | undefined, member: number, pics: Photo[] = [], room = false) {
     const helpers = this.bots().filter((b) => b.id !== CHIEF) as Helper[];
     const lastBot = this.db.get("SELECT text, task_id, at FROM messages WHERE bot = ? AND member = ? AND author = 'bot' ORDER BY id DESC LIMIT 1", CHIEF, member);
@@ -1049,17 +1052,7 @@ export class Crew {
     const earlier: string | undefined = asked && JSON.parse(asked.data).message === last ? JSON.parse(asked.data).text
       : /^https?:\/\/\S+$/i.test(text) && previous && /\b(market|marketing|promote|launch)\b/i.test(previous) ? previous : undefined;
     const request = { text, earlier };
-    const ruled = await route(request, helpers);
-    const brain = ruled.abstained ? await this.usable(member, this.choices({ bot: CHIEF, brain: model ? disk.brainKey(disk.parseBrain(model)) : null })) : undefined;
-    const to = brain ? await route(request, helpers, byRuntime(this.runtime, member)) : ruled;
-    // Torn with photos in hand: Chief takes it himself rather than ask, so the photos go with the request.
-    if (to.abstained && to.probabilities && !earlier && !pics.length) {
-      return void this.db.tx(() => {
-        this.say(CHIEF, 'person', text, null, member);
-        const message = this.say(CHIEF, 'bot', clarify(to, helpers, ''), null, member);
-        this.db.event('route.asked', CHIEF, { member, message, text });
-      });
-    }
+    const to = await route(request, helpers);
     const body = earlier ? `${earlier}\n${text}` : text;
     const helper = !to.abstained && helpers.find((b) => b.id === to.answer);
     if (!helper) return this.addTask(CHIEF, body, 'person', model, member, undefined, text, pics, { room });
