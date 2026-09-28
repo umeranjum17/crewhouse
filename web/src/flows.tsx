@@ -105,7 +105,7 @@ export function SignIn({ me, owner, ai = A.AIS[0], tab: first, onReady, onClose 
   const cancel = () => { void api.signInCancel(me, ai.key).catch(() => {}); setCancelled(true); };
   const close = () => { if (phase === 'waiting' || phase === 'opening' || phase === 'code') void api.signInCancel(me, ai.key).catch(() => {}); onClose(); };
   const code = g.signing?.code || 'WB60-FFV06';
-  const page = g.signing?.url || 'https://auth.openai.com/codex/device';
+  const page = g.signing?.url || (ai.key === 'chatgpt' ? 'https://auth.openai.com/codex/device' : '');
   const at = phase === 'done' || phase === 'work' ? 3 : phase === 'waiting' || phase === 'code' ? 1 : 0;
   const notNow = <button className="link" onClick={onClose}>Not now</button>;
   return (
@@ -115,18 +115,18 @@ export function SignIn({ me, owner, ai = A.AIS[0], tab: first, onReady, onClose 
       {phase === 'opening' && <><h2>Opening {name}…</h2><div className="dotdot" aria-hidden><i /><i /><i /></div><button className="link" onClick={cancel}>Cancel</button></>}
       {phase === 'waiting' && <>
         <h2>Say yes on {name}'s page</h2>
-        <p className="mute">Pick your account, then tap <b>Continue</b>. {name} calls the access your helpers use <b>“Codex”</b>. Come back here after; this moves on by itself.</p>
+        <p className="mute">{ai.key === 'chatgpt' ? <>Pick your account, then tap <b>Continue</b>. {name} calls the access your helpers use <b>“Codex”</b>.</> : <>Follow {name}'s instructions on its page.</>} Come back here after; this moves on by itself.</p>
         {!tab.open() && <a className="btn go big" href={g.page || '#'} target="_blank" rel="noreferrer">Open {name} ↗</a>}
         <Pill tone="wait">Waiting for {name}…</Pill>
-        <button className="link" onClick={() => start({ via: 'code' })}>Having trouble? Use a code instead</button>
+        {ai.key === 'chatgpt' && <button className="link" onClick={() => start({ via: 'code' })}>Having trouble? Use a code instead</button>}
         <button className="link" onClick={cancel}>Cancel</button>
       </>}
       {phase === 'code' && <>
         <h2>Let's try it with a code</h2>
         <p className="mute">Type this on {name}'s page instead. Come back after; this moves on by itself.</p>
         <button className="code" onClick={() => navigator.clipboard?.writeText(code).then(() => toast('Code copied'), () => {})} aria-label={`Code ${code.split('').join(' ')}. Tap to copy.`}>{code}<span>Tap to copy</span></button>
-        <a className="btn go big" href={page} target="_blank" rel="noreferrer">Open {name} ↗</a>
-        <p className="mute small">If {name} says <b>device code sign-in is off</b>: in {name} open Settings → Security, turn on <b>Device code authorization</b>, then tap Open {name} again. ({name} only says this after you sign in.)</p>
+        {page && <a className="btn go big" href={page} target="_blank" rel="noreferrer">Open {name} ↗</a>}
+        {ai.key === 'chatgpt' && <p className="mute small">If {name} says <b>device code sign-in is off</b>: in {name} open Settings → Security, turn on <b>Device code authorization</b>, then tap Open {name} again. ({name} only says this after you sign in.)</p>}
         <button className="link" onClick={cancel}>Cancel</button>
       </>}
       {phase === 'done' && <><h2>You're signed in!</h2><p>The crew thinks with your own {name} now. Your password stayed with {name}.</p>
@@ -137,8 +137,8 @@ export function SignIn({ me, owner, ai = A.AIS[0], tab: first, onReady, onClose 
         <button className="link" onClick={() => { setKeepWork(true); onReady(); }}>Keep this one</button></>}
       {phase === 'cancelled' && <><h2>No problem</h2><p className="mute">Nothing was changed. You can sign in whenever you like.</p>
         <button className="btn go big" onClick={() => again()}>Try again</button>{notNow}</>}
-      {phase === 'busy' && <><h2>One moment</h2><p className="mute">Something else on this computer is signing in to {name}. Try again in a minute.</p>
-        <button className="btn go big" onClick={() => again()}>Try again</button><button className="link" onClick={() => start({ via: 'code' })}>Use a code instead</button></>}
+      {phase === 'busy' && <><h2>One moment</h2><p className="mute">Another sign-in is already in progress. Finish or cancel it, then try again.</p>
+        <button className="btn go big" onClick={() => again()}>Try again</button>{ai.key === 'chatgpt' && <button className="link" onClick={() => start({ via: 'code' })}>Use a code instead</button>}</>}
       {phase === 'expired' && <><h2>That ran out of time</h2><p className="mute">Sign-ins only wait a few minutes, to keep your account safe. Let's start a fresh one.</p>
         <button className="btn go big" onClick={() => again()}>Start again</button>{notNow}</>}
       {phase === 'failed' && <><h2>That didn't go through</h2><p className="mute">{name} didn't finish the sign-in. No harm done; let's try once more.</p>
