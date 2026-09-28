@@ -739,6 +739,29 @@ test('household: bots and tasks belong to a member and run on that member\'s own
   done();
 });
 
+test('household: bot and home projections never show another member’s work', () => {
+  const { cfg, db, crew, done } = setup();
+  crew.recruit('scout', 'Scout', 'person');
+  const guest = crew.addMember('Guest').id;
+  const owner = Number(db.run("INSERT INTO tasks (bot, title, body, result, state, member) VALUES ('scout', 'owner title', 'owner secret', 'owner result', 'done', 1)").lastInsertRowid);
+  const other = Number(db.run("INSERT INTO tasks (bot, title, body, result, state, member) VALUES ('scout', 'guest title', 'guest secret', 'guest result', 'done', ?)", guest).lastInsertRowid);
+  db.event('task.done', 'scout', { task: owner, title: 'owner secret' });
+  db.event('task.done', 'scout', { task: other, title: 'guest secret' });
+  db.event('file.delivered', 'scout', { task: owner, path: 'files/owner.txt', note: 'owner file' });
+  db.event('file.delivered', 'scout', { task: other, path: 'files/guest.txt', note: 'guest file' });
+  const files = join(cfg.crewDir, 'bots', 'scout', 'files');
+  writeFileSync(join(files, 'owner.txt'), 'owner');
+  writeFileSync(join(files, 'guest.txt'), 'guest');
+  const view = crew.botPage('scout', guest);
+  assert.deepEqual(view.tasks.map((t: any) => t.id), [other]);
+  assert.deepEqual(view.files.map((f: any) => f.path), ['guest.txt']);
+  assert.ok(view.trail.every((e: any) => !JSON.stringify(e).includes('owner secret') && !JSON.stringify(e).includes('owner.txt')));
+  assert.equal(crew.snapshot(guest).bots.find((b: any) => b.id === 'scout')?.task, null);
+  assert.ok(crew.snapshot(guest).events.every((e: any) => !JSON.stringify(e).includes('owner secret') && !JSON.stringify(e).includes('owner.txt')));
+  assert.deepEqual(crew.botPage('scout', OWNER).tasks.map((t: any) => t.id), [owner]);
+  done();
+});
+
 test('household: quiet hours park questions at once; settings validate', async () => {
   const { root, db, crew, done } = setup();
   crew.onboard('sir');

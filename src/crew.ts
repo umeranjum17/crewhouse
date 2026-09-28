@@ -412,7 +412,7 @@ export class Crew {
   private progress(bot: string, task: Row | undefined) {
     if (!task) return { step: null, quietSince: null, stuck: false };
     const step = this.db.get(`SELECT seq, at, kind, data FROM events WHERE bot = ? AND kind IN ('run.tool', 'task.progress', 'file.delivered') AND json_extract(data, '$.task') = ? ORDER BY seq DESC LIMIT 1`, bot, task.id);
-    const quietSince = this.db.get('SELECT MAX(at) AS at FROM events WHERE bot = ?', bot)!.at as number;
+    const quietSince = this.db.get("SELECT MAX(at) AS at FROM events WHERE bot = ? AND json_extract(data, '$.task') = ?", bot, task.id)?.at ?? task.updated_at ?? null;
     return { step: step ? { ...step, data: JSON.parse(step.data) } : null, quietSince, stuck: task.state === 'working' && Date.now() - quietSince > STUCK_MS };
   }
 
@@ -436,12 +436,12 @@ export class Crew {
   }
 
   /** A bot as the app sees it: no token, no model, nothing technical. */
-  private pub(b: Row) {
-    const task = this.activeTask(b.id);
+  private pub(b: Row, viewer = OWNER) {
+    const task = this.db.get("SELECT * FROM tasks WHERE bot = ? AND COALESCE(member, ?) = ? AND state IN ('working', 'needs_you') ORDER BY id LIMIT 1", b.id, OWNER, viewer);
     return { id: b.id, display: b.display, role: b.role, template: b.template, color: b.color, member: b.member, state: b.state, created_at: b.created_at,
       thinks: this.thinks(b.id), ...this.screenOf(b.id), live: this.liveState(b.id), task: task ? this.task(task) : null, ...this.progress(b.id, task),
-      queued: this.db.get("SELECT COUNT(*) AS n FROM tasks WHERE bot = ? AND state = 'queued'", b.id)!.n,
-      pausedUntil: this.db.get("SELECT MIN(wake_at) AS w FROM tasks WHERE bot = ? AND state = 'paused'", b.id)!.w };
+      queued: this.db.get("SELECT COUNT(*) AS n FROM tasks WHERE bot = ? AND COALESCE(member, ?) = ? AND state = 'queued'", b.id, OWNER, viewer)!.n,
+      pausedUntil: this.db.get("SELECT MIN(wake_at) AS w FROM tasks WHERE bot = ? AND COALESCE(member, ?) = ? AND state = 'paused'", b.id, OWNER, viewer)!.w };
   }
 
   private liveState(id: string) { return !this.live.get(id) ? 'off' : this.busy.has(id) ? 'working' : 'idle'; }
@@ -488,13 +488,13 @@ export class Crew {
     return {
       person: { ...me, quietNow: quietNow(me.quiet) },
       members: this.members(),
-      bots: this.bots().map((b) => ({ ...this.pub(b), ...this.chat(b.id, me.id) })),
+      bots: this.bots().map((b) => ({ ...this.pub(b, me.id), ...this.chat(b.id, me.id) })),
       templates: disk.listTemplates(this.cfg).map((t) => ({ id: t.id, display: t.display, role: t.role, color: t.color, kit: disk.templateKit(this.cfg, t) })),
       tasks: this.db.all('SELECT * FROM tasks WHERE bot != ? AND member = ? ORDER BY id DESC LIMIT 50', CHIEF, me.id).map((t) => ({ ...this.task(t), files: t.state === 'done' ? files(t.id) : [] })),
       ideas: this.ideas(me.id),
       room: (() => { const r = this.room(me.id); return { last: r.lines.at(-1) ?? null, busy: r.busy }; })(),
       asks: this.db.all("SELECT * FROM asks WHERE state = 'open' AND COALESCE(member, ?) = ? ORDER BY id", OWNER, me.id).map((a) => this.askView(a)),
-      events: this.db.events(0, 80),
+      events: this.db.events(0, 80, me.id),
       /** This member's AI accounts that are resting now, and until when (docs/ui-contract.md). */
       resting: Object.fromEntries(Object.keys(PROVIDERS).map((k) => [k, this.restingUntil(k, me.id)]).filter(([, t]) => t)),
       /** The apps this member has connected, by the app screen's own names. */
@@ -827,9 +827,9 @@ export class Crew {
   botPage(id: string, viewer = OWNER, around?: number) {
     const b = this.bot(id);
     if (!b) throw Object.assign(new Error('no such bot'), { status: 404 });
-    const undone = new Set(this.db.all("SELECT data FROM events WHERE bot = ? AND kind = 'memory.undone'", id).map((e) => JSON.parse(e.data).seq));
+    const undone = new Set(this.db.eventsForBot(id, ['memory.undone'], viewer, 10000).map((e) => e.data.seq));
     return {
-      bot: this.pub(b),
+      bot: this.pub(b, viewer),
       job: disk.readJob(this.cfg, id),
       // Each member has their own thread with a bot; notes to the whole house (member NULL) show to everyone.
       // A search landing on an old line gets a window around it: the newest 200 would miss it entirely.
@@ -853,7 +853,7 @@ export class Crew {
               .map((e) => ({ bot: e.bot, path: JSON.parse(e.data).path })) : [],
           // Chief's hand-off in a helper's chat collapses to its task's title, with the full words behind Show details.
           ...(id !== CHIEF && m.author === 'chief' && m.task_id ? { title: this.db.get('SELECT title FROM tasks WHERE id = ?', m.task_id)?.title } : {}) })),
-      tasks: this.db.all('SELECT * FROM tasks WHERE bot = ? ORDER BY id DESC LIMIT 50', id).map((t) => this.task(t)),
+      tasks: this.db.all('SELECT * FROM tasks WHERE bot = ? AND COALESCE(member, ?) = ? ORDER BY id DESC LIMIT 50', id, OWNER, viewer).map((t) => this.task(t)),
       // What this helper learned about the viewer: never another member's notes.
       notes: disk.readNotes(this.cfg, { member: viewer, bot: id }),
       notesCap: disk.NOTES_CAP,
@@ -861,10 +861,9 @@ export class Crew {
       soulCap: disk.SOUL_CAP,
       skills: disk.listSkills(this.cfg, id),
       tools: disk.botTools(this.cfg, id),
-      files: disk.listFiles(this.cfg, id),
-      trail: this.db.all(`SELECT * FROM events WHERE bot = ? AND kind IN (${TRAIL.map(() => '?').join(', ')}) ORDER BY seq DESC LIMIT 300`, id, ...TRAIL)
-        .map((e) => ({ ...e, data: JSON.parse(e.data), ...(e.kind === 'memory.learned' && undone.has(e.seq) ? { undone: true } : {}) }))
-        .filter((e: Row) => !String(e.kind).startsWith('memory.') || (e.data.member ?? OWNER) === viewer),
+      files: disk.listFiles(this.cfg, id, new Set(this.db.all(`SELECT json_extract(e.data, '$.path') AS path FROM events e JOIN tasks t ON t.id = json_extract(e.data, '$.task')
+        WHERE e.bot = ? AND e.kind = 'file.delivered' AND COALESCE(t.member, ?) = ?`, id, OWNER, viewer).map((e) => String(e.path).replace(/^files\//, '')))),
+      trail: this.db.eventsForBot(id, TRAIL, viewer).map((e) => ({ ...e, ...(e.kind === 'memory.learned' && undone.has(e.seq) ? { undone: true } : {}) })),
       // Standing answers in plain words; taking one back sends the words back.
       allow: (disk.botConfig(this.cfg, id).allow ?? []).map(coversOf),
       memory: disk.botConfig(this.cfg, id).memory !== false,
@@ -970,7 +969,7 @@ export class Crew {
   say(bot: string, author: string, text: string, taskId: number | null = null, member?: number | null) {
     const m = member !== undefined ? member : taskId ? this.db.get('SELECT member FROM tasks WHERE id = ?', taskId)?.member ?? null : null;
     const id = Number(this.db.run('INSERT INTO messages (bot, author, text, task_id, at, member) VALUES (?, ?, ?, ?, ?, ?)', bot, author, text, taskId, Date.now(), m).lastInsertRowid);
-    this.db.event('message', bot, { id, author, text: text.slice(0, 280) });
+    this.db.event('message', bot, { id, author, text: text.slice(0, 280), member: m ?? OWNER });
     return id;
   }
 
@@ -1793,9 +1792,10 @@ export class Crew {
   }
 
   /** Allow once, for this task, or always for the bot; or not now. Spending is never more than once. */
-  async answer(askId: number, body: { answer?: string; scope?: string; schedule?: string }) {
+  async answer(askId: number, body: { answer?: string; scope?: string; schedule?: string }, viewer = OWNER) {
     const ask = this.db.get("SELECT * FROM asks WHERE id = ? AND state = 'open'", askId);
     if (!ask) throw fail('that question is already settled', 409);
+    if ((ask.member ?? OWNER) !== viewer) throw fail('that question is someone else’s', 403);
     const detail = JSON.parse(ask.detail || '{}');
     if (!['allow', 'deny'].includes(body.answer ?? '')) throw fail('answer allow or deny');
     const scope = body.answer === 'allow' ? body.scope ?? 'once' : 'once';
@@ -1817,7 +1817,7 @@ export class Crew {
       if (scope === 'task') this.taskGrants.set(ask.task_id, [...(this.taskGrants.get(ask.task_id) ?? []), detail.key]);
       if (scope === 'always') {
         disk.setSettings(this.cfg, ask.bot, { allow: [...(disk.botConfig(this.cfg, ask.bot).allow ?? []), detail.key] });
-        this.db.event('bot.allowed', ask.bot, { covers: coversOf(detail.key) });
+        this.db.event('bot.allowed', ask.bot, { covers: coversOf(detail.key), member: ask.member ?? OWNER });
       }
       const task = ask.task_id && this.db.get("SELECT * FROM tasks WHERE id = ? AND state = 'needs_you'", ask.task_id);
       if (task && !held) this.setTask(task, 'working');

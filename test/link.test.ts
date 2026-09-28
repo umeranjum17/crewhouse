@@ -36,6 +36,16 @@ test('the link binds loopback and Tailscale by default; the home network only wh
   assert.deepEqual(linkHosts('', false, { lo: at('127.0.0.1', true), eth0: at('192.168.1.20') }), ['127.0.0.1'], 'no Tailscale: loopback only');
 });
 
+test('paired phone dispatch preserves its member for the shared page API', async () => {
+  const db = new Store(temp('crewhouse-phone-member'));
+  const calls: number[] = [];
+  const link = new Link({} as any, db, async (_method, _path, _body, member) => { calls.push(member); return { member }; }) as any;
+  const reply = await link.request('GET /api/bots/scout', {}, { id: 'guest-phone', role: 'control', meta: { member: 2 } });
+  assert.deepEqual(reply, { status: 200, body: { member: 2 } });
+  assert.deepEqual(calls, [2]);
+  db.close();
+});
+
 test('quiet hours hold the push and send exactly one when they end, even across a restart', () => {
   const dir = temp('crewhouse-held');
   const sent: { id: string; to: string[] }[] = [];

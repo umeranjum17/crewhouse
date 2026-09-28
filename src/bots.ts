@@ -377,7 +377,7 @@ export function archiveSkill(cfg: Config, id: string, name: string) {
   return skill;
 }
 
-export function listFiles(cfg: Config, id: string) {
+export function listFiles(cfg: Config, id: string, allowed?: Set<string>) {
   const root = join(botDir(cfg, id), 'files');
   const out: { path: string; size: number; mtime: number }[] = [];
   const walk = (d: string) => {
@@ -385,7 +385,7 @@ export function listFiles(cfg: Config, id: string) {
     for (const f of readdirSync(d)) {
       const p = join(d, f);
       const st = statSync(p);
-      if (st.isDirectory()) walk(p); else out.push({ path: relative(root, p), size: st.size, mtime: st.mtimeMs });
+      if (st.isDirectory()) walk(p); else if (!allowed || allowed.has(relative(root, p))) out.push({ path: relative(root, p), size: st.size, mtime: st.mtimeMs });
     }
   };
   walk(root);

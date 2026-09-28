@@ -159,7 +159,7 @@ export function subscribe(onEvent: (e: Json) => void) {
   if (demo) return () => {};
   let ws: WebSocket | undefined, stopped = false;
   const open = () => {
-    ws = new WebSocket(`${wsBase()}/ws`);
+    ws = new WebSocket(`${wsBase()}/ws?member=${member}`);
     ws.onmessage = (m) => onEvent(JSON.parse(m.data));
     ws.onclose = () => { if (!stopped) setTimeout(open, 1500); };
     ws.onopen = () => onEvent({ kind: 'connected' });

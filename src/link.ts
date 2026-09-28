@@ -131,7 +131,7 @@ export class Link {
       onError: (e) => console.error('phone link:', e),
     });
     this.wss.on('connection', (ws) => this.host.accept(ws as any));
-    this.db.onEvent((e) => this.host.broadcast(e));
+    this.db.onEvent((e) => this.host.broadcast(e, (g) => this.db.visibleEvent(e, memberOf(g))));
   }
 
   // Grants live in the devices table: one row per phone, with the member it acts as.
