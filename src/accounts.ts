@@ -144,7 +144,7 @@ export class Accounts {
     });
     server.on('error', () => {
       const view = this.views.get(k);
-      if (view && view.state === 'waiting') { view.state = 'failed'; view.error = 'Something else on this computer is signing in to ChatGPT. Try again in a minute.'; }
+      if (view && view.state === 'waiting') { view.state = 'failed'; view.error = 'Another sign-in is already in progress. Finish or cancel it, then try again.'; }
       this.callback = undefined;
     });
     server.listen(CALLBACK_PORT, '127.0.0.1');
