@@ -41,13 +41,13 @@ Other commands: `./crewhouse update` (pulls, installs and restarts crewd; refuse
  crewd ── SQLite (state, append-only events, per-bot queue)
    │  in-process
    ▼
- the bundled Pi engine (pinned, its own folder) ── one ModelRuntime per person: only their own sign-ins
+ the bundled OpenClaw engine (pinned, its own folder) ── one engine agent per person: only their own sign-ins
    └─ one session per task, in the bot's own folder ── every tool call passes crewd's gate first
         └─ tools: its files, a sandboxed shell (bubblewrap), the web, its browser, the person's connected apps
 ```
 
 - **crewd** (`src/`) is one Node process with one SQLite file (`node:sqlite`). Every change is an event; the UI follows the event stream over a WebSocket.
-- **The engine** is [Pi](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) through its SDK, pinned exactly in `package.json` and running inside crewd (`src/engine.ts`). It is Crewhouse's own copy: its folder is `~/.local/state/crewhouse/engine/`, set explicitly on every session, and crewd clears every inherited `PI_*` and provider-key variable at startup (`src/isolate.ts`). Your own `pi`, `~/.pi` and `~/.agents` are never read, written or run; `test/isolation.test.ts` proves it against a decoy of both on every CI run. Nothing is discovered: no extensions, context files or prompt templates, and only the bot's own skills.
+- **The engine** is [OpenClaw](https://www.npmjs.com/package/openclaw), pinned exactly in `runtime/openclaw/package.json` and running as a supervised child process crewd spawns (`src/openclaw/gateway.ts`). It is Crewhouse's own copy: installed scripts-off into `runtime/openclaw/node_modules`, and its state lives in `~/.local/state/crewhouse/openclaw/` under its own HOME — the child's whole environment is built from nothing at startup, loopback only with token auth, and channels, Control UI, Tailscale and mDNS off. Your own `~/.pi` and `~/.agents` are never read, written or run; `test/isolation.test.ts` proves it against a decoy of both on every CI run. Nothing is discovered: no extensions, context files or prompt templates, and skills only from a reviewed allowlist plus the bot's own.
 - **Each task is one engine session**, in the bot's folder, with its own session file. Asking a bot again later is a new session; the bot's memory is its notes.
 - **The gate** (`src/policy.ts`, on the engine's `tool_call` hook) decides every tool call from the tool and its input, never from the model's words:
   - Work in the bot's own folder, its sandboxed shell, reading the web and reading from a connected app run silently.
