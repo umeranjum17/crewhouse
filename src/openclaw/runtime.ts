@@ -10,7 +10,7 @@ import { OpenClawGateway } from './gateway.ts';
 import { ToolBridge } from './bridge.ts';
 
 /** Crewhouse account key → OpenClaw provider id. ChatGPT is the one front door; the rest are quiet options. */
-const PROVIDER_OF: Record<string, string> = { chatgpt: 'openai', grok: 'xai', copilot: 'github-copilot', openrouter: 'openrouter', minimax: 'minimax', claude: 'anthropic' };
+const PROVIDER_OF: Record<string, string> = { chatgpt: 'openai-codex', grok: 'xai', copilot: 'github-copilot', openrouter: 'openrouter', minimax: 'minimax', claude: 'anthropic' };
 /** The engine's own sign-in route per account (the pin's wizard choices). A CLI prerequisite is labelled where it exists. */
 const AUTH_CHOICE: Record<string, string> = {
   chatgpt: 'openai', grok: 'xai-oauth', copilot: 'github-copilot', openrouter: 'openrouter-oauth', minimax: 'minimax-global-oauth', claude: 'anthropic-cli',
