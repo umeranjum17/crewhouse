@@ -5,7 +5,8 @@ import { draftOf, keepDraft, sent } from './draft.ts';
 import { cycle, type Focused } from './dialog.ts';
 import { chatTokens, safeLink } from './chat-md.ts';
 import * as art from './art.ts';
-import { clock, docLinks, document as docView, fileSource, fileView, mdPlain, pageWords, sheetWords, workbook, type Card, type DocPart, type DocView, type FileView, type Helper, type Step, type Workbook } from './adapter.ts';
+import { MARKS } from './logos.ts';
+import { askTag, clock, docLinks, document as docView, fileSource, fileView, mdPlain, pageWords, sheetWords, workbook, type Card, type DocPart, type DocView, type FileView, type Helper, type Step, type Workbook } from './adapter.ts';
 
 /** Markdown inline runs, from the shared safe tokens (web/src/chat-md.ts): no raw HTML, http(s) links only. */
 const mdInline = (tokens: any[]): ReactNode => tokens.map((t, i) => t.type === 'strong' ? <strong key={i}>{mdInline(t.tokens)}</strong>
@@ -169,6 +170,15 @@ export function Logo({ night }: { night?: boolean }) {
     <span className="logo" aria-label="Crewhouse">
       <Dots rows={art.chiefSmall()} pal={night ? art.CHIEF_PAL_NIGHT : art.CHIEF_PAL} d={1.8} crisp />
       <span>Crewhouse</span>
+    </span>
+  );
+}
+
+/** An AI account's own mark, white on its brand tile. */
+export function AiMark({ ai, size = 36 }: { ai: { key: string; bg: string }; size?: number }) {
+  return (
+    <span className="ai-mark" style={{ background: ai.bg, width: size, height: size }} aria-hidden>
+      <svg viewBox="0 0 24 24" width={size * .56} height={size * .56}><path d={MARKS[ai.key]} fill="#fff" /></svg>
     </span>
   );
 }
@@ -440,11 +450,12 @@ export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; 
   return (
     <div className="card ask">
       <div className="ask-head">
-        {who && <Face who={{ ...who, mood: 'ask' }} size={36} />}
-        <div><b>{c.head}</b><div className="mute small">{clock(c.at)}</div></div>
+        {who && <Face who={{ ...who, mood: 'ask' }} size={32} />}
+        <div className="grow"><div className="ask-tag"><i />{askTag(c)} · {clock(c.at)}</div><b>{c.head}</b></div>
       </div>
       {c.kind === 'routine' && c.lines ? <div className="routine-lines">{c.lines.map((l, i) => <div key={i} className={i ? 'mute' : ''}>{l}</div>)}</div>
         : <p className="ask-words">{c.words}</p>}
+      {c.preview && !c.review && c.kind !== 'routine' && <div className="ask-peek">{c.preview.head && <div className="mute small">{c.preview.head}</div>}<div className="clamp3">{c.preview.body}</div></div>}
       {oops && <div className="send-failed" role="alert">That didn't go through. <button type="button" className="link inline" onClick={() => last.current && act(last.current)}>Try again</button></div>}
       {c.kind === 'routine' ? (
         <>
@@ -456,7 +467,7 @@ export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; 
           <div className="btns">
             <button className="btn go" disabled={stuck} onClick={start}>Start it</button>
             <button className="btn" aria-pressed={when !== null} onClick={() => { setWhen(when === null ? c.schedule || '' : null); }}>{when === null ? 'Change time' : 'Keep the time'}</button>
-            <button className="btn" onClick={() => act({ answer: 'deny' })}>Not now</button>
+            <button className="btn ghost" onClick={() => act({ answer: 'deny' })}>Not now</button>
           </div>
         </>
       ) : c.reply ? (
@@ -467,14 +478,14 @@ export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; 
       ) : c.review ? (
         <div className="btns">
           <a className="btn go" href={`#/ask/${c.id}`}>Review order</a>
-          {deny && <button className="btn" onClick={() => act(deny.body)}>{deny.label}</button>}
+          {deny && <button className="btn ghost" onClick={() => act(deny.body)}>{deny.label}</button>}
         </div>
       ) : (
         <div className="btns">
           <button className="btn go" onClick={() => act(yes.body)}>{yes.label}</button>
           {c.preview && <a className="btn" href={`#/ask/${c.id}`}>Read it first</a>}
           {!c.preview && rest.length > 1 && <a className="btn" href={`#/ask/${c.id}`}>More</a>}
-          <button className="btn" onClick={() => act({ answer: 'deny' })}>Not now</button>
+          <button className="btn ghost" onClick={() => act({ answer: 'deny' })}>Not now</button>
         </div>
       )}
     </div>
@@ -495,9 +506,9 @@ export function AskSheet({ c, who, chiefSays, onClose }: { c: Card; who: Helper 
   return (
     <div className="scrim" onClick={onClose}>
       <div ref={box} className="sheet approve" role="dialog" aria-modal aria-label={c.head} onClick={(e) => e.stopPropagation()}>
-        <div className="approve-face">
-          {who && <span className="halo"><PalArt kind={who.kind} mood="ask" d={6} name={who.name} /></span>}
-          <Pill tone="wait">{who?.name ?? 'The crew'} · {c.kind === 'spend' ? 'wants to spend money' : c.kind === 'setup' ? 'Home setup' : 'needs your OK'}</Pill>
+        <div className="approve-head">
+          {who ? <Face who={{ ...who, mood: 'ask' }} size={48} /> : <Face who="chief" size={48} />}
+          <div><b>{who?.name ?? 'The crew'}</b><div className="ask-tag"><i />{askTag(c)} · {clock(c.at)}</div></div>
         </div>
         <h2>{heading}</h2>
         {c.review ? (
@@ -509,7 +520,7 @@ export function AskSheet({ c, who, chiefSays, onClose }: { c: Card; who: Helper 
           <div className={`preview ${open ? 'open' : ''}`}>
             {c.preview.head && <div className="mute small">{c.preview.head}</div>}
             <div>{c.preview.body}</div>
-            {!open && <button className="link pink" onClick={() => setOpen(true)}>Read all</button>}
+            {!open && <button className="link" onClick={() => setOpen(true)}>Read all</button>}
           </div>
         )}
         {chiefSays && <div className="chief-says"><Face who="chief" size={30} /><span><b>Chief:</b> {chiefSays}</span></div>}
@@ -518,7 +529,7 @@ export function AskSheet({ c, who, chiefSays, onClose }: { c: Card; who: Helper 
         <div className="approve-btns">
           {c.kind === 'setup' && <><a className="btn go big" href="#/settings" onClick={onClose}>Open Home setup</a>
             <button className="link" onClick={() => act({ answer: 'deny' })}>Not now</button></>}
-          {c.kind !== 'setup' && c.choices.map((x, i) => <button key={x.label} className={i === 0 ? 'btn go big' : 'link'} onClick={() => act(x.body)}>{x.label}</button>)}
+          {c.kind !== 'setup' && c.choices.map((x, i) => <button key={x.label} className={i === 0 ? 'btn go big' : x.body.answer === 'deny' ? 'link' : 'btn big'} onClick={() => act(x.body)}>{x.label}</button>)}
         </div>
       </div>
     </div>

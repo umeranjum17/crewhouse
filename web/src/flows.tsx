@@ -6,7 +6,7 @@ import { createPortal } from 'react-dom';
 import { api, demo, trouble, type Json } from './api.ts';
 import * as A from './adapter.ts';
 import * as art from './art.ts';
-import { attempt, ChiefArt, Dots, Face, Laptop, Pill, toast, useDialogOwn } from './parts.tsx';
+import { AiMark, attempt, ChiefArt, Dots, Face, Laptop, Pill, toast, useDialogOwn } from './parts.tsx';
 
 type Phase = 'opening' | 'waiting' | 'code' | 'done' | 'work' | 'busy' | 'cancelled' | 'unticked' | 'expired' | 'failed' | 'offline' | 'unavailable' | 'house' | 'asked';
 /** ?demo&phase=expired pins a flow to one state, for design review and screenshots. */
@@ -31,13 +31,14 @@ function Progress({ at, steps }: { at: number; steps: string[] }) {
   );
 }
 
-function Mood({ phase, app }: { phase: Phase; app?: A.App }) {
+function Mood({ phase, app, ai }: { phase: Phase; app?: A.App; ai?: { key: string; bg: string } }) {
   const mood: art.Mood = phase === 'done' ? 'happy' : phase === 'offline' ? 'rest' : phase === 'waiting' ? 'idle' : phase === 'opening' ? 'work'
     : phase === 'failed' || phase === 'expired' || phase === 'unavailable' ? 'error' : 'ask';
   return (
     <div className="flow-face">
       <span className="halo"><ChiefArt mood={mood} d={5} /></span>
       {app && <span className="app-ic badge-ic" style={{ background: app.bg }}>{app.mark}</span>}
+      {ai && <span className="badge-ic ai-badge"><AiMark ai={ai} size={38} /></span>}
       {phase === 'opening' && <Laptop />}
       {phase === 'done' && <pre className="art sparkle" aria-hidden>{'✦  ·  ✧  ·  ✦'}</pre>}
     </div>
@@ -86,7 +87,7 @@ function useTab(first: Window | null | undefined) {
  * on only when crewd has a sign-in that works. The code is the fallback ("Having trouble?", or by itself when the page
  * never comes back). Every other ending has its own words: declined, busy, expired, a work account, offline.
  */
-export function SignIn({ me, owner, ai = A.AIS[0], tab: first, onReady, onClose }: { me: number; owner: string; ai?: { key: string; name: string }; tab?: Window | null; onReady: () => void; onClose: () => void }) {
+export function SignIn({ me, owner, ai = A.AIS[0], tab: first, onReady, onClose }: { me: number; owner: string; ai?: { key: string; name: string; bg: string }; tab?: Window | null; onReady: () => void; onClose: () => void }) {
   const name = ai.name;
   const { value, offline } = usePoll(() => api.accounts(), 1500);
   const g = A.account(value, me, ai.key);
@@ -111,7 +112,7 @@ export function SignIn({ me, owner, ai = A.AIS[0], tab: first, onReady, onClose 
   return (
     <Sheet label={`Sign in with ${name}`} onClose={close}>
       {!['offline', 'busy'].includes(phase) && <Progress at={at} steps={[`Open ${name}`, 'Say yes', 'Done']} />}
-      <Mood phase={phase === 'code' ? 'waiting' : phase} />
+      <Mood phase={phase === 'code' ? 'waiting' : phase} ai={phase === 'offline' ? undefined : ai} />
       {phase === 'opening' && <><h2>Opening {name}…</h2><div className="dotdot" aria-hidden><i /><i /><i /></div><button className="link" onClick={cancel}>Cancel</button></>}
       {phase === 'waiting' && <>
         <h2>Say yes on {name}'s page</h2>

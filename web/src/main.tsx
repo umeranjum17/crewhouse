@@ -7,7 +7,7 @@ import { api, demo, setMember, subscribe, type Json } from './api.ts';
 import * as A from './adapter.ts';
 import * as art from './art.ts';
 type Helper = ReturnType<typeof A.crew>[number];
-import { AskCard, AskSheet, attempt, Celebrate, setChiefMood, setNight, ChiefArt, Composer, Face, Dots, Logo, Media, ChatText, PalArt, Pill, Splash, Steps, Toasts, toast, useListen, PreviewPanel } from './parts.tsx';
+import { AiMark, AskCard, AskSheet, attempt, Celebrate, setChiefMood, setNight, ChiefArt, Composer, Face, Dots, Logo, Media, ChatText, PalArt, Pill, Splash, Steps, Toasts, toast, useListen, PreviewPanel } from './parts.tsx';
 import { keepDraft } from './draft.ts';
 import { Screen } from './screen.tsx';
 import { AccountCard, ConnectApp, ConnectCard, openTab, sheet, SignIn, Unreachable } from './flows.tsx';
@@ -84,11 +84,11 @@ function Hello({ state, refresh, night }: Ctx) {
       <span className="halo"><ChiefArt mood={tipped ? 'idle' : 'hello'} d={8.5} /></span>
       <h1>{A.greeting()}{address.trim() ? `, ${address.trim()}` : ''}</h1>
       <p className="lead">I'm Chief. I run the crew in this house{isOwner ? '.' : `; ${owner} set me up for you.`}</p>
-      <div className="promises">
-        <div>› Your helpers live on this computer, and think with your own ChatGPT.</div>
-        <div>› {A.atHome()[1]}</div>
-        <div>› I'll ask before sending messages, deleting things or spending money.</div>
-      </div>
+      <ul className="promises">
+        <li>Your helpers live on this computer, and think with your own ChatGPT.</li>
+        <li>{A.atHome()[1]}</li>
+        <li>I'll ask before sending messages, deleting things or spending money.</li>
+      </ul>
       <h2 className="plate">What can I take off your plate?</h2>
       <div className="ideas">
         {A.firstIdeas(state).map((i) => <button key={i.label} className="idea" onClick={() => pick(i.label)}><span aria-hidden>{i.icon}</span><b>{i.label}</b><i aria-hidden>›</i></button>)}
@@ -429,7 +429,7 @@ function Crew(ctx: Ctx) {
     <div className="page">
       <h1>Your crew</h1>
       <p className="lead">Everyone answers to Chief. Tap a helper to chat, or add one for something new.</p>
-      <div className="grid">
+      <div className="grid crew-grid">
         <a className="card pal-card" href="#/chief"><span className="halo"><ChiefArt mood={c.mood} d={4} /></span><b>Chief</b><Pill tone={c.tone}>{c.line}</Pill><span className="mute small">Runs the crew and answers to you</span></a>
         {A.crew(state).map((h) => (
           <a key={h.id} className="card pal-card" href={hrefOf(h.id)}>
@@ -903,23 +903,7 @@ function Settings({ state, me, refresh, tick, accounts, look, setLook, switchTo 
         <div className="chips">{state.members.map((m: Json) => <button key={m.id} className={`chip ${m.id === me ? 'on' : ''}`} onClick={() => switchTo(m.id)}>{m.name}</button>)}</div></>)}
 
       <div className="label">Your AI accounts</div>
-      <p className="mute small">{A.AI_ROUTES}</p>
-      {A.AIS.map((ai) => {
-        const g = A.account(accounts, me, ai.key);
-        return (
-          <div key={ai.key} className="card row stack-row">
-            <span className="app-ic" style={{ background: ai.bg }}>◎</span>
-            <div className="grow"><b>{ai.name}</b><div className="mute small">{g.state === 'ready'
-              ? g.notIncluded ? "Your plan doesn't include helpers yet." : `Connected${g.work ? ` as ${g.work}, a work account` : ''}. The crew can think with it.${g.resting ? ` ${g.resting}.` : ''}`
-              : g.state === 'checking' ? 'Checking…'
-              : ai.key === 'chatgpt' ? `Not signed in. You'll say yes once on ${ai.name}; it calls the access your helpers use “Codex”.`
-              : ai.cli ? `Untested here — no account yet. Needs ${ai.cli} first.`
-              : `Untested here — no account yet. Signing in uses your own ${ai.name}.`}</div></div>
-            {g.state === 'signed-out' && <button className="btn go" onClick={() => setSigning({ ai, tab: openTab() })}>Sign in</button>}
-            {g.state === 'ready' && <button className="btn" onClick={() => attempt(async () => { await api.signOut(me, ai.key); refresh(); }, `Signed out of ${ai.name}`)}>Sign out</button>}
-          </div>
-        );
-      })}
+      <AiAccounts me={me} accounts={accounts} refresh={refresh} signIn={(ai) => setSigning({ ai, tab: openTab() })} />
 
       <div className="label">How much of it the crew may use</div>
       <div className="seg">{A.SHARES.map((o) => <button key={o.key} className={A.share(state).choice === o.key ? 'on' : ''} title={o.says}
@@ -949,6 +933,27 @@ function Settings({ state, me, refresh, tick, accounts, look, setLook, switchTo 
       {signing !== false && <SignIn me={me} owner={ownerName(state)} ai={signing?.ai} tab={signing?.tab} onReady={() => { setSigning(false); refresh(); }} onClose={() => setSigning(false)} />}
     </div>
   );
+}
+
+/** The accounts the crew thinks with, signed in first; every other route waits quietly under "More ways to sign in". */
+function AiAccounts({ me, accounts, refresh, signIn }: { me: number; accounts: Json[] | null; refresh: () => void; signIn: (ai: (typeof A.AIS)[number]) => void }) {
+  const { mine, more } = A.aiList(accounts, me);
+  const row = ({ ai, g, says }: ReturnType<typeof A.aiList>['more'][number]) => (
+    <div key={ai.key} className="ai-row">
+      <AiMark ai={ai} />
+      <div className="grow"><b>{ai.name}</b><div className="mute small">{says}</div></div>
+      {g.state === 'signed-out' && <button className={`btn ${mine.some((r) => r.ai === ai) ? 'go' : 'quiet'}`} onClick={() => signIn(ai)}>Sign in</button>}
+      {g.state === 'ready' && <button className="link" onClick={() => attempt(async () => { await api.signOut(me, ai.key); refresh(); }, `Signed out of ${ai.name}`)}>Sign out</button>}
+    </div>
+  );
+  return (<>
+    <div className="card list ai-list">{mine.map(row)}</div>
+    {more.length > 0 && <details className="more-ways">
+      <summary><span className="grow">More ways to sign in</span><span className="ai-stack">{more.map((r) => <AiMark key={r.ai.key} ai={r.ai} size={22} />)}</span><i aria-hidden>›</i></summary>
+      <div className="card list ai-list">{more.map(row)}</div>
+    </details>}
+    <p className="mute small">{A.AI_ROUTES}</p>
+  </>);
 }
 
 /** Owner only: the house's monthly money cap. Helpers ask before every spend; past this they can't spend at all. */

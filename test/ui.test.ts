@@ -286,7 +286,7 @@ test('the runs-at-home line is said once, in the same plain words, in all three 
   assert.match(A.atHome('the home computer')[0], /^Your helpers live on the home computer and use your own sign-ins\.$/, 'the phone names the home computer');
   const web = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
   assert.equal([...web.matchAll(/A\.atHome\(/g)].length, 2, 'Hello and Settings both quote it; nobody paraphrases it');
-  assert.match(web, /<div>› \{A\.atHome\(\)\[1\]\}<\/div>/, "it sits in Hello's promises, the same three rows as before");
+  assert.match(web, /<ul className="promises">\s+<li>[^<]+<\/li>\s+<li>\{A\.atHome\(\)\[1\]\}<\/li>\s+<li>[^<]+<\/li>\s+<\/ul>/, "it sits in Hello's promises, the same three rows as before");
   assert.match(web, /<h1>Settings<\/h1>\s+<p className="mute small">\{A\.atHome\(\)\.join\(' '\)\}<\/p>/, 'Settings says it under the title, in the quiet style');
   const app = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
   assert.equal([...app.matchAll(/A\.atHome\('the home computer'\)/g)].length, 3, 'the phone quotes it at first run (two lines) and on This phone');

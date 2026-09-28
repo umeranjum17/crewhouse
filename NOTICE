@@ -11,3 +11,7 @@ vendors' terms.
 
 The web app bundles the Nunito and JetBrains Mono fonts under the SIL Open
 Font License 1.1 (see web/fonts/OFL.txt).
+
+The AI account marks in web/src/logos.ts come from Simple Icons (CC0 1.0) and,
+for Grok, Lobe Icons (MIT License, Copyright (c) 2023 LobeHub). The marks are
+trademarks of their owners, shown only to name the account being signed in to.

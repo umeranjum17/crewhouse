@@ -22,6 +22,8 @@ export type Card = {
    *  `known`: crewd could read the total. Without it, the safe way out is the person buying it themselves. */
   review?: boolean; order?: { shown: string; known: boolean; dollars: boolean };
 };
+/** The small line above an ask's title: what kind of yes it wants, so the title itself can stay plain. */
+export const askTag = (c: Card) => ({ spend: 'Wants to spend money', question: 'Has a question', routine: 'A routine to start', setup: 'Home setup', connect: 'Wants an app' } as Record<string, string>)[c.kind] ?? 'Needs your OK';
 export type Work = { helper: string; title: string; line: string; waiting: boolean };
 export type Thing = { id: number; helper: string; title: string; at: number; summary: string; files: FileView[] };
 export type FileView = { url: string; kind: 'video' | 'image' | 'doc' | 'sheet' | 'page'; name: string };
@@ -844,6 +846,25 @@ export function account(accounts: Json[] | null, member: number, key = 'chatgpt'
     work: a.work ? (typeof a.work === 'string' ? a.work : 'a work account') : '' };
 }
 export const chatgpt = (accounts: Json[] | null, member: number) => account(accounts, member, 'chatgpt');
+
+/** Settings' account list: the accounts signed in first (or ChatGPT, the front door, while none is), every other route
+ *  under "More ways to sign in". Each row's one line says where it stands in plain words; a route nobody has signed in
+ *  to here is "not set up", never connected. */
+export function aiList(accounts: Json[] | null, member: number) {
+  const rows = AIS.map((ai) => {
+    const g = account(accounts, member, ai.key);
+    const says = g.state === 'ready'
+      ? g.notIncluded ? "Signed in, but your plan doesn't include helpers yet." : g.resting ? `Signed in. ${g.resting}.` : `Signed in${g.work ? ` as ${g.work}, a work account` : ''}. The crew uses it.`
+      : g.state === 'checking' ? 'Checking…'
+      : ai.key === 'chatgpt' ? `Not signed in yet. You'll say yes once on ${ai.name}.`
+      : ai.cli ? `Not set up. Needs ${ai.cli} first.`
+      : `Not set up. Uses your own ${ai.name} plan.`;
+    return { ai, g, says };
+  });
+  const mine = rows.filter((r) => r.g.state === 'ready');
+  const front = mine.length ? mine : rows.filter((r) => r.ai.key === 'chatgpt');
+  return { mine: front, more: rows.filter((r) => !front.includes(r)) };
+}
 /** The account the crew thinks with: the first one signed in. Null while checking, 'none' when there is none yet. */
 export function thinking(accounts: Json[] | null, member: number) {
   if (!accounts) return null;
