@@ -84,7 +84,7 @@ b { font-weight: 600; }
 .tag { font: 500 11px/14px var(--ui); background: var(--soft); color: var(--mute); border-radius: 999px; padding: 2px 8px; margin-left: 6px; }
 .badge { background: var(--pink); color: #fff; font: 500 11px/14px var(--ui); border-radius: 999px; padding: 1px 6px; margin-left: auto; }
 .input { width: 100%; background: var(--solid); border: 1px solid var(--line2); border-radius: 10px; padding: 12px 16px; font-size: 15px; }
-.input.center { text-align: center; font-weight: 800; }
+.input.center { text-align: center; font-weight: 600; }
 textarea.input { resize: vertical; }
 
 /* cards: one flat surface, hairline-divided rows inside; only Needs you, the review sheet, dialogs and the composer
@@ -98,9 +98,10 @@ textarea.input { resize: vertical; }
 .row-item:first-child { border-top: 0; }
 .ask { border-color: color-mix(in srgb, var(--pink) 40%, var(--line)); }
 .ask-head { display: flex; gap: 10px; align-items: center; }
-.ask-words { font: 700 16.5px/1.4 var(--ui); margin: 10px 0 0; }
+.ask-words { font: 600 16px/1.45 var(--ui); margin: 10px 0 0; }
 /* Chief's offered routine: the confirmation lines (cadence first), the edit under it, and the tappable time on a row. */
-.routine-lines { display: grid; gap: 5px; margin-top: 10px; font: 700 16px/1.4 var(--ui); }
+.routine-lines { display: grid; gap: 4px; margin-top: 10px; font: 600 16px/1.45 var(--ui); }
+.routine-lines > .mute { font: 400 15px/1.45 var(--ui); color: var(--ink2); }
 .routine-edit { margin-top: 10px; }
 .routine-note { margin-top: 6px; }
 .routine-ask form { margin-top: 12px; }
@@ -119,7 +120,7 @@ textarea.input { resize: vertical; }
 .bar span { display: block; height: 100%; width: 40%; border-radius: 9px; background: var(--ok); }
 .stuck { background: color-mix(in srgb, var(--wait) 14%, var(--solid)); border-radius: 18px; padding: 12px 14px; margin: 4px 0 10px; font-size: 14.5px; }
 .steps { padding: 10px 16px; }
-.step { display: flex; gap: 10px; align-items: baseline; padding: 5px 0; font-size: 14.5px; }
+.step { display: flex; gap: 10px; align-items: baseline; padding: 6px 0; font-size: 15px; line-height: 1.45; }
 .step i { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); flex: none; transform: translateY(-1px); }
 .step.asked i { background: var(--wait); }
 .step.now i { background: transparent; border: 2px solid var(--wait); }
@@ -154,7 +155,7 @@ video.media { width: auto; max-width: 100%; max-height: 360px; height: auto; obj
 .hello { max-width: 440px; margin: 0 auto; padding: 36px 20px 40px; display: grid; justify-items: center; text-align: center; gap: 4px; }
 .hello h1 { font-size: 28px; margin-top: 6px; }
 .hello .lead { font-size: 16px; }
-.hello .input.name { text-align: center; font-weight: 800; font-size: 18px; padding: 15px; border-radius: 999px; }
+.hello .input.name { text-align: center; font-weight: 600; font-size: 18px; padding: 15px; border-radius: 999px; }
 .promises { text-align: left; font-size: 14.5px; line-height: 1.75; width: 100%; }
 .hello .btn.big { margin-top: 12px; }
 .gpt { width: 22px; height: 22px; border-radius: 50%; background: var(--go-ink); color: var(--go); display: grid; place-items: center; font-size: 13px; }
@@ -176,7 +177,7 @@ video.media { width: auto; max-width: 100%; max-height: 360px; height: auto; obj
 .approve-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; margin-top: 8px; }
 .approve-btns .btn.big { grid-column: 1 / -1; }
 .approve-btns .btn:only-child, .approve-btns .btn:nth-child(2):last-child { grid-column: 1 / -1; }
-.code { font: 900 34px/1 var(--ui); letter-spacing: 3px; white-space: nowrap; padding: 18px 22px; background: var(--soft); border-radius: 20px; }
+.code { font: 700 34px/1 var(--ui); letter-spacing: 3px; white-space: nowrap; padding: 18px 22px; background: var(--soft); border-radius: 20px; }
 
 /* home */
 .home, .page { max-width: 720px; margin: 0 auto; padding: 20px 16px 40px; }
@@ -209,15 +210,15 @@ video.media { width: auto; max-width: 100%; max-height: 360px; height: auto; obj
 .file-chip { width: 36px; height: 40px; border-radius: 6px; background: var(--soft); color: var(--ink2); display: grid; place-items: center; font: 600 11px/14px var(--ui); flex: none; }
 .btn.sm { min-height: 32px; padding: 4px 12px; font-size: 13px; border-radius: 8px; }
 /* The house's setup jobs: a tick ring, a plain line, and the panel it opens. */
-.setup-mark { font: 900 15px var(--ui); color: var(--mute); width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--shadow); display: inline-grid; place-items: center; flex: none; }
+.setup-mark { font: 600 13px var(--ui); color: var(--mute); width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--shadow); display: inline-grid; place-items: center; flex: none; }
 .setup-mark.done { color: var(--ok-ink); border-color: var(--ok); background: color-mix(in srgb, var(--ok) 18%, transparent); }
 /* Hello's own-words ask: one field, one send. */
 .own-ask { display: flex; gap: 8px; margin-top: 10px; }
 .own-ask .input { flex: 1; }
 
 .bubbles { display: flex; gap: 14px; overflow-x: auto; padding: 8px 4px 4px; scrollbar-width: none; justify-content: safe center; }
-.bubble { display: grid; justify-items: center; gap: 4px; font: 800 13.5px var(--ui); flex: none; }
-.bubble.dim { color: var(--mute); font-weight: 700; }
+.bubble { display: grid; justify-items: center; gap: 4px; font: 600 13.5px var(--ui); flex: none; }
+.bubble.dim { color: var(--mute); font-weight: 500; }
 .bubble .face { background: var(--solid) !important; }
 .dock { position: sticky; bottom: 0; padding: 18px 18px 12px; margin: 8px -18px 0; z-index: 3; background: color-mix(in srgb, var(--bg) 60%, transparent); mask-image: linear-gradient(transparent, #000 16px); }
 .dock .chips { flex-wrap: nowrap; overflow-x: auto; margin: 0 0 8px; scrollbar-width: none; }
@@ -283,9 +284,11 @@ a.back:not([aria-label]) { font: 500 15px/20px var(--ui); padding: 0 8px; margin
 .pal-card { display: grid; justify-items: center; gap: 8px; text-align: center; padding: 18px 14px; }
 .pal-card .halo { padding: 10px; }
 .pal-card.add { border: 2px dashed var(--shadow); background: transparent; box-shadow: none; align-content: center; }
-.grid.things { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+.grid.things { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
 .thing .media { margin: 0 0 10px; }
 .thing .wb-card, .thing .doc { margin: 0 0 12px; max-width: none; }
+/* In a Things card the whole card opens it, so the name keeps the width an Open button would take. */
+.thing .wb-open, .thing .doc > b { display: none; }
 .thing .cover span { font-size: 20px; padding: 0 40px; }
 .thing p { margin: 4px 0; font-size: 14px; }
 .by { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
@@ -295,7 +298,7 @@ a.back:not([aria-label]) { font: 500 15px/20px var(--ui); padding: 0 8px; margin
 
 /* settings */
 .person .field { display: grid; gap: 6px; font-size: 13.5px; color: var(--mute); font-weight: 700; margin-top: 12px; }
-.initial { width: 40px; height: 40px; border-radius: 50%; background: var(--go); color: var(--go-ink); display: grid; place-items: center; font-weight: 900; flex: none; }
+.initial { width: 40px; height: 40px; border-radius: 50%; background: var(--go); color: var(--go-ink); display: grid; place-items: center; font-weight: 600; flex: none; }
 .toggle, .toggle-row { display: flex; gap: 12px; align-items: center; cursor: pointer; }
 .toggle-row { margin-top: 12px; }
 input[role='switch'] { appearance: none; width: 40px; height: 24px; border-radius: 999px; background: var(--line2); position: relative; flex: none; transition: background 120ms var(--ease); cursor: pointer; }
@@ -310,14 +313,14 @@ input[role='switch']:checked::after { left: 19px; }
 .app { display: grid; justify-items: center; gap: 4px; margin: 0; padding: 14px 8px; border: 0; font-size: 13.5px; }
 .app .app-ic { width: 46px; height: 46px; border-radius: 14px; font-size: 20px; margin-bottom: 4px; }
 .app.on { border: 1px solid var(--line); }
-.app .ok { color: var(--ok-ink); font-weight: 800; font-size: 12px; }
-.app .mute { font-weight: 800; font-size: 12px; }
+.app .ok { color: var(--ok-ink); font-weight: 600; font-size: 12px; }
+.app .mute { font-weight: 500; font-size: 12px; }
 .screen-idle { height: 100%; display: grid; place-items: center; background: var(--soft); color: var(--mute); font-weight: 700; border-radius: 16px; }
 .nudge-line { color: var(--ink2); font-size: 14.5px; }
 
 /* toast, offline */
-.toast { position: fixed; left: 50%; bottom: 90px; transform: translateX(-50%); background: var(--ink); color: var(--bg); font-weight: 800; border-radius: 999px; padding: 10px 18px; z-index: 60; max-width: 90vw; text-align: center; animation: up .25s ease; box-shadow: 0 10px 30px #0003; }
-.offline { position: sticky; top: 0; z-index: 20; background: var(--wait); color: #2e2a40; text-align: center; font-weight: 800; padding: 8px; border-radius: 0 0 16px 16px; }
+.toast { position: fixed; left: 50%; bottom: 90px; transform: translateX(-50%); background: var(--ink); color: var(--bg); font-weight: 500; border-radius: 999px; padding: 10px 18px; z-index: 60; max-width: 90vw; text-align: center; animation: up .25s ease; box-shadow: 0 10px 30px #0003; }
+.offline { position: sticky; top: 0; z-index: 20; background: color-mix(in srgb, var(--amber) 14%, var(--solid)); color: var(--ink); border-bottom: 1px solid color-mix(in srgb, var(--amber) 35%, var(--line)); text-align: center; font: 500 14px/1.45 var(--ui); padding: 10px 16px; }
 
 /* shell: phone first, a tab bar at the bottom */
 .side, .rail { display: none; }
@@ -510,7 +513,7 @@ details.card[open] > summary { margin-bottom: 10px; }
 .wb-head .btn { min-height: 40px; padding: 6px 14px; font-size: 14px; }
 .wb-head .wb-what b { font-size: 17px; line-height: 22px; }
 .wb-tabs { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
-.wb-tab { font: 800 13px var(--ui); background: var(--soft); border: 0; border-radius: 999px; padding: 7px 12px; color: var(--mute); white-space: nowrap; }
+.wb-tab { font: 600 13px var(--ui); background: var(--soft); border: 0; border-radius: 999px; padding: 7px 12px; color: var(--mute); white-space: nowrap; }
 .wb-tab.on { background: color-mix(in srgb, var(--pink) 16%, var(--solid)); color: var(--ink); box-shadow: 0 0 0 1.5px var(--pink) inset; }
 .wb-rows { flex: 1; min-height: 0; overflow: auto; background: var(--soft); border-radius: 14px; padding: 10px; display: grid; gap: 8px; align-content: start; }
 .wb-grid { border-collapse: collapse; width: auto; min-width: 100%; font-size: 14px; }
@@ -533,8 +536,8 @@ details.card[open] > summary { margin-bottom: 10px; }
   .wb-panel { width: min(660px, 48vw); height: 100%; border-radius: 24px 0 0 24px; box-shadow: -24px 0 60px -18px #0006; padding: 24px; }
 }
 
-/* An account row on a narrow screen: the words keep the width, the button drops under them. */
-.account-row { flex-wrap: wrap; row-gap: 10px; }
-.account-row > .grow { flex: 1 1 200px; }
-.account-row > .btn { margin-left: 52px; }
-@media (min-width: 600px) { .account-row > .btn { margin-left: 0; } }
+/* A row with a button on a narrow screen: the words keep the width, the button drops under them. */
+.stack-row { flex-wrap: wrap; row-gap: 10px; }
+.stack-row > .grow { flex: 1 1 200px; }
+.stack-row > .app-ic ~ .btn { margin-left: 52px; }
+@media (min-width: 600px) { .stack-row > .app-ic ~ .btn { margin-left: 0; } }

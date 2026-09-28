@@ -740,9 +740,9 @@ function AskCard({ c, who, state, onDone, canAct, offline, open }: { c: A.Card; 
         {who && <Face who={{ ...who, mood: 'ask' }} size={36} />}
         <View style={{ flex: 1 }}><T style={s.b}>{c.head}</T><T tone="mute" style={s.small}>{A.clock(c.at)}</T></View>
       </View>
-      {c.kind === 'routine' && c.lines ? <View style={{ gap: 3, marginVertical: 8 }}>
-        {c.lines.map((l, i) => <T key={i} tone={i ? 'mute' : undefined} style={i ? s.small : s.b}>{l}</T>)}
-      </View> : <T style={{ marginVertical: 8 }}>{c.words}</T>}
+      {c.kind === 'routine' && c.lines ? <View style={{ gap: 3 }}>
+        {c.lines.map((l, i) => <T key={i} tone={i ? 'ink2' : undefined} style={i ? undefined : s.askWords}>{l}</T>)}
+      </View> : <T style={s.askWords}>{c.words}</T>}
       {oops && <T tone="pinkInk" style={s.small}>That didn't go through. Try again.</T>}
       {offline ? <T tone="mute" style={s.small}>You can answer once the home computer is back.</T>
         : !canAct ? <T tone="mute" style={s.small}>This phone watches; answer on another phone or the computer.</T> : c.kind === 'connect' ? (
@@ -1399,6 +1399,7 @@ const s = StyleSheet.create({
   b: { fontWeight: '600' },
   small: { fontSize: 13, lineHeight: 18 },
   read: { fontSize: 16, lineHeight: 24 },
+  askWords: { fontSize: 16, lineHeight: 23, fontWeight: '600' },
   label: { fontSize: 13, lineHeight: 18, fontWeight: '600', marginTop: 24, marginBottom: 6, marginHorizontal: 4 },
   time: { fontSize: 12, lineHeight: 16 },
   fp: { fontSize: 22, fontWeight: '600', fontVariant: ['tabular-nums'], marginVertical: 8, textAlign: 'center' },
