@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { execFile, spawn, type ChildProcess } from 'node:child_process';
-import { closeSync, constants, copyFileSync, existsSync, fstatSync, ftruncateSync, mkdirSync, openSync, readFileSync, readlinkSync, realpathSync, rmSync, statSync, writeFileSync, writeSync } from 'node:fs';
+import { closeSync, constants, copyFileSync, existsSync, fstatSync, ftruncateSync, mkdirSync, openSync, readFileSync, readdirSync, readlinkSync, realpathSync, rmSync, statSync, writeFileSync, writeSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { Type } from 'typebox';
@@ -15,7 +15,7 @@ import { allowed, proxy } from './net.ts';
 import type { Server } from 'node:net';
 import { acts, claimOf, coversOf, effectOf, orderOf, pressOf, toolWords, type Effect } from './policy.ts';
 import { axiEnv, registry, resolveGrants, toolBin, which } from './tools.ts';
-import { describe, nextRun, parseSchedule } from './routines.ts';
+import { describe, describeTrigger, nextRun, parseSchedule, parseTrigger } from './routines.ts';
 import { buildWorkbook, readWorkbook } from './workbooks.ts';
 import { MAX_ITEMS, MAX_PARALLEL, subMessage, type BatchAnswer } from './batch.ts';
 import { buildDocument, readDocument } from './documents.ts';
@@ -31,7 +31,7 @@ export const asksForPhone = (text: string) => /\b(pair|connect|link|add|use|inst
 export const inlineHowTo = (text: string): 'signin' | 'app' | 'routine' | null =>
   /\b(sign[ -]?in|log[ -]?in)\b/i.test(text) && /\b(chatgpt|ai account|crewhouse)\b/i.test(text) ? 'signin' :
   /\b(connect|link|add)\b[\s\S]{0,45}\b(google calendar|calendar|gmail|drive|notion|canva)\b/i.test(text) ? 'app' :
-  /\b(every|each|weekday|routine|schedule)\b/i.test(text) ? 'routine' : null;
+  /\b(every|each|weekday|routine|schedule|when a file arrives|wakes up)\b/i.test(text) ? 'routine' : null;
 
 const HOLD_MS = Number(process.env.CREWHOUSE_HOLD_MS || 180_000); // how long a tool call waits for an answer before the turn parks
 const TASK_TIMEOUT_MS = 60 * 60_000;
@@ -654,7 +654,9 @@ export class Crew {
   /** One member's routines: those they set up, and their own morning digest. */
   routines(member = OWNER) {
     return this.db.all('SELECT * FROM routines WHERE member = ? ORDER BY kind, id', member).map(({ brain, ...r }): Row => ({
-      ...r, words: describe(parseSchedule(r.schedule)), thinks: brain ? disk.brainName(disk.parseBrain(brain)) : null,
+      ...r, words: r.schedule ? describe(parseSchedule(r.schedule)) : '',
+      on: r.trigger ? describeTrigger(parseTrigger(r.trigger), this.bot(r.bot)?.display ?? r.bot) : '',
+      thinks: brain ? disk.brainName(disk.parseBrain(brain)) : null,
       history: this.db.all("SELECT seq, at, kind, data FROM events WHERE kind IN ('routine.fired', 'routine.skipped') AND json_extract(data, '$.routine') = ? ORDER BY seq DESC LIMIT 8", r.id)
         .map((e) => {
           const d = JSON.parse(e.data);
@@ -682,32 +684,40 @@ export class Crew {
       CHIEF, member, nextRun(parseSchedule('every day 8:00'), Date.now()), Date.now());
   }
 
-  /** Check a routine request and fill in its defaults — the one plan behind Chief's confirmation card and the person's own add. */
-  private planRoutine(b: { bot?: string; schedule?: string; task?: string; model?: string; name?: string; quiet?: boolean; watch?: string }) {
+  /** Check a routine request and fill in its defaults — the one plan behind Chief's confirmation card and the person's own add.
+   *  A routine starts on its schedule, on its local event (`on`), or either when both are given; a trigger-only
+   *  routine keeps no time at all. Nothing runs until the person says yes on the card. */
+  private planRoutine(b: { bot?: string; schedule?: string; on?: string; task?: string; model?: string; name?: string; quiet?: boolean; watch?: string }) {
     const bot = this.bot(String(b.bot ?? '').toLowerCase());
     if (!bot || bot.id === CHIEF) throw Object.assign(new Error(`no bot called ${b.bot}; a routine hands a task to one of the crew`), { status: 404 });
     // A watch: crewd reads the page on schedule and wakes the helper only when it changed.
     const watch = b.watch ? String(b.watch).trim() : null;
     if (watch && !/^https?:$/.test(URL.canParse(watch) ? new URL(watch).protocol : '')) throw fail('a page to watch starts with https://');
+    const on = b.on ? String(b.on).trim() : null;
+    if (on) parseTrigger(on); // plain words back when it can't be read as a local event
     const body = String(b.task ?? '').trim() || (watch ? 'Tell the person what changed on the page, in one or two lines.' : '');
     if (!body) throw Object.assign(new Error('say what the routine should do'), { status: 400 });
-    const when = paced(parseSchedule(String(b.schedule ?? '')));
+    const schedule = String(b.schedule ?? '').trim();
+    if (!schedule && !on) throw Object.assign(new Error('say when it should run, or what should start it'), { status: 400 });
+    const when = schedule ? paced(parseSchedule(schedule)) : null;
     const brain = b.model ? disk.brainKey(disk.parseBrain(b.model)) : null;
     // Unnamed routines take the task's first sentence: "Make a demo of this week's screenshots".
     const first = body.split(/\n|(?<=[.!?])\s/)[0].replace(/[.!?]$/, '');
     const name = String(b.name ?? '').trim().slice(0, 60) || (watch && !b.task ? new URL(watch).hostname.replace(/^www\./, '') : short(first, 60));
-    return { bot, watch, body, when, brain, first, name, quiet: b.quiet === true || !!watch };
+    return { bot, watch, body, when, on, brain, first, name, quiet: b.quiet === true || !!watch };
   }
 
   /** A routine is its setter's: the member who added it, or the one Chief set it up for. Its runs use their accounts. */
-  addRoutine(b: { bot?: string; schedule?: string; task?: string; model?: string; name?: string; quiet?: boolean; watch?: string }, by: string, member = by === CHIEF ? this.chiefFor() : OWNER) {
+  addRoutine(b: { bot?: string; schedule?: string; on?: string; task?: string; model?: string; name?: string; quiet?: boolean; watch?: string }, by: string, member = by === CHIEF ? this.chiefFor() : OWNER) {
     const plan = this.planRoutine(b);
+    const words = [plan.when ? describe(plan.when) : '', plan.on ? describeTrigger(parseTrigger(plan.on), plan.bot.display) : ''].filter(Boolean).join('; ');
     return this.db.tx(() => {
-      const r = this.db.run('INSERT INTO routines (bot, name, schedule, body, brain, member, quiet, watch, next_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        plan.bot.id, plan.name, String(b.schedule).trim(), plan.body, plan.brain, member, plan.quiet ? 1 : 0, plan.watch, nextRun(plan.when, Date.now()), Date.now());
+      const r = this.db.run('INSERT INTO routines (bot, name, schedule, body, brain, member, quiet, watch, trigger, next_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        plan.bot.id, plan.name, String(b.schedule ?? '').trim(), plan.body, plan.brain, member, plan.quiet ? 1 : 0, plan.watch, plan.on, plan.when ? nextRun(plan.when, Date.now()) : null, Date.now());
       const row = this.routine(Number(r.lastInsertRowid));
-      this.db.event('routine.created', plan.bot.id, { routine: row.id, name: plan.name, words: describe(plan.when), by, member });
-      if (by === CHIEF) this.say(CHIEF, 'system', `Routine added: “${plan.name}” for ${plan.bot.display}, ${describe(plan.when)}. First run ${clock(row.next_at)}.`, null, member);
+      if (plan.on) mkdirSync(this.inbox(plan.bot.id), { recursive: true });
+      this.db.event('routine.created', plan.bot.id, { routine: row.id, name: plan.name, words, by, member });
+      if (by === CHIEF) this.say(CHIEF, 'system', `Routine added: “${plan.name}” for ${plan.bot.display}, ${words}.${plan.when ? ` First run ${clock(row.next_at)}.` : ''}`, null, member);
       return row;
     });
   }
@@ -719,12 +729,13 @@ export class Crew {
     const plan = this.planRoutine(p);
     const host = plan.watch ? new URL(plan.watch).hostname.replace(/^www\./, '') : '';
     const what = plan.watch ? `Keeps an eye on ${host}` : `${plan.bot.display} will ${plan.first.charAt(0).toLowerCase()}${plan.first.slice(1)}`;
-    const lines = [describe(plan.when), what,
+    const start = [plan.when ? describe(plan.when) : '', plan.on ? describeTrigger(parseTrigger(plan.on), plan.bot.display) : ''].filter(Boolean);
+    const lines = [...start, what,
       plan.watch ? 'Tells you only when the page changes' : plan.quiet ? 'Tells you only when something changed' : 'Tells you each time it runs',
-      `First time: ${clock(nextRun(plan.when, Date.now()))}`];
-    const words = `${describe(plan.when)}, ${what}.`;
+      ...(plan.when ? [`First time: ${clock(nextRun(plan.when, Date.now()))}`] : [])];
+    const words = `${start.join('; ')}, ${what}.`;
     return this.propose(CHIEF, words, {
-      routine: { bot: plan.bot.id, schedule: String(p.schedule ?? '').trim(), task: p.task, name: p.name, model: p.model, quiet: p.quiet, watch: p.watch },
+      routine: { bot: plan.bot.id, schedule: String(p.schedule ?? '').trim(), on: plan.on, task: p.task, name: p.name, model: p.model, quiet: p.quiet, watch: p.watch },
       preview: { head: 'A new routine', body: lines.join('\n') },
     }, member);
   }
@@ -740,10 +751,11 @@ export class Crew {
     const state = b.state ?? r.state;
     if (!['on', 'paused'].includes(state)) throw Object.assign(new Error('a routine is on or paused'), { status: 400 });
     const schedule = b.schedule?.trim() || r.schedule;
-    const next = nextRun(paced(parseSchedule(schedule)), Date.now());
+    const next = schedule ? nextRun(paced(parseSchedule(schedule)), Date.now()) : null;
     this.db.tx(() => {
       this.db.run('UPDATE routines SET state = ?, schedule = ?, next_at = ? WHERE id = ?', state, schedule, next, id);
-      this.db.event(state !== r.state ? `routine.${state === 'on' ? 'resumed' : 'paused'}` : 'routine.changed', r.bot, { routine: id, name: r.name, words: describe(parseSchedule(schedule)) });
+      this.db.event(state !== r.state ? `routine.${state === 'on' ? 'resumed' : 'paused'}` : 'routine.changed', r.bot, { routine: id, name: r.name,
+        words: [schedule ? describe(parseSchedule(schedule)) : '', r.trigger ? describeTrigger(parseTrigger(r.trigger), this.bot(r.bot)?.display ?? r.bot) : ''].filter(Boolean).join('; ') });
     });
   }
 
@@ -755,12 +767,31 @@ export class Crew {
 
   runRoutine(id: number) { this.fire(this.routine(id), 'now'); }
 
-  /** Fire every routine that is due. A machine that slept through runs catches up once (latest only), then moves on. */
+  /** Fire every routine that is due, and notice files arriving for event-started chores: one query, no AI until
+   *  something actually starts. A machine that slept through runs catches up once (latest only), then moves on. */
   schedule(now = Date.now()) {
-    for (const r of this.db.all("SELECT * FROM routines WHERE state = 'on' AND next_at <= ?", now)) {
+    for (const r of this.db.all("SELECT * FROM routines WHERE state = 'on' AND (next_at <= ? OR trigger IS NOT NULL)", now)) {
+      if (r.trigger) { try { if ('file' in parseTrigger(r.trigger)) this.checkInbox(r); } catch (e) { console.error('trigger', r.id, e); } }
+      if (!r.schedule || r.next_at > now) continue; // trigger-only: no time; wake triggers fire from slept()
       this.db.run('UPDATE routines SET next_at = ? WHERE id = ?', nextRun(parseSchedule(r.schedule), now), r.id);
       try { this.fire(r, now - r.next_at > 60_000 ? 'late' : 'schedule'); } catch (e) { console.error('routine', r.id, e); }
     }
+  }
+
+  /** The helper's inbox: the one watched folder a file trigger reads. Fixed per helper, so plain words never carry a path. */
+  inbox(botId: string) { return join(disk.botDir(this.cfg, botId), 'files', 'inbox'); }
+
+  /** A file trigger's check: names in the helper's inbox that were not there last tick start the chore once, through
+   *  the same fire path as a time — the same task, approvals and share. The first look is the baseline, so files
+   *  already sitting there never start it. */
+  private checkInbox(r: Row) {
+    const dir = this.inbox(r.bot);
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+    const now = existsSync(dir) ? readdirSync(dir).filter((f) => f !== '.DS_Store').sort().slice(0, 500) : []; // ponytail: capped snapshot; an inbox past 500 names needs a real watcher
+    const before: string[] | null = JSON.parse(r.cursor ?? 'null');
+    this.db.run('UPDATE routines SET cursor = ? WHERE id = ?', JSON.stringify(now), r.id);
+    const arrived = before ? now.filter((f) => !before.includes(f)) : []; // the first look is the baseline
+    if (arrived.length) this.fire(r, 'file', `New in ${this.bot(r.bot)?.display ?? r.bot}'s inbox: ${arrived.slice(0, 5).join(', ')}${arrived.length > 5 ? `, and ${arrived.length - 5} more` : ''}.`);
   }
 
   private sendDigest(r: Row, why: string, now: number, day?: { at: number | null; title: string }[]) {
@@ -771,7 +802,7 @@ export class Crew {
     });
   }
 
-  private fire(r: Row, why: 'schedule' | 'late' | 'now') {
+  private fire(r: Row, why: 'schedule' | 'late' | 'now' | 'file' | 'wake', note?: string) {
     const now = Date.now();
     if (r.kind === 'digest') {
       // With Calendar connected, crewd reads today's events itself first; the digest still costs no AI.
@@ -802,7 +833,7 @@ export class Crew {
       return;
     }
     if (r.watch) return void this.check(r, why);
-    const { task } = this.addTask(r.bot, r.body, why === 'now' ? 'routine.now' : 'routine', r.brain ?? undefined, r.member, r);
+    const { task } = this.addTask(r.bot, note ? `${r.body}\n\n[Crewhouse] ${note}` : r.body, why === 'now' ? 'routine.now' : 'routine', r.brain ?? undefined, r.member, r);
     this.db.tx(() => {
       this.db.run('UPDATE routines SET last_at = ?, last_task = ? WHERE id = ?', now, task, r.id);
       this.db.event('routine.fired', r.bot, { routine: r.id, name: r.name, why, task });
@@ -811,7 +842,7 @@ export class Crew {
 
   /** A manual run retries a sign-in-parked last run: the same task, queued again — never a second stacked task and
    *  never a silent skip. A scheduled tick retries it only once the member signed in since, and stays quiet either way. */
-  private retryPaused(r: Row, open: Row, origin: string, why: 'schedule' | 'late' | 'now') {
+  private retryPaused(r: Row, open: Row, origin: string, why: 'schedule' | 'late' | 'now' | 'file' | 'wake') {
     const now = Date.now();
     this.db.run('UPDATE tasks SET origin = ?, created_at = ? WHERE id = ?', origin, now, open.id);
     this.setTask(open, 'queued');
@@ -820,7 +851,7 @@ export class Crew {
     this.dispatch();
   }
 
-  private async retryPausedWhenSignedIn(r: Row, open: Row, why: 'schedule' | 'late') {
+  private async retryPausedWhenSignedIn(r: Row, open: Row, why: 'schedule' | 'late' | 'file' | 'wake') {
     let account: string | undefined;
     try { account = await this.usable(open.member ?? OWNER, this.choices(open)); } catch { return; }
     if (!account) return;
@@ -1219,7 +1250,7 @@ export class Crew {
     const r = task.routine && this.db.get('SELECT * FROM routines WHERE id = ?', task.routine);
     if (r) {
       if (unsure) return void this.say(CHIEF, 'bot', `${b} isn't sure “${r.name}” worked. ${result}`, null, member);
-      const again = r.state === 'on' ? ` It will try again ${clock(r.next_at)}.` : '';
+      const again = r.state === 'on' && r.next_at ? ` It will try again ${clock(r.next_at)}.` : '';
       return void this.say(CHIEF, 'bot', `${b} couldn't finish “${r.name}”. ${result}${again}`, null, member);
     }
     this.say(task.bot, 'bot', unsure ? `${UNSURE} ${result}` : result, task.id, member);
@@ -2068,11 +2099,11 @@ export class Crew {
       // A helper can ask for its own recurring check — a watch on a page, or a quiet look that needs its own browser.
       // It is the same card as Chief's: nothing runs until the person says yes on it.
       own.push(tool('crew_routine', 'Offer the person a recurring check of your own: the same task on a schedule, which nothing runs until they say ' +
-        'yes on a card. `when` is plain words in local time: "every day 9:00", "every 2 hours". `watch`: a page address Crewhouse reads itself, waking ' +
+        'yes on a card. `when` is plain words in local time: "every day 9:00", "every 2 hours". `on` starts it on a local event instead of a time: "when a file arrives in the inbox" or "when this computer wakes up" (the card names the inbox; `when` may be empty then). `watch`: a page address Crewhouse reads itself, waking ' +
         'you only when it changed, so a quiet day costs the person no AI — prefer it. `quiet`: you look each time but speak only when something ' +
         'changed; use it when the page draws what matters with JavaScript, so only your own browser can read it. Say in `task` what you are looking for.',
-        { when: Type.String(), task: Type.String(), name: Type.Optional(Type.String()), quiet: Type.Optional(Type.Boolean()), watch: Type.Optional(Type.String()) },
-        (p) => this.offerRoutine({ bot: botId, schedule: p.when, task: p.task, name: p.name, quiet: p.quiet, watch: p.watch }, this.activeTask(botId)?.member)));
+        { when: Type.Optional(Type.String()), on: Type.Optional(Type.String()), task: Type.String(), name: Type.Optional(Type.String()), quiet: Type.Optional(Type.Boolean()), watch: Type.Optional(Type.String()) },
+        (p) => this.offerRoutine({ bot: botId, schedule: p.when, on: p.on, task: p.task, name: p.name, quiet: p.quiet, watch: p.watch }, this.activeTask(botId)?.member)));
       const others = this.bots().filter((b) => b.id !== CHIEF && b.id !== botId).map((b) => `${b.id} (${b.role})`).join('; ');
       if (!others) return own;
       return [...own, tool('crew_pass', `Hand the next step to another helper, for the same person: ${others}. Write what they should do and what "done" means. ` +
@@ -2096,12 +2127,13 @@ export class Crew {
         { bot: Type.String(), task: Type.String(), title: Type.Optional(Type.String()), account: Type.Optional(Type.String()), steps: Type.Optional(Type.Array(Type.String())) },
         (p) => this.plan(String(p.bot).toLowerCase(), p.task ?? '', p.account, p.title, p.steps)),
       tool('crew_routine', 'Offer the person a routine: the same task on a schedule, for them to say yes or no. `when` is plain words in local time: "every Monday 9:00", "weekdays 8am", "every 2 hours". ' +
+        '`on` starts it on a local event instead of a time: "when a file arrives in the inbox" or "when this computer wakes up" (the card names the inbox; `when` may be empty then). ' +
         '`quiet`: a check-in that only speaks up when something needs the person. `watch`: a page address to keep an eye on; Crewhouse reads it on ' +
         'schedule and wakes the bot only when it changed, and `task` says what matters ("tell me if the price drops below $900"). ' +
         'The person sees a card with the cadence and first run; nothing runs until they start it.',
-        { bot: Type.String(), when: Type.String(), task: Type.String(), name: Type.Optional(Type.String()), account: Type.Optional(Type.String()), quiet: Type.Optional(Type.Boolean()), watch: Type.Optional(Type.String()) },
-        (p) => this.offerRoutine({ bot: p.bot, schedule: p.when, task: p.task, name: p.name, model: p.account, quiet: p.quiet, watch: p.watch })),
-      tool('crew_routines', 'The routines and when each runs next.', {}, () => this.routines(this.chiefFor()).map((x) => ({ id: x.id, bot: x.bot, name: x.name, when: x.words, state: x.state, next: new Date(x.next_at).toString() }))),
+        { bot: Type.String(), when: Type.Optional(Type.String()), on: Type.Optional(Type.String()), task: Type.String(), name: Type.Optional(Type.String()), account: Type.Optional(Type.String()), quiet: Type.Optional(Type.Boolean()), watch: Type.Optional(Type.String()) },
+        (p) => this.offerRoutine({ bot: p.bot, schedule: p.when, on: p.on, task: p.task, name: p.name, model: p.account, quiet: p.quiet, watch: p.watch })),
+      tool('crew_routines', 'The routines and when each runs next.', {}, () => this.routines(this.chiefFor()).map((x) => ({ id: x.id, bot: x.bot, name: x.name, when: x.words, on: x.on ?? '', state: x.state, next: x.next_at ? new Date(x.next_at).toString() : '' }))),
       tool('crew_status', 'Open tasks, and what this person’s crew finished recently (titles and delivered files).', {}, () => ({ open: this.db.all("SELECT id, bot, title, state FROM tasks WHERE state IN ('queued','working','needs_you','paused') ORDER BY id"), finished: this.finishedList(this.chiefFor()) })),
       tool('crew_suggest', 'Suggest a change to how a helper comes across (its personality), when the person asks for one. ' +
         '`text`: the whole new personality, a few short plain lines in the second person ("You are Reel. …"). The person sees it and says yes or no.',
@@ -2486,6 +2518,10 @@ export class Crew {
           `I'm running ${list} now, once, to catch up.`, null, member);
       }
     });
+    // Wake triggers: chores the person asked to start on waking, through the same fire path as a time.
+    for (const r of this.db.all("SELECT * FROM routines WHERE state = 'on' AND trigger IS NOT NULL AND kind != 'digest'")) {
+      try { if ('wake' in parseTrigger(r.trigger)) this.fire(r, 'wake'); } catch (e) { console.error('trigger', r.id, e); }
+    }
   }
 
   // ---- the bot's screen: watch, take over, give back ----

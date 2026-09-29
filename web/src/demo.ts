@@ -211,6 +211,7 @@ const state = {
     routine(1, 'chief', 'Your week, every morning', 'every day 8:00', 'on', 'digest'),
     routine(2, 'scout', 'Plan the week’s dinners', 'every Saturday 10:00', 'on'),
     { ...routine(3, 'pip', 'Check the school newsletter', 'every Friday 16:00', 'paused'), quiet: 1 },
+    { id: 4, bot: 'scout', kind: 'task', name: 'File the new receipts', words: '', on: "When a file arrives in Scout's inbox", state: 'on', next_at: null, history: [] },
   ],
   connections: connected,
   share: { choice: 'light', used: variant === 'share' },

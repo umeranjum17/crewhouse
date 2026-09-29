@@ -79,3 +79,23 @@ export function nextRun(s: Schedule, after: number) {
   }
   throw new Error('unreachable: a schedule always has a day');
 }
+
+/** A local event that starts a routine instead of (or as well as) a time: a file arriving in the helper's
+ *  inbox, or the computer waking. The inbox is fixed per helper, so the words never carry a path. */
+export type Trigger = { file: true } | { wake: true };
+
+const triggerBad = (text: string) => Object.assign(new Error(`I can't start anything on "${text}"; try "when a file arrives in the inbox" or "when this computer wakes up"`), { status: 400 });
+
+export function parseTrigger(text: string): Trigger {
+  const s = String(text).toLowerCase().replace(/[,.]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!s.startsWith('when ')) throw triggerBad(text);
+  if (/\b(wake|wakes|woke|waking)\b/.test(s) && /\b(computer|machine|laptop|mac|pc)\b/.test(s)) return { wake: true };
+  if (/\b(file|files|photo|photos|picture|pictures|receipt|receipts|attachment|document)\b/.test(s) &&
+    /\b(arrive|arrives|arriving|land|lands|landing|drop|dropped|added|appear|appears|show|shows)\b/.test(s)) return { file: true };
+  throw triggerBad(text);
+}
+
+/** The trigger back in plain words; `who` is the helper's display name, whose inbox the file trigger watches. */
+export function describeTrigger(t: Trigger, who: string) {
+  return 'file' in t ? `When a file arrives in ${who}'s inbox` : 'When this computer wakes up';
+}

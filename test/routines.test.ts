@@ -1,11 +1,12 @@
 // Routines: plain-words schedules, next run, catch-up after sleep, overlap, pause, the morning digest. No CLI, no quota.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { setup as lab, settled, release, holding, until, lastSaid, sleep } from './lab.ts';
 import * as A from '../web/src/adapter.ts';
 import type { Store } from '../src/db.ts';
-const { describe, nextRun, parseSchedule } = await import('../src/routines.ts');
+const { describe, describeTrigger, nextRun, parseSchedule, parseTrigger } = await import('../src/routines.ts');
 
 const at = (y: number, mo: number, d: number, h = 0, m = 0) => new Date(y, mo - 1, d, h, m).getTime();
 const state = (db: Store, t: number) => db.get('SELECT state FROM tasks WHERE id = ?', t)!.state;
@@ -605,5 +606,116 @@ test('the checkout card is read from the page: items and total as the page write
   assert.equal(crew.snapshot().money!.spent, 43.1);
   await release(crew, 'scout', 'Done shopping.');
   await settled(db, t);
+  done();
+});
+
+test('trigger words: parse, describe, reject', () => {
+  const files: [string, string][] = [
+    ['when a file arrives in the inbox', "When a file arrives in Reel's inbox"],
+    ['when photos land in the inbox', "When a file arrives in Reel's inbox"],
+    ['when a receipt is added', "When a file arrives in Reel's inbox"],
+  ];
+  for (const [text, words] of files) assert.equal(describeTrigger(parseTrigger(text), 'Reel'), words, text);
+  assert.equal(describeTrigger(parseTrigger('when this computer wakes up'), 'Reel'), 'When this computer wakes up');
+  assert.equal(describeTrigger(parseTrigger('when my laptop wakes'), 'Reel'), 'When this computer wakes up');
+  // The card's own words read back.
+  assert.equal(describeTrigger(parseTrigger("When a file arrives in Reel's inbox"), 'Reel'), "When a file arrives in Reel's inbox");
+  for (const text of ['', 'every Monday 9:00', 'whenever', 'when I wake up', 'when it rains']) assert.throws(() => parseTrigger(text), /can't start anything/, text);
+});
+
+test('event triggers: a file arriving in the inbox starts the chore once; waking starts wake chores', async () => {
+  const { db, crew, cfg, done } = setup();
+  assert.throws(() => crew.addRoutine({ bot: 'reel', on: 'whenever', task: 'x' }, 'person'), /can't start anything/);
+  assert.throws(() => crew.addRoutine({ bot: 'reel', task: 'x' }, 'person'), /say when it should run/);
+  const file = crew.addRoutine({ bot: 'reel', on: 'when a file arrives in the inbox', task: 'ask permission: file the new receipt', name: 'Receipts' }, 'person');
+  assert.equal(file.schedule, '', 'a trigger-only routine keeps no time');
+  assert.equal(file.next_at, null);
+  assert.equal(crew.routines().find((x) => x.id === file.id)!.on, "When a file arrives in Reel's inbox");
+  assert.equal(crew.routines().find((x) => x.id === file.id)!.words, '');
+  const shown = A.routines(crew.snapshot()).find((x: any) => x.id === file.id)!;
+  assert.equal(shown.on, "When a file arrives in Reel's inbox");
+  assert.equal(shown.next, '', 'no time, no next date');
+  const both = crew.addRoutine({ bot: 'reel', schedule: 'every day 7:00', on: 'when a file arrives in the inbox', task: 'sort it', name: 'Both' }, 'person');
+  assert.equal(crew.routines().find((x) => x.id === both.id)!.words, 'Every day at 7:00 am');
+  crew.deleteRoutine(both.id);
+  const wake = crew.addRoutine({ bot: 'reel', on: 'when this computer wakes up', task: 'ask permission: say good morning', name: 'Wake up' }, 'person');
+
+  // The first tick only learns what is already there: nothing starts.
+  crew.schedule();
+  assert.equal(fired(db, file.id).length, 0);
+
+  // A file lands in the helper's inbox: the chore starts once, naming the file.
+  writeFileSync(join(crew.inbox('reel'), 'receipt.jpg'), 'x');
+  crew.schedule();
+  let h = fired(db, file.id);
+  assert.equal(h.length, 1);
+  assert.equal(h[0].why, 'file');
+  const t = db.get('SELECT * FROM tasks WHERE id = ?', h[0].task)!;
+  assert.match(t.body, /receipt\.jpg/);
+  assert.doesNotMatch(t.body, /\blab-|\/state\//, 'basenames, never paths');
+  await until('holding', () => crew.sessionOf('reel'));
+
+  // Another file while it runs: skipped, not stacked.
+  writeFileSync(join(crew.inbox('reel'), 'receipt2.jpg'), 'x');
+  crew.schedule();
+  h = fired(db, file.id);
+  assert.equal(h.at(-1).kind, 'routine.skipped');
+  assert.equal(db.get('SELECT COUNT(*) AS n FROM tasks WHERE routine = ?', file.id)!.n, 1);
+  await release(crew, 'reel', 'Receipt filed.');
+  await settled(db, t.id);
+  assert.equal(state(db, t.id), 'done');
+
+  // Waking the computer starts the wake chore, and nothing else.
+  crew.slept(Date.now() - 3_600_000, Date.now());
+  const w = fired(db, wake.id);
+  assert.equal(w.length, 1);
+  assert.equal(w[0].why, 'wake');
+  assert.equal(fired(db, file.id).length, 2, 'no file arrived: no second start');
+  await release(crew, 'reel', 'Good morning.');
+  await settled(db, w[0].task);
+
+  // Paused triggers stay off; a file still waiting when it resumes starts it.
+  crew.updateRoutine(file.id, { state: 'paused' });
+  writeFileSync(join(crew.inbox('reel'), 'receipt3.jpg'), 'x');
+  crew.schedule();
+  assert.equal(fired(db, file.id).length, 2);
+  crew.updateRoutine(file.id, { state: 'on' });
+  crew.schedule();
+  assert.equal(fired(db, file.id).length, 3);
+  const last = db.get('SELECT * FROM tasks WHERE id = ?', fired(db, file.id).at(-1).task)!;
+  assert.match(last.body, /receipt3\.jpg/);
+  await release(crew, 'reel', 'Filed.');
+  await settled(db, last.id);
+  done();
+});
+
+test('a helper offers an event chore on a card, and nothing runs until the person starts it', async () => {
+  const { db, crew, done } = setup();
+  const { task } = await (crew as any).post('reel', `[tool crew_routine ${JSON.stringify({ on: 'when photos land in the inbox', task: 'tidy the new photos' })}]`);
+  await until('the card', () => db.get("SELECT * FROM asks WHERE kind = 'propose' AND state = 'open'"));
+  const card = db.get("SELECT * FROM asks WHERE kind = 'propose' AND state = 'open'")!;
+  const preview = JSON.parse(card.detail).preview.body as string;
+  assert.match(preview, /When a file arrives in Reel's inbox/);
+  assert.doesNotMatch(preview, /First time/, 'no time, no first run');
+  assert.equal(db.get("SELECT COUNT(*) AS n FROM routines WHERE kind = 'task'")!.n, 0, 'nothing runs until the person says yes');
+  await crew.answer(card.id, { answer: 'allow' });
+  await settled(db, task);
+  const r = db.get("SELECT * FROM routines WHERE bot = 'reel' AND kind = 'task'")!;
+  assert.equal(r.schedule, '');
+  assert.equal(r.trigger, 'when photos land in the inbox');
+  assert.equal(crew.routines().find((x) => x.id === r.id)!.on, "When a file arrives in Reel's inbox");
+  done();
+});
+
+test('a failed trigger-only routine says so with no time to try again', async () => {
+  const { db, crew, done } = setup();
+  const r = crew.addRoutine({ bot: 'reel', on: 'when this computer wakes up', task: 'ask permission: say good morning', name: 'Wake up' }, 'person');
+  crew.runRoutine(r.id);
+  const t = db.get('SELECT id FROM tasks WHERE routine = ?', r.id)!.id;
+  await until('working', () => state(db, t) === 'working');
+  db.run('UPDATE tasks SET created_at = ? WHERE id = ?', Date.now() - 2 * 3_600_000, t);
+  (crew as any).tick();
+  await until('failed', () => state(db, t) === 'failed');
+  assert.match(lastSaid(db, 'chief')!, /^Reel couldn't finish “Wake up”\. Took longer than an hour, so I stopped it\.$/);
   done();
 });
