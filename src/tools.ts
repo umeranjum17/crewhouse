@@ -138,14 +138,13 @@ export async function installTool(cfg: Config, id: string, log: (s: string) => v
   let binDir = dir;
   // npm's own cache and settings stay in Crewhouse's tool folder, not the person's ~/.npm and ~/.npmrc; no install scripts run.
   const npm = { npm_config_cache: join(cfg.toolsDir, '.npm-cache'), npm_config_userconfig: '/dev/null', npm_config_ignore_scripts: 'true' };
-  if (t.install.npm && existsSync(lockOf(cfg, id))) {
-    log(`${t.name}: npm ci (${t.install.npm}, every dependency from the lockfile)`);
-    for (const f of ['package.json', 'package-lock.json']) copyFileSync(join(cfg.repoDir, 'tools', id, f), join(dir, f));
-    run('npm', ['ci', '--no-audit', '--no-fund'], npm);
-    binDir = join(dir, 'node_modules', '.bin');
-  } else if (t.install.npm) {
-    log(`${t.name}: npm ${t.install.npm}`);
-    run('npm', ['install', '--prefix', dir, '--no-audit', '--no-fund', '--no-save', t.install.npm], npm);
+  if (t.install.npm) {
+    const locked = existsSync(lockOf(cfg, id));
+    log(locked ? `${t.name}: npm ci (${t.install.npm}, every dependency from the lockfile)` : `${t.name}: npm ${t.install.npm}`);
+    if (locked) {
+      for (const f of ['package.json', 'package-lock.json']) copyFileSync(join(cfg.repoDir, 'tools', id, f), join(dir, f));
+      run('npm', ['ci', '--no-audit', '--no-fund'], npm);
+    } else run('npm', ['install', '--prefix', dir, '--no-audit', '--no-fund', '--no-save', t.install.npm], npm);
     binDir = join(dir, 'node_modules', '.bin');
   } else if (t.install.pip) {
     log(`${t.name}: pip ${t.install.pip}`);

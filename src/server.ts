@@ -196,25 +196,16 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       const ext = extname(full).slice(1);
       return { type: ext === 'jpg' ? 'image/jpeg' : `image/${ext}`, data: readFileSync(full).toString('base64') };
     }
-    // A delivered spreadsheet, as words for the app's read-only preview: crewd parses it (exceljs), the app never does.
-    if (m === 'GET' && p === '/api/workbook') {
+    // A delivered file as words for the app's read-only preview: crewd parses it, the app never opens the raw file.
+    // A finished video comes in pieces for the phone, which can't reach this computer's /files address.
+    const preview = async (re: RegExp, word: string, fn: (rel: string) => unknown) => {
       const rel = String(q.get('path') ?? '');
-      if (!/^files\/[\w./-]+\.xlsx$/i.test(rel)) throw Object.assign(new Error('not a spreadsheet'), { status: 404 });
-      return await crew.workbookView(String(q.get('bot') ?? ''), rel, me);
-    }
-    // A delivered document (or a delivered .md/.txt, read the same way), as plain parts for the app's read-only
-    // preview: crewd parses it, the app never does — and never opens the raw file.
-    if (m === 'GET' && p === '/api/document') {
-      const rel = String(q.get('path') ?? '');
-      if (!/^files\/[\w./-]+\.(docx|md|txt)$/i.test(rel)) throw Object.assign(new Error('not a document'), { status: 404 });
-      return await crew.documentView(String(q.get('bot') ?? ''), rel, me);
-    }
-    // A finished video in pieces for the phone, which can't reach this computer's /files address: one base64 slice per ask.
-    if (m === 'GET' && p === '/api/video') {
-      const rel = String(q.get('path') ?? '');
-      if (!/^files\/[\w./-]+\.(mp4|webm|mov)$/i.test(rel)) throw Object.assign(new Error('not a video'), { status: 404 });
-      return await crew.videoSlice(String(q.get('bot') ?? ''), rel, Number(q.get('after')) || 0, me);
-    }
+      if (!re.test(rel)) throw Object.assign(new Error(word), { status: 404 });
+      return fn(rel);
+    };
+    if (m === 'GET' && p === '/api/workbook') return preview(/^files\/[\w./-]+\.xlsx$/i, 'not a spreadsheet', (rel) => crew.workbookView(String(q.get('bot') ?? ''), rel, me));
+    if (m === 'GET' && p === '/api/document') return preview(/^files\/[\w./-]+\.(docx|md|txt)$/i, 'not a document', (rel) => crew.documentView(String(q.get('bot') ?? ''), rel, me));
+    if (m === 'GET' && p === '/api/video') return preview(/^files\/[\w./-]+\.(mp4|webm|mov)$/i, 'not a video', (rel) => crew.videoSlice(String(q.get('bot') ?? ''), rel, Number(q.get('after')) || 0, me));
     if (m === 'POST' && p === '/api/onboard') { const b = body; return crew.onboard(b.address ?? '', me, b.ask, typeof b.bot === 'string' ? b.bot : undefined) ?? { ok: true }; }
     if (m === 'POST' && p === '/api/recruit') { const b = body; const { token, ...bot } = crew.recruit(b.template, b.name, 'person', me); return bot; }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)$/)) && m === 'GET') return crew.botPage(r[1], me, Number(q.get('around')) || undefined);

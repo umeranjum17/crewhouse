@@ -87,6 +87,8 @@ const clean = (s: unknown, n: number) => String(s ?? '').replace(/\s+/g, ' ').tr
  *  so eight parallel items don't each pay for the whole conversation. */
 const BATCH_SYSTEM = 'You research one item on the web and report back briefly. Read the web; never sign in, post, buy or submit forms. Every claim that matters gets its source.';
 const fail = (message: string, status = 400) => Object.assign(new Error(message), { status });
+/** Person's words, trimmed to `n`: every name and address goes through here, or the card has nothing to show. */
+const needText = (v: unknown, n: number, msg: string) => { const s = clean(v, n); if (!s) throw fail(msg); return s; }
 /** A URL is context for a job, never its name. */
 export function taskTitle(body: string) {
   const first = body.split('\n')[0].trim();
@@ -286,7 +288,7 @@ export class Crew {
     const last = Number(this.db.get("SELECT value FROM settings WHERE key = 'crew.lastTick'")?.value ?? 0);
     if (last) this.lastTick = last;
     if (last && Date.now() - last > SLEPT_MS) this.slept(last, Date.now());
-    void this.migrateMembers().then(async () => {
+    void this.eachLegacy('migrate').then(async () => {
       if (this.stopped) return; // crewd stopped before the engine came up
       // The engine comes up in the background: a first install can take minutes, and crewd boots without it.
       const up = await this.runtime.start(this.toolHost()).then(() => true).catch((e) => {
@@ -295,7 +297,7 @@ export class Crew {
         return false;
       });
       // The gateway is the witness: only a sign-in it reports retires crewhouse's staged copy.
-      if (up && !this.stopped) await this.confirmMigrations();
+      if (up && !this.stopped) await this.eachLegacy('confirm');
       if (this.cfg.engineProvider && this.runtime.configureModelProvider)
         await this.runtime.configureModelProvider(this.cfg.engineProvider.baseUrl, this.cfg.engineProvider.apiKey).catch((e: unknown) => console.error('engine provider:', e));
       if (this.stopped) return;
@@ -305,30 +307,17 @@ export class Crew {
     this.dispatch();
   }
 
-  /** One-time per member: stage the member's old engine sign-in where the engine's doctor imports it (spec §6).
-   *  Runs while the gateway is still down — the engine refuses doctor runs otherwise — and retires nothing: the
-   *  copy moves aside only after the gateway itself reports the member signed in (confirmMigrations below). */
-  private async migrateMembers() {
-    const migrate = (this.runtime as { migrate?: (member: number, path: string) => Promise<boolean> }).migrate;
-    if (!migrate) return;
+  /** One-time per member (spec §6): `migrate` stages the member's old engine sign-in where the engine's doctor
+   *  imports it while the gateway is still down and retires nothing; `confirm` moves the copy aside only once the
+   *  gateway reports the member signed in. Anything else stays put and retries on the next boot — never a second
+   *  sign-in for the person. */
+  private async eachLegacy(method: 'migrate' | 'confirm') {
+    const fn = (this.runtime as { migrate?: (member: number, path: string) => Promise<boolean>; confirm?: (member: number, path: string) => Promise<boolean> })[method];
+    if (!fn) return;
     for (const m of this.members()) {
       const legacy = this.legacyAuth(m.id);
       if (!existsSync(legacy) && !existsSync(`${legacy}.moved-to-engine`)) continue;
-      try { await migrate.call(this.runtime, m.id, legacy); }
-      catch (e) { console.error(`engine migration m${m.id}:`, e); }
-    }
-  }
-
-  /** The gateway came up: retire each member's staged sign-in copy only when the gateway reports the member
-   *  signed in to every account the old auth held. Anything else stays put and retries on the next boot — never
-   *  a second sign-in for the person. */
-  private async confirmMigrations() {
-    const confirm = (this.runtime as { confirm?: (member: number, path: string) => Promise<boolean> }).confirm;
-    if (!confirm) return;
-    for (const m of this.members()) {
-      const legacy = this.legacyAuth(m.id);
-      if (!existsSync(legacy) && !existsSync(`${legacy}.moved-to-engine`)) continue;
-      try { await confirm.call(this.runtime, m.id, legacy); }
+      try { await fn.call(this.runtime, m.id, legacy); }
       catch (e) { console.error(`engine migration m${m.id}:`, e); }
     }
   }
@@ -629,7 +618,7 @@ export class Crew {
     return part < 1 / 3 ? 'small' : part < 2 / 3 ? 'fair' : 'most';
   }
 
-  /** A routine run over the share waits for tomorrow; Chief says so once a day. */
+  /** Over the share, a routine run waits for tomorrow; Chief says so once a day. */
   private waitForTomorrow(task: Row) {
     const now = new Date();
     const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime();
@@ -707,7 +696,6 @@ export class Crew {
     if (!schedule && !on) throw Object.assign(new Error('say when it should run, or what should start it'), { status: 400 });
     const when = schedule ? paced(parseSchedule(schedule)) : null;
     const brain = b.model ? disk.brainKey(disk.parseBrain(b.model)) : null;
-    // Unnamed routines take the task's first sentence: "Make a demo of this week's screenshots".
     const first = body.split(/\n|(?<=[.!?])\s/)[0].replace(/[.!?]$/, '');
     const name = String(b.name ?? '').trim().slice(0, 60) || (watch && !b.task ? new URL(watch).hostname.replace(/^www\./, '') : short(first, 60));
     return { bot, watch, body, when, on, brain, first, name, quiet: b.quiet === true || !!watch };
@@ -797,7 +785,7 @@ export class Crew {
     const now = existsSync(dir) ? readdirSync(dir).filter((f) => f !== '.DS_Store').sort().slice(0, 500) : []; // ponytail: capped snapshot; an inbox past 500 names needs a real watcher
     const before: string[] | null = JSON.parse(r.cursor ?? 'null');
     this.db.run('UPDATE routines SET cursor = ? WHERE id = ?', JSON.stringify(now), r.id);
-    const arrived = before ? now.filter((f) => !before.includes(f)) : []; // the first look is the baseline
+    const arrived = before ? now.filter((f) => !before.includes(f)) : [];
     if (arrived.length) this.fire(r, 'file', `New in ${this.bot(r.bot)?.display ?? r.bot}'s inbox: ${arrived.slice(0, 5).join(', ')}${arrived.length > 5 ? `, and ${arrived.length - 5} more` : ''}.`);
   }
 
@@ -827,7 +815,6 @@ export class Crew {
         return;
       }
       if (open.state === 'paused' && open.wake_at == null && /^Waiting for (you to sign in with .+|a .+ plan with helpers\.)$/.test(open.result ?? '')) {
-        // run() rechecks the account and either starts the parked task or pauses it again with honest words.
         if (why === 'now') return void this.retryPaused(r, open, 'routine.now', why);
         void this.retryPausedWhenSignedIn(r, open, why);
         return;
@@ -932,8 +919,7 @@ export class Crew {
   }
 
   botPage(id: string, viewer = OWNER, around?: number) {
-    const b = this.bot(id);
-    if (!b) throw Object.assign(new Error('no such bot'), { status: 404 });
+    const b = this.needBot(id);
     const undone = new Set(this.db.eventsForBot(id, ['memory.undone'], viewer, 10000).map((e) => e.data.seq));
     return {
       bot: this.pub(b, viewer),
@@ -988,24 +974,18 @@ export class Crew {
   // ---- people ----
   /** First meeting: the person tells Chief how to be addressed. Stored per person, used by every bot. */
   onboard(address: string, member = OWNER, ask?: string, bot?: string): { task: number } | void {
-    const a = clean(address, 40);
-    if (!a) throw Object.assign(new Error('say how Chief should address you'), { status: 400 });
-    if (ask?.trim()) {
+    const a = needText(address, 40, 'say how Chief should address you');
+    const hello = ask?.trim();
+    let to = CHIEF;
+    if (hello) {
       // A Hello goal tap starts in its helper's thread: hired silently when the member's account runs
       // helpers, or with Chief when it names no template or the plan has none.
-      let to = CHIEF;
       try {
         const t = disk.loadTemplate(this.cfg, bot ?? '');
         const hired = this.bots().find((b) => b.template === t.id)?.id;
         const brains = hired ? disk.brains(this.cfg, hired) : (t.models ?? ['chatgpt']).map(disk.parseBrain);
         if (brains.some((b) => !this.accounts.unready(member, b.provider) && !this.accounts.notIncluded(member, b.provider))) to = hired ?? this.recruit(t.id, undefined, 'person', member).id;
       } catch { /* Chief */ }
-      this.db.tx(() => {
-        this.db.run("DELETE FROM messages WHERE bot = ? AND member = ? AND author = 'bot'", CHIEF, member);
-        this.db.run('UPDATE people SET address = ?, onboarded = 1 WHERE id = ?', a, member);
-        this.db.event('person.onboarded', null, { member, address: a });
-      });
-      return this.addTask(to, ask.trim(), 'person', undefined, member);
     }
     // The address is already stored in people; the Hello screen already greeted her, so the thread starts empty and renders ChiefIdeas.
     this.db.tx(() => {
@@ -1013,12 +993,12 @@ export class Crew {
       this.db.run('UPDATE people SET address = ?, onboarded = 1 WHERE id = ?', a, member);
       this.db.event('person.onboarded', null, { member, address: a });
     });
+    if (hello) return this.addTask(to, hello, 'person', undefined, member);
   }
 
   /** Someone else in the house. Chief greets them in their own thread; they sign in to their own AI accounts in Settings. */
   addMember(name: string) {
-    const n = clean(name, 32);
-    if (!n) throw Object.assign(new Error('give them a name'), { status: 400 });
+    const n = needText(name, 32, 'give them a name');
     if (this.db.get('SELECT 1 FROM people WHERE lower(name) = lower(?)', n)) throw Object.assign(new Error(`${n} is already here`), { status: 409 });
     return this.db.tx(() => {
       const id = Number(this.db.run('INSERT INTO people (name, created_at) VALUES (?, ?)', n, Date.now()).lastInsertRowid);
@@ -1033,8 +1013,7 @@ export class Crew {
   updateMember(id: number, body: { name?: unknown; address?: unknown; quiet?: unknown; share?: unknown }) {
     this.member(id);
     if (body.name !== undefined) {
-      const n = clean(body.name, 32);
-      if (!n) throw Object.assign(new Error('give them a name'), { status: 400 });
+      const n = needText(body.name, 32, 'give them a name');
       this.db.run('UPDATE people SET name = ? WHERE id = ?', n, id);
     }
     if (body.quiet !== undefined) {
@@ -1062,6 +1041,12 @@ export class Crew {
 
   /** The member Chief is working for right now: whoever asked for his current task. */
   chiefFor() { return this.activeTask(CHIEF)?.member ?? OWNER; }
+  /** The bot, or a 404. */
+  private needBot(id: string) {
+    const b = this.bot(id);
+    if (!b) throw fail('no such bot', 404);
+    return b;
+  }
 
   /** A new bot is its recruiter's: the member who hired it, or the one Chief recruited it for. */
   recruit(template: string, name: string | undefined, by: string, member = by === CHIEF ? this.chiefFor() : OWNER) {
@@ -1096,18 +1081,10 @@ export class Crew {
     if (!text.trim() && !pics.length) throw Object.assign(new Error('empty message'), { status: 400 });
     const words = text.trim() || (pics.length === 1 ? 'Here is a photo.' : 'Here are some photos.');
     if (botId === CHIEF && !this.member(member).onboarded) { this.say(CHIEF, 'person', words, null, member); return this.onboard(words, member); }
-    if (botId === CHIEF && asksForPhone(words) && !pics.length) {
+    if (botId === CHIEF && !pics.length && (asksForPhone(words) || inlineHowTo(words) === 'signin' || inlineHowTo(words) === 'app')) {
       this.say(CHIEF, 'person', words, null, member);
-      await this.addPhone(member);
-      return;
-    }
-    if (botId === CHIEF && !pics.length && inlineHowTo(words) === 'signin') {
-      this.say(CHIEF, 'person', words, null, member);
-      this.say(CHIEF, 'bot', 'Sign in with ChatGPT.', null, member);
-      return;
-    }
-    if (botId === CHIEF && !pics.length && inlineHowTo(words) === 'app') {
-      this.say(CHIEF, 'person', words, null, member);
+      if (asksForPhone(words)) { await this.addPhone(member); return; }
+      if (inlineHowTo(words) === 'signin') { this.say(CHIEF, 'bot', 'Sign in with ChatGPT.', null, member); return; }
       const app = /\b(calendar|gmail|drive|notion|canva)\b/i.exec(words)?.[1].toLowerCase() ?? 'calendar';
       this.say(CHIEF, 'bot', `Connect ${this.connections.apps[app].name}.`, null, member);
       if (!this.connections.connected(member, app)) this.openAsk(CHIEF, undefined, `Connect ${this.connections.apps[app].name}`, { app, words: `Connect your ${this.connections.apps[app].name}` }, 'connect', member);
@@ -1567,29 +1544,31 @@ export class Crew {
     const who = this.bot(task.bot)!.display;
     // Only accounts the member has: a resting one wakes up; one never signed in doesn't.
     const rests = choices.filter((b) => !this.accounts.unready(member, b.provider)).map((b) => this.restingUntil(b.provider, member)).filter(Boolean);
+    let wake: number | null, state: string, words: string, voice: string;
     if (!rests.length) {
       const handoff = this.handoffs.get(task.id) ?? '';
       this.handoffs.delete(task.id);
       const plan = choices.some((b) => this.accounts.notIncluded(member, b.provider));
       const owner = member !== OWNER ? this.member(OWNER).name : '';
       const first = !this.db.get("SELECT 1 FROM tasks WHERE member = ? AND id != ? AND state != 'paused'", member, task.id);
-      const words = plan ? `Your ${name} plan doesn't include helpers yet. Everything else in ${name} is fine. ${name} Plus includes it${owner ? `, or you can ask ${owner} to cover it` : ''}.`
+      wake = null;
+      state = plan ? `Waiting for a ${name} plan with helpers.` : `Waiting for you to sign in with ${name}.`;
+      words = plan ? `Your ${name} plan doesn't include helpers yet. Everything else in ${name} is fine. ${name} Plus includes it${owner ? `, or you can ask ${owner} to cover it` : ''}.`
         : /sign in again/.test(handoff) ? signedOutWords(name)
         : first && task.bot === CHIEF ? `The crew uses your ${name} account. Sign in when you're ready and I'll start.`
         : `${task.bot === CHIEF ? 'I' : who} will start the moment you sign in with ${name}.`;
-      this.db.tx(() => {
-        this.db.run('UPDATE tasks SET wake_at = NULL WHERE id = ?', task.id);
-        this.setTask(task, 'paused', plan ? `Waiting for a ${name} plan with helpers.` : `Waiting for you to sign in with ${name}.`);
-        this.say(task.bot, task.bot === CHIEF ? 'bot' : 'system', words, task.id);
-      });
-      return;
+      voice = task.bot === CHIEF ? 'bot' : 'system';
+    } else {
+      wake = Math.min(...rests);
+      const why = choices.length === 1 ? `Your ${name} is resting until ${clock(wake)}` : `All ${whose ? whose + ' ' : ''}AI accounts are resting until ${clock(wake)}`;
+      state = `${why}.`;
+      words = `${why}. ${choices.length === 1 ? `${who} will finish this then` : "I'll pick this up then"}.`;
+      voice = 'system';
     }
-    const wake = Math.min(...rests);
-    const why = choices.length === 1 ? `Your ${name} is resting until ${clock(wake)}` : `All ${whose ? whose + ' ' : ''}AI accounts are resting until ${clock(wake)}`;
     this.db.tx(() => {
       this.db.run('UPDATE tasks SET wake_at = ? WHERE id = ?', wake, task.id);
-      this.setTask(task, 'paused', `${why}.`);
-      this.say(task.bot, 'system', `${why}. ${choices.length === 1 ? `${who} will finish this then` : "I'll pick this up then"}.`, task.id);
+      this.setTask(task, 'paused', state);
+      this.say(task.bot, voice, words, task.id);
     });
   }
 
@@ -1800,10 +1779,9 @@ export class Crew {
 
   /** A call that goes through and acts out in the world marks its job: that job must now say whether it worked, and an
    *  earlier "it worked" no longer covers it. */
-  private async gate(botId: string, tool: string, input: Record<string, any>) {
-    const s = this.seen(botId);
+  private async gate(botId: string, tool: string, input: Record<string, any>, s = this.seen(botId)) {
     const e = effectOf(tool, input, s);
-    const r = await this.decide(botId, tool, input);
+    const r = await this.decide(botId, tool, input, e);
     const task = !r && acts(tool, input, e) && this.activeTask(botId);
     if (task) {
       let where = s.apps?.[tool] ? `your ${s.apps[tool].app}` : tool === 'calendar' ? 'your Google Calendar' : s.run?.[tool]?.name ?? 'a web page';
@@ -1814,7 +1792,7 @@ export class Crew {
   }
 
   /** Run it, refuse it, or ask the person in one plain sentence and wait. The model's own words never decide. */
-  private async decide(botId: string, tool: string, input: Record<string, any>) {
+  private async decide(botId: string, tool: string, input: Record<string, any>, e: Effect = effectOf(tool, input, this.seen(botId))) {
     if (this.held.has(botId)) return { block: true, reason: 'The person has the controls of your screen; wait. You will be told when they give them back.', terminate: true };
     const task = this.activeTask(botId);
     // A fenced helper uses only tools whose way out crewd holds: the proxied shell, the checked web, its files, the crew.
@@ -1822,7 +1800,6 @@ export class Crew {
       this.refusedNet(botId, tool);
       return { block: true, reason: 'This helper may reach only the places on its list; that tool goes elsewhere.' };
     }
-    let e = effectOf(tool, input, this.seen(botId));
     const words = toolWords(tool, input);
     if (words) this.db.event('run.tool', botId, { task: task?.id, words });
     // Lines the helper types on a page nobody has approved yet (an unsigned register's form) are remembered for the
@@ -1952,7 +1929,6 @@ export class Crew {
 
   private openAsk(bot: string, task: Row | undefined, title: string, detail: Row, kind = 'permission', to?: number) {
     return this.db.tx(() => {
-      // The question goes to whoever the work is for.
       const member = to ?? task?.member ?? this.bot(bot)?.member ?? OWNER;
       const r = this.db.run('INSERT INTO asks (bot, task_id, kind, title, detail, at, member) VALUES (?, ?, ?, ?, ?, ?, ?)', bot, task?.id ?? null, kind, title, JSON.stringify(detail), Date.now(), member);
       if (task) this.setTask(task, 'needs_you');
@@ -2040,8 +2016,7 @@ export class Crew {
 
   /** "Chief, call me Umer": for Chief's current member unless another is named. */
   setAddress(address: string, member = this.chiefFor()) {
-    const a = clean(address, 40);
-    if (!a) throw fail('say how to address them');
+    const a = needText(address, 40, 'say how to address them');
     this.db.run('UPDATE people SET address = ?, onboarded = 1 WHERE id = ?', a, member);
     this.db.event('person.onboarded', null, { member, address: a });
   }
@@ -2226,6 +2201,16 @@ export class Crew {
     ];
   }
 
+  /** Files handed from one helper's files/ to another's, resolved and checked: only real files, still inside. */
+  private handFiles(from: string, files: string[]) {
+    const base = realpathSync(join(disk.botDir(this.cfg, from), 'files'));
+    return files.map((f) => {
+      const full = disk.insideBot(this.cfg, from, f);
+      if (!realpathSync(full).startsWith(base + '/') || !statSync(full).isFile()) throw fail('pass only files from your files/');
+      return { full, name: f.slice('files/'.length) };
+    });
+  }
+
   /** A helper hands the next step to another, for the same member. Three hand-offs from one request at most, so two
    *  helpers can't pass a job back and forth for ever. Chief is not handed work: the person talks to him. */
   private pass(from: string, to: string, text: string, files: string[] = []) {
@@ -2237,12 +2222,7 @@ export class Crew {
     const hops = (task.hops ?? 0) + 1;
     if (hops > 3) throw fail('this job has been handed on three times already; finish it yourself, or tell the person what is left');
     if (!Array.isArray(files) || files.length > 20 || files.some((f) => typeof f !== 'string')) throw fail('pass up to twenty files');
-    const base = realpathSync(join(disk.botDir(this.cfg, from), 'files'));
-    const checked = files.map((f) => {
-      const full = disk.insideBot(this.cfg, from, f);
-      if (!realpathSync(full).startsWith(base + '/') || !statSync(full).isFile()) throw fail('pass only files from your files/');
-      return { full, name: f.slice('files/'.length) };
-    });
+    const checked = this.handFiles(from, files);
     const detail = { to, text: text.trim(), files: files.slice(), root: task.root ?? task.id, parent: task.id, member: task.member ?? OWNER, hops };
     if (disk.botConfig(this.cfg, from).handoff === 'ask') return this.propose(from,
       `${this.bot(from)!.display} wants to hand this to ${b.display}: ${short(text, 160)}${files.length ? `, with ${files.map((f) => basename(f)).join(', ')}` : ''}`,
@@ -2251,11 +2231,7 @@ export class Crew {
   }
 
   private handOn(from: string, d: Row, checked?: { full: string; name: string }[]) {
-    const files = checked ?? (d.files as string[]).map((f) => {
-      const full = disk.insideBot(this.cfg, from, f), base = realpathSync(join(disk.botDir(this.cfg, from), 'files'));
-      if (!realpathSync(full).startsWith(base + '/') || !statSync(full).isFile()) throw fail('pass only files from your files/');
-      return { full, name: f.slice('files/'.length) };
-    });
+    const files = checked ?? this.handFiles(from, d.files as string[]);
     const dest = join(disk.botDir(this.cfg, d.to), 'files', `from-${from}`);
     const paths = files.map((f) => `files/from-${from}/${f.name}`);
     for (let i = 0; i < files.length; i++) {
@@ -2571,11 +2547,10 @@ export class Crew {
   }
 
   // ---- the bot's screen: watch, take over, give back ----
-  /** One signaling request from a watching screen. Watching starts the bot's desktop if it is resting. */
-  /** `canControl` false: a watch-only phone, which never drives even while the person holds the controls elsewhere. */
+  /** One signaling request from a watching screen. Watching starts the bot's desktop if it is resting.
+   *  `canControl` false: a watch-only phone, which never drives even while the person holds the controls elsewhere. */
   async desktopSignal(botId: string, watcher: Watcher, method: string, params: Row, canControl = true) {
-    const bot = this.bot(botId);
-    if (!bot) throw fail('no such bot', 404);
+    const bot = this.needBot(botId);
     if (method === 'session.open') {
       if (!disk.canUse(this.cfg, botId, 'computer')) throw Object.assign(new Error(`${bot.display} has no computer; grant it on the Tools tab`), { code: 'no-screen' });
       await this.desktops.ensure(botId, bot.n, disk.botDir(this.cfg, botId));
@@ -2585,8 +2560,7 @@ export class Crew {
 
   /** The person takes the controls: the bot stops where it is, and its tool calls are refused until Give back. */
   async takeOver(botId: string) {
-    const bot = this.bot(botId);
-    if (!bot) throw fail('no such bot', 404);
+    const bot = this.needBot(botId);
     if (this.held.has(botId)) return;
     this.held.add(botId);
     const task = this.activeTask(botId);
@@ -2603,8 +2577,7 @@ export class Crew {
    *  `keep` names the sites they ticked on the give-back sheet — hosts crewd read itself off the bot's own tabs
    *  (`tabHosts`), so a sign-in the person does while holding the wheel is remembered and its presses ask. */
   async giveBack(botId: string, note = '', keep?: string[]) {
-    const bot = this.bot(botId);
-    if (!bot) throw fail('no such bot', 404);
+    const bot = this.needBot(botId);
     if (!this.held.has(botId)) throw fail(`${bot.display} already has the controls`, 409);
     let kept: string[] = [];
     if (keep?.length) {
@@ -2652,8 +2625,7 @@ export class Crew {
    *  presses there run silently — exactly the gap this closes. No computer granted means there is no browser and
    *  nothing to clear, so the host goes. */
   async forget(botId: string, host: string) {
-    const bot = this.bot(botId);
-    if (!bot) throw fail('no such bot', 404);
+    const bot = this.needBot(botId);
     try {
       if (disk.canUse(this.cfg, botId, 'computer')) {
         await this.desktops.ensure(botId, bot.n, disk.botDir(this.cfg, botId));

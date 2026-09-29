@@ -34,8 +34,7 @@ export const sandboxed = (space: string, readOnly: string[], env: Record<string,
     ...readOnly.map((d) => `--ro-bind-try ${q(d)} ${q(d)}`), `--bind ${q(space)} ${q(space)}`,
     ...(net ? [`--ro-bind ${q(process.execPath)} /run/crewhouse/node --bind ${q(net)} /run/crewhouse/net.sock`] : []),
     '--clearenv', ...Object.entries({ ...env, HOME: space, LANG: 'C.UTF-8', TERM: 'dumb', PATH: `${env.PATH ? env.PATH + ':' : ''}/usr/local/bin:/usr/bin`,
-      ...(net ? Object.fromEntries(['http_proxy', 'https_proxy', 'HTTP_PROXY', 'HTTPS_PROXY', 'npm_config_proxy', 'npm_config_https_proxy'].map((k) => [k, PROXY])) : {}),
-      ...(net ? { NODE_USE_ENV_PROXY: '1' } : {}) }).map(([k, v]) => `--setenv ${k} ${q(v)}`),
+      ...(net ? { ...Object.fromEntries(['http_proxy', 'https_proxy', 'HTTP_PROXY', 'HTTPS_PROXY', 'npm_config_proxy', 'npm_config_https_proxy'].map((k) => [k, PROXY])), NODE_USE_ENV_PROXY: '1' } : {}) }).map(([k, v]) => `--setenv ${k} ${q(v)}`),
     `--chdir ${q(space)} --unshare-all ${net ? '' : '--share-net '}--die-with-parent -- bash -c`,
     q(net ? `/run/crewhouse/node -e ${q(BRIDGE)} /run/crewhouse/net.sock >/dev/null 2>&1 & for _ in $(seq 100); do [ -e /tmp/.crewhouse-net ] && break; sleep 0.05; done; ${command}` : command)].join(' ');
 };
