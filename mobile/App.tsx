@@ -5,8 +5,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useFonts } from 'expo-font';
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
-  ActivityIndicator, AppState, BackHandler, Clipboard, Image, KeyboardAvoidingView, Modal, Pressable, ScrollView, StatusBar, StyleSheet, Text, TextInput, useColorScheme, View,
-} from 'react-native';
+  ActivityIndicator, AppState, BackHandler, Clipboard, Image, KeyboardAvoidingView, Modal, Pressable, ScrollView, StatusBar, StyleSheet, Switch, Text, TextInput, useColorScheme, View,} from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import * as A from '../web/src/adapter.ts';
 import { chatTokens, safeLink } from '../web/src/chat-md.ts';
@@ -1171,23 +1170,14 @@ function Crew(ctx: Ctx) {
   const { state, go } = ctx;
   const t = useLook();
   const chief = chiefNow(state, ctx.offline);
-  const tile = (key: string, face: ReactNode, name: string, pill: ReactNode, role: string, r: Route) => (
-    <Pressable key={key} style={({ pressed }) => [s.palRow, { backgroundColor: t.card, borderColor: t.line }, pressed && { opacity: 0.6 }]} onPress={() => go(r)} accessibilityRole="button" accessibilityLabel={name}>
-      {face}
-      <View style={{ flex: 1, gap: 3, alignItems: 'flex-start' }}><T style={[s.b, { fontSize: 16 }]}>{name}</T>{pill}<T tone="mute" style={s.small} lines={1}>{role}</T></View>
-      <T tone="mute">›</T>
-    </Pressable>
-  );
-  return (
-    <Page title="Your crew" lead="Everyone answers to Chief. Tap a helper to chat.">
-      <View style={{ gap: 8 }}>
-        {tile('chief', <Face who="chief" size={56} mood={chief.mood} />, 'Chief', <Pill tone={chief.mood === 'rest' ? 'off' : 'ok'}>{chief.line}</Pill>, 'Runs the crew and answers to you', { view: 'chief' })}
-        {A.crew(state).map((h) => tile(h.id, <Face who={h} size={56} />, h.name, <HelperPill h={h} offline={ctx.offline} />, h.role, { view: 'helper', id: h.id }))}
-      </View>
-      {ctx.canAct ? <Btn go label="Add a helper" onPress={() => go({ view: 'add' })} /> : null}
-    </Page>
-  );
-}
+  const row = (key: string, face: ReactNode, name: string, role: string, status: ReactNode, route: Route) => <Pressable key={key} onPress={() => go(route)} style={{ minHeight: 68, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 12, borderBottomWidth: 1, borderColor: t.line }}>
+    {face}<View style={{ flex: 1, minWidth: 0 }}><T style={s.b}>{name}</T><T tone="mute" style={s.small} lines={1}>{role}</T></View>{status}
+  </Pressable>;
+  return <Page title="Your crew" lead="Everyone answers to Chief."><Card>
+    {row('chief', <Face who="chief" size={44} />, 'Chief', 'Runs the crew and answers to you', <Pill tone={chief.mood === 'rest' ? 'off' : 'ok'}>{chief.line}</Pill>, { view: 'chief' })}
+    {A.crew(state).map((h) => row(h.id, <Face who={h} size={44} />, h.name, h.role, <HelperPill h={h} offline={ctx.offline} />, { view: 'helper', id: h.id }))}
+    {ctx.canAct && <Pressable onPress={() => go({ view: 'add' })} style={{ minHeight: 68, flexDirection: 'row', alignItems: 'center', gap: 12 }}><View style={{ width: 44, height: 44, borderRadius: 22, borderWidth: 1, borderStyle: 'dashed', borderColor: t.line, alignItems: 'center', justifyContent: 'center' }}><T tone="mute">+</T></View><T style={{ flex: 1 }}>Add a helper</T><T tone="mute">›</T></Pressable>}
+  </Card></Page>;}
 
 function HelperPage(ctx: Ctx & { id: string; tab: string; m?: number; setTab: (t: string) => void }) {
   const { id, tab, m, setTab, state, tick, refresh, canAct, back, go } = ctx;
@@ -1213,12 +1203,12 @@ function HelperPage(ctx: Ctx & { id: string; tab: string; m?: number; setTab: (t
         <Chat key={id} {...ctx} id={id} m={m} />
       </> : <>
         <Head onBack={() => setTab('chat')}>
-          <Face who={h} size={40} />
-          <View style={{ flex: 1 }}><T style={s.b}>{h.name}</T><T tone="mute" style={s.small} lines={1}>{h.status}</T></View>
+          <Face who={h} size={64} />
+          <View style={{ flex: 1 }}><T style={s.b}>{h.name}</T><T tone="mute" style={s.small} lines={2}>{h.role}</T></View>
           <Btn ghost label="Chat" onPress={() => setTab('chat')} />
         </Head>
         <ScrollView contentContainerStyle={{ padding: 16, gap: 10 }}>
-          <T style={s.b}>{`What ${h.name} is doing`}</T>
+          <T style={s.b}>Now</T>
           {b?.task ? (trail.length ? <Card><Steps steps={A.steps(page?.trail ?? [], b.task.id, true)} max={all ? 40 : 7} /></Card> : <T tone="mute">{`Working on “${A.plain(b.task.title)}”. Steps show as they happen.`}</T>)
             : <T tone="mute">Nothing right now.</T>}
           {trail.length > 7 && <Btn ghost label={all ? 'Just now' : 'Every step'} onPress={() => setAll((v) => !v)} />}
@@ -1420,8 +1410,7 @@ function RoutineRow({ r, h, act, go, canAct }: { r: Json; h: A.Helper | undefine
       </View>}
       {canAct && <View style={s.chips}>
         <Btn label="Do it now" onPress={() => act(() => api.runRoutine(r.id), 'Asked to run')} />
-        <Btn label={r.paused ? 'Resume' : 'Pause'} onPress={() => act(() => api.routine(r.id, { state: r.paused ? 'on' : 'paused' }))} />
-        {!r.digest && <Btn ghost label="Remove" onPress={() => act(() => api.removeRoutine(r.id), 'Removed')} />}
+        <View style={[s.row, { marginLeft: 'auto' }]}><T tone="mute" style={s.small}>{r.paused ? 'Paused' : 'On'}</T><Switch value={!r.paused} accessibilityLabel={`${r.paused ? 'Resume' : 'Pause'} ${r.name}`} trackColor={{ false: t.line, true: t.ok }} thumbColor={t.solid} onValueChange={(on) => { void act(() => api.routine(r.id, { state: on ? 'on' : 'paused' })); }} /></View>        {!r.digest && <Btn ghost label="Remove" onPress={() => act(() => api.removeRoutine(r.id), 'Removed')} />}
       </View>}
     </Card>
   );
@@ -1464,18 +1453,15 @@ function AddHelper({ state, refresh, go }: Ctx) {
   const t = useLook();
   const [names, setNames] = useState<Record<string, string>>({});
   return (
-    <Page title="Add a helper" lead="Each helper has its own little computer at home and gets better as it learns what you like. It always asks before sending, paying or deleting anything.">
-      {A.gallery(state).map((g: Json) => {
+    <Page title="Add a helper" lead="Pick a starter, or tell Chief what you need.">
+      <Label>Starters</Label><Card>{A.gallery(state).map((g: Json) => {
         const name = (names[g.id] ?? g.name).trim() || g.name;
-        return (
-          <Card key={g.id}>
-            <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}><Face who={{ kind: g.kind, name: g.name } as any} size={52} /><T tone="ink2" style={{ flex: 1 }}>{g.does}</T></View>
-            <TextInput style={[s.input, { color: t.ink, borderColor: t.line }]} value={names[g.id] ?? g.name} onChangeText={(v) => setNames({ ...names, [g.id]: v })} accessibilityLabel={`Name for ${g.name}`} />
-            <Btn go label={`Welcome ${name}`} onPress={() => attempt(async () => { const b = await api.recruit(g.id, name); refresh(); go({ view: 'helper', id: b.id }, true); }, `${name} joined the crew`)} />
-          </Card>
-        );
-      })}
-      <Card><T style={s.b}>Need something else?</T><T tone="mute">Tell Chief in your own words, like “keep an eye on flats in Phuket”, and he'll suggest the right helper.</T></Card>
+        return <View key={g.id} style={{ minHeight: 68, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8, borderBottomWidth: 1, borderColor: t.line }}>
+          <Face who={{ kind: g.kind, name: g.name } as any} size={44} /><View style={{ flex: 1, minWidth: 0 }}><TextInput style={{ fontFamily: 'Inter', fontWeight: '500', fontSize: 15, color: t.ink, padding: 0 }} value={names[g.id] ?? g.name} onChangeText={(v) => setNames({ ...names, [g.id]: v })} accessibilityLabel={`Name for ${g.name}`} /><T tone="mute" style={s.small} lines={2}>{g.does}</T></View>
+          <Btn label="Add" onPress={() => attempt(async () => { const b = await api.recruit(g.id, name); refresh(); go({ view: 'helper', id: b.id }, true); }, `${name} joined the crew`)} />
+        </View>;
+      })}</Card>
+      <Label>Something else</Label><Card><T tone="mute" style={s.small}>Tell Chief what you need help with.</T><Composer placeholder="Tell Chief what you need help with" chat="chief" onSend={async (text) => { if (await attempt(() => api.post('chief', text), undefined, true)) go({ view: 'chief' }, true); }} /></Card>
     </Page>
   );
 }
