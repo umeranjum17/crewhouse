@@ -795,11 +795,7 @@ export class Crew {
   }
 
   private sendDigest(r: Row, why: string, now: number, day?: { at: number | null; title: string }[]) {
-    this.db.tx(() => {
-      this.say(CHIEF, 'bot', this.digest(r.member, r.last_at ?? now - 86_400_000, day), null, r.member);
-      this.db.run('UPDATE routines SET last_at = ? WHERE id = ?', now, r.id);
-      this.db.event('routine.fired', CHIEF, { routine: r.id, name: r.name, why, member: r.member });
-    });
+    this.db.tx(() => { this.say(CHIEF, 'bot', this.digest(r.member, r.last_at ?? now - 86_400_000, day), null, r.member); this.db.run('UPDATE routines SET last_at = ? WHERE id = ?', now, r.id); this.db.event('routine.fired', CHIEF, { routine: r.id, name: r.name, why, member: r.member }); });
   }
 
   private fire(r: Row, why: 'schedule' | 'late' | 'now' | 'file' | 'wake', note?: string) {
@@ -913,6 +909,9 @@ export class Crew {
     const asks = this.db.all("SELECT * FROM asks WHERE state = 'open' AND COALESCE(member, ?) = ? ORDER BY id", OWNER, member);
     const learned = this.db.all("SELECT bot, data FROM events WHERE kind = 'memory.learned' AND at >= ? AND COALESCE(json_extract(data, '$.member'), ?) = ? ORDER BY seq", since, OWNER, member);
     const soon = this.db.all("SELECT * FROM routines WHERE state = 'on' AND kind != 'digest' AND member = ? AND next_at <= ? ORDER BY next_at", member, Date.now() + 86_400_000);
+    const scout = this.bots().find((b) => b.template === 'scout' && (b.member ?? OWNER) === member)?.id;
+    const goal = scout && (disk.readNotes(this.cfg, { member, bot: scout }).split('\n').some((l) => l.replace(/^- /, '').startsWith('Goal:')) ||
+      this.db.get('SELECT 1 FROM tasks WHERE member = ? AND bot = ?', member, scout));
     const lines = [`Good ${partOfDay()}${address ? `, ${address}` : ''}. While you were away:`];
     lines.push(done.length ? `- Finished: ${list(done.slice(0, 5).map((t) => `${name(t.bot)}, “${t.title}”`))}${done.length > 5 ? `, and ${done.length - 5} more` : ''}.` : '- Nothing new was finished.');
     if (failed.length) lines.push(`- Did not go well: ${list(failed.slice(0, 3).map((t) => `${name(t.bot)}, “${t.title}” (${String(t.result ?? '').slice(0, 80)})`))}.`);
@@ -921,6 +920,7 @@ export class Crew {
     for (const l of learned.slice(0, 3)) lines.push(`- ${name(l.bot)} learned: ${JSON.parse(l.data).text}`);
     if (day) lines.push(day.length ? `- Today on your calendar: ${list(day.map((e) => e.at ? `${clock(e.at)}, ${e.title}` : `${e.title} (all day)`))}.` : '- Nothing on your calendar today.');
     lines.push(soon.length ? `- Coming up: ${list(soon.map((r) => `“${r.name}” with ${name(r.bot)}, ${clock(r.next_at)}`))}.` : '- Nothing is scheduled for the next day.');
+    if (!goal) lines.push('- Want help starting something on the side? Tap to begin.');
     return lines.join('\n');
   }
 

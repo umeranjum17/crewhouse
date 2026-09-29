@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { setup as lab, settled, release, holding, until, lastSaid, sleep } from './lab.ts';
+import * as disk from '../src/bots.ts';
 import * as A from '../web/src/adapter.ts';
 import type { Store } from '../src/db.ts';
 const { describe, describeTrigger, nextRun, parseSchedule, parseTrigger } = await import('../src/routines.ts');
@@ -133,6 +134,29 @@ test('morning digest: on by default at 8:00, says what finished, what needs you,
   assert.match(text, /Needs you: Reel wants to look through your Pictures folder\./);
   assert.match(text, /Coming up: “Tidy the screenshots” with Reel/);
   assert.doesNotMatch(text, /Master|aye|!/);
+  done();
+});
+
+test('digest nudges toward a goal until Scout has a goal task', async () => {
+  const { db, crew, done } = setup();
+  const nudges = () => crew.digest(1, 0).split('Want help starting something on the side? Tap to begin.').length - 1;
+  assert.equal(nudges(), 1, 'the nudge is there once');
+  crew.recruit('scout', 'Scout', 'person');
+  assert.equal(nudges(), 1, 'a Scout with no goal yet still gets the nudge');
+  await settled(db, crew.assign('scout', 'Help me earn a little on the side', 'person').task);
+  assert.equal(nudges(), 0, 'a Scout goal task drops the nudge');
+  done();
+});
+
+test('digest nudges until a goal note exists, per member', () => {
+  const { crew, cfg, done } = setup();
+  crew.recruit('scout', 'Scout', 'person');
+  assert.match(crew.digest(1, 0), /Want help starting something on the side\? Tap to begin\./);
+  disk.remember(cfg, { member: 1, bot: 'scout' }, 'Goal: weekend dog walking');
+  assert.doesNotMatch(crew.digest(1, 0), /Want help starting/);
+  const sam = crew.addMember('Sam').id;
+  crew.onboard('Sam', sam);
+  assert.match(crew.digest(sam, 0), /Want help starting/, 'another member without a goal still gets the nudge');
   done();
 });
 
