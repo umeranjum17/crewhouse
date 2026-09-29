@@ -1188,7 +1188,7 @@ function JobList({ state, go }: { state: Json; go: Ctx['go'] }) {
     {A.jobs(state).slice(0, 3).map((j, i) => <Pressable key={j.bot + j.label} style={[s.listRow, { borderTopColor: t.line, borderTopWidth: i ? StyleSheet.hairlineWidth : 0 }]}
       onPress={() => { if (j.needs.length) go({ view: 'phone' }); else { keepDraft('chief', j.ask); go({ view: 'chief' }); } }}>
       <Face who={A.crew(state).find((h) => h.id === j.bot) ?? { kind: 'pip', name: j.bot }} size={28} />
-      <View style={{ flex: 1 }}><T style={s.rowTitle} lines={2}>{j.label}</T>{!!j.needs.length && <T tone="mute" style={s.small}>{A.jobNeeds(j.needs)}</T>}</View><T tone="mute">›</T>
+      <View style={{ flex: 1 }}><T style={s.rowTitle} lines={2}>{j.label}</T>{!!j.says && <T tone="mute" style={s.small} lines={1}>{j.says}</T>}{!!j.needs.length && <T tone="mute" style={s.small}>{A.jobNeeds(j.needs)}</T>}</View><T tone="mute">›</T>
     </Pressable>)}
   </View></View>;
 }
