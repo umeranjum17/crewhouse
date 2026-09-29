@@ -153,24 +153,31 @@ export function SignIn({ me, owner, ai = A.AIS[0], tab: first, onReady, onClose 
  * In a chat, right under Chief's line, while the crew can't think yet: the sign-in (with the one word ChatGPT's page
  * will use), or, for a plan without helpers, the ways forward. Taps: Sign in (1), her account (2), Continue (3).
  */
+/** The sign-in card, in the ask-card anatomy (§4.11) with the ChatGPT button as primary. */
 export function AccountCard({ me, owner, isOwner, g, inChat, onReady }: { me: number; owner: string; isOwner: boolean; g: ReturnType<typeof A.account>; inChat?: boolean; onReady: () => void }) {
   const [signing, setSigning] = useState<Window | null | false>(sheet === 'signin' ? null : false);
   const [noAccount, setNoAccount] = useState(false);
   const ai = A.AIS[0];
   if (g.notIncluded) return (
-    <div className="card account-card">
-      {!inChat && <><b>Your {ai.name} plan doesn't include helpers yet</b>
-        <p className="mute">Everything else in {ai.name} is fine. {ai.name} Plus includes it{isOwner ? '' : `, or ${owner} can cover it`}.</p></>}
-      {!isOwner && <button className="btn go big" onClick={() => attempt(() => api.askOwner(me, ai.key), `Asked ${owner}`)}>Ask {owner} to cover it</button>}
-      <a className={`btn big ${isOwner ? 'go' : ''}`} href="https://chatgpt.com/#pricing" target="_blank" rel="noreferrer">See {ai.name} plans ↗</a>
-      <button className="link" onClick={() => attempt(async () => { await api.retryAccount(me, ai.key); onReady(); }, 'Trying again')}>I've changed my plan</button>
+    <div className="card ask">
+      <div className="ask-head"><Face who="chief" size={28} /><div className="grow"><b>Chief</b><div className="ask-status"><i />Needs a bigger plan</div></div></div>
+      <p className="ask-words">Your {ai.name} plan doesn't include helpers yet</p>
+      {!inChat && <p className="mute small">Everything else in {ai.name} is fine. {ai.name} Plus includes it{isOwner ? '' : `, or ${owner} can cover it`}.</p>}
+      <div className="btns">
+        {!isOwner && <button className="btn go" onClick={() => attempt(() => api.askOwner(me, ai.key), `Asked ${owner}`)}>Ask {owner} to cover it</button>}
+        <a className={`btn ${isOwner ? 'go' : ''}`} href="https://chatgpt.com/#pricing" target="_blank" rel="noreferrer">See {ai.name} plans ↗</a>
+        <button className="btn ghost always" onClick={() => attempt(async () => { await api.retryAccount(me, ai.key); onReady(); }, 'Trying again')}>I've changed my plan</button>
+      </div>
     </div>
   );
   return (
-    <div className="card account-card">
-      <p>{ai.name} asks you once. If it mentions <b>“Codex”</b>, that's the part your helpers use.</p>
-      <button className="btn go big" onClick={() => setSigning(openTab())}><AiMark ai={ai} size={24} />Sign in with {ai.name}</button>
-      <button className="link" onClick={() => { setNoAccount(true); window.open('https://chatgpt.com/', '_blank'); }}>No {ai.name} account? Make a free one</button>
+    <div className="card ask">
+      <div className="ask-head"><Face who="chief" size={28} /><div className="grow"><b>Chief</b><div className="ask-status"><i />Needs a sign-in</div></div></div>
+      <p className="ask-words">{ai.name} asks you once. If it mentions <b>"Codex"</b>, that's the part your helpers use.</p>
+      <div className="btns">
+        <button className="btn go big" onClick={() => setSigning(openTab())}><AiMark ai={ai} size={24} />Sign in with {ai.name}</button>
+        <button className="link" onClick={() => { setNoAccount(true); window.open('https://chatgpt.com/', '_blank'); }}>No {ai.name} account? Make a free one</button>
+      </div>
       {noAccount && <p className="mute small">{ai.name} opened in a new tab: sign up with Google or Apple in a few taps, then come straight back and tap Sign in.</p>}
       {signing !== false && <SignIn me={me} owner={owner} tab={signing} onReady={() => { setSigning(false); onReady(); }} onClose={() => setSigning(false)} />}
     </div>
@@ -254,22 +261,31 @@ export function ConnectApp({ app, helper, state, tab: first, ask, onConnected, o
   );
 }
 
-/** The in-chat offer, only when a task needs the app: "Connect Google Calendar" opens Google's page in that tap. */
+/** The in-chat offer, only when a task needs the app: one ask card (§4.4, connect). "Connect {App}" opens the app's
+ *  page in that tap. Her ask with the owner, while the house isn't ready, shows on the card until it is. */
 export function ConnectCard({ c, helper, state, onDone }: { c: A.Card; helper?: string; state: Json; onDone: () => void }) {
   const [open, setOpen] = useState<Window | null | false>(sheet === 'connect' ? null : false);
   const app = c.app!;
+  const who = A.crew(state).find((x) => x.id === c.helper);
   const owner = state.members.find((m: Json) => m.id === A.OWNER)?.name ?? 'the owner';
   // Her ask with the owner: shown on the card until the house is ready, then Connect comes back.
   const asked = (state.asks as Json[]).find((a) => a.kind === 'setup' && a.state === 'open' && a.detail?.app === app.id);
   const no = () => api.answer(c.id, { answer: 'deny' }).then(onDone, () => toast("Can't reach the home computer right now."));
   const yes = () => void api.answer(c.id, { answer: 'allow' }).catch(() => {}).then(onDone);
   return (
-    <div className="connect-offer">
-      <div className="card connect"><span className="app-ic" style={{ background: app.bg }}>{app.mark}</span><span className="grow">{c.words}</span></div>
-      {asked ? <p className="mute">Asked {owner} · {A.clock(asked.at)}</p>
-        : <button className="btn go big" onClick={() => setOpen(A.needsHouse(state, app) ? null : openTab())}>Connect {app.name}</button>}
+    <div className="card ask">
+      <div className="ask-head">
+        {who ? <Face who={{ ...who, mood: 'ask' }} size={28} /> : <span className="app-ic" style={{ background: app.bg }}>{app.mark}</span>}
+        <div className="grow"><b>{who?.name ?? helper ?? 'The crew'}</b><div className="ask-status"><i />{c.status}</div></div>
+        <time className="mute small">{A.clock(c.at)}</time>
+      </div>
+      <p className="ask-words">{c.words}</p>
+      {asked && <p className="mute small">Asked {owner} · {A.clock(asked.at)}</p>}
       {app.warns && !asked && <p className="warn-line">Google shows a warning for apps it hasn't reviewed — a family app always gets it. Tap <b>Advanced</b>, then <b>Go to Crewhouse</b>.</p>}
-      {asked ? <button className="link" onClick={no}>Do it without {app.name}</button> : <button className="link" onClick={no}>Not now</button>}
+      <div className="btns">
+        {!asked && <button className="btn go" onClick={() => setOpen(A.needsHouse(state, app) ? null : openTab())}>Connect {app.name}</button>}
+        <button className="btn" onClick={no}>{asked ? `Do it without ${app.name}` : 'Not now'}</button>
+      </div>
       {open !== false && <ConnectApp app={app} helper={helper} state={state} tab={open} ask={c.id} onConnected={yes} onClose={() => setOpen(false)} onDone={() => setOpen(false)} />}
     </div>
   );

@@ -37,6 +37,12 @@ const look = (night: boolean): Look => {
 const Theme = createContext<Look>(look(false));
 const useLook = () => useContext(Theme);
 
+/** Two token colours blended (RN has no CSS color-mix): the ask card's border is 40% pink into the line. */
+const mix = (a: string, b: string, f: number) => {
+  const p = (h: string, i: number) => parseInt(h.slice(i, i + 2), 16);
+  return '#' + [1, 3, 5].map((i) => Math.round(p(a, i) * f + p(b, i) * (1 - f)).toString(16).padStart(2, '0')).join('');
+};
+
 // ---------- toasts and actions ----------
 let say: (m: string) => void = () => {};
 const FRIENDLY = {
@@ -117,11 +123,6 @@ function Pill({ tone = 'ok', children }: { tone?: 'ok' | 'wait' | 'off'; childre
   );
 }
 
-/** The small line above an ask's title: what kind of yes it wants, with the only pink on the card. */
-function AskTag({ c }: { c: A.Card }) {
-  const t = useLook();
-  return <View style={s.row6}><View style={[s.pillDot, { backgroundColor: t.pink }]} /><T tone="mute" style={s.small}>{A.askTag(c)} · {A.clock(c.at)}</T></View>;
-}
 /** An AI account's own mark, white on its brand tile. */
 function AiMark({ ai, size = 32 }: { ai: { key: string; bg: string }; size?: number }) {
   return <View style={{ width: size, height: size, borderRadius: size * 0.28, backgroundColor: ai.bg, alignItems: 'center', justifyContent: 'center' }}>
@@ -184,7 +185,7 @@ function Empty({ children }: { children: ReactNode }) {
 }
 function Card({ children, style, ask, onTouchStart }: { children: ReactNode; style?: any; ask?: boolean; onTouchStart?: () => void }) {
   const t = useLook();
-  return <View onTouchStart={onTouchStart} style={[s.card, { backgroundColor: t.card, borderColor: t.line, borderWidth: 1 }, ask && s.askCard, style]}>{children}</View>;
+  return <View onTouchStart={onTouchStart} style={[s.card, { backgroundColor: t.card, borderColor: ask ? mix(t.pink, t.line, 0.4) : t.line, borderWidth: 1 }, ask && s.askCard, style]}>{children}</View>;
 }
 /** The Add-a-phone card in Chief's chat, on the phone. It refreshes itself like the computer's card: a new code while
  *  it is on screen and someone is about (ten minutes), then a Show-a-new-code button — never directions to go elsewhere. */
@@ -763,16 +764,69 @@ function Hello({ state, refresh, go }: Ctx) {
 // ---------- asks ----------
 const answer = (c: A.Card, body: Json) => attempt(() => api.answer(c.id, body), body.answer === 'deny' ? 'OK, not now' : 'Done. Carrying on.');
 
+/** The ask's evidence in the sunken block, mirroring web/src/parts.tsx AskEvidence (§4.4): the order's lines with
+ *  the total above a hairline, a form's or a job's label-over-value lines, a draft, the routine's confirmation
+ *  lines, or exactly what goes out. Long bodies clamp until `open`; `readAll` is the caller's way of opening them. */
+function AskEvidence({ c, open, readAll }: { c: A.Card; open: boolean; readAll?: ReactNode }) {
+  const t = useLook();
+  const body = c.preview?.body ?? '';
+  if (c.review) return <View style={[s.ev, { backgroundColor: t.sunken }]}>{body.split('\n').map((l, i) => {
+    const m = l.match(/^(.*?)[\s—]+(\$[\d.,]+)$/);
+    const total = /^Total/.test(l);
+    return <View key={i} style={[s.orderRow, total && { borderTopColor: t.line, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 8, marginTop: 2 }]}>
+      {m ? <><T style={{ flex: 1, ...(total && s.b) }}>{m[1]}</T><T style={total ? s.b : undefined}>{m[2]}</T></> : <T style={total ? s.b : undefined}>{l}</T>}
+    </View>;
+  })}</View>;
+  if (c.evidence === 'lines') return <View style={[s.ev, { backgroundColor: t.sunken }]}>{body.split('\n').filter(Boolean).map((l, i) => {
+    const at = l.indexOf(': ');
+    return at > 0 ? <View key={i} style={{ gap: 2 }}><T tone="mute" style={s.label2}>{l.slice(0, at)}</T><T style={{ fontWeight: '500' }}>{l.slice(at + 2)}</T></View>
+      : <T key={i}>{l}</T>;
+  })}</View>;
+  if (c.evidence === 'draft') {
+    const at = body.indexOf('\n');
+    return <View style={[s.ev, { backgroundColor: t.sunken }]}>
+      {!!c.draftTo && <T tone="mute" style={s.small}>To {c.draftTo}</T>}
+      <T style={{ fontWeight: '500' }}>{(at < 0 ? body : body.slice(0, at)).replace(/^Subject: /, '')}</T>
+      <T tone="ink2" lines={open ? undefined : 4}>{(at < 0 ? '' : body.slice(at + 1)).trim()}</T>
+      {!open && readAll}
+    </View>;
+  }
+  if (c.lines) return <View style={[s.ev, { backgroundColor: t.sunken }]}>{c.lines.map((l, i) =>
+    <T key={i} tone={i && c.kind === 'routine' ? 'mute' : 'ink'} style={i && c.kind === 'routine' ? s.small : undefined}>{l}</T>)}</View>;
+  if (c.preview) return <View style={[s.ev, { backgroundColor: t.sunken }]}>
+    {!!c.preview.head && <T tone="mute" style={s.small}>{c.preview.head}</T>}
+    <T tone="ink2" lines={open ? undefined : 3}>{c.preview.body}</T>
+    {!open && readAll}
+  </View>;
+  return null;
+}
+
+/** The ask card's head: the asker's face and name, the status line with the pink dot, the time on the right. */
+function AskHead({ c, who }: { c: A.Card; who: A.Helper | undefined }) {
+  const t = useLook();
+  const name = c.helper === 'chief' ? 'Chief' : who?.name ?? c.head;
+  return <View style={s.row}>
+    {c.helper === 'chief' ? <Face who="chief" size={28} /> : who ? <Face who={{ ...who, mood: 'ask' }} size={28} /> : null}
+    <View style={{ flex: 1 }}>
+      <T style={{ fontWeight: '500' }}>{name}</T>
+      <View style={s.askStatus}><View style={[s.statusDot, { backgroundColor: t.pink }]} /><T tone="ink2" style={s.small}>{c.status}</T></View>
+    </View>
+    <T tone="mute" style={s.small}>{A.clock(c.at)}</T>
+  </View>;
+}
+
 function AskCard({ c, who, state, onDone, canAct, offline, open }: { c: A.Card; who: A.Helper | undefined; state: Json; onDone: () => void; canAct: boolean; offline: boolean; open: (c: A.Card) => void }) {
   const [reply, setReply] = useState('');
   const [oops, setOops] = useState(false);
   const last = useRef<Json | null>(null);
   const t = useLook();
   const act = async (body: Json) => { last.current = body; setOops(false); if (await answer(c, body)) onDone(); else setOops(true); };
-  const [yes, ...rest] = c.choices;
-  const deny = c.choices.find((x) => x.body.answer === 'deny');
+  const yes = c.choices[0];
+  const deny = c.choices.find((x) => x.body.answer === 'deny' && x !== yes);
+  const always = c.choices.find((x) => x.body.scope === 'always');
   const owner = state.members.find((m: Json) => m.id === A.OWNER)?.name ?? 'the owner';
   const [askedAt, setAskedAt] = useState(0); // after 'Ask {owner} to set it up', the card itself says so
+  const question = c.review && c.preview?.head ? c.preview.head : c.words;
   // A routine offered by Chief: the lines are the confirmation; changing the time is an edit before the yes.
   const [when, setWhen] = useState<string | null>(null);
   const [sched, setSched] = useState<Json>(null);
@@ -784,17 +838,9 @@ function AskCard({ c, who, state, onDone, canAct, offline, open }: { c: A.Card; 
   const stuck = when !== null && (!when.trim() || !sched || sched.bad);
   return (
     <Card ask>
-      <View style={[s.row, { alignItems: 'flex-start' }]}>
-        {who && <Face who={{ ...who, mood: 'ask' }} size={32} />}
-        <View style={{ flex: 1, gap: 2 }}><AskTag c={c} /><T style={s.askHead}>{c.head}</T></View>
-      </View>
-      {c.kind === 'routine' && c.lines ? <View style={{ gap: 3 }}>
-        {c.lines.map((l, i) => <T key={i} tone={i ? 'ink2' : undefined} style={i ? undefined : s.askLine}>{l}</T>)}
-      </View> : <T tone="ink2">{c.words}</T>}
-      {c.preview && !c.review && c.kind !== 'routine' && <View style={[s.peek, { backgroundColor: t.soft }]}>
-        {!!c.preview.head && <T tone="mute" style={s.small} lines={1}>{c.preview.head}</T>}
-        <T lines={3} style={s.peekText}>{c.preview.body}</T>
-      </View>}
+      <AskHead c={c} who={who} />
+      <T style={s.askWords}>{question}</T>
+      <AskEvidence c={c} open={false} readAll={<Btn label="Read all" onPress={() => open(c)} />} />
       {oops && <T tone="pinkInk" style={s.small}>That didn't go through. Try again.</T>}
       {offline ? <T tone="mute" style={s.small}>You can answer once the home computer is back.</T>
         : !canAct ? <T tone="mute" style={s.small}>This phone watches; answer on another phone or the computer.</T> : c.kind === 'connect' ? (
@@ -814,7 +860,7 @@ function AskCard({ c, who, state, onDone, canAct, offline, open }: { c: A.Card; 
           <View style={s.chips}>
             <Btn go label="Start it" disabled={stuck} onPress={() => act({ answer: 'allow', scope: 'once', ...(when !== null && when.trim() && when.trim() !== c.schedule ? { schedule: when.trim() } : {}) })} />
             <Btn label={when === null ? 'Change time' : 'Keep the time'} onPress={() => setWhen(when === null ? c.schedule || '' : null)} />
-            <Btn ghost label="Not now" onPress={() => act({ answer: 'deny' })} />
+            {deny && <Btn label={deny.label} onPress={() => act(deny.body)} />}
           </View>
         </>
       ) : c.reply ? (
@@ -827,44 +873,50 @@ function AskCard({ c, who, state, onDone, canAct, offline, open }: { c: A.Card; 
           <Btn go label="Review order" onPress={() => open(c)} />
           {deny && <Btn ghost label={deny.label} onPress={() => act(deny.body)} />}
         </View>
-      ) : (
+      ) : yes ? (
         <View style={s.chips}>
           <Btn go label={yes.label} onPress={() => act(yes.body)} />
-          {(c.preview || rest.length > 1) && <Btn label={c.preview ? 'Read it first' : 'More'} onPress={() => open(c)} />}
-          <Btn ghost label="Not now" onPress={() => act({ answer: 'deny' })} />
+          {deny && <Btn label={deny.label} onPress={() => act(deny.body)} />}
         </View>
-      )}
+      ) : null}
+      {always && <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: t.line, paddingTop: 10, width: '100%' }}><Btn ghost label={always.label} onPress={() => act(always.body)} /></View>}
+      {c.kind === 'spend' && <T tone="mute" style={[s.small, { textAlign: 'center' }]}>Anything that costs money asks you every time.</T>}
     </Card>
   );
 }
 
-/** The approval moment: who, what, exactly what goes out, and the choices. A checkout reviews the order here, with a
- *  yes that names it; an order without a readable total offers no yes at all. */
+/** The approval moment, mirroring web/src/parts.tsx AskSheet (§4.4): who, the status, exactly what goes out, and
+ *  the choices — full-width buttons, the primary above its way out; a checkout reviews the whole order here, and an
+ *  order without a readable total offers no yes at all. */
 function AskSheet({ c, who, chiefSays, canAct, onClose }: { c: A.Card; who: A.Helper | undefined; chiefSays?: string; canAct: boolean; onClose: () => void }) {
   const t = useLook();
+  const [open, setOpen] = useState(false);
   const [oops, setOops] = useState(false);
   const last = useRef<Json | null>(null);
   const act = async (body: Json) => { last.current = body; setOops(false); if (await answer(c, body)) onClose(); else setOops(true); };
   const reduce = motion.useReduceMotion();
-  const heading = c.review && c.preview?.head ? c.preview.head : c.words;
+  const question = c.review && c.preview?.head ? c.preview.head : c.words;
+  const yes = c.choices[0]?.body.answer === 'allow' ? c.choices[0] : null;
+  // Every way out that isn't the one yes — an unpriced order has two, and neither is a yes.
+  const rest = c.choices.filter((x) => x !== yes && x.body.scope !== 'always');
+  const always = c.choices.find((x) => x.body.scope === 'always');
   return (
     <Modal visible transparent animationType={motion.sheet(reduce)} onRequestClose={onClose}>
       <Pressable style={s.scrim} onPress={onClose}>
-        <Pressable style={[s.sheet, { backgroundColor: t.bg }]} onPress={() => {}}>
-          <View style={[s.handle, { backgroundColor: t.line }]} />
-          <View style={[s.row, { gap: 12 }]}>
-            {who ? <Face who={{ ...who, mood: 'ask' }} size={48} /> : <Face who="chief" size={48} />}
-            <View style={{ flex: 1, gap: 2 }}><T style={s.b}>{who?.name ?? 'The crew'}</T><AskTag c={c} /></View>
-          </View>
-          <T style={s.sheetHead}>{heading}</T>
-          {c.review ? <>
-            {c.preview && <View style={[s.peek, { backgroundColor: t.soft, gap: 4 }]}>{c.preview.body.split('\n').map((l, i) => /^Total/.test(l) ? <T key={i} style={s.total}>{l}</T> : <T key={i}>{l}</T>)}</View>}
-            {c.order && !c.order.known && <T tone="mute" style={s.small}>So nothing is counted against the monthly limit.</T>}
-          </> : c.preview && <View style={[s.peek, { backgroundColor: t.soft }]}>{!!c.preview.head && <T tone="mute" style={s.small}>{c.preview.head}</T>}<T style={s.peekText}>{c.preview.body}</T></View>}
-          {!!chiefSays && <View style={s.row}><Face who="chief" size={30} /><T style={{ flex: 1 }}><Text style={s.b}>Chief:</Text> {A.plain(chiefSays)}</T></View>}
-          {c.kind === 'spend' && <T tone="mute" style={s.small}>Anything that costs money asks you every time.</T>}
+        <Pressable style={[s.sheet, { backgroundColor: t.surface }]} onPress={() => {}}>
+          <View style={[s.grabber, { backgroundColor: t.line2 }]} />
+          <AskHead c={c} who={who} />
+          <T style={s.askQ}>{question}</T>
+          <AskEvidence c={c} open={open} readAll={<Btn label="Read all" onPress={() => setOpen(true)} />} />
+          {c.review && c.order && !c.order.known && <T tone="mute" style={s.small}>So nothing is counted against the monthly limit.</T>}
+          {!!chiefSays && <View style={s.row}><Face who="chief" size={20} /><T tone="ink2" style={{ flex: 1 }}><Text style={s.b}>Chief:</Text> {A.plain(chiefSays)}</T></View>}
           {oops && <T tone="pinkInk" style={s.small}>That didn't go through. Try again.</T>}
-          {canAct ? c.choices.map((x, i) => <Btn key={x.label} go={i === 0} ghost={i > 0 && x.body.answer === 'deny'} big label={x.label} onPress={() => act(x.body)} />) : <Btn big label="Close" onPress={onClose} />}
+          {canAct ? <>
+            {rest.map((x) => <Btn key={x.label} big label={x.label} onPress={() => act(x.body)} />)}
+            {yes && <Btn go big label={yes.label} onPress={() => act(yes.body)} />}
+          </> : <Btn big label="Close" onPress={onClose} />}
+          {always && canAct && <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: t.line, paddingTop: 10 }}><Btn ghost big label={always.label} onPress={() => act(always.body)} /></View>}
+          {c.kind === 'spend' && <T tone="mute" style={[s.small, { textAlign: 'center' }]}>Anything that costs money asks you every time.</T>}
         </Pressable>
       </Pressable>
     </Modal>
@@ -1521,14 +1573,7 @@ const s = StyleSheet.create({
   small: { fontSize: 13, lineHeight: 18 },
   read: { fontSize: 16, lineHeight: 24 },
   askCard: { shadowColor: '#14121a', shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
-  askHead: { fontSize: 15.5, lineHeight: 21, fontWeight: '600' },
-  askLine: { fontSize: 15.5, lineHeight: 22, fontWeight: '500' },
   row6: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  peek: { borderRadius: 10, paddingVertical: 10, paddingHorizontal: 12, gap: 2 },
-  peekText: { fontSize: 14.5, lineHeight: 21 },
-  total: { fontSize: 18, lineHeight: 25, fontWeight: '700', marginTop: 4 },
-  handle: { alignSelf: 'center', width: 36, height: 4, borderRadius: 4, marginTop: -8 },
-  sheetHead: { fontSize: 19, lineHeight: 26, fontWeight: '600', letterSpacing: -0.2 },
   halo: { padding: 14, borderRadius: 999 },
   warmRing: { borderWidth: 10, padding: 16 },
   speech: { borderWidth: 1, borderRadius: 20, paddingVertical: 16, paddingHorizontal: 18, gap: 4, marginTop: 6, shadowColor: '#14121a', shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
@@ -1595,5 +1640,13 @@ const s = StyleSheet.create({
   toast: { position: 'absolute', bottom: 84, alignSelf: 'center', paddingHorizontal: 16, paddingVertical: 10, borderRadius: radius.pill, fontWeight: '500', overflow: 'hidden', maxWidth: '90%' },
   scanHint: { position: 'absolute', left: 0, right: 0, bottom: 0, padding: 20, gap: 12, backgroundColor: '#000a' },
   scrim: { flex: 1, backgroundColor: '#0006', justifyContent: 'flex-end' },
-  sheet: { padding: 22, gap: 12, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet },
+  sheet: { padding: 22, paddingTop: 12, gap: 12, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet },
+  grabber: { alignSelf: 'center', width: 36, height: 5, borderRadius: 3, marginBottom: 2 },
+  askStatus: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  statusDot: { width: 6, height: 6, borderRadius: 3 },
+  askWords: { fontSize: 17, lineHeight: 24, fontWeight: '600' },
+  askQ: { fontSize: 20, lineHeight: 26, fontWeight: '600', letterSpacing: -0.2 },
+  ev: { borderRadius: radius.control, padding: 12, gap: 6, width: '100%' },
+  orderRow: { flexDirection: 'row', gap: 12, alignItems: 'baseline', alignSelf: 'stretch' },
+  label2: { fontSize: 12, lineHeight: 16, fontWeight: '500' },
 });
