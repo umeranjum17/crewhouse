@@ -73,8 +73,7 @@ export function dedupe(list: Brain[]) {
 export function setBrains(cfg: Config, id: string, models: string[]) {
   if (!Array.isArray(models) || !models.length) throw Object.assign(new Error('pick at least one model'), { status: 400 });
   const list = dedupe(models.map(parseBrain)).map(brainKey);
-  const p = join(botDir(cfg, id), 'bot.json');
-  writeFileSync(p, JSON.stringify({ ...botConfig(cfg, id), models: list }, null, 2) + '\n');
+  patchConfig(cfg, id, { models: list });
   return list;
 }
 /** The person's standing answers for a bot ("Always for Reel") and its memory switch. */
@@ -171,9 +170,12 @@ export type Job = { does: string; aim: string; gets: string; how: string; great:
 const jobKeys = ['does', 'aim', 'gets', 'how', 'great'] as const;
 const jobText = (j: Job) => JOB_LABELS.map((label, i) => `### ${label}\n${j[jobKeys[i]]}`).join('\n\n');
 export const jobPreview = (j: Job) => jobText(j);
+const checkParts = (clean: Record<string, string>) => {
+  if (jobKeys.some((k) => !clean[k] || clean[k].length > 600)) throw Object.assign(new Error('each part needs words, under 600 characters'), { status: 400 });
+  if (jobText(clean as Job).length > 3000) throw Object.assign(new Error('the whole job must be under 3,000 characters'), { status: 400 });
+};
 export function validateJob(j: Record<string, string>) {
-  if (jobKeys.some((k) => !j[k] || j[k].length > 600)) throw Object.assign(new Error('each part needs words, under 600 characters'), { status: 400 });
-  if (jobText(j as Job).length > 3000) throw Object.assign(new Error('the whole job must be under 3,000 characters'), { status: 400 });
+  checkParts(j);
 }
 export function readJob(cfg: Config, id: string): Job {
   const text = readFileSync(join(botDir(cfg, id), 'AGENTS.md'), 'utf8');
@@ -184,9 +186,8 @@ export function readJob(cfg: Config, id: string): Job {
 }
 export function writeJob(cfg: Config, id: string, value: Job) {
   const clean = Object.fromEntries(jobKeys.map((k) => [k, String(value[k] ?? '').replace(/\r/g, '').trim()]));
-  if (jobKeys.some((k) => !clean[k] || clean[k].length > 600)) throw Object.assign(new Error('each part needs words, under 600 characters'), { status: 400 });
+  checkParts(clean);
   const section = jobText(clean as Job);
-  if (section.length > 3000) throw Object.assign(new Error('the whole job must be under 3,000 characters'), { status: 400 });
   const p = join(botDir(cfg, id), 'AGENTS.md');
   let text = readFileSync(p, 'utf8');
   const replacement = `## Your job\n${section}\n\n`;
@@ -299,8 +300,9 @@ export function upgradeFolder(cfg: Config, id: string, tpl: Template | null, dis
     rmSync(old);
     commit(dir, ['notes.md'], 'Notes now live in each person\'s own folder');
   }
-  if (tpl && !existsSync(join(dir, 'soul.md')) && templateSoul(cfg, tpl, display)) {
-    writeFileSync(join(dir, 'soul.md'), templateSoul(cfg, tpl, display));
+  const soul = tpl && !existsSync(join(dir, 'soul.md')) ? templateSoul(cfg, tpl, display) : '';
+  if (soul) {
+    writeFileSync(join(dir, 'soul.md'), soul);
     const job = join(dir, 'AGENTS.md');
     if (existsSync(job)) writeFileSync(job, readFileSync(job, 'utf8').replace(/\n## Voice\n[\s\S]*?(?=\n## |$)/, ''));
     commit(dir, ['soul.md', 'AGENTS.md'], 'A soul of its own');
