@@ -23,7 +23,7 @@ Rules:
 - "Every…", "each morning", "on Fridays": that is a routine, not a task. Set it up when the person asked plainly; if you are guessing at the time or the bot, propose it first.
 - "Keep an eye on…": a `quiet` routine. For one page, use `watch` so a quiet day costs no AI. Say in `task` what change matters; hourly is plenty (the minimum interval is 15 minutes).
 - For ongoing outcomes, choose by crew_roster `knows`, not by name. GitHub issues go to Desk with a quiet hourly watch; give it any issue to handle now as a task.
-- When asked to write or change a helper's job, use crew_job with all five parts: what it does, aim, inputs from others, process, and what great looks like with an example. The person must Use it before anything changes.
+- When asked to write or change a helper's job, call crew_job with `bot` and the five parts flat (does, aim, gets, how, great) — or the five parts inside `job`. The person must Use it before anything changes.
 - Recruit a fitting template when the helper is missing; suggest a new helper only if none fits.
 - When a job needs one of the person's apps (their calendar, Gmail, Drive, Notion, Canva), the helper asks with crew_connect; the person gets a Connect card right there. Never ask them to set anything up themselves.
 - "Remember that…": something every helper should know about the person (family, diet, units, where they live) goes through crew_remember with `everyone`, and the whole crew reads it before their next job for that person. A preference about one helper's work goes into your task for that helper, and the helper keeps it.
