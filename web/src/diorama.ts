@@ -49,6 +49,7 @@ type Char = {
 };
 type Tween = { t0: number; dur: number; fn: (p: number) => void; done?: () => void };
 type Cam = { yaw: number; pitch: number; dist: number; target: THREE.Vector3 };
+type Box = { l: number; t: number; r: number; b: number };
 
 const easeOut = (p: number) => 1 - Math.pow(1 - p, 4);
 const bounce = (p: number) => { const n = 7.5625, d = 2.75; if (p < 1 / d) return n * p * p; if (p < 2 / d) return n * (p -= 1.5 / d) * p + 0.75; if (p < 2.5 / d) return n * (p -= 2.25 / d) * p + 0.9375; return n * (p -= 2.625 / d) * p + 0.984375; };
@@ -104,14 +105,24 @@ export function diorama(host: HTMLElement, anchors: Anchors, onPick: (id: string
     if (off.x || off.y) camera.setViewOffset(size.w, size.h, off.x, off.y, size.w, size.h); else camera.clearViewOffset();
     place(camera, cam);
     renderer.render(scene, camera);
+    const cards: { el: HTMLElement; at: string; x: number; y: number; b?: Box }[] = [];
     for (const [key, el] of anchors) {
-      const [id, at] = key.split(':'), ch = chars.get(id);
-      const obj = at === 'head' ? ch?.head : at === 'desk' ? ch?.desk : ch?.feet;
-      if (!obj) continue;
-      obj.getWorldPosition(v3).project(camera);
-      el.style.transform = `translate3d(${((v3.x * 0.5 + 0.5) * size.w).toFixed(1)}px,${((-v3.y * 0.5 + 0.5) * size.h).toFixed(1)}px,0)`;
-      el.style.zIndex = String(Math.round(ch!.g.position.z * 10) + (at === 'feet' ? 400 : at === 'desk' ? 300 : 200));
+      const at = key.split(':')[1], p = anchorAt(key);
+      if (!p) continue;
+      cards.push({ el, at, ...p, b: boxes.get(key) });
+      el.style.zIndex = String(Math.round(chars.get(key.split(':')[0])!.g.position.z * 10) + (at === 'feet' ? 400 : at === 'desk' ? 300 : 200));
     }
+    // A card stays inside the stage, and two cards of a kind never cover each other: they step apart sideways.
+    const inside = (c: (typeof cards)[number]) => c.b ? clamp(0, 6 - (c.x + c.b.l), size.w - 6 - (c.x + c.b.r)) : 0;
+    for (const c of cards) c.x += inside(c);
+    for (let pass = 0; pass < 3; pass++) {
+      for (const a of cards) for (const b of cards) {
+        if (a === b || a.at !== b.at || a.at === 'desk' || !a.b || !b.b || a.x > b.x) continue;
+        const over = a.x + a.b.r + 6 - (b.x + b.b.l), vert = Math.min(a.y + a.b.b, b.y + b.b.b) - Math.max(a.y + a.b.t, b.y + b.b.t);
+        if (over > 0 && vert > 0) { a.x -= over / 2; b.x += over / 2; a.x += inside(a); b.x += inside(b); }
+      }
+    }
+    for (const c of cards) c.el.style.transform = `translate3d(${c.x.toFixed(1)}px,${c.y.toFixed(1)}px,0)`;
     // Cards never wider than the gap between two desks, so neighbours never cover each other's words or buttons.
     if (!look.phone && room && room.crew.length > 1) {
       const xs = room.crew.map((c) => { chars.get(c.id)!.feet.getWorldPosition(v3).project(camera); return (v3.x * 0.5 + 0.5) * size.w; });
@@ -121,6 +132,28 @@ export function diorama(host: HTMLElement, anchors: Anchors, onPick: (id: string
     }
   }
   let cardW = '';
+
+  /** Where an overlay card's point is on the stage, in pixels. A head card holds still while its figure bobs. */
+  function anchorAt(key: string) {
+    const [id, at] = key.split(':'), ch = chars.get(id);
+    const obj = at === 'head' ? ch?.head : at === 'desk' ? ch?.desk : ch?.feet;
+    if (!ch || !obj) return null;
+    obj.getWorldPosition(v3);
+    if (at === 'head') v3.y -= ch.fig.position.y - ch.baseY;
+    v3.project(camera);
+    return { x: (v3.x * 0.5 + 0.5) * size.w, y: (-v3.y * 0.5 + 0.5) * size.h };
+  }
+  /** Each card's box around its point, as office.tsx laid it out: measured after it renders, never guessed. */
+  let boxes = new Map<string, Box>();
+  function measure() {
+    boxes = new Map();
+    for (const [key, el] of anchors) {
+      const kid = el.firstElementChild;
+      if (!kid) continue;
+      const a = el.getBoundingClientRect(), k = kid.getBoundingClientRect();
+      if (k.width && k.height) boxes.set(key, { l: k.left - a.left, t: k.top - a.top, r: k.right - a.left, b: k.bottom - a.top });
+    }
+  }
 
   // Ambient life: the working bob, the asking hop, and now and then a blink — only while someone of yours is busy.
   function ambient() {
@@ -159,15 +192,15 @@ export function diorama(host: HTMLElement, anchors: Anchors, onPick: (id: string
   }
   function layout(n: number) {
     if (look.phone) {
-      const rows = Math.max(1, Math.ceil((n + 1) / 2)), D = rows * 5.6 - 2, z = (r: number) => -D / 2 + 2 + r * 5.6;
+      const rows = Math.max(1, Math.ceil((n + 1) / 2)), D = rows * 4.6 - 1.2, z = (r: number) => -D / 2 + 2 + r * 4.6;
       const cell = (i: number) => ({ x: i % 2 ? 1.9 : -1.9, z: z(Math.floor(i / 2)), ry: 0.05 });
       return { W: 7.6, D, H: 2.2, chief: { ...cell(0), ry: 0.2 }, crew: Array.from({ length: n }, (_, i) => cell(i + 1)),
-        shelf: { x: 3.1, z: -D / 2 + 0.5 }, door: Math.min(-D / 2 + 4.8, D / 2 - 0.7), win: 1.9, pic: -1.1, yaw: 0.06, pitch: 1.02, lift: 0.1 };
+        shelf: { x: 3.1, z: -D / 2 + 0.5 }, door: Math.min(-D / 2 + 4.8, D / 2 - 0.7), win: 1.9, pic: -1.1, yaw: 0.06, pitch: 1.02 };
     }
     const s = n > 1 ? clamp(10.2 / (n - 1), 2.4, 3.4) : 0, x0 = n > 1 ? -3 : 1;
     const W = Math.max(18, 2 * (x0 + (n - 1) * s + 1.7));
     return { W, D: 5.8, H: 3.3, chief: { x: -6.4, z: 0.9, ry: 0.5 }, crew: Array.from({ length: n }, (_, i) => ({ x: x0 + i * s, z: -0.5, ry: 0.1 })),
-      shelf: { x: -W / 2 + 1.1, z: -2.3 }, door: -0.9, win: 2.2, pic: -3.6, yaw: 0.26, pitch: 0.6, lift: 0.3 };
+      shelf: { x: -W / 2 + 1.1, z: -2.3 }, door: -0.9, win: 2.2, pic: -3.6, yaw: 0.26, pitch: 0.6 };
   }
 
   /** Static furniture merged into one mesh per colour: ~120 meshes become a dozen draw calls. */
@@ -332,7 +365,7 @@ export function diorama(host: HTMLElement, anchors: Anchors, onPick: (id: string
     if (scene) dispose3(scene);
     T = look.night ? PAL.night : PAL.day;
     const L = layout(r.crew.length), s = new THREE.Scene();
-    scene = s; chars = new Map(); room = r;
+    scene = s; chars = new Map(); room = r; sized = { w: 0, n: 0 };
     const fixed = new THREE.Group(); // everything that never changes: baked into a few meshes below
 
     s.add(new THREE.HemisphereLight(T.hemi[0], T.hemi[1], T.hemi[2]));
@@ -481,31 +514,48 @@ export function diorama(host: HTMLElement, anchors: Anchors, onPick: (id: string
     c.position.set(s.target.x + s.dist * cp * Math.sin(s.yaw), s.target.y + s.dist * Math.sin(s.pitch), s.target.z + s.dist * cp * Math.cos(s.yaw));
     c.lookAt(s.target);
   }
+  /** Frame the room: the nearest camera that keeps the room and every card on it in frame, the whole of it centred,
+   *  and the stage as tall as that picture wants, so the card around it has no empty band (a phone's tall crew may
+   *  stop at `most`; then the room fits the height instead). */
+  let sized = { w: 0, n: 0 };
   function fit() {
     if (!scene || !room) return;
     const L = layout(room.crew.length);
     camera.aspect = size.w / size.h; camera.fov = look.phone ? 26 : 30; camera.clearViewOffset(); camera.updateProjectionMatrix();
+    measure();
     const pts: [number, number, number][] = [];
     for (const x of [-L.W / 2, L.W / 2]) pts.push([x, -0.4, L.D / 2], [x, L.H, -L.D / 2]);
     pts.push([-L.W / 2, L.H, L.D / 2]);
-    for (const ch of chars.values()) { const p = ch.g.position; pts.push([p.x, 2 + L.lift, p.z], [p.x, 0, p.z + 1.3]); }
+    for (const ch of chars.values()) { const p = ch.g.position; pts.push([p.x, 2.1, p.z], [p.x, 0, p.z + 1.3]); }
     const h: Cam = { yaw: L.yaw, pitch: L.pitch, target: new THREE.Vector3(0, look.phone ? 0.2 : 0.6, look.phone ? 0.2 : 0.3), dist: 20 };
-    // The nearest camera that keeps the room and the cards above every head in frame, then the room centred in it.
-    const span = (d: number) => {
+    const frame = (d: number) => {
       place(camera, { ...h, dist: d }); camera.updateMatrixWorld();
-      let lo = Infinity, hi2 = -Infinity, wide = 0;
-      for (const [x, y, z] of pts) { v3.set(x, y, z).project(camera); lo = Math.min(lo, v3.y); hi2 = Math.max(hi2, v3.y); wide = Math.max(wide, Math.abs(v3.x)); }
-      return { lo, hi: hi2, wide };
+      const f = { x0: Infinity, x1: -Infinity, y0: Infinity, y1: -Infinity };
+      const add = (x: number, y: number) => { f.x0 = Math.min(f.x0, x); f.x1 = Math.max(f.x1, x); f.y0 = Math.min(f.y0, y); f.y1 = Math.max(f.y1, y); };
+      for (const [x, y, z] of pts) { v3.set(x, y, z).project(camera); add((v3.x * 0.5 + 0.5) * size.w, (-v3.y * 0.5 + 0.5) * size.h); }
+      for (const [key, b] of boxes) { const p = anchorAt(key); if (p) { add(p.x + b.l, p.y + b.t); add(p.x + b.r, p.y + b.b); } }
+      return f;
     };
-    // The cards above each head (office.tsx) need their height in pixels, whatever the distance.
-    const headroom = ((look.phone ? 64 : 100) * 2) / size.h;
-    const fits = (d: number) => { const s = span(d); return s.wide < 0.95 && s.hi - s.lo + headroom < 1.88; };
-    let lo = 4, hi = 120;
+    const pad = look.phone ? 8 : 14;
+    const fits = (d: number) => { const f = frame(d); return f.x1 - f.x0 <= size.w - 2 * pad && f.y1 - f.y0 <= size.h - 2 * pad; };
+    let lo = 2, hi = 160;
     for (let i = 0; i < 30; i++) { const mid = (lo + hi) / 2; if (fits(mid)) hi = mid; else lo = mid; }
-    h.dist = hi; home = h;
-    const s = span(hi);
-    homeOff = { x: 0, y: (-(s.hi + headroom + s.lo) / 2) * size.h / 2 };
+    h.dist = hi;
+    const f = frame(hi);
+    // How tall the picture wants the stage at this width. The ResizeObserver brings us back here at that height; the
+    // count stops a width that never settles (a pixel of rounding either way) from resizing for ever.
+    const most = look.phone ? Math.min(640, size.w * 1.6) : 560, least = look.phone ? 240 : 300;
+    const want = Math.round(clamp((f.y1 - f.y0) * (size.w - 2 * pad) / (f.x1 - f.x0) + 2 * pad, least, most));
+    if (sized.w !== size.w) sized = { w: size.w, n: 0 };
+    if (Math.abs(want - size.h) > 1.5 && sized.n++ < 4) Object.assign(host.style, { height: `${want}px`, aspectRatio: 'auto' });
+    const was = home && cam ? { yaw: cam.yaw - home.yaw, pitch: cam.pitch - home.pitch, dist: cam.dist / home.dist } : null;
+    home = h;
+    homeOff = { x: (f.x0 + f.x1) / 2 - size.w / 2, y: (f.y0 + f.y1) / 2 - size.h / 2 };
+    // Keep where the person has turned the room to, or who they are visiting.
+    if (camTween) { tweens.delete(camTween); camTween = null; } // a glide under way was aiming at the old frame
     cam = { ...h, target: h.target.clone() }; off = { ...homeOff };
+    if (was) { cam.yaw += was.yaw; cam.pitch += was.pitch; cam.dist *= was.dist; }
+    if (focused) jump(focused.id, focused.cover);
   }
   function clampCam() {
     if (!home || !cam) return;
@@ -514,7 +564,21 @@ export function diorama(host: HTMLElement, anchors: Anchors, onPick: (id: string
     cam.pitch = clamp(cam.pitch, home.pitch - d10, home.pitch + d10);
     cam.dist = clamp(cam.dist, home.dist * 0.4, home.dist * 1.18);
   }
-  let camTween: Tween | null = null;
+  let camTween: Tween | null = null, focused: { id: string; cover: { right: number; bottom: number } } | null = null;
+  /** The camera that visits one character (or the room's own, for null), centred in what a side panel leaves uncovered. */
+  function aim(id: string | null, cover: { right: number; bottom: number }) {
+    if (!home) return null;
+    if (!id) return { goal: home, off: homeOff };
+    const ch = chars.get(id); if (!ch) return null;
+    const p = new THREE.Vector3(); ch.fig.getWorldPosition(p); p.y += ch.height * 0.55 - (ch.fig.position.y - ch.baseY);
+    return { goal: { yaw: home.yaw, pitch: home.pitch, dist: home.dist * (look.phone ? 0.78 : 0.6), target: p }, off: { x: cover.right / 2, y: cover.bottom / 2 } };
+  }
+  function jump(id: string, cover: { right: number; bottom: number }) {
+    const to = aim(id, cover);
+    if (!to) return;
+    if (camTween) tweens.delete(camTween);
+    cam = { ...to.goal, target: to.goal.target.clone() }; off = { ...to.off };
+  }
   function glide(goal: Cam, to: { x: number; y: number }) {
     if (!cam) return;
     const a = { ...cam, target: cam.target.clone() }, o = { ...off };
@@ -578,20 +642,21 @@ export function diorama(host: HTMLElement, anchors: Anchors, onPick: (id: string
       const next = `${l.night}|${l.phone}|${r.crew.map((c) => `${c.id}.${c.kind}`).join(',')}`;
       if (!scene || next !== cast || r.doneToday < (room?.doneToday ?? 0)) { look = l; cast = next; tweens.clear(); build(r); draw(); ambient(); return; }
       update(r);
+      // A card that grew or shrank (a question arrived, a step got longer) reframes the room around it.
+      const was = JSON.stringify([...boxes]); measure();
+      if (JSON.stringify([...boxes]) !== was) { fit(); wake(); }
     },
     focus(id, cover = { right: 0, bottom: 0 }) {
-      if (!home) return;
-      if (!id) { glide(home, homeOff); return; }
-      const ch = chars.get(id); if (!ch) return;
-      const p = new THREE.Vector3(); ch.fig.getWorldPosition(p); p.y += ch.height * 0.55;
-      glide({ yaw: home.yaw, pitch: home.pitch, dist: home.dist * (look.phone ? 0.78 : 0.6), target: p }, { x: cover.right / 2, y: cover.bottom / 2 });
+      focused = id ? { id, cover } : null;
+      const to = aim(id, cover);
+      if (to) glide(to.goal, to.off);
     },
     wake,
     dispose() {
       dead = true; cancelAnimationFrame(raf); clearTimeout(ambT); tweens.clear();
       resize.disconnect(); seen.disconnect(); document.removeEventListener('visibilitychange', onVis);
       if (scene) dispose3(scene);
-      cube.dispose(); renderer.dispose(); renderer.forceContextLoss(); canvas.remove();
+      cube.dispose(); renderer.dispose(); renderer.forceContextLoss(); canvas.remove(); Object.assign(host.style, { height: '', aspectRatio: '' });
     },
   };
 }

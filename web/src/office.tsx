@@ -68,8 +68,9 @@ export function Office({ state, night }: { state: Json; night: boolean }) {
   const crew = live.crew.map((c) => (c.ask && asks.get(c.id)?.[0] ? { ...c, ask: asks.get(c.id)![0] } : c));
   const day = new Date(); day.setHours(0, 0, 0, 0);
   const room: Room = { chief: { mood: live.chief.mood }, crew, doneToday: live.done.filter((t) => t.at >= day.getTime()).length };
-  // The scene redraws only when something it draws has changed; words live in the cards above it, which React keeps.
-  const roomKey = JSON.stringify([room.chief, room.doneToday, crew.map((c) => [c.id, c.kind, c.mood, c.ring, c.busyElsewhere, c.ask?.kind, c.things.map((f) => f.kind)])]);
+  // The scene redraws only when something it draws, or a card pinned in it, has changed: the words themselves live in
+  // the cards, which React keeps, but a card that changes size reframes the room.
+  const roomKey = JSON.stringify([room.chief, room.doneToday, crew.map((c) => [c.id, c.kind, c.mood, c.ring, c.busyElsewhere, c.ask?.id, c.ask?.kind, c.status, c.step, c.things.map((f) => f.kind)])]);
   const roomNow = useRef(room);
   roomNow.current = room;
 
@@ -143,12 +144,13 @@ export function Office({ state, night }: { state: Json; night: boolean }) {
         {fresh.has(`${c.id}:${i}`) && <span className="o-new">New</span>}
       </button>))}
     </div>);
-  const tag = (c: A.OfficeMember, withStep: boolean) => (
+  const tag = (c: A.OfficeMember) => (
     <button className={`o-tag ${tone(c).cls}`} onClick={() => setOpen(c.id)} aria-label={`${c.name}: ${c.status}`}>
-      <b>{c.name}</b><span className="o-st"><i /><span>{c.status}</span></span>
-      {withStep && c.ring === 'working' && c.step && <span className="o-line"><Typing /><span className="o-bt">{c.step}</span></span>}
+      <b>{c.name}</b><span className="o-st">{c.ring === 'working' ? <Typing /> : <i />}<span>{c.status}</span></span>
     </button>);
-  const review = (c: A.OfficeMember) => c.ask && <a className="btn sm o-review" href={`#/ask/${c.ask.id}`} aria-label={`Review what ${c.name} needs`}>Review</a>;
+  // On a phone the one card over a helper who needs you is the way in: their name and a Review, in pink.
+  const needs = (c: A.OfficeMember) => c.ask && <a className="o-tag o-need" href={`#/ask/${c.ask.id}`} aria-label={`Review what ${c.name} needs: ${c.ask.head}`}>
+    <b>{c.name}</b><span className="o-go">Review</span></a>;
   const chiefTag = <button className={`o-tag ${live.chief.mood === 'ask' ? 's-needs' : live.chief.mood === 'work' ? 's-work' : 's-free'}`} onClick={() => go('#/chief')} aria-label="Chief: open his chat">
     <b>Chief</b><span className="o-st"><i /><span>Runs the crew</span></span></button>;
 
@@ -161,19 +163,18 @@ export function Office({ state, night }: { state: Json; night: boolean }) {
           {crew.map((c) => { const on = `anc${open === c.id ? ' on' : ''}`; return <div key={c.id} className="o-who">
             <div className={on} ref={bind(`${c.id}:head`)}>
               <div className="o-stack">
-                {phone ? tag(c, true)
-                  : c.ask ? <div className="o-ask" title={c.ask.words}><div className="o-ask-tag"><i /><span>{c.ask.head}</span></div>{review(c)}</div>
+                {phone ? needs(c) || tag(c)
+                  : c.ask ? <div className="o-ask" title={c.ask.words}><div className="o-ask-tag"><i /><span>{c.ask.head}</span></div><a className="btn sm" href={`#/ask/${c.ask.id}`} aria-label={`Review what ${c.name} needs`}>Review</a></div>
                   : c.ring === 'working' && c.step ? <div className="o-bubble"><Typing /><span className="o-bt" key={c.step}>{c.step}</span></div> : null}
               </div>
             </div>
-            <div className={on} ref={bind(`${c.id}:desk`)}><div className="o-desk">{chips(c)}{phone && review(c)}</div></div>
-            <div className={on} ref={bind(`${c.id}:feet`)}>{!phone && tag(c, false)}</div>
+            <div className={on} ref={bind(`${c.id}:desk`)}><div className="o-desk">{chips(c)}</div></div>
+            <div className={on} ref={bind(`${c.id}:feet`)}>{!phone && tag(c)}</div>
           </div>; })}
-          {!mine && <div className="o-empty">{live.crew.some((c) => c.busyElsewhere) ? 'Nothing of yours on the go right now.' : 'Nothing of yours on the go. The crew is free.'}</div>}
-          {!phone && <div className="o-hint" aria-hidden>Drag to look around · tap anyone to visit</div>}
         </div>}
         {mode === 'still' && <Still live={{ ...live, crew }} open={setOpen} />}
       </div>
+      {mode === '3d' && !mine && <p className="o-empty">{live.crew.some((c) => c.busyElsewhere) ? 'Nothing of yours on the go right now.' : 'Nothing of yours on the go. The crew is free.'}</p>}
       {open && crew.some((c) => c.id === open) && createPortal(<HelperSheet c={crew.find((c) => c.id === open)!} h={roles.get(open)} state={state}
         asks={asks.get(open) ?? []} onClose={() => setOpen(null)} />, document.body)}
     </section>

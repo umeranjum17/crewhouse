@@ -739,14 +739,13 @@ details.card[open] > summary { margin-bottom: 10px; }
 @media (min-width: 900px) { .main > .page.chat-page { flex: none; height: 100dvh; } }
 
 /* The office (web/src/office.tsx): Home's top frame, inside the hero card. A tabletop room in 3D with cards pinned
-   to points in it (web/src/diorama.ts), or, without 3D or with Reduce Motion, the same cast standing in a still row. */
-:root { --stage-a: #FFF6EA; --stage-b: #F3EEE8; }
-[data-theme='night'] { --stage-a: #1E1B26; --stage-b: #121116; }
-.office { margin-top: 18px; }
-.o-stage { position: relative; isolation: isolate; height: clamp(420px, 56vh, 600px); border-radius: 18px; overflow: hidden; border: 1px solid var(--line);
-  background: radial-gradient(120% 90% at 50% 20%, var(--stage-a), var(--stage-b)); }
-.o-phone .o-stage { height: min(600px, 150vw); border-radius: 16px; }
-.o-stage.still { height: auto; min-height: 0; }
+   to points in it (web/src/diorama.ts), or, without 3D or with Reduce Motion, the same cast standing in a still row.
+   The stage is a soft tile like the stats above it, and as tall as the room it holds: diorama.ts sets its height once
+   it has framed the room; until then it keeps about the room's shape, so Home does not jump when the 3D arrives. */
+.office { margin-top: 12px; }
+.o-stage { position: relative; isolation: isolate; aspect-ratio: 2.2; border-radius: 16px; overflow: hidden; background: var(--soft); }
+.o-phone .o-stage { aspect-ratio: .63; }
+.o-stage.still { aspect-ratio: auto; }
 .o-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: pan-y; cursor: grab; outline: none; animation: fade 420ms var(--ease) both; }
 .o-stage canvas.drag { cursor: grabbing; }
 .o-ov { position: absolute; inset: 0; pointer-events: none; overflow: hidden; animation: fade 420ms var(--ease) both; }
@@ -755,7 +754,7 @@ details.card[open] > summary { margin-bottom: 10px; }
 .o-ov.focus .anc { opacity: .28; transition: opacity 300ms var(--ease); }
 .o-ov.focus .anc.on { opacity: 1; }
 .o-stack { position: absolute; left: 0; bottom: 8px; transform: translateX(-50%); width: var(--card-w, 164px); display: flex; flex-direction: column; align-items: center; gap: 6px; }
-.o-phone .o-stack { width: 126px; bottom: 4px; gap: 4px; }
+.o-phone .o-stack { width: max-content; max-width: 140px; bottom: 4px; gap: 4px; }
 .o-desk { position: absolute; left: 0; top: 0; transform: translate(-50%, -100%); display: flex; gap: 5px; align-items: center; }
 .o-phone .o-desk { transform: translate(-30%, -40%); }
 
@@ -772,12 +771,15 @@ details.card[open] > summary { margin-bottom: 10px; }
 .s-needs .o-st { color: var(--ink); } .s-needs .o-st i { background: var(--pink); }
 .s-next .o-st i { background: var(--amber); }
 .s-away .o-st i { background: var(--ink2); opacity: .55; }
-.o-phone .o-tag { position: relative; top: 0; transform: none; width: 100%; max-width: 100%; justify-items: start; text-align: left; padding: 3px 10px 4px; border-radius: 12px; }
+.o-phone .o-tag { position: relative; top: 0; transform: none; max-width: 100%; justify-items: start; text-align: left; padding: 4px 10px 5px; border-radius: 12px; }
 .o-phone .o-tag:hover { transform: translateY(-1px); }
 .o-phone .o-tag b { font-size: 12.5px; }
 .o-phone .o-st { font-size: 11px; }
-.o-line { display: flex; gap: 6px; align-items: center; width: 100%; min-width: 0; margin-top: 3px; padding-top: 3px; border-top: 1px solid var(--line); font: 500 11.5px/15px var(--ui); color: var(--ink); }
-.o-line .o-bt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+/* A helper who needs you, on a phone: one pink card, their name and the way in. */
+.o-tag.o-need { display: flex; gap: 8px; align-items: center; padding: 5px 5px 5px 11px; border-radius: 999px; background: var(--pink); border-color: var(--pink); color: var(--on-pink); text-decoration: none;
+  box-shadow: 0 6px 16px -6px color-mix(in srgb, var(--pink) 60%, transparent); }
+.o-need .o-go { font: 650 12px/16px var(--ui); padding: 3px 9px; border-radius: 999px; background: color-mix(in srgb, var(--on-pink) 22%, transparent); }
+.o-need .o-go::after { content: ' ›'; }
 
 .o-bubble { position: relative; max-width: 100%; background: var(--solid); border: 1px solid var(--line); border-radius: 14px; padding: 6px 10px 7px; box-shadow: var(--e1);
   font: 500 12.5px/16px var(--ui); color: var(--ink); display: flex; gap: 7px; align-items: flex-start; }
@@ -785,7 +787,7 @@ details.card[open] > summary { margin-bottom: 10px; }
 .o-bubble .o-bt { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-width: 0; animation: swap 420ms var(--ease); }
 @keyframes swap { from { opacity: 0; transform: translateY(5px); } }
 .o-typing { display: inline-flex; gap: 2px; flex: none; margin-top: 6px; }
-.o-line .o-typing { margin-top: 0; }
+.o-st .o-typing { margin-top: 0; }
 .o-typing i { width: 4px; height: 4px; border-radius: 50%; background: var(--ok); opacity: .7; }
 
 .o-wips { display: flex; gap: 5px; align-items: center; }
@@ -809,16 +811,13 @@ details.card[open] > summary { margin-bottom: 10px; }
 .o-ask-tag span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .o-ask-tag i { width: 7px; height: 7px; border-radius: 50%; background: var(--pink); flex: none; }
 .o-ask .btn.sm { min-height: 30px; padding: 4px 12px; }
-.o-ask .btn, .o-review { background: var(--pink); color: var(--on-pink); border-color: var(--pink); }
+.o-ask .btn { background: var(--pink); color: var(--on-pink); border-color: var(--pink); }
 .o-ask.big { padding: 14px 16px 16px; gap: 10px; box-shadow: none; }
 .o-ask.big p { font-size: 14.5px; line-height: 21px; color: var(--ink); -webkit-line-clamp: 6; }
 .o-ask.big .o-ask-tag span { white-space: normal; }
 .o-ask.big .btn { justify-self: start; width: auto; }
-.o-review { box-shadow: 0 6px 16px -6px color-mix(in srgb, var(--pink) 60%, transparent); }
 
-.o-empty { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); width: max-content; max-width: calc(100% - 32px); background: var(--solid); border: 1px solid var(--line);
-  border-radius: 999px; padding: 7px 14px; font: 500 13.5px/18px var(--ui); color: var(--ink); box-shadow: var(--e1); text-align: center; }
-.o-hint { position: absolute; right: 12px; bottom: 12px; font: 500 11.5px/15px var(--ui); color: var(--ink2); background: color-mix(in srgb, var(--solid) 80%, transparent); border-radius: 999px; padding: 4px 10px; }
+.o-empty { margin: 10px 0 0; text-align: center; font: 500 13px/18px var(--ui); color: var(--ink2); }
 
 /* The still room: the same cast in a row, each with its one line. */
 .o-still { display: flex; gap: 12px; padding: 18px; overflow-x: auto; scrollbar-width: none; }
@@ -855,6 +854,6 @@ details.card[open] > summary { margin-bottom: 10px; }
   @keyframes side { from { opacity: 0; transform: translateX(28px); } }
 }
 @media (max-width: 899px) {
-  .hero .office { margin: 16px -10px 0; }
+  .hero .office { margin-top: 10px; }
   .o-scrim { align-items: end; }
 }
