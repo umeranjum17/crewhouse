@@ -307,6 +307,15 @@ function ChiefIdeas({ state, chat, picked }: { state: Json; chat: string; picked
   ))}</div>;
 }
 
+/** A helper's starters in its own fresh chat: its own ready rows only, never another helper's. A tap fills the box, it never sends. */
+function HelperIdeas({ state, chat, picked }: { state: Json; chat: string; picked: () => void }) {
+  const rows = A.ideas(state).filter((i: Json) => i.bot === chat);
+  if (!rows.length) return null;
+  return <div className="chips center">{rows.map((i: Json) => (
+    <button key={i.bot + i.label} className="chip" onClick={() => { keepDraft(chat, i.ask); picked(); }}>✦ {i.label}</button>
+  ))}</div>;
+}
+
 /** Chief's hand-off in a helper's chat: the collapsed ask, with the full assignment words behind Show details. */
 function ChiefAsk({ l }: { l: { text: string; detail: string } }) {
   const [open, setOpen] = useState(false);
@@ -404,6 +413,8 @@ function Chat({ id, m, state, me, tick, refresh, accounts }: Ctx & { id: string;
     return ok;
   };
   const name = h?.name ?? 'Chief';
+  // A fresh chat shows starters: nothing yet, or only the hidden "X joined the crew" note from recruiting.
+  const fresh = !lines.length || (lines.length === 1 && lines[0].from === 'note' && lines[0].text.startsWith(`${name} joined the crew`));
   // Lines that arrive while you watch rise in; the thread you open with is simply there.
   const opened = useRef<number | null>(null);
   if (opened.current === null && page) opened.current = page.messages?.at(-1)?.id ?? 0;
@@ -419,7 +430,9 @@ function Chat({ id, m, state, me, tick, refresh, accounts }: Ctx & { id: string;
           <b>{name}</b><span>{h ? h.role : 'Runs the crew and answers to you'}</span>
         </div>}
         {!page && <div className="skeleton" aria-busy="true" aria-label="Opening the chat"><i /><i /><i /></div>}
-        {!lines.length && page && id === 'chief' && <ChiefIdeas state={state} chat={id} picked={() => setSeed((n) => n + 1)} />}
+        {fresh && page && (id === 'chief'
+          ? <ChiefIdeas state={state} chat={id} picked={() => setSeed((n) => n + 1)} />
+          : <HelperIdeas state={state} chat={id} picked={() => setSeed((n) => n + 1)} />)}
         {lines.map((l, i) => start && i === 0 && l.from === 'note' && l.text.startsWith(`${name} joined the crew`) ? null : <div key={l.id} className="line-wrap">{dayOf(l.at)}
           <div id={`m${l.id}`} className={`line ${l.from}${l.unsure ? ' unsure' : ''}${l.id > (opened.current ?? Infinity) ? ' fresh' : ''}${i && lines[i - 1].from === l.from && l.from !== 'me' ? ' consecutive' : ''}`}>
             {l.from !== 'me' && l.from !== 'note' && <div className="line-by"><Face who={l.from === 'chief' ? 'chief' : h ?? 'chief'} size={28} /><span className="who">{l.from === 'chief' ? 'Chief' : name}</span><time>{l.at ? A.clock(l.at) : ''}</time></div>}

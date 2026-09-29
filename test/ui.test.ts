@@ -276,6 +276,36 @@ test('Home keeps a standing "hand me a job" list, straight from crewd\'s ideas: 
   assert.doesNotMatch(list, /api\.post/, 'nothing is handed over by itself');
 });
 
+test('a freshly recruited helper opens on its own starters, and a tap fills the box without sending', () => {
+  const withJobs = { ...state, ideas: [
+    { bot: 'scout', promise: 'Ask me anything and I will answer with sources', ask: 'Find out ', group: 'life', needs: [] },
+    { bot: 'scribe', promise: 'Say who it is for and the email is written', ask: 'Write an email to ', group: 'life', needs: [] },
+  ] };
+  const own = A.ideas(withJobs).filter((i: any) => i.bot === 'scout');
+  assert.deepEqual(own.map((i: any) => i.bot), ['scout'], 'a helper sees its own rows, never another helper\'s');
+  assert.equal(own[0].ask, 'Find out ', 'the chip carries the ask words');
+  // A tap fills the box: the composer remounts from the draft (key={seed}) and nothing is posted.
+  keepDraft('scout', own[0].ask);
+  assert.equal(draftOf('scout').text, 'Find out ', 'the tap filled the helper\'s box');
+  keepDraft('scout', '');
+  const src = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
+  assert.match(src, /const fresh = !lines\.length/, 'the hidden join note counts as a fresh chat, not only an empty one');
+  assert.match(src, /joined the crew`\)\)/, 'fresh means only that note');
+  assert.match(src, /<HelperIdeas state=\{state\} chat=\{id\}/, 'a helper gets its own chips beside Chief\'s');
+  const helper = src.slice(src.indexOf('function HelperIdeas'), src.indexOf('function HelperIdeas') + 700);
+  assert.match(helper, /i\.bot === chat/, 'the helper\'s chips are its own ready rows');
+  assert.match(helper, /keepDraft\(chat, i\.ask\)/, 'a tap fills the box');
+  assert.doesNotMatch(helper, /api\.post/, 'it never sends');
+  const chat = src.slice(src.indexOf('function Chat('), src.indexOf('function Chat(') + 9500);
+  assert.match(chat, /fresh && page/, 'the fresh chat renders the starters');
+  const app = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
+  const phone = app.slice(app.indexOf('function Chat('), app.indexOf('function Chat(') + 9000);
+  assert.match(phone, /joined the crew`\)\)/, 'the phone uses the same fresh condition');
+  assert.match(phone, /i\.bot === id/, 'the phone filters to the helper\'s own rows too');
+  assert.match(phone, /keepDraft\(id, i\.ask\)/, 'a phone tap fills the box');
+  assert.doesNotMatch(phone.slice(phone.indexOf('s.chips'), phone.indexOf('s.chips') + 600), /api\.post/, 'and never sends');
+});
+
 test('chat navigation acts like chat: no tab scroller, Details behind the header, Back by history', () => {
   assert.equal(A.lines({ messages: [{ id: 1, author: 'bot', text: 'Hello' }] }, 'scout')[0].at, undefined, 'old lines without timestamps keep asks in the thread');
   const src = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');

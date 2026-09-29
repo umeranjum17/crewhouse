@@ -1205,6 +1205,10 @@ function Chat({ id, m, state, tick, refresh, canAct, offline, open }: Ctx & { id
   const cards = A.cards(state).filter((c) => c.helper === id);
   const last = lines.at(-1);
   const name = h?.name ?? 'Chief';
+  // A fresh chat shows starters: nothing yet, or only the hidden "X joined the crew" note from recruiting.
+  const fresh = !lines.length || (lines.length === 1 && lines[0].from === 'note' && lines[0].text.startsWith(`${name} joined the crew`));
+  // A helper's starters are its own ready rows only, never another helper's; Chief keeps every row.
+  const own = id === 'chief' ? A.ideas(state) : A.ideas(state).filter((i: Json) => i.bot === id);
   // Seen: the chat's unread count goes once its newest line is on screen (a watch-only phone can't mark it).
   const newest = last?.id;
   useEffect(() => { if (canAct && newest && b?.unread) void api.read(id).then(refresh).catch(() => {}); }, [canAct, newest, b?.unread, id, refresh]);
@@ -1244,8 +1248,8 @@ function Chat({ id, m, state, tick, refresh, canAct, offline, open }: Ctx & { id
           <T style={s.introName}>{name}</T><T tone="ink2" style={[s.centerText, { maxWidth: 300 }]}>{h ? h.role : 'Runs the crew and answers to you'}</T>
         </View>}
         {!page && <View style={{ gap: 12, paddingLeft: 36, paddingTop: 20 }} accessibilityLabel="Opening the chat">{['62%', '84%', '40%'].map((w) => <View key={w} style={[s.bar, { width: w as any, backgroundColor: t.soft }]} />)}</View>}
-        {!lines.length && page && id === 'chief' && canAct && <View style={[s.chips, { justifyContent: 'center' }]}>
-            {A.ideas(state).map((i: Json) => <Btn key={i.bot + i.label} label={`✦ ${i.label}`} onPress={() => { keepDraft(id, i.ask); setSeed((n) => n + 1); }} />)}
+        {fresh && page && canAct && own.length > 0 && <View style={[s.chips, { justifyContent: 'center' }]}>
+            {own.map((i: Json) => <Btn key={i.bot + i.label} label={`✦ ${i.label}`} onPress={() => { keepDraft(id, i.ask); setSeed((n) => n + 1); }} />)}
           </View>}
         {lines.map((l, i) => start && i === 0 && l.from === 'note' && l.text.startsWith(`${name} joined the crew`) ? null : <View key={l.id} style={{ gap: 10 }}>{dayOf(l.at)}<motion.Rise reduce={reduce || l.id <= (opened.current ?? Infinity)}>
           <View onLayout={(e) => ys.current.set(l.id, e.nativeEvent.layout.y)}
