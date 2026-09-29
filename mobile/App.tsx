@@ -5,7 +5,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useFonts } from 'expo-font';
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
-  ActivityIndicator, AppState, BackHandler, Clipboard, Image, KeyboardAvoidingView, Modal, Pressable, ScrollView, StatusBar, StyleSheet, Switch, Text, TextInput, useColorScheme, View,} from 'react-native';
+  ActivityIndicator, AppState, BackHandler, Clipboard, Image, KeyboardAvoidingView, Modal, PermissionsAndroid, Pressable, ScrollView, StatusBar, StyleSheet, Switch, Text, TextInput, useColorScheme, View,} from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import * as A from '../web/src/adapter.ts';
 import { chatTokens, safeLink } from '../web/src/chat-md.ts';
@@ -29,6 +29,7 @@ import QRCode from 'qrcode';
 import * as motion from './src/motion';
 import { MARKS } from './src/marks';
 import { Office } from './src/office';
+import { canHear, hear, stopHearing } from './modules/crewhouse-net';
 import { connect, desktopSignaling, forgetGrant, kept, loadGrant, onLive, pair, pairTypedCode, type Grant, type Status } from './src/link';
 
 // ---------- look ----------
@@ -236,8 +237,43 @@ async function shrink(uri: string): Promise<Photo> {
   return { type: 'image/jpeg', data: r.base64 ?? '', uri: r.uri };
 }
 
-/** The message box: words (the phone keyboard's own mic dictates them) and up to four photos. A send that didn't go
- *  through keeps both with a Retry; each chat holds its own words (web/src/draft.ts). */
+/** The voice note to Chief: a mic in the box when this phone can hear on the phone itself (web/src/parts.tsx
+ *  useVoice). What was said lands after what is already there, for the person to read and send; speaking sends nothing. */
+function Mic({ on, text, put }: { on: boolean; text: string; put: (t: string) => void }) {
+  const t = useLook();
+  const [can, setCan] = useState(false);
+  const [listening, setListening] = useState(false);
+  const now = useRef(text);
+  now.current = text;
+  useEffect(() => { if (on) void canHear().then(setCan); }, [on]);
+  const shown = useRef(true);
+  useEffect(() => () => { shown.current = false; }, []);
+  useEffect(() => (listening ? () => stopHearing() : undefined), [listening]); // leaving the box turns the mic off
+  if (!can) return null;
+  const start = async () => {
+    setListening(true);
+    const mic = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO, { title: 'Speak to Chief',
+      message: 'Crewhouse hears you only while the mic is on, on this phone. Your words wait in the box until you send them.', buttonPositive: 'OK' });
+    if (!shown.current) return;
+    if (mic !== PermissionsAndroid.RESULTS.GRANTED) { setListening(false); return say('Allow the microphone for Crewhouse in your phone settings, then try again.'); }
+    hear().then((w) => { if (w) put(now.current.trim() ? `${now.current.trimEnd()} ${w}` : w); else say("I didn't catch that. Try again."); },
+      (e) => say(/blocked/.test(`${e?.code} ${e?.message}`) ? 'Allow the microphone for Crewhouse in your phone settings, then try again.'
+        : "Speaking isn't ready on this phone yet. Type instead, or use the keyboard's mic."))
+      .finally(() => setListening(false));
+  };
+  return <Pressable onPress={() => (listening ? stopHearing() : void start())} accessibilityRole="button" accessibilityLabel={listening ? 'Stop listening' : 'Speak to Chief'}
+    accessibilityState={{ selected: listening }} style={[s.send, { backgroundColor: listening ? t.pink : 'transparent' }]}>
+    {listening ? <View style={{ width: 12, height: 12, borderRadius: 3, backgroundColor: '#fff' }} />
+      : <View style={{ alignItems: 'center' }}>
+        <View style={{ width: 10, height: 15, borderRadius: 5, borderWidth: 2, borderColor: t.ink2 }} />
+        <View style={{ width: 16, height: 7, marginTop: -4, borderBottomLeftRadius: 8, borderBottomRightRadius: 8, borderWidth: 2, borderTopWidth: 0, borderColor: t.ink2 }} />
+        <View style={{ width: 2, height: 3, backgroundColor: t.ink2 }} />
+      </View>}
+  </Pressable>;
+}
+
+/** The message box: words (the phone keyboard's own mic dictates them; Chief's box has its own) and up to four
+ *  photos. A send that didn't go through keeps both with a Retry; each chat holds its own words (web/src/draft.ts). */
 function Composer({ placeholder, onSend, chat, photos: canPhoto = true }: { placeholder: string; onSend: (t: string, photos: Photo[]) => unknown; chat?: string; photos?: boolean }) {
   const t = useLook();
   const [text, setText] = useState(() => (chat ? draftOf(chat).text : ''));
@@ -279,6 +315,7 @@ function Composer({ placeholder, onSend, chat, photos: canPhoto = true }: { plac
           <Text style={{ color: t.ink, fontSize: 20 }}>＋</Text>
         </Pressable>}
         <TextInput style={[s.composerInput, { color: t.ink }]} value={text} onChangeText={change} multiline placeholder={placeholder} placeholderTextColor={t.mute} accessibilityLabel={placeholder} />
+        <Mic on={chat === 'chief'} text={text} put={change} />
         <Pressable onPress={() => void send()} disabled={!ready || busy} accessibilityLabel="Send" style={[s.send, { backgroundColor: t.go, opacity: ready && !busy ? 1 : 0.4 }]}>
           <Text style={{ color: t.goInk, fontSize: 18, fontWeight: '900' }}>↑</Text>
         </Pressable>
@@ -828,6 +865,21 @@ function AskHead({ c, who }: { c: A.Card; who: A.Helper | undefined }) {
   </View>;
 }
 
+/** A helper's draft takes the person's own words before Approve (web/src/parts.tsx useDraftEdit): their version
+ *  replaces the draft, and still nothing is sent. */
+function useDraftEdit(c: A.Card) {
+  const t = useLook();
+  const [words, setWords] = useState<string | null>(null);
+  const changed = words !== null && words.trim() !== c.draftText;
+  return {
+    can: c.evidence === 'draft' && !!c.draftText, editing: words !== null, empty: words !== null && !words.trim(),
+    toggle: () => setWords(words === null ? c.draftText ?? '' : null),
+    box: words !== null && <TextInput style={[s.input, { color: t.ink, borderColor: t.line, minHeight: 160, textAlignVertical: 'top' }]} value={words} onChangeText={setWords}
+      multiline autoFocus accessibilityLabel="Your version of the message" />,
+    yes: (body: Json) => (changed ? { ...body, text: words!.trim() } : body),
+  };
+}
+
 function AskCard({ c, who, state, onDone, canAct, offline, open }: { c: A.Card; who: A.Helper | undefined; state: Json; onDone: () => void; canAct: boolean; offline: boolean; open: (c: A.Card) => void }) {
   const [reply, setReply] = useState('');
   const [oops, setOops] = useState(false);
@@ -851,11 +903,12 @@ function AskCard({ c, who, state, onDone, canAct, offline, open }: { c: A.Card; 
   const stuck = when !== null && (!when.trim() || !sched || sched.bad);
   // Chief's plan: "Change it" opens a box, and what the person types goes back to Chief for a new plan.
   const [change, setChange] = useState<string | null>(null);
+  const edit = useDraftEdit(c);
   return (
     <Card ask>
       <AskHead c={c} who={who} />
       <T style={s.askWords}>{question}</T>
-      <AskEvidence c={c} open={false} readAll={<Btn label="Read all" onPress={() => open(c)} />} />
+      {edit.box || <AskEvidence c={c} open={false} readAll={<Btn label="Read all" onPress={() => open(c)} />} />}
       {oops && <T tone="pinkInk" style={s.small}>That didn't go through. Try again.</T>}
       {offline ? <T tone="mute" style={s.small}>You can answer once the home computer is back.</T>
         : !canAct ? <T tone="mute" style={s.small}>This phone watches; answer on another phone or the computer.</T> : c.kind === 'connect' ? (
@@ -903,7 +956,8 @@ function AskCard({ c, who, state, onDone, canAct, offline, open }: { c: A.Card; 
         </View>
       ) : yes ? (
         <View style={s.chips}>
-          <Btn go label={yes.label} onPress={() => act(yes.body)} />
+          <Btn go label={yes.label} disabled={edit.empty} onPress={() => act(edit.yes(yes.body))} />
+          {edit.can && <Btn label={edit.editing ? 'Use the original' : 'Edit'} onPress={edit.toggle} />}
           {deny && <Btn label={deny.label} onPress={() => act(deny.body)} />}
         </View>
       ) : null}
@@ -929,6 +983,7 @@ function AskSheet({ c, who, chiefSays, canAct, onClose }: { c: A.Card; who: A.He
   // Every way out that isn't the one yes — an unpriced order has two, and neither is a yes.
   const rest = c.choices.filter((x) => x !== yes && x.body.scope !== 'always');
   const always = c.choices.find((x) => x.body.scope === 'always');
+  const edit = useDraftEdit(c);
   return (
     <Modal visible transparent animationType={motion.sheet(reduce)} onRequestClose={onClose}>
       <Pressable style={s.scrim} onPress={onClose}>
@@ -936,13 +991,14 @@ function AskSheet({ c, who, chiefSays, canAct, onClose }: { c: A.Card; who: A.He
           <View style={[s.grabber, { backgroundColor: t.line2 }]} />
           <AskHead c={c} who={who} />
           <T style={s.askQ}>{question}</T>
-          <AskEvidence c={c} open={open} readAll={<Btn label="Read all" onPress={() => setOpen(true)} />} />
+          {edit.box || <AskEvidence c={c} open={open} readAll={<Btn label="Read all" onPress={() => setOpen(true)} />} />}
           {c.review && c.order && !c.order.known && <T tone="mute" style={s.small}>So nothing is counted against the monthly limit.</T>}
           {!!chiefSays && <View style={s.row}><Face who="chief" size={20} /><T tone="ink2" style={{ flex: 1 }}><Text style={s.b}>Chief:</Text> {A.plain(chiefSays)}</T></View>}
           {oops && <T tone="pinkInk" style={s.small}>That didn't go through. Try again.</T>}
           {canAct ? <>
+            {edit.can && <Btn big label={edit.editing ? 'Use the original' : 'Edit'} onPress={edit.toggle} />}
             {rest.map((x) => <Btn key={x.label} big label={x.label} onPress={() => act(x.body)} />)}
-            {yes && <Btn go big label={yes.label} onPress={() => act(yes.body)} />}
+            {yes && <Btn go big label={yes.label} disabled={edit.empty} onPress={() => act(edit.yes(yes.body))} />}
           </> : <Btn big label="Close" onPress={onClose} />}
           {always && canAct && <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: t.line, paddingTop: 10 }}><Btn ghost big label={always.label} onPress={() => act(always.body)} /></View>}
           {c.kind === 'spend' && <T tone="mute" style={[s.small, { textAlign: 'center' }]}>Anything that costs money asks you every time.</T>}

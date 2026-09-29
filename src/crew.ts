@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { execFile, spawn, type ChildProcess } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { closeSync, constants, copyFileSync, existsSync, fstatSync, ftruncateSync, mkdirSync, openSync, readFileSync, readlinkSync, realpathSync, rmSync, statSync, writeFileSync, writeSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { Type } from 'typebox';
@@ -82,6 +82,8 @@ export function quietNow(quiet: string | null | undefined, at = new Date()) {
 }
 
 const sha = (s: string) => createHash('sha256').update(s).digest('hex');
+/** A draft in the person's name fits on its card whole, so what they approve (or change) is all of it. */
+const DRAFT_CAP = 20_000;
 const clean = (s: unknown, n: number) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n);
 /** What each batch item hears: its one item and the shared question. The parent's own prompt stays out of it,
  *  so eight parallel items don't each pay for the whole conversation. */
@@ -1886,7 +1888,7 @@ export class Crew {
   }
 
   /** Allow once, for this task, or always for the bot; or not now. Spending is never more than once. */
-  async answer(askId: number, body: { answer?: string; scope?: string; schedule?: string; change?: string }, viewer = OWNER) {
+  async answer(askId: number, body: { answer?: string; scope?: string; schedule?: string; change?: string; text?: string }, viewer = OWNER) {
     const ask = this.db.get("SELECT * FROM asks WHERE id = ? AND state = 'open'", askId);
     if (!ask) throw fail('that question is already settled', 409);
     if ((ask.member ?? OWNER) !== viewer) throw fail('that question is someone else’s', 403);
@@ -1898,6 +1900,18 @@ export class Crew {
     // A suggestion takes effect on yes, before the card closes: if it can't, the card stays open. A routine offered by
     // Chief takes the time the person changed on the card ("Change time"), then the same yes.
     if (body.schedule && ask.kind === 'propose' && detail.routine) detail.routine.schedule = String(body.schedule);
+    // A draft the person changed before Approve: their words are the ones kept, in the draft's own file. Still nothing is sent.
+    if (body.text !== undefined) {
+      const text = String(body.text).trim();
+      if (ask.kind !== 'propose' || !detail.draft || body.answer !== 'allow') throw fail('only a draft you approve takes new words');
+      if (!text || text.length > DRAFT_CAP) throw fail(text ? 'that draft is too long' : 'the draft is empty');
+      if (text !== String(detail.preview?.body ?? '').trim()) {
+        // A card from before drafts showed whole may hold only the start of it: changing that would cut the rest.
+        if (sha(String(detail.preview?.body ?? '')) !== detail.draft.sha) throw fail('that draft is too long to change here', 409);
+        this.keepDraft(ask.bot, detail.draft.path, text);
+        detail.draft = { ...detail.draft, sha: sha(text), edited: true };
+      }
+    }
     if (ask.kind === 'propose' && body.answer === 'allow') this.adopt(ask.bot, detail, ask.member ?? OWNER);
     if (ask.kind === 'propose' && body.answer === 'deny' && detail.draft) this.db.event('draft.rejected', ask.bot, { ...detail.draft, task: detail.task });
     const change = ask.kind === 'propose' && detail.plan && body.answer === 'deny' ? String(body.change ?? '').trim().slice(0, 2000) : '';
@@ -2024,8 +2038,9 @@ export class Crew {
           if (!existsSync(full)) throw new Error(`no file at ${p.path}`);
           const text = readFileSync(full, 'utf8').trim(), to = clean(p.to, 80), b = this.bot(botId)!;
           if (!text) throw new Error('the draft is empty');
+          if (text.length > DRAFT_CAP) throw new Error(`the draft is over ${DRAFT_CAP} characters; shorten it`);
           return this.propose(botId, `${b.display} drafted something for ${to}. Nothing is sent: you post it yourself.`,
-            { draft: { to, path: full.slice(disk.botDir(this.cfg, botId).length + 1), sha: sha(text) }, preview: { head: `Draft for ${to}`, body: text.slice(0, 4000) } });
+            { draft: { to, path: full.slice(disk.botDir(this.cfg, botId).length + 1), sha: sha(text) }, preview: { head: `Draft for ${to}`, body: text } });
         }),
       tool('crew_verify', 'Have Crewhouse itself check a fix you propose to a git checkout in your folder: it applies only the check (`tests`, the ' +
         'paths in the patch that test the fix) to `base` and runs `command`, which must fail; then the whole patch, which must pass; it runs in a ' +
@@ -2179,6 +2194,23 @@ export class Crew {
       this.openAsk(botId, undefined, title, { ...detail, task: t?.id }, 'propose', who);
     }
     return { asked: true, note: 'The person sees your suggestion on a card. Carry on; nothing changes unless they say yes.' };
+  }
+
+  /** Writes the person's version of a draft over the helper's, never through a link out of the helper's folder: the
+   *  helper can still be changing that folder, so the file opened is checked, not just the path beforehand. */
+  private keepDraft(bot: string, path: string, text: string) {
+    const root = realpathSync(disk.botDir(this.cfg, bot)) + '/', full = disk.insideBot(this.cfg, bot, path);
+    const moved = () => fail('that draft has moved', 409);
+    let fd: number;
+    try { fd = openSync(join(realpathSync(dirname(full)), basename(full)), constants.O_WRONLY | constants.O_CREAT | constants.O_NOFOLLOW, 0o644); } catch { throw moved(); }
+    try {
+      let at = root; // where the open file really is; without /proc, the folder resolved just before
+      try { at = readlinkSync(`/proc/self/fd/${fd}`); } catch { at = join(realpathSync(dirname(full)), basename(full)); }
+      const st = fstatSync(fd);
+      if (!at.startsWith(root) || !st.isFile() || st.nlink !== 1) throw moved();
+      ftruncateSync(fd);
+      writeSync(fd, `${text}\n`);
+    } finally { closeSync(fd); }
   }
 
   /** The person said yes to a suggestion. */

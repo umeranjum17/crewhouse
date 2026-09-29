@@ -29,7 +29,8 @@
       "permissions": [
         "android.permission.ACCESS_WIFI_STATE",
         "android.permission.CHANGE_WIFI_MULTICAST_STATE",
-        "android.permission.CAMERA"
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "plugins": [
@@ -67,7 +68,7 @@
         "expo-image-picker",
         {
           "photosPermission": "Crewhouse lets you send a photo to a helper.",
-          "microphonePermission": false
+          "microphonePermission": "Crewhouse hears you only while the mic is on, to put what you say in the message box."
         }
       ],
       "expo-notifications"

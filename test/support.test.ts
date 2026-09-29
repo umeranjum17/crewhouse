@@ -3,7 +3,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { setup, settled, task } from './lab.ts';
 import * as disk from '../src/bots.ts';
@@ -46,6 +47,60 @@ test('Chief sees what each template knows, and a drafted reply waits on a card t
   assert.deepEqual([ok.to, ok.path, ok.task], ['muxr issue #208', 'files/support/208/reply.md', t2]);
   assert.equal(ok.sha, events(db, 'draft.rejected')[0].sha, 'the same words, by their hash');
   assert.equal(task(db, t2).state, 'done', 'a draft is not an act');
+  assert.ok(!ok.edited, 'approved as written');
+  done();
+});
+
+test('the person can change a draft before Approve: their words are the ones kept, and still nothing is sent', async () => {
+  const { root, cfg, db, crew, done } = setup();
+  crew.onboard('sir');
+  crew.recruit('support', 'Desk', 'person');
+  const space = disk.botDir(cfg, 'desk'), file = join(space, 'files', 'reply.md');
+  mkdirSync(join(space, 'files'), { recursive: true });
+  const card = () => db.get("SELECT * FROM asks WHERE bot = 'desk' AND kind = 'propose' AND state = 'open'");
+  const draft = async (words: string) => {
+    writeFileSync(file, words);
+    await settled(db, (await crew.post('desk', `draft it ${call('crew_draft', { path: 'files/reply.md', to: 'the school office' })}`))!.task);
+    return card()!.id;
+  };
+  let id = await draft('Hello, the form is in the bag.\n');
+  await assert.rejects(crew.answer(id, { answer: 'deny', text: 'Mine' }), /only a draft you approve/, 'a no keeps no words');
+  await assert.rejects(crew.answer(id, { answer: 'allow', text: '   ' }), /empty/);
+  await assert.rejects(crew.answer(id, { answer: 'allow', text: 'Mine' }, 2), /someone else/, 'only the person it is for can change it');
+  await crew.answer(id, { answer: 'allow', text: '  Hello, the signed form is in Ayaan\'s bag.\n\nThank you, Nadia  ' });
+  assert.equal(readFileSync(file, 'utf8'), "Hello, the signed form is in Ayaan's bag.\n\nThank you, Nadia\n", 'the person\'s version is the draft now');
+  const ok = events(db, 'draft.approved').at(-1);
+  assert.equal(ok.edited, true);
+  assert.equal(ok.sha, createHash('sha256').update("Hello, the signed form is in Ayaan's bag.\n\nThank you, Nadia").digest('hex'), 'the approval names the words the person kept');
+  assert.equal(db.get("SELECT COUNT(*) AS n FROM events WHERE kind IN ('mail.sent', 'message.sent')")!.n, 0, 'nothing went out');
+
+  id = await draft('Same words.\n');
+  await crew.answer(id, { answer: 'allow', text: 'Same words.' });
+  assert.ok(!events(db, 'draft.approved').at(-1).edited, 'unchanged words are not an edit');
+
+  // A helper that swaps its draft for a link out of its folder can't make the person's yes write there.
+  id = await draft('Hi.\n');
+  const outside = join(root, 'outside.txt');
+  writeFileSync(outside, 'untouched');
+  rmSync(file);
+  symlinkSync(outside, file);
+  await assert.rejects(crew.answer(id, { answer: 'allow', text: 'Overwrite' }), /moved/);
+  assert.equal(readFileSync(outside, 'utf8'), 'untouched');
+  assert.ok(card(), 'the card stays open when the words could not be kept');
+  // Nor through a link to a file that isn't there yet: the yes must not create it.
+  const fresh = join(root, 'fresh.txt');
+  rmSync(file);
+  symlinkSync(fresh, file);
+  await assert.rejects(crew.answer(id, { answer: 'allow', text: 'Overwrite' }), /moved/);
+  assert.ok(!existsSync(fresh), 'nothing was made outside the helper\'s folder');
+
+  // A card from before drafts showed whole holds only the start of a long draft: changing it would cut the rest.
+  rmSync(file);
+  id = await draft('Short.\n');
+  const d = JSON.parse(card()!.detail);
+  db.run('UPDATE asks SET detail = ? WHERE id = ?', JSON.stringify({ ...d, draft: { ...d.draft, sha: 'the-whole-longer-draft' } }), id);
+  await assert.rejects(crew.answer(id, { answer: 'allow', text: 'Short, changed.' }), /too long to change/);
+  assert.equal(readFileSync(file, 'utf8'), 'Short.\n');
   done();
 });
 

@@ -185,6 +185,7 @@ test('a helper\'s draft waits in Needs you, named for who it goes to; the row\'s
   assert.equal(c.head, 'Scout drafted a message for the school office', 'the card says what it is and who it is for, never "learned something"');
   assert.deepEqual(c.choices.map((x: any) => x.label), ['Approve', 'Not now'], 'the no-send approval stays');
   assert.match(c.preview?.body ?? '', /trip form/, 'the sheet the row opens shows the words');
+  assert.equal(c.draftText, "Hello, the signed trip form is in Ayaan's bag this morning. Thank you, Nadia", 'the words to change are the draft itself, not a tidied copy');
   const rows = A.needsYou(s);
   assert.equal(rows.find((r: any) => r.id === ask.id)?.head, 'Scout drafted a message for the school office', 'the draft is a Needs-you row, ready to tap');
   assert.ok(!rows.some((r: any) => /learned something/.test(r.head)));
@@ -1254,4 +1255,19 @@ test('the office moves on live events; the refresh stays the source of truth', (
   u = A.officeEvent(u, { seq: 28, at: OTN, kind: 'task.failed', bot: 'pip', data: { task: 51, title: 'Car insurance renewal' } });
   assert.equal(u.crew.find((c) => c.id === 'pip')!.mood, 'error');
   for (const view of [v, u]) assert.doesNotMatch(shown(view), FORBIDDEN);
+});
+
+test('speaking to Chief stays on the device and only fills the box: the person still taps send', () => {
+  const src = (f: string) => readFileSync(join(import.meta.dirname, '..', f), 'utf8');
+  const web = src('web/src/voice.ts');
+  assert.match(web, /processLocally: true/, 'the browser is asked for its on-device recognizer only');
+  assert.doesNotMatch(web, /^import|\bfetch\(|XMLHttpRequest|WebSocket|api\./m, 'the voice helper talks to nothing but the recognizer');
+  assert.match(src('mobile/modules/crewhouse-net/android/src/main/java/expo/modules/crewhousenet/CrewhouseVoiceModule.kt'), /createOnDeviceSpeechRecognizer/, 'the phone uses its on-device recognizer only');
+  assert.doesNotMatch(src('mobile/modules/crewhouse-net/android/src/main/java/expo/modules/crewhousenet/CrewhouseVoiceModule.kt'), /createSpeechRecognizer\(/);
+  // What was heard goes into the box through the composer's own change; the send button stays the only way out.
+  const parts = src('web/src/parts.tsx'), app = src('mobile/App.tsx');
+  assert.match(parts, /useVoice\(chat === 'chief', text, \(t\) => change\(t\)\)/);
+  assert.match(app, /<Mic on=\{chat === 'chief'\} text=\{text\} put=\{change\} \/>/);
+  for (const f of [parts.slice(parts.indexOf('function useVoice'), parts.indexOf('export function Composer')), app.slice(app.indexOf('function Mic('), app.indexOf('function Composer('))])
+    assert.doesNotMatch(f, /send\(|onSend|api\./, 'the mic never sends');
 });
