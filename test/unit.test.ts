@@ -1128,6 +1128,33 @@ test('Chief proposes helper job recipes; nothing writes until Use it, and crew_j
   done();
 });
 
+test('Write it for me: crew_job takes the nested five-part shape too, and the thread keeps the person\'s own words', async () => {
+  const { db, crew, done } = setup();
+  crew.onboard('sir');
+  crew.recruit('scout', 'Scout', 'person');
+  const botDir = join(crew['cfg'].crewDir, 'bots', 'scout');
+  const before = readFileSync(join(botDir, 'AGENTS.md'), 'utf8');
+  const parts = { does: 'Sort bills and letters.', aim: 'Triage the post pile.', gets: 'The person\u2019s rough brief.', how: 'Sort oldest first, flag deadlines.', great: 'A tidy pile; for example, bills by due date.' };
+  // The gateway shows the model no parameter schema for crew_job, so it sends the nested
+  // five-part shape it knows from crew_create. That must draft, not reject.
+  const { task: id } = (await crew.post('chief', `Please ${call('crew_job', { bot: 'Scout', job: parts })}`))!;
+  await settled(db, id);
+  const ask = db.get("SELECT * FROM asks WHERE bot = 'chief' AND kind = 'propose' AND state = 'open'");
+  assert.ok(ask, 'a nested five-part call drafts a proposal card');
+  assert.deepEqual(JSON.parse(ask!.detail).job, { bot: 'scout', ...parts });
+  assert.equal(readFileSync(join(botDir, 'AGENTS.md'), 'utf8'), before, 'nothing writes until Use it');
+  await crew.answer(ask!.id, { answer: 'allow' });
+  assert.deepEqual(disk.readJob(crew['cfg'], 'scout'), parts);
+  // The draft route shows the person's rough words in Chief's thread, never the internal prompt.
+  const idea = 'sort my bills and letters, oldest first, do not pay or send anything';
+  const { task: t2 } = (crew as any).requestChief(`Write Scout's job from: ${idea}. Use crew_job.`, 1, idea);
+  const shown = db.get("SELECT text FROM messages WHERE task_id = ? AND author = 'person'", t2)?.text;
+  assert.equal(shown, idea);
+  assert.doesNotMatch(shown!, /crew_job/);
+  await settled(db, t2);
+  done();
+});
+
 test('photos with a message: kept in the helper\'s files, shown in the chat, seen by the model, and through Chief too', async () => {
   const { db, crew, cfg, done } = setup();
   crew.onboard('sir');

@@ -1034,9 +1034,10 @@ export class Crew {
   }
 
   /** A targeted request that must stay with Chief rather than pass through helper routing. */
-  requestChief(text: string, member = OWNER) {
+  requestChief(text: string, member = OWNER, said?: string) {
     if (!text.trim()) throw Object.assign(new Error('empty message'), { status: 400 });
-    return this.addTask(CHIEF, text.trim(), 'person', undefined, member);
+    // The thread shows the person's own words (`said`), never crewd's instruction to the model.
+    return this.addTask(CHIEF, text.trim(), 'person', undefined, member, undefined, said?.trim() ? said.trim() : text.trim());
   }
 
   /** Plainly addressed helper requests go straight there; unresolved requests become Chief tasks immediately.
@@ -2007,11 +2008,17 @@ export class Crew {
             { create: { name, job, soul, first: p.first ? String(p.first).slice(0, 2000) : undefined },
               preview: { head: `${name}, a new helper`, body: `${disk.jobPreview(job)}\n\n${body}\n\n${name} can use the web, a browser of its own and its own files, and asks you before anything leaves this computer or costs money.` } });
         }),
-      tool('crew_job', 'Write the five parts of a helper’s job when the person asks. Nothing changes until they say Use it.',
-        { bot: Type.String(), does: Type.String(), aim: Type.String(), gets: Type.String(), how: Type.String(), great: Type.String() }, (p) => {
+      tool('crew_job', 'Write the five parts of a helper’s job when the person asks. Nothing changes until they say Use it. ' +
+        'Pass `bot` and the five parts flat, or the five parts inside `job` (the shape crew_create uses).',
+        { bot: Type.String(), does: Type.Optional(Type.String()), aim: Type.Optional(Type.String()), gets: Type.Optional(Type.String()), how: Type.Optional(Type.String()), great: Type.Optional(Type.String()), job: Type.Optional(Type.Any()) }, (p) => {
           const b = this.bot(String(p.bot ?? '').toLowerCase());
           if (!b || b.id === CHIEF) throw fail(`no helper called ${p.bot}`, 404);
-          const job = Object.fromEntries(['does', 'aim', 'gets', 'how', 'great'].map((k) => [k, String(p[k] ?? '').replace(/\r/g, '').trim()])) as disk.Job;
+          // The gateway shows the model no parameter schema for this tool, so it sends the nested
+          // five-part shape it knows from crew_create. Take either shape, never reject a format.
+          let inner: unknown = p.job;
+          if (typeof inner === 'string') { try { inner = JSON.parse(inner); } catch { inner = undefined; } }
+          const src = (inner && typeof inner === 'object' ? inner : p) as Record<string, unknown>;
+          const job = Object.fromEntries(['does', 'aim', 'gets', 'how', 'great'].map((k) => [k, String(src[k] ?? '').replace(/\r/g, '').trim()])) as disk.Job;
           disk.validateJob(job);
           return this.propose(CHIEF, `Chief wrote ${b.display}'s job`, { job: { bot: b.id, ...job }, preview: { head: `${b.display}'s job`, body: disk.jobPreview(job) } });
         }),
