@@ -27,8 +27,6 @@ export function provider(key: string) {
 /** A time in the person's own words: "9:08 pm". Never a raw stamp. */
 export const clock = (at: number) => new Date(at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).replace(/\s([AP])M$/, (m) => m.toLowerCase());
 
-export const signInError = (name: string) => `${name} didn't finish the sign-in. Tap Sign in with ${name} to try again.`;
-
 type View = { state: 'waiting' | 'done' | 'failed'; via: 'browser' | 'code'; url?: string; code?: string; error?: string; why?: string };
 
 /** The person-facing half of the engine's sign-in: who is signed in to what, and the one card that drives the
