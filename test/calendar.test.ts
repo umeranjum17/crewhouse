@@ -68,19 +68,34 @@ test('calendar-axi: the day, the week, free time; adding twice adds once; move k
   assert.match(await runCalendar(token, ['move', 'ev1abc', `${tomorrow} 14:00`]), /^moved: \{id: ev1abc, when: \w{3} \d{4}-\d\d-\d\d 14:00-15:00\}$/);
   assert.equal(await runCalendar(token, ['cancel', 'ev2abc']), 'cancelled: {id: ev2abc}');
   assert.equal(store.size, 2);
-  assert.match(await runCalendar(token, []), /^today\[0\]\{id,when,title\}:\nnext: nothing more today\nhelp\[7\]:/);
+  assert.match(await runCalendar(token, []), /^today\[0\]\{id,when,title\}:\nnext: nothing more today\nhelp\[8\]:/);
 
   // Nothing but Google's own event ids reaches the address; plain errors with the help.
   assert.match(await runCalendar(token, ['cancel', '../../calendarList']), /^error: calendar cancel <id>/);
-  assert.match(await runCalendar(token, ['frobnicate']), /^error: no command "frobnicate"\nhelp\[7\]:/);
+  assert.match(await runCalendar(token, ['frobnicate']), /^error: no command "frobnicate"\nhelp\[8\]:/);
   await assert.rejects(runCalendar(token, ['move', 'nosuchev1', 'tomorrow']), /No such event/);
   await assert.rejects(runCalendar(async () => null, ['week']), /not connected any more/);
   assert.ok(!asked.some((a) => /calendarList|\.\./.test(a)));
 });
 
+test('calendar next [n]: the next timed events across two weeks, no ask', async () => {
+  store.clear();
+  const morrow = ymd(day(1)), overmorrow = ymd(day(2));
+  const ids = [];
+  for (const [title, when] of [['First', `${morrow} 09:00`], ['Second', `${morrow} 15:00`], ['Third', `${overmorrow} 10:00`]]) {
+    ids.push(/id: (\w+)/.exec(await runCalendar(token, ['add', title, when]))![1]);
+  }
+  await runCalendar(token, ['add', 'Day off', morrow]);
+  const row = (id: string, d: Date, title: string) => `  ${id},${whenOf({ start: d, end: new Date(d.getTime() + 3_600_000), allDay: false })},${title}`;
+  assert.equal(await runCalendar(token, ['next', '2']), ['next[2]{id,when,title}:', row(ids[0], day(1, 9), 'First'), row(ids[1], day(1, 15), 'Second')].join('\n'));
+  assert.match(await runCalendar(token, ['next']), /^next\[3\]/, 'no count means three');
+  assert.ok(!(await runCalendar(token, ['next'])).includes('Day off'), 'all-day events are not next');
+  assert.equal(effectOf('calendar', { args: ['next', '2'] }, { bot: 'Pip', space: '/tmp/pip', secret: [] }).kind, 'safe');
+});
+
 test('the gate reads the calendar command: looking is free, adding and moving ask, cancelling asks as a delete', () => {
   const s = { bot: 'Pip', space: '/tmp/pip', secret: [] };
-  for (const args of [[], ['today'], ['week', '--from', 'tomorrow'], ['free', 'tomorrow']]) assert.equal(effectOf('calendar', { args }, s).kind, 'safe');
+  for (const args of [[], ['today'], ['week', '--from', 'tomorrow'], ['free', 'tomorrow'], ['next'], ['next', '2']]) assert.equal(effectOf('calendar', { args }, s).kind, 'safe');
   assert.deepEqual(effectOf('calendar', { args: ['add', 'Dentist', 'tomorrow 09:00', '--where', 'High St'] }, s), {
     kind: 'send', words: 'Pip wants to add “Dentist” to your Google Calendar, tomorrow 09:00.', key: 'app:Google Calendar:add an event', covers: '“add an event” in your Google Calendar' });
   assert.equal((effectOf('calendar', { args: ['move', 'ev1abc', 'tomorrow 14:00'] }, s) as { words: string }).words, 'Pip wants to move an event on your Google Calendar to tomorrow 14:00.');

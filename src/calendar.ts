@@ -1,7 +1,6 @@
 // calendar-axi: the person's own Google Calendar as one small command-shaped tool, in place of Google's hosted MCP server
-// (nine tool schemas, about 5,000 tokens on every turn). crewd runs it itself, on the member's Calendar connection: the
-// token never leaves crewd. Answers are short TOON (`name[N]{fields}:` then rows). The gate reads the command
-// (src/policy.ts): looking is free, adding and moving ask, cancelling asks as a delete.
+// (nine tool schemas, about 5,000 tokens on every turn). crewd runs it itself, on the member's Calendar connection; the token never leaves crewd.
+// Answers are short TOON (`name[N]{fields}:` then rows). The gate (src/policy.ts) reads the command: looking is free, adding and moving ask, cancelling asks as a delete.
 import { createHash } from 'node:crypto';
 import { tool } from './engine.ts';
 
@@ -12,6 +11,7 @@ const HELP = [
   'calendar                      today, and what is next',
   'calendar week [--from <day>]  seven days of events',
   'calendar free <day>           free slots between 08:00 and 20:00',
+  'calendar next [n]             the next n timed events (default 3)',
   'calendar add "<title>" <when> [--end <when>] [--where <place>] [--note <text>] [--key <k>]   (adding twice is safe)',
   'calendar move <id> <when>     keeps its length',
   'calendar cancel <id>',
@@ -103,8 +103,7 @@ export async function runCalendar(token: Token, args: string[]): Promise<string>
     if (!from) return bad(`"${o.from}" is not a day`);
     const start = new Date(from.at.getFullYear(), from.at.getMonth(), from.at.getDate());
     const list = await events(token, start, addDays(start, 7));
-    const timed = list.filter((e) => !e.allDay);
-    const clashes = timed.filter((e, i) => timed.slice(0, i).some((p) => p.end > e.start)).length;
+    const clashes = list.filter((e) => !e.allDay).filter((e, i, t) => t.slice(0, i).some((p) => p.end > e.start)).length;
     return [table('events', ['id', 'when', 'title', 'where'], list.map((e) => ({ id: e.id, when: whenOf(e), title: e.title, where: e.where }))),
       `total: ${list.length}`, `clashes: ${clashes}`].join('\n');
   }
@@ -121,6 +120,8 @@ export async function runCalendar(token: Token, args: string[]): Promise<string>
     if (close > at) slots.push({ from: hm(at), to: hm(close) });
     return table('slots', ['from', 'to'], slots);
   }
+  if (cmd === 'next') return table('next', ['id', 'when', 'title'],
+    (await events(token, new Date(), addDays(new Date(), 14))).filter((e) => !e.allDay).slice(0, Math.max(1, Number(rest[0]) || 3)).map((e) => ({ id: e.id, when: whenOf(e), title: e.title })));
   if (cmd === 'add') {
     const [title, when] = rest;
     const start = parseWhen(when ?? '');

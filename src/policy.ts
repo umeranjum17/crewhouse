@@ -118,15 +118,14 @@ export function effectOf(tool: string, input: Record<string, any>, s: Seen): Eff
       : { kind: 'send', press: true, words: `${s.bot} wants to act as you on ${act.host}, a site you signed it in to.` };
   }
   if (tool === 'calendar') {
-    // calendar-axi (src/calendar.ts): the card says what and when from the command itself.
     const [cmd = 'today', ...rest] = (Array.isArray(input.args) ? input.args : []).map(String);
     const words = rest.filter((a, i) => !a.startsWith('--') && !rest[i - 1]?.startsWith('--')).map((w) => w.replace(/\s+/g, ' ').trim().slice(0, 80));
-    if (['today', 'week', 'free'].includes(cmd)) return { kind: 'safe' };
+    if (['today', 'week', 'free', 'next'].includes(cmd)) return { kind: 'safe' };
     const key = `app:Google Calendar:${cmd} an event`;
     if (cmd === 'add') return { kind: 'send', words: `${s.bot} wants to add “${words[0] ?? ''}” to your Google Calendar, ${words[1] ?? ''}.`, key, covers: coversOf(key) };
     if (cmd === 'move') return { kind: 'send', words: `${s.bot} wants to move an event on your Google Calendar to ${words[1] ?? ''}.`, key, covers: coversOf(key) };
     if (cmd === 'cancel') return { kind: 'delete', words: `${s.bot} wants to cancel an event on your Google Calendar.`, key, covers: coversOf(key) };
-    return { kind: 'refuse', why: 'Your calendar can: today, week, free, add, move or cancel.' };
+    return { kind: 'refuse', why: 'Your calendar can: next, today, week, free, add, move or cancel.' };
   }
   // mail-axi (src/mail.ts) only reads: its token is gmail.readonly.
   if (tool === 'mail') {
