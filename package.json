@@ -35,11 +35,13 @@
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
+    "@types/three": "0.186.0",
     "@types/ws": "^8.18.1",
     "esbuild": "^0.28.0",
     "qrcode": "^1.5.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "three": "0.186.1",
     "typescript": "^5.7.0"
   }
 }

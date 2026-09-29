@@ -4,7 +4,8 @@
 // ?demo=resting, ?demo=connect (a helper asks for Google Calendar in chat), ?demo=nogoogle (Google not on for the house), ?demo=share (the crew's share used up today, $4 spent), ?demo=claim (Scout asks to fill a line of an unclaimed-money claim),
 // ?demo=return (Scout asks to press a shop's Start return), ?demo=chase (Scout's chase email as a draft to send), ?demo=renewal (Scout's renewal warning and the cancellation email as a draft to send), ?demo=day (Scout's plan of the day, three things in order),
 // ?demo=paper (Scout's reply to the school as a draft to approve — the paper, sorted), ?demo=meals (this week's dinners shopped into a cart, waiting on its checkout card),
-// ?demo=watch (the name watch heard: one source-linked line), ?demo=neighbour (the weekly brief as a document), ?demo=brief (the month in brief as a document).
+// ?demo=watch (the name watch heard: one source-linked line), ?demo=neighbour (the weekly brief as a document), ?demo=brief (the month in brief as a document),
+// ?demo=office (Home's office with first looks on the desks and a helper busy with another job), ?demo=calm (nothing of hers on the go).
 // &sheet=signin or &sheet=connect opens that sheet, and &phase=… pins it to one state.
 import type { Json } from './api.ts';
 import { AIS } from './adapter.ts';
@@ -100,6 +101,14 @@ const events = [
   ev(12, 2, 'task.progress', 'reel', { task: 41, text: 'Writing “Happy Birthday, Mum”' }),
   ev(13, 1, 'task.progress', 'scout', { task: 42, text: 'Comparing three airlines' }),
 ];
+// ?demo=office: the room with first looks on the desks (Reel's first cut, Scout's flights side by side) and Pip busy
+// with someone else's job: live, with no task of hers. ?demo=calm: nothing of hers on the go, so the room is idle.
+if (variant === 'office') {
+  events.push(ev(14, 1, 'file.delivered', 'reel', { task: 41, path: 'files/happy-birthday-first-cut.mp4' }),
+    ev(15, 1, 'file.delivered', 'scout', { task: 42, path: 'files/flights-to-lahore.xlsx' }));
+  Object.assign(bots.find((b) => b.id === 'pip')!, { live: 'working' });
+}
+if (variant === 'calm') for (const b of bots) Object.assign(b, { task: null, step: undefined });
 
 const state = {
   person: me === 1 ? { id: 1, name: 'Umer', address: 'sir', onboarded: 1 }
@@ -169,7 +178,7 @@ const state = {
         words: 'Scout wants to place this order at grocer.example: Basmati rice 10 lb, Whole milk (1 gal) x2, Garlic, 2 kg. Total $43.10.',
         preview: { head: 'The order at grocer.example', body: 'Basmati rice 10 lb — $24.00\nWhole milk (1 gal) x2 — $7.90\nGarlic, 2 kg — $6.20\nTotal $43.10' },
         order: { shown: '$43.10', known: true, dollars: true } } }]
-    : firstRun || variant.startsWith('voice-') ? [] : asks.filter((a) => a.member === me),
+    : firstRun || variant === 'calm' || variant.startsWith('voice-') ? [] : asks.filter((a) => a.member === me),
   events,
   resting: variant === 'resting' ? { chatgpt: now + 95 * min } : {},
   routines: [
@@ -292,6 +301,10 @@ if (variant === 'day') pages.scout = { messages: [
   { id: 2, author: 'bot', text: 'Two fixed things today, and one form to sign.\n1. 8:40 am \u2014 Sign Ayaan\u2019s trip form, the school office wants it before the run.\n2. 1:15 pm \u2014 Call the shop back about the espresso machine, the refund waits on what you tell them.\n3. 6:30 pm \u2014 Pack the kit bag for tomorrow\u2019s sports day, it goes in the car.\nThe rest of the mail can wait until tomorrow. Want me to bring you a list like this every weekday morning?' },
 ] };
 /** What crewd read out of that workbook (src/workbooks.ts): the demo\u2019s own copy, in crewd\u2019s shape. */
+// Scout's first look at the flights (?demo=office): three airlines side by side.
+const flights = { sheets: [{ name: 'Flights', total: 4, rows: [['Airline', 'Leaves', 'Direct', 'Return fare'],
+  ['Emirates', 'Fri 19 Dec, 21:40', 'No, via Dubai', '$1,184'], ['Qatar Airways', 'Sat 20 Dec, 08:15', 'No, via Doha', '$1,092'],
+  ['PIA', 'Fri 19 Dec, 23:55', 'Yes', '$968']] }] };
 const book = {
   sheets: [
     { name: 'Daily dashboard', total: 6, rows: [
@@ -409,7 +422,7 @@ export async function demoCall(method: string, path: string, _body?: Json) {
   }
   if (method === 'GET' && path.startsWith('/api/accounts')) return accounts;
   // The workbook crewd reads for the card and the panel (src/workbooks.ts): the tabs, headings and first rows.
-  if (method === 'GET' && path.startsWith('/api/workbook')) return book;
+  if (method === 'GET' && path.startsWith('/api/workbook')) return path.includes('flights') ? flights : book;
   // The document crewd reads for its card and panel (src/documents.ts): the headings, paragraphs, lists and tables —
   // a delivered .md is read the same way (the meals demo's plan and list), never opened as the raw file.
   if (method === 'GET' && path.startsWith('/api/document')) return path.includes('dinners-and-shopping-list.md') ? { text: [

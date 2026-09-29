@@ -15,7 +15,8 @@ cpSync(root + 'manifest.webmanifest', root + 'dist/manifest.webmanifest'); // "S
 // Content-named bundles: the browser caches each build forever, and a changed build simply gets a new name.
 const built = await build({
   entryPoints: [root + 'src/main.tsx', root + 'src/styles.css'],
-  entryNames: '[name]-[hash]', metafile: true,
+  // Split so a dynamic import() is its own file: three.js (the office's 3D room) loads only once Home has painted.
+  entryNames: '[name]-[hash]', chunkNames: 'chunk-[hash]', splitting: true, format: 'esm', metafile: true,
   nodePaths: [new URL('../node_modules/', import.meta.url).pathname], // a copy of the tree built from elsewhere still resolves this checkout's packages
   outdir: root + 'dist', bundle: true, minify: true, sourcemap: true, target: 'es2022', jsx: 'automatic',
   define: { 'process.env.NODE_ENV': '"production"' }, logLevel: 'warning',
@@ -24,11 +25,11 @@ const built = await build({
   alias: { 'react-native': root + 'src/rn-web.tsx' },
   external: ['/fonts/*'],
 });
-// The shell must name the hashed bundles, or the browser would never find them.
+// The shell must name the hashed entry bundles, or the browser would never find them; chunks are found by import().
 let html = readFileSync(root + 'dist/index.html', 'utf8');
-for (const f of Object.keys(built.metafile.outputs)) {
-  if (/\.css$/.test(f)) html = html.replace('/styles.css', '/' + basename(f));
-  if (/\.js$/.test(f)) html = html.replace('/main.js', '/' + basename(f));
+for (const [f, o] of Object.entries(built.metafile.outputs)) {
+  if (o.entryPoint?.endsWith('styles.css') && /\.css$/.test(f)) html = html.replace('/styles.css', '/' + basename(f));
+  if (o.entryPoint?.endsWith('main.tsx') && /\.js$/.test(f)) html = html.replace('/main.js', '/' + basename(f));
 }
 writeFileSync(root + 'dist/index.html', html);
 console.log('web UI built into ' + root + 'dist');

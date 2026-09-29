@@ -606,7 +606,7 @@ test('no jargon anywhere: the machinery\'s words never reach a person', () => {
     return [...lits, ...jsx].filter((l) => !TOKENY.test(l.trim()));
   };
   const srcDir = join(import.meta.dirname, '..', 'web', 'src');
-  for (const f of ['main.tsx', 'parts.tsx', 'flows.tsx', 'dialog.ts', 'draft.ts', 'kept.ts', 'chat-md.ts', 'demo.ts', 'adapter.ts'])
+  for (const f of ['main.tsx', 'parts.tsx', 'flows.tsx', 'office.tsx', 'diorama.ts', 'dialog.ts', 'draft.ts', 'kept.ts', 'chat-md.ts', 'demo.ts', 'adapter.ts'])
     for (const w of prose(readFileSync(join(srcDir, f), 'utf8')))
       assert.doesNotMatch(w, JARGON, `${f} shows: ${w.trim().slice(0, 80)}`);
   const app = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');

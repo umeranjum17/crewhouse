@@ -10,6 +10,7 @@ type Helper = ReturnType<typeof A.crew>[number];
 import { AiMark, AskCard, Banner, AskSheet, attempt, Celebrate, setChiefMood, setNight, ChiefArt, Composer, Face, Dots, Logo, Media, ChatText, PalArt, Pill, Splash, Steps, Toasts, toast, useListen, PreviewPanel } from './parts.tsx';
 import { keepDraft } from './draft.ts';
 import { Screen } from './screen.tsx';
+import { hear, Office } from './office.tsx';
 import { AccountCard, ConnectApp, ConnectCard, openTab, sheet, SignIn, Unreachable } from './flows.tsx';
 
 type View = 'home' | 'chief' | 'room' | 'crew' | 'add' | 'helper' | 'things' | 'routines' | 'settings' | 'apps' | 'ask' | 'share';
@@ -218,6 +219,14 @@ function HomeHero({ ctx, children }: { ctx: Ctx; children?: ReactNode }) {
   );
 }
 
+/** The desk frame shows from 900 px (styles.css); only the frame on screen holds the office, so it draws once. */
+function useWide() {
+  const q = useMemo(() => matchMedia('(min-width: 900px)'), []);
+  const [wide, setWide] = useState(q.matches);
+  useEffect(() => { const f = () => setWide(q.matches); q.addEventListener('change', f); return () => q.removeEventListener('change', f); }, [q]);
+  return wide;
+}
+
 /** An empty list, said warmly: a small mark and a plain line, never a blank box. */
 const Empty = ({ children }: { children: ReactNode }) => <div className="frame-empty"><span className="art orn" aria-hidden>{art.ORNAMENT}</span>{children}</div>;
 
@@ -231,6 +240,9 @@ function Home(ctx: Ctx) {
   const g = A.account(accounts, me);
   const toChief = async (t: string) => { const ok = await attempt(() => api.post('chief', t), undefined, true); if (ok) { refresh(); go('#/chief'); } return ok; };
   const needsHead = <div className="section-head"><span className="label">Needs you{cards.length > 0 && <span className="count">{cards.length}</span>}</span>{cards.length > 3 && <button className="link" onClick={() => setAllNeeds(!allNeeds)}>{allNeeds ? 'Show less' : `See all ${cards.length}`}</button>}</div>;
+  // The office is Home's top frame, inside the hero card: one room, drawn once for whichever frame is showing.
+  const wide = useWide();
+  const office = (frame: 'phone' | 'desk') => (frame === 'desk') === wide && <Office state={state} night={ctx.night} />;
   const nudges = <>
     {(g.state === 'signed-out' || g.notIncluded) && <AccountCard me={me} owner={ownerName(state)} isOwner={me === A.OWNER} g={g} onReady={refresh} />}
     {state.person.id === A.OWNER && <SetupRow state={state} accounts={accounts} tick={tick} />}
@@ -241,12 +253,12 @@ function Home(ctx: Ctx) {
   return (
     <div className="home">
       <div className="desk-col">
-        <div className="phone-only"><HomeHero ctx={ctx} />{nudges}</div>
+        <div className="phone-only"><HomeHero ctx={ctx}>{office('phone')}</HomeHero>{nudges}</div>
         {cards.length > 0 && <section className="home-section phone-only" aria-label="Needs you">{needsHead}<div className="list-group needs-card"><NeedsRows state={state} cards={cards} all={allNeeds} /></div></section>}
         <Chats state={state} refresh={refresh} /><JobList state={state} phone />
         <div className="desk">
+          <div className="desk-only desk-top"><HomeHero ctx={ctx}>{office('desk')}<div className="hero-ask"><Composer placeholder="Ask Chief anything" onSend={toChief} {...typeInto('chief')} /></div></HomeHero>{nudges}</div>
           <div className="desk-main">
-            <div className="desk-only"><HomeHero ctx={ctx}><div className="hero-ask"><Composer placeholder="Ask Chief anything" onSend={toChief} {...typeInto('chief')} /></div></HomeHero>{nudges}</div>
             <section className="home-section needs">{needsHead}<div className="list-group">{cards.length ? <NeedsRows state={state} cards={cards} all={allNeeds} /> : <Empty>All clear. Nothing needs you.</Empty>}</div></section>
             <section className="home-section working"><div className="label">Working now</div><div className="list-group">
               {works.length ? works.map((w) => { const h = A.crew(state).find((x) => x.id === w.helper); return <a key={w.helper} className="list-row" href={hrefOf(w.helper)}>
@@ -1133,7 +1145,7 @@ function App() {
     addEventListener('hashchange', onHash);
     refresh();
     let pending: any;
-    const stop = subscribe(() => { clearTimeout(pending); pending = setTimeout(refresh, 120); });
+    const stop = subscribe((e) => { hear(e); clearTimeout(pending); pending = setTimeout(refresh, 120); });
     const poll = setInterval(refresh, 15000); // belt and braces if the socket is quietly gone
     if (new URLSearchParams(location.search).has('celebrate')) setParty({ title: "Mum's birthday video", helper: 'reel' });
     return () => { removeEventListener('hashchange', onHash); stop(); clearInterval(poll); };
