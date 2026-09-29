@@ -47,8 +47,7 @@ async function browse() {
   const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
   const profile = temp(`office-browser-${Date.now()}`);
   const chrome = spawn(bin!, ['--headless=new', '--disable-dev-shm-usage', '--no-first-run', '--no-default-browser-check', '--use-angle=swiftshader', '--enable-unsafe-swiftshader',
-    '--remote-debugging-port=0', `--user-data-dir=${profile}`, '--window-size=1440,900', 'about:blank'], { stdio: 'ignore' });
-  after(() => { chrome.kill('SIGKILL'); server.close(); });
+    '--remote-debugging-port=0', `--user-data-dir=${profile}`, '--window-size=1440,900', 'about:blank'], { stdio: 'ignore', detached: true });
   const portFile = join(profile, 'DevToolsActivePort');
   await until('the browser to listen', () => existsSync(portFile) && readFileSync(portFile, 'utf8').includes('\n'), 30_000);
   const port = readFileSync(portFile, 'utf8').split('\n')[0];
@@ -56,6 +55,16 @@ async function browse() {
   await until('a page', async () => (page = ((await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()) as any[]).find((t) => t.type === 'page')), 10_000);
   const ws = new WebSocket(page!.webSocketDebuggerUrl);
   await new Promise((r, j) => { ws.once('open', r); ws.once('error', j); });
+  after(async () => {
+    // Chrome's helper processes keep writing the profile after the main one exits (see test/teach.test.ts):
+    // end the whole group and wait for it, so the scratch cleanup never unlinks a live profile.
+    ws.close();
+    server.close();
+    if (chrome.exitCode === null && chrome.signalCode === null) {
+      try { process.kill(-chrome.pid!, 'SIGKILL'); } catch { /* already gone */ }
+      await until('the browser to exit', () => chrome.exitCode !== null || chrome.signalCode !== null, 10_000);
+    }
+  });
   let id = 0;
   const waiting = new Map<number, (m: any) => void>();
   ws.on('message', (d) => { const m = JSON.parse(String(d)); waiting.get(m.id)?.(m); waiting.delete(m.id); });
