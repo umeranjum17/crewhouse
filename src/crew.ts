@@ -771,8 +771,9 @@ export class Crew {
   schedule(now = Date.now()) {
     for (const r of this.db.all("SELECT * FROM routines WHERE state = 'on' AND (next_at <= ? OR trigger IS NOT NULL)", now)) {
       if (r.trigger) { try { if ('file' in parseTrigger(r.trigger)) this.checkInbox(r); } catch (e) { console.error('trigger', r.id, e); } }
-      if (!r.schedule || r.next_at > now) continue; // trigger-only: no time; wake triggers fire from slept()
-      this.db.run('UPDATE routines SET next_at = ? WHERE id = ?', nextRun(parseSchedule(r.schedule), now), r.id);
+      if ((!r.schedule && r.kind !== 'once') || r.next_at > now) continue; // trigger-only: no time; wake triggers fire from slept(); a once reminder carries its time in next_at
+      if (r.kind === 'once') this.db.run('DELETE FROM routines WHERE id = ?', r.id); // one-shot: gone as it fires
+      else this.db.run('UPDATE routines SET next_at = ? WHERE id = ?', nextRun(parseSchedule(r.schedule), now), r.id);
       try { this.fire(r, now - r.next_at > 60_000 ? 'late' : 'schedule'); } catch (e) { console.error('routine', r.id, e); }
     }
   }
@@ -1855,7 +1856,6 @@ export class Crew {
     return answer === 'allow' ? undefined : { block: true, reason: 'The person said not now. Continue without it, or explain what you need.' };
   }
 
-  /** Hold the call while the person decides; after the hold, park: the turn ends and the answer arrives as the next prompt. */
   /** A checkout page's card: the order as the page shows it, and its total as the cost the money cap counts when it's in
    *  dollars. crewd reads it from the page as the browser tool itself reports it; the model's words never reach it. */
   private order(botId: string, e: Extract<Effect, { words: string }>) {
@@ -1942,8 +1942,15 @@ export class Crew {
     });
   }
 
-  /** Allow once, for this task, or always for the bot; or not now. Spending is never more than once. */
-  async answer(askId: number, body: { answer?: string; scope?: string; schedule?: string; change?: string; text?: string }, viewer = OWNER) {
+  private defer(ask: Row) { // "Not now, remind me tomorrow": a one-shot routine, fired once by schedule(), then gone
+    const next = new Date(); next.setDate(next.getDate() + 1); next.setHours(9, 0, 0, 0);
+    const name = short(String(ask.title ?? 'a deferred question'), 60);
+    const id = this.db.run("INSERT INTO routines (bot, name, schedule, body, kind, member, next_at, created_at) VALUES (?, ?, '', ?, 'once', ?, ?, ?)", ask.bot, name, `The person said not now and asked to be reminded: "${name}". Raise it with them again now.`, ask.member ?? OWNER, next.getTime(), Date.now()).lastInsertRowid;
+    this.db.event('routine.created', ask.bot, { routine: Number(id), name, words: 'Reminds you tomorrow', member: ask.member ?? OWNER });
+  }
+
+  /** Allow once, for this task, or always for the bot; or not now — with a reminder tomorrow when asked. Spending is never more than once. */
+  async answer(askId: number, body: { answer?: string; scope?: string; schedule?: string; change?: string; text?: string; remind?: boolean }, viewer = OWNER) {
     const ask = this.db.get("SELECT * FROM asks WHERE id = ? AND state = 'open'", askId);
     if (!ask) throw fail('that question is already settled', 409);
     if ((ask.member ?? OWNER) !== viewer) throw fail('that question is someone else’s', 403);
@@ -1972,6 +1979,7 @@ export class Crew {
     const change = ask.kind === 'propose' && detail.plan && body.answer === 'deny' ? String(body.change ?? '').trim().slice(0, 2000) : '';
     const shown = change ? 'change it' : body.answer === 'deny' ? 'not now' : scope === 'task' ? 'allowed for this task' : scope === 'always' ? `always allowed for ${who}` : 'allowed once';
     const held = this.holds.get(askId);
+    const task = ask.task_id && this.db.get('SELECT * FROM tasks WHERE id = ?', ask.task_id);
     this.db.tx(() => {
       this.db.run("UPDATE asks SET state = 'answered', answer = ?, answered_at = ? WHERE id = ?", shown, Date.now(), askId);
       this.db.event('ask.answered', ask.bot, { ask: askId, task: ask.task_id, answer: shown });
@@ -1983,27 +1991,25 @@ export class Crew {
         disk.setSettings(this.cfg, ask.bot, { allow: [...(disk.botConfig(this.cfg, ask.bot).allow ?? []), detail.key] });
         this.db.event('bot.allowed', ask.bot, { covers: coversOf(detail.key), member: ask.member ?? OWNER });
       }
-      const task = ask.task_id && this.db.get("SELECT * FROM tasks WHERE id = ? AND state = 'needs_you'", ask.task_id);
-      if (task && !held) this.setTask(task, 'working');
+      if (task?.state === 'needs_you' && !held) this.setTask(task, 'working');
       if (detail.pass) this.wrap(detail.pass.root);
+      if (body.answer === 'deny' && body.remind === true && !change) this.defer(ask);
     });
     if (held) { held(body.answer!); this.holds.delete(askId); return; }
     // Change it: the person's own words go back to Chief with the plan they are about, for a new card.
     if (change) this.requestChief(`[Crewhouse] ${this.called(ask.member ?? OWNER)} wants a change to your plan for ${detail.plan.bot}: ${detail.plan.text}\nSteps:\n` +
       `${detail.plan.steps.map((x: string, i: number) => `${i + 1}. ${x}`).join('\n')}\nThey say: ${change}\nOffer the changed plan with crew_assign and steps.`, ask.member ?? OWNER, change);
     if (ask.kind === 'propose') return;
-    const t = ask.task_id && this.db.get('SELECT * FROM tasks WHERE id = ?', ask.task_id);
-    if (ask.kind === 'connect' && t && body.answer === 'allow' && this.live.get(ask.bot)?.task === t.id) {
+    if (ask.kind === 'connect' && task && body.answer === 'allow' && this.live.get(ask.bot)?.task === task.id) {
       // Connected: the app's tools arrive with a fresh session, so the task picks up in its own conversation with them.
       this.close(ask.bot);
-      this.handoffs.set(t.id, `${this.connections.apps[detail.app]?.name ?? 'The app'} is connected now`);
-      this.connected.add(t.id);
-      this.setTask(t, 'queued');
+      this.handoffs.set(task.id, `${this.connections.apps[detail.app]?.name ?? 'The app'} is connected now`);
+      this.connected.add(task.id);
+      this.setTask(task, 'queued');
       return this.dispatch();
     }
     // Parked: the turn already ended with a "wait", so the answer is the next prompt into the same session.
     if (body.answer === 'allow') this.granted.add(`${ask.bot}\n${ask.title}`);
-    const task = ask.task_id && this.db.get('SELECT * FROM tasks WHERE id = ?', ask.task_id);
     const l = this.live.get(ask.bot);
     if (!task || !l || l.task !== task.id) return; // not running now (after a restart): it asks again when it resumes, and goes through
     this.turn(ask.bot, l, `[Crewhouse] ${this.called(task.member ?? OWNER).replace(/^the/, 'The')} has answered your request ("${ask.title}"): ` +

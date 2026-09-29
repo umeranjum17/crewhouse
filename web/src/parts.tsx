@@ -491,7 +491,7 @@ export function Composer({ placeholder, onSend, chat }: { placeholder: string; o
 }
 
 // ---------- asks ----------
-const answer = (c: Card, body: Json) => attempt(() => api.answer(c.id, body), body.change ? 'Chief will change the plan' : body.answer === 'deny' ? 'OK, not now' : 'Done. Carrying on.');
+const answer = (c: Card, body: Json) => attempt(() => api.answer(c.id, body), body.change ? 'Chief will change the plan' : body.remind ? 'OK, back tomorrow' : body.answer === 'deny' ? 'OK, not now' : 'Done. Carrying on.');
 
 /** A waiting-for-the-computer schedule preview: the words in plain time, and the first run on the computer's own clock. */
 function useSchedule(text: string | null) {
@@ -574,6 +574,8 @@ export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; 
   const act = async (body: Json) => { last.current = body; setOops(false); if (await answer(c, body)) onDone(); else setOops(true); };
   const yes = c.choices[0];
   const deny = c.choices.find((x) => x.body.answer === 'deny' && x !== yes);
+  // A deferred "Not now" comes back on its own: "Remind me tomorrow" re-asks it from a one-shot routine.
+  const remind = deny && deny.label === 'Not now' ? { ...deny.body, remind: true } : null;
   const always = c.choices.find((x) => x.body.scope === 'always');
   const question = c.review && c.preview?.head ? c.preview.head : c.words;
   // A routine offered by Chief: the lines are the confirmation, and changing the time is an edit before the yes.
@@ -601,6 +603,7 @@ export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; 
             <button className="btn go" disabled={stuck} onClick={start}>Start it</button>
             <button className="btn" aria-pressed={when !== null} onClick={() => { setWhen(when === null ? c.schedule || '' : null); }}>{when === null ? 'Change time' : 'Keep the time'}</button>
             {deny && <button className="btn" onClick={() => act(deny.body)}>{deny.label}</button>}
+            {remind && <button className="btn ghost" onClick={() => act(remind)}>Remind me tomorrow</button>}
           </div>
         </>
       ) : c.kind === 'plan' ? (
@@ -613,6 +616,7 @@ export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; 
             {change === null && <button className="btn go" onClick={() => act(yes.body)}>{yes.label}</button>}
             <button className="btn" aria-pressed={change !== null} onClick={() => setChange(change === null ? '' : null)}>{change === null ? 'Change it' : 'Keep the plan'}</button>
             {deny && <button className="btn" onClick={() => act(deny.body)}>{deny.label}</button>}
+            {remind && <button className="btn ghost" onClick={() => act(remind)}>Remind me tomorrow</button>}
           </div>
         </>
       ) : c.reply ? (
@@ -624,12 +628,14 @@ export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; 
         <div className="btns">
           <a className="btn go" href={`#/ask/${c.id}`}>Review order</a>
           {deny && <button className="btn ghost" onClick={() => act(deny.body)}>{deny.label}</button>}
+          {remind && <button className="btn ghost" onClick={() => act(remind)}>Remind me tomorrow</button>}
         </div>
       ) : yes ? (
         <div className="btns">
           <button className="btn go" disabled={edit.empty} onClick={() => act(edit.yes(yes.body))}>{yes.label}</button>
           {edit.can && <button className="btn" aria-pressed={edit.editing} onClick={edit.toggle}>{edit.editing ? 'Use the original' : 'Edit'}</button>}
           {deny && <button className="btn" onClick={() => act(deny.body)}>{deny.label}</button>}
+          {remind && <button className="btn ghost" onClick={() => act(remind)}>Remind me tomorrow</button>}
           {always && <button className="btn ghost always" onClick={() => act(always.body)}>{always.label}</button>}
         </div>
       ) : null}
@@ -653,6 +659,7 @@ export function AskSheet({ c, who, chiefSays, onClose }: { c: Card; who: Helper 
   const yes = c.choices[0]?.body.answer === 'allow' ? c.choices[0] : null;
   // Every way out that isn't the one yes — an unpriced order has two, and neither is a yes.
   const rest = c.choices.filter((x) => x !== yes && x.body.scope !== 'always');
+  const remind = rest.find((x) => x.label === 'Not now' && x.body.answer === 'deny');
   const always = c.choices.find((x) => x.body.scope === 'always');
   const edit = useDraftEdit(c);
   return (
@@ -670,6 +677,7 @@ export function AskSheet({ c, who, chiefSays, onClose }: { c: Card; who: Helper 
             <button className="btn big" onClick={() => act({ answer: 'deny' })}>Not now</button>
           </> : <>
             {edit.can && <button className="btn big" aria-pressed={edit.editing} onClick={edit.toggle}>{edit.editing ? 'Use the original' : 'Edit'}</button>}
+            {remind && <button className="btn big ghost" onClick={() => act({ ...remind.body, remind: true })}>Remind me tomorrow</button>}
             {rest.map((x) => <button key={x.label} className="btn big" onClick={() => act(x.body)}>{x.label}</button>)}
             {yes && <button className="btn go big" disabled={edit.empty} onClick={() => act(edit.yes(yes.body))}>{yes.label}</button>}
           </>}
