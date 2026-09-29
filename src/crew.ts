@@ -41,7 +41,6 @@ import { clock } from './accounts.ts';
 /** OpenClaw's own tools crewhouse adopts once their policy effects are reviewed: reads, recall and media on the
  *  member's own sign-in. Any future native tool not reviewed here fails closed until a bump reviews it. */
 const NATIVE_TOOLS = new Set(['web_search', 'web_fetch', 'memory_search', 'memory_get', 'view_image', 'pdf', 'image_generate']);
-export { clock };
 
 /** At most n characters, cut at a word boundary with an ellipsis: titles on cards and in the digest. */
 export const short = (s: string, n: number) => (s = s.trim(), s.length > n ? `${s.slice(0, n - 1).replace(/\s+\S*$/, '')}…` : s);
@@ -119,13 +118,14 @@ export function relayResult(reply: string, note = '') {
   return 'The result is ready.';
 }
 
-function chiefFirst(body: string) {
+export function chiefFirst(body: string) {
   const url = /https?:\/\/[^\s]+/i.exec(body)?.[0];
   if (url) { try { return `Looking at ${new URL(url).hostname.replace(/^www\./, '')} now.`; } catch { /* malformed address */ } }
   if (/\b(market|marketing|promote|launch)\b/i.test(body)) return "I'll work out the next step for your app.";
   if (/\b(dinner|meal)\b/i.test(body)) return "I'll put together a dinner plan.";
   if (/\b(remind|reminder)\b/i.test(body)) return "I'll work out the reminder and when it should run.";
   if (/\b(research|look into|find out|what do people say)\b/i.test(body)) return "I'll check the question and what evidence would help.";
+  if (/\b(calendar|meetings?|inbox|emails?|mail)\b/i.test(body)) return /\b(calendar|meetings?)\b/i.test(body) ? 'Checking your calendar.' : 'Checking your email.';
   return "I'll look into that now.";
 }
 

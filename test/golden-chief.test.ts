@@ -1,7 +1,6 @@
 // The owner's four-turn complaint, exercised through the real Crew and its stub engine.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { homedir } from 'node:os';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -74,10 +73,10 @@ test('title, relay and markdown trust boundary', () => {
 
 test('the live system prompt stays brief, answers first, and honors a chosen address once', () => {
   const { cfg, crew, done } = setup();
-  // Frozen at 10,267 chars with HOME=/home/umer (length 10); the folders line embeds the home directory once,
-  // so the guard subtracts it and holds under any HOME, including a test throwaway. HOME length is recorded.
+  // Frozen at 9,986 chars: P7 took the owner-folders paragraph (which embedded the home directory) out of
+  // Chief's prompt, so it no longer varies with HOME and the guard is a plain length check.
   const prompt = disk.systemPrompt(cfg, 'chief', true);
-  assert.ok(prompt.length - homedir().length <= 10_267 - 10, `Chief prompt grew past its frozen size (prompt ${prompt.length}, HOME=${homedir()} length ${homedir().length})`);
+  assert.ok(prompt.length <= 9_986, `Chief prompt grew past its frozen size (prompt ${prompt.length})`);
   // Every agent, Chief included, carries the same model-visible tool descriptions: no new ABOUT text.
   assert.ok(TOOLS.reduce((n, t) => n + t.description.length, 0) <= 2742, 'TOOLS descriptions grew past 2742 chars');
   for (const tpl of disk.listTemplates(cfg)) {
