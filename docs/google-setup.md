@@ -1,7 +1,7 @@
 # Switching Google on for the house
 
 Once, by the owner, about twenty minutes, free. After this, anyone in the house can let a helper use their own Google Calendar, Gmail or Drive with a tap on the Connect card in a chat.
-Until it is done, those cards say "Google isn't switched on for the house yet. Ask Umer." and nobody reaches a broken Google page.
+Until it is done, those cards say the app needs Google switched on for the house first, which the owner does once in Settings, and nobody reaches a broken Google page.
 
 Notion, Canva, sharing from the phone and ChatGPT need none of this.
 

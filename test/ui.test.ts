@@ -18,7 +18,7 @@ const now = Date.now();
 
 test('crew room lines and handoff checks hide machinery', () => {
   const s: Json = { bots: [{ id: 'scout', display: 'Scout', template: 'scout', task: null }], events: [], asks: [] };
-  const lines = A.room({ lines: [{ id: 1, bot: 'scout', author: 'bot', text: 'See /home/umer/files/story.md and `ffmpeg -i x` from sonnet', files: [{ bot: 'scout', path: 'files/story.md' }], at: now }] }, s);
+  const lines = A.room({ lines: [{ id: 1, bot: 'scout', author: 'bot', text: 'See /home/alex/files/story.md and `ffmpeg -i x` from sonnet', files: [{ bot: 'scout', path: 'files/story.md' }], at: now }] }, s);
   assert.ok(!/\/home\/|ffmpeg|sonnet|files\//i.test(lines[0].text));
   assert.equal(lines[0].files.length, 1);
   const c = A.card({ id: 2, bot: 'scout', kind: 'propose', at: now, detail: { pass: { files: ['story.md'] }, words: 'Scout wants to hand this to Scribe' } }, s);
@@ -34,12 +34,12 @@ const state = {
     bot('chief'),
     bot('reel', { task: { id: 5, title: 'Make a birthday video for mum', state: 'needs_you' }, stuck: true, quietSince: now - 6 * 60_000,
       step: { kind: 'run.tool', at: now, data: { tool: 'Bash', summary: 'fc-list 2>&1 | head -20' } } }),
-    bot('scout', { task: { id: 6, title: 'Flights', state: 'working' }, step: { kind: 'run.tool', at: now, data: { tool: 'Read', summary: '/home/umer/Crewhouse/bots/scout/notes.md' } } }),
+    bot('scout', { task: { id: 6, title: 'Flights', state: 'working' }, step: { kind: 'run.tool', at: now, data: { tool: 'Read', summary: '/home/alex/Crewhouse/bots/scout/notes.md' } } }),
     bot('tracer', { template: 'tracer' }),
   ],
   templates: [{ id: 'chief' }, { id: 'reel', display: 'Reel', role: 'Makes videos' }, { id: 'tracer', display: 'Tracer', role: 'Finds emails' }],
   tasks: [
-    { id: 4, bot: 'reel', title: 'Eid collage', state: 'done', updated_at: now, files: ['files/eid-collage.png'], result: 'Saved to /home/umer/Crewhouse/bots/reel/files/eid-collage.png with `magick montage -tile 4x3`' },
+    { id: 4, bot: 'reel', title: 'Eid collage', state: 'done', updated_at: now, files: ['files/eid-collage.png'], result: 'Saved to /home/alex/Crewhouse/bots/reel/files/eid-collage.png with `magick montage -tile 4x3`' },
     { id: 3, bot: 'scout', title: 'Flights', state: 'failed', updated_at: now, files: [], result: 'Stopped on an error from claude: 529 overloaded' },
   ],
   ideas: [],
@@ -64,7 +64,7 @@ const state = {
 };
 const page = { messages: [
   { id: 1, author: 'person', text: 'can you make a birthday video for mum' },
-  { id: 2, author: 'bot', text: 'Done! I ran `ffmpeg -i /home/umer/Crewhouse/bots/reel/files/in.mp4 out.mp4` with Claude Code.\n```sh\nls -la\n```' },
+  { id: 2, author: 'bot', text: 'Done! I ran `ffmpeg -i /home/alex/Crewhouse/bots/reel/files/in.mp4 out.mp4` with Claude Code.\n```sh\nls -la\n```' },
   { id: 3, author: 'system', text: 'Delivered files/mum-birthday_v2.mp4: first cut' },
 ], notes: '# Notes\n- Nadia likes soft piano\n- Keep videos in ~/Crewhouse/bots/reel/files', trail: state.events,
   soul: '# Reel\n\nYou are Reel.\n\n## Voice\n- Upbeat. Say what you made, never `ffmpeg -i in.mp4`.',
@@ -83,7 +83,7 @@ test('nothing technical survives the adapter', () => {
     resting: A.resting(state), apps: A.apps(state), chatgpt: { ...h, signing: { code: h.signing?.code } },
   };
   for (const [name, v] of Object.entries(views)) assert.doesNotMatch(shown(v), FORBIDDEN, name);
-  const jobView = A.jobParts({ does: 'Compare prices.', aim: 'Find a fair option.', gets: 'The person’s budget.', how: 'Check two sources.', great: 'A sourced comparison with totals.', prompt: 'You are Quill. Read /home/umer/private/AGENTS.md' });
+  const jobView = A.jobParts({ does: 'Compare prices.', aim: 'Find a fair option.', gets: 'The person’s budget.', how: 'Check two sources.', great: 'A sourced comparison with totals.', prompt: 'You are Quill. Read /home/alex/private/AGENTS.md' });
   assert.doesNotMatch(shown(jobView), /You are|\/home\/|AGENTS\.md/, 'job view contains only the five plain recipe parts, never prompt text or paths');
   assert.equal(h.signing?.code, 'AB12-CDE34', 'the one-time code reaches the sign-in sheet');
   assert.deepEqual(A.knows(page.skills).map((k) => k.says), ['Turn photos into a short video', 'plan dinners'], 'the person\'s words, never the model\'s');
@@ -306,7 +306,7 @@ test('owner-only helpers stay with the owner', () => {
 });
 
 test('plain() keeps what a person wrote and drops the machinery', () => {
-  assert.equal(A.plain('Saved it to /home/umer/x/report.pdf for you'), 'Saved it to “Report” for you');
+  assert.equal(A.plain('Saved it to /home/alex/x/report.pdf for you'), 'Saved it to “Report” for you');
   assert.equal(A.plain('I used `ls -la` and it worked'), 'I used and it worked');
   assert.equal(A.plain('Your `Birthday` video'), 'Your Birthday video');
   assert.equal(A.plain('It is saved at `files/birthday-card.mp4` and is 1080p.'), 'It is saved at “Birthday card” and is 1080p.', 'a file named by the bot keeps its name');
@@ -892,7 +892,7 @@ test('a photo in a message is a picture, not words', () => {
 // reaches a screen — crewd reads it (src/workbooks.ts) and the app renders these words.
 test('a delivered workbook is a card in the chat, and opens as a read-only sheet with tabs', () => {
   const json = { sheets: [
-    { name: 'Daily dashboard', total: 6, rows: [['Today', 'Number', 'Notes'], ['Arrivals', '6', 'from /home/umer/Crewhouse/bots/quill/files/log.xlsx'], ['Rooms ready', '—', '']] },
+    { name: 'Daily dashboard', total: 6, rows: [['Today', 'Number', 'Notes'], ['Arrivals', '6', 'from /home/alex/Crewhouse/bots/quill/files/log.xlsx'], ['Rooms ready', '—', '']] },
     { name: 'Rooms & housekeeping', total: 40, rows: [['Room', 'State', 'Checked by'], ['204', 'Ready', 'Rani']] },
   ] };
   const book = A.workbook(json, 'Hotel guest reception');
