@@ -132,6 +132,12 @@
       "group": "life",
       "promise": "Once a month I'll write the short story of what happened in our world — the topics, names and places you care about — with a link for every claim, as a document you keep.",
       "ask": "Write me the month in brief"
+    },
+    {
+      "needs": [],
+      "group": "goal",
+      "promise": "Tell me what you're good at and the hours you have, and I'll price five things like yours and say what sells.",
+      "ask": "Help me earn a little on the side"
     }
   ]
 }

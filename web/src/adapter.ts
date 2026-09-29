@@ -652,7 +652,7 @@ export function things(state: Json): Thing[] {
   }));
 }
 
-export type Job = { bot: string; label: string; ask: string; money: boolean; needs: string[] };
+export type Job = { bot: string; label: string; ask: string; goal: boolean; money: boolean; needs: string[] };
 
 /** Home's three counts, from the same rows shown below them: what needs you, who is working, what got done today. */
 export function homeCounts(state: Json) {
@@ -666,22 +666,23 @@ export function homeSummary(state: Json) {
 }
 
 /** Home's standing "hand me a job" list: the jobs the crew offers to do end to end, from crewd's `ideas[]` — which is
- *  already only what this crew can do. Money back first, then the everyday jobs. A row that needs an app the person
+ *  already only what this crew can do. A goal first, then money back, then the everyday jobs. A row that needs an app the person
  *  hasn't connected says what it needs instead of dead-ending, and never fills the box. (docs/ui-contract.md) */
 export function jobs(state: Json): Job[] {
   const rows: Job[] = (state.ideas ?? []).map((i: Json) => ({
     bot: String(i.bot ?? 'chief'), label: plain(i.ask ?? ''), ask: String(i.ask ?? ''),
-    money: i.group === 'money', needs: ((i.needs ?? []) as string[]).map((w) => plain(w)).filter(Boolean),
+    goal: i.group === 'goal', money: i.group === 'money', needs: ((i.needs ?? []) as string[]).map((w) => plain(w)).filter(Boolean),
   }));
-  return rows.sort((a, b) => Number(b.money) - Number(a.money) || a.needs.length - b.needs.length);
+  return rows.sort((a, b) => Number(b.goal) - Number(a.goal) || Number(b.money) - Number(a.money) || a.needs.length - b.needs.length);
 }
 /** What a job that can't run yet would need first, in one plain line. */
 export const jobNeeds = (needs: string[]) => `Needs ${needs.join(' and ')} first.`;
 
-/** Chief's three first-run ideas: one tap is both "hello" and the first job. */
-export const FIRST_IDEAS = [
+/** Chief's three first-run ideas: one tap is both "hello" and the first job. The middle one goes straight to
+ *  Scout: her side-income ask starts in Scout's thread, never through Chief. */
+export const FIRST_IDEAS: { icon: string; label: string; bot?: string }[] = [
   { icon: '🍲', label: "Plan this week's dinners, with a shopping list" },
-  { icon: '🎂', label: 'Write a birthday message for Mum' },
+  { icon: '💡', label: 'Help me earn a little on the side', bot: 'scout' },
   { icon: '📅', label: "What's on this week?" },
 ];
 

@@ -805,9 +805,9 @@ function Hello({ state, refresh, go }: Ctx) {
     <TextInput style={[s.input, { color: t.ink, borderColor: t.line }]} value={address} onChangeText={setAddress} placeholder="What shall I call you?" placeholderTextColor={t.mute} accessibilityLabel="What shall I call you?" />
     <View style={s.chips}>{['Sir', "Ma'am", ...(named ? [named] : [])].map((q) => <Btn key={q} label={q} onPress={() => setAddress(q)} />)}</View>
   </>;
-  const pick = (ask?: string) => {
+  const pick = (ask?: string, bot?: string) => {
     if (!address.trim()) return say('First, what shall I call you?');
-    void attempt(async () => { await api.onboard(address.trim(), ask); refresh(); go({ view: 'chief' }, true); });
+    void attempt(async () => { await api.onboard(address.trim(), ask, bot); refresh(); go({ view: 'chief' }, true); });
   };
   const reduce = motion.useReduceMotion();
   return (
@@ -824,7 +824,7 @@ function Hello({ state, refresh, go }: Ctx) {
       </Card></motion.Rise>
       {!named && name}
       <Label>What can I take off your plate?</Label>
-      {A.firstIdeas(state).map((i) => <Pressable key={i.label} onPress={() => pick(i.label)} accessibilityRole="button" accessibilityLabel={i.label}
+      {A.firstIdeas(state).map((i) => <Pressable key={i.label} onPress={() => pick(i.label, i.bot)} accessibilityRole="button" accessibilityLabel={i.label}
         style={({ pressed }) => [s.idea, { backgroundColor: t.card, borderColor: t.line }, pressed && { opacity: 0.6 }]}>
         <View style={[s.ideaIcon, { backgroundColor: t.soft }]}><Text style={{ fontSize: 18 }}>{i.icon}</Text></View>
         <T style={{ flex: 1, fontWeight: '500' }}>{i.label}</T><T tone="mute">›</T>

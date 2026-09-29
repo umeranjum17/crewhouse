@@ -49,8 +49,9 @@ export const api = {
    *  `{data, more, size}` from byte `after`. */
   video: (bot: string, path: string, after: number) => call('GET', `/api/video?bot=${encodeURIComponent(bot)}&path=${encodeURIComponent(path)}&after=${after}`) as Promise<{ data: string; more: boolean; size: number }>,
   post: (id: string, text: string, photos?: { type: string; data: string }[] | { room: boolean }) => call('POST', `/api/bots/${id}/messages`, { text, ...(Array.isArray(photos) && photos.length ? { photos } : {}), ...(!Array.isArray(photos) && photos ? photos : {}) }),
-  /** First run: how Chief addresses the person, and (from an idea card) their first request, in one tap. */
-  onboard: (address: string, ask?: string) => call('POST', '/api/onboard', { address, ask }),
+  /** First run: how Chief addresses the person, and (from an idea card) their first request, in one tap.
+   *  A goal card also names its helper, so the request starts there instead of with Chief. */
+  onboard: (address: string, ask?: string, bot?: string) => call('POST', '/api/onboard', { address, ask, bot }),
   recruit: (template: string, name: string) => call('POST', '/api/recruit', { template, name }),
   /** What one helper learned about this member, and what the whole crew knows about them: each person's own. */
   notes: (id: string, text: string) => call('PUT', `/api/bots/${id}/notes`, { text }),

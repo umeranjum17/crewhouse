@@ -41,6 +41,12 @@
       ],
       "promise": "Ask for a tracker or a log and I’ll build the spreadsheet, ready to fill in.",
       "ask": "Make a spreadsheet for "
+    },
+    {
+      "needs": [],
+      "group": "goal",
+      "promise": "Your first listing and three posts, written in your voice — you post them.",
+      "ask": "Write my first listing and three posts"
     }
   ]
 }
