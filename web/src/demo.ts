@@ -343,7 +343,7 @@ const book = {
   sheets: [
     { name: 'Daily dashboard', total: 6, rows: [
       ['Today', 'Number', 'Notes'], ['Arrivals', '6', 'Two early, one at 4pm'], ['Departures', '4', 'One late checkout agreed'], ['Walk-ins so far', '1', 'Room 204 taken'], ['Rooms ready', 'auto', 'Worked out when you open it']],
-      nums: [1, 2, 3, 4, 5], roles: [['head', 'head', 'head'], ['', '', ''], ['', '', ''], ['', '', ''], ['', '', ''], ['', 'calc', '']] }, 
+      nums: [1, 2, 3, 4, 5], roles: [['head', 'head', 'head'], ['', '', ''], ['', '', ''], ['', '', ''], ['', 'calc', '']] },
     { name: 'Booking & check-in', total: 34, rows: [
       ['Guest', 'Room', 'Arrival', 'Departure', 'Nights', 'Status', 'Rate', 'Paid'],
       ['Amina Khan', '204', '11 Oct', '14 Oct', '3', 'Checked in', '285', '285'],
@@ -364,7 +364,7 @@ const book = {
       ['Bilal Sheikh', '108', '120', '40', '80', 'Cash'],
       ['Family Nazir', '301', '520', '0', '520', 'Not paid yet']],
       nums: [1, 2, 3, 4], roles: [['head', 'head', 'head', 'head', 'head', 'head'],
-        ['', '', '', '', '', ''], ['', '', '', '', '', ''], ['', '', '', '', '', '']] },
+        ['', '', '', '', 'calc', 'in'], ['', '', '', '', 'calc', 'in'], ['', '', '', '', 'calc', 'in']] },
   ],
 };
 /** What crewd read out of a watch brief (?demo=neighbour, ?demo=brief, src/documents.ts): plain parts, never the file. */

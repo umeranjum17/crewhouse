@@ -2,7 +2,10 @@
 // an engine or model name, a usage percentage, a raw prompt or terminal text (persona brief rule 5).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readdirSync, readFileSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { build } from 'esbuild';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { join } from 'node:path';
 import type { Json } from '../web/src/api.ts';
 import type { Bitmap, Kind } from '../web/src/art.ts';
@@ -964,8 +967,8 @@ test('reading text clears 4.5:1 against the surfaces it sits on, day and night',
   const lum = (hex: string) => { const c = hex.replace('#', ''); const [r, g, b] = [0, 2, 4].map((i) => parseInt(c.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
   const ratio = (a: string, b: string) => { const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m); return (x + 0.05) / (y + 0.05); };
   for (const [name, pal, bgs] of [
-    ['day', color.day, [color.day.surface, color.day.bg, color.day.sunken]],
-    ['night', color.night, [color.night.bg, color.night.surface, color.night.sunken]],
+    ['day', color.day, [color.day.surface, color.day.bg, color.day.sunken, color.day.cellIn, color.day.cellCalc]],
+    ['night', color.night, [color.night.bg, color.night.surface, color.night.sunken, color.night.cellIn, color.night.cellCalc]],
   ] as const) {
     for (const t of [pal.ink, pal.ink2]) {
       for (const b of bgs) assert.ok(ratio(t, b) >= 4.5, `${name}: ${t} on ${b} is ${ratio(t, b).toFixed(2)}`);
@@ -991,7 +994,7 @@ test('a photo in a message is a picture, not words', () => {
 
 // The bar the captain set: a helper makes the workbook, and it arrives as a card you can open. The file itself never
 // reaches a screen — crewd reads it (src/workbooks.ts) and the app renders these words.
-test('a delivered workbook is a card in the chat, and opens as a read-only sheet with tabs', () => {
+test('a delivered workbook is a card in the chat, and opens as a read-only sheet with tabs', async () => {
   const json = { sheets: [
     { name: 'Daily dashboard', total: 6, rows: [['Today', 'Number', 'Notes'], ['Arrivals', '6', 'from /home/alex/Crewhouse/bots/quill/files/log.xlsx'], ['Rooms ready', '—', '']] },
     { name: 'Rooms & housekeeping', total: 40, rows: [['Room', 'State', 'Checked by'], ['204', 'Ready', 'Rani']] },
@@ -1020,15 +1023,59 @@ test('a delivered workbook is a card in the chat, and opens as a read-only sheet
   const panel = parts.slice(parts.indexOf('export function PreviewPanel'), parts.indexOf('export function Steps', parts.indexOf('export function PreviewPanel')));
   assert.match(parts, /f\.kind === 'sheet' \|\| f\.kind === 'page'\) return <PreviewCard/, 'a finished file is a card, not a plain file row');
   assert.match(parts, /<b>\{f\.name\}<\/b>[\s\S]{0,300}\{about\}/, 'the card: its name and a line about it');
-  assert.match(parts, /className="wb-thumb"[\s\S]{0,120}<i key=\{i\}>\{h\}<\/i>/, 'a peek inside the file');
   assert.match(parts, /<b className="wb-open">Open<\/b>/, 'and Open');
   assert.match(panel, /role="dialog" aria-modal aria-label=\{f\.name\}/, 'the panel is a dialog the keyboard belongs to');
   assert.match(panel, /<nav className="wb-tabs"[\s\S]{0,160}setTab\(i\)/, 'sheet tabs');
-  assert.match(panel, /<table className="wb-grid">[\s\S]{0,220}<tbody>/, 'its cells as a table');
+  assert.ok(panel.indexOf('<nav className="wb-tabs"') > panel.indexOf('<SheetTable s={s} />'), 'the tabs sit under the sheet, as in its own program');
   assert.match(panel, /className="btn" href=\{f\.url\}[^>]*>Download</, 'Download hands over the file');
-  assert.match(panel, /more rows/, 'what is not shown is said, not hidden');
+
+  // The card's peek and the panel's grid, rendered for real: letters over the columns, the file's own row numbers
+  // (a gap where a blank row was skipped), a tint for each role, and a four-by-four corner on the card.
+  const dir = mkdtempSync(join(process.cwd(), 'test/.sheet-'));
+  try {
+    await build({ entryPoints: ['web/src/parts.tsx'], outfile: join(dir, 'parts.mjs'), bundle: true, platform: 'node', format: 'esm', packages: 'external', logLevel: 'error' });
+    const { SheetTable, Thumb } = await import(join(dir, 'parts.mjs'));
+    const sheet = A.workbook({ sheets: [{ name: 'Bookings', total: 4, rows: [['Guest', 'Nights', 'Rate', 'Bill', 'Paid'], ['Amina', '3', '95', '285', 'Yes'], ['Bilal', '1', '120', 'auto', 'No']],
+      nums: [1, 2, 4], roles: [['head', 'head', 'head', 'head', 'head'], ['', 'in', '', '', 'in'], ['', 'in', '', 'calc', 'in']] }] }, 'Bookings').sheets[0];
+    const grid = renderToStaticMarkup(createElement(SheetTable, { s: sheet }));
+    assert.match(grid, /<thead><tr><th class="wb-n"><\/th><th>A<\/th><th>B<\/th><th>C<\/th><th>D<\/th><th>E<\/th><\/tr><\/thead>/, 'column letters');
+    assert.deepEqual([...grid.matchAll(/<tr><th class="wb-n" scope="row">(\d+)<\/th>/g)].map((m) => m[1]), ['1', '2', '4'], 'row numbers from the file, gap kept');
+    assert.match(grid, /<th scope="col" class="head">Guest<\/th>/, 'the heading row is set apart, and names its column for a screen reader');
+    assert.match(grid, /<td class="in">3<\/td>/, 'what the person fills in is tinted');
+    assert.match(grid, /<td class="calc">auto<\/td>/, 'what works itself out is tinted too');
+    assert.match(grid, /and one more row\. /, 'one row is a row');
+    assert.match(renderToStaticMarkup(createElement(SheetTable, { s: { ...sheet, total: 9 } })), /and 6 more rows\. /, 'what is not shown is said, not hidden');
+    const thumb = renderToStaticMarkup(createElement(Thumb, { name: 'Bookings', book: { name: 'Bookings', sheets: [sheet] }, doc: null, text: null }));
+    assert.equal((thumb.match(/<i[ >]/g) ?? []).length, 12, 'the card peeks at the top-left corner: four columns of each of its three rows');
+    const tall = { ...sheet, rows: [...sheet.rows, ...sheet.rows, ...sheet.rows] };
+    assert.equal((renderToStaticMarkup(createElement(Thumb, { name: 'x', book: { name: 'x', sheets: [tall] }, doc: null, text: null })).match(/<i[ >]/g) ?? []).length, 16, 'four by four at most');
+    assert.match(thumb, /^<span class="wb-thumb" aria-hidden="true"[^>]*><i class="head">Guest<\/i><i class="head">Nights<\/i>/);
+    assert.match(thumb, /<i class="calc">auto<\/i>/);
+    const page = renderToStaticMarkup(createElement(Thumb, { name: 'Handbook', book: null, text: null,
+      doc: A.document({ parts: [{ kind: 'heading', text: 'Handbook' }, { kind: 'heading', text: 'Mornings' }, { kind: 'p', text: 'Open the desk at seven.' }, { kind: 'li', text: 'Walk the free rooms' }] }, 'Handbook') }));
+    assert.match(page, /class="wb-thumb leaf"[^>]*><b>Mornings<\/b><i style="width:\d+(\.\d+)?%"><\/i><i /, 'a page peeks as its heading over its lines, never the title twice');
+    assert.equal(renderToStaticMarkup(createElement(Thumb, { name: 'x', book: null, doc: null, text: null })), '', 'nothing to peek at yet shows nothing');
+    assert.equal(renderToStaticMarkup(createElement(Thumb, { name: 'x', book: A.workbook({ sheets: [{ name: 'Plan', rows: [] }] }, 'x'), doc: null, text: null })), '', 'nor does an empty sheet');
+    assert.deepEqual([0, 1, 2].map(A.column), ['A', 'B', 'C']);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
   assert.doesNotMatch(panel, /<input|<textarea|contentEditable|onClick=\{\(\) => (?!setTab\b)(set|edit)/, 'read-only: nothing to type into');
   assert.match(readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8'), /a === 'f' && b && c[\s\S]{0,120}file: decodeURIComponent\(c\)/, '#/f/<helper>/<file> opens the panel beside its chat');
+});
+
+// The phone's reader shows a sheet the way the web's panel does: letters, the file's row numbers, the heading row set
+// apart, the two tints from the shared tokens, and the tabs under the sheet rather than over it.
+test('the phone reads a sheet as a grid with its tabs underneath', () => {
+  const app = readFileSync(PHONE_SCREENS[0], 'utf8');
+  const grid = app.slice(app.indexOf('function SheetGrid('), app.indexOf('function DocParts('));
+  const sheet = app.slice(app.indexOf('function DocSheet('), app.indexOf('function VideoSheet('));
+  assert.match(grid, /nums && <View[\s\S]{0,200}A\.column\(c\)/, 'letters over the columns');
+  assert.match(grid, /nums\[j\] \?\? j \+ 1/, 'row numbers from the file down the side');
+  assert.match(grid, /role === 'in' \? t\.cellIn : role === 'calc' \? t\.cellCalc/, 'fill-in and worked-out cells tinted');
+  assert.match(grid, /role === 'head' \? s\.b/, 'the heading row set apart');
+  assert.match(sheet, /<SheetGrid head=\{sNow\.head\} rows=\{sNow\.rows\} nums=\{sNow\.nums\} roles=\{sNow\.roles\} \/>/);
+  assert.ok(sheet.indexOf('setTab(i)') > sheet.indexOf('</ScrollView>'), 'tabs under the sheet, outside its scroll');
+  assert.match(sheet, /more === 1 \? 'one more row' : `\$\{more\} more rows`/, 'one row is a row');
+  for (const pal of [color.day, color.night]) assert.ok(pal.cellIn && pal.cellCalc && pal.cellIn !== pal.cellCalc);
 });
 
 // The same bar for a document: crewd writes the .docx (crew_document), the chat shows a card, and the panel is the

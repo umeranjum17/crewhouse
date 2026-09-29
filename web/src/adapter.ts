@@ -138,6 +138,8 @@ export function workbook(json: Json, name: string): Workbook {
     }),
   };
 }
+/** A sheet's column letter: A, B, C… (workbook() keeps 14 columns at most, so one letter always does). */
+export const column = (i: number) => String.fromCharCode(65 + i);
 /** How many tabs a workbook has, said the way a person would: "One sheet", "4 sheets". */
 export const sheetWords = (n: number) => (n === 1 ? 'One sheet' : n > 1 ? `${n} sheets` : 'A spreadsheet');
 /** How many sections a document has, said the way a person would: "3 sections", "One section", "A document". */
