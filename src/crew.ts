@@ -496,12 +496,17 @@ export class Crew {
     return this.askView(this.db.get('SELECT * FROM asks WHERE id = ?', id)!);
   }
 
-  /** A task's delivered files, its own output first: files handed over from another helper are that task's
-   *  input, never its result, so Things previews and opens what the task itself made. */
+  /** A delivered file handed over from another helper is that task's input, never its result. New rows carry
+   *  input:true; rows recorded before that tag still read as input by their handoff-copy path (files/from-<helper>/). */
+  private isInput(d: Row): boolean {
+    return !!d.input || String(d.path ?? '').startsWith('files/from-');
+  }
+
+  /** A task's delivered files, its own output first, so Things previews and opens what the task itself made. */
   private taskFiles(task: number): Row[] {
     const rows = this.db.all(`SELECT data FROM events WHERE kind = 'file.delivered' AND json_extract(data, '$.task') = ? ORDER BY seq`, task)
       .map((e) => JSON.parse(e.data));
-    return [...rows.filter((d) => !d.input), ...rows.filter((d) => d.input)];
+    return [...rows.filter((d) => !this.isInput(d)), ...rows.filter((d) => this.isInput(d))];
   }
 
   snapshot(viewer = OWNER) {
@@ -646,7 +651,7 @@ export class Crew {
           const d = JSON.parse(e.data);
           const t = d.task ? this.db.get('SELECT state, result FROM tasks WHERE id = ?', d.task) : undefined;
           const line = d.task ? this.db.get("SELECT id FROM messages WHERE task_id = ? AND author = 'bot' ORDER BY id DESC LIMIT 1", d.task) : undefined;
-          const made = d.task && this.db.get("SELECT 1 FROM events WHERE kind = 'file.delivered' AND json_extract(data, '$.task') = ? AND json_extract(data, '$.input') IS NULL", d.task);
+          const made = d.task && this.db.get("SELECT 1 FROM events WHERE kind = 'file.delivered' AND json_extract(data, '$.task') = ? AND json_extract(data, '$.input') IS NULL AND json_extract(data, '$.path') NOT LIKE 'files/from-%'", d.task);
           return { at: e.at, kind: e.kind, ...d, state: t?.state,
             ...(t?.state === 'paused' || t?.state === 'failed' || t?.state === 'unsure' ? { reason: t.result } : {}),
             ...(t?.result === ALL_CLEAR_RESULT ? { clear: true } : {}),
@@ -1573,7 +1578,7 @@ export class Crew {
       this.setTask(task, 'done', clear ? ALL_CLEAR_RESULT : text || 'Done.');
       if (task.origin === CHIEF && !this.teamJob(task)) {
         // In Chief's own voice, written by crewd: no model call, no task number.
-        const files = this.db.all("SELECT data FROM events WHERE kind = 'file.delivered' AND bot = ? AND json_extract(data, '$.task') = ? AND json_extract(data, '$.input') IS NULL", botId, task.id);
+        const files = this.db.all("SELECT data FROM events WHERE kind = 'file.delivered' AND bot = ? AND json_extract(data, '$.task') = ? AND json_extract(data, '$.input') IS NULL AND json_extract(data, '$.path') NOT LIKE 'files/from-%'", botId, task.id);
         const note = files.map((e) => JSON.parse(e.data).note as string).find(Boolean) ?? '';
         this.say(CHIEF, 'bot', relayResult(text, note), files.length ? task.id : null, task.member ?? OWNER);
       }

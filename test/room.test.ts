@@ -144,6 +144,26 @@ test('Things foregrounds a task’s own output ahead of handed-over input', asyn
   done();
 });
 
+test('Things foregrounds own output ahead of an untagged legacy handoff copy', async () => {
+  const { db, cfg, crew, done } = setup();
+  crew.onboard('Sara');
+  crew.recruit('scout', 'Scout', 'person'); crew.recruit('scribe', 'Scribe', 'person');
+  const first = (await crew.post('scribe', 'ask permission: write the one-page family checklist'))!.task;
+  await holding(crew, 'scribe');
+  // A handoff recorded before the input:true tag: a plain file.delivered event on the handoff-copy path.
+  const legacy = join(disk.botDir(cfg, 'scribe'), 'files', 'from-scout');
+  mkdirSync(legacy, { recursive: true }); writeFileSync(join(legacy, 'fdic-basics.md'), 'research');
+  db.event('file.delivered', 'scribe', { task: first, path: 'files/from-scout/fdic-basics.md', note: 'from Scout', size: 8 });
+  writeFileSync(join(disk.botDir(cfg, 'scribe'), 'files', 'family-checklist.md'), 'checklist');
+  (crew as any).deliver('scribe', 'files/family-checklist.md', 'checklist');
+  await release(crew, 'scribe', 'Checklist ready.'); await settled(db, first);
+  const things = crew.snapshot().tasks.filter((t: any) => t.bot === 'scribe' && t.state === 'done');
+  assert.equal(things.length, 1);
+  assert.equal(things[0].files[0], 'files/family-checklist.md');
+  assert.ok(things[0].files.includes('files/from-scout/fdic-basics.md'));
+  done();
+});
+
 test('room replies rejoin a job; plain routed work stays out', async () => {
   const { db, crew, done } = setup();
   crew.onboard('Sara'); crew.recruit('scout', 'Scout', 'person');
