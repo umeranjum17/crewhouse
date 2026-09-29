@@ -1277,6 +1277,7 @@ function Chat({ id, m, state, tick, refresh, canAct, offline, open }: Ctx & { id
             {!!l.text && (l.detail ? <ChiefAsk l={{ text: l.text, detail: l.detail }} /> : l.from === 'me'
               ? <View style={[s.bubbleText, { backgroundColor: t.go, borderBottomRightRadius: 6 }]}><Theme.Provider value={mine}><ChatText text={l.text} /></Theme.Provider></View>
               : <View style={{ paddingLeft: 36 }}><ChatText text={l.text} /></View>)}
+            {!l.text && !!l.about && <View style={{ paddingLeft: 36 }}><ChatText text={l.about} /></View>}
             {l.files.map((f) => <Card key={f.url}><FileRow f={f} /></Card>)}
             {phoneOffer?.message === l.id && <PhoneCard offer={phoneOffer} reload={() => void load()} members={state.members} />}
             {cards.filter((c) => lines.findLastIndex((x) => (x.at ?? 0) <= c.at) === i).map((c) => <AskCard key={c.id} c={c} who={h} state={state} onDone={refresh} canAct={canAct} offline={offline} open={open} />)}

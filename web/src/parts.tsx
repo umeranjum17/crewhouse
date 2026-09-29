@@ -279,7 +279,7 @@ const bare = (t: string) => t.toLowerCase().replace(/^the\s+|[^a-z0-9]/g, '');
 /** The line under a file's name: what kind of thing it is, and how much is in it. */
 function aboutFile(f: FileView, book: Workbook | null, doc: DocView | null) {
   const kind = f.kind === 'page' ? 'Document' : 'Spreadsheet';
-  const count = book ? book.sheets.length : doc?.parts.filter((p) => p.kind === 'heading').length ?? 0;
+  const count = book ? book.sheets.length : doc?.parts.filter((p) => p.kind === 'heading' && bare(p.text ?? '') !== bare(f.name)).length ?? 0;
   return count ? `${kind} · ${book ? sheetWords(count) : pageWords(count)}` : kind;
 }
 

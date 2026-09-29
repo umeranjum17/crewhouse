@@ -1014,7 +1014,10 @@ test('a delivered workbook is a card in the chat, and opens as a read-only sheet
 
   const [line] = A.lines({ messages: [{ id: 9, author: 'system', text: 'Delivered files/hotel-guest-reception.xlsx: 4 sheets: Daily dashboard, Booking & check-in' }] }, 'quill');
   assert.equal(line.files[0].kind, 'sheet');
-  assert.equal(line.text, '4 sheets: Daily dashboard, Booking & check-in');
+  assert.equal(line.text, '', 'the card says what is in it, so the line says nothing twice');
+  assert.equal(line.about, '4 sheets: Daily dashboard, Booking & check-in', 'the phone\'s plainer card keeps the words');
+  assert.equal(A.lines({ messages: [{ id: 9, author: 'system', text: 'Delivered files/menu.md: dinners for the week' }] }, 'quill')[0].text, 'dinners for the week', 'a written page has no counted card, so it keeps its words');
+  assert.equal(A.lines({ messages: [{ id: 9, author: 'system', text: 'Delivered files/receipt.pdf: the receipt' }] }, 'quill')[0].text, 'the receipt', 'any other file keeps its words');
   assert.deepEqual(A.fileSource(line.files[0].url), { bot: 'quill', path: 'files/hotel-guest-reception.xlsx' }, 'what the app asks crewd to read');
   const [thing] = A.things({ tasks: [{ id: 1, bot: 'quill', title: 'Hotel guest reception', state: 'done', updated_at: now, files: ['files/hotel-guest-reception.xlsx'] }] });
   assert.equal(thing.files[0].kind, 'sheet', 'Things opens it the same way');
