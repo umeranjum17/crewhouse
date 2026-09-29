@@ -48,6 +48,9 @@
         {
           "android": {
             "usesCleartextTraffic": true
+          },
+          "ios": {
+            "deploymentTarget": "18.0"
           }
         }
       ],
@@ -61,7 +64,13 @@
           "androidMultiIntentFilters": [
             "image/*"
           ],
-          "disableIOS": true
+          "iosActivationRules": {
+            "NSExtensionActivationSupportsText": true,
+            "NSExtensionActivationSupportsWebURLWithMaxCount": 1,
+            "NSExtensionActivationSupportsWebPageWithMaxCount": 1,
+            "NSExtensionActivationSupportsImageWithMaxCount": 4
+          },
+          "iosShareExtensionName": "Send to Crewhouse"
         }
       ],
       [
@@ -71,7 +80,9 @@
           "microphonePermission": "Crewhouse hears you only while the mic is on, to put what you say in the message box."
         }
       ],
-      "expo-notifications"
+      "expo-notifications",
+      "@bacons/apple-targets",
+      "./plugins/shortcuts.js"
     ],
     "scheme": "crewhouse"
   }

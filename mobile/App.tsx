@@ -5,7 +5,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useFonts } from 'expo-font';
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
-  ActivityIndicator, AppState, BackHandler, Clipboard, Image, KeyboardAvoidingView, Modal, PermissionsAndroid, Pressable, ScrollView, StatusBar, StyleSheet, Switch, Text, TextInput, useColorScheme, View,} from 'react-native';
+  ActivityIndicator, AppState, BackHandler, Clipboard, Image, KeyboardAvoidingView, Modal, PermissionsAndroid, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Switch, Text, TextInput, useColorScheme, View,} from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import * as A from '../web/src/adapter.ts';
 import { chatTokens, safeLink } from '../web/src/chat-md.ts';
@@ -28,6 +28,7 @@ import { useShareIntent } from 'expo-share-intent';
 import QRCode from 'qrcode';
 import * as motion from './src/motion';
 import { MARKS } from './src/marks';
+import { askOf } from './src/ask';
 import { Office } from './src/office';
 import { canHear, hear, stopHearing } from './modules/crewhouse-net';
 import { connect, desktopSignaling, forgetGrant, kept, loadGrant, onLive, pair, pairTypedCode, type Grant, type Status } from './src/link';
@@ -716,6 +717,22 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
     return true;
   }, [stack.length, sheet]);
   useEffect(() => { const sub = BackHandler.addEventListener('hardwareBackPress', back); return () => sub.remove(); }, [back]);
+  // A shortcut or control opened crewhouse://ask (src/ask.ts): its words wait in that chat's box, never sent. The app
+  // opens that address itself, often while starting up, so the last one opened is read on mount, not only heard.
+  const [asked, setAsked] = useState<string | null>(null);
+  useEffect(() => {
+    setAsked(Linking.getLinkingURL());
+    const sub = Linking.addEventListener('url', (e) => setAsked(e.url));
+    return () => sub.remove();
+  }, []);
+  useEffect(() => {
+    const a = asked && state ? askOf(asked, A.crew(state).map((h) => ({ id: h.id, template: state.bots.find((b: Json) => b.id === h.id)?.template }))) : null;
+    if (!a) return;
+    setAsked(null);
+    Linking.clearInitialURL();
+    if (a.text) keepDraft(a.chat, a.text);
+    go(a.chat === 'chief' ? { view: 'chief' } : { view: 'helper', id: a.chat });
+  }, [asked, !!state]);
   const forget = async () => { link.current?.stop(); await forgetGrant(); onRemoved(); };
 
   if (status === 'refused') {
@@ -768,10 +785,10 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
       </Modal>
       <View style={{ flex: 1 }}>
         {route.view === 'home' && <Home {...ctx} />}
-        {route.view === 'chief' && <ChiefPage {...ctx} m={route.m} />}
+        {route.view === 'chief' && <ChiefPage key={stack.length} {...ctx} m={route.m} />}
         {route.view === 'room' && <Room {...ctx} />}
         {route.view === 'crew' && <Crew {...ctx} />}
-        {route.view === 'helper' && <HelperPage {...ctx} id={route.id!} tab={route.tab ?? 'chat'} m={route.m} setTab={(tab) => setStack((st) => [...st.slice(0, -1), { ...route, tab }])} />}
+        {route.view === 'helper' && <HelperPage key={stack.length} {...ctx} id={route.id!} tab={route.tab ?? 'chat'} m={route.m} setTab={(tab) => setStack((st) => [...st.slice(0, -1), { ...route, tab }])} />}
         {route.view === 'routines' && <Page title="Routines" lead="Jobs the crew does on a schedule."><RoutineList {...ctx} /></Page>}
         {route.view === 'add' && <AddHelper {...ctx} />}
         {route.view === 'things' && <Page title="Things" lead="Everything the crew has made for you."><ThingsList list={A.things(state)} state={state} empty="Videos, lists, letters and plans the crew makes for you land here." /></Page>}
@@ -1684,6 +1701,26 @@ function PhoneAccounts() {
 }
 
 // ---------- this phone ----------
+/** iPhone and iPad have no room for Chief to float over other apps, so this card shows how to get the same thing from the
+ *  phone's own floating button and controls (the actions come from targets/actions). */
+function OnYourScreen() {
+  const t = useLook();
+  const steps = [
+    'In the Shortcuts app, open Crewhouse and add Ask Chief to your shortcuts.',
+    'In Settings, go to Accessibility, Touch, AssistiveTouch, and switch it on.',
+    'Tap Customize Top Level Menu, pick a spot, and choose Ask Chief.',
+  ];
+  return (
+    <Card style={{ gap: 10 }}>
+      <T style={s.b}>Chief on your screen</T>
+      <T tone="mute">Your screen can keep a small button that you drag to any edge. Make it open Chief:</T>
+      {steps.map((l, i) =>
+        <View key={l} style={[s.row, { alignItems: 'flex-start' }]}><Text style={[s.stepNum, { backgroundColor: t.soft, color: t.ink }]}>{i + 1}</Text><T tone="ink2" style={{ flex: 1 }}>{l}</T></View>)}
+      <T tone="mute" style={s.small}>Ask Chief, Write with Scribe and Record a demo with Reel also go in Control Center, on the Lock Screen, and on the Action button if yours has one. Each opens the chat with your words in the box; nothing is sent until you tap send.</T>
+    </Card>
+  );
+}
+
 function ThisPhone({ grant, status, onForget, onClear }: { grant: Grant; status: Status; onForget: () => void; onClear: () => void }) {
   // This phone knows its own news state: allowed and working, said no, or this build can't push at all.
   const [push, setPush] = useState<'on' | 'off' | 'missing' | null>(null);
@@ -1703,6 +1740,7 @@ function ThisPhone({ grant, status, onForget, onClear }: { grant: Grant; status:
         <T tone={push === 'on' ? 'ink' : 'mute'}>{push ? PUSH_WORDS[push] : 'Checking…'}</T>
         {push === 'off' && <View style={s.row}><Btn label="Open phone settings" onPress={() => void Linking.openSettings()} /></View>}
       </Card>
+      {Platform.OS === 'ios' && <OnYourScreen />}
       <Card>
         <T style={s.b}>Chats kept on this phone</T>
         <T tone="mute">This phone keeps the last week of your chats, so you can read them while the home computer is off. Clearing removes them from this phone only; unpairing clears them too.</T>
