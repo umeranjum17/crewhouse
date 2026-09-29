@@ -963,11 +963,11 @@ export class Crew {
       });
       return this.addTask(CHIEF, ask.trim(), 'person', undefined, member);
     }
-    const empty = this.bots().length === 1;
+    // The address is already stored in people; the Hello screen already greeted her, so the thread
+    // starts empty and renders ChiefIdeas.
     this.db.tx(() => {
+      this.db.run("DELETE FROM messages WHERE bot = ? AND member = ? AND author = 'bot'", CHIEF, member);
       this.db.run('UPDATE people SET address = ?, onboarded = 1 WHERE id = ?', a, member);
-      this.say(CHIEF, 'person', a, null, member);
-      this.say(CHIEF, 'bot', `Thanks, ${a}. What would you like to work on?` + (empty ? ' I can bring in Scout for research, Scribe for writing or Reel for videos.' : ''), null, member);
       this.db.event('person.onboarded', null, { member, address: a });
     });
   }
@@ -1052,7 +1052,7 @@ export class Crew {
     const pics = checkPhotos(photos);
     if (!text.trim() && !pics.length) throw Object.assign(new Error('empty message'), { status: 400 });
     const words = text.trim() || (pics.length === 1 ? 'Here is a photo.' : 'Here are some photos.');
-    if (botId === CHIEF && !this.member(member).onboarded) return this.onboard(words, member);
+    if (botId === CHIEF && !this.member(member).onboarded) { this.say(CHIEF, 'person', words, null, member); return this.onboard(words, member); }
     if (botId === CHIEF && asksForPhone(words) && !pics.length) {
       this.say(CHIEF, 'person', words, null, member);
       await this.addPhone(member);
