@@ -1049,3 +1049,129 @@ test('a delivered .mp4 shows a video badge, never DOCX', () => {
   const app = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
   assert.doesNotMatch(app, /'DOCX'|'XLSX'|'PDF'/, 'no badge is a hardcoded default; every chip comes from the file');
 });
+
+// The office: one room per viewer from the adapter views, holding only their own jobs. Ported from the office-view
+// board fixture (data/ch-office-view/board/kit/data.js): Nadia (2), Umer (1, owner), Sam (3); reel/scout/scribe work
+// for Nadia, pip/tracer for Umer; a helper busy with someone else's job reads live 'working' with no task of yours.
+const OTN = Date.now();
+const oBot = (id: string, name: string, extra: Json = {}) => ({ id, display: name, template: id, role: `${name} helps out`,
+  controls: 'bot', computer: false, queued: 0, pausedUntil: null, unread: 0, stuck: false, ...extra });
+const oTask = { reel: { id: 41, title: "Mum's birthday video", state: 'working' },
+  scout: { id: 42, title: 'Flights to Lahore in December', state: 'working' },
+  scribe: { id: 43, title: 'Thank-you note for Aunty Sara', state: 'needs_you' },
+  pip: { id: 51, title: 'Car insurance renewal', state: 'working' },
+  tracer: { id: 44, title: "Sara Malik's work email", state: 'needs_you' } } as Record<string, Json>;
+const oOwner = { reel: 2, scout: 2, scribe: 2, pip: 1, tracer: 1 } as Record<string, number>;
+const oStep = { reel: { seq: 11, at: OTN, kind: 'run.tool', data: { task: 41, words: 'Timing the photos to the music' } },
+  scout: { seq: 12, at: OTN, kind: 'task.progress', data: { task: 42, text: 'Comparing three airlines' } },
+  pip: { seq: 13, at: OTN, kind: 'run.tool', data: { task: 51, words: 'Putting the prices side by side' } } } as Record<string, Json>;
+function officeState(viewer: number): Json {
+  const bots = ['reel', 'scout', 'scribe', 'pip', 'tracer']
+    .filter((id) => viewer === 1 || id !== 'tracer')
+    .map((id) => {
+      const mine = oOwner[id] === viewer;
+      return oBot(id, id[0].toUpperCase() + id.slice(1), { live: 'working', task: mine ? { ...oTask[id] } : null,
+        step: mine ? oStep[id] ?? null : null, ...(id === 'scribe' && viewer === 1 ? { queued: 1 } : {}) });
+    });
+  const asks = viewer === 2
+    ? [{ id: 7, bot: 'scribe', kind: 'permission', at: OTN, detail: { effect: 'send', words: 'Scribe wants to email your thank-you note to Aunty Sara. Send it?',
+      preview: { head: 'To Aunty Sara', body: 'Dear Aunty Sara, thank you for Sunday dinner' } } }]
+    : viewer === 1
+    ? [{ id: 8, bot: 'tracer', kind: 'permission', at: OTN, detail: { effect: 'spend', spends: true, words: 'Tracer wants one paid lookup to confirm the address. OK?' } }]
+    : [];
+  const tasks = viewer === 2
+    ? [{ id: 21, bot: 'scout', title: "This week's dinners", state: 'done', updated_at: OTN,
+      files: ['files/dinners-and-shopping-list.md'], result: 'Seven dinners the kids will actually eat, and one shopping list sorted by aisle.' }]
+    : viewer === 1
+    ? [{ id: 22, bot: 'scribe', title: 'Letter to the school about the trip', state: 'done', updated_at: OTN,
+      files: ['files/school-trip-letter.docx'], result: 'A short, polite letter asking to move Ayaan to the Friday group.' }]
+    : [];
+  const events = [
+    ...(oOwner.reel === viewer ? [oStep.reel] : []), ...(oOwner.scout === viewer ? [oStep.scout] : []), ...(oOwner.pip === viewer ? [oStep.pip] : []),
+    ...(oOwner.reel === viewer ? [{ seq: 14, at: OTN, kind: 'file.delivered', bot: 'reel', data: { task: 41, path: 'files/birthday-first-look.png', note: 'A still from the opening' } }] : []),
+    ...(oOwner.pip === viewer ? [{ seq: 15, at: OTN, kind: 'file.delivered', bot: 'pip', data: { task: 51, path: 'files/car-insurance-prices.xlsx', note: 'This year against two others' } }] : []),
+  ];
+  return { person: { id: viewer }, members: [], asks, tasks, events, resting: {}, ideas: [],
+    bots: [{ id: 'chief', display: 'Chief', template: 'chief' }, ...bots] };
+}
+const OJARGON = /\b(relay|noise|tickets?|grants?|daemon|crewd|engine|tokens?|ports?|stub|hosted?|links?|host)\b/i;
+
+test('the office: one room per viewer, holding only their own jobs', () => {
+  const nadia = A.office(officeState(2), { busyElsewhere: true });
+  assert.deepEqual(nadia.crew.map((c) => c.id), ['reel', 'scout', 'scribe', 'pip'], 'everyone is in the room; Tracer stays with the owner');
+  const reel = nadia.crew.find((c) => c.id === 'reel')!;
+  assert.deepEqual([reel.status, reel.step, reel.ring, reel.busyElsewhere], ["Mum's birthday video", 'Timing the photos to the music', 'working', false]);
+  assert.equal(reel.things[0].kind, 'image', 'the first look sits on the desk');
+  assert.ok(reel.steps.some((s) => s.now), 'the latest step is marked now');
+  const scribe = nadia.crew.find((c) => c.id === 'scribe')!;
+  assert.equal(scribe.ring, 'needs');
+  assert.match(scribe.ask?.head ?? '', /ready to send/, 'the question waits on the desk');
+  assert.match(scribe.ask?.words ?? '', /Aunty Sara/);
+  assert.equal(nadia.chief.line, 'Scribe needs you', 'Chief names the headline');
+  assert.deepEqual(nadia.counts, { needs: 1, working: 2, done: 1 });
+  // Pip works for Umer: Nadia sees it busy, with nothing of his.
+  const pip = nadia.crew.find((c) => c.id === 'pip')!;
+  assert.deepEqual([pip.status, pip.step, pip.ring, pip.busyElsewhere], [A.BUSY_ELSEWHERE, '', '', true]);
+  assert.deepEqual([pip.things, pip.steps, pip.ask], [[], [], undefined]);
+  assert.doesNotMatch(shown(pip), /Car insurance|renewal|51|Umer/, 'no title, no step, no member');
+  // Umer sees his own room: Pip on the job, Tracer waiting, everyone else's helpers busy.
+  const umer = A.office(officeState(1), { busyElsewhere: true });
+  assert.deepEqual(umer.crew.map((c) => c.id), ['reel', 'scout', 'scribe', 'pip', 'tracer']);
+  assert.equal(umer.crew.find((c) => c.id === 'pip')!.status, 'Car insurance renewal');
+  assert.equal(umer.crew.find((c) => c.id === 'tracer')!.ring, 'needs');
+  assert.equal(umer.crew.find((c) => c.id === 'reel')!.busyElsewhere, true);
+  assert.doesNotMatch(shown(umer.crew.find((c) => c.id === 'reel')), /Mum|birthday|Nadia/);
+  assert.deepEqual(umer.counts, { needs: 1, working: 1, done: 1 });
+  // Sam's evening: nothing of his on the go, and nobody else's words.
+  const sam = A.office(officeState(3));
+  assert.deepEqual(sam.counts, { needs: 0, working: 0, done: 0 });
+  assert.deepEqual(sam.done, []);
+  assert.equal(sam.chief.line, 'Keeping an eye on things');
+  assert.ok(sam.crew.every((c) => c.status === 'Free to help' && !c.busyElsewhere), "today's rule: someone else's job looks free");
+  const samBusy = A.office(officeState(3), { busyElsewhere: true });
+  assert.ok(samBusy.crew.every((c) => c.busyElsewhere), 'with the decision on: busy, and still wordless');
+  for (const c of samBusy.crew) assert.doesNotMatch(shown(c), /Mum|birthday|Flights|Lahore|Aunty|insurance|email|Nadia|Umer/);
+  // Whatever the room holds, no machinery reaches it.
+  for (const v of [nadia, umer, sam, samBusy]) {
+    assert.doesNotMatch(shown(v), FORBIDDEN, 'no paths, engines, percentages or prompts');
+    const words = (x: unknown): string => typeof x === 'string' ? x : Array.isArray(x) ? x.map(words).join(' ')
+      : x && typeof x === 'object' ? Object.entries(x).filter(([k]) => k !== 'url' && k !== 'at').map(([, w]) => words(w)).join(' ') : '';
+    assert.doesNotMatch(words(v), OJARGON, 'no machinery words');
+  }
+});
+
+test('the office moves on live events; the refresh stays the source of truth', () => {
+  let v = A.office(officeState(2), { busyElsewhere: true });
+  v = A.officeEvent(v, { seq: 20, at: OTN, kind: 'run.tool', bot: 'scout', data: { task: 42, words: 'Friday night is cheapest direct' } });
+  const scout = v.crew.find((c) => c.id === 'scout')!;
+  assert.equal(scout.step, 'Friday night is cheapest direct', 'a step bumps the bubble');
+  assert.equal(scout.steps.at(-1)?.now, true);
+  v = A.officeEvent(v, { seq: 21, at: OTN, kind: 'file.delivered', bot: 'reel', data: { task: 41, path: 'files/birthday-full-cut.mp4', note: 'Ninety seconds, with the piano song' } });
+  const reel = v.crew.find((c) => c.id === 'reel')!;
+  assert.equal(reel.things.length, 2, 'a new thing lands on the desk');
+  assert.equal(reel.things.at(-1)?.kind, 'video');
+  assert.match(reel.step, /Birthday full cut/);
+  // Someone else's traffic and unknown helpers change nothing.
+  const pipBefore = v.crew.find((c) => c.id === 'pip')!;
+  const v2 = A.officeEvent(v, { seq: 22, at: OTN, kind: 'run.tool', bot: 'pip', data: { task: 51, words: 'Reading the renewal letter' } });
+  assert.equal(v2.crew.find((c) => c.id === 'pip'), pipBefore, 'a busy-elsewhere row ignores steps defensively');
+  assert.equal(A.officeEvent(v, { seq: 23, at: OTN, kind: 'run.tool', bot: 'ghost', data: { task: 1, words: 'Hi' } }), v);
+  assert.equal(A.officeEvent(v, { seq: 24, at: OTN, kind: 'reply.partial', bot: 'scout', data: {} }), v, 'a kind the room does not draw leaves it alone');
+  // Done: the jump, and the thing into the tray.
+  v = A.officeEvent(v, { seq: 25, at: OTN, kind: 'task.done', bot: 'reel', data: { task: 41, title: "Mum's birthday video", result: 'Ninety seconds of photos, with a gentle piano song.' } });
+  const done = v.crew.find((c) => c.id === 'reel')!;
+  assert.deepEqual([done.ring, done.mood, done.status, done.step], ['', 'happy', 'Free to help', '']);
+  assert.equal(v.done.length, 2);
+  assert.equal(v.counts.done, 2);
+  assert.match(v.done[0].summary, /Ninety seconds/);
+  // A question, then its answer.
+  let u = A.office(officeState(1), { busyElsewhere: true });
+  u = A.officeEvent(u, { seq: 26, at: OTN, kind: 'ask.opened', bot: 'pip', data: { task: 51 } });
+  assert.deepEqual([u.crew.find((c) => c.id === 'pip')!.ring, u.crew.find((c) => c.id === 'pip')!.status], ['needs', 'Needs you']);
+  assert.equal(u.counts.needs, 2);
+  u = A.officeEvent(u, { seq: 27, at: OTN, kind: 'ask.answered', bot: 'pip', data: { task: 51, answer: 'allow' } });
+  assert.equal(u.crew.find((c) => c.id === 'pip')!.ring, 'working', 'answered: back on the job');
+  u = A.officeEvent(u, { seq: 28, at: OTN, kind: 'task.failed', bot: 'pip', data: { task: 51, title: 'Car insurance renewal' } });
+  assert.equal(u.crew.find((c) => c.id === 'pip')!.mood, 'error');
+  for (const view of [v, u]) assert.doesNotMatch(shown(view), FORBIDDEN);
+});

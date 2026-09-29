@@ -906,3 +906,117 @@ const APPS: App[] = [
 ];
 /** The app grid; which ones are on comes from crewd's connections once it has them. */
 export const apps = (state: Json): App[] => APPS.map((a) => ({ ...a, on: !!state.connections?.includes?.(a.id) }));
+
+// ---------- the office ----------
+/** One character in the office: a helper as its viewer may see it. Every word comes from the adapter views above
+ *  (crew, chief, work, cards, things) plus the step/file worders, never raw state — so the room a member sees holds
+ *  only their own jobs, and a helper busy with someone else's job carries no title, step or member, ever. */
+export type OfficeMember = { id: string; name: string; kind: Kind; mood: Mood; ring: Helper['ring']; status: string;
+  step: string; steps: Step[]; things: FileView[]; ask?: Card; busyElsewhere: boolean };
+export type OfficeView = { chief: ChiefView; crew: OfficeMember[]; done: Thing[];
+  counts: { needs: number; working: number; done: number } };
+export type OfficeOpts = { busyElsewhere?: boolean };
+/** "Busy with another job", said once: the room's honest word when a helper works for someone else. */
+export const BUSY_ELSEWHERE = 'Busy with another job';
+/** A helper the viewer can read as busy elsewhere: working on the bot, with no task of the viewer's (src/crew.ts
+ *  pub/liveState). Bot-level signals only — never a title, step or member. */
+const isBusyElsewhere = (b: Json) => b?.live === 'working' && !b?.task;
+
+export function office(state: Json, opts: OfficeOpts = {}): OfficeView {
+  const helpers = crew(state);
+  const raw = new Map((state.bots as Json[] ?? []).map((b: Json) => [b.id, b]));
+  const lines = new Map(work(state).map((w) => [w.helper, w]));
+  const open = cards(state);
+  const events = (state.events ?? []) as Json[];
+  const crewRows: OfficeMember[] = helpers.map((h) => {
+    const b = raw.get(h.id) ?? {};
+    const task = b.task ?? null;
+    if (opts.busyElsewhere && isBusyElsewhere(b)) {
+      return { id: h.id, name: h.name, kind: h.kind, mood: 'work' as Mood, ring: '' as const,
+        status: BUSY_ELSEWHERE, step: '', steps: [], things: [], ask: undefined, busyElsewhere: true };
+    }
+    const now = task ? steps(events, task.id, true) : [];
+    const made = task ? events.filter((e) => e.kind === 'file.delivered' && !e.data?.photo && e.data?.task === task.id)
+      .map((e) => fileView(h.id, String(e.data?.path ?? ''))) : [];
+    const w = lines.get(h.id);
+    return { id: h.id, name: h.name, kind: h.kind, mood: h.mood, ring: h.ring, status: h.status,
+      step: (b.step && step(b.step)) || (w && !w.waiting ? 'Getting started…' : ''), steps: now, things: made,
+      ask: open.find((c) => c.helper === h.id), busyElsewhere: false };
+  });
+  const done = things(state);
+  return { chief: chief(state), crew: crewRows, done,
+    counts: { needs: crewRows.filter((c) => c.ring === 'needs').length,
+      working: crewRows.filter((c) => c.ring === 'working').length, done: done.length } };
+}
+
+/** The office between refreshes: crewd's debounced snapshot stays the source of truth, and each live event only
+ *  moves the words it carries (report §7). Pure — the passed view is never changed. Someone else's events never
+ *  reach a view (db.visibleEvent), and a busy-elsewhere row ignores step/file updates defensively. */
+export function officeEvent(view: OfficeView, e: Json): OfficeView {
+  const touch = (id: string, f: (c: OfficeMember) => OfficeMember): OfficeView => {
+    const crew = view.crew.map((c) => (c.id === id ? f(c) : c));
+    if (crew.every((c, i) => c === view.crew[i])) return view;
+    return { ...view, crew, counts: { needs: crew.filter((c) => c.ring === 'needs').length,
+      working: crew.filter((c) => c.ring === 'working').length, done: view.done.length } };
+  };
+  const say = (c: OfficeMember, text: string): OfficeMember => {
+    const last = c.steps.at(-1);
+    const seq = typeof e.seq === 'number' ? e.seq : (last?.seq ?? 0) + 1;
+    const next = last?.text === text ? c.steps : [...c.steps, { at: e.at == null ? Date.now() : at(e.at), text, seq }].slice(-80);
+    return { ...c, step: text, steps: next.map((s, i, a) => ({ ...s, now: i === a.length - 1 })) };
+  };
+  const d = e.data ?? {};
+  switch (e.kind) {
+    case 'run.tool': {
+      const text = d.words ? plain(d.words) : 'Worked on it';
+      return touch(String(e.bot), (c) => (c.busyElsewhere ? c : say(c, text)));
+    }
+    case 'task.progress': {
+      const text = plain(d.text ?? '');
+      if (!text) return view;
+      return touch(String(e.bot), (c) => (c.busyElsewhere ? c : say(c, text)));
+    }
+    case 'file.delivered': {
+      return touch(String(e.bot), (c) => {
+        if (c.busyElsewhere) return c;
+        const withStep = say(c, step(e) ?? c.step);
+        return d.photo ? withStep : { ...withStep, things: [...withStep.things, fileView(c.id, String(d.path ?? ''))] };
+      });
+    }
+    case 'task.created':
+    case 'task.working':
+      return touch(String(e.bot), (c) => ({ ...c, busyElsewhere: false, ring: 'working' as const,
+        mood: c.mood === 'idle' ? 'work' as Mood : c.mood,
+        status: d.title ? plain(d.title) : c.status === BUSY_ELSEWHERE ? 'Getting started\u2026' : c.status }));
+    case 'task.paused':
+      return touch(String(e.bot), (c) => ({ ...c, ring: '' as const, step: '', steps: [], status: 'Free to help' }));
+    case 'task.done': {
+      const files = (Array.isArray(d.files) ? d.files : []).map((f: Json) => fileView(String(e.bot), String(f)));
+      const thing: Thing = { id: typeof d.task === 'number' ? d.task : Date.now(), helper: String(e.bot),
+        title: plain(d.title ?? ''), at: e.at ?? Date.now(), summary: teaser(d.result ?? '').slice(0, 220), files };
+      const crew = view.crew.map((c) => (c.id === String(e.bot)
+        ? { ...c, busyElsewhere: false, ring: '' as const, mood: 'happy' as Mood, status: 'Free to help', step: '', steps: [], things: [], ask: undefined } : c));
+      return { ...view, crew, done: [thing, ...view.done],
+        counts: { needs: crew.filter((c) => c.ring === 'needs').length,
+          working: crew.filter((c) => c.ring === 'working').length, done: view.done.length + 1 } };
+    }
+    case 'task.failed':
+    case 'task.unsure':
+      return touch(String(e.bot), (c) => (c.busyElsewhere ? c : { ...c, ring: '' as const, mood: 'error' as Mood, step: step(e) ?? c.step }));
+    case 'ask.opened':
+      return touch(String(e.bot), (c) => (c.busyElsewhere ? c
+        : { ...c, ring: 'needs' as const, mood: 'ask' as Mood, status: 'Needs you', step: 'Waiting for your OK' }));
+    case 'ask.answered':
+    case 'ask.parked':
+      return touch(String(e.bot), (c) => {
+        if (c.ring !== 'needs') return { ...c, ask: undefined };
+        // The question is answered: back to the last step the refresh knew, since the snapshot stays the source
+        // of truth and this row only bridges the gap between refreshes.
+        const back = c.steps.at(-1);
+        return { ...c, ask: undefined, ring: back ? 'working' as const : '' as const,
+          mood: back ? 'work' as Mood : 'idle' as Mood, status: back ? back.text : 'Free to help', step: back ? back.text : '' };
+      });
+    default:
+      return view;
+  }
+}
