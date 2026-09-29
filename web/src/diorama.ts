@@ -543,11 +543,12 @@ export function diorama(host: HTMLElement, anchors: Anchors, onPick: (id: string
     h.dist = hi;
     const f = frame(hi);
     // How tall the picture wants the stage at this width. The ResizeObserver brings us back here at that height; the
-    // count stops a width that never settles (a pixel of rounding either way) from resizing for ever.
+    // count stops a width that never settles (a pixel of rounding either way) from resizing for ever; settling refills it.
     const most = look.phone ? Math.min(640, size.w * 1.6) : 560, least = look.phone ? 240 : 300;
     const want = Math.round(clamp((f.y1 - f.y0) * (size.w - 2 * pad) / (f.x1 - f.x0) + 2 * pad, least, most));
     if (sized.w !== size.w) sized = { w: size.w, n: 0 };
-    if (Math.abs(want - size.h) > 1.5 && sized.n++ < 4) Object.assign(host.style, { height: `${want}px`, aspectRatio: 'auto' });
+    if (Math.abs(want - size.h) <= 1.5) sized.n = 0; // settled: the next card that grows may resize again
+    else if (sized.n++ < 4) Object.assign(host.style, { height: `${want}px`, aspectRatio: 'auto' });
     const was = home && cam ? { yaw: cam.yaw - home.yaw, pitch: cam.pitch - home.pitch, dist: cam.dist / home.dist } : null;
     home = h;
     homeOff = { x: (f.x0 + f.x1) / 2 - size.w / 2, y: (f.y0 + f.y1) / 2 - size.h / 2 };
