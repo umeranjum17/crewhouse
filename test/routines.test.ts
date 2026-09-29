@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { setup as lab, settled, release, holding, until, lastSaid } from './lab.ts';
+import { setup as lab, settled, release, holding, until, lastSaid, sleep } from './lab.ts';
 import * as A from '../web/src/adapter.ts';
 import type { Store } from '../src/db.ts';
 const { describe, nextRun, parseSchedule } = await import('../src/routines.ts');
@@ -295,6 +295,64 @@ test('Do it now on a share-parked routine restarts the run clock: an hour-old ta
   } finally {
     if (before === undefined) delete process.env.CREWHOUSE_DAY_TOKENS; else process.env.CREWHOUSE_DAY_TOKENS = before;
   }
+  done();
+});
+
+test('Do it now recovers a sign-in-parked routine once signed in, and refuses honestly while still signed out', async () => {
+  const { db, crew, done } = setup();
+  const keys = ['chatgpt', 'grok', 'copilot', 'openrouter', 'minimax', 'claude'];
+  for (const k of keys) (crew.accounts as any).ready.set(`1:${k}`, false);
+  const r = crew.addRoutine({ bot: 'reel', schedule: 'every day 7:00', task: 'check the prices', name: 'Deal check' }, 'person');
+  crew.runRoutine(r.id);
+  const t = db.get('SELECT * FROM tasks WHERE routine = ?', r.id)!;
+  await settled(db, t.id);
+  assert.equal(state(db, t.id), 'paused');
+  assert.match(db.get('SELECT result FROM tasks WHERE id = ?', t.id)!.result, /Waiting for you to sign in/);
+  assert.match(A.routines(crew.snapshot()).find((x: any) => x.id === r.id)!.last, /Waiting for you to sign in/);
+
+  // Still signed out: the tap retries the same task rather than stacking or silently skipping, and it waits again.
+  crew.runRoutine(r.id);
+  await settled(db, t.id);
+  assert.equal(db.get('SELECT COUNT(*) AS n FROM tasks WHERE routine = ?', r.id)!.n, 1, 'no second task stacked');
+  assert.equal(fired(db, r.id).at(-1).kind, 'routine.fired', 'a manual retry, not a silent skip');
+  assert.equal(fired(db, r.id).at(-1).task, t.id);
+  assert.equal(state(db, t.id), 'paused');
+
+  // Signed in since, with no sign-in event reaching it: the same tap runs the parked task.
+  for (const k of keys) (crew.accounts as any).ready.delete(`1:${k}`);
+  crew.runRoutine(r.id);
+  await settled(db, t.id);
+  assert.equal(state(db, t.id), 'done', 'the parked task runs once the account is back');
+  assert.equal(db.get('SELECT COUNT(*) AS n FROM tasks WHERE routine = ?', r.id)!.n, 1);
+  assert.match(A.routines(crew.snapshot()).find((x: any) => x.id === r.id)!.last, /Last ran/);
+  done();
+});
+
+test('a scheduled tick recovers a sign-in-parked routine once signed in, and stays quiet while signed out', async () => {
+  const { db, crew, done } = setup();
+  const keys = ['chatgpt', 'grok', 'copilot', 'openrouter', 'minimax', 'claude'];
+  for (const k of keys) (crew.accounts as any).ready.set(`1:${k}`, false);
+  const r = crew.addRoutine({ bot: 'reel', schedule: 'every day 7:00', task: 'check the prices', name: 'Deal check' }, 'person');
+  crew.runRoutine(r.id);
+  const t = db.get('SELECT * FROM tasks WHERE routine = ?', r.id)!;
+  await settled(db, t.id);
+  assert.equal(state(db, t.id), 'paused');
+
+  // Due while still signed out: nothing new runs, and the screen keeps its honest reason.
+  db.run('UPDATE routines SET next_at = ? WHERE id = ?', Date.now() - 1000, r.id);
+  crew.schedule();
+  await sleep(100);
+  assert.equal(db.get('SELECT COUNT(*) AS n FROM tasks WHERE routine = ?', r.id)!.n, 1);
+  assert.equal(state(db, t.id), 'paused');
+
+  // Due once signed in: the parked task runs by itself.
+  for (const k of keys) (crew.accounts as any).ready.delete(`1:${k}`);
+  db.run('UPDATE routines SET next_at = ? WHERE id = ?', Date.now() - 1000, r.id);
+  crew.schedule();
+  await until('scheduled tick retries the parked task', () => state(db, t.id) !== 'paused');
+  await settled(db, t.id);
+  assert.equal(state(db, t.id), 'done');
+  assert.equal(db.get('SELECT COUNT(*) AS n FROM tasks WHERE routine = ?', r.id)!.n, 1);
   done();
 });
 
