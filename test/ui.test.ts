@@ -414,9 +414,9 @@ test('the mascots: every mood draws a whole grid in known colours, and Chief\'s 
 });
 
 test('the phone office sprite set matches art.ts kinds × moods', async () => {
-  // P4: scripts/icons.mjs renders every mascot in every mood into mobile/assets/pals/, required from
-  // mobile/src/marks.ts. The phone office draws those PNGs instead of one View per dot. Chief ships a
-  // night set; the pals' palette is the same day and night, so they render once.
+  // P4: scripts/icons.mjs renders every mascot in every mood into mobile/assets/pals/ (art.spriteSvg: square pixels
+  // with a one-dot ink edge), required from mobile/src/marks.ts. The phone office draws those PNGs instead of one View
+  // per dot. Chief ships a night set; the pals' palette is the same day and night, so they render once.
   const art = await import('../web/src/art.ts');
   const files = new Map<string, Bitmap>();
   for (const m of art.MOODS) {
@@ -430,30 +430,20 @@ test('the phone office sprite set matches art.ts kinds × moods', async () => {
   for (const [f, rows] of files) {
     const b = readFileSync(join(dir, f));
     assert.deepEqual(b.subarray(0, 8), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), `${f} is no PNG`);
-    assert.equal(b.readUInt32BE(16), rows[0].length * 8, `${f} width is not its bitmap at 8 px a dot`);
-    assert.equal(b.readUInt32BE(20), rows.length * 8, `${f} height is not its bitmap at 8 px a dot`);
+    assert.equal(b.readUInt32BE(16), (rows[0].length + 2) * 8, `${f} width is not its bitmap and edge at 8 px a dot`);
+    assert.equal(b.readUInt32BE(20), (rows.length + 2) * 8, `${f} height is not its bitmap and edge at 8 px a dot`);
   }
   const wired = new Set([...readFileSync(join(import.meta.dirname, '..', 'mobile', 'src', 'marks.ts'), 'utf8')
     .matchAll(/require\('\.\.\/assets\/pals\/([\w-]+\.png)'\)/g)].map((m) => m[1]));
   assert.deepEqual(wired, new Set(files.keys()), 'mobile/src/marks.ts does not require the whole set');
 });
 
-test('the phone office: a still room drawn once, a crew that moves only when news lands', () => {
-  // scripts/office.mjs draws the Studio into mobile/assets/office/, one set per theme; marks.ts requires each
-  // picture and pieces.json places it on the stage.
-  const dir = join(import.meta.dirname, '..', 'mobile', 'assets', 'office');
-  const boxes = JSON.parse(readFileSync(join(dir, 'pieces.json'), 'utf8'));
-  const pngs = readdirSync(dir).filter((f) => f.endsWith('.png')).map((f) => f.slice(0, -4));
-  assert.deepEqual(new Set(pngs), new Set(Object.keys(boxes)), 'a picture without a place, or a place without a picture');
-  const kinds = ['reel', 'scout', 'scribe', 'tracer', 'pip'];
-  for (const theme of ['day', 'night'])
-    for (const n of ['room', 'desk', 'pool', 'sofa', 'arm', 'tray', ...kinds.map((k) => `wall-${k}`)]) assert.ok(boxes[`${n}-${theme}`], `${n}-${theme}`);
-  const wired = new Set([...readFileSync(join(import.meta.dirname, '..', 'mobile', 'src', 'marks.ts'), 'utf8')
-    .matchAll(/require\('\.\.\/assets\/office\/([\w-]+)\.png'\)/g)].map((m) => m[1]));
-  assert.deepEqual(wired, new Set(pngs), 'mobile/src/marks.ts does not require the whole room');
+test('the phone office: one flat room, a crew that moves only when news lands', () => {
+  // The room is drawn in Views on A.floorPlan, as the web's is: no pictures of a room, no isometric plan.
   // The battery budget: no timer or beat keeps a quiet room moving, moves wait for the app to be on screen, the live
   // desktop never opens here, and the room reads the shared view model with "Busy with another job" on.
   const office = readFileSync(join(import.meta.dirname, '..', 'mobile', 'src', 'office.tsx'), 'utf8');
+  assert.match(office, /A\.floorPlan\(crew, width, all\)/);
   assert.doesNotMatch(office, /setInterval|setTimeout|useBeat|requestAnimationFrame|DesktopView|desktopSignaling/);
   assert.match(office, /A\.office\(state, \{ busyElsewhere: true \}\)/);
   assert.match(office, /A\.officeEvent\(/);
@@ -640,7 +630,7 @@ test('no jargon anywhere: the machinery\'s words never reach a person', () => {
     return [...lits, ...jsx].filter((l) => !TOKENY.test(l.trim()));
   };
   const srcDir = join(import.meta.dirname, '..', 'web', 'src');
-  for (const f of ['main.tsx', 'parts.tsx', 'flows.tsx', 'office.tsx', 'diorama.ts', 'dialog.ts', 'draft.ts', 'kept.ts', 'chat-md.ts', 'demo.ts', 'adapter.ts'])
+  for (const f of ['main.tsx', 'parts.tsx', 'flows.tsx', 'office.tsx', 'dialog.ts', 'draft.ts', 'kept.ts', 'chat-md.ts', 'demo.ts', 'adapter.ts'])
     for (const w of prose(readFileSync(join(srcDir, f), 'utf8')))
       assert.doesNotMatch(w, JARGON, `${f} shows: ${w.trim().slice(0, 80)}`);
   for (const f of PHONE_SCREENS) for (const w of prose(readFileSync(f, 'utf8'))) assert.doesNotMatch(w, JARGON, `${f} shows: ${w.trim().slice(0, 80)}`);

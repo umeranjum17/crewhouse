@@ -138,6 +138,26 @@ export function pal(kind: Kind, mood: Mood = 'idle'): Bitmap {
   } as Record<string, [number, number, string[]][]>)[mood] ?? [];
   return draw(18, 17, [0, 0, body], [0, mood === 'ask' ? -1 : 0, top], ...eyes, [7, ey + 3, PAL_MOUTH[mood] ?? [' ee']], [a - 2, ey + 2, ['c']], [b + 3, ey + 2, ['c']], ...signs);
 }
+/** A bitmap as crisp square pixels in an SVG, `pitch` units a dot, each run of one colour a single rect. With an
+ *  `outline` colour every lit dot gets a one-dot edge around it (the sprite then grows a dot on each side), so a
+ *  mascot reads on any wall. The web office draws it as an image; scripts/icons.mjs renders the phone's PNGs from it. */
+/** The office sprites' edge: Chief's ink. */
+export const EDGE = '#2e2a40';
+export function spriteSvg(rows: Bitmap, pal: Palette, pitch = 1, outline = '') {
+  const pad = outline ? 1 : 0, w = rows[0].length + 2 * pad, h = rows.length + 2 * pad;
+  const lit = (x: number, y: number) => !!pal[rows[y - pad]?.[x - pad]];
+  const at = (x: number, y: number) => (lit(x, y) ? pal[rows[y - pad][x - pad]]
+    : outline && [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => lit(x + dx, y + dy)) ? outline : '');
+  let s = '';
+  for (let y = 0; y < h; y++) for (let x = 0; x < w;) {
+    const c = at(x, y);
+    let n = 1;
+    while (c && x + n < w && at(x + n, y) === c) n++;
+    if (c) s += `<rect x="${x * pitch}" y="${y * pitch}" width="${n * pitch}" height="${pitch}" fill="${c}"/>`;
+    x += n;
+  }
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w * pitch}" height="${h * pitch}" viewBox="0 0 ${w * pitch} ${h * pitch}" shape-rendering="crispEdges">${s}</svg>`;
+}
 export const palPalette = (kind: Kind): Palette => ({ ...SIGNS, b: PALS[kind].body, D: PALS[kind].dark, S: PALS[kind].soft, G: '#5fc27e' });
 
 // ── The logo: a dot house with a smile, and the wordmark in the same dots ──

@@ -88,30 +88,3 @@ export const PALS: Record<string, number> = {
   'tracer-error': require('../assets/pals/tracer-error.png'),
   'pip-error': require('../assets/pals/pip-error.png'),
 };
-
-// The office room and the pieces that stand between the crew, day and night (made from mobile/src/studio.ts by
-// `node scripts/office.mjs`); their boxes on the stage are in pieces.json beside them.
-export const OFFICE: Record<string, number> = {
-  'room-day': require('../assets/office/room-day.png'),
-  'pool-day': require('../assets/office/pool-day.png'),
-  'desk-day': require('../assets/office/desk-day.png'),
-  'sofa-day': require('../assets/office/sofa-day.png'),
-  'arm-day': require('../assets/office/arm-day.png'),
-  'tray-day': require('../assets/office/tray-day.png'),
-  'wall-reel-day': require('../assets/office/wall-reel-day.png'),
-  'wall-scout-day': require('../assets/office/wall-scout-day.png'),
-  'wall-scribe-day': require('../assets/office/wall-scribe-day.png'),
-  'wall-tracer-day': require('../assets/office/wall-tracer-day.png'),
-  'wall-pip-day': require('../assets/office/wall-pip-day.png'),
-  'room-night': require('../assets/office/room-night.png'),
-  'pool-night': require('../assets/office/pool-night.png'),
-  'desk-night': require('../assets/office/desk-night.png'),
-  'sofa-night': require('../assets/office/sofa-night.png'),
-  'arm-night': require('../assets/office/arm-night.png'),
-  'tray-night': require('../assets/office/tray-night.png'),
-  'wall-reel-night': require('../assets/office/wall-reel-night.png'),
-  'wall-scout-night': require('../assets/office/wall-scout-night.png'),
-  'wall-scribe-night': require('../assets/office/wall-scribe-night.png'),
-  'wall-tracer-night': require('../assets/office/wall-tracer-night.png'),
-  'wall-pip-night': require('../assets/office/wall-pip-night.png'),
-};
