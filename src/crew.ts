@@ -1153,11 +1153,11 @@ export class Crew {
   private async route(text: string, model: string | undefined, member: number, pics: Photo[] = [], room = false) {
     const helpers = this.bots().filter((b) => b.id !== CHIEF) as Helper[];
     const lastBot = this.db.get("SELECT text, task_id, at FROM messages WHERE bot = ? AND member = ? AND author = 'bot' ORDER BY id DESC LIMIT 1", CHIEF, member);
-    const replyTo = text.length < 120 && !/\[tool\b/.test(text) && lastBot?.task_id && lastBot.at > Date.now() - 30 * 60_000 && /\?\s*$/.test(lastBot.text)
+    const replyTo = text.length < 120 && !/\[tool\b/.test(text) && lastBot && lastBot.task_id && lastBot.at > Date.now() - 30 * 60_000 && /\?\s*$/.test(lastBot.text)
       ? this.db.get('SELECT bot, body FROM tasks WHERE id = ?', lastBot.task_id) : undefined;
     if (replyTo?.bot === CHIEF) return this.addTask(CHIEF, text, 'person', model, member, undefined, text, pics, { room });
     // An answer to a helper's question skips routing and Chief: a fresh task carrying the question and its answer.
-    if (replyTo && replyTo.bot !== CHIEF && this.bot(replyTo.bot)) {
+    if (replyTo && lastBot && replyTo.bot !== CHIEF && this.bot(replyTo.bot)) {
       const r = this.addTask(replyTo.bot, `${replyTo.body}\nAsked: ${lastBot.text}\nAnswer: ${text}`, CHIEF, model, member, undefined, text, pics, { room });
       this.say(CHIEF, 'person', text + r.shown, null, member);
       return { task: r.task };
