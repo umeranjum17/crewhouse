@@ -3,7 +3,7 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { setup, settled, task, until } from './lab.ts';
 
@@ -194,6 +194,27 @@ async function house(crew: any) {
 }
 /** One Connect, with the person saying yes on Google's page. */
 const yes = async (crew: any, app: string) => back(crew, await start(crew, app), { code: 'good' });
+
+test('a send reuses the app listing: one handshake per connection set, not per task', async () => {
+  const { crew, done } = lab();
+  crew.onboard('sir');
+  const empty = await crew.connections.tools(OWNER);
+  assert.equal(await crew.connections.tools(OWNER), empty, 'no apps: the same listing, no refetch');
+  // The callback's write, as finish() would store it: the set changes, so the next send lists again.
+  const dir = join(crew['cfg'].stateDir, 'people', String(OWNER));
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, 'connections.json'), JSON.stringify({ mocknote: { access: 'A1', refresh: 'R1', expires: Date.now() + 3600_000 } }));
+  const listed = await crew.connections.tools(OWNER);
+  assert.notEqual(listed, empty);
+  assert.ok(listed.effects['mocknote_search'], 'the newly connected app is listed');
+  assert.equal(await crew.connections.tools(OWNER), listed, 'the next send reuses it');
+  const hits = seen.auth.length;
+  await crew.connections.tools(OWNER);
+  assert.equal(seen.auth.length, hits, 'reused: nothing reached the server');
+  crew.connections.disconnect(OWNER, 'mocknote');
+  assert.deepEqual((await crew.connections.tools(OWNER)).effects, {}, 'disconnecting clears the listing');
+  done();
+});
 
 test("Google for the house: the pasted key is checked with Google before it's kept, and each wrong paste is named", async () => {
   const { crew, done } = googleLab();

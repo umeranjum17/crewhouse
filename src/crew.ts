@@ -1219,13 +1219,14 @@ export class Crew {
       task.bot, member.id, member.id, task.id, Date.now() - 2 * 86_400_000)?.text;
     const last = said ? `[Crewhouse] Your last message in this chat, which this may answer: “${short(said, 800)}”\n` : '';
     if (task.bot !== CHIEF) return `${this.memory(task.bot, member.id)}${last}[Crewhouse task #${task.id} from ${routine ? `the routine “${routine}”, set up by ${this.called(member.id)}` : who}]\n${task.body}${quiet}${debrief}`;
+    // The crew by name only: crew_roster already lists roles, busy state and recruitable templates on demand,
+    // so the standing prompt need not carry them (and their staleness) on every turn.
     const crew = this.bots().filter((b) => b.id !== CHIEF)
-      .map((b) => `${b.display} (id ${b.id}, ${b.template}, ${this.activeTask(b.id) ? 'busy' : 'free'})`).join('; ') || 'nobody yet';
-    const tpls = disk.listTemplates(this.cfg).map((t) => `${t.id}: ${t.role}`).join('; ');
+      .map((b) => `${b.display} (id ${b.id})`).join('; ') || 'nobody yet';
     const house = this.members().length > 1 ? ` You are speaking with ${member.name}, one of the household; each person has their own crew thread and AI accounts.` : '';
     const history = this.db.all("SELECT author, text FROM messages WHERE bot = ? AND member = ? AND id < (SELECT MIN(id) FROM messages WHERE task_id = ?) ORDER BY id DESC LIMIT 6", CHIEF, member.id, task.id)
       .reverse().map((m) => `${m.author === 'person' ? 'Person' : 'Chief'}: ${short(String(m.text).split('[tool ')[0], 300)}`).join('\n').slice(0, 1500);
-    return `${this.memory(task.bot, member.id)}[Crewhouse]${house} Crew: ${crew}. Templates: ${tpls}.\n${history ? `Earlier in this chat:\n${history}\n` : ''}The person says: ${task.body}`;
+    return `${this.memory(task.bot, member.id)}[Crewhouse]${house} Crew: ${crew}.\n${history ? `Earlier in this chat:\n${history}\n` : ''}The person says: ${task.body}`;
   }
 
   /** What this member's crew actually finished: titles and delivered files, for Chief's crew_status.

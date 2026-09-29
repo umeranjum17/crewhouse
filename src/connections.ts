@@ -342,8 +342,21 @@ export class Connections {
     for (const m of members) for (const id of Object.keys(this.read(m))) await this.token(m, id).catch(() => null);
   }
 
+  // The member's connected apps as bot tools, cached by connected set: listing remote tools costs MCP handshakes,
+  // and every send used to pay them before the first model turn. A connect or disconnect changes the set, so the
+  // cache keys on it; a token refresh keeps the set and stays cached (tools take their token live, per call).
+  private toolCache = new Map<number, { key: string; out: Promise<{ tools: CrewTool[]; effects: Record<string, AppTool> }> }>();
+  tools(member: number): Promise<{ tools: CrewTool[]; effects: Record<string, AppTool> }> {
+    const key = Object.keys(this.read(member)).sort().join(',');
+    const hit = this.toolCache.get(member);
+    if (hit && hit.key === key) return hit.out;
+    const out = this.loadTools(member);
+    this.toolCache.set(member, { key, out });
+    out.catch(() => { if (this.toolCache.get(member)?.out === out) this.toolCache.delete(member); }); // a failure pins nothing
+    return out;
+  }
   /** The member's connected apps as bot tools, with what each tool does to the world (for the gate). */
-  async tools(member: number): Promise<{ tools: CrewTool[]; effects: Record<string, AppTool> }> {
+  private async loadTools(member: number): Promise<{ tools: CrewTool[]; effects: Record<string, AppTool> }> {
     const tools: CrewTool[] = [];
     const effects: Record<string, AppTool> = {};
     for (const id of Object.keys(this.read(member))) {

@@ -31,7 +31,10 @@ test('Chief: the four turns stay in Chief, URLs are context not task names, rela
   assert.equal(crew.botPage('chief').phoneOffer?.typed, '23456-789AB');
   assert.equal(chiefTasks.at(-1)!.title, 'i want to market my app');
   assert.match(chiefTasks.at(-1)!.body, /i want to market my app\nhttps:\/\/trymuxr.com\//);
-  assert.match((crew as any).prompt(chiefTasks.at(-1)), /Earlier in this chat:[\s\S]*market my app/);
+  const first = (crew as any).prompt(chiefTasks.at(-1));
+  assert.match(first, /Earlier in this chat:[\s\S]*market my app/);
+  assert.doesNotMatch(first, /Templates:/, 'roster and templates ride crew_roster on demand, not every prompt');
+  assert.match(first, /Crew: Scout \(id scout\)\./, 'the crew line names who is on, nothing stale');
   const helper = crew.assign('scout', 'https://trymuxr.com/\n[tool crew_document {"name":"muxr launch plan","blocks":[{"heading":"Audience"},{"text":"Developers with coding agents"},{"heading":"Three channels"},{"heading":"First week of posts"}]}]', 'chief').task;
   assert.equal(db.get('SELECT title FROM tasks WHERE id = ?', helper)!.title, 'Work on trymuxr.com');
   await settled(db, helper);
