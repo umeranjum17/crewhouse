@@ -81,6 +81,7 @@
         }
       ],
       "expo-notifications",
+      "@byokit/status",
       "@bacons/apple-targets",
       "./plugins/shortcuts.js"
     ],

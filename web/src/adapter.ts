@@ -665,6 +665,28 @@ export function homeSummary(state: Json) {
   return `${needs} ${needs === 1 ? 'thing needs' : 'things need'} you · ${working} ${working === 1 ? 'helper' : 'helpers'} working`;
 }
 
+/** The phone's status-bar chip and its notification, one more view of Home's own numbers; null when nothing is working
+ *  or waiting. Only this person's jobs: a bot's `task` is theirs alone (its bot-wide `live` never counts). Names stay in
+ *  `title`/`text`, shown only on an unlocked phone; `chip` (at most 7 characters) and `publicText` carry counts only.
+ *  `active`: a job is working, so the chip may show; waiting alone is a plain notification. A watching phone gets no
+ *  actions: a tap opens the app. */
+export type CrewStatus = { active: boolean; needsYou: number; title: string; text: string; publicText: string; chip: string; actions: { id: 'needs' | 'ask'; label: string }[] };
+export function status(state: Json, canAct = true): CrewStatus | null {
+  const mine = new Set(['chief', ...crew(state).map((h) => h.id)]);
+  const working = (state.bots as Json[]).filter((b) => mine.has(b.id) && b.task?.state === 'working').map((b) => (b.id === 'chief' ? 'Chief' : String(b.display)));
+  const n = working.length, needs = homeCounts(state).needs;
+  if (!n && !needs) return null;
+  const need = `${needs} ${needs === 1 ? 'needs' : 'need'} you`;
+  return {
+    active: n > 0, needsYou: needs,
+    title: n === 1 ? `${working[0]} is working` : n ? `${n} helpers working` : need,
+    text: n && needs ? need : chief(state).line,
+    publicText: [n ? `${n} working` : '', needs ? need : ''].filter(Boolean).join(' · '),
+    chip: needs ? 'Needs' : n > 1 && n < 10 ? `${n} busy` : 'Busy',
+    actions: !canAct ? [] : [...(needs ? [{ id: 'needs' as const, label: 'See what needs you' }] : []), { id: 'ask', label: 'Ask Chief' }],
+  };
+}
+
 /** Home's standing "hand me a job" list: the jobs the crew offers to do end to end, from crewd's `ideas[]` — which is
  *  already only what this crew can do. A goal first, then money back, then the everyday jobs. A row that needs an app the person
  *  hasn't connected says what it needs instead of dead-ending, and never fills the box. A row with `hire` names the

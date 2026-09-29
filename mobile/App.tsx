@@ -29,6 +29,7 @@ import QRCode from 'qrcode';
 import * as motion from './src/motion';
 import { MARKS } from './src/marks';
 import { askOf } from './src/ask';
+import { chip, chipSettings, chipState, chipWords, onChip, type StatusState } from './src/chip';
 import { Office } from './src/office';
 import { canHear, hear, stopHearing } from './modules/crewhouse-net';
 import { connect, desktopSignaling, forgetGrant, kept, loadGrant, onLive, pair, pairTypedCode, type Grant, type Status } from './src/link';
@@ -697,6 +698,9 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
     return () => clearTimeout(t);
   }, [status]);
   const out = status === 'offline' || late;
+  // The crew in the status bar, from the same refresh as every screen: out of touch or gone, it goes too.
+  useEffect(() => { if (out) chip(null); else if (status === 'online' && state) chip(A.status(state, grant.device.role === 'control')); }, [state, status, out]);
+  useEffect(() => () => chip(null), []);
   // Out of touch: say what the phone observed and what to try, looked at again every few seconds (Tailscale switched
   // on, back on the Wi-Fi, the computer woke); each look is bounded, and the link keeps retrying by itself meanwhile.
   useEffect(() => {
@@ -723,9 +727,11 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
   useEffect(() => {
     setAsked(Linking.getLinkingURL());
     const sub = Linking.addEventListener('url', (e) => setAsked(e.url));
-    return () => sub.remove();
+    const off = onChip(setAsked); // the status bar's actions open the same addresses
+    return () => { sub.remove(); off(); };
   }, []);
   useEffect(() => {
+    if (asked && /^crewhouse:\/\/needs\/?$/.test(asked)) { setAsked(null); Linking.clearInitialURL(); go({ view: 'home' }, true); return; } // Home leads with what needs you
     const a = asked && state ? askOf(asked, A.crew(state).map((h) => ({ id: h.id, template: state.bots.find((b: Json) => b.id === h.id)?.template }))) : null;
     if (!a) return;
     setAsked(null);
@@ -1726,6 +1732,22 @@ function OnYourScreen() {
   );
 }
 
+/** Whether the crew can show at the top of the screen while it works; the phone's own setting decides, so this row says
+ *  which way it is and opens that setting. Looked at again whenever the app comes back. */
+function StatusBarRow() {
+  const awake = motion.useAwake();
+  const [st, setSt] = useState<StatusState | null>(null);
+  useEffect(() => { if (awake) void chipState().then(setSt).catch(() => {}); }, [awake]);
+  if (!st) return null;
+  return (
+    <Card>
+      <T style={s.b}>Your crew at the top of the screen</T>
+      <T tone={st === 'on' ? 'ink' : 'mute'}>{chipWords(st)}</T>
+      {(st === 'off' || st === 'needs-permission') && <View style={s.row}><Btn label="Open phone settings" onPress={() => void chipSettings()} /></View>}
+    </Card>
+  );
+}
+
 function ThisPhone({ grant, status, onForget, onClear }: { grant: Grant; status: Status; onForget: () => void; onClear: () => void }) {
   // This phone knows its own news state: allowed and working, said no, or this build can't push at all.
   const [push, setPush] = useState<'on' | 'off' | 'missing' | null>(null);
@@ -1745,6 +1767,7 @@ function ThisPhone({ grant, status, onForget, onClear }: { grant: Grant; status:
         <T tone={push === 'on' ? 'ink' : 'mute'}>{push ? PUSH_WORDS[push] : 'Checking…'}</T>
         {push === 'off' && <View style={s.row}><Btn label="Open phone settings" onPress={() => void Linking.openSettings()} /></View>}
       </Card>
+      {Platform.OS === 'android' && <StatusBarRow />}
       {Platform.OS === 'ios' && <OnYourScreen />}
       <Card>
         <T style={s.b}>Chats kept on this phone</T>
