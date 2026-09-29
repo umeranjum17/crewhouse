@@ -1134,6 +1134,37 @@ test('a delivered document is a card in the chat, and opens as a read-only docum
   assert.match(api, /\/api\/document/, 'the app asks crewd to read the document, never parses it');
 });
 
+// The wait between the answer and the card (?demo=building): while a workbook or document job is live and its
+// file hasn't landed, the chat holds its place with a skeleton card — never a tool name, never silence.
+test('a file build shows a placeholder card until the file lands', () => {
+  const asking = { messages: [
+    { id: 1, author: 'person', text: 'create an excel for reception at the hotel' },
+    { id: 2, author: 'bot', text: 'One thing before I build it: whose day sheet is it?' },
+    { id: 3, author: 'person', text: "the desk's own day sheet" },
+  ] };
+  const live = { id: 7, title: 'Excel for reception', state: 'working', files: [] };
+  assert.equal(A.building(A.lines(asking, 'scribe'), live), true, 'mid-build: the question answered, no file yet');
+  const landed = A.lines({ messages: [...asking.messages,
+    { id: 4, author: 'system', text: 'Delivered files/hotel-guest-reception.xlsx: 4 sheets: Daily dashboard' }] }, 'scribe');
+  assert.equal(A.building(landed, live), false, 'the file landed: its own card takes the placeholder\u2019s place');
+  assert.equal(A.building(A.lines(asking, 'scribe'), { ...live, state: 'needs_you' }), false, 'waiting on the person is not building');
+  assert.equal(A.building(A.lines(asking, 'scribe'), null), false, 'no live task, no placeholder');
+  const flights = A.lines({ messages: [{ id: 1, author: 'person', text: 'find me somewhere nice for dinner' }] }, 'scout');
+  assert.equal(A.building(flights, { id: 8, title: 'Saturday dinner', state: 'working', files: [] }), false, 'another kind of job never shows it');
+  const doc = A.lines({ messages: [{ id: 1, author: 'person', text: 'put the desk rules together as a word document' }] }, 'scribe');
+  assert.equal(A.building(doc, { id: 9, title: 'Front-desk handbook', state: 'working', files: [] }), true, 'a document build holds its place too');
+
+  const main = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
+  assert.match(main, /A\.building\(lines, live\)/, 'the chat asks the adapter whether a file is on its way');
+  assert.match(main, /Building it\. I\u2019ll share it here\./, 'the placeholder says so in plain words');
+  assert.match(main, /className="building-card"[\s\S]{0,200}aria-label="Building it"/, 'a skeleton card, named for what it is');
+  const demo = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'demo.ts'), 'utf8');
+  assert.match(demo, /variant === 'building'/, '?demo=building is wired');
+  assert.match(demo, /\?demo=building/, '?demo=building is documented with the other variants');
+  const css = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'styles.css'), 'utf8');
+  assert.match(css, /\.building-card/, 'the skeleton card has its own style');
+});
+
 // The owner's screenshot, fixed: a meal plan delivered as .md must open as a rendered page in the read-only panel —
 // never the raw file at its /files/ address — through the shared safe markdown renderer the chat already uses.
 test('inline video uses intrinsic portrait aspect without cropping', () => {

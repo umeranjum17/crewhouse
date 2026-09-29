@@ -726,6 +726,10 @@ details.card[open] > summary { margin-bottom: 10px; }
 .skeleton { display: grid; gap: 12px; padding: 28px 0 0 36px; }
 .skeleton i { height: 14px; border-radius: 7px; background: linear-gradient(90deg, var(--soft) 20%, var(--line) 50%, var(--soft) 80%); background-size: 200% 100%; animation: shimmer 1.4s linear infinite; }
 .skeleton i:nth-child(1) { width: 62%; } .skeleton i:nth-child(2) { width: 84%; } .skeleton i:nth-child(3) { width: 40%; }
+.building-card { display: grid; gap: 10px; max-width: 340px; padding: 12px 14px; border-radius: 12px; background: var(--soft); }
+.building-card i { height: 12px; border-radius: 6px; background: linear-gradient(90deg, var(--line) 20%, var(--soft) 50%, var(--line) 80%); background-size: 200% 100%; animation: shimmer 1.4s linear infinite; }
+.building-card i:nth-child(1) { width: 38%; } .building-card i:nth-child(2) { width: 74%; }
+.building-card .bubble-text { padding: 0; }
 .pill.live i { animation: pulse 1.8s ease-out infinite; }
 
 /* First light (Hello): the block-letter name, Chief in a warm halo, and his words in a speech bubble, arriving in order. */

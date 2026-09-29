@@ -795,6 +795,17 @@ export function lines(page: Json, bot: string): Line[] {
   }).filter((l: Line) => l.text || l.files.length);
 }
 
+/** A file build underway: the chat's task is live on a workbook or document job, and its file hasn't
+ *  landed yet. The chat shows a skeleton card until the file's own card arrives. */
+const FILE_JOB = /\b(excel|spreadsheet|xlsx?|workbook|docx?|document)\b/i;
+export function building(lines: Line[], live: Json): boolean {
+  if (!live || live.state !== 'working') return false;
+  if ((live.files ?? []).some((f: Json) => !f.photo && !f.input)) return false;
+  if (lines.some((l) => l.files.some((f) => f.kind === 'sheet' || f.kind === 'page'))) return false;
+  const asked = [...lines].reverse().find((l) => l.from === 'me' && l.text)?.text ?? '';
+  return FILE_JOB.test(asked) || FILE_JOB.test(String(live.title ?? ''));
+}
+
 /** What a helper remembers about you (or the whole crew knows about you), one line each, from its notes. */
 export const memories = (notes = '') => notes.split('\n').map((l) => l.replace(/^[-*]\s*/, '').trim()).filter((l) => l && !l.startsWith('#')).map(plain);
 /** The sites the person signed a helper in to, bare hosts, sorted for a steady list — each with a Forget in Details. */
