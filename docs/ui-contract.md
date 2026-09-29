@@ -14,7 +14,7 @@ The rule behind every field: nothing a person reads may be a command, a file pat
 |---|---|---|
 | `person` `{id, name, address, onboarded}` | Hello gate, greeting | `id 1` is the owner; owner-only helpers (Tracer) hide from others |
 | `members` | Settings → People, "who's using this screen" | |
-| `bots[]` `{id, display, role, template, task, queued, pausedUntil, stuck, quietSince, step, computer, controls}` | Chats list, Crew, sidebar, stuck notes | `template` picks the pal. crewd sends no model or engine names; `thinks` is account names only, and never read |
+| `bots[]` `{id, display, role, template, task, queued, pausedUntil, stuck, quietSince, step, computer, controls}` | Chats list, Crew, sidebar, stuck notes | `template` picks the pal. crewd sends no model or engine names; `thinks` is account names only, and never read. An active `task` carries `files[]` `{path, note, at}` — the job's delivered files, its own output first, handed-over inputs marked `input` — so the office desk shows first looks without new fetches |
 | `bots[].last` `{author, text, at}`, `bots[].unread` | The chat list: each thread's last line and time, newest first (Chief pinned), and how many lines are new | The viewer's own thread only; `adapter.chats()` turns a delivered file into "Sent “Name”" and the person's own line into "You: …". `POST /api/bots/:id/read` clears `unread` when the chat is on screen; a view-only phone can't |
 | `GET /api/search?q=` → `{messages[], things[]}` | Search your chats | The viewer's own lines and finished things, newest first; two letters at least. `adapter.found()` words them |
 | `tasks[]` (done, with `files`) | Things, "done today" | `title` must be a short name, never the prompt |

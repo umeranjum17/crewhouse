@@ -782,6 +782,22 @@ test('household: bot and home projections never show another member’s work', (
   assert.equal(crew.snapshot(guest).bots.find((b: any) => b.id === 'scout')?.task, null);
   assert.ok(crew.snapshot(guest).events.every((e: any) => !JSON.stringify(e).includes('owner secret') && !JSON.stringify(e).includes('owner.txt')));
   assert.deepEqual(crew.botPage('scout', OWNER).tasks.map((t: any) => t.id), [owner]);
+  // An active job's delivered things ride on its own task only: own output first, handed-over inputs marked.
+  const wOwner = Number(db.run("INSERT INTO tasks (bot, title, body, result, state, member) VALUES ('scout', 'owner job', 'body', NULL, 'working', 1)").lastInsertRowid);
+  db.event('file.delivered', 'scout', { task: wOwner, path: 'files/from-reel/lead.png', note: 'from Reel', input: true });
+  db.event('file.delivered', 'scout', { task: wOwner, path: 'files/owner-first-look.png', note: 'First look: the opening' });
+  const wGuest = Number(db.run("INSERT INTO tasks (bot, title, body, result, state, member) VALUES ('scout', 'guest job', 'body', NULL, 'working', ?)", guest).lastInsertRowid);
+  db.event('file.delivered', 'scout', { task: wGuest, path: 'files/guest-first-look.png', note: 'First look' });
+  const stranger = crew.addMember('Stranger').id;
+  assert.equal(crew.snapshot(stranger).bots.find((b: any) => b.id === 'scout')?.task, null, 'a guest sees no active task on a shared helper');
+  assert.ok(!JSON.stringify(crew.snapshot(stranger)).includes('first-look'), 'they get no files either');
+  const guestTask = crew.snapshot(guest).bots.find((b: any) => b.id === 'scout')?.task;
+  assert.deepEqual(guestTask?.files.map((f: any) => f.path), ['files/guest-first-look.png'], 'their own desk only');
+  const ownerTask = crew.snapshot(OWNER).bots.find((b: any) => b.id === 'scout')?.task;
+  assert.deepEqual(ownerTask?.files.map((f: any) => f.path), ['files/owner-first-look.png', 'files/from-reel/lead.png'], 'own output first');
+  assert.deepEqual(ownerTask?.files.map((f: any) => !!f.input), [false, true], 'handed-over inputs marked');
+  assert.ok(ownerTask?.files.every((f: any) => typeof f.at === 'number' && typeof f.note === 'string'), 'each thing carries when it landed and the helper\'s note');
+  assert.ok(!JSON.stringify(crew.snapshot(guest)).includes('owner-first-look'), 'no first look leaks across members');
   done();
 });
 

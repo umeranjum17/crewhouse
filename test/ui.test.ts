@@ -1271,3 +1271,26 @@ test('speaking to Chief stays on the device and only fills the box: the person s
   for (const f of [parts.slice(parts.indexOf('function useVoice'), parts.indexOf('export function Composer')), app.slice(app.indexOf('function Mic('), app.indexOf('function Composer('))])
     assert.doesNotMatch(f, /send\(|onSend|api\./, 'the mic never sends');
 });
+
+test('a desk shows the job\'s first looks from its task, never a raw path', () => {
+  // crewd sends own output first with handed-over inputs marked; photos stay in the chat.
+  const task = { id: 41, title: 'Party plan', state: 'working', files: [
+    { path: 'files/party-plan-first-look.png', note: 'First look: the table', at: OTN },
+    { path: 'files/from-scout/venue-lead.png', note: 'from Scout', at: OTN, input: true },
+    { path: 'files/photos/41-1.png', note: 'your photo', at: OTN, photo: true },
+  ] };
+  const bots: Json[] = [{ id: 'chief', display: 'Chief', template: 'chief' },
+    oBot('reel', 'Reel', { live: 'working', task, step: null })];
+  const s: Json = { person: { id: 2 }, members: [], asks: [],
+    tasks: [{ id: 21, bot: 'reel', title: 'Old job', state: 'done', updated_at: OTN, files: [], result: 'Done.' }],
+    events: [], resting: {}, ideas: [], bots };
+  const h = A.crew(s).find((x) => x.id === 'reel')!;
+  assert.deepEqual(h.things.map((f) => f.name), ['Party plan first look', 'Venue lead'], 'own output first, photos off the desk');
+  const w = A.work(s).find((x) => x.helper === 'reel')!;
+  assert.deepEqual(w.things.map((f) => f.name), h.things.map((f) => f.name), 'the job sheet reads the same desk');
+  // The room keeps first looks past the event window: no live event needed.
+  const v = A.office(s, { busyElsewhere: true });
+  assert.deepEqual(v.crew.find((c) => c.id === 'reel')!.things.map((f) => f.name), ['Party plan first look', 'Venue lead']);
+  for (const view of [h, w, v]) assert.doesNotMatch(shown(view), FORBIDDEN, 'things never render a raw path');
+  assert.doesNotMatch(h.things.map((f) => f.name).join(' '), /files\/|\.png/i, 'names are said, not pathed');
+});

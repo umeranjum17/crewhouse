@@ -9,7 +9,7 @@ export const OWNER = 1;
 
 export type Helper = {
   id: string; name: string; kind: Kind; mood: Mood; ring: 'working' | 'needs' | ''; status: string; role: string;
-  computer: boolean; driving: boolean; stuckFor: number; quietSince: number;
+  computer: boolean; driving: boolean; stuckFor: number; quietSince: number; things: FileView[];
 };
 export type Choice = { label: string; body: Json; primary?: boolean };
 export type Card = {
@@ -30,7 +30,7 @@ export type Card = {
 };
 /** The small line above an ask's title: what kind of yes it wants, so the title itself can stay plain. */
 export const askTag = (c: Card) => ({ spend: 'Wants to spend money', question: 'Has a question', routine: 'A routine to start', plan: 'A plan to start', setup: 'Home setup', connect: 'Wants an app' } as Record<string, string>)[c.kind] ?? 'Needs your OK';
-export type Work = { helper: string; title: string; line: string; waiting: boolean };
+export type Work = { helper: string; title: string; line: string; waiting: boolean; things: FileView[] };
 export type Thing = { id: number; helper: string; title: string; at: number; summary: string; files: FileView[] };
 export type FileView = { url: string; kind: 'video' | 'image' | 'doc' | 'sheet' | 'page'; name: string };
 /** One tab of a delivered workbook, read back by crewd: its headings, its first rows, and how many it has. */
@@ -215,6 +215,16 @@ export function kindOf(b: Json): Kind {
 /** Templates only the owner sees in the gallery (people-finding spends money). */
 const OWNER_ONLY = new Set(['tracer']);
 
+/** A helper's desk: its active job's delivered files as views, own output first, one row per path where it
+ *  last landed. Photos ride in the chat, never on the desk. */
+export function deskThings(id: string, task: Json | null): FileView[] {
+  const paths = ((task?.files ?? []) as Json[])
+    .filter((f) => !f?.photo && !String(f?.path ?? '').startsWith('files/photos/'))
+    .map((f) => String(f?.path ?? ''))
+    .filter(Boolean);
+  return paths.filter((p, i) => paths.lastIndexOf(p) === i).map((p) => fileView(id, p));
+}
+
 export function helper(b: Json, events: Json[] = []): Helper {
   const needs = b.task?.state === 'needs_you';
   const stuck = !!b.stuck;
@@ -226,6 +236,7 @@ export function helper(b: Json, events: Json[] = []): Helper {
     mood: helperMood(b, needs, stuck, events),
     ring: needs ? 'needs' : b.task ? 'working' : '',
     stuckFor: stuck ? Math.max(1, Math.round((Date.now() - b.quietSince) / 60_000)) : 0, quietSince: b.quietSince ?? 0,
+    things: deskThings(b.id, b.task ?? null),
   };
 }
 
@@ -622,7 +633,7 @@ export function work(state: Json): Work[] {
   return state.bots.filter((b: Json) => mine.has(b.id) && (b.task || b.queued)).map((b: Json) => {
     const s = b.step && step(b.step);
     const needs = b.task?.state === 'needs_you';
-    return { helper: b.id, title: plain(b.task?.title ?? 'Up next'), line: needs ? 'Waiting for your OK' : s ? s : b.task ? 'Getting started…' : 'Waiting its turn', waiting: !b.task || needs };
+    return { helper: b.id, title: plain(b.task?.title ?? 'Up next'), line: needs ? 'Waiting for your OK' : s ? s : b.task ? 'Getting started…' : 'Waiting its turn', waiting: !b.task || needs, things: deskThings(b.id, b.task ?? null) };
   });
 }
 
@@ -957,9 +968,12 @@ export function office(state: Json, opts: OfficeOpts = {}): OfficeView {
         status: BUSY_ELSEWHERE, step: '', steps: [], things: [], ask: undefined, busyElsewhere: true };
     }
     const now = task ? steps(events, task.id, true) : [];
-    // A path delivered again (a first look, then the finished one) is one thing, where it last landed.
+    // The desk holds the task's delivered files first (they survive the 80-event window), then any live
+    // arrival the snapshot predates; a path delivered again (a first look, then the finished one) is one thing.
+    const desk = deskThings(h.id, task);
     const paths = task ? events.filter((e) => e.kind === 'file.delivered' && !e.data?.photo && e.data?.task === task.id).map((e) => String(e.data?.path ?? '')) : [];
-    const made = paths.filter((p, i) => paths.lastIndexOf(p) === i).map((p) => fileView(h.id, p));
+    const extra = paths.filter((p, i) => paths.lastIndexOf(p) === i && !desk.some((f) => f.url === fileView(h.id, p).url));
+    const made = [...desk, ...extra.map((p) => fileView(h.id, p))];
     const w = lines.get(h.id);
     return { id: h.id, name: h.name, kind: h.kind, mood: h.mood, ring: h.ring, status: h.status,
       step: (b.step && step(b.step)) || (w && !w.waiting ? 'Getting started…' : ''), steps: now, things: made,
