@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Json } from '../web/src/api.ts';
+import type { Bitmap, Kind } from '../web/src/art.ts';
 import { PROVIDERS } from '../src/accounts.ts';
 import * as A from '../web/src/adapter.ts';
 import { readTyped } from '../mobile/src/typed.ts';
@@ -383,6 +384,31 @@ test('the mascots: every mood draws a whole grid in known colours, and Chief\'s 
   assert.ok(art.chief('worried').join().includes('d'), 'worried keeps the drop');
   assert.notEqual(art.chiefSmall('idle').join(), art.chiefSmall('error').join(), 'small content is not the small cut');
   assert.deepEqual(art.chiefSmall('idle').filter((r) => r.includes('m')).map(shape), ['m.......m', 'mmmmmmm'], 'small content: the moustache line curls \\u2228');
+});
+
+test('the phone office sprite set matches art.ts kinds × moods', async () => {
+  // P4: scripts/icons.mjs renders every mascot in every mood into mobile/assets/pals/, required from
+  // mobile/src/marks.ts. The phone office draws those PNGs instead of one View per dot. Chief ships a
+  // night set; the pals' palette is the same day and night, so they render once.
+  const art = await import('../web/src/art.ts');
+  const files = new Map<string, Bitmap>();
+  for (const m of art.MOODS) {
+    files.set(`chief-${m}.png`, art.chief(m));
+    files.set(`chief-${m}-night.png`, art.chief(m));
+    for (const k of Object.keys(art.PALS)) files.set(`${k}-${m}.png`, art.pal(k as Kind, m));
+  }
+  const dir = join(import.meta.dirname, '..', 'mobile', 'assets', 'pals');
+  assert.deepEqual(new Set(readdirSync(dir).filter((f) => f.endsWith('.png'))), new Set(files.keys()),
+    'a mood without a sprite, or a sprite without a mood');
+  for (const [f, rows] of files) {
+    const b = readFileSync(join(dir, f));
+    assert.deepEqual(b.subarray(0, 8), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), `${f} is no PNG`);
+    assert.equal(b.readUInt32BE(16), rows[0].length * 8, `${f} width is not its bitmap at 8 px a dot`);
+    assert.equal(b.readUInt32BE(20), rows.length * 8, `${f} height is not its bitmap at 8 px a dot`);
+  }
+  const wired = new Set([...readFileSync(join(import.meta.dirname, '..', 'mobile', 'src', 'marks.ts'), 'utf8')
+    .matchAll(/require\('\.\.\/assets\/pals\/([\w-]+\.png)'\)/g)].map((m) => m[1]));
+  assert.deepEqual(wired, new Set(files.keys()), 'mobile/src/marks.ts does not require the whole set');
 });
 
 test("Chief's mood is the first matching row of the table, and the line follows the face", () => {
