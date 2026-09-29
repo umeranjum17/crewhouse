@@ -265,7 +265,7 @@ function Home(ctx: Ctx) {
       <div className="desk-col">
         <div className="phone-only"><HomeHero ctx={ctx}>{office('phone')}</HomeHero>{nudges}</div>
         {cards.length > 0 && <section className="home-section phone-only" aria-label="Needs you">{needsHead}<div className="list-group needs-card"><NeedsRows state={state} cards={cards} all={allNeeds} /></div></section>}
-        <Chats state={state} refresh={refresh} /><JobList state={state} phone />
+        <Chats state={state} refresh={refresh} /><JobList state={state} phone refresh={refresh} />
         <div className="desk">
           <div className="desk-only desk-top"><HomeHero ctx={ctx}>{office('desk')}<div className="hero-ask"><Composer placeholder="Ask Chief anything" onSend={toChief} {...typeInto('chief')} /></div></HomeHero>{nudges}</div>
           <div className="desk-main">
@@ -279,7 +279,7 @@ function Home(ctx: Ctx) {
               {todays.length ? todays.map((t) => { const target = A.fileTarget(t.files[0]); return <div key={t.id} className="list-row"><span className="file-chip">{target?.chip ?? '—'}</span><span className="grow"><b className="clamp1">{t.title}</b><span className="small clamp1">{t.summary}</span></span><a className="btn sm" href={target?.href ?? hrefOf(t.helper)}>Open</a></div>; }) : <Empty>Nothing yet today.</Empty>}
             </div></section>
           </div>
-          <div className="desk-side"><JobList state={state} /><p className="small mute">Tap one and Chief gets it ready. Nothing starts until you send.</p></div>
+          <div className="desk-side"><JobList state={state} refresh={refresh} /><p className="small mute">Tap one and Chief gets it ready. Nothing starts until you send.</p></div>
         </div>
       </div>
       <div className="dock phone-only"><Composer placeholder="Ask Chief anything" onSend={toChief} {...typeInto('chief')} /></div>
@@ -290,11 +290,18 @@ const ownerName = (state: Json) => state.members.find((m: Json) => m.id === A.OW
 
 /** The standing "hand me a job" list (docs/ui-contract.md, `ideas[]`): what the crew offers to do end to end, money back
  *  first. A row fills Chief's box with the words and never sends; a job still waiting on an app says what it needs and
- *  leads to the apps screen instead of dead-ending. The same rows sit in the desk's third frame and under the chats on a phone. */
-function JobList({ state, phone }: { state: Json; phone?: boolean }) {
+ *  leads to the apps screen instead of dead-ending. A row offering a helper not hired yet brings them on first, then
+ *  fills that helper's box. The same rows sit in the desk's third frame and under the chats on a phone. */
+function JobList({ state, phone, refresh }: { state: Json; phone?: boolean; refresh: () => void }) {
   const crew = A.crew(state);
   const rows = A.jobs(state);
   const hand = (ask: string) => { keepDraft('chief', ask); go('#/chief'); };
+  // The gallery hire, then the words in the new helper's own box: nothing starts until they send.
+  const hire = async (template: string, ask: string) => {
+    const name = state.templates.find((t: Json) => t.id === template)?.display ?? template;
+    let id = '';
+    if (await attempt(async () => { id = (await api.recruit(template, name)).id; }, `${name} joined the crew`)) { refresh(); keepDraft(id, ask); go(`#/h/${id}`); }
+  };
   return (
     <section className={`home-section jobs${phone ? ' phone-only' : ''}`} aria-label="Hand the crew a job">
       <div className="label">Hand the crew a job</div><div className="list-group">
@@ -303,6 +310,7 @@ function JobList({ state, phone }: { state: Json; phone?: boolean }) {
         const body = <><Face who={h ?? { kind: 'pip', name: j.bot }} size={phone ? 28 : 36} />
           <span className="grow"><b className="clamp">{j.label}</b>{j.says && <span className="small mute clamp1">{j.says}</span>}{j.needs.length > 0 && <span className="small clamp1">{A.jobNeeds(j.needs)}</span>}</span><span className="mute" aria-hidden>›</span></>;
         return j.needs.length ? <a key={j.bot + j.label} className="list-row" href="#/apps">{body}</a>
+          : j.hire ? <button key={j.bot + j.label} className="list-row" onClick={() => hire(j.hire!, j.ask)}>{body}</button>
           : <button key={j.bot + j.label} className="list-row" onClick={() => hand(j.ask)}>{body}</button>;
       }) : <div className="frame-empty">Nothing to hand over yet. Hire a helper, and this fills up.</div>}
       </div>

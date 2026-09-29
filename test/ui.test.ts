@@ -273,8 +273,8 @@ test('Home keeps a standing "hand me a job" list, straight from crewd\'s ideas: 
   assert.equal(fill.choices.find((c: any) => c.body.scope === 'always'), undefined, 'and still no standing answer');
   const src = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
   const home = src.slice(src.indexOf('function Home('), src.indexOf('const ownerName'));
-  assert.match(home, /<JobList state=\{state\} \/>/, 'the desk\'s frame beside Working now and Done today');
-  assert.match(home, /<JobList state=\{state\} phone \/>/, 'and under the chats on a phone');
+  assert.match(home, /<JobList state=\{state\} refresh=\{refresh\} \/>/, 'the desk\'s frame beside Working now and Done today');
+  assert.match(home, /<JobList state=\{state\} phone refresh=\{refresh\} \/>/, 'and under the chats on a phone');
   const list = src.slice(src.indexOf('function JobList('), src.indexOf('function JobList(') + 1800);
   assert.match(list, /A\.jobs\(state\)/, 'the rows are the ideas, not a list written in the app');
   assert.match(list, /keepDraft\('chief', ask\)/, 'a tap fills Chief\'s box; it never sends');
@@ -1322,6 +1322,40 @@ test('?demo=fresh renders the Chief-only Home with no errors', () => {
   const demo = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'demo.ts'), 'utf8');
   assert.match(demo, /\?demo=fresh/, 'the demo serves the fresh Home');
   assert.match(demo, /if \(fresh\)/, 'fresh ships Chief-only, with no standing jobs');
+});
+
+// Offer-to-hire rows on a Chief-only Home: unhired templates offer goal rows needing nothing, tagged with the
+// template to hire. Home's list carries them; a tap brings the helper on then fills their box; chips never do.
+test('a Chief-only Home offers its helpers for hire: jobs carry hire, the tap hires first', () => {
+  // The fresh Home's rows, straight from the templates' goal rows so the copy cannot drift.
+  const goals = ['scout', 'scribe', 'reel'].map((t) => {
+    const j = JSON.parse(readFileSync(join(import.meta.dirname, '..', 'templates', t, 'bot.json'), 'utf8'));
+    const g = j.ideas.find((i: any) => i.group === 'goal');
+    return { bot: t, promise: g.promise, ask: g.ask, group: 'goal', needs: [], hire: t };
+  });
+  const freshHire = { ...state, ideas: goals };
+  const rows = A.jobs(freshHire);
+  assert.equal(rows.length, 3, 'jobs() is non-empty for ?demo=fresh');
+  assert.ok(rows.every((r) => r.hire && r.goal && !r.needs.length), 'each row offers its template');
+  assert.doesNotMatch(shown(rows), FORBIDDEN, 'an offer reads as plain words');
+  assert.equal(A.ideas(freshHire).length, 3, "chips stay Chief's own three starters, never offers");
+  assert.ok(A.ideas(freshHire).every((i: any) => i.bot === 'chief'), 'an offer cannot fill a box for a helper not hired yet');
+  // ?demo=fresh carries the same rows: the demo wires them in and repeats their words.
+  const demo = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'demo.ts'), 'utf8');
+  assert.match(demo, /ideas: freshHire/, 'fresh ships the hire rows');
+  for (const g of goals) assert.ok(demo.includes(g.ask), `fresh repeats “${g.ask}”`);
+  // A tap runs the gallery hire, then fills that helper's box: nothing starts until they send.
+  const web = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
+  const list = web.slice(web.indexOf('function JobList('), web.indexOf('function JobList(') + 2200);
+  assert.match(list, /api\.recruit\(template, name\)/, 'a tap hires the offered template');
+  assert.match(list, /keepDraft\(id, ask\)/, 'then fills that helper\'s box');
+  assert.match(list, /go\(`#\/h\/\$\{id\}`\)/, 'and opens their chat');
+  assert.match(list, /j\.hire \? <button/, 'the offer is a button, while a waiting row still links to the apps screen');
+  assert.match(list, /keepDraft\('chief', ask\)/, 'a hired helper\'s row still fills Chief\'s box');
+  const app = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
+  const phone = app.slice(app.indexOf('function JobList('), app.indexOf('function JobList(') + 1500);
+  assert.match(phone, /j\.hire\) void hire\(j\.hire, j\.ask\)/, 'the phone hires first too');
+  assert.match(phone, /keepDraft\(b\.id, ask\)/, 'then fills that helper\'s box');
 });
 
 // The office: one room per viewer from the adapter views, holding only their own jobs. Ported from the office-view

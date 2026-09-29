@@ -1128,7 +1128,7 @@ function Home(ctx: Ctx) {
         </Pressable>
         {needs.length > 0 && <View><Label count={needs.length}>Needs you</Label><View style={[s.listGroup, { backgroundColor: t.solid, borderColor: t.line }]}><NeedsRows state={state} cards={needs} open={open} /></View></View>}
         <ChatList state={state} go={go} mood={chief.mood} />
-        <JobList state={state} go={go} />
+        <JobList state={state} go={go} refresh={refresh} />
       </ScrollView>
       {canAct && <View style={s.dock}><Composer placeholder="Ask Chief anything" onSend={toChief} chat="chief" /></View>}
       {!!desk && <DeskSheet desk={desk} {...ctx} onClose={() => setDesk(null)} />}
@@ -1199,11 +1199,16 @@ function ChatList({ state, go, mood }: { state: Json; go: Ctx['go']; mood?: art.
   </View></View>;
 }
 
-function JobList({ state, go }: { state: Json; go: Ctx['go'] }) {
+function JobList({ state, go, refresh }: { state: Json; go: Ctx['go']; refresh: () => void }) {
   const t = useLook();
+  // The gallery hire, then the words in the new helper's own box: nothing starts until they send.
+  const hire = async (template: string, ask: string) => {
+    const name = state.templates.find((x: Json) => x.id === template)?.display ?? template;
+    await attempt(async () => { const b = await api.recruit(template, name); refresh(); keepDraft(b.id, ask); go({ view: 'helper', id: b.id }, true); }, `${name} joined the crew`);
+  };
   return <View><Label>Hand the crew a job</Label><View style={[s.listGroup, { backgroundColor: t.solid, borderColor: t.line }]}>
     {A.jobs(state).slice(0, 3).map((j, i) => <Pressable key={j.bot + j.label} style={[s.listRow, { borderTopColor: t.line, borderTopWidth: i ? StyleSheet.hairlineWidth : 0 }]}
-      onPress={() => { if (j.needs.length) go({ view: 'phone' }); else { keepDraft('chief', j.ask); go({ view: 'chief' }); } }}>
+      onPress={() => { if (j.needs.length) go({ view: 'phone' }); else if (j.hire) void hire(j.hire, j.ask); else { keepDraft('chief', j.ask); go({ view: 'chief' }); } }}>
       <Face who={A.crew(state).find((h) => h.id === j.bot) ?? { kind: 'pip', name: j.bot }} size={28} />
       <View style={{ flex: 1 }}><T style={s.rowTitle} lines={2}>{j.label}</T>{!!j.says && <T tone="mute" style={s.small} lines={1}>{j.says}</T>}{!!j.needs.length && <T tone="mute" style={s.small}>{A.jobNeeds(j.needs)}</T>}</View><T tone="mute">›</T>
     </Pressable>)}

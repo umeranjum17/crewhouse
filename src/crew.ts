@@ -430,12 +430,12 @@ export class Crew {
     return { step: step ? { ...step, data: JSON.parse(step.data) } : null, quietSince, stuck: task.state === 'working' && Date.now() - quietSince > STUCK_MS };
   }
 
-  /** Ideas are promises a hired bot can keep: each needs tools the bot is granted and that work on this computer, and
-   *  the apps the person has connected (`needs` may name either). A job whose app is not connected yet is still shown,
-   *  saying what it would need first — a standing list they can browse, not a dead end (docs/ui-contract.md). */
+  /** Ideas are promises a hired bot can keep (tools granted and ready here, apps connected), shown with what they wait on;
+   *  unhired templates offer up to 3 goal rows needing nothing, tagged with the template to hire (docs/ui-contract.md). */
   private ideas(member = OWNER) {
     const on = new Set(this.connections.on(member));
     const house = this.connections.houseGoogle();
+    const hired = new Set(this.bots().filter((b) => b.id !== CHIEF).map((b) => b.template));
     const rows = this.bots().filter((b) => b.id !== CHIEF).flatMap((b) => {
       const ready = new Set(disk.botTools(this.cfg, b.id).filter((t) => t.granted && t.ready).map((t) => t.id));
       // A tool the bot does not have: the promise is not made. An app they haven't connected: it is, with what's missing.
@@ -444,9 +444,9 @@ export class Crew {
           // Two of the household's Google apps name one thing: the row says "Google", not "Google and Google".
           needs: [...new Set(i.needs.filter((n) => !ready.has(n) && !on.has(n)).map((n) => (APPS[n] ? (APPS[n].google && !house ? 'Google' : APPS[n].name) : '')))] }));
     });
-    // The six-row cap counts the jobs they can hand over now; what they would need first rides along beside them.
-    // ponytail: waiting rows are uncapped because no template set has more than a screenful; cap them when one does.
-    return [...rows.filter((r) => !r.needs.length).slice(0, 6), ...rows.filter((r) => r.needs.length)];
+    const hire = disk.listTemplates(this.cfg).filter((t) => !hired.has(t.id)).flatMap((t) => (t.ideas ?? []).filter((i) => !(i.needs ?? []).length).map((i) => ({ bot: t.id, promise: i.promise, ask: i.ask, group: i.group ?? 'life', needs: [], hire: t.id }))).sort((a, b) => Number(b.group === 'goal') - Number(a.group === 'goal')).slice(0, 3);
+    // The six-row cap counts the jobs they can hand over now, hired or to hire; waiting rows ride along uncapped (ponytail: no template set has more than a screenful; cap them when one does).
+    return [...rows.filter((r) => !r.needs.length).concat(hire).slice(0, 6), ...rows.filter((r) => r.needs.length)];
   }
 
   /** A bot as the app sees it: no token, no model, nothing technical. */
