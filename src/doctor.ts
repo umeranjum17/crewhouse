@@ -3,7 +3,7 @@ import { loadConfig } from './config.ts';
 import { toolStatus, which } from './tools.ts';
 import { browserBin, missing } from './desktop.ts';
 import { sandboxReady } from './engine.ts';
-import { ENGINE_VERSION } from './openclaw/gateway.ts';
+import { ENGINE_VERSION } from './openclaw/runtime.ts';
 
 const cfg = loadConfig();
 let problems = 0;

@@ -1,224 +1,161 @@
+// The engine port on the BYOKit OpenClaw kit. This file is the only one that imports the kit: it maps Crewhouse's
+// members, accounts, runs and tools onto the kit's, and keeps the crew's own learned-skill capture beside it.
 import { randomUUID } from 'node:crypto';
-import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
-import { commit } from './bots_git.ts';
-import { dirname, join } from 'node:path';
-import { GatewayClient } from '@openclaw/gateway-client';
-import type { AgentRuntime, Member, RunEnd, RunEvent, RunSpec, SignInStep, ToolHost } from '../runtime.ts';
-import { OpenClawGateway } from './gateway.ts';
-import { ToolBridge } from './bridge.ts';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import { OpenClawKit, type KitOptions, type ToolSpec } from '@byokit/openclaw';
+import { commit } from '../bots.ts';
+import { CALLBACK_PORT } from '../callback-port.ts';
+import type { AgentRuntime, Member, RunEnd, RunEvent, RunRef, RunSpec, SignInStep, ToolHost } from '../runtime.ts';
 
+export { ENGINE_VERSION } from '@byokit/openclaw';
+
+const repo = resolve(import.meta.dirname, '../..');
 /** Crewhouse account key → OpenClaw provider id. ChatGPT is the one front door; the rest are quiet options. */
 const PROVIDER_OF: Record<string, string> = { chatgpt: 'openai', grok: 'xai', copilot: 'github-copilot', openrouter: 'openrouter', minimax: 'minimax', claude: 'anthropic' };
-/** The engine's own sign-in route per account (the pin's wizard choices). A CLI prerequisite is labelled where it exists. */
+const NAME_OF: Record<string, string> = { chatgpt: 'ChatGPT', grok: 'Grok', copilot: 'GitHub Copilot', openrouter: 'OpenRouter', minimax: 'MiniMax', claude: 'Claude' };
+/** The engine's own sign-in route per account (the pin's wizard choices). */
 const AUTH_CHOICE: Record<string, string> = {
   chatgpt: 'openai', grok: 'xai-oauth', copilot: 'github-copilot', openrouter: 'openrouter-oauth', minimax: 'minimax-global-oauth', claude: 'anthropic-cli',
 };
 const CODE_CHOICE: Record<string, string> = {
   chatgpt: 'openai-device-code', grok: 'xai-device-code', openrouter: 'openrouter-oauth', minimax: 'minimax-global-oauth',
 };
-/** Accounts whose sign-in needs a tool installed and logged in on this computer (said plainly on the card). */
-export const CLI_PREREQUISITE: Record<string, string> = { claude: 'the Claude CLI, signed in inside the engine\'s own folder' };
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const m = (member: Member) => `m${member}`;
+/** The engine-side name of a Crewhouse tool and back: only the shell differs. */
+const crewName = (tool: string) => tool === 'shell' ? 'bash' : tool;
+
+// The model-visible tools. Names are Crewhouse's: `shell` is crewd's sandboxed shell (Crewhouse's `bash`; the engine
+// would rewrite a tool called bash to its own exec before the gate saw it), `browser` the bot's own browser,
+// `calendar`/`mail` the two read-mostly app AXIs, `crew_app` a remote app's tools, `crew_*` the crew's own.
+const args = { type: 'object', properties: { args: { type: 'array', items: { type: 'string' } } }, required: ['args'], additionalProperties: false };
+const SCHEMAS: Record<string, object> = {
+  shell: { type: 'object', properties: { command: { type: 'string' } }, required: ['command'], additionalProperties: false },
+  browser: args, calendar: args, mail: args,
+  crew_app: { type: 'object', properties: { tool: { type: 'string' }, input: { type: 'object', additionalProperties: true } }, required: ['tool'], additionalProperties: false },
+  crew_remember: { type: 'object', properties: {
+    text: { type: 'string', description: 'One short line stating the lasting preference to save.' },
+    replaces: { type: 'string', description: 'Words of an old note this corrects, if any.' },
+    everyone: { type: 'boolean', description: 'True if every helper should know it; otherwise it stays in your notes.' },
+  }, required: ['text'], additionalProperties: false },
+  crew_document: { type: 'object', properties: {
+    name: { type: 'string', description: 'Title of the finished document.' },
+    blocks: { type: 'array', description: 'Document content in order: {heading}, {text}, {bullets: [strings]} or {table: {head: [cells], rows: [[cells]]}}.',
+      items: { type: 'object', additionalProperties: true }, minItems: 1 },
+  }, required: ['name', 'blocks'], additionalProperties: false },
+  crew_report: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'], additionalProperties: false },
+};
+const ABOUT: Record<string, string> = {
+  shell: 'Run a shell command in your own space (a sandbox: your folder is the only writable part of the disk). Long output is cut to the last lines.',
+  browser: 'Your own browser (playwright-axi): goto <url>, snapshot, find <text>, click <ref>, fill <ref> <text>, press <key>, go-back.',
+  calendar: "The person's own Google Calendar: see the day or week, find free time, add, move or cancel events, as `args`.",
+  mail: "The person's own Gmail, read-only: what is new, search it, read a conversation, as `args`. It cannot send or change mail.",
+  crew_app: "Use one of the person's connected apps' tools: `tool` names it (the run's prompt lists them) and `input` carries its arguments.",
+  crew_remember: 'Save a lasting preference: pass {text: "one short line"}; optionally replaces and everyone. Do not save how to address the person.',
+  crew_document: 'Write and deliver an editable document: pass {name: "title", blocks: [{heading: "Title"}, {text: "Paragraph"}, {bullets: ["Item"]}]}. Crewhouse writes the file; do not make it yourself.',
+};
+export const TOOLS: ToolSpec[] = ['shell', 'browser', 'calendar', 'mail', 'crew_app', 'crew_web_fetch', 'crew_web_search', 'crew_read', 'crew_write',
+  'crew_edit', 'crew_ls', 'crew_grep', 'crew_find', 'crew_connect', 'crew_outcome', 'crew_report', 'crew_deliver', 'crew_workbook', 'crew_document',
+  'crew_copy', 'crew_remember', 'crew_draft', 'crew_verify', 'crew_learn', 'crew_routine', 'crew_pass', 'crew_add_phone', 'crew_roster',
+  'crew_recruit', 'crew_assign', 'crew_routines', 'crew_status', 'crew_suggest', 'crew_create', 'crew_job', 'crew_call_me',
+].map((name) => ({ name, description: ABOUT[name] ?? `Crewhouse ${name.slice(5).replaceAll('_', ' ')}. The person sees the result in their crew.`,
+  parameters: SCHEMAS[name] ?? { type: 'object', additionalProperties: true } }));
+
+/** Crewhouse's engine config, merged under the kit's invariants on every prepare. The learning mode is left to the
+ *  engine's saved config: crewd applies the household's switch whenever the engine comes up (Crew.setLearning). */
+const CONFIG = {
+  // An empty allow list: the engine otherwise narrows to its model map, and the family's other providers vanish.
+  agents: { defaults: { sandbox: { mode: 'off' }, modelPolicy: { allow: [] } } },
+  tools: { profile: 'coding', alsoAllow: TOOLS.map((t) => t.name), deny: ['group:fs', 'group:runtime', 'group:automation', 'group:messaging', 'group:nodes', 'group:ui', 'sessions_send', 'sessions_spawn', 'conversations_send', 'conversations_turn', 'subagents', 'code_execution', 'gateway', 'openclaw', 'plugins', 'cron', 'ask_user', 'suggest_task'], fs: { workspaceOnly: true }, exec: { security: 'deny', ask: 'always' }, elevated: { enabled: false }, agentToAgent: { enabled: false }, sessions: { visibility: 'agent' } },
+  // `paths: []` drops the plugin folder older Crewhouse builds loaded; the kit adds its own bridge plugin.
+  plugins: { load: { paths: [] }, allow: ['crewhouse', 'memory-core', 'openai'], entries: {
+    'memory-core': { config: { dreaming: { enabled: false } } },
+    // The Codex app-server harness is deferred (spec §5.1): leaving it unconfigured keeps its install off.
+    codex: { enabled: false },
+  } },
+  // Only skills reviewed against the tarball and this repo's own content may exist; installs go through the kit's
+  // operator policy with Crewhouse's trusted list (trusted-skills.json) and fail closed without it.
+  skills: { allowBundled: ['video-frames', 'openai-whisper', 'summarize', 'nano-pdf', 'diagram-maker'], workshop: { approvalPolicy: 'auto' } },
+};
 
 export class OpenClawRuntime implements AgentRuntime {
-  private gateway: OpenClawGateway;
-  bridge?: ToolBridge;
-  private client?: GatewayClient;
-  private agents = new Set<number>();
+  readonly kit: OpenClawKit;
   readonly stateDir: string;
-  constructor(stateDir: string) { this.stateDir = stateDir; this.gateway = new OpenClawGateway(stateDir); }
-  /** The crew folder, for the install policy's own-content roots. Set before start(). */
-  crewDir = '';
-  async start(host: ToolHost) {
-    this.gateway.crewDir = this.crewDir;
-    this.bridge = new ToolBridge(this.stateDir, host);
-    await this.bridge.start();
-    try { this.client = await this.gateway.start(); }
-    catch (error) { this.bridge.stop(); throw error; }
-    return this.client;
+  private host?: ToolHost;
+  /** Crewhouse's own record of each registered run (bot and task), keyed by session. */
+  private runs = new Map<string, RunRef>();
+  constructor(stateDir: string, crewDir = '', o: Partial<KitOptions> = {}) {
+    this.stateDir = stateDir;
+    this.kit = new OpenClawKit({
+      stateDir, engineDir: join(repo, 'runtime/openclaw'), plugin: { id: 'crewhouse' }, tools: TOOLS, config: CONFIG,
+      permitted: (tool) => tool.startsWith('crew_'), callbackPort: CALLBACK_PORT,
+      installPolicy: { trustedSkills: join(import.meta.dirname, 'trusted-skills.json'), ownRoots: [repo, crewDir].filter(Boolean) },
+      host: {
+        // A key the kit passes that Crewhouse never registered is the armed curation window's one call (allowOnce).
+        gate: async (ref, tool, input) => {
+          const run = this.runs.get(ref.sessionKey);
+          if (!run) return { allow: true };
+          if (!this.host) return { allow: false, reason: 'Crewhouse could not check this call.' };
+          const decision = await this.host.gate(run, crewName(tool), input);
+          return decision.allow ? decision : { allow: false, reason: decision.reason };
+        },
+        call: async (ref, tool, input, signal) => {
+          const run = this.runs.get(ref.sessionKey);
+          if (!run || !this.host) throw new Error('Unknown run');
+          return this.host.call(run, crewName(tool), input, signal);
+        },
+      },
+      ...o,
+    });
   }
-  async stop() { await this.gateway.stop(); this.bridge?.stop(); this.client = undefined; }
-  memoryLimited(member: number) { return this.gateway.memoryLimited(member); }
-  private connected() { if (!this.client) throw new Error('Crewhouse engine is not ready'); return this.client; }
-  private async agent(member: number) {
-    if (this.agents.has(member)) return `m${member}`;
-    const id = `m${member}`;
-    const client = this.connected();
-    const existing = await client.request<{ agents: { id: string }[] }>('agents.list');
-    if (!existing.agents?.some((agent) => agent.id === id))
-      await client.request('agents.create', { name: id, workspace: join(this.stateDir, 'openclaw/workspaces', id) });
-    this.agents.add(member);
-    return id;
-  }
+  async start(host: ToolHost) { this.host = host; await this.kit.start(); }
+  async stop() { await this.kit.stop(); }
+  memoryLimited(member: number) { return this.kit.memoryLimited(m(member)); }
 
-  // ---- accounts: the engine owns credentials; crewd drives its wizard and reads its status ----
+  // ---- accounts: the engine owns credentials; the kit drives its wizard and reads its status ----
 
   async signedIn(member: number, account: string) {
     const provider = PROVIDER_OF[account];
-    if (!provider) return false;
-    const id = await this.agent(member);
-    const status = await this.connected().request<{ providers?: unknown[] }>('models.authStatus', { agentId: id }, { timeoutMs: 20_000 }).catch(() => undefined);
-    return (status?.providers ?? []).some((p: any) => (typeof p === 'string' ? p : p?.provider) === provider);
+    return provider ? this.kit.signedIn(m(member), provider) : false;
   }
 
-  /** Drive the engine's provider-owned login and tell the person's card what to show. ChatGPT: the redirect lands on
-   *  crewd's own 1455 listener and crewd pastes the address into the wizard (the engine cannot bind it first); the
-   *  device code covers the phone and the no-browser path. Other providers' wizards are wired as they are reviewed. */
+  /** The engine's provider-owned login; the kit holds the ChatGPT callback port during a browser sign-in and the
+   *  device code covers the phone and the no-browser path. The card hears the kit's views in Crewhouse's words. */
   signIn(member: number, account: string, via: 'browser' | 'code', on: (step: SignInStep) => void): { paste(text: string): void; cancel(): void } {
-    const controller = new AbortController();
-    const signal = controller.signal;
-    let pasteIn: ((text: string) => void) | undefined;
-    const paste = (text: string) => pasteIn?.(text);
-    const cancel = () => controller.abort();
-    let sessionId = '';
-    void (async () => {
-      try {
-        const client = this.connected();
-        const agentId = await this.agent(member);
-        const authChoice = via === 'code' ? CODE_CHOICE[account] ?? AUTH_CHOICE[account] : AUTH_CHOICE[account];
-        if (!authChoice) throw new Error(`Sign-in for ${account} is not connected yet`);
-        const say = (s: Omit<SignInStep, 'waiting'> & { waiting?: boolean }) => on({ waiting: true, ...s });
-        const started = await client.request<{ sessionId: string; done?: boolean; step?: any }>('openclaw.setup.auth.start',
-          { sessionId: `crewhouse-${randomUUID()}`, agentId, authChoice }, { timeoutMs: 60_000, signal: controller.signal });
-        // The wizard hands over steps only when pulled with wizard.next (the engine's own Control UI drives it the
-        // same way); wizard.status answers {status, error} and never carries a step. A session left running holds the
-        // engine's single setup admission, so every exit short of done cancels this session (never another's).
-        sessionId = started.sessionId;
-        const release = () => client.request('wizard.cancel', { sessionId }, { timeoutMs: 10_000 }).catch(() => {});
-        let step: any, terminal: any, done = !!started.done;
-        for (let turns = 0; !done && !signal.aborted && turns < 200; turns++) {
-          if (!step) {
-            const n = await client.request<{ done?: boolean; step?: any; error?: string }>('wizard.next', { sessionId }, { timeoutMs: 120_000, signal: controller.signal }).catch(() => undefined);
-            if (!n) { await sleep(500); continue; }
-            if (n.done) { terminal = n; done = true; break; }
-            step = n.step;
-            continue;
-          }
-          const st = step;
-          step = undefined;
-          if (st.deviceCode) {
-            say({ code: st.deviceCode.code, url: st.externalUrl });
-            // The engine polls the provider itself once the shown code is acknowledged.
-            const n = await client.request<{ done?: boolean; step?: any; error?: string }>('wizard.next', { sessionId, answer: { stepId: st.id } }, { timeoutMs: 120_000, signal: controller.signal }).catch(() => undefined);
-            if (n) {
-              if (n.done) { terminal = n; done = true; break; }
-              step = n.step;
-            }
-            continue;
-          }
-          if (st.type === 'text' && !st.sensitive) {
-            // The paste step: the person's browser came back to crewd's own page; crewd hands the address over.
-            say({});
-            const value = await new Promise<string | undefined>((resolve) => {
-              pasteIn = resolve;
-              const giveUp = setTimeout(() => { pasteIn = undefined; resolve(undefined); }, 15 * 60_000);
-              signal.addEventListener('abort', () => { clearTimeout(giveUp); pasteIn = undefined; resolve(undefined); }, { once: true });
-            });
-            if (value === undefined) break;
-            const n = await client.request<{ done?: boolean; step?: any; error?: string }>('wizard.next', { sessionId, answer: { stepId: st.id, value } }, { timeoutMs: 120_000, signal: controller.signal });
-            if (n.done) { terminal = n; done = true; break; }
-            step = n.step;
-            if (n.error) say({ error: n.error });
-            continue;
-          }
-          if (st.type === 'note' || st.type === 'confirm' || st.type === 'select' || st.type === 'action') {
-            if (st.externalUrl) say({ url: st.externalUrl });
-            say({}); // the card says what to do while the engine drives
-            const n = await client.request<{ done?: boolean; step?: any; error?: string }>('wizard.next', { sessionId, answer: { stepId: st.id } }, { timeoutMs: 120_000, signal: controller.signal });
-            if (n.done) { terminal = n; done = true; break; }
-            step = n.step;
-            if (n.error) say({ error: n.error });
-            continue;
-          }
-          // progress and anything gateway-driven: it advances by itself
-          const n = await client.request<{ done?: boolean; step?: any; error?: string }>('wizard.next', { sessionId }, { timeoutMs: 120_000, signal: controller.signal }).catch(() => undefined);
-          if (!n) { await sleep(500); continue; }
-          if (n.done) { terminal = n; done = true; break; }
-          step = n.step;
-        }
-        if (signal.aborted) { await release(); return; }
-        const failed = done && terminal ? String(terminal.error ?? (terminal.status === 'error' ? 'Sign-in failed' : '')) : '';
-        if (!done) { await release(); on({ waiting: false, error: 'The sign-in took too long. Tap Sign in with ChatGPT to start again.' }); }
-        else if (failed) { await release(); on({ waiting: false, error: failed.slice(0, 200) }); }
-        else on({ waiting: false, done: true });
-      } catch (e: any) {
-        if (sessionId) void this.client?.request('wizard.cancel', { sessionId }, { timeoutMs: 10_000 }).catch(() => {});
-        on({ waiting: false, error: String(e?.message ?? e).slice(0, 200) });
-      }
-    })();
-    return { paste, cancel };
+    const authChoice = via === 'code' ? CODE_CHOICE[account] ?? AUTH_CHOICE[account] : AUTH_CHOICE[account];
+    if (!authChoice) {
+      queueMicrotask(() => on({ waiting: false, error: `Sign-in for ${account} is not connected yet` }));
+      return { paste() {}, cancel() {} };
+    }
+    const name = NAME_OF[account] ?? account;
+    return this.kit.signIn(m(member), { authChoice, via }, (v) => {
+      if (v.state === 'waiting') on({ waiting: true, ...(v.url ? { url: v.url } : {}), ...(v.code ? { code: v.code } : {}), ...(v.error ? { error: v.error } : {}) });
+      else if (v.state === 'done') on({ waiting: false, done: true });
+      else if (v.why === 'busy') on({ waiting: false, error: 'Another sign-in is already in progress. Finish or cancel it, then try again.' });
+      else if (v.why === 'expired') on({ waiting: false, error: `The sign-in took too long. Tap Sign in with ${name} to start again.` });
+      else if (v.why !== 'declined') on({ waiting: false, error: v.error ?? 'Sign-in failed' });
+    });
   }
 
   async signOut(member: number, account: string) {
     const provider = PROVIDER_OF[account];
-    if (!provider) throw new Error(`no such AI account`);
-    const id = await this.agent(member);
-    await this.connected().request('models.authLogout', { provider, agentId: id }, { timeoutMs: 20_000 });
+    if (!provider) throw new Error('no such AI account');
+    await this.kit.signOut(m(member), provider);
   }
 
-  /** One-time per member (spec §6): place the member's old engine sign-in where the engine's doctor imports it, and
-   *  run doctor once against the isolated state. Runs in the offline window before the gateway comes up — the
-   *  engine's doctor refuses to run while a gateway owns the state directory — and the engine installs first
-   *  (prepare), because an import without the engine is exactly how a preserved sign-in gets lost. Nothing is
-   *  retired here either way: the copy only moves aside once the gateway confirms the import (confirm). */
+  /** One-time per member (spec §6): stage the member's old engine sign-in for the engine's doctor, offline, before
+   *  start(). Nothing is retired here: the copy moves aside only once the gateway confirms the import (confirm). */
   async migrate(member: Member, legacyAuthPath: string) {
-    const moved = `${legacyAuthPath}.moved-to-engine`;
-    const source = existsSync(legacyAuthPath) ? legacyAuthPath : existsSync(moved) && !existsSync(`${moved}.canonicalized`) ? moved : '';
-    if (!source) return false;
-    await this.gateway.prepare();
-    const agentDir = join(this.gateway.root, 'state', 'agents', `m${member}`, 'agent');
-    mkdirSync(agentDir, { recursive: true });
-    // Doctor canonicalizes legacy provider ids in auth-profiles.json before importing it into SQLite; staging
-    // auth.json instead imports the old id as-is, which looks signed in but cannot authenticate openai/* turns.
-    const staged = join(agentDir, 'auth-profiles.json');
-    if (!existsSync(staged)) {
-      const legacy = JSON.parse(readFileSync(source, 'utf8'));
-      if (source === moved && !legacy['openai-codex']) return false;
-      writeFileSync(staged, JSON.stringify({ version: 1, profiles: Object.fromEntries(
-        Object.entries(legacy).map(([provider, credential]) => [`${provider}:default`, credential])) }), { mode: 0o600 });
-    }
-    const { entry, env } = this.gateway.doctorContext();
-    const ran = spawnSync(process.execPath, [entry, 'doctor', '--fix', '--yes', '--non-interactive'], { env, cwd: env.HOME as string, timeout: 120_000, stdio: 'pipe' });
-    // The doctor's exit code is a weak yes (it exits 0 even when it imports nothing), so a failed run only clears
-    // the staging — the next boot stages the original again, byte for byte. Retiring stays confirm's job.
-    if (ran.status !== 0) rmSync(staged, { force: true });
-    return ran.status === 0;
+    return await this.kit.migrateRetainedLogin(m(member), { path: legacyAuthPath }) === 'staged';
   }
-
-  /** After the gateway is up: the migration only counts when the gateway itself reports the member signed in to
-   *  every account their old auth held. Only a confirmed import retires crewhouse's copy (a rename — the original
-   *  bytes move aside whole); anything else leaves the sign-in exactly where it was, and the next boot retries it
-   *  without asking the person to sign in again. */
-  async confirm(member: Member, legacyAuthPath: string) {
-    const moved = `${legacyAuthPath}.moved-to-engine`;
-    const source = existsSync(legacyAuthPath) ? legacyAuthPath : existsSync(moved) && !existsSync(`${moved}.canonicalized`) ? moved : '';
-    if (!source) return false;
-    try {
-      const wanted = Object.keys(JSON.parse(readFileSync(source, 'utf8'))).map((key) => key === 'openai-codex' ? 'openai' : PROVIDER_OF[key] ?? key.toLowerCase());
-      if (!wanted.length) return false; // nothing recognizable to verify: never retire on a guess
-      const id = await this.agent(member);
-      for (let tries = 0; tries < 3; tries++) {
-        const status = await this.connected().request<{ providers?: unknown[] }>('models.authStatus', { agentId: id, refresh: true }, { timeoutMs: 20_000 }).catch(() => undefined);
-        const have = new Set((status?.providers ?? []).map((p: any) => (typeof p === 'string' ? p : p?.provider)));
-        if (wanted.every((provider) => have.has(provider))) {
-          if (source === legacyAuthPath) renameSync(legacyAuthPath, moved);
-          writeFileSync(`${moved}.canonicalized`, '', { mode: 0o600 });
-          return true;
-        }
-        await sleep(1500);
-      }
-    } catch { /* the engine is down or the file unreadable: the original stays */ }
-    return false;
-  }
+  confirm(member: Member, legacyAuthPath: string) { return this.kit.confirmRetainedLogin(m(member), { path: legacyAuthPath }); }
 
   /** Point this engine at a custom OpenAI-compatible provider (the tests' scripted model; a self-hosted gateway later).
    *  Sets the provider and makes it every agent's primary model. */
   async configureModelProvider(baseUrl: string, apiKey: string, modelRef = 'crewhouse-stub/test') {
-    const client = this.connected();
-    const cur = await client.request<{ hash: string }>('config.get');
-    await client.request('config.patch', { baseHash: cur.hash, raw: JSON.stringify({
+    await this.kit.patchConfig({
       models: { providers: { 'crewhouse-stub': {
         baseUrl, apiKey, api: 'openai-completions',
         models: [{ id: 'test', name: 'Test', reasoning: true, input: ['text'],
@@ -226,53 +163,27 @@ export class OpenClawRuntime implements AgentRuntime {
           compat: { supportsReasoningEffort: true, supportedReasoningEfforts: ['off', 'low', 'medium', 'high'] } }],
       } } },
       agents: { defaults: { model: { primary: modelRef } } },
-    }) });
+    });
   }
 
-  async setLearning(on: boolean) {
-    const client = this.connected();
-    const cur = await client.request<{ hash: string }>('config.get');
-    await client.request('config.patch', { baseHash: cur.hash, raw: JSON.stringify({ skills: { workshop: { autonomous: { mode: on ? 'auto' : 'off' } } } }) });
-  }
+  async setLearning(on: boolean) { await this.kit.patchConfig({ skills: { workshop: { autonomous: { mode: on ? 'auto' : 'off' } } } }); }
   async learning() {
-    const id = await this.agent(1).catch(() => '');
-    const s = await this.connected().request<{ config?: any }>('config.get', id ? { agentId: id } : {}, { timeoutMs: 20_000 }).catch(() => undefined);
+    const s = await this.kit.call('config.get', {}, { timeoutMs: 20_000 }).catch(() => undefined) as { config?: any } | undefined;
     return s?.config?.skills?.workshop?.autonomous?.mode !== 'off';
   }
+
   async run(spec: RunSpec, on: (event: RunEvent) => void, opts?: { register?: boolean }): Promise<RunEnd> {
-    const client = this.connected();
-    const agentId = await this.agent(spec.member);
-    if (opts?.register !== false) this.bridge?.register(spec);
-    let runId: string | undefined;
-    let text = '';
-    const unsubscribe = this.gateway.onEvent((event) => {
-      const payload = event.payload;
-      if (event.event !== 'agent' || !runId || payload?.runId !== runId) return;
-      if (payload.stream === 'assistant' && typeof payload.data?.text === 'string') {
-        text = payload.data.text;
-        on({ type: 'text', text });
-      } else if (payload.stream === 'tool' && typeof payload.data?.name === 'string') {
-        on({ type: 'tool', name: payload.data.name, phase: payload.data.phase === 'end' ? 'end' : 'start' });
-      }
-    });
+    const register = opts?.register !== false;
+    if (register) this.runs.set(spec.key, spec);
     try {
-      const started = await client.request<{ runId: string }>('agent', {
-        agentId, sessionKey: spec.key, message: spec.message,
-        extraSystemPrompt: spec.system, idempotencyKey: randomUUID(),
-        ...(spec.images?.length ? { attachments: spec.images.map((image) => ({ type: 'image', mimeType: image.mimeType, content: image.data })) } : {}),
-        ...(spec.thinking ? { thinking: spec.thinking } : {}),
-      });
-      runId = started.runId;
-      const done = await client.request<any>('agent.wait', { runId, timeoutMs: 3_600_000 }, { timeoutMs: 3_610_000 });
-      text = String(done.terminalReply?.text ?? text);
-      if (done.status === 'ok') { on({ type: 'text', text }); return { ok: true, text }; }
-      if (done.stopReason === 'aborted') return { ok: false, aborted: true };
-      return { ok: false, kind: 'other', message: String(done.error ?? done.status ?? 'Engine stopped') };
+      return await this.kit.run({ sessionKey: spec.key, member: m(spec.member), message: spec.message, system: spec.system,
+        ...(spec.images?.length ? { images: spec.images } : {}), ...(spec.thinking ? { thinking: spec.thinking } : {}), register },
+        (e) => on(e.type === 'tool' ? { ...e, name: crewName(e.name) } : e));
     } catch (error) { return { ok: false, kind: 'other', message: String(error) }; }
-    finally { unsubscribe(); this.bridge?.unregister(spec.key); }
+    finally { if (register) this.runs.delete(spec.key); }
   }
-  async steer(key: string, text: string) { await this.connected().request('sessions.steer', { sessionKey: key, message: text }); }
-  async abort(key: string) { await this.connected().request('chat.abort', { sessionKey: key }); }
+  steer(key: string, text: string) { return this.kit.steer(key, text); }
+  abort(key: string) { return this.kit.abort(key); }
   async trail(_key: string) { return []; }
   async ask(member: number, prompt: string) {
     const end = await this.run({ key: `agent:m${member}:crewhouse:route:${randomUUID()}`, member, bot: 'chief', task: 0, account: 'chatgpt',
@@ -282,8 +193,8 @@ export class OpenClawRuntime implements AgentRuntime {
   }
   /** The member's applied learned skills (the workshop's proposals, applied state last). */
   async learned(member: number) {
-    const id = await this.agent(member);
-    const list = await this.connected().request<{ proposals?: any[] }>('skills.proposals.list', { agentId: id }, { timeoutMs: 20_000 }).catch(() => undefined);
+    const { agentId } = await this.kit.ensureMember(m(member));
+    const list = await this.kit.call('skills.proposals.list', { agentId }, { timeoutMs: 20_000 }).catch(() => undefined) as { proposals?: any[] } | undefined;
     return (list?.proposals ?? []).map((p) => ({
       id: String(p.id ?? ''),
       skill: String(p.skillName ?? p.title ?? ''),
@@ -294,7 +205,7 @@ export class OpenClawRuntime implements AgentRuntime {
 
   /** The member's learned-skills folder, and its pre-change capture: crewhouse's own git versioning. A capture that
    *  cannot be verified throws, and the caller must refuse the review — the data stays. */
-  workspaceOf(member: number) { return join(this.stateDir, 'openclaw/workspaces', `m${member}`, 'skills'); }
+  workspaceOf(member: number) { return join(this.stateDir, 'openclaw/workspaces', m(member), 'skills'); }
   captureLearned(member: number): string {
     const dir = this.workspaceOf(member);
     if (!existsSync(join(dir, '.git'))) mkdirSync(dir, { recursive: true });
@@ -309,7 +220,7 @@ export class OpenClawRuntime implements AgentRuntime {
    *  so the restore is byte-for-byte: leading and trailing whitespace and the final newline all survive. */
   restoreLearned(member: number, name: string, hash?: string) {
     const dir = this.workspaceOf(member);
-    const git = (args: string[]) => execFileSync('git', ['-c', 'user.name=Crewhouse', '-c', 'user.email=crewhouse@localhost', ...args], { cwd: dir, stdio: 'pipe' });
+    const git = (argv: string[]) => execFileSync('git', ['-c', 'user.name=Crewhouse', '-c', 'user.email=crewhouse@localhost', ...argv], { cwd: dir, stdio: 'pipe' });
     const at = (hash ?? git(['rev-parse', '--short', 'HEAD'])).toString().trim();
     let body: Buffer;
     try { body = git(['show', `${at}:${name}/SKILL.md`]); }
@@ -320,36 +231,41 @@ export class OpenClawRuntime implements AgentRuntime {
     return at;
   }
 
+  /** The workshop window for the member's own collection review: its reconcile only, one call wide. The engine mints
+   *  the reviewer's session key fresh per run (`incognito-<uuid>`), so the first qualifying call is the captured one. */
+  armCuration(member: number, ms = 10 * 60_000) {
+    this.kit.allowOnce({ keyPrefix: `agent:${m(member)}:skill-collection-review:`, tool: 'skill_workshop', input: (i) => i.action === 'reconcile' }, ms);
+  }
+
   /** The collection review, on crewhouse's own boundary: capture first (refusing everything on failure), open the
-   *  workshop window only for the engine's reviewer, run the review, close it, and report kept/rewritten/dropped. */
+   *  workshop window only for the member's own reviewer and its reconcile — one call wide — run the review, close
+   *  it, and report kept/rewritten/dropped. */
   async runCollectionReview(member: number) {
-    const agentId = await this.agent(member);
     const capture = this.captureLearned(member);
-    const jobs = await this.connected().request<{ jobs: { id: string; name: string; enabled: boolean }[] }>('cron.list', { limit: 100 }, { timeoutMs: 20_000 });
-    const job = jobs.jobs?.find((j) => j.name === `skill-collection-review-m${member}`);
+    const jobs = await this.kit.call('cron.list', { limit: 100 }, { timeoutMs: 20_000 }) as { jobs?: { id: string; name: string; enabled: boolean }[] };
+    const job = jobs.jobs?.find((j) => j.name === `skill-collection-review-${m(member)}`);
     if (!job?.enabled) throw new Error('the collection review is not enabled');
-    this.bridge?.armCuration({ member, review: 'skill-collection-review', action: 'reconcile' }, 10 * 60_000);
+    this.armCuration(member);
     try {
-      const kicked = await this.connected().request<{ runId: string }>('cron.run', { id: job.id, mode: 'force' }, { timeoutMs: 30_000 });
+      const kicked = await this.kit.call('cron.run', { id: job.id, mode: 'force' } as { id: string }, { timeoutMs: 30_000 }) as { runId?: string };
       for (const end = Date.now() + 240_000; Date.now() < end;) {
         await sleep(2000);
-        const runs = await this.connected().request<{ entries: { runId: string; status: string }[] }>('cron.runs', { id: job.id }, { timeoutMs: 20_000 }).catch(() => undefined);
+        const runs = await this.kit.call('cron.runs', { id: job.id }, { timeoutMs: 20_000 }).catch(() => undefined) as { entries?: { runId: string; status: string }[] } | undefined;
         if (runs?.entries?.some((e) => e.runId === kicked.runId && e.status === 'ok')) break;
       }
-      const curator = await this.connected().request<any>('skills.curator.status', {}, { timeoutMs: 20_000 }).catch(() => undefined);
+      const curator = await this.kit.call('skills.curator.status', {}, { timeoutMs: 20_000 }).catch(() => undefined) as any;
       const outcome = curator?.collectionReview ?? {};
       const names = (v: any) => Array.isArray(v) ? v.map((x: any) => x?.name ?? x?.skill ?? x).filter(Boolean) : [];
       return { capture, kept: names(outcome.kept), written: names(outcome.written), dropped: names(outcome.dropped) };
-    } finally { this.bridge?.disarmCuration(); }
+    } finally { this.kit.disallowOnce(); }
   }
 
   /** Forget one learned skill. Pending proposals are rejected directly; an applied one is restored by a one-shot
    *  turn whose only possible tool is the workshop's own restore (spec §5.4) — no other tool can run on it. */
   async forget(member: number, id: string, skill = '') {
-    const agentId = await this.agent(member);
-    const client = this.connected();
-    for (const method of ['skills.proposals.reject', 'skills.proposals.quarantine']) {
-      const ok = await client.request(method, { agentId, proposalId: id }, { timeoutMs: 20_000 }).then(() => true).catch(() => false);
+    const { agentId } = await this.kit.ensureMember(m(member));
+    for (const method of ['skills.proposals.reject', 'skills.proposals.quarantine'] as const) {
+      const ok = await this.kit.call(method, { agentId, proposalId: id } as any, { timeoutMs: 20_000 }).then(() => true).catch(() => false);
       if (ok) return;
     }
     // Applied: a one-shot turn, unregistered (so the gate allows only the workshop's restore), then forgotten for good.

@@ -10,9 +10,8 @@ import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { connect } from 'node:net';
 import { OpenClawRuntime } from '../src/openclaw/runtime.ts';
-import { ToolBridge } from '../src/openclaw/bridge.ts';
+import { faked } from './kit-fake.ts';
 
 const fixture = () => {
   const state = mkdtempSync(join(tmpdir(), 'crewhouse-curation-'));
@@ -130,18 +129,10 @@ test('curation restore: is byte-for-byte, keeping leading and trailing whitespac
 });
 
 test('the current review end to end: one window allows one reviewer call, and its cleanup restores byte-faithfully', async () => {
-  const state = mkdtempSync(join(tmpdir(), 'crewhouse-curation-e2e-'));
-  const runtime = new OpenClawRuntime(state);
-  const bridge = new ToolBridge(state, { tools: () => [], gate: async () => ({ allow: false, reason: 'no runs here' }), call: async () => { throw new Error('no calls in this test'); } });
-  const ask = (frame: object): Promise<any> => new Promise((resolve, reject) => {
-    const socket = connect(bridge.path);
-    let text = '';
-    socket.on('error', reject);
-    socket.on('data', (chunk) => { text += chunk; if (text.includes('\n')) { resolve(JSON.parse(text)); socket.end(); } });
-    socket.on('connect', () => socket.write(JSON.stringify(frame) + '\n'));
-  });
+  const f = faked({ gate: () => ({ allow: false, reason: 'no runs here' }), call: () => { throw new Error('no calls in this test'); } });
+  const { runtime, ask } = f;
   try {
-    await bridge.start();
+    await f.started;
     // The real layout and real executable paths: the runtime's own skills roots, its own git capture, and the
     // bridge socket the engine's reviewer speaks on. The engine keys the reviewer session
     // `agent:<agentId>:skill-collection-review:incognito-<uuid>`, minted fresh per run — unknowable beforehand.
@@ -154,7 +145,7 @@ test('the current review end to end: one window allows one reviewer call, and it
     // The CURRENT review's coverage, per member: captured before the window opens, like runCollectionReview does.
     const capture = runtime.captureLearned(1);
     const capture2 = runtime.captureLearned(2);
-    bridge.armCuration({ member: 1, review: 'skill-collection-review', action: 'reconcile' }, 10 * 60_000);
+    runtime.armCuration(1);
     // (b) The window is one call wide: the current review's own reconcile passes, then nothing does — no replay,
     // no old or different review re-running under a fresh incognito key, no other member, no other tool, and
     // after the disarm in runCollectionReview's finally, not even the reviewer again.
@@ -165,8 +156,8 @@ test('the current review end to end: one window allows one reviewer call, and it
     assert.equal((await ask(rerun)).allow, false, 'an old or different review cannot reuse the window via its prefix');
     assert.equal((await ask({ kind: 'gate', key: `agent:m2:skill-collection-review:incognito-${randomUUID()}`, tool: 'skill_workshop', input: { action: 'reconcile' } })).allow, false, 'another member was never covered by this window');
     assert.equal((await ask({ kind: 'gate', key: reviewer.key, tool: 'bash', input: { command: 'ls' } })).allow, false, 'the window is workshop-only');
-    bridge.disarmCuration();
-    assert.equal((await ask(reviewer)).allow, false, 'a stale window denies everything');
+    runtime.kit.disallowOnce();
+    assert.equal((await ask(reviewer)).allow, false, 'a closed window denies everything');
     // (a) The review's cleanup lands on the covered member: the skill is dropped, and unrelated later work
     // happens on top before anyone notices.
     rmSync(join(runtime.workspaceOf(1), 'fare-check'), { recursive: true, force: true });
@@ -178,19 +169,17 @@ test('the current review end to end: one window allows one reviewer call, and it
     assert.equal(readFileSync(join(runtime.workspaceOf(1), 'later-thing', 'SKILL.md'), 'utf8'), '# Later\n', 'unrelated later edits stay intact');
     assert.equal(readFileSync(join(runtime.workspaceOf(2), 'printer-spirit', 'SKILL.md'), 'utf8'), '# Printer Spirit\n', "member 2's data is untouched");
     assert.equal(spawnSync('git', ['-C', runtime.workspaceOf(2), 'rev-parse', '--short', 'HEAD'], { encoding: 'utf8' }).stdout.trim(), capture2, "member 2's history did not move");
-  } finally {
-    bridge.stop();
-    await runtime.stop().catch(() => {});
-    rmSync(state, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
-  }
+  } finally { await f.done(); }
 });
 
 test('curation trigger: a refused capture never opens the workshop window', async () => {
   const state = mkdtempSync(join(tmpdir(), 'crewhouse-curation-run-'));
   const runtime = new OpenClawRuntime(state);
+  let armed = 0;
+  runtime.kit.allowOnce = () => { armed++; };
   try {
     // No workspace on disk at all: the capture would fail, so the review must be refused and the window never opens.
     await assert.rejects(() => runtime.runCollectionReview(1), /capture failed|not enabled|not ready/i);
-    assert.equal(runtime.bridge?.curationArmed ?? false, false, 'the workshop window stayed closed');
+    assert.equal(armed, 0, 'the workshop window never opened');
   } finally { await runtime.stop().catch(() => {}); rmSync(state, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); }
 });

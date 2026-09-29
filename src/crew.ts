@@ -23,7 +23,7 @@ import type { Link } from './link.ts';
 import type { AgentRuntime, RunEnd, RunEvent, RunRef, RunSpec, ToolHost } from './runtime.ts';
 import { OpenClawRuntime } from './openclaw/runtime.ts';
 import { StubRuntime } from './stub-runtime.ts';
-import { fileTool } from './openclaw/files.ts';
+import { fileTool } from './files.ts';
 
 /** Phone pairing stays with Chief, including 'pair my computer with you' said on the home computer. */
 export const asksForPhone = (text: string) => /\b(pair|connect|link|add|use|install)\b[\s\S]{0,65}\b(phone|mobile|computer|crewhouse app)\b|\b(phone|mobile|computer)\b[\s\S]{0,35}\b(pair|connect|link)\b/i.test(text);
@@ -244,7 +244,7 @@ export class Crew {
     this.cfg = cfg; this.db = db;
     this.desktops = new Desktops(cfg.stateDir);
     this.keepAwake = cfg.engine === 'stub' ? () => {} : inhibitor();
-    this.runtime = cfg.engine === 'stub' ? new StubRuntime() : new OpenClawRuntime(cfg.stateDir);
+    this.runtime = cfg.engine === 'stub' ? new StubRuntime() : new OpenClawRuntime(cfg.stateDir, cfg.crewDir);
     this.accounts = new Accounts(this.runtime);
     // A scripted/custom model provider stands in for the person's own ChatGPT, exactly as the stub model always did.
     if (cfg.engineProvider) this.accounts.ready.set(`${OWNER}:chatgpt`, true);
@@ -279,7 +279,6 @@ export class Crew {
     void this.migrateMembers().then(async () => {
       if (this.stopped) return; // crewd stopped before the engine came up
       // The engine comes up in the background: a first install can take minutes, and crewd boots without it.
-      if ('crewDir' in this.runtime) (this.runtime as { crewDir: string }).crewDir = this.cfg.crewDir;
       const up = await this.runtime.start(this.toolHost()).then(() => true).catch((e) => {
         console.error('engine start:', e);
         this.db.event('system.engine', null, { error: String(e).slice(0, 300) });
@@ -290,10 +289,8 @@ export class Crew {
       if (this.cfg.engineProvider && this.runtime.configureModelProvider)
         await this.runtime.configureModelProvider(this.cfg.engineProvider.baseUrl, this.cfg.engineProvider.apiKey).catch((e: unknown) => console.error('engine provider:', e));
       if (this.stopped) return;
-      if (this.learningOn()) {
-        await this.runtime.setLearning?.(true).catch((e: unknown) => console.error('learning:', e));
-        this.curationAt = Date.now() + 60_000; // first look a minute after the engine is up, then weekly from the job
-      }
+      await this.runtime.setLearning?.(this.learningOn()).catch((e: unknown) => console.error('learning:', e));
+      if (this.learningOn()) this.curationAt = Date.now() + 60_000; // first look a minute after the engine is up, then weekly from the job
     });
     this.dispatch();
   }

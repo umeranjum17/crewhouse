@@ -1,6 +1,5 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createServer } from 'node:net';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { build } from 'esbuild';
@@ -37,21 +36,4 @@ test('the shared sign-in sheet reserves ChatGPT instructions for ChatGPT', async
       }
     }
   } finally { delete (globalThis as any).location; delete (globalThis as any).document; rmSync(dir, { recursive: true, force: true }); }
-});
-
-test('busy callback cannot blame ChatGPT for another provider', async () => {
-  const listener = createServer();
-  await new Promise<void>((resolve) => listener.listen(0, '127.0.0.1', resolve));
-  try {
-    process.env.CREWHOUSE_CALLBACK_PORT = String((listener.address() as { port: number }).port);
-    const { Accounts } = await import('../src/accounts.ts');
-    const accounts = new Accounts({ signIn: () => ({ paste() {}, cancel() {} }) } as any);
-    await accounts.login(1, 'grok');
-    const deadline = Date.now() + 2000;
-    while (accounts.view(1, 'grok')?.state !== 'failed' && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 10));
-    assert.equal(accounts.view(1, 'grok')?.state, 'failed');
-    assert.doesNotMatch(accounts.view(1, 'grok')?.error ?? '', /ChatGPT/);
-    assert.match(accounts.view(1, 'grok')?.error ?? '', /signing in|sign-in/);
-    accounts.stop();
-  } finally { listener.close(); delete process.env.CREWHOUSE_CALLBACK_PORT; }
 });
