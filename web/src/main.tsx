@@ -178,6 +178,15 @@ function SetupRow({ state, accounts, tick }: { state: Json; accounts: Json[] | n
   return <a className="card nudge" href="#/settings"><span className="grow">Home setup: {left} {left === 1 ? 'thing' : 'things'} left</span><b>›</b></a>;
 }
 
+/** The same row for a non-owner member until their first week is done: their calendar and one job.
+ *  Sign-in stays out — a signed-out member already sees an AccountCard above. Tapping opens the apps
+ *  screen, where the calendar connects; the job list sits on this same Home below. */
+function MemberRow({ state }: { state: Json }) {
+  const { left } = A.memberSetup(state);
+  if (!left) return null;
+  return <a className="card nudge" href="#/apps"><span className="grow">Getting started: {left} {left === 1 ? 'thing' : 'things'} left</span><b>›</b></a>;
+}
+
 /** Needs-you rows only open the review sheet; nothing commits from Home. */
 function NeedsRows({ state, cards, quiet, all = false }: { state: Json; cards: A.Card[]; quiet?: boolean; all?: boolean }) {
   const crew = A.crew(state);
@@ -246,6 +255,7 @@ function Home(ctx: Ctx) {
   const nudges = <>
     {(g.state === 'signed-out' || g.notIncluded) && <AccountCard me={me} owner={ownerName(state)} isOwner={me === A.OWNER} g={g} onReady={refresh} />}
     {state.person.id === A.OWNER && <SetupRow state={state} accounts={accounts} tick={tick} />}
+    {state.person.id !== A.OWNER && <MemberRow state={state} />}
     {A.resting(state) && <div className="card nudge"><span className="grow">{A.resting(state)}. I'll pick things back up then.</span></div>}
     {A.gettingReady(state) && <div className="card nudge"><span className="grow">{A.gettingReady(state)}</span></div>}
     {A.update(state) && <div className="card nudge"><span className="grow">{A.update(state)!.words}</span><a className="btn go" href={A.update(state)!.url} target="_blank" rel="noreferrer">Download</a></div>}

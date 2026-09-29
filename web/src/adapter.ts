@@ -713,6 +713,17 @@ export function homeSetup(state: Json, g: Json | null, link: Json | null) {
   return { rows, left: rows.filter((r) => !r.done).length };
 }
 
+/** A non-owner member's first-week checklist: their own calendar connection, and handing the crew one
+ *  job. Sign-in stays out: a signed-out member already sees an AccountCard. Until both are done, their Home
+ *  carries the same row the owner's house setup gets. Everything here is the viewer's own snapshot. */
+export function memberSetup(state: Json) {
+  const rows = [
+    { key: 'calendar', says: 'Connect your calendar', done: (state.connections ?? []).includes('calendar') },
+    { key: 'job', says: 'Hand the crew one job', done: (state.tasks ?? []).length > 0 },
+  ];
+  return { rows, left: rows.filter((r) => !r.done).length };
+}
+
 /** Ideas are promises from a named helper; Chief offers three of his own when the crew has none.
  *  A job still waiting on an app the person hasn't connected belongs on Home (jobs), not among these chips. */
 export function ideas(state: Json) {
