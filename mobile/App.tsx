@@ -25,6 +25,7 @@ import { useShareIntent } from 'expo-share-intent';
 import QRCode from 'qrcode';
 import * as motion from './src/motion';
 import { MARKS } from './src/marks';
+import { Office } from './src/office';
 import { connect, desktopSignaling, forgetGrant, kept, loadGrant, onLive, pair, pairTypedCode, type Grant, type Status } from './src/link';
 
 // ---------- look ----------
@@ -982,10 +983,15 @@ function Home(ctx: Ctx) {
   const needs = A.needsYou(state);
   const chief = chiefNow(state, offline);
   const toChief = async (x: string, p: Photo[] = []) => { const ok = await attempt(() => api.post('chief', x, p.map(({ type, data }) => ({ type, data }))), undefined, true); if (ok) { refresh(); go({ view: 'chief' }); } return ok; };
+  const [room, setRoom] = useState(0);
+  const [desk, setDesk] = useState<{ c: A.OfficeMember; state: Json } | null>(null);
   return (
     <View style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={s.page} keyboardShouldPersistTaps="handled">
         <HomeHero state={state} offline={offline} go={go} />
+        <View onLayout={(e) => setRoom(e.nativeEvent.layout.width)} style={[s.office, { backgroundColor: t.soft, borderColor: t.line }]}>
+          {room > 0 && <Office state={state} night={t.night} offline={offline} width={room - 2} onChief={() => go({ view: 'chief' })} onDesk={(c) => setDesk({ c, state })} onTray={() => go({ view: 'things' })} />}
+        </View>
         {!!A.resting(state) && <Card><T>{A.resting(state)}. I'll pick things back up then.</T></Card>}
         <Pressable onPress={() => go({ view: 'phone' })} accessibilityRole="button" accessibilityLabel="Check AI account sign-in on the home computer" style={({ pressed }) => [s.listRow, s.listGroup, { backgroundColor: t.solid, borderColor: t.line }, pressed && { opacity: 0.6 }]}>
           <AiMark ai={A.AIS[0]} size={30} />
@@ -996,8 +1002,57 @@ function Home(ctx: Ctx) {
         <JobList state={state} go={go} />
       </ScrollView>
       {canAct && <View style={s.dock}><Composer placeholder="Ask Chief anything" onSend={toChief} chat="chief" /></View>}
+      {!!desk && <DeskSheet desk={desk} {...ctx} onClose={() => setDesk(null)} />}
     </View>
   );
+}
+
+/** A helper's desk, opened from the office: what it is on, its steps with the latest marked now, what it has made for
+ *  this job so far, and its question with a Review that opens the same sheet as Needs you — over the desk, as a file
+ *  does (iOS won't present a new sheet while this one is still sliding away). A helper busy with someone else's job
+ *  shows only that. Never its live screen: that opens from its chat. */
+function DeskSheet({ desk, state, offline, canAct, go, refresh, onClose }: Ctx & { desk: { c: A.OfficeMember; state: Json }; onClose: () => void }) {
+  const t = useLook();
+  const reduce = motion.useReduceMotion();
+  const [asking, setAsking] = useState(false);
+  const id = desk.c.id;
+  // The room's own row (live events included) until the next refresh, then the snapshot again.
+  const c = desk.state === state ? desk.c : A.office(state, { busyElsewhere: true }).crew.find((x) => x.id === id);
+  const h = A.crew(state).find((x) => x.id === id);
+  if (!c || !h) return null;
+  const job = A.work(state).find((w) => w.helper === id);
+  const to = (r: Route) => { onClose(); go(r); };
+  return <Modal visible transparent animationType={motion.sheet(reduce)} onRequestClose={onClose}>
+    <Pressable style={s.scrim} onPress={onClose}>
+      <Pressable style={[s.sheet, { backgroundColor: t.surface, maxHeight: '88%' }]} onPress={() => {}}>
+        <View style={[s.grabber, { backgroundColor: t.line2 }]} />
+        <View style={s.row}>
+          <Face who={offline ? { ...h, ring: '' as const, mood: 'rest' as const } : { ...h, mood: c.mood, ring: c.ring }} size={52} />
+          <View style={{ flex: 1 }}><T style={s.h2}>{c.name}</T><T tone="ink2" style={s.small} lines={2}>{h.role}</T></View>
+          <Btn label="Close" onPress={onClose} />
+        </View>
+        <View style={{ flexDirection: 'row' }}>{offline ? <Pill tone="off">{OUT}</Pill>
+          : <Pill tone={c.ring === 'needs' ? 'wait' : c.ring ? 'ok' : 'off'}>{c.busyElsewhere ? A.BUSY_ELSEWHERE : c.ring === 'working' ? 'Working' : c.status}</Pill>}</View>
+        <ScrollView contentContainerStyle={{ gap: 12 }}>
+          {!offline && c.busyElsewhere && <T tone="ink2">{`${c.name} is on another job right now. Anything you ask for waits its turn.`}</T>}
+          {!offline && !c.busyElsewhere && !!job && <View style={[s.ev, { backgroundColor: t.sunken }]}>
+            <T tone="ink2" style={s.label}>{job.waiting && c.ring !== 'needs' ? 'Up next' : 'Working on'}</T>
+            <T style={[s.rowTitle, s.b]}>{job.title}</T>
+          </View>}
+          {!offline && c.ask && <Card ask>
+            <T style={s.b}>{c.ask.head}</T>
+            <T tone="ink2" lines={3}>{c.ask.words}</T>
+            <View style={s.chips}><Btn go label="Review" onPress={() => setAsking(true)} /></View>
+          </Card>}
+          {!offline && !c.busyElsewhere && c.steps.length > 0 && <View><Label>Steps</Label><Steps steps={c.steps} /></View>}
+          {!offline && !c.busyElsewhere && c.things.length > 0 && <View><Label>On the desk</Label><Card>{c.things.map((f) => <FileRow key={f.url} f={f} />)}</Card></View>}
+          <Btn big label={`Open ${c.name}'s chat`} onPress={() => to({ view: 'helper', id })} />
+        </ScrollView>
+        {asking && c.ask && <AskSheet c={c.ask} who={h} chiefSays={state.asks.find((a: Json) => a.id === c.ask!.id)?.detail?.chief} canAct={canAct}
+          onClose={() => { setAsking(false); refresh(); }} />}
+      </Pressable>
+    </Pressable>
+  </Modal>;
 }
 
 function ChatList({ state, go, mood }: { state: Json; go: Ctx['go']; mood?: art.Mood }) {
@@ -1570,6 +1625,7 @@ const s = StyleSheet.create({
   labelRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 24, marginBottom: 8, marginHorizontal: 4 },
   label: { fontSize: 12, lineHeight: 16, fontWeight: '600', letterSpacing: 0.7, textTransform: 'uppercase' },
   count: { minWidth: 18, height: 18, borderRadius: 9, paddingHorizontal: 5, fontSize: 11, lineHeight: 18, fontWeight: '700', textAlign: 'center', overflow: 'hidden' },
+  office: { borderWidth: 1, borderRadius: 20, overflow: 'hidden' },
   hero: { borderWidth: 1, borderRadius: 20, padding: 18, overflow: 'hidden', shadowColor: '#14121a', shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
   heroWarm: { position: 'absolute', opacity: 0.3 },
   eyebrow: { fontSize: 11.5, lineHeight: 16, fontWeight: '600', letterSpacing: 0.9 },
