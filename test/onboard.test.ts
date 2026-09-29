@@ -98,3 +98,11 @@ test('a sign-in that stopped working (a password change): signed out for real, s
     'Grok signed you out. That happens after a password change. Sign in again and the crew picks up where it left off.');
   done();
 });
+
+test('typed-name onboarding ends on ideas, not an open question', async () => {
+  const { crew, done } = setup();
+  crew.onboard('sir');
+  assert.equal(crew.botPage('chief').messages.length, 0, 'the empty thread renders ChiefIdeas');
+  assert.equal(crew.member(1).address, 'sir', 'the address is stored in people');
+  done();
+});

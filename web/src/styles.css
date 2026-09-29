@@ -103,6 +103,7 @@ b { font-weight: 600; }
 .pill.off i { background: var(--shadow); box-shadow: none; }
 .chips { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0; }
 .chips.center { justify-content: center; }
+.ideas-intro { text-align: center; color: var(--ink2); margin: 10px 0 0; }
 .chip { font: 500 13px/18px var(--ui); background: var(--soft); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; white-space: nowrap; display: inline-flex; gap: 6px; align-items: center; }
 .chip.on { background: var(--solid); border-color: var(--ink2); }
 .btn { font: 600 14px/20px var(--ui); border-radius: 10px; padding: 8px 16px; border: 1px solid var(--line2); background: var(--solid); color: var(--ink); display: inline-flex; gap: 8px; align-items: center; justify-content: center; white-space: nowrap; min-height: 40px; transition: background 120ms var(--ease); }
