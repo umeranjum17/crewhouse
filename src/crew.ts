@@ -8,7 +8,7 @@ import { CHIEF, type Config } from './config.ts';
 import type { Row, Store } from './db.ts';
 import * as disk from './bots.ts';
 import { Desktops, browserBin, missing as desktopMissing, type Watcher } from './desktop.ts';
-import { Accounts, OWNER, PROVIDERS } from './accounts.ts';
+import { Accounts, OWNER, PROVIDERS, clock } from './accounts.ts';
 import { Connections, type AppTool, APPS } from './connections.ts';
 import { bashTool, readPage, runAxi, runSandboxed, q, sandboxReady, tool, webTools, type CrewTool } from './engine.ts';
 import { allowed, proxy } from './net.ts';
@@ -36,7 +36,6 @@ export const inlineHowTo = (text: string): 'signin' | 'app' | 'routine' | null =
 const HOLD_MS = Number(process.env.CREWHOUSE_HOLD_MS || 180_000); // how long a tool call waits for an answer before the turn parks
 const TASK_TIMEOUT_MS = 60 * 60_000;
 const taskTokenCap = () => Number(process.env.CREWHOUSE_TASK_TOKENS || 500_000); // ponytail: one house number, not per template; per-template bot.json field if Scribe and Reel diverge.
-import { clock } from './accounts.ts';
 
 /** OpenClaw's own tools crewhouse adopts once their policy effects are reviewed: reads, recall and media on the
  *  member's own sign-in. Any future native tool not reviewed here fails closed until a bump reviews it. */
@@ -1154,9 +1153,15 @@ export class Crew {
   private async route(text: string, model: string | undefined, member: number, pics: Photo[] = [], room = false) {
     const helpers = this.bots().filter((b) => b.id !== CHIEF) as Helper[];
     const lastBot = this.db.get("SELECT text, task_id, at FROM messages WHERE bot = ? AND member = ? AND author = 'bot' ORDER BY id DESC LIMIT 1", CHIEF, member);
-    const replying = text.length < 120 && !/\[tool\b/.test(text) && lastBot?.task_id && lastBot.at > Date.now() - 30 * 60_000 && /\?\s*$/.test(lastBot.text)
-      && this.db.get('SELECT bot FROM tasks WHERE id = ?', lastBot.task_id)?.bot === CHIEF;
-    if (replying) return this.addTask(CHIEF, text, 'person', model, member, undefined, text, pics, { room });
+    const replyTo = text.length < 120 && !/\[tool\b/.test(text) && lastBot && lastBot.task_id && lastBot.at > Date.now() - 30 * 60_000 && /\?\s*$/.test(lastBot.text)
+      ? this.db.get('SELECT bot, body FROM tasks WHERE id = ?', lastBot.task_id) : undefined;
+    if (replyTo?.bot === CHIEF) return this.addTask(CHIEF, text, 'person', model, member, undefined, text, pics, { room });
+    // An answer to a helper's question skips routing and Chief: a fresh task carrying the question and its answer.
+    if (replyTo && lastBot && replyTo.bot !== CHIEF && this.bot(replyTo.bot)) {
+      const r = this.addTask(replyTo.bot, `${replyTo.body}\nAsked: ${lastBot.text}\nAnswer: ${text}`, CHIEF, model, member, undefined, text, pics, { room });
+      this.say(CHIEF, 'person', text + r.shown, null, member);
+      return { task: r.task };
+    }
     const previous = this.db.get("SELECT text FROM messages WHERE bot = ? AND member = ? AND author = 'person' ORDER BY id DESC LIMIT 1", CHIEF, member)?.text as string | undefined;
     const earlier: string | undefined = /^https?:\/\/\S+$/i.test(text) && previous && /\b(market|marketing|promote|launch)\b/i.test(previous) ? previous : undefined;
     const body = earlier ? `${earlier}\n${text}` : text;
@@ -1644,7 +1649,9 @@ export class Crew {
         // In Chief's own voice, written by crewd: no model call, no task number.
         const files = this.db.all("SELECT data FROM events WHERE kind = 'file.delivered' AND bot = ? AND json_extract(data, '$.task') = ? AND json_extract(data, '$.input') IS NULL AND json_extract(data, '$.path') NOT LIKE 'files/from-%'", botId, task.id);
         const note = files.map((e) => JSON.parse(e.data).note as string).find(Boolean) ?? '';
-        this.say(CHIEF, 'bot', relayResult(text, note), files.length ? task.id : null, task.member ?? OWNER);
+        // One clarifying question round-trips word for word, carrying its task so the answer finds it again.
+        if (!files.length && /\?\s*$/.test(text)) this.say(CHIEF, 'bot', `${b.display} asks: ${text}`, task.id, task.member ?? OWNER);
+        else this.say(CHIEF, 'bot', relayResult(text, note), files.length ? task.id : null, task.member ?? OWNER);
       }
     });
     if (task && !parked && !this.held.has(botId)) this.close(botId);

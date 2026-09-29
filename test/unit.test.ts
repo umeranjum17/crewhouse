@@ -936,6 +936,55 @@ test('routing: a spreadsheet request goes straight to Scribe, hiring Scribe if n
   done();
 });
 
+test("a helper's question round-trips in Chief's thread: one answer, then the file card", async () => {
+  const { db, crew, done } = setup();
+  crew.onboard('sir');
+  const chiefBot = () => db.all("SELECT text FROM messages WHERE bot = 'chief' AND author = 'bot' ORDER BY id").map((m: any) => m.text);
+  const scribes = () => db.get("SELECT COUNT(*) AS n FROM tasks WHERE bot = 'scribe'")!.n as number;
+  // A small but real workbook spec: the follow-up run builds it for the card.
+  const sheets = [{ name: 'Bookings', columns: [{ header: 'Guest' }, { header: 'Status', options: ['Booked', 'Checked in'] }], rows: [['Amina Khan', 'Booked']] }];
+  const marker = call('crew_workbook', { name: 'Reception log', sheets });
+
+  // The request names a workbook, so it goes straight to the silently hired Scribe; "ask permission" holds the turn.
+  const first = (await crew.post('chief', 'make an excel for reception, ask permission before you build anything'))!.task;
+  assert.equal(task(db, first).bot, 'scribe');
+  assert.equal(task(db, first).origin, 'chief');
+  assert.equal(task(db, first).parent, null);
+  await release(crew, 'scribe', `${marker} Visitor log, bookings, or something else?`);
+  await settled(db, first);
+
+  // The question reaches Chief's thread word for word, ending in "?", carrying its task but no card.
+  const question = chiefBot().at(-1)!;
+  assert.ok(question.startsWith('Scribe asks: '));
+  assert.ok(question.endsWith('?'));
+  assert.equal(db.get("SELECT task_id AS id FROM messages WHERE bot = 'chief' AND author = 'bot' AND text = ?", question)?.id, first);
+  let page = await crew.botPage('chief', OWNER);
+  assert.deepEqual(page.messages.find((m: any) => m.task_id === first)?.files, [], 'a line with a task and no files adds no card');
+
+  // Posting the answer starts a fresh Scribe task carrying the context, skipping routing and Chief.
+  const second = (await crew.post('chief', 'bookings'))!.task;
+  assert.equal(task(db, second).bot, 'scribe');
+  assert.equal(task(db, second).origin, 'chief');
+  assert.equal(task(db, second).parent, null);
+  assert.match(task(db, second).body, /excel for reception/);
+  assert.match(task(db, second).body, /bookings/);
+  // The carried "ask permission" holds the fresh turn too; releasing it finishes the workbook and its card.
+  await release(crew, 'scribe', 'The reception workbook is ready.');
+  await settled(db, second);
+  page = await crew.botPage('chief', OWNER);
+  assert.ok(page.messages.find((m: any) => m.task_id === second)?.files.some((f: any) => f.path.endsWith('.xlsx')), "the workbook card lands in Chief's thread");
+  assert.deepEqual(page.messages.find((m: any) => m.task_id === first)?.files, [], 'the question line stays card-free');
+
+  // An unrelated long message after the question routes normally, not into Scribe's thread.
+  const third = (await crew.post('chief', 'plan our anniversary dinner next month with a full week of menus and a shopping list for every single day, please'))!.task;
+  assert.equal(task(db, third).bot, 'chief');
+  assert.equal(scribes(), 2);
+  // The stub holds any prompt containing "ask permission", including this one via the chat history; release it.
+  await release(crew, 'chief', 'Enjoy the anniversary.');
+  await settled(db, third);
+  done();
+});
+
 test('routing: explicit helpers are direct; uncertain requests start Chief without a blocking model turn', async () => {
   const { db, crew, done } = setup();
   crew.onboard('sir');
