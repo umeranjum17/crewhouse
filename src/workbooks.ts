@@ -27,8 +27,7 @@ export async function buildWorkbook(file: string, spec: WorkbookSpec) {
   const sheets = Array.isArray(spec?.sheets) ? spec.sheets.slice(0, MAX.sheets) : [];
   if (!sheets.length) throw new Error('say what the workbook should have: at least one sheet with columns');
   const wb = new ExcelJS.Workbook();
-  wb.creator = 'Crewhouse';
-  wb.created = new Date();
+  wb.creator = 'Crewhouse'; wb.created = new Date();
   const taken = new Set<string>();
   sheets.forEach((s, n) => {
     const cols = (Array.isArray(s.columns) ? s.columns : []).slice(0, MAX.columns);
@@ -42,9 +41,7 @@ export async function buildWorkbook(file: string, spec: WorkbookSpec) {
       return { header, width: Math.min(MAX.width, Math.max(10, Number(c?.width) || Math.min(widest + 2, 42))) };
     });
     ws.getRow(1).font = { bold: true };
-    for (const row of rows) {
-      ws.addRow(row.map((v) => (typeof v === 'string' && v.startsWith('=') ? { formula: v.slice(1) } : v ?? null)));
-    }
+    for (const row of rows) ws.addRow(row.map((v) => (typeof v === 'string' && v.startsWith('=') ? { formula: v.slice(1) } : v ?? null)));
     cols.forEach((c, i) => {
       const options = (Array.isArray(c?.options) ? c.options : []).map((o) => String(o).trim()).filter(Boolean).slice(0, MAX.options);
       if (!options.length) return;
@@ -58,40 +55,42 @@ export async function buildWorkbook(file: string, spec: WorkbookSpec) {
 }
 
 /** What a cell says, whatever kind of cell it is: one string for the preview's table. A formula shows its computed
- *  value when the file has one cached, or a quiet dash — never the formula text; the downloaded file keeps the real thing. */
+ *  value when the file has one cached, or "auto" — never the formula text; the downloaded file keeps the real thing. */
 function text(v: any): string {
   if (v === null || v === undefined) return '';
   if (v instanceof Date) return Number.isNaN(v.getTime()) ? '' : v.toISOString().slice(0, 10);
   if (typeof v === 'object') {
     if (Array.isArray(v.richText)) return v.richText.map((t: any) => text(t.text)).join('');
-    if ('result' in v || 'formula' in v) return v.result == null ? '—' : text(v.result);
-    if ('text' in v) return text(v.text);
-    if ('hyperlink' in v) return text(v.text ?? v.hyperlink);
+    if ('result' in v || 'formula' in v) return v.result == null ? 'auto' : text(v.result);
+    if ('text' in v || 'hyperlink' in v) return text(v.text ?? v.hyperlink);
     return '';
   }
   return typeof v === 'number' || typeof v === 'boolean' ? String(v) : String(v).replace(/\r?\n/g, ' ');
 }
 
-/**
- * Read a workbook back as JSON for the app: at most this many rows and columns of each sheet, header row first.
- * Nothing but words and counts leaves here, so a workbook cannot smuggle a path or a command onto a screen.
- */
+/** Read a workbook back as JSON for the app: header row first, at most this many rows and columns of each sheet,
+ *  plus row numbers (`nums`, gaps where blanks were skipped) and cell roles (`roles`: head/in/calc/empty, from
+ *  formulas and validation only). Nothing but words and counts leaves here — no paths or commands on a screen. */
 export async function readWorkbook(file: string, max = { rows: 40, cols: 14 }) {
   const ExcelJS = await excel();
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.readFile(file);
   const sheets = wb.worksheets.slice(0, MAX.sheets).map((ws: any) => {
-    const rows: string[][] = [];
+    const rows: string[][] = [], nums: number[] = [], roles: string[][] = [];
     let total = 0;
-    ws.eachRow({ includeEmpty: false }, (row: any) => {
-      const cells: string[] = [];
-      for (let c = 1; c <= max.cols; c++) cells.push(text(row.getCell(c).value).slice(0, 120));
-      while (cells.length && !cells.at(-1)) cells.pop(); // the table ends where the words do
+    ws.eachRow({ includeEmpty: false }, (row: any, n: number) => {
+      const cells: string[] = [], role: string[] = [];
+      for (let c = 1; c <= max.cols; c++) {
+        const cell = row.getCell(c), v: any = cell.value;
+        cells.push(text(v).slice(0, 120));
+        role.push(!total ? 'head' : v && typeof v === 'object' && 'formula' in v ? 'calc' : cell.dataValidation ? 'in' : '');
+      }
+      while (cells.length && !cells.at(-1)) { cells.pop(); role.pop(); } // the table ends where the words do
       if (!cells.some((c) => c)) return; // a blank row under the dropdowns is not a row of a sheet
       total++;
-      if (rows.length < max.rows) rows.push(cells);
+      if (rows.length < max.rows) { rows.push(cells); nums.push(n); roles.push(role); }
     });
-    return { name: String(ws.name), total, rows };
+    return { name: String(ws.name), total, rows, nums, roles };
   });
   return { sheets };
 }
