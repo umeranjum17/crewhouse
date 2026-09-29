@@ -89,6 +89,12 @@ export function taskTitle(body: string) {
   if (!/^https?:\/\/\S+$/i.test(first)) return short(first, 80);
   try { return `Work on ${new URL(first).hostname.replace(/^www\./, '')}`; } catch { return 'Work on the site'; }
 }
+/** The engine's reply-routing control markers (like [[reply_to_current]]) are never person-visible: stripped
+ *  before a reply is kept or shown, on write and on read for older rows. Plain prose passes through untouched. */
+export function cleanReply(text: string) {
+  return String(text ?? '').replace(/\[\[\s*reply[^\[\]]*\]\] ?/gi, '').replace(/[ \t]+\n/g, '\n').replace(/\n[ \t]*\n(?:[ \t]*\n)*/g, '\n\n').trim();
+}
+
 /** A relay is the answer, not a quoted chunk of the helper's raw markdown. */
 export function relayResult(reply: string, note = '') {
   const tidy = (s: string) => s.replace(/^A document in \d+ sections?:\s*(.+)$/i, 'The $1 is ready.')
@@ -447,7 +453,9 @@ export class Crew {
   private liveState(id: string) { return !this.live.get(id) ? 'off' : this.busy.has(id) ? 'working' : 'idle'; }
 
   /** A task for the app: its words and state, not the AI it asked for or its session file. */
-  private task({ brain, session, tokens: _, ...t }: Row) { return { ...t, thinks: brain ? disk.brainName(disk.parseBrain(brain)) : null }; }
+  private task({ brain, session, tokens: _, ...t }: Row) {
+    return { ...t, ...(t.result == null ? {} : { result: cleanReply(t.result) }), thinks: brain ? disk.brainName(disk.parseBrain(brain)) : null };
+  }
 
   /** An open question for the app: the plain sentence and what "For this task" or "Always" would cover. The gate's key stays here.
    *  A checkout adds the order's plain facts for the review sheet — what the page charges and whether crewd could read it,
@@ -519,7 +527,7 @@ export class Crew {
     const lines = this.db.all(`SELECT m.*, t.origin, t.parent, t.root FROM messages m JOIN tasks t ON t.id = m.task_id
       WHERE t.member = ? AND t.root IN (${roots}) AND m.id < ? ORDER BY m.id DESC LIMIT 200`, member, member, before ?? Number.MAX_SAFE_INTEGER).reverse();
     return { lines: lines.map((m) => ({ id: m.id, bot: m.bot, author: m.author, to: m.parent && m.author === m.origin ? m.bot : undefined,
-      from: m.parent && m.author === m.origin ? m.origin : undefined, text: m.text, at: m.at,
+      from: m.parent && m.author === m.origin ? m.origin : undefined, text: cleanReply(m.text), at: m.at,
       files: m.parent && m.author === m.origin ? this.db.all("SELECT data FROM events WHERE kind = 'file.delivered' AND json_extract(data, '$.task') = ?", m.task_id).map((e) => ({ bot: m.bot, path: JSON.parse(e.data).path })) : [] })),
       busy: this.db.all(`SELECT DISTINCT bot FROM tasks WHERE member = ? AND root IN (${roots}) AND state IN ('queued','working','needs_you','paused')`, member, member).map((r) => r.bot),
       asks: this.db.all(`SELECT * FROM asks WHERE state = 'open' AND COALESCE(member, ?) = ? AND (json_extract(detail, '$.pass.root') IN (${roots}) OR task_id IN (SELECT id FROM tasks WHERE root IN (${roots})))`, OWNER, member, member, member).map((a) => this.askView(a)) };
@@ -545,6 +553,7 @@ export class Crew {
   private chat(bot: string, member: number) {
     const mine = 'bot = ? AND COALESCE(member, ?) = ?';
     const last = this.db.get(`SELECT author, substr(text, 1, 160) AS text, at FROM messages WHERE ${mine} ORDER BY id DESC LIMIT 1`, bot, member, member);
+    if (last) last.text = cleanReply(last.text);
     const seen = this.db.get('SELECT seen FROM reads WHERE member = ? AND bot = ?', member, bot)?.seen ?? 0;
     const unread = this.db.get(`SELECT COUNT(*) AS n FROM messages WHERE ${mine} AND id > ? AND ${Crew.UNSEEN}`, bot, member, member, seen)!.n as number;
     return { last: last ?? null, unread };
@@ -562,7 +571,8 @@ export class Crew {
     const like = `%${String(q).trim().replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
     if (like.length < 4) return { messages: [], things: [] };
     return {
-      messages: this.db.all("SELECT id, bot, author, substr(text, 1, 200) AS text, at FROM messages WHERE COALESCE(member, ?) = ? AND text LIKE ? ESCAPE '\\' ORDER BY id DESC LIMIT 50", member, member, like),
+      messages: this.db.all("SELECT id, bot, author, substr(text, 1, 200) AS text, at FROM messages WHERE COALESCE(member, ?) = ? AND text LIKE ? ESCAPE '\\' ORDER BY id DESC LIMIT 50", member, member, like)
+        .map((m: Row) => ({ ...m, text: cleanReply(m.text) })),
       things: this.db.all("SELECT id, bot, title, updated_at AS at FROM tasks WHERE member = ? AND bot != ? AND state = 'done' AND (title LIKE ? ESCAPE '\\' OR result LIKE ? ESCAPE '\\') ORDER BY id DESC LIMIT 20", member, CHIEF, like, like),
     };
   }
@@ -849,7 +859,7 @@ export class Crew {
             SELECT * FROM (SELECT * FROM messages WHERE bot = ? AND COALESCE(member, ?) = ? AND id < ? ORDER BY id DESC LIMIT 99)
           ) ORDER BY id`, id, viewer, viewer, around, id, viewer, viewer, around)
         : this.db.all('SELECT * FROM (SELECT * FROM messages WHERE bot = ? AND COALESCE(member, ?) = ? ORDER BY id DESC LIMIT 200) ORDER BY id', id, viewer, viewer))
-        .map((m: Row): Row => ({ ...m,
+        .map((m: Row): Row => ({ ...m, text: cleanReply(m.text),
           files: id === CHIEF && m.author === 'bot' && m.task_id
             ? this.db.all("SELECT bot, data FROM events WHERE kind = 'file.delivered' AND json_extract(data, '$.task') = ?", m.task_id)
               .map((e) => ({ bot: e.bot, path: JSON.parse(e.data).path })) : [],
@@ -969,6 +979,7 @@ export class Crew {
   // ---- work ----
   /** A message in a bot's thread: the member's own thread when it belongs to their task, the whole house's otherwise. */
   say(bot: string, author: string, text: string, taskId: number | null = null, member?: number | null) {
+    if (author === 'bot') text = cleanReply(text);
     const m = member !== undefined ? member : taskId ? this.db.get('SELECT member FROM tasks WHERE id = ?', taskId)?.member ?? null : null;
     const id = Number(this.db.run('INSERT INTO messages (bot, author, text, task_id, at, member) VALUES (?, ?, ?, ?, ?, ?)', bot, author, text, taskId, Date.now(), m).lastInsertRowid);
     this.db.event('message', bot, { id, author, text: text.slice(0, 280), member: m ?? OWNER });
@@ -1339,7 +1350,7 @@ export class Crew {
   /** Only assistant prose is visible; tool arguments and reasoning never ride the live feed. */
   private onEvent(botId: string, l: Live, e: RunEvent) {
     if (this.live.get(botId) !== l) return;
-    if (e.type === 'text') this.db.live('reply.partial', botId, { task: l.task, member: l.member, text: e.text.slice(0, 280) });
+    if (e.type === 'text') this.db.live('reply.partial', botId, { task: l.task, member: l.member, text: cleanReply(e.text).slice(0, 280) });
     else if (e.type === 'usage' && e.tokens) {
       this.db.run('UPDATE tasks SET tokens = tokens + ? WHERE id = ?', Math.round(e.tokens), l.task);
       this.db.run('INSERT INTO usage (member, day, tokens) VALUES (?, ?, ?) ON CONFLICT(member, day) DO UPDATE SET tokens = tokens + excluded.tokens', l.member, dayOf(), Math.round(e.tokens));
@@ -1478,7 +1489,7 @@ export class Crew {
   /** A turn finished with a reply. */
   finish(botId: string, reply: string) {
     const task = this.activeTask(botId);
-    const text = reply.trim();
+    const text = cleanReply(reply.trim());
     // A turn that ended on a parked question isn't the end of the task: it resumes when the person answers.
     const parked = task && this.db.get("SELECT 1 FROM asks WHERE task_id = ? AND state = 'open' AND kind IN ('permission', 'connect')", task.id);
     const clear = !!task?.routine && text.replace(/[.\s]+$/, '') === ALL_CLEAR && !!this.db.get('SELECT 1 FROM routines WHERE id = ? AND quiet = 1', task.routine);
