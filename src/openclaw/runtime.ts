@@ -177,9 +177,10 @@ export class OpenClawRuntime implements AgentRuntime {
   async run(spec: RunSpec, on: (event: RunEvent) => void, opts?: { register?: boolean }): Promise<RunEnd> {
     const register = opts?.register !== false;
     if (register) this.runs.set(spec.key, spec);
+    const provider = PROVIDER_OF[spec.account]; // the run's own account: this provider is the one called and billed
     try {
       return await this.kit.run({ sessionKey: spec.key, member: m(spec.member), message: spec.message, system: spec.system,
-        ...(spec.images?.length ? { images: spec.images } : {}), ...(spec.thinking ? { thinking: spec.thinking } : {}), register },
+        ...(spec.model && provider ? { model: `${provider}/${spec.model}` } : {}), ...(spec.images?.length ? { images: spec.images } : {}), ...(spec.thinking ? { thinking: spec.thinking } : {}), register },
         (e) => on(e.type === 'tool' ? { ...e, name: crewName(e.name) } : e));
     } catch (error) { return { ok: false, kind: 'other', message: String(error) }; }
     finally { if (register) this.runs.delete(spec.key); }

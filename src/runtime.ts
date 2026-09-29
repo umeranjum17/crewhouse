@@ -10,6 +10,7 @@ export interface ToolHost {
 }
 export interface RunSpec extends RunRef {
   cwd: string; system: string; message: string; account: string;
+  model?: string;
   images?: { data: string; mimeType: string }[];
   thinking?: 'low'; builtins: string[];
 }
