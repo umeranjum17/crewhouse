@@ -6,10 +6,12 @@ import { copyFileSync, existsSync, mkdtempSync, mkdirSync, readFileSync, renameS
 import { tmpdir } from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
 import { spawnSync } from 'node:child_process';
+import { createHash, generateKeyPairSync } from 'node:crypto';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { OpenClawRuntime } from '../src/openclaw/runtime.ts';
 import { startModelStub } from './openclaw-stub.ts';
+import { faked } from './kit-fake.ts';
 
 const legacyAuth = (extra: Record<string, unknown> = {}) => JSON.stringify({
   'openai-codex': { type: 'oauth', provider: 'openai-codex', access: 'a-preserved', refresh: 'r-preserved', expires: Date.now() + 30 * 86_400_000 },
@@ -28,38 +30,32 @@ async function house() {
 
 const host = { tools: () => [], gate: async () => ({ allow: true }) as const, call: async () => 'done' };
 
+
 test('ChatGPT uses the canonical gateway auth provider for status, logout and migration confirmation', async () => {
-  const { legacy, runtime, stop } = await house();
-  const calls: { method: string; params: any }[] = [];
-  const client = { request: async (method: string, params: any) => {
-    calls.push({ method, params });
-    if (method === 'models.authStatus') return { providers: [{ provider: 'openai' }] };
-  } };
-  // A scripted gateway response isolates the identity projection from doctor and network setup.
-  (runtime as any).client = client;
-  (runtime as any).agents.add(1);
+  const { legacy, stop } = await house();
+  const f = faked({}, { 'models.authStatus': () => ({ providers: [{ provider: 'openai' }] }) });
   try {
+    await f.started;
     writeFileSync(legacy, legacyAuth());
-    assert.equal(await runtime.signedIn(1, 'chatgpt'), true);
-    await runtime.signOut(1, 'chatgpt');
-    assert.deepEqual(calls.find((c) => c.method === 'models.authLogout')?.params, { provider: 'openai', agentId: 'm1' });
-    assert.equal(await runtime.confirm(1, legacy), true);
+    assert.equal(await f.runtime.signedIn(1, 'chatgpt'), true);
+    await f.runtime.signOut(1, 'chatgpt');
+    assert.deepEqual(f.fake.calls.find((c) => c.method === 'models.authLogout')?.params, { provider: 'openai', agentId: 'm1' });
+    assert.equal(await f.runtime.confirm(1, legacy), true);
     assert.ok(existsSync(`${legacy}.moved-to-engine`));
-  } finally { await stop(); }
+  } finally { await f.done(); await stop(); }
 });
 
-test('existing gateway config gains only the subscription runtime rule', async () => {
+test('existing gateway config gains the subscription runtime rule and Crewhouse\'s tool fence', async () => {
   const { stateDir, runtime, stop } = await house();
   try {
-    const gateway = (runtime as any).gateway;
-    await gateway.prepare();
+    await runtime.kit.prepare();
     const path = join(stateDir, 'openclaw/openclaw.json');
     const config = JSON.parse(readFileSync(path, 'utf8'));
     config.agents.defaults.modelPolicy = { allow: ['anthropic/*'] };
     writeFileSync(path, JSON.stringify(config));
-    await gateway.prepare();
+    await runtime.kit.prepare();
     const updated = JSON.parse(readFileSync(path, 'utf8'));
-    assert.deepEqual(updated.agents.defaults.modelPolicy.allow, ['anthropic/*', 'openai/*']);
+    assert.deepEqual(updated.agents.defaults.modelPolicy.allow, [], 'an explicit model map never narrows the family\'s providers');
     assert.equal(updated.agents.defaults.models['openai/*'].agentRuntime.id, 'openclaw');
     assert.deepEqual(updated.tools.exec, { security: 'deny', ask: 'always' });
     assert.equal(updated.plugins.entries.codex.enabled, false);
@@ -71,12 +67,11 @@ test('a previously retired legacy import repairs through doctor without touching
   const other = { type: 'token', provider: 'anthropic', token: 'synthetic-other' };
   try {
     writeFileSync(legacy, legacyAuth({ anthropic: other }));
-    const gateway = (runtime as any).gateway;
-    await gateway.prepare();
+    await runtime.kit.prepare();
     const agentDir = join(stateDir, 'openclaw/state/agents/m1/agent');
     mkdirSync(agentDir, { recursive: true });
     copyFileSync(legacy, join(agentDir, 'auth.json')); // the old shipped migration, before the repair
-    const { entry, env } = gateway.doctorContext();
+    const { entry, env } = runtime.kit.doctorContext();
     assert.equal(spawnSync(process.execPath, [entry, 'doctor', '--fix', '--yes', '--non-interactive'],
       { env, cwd: env.HOME, timeout: 120_000, stdio: 'pipe' }).status, 0);
     renameSync(legacy, `${legacy}.moved-to-engine`);
@@ -98,7 +93,7 @@ test('a previously retired legacy import repairs through doctor without touching
     assert.equal(profiles['openai:default'].provider, 'openai');
     assert.equal(profiles['openai:default'].access, 'a-preserved');
     assert.deepEqual(profiles['anthropic:default'], other);
-    const cfg = (await (runtime as any).client.request('config.get')).config;
+    const cfg = ((await runtime.kit.call('config.get', {})) as any).config;
     assert.deepEqual(cfg.tools.exec, { security: 'deny', ask: 'always' });
     assert.equal(cfg.plugins.entries.codex.enabled, false);
     assert.ok(existsSync(`${legacy}.moved-to-engine`), 'the original recovery bytes remain');
@@ -126,7 +121,7 @@ test('a preserved sign-in survives the upgrade, a failed import stays recoverabl
       assert.equal(stored['openai:default'].provider, 'openai');
       assert.equal(stored['openai:default'].access, 'a-preserved');
       assert.equal(stored['openai:default'].refresh, 'r-preserved');
-      const config = await (runtime as any).client.request('config.get');
+      const config = await runtime.kit.call('config.get', {}) as any;
       assert.equal(config.config.agents.defaults.models['openai/*'].agentRuntime.id, 'openclaw');
       assert.deepEqual(config.config.agents.defaults.modelPolicy.allow, [], 'other members’ models remain selectable');
       await runtime.configureModelProvider(stub.url, 'stub-m1');
@@ -161,4 +156,25 @@ test('a preserved sign-in survives the upgrade, a failed import stays recoverabl
       assert.ok(!existsSync(`${legacy}.moved-to-engine`), 'nothing was retired');
     } finally { await stop(); }
   }
+});
+
+test('an upgraded house starts: its device identity and old plugin folder carry over', { timeout: 240_000 }, async () => {
+  const { stateDir, runtime, stop } = await house();
+  try {
+    // What the previous engine adapter left in every existing state: its own identity file shape and plugin path.
+    const engine = join(stateDir, 'openclaw');
+    mkdirSync(engine, { recursive: true });
+    const { publicKey, privateKey } = generateKeyPairSync('ed25519');
+    writeFileSync(join(engine, 'device.json'), JSON.stringify({
+      deviceId: createHash('sha256').update(publicKey.export({ type: 'spki', format: 'der' }).subarray(-32)).digest('hex'),
+      publicKeyPem: publicKey.export({ type: 'spki', format: 'pem' }), privateKeyPem: privateKey.export({ type: 'pkcs8', format: 'pem' }),
+    }), { mode: 0o600 });
+    writeFileSync(join(engine, 'openclaw.json'), JSON.stringify({ plugins: { load: { paths: [join(stateDir, 'gone/src/openclaw/plugin')] }, allow: ['crewhouse'] } }));
+    await runtime.kit.prepare();
+    const config = JSON.parse(readFileSync(join(engine, 'openclaw.json'), 'utf8'));
+    assert.deepEqual(config.plugins.load.paths, [join(engine, 'plugin')], 'only the bridge plugin loads; the old folder is gone');
+    await runtime.start(host);
+    const health = await runtime.kit.call('health', {}) as { ok: boolean; plugins: { loaded: string[] } };
+    assert.ok(health.ok && health.plugins.loaded.includes('crewhouse'));
+  } finally { await stop(); }
 });

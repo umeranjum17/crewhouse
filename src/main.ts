@@ -1,4 +1,4 @@
-// The daemon: config, store, crew, server. The engine is a supervised child process (src/openclaw/gateway.ts),
+// The daemon: config, store, crew, server. The engine is a supervised child process (the BYOKit OpenClaw kit, src/openclaw/runtime.ts),
 // so nothing here needs a guarded import order: no engine is loaded at import time.
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';

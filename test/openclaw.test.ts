@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, readFileSync, readdirSync, readlinkSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, readlinkSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { GatewayClient } from '@openclaw/gateway-client';
-import { OpenClawGateway, isolatedEnv } from '../src/openclaw/gateway.ts';
+import { OpenClawKit } from '@byokit/openclaw';
+import { OpenClawRuntime } from '../src/openclaw/runtime.ts';
 import { runSandboxed, sandboxReady } from '../src/engine.ts';
 
 test('pinned engine uses isolated home, loopback token and no Control UI', { timeout: 120_000 }, async () => {
@@ -19,30 +19,32 @@ test('pinned engine uses isolated home, loopback token and no Control UI', { tim
   const oldKey = process.env.OPENAI_API_KEY;
   process.env.HOME = owner;
   process.env.OPENAI_API_KEY = 'decoy-secret';
-  const gateway = new OpenClawGateway(join(root, 'state'));
+  const runtime = new OpenClawRuntime(join(root, 'state'));
+  const { kit } = runtime;
+  const engine = join(root, 'state', 'openclaw');
   try {
-    await gateway.prepare();
-    const configPath = join(gateway.root, 'openclaw.json');
+    await kit.prepare();
+    const configPath = join(engine, 'openclaw.json');
     const oldConfig = JSON.parse(readFileSync(configPath, 'utf8'));
     oldConfig.memory = { search: { provider: 'auto', fallback: 'openai' } };
     oldConfig.agents.entries = { m9: { memory: { search: { provider: 'openai' } } } };
     writeFileSync(configPath, JSON.stringify(oldConfig));
-    await gateway.prepare();
+    await kit.prepare();
     const safeConfig = JSON.parse(readFileSync(configPath, 'utf8'));
     assert.equal(safeConfig.memory.search.provider, 'none');
     assert.equal(safeConfig.memory.search.fallback, 'none');
     assert.equal(safeConfig.agents.entries.m9.memory.search.provider, 'none');
-    assert.equal(gateway.memoryLimited(9), true);
-    const env = isolatedEnv(gateway.stateDir, 'test');
-    assert.equal(env.HOME, join(gateway.root, 'home'));
+    assert.equal(runtime.memoryLimited(9), true);
+    const { env } = kit.doctorContext();
+    assert.equal(env.HOME, join(engine, 'home'));
     assert.equal(env.OPENAI_API_KEY, undefined);
-    const client = await gateway.start();
-    const health = await client.request<{ ok: boolean; plugins: { loaded: string[] } }>('health');
+    await runtime.start({ tools: () => [], gate: async () => ({ allow: false, reason: 'no runs here' }), call: async () => 'no calls here' });
+    const health = await kit.call('health', {}) as { ok: boolean; plugins: { loaded: string[] } };
     assert.equal(health.ok, true);
     assert.ok(health.plugins.loaded.includes('crewhouse'), 'fail-closed hook did not load');
-    const port = Number(readFileSync(join(gateway.root, 'port'), 'utf8'));
+    const port = Number(readFileSync(join(engine, 'port'), 'utf8'));
     assert.notEqual(port, 18789);
-    const pid = Number(readFileSync(join(gateway.root, 'gateway.pid'), 'utf8'));
+    const pid = Number(readFileSync(join(engine, 'gateway.pid'), 'utf8'));
     const childEnv = readFileSync(`/proc/${pid}/environ`, 'utf8');
     assert.doesNotMatch(childEnv, /decoy-secret|\.pi|\.clawdbot/);
     assert.match(childEnv, /OPENCLAW_SKIP_CHANNELS=1/);
@@ -57,40 +59,39 @@ test('pinned engine uses isolated home, loopback token and no Control UI', { tim
     assert.ok(listeners.every((cols) => cols[1].startsWith('0100007F:')), 'Engine listeners must bind loopback');
     const response = await fetch(`http://127.0.0.1:${port}/`);
     assert.notEqual(response.status, 200);
-    const unauthenticated = new GatewayClient({ url: `ws://127.0.0.1:${port}`, clientName: 'cli',
-      onHelloOk: () => assert.fail('A bot without the token authenticated') });
-    unauthenticated.start();
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    await assert.rejects(unauthenticated.request('agents.list', {}, { timeoutMs: 500 }), /not connected|timeout|closed/i);
-    unauthenticated.stop();
+    // A client holding everything but the token — the same port and device identity — never gets in.
+    const thief = join(root, 'thief');
+    mkdirSync(join(thief, 'openclaw'), { recursive: true });
+    for (const file of ['port', 'device.json']) cpSync(join(engine, file), join(thief, 'openclaw', file));
+    writeFileSync(join(thief, 'openclaw', 'token'), 'not-the-token');
+    const outsider = new OpenClawKit({ stateDir: thief, spawnEngine: false });
+    await assert.rejects(outsider.start(), 'a client without the token authenticated');
+    await outsider.stop();
     if (sandboxReady()) {
       const bot = join(root, 'bot');
       mkdirSync(bot);
       const attack = await runSandboxed(bot, [], {},
-        `test ! -e ${join(gateway.root, 'token')} && test ! -e ${join(gateway.root, 'crewd.sock')}`);
+        `test ! -e ${join(engine, 'token')} && test ! -e ${join(engine, 'crewd.sock')}`);
       assert.equal(attack.code, 0, 'bot shell can access the gateway credential or gate socket');
     }
-    const snapshot = await client.request<{ path: string; hash: string }>('config.get');
-    assert.ok(snapshot.path.startsWith(gateway.root));
-    const workspace = join(gateway.root, 'workspaces/m1');
-    await client.request('agents.create', { name: 'm1', workspace });
+    const snapshot = await kit.call('config.get', {}) as { path: string };
+    assert.ok(snapshot.path.startsWith(engine));
+    await kit.ensureMember('m1');
     // Empty isolated fixture only: prove the upstream weekly job can wake; production stays off until backup gates it.
-    const updated = await client.request<{ hash: string }>('config.get');
-    await client.request('config.patch', { baseHash: updated.hash,
-      raw: JSON.stringify({ skills: { workshop: { autonomous: { mode: 'auto' } } } }) });
-    const jobs = await client.request<{ jobs: { id: string; name: string; enabled: boolean; nextRunAtMs: number }[] }>('cron.list', { limit: 100 });
+    await runtime.setLearning(true);
+    const jobs = await kit.call('cron.list', { limit: 100 }) as { jobs: { id: string; name: string; enabled: boolean; nextRunAtMs: number }[] };
     const review = jobs.jobs.find((job) => job.name === 'skill-collection-review-m1');
     assert.ok(review?.enabled && review.nextRunAtMs > Date.now());
-    const kicked = await client.request<{ runId: string }>('cron.run', { id: review.id, mode: 'force' });
+    const kicked = await kit.call('cron.run', { id: review.id, mode: 'force' } as { id: string }) as { runId: string };
     let finished = false;
     for (const until = Date.now() + 10_000; Date.now() < until && !finished;) {
-      const runs = await client.request<{ entries: { runId: string; action: string; status: string }[] }>('cron.runs', { id: review.id });
+      const runs = await kit.call('cron.runs', { id: review.id }) as { entries: { runId: string; action: string; status: string }[] };
       finished = runs.entries.some((entry) => entry.runId === kicked.runId && entry.action === 'finished' && entry.status === 'ok');
       if (!finished) await new Promise((resolve) => setTimeout(resolve, 100));
     }
     assert.ok(finished, 'system-owned review did not complete in empty fixture');
     // A9: the reviewed bundled list is the one the agent sees; a bundled skill outside it is blocked by allowlist.
-    const skills = await client.request<{ skills?: Record<string, unknown>[] }>('skills.status', { agentId: 'm1' }, { timeoutMs: 30000 });
+    const skills = await kit.call('skills.status', { agentId: 'm1' }, { timeoutMs: 30000 }) as { skills?: Record<string, unknown>[] };
     const byName = Object.fromEntries((skills.skills ?? []).map((s) => [s.name, s]));
     assert.equal(byName.weather?.blockedByAllowlist, true, 'a bundled skill outside the reviewed list is blocked');
     for (const allowed of ['video-frames', 'summarize', 'diagram-maker'])
@@ -98,7 +99,7 @@ test('pinned engine uses isolated home, loopback token and no Control UI', { tim
     assert.deepEqual(readdirSync(owner).sort(), ['.clawdbot', '.codex', '.openclaw', '.pi']);
     for (const name of readdirSync(owner)) assert.equal(readFileSync(join(owner, name, 'decoy'), 'utf8'), 'unchanged');
   } finally {
-    await gateway.stop();
+    await runtime.stop();
     if (original === undefined) delete process.env.HOME; else process.env.HOME = original;
     if (oldKey === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = oldKey;
     rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 200 });

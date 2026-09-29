@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'n
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { fileTool } from '../src/openclaw/files.ts';
+import { fileTool } from '../src/files.ts';
 
 test('bot file tools write where the gate allowed, and never travel through a symlink', () => {
   const bot = mkdtempSync(join(tmpdir(), 'crewhouse-files-'));

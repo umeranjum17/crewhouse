@@ -17,7 +17,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { OpenClawGateway } from '../src/openclaw/gateway.ts';
+import { OpenClawRuntime } from '../src/openclaw/runtime.ts';
 import { loadConfig } from '../src/config.ts';
 import { addressLine, listSkills, listTemplates, readNotes, systemPrompt } from '../src/bots.ts';
 
@@ -96,18 +96,18 @@ function crewdAlive(stateDir) {
 
 /** One raw turn: send, wait, and time the first assistant text the engine streams back. Events are timestamped as
  *  they arrive (the words often land after the `agent` call returns), and read out once the run has ended. */
-export async function oneRun(gateway, client, agentId, variant, tag, waitMs = 120_000) {
+export async function oneRun(kit, agentId, variant, tag, waitMs = 120_000) {
   const seen = [];
-  const off = gateway.onEvent((event) => { if (event.event === 'agent' && event.payload?.runId) seen.push({ at: Date.now(), ...event.payload }); });
+  const off = kit.onEvent('agent', (payload) => { if (payload?.runId) seen.push({ at: Date.now(), ...payload }); });
   try {
     const started = Date.now();
-    const run = await client.request('agent', {
+    const run = await kit.call('agent', {
       agentId, sessionKey: `agent:m1:crewhouse:firstwords:${tag}`.replace(/[^a-zA-Z0-9:._-]/g, '-'), message: variant.message,
       extraSystemPrompt: variant.system, idempotencyKey: randomUUID(),
       ...(variant.thinking ? { thinking: variant.thinking } : {}),
     }, { timeoutMs: 60_000 });
     if (!run?.runId) throw new Error('the engine returned no run');
-    const done = await client.request('agent.wait', { runId: run.runId, timeoutMs: waitMs }, { timeoutMs: waitMs + 10_000 }).catch((e) => ({ status: 'timeout', error: String(e?.message ?? e) }));
+    const done = await kit.call('agent.wait', { runId: run.runId, timeoutMs: waitMs }, { timeoutMs: waitMs + 10_000 }).catch((e) => ({ status: 'timeout', error: String(e?.message ?? e) }));
     const mine = seen.filter((s) => s.runId === run.runId);
     const words = mine.find((s) => s.stream === 'assistant' && typeof s.data?.text === 'string' && s.data.text.length > 0);
     const tool = mine.find((s) => s.stream === 'tool' && typeof s.data?.name === 'string');
@@ -130,34 +130,21 @@ export async function measure(opts) {
   if (!opts.provider && (!existsSync(opts.state) || !existsSync(join(opts.state, 'openclaw', 'openclaw.json'))))
     throw new Error(`no engine state at ${opts.state}; give the state dir of a Crewhouse that has started once`);
   const vs = variants(opts.variants, cfg, opts.body, opts.address);
-  const gateway = new OpenClawGateway(opts.state);
-  gateway.crewDir = opts.crew;
+  const runtime = new OpenClawRuntime(opts.state, opts.crew);
+  const kit = runtime.kit;
   const rows = [];
-  const client = await gateway.start();
   try {
-    if (opts.provider) await point(client, opts.provider);
-    const agents = await client.request('agents.list', {}, { timeoutMs: 20_000 }).catch(() => undefined);
-    if (!agents?.agents?.some((a) => a.id === 'm1')) await client.request('agents.create', { name: 'm1', workspace: join(opts.state, 'openclaw', 'workspaces', 'm1') });
-    const auth = await client.request('models.authStatus', { agentId: 'm1' }, { timeoutMs: 20_000 }).catch(() => undefined);
-    const providers = (auth?.providers ?? []).map((p) => (typeof p === 'string' ? p : p?.provider));
+    await runtime.start({ tools: () => [], gate: async () => ({ allow: false, reason: 'no tools in a measured turn' }), call: async () => '' });
+    if (opts.provider) await runtime.configureModelProvider(opts.provider.baseUrl, opts.provider.apiKey);
+    await kit.ensureMember('m1');
+    const providers = await kit.providers('m1').catch(() => []);
     if (!opts.provider && !providers.includes('openai')) throw new Error(`no ChatGPT sign-in on this state (signed in: ${providers.join(', ') || 'nobody'}); nothing was measured`);
-    const cfgNow = await client.request('config.get', {}, { timeoutMs: 20_000 }).catch(() => undefined);
+    const cfgNow = await kit.call('config.get', {}, { timeoutMs: 20_000 }).catch(() => undefined);
     const model = String(cfgNow?.config?.agents?.defaults?.model?.primary ?? "the account's own default");
     // Interleaved, not blocked: provider-side drift then shows up in both variants instead of on whichever ran last.
-    for (let i = 0; i < opts.runs; i++) for (const v of vs) rows.push({ variant: v.name, run: i + 1, ...(await oneRun(gateway, client, 'm1', v, `${opts.tag}:${v.name}:${i + 1}`, opts.wait)) });
+    for (let i = 0; i < opts.runs; i++) for (const v of vs) rows.push({ variant: v.name, run: i + 1, ...(await oneRun(kit, 'm1', v, `${opts.tag}:${v.name}:${i + 1}`, opts.wait)) });
     return { variants: vs, rows, meta: { state: opts.state, crew: opts.crew, model, body: opts.body, runs: opts.runs, providers, head: headOf(cfg.repoDir) } };
-  } finally { await gateway.stop(); }
-}
-
-/** The scripted model the harness's own test runs on (test-only; it rewrites this state's model config). */
-async function point(client, { baseUrl, apiKey }) {
-  const cur = await client.request('config.get');
-  await client.request('config.patch', { baseHash: cur.hash, raw: JSON.stringify({
-    models: { providers: { 'crewhouse-stub': { baseUrl, apiKey, api: 'openai-completions',
-      models: [{ id: 'test', name: 'Test', reasoning: true, input: ['text'], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 32000, maxTokens: 2048,
-        compat: { supportsReasoningEffort: true, supportedReasoningEfforts: ['off', 'low', 'medium', 'high'] } }] } } },
-    agents: { defaults: { model: { primary: 'crewhouse-stub/test' } } },
-  }) });
+  } finally { await runtime.stop(); }
 }
 
 export function report({ variants: vs, rows, meta = {} }) {
