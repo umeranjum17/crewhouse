@@ -13,7 +13,7 @@ export type Helper = {
 };
 export type Choice = { label: string; body: Json; primary?: boolean };
 export type Card = {
-  id: number; helper: string; kind: 'ok' | 'spend' | 'question' | 'connect' | 'routine' | 'setup'; head: string; words: string;
+  id: number; helper: string; kind: 'ok' | 'spend' | 'question' | 'connect' | 'routine' | 'setup' | 'plan'; head: string; words: string;
   preview?: { head?: string; body: string }; choices: Choice[]; reply: boolean; app?: App; at: number;
   /** Chief's offered routine: the lines to confirm (cadence, what, quiet, first run), the schedule words to edit, and
    *  the time-zone line when the home computer's clock sits in another zone from this device's. */
@@ -27,7 +27,7 @@ export type Card = {
   status: string; evidence?: 'lines' | 'draft'; draftTo?: string;
 };
 /** The small line above an ask's title: what kind of yes it wants, so the title itself can stay plain. */
-export const askTag = (c: Card) => ({ spend: 'Wants to spend money', question: 'Has a question', routine: 'A routine to start', setup: 'Home setup', connect: 'Wants an app' } as Record<string, string>)[c.kind] ?? 'Needs your OK';
+export const askTag = (c: Card) => ({ spend: 'Wants to spend money', question: 'Has a question', routine: 'A routine to start', plan: 'A plan to start', setup: 'Home setup', connect: 'Wants an app' } as Record<string, string>)[c.kind] ?? 'Needs your OK';
 export type Work = { helper: string; title: string; line: string; waiting: boolean };
 export type Thing = { id: number; helper: string; title: string; at: number; summary: string; files: FileView[] };
 export type FileView = { url: string; kind: 'video' | 'image' | 'doc' | 'sheet' | 'page'; name: string };
@@ -542,6 +542,11 @@ export function card(a: Json, state: Json): Card {
       schedule: String(d.routine.schedule ?? ''), zoneNote: note,
       choices: [{ label: 'Start it', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
   }
+  // Chief's plan for a job of several steps: the steps are the evidence, and nothing starts before Go. "Change it" is
+  // the card's own box (a no that carries the person's words back to Chief), not a choice here.
+  if (a.kind === 'propose' && d.plan) return { ...base, kind: 'plan', status: 'A plan to start', head: "Chief's plan", words: plain(d.words ?? a.title),
+    lines: (d.plan.steps ?? []).map((x: string, i: number) => `${i + 1}. ${plain(x)}`),
+    choices: [{ label: 'Go', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
   if (a.kind === 'propose' && d.pass) return { ...base, kind: 'ok', status: 'Wants to hand work on', head: `${name} wants to hand work on`, words: plain(d.words ?? a.title),
     lines: (d.pass.files ?? []).map((f: string) => `With “${pretty(f)}”`),
     choices: [{ label: 'Hand it on', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };

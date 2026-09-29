@@ -468,7 +468,7 @@ export class Crew {
     const covers = d.key ? coversOf(d.key) : null;
     if (a.kind === 'connect') return { ...a, detail: { app: d.app, words: d.words } };
     if (a.kind === 'setup') return { ...a, detail: { app: d.app, person: d.person } };
-    if (a.kind === 'propose') return { ...a, detail: { words: a.title, preview: d.preview, ...(d.create ? { yes: `Yes, take ${d.create.name} on` } : d.draft ? { yes: 'Approve' } : {}), ...(d.draft ? { draft: d.draft } : {}), ...(d.job ? { job: d.job } : {}), ...(d.pass ? { pass: { root: d.pass.root, files: d.pass.files.map((f: string) => basename(f)) } } : {}), ...(d.routine ? { routine: d.routine } : {}) } };
+    if (a.kind === 'propose') return { ...a, detail: { words: a.title, preview: d.preview, ...(d.create ? { yes: `Yes, take ${d.create.name} on` } : d.draft ? { yes: 'Approve' } : {}), ...(d.draft ? { draft: d.draft } : {}), ...(d.job ? { job: d.job } : {}), ...(d.pass ? { pass: { root: d.pass.root, files: d.pass.files.map((f: string) => basename(f)) } } : {}), ...(d.routine ? { routine: d.routine } : {}), ...(d.plan ? { plan: { bot: d.plan.bot, steps: d.plan.steps } } : {}) } };
     return { ...a, detail: { effect: d.effect, words: a.title, spends: d.effect === 'spend', covers, ...(covers ? { always: covers } : {}), ...(d.preview ? { preview: d.preview } : {}), ...(d.press ? { press: true } : {}), ...(d.fill ? { fill: true } : {}),
       ...(d.checkout ? { order: { shown: d.checkout.shown ?? '', known: Number.isFinite(d.checkout.total), dollars: d.checkout.currency === '$' } } : {}) } };
   }
@@ -1126,6 +1126,18 @@ export class Crew {
     if (botId === CHIEF) throw Object.assign(new Error('Chief cannot assign to himself'), { status: 400 });
     // Chief's hand-offs are for whoever asked Chief, and run on that member's own accounts.
     return this.addTask(botId, text.trim(), by, model, by === CHIEF ? this.chiefFor() : this.bot(botId)!.member ?? OWNER, undefined, text.trim(), [], { parent: by === CHIEF ? this.activeTask(CHIEF)?.id : undefined, title });
+  }
+
+  /** Chief's job of several `steps` goes on a plan card first and starts on Go; the gate still asks every send, spend or change. */
+  private plan(botId: string, text: string, model?: string, title?: string, steps?: unknown) {
+    const plan = (Array.isArray(steps) ? steps : typeof steps === 'string' ? steps.split('\n') : [])
+      .map((x) => String(x).replace(/^\s*(\d+[.)]|[-*•])\s*/, '').trim()).filter(Boolean);
+    if (plan.length < 2 || !this.bot(botId) || botId === CHIEF) return this.assign(botId, text, CHIEF, model, title);
+    if (plan.length > 10 || plan.some((x) => x.length > 300)) throw fail('keep the plan to ten short steps');
+    const what = taskTitle(title || text);
+    this.propose(CHIEF, `Here’s the plan for “${what}”. ${this.bot(botId)!.display} starts when you say Go.`,
+      { plan: { bot: botId, text: text.trim(), model, title: what, steps: plan }, preview: { body: plan.map((x, i) => `${i + 1}. ${x}`).join('\n') } }, this.chiefFor());
+    return { asked: true, note: 'The person sees your plan on a card. Nothing starts until they say Go; do not assign it again.' };
   }
 
   /** `said` is what the thread shows, when it isn't the whole body. */
@@ -1870,7 +1882,7 @@ export class Crew {
   }
 
   /** Allow once, for this task, or always for the bot; or not now. Spending is never more than once. */
-  async answer(askId: number, body: { answer?: string; scope?: string; schedule?: string }, viewer = OWNER) {
+  async answer(askId: number, body: { answer?: string; scope?: string; schedule?: string; change?: string }, viewer = OWNER) {
     const ask = this.db.get("SELECT * FROM asks WHERE id = ? AND state = 'open'", askId);
     if (!ask) throw fail('that question is already settled', 409);
     if ((ask.member ?? OWNER) !== viewer) throw fail('that question is someone else’s', 403);
@@ -1884,7 +1896,8 @@ export class Crew {
     if (body.schedule && ask.kind === 'propose' && detail.routine) detail.routine.schedule = String(body.schedule);
     if (ask.kind === 'propose' && body.answer === 'allow') this.adopt(ask.bot, detail, ask.member ?? OWNER);
     if (ask.kind === 'propose' && body.answer === 'deny' && detail.draft) this.db.event('draft.rejected', ask.bot, { ...detail.draft, task: detail.task });
-    const shown = body.answer === 'deny' ? 'not now' : scope === 'task' ? 'allowed for this task' : scope === 'always' ? `always allowed for ${who}` : 'allowed once';
+    const change = ask.kind === 'propose' && detail.plan && body.answer === 'deny' ? String(body.change ?? '').trim().slice(0, 2000) : '';
+    const shown = change ? 'change it' : body.answer === 'deny' ? 'not now' : scope === 'task' ? 'allowed for this task' : scope === 'always' ? `always allowed for ${who}` : 'allowed once';
     const held = this.holds.get(askId);
     this.db.tx(() => {
       this.db.run("UPDATE asks SET state = 'answered', answer = ?, answered_at = ? WHERE id = ?", shown, Date.now(), askId);
@@ -1902,6 +1915,9 @@ export class Crew {
       if (detail.pass) this.wrap(detail.pass.root);
     });
     if (held) { held(body.answer!); this.holds.delete(askId); return; }
+    // Change it: the person's own words go back to Chief with the plan they are about, for a new card.
+    if (change) this.requestChief(`[Crewhouse] ${this.called(ask.member ?? OWNER)} wants a change to your plan for ${detail.plan.bot}: ${detail.plan.text}\nSteps:\n` +
+      `${detail.plan.steps.map((x: string, i: number) => `${i + 1}. ${x}`).join('\n')}\nThey say: ${change}\nOffer the changed plan with crew_assign and steps.`, ask.member ?? OWNER, change);
     if (ask.kind === 'propose') return;
     const t = ask.task_id && this.db.get('SELECT * FROM tasks WHERE id = ?', ask.task_id);
     if (ask.kind === 'connect' && t && body.answer === 'allow' && this.live.get(ask.bot)?.task === t.id) {
@@ -2043,8 +2059,10 @@ export class Crew {
       })),
       tool('crew_recruit', 'Recruit a bot from a template.', { template: Type.String(), name: Type.Optional(Type.String()) },
         (p) => { const n = this.recruit(p.template, p.name, CHIEF); return { recruited: { id: n.id, name: n.display } }; }),
-      tool('crew_assign', `Hand a bot a task. Give it a short descriptive title, never a URL. \`account\` (${accounts}) only when a task plainly suits another AI.`,
-        { bot: Type.String(), task: Type.String(), title: Type.Optional(Type.String()), account: Type.Optional(Type.String()) }, (p) => this.assign(String(p.bot).toLowerCase(), p.task ?? '', CHIEF, p.account, p.title)),
+      tool('crew_assign', `Hand a bot a task. Give it a short descriptive title, never a URL. \`account\` (${accounts}) only when a task plainly suits another AI. ` +
+        'A job of several steps: list them in `steps`, in plain words; the person sees the plan and it starts when they say Go.',
+        { bot: Type.String(), task: Type.String(), title: Type.Optional(Type.String()), account: Type.Optional(Type.String()), steps: Type.Optional(Type.Array(Type.String())) },
+        (p) => this.plan(String(p.bot).toLowerCase(), p.task ?? '', p.account, p.title, p.steps)),
       tool('crew_routine', 'Offer the person a routine: the same task on a schedule, for them to say yes or no. `when` is plain words in local time: "every Monday 9:00", "weekdays 8am", "every 2 hours". ' +
         '`quiet`: a check-in that only speaks up when something needs the person. `watch`: a page address to keep an eye on; Crewhouse reads it on ' +
         'schedule and wakes the bot only when it changed, and `task` says what matters ("tell me if the price drops below $900"). ' +
@@ -2169,6 +2187,12 @@ export class Crew {
     } else if (d.routine) this.addRoutine(d.routine, CHIEF, member);
     else if (d.create) this.create(d.create, member);
     else if (d.draft) this.db.event('draft.approved', botId, { ...d.draft, task: d.task, member });
+    else if (d.plan) {
+      if (!this.bot(d.plan.bot)) throw fail('that helper has left the crew', 409);
+      const steps = d.plan.steps.map((x: string, i: number) => `${i + 1}. ${x}`).join('\n');
+      this.addTask(d.plan.bot, `${d.plan.text}\n\n[Crewhouse] The plan ${this.called(member)} said Go to:\n${steps}\nIt approves no send, purchase or change by itself: those still ask.`,
+        CHIEF, d.plan.model, member, undefined, d.plan.text, [], { parent: d.task, title: d.plan.title });
+    }
   }
 
   /** A helper Chief made up, on the person's yes: the plain base template with the job and personality from the card,

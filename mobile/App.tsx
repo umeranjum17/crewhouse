@@ -775,7 +775,7 @@ function Hello({ state, refresh, go }: Ctx) {
 }
 
 // ---------- asks ----------
-const answer = (c: A.Card, body: Json) => attempt(() => api.answer(c.id, body), body.answer === 'deny' ? 'OK, not now' : 'Done. Carrying on.');
+const answer = (c: A.Card, body: Json) => attempt(() => api.answer(c.id, body), body.change ? 'Chief will change the plan' : body.answer === 'deny' ? 'OK, not now' : 'Done. Carrying on.');
 
 /** The ask's evidence in the sunken block, mirroring web/src/parts.tsx AskEvidence (§4.4): the order's lines with
  *  the total above a hairline, a form's or a job's label-over-value lines, a draft, the routine's confirmation
@@ -849,6 +849,8 @@ function AskCard({ c, who, state, onDone, canAct, offline, open }: { c: A.Card; 
     return () => clearTimeout(x);
   }, [when]);
   const stuck = when !== null && (!when.trim() || !sched || sched.bad);
+  // Chief's plan: "Change it" opens a box, and what the person types goes back to Chief for a new plan.
+  const [change, setChange] = useState<string | null>(null);
   return (
     <Card ask>
       <AskHead c={c} who={who} />
@@ -876,6 +878,19 @@ function AskCard({ c, who, state, onDone, canAct, offline, open }: { c: A.Card; 
             {deny && <Btn label={deny.label} onPress={() => act(deny.body)} />}
           </View>
         </>
+      ) : c.kind === 'plan' ? (
+        <>
+          {change !== null && <View style={s.row}>
+            <TextInput style={[s.input, { flex: 1, color: t.ink, borderColor: t.line }]} value={change} onChangeText={setChange} autoFocus
+              placeholder="What should change?" placeholderTextColor={t.mute} accessibilityLabel="What should change" />
+            <Btn go label="Send" disabled={!change.trim()} onPress={() => act({ answer: 'deny', change: change.trim() })} />
+          </View>}
+          <View style={s.chips}>
+            {change === null && <Btn go label={yes.label} onPress={() => act(yes.body)} />}
+            <Btn label={change === null ? 'Change it' : 'Keep the plan'} onPress={() => setChange(change === null ? '' : null)} />
+            {deny && <Btn label={deny.label} onPress={() => act(deny.body)} />}
+          </View>
+        </>
       ) : c.reply ? (
         <View style={s.row}>
           <TextInput style={[s.input, { flex: 1, color: t.ink, borderColor: t.line }]} value={reply} onChangeText={setReply} placeholder={`Tell ${who?.name ?? 'them'} what to do`} placeholderTextColor={t.mute} />
@@ -894,6 +909,7 @@ function AskCard({ c, who, state, onDone, canAct, offline, open }: { c: A.Card; 
       ) : null}
       {always && <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: t.line, paddingTop: 10, width: '100%' }}><Btn ghost label={always.label} onPress={() => act(always.body)} /></View>}
       {c.kind === 'spend' && <T tone="mute" style={[s.small, { textAlign: 'center' }]}>Anything that costs money asks you every time.</T>}
+      {c.kind === 'plan' && <T tone="mute" style={[s.small, { textAlign: 'center' }]}>Saying Go doesn’t OK any sending or spending. Those still ask you each time.</T>}
     </Card>
   );
 }

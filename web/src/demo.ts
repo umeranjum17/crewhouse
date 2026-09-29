@@ -152,6 +152,9 @@ const state = {
   ],
   asks: variant.startsWith('phone') ? [] : variant === 'room' ? [{ id: 90, bot: 'scout', task_id: null, kind: 'propose', at: now - min, title: 'Scout wants to hand this to Scribe: draft the story', detail: { words: 'Scout wants to hand this to Scribe: draft the story, with stories.md', pass: { root: 70, files: ['stories.md'] }, preview: { head: 'Scout → Scribe', body: 'Draft the story for the family newsletter.' } } }]
     : variant === 'job-card' ? [{ id: 21, bot: 'chief', task_id: null, kind: 'propose', at: now, member: me, title: "Chief wrote Pip's job", detail: { job: { bot: 'pip', does: 'Keep Nadia’s family calendar in order.', aim: 'Help the family know what is coming.', gets: 'Events and reminders from the person.', how: 'Check dates, add reminders only when asked, and explain changes.', great: 'A clear, accurate week; for example, sports day with a reminder the evening before.' }, preview: { head: "Pip's job", body: 'What it does: Keep Nadia’s family calendar in order.\n\nWhat it’s aiming for: Help the family know what is coming.\n\nWhat it gets from others: Events and reminders from the person.\n\nHow it goes about it: Check dates, add reminders only when asked, and explain changes.\n\nWhat great looks like: A clear, accurate week; for example, sports day with a reminder the evening before.' } } }]
+    : variant === 'job-plan' ? [{ id: 22, bot: 'chief', task_id: null, kind: 'propose', at: now, member: me, title: 'Here’s the plan for “Find the best five strollers under $400”. Scout starts when you say Go.', detail: {
+        words: 'Here’s the plan for “Find the best five strollers under $400”. Scout starts when you say Go.',
+        plan: { bot: 'scout', steps: ['Look through reviews and parents’ forums for strollers under $400', 'Pick the five that come up best, with any recalls checked', 'Compare them on weight, fold, storage and price in one sheet', 'Tell you the one to buy and why'] } } }]
     : variant === 'connect' ? [{ id: 11, bot: 'pip', task_id: 45, kind: 'connect', at: now, member: me, title: 'Connect Google Calendar', detail: { app: 'calendar', words: 'Let Pip use your Google Calendar' } }]
     : variant === 'claim' ? [{ id: 13, bot: 'scout', task_id: 42, kind: 'permission', at: now - 30_000, member: me, title: '', detail: {
         effect: 'send', press: true, fill: true, spends: false,
@@ -242,6 +245,8 @@ const pages: Record<string, Json> = {
   soul: '# Reel\n\n## How you come across\n- Upbeat and practical: one sentence on what was made, then let the video speak.\n- Loves a tidy thirty seconds: clean cuts, steady pacing, nothing that shouts.\n- Makes a sensible call when something is missing, and says what was assumed.',
   skills: [{ name: 'make-reel', says: 'Turn photos and screenshots into a short video' }, { name: 'birthday-video', says: 'Make a birthday video from family photos', learned: true }] },
 };
+if (variant === 'job-plan') pages.chief.messages.push({ id: 71, author: 'person', text: 'find me a good stroller under $400, compare the best five' },
+  { id: 72, author: 'chief', text: 'Happy to, Nadia. Scout will take it; here is how, before anything starts.' });
 if (variant === 'room') pages.chief.messages.push({ id: 70, author: 'bot', text: 'All done, Nadia. Scout: three stories. Scribe: a newsletter draft waiting for your yes.' });
 if (variant === 'connect') pages.pip = { messages: [
   { id: 1, author: 'person', text: "What's on this week?" },
