@@ -17,6 +17,9 @@ import { CONTROL_PERMISSIONS, DesktopView, useDesktopSession } from '@desklink/r
 import { desktopAvailable } from '@desklink/react-native/availability';
 import * as ImagePicker from 'expo-image-picker';
 import * as Linking from 'expo-linking';
+
+// React Native always defines this; @types/react-native is not installed, so say so once for tsc.
+declare const __DEV__: boolean;
 import * as Notifications from 'expo-notifications';
 import { File, Paths } from 'expo-file-system';
 import { VideoView, useVideoPlayer } from 'expo-video';
@@ -497,6 +500,16 @@ function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
     setWords('');
     setBusy(false);
   };
+  // Dev-only QR bypass (QA-283): an emulator's virtual camera can show the code without ever firing
+  // onBarcodeScanned, so a dev build accepts the same scanned text by link
+  // (`adb shell am start -a android.intent.action.VIEW -d "crewhouse://pair?code=<url-encoded QR text>"`)
+  // through the same tryCode handler the camera uses. Release builds ignore it.
+  const devPairUrl = Linking.useURL();
+  useEffect(() => {
+    if (!__DEV__ || !devPairUrl) return;
+    const m = /^crewhouse:\/\/pair\?code=(.+)$/.exec(devPairUrl);
+    if (m) void tryCode(decodeURIComponent(m[1]));
+  }, [devPairUrl]);
   // The pairing success says the news state once ('missing' when this build has no push credential).
   useEffect(() => { if (!done) return; void pushState(true).then((p) => { setPush(p); setChecked(true); }).catch(() => setChecked(true)); }, [!!done]);
   if (done) {
