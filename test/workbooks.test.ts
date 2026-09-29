@@ -139,6 +139,34 @@ test('two members ask for the same title: each task gets its own file, and neith
   await assert.rejects(() => crew.workbookView('quill', a, sam), /not delivered to you/);
 });
 
+test('the make-spreadsheet skill carries the question, the spec shape and a buildable reception outline', async () => {
+  const md = readFileSync(new URL('../skills/make-spreadsheet/SKILL.md', import.meta.url), 'utf8');
+  // The frontmatter parses: the skill keeps its name and its two descriptions.
+  assert.equal(/^name:\s*(.+)$/m.exec(md)?.[1]?.trim(), 'make-spreadsheet');
+  assert.ok(/^description:\s*(.+)$/m.test(md), 'the model description is there');
+  assert.ok(/^says:\s*(.+)$/m.test(md), 'the person-facing line is there');
+  // Step 1: one question with kinds plus "something else", then stop.
+  assert.match(md, /exactly one question/);
+  assert.match(md, /something else/);
+  // The spec shape the helper fills in, literally.
+  assert.ok(md.includes('{name, sheets:[{name, columns:[{header,width?,options?}], rows}]}'));
+  // The reception outline builds as-is.
+  const json = /```json\r?\n([\s\S]*?)\r?\n```/.exec(md)?.[1];
+  assert.ok(json, 'one fenced JSON outline');
+  const outline = JSON.parse(json!);
+  assert.deepEqual(outline.sheets.map((s: any) => s.name), ['Dashboard', 'Bookings & check-in', 'Rooms & housekeeping', 'Payments', 'Setup & guide']);
+  for (const s of outline.sheets) assert.equal(s.rows.length, 1, `${s.name}: one example row`);
+  const status = outline.sheets[1].columns.at(-1);
+  assert.deepEqual(status.options, ['Booked', 'Checked in', 'Due out'], 'options on status');
+  assert.deepEqual(outline.sheets[3].columns[2].options, ['Cash', 'Card', 'Transfer', 'Unpaid'], 'options on payment');
+  assert.match(outline.sheets[1].rows[0][2], /^\d{4}-\d{2}-\d{2}$/, 'ISO dates');
+  const file = join(temp('skill-outline'), 'reception.xlsx');
+  const built = await buildWorkbook(file, outline);
+  assert.deepEqual(built.sheets, outline.sheets.map((s: any) => s.name));
+  const view = await readWorkbook(file);
+  assert.deepEqual(view.sheets[1].rows[1], ['Amina Khan', '204', '2026-10-01', 'Checked in']);
+});
+
 test('a file delivered for one member cannot be taken by another member’s task', async () => {
   const { cfg, db, crew } = setup();
   crew.onboard('sir');
