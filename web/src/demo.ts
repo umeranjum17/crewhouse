@@ -6,7 +6,8 @@
 // ?demo=paper (Scout's reply to the school as a draft to approve — the paper, sorted), ?demo=meals (this week's dinners shopped into a cart, waiting on its checkout card),
 // ?demo=watch (the name watch heard: one source-linked line), ?demo=neighbour (the weekly brief as a document), ?demo=brief (the month in brief as a document),
 // ?demo=office (Home's office with first looks on the desks and a helper busy with another job), ?demo=calm (nothing of hers on the go),
-// ?demo=fresh (the Chief-only Home a new person gets: no helpers hired yet, nothing to hand over).
+// ?demo=fresh (the Chief-only Home a new person gets: no helpers hired yet, nothing to hand over),
+// ?demo=crew1, crew5, crew12, crew30 (the office at that many helpers).
 // &sheet=signin or &sheet=connect opens that sheet, and &phase=… pins it to one state.
 import type { Json } from './api.ts';
 import { AIS } from './adapter.ts';
@@ -111,6 +112,24 @@ if (variant === 'office') {
   Object.assign(bots.find((b) => b.id === 'pip')!, { live: 'working' });
 }
 if (variant === 'calm') for (const b of bots) Object.assign(b, { task: null, step: undefined });
+// ?demo=crew1, crew5, crew12, crew30: the office at that many helpers (Tracer is the owner's alone, so never one of
+// hers). The household's own four come first (Scribe, who needs her, alone at crew1), then made-up helpers: every eighth needs her, three in eight work, one is busy with
+// someone else's job, and the rest are free.
+const many = /^crew(\d+)$/.exec(variant);
+if (many) {
+  const n = Number(many[1]), kinds = ['reel', 'scout', 'scribe', 'pip'];
+  const names = ['Bea', 'Kit', 'Ollie', 'Juno', 'Milo', 'Tess', 'Remy', 'Ivy', 'Otto', 'Nell', 'Finn', 'Luna', 'Hugo', 'Wren', 'Ada', 'Zed', 'Mae', 'Rex', 'Isla', 'Theo', 'Cleo', 'Ned', 'Pia', 'Sol', 'Yara', 'Bo', 'Gus', 'Lia', 'Max', 'Noor'];
+  const jobs = ['Holiday photo book', 'Compare phone plans', 'Tidy the budget sheet', 'Find a piano teacher', 'Plan the garden', 'Sort the insurance letters'];
+  const own = ['scribe', 'reel', 'scout', 'pip'].map((id) => bots.find((b) => b.id === id)!);
+  bots.splice(1, bots.length - 1, ...own.slice(0, Math.min(n, 4)));
+  for (let i = 4; i < n; i++) {
+    const id = `h${i}`, name = names[(i - 4) % names.length], job = jobs[i % jobs.length], k = i % 8;
+    const t = k === 0 || k <= 3 ? task(100 + i, id, job, k === 0 ? 'needs_you' : 'working') : null;
+    bots.push(bot(id, name, 'Helps around the house', { template: kinds[i % 4], task: t, live: k === 7 ? 'working' : undefined,
+      step: k && t ? { kind: 'task.progress', at: now - min, data: { text: `Working on ${job.toLowerCase()}` } } : undefined }));
+    if (k === 0) asks.push({ id: 300 + i, bot: id, task_id: 100 + i, kind: 'question', at: now - min, member: me, title: '', detail: { question: `A quick question about ${job.toLowerCase()}` } });
+  }
+}
 
 const state = {
   person: me === 1 ? { id: 1, name: 'Umer', address: 'sir', onboarded: 1 }

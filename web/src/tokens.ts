@@ -19,3 +19,10 @@ export const type = {
 } as const;
 export const motion = { fast: 120, base: 200, slow: 280, exit: 160 };
 export const font = { ui: "'Inter', system-ui, sans-serif", art: "'JetBrains Mono', ui-monospace, monospace" };
+/** The office room's flat colours (web/src/office.tsx, mobile/src/office.tsx): one room, day and night. */
+export const room = {
+  day: { wall: '#FFF1DC', stripe: '#FBE5C8', skirt: '#E7C9A3', floor: '#E2C49F', seam: '#CDAA80', desk: '#D39A66', top: '#EDB985', edge: '#9A6238',
+    bezel: '#3B3552', screen: '#2C2A39', sofa: '#FF9BB3', sofaDark: '#E97B98', window: '#BFE3FF', frame: '#FFFFFF', leaf: '#5FC27E', pot: '#FFB199' },
+  night: { wall: '#39334F', stripe: '#342E49', skirt: '#27222F', floor: '#4A4157', seam: '#3B3346', desk: '#6B4F3A', top: '#80604A', edge: '#43301F',
+    bezel: '#15131A', screen: '#1F1D29', sofa: '#C2475F', sofaDark: '#9E3A50', window: '#1E2A55', frame: '#524A64', leaf: '#3F9D63', pot: '#B8664F' },
+};

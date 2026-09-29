@@ -1083,7 +1083,7 @@ function Home(ctx: Ctx) {
       <ScrollView contentContainerStyle={s.page} keyboardShouldPersistTaps="handled">
         <HomeHero state={state} offline={offline} go={go} />
         <View onLayout={(e) => setRoom(e.nativeEvent.layout.width)} style={[s.office, { backgroundColor: t.soft, borderColor: t.line }]}>
-          {room > 0 && <Office state={state} night={t.night} offline={offline} width={room - 2} onChief={() => go({ view: 'chief' })} onDesk={(c) => setDesk({ c, state })} onTray={() => go({ view: 'things' })} />}
+          {room > 0 && <Office state={state} night={t.night} offline={offline} width={room - 2} onChief={() => go({ view: 'chief' })} onDesk={(c) => setDesk({ c, state })} onAsk={open} onTray={() => go({ view: 'things' })} />}
         </View>
         {!!A.resting(state) && <Card><T>{A.resting(state)}. I'll pick things back up then.</T></Card>}
         <Pressable onPress={() => go({ view: 'phone' })} accessibilityRole="button" accessibilityLabel="Check AI account sign-in on the home computer" style={({ pressed }) => [s.listRow, s.listGroup, { backgroundColor: t.solid, borderColor: t.line }, pressed && { opacity: 0.6 }]}>

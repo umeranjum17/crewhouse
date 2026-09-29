@@ -954,6 +954,8 @@ export const BUSY_ELSEWHERE = 'Busy with another job';
  *  pub/liveState). Bot-level signals only — never a title, step or member. */
 const isBusyElsewhere = (b: Json) => b?.live === 'working' && !b?.task;
 
+/** The question that matters most comes first: money, then anything sent in the person's name, then the rest. */
+export const askRank = (c: Card) => (c.kind === 'spend' ? 0 : c.kind === 'ok' ? 1 : 2);
 export function office(state: Json, opts: OfficeOpts = {}): OfficeView {
   const helpers = crew(state);
   const raw = new Map((state.bots as Json[] ?? []).map((b: Json) => [b.id, b]));
@@ -977,7 +979,7 @@ export function office(state: Json, opts: OfficeOpts = {}): OfficeView {
     const w = lines.get(h.id);
     return { id: h.id, name: h.name, kind: h.kind, mood: h.mood, ring: h.ring, status: h.status,
       step: (b.step && step(b.step)) || (w && !w.waiting ? 'Getting started…' : ''), steps: now, things: made,
-      ask: open.find((c) => c.helper === h.id), busyElsewhere: false };
+      ask: open.filter((c) => c.helper === h.id).sort((a, b) => askRank(a) - askRank(b))[0], busyElsewhere: false };
   });
   const done = things(state);
   return { chief: chief(state), crew: crewRows, done,
@@ -1056,4 +1058,30 @@ export function officeEvent(view: OfficeView, e: Json): OfficeView {
     default:
       return view;
   }
+}
+
+/** A helper waiting on you: a job of yours stopped for your answer, or a question open on a card. */
+export const waitsOnYou = (c: OfficeMember) => c.ring === 'needs' || !!c.ask;
+/** The narrowest a desk and a lounge seat may be, in points: the floor plan fits as many across as the room is wide. */
+export const DESK_W = 100, LOUNGE_W = 72;
+export type FloorPlan = { cols: number; desks: OfficeMember[]; spare: number; loungeCols: number; lounge: OfficeMember[]; more: number };
+/** Who sits where in the flat office, one rule for the web and the phone at any crew size. Chief and every helper
+ *  on a job of yours sit at desks, with room over their heads for a bubble; everyone else is in the lounge, a smaller
+ *  sprite with a name chip. Folded (the default), the desks take two rows and the lounge two, and the rest wait behind
+ *  "+N more" (the lounge's last seat); a helper who needs you always keeps a desk, however many there are. Seats keep
+ *  the crew's own order, so nobody changes desk when someone else's news lands. `spare` empty desks finish the row. */
+export function floorPlan(crew: OfficeMember[], width: number, all = false): FloorPlan {
+  const cols = Math.max(2, Math.min(8, Math.floor(width / DESK_W)));
+  const loungeCols = Math.max(3, Math.min(12, Math.floor(width / LOUNGE_W)));
+  const busy = crew.filter((c) => waitsOnYou(c) || c.ring === 'working');
+  const idle = crew.filter((c) => !busy.includes(c));
+  let desks = busy, lounge = idle;
+  if (!all) {
+    const first = [...busy.filter(waitsOnYou), ...busy.filter((c) => !waitsOnYou(c))];
+    const keep = new Set(first.slice(0, Math.max(2 * cols - 1, busy.filter(waitsOnYou).length))); // Chief has a desk too
+    desks = busy.filter((c) => keep.has(c));
+    const seats = 2 * loungeCols;
+    lounge = desks.length < busy.length || idle.length > seats ? idle.slice(0, seats - 1) : idle;
+  }
+  return { cols, desks, spare: (cols - ((desks.length + 1) % cols)) % cols, loungeCols, lounge, more: crew.length - desks.length - lounge.length };
 }

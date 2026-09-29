@@ -6,7 +6,7 @@
 // `node scripts/icons.mjs` (the PNGs need ImageMagick's `magick`). The outputs are committed.
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
-import { chief, chiefSmall, pal, palPalette, CHIEF_PAL, CHIEF_PAL_NIGHT, MOODS, NOTIFY, PALS } from '../web/src/art.ts';
+import { chief, chiefSmall, pal, palPalette, spriteSvg, CHIEF_PAL, CHIEF_PAL_NIGHT, EDGE, MOODS, NOTIFY, PALS } from '../web/src/art.ts';
 import { MARKS } from '../web/src/logos.ts';
 
 const web = new URL('../web/', import.meta.url).pathname;
@@ -51,23 +51,12 @@ for (const [key, d] of Object.entries(MARKS)) {
   rmSync(`${ai}${key}.svg`);
 }
 console.log('icons written into web/ and mobile/assets/ai/');
-// The phone office sprites: one PNG per (kind, mood), plus Chief's night set. Round dots like the app's dot
-// faces, at 8 px a dot. The phone draws these with <Image> instead of one View per dot.
+// The phone office sprites: one PNG per (kind, mood), plus Chief's night set. Square pixels with an ink edge, as the
+// web office draws them (art.ts spriteSvg), at 8 px a dot. The phone draws these with <Image> instead of one View per dot.
 const pals = new URL('../mobile/assets/pals/', import.meta.url).pathname;
 mkdirSync(pals, { recursive: true });
-const PITCH = 8;
-const spriteSvg = (rows, pal) => {
-  const w = rows[0].length, h = rows.length;
-  let s = '';
-  rows.forEach((r, y) => [...r].forEach((k, x) => {
-    const c = pal[k];
-    if (!c) return;
-    s += `<circle cx="${((x + 0.5) * PITCH).toFixed(2)}" cy="${((y + 0.5) * PITCH).toFixed(2)}" r="${(PITCH * 0.43).toFixed(2)}" fill="${c}"/>`;
-  }));
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w * PITCH}" height="${h * PITCH}" viewBox="0 0 ${w * PITCH} ${h * PITCH}">${s}</svg>\n`;
-};
 const sprite = (name, rows, pal) => {
-  writeFileSync(`${pals}${name}.svg`, spriteSvg(rows, pal));
+  writeFileSync(`${pals}${name}.svg`, spriteSvg(rows, pal, 8, EDGE));
   execFileSync('magick', ['-background', 'none', '-density', '96', `${pals}${name}.svg`, '-depth', '8', '-strip', `PNG32:${pals}${name}.png`]);
   rmSync(`${pals}${name}.svg`);
 };

@@ -1,51 +1,59 @@
-// The office at the top of Home: Chief and the crew in one room, each at their desk, with what they are making for
-// you on it. On a computer it is the Diorama (web/src/diorama.ts, real 3D, loaded after Home paints); without 3D, or
-// with Reduce Motion on, it is a still row of the same mascots. Every word comes from A.office (web/src/adapter.ts):
+// The office at the top of Home: Chief and the crew in one flat room, drawn front on like a cut-open dollhouse, with
+// what each helper is making for you pinned beside their desk. The phone draws the same room (mobile/src/office.tsx),
+// and A.floorPlan (web/src/adapter.ts) says who sits where at any crew size: a desk for Chief and for each helper on a
+// job of yours, the lounge sofa for everyone else, "+N more" past two rows of each. Every word comes from A.office:
 // a member's room holds only their own jobs, and a helper busy with someone else's shows just "Busy with another job".
-// Nothing is decided here: a question opens its review sheet, a thing opens its preview (the "Home commits nothing" rule).
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+// Nothing is decided here: a question opens its review sheet, a helper opens their panel (the "Home commits nothing"
+// rule). Nothing moves while the room is quiet: a helper hops once when their news lands, and Reduce Motion skips it.
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { Json } from './api.ts';
 import * as A from './adapter.ts';
-import { PALS, type Kind } from './art.ts';
-import type { Anchors, Diorama, Room } from './diorama.ts';
+import * as art from './art.ts';
+import { room as ROOM } from './tokens.ts';
 import { Face, Media, Pill, Steps, useDialogOwn } from './parts.tsx';
 
 // Live events reach the room straight from the socket the shell already holds (main.tsx): a step swaps the bubble
-// and a new thing drops onto the desk before the debounced refresh lands, and the refresh stays the source of truth.
+// and a new thing lands by the desk before the debounced refresh lands, and the refresh stays the source of truth.
 const ears = new Set<(e: Json) => void>();
 export const hear = (e: Json) => ears.forEach((f) => f(e));
 
 const go = (hash: string) => { location.hash = hash; };
 const reduced = () => typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
-function useReducedMotion() {
-  const [on, setOn] = useState(reduced);
-  useEffect(() => {
-    const q = matchMedia('(prefers-reduced-motion: reduce)');
-    const f = () => setOn(q.matches);
-    q.addEventListener('change', f);
-    return () => q.removeEventListener('change', f);
-  }, []);
-  return on;
-}
 
 type Tone = { cls: string; pill: 'ok' | 'wait' | 'off' };
 function tone(c: A.OfficeMember): Tone {
-  if (c.ring === 'needs' || c.ask) return { cls: 's-needs', pill: 'wait' };
-  if (c.ring === 'working') return { cls: 's-work', pill: 'ok' };
-  if (c.busyElsewhere) return { cls: 's-away', pill: 'off' };
-  if (c.status === 'Up next') return { cls: 's-next', pill: 'off' };
-  return { cls: 's-free', pill: 'off' };
+  if (A.waitsOnYou(c)) return { cls: 'needs', pill: 'wait' };
+  if (c.ring === 'working') return { cls: 'work', pill: 'ok' };
+  if (c.busyElsewhere) return { cls: 'away', pill: 'off' };
+  if (c.status === 'Up next') return { cls: 'next', pill: 'off' };
+  return { cls: 'free', pill: 'off' };
 }
-const KIND_WORDS: Record<A.FileView['kind'], string> = { image: 'A picture', video: 'A video', sheet: 'A spreadsheet', page: 'A document', doc: 'A file' };
+const said = (c: A.OfficeMember) => (c.busyElsewhere ? `${c.name}, ${A.BUSY_ELSEWHERE.toLowerCase()}`
+  : A.waitsOnYou(c) ? `${c.name} needs you` : c.ring === 'working' ? `${c.name}, working on ${c.status}` : `${c.name}, ${c.status.toLowerCase()}`);
 
-/** A thing on a desk, small: its kind as a tile, its name beside it. */
-function ThingIcon({ f, kind }: { f: A.FileView; kind: Kind }) {
-  if (f.kind === 'image' || f.kind === 'video') {
-    return <span className="o-ic sw" aria-hidden style={{ background: `linear-gradient(135deg, ${PALS[kind].body}, #ff7aa2)` }}>{f.kind === 'video' ? '▶' : ''}</span>;
+/** A mascot as crisp square pixels with an ink edge, `dot` px a pixel; one image per face, made once. */
+const urls = new Map<string, string>();
+function Sprite({ who, mood, dot, night, className = '', beat }: { who: art.Kind | 'chief'; mood: art.Mood; dot: number; night: boolean; className?: string; beat?: string }) {
+  const key = `${who}-${mood}-${night && who === 'chief' ? 'n' : 'd'}`;
+  let url = urls.get(key);
+  if (!url) {
+    const svg = who === 'chief' ? art.spriteSvg(art.chief(mood), night ? art.CHIEF_PAL_NIGHT : art.CHIEF_PAL, 1, art.EDGE) : art.spriteSvg(art.pal(who, mood), art.palPalette(who), 1, art.EDGE);
+    urls.set(key, url = `data:image/svg+xml,${encodeURIComponent(svg)}`);
   }
-  return <span className={`o-ic ${f.kind === 'sheet' ? 'sheet' : ''}`} aria-hidden>{f.kind === 'sheet' ? '▦' : '▤'}</span>;
+  const [w, h] = who === 'chief' ? [24, 25] : [20, 19];
+  const img = useRef<HTMLImageElement>(null);
+  // A hop when their news lands (a new ring, mood or thing): once, never on the first paint, never with Reduce Motion.
+  const was = useRef(beat);
+  useEffect(() => {
+    if (was.current === beat) return;
+    was.current = beat;
+    if (!reduced()) img.current?.animate([{ translate: '0 0' }, { translate: '0 -10px', offset: 0.35 }, { translate: '0 0', offset: 0.7 }, { translate: '0 -3px', offset: 0.85 }, { translate: '0 0' }], { duration: 560, easing: 'ease-out' });
+  }, [beat]);
+  return <img ref={img} className={`o-px o-sprite ${className}`} src={url} alt="" width={w * dot} height={h * dot} draggable={false} />;
 }
+
+const KIND_WORDS: Record<A.FileView['kind'], string> = { image: 'a picture', video: 'a video', sheet: 'a spreadsheet', page: 'a document', doc: 'a file' };
 
 export function Office({ state, night }: { state: Json; night: boolean }) {
   const view = useMemo(() => A.office(state, { busyElsewhere: true }), [state]);
@@ -57,64 +65,30 @@ export function Office({ state, night }: { state: Json; night: boolean }) {
     return () => { ears.delete(f); };
   }, []);
   const roles = useMemo(() => new Map(A.crew(state).map((h) => [h.id, h])), [state]);
-  // Every question a helper has open, the one that matters most first: money, then anything sent in her name.
+  // Every question a helper has open, the one that matters most first (A.askRank), for their panel.
   const asks = useMemo(() => {
-    const rank = (c: A.Card) => (c.kind === 'spend' ? 0 : c.kind === 'ok' ? 1 : 2);
     const by = new Map<string, A.Card[]>();
     for (const c of A.cards(state)) by.set(c.helper, [...(by.get(c.helper) ?? []), c]);
-    for (const l of by.values()) l.sort((a, b) => rank(a) - rank(b));
+    for (const l of by.values()) l.sort((a, b) => A.askRank(a) - A.askRank(b));
     return by;
   }, [state]);
-  const crew = live.crew.map((c) => (c.ask && asks.get(c.id)?.[0] ? { ...c, ask: asks.get(c.id)![0] } : c));
-  const day = new Date(); day.setHours(0, 0, 0, 0);
-  const room: Room = { chief: { mood: live.chief.mood }, crew, doneToday: live.done.filter((t) => t.at >= day.getTime()).length };
-  // The scene redraws only when something it draws, or a card pinned in it, has changed: the words themselves live in
-  // the cards, which React keeps, but a card that changes size reframes the room.
-  const roomKey = JSON.stringify([room.chief, room.doneToday, crew.map((c) => [c.id, c.kind, c.mood, c.ring, c.busyElsewhere, c.ask?.id, c.ask?.kind, c.status, c.step, c.things.map((f) => f.kind)])]);
-  const roomNow = useRef(room);
-  roomNow.current = room;
-
-  // What the stage is: waiting for the 3D chunk, the 3D room, or the still row.
-  const reduce = useReducedMotion();
-  const [mode, setMode] = useState<'wait' | '3d' | 'still'>(() => (reduced() ? 'still' : 'wait'));
-  const stage = useRef<HTMLDivElement>(null);
-  const scene = useRef<Diorama | null>(null);
-  const anchors = useRef<Anchors>(new Map()).current;
+  const crew = live.crew;
   const [open, setOpen] = useState<string | null>(null);
-  const pick = useRef((id: string) => {});
-  pick.current = (id: string) => (id === 'chief' ? go('#/chief') : id === 'done' ? go('#/things') : setOpen(id));
-  const [phone, setPhone] = useState(false);
-  useEffect(() => {
-    const el = stage.current;
+  const [all, setAll] = useState(false);
+
+  // The room is as many seats across as it is wide: measured before the first paint, then on every resize.
+  const box = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(0);
+  useLayoutEffect(() => {
+    const el = box.current;
     if (!el) return;
-    const ro = new ResizeObserver(([en]) => setPhone(en.contentRect.width < 600));
+    setWidth(el.clientWidth);
+    const ro = new ResizeObserver(([en]) => setWidth(Math.round(en.contentRect.width)));
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-
-  useEffect(() => {
-    if (reduce) { setMode('still'); return; }
-    let gone = false, d: Diorama | null = null;
-    setMode('wait');
-    import('./diorama.ts').then((m) => {
-      if (gone || !stage.current) return;
-      d = m.diorama(stage.current, anchors, (id) => pick.current(id), () => { if (!gone) { d?.dispose(); scene.current = null; setMode('still'); } });
-      scene.current = d;
-      setMode(d ? '3d' : 'still');
-    }).catch(() => { if (!gone) setMode('still'); });
-    return () => { gone = true; d?.dispose(); scene.current = null; };
-  }, [reduce, anchors]);
-
-  // Draw only when what the room shows has changed: the 15 s refresh with nothing new costs no frame at all.
-  useEffect(() => { if (mode === '3d') scene.current?.show(roomNow.current, { night, phone }); }, [mode, roomKey, night, phone]);
-
-  // A tapped helper: the camera glides to them, kept clear of the panel that opens beside (or below) the room.
-  useEffect(() => {
-    const el = stage.current;
-    if (mode !== '3d' || !el) return;
-    const r = el.getBoundingClientRect();
-    scene.current?.focus(open, phone ? { right: 0, bottom: Math.max(0, r.bottom - innerHeight * 0.42) } : { right: Math.max(0, r.right - (innerWidth - 480)), bottom: 0 });
-  }, [open, mode, phone]);
+  const plan = A.floorPlan(crew, width || 360, all);
+  const folds = all && A.floorPlan(crew, width || 360).more > 0;
 
   // A thing that just arrived wears "New" for a moment and drops in.
   const seen = useRef<Map<string, number> | null>(null);
@@ -134,70 +108,88 @@ export function Office({ state, night }: { state: Json; night: boolean }) {
     timers.current.push(window.setTimeout(() => setFresh((f) => new Set([...f].filter((k) => !got.has(k)))), 6000));
   }, [live]);
 
-  const bind = (key: string) => (el: HTMLElement | null) => { if (el) anchors.set(key, el); else anchors.delete(key); };
-  const mine = live.crew.some((c) => c.ring || c.ask);
-  const chips = (c: A.OfficeMember) => c.things.length > 0 && (
-    <div className="o-wips">{c.things.map((f, i) => (
-      <button key={i} className={`o-wip${fresh.has(`${c.id}:${i}`) ? ' drop' : ''}`}
-        onClick={() => setOpen(c.id)} aria-label={`${f.name}, ${KIND_WORDS[f.kind].toLowerCase()} from ${c.name}`} title={f.name}>
-        <ThingIcon f={f} kind={c.kind} />
-        {fresh.has(`${c.id}:${i}`) && <span className="o-new">New</span>}
-      </button>))}
-    </div>);
-  const tag = (c: A.OfficeMember) => (
-    <button className={`o-tag ${tone(c).cls}`} onClick={() => setOpen(c.id)} aria-label={`${c.name}: ${c.status}`}>
-      <b>{c.name}</b><span className="o-st">{c.ring === 'working' ? <Typing /> : <i />}<span>{c.status}</span></span>
-    </button>);
-  // On a phone the one card over a helper who needs you is the way in: their name and a Review, in pink.
-  const needs = (c: A.OfficeMember) => c.ask && <a className="o-tag o-need" href={`#/ask/${c.ask.id}`} aria-label={`Review what ${c.name} needs: ${c.ask.head}`}>
-    <b>{c.name}</b><span className="o-go">Review</span></a>;
-  const chiefTag = <button className={`o-tag ${live.chief.mood === 'ask' ? 's-needs' : live.chief.mood === 'work' ? 's-work' : 's-free'}`} onClick={() => go('#/chief')} aria-label="Chief: open his chat">
-    <b>Chief</b><span className="o-st"><i /><span>Runs the crew</span></span></button>;
+  const r = night ? ROOM.night : ROOM.day;
+  const vars = { '--r-wall': r.wall, '--r-stripe': r.stripe, '--r-skirt': r.skirt, '--r-floor': r.floor, '--r-seam': r.seam, '--r-desk': r.desk, '--r-top': r.top, '--r-edge': r.edge,
+    '--r-bezel': r.bezel, '--r-screen': r.screen, '--r-sofa': r.sofa, '--r-sofa-dark': r.sofaDark, '--r-window': r.window, '--r-frame': r.frame, '--r-leaf': r.leaf, '--r-pot': r.pot } as CSSProperties;
+  const day = new Date(); day.setHours(0, 0, 0, 0);
+  const today = live.done.filter((t) => t.at >= day.getTime()).length; // the tray holds today's, as Home's count does
+  const calm = crew.some((c) => c.ring || c.ask) ? ''
+    : crew.some((c) => c.busyElsewhere) ? 'Nothing of yours on the go right now.' : 'Nothing of yours on the go. The crew is free.';
+  const chiefBusy = live.chief.mood === 'ask' ? 'needs' : live.chief.mood === 'work' ? 'work' : '';
 
   return (
-    <section className={`office${phone ? ' o-phone' : ''}`} aria-label="The office">
-      <div ref={stage} className={`o-stage ${mode}`}>
-        {mode === '3d' && <div className={`o-ov${open ? ' focus' : ''}`}>
-          <div className="anc on" ref={bind('chief:feet')}>{!phone && chiefTag}</div>
-          <div className="anc on" ref={bind('chief:head')}>{phone && <div className="o-stack">{chiefTag}</div>}</div>
-          {crew.map((c) => { const on = `anc${open === c.id ? ' on' : ''}`; return <div key={c.id} className="o-who">
-            <div className={on} ref={bind(`${c.id}:head`)}>
-              <div className="o-stack">
-                {phone ? needs(c) || tag(c)
-                  : c.ask ? <div className="o-ask" title={c.ask.words}><div className="o-ask-tag"><i /><span>{c.ask.head}</span></div><a className="btn sm" href={`#/ask/${c.ask.id}`} aria-label={`Review what ${c.name} needs`}>Review</a></div>
-                  : c.ring === 'working' && c.step ? <div className="o-bubble"><Typing /><span className="o-bt" key={c.step}>{c.step}</span></div> : null}
-              </div>
+    <section className="office" aria-label="The office">
+      <div ref={box} className="o-room" style={vars}>
+        <div className="o-head">
+          {calm && <span className="o-calm">{calm}</span>}
+          <a className="o-tray" href="#/things" aria-label={`Your tray: ${today} done today`}>Your tray · {today}</a>
+        </div>
+        <div className="o-desks" style={{ ['--cols' as string]: plan.cols }}>
+          <div className="o-cell chief">
+            <div className="o-chair" />
+            <Sprite who="chief" mood={live.chief.mood} dot={3} night={night} beat={live.chief.mood} />
+            <div className="o-seat" />
+            <Bubble cls={chiefBusy} name="Chief" line={live.chief.line} />
+            <button className="o-hit" onClick={() => go('#/chief')} aria-label={`Chief: ${live.chief.line}`} />
+          </div>
+          {plan.desks.map((c) => (
+            <div key={c.id} className="o-cell">
+              <Sprite who={c.kind} mood={c.mood} dot={3} night={night} className="at-desk" beat={`${c.ring}|${c.mood}|${c.things.length}|${c.ask?.id ?? ''}`} />
+              <div className="o-deskf" />
+              <div className="o-mon"><Screen c={c} /></div>
+              {c.things.length > 0 && <div className="o-things" aria-hidden>{c.things.slice(-2).map((f, j) => {
+                const i = c.things.length - Math.min(2, c.things.length) + j, k = `${c.id}:${i}`;
+                return <span key={k} className={`o-thing ${f.kind === 'image' || f.kind === 'video' ? 'o-pin' : 'o-paper'}${fresh.has(k) ? ' drop' : ''}`}
+                  style={{ ['--c' as string]: art.PALS[c.kind].body }} title={f.name}>{fresh.has(k) && <span className="o-new">New</span>}</span>;
+              })}</div>}
+              <button className="o-hit" onClick={() => setOpen(c.id)} aria-label={said(c) + (c.things.length ? `, made ${c.things.map((f) => KIND_WORDS[f.kind]).join(', ')}` : '')} />
+              {A.waitsOnYou(c) && c.ask
+                ? <Bubble cls="needs" name={c.name} line={c.ask.head}><a href={`#/ask/${c.ask.id}`} aria-label={`Review what ${c.name} needs: ${c.ask.head}`}>Review</a></Bubble>
+                : <Bubble cls={tone(c).cls} name={c.name} line={c.step || c.status} typing={c.ring === 'working'} />}
             </div>
-            <div className={on} ref={bind(`${c.id}:desk`)}><div className="o-desk">{chips(c)}</div></div>
-            <div className={on} ref={bind(`${c.id}:feet`)}>{!phone && tag(c)}</div>
-          </div>; })}
+          ))}
+          {Array.from({ length: plan.spare }, (_, i) => (
+            <div key={`spare${i}`} className="o-cell" aria-hidden>
+              {i % 2 ? <><div className="o-deskf" /><div className="o-mon"><div className="o-scr" /></div></> : <><div className="o-win" /><div className="o-plant" /></>}
+            </div>
+          ))}
+        </div>
+        {(plan.lounge.length > 0 || plan.more > 0 || folds) && <div className="o-lounge" style={{ ['--cols' as string]: plan.loungeCols }}>
+          {plan.lounge.map((c) => (
+            <div key={c.id} className="o-cell">
+              <Sprite who={c.kind} mood={c.mood} dot={2} night={night} beat={`${c.ring}|${c.mood}|${c.busyElsewhere}`} />
+              <div className="o-sofa" />
+              <div className={`o-chip ${tone(c).cls}`}><i /><b>{c.name}</b></div>
+              <button className="o-hit" onClick={() => setOpen(c.id)} aria-label={said(c)} />
+            </div>
+          ))}
+          {plan.more > 0 && <div className="o-cell"><div className="o-sofa" /><button className="o-more" onClick={() => setAll(true)} aria-label={`Show ${plan.more} more of the crew`}>+{plan.more} more</button></div>}
+          {folds && <div className="o-cell"><div className="o-sofa" /><button className="o-more" onClick={() => setAll(false)}>Show fewer</button></div>}
+          {Array.from({ length: (plan.loungeCols - ((plan.lounge.length + (plan.more > 0 || folds ? 1 : 0)) % plan.loungeCols)) % plan.loungeCols }, (_, i) =>
+            <div key={`sofa${i}`} className="o-cell" aria-hidden><div className="o-sofa" /></div>)}
         </div>}
-        {mode === 'still' && <Still live={{ ...live, crew }} open={setOpen} />}
       </div>
-      {mode === '3d' && !mine && <p className="o-empty">{live.crew.some((c) => c.busyElsewhere) ? 'Nothing of yours on the go right now.' : 'Nothing of yours on the go. The crew is free.'}</p>}
       {open && crew.some((c) => c.id === open) && createPortal(<HelperSheet c={crew.find((c) => c.id === open)!} h={roles.get(open)} state={state}
         asks={asks.get(open) ?? []} onClose={() => setOpen(null)} />, document.body)}
     </section>
   );
 }
 
+/** The card over a seat: a name and one line, the typing dots while working, and a Review when it needs her. */
+function Bubble({ cls, name, line, typing, children }: { cls: string; name: string; line: string; typing?: boolean; children?: ReactNode }) {
+  return <div className={`o-bub ${cls}`} aria-hidden={!children}>
+    <b>{name}</b>
+    {children ?? <span className="o-st">{typing ? <Typing /> : <i />}<span>{line}</span></span>}
+  </div>;
+}
+
 const Typing = () => <span className="o-typing" aria-hidden><i /><i /><i /></span>;
 
-/** Without 3D, or with Reduce Motion on: the same cast, standing still in a row, each with its one line. */
-function Still({ live, open }: { live: A.OfficeView; open: (id: string) => void }) {
-  return (
-    <div className="o-still">
-      <button className="o-still-who" onClick={() => go('#/chief')}><Face who="chief" size={64} /><b>Chief</b><span>{live.chief.line}</span></button>
-      {live.crew.map((c) => (
-        <button key={c.id} className={`o-still-who ${tone(c).cls}`} onClick={() => open(c.id)} aria-label={`${c.name}: ${c.status}`}>
-          <Face who={{ kind: c.kind, name: c.name, mood: c.mood }} size={64} ring={c.ring} />
-          <b>{c.name}</b><span className="o-st"><i /><span>{c.status}</span></span>
-          {c.ask && <span className="o-still-ask">{c.ask.head}</span>}
-          {c.things.length > 0 && <span className="o-count">{c.things.length === 1 ? 'One thing on the desk' : `${c.things.length} things on the desk`}</span>}
-        </button>
-      ))}
-    </div>
-  );
+/** The monitor: dark when free, lines while working, pink with the question's mark when it needs her. */
+function Screen({ c }: { c: A.OfficeMember }) {
+  if (A.waitsOnYou(c)) return <div className="o-scr needs">{c.ask?.kind === 'spend' ? '$' : '!'}</div>;
+  if (c.ring === 'working') return <div className="o-scr"><i /><i /><i /></div>;
+  return <div className="o-scr" />;
 }
 
 /** One helper, up close: what they are on, the steps so far, anything waiting on you, and what they have made. */
