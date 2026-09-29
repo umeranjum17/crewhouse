@@ -75,9 +75,9 @@ function Hello({ state, refresh, night }: Ctx) {
   const [own, setOwn] = useState(false);
   const [words, setWords] = useState('');
   useEffect(() => { const t = setTimeout(() => setTipped(true), 2400); return () => clearTimeout(t); }, []);
-  const pick = (ask: string) => {
+  const pick = (ask: string, bot?: string) => {
     if (!address.trim()) { setOther(true); toast('First, what shall I call you?'); input.current?.focus(); return; }
-    void attempt(async () => { await api.onboard(address.trim(), ask); refresh(); go('#/chief'); });
+    void attempt(async () => { await api.onboard(address.trim(), ask, bot); refresh(); go('#/chief'); });
   };
   return (
     <div className="hello">
@@ -94,7 +94,7 @@ function Hello({ state, refresh, night }: Ctx) {
       </ul>
       <h2 className="plate">What can I take off your plate?</h2>
       <div className="ideas">
-        {A.firstIdeas(state).map((i) => <button key={i.label} className="idea" onClick={() => pick(i.label)}><span aria-hidden>{i.icon}</span><b>{i.label}</b><i aria-hidden>›</i></button>)}
+        {A.firstIdeas(state).map((i) => <button key={i.label} className="idea" onClick={() => pick(i.label, i.bot)}><span aria-hidden>{i.icon}</span><b>{i.label}</b><i aria-hidden>›</i></button>)}
       </div>
       {own ? <div className="own-ask">
         <input className="input" value={words} onChange={(e) => setWords(e.target.value)} placeholder="Ask for anything…" aria-label="Your first ask"

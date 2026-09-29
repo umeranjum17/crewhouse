@@ -980,18 +980,25 @@ export class Crew {
 
   // ---- people ----
   /** First meeting: the person tells Chief how to be addressed. Stored per person, used by every bot. */
-  onboard(address: string, member = OWNER, ask?: string): { task: number } | void {
+  onboard(address: string, member = OWNER, ask?: string, bot?: string): { task: number } | void {
     const a = clean(address, 40);
     if (!a) throw Object.assign(new Error('say how Chief should address you'), { status: 400 });
     if (ask?.trim()) {
-      // The app's first-run screen: Chief greeted her there by name, and she tapped something she wants done. Her
-      // thread starts with that request (the written greeting asked a question she has now answered), and it goes to work.
+      // A Hello goal tap starts in its helper's thread: hired silently when the member's account runs
+      // helpers, or with Chief when it names no template or the plan has none.
+      let to = CHIEF;
+      try {
+        const t = disk.loadTemplate(this.cfg, bot ?? '');
+        const hired = this.bots().find((b) => b.template === t.id)?.id;
+        const brains = hired ? disk.brains(this.cfg, hired) : (t.models ?? ['chatgpt']).map(disk.parseBrain);
+        if (brains.some((b) => !this.accounts.unready(member, b.provider) && !this.accounts.notIncluded(member, b.provider))) to = hired ?? this.recruit(t.id, undefined, 'person', member).id;
+      } catch { /* Chief */ }
       this.db.tx(() => {
         this.db.run("DELETE FROM messages WHERE bot = ? AND member = ? AND author = 'bot'", CHIEF, member);
         this.db.run('UPDATE people SET address = ?, onboarded = 1 WHERE id = ?', a, member);
         this.db.event('person.onboarded', null, { member, address: a });
       });
-      return this.addTask(CHIEF, ask.trim(), 'person', undefined, member);
+      return this.addTask(to, ask.trim(), 'person', undefined, member);
     }
     // The address is already stored in people; the Hello screen already greeted her, so the thread
     // starts empty and renders ChiefIdeas.

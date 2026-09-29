@@ -226,7 +226,7 @@ test('Home commits nothing: a row opens the review sheet, and a starter fills th
   assert.doesNotMatch(app, /api\.post\(i\.bot/, 'an idea chip fills the draft, it never sends');
 });
 
-test('Home keeps a standing "hand me a job" list, straight from crewd\'s ideas: money back first, and a job that needs an app says so', () => {
+test('Home keeps a standing "hand me a job" list, straight from crewd\'s ideas: a goal first, then money back, and a job that needs an app says so', () => {
   const withJobs = { ...state, ideas: [
     { bot: 'scout', promise: 'I\'ll search the government\'s unclaimed-money registers for our family\'s names and get the claims ready to file. I\'ll file it end to end — you just tap approve.', ask: 'Search for money owed to us that nobody has claimed', group: 'money', needs: [] },
     { bot: 'scout', promise: 'I\'ll claim the money back the day the price drops. I\'ll do it end to end — you just tap approve.', ask: 'Watch something I bought', group: 'money', needs: ['Gmail'] },
@@ -307,6 +307,35 @@ test('a freshly recruited helper opens on its own starters, and a tap fills the 
   assert.match(phone, /i\.bot === id/, 'the phone filters to the helper\'s own rows too');
   assert.match(phone, /keepDraft\(id, i\.ask\)/, 'a phone tap fills the box');
   assert.doesNotMatch(phone.slice(phone.indexOf('s.chips'), phone.indexOf('s.chips') + 600), /api\.post/, 'and never sends');
+});
+
+test('goal rows lead Home and Hello: one per template, goal sorts first, plain words throughout', () => {
+  // Every helper template carries exactly one goal row, needing nothing up front.
+  const goals = ['scout', 'scribe', 'tracer', 'reel'].map((t) => {
+    const j = JSON.parse(readFileSync(join(import.meta.dirname, '..', 'templates', t, 'bot.json'), 'utf8'));
+    const g = j.ideas.filter((i: any) => i.group === 'goal');
+    assert.equal(g.length, 1, `${t} carries one goal row`);
+    return { bot: t, ...g[0] };
+  });
+  const BANNED = /\b(links?|host)\b/i; // the screen-word bans: a goal never names machinery
+  for (const g of goals) {
+    assert.deepEqual(g.needs, [], `${g.bot}'s goal runs now`);
+    assert.doesNotMatch(`${g.promise} ${g.ask}`, BANNED, `${g.bot}'s goal stays plain words`);
+  }
+  // On Home a goal sorts before money back, which still leads the everyday jobs.
+  const rows = A.jobs({ ...state, ideas: [
+    { bot: 'scout', promise: 'money back', ask: 'money back', group: 'money', needs: [] },
+    ...goals.map((g) => ({ bot: g.bot, promise: g.promise, ask: g.ask, group: 'goal', needs: [] })),
+    { bot: 'scribe', promise: 'everyday', ask: 'everyday', needs: [] },
+  ] });
+  assert.ok(rows.slice(0, 4).every((r) => r.goal), 'goal rows lead');
+  assert.equal(rows[4].label, 'money back', 'money back still leads the everyday jobs');
+  // Hello carries one goal row, and it goes straight to Scout.
+  const hello = A.firstIdeas({ house: { google: true } });
+  assert.equal(hello.length, 3);
+  assert.equal(hello.filter((i) => i.bot === 'scout').length, 1, 'one goal row on Hello');
+  assert.equal(hello.find((i) => i.bot === 'scout')!.label, 'Help me earn a little on the side');
+  assert.doesNotMatch(shown({ hello, rows }), BANNED, 'goal copy stays plain words');
 });
 
 test('chat navigation acts like chat: no tab scroller, Details behind the header, Back by history', () => {

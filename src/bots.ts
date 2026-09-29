@@ -18,8 +18,8 @@ export interface Template {
   skills?: string[];
   /** Promises the bot makes on Home; each is shown only while every tool it needs is granted and ready. `needs` may name
    *  a tool from the kit or an app the person connects (src/connections.ts): a job waiting on an app is shown saying what
-   *  it needs first. `group` is the Home list's two groups — money back first, then the everyday jobs. */
-  ideas?: { needs: string[]; promise: string; ask: string; group?: 'money' | 'life' }[];
+   *  it needs first. `group` is the Home list's order — a goal first, then money back, then the everyday jobs. */
+  ideas?: { needs: string[]; promise: string; ask: string; group?: 'goal' | 'money' | 'life' }[];
   /** A base for helpers Chief makes up (templates/helper): never offered on its own. */
   hidden?: boolean;
   /** The only hosts its shell and web tools may reach (src/net.ts); none listed: the open network. */

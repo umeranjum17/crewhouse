@@ -679,8 +679,9 @@ test('home facts: ideas only from ready tools, stuck after quiet, memory switch'
     assert.ok(!ideas.some((i: any) => /PDF/.test(i.promise)), 'no idea for a tool that is missing here');
   } finally { process.env.PATH = path; }
   disk.setGrants(cfg, 'scout', ['files']);
-  // What is left over is only a job waiting on an app the person has not connected: nothing the helper has lost the tool for.
-  assert.equal(crew.snapshot().ideas.filter((i: any) => !i.needs.length).length, 0, 'no idea for a tool that is not granted');
+  // What is left over is only a job waiting on an app the person has not connected, and the tool-free
+  // goal row (its journey is questions and crew tools): nothing the helper has lost the tool for.
+  assert.equal(crew.snapshot().ideas.filter((i: any) => !i.needs.length && i.group !== 'goal').length, 0, 'no idea for a tool that is not granted');
 
   disk.remember(cfg, { member: 1, bot: 'scout' }, 'Prefers short answers');
   const t = crew.assign('scout', 'ask permission to look', 'chief').task;
