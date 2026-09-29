@@ -198,17 +198,21 @@ function PhoneCard({ offer, reload, members }: { offer: NonNullable<ReturnType<t
   const active = useRef(Date.now());
   const busy = useRef(false);
   useEffect(() => { if (offer.token !== current.token) setCurrent(offer); }, [offer.token]);
+  const picked = useRef<number | undefined>(undefined); // a person tapped while a new code was on its way
   const renew = async (member?: number) => {
-    if (busy.current) return;
+    if (busy.current) { if (member !== undefined) picked.current = member; return; }
     busy.current = true;
     try { setCurrent(await api.refreshPhone(current.message, member)); reload(); } catch { active.current = 0; say('Could not show a new code'); }
     finally { busy.current = false; }
+    const next = picked.current;
+    picked.current = undefined;
+    if (next !== undefined) void renew(next);
   };
   useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer); }, []);
   useEffect(() => { if (now >= current.expires && now - active.current < 10 * 60_000 && !offer.waiting && !offer.joined) void renew(); }, [now, current.expires, offer.waiting, offer.joined]);
   const left = Math.max(0, Math.ceil((current.expires - now) / 1000));
   const qr = current.qr.startsWith('byokit-link:') ? QRCode.create(current.qr, { errorCorrectionLevel: 'M' }).modules : null;
-  const whose = A.phoneFor(members, current.member ?? A.OWNER);
+  const whose = A.phoneFor(members, current.member ?? A.OWNER, 'control', true);
   return <Card style={{ gap: 10, marginLeft: 36 }} onTouchStart={() => { active.current = Date.now(); }}>
     <T style={s.b}>Add a phone</T>
     {!offer.joined && !!whose.people.length && <>{!offer.waiting && <><T tone="ink2">Whose phone is it?</T>

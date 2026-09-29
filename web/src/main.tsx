@@ -323,11 +323,15 @@ function PhoneCard({ offer, reload, members }: { offer: Json; reload: () => void
   const busy = useRef(false);
   useEffect(() => { if (offer.token !== current.token) setCurrent(offer); }, [offer.token]);
   useEffect(() => { void QRCode.toString(current.qr, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' }).then(setSvg); }, [current.qr]);
+  const picked = useRef<number | undefined>(undefined); // a person tapped while a new code was on its way
   const renew = async (member?: number) => {
-    if (busy.current) return;
+    if (busy.current) { if (member !== undefined) picked.current = member; return; }
     busy.current = true;
     try { setCurrent(await api.refreshPhone(current.message, member)); reload(); } catch { active.current = 0; toast('Could not show a new code'); }
     finally { busy.current = false; }
+    const next = picked.current;
+    picked.current = undefined;
+    if (next !== undefined) void renew(next);
   };
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
   useEffect(() => { if (now >= current.expires && now - active.current < 10 * 60_000 && !offer.waiting && !offer.joined) void renew(); }, [now, current.expires, offer.waiting, offer.joined]);
@@ -825,7 +829,7 @@ function Routines(ctx: Ctx) {
 
 // ---------- settings ----------
 /** Settings, Phones: pair the phone app by its camera, see each phone, take one away. Only this computer can. */
-function Phones({ tick, members }: { tick: number; members: Json[] }) {
+function Phones({ tick, members, owner }: { tick: number; members: Json[]; owner: boolean }) {
   const [phones, setPhones] = useState<Json[] | null | undefined>(undefined);
   const [whose, setWhose] = useState(A.OWNER);
   const [link, setLink] = useState<Json>(null);
@@ -861,7 +865,7 @@ function Phones({ tick, members }: { tick: number; members: Json[] }) {
         ))}
         {!!A.pushWords(link) && <p className="mute small">{A.pushWords(link)}</p>}
         {!phones.length && <p className="mute">No phones yet. Install the Crewhouse app, then scan the code it asks for.</p>}
-        {!offer && !!choice.people.length && <><div className="small">Whose phone is it?</div>
+        {!offer && owner && !!choice.people.length && <><div className="small">Whose phone is it?</div>
           <div className="chips">{choice.people.map((m) => <button key={m.id} className={`chip ${m.id === whose ? 'on' : ''}`} onClick={() => setWhose(m.id)}>{m.name}</button>)}</div></>}
         {!offer && <div className="btns"><button className="btn go" onClick={() => show('control')}>Add a phone</button><button className="btn" onClick={() => show('view')}>Add one that only watches</button></div>}
       </div>
@@ -970,7 +974,7 @@ function Settings({ state, me, refresh, tick, accounts, look, setLook, switchTo 
         </form>
       )}
 
-      <Phones tick={tick} members={state.members} />
+      <Phones tick={tick} members={state.members} owner={owner} />
 
       <div className="label">Look</div>
       <div className="seg">{[['auto', 'Evenings dark'], ['day', 'Day'], ['night', 'Night']].map(([k, l]) => <button key={k} className={look === k ? 'on' : ''} onClick={() => setLook(k)}>{l}</button>)}</div>

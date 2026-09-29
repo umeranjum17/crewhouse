@@ -174,6 +174,12 @@ export class Link {
     if (!a) throw Object.assign(new Error('that phone stopped waiting'), { status: 404 });
     a.answer(yes);
   }
+  /** Chief's card changed person: its old code (and any phone waiting on it) must not pair as the old person. The kit
+   *  withdraws codes only all at once, so a code showing in Settings goes too. */
+  withdraw(offer: string) {
+    this.host.stopPairing();
+    for (const a of this.asking.values()) if (a.offer === offer) a.answer(false);
+  }
   approve(words: string) {
     const a = [...this.asking.values()].find((a) => a.words === words.trim());
     if (!a) throw Object.assign(new Error('those words do not match a waiting phone'), { status: 404 });

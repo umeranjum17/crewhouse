@@ -13,7 +13,7 @@ test('Chief offers every phone phrasing to the owner, never another member', asy
   const { crew, db, cfg } = setup();
   const offer = { qr: 'byokit-link:1:one-use-ticket', typed: '23456-789AB', expires: Date.now() + 120_000, urls: ['ws://127.0.0.1/link'] };
   let minted = 0;
-  crew.phoneLink = { offer: async () => { minted++; return { ...offer, expires: Date.now() + 120_000 }; }, status: () => ({ asking: [] }) as any };
+  crew.phoneLink = { offer: async () => { minted++; return { ...offer, expires: Date.now() + 120_000 }; }, status: () => ({ asking: [] }) as any, withdraw: () => {} };
   assert.match(readFileSync(join(cfg.repoDir, 'templates/chief/AGENTS.md'), 'utf8'), /## About Crewhouse/);
   assert.match(systemPrompt(cfg, 'chief', true), /Settings > Phones > Add a phone/);
   crew.onboard('Owner');

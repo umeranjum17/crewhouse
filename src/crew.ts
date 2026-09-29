@@ -221,7 +221,7 @@ export class Crew {
   readonly desktops: Desktops;
   readonly accounts: Accounts;
   readonly connections: Connections;
-  phoneLink?: Pick<Link, 'offer' | 'status'>;
+  phoneLink?: Pick<Link, 'offer' | 'status' | 'withdraw'>;
   private freshAt = 0;
   private lastTick = 0;
   /** Keeps idle sleep away while a helper is working, and only then. Never the lid. Tests replace it. */
@@ -1085,6 +1085,7 @@ export class Crew {
     if (!this.phoneLink) throw fail('Phone pairing is not ready yet', 503);
     const token = randomBytes(16).toString('hex');
     const person = this.member(Number(whose ?? old.member ?? OWNER)).id as number;
+    if (person !== (old.member ?? OWNER)) this.phoneLink.withdraw(old.token);
     const { qr, typed, expires } = await this.phoneLink.offer('control', person, token);
     const offer = { qr, typed, expires, message, token, member: person };
     this.db.run("UPDATE settings SET value = ? WHERE key = 'phone.offer.1'", JSON.stringify(offer));

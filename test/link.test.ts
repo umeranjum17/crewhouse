@@ -403,6 +403,7 @@ test('the owner picks whose phone it is: the grant acts as that member alone, an
   assert.equal((await http('POST', '/api/phones/refresh', { message: card.message, member: 999 })).status, 404);
   const forZara = (await http('POST', '/api/phones/refresh', { message: card.message, member: zara })).body;
   assert.equal(forZara.member, zara);
+  await assert.rejects(pairWithOffer(card.qr, { name: 'Old code', onWords: () => {} }), /code|used|match|run out/i, "the owner's code on the card died when it became Zara's");
   assert.equal((await o.req('POST', '/api/phones/refresh', { message: card.message })).body.member, zara, "a renewal keeps the card's person");
   const shown = (await http('GET', '/api/bots/chief')).body.phoneOffer;
   const zaraPairing = pairWithOffer(shown.qr, { name: 'Zara phone', onWords: () => {} });
