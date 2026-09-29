@@ -6,8 +6,7 @@ import { basename, dirname, relative, resolve } from 'node:path';
 export type Effect =
   | { kind: 'safe' }
   | { kind: 'refuse'; why: string }
-  /** `key` is what "For this task" and "Always" remember; spending has none, so it asks every time. */
-  /** `cost` is the most a spend can cost, in dollars, when the tool says so up front. */
+  /** `key` is what "For this task" and "Always" remember (spending has none, so it asks every time); `cost` caps a spend in dollars when stated up front. */
   | { kind: 'files' | 'send' | 'spend' | 'delete'; words: string; key?: string; covers?: string; cost?: number;
       preview?: { head: string; body: string }; press?: boolean; fill?: boolean };
 

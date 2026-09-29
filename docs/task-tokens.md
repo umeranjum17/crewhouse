@@ -37,3 +37,9 @@ read-only mode against live jobs:
     node scripts/measure-task-tokens.mjs --state <retained state dir>
 
 which aggregates `tasks.tokens` by bot without starting anything.
+
+CH-6 ceiling (one house-wide number, `taskTokenCap` in `src/crew.ts`): checked
+where usage is summed, a task that reaches it stops with plain words. Default
+500,000 (`CREWHOUSE_TASK_TOKENS` overrides); stub jobs cost ~200, so the
+default only stops runaways. Re-tune from a retained-home `--state` run if
+live jobs approach it. Test: `test/task-ceiling.test.ts`.
