@@ -27,7 +27,7 @@ test('a run\'s tool call crosses the gate as the crew\'s own run; an unknown run
     try {
       await denied.started;
       await denied.runtime.run({ key: 'agent:m2:crewhouse:scout:4', member: 2, bot: 'scout', task: 4, account: 'chatgpt',
-        cwd: '', system: '', message: '[tool bash {"command":"ls"}]', builtins: [] }, () => {});
+        cwd: '', system: '', message: '[tool shell {"command":"ls"}]', builtins: [] }, () => {});
       assert.deepEqual(denied.seen.gated.map(([run, tool]) => [run.member, run.bot, tool]), [[2, 'scout', 'bash']]);
       assert.equal(denied.seen.called.length, 0);
     } finally { await denied.done(); }

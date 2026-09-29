@@ -18,7 +18,7 @@ export function faked(host: { gate?: (run: RunRef, tool: string) => any; call?: 
     call: async (run, tool, input) => { seen.called.push([run, tool, input]); return host.call?.(run, tool, input) ?? 'done'; },
   });
   const ask = (frame: object): Promise<any> => new Promise((resolve, reject) => {
-    const socket = connect(join(state, 'openclaw', 'crewd.sock'));
+    const socket = connect(join(state, 'openclaw', 'bridge.sock'));
     let text = '';
     socket.on('error', reject);
     socket.on('data', (chunk) => { text += chunk; if (text.includes('\n')) { resolve(JSON.parse(text)); socket.end(); } });

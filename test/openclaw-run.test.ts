@@ -23,7 +23,7 @@ test('real Gateway tool call crosses fail-closed Crewhouse gate', { timeout: 420
   try {
     await runtime.start({
       tools: () => [],
-      gate: async (_run, tool) => { gated.push(tool); return ['crew_report', 'crew_web_fetch'].includes(tool) ? { allow: true } : { allow: false, reason: 'Unknown tool' }; },
+      gate: async (_run, tool) => { gated.push(tool); return ['crew_report', 'crew_web_fetch', 'memory_search'].includes(tool) ? { allow: true } : { allow: false, reason: 'Unknown tool' }; },
       call: async (_run, tool, input) => { called++; return tool === 'crew_report' ? `Progress: ${input.text}` : 'Safe page'; },
     });
     await runtime.configureModelProvider(stub.url, 'stub-m1');
@@ -41,9 +41,10 @@ test('real Gateway tool call crosses fail-closed Crewhouse gate', { timeout: 420
     assert.ok(tools.includes('crew_report:start'), JSON.stringify(tools));
     assert.ok(stub.calls.length > 0);
     // Keyword memory recall: free, never a paid embedding request.
-    const keyword = await kit.call('tools.invoke', { agentId: 'm1', sessionKey: 'agent:m1:crewhouse:chief:memory', name: 'memory_search', args: { query: 'blue lantern' } } as any) as any;
-    assert.equal(keyword.ok, true, JSON.stringify(keyword).slice(0, 500));
-    assert.ok(JSON.stringify(keyword.output).includes('blue lantern'), JSON.stringify(keyword).slice(0, 600));
+    const outsider = await kit.call('tools.invoke', { agentId: 'm1', sessionKey: 'agent:m1:crewhouse:chief:memory', name: 'memory_search', args: { query: 'blue lantern' } } as any) as any;
+    assert.equal(outsider.ok, false, 'a session Crewhouse never registered cannot run even an engine builtin');
+    const keyword = await runtime.run(spec('agent:m1:crewhouse:chief:4', 1, 'chief', 4, '[tool memory_search {"query":"blue lantern"}]'), () => {});
+    assert.ok(keyword.ok && keyword.text.includes('blue lantern'), JSON.stringify(keyword).slice(0, 600));
     assert.ok(stub.calls.every((call) => !/embeddings/.test(call.path)), 'keyword-only memory attempted a paid embedding request');
     const read = await runtime.run(spec('agent:m1:crewhouse:scout:3', 1, 'scout', 3, '[tool crew_web_fetch {"url":"https://example.test/"}]'), () => {});
     assert.ok(read.ok, JSON.stringify(read));
@@ -69,12 +70,11 @@ test('real Gateway tool call crosses fail-closed Crewhouse gate', { timeout: 420
 
     await kit.patchConfig({ memory: { search: { provider: 'ollama', model: 'local-test', remote: { baseUrl: stub.url.replace(/\/v1$/, '') } } } });
     await runtime.stop();
-    await runtime.start({ tools: () => [], gate: async () => ({ allow: false, reason: 'no runs here' }), call: async () => 'no calls here' });
+    await runtime.start({ tools: () => [], gate: async (_run, tool) => tool === 'memory_search' ? { allow: true } : { allow: false, reason: 'no runs here' }, call: async () => 'no calls here' });
     const { workspace: ws3 } = await kit.ensureMember('m3');
     writeFileSync(join(ws3, 'MEMORY.md'), 'A green umbrella is by the door.');
-    const local = await kit.call('tools.invoke', { agentId: 'm3', sessionKey: 'agent:m3:crewhouse:scout:local', name: 'memory_search', args: { query: 'green umbrella' } } as any) as any;
-    assert.equal(local.ok, true, JSON.stringify(local).slice(0, 500));
-    assert.ok(JSON.stringify(local.output).includes('green umbrella'), JSON.stringify(local).slice(0, 600));
+    const local = await runtime.run(spec('agent:m3:crewhouse:scout:10', 3, 'scout', 10, '[tool memory_search {"query":"green umbrella"}]'), () => {});
+    assert.ok(local.ok && local.text.includes('green umbrella'), JSON.stringify(local).slice(0, 600));
     assert.ok(stub.calls.some((call) => call.path === '/api/embed'), `configured local embedding route was not used: ${JSON.stringify(local).slice(0, 500)}; paths ${stub.calls.map((c) => c.path).join(',')}`);
     assert.ok(stub.calls.every((call) => !/\/v1\/embeddings/.test(call.path)), 'API-billed embeddings were requested');
 

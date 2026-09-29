@@ -71,7 +71,7 @@ test('pinned engine uses isolated home, loopback token and no Control UI', { tim
       const bot = join(root, 'bot');
       mkdirSync(bot);
       const attack = await runSandboxed(bot, [], {},
-        `test ! -e ${join(engine, 'token')} && test ! -e ${join(engine, 'crewd.sock')}`);
+        `test ! -e ${join(engine, 'token')} && test ! -e ${join(engine, 'bridge.sock')}`);
       assert.equal(attack.code, 0, 'bot shell can access the gateway credential or gate socket');
     }
     const snapshot = await kit.call('config.get', {}) as { path: string };

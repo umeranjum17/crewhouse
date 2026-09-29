@@ -24,12 +24,15 @@ const CODE_CHOICE: Record<string, string> = {
 };
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const m = (member: Member) => `m${member}`;
+/** The engine-side name of a Crewhouse tool and back: only the shell differs. */
+const crewName = (tool: string) => tool === 'shell' ? 'bash' : tool;
 
-// The model-visible tools. Names are Crewhouse's: `bash` is crewd's sandboxed shell, `browser` the bot's own browser,
+// The model-visible tools. Names are Crewhouse's: `shell` is crewd's sandboxed shell (Crewhouse's `bash`; the engine
+// would rewrite a tool called bash to its own exec before the gate saw it), `browser` the bot's own browser,
 // `calendar`/`mail` the two read-mostly app AXIs, `crew_app` a remote app's tools, `crew_*` the crew's own.
 const args = { type: 'object', properties: { args: { type: 'array', items: { type: 'string' } } }, required: ['args'], additionalProperties: false };
 const SCHEMAS: Record<string, object> = {
-  bash: { type: 'object', properties: { command: { type: 'string' } }, required: ['command'], additionalProperties: false },
+  shell: { type: 'object', properties: { command: { type: 'string' } }, required: ['command'], additionalProperties: false },
   browser: args, calendar: args, mail: args,
   crew_app: { type: 'object', properties: { tool: { type: 'string' }, input: { type: 'object', additionalProperties: true } }, required: ['tool'], additionalProperties: false },
   crew_remember: { type: 'object', properties: {
@@ -45,7 +48,7 @@ const SCHEMAS: Record<string, object> = {
   crew_report: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'], additionalProperties: false },
 };
 const ABOUT: Record<string, string> = {
-  bash: 'Run a shell command in your own space (a sandbox: your folder is the only writable part of the disk). Long output is cut to the last lines.',
+  shell: 'Run a shell command in your own space (a sandbox: your folder is the only writable part of the disk). Long output is cut to the last lines.',
   browser: 'Your own browser (playwright-axi): goto <url>, snapshot, find <text>, click <ref>, fill <ref> <text>, press <key>, go-back.',
   calendar: "The person's own Google Calendar: see the day or week, find free time, add, move or cancel events, as `args`.",
   mail: "The person's own Gmail, read-only: what is new, search it, read a conversation, as `args`. It cannot send or change mail.",
@@ -53,7 +56,7 @@ const ABOUT: Record<string, string> = {
   crew_remember: 'Save a lasting preference: pass {text: "one short line"}; optionally replaces and everyone. Do not save how to address the person.',
   crew_document: 'Write and deliver an editable document: pass {name: "title", blocks: [{heading: "Title"}, {text: "Paragraph"}, {bullets: ["Item"]}]}. Crewhouse writes the file; do not make it yourself.',
 };
-export const TOOLS: ToolSpec[] = ['bash', 'browser', 'calendar', 'mail', 'crew_app', 'crew_web_fetch', 'crew_web_search', 'crew_read', 'crew_write',
+export const TOOLS: ToolSpec[] = ['shell', 'browser', 'calendar', 'mail', 'crew_app', 'crew_web_fetch', 'crew_web_search', 'crew_read', 'crew_write',
   'crew_edit', 'crew_ls', 'crew_grep', 'crew_find', 'crew_connect', 'crew_outcome', 'crew_report', 'crew_deliver', 'crew_workbook', 'crew_document',
   'crew_copy', 'crew_remember', 'crew_draft', 'crew_verify', 'crew_learn', 'crew_routine', 'crew_pass', 'crew_add_phone', 'crew_roster',
   'crew_recruit', 'crew_assign', 'crew_routines', 'crew_status', 'crew_suggest', 'crew_create', 'crew_job', 'crew_call_me',
@@ -95,13 +98,13 @@ export class OpenClawRuntime implements AgentRuntime {
           const run = this.runs.get(ref.sessionKey);
           if (!run) return { allow: true };
           if (!this.host) return { allow: false, reason: 'Crewhouse could not check this call.' };
-          const decision = await this.host.gate(run, tool, input);
+          const decision = await this.host.gate(run, crewName(tool), input);
           return decision.allow ? decision : { allow: false, reason: decision.reason };
         },
         call: async (ref, tool, input, signal) => {
           const run = this.runs.get(ref.sessionKey);
           if (!run || !this.host) throw new Error('Unknown run');
-          return this.host.call(run, tool, input, signal);
+          return this.host.call(run, crewName(tool), input, signal);
         },
       },
       ...o,
@@ -174,7 +177,8 @@ export class OpenClawRuntime implements AgentRuntime {
     if (register) this.runs.set(spec.key, spec);
     try {
       return await this.kit.run({ sessionKey: spec.key, member: m(spec.member), message: spec.message, system: spec.system,
-        ...(spec.images?.length ? { images: spec.images } : {}), ...(spec.thinking ? { thinking: spec.thinking } : {}), register }, on);
+        ...(spec.images?.length ? { images: spec.images } : {}), ...(spec.thinking ? { thinking: spec.thinking } : {}), register },
+        (e) => on(e.type === 'tool' ? { ...e, name: crewName(e.name) } : e));
     } catch (error) { return { ok: false, kind: 'other', message: String(error) }; }
     finally { if (register) this.runs.delete(spec.key); }
   }
