@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Json } from '../web/src/api.ts';
+import type { Bitmap, Kind } from '../web/src/art.ts';
 import { PROVIDERS } from '../src/accounts.ts';
 import * as A from '../web/src/adapter.ts';
 import { readTyped } from '../mobile/src/typed.ts';
@@ -390,11 +391,11 @@ test('the phone office sprite set matches art.ts kinds × moods', async () => {
   // mobile/src/marks.ts. The phone office draws those PNGs instead of one View per dot. Chief ships a
   // night set; the pals' palette is the same day and night, so they render once.
   const art = await import('../web/src/art.ts');
-  const files = new Map<string, art.Bitmap>();
+  const files = new Map<string, Bitmap>();
   for (const m of art.MOODS) {
     files.set(`chief-${m}.png`, art.chief(m));
     files.set(`chief-${m}-night.png`, art.chief(m));
-    for (const k of Object.keys(art.PALS)) files.set(`${k}-${m}.png`, art.pal(k as art.Kind, m));
+    for (const k of Object.keys(art.PALS)) files.set(`${k}-${m}.png`, art.pal(k as Kind, m));
   }
   const dir = join(import.meta.dirname, '..', 'mobile', 'assets', 'pals');
   assert.deepEqual(new Set(readdirSync(dir).filter((f) => f.endsWith('.png'))), new Set(files.keys()),
