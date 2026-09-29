@@ -459,7 +459,7 @@ test('the phone office: a still room drawn once, a crew that moves only when new
   assert.match(office, /motion\.useAwake\(\)/);
   const motion = readFileSync(join(import.meta.dirname, '..', 'mobile', 'src', 'motion.ts'), 'utf8');
   assert.doesNotMatch(motion.slice(motion.indexOf('// ---------- the office')), /useNativeDriver: false/);
-  assert.match(motion, /if \(still\) return;/, 'no office move starts under Reduce Motion or in the background');
+  assert.match(motion, /if \(still \|\| beat == null\) \{ rest\(\); return; \}/, 'no office move starts under Reduce Motion or in the background');
   const home = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
   const top = home.slice(home.indexOf('function Home('), home.indexOf('function ChatList('));
   assert.ok(top.indexOf('<HomeHero') < top.indexOf('<Office') && top.indexOf('<Office') < top.indexOf('Needs you'), 'the office sits at the top of Home');

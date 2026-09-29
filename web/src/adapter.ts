@@ -936,8 +936,9 @@ export function office(state: Json, opts: OfficeOpts = {}): OfficeView {
         status: BUSY_ELSEWHERE, step: '', steps: [], things: [], ask: undefined, busyElsewhere: true };
     }
     const now = task ? steps(events, task.id, true) : [];
-    const made = task ? events.filter((e) => e.kind === 'file.delivered' && !e.data?.photo && e.data?.task === task.id)
-      .map((e) => fileView(h.id, String(e.data?.path ?? ''))) : [];
+    // A path delivered again (a first look, then the finished one) is one thing, where it last landed.
+    const paths = task ? events.filter((e) => e.kind === 'file.delivered' && !e.data?.photo && e.data?.task === task.id).map((e) => String(e.data?.path ?? '')) : [];
+    const made = paths.filter((p, i) => paths.lastIndexOf(p) === i).map((p) => fileView(h.id, p));
     const w = lines.get(h.id);
     return { id: h.id, name: h.name, kind: h.kind, mood: h.mood, ring: h.ring, status: h.status,
       step: (b.step && step(b.step)) || (w && !w.waiting ? 'Getting started…' : ''), steps: now, things: made,
@@ -980,7 +981,8 @@ export function officeEvent(view: OfficeView, e: Json): OfficeView {
       return touch(String(e.bot), (c) => {
         if (c.busyElsewhere) return c;
         const withStep = say(c, step(e) ?? c.step);
-        return d.photo ? withStep : { ...withStep, things: [...withStep.things, fileView(c.id, String(d.path ?? ''))] };
+        const f = fileView(c.id, String(d.path ?? ''));
+        return d.photo ? withStep : { ...withStep, things: [...withStep.things.filter((x) => x.url !== f.url), f] };
       });
     }
     case 'task.created':

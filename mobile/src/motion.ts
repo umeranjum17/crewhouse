@@ -59,12 +59,12 @@ export function useAwake() {
 }
 
 /** Runs `make` once each time `beat` changes after the first render, while awake and not reduced. */
-function useOnBeat(beat: unknown, still: boolean, make: () => Animated.CompositeAnimation) {
+function useOnBeat(beat: unknown, still: boolean, rest: () => void, make: () => Animated.CompositeAnimation) {
   const was = useRef(beat);
   useEffect(() => {
     if (Object.is(was.current, beat)) return;
     was.current = beat;
-    if (still) return;
+    if (still || beat == null) { rest(); return; }
     const a = make();
     a.start();
     return () => a.stop();
@@ -74,17 +74,18 @@ function useOnBeat(beat: unknown, still: boolean, make: () => Animated.Composite
 /** A character hops when news lands for it (`beat` changes), `times` over: twice for a finished job. */
 export function Hop({ beat, times = 1, reduce, awake, style, children }: { beat: unknown; times?: number; reduce: boolean; awake: boolean; style?: StyleProp<ViewStyle>; children: ReactNode }) {
   const [y] = useState(() => new Animated.Value(0));
-  useOnBeat(beat, reduce || !awake, () => Animated.loop(Animated.sequence([
+  useOnBeat(beat, reduce || !awake, () => y.setValue(0), () => Animated.loop(Animated.sequence([
     Animated.timing(y, { toValue: -9, duration: 150, easing: Easing.out(Easing.quad), useNativeDriver: true }),
     Animated.timing(y, { toValue: 0, duration: 260, easing: Easing.bounce, useNativeDriver: true }),
   ]), { iterations: times }));
   return createElement(Animated.View, { style: [style, { transform: [{ translateY: y }] }] }, children);
 }
 
-/** A ring on the floor that swells out three times when a question arrives (`beat`), then rests. */
+/** A ring on the floor that swells out three times when a question arrives (`beat` turns to it), then rests; a null
+ *  beat is no question. */
 export function Pulse({ beat, reduce, awake, style }: { beat: unknown; reduce: boolean; awake: boolean; style: StyleProp<ViewStyle> }) {
   const [v] = useState(() => new Animated.Value(1));
-  useOnBeat(beat, reduce || !awake, () => {
+  useOnBeat(beat, reduce || !awake, () => v.setValue(1), () => {
     v.setValue(0);
     return Animated.loop(Animated.timing(v, { toValue: 1, duration: 1100, easing: Easing.out(Easing.cubic), useNativeDriver: true }), { iterations: 3 });
   });

@@ -1008,11 +1008,13 @@ function Home(ctx: Ctx) {
 }
 
 /** A helper's desk, opened from the office: what it is on, its steps with the latest marked now, what it has made for
- *  this job so far, and its question with a Review that opens the same sheet as Needs you. A helper busy with someone
- *  else's job shows only that. Never its live screen: that opens from its chat. */
-function DeskSheet({ desk, state, offline, go, open, onClose }: Ctx & { desk: { c: A.OfficeMember; state: Json }; onClose: () => void }) {
+ *  this job so far, and its question with a Review that opens the same sheet as Needs you — over the desk, as a file
+ *  does (iOS won't present a new sheet while this one is still sliding away). A helper busy with someone else's job
+ *  shows only that. Never its live screen: that opens from its chat. */
+function DeskSheet({ desk, state, offline, canAct, go, refresh, onClose }: Ctx & { desk: { c: A.OfficeMember; state: Json }; onClose: () => void }) {
   const t = useLook();
   const reduce = motion.useReduceMotion();
+  const [asking, setAsking] = useState(false);
   const id = desk.c.id;
   // The room's own row (live events included) until the next refresh, then the snapshot again.
   const c = desk.state === state ? desk.c : A.office(state, { busyElsewhere: true }).crew.find((x) => x.id === id);
@@ -1040,12 +1042,14 @@ function DeskSheet({ desk, state, offline, go, open, onClose }: Ctx & { desk: { 
           {!offline && c.ask && <Card ask>
             <T style={s.b}>{c.ask.head}</T>
             <T tone="ink2" lines={3}>{c.ask.words}</T>
-            <View style={s.chips}><Btn go label="Review" onPress={() => { onClose(); open(c.ask!); }} /></View>
+            <View style={s.chips}><Btn go label="Review" onPress={() => setAsking(true)} /></View>
           </Card>}
           {!offline && !c.busyElsewhere && c.steps.length > 0 && <View><Label>Steps</Label><Steps steps={c.steps} /></View>}
           {!offline && !c.busyElsewhere && c.things.length > 0 && <View><Label>On the desk</Label><Card>{c.things.map((f) => <FileRow key={f.url} f={f} />)}</Card></View>}
           <Btn big label={`Open ${c.name}'s chat`} onPress={() => to({ view: 'helper', id })} />
         </ScrollView>
+        {asking && c.ask && <AskSheet c={c.ask} who={h} chiefSays={state.asks.find((a: Json) => a.id === c.ask!.id)?.detail?.chief} canAct={canAct}
+          onClose={() => { setAsking(false); refresh(); }} />}
       </Pressable>
     </Pressable>
   </Modal>;

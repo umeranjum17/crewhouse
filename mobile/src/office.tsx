@@ -34,7 +34,7 @@ export function Office({ state, night, offline, width, onChief, onDesk, onTray }
 }) {
   const view = useOffice(state);
   // What this phone kept says how things were: while out of reach nobody claims to be busy (App.tsx OUT).
-  const crew = offline ? view.crew.map((c) => ({ ...c, mood: 'rest' as Mood, ring: '' as const, busyElsewhere: false, ask: undefined })) : view.crew;
+  const crew = offline ? view.crew.map((c) => ({ ...c, mood: 'rest' as Mood, ring: '' as const, busyElsewhere: false, ask: undefined, status: OUT, step: '', steps: [] })) : view.crew;
   const chief = offline ? { mood: 'rest' as Mood, line: OUT } : view.chief;
   const t = night ? color.night : color.day;
   const theme = night ? 'night' : 'day';
@@ -47,7 +47,8 @@ export function Office({ state, night, offline, width, onChief, onDesk, onTray }
   const at: At = (x, y, w = 0, h = 0, z = 0) => ({ position: 'absolute', left: x * k, top: y * k, width: w * k, height: h * k, zIndex: z });
   const piece = (name: string, dx = 0, dy = 0, z = 0) => {
     const [x, y, w, h] = BOX[`${name}-${theme}`];
-    return <Image key={`${name}@${dx},${dy}`} source={OFFICE[`${name}-${theme}`]} style={at(x + dx, y + dy, w, h, z)} />;
+    // Furniture never takes a tap: it would swallow the helper standing behind it.
+    return <View key={`${name}@${dx},${dy}`} pointerEvents="none" style={at(x + dx, y + dy, w, h, z)}><Image source={OFFICE[`${name}-${theme}`]} style={{ width: '100%', height: '100%' }} /></View>;
   };
   const shown = crew.slice(0, SLOTS.length); // ponytail: six desks; a bigger crew still reads in full in the lists below
   const [x0, y0] = P(...SLOTS[0]);
@@ -58,14 +59,14 @@ export function Office({ state, night, offline, width, onChief, onDesk, onTray }
     : `Nothing of yours on the go. ${crew.some((c) => c.busyElsewhere) ? 'Some of the crew are busy with other jobs.' : 'The crew is free.'}`;
   return (
     <View style={{ width, height: STAGE.h * k }}>
-      <Image source={OFFICE[`room-${theme}`]} style={at(0, 0, STAGE.w, STAGE.h)} accessibilityIgnoresInvertColors />
+      <View pointerEvents="none" style={at(0, 0, STAGE.w, STAGE.h)}><Image source={OFFICE[`room-${theme}`]} style={{ width: '100%', height: '100%' }} accessibilityIgnoresInvertColors /></View>
       {shown.length <= WALLED && piece('sofa', 0, 0, depth(3.5, 5.1))}
       {shown.map((c, i) => {
         const [cx, cy] = SLOTS[i], [sx, sy] = P(cx, cy), dx = sx - x0, dy = sy - y0;
         return [
           piece('pool', dx, dy, 1),
           i < WALLED && piece(`wall-${c.kind}`, dx, dy, depth(cx, cy, -45)),
-          <Pal key={`pal-${c.id}`} c={c} at={at} k={k} p={P(...standAt(SLOTS[i]))} z={depth(cx, cy, -25)} night={night} t={t}
+          <Pal key={`pal-${c.id}`} c={c} live={view.crew[i]} at={at} k={k} p={P(...standAt(SLOTS[i]))} z={depth(cx, cy, -25)} night={night} t={t}
             reduce={reduce} awake={awake} onPress={() => onDesk(c)} />,
           piece('desk', dx, dy, depth(cx, cy)),
           <Mug key={`mug-${c.id}`} kind={c.kind} style={at(...P(cx - 0.2, cy + 0.32, 28), 0, 0, depth(cx, cy, 1))} k={k} />,
@@ -79,7 +80,7 @@ export function Office({ state, night, offline, width, onChief, onDesk, onTray }
           </View>),
         ];
       })}
-      <Chief mood={chief.mood} line={chief.line} at={at} k={k} night={night} reduce={reduce} awake={awake} onPress={onChief} />
+      <Chief mood={chief.mood} news={view.chief.mood} line={chief.line} at={at} k={k} night={night} reduce={reduce} awake={awake} onPress={onChief} />
       {piece('arm', 0, 0, depth(1.8, 8.1, 10))}
       {piece('tray', 0, 0, depth(...TRAY))}
       {today.slice(0, 4).map((d, i, all) => {
@@ -141,36 +142,38 @@ function Sprite({ id, w, h, k, night, blink }: { id: string; w: number; h: numbe
   </View>;
 }
 
-function Pal({ c, at, k, p: [x, y], z, night, t, reduce, awake, onPress }: {
-  c: A.OfficeMember; at: At; k: number; p: [number, number]; z: number; night: boolean; t: Look; reduce: boolean; awake: boolean; onPress: () => void;
+/** `c` is the helper as drawn; `live` is the same row before the offline rest, so what moves it (a new ring, mood,
+ *  thing, step or question) is news in the house, never a link that dropped and came back. */
+function Pal({ c, live, at, k, p: [x, y], z, night, t, reduce, awake, onPress }: {
+  c: A.OfficeMember; live: A.OfficeMember; at: At; k: number; p: [number, number]; z: number; night: boolean; t: Look; reduce: boolean; awake: boolean; onPress: () => void;
 }) {
   const w = 144 * SPRITE * k, h = 136 * SPRITE * k;
-  const blink = motion.useBlink(c.step, reduce, awake);
+  const blink = motion.useBlink(live.step, reduce, awake);
   const ring = c.ring === 'needs' ? t.pink : c.ring === 'working' ? t.green : '';
   const r = 42 * k; // the floor ring's half-width
   return <View style={{ ...at(x, y, 0, 0, z) }}>
     <View pointerEvents="none" style={{ position: 'absolute', left: -r, top: -r, width: 2 * r, height: 2 * r, borderRadius: r, backgroundColor: night ? '#0008' : '#54341A22', transform: [{ scaleY: 0.3 }] }} />
     {!!ring && <View pointerEvents="none" style={{ position: 'absolute', left: -r, top: -r, width: 2 * r, height: 2 * r, borderRadius: r, borderWidth: 2.5, borderColor: ring, opacity: c.ring === 'needs' ? 1 : 0.75, transform: [{ scaleY: 0.4 }] }} />}
-    {c.ring === 'needs' && <motion.Pulse beat={c.ask?.id ?? c.status} reduce={reduce} awake={awake}
-      style={{ position: 'absolute', left: -r, top: -r, width: 2 * r, height: 2 * r, borderRadius: r, borderWidth: 2, borderColor: t.pink }} />}
+    <motion.Pulse beat={live.ring === 'needs' ? live.ask?.id ?? live.status : null} reduce={reduce} awake={awake}
+      style={{ position: 'absolute', left: -r, top: -r, width: 2 * r, height: 2 * r, borderRadius: r, borderWidth: 2, borderColor: t.pink }} />
     <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={said(c)} hitSlop={8}
       style={{ position: 'absolute', left: -w / 2, top: -h - 18 * k, width: w, height: h }}>
-      <motion.Hop beat={`${c.ring}|${c.mood}|${c.things.length}`} times={c.mood === 'happy' ? 2 : 1} reduce={reduce} awake={awake}>
+      <motion.Hop beat={`${live.ring}|${live.mood}|${live.things.length}`} times={live.mood === 'happy' ? 2 : 1} reduce={reduce} awake={awake}>
         <Sprite id={`${c.kind}-${c.mood}`} w={w} h={h} k={k} night={night} blink={blink} />
       </motion.Hop>
     </Pressable>
   </View>;
 }
 
-function Chief({ mood, line, at, k, night, reduce, awake, onPress }: {
-  mood: Mood; line: string; at: At; k: number; night: boolean; reduce: boolean; awake: boolean; onPress: () => void;
+function Chief({ mood, news, line, at, k, night, reduce, awake, onPress }: {
+  mood: Mood; news: Mood; line: string; at: At; k: number; night: boolean; reduce: boolean; awake: boolean; onPress: () => void;
 }) {
   const [x, y] = P(...CHIEF);
   const w = 176 * SPRITE * k, h = 184 * SPRITE * k;
   return <View style={at(x, y, 0, 0, depth(1.4, 7.6, 2))}>
     <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`Chief: ${line}`} hitSlop={8}
       style={{ position: 'absolute', left: -w / 2, top: -h - CHIEF_LIFT * k, width: w, height: h }}>
-      <motion.Hop beat={mood} reduce={reduce} awake={awake}>
+      <motion.Hop beat={news} reduce={reduce} awake={awake}>
         <Sprite id={`chief-${mood}${night ? '-night' : ''}`} w={w} h={h} k={k} night={night} blink={false} />
       </motion.Hop>
     </Pressable>
