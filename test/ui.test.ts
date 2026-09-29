@@ -282,6 +282,34 @@ test('Home keeps a standing "hand me a job" list, straight from crewd\'s ideas: 
   assert.doesNotMatch(list, /api\.post/, 'nothing is handed over by itself');
 });
 
+test('every job that sends or spends names its ask-first step, and Home shows it under the row', () => {
+  // The template rule (src/bots.ts `ideas`): a promise that sends or spends names its ask-first step in its own
+  // words. It reaches Home only with its source: the row carries the short ask, the promise's first sentence sits
+  // under it. Proof is only counts from local rows — the digest's Finished lines and "done today" — never a "time
+  // given back" figure, which no row records.
+  const SEND_SPEND = /\b(paid|purchase|order|cart|checkout|refund|lookup|claims? ready|end to end|asks? you first|ask (you )?before|tap approve|approve it|you send|you post|send it|post (it|them)|file it)\b/i;
+  const ASK_FIRST = /\b(tap approve|approve it|asks? you first|ask (you )?before|you read|you send|you post|never contact|like any purchase)\b/i;
+  const NO_TIME_FIGURE = /time (given|saved)|given back|saved you|hours? (saved|back)/i;
+  const tplNames = ['scout', 'scribe', 'tracer', 'reel'];
+  const ideas = tplNames.flatMap((t) => {
+    const j = JSON.parse(readFileSync(join(import.meta.dirname, '..', 'templates', t, 'bot.json'), 'utf8'));
+    return (j.ideas as any[]).map((i) => ({ bot: t, ...i }));
+  });
+  const outbound = ideas.filter((i) => SEND_SPEND.test(i.promise));
+  assert.ok(outbound.length >= 8, `enough send/spend jobs to pin the rule (${outbound.length})`);
+  for (const i of outbound) assert.match(i.promise, ASK_FIRST, `${i.bot} names its ask-first step: ${i.promise.slice(0, 60)}\u2026`);
+  for (const i of ideas) assert.doesNotMatch(`${i.promise} ${i.ask}`, NO_TIME_FIGURE, `${i.bot} shows no time figure`);
+  const st = { ...state,
+    bots: [...state.bots, ...tplNames.map((t) => ({ id: t, display: t[0].toUpperCase() + t.slice(1) }))],
+    ideas: ideas.map((i) => ({ bot: i.bot, promise: i.promise, ask: i.ask, group: i.group, needs: [] })) };
+  for (const i of outbound) {
+    assert.ok(A.jobs(st).find((r) => r.ask === i.ask)!.says.length > 0, `Home shows the promise under the row: ${i.ask.slice(0, 40)}`);
+  }
+  const web = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8')
+    + readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'adapter.ts'), 'utf8');
+  assert.doesNotMatch(web, NO_TIME_FIGURE, 'no time figure beside the counts');
+});
+
 test('a freshly recruited helper opens on its own starters, and a tap fills the box without sending', () => {
   const withJobs = { ...state, ideas: [
     { bot: 'scout', promise: 'Ask me anything and I will answer with sources', ask: 'Find out ', group: 'life', needs: [] },
