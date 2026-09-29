@@ -748,6 +748,7 @@ test('no jargon anywhere: the machinery\'s words never reach a person', () => {
     reach: A.reach(linkView), reached: A.reached({ reached: { home: now, tailscale: now - 9e6, relay: now - 5e6 } }),
     push: A.pushWords(linkView), typed: A.phoneTyped({ short: 'K7M2QX', code: '7KQ4-M2XP-9RTH', relay: 'https://go.example.com' }),
     anywhere: A.anywhere(linkView), away: A.away({ tailnet: true, vpn: true, knock: 'timeout', reached: { tailscale: now - 3.6e6 } }),
+    status: A.status(state),
   };
   const words = (x: unknown): string => typeof x === 'string' ? x : Array.isArray(x) ? x.map(words).join(' ')
     : x && typeof x === 'object' ? Object.entries(x).filter(([k]) => k !== 'url' && k !== 'at').map(([, v]) => words(v)).join(' ') : '';
@@ -761,6 +762,39 @@ test('no jargon anywhere: the machinery\'s words never reach a person', () => {
     'That code is missing where to look it up. Copy the whole code from your computer, then try again.',
     "Can't reach the home computer right now. Check it's on, then try again.", 'That didn’t work. Please try again.'])
     assert.doesNotMatch(w, JARGON);
+});
+
+test('the status-bar chip: this person\'s jobs only, counts only where a locked phone shows it, and one door to the kit', () => {
+  const st = A.status(state)!;
+  // Scout's job is working; Reel's waits on Nadia. Tracer is busy, but only bot-wide (`live`): not her job, not counted.
+  const s2 = { ...state, bots: state.bots.map((b) => (b.id === 'tracer' ? { ...b, live: 'working' } : b)) };
+  assert.deepEqual(A.status(s2), st, 'a helper busy on someone else\'s job never shows');
+  assert.equal(st.active, true);
+  assert.equal(st.title, 'Scout is working', 'names only in the unlocked lines');
+  assert.equal(st.publicText, `1 working · ${st.needsYou} need${st.needsYou === 1 ? 's' : ''} you`);
+  assert.equal(st.chip, 'Needs');
+  assert.deepEqual(st.actions.map((a) => a.id), ['needs', 'ask']);
+  assert.deepEqual(A.status(state, false)!.actions, [], 'a watching phone only opens the app');
+  const many = (n: number, extra: Json[] = []) => A.status({ ...state, asks: [], bots: [...Array.from({ length: n }, (_, i) => bot(`helper${i}`, { display: `Helper ${i}`, task: { id: i, title: 'Tax return', state: 'working' } })), ...extra] })!;
+  assert.equal(many(3).chip, '3 busy');
+  assert.equal(many(12).chip, 'Busy');
+  assert.equal(many(1, [bot('chief', { task: { id: 99, title: 'Plan dinners', state: 'working' } })]).title, '2 helpers working', 'Chief working on her job counts');
+  assert.deepEqual(many(2).actions.map((a) => a.id), ['ask'], 'nothing waiting: no needs action');
+  assert.equal(A.status({ ...state, asks: [], bots: [bot('chief'), bot('scout')] }), null, 'a quiet crew clears the chip');
+  const waiting = A.status({ ...state, bots: [bot('chief'), bot('reel', { task: { id: 5, title: 'Birthday video', state: 'needs_you' } })] })!;
+  assert.equal(waiting.active, false, 'waiting alone is never promoted to the chip');
+  for (const v of [st, many(1), many(3), many(12), waiting]) {
+    assert.ok([...v.chip].length <= 7, v.chip);
+    for (const b of [...state.bots, ...Array.from({ length: 12 }, (_, i) => ({ display: `Helper ${i}` }))]) {
+      assert.ok(!`${v.chip} ${v.publicText}`.includes(b.display), `${b.display} on a locked screen`);
+    }
+    assert.doesNotMatch(shown(v), FORBIDDEN);
+    assert.doesNotMatch(`${v.chip} ${v.publicText}`, /[A-Za-z]{2,}.*(Birthday|Tax|Flights|Plan)/, 'no job on the lock screen');
+  }
+  // The kit is imported in one place, and the app reaches it only through that file.
+  const mobile = join(import.meta.dirname, '..', 'mobile');
+  const users = [...readdirSync(join(mobile, 'src')).map((f) => join('src', f)), 'App.tsx', 'index.ts'].filter((f) => readFileSync(join(mobile, f), 'utf8').includes('@byokit/status'));
+  assert.deepEqual(users, [join('src', 'chip.ts')]);
 });
 
 test('the phone\'s one code box reads either kind by its shape, and rejects what it cannot dial', () => {
