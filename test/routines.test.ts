@@ -706,3 +706,16 @@ test('a helper offers an event chore on a card, and nothing runs until the perso
   assert.equal(crew.routines().find((x) => x.id === r.id)!.on, "When a file arrives in Reel's inbox");
   done();
 });
+
+test('a failed trigger-only routine says so with no time to try again', async () => {
+  const { db, crew, done } = setup();
+  const r = crew.addRoutine({ bot: 'reel', on: 'when this computer wakes up', task: 'ask permission: say good morning', name: 'Wake up' }, 'person');
+  crew.runRoutine(r.id);
+  const t = db.get('SELECT id FROM tasks WHERE routine = ?', r.id)!.id;
+  await until('working', () => state(db, t) === 'working');
+  db.run('UPDATE tasks SET created_at = ? WHERE id = ?', Date.now() - 2 * 3_600_000, t);
+  (crew as any).tick();
+  await until('failed', () => state(db, t) === 'failed');
+  assert.match(lastSaid(db, 'chief')!, /^Reel couldn't finish “Wake up”\. Took longer than an hour, so I stopped it\.$/);
+  done();
+});

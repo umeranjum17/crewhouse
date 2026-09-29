@@ -767,18 +767,14 @@ export class Crew {
 
   runRoutine(id: number) { this.fire(this.routine(id), 'now'); }
 
-  /** Fire every routine that is due. A machine that slept through runs catches up once (latest only), then moves on. */
+  /** Fire every routine that is due, and notice files arriving for event-started chores: one query, no AI until
+   *  something actually starts. A machine that slept through runs catches up once (latest only), then moves on. */
   schedule(now = Date.now()) {
-    for (const r of this.db.all("SELECT * FROM routines WHERE state = 'on' AND next_at <= ?", now)) {
+    for (const r of this.db.all("SELECT * FROM routines WHERE state = 'on' AND (next_at <= ? OR trigger IS NOT NULL)", now)) {
+      if (r.trigger) { try { if ('file' in parseTrigger(r.trigger)) this.checkInbox(r); } catch (e) { console.error('trigger', r.id, e); } }
+      if (!r.schedule || r.next_at > now) continue; // trigger-only: no time; wake triggers fire from slept()
       this.db.run('UPDATE routines SET next_at = ? WHERE id = ?', nextRun(parseSchedule(r.schedule), now), r.id);
       try { this.fire(r, now - r.next_at > 60_000 ? 'late' : 'schedule'); } catch (e) { console.error('routine', r.id, e); }
-    }
-    // File triggers: a local readdir on the tick, no AI until a file actually arrives.
-    for (const r of this.db.all("SELECT * FROM routines WHERE state = 'on' AND trigger IS NOT NULL AND kind != 'digest'")) {
-      let t;
-      try { t = parseTrigger(r.trigger); } catch { continue; }
-      if (!('file' in t)) continue; // wake triggers fire from slept()
-      try { this.checkInbox(r); } catch (e) { console.error('trigger', r.id, e); }
     }
   }
 
@@ -790,12 +786,11 @@ export class Crew {
    *  already sitting there never start it. */
   private checkInbox(r: Row) {
     const dir = this.inbox(r.bot);
-    if (!existsSync(dir)) { mkdirSync(dir, { recursive: true }); this.db.run('UPDATE routines SET cursor = ? WHERE id = ?', '[]', r.id); return; }
-    const now = readdirSync(dir).filter((f) => f !== '.DS_Store').sort().slice(0, 500); // ponytail: capped snapshot; an inbox past 500 names needs a real watcher
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+    const now = existsSync(dir) ? readdirSync(dir).filter((f) => f !== '.DS_Store').sort().slice(0, 500) : []; // ponytail: capped snapshot; an inbox past 500 names needs a real watcher
     const before: string[] | null = JSON.parse(r.cursor ?? 'null');
     this.db.run('UPDATE routines SET cursor = ? WHERE id = ?', JSON.stringify(now), r.id);
-    if (!before) return;
-    const arrived = now.filter((f) => !before.includes(f));
+    const arrived = before ? now.filter((f) => !before.includes(f)) : []; // the first look is the baseline
     if (arrived.length) this.fire(r, 'file', `New in ${this.bot(r.bot)?.display ?? r.bot}'s inbox: ${arrived.slice(0, 5).join(', ')}${arrived.length > 5 ? `, and ${arrived.length - 5} more` : ''}.`);
   }
 
@@ -1255,7 +1250,7 @@ export class Crew {
     const r = task.routine && this.db.get('SELECT * FROM routines WHERE id = ?', task.routine);
     if (r) {
       if (unsure) return void this.say(CHIEF, 'bot', `${b} isn't sure “${r.name}” worked. ${result}`, null, member);
-      const again = r.state === 'on' ? ` It will try again ${clock(r.next_at)}.` : '';
+      const again = r.state === 'on' && r.next_at ? ` It will try again ${clock(r.next_at)}.` : '';
       return void this.say(CHIEF, 'bot', `${b} couldn't finish “${r.name}”. ${result}${again}`, null, member);
     }
     this.say(task.bot, 'bot', unsure ? `${UNSURE} ${result}` : result, task.id, member);
