@@ -370,6 +370,17 @@ test('first success: starters never dead-end, and the house setup is the owner\'
   assert.equal(A.homeSetup({ house: { google: true } }, { state: 'ready' }, { anywhere: 'anywhere' }).left, 0);
   const half = A.homeSetup({ house: { google: false } }, { state: 'ready' }, { anywhere: 'anywhere' });
   assert.deepEqual(half.rows.filter((r) => !r.done).map((r) => r.key), ['google']);
+  // A non-owner member's first week: their own calendar, and one job handed over — never sign-in.
+  const fresh = { connections: [], tasks: [] };
+  assert.equal(A.memberSetup(fresh).left, 2, 'a fresh member has two things left');
+  assert.deepEqual(A.memberSetup(fresh).rows.map((r) => r.says), ['Connect your calendar', 'Hand the crew one job']);
+  assert.equal(A.memberSetup({ connections: ['calendar'], tasks: [] }).left, 1, 'the calendar connects from the member\u2019s own snapshot');
+  assert.equal(A.memberSetup({ connections: [], tasks: [{ id: 1 }] }).left, 1, 'one handed job checks the other box');
+  assert.equal(A.memberSetup({ connections: ['calendar'], tasks: [{ id: 1 }] }).left, 0, 'both done and the row goes away');
+  assert.doesNotMatch(shown(A.memberSetup(fresh)), FORBIDDEN, 'plain words only');
+  const web = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
+  assert.match(web, /state\.person\.id !== A\.OWNER && <MemberRow/, 'a non-owner member gets the row');
+  assert.match(web, /function MemberRow[\s\S]*?href="#\/apps"/, 'the row opens the apps screen, where the calendar connects');
 });
 
 test('the runs-at-home line is said once, in the same plain words, in all three places a family meets it', () => {
