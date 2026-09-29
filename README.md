@@ -31,6 +31,13 @@
   <sub>Every picture here is the real app running. The household in it (Nadia and her crew) and its messages come from the app's built-in demo, so no one's real data is shown.</sub>
 </p>
 
+## Download
+
+- **Phone app (Android, preview):** [CREWHOUSE-APK-1.0.0-preview.20260929.15.apk](https://github.com/umeranjum17/crewhouse/releases/download/v1.0.0-preview.20260929.15/CREWHOUSE-APK-1.0.0-preview.20260929.15.apk) — v1.0.0-preview.20260929.15, ~139 MB, SHA-256 `e2c8fbe2e18123162c11b5d3525b23073cef496c94964a41d2545be2bdbe4c78`. Debug-signed preview; updates the previous preview in place. Pair it under Settings, Phones on the computer (see [TRY-IT.md](TRY-IT.md#3-the-phone-app)).
+- **Computer:** Crewhouse is self-hosted and installs from source — see [Quick start](#quick-start) (`git clone` + `./crewhouse setup`). There is no desktop installer.
+
+There is no full release yet, only phone-app previews, so GitHub's `/releases/latest` links don't apply (GitHub skips prereleases there). The link above names the current preview; for anything newer, check the [releases page](https://github.com/umeranjum17/crewhouse/releases).
+
 ## Why Crewhouse exists
 
 A family's to-do list is full of small jobs that take an afternoon each: chasing a refund, comparing flights, planning the week's dinners, writing the thank-you note. AI can do most of them now, but only if it can act, and nobody wants a chatbot sending emails or placing orders on its own.
