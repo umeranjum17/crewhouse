@@ -49,6 +49,8 @@ export const api = {
    *  `{data, more, size}` from byte `after`. */
   video: (bot: string, path: string, after: number) => call('GET', `/api/video?bot=${encodeURIComponent(bot)}&path=${encodeURIComponent(path)}&after=${after}`) as Promise<{ data: string; more: boolean; size: number }>,
   post: (id: string, text: string, photos?: { type: string; data: string }[] | { room: boolean }) => call('POST', `/api/bots/${id}/messages`, { text, ...(Array.isArray(photos) && photos.length ? { photos } : {}), ...(!Array.isArray(photos) && photos ? photos : {}) }),
+  /** A word to a helper's running job: it reads it after its current step, without starting over. Only that job's own member may. */
+  steer: (id: string, text: string) => call('POST', `/api/bots/${id}/steer`, { text }),
   /** First run: how Chief addresses the person, and (from an idea card) their first request, in one tap.
    *  A goal card also names its helper, so the request starts there instead of with Chief. */
   onboard: (address: string, ask?: string, bot?: string) => call('POST', '/api/onboard', { address, ask, bot }),

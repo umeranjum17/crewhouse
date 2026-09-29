@@ -1000,8 +1000,7 @@ export class Crew {
       });
       return this.addTask(to, ask.trim(), 'person', undefined, member);
     }
-    // The address is already stored in people; the Hello screen already greeted her, so the thread
-    // starts empty and renders ChiefIdeas.
+    // The address is already stored in people; the Hello screen already greeted her, so the thread starts empty and renders ChiefIdeas.
     this.db.tx(() => {
       this.db.run("DELETE FROM messages WHERE bot = ? AND member = ? AND author = 'bot'", CHIEF, member);
       this.db.run('UPDATE people SET address = ?, onboarded = 1 WHERE id = ?', a, member);
@@ -2024,11 +2023,12 @@ export class Crew {
     this.db.event('person.onboarded', null, { member, address: a });
   }
 
-  /** The person adds a word while the bot works: it reads it after its current step, without starting over. */
+  /** The person adds a word while the bot works: it reads it after its current step, without starting over. Only that job's own member may steer it. */
   steer(botId: string, text: string, member = OWNER) {
     const l = this.live.get(botId);
     if (!text.trim()) throw fail('empty message');
     if (!l || !this.busy.has(botId)) throw fail(`${this.bot(botId)?.display ?? 'That bot'} isn't working on anything right now; send it as a message`, 409);
+    if ((l.member ?? OWNER) !== member) throw fail('that job is someone else’s', 403);
     void this.runtime.steer(l.key, text.trim()).catch(() => {});
     this.say(botId, 'person', text.trim(), l.task, member);
     this.db.event('run.typed', botId, { task: l.task });

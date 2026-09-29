@@ -608,6 +608,8 @@ test('steer: a word from the person reaches the bot mid-task without starting ov
   const t = crew.assign('reel', 'ask permission to render', 'chief').task;
   await holding(crew, 'reel');
   crew.steer('reel', 'make it faster');
+  const sam = crew.addMember('Sam').id as number;
+  assert.throws(() => crew.steer('reel', 'make it slower', sam), /someone else/, 'another member cannot steer this job');
   await release(crew, 'reel');
   await settled(db, t);
   assert.ok(db.get("SELECT 1 FROM messages WHERE bot = 'reel' AND author = 'person' AND text = 'make it faster'"));
