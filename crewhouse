@@ -74,6 +74,12 @@ autostarted() { [ -f "$UNIT" ] && has_systemd && systemctl --user is-active --qu
 # Refuse to delete anything that isn't plainly a Crewhouse folder.
 remove() {
   case "$1" in ""|/|"$HOME"|"$HOME/"|"$(pwd)") echo "refusing to delete '$1'" >&2; exit 1 ;; esac
+  # The engine is a supervised child process: right after stop it can still hold files open (its compile cache
+  # has raced rm here), so a removal that loses the race waits and retries instead of failing the first uninstall.
+  for _ in $(seq 30); do
+    if rm -rf -- "$1" 2>/dev/null && [ ! -e "$1" ]; then return 0; fi
+    sleep 0.5
+  done
   rm -rf -- "$1"
 }
 

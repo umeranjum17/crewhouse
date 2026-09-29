@@ -49,10 +49,10 @@ const bots = [
 if (firstRun || variant === 'connect') for (const b of bots) Object.assign(b, { task: b.id === 'pip' && variant === 'connect' ? task(45, 'pip', "What's on this week?", 'needs_you') : null, step: undefined });
 
 const asks = [
-  { id: 7, bot: 'scribe', task_id: 43, kind: 'permission', at: now - 3 * min, member: me, title: 'Scribe would like to send an email', detail: {
-    effect: 'send', thing: 'note', always: 'Aunty Sara', rule: 'send:aunty-sara', chief: 'A lovely note, if I may say so.',
-    words: 'Scribe wants to email your thank-you note to Aunty Sara. Send it?',
-    preview: { head: 'To Aunty Sara · from your Gmail', body: "Dear Aunty Sara, thank you so much for the lovely dinner on Sunday. Mum hasn't stopped talking about your biryani, and neither have I. Next time, it's at ours! With love, Nadia" },
+  { id: 7, bot: 'scribe', task_id: 43, kind: 'propose', at: now - 3 * min, member: me, title: 'Scribe drafted a message for Aunty Sara', detail: {
+    words: 'Scribe drafted a message for Aunty Sara. Nothing is sent: you post it yourself.',
+    draft: { to: 'Aunty Sara' }, yes: 'Approve',
+    preview: { head: 'Draft for Aunty Sara', body: "Dear Aunty Sara, thank you so much for the lovely dinner on Sunday. Mum hasn't stopped talking about your biryani, and neither have I. Next time, it's at ours! With love, Nadia" },
   } },
   { id: 10, bot: 'scout', task_id: null, kind: 'propose', at: now - 4 * min, member: me, title: 'Scout would like to remember how to do this: Plan the week’s dinners, with a shopping list', detail: {
     words: 'Scout would like to remember how to do this: Plan the week’s dinners, with a shopping list',
