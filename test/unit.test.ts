@@ -901,6 +901,40 @@ test('sign-in: a cancelled sign-in keeps nothing, signed in nothing', async () =
   done();
 });
 
+test('routing: a spreadsheet request goes straight to Scribe, hiring Scribe if needed', async () => {
+  const { db, crew, done } = setup();
+  crew.onboard('sir');
+  const said = (bot: string) => db.all("SELECT text FROM messages WHERE bot = ? AND author = 'bot' ORDER BY id", bot).map((m: any) => m.text);
+
+  // Chief-only crew: Scribe is hired silently on the member's own account; no Chief task, no Chief turn.
+  const s = (await crew.post('chief', 'make me an Excel for reception'))!.task;
+  assert.equal(task(db, s).bot, 'scribe');
+  assert.equal(task(db, s).origin, 'chief');
+  assert.equal(task(db, s).parent, null);
+  assert.equal(db.get("SELECT COUNT(*) AS n FROM tasks WHERE bot = 'chief'")!.n, 0, 'no Chief task');
+  assert.equal(crew.bot('scribe')?.template, 'scribe', 'Scribe is hired');
+  assert.ok(said('chief').includes('Scribe is on it.'));
+  await settled(db, s);
+
+  // A routine stays with Chief even when it names a tracker.
+  const r = (await crew.post('chief', 'remind me every day to update the tracker'))!.task;
+  assert.equal(task(db, r).bot, 'chief');
+  await settled(db, r);
+
+  // A plainly named helper wins over the shortcut.
+  crew.recruit('reel', 'Reel', 'person');
+  const n = (await crew.post('chief', '@Reel make an excel'))!.task;
+  assert.equal(task(db, n).bot, 'reel');
+  await settled(db, n);
+
+  // A plan without helpers stays with Chief instead of stalling on Scribe.
+  for (const p of Object.keys(PROVIDERS)) crew.accounts.notIncluded(OWNER, p, true);
+  const e = (await crew.post('chief', 'make me a workbook for reception'))!.task;
+  assert.equal(task(db, e).bot, 'chief');
+  await settled(db, e);
+  done();
+});
+
 test('routing: explicit helpers are direct; uncertain requests start Chief without a blocking model turn', async () => {
   const { db, crew, done } = setup();
   crew.onboard('sir');

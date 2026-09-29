@@ -19,7 +19,7 @@ import { describe, nextRun, parseSchedule } from './routines.ts';
 import { buildWorkbook, readWorkbook } from './workbooks.ts';
 import { MAX_ITEMS, MAX_PARALLEL, subMessage, type BatchAnswer } from './batch.ts';
 import { buildDocument, readDocument } from './documents.ts';
-import { route, type Helper } from './route.ts';
+import { route, chiefWork, type Helper } from './route.ts';
 import type { Link } from './link.ts';
 import type { AgentRuntime, RunEnd, RunEvent, RunRef, RunSpec, ToolHost } from './runtime.ts';
 import { OpenClawRuntime } from './openclaw/runtime.ts';
@@ -35,13 +35,11 @@ export const inlineHowTo = (text: string): 'signin' | 'app' | 'routine' | null =
 
 const HOLD_MS = Number(process.env.CREWHOUSE_HOLD_MS || 180_000); // how long a tool call waits for an answer before the turn parks
 const TASK_TIMEOUT_MS = 60 * 60_000;
-import { classifyText } from './failures.ts';
 import { clock } from './accounts.ts';
 
 /** OpenClaw's own tools crewhouse adopts once their policy effects are reviewed: reads, recall and media on the
  *  member's own sign-in. Any future native tool not reviewed here fails closed until a bump reviews it. */
 const NATIVE_TOOLS = new Set(['web_search', 'web_fetch', 'memory_search', 'memory_get', 'view_image', 'pdf', 'image_generate']);
-export { clock };
 
 /** At most n characters, cut at a word boundary with an ellipsis: titles on cards and in the digest. */
 export const short = (s: string, n: number) => (s = s.trim(), s.length > n ? `${s.slice(0, n - 1).replace(/\s+\S*$/, '')}…` : s);
@@ -1122,10 +1120,12 @@ export class Crew {
     if (replying) return this.addTask(CHIEF, text, 'person', model, member, undefined, text, pics, { room });
     const previous = this.db.get("SELECT text FROM messages WHERE bot = ? AND member = ? AND author = 'person' ORDER BY id DESC LIMIT 1", CHIEF, member)?.text as string | undefined;
     const earlier: string | undefined = /^https?:\/\/\S+$/i.test(text) && previous && /\b(market|marketing|promote|launch)\b/i.test(previous) ? previous : undefined;
-    const request = { text, earlier };
-    const to = await route(request, helpers);
     const body = earlier ? `${earlier}\n${text}` : text;
-    const helper = !to.abstained && helpers.find((b) => b.id === to.answer);
+    const to = await route({ text, earlier }, helpers);
+    // A spreadsheet the rules miss goes straight to Scribe, hired silently when the member's account can run helpers.
+    const helper = (!to.abstained && helpers.find((b) => b.id === to.answer))
+      || (/\b(excel|spreadsheet|xlsx|workbook|tracker)\b/i.test(body) && !chiefWork.test(body)
+        && await this.usable(member, this.choices({ bot: 'scribe' } as Row)) && (this.bots().find((b) => b.template === 'scribe') ?? this.recruit('scribe', undefined, 'person', member)));
     if (!helper) return this.addTask(CHIEF, body, 'person', model, member, undefined, text, pics, { room });
     const r = this.addTask(helper.id, body, CHIEF, model, member, undefined, body, pics, { room });
     this.say(CHIEF, 'person', text + r.shown, null, member);
