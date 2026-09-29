@@ -538,6 +538,13 @@ test('raw /files/ only opens for the member it was delivered to', async () => {
   db.close();
   mkdirSync(join(root, 'crew', 'bots', 'reel', 'files'), { recursive: true });
   writeFileSync(join(root, 'crew', 'bots', 'reel', 'files', 'owner-file.txt'), 'owner words');
+  mkdirSync(join(root, 'crew', 'bots', 'reel', 'work'), { recursive: true });
+  writeFileSync(join(root, 'crew', 'bots', 'reel', 'work', 'secret.webm'), 'raw take bytes');
   assert.equal((await fetch(`${base}/files/reel/owner-file.txt`)).status, 200, 'the owner keeps the trail');
   assert.equal((await fetch(`${base}/files/reel/owner-file.txt`, { headers: asGuest })).status, 403, 'a guest gets no window into the folder');
+  for (const sneak of ['..%2Fwork%2Fsecret.webm', '..%252Fwork%252Fsecret.webm', '../work/secret.webm', '..%2F..%2Fcrew%2Fbots%2Freel%2Fwork%2Fsecret.webm']) {
+    const res = await fetch(`${base}/files/reel/${sneak}`);
+    assert.notEqual(res.status, 200, `${sneak} never serves`);
+    assert.ok(!(await res.text()).includes('raw take'), `${sneak} leaks nothing`);
+  }
 });
