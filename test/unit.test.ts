@@ -12,7 +12,7 @@ import { temp } from './tmp.ts';
 import { setup, sleep, task, until, prompted, settled, holding, release, lastSaid } from './lab.ts';
 import * as A from '../web/src/adapter.ts';
 
-const { Crew, quietNow, short } = await import('../src/crew.ts');
+const { Crew, quietNow, short, cleanReply } = await import('../src/crew.ts');
 const { classifyText } = await import('../src/failures.ts');
 const { Accounts, OWNER, PROVIDERS } = await import('../src/accounts.ts');
 const { effectOf, browserAsk, coversOf, toolWords, orderOf } = await import('../src/policy.ts');
@@ -84,6 +84,29 @@ test('limited memory is disclosed once in the person-visible thread', async () =
   const notices = db.all("SELECT text FROM messages WHERE author = 'system' AND text LIKE 'Memory features are limited:%'");
   assert.equal(notices.length, 1);
   assert.match(notices[0].text, /no paid search was tried/i);
+  done();
+});
+
+test('model control markers never reach the person: stripped before persist and projection', async () => {
+  assert.equal(cleanReply('[[reply_to_current]] I made the editable dinner plan.'), 'I made the editable dinner plan.');
+  assert.equal(cleanReply('[[reply_to_parent]] Done.'), 'Done.');
+  assert.equal(cleanReply('First line.\n[[reply_to_current]] Second line.'), 'First line.\nSecond line.');
+  assert.equal(cleanReply('plain words, no marker'), 'plain words, no marker');
+  const { db, crew, done } = setup();
+  crew.onboard('sir');
+  crew.recruit('scout', 'Scout', 'person');
+  const t = crew.assign('scout', 'ask permission first, then plan two dinners', 'chief').task;
+  await release(crew, 'scout', '[[reply_to_current]] I made the editable dinner plan.');
+  await settled(db, t);
+  assert.equal(task(db, t).state, 'done');
+  assert.doesNotMatch(task(db, t).result, /\[\[reply/, 'the stored result keeps no control marker');
+  assert.doesNotMatch(lastSaid(db, 'scout'), /\[\[reply/, 'the chat line keeps no control marker');
+  db.run('UPDATE tasks SET result = ? WHERE id = ?', '[[reply_to_current]] stale words', t);
+  const page = crew.botPage('scout');
+  const projected = page.tasks.find((x: any) => x.id === t)!.result;
+  assert.ok(projected);
+  assert.doesNotMatch(projected, /\[\[reply/, 'an older stored row reads clean');
+  assert.ok(page.messages.every((m: any) => !/\[\[reply/.test(m.text)), 'every projected chat line reads clean');
   done();
 });
 
