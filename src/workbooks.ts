@@ -18,6 +18,20 @@ function sheetName(raw: string, taken: Set<string>, n: number) {
   return name;
 }
 
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
+/** Dark header, blue for a calculated cell, yellow for an input cell. */
+const FILL = {
+  header: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F2937' } },
+  formula: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDBEAFE' } },
+  input: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF9C4' } },
+} as const;
+
+/** YYYY-MM-DD becomes a real UTC-midnight date; null when the calendar says otherwise. */
+function dateOf(s: string) {
+  const [y, m, d] = s.split('-').map(Number);
+  const t = new Date(Date.UTC(y, m - 1, d));
+  return t.getUTCFullYear() === y && t.getUTCMonth() === m - 1 && t.getUTCDate() === d ? t : null;
+}
 /** exceljs is CommonJS, and only worth loading for the seconds it is used. */
 const excel = () => import('exceljs').then((m: any) => m.default ?? m);
 
@@ -28,6 +42,7 @@ export async function buildWorkbook(file: string, spec: WorkbookSpec) {
   if (!sheets.length) throw new Error('say what the workbook should have: at least one sheet with columns');
   const wb = new ExcelJS.Workbook();
   wb.creator = 'Crewhouse'; wb.created = new Date();
+  wb.calcProperties.fullCalcOnLoad = true;
   const taken = new Set<string>();
   sheets.forEach((s, n) => {
     const cols = (Array.isArray(s.columns) ? s.columns : []).slice(0, MAX.columns);
@@ -40,14 +55,36 @@ export async function buildWorkbook(file: string, spec: WorkbookSpec) {
       const widest = Math.max(header.length, ...rows.map((r) => String(r[i] ?? '').length), 0);
       return { header, width: Math.min(MAX.width, Math.max(10, Number(c?.width) || Math.min(widest + 2, 42))) };
     });
-    ws.getRow(1).font = { bold: true };
-    for (const row of rows) ws.addRow(row.map((v) => (typeof v === 'string' && v.startsWith('=') ? { formula: v.slice(1) } : v ?? null)));
+    ws.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    // Only a sheet the person works in gets colours: one with dropdowns or formulas. A plain guide sheet stays plain.
+    const lively =
+      cols.some((c) => (Array.isArray(c?.options) ? c.options : []).some((o) => String(o).trim())) ||
+      rows.some((r) => r.some((v) => typeof v === 'string' && v.startsWith('=')));
+    if (lively) ws.getRow(1).fill = { ...FILL.header };
+    for (const row of rows) {
+      const added = ws.addRow(row.map((v) => {
+        if (typeof v === 'string' && v.startsWith('=')) return { formula: v.slice(1) };
+        if (typeof v === 'string' && DATE.test(v)) return dateOf(v) ?? v;
+        return v ?? null;
+      }));
+      added.eachCell((cell: any) => {
+        const v = cell.value;
+        const formula = !!v && typeof v === 'object' && 'formula' in v;
+        if (v instanceof Date) cell.numFmt = 'yyyy-mm-dd';
+        else if (typeof v === 'string' && v.length > 60) cell.alignment = { wrapText: true };
+        if (lively) cell.fill = { ...FILL[formula ? 'formula' : 'input'] };
+      });
+    }
     cols.forEach((c, i) => {
       const options = (Array.isArray(c?.options) ? c.options : []).map((o) => String(o).trim()).filter(Boolean).slice(0, MAX.options);
       if (!options.length) return;
       // Fill the dropdowns down past the finished rows, so the person can keep typing in it.
       const until = Math.min(Math.max(rows.length + 10, 12), MAX.dropdown);
-      for (let r = 2; r <= until; r++) ws.getCell(r, i + 1).dataValidation = { type: 'list', allowBlank: true, formulae: [`"${options.join(',')}"`] };
+      for (let r = 2; r <= until; r++) {
+        const cell = ws.getCell(r, i + 1);
+        cell.dataValidation = { type: 'list', allowBlank: true, formulae: [`"${options.join(',')}"`] };
+        cell.fill = { ...FILL.input };
+      }
     });
   });
   await wb.xlsx.writeFile(file);

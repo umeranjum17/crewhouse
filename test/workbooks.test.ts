@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { temp } from './tmp.ts';
 import { setup, settled, task } from './lab.ts';
 import { buildWorkbook, readWorkbook } from '../src/workbooks.ts';
+import JSZip from 'jszip';
 import * as disk from '../src/bots.ts';
 
 const ExcelJS = (await import('exceljs')).default;
@@ -50,6 +51,41 @@ test('the workbook crewd writes is a real .xlsx: its sheets, the dropdown, the f
   assert.equal(wb.worksheets[2].getColumn(1).width, 10, 'a default width of its own, not Excel of one character');
   assert.equal(wb.worksheets[0].getColumn(1).width, 24, 'the width the helper asked for');
   assert.equal((wb.worksheets[0].getCell('C3').value as any).formula, 'COUNTIF(Rooms!D2:D40,"Ready")', 'a formula, not the word "formula"');
+  assert.equal((wb.worksheets[0].getCell('A1').fill as any)?.fgColor?.argb, 'FF1F2937', 'the header sits on a dark fill');
+  assert.equal(wb.worksheets[0].getCell('A1').font?.color?.argb, 'FFFFFFFF', 'white bold header text');
+  assert.equal((wb.worksheets[0].getCell('C3').fill as any)?.fgColor?.argb, 'FFDBEAFE', 'a calculated cell is blue');
+  assert.equal((bookings.getCell('B2').fill as any)?.fgColor?.argb, 'FFFFF9C4', 'an input cell is yellow');
+  assert.equal((bookings.getCell('C9').fill as any)?.fgColor?.argb, 'FFFFF9C4', 'the empty dropdown rows are inputs too');
+  assert.equal((bookings.getCell('D9').fill as any)?.fgColor, undefined, 'only the column asked for');
+});
+
+test('styling: dates are real dates, formulas calculate on open, and a plain guide sheet stays plain', async () => {
+  const file = join(temp('styled'), 'styled.xlsx');
+  const long = 'A note the front desk keeps repeating to every guest at check-in, word for word, every single day';
+  await buildWorkbook(file, { name: 'Styled', sheets: [
+    { name: 'Bookings', columns: [{ header: 'Guest' }, { header: 'Arrives' }, { header: 'Status', options: ['Booked', 'Checked in'] }, { header: 'Note' }],
+      rows: [['Amina Khan', '2026-10-03', 'Checked in', long], ['Bilal Sheikh', 'not a date', 'Booked', 'short']] },
+    { name: 'Setup and guide', columns: [{ header: 'How to use this' }],
+      rows: [['Type the guest name, the arrival date, and pick a status.']] },
+  ] });
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.readFile(file);
+  const bookings = wb.worksheets[0];
+  const arrives = bookings.getCell('B2').value;
+  assert.ok(arrives instanceof Date, 'a YYYY-MM-DD string is a date, so date maths works');
+  assert.equal(arrives.toISOString().slice(0, 10), '2026-10-03');
+  assert.equal(bookings.getCell('B2').numFmt, 'yyyy-mm-dd');
+  assert.equal(bookings.getCell('B3').value, 'not a date', 'anything else stays words');
+  // exceljs writes calcPr but does not read it back, so check the bytes Excel itself will see.
+  const xml = await (await JSZip.loadAsync(readFileSync(file))).file('xl/workbook.xml')!.async('string');
+  assert.match(xml, /fullCalcOnLoad="1"/, 'Excel calculates the formulas when the person opens it');
+  assert.equal(bookings.getCell('D2').alignment?.wrapText, true, 'a long note wraps instead of running off');
+  assert.equal(bookings.getCell('A2').alignment?.wrapText, undefined, 'a short name does not');
+  const guide = wb.worksheets[1];
+  for (const addr of ['A1', 'A2']) {
+    const cell = guide.getCell(addr);
+    assert.notEqual((cell.fill as any)?.pattern, 'solid', `${addr}: the guide sheet carries no fills`);
+  }
 });
 
 test('a sheet name Excel would refuse is made usable, and an empty sheet still gets its header', async () => {
