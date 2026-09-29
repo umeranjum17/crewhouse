@@ -19,7 +19,7 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { OpenClawRuntime } from '../src/openclaw/runtime.ts';
 import { loadConfig } from '../src/config.ts';
-import { addressLine, listSkills, listTemplates, readNotes, systemPrompt } from '../src/bots.ts';
+import { addressLine, listSkills, readNotes, systemPrompt } from '../src/bots.ts';
 
 const TARGET_MS = 3000;
 
@@ -58,8 +58,7 @@ export function variants(argv, cfg, body, address = '') {
   const about = readNotes(cfg, { member: 1, bot: null }).trim();
   const notes = readNotes(cfg, { member: 1, bot: 'chief' }).trim();
   const ids = existsSync(join(cfg.crewDir, 'bots')) ? readdirSync(join(cfg.crewDir, 'bots')) : [];
-  const crew = ids.filter((id) => id !== 'chief').map((id) => `${id} (id ${id}, free)`).join('; ') || 'nobody yet';
-  const tpls = listTemplates(cfg).map((t) => `${t.id}: ${t.role}`).join('; ');
+  const crew = ids.filter((id) => id !== 'chief').map((id) => `${id} (id ${id})`).join('; ') || 'nobody yet';
   const skills = listSkills(cfg, 'chief');
   const system = systemPrompt(cfg, 'chief', true)
     + (skills.length ? `\n## Skills you follow\n${skills.map((s) => `- ${s.name}: ${s.description || 'how you do this kind of job'}`).join('\n')}\n` : '');
@@ -67,7 +66,7 @@ export function variants(argv, cfg, body, address = '') {
   const message = `[Crewhouse] ${addressLine(address || null)}`
     + `${about ? `\nWhat the whole crew knows about the person:\n${about}` : ''}`
     + `${notes ? `\nYour notes (what you have learned about how they like your work):\n${notes}` : ''}\n\n`
-    + `[Crewhouse] Crew: ${crew}. Templates: ${tpls}.\nThe person says: ${body}`;
+    + `[Crewhouse] Crew: ${crew}.\nThe person says: ${body}`;
   const all = {
     tiny: { system: 'You are a test harness.', message: 'Reply with the single word: ready.', thinking: undefined },
     chief: { system, message, thinking: 'low' },
