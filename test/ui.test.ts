@@ -17,6 +17,9 @@ import { cycle } from '../web/src/dialog.ts';
 
 const now = Date.now();
 
+/** The phone app's screens: App.tsx and the office room beside it. */
+const PHONE_SCREENS = ['App.tsx', 'src/office.tsx'].map((f) => join(import.meta.dirname, '..', 'mobile', f));
+
 test('crew room lines and handoff checks hide machinery', () => {
   const s: Json = { bots: [{ id: 'scout', display: 'Scout', template: 'scout', task: null }], events: [], asks: [] };
   const lines = A.room({ lines: [{ id: 1, bot: 'scout', author: 'bot', text: 'See /home/alex/files/story.md and `ffmpeg -i x` from sonnet', files: [{ bot: 'scout', path: 'files/story.md' }], at: now }] }, s);
@@ -339,10 +342,10 @@ test('plain() keeps what a person wrote and drops the machinery', () => {
 test('the screens read view models only, and the mono face draws art only', () => {
   const dir = join(import.meta.dirname, '..', 'web', 'src');
   // The phone app's screens too (mobile/App.tsx), which read the same adapter.
-  for (const f of [...readdirSync(dir).filter((f) => f.endsWith('.tsx')).map((f) => join(dir, f)), join(dir, '..', '..', 'mobile', 'App.tsx')]) {
+  for (const f of [...readdirSync(dir).filter((f) => f.endsWith('.tsx')).map((f) => join(dir, f)), ...PHONE_SCREENS]) {
     const src = readFileSync(f, 'utf8');
     assert.doesNotMatch(src, /detail\.(summary|pane|rule|tool)|\.thinks\b|\.limits\b|\.runtime\b|\bclaude\b|terminal/i, f);
-    if (f.endsWith('App.tsx')) assert.doesNotMatch(src, /monospace/, 'the phone app draws its art as dots, and sets no text in mono');
+    if (f.includes('mobile')) assert.doesNotMatch(src, /monospace/, 'the phone app draws its art as dots, and sets no text in mono');
     else assert.doesNotMatch(src, /<pre(?![^>]*className="art)/, f);
   }
   const css = readFileSync(join(dir, 'styles.css'), 'utf8');
@@ -359,9 +362,11 @@ test('Home renders once: a second full Home (bd51524) put a second composer belo
 });
 
 test('the phone app moves only through mobile/src/motion.ts, where Reduce Motion always snaps', () => {
-  const app = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
-  assert.doesNotMatch(app, /\bAnimated\b|LayoutAnimation|animated: true|animationType="(slide|fade)"/, 'a move named outside motion.ts');
-  for (const [m] of app.matchAll(/animationType=\{[^}]*\}|animationType="[^"]*"/g)) assert.match(m, /motion\.\w+\(reduce\)|"none"/, m);
+  for (const f of PHONE_SCREENS) {
+    const app = readFileSync(f, 'utf8');
+    assert.doesNotMatch(app, /\bAnimated\b|LayoutAnimation|animated: true|animationType="(slide|fade)"/, `a move named outside motion.ts: ${f}`);
+    for (const [m] of app.matchAll(/animationType=\{[^}]*\}|animationType="[^"]*"/g)) assert.match(m, /motion\.\w+\(reduce\)|"none"/, m);
+  }
   const rule = readFileSync(join(import.meta.dirname, '..', 'mobile', 'src', 'motion.ts'), 'utf8');
   assert.match(rule, /reduce \? 'none'/, 'Reduce Motion snaps a sheet');
 });
@@ -430,6 +435,34 @@ test('the phone office sprite set matches art.ts kinds × moods', async () => {
   const wired = new Set([...readFileSync(join(import.meta.dirname, '..', 'mobile', 'src', 'marks.ts'), 'utf8')
     .matchAll(/require\('\.\.\/assets\/pals\/([\w-]+\.png)'\)/g)].map((m) => m[1]));
   assert.deepEqual(wired, new Set(files.keys()), 'mobile/src/marks.ts does not require the whole set');
+});
+
+test('the phone office: a still room drawn once, a crew that moves only when news lands', () => {
+  // scripts/office.mjs draws the Studio into mobile/assets/office/, one set per theme; marks.ts requires each
+  // picture and pieces.json places it on the stage.
+  const dir = join(import.meta.dirname, '..', 'mobile', 'assets', 'office');
+  const boxes = JSON.parse(readFileSync(join(dir, 'pieces.json'), 'utf8'));
+  const pngs = readdirSync(dir).filter((f) => f.endsWith('.png')).map((f) => f.slice(0, -4));
+  assert.deepEqual(new Set(pngs), new Set(Object.keys(boxes)), 'a picture without a place, or a place without a picture');
+  const kinds = ['reel', 'scout', 'scribe', 'tracer', 'pip'];
+  for (const theme of ['day', 'night'])
+    for (const n of ['room', 'desk', 'pool', 'sofa', 'arm', 'tray', ...kinds.map((k) => `wall-${k}`)]) assert.ok(boxes[`${n}-${theme}`], `${n}-${theme}`);
+  const wired = new Set([...readFileSync(join(import.meta.dirname, '..', 'mobile', 'src', 'marks.ts'), 'utf8')
+    .matchAll(/require\('\.\.\/assets\/office\/([\w-]+)\.png'\)/g)].map((m) => m[1]));
+  assert.deepEqual(wired, new Set(pngs), 'mobile/src/marks.ts does not require the whole room');
+  // The battery budget: no timer or beat keeps a quiet room moving, moves wait for the app to be on screen, the live
+  // desktop never opens here, and the room reads the shared view model with "Busy with another job" on.
+  const office = readFileSync(join(import.meta.dirname, '..', 'mobile', 'src', 'office.tsx'), 'utf8');
+  assert.doesNotMatch(office, /setInterval|setTimeout|useBeat|requestAnimationFrame|DesktopView|desktopSignaling/);
+  assert.match(office, /A\.office\(state, \{ busyElsewhere: true \}\)/);
+  assert.match(office, /A\.officeEvent\(/);
+  assert.match(office, /motion\.useAwake\(\)/);
+  const motion = readFileSync(join(import.meta.dirname, '..', 'mobile', 'src', 'motion.ts'), 'utf8');
+  assert.doesNotMatch(motion.slice(motion.indexOf('// ---------- the office')), /useNativeDriver: false/);
+  assert.match(motion, /if \(still\) return;/, 'no office move starts under Reduce Motion or in the background');
+  const home = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
+  const top = home.slice(home.indexOf('function Home('), home.indexOf('function ChatList('));
+  assert.ok(top.indexOf('<HomeHero') < top.indexOf('<Office') && top.indexOf('<Office') < top.indexOf('Needs you'), 'the office sits at the top of Home');
 });
 
 test("Chief's mood is the first matching row of the table, and the line follows the face", () => {
@@ -609,8 +642,8 @@ test('no jargon anywhere: the machinery\'s words never reach a person', () => {
   for (const f of ['main.tsx', 'parts.tsx', 'flows.tsx', 'office.tsx', 'diorama.ts', 'dialog.ts', 'draft.ts', 'kept.ts', 'chat-md.ts', 'demo.ts', 'adapter.ts'])
     for (const w of prose(readFileSync(join(srcDir, f), 'utf8')))
       assert.doesNotMatch(w, JARGON, `${f} shows: ${w.trim().slice(0, 80)}`);
+  for (const f of PHONE_SCREENS) for (const w of prose(readFileSync(f, 'utf8'))) assert.doesNotMatch(w, JARGON, `${f} shows: ${w.trim().slice(0, 80)}`);
   const app = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
-  for (const w of prose(app)) assert.doesNotMatch(w, JARGON, `App.tsx shows: ${w.trim().slice(0, 80)}`);
   assert.doesNotMatch(app, /Use a relay code|Relay address|Short relay code|legacy/, 'the phone pairs through one code box; no relay toggle');
   // The adapter is everything a person reads: no view says a machinery word, and Tailscale appears only in the
   // anywhere setup and the away explainer.
