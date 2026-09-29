@@ -492,10 +492,18 @@ export class Crew {
     return this.askView(this.db.get('SELECT * FROM asks WHERE id = ?', id)!);
   }
 
+  /** A task's delivered files, its own output first: files handed over from another helper are that task's
+   *  input, never its result, so Things previews and opens what the task itself made. */
+  private taskFiles(task: number): Row[] {
+    const rows = this.db.all(`SELECT data FROM events WHERE kind = 'file.delivered' AND json_extract(data, '$.task') = ? ORDER BY seq`, task)
+      .map((e) => JSON.parse(e.data));
+    return [...rows.filter((d) => !d.input), ...rows.filter((d) => d.input)];
+  }
+
   snapshot(viewer = OWNER) {
     // The house being ready settles every outstanding 'set it up' ask by itself.
     if (this.connections.houseGoogle()) this.db.run("UPDATE asks SET state = 'withdrawn', answer = 'house-ready' WHERE kind = 'setup' AND state = 'open'");
-    const files = (task: number) => this.db.all(`SELECT data FROM events WHERE kind = 'file.delivered' AND json_extract(data, '$.task') = ?`, task).map((e) => JSON.parse(e.data).path);
+    const files = (task: number) => this.taskFiles(task).map((d) => d.path);
     const me = this.viewer(viewer);
     return {
       person: { ...me, quietNow: quietNow(me.quiet) },
@@ -530,7 +538,7 @@ export class Crew {
       WHERE t.member = ? AND t.root IN (${roots}) AND m.id < ? ORDER BY m.id DESC LIMIT 200`, member, member, before ?? Number.MAX_SAFE_INTEGER).reverse();
     return { lines: lines.map((m) => ({ id: m.id, bot: m.bot, author: m.author, to: m.parent && m.author === m.origin ? m.bot : undefined,
       from: m.parent && m.author === m.origin ? m.origin : undefined, text: cleanReply(m.text), at: m.at,
-      files: m.parent && m.author === m.origin ? this.db.all("SELECT data FROM events WHERE kind = 'file.delivered' AND json_extract(data, '$.task') = ?", m.task_id).map((e) => ({ bot: m.bot, path: JSON.parse(e.data).path })) : [] })),
+      files: m.parent && m.author === m.origin ? this.taskFiles(m.task_id).map((d) => ({ bot: m.bot, path: d.path })) : [] })),
       busy: this.db.all(`SELECT DISTINCT bot FROM tasks WHERE member = ? AND root IN (${roots}) AND state IN ('queued','working','needs_you','paused')`, member, member).map((r) => r.bot),
       asks: this.db.all(`SELECT * FROM asks WHERE state = 'open' AND COALESCE(member, ?) = ? AND (json_extract(detail, '$.pass.root') IN (${roots}) OR task_id IN (SELECT id FROM tasks WHERE root IN (${roots})))`, OWNER, member, member, member).map((a) => this.askView(a)) };
   }
@@ -634,7 +642,7 @@ export class Crew {
           const d = JSON.parse(e.data);
           const t = d.task ? this.db.get('SELECT state, result FROM tasks WHERE id = ?', d.task) : undefined;
           const line = d.task ? this.db.get("SELECT id FROM messages WHERE task_id = ? AND author = 'bot' ORDER BY id DESC LIMIT 1", d.task) : undefined;
-          const made = d.task && this.db.get("SELECT 1 FROM events WHERE kind = 'file.delivered' AND json_extract(data, '$.task') = ?", d.task);
+          const made = d.task && this.db.get("SELECT 1 FROM events WHERE kind = 'file.delivered' AND json_extract(data, '$.task') = ? AND json_extract(data, '$.input') IS NULL", d.task);
           return { at: e.at, kind: e.kind, ...d, state: t?.state,
             ...(t?.state === 'paused' || t?.state === 'failed' || t?.state === 'unsure' ? { reason: t.result } : {}),
             ...(t?.result === ALL_CLEAR_RESULT ? { clear: true } : {}),
@@ -1220,8 +1228,7 @@ export class Crew {
     const rows = this.db.all("SELECT id, bot, title FROM tasks WHERE bot != ? AND member = ? AND state = 'done' AND updated_at >= ? AND COALESCE(result, '') != ? ORDER BY id DESC LIMIT 10",
       CHIEF, member, Date.now() - 30 * 86_400_000, ALL_CLEAR_RESULT);
     return rows.map((t) => {
-      const files = this.db.all("SELECT data FROM events WHERE kind = 'file.delivered' AND json_extract(data, '$.task') = ?", t.id)
-        .map((e) => JSON.parse(e.data));
+      const files = this.taskFiles(t.id);
       return {
         bot: this.bot(t.bot)?.display ?? t.bot,
         title: short(t.title.split('[tool')[0].trim() || t.title, 80),
@@ -1562,7 +1569,7 @@ export class Crew {
       this.setTask(task, 'done', clear ? ALL_CLEAR_RESULT : text || 'Done.');
       if (task.origin === CHIEF && !this.teamJob(task)) {
         // In Chief's own voice, written by crewd: no model call, no task number.
-        const files = this.db.all("SELECT data FROM events WHERE kind = 'file.delivered' AND bot = ? AND json_extract(data, '$.task') = ?", botId, task.id);
+        const files = this.db.all("SELECT data FROM events WHERE kind = 'file.delivered' AND bot = ? AND json_extract(data, '$.task') = ? AND json_extract(data, '$.input') IS NULL", botId, task.id);
         const note = files.map((e) => JSON.parse(e.data).note as string).find(Boolean) ?? '';
         this.say(CHIEF, 'bot', relayResult(text, note), files.length ? task.id : null, task.member ?? OWNER);
       }
@@ -2126,7 +2133,7 @@ export class Crew {
     }
     const { task: id } = this.addTask(d.to, `${d.text}${paths.length ? `\n\nFiles handed over:\n${paths.join('\n')}` : ''}`, from, undefined, d.member,
       undefined, d.text, [], { parent: d.parent, root: d.root, hops: d.hops });
-    for (const path of paths) this.db.event('file.delivered', d.to, { task: id, path, note: `from ${this.bot(from)!.display}`, size: statSync(join(disk.botDir(this.cfg, d.to), path)).size });
+    for (const path of paths) this.db.event('file.delivered', d.to, { task: id, path, note: `from ${this.bot(from)!.display}`, input: true, size: statSync(join(disk.botDir(this.cfg, d.to), path)).size });
     return { passed: { to: this.bot(d.to)!.display, task: id }, note: `${this.bot(d.to)!.display} has it. The person can follow along in The crew.` };
   }
 
