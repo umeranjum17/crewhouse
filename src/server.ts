@@ -106,7 +106,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
   if (packaged || process.env.CREWHOUSE_RELEASES) { void checkUpdate(); setInterval(checkUpdate, 86_400_000).unref(); }
   const localHost = (h = '') => /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/.test(h);
   // A paired phone acts as the household member it was paired for.
-  const link = new Link(cfg, db, (m, path, body, member) => { const u = new URL(path, 'http://x'); return api(m, u.pathname, u.searchParams, body, member); });
+  const link = new Link(cfg, db, (m, path, body, member, key) => { const u = new URL(path, 'http://x'); return api(m, u.pathname, u.searchParams, body, member, key); });
   crew.phoneLink = link;
   link.desk = { signal: (bot, w, method, params, canControl) => crew.desktopSignal(bot, w, method, params, canControl), release: (w) => crew.desktops.release(w) };
   link.quiet = (member) => !!crew.members().find((x) => x.id === member)?.quietNow;
@@ -178,7 +178,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
   });
 
   /** The app API, shared by the web app (HTTP) and paired phones (the link). `me` is the member using it. */
-  async function api(m: string, p: string, q: URLSearchParams, body: any, me: number) {
+  async function api(m: string, p: string, q: URLSearchParams, body: any, me: number, key?: string) {
     let r: RegExpMatchArray | null;
     // What is installing now, and (for the owner) a newer Crewhouse to download.
     if (m === 'GET' && p === '/api/state') return { ...crew.snapshot(me), zone: Intl.DateTimeFormat().resolvedOptions().timeZone, installing: [...installing], showing: teacher.showing(), ...(update && me === OWNER ? { update } : {}) };
@@ -218,7 +218,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     if (m === 'POST' && p === '/api/onboard') { const b = body; return crew.onboard(b.address ?? '', me, b.ask, typeof b.bot === 'string' ? b.bot : undefined) ?? { ok: true }; }
     if (m === 'POST' && p === '/api/recruit') { const b = body; const { token, ...bot } = crew.recruit(b.template, b.name, 'person', me); return bot; }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)$/)) && m === 'GET') return crew.botPage(r[1], me, Number(q.get('around')) || undefined);
-    if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/messages$/)) && m === 'POST') { const b = body; return crew.post(r[1], b.text ?? '', b.model, me, b.photos, b.room === true); }
+    if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/messages$/)) && m === 'POST') { const b = body; return crew.post(r[1], b.text ?? '', b.model, me, b.photos, b.room === true, key); }
     if (m === 'GET' && p === '/api/people') return crew.members();
     if (m === 'POST' && p === '/api/people') return crew.addMember(body.name);
     if ((r = p.match(/^\/api\/people\/(\d+)$/)) && m === 'PUT') return crew.updateMember(Number(r[1]), body);
@@ -409,7 +409,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     if ((r = p.match(/^\/api\/routines\/(\d+)$/)) && m === 'PUT') { crew.updateRoutine(Number(r[1]), body); return { ok: true }; }
     if ((r = p.match(/^\/api\/routines\/(\d+)$/)) && m === 'DELETE') { crew.deleteRoutine(Number(r[1])); return { ok: true }; }
     if ((r = p.match(/^\/api\/routines\/(\d+)\/run$/)) && m === 'POST') { crew.runRoutine(Number(r[1])); return { ok: true }; }
-    if ((r = p.match(/^\/api\/asks\/(\d+)\/answer$/)) && m === 'POST') { await crew.answer(Number(r[1]), body, me); return { ok: true }; }
+    if ((r = p.match(/^\/api\/asks\/(\d+)\/answer$/)) && m === 'POST') { await crew.answer(Number(r[1]), body, me, key); return { ok: true }; }
     throw Object.assign(new Error('not found'), { status: 404 });
   }
 

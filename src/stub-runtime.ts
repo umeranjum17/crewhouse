@@ -69,6 +69,7 @@ export class StubRuntime implements AgentRuntime {
       on({ type: 'tool', name, phase: 'end', ok: true });
       this.transcripts.set(spec.key, `${this.transcript(spec.key)}${name}: ${result}\n`);
     }
+    if (/link is down/i.test(said)) return { ok: false, kind: 'network', message: 'fetch failed' };
     if (/hit the limit/i.test(said) && spec.account === 'chatgpt')
       return { ok: false, kind: 'resting', message: 'You have hit your ChatGPT usage limit (plus plan). Try again in ~30 min.', until: Date.now() + 1_800_000 };
     if (/no helpers in plan/i.test(said) && spec.account === 'chatgpt')
