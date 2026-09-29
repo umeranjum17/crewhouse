@@ -764,6 +764,8 @@ details.card[open] > summary { margin-bottom: 10px; }
   background-image: repeating-linear-gradient(90deg, transparent 0 30px, var(--r-seam) 30px 32px); box-shadow: 0 -3px 0 var(--r-skirt); }
 .o-hit { position: absolute; inset: 0; z-index: 1; background: none; border: 0; padding: 0; border-radius: 0; cursor: pointer; }
 .o-hit:focus-visible { outline: 2px solid var(--pink); outline-offset: -3px; }
+/* The room's furniture is scenery: a tap on a desk, a monitor or the sofa opens whoever sits there. */
+.o-deskf, .o-mon, .o-things, .o-chair, .o-seat, .o-win, .o-plant, .o-sofa { pointer-events: none; }
 .o-px { position: absolute; display: block; image-rendering: pixelated; pointer-events: none; }
 .o-sprite { left: 50%; bottom: 20px; z-index: 2; transform: translateX(-50%); }
 .o-sprite.at-desk { left: calc(50% - 46px); bottom: 26px; transform: none; }

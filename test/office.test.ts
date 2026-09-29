@@ -161,6 +161,11 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, no bubble or desk thin
         if (n === 30) assert.ok(m.more > 0, `${at}: a big crew folds behind "+N more"`);
       }
     }
+    // The furniture is scenery: a tap on a desk front lands on its seat and opens that helper.
+    await b.open('demo=crew5&day');
+    await until('the room', () => b.run(room), 30_000);
+    await b.run("(() => { const r = document.querySelector('.o-deskf').getBoundingClientRect(); document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2).click(); })()");
+    await until('the helper\'s panel', () => b.run("!!document.querySelector('.o-sheet')"), 5000);
     // "+N more" opens the whole crew, and "Show fewer" folds it again.
     await b.open('demo=crew30&day');
     await until('the room', () => b.run(room), 30_000);

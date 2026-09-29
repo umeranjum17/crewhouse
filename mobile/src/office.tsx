@@ -45,7 +45,8 @@ export function Office({ state, night, offline, width, onChief, onDesk, onAsk, o
   seen.current ??= new Set(crew.flatMap((c) => c.things.map((f) => f.url)));
   const plan = A.floorPlan(crew, width, all);
   const folds = all && A.floorPlan(crew, width).more > 0;
-  const dw = width / plan.cols, lw = width / plan.loungeCols;
+  // Whole points: fractional seats add up past the row in Yoga's floats and wrap the last one onto a line of its own.
+  const dw = Math.floor(width / plan.cols), lw = Math.floor(width / plan.loungeCols);
   const day = new Date().setHours(0, 0, 0, 0);
   const today = view.done.filter((d) => d.at >= day).length; // the tray holds today's, as Home's count does (A.homeCounts)
   const calm = offline ? OUT : crew.some((c) => c.ring || c.ask) ? ''
@@ -73,7 +74,7 @@ export function Office({ state, night, offline, width, onChief, onDesk, onAsk, o
         {plan.desks.map((c) => {
           const live = byId.get(c.id) ?? c;
           const needs = A.waitsOnYou(c);
-          return <Cell key={c.id} w={dw} h={DESK_H} r={r} label={said(c)} onPress={() => onDesk(c)}>
+          return <Cell key={c.id} w={dw} h={DESK_H} r={r} label={said(c)} onPress={() => onDesk(c)} onReview={needs && c.ask ? () => onAsk(c.ask!) : undefined}>
             <motion.Hop beat={`${live.ring}|${live.mood}|${live.things.length}|${live.ask?.id ?? ''}`} times={live.mood === 'happy' ? 2 : 1} reduce={reduce} awake={awake}
               style={{ position: 'absolute', left: dw / 2 - 46, bottom: 26 }}>
               <Pal id={`${c.kind}-${c.mood}`} dot={3} step={live.step} reduce={reduce} awake={awake} />
@@ -149,7 +150,7 @@ function useOffice(state: Json) {
 
 /** One seat: the plank floor and skirting under it (seats side by side make one floor), the lounge's sofa back, and
  *  the whole seat as the tap target when it holds someone. */
-function Cell({ w, h, r, lounge, label, onPress, children }: { w: number; h: number; r: Room; lounge?: boolean; label?: string; onPress?: () => void; children: ReactNode }) {
+function Cell({ w, h, r, lounge, label, onPress, onReview, children }: { w: number; h: number; r: Room; lounge?: boolean; label?: string; onPress?: () => void; onReview?: () => void; children: ReactNode }) {
   const floor = <>
     {lounge && <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, top: 30, height: 20, backgroundColor: r.sofaDark }} />}
     <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: FLOOR + 3, backgroundColor: r.floor, borderTopWidth: 3, borderColor: r.skirt }}>
@@ -157,7 +158,9 @@ function Cell({ w, h, r, lounge, label, onPress, children }: { w: number; h: num
     </View>
   </>;
   if (!onPress) return <View style={{ width: w, height: h }}>{floor}{children}</View>;
-  return <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label} style={{ width: w, height: h }}>{floor}{children}</Pressable>;
+  // A screen reader reads the seat as one button, so the Review inside it is offered as the seat's own action too.
+  return <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label} style={{ width: w, height: h }}
+    accessibilityActions={onReview ? [{ name: 'review', label: 'Review' }] : undefined} onAccessibilityAction={(e) => { if (e.nativeEvent.actionName === 'review') onReview?.(); }}>{floor}{children}</Pressable>;
 }
 
 /** A mascot sprite, `dot` points a pixel (the PNGs carry an ink edge a pixel wide), blinking for a moment on news. */
