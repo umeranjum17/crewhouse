@@ -188,6 +188,27 @@ test('a helper\'s draft waits in Needs you, named for who it goes to; the row\'s
   done();
 });
 
+test("a job proposal card names the helper's proposed job, never a memory heading", async () => {
+  // The real path: Chief drafts a five-part job (crew_job) and the ask the app receives is
+  // crew.snapshot()'s — every open ask already through Crew.askView. Before the fix askView dropped
+  // the job detail, so the card fell into the generic propose head (QA-233/D35).
+  const { setup: lab, until } = await import('./lab.ts');
+  const { crew, done } = lab();
+  crew.onboard('sir');
+  crew.recruit('scout', 'Scout', 'person');
+  const parts = { does: 'Sort bills and letters.', aim: 'Triage the post pile.', gets: 'The rough brief.', how: 'Sort oldest first, flag deadlines.', great: 'A tidy pile, bills by due date.' };
+  await crew.post('chief', `Please [tool crew_job ${JSON.stringify({ bot: 'scout', ...parts })}]`);
+  await until('the job ask in the served view', () => crew.snapshot().asks.some((a: any) => a.kind === 'propose' && a.detail.job));
+  const s: Json = crew.snapshot();
+  const ask = s.asks.find((a: any) => a.kind === 'propose' && a.detail.job)!;
+  const c = A.card(ask, s);
+  assert.equal(c.head, "Scout's proposed job", 'the card names the proposed job, not a memory preference');
+  assert.doesNotMatch(c.status ?? '', /remember/i, 'no memory-specific heading above a job change');
+  assert.deepEqual(c.choices.map((x: any) => x.label), ['Use it', 'Not now'], 'consent still replaces the job or leaves it');
+  assert.match(c.preview?.body ?? '', /What it does: Sort bills/);
+  done();
+});
+
 test('Home commits nothing: a row opens the review sheet, and a starter fills the box without sending', () => {
   const src = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
   const home = src.slice(src.indexOf('function NeedsRows('), src.indexOf("const ownerName"));
@@ -775,7 +796,7 @@ test('no raw heading markers reach the ask card or its Read-all view', () => {
   const job = { bot: 'scout', does: '### Registry checks\nScout reads the public register', aim: '## Peace of mind about names',
     gets: 'nothing', how: '### Gently, one page a day', great: '### Quiet weeks, a word when something changed' };
   const c = A.card({ id: 9, bot: 'chief', kind: 'propose', at: now, detail: { job } }, s);
-  assert.equal(c.head, `Chief wrote Scout's job`);
+  assert.equal(c.head, `Scout's proposed job`);
   assert.doesNotMatch(c.preview!.body, /#|\\\\n/, c.preview!.body);
   assert.match(c.preview!.body, /What it does: Registry checks\nScout reads the public register/);
   const offered = A.card({ id: 10, bot: 'scout', kind: 'propose', at: now,
