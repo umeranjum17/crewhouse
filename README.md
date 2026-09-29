@@ -1,119 +1,201 @@
-# Crewhouse
+<h1 align="center">
+  <img src="web/icon-192.png" width="72" alt="" valign="middle" /> Crewhouse
+</h1>
 
-[![CI](https://github.com/umeranjum17/crewhouse/actions/workflows/ci.yml/badge.svg)](https://github.com/umeranjum17/crewhouse/actions/workflows/ci.yml)
+<p align="center">
+  <a href="https://github.com/umeranjum17/crewhouse/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/umeranjum17/crewhouse/ci.yml?style=flat&branch=main" /></a>
+  <a href="LICENSE"><img alt="Apache 2.0" src="https://img.shields.io/badge/license-Apache--2.0-666?style=flat" /></a>
+  <img alt="Linux" src="https://img.shields.io/badge/Linux-111?style=flat" />
+  <img alt="Self-hosted" src="https://img.shields.io/badge/self--hosted-111?style=flat" />
+</p>
 
-Local-first, open-source crew of persistent AI helpers run by Chief on your own ChatGPT.
+<p align="center">
+  <strong>A crew of AI helpers that lives on your computer and works for your household.</strong><br/>
+  You talk to Chief. Chief hands the job to the right helper: Scout looks things up, Scribe drafts, Reel makes videos, Tracer finds leads. Each helper is a folder on your disk that thinks with your own ChatGPT. When a helper wants to send, spend or delete something, it asks you first, in one plain sentence, on your computer or your phone.
+</p>
 
-You talk to **Chief**. Chief recruits bots from templates (Reel makes demo videos, Scout researches, Scribe drafts, Tracer finds leads) and hands them work. Each bot is a folder on your disk with its own persona, notes, skills and files. It thinks with your own AI account, which you sign in to from inside the app. Questions come to you in one place, as one plain sentence, from a desktop or phone browser. Every helper is a chat, like a messaging app: the list shows each one's last line and what's new, a search box finds anything anyone said, and `@Scout` in Chief's box goes straight to Scout.
+<h3 align="center"><a href="#quick-start"><ins>Run it on your computer</ins></a></h3>
 
-Nothing leaves your machine except what the crew sends your own AI account to do the work: there is no server of ours and no telemetry.
+<p align="center">
+  <a href="#quick-start">Quick start</a> ·
+  <a href="TRY-IT.md">A 30-minute walk through</a> ·
+  <a href="https://github.com/umeranjum17/crewhouse/releases">Android preview builds</a> ·
+  <a href="#under-the-hood">Under the hood</a>
+</p>
 
-> Status: first working slice. Chief, the crew, plain-words approvals, routines, a household, in-app sign-in, app connections and the web app work end to end on Linux, on the engine Crewhouse ships inside itself, and crewd picks running work back up after a restart. Each bot with the Computer tool gets its own desktop you can watch and take over. The phone app is in review ([#7](https://github.com/umeranjum17/crewhouse/pull/7)). See "Not yet", and [TRY-IT.md](TRY-IT.md) for a first walk through.
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/readme/home-night.webp" />
+    <img src="docs/screenshots/readme/home-day.webp" alt="Crewhouse's Home at desktop width: four things that need you, two helpers working, today's finished work, and a list of jobs to hand the crew" width="960" />
+  </picture><br/>
+  <sub>Every picture here is the real app running. The household in it (Nadia and her crew) and its messages come from the app's built-in demo, so no one's real data is shown.</sub>
+</p>
+
+## Why Crewhouse exists
+
+A family's to-do list is full of small jobs that take an afternoon each: chasing a refund, comparing flights, planning the week's dinners, writing the thank-you note. AI can do most of them now, but only if it can act, and nobody wants a chatbot sending emails or placing orders on its own.
+
+Crewhouse gives the household a crew that does the work and a single, calm place to say yes. The helpers run on your own computer, with your own ChatGPT sign-in. There is no Crewhouse server and no telemetry. What leaves the house is what a job needs: your AI account, the pages and searches a helper opens, the apps you connected, and a content-free "Crewhouse has news" ping to your phone.
+
+## See it in action
+
+### Ask in your own words
+
+Tell Chief what you need. He hands it to the helper who does that kind of work, or asks one short question when he isn't sure who that is. A job that should repeat ("weekdays 8am…") comes back as a routine card, and nothing is scheduled until you tap Start it.
+
+<p align="center">
+  <img src="docs/screenshots/readme/routine.webp" alt="Chief's chat: the person asks for Pip to plan the week's dinners every weekday morning, and Chief replies with a routine card, Every weekday at 8:00 am, with Start it, Change time and Not now" width="300" />
+</p>
+
+### It asks before it spends
+
+Helpers work in their own folders without bothering you. Anything that costs money asks every time. The card is built from what the shop's own page shows, never from the model's description of it. Sending, deleting, or opening something of yours also asks first. Some of those can get a standing "Always OK" (say, adding events to your calendar). Spending never can, and neither can acting as you on a site you signed a helper in to. The owner also sets one monthly spending cap for the whole house.
+
+<p align="center">
+  <img src="docs/screenshots/readme/order.webp" alt="Scout asks to place an order at shop.example: garlic, milk and rice, total $43.10, with Review order and Don't place order" width="300" />
+</p>
+
+### Drafts, never sent behind your back
+
+When a helper writes in your name (a reply to the school, a refund chase, a cancellation email), it arrives as a draft. You approve it or you don't, and nothing is sent either way. The helper hands you the words to send yourself.
+
+<p align="center">
+  <img src="docs/screenshots/readme/draft.webp" alt="Scout's draft of a refund chase to a shop's support inbox, marked 'A draft for you to send, nothing is sent'" width="300" />
+</p>
+
+### Real files, ready to use
+
+Ask for a spreadsheet or a document and you get a real `.xlsx` or `.docx`. The helper describes what goes in it, and Crewhouse builds the file. You can open it right in the chat to read it, or download it.
+
+<p align="center">
+  <img src="docs/screenshots/readme/workbook.webp" alt="Scribe's hotel reception workbook open beside the chat: four sheets, the daily dashboard showing arrivals, departures and walk-ins" width="760" />
+</p>
+
+### A crew you can grow
+
+Each helper has a soul (who it is, written by you), a job, its own skills and tools, and notes about the people it works for. Every note it keeps is a git commit you can undo. Add a helper from a template, or describe one to Chief and approve what he suggests.
+
+<p align="center">
+  <img src="docs/screenshots/readme/crew.webp" alt="The crew screen: Chief, Reel, Scout, Scribe and Pip, each with what it is doing now, and Add a helper" width="300" />
+</p>
+
+### Routines, without the setup
+
+"Every Friday 5pm" or "weekdays 8am" become routines that run on the computer's own clock. If the computer slept through one, it catches up once. If the last run is still going, the next one is skipped, not stacked. A quiet check-in only tells you when something changed. Chief's morning digest (what finished, what needs you, what's coming) is written by Crewhouse itself, so it uses none of your ChatGPT.
+
+<p align="center">
+  <img src="docs/screenshots/readme/routines.webp" alt="The Routines screen: a box to tell Chief what should happen regularly, Your week every morning, Plan the week's dinners every Saturday, and a paused school newsletter check" width="300" />
+</p>
+
+### Sign in once, inside the app
+
+There are no terminal logins and no API keys. The first time you ask for something, Chief puts a **Sign in with ChatGPT** button under his reply. ChatGPT's own page opens, you tap Continue, and the job starts. A one-time code is the fallback. Other subscriptions the engine supports are under Settings, AI accounts ([the list](docs/supported-subscriptions.md)).
+
+<p align="center">
+  <img src="docs/screenshots/readme/signin.webp" alt="Chief's chat after a first request: 'ChatGPT asks you once', with a Sign in with ChatGPT button" width="300" />
+</p>
+
+### Day and night, desk and pocket
+
+The same app works at desktop and phone width, and switches to night colours in the evening. The Android app pairs with the computer by QR code or a typed code, over the home Wi-Fi, over Tailscale, or through a relay you run yourself. Its notifications only ever say "Crewhouse has news". The words themselves come over the encrypted link.
+
+<p align="center">
+  <img src="docs/screenshots/readme/phone-day.webp" alt="Home at phone width in day colours" width="260" />
+  <img src="docs/screenshots/readme/phone-night.webp" alt="Home at phone width in night colours" width="260" />
+</p>
+
+**Also in the house:**
+
+- **A household.** Add people under Settings. Each person gets their own Chief thread, helpers' notes about them, questions, quiet hours and **their own AI sign-in**. Crewhouse never lends one person's account to another, and one person's AI running out never pauses someone else's work.
+- **Each helper's own computer (Linux).** A helper with the Computer tool gets its own virtual display and browser, never yours. Watch it live, take the wheel (the helper pauses until you hand it back), or show it how to do a task so it can keep the steps as a skill.
+- **Connected apps.** Each person connects their own Notion, Canva, Google Drive, Calendar or Gmail. A helper that needs one asks with a Connect card in the chat. Reading happens straight away; changing or sending asks first. Google needs a one-time setup by the owner ([docs/google-setup.md](docs/google-setup.md)).
+- **Picks up after a restart.** Stop the computer mid-job, start it again, and the job carries on in the same conversation. A question waiting on you is still there.
+- **Learns how you work.** After a long job the helper can keep what it learned as a skill. You'll see a "Learned: …" line with Forget next to it, and Settings can switch this off.
 
 ## Quick start
 
-**The download (Debian, Ubuntu and friends):** open `crewhouse_<version>_amd64.deb` from the release page, and the software centre installs it along with what it needs (bubblewrap for the helpers' shell, Xvfb for their own screens). Then open **Crewhouse** from the app menu. It starts itself, opens in its own window, starts by itself whenever you log in, and fetches the helpers' own tools (their web browser is the big one) in the background on its first run, while everything else already works. On other Linux, `crewhouse-<version>-linux-x64.tar.gz` is the same folder: unpack it and run `crewhouse/node/bin/node crewhouse/launch.mjs`. Both carry their own Node. The downloaded app checks the project's public release list once a day and tells the owner when a new version is ready; nothing of the family's is sent. `node scripts/package.mjs` builds both, after `npm run build:web`.
+Crewhouse is self-hosted only. There is no hosted service and no account with us. It runs on one computer in the house, and everyone uses it from a browser or the phone app.
 
-**From source:** you need Linux (macOS works without the bots' shell and desktops) and [Node](https://nodejs.org) 22.19 or later. Nothing else: no CLIs, no terminal sign-ins.
+You need **Linux** and **[Node.js](https://nodejs.org) 22.22.3 or later**. Nothing else: the AI engine ships inside Crewhouse, and everyone signs in from the app.
 
 ```bash
 git clone https://github.com/umeranjum17/crewhouse && cd crewhouse
-./crewhouse setup     # installs dependencies, builds the web app, offers the tool kit, checks your machine
-./crewhouse start     # starts crewd and prints the address, http://127.0.0.1:7711
+./crewhouse setup     # installs dependencies and the engine, builds the web app, checks the machine
+./crewhouse start     # starts Crewhouse and prints the address
 ```
 
-On Linux, setup offers to start Crewhouse by itself whenever you log in (a systemd user service; `./crewhouse autostart on|off` changes it later), so a reboot needs no terminal.
+Open **http://127.0.0.1:7711**. Chief greets you and offers three things to take off your plate. Tap one, then **Sign in with ChatGPT** under his reply, and the crew starts work.
 
-Open the address. Chief greets you and offers three things he can take off your plate; tap one. He asks you to **Sign in with ChatGPT** right there: ChatGPT's own page opens, you pick your account and tap Continue, and it comes straight back. Then try:
+<p align="center">
+  <img src="docs/screenshots/readme/hello.webp" alt="The first screen after install: Chief says Good morning, promises to ask before sending, deleting or spending, and offers three jobs" width="760" />
+</p>
 
-> Please recruit Reel and have it make a 6 second title card that says Crewhouse.
+When run in a terminal, `setup` asks two things:
 
-Chief recruits Reel and hands it the task. Reel works in its own folder without asking; if it wanted to send, pay for, delete or open something of yours, it would ask first in one sentence. The video appears in Reel's chat and on its **Files** tab.
+- Whether to install the helpers' pinned tools now: their web browser with its own Chromium (about 170 MB), MarkItDown and yt-dlp. You can do this later with `./crewhouse tools install`.
+- Whether Crewhouse should start by itself when you log in (a systemd user service). You can change this later with `./crewhouse autostart on|off`.
 
-Other commands: `./crewhouse update` (pulls, installs and restarts crewd; refuses if this folder has local changes; running work carries on), `./crewhouse uninstall [--all]` (removes the database, the engine's folder, everyone's sign-ins and pinned tools; your crew folder stays unless you add `--all`), `./crewhouse doctor` (what's installed, what's missing, how to add it), `./crewhouse tools [install [ids...]]` (the tool kit) and `./crewhouse test` (the test suite; it runs the engine on a scripted stub model, so it needs no account and uses no quota). CI runs the typecheck, the web build and this suite on every pull request.
+`./crewhouse doctor` shows what's installed and what's missing. The helpers' sandboxed shell needs [bubblewrap](https://github.com/containers/bubblewrap), and their own screens need Xvfb and Chromium. Crewhouse is built and tested on Linux. On macOS, helpers get no shell or screens, and autostart isn't available.
 
-## How it works
+Everything Crewhouse writes lives in `~/.local/state/crewhouse/` (the database, the engine and everyone's sign-ins), `~/Crewhouse/` (helpers and what they know about each person) and `~/.local/share/crewhouse/tools/` (the tool kit). `./crewhouse uninstall` removes all of it, but keeps your crew folder unless you add `--all`.
+
+| Command | What it does |
+|---|---|
+| `./crewhouse update` | Pulls, installs and restarts Crewhouse. Running work carries on. It refuses if the folder has local changes. |
+| `./crewhouse doctor` | Shows what's installed and what's missing, and how to add it |
+| `./crewhouse tools [install [ids...]]` | Lists or installs the helpers' tool kit |
+| `./crewhouse autostart on\|off` | Turns starting at login on or off |
+| `./crewhouse phones code \| pending \| approve '<two words>'` | Pairs a phone from the terminal |
+| `./crewhouse uninstall [--all] [--yes]` | Removes what Crewhouse installed |
+
+**The phone app** (Android) is in preview. Debug-signed APKs are on the [releases page](https://github.com/umeranjum17/crewhouse/releases). Pair it under Settings, Phones on the computer ([TRY-IT.md](TRY-IT.md#3-the-phone-app)). To reach the computer away from home, use Tailscale or [run your own relay](relay/README.md). There's no built-in one.
+
+## Under the hood
 
 ```
- browser (desktop or phone width)
-        │ HTTP + WebSocket, 127.0.0.1 only
+ browser or phone app
+        │ HTTP + WebSocket on 127.0.0.1 · the phone over an encrypted link
         ▼
- crewd ── SQLite (state, append-only events, per-bot queue)
-   │  in-process
+ crewd ── SQLite (state, append-only events, per-helper queue)
+   │ supervised child process, loopback + token
    ▼
- the bundled OpenClaw engine (pinned, its own folder) ── one engine agent per person: only their own sign-ins
-   └─ one session per task, in the bot's own folder ── every tool call passes crewd's gate first
-        └─ tools: its files, a sandboxed shell (bubblewrap), the web, its browser, the person's connected apps
+ the bundled OpenClaw engine ── one engine agent per person: only their own sign-ins
+   └─ one session per task ── every tool call passes crewd's gate first
+        └─ tools: the helper's files, a sandboxed shell, the web, its own browser, the person's connected apps
 ```
 
-- **crewd** (`src/`) is one Node process with one SQLite file (`node:sqlite`). Every change is an event; the UI follows the event stream over a WebSocket.
-- **The engine** is [OpenClaw](https://www.npmjs.com/package/openclaw), pinned exactly in `runtime/openclaw/package.json` and running as a supervised child process crewd spawns (`src/openclaw/gateway.ts`). It is Crewhouse's own copy: installed scripts-off into `runtime/openclaw/node_modules`, and its state lives in `~/.local/state/crewhouse/openclaw/` under its own HOME — the child's whole environment is built from nothing at startup, loopback only with token auth, and channels, Control UI, Tailscale and mDNS off. Your own `~/.pi` and `~/.agents` are never read, written or run; `test/isolation.test.ts` proves it against a decoy of both on every CI run. Nothing is discovered: no extensions, context files or prompt templates, and skills only from a reviewed allowlist plus the bot's own.
-- **Each task is one engine session**, in the bot's folder, with its own session file. Asking a bot again later is a new session; the bot's memory is its notes.
-- **The gate** (`src/policy.ts`, on the engine's `tool_call` hook) decides every tool call from the tool and its input, never from the model's words:
-  - Work in the bot's own folder, its sandboxed shell, reading the web and reading from a connected app run silently.
-  - Opening or changing your own files, acting as you on a site you signed its browser in to, changing something in a connected app, and anything that costs money stop for **one plain sentence** ("Maya wants to change a file in your Documents folder: “plan.txt”."), with Allow once, For this task, Always for Maya, or Not now. Spending never gets more than once. Sign-in and key folders (`~/.pi`, `~/.ssh`, every person's sign-ins…) are refused outright.
-  - A question waits 3 minutes, then the turn parks and your later answer resumes the same session.
-- **The shell** runs in [bubblewrap](https://github.com/containers/bubblewrap): `/usr` and `/etc` read-only, an empty `/home` with only the bot's folder in it, no inherited environment, network on. So no command ever needs your approval. Without a usable bubblewrap (macOS, or a distro that forbids user namespaces) bots get no shell; `./crewhouse doctor` says so.
-- **Bots on disk** live at `~/Crewhouse/bots/<name>/`: `AGENTS.md` (persona), `notes.md` (what it learned, capped at 2,500 characters and read at the start of every task), `skills/*/SKILL.md` ([agentskills](https://agentskills.io) format), `files/` (deliverables) and `work/`.
-- **Thinks with**: each bot has an order of AI accounts in its `bot.json`, ChatGPT by default. When an account hits its limit ("resting until 3:40 pm"), the task carries on with the next one, in the same session file, conversation and all. Chief can also pick an account for a single task.
-- **Memory**: every change to a bot's `notes.md` is a git commit in its folder, and **Undo** on the bot's **What I did** tab takes any one of them back.
-- **Tools** are a curated kit, one manifest per tool in `tools/<name>/tool.json`: what it does, its licence, how it installs and when it **asks you first**, in plain words (shown on the recruit card and the bot's Tools tab).
-  - Pinned tools install into Crewhouse's own folder (`~/.local/share/crewhouse/tools/`), never globally and never with sudo: the browser ([playwright-axi](https://github.com/brycehamrick/playwright-axi), an [AXI](https://axi.md) over Playwright, with its own Chromium; every dependency from a committed lockfile), [MarkItDown](https://github.com/microsoft/markitdown) and [yt-dlp](https://github.com/yt-dlp/yt-dlp) (checksum-verified). System tools (gh, ffmpeg, ImageMagick, ripgrep, jq) are detected, and doctor prints the install line. Web search and fetch are Crewhouse's own, with no key.
-  - A bot's grants become its engine tools: files and the sandboxed shell (with the kit's programs on its PATH), web search and fetch, the browser (one tool taking playwright-axi's argument list: one small schema per turn instead of an MCP server's dozens, and pages in compact TOON-style output; crewd runs it by absolute path with the bot's own HOME and XDG folders, never yours, and its gate reads every argument list), and typed tools for command-line programs that use your own sign-in (`github`, `people_search`). Those run with a fixed argument list outside the sandbox; the manifest's `run.free` prefixes run at once, `run.spend` ones ask every time, anything else is refused.
-  - Each bot's browser has its own profile in `bots/<name>/browser/`. The gate asks you before a click or keystroke on a checkout or payment page, or on a site you signed the bot in to. Signing in is yours: on **Give back** you tick the sites you signed it in to (crewd reads the hosts off its own tabs), it keeps them in `bot.json` `signedIn`, and Details lists them with a **Forget** each.
-- **Each bot's own desktop** (the Computer tool, Linux): when a task starts, crewd gives the bot a virtual display (`Xvfb :1NN`, 1280×800, its own X cookie) with its own Chromium on it, profile in `bots/<name>/browser/`. The browser tool drives that Chromium through a DevTools pipe that crewd relays at a secret loopback address, never an open port, so no other bot's shell can reach it; on that display only, never yours. The desktop stops after 10 idle minutes.
-  - On the bot's **Screen** tab, **Watch** streams it live through [desklink](https://www.npmjs.com/package/@desklink/host) (WebRTC, view only). crewd starts the desklink engine and picks the display and permissions; the page never can.
-  - **Take over** pauses the bot: its turn is stopped and every tool call is refused ("the person has the controls; wait") until you **Give back**, which resumes its task with your note of what you did. Use it to sign the bot's browser in to a site.
-  - **Show it how** (teach a task by showing it): on the Screen tab, on the computer or the phone, say what you are showing and press Start. It is Take over with a recorder on: while you drive the bot's own browser, crewd writes down, in plain words, the pages you open, what you click by its visible label, and which box you type in, never what you type and nothing from a password box, plus a picture of each page. **Done showing** hands the wheel back and gives the bot the steps and up to four pictures, and it asks to keep them as one of its skills (the usual yes-or-no card) and does it once. **Cancel** keeps nothing. A show ends by itself after 15 minutes (`src/teach.ts`).
-  - Needs Xvfb and Chromium; `./crewhouse doctor` names what is missing.
+<details>
+<summary><strong>How the pieces fit</strong></summary>
 
-  | Watch | Take over | Phone width |
-  |---|---|---|
-  | ![Watching Scout's screen](docs/screenshots/desktop-watch.webp) | ![You have the controls](docs/screenshots/desktop-drive.webp) | ![Phone width](docs/screenshots/desktop-phone.webp) |
-- **Skills** live in a shared library (`skills/`, agentskills format). Each template lists the ones it starts with, and the bot gets its own copy.
-- **Tracer** finds people, work emails and phone numbers through [treg](https://github.com/superdesigndev/treg) (Apache-2.0 with an added no-hosted-resale term; Crewhouse only calls your installed `treg` CLI, owner-only). Setup is yours, in your own terminal: `curl -fsSL https://treg.to/install.sh | sh` (Python 3.12 or 3.13), then `treg login` (new accounts get $1 of credit). Your own provider keys (`treg secret add`, or the treg dashboard) are used first and never billed by treg. Searching the catalog and reading prices is free and needs no account. Every paid call comes to you as an approval showing its price cap (`X-Treg-Route-Max-Cost`, which treg enforces on its routed people endpoints). No key ever goes into Crewhouse, and bots can't read `~/.treg`.
-- **A household.** One person needs nothing new. Add someone under **Settings, People** and they get their own thread with Chief (who asks how to address them), their own bots, tasks and questions, and quiet hours during which a bot's question waits instead of holding the bot (standing answers still apply). The screen's owner is picked under **Who is using this screen?**; it is a view, not a login.
-  - **Each person runs on their own AI accounts.** The companies' terms forbid making your account available to anyone else, so crewd never lends one. Each person, the owner too, has their own engine runtime and credential file (`~/.local/state/crewhouse/people/<id>/engine/auth.json`), and signs in from the app (`src/accounts.ts`): **Sign in with ChatGPT** opens ChatGPT's own page in the tap, and ChatGPT sends the browser straight back to crewd's own listener on this computer (port 1455, the address ChatGPT's sign-in is fixed to). The tab then shows Crewhouse's words, only once the sign-in really works, and the app moves on by itself: three taps. A one-time code is the fallback (Having trouble?, or by itself when the page hasn't come back after three minutes). After signing in crewd reads the plan from the sign-in itself and steers a work ChatGPT (Business, Enterprise, Edu) to a personal one; a plan without helpers ("usage not included") is said plainly, with Ask the owner to cover it and See ChatGPT plans. ChatGPT is the one account the app offers; crewd also keeps Grok, GitHub Copilot and OpenRouter as quiet paths for later. Claude is not offered (Anthropic allows its subscriptions only in its own apps), and neither is Meta.
-  - A sign-in that fails, is declined, can't be reached, runs out of time, finds the port busy or is cancelled ends signed out, with one plain sentence and one next step. A request made before signing in waits for that person's own sign-in (never anyone else's) and starts by itself after. Sign-ins are refreshed in the background, and one that lapses (a password change) is signed out and Chief says so once.
-  - A task runs on the accounts of whoever asked for it (Chief's hand-offs too). "Resting until" is per person: one person's spent limit never pauses another's work, and nobody's work falls back onto someone else's account.
-- **Connections** (`src/connections.ts`): each person connects their own apps under **Settings, Connections**, on the app's own page, and every helper working for them can then use them, through the gate (reading runs silently; changing or sending asks). A helper that needs an app asks for it in the chat (`crew_connect`): a Connect card that opens the app's own page in that tap, and the task carries on with it once connected. Notion and Canva register Crewhouse by themselves (OAuth dynamic client registration), so they need no setup. Google Drive, Calendar and Gmail are one service per connection (so Google never shows tick-boxes) through the household's own Google app, which the owner switches on once under **Settings, Google for the house** ([docs/google-setup.md](docs/google-setup.md): about twenty minutes, free); Calendar and Gmail show Google's "unverified app" screen, which the card warns about first. **Share to Crewhouse** from any app on the phone needs nothing at all. Google Calendar and Gmail are crewd's own one-tool `calendar` (calendar-axi, `src/calendar.ts`: today, week, free, add, move, cancel) and read-only `mail` (mail-axi, `src/mail.ts`: inbox, search, read) instead of Google's hosted MCP servers, so each costs a helper a few dozen tokens a turn rather than thousands. Tokens stay in each person's own folder (`people/<id>/connections.json`, mode 600), are refreshed in the background, and never reach a bot or the app screen. Outlook and OneDrive are not in v1 (Microsoft now requires an Azure directory first).
+- **crewd** (`src/`) is one Node process with one SQLite file. Every change is an event, and the app follows the event stream. The web app reads crewd only through `web/src/adapter.ts`. The contract is [docs/ui-contract.md](docs/ui-contract.md).
+- **The engine** is [OpenClaw](https://www.npmjs.com/package/openclaw), pinned exactly in `runtime/openclaw/package.json`, installed with scripts off, and run as a child process with an environment built from nothing. It uses loopback only, with token auth, and channels, Control UI, Tailscale and mDNS are all off. Crewhouse never reads or runs your own agent setup (`~/.openclaw`, `~/.codex`, `~/.pi` and the like). `test/openclaw.test.ts` and `test/isolation.test.ts` check that on every CI run.
+- **Tasks** are engine sessions keyed by person, helper and task. A restart, or switching to another account when one hits its limit, continues the same session.
+- **The gate** (`src/policy.ts`) decides every tool call from the tool and its input, never from the model's words. Unknown tools fail closed. Sign-in and key folders are refused outright. A question waits a few minutes, then the helper parks, and your later answer resumes it.
+- **The shell** runs in bubblewrap: `/usr` and `/etc` read-only, an empty `/home` with only the helper's folder in it, and no inherited environment. A template can restrict a helper to a list of hosts, reached only through crewd's allowlisting proxy (`src/net.ts`).
+- **On disk:** a helper is `~/Crewhouse/bots/<id>/` (`soul.md`, `AGENTS.md` for its job, `bot.json`, `skills/`, `files/`). What the crew knows about a person is in `~/Crewhouse/people/<id>/` (`about.md` and one `notes/<helper>.md` per helper), and every change is a git commit.
+- **Tools** are a curated kit, one manifest per tool in `tools/<id>/tool.json`, saying what it does, its licence, and when it asks you first. Pinned tools install into Crewhouse's own folder, never globally and never with sudo. The browser is [playwright-axi](https://github.com/brycehamrick/playwright-axi) with its own Chromium. Command-line programs that use your own sign-in are typed tools, never shell.
+- **Helpers' screens** (`src/desktop.ts`) are one Xvfb display and one Chromium per helper, streamed to you with [desklink](https://www.npmjs.com/package/@desklink/host). DevTools goes over a pipe that crewd relays at a secret loopback path, so no other helper's shell can reach it.
+- **Routing** a message to Chief uses [`@byokit/decide`](https://www.npmjs.com/package/@byokit/decide): rules for the obvious cases, then the person's own AI. The phone link and relay use [`@byokit/link`](https://www.npmjs.com/package/@byokit/link) and [`@byokit/relay`](https://www.npmjs.com/package/@byokit/relay).
+- **Settings by environment:** `CREWHOUSE_STATE_DIR`, `CREWHOUSE_CREW_DIR`, `CREWHOUSE_TOOLS_DIR`, `CREWHOUSE_PORT` (default 7711), `CREWHOUSE_MAX_CONCURRENT` (default 3), `CREWHOUSE_RELAY`, and `CREWHOUSE_ENGINE=stub` (the scripted test model).
 
-  | First run | Her first request | Say yes on ChatGPT's page | A Connect card |
-  |---|---|---|---|
-  | ![Chief greets her with three ideas](docs/screenshots/onboard/01-hello.webp) | ![Sign in with ChatGPT under Chief's line](docs/screenshots/onboard/02-first-request.webp) | ![Waiting for ChatGPT's page](docs/screenshots/onboard/03-signin-say-yes.webp) | ![Connect Google Calendar, with the warning first](docs/screenshots/onboard/07-connect-card-calendar.webp) |
-
-  Every other state, at phone width, is in [docs/screenshots/onboard/](docs/screenshots/onboard/) (`?demo=…&sheet=…&phase=…` shows each one; see `web/src/demo.ts`).
-- **Routines** hand a bot the same task on a schedule, written in plain words by this computer's clock: "every Monday 9:00", "weekdays 8am", "every day 7:30pm", "every 2 hours" (`src/routines.ts`). Add one on the **Routines** screen or a bot's Routines tab, or just tell Chief ("every Friday at five, have Reel make a demo of what shipped"), who sets it up with his `crew_routine` tool. Each routine can pick its own AI account, and runs on the accounts of whoever set it up.
-  - The schedule lives in SQLite and crewd's own loop fires it: no cron, no model call to decide when. A computer that slept through a run catches up **once** when it wakes, and Chief says in each person's thread which routines were missed and are running now; if the last run is still going (or waiting on you), the next one is **skipped**, not stacked. A paused routine never catches up. Every card shows the next run and the history.
-  - **The crew's share of your ChatGPT.** Each person picks, in Settings, how much of their own ChatGPT the crew may use: **Light** (the default: leave most of it for me), **Normal**, or **As much as it needs**. crewd adds up what each finished turn used (weighted as the plan's limits weigh it) per person per day; once today's share is gone, routines and check-ins wait until midnight and Chief says so once, while anything the person asks for still runs. No number is ever shown. A routine repeats at most every 15 minutes.
-  - **A money cap.** Every spend already asks, every time. The owner also sets the most the crew may spend in a month (Settings, Money; $20 by default): yeses to spends with a known price add up, and a spend that would pass the cap is refused before it asks.
-  - **Sleep, honestly.** The crew runs on this computer, so it pauses while the computer sleeps; the app and Chief say so, and the phone shows when it last heard from it. While a helper is actually working, crewd holds off idle sleep (`systemd-inhibit` on Linux, `caffeinate` on macOS) and lets go the moment the crew is idle. It never overrides closing the lid.
-  - **Chief's morning digest** is on for everyone at 8:00: while you were away, what finished, what didn't go well, what needs you and what is coming up, in your own thread with Chief. It is written by crewd, so it costs no tokens. Move it or pause it under Routines.
-
-  | Routines | Adding one from a bot's page | Chief sets one up, then the digest |
-  |---|---|---|
-  | ![Routines](docs/screenshots/routines-list.webp) | ![Adding a routine](docs/screenshots/routines-add.webp) | ![Chief and the digest](docs/screenshots/routines-chief.webp) |
-- **Phones, at home and away** (`src/link.ts`, Settings, Phones): at home a phone pairs over the home Wi-Fi, which opens only for the two minutes a pairing code lasts (or stays open if the owner turns "home network" on), and a paired phone finds the computer again over mDNS after the router moves it. Away from home it goes through Tailscale's free plan, through the official app: Settings, Phones, **Reach it from anywhere** says in plain words whether the computer is only at home, reachable from anywhere, or needs Tailscale signed in again, with three numbered steps (install Tailscale here; for each person, Share this computer from Tailscale and send them the link; on their phone install Tailscale, sign in with Google, Accept). Phones dial the computer's Tailscale address directly; the link's own encryption runs inside, so there is no Serve and never Funnel. When the phone can't reach the computer it says what it actually saw and what to try, never a guess: it knocks on the computer's address with a short bound (answers, refused, or no answer at all), checks whether Tailscale is on on the phone, and remembers what the computer last said (its own Tailscale, whether its Tailscale had this phone as a peer, and when this phone last reached it over Tailscale). When the cause can't be told apart, say no answer over Tailscale from a phone that never reached it from away, it says so and names both things to check: asleep, or not shared with this phone's Tailscale account. Settings, Phones shows each phone's last contact and route (home Wi-Fi, Tailscale or the relay), so a phone that has never reached the computer from away stands out. No Tailscale account? Or rather not depend on Tailscale's servers? See [relay/README.md](relay/README.md#without-tailscales-servers-headscale).
-  - *A check by hand, for anyone with two Tailscale accounts (not blocking: the phone reports the failure itself):* that a **shared** computer's Tailscale address answers the link from the sharee's phone. From the owner's Tailscale admin page, share this computer with a second person's account; on that person's phone, on mobile data with Tailscale on, pair at home, then open Crewhouse away from home. The phone showing the chats (Settings, Phones on the computer shows it "with you now") is the proof; record the date and phone here. Not yet done: it needs two real Tailscale accounts.
-- **Type a code without a relay:** Settings, Phones, Add a phone shows a copyable code below the QR. It carries the same one-use ticket, host key and direct home/Tailscale addresses; it lasts two minutes. Away from the computer, someone there can send you `./crewhouse phones code` (a fresh code), then check `./crewhouse phones pending` and run `./crewhouse phones approve 'word one word two'` only when your phone shows those exact two words. The computer must be reachable over home Wi-Fi or Tailscale; a code does not make an unreachable computer reachable.
-- **From anywhere, with your own relay** (`relay/`): phones reach the family computer through a relay the computer dials out to, so it opens no port. The relay passes the link's encrypted frames without reading them, and push is content-free: a phone is only told "Crewhouse has news" and fetches the words over the link. There is no hosted Crewhouse relay and none is built in: a family that wants one runs their own with one command (`docker compose -f relay/compose.yml up -d`, see [relay/README.md](relay/README.md)) and set it under **Settings, Phones, Reach this computer from anywhere** (with the relay's one-use invitation, if it asks for one) or with `CREWHOUSE_RELAY`. crewd then dials out to it: new pairing codes carry the relay address, phones paired at home learn it, a phone can pair by typing two short codes instead of scanning, and a browser's Web Push address is kept there (a phone's push goes through Expo, relay or not).
-- **Phone notifications** (`src/link.ts`): each push says only "Crewhouse has news" (a question for that person, their job finished, failed or not sure it worked, or Chief speaking to them), is held through their quiet hours, and the phone fetches the words over the link. crewd sends it through Expo's free push service to the Expo token the app registers when the person allows notifications; no relay needed. Everything up to the app's Android push credential is in place: with none yet, the app tells the computer, and Settings, Phones says once "Phone notifications aren't switched on for this app yet". To switch them on, whoever builds the app (no code change, no credential ever in this repository):
-  1. In the [Firebase console](https://console.firebase.google.com) (free), add a project, then an Android app with package `dev.crewhouse.app`; download its `google-services.json` and put it at `mobile/google-services.json` (`mobile/app.config.js` picks it up; it is the app's public config, not a secret).
-  2. With an Expo account (free), run `npx eas init` in `mobile/`: it adds the project id to `mobile/app.json` under `expo.extra.eas.projectId`, which the app uses to get its push token.
-  3. In Firebase, Project settings, Service accounts, generate a private key, and upload it to Expo: `npx eas credentials` → Android → Google Service Account → FCM V1. It stays with Expo, never in this repository or on a family's computer.
-  4. Build the APK again (`npm run apk` in `mobile/`) and install it. Each phone registers when it next reaches the computer; the Settings line goes away with the first push Expo accepts.
-- **The crew tools** are how bots talk to crewd, as engine tools calling crewd directly: `crew_report`, `crew_deliver`, `crew_remember`, and for Chief, `crew_roster`, `crew_recruit`, `crew_assign`, `crew_routine`, `crew_routines`, `crew_status` and `crew_call_me`.
-
-Data lives outside the repo: the database is in `~/.local/state/crewhouse/`, the bots in `~/Crewhouse/`. The tool kit is in `~/.local/share/crewhouse/tools/`. Override with `CREWHOUSE_STATE_DIR`, `CREWHOUSE_CREW_DIR` and `CREWHOUSE_TOOLS_DIR`. Other settings: `CREWHOUSE_PORT` (default 7711), `CREWHOUSE_MAX_CONCURRENT` (default 3), `CREWHOUSE_RELAY` (the relay address; Settings, Phones overrides it) and `CREWHOUSE_ENGINE=stub` (the scripted test model).
+</details>
 
 ## Not yet
 
-- The phone app (`mobile/`, Android) has chats, the crew, adding a helper, routines, things, about me and each bot's screen, which it can watch and take over. Not yet on the phone: editing a helper's personality or tools, and Settings; those stay on the computer. iOS comes later.
-- Phone notifications reaching anyone: they wait only on the app's Android push credential (see **Phone notifications** above). Triggers (a folder or a webhook), Telegram. A per-person login: on this computer anyone can pick who they are.
-- Bot desktops and the bots' shell on macOS (desklink is Linux only; the shell needs a Seatbelt wrapper), and on Windows. Watching a bot's screen from outside the house through a relay (the picture needs a TURN route; chat, routines and take-over's buttons work).
-- Signing in with ChatGPT *from the phone*: ChatGPT's page returns to `localhost:1455` on the device that opened it, so the phone app needs to catch it there and relay it to the home computer (the next step, after the phone app). Until then, a phone signs in with the code, or at the home computer. The owner-funded "house allowance". Outlook and OneDrive.
-- A macOS download, and updating in place: today a new version is a new download (the app says when one is ready).
+- iOS, and a signed Android release. The Android app is a debug-signed preview, and its push notifications need the builder's own push credential. Editing a helper, signing people in and connecting apps stay on the computer.
+- Helpers' shell and screens on macOS and Windows, and a desktop download. Today you install from source.
+- Signing in from the phone. For now, everyone signs in on the computer, in the browser, with a one-time code as the fallback.
+- A per-person login. Anyone at the computer can pick who they are.
+
+## Development
+
+```bash
+npm run check        # typecheck (tsc, strict)
+./crewhouse test     # the suite, on a scripted model: no account, no network, no quota
+```
+
+`./crewhouse test` runs in a throwaway HOME and then checks that your own `~/.pi` sign-ins, settings and extensions are unchanged, byte for byte. CI runs the typecheck, the suite (`npm test`) and the web build on Node 22.22.3 and 24. Project conventions for contributors and coding agents are in [AGENTS.md](AGENTS.md).
 
 ## License
 
-Apache-2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+Crewhouse is licensed under the [Apache License 2.0](LICENSE). Third-party notices are in [NOTICE](NOTICE). Each person's AI account stays subject to its provider's terms.
