@@ -1,4 +1,4 @@
 {
   "platforms": ["android"],
-  "android": { "modules": ["expo.modules.crewhousenet.CrewhouseNetModule"] }
+  "android": { "modules": ["expo.modules.crewhousenet.CrewhouseNetModule", "expo.modules.crewhousenet.CrewhouseVoiceModule"] }
 }

@@ -120,7 +120,7 @@ export const api = {
   connect: (app: string) => call('POST', `/api/connections/${app}`),
   connection: (app: string) => call('GET', `/api/connections/${app}`),
   disconnect: (app: string) => call('DELETE', `/api/connections/${app}`),
-  answer: (ask: number, body: { answer: 'allow' | 'deny'; scope?: 'once' | 'task' | 'always' }) => call('POST', `/api/asks/${ask}/answer`, body),
+  answer: (ask: number, body: { answer: 'allow' | 'deny'; scope?: 'once' | 'task' | 'always'; text?: string }) => call('POST', `/api/asks/${ask}/answer`, body),
 };
 
 const wsBase = () => `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`;

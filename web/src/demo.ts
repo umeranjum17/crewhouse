@@ -166,15 +166,15 @@ const state = {
         preview: { head: 'What Scout will press on shop.example', body: 'Espresso machine — delivered 12 May\nReturns are free within 30 days. Starting a return books a collection and tells the shop to expect the item.\nStart return' } } }]
     : variant === 'chase' ? [{ id: 17, bot: 'scout', task_id: 48, kind: 'propose', at: now - 30_000, member: me, title: 'Scout drafted something for the shop’s support inbox. Nothing is sent: you post it yourself.', detail: {
         words: 'Scout drafted something for the shop’s support inbox. Nothing is sent: you post it yourself.',
-        draft: { to: 'the shop’s support inbox', path: 'files/chase-order-98765.md', sha: 'demo' },
+        draft: { to: 'the shop’s support inbox', path: 'files/chase-order-98765.md', sha: 'demo' }, yes: 'Approve',
         preview: { head: 'Draft for the shop’s support inbox', body: 'Subject: Order 98765 — returned 16 May, no refund yet\n\nHello, my return reached you on 16 May, inside your own 30-day window. The order page still shows no refund.\n\nPlease confirm when the refund goes back to my card. Regards,\nNadia' } } }]
     : variant === 'renewal' ? [{ id: 18, bot: 'scout', task_id: 49, kind: 'propose', at: now - 30_000, member: me, title: 'Scout drafted something for the streaming service’s support inbox. Nothing is sent: you post it yourself.', detail: {
         words: 'Scout drafted something for the streaming service’s support inbox. Nothing is sent: you post it yourself.',
-        draft: { to: 'the streaming service’s support inbox', path: 'files/cancel-family-plan.md', sha: 'demo' },
+        draft: { to: 'the streaming service’s support inbox', path: 'files/cancel-family-plan.md', sha: 'demo' }, yes: 'Approve',
         preview: { head: 'Draft for the streaming service’s support inbox', body: 'Subject: Family plan — please cancel before 14 June\n\nHello, my Family plan renews on 14 June at $18.99. Please cancel it from that date and confirm in writing that nothing further will be charged to my card.\n\nRegards,\nNadia' } } }]
     : variant === 'paper' ? [{ id: 19, bot: 'scout', task_id: 50, kind: 'propose', at: now - 30_000, member: me, title: 'Scout drafted something for the school office. Nothing is sent: you post it yourself.', detail: {
         words: 'Scout drafted something for the school office. Nothing is sent: you post it yourself.',
-        draft: { to: 'the school office', path: 'files/reply-trip-form.md', sha: 'demo' },
+        draft: { to: 'the school office', path: 'files/reply-trip-form.md', sha: 'demo' }, yes: 'Approve',
         preview: { head: 'Draft for the school office', body: 'Subject: Ayaan’s trip form — Friday\n\nHello, the signed trip form is in Ayaan’s bag this morning. He takes the packed-lunch option, and I can walk with the group if you are still short of adults.\n\nThank you,\nNadia' } } }]
     : variant === 'meals' ? [{ id: 20, bot: 'scout', task_id: 51, kind: 'permission', at: now - 30_000, member: me, title: '', detail: {
         effect: 'spend', spends: true,

@@ -2,6 +2,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { api, trouble, type Json } from './api.ts';
 import { draftOf, keepDraft, sent } from './draft.ts';
+import { canHear, hear } from './voice.ts';
 import { cycle, type Focused } from './dialog.ts';
 import { chatTokens, safeLink } from './chat-md.ts';
 import * as art from './art.ts';
@@ -391,12 +392,36 @@ export function Steps({ steps, max = 6, onUndo }: { steps: Step[]; max?: number;
   );
 }
 
+/** The voice note to Chief: a mic in the box when this browser can hear on this device. What was said lands in the
+ *  box after what is already there, for the person to read and send; nothing is sent by speaking. */
+function useVoice(on: boolean, text: string, put: (t: string) => void) {
+  const [can, setCan] = useState(false);
+  const [ear, setEar] = useState<{ stop: () => void } | null>(null);
+  const now = useRef(text);
+  now.current = text;
+  useEffect(() => { if (on) void canHear().then(setCan); }, [on]);
+  useEffect(() => () => ear?.stop(), [ear]); // leaving the box turns the mic off
+  if (!can) return null;
+  const start = () => {
+    const h = hear();
+    setEar(h);
+    setListen('chief', true);
+    h.words.then((w) => { if (w) put(now.current.trim() ? `${now.current.trimEnd()} ${w}` : w); else toast("I didn't catch that. Try again."); },
+      (e) => toast(e.message === 'blocked' ? 'Allow the microphone for this page, then try again.' : "Speaking isn't ready on this computer. Type instead."))
+      .finally(() => { setEar(null); setListen('chief', false); });
+  };
+  return <button type="button" className={`mic${ear ? ' on' : ''}`} aria-label={ear ? 'Stop listening' : 'Speak to Chief'} aria-pressed={!!ear}
+    onClick={() => (ear ? ear.stop() : start())}>{ear ? <i className="mic-stop" /> : <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" /></svg>}</button>;
+}
+
 /**
  * The message box. `chat` ties it to one conversation's held draft. A send that doesn't go through keeps the words
  * here with a Retry: nothing a person typed is ever thrown away (web/src/draft.ts).
  */
 export function Composer({ placeholder, onSend, chat }: { placeholder: string; onSend: (t: string) => Promise<unknown> | unknown; chat?: string }) {
   const [text, setText] = useState(() => (chat ? draftOf(chat).text : ''));
+  const voice = useVoice(chat === 'chief', text, (t) => change(t));
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
   const [focused, setFocused] = useState(false);
@@ -422,6 +447,7 @@ export function Composer({ placeholder, onSend, chat }: { placeholder: string; o
       <textarea rows={1} value={text} placeholder={placeholder} aria-label={placeholder}
         onFocus={() => { setFocused(true); hear(true, text); }} onBlur={() => { setFocused(false); hear(false, text); }}
         onChange={(e) => change(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(); } }} />
+      {voice}
       <button className="send" aria-label="Send" disabled={!text.trim() || busy}>↑</button>
     </form>
   );
@@ -489,6 +515,19 @@ function AskHead({ c, who }: { c: Card; who: Helper | undefined }) {
   </div>;
 }
 
+/** A helper's draft takes the person's own words before Approve: their version replaces the draft, and still nothing
+ *  is sent. `box` stands in for the evidence while editing; `yes` carries the words only when they changed. */
+function useDraftEdit(c: Card) {
+  const [words, setWords] = useState<string | null>(null);
+  const changed = words !== null && words.trim() !== c.draftText;
+  return {
+    can: c.evidence === 'draft' && !!c.draftText, editing: words !== null, empty: words !== null && !words.trim(),
+    toggle: () => setWords(words === null ? c.draftText ?? '' : null),
+    box: words !== null && <textarea className="input draft-edit" rows={8} value={words} onChange={(e) => setWords(e.target.value)} aria-label="Your version of the message" autoFocus />,
+    yes: (body: Json) => (changed ? { ...body, text: words!.trim() } : body),
+  };
+}
+
 /** The plain-language ask card, in the thread: one decision with the evidence in front of you. A checkout opens the
  *  review before any yes; spending always says the footer note. */
 export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; onDone: () => void }) {
@@ -507,11 +546,12 @@ export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; 
   const stuck = when !== null && (!when.trim() || !preview || preview.bad);
   // Chief's plan: "Change it" opens a box, and what the person types goes back to Chief for a new plan.
   const [change, setChange] = useState<string | null>(null);
+  const edit = useDraftEdit(c);
   return (
     <div className="card ask">
       <AskHead c={c} who={who} />
       <p className="ask-words">{question}</p>
-      <AskEvidence c={c} open={false} readAll={<a className="link" href={`#/ask/${c.id}`}>Read all</a>} />
+      {edit.box || <AskEvidence c={c} open={false} readAll={<a className="link" href={`#/ask/${c.id}`}>Read all</a>} />}
       {oops && <div className="send-failed" role="alert">That didn't go through. <button type="button" className="link inline" onClick={() => last.current && act(last.current)}>Try again</button></div>}
       {c.kind === 'routine' ? (
         <>
@@ -550,7 +590,8 @@ export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; 
         </div>
       ) : yes ? (
         <div className="btns">
-          <button className="btn go" onClick={() => act(yes.body)}>{yes.label}</button>
+          <button className="btn go" disabled={edit.empty} onClick={() => act(edit.yes(yes.body))}>{yes.label}</button>
+          {edit.can && <button className="btn" aria-pressed={edit.editing} onClick={edit.toggle}>{edit.editing ? 'Use the original' : 'Edit'}</button>}
           {deny && <button className="btn" onClick={() => act(deny.body)}>{deny.label}</button>}
           {always && <button className="btn ghost always" onClick={() => act(always.body)}>{always.label}</button>}
         </div>
@@ -576,12 +617,13 @@ export function AskSheet({ c, who, chiefSays, onClose }: { c: Card; who: Helper 
   // Every way out that isn't the one yes — an unpriced order has two, and neither is a yes.
   const rest = c.choices.filter((x) => x !== yes && x.body.scope !== 'always');
   const always = c.choices.find((x) => x.body.scope === 'always');
+  const edit = useDraftEdit(c);
   return (
     <div className="scrim" onClick={onClose}>
       <div ref={box} className="sheet approve" role="dialog" aria-modal aria-label={c.head} onClick={(e) => e.stopPropagation()}>
         <AskHead c={c} who={who} />
         <h2 className="ask-words">{question}</h2>
-        <AskEvidence c={c} open={open} readAll={<button className="link" onClick={() => setOpen(true)}>Read all</button>} />
+        {edit.box || <AskEvidence c={c} open={open} readAll={<button className="link" onClick={() => setOpen(true)}>Read all</button>} />}
         {c.review && c.order && !c.order.known && <div className="mute small">So nothing is counted against the monthly limit.</div>}
         {chiefSays && <div className="chief-says"><Face who="chief" size={20} /><span><b>Chief:</b> {chiefSays}</span></div>}
         {oops && <div className="send-failed" role="alert">That didn't go through. <button type="button" className="link inline" onClick={() => last.current && act(last.current)}>Try again</button></div>}
@@ -590,8 +632,9 @@ export function AskSheet({ c, who, chiefSays, onClose }: { c: Card; who: Helper 
             <a className="btn go big" href="#/settings" onClick={onClose}>Open Home setup</a>
             <button className="btn big" onClick={() => act({ answer: 'deny' })}>Not now</button>
           </> : <>
+            {edit.can && <button className="btn big" aria-pressed={edit.editing} onClick={edit.toggle}>{edit.editing ? 'Use the original' : 'Edit'}</button>}
             {rest.map((x) => <button key={x.label} className="btn big" onClick={() => act(x.body)}>{x.label}</button>)}
-            {yes && <button className="btn go big" onClick={() => act(yes.body)}>{yes.label}</button>}
+            {yes && <button className="btn go big" disabled={edit.empty} onClick={() => act(edit.yes(yes.body))}>{yes.label}</button>}
           </>}
         </div>
         {always && <button className="btn ghost always" onClick={() => act(always.body)}>{always.label}</button>}
