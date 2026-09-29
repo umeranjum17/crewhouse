@@ -17,6 +17,7 @@ import { acts, claimOf, coversOf, effectOf, orderOf, pressOf, toolWords, type Ef
 import { axiEnv, registry, resolveGrants, toolBin, which } from './tools.ts';
 import { describe, nextRun, parseSchedule } from './routines.ts';
 import { buildWorkbook, readWorkbook } from './workbooks.ts';
+import { MAX_ITEMS, MAX_PARALLEL, subMessage, type BatchAnswer } from './batch.ts';
 import { buildDocument, readDocument } from './documents.ts';
 import { route, type Helper } from './route.ts';
 import type { Link } from './link.ts';
@@ -82,6 +83,9 @@ export function quietNow(quiet: string | null | undefined, at = new Date()) {
 
 const sha = (s: string) => createHash('sha256').update(s).digest('hex');
 const clean = (s: unknown, n: number) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n);
+/** What each batch item hears: its one item and the shared question. The parent's own prompt stays out of it,
+ *  so eight parallel items don't each pay for the whole conversation. */
+const BATCH_SYSTEM = 'You research one item on the web and report back briefly. Read the web; never sign in, post, buy or submit forms. Every claim that matters gets its source.';
 const fail = (message: string, status = 400) => Object.assign(new Error(message), { status });
 /** A URL is context for a job, never its name. */
 export function taskTitle(body: string) {
@@ -1985,6 +1989,11 @@ export class Crew {
         + 'starts with "=" is a formula. crewd writes the file, so never make the binary yourself. Make it finished: a real heading on every sheet and at '
         + 'least one example row that shows the person how to fill it in.',
         { name: Type.String(), sheets: Type.Any() }, (p) => this.workbook(botId, String(p.name ?? ''), p.sheets)),
+      tool('crew_batch', 'Research several items at once (up to 24) against the one `question`: `items` is the list, each a short name. ' +
+        'Each item is researched in parallel and you get back one JSON array of {item, ok, text}. Put every answer — with a source column — into a single crew_workbook, delivered once. ' +
+        'A batch item answers its own item only; it cannot start another batch.',
+        { question: Type.String(), items: Type.Array(Type.String()) }, (p) =>
+          this.batch(botId, String(p.question ?? ''), Array.isArray(p.items) ? p.items.map(String) : [])),
       tool('crew_document', 'Write a real document the person can open and edit (.docx), in your files/, and deliver it. `name` is the title; '
         + '`blocks` is the document in order: {heading}, {text, bold?, italic?}, {bullets: […]} or {table: {head: […], rows: [[cell, …], …]}}. '
         + 'crewd writes the file, so never make the binary yourself. Make it finished: a title, short paragraphs and a table where rows help. '
@@ -2049,7 +2058,7 @@ export class Crew {
     }
     const accounts = Object.keys(PROVIDERS).join(', ');
     // Chief coordinates and delegates finished files to helpers; their artifact tools need not occupy his first model call.
-    const chiefTools = own.filter((t) => !['crew_deliver', 'crew_workbook', 'crew_document', 'crew_copy', 'crew_draft', 'crew_verify'].includes(t.name));
+    const chiefTools = own.filter((t) => !['crew_deliver', 'crew_workbook', 'crew_document', 'crew_copy', 'crew_draft', 'crew_verify', 'crew_batch'].includes(t.name));
     return [...chiefTools,
       tool('crew_add_phone', 'Show the owner an Add a phone card in this chat with a fresh QR and code. Only the owner can add phones.', {}, () => this.addPhone(this.chiefFor())),
       tool('crew_roster', 'Who is on the crew, and the templates you can recruit from.', {}, () => ({
@@ -2254,6 +2263,63 @@ export class Crew {
       if (/\.(patch|diff)$/.test(path) && !(existsSync(full) && ok.has(sha(readFileSync(full, 'utf8'))))) return path;
     }
     return null;
+  }
+
+  /** Tasks with a batch running now: a batch item answers its own item only, never starts another batch. */
+  private batching = new Set<number>();
+
+  /** crew_batch: one question fanned out over many items, each its own engine session on this member and task
+   *  (same gate, same subscription, same member boundary — never another member's). At most MAX_PARALLEL sessions
+   *  run at once; the model merges the returned answers into one crew_workbook. A resting account stops new waves
+   *  early with plain words, exactly as a normal turn would rest it. */
+  private async batch(botId: string, question: string, items: string[]) {
+    const task = this.activeTask(botId);
+    const l = this.live.get(botId);
+    if (!task || !l) throw new Error('no task running');
+    if (this.batching.has(task.id)) throw new Error('a batch item researches its one item itself; it cannot start another batch');
+    const q = clean(question, 500);
+    const list = items.map((s) => String(s).trim().slice(0, 200)).filter(Boolean);
+    if (!q) throw new Error('say the one question every item should answer');
+    if (!list.length) throw new Error('list the items to research, each a short name');
+    const member = task.member ?? OWNER;
+    const trimmed = list.slice(0, MAX_ITEMS);
+    const answers: BatchAnswer[] = new Array(trimmed.length);
+    let at = 0, tired = 0;
+    this.batching.add(task.id);
+    try {
+      // Waves of at most MAX_PARALLEL: a resting account stops the later waves before they start.
+      while (at < trimmed.length && tired < 2) {
+        const wave = trimmed.slice(at, at + MAX_PARALLEL).map((item, k) => (async () => {
+          const i = at + k;
+          const end = await this.runtime.run({
+            key: `agent:m${member}:crewhouse:${botId}:${task.id}:batch:${i}`, member, bot: botId, task: task.id,
+            account: l.account, cwd: disk.botDir(this.cfg, botId), system: BATCH_SYSTEM,
+            message: subMessage(q, item), builtins: [],
+          }, () => {});
+          if (!end.ok && 'aborted' in end) {
+            answers[i] = { item, ok: false, text: 'this item was stopped before it answered.' };
+          } else if (!end.ok && (end.kind === 'resting' || end.kind === 'plan')) {
+            tired++;
+            if (end.kind === 'resting') this.accounts.rest(member, l.account, end.until ?? Date.now() + 60 * 60_000);
+            else this.accounts.notIncluded(member, l.account, true);
+            answers[i] = { item, ok: false, text: `${disk.brainName({ provider: l.account })} is resting; this item was not researched.` };
+          } else if (!end.ok) {
+            answers[i] = { item, ok: false, text: `this item could not be researched (${end.message.slice(0, 120)}).` };
+          } else {
+            answers[i] = { item, ok: true, text: end.text.slice(0, 2000) };
+          }
+        })());
+        at += wave.length;
+        await Promise.all(wave);
+      }
+    } finally {
+      this.batching.delete(task.id);
+    }
+    const notes = [
+      list.length > trimmed.length ? `only the first ${MAX_ITEMS} of ${list.length} items were researched` : '',
+      tired >= 2 ? `${disk.brainName({ provider: l.account })} started resting, so the remaining items were left out — try them again later` : '',
+    ].filter(Boolean);
+    return { answers, ...(notes.length ? { note: notes.join('; ') } : {}) };
   }
 
   /** crew_workbook: crewd writes the .xlsx itself (src/workbooks.ts) into the bot's files/ and delivers it like any other file. */

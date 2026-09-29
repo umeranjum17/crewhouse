@@ -1092,7 +1092,7 @@ test('Chief proposes helper job recipes; nothing writes until Use it, and crew_j
   const before = readFileSync(join(botDir, 'AGENTS.md'), 'utf8');
   const chiefTools = (crew as any).crewTools('chief').map((t: any) => t.name);
   assert.ok(chiefTools.includes('crew_job'));
-  for (const name of ['crew_deliver', 'crew_workbook', 'crew_document', 'crew_copy', 'crew_draft', 'crew_verify'])
+  for (const name of ['crew_deliver', 'crew_workbook', 'crew_document', 'crew_copy', 'crew_draft', 'crew_verify', 'crew_batch'])
     assert.ok(!chiefTools.includes(name), `${name} belongs to helpers, not Chief's coordination turn`);
   for (const id of ['scout', 'scribe', 'pip']) assert.ok(!(crew as any).crewTools(id).some((t: any) => t.name === 'crew_job'), `${id} cannot write helper jobs`);
   const job = { bot: 'scout', does: 'Find reliable answers.', aim: 'Give a concise answer.', gets: 'The person’s question.', how: 'Check trustworthy sources.', great: 'A sourced answer; for example, three clear findings.' };
