@@ -82,6 +82,23 @@ test('denied handoff creates no task', async () => {
   done();
 });
 
+test('final wrap never repeats an in-progress line after the work finished (D37)', async () => {
+  const { db, crew, done } = setup();
+  crew.onboard('Sara'); crew.recruit('scout', 'Scout', 'person'); crew.recruit('scribe', 'Scribe', 'person');
+  const first = (await crew.post('scout', 'ask permission: research FDIC basics then hand on'))!.task;
+  await holding(crew, 'scout');
+  (crew as any).pass('scout', 'scribe', 'ask permission: write the one-page family checklist from the research');
+  await release(crew, 'scout', 'The FDIC research is complete and sourced; Scribe is preparing the one-page checklist now.');
+  const second = db.get("SELECT id FROM tasks WHERE bot = 'scribe'")!.id;
+  await release(crew, 'scribe', 'Finished the one-page FDIC family checklist with coverage limits and what to do next.');
+  await settled(db, first); await settled(db, second);
+  const wrap = db.get("SELECT text FROM messages WHERE bot = 'chief' AND task_id = ? AND text LIKE 'All done.%'", first)?.text ?? '';
+  assert.match(wrap, /Scout finished\./);
+  assert.match(wrap, /Scribe finished\./);
+  assert.doesNotMatch(wrap, /is preparing/i);
+  done();
+});
+
 test('wrap-up reports an unsure part without saying all done', async () => {
   const { db, crew, done } = setup();
   crew.onboard('Sara'); crew.recruit('reel', 'Reel', 'person'); crew.recruit('scout', 'Scout', 'person');

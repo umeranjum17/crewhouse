@@ -95,16 +95,20 @@ export function cleanReply(text: string) {
   return String(text ?? '').replace(/\[\[\s*reply[^\[\]]*\]\] ?/gi, '').replace(/[ \t]+\n/g, '\n').replace(/\n[ \t]*\n(?:[ \t]*\n)*/g, '\n\n').trim();
 }
 
-/** A relay is the answer, not a quoted chunk of the helper's raw markdown. */
+/** A relay is the answer, not a quoted chunk of the helper's raw markdown. Clauses about work still under
+ *  way (a handoff note like "Scribe is preparing…" written before the next helper finished) are stale by the
+ *  time the final wrap states the outcome, so they are never relayed. */
+const STALE_PROGRESS = /\b(is|are)\s+(preparing|on it\b|working on|looking into|checking|getting|putting together|writing|finishing)|\bwill\s+(prepare|write|check|finish|share|send|follow up)\b/i;
 export function relayResult(reply: string, note = '') {
   const tidy = (s: string) => s.replace(/^A document in \d+ sections?:\s*(.+)$/i, 'The $1 is ready.')
     .replace(/\[([^\]]+)\]\(https?:\/\/[^)]+\)/g, '$1').replace(/\*\*|^\s*[-*]\s*/gm, '')
     .replace(/\b(sir|ma'am)\b[,.]?\s*/gi, '').replace(/^\w+:\s*/, '').replace(/https?:\/\/\S+/g, '').trim();
   // Only complete sentences fit for a headline; never apply short(), which adds a cut-off ellipsis.
+  // A semicolon joins what are really two headlines, so split there too: the stale half must not ride along.
   for (const source of [note.length < 140 ? note : '', reply]) {
-    const sentences = tidy(source).match(/[^.!?]+[.!?][”"']?(?=\s|$)/g) ?? [];
-    const full = sentences.map((s) => s.trim()).find((s) => s.length <= 160 && !/(?:…|\.{2,})[”"']?$/.test(s));
-    if (full) return `${full.replace(/[.!?][”"']?$/, '').trim()}.`;
+    const sentences = tidy(source).match(/[^.!?;]+[.!?;][”"']?(?=\s|$)/g) ?? [];
+    const full = sentences.map((s) => s.trim()).find((s) => s.length <= 160 && !/(?:…|\.{2,})[”"']?$/.test(s) && !STALE_PROGRESS.test(s));
+    if (full) return `${full.replace(/[.!?;][”"']?$/, '').trim()}.`;
   }
   return 'The result is ready.';
 }
