@@ -1120,11 +1120,8 @@ export class Crew {
     const replying = text.length < 120 && !/\[tool\b/.test(text) && lastBot?.task_id && lastBot.at > Date.now() - 30 * 60_000 && /\?\s*$/.test(lastBot.text)
       && this.db.get('SELECT bot FROM tasks WHERE id = ?', lastBot.task_id)?.bot === CHIEF;
     if (replying) return this.addTask(CHIEF, text, 'person', model, member, undefined, text, pics, { room });
-    const last = this.db.get('SELECT id FROM messages WHERE bot = ? AND member = ? ORDER BY id DESC LIMIT 1', CHIEF, member)?.id;
-    const asked = this.db.get("SELECT data FROM events WHERE kind = 'route.asked' AND json_extract(data, '$.member') = ? ORDER BY seq DESC LIMIT 1", member);
     const previous = this.db.get("SELECT text FROM messages WHERE bot = ? AND member = ? AND author = 'person' ORDER BY id DESC LIMIT 1", CHIEF, member)?.text as string | undefined;
-    const earlier: string | undefined = asked && JSON.parse(asked.data).message === last ? JSON.parse(asked.data).text
-      : /^https?:\/\/\S+$/i.test(text) && previous && /\b(market|marketing|promote|launch)\b/i.test(previous) ? previous : undefined;
+    const earlier: string | undefined = /^https?:\/\/\S+$/i.test(text) && previous && /\b(market|marketing|promote|launch)\b/i.test(previous) ? previous : undefined;
     const request = { text, earlier };
     const to = await route(request, helpers);
     const body = earlier ? `${earlier}\n${text}` : text;
