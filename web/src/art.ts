@@ -3,6 +3,8 @@
 // a bitmap is an array of equal-width strings, '.' is an unlit dot, any other letter indexes a palette.
 
 export type Mood = 'idle' | 'blink' | 'twitch' | 'hello' | 'happy' | 'work' | 'ask' | 'listen' | 'rest' | 'worried' | 'error';
+/** Every mood, for the sprite pipelines that must render each one (scripts/icons.mjs, mobile/assets/pals/). */
+export const MOODS: Mood[] = ['idle', 'blink', 'twitch', 'hello', 'happy', 'work', 'ask', 'listen', 'rest', 'worried', 'error'];
 export type Bitmap = string[];
 export type Palette = Record<string, string>;
 
