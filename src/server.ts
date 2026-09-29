@@ -127,17 +127,18 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
         // Phones: pairing and grants answer on this computer only, never over the phone link.
         if (p === '/api/phones' && req.method === 'GET') return send(res, 200, link.devices());
         if (p === '/api/phones/link' && req.method === 'GET') return send(res, 200, link.status());
-        if (p === '/api/phones/pair' && req.method === 'POST') { if (me !== 1) return send(res, 403, { error: 'ask the owner to add a phone' }); return send(res, 200, await link.offer((await readJson(req)).role ?? 'control', me)); }
-        if (p === '/api/phones/refresh' && req.method === 'POST') return send(res, 200, await crew.refreshPhone(Number((await readJson(req)).message), me));
+        // The owner says whose phone it is; crewd checks that person exists and keeps it with the code, so the phone never says.
+        if (p === '/api/phones/pair' && req.method === 'POST') { if (me !== 1) return send(res, 403, { error: 'ask the owner to add a phone' }); const b = await readJson(req); return send(res, 200, await link.offer(b.role ?? 'control', crew.member(Number(b.member ?? me)).id)); }
+        if (p === '/api/phones/refresh' && req.method === 'POST') { const b = await readJson(req); return send(res, 200, await crew.refreshPhone(Number(b.message), me, b.member)); }
         if (p === '/api/phones/pending' && req.method === 'GET') return send(res, 200, link.status().asking);
         if (p === '/api/phones/approve' && req.method === 'POST') { link.approve(String((await readJson(req)).words ?? '')); return send(res, 200, { ok: true }); }
         if (p === '/api/phones/lan' && req.method === 'PUT') { await link.setLan(!!(await readJson(req)).on); return send(res, 200, link.status()); }
         if (p === '/api/phones/relay' && req.method === 'PUT') { const b = await readJson(req); link.setRelay(typeof b.url === 'string' ? b.url.trim() : null, typeof b.enrol === 'string' ? b.enrol : undefined); return send(res, 200, link.status()); }
-        if (p === '/api/phones/code' && req.method === 'POST') { if (me !== 1) return send(res, 403, { error: 'ask the owner to add a phone' }); return send(res, 200, await link.typed((await readJson(req)).role ?? 'control', me)); }
+        if (p === '/api/phones/code' && req.method === 'POST') { if (me !== 1) return send(res, 403, { error: 'ask the owner to add a phone' }); const b = await readJson(req); return send(res, 200, await link.typed(b.role ?? 'control', crew.member(Number(b.member ?? me)).id)); }
         // A phone that scanned the code waits here: the person checks its two words and says yes or no.
         if (p === '/api/phones/answer' && req.method === 'POST') { if (me !== 1) return send(res, 403, { error: 'ask the owner to approve a phone' }); const b = await readJson(req);
           if (b.offer !== undefined) {
-            if (me !== 1 || !link.status().asking.some((a) => a.id === Number(b.id) && a.offer === b.offer && a.member === me)) return send(res, 403, { error: 'that phone is not waiting for you' });
+            if (!link.status().asking.some((a) => a.id === Number(b.id) && a.offer === b.offer)) return send(res, 403, { error: 'that phone is not waiting for you' });
             if (crew.botPage('chief', me).phoneOffer?.token !== b.offer) return send(res, 409, { error: 'that code is no longer showing' });
           }
           link.answer(Number(b.id), b.yes === true); return send(res, 200, { ok: true }); }
@@ -186,7 +187,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     if (m === 'GET' && p === '/api/room') return crew.room(me, Number(q.get('before')) || undefined);
     // The one phone-admin call a paired phone makes itself: renewing the Add-a-phone code it is looking at, so the
     // card on the phone refreshes like the web card's (crew.refreshPhone answers only the owner).
-    if (m === 'POST' && p === '/api/phones/refresh') return crew.refreshPhone(Number(body?.message), me);
+    if (m === 'POST' && p === '/api/phones/refresh') return crew.refreshPhone(Number(body?.message), me, body?.member);
     // A sent photo for the phone, which can't open this computer's /files address: small enough for one link frame.
     if (m === 'GET' && p === '/api/photo') {
       const rel = String(q.get('path') ?? '');

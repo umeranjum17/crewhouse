@@ -192,24 +192,32 @@ function Card({ children, style, ask, onTouchStart }: { children: ReactNode; sty
 }
 /** The Add-a-phone card in Chief's chat, on the phone. It refreshes itself like the computer's card: a new code while
  *  it is on screen and someone is about (ten minutes), then a Show-a-new-code button — never directions to go elsewhere. */
-function PhoneCard({ offer, reload }: { offer: NonNullable<ReturnType<typeof A.phoneOffer>>; reload: () => void }) {
+function PhoneCard({ offer, reload, members }: { offer: NonNullable<ReturnType<typeof A.phoneOffer>>; reload: () => void; members: Json[] }) {
   const [current, setCurrent] = useState(offer);
   const [now, setNow] = useState(Date.now());
   const active = useRef(Date.now());
   const busy = useRef(false);
   useEffect(() => { if (offer.token !== current.token) setCurrent(offer); }, [offer.token]);
-  const renew = async () => {
-    if (busy.current) return;
+  const picked = useRef<number | undefined>(undefined); // a person tapped while a new code was on its way
+  const renew = async (member?: number) => {
+    if (busy.current) { if (member !== undefined) picked.current = member; return; }
     busy.current = true;
-    try { setCurrent(await api.refreshPhone(current.message)); reload(); } catch { active.current = 0; say('Could not show a new code'); }
+    try { setCurrent(await api.refreshPhone(current.message, member)); reload(); } catch { active.current = 0; say('Could not show a new code'); }
     finally { busy.current = false; }
+    const next = picked.current;
+    picked.current = undefined;
+    if (next !== undefined) void renew(next);
   };
   useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer); }, []);
   useEffect(() => { if (now >= current.expires && now - active.current < 10 * 60_000 && !offer.waiting && !offer.joined) void renew(); }, [now, current.expires, offer.waiting, offer.joined]);
   const left = Math.max(0, Math.ceil((current.expires - now) / 1000));
   const qr = current.qr.startsWith('byokit-link:') ? QRCode.create(current.qr, { errorCorrectionLevel: 'M' }).modules : null;
+  const whose = A.phoneFor(members, current.member ?? A.OWNER, 'control', true);
   return <Card style={{ gap: 10, marginLeft: 36 }} onTouchStart={() => { active.current = Date.now(); }}>
     <T style={s.b}>Add a phone</T>
+    {!offer.joined && !!whose.people.length && <>{!offer.waiting && <><T tone="ink2">Whose phone is it?</T>
+      <View style={s.chips}>{whose.people.map((m) => <Btn key={m.id} go={m.id === (current.member ?? A.OWNER)} label={m.name} onPress={() => { active.current = Date.now(); void renew(m.id); }} />)}</View></>}
+      <T tone="mute">{whose.says}</T></>}
     {!offer.joined && !offer.waiting && left > 0 && qr && <View accessibilityLabel="Scan to pair another phone" style={{ width: 220, height: 220, backgroundColor: 'white', padding: 8 }}><View style={{ flex: 1 }}>{Array.from({ length: qr.size }, (_, y) => <View key={y} style={{ flex: 1, flexDirection: 'row' }}>{Array.from({ length: qr.size }, (_, x) => <View key={x} style={{ flex: 1, backgroundColor: qr.get(x, y) ? 'black' : 'white' }} />)}</View>)}</View></View>}
     {offer.joined ? <T style={s.b}>Paired: {offer.joined}</T> : offer.waiting ? <><T>{offer.waiting.name} is waiting. Check these two words: {offer.waiting.words}</T><T tone="mute">For your safety, approve on the computer where this code was shown.</T></> : left ? <><T>Scan this with the other phone, or type this code there. Approve on the computer.</T><T style={s.b}>{current.typed}</T><Btn label="Copy code" onPress={() => { Clipboard.setString(current.typed); say('Code copied'); }} /><T tone="mute">Works once · {Math.floor(left / 60)}:{String(left % 60).padStart(2, '0')} left</T></>
       : <><T tone="mute">That code has run out.</T><Btn go label="Show a new code" onPress={() => { active.current = Date.now(); void renew(); }} /></>}
@@ -1191,7 +1199,7 @@ function Chat({ id, m, state, tick, refresh, canAct, offline, open }: Ctx & { id
               ? <View style={[s.bubbleText, { backgroundColor: t.go, borderBottomRightRadius: 6 }]}><Theme.Provider value={mine}><ChatText text={l.text} /></Theme.Provider></View>
               : <View style={{ paddingLeft: 36 }}><ChatText text={l.text} /></View>)}
             {l.files.map((f) => <Card key={f.url}><FileRow f={f} /></Card>)}
-            {phoneOffer?.message === l.id && <PhoneCard offer={phoneOffer} reload={() => void load()} />}
+            {phoneOffer?.message === l.id && <PhoneCard offer={phoneOffer} reload={() => void load()} members={state.members} />}
             {cards.filter((c) => lines.findLastIndex((x) => (x.at ?? 0) <= c.at) === i).map((c) => <AskCard key={c.id} c={c} who={h} state={state} onDone={refresh} canAct={canAct} offline={offline} open={open} />)}
           </View></motion.Rise></View>
         )}

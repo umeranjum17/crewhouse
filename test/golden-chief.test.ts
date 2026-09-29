@@ -19,7 +19,7 @@ const bad = (text: string) => {
 test('Chief: the four turns stay in Chief, URLs are context not task names, relays are his words', async () => {
   const { crew, db, done } = setup();
   process.env.CREWHOUSE_STUB_GOLDEN = '1';
-  crew.phoneLink = { offer: async () => ({ qr: 'byokit-link:1:demo', typed: '23456-789AB', expires: Date.now() + 120_000, urls: [] }), status: () => ({ asking: [] }) as any };
+  crew.phoneLink = { offer: async () => ({ qr: 'byokit-link:1:demo', typed: '23456-789AB', expires: Date.now() + 120_000, urls: [] }), status: () => ({ asking: [] }) as any, withdraw: () => {} };
   crew.onboard('Umer');
   crew.recruit('scout', 'Scout', 'person');
   for (const text of turns) {

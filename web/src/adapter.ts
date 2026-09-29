@@ -43,7 +43,20 @@ export type Line = { id: number; from: 'me' | 'them' | 'chief' | 'note'; text: s
   /** Chief's full assignment in a helper's chat, behind Show details: the line itself stays one short ask. */
   detail?: string };
 /** The one-use pairing ticket is rendered only in the owner's Chief chat, never as chat text. */
-export const phoneOffer = (page: Json, member: number): { qr: string; typed: string; expires: number; message: number; token?: string; waiting?: { id: number; name: string; words: string }; joined?: string } | null => member === OWNER ? page?.phoneOffer ?? null : null;
+export const phoneOffer = (page: Json, member: number): { qr: string; typed: string; expires: number; message: number; token?: string; member?: number; waiting?: { id: number; name: string; words: string }; joined?: string } | null => member === OWNER ? page?.phoneOffer ?? null : null;
+/** Add a phone, for the owner: whose phone it can be (only when the house has more than one person; the owner is "Me")
+ *  and what it will do as them. crewd checks the choice; the phone that scans never says whose it is. On the owner's own
+ *  phone (`other`) the one being added is "the other phone". */
+export const phoneFor = (members: Json[], member = OWNER, role = 'control', other = false) => {
+  const who = member === OWNER ? '' : members.find((m) => m.id === member)?.name ?? '';
+  const it = other ? 'The other phone' : 'This phone';
+  return {
+    people: members.length > 1 ? members.map((m) => ({ id: m.id as number, name: m.id === OWNER ? 'Me' : m.name as string })) : [],
+    says: !who ? (role === 'view' ? `${it} will watch the crew but not answer or give jobs.` : `${it} will answer the crew and give them jobs, as you.`)
+      : role === 'view' ? `${it} will be ${who}'s. It will watch ${who}'s chats and jobs, but not answer or give jobs.`
+      : `${it} will be ${who}'s. It will answer the crew and give them jobs as ${who}, and see only ${who}'s chats and jobs.`,
+  };
+};
 export type App = { id: string; name: string; mark: string; bg: string; on: boolean; does: string; warns?: boolean };
 
 // ---------- words ----------

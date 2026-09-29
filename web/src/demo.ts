@@ -400,7 +400,7 @@ const accounts = [1, 2, 3].flatMap((m) => AIS.map((ai) => ({ member: m, account:
   signIn: ai.key === 'chatgpt' && variant === 'signin' && m === me ? { state: 'waiting', via: 'browser', url: 'https://auth.openai.com/oauth/authorize' } : null })));
 
 let calls = 0;
-export async function demoCall(method: string, path: string, _body?: Json) {
+export async function demoCall(method: string, path: string, body?: Json) {
   // "offline": the home computer never answers; "lost": it answers once, then goes quiet.
   if (variant === 'offline' || (variant === 'lost' && calls++ > 0)) throw new TypeError('Failed to fetch');
   if (method === 'GET' && path === '/api/state') return state;
@@ -463,7 +463,7 @@ export async function demoCall(method: string, path: string, _body?: Json) {
     anywhere: variant === 'home' ? 'home' : variant === 'signin-again' ? 'signin' : 'anywhere' };
   if (method === 'POST' && path === '/api/phones/pair') return { qr: 'crewhouse-demo', typed: '7KQ4-M2XP-9RTH-6N5B-8V3C', expires: Date.now() + 120_000 };
   if (method === 'POST' && path === '/api/phones/refresh') {
-    pages.chief.phoneOffer = { ...pages.chief.phoneOffer, token: `demo-${Date.now()}`, expires: Date.now() + 120_000 };
+    pages.chief.phoneOffer = { ...pages.chief.phoneOffer, token: `demo-${Date.now()}`, expires: Date.now() + 120_000, member: body?.member ?? pages.chief.phoneOffer.member };
     return pages.chief.phoneOffer;
   }
   if (method === 'POST' && path === '/api/phones/answer') { pages.chief.phoneOffer = { ...pages.chief.phoneOffer, waiting: null, joined: 'Pixel' }; return { ok: true }; }

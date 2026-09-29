@@ -225,7 +225,7 @@ export class Crew {
   readonly desktops: Desktops;
   readonly accounts: Accounts;
   readonly connections: Connections;
-  phoneLink?: Pick<Link, 'offer' | 'status'>;
+  phoneLink?: Pick<Link, 'offer' | 'status' | 'withdraw'>;
   private freshAt = 0;
   private lastTick = 0;
   /** Keeps idle sleep away while a helper is working, and only then. Never the lid. Tests replace it. */
@@ -1080,15 +1080,18 @@ export class Crew {
     return { shown: true }; // the model never sees the one-use ticket
   }
 
-  /** Refresh only the owner's currently displayed offer; an old card cannot replace a newer one. */
-  async refreshPhone(message: number, member: number) {
+  /** Refresh only the owner's currently displayed offer; an old card cannot replace a newer one. `whose` is the person the
+   *  owner picked on the card (checked here; the phone that scans never says), else the card keeps its person. */
+  async refreshPhone(message: number, member: number, whose?: unknown) {
     if (member !== OWNER) throw fail('ask the owner to add a phone', 403);
     const old = JSON.parse(this.db.get("SELECT value FROM settings WHERE key = 'phone.offer.1'")?.value ?? 'null');
     if (!old || old.message !== message || old.joined) throw fail('that code is no longer showing', 409);
     if (!this.phoneLink) throw fail('Phone pairing is not ready yet', 503);
     const token = randomBytes(16).toString('hex');
-    const { qr, typed, expires } = await this.phoneLink.offer('control', member, token);
-    const offer = { qr, typed, expires, message, token };
+    const person = this.member(Number(whose ?? old.member ?? OWNER)).id as number;
+    if (person !== (old.member ?? OWNER)) this.phoneLink.withdraw(old.token);
+    const { qr, typed, expires } = await this.phoneLink.offer('control', person, token);
+    const offer = { qr, typed, expires, message, token, member: person };
     this.db.run("UPDATE settings SET value = ? WHERE key = 'phone.offer.1'", JSON.stringify(offer));
     return offer;
   }
