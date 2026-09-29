@@ -1180,24 +1180,24 @@ export class Crew {
     const house = this.members().length > 1 ? ` You are speaking with ${member.name}, one of the household; each person has their own crew thread and AI accounts.` : '';
     const history = this.db.all("SELECT author, text FROM messages WHERE bot = ? AND member = ? AND id < (SELECT MIN(id) FROM messages WHERE task_id = ?) ORDER BY id DESC LIMIT 6", CHIEF, member.id, task.id)
       .reverse().map((m) => `${m.author === 'person' ? 'Person' : 'Chief'}: ${short(String(m.text).split('[tool ')[0], 300)}`).join('\n').slice(0, 1500);
-    return `${this.memory(task.bot, member.id)}[Crewhouse]${house} Crew: ${crew}. Templates: ${tpls}.\n${this.finishedWork(member.id)}${history ? `Earlier in this chat:\n${history}\n` : ''}The person says: ${task.body}`;
+    return `${this.memory(task.bot, member.id)}[Crewhouse]${house} Crew: ${crew}. Templates: ${tpls}.\n${history ? `Earlier in this chat:\n${history}\n` : ''}The person says: ${task.body}`;
   }
 
-  /** What this member's crew actually finished: titles and delivered files, so a recap answers from the record,
-   *  never from a guess. Only the task's own member's, never another member's. */
-  private finishedWork(member: number) {
+  /** What this member's crew actually finished: titles and delivered files, for Chief's crew_status.
+   *  Only the task's own member's, never another member's. */
+  private finishedList(member: number) {
     const rows = this.db.all("SELECT id, bot, title FROM tasks WHERE bot != ? AND member = ? AND state = 'done' AND updated_at >= ? AND COALESCE(result, '') != ? ORDER BY id DESC LIMIT 10",
       CHIEF, member, Date.now() - 30 * 86_400_000, ALL_CLEAR_RESULT);
-    if (!rows.length) return 'Finished work (this person, last 30 days): nothing finished is recorded.\n';
-    const lines = rows.map((t) => {
+    return rows.map((t) => {
       const files = this.db.all("SELECT data FROM events WHERE kind = 'file.delivered' AND json_extract(data, '$.task') = ?", t.id)
         .map((e) => JSON.parse(e.data));
-      const names = files.map((f) => String(f.path).replace(/^files\//, '')).filter((p) => !p.startsWith('photos/'));
-      const note = files.map((f) => String(f.note ?? '').split('[tool')[0].trim()).find(Boolean);
-      const title = short(t.title.split('[tool')[0].trim() || t.title, 80);
-      return `- ${this.bot(t.bot)?.display ?? t.bot}, "${title}"${note ? ` — ${short(note, 140)}` : ''}${names.length ? ` (file: ${names.slice(0, 3).join(', ')})` : ''}`;
+      return {
+        bot: this.bot(t.bot)?.display ?? t.bot,
+        title: short(t.title.split('[tool')[0].trim() || t.title, 80),
+        note: files.map((f) => short(String(f.note ?? '').split('[tool')[0].trim(), 140)).find(Boolean) ?? '',
+        files: files.map((f) => String(f.path).replace(/^files\//, '')).filter((p) => !p.startsWith('photos/')).slice(0, 3),
+      };
     });
-    return `Finished work (this person, last 30 days):\n${lines.join('\n')}\nWhen they ask what got done, for a recap or a month in brief, answer from this list and name what it holds. Never say nothing was finished when it lists finished work; when it says nothing is recorded, say so plainly and never invent work.\n`;
   }
 
   /** How to address the person, what the whole crew knows about them, and this bot's own notes on them: read at the start of
@@ -2007,7 +2007,7 @@ export class Crew {
         { bot: Type.String(), when: Type.String(), task: Type.String(), name: Type.Optional(Type.String()), account: Type.Optional(Type.String()), quiet: Type.Optional(Type.Boolean()), watch: Type.Optional(Type.String()) },
         (p) => this.offerRoutine({ bot: p.bot, schedule: p.when, task: p.task, name: p.name, model: p.account, quiet: p.quiet, watch: p.watch })),
       tool('crew_routines', 'The routines and when each runs next.', {}, () => this.routines(this.chiefFor()).map((x) => ({ id: x.id, bot: x.bot, name: x.name, when: x.words, state: x.state, next: new Date(x.next_at).toString() }))),
-      tool('crew_status', 'Open tasks.', {}, () => this.db.all("SELECT id, bot, title, state FROM tasks WHERE state IN ('queued','working','needs_you','paused') ORDER BY id")),
+      tool('crew_status', 'Open tasks, and what this person’s crew finished recently (titles and delivered files).', {}, () => ({ open: this.db.all("SELECT id, bot, title, state FROM tasks WHERE state IN ('queued','working','needs_you','paused') ORDER BY id"), finished: this.finishedList(this.chiefFor()) })),
       tool('crew_suggest', 'Suggest a change to how a helper comes across (its personality), when the person asks for one. ' +
         '`text`: the whole new personality, a few short plain lines in the second person ("You are Reel. …"). The person sees it and says yes or no.',
         { bot: Type.String(), text: Type.String() }, (p) => {
