@@ -44,7 +44,9 @@ export type Step = { at: number; text: string; now?: boolean; asked?: boolean; s
 /** `unsure`: crewd's line for a job that acted but couldn't confirm it worked, shown apart from the helper's own words. */
 export type Line = { id: number; from: 'me' | 'them' | 'chief' | 'note'; text: string; files: FileView[]; choices: string[]; at?: number; unsure?: boolean;
   /** Chief's full assignment in a helper's chat, behind Show details: the line itself stays one short ask. */
-  detail?: string };
+  detail?: string;
+  /** What a delivered workbook or document holds, said once: the web's card says it itself, the phone shows these. */
+  about?: string };
 /** The one-use pairing ticket is rendered only in the owner's Chief chat, never as chat text. */
 export const phoneOffer = (page: Json, member: number): { qr: string; typed: string; expires: number; message: number; token?: string; member?: number; waiting?: { id: number; name: string; words: string }; joined?: string } | null => member === OWNER ? page?.phoneOffer ?? null : null;
 /** Add a phone, for the owner: whose phone it can be (only when the house has more than one person; the owner is "Me")
@@ -780,10 +782,12 @@ export function lines(page: Json, bot: string): Line[] {
     const text = String(m.text ?? '').replace(PHOTO, '').trim();
     if (m.author === 'system') {
       const f = /^Delivered (files\/.+?)(?::\s|$)/.exec(text);
-      const file = f && fileView(bot, f[1]);
-      // A sheet or a document is its card, which already says what it is and what is in it: no words of its own.
-      return file ? { id: m.id, from: 'note', text: file.kind === 'sheet' || file.kind === 'page' ? '' : plain(text.slice(f![0].length)) || `Here's “${pretty(f![1])}”`, files: [file], choices: [] }
-        : { id: m.id, from: 'note', text: plain(text), files: [], choices: [] };
+      if (!f) return { id: m.id, from: 'note', text: plain(text), files: [], choices: [] };
+      const words = plain(text.slice(f[0].length)) || `Here's “${pretty(f[1])}”`;
+      // A built workbook or document is its card on the web, which says what is in it: no words of its own there. The
+      // phone's plainer card has no count, so it keeps them as `about`.
+      const card = /\.(xlsx|docx)$/i.test(f[1]);
+      return { id: m.id, from: 'note', text: card ? '' : words, about: card ? words : undefined, files: [fileView(bot, f[1])], choices: [] };
     }
     // Another helper handing this one a job: a note in its words, "Reel asked: …".
     if (!['person', 'bot', 'chief'].includes(m.author)) return { id: m.id, from: 'note', text: `${String(m.author).replace(/^./, (c) => c.toUpperCase())} asked: ${plain(text)}`, files: [], choices: [] };
