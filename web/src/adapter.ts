@@ -652,7 +652,7 @@ export function things(state: Json): Thing[] {
   }));
 }
 
-export type Job = { bot: string; label: string; ask: string; goal: boolean; money: boolean; needs: string[] };
+export type Job = { bot: string; label: string; ask: string; says: string; goal: boolean; money: boolean; needs: string[] };
 
 /** Home's three counts, from the same rows shown below them: what needs you, who is working, what got done today. */
 export function homeCounts(state: Json) {
@@ -670,10 +670,19 @@ export function homeSummary(state: Json) {
  *  hasn't connected says what it needs instead of dead-ending, and never fills the box. (docs/ui-contract.md) */
 export function jobs(state: Json): Job[] {
   const rows: Job[] = (state.ideas ?? []).map((i: Json) => ({
-    bot: String(i.bot ?? 'chief'), label: plain(i.ask ?? ''), ask: String(i.ask ?? ''),
+    bot: String(i.bot ?? 'chief'), label: plain(i.ask ?? ''), ask: String(i.ask ?? ''), says: promiseLine(state, i),
     goal: i.group === 'goal', money: i.group === 'money', needs: ((i.needs ?? []) as string[]).map((w) => plain(w)).filter(Boolean),
   }));
   return rows.sort((a, b) => Number(b.goal) - Number(a.goal) || Number(b.money) - Number(a.money) || a.needs.length - b.needs.length);
+}
+/** Under a job row, whose job it is and the first sentence of its promise: "Scout · I'll search …". Empty when the
+ *  promise only repeats the ask. */
+function promiseLine(state: Json, i: Json) {
+  const first = (/^.*?[.!?](?=\s|$)/s.exec(plain(i.promise ?? '')) ?? [plain(i.promise ?? '')])[0].trim();
+  const [a, b] = [first, plain(i.ask ?? '')].map((w) => w.toLowerCase().replace(/[.!?\s]+$/, ''));
+  if (!first || a.startsWith(b) || b.startsWith(a)) return '';
+  const name = i.bot === 'chief' || !i.bot ? 'Chief' : state.bots?.find((x: Json) => x.id === i.bot)?.display ?? i.bot;
+  return `${name} · ${first}`;
 }
 /** What a job that can't run yet would need first, in one plain line. */
 export const jobNeeds = (needs: string[]) => `Needs ${needs.join(' and ')} first.`;

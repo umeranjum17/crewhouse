@@ -235,7 +235,10 @@ test('Home keeps a standing "hand me a job" list, straight from crewd\'s ideas: 
   ] };
   const rows = A.jobs(withJobs);
   assert.deepEqual(rows.map((r) => [r.bot, r.needs.length]), [['scout', 0], ['scout', 1], ['scribe', 0], ['reel', 0]], 'money back leads — the job that waits on nothing first — and a waiting row keeps its needs');
-  assert.equal(rows[0].label, withJobs.ideas[0].ask, 'Home uses the short ask, never the four-line promise');
+  assert.equal(rows[0].label, withJobs.ideas[0].ask, 'Home uses the short ask as the row');
+  assert.equal(A.jobs({ ...withJobs, bots: [...state.bots, { id: 'scout', display: 'Scout' }] })[0].says, 'Scout · I\'ll search the government\'s unclaimed-money registers for our family\'s names and get the claims ready to file.', 'under it, whose job it is and one sentence of the promise');
+  for (const r of rows) assert.ok((r.says.match(/[.!?](\s|$)/g) ?? []).length <= 1, `at most one sentence of a promise: ${r.says}`);
+  assert.equal(A.jobs({ ...state, ideas: [{ bot: 'chief', promise: "What's on this week?", ask: "What's on this week?" }] })[0].says, '', 'a promise that only repeats the ask adds no line');
   assert.match(A.homeSummary({ ...withJobs, asks: [], bots: [] }), /0 things need you · 0 helpers working/, 'the summary follows the rows, not demo copy');
   assert.deepEqual(A.ideas(withJobs).map((i: any) => i.bot), ['scout', 'scribe', 'reel'], 'Chief\'s chips stay jobs the crew can run now — the unclaimed search needs nothing, so it chips too');
   assert.match(A.jobNeeds(rows.find((r) => r.needs.length)!.needs), /^Needs Gmail first\.$/);

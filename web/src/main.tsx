@@ -291,7 +291,7 @@ function JobList({ state, phone }: { state: Json; phone?: boolean }) {
       {(phone ? rows.slice(0, 3) : rows).length ? (phone ? rows.slice(0, 3) : rows).map((j) => {
         const h = crew.find((x) => x.id === j.bot);
         const body = <><Face who={h ?? { kind: 'pip', name: j.bot }} size={phone ? 28 : 36} />
-          <span className="grow"><b className="clamp">{j.label}</b>{j.needs.length > 0 && <span className="small clamp1">{A.jobNeeds(j.needs)}</span>}</span><span className="mute" aria-hidden>›</span></>;
+          <span className="grow"><b className="clamp">{j.label}</b>{j.says && <span className="small mute clamp1">{j.says}</span>}{j.needs.length > 0 && <span className="small clamp1">{A.jobNeeds(j.needs)}</span>}</span><span className="mute" aria-hidden>›</span></>;
         return j.needs.length ? <a key={j.bot + j.label} className="list-row" href="#/apps">{body}</a>
           : <button key={j.bot + j.label} className="list-row" onClick={() => hand(j.ask)}>{body}</button>;
       }) : <div className="frame-empty">Nothing to hand over yet. Hire a helper, and this fills up.</div>}
