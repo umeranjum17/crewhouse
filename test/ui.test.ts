@@ -1131,6 +1131,27 @@ test('a delivered .mp4 shows a video badge, never DOCX', () => {
   assert.doesNotMatch(app, /'DOCX'|'XLSX'|'PDF'/, 'no badge is a hardcoded default; every chip comes from the file');
 });
 
+// ?demo=fresh: the Chief-only Home a new person gets — no helpers hired yet, so Home has nothing to hand over,
+// nothing needs them, and Chief's own three starters fill the empty chat. Renders through every Home view with no errors.
+test('?demo=fresh renders the Chief-only Home with no errors', () => {
+  const fresh: Json = { person: { id: 2, name: 'Nadia', address: 'Nadia', onboarded: 1 },
+    members: [{ id: 1, name: 'Umer' }, { id: 2, name: 'Nadia' }],
+    bots: [{ id: 'chief', display: 'Chief', template: 'chief', role: 'Runs the crew and answers to you', state: 'on', controls: 'bot', task: null, queued: 0, pausedUntil: null }],
+    templates: [{ id: 'chief', display: 'Chief' }],
+    tasks: [], ideas: [], asks: [], events: [], routines: [], resting: {}, connections: [] };
+  assert.deepEqual(A.jobs(fresh), [], 'no helpers yet, so nothing to hand over');
+  assert.match(A.homeSummary(fresh), /0 things need you · 0 helpers working/);
+  assert.equal(A.ideas(fresh).length, 3, "Chief's own three starters fill the empty chat");
+  assert.deepEqual(A.crew(fresh), [], 'nobody else in the crew');
+  const room = A.office(fresh);
+  assert.deepEqual(room.crew, [], 'nobody else in the room');
+  assert.deepEqual(room.counts, { needs: 0, working: 0, done: 0 });
+  assert.doesNotMatch(shown({ ...room, jobs: A.jobs(fresh), ideas: A.ideas(fresh) }), FORBIDDEN, 'no machinery reaches the fresh Home');
+  const demo = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'demo.ts'), 'utf8');
+  assert.match(demo, /\?demo=fresh/, 'the demo serves the fresh Home');
+  assert.match(demo, /if \(fresh\)/, 'fresh ships Chief-only, with no standing jobs');
+});
+
 // The office: one room per viewer from the adapter views, holding only their own jobs. Ported from the office-view
 // board fixture (data/ch-office-view/board/kit/data.js): Nadia (2), Umer (1, owner), Sam (3); reel/scout/scribe work
 // for Nadia, pip/tracer for Umer; a helper busy with someone else's job reads live 'working' with no task of yours.

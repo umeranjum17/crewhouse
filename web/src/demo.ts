@@ -5,7 +5,8 @@
 // ?demo=return (Scout asks to press a shop's Start return), ?demo=chase (Scout's chase email as a draft to send), ?demo=renewal (Scout's renewal warning and the cancellation email as a draft to send), ?demo=day (Scout's plan of the day, three things in order),
 // ?demo=paper (Scout's reply to the school as a draft to approve — the paper, sorted), ?demo=meals (this week's dinners shopped into a cart, waiting on its checkout card),
 // ?demo=watch (the name watch heard: one source-linked line), ?demo=neighbour (the weekly brief as a document), ?demo=brief (the month in brief as a document),
-// ?demo=office (Home's office with first looks on the desks and a helper busy with another job), ?demo=calm (nothing of hers on the go).
+// ?demo=office (Home's office with first looks on the desks and a helper busy with another job), ?demo=calm (nothing of hers on the go),
+// ?demo=fresh (the Chief-only Home a new person gets: no helpers hired yet, nothing to hand over).
 // &sheet=signin or &sheet=connect opens that sheet, and &phase=… pins it to one state.
 import type { Json } from './api.ts';
 import { AIS } from './adapter.ts';
@@ -17,6 +18,7 @@ const min = 60_000;
 const me = variant === 'umer' || variant.startsWith('phone') ? 1 : 2;
 const signin = ['signin', 'hello', 'first', 'work'].includes(variant);
 const firstRun = ['first', 'answer', 'plan', 'work'].includes(variant);
+const fresh = variant === 'fresh';
 // Google for the whole house: what crewd's ideas[] says a job waits on when the house's Google is off (docs/ui-contract.md).
 const houseGoogle = variant !== 'nogoogle' && !new URLSearchParams(location.search).has('nohouse');
 // The day, planned waits on the person's own calendar and mail (?demo=day has both on, ?demo=nogoogle neither).
@@ -198,6 +200,12 @@ const state = {
   desktops: { missing: [] },
 };
 
+// ?demo=fresh: the Chief-only Home a new person gets — no helpers hired yet, so no jobs, asks or history.
+if (fresh) {
+  Object.assign(bots[0], { last: null, unread: 0 });
+  Object.assign(state, { bots: bots.slice(0, 1), room: {}, tasks: [], ideas: [], asks: [], events: [], routines: state.routines.slice(0, 1) });
+}
+
 // ?demo=unknown puts an order crewd couldn't price on Scout's card instead: no yes, the person finishes it themselves.
 const first = "Plan this week's dinners, with a shopping list";
 const pages: Record<string, Json> = {
@@ -248,6 +256,7 @@ const pages: Record<string, Json> = {
 if (variant === 'job-plan') pages.chief.messages.push({ id: 71, author: 'person', text: 'find me a good stroller under $400, compare the best five' },
   { id: 72, author: 'chief', text: 'Happy to, Nadia. Scout will take it; here is how, before anything starts.' });
 if (variant === 'room') pages.chief.messages.push({ id: 70, author: 'bot', text: 'All done, Nadia. Scout: three stories. Scribe: a newsletter draft waiting for your yes.' });
+if (fresh) pages.chief = { messages: [] };
 if (variant === 'connect') pages.pip = { messages: [
   { id: 1, author: 'person', text: "What's on this week?" },
   { id: 2, author: 'bot', text: 'I can do this with your Google Calendar.' },
