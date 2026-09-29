@@ -471,9 +471,11 @@ export class Crew {
     if (existing) return this.askView(existing);
     const person = String(me.address || me.name || 'Someone');
     // The event carries the ask's id like every ask.opened: phones fan the news out by it.
+    // The card is the owner's to-do (member 1); the asker's id rides the detail so her own
+    // snapshot keeps the 'Asked {owner}' state while uninvolved members see nothing; answering stays owner's.
     const id = this.db.tx(() => {
-      const r = this.db.run("INSERT INTO asks (bot, kind, title, detail, at) VALUES ('chief', 'setup', ?, ?, ?)",
-        `${person} would like ${app}`, JSON.stringify({ app, person }), Date.now());
+      const r = this.db.run("INSERT INTO asks (bot, kind, title, detail, at, member) VALUES ('chief', 'setup', ?, ?, ?, ?)",
+        `${person} would like ${app}`, JSON.stringify({ app, person, asker: me.id }), Date.now(), OWNER);
       this.db.event('ask.opened', 'chief', { kind: 'setup', app, ask: Number(r.lastInsertRowid) });
       return Number(r.lastInsertRowid);
     });
@@ -493,7 +495,7 @@ export class Crew {
       tasks: this.db.all('SELECT * FROM tasks WHERE bot != ? AND member = ? ORDER BY id DESC LIMIT 50', CHIEF, me.id).map((t) => ({ ...this.task(t), files: t.state === 'done' ? files(t.id) : [] })),
       ideas: this.ideas(me.id),
       room: (() => { const r = this.room(me.id); return { last: r.lines.at(-1) ?? null, busy: r.busy }; })(),
-      asks: this.db.all("SELECT * FROM asks WHERE state = 'open' AND COALESCE(member, ?) = ? ORDER BY id", OWNER, me.id).map((a) => this.askView(a)),
+      asks: this.db.all("SELECT * FROM asks WHERE state = 'open' AND (COALESCE(member, ?) = ? OR (kind = 'setup' AND json_extract(detail, '$.asker') = ?)) ORDER BY id", OWNER, me.id, me.id).map((a) => this.askView(a)),
       events: this.db.events(0, 80, me.id),
       /** This member's AI accounts that are resting now, and until when (docs/ui-contract.md). */
       resting: Object.fromEntries(Object.keys(PROVIDERS).map((k) => [k, this.restingUntil(k, me.id)]).filter(([, t]) => t)),
@@ -1766,7 +1768,9 @@ export class Crew {
 
   private async ask(botId: string, task: Row | undefined, e: Extract<Effect, { words: string }>, checkout?: { page: string; total: number | null }): Promise<string | null> {
     // The same call asked again (the bot resumed after a restart) takes over the card already shown.
-    const same = this.db.all("SELECT id FROM asks WHERE bot = ? AND kind = 'permission' AND state = 'open' AND title = ?", botId, e.words).find((a) => !this.holds.has(a.id));
+    // Scoped to the asking member, like the card itself: one member's parked card never answers another's wait.
+    const who = task?.member ?? this.bot(botId)?.member ?? OWNER;
+    const same = this.db.all("SELECT id FROM asks WHERE bot = ? AND kind = 'permission' AND state = 'open' AND title = ? AND COALESCE(member, ?) = ?", botId, e.words, OWNER, who).find((a) => !this.holds.has(a.id));
     const askId = same ? same.id : this.openAsk(botId, task, e.words, { effect: e.kind, key: e.key, ...(e.cost !== undefined ? { cost: e.cost } : {}), ...(e.preview ? { preview: e.preview } : {}), ...(checkout ? { checkout } : {}), ...(e.press ? { press: true } : {}), ...(e.fill ? { fill: true } : {}) });
     if (same && task) this.setTask(task, 'needs_you');
     // In their quiet hours nobody will answer soon: park at once instead of holding the bot.
@@ -2110,7 +2114,7 @@ export class Crew {
     const t = this.activeTask(botId);
     const member = t?.member ?? OWNER;
     if (this.connections.connected(member, app)) return { connected: true, note: `${a.name} is already connected; its tools arrive with your next task.` };
-    if (!this.db.get("SELECT 1 FROM asks WHERE bot = ? AND kind = 'connect' AND state = 'open' AND json_extract(detail, '$.app') = ?", botId, app)) {
+    if (!this.db.get("SELECT 1 FROM asks WHERE bot = ? AND kind = 'connect' AND state = 'open' AND json_extract(detail, '$.app') = ? AND COALESCE(member, ?) = ?", botId, app, OWNER, member)) {
       this.openAsk(botId, t, `Connect ${a.name}`, { app, words: `Let ${this.bot(botId)!.display} use your ${a.name}` }, 'connect');
     }
     return { asked: true, note: 'The person sees a Connect card now. End your turn with one short line; you will be told when they answer.' };
