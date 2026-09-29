@@ -35,6 +35,7 @@ export const inlineHowTo = (text: string): 'signin' | 'app' | 'routine' | null =
 
 const HOLD_MS = Number(process.env.CREWHOUSE_HOLD_MS || 180_000); // how long a tool call waits for an answer before the turn parks
 const TASK_TIMEOUT_MS = 60 * 60_000;
+const taskTokenCap = () => Number(process.env.CREWHOUSE_TASK_TOKENS || 500_000); // ponytail: one house number, not per template; per-template bot.json field if Scribe and Reel diverge.
 import { clock } from './accounts.ts';
 
 /** OpenClaw's own tools crewhouse adopts once their policy effects are reviewed: reads, recall and media on the
@@ -605,8 +606,7 @@ export class Crew {
     };
   }
 
-  // ---- the share: what a run used lands on its member's day ----
-  // Usage arrives as RunEvent 'usage' (handled in onEvent); per-run accounting stays where the event is.
+  // ---- the share: what a run used lands on its member's day; each task also stops at its own ceiling (see onEvent) ----
 
   /** The member's routines and check-ins have had their share of today. Things they ask for directly never wait on it. */
   overShare(member: number) {
@@ -1481,6 +1481,8 @@ export class Crew {
     else if (e.type === 'usage' && e.tokens) {
       this.db.run('UPDATE tasks SET tokens = tokens + ? WHERE id = ?', Math.round(e.tokens), l.task);
       this.db.run('INSERT INTO usage (member, day, tokens) VALUES (?, ?, ?) ON CONFLICT(member, day) DO UPDATE SET tokens = tokens + excluded.tokens', l.member, dayOf(), Math.round(e.tokens));
+      const t = this.db.get('SELECT * FROM tasks WHERE id = ?', l.task);
+      if (t && t.state === 'working' && t.tokens >= taskTokenCap()) { this.close(botId); this.setTask(t, 'failed', 'This one was getting long, so I stopped it before it used more of your AI.'); }
     }
   }
 
