@@ -391,10 +391,26 @@ function Wide({ children }: { children: ReactNode }) {
   </View>;
 }
 
-function SheetGrid({ head, rows }: { head: string[]; rows: string[][] }) {
+/** A table as a grid. A sheet's (given its row numbers and cell roles) reads like the web's panel: letters over the
+ *  columns, row numbers down the side, the heading row set apart, soft yellow to fill in, soft blue worked out.
+ *  RN has no table layout, so every column gets one width from its longest words and the rows line up. */
+function SheetGrid({ head, rows, nums, roles }: { head: string[]; rows: string[][]; nums?: number[]; roles?: string[][] }) {
   const t = useLook();
-  return <View>{[head, ...rows].map((row, j) => <View key={j} style={{ flexDirection: 'row' }}>{row.map((c, k) =>
-    <View key={k} style={{ minWidth: 90, maxWidth: 200, padding: 6, borderWidth: 1, borderColor: t.line }}><T style={j ? undefined : s.b}>{c}</T></View>)}</View>)}</View>;
+  const all = [head, ...rows];
+  const cols = [...Array(Math.max(0, ...all.map((r) => r.length))).keys()];
+  const w = cols.map((c) => Math.min(200, Math.max(90, 14 + 7.5 * Math.max(...all.map((r) => (r[c] ?? '').length)))));
+  const edge = { width: 36, padding: 4, borderWidth: 1, borderColor: t.line, backgroundColor: t.soft, alignItems: 'center' as const };
+  const tint = (role: string) => (role === 'in' ? t.cellIn : role === 'calc' ? t.cellCalc : t.solid);
+  return <View>
+    {nums && <View style={{ flexDirection: 'row' }}><View style={edge} />{cols.map((c) =>
+      <View key={c} style={[edge, { width: w[c] }]}><T tone="mute" style={s.small}>{A.column(c)}</T></View>)}</View>}
+    {all.map((row, j) => <View key={j} style={{ flexDirection: 'row' }}>
+      {nums && <View style={edge}><T tone="mute" style={s.small}>{String(nums[j] ?? j + 1)}</T></View>}
+      {cols.map((k) => { const role = roles?.[j]?.[k] || (j ? '' : 'head');
+        return <View key={k} style={{ width: w[k], padding: 6, borderWidth: 1, borderColor: t.line, backgroundColor: tint(role), borderBottomWidth: role === 'head' ? 2 : 1, borderBottomColor: role === 'head' ? t.line2 : t.line }}>
+          <T style={role === 'head' ? s.b : undefined}>{row[k] ?? ''}</T></View>; })}
+    </View>)}
+  </View>;
 }
 
 /** A document's parts as the web's reader shows them: headings, paragraphs, bullets and tables. */
@@ -424,21 +440,24 @@ function DocSheet({ f, onClose }: { f: A.FileView; onClose: () => void }) {
   const text = page && !book && !doc ? A.mdPlain(String(page?.text ?? '')) : null;
   const sheets = book?.sheets ?? [];
   const sNow = sheets[Math.min(tab, Math.max(0, sheets.length - 1))];
+  const more = sNow ? sNow.total - sNow.rows.length - 1 : 0;
   return <Modal visible transparent animationType={motion.sheet(reduce)} onRequestClose={onClose}>
     <Pressable style={s.scrim} onPress={onClose}>
       <Pressable style={[s.sheet, { backgroundColor: t.bg, maxHeight: '88%' }]} onPress={() => {}}>
         <View style={[s.row, { paddingBottom: 12, borderBottomWidth: 1, borderColor: t.line }]}>
           <View style={[s.fileIc, { backgroundColor: t.solid, borderColor: t.line }]}><T tone={f.kind === 'sheet' ? undefined : 'ink2'} style={[s.fileGlyph, f.kind === 'sheet' && { color: t.ok }]}>{f.kind === 'sheet' ? '▦' : '▤'}</T></View>
           <T style={[s.h2, { flex: 1 }]} lines={2}>{f.name}</T><Btn label="Close" onPress={onClose} /></View>
-        <ScrollView>
+        <ScrollView style={{ flexShrink: 1 }}>
           {page === null && <T tone="mute">Opening “{f.name}”…</T>}
           {page !== null && !book && !doc && !text && <T tone="mute">There is nothing in it to show yet.</T>}
-          {sheets.length > 1 && <View style={s.chips}>{sheets.map((x, i) => <Btn key={`${x.name}-${i}`} go={i === tab} label={x.name} onPress={() => setTab(i)} />)}</View>}
-          {sNow && <>{book && sheets.length === 1 && <T style={s.b}>{sNow.name}</T>}<Wide><SheetGrid head={sNow.head} rows={sNow.rows} /></Wide>
-            {sNow.total > sNow.rows.length + 1 && <T tone="mute" style={s.small}>{`…and ${sNow.total - sNow.rows.length - 1} more rows. Open it on the computer to see the whole sheet.`}</T>}</>}
+          {sNow && <View style={{ gap: 8, paddingTop: 12 }}><Wide><SheetGrid head={sNow.head} rows={sNow.rows} nums={sNow.nums} roles={sNow.roles} /></Wide>
+            {more > 0 && <T tone="mute" style={s.small}>{`…and ${more === 1 ? 'one more row' : `${more} more rows`}. Open it on the computer to see the whole sheet.`}</T>}</View>}
           {doc && (doc.parts.length ? <DocParts parts={doc.parts} /> : <T tone="mute">There is nothing in it to show yet.</T>)}
           {text != null && text !== '' && <ChatText text={text} />}
         </ScrollView>
+        {/* the sheet's tabs sit under it, as in the file's own program */}
+        {sheets.length > 0 && <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, borderTopWidth: 1, borderColor: t.line, paddingTop: 8 }}
+          contentContainerStyle={{ gap: 8 }}>{sheets.map((x, i) => <Btn key={`${x.name}-${i}`} go={x === sNow} label={x.name} onPress={() => setTab(i)} />)}</ScrollView>}
       </Pressable>
     </Pressable>
   </Modal>;

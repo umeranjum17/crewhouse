@@ -7,7 +7,7 @@ import { cycle, type Focused } from './dialog.ts';
 import { chatTokens, safeLink } from './chat-md.ts';
 import * as art from './art.ts';
 import { MARKS } from './logos.ts';
-import { clock, docLinks, document as docView, fileSource, fileView, mdPlain, pageWords, sheetWords, workbook, type Card, type DocPart, type DocView, type FileView, type Helper, type Step, type Workbook } from './adapter.ts';
+import { clock, column, docLinks, document as docView, fileSource, fileView, mdPlain, pageWords, sheetWords, workbook, type Card, type DocPart, type DocView, type FileView, type Helper, type Sheet, type Step, type Workbook } from './adapter.ts';
 
 /** Markdown inline runs, from the shared safe tokens (web/src/chat-md.ts): no raw HTML, http(s) links only. */
 const mdInline = (tokens: any[]): ReactNode => tokens.map((t, i) => t.type === 'strong' ? <strong key={i}>{mdInline(t.tokens)}</strong>
@@ -283,25 +283,68 @@ function aboutFile(f: FileView, book: Workbook | null, doc: DocView | null) {
   return count ? `${kind} · ${book ? sheetWords(count) : pageWords(count)}` : kind;
 }
 
-/** A finished file the helper made — a workbook or a document — in the chat: its name, a line about it, a peek inside, Open. */
+/** A page's peek: its first heading that is not the title said twice, over a grey line for each of the next few parts,
+ *  each as long as the words it stands for. A written page (.md) reads the same way from its own lines. */
+function pagePeek(name: string, doc: DocView | null, text: string | null) {
+  const parts: DocPart[] = doc?.parts ?? (text ?? '').split('\n').filter((l) => l.trim())
+    .map((l) => ({ kind: /^#/.test(l) ? 'heading' : 'p', text: l.replace(/^[#>*\-\s]+/, '') }));
+  const at = parts.findIndex((p) => p.kind === 'heading' && bare(p.text ?? '') !== bare(name));
+  const bars = parts.slice(at + 1).filter((p) => p.kind !== 'heading').slice(0, 4)
+    .map((p) => (p.kind === 'table' ? 100 : Math.min(100, 30 + (p.text ?? '').length / 2)));
+  return { head: at < 0 ? '' : parts[at].text ?? '', bars };
+}
+
+/** The card's peek inside: a sheet's top-left corner as a small grid, tinted the way the panel is, or a page's heading
+ *  over its lines. Nothing to peek at yet (still opening, or empty) shows nothing. */
+export function Thumb({ name, book, doc, text }: { name: string; book: Workbook | null; doc: DocView | null; text: string | null }) {
+  const s = book?.sheets[0];
+  if (s && [s.head, ...s.rows].some((r) => r.some(Boolean))) {
+    const rows = [s.head, ...s.rows].slice(0, 4);
+    const cols = [...Array(Math.min(4, Math.max(...rows.map((r) => r.length)))).keys()];
+    return <span className="wb-thumb" aria-hidden style={{ gridTemplateColumns: `repeat(${cols.length}, minmax(0, 1fr))` }}>{rows.flatMap((r, j) => cols.map((c) =>
+      <i key={`${j}-${c}`} className={s.roles[j]?.[c] || (j ? undefined : 'head')}>{r[c] ?? ''}</i>))}</span>;
+  }
+  const page = doc || text ? pagePeek(name, doc, text) : null;
+  if (!page || (!page.head && !page.bars.length)) return null;
+  return <span className="wb-thumb leaf" aria-hidden>
+    {page.head && <b>{page.head}</b>}
+    {page.bars.map((w, i) => <i key={i} style={{ width: `${w}%` }} />)}
+  </span>;
+}
+
+/** A finished file the helper made — a workbook or a document — in the chat: a peek inside, then what kind of file it
+ *  is, its name, a line about it, and Open. */
 export function PreviewCard({ f, big }: { f: FileView; big?: boolean }) {
-  const { book, doc } = usePreview(f);
+  const { book, doc, text } = usePreview(f);
   const src = fileSource(f.url);
-  // The peek: a sheet's column names, a document's section headings — never the title said twice.
-  const head = (book?.sheets[0]?.head ?? doc?.parts.filter((p) => p.kind === 'heading').map((p) => p.text ?? '') ?? [])
-    .filter((h) => h && bare(h) !== bare(f.name));
   const about = aboutFile(f, book, doc);
   return (
     <a className={`wb-card${big ? ' big' : ''}`} href={`#/f/${src?.bot ?? ''}/${encodeURIComponent(src?.path ?? '')}`} aria-label={`Open ${f.name}`}>
-      <span className={`wb-ic wb-${f.kind}`} aria-hidden>{f.kind === 'page' ? '▤' : '▦'}</span>
+      <Thumb name={f.name} book={book} doc={doc} text={text} />
+      <span className={`wb-ic wb-${f.kind}`} aria-hidden>{src?.path.split('.').pop()?.toUpperCase().slice(0, 4)}</span>
       <span className="grow wb-what">
         <b>{f.name}</b>
         <span className="mute small">{about}</span>
       </span>
       <b className="wb-open">Open</b>
-      {head.length > 0 && <span className="wb-thumb" aria-hidden>{head.slice(0, 4).map((h, i) => <i key={i}>{h}</i>)}</span>}
     </a>
   );
+}
+
+/** One sheet as a grid, read-only: letters over every column any row reaches, the file's own row numbers down the
+ *  side, each cell tinted by its role, and what is not shown said under it. */
+export function SheetTable({ s }: { s: Sheet }) {
+  const cols = [...Array(Math.max(...[s.head, ...s.rows].map((r) => r.length))).keys()];
+  const more = s.total - s.rows.length - 1;
+  return <div className="wb-rows">
+    <table className="wb-grid wb-sheet">
+      <thead><tr><th className="wb-n" />{cols.map((c) => <th key={c}>{column(c)}</th>)}</tr></thead>
+      <tbody>{[s.head, ...s.rows].map((r, i) => <tr key={i}><th className="wb-n" scope="row">{s.nums[i] ?? i + 1}</th>
+        {cols.map((c) => i ? <td key={c} className={s.roles[i]?.[c] || undefined}>{r[c] ?? ''}</td>
+          : <th key={c} scope="col" className="head">{r[c] ?? ''}</th>)}</tr>)}</tbody>
+    </table>
+    {more > 0 && <div className="mute small">…and {more === 1 ? 'one more row' : `${more} more rows`}. Download it to see the whole sheet.</div>}
+  </div>;
 }
 
 /** Link bare source URLs without changing the document's visible text. React escapes everything else. */
@@ -356,16 +399,10 @@ export function PreviewPanel({ bot, path, onClose }: { bot: string; path: string
         {!book && !doc && text === null && <div className="mute">Opening “{f.name}”…</div>}
         {book && !sheets.length && <div className="mute">There is nothing in it to show yet.</div>}
         {doc && !doc.parts.length && <div className="mute">There is nothing in it to show yet.</div>}
-        {sheets.length > 1 && <nav className="wb-tabs" aria-label="Sheets">
-          {sheets.map((x, i) => <button key={`${x.name}-${i}`} className={`wb-tab${i === tab ? ' on' : ''}`} onClick={() => setTab(i)}>{x.name}</button>)}
+        {s && <SheetTable s={s} />}
+        {sheets.length > 0 && <nav className="wb-tabs" aria-label="Sheets">
+          {sheets.map((x, i) => <button key={`${x.name}-${i}`} className={`wb-tab${x === s ? ' on' : ''}`} onClick={() => setTab(i)}>{x.name}</button>)}
         </nav>}
-        {s && <div className="wb-rows">
-          <table className="wb-grid">
-            <thead><tr>{s.head.map((h, i) => <th key={i}>{h}</th>)}</tr></thead>
-            <tbody>{s.rows.map((r, i) => <tr key={i}>{s.head.map((_, c) => <td key={c}>{r[c] ?? ''}</td>)}</tr>)}</tbody>
-          </table>
-          {s.total > s.rows.length + 1 && <div className="mute small">…and {s.total - s.rows.length - 1} more rows. Download it to see the whole sheet.</div> }
-        </div>}
         {doc && doc.parts.length > 0 && <DocBody doc={doc} />}
         {text !== null && <div className="wb-rows doc-rows"><div className="chat-md">{mdBlocks(chatTokens(text))}</div></div>}
       </div>

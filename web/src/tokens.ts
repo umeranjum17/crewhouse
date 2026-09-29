@@ -4,11 +4,14 @@ export const color = {
     bg: '#FAF9F7', surface: '#FFFFFF', sunken: '#F3F1EE', line: '#E7E4DF', line2: '#D9D5CF',
     ink: '#1B1A1F', ink2: '#56525D', mute: '#8B8792', accent: '#1B1A1F', onAccent: '#FFFFFF',
     pink: '#D23369', green: '#1E9A58', amber: '#B86E00', danger: '#C4372C',
+    // a spreadsheet's cells: soft yellow for what the person fills in, soft blue for what works itself out
+    cellIn: '#FFEFB8', cellCalc: '#DAE8FB',
   },
   night: {
     bg: '#111014', surface: '#1A191E', sunken: '#151418', line: '#2A2830', line2: '#36333D',
     ink: '#F1EFEA', ink2: '#ABA7B1', mute: '#78747E', accent: '#F1EFEA', onAccent: '#111014',
     pink: '#FF6B9A', green: '#4BD08A', amber: '#F2B04B', danger: '#FF6B5E',
+    cellIn: '#3A3118', cellCalc: '#1B2B42',
   },
 };
 export const spacing = [4, 8, 12, 16, 20, 24, 32, 48] as const;
