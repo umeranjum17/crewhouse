@@ -99,7 +99,7 @@ test('a helper makes one in its own chat: the file lands in files/, is delivered
   await settled(db, id);
   assert.equal(task(db, id).state, 'done');
 
-  const rel = 'files/hotel-guest-reception.xlsx';
+  const rel = `files/hotel-guest-reception-t${id}.xlsx`;
   const full = join(disk.botDir(cfg, 'quill'), rel);
   assert.ok(existsSync(full), 'the workbook is in the helper folder');
   const delivered = db.all("SELECT data FROM events WHERE kind = 'file.delivered'").map((e: any) => JSON.parse(e.data));
@@ -118,4 +118,38 @@ test('a helper makes one in its own chat: the file lands in files/, is delivered
   const other = (await crew.post('quill', `and a note ${call('crew_deliver', { path: 'files/notes.txt' })}`))!.task;
   await settled(db, other);
   await assert.rejects(() => crew.workbookView('quill', 'files/notes.txt', 1), /no such spreadsheet/, 'only a spreadsheet is read as one');
+});
+
+test('two members ask for the same title: each task gets its own file, and neither preview opens the other', async () => {
+  const { db, crew } = setup();
+  crew.onboard('sir');
+  crew.recruit('scribe', 'Quill', 'person');
+  const sam = crew.addMember('Sam').id as number;
+  const mine = (await crew.post('quill', `a reception sheet ${call('crew_workbook', spec)}`))!.task;
+  await settled(db, mine);
+  const theirs = (await crew.post('quill', `a reception sheet ${call('crew_workbook', spec)}`, undefined, sam))!.task;
+  await settled(db, theirs);
+  assert.equal(task(db, mine).state, 'done');
+  assert.equal(task(db, theirs).state, 'done');
+  const paths = db.all("SELECT data FROM events WHERE kind = 'file.delivered'").map((e: any) => JSON.parse(e.data).path);
+  assert.equal(new Set(paths).size, 2, 'one file per task, no overwrite');
+  assert.ok(paths.every((p: string) => new RegExp(`-t(${mine}|${theirs})\\.xlsx$`).test(p)));
+  const [a, b] = paths;
+  await assert.rejects(() => crew.workbookView('quill', b, 1), /not delivered to you/);
+  await assert.rejects(() => crew.workbookView('quill', a, sam), /not delivered to you/);
+});
+
+test('a file delivered for one member cannot be taken by another member’s task', async () => {
+  const { cfg, db, crew } = setup();
+  crew.onboard('sir');
+  crew.recruit('scribe', 'Quill', 'person');
+  const sam = crew.addMember('Sam').id as number;
+  writeFileSync(join(disk.botDir(cfg, 'quill'), 'files', 'shared.txt'), 'mine');
+  const mine = (await crew.post('quill', `take it ${call('crew_deliver', { path: 'files/shared.txt' })}`))!.task;
+  await settled(db, mine);
+  const theirs = (await crew.post('quill', `take it ${call('crew_deliver', { path: 'files/shared.txt' })}`, undefined, sam))!.task;
+  await settled(db, theirs);
+  const delivered = db.all("SELECT data FROM events WHERE kind = 'file.delivered' AND json_extract(data, '$.path') = 'files/shared.txt'")
+    .map((e: any) => JSON.parse(e.data).task);
+  assert.deepEqual(delivered, [mine], 'the second task is refused, never an overwrite');
 });

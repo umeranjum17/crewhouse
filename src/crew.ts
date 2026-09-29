@@ -2155,7 +2155,8 @@ export class Crew {
   /** crew_workbook: crewd writes the .xlsx itself (src/workbooks.ts) into the bot's files/ and delivers it like any other file. */
   private async workbook(botId: string, name: string, sheets: unknown) {
     const title = clean(name, 60) || 'Workbook';
-    const rel = join('files', `${disk.slug(title)}.xlsx`);
+    const task = this.activeTask(botId)?.id;
+    const rel = join('files', `${disk.slug(title)}${task ? `-t${task}` : ''}.xlsx`);
     const full = disk.insideBot(this.cfg, botId, rel);
     mkdirSync(dirname(full), { recursive: true });
     const built = await buildWorkbook(full, { name: title, sheets } as any);
@@ -2163,12 +2164,16 @@ export class Crew {
     return { ok: true, path: rel, sheets: built.sheets };
   }
 
+  /** A raw file only opens for the member it was delivered to — the same check the previews use. */
+  fileFor(botId: string, path: string, viewer: number) {
+    return !!this.db.get("SELECT 1 AS ok FROM events e JOIN tasks t ON t.id = json_extract(e.data, '$.task') " +
+      "WHERE e.bot = ? AND e.kind = 'file.delivered' AND json_extract(e.data, '$.path') = ? AND COALESCE(t.member, ?) = ?", botId, String(path ?? ''), viewer, viewer);
+  }
+
   /** The app's read-only preview of a workbook the bot delivered to this member: words and counts, never the file or its path. */
   async workbookView(botId: string, path: string, viewer: number) {
     const rel = String(path ?? '');
-    const seen = this.db.get("SELECT 1 AS ok FROM events e JOIN tasks t ON t.id = json_extract(e.data, '$.task') " +
-      "WHERE e.bot = ? AND e.kind = 'file.delivered' AND json_extract(e.data, '$.path') = ? AND COALESCE(t.member, ?) = ?", botId, rel, viewer, viewer);
-    if (!seen) throw Object.assign(new Error('that spreadsheet was not delivered to you'), { status: 403 });
+    if (!this.fileFor(botId, rel, viewer)) throw Object.assign(new Error('that spreadsheet was not delivered to you'), { status: 403 });
     const full = disk.insideBot(this.cfg, botId, rel);
     if (!/\.xlsx$/i.test(full) || !existsSync(full) || statSync(full).size > 20_000_000) throw Object.assign(new Error('no such spreadsheet'), { status: 404 });
     return readWorkbook(full);
@@ -2177,7 +2182,8 @@ export class Crew {
   /** crew_document: crewd writes the .docx itself (src/documents.ts) into the bot's files/ and delivers it like any other file. */
   private async document(botId: string, name: string, blocks: unknown) {
     const title = clean(name, 60) || 'Document';
-    const rel = join('files', `${disk.slug(title)}.docx`);
+    const task = this.activeTask(botId)?.id;
+    const rel = join('files', `${disk.slug(title)}${task ? `-t${task}` : ''}.docx`);
     const full = disk.insideBot(this.cfg, botId, rel);
     mkdirSync(dirname(full), { recursive: true });
     await buildDocument(full, { name: title, blocks } as any);
@@ -2193,9 +2199,7 @@ export class Crew {
    *  own words for a delivered .md or .txt (for the shared safe renderer) — never a path, only to the member it went to. */
   async documentView(botId: string, path: string, viewer: number) {
     const rel = String(path ?? '');
-    const seen = this.db.get("SELECT 1 AS ok FROM events e JOIN tasks t ON t.id = json_extract(e.data, '$.task') " +
-      "WHERE e.bot = ? AND e.kind = 'file.delivered' AND json_extract(e.data, '$.path') = ? AND COALESCE(t.member, ?) = ?", botId, rel, viewer, viewer);
-    if (!seen) throw Object.assign(new Error('that document was not delivered to you'), { status: 403 });
+    if (!this.fileFor(botId, rel, viewer)) throw Object.assign(new Error('that document was not delivered to you'), { status: 403 });
     const full = disk.insideBot(this.cfg, botId, rel);
     if (!/\.(docx|md|txt)$/i.test(full) || !existsSync(full) || statSync(full).size > 20_000_000) throw Object.assign(new Error('no such document'), { status: 404 });
     // A delivered .md or .txt leaves as its own words (capped), read by the app's shared safe markdown renderer;
@@ -2206,9 +2210,7 @@ export class Crew {
   /** A delivered video, in base64 slices (a phone fetches it piece by piece over the link), only for the member it was delivered to. */
   async videoSlice(botId: string, path: string, after: number, viewer: number) {
     const rel = String(path ?? '');
-    const seen = this.db.get("SELECT 1 AS ok FROM events e JOIN tasks t ON t.id = json_extract(e.data, '$.task') " +
-      "WHERE e.bot = ? AND e.kind = 'file.delivered' AND json_extract(e.data, '$.path') = ? AND COALESCE(t.member, ?) = ?", botId, rel, viewer, viewer);
-    if (!seen) throw Object.assign(new Error('that video was not delivered to you'), { status: 403 });
+    if (!this.fileFor(botId, rel, viewer)) throw Object.assign(new Error('that video was not delivered to you'), { status: 403 });
     const full = disk.insideBot(this.cfg, botId, rel);
     if (!/\.(mp4|webm|mov)$/i.test(rel) || !existsSync(full) || !statSync(full).isFile()) throw Object.assign(new Error('no such video'), { status: 404 });
     const size = statSync(full).size;
@@ -2222,8 +2224,11 @@ export class Crew {
     const full = disk.insideBot(this.cfg, botId, String(path ?? ''));
     if (!existsSync(full)) throw new Error(`no file at ${path}`);
     const rel = full.slice(disk.botDir(this.cfg, botId).length + 1);
-    const task = this.activeTask(botId)?.id;
+    const active = this.activeTask(botId);
+    const task = active?.id;
     if (task && this.db.get(`SELECT 1 FROM events WHERE kind = 'file.delivered' AND bot = ? AND json_extract(data, '$.task') = ? AND json_extract(data, '$.path') = ?`, botId, task, rel)) return { ok: true, already: true };
+    const clash = this.db.get(`SELECT COALESCE(tm.member, ?) AS m, json_extract(e.data, '$.task') AS other FROM events e LEFT JOIN tasks tm ON tm.id = json_extract(e.data, '$.task') WHERE e.kind = 'file.delivered' AND e.bot = ? AND json_extract(e.data, '$.path') = ?`, OWNER, botId, rel);
+    if (clash && (clash.other ?? undefined) !== task && clash.m !== (active?.member ?? OWNER)) throw Object.assign(new Error(`${rel} was already delivered for someone else`), { status: 409 });
     this.db.event('file.delivered', botId, { task, path: rel, note: short(clean(note, 1000), 200), size: statSync(full).size });
     // A patch is only ever a suggested change for the maintainer to review, in crewd's own words, never the model's.
     this.say(botId, 'system', /\.(patch|diff)$/.test(rel) ? `Delivered ${rel}: Suggested change (for the maintainer to review)${this.db.get("SELECT 1 FROM events WHERE kind = 'verify.result' AND bot = ? AND json_extract(data, '$.passed') AND json_extract(data, '$.sha') = ?", botId, sha(readFileSync(full, 'utf8'))) ? ': passed its own check' : ''}` : `Delivered ${rel}${note ? `: ${note}` : ''}`, task ?? null);

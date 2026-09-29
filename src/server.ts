@@ -155,7 +155,10 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
 
       const file = p.match(/^\/files\/([a-z0-9-]+)\/(.+)$/);
       if (file) {
-        const full = disk.insideBot(cfg, file[1], join('files', decodeURIComponent(file[2])));
+        const rel = join('files', decodeURIComponent(file[2]));
+        const me = crew.viewer(req.headers['x-crewhouse-member']).id as number;
+        if (me !== OWNER && !crew.fileFor(file[1], rel, me)) return send(res, 403, { error: 'not delivered to you' });
+        const full = disk.insideBot(cfg, file[1], rel);
         if (!existsSync(full)) return send(res, 404, { error: 'no such file' });
         return sendFile(req, res, full);
       }
