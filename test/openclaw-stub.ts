@@ -8,7 +8,6 @@
 //   no helpers in plan   answer as a plan without helpers does
 //   sign me out          answer as an account whose sign-in stopped working does
 //   ask permission       hold the turn (after its tool calls) until the test releases it (`release`)
-//   [route ID]           asked who should take a request: ID, fairly sure; [route ?]: torn evenly; neither: Chief, sure
 //   anything else        reply `stub <bot>: done with "<the last line of the message>"`
 import { createServer, type Server } from 'node:http';
 import { randomUUID } from 'node:crypto';
@@ -79,12 +78,6 @@ export function startModelStub() {
       send({ role: 'assistant', tool_calls: [{ index: 0, id: `call_${id}`, type: 'function', function: { name: 'skill_workshop', arguments: '{"action":"restore_collection"}' } }] });
       send({}, 'tool_calls');
       return void res.end('data: [DONE]\n\n');
-    }
-    // Routing asks who takes a request; the script answers in the kit's own shape.
-    if (said.startsWith('[Crewhouse routing]')) {
-      const options = [...said.matchAll(/^- ([a-z0-9-]+):/gm)].map((m) => m[1]);
-      const pick = /\[route ([a-z0-9-]+|\?)\]/.exec(said)?.[1] ?? 'chief';
-      return plain(res, body, JSON.stringify(Object.fromEntries(options.map((o) => [o, pick === '?' ? 1 / options.length : o === pick ? 0.9 : 0.1 / (options.length - 1)]))));
     }
     if (/sign me out/i.test(said)) {
       res.writeHead(401, { 'content-type': 'application/json' });

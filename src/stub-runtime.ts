@@ -92,11 +92,6 @@ export class StubRuntime implements AgentRuntime {
   async steer(key: string, text: string) { this.steered.set(key, text); }
   async abort(key: string) { this.cancelled.add(key); this.release(key); }
   async trail(_key: string) { return []; }
-  async ask(_member: number, prompt: string) {
-    const options = [...prompt.matchAll(/^- ([a-z0-9-]+):/gm)].map((match) => match[1]);
-    const pick = /\[route ([a-z0-9-]+|\?)\]/.exec(prompt)?.[1] ?? 'chief';
-    return JSON.stringify(Object.fromEntries(options.map((option) => [option, pick === '?' ? 1 / options.length : option === pick ? 0.9 : 0.1 / (options.length - 1)])));
-  }
   async learned(_member: number) { return []; }
   async forget(_member: number, _id: string) {}
   private learningOn = true;

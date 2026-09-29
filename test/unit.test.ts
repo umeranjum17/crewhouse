@@ -924,9 +924,8 @@ test('routing: explicit helpers are direct; uncertain requests start Chief witho
 
   // Addressing Chief is a direct task, not a second subscription turn spent asking who should take it.
   const runtime = (crew as any).runtime;
-  const ask = runtime.ask.bind(runtime);
+  assert.equal(runtime.ask, undefined, 'no routing model turn exists: rules decide, a miss becomes a Chief task');
   let routingCalls = 0;
-  runtime.ask = async (...args: Parameters<typeof ask>) => { routingCalls++; return ask(...args); };
   const signedIn = crew.accounts.signedIn;
   let routeChecks = 0;
   let pendingBody = 'Chief, help me think through this decision';
