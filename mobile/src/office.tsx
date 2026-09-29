@@ -49,7 +49,7 @@ export function Office({ state, night, offline, width, onChief, onDesk, onAsk, o
   const dw = Math.floor(width / plan.cols), lw = Math.floor(width / plan.loungeCols);
   const day = new Date().setHours(0, 0, 0, 0);
   const today = view.done.filter((d) => d.at >= day).length; // the tray holds today's, as Home's count does (A.homeCounts)
-  const calm = offline ? OUT : crew.some((c) => c.ring || c.ask) ? ''
+  const calm = offline ? OUT : crew.some((c) => c.ring || c.ask) ? '' : !crew.length ? 'Nothing on the go yet.'
     : `Nothing of yours on the go. ${crew.some((c) => c.busyElsewhere) ? 'Some of the crew are busy with other jobs.' : 'The crew is free.'}`;
   const sofas = (plan.loungeCols - ((plan.lounge.length + (plan.more > 0 || folds ? 1 : 0)) % plan.loungeCols)) % plan.loungeCols;
   const byId = new Map(view.crew.map((c) => [c.id, c]));

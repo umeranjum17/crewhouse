@@ -113,7 +113,7 @@ export function Office({ state, night }: { state: Json; night: boolean }) {
     '--r-bezel': r.bezel, '--r-screen': r.screen, '--r-sofa': r.sofa, '--r-sofa-dark': r.sofaDark, '--r-window': r.window, '--r-frame': r.frame, '--r-leaf': r.leaf, '--r-pot': r.pot } as CSSProperties;
   const day = new Date(); day.setHours(0, 0, 0, 0);
   const today = live.done.filter((t) => t.at >= day.getTime()).length; // the tray holds today's, as Home's count does
-  const calm = crew.some((c) => c.ring || c.ask) ? ''
+  const calm = crew.some((c) => c.ring || c.ask) ? '' : !crew.length ? 'Nothing on the go yet.'
     : crew.some((c) => c.busyElsewhere) ? 'Nothing of yours on the go right now.' : 'Nothing of yours on the go. The crew is free.';
   const chiefBusy = live.chief.mood === 'ask' ? 'needs' : live.chief.mood === 'work' ? 'work' : '';
 
