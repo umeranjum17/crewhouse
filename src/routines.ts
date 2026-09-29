@@ -8,8 +8,13 @@ const DAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
 const NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const bad = (text: string) => Object.assign(new Error(`I can't read "${text}" as a schedule; try "every Monday 9:00", "weekdays at 8am" or "every 2 hours"`), { status: 400 });
 
+const NUMS = ['one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve'];
+const numOf = (w: string) => NUMS.indexOf(w) + 1;
+
 export function parseSchedule(text: string): Schedule {
-  const s = String(text).toLowerCase().replace(/[,.]/g, ' ').replace(/(\d)\s+(am|pm)\b/g, '$1$2').trim();
+  const s = String(text).toLowerCase().replace(/[,.]/g, ' ')
+    .replace(/\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+(am|pm)\b/g, (_, n, ap) => `${numOf(n)}${ap}`)
+    .replace(/(\d)\s+(am|pm)\b/g, '$1$2').trim();
   const every = /^(?:every|each)\s+(\d+\s*)?(minute|min|hour|hr)s?$/.exec(s) ?? (s === 'hourly' ? [s, '1', 'hour'] : null);
   if (every) {
     const n = Number(every[1] ?? 1) * (every[2].startsWith('h') ? 60 : 1);
@@ -18,6 +23,7 @@ export function parseSchedule(text: string): Schedule {
   }
   const days = new Set<number>();
   let at: number | undefined;
+  let tod: number | undefined; // morning/evening/night: a default hour, never a day
   for (const w of s.split(/\s+/)) {
     if (['every', 'each', 'at', 'on', 'and', 'in', 'the'].includes(w)) continue;
     const t = /^(\d{1,2})(?::(\d\d))?(am|pm)?$/.exec(w);
@@ -30,17 +36,26 @@ export function parseSchedule(text: string): Schedule {
       at = h * 60 + m;
     } else if (w === 'noon') at = 12 * 60;
     else if (w === 'midnight') at = 0;
-    else if (/^(day|days|daily|everyday|night|morning|evening)$/.test(w)) [0, 1, 2, 3, 4, 5, 6].forEach((d) => days.add(d));
+    else if (/^(day|days|daily|everyday)$/.test(w)) [0, 1, 2, 3, 4, 5, 6].forEach((d) => days.add(d));
+    else if (w === 'morning') tod ??= 9 * 60;
+    else if (w === 'evening') tod ??= 18 * 60;
+    else if (w === 'night') tod ??= 21 * 60;
     else if (/^weekdays?$/.test(w)) [1, 2, 3, 4, 5].forEach((d) => days.add(d));
     else if (/^weekends?$/.test(w)) [0, 6].forEach((d) => days.add(d));
     else {
-      const d = DAYS.findIndex((x, i) => w.startsWith(x) && NAMES[i].toLowerCase().startsWith(w.replace(/s$/, '')));
-      if (d < 0) throw bad(text);
-      days.add(d);
+      // "Friday at five" is the working day's end, not the small hours; seven to eleven keep the morning.
+      const n = numOf(w);
+      if (n > 0 && at === undefined) at = (n <= 6 ? n + 12 : n) * 60;
+      else {
+        const d = DAYS.findIndex((x, i) => w.startsWith(x) && NAMES[i].toLowerCase().startsWith(w.replace(/s$/, '')));
+        if (d < 0) throw bad(text);
+        days.add(d);
+      }
     }
   }
+  if (!days.size && tod !== undefined) [0, 1, 2, 3, 4, 5, 6].forEach((d) => days.add(d)); // "every evening"
   if (!days.size) throw bad(text);
-  return { days: [...days].sort(), at: at ?? 9 * 60 }; // "every Monday" means the start of the working day
+  return { days: [...days].sort(), at: at ?? tod ?? 9 * 60 }; // "every Monday" means the start of the working day
 }
 
 const hhmm = (at: number) => new Date(2000, 0, 1, Math.floor(at / 60), at % 60).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase();

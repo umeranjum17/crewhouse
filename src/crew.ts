@@ -344,11 +344,13 @@ export class Crew {
           this.db.event('learn.curated', CHIEF, { member: m.id, capture: outcome.capture, kept: outcome.kept, written: outcome.written, dropped: outcome.dropped });
         });
       } catch (e) {
-        // Refused (usually the capture): the data stays exactly as it was, and the person hears why.
+        // Refused (usually the capture): the data stays exactly as it was, and the person hears why — unless
+        // the member has no learned skills at all (a fresh household), where there is nothing to leave untouched.
         console.error(`curation m${m.id}:`, e);
+        const learned = await this.runtime.learned(m.id).catch(() => []);
         this.db.tx(() => {
           this.db.event('learn.curated', CHIEF, { member: m.id, refused: String(e).slice(0, 200) });
-          this.say(CHIEF, 'system', `I left ${this.member(m.id).name}'s learned skills untouched this week — tidying them didn't feel safe just now.`, null, m.id);
+          if (learned.length) this.say(CHIEF, 'system', `I left ${this.member(m.id).name}'s learned skills untouched this week — tidying them didn't feel safe just now.`, null, m.id);
         });
       }
     }

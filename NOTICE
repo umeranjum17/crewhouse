@@ -5,7 +5,7 @@ This product includes software developed by the Crewhouse Authors.
 
 Licensed under the Apache License, Version 2.0 (see LICENSE).
 
-Crewhouse runs its AI engine, Pi (MIT), in-process, on the AI accounts each
+Crewhouse runs its AI engine, the OpenClaw gateway (MIT), as a supervised child process, on the AI accounts each
 person signs in to themselves. Those accounts remain subject to their
 vendors' terms.
 
