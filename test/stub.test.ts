@@ -2,7 +2,7 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
-import { existsSync,  readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { temp } from './tmp.ts';
@@ -499,4 +499,19 @@ test('the web API scopes bot pages and activity to the selected real member', as
   assert.equal((await api('POST', `/api/asks/${ask}/answer`, { answer: 'deny' }, asGuest)).status, 403);
   assert.equal(db.prepare('SELECT state FROM asks WHERE id = ?').get(ask)?.state, 'open');
   db.close();
+});
+
+test('raw /files/ only opens for the member it was delivered to', async () => {
+  await ready();
+  await api('POST', '/api/recruit', { template: 'reel', name: 'Reel' });
+  const guest = (await api('POST', '/api/people', { name: 'Files Guest' })).body.id;
+  const asGuest = { 'x-crewhouse-member': String(guest) };
+  const db = new DatabaseSync(join(root, 'state', 'crew.db'));
+  const id = Number(db.prepare("INSERT INTO tasks (bot, title, body, result, state, member) VALUES ('reel', 'owner file', 'body', 'result', 'done', 1)").run().lastInsertRowid);
+  db.prepare('INSERT INTO events (at, kind, bot, data) VALUES (?, ?, ?, ?)').run(Date.now(), 'file.delivered', 'reel', JSON.stringify({ task: id, path: 'files/owner-file.txt', note: 'private' }));
+  db.close();
+  mkdirSync(join(root, 'crew', 'bots', 'reel', 'files'), { recursive: true });
+  writeFileSync(join(root, 'crew', 'bots', 'reel', 'files', 'owner-file.txt'), 'owner words');
+  assert.equal((await fetch(`${base}/files/reel/owner-file.txt`)).status, 200, 'the owner keeps the trail');
+  assert.equal((await fetch(`${base}/files/reel/owner-file.txt`, { headers: asGuest })).status, 403, 'a guest gets no window into the folder');
 });

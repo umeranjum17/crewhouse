@@ -72,7 +72,7 @@ test('a helper makes one in its own chat: the file lands in files/, is delivered
   await settled(db, id);
   assert.equal(task(db, id).state, 'done');
 
-  const rel = 'files/front-desk-handbook.docx';
+  const rel = `files/front-desk-handbook-t${id}.docx`;
   const full = join(disk.botDir(cfg, 'quill'), rel);
   assert.ok(existsSync(full), 'the document is in the helper folder');
   const delivered = db.all("SELECT data FROM events WHERE kind = 'file.delivered'").map((e: any) => JSON.parse(e.data));
@@ -101,3 +101,22 @@ test('a helper makes one in its own chat: the file lands in files/, is delivered
   await assert.rejects(() => crew.documentView('quill', 'files/table.csv', 1), /no such document/, 'only a page is read as one');
 });
 
+
+test('two members ask for the same title: each task gets its own file, and neither preview opens the other', async () => {
+  const { db, crew } = setup();
+  crew.onboard('sir');
+  crew.recruit('scribe', 'Quill', 'person');
+  const sam = crew.addMember('Sam').id as number;
+  const mine = (await crew.post('quill', `the desk rules ${call('crew_document', spec)}`))!.task;
+  await settled(db, mine);
+  const theirs = (await crew.post('quill', `the desk rules ${call('crew_document', spec)}`, undefined, sam))!.task;
+  await settled(db, theirs);
+  assert.equal(task(db, mine).state, 'done');
+  assert.equal(task(db, theirs).state, 'done');
+  const paths = db.all("SELECT data FROM events WHERE kind = 'file.delivered'").map((e: any) => JSON.parse(e.data).path);
+  assert.equal(new Set(paths).size, 2, 'one file per task, no overwrite');
+  assert.ok(paths.every((p: string) => new RegExp(`-t(${mine}|${theirs})\\.docx$`).test(p)));
+  const [a, b] = paths;
+  await assert.rejects(() => crew.documentView('quill', b, 1), /not delivered to you/);
+  await assert.rejects(() => crew.documentView('quill', a, sam), /not delivered to you/);
+});
