@@ -281,6 +281,11 @@ export class Crew {
     if (!this.member(OWNER).onboarded && !this.db.get('SELECT 1 FROM messages WHERE bot = ?', CHIEF)) this.say(CHIEF, 'bot', chiefGreeting(), null, OWNER);
     this.timer = setInterval(() => this.tick(), 1500);
     this.recover();
+    // A cold boot replays the sleep line: the last tick survived in settings, so a gap still names the
+    // missed routines once and starts wake chores, on this computer or a cloud one.
+    const last = Number(this.db.get("SELECT value FROM settings WHERE key = 'crew.lastTick'")?.value ?? 0);
+    if (last) this.lastTick = last;
+    if (last && Date.now() - last > SLEPT_MS) this.slept(last, Date.now());
     void this.migrateMembers().then(async () => {
       if (this.stopped) return; // crewd stopped before the engine came up
       // The engine comes up in the background: a first install can take minutes, and crewd boots without it.
@@ -374,6 +379,8 @@ export class Crew {
     const tasks = this.db.all("SELECT * FROM tasks WHERE state IN ('working', 'needs_you')");
     for (const t of tasks) {
       this.handoffs.set(t.id, 'Crewhouse restarted');
+      // An acted call may have landed out in the world: the resumed job asks again, even under always.
+      if (t.acted) this.db.run('UPDATE tasks SET reask = 1 WHERE id = ?', t.id);
       this.setTask(t, 'queued');
     }
     if (tasks.length) this.db.event('system.recovered', null, { resumed: tasks.length });
@@ -1082,7 +1089,7 @@ export class Crew {
 
   /** A person's message in a bot's thread is a task for that bot; in Chief's thread it goes where `route` says. */
   /** `photos` from the phone or the share sheet: the helper sees them with the words, and they are kept in its files. */
-  async post(botId: string, text: string, model?: string, member = OWNER, photos?: unknown, room = false) {
+  async post(botId: string, text: string, model?: string, member = OWNER, photos?: unknown, room = false, key?: string) {
     const bot = this.bot(botId);
     if (!bot) throw Object.assign(new Error('no such bot'), { status: 404 });
     const pics = checkPhotos(photos);
@@ -1106,9 +1113,9 @@ export class Crew {
       if (!this.connections.connected(member, app)) this.openAsk(CHIEF, undefined, `Connect ${this.connections.apps[app].name}`, { app, words: `Connect your ${this.connections.apps[app].name}` }, 'connect', member);
       return;
     }
-    if (botId === CHIEF) return this.route(words, model, member, pics, room);
+    if (botId === CHIEF) return this.route(words, model, member, pics, room, key);
     const latest = room ? this.db.get('SELECT root FROM tasks WHERE room = 1 AND member = ? AND bot = ? ORDER BY id DESC LIMIT 1', member, botId) : undefined;
-    return this.addTask(botId, words, 'person', model, member, undefined, words, pics, { room, root: latest?.root });
+    return this.addTask(botId, words, 'person', model, member, undefined, words, pics, { room, root: latest?.root, key });
   }
 
   /** One pairing offer, using the same one-use code as Settings. Never give its ticket to a model or another member. */
@@ -1150,15 +1157,15 @@ export class Crew {
 
   /** Plainly addressed helper requests go straight there; unresolved requests become Chief tasks immediately.
    *  Chief can ask or hand off in his task, without a separate model turn delaying the person's first words. */
-  private async route(text: string, model: string | undefined, member: number, pics: Photo[] = [], room = false) {
+  private async route(text: string, model: string | undefined, member: number, pics: Photo[] = [], room = false, key?: string) {
     const helpers = this.bots().filter((b) => b.id !== CHIEF) as Helper[];
     const lastBot = this.db.get("SELECT text, task_id, at FROM messages WHERE bot = ? AND member = ? AND author = 'bot' ORDER BY id DESC LIMIT 1", CHIEF, member);
     const replyTo = text.length < 120 && !/\[tool\b/.test(text) && lastBot && lastBot.task_id && lastBot.at > Date.now() - 30 * 60_000 && /\?\s*$/.test(lastBot.text)
       ? this.db.get('SELECT bot, body FROM tasks WHERE id = ?', lastBot.task_id) : undefined;
-    if (replyTo?.bot === CHIEF) return this.addTask(CHIEF, text, 'person', model, member, undefined, text, pics, { room });
+    if (replyTo?.bot === CHIEF) return this.addTask(CHIEF, text, 'person', model, member, undefined, text, pics, { room, key });
     // An answer to a helper's question skips routing and Chief: a fresh task carrying the question and its answer.
     if (replyTo && lastBot && replyTo.bot !== CHIEF && this.bot(replyTo.bot)) {
-      const r = this.addTask(replyTo.bot, `${replyTo.body}\nAsked: ${lastBot.text}\nAnswer: ${text}`, CHIEF, model, member, undefined, text, pics, { room });
+      const r = this.addTask(replyTo.bot, `${replyTo.body}\nAsked: ${lastBot.text}\nAnswer: ${text}`, CHIEF, model, member, undefined, text, pics, { room, key });
       this.say(CHIEF, 'person', text + r.shown, null, member);
       return { task: r.task };
     }
@@ -1170,8 +1177,8 @@ export class Crew {
     const helper = (!to.abstained && helpers.find((b) => b.id === to.answer))
       || (/\b(excel|spreadsheet|xlsx|workbook|tracker)\b/i.test(body) && !chiefWork.test(body)
         && await this.usable(member, this.choices({ bot: 'scribe' } as Row)) && (this.bots().find((b) => b.template === 'scribe') ?? this.recruit('scribe', undefined, 'person', member)));
-    if (!helper) return this.addTask(CHIEF, body, 'person', model, member, undefined, text, pics, { room });
-    const r = this.addTask(helper.id, body, CHIEF, model, member, undefined, body, pics, { room });
+    if (!helper) return this.addTask(CHIEF, body, 'person', model, member, undefined, text, pics, { room, key });
+    const r = this.addTask(helper.id, body, CHIEF, model, member, undefined, body, pics, { room, key });
     this.say(CHIEF, 'person', text + r.shown, null, member);
     this.say(CHIEF, 'bot', `${helper.display} is on it.`, null, member);
     return { task: r.task };
@@ -1198,10 +1205,15 @@ export class Crew {
   }
 
   /** `said` is what the thread shows, when it isn't the whole body. */
-  private addTask(bot: string, body: string, origin: string, model: string | undefined, member: number, routine?: Row, said = body, pics: Photo[] = [], link: { parent?: number; root?: number; room?: boolean; hops?: number; title?: string } = {}) {
+  private addTask(bot: string, body: string, origin: string, model: string | undefined, member: number, routine?: Row, said = body, pics: Photo[] = [], link: { parent?: number; root?: number; room?: boolean; hops?: number; title?: string; key?: string } = {}) {
     const brain = model ? disk.brainKey(disk.parseBrain(model)) : null;
     const title = routine?.name ? short(routine.name, 80) : link.title ? taskTitle(link.title) : taskTitle(body);
     let shown = '';
+    // A replayed phone request answers with its first result (the claim below lands in the same transaction as the task).
+    if (link.key) {
+      const prior = this.db.get('SELECT value FROM settings WHERE key = ?', `link.key.${link.key}`)?.value as string | undefined;
+      if (prior) return JSON.parse(prior);
+    }
     const id = this.db.tx(() => {
       const now = Date.now();
       const r = this.db.run('INSERT INTO tasks (bot, title, body, origin, state, created_at, updated_at, brain, member, routine) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
@@ -1223,6 +1235,7 @@ export class Crew {
       if (routine) this.say(bot, 'system', `${routine.watch ? `“${routine.name}”: the page changed` : `Routine “${routine.name}”`}: ${body.split('\n\n[Crewhouse]')[0]}`, id);
       else this.say(bot, origin === 'person' ? 'person' : origin, said + shown, id);
       this.db.event('task.created', bot, { task: id, origin, member, title });
+      if (link.key) this.db.run('INSERT INTO settings (key, value) VALUES (?, ?)', `link.key.${link.key}`, JSON.stringify({ task: id, shown }));
       return id;
     });
     if (bot === CHIEF) this.db.live('reply.partial', CHIEF, { task: id, member, text: chiefFirst(body) });
@@ -1500,6 +1513,12 @@ export class Crew {
       return this.finish(botId, end.text); // a rest expires by its own time; a success never clears one early
     }
     if ('aborted' in end) return; // stopped on purpose: Take over, Stop, or a parked question
+    if (end.kind === 'network') {
+      this.handoffs.set(task.id, 'The connection dropped');
+      this.close(botId);
+      this.setTask(task, 'queued');
+      return this.dispatch();
+    }
     const name = disk.brainName({ provider: l.account });
     const words = end.kind === 'resting' ? `${name} is resting until ${clock(end.until ?? Date.now() + 60 * 60_000)}`
       : end.kind === 'signed-out' ? `${name} needs you to sign in again`
@@ -1846,7 +1865,8 @@ export class Crew {
     }
     if (this.granted.delete(`${botId}\n${e.words}`)) return undefined; // answered "allow" after the turn had parked
     const standing = e.key && [...(task && this.taskGrants.get(task.id) || []), ...(disk.botConfig(this.cfg, botId).allow ?? [])].includes(e.key);
-    if (standing) {
+    if (standing && task?.reask) this.db.run('UPDATE tasks SET reask = 0 WHERE id = ?', task.id); // acted, then restarted: this one asks
+    else if (standing) {
       this.db.event('run.allowed', botId, { task: task?.id, words: e.words });
       return undefined;
     }
@@ -1949,8 +1969,10 @@ export class Crew {
   }
 
   /** Allow once, for this task, or always for the bot; or not now — with a reminder tomorrow when asked. Spending is never more than once. */
-  async answer(askId: number, body: { answer?: string; scope?: string; schedule?: string; change?: string; text?: string; remind?: boolean }, viewer = OWNER) {
+  async answer(askId: number, body: { answer?: string; scope?: string; schedule?: string; change?: string; text?: string; remind?: boolean }, viewer = OWNER, key?: string) {
     const ask = this.db.get("SELECT * FROM asks WHERE id = ? AND state = 'open'", askId);
+    // A replayed phone answer lands here when the first one acted but its reply never shipped: already settled, same key.
+    if (!ask && key && this.db.get('SELECT 1 FROM settings WHERE key = ?', `link.key.${key}`)) return;
     if (!ask) throw fail('that question is already settled', 409);
     if ((ask.member ?? OWNER) !== viewer) throw fail('that question is someone else’s', 403);
     const detail = JSON.parse(ask.detail || '{}');
@@ -1993,6 +2015,7 @@ export class Crew {
       if (task?.state === 'needs_you' && !held) this.setTask(task, 'working');
       if (detail.pass) this.wrap(detail.pass.root);
       if (body.answer === 'deny' && body.remind === true && !change) this.defer(ask);
+      if (key) this.db.run('INSERT INTO settings (key, value) VALUES (?, ?)', `link.key.${key}`, '{"ok":true}');
     });
     if (held) { held(body.answer!); this.holds.delete(askId); return; }
     // Change it: the person's own words go back to Chief with the plan they are about, for a new card.
@@ -2505,6 +2528,7 @@ export class Crew {
       const now = Date.now();
       if (this.lastTick && now - this.lastTick > SLEPT_MS) this.slept(this.lastTick, now);
       this.lastTick = now;
+      this.db.run("INSERT INTO settings (key, value) VALUES ('crew.lastTick', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", String(now));
       this.schedule();
       const working = !!this.db.get("SELECT 1 FROM tasks WHERE state = 'working' LIMIT 1");
       if (working !== this.awake) { this.awake = working; this.keepAwake(working); }
@@ -2512,7 +2536,7 @@ export class Crew {
         this.curationBusy = true;
         void this.weeklyCuration().finally(() => { this.curationBusy = false; });
       }
-      for (const task of this.db.all("SELECT * FROM tasks WHERE state IN ('working', 'needs_you') AND created_at < ?", Date.now() - TASK_TIMEOUT_MS)) {
+      for (const task of this.db.all("SELECT * FROM tasks WHERE state IN ('working', 'needs_you') AND updated_at < ?", Date.now() - TASK_TIMEOUT_MS)) {
         this.close(task.bot);
         this.setTask(task, 'failed', 'Took longer than an hour, so I stopped it.');
       }
@@ -2536,7 +2560,7 @@ export class Crew {
       for (const member of new Set(missed.map((r) => r.member as number))) {
         const names = missed.filter((r) => r.member === member).map((r) => `“${r.name}”`);
         const list = names.length < 2 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
-        this.say(CHIEF, 'bot', `Your computer was asleep from ${clock(from)} to ${clock(to)}, so the crew paused. ` +
+        this.say(CHIEF, 'bot', `The crew was off from ${clock(from)} to ${clock(to)}, so jobs paused. ` +
           `I'm running ${list} now, once, to catch up.`, null, member);
       }
     });

@@ -23,7 +23,7 @@ export interface Desk {
 }
 
 export const PAIR_MS = Number(process.env.CREWHOUSE_PAIR_MS || 120_000); // a pairing QR is good for two minutes
-export type Handler = (method: string, path: string, body: any, member: number) => Promise<unknown>;
+export type Handler = (method: string, path: string, body: any, member: number, key?: string) => Promise<unknown>;
 type Ifaces = ReturnType<typeof networkInterfaces>;
 
 // Tailscale is recognised by its address range (100.64.0.0/10); tailscaled is asked only whether it needs signing in.
@@ -116,6 +116,20 @@ export class Link {
     this.handle = handle;
   }
 
+  /** Completed answers, in SQLite so they survive a restart: one device's answer never serves another's,
+   *  and a malformed record refuses the replay rather than running it twice (link SECURITY.md item 6). */
+  readonly answers = {
+    get: async (device: string, key: string): Promise<unknown> =>
+      JSON.parse(this.db.get('SELECT value FROM settings WHERE key = ?', `link.ans.${device}.${key}`)?.value ?? 'null'),
+    put: async (device: string, key: string, answer: object) => {
+      this.db.run('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', `link.ans.${device}.${key}`, JSON.stringify(answer));
+    },
+    drop: async (device: string, keys?: string[]) => {
+      if (keys) for (const k of keys) this.db.run('DELETE FROM settings WHERE key = ?', `link.ans.${device}.${k}`);
+      else this.db.run('DELETE FROM settings WHERE instr(key, ?) = 1', `link.ans.${device}.`);
+    },
+  };
+
   async open() {
     const file = join(this.cfg.stateDir, 'link.key');
     if (!existsSync(file)) writeFileSync(file, JSON.stringify({ sk: Buffer.from(keyPair().secretKey).toString('base64') }), { mode: 0o600 });
@@ -126,7 +140,8 @@ export class Link {
       confirm: (p) => this.confirm(p),
       // A watch-only phone may read and watch a bot's screen; the desktop never gives it the controls.
       canView: (req) => req.op.startsWith('GET ') || req.op === 'desktop',
-      handle: (req, g) => this.request(req.op, req.args, g),
+      handle: (req, g) => this.request(req.op, req.args, g, req.key),
+      answers: this.answers,
       stream: (s, req, g) => this.desktop(s, req.args, g),
       onError: (e) => console.error('phone link:', e),
     });
@@ -413,8 +428,9 @@ export class Link {
     if (this.client) await this.client.revoke(id); else await this.host.revoke(id);
   }
 
-  /** One request from a phone, as `METHOD /path`: run as its member, answered like HTTP. */
-  private async request(op: string, body: unknown, g: Grant): Promise<{ status: number; body: unknown }> {
+  /** One request from a phone, as `METHOD /path`: run as its member, answered like HTTP. `key` is the
+   *  device's idempotency key; mutating handlers record it with their effect (same transaction). */
+  private async request(op: string, body: unknown, g: Grant, key?: string): Promise<{ status: number; body: unknown }> {
     const [method, path = ''] = op.split(' ', 2);
     if (!path.startsWith('/api/')) return { status: 404, body: { error: 'not found' } };
     // The phone's own: every address it can reach this computer at now (a phone paired at home learns Tailscale and the
@@ -440,10 +456,10 @@ export class Link {
     // Household admin stays on the computer: AI account sign-ins, people, the house's Google app, connecting apps
     // (their sign-in pages come back to this computer's own address), and the phones themselves — except the owner's
     // phone renewing a code it is looking at, so the pairing card on the phone refreshes itself like the web card's.
-    if (op === 'POST /api/phones/refresh' && memberOf(g) === 1) return this.handle(method, path, body ?? {}, memberOf(g)).then(
+    if (op === 'POST /api/phones/refresh' && memberOf(g) === 1) return this.handle(method, path, body ?? {}, memberOf(g), key).then(
       (r) => ({ status: 200, body: r }), (e: any) => ({ status: e.status ?? 400, body: { error: e.message } }));
     if (/^\/api\/(accounts|house|phones)\b/.test(path) || (/^\/api\/(people|connections)\b/.test(path) && method !== 'GET')) return { status: 403, body: { error: 'do that on the computer' } };
-    try { return { status: 200, body: await this.handle(method, path, body ?? {}, memberOf(g)) }; }
+    try { return { status: 200, body: await this.handle(method, path, body ?? {}, memberOf(g), key) }; }
     catch (e: any) { return { status: e.status ?? 400, body: { error: e.message } }; }
   }
 
