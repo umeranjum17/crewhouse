@@ -99,6 +99,34 @@ test('wrap-up reports an unsure part without saying all done', async () => {
   done();
 });
 
+test('Things foregrounds a task’s own output ahead of handed-over input', async () => {
+  const { db, cfg, crew, done } = setup();
+  crew.onboard('Sara');
+  crew.recruit('scout', 'Scout', 'person'); crew.recruit('scribe', 'Scribe', 'person');
+  const scoutFiles = join(disk.botDir(cfg, 'scout'), 'files');
+  mkdirSync(scoutFiles, { recursive: true }); writeFileSync(join(scoutFiles, 'fdic-basics.md'), 'research');
+  const first = (await crew.post('scout', 'ask permission: research FDIC insurance'))!.task;
+  await holding(crew, 'scout');
+  (crew as any).deliver('scout', 'files/fdic-basics.md', 'research');
+  // Scribe's run holds on "ask permission", so its own delivery lands on the handoff task, as in production.
+  (crew as any).pass('scout', 'scribe', 'ask permission: write the one-page family checklist. Done means: a checklist', ['files/fdic-basics.md']);
+  await until('scribe task', () => db.get("SELECT id FROM tasks WHERE bot = 'scribe'"));
+  const next = db.get("SELECT id FROM tasks WHERE bot = 'scribe'")!.id;
+  await holding(crew, 'scribe');
+  writeFileSync(join(disk.botDir(cfg, 'scribe'), 'files', 'family-checklist.md'), 'checklist');
+  (crew as any).deliver('scribe', 'files/family-checklist.md', 'checklist');
+  await release(crew, 'scribe', 'Checklist ready.'); await settled(db, next);
+  await release(crew, 'scout', 'Passed it on.'); await settled(db, first);
+  const things = crew.snapshot().tasks.filter((t: any) => t.bot === 'scribe' && t.state === 'done');
+  assert.equal(things.length, 1);
+  assert.equal(things[0].files[0], 'files/family-checklist.md');
+  assert.ok(things[0].files.includes('files/from-scout/fdic-basics.md'));
+  // Exact member checks: another member sees none of it.
+  const sam = crew.addMember('Sam').id as number;
+  assert.equal(crew.snapshot(sam).tasks.filter((t: any) => t.bot === 'scribe').length, 0);
+  done();
+});
+
 test('room replies rejoin a job; plain routed work stays out', async () => {
   const { db, crew, done } = setup();
   crew.onboard('Sara'); crew.recruit('scout', 'Scout', 'person');
