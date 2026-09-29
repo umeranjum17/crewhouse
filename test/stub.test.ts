@@ -6,6 +6,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { temp } from './tmp.ts';
+import { setup as lab, settled, release, task } from './lab.ts';
 import { createServer, type AddressInfo } from 'node:net';
 import { createServer as createHttpServer } from 'node:http';
 import { DatabaseSync } from 'node:sqlite';
@@ -22,7 +23,7 @@ const daemon = spawn(process.execPath, [join(import.meta.dirname, '..', 'src', '
 after(() => daemon.kill());
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-const { PROVIDERS } = await import('../src/accounts.ts');
+const { PROVIDERS, OWNER } = await import('../src/accounts.ts');
 async function api(method: string, path: string, body?: unknown, headers: Record<string, string> = { 'x-crewhouse': '1' }) {
   const res = await fetch(base + path, { method, headers: { 'content-type': 'application/json', ...headers }, body: body ? JSON.stringify(body) : undefined });
   return { status: res.status, body: await res.json() };
@@ -547,4 +548,43 @@ test('raw /files/ only opens for the member it was delivered to', async () => {
     assert.notEqual(res.status, 200, `${sneak} never serves`);
     assert.ok(!(await res.text()).includes('raw take'), `${sneak} leaks nothing`);
   }
+});
+
+test('one chat end to end on the stub: excel request, one question, bookings, then the xlsx card and its roles', async () => {
+  const { db, crew, done } = lab();
+  crew.onboard('sir');
+  const chiefSays = () => db.all("SELECT text FROM messages WHERE bot = 'chief' AND author = 'bot' ORDER BY id").map((m: any) => m.text);
+  // A small but real workbook spec: the follow-up run builds it for the card.
+  const sheets = [{ name: 'Bookings', columns: [{ header: 'Guest' }, { header: 'Status', options: ['Booked', 'Checked in'] }], rows: [['Amina Khan', 'Booked']] }];
+  const marker = call('crew_workbook', { name: 'Reception log', sheets });
+
+  // The request names a workbook, so it goes straight to the silently hired Scribe; "ask permission" holds the turn.
+  const first = (await crew.post('chief', 'make me an Excel for reception, ask permission before you build anything'))!.task;
+  assert.equal(task(db, first).bot, 'scribe');
+  assert.equal(task(db, first).origin, 'chief');
+  await release(crew, 'scribe', `${marker} Visitor log, bookings, or something else?`);
+  await settled(db, first);
+
+  // The question reaches Chief's thread word for word, ending in "?", carrying its task but no card.
+  const question = chiefSays().at(-1)!;
+  assert.ok(question.startsWith('Scribe asks: '));
+  assert.ok(question.endsWith('?'));
+
+  // Posting the answer builds the workbook, and its card lands in Chief's thread.
+  const second = (await crew.post('chief', 'bookings'))!.task;
+  assert.equal(task(db, second).bot, 'scribe');
+  await release(crew, 'scribe', 'The reception workbook is ready.');
+  await settled(db, second);
+  const page = await crew.botPage('chief', OWNER);
+  const card = page.messages.find((m: any) => m.task_id === second)?.files.find((f: any) => f.path.endsWith('.xlsx'));
+  assert.ok(card, "the finished spreadsheet's card is in Chief's thread");
+
+  // The preview behind the card carries row numbers and cell roles, in plain words.
+  const view = await crew.workbookView('scribe', card.path, OWNER) as any;
+  assert.deepEqual(view.sheets.map((s: any) => s.name), ['Bookings']);
+  assert.ok(view.sheets[0].roles.flat().includes('head'), 'header cells read as headers');
+  assert.ok(view.sheets[0].roles.flat().includes('in'), 'dropdown cells read as inputs');
+  assert.equal(view.sheets[0].nums.length, view.sheets[0].rows.length, 'every row has a number');
+  await assert.rejects(() => crew.workbookView('scribe', card.path, OWNER + 1), /not delivered to you/, 'another member never sees it');
+  done();
 });
