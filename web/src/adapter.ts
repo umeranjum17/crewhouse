@@ -780,7 +780,9 @@ export function lines(page: Json, bot: string): Line[] {
     const text = String(m.text ?? '').replace(PHOTO, '').trim();
     if (m.author === 'system') {
       const f = /^Delivered (files\/.+?)(?::\s|$)/.exec(text);
-      return f ? { id: m.id, from: 'note', text: plain(text.slice(f[0].length)) || `Here's “${pretty(f[1])}”`, files: [fileView(bot, f[1])], choices: [] }
+      const file = f && fileView(bot, f[1]);
+      // A sheet or a document is its card, which already says what it is and what is in it: no words of its own.
+      return file ? { id: m.id, from: 'note', text: file.kind === 'sheet' || file.kind === 'page' ? '' : plain(text.slice(f![0].length)) || `Here's “${pretty(f![1])}”`, files: [file], choices: [] }
         : { id: m.id, from: 'note', text: plain(text), files: [], choices: [] };
     }
     // Another helper handing this one a job: a note in its words, "Reel asked: …".

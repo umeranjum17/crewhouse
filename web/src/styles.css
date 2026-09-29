@@ -636,8 +636,15 @@ details.card[open] > summary { margin-bottom: 10px; }
 .doc-rows .wb-grid { margin: 4px 0; max-width: none; }
 @media (min-width: 900px) {
   /* a desk opens the workbook beside the chat it came from; a phone gets the whole screen */
+  :root { --book: min(560px, 48vw); }
   .wb-scrim { align-items: stretch; justify-items: end; padding: 0; background: transparent; pointer-events: none; }
-  .wb-panel { pointer-events: auto; width: min(560px, 48vw); height: 100%; border-radius: 0; border-left: 1px solid var(--line); box-shadow: var(--e2); padding: 24px; }
+  .wb-panel { pointer-events: auto; width: var(--book); height: 100%; border-radius: 0; border-left: 1px solid var(--line); box-shadow: var(--e2); padding: 24px; }
+}
+@media (min-width: 1200px) {
+  /* with room for both, the chat moves over for the panel instead of sitting under it */
+  .with-book .main { padding-right: var(--book); }
+  .with-book .working-on { display: none; }
+  .with-book .page.chat-page .chat { grid-template-columns: minmax(0, 720px); }
 }
 
 /* A row with a button on a narrow screen: the words keep the width, the button drops under them. */
