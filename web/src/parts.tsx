@@ -428,7 +428,7 @@ export function Composer({ placeholder, onSend, chat }: { placeholder: string; o
 }
 
 // ---------- asks ----------
-const answer = (c: Card, body: Json) => attempt(() => api.answer(c.id, body), body.answer === 'deny' ? 'OK, not now' : 'Done. Carrying on.');
+const answer = (c: Card, body: Json) => attempt(() => api.answer(c.id, body), body.change ? 'Chief will change the plan' : body.answer === 'deny' ? 'OK, not now' : 'Done. Carrying on.');
 
 /** A waiting-for-the-computer schedule preview: the words in plain time, and the first run on the computer's own clock. */
 function useSchedule(text: string | null) {
@@ -505,6 +505,8 @@ export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; 
   const preview = useSchedule(when);
   const start = () => act({ answer: 'allow', scope: 'once', ...(when !== null && when.trim() && when.trim() !== c.schedule ? { schedule: when.trim() } : {}) });
   const stuck = when !== null && (!when.trim() || !preview || preview.bad);
+  // Chief's plan: "Change it" opens a box, and what the person types goes back to Chief for a new plan.
+  const [change, setChange] = useState<string | null>(null);
   return (
     <div className="card ask">
       <AskHead c={c} who={who} />
@@ -521,6 +523,18 @@ export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; 
           <div className="btns">
             <button className="btn go" disabled={stuck} onClick={start}>Start it</button>
             <button className="btn" aria-pressed={when !== null} onClick={() => { setWhen(when === null ? c.schedule || '' : null); }}>{when === null ? 'Change time' : 'Keep the time'}</button>
+            {deny && <button className="btn" onClick={() => act(deny.body)}>{deny.label}</button>}
+          </div>
+        </>
+      ) : c.kind === 'plan' ? (
+        <>
+          {change !== null && <form className="row routine-edit" onSubmit={(e) => { e.preventDefault(); if (change.trim()) void act({ answer: 'deny', change: change.trim() }); }}>
+            <input className="input grow" value={change} onChange={(e) => setChange(e.target.value)} placeholder="What should change?" aria-label="What should change" autoFocus />
+            <button className="btn go" disabled={!change.trim()}>Send</button>
+          </form>}
+          <div className="btns">
+            {change === null && <button className="btn go" onClick={() => act(yes.body)}>{yes.label}</button>}
+            <button className="btn" aria-pressed={change !== null} onClick={() => setChange(change === null ? '' : null)}>{change === null ? 'Change it' : 'Keep the plan'}</button>
             {deny && <button className="btn" onClick={() => act(deny.body)}>{deny.label}</button>}
           </div>
         </>
@@ -542,6 +556,7 @@ export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; 
         </div>
       ) : null}
       {c.kind === 'spend' && <p className="ask-note">Anything that costs money asks you every time.</p>}
+      {c.kind === 'plan' && <p className="ask-note">Saying Go doesn’t OK any sending or spending. Those still ask you each time.</p>}
     </div>
   );
 }
