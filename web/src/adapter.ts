@@ -652,7 +652,7 @@ export function things(state: Json): Thing[] {
   }));
 }
 
-export type Job = { bot: string; label: string; ask: string; says: string; goal: boolean; money: boolean; needs: string[] };
+export type Job = { bot: string; label: string; ask: string; says: string; goal: boolean; money: boolean; needs: string[]; hire?: string };
 
 /** Home's three counts, from the same rows shown below them: what needs you, who is working, what got done today. */
 export function homeCounts(state: Json) {
@@ -667,11 +667,13 @@ export function homeSummary(state: Json) {
 
 /** Home's standing "hand me a job" list: the jobs the crew offers to do end to end, from crewd's `ideas[]` — which is
  *  already only what this crew can do. A goal first, then money back, then the everyday jobs. A row that needs an app the person
- *  hasn't connected says what it needs instead of dead-ending, and never fills the box. (docs/ui-contract.md) */
+ *  hasn't connected says what it needs instead of dead-ending, and never fills the box. A row with `hire` names the
+ *  unhired template a tap brings on first (docs/ui-contract.md). */
 export function jobs(state: Json): Job[] {
   const rows: Job[] = (state.ideas ?? []).map((i: Json) => ({
     bot: String(i.bot ?? 'chief'), label: plain(i.ask ?? ''), ask: String(i.ask ?? ''), says: promiseLine(state, i),
     goal: i.group === 'goal', money: i.group === 'money', needs: ((i.needs ?? []) as string[]).map((w) => plain(w)).filter(Boolean),
+    ...(typeof i.hire === 'string' && i.hire ? { hire: i.hire } : {}),
   }));
   return rows.sort((a, b) => Number(b.goal) - Number(a.goal) || Number(b.money) - Number(a.money) || a.needs.length - b.needs.length);
 }
@@ -725,9 +727,10 @@ export function memberSetup(state: Json) {
 }
 
 /** Ideas are promises from a named helper; Chief offers three of his own when the crew has none.
- *  A job still waiting on an app the person hasn't connected belongs on Home (jobs), not among these chips. */
+ *  A job still waiting on an app the person hasn't connected belongs on Home (jobs), not among these chips.
+ *  Offer-to-hire rows stay on Home too: a chip can only fill a box, never bring a helper on. */
 export function ideas(state: Json) {
-  const own = state.ideas.filter((i: Json) => !(i.needs ?? []).length).map((i: Json) => ({ bot: i.bot, label: plain(i.promise), ask: i.ask }));
+  const own = state.ideas.filter((i: Json) => !i.hire && !(i.needs ?? []).length).map((i: Json) => ({ bot: i.bot, label: plain(i.promise), ask: i.ask }));
   return own.length ? own : [
     { bot: 'chief', label: "Plan this week's dinners", ask: "Plan this week's dinners and make a shopping list" },
     { bot: 'chief', label: 'Write a birthday message', ask: 'Help me write a birthday message for ' },

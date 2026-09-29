@@ -222,10 +222,16 @@ const state = {
   desktops: { missing: [] },
 };
 
-// ?demo=fresh: the Chief-only Home a new person gets — no helpers hired yet, so no jobs, asks or history.
+// ?demo=fresh: the Chief-only Home a new person gets — no helpers hired yet, so the standing list offers
+// three goal rows that bring their helper on with a tap, and nothing else waits or went before.
+const freshHire = [
+  { bot: 'scout', promise: "Tell me what you're good at and the hours you have, and I'll price five things like yours and say what sells.", ask: 'Help me earn a little on the side', group: 'goal', needs: [], hire: 'scout' },
+  { bot: 'scribe', promise: 'Your first listing and three posts, written in your voice — you post them.', ask: 'Write my first listing and three posts', group: 'goal', needs: [], hire: 'scribe' },
+  { bot: 'reel', promise: 'A 20-second video from three photos.', ask: 'Make a 20-second video from my three photos', group: 'goal', needs: [], hire: 'reel' },
+];
 if (fresh) {
   Object.assign(bots[0], { last: null, unread: 0 });
-  Object.assign(state, { bots: bots.slice(0, 1), room: {}, tasks: [], ideas: [], asks: [], events: [], routines: state.routines.slice(0, 1) });
+  Object.assign(state, { bots: bots.slice(0, 1), room: {}, tasks: [], ideas: freshHire, asks: [], events: [], routines: state.routines.slice(0, 1) });
 }
 
 // ?demo=unknown puts an order crewd couldn't price on Scout's card instead: no yes, the person finishes it themselves.
