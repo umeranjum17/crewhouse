@@ -752,7 +752,8 @@ export class Crew {
       }
       return this.sendDigest(r, why, now);
     }
-    // Overlap: the last run is still going (or waiting on the person), so this one is skipped, not stacked.
+    // Overlap: the last run is still going (or waiting on the person), so this one is skipped, not stacked. A last
+    // run parked waiting on sign-in is not under way: it is retried instead, never silently skipped.
     const open = r.last_task && this.db.get("SELECT * FROM tasks WHERE id = ? AND state IN ('queued', 'working', 'needs_you', 'paused')", r.last_task);
     if (open) {
       if (why === 'now' && open.state === 'paused' && open.result === 'Waiting for tomorrow: the crew has had its share of your AI today.') {
@@ -761,6 +762,12 @@ export class Crew {
         this.db.run("UPDATE tasks SET origin = 'routine.now', wake_at = NULL, created_at = ? WHERE id = ?", Date.now(), open.id);
         this.setTask(open, 'queued');
         this.dispatch();
+        return;
+      }
+      if (open.state === 'paused' && open.wake_at == null && /^Waiting for (you to sign in with .+|a .+ plan with helpers\.)$/.test(open.result ?? '')) {
+        // run() rechecks the account and either starts the parked task or pauses it again with honest words.
+        if (why === 'now') return void this.retryPaused(r, open, 'routine.now', why);
+        void this.retryPausedWhenSignedIn(r, open, why);
         return;
       }
       this.db.event('routine.skipped', r.bot, { routine: r.id, name: r.name, why: 'overlap', task: r.last_task });
@@ -772,6 +779,28 @@ export class Crew {
       this.db.run('UPDATE routines SET last_at = ?, last_task = ? WHERE id = ?', now, task, r.id);
       this.db.event('routine.fired', r.bot, { routine: r.id, name: r.name, why, task });
     });
+  }
+
+  /** A manual run retries a sign-in-parked last run: the same task, queued again — never a second stacked task and
+   *  never a silent skip. A scheduled tick retries it only once the member signed in since, and stays quiet either way. */
+  private retryPaused(r: Row, open: Row, origin: string, why: 'schedule' | 'late' | 'now') {
+    const now = Date.now();
+    this.db.run('UPDATE tasks SET origin = ?, created_at = ? WHERE id = ?', origin, now, open.id);
+    this.setTask(open, 'queued');
+    this.db.run('UPDATE routines SET last_at = ?, last_task = ? WHERE id = ?', now, open.id, r.id);
+    this.db.event('routine.fired', r.bot, { routine: r.id, name: r.name, why, task: open.id });
+    this.dispatch();
+  }
+
+  private async retryPausedWhenSignedIn(r: Row, open: Row, why: 'schedule' | 'late') {
+    let account: string | undefined;
+    try { account = await this.usable(open.member ?? OWNER, this.choices(open)); } catch { return; }
+    if (!account) return;
+    try {
+      const cur = this.db.get('SELECT state, wake_at FROM tasks WHERE id = ?', open.id);
+      if (!cur || cur.state !== 'paused' || cur.wake_at != null) return;
+      this.retryPaused(r, open, 'routine', why);
+    } catch { /* a manual run beat the tick to it */ }
   }
 
   /** A watch's check: read the page, compare it with last time's, and hand the helper a task only when it changed.
