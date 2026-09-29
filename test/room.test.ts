@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { setup, holding, release, settled, until, task } from './lab.ts';
 import * as disk from '../src/bots.ts';
@@ -141,6 +141,29 @@ test('Things foregrounds a task’s own output ahead of handed-over input', asyn
   // Exact member checks: another member sees none of it.
   const sam = crew.addMember('Sam').id as number;
   assert.equal(crew.snapshot(sam).tasks.filter((t: any) => t.bot === 'scribe').length, 0);
+  done();
+});
+
+test('a first look delivered mid-job shows on the member\u2019s own desk only', async () => {
+  const { db, cfg, crew, done } = setup();
+  for (const t of ['reel', 'scout', 'scribe', 'helper', 'tracer'])
+    assert.match(readFileSync(join(cfg.repoDir, `templates/${t}/AGENTS.md`), 'utf8'), /share a first look with crew_deliver.*note starting `First look:`/, `${t} shares first looks`);
+  assert.doesNotMatch(readFileSync(join(cfg.repoDir, 'templates/support/AGENTS.md'), 'utf8'), /First look/, 'support drafts are already reviewed');
+  crew.onboard('Sara');
+  crew.recruit('scout', 'Scout', 'person');
+  const dir = join(disk.botDir(cfg, 'scout'), 'files');
+  mkdirSync(dir, { recursive: true }); writeFileSync(join(dir, 'opening.md'), 'draft');
+  const first = (await crew.post('scout', 'ask permission: research the opening'))!.task;
+  await holding(crew, 'scout');
+  assert.equal((crew.snapshot().bots.find((b: any) => b.id === 'scout')?.task as any)?.state, 'working');
+  (crew as any).deliver('scout', 'files/opening.md', 'First look: the opening outline');
+  const mine = crew.snapshot().bots.find((b: any) => b.id === 'scout')?.task;
+  assert.deepEqual(mine?.files.map((f: any) => f.path), ['files/opening.md'], 'the desk shows the first look mid-job');
+  assert.equal(mine?.files[0].note, 'First look: the opening outline');
+  const sam = crew.addMember('Sam').id as number;
+  assert.equal(crew.snapshot(sam).bots.find((b: any) => b.id === 'scout')?.task, null, 'another member sees no task');
+  assert.ok(!JSON.stringify(crew.snapshot(sam)).includes('opening.md'), 'and no first look leaks across members');
+  await release(crew, 'scout', 'Still working.'); await settled(db, first);
   done();
 });
 
