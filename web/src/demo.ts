@@ -318,26 +318,34 @@ if (variant === 'day') pages.scout = { messages: [
 // Scout's first look at the flights (?demo=office): three airlines side by side.
 const flights = { sheets: [{ name: 'Flights', total: 4, rows: [['Airline', 'Leaves', 'Direct', 'Return fare'],
   ['Emirates', 'Fri 19 Dec, 21:40', 'No, via Dubai', '$1,184'], ['Qatar Airways', 'Sat 20 Dec, 08:15', 'No, via Doha', '$1,092'],
-  ['PIA', 'Fri 19 Dec, 23:55', 'Yes', '$968']] }] };
+  ['PIA', 'Fri 19 Dec, 23:55', 'Yes', '$968']],
+  nums: [1, 2, 3, 4], roles: [['head', 'head', 'head', 'head'], ['', '', '', ''], ['', '', '', ''], ['', '', '', '']] }] };
 const book = {
   sheets: [
     { name: 'Daily dashboard', total: 6, rows: [
-      ['Today', 'Number', 'Notes'], ['Arrivals', '6', 'Two early, one at 4pm'], ['Departures', '4', 'One late checkout agreed'], ['Walk-ins so far', '1', 'Room 204 taken'], ['Rooms ready', '—', 'Worked out when you open it']] },
+      ['Today', 'Number', 'Notes'], ['Arrivals', '6', 'Two early, one at 4pm'], ['Departures', '4', 'One late checkout agreed'], ['Walk-ins so far', '1', 'Room 204 taken'], ['Rooms ready', 'auto', 'Worked out when you open it']],
+      nums: [1, 2, 3, 4, 5], roles: [['head', 'head', 'head'], ['', '', ''], ['', '', ''], ['', '', ''], ['', '', ''], ['', 'calc', '']] }, 
     { name: 'Booking & check-in', total: 34, rows: [
       ['Guest', 'Room', 'Arrival', 'Departure', 'Nights', 'Status', 'Rate', 'Paid'],
       ['Amina Khan', '204', '11 Oct', '14 Oct', '3', 'Checked in', '285', '285'],
       ['Bilal Sheikh', '108', '12 Oct', '13 Oct', '1', 'Booked', '120', '40'],
-      ['Family Nazir', '301', '12 Oct', '16 Oct', '4', 'Waitlist', '520', '0']] },
+      ['Family Nazir', '301', '12 Oct', '16 Oct', '4', 'Waitlist', '520', '0']],
+      nums: [1, 2, 3, 4], roles: [['head', 'head', 'head', 'head', 'head', 'head', 'head', 'head'],
+        ['', '', '', '', '', 'in', '', ''], ['', '', '', '', '', 'in', '', ''], ['', '', '', '', '', 'in', '', '']] },
     { name: 'Rooms & housekeeping', total: 40, rows: [
       ['Room', 'Type', 'Guest', 'State', 'Checked by', 'Notes'],
       ['204', 'Sea view double', 'Amina Khan', 'Checked in', 'Rani', 'Extra pillow asked for'],
       ['108', 'Standard single', '', 'Cleaning', '', 'Start after 11'],
-      ['301', 'Family suite', '', 'To do', '', 'Hairdryer missing']] },
+      ['301', 'Family suite', '', 'To do', '', 'Hairdryer missing']],
+      nums: [1, 2, 3, 4], roles: [['head', 'head', 'head', 'head', 'head', 'head'],
+        ['', '', '', 'in', '', ''], ['', '', '', 'in', '', ''], ['', '', '', 'in', '', '']] },
     { name: 'Payments', total: 12, rows: [
       ['Guest', 'Room', 'Bill', 'Paid', 'To pay', 'Way paid'],
       ['Amina Khan', '204', '285', '285', '0', 'Card'],
       ['Bilal Sheikh', '108', '120', '40', '80', 'Cash'],
-      ['Family Nazir', '301', '520', '0', '520', 'Not paid yet']] },
+      ['Family Nazir', '301', '520', '0', '520', 'Not paid yet']],
+      nums: [1, 2, 3, 4], roles: [['head', 'head', 'head', 'head', 'head', 'head'],
+        ['', '', '', '', '', ''], ['', '', '', '', '', ''], ['', '', '', '', '', '']] },
   ],
 };
 /** What crewd read out of a watch brief (?demo=neighbour, ?demo=brief, src/documents.ts): plain parts, never the file. */

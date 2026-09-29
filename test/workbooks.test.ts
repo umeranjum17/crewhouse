@@ -76,10 +76,25 @@ test('the preview JSON: every sheet, its headings and its first rows, as words a
   assert.deepEqual(json.sheets[1].rows[1], ['Amina Khan', '204', 'Checked in', 'yes']);
   assert.deepEqual(json.sheets[1].rows.at(-1), ['Bilal Sheikh', '108', 'Booked', 'not yet']);
   assert.equal(json.sheets[1].total, 3, 'the header and the finished rows, not the blank ones under the dropdown');
-  assert.equal(json.sheets[0].rows[2][2], '—', 'a formula with no computed value is a quiet dash, never the formula text');
-  for (const s of json.sheets) for (const r of s.rows) for (const c of r) assert.doesNotMatch(c, /^=/, 'no preview cell ever shows a formula');
+  assert.equal(json.sheets[0].rows[2][2], 'auto', 'a formula with no computed value reads auto, never the formula text');
+  for (const s of json.sheets) {
+    for (const r of s.rows) for (const c of r) { assert.doesNotMatch(c, /^=/, 'no preview cell ever shows a formula'); assert.doesNotMatch(c, /—/, 'no quiet dash either'); }
+    assert.deepEqual(s.nums, s.rows.map((_: any, i: number) => i + 1), 'row numbers run with the rows when none are blank');
+    assert.equal(s.roles.length, s.rows.length, 'one role per row');
+    for (const r of s.roles) for (const c of r) assert.match(c, /^(head|in|calc|)$/, 'roles are lowercase words only');
+  }
+  assert.deepEqual(json.sheets[0].roles[0], ['head', 'head', 'head'], 'the heading row');
+  assert.deepEqual(json.sheets[0].roles[2], ['', '', 'calc'], 'a formula cell, from the formula not the fill');
+  assert.deepEqual(json.sheets[1].roles[1], ['', '', 'in', ''], 'a dropdown cell, from the validation not the fill');
 
-  // A file that carries its own computed values (as Excel does) shows them, not the dash.
+  // A blank row in the spec leaves a gap in the numbers, not a row in the table.
+  const gapFile = join(temp('gap'), 'gap.xlsx');
+  await buildWorkbook(gapFile, { name: 'Gap', sheets: [{ name: 'S', columns: [{ header: 'A' }], rows: [['one'], [], ['three']] }] });
+  const gap = await readWorkbook(gapFile);
+  assert.deepEqual(gap.sheets[0].rows, [['A'], ['one'], ['three']]);
+  assert.deepEqual(gap.sheets[0].nums, [1, 2, 4], 'the skipped blank row shows as a gap');
+
+  // A file that carries its own computed values (as Excel does) shows them, not auto.
   const dir = temp('cached');
   const cached = new ExcelJS.Workbook();
   const ws = cached.addWorksheet('Maths');

@@ -33,8 +33,9 @@ export const askTag = (c: Card) => ({ spend: 'Wants to spend money', question: '
 export type Work = { helper: string; title: string; line: string; waiting: boolean; things: FileView[] };
 export type Thing = { id: number; helper: string; title: string; at: number; summary: string; files: FileView[] };
 export type FileView = { url: string; kind: 'video' | 'image' | 'doc' | 'sheet' | 'page'; name: string };
-/** One tab of a delivered workbook, read back by crewd: its headings, its first rows, and how many it has. */
-export type Sheet = { name: string; head: string[]; rows: string[][]; total: number };
+/** One tab of a delivered workbook, read back by crewd: its headings, its first rows, how many it has,
+ *  and the parallel row numbers and cell roles (`head`, `in`, `calc`, or empty) the panel reads. */
+export type Sheet = { name: string; head: string[]; rows: string[][]; total: number; nums: number[]; roles: string[][] };
 export type Workbook = { name: string; sheets: Sheet[] };
 /** One part of a delivered document, read back by crewd: a heading, a paragraph, a bullet, or a table. */
 export type DocPart = { kind: 'heading' | 'p' | 'li' | 'table'; text?: string; bold?: boolean; items?: string[]; head?: string[]; rows?: string[][] };
@@ -130,7 +131,10 @@ export function workbook(json: Json, name: string): Workbook {
     sheets: (Array.isArray(json?.sheets) ? json.sheets : []).slice(0, 12).map((s: Json) => {
       const rows = (Array.isArray(s?.rows) ? s.rows : []).slice(0, 40)
         .map((r: Json) => (Array.isArray(r) ? r : []).slice(0, 14).map((c: Json) => plain(String(c ?? '')).slice(0, 160)));
-      return { name: plain(String(s?.name ?? '').trim()) || 'Sheet', head: rows[0] ?? [], rows: rows.slice(1), total: Number(s?.total) || rows.length };
+      const nums = (Array.isArray(s?.nums) ? s.nums : []).slice(0, 40).map((n: Json) => Number(n) || 0);
+      const roles = (Array.isArray(s?.roles) ? s.roles : []).slice(0, 40)
+        .map((r: Json) => (Array.isArray(r) ? r : []).slice(0, 14).map((c: Json) => ['head', 'in', 'calc'].includes(String(c)) ? String(c) : ''));
+      return { name: plain(String(s?.name ?? '').trim()) || 'Sheet', head: rows[0] ?? [], rows: rows.slice(1), total: Number(s?.total) || rows.length, nums, roles };
     }),
   };
 }
