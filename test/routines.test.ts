@@ -743,3 +743,47 @@ test('a failed trigger-only routine says so with no time to try again', async ()
   assert.match(lastSaid(db, 'chief')!, /^Reel couldn't finish “Wake up”\. Took longer than an hour, so I stopped it\.$/);
   done();
 });
+
+test('not now, remind me tomorrow: the question comes back once, then the reminder is gone', async () => {
+  const { db, crew, done } = setup();
+  const ask = (title: string) => Number(db.run("INSERT INTO asks (bot, kind, title, detail, at, member) VALUES ('reel', 'permission', ?, '{}', ?, 1)", title, Date.now()).lastInsertRowid);
+
+  // A plain Not now files nothing.
+  await crew.answer(ask('Reel wants to look through your Pictures folder.'), { answer: 'deny' });
+  assert.equal(db.get("SELECT COUNT(*) AS n FROM routines WHERE kind = 'once'")!.n, 0);
+
+  // "Remind me tomorrow" files a one-shot routine for tomorrow at 9, on the asker's own side.
+  const id = ask('Reel wants to change a file in your Documents folder.');
+  await crew.answer(id, { answer: 'deny', remind: true });
+  const r = db.get("SELECT * FROM routines WHERE kind = 'once'")!;
+  assert.equal(r.bot, 'reel');
+  assert.equal(r.member, 1);
+  assert.equal(r.schedule, '', 'no repeating schedule: the time lives in next_at alone');
+  assert.equal(r.trigger, null);
+  const at = new Date(r.next_at);
+  const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
+  assert.equal(at.toDateString(), tomorrow.toDateString());
+  assert.equal(at.getHours(), 9);
+  assert.match(r.body, /Raise it with them again now/);
+  assert.equal(db.get('SELECT state FROM asks WHERE id = ?', id)!.state, 'answered');
+
+  // Not due yet: nothing happens.
+  crew.schedule();
+  assert.equal(db.get("SELECT COUNT(*) AS n FROM tasks WHERE routine = ?", r.id)!.n, 0);
+
+  // Due: the helper gets the question back as a task, and the reminder is gone.
+  db.run('UPDATE routines SET next_at = ? WHERE id = ?', Date.now() - 1000, r.id);
+  crew.schedule();
+  assert.equal(db.get('SELECT COUNT(*) AS n FROM routines WHERE id = ?', r.id)!.n, 0, 'one-shot: gone as it fires');
+  const t = db.get('SELECT * FROM tasks WHERE routine = ?', r.id)!;
+  assert.equal(t.origin, 'routine');
+  assert.equal(t.member, 1);
+  assert.match(t.body, /Documents folder/);
+  assert.match(t.body, /Raise it with them again now/);
+  await settled(db, t.id);
+
+  // A later tick never raises it twice.
+  crew.schedule();
+  assert.equal(db.get('SELECT COUNT(*) AS n FROM tasks WHERE routine = ?', r.id)!.n, 1);
+  done();
+});
