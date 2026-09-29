@@ -856,7 +856,7 @@ export const knows = (skills: Json[] = []) => skills.map((k) => ({ name: String(
 // ---------- routines, people, accounts, apps ----------
 export function routines(state: Json, bot?: string) {
   return state.routines.filter((r: Json) => !bot || r.bot === bot).map((r: Json) => ({
-    id: r.id, name: plain(r.name), helper: r.kind === 'digest' ? 'chief' : r.bot, when: r.words, paused: r.state === 'paused', next: clock(r.next_at), digest: r.kind === 'digest',
+    id: r.id, name: plain(r.name), helper: r.kind === 'digest' ? 'chief' : r.bot, when: plain(r.words ?? ''), on: plain(r.on ?? ''), paused: r.state === 'paused', next: r.next_at ? clock(r.next_at) : '', digest: r.kind === 'digest',
     quiet: !!r.quiet, watching: r.watch ? host(r.watch) : '',
     last: r.history?.[0] ? lastRun(r.history[0]) : '',
     // Where the last run ended up: the thing it made, else its line in the helper's chat. A skipped run has neither.

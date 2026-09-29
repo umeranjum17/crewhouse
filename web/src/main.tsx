@@ -777,7 +777,7 @@ function RoutineList({ state, refresh, bot }: Ctx & { bot?: string }) {
   return (
     <>
       {list.map((r: Json) => <RoutineRow key={r.id} r={r} h={crew.find((x) => x.id === r.helper)} act={act} />)}
-      {!list.length && <div className="card empty">Nothing on a schedule yet.</div>}
+      {!list.length && <div className="card empty">Nothing set up yet.</div>}
     </>
   );
 }
@@ -798,8 +798,8 @@ function RoutineRow({ r, h, act }: { r: Json; h: Helper | undefined; act: (fn: (
         <Face who={h ?? 'chief'} size={40} />
         <div className="grow">
           <b>{r.name}</b>
-          {when === null ? <button className="link line-when" onClick={() => setWhen(r.when)}>
-            {r.watching ? `Keeps an eye on ${r.watching} · ` : ''}{r.when}{r.paused ? ' · paused' : ` · next ${r.next}`}{r.quiet && !r.watching ? " · stays quiet if there's nothing" : ''}
+          {when === null ? <button className="link line-when" onClick={() => setWhen(r.when || '')}>
+            {[r.on, r.watching ? `Keeps an eye on ${r.watching}` : '', r.when].filter(Boolean).join(' · ')}{r.paused ? ' · paused' : r.next ? ` · next ${r.next}` : ''}{r.quiet && !r.watching ? " · stays quiet if there's nothing" : ''}
           </button> : <div className="mute small">Moving it — save a new time below, or cancel.</div>}
           {r.last && <div className="mute small">{r.last}{r.result && <> · <a className="link pink" href={r.result.thing ? `#/things/t${r.result.thing}` : `#/h/${r.helper}/chat/m${r.result.msg}`}>See result</a></>}</div>}
         </div>
@@ -838,7 +838,7 @@ function RoutineAsk() {
   );
 }
 function Routines(ctx: Ctx) {
-  return <div className="page rest-screen"><h1>Routines</h1><p className="lead">What the crew does on a schedule, and whether it's on.</p><RoutineList {...ctx} /><p className="mute small routine-footnote">The crew only runs routines you have approved.</p><div className="label">New routine</div><RoutineAsk /></div>;
+  return <div className="page rest-screen"><h1>Routines</h1><p className="lead">What the crew does on a schedule or when something happens, and whether it's on.</p><RoutineList {...ctx} /><p className="mute small routine-footnote">The crew only runs routines you have approved.</p><div className="label">New routine</div><RoutineAsk /></div>;
 }
 
 // ---------- settings ----------
