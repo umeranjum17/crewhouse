@@ -454,7 +454,7 @@ export class Crew {
   private pub(b: Row, viewer = OWNER) {
     const task = this.db.get("SELECT * FROM tasks WHERE bot = ? AND COALESCE(member, ?) = ? AND state IN ('working', 'needs_you') ORDER BY id LIMIT 1", b.id, OWNER, viewer);
     return { id: b.id, display: b.display, role: b.role, template: b.template, color: b.color, member: b.member, state: b.state, created_at: b.created_at,
-      thinks: this.thinks(b.id), ...this.screenOf(b.id), live: this.liveState(b.id), task: task ? this.task(task) : null, ...this.progress(b.id, task),
+      thinks: this.thinks(b.id), ...this.screenOf(b.id), live: this.liveState(b.id), task: task ? { ...this.task(task), files: this.activeFiles(task.id) } : null, ...this.progress(b.id, task),
       queued: this.db.get("SELECT COUNT(*) AS n FROM tasks WHERE bot = ? AND COALESCE(member, ?) = ? AND state = 'queued'", b.id, OWNER, viewer)!.n,
       pausedUntil: this.db.get("SELECT MIN(wake_at) AS w FROM tasks WHERE bot = ? AND COALESCE(member, ?) = ? AND state = 'paused'", b.id, OWNER, viewer)!.w };
   }
@@ -507,9 +507,16 @@ export class Crew {
 
   /** A task's delivered files, its own output first, so Things previews and opens what the task itself made. */
   private taskFiles(task: number): Row[] {
-    const rows = this.db.all(`SELECT data FROM events WHERE kind = 'file.delivered' AND json_extract(data, '$.task') = ? ORDER BY seq`, task)
-      .map((e) => JSON.parse(e.data));
+    const rows = this.db.all(`SELECT at, data FROM events WHERE kind = 'file.delivered' AND json_extract(data, '$.task') = ? ORDER BY seq`, task)
+      .map((e) => ({ ...JSON.parse(e.data), at: e.at }));
     return [...rows.filter((d) => !this.isInput(d)), ...rows.filter((d) => this.isInput(d))];
+  }
+
+  /** The viewer's active task carries its delivered files for the office desk: path, the helper's note and when
+   *  it landed, own output first, handed-over inputs marked. Photos ride along for the chat, not the desk. */
+  private activeFiles(task: number) {
+    return this.taskFiles(task).map((d) => ({ path: d.path, note: d.note ?? '', at: d.at,
+      ...(d.photo ? { photo: true } : {}), ...(this.isInput(d) ? { input: true } : {}) }));
   }
 
   snapshot(viewer = OWNER) {
