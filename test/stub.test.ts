@@ -76,6 +76,32 @@ test('chief onboarding, recruit, assign, grants', async () => {
   assert.equal(said.task_id, hand);
   assert.doesNotMatch(said.text, /#\d|has finished|Sir/, 'no task number or honorific');
 
+  // The helper's delivered file shows as a card on that one wrap line; handoff copies stay out.
+  const wrapDb = new DatabaseSync(join(root, 'state', 'crew.db'));
+  wrapDb.prepare('INSERT INTO events (at, kind, bot, data) VALUES (?, ?, ?, ?)').run(Date.now(), 'file.delivered', 'reel', JSON.stringify({ task: t.id, path: 'files/demo.xlsx', note: 'demo sheet' }));
+  wrapDb.prepare('INSERT INTO events (at, kind, bot, data) VALUES (?, ?, ?, ?)').run(Date.now(), 'file.delivered', 'reel', JSON.stringify({ task: t.id, path: 'files/from-reel/copy.txt' }));
+  wrapDb.close();
+  page = (await api('GET', '/api/bots/chief')).body;
+  const wrapped = page.messages.find((m: any) => m.author === 'bot' && m.text.startsWith('All done.'));
+  assert.equal(page.messages.filter((m: any) => m.author === 'bot' && m.text.startsWith('All done.') && m.task_id === hand).length, 1, 'the finished helper job closes exactly once');
+  assert.ok(wrapped.files.some((f: any) => f.path === 'files/demo.xlsx'), "the wrap line carries the helper's file");
+  assert.ok(!wrapped.files.some((f: any) => f.path === 'files/from-reel/copy.txt'), 'handoff copies stay off the card');
+
+  // Two helpers on one Chief job: each delivered file shows exactly once on the single wrap line.
+  await api('POST', '/api/recruit', { template: 'scout', name: 'Scout' });
+  const pair = (await say('chief', `two jobs please ${call('crew_assign', { bot: 'reel', task: 'First pair job' })} ${call('crew_assign', { bot: 'scout', task: 'Second pair job' })}`)).body.task;
+  const jobA = await until(async () => (await api('GET', '/api/bots/reel')).body.tasks.find((x: any) => x.title === 'First pair job' && x.state === 'done'));
+  const jobB = await until(async () => (await api('GET', '/api/bots/scout')).body.tasks.find((x: any) => x.title === 'Second pair job' && x.state === 'done'));
+  const pairDb = new DatabaseSync(join(root, 'state', 'crew.db'));
+  for (const [bot, id, label] of [['reel', jobA.id, 'first'], ['scout', jobB.id, 'second']] as const) {
+    pairDb.prepare('INSERT INTO events (at, kind, bot, data) VALUES (?, ?, ?, ?)').run(Date.now(), 'file.delivered', bot, JSON.stringify({ task: id, path: `files/${label}.xlsx`, note: `${label} sheet` }));
+  }
+  pairDb.close();
+  page = (await api('GET', '/api/bots/chief')).body;
+  const both = page.messages.filter((m: any) => m.author === 'bot' && m.text.startsWith('All done.') && m.task_id === pair);
+  assert.equal(both.length, 1, 'two helpers still close with one wrap line');
+  assert.deepEqual(both[0].files.map((f: any) => f.path).sort(), ['files/first.xlsx', 'files/second.xlsx']);
+
   // Grants: what the person ticks is what the bot gets.
   const tools = (await api('GET', '/api/bots/reel')).body.tools;
   assert.ok(tools.find((x: any) => x.id === 'media').granted);

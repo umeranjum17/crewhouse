@@ -919,7 +919,7 @@ export class Crew {
         : this.db.all('SELECT * FROM (SELECT * FROM messages WHERE bot = ? AND COALESCE(member, ?) = ? ORDER BY id DESC LIMIT 200) ORDER BY id', id, viewer, viewer))
         .map((m: Row): Row => ({ ...m, text: cleanReply(m.text),
           files: id === CHIEF && m.author === 'bot' && m.task_id
-            ? this.db.all("SELECT bot, data FROM events WHERE kind = 'file.delivered' AND json_extract(data, '$.task') = ?", m.task_id)
+            ? this.db.all("SELECT bot, data FROM events WHERE kind = 'file.delivered' AND json_extract(data, '$.task') IN (SELECT id FROM tasks WHERE root = (SELECT COALESCE(root,id) FROM tasks WHERE id = ?)) AND json_extract(data, '$.input') IS NULL AND json_extract(data, '$.path') NOT LIKE 'files/from-%'", m.task_id)
               .map((e) => ({ bot: e.bot, path: JSON.parse(e.data).path })) : [],
           // Chief's hand-off in a helper's chat collapses to its task's title, with the full words behind Show details.
           ...(id !== CHIEF && m.author === 'chief' && m.task_id ? { title: this.db.get('SELECT title FROM tasks WHERE id = ?', m.task_id)?.title } : {}) })),
