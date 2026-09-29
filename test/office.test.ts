@@ -122,6 +122,19 @@ test('the office keeps the battery budget: no frame while idle, no animation loo
   const tags = await b.run("[...document.querySelectorAll('.o-tag')].map((t) => t.textContent)");
   assert.ok(tags.some((t: string) => t.startsWith('Pip') && t.includes('Busy with another job')), tags.join(' | '));
 
+  // The room is framed on its cards, on a computer and on a phone: every card inside the stage, none covering another.
+  const framed = `(() => { const st = document.querySelector('.o-stage').getBoundingClientRect();
+    const r = [...document.querySelectorAll('.o-stack > *, .o-tag')].map((e) => e.getBoundingClientRect()).filter((x) => x.width);
+    let bad = r.filter((x) => x.left < st.left - 1 || x.right > st.right + 1 || x.top < st.top - 1 || x.bottom > st.bottom + 1).length;
+    r.forEach((a, i) => r.slice(i + 1).forEach((c) => { if (a.left < c.right && c.left < a.right && a.top < c.bottom && c.top < a.bottom) bad++; }));
+    return r.length > 4 && bad === 0; })()`;
+  await until('every card in the stage and clear of the others', () => b.run(framed), 10_000);
+  await b.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+  await b.open('demo=office&day');
+  await until('the 3D room on a phone', () => b.run("!!document.querySelector('.o-phone .o-stage canvas')"), 30_000);
+  await until('every card in the phone\'s stage and clear of the others', () => b.run(framed), 10_000);
+  await b.send('Emulation.clearDeviceMetricsOverride');
+
   // Reduce Motion: the still row, and the 3D chunk is never even fetched.
   await b.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
   await b.open('demo=office&day');
