@@ -8,6 +8,7 @@
 // ?demo=office (Home's office with first looks on the desks and a helper busy with another job), ?demo=calm (nothing of hers on the go),
 // ?demo=fresh (the Chief-only Home a new person gets: no helpers hired yet, nothing to hand over),
 // ?demo=crew1, crew5, crew12, crew30 (the office at that many helpers).
+// ?demo=building (Scribe mid-build: the question answered, the workbook not yet delivered).
 // &sheet=signin or &sheet=connect opens that sheet, and &phase=… pins it to one state.
 import type { Json } from './api.ts';
 import { AIS } from './adapter.ts';
@@ -202,7 +203,8 @@ const state = {
         words: 'Scout wants to place this order at grocer.example: Basmati rice 10 lb, Whole milk (1 gal) x2, Garlic, 2 kg. Total $43.10.',
         preview: { head: 'The order at grocer.example', body: 'Basmati rice 10 lb — $24.00\nWhole milk (1 gal) x2 — $7.90\nGarlic, 2 kg — $6.20\nTotal $43.10' },
         order: { shown: '$43.10', known: true, dollars: true } } }]
-    : firstRun || variant === 'calm' || variant.startsWith('voice-') ? [] : asks.filter((a) => a.member === me),
+    : firstRun || variant === 'calm' || variant.startsWith('voice-') ? []
+    : variant === 'building' ? asks.filter((a) => a.member === me && a.bot !== 'scribe') : asks.filter((a) => a.member === me),
   events,
   resting: variant === 'resting' ? { chatgpt: now + 95 * min } : {},
   routines: [
@@ -293,6 +295,15 @@ pages.scribe = { messages: [
   { id: 9, author: 'bot', text: 'Done: the front-desk handbook. How the day opens, check-ins, payments, and what to do when the power goes. Say the word and I’ll change anything in it.' },
   { id: 10, author: 'system', text: 'Delivered files/front-desk-handbook.docx: A document in 3 sections: Front-desk handbook' },
 ] };
+// ?demo=building: Scribe mid-build — the question answered, the workbook not yet delivered, so the chat holds its place.
+if (variant === 'building') {
+  Object.assign(bots.find((b) => b.id === 'scribe')!, { task: task(43, 'scribe', 'Excel for reception', 'working'), step: undefined });
+  pages.scribe = { messages: [
+    { id: 1, author: 'person', text: 'create an excel for reception at the hotel' },
+    { id: 2, author: 'bot', text: 'One thing before I build it: is this the desk\u2019s own day sheet, or the manager\u2019s log of every booking?' },
+    { id: 3, author: 'person', text: 'the desk\u2019s own day sheet' },
+  ] };
+}
 // A renewal caught ahead of the bill: the warning in Scout's chat, and the cancellation sitting below it as a draft.
 if (variant === 'renewal') pages.scout = { messages: [
   { id: 1, author: 'person', text: 'watch my subscriptions so nothing gets renewed without me hearing about it first' },
