@@ -196,7 +196,7 @@ function inhibitor() {
 interface Browser { run: (args: string[], signal?: AbortSignal) => Promise<string>; end: () => void; release: () => void }
 
 /** A run's place in the crew: which task, whose account, its session key, and the browser if it has one. */
-interface Live { key: string; task: number; member: number; account: string; grants: string[]; browser?: Browser; page?: string; snapshot?: string; apps?: Record<string, AppTool>;
+interface Live { key: string; task: number; member: number; account: string; model?: string; grants: string[]; browser?: Browser; page?: string; snapshot?: string; apps?: Record<string, AppTool>;
   /** The tools crewd runs for this run: the sandboxed shell, the browser AXI, the person's connected apps'. */
   shell?: CrewTool; browserTool?: CrewTool; appTools?: Map<string, CrewTool>;
   /** Lines the helper typed on this page that no card has shown yet (an unsigned register's claim form). */
@@ -842,9 +842,7 @@ export class Crew {
   }
 
   private async retryPausedWhenSignedIn(r: Row, open: Row, why: 'schedule' | 'late' | 'file' | 'wake') {
-    let account: string | undefined;
-    try { account = await this.usable(open.member ?? OWNER, this.choices(open)); } catch { return; }
-    if (!account) return;
+    try { if (!await this.usable(open.member ?? OWNER, this.choices(open))) return; } catch { return; }
     try {
       const cur = this.db.get('SELECT state, wake_at FROM tasks WHERE id = ?', open.id);
       if (!cur || cur.state !== 'paused' || cur.wake_at != null) return;
@@ -1335,8 +1333,8 @@ export class Crew {
     const member = task.member ?? OWNER;
     try {
       const choices = this.choices(task);
-      const account = await this.usable(member, choices);
-      if (!account) return this.pause(task, choices);
+      const brain = await this.usable(member, choices);
+      if (!brain) return this.pause(task, choices);
       if (task.origin === 'routine' && this.overShare(member)) return this.waitForTomorrow(task);
       this.setTask(task, 'working');
       if (this.runtime.memoryLimited?.(member)) {
@@ -1349,11 +1347,11 @@ export class Crew {
       const handoff = this.handoffs.get(task.id);
       this.handoffs.delete(task.id);
       const resumes = !!task.session && task.session.startsWith('agent:m');
-      const l = await this.open(bot, task, member, account);
+      const l = await this.open(bot, task, member, brain);
       this.db.run("UPDATE bots SET state = 'on' WHERE id = ?", bot.id);
-      this.db.event('run.started', bot.id, { task: task.id, account, name: disk.brainName({ provider: account }), member });
+      this.db.event('run.started', bot.id, { task: task.id, account: brain.provider, name: disk.brainName(brain), member });
       if (handoff && resumes) this.db.event('run.resumed', bot.id, { task: task.id, why: handoff });
-      if (handoff && handoff !== 'Crewhouse restarted') this.say(bot.id, 'system', `${handoff}. ${bot.display} carries on${this.connected.delete(task.id) ? '' : ` with ${disk.brainName({ provider: account })}`}.`, task.id);
+      if (handoff && handoff !== 'Crewhouse restarted') this.say(bot.id, 'system', `${handoff}. ${bot.display} carries on${this.connected.delete(task.id) ? '' : ` with ${disk.brainName(brain)}`}.`, task.id);
       this.turn(bot.id, l, resumes ? `[Crewhouse] ${handoff ?? 'You were interrupted'}. Continue task #${task.id} where you left off; ` +
         'check work/ and files/ before redoing anything.' : this.prompt(task), resumes ? undefined : this.images(bot.id, task));
     } catch (e: any) {
@@ -1383,13 +1381,13 @@ export class Crew {
   private refusedNet(botId: string, to: string) { this.db.event('net.refused', botId, { task: this.activeTask(botId)?.id, to: to.slice(0, 260) }); }
 
   /** A run's setup: the bot's folder as its space, its granted tools behind crewd's gate, its own session key. */
-  private async open(bot: Row, task: Row, member: number, account: string) {
+  private async open(bot: Row, task: Row, member: number, brain: disk.Brain) {
     this.close(bot.id);
     const space = disk.botDir(this.cfg, bot.id);
     const conf = disk.botConfig(this.cfg, bot.id);
     const g = resolveGrants(this.cfg, conf.tools ?? [], { 'bot.dir': space, 'bot.id': bot.id });
     const net = this.netOf(bot.id);
-    const l = { key: `agent:m${member}:crewhouse:${bot.id}:${task.id}`, task: task.id, member, account, grants: g.tools } as Live;
+    const l = { key: `agent:m${member}:crewhouse:${bot.id}:${task.id}`, task: task.id, member, account: brain.provider, model: brain.model, grants: g.tools } as Live;
     // The bot's shell: bubblewrap, where its space is the only writable part of the disk.
     if (g.tools.includes('files') && sandboxReady()) l.shell = bashTool(space, [this.cfg.toolsDir], { ...g.env, PATH: toolBin(this.cfg) }, net?.sock);
     // The person's connected apps (their Notion, their Google…): every helper working for them can use them, through the gate.
@@ -1449,7 +1447,7 @@ export class Crew {
     this.db.event('run.prompted', botId, { task: l.task, ...(images?.length ? { photos: images.length } : {}) });
     this.busy.add(botId);
     const spec: RunSpec = {
-      key: l.key, member: l.member, bot: botId, task: l.task, account: l.account,
+      key: l.key, member: l.member, bot: botId, task: l.task, account: l.account, ...(l.model ? { model: l.model } : {}),
       cwd: disk.botDir(this.cfg, botId), system: this.systemPromptFor(botId, l), message: text,
       ...(images?.length ? { images } : {}),
       thinking: botId === CHIEF ? 'low' : undefined, builtins: [],
@@ -1523,13 +1521,13 @@ export class Crew {
     this.dispatch();
   }
 
-  /** The first of these accounts the member can think with now: signed in, and not resting. */
+  /** The first of these brains the member can think with now: signed in, and not resting. */
   private async usable(member: number, choices: disk.Brain[]) {
     for (const b of choices) {
       if (!await this.accounts.signedIn(member, b.provider).catch(() => false)) continue;
       const until = this.accounts.restingUntil(member, b.provider);
       if (until && until > Date.now()) continue;
-      return b.provider;
+      return b;
     }
     return undefined;
   }

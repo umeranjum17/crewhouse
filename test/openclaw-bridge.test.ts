@@ -76,3 +76,27 @@ test('the engine pin is the kit\'s, and only the engine port imports the kit', (
     .filter((f) => /from '@(byokit\/openclaw|openclaw\/)/.test(readFileSync(join(src, f), 'utf8')));
   assert.deepEqual(importers, ['openclaw/runtime.ts']);
 });
+
+test('a run carries its own account to the engine: the picked provider is the one called', async () => {
+  const f = faked({}, { 'models.authStatus': () => ({ providers: [{ provider: 'openai' }] }) });
+  try {
+    await f.started;
+    const end = await f.runtime.run({ key: 'agent:m1:crewhouse:chief:1', member: 1, bot: 'chief', task: 1, account: 'chatgpt',
+      model: 'gpt-5.1', cwd: '', system: '', message: 'Say hello.', builtins: [] }, () => {});
+    assert.ok(end.ok, JSON.stringify(end));
+    const agent = f.fake.calls.find((c) => c.method === 'agent');
+    assert.deepEqual([(agent?.params as any)?.provider, (agent?.params as any)?.model], ['openai', 'gpt-5.1']);
+    // A provider the member never signed in to ends signed-out, and the engine is never asked.
+    const out = await f.runtime.run({ key: 'agent:m1:crewhouse:chief:2', member: 1, bot: 'chief', task: 2, account: 'grok',
+      model: 'grok-4', cwd: '', system: '', message: 'Say hello.', builtins: [] }, () => {});
+    assert.equal(!out.ok && 'kind' in out && out.kind, 'signed-out');
+    assert.equal(f.fake.calls.filter((c) => c.method === 'agent').length, 1);
+    // A brain that named no model sends the same request as before, with no provider override.
+    const plain = await f.runtime.run({ key: 'agent:m1:crewhouse:chief:3', member: 1, bot: 'chief', task: 3, account: 'chatgpt',
+      cwd: '', system: '', message: 'Say hello.', builtins: [] }, () => {});
+    assert.ok(plain.ok, JSON.stringify(plain));
+    const agents = f.fake.calls.filter((c) => c.method === 'agent');
+    assert.equal(agents.length, 2);
+    assert.ok(!('provider' in (agents[1].params as any)) && !('model' in (agents[1].params as any)));
+  } finally { await f.done(); }
+});

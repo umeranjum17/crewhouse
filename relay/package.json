@@ -13,6 +13,6 @@
     "health": "node health.ts"
   },
   "dependencies": {
-    "@byokit/relay": "0.1.3"
+    "@byokit/relay": "0.2.1"
   }
 }
