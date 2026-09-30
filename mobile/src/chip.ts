@@ -10,7 +10,7 @@ const TIMEOUT_MS = 15 * 60_000;
 /** Show the crew's status, or take it away (offline, or nothing working or waiting). */
 export function chip(s: CrewStatus | null) {
   if (!s) return kit.clear();
-  kit.show({ title: s.title, text: s.text, chip: s.chip, publicText: s.publicText, promote: s.active, actions: s.actions, timeoutMs: TIMEOUT_MS });
+  kit.show({ icon: 'notification_icon', title: s.title, text: s.text, chip: s.chip, publicText: s.publicText, promote: s.active, actions: s.actions, timeoutMs: TIMEOUT_MS });
 }
 /** A tap on one of its actions arrives as the crewhouse:// address the app already opens (crewhouse://needs, crewhouse://ask). */
 export const onChip = (open: (url: string) => void) => kit.on('action', (e) => open(`crewhouse://${e.id}`));

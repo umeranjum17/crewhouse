@@ -18,7 +18,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#1F6F66",
+        "backgroundColor": "#ffd6c7",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -80,7 +80,13 @@
           "microphonePermission": "Crewhouse hears you only while the mic is on, to put what you say in the message box."
         }
       ],
-      "expo-notifications",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#1F6F66"
+        }
+      ],
       "@byokit/status",
       [
         "@byokit/overlay",
