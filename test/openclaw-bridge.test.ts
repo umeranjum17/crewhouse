@@ -100,7 +100,7 @@ test('a run carries its own account to the engine: the picked provider is the on
 });
 
 // Exercise the kit's real installation branch, replacing only npm with an offline recorder.
-test('prepare installs the kit pin with scripts off and an isolated install home; a matching engine is reused', async () => {
+test('prepare installs and repairs the kit pin with scripts off and an isolated home; a matching engine is reused', async () => {
   const state = mkdtempSync(join(tmpdir(), 'ch-install-'));
   const dir = join(state, 'engine');
   const npm = join(state, 'npm');
@@ -109,9 +109,12 @@ test('prepare installs the kit pin with scripts off and an isolated install home
 const fs = require('node:fs'), path = require('node:path');
 const dir = process.argv.at(-1);
 fs.writeFileSync(path.join(dir, 'install.json'), JSON.stringify({ args: process.argv.slice(2), env: process.env }));
+for (const [name, pkg] of Object.entries(JSON.parse(fs.readFileSync(path.join(dir, 'package-lock.json'), 'utf8')).packages)) {
+  if (!name) continue;
+  fs.mkdirSync(path.join(dir, name), { recursive: true });
+  fs.writeFileSync(path.join(dir, name, 'package.json'), JSON.stringify({ version: pkg.version }));
+}
 const target = path.join(dir, 'node_modules/openclaw');
-fs.mkdirSync(target, { recursive: true });
-fs.writeFileSync(path.join(target, 'package.json'), JSON.stringify({ version: '${ENGINE_VERSION}' }));
 fs.writeFileSync(path.join(target, 'openclaw.mjs'), '');
 `);
   chmodSync(npm, 0o700);
@@ -126,6 +129,21 @@ fs.writeFileSync(path.join(target, 'openclaw.mjs'), '');
     assert.equal(install.env.npm_config_cache, join(state, 'openclaw/npm-cache'));
     assert.equal(install.env.OPENCLAW_DISABLE_BUNDLED_PLUGIN_POSTINSTALL, '1');
     assert.deepEqual(Object.keys(install.env).sort(), ['HOME', 'OPENCLAW_DISABLE_BUNDLED_PLUGIN_POSTINSTALL', 'PATH', 'npm_config_cache']);
+    const lock = JSON.parse(readFileSync(join(pin, 'package-lock.json'), 'utf8'));
+    const dependency = Object.keys(lock.packages).find((p) => p && !lock.packages[p].optional && p !== 'node_modules/openclaw')!;
+    for (const damage of [
+      () => writeFileSync(join(dir, 'package.json'), '{}'),
+      () => writeFileSync(join(dir, 'package-lock.json'), '{}'),
+      () => rmSync(join(dir, dependency), { recursive: true }),
+      () => writeFileSync(join(dir, dependency, 'package.json'), JSON.stringify({ version: '0.0.0' })),
+    ]) {
+      damage();
+      await runtime.kit.prepare();
+      for (const file of ['package.json', 'package-lock.json'])
+        assert.equal(readFileSync(join(dir, file), 'utf8'), readFileSync(join(pin, file), 'utf8'));
+      assert.equal(JSON.parse(readFileSync(join(dir, dependency, 'package.json'), 'utf8')).version, lock.packages[dependency].version);
+      assert.equal(JSON.parse(readFileSync(join(dir, 'node_modules/openclaw/package.json'), 'utf8')).version, ENGINE_VERSION);
+    }
     rmSync(npm);
     await runtime.kit.prepare(); // An unavailable npm proves the matching installed engine is reused.
     assert.ok(existsSync(runtime.kit.doctorContext().entry));

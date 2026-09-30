@@ -1,6 +1,6 @@
 // The phone's end of the link: @byokit/link's device side, its grant in secure storage, and the transport that
 // web/src/api.ts calls through. Each call is one request, `METHOD /path`, answered like HTTP (src/link.ts).
-import { DeviceLink, LinkError, hostId, pairWithCode, pairWithOffer, offerText, decodeOffer, secureDeviceStore, unb64url, type DeviceGrant, type LinkStatus } from '@byokit/link';
+import { DeviceLink, LinkError, hostId, pairWithCode, pairWithOffer, offerText, decodeOffer, secureDeviceStore, migrateGrant, unb64url, type DeviceGrant, type LinkStatus } from '@byokit/link';
 import { findHost } from '@byokit/relay/device';
 import { readTyped } from './typed.ts';
 import * as Device from 'expo-device';
@@ -15,7 +15,6 @@ import { addresses } from '../modules/crewhouse-net';
 export type Grant = DeviceGrant;
 export type Status = LinkStatus;
 const STORE = 'crewhouse.grant';
-const url64 = (s: string) => s.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 // Unpaired or removed on the computer: the chats this phone kept go with the grant.
 const grants = secureDeviceStore(SecureStore, STORE);
 const store = { save: grants.save, clear: () => { kept.clear(); void SecureStore.deleteItemAsync('crewhouse.said'); return grants.clear(); } };
@@ -37,10 +36,7 @@ export async function loadGrant(): Promise<Grant | null> {
   if (grant) return grant;
   const s = await SecureStore.getItemAsync(STORE);
   if (!s) return null;
-  const g = JSON.parse(s);
-  if (g.v === 1) return g;
-  // Migration debt (G07): link lacks migrateGrant(raw, {format:'crewhouse-v0'}). Keep the old keys and shape migration unchanged.
-  const moved: Grant = { v: 1, secretKey: url64(g.sk), host: url64(g.crewdPk), hostName: 'your computer', urls: g.urls, device: g.device };
+  const moved = migrateGrant(s, { format: 'crewhouse-v0' });
   await store.save(moved);
   return moved;
 }

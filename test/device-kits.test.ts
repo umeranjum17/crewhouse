@@ -44,15 +44,25 @@ test('phone kit migration preserves grants, legacy identity, cleanup and authent
     assert.deepEqual(await phone.loadGrant(), grant);
     assert.equal(phone.secure.values.get('crewhouse.grant'), original);
     assert.deepEqual(phone.secure.writes, [], 'reading a paired v1 grant never rewrites it');
-    const legacy = { sk: '+/8=', crewdPk: Buffer.from(new Uint8Array(32).fill(9)).toString('base64'), urls: grant.urls, device: grant.device };
+    const legacy = { sk: Buffer.from(new Uint8Array(32).fill(251)).toString('base64'),
+      crewdPk: Buffer.from(new Uint8Array(32).fill(9)).toString('base64'), fp: 'c31a 7a40 64b2 bdc1', urls: grant.urls, device: grant.device };
     phone.secure.values.set('crewhouse.grant', JSON.stringify(legacy));
     const moved = await phone.loadGrant();
-    assert.equal(moved.secretKey, '-_8');
+    assert.equal(moved.secretKey, b64url(new Uint8Array(32).fill(251)));
     assert.equal(moved.host, grant.host);
     assert.deepEqual(moved.device, grant.device);
     assert.deepEqual(moved.urls, grant.urls);
     assert.equal(phone.secure.values.get('crewhouse.grant'), JSON.stringify(moved), 'kit save has the old JSON byte format/key');
     assert.deepEqual(await phone.loadGrant(), moved, 'next launch reads the migrated grant through the kit');
+    for (const bad of [{ ...legacy, fp: 'wrong' }, { ...legacy, sk: '+/8=' }]) {
+      const saved = JSON.stringify(bad);
+      phone.secure.values.set('crewhouse.grant', saved);
+      const writes = phone.secure.writes.length;
+      await assert.rejects(phone.loadGrant(), { name: 'GrantMigrationError', code: 'invalid-grant' });
+      assert.equal(phone.secure.values.get('crewhouse.grant'), saved, 'failed migration preserves the original');
+      assert.equal(phone.secure.writes.length, writes);
+    }
+    phone.secure.values.set('crewhouse.grant', JSON.stringify(moved));
     phone.kept.chat('any', { messages: [{ text: 'private', at: Date.now() }] });
     assert.equal(phone.kept.page('any').messages.length, 1);
     phone.secure.values.set('crewhouse.said', '{}');

@@ -419,6 +419,8 @@ test('upgrade removes a former personâ€™s phone before grants load; the personâ€
   const db = new DatabaseSync(join(root, 'state', 'crew.db'));
   db.prepare("INSERT INTO people (id, name) VALUES (2, 'Former person')").run();
   db.prepare('UPDATE devices SET member = 2 WHERE id = ?').run(bGrant.device.id);
+  const pk = db.prepare('SELECT pk FROM devices WHERE id = ?').get(aGrant.device.id)!.pk as string;
+  db.prepare('UPDATE devices SET pk = ? WHERE id = ?').run(Buffer.from(pk, 'base64url').toString('base64'), aGrant.device.id);
   const hour = new Date().getHours();
   const time = (h: number) => `${String((h + 24) % 24).padStart(2, '0')}:00`;
   db.prepare('UPDATE people SET quiet = ? WHERE id = 1').run(`${time(hour - 1)}-${time(hour + 1)}`);
@@ -442,7 +444,7 @@ test('upgrade removes a former personâ€™s phone before grants load; the personâ€
     const phones = (await http('GET', '/api/phones')).body;
     assert.ok(!phones.some((p: any) => p.id === bGrant.device.id));
     assert.ok(phones.some((p: any) => p.id === aGrant.device.id));
-    assert.equal((await a.req('GET', '/api/state')).body.person.id, 1);
+    assert.equal((await a.req('GET', '/api/state')).body.person.id, 1, 'legacy base64 host record keeps the phone paired');
     assert.equal((await view.req('GET', '/api/state')).status, 200);
     assert.equal((await view.req('POST', '/api/bots/chief/messages', { text: 'no' })).status, 403);
     assert.equal(pushes.length, 0, 'quiet hours still hold news across the upgrade');
