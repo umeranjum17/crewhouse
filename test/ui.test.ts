@@ -219,7 +219,7 @@ test("a job proposal card names the helper's proposed job, never a memory headin
 
 test('Home commits nothing: a row opens the review sheet, and a starter fills the box without sending', () => {
   const src = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
-  const home = src.slice(src.indexOf('function NeedsRows('), src.indexOf("const ownerName"));
+  const home = src.slice(src.indexOf('function NeedsRows('), src.indexOf('/** The standing'));
   assert.ok(!home.includes('<AskCard'), 'ask cards with buttons sat right on Home; a row opens the sheet instead');
   assert.match(home, /needs-row/, 'the compact Needs-you rows');
   assert.match(home, /href=\{`#\/ask\/\$\{c\.id\}`\}/, 'every row opens the existing review sheet');
@@ -273,7 +273,7 @@ test('Home keeps a standing "hand me a job" list, straight from crewd\'s ideas: 
   assert.equal(these.choices[0].label, 'Yes, fill these in', 'more than one line, these in');
   assert.equal(fill.choices.find((c: any) => c.body.scope === 'always'), undefined, 'and still no standing answer');
   const src = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
-  const home = src.slice(src.indexOf('function Home('), src.indexOf('const ownerName'));
+  const home = src.slice(src.indexOf('function Home('), src.indexOf('/** The standing'));
   assert.match(home, /<JobList state=\{state\} refresh=\{refresh\} \/>/, 'the desk\'s frame beside Working now and Done today');
   assert.match(home, /<JobList state=\{state\} phone refresh=\{refresh\} \/>/, 'and under the chats on a phone');
   const list = src.slice(src.indexOf('function JobList('), src.indexOf('function JobList(') + 1800);

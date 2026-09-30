@@ -458,6 +458,12 @@ test('upgrade removes a former personâ€™s phone before grants load; the personâ€
       await until(async () => pushes.length >= 2);
       assert.ok(pushes.flat().every((p) => p.to === 'ExponentPushToken[kept]' && p.title === NEWS));
     } finally { live.close(); }
+    assert.equal((await http('PUT', '/api/people/42', { name: 'Umer' })).status, 200, 'legacy route shape edits only the person');
+    const snapshot = (await a.req('GET', '/api/state')).body;
+    assert.deepEqual(snapshot.members.map((m: any) => [m.id, m.name]), [[1, 'Umer']], 'old phone builds keep their members array');
+    assert.equal(typeof snapshot.house.google, 'boolean');
+    assert.ok(Object.hasOwn(snapshot.house, 'steps'));
+    assert.equal((await http('POST', '/api/accounts/42/chatgpt/retry')).status, 200, 'account route ignores the former member segment');
     assert.equal((await http('POST', '/api/people', { name: 'Another' })).status, 404);
     assert.equal((await http('GET', '/api/people')).status, 404);
     assert.equal((await http('POST', '/api/house/ask', { app: 'calendar' })).status, 404);

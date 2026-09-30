@@ -87,7 +87,7 @@ function useTab(first: Window | null | undefined) {
  * on only when crewd has a sign-in that works. The code is the fallback ("Having trouble?", or by itself when the page
  * never comes back). Every other ending has its own words: declined, busy, expired, a work account, offline.
  */
-export function SignIn({ me, owner, ai = A.AIS[0], tab: first, onReady, onClose }: { me: number; owner: string; ai?: { key: string; name: string; bg: string }; tab?: Window | null; onReady: () => void; onClose: () => void }) {
+export function SignIn({ me, ai = A.AIS[0], tab: first, onReady, onClose }: { me: number; ai?: { key: string; name: string; bg: string }; tab?: Window | null; onReady: () => void; onClose: () => void }) {
   const name = ai.name;
   const { value, offline } = usePoll(() => api.accounts(), 1500);
   const g = A.account(value, me, ai.key);
@@ -178,7 +178,7 @@ export function AccountCard({ me, g, inChat, onReady }: { me: number; g: ReturnT
         <button className="link" onClick={() => { setNoAccount(true); window.open('https://chatgpt.com/', '_blank'); }}>No {ai.name} account? Make a free one</button>
       </div>
       {noAccount && <p className="mute small">{ai.name} opened in a new tab: sign up with Google or Apple in a few taps, then come straight back and tap Sign in.</p>}
-      {signing !== false && <SignIn me={me} owner="" tab={signing} onReady={() => { setSigning(false); onReady(); }} onClose={() => setSigning(false)} />}
+      {signing !== false && <SignIn me={me} tab={signing} onReady={() => { setSigning(false); onReady(); }} onClose={() => setSigning(false)} />}
     </div>
   );
 }

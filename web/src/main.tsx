@@ -286,7 +286,6 @@ function Home(ctx: Ctx) {
     </div>
   );
 }
-const ownerName = (state: Json) => state.members.find((m: Json) => m.id === A.OWNER)?.name ?? 'the owner';
 
 /** The standing "hand me a job" list (docs/ui-contract.md, `ideas[]`): what the crew offers to do end to end, money back
  *  first. A row fills Chief's box with the words and never sends; a job still waiting on an app says what it needs and
@@ -1007,7 +1006,7 @@ function Settings({ state, me, refresh, tick, accounts, look, setLook, switchTo 
       <div className="seg">{[['auto', 'Evenings dark'], ['day', 'Day'], ['night', 'Night']].map(([k, l]) => <button key={k} className={look === k ? 'on' : ''} onClick={() => setLook(k)}>{l}</button>)}</div>
       {owner && <Money state={state} refresh={refresh} />}
       {owner && <HouseGoogle on={!!state.house?.google} steps={state.house?.steps} refresh={refresh} />}
-      {signing !== false && <SignIn me={me} owner={ownerName(state)} ai={signing?.ai} tab={signing?.tab} onReady={() => { setSigning(false); refresh(); }} onClose={() => setSigning(false)} />}
+      {signing !== false && <SignIn me={me} ai={signing?.ai} tab={signing?.tab} onReady={() => { setSigning(false); refresh(); }} onClose={() => setSigning(false)} />}
     </div>
   );
 }

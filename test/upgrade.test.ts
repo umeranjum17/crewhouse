@@ -16,6 +16,7 @@ function seed() {
   const { db, cfg } = lab;
   db.run("UPDATE people SET name = 'Umer', address = 'sir', onboarded = 1, quiet = '22:00-07:00', share = 'normal' WHERE id = 1");
   db.run("INSERT INTO people (id, name) VALUES (2, 'Former person')");
+  db.run('UPDATE bots SET member = 2');
   const put = (rel: string, words: string) => { const path = join(lab.root, rel); mkdirSync(join(path, '..'), { recursive: true }); writeFileSync(path, words); return path; };
   const files = [
     'crew/people/1/about.md', 'crew/people/1/notes/chief.md', 'crew/people/2/about.md',
@@ -43,7 +44,8 @@ function seed() {
   db.event('net.refused', 'chief', { to: 'https://private.example/' });
   db.event('routine.fired', 'chief', { routine: 2, watch: 'changed' });
   db.event('task.done', 'chief', { task: 2 });
-  db.event('money.spent', 'chief', { ask: 2, amount: 12 });
+  const now = new Date();
+  db.event('money.spent', 'chief', { ask: 2, amount: 12, month: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}` });
   db.event('money.cap', null, { cap: 50 });
   db.event('task.done', 'chief', { task: 1 });
   const rows = () => Object.fromEntries(['people', 'tasks', 'routines', 'messages', 'reads', 'usage', 'asks', 'devices'].map((table) => [table,
@@ -57,6 +59,7 @@ test('upgrade preserves the person, spending and all files; former live actors a
   const bytes = files.map((f) => readFileSync(f));
   const settings = db.all("SELECT * FROM settings WHERE key != 'phone.offer.1'");
   const spent = new Crew(cfg, db).spentThisMonth();
+  assert.equal(spent, 12, 'this month’s spending is present before the split');
   // An interrupted VACUUM copy must not be mistaken for a finished backup.
   const backup = join(cfg.stateDir, 'crew-before-one-person.db');
   writeFileSync(`${backup}.part`, 'interrupted');
