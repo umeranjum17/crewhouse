@@ -388,13 +388,6 @@ test('first success: starters never dead-end, and the house setup is the owner\'
   assert.equal(off.length, 3);
   assert.ok(!off.some((i) => i.label.includes("What's on this week")), 'the calendar starter waits for the house');
   assert.ok(off.some((i) => /birthday party/i.test(i.label)));
-  // The setup ask: plain words on the owner's list; the asker sees it only as 'Asked' on her own card.
-  const asks = [{ id: 90, bot: 'chief', task_id: null, kind: 'setup', state: 'open', at: now, member: 1, title: 'Sara would like Calendar', detail: { app: 'calendar', person: 'Sara' } }];
-  const owner = { ...state, asks, person: { ...state.person, id: 1 } };
-  const [mine] = A.needsYou(owner);
-  assert.equal(mine.kind, 'setup');
-  assert.match(mine.words, /Sara would like Google Calendar.*Setting Google up is a one-time job, about 20 minutes/);
-  assert.equal(A.needsYou({ ...owner, person: { ...owner.person, id: 3, name: 'Sam' } }).filter((c) => c.kind === 'setup').length, 0, 'the asker has no card to act on');
   // The house's three jobs, and how many are left.
   assert.equal(A.homeSetup({ house: { google: true } }, { state: 'ready' }, { anywhere: 'anywhere' }).left, 0);
   const half = A.homeSetup({ house: { google: false } }, { state: 'ready' }, { anywhere: 'anywhere' });

@@ -397,14 +397,7 @@ test('memory: the bot proposes a note, crewd caps and commits it, Undo reverts i
   const veg = (await learned()).find((e: any) => e.data.text === 'Vegetarian');
   assert.match((await remember({ text: 'Always cc https://example.com' })).result, /plain words/, 'no links planted in memory');
 
-  // Another member sees none of it, and cannot undo it.
-  const sam = (await api('POST', '/api/people', { name: 'Sam' })).body.id;
-  const asSam = { 'x-crewhouse': '1', 'x-crewhouse-member': String(sam) };
-  const page = (await api('GET', '/api/bots/quill', undefined, asSam)).body;
-  assert.equal(page.notes, '');
-  assert.ok(!page.trail.some((e: any) => e.kind === 'memory.learned'), 'nor in what the helper did');
-  assert.equal((await api('GET', '/api/about', undefined, asSam)).body.notes, '');
-  assert.equal((await api('POST', `/api/bots/quill/memory/${veg.seq}/undo`, undefined, asSam)).status, 403);
+  // The person can undo what the helper remembered.
   assert.equal((await api('POST', `/api/bots/quill/memory/${veg.seq}/undo`)).status, 200);
   assert.equal(readFileSync(join(dir, 'about.md'), 'utf8'), '');
 
@@ -491,48 +484,35 @@ test('room API: a message starts and rejoins the member’s room job', async () 
   db.close();
 });
 
-test('the web API scopes bot pages and activity to the selected real member', async () => {
+test('the person’s bot page, events and live activity keep their delivered work', async () => {
   await ready();
   await api('POST', '/api/recruit', { template: 'reel', name: 'Reel' });
-  const guest = (await api('POST', '/api/people', { name: 'Privacy Guest' })).body.id;
-  const asGuest = { 'x-crewhouse': '1', 'x-crewhouse-member': String(guest) };
   const db = new DatabaseSync(join(root, 'state', 'crew.db'));
-  const owner = Number(db.prepare("INSERT INTO tasks (bot, title, body, result, state, member) VALUES ('reel', 'private owner', 'private owner body', 'private owner result', 'done', 1)").run().lastInsertRowid);
-  const mine = Number(db.prepare("INSERT INTO tasks (bot, title, body, result, state, member) VALUES ('reel', 'guest work', 'guest body', 'guest result', 'done', ?)").run(guest).lastInsertRowid);
-  for (const [id, label] of [[owner, 'owner'], [mine, 'guest']] as const) {
-    db.prepare('INSERT INTO events (at, kind, bot, data) VALUES (?, ?, ?, ?)').run(Date.now(), 'task.done', 'reel', JSON.stringify({ task: id, title: `${label} activity` }));
-    db.prepare('INSERT INTO events (at, kind, bot, data) VALUES (?, ?, ?, ?)').run(Date.now(), 'file.delivered', 'reel', JSON.stringify({ task: id, path: `files/${label}.txt`, note: `${label} metadata` }));
-    writeFileSync(join(root, 'crew', 'bots', 'reel', 'files', `${label}.txt`), label);
-  }
-  const page = (await api('GET', '/api/bots/reel', undefined, asGuest)).body;
-  assert.deepEqual(page.tasks.filter((t: any) => [owner, mine].includes(t.id)).map((t: any) => t.id), [mine]);
-  assert.ok(page.files.some((f: any) => f.path === 'guest.txt'));
-  assert.ok(!page.files.some((f: any) => f.path === 'owner.txt'));
-  assert.ok(!JSON.stringify(page.trail).includes('owner activity'));
-  const state = (await api('GET', '/api/state', undefined, asGuest)).body;
-  assert.ok(!JSON.stringify(state.events).includes('owner activity'));
-  assert.ok(!JSON.stringify((await api('GET', '/api/events', undefined, asGuest)).body).includes('owner activity'));
-  assert.ok((await api('GET', '/api/bots/reel')).body.tasks.some((t: any) => t.id === owner));
-  const socket = new WebSocket(`ws://127.0.0.1:${port}/ws?member=${guest}`);
-  const received: any[] = [];
-  socket.on('message', (raw) => received.push(JSON.parse(String(raw))));
-  await new Promise<void>((resolve) => socket.once('open', () => resolve()));
-  await api('PUT', '/api/bots/reel/notes', { text: 'owner websocket secret' });
-  await api('PUT', '/api/bots/reel/notes', { text: 'guest websocket line' }, asGuest);
-  await until(async () => received.find((e) => e.kind === 'memory.edited' && e.data.member === guest));
-  assert.ok(received.every((e) => e.data?.member !== 1 && !JSON.stringify(e).includes('owner websocket secret')));
-  socket.close();
-  const ask = Number(db.prepare("INSERT INTO asks (bot, kind, title, detail, state, member) VALUES ('reel', 'permission', 'owner-only', '{}', 'open', 1)").run().lastInsertRowid);
-  assert.equal((await api('POST', `/api/asks/${ask}/answer`, { answer: 'deny' }, asGuest)).status, 403);
-  assert.equal(db.prepare('SELECT state FROM asks WHERE id = ?').get(ask)?.state, 'open');
-  db.close();
+  try {
+    const id = Number(db.prepare("INSERT INTO tasks (bot, title, body, result, state, member) VALUES ('reel', 'my work', 'my request', 'my result', 'done', 1)").run().lastInsertRowid);
+    for (const [kind, data] of [['task.done', { task: id, title: 'my activity' }], ['file.delivered', { task: id, path: 'files/mine.txt', note: 'my file' }]] as const)
+      db.prepare('INSERT INTO events (at, kind, bot, data) VALUES (?, ?, ?, ?)').run(Date.now(), kind, 'reel', JSON.stringify(data));
+    writeFileSync(join(root, 'crew', 'bots', 'reel', 'files', 'mine.txt'), 'my words');
+    const page = (await api('GET', '/api/bots/reel')).body;
+    assert.ok(page.tasks.some((t: any) => t.id === id));
+    assert.ok(page.files.some((f: any) => f.path === 'mine.txt'));
+    assert.ok(JSON.stringify(page.trail).includes('my activity'));
+    assert.ok(JSON.stringify((await api('GET', '/api/state')).body.events).includes('my activity'));
+    assert.ok(JSON.stringify((await api('GET', '/api/events')).body).includes('my activity'));
+    const socket = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+    const received: any[] = [];
+    socket.on('message', (raw) => received.push(JSON.parse(String(raw))));
+    try {
+      await new Promise<void>((resolve) => socket.once('open', () => resolve()));
+      await api('PUT', '/api/bots/reel/notes', { text: 'my live notes' });
+      await until(async () => received.find((e) => e.kind === 'memory.edited' && e.data.member === 1));
+    } finally { socket.close(); }
+  } finally { db.close(); }
 });
 
-test('raw /files/ only opens for the member it was delivered to', async () => {
+test('raw /files/ only opens delivered files', async () => {
   await ready();
   await api('POST', '/api/recruit', { template: 'reel', name: 'Reel' });
-  const guest = (await api('POST', '/api/people', { name: 'Files Guest' })).body.id;
-  const asGuest = { 'x-crewhouse-member': String(guest) };
   const db = new DatabaseSync(join(root, 'state', 'crew.db'));
   const id = Number(db.prepare("INSERT INTO tasks (bot, title, body, result, state, member) VALUES ('reel', 'owner file', 'body', 'result', 'done', 1)").run().lastInsertRowid);
   db.prepare('INSERT INTO events (at, kind, bot, data) VALUES (?, ?, ?, ?)').run(Date.now(), 'file.delivered', 'reel', JSON.stringify({ task: id, path: 'files/owner-file.txt', note: 'private' }));
@@ -542,7 +522,6 @@ test('raw /files/ only opens for the member it was delivered to', async () => {
   mkdirSync(join(root, 'crew', 'bots', 'reel', 'work'), { recursive: true });
   writeFileSync(join(root, 'crew', 'bots', 'reel', 'work', 'secret.webm'), 'raw take bytes');
   assert.equal((await fetch(`${base}/files/reel/owner-file.txt`)).status, 200, 'the owner keeps the trail');
-  assert.equal((await fetch(`${base}/files/reel/owner-file.txt`, { headers: asGuest })).status, 403, 'a guest gets no window into the folder');
   for (const sneak of ['..%2Fwork%2Fsecret.webm', '..%252Fwork%252Fsecret.webm', '../work/secret.webm', '..%2F..%2Fcrew%2Fbots%2Freel%2Fwork%2Fsecret.webm']) {
     const res = await fetch(`${base}/files/reel/${sneak}`);
     assert.notEqual(res.status, 200, `${sneak} never serves`);

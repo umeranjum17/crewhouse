@@ -30,7 +30,7 @@ The rule behind every field: nothing a person reads may be a command, a file pat
 | `showing` `{[bot]: {what, steps}}` | "Showing how to …: 3 steps so far" on the Screen tab, with Done showing and Cancel (`adapter.showing()`) | `POST /api/bots/:id/show {what}` starts one (Take over with a recorder; needs the bot's computer), `POST /api/bots/:id/shown {keep}` ends it: `keep` hands the bot the steps and page pictures as a message from the person |
 | `installing` | "Getting the helpers' own web browser ready…" (`adapter.gettingReady()`) | Tool ids crewd is fetching now; the downloaded app fetches every missing tool on its first runs |
 | `update` `{version, url}` | "A new Crewhouse is ready (0.2.0)" with Download (`adapter.update()`) | Owner only, and only in the downloaded app (checked once a day from the project's public release list) |
-| `house` `{google, steps}` | Google's apps: connect, or "Ask the owner"; Settings, Google for the house | Whether the owner has switched Google on for the house; once the key is in, `steps` is the four setup steps as `{state: 'checked' \| 'said' \| 'missing', note}`, from Google's own answers (`said`: nobody has connected yet to find out) |
+| `house` `{google, steps}` | Google's apps: connect; Settings, Google for your crew | Whether the owner has switched Google on for the house; once the key is in, `steps` is the four setup steps as `{state: 'checked' \| 'said' \| 'missing', note}`, from Google's own answers (`said`: nobody has connected yet to find out) |
 
 ## Asks: the approval moment
 
@@ -95,7 +95,7 @@ Her Chief thread then starts with that request. From the goal starter it also ca
 `{via: 'code'}` ("Having trouble?") turns the same sign-in into `{via: 'code', code, url}`; crewd does it by itself when the page hasn't come back in three minutes. `{fresh: true}` asks ChatGPT's page which account again ("Use my personal account").
 A sign-in that fails ends as `signIn: {state: 'failed', error, why?}`: `why: 'declined'` (Cancel on ChatGPT's page), `why: 'busy'` (something else on this computer is signing in to ChatGPT), or `error` saying "expired"/"took too long"; each has its own words in the app.
 `work` is the email of a work ChatGPT (Business, Enterprise, Edu), read from the sign-in itself; the app offers "Use my personal account".
-`notIncluded`: the plan has no helpers (ChatGPT's `usage_not_included`). `…/ask-owner` puts a note in the owner's Chief thread; `…/retry` is "I've changed my plan".
+`notIncluded`: the plan has no helpers (ChatGPT's `usage_not_included`). `…/retry` is "I've changed my plan".
 `…/cancel` stops a sign-in, `…/logout` signs out. No other provider is shown. Claude is never offered.
 
 ## Connecting an app (today)
@@ -139,3 +139,5 @@ Both retry by themselves and say "Back in touch" when it answers again.
 `GET /api/learned` → `[{id, skill, at, state}]` — the skills the engine learned from this member's own work (`state: 'applied'` is what the rows show); `POST /api/learned/forget {id, skill}` puts one back the way it was (the engine's own restore; nothing else runs). The bot page's settings show these as **Learned · Forget** rows under the **Learn from how I work** switch.
 `GET /api/learning` → `{on}` and `POST /api/learning {on}` are that switch: the engine's own learning mode, on by default. Both answer only for the viewer's own member.
 `GET /api/task/:id/trail` → `[{at, words, ok}]` — one plain-words row per tool call of one task, recorded by crewd itself (`run.call`), redacted to words; only the task's member (or the owner) may read it. The "How I did it" drawer renders it collapsed by default.
+
+An install serves one person (id 1). Creating or listing people at `/api/people`, requesting Google setup at `/api/house/ask`, and `…/ask-owner` are no longer supported. The person's editable settings keep `PUT /api/people/1`. Snapshots still emit `members: [person]`, `person.id: 1`, `house: {google, steps}` and live `reply.partial` still carries `member: 1` for older phone builds; `/api/phones/refresh` tolerates their `member` field.

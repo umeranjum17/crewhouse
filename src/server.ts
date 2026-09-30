@@ -210,9 +210,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     if (m === 'POST' && p === '/api/recruit') { const b = body; const { token, ...bot } = crew.recruit(b.template, b.name, 'person', me); return bot; }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)$/)) && m === 'GET') return crew.botPage(r[1], me, Number(q.get('around')) || undefined);
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/messages$/)) && m === 'POST') { const b = body; return crew.post(r[1], b.text ?? '', b.model, me, b.photos, b.room === true, key); }
-    if (m === 'GET' && p === '/api/people') return crew.members();
-    if (m === 'POST' && p === '/api/people') return crew.addMember(body.name);
-    if ((r = p.match(/^\/api\/people\/(\d+)$/)) && m === 'PUT') return crew.updateMember(Number(r[1]), body);
+    if ((r = p.match(/^\/api\/people\/(\d+)$/)) && m === 'PUT') return crew.updateMember(OWNER, body);
     if (m === 'GET' && p === '/api/accounts') {
       // Everyone's AI accounts: signed in or not (the engine's own local check), resting until when, and any sign-in in progress.
       // A work ChatGPT (Business, Enterprise, Edu) is flagged by its email, so the app can steer to a personal one.
@@ -223,14 +221,13 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       })));
     }
     // "Sign in with …": start (the page by default, `via: 'code'` for the code), paste the address the browser landed on,
-    // cancel, sign out; "I've changed my plan" (retry) and "Ask the owner to cover it".
-    if ((r = p.match(/^\/api\/accounts\/(\d+)\/([a-z]+)\/(login|paste|cancel|logout|retry|ask-owner)$/)) && m === 'POST') {
-      const [who, key, act] = [crew.member(Number(r[1])).id as number, r[2], r[3]];
+    // cancel, sign out; "I've changed my plan" (retry).
+    if ((r = p.match(/^\/api\/accounts\/(\d+)\/([a-z]+)\/(login|paste|cancel|logout|retry)$/)) && m === 'POST') {
+      const [who, key, act] = [OWNER, r[2], r[3]];
       provider(key);
       const b = body;
       if (act === 'login') return { ok: true, signIn: await crew.accounts.login(who, key, b.via === 'code' ? 'code' : 'browser', !!b.fresh) };
       else if (act === 'retry') crew.retryAccount(who, key);
-      else if (act === 'ask-owner') crew.askOwner(who, key);
       else if (act === 'paste') crew.accounts.paste(who, key, String(b.text ?? ''));
       else if (act === 'cancel') crew.accounts.cancel(who, key);
       else await crew.accounts.logout(who, key);
@@ -352,7 +349,6 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       return { ok: true };
     }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/read$/)) && m === 'POST') { crew.read(r[1], me); return { ok: true }; }
-    if (m === 'POST' && p === '/api/house/ask') return crew.askSetup(String(body.app ?? 'calendar'), me);
     if (m === 'GET' && p === '/api/search') return crew.search(q.get('q') ?? '', me);
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/steer$/)) && m === 'POST') { crew.steer(r[1], String(body.text ?? ''), me); return { ok: true }; }
     if ((r = p.match(/^\/api\/tools\/([a-z0-9-]+)\/install$/)) && m === 'POST') {

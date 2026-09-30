@@ -36,8 +36,6 @@ export const api = {
   read: (id: string) => call('POST', `/api/bots/${id}/read`),
   /** Words across the person's own chats and finished things. */
   search: (q: string) => call('GET', `/api/search?q=${encodeURIComponent(q)}`),
-  /** Ask the owner to switch Google on for the house: one ask on their list. */
-  houseAsk: (app: string) => call('POST', '/api/house/ask', { app }),
   /** `photos`: up to four, each `{type: 'image/jpeg' | 'image/png' | 'image/webp', data: base64}`. */
   /** A photo someone sent, as data: the phone shows it without opening this computer's own address. */
   photo: (bot: string, path: string) => call('GET', `/api/photo?bot=${encodeURIComponent(bot)}&path=${encodeURIComponent(path)}`) as Promise<{ type: string; data: string }>,
@@ -86,15 +84,11 @@ export const api = {
   pages: async (id: string): Promise<string[]> => (await call('GET', `/api/bots/${id}/screen`)).pages ?? [],
   /** Take a site back off its signed-in list, and clear it from its browser. */
   forget: (id: string, host: string) => call('POST', `/api/bots/${id}/forget`, { host }),
-  people: () => call('GET', '/api/people'),
-  addPerson: (name: string) => call('POST', '/api/people', { name }),
   person: (id: number, body: { name?: string; address?: string; quiet?: string | null; share?: string }) => call('PUT', `/api/people/${id}`, body),
   accounts: () => call('GET', '/api/accounts'),
   /** "Sign in with ChatGPT": its own page, which comes straight back to the home computer. `via: 'code'` is the fallback;
    *  `fresh` asks ChatGPT's page which account again ("Use my personal account"). */
   signIn: (member: number, account: string, body: { via?: 'code'; fresh?: boolean } = {}) => call('POST', `/api/accounts/${member}/${account}/login`, body),
-  /** A plan without helpers: "Ask the owner to cover it", or "I've changed my plan". */
-  askOwner: (member: number, account: string) => call('POST', `/api/accounts/${member}/${account}/ask-owner`),
   retryAccount: (member: number, account: string) => call('POST', `/api/accounts/${member}/${account}/retry`),
   /** The owner switches Google on for the house: the household Google app's client ID and secret (docs/google-setup.md). */
   houseGoogle: (id: string, secret: string) => call('PUT', '/api/house/google', { id, secret }),

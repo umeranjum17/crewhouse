@@ -957,8 +957,6 @@ function AskCard({ c, who, state, onDone, canAct, offline, open }: { c: A.Card; 
   const yes = c.choices[0];
   const deny = c.choices.find((x) => x.body.answer === 'deny' && x !== yes);
   const always = c.choices.find((x) => x.body.scope === 'always');
-  const owner = state.members.find((m: Json) => m.id === A.OWNER)?.name ?? 'the owner';
-  const [askedAt, setAskedAt] = useState(0); // after 'Ask {owner} to set it up', the card itself says so
   const question = c.review && c.preview?.head ? c.preview.head : c.words;
   // A routine offered by Chief: the lines are the confirmation; changing the time is an edit before the yes.
   const [when, setWhen] = useState<string | null>(null);
@@ -980,13 +978,10 @@ function AskCard({ c, who, state, onDone, canAct, offline, open }: { c: A.Card; 
       {oops && <T tone="pinkInk" style={s.small}>That didn't go through. Try again.</T>}
       {offline ? <T tone="mute" style={s.small}>You can answer once the home computer is back.</T>
         : !canAct ? <T tone="mute" style={s.small}>This phone watches; answer on another phone or the computer.</T> : c.kind === 'connect' ? (
-        askedAt ? <T tone="mute" style={s.small}>Asked {owner} · {A.clock(askedAt)}</T>
-          : <View style={{ gap: 8 }}>
-            {A.needsHouse(state, c.app!)
-              ? <Btn go label={`Ask ${owner} to set it up`} onPress={() => { setAskedAt(Date.now()); void attempt(() => api.houseAsk(c.app!.id)); }} />
-              : <T tone="mute" style={s.small}>Finish on the computer: it's waiting in this chat there.</T>}
-            <Btn label={`Do it without ${c.app!.name}`} onPress={() => act({ answer: 'deny' })} />
-          </View>
+        <View style={{ gap: 8 }}>
+          <T tone="mute" style={s.small}>Finish on the computer: it's waiting in this chat there.</T>
+          <Btn label={`Do it without ${c.app!.name}`} onPress={() => act({ answer: 'deny' })} />
+        </View>
       ) : c.kind === 'routine' ? (
         <>
           {when !== null && <TextInput style={[s.input, { color: t.ink, borderColor: t.line }]} value={when} onChangeText={setWhen} autoFocus
