@@ -66,12 +66,12 @@ test("a replayed phone request returns its first answer: one job, even across a 
   const first = lab();
   try {
     first.crew.recruit('reel', 'Reel', 'person');
-    const wire = (db: Store, crew: Crew) => new Link(first.cfg, db, (m, p, body, member, key?: string) => {
+    const wire = (db: Store, crew: Crew) => new Link(first.cfg, db, (m, p, body, key?: string) => {
       const r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/messages$/);
-      if (r && m === 'POST') return (crew as any).post(r[1], body.text, undefined, member, undefined, false, key);
+      if (r && m === 'POST') return (crew as any).post(r[1], body.text, undefined, 1, undefined, false, key);
       throw Object.assign(new Error('not found'), { status: 404 });
     });
-    const via = { id: 'phone-1', role: 'control', meta: { member: 1 } } as any;
+    const via = { id: 'phone-1', role: 'control' } as any;
     const a = wire(first.db, first.crew);
     // The answers store: device-scoped, fail-closed, dropped on acknowledgement.
     const store = (a as any).answers;

@@ -103,9 +103,8 @@ export const api = {
   // Phones: this computer only; crewd refuses these over the phone link.
   phones: () => call('GET', '/api/phones'),
   phoneLink: () => call('GET', '/api/phones/link'),
-  /** `member`: whose phone it will be (the owner picks; crewd checks). */
-  pairPhone: (role: 'control' | 'view' = 'control', member?: number) => call('POST', '/api/phones/pair', { role, member }),
-  refreshPhone: (message: number, member?: number) => call('POST', '/api/phones/refresh', { message, member }),
+  pairPhone: (role: 'control' | 'view' = 'control') => call('POST', '/api/phones/pair', { role }),
+  refreshPhone: (message: number) => call('POST', '/api/phones/refresh', { message }),
   removePhone: (id: string) => call('DELETE', `/api/phones/${id}`),
   /** The person's yes or no for a phone that scanned the code; both screens show the same two words. */
   answerPhone: (id: number, yes: boolean, offer?: string) => call('POST', '/api/phones/answer', { id, yes, offer }),
@@ -113,7 +112,7 @@ export const api = {
   /** The relay phones reach this computer through from anywhere ('' off, null back to the default), and a one-use invitation. */
   phoneRelay: (url: string | null, enrol?: string) => call('PUT', '/api/phones/relay', { url, enrol }),
   /** Codes to type on the phone instead of scanning, through the relay. */
-  phoneCode: (role: 'control' | 'view' = 'control', member?: number) => call('POST', '/api/phones/code', { role, member }),
+  phoneCode: (role: 'control' | 'view' = 'control') => call('POST', '/api/phones/code', { role }),
   connect: (app: string) => call('POST', `/api/connections/${app}`),
   connection: (app: string) => call('GET', `/api/connections/${app}`),
   disconnect: (app: string) => call('DELETE', `/api/connections/${app}`),

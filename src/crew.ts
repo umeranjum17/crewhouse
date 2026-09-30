@@ -228,7 +228,7 @@ export class Crew {
   readonly desktops: Desktops;
   readonly accounts: Accounts;
   readonly connections: Connections;
-  phoneLink?: Pick<Link, 'offer' | 'status' | 'withdraw'>;
+  phoneLink?: Pick<Link, 'offer' | 'status'>;
   private freshAt = 0;
   private lastTick = 0;
   /** Keeps idle sleep away while a helper is working, and only then. Never the lid. Tests replace it. */
@@ -900,7 +900,7 @@ export class Crew {
       job: disk.readJob(this.cfg, id),
       // Each member has their own thread with a bot; notes to the whole house (member NULL) show to everyone.
       // A search landing on an old line gets a window around it: the newest 200 would miss it entirely.
-      phoneOffer: id === CHIEF && viewer === OWNER && !around ? (() => {
+      phoneOffer: id === CHIEF && !around ? (() => {
         const value = this.db.get("SELECT value FROM settings WHERE key = 'phone.offer.1'")?.value;
         if (!value) return null;
         const offer = JSON.parse(value);
@@ -1057,7 +1057,7 @@ export class Crew {
     if (botId === CHIEF && !this.member(member).onboarded) { this.say(CHIEF, 'person', words, null, member); return this.onboard(words, member); }
     if (botId === CHIEF && !pics.length && (asksForPhone(words) || inlineHowTo(words) === 'signin' || inlineHowTo(words) === 'app')) {
       this.say(CHIEF, 'person', words, null, member);
-      if (asksForPhone(words)) { await this.addPhone(member); return; }
+      if (asksForPhone(words)) { await this.addPhone(); return; }
       if (inlineHowTo(words) === 'signin') { this.say(CHIEF, 'bot', 'Sign in with ChatGPT.', null, member); return; }
       const app = /\b(calendar|gmail|drive|notion|canva)\b/i.exec(words)?.[1].toLowerCase() ?? 'calendar';
       this.say(CHIEF, 'bot', `Connect ${this.connections.apps[app].name}.`, null, member);
@@ -1069,32 +1069,24 @@ export class Crew {
     return this.addTask(botId, words, 'person', model, member, undefined, words, pics, { room, root: latest?.root, key });
   }
 
-  /** One pairing offer, using the same one-use code as Settings. Never give its ticket to a model or another member. */
-  private async addPhone(member: number) {
-    if (member !== OWNER) {
-      this.say(CHIEF, 'bot', 'Ask the owner to add your phone under Settings > Phones > Add a phone.', null, member);
-      return { available: false };
-    }
+  /** One pairing offer, using the same one-use code as Settings. Never give its ticket to a model. */
+  private async addPhone() {
     if (!this.phoneLink) throw fail('Phone pairing is not ready yet', 503);
     const token = randomBytes(16).toString('hex');
-    const { qr, typed, expires } = await this.phoneLink.offer('control', member, token);
-    const message = this.say(CHIEF, 'bot', 'Open Crewhouse on your phone and scan this, or type the code.', null, member);
+    const { qr, typed, expires } = await this.phoneLink.offer('control', token);
+    const message = this.say(CHIEF, 'bot', 'Open Crewhouse on your phone and scan this, or type the code.', null, OWNER);
     this.db.run("INSERT INTO settings (key, value) VALUES ('phone.offer.1', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", JSON.stringify({ qr, typed, expires, message, token }));
     return { shown: true }; // the model never sees the one-use ticket
   }
 
-  /** Refresh only the owner's currently displayed offer; an old card cannot replace a newer one. `whose` is the person the
-   *  owner picked on the card (checked here; the phone that scans never says), else the card keeps its person. */
-  async refreshPhone(message: number, member: number, whose?: unknown) {
-    if (member !== OWNER) throw fail('ask the owner to add a phone', 403);
+  /** Refresh the currently displayed offer; an old card cannot replace a newer one. */
+  async refreshPhone(message: number) {
     const old = JSON.parse(this.db.get("SELECT value FROM settings WHERE key = 'phone.offer.1'")?.value ?? 'null');
     if (!old || old.message !== message || old.joined) throw fail('that code is no longer showing', 409);
     if (!this.phoneLink) throw fail('Phone pairing is not ready yet', 503);
     const token = randomBytes(16).toString('hex');
-    const person = this.member(Number(whose ?? old.member ?? OWNER)).id as number;
-    if (person !== (old.member ?? OWNER)) this.phoneLink.withdraw(old.token);
-    const { qr, typed, expires } = await this.phoneLink.offer('control', person, token);
-    const offer = { qr, typed, expires, message, token, member: person };
+    const { qr, typed, expires } = await this.phoneLink.offer('control', token);
+    const offer = { qr, typed, expires, message, token };
     this.db.run("UPDATE settings SET value = ? WHERE key = 'phone.offer.1'", JSON.stringify(offer));
     return offer;
   }
@@ -2097,7 +2089,7 @@ export class Crew {
     // Chief coordinates and delegates finished files to helpers; their artifact tools need not occupy his first model call.
     const chiefTools = own.filter((t) => !['crew_deliver', 'crew_workbook', 'crew_document', 'crew_copy', 'crew_draft', 'crew_verify', 'crew_batch'].includes(t.name));
     return [...chiefTools,
-      tool('crew_add_phone', 'Show the owner an Add a phone card in this chat with a fresh QR and code. Only the owner can add phones.', {}, () => this.addPhone(this.chiefFor())),
+      tool('crew_add_phone', 'Show an Add a phone card in this chat with a fresh QR and code.', {}, () => this.addPhone()),
       tool('crew_roster', 'Who is on the crew, and the templates you can recruit from.', {}, () => ({
         crew: this.bots().filter((x) => x.id !== CHIEF).map((x) => ({ id: x.id, name: x.display, role: x.role, busy: !!this.activeTask(x.id),
           knows: disk.listSkills(this.cfg, x.id).map((k) => k.description || k.name) })),

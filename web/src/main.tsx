@@ -348,32 +348,26 @@ function PairQR({ text }: { text: string }) {
     <path fill="black" d={rows.flatMap((row, y) => row.map((dark, x) => dark ? `M${x} ${y}h1v1h-1z` : '')).join('')} />
   </svg>;
 }
-function PhoneCard({ offer, reload, members }: { offer: Json; reload: () => void; members: Json[] }) {
+function PhoneCard({ offer, reload }: { offer: Json; reload: () => void }) {
   const [current, setCurrent] = useState<Json>(offer);
   const [now, setNow] = useState(Date.now());
   const active = useRef(Date.now());
   const busy = useRef(false);
   useEffect(() => { if (offer.token !== current.token) setCurrent(offer); }, [offer.token]);
-  const picked = useRef<number | undefined>(undefined); // a person tapped while a new code was on its way
-  const renew = async (member?: number) => {
-    if (busy.current) { if (member !== undefined) picked.current = member; return; }
+  const renew = async () => {
+    if (busy.current) return;
     busy.current = true;
-    try { setCurrent(await api.refreshPhone(current.message, member)); reload(); } catch { active.current = 0; toast('Could not show a new code'); }
+    try { setCurrent(await api.refreshPhone(current.message)); reload(); } catch { active.current = 0; toast('Could not show a new code'); }
     finally { busy.current = false; }
-    const next = picked.current;
-    picked.current = undefined;
-    if (next !== undefined) void renew(next);
   };
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
   useEffect(() => { if (now >= current.expires && now - active.current < 10 * 60_000 && !offer.waiting && !offer.joined) void renew(); }, [now, current.expires, offer.waiting, offer.joined]);
   const left = Math.max(0, Math.ceil((current.expires - now) / 1000));
-  const whose = A.phoneFor(members, current.member ?? A.OWNER);
   return <div className="card pair" aria-label="Add a phone" onPointerDown={() => { active.current = Date.now(); }}>
-    {offer.joined ? <b>Paired: {offer.joined}</b> : offer.waiting ? <div className="grow"><b>{offer.waiting.name} would like to join</b><p>Do these two words match the phone? <b>{offer.waiting.words}</b></p>{!!whose.people.length && <p className="mute small">{whose.says}</p>}<div className="btns"><button className="btn go" onClick={() => attempt(async () => { await api.answerPhone(offer.waiting.id, true, offer.token); reload(); })}>Yes, they match</button><button className="btn" onClick={() => attempt(async () => { await api.answerPhone(offer.waiting.id, false, offer.token); reload(); })}>No</button></div></div> : <>
+    {offer.joined ? <b>Paired: {offer.joined}</b> : offer.waiting ? <div className="grow"><b>{offer.waiting.name} would like to join</b><p>Do these two words match the phone? <b>{offer.waiting.words}</b></p><p className="mute small">This phone will answer the crew and give them jobs, as you.</p><div className="btns"><button className="btn go" onClick={() => attempt(async () => { await api.answerPhone(offer.waiting.id, true, offer.token); reload(); })}>Yes, they match</button><button className="btn" onClick={() => attempt(async () => { await api.answerPhone(offer.waiting.id, false, offer.token); reload(); })}>No</button></div></div> : <>
       {left ? <div className="qr"><PairQR text={current.qr} /></div> : <div className="qr expired">Code expired</div>}
       <div className="grow"><b>Add a phone</b><p className="small">Scan this in the phone app or type the code.</p>
-        {!!whose.people.length && <><p className="small">Whose phone is it?</p><div className="chips">{whose.people.map((m) => <button key={m.id} className={`chip ${m.id === (current.member ?? A.OWNER) ? 'on' : ''}`} onClick={() => { active.current = Date.now(); void renew(m.id); }}>{m.name}</button>)}</div>
-          <p className="mute small">{whose.says}</p></>}
+        <p className="mute small">This phone will answer the crew and give them jobs, as you.</p>
         {left > 0 ? <><p className="small">Type this code: <b style={{ overflowWrap: 'anywhere', userSelect: 'all' }}>{current.typed}</b> <button className="btn ghost" onClick={() => void navigator.clipboard.writeText(current.typed)}>Copy</button></p><p className="mute small">Works once · {Math.floor(left / 60)}:{String(left % 60).padStart(2, '0')} left</p></> : <button className="btn go" onClick={() => { active.current = Date.now(); void renew(); }}>Show a new code</button>}
       </div></>}
   </div>;
@@ -398,7 +392,7 @@ function Chat({ id, m, state, me, tick, refresh, accounts }: Ctx & { id: string;
     if (e.kind === 'message' && e.data?.author === 'bot') setPartial('');
   }), [id]);
   useEffect(() => { if ((page?.messages ?? []).some((x: Json) => x.author === 'bot' && x.text === partial)) setPartial(''); }, [page, partial]);
-  const phoneOffer = id === 'chief' ? A.phoneOffer(page, me) : null;
+  const phoneOffer = id === 'chief' ? A.phoneOffer(page) : null;
   const box = useRef<HTMLDivElement>(null);
   // The thread scrolls by its own column on a desk (a scrollIntoView here once dragged the whole page up with it,
   // leaving a dead band on top); the phone keeps the document scroll. An anchored landing scrolls to the line instead.
@@ -461,7 +455,7 @@ function Chat({ id, m, state, me, tick, refresh, accounts }: Ctx & { id: string;
             {l.text && (l.detail ? <ChiefAsk l={{ text: l.text, detail: l.detail }} /> : <div className="bubble-text"><ChatText text={l.text} /></div>)}
             {id === 'chief' && l.text === 'Sign in with ChatGPT.' && <AccountCard me={me} g={{ ...g, state: 'signed-out' }} inChat onReady={() => { void load(); refresh(); }} />}
             {l.files.map((f) => <Media key={f.url} f={f} big />)}
-            {phoneOffer?.message === l.id && <PhoneCard offer={phoneOffer} reload={() => void load()} members={state.members} />}
+            {phoneOffer?.message === l.id && <PhoneCard offer={phoneOffer} reload={() => void load()} />}
             {cards.filter((c) => lines.findLastIndex((x) => (x.at ?? 0) <= c.at) === i).map((c) => c.kind === 'connect' ? <ConnectCard key={c.id} c={c} helper={h?.name} state={state} onDone={refresh} /> : <AskCard key={c.id} c={c} who={h} onDone={refresh} />)}
           </div></div>
         )}
@@ -865,9 +859,8 @@ function Routines(ctx: Ctx) {
 
 // ---------- settings ----------
 /** Settings, Phones: pair the phone app by its camera, see each phone, take one away. Only this computer can. */
-function Phones({ tick, members, owner }: { tick: number; members: Json[]; owner: boolean }) {
+function Phones({ tick }: { tick: number }) {
   const [phones, setPhones] = useState<Json[] | null | undefined>(undefined);
-  const [whose, setWhose] = useState(A.OWNER);
   const [link, setLink] = useState<Json>(null);
   const [offer, setOffer] = useState<Json>(null);
   const [typed, setTyped] = useState<Json>(null);
@@ -880,8 +873,7 @@ function Phones({ tick, members, owner }: { tick: number; members: Json[]; owner
   // The code closes by itself once a phone uses it.
   const joined = offer && phones?.find((p) => !offer.had.includes(p.id));
   useEffect(() => { if (joined) { setOffer(null); toast(`${joined.name} is paired`); } }, [joined?.id]);
-  const show = (role: 'control' | 'view', member = whose) => attempt(async () => { setTyped(null); setOffer({ ...(await api.pairPhone(role, member)), role, member, had: (phones ?? []).map((p) => p.id) }); });
-  const choice = A.phoneFor(members, whose);
+  const show = (role: 'control' | 'view') => attempt(async () => { setTyped(null); setOffer({ ...(await api.pairPhone(role)), role, had: (phones ?? []).map((p) => p.id) }); });
   const left = offer ? Math.max(0, Math.round((offer.expires - now) / 1000)) : 0;
 
   return (<>
@@ -892,22 +884,20 @@ function Phones({ tick, members, owner }: { tick: number; members: Json[]; owner
       <div className="card list">
         {phones.map((p) => (
           <div key={p.id} className="row-item"><span className="phone-ic">▯</span>
-            <span className="grow"><b>{p.name}</b><div className="mute small">{p.role === 'view' ? 'Can watch, not answer' : 'Can answer and give jobs'}{p.person ? ` · ${p.person}'s` : ''} · {p.online ? 'with you now' : `last seen ${A.clock(p.seen)}`}</div>
+            <span className="grow"><b>{p.name}</b><div className="mute small">{p.role === 'view' ? 'Can watch, not answer' : 'Can answer and give jobs'} · {p.online ? 'with you now' : `last seen ${A.clock(p.seen)}`}</div>
               <div className="mute small">{A.reached(p)}{p.push === 'off' ? ' · notifications off on this phone' : ''}</div></span>
             <button className="btn ghost" onClick={() => attempt(async () => { await api.removePhone(p.id); await load(); }, `${p.name} can't reach the crew any more`)}>Remove</button>
           </div>
         ))}
         {!!A.pushWords(link) && <p className="mute small">{A.pushWords(link)}</p>}
         {!phones.length && <p className="mute">No phones yet. Install the Crewhouse app, then scan the code it asks for.</p>}
-        {!offer && owner && !!choice.people.length && <><div className="small">Whose phone is it?</div>
-          <div className="chips">{choice.people.map((m) => <button key={m.id} className={`chip ${m.id === whose ? 'on' : ''}`} onClick={() => setWhose(m.id)}>{m.name}</button>)}</div></>}
         {!offer && <div className="btns"><button className="btn go" onClick={() => show('control')}>Add a phone</button><button className="btn" onClick={() => show('view')}>Add one that only watches</button></div>}
       </div>
       {link.asking.map((a: Json) => (
         <div key={a.id} className="card ask">
           <b>{a.name} would like to join</b>
           <p>Only say yes if the phone shows these two words: <b>{a.words}</b></p>
-          <p className="mute small">{A.phoneFor(members, a.member, a.role).says}</p>
+          <p className="mute small">{a.role === 'view' ? 'This phone will watch the crew but not answer or give jobs.' : 'This phone will answer the crew and give them jobs, as you.'}</p>
           <div className="btns">
             <button className="btn go" onClick={() => attempt(async () => { await api.answerPhone(a.id, true); await load(); })}>Yes, the words match</button>
             <button className="btn" onClick={() => attempt(async () => { await api.answerPhone(a.id, false); await load(); }, `${a.name} was turned away`)}>No</button>
@@ -919,13 +909,13 @@ function Phones({ tick, members, owner }: { tick: number; members: Json[]; owner
           {left > 0 ? <div className="qr"><PairQR text={offer.qr} /></div> : <div className="qr expired">This code ran out.</div>}
           <div className="grow">
             <b>Scan this with the Crewhouse app</b>
-            <p className="mute small">{A.phoneFor(members, offer.member, offer.role).says}</p>
+            <p className="mute small">{offer.role === 'view' ? 'This phone will watch the crew but not answer or give jobs.' : 'This phone will answer the crew and give them jobs, as you.'}</p>
             <p className="mute small">Then check the two words the phone shows against the ones that appear here.</p>
             <p className="mute small">{left > 0 ? `Works once, for ${left} more seconds.` : 'Make a new one when the phone is ready.'}</p>
             {left > 0 && <p className="small">Can't scan? Type this code on the phone (or copy it to someone you trust): <b style={{ overflowWrap: 'anywhere', userSelect: 'all' }}>{offer.typed}</b></p>}
             {left > 0 && A.reach(link).online && (typed ? <p className="small">If the phone is away from home, type this one instead: <b style={{ overflowWrap: 'anywhere', userSelect: 'all' }}>{A.phoneTyped(typed)}</b></p>
-              : <button className="link inline small" onClick={() => attempt(async () => setTyped(await api.phoneCode(offer.role, offer.member)))}>Show a code that works from anywhere</button>)}
-            <div className="btns">{left <= 0 && <button className="btn go" onClick={() => show(offer.role, offer.member)}>New code</button>}<button className="btn ghost" onClick={() => setOffer(null)}>Close</button></div>
+              : <button className="link inline small" onClick={() => attempt(async () => setTyped(await api.phoneCode(offer.role)))}>Show a code that works from anywhere</button>)}
+            <div className="btns">{left <= 0 && <button className="btn go" onClick={() => show(offer.role)}>New code</button>}<button className="btn ghost" onClick={() => setOffer(null)}>Close</button></div>
           </div>
         </div>
       )}
@@ -1000,7 +990,7 @@ function Settings({ state, me, refresh, tick, accounts, look, setLook, switchTo 
 
       <div className="label">You</div>
       {state.members.map((m: Json) => <Person key={m.id} m={m} you={m.id === me} act={act} />)}
-      <Phones tick={tick} members={state.members} owner={owner} />
+      <Phones tick={tick} />
 
       <div className="label">Look</div>
       <div className="seg">{[['auto', 'Evenings dark'], ['day', 'Day'], ['night', 'Night']].map(([k, l]) => <button key={k} className={look === k ? 'on' : ''} onClick={() => setLook(k)}>{l}</button>)}</div>

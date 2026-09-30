@@ -1,7 +1,7 @@
 // The phone link: @byokit/link's host (Noise IK pairing, durable grants, encrypted requests, revoke) on sockets crewd
 // opens itself. By default it listens on loopback and Tailscale only; the home network opens for the two minutes a
 // pairing code lasts, and stays open only when the owner turns it on. Crewhouse's part
-// is where it listens, who a phone acts as, what a phone may not do, and the person at the computer saying yes.
+// is where it listens, what a phone may not do, and the person at the computer saying yes.
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import { networkInterfaces } from 'node:os';
@@ -21,7 +21,7 @@ export interface Desk {
 }
 
 export const PAIR_MS = Number(process.env.CREWHOUSE_PAIR_MS || 120_000); // a pairing QR is good for two minutes
-export type Handler = (method: string, path: string, body: any, member: number, key?: string) => Promise<unknown>;
+export type Handler = (method: string, path: string, body: any, key?: string) => Promise<unknown>;
 type Ifaces = ReturnType<typeof networkInterfaces>;
 
 // Migration debt (G05): reach has no directRoutes({listen:{loopback,tailnet,lan}}) for multiple listeners.
@@ -66,10 +66,9 @@ export const NEWS = 'Crewhouse has news';
 const wsOrigin = (url: string) => url.replace(/^http/, 'ws');
 
 const pushOf = (v?: string) => (v === 'missing' || v === 'off' ? v : v ? 'on' : undefined);
-const memberOf = (g: Grant) => (g.meta as { member?: number } | undefined)?.member ?? 1;
 
 /** A phone waiting at the computer for the person's yes: its name and the two words both screens show. */
-type Asking = { id: number; name: string; words: string; role: Role; member: number; offer?: string; answer: (yes: boolean) => void };
+type Asking = { id: number; name: string; words: string; role: Role; offer?: string; answer: (yes: boolean) => void };
 
 export class Link {
   host!: Host;
@@ -97,8 +96,8 @@ export class Link {
   /** Expo's push service: it holds the app's Android push credential, so crewd sends with no secret of its own. */
   pushUrl = process.env.CREWHOUSE_PUSH_URL || 'https://exp.host/--/api/v2/push/send';
   private anywhere: Anywhere = 'home';
-  /** Whether a member is in their quiet hours now: their phones get no notification then. Set by the server. */
-  quiet: (member: number) => boolean = () => false;
+  /** Whether the person is in their quiet hours now: their phones get no notification then. Set by the server. */
+  quiet: () => boolean = () => false;
 
   constructor(cfg: Config, db: Store, handle: Handler) {
     this.cfg = cfg;
@@ -139,16 +138,16 @@ export class Link {
     this.db.onEvent((e) => this.host.broadcast(e));
   }
 
-  // Grants live in the devices table: one row per phone, with the member it acts as.
+  // Grants live in the devices table: one row per phone.
   private load(): Grant[] {
     return this.db.all('SELECT * FROM devices ORDER BY created_at').map((d) => ({
-      id: d.id, key: b64url(new Uint8Array(Buffer.from(d.pk, 'base64'))), name: d.name, role: d.role, created: d.created_at, lastSeen: d.last_seen ?? undefined, meta: { member: d.member ?? 1 } }));
+      id: d.id, key: b64url(new Uint8Array(Buffer.from(d.pk, 'base64'))), name: d.name, role: d.role, created: d.created_at, lastSeen: d.last_seen ?? undefined }));
   }
   private save(grants: Grant[]) {
     const before = new Map(this.load().map((g) => [g.id, g]));
     this.db.tx(() => {
       this.db.run('DELETE FROM devices');
-      for (const g of grants) this.db.run('INSERT INTO devices (id, name, pk, role, member, created_at, last_seen) VALUES (?, ?, ?, ?, ?, ?, ?)', g.id, g.name, g.key, g.role, memberOf(g), g.created, g.lastSeen ?? null);
+      for (const g of grants) this.db.run('INSERT INTO devices (id, name, pk, role, created_at, last_seen) VALUES (?, ?, ?, ?, ?, ?)', g.id, g.name, g.key, g.role, g.created, g.lastSeen ?? null);
       for (const g of grants) if (!before.has(g.id)) {
         this.db.event('device.paired', null, { id: g.id, name: g.name, role: g.role });
         const value = this.db.get("SELECT value FROM settings WHERE key = 'phone.offer.1'")?.value;
@@ -169,7 +168,7 @@ export class Link {
     return new Promise<boolean>((resolve) => {
       const id = ++this.n;
       const done = (yes: boolean) => { if (this.asking.delete(id)) { this.db.event('device.asked', null, { id, done: true }); resolve(yes); } };
-      this.asking.set(id, { id, name: p.name, words: p.words, role: p.role, member: (p.meta as any)?.member ?? 1, offer: (p.meta as any)?.offer, answer: done });
+      this.asking.set(id, { id, name: p.name, words: p.words, role: p.role, offer: (p.meta as any)?.offer, answer: done });
       this.db.event('device.asked', null, { id, name: p.name }); // Settings shows the question
       setTimeout(() => done(false), PAIR_MS).unref();
     });
@@ -178,12 +177,6 @@ export class Link {
     const a = this.asking.get(id);
     if (!a) throw Object.assign(new Error('that phone stopped waiting'), { status: 404 });
     a.answer(yes);
-  }
-  /** Chief's card changed person: its old code (and any phone waiting on it) must not pair as the old person. The kit
-   *  withdraws codes only all at once, so a code showing in Settings goes too. */
-  withdraw(offer: string) {
-    this.host.stopPairing();
-    for (const a of this.asking.values()) if (a.offer === offer) a.answer(false);
   }
   approve(words: string) {
     const a = [...this.asking.values()].find((a) => a.words === words.trim());
@@ -329,11 +322,11 @@ export class Link {
     s.onEnd = () => desk.release(watcher);
   }
 
-  /** Tell a member's phones there is news. Content-free: the words stay on this computer until the phone asks. In their
+  /** Tell the person's phones there is news. Content-free: the words stay on this computer until the phone asks. In their
    *  quiet hours the push is held (kept in the store, so a restart keeps it) and `sendHeld` sends one when they end. */
-  private async tell(member: number, id: string) {
-    if (this.quiet(member)) return void this.db.run("INSERT INTO settings (key, value) VALUES (?, '1') ON CONFLICT(key) DO NOTHING", `push.held.${member}`);
-    const to = this.host.devices().filter((g) => memberOf(g) === member).map((g) => g.id);
+  private async tell(id: string) {
+    if (this.quiet()) return void this.db.run("INSERT INTO settings (key, value) VALUES (?, '1') ON CONFLICT(key) DO NOTHING", 'push.held.1');
+    const to = this.host.devices().map((g) => g.id);
     const phones = to.map((d) => [d, this.setting(`phone.push.${d}`)]).filter(([, t]) => isExpoToken(t));
     if (phones.length) await this.expo(id, phones as [string, string][]).catch((e) => console.error('push:', e.message));
     // A browser's Web Push address is kept on the family's relay, which holds the key for it.
@@ -353,26 +346,21 @@ export class Link {
     });
   }
 
-  /** Quiet hours over: one push per member for everything that came in during them, however much it was. */
+  /** Quiet hours over: one push for everything that came in during them, however much it was. */
   sendHeld(at = Date.now()) {
-    for (const { key } of this.db.all("SELECT key FROM settings WHERE key LIKE 'push.held.%'")) {
-      const member = Number(key.slice('push.held.'.length));
-      if (this.quiet(member)) continue;
-      this.db.run('DELETE FROM settings WHERE key = ?', key);
-      void this.tell(member, `held-${member}-${at}`);
-    }
+    if (this.quiet() || !this.setting('push.held.1')) return;
+    this.db.run("DELETE FROM settings WHERE key = 'push.held.1'");
+    void this.tell(`held-1-${at}`);
   }
 
-  /** What a phone hears about: a question for its person, their job finished or stuck, and Chief speaking to them. */
+  /** What a phone hears about: a question, a job finished or stuck, and Chief speaking to the person. */
   private news(e: { seq: number; kind: string; data: any; bot: string | null }) {
-    let member: number | undefined;
-    if (e.kind === 'ask.opened') member = this.db.get('SELECT member FROM asks WHERE id = ?', e.data.ask)?.member ?? 1;
-    else if (e.kind === 'alert') member = e.data.member;
-    else if (e.kind === 'task.done') {
-      const t = this.db.get('SELECT member, bot, result FROM tasks WHERE id = ?', e.data.task);
-      if (t && t.bot !== 'chief' && t.result !== 'All clear') member = t.member ?? 1;
-    } else if (e.kind === 'message' && e.bot === 'chief' && e.data.author === 'bot') member = this.db.get('SELECT member FROM messages WHERE id = ?', e.data.id)?.member ?? undefined;
-    if (member !== undefined) void this.tell(member, `e${e.seq}`);
+    let news = e.kind === 'ask.opened' || e.kind === 'alert' || (e.kind === 'message' && e.bot === 'chief' && e.data.author === 'bot');
+    if (e.kind === 'task.done') {
+      const t = this.db.get('SELECT bot, result FROM tasks WHERE id = ?', e.data.task);
+      news = !!t && t.bot !== 'chief' && t.result !== 'All clear';
+    }
+    if (news) void this.tell(`e${e.seq}`);
   }
 
   /** Settings, Phones: how phones reach this computer, and any phone waiting for a yes (docs/ui-contract.md). */
@@ -381,11 +369,11 @@ export class Link {
     const missing = this.setting('push.refused') || this.host?.devices().some((g) => this.setting(`phone.push.${g.id}`) === 'missing');
     return { on: this.cfg.linkPort > 0, lan: this.lan, pinned: !!this.cfg.linkHost, hosts: [...this.servers.keys()], tailscale: routes(this.ifaces(), this.tailnetIPs).tailscale.length > 0, anywhere: this.anywhere,
       relay: this.relay, relayStatus: this.relayStatus, push: missing ? 'missing' : 'ready',
-      asking: [...this.asking.values()].map(({ id, name, words, role, member, offer }) => ({ id, name, words, role, member, offer })) };
+      asking: [...this.asking.values()].map(({ id, name, words, role, offer }) => ({ id, name, words, role, offer })) };
   }
 
-  /** A single-use QR for a phone that will act as `member`. */
-  async offer(role: string, member: number, offer?: string): Promise<{ qr: string; typed: string; expires: number; urls: string[] }> {
+  /** A single-use QR for the person's phone. */
+  async offer(role: string, offer?: string): Promise<{ qr: string; typed: string; expires: number; urls: string[] }> {
     if (role !== 'control' && role !== 'view') throw Object.assign(new Error('role is control or view'), { status: 400 });
     // The home network opens for as long as the code lasts (and a phone that joins keeps its socket); Tailscale may have
     // come up since crewd started.
@@ -394,23 +382,22 @@ export class Link {
     this.shut = setTimeout(() => void this.bind(), PAIR_MS + 100).unref();
     await this.bind();
     const urls = this.urls();
-    const { text, expires } = this.host.offer({ role, urls, meta: { member, offer } });
+    const { text, expires } = this.host.offer({ role, urls, meta: { offer } });
     const raw = parseOffer(text);
     return { qr: text, typed: encodeOffer(raw), expires, urls };
   }
 
   /** Codes to type instead of scanning, through the relay: its short code (which computer) and link's pairing code. */
-  async typed(role: string, member: number) {
+  async typed(role: string) {
     if (role !== 'control' && role !== 'view') throw Object.assign(new Error('role is control or view'), { status: 400 });
     if (!this.client || this.relayStatus !== 'online') throw Object.assign(new Error('typing a code works once this computer is reachable from anywhere'), { status: 409 });
     const { code: short, expires } = await this.client.code();
-    const { code } = this.host.code({ role, meta: { member } });
+    const { code } = this.host.code({ role });
     return { short, code, relay: this.relay, expires };
   }
 
   devices() {
-    const people = new Map(this.db.all('SELECT id, name FROM people').map((p) => [p.id, p.name]));
-    return this.host.devices().map((g) => ({ id: g.id, name: g.name, member: memberOf(g), person: people.get(memberOf(g)) ?? null, role: g.role,
+    return this.host.devices().map((g) => ({ id: g.id, name: g.name, role: g.role,
       seen: g.lastSeen ?? g.created, online: g.online, reached: this.reached(g.id), push: pushOf(this.setting(`phone.push.${g.id}`)) }));
   }
 
@@ -420,7 +407,7 @@ export class Link {
     if (this.client) await this.client.revoke(id); else await this.host.revoke(id);
   }
 
-  /** One request from a phone, as `METHOD /path`: run as its member, answered like HTTP. `key` is the
+  /** One request from a phone, as `METHOD /path`: answered like HTTP. `key` is the
    *  device's idempotency key; mutating handlers record it with their effect (same transaction). */
   private async request(op: string, body: unknown, g: Grant, key?: string): Promise<{ status: number; body: unknown }> {
     const [method, path = ''] = op.split(' ', 2);
@@ -445,13 +432,13 @@ export class Link {
       await this.client.subscribe(g.id, { web: sub.web });
       return { status: 200, body: { ok: true } };
     }
-    // Household admin stays on the computer: AI account sign-ins, people, the house's Google app, connecting apps
-    // (their sign-in pages come back to this computer's own address), and the phones themselves — except the owner's
+    // Settings stay on the computer: AI account sign-ins, people, Google setup, connecting apps
+    // (their sign-in pages come back to this computer's own address), and the phones themselves — except the person's
     // phone renewing a code it is looking at, so the pairing card on the phone refreshes itself like the web card's.
-    if (op === 'POST /api/phones/refresh' && memberOf(g) === 1) return this.handle(method, path, body ?? {}, memberOf(g), key).then(
+    if (op === 'POST /api/phones/refresh') return this.handle(method, path, body ?? {}, key).then(
       (r) => ({ status: 200, body: r }), (e: any) => ({ status: e.status ?? 400, body: { error: e.message } }));
     if (/^\/api\/(accounts|house|phones)\b/.test(path) || (/^\/api\/(people|connections)\b/.test(path) && method !== 'GET')) return { status: 403, body: { error: 'do that on the computer' } };
-    try { return { status: 200, body: await this.handle(method, path, body ?? {}, memberOf(g), key) }; }
+    try { return { status: 200, body: await this.handle(method, path, body ?? {}, key) }; }
     catch (e: any) { return { status: e.status ?? 400, body: { error: e.message } }; }
   }
 
