@@ -15,8 +15,8 @@
     "check": "tsc"
   },
   "dependencies": {
-    "@byokit/accounts": "0.8.0",
-    "@byokit/decide": "0.4.2",
+    "@byokit/accounts": "0.9.0",
+    "@byokit/decide": "0.4.3",
     "@byokit/link": "0.6.0",
     "@byokit/openclaw": "0.2.5",
     "@byokit/reach": "0.4.0",

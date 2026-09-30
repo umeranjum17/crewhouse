@@ -87,7 +87,7 @@
           "color": "#1F6F66"
         }
       ],
-      "@byokit/status",
+      "@byokit/statusbar",
       [
         "@byokit/overlay",
         {

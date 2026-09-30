@@ -1,7 +1,7 @@
-// The crew in the phone's status bar (Android 16's Live Update), over @byokit/status: the one file that imports the kit.
+// The crew in the phone's status bar (Android 16's Live Update), over @byokit/statusbar: the one file that imports the kit.
 // It shows adapter.status() from the app's own refresh; the kit drops unchanged posts and throttles the rest, so there is
 // no polling here. On iPhone and older Android the kit is unsupported and every call is a no-op.
-import { status as kit, stateWords, type StatusState } from '@byokit/status';
+import { status as kit, stateWords, type StatusState } from '@byokit/statusbar';
 import type { CrewStatus } from '../../web/src/adapter.ts';
 
 // A frozen chip clears itself this long after the last post (a dead app or link); longer than a quiet step.
