@@ -38,6 +38,35 @@
 
 There is no full release yet, only phone-app previews, so GitHub's `/releases/latest` links don't apply (GitHub skips prereleases there). The link above names the current preview; for anything newer, check the [releases page](https://github.com/umeranjum17/crewhouse/releases).
 
+### Desktop bar (Omarchy or Waybar)
+
+The computer owner's bar can show `2 working · 1 needs you`, using the same status as the phone. It shows only your own work, with counts in both the pill and tooltip. It clears when the crew is quiet or unreachable. Start Crewhouse normally; the bar only reads its status.
+
+Replace `/absolute/path/crewhouse` with your source checkout and `/absolute/path/node` with your Node executable (`command -v node`, Node 22.22.3 or later). The bar runs [packaging/bar-pill.mjs](packaging/bar-pill.mjs) once every 10 seconds. For a different Crewhouse port, prefix the command with `CREWHOUSE_PORT=1234` and change the click address too.
+
+For Omarchy's Quickshell bar, add this command module to an existing `bar.layout` section in `~/.config/omarchy/shell.json`:
+
+```json
+{
+  "id": "crewhouse", "type": "command",
+  "exec": "/absolute/path/node /absolute/path/crewhouse/packaging/bar-pill.mjs",
+  "interval": 10,
+  "onClick": "xdg-open http://127.0.0.1:7711"
+}
+```
+
+For Waybar, add `custom/crewhouse` to `modules-right` (or another module list) and add this configuration:
+
+```json
+"custom/crewhouse": {
+  "exec": "/absolute/path/node /absolute/path/crewhouse/packaging/bar-pill.mjs",
+  "return-type": "json", "interval": 10,
+  "on-click": "xdg-open http://127.0.0.1:7711"
+}
+```
+
+This view is for the owner's computer session; it has no household-member selector. Clicking opens Crewhouse, where you can respond on each card.
+
 ## Why Crewhouse exists
 
 A family's to-do list is full of small jobs that take an afternoon each: chasing a refund, comparing flights, planning the week's dinners, writing the thank-you note. AI can do most of them now, but only if it can act, and nobody wants a chatbot sending emails or placing orders on its own.
