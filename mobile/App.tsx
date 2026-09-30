@@ -31,6 +31,7 @@ import { MARKS } from './src/marks';
 import { askOf, sharedOf } from './src/ask';
 import { bubbleOff, bubbleOn, bubbleResume, bubbleState, bubbleWords, openBubblePermission, showCrew, wanted, type OverlayState } from './src/bubble';
 import { chip, chipSettings, chipState, chipWords, onChip, type StatusState } from './src/chip';
+import { island } from './src/island';
 import { Office } from './src/office';
 import { canHear, hear, stopHearing } from './modules/crewhouse-net';
 import { connect, desktopSignaling, forgetGrant, kept, loadGrant, onLive, pair, pairTypedCode, type Grant, type Status } from './src/link';
@@ -706,9 +707,11 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
     return () => clearTimeout(t);
   }, [status]);
   const out = status === 'offline' || late;
-  // The crew in the status bar, from the same refresh as every screen: out of touch or gone, it goes too.
-  useEffect(() => { if (out) chip(null); else if (status === 'online' && state) chip(A.status(state, grant.device.role === 'control')); }, [state, status, out]);
-  useEffect(() => () => chip(null), []);
+  // The crew in the status bar (Android) or the Dynamic Island (iPhone), from the same refresh as every screen: out of
+  // touch or gone, it goes too.
+  const show = (s: A.CrewStatus | null) => { chip(s); island(s); };
+  useEffect(() => { if (out) show(null); else if (status === 'online' && state) show(A.status(state, grant.device.role === 'control')); }, [state, status, out]);
+  useEffect(() => () => show(null), []);
   // Chief on the screen, when the person left him on: his face follows this same refresh while the app is open.
   useEffect(() => { void bubbleResume(grant); }, [grant]);
   useEffect(() => { if (out || state) showCrew(out ? null : state, out); }, [state, out]);

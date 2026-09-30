@@ -97,6 +97,7 @@
           }
         }
       ],
+      "expo-widgets",
       "@bacons/apple-targets",
       "./plugins/shortcuts.js"
     ],
