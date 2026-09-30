@@ -185,7 +185,7 @@ export class Desktops {
       setTimeout(() => early.forEach((e) => this.deliver(d, e)));
       return opened;
     }
-    if (!['session.description', 'session.candidate', 'session.close'].includes(method)) throw refused(`${method} is not allowed`, 'malformed');
+    if (!['session.description', 'session.candidate', 'session.restart_ice', 'session.close'].includes(method)) throw refused(`${method} is not allowed`, 'malformed');
     if (!d.session || d.session.watcher !== watcher || params.session_id !== d.session.id) throw refused('not your session', 'not-authorized');
     if (method === 'session.close') { await this.closeSession(d); return { closed: true }; }
     if (!d.engine) throw refused('no engine', 'no-screen');

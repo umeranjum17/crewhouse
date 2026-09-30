@@ -96,6 +96,13 @@ test('watching: crewd picks the display and the permissions', { skip: noXvfb }, 
   for (let i = 0; i < 100 && !a.seen.some((e) => e.kind === 'description'); i++) await sleep(100);
   assert.ok(a.seen.some((e) => e.kind === 'description'), 'the offer reaches the watcher');
   await assert.rejects(desks.signal('reel', b, 'session.candidate', { session_id: view.sessionId, candidate: '' }, false), { code: 'not-authorized' });
+  await assert.rejects(desks.signal('reel', b, 'session.restart_ice', { session_id: view.sessionId, generation: view.generation }, false), { code: 'not-authorized' });
+  await assert.rejects(desks.signal('reel', a, 'session.restart_ice', { session_id: 'someone-else', generation: view.generation }, false), { code: 'not-authorized' });
+  const offers = () => a.seen.filter((e) => e.kind === 'description').length;
+  const beforeRestart = offers();
+  await desks.signal('reel', a, 'session.restart_ice', { session_id: view.sessionId, generation: view.generation }, false);
+  await until('a fresh offer for the same watching session', () => offers() > beforeRestart, 10_000);
+  assert.equal(desks.info('reel')?.watching, true, 'ICE recovery keeps the watching session');
   await assert.rejects(desks.signal('reel', a, 'clipboard.read', { session_id: view.sessionId }, false), { code: 'malformed' });
   desks.release(a);
   assert.equal(desks.info('reel')?.watching, false, 'a closed socket ends its session');

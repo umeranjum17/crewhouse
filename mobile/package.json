@@ -11,7 +11,7 @@
     "@byokit/relay": "0.3.0",
     "@byokit/status": "file:../vendor/byokit-status-0.1.0-923c2ed.tgz",
     "@byokit/ui-core": "0.3.0",
-    "@desklink/react-native": "0.1.0",
+    "@desklink/react-native": "0.2.0",
     "@expo/ui": "~57.0.21",
     "expo": "~57.0.25",
     "expo-build-properties": "~57.0.22",
