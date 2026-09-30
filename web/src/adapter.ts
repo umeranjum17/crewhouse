@@ -683,8 +683,30 @@ export function status(state: Json, canAct = true): CrewStatus | null {
     text: n && needs ? need : chief(state).line,
     publicText: [n ? `${n} working` : '', needs ? need : ''].filter(Boolean).join(' · '),
     chip: needs ? 'Needs' : n > 1 && n < 10 ? `${n} busy` : 'Busy',
-    actions: !canAct ? [] : [...(needs ? [{ id: 'needs' as const, label: 'See what needs you' }] : []), { id: 'ask', label: 'Ask Chief' }],
+    actions: quick(state, canAct).filter((a) => a.id === 'needs' || a.id === 'ask').map(({ id, label }) => ({ id: id as 'needs' | 'ask', label })),
   };
+}
+
+/** The phone's quick actions, one list for every view of the crew (the status-bar chip takes its first two, the bubble's
+ *  panel all of them). Each opens a crewhouse:// address the app already reads, where words wait in a box, never sent;
+ *  `screen` is the phone's own (its screen, handed to a helper). A helper's row shows only when it is in this crew. A
+ *  watching phone gets none. */
+export type QuickAction = { id: 'needs' | 'ask' | 'screen' | 'write' | 'demo'; label: string; url: string };
+export function quick(state: Json, canAct = true): QuickAction[] {
+  if (!canAct) return [];
+  const needs = homeCounts(state).needs;
+  const ask = (id: QuickAction['id'], template: string, label: (name: string) => string): QuickAction[] => {
+    const h = crew(state).find((x) => state.bots.find((b: Json) => b.id === x.id)?.template === template);
+    const words = String((state.ideas ?? []).find((i: Json) => i.bot === h?.id && !i.needs?.length)?.ask ?? '');
+    return h ? [{ id, label: label(h.name), url: `crewhouse://ask?to=${template}&text=${encodeURIComponent(words)}` }] : [];
+  };
+  return [
+    ...(needs ? [{ id: 'needs' as const, label: 'See what needs you', url: 'crewhouse://needs' }] : []),
+    { id: 'ask', label: 'Ask Chief', url: 'crewhouse://ask' },
+    { id: 'screen', label: 'Hand my screen to…', url: '' },
+    ...ask('write', 'scribe', (n) => `Write with ${n}`),
+    ...ask('demo', 'reel', (n) => `Record a demo with ${n}`),
+  ];
 }
 
 /** Home's standing "hand me a job" list: the jobs the crew offers to do end to end, from crewd's `ideas[]` — which is

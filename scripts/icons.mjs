@@ -66,3 +66,16 @@ for (const m of MOODS) {
   for (const kind of Object.keys(PALS)) sprite(`${kind}-${m}`, pal(kind, m), palPalette(kind));
 }
 console.log('sprites written into mobile/assets/pals/');
+// The phone's on-screen bubble (@byokit/overlay, mobile/src/bubble.ts): Chief on his warm disc, one still per mood he
+// can wear on Home; `ask` wears the pink dot. 168 px is the bubble's 56 dp at the densest screens. The glyph is its
+// notification's small icon.
+const bubbles = new URL('../mobile/assets/bubble/', import.meta.url).pathname;
+mkdirSync(bubbles, { recursive: true });
+for (const m of ['idle', 'work', 'ask', 'happy', 'rest', 'worried', 'error']) {
+  const dot = m === 'ask' ? '<circle cx="846" cy="178" r="138" fill="#D23369" stroke="#FFFFFF" stroke-width="36"/>' : '';
+  writeFileSync(`${bubbles}chief-${m}.svg`, svg(`<circle cx="512" cy="512" r="488" fill="#FFF3E0" stroke="${EDGE}" stroke-width="24"/>${dots(chief(m), CHIEF_PAL, 512, 540, 620, true)}${dot}`));
+  execFileSync('magick', ['-background', 'none', '-density', '96', `${bubbles}chief-${m}.svg`, '-resize', '168x168', '-depth', '8', '-strip', `PNG32:${bubbles}chief-${m}.png`]);
+  rmSync(`${bubbles}chief-${m}.svg`);
+}
+execFileSync('magick', [web + 'notify-96.png', `PNG32:${bubbles}glyph.png`]);
+console.log('bubble written into mobile/assets/bubble/');

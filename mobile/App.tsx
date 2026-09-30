@@ -28,7 +28,8 @@ import { useShareIntent } from 'expo-share-intent';
 import QRCode from 'qrcode';
 import * as motion from './src/motion';
 import { MARKS } from './src/marks';
-import { askOf } from './src/ask';
+import { askOf, sharedOf } from './src/ask';
+import { bubbleOff, bubbleOn, bubbleResume, bubbleState, bubbleWords, openBubblePermission, showCrew, wanted, type OverlayState } from './src/bubble';
 import { chip, chipSettings, chipState, chipWords, onChip, type StatusState } from './src/chip';
 import { Office } from './src/office';
 import { canHear, hear, stopHearing } from './modules/crewhouse-net';
@@ -50,7 +51,9 @@ const mix = (a: string, b: string, f: number) => {
 };
 
 // ---------- toasts and actions ----------
-let say: (m: string) => void = () => {};
+// Each mounted Toast (the app's, and the bubble's panel's over other apps) takes its turn; the newest one speaks.
+const toasts: ((m: string) => void)[] = [];
+const say = (m: string) => toasts.at(-1)?.(m);
 const FRIENDLY = {
   missing: "That isn't ready yet. It arrives with the next Crewhouse update.",
   offline: "Can't reach the home computer right now. Check it's on, then try again.",
@@ -64,7 +67,12 @@ async function attempt(fn: () => Promise<unknown>, ok?: string, quiet = false) {
 function Toast() {
   const [m, setM] = useState('');
   const t = useLook();
-  useEffect(() => { let x: any; say = (s) => { setM(s); clearTimeout(x); x = setTimeout(() => setM(''), 2600); }; }, []);
+  useEffect(() => {
+    let x: any;
+    const mine = (s: string) => { setM(s); clearTimeout(x); x = setTimeout(() => setM(''), 2600); };
+    toasts.push(mine);
+    return () => { clearTimeout(x); toasts.splice(toasts.indexOf(mine), 1); };
+  }, []);
   return m ? <Text style={[s.toast, { backgroundColor: t.ink, color: t.bg }]}>{m}</Text> : null;
 }
 
@@ -686,11 +694,11 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
   }, []);
   useEffect(() => {
     let pending: any;
-    const { link: l, call, learn, facts: f, push } = connect(grant, () => { clearTimeout(pending); pending = setTimeout(refresh, 120); }, (st) => { setStatus(st); if (st === 'online') { refresh(); void learn(); void push(); } if (st === 'removed') onRemoved(); }); // online: first load, and catching up after a reconnect
+    const { link: l, call, learn, facts: f, push, release } = connect(grant, () => { clearTimeout(pending); pending = setTimeout(refresh, 120); }, (st) => { setStatus(st); if (st === 'online') { refresh(); void learn(); void push(); } if (st === 'removed') onRemoved(); }); // online: first load, and catching up after a reconnect
     link.current = l;
     facts.current = f;
     setTransport(call);
-    return () => l.stop();
+    return release;
   }, [grant, refresh, onRemoved]);
   useEffect(() => {
     if (status === 'online') { setLate(false); return; }
@@ -701,6 +709,9 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
   // The crew in the status bar, from the same refresh as every screen: out of touch or gone, it goes too.
   useEffect(() => { if (out) chip(null); else if (status === 'online' && state) chip(A.status(state, grant.device.role === 'control')); }, [state, status, out]);
   useEffect(() => () => chip(null), []);
+  // Chief on the screen, when the person left him on: his face follows this same refresh while the app is open.
+  useEffect(() => { void bubbleResume(grant); }, [grant]);
+  useEffect(() => { if (out || state) showCrew(out ? null : state, out); }, [state, out]);
   // Out of touch: say what the phone observed and what to try, looked at again every few seconds (Tailscale switched
   // on, back on the Wi-Fi, the computer woke); each look is bounded, and the link keeps retrying by itself meanwhile.
   useEffect(() => {
@@ -724,6 +735,7 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
   // A shortcut or control opened crewhouse://ask (src/ask.ts): its words wait in that chat's box, never sent. The app
   // opens that address itself, often while starting up, so the last one opened is read on mount, not only heard.
   const [asked, setAsked] = useState<string | null>(null);
+  const [picked, setPicked] = useState<string | null>(null);
   useEffect(() => {
     setAsked(Linking.getLinkingURL());
     const sub = Linking.addEventListener('url', (e) => setAsked(e.url));
@@ -732,6 +744,8 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
   }, []);
   useEffect(() => {
     if (asked && /^crewhouse:\/\/needs\/?$/.test(asked)) { setAsked(null); Linking.clearInitialURL(); go({ view: 'home' }, true); return; } // Home leads with what needs you
+    const picked = asked ? sharedOf(asked) : null;
+    if (picked !== null) { setAsked(null); Linking.clearInitialURL(); setPicked(picked); return; } // "Ask Crewhouse" on text in another app
     const a = asked && state ? askOf(asked, A.crew(state).map((h) => ({ id: h.id, template: state.bots.find((b: Json) => b.id === h.id)?.template }))) : null;
     if (!a) return;
     setAsked(null);
@@ -739,7 +753,7 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
     if (a.text) keepDraft(a.chat, a.text);
     go(a.chat === 'chief' ? { view: 'chief' } : { view: 'helper', id: a.chat });
   }, [asked, !!state]);
-  const forget = async () => { link.current?.stop(); await forgetGrant(); onRemoved(); };
+  const forget = async () => { await bubbleOff().catch(() => {}); link.current?.stop(); await forgetGrant(); onRemoved(); };
 
   if (status === 'refused') {
     return (
@@ -766,6 +780,7 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
   const shared = hasShareIntent && canAct && state.person.onboarded
     ? { text: [shareIntent.text, shareIntent.webUrl].filter((x, i, a) => x && a.indexOf(x) === i).join('\n'), files: (shareIntent.files ?? []).map((f) => ({ path: f.path, mimeType: f.mimeType })) } : null;
   if (shared) return <ShareIn state={state} shared={shared} go={go} onDone={() => resetShareIntent()} />;
+  if (picked !== null && canAct && state.person.onboarded) return <ShareIn state={state} shared={{ text: picked, files: [] }} go={go} onDone={() => setPicked(null)} />;
   if (!state.person.onboarded && canAct) return <Hello {...ctx} />;
   const nav: [Route['view'], string, art.Tab][] = [['home', 'Home', 'home'], ['crew', 'Crew', 'crew'], ['things', 'Things', 'things'], ['routines', 'Routines', 'routines'], ['phone', 'Settings', 'settings']];
   // In any chat Chats is lit; Crew is lit only on Crew and Add.
@@ -1748,6 +1763,32 @@ function StatusBarRow() {
   );
 }
 
+/** "Chief on your screen": off until the person switches it on. The phone's own over-other-apps switch has to allow
+ *  it; the row says so and opens that switch, and looks again when the person comes back. */
+function BubbleRow({ grant }: { grant: Grant }) {
+  const t = useLook();
+  const awake = motion.useAwake();
+  const [want, setWant] = useState<boolean | null>(null);
+  const [st, setSt] = useState<OverlayState | null>(null);
+  const turn = async (on: boolean) => { setWant(on); setSt(on ? await bubbleOn(grant) : (await bubbleOff(), 'off')); };
+  useEffect(() => {
+    if (!awake) return;
+    void (async () => { const w = await wanted(); setWant(w); setSt(w ? await bubbleOn(grant) : await bubbleState()); })().catch(() => {});
+  }, [awake]);
+  if (want === null || st === null || st === 'unsupported') return null;
+  return (
+    <Card>
+      <View style={s.row}>
+        <View style={{ flex: 1 }}><T style={s.b}>Chief on your screen</T>
+          <T tone="mute">A small Chief you can drag to either side, over your other apps. Tap him to ask, answer or hand him your screen.</T></View>
+        <Switch value={want} accessibilityLabel="Chief on your screen" trackColor={{ false: t.line, true: t.ok }} thumbColor={t.solid} onValueChange={(on) => void attempt(() => turn(on))} />
+      </View>
+      {want && st !== 'on' && <><T tone="ink2">{bubbleWords(st)}</T>
+        {st === 'needs-permission' && <View style={s.row}><Btn label="Open phone settings" onPress={() => void openBubblePermission()} /></View>}</>}
+    </Card>
+  );
+}
+
 function ThisPhone({ grant, status, onForget, onClear }: { grant: Grant; status: Status; onForget: () => void; onClear: () => void }) {
   // This phone knows its own news state: allowed and working, said no, or this build can't push at all.
   const [push, setPush] = useState<'on' | 'off' | 'missing' | null>(null);
@@ -1768,6 +1809,7 @@ function ThisPhone({ grant, status, onForget, onClear }: { grant: Grant; status:
         {push === 'off' && <View style={s.row}><Btn label="Open phone settings" onPress={() => void Linking.openSettings()} /></View>}
       </Card>
       {Platform.OS === 'android' && <StatusBarRow />}
+      {Platform.OS === 'android' && grant.device.role === 'control' && <BubbleRow grant={grant} />}
       {Platform.OS === 'ios' && <OnYourScreen />}
       <Card>
         <T style={s.b}>Chats kept on this phone</T>
@@ -1875,3 +1917,6 @@ const s = StyleSheet.create({
   orderRow: { flexDirection: 'row', gap: 12, alignItems: 'baseline', alignSelf: 'stretch' },
   label2: { fontSize: 12, lineHeight: 16, fontWeight: '500' },
 });
+
+// The bubble's panel (src/panel.tsx) is its own screen over other apps, built from these same pieces.
+export { AskSheet, attempt, Btn, Card, Composer, Face, look, s, ShareIn, T, Theme, Toast };
