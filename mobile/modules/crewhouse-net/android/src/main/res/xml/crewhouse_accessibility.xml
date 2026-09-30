@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Window content for the focused box; interactive windows so it is found under Chief's panel. -->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+  android:accessibilityEventTypes="typeWindowStateChanged"
+  android:accessibilityFeedbackType="feedbackGeneric"
+  android:accessibilityFlags="flagRetrieveInteractiveWindows"
+  android:canRetrieveWindowContent="true"
+  android:description="@string/crewhouse_accessibility_description" />

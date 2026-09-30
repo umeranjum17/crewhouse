@@ -13,3 +13,8 @@ android {
     versionName '1.0.0'
   }
 }
+
+dependencies {
+  // ByokitAccessibility: the service hands itself to @byokit/overlay.
+  implementation project(':byokit-overlay')
+}

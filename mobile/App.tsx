@@ -286,7 +286,7 @@ function Mic({ on, text, put }: { on: boolean; text: string; put: (t: string) =>
 
 /** The message box: words (the phone keyboard's own mic dictates them; Chief's box has its own) and up to four
  *  photos. A send that didn't go through keeps both with a Retry; each chat holds its own words (web/src/draft.ts). */
-function Composer({ placeholder, onSend, chat, photos: canPhoto = true }: { placeholder: string; onSend: (t: string, photos: Photo[]) => unknown; chat?: string; photos?: boolean }) {
+function Composer({ placeholder, onSend, chat, photos: canPhoto = true, mic = chat === 'chief' }: { placeholder: string; onSend: (t: string, photos: Photo[]) => unknown; chat?: string; photos?: boolean; mic?: boolean }) {
   const t = useLook();
   const [text, setText] = useState(() => (chat ? draftOf(chat).text : ''));
   const [pics, setPics] = useState<Photo[]>([]);
@@ -327,7 +327,7 @@ function Composer({ placeholder, onSend, chat, photos: canPhoto = true }: { plac
           <Text style={{ color: t.ink, fontSize: 20 }}>＋</Text>
         </Pressable>}
         <TextInput style={[s.composerInput, { color: t.ink }]} value={text} onChangeText={change} multiline placeholder={placeholder} placeholderTextColor={t.mute} accessibilityLabel={placeholder} />
-        <Mic on={chat === 'chief'} text={text} put={change} />
+        <Mic on={mic} text={text} put={change} />
         <Pressable onPress={() => void send()} disabled={!ready || busy} accessibilityLabel="Send" style={[s.send, { backgroundColor: t.go, opacity: ready && !busy ? 1 : 0.4 }]}>
           <Text style={{ color: t.goInk, fontSize: 18, fontWeight: '900' }}>↑</Text>
         </Pressable>
@@ -1767,7 +1767,7 @@ function BubbleRow({ grant }: { grant: Grant }) {
     <Card>
       <View style={s.row}>
         <View style={{ flex: 1 }}><T style={s.b}>Chief on your screen</T>
-          <T tone="mute">A small Chief you can drag to either side, over your other apps. Tap him to ask, answer or hand him your screen.</T></View>
+          <T tone="mute">A small Chief you can drag to either side, over your other apps. Tap him to ask, answer, write in the box you're typing in, or hand him your screen.</T></View>
         <Switch value={want} accessibilityLabel="Chief on your screen" trackColor={{ false: t.line, true: t.ok }} thumbColor={t.solid} onValueChange={(on) => void attempt(() => turn(on))} />
       </View>
       {want && st !== 'on' && <><T tone="ink2">{bubbleWords(st)}</T>
