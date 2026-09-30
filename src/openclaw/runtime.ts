@@ -1,10 +1,10 @@
-// The engine port on the BYOKit OpenClaw kit. This file is the only one that imports the kit: it maps the
-// person's accounts, runs and tools onto the kit's, and keeps the crew's own learned-skill capture beside it.
+// The BYOKit engine port: accounts, runs, tools and Crewhouse's learned-skill capture.
 import { randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { OpenClawKit, type KitOptions, type ToolSpec } from '@byokit/openclaw';
+import { osKeyringSeal } from '@byokit/secrets';
 import { PROVIDERS } from '../accounts.ts';
 import { commit } from '../bots.ts';
 import { CALLBACK_PORT } from '../callback-port.ts';
@@ -27,9 +27,7 @@ const ME = 'm1';
 /** The engine-side name of a Crewhouse tool and back: only the shell differs. */
 const crewName = (tool: string) => tool === 'shell' ? 'bash' : tool;
 
-// The model-visible tools. Names are Crewhouse's: `shell` is crewd's sandboxed shell (Crewhouse's `bash`; the engine
-// would rewrite a tool called bash to its own exec before the gate saw it), `browser` the bot's own browser,
-// `calendar`/`mail` the two read-mostly app AXIs, `crew_app` a remote app's tools, `crew_*` the crew's own.
+// Model-visible tools: `shell` avoids the engine rewriting `bash` to its own exec before the gate.
 const args = { type: 'object', properties: { args: { type: 'array', items: { type: 'string' } } }, required: ['args'], additionalProperties: false };
 const SCHEMAS: Record<string, object> = {
   shell: { type: 'object', properties: { command: { type: 'string' } }, required: ['command'], additionalProperties: false },
@@ -65,8 +63,7 @@ export const TOOLS: ToolSpec[] = ['shell', 'browser', 'calendar', 'mail', 'crew_
 ].map((name) => ({ name, description: ABOUT[name] ?? `Crewhouse ${name.slice(5).replaceAll('_', ' ')}. The person sees the result in their crew.`,
   parameters: SCHEMAS[name] ?? { type: 'object', additionalProperties: true } }));
 
-/** Crewhouse's engine config, merged under the kit's invariants on every prepare. The learning mode is left to the
- *  engine's saved config: crewd applies the person's switch whenever the engine comes up (Crew.setLearning). */
+/** Crewhouse's engine config, merged under the kit's invariants on every prepare. */
 const CONFIG = {
   // An empty allow list: the engine otherwise narrows to its model map, and the person's other providers vanish.
   agents: { defaults: { sandbox: { mode: 'off' }, modelPolicy: { allow: [] } } },
@@ -86,12 +83,12 @@ export class OpenClawRuntime implements AgentRuntime {
   readonly kit: OpenClawKit;
   readonly stateDir: string;
   private host?: ToolHost;
-  /** Crewhouse's own record of each registered run (bot and task), keyed by session. */
   private runs = new Map<string, RunRef>();
   constructor(stateDir: string, crewDir = '', o: Partial<KitOptions> = {}) {
     this.stateDir = stateDir;
     this.kit = new OpenClawKit({
       stateDir, engineDir: join(repo, 'runtime/openclaw'), plugin: { id: 'crewhouse' }, tools: TOOLS, config: CONFIG,
+      authSeal: 'authSeal' in o ? o.authSeal : osKeyringSeal({ service: 'crewhouse-engine' }),
       permitted: (tool) => tool.startsWith('crew_'), callbackPort: CALLBACK_PORT,
       installPolicy: { trustedSkills: join(import.meta.dirname, 'trusted-skills.json'), ownRoots: [repo, crewDir].filter(Boolean) },
       host: {
@@ -147,15 +144,13 @@ export class OpenClawRuntime implements AgentRuntime {
     await this.kit.signOut(ME, provider);
   }
 
-  /** One-time (spec §6): stage the person's old engine sign-in for the engine's doctor, offline, before
-   *  start(). Nothing is retired here: the copy moves aside only once the gateway confirms the import (confirm). */
+  /** Stage offline through the kit; confirmation removes the verified source without a plaintext archive. */
   async migrate(legacyAuthPath: string) {
     return await this.kit.migrateRetainedLogin(ME, { path: legacyAuthPath }) === 'staged';
   }
   confirm(legacyAuthPath: string) { return this.kit.confirmRetainedLogin(ME, { path: legacyAuthPath }); }
 
-  /** Point this engine at a custom OpenAI-compatible provider (the tests' scripted model; a self-hosted gateway later).
-   *  Sets the provider and makes it every agent's primary model. */
+  /** Set the custom OpenAI-compatible provider and primary model (the tests' scripted model). */
   async configureModelProvider(baseUrl: string, apiKey: string, modelRef = 'crewhouse-stub/test') {
     await this.kit.patchConfig({
       models: { providers: { 'crewhouse-stub': {
