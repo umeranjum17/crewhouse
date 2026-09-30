@@ -917,15 +917,15 @@ test('reach it from anywhere: three plain states and numbered steps, and the pho
   const home = A.anywhere({ anywhere: 'home', hosts: ['127.0.0.1', '100.101.2.3'], tailscale: false });
   assert.equal(home.state, 'home');
   assert.match(home.words, /^Only at home\./);
-  assert.deepEqual(home.steps.map((x) => x.split(' ').slice(0, 2).join(' ')), ['Install Tailscale', 'For each', 'On their']);
+  assert.deepEqual(home.steps.map((x) => x.split(' ').slice(0, 2).join(' ')), ['Install Tailscale', 'On your', 'Then pair']);
   const anywhere = A.anywhere({ anywhere: 'anywhere', hosts: ['100.101.2.3'] });
   assert.match(anywhere.words, /^Reachable from anywhere\./);
-  assert.equal(anywhere.steps.length, 2, 'this computer is done; the steps for each person stay');
+  assert.equal(anywhere.steps.length, 2, 'this computer is done; the steps for your phone stay');
   const signin = A.anywhere({ anywhere: 'signin' });
   assert.match(signin.words, /^Tailscale needs signing in again/);
   assert.equal(A.anywhere(null).state, 'home');
   for (const x of [home, anywhere, signin]) assert.doesNotMatch(shown(x), TECH);
-  assert.match(home.steps[1], /Share/, 'share the computer, not an invitation into the network');
+  assert.match(home.steps[1], /your phone.*same Google account/, 'your phone uses your own account');
   assert.doesNotMatch(shown(home), /invite/i);
 
   const away = [
@@ -1048,7 +1048,7 @@ test('Chief-learned memories can be undone from his own page: the same trail, th
   assert.match(src, /!h && id !== 'chief'/);
   assert.match(src, /'#\/h\/chief\/did'/);
   // The trail shows a learned line with its Undo, and that undo posts where the helpers' trail posts.
-  const steps = A.steps([{ seq: 3, at: now, kind: 'memory.learned', bot: 'chief', data: { task: 2, text: 'Nobody in the household eats pork.' } }]);
+  const steps = A.steps([{ seq: 3, at: now, kind: 'memory.learned', bot: 'chief', data: { task: 2, text: 'Umer does not eat pork.' } }]);
   assert.deepEqual(steps.map((s) => [s.undo, s.seq]), [[true, 3]]);
   const calls: string[] = [];
   setTransport((method, path) => { calls.push(`${method} ${path}`); return Promise.resolve({ ok: true }); });
@@ -1146,6 +1146,9 @@ test('a failed send keeps the words for a Retry; every chat keeps its own draft'
 });
 
 test('the words people read make only claims Crewhouse can keep', () => {
+  const web = readFileSync(join(import.meta.dirname, '..', 'web/src/main.tsx'), 'utf8');
+  assert.match(web, /<div className="label">You<\/div>/);
+  assert.doesNotMatch(web, /People in this house|Others in the house|nobody else in the house/i);
   for (const f of ['web/src/main.tsx', 'web/src/flows.tsx', 'web/src/adapter.ts', 'mobile/App.tsx', 'src/crew.ts']) {
     const src = readFileSync(join(import.meta.dirname, '..', f), 'utf8');
     assert.doesNotMatch(src, /so it's safe|stays in this house|treat them like you|plenty left|never more than this in a month|that's us/i, f);

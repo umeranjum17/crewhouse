@@ -126,7 +126,7 @@ if (many) {
   for (let i = 4; i < n; i++) {
     const id = `h${i}`, name = names[(i - 4) % names.length], job = jobs[i % jobs.length], k = i % 8;
     const t = k === 0 || k <= 3 ? task(100 + i, id, job, k === 0 ? 'needs_you' : 'working') : null;
-    bots.push(bot(id, name, 'Helps around the house', { template: kinds[i % 4], task: t, live: k === 7 ? 'working' : undefined,
+    bots.push(bot(id, name, 'Helps with your jobs', { template: kinds[i % 4], task: t, live: k === 7 ? 'working' : undefined,
       step: k && t ? { kind: 'task.progress', at: now - min, data: { text: `Working on ${job.toLowerCase()}` } } : undefined }));
     if (k === 0) asks.push({ id: 300 + i, bot: id, task_id: 100 + i, kind: 'question', at: now - min, member: me, title: '', detail: { question: `A quick question about ${job.toLowerCase()}` } });
   }
@@ -163,7 +163,7 @@ const state = {
     { bot: 'scout', promise: "I'll set up the return, keep the label, and keep checking until the shop says the refund is on its way. Every step asks you first, on its own card.", ask: 'Help me return this and get the refund', group: 'money', needs: [] },
     { bot: 'scout', promise: "I'll turn your mail, your calendar and what's still open into what today actually is.", ask: "Give me my day: what's on, what's waiting on me, what to do first", needs: dayNeeds },
     { bot: 'scout', promise: "I'll read the letters and forms coming into your mail, put what's due on your calendar, and draft every reply — you read, tap approve, and send.", ask: "Sort the paperwork: what's due, and draft the replies", needs: paperNeeds },
-    { bot: 'scout', promise: "Once a week I'll plan seven dinners everyone will actually eat, write the shopping list sorted by aisle, and put the shop day on your calendar. If you want, I'll fill the cart too — you approve it like any purchase.", ask: "Plan our dinners for the week and write the shopping list", needs: [] },
+    { bot: 'scout', promise: "Once a week I'll plan seven dinners you will enjoy, write the shopping list sorted by aisle, and put the shop day on your calendar. If you want, I'll fill the cart too — you approve it like any purchase.", ask: "Plan my dinners for the week and write the shopping list", needs: [] },
     { bot: 'scout', promise: "I'll keep an ear out for your name and anything you told me to listen for — across Reddit, Hacker News, news sites and X — and send you one line saying where it came from when something shows up. Quiet otherwise.", ask: 'Watch for my name online and tell me when something shows up', needs: [] },
     { bot: 'scout', promise: "Give me the names of the others doing what you do. I'll watch their pages and newsletters, and once a week you get one short brief: what changed, what it means, what you could do about it. I never contact anyone.", ask: 'Watch my competitors and give me a weekly brief', needs: [] },
     { bot: 'scout', promise: "Once a month I'll write the short story of what happened in our world — the topics, names and places you care about — with a note on where every claim came from, as a document you keep.", ask: 'Write me the month in brief', needs: [] },
@@ -172,7 +172,7 @@ const state = {
     { bot: 'chief', promise: "What's on this week?", ask: "What's on this week?" },
     { bot: 'reel', promise: 'Make a poster from photos', ask: 'Make a poster from these photos: ' },
   ],
-  asks: variant.startsWith('phone') ? [] : variant === 'room' ? [{ id: 90, bot: 'scout', task_id: null, kind: 'propose', at: now - min, title: 'Scout wants to hand this to Scribe: draft the story', detail: { words: 'Scout wants to hand this to Scribe: draft the story, with stories.md', pass: { root: 70, files: ['stories.md'] }, preview: { head: 'Scout → Scribe', body: 'Draft the story for the family newsletter.' } } }]
+  asks: variant.startsWith('phone') ? [] : variant === 'room' ? [{ id: 90, bot: 'scout', task_id: null, kind: 'propose', at: now - min, title: 'Scout wants to hand this to Scribe: draft the story', detail: { words: 'Scout wants to hand this to Scribe: draft the story, with stories.md', pass: { root: 70, files: ['stories.md'] }, preview: { head: 'Scout → Scribe', body: 'Draft the story for your newsletter.' } } }]
     : variant === 'job-card' ? [{ id: 21, bot: 'chief', task_id: null, kind: 'propose', at: now, member: me, title: "Chief wrote Pip's job", detail: { job: { bot: 'pip', does: 'Keep Umer’s calendar in order.', aim: 'Help Umer know what is coming.', gets: 'Events and reminders from the person.', how: 'Check dates, add reminders only when asked, and explain changes.', great: 'A clear, accurate week; for example, sports day with a reminder the evening before.' }, preview: { head: "Pip's job", body: 'What it does: Keep Umer’s calendar in order.\n\nWhat it’s aiming for: Help Umer know what is coming.\n\nWhat it gets from others: Events and reminders from the person.\n\nHow it goes about it: Check dates, add reminders only when asked, and explain changes.\n\nWhat great looks like: A clear, accurate week; for example, sports day with a reminder the evening before.' } } }]
     : variant === 'job-plan' ? [{ id: 22, bot: 'chief', task_id: null, kind: 'propose', at: now, member: me, title: 'Here’s the plan for “Find the best five strollers under $400”. Scout starts when you say Go.', detail: {
         words: 'Here’s the plan for “Find the best five strollers under $400”. Scout starts when you say Go.',
@@ -193,7 +193,7 @@ const state = {
     : variant === 'renewal' ? [{ id: 18, bot: 'scout', task_id: 49, kind: 'propose', at: now - 30_000, member: me, title: 'Scout drafted something for the streaming service’s support inbox. Nothing is sent: you post it yourself.', detail: {
         words: 'Scout drafted something for the streaming service’s support inbox. Nothing is sent: you post it yourself.',
         draft: { to: 'the streaming service’s support inbox', path: 'files/cancel-family-plan.md', sha: 'demo' }, yes: 'Approve',
-        preview: { head: 'Draft for the streaming service’s support inbox', body: 'Subject: Family plan — please cancel before 14 June\n\nHello, my Family plan renews on 14 June at $18.99. Please cancel it from that date and confirm in writing that nothing further will be charged to my card.\n\nRegards,\nUmer' } } }]
+        preview: { head: 'Draft for the streaming service’s support inbox', body: 'Subject: Streaming plan — please cancel before 14 June\n\nHello, my Streaming plan renews on 14 June at $18.99. Please cancel it from that date and confirm in writing that nothing further will be charged to my card.\n\nRegards,\nUmer' } } }]
     : variant === 'paper' ? [{ id: 19, bot: 'scout', task_id: 50, kind: 'propose', at: now - 30_000, member: me, title: 'Scout drafted something for the school office. Nothing is sent: you post it yourself.', detail: {
         words: 'Scout drafted something for the school office. Nothing is sent: you post it yourself.',
         draft: { to: 'the school office', path: 'files/reply-trip-form.md', sha: 'demo' }, yes: 'Approve',
@@ -277,9 +277,9 @@ const pages: Record<string, Json> = {
     { id: 2, author: 'bot', text: "Love this! I found 38 photos from Eid, and I'll pick the 8 happiest. What kind of music?", choices: ['🎹 Soft & sweet', '🎉 Upbeat', 'No music'] },
     { id: 3, author: 'person', text: 'soft and sweet please' },
     { id: 4, author: 'system', text: "Delivered files/happy-birthday-mum.mp4: Here's a first look 💐" },
-  ], notes: '- Umer likes soft piano music for family videos\n- Mum is "Ammi" in titles', tasks: [],
+  ], notes: '- Umer likes soft piano music for his videos\n- Mum is "Ammi" in titles', tasks: [],
   soul: '# Reel\n\n## How you come across\n- Upbeat and practical: one sentence on what was made, then let the video speak.\n- Loves a tidy thirty seconds: clean cuts, steady pacing, nothing that shouts.\n- Makes a sensible call when something is missing, and says what was assumed.',
-  skills: [{ name: 'make-reel', says: 'Turn photos and screenshots into a short video' }, { name: 'birthday-video', says: 'Make a birthday video from family photos', learned: true }] },
+  skills: [{ name: 'make-reel', says: 'Turn photos and screenshots into a short video' }, { name: 'birthday-video', says: 'Make a birthday video from your photos', learned: true }] },
 };
 if (variant === 'job-plan') pages.chief.messages.push({ id: 71, author: 'person', text: 'find me a good stroller under $400, compare the best five' },
   { id: 72, author: 'chief', text: 'Happy to, Umer. Scout will take it; here is how, before anything starts.' });
@@ -314,7 +314,7 @@ if (variant === 'building') {
 // A renewal caught ahead of the bill: the warning in Scout's chat, and the cancellation sitting below it as a draft.
 if (variant === 'renewal') pages.scout = { messages: [
   { id: 1, author: 'person', text: 'watch my subscriptions so nothing gets renewed without me hearing about it first' },
-  { id: 2, author: 'bot', text: 'Your streaming Family plan renews on 14 June at $18.99 — read off your own account page, not the page new customers see. Ten days ahead of the bill, so you hear it now.' },
+  { id: 2, author: 'bot', text: 'Your streaming plan renews on 14 June at $18.99 — read off your own account page, not the page new customers see. Ten days ahead of the bill, so you hear it now.' },
   { id: 3, author: 'bot', text: 'The cancellation email is on a card below, in your name. Nothing is sent and nothing is cancelled yet: you read it and post it yourself. If you would rather I pressed Cancel on your account page, say so — I’ll ask you again on a card naming the button and what it changes.' },
 ], notes: '', tasks: [] };
 // The paper, sorted (?demo=paper): the week's letters in one line, and the reply sitting below as a draft to approve.
@@ -324,7 +324,7 @@ if (variant === 'paper') pages.scout = { messages: [
 ], notes: '', tasks: [] };
 // The meals, planned (?demo=meals): the week's dinners and the list, and the cart waiting on its checkout card.
 if (variant === 'meals') pages.scout = { messages: [
-  { id: 1, author: 'person', text: 'Plan our dinners for the week and write the shopping list' },
+  { id: 1, author: 'person', text: 'Plan my dinners for the week and write the shopping list' },
   { id: 2, author: 'bot', text: 'Seven dinners, one line each, nothing over forty minutes on a school night — Friday stays pizza night, and Sunday\'s roast covers Monday\'s leftovers.\nThe list is below, sorted the way you walk the shop: produce first, then chilled, pantry, freezer. The shop day is on your calendar for Saturday morning.\nYou asked me to fill the cart too: it\'s at the checkout on a card, every item and the total. Placing the order is yours.' },
   { id: 3, author: 'system', text: 'Delivered files/dinners-and-shopping-list.md: Seven dinners and the list, sorted by aisle' },
 ], notes: '', tasks: [] };
@@ -465,7 +465,7 @@ export async function demoCall(method: string, path: string, body?: Json) {
   if (method === 'GET' && path.startsWith('/api/room')) return { lines: [
     { id: 81, bot: 'scout', author: 'person', text: 'Find three stories about the neighbourhood.', at: now - 5 * min },
     { id: 82, bot: 'scout', author: 'bot', text: 'Three stories worth telling: a new park, a school garden, and a night market.', at: now - 4 * min },
-    { id: 83, bot: 'scribe', author: 'scout', from: 'scout', to: 'scribe', text: 'Draft the story for the family newsletter.', at: now - 2 * min, files: [{ bot: 'scribe', path: 'files/from-scout/stories.md' }] },
+    { id: 83, bot: 'scribe', author: 'scout', from: 'scout', to: 'scribe', text: 'Draft the story for your newsletter.', at: now - 2 * min, files: [{ bot: 'scribe', path: 'files/from-scout/stories.md' }] },
     { id: 84, bot: 'chief', author: 'bot', text: 'All done, Umer. Scout: three stories. Scribe: a newsletter draft waiting for your yes.', at: now - min },
   ], busy: ['scout', 'scribe'], asks: state.asks.filter((a: Json) => a.detail?.pass) };
   if (method === 'GET' && path.startsWith('/api/bots/scout')) return { ...pages.scout, handoff: 'ask', bot: bots.find((x) => x.id === 'scout') };

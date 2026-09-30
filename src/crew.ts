@@ -135,7 +135,7 @@ const partOfDay = () => { const h = new Date().getHours(); return h >= 5 && h < 
 export const chiefGreeting = () =>
   `Good ${partOfDay()}. I am Chief, of the Crewhouse. I help get things done with your crew.\n\n` +
   '- The crew works on this computer and pauses when it sleeps.\n' +
-  '- We stop and ask you first before anything leaves this house, costs money or touches your own files.\n' +
+  '- We stop and ask you first before sending anything, spending money or touching your own files.\n' +
   '- Your AI account does the thinking; your sign-ins stay yours.\n\n' +
   'What should I call you?';
 

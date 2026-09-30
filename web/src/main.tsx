@@ -647,7 +647,7 @@ function MemoryList({ notes, save, empty, placeholder }: { notes: string; save: 
 function Remembers({ id, name, page, reload }: { id: string; name: string; page: Json; reload: () => void }) {
   return (
     <>
-      <p className="lead">What {name} has learned about how you like its work. It reads this every time it starts a job for you. Others in the house have their own.</p>
+      <p className="lead">What {name} has learned about how you like its work. It reads this every time it starts a job for you.</p>
       <label className="card toggle"><span className="grow"><b>Remember things</b><div className="mute small">{page.memory === false ? `${name} starts fresh every time.` : `${name} keeps notes on what you like.`}</div></span>
         <input type="checkbox" role="switch" checked={page.memory !== false} onChange={(e) => attempt(async () => { await api.settings(id, { memory: e.target.checked }); reload(); })} /></label>
       <label className="card toggle"><span className="grow"><b>Check with me before {name} hands work on</b></span>
@@ -741,9 +741,9 @@ function AboutYou({ tick }: { tick: number }) {
   return (
     <>
       <div className="label">About you</div>
-      <p className="mute small">What the whole crew knows about you. Every helper reads it before a job for you; nobody else in the house sees it.</p>
+      <p className="mute small">What the whole crew knows about you. Every helper reads it before a job for you.</p>
       <MemoryList notes={notes} save={async (t) => { await api.setAbout(t); await load(); }}
-        empty="Nothing yet. Tell Chief things like “we're vegetarian” and the whole crew will know." placeholder="For example: we're vegetarian" />
+        empty="Nothing yet. Tell Chief things like “I'm vegetarian” and the whole crew will know." placeholder="For example: I'm vegetarian" />
     </>
   );
 }
@@ -998,7 +998,7 @@ function Settings({ state, me, refresh, tick, accounts, look, setLook, switchTo 
       <div className="label">Your apps</div>
       <a className="card row" href="#/apps"><span className="app-row">{A.apps(state).slice(0, 5).map((a) => <span key={a.id} className="app-ic sm" style={{ background: a.bg }}>{a.mark}</span>)}</span><span className="grow mute">{A.apps(state).filter((a) => a.on).length} connected</span><b>›</b></a>
 
-      <div className="label">People in this house</div>
+      <div className="label">You</div>
       {state.members.map((m: Json) => <Person key={m.id} m={m} you={m.id === me} act={act} />)}
       <Phones tick={tick} members={state.members} owner={owner} />
 

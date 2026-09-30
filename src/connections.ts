@@ -208,7 +208,7 @@ export class Connections {
     const c = all[this.clientKey(id)];
     // A registration is for one return address; the household's own app (no address on file) takes any loopback port.
     if (c?.id && (!c.redirect || c.redirect === this.redirect)) return c;
-    if (!ends.register) throw Object.assign(new Error('needs the household app'), { status: 409 });
+    if (!ends.register) throw Object.assign(new Error('set up Google in Settings first'), { status: 409 });
     const res = await fetch(ends.register, {
       method: 'POST', headers: { 'content-type': 'application/json' }, signal: AbortSignal.timeout(15_000),
       body: JSON.stringify({ client_name: 'Crewhouse', redirect_uris: [this.redirect], grant_types: ['authorization_code', 'refresh_token'], response_types: ['code'], token_endpoint_auth_method: 'none' }),
