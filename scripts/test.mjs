@@ -1,4 +1,5 @@
-import { mkdtempSync, readdirSync, rmSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, readdirSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -13,13 +14,15 @@ const root = mkdtempSync(join(tmpdir(), `${prefix}${process.pid}-`));
 mkdirSync(join(root, 'home'));
 mkdirSync(join(root, 'tmp'));
 const scratch = join(root, 'tmp');
+const authKey = join(root, 'auth.key');
+writeFileSync(authKey, randomBytes(32), { mode: 0o600 }); // no test ever opens the owner's keyring
 const before = new Set(readdirSync(scratch));
 const cleanup = () => rmSync(root, { recursive: true, force: true });
 for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => { cleanup(); process.kill(process.pid, signal); });
 const files = readdirSync('test').filter((name) => name.endsWith('.test.ts')).map((name) => join('test', name));
 // Serial files: the engine tests each spawn a real gateway; parallel runs starve them past their timeouts.
 const result = spawnSync(process.execPath, ['--test', '--test-concurrency=1', ...files], {
-  stdio: 'inherit', env: { ...process.env, HOME: join(root, 'home'), TMPDIR: join(root, 'tmp') },
+  stdio: 'inherit', env: { ...process.env, HOME: join(root, 'home'), TMPDIR: join(root, 'tmp'), CREWHOUSE_AUTH_KEY_FILE: authKey },
 });
 const leaked = readdirSync(scratch).filter((name) => name.startsWith(prefix) && !before.has(name));
 cleanup();
