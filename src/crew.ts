@@ -310,7 +310,7 @@ export class Crew {
   private async eachLegacy(method: 'migrate' | 'confirm') {
     const fn = (this.runtime as { migrate?: (path: string) => Promise<boolean>; confirm?: (path: string) => Promise<boolean> })[method];
     const legacy = join(this.cfg.stateDir, 'people', '1', 'engine', 'auth.json');
-    if (!fn || (!existsSync(legacy) && !existsSync(`${legacy}.moved-to-engine`) && !existsSync(`${legacy}.moved-to-engine.sealed`))) return;
+    if (!fn || (!existsSync(legacy) && !existsSync(`${legacy}.moved-to-engine`))) return;
     try { await fn.call(this.runtime, legacy); }
     catch (e) { console.error('engine migration:', e); }
   }
@@ -369,9 +369,10 @@ export class Crew {
     clearInterval(this.timer);
     if (this.awake) this.keepAwake(false);
     for (const [id, l] of this.live) { this.live.delete(id); l.browser?.end(); }
+    void this.runtime.stop().catch(() => {});
+    void this.desktops.stopAll();
     for (const n of this.nets.values()) n.close();
     this.accounts.stop();
-    return Promise.all([this.runtime.stop(), this.desktops.stopAll()]);
   }
 
   // ---- reads ----
