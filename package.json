@@ -18,7 +18,7 @@
     "@byokit/accounts": "0.7.0",
     "@byokit/decide": "0.4.0",
     "@byokit/link": "0.4.0",
-    "@byokit/openclaw": "0.1.0",
+    "@byokit/openclaw": "0.1.4",
     "@byokit/reach": "0.3.0",
     "@byokit/relay": "0.3.0",
     "@byokit/ui-core": "0.3.0",

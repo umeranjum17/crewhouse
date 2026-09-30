@@ -9,3 +9,5 @@ work/
 .lab/
 relay-data/
 /dist/
+
+/runtime/openclaw/
