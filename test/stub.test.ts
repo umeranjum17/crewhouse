@@ -16,6 +16,8 @@ const root = temp('crewhouse-test');
 // A port the OS says is free, not a random guess that another run may hold.
 const port = await new Promise<number>((r) => { const s = createServer().listen(0, '127.0.0.1', () => { const { port } = s.address() as AddressInfo; s.close(() => r(port)); }); });
 const base = `http://127.0.0.1:${port}`;
+// Fixture writers share crewd's WAL file and its bounded SQLite contention handler.
+const openDb = () => new DatabaseSync(join(root, 'state', 'crew.db'), { timeout: 3000 });
 const daemon = spawn(process.execPath, [join(import.meta.dirname, '..', 'src', 'main.ts')], {
   env: { ...process.env, CREWHOUSE_ENGINE: 'stub', CREWHOUSE_HOLD_MS: '5000', CREWHOUSE_PORT: String(port), CREWHOUSE_STATE_DIR: join(root, 'state'), CREWHOUSE_CREW_DIR: join(root, 'crew'), CREWHOUSE_TOOLS_DIR: join(root, 'tools') },
   stdio: ['ignore', 'pipe', 'inherit'],
@@ -78,7 +80,7 @@ test('chief onboarding, recruit, assign, grants', async () => {
   assert.doesNotMatch(said.text, /#\d|has finished|Sir/, 'no task number or honorific');
 
   // The helper's delivered file shows as a card on that one wrap line; handoff copies stay out.
-  const wrapDb = new DatabaseSync(join(root, 'state', 'crew.db'));
+  const wrapDb = openDb();
   wrapDb.prepare('INSERT INTO events (at, kind, bot, data) VALUES (?, ?, ?, ?)').run(Date.now(), 'file.delivered', 'reel', JSON.stringify({ task: t.id, path: 'files/demo.xlsx', note: 'demo sheet' }));
   wrapDb.prepare('INSERT INTO events (at, kind, bot, data) VALUES (?, ?, ?, ?)').run(Date.now(), 'file.delivered', 'reel', JSON.stringify({ task: t.id, path: 'files/from-reel/copy.txt' }));
   wrapDb.close();
@@ -93,7 +95,8 @@ test('chief onboarding, recruit, assign, grants', async () => {
   const pair = (await say('chief', `two jobs please ${call('crew_assign', { bot: 'reel', task: 'First pair job' })} ${call('crew_assign', { bot: 'scout', task: 'Second pair job' })}`)).body.task;
   const jobA = await until(async () => (await api('GET', '/api/bots/reel')).body.tasks.find((x: any) => x.title === 'First pair job' && x.state === 'done'));
   const jobB = await until(async () => (await api('GET', '/api/bots/scout')).body.tasks.find((x: any) => x.title === 'Second pair job' && x.state === 'done'));
-  const pairDb = new DatabaseSync(join(root, 'state', 'crew.db'));
+  await done('chief', pair);
+  const pairDb = openDb();
   for (const [bot, id, label] of [['reel', jobA.id, 'first'], ['scout', jobB.id, 'second']] as const) {
     pairDb.prepare('INSERT INTO events (at, kind, bot, data) VALUES (?, ?, ?, ?)').run(Date.now(), 'file.delivered', bot, JSON.stringify({ task: id, path: `files/${label}.xlsx`, note: `${label} sheet` }));
   }
@@ -296,7 +299,8 @@ test('screen: take over and give back through the API; watching needs the Comput
   assert.equal((await api('POST', '/api/bots/reel/takeover', undefined, {})).status, 403, 'cross-site pages cannot take over');
   assert.equal((await api('POST', '/api/bots/reel/steer', { text: 'faster' })).status, 409, 'nothing running to steer');
 
-  // Reel's grants were narrowed above (no Computer), so its screen refuses to open.
+  // Set this test's own grant precondition, even if an earlier onboarding assertion fails.
+  await api('PUT', '/api/bots/reel/tools', { tools: ['files', 'media', 'images'] });
   const ws = new WebSocket(`ws://127.0.0.1:${port}/ws/desktop/reel`);
   await new Promise((r) => ws.once('open', r));
   ws.send(JSON.stringify({ id: 1, method: 'session.open', params: { permissions: ['view'] } }));
@@ -339,7 +343,8 @@ test('routines: Chief offers one as a card, the person starts it (or changes the
   assert.equal((await api('GET', '/api/state')).body.routines.some((x: any) => x.name === 'Tidy the screenshots folder'), false);
 
   // Its time comes (moved into the past, as after a sleep): crewd's own clock fires it and Reel does the work.
-  new DatabaseSync(join(root, 'state', 'crew.db')).prepare('UPDATE routines SET next_at = ? WHERE id = ?').run(Date.now() - 1000, r.id);
+  const routineDb = openDb();
+  try { routineDb.prepare('UPDATE routines SET next_at = ? WHERE id = ?').run(Date.now() - 1000, r.id); } finally { routineDb.close(); }
   r = await until(async () => (await api('GET', '/api/state')).body.routines.find((x: any) => x.id === r.id && x.history[0]?.state === 'done'));
   assert.equal(r.history[0].why, 'schedule');
   assert.ok(r.next_at > Date.now());
@@ -369,7 +374,9 @@ test('memory: the bot proposes a note, crewd caps and commits it, Undo reverts i
   const first = (await say('quill', 'Draft a note')).body.task;
   await done('quill', first);
   // The debrief travels in the run's prompt; the engine keeps the conversation itself (its key is on the task).
-  const session = new DatabaseSync(join(root, 'state', 'crew.db')).prepare('SELECT session FROM tasks WHERE id = ?').get(first) as any;
+  const sessionDb = openDb();
+  const session = sessionDb.prepare('SELECT session FROM tasks WHERE id = ?').get(first) as any;
+  sessionDb.close();
   assert.match(session.session, /^agent:m1:crewhouse:quill:\d+$/, 'the run has its own session key');
 
   await remember({ text: 'Prefers 0.5 s transitions' });
@@ -479,7 +486,7 @@ test('room API: a message starts and rejoins the member’s room job', async () 
   const room = (await api('GET', '/api/room')).body;
   assert.ok(room.lines.some((l: any) => l.text === 'More on that room job'));
   assert.equal(room.lines.filter((l: any) => l.text === 'A room job').length, 1);
-  const db = new DatabaseSync(join(root, 'state', 'crew.db'));
+  const db = openDb();
   assert.equal(db.prepare('SELECT root FROM tasks WHERE id = ?').get(second)?.root, first);
   db.close();
 });
@@ -487,7 +494,7 @@ test('room API: a message starts and rejoins the member’s room job', async () 
 test('the person’s bot page, events and live activity keep their delivered work', async () => {
   await ready();
   await api('POST', '/api/recruit', { template: 'reel', name: 'Reel' });
-  const db = new DatabaseSync(join(root, 'state', 'crew.db'));
+  const db = openDb();
   try {
     const id = Number(db.prepare("INSERT INTO tasks (bot, title, body, result, state, member) VALUES ('reel', 'my work', 'my request', 'my result', 'done', 1)").run().lastInsertRowid);
     for (const [kind, data] of [['task.done', { task: id, title: 'my activity' }], ['file.delivered', { task: id, path: 'files/mine.txt', note: 'my file' }]] as const)
@@ -513,7 +520,7 @@ test('the person’s bot page, events and live activity keep their delivered wor
 test('raw /files/ only opens delivered files', async () => {
   await ready();
   await api('POST', '/api/recruit', { template: 'reel', name: 'Reel' });
-  const db = new DatabaseSync(join(root, 'state', 'crew.db'));
+  const db = openDb();
   const id = Number(db.prepare("INSERT INTO tasks (bot, title, body, result, state, member) VALUES ('reel', 'owner file', 'body', 'result', 'done', 1)").run().lastInsertRowid);
   db.prepare('INSERT INTO events (at, kind, bot, data) VALUES (?, ?, ?, ?)').run(Date.now(), 'file.delivered', 'reel', JSON.stringify({ task: id, path: 'files/owner-file.txt', note: 'private' }));
   db.close();
