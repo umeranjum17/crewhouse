@@ -76,7 +76,7 @@ test('a paired phone learns the addresses this computer gains, and reaches it af
   const moved = `ws://192.168.1.3:${home.port}/link`, tailnet = `ws://100.101.2.3:${home.port}/link`;
   const kept = await until('the phone keeps the new addresses', () => p.saved.at(-1)?.urls.includes(tailnet) && p.saved.at(-1));
   assert.deepEqual(kept.urls, [`ws://192.168.1.2:${home.port}/link`, moved, tailnet]);
-  const reach = await p.link.request('GET /api/reach') as { body: { urls: string[] } };
+  const reach = await p.link.request('GET /api/reach', { build: 'p9b' }) as { body: { urls: string[] } };
   assert.deepEqual(reach.body.urls, [moved, tailnet], 'a phone that was offline asks on reconnect');
   p.link.stop();
 
@@ -116,7 +116,7 @@ test('the home network opens for a pairing code, closes after it, and stays open
   assert.equal(await dials(lan), false);
   assert.equal(home.mdns.on.length, 0);
   assert.equal(p.status(), 'online');
-  const req = await p.link.request('GET /api/reach') as { body: { urls: string[] } };
+  const req = await p.link.request('GET /api/reach', { build: 'p9b' }) as { body: { urls: string[] } };
   assert.deepEqual(req.body.urls, ['ws://127.0.0.1:' + home.port + '/link'], 'no home address offered once it is closed');
 
   // The owner turns "home network" on: open, and announced, past any code.

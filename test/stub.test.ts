@@ -129,9 +129,9 @@ test('a Chief reply streams partial words before its durable message', async () 
     await done('chief', body.task);
     const trace = events.filter((e) => e.bot === 'chief');
     const partial = trace.find((e) => e.kind === 'reply.partial');
+    assert.equal(Object.hasOwn(partial.data, 'member'), false, 'live replies have no household selector');
     const final = trace.find((e) => e.kind === 'message' && e.data.author === 'bot');
     assert.ok(partial && final && trace.indexOf(partial) < trace.indexOf(final), 'partial text arrives before the completed reply');
-    assert.equal(partial.data.member, 1);
     assert.ok(events.find((e) => e.kind === 'message' && e.data.author === 'person'), 'the send is persisted');
     const created = trace.find((e) => e.kind === 'task.created' && e.data.task === body.task);
     const prompted = trace.find((e) => e.kind === 'run.prompted' && e.data.task === body.task);
@@ -168,7 +168,7 @@ test('personal requests reach Chief words before the model, including ambiguous 
       assert.ok(created && prompted && model, `${label}: task, prompt and model words observed`);
       assert.match(first.data.text, expected);
       assert.ok(first.at <= prompted.at, `${label}: first words precede the model turn`);
-      assert.equal(first.data.member, 1);
+      assert.equal(Object.hasOwn(first.data, 'member'), false);
       console.log(`stub HTTP ${label}: send→task ${created.at - started}ms; task→first words ${first.at - created.at}ms; model wait ${model.at - prompted.at}ms`);
     }
   } finally { ws.close(); }

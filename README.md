@@ -148,7 +148,9 @@ The same app works at desktop and phone width, and switches to night colours in 
 - **Picks up after a restart.** Stop the computer mid-job, start it again, and the job carries on in the same conversation. A question waiting on you is still there.
 - **Learns how you work.** After a long job the helper can keep what it learned as a skill. You'll see a "Learned: …" line with Forget next to it, and Settings can switch this off.
 
-Existing shared installs upgrade to the person who set them up (person 1). Before changing live data, Crewhouse saves the full database as `crew-before-one-person.db` in its state folder. Other people's jobs, messages and phones leave the live install; their files and sign-ins stay untouched on disk. Your sign-ins, connections, memory, phones and settings keep working. Watch baselines for removed routines are kept with a `.before-one-person` suffix so a new routine starts fresh. Downgrading to a build before this migration is unsupported: an older build could reuse a former person's id and files.
+Existing shared installs must first update through the one-person migration release (P1, `bc37c20`) before installing this build; otherwise startup refuses without changing their live data. That release upgrades to the person who set them up (person 1). Before changing live data, the P1 release saves the full database as `crew-before-one-person.db` in its state folder. Other people's jobs, messages and phones leave the live install; their files and sign-ins stay untouched on disk. Your sign-ins, connections, memory, phones and settings keep working. Watch baselines for removed routines are kept with a `.before-one-person` suffix so a new routine starts fresh. Downgrading to a build before this migration is unsupported: an older build could reuse a former person's id and files.
+
+Phone builds older than P9b are unsupported. Update the Crewhouse app alongside the computer: unmarked phone requests receive only an empty Home with “Update the Crewhouse app” in Chief’s chat row; their actions are refused. P9b phone builds identify themselves on each encrypted request.
 
 ## Quick start
 

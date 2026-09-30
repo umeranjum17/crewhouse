@@ -67,7 +67,7 @@ test('reachable from anywhere: enrol once, pair by typed code, talk through the 
   const events: any[] = [];
   const phone = new DeviceLink(grant, { onEvent: (e) => events.push(e) });
   after(() => phone.stop());
-  const req = (op: string, body?: unknown) => phone.request(op, body) as Promise<{ status: number; body: any }>;
+  const req = (op: string, body?: unknown) => phone.request(op, { ...body as object, build: 'p9b' }) as Promise<{ status: number; body: any }>;
   assert.equal((await req('GET /api/state')).status, 200, 'the app, through the relay');
   const reach = (await req('GET /api/reach', { via: 'relay' })).body;
   assert.deepEqual(reach.urls, [url], 'a phone paired at home learns the relay address');

@@ -484,7 +484,6 @@ export class Crew {
     person.quietNow = quietNow(person.quiet);
     return {
       person,
-      members: [person],
       bots: this.bots().map((b) => ({ ...this.pub(b), ...this.chat(b.id) })),
       templates: disk.listTemplates(this.cfg).map((t) => ({ id: t.id, display: t.display, role: t.role, color: t.color, kit: disk.templateKit(this.cfg, t) })),
       tasks: this.db.all('SELECT * FROM tasks WHERE bot != ? ORDER BY id DESC LIMIT 50', CHIEF).map((t) => ({ ...this.task(t), files: t.state === 'done' ? files(t.id) : [] })),
@@ -1148,7 +1147,7 @@ export class Crew {
       if (link.key) this.db.run('INSERT INTO settings (key, value) VALUES (?, ?)', `link.key.${link.key}`, JSON.stringify({ task: id, shown }));
       return id;
     });
-    if (bot === CHIEF) this.db.live('reply.partial', CHIEF, { task: id, member: 1, text: chiefFirst(body) });
+    if (bot === CHIEF) this.db.live('reply.partial', CHIEF, { task: id, text: chiefFirst(body) });
     queueMicrotask(() => this.dispatch());
     return { task: id, shown };
   }
@@ -1398,7 +1397,7 @@ export class Crew {
   /** Only assistant prose is visible; tool arguments and reasoning never ride the live feed. */
   private onEvent(botId: string, l: Live, e: RunEvent) {
     if (this.live.get(botId) !== l) return;
-    if (e.type === 'text') this.db.live('reply.partial', botId, { task: l.task, member: 1, text: cleanReply(e.text).slice(0, 280) });
+    if (e.type === 'text') this.db.live('reply.partial', botId, { task: l.task, text: cleanReply(e.text).slice(0, 280) });
     else if (e.type === 'usage' && e.tokens) {
       this.db.run('UPDATE tasks SET tokens = tokens + ? WHERE id = ?', Math.round(e.tokens), l.task);
       this.db.run('INSERT INTO usage (member, day, tokens) VALUES (1, ?, ?) ON CONFLICT(member, day) DO UPDATE SET tokens = tokens + excluded.tokens', dayOf(), Math.round(e.tokens));

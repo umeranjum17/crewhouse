@@ -37,7 +37,6 @@ const bot = (id: string, extra = {}) => ({ id, display: id[0].toUpperCase() + id
 // The owner's screenshot, as crewd sends it today: a raw fc-list approval, "Claude · 9% of 5h used", the prompt as the task.
 const state = {
   person: { id: 1, name: 'Umer', address: 'Umer', onboarded: 1 },
-  members: [{ id: 1, name: 'Umer' }],
   bots: [
     bot('chief'),
     bot('reel', { task: { id: 5, title: 'Make a birthday video for mum', state: 'needs_you' }, stuck: true, quietSince: now - 6 * 60_000,
@@ -563,7 +562,7 @@ test('the phone office: one flat room, a crew that moves only when news lands', 
 test("Chief's mood is the first matching row of the table, and the line follows the face", () => {
   const min = 60_000, ago = (m: number) => Date.now() - m * min;
   const bot = (id: string, extra: Json = {}) => ({ id, display: id[0].toUpperCase() + id.slice(1), template: id, ...extra });
-  const base: Json = { person: { id: 1 }, members: [], asks: [], tasks: [], events: [], resting: {}, bots: [bot('chief'), bot('reel'), bot('scout')] };
+  const base: Json = { person: { id: 1 }, asks: [], tasks: [], events: [], resting: {}, bots: [bot('chief'), bot('reel'), bot('scout')] };
   const withBots = (...bs: Json[]) => ({ ...base, bots: [bot('chief'), ...bs] });
   const mood = (v: { mood: string }) => v.mood;
   // 9 · nothing applies: content
@@ -1447,8 +1446,7 @@ test('a delivered .mp4 shows a video badge, never DOCX', () => {
 // nothing needs them, and Chief's own three starters fill the empty chat. Renders through every Home view with no errors.
 test('?demo=fresh renders the Chief-only Home with no errors', () => {
   const fresh: Json = { person: { id: 1, name: 'Umer', address: 'Umer', onboarded: 1 },
-    members: [{ id: 1, name: 'Umer' }],
-    bots: [{ id: 'chief', display: 'Chief', template: 'chief', role: 'Runs the crew and answers to you', state: 'on', controls: 'bot', task: null, queued: 0, pausedUntil: null }],
+      bots: [{ id: 'chief', display: 'Chief', template: 'chief', role: 'Runs the crew and answers to you', state: 'on', controls: 'bot', task: null, queued: 0, pausedUntil: null }],
     templates: [{ id: 'chief', display: 'Chief' }],
     tasks: [], ideas: [], asks: [], events: [], routines: [], resting: {}, connections: [] };
   assert.deepEqual(A.jobs(fresh), [], 'no helpers yet, so nothing to hand over');
@@ -1524,7 +1522,7 @@ function officeState(): Json {
     { seq: 14, at: OTN, kind: 'file.delivered', bot: 'reel', data: { task: 41, path: 'files/birthday-first-look.png', note: 'A still from the opening' } },
     { seq: 15, at: OTN, kind: 'file.delivered', bot: 'pip', data: { task: 51, path: 'files/car-insurance-prices.xlsx', note: 'This year against two others' } },
   ];
-  return { person: { id: 1 }, members: [], asks, tasks, events, resting: {}, ideas: [],
+  return { person: { id: 1 }, asks, tasks, events, resting: {}, ideas: [],
     bots: [{ id: 'chief', display: 'Chief', template: 'chief' }, ...bots] };
 }
 const OJARGON = /\b(relay|noise|tickets?|grants?|daemon|crewd|engine|tokens?|ports?|stub|hosted?|links?|host)\b/i;
@@ -1612,7 +1610,7 @@ test('a desk shows the job\'s first looks from its task, never a raw path', () =
   ] };
   const bots: Json[] = [{ id: 'chief', display: 'Chief', template: 'chief' },
     oBot('reel', 'Reel', { live: 'working', task, step: null })];
-  const s: Json = { person: { id: 1 }, members: [], asks: [],
+  const s: Json = { person: { id: 1 }, asks: [],
     tasks: [{ id: 21, bot: 'reel', title: 'Old job', state: 'done', updated_at: OTN, files: [], result: 'Done.' }],
     events: [], resting: {}, ideas: [], bots };
   const h = A.crew(s).find((x) => x.id === 'reel')!;

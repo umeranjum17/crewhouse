@@ -1,7 +1,6 @@
 import { DatabaseSync } from 'node:sqlite';
-import { existsSync, mkdirSync, renameSync, rmSync } from 'node:fs';
+import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import type { Config } from './config.ts';
 
 export type Row = Record<string, any>;
 
@@ -56,40 +55,9 @@ export class Store {
   get(sql: string, ...args: any[]): Row | undefined { return this.db.prepare(sql).get(...args) as Row | undefined; }
   run(sql: string, ...args: any[]) { return this.db.prepare(sql).run(...args); }
 
-  /** Split a shared install before the link reads grants. A failed backup or split stops boot and retries next time. */
-  single(cfg: Config) {
-    if (!this.get('SELECT 1 FROM people WHERE id != 1')) return;
-    const backup = join(cfg.stateDir, 'crew-before-one-person.db');
-    if (!existsSync(backup)) {
-      for (const f of [`${backup}.part`, `${backup}.part-journal`]) rmSync(f, { force: true });
-      this.run('VACUUM INTO ?', `${backup}.part`);
-      renameSync(`${backup}.part`, backup);
-    }
-    for (const r of this.all('SELECT id, bot FROM routines WHERE COALESCE(member, 1) != 1 AND watch IS NOT NULL')) {
-      const f = join(cfg.crewDir, 'bots', r.bot, 'work', 'watch', `${r.id}.txt`);
-      if (existsSync(f)) renameSync(f, `${f}.before-one-person`);
-    }
-    this.tx(() => this.db.exec(`
-      CREATE TEMP TABLE split_owner AS SELECT seq, COALESCE(
-        CASE WHEN kind = 'system.recovered' THEN 1 END,
-        (SELECT COALESCE(member, 1) FROM tasks WHERE json_type(e.data, '$.task') = 'integer' AND id = json_extract(e.data, '$.task')),
-        (SELECT COALESCE(member, 1) FROM asks WHERE json_type(e.data, '$.ask') = 'integer' AND id = json_extract(e.data, '$.ask')),
-        json_extract(e.data, '$.member'),
-        (SELECT COALESCE(member, 1) FROM routines WHERE id = json_extract(e.data, '$.routine'))) AS m FROM events e;
-      UPDATE events SET data = json_remove(data, '$.ask') WHERE kind = 'money.spent' AND seq IN (SELECT seq FROM split_owner WHERE m IS NOT NULL AND m != 1);
-      DELETE FROM events WHERE kind NOT LIKE 'money.%' AND seq IN (SELECT seq FROM split_owner WHERE m IS NOT NULL AND m != 1);
-      DROP TABLE split_owner;
-      DELETE FROM devices WHERE COALESCE(member, 1) != 1;
-      DELETE FROM tasks WHERE COALESCE(member, 1) != 1;
-      DELETE FROM asks WHERE COALESCE(member, 1) != 1;
-      DELETE FROM routines WHERE COALESCE(member, 1) != 1;
-      DELETE FROM messages WHERE member != 1;
-      DELETE FROM reads WHERE member != 1;
-      DELETE FROM usage WHERE member != 1;
-      UPDATE bots SET member = 1;
-      UPDATE settings SET value = json_remove(value, '$.member') WHERE key = 'phone.offer.1';
-      DELETE FROM people WHERE id != 1;
-    `));
+  /** Shared installs must pass through the backup-and-split release before this build. */
+  single() {
+    if (this.get('SELECT 1 FROM people WHERE id != 1')) throw new Error('Update through the one-person migration release bc37c20 (P1) first.');
   }
 
   tx<T>(fn: () => T): T {
