@@ -59,7 +59,7 @@ function phone(grant: DeviceGrant) {
 
 test('a paired phone learns the addresses this computer gains, and reaches it after the old one is gone', async () => {
   const home = await computer('home', { wlan0: at('192.168.1.2') });
-  const offer = await home.link.offer('control', 1);
+  const offer = await home.link.offer('control');
   assert.deepEqual(offer.urls, [`ws://192.168.1.2:${home.port}/link`]);
   const paired = pairWithOffer(offer.qr, { resolve: dialUrl, name: 'Pixel', onWords: () => {} });
   const asking = await until('asked at the computer', () => home.link.status().asking[0]);
@@ -88,7 +88,7 @@ test('a paired phone learns the addresses this computer gains, and reaches it af
 test('another computer at a learned address fails the handshake', async () => {
   const home = await computer('home2', { wlan0: at('192.168.1.5') });
   const other = await computer('other', { wlan0: at('192.168.1.6') });
-  const paired = pairWithOffer((await home.link.offer('control', 1)).qr, { resolve: dialUrl, name: 'Pixel', onWords: () => {} });
+  const paired = pairWithOffer((await home.link.offer('control')).qr, { resolve: dialUrl, name: 'Pixel', onWords: () => {} });
   home.link.answer((await until('asked', () => home.link.status().asking[0])).id, true);
   const grant = await paired;
   const p = phone({ ...grant, urls: [`ws://192.168.1.6:${other.port}/link`] });
@@ -102,7 +102,7 @@ test('the home network opens for a pairing code, closes after it, and stays open
   assert.equal(await dials(lan), false);
   assert.equal(home.mdns.on.length, 0, 'and nothing announced');
 
-  const offer = await home.link.offer('control', 1);
+  const offer = await home.link.offer('control');
   assert.deepEqual(offer.urls, [lan], 'the code carries the home address');
   assert.deepEqual(home.link.status().hosts, ['0.0.0.0']);
   assert.deepEqual(home.mdns.on.map((m) => [m.type, m.port, m.txt]), [['crewhouse', home.port, { id: home.link.host.id, url: lan }]]);
@@ -123,7 +123,7 @@ test('the home network opens for a pairing code, closes after it, and stays open
   await home.link.setLan(true);
   assert.equal(await dials(lan), true);
   assert.equal(home.mdns.on.length, 1);
-  const renewed = await home.link.offer('control', 1);
+  const renewed = await home.link.offer('control');
   await until('renewed code expired', () => Date.now() > renewed.expires, 5000);
   await home.link.bind();
   assert.equal(await dials(lan), true, 'still open after the code ran out');

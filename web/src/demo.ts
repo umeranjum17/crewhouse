@@ -517,13 +517,13 @@ export async function demoCall(method: string, path: string, body?: Json) {
     anywhere: variant === 'home' ? 'home' : variant === 'signin-again' ? 'signin' : 'anywhere' };
   if (method === 'POST' && path === '/api/phones/pair') return { qr: 'crewhouse-demo', typed: '7KQ4-M2XP-9RTH-6N5B-8V3C', expires: Date.now() + 120_000 };
   if (method === 'POST' && path === '/api/phones/refresh') {
-    pages.chief.phoneOffer = { ...pages.chief.phoneOffer, token: `demo-${Date.now()}`, expires: Date.now() + 120_000, member: body?.member ?? pages.chief.phoneOffer.member };
+    pages.chief.phoneOffer = { ...pages.chief.phoneOffer, token: `demo-${Date.now()}`, expires: Date.now() + 120_000 };
     return pages.chief.phoneOffer;
   }
   if (method === 'POST' && path === '/api/phones/answer') { pages.chief.phoneOffer = { ...pages.chief.phoneOffer, waiting: null, joined: 'Pixel' }; return { ok: true }; }
   if (method === 'POST' && path === '/api/house/ask') return { ok: true };
-  if (method === 'GET' && path === '/api/phones') return [{ id: 1, name: "Umer's phone", member: me, seen: now - 5 * min, reached: { home: now - 5 * min }, push: 'on' },
-    { id: 2, name: "Umer's other phone", member: me, seen: now - 2 * 60 * min, reached: { home: now - 26 * 60 * min, tailscale: now - 2 * 60 * min }, push: 'off' }];
+  if (method === 'GET' && path === '/api/phones') return [{ id: 1, name: "Umer's phone", seen: now - 5 * min, reached: { home: now - 5 * min }, push: 'on' },
+    { id: 2, name: "Umer's other phone", seen: now - 2 * 60 * min, reached: { home: now - 26 * 60 * min, tailscale: now - 2 * 60 * min }, push: 'off' }];
   if (method === 'POST' && path.startsWith('/api/connections/')) return { url: 'https://accounts.google.com/' };
   if (method === 'GET' && path.startsWith('/api/connections/')) return { state: 'waiting' };
   if (method === 'GET' && path.startsWith('/api/schedule')) {

@@ -52,33 +52,21 @@ test('the link binds loopback and Tailscale by default; the home network only wh
   assert.deepEqual(phoneAddresses(['0.0.0.0'], unnamed, ['100.101.2.3']), ['192.168.1.20', '100.101.2.3']);
 });
 
-test('paired phone dispatch preserves its member for the shared page API', async () => {
-  const db = new Store(temp('crewhouse-phone-member'));
-  const calls: number[] = [];
-  const link = new Link({} as any, db, async (_method, _path, _body, member) => { calls.push(member); return { member }; }) as any;
-  const reply = await link.request('GET /api/bots/scout', {}, { id: 'guest-phone', role: 'control', meta: { member: 2 } });
-  assert.deepEqual(reply, { status: 200, body: { member: 2 } });
-  assert.deepEqual(calls, [2]);
-  db.close();
-});
-
 test('quiet hours hold the push and send exactly one when they end, even across a restart', () => {
   const dir = temp('crewhouse-held');
   const sent: { id: string; to: string[] }[] = [];
   let quiet = true;
   const link = (db: Store) => Object.assign(new Link({} as any, db, async () => null) as any, {
-    client: { notify: async (n: any) => { sent.push(n); return {}; } }, relayStatus: 'online', quiet: (m: number) => m === 1 && quiet,
-    host: { devices: () => [{ id: 'pixel', meta: { member: 1 } }, { id: 'ipad', meta: { member: 2 } }] },
+    client: { notify: async (n: any) => { sent.push(n); return {}; } }, relayStatus: 'online', quiet: () => quiet,
+    host: { devices: () => [{ id: 'pixel' }, { id: 'ipad' }] },
   });
   let db = new Store(dir);
   const a = link(db);
-  // 2 am: a failed job, then a not-sure one, for member 1 in their quiet hours; member 2 is awake.
+  // 2 am: a failed job, then a not-sure one, held for both phones in quiet hours.
   a.news({ seq: 1, kind: 'alert', data: { member: 1 }, bot: null });
   a.news({ seq: 2, kind: 'alert', data: { member: 1 }, bot: null });
   a.sendHeld();
   assert.equal(sent.length, 0, 'nothing reaches the phone in quiet hours');
-  a.news({ seq: 3, kind: 'alert', data: { member: 2 }, bot: null });
-  assert.deepEqual(sent.map((n) => n.to), [['ipad']], 'someone awake is told at once');
 
   // crewd restarts overnight; the hold is in the store.
   db.close();
@@ -87,7 +75,7 @@ test('quiet hours hold the push and send exactly one when they end, even across 
   quiet = false;
   b.sendHeld();
   b.sendHeld();
-  assert.deepEqual(sent.map((n) => n.to), [['ipad'], ['pixel']], 'one push when quiet hours end, for however much came in');
+  assert.deepEqual(sent.map((n) => n.to), [['pixel', 'ipad']], 'one push when quiet hours end, for however much came in');
   db.close();
 });
 
@@ -98,15 +86,15 @@ test('push through a stubbed Expo: exactly one content-free push per paired phon
   await new Promise<void>((r) => expo.listen(0, '127.0.0.1', r));
   after(() => expo.close());
   const db = new Store(temp('crewhouse-push'));
-  const devices = [{ id: 'pixel', meta: { member: 1 } }, { id: 'moto', meta: { member: 1 } }, { id: 'ipad', meta: { member: 2 } }];
+  const devices = [{ id: 'pixel' }, { id: 'moto' }, { id: 'ipad' }];
   const link = Object.assign(new Link({} as any, db, async () => null) as any, { host: { devices: () => devices }, pushUrl: `http://127.0.0.1:${(expo.address() as AddressInfo).port}/push` });
-  const phone = (id: string, body: unknown) => link.request('POST /api/push', body, { id, meta: devices.find((d) => d.id === id)!.meta });
+  const phone = (id: string, body: unknown) => link.request('POST /api/push', body, { id, role: 'control' });
   assert.equal((await phone('pixel', { expo: 'ExponentPushToken[pixel-1]' })).status, 200);
   assert.equal((await phone('moto', { expo: 'ExponentPushToken[moto-1]' })).status, 200);
   assert.equal((await phone('ipad', { expo: 'not a token' })).status, 409, 'only an Expo token, or saying why there is none');
   assert.equal(link.status().push, 'ready');
 
-  // A job fails for member 1: each of their phones gets "Crewhouse has news" and nothing else; member 2's gets nothing.
+  // A job fails: every phone with notifications on gets content-free news.
   link.news({ seq: 7, kind: 'alert', data: { member: 1, words: 'Reel could not pay the dentist' }, bot: null });
   for (const end = Date.now() + 5000; !got.length && Date.now() < end;) await new Promise((r) => setTimeout(r, 20));
   assert.deepEqual(got, [[
@@ -116,12 +104,12 @@ test('push through a stubbed Expo: exactly one content-free push per paired phon
 
   // Expo has no Android credential for the app yet: Settings says so, once, rather than pushes vanishing.
   answer = (msgs) => msgs.map(() => ({ status: 'error', details: { error: 'InvalidCredentials' } }));
-  await link.tell(1, 'e8');
+  await link.tell('e8');
   assert.equal(link.status().push, 'missing');
   answer = (msgs) => msgs.map((_m, i) => (i ? { status: 'error', details: { error: 'DeviceNotRegistered' } } : { status: 'ok' }));
-  await link.tell(1, 'e9');
+  await link.tell('e9');
   assert.equal(link.status().push, 'ready', 'a push that goes through clears it');
-  await link.tell(1, 'e10');
+  await link.tell('e10');
   assert.deepEqual(got.at(-1)!.map((m: any) => m.to), ['ExponentPushToken[pixel-1]'], 'a phone Expo no longer knows is dropped');
 
   // The app build itself has no push credential: the phone says so, and Settings shows it; said no to notifications is per phone.
@@ -147,7 +135,7 @@ test('questions, finished helper jobs and Chief lines push only content-free new
   t.after(() => expo.close());
   const db = new Store(temp('crewhouse-news'));
   t.after(() => db.close());
-  const devices = ['pixel', 'moto'].map((id) => ({ id, meta: { member: 1 } }));
+  const devices = ['pixel', 'moto'].map((id) => ({ id }));
   const link = Object.assign(new Link({} as any, db, async () => null) as any, {
     host: { devices: () => devices }, pushUrl: `http://127.0.0.1:${(expo.address() as AddressInfo).port}/push`,
   });
@@ -155,7 +143,7 @@ test('questions, finished helper jobs and Chief lines push only content-free new
   // news() is fire-and-forget: retain the real sends so silence and exact counts can be checked without a sleep.
   const pending: Promise<void>[] = [];
   const tell = link.tell.bind(link);
-  link.tell = (member: number, id: string) => { const send = tell(member, id); pending.push(send); return send; };
+  link.tell = (id: string) => { const send = tell(id); pending.push(send); return send; };
   db.run("INSERT INTO asks (id, bot, member, title, detail) VALUES (1, 'scout', 1, 'Private question', 'Private detail')");
   db.run("INSERT INTO tasks (id, bot, member, state, result) VALUES (1, 'scout', 1, 'done', 'Private finished work')");
   db.run("INSERT INTO messages (id, bot, member, author, text) VALUES (1, 'chief', 1, 'bot', 'Private Chief line')");
@@ -190,13 +178,12 @@ test('a paired phone renews the Add-a-phone code it is looking at; the rest of p
   const db = new Store(temp('crewhouse-renew'));
   const seen: string[] = [];
   const link = new Link({} as any, db, async (m: string, path: string) => { seen.push(`${m} ${path}`); return { message: 7, token: 'fresh' }; });
-  const owner = { id: 'pixel', meta: { member: 1 } };
-  const renew = (g: { id: string; meta: { member: number } }, op: string) => (link as any).request(op, { message: 7 }, g);
-  assert.deepEqual(await renew(owner, 'POST /api/phones/refresh'), { status: 200, body: { message: 7, token: 'fresh' } }, "the owner's phone asks for its own fresh code");
-  assert.deepEqual(seen, ['POST /api/phones/refresh'], 'the ask reaches crewd, which answers only the owner');
-  assert.equal((await renew(owner, 'POST /api/phones/pair')).status, 403, 'minting a first code stays on the computer');
-  assert.equal((await renew(owner, 'DELETE /api/phones/pixel')).status, 403, 'removing a phone stays on the computer');
-  assert.equal((await renew({ id: 'ipad', meta: { member: 2 } }, 'POST /api/phones/refresh')).status, 403, 'another member administers nothing');
+  const phone = { id: 'pixel' };
+  const renew = (g: { id: string }, op: string) => (link as any).request(op, { message: 7 }, g);
+  assert.deepEqual(await renew(phone, 'POST /api/phones/refresh'), { status: 200, body: { message: 7, token: 'fresh' } }, "the person's phone asks for its own fresh code");
+  assert.deepEqual(seen, ['POST /api/phones/refresh'], 'the ask reaches crewd');
+  assert.equal((await renew(phone, 'POST /api/phones/pair')).status, 403, 'minting a first code stays on the computer');
+  assert.equal((await renew(phone, 'DELETE /api/phones/pixel')).status, 403, 'removing a phone stays on the computer');
   db.close();
 });
 
@@ -326,16 +313,17 @@ test('pairing with a yes at the computer, grants, approvals from the phone, and 
   assert.equal((await watcher.req('GET', '/api/state')).body.person.id, 1);
   assert.equal((await watcher.req('POST', '/api/bots/chief/messages', { text: 'hi' })).status, 403);
 
-  // The owner's paired phone renews a code that is showing, so its card refreshes itself (docs/ui-contract.md).
+  // The person's paired phone renews a code that is showing, so its card refreshes itself (docs/ui-contract.md).
   await http('POST', '/api/bots/chief/messages', { text: 'pair my phone' });
   const live = (await http('GET', '/api/bots/chief')).body.phoneOffer;
-  const fromPhone = await a.req('POST', '/api/phones/refresh', { message: live.message });
+  const fromPhone = await a.req('POST', '/api/phones/refresh', { message: live.message, member: 2 });
   assert.equal(fromPhone.status, 200);
   assert.ok(fromPhone.body.token && fromPhone.body.token !== live.token, 'a fresh code, minted at the phone\'s ask');
+  assert.equal(fromPhone.body.member, undefined, 'legacy member input is ignored');
 
   // Settings lists both; removing one closes its link, the phone forgets its grant, and its key is refused.
   const phones = (await http('GET', '/api/phones')).body;
-  assert.deepEqual(phones.map((d: any) => [d.name, d.role, d.member, d.online]), [['Pixel', 'control', 1, true], ['Tablet', 'view', 1, true]]);
+  assert.deepEqual(phones.map((d: any) => [d.name, d.role, d.online]), [['Pixel', 'control', true], ['Tablet', 'view', true]]);
   assert.equal((await http('DELETE', `/api/phones/${phones[0].id}`)).status, 200);
   await until(async () => a.status() === 'removed');
   const again = open(grant);
@@ -361,6 +349,10 @@ test('a direct typed code and exact local CLI words pair once', async () => {
   assert.match(cli('approve', words), /approved/);
   const grant = await pairing;
   assert.equal(grant.device.role, 'control');
+  const phone = (await http('GET', '/api/phones')).body.find((p: any) => p.id === grant.device.id);
+  assert.ok(phone, 'the paired phone appears in the computer’s phone list');
+  assert.equal(Object.hasOwn(phone, 'member'), false, 'the paired phone has no person selector');
+  assert.equal(Object.hasOwn(phone, 'person'), false, 'the paired phone needs no person label');
   await assert.rejects(pairWithOffer(qr, { name: 'Again', onWords: () => {} }), /code|used|match|run out/i);
   assert.equal((await http('POST', '/api/phones/approve', { words }, {})).status, 403);
   const lan = await new Promise<number>((resolve, reject) => {

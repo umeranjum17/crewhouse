@@ -9,16 +9,14 @@ import { phoneOffer, lines } from '../web/src/adapter.ts';
 
 const phrases = ['pair my phone', 'pair my computer with you', 'connect my phone', 'add my phone', 'use crewhouse on my phone', 'install on my phone'];
 
-test('Chief offers every phone phrasing to the owner, never another member', async () => {
+test('Chief offers every phone phrasing to the person', async () => {
   const { crew, db, cfg } = setup();
   const offer = { qr: 'byokit-link:1:one-use-ticket', typed: '23456-789AB', expires: Date.now() + 120_000, urls: ['ws://127.0.0.1/link'] };
   let minted = 0;
-  crew.phoneLink = { offer: async () => { minted++; return { ...offer, expires: Date.now() + 120_000 }; }, status: () => ({ asking: [] }) as any, withdraw: () => {} };
+  crew.phoneLink = { offer: async () => { minted++; return { ...offer, expires: Date.now() + 120_000 }; }, status: () => ({ asking: [] }) as any };
   assert.match(readFileSync(join(cfg.repoDir, 'templates/chief/AGENTS.md'), 'utf8'), /## About Crewhouse/);
   assert.match(systemPrompt(cfg, 'chief', true), /Settings > Phones > Add a phone/);
   crew.onboard('Owner');
-  const member = crew.addMember('Another person');
-  crew.onboard('Another person', member.id);
   for (const phrase of phrases) {
     assert.equal(asksForPhone(phrase), true, phrase);
     await crew.post('chief', phrase, undefined, 1);
@@ -28,23 +26,16 @@ test('Chief offers every phone phrasing to the owner, never another member', asy
     assert.ok(page.phoneOffer.expires > Date.now());
     assert.equal(page.messages.at(-1)!.id, page.phoneOffer.message);
     assert.equal(page.messages.at(-1)!.text, 'Open Crewhouse on your phone and scan this, or type the code.');
-    assert.equal(phoneOffer(page, 1)?.message, page.messages.at(-1)!.id, 'phone card attaches to this reply');
-    assert.equal(phoneOffer(page, member.id), null, 'another member never gets the card');
+    assert.equal(phoneOffer(page)?.message, page.messages.at(-1)!.id, 'phone card attaches to this reply');
     assert.ok(!JSON.stringify(page.messages).includes(offer.qr), 'ticket is not in chat text');
-    await crew.post('chief', phrase, undefined, member.id);
-    const other = crew.botPage('chief', member.id);
-    assert.equal(other.phoneOffer, null);
-    assert.match(other.messages.at(-1)!.text, /Ask the owner/);
-    assert.ok(!JSON.stringify(other).includes(offer.qr));
   }
   assert.equal(minted, phrases.length);
   const page = crew.botPage('chief', 1);
-  const renewed = await crew.refreshPhone(page.phoneOffer.message, 1);
+  const renewed = await crew.refreshPhone(page.phoneOffer.message);
   assert.equal(renewed.message, page.phoneOffer.message);
   assert.notEqual(renewed.token, page.phoneOffer.token);
-  await assert.rejects(crew.refreshPhone(page.phoneOffer.message, member.id), /owner/);
-  await assert.rejects(crew.refreshPhone(0, 1), /no longer showing/);
-  assert.ok(!JSON.stringify(crew.snapshot(member.id)).includes(offer.qr), 'ticket never enters public state');
+  await assert.rejects(crew.refreshPhone(0), /no longer showing/);
+  assert.ok(!JSON.stringify(crew.snapshot()).includes(offer.qr), 'ticket never enters public state');
 });
 
 test('a Chief hand-off in a helper chat carries its task title, for the collapsed Chief asked line', async () => {
