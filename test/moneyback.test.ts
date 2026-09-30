@@ -32,7 +32,7 @@ test('Home lists the unclaimed-money job too: it waits on nothing, because searc
   const { crew, done } = setup();
   assert.equal(unclaimed(crew).group, 'money', 'money back leads the list');
   assert.deepEqual(unclaimed(crew).needs, [], 'the registers are read without an account, so the row is ready to hand over');
-  assert.match(unclaimed(crew).ask, /money owed to us/);
+  assert.match(unclaimed(crew).ask, /money owed to me/);
   done();
 });
 
@@ -402,7 +402,7 @@ test('Home lists the renewal job with the money-back three, and says what it wai
 
 test('a renewal caught ahead of the bill: the warning plus a cancellation email that stays a draft', async () => {
   const { db, crew, done } = setup();
-  const letter = 'Subject: Family plan — please cancel before 14 June\n\nHello, my Family plan renews on 14 June at $18.99. Please cancel it from that date and confirm in writing that nothing further will be charged to my card. Regards, Nadia';
+  const letter = 'Subject: Family plan — please cancel before 14 June\n\nHello, my Family plan renews on 14 June at $18.99. Please cancel it from that date and confirm in writing that nothing further will be charged to my card. Regards, Umer';
   const { task: t } = (await crew.post('scout', 'ask permission: my streaming plan renews 14 June, write the cancellation and put it in front of me. '
     + `[tool crew_write {"path":"files/cancel-family-plan.md","content":"${letter.replace(/\n/g, '\\n')}"}] `
     + '[tool crew_draft {"path":"files/cancel-family-plan.md","to":"the streaming service’s support inbox"}] '

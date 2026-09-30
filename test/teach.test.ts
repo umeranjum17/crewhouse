@@ -73,7 +73,7 @@ test('a real show: what was clicked and which box was typed in, never the words,
   await call('Page.navigate', { url: `${site_}/stats` });
   await until('the page', async () => (await call('Runtime.evaluate', { expression: 'document.getElementById("save") !== null && window.__crewhouseShow === true', returnByValue: true }))?.result?.value);
   const act = (js: string) => call('Runtime.evaluate', { expression: js });
-  await act(`(() => { const n = document.getElementById('n'); n.value = 'Nadia secret words'; n.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+  await act(`(() => { const n = document.getElementById('n'); n.value = 'Umer secret words'; n.dispatchEvent(new Event('change', { bubbles: true })); })()`);
   await act(`(() => { const p = document.querySelector('[type=password]'); p.value = 'hunter2'; p.dispatchEvent(new Event('change', { bubbles: true })); p.click(); })()`);
   await act(`document.getElementById('save').click()`);
   await act(`document.querySelector('a').click()`);
@@ -84,7 +84,7 @@ test('a real show: what was clicked and which box was typed in, never the words,
   const out = teacher.stop('reel')!;
   const host = `127.0.0.1`;
   assert.deepEqual(out.steps, [`Opened ${host}/stats`, 'Typed in “Your name”', 'Clicked “Save”', 'Clicked “Subscribers”', `Opened ${host}/next`]);
-  assert.doesNotMatch(JSON.stringify(out.steps), /Nadia|secret|hunter2|Password/i, 'never what was typed, nothing from the password box');
+  assert.doesNotMatch(JSON.stringify(out.steps), /Umer|secret|hunter2|Password/i, 'never what was typed, nothing from the password box');
   assert.ok(out.shots.length >= 1 && out.shots.every((s) => s.type === 'image/jpeg' && s.data.length > 100), 'a picture of the pages');
   assert.equal(teacher.has('reel'), false);
 });

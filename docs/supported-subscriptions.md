@@ -14,7 +14,7 @@ tools.
 
 Status vocabulary: **WIRED** = the route is implemented through the gateway's own wizard and usable from the app;
 **UNTESTED-no-account** = implemented through the same wizard drive, but no account of that kind exists in this
-build's household, so only the route's presence and choice ids are verified (against the pinned tarball's provider
+build’s install, so only the route's presence and choice ids are verified (against the pinned tarball's provider
 contracts and a live wizard probe) — never a claim that a login was exercised. The QA gate signs in what the QA
 home actually holds.
 

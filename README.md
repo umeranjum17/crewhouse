@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <strong>A crew of AI helpers that lives on your computer and works for your household.</strong><br/>
+  <strong>Your personal assistant — you and your crew of helpers, on your own computer.</strong><br/>
   You talk to Chief. Chief hands the job to the right helper: Scout looks things up, Scribe drafts, Reel makes videos, Tracer finds leads. Each helper is a folder on your disk that thinks with your own ChatGPT. When a helper wants to send, spend or delete something, it asks you first, in one plain sentence, on your computer or your phone.
 </p>
 
@@ -26,9 +26,9 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/readme/home-night.webp" />
-    <img src="docs/screenshots/readme/home-day.webp" alt="Crewhouse's Home at desktop width: four things that need you, two helpers working, today's finished work, and a list of jobs to hand the crew" width="960" />
+    <img src="docs/screenshots/readme/home-day.webp" alt="Crewhouse's Home at desktop width: things that need you, two helpers working, today's finished work, and a list of jobs to hand the crew" width="960" />
   </picture><br/>
-  <sub>Every picture here is the real app running. The household in it (Nadia and her crew) and its messages come from the app's built-in demo, so no one's real data is shown.</sub>
+  <sub>Every picture here is the real app running. The person in it (Umer and his crew) and its messages come from the app's built-in demo, so no one's real data is shown.</sub>
 </p>
 
 ## Download
@@ -69,9 +69,9 @@ This view is for the owner's computer session; it has no household-member select
 
 ## Why Crewhouse exists
 
-A family's to-do list is full of small jobs that take an afternoon each: chasing a refund, comparing flights, planning the week's dinners, writing the thank-you note. AI can do most of them now, but only if it can act, and nobody wants a chatbot sending emails or placing orders on its own.
+Your to-do list is full of small jobs that take an afternoon each: chasing a refund, comparing flights, planning the week's dinners, writing the thank-you note. AI can do most of them now, but only if it can act, and nobody wants a chatbot sending emails or placing orders on its own.
 
-Crewhouse gives the household a crew that does the work and a single, calm place to say yes. The helpers run on your own computer, with your own ChatGPT sign-in. There is no Crewhouse server and no telemetry. What leaves the house is what a job needs: your AI account, the pages and searches a helper opens, the apps you connected, and a content-free "Crewhouse has news" ping to your phone.
+Crewhouse is your personal assistant: a crew that does the work and a calm place to say yes. The helpers run on your own computer, with your own ChatGPT sign-in. There is no Crewhouse server and no telemetry. What leaves your computer is what a job needs: your AI account, the pages and searches a helper opens, the apps you connected, and a content-free "Crewhouse has news" ping to your phone.
 
 ## See it in action
 
@@ -85,10 +85,10 @@ Tell Chief what you need. He hands it to the helper who does that kind of work, 
 
 ### It asks before it spends
 
-Helpers work in their own folders without bothering you. Anything that costs money asks every time. The card is built from what the shop's own page shows, never from the model's description of it. Sending, deleting, or opening something of yours also asks first. Some of those can get a standing "Always OK" (say, adding events to your calendar). Spending never can, and neither can acting as you on a site you signed a helper in to. The owner also sets one monthly spending cap for the whole house.
+Helpers work in their own folders without bothering you. Anything that costs money asks every time. The card is built from what the shop's own page shows, never from the model's description of it. Sending, deleting, or opening something of yours also asks first. Some of those can get a standing "Always OK" (say, adding events to your calendar). Spending never can, and neither can acting as you on a site you signed a helper in to. You also set a monthly spending cap for your crew.
 
 <p align="center">
-  <img src="docs/screenshots/readme/order.webp" alt="Scout asks to place an order at shop.example: garlic, milk and rice, total $43.10, with Review order and Don't place order" width="300" />
+  <img src="docs/screenshots/readme/order.webp" alt="Scout asks to place an order at grocer.example: garlic, milk and rice, total $43.10, with Review order and Don't place order" width="300" />
 </p>
 
 ### Drafts, never sent behind your back
@@ -140,19 +140,19 @@ The same app works at desktop and phone width, and switches to night colours in 
   <img src="docs/screenshots/readme/phone-night.webp" alt="Home at phone width in night colours" width="260" />
 </p>
 
-**Also in the house:**
+**Also included:**
 
-- **A household.** Add people under Settings. Each person gets their own Chief thread, helpers' notes about them, questions, quiet hours and **their own AI sign-in**. Crewhouse never lends one person's account to another, and one person's AI running out never pauses someone else's work.
+- **Your personal assistant.** One install is for you and your crew of helpers. Ask in your own words, read what comes back, and tap yes when a helper needs you. No technical knowledge needed to use it.
 - **Each helper's own computer (Linux).** A helper with the Computer tool gets its own virtual display and browser, never yours. Watch it live, take the wheel (the helper pauses until you hand it back), or show it how to do a task so it can keep the steps as a skill.
-- **Connected apps.** Each person connects their own Notion, Canva, Google Drive, Calendar or Gmail. A helper that needs one asks with a Connect card in the chat. Reading happens straight away; changing or sending asks first. Google needs a one-time setup by the owner ([docs/google-setup.md](docs/google-setup.md)).
+- **Connected apps.** Connect your Notion, Canva, Google Drive, Calendar or Gmail. A helper that needs one asks with a Connect card in the chat. Reading happens straight away; changing or sending asks first. Google needs a one-time setup on your computer ([docs/google-setup.md](docs/google-setup.md)).
 - **Picks up after a restart.** Stop the computer mid-job, start it again, and the job carries on in the same conversation. A question waiting on you is still there.
 - **Learns how you work.** After a long job the helper can keep what it learned as a skill. You'll see a "Learned: …" line with Forget next to it, and Settings can switch this off.
 
 ## Quick start
 
-Crewhouse is self-hosted only. There is no hosted service and no account with us. It runs on one computer in the house, and everyone uses it from a browser or the phone app.
+Crewhouse is self-hosted only. There is no hosted service and no account with us. Your personal assistant runs on your computer. You use it from a browser or the phone app.
 
-You need **Linux** and **[Node.js](https://nodejs.org) 22.22.3 or later**. Nothing else: the AI engine ships inside Crewhouse, and everyone signs in from the app.
+You need **Linux** and **[Node.js](https://nodejs.org) 22.22.3 or later**. Nothing else: the AI engine ships inside Crewhouse, and you sign in from the app.
 
 ```bash
 git clone https://github.com/umeranjum17/crewhouse && cd crewhouse

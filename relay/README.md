@@ -1,6 +1,6 @@
 # Crewhouse relay
 
-How a phone reaches the family computer from anywhere, without the computer opening a port: crewd dials out to the
+How a phone reaches your computer from anywhere, without the computer opening a port: crewd dials out to the
 relay, the phone dials the relay, and the relay passes [link](https://www.npmjs.com/package/@byokit/link) frames
 between them. It runs [`@byokit/relay`](https://www.npmjs.com/package/@byokit/relay) (pinned exactly) with Crewhouse's
 settings, in `main.ts`.
@@ -13,17 +13,16 @@ What the relay can and can't see:
   keeps only browsers' Web Push addresses: the phone app's push goes from the computer through Expo, relay or not.
 - **Metadata:** which computers are registered, when phones connect to them, and browsers' push addresses.
 
-There is no hosted Crewhouse relay, and the app has no relay address built in. A family runs their own and sets it: **Settings, Phones** on the computer (`PUT /api/phones/relay {url}`), or
+There is no hosted Crewhouse relay, and the app has no relay address built in. You run your own and set it: **Settings, Phones** on the computer (`PUT /api/phones/relay {url}`), or
 `CREWHOUSE_RELAY=https://relay.example` for crewd. `''` turns the relay off.
 
 ## Without Tailscale's servers: Headscale
 
-The guided route in **Settings, Phones** uses Tailscale's free plan, whose coordination server Tailscale Inc runs. A
-family that would rather not depend on it can run [Headscale](https://github.com/juanfont/headscale) (BSD-3), an open
+The guided route in **Settings, Phones** uses Tailscale's free plan, whose coordination server Tailscale Inc runs. If you would rather not depend on it, you can run [Headscale](https://github.com/juanfont/headscale) (BSD-3), an open
 coordination server that the official Tailscale apps can sign in to (on the phone: Tailscale's settings, alternate
 server). Crewhouse needs no change for it: crewd still recognises the Tailscale address and puts it in pairing codes.
 Like this relay, Headscale has to be reachable from the internet (a small server, or a port and a name), so it is for
-families with someone technical.
+people comfortable setting up a server.
 
 ## Run your own
 
@@ -33,7 +32,7 @@ With Docker, from the repository root:
 docker compose -f relay/compose.yml up -d
 ```
 
-It listens on `127.0.0.1:7300`. For the family's tailnet, provision TLS through `@byokit/reach` instead of driving the Tailscale CLI:
+It listens on `127.0.0.1:7300`. For your tailnet, provision TLS through `@byokit/reach` instead of driving the Tailscale CLI:
 
 ```ts
 import { reach } from '@byokit/reach';
