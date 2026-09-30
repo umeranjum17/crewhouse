@@ -994,8 +994,8 @@ function Settings({ state, me, refresh, tick, accounts, look, setLook, switchTo 
 
       <div className="label">Look</div>
       <div className="seg">{[['auto', 'Evenings dark'], ['day', 'Day'], ['night', 'Night']].map(([k, l]) => <button key={k} className={look === k ? 'on' : ''} onClick={() => setLook(k)}>{l}</button>)}</div>
-      {owner && <Money state={state} refresh={refresh} />}
-      {owner && <HouseGoogle on={!!state.house?.google} steps={state.house?.steps} refresh={refresh} />}
+      <Money state={state} refresh={refresh} />
+      <HouseGoogle on={!!state.house?.google} steps={state.house?.steps} refresh={refresh} />
       {signing !== false && <SignIn ai={signing?.ai} tab={signing?.tab} onReady={() => { setSigning(false); refresh(); }} onClose={() => setSigning(false)} />}
     </div>
   );
@@ -1022,7 +1022,7 @@ function AiAccounts({ accounts, refresh, signIn }: { accounts: Json[] | null; re
   </>);
 }
 
-/** Owner only: the house's monthly money cap. Helpers ask before every spend; past this they can't spend at all. */
+/** The monthly money cap. Helpers ask before every spend; past this they can't spend at all. */
 function Money({ state, refresh }: { state: Json; refresh: () => void }) {
   const m = A.money(state);
   const [cap, setCap] = useState(String(m?.cap ?? 20));
@@ -1039,7 +1039,7 @@ function Money({ state, refresh }: { state: Json; refresh: () => void }) {
   </>);
 }
 
-/** Owner only: switch Google on for your crew, once. Each step opens the Google page it happens on, in turn, and the
+/** Switch Google on once. Each step opens the Google page it happens on, in turn, and the
  *  last one ends with two things to paste here (docs/google-setup.md has the same steps with the why). */
 function HouseGoogle({ on, steps, refresh }: { on: boolean; steps?: A.GoogleStep[] | null; refresh: () => void }) {
   const [edit, setEdit] = useState(false);
@@ -1049,17 +1049,17 @@ function HouseGoogle({ on, steps, refresh }: { on: boolean; steps?: A.GoogleStep
   const last = step === A.GOOGLE_STEPS.length - 1;
   const s = A.GOOGLE_STEPS[step];
   return (<>
-    <div className="label" id="setup-google">Google for your crew</div>
+    <div className="label" id="setup-google">Google setup</div>
     {on && !edit ? <div className="card">
-        <div className="row"><span className="grow"><b>{A.googleHeadline(steps)}</b><div className="mute small">What Google itself has answered so far. Steps nobody has tried yet say “you said done”.</div></span>
+        <div className="row"><span className="grow"><b>{A.googleHeadline(steps)}</b><div className="mute small">What Google itself has answered so far. Steps you haven't tried yet say “you said done”.</div></span>
           <button className="btn" onClick={() => { setEdit(true); setStep(A.GOOGLE_STEPS.length - 1); }}>Change key</button></div>
         {steps?.map((m, i) => <div key={i} className="row stack-row">
           <span className="grow"><b>{i + 1}. {A.GOOGLE_STEPS[i].title}</b> <span className={m.state === 'checked' ? 'ok' : m.state === 'missing' ? 'warn-line' : 'mute'}>{A.STEP_MARK[m.state]}</span><div className="mute small">{m.note}</div></span>
           {m.state === 'missing' && <a className="btn go" href={A.GOOGLE_STEPS[i].url} target="_blank" rel="noreferrer">Open Google's page</a>}
         </div>)}
       </div>
-      : <form className="card form" onSubmit={(e) => { e.preventDefault(); void attempt(async () => { await api.houseGoogle(id, secret); setEdit(false); refresh(); }, 'Google is on for your crew'); }}>
-        <b>Switch Google on for your crew</b>
+      : <form className="card form" onSubmit={(e) => { e.preventDefault(); void attempt(async () => { await api.houseGoogle(id, secret); setEdit(false); refresh(); }, 'Google is on'); }}>
+        <b>Switch Google on</b>
         <p className="mute small">About twenty minutes on Google's own pages, free. Then you can let a helper use your Calendar, Gmail or Drive with one tap.</p>
         <div className="mute small">Step {step + 1} of {A.GOOGLE_STEPS.length}</div>
         <b>{s.title}</b>

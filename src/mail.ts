@@ -1,5 +1,5 @@
 // mail-axi: the person's own Gmail, read-only, as one small command-shaped tool in place of Google's hosted Gmail MCP
-// server (23 tool schemas, about 8,900 tokens on every turn). crewd runs it on the member's Gmail connection
+// server (23 tool schemas, about 8,900 tokens on every turn). crewd runs it on the person's Gmail connection
 // (`gmail.readonly`): the token never leaves crewd, and nothing here can send, change or delete mail.
 import { tool } from './engine.ts';
 import { options, table } from './calendar.ts';

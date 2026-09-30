@@ -98,10 +98,10 @@ test('template refresh updates untouched copies but preserves a person-edited so
   writeFileSync(join(dir, 'AGENTS.md'), 'Old template');
   execFileSync('git', ['-C', dir, '-c', 'user.name=Crewhouse', '-c', 'user.email=crewhouse@localhost', 'add', 'AGENTS.md']);
   execFileSync('git', ['-C', dir, '-c', 'user.name=Crewhouse', '-c', 'user.email=crewhouse@localhost', 'commit', '-m', 'Updated to the new template']);
-  disk.upgradeFolder(cfg, 'scout', tpl, 'Scout', 1);
+  disk.upgradeFolder(cfg, 'scout', tpl, 'Scout');
   assert.equal(readFileSync(join(dir, 'AGENTS.md'), 'utf8'), original);
   disk.writeSoul(cfg, 'scout', '# Scout\n\nPersonal voice.');
-  disk.upgradeFolder(cfg, 'scout', tpl, 'Scout', 1);
+  disk.upgradeFolder(cfg, 'scout', tpl, 'Scout');
   assert.match(disk.readSoul(cfg, 'scout'), /Personal voice/);
   done();
 });

@@ -42,7 +42,7 @@ const app = createServer(async (req, res) => {
     res.writeHead(302, { location: why ? `/signin/oauth/error?authError=${Buffer.from(why, 'latin1').toString('base64')}` : '/v3/signin/identifier' });
     return res.end();
   }
-  // The read-back after a yes: Google's real 403 when the owner hasn't enabled that API.
+  // The read-back after a yes: Google's real 403 when the person hasn't enabled that API.
   if (url.pathname.startsWith('/gread/')) {
     if (google.off.includes(url.pathname.slice(7))) return json({ error: { code: 403, status: 'PERMISSION_DENIED', errors: [{ reason: 'accessNotConfigured' }],
       details: [{ '@type': 'type.googleapis.com/google.rpc.ErrorInfo', reason: 'SERVICE_DISABLED', domain: 'googleapis.com' }] } }, 403);
@@ -80,28 +80,33 @@ function lab() {
 /** The browser coming back from the app's page, as the app would send it. */
 const back = (crew: any, from: string, q: Record<string, string>) => crew.connections.finish(new URLSearchParams({ state: new URL(from).searchParams.get('state')!, ...q }));
 /** Start connecting and keep the link the person would open (the view drops it once the try is over). */
-const start = async (crew: any, app = 'mocknote') => (await crew.connections.connect(OWNER, app)).url as string;
+const start = async (crew: any, app = 'mocknote') => (await crew.connections.connect(app)).url as string;
 
 test('connect: the app\'s own page, back to Crewhouse, connected; the tokens stay in that person\'s own folder', async () => {
   const { cfg, crew, done } = lab();
-  const view = await crew.connections.connect(OWNER, 'mocknote');
+  const view = await crew.connections.connect('mocknote');
   const url = new URL(view.url!);
   assert.equal(url.origin + url.pathname, `${base}/authorize`, 'the app\'s own sign-in page');
   for (const k of ['client_id', 'state', 'code_challenge', 'redirect_uri']) assert.ok(url.searchParams.get(k), k);
   assert.equal(url.searchParams.get('code_challenge_method'), 'S256');
   assert.equal(url.searchParams.get('scope'), 'read write');
   assert.equal(await back(crew, view.url!, { code: 'good' }), 'Mocknote is connected. You can go back to Crewhouse now.');
-  assert.equal(crew.connections.view(OWNER, 'mocknote')!.state, 'done');
+  assert.equal(crew.connections.view('mocknote')!.state, 'done');
   const file = join(cfg.stateDir, 'people', '1', 'connections.json');
   assert.equal(statSync(file).mode & 0o777, 0o600);
   assert.equal(JSON.parse(readFileSync(file, 'utf8')).mocknote.access, 'A1');
-  const listed = crew.connections.list(OWNER).find((c) => c.app === 'mocknote')!;
+  const listed = crew.connections.list().find((c) => c.app === 'mocknote')!;
   assert.equal(listed.connected, true);
-  assert.ok(!JSON.stringify(crew.connections.list(OWNER)).includes('A1'), 'no token reaches the app screen');
-  const sam = crew.addMember('Sam').id;
-  assert.equal(crew.connections.connected(sam, 'mocknote'), false, 'one person\'s connection is theirs alone');
-  crew.connections.disconnect(OWNER, 'mocknote');
-  assert.equal(crew.connections.connected(OWNER, 'mocknote'), false);
+  assert.ok(!JSON.stringify(crew.connections.list()).includes('A1'), 'no token reaches the app screen');
+  const former = join(cfg.stateDir, 'people', '2');
+  mkdirSync(former, { recursive: true });
+  const saved = JSON.stringify({ mocknote: { access: 'former', refresh: 'former', expires: 0 } });
+  writeFileSync(join(former, 'connections.json'), saved);
+  await crew.connections.keepFresh();
+  assert.equal(readFileSync(join(former, 'connections.json'), 'utf8'), saved, 'former tokens are never refreshed or written');
+  assert.equal(crew.connections.connected('mocknote'), true, 'only the person\'s connection is read');
+  crew.connections.disconnect('mocknote');
+  assert.equal(crew.connections.connected('mocknote'), false);
   done();
 });
 
@@ -109,29 +114,29 @@ test('connect failures: declined, a bad return, an old link, offline, too slow; 
   const { crew, done } = lab();
   let link = await start(crew);
   assert.equal(await back(crew, link, { error: 'access_denied' }), "No problem, nothing was connected. Tap Connect whenever you'd like to try again.");
-  assert.equal(crew.connections.status(OWNER, 'mocknote').state, 'declined');
-  assert.equal(crew.connections.connected(OWNER, 'mocknote'), false);
+  assert.equal(crew.connections.status('mocknote').state, 'declined');
+  assert.equal(crew.connections.connected('mocknote'), false);
   link = await start(crew);
   assert.equal(await back(crew, link, { code: 'forged' }), "Mocknote didn't finish connecting. Tap Connect to try again.");
-  assert.equal(crew.connections.view(OWNER, 'mocknote')!.state, 'failed');
+  assert.equal(crew.connections.view('mocknote')!.state, 'failed');
   assert.equal(await back(crew, link, { code: 'good' }), 'This connection link has expired. Go back to Crewhouse and tap Connect again.', 'a link works once');
   // Tapping Connect again replaces the earlier try: its link no longer works, the new one does.
   const first = await start(crew);
   const second = await start(crew);
   assert.match(await back(crew, first, { code: 'good' }), /expired/);
   assert.match(await back(crew, second, { code: 'good' }), /connected/);
-  assert.equal((await crew.connections.connect(OWNER, 'mocknote')).state, 'done', 'already on: nothing to open');
-  assert.deepEqual(crew.connections.status(OWNER, 'mocknote'), { state: 'on' });
-  crew.connections.cancel(OWNER, 'mocknote');
-  assert.deepEqual(crew.connections.status(OWNER, 'mocknote'), { state: 'cancelled' }, 'closing the sheet on a finished one disconnects it');
+  assert.equal((await crew.connections.connect('mocknote')).state, 'done', 'already on: nothing to open');
+  assert.deepEqual(crew.connections.status('mocknote'), { state: 'on' });
+  crew.connections.cancel('mocknote');
+  assert.deepEqual(crew.connections.status('mocknote'), { state: 'cancelled' }, 'closing the sheet on a finished one disconnects it');
   crew.connections.apps.offline = { name: 'Offline', servers: [], issuer: 'http://127.0.0.1:9' };
-  assert.equal((await crew.connections.connect(OWNER, 'offline')).error, "Couldn't reach Offline. Check the internet connection, then tap Connect again.");
+  assert.equal((await crew.connections.connect('offline')).error, "Couldn't reach Offline. Check the internet connection, then tap Connect again.");
   const slow = await start(crew);
-  await until('too slow', () => crew.connections.view(OWNER, 'mocknote')?.state === 'failed', 5000);
-  assert.equal(crew.connections.view(OWNER, 'mocknote')!.error, 'Connecting took too long. Tap Connect to start again.');
-  assert.equal(crew.connections.status(OWNER, 'mocknote').state, 'expired');
+  await until('too slow', () => crew.connections.view('mocknote')?.state === 'failed', 5000);
+  assert.equal(crew.connections.view('mocknote')!.error, 'Connecting took too long. Tap Connect to start again.');
+  assert.equal(crew.connections.status('mocknote').state, 'expired');
   assert.match(await back(crew, slow, { code: 'good' }), /expired/);
-  await assert.rejects(crew.connections.connect(OWNER, 'outlook'), /no such app/, 'Outlook is cut from v1');
+  await assert.rejects(crew.connections.connect('outlook'), /no such app/, 'Outlook is cut from v1');
   assert.equal(connectError('Canva', 'getaddrinfo ENOTFOUND mcp.canva.com'), "Couldn't reach Canva. Check the internet connection, then tap Connect again.");
   done();
 });
@@ -139,15 +144,15 @@ test('connect failures: declined, a bad return, an old link, offline, too slow; 
 test('connections stay fresh in the background; a revoked one disconnects and says so once', async () => {
   const { cfg, db, crew, done } = lab();
   crew.onboard('sir');
-  const v = await crew.connections.connect(OWNER, 'mocknote');
+  const v = await crew.connections.connect('mocknote');
   await back(crew, v.url!, { code: 'good' });
   const file = join(cfg.stateDir, 'people', '1', 'connections.json');
   const set = (t: object) => { const all = JSON.parse(readFileSync(file, 'utf8')); all.mocknote = { ...all.mocknote, ...t }; writeFileSync(file, JSON.stringify(all)); };
   set({ expires: Date.now() - 1 });
-  assert.equal(await crew.connections.token(OWNER, 'mocknote'), 'A2', 'refreshed when it ran out');
+  assert.equal(await crew.connections.token('mocknote'), 'A2', 'refreshed when it ran out');
   set({ expires: Date.now() - 1, refresh: 'revoked' });
-  await crew.connections.keepFresh([OWNER]);
-  assert.equal(crew.connections.connected(OWNER, 'mocknote'), false);
+  await crew.connections.keepFresh();
+  assert.equal(crew.connections.connected('mocknote'), false);
   assert.match(db.get("SELECT text FROM messages WHERE bot = 'chief' ORDER BY id DESC")!.text, /^Your Mocknote connection has run out\. Connect it again under Settings, Connections/);
   done();
 });
@@ -156,7 +161,7 @@ test('a connected app\'s tools: reading runs silently, changing something asks i
   const { db, crew, done } = lab();
   crew.onboard('sir');
   crew.recruit('scribe', 'Quill', 'person');
-  const v = await crew.connections.connect(OWNER, 'mocknote');
+  const v = await crew.connections.connect('mocknote');
   await back(crew, v.url!, { code: 'good' });
   const t = crew.assign('quill', 'find it [tool crew_app {"tool":"mocknote_search","input":{"q":"school trip"}}]', 'chief').task;
   await settled(db, t);
@@ -186,7 +191,7 @@ function googleLab() {
   return s;
 }
 
-/** The owner's paste, as Settings sends it; the error's words when Google (or the shape check) says no. */
+/** The person's paste, as Settings sends it; the error's words when Google (or the shape check) says no. */
 const paste = (crew: any, id: string, secret: string) => crew.connections.setHouseGoogle(id, secret).then(() => 'saved', (e: any) => e.message);
 async function house(crew: any) {
   assert.equal(await paste(crew, ` ${gid('123-house')} `, ` ${SECRET} `), 'saved');
@@ -198,25 +203,25 @@ const yes = async (crew: any, app: string) => back(crew, await start(crew, app),
 test('a send reuses the app listing: one handshake per connection set, not per task', async () => {
   const { crew, done } = lab();
   crew.onboard('sir');
-  const empty = await crew.connections.tools(OWNER);
-  assert.equal(await crew.connections.tools(OWNER), empty, 'no apps: the same listing, no refetch');
+  const empty = await crew.connections.tools();
+  assert.equal(await crew.connections.tools(), empty, 'no apps: the same listing, no refetch');
   // The callback's write, as finish() would store it: the set changes, so the next send lists again.
   const dir = join(crew['cfg'].stateDir, 'people', String(OWNER));
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, 'connections.json'), JSON.stringify({ mocknote: { access: 'A1', refresh: 'R1', expires: Date.now() + 3600_000 } }));
-  const listed = await crew.connections.tools(OWNER);
+  const listed = await crew.connections.tools();
   assert.notEqual(listed, empty);
   assert.ok(listed.effects['mocknote_search'], 'the newly connected app is listed');
-  assert.equal(await crew.connections.tools(OWNER), listed, 'the next send reuses it');
+  assert.equal(await crew.connections.tools(), listed, 'the next send reuses it');
   const hits = seen.auth.length;
-  await crew.connections.tools(OWNER);
+  await crew.connections.tools();
   assert.equal(seen.auth.length, hits, 'reused: nothing reached the server');
-  crew.connections.disconnect(OWNER, 'mocknote');
-  assert.deepEqual((await crew.connections.tools(OWNER)).effects, {}, 'disconnecting clears the listing');
+  crew.connections.disconnect('mocknote');
+  assert.deepEqual((await crew.connections.tools()).effects, {}, 'disconnecting clears the listing');
   done();
 });
 
-test("Google for your crew: the pasted key is checked with Google before it's kept, and each wrong paste is named", async () => {
+test("Google setup: the pasted key is checked with Google before it's kept, and each wrong paste is named", async () => {
   const { crew, done } = googleLab();
   const ID = gid('123-house');
   assert.match(await paste(crew, SECRET, ID), /^That's the Client secret\. It goes in the second box/);
@@ -235,54 +240,54 @@ test("Google for your crew: the pasted key is checked with Google before it's ke
   done();
 });
 
-test("Google: after the yes, one read back before connected; Google's real failure sends the owner to the step that's missing", async () => {
+test("Google: after the yes, one read back before connected; Google's real failure points to the step that's missing", async () => {
   const { crew, done } = googleLab();
   await house(crew);
   google.ticked = 'https://www.googleapis.com/auth/gmail.readonly';
   // Still in Testing: it would work for a week, so it isn't called connected.
   google.testing = true;
-  assert.equal(await yes(crew, 'gmail'), "Your Google app is still in Testing, so Google would cut Gmail off within a week. Step 3 of Google for your crew: press Publish app.");
-  assert.deepEqual(crew.connections.status(OWNER, 'gmail'), { state: 'failed', error: (crew.connections.view(OWNER, 'gmail') as any).error, step: 3 });
-  assert.equal(crew.connections.connected(OWNER, 'gmail'), false);
+  assert.equal(await yes(crew, 'gmail'), "Your Google app is still in Testing, so Google would cut Gmail off within a week. Step 3 of Google setup: press Publish app.");
+  assert.deepEqual(crew.connections.status('gmail'), { state: 'failed', error: (crew.connections.view('gmail') as any).error, step: 3 });
+  assert.equal(crew.connections.connected('gmail'), false);
   assert.deepEqual(crew.connections.houseSteps()![2], { state: 'missing', note: 'Still in Testing: press Publish app under Audience.' });
   google.testing = false;
   // The Gmail API never enabled: Google's 403 on the read back names it.
   google.off = ['gmail'];
-  assert.equal(await yes(crew, 'gmail'), "Gmail API isn't switched on in your Google project yet. Step 2 of Google for your crew: enable Gmail API.");
-  assert.equal(crew.connections.status(OWNER, 'gmail').step, 2);
-  assert.equal(crew.connections.connected(OWNER, 'gmail'), false);
+  assert.equal(await yes(crew, 'gmail'), "Gmail API isn't switched on in your Google project yet. Step 2 of Google setup: enable Gmail API.");
+  assert.equal(crew.connections.status('gmail').step, 2);
+  assert.equal(crew.connections.connected('gmail'), false);
   assert.deepEqual(crew.connections.houseSteps()![1], { state: 'missing', note: 'Gmail API is still off. Enable it.' });
   assert.equal(crew.connections.houseSteps()![2].state, 'checked', 'a read that got as far as the API proves the app is published');
   // Any other failed read: not connected, and it says so.
   google.off = [];
   google.broken = true;
   assert.match(await yes(crew, 'gmail'), /^Gmail said yes, but Crewhouse couldn't read anything back from it, so it isn't connected/);
-  assert.equal(crew.connections.connected(OWNER, 'gmail'), false);
+  assert.equal(crew.connections.connected('gmail'), false);
   google.broken = false;
   // Fixed: connected, and the step is ticked from the evidence.
   assert.match(await yes(crew, 'gmail'), /^Gmail is connected/);
-  assert.deepEqual(crew.connections.houseSteps()![1], { state: 'said', note: 'Gmail API answered; the others are checked the first time someone connects them.' });
+  assert.deepEqual(crew.connections.houseSteps()![1], { state: 'said', note: 'Gmail API answered; the others are checked the first time you connect them.' });
   for (const [id, scope] of [['calendar', 'calendar.events'], ['drive', 'drive.file']]) {
     google.ticked = `https://www.googleapis.com/auth/${scope}`;
     assert.match(await yes(crew, id), /is connected/);
   }
   assert.deepEqual(crew.connections.houseSteps()!.map((s: any) => s.state), ['checked', 'checked', 'checked', 'checked']);
   // A Workspace app left Internal: step 3; a key Google stopped knowing (deleted after the paste): step 4.
-  crew.connections.disconnect(OWNER, 'calendar');
-  assert.equal(await back(crew, await start(crew, 'calendar'), { error: 'org_internal' }), "Your Google app is set to Internal, so Google turns everyone else away. Step 3 of Google for your crew: make it External.");
-  assert.equal(crew.connections.status(OWNER, 'calendar').step, 3);
-  assert.match(connectError('Gmail', 'invalid_client'), /^Google didn't accept your key\. Step 4 of Google for your crew: make a “Desktop app” key/);
+  crew.connections.disconnect('calendar');
+  assert.equal(await back(crew, await start(crew, 'calendar'), { error: 'org_internal' }), "Your Google app is set to Internal, so Google may turn you away. Step 3 of Google setup: make it External.");
+  assert.equal(crew.connections.status('calendar').step, 3);
+  assert.match(connectError('Gmail', 'invalid_client'), /^Google didn't accept your key\. Step 4 of Google setup: make a “Desktop app” key/);
   done();
 });
 
-test("Google: one service per connection, only after the owner switched it on for the house; Google's own failures said plainly", async () => {
+test("Google: one service per connection, only after its one-time setup; Google's own failures said plainly", async () => {
   const { crew, done } = googleLab();
   assert.deepEqual(Object.keys(crew.connections.apps).filter((k) => k !== 'mocknote'), ['drive', 'calendar', 'gmail', 'notion', 'canva'], 'v1: no Outlook, no OneDrive');
-  // Before the owner's setup: nobody is sent to Google's "OAuth client not found" page.
-  await assert.rejects(crew.connections.connect(OWNER, 'calendar'), (e: any) => e.status === 409 && /Google switched on for your crew/.test(e.message));
-  assert.match(crew.connections.list(OWNER).find((c: any) => c.app === 'gmail')!.house!, /set it up once in Settings/);
+  // Before setup: you is sent to Google's "OAuth client not found" page.
+  await assert.rejects(crew.connections.connect('calendar'), (e: any) => e.status === 409 && /Google switched on for your crew/.test(e.message));
+  assert.match(crew.connections.list().find((c: any) => c.app === 'gmail')!.house!, /set it up once in Settings/);
   await house(crew);
-  assert.deepEqual(crew.connections.list(OWNER).filter((c: any) => c.warns).map((c: any) => c.app), ['calendar', 'gmail'], 'Drive shows no unverified-app warning');
+  assert.deepEqual(crew.connections.list().filter((c: any) => c.warns).map((c: any) => c.app), ['calendar', 'gmail'], 'Drive shows no unverified-app warning');
 
   // One scope per request, and the household app's own client.
   let url = new URL(await start(crew, 'calendar'));
@@ -290,19 +295,19 @@ test("Google: one service per connection, only after the owner switched it on fo
   assert.equal(url.searchParams.get('client_id'), gid('123-house'));
   // "Back to safety" on Google's warning.
   assert.equal(await back(crew, url.toString(), { error: 'access_denied' }), "No problem, nothing was connected. Tap Connect whenever you'd like to try again.");
-  assert.equal(crew.connections.status(OWNER, 'calendar').state, 'declined');
+  assert.equal(crew.connections.status('calendar').state, 'declined');
   // The box left unticked: not half connected.
   url = new URL(await start(crew, 'calendar'));
   google.ticked = 'openid';
   assert.equal(await back(crew, url.toString(), { code: 'good' }), "Google Calendar still isn't ticked. Tap Connect, then tick Google Calendar on Google's page.");
-  assert.equal(crew.connections.status(OWNER, 'calendar').state, 'unticked');
-  assert.equal(crew.connections.connected(OWNER, 'calendar'), false);
+  assert.equal(crew.connections.status('calendar').state, 'unticked');
+  assert.equal(crew.connections.connected('calendar'), false);
   // Ticked: connected, as Calendar only.
   url = new URL(await start(crew, 'calendar'));
   google.ticked = 'https://www.googleapis.com/auth/calendar.events';
   assert.match(await back(crew, url.toString(), { code: 'good' }), /^Google Calendar is connected/);
   assert.deepEqual(crew.snapshot().connections, ['calendar']);
-  assert.equal(crew.connections.connected(OWNER, 'gmail'), false, 'Calendar is not Gmail');
+  assert.equal(crew.connections.connected('gmail'), false, 'Calendar is not Gmail');
   done();
 });
 
@@ -314,7 +319,7 @@ test('in chat: a helper asks for an app, the person connects it from the card, a
   await until('asked', () => task(db, t).state === 'needs_you');
   const ask = crew.snapshot().asks.find((a: any) => a.kind === 'connect')!;
   assert.deepEqual(ask.detail, { app: 'mocknote', words: 'Let Quill use your Mocknote' });
-  const v = await crew.connections.connect(OWNER, 'mocknote');
+  const v = await crew.connections.connect('mocknote');
   await back(crew, v.url!, { code: 'good' });
   await crew.answer(ask.id, { answer: 'allow' });
   await settled(db, t);

@@ -1,5 +1,5 @@
 // calendar-axi: the person's own Google Calendar as one small command-shaped tool, in place of Google's hosted MCP server
-// (nine tool schemas, about 5,000 tokens on every turn). crewd runs it itself, on the member's Calendar connection; the token never leaves crewd.
+// (nine tool schemas, about 5,000 tokens on every turn). crewd runs it itself, on the person's Calendar connection; the token never leaves crewd.
 // Answers are short TOON (`name[N]{fields}:` then rows). The gate (src/policy.ts) reads the command: looking is free, adding and moving ask, cancelling asks as a delete.
 import { createHash } from 'node:crypto';
 import { tool } from './engine.ts';

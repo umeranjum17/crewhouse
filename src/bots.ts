@@ -223,30 +223,28 @@ export function templateSoul(cfg: Config, tpl: Template, display: string) {
   return existsSync(p) ? renamed(readFileSync(p, 'utf8'), tpl.display, display) : '';
 }
 
-// ---- memory: everything the crew knows about a person lives in that person's own folder ----
-// people/<member>/about.md is what every helper knows about them; people/<member>/notes/<bot>.md is what one helper
-// learned doing its work for them. Other members' notes are never in a bot's folder, prompt or screens.
+// ---- memory: people/1/about.md is shared by the crew; people/1/notes/<bot>.md is one helper's notes ----
 export const NOTES_CAP = 2500;
 export const ABOUT_CAP = 1500;
 
-/** Whose memory, and which: one helper's notes (`bot`), or what the whole crew knows about them (`bot` null). */
-export interface Memory { member: number; bot: string | null }
+/** Which memory: one helper's notes (`bot`), or what the whole crew knows about them (`bot` null). */
+export interface Memory { bot: string | null }
 
-export const personDir = (cfg: Config, member: number) => join(cfg.crewDir, 'people', String(member));
+export const personDir = (cfg: Config) => join(cfg.crewDir, 'people', '1');
 const memoryFile = (m: Memory) => m.bot ? `notes/${m.bot}.md` : 'about.md';
 const capOf = (m: Memory) => m.bot ? NOTES_CAP : ABOUT_CAP;
 
 export function readNotes(cfg: Config, m: Memory) {
-  const p = join(personDir(cfg, m.member), memoryFile(m));
+  const p = join(personDir(cfg), memoryFile(m));
   return existsSync(p) ? readFileSync(p, 'utf8') : '';
 }
 
 function saveNotes(cfg: Config, m: Memory, text: string, message: string) {
   if (text.length > capOf(m)) throw new Error(`notes are full (${text.length}/${capOf(m)}); fold two notes into one with \`replaces\` first`);
-  const p = join(personDir(cfg, m.member), memoryFile(m));
+  const p = join(personDir(cfg), memoryFile(m));
   mkdirSync(dirname(p), { recursive: true });
   writeFileSync(p, text);
-  return commit(personDir(cfg, m.member), [memoryFile(m)], message);
+  return commit(personDir(cfg), [memoryFile(m)], message);
 }
 
 const noteLines = (cfg: Config, m: Memory) => { const t = readNotes(cfg, m).replace(/\n$/, ''); return t ? t.split('\n') : []; };
@@ -288,17 +286,17 @@ export function writeNotes(cfg: Config, m: Memory, text: string) {
   saveNotes(cfg, m, text, 'Edited by the person');
 }
 
-/** Before notes were each person's, a bot kept one notes.md for the whole house. It becomes the owner's, history kept in both folders;
+/** A bot's legacy notes.md becomes the person's, history kept in both folders;
  *  a soul still written into the job file moves into its own file. Runs at every start; a no-op once done. */
-export function upgradeFolder(cfg: Config, id: string, tpl: Template | null, display: string, owner: number) {
+export function upgradeFolder(cfg: Config, id: string, tpl: Template | null, display: string) {
   const dir = botDir(cfg, id);
   const old = join(dir, 'notes.md');
   if (existsSync(old)) {
     const text = readFileSync(old, 'utf8');
-    const m = { member: owner, bot: id };
+    const m = { bot: id };
     if (text.trim() && !readNotes(cfg, m).trim()) saveNotes(cfg, m, text.slice(0, NOTES_CAP), `Kept from ${display}'s notes`);
     rmSync(old);
-    commit(dir, ['notes.md'], 'Notes now live in each person\'s own folder');
+    commit(dir, ['notes.md'], 'Notes now live in the person\'s folder');
   }
   const soul = tpl && !existsSync(join(dir, 'soul.md')) ? templateSoul(cfg, tpl, display) : '';
   if (soul) {

@@ -94,7 +94,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
   const packaged = process.env.CREWHOUSE_PACKAGED === '1';
   if (packaged) void (async () => { for (const t of toolStatus(cfg).filter((x) => x.installable && !x.ready)) await install(t.id); })();
   // A newer release, from the project's public release list, once a day and only for the downloaded app: nothing of
-  // the family's is sent. The owner sees "A new Crewhouse is ready" with its download page.
+  // yours is sent. You see "A new Crewhouse is ready" with its download page.
   let update: { version: string; url: string } | null = null;
   const version = JSON.parse(readFileSync(join(cfg.repoDir, 'package.json'), 'utf8')).version as string;
   const newer = (a: string, b: string) => { const x = a.split('.').map(Number), y = b.split('.').map(Number); for (let i = 0; i < 3; i++) if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) > (y[i] ?? 0); return false; };
@@ -180,8 +180,8 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
   /** The app API, shared by the web app (HTTP) and paired phones (the link). `me` is the member using it. */
   async function api(m: string, p: string, q: URLSearchParams, body: any, me: number, key?: string) {
     let r: RegExpMatchArray | null;
-    // What is installing now, and (for the owner) a newer Crewhouse to download.
-    if (m === 'GET' && p === '/api/state') return { ...crew.snapshot(me), zone: Intl.DateTimeFormat().resolvedOptions().timeZone, installing: [...installing], showing: teacher.showing(), ...(update && me === OWNER ? { update } : {}) };
+    // What is installing now, and a newer Crewhouse to download.
+    if (m === 'GET' && p === '/api/state') return { ...crew.snapshot(me), zone: Intl.DateTimeFormat().resolvedOptions().timeZone, installing: [...installing], showing: teacher.showing(), ...(update ? { update } : {}) };
     if (m === 'GET' && p === '/api/events') return db.events(Number(q.get('after') || 0), 200);
     if (m === 'GET' && p === '/api/room') return crew.room(me, Number(q.get('before')) || undefined);
     // The one phone-admin call a paired phone makes itself: renewing the Add-a-phone code it is looking at, so the
@@ -234,7 +234,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       return { ok: true, signIn: crew.accounts.view(key) };
     }
     // Connections: the viewer's own apps (Notion, Canva, Google…), connected on the app's own page (docs/ui-contract.md).
-    if (m === 'GET' && p === '/api/connections') return crew.connections.list(me);
+    if (m === 'GET' && p === '/api/connections') return crew.connections.list();
     // The "How I did it" drawer: one plain row per tool call of a task, recorded by crewd, redacted to words.
     if ((r = p.match(/^\/api\/task\/(\d+)\/trail$/)) && m === 'GET') {
       const id = Number(r[1]);
@@ -253,24 +253,22 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     }
     if (m === 'GET' && p === '/api/learning') return { on: await Promise.resolve(crew.learningOn()) };
     if ((r = p.match(/^\/api\/learning$/)) && m === 'POST') { await crew.setLearning(body.on === true); return { ok: true, on: body.on === true }; }
-    // The owner switches Google on for the house, once: the household Google app's client ID and secret.
+    // Switch Google on once: the personal Google app's client ID and secret.
     if (m === 'PUT' && p === '/api/house/google') {
-      if (me !== OWNER) throw Object.assign(new Error('only the owner sets this up'), { status: 403 });
       const b = body;
       await crew.connections.setHouseGoogle(b.id, b.secret);
       return { ok: true };
     }
-    // The owner sets the house's monthly money cap: helpers can never spend past it, however many yeses.
+    // The person sets the monthly money cap: helpers can never spend past it, however many yeses.
     if (m === 'PUT' && p === '/api/house/money') {
-      if (me !== OWNER) throw Object.assign(new Error('only the owner sets this'), { status: 403 });
       crew.setMoneyCap(body.cap);
       return { cap: crew.moneyCap(), spent: crew.spentThisMonth() };
     }
     if ((r = p.match(/^\/api\/connections\/([a-z]+)$/))) {
       const app = r[1];
-      if (m === 'POST') { const v = await crew.connections.connect(me, app); return v.state === 'done' ? { state: 'on' } : v.state === 'failed' ? Promise.reject(Object.assign(new Error(v.error), { status: 502 })) : { url: v.url }; }
-      if (m === 'GET') return crew.connections.status(me, app);
-      if (m === 'DELETE') { crew.connections.cancel(me, app); return { ok: true }; }
+      if (m === 'POST') { const v = await crew.connections.connect(app); return v.state === 'done' ? { state: 'on' } : v.state === 'failed' ? Promise.reject(Object.assign(new Error(v.error), { status: 502 })) : { url: v.url }; }
+      if (m === 'GET') return crew.connections.status(app);
+      if (m === 'DELETE') { crew.connections.cancel(app); return { ok: true }; }
     }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/models$/)) && m === 'PUT') {
       crew.botPage(r[1]); // 404 for unknown bots
@@ -291,16 +289,16 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       crew.requestChief(`Write ${b.display}'s job from: ${idea}. Use crew_job.`, me, idea);
       return { ok: true };
     }
-    // What a helper learned about the viewer, and what the whole crew knows about them: each person edits only their own.
+    // What a helper learned about the person, and what the whole crew knows about them.
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/notes$/)) && m === 'PUT') {
       crew.botPage(r[1]); // 404 for unknown bots
-      disk.writeNotes(cfg, { member: me, bot: r[1] }, body.text ?? '');
+      disk.writeNotes(cfg, { bot: r[1] }, body.text ?? '');
       db.event('memory.edited', r[1], { by: 'person' });
       return { ok: true };
     }
-    if (p === '/api/about' && m === 'GET') return { notes: disk.readNotes(cfg, { member: me, bot: null }), cap: disk.ABOUT_CAP };
+    if (p === '/api/about' && m === 'GET') return { notes: disk.readNotes(cfg, { bot: null }), cap: disk.ABOUT_CAP };
     if (p === '/api/about' && m === 'PUT') {
-      disk.writeNotes(cfg, { member: me, bot: null }, body.text ?? '');
+      disk.writeNotes(cfg, { bot: null }, body.text ?? '');
       db.event('memory.edited', null, { by: 'person', everyone: true });
       return { ok: true };
     }
@@ -308,9 +306,9 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       const e = db.get("SELECT * FROM events WHERE seq = ? AND bot = ? AND kind = 'memory.learned'", Number(r[2]), r[1]);
       if (!e) throw Object.assign(new Error('no such memory'), { status: 404 });
       const d = JSON.parse(e.data);
-      if ((d.member ?? 1) !== me) throw Object.assign(new Error('that is someone else\'s'), { status: 403 });
+      if ((d.member ?? 1) !== OWNER) throw Object.assign(new Error('no such memory'), { status: 404 });
       if (db.get("SELECT 1 FROM events WHERE kind = 'memory.undone' AND json_extract(data, '$.seq') = ?", e.seq)) throw Object.assign(new Error('already undone'), { status: 409 });
-      const commit = disk.forget(cfg, { member: me, bot: d.everyone ? null : r[1] }, { added: d.added ?? `- ${d.text}`, removed: d.removed ?? null, commit: d.commit ?? null });
+      const commit = disk.forget(cfg, { bot: d.everyone ? null : r[1] }, { added: d.added ?? `- ${d.text}`, removed: d.removed ?? null, commit: d.commit ?? null });
       db.event('memory.undone', r[1], { seq: e.seq, text: d.text, commit });
       return { ok: true };
     }

@@ -13,19 +13,19 @@ export { CALENDAR };
 
 export interface App {
   name: string;
-  /** Google's apps share the household's one registered Google app (the owner sets it up once: docs/google-setup.md). */
+  /** Google's apps share the person's one registered Google app (the person sets it up once: docs/google-setup.md). */
   google?: boolean;
   /** Google shows its "unverified app" screen for this one; the Connect card warns first. */
   warns?: boolean;
   /** The app's MCP servers: their tools become the bots' tools, named `<app>_<tool>`. */
   servers: string[];
-  /** Or crewd's own one-tool AXI for it, on the member's token (its commands are gated in src/policy.ts). */
+  /** Or crewd's own one-tool AXI for it, on the person's token (its commands are gated in src/policy.ts). */
   tool?: (token: () => Promise<string | null>) => CrewTool;
   /** Where OAuth is discovered (RFC 8414) and clients register themselves (RFC 7591): nothing to set up. */
   issuer?: string;
-  /** Or fixed endpoints with the household's own registered app (Google), read from <state>/apps.json. */
+  /** Or fixed endpoints with the person's own registered app (Google), read from <state>/apps.json. */
   oauth?: { authorize: string; token: string; scopes: string[]; extra?: Record<string, string> };
-  /** Google's: the API the owner enables in step 2, and one small read that proves a new connection works. */
+  /** Google's: the API the person enables in step 2, and one small read that proves a new connection works. */
   api?: string;
   check?: string;
 }
@@ -48,11 +48,11 @@ export const APPS: Record<string, App> = {
 type Tokens = { access: string; refresh?: string; expires: number; scope?: string; lasts?: number };
 type Endpoints = { authorize: string; token: string; register?: string; scopes: string[]; extra?: Record<string, string> };
 export type Connecting = { state: 'waiting' | 'done' | 'failed'; url?: string; error?: string; why?: 'declined' | 'unticked'; step?: number };
-/** Evidence about the owner's four steps (docs/google-setup.md), gathered from what Google actually answered. */
+/** Evidence about the person's four steps (docs/google-setup.md), gathered from what Google actually answered. */
 type Proof = { published?: boolean; apis?: Record<string, boolean> };
 export type Step = { state: 'checked' | 'said' | 'missing'; note: string };
 
-/** Which of the owner's four steps a failure from Google points back to. */
+/** Which of the person's four steps a failure from Google points back to. */
 export const stepOf = (error: string) =>
   /^testing|org_internal/.test(error) ? 3 : error === 'disabled' ? 2 : /invalid_client|unauthorized_client|deleted_client|redirect_uri_mismatch/.test(error) ? 4 : undefined;
 
@@ -60,10 +60,10 @@ const CONNECT_MS = Number(process.env.CREWHOUSE_SIGNIN_MS || 15 * 60_000);
 
 /** A failed connection in one plain sentence with one next step. */
 export function connectError(name: string, error: string, api = name) {
-  if (error === 'testing') return `Your Google app is still in Testing, so Google would cut ${name} off within a week. Step 3 of Google for your crew: press Publish app.`;
-  if (error === 'org_internal') return `Your Google app is set to Internal, so Google turns everyone else away. Step 3 of Google for your crew: make it External.`;
-  if (error === 'disabled') return `${api} isn't switched on in your Google project yet. Step 2 of Google for your crew: enable ${api}.`;
-  if (stepOf(error) === 4) return `Google didn't accept your key. Step 4 of Google for your crew: make a “Desktop app” key and paste it again.`;
+  if (error === 'testing') return `Your Google app is still in Testing, so Google would cut ${name} off within a week. Step 3 of Google setup: press Publish app.`;
+  if (error === 'org_internal') return `Your Google app is set to Internal, so Google may turn you away. Step 3 of Google setup: make it External.`;
+  if (error === 'disabled') return `${api} isn't switched on in your Google project yet. Step 2 of Google setup: enable ${api}.`;
+  if (stepOf(error) === 4) return `Google didn't accept your key. Step 4 of Google setup: make a “Desktop app” key and paste it again.`;
   if (error === 'unread') return `${name} said yes, but Crewhouse couldn't read anything back from it, so it isn't connected. Tap Connect to try again.`;
   if (/unticked/.test(error)) return `${name} still isn't ticked. Tap Connect, then tick ${name} on Google's page.`;
   if (/access_denied|denied|declined/i.test(error)) return `No problem, nothing was connected. Tap Connect whenever you'd like to try again.`;
@@ -75,10 +75,10 @@ export class Connections {
   private cfg: Config;
   private redirect: string;
   apps: Record<string, App> = { ...APPS };
-  private flows = new Map<string, Connecting & { member: number; app: string; verifier: string; ends: Endpoints; client: { id: string; secret?: string }; timer: NodeJS.Timeout }>();
+  private flows = new Map<string, Connecting & { app: string; verifier: string; ends: Endpoints; client: { id: string; secret?: string }; timer: NodeJS.Timeout }>();
   private views = new Map<string, Connecting>();
-  onChange?: (member: number, app: string) => void;
-  onExpired?: (member: number, app: string) => void;
+  onChange?: (app: string) => void;
+  onExpired?: (app: string) => void;
 
   /** `redirect` is crewd's own loopback address: the app's page sends the browser back there. */
   constructor(cfg: Config, redirect: string) { this.cfg = cfg; this.redirect = redirect; }
@@ -88,23 +88,23 @@ export class Connections {
     if (!a) throw Object.assign(new Error('no such app'), { status: 404 });
     return a;
   }
-  private file(member: number) { return join(this.cfg.stateDir, 'people', String(member), 'connections.json'); }
-  private read(member: number): Record<string, Tokens> { const f = this.file(member); return existsSync(f) ? JSON.parse(readFileSync(f, 'utf8')) : {}; }
-  private write(member: number, all: Record<string, Tokens>) {
-    mkdirSync(join(this.cfg.stateDir, 'people', String(member)), { recursive: true, mode: 0o700 });
-    writeFileSync(this.file(member), JSON.stringify(all, null, 2), { mode: 0o600 });
+  private file() { return join(this.cfg.stateDir, 'people', '1', 'connections.json'); }
+  private read(): Record<string, Tokens> { const f = this.file(); return existsSync(f) ? JSON.parse(readFileSync(f, 'utf8')) : {}; }
+  private write(all: Record<string, Tokens>) {
+    mkdirSync(join(this.cfg.stateDir, 'people', '1'), { recursive: true, mode: 0o700 });
+    writeFileSync(this.file(), JSON.stringify(all, null, 2), { mode: 0o600 });
   }
-  /** Registrations and the household's own app ids, shared by everyone in the house (they are not anyone's sign-in). */
+  /** Registrations and the person's own app ids, kept for this install (they are not anyone's sign-in). */
   private clients(): Record<string, { id: string; secret?: string; redirect?: string; proof?: Proof }> {
     const f = join(this.cfg.stateDir, 'apps.json');
     return existsSync(f) ? JSON.parse(readFileSync(f, 'utf8')) : {};
   }
   private clientKey = (id: string) => (this.apps[id]?.google ? 'google' : id);
 
-  /** Whether the owner has switched Google on for the house (docs/google-setup.md). */
+  /** Whether Google is switched on (docs/google-setup.md). */
   houseGoogle() { return !!this.clients().google?.id; }
 
-  /** The owner pastes the household Google app's client ID and secret, once. Kept only once Google itself has taken them:
+  /** The person pastes your Google app's client ID and secret, once. Kept only once Google itself has taken them:
    *  a wrong paste, a key Google doesn't know, or a key that isn't a Desktop app is said in plain words and not saved. */
   async setHouseGoogle(rawId: unknown, rawSecret: unknown) {
     const id = String(rawId ?? '').trim(), secret = String(rawSecret ?? '').trim();
@@ -134,7 +134,7 @@ export class Connections {
   }
   private saveClients(all: object) { writeFileSync(join(this.cfg.stateDir, 'apps.json'), JSON.stringify(all, null, 2), { mode: 0o600 }); }
 
-  /** Something Google answered that proves (or disproves) one of the owner's steps. */
+  /** Something Google answered that proves (or disproves) one of the person's steps. */
   private prove(p: Proof) {
     const all = this.clients();
     if (!all.google) return;
@@ -143,7 +143,7 @@ export class Connections {
     this.saveClients(all);
   }
 
-  /** The owner's four steps as far as Crewhouse can tell: checked from Google's own answers, missing when Google said
+  /** The person's four steps as far as Crewhouse can tell: checked from Google's own answers, missing when Google said
    *  so, or only "you said done" when nobody has connected yet to find out. Null until the key is pasted. */
   houseSteps(): Step[] | null {
     const g = this.clients().google;
@@ -152,43 +152,43 @@ export class Connections {
     const google = Object.keys(this.apps).filter((id) => this.apps[id].api);
     const names = (ids: string[]) => ids.map((id) => this.apps[id].api).join(', ').replace(/, ([^,]*)$/, ' and $1');
     const off = google.filter((id) => p.apis?.[id] === false), ok = google.filter((id) => p.apis?.[id]);
-    const later = 'Checked the first time someone connects.';
+    const later = 'Checked the first time you connect.';
     return [
       { state: 'checked', note: 'Google knows the project.' },
       off.length ? { state: 'missing', note: `${names(off)} ${off.length > 1 ? 'are' : 'is'} still off. Enable ${off.length > 1 ? 'them' : 'it'}.` }
         : ok.length === google.length ? { state: 'checked', note: 'Calendar, Gmail and Drive all answered.' }
-        : { state: 'said', note: ok.length ? `${names(ok)} answered; the others are checked the first time someone connects them.` : later },
+        : { state: 'said', note: ok.length ? `${names(ok)} answered; the others are checked the first time you connect them.` : later },
       p.published === false ? { state: 'missing', note: 'Still in Testing: press Publish app under Audience.' } : p.published ? { state: 'checked', note: 'Published.' } : { state: 'said', note: later },
       { state: 'checked', note: 'Google took the key.' },
     ];
   }
 
-  connected(member: number, app: string) { return !!this.read(member)[app]; }
+  connected(app: string) { return !!this.read()[app]; }
 
   /** The app screen's ids for what is connected. */
-  on(member: number) { return Object.keys(this.read(member)).filter((id) => this.apps[id]); }
+  on() { return Object.keys(this.read()).filter((id) => this.apps[id]); }
 
   /** Where a connection stands, in the app screen's words: waiting, on, expired, declined, unticked, failed or cancelled. */
-  status(member: number, id: string) {
-    if (this.connected(member, id)) return { state: 'on' };
-    const v = this.view(member, id);
+  status(id: string) {
+    if (this.connected(id)) return { state: 'on' };
+    const v = this.view(id);
     if (!v) return { state: 'cancelled' };
     return { state: v.state === 'waiting' ? 'waiting' : v.why ?? (/too long|expired/.test(v.error ?? '') ? 'expired' : 'failed'), error: v.error, step: v.step };
   }
 
   /** The person closed the sheet: a waiting connection stops; a finished one is disconnected. */
-  cancel(member: number, id: string) {
-    for (const [s, f] of this.flows) if (f.member === member && f.app === id) { clearTimeout(f.timer); this.flows.delete(s); }
-    if (this.connected(member, id)) return this.disconnect(member, id);
-    this.views.delete(`${member}:${id}`);
-    this.onChange?.(member, id);
+  cancel(id: string) {
+    for (const [s, f] of this.flows) if (f.app === id) { clearTimeout(f.timer); this.flows.delete(s); }
+    if (this.connected(id)) return this.disconnect(id);
+    this.views.delete(id);
+    this.onChange?.(id);
   }
-  view(member: number, app: string) { return this.views.get(`${member}:${app}`) ?? null; }
+  view(app: string) { return this.views.get(app) ?? null; }
 
   /** What the Connections screen lists for one person: plain words only. */
-  list(member: number) {
+  list() {
     return Object.entries(this.apps).map(([id, a]) => ({
-      app: id, name: a.name, connected: this.connected(member, id), connecting: this.view(member, id), warns: !!a.warns,
+      app: id, name: a.name, connected: this.connected(id), connecting: this.view(id), warns: !!a.warns,
       house: a.google && !this.houseGoogle() ? `${a.name} needs Google switched on for your crew first; set it up once in Settings.` : null,
     }));
   }
@@ -202,11 +202,11 @@ export class Connections {
     return { authorize: m.authorization_endpoint, token: m.token_endpoint, register: m.registration_endpoint, scopes: prm.scopes_supported ?? m.scopes_supported ?? [] };
   }
 
-  /** This computer's client with the app: registered once by itself where the app allows it, else the household's own app. */
+  /** This computer's client with the app: registered once by itself where the app allows it, else the person's own app. */
   private async client(id: string, ends: Endpoints) {
     const all = this.clients();
     const c = all[this.clientKey(id)];
-    // A registration is for one return address; the household's own app (no address on file) takes any loopback port.
+    // A registration is for one return address; the person's own app (no address on file) takes any loopback port.
     if (c?.id && (!c.redirect || c.redirect === this.redirect)) return c;
     if (!ends.register) throw Object.assign(new Error('set up Google in Settings first'), { status: 409 });
     const res = await fetch(ends.register, {
@@ -220,15 +220,15 @@ export class Connections {
   }
 
   /** Connect: returns the app's own page to open. The browser comes back to `finish` through crewd's callback.
-   *  A Google app before the owner has switched Google on for the house answers 409 (the app says "Ask the owner"),
+   *  A Google app before Google is switched on answers 409 (the app points to Settings),
    *  so nobody ever reaches Google's "OAuth client not found" page. */
-  async connect(member: number, id: string) {
+  async connect(id: string) {
     const a = this.app(id);
-    const house = this.list(member).find((x) => x.app === id)!.house;
+    const house = this.list().find((x) => x.app === id)!.house;
     if (house) throw Object.assign(new Error(house), { status: 409 });
-    if (this.connected(member, id)) return { state: 'done' } as Connecting;
-    const key = `${member}:${id}`;
-    for (const [s, f] of this.flows) if (f.member === member && f.app === id) { clearTimeout(f.timer); this.flows.delete(s); } // a new try replaces the old
+    if (this.connected(id)) return { state: 'done' } as Connecting;
+    const key = id;
+    for (const [s, f] of this.flows) if (f.app === id) { clearTimeout(f.timer); this.flows.delete(s); } // a new try replaces the old
     const view: Connecting = { state: 'waiting' };
     this.views.set(key, view);
     try {
@@ -240,13 +240,13 @@ export class Connections {
       for (const [k, v] of Object.entries({ response_type: 'code', client_id: client.id, redirect_uri: this.redirect, state, code_challenge: createHash('sha256').update(verifier).digest('base64url'),
         code_challenge_method: 'S256', ...(ends.scopes.length ? { scope: ends.scopes.join(' ') } : {}), ...(a.issuer ? { resource: a.issuer } : {}), ...ends.extra })) url.searchParams.set(k, v);
       view.url = url.toString();
-      const timer = setTimeout(() => { this.flows.delete(state); Object.assign(view, { state: 'failed', url: undefined, error: `Connecting took too long. Tap Connect to start again.` }); this.onChange?.(member, id); }, CONNECT_MS);
-      this.flows.set(state, { ...view, member, app: id, verifier, ends, client, timer });
+      const timer = setTimeout(() => { this.flows.delete(state); Object.assign(view, { state: 'failed', url: undefined, error: `Connecting took too long. Tap Connect to start again.` }); this.onChange?.(id); }, CONNECT_MS);
+      this.flows.set(state, { ...view, app: id, verifier, ends, client, timer });
     } catch (e: any) {
-      console.error(`connect ${id} for member ${member}:`, e?.message ?? e);
+      console.error(`connect ${id}:`, e?.message ?? e);
       Object.assign(view, { state: 'failed', error: connectError(a.name, String(e?.message)) });
     }
-    this.onChange?.(member, id);
+    this.onChange?.(id);
     return view;
   }
 
@@ -257,29 +257,29 @@ export class Connections {
     this.flows.delete(q.get('state')!);
     clearTimeout(f.timer);
     const a = this.app(f.app);
-    const view = this.views.get(`${f.member}:${f.app}`)!;
+    const view = this.views.get(f.app)!;
     try {
       if (q.get('error')) throw new Error(q.get('error')!);
       const tokens = await this.exchange(f.ends, f.client, { grant_type: 'authorization_code', code: q.get('code') ?? '', redirect_uri: this.redirect, code_verifier: f.verifier });
       // Google lets a box be left unticked: that connection would be half there, so it doesn't count.
       if (a.google && tokens.scope && !f.ends.scopes.every((sc) => tokens.scope!.split(' ').includes(sc))) throw new Error('unticked');
       if (a.check) await this.readBack(f.app, a.check, tokens);
-      this.write(f.member, { ...this.read(f.member), [f.app]: tokens });
+      this.write({ ...this.read(), [f.app]: tokens });
       Object.assign(view, { state: 'done', url: undefined, error: undefined, why: undefined, step: undefined });
       return `${a.name} is connected. You can go back to Crewhouse now.`;
     } catch (e: any) {
-      console.error(`connect ${f.app} for member ${f.member}:`, e?.message ?? e);
+      console.error(`connect ${f.app}:`, e?.message ?? e);
       const m = String(e?.message);
       Object.assign(view, { state: 'failed', url: undefined, why: m === 'unticked' ? 'unticked' : /access_denied|denied/i.test(m) ? 'declined' : undefined,
         step: a.google ? stepOf(m) : undefined, error: connectError(a.name, m, a.api) });
       return view.error!;
     } finally {
-      this.onChange?.(f.member, f.app);
+      this.onChange?.(f.app);
     }
   }
 
   /** Before "connected": one small read with the new token, so a yes on Google's page that can't actually reach the
-   *  person's Calendar, Gmail or Drive is never called connected. What Google answers is kept as proof of the owner's steps. */
+   *  person's Calendar, Gmail or Drive is never called connected. What Google answers is kept as proof of the person's steps. */
   private async readBack(id: string, url: string, t: Tokens) {
     // Google says how long a refresh token lasts only when it runs out: a week means the app is still in Testing, and
     // no lifetime means it's published.
@@ -302,70 +302,70 @@ export class Connections {
   }
 
   /** A working access token, refreshed when it is close to running out. A refused refresh disconnects and says so once. */
-  async token(member: number, id: string): Promise<string | null> {
-    const all = this.read(member);
+  async token(id: string): Promise<string | null> {
+    const all = this.read();
     const t = all[id];
     if (!t) return null;
     if (t.expires - Date.now() > 5 * 60_000) return t.access;
     try {
       const ends = await this.endpoints(this.app(id));
       const fresh = await this.exchange(ends, await this.client(id, ends), { grant_type: 'refresh_token', refresh_token: t.refresh ?? '' });
-      this.write(member, { ...this.read(member), [id]: fresh });
+      this.write({ ...this.read(), [id]: fresh });
       return fresh.access;
     } catch (e: any) {
       if (/fetch failed|network|ENOTFOUND|EAI_AGAIN|ECONN|timed? ?out/i.test(String(e?.message))) return t.access; // offline, not revoked
-      this.disconnect(member, id);
-      this.onExpired?.(member, id);
+      this.disconnect(id);
+      this.onExpired?.(id);
       return null;
     }
   }
 
-  /** Today's events on the member's own Google Calendar, read by crewd itself for the morning digest (no AI). All-day
+  /** Today's events on the person's own Google Calendar, read by crewd itself for the morning digest (no AI). All-day
    *  events have no time. Null when Calendar isn't connected or can't be read right now. */
-  async today(member: number): Promise<{ at: number | null; title: string }[] | null> {
-    if (!this.connected(member, 'calendar')) return null;
+  async today(): Promise<{ at: number | null; title: string }[] | null> {
+    if (!this.connected('calendar')) return null;
     const d = new Date();
     const from = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-    const list = await events(() => this.token(member, 'calendar'), from, new Date(from.getFullYear(), from.getMonth(), from.getDate() + 1)).catch(() => null);
+    const list = await events(() => this.token('calendar'), from, new Date(from.getFullYear(), from.getMonth(), from.getDate() + 1)).catch(() => null);
     return list && list.slice(0, 12).map((e) => ({ at: e.allDay ? null : e.start.getTime(), title: e.title }));
   }
 
-  disconnect(member: number, id: string) {
-    const { [id]: _gone, ...rest } = this.read(member);
-    this.write(member, rest);
-    this.views.delete(`${member}:${id}`);
-    this.onChange?.(member, id);
+  disconnect(id: string) {
+    const { [id]: _gone, ...rest } = this.read();
+    this.write(rest);
+    this.views.delete(id);
+    this.onChange?.(id);
   }
 
   /** Refresh every connection now and then, so none lapses while nobody is looking. */
-  async keepFresh(members: number[]) {
-    for (const m of members) for (const id of Object.keys(this.read(m))) await this.token(m, id).catch(() => null);
+  async keepFresh() {
+    for (const id of Object.keys(this.read())) await this.token(id).catch(() => null);
   }
 
-  // The member's connected apps as bot tools, cached by connected set: listing remote tools costs MCP handshakes,
+  // The person's connected apps as bot tools, cached by connected set: listing remote tools costs MCP handshakes,
   // and every send used to pay them before the first model turn. A connect or disconnect changes the set, so the
   // cache keys on it; a token refresh keeps the set and stays cached (tools take their token live, per call).
-  private toolCache = new Map<number, { key: string; out: Promise<{ tools: CrewTool[]; effects: Record<string, AppTool> }> }>();
-  tools(member: number): Promise<{ tools: CrewTool[]; effects: Record<string, AppTool> }> {
-    const key = Object.keys(this.read(member)).sort().join(',');
-    const hit = this.toolCache.get(member);
+  private toolCache?: { key: string; out: Promise<{ tools: CrewTool[]; effects: Record<string, AppTool> }> };
+  tools(): Promise<{ tools: CrewTool[]; effects: Record<string, AppTool> }> {
+    const key = Object.keys(this.read()).sort().join(',');
+    const hit = this.toolCache;
     if (hit && hit.key === key) return hit.out;
-    const out = this.loadTools(member);
-    this.toolCache.set(member, { key, out });
-    out.catch(() => { if (this.toolCache.get(member)?.out === out) this.toolCache.delete(member); }); // a failure pins nothing
+    const out = this.loadTools();
+    this.toolCache = { key, out };
+    out.catch(() => { if (this.toolCache?.out === out) this.toolCache = undefined; }); // a failure pins nothing
     return out;
   }
-  /** The member's connected apps as bot tools, with what each tool does to the world (for the gate). */
-  private async loadTools(member: number): Promise<{ tools: CrewTool[]; effects: Record<string, AppTool> }> {
+  /** The person's connected apps as bot tools, with what each tool does to the world (for the gate). */
+  private async loadTools(): Promise<{ tools: CrewTool[]; effects: Record<string, AppTool> }> {
     const tools: CrewTool[] = [];
     const effects: Record<string, AppTool> = {};
-    for (const id of Object.keys(this.read(member))) {
+    for (const id of Object.keys(this.read())) {
       const a = this.apps[id];
       if (!a) continue;
-      if (a.tool) tools.push(a.tool(() => this.token(member, id)));
+      if (a.tool) tools.push(a.tool(() => this.token(id)));
       for (const server of a.servers) {
         try {
-          const mcp = new RemoteMcp(server, () => this.token(member, id));
+          const mcp = new RemoteMcp(server, () => this.token(id));
           await mcp.request('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'crewhouse', version: '1' } });
           const { tools: list } = await mcp.request('tools/list', {});
           for (const t of list) {
@@ -377,7 +377,7 @@ export class Connections {
                 return (r.content ?? []).filter((c: any) => c.type === 'text').map((c: any) => c.text).join('\n');
               }));
           }
-        } catch (e) { console.error(`${id} tools for member ${member}:`, e); }
+        } catch (e) { console.error(`${id} tools:`, e); }
       }
     }
     return { tools, effects };
