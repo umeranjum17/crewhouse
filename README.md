@@ -177,12 +177,6 @@ When run in a terminal, `setup` asks two things:
 
 `./crewhouse doctor` shows what's installed and what's missing. The helpers' sandboxed shell needs [bubblewrap](https://github.com/containers/bubblewrap), and their own screens need Xvfb and Chromium. Crewhouse is built and tested on Linux. On macOS, helpers get no shell or screens, and autostart isn't available.
 
-Engine sign-ins use BYOKit's sealing: the stopped engine keeps `auth-store.sealed`, and the next start restores the same login. Verified legacy copies and migration archives leave no plaintext credential copy. The kit uses a non-interactive OS keyring when available; a locked, missing or unresponsive keyring automatically uses a persistent owner-only host key, without prompting or manual setup. There is no plaintext fallback and no `CREWHOUSE_AUTH_KEY_FILE` requirement.
-
-On Linux the kit's host key lives at `$XDG_STATE_HOME/byokit-<SHA-256 of crewhouse-engine>/host-key/` (the state root defaults to `~/.local/state`), beside the default `crewhouse/` state directory. Exclude that key directory from sealed-store backups; keep it separately for restores. Crewhouse does not copy or export it. Stop all writers before any kit-managed rotation; never edit key files yourself. Losing the original key or OS keyring makes the sealed store unrecoverable; an older build cannot open it.
-
-Credentials remain plaintext while the engine or migration doctor runs. Orderly shutdown waits for sealing; a crash is recovered on the next prepare once the old engine has stopped. Use encrypted storage and exclude live engine state from backups. This does not protect against another process running as the same OS user.
-
 Everything Crewhouse writes lives in `~/.local/state/crewhouse/` (the database, the engine and saved sign-ins), `~/Crewhouse/` (helpers and what they know about each person) and `~/.local/share/crewhouse/tools/` (the tool kit). `./crewhouse uninstall` removes all of it, but keeps your crew folder unless you add `--all`.
 
 | Command | What it does |
