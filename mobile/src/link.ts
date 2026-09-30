@@ -1,6 +1,6 @@
 // The phone's end of the link: @byokit/link's device side, its grant in secure storage, and the transport that
 // web/src/api.ts calls through. Each call is one request, `METHOD /path`, answered like HTTP (src/link.ts).
-import { DeviceLink, LinkError, hostId, pairWithCode, pairWithOffer, offerText, unb64url, type DeviceGrant, type LinkStatus } from '@byokit/link';
+import { DeviceLink, LinkError, hostId, pairWithCode, pairWithOffer, offerText, secureDeviceStore, unb64url, type DeviceGrant, type LinkStatus } from '@byokit/link';
 import { decodeTyped } from '../../src/typed-code.ts';
 import { findHost } from '@byokit/relay/device';
 import { readTyped } from './typed.ts';
@@ -8,7 +8,7 @@ import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { File, Paths } from 'expo-file-system';
 import * as SecureStore from 'expo-secure-store';
-import Zeroconf from 'react-native-zeroconf';
+import { browse, type BrowseService } from '@byokit/reach';
 import * as K from '../../web/src/kept.ts';
 import { knock } from '../../web/src/adapter.ts';
 import { addresses } from '../modules/crewhouse-net';
@@ -18,7 +18,8 @@ export type Status = LinkStatus;
 const STORE = 'crewhouse.grant';
 const url64 = (s: string) => s.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 // Unpaired or removed on the computer: the chats this phone kept go with the grant.
-const store = { save: (g: Grant) => SecureStore.setItemAsync(STORE, JSON.stringify(g)), clear: () => { kept.clear(); void SecureStore.deleteItemAsync('crewhouse.said'); return SecureStore.deleteItemAsync(STORE); } };
+const grants = secureDeviceStore(SecureStore, STORE);
+const store = { save: grants.save, clear: () => { kept.clear(); void SecureStore.deleteItemAsync('crewhouse.said'); return grants.clear(); } };
 
 /** Recent chats kept in the app's own files (web/src/kept.ts), readable while the home computer can't be reached. */
 const keptFile = () => new File(Paths.document, 'kept.json');
@@ -33,11 +34,13 @@ export const kept = {
 };
 
 export async function loadGrant(): Promise<Grant | null> {
+  const grant = await grants.load();
+  if (grant) return grant;
   const s = await SecureStore.getItemAsync(STORE);
   if (!s) return null;
   const g = JSON.parse(s);
   if (g.v === 1) return g;
-  // Paired before @byokit/link: the same keys, stored in the old shape. The computer kept this phone's grant too.
+  // Migration debt: the kit lacks legacy-grant conversion. Keep the old keys and shape migration unchanged.
   const moved: Grant = { v: 1, secretKey: url64(g.sk), host: url64(g.crewdPk), hostName: 'your computer', urls: g.urls, device: g.device };
   await store.save(moved);
   return moved;
@@ -203,9 +206,10 @@ const tailnet = (ip: string) => /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(
  *  and its handshake still checks the key. Returns stop. */
 function look(grant: Grant, found: (url: string) => void) {
   const id = hostId(unb64url(grant.host));
-  const z = new Zeroconf();
-  z.on('resolved', (s) => { if (s.txt?.id === id && s.txt.url?.startsWith('ws://')) found(s.txt.url); });
+  const z = browse({ type: 'crewhouse', protocol: 'tcp', domain: 'local.' });
+  const resolved = (s: BrowseService) => { if (s.txt.id === id && s.txt.url?.startsWith('ws://')) found(s.txt.url); };
+  z.on('found', resolved);
+  z.on('updated', resolved);
   z.on('error', () => {}); // no Wi-Fi, or mDNS blocked: the other addresses keep trying
-  z.scan('crewhouse', 'tcp', 'local.');
-  return () => { z.stop(); z.removeDeviceListeners(); };
+  return () => z.stop();
 }

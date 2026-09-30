@@ -38,8 +38,8 @@ function fileStore(dir: string) {
 export async function startRelay(o: RelaySettings): Promise<{ relay: Relay; server: Server; url: string; close(): Promise<void> }> {
   const relay = await Relay.open({ store: fileStore(o.dataDir), ownerToken: o.ownerToken || undefined, trustProxy: o.trustProxy,
     push: { subject: 'https://github.com/umeranjum17/crewhouse', ...o.push } });
-  // ponytail: the two hooks below replace private Relay methods; @byokit/relay is pinned exactly and
-  // test/relay.test.ts fails if a bump moves them. Upstream options for both would retire this.
+  // Migration debt: private Relay hooks are not a supported extension point. BYOKit must publish options
+  // for content-free notifications and open signup; test/relay.test.ts gates the pin until migration.
   const r = relay as any;
   const sha = (s: string) => createHash('sha256').update(s).digest('base64url');
   // Content-free push, enforced here rather than trusted to each host: a fixed title, no body, data or buttons. The id

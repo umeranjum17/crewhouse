@@ -19,7 +19,7 @@ test('representative Scribe and Reel jobs settle with their cost in tasks.tokens
   const text = report(out).text;
   assert.match(text, /\| scribe \| draft-email \| 1 \| \d+ \|/);
   assert.match(text, /\| reel \| demo-video \| 1 \| \d+ \|/);
-  assert.match(text, /largest single task observed: \d+ tokens \(input to the CH-6 ceiling\)/);
+  assert.match(text, /largest single task observed: \d+ tokens \(supplied usage events only; not proof of real-engine metering or caps\)/);
 });
 
 test('readState aggregates a past state dir read-only and starts nothing', async () => {

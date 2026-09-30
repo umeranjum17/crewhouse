@@ -28,18 +28,6 @@ throwaway crew; every task settled `done` and its cost was read out of
 
 Largest single task observed: 233 tokens.
 
-Input to the CH-6 ceiling: on the stub every representative job is one turn of
-roughly 200 tokens, because the stub answers in one turn with no tool calls. A
-real job takes several turns with tool calls, so the live number is higher. Set
-the house-wide ceiling only after a retained-home run of the same script in
-read-only mode against live jobs:
+These are historical scripted-provider usage events, not measured real-engine allocations. The script's `--state` mode only aggregates the recorded `tasks.tokens`; a stored number proves no more than the usage events supplied to it.
 
-    node scripts/measure-task-tokens.mjs --state <retained state dir>
-
-which aggregates `tasks.tokens` by bot without starting anything.
-
-CH-6 ceiling (one house-wide number, `taskTokenCap` in `src/crew.ts`): checked
-where usage is summed, a task that reaches it stops with plain words. Default
-500,000 (`CREWHOUSE_TASK_TOKENS` overrides); stub jobs cost ~200, so the
-default only stops runaways. Re-tune from a retained-home `--state` run if
-live jobs approach it. Test: `test/task-ceiling.test.ts`.
+Migration debt: the pinned published OpenClaw kit's `RunEvent` has no usage event. BYOKit must publish per-run usage and a durable usage-ledger/window/cap contract before Crewhouse can claim measured real-engine costs or enforced real-engine ceilings. The current local `taskTokenCap` path (default 500,000, `CREWHOUSE_TASK_TOKENS` override) stops tasks only when supplied usage reaches it; `test/task-ceiling.test.ts` proves that on the scripted provider. Retained-state totals cannot close the upstream metering gap.

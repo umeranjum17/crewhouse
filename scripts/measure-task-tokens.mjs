@@ -1,5 +1,6 @@
-// What a real Scribe / Reel job costs in tasks.tokens, so the per-task ceiling (CH-6)
-// is set from measured numbers, never a guess. Two modes:
+// Historical/scripted usage evidence from tasks.tokens, not real-engine metering proof.
+// Migration debt: the published OpenClaw kit emits no usage; BYOKit must supply per-run
+// usage and ledger/cap contracts before claiming measured or enforced real-engine limits. Two modes:
 //
 //   node scripts/measure-task-tokens.mjs [--runs N] [--out report.md]
 //     Throwaway crew on the scripted stub model (no account, no network, no quota):
@@ -8,7 +9,7 @@
 //
 //   node scripts/measure-task-tokens.mjs --state <state dir> [--out report.md]
 //     Read-only: aggregates tasks.tokens by bot from an existing state dir (e.g. a
-//     retained-home live measurement). Opens crew.db read-only, starts nothing.
+//     retained recorded usage). Opens crew.db read-only, starts nothing.
 //
 // Representative jobs are the helpers' own ideas (templates/scribe/bot.json,
 // templates/reel/bot.json), so the numbers describe the jobs people actually tap.
@@ -107,7 +108,7 @@ export function report({ rows, meta = {} }) {
   return {
     summary: Object.fromEntries([...new Set(rows.map((r) => r.bot))].map((b) => [b, stats(rows.filter((r) => r.bot === b).map((r) => r.tokens))])),
     text: [`source: crewhouse ${meta.head || 'unknown'}; engine: ${meta.engine ?? 'a past state dir'}; runs: ${meta.runs ?? 1}`,
-      `largest single task observed: ${top} tokens (input to the CH-6 ceiling).`, '', ...head, ...lines, ''].join('\n'),
+      `largest single task observed: ${top} tokens (supplied usage events only; not proof of real-engine metering or caps).`, '', ...head, ...lines, ''].join('\n'),
   };
 }
 

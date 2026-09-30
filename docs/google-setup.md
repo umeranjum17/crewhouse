@@ -25,6 +25,8 @@ Google allows that without its review for personal use by fewer than 100 people:
    - Copy the **Client ID** (it ends in `.apps.googleusercontent.com`) and the **Client secret**.
 5. In Crewhouse on the home computer: **Settings → Google for the house**, paste both, and press **Switch it on**.
 
+Backend migration debt: Google OAuth, client verification, API probes and credential storage currently live in `src/connections.ts`; they must move to published BYOKit OAuth/keystore/Google capabilities. The steps here describe the person-facing setup, not permission to add raw integrations.
+
 That's all. The Client ID and secret stay on the home computer, in Crewhouse's own folder; nobody's Google password or token ever passes through them.
 
 ## What each person sees when they connect

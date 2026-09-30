@@ -12,5 +12,6 @@
   ],
   "grant": {
     "default": true
-  }
+  },
+  "migrationDebt": "Raw tool installation/execution and third-party SDK ownership must move to published BYOKit capabilities; this manifest records current behavior, not an approved bypass."
 }

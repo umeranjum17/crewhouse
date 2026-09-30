@@ -1,4 +1,5 @@
-// Small fixes to native modules, applied after install; each is idempotent. Drop one once its module ships the fix.
+// Migration debt: private desktop/share/widget SDK patches belong in BYOKit-owned native integrations.
+// Existing historical repairs are idempotent; remove them when published kits own these paths.
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 
 function patch(rel, done, edit) {

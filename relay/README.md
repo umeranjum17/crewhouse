@@ -9,7 +9,7 @@ What the relay can and can't see:
 
 - **Messages:** it can't read them. They are end-to-end encrypted (Noise IK) between the phone and the computer.
 - **Push:** content-free. Whatever a computer asks for, a phone is told only "Crewhouse has news", with no body, data
-  or buttons, and fetches the words over the encrypted link. `main.ts` enforces this on the relay itself. The relay
+  or buttons, and fetches the words over the encrypted link. `main.ts` currently enforces this through private relay hooks: migration debt pending BYOKit options for content-free push and open signup. The relay
   keeps only browsers' Web Push addresses: the phone app's push goes from the computer through Expo, relay or not.
 - **Metadata:** which computers are registered, when phones connect to them, and browsers' push addresses.
 
@@ -33,9 +33,17 @@ With Docker, from the repository root:
 docker compose -f relay/compose.yml up -d
 ```
 
-It listens on `127.0.0.1:7300`. Put TLS in front of it, for example `tailscale serve --bg 7300` (the family's phones on
-the tailnet) or Caddy with `reverse_proxy 127.0.0.1:7300` (a public name). Check it with
-`node relay/health.ts https://relay.example`.
+It listens on `127.0.0.1:7300`. For the family's tailnet, provision TLS through `@byokit/reach` instead of driving the Tailscale CLI:
+
+```ts
+import { reach } from '@byokit/reach';
+const result = await reach({ port: 7300, via: 'tailscale', previous: saved.ingress });
+saved.ingress = result.ingress;
+if (result.pendingCleanup) saved.pendingCleanup = result.pendingCleanup;
+// Persist saved in your provisioning state before exiting; supply it on the next run.
+```
+
+This is a provisioning recipe, not something `relay/main.ts` already runs. Persist the ingress ownership fingerprint and any pending cleanup (including `error.pendingCleanup` on failure). The kit refuses an unrecorded existing Serve root or Funnel; never replace a shared mapping or enable Funnel. The public-name Caddy deployment and relay file persistence remain migration debt pending kit provisioning/keystore contracts. Check TLS with `node relay/health.ts https://relay.example`.
 
 Without Docker: `cd relay && npm ci && node main.ts` (Node 22.19 or later).
 
