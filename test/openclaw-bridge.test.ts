@@ -1,11 +1,12 @@
 // The engine port on the kit, with the kit's fake Gateway as the transport: a scripted `[tool …]` call crosses the
 // kit's real bridge socket, and Crewhouse's gate and tools see the crew's own run (bot and task), never the engine's.
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync } from 'node:fs';
+import { chmodSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { TOOLS } from '../src/openclaw/runtime.ts';
+import { ENGINE_VERSION, OpenClawRuntime, TOOLS } from '../src/openclaw/runtime.ts';
 import { faked } from './kit-fake.ts';
 
 test('a run\'s tool call crosses the gate as the crew\'s own run; an unknown run fails closed', async () => {
@@ -67,10 +68,7 @@ test('model-visible crew tools tell the model the required arguments', () => {
   assert.match(document.description, /blocks/);
 });
 
-test('the engine pin is the kit\'s, and only the engine port imports the kit', () => {
-  const kit = fileURLToPath(new URL('.', import.meta.resolve('@byokit/openclaw/testing'))).replace(/dist\/testing\/$/, 'engine');
-  for (const file of ['package.json', 'package-lock.json'])
-    assert.equal(readFileSync(new URL(`../runtime/openclaw/${file}`, import.meta.url), 'utf8'), readFileSync(join(kit, file), 'utf8'), `runtime/openclaw/${file} drifted from the kit's engine pin`);
+test('only the engine port imports the kit', () => {
   const src = fileURLToPath(new URL('../src/', import.meta.url));
   const importers = readdirSync(src, { recursive: true, encoding: 'utf8' }).filter((f) => /\.(ts|mjs|js)$/.test(f))
     .filter((f) => /from '@(byokit\/openclaw|openclaw\/)/.test(readFileSync(join(src, f), 'utf8')));
@@ -99,4 +97,37 @@ test('a run carries its own account to the engine: the picked provider is the on
     assert.equal(agents.length, 2);
     assert.ok(!('provider' in (agents[1].params as any)) && !('model' in (agents[1].params as any)));
   } finally { await f.done(); }
+});
+
+// Exercise the kit's real installation branch, replacing only npm with an offline recorder.
+test('prepare installs the kit pin with scripts off and an isolated install home; a matching engine is reused', async () => {
+  const state = mkdtempSync(join(tmpdir(), 'ch-install-'));
+  const dir = join(state, 'engine');
+  const npm = join(state, 'npm');
+  const pin = fileURLToPath(new URL('.', import.meta.resolve('@byokit/openclaw/testing'))).replace(/dist\/testing\/$/, 'engine');
+  writeFileSync(npm, `#!${process.execPath}
+const fs = require('node:fs'), path = require('node:path');
+const dir = process.argv.at(-1);
+fs.writeFileSync(path.join(dir, 'install.json'), JSON.stringify({ args: process.argv.slice(2), env: process.env }));
+const target = path.join(dir, 'node_modules/openclaw');
+fs.mkdirSync(target, { recursive: true });
+fs.writeFileSync(path.join(target, 'package.json'), JSON.stringify({ version: '${ENGINE_VERSION}' }));
+fs.writeFileSync(path.join(target, 'openclaw.mjs'), '');
+`);
+  chmodSync(npm, 0o700);
+  const runtime = new OpenClawRuntime(state, '', { engineDir: dir, npmPath: npm });
+  try {
+    await runtime.kit.prepare();
+    for (const file of ['package.json', 'package-lock.json'])
+      assert.equal(readFileSync(join(dir, file), 'utf8'), readFileSync(join(pin, file), 'utf8'));
+    const install = JSON.parse(readFileSync(join(dir, 'install.json'), 'utf8'));
+    assert.deepEqual(install.args, ['ci', '--ignore-scripts', '--no-audit', '--no-fund', '--prefix', dir]);
+    assert.equal(install.env.HOME, join(state, 'openclaw/install-home'));
+    assert.equal(install.env.npm_config_cache, join(state, 'openclaw/npm-cache'));
+    assert.equal(install.env.OPENCLAW_DISABLE_BUNDLED_PLUGIN_POSTINSTALL, '1');
+    assert.deepEqual(Object.keys(install.env).sort(), ['HOME', 'OPENCLAW_DISABLE_BUNDLED_PLUGIN_POSTINSTALL', 'PATH', 'npm_config_cache']);
+    rmSync(npm);
+    await runtime.kit.prepare(); // An unavailable npm proves the matching installed engine is reused.
+    assert.ok(existsSync(runtime.kit.doctorContext().entry));
+  } finally { rmSync(state, { recursive: true, force: true }); }
 });

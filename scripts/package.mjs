@@ -34,19 +34,14 @@ for (const part of ['src', 'templates', 'tools', 'skills', 'package.json', 'pack
   if (existsSync(join(repo, part))) cpSync(join(repo, part), join(app, part), { recursive: true });
 }
 cpSync(join(repo, 'web', 'dist'), join(app, 'web', 'dist'), { recursive: true });
-mkdirSync(join(app, 'runtime/openclaw'), { recursive: true });
-for (const name of ['package.json', 'package-lock.json']) cpSync(join(repo, 'runtime/openclaw', name), join(app, 'runtime/openclaw', name));
-sh(join(opt, 'node', 'bin', 'npm'), ['ci', '--omit=dev', '--no-audit', '--no-fund'], { cwd: app, env: { ...process.env, PATH: `${join(opt, 'node', 'bin')}:${process.env.PATH}` } });
-const engineHome = join(stage, 'engine-install-home');
-mkdirSync(engineHome, { recursive: true });
-sh(join(opt, 'node', 'bin', 'npm'), ['ci', '--ignore-scripts', '--no-audit', '--no-fund'], {
-  cwd: join(app, 'runtime/openclaw'), env: {
-    PATH: `${join(opt, 'node', 'bin')}:/usr/bin:/bin`, HOME: engineHome,
-    npm_config_cache: join(stage, 'engine-cache'), OPENCLAW_DISABLE_BUNDLED_PLUGIN_POSTINSTALL: '1',
-  },
-});
-rmSync(engineHome, { recursive: true, force: true });
-rmSync(join(stage, 'engine-cache'), { recursive: true, force: true });
+mkdirSync(join(app, 'scripts'), { recursive: true });
+cpSync(join(repo, 'scripts/prepare-engine.mjs'), join(app, 'scripts/prepare-engine.mjs'));
+const bundledEnv = { ...process.env, PATH: `${join(opt, 'node', 'bin')}:${process.env.PATH}` };
+sh(join(opt, 'node', 'bin', 'npm'), ['ci', '--omit=dev', '--no-audit', '--no-fund'], { cwd: app, env: bundledEnv });
+const engineState = join(stage, 'engine-prepare');
+sh(join(opt, 'node', 'bin', 'node'), ['scripts/prepare-engine.mjs', engineState], { cwd: app, env: bundledEnv });
+sh(join(opt, 'node', 'bin', 'npm'), ['audit', 'signatures', '--prefix', 'runtime/openclaw'], { cwd: app, env: bundledEnv });
+rmSync(engineState, { recursive: true, force: true });
 
 // The launcher, the menu entry and the icon.
 cpSync(join(repo, 'packaging', 'launch.mjs'), join(opt, 'launch.mjs'));

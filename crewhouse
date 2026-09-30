@@ -15,14 +15,6 @@ paths() {
     "const { loadConfig } = await import('./src/config.ts'); const c = loadConfig(); console.log([c.stateDir, c.crewDir, c.toolsDir].join('\t'))")
 }
 
-install_engine() {
-  paths
-  mkdir -p "$STATE/openclaw/install-home" "$STATE/openclaw/npm-cache"
-  HOME="$STATE/openclaw/install-home" npm_config_cache="$STATE/openclaw/npm-cache" \
-    OPENCLAW_DISABLE_BUNDLED_PLUGIN_POSTINSTALL=1 \
-    npm ci --ignore-scripts --no-audit --no-fund --prefix runtime/openclaw
-}
-
 # crewd's pid, only if that process really is this checkout's crewd.
 crewd_pid() {
   local f="$STATE/crewd.pid" pid
@@ -87,7 +79,7 @@ case "${1:-}" in
   setup)
     need_node
     npm ci --no-audit --no-fund
-    install_engine
+    node scripts/prepare-engine.mjs
     npm run build:web
     # Detect, explain, ask, then install: pinned tools go into Crewhouse's own folder, never global, never sudo.
     node src/tools.ts
@@ -131,7 +123,7 @@ case "${1:-}" in
     git pull --ff-only
     if [ "$(git rev-parse HEAD)" = "$before" ]; then echo "Already up to date."; exit 0; fi
     npm ci --no-audit --no-fund
-    install_engine
+    node scripts/prepare-engine.mjs
     npm run build:web
     paths
     # A tool whose pin moved (a new version, or a new program) is reinstalled now, before crewd comes back.
