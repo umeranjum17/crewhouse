@@ -1,5 +1,5 @@
 // Draws Crewhouse's icons from the mascot bitmaps in web/src/art.ts, so the icon can never drift from Chief:
-// the app icon, the maskable icon, the favicon (his 12-dot cut) and the alpha-only notification glyph.
+// native/store and desktop exports, the maskable icon, the favicon (his 12-dot cut) and notification glyph.
 // It also renders the phone office sprite set into mobile/assets/pals/: every mascot in every mood (Chief in
 // day and night palettes; the pals' palette is the same in both, so they render once), required from
 // mobile/src/marks.ts. Run after changing Chief, a pal, or an AI account's mark (web/src/logos.ts):
@@ -25,6 +25,8 @@ function dots(rows, pal, cx, cy, size, square = false) {
   return s;
 }
 const svg = (body, bg = '') => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">${bg}${body}</svg>\n`;
+const solid = `${BG}<rect width="1024" height="1024" fill="url(#g)"/>`;
+const mobile = '../mobile/assets/';
 const out = {
   // The app icon: Chief whole, on the Pocket Pals gradient. Rounded for browsers; launchers mask the PNGs themselves.
   'icon.svg': svg(dots(chief(), CHIEF_PAL, 512, 530, 760), `${BG}<rect width="1024" height="1024" rx="236" fill="url(#g)"/>`),
@@ -32,16 +34,35 @@ const out = {
   'icon-maskable.svg': svg(dots(chief(), CHIEF_PAL, 512, 520, 600), `${BG}<rect width="1024" height="1024" fill="url(#g)"/>`),
   // The favicon: his 12-dot cut, which is what survives at 16–48 px.
   'favicon.svg': svg(dots(chiefSmall(), CHIEF_PAL, 512, 512, 900), `${BG}<rect width="1024" height="1024" rx="236" fill="url(#g)"/>`),
+  // Native platforms supply their own mask; no rounded corners or alpha in the iOS/store master.
+  [mobile + 'icon.svg']: svg(dots(chief(), CHIEF_PAL, 512, 530, 760), solid),
+  // Android's 108 dp canvas has a 66 dp safe circle. These layers keep all of Chief inside it.
+  [mobile + 'android-icon-foreground.svg']: svg(dots(chief(), CHIEF_PAL, 512, 512, 560)),
+  [mobile + 'android-icon-background.svg']: svg('', solid),
+  [mobile + 'android-icon-monochrome.svg']: svg(dots(chief(), Object.fromEntries(Object.keys(CHIEF_PAL).map(k => [k, '#ffffff'])), 512, 512, 560)),
   // The notification glyph: white on transparent (Android reads only the alpha), bowler, eyes and moustache.
-  'notify.svg': svg(dots(NOTIFY, { x: '#ffffff' }, 512, 512, 1024, true)),
+  'notify.svg': svg(dots(NOTIFY, { x: '#ffffff' }, 512, 512, 800, true)),
 };
 for (const [name, text] of Object.entries(out)) writeFileSync(web + name, text);
-const png = (from, to, px) => execFileSync('magick', ['-background', 'none', '-density', '300', web + from, '-resize', `${px}x${px}`, '-depth', '8', '-strip', web + to]);
+const png = (from, to, px, opaque = false) => execFileSync('magick', ['-background', 'none', '-density', '300', web + from, '-resize', `${px}x${px}`, '-depth', '8', '-strip', `${opaque ? 'PNG24' : 'PNG32'}:${web + to}`]);
 png('icon.svg', 'icon-192.png', 192);
 png('icon.svg', 'icon-512.png', 512);
-png('icon-maskable.svg', 'icon-maskable-512.png', 512);
-png('icon-maskable.svg', 'apple-touch-icon.png', 180);
+png('icon-maskable.svg', 'icon-maskable-512.png', 512, true);
+png('icon-maskable.svg', 'icon-maskable-192.png', 192, true);
+png('icon-maskable.svg', 'apple-touch-icon.png', 180, true);
 png('notify.svg', 'notify-96.png', 96);
+for (const px of [16, 32, 48]) png('favicon.svg', `favicon-${px}.png`, px);
+execFileSync('magick', [[16, 32, 48].map(px => web + `favicon-${px}.png`), web + 'favicon.ico'].flat());
+png(mobile + 'icon.svg', mobile + 'icon.png', 1024, true);
+for (const layer of ['foreground', 'background', 'monochrome']) png(mobile + `android-icon-${layer}.svg`, mobile + `android-icon-${layer}.png`, 1024, layer === 'background');
+png('notify.svg', mobile + 'notification-icon.png', 96);
+const desktop = new URL('../packaging/icons/', import.meta.url).pathname;
+mkdirSync(desktop, { recursive: true });
+for (const px of [16, 24, 32, 48, 64, 128, 256, 512]) png(px <= 64 ? 'favicon.svg' : 'icon.svg', `../packaging/icons/crewhouse-${px}.png`, px);
+const store = new URL('../mobile/store/', import.meta.url).pathname;
+mkdirSync(store, { recursive: true });
+png(mobile + 'icon.svg', '../mobile/store/google-play-icon.png', 512, true);
+png(mobile + 'icon.svg', '../mobile/store/app-store-icon.png', 1024, true);
 // The AI account marks for the phone, which draws no SVG: white on transparent, laid on each account's tile.
 const ai = new URL('../mobile/assets/ai/', import.meta.url).pathname;
 mkdirSync(ai, { recursive: true });
@@ -50,7 +71,7 @@ for (const [key, d] of Object.entries(MARKS)) {
   execFileSync('magick', ['-background', 'none', '-density', '1200', `${ai}${key}.svg`, '-resize', '96x96', '-depth', '8', '-strip', `PNG32:${ai}${key}.png`]);
   rmSync(`${ai}${key}.svg`);
 }
-console.log('icons written into web/ and mobile/assets/ai/');
+console.log('icons written into web/, mobile/assets/, mobile/store/ and packaging/icons/');
 // The phone office sprites: one PNG per (kind, mood), plus Chief's night set. Square pixels with an ink edge, as the
 // web office draws them (art.ts spriteSvg), at 8 px a dot. The phone draws these with <Image> instead of one View per dot.
 const pals = new URL('../mobile/assets/pals/', import.meta.url).pathname;

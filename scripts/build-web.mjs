@@ -10,7 +10,7 @@ mkdirSync(root + 'dist', { recursive: true });
 cpSync(root + 'index.html', root + 'dist/index.html');
 cpSync(root + 'fonts', root + 'dist/fonts', { recursive: true });
 // Icons are drawn from Chief's bitmaps by scripts/icons.mjs.
-for (const f of ['icon.svg', 'favicon.svg', 'notify.svg', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png', 'notify-96.png']) cpSync(root + f, root + 'dist/' + f);
+for (const f of ['icon.svg', 'favicon.svg', 'favicon.ico', 'favicon-16.png', 'favicon-32.png', 'favicon-48.png', 'notify.svg', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'icon-maskable-192.png', 'apple-touch-icon.png', 'notify-96.png']) cpSync(root + f, root + 'dist/' + f);
 cpSync(root + 'manifest.webmanifest', root + 'dist/manifest.webmanifest'); // "Share to Crewhouse" from the phone's Share sheet
 // Content-named bundles: the browser caches each build forever, and a changed build simply gets a new name.
 const built = await build({

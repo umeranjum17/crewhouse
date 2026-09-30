@@ -20,7 +20,7 @@ const resultPage = (title: string, words: string, close = false) => '<!doctype h
   (close ? '<script>setTimeout(() => window.close(), 1500)</script>' : '') + '</body>';
 
 const TYPES: Record<string, string> = {
-  '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml',
+  '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.ico': 'image/x-icon',
   '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif',
   '.mp4': 'video/mp4', '.webm': 'video/webm', '.md': 'text/plain; charset=utf-8', '.txt': 'text/plain; charset=utf-8',
   '.json': 'application/json', '.pdf': 'application/pdf', '.webmanifest': 'application/manifest+json',

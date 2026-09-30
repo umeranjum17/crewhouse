@@ -52,8 +52,11 @@ rmSync(join(stage, 'engine-cache'), { recursive: true, force: true });
 cpSync(join(repo, 'packaging', 'launch.mjs'), join(opt, 'launch.mjs'));
 mkdirSync(join(stage, 'usr', 'share', 'applications'), { recursive: true });
 cpSync(join(repo, 'packaging', 'crewhouse.desktop'), join(stage, 'usr', 'share', 'applications', 'crewhouse.desktop'));
-mkdirSync(join(stage, 'usr', 'share', 'icons', 'hicolor', '512x512', 'apps'), { recursive: true });
-cpSync(join(repo, 'web', 'icon-512.png'), join(stage, 'usr', 'share', 'icons', 'hicolor', '512x512', 'apps', 'crewhouse.png'));
+for (const px of [16, 24, 32, 48, 64, 128, 256, 512]) {
+  const dir = join(stage, 'usr', 'share', 'icons', 'hicolor', `${px}x${px}`, 'apps');
+  mkdirSync(dir, { recursive: true });
+  cpSync(join(repo, 'packaging', 'icons', `crewhouse-${px}.png`), join(dir, 'crewhouse.png'));
+}
 mkdirSync(join(stage, 'usr', 'bin'), { recursive: true });
 writeFileSync(join(stage, 'usr', 'bin', 'crewhouse-app'), '#!/bin/sh\nexec /opt/crewhouse/node/bin/node /opt/crewhouse/launch.mjs "$@"\n');
 chmodSync(join(stage, 'usr', 'bin', 'crewhouse-app'), 0o755);
