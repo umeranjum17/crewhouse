@@ -55,8 +55,8 @@ const expand = (p) => p.replace(/^~(?=\/|$)/, process.env.HOME ?? '~');
 /** The two things a first turn can differ by: what it carries, and what it asks for. The crew line stands in the
  *  folder id for the display name (crewd reads that from SQLite); everything else is the file it really reads. */
 export function variants(argv, cfg, body, address = '') {
-  const about = readNotes(cfg, { member: 1, bot: null }).trim();
-  const notes = readNotes(cfg, { member: 1, bot: 'chief' }).trim();
+  const about = readNotes(cfg, { bot: null }).trim();
+  const notes = readNotes(cfg, { bot: 'chief' }).trim();
   const ids = existsSync(join(cfg.crewDir, 'bots')) ? readdirSync(join(cfg.crewDir, 'bots')) : [];
   const crew = ids.filter((id) => id !== 'chief').map((id) => `${id} (id ${id})`).join('; ') || 'nobody yet';
   const skills = listSkills(cfg, 'chief');

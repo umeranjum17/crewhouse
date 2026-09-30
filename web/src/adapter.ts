@@ -209,8 +209,6 @@ export function kindOf(b: Json): Kind {
   for (const c of String(b?.id ?? '')) h = (h * 31 + c.charCodeAt(0)) >>> 0;
   return KINDS[h % KINDS.length];
 }
-/** Templates only the owner sees in the gallery (people-finding spends money). */
-const OWNER_ONLY = new Set(['tracer']);
 
 /** A helper's desk: its active job's delivered files as views, own output first, one row per path where it
  *  last landed. Photos ride in the chat, never on the desk. */
@@ -349,7 +347,7 @@ export const STEP_MARK = { checked: '✓ Checked', said: 'You said done', missin
 export const googleHeadline = (steps?: GoogleStep[] | null) => {
   const missing = steps?.findIndex((s) => s.state === 'missing') ?? -1;
   if (missing >= 0) return `Step ${missing + 1} is missing`;
-  return steps?.every((s) => s.state === 'checked') ? 'Google is on for your crew ✓' : 'Google key saved and checked by Google';
+  return steps?.every((s) => s.state === 'checked') ? 'Google is on ✓' : 'Google key saved and checked by Google';
 };
 
 /** The one code a phone away from home types: the short code and the pairing code, with the go-between's own
@@ -462,10 +460,9 @@ export function zoneNote(state: Json) {
   return z && mine && z !== mine ? `Times follow the home computer's clock (${z}).` : '';
 }
 
-/** The helpers this person sees: everyone's, less the owner-only ones unless it's the owner. */
+/** The person's helpers. */
 export function crew(state: Json) {
-  const owner = state.person.id === OWNER;
-  return state.bots.filter((b: Json) => b.id !== 'chief' && (owner || !OWNER_ONLY.has(b.template))).map((b: Json) => helper(b, state.events ?? [])) as Helper[];
+  return state.bots.filter((b: Json) => b.id !== 'chief').map((b: Json) => helper(b, state.events ?? [])) as Helper[];
 }
 
 /** One thread in the chat list: Chief pinned on top, then the helpers, the latest talk first. */
@@ -530,8 +527,7 @@ export function jobParts(job: Json) {
 }
 
 export function gallery(state: Json) {
-  const owner = state.person.id === OWNER;
-  return state.templates.filter((t: Json) => t.id !== 'chief' && (owner || !(t.ownerOnly || OWNER_ONLY.has(t.id))))
+  return state.templates.filter((t: Json) => t.id !== 'chief')
     .map((t: Json) => ({ id: t.id, name: t.display, kind: kindOf(t), does: plain(t.role ?? '') }));
 }
 
@@ -730,13 +726,13 @@ export function firstIdeas(state: Json) {
   return FIRST_IDEAS.filter((i) => !i.label.startsWith("What's on this week")).concat({ icon: '🎈', label: 'Help me plan a birthday party' });
 }
 
-/** The owner's three setup jobs: what the crew thinks with, the phones reaching it, and Google for your crew.
+/** Your three setup jobs: what the crew thinks with, the phones reaching it, and Google setup.
  *  Until all three are done, the owner's Home says how many are left. */
 export function homeSetup(state: Json, g: Json | null, link: Json | null) {
   const rows = [
     { key: 'chatgpt', says: 'ChatGPT signed in', done: g?.state === 'ready' && !g?.notIncluded },
     { key: 'phones', says: 'Phones can reach the crew from anywhere', done: link?.anywhere === 'anywhere' },
-    { key: 'google', says: 'Google for your crew', done: state.house?.google !== false },
+    { key: 'google', says: 'Google setup', done: state.house?.google !== false },
   ];
   return { rows, left: rows.filter((r) => !r.done).length };
 }

@@ -187,14 +187,13 @@ export function AccountCard({ g, inChat, onReady }: { g: ReturnType<typeof A.acc
 /**
  * Connecting an app: its own page opens in the tap (Google, Notion or Canva), the person says yes there, and the sheet
  * turns to done by itself. Calendar and Gmail warn about Google's "unverified app" screen before it appears. Google's
- * apps before the owner has switched Google on for your crew say so instead of opening a broken page.
+ * apps before Google is set up say so instead of opening a broken page.
  */
 export function ConnectApp({ app, helper, state, tab: first, ask, onConnected, onDone, onClose }: { app: A.App; helper?: string; state: Json; tab?: Window | null; ask?: number; onConnected?: () => void; onDone: () => void; onClose: () => void }) {
   const [phase, setPhase] = useState<Phase>(pinned ?? 'opening');
   const [url, setUrl] = useState(pinned ? 'https://accounts.google.com/' : '');
   const tab = useTab(first);
   const who = A.signsInWith(app);
-  const owner = state.members.find((m: Json) => m.id === A.OWNER)?.name ?? 'the owner';
   const start = () => {
     setPhase('opening');
     api.connect(app.id).then((r) => { setUrl(r?.url ?? ''); tab.goTo(r?.url ?? ''); setPhase(r?.state === 'on' ? 'done' : 'waiting'); })
@@ -232,20 +231,20 @@ export function ConnectApp({ app, helper, state, tab: first, ask, onConnected, o
       {phase === 'done' && <><h2>{app.name} is connected</h2><p>{app.does}</p>{helper && <p className="mute">{helper} is carrying on with it now.</p>}
         <button className="btn go big" onClick={onDone}>Done</button></>}
       {phase === 'cancelled' && <><h2>No problem</h2><p className="mute">Nothing was connected{helper ? `, and ${helper} will manage without it` : ''}.
-        {app.warns ? ` Google shows that warning for every app it hasn't reviewed — a personal app always gets it. Crewhouse is ${owner}'s app, running on your own computer. Tap Advanced, then Go to Crewhouse.` : ` You can connect ${app.name} any time.`}</p>
+        {app.warns ? ` Google shows that warning for every app it hasn't reviewed — a personal app always gets it. Crewhouse is your app, running on your own computer. Tap Advanced, then Go to Crewhouse.` : ` You can connect ${app.name} any time.`}</p>
         <button className="btn go big" onClick={again}>Try again</button>{notNow}</>}
       {phase === 'unticked' && <><h2>Almost: tick the box</h2><p className="mute">{app.name} still isn't ticked. Tap Try again, then tick {app.name} on Google's page.</p>
         <button className="btn go big" onClick={again}>Try again</button>{notNow}</>}
       {phase === 'expired' && <><h2>That page timed out</h2><p className="mute">{who}'s page only waits a few minutes. Let's open a fresh one.</p>
         <button className="btn go big" onClick={again}>Start again</button>{notNow}</>}
       {phase === 'failed' && (poll.value?.step
-        // Google answered that one of the owner's four setup steps isn't done: say which, and send the owner to it.
+        // Google answered that one of the four setup steps isn't done: say which, and point to it.
         ? <><h2>A Google setup step is missing</h2><p className="mute">{poll.value.error}</p>
           <a className="btn go big" href="#/settings" onClick={onClose}>Open Settings</a>{notNow}</>
         : <><h2>That didn't go through</h2><p className="mute">{poll.value?.error ?? `${who} didn't finish connecting. No harm done; let's try once more.`}</p>
           <button className="btn go big" onClick={again}>Try again</button>{notNow}</>)}
       {phase === 'offline' && <OfflineWords onClose={onClose} />}
-      {phase === 'house' && <><h2>Switch Google on for your crew</h2><p className="mute">It's a one-time setup, about twenty minutes, and then you can connect Calendar, Gmail and Drive.</p>
+      {phase === 'house' && <><h2>Switch Google on</h2><p className="mute">It's a one-time setup, about twenty minutes, and then you can connect Calendar, Gmail and Drive.</p>
         <a className="btn go big" href="#/settings" onClick={onClose}>Open Settings</a>{notNow}</>}
       {phase === 'unavailable' && <><h2>Coming very soon</h2><p className="mute">Connecting {app.name} arrives with the next Crewhouse update.</p>
         <button className="btn go big" onClick={onClose}>OK</button></>}

@@ -1,16 +1,16 @@
 ---
 name: plan-meals
-description: Plan a week of dinners the household will actually eat, write the shopping list sorted by aisle, put the shop day on the calendar, and fill an online cart only through its checkout card. Use for "plan our meals", "what's for dinner this week", "shopping list", "groceries".
+description: Plan a week of dinners the person will actually eat, write the shopping list sorted by aisle, put the shop day on the calendar, and fill an online cart only through its checkout card. Use for "plan our meals", "what's for dinner this week", "shopping list", "groceries".
 says: Plan seven dinners everyone will eat, write the list sorted by aisle, and put the shop day on your calendar
 ---
 
 # Plan the meals
 
-You are feeding the house for one week. The plan is seven dinners real people will cook and eat on a weeknight, the
+You are planning meals for the person for one week. The plan is seven dinners real people will cook and eat on a weeknight, the
 list is one page sorted by the way a person walks the shop, and anything that costs money asks first — the shop day on
 its card, the cart on its checkout card, every time.
 
-1. Read what the house eats before you plan: the household's own notes (the member's about notes) first — who is
+1. Read what the house eats before you plan: the person's about notes first — who is
    vegetarian, who is allergic, how many eat, what the budget is. Ask one question only when something that changes
    every meal is missing. A plan nobody eats is food thrown away.
 2. Plan seven dinners, one line each: the dish and why it fits that day (the late night gets the twenty-minute one,

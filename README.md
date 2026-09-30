@@ -85,7 +85,7 @@ Tell Chief what you need. He hands it to the helper who does that kind of work, 
 
 ### It asks before it spends
 
-Helpers work in their own folders without bothering you. Anything that costs money asks every time. The card is built from what the shop's own page shows, never from the model's description of it. Sending, deleting, or opening something of yours also asks first. Some of those can get a standing "Always OK" (say, adding events to your calendar). Spending never can, and neither can acting as you on a site you signed a helper in to. You also set a monthly spending cap for your crew.
+Helpers work in their own folders without bothering you. Anything that costs money asks every time. The card is built from what the shop's own page shows, never from the model's description of it. Sending, deleting, or opening something of yours also asks first. Some of those can get a standing "Always OK" (say, adding events to your calendar). Spending never can, and neither can acting as you on a site you signed a helper in to. Set your monthly spending cap under Settings → Money; every purchase still asks first.
 
 <p align="center">
   <img src="docs/screenshots/readme/order.webp" alt="Scout asks to place an order at grocer.example: garlic, milk and rice, total $43.10, with Review order and Don't place order" width="300" />
@@ -144,7 +144,7 @@ The same app works at desktop and phone width, and switches to night colours in 
 
 - **Your personal assistant.** One install is for you and your crew of helpers. Ask in your own words, read what comes back, and tap yes when a helper needs you. No technical knowledge needed to use it.
 - **Each helper's own computer (Linux).** A helper with the Computer tool gets its own virtual display and browser, never yours. Watch it live, take the wheel (the helper pauses until you hand it back), or show it how to do a task so it can keep the steps as a skill.
-- **Connected apps.** Connect your Notion, Canva, Google Drive, Calendar or Gmail. A helper that needs one asks with a Connect card in the chat. Reading happens straight away; changing or sending asks first. Google needs a one-time setup on your computer ([docs/google-setup.md](docs/google-setup.md)).
+- **Connected apps.** Connect your Notion, Canva, Google Drive, Calendar or Gmail. A helper that needs one asks with a Connect card in the chat. Reading happens straight away; changing or sending asks first. Google needs a one-time setup under Settings → Google setup on your computer ([docs/google-setup.md](docs/google-setup.md)).
 - **Picks up after a restart.** Stop the computer mid-job, start it again, and the job carries on in the same conversation. A question waiting on you is still there.
 - **Learns how you work.** After a long job the helper can keep what it learned as a skill. You'll see a "Learned: …" line with Forget next to it, and Settings can switch this off.
 

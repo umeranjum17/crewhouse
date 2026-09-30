@@ -152,7 +152,7 @@ test('digest nudges until a goal note exists, per member', () => {
   const { crew, cfg, done } = setup();
   crew.recruit('scout', 'Scout', 'person');
   assert.match(crew.digest(1, 0), /Want help starting something on the side\? Tap to begin\./);
-  disk.remember(cfg, { member: 1, bot: 'scout' }, 'Goal: weekend dog walking');
+  disk.remember(cfg, { bot: 'scout' }, 'Goal: weekend dog walking');
   assert.doesNotMatch(crew.digest(1, 0), /Want help starting/);
   const sam = crew.addMember('Sam').id;
   crew.onboard('Sam', sam);
@@ -399,7 +399,7 @@ test('money cap: each spend still asks, and past the month\'s cap the crew canno
   assert.deepEqual(crew.snapshot().money, { cap: 20, spent: 0 });
   assert.equal(crew.snapshot(2 as any).money?.cap, 20, 'an unknown viewer is shown as the owner');
   crew.addMember('Sara');
-  assert.equal(crew.snapshot(2).money, undefined, 'only the owner sees the money');
+  assert.deepEqual(crew.snapshot(2).money, { cap: 20, spent: 0 }, 'the cap is install-wide');
 
   const first = gate(15);
   await until('asked', () => db.get("SELECT id FROM asks WHERE bot = 'tracer' AND state = 'open'"));
@@ -412,7 +412,7 @@ test('money cap: each spend still asks, and past the month\'s cap the crew canno
   // $15 + $10 would pass $20: refused at once, no card.
   const refused = await gate(10);
   assert.equal(refused.block, true);
-  assert.match(refused.reason, /past the \$20 you set/);
+  assert.match(refused.reason, /past the \$20 monthly limit/);
   assert.equal(db.get("SELECT COUNT(*) AS n FROM asks WHERE bot = 'tracer'")!.n, 1);
 
   assert.throws(() => crew.setMoneyCap(-1), /between/);

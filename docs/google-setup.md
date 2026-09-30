@@ -23,7 +23,7 @@ Google allows that without its review for personal use by fewer than 100 people:
 4. **APIs & Services → Credentials → Create credentials → OAuth client ID**:
    - Application type **Desktop app**, name **Crewhouse home computer**.
    - Copy the **Client ID** (it ends in `.apps.googleusercontent.com`) and the **Client secret**.
-5. In Crewhouse on the home computer: **Settings → Google for your crew**, paste both, and press **Switch it on**.
+5. In Crewhouse on the home computer: **Settings → Google setup**, paste both, and press **Switch it on**.
 
 Backend migration debt: Google OAuth, client verification, API probes and credential storage currently live in `src/connections.ts`; they must move to published BYOKit OAuth/keystore/Google capabilities. The steps here describe the person-facing setup, not permission to add raw integrations.
 
@@ -49,7 +49,7 @@ Gmail's warning can only go with the paid assessment (CASA), so it stays at 5.
 
 ## How Crewhouse checks each step
 
-Crewhouse never calls a step done on your word alone. Settings → Google for your crew shows each step as **Checked** (Google's own answer proved it), **Missing** (Google's answer showed it isn't done, with the page to fix it) or **You said done** (nobody has connected yet, so there is nothing to check it with).
+Crewhouse never calls a step done on your word alone. Settings → Google setup shows each step as **Checked** (Google's own answer proved it), **Missing** (Google's answer showed it isn't done, with the page to fix it) or **You said done** (you have not connected yet, so there is nothing to check it with).
 
 - **Pasting the key** (steps 1 and 4): Crewhouse asks Google whether it knows the Client ID and secret, and whether the key takes this computer's address, before keeping it. A secret in the ID box, the ID pasted twice, a key Google doesn't know, a secret from another key, or a *Web application* key is each said in plain words, and nothing is saved.
 - **Your first Connect** (steps 2 and 3): after the yes on Google's page, Crewhouse reads one small thing back (a calendar event, the Gmail address, the Drive user) before it says Connected. If Google answers that the API is off, the card names it and points to step 2. If Google says the connection only lasts a week, the app is still in *Testing*: the card points to step 3, **Publish app**, and nothing is connected, because it would stop working within the week.

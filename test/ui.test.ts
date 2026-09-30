@@ -380,13 +380,13 @@ test('chat navigation acts like chat: no tab scroller, Details behind the header
   assert.doesNotMatch(app, /\['chief', 'helper', 'add'\]\.includes\(route\.view\) \? 'crew'/, 'a helper chat lights Chats, not Crew');
 });
 
-test('first success: starters never dead-end, and the house setup is the owner\'s to-do', () => {
-  // Google off for the house: the calendar starter sits out; a party plan takes its place.
+test('first success: starters never dead-end, and setup stays in Settings', () => {
+  // Google not set up: the calendar starter sits out; a party plan takes its place.
   const on = A.firstIdeas({ house: { google: true } });
   const off = A.firstIdeas({ house: { google: false } });
   assert.equal(on.length, 3);
   assert.equal(off.length, 3);
-  assert.ok(!off.some((i) => i.label.includes("What's on this week")), 'the calendar starter waits for the house');
+  assert.ok(!off.some((i) => i.label.includes("What's on this week")), 'the calendar starter waits for Google setup');
   assert.ok(off.some((i) => /birthday party/i.test(i.label)));
   // The house's three jobs, and how many are left.
   assert.equal(A.homeSetup({ house: { google: true } }, { state: 'ready' }, { anywhere: 'anywhere' }).left, 0);
@@ -422,11 +422,11 @@ test('the runs-at-home line is said once, in the same plain words, in all three 
   assert.doesNotMatch(app, /I run the crew on this computer/, 'the phone never calls the family computer "this computer"');
 });
 
-test('owner-only helpers stay with the owner', () => {
-  assert.ok(!A.crew(state).some((h) => h.id === 'tracer'));
-  assert.ok(!A.gallery(state).some((t: any) => t.id === 'tracer'));
-  const owner = { ...state, person: { ...state.person, id: 1 } };
-  assert.ok(A.crew(owner).some((h) => h.id === 'tracer'));
+test('Tracer is visible and recruitable without an owner filter', () => {
+  assert.ok(A.crew(state).some((h) => h.id === 'tracer'));
+  assert.ok(A.gallery(state).some((t: Json) => t.id === 'tracer'));
+  const legacy = { ...state, templates: [{ id: 'tracer', display: 'Tracer', ownerOnly: true }] };
+  assert.ok(A.gallery(legacy).some((t: Json) => t.id === 'tracer'), 'old template metadata cannot hide it');
 });
 
 test('plain() keeps what a person wrote and drops the machinery', () => {
@@ -639,7 +639,7 @@ test('helpers wear the same story on their own faces', () => {
   const moodOf = (id: string) => A.crew(s).find((h) => h.id === id)!.mood;
   assert.deepEqual(['scribe', 'reel', 'scout', 'pip', 'tracer', 'muse', 'ink'].map(moodOf), ['error', 'ask', 'happy', 'worried', 'work', 'rest', 'idle']);
   assert.equal(moodOf('scribe') === 'error' && A.crew(s).find((h) => h.id === 'scribe')!.ring, '', 'sad is a face, not a ring');
-  // The owner only test below keeps tracer visible; here the mapping is what matters.
+  // Tracer is visible in the crew; here the mapping is what matters.
 });
 
 test('the phone\'s tab icons: whole 9×9 grids of one ink, each its own shape, and no font glyphs in the tab bar', async () => {
@@ -681,14 +681,14 @@ test('Settings keeps the person’s Chief address, quiet-hours switch and crew s
   assert.match(src, /How much of it the crew may use[\s\S]*?onClick=\{[^\n]*api\.person\([^\n]*\{ share:/, 'the person can still set the crew’s share in Settings');
 });
 
-test('the crew\'s share is words, never a number; money is whole dollars and only for the owner', () => {
+test('the crew\'s share is words, never a number; money is dollars against your cap', () => {
   for (const s of [{ choice: 'light', used: false }, { choice: 'light', used: true }, { choice: 'full', used: false }]) {
     const v = A.share({ share: s });
     assert.doesNotMatch(shown(v), FORBIDDEN);
     assert.doesNotMatch(v.today, /\d/, 'no counts, no percentages');
   }
   assert.match(A.share({ share: { choice: 'light', used: true } }).today, /start again tomorrow/);
-  assert.equal(A.money({}), null, 'not the owner: nothing about money');
+  assert.equal(A.money({}), null, 'an older snapshot without money has no panel');
   assert.equal(A.money({ money: { cap: 20, spent: 0 } })!.month, 'This month: nothing spent yet.');
   assert.equal(A.money({ money: { cap: 20, spent: 4.5 } })!.month, 'This month: $4.50 of $20 spent.');
 });

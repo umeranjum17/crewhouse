@@ -257,8 +257,8 @@ export class Crew {
     if (cfg.engineProvider) this.accounts.ready.set('chatgpt', true);
     this.accounts.onSignedIn = () => this.wake(`You're signed in. I'll start now.`);
     this.connections = new Connections(cfg, `http://${cfg.host}:${cfg.port}/connect/callback`);
-    this.connections.onChange = (_member, app) => this.db.event('app.changed', null, { app });
-    this.connections.onExpired = (member, app) => this.say(CHIEF, 'system', `Your ${this.connections.apps[app].name} connection has run out. Connect it again under Settings, Connections, whenever you like.`, null, member);
+    this.connections.onChange = (app) => this.db.event('app.changed', null, { app });
+    this.connections.onExpired = (app) => this.say(CHIEF, 'system', `Your ${this.connections.apps[app].name} connection has run out. Connect it again under Settings, Connections, whenever you like.`, null, OWNER);
   }
 
   init() {
@@ -277,7 +277,7 @@ export class Crew {
     for (const b of this.bots()) {
       let tpl: disk.Template | null = null;
       try { tpl = disk.loadTemplate(this.cfg, b.template); } catch { /* a template since removed: its bot keeps its folder as is */ }
-      disk.upgradeFolder(this.cfg, b.id, tpl, b.display, OWNER);
+      disk.upgradeFolder(this.cfg, b.id, tpl, b.display);
     }
     if (!this.member(OWNER).onboarded && !this.db.get('SELECT 1 FROM messages WHERE bot = ?', CHIEF)) this.say(CHIEF, 'bot', chiefGreeting(), null, OWNER);
     this.timer = setInterval(() => this.tick(), 1500);
@@ -416,8 +416,8 @@ export class Crew {
 
   /** Ideas are promises a hired bot can keep (tools granted and ready here, apps connected), shown with what they wait on;
    *  unhired templates offer up to 3 goal rows needing nothing, tagged with the template to hire (docs/ui-contract.md). */
-  private ideas(member = OWNER) {
-    const on = new Set(this.connections.on(member));
+  private ideas() {
+    const on = new Set(this.connections.on());
     const house = this.connections.houseGoogle();
     const hired = new Set(this.bots().filter((b) => b.id !== CHIEF).map((b) => b.template));
     const rows = this.bots().filter((b) => b.id !== CHIEF).flatMap((b) => {
@@ -490,23 +490,22 @@ export class Crew {
       bots: this.bots().map((b) => ({ ...this.pub(b, me.id), ...this.chat(b.id, me.id) })),
       templates: disk.listTemplates(this.cfg).map((t) => ({ id: t.id, display: t.display, role: t.role, color: t.color, kit: disk.templateKit(this.cfg, t) })),
       tasks: this.db.all('SELECT * FROM tasks WHERE bot != ? AND member = ? ORDER BY id DESC LIMIT 50', CHIEF, me.id).map((t) => ({ ...this.task(t), files: t.state === 'done' ? files(t.id) : [] })),
-      ideas: this.ideas(me.id),
+      ideas: this.ideas(),
       room: (() => { const r = this.room(me.id); return { last: r.lines.at(-1) ?? null, busy: r.busy }; })(),
       asks: this.db.all("SELECT * FROM asks WHERE state = 'open' AND COALESCE(member, ?) = ? ORDER BY id", OWNER, me.id).map((a) => this.askView(a)),
       events: this.db.events(0, 80),
       /** The person's AI accounts that are resting now, and until when (docs/ui-contract.md). */
       resting: Object.fromEntries(Object.keys(PROVIDERS).map((k) => [k, this.restingUntil(k)]).filter(([, t]) => t)),
-      /** The apps this member has connected, by the app screen's own names. */
-      connections: this.connections.on(me.id),
-      /** Whether the owner has switched Google on for the house (Calendar, Gmail and Drive need it), and its four steps as
+      /** The apps the person has connected, by the app screen's own names. */
+      connections: this.connections.on(),
+      /** Whether Google is switched on (Calendar, Gmail and Drive need it), and its four steps as
        *  far as Google's own answers show: checked, missing, or only said done. */
       house: { google: this.connections.houseGoogle(), steps: this.connections.houseSteps() },
       desktops: { ready: desktopMissing().length === 0 },
       routines: this.routines(me.id),
       /** The viewer's pick for the crew's share of their AI, and whether today's is used up. Never a number. */
       share: { choice: me.share ?? 'light', used: this.overShare(me.id), week: this.week(me.id) },
-      /** Owner only: the house's monthly money cap and what was spent this month, in dollars. */
-      ...(me.id === OWNER ? { money: { cap: this.moneyCap(), spent: this.spentThisMonth() } } : {}),
+      money: { cap: this.moneyCap(), spent: this.spentThisMonth() },
     };
   }
 
@@ -762,8 +761,8 @@ export class Crew {
     const now = Date.now();
     if (r.kind === 'digest') {
       // With Calendar connected, crewd reads today's events itself first; the digest still costs no AI.
-      if (this.connections.connected(r.member, 'calendar')) {
-        return void this.connections.today(r.member).catch(() => null).then((day) => this.sendDigest(r, why, now, day ?? undefined));
+      if (this.connections.connected('calendar')) {
+        return void this.connections.today().catch(() => null).then((day) => this.sendDigest(r, why, now, day ?? undefined));
       }
       return this.sendDigest(r, why, now);
     }
@@ -867,7 +866,7 @@ export class Crew {
     const learned = this.db.all("SELECT bot, data FROM events WHERE kind = 'memory.learned' AND at >= ? AND COALESCE(json_extract(data, '$.member'), ?) = ? ORDER BY seq", since, OWNER, member);
     const soon = this.db.all("SELECT * FROM routines WHERE state = 'on' AND kind != 'digest' AND member = ? AND next_at <= ? ORDER BY next_at", member, Date.now() + 86_400_000);
     const scout = this.bots().find((b) => b.template === 'scout' && (b.member ?? OWNER) === member)?.id;
-    const goal = scout && (disk.readNotes(this.cfg, { member, bot: scout }).split('\n').some((l) => l.replace(/^- /, '').startsWith('Goal:')) ||
+    const goal = scout && (disk.readNotes(this.cfg, { bot: scout }).split('\n').some((l) => l.replace(/^- /, '').startsWith('Goal:')) ||
       this.db.get('SELECT 1 FROM tasks WHERE member = ? AND bot = ?', member, scout));
     const lines = [`Good ${partOfDay()}${address ? `, ${address}` : ''}. While you were away:`];
     lines.push(done.length ? `- Finished: ${list(done.slice(0, 5).map((t) => `${name(t.bot)}, “${t.title}”`))}${done.length > 5 ? `, and ${done.length - 5} more` : ''}.` : '- Nothing new was finished.');
@@ -910,8 +909,8 @@ export class Crew {
           // Chief's hand-off in a helper's chat collapses to its task's title, with the full words behind Show details.
           ...(id !== CHIEF && m.author === 'chief' && m.task_id ? { title: this.db.get('SELECT title FROM tasks WHERE id = ?', m.task_id)?.title } : {}) })),
       tasks: this.db.all('SELECT * FROM tasks WHERE bot = ? AND COALESCE(member, ?) = ? ORDER BY id DESC LIMIT 50', id, OWNER, viewer).map((t) => this.task(t)),
-      // What this helper learned about the viewer: never another member's notes.
-      notes: disk.readNotes(this.cfg, { member: viewer, bot: id }),
+      // What this helper learned about the person.
+      notes: disk.readNotes(this.cfg, { bot: id }),
       notesCap: disk.NOTES_CAP,
       soul: disk.readSoul(this.cfg, id),
       soulCap: disk.SOUL_CAP,
@@ -1050,7 +1049,7 @@ export class Crew {
       if (inlineHowTo(words) === 'signin') { this.say(CHIEF, 'bot', 'Sign in with ChatGPT.', null, member); return; }
       const app = /\b(calendar|gmail|drive|notion|canva)\b/i.exec(words)?.[1].toLowerCase() ?? 'calendar';
       this.say(CHIEF, 'bot', `Connect ${this.connections.apps[app].name}.`, null, member);
-      if (!this.connections.connected(member, app)) this.openAsk(CHIEF, undefined, `Connect ${this.connections.apps[app].name}`, { app, words: `Connect your ${this.connections.apps[app].name}` }, 'connect', member);
+      if (!this.connections.connected(app)) this.openAsk(CHIEF, undefined, `Connect ${this.connections.apps[app].name}`, { app, words: `Connect your ${this.connections.apps[app].name}` }, 'connect', member);
       return;
     }
     if (botId === CHIEF) return this.route(words, model, member, pics, room, key);
@@ -1232,14 +1231,14 @@ export class Crew {
     const said = task.origin === 'person' && task.bot !== CHIEF && this.db.get("SELECT text FROM messages WHERE bot = ? AND author = 'bot' AND COALESCE(member, ?) = ? AND COALESCE(task_id, 0) != ? AND at > ? ORDER BY id DESC LIMIT 1",
       task.bot, member.id, member.id, task.id, Date.now() - 2 * 86_400_000)?.text;
     const last = said ? `[Crewhouse] Your last message in this chat, which this may answer: “${short(said, 800)}”\n` : '';
-    if (task.bot !== CHIEF) return `${this.memory(task.bot, member.id)}${last}[Crewhouse task #${task.id} from ${routine ? `the routine “${routine}”, set up by ${this.called(member.id)}` : who}]\n${task.body}${quiet}${debrief}`;
+    if (task.bot !== CHIEF) return `${this.memory(task.bot)}${last}[Crewhouse task #${task.id} from ${routine ? `the routine “${routine}”, set up by ${this.called(member.id)}` : who}]\n${task.body}${quiet}${debrief}`;
     // The crew by name only: crew_roster already lists roles, busy state and recruitable templates on demand,
     // so the standing prompt need not carry them (and their staleness) on every turn.
     const crew = this.bots().filter((b) => b.id !== CHIEF)
       .map((b) => `${b.display} (id ${b.id})`).join('; ') || 'nobody yet';
     const history = this.db.all("SELECT author, text FROM messages WHERE bot = ? AND member = ? AND id < (SELECT MIN(id) FROM messages WHERE task_id = ?) ORDER BY id DESC LIMIT 6", CHIEF, member.id, task.id)
       .reverse().map((m) => `${m.author === 'person' ? 'Person' : 'Chief'}: ${short(String(m.text).split('[tool ')[0], 300)}`).join('\n').slice(0, 1500);
-    return `${this.memory(task.bot, member.id)}[Crewhouse] Crew: ${crew}.\n${history ? `Earlier in this chat:\n${history}\n` : ''}The person says: ${task.body}`;
+    return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}.\n${history ? `Earlier in this chat:\n${history}\n` : ''}The person says: ${task.body}`;
   }
 
   /** What this member's crew actually finished: titles and delivered files, for Chief's crew_status.
@@ -1259,12 +1258,12 @@ export class Crew {
   }
 
   /** How to address the person, what the whole crew knows about them, and this bot's own notes on them: read at the start of
-   *  every task, so a correction lands at once. Only the task's own member's, never another member's. */
-  private memory(id: string, member: number) {
+   *  every task, so a correction lands at once. The files stay at people/1. */
+  private memory(id: string) {
     const on = disk.botConfig(this.cfg, id).memory !== false;
-    const about = on ? disk.readNotes(this.cfg, { member, bot: null }).trim() : '';
-    const notes = on ? disk.readNotes(this.cfg, { member, bot: id }).trim() : '';
-    return `[Crewhouse] ${disk.addressLine(this.member(member).address)}` +
+    const about = on ? disk.readNotes(this.cfg, { bot: null }).trim() : '';
+    const notes = on ? disk.readNotes(this.cfg, { bot: id }).trim() : '';
+    return `[Crewhouse] ${disk.addressLine(this.member(OWNER).address)}` +
       `${about ? `\nWhat the whole crew knows about the person:\n${about}` : ''}` +
       `${notes ? `\nYour notes (what you have learned about how they like your work):\n${notes}` : ''}\n\n`;
   }
@@ -1347,7 +1346,7 @@ export class Crew {
     // The bot's shell: bubblewrap, where its space is the only writable part of the disk.
     if (g.tools.includes('files') && sandboxReady()) l.shell = bashTool(space, [this.cfg.toolsDir], { ...g.env, PATH: toolBin(this.cfg) }, net?.sock);
     // The person's connected apps (their Notion, their Google…): every helper working for them can use them, through the gate.
-    const apps = await this.connections.tools(OWNER);
+    const apps = await this.connections.tools();
     l.apps = apps.effects;
     l.appTools = new Map(apps.tools.map((t) => [t.name, t]));
     const axi = g.axi.browser;
@@ -1781,7 +1780,7 @@ export class Crew {
     }
     if (e.kind === 'spend' && e.cost !== undefined && this.spentThisMonth() + e.cost > this.moneyCap()) {
       this.db.event('money.refused', botId, { task: task?.id, cost: e.cost });
-      return { block: true, reason: `That would take this month's spending past the $${this.moneyCap()} you set. Tell the person, in one line; the owner can raise the limit in Settings.` };
+      return { block: true, reason: `That would take this month's spending past the $${this.moneyCap()} monthly limit. Tell the person, in one line; they can raise it in Settings.` };
     }
     if (this.granted.delete(`${botId}\n${e.words}`)) return undefined; // answered "allow" after the turn had parked
     const standing = e.key && [...(task && this.taskGrants.get(task.id) || []), ...(disk.botConfig(this.cfg, botId).allow ?? [])].includes(e.key);
@@ -2027,10 +2026,8 @@ export class Crew {
         '`everyone`: true for something every helper should know about them; otherwise it goes in your own notes.',
         { text: Type.String(), replaces: Type.Optional(Type.String()), everyone: Type.Optional(Type.Boolean()) }, (p) => {
           if (disk.botConfig(this.cfg, botId).memory === false) throw new Error('memory is off for this bot; the person turned it off');
-          // Whose memory is the running task's member's, never the model's choice.
-          const member = this.activeTask(botId)?.member ?? OWNER;
           const everyone = p.everyone === true;
-          const change = disk.remember(this.cfg, { member, bot: everyone ? null : botId }, String(p.text ?? ''), String(p.replaces ?? ''));
+          const change = disk.remember(this.cfg, { bot: everyone ? null : botId }, String(p.text ?? ''), String(p.replaces ?? ''));
           this.db.event('memory.learned', botId, { task: task(), text: change.added.slice(2, 202), ...(everyone ? { everyone } : {}), ...change });
         }),
       tool('crew_draft', 'Put a draft that would go out in the person\'s name (a reply, a post, an email) in front of them on a card. Nothing is ' +
@@ -2261,9 +2258,8 @@ export class Crew {
     const a = this.connections.apps[app];
     if (!a) throw fail(`no app called ${app}`);
     const t = this.activeTask(botId);
-    const member = t?.member ?? OWNER;
-    if (this.connections.connected(member, app)) return { connected: true, note: `${a.name} is already connected; its tools arrive with your next task.` };
-    if (!this.db.get("SELECT 1 FROM asks WHERE bot = ? AND kind = 'connect' AND state = 'open' AND json_extract(detail, '$.app') = ? AND COALESCE(member, ?) = ?", botId, app, OWNER, member)) {
+    if (this.connections.connected(app)) return { connected: true, note: `${a.name} is already connected; its tools arrive with your next task.` };
+    if (!this.db.get("SELECT 1 FROM asks WHERE bot = ? AND kind = 'connect' AND state = 'open' AND json_extract(detail, '$.app') = ?", botId, app)) {
       this.openAsk(botId, t, `Connect ${a.name}`, { app, words: `Let ${this.bot(botId)!.display} use your ${a.name}` }, 'connect');
     }
     return { asked: true, note: 'The person sees a Connect card now. End your turn with one short line; you will be told when they answer.' };
@@ -2461,7 +2457,7 @@ export class Crew {
       this.desktops.sweep((bot) => !!this.activeTask(bot) || this.held.has(bot));
       if (Date.now() - this.freshAt > 30 * 60_000) {
         this.freshAt = Date.now();
-        void this.connections.keepFresh(this.members().map((m) => m.id)).catch((e) => console.error('keep fresh', e));
+        void this.connections.keepFresh().catch((e) => console.error('keep fresh', e));
       }
     } catch (e) { console.error('tick', e); }
     this.dispatch();
