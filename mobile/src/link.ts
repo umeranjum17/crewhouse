@@ -1,6 +1,6 @@
 // The phone's end of the link: @byokit/link's device side, its grant in secure storage, and the transport that
 // web/src/api.ts calls through. Each call is one request, `METHOD /path`, answered like HTTP (src/link.ts).
-import { DeviceLink, LinkError, hostId, pairWithCode, pairWithOffer, b64url, unb64url, type DeviceGrant, type LinkStatus } from '@byokit/link';
+import { DeviceLink, LinkError, hostId, pairWithCode, pairWithOffer, offerText, unb64url, type DeviceGrant, type LinkStatus } from '@byokit/link';
 import { decodeTyped } from '../../src/typed-code.ts';
 import { findHost } from '@byokit/relay/device';
 import { readTyped } from './typed.ts';
@@ -52,17 +52,11 @@ export async function pair(scanned: string, onWords: (w: string) => void): Promi
   return g;
 }
 
-/** The typed envelope contains the same one-use QR ticket, addresses and pinned Noise host key. */
-export async function pairDirectTyped(text: string, onWords: (w: string) => void): Promise<Grant> {
-  const offer = decodeTyped(text);
-  return pair(`byokit-link:1:${b64url(new TextEncoder().encode(JSON.stringify(offer)))}`, onWords);
-}
-
 /** Typed instead of scanned: one box takes any code. A direct code is the long envelope; a relay code names its
  *  relay inside itself (readTyped), so the address is never typed by the person. */
 export async function pairTypedCode(text: string, onWords: (w: string) => void): Promise<Grant> {
   const t = readTyped(text);
-  if (t.kind === 'direct') return pairDirectTyped(t.text, onWords);
+  if (t.kind === 'direct') return pair(offerText(decodeTyped(t.text)), onWords);
   if (t.kind === 'unknown') throw new Error('That code is missing where to look it up. Copy the whole code from your computer, then try again.');
   const name = (Device.deviceName || Device.modelName || 'Phone').slice(0, 40);
   const g = await pairWithCode(await findHost(t.base, t.short), t.code, { name, onWords });
