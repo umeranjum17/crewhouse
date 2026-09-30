@@ -188,7 +188,7 @@ Everything Crewhouse writes lives in `~/.local/state/crewhouse/` (the database, 
 
 **The phone app** (Android) is in preview. Debug-signed APKs are on the [releases page](https://github.com/umeranjum17/crewhouse/releases). Pair it under Settings, Phones on the computer ([TRY-IT.md](TRY-IT.md#3-the-phone-app)), or ask Chief to add your phone. Every paired phone uses your crew; you can also add one that only watches. Quiet hours hold notifications across a restart and send one when they end. To reach the computer away from home, use Tailscale or [run your own relay](relay/README.md). There's no built-in one.
 
-Phone notifications currently use raw Expo registration, delivery and a local quiet-hours outbox: migration debt pending published BYOKit notification contracts. Content-free news, member authorization and quiet-hour preferences remain Crewhouse policy. Android status already uses an actual private BYOKit tarball (`vendor/byokit-status-0.1.0-923c2ed.tgz`); public publication is a release gap, while the direct iOS Live Activity integration still needs a kit.
+Phone notifications currently use raw Expo registration, delivery and a local quiet-hours outbox: migration debt pending published BYOKit notification contracts. Content-free news, member authorization and quiet-hour preferences remain Crewhouse policy. Android status uses the published `@byokit/statusbar` 0.1.0 kit; the direct iOS Live Activity integration still needs a kit.
 
 ## Under the hood
 

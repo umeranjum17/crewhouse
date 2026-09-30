@@ -803,7 +803,7 @@ test('the status-bar chip: this person\'s jobs only, counts only where a locked 
   }
   // The kit is imported in one place, and the app reaches it only through that file.
   const mobile = join(import.meta.dirname, '..', 'mobile');
-  const users = [...readdirSync(join(mobile, 'src')).map((f) => join('src', f)), 'App.tsx', 'index.ts'].filter((f) => readFileSync(join(mobile, f), 'utf8').includes('@byokit/status'));
+  const users = [...readdirSync(join(mobile, 'src')).map((f) => join('src', f)), 'App.tsx', 'index.ts'].filter((f) => readFileSync(join(mobile, f), 'utf8').includes('@byokit/statusbar'));
   assert.deepEqual(users, [join('src', 'chip.ts')]);
 });
 
