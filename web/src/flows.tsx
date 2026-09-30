@@ -293,7 +293,7 @@ export function Unreachable({ retry, owner }: { retry: () => void; owner: boolea
     <div className="unreachable">
       <div className="asleep">
         <pre className="art zzz" aria-hidden>{'      z\n    z\n  z'}</pre>
-        <Dots rows={art.HOUSE.map((r, i) => (i === 6 ? r.replace(/e/g, 'p') : r))} pal={art.HOUSE_PAL} d={9} label="The house, asleep" />
+        <Dots rows={art.HOUSE.map((r, i) => (i === 6 ? r.replace(/e/g, 'p') : r))} pal={art.HOUSE_PAL} d={9} label="Crewhouse, asleep" />
       </div>
       <h1>The home computer isn't answering</h1>
       <p className="lead">It may be asleep, switched off, or offline. Crewhouse and your helpers live there, so everything picks up again the moment it's back.</p>
