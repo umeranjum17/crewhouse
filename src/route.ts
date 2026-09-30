@@ -1,5 +1,5 @@
 // Whose hands a request to Chief goes into: one helper's, Chief's own, or nobody's yet (Chief asks one plain question).
-// A typed decision (@byokit/decide): rules first; a miss becomes a Chief task.
+// Explicit rules-only backends bypass the kit's configured Jev default; a miss becomes a Chief task.
 import { decide, rules, type Answer, type Question } from '@byokit/decide';
 import { CHIEF } from './config.ts';
 

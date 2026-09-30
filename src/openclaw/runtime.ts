@@ -5,6 +5,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { OpenClawKit, type KitOptions, type ToolSpec } from '@byokit/openclaw';
+import { PROVIDERS } from '../accounts.ts';
 import { commit } from '../bots.ts';
 import { CALLBACK_PORT } from '../callback-port.ts';
 import type { AgentRuntime, Member, RunEnd, RunEvent, RunRef, RunSpec, SignInStep, ToolHost } from '../runtime.ts';
@@ -14,7 +15,6 @@ export { ENGINE_VERSION } from '@byokit/openclaw';
 const repo = resolve(import.meta.dirname, '../..');
 /** Crewhouse account key → OpenClaw provider id. ChatGPT is the one front door; the rest are quiet options. */
 const PROVIDER_OF: Record<string, string> = { chatgpt: 'openai', grok: 'xai', copilot: 'github-copilot', openrouter: 'openrouter', minimax: 'minimax', claude: 'anthropic' };
-const NAME_OF: Record<string, string> = { chatgpt: 'ChatGPT', grok: 'Grok', copilot: 'GitHub Copilot', openrouter: 'OpenRouter', minimax: 'MiniMax', claude: 'Claude' };
 /** The engine's own sign-in route per account (the pin's wizard choices). */
 const AUTH_CHOICE: Record<string, string> = {
   chatgpt: 'openai', grok: 'xai-oauth', copilot: 'github-copilot', openrouter: 'openrouter-oauth', minimax: 'minimax-global-oauth', claude: 'anthropic-cli',
@@ -131,7 +131,7 @@ export class OpenClawRuntime implements AgentRuntime {
       queueMicrotask(() => on({ waiting: false, error: `Sign-in for ${account} is not connected yet` }));
       return { paste() {}, cancel() {} };
     }
-    const name = NAME_OF[account] ?? account;
+    const name = PROVIDERS[account]?.name ?? account;
     return this.kit.signIn(m(member), { authChoice, via }, (v) => {
       if (v.state === 'waiting') on({ waiting: true, ...(v.url ? { url: v.url } : {}), ...(v.code ? { code: v.code } : {}), ...(v.error ? { error: v.error } : {}) });
       else if (v.state === 'done') on({ waiting: false, done: true });

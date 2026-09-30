@@ -15,11 +15,13 @@
     "check": "tsc"
   },
   "dependencies": {
-    "@byokit/decide": "0.2.0",
+    "@byokit/accounts": "0.7.0",
+    "@byokit/decide": "0.4.0",
     "@byokit/link": "0.4.0",
     "@byokit/openclaw": "0.1.0",
     "@byokit/reach": "0.3.0",
     "@byokit/relay": "0.3.0",
+    "@byokit/ui-core": "0.3.0",
     "@desklink/host": "^0.1.0",
     "docx": "9.7.2",
     "exceljs": "4.4.0",

@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 const { setup, settled, task, until } = await import('./lab.ts');
-const { classifyText } = await import('../src/failures.ts');
+const { classify: classifyText } = await import('@byokit/accounts');
 const disk = await import('../src/bots.ts');
 
 /** A user message the stub model turns into one tool call. */

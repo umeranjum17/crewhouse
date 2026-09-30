@@ -1,6 +1,8 @@
 // The thin adapter: crewd's state in, plain words out. Every screen reads these view models and nothing raw,
 // so the engine underneath can change (docs/ui-contract.md) without the screens changing, and nothing technical
 // (commands, file paths, model names, percentages, raw prompts) can reach a person. test/ui.test.ts holds this.
+import { provider } from '@byokit/accounts';
+import { phaseOf } from '@byokit/ui-core/phase';
 import type { Json } from './api.ts';
 import { safeLink } from './chat-md.ts';
 import { PALS, type Kind, type Mood } from './art.ts';
@@ -957,10 +959,10 @@ function lastRun(h: Json) {
  *  supports, ChatGPT first (the one front door; the rest are quiet paths). `cli`: signing in needs a tool installed
  *  and signed in on this computer first. Kept in step with crewd's own list by test/ui.test.ts. */
 export const AIS = [
-  { key: 'chatgpt', name: 'ChatGPT', bg: '#10a37f' },
-  { key: 'grok', name: 'Grok', bg: '#1d1d1f' },
-  { key: 'copilot', name: 'GitHub Copilot', bg: '#24292f' },
-  { key: 'openrouter', name: 'OpenRouter', bg: '#8b5cf6' },
+  { key: 'chatgpt', name: provider('chatgpt').name, bg: '#10a37f' },
+  { key: 'grok', name: provider('grok').name, bg: '#1d1d1f' },
+  { key: 'copilot', name: provider('copilot').name, bg: '#24292f' },
+  { key: 'openrouter', name: provider('openrouter').name, bg: '#8b5cf6' },
   { key: 'minimax', name: 'MiniMax', bg: '#e11d48' },
   { key: 'claude', name: 'Claude', bg: '#d97757', cli: 'Claude Code, installed and signed in on this computer' },
 ];
@@ -975,14 +977,16 @@ export function account(accounts: Json[] | null, member: number, key = 'chatgpt'
   const none = { signing: null, page: '', expired: false, failed: false, declined: false, busy: false, resting: '', notIncluded: false, work: '' };
   if (!a) return { state: 'checking' as const, ...none };
   const s = a.signIn;
-  const waiting = s?.state === 'waiting';
-  const signing = waiting && s.code ? { url: s.url ?? '', code: s.code } : null;
-  const expired = s?.state === 'failed' && /expired|too long/i.test(s.error ?? '');
-  const declined = s?.state === 'failed' && s.why === 'declined';
-  const busy = s?.state === 'failed' && s.why === 'busy';
+  const phase = phaseOf({ signIn: s });
+  const waiting = phase === 'waiting' || phase === 'code' || (phase === 'opening' && s?.state === 'waiting');
+  const signing = phase === 'code' && s.code ? { url: s.url ?? '', code: s.code } : null;
+  // Expiry stays an independent screen flag, based on the error words even when the reason also says busy or declined.
+  const expired = s?.state === 'failed' && phaseOf({ signIn: { ...s, why: undefined } }) === 'expired';
+  const declined = phase === 'cancelled';
+  const busy = phase === 'busy';
   // 'unavailable' was the CLI missing; the engine now ships inside Crewhouse, so there is always something to sign in to.
   return { state: a.signedIn ? 'ready' as const : 'signed-out' as const as 'ready' | 'signed-out' | 'unavailable',
-    signing, page: waiting && !s.code ? s.url ?? '' : '', expired, declined, busy, failed: s?.state === 'failed' && !expired && !declined && !busy,
+    signing, page: waiting && !s?.code ? s?.url ?? '' : '', expired, declined, busy, failed: s?.state === 'failed' && !expired && !declined && !busy,
     resting: a.restingUntil > 0 ? `Resting until ${clock(a.restingUntil)}` : '', notIncluded: !!a.notIncluded,
     work: a.work ? (typeof a.work === 'string' ? a.work : 'a work account') : '' };
 }
