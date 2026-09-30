@@ -8,10 +8,10 @@ import { createServer, type Server } from 'node:http';
 import { networkInterfaces } from 'node:os';
 import { join } from 'node:path';
 import { WebSocketServer } from 'ws';
-import { Host, keyPair, keyPairFrom, unb64url, type Grant, type PairRequest, type Role } from '@byokit/link';
+import { Host, keyPair, keyPairFrom, parseOffer, type Grant, type PairRequest, type Role } from '@byokit/link';
 import { encodeTyped } from './typed-code.ts';
-import { advertise, type Bonjour } from '@byokit/reach';
-import { RelayClient, isExpoToken, type RelayStatus } from '@byokit/relay';
+import { advertise, routes, tailscaleState as kitTailscaleState, isPeer, type Bonjour } from '@byokit/reach';
+import { RelayClient, isExpoToken, linkUrl, type RelayStatus } from '@byokit/relay';
 import type { Config } from './config.ts';
 import type { Store } from './db.ts';
 import type { Watcher } from './desktop.ts';
@@ -28,20 +28,21 @@ type Ifaces = ReturnType<typeof networkInterfaces>;
 
 // Tailscale is recognised by its address range (100.64.0.0/10); tailscaled is asked only whether it needs signing in.
 const tailscale = (ip: string) => /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(ip);
-const ipv4 = (ifaces: Ifaces) => Object.entries(ifaces)
-  .filter(([name]) => !/^(docker|br-|veth|virbr|vmnet|vboxnet)/.test(name)) // container and VM bridges a phone can't reach
-  .flatMap(([, list]) => list ?? []).filter((a) => a.family === 'IPv4' && !a.internal).map((a) => a.address);
+// reach excludes Tailscale interfaces from routes(); keep only the product's direct-tailnet selection here.
+const tailAddresses = (ifaces: Ifaces) => [...routes(ifaces).private.map((r) => r.address), ...Object.entries(ifaces)
+  .filter(([name]) => /^tailscale/i.test(name)).flatMap(([, list]) => list ?? [])
+  .filter((a) => a.family === 'IPv4' && !a.internal).map((a) => a.address)].filter(tailscale);
 
 /** Where the link listens: loopback and Tailscale; every interface only when the owner opts in to the LAN. */
 export function linkHosts(pinned: string, lan: boolean, ifaces: Ifaces = networkInterfaces()): string[] {
   if (pinned) return pinned.split(',').map((h) => h.trim()).filter(Boolean);
-  return lan ? ['0.0.0.0'] : ['127.0.0.1', ...ipv4(ifaces).filter(tailscale)];
+  return lan ? ['0.0.0.0'] : ['127.0.0.1', ...tailAddresses(ifaces)];
 }
 
 /** Addresses a phone can dial for those hosts: home network first, then Tailscale. Loopback only when there is
  *  nothing else, which reaches an emulator or a phone forwarded over USB. */
 export function phoneAddresses(hosts: string[], ifaces: Ifaces = networkInterfaces()): string[] {
-  const ips = hosts.includes('0.0.0.0') ? ipv4(ifaces) : hosts.filter((h) => !/^127\.|^localhost$/.test(h));
+  const ips = hosts.includes('0.0.0.0') ? [...routes(ifaces).lan, ...tailAddresses(ifaces)] : hosts.filter((h) => !/^127\.|^localhost$/.test(h));
   const out = [...ips.filter((ip) => !tailscale(ip)), ...ips.filter(tailscale)];
   return out.length ? out : ['127.0.0.1'];
 }
@@ -51,10 +52,11 @@ export function phoneAddresses(hosts: string[], ifaces: Ifaces = networkInterfac
  *  address, never Serve or Funnel: the link does its own encryption, and a shared computer is reachable the same way. */
 export type Anywhere = 'home' | 'anywhere' | 'signin';
 export async function tailscaleState(bound: boolean, bin = 'tailscale'): Promise<Anywhere> {
-  const s = await tsStatus(bin, false);
-  if (!s) return bound ? 'anywhere' : 'home'; // not installed, or not answering
-  const expired = s.Self?.KeyExpiry && Date.parse(s.Self.KeyExpiry) < Date.now();
-  return /^(NeedsLogin|NeedsMachineAuth)$/.test(s.BackendState) || expired ? 'signin' : bound ? 'anywhere' : 'home';
+  const s = await kitTailscaleState({ bin, timeoutMs: 5000 });
+  // reach's snapshot omits KeyExpiry; preserve the product's expired-key words until it exposes it.
+  const raw = s.backendState === 'Running' ? await tsStatus(bin, false) : undefined;
+  const expired = raw?.Self?.KeyExpiry && Date.parse(raw.Self.KeyExpiry) < Date.now();
+  return s.needsSignin || s.backendState === 'NeedsMachineAuth' || expired ? 'signin' : bound ? 'anywhere' : 'home';
 }
 const tsStatus = (bin: string, peers: boolean) => new Promise<any>((resolve) => execFile(bin, ['status', '--json', `--peers=${peers}`], { timeout: 5000 }, (_e, out) => {
   try { resolve(JSON.parse(out)); } catch { resolve(null); }
@@ -64,7 +66,7 @@ const tsStatus = (bin: string, peers: boolean) => new Promise<any>((resolve) => 
  *  was never shared with is not one. Undefined when this computer's Tailscale can't say. */
 export async function tailscalePeer(ip: string, bin = 'tailscale'): Promise<boolean | undefined> {
   const s = await tsStatus(bin, true);
-  return s?.Self ? Object.values<any>(s.Peer ?? {}).some((p) => p?.TailscaleIPs?.includes(ip)) : undefined;
+  return s?.Self ? isPeer(s, ip) : undefined;
 }
 
 /** The routes a phone reaches this computer by, as it reports them (`GET /api/reach {via}`). */
@@ -229,7 +231,7 @@ export class Link {
     if (now !== before) console.log(`phone link (Noise-encrypted) on port ${this.cfg.linkPort}: ${now || 'nowhere'}${this.lan ? ' (home network on)' : ''}`);
     this.follow();
     await (this.announcing = this.announcing.then(() => this.announce()));
-    this.anywhere = await tailscaleState(ipv4(this.ifaces()).some(tailscale), this.tailscaleBin);
+    this.anywhere = await tailscaleState(tailAddresses(this.ifaces()).length > 0, this.tailscaleBin);
   }
 
   /** While the home network is open, say so over mDNS, so a paired phone finds this computer after the router gives it a
@@ -240,7 +242,7 @@ export class Link {
     this.advertised = url;
     await this.mdns?.stop().catch(() => {});
     this.mdns = undefined;
-    if (url) this.mdns = await advertise({ type: 'crewhouse', port: this.cfg.linkPort, txt: { id: this.host.id, url }, bonjour: this.bonjour })
+    if (url) this.mdns = await advertise({ type: 'crewhouse', port: this.cfg.linkPort, txt: { id: this.host.id, url }, addresses: phoneAddresses([...this.servers.keys()], this.ifaces()), bonjour: this.bonjour })
       .catch((e) => { console.error('phone link: mDNS:', e.message); return undefined; });
   }
 
@@ -307,7 +309,7 @@ export class Link {
   }
 
   /** The address a phone dials through the relay, or none. */
-  relayUrl() { return this.relay && this.host ? `${wsOrigin(this.relay)}/link/v1/${this.host.id}` : ''; }
+  relayUrl() { return this.relay && this.host ? linkUrl(this.relay, this.host.id) : ''; }
 
   /** Set by the server: what a phone's desktop stream talks to. */
   desk?: Desk;
@@ -387,7 +389,7 @@ export class Link {
   status() {
     // `push: 'missing'`: this app build, or Expo, has no Android push credential yet (README, "Phone notifications").
     const missing = this.setting('push.refused') || this.host?.devices().some((g) => this.setting(`phone.push.${g.id}`) === 'missing');
-    return { on: this.cfg.linkPort > 0, lan: this.lan, pinned: !!this.cfg.linkHost, hosts: [...this.servers.keys()], tailscale: ipv4(this.ifaces()).some(tailscale), anywhere: this.anywhere,
+    return { on: this.cfg.linkPort > 0, lan: this.lan, pinned: !!this.cfg.linkHost, hosts: [...this.servers.keys()], tailscale: tailAddresses(this.ifaces()).length > 0, anywhere: this.anywhere,
       relay: this.relay, relayStatus: this.relayStatus, push: missing ? 'missing' : 'ready',
       asking: [...this.asking.values()].map(({ id, name, words, role, member, offer }) => ({ id, name, words, role, member, offer })) };
   }
@@ -403,7 +405,7 @@ export class Link {
     await this.bind();
     const urls = this.urls();
     const { text, expires } = this.host.offer({ role, urls, meta: { member, offer } });
-    const raw = JSON.parse(new TextDecoder().decode(unb64url(text.slice('byokit-link:1:'.length))));
+    const raw = parseOffer(text);
     return { qr: text, typed: encodeTyped(raw), expires, urls };
   }
 

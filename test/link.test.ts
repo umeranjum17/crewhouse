@@ -8,7 +8,7 @@ import { createServer as http1, request as http1Request } from 'node:http';
 import { createServer, type AddressInfo } from 'node:net';
 import { join } from 'node:path';
 import { temp } from './tmp.ts';
-import { DeviceLink, pairWithOffer, type DeviceGrant, type LinkStatus } from '@byokit/link';
+import { DeviceLink, pairWithOffer, type DeviceGrant, type LinkStatus, encodeOffer, offerText, parseOffer } from '@byokit/link';
 import { Link, NEWS, linkHosts, phoneAddresses, tailscalePeer } from '../src/link.ts';
 import { Store } from '../src/db.ts';
 import { decodeTyped, encodeTyped } from '../src/typed-code.ts';
@@ -19,9 +19,20 @@ test('typed envelope carries addresses, port, key and one-use secret; errors are
     name: 'your computer', role: 'control' as const, expires: Date.now() + 120_000,
     urls: ['ws://192.168.1.2:9443/link', 'ws://100.101.2.3:9443/link'] };
   const code = encodeTyped(o);
-  assert.deepEqual({ ...decodeTyped(code), name: o.name }, { ...o, expires: Math.floor(o.expires / 1000) * 1000 });
-  assert.throws(() => decodeTyped(code.replace(/[23456789ABCDEFGHJKMNPQRSTUVWXYZ]/, 'Z')), /match/);
+  assert.deepEqual({ ...decodeTyped(code), name: o.name }, o);
+  assert.equal(code, encodeOffer(o));
+  assert.deepEqual(parseOffer(offerText(decodeTyped(code))), o);
+  assert.throws(() => decodeTyped(code.replace(/^./, 'Z')), /match/);
   assert.throws(() => decodeTyped(code, o.expires + 1000), /run out/);
+});
+
+test('pre-kit compact codes remain readable without changing their pinned key or ticket', () => {
+  const old = '262J8-2T52E-3J82T-52E3J-82T52-E3J82-T52E3-J82T5-2E3J8-2T52E-3J82T-92X5J-G3T92-X5JG3-T92X5-JG3T9-HPQSC-22425-2CJ2A-46NKJ-2U572-A3MBT-V98C5-JZ';
+  assert.deepEqual(decodeTyped(old, 0), { v: 1, name: 'your computer', role: 'control', expires: 2100000000000,
+    host: b64url(new Uint8Array(32).fill(3)), ticket: b64url(new Uint8Array(16).fill(7)),
+    urls: ['ws://192.168.1.2:9443/link', 'ws://100.101.2.3:9443/link'] });
+  assert.throws(() => decodeTyped(old, 2100000000001), /run out/);
+  assert.throws(() => decodeTyped(old.slice(0, -1) + '2', 0), /match/);
 });
 
 test('the link binds loopback and Tailscale by default; the home network only when turned on', () => {

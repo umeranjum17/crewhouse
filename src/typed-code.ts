@@ -1,39 +1,20 @@
 // The QR's one-use ticket in a typeable envelope. The checksum catches typing errors; Noise pins the host key.
-import { b64url, unb64url } from '@byokit/link';
+import { b64url, decodeOffer, encodeOffer } from '@byokit/link';
 
 export type TypedOffer = { v: 1; host: string; name: string; urls: string[]; ticket: string; expires: number; role: 'control' | 'view' };
 const ABC = '23456789ABCDEFGHJKMNPQRSTUVWXYZ0';
 const bad = () => new Error("That code didn't match. Check it and try again.");
 const checksum = (b: Uint8Array) => { let h = 2166136261; for (const x of b) h = Math.imul(h ^ x, 16777619) >>> 0; return h >>> 0; };
 
-export function encodeTyped(o: TypedOffer): string {
-  const urls = o.urls.filter((u) => /^ws:\/\//.test(u)); // relay URLs aren't needed for direct pairing
-  if (!urls.length || urls.length > 8) throw new Error('No direct phone address is available');
-  const bytes = [1, o.role === 'control' ? 1 : 0, ...unb64url(o.host), ...unb64url(o.ticket)];
-  const expiry = Math.floor(o.expires / 1000);
-  for (const n of [expiry >>> 24, expiry >>> 16, expiry >>> 8, expiry]) bytes.push(n & 255);
-  bytes.push(urls.length);
-  for (const u of urls) {
-    const match = /^ws:\/\/(\d{1,3}(?:\.\d{1,3}){3}):(\d+)\/link$/.exec(u);
-    const ip = match?.[1].split('.').map(Number);
-    const port = Number(match?.[2]);
-    if (ip?.length === 4 && ip.every((n) => n >= 0 && n < 256) && port > 0 && port < 65536) {
-      bytes.push(0, ...ip, port >>> 8, port & 255);
-    } else {
-      const text = new TextEncoder().encode(u);
-      if (text.length > 255) throw new Error('Phone address is too long');
-      bytes.push(text.length, ...text);
-    }
+export const encodeTyped = encodeOffer;
+// Pre-kit compact envelopes remain readable; new offers use the kit's complete envelope.
+export function decodeTyped(text: string, now = Date.now()) {
+  try { return decodeOffer(text, now); } catch (error) {
+    if (!text.toUpperCase().replace(/[\s-]/g, '').startsWith('26')) throw error;
+    return decodeLegacy(text, now);
   }
-  const hash = checksum(Uint8Array.from(bytes));
-  bytes.push(hash >>> 24, hash >>> 16 & 255, hash >>> 8 & 255, hash & 255);
-  let bits = 0, value = 0, out = '';
-  for (const b of bytes) { value = (value << 8 | b) & 0xffff; bits += 8; while (bits >= 5) { bits -= 5; out += ABC[(value >>> bits) & 31]; } }
-  if (bits) out += ABC[(value << (5 - bits)) & 31];
-  return out.match(/.{1,5}/g)!.join('-');
 }
-
-export function decodeTyped(text: string, now = Date.now()): TypedOffer {
+function decodeLegacy(text: string, now: number): TypedOffer {
   const s = text.toUpperCase().replace(/[\s-]/g, '');
   if (!s || [...s].some((c) => !ABC.includes(c)) || s.length > 2048) throw bad();
   const b: number[] = []; let bits = 0, value = 0;

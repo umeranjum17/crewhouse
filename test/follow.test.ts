@@ -1,7 +1,7 @@
 // Where phones reach this computer: the home network opens only while a pairing code lasts (or when the owner leaves it
 // on), and says so over mDNS; a phone paired on one address learns the ones this computer gains later (its home address
 // moved, Tailscale came up) while any route is up, and dials them once the old one is gone. The interfaces and the mDNS
-// publisher are fake; the sockets, the Noise handshake and the phone's side are real, all on loopback.
+// publisher are fake; the sockets, the Noise handshake and the phone's side are real, all on loopback through the kit's dial resolver.
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer, type AddressInfo } from 'node:net';
@@ -20,6 +20,7 @@ async function until<T>(what: string, fn: () => T | undefined | false, ms = 10_0
   for (const end = Date.now() + ms; Date.now() < end; await sleep(20)) { const v = fn(); if (v) return v; }
   throw new Error(`timed out waiting for ${what}`);
 }
+const dialUrl = (url: string) => url.replace('192.168.1.', '127.0.0.');
 const at = (address: string) => [{ address, family: 'IPv4', internal: false, netmask: '', mac: '', cidr: null }] as any;
 
 /** A computer whose interfaces the test moves, with the home network on unless `lan` is false. Its mDNS goes nowhere:
@@ -41,7 +42,7 @@ async function computer(name: string, ifaces: Record<string, any>, lan = true) {
   return { link, port: cfg.linkPort, ifaces, mdns };
 }
 const dials = (url: string) => new Promise<boolean>((resolve) => {
-  const ws = new WebSocket(url);
+  const ws = new WebSocket(dialUrl(url));
   ws.onopen = () => { ws.close(); resolve(true); };
   ws.onerror = () => resolve(false);
 });
@@ -50,17 +51,17 @@ function phone(grant: DeviceGrant) {
   let status: LinkStatus = 'connecting';
   const saved: DeviceGrant[] = [];
   // As mobile/src/link.ts does: each address the computer names is remembered.
-  const link: DeviceLink = new DeviceLink(grant, { store: { save: (g) => { saved.push(g); }, clear: () => {} }, onStatus: (s) => { status = s; },
+  const link: DeviceLink = new DeviceLink(grant, { resolve: dialUrl, store: { save: (g) => { saved.push(g); }, clear: () => {} }, onStatus: (s) => { status = s; },
     onEvent: (e: any) => { if (e.kind === 'link.urls') e.data.urls.forEach((u: string) => link.addUrl(u)); } });
   after(() => link.stop());
   return { link, saved, status: () => status };
 }
 
 test('a paired phone learns the addresses this computer gains, and reaches it after the old one is gone', async () => {
-  const home = await computer('home', { wlan0: at('127.0.0.2') });
+  const home = await computer('home', { wlan0: at('192.168.1.2') });
   const offer = await home.link.offer('control', 1);
-  assert.deepEqual(offer.urls, [`ws://127.0.0.2:${home.port}/link`]);
-  const paired = pairWithOffer(offer.qr, { name: 'Pixel', onWords: () => {} });
+  assert.deepEqual(offer.urls, [`ws://192.168.1.2:${home.port}/link`]);
+  const paired = pairWithOffer(offer.qr, { resolve: dialUrl, name: 'Pixel', onWords: () => {} });
   const asking = await until('asked at the computer', () => home.link.status().asking[0]);
   home.link.answer(asking.id, true);
   const grant = await paired;
@@ -69,12 +70,12 @@ test('a paired phone learns the addresses this computer gains, and reaches it af
   await until('online', () => p.status() === 'online');
 
   // The router hands the computer a new home address, and Tailscale comes up: bind() (every half minute) tells the phone.
-  home.ifaces.wlan0 = at('127.0.0.3');
+  home.ifaces.wlan0 = at('192.168.1.3');
   home.ifaces.tailscale0 = at('100.101.2.3');
   await home.link.bind();
-  const moved = `ws://127.0.0.3:${home.port}/link`, tailnet = `ws://100.101.2.3:${home.port}/link`;
+  const moved = `ws://192.168.1.3:${home.port}/link`, tailnet = `ws://100.101.2.3:${home.port}/link`;
   const kept = await until('the phone keeps the new addresses', () => p.saved.at(-1)?.urls.includes(tailnet) && p.saved.at(-1));
-  assert.deepEqual(kept.urls, [`ws://127.0.0.2:${home.port}/link`, moved, tailnet]);
+  assert.deepEqual(kept.urls, [`ws://192.168.1.2:${home.port}/link`, moved, tailnet]);
   const reach = await p.link.request('GET /api/reach') as { body: { urls: string[] } };
   assert.deepEqual(reach.body.urls, [moved, tailnet], 'a phone that was offline asks on reconnect');
   p.link.stop();
@@ -85,18 +86,18 @@ test('a paired phone learns the addresses this computer gains, and reaches it af
 });
 
 test('another computer at a learned address fails the handshake', async () => {
-  const home = await computer('home2', { wlan0: at('127.0.0.5') });
-  const other = await computer('other', { wlan0: at('127.0.0.6') });
-  const paired = pairWithOffer((await home.link.offer('control', 1)).qr, { name: 'Pixel', onWords: () => {} });
+  const home = await computer('home2', { wlan0: at('192.168.1.5') });
+  const other = await computer('other', { wlan0: at('192.168.1.6') });
+  const paired = pairWithOffer((await home.link.offer('control', 1)).qr, { resolve: dialUrl, name: 'Pixel', onWords: () => {} });
   home.link.answer((await until('asked', () => home.link.status().asking[0])).id, true);
   const grant = await paired;
-  const p = phone({ ...grant, urls: [`ws://127.0.0.6:${other.port}/link`] });
+  const p = phone({ ...grant, urls: [`ws://192.168.1.6:${other.port}/link`] });
   await until('refused', () => p.status() === 'refused');
 });
 
 test('the home network opens for a pairing code, closes after it, and stays open only when the owner turns it on', async () => {
-  const home = await computer('window', { wlan0: at('127.0.0.7') }, false);
-  const lan = `ws://127.0.0.7:${home.port}/link`;
+  const home = await computer('window', { wlan0: at('192.168.1.7') }, false);
+  const lan = `ws://192.168.1.7:${home.port}/link`;
   assert.deepEqual(home.link.status().hosts, ['127.0.0.1'], 'off by default: loopback (and Tailscale) only');
   assert.equal(await dials(lan), false);
   assert.equal(home.mdns.on.length, 0, 'and nothing announced');
@@ -105,7 +106,7 @@ test('the home network opens for a pairing code, closes after it, and stays open
   assert.deepEqual(offer.urls, [lan], 'the code carries the home address');
   assert.deepEqual(home.link.status().hosts, ['0.0.0.0']);
   assert.deepEqual(home.mdns.on.map((m) => [m.type, m.port, m.txt]), [['crewhouse', home.port, { id: home.link.host.id, url: lan }]]);
-  const paired = pairWithOffer(offer.qr, { name: 'Pixel', onWords: () => {} });
+  const paired = pairWithOffer(offer.qr, { resolve: dialUrl, name: 'Pixel', onWords: () => {} });
   home.link.answer((await until('asked', () => home.link.status().asking[0])).id, true);
   const p = phone(await paired);
   await until('online', () => p.status() === 'online');
@@ -122,8 +123,9 @@ test('the home network opens for a pairing code, closes after it, and stays open
   await home.link.setLan(true);
   assert.equal(await dials(lan), true);
   assert.equal(home.mdns.on.length, 1);
-  await home.link.offer('control', 1);
-  await sleep(1700);
+  const renewed = await home.link.offer('control', 1);
+  await until('renewed code expired', () => Date.now() > renewed.expires, 5000);
+  await home.link.bind();
   assert.equal(await dials(lan), true, 'still open after the code ran out');
   assert.equal(home.mdns.on.length, 1);
   assert.equal(home.mdns.ever, 2, 'announced once per opening, not per code');
@@ -148,7 +150,7 @@ test('Tailscale in three plain states, from its own status: signed in, signed ou
   assert.equal(await tailscaleState(true, cli('ts-broken', null)), 'anywhere', 'not answering: the bound address decides');
 
   // Settings and the phone hear it; the home network being open doesn't hide Tailscale.
-  const home = await computer('ts', { wlan0: at('127.0.0.8'), tailscale0: at('100.101.2.3') }, true);
+  const home = await computer('ts', { wlan0: at('192.168.1.8'), tailscale0: at('100.101.2.3') }, true);
   home.link.tailscaleBin = cli('ts-out2', { BackendState: 'NeedsLogin' });
   await home.link.bind();
   assert.deepEqual([home.link.status().tailscale, home.link.status().anywhere], [true, 'signin']);
