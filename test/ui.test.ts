@@ -678,7 +678,9 @@ test('Settings keeps the person’s Chief address, quiet-hours switch and crew s
   const src = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
   assert.match(src, /<label[^>]*>Chief calls (?:you|\{you \? 'you' : 'them'\})\s*<input[^>]*[\s\S]*?api\.person\([^\n]*\{ address \}/, 'Chief calls you stays editable and saves the address');
   assert.match(src, /<label[^>]*><span[^>]*>Quiet hours[\s\S]*?<input type="checkbox" role="switch"[^\n]*api\.person\([^\n]*\{ quiet:/, 'quiet hours stays a switch that saves the preference');
-  assert.match(src, /How much of it the crew may use[\s\S]*?onClick=\{[^\n]*api\.person\([^\n]*\{ share:/, 'the person can still set the crew’s share in Settings');
+  assert.match(src, /How much of (?:it|your AI) the crew may use[\s\S]*?onClick=\{[^\n]*api\.person\([^\n]*\{ share:/, 'the person can still set the crew’s share in Settings');
+  assert.match(src, /<label[^>]*>Your name\s*<input[^>]*[\s\S]*?api\.person\([^\n]*\{ name \}/, 'the person can rename themselves from the default');
+  assert.doesNotMatch(src, /className="tag"|Home setup/, 'no you/owner tags, no household setup words');
 });
 
 test('the crew\'s share is words, never a number; money is dollars against your cap', () => {

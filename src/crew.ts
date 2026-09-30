@@ -953,22 +953,22 @@ export class Crew {
     if (hello) return this.addTask(to, hello, 'person', undefined);
   }
 
-  /** Name, how Chief addresses them, and quiet hours ("22:00-07:00", or null for none). */
-  updateMember(id: number, body: { name?: unknown; address?: unknown; quiet?: unknown; share?: unknown }) {
+  /** The person's name, how Chief addresses them, quiet hours ("22:00-07:00", or null for none) and the crew's share. */
+  updatePerson(body: { name?: unknown; address?: unknown; quiet?: unknown; share?: unknown }) {
     this.person();
     if (body.name !== undefined) {
-      const n = needText(body.name, 32, 'give them a name');
-      this.db.run('UPDATE people SET name = ? WHERE id = ?', n, id);
+      const n = needText(body.name, 32, 'give yourself a name');
+      this.db.run('UPDATE people SET name = ? WHERE id = 1', n);
     }
     if (body.quiet !== undefined) {
       if (body.quiet !== null && !(typeof body.quiet === 'string' && /^([01]\d|2[0-3]):[0-5]\d-([01]\d|2[0-3]):[0-5]\d$/.test(body.quiet))) {
         throw Object.assign(new Error('quiet hours look like 22:00-07:00'), { status: 400 });
       }
-      this.db.run('UPDATE people SET quiet = ? WHERE id = ?', body.quiet, id);
+      this.db.run('UPDATE people SET quiet = ? WHERE id = 1', body.quiet);
     }
     if (body.share !== undefined) {
       if (!(typeof body.share === 'string' && body.share in SHARES)) throw fail('the crew\'s share is light, normal or full');
-      this.db.run('UPDATE people SET share = ? WHERE id = ?', body.share, id);
+      this.db.run('UPDATE people SET share = ? WHERE id = 1', body.share);
     }
     if (body.address !== undefined) this.setAddress(String(body.address));
     this.db.event('person.updated', null);

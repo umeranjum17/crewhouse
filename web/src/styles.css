@@ -116,7 +116,6 @@ b { font-weight: 600; }
 .link { background: none; border: 0; padding: 6px 2px; color: var(--ink2); font-weight: 500; text-decoration: none; }
 .link.inline { padding: 0; }
 .link.pink { color: var(--pink-ink); text-decoration: none; }
-.tag { font: 500 11px/14px var(--ui); background: var(--soft); color: var(--mute); border-radius: 999px; padding: 2px 8px; margin-left: 6px; }
 .badge { background: var(--pink); color: var(--on-pink); font: 500 11px/14px var(--ui); border-radius: 999px; padding: 1px 6px; margin-left: auto; }
 .input { width: 100%; background: var(--solid); border: 1px solid var(--line2); border-radius: 10px; padding: 12px 16px; font-size: 15px; }
 .input.center { text-align: center; font-weight: 600; }
@@ -374,6 +373,8 @@ a.back:not([aria-label]) { font: 500 15px/20px var(--ui); padding: 0 8px; margin
 
 /* settings */
 .person .field { display: grid; gap: 6px; font-size: 13.5px; color: var(--mute); font-weight: 700; margin-top: 12px; }
+.person .field .seg { justify-self: start; }
+.person .field .small { font-weight: 400; }
 .initial { width: 40px; height: 40px; border-radius: 50%; background: var(--go); color: var(--go-ink); display: grid; place-items: center; font-weight: 600; flex: none; }
 .toggle, .toggle-row { display: flex; gap: 12px; align-items: center; cursor: pointer; }
 .toggle-row { margin-top: 12px; }

@@ -175,7 +175,7 @@ function SetupRow({ state, accounts, tick }: { state: Json; accounts: Json[] | n
   useEffect(() => { api.phoneLink().then(setLink).catch(() => {}); }, [tick]);
   const { left } = A.homeSetup(state, A.account(accounts), link);
   if (!left) return null;
-  return <a className="card nudge" href="#/settings"><span className="grow">Home setup: {left} {left === 1 ? 'thing' : 'things'} left</span><b>›</b></a>;
+  return <a className="card nudge" href="#/settings"><span className="grow">Getting set up: {left} {left === 1 ? 'thing' : 'things'} left</span><b>›</b></a>;
 }
 
 /** The same row for a non-owner member until their first week is done: their calendar and one job.
@@ -943,15 +943,14 @@ function Phones({ tick }: { tick: number }) {
   </>);
 }
 
-/** Owner only: the house's three setup jobs, and where each one is finished. The family never sees Google's own
- *  words here — those live inside the Google panel alone. */
+/** The three setup jobs, and where each one is finished. Google's own words stay inside the Google panel. */
 function HomeSetup({ state, accounts, tick }: { state: Json; accounts: Json[] | null; tick: number }) {
   const [link, setLink] = useState<Json>(null);
   useEffect(() => { api.phoneLink().then(setLink).catch(() => {}); }, [tick]);
   const { rows, left } = A.homeSetup(state, A.account(accounts), link);
   const jump = (key: string) => document.getElementById(`setup-${key}`)?.scrollIntoView({ behavior: 'smooth' });
   return (<>
-    <div className="label">Home setup</div>
+    <div className="label">Getting set up</div>
     <div className="card list">{rows.map((r) => (
       <div key={r.key} className="row-item">
         <span className={`setup-mark${r.done ? ' done' : ''}`} aria-label={r.done ? 'done' : 'to do'}>{r.done ? '✓' : '○'}</span>
@@ -973,21 +972,16 @@ function Settings({ state, refresh, tick, accounts, look, setLook }: Ctx & { loo
       <p className="mute small">{A.atHome().join(' ')}</p>
       {owner && <HomeSetup state={state} accounts={accounts} tick={tick} />}
 
-      <div className="label">Your AI accounts</div>
-      <AiAccounts accounts={accounts} refresh={refresh} signIn={(ai) => setSigning({ ai, tab: openTab() })} />
-
-      <div className="label">How much of it the crew may use</div>
-      <div className="seg">{A.SHARES.map((o) => <button key={o.key} className={A.share(state).choice === o.key ? 'on' : ''} title={o.says}
-        onClick={() => act(() => api.person(state.person.id, { share: o.key }), o.says)}>{o.label}</button>)}</div>
-      <p className="mute small">{A.SHARES.find((o) => o.key === A.share(state).choice)?.says}. {A.share(state).today} {A.share(state).week}</p>
-
+      <div className="label">You</div>
+      <You state={state} act={act} />
       <AboutYou tick={tick} />
+
+      <div className="label" id="setup-chatgpt">Your AI accounts</div>
+      <AiAccounts accounts={accounts} refresh={refresh} signIn={(ai) => setSigning({ ai, tab: openTab() })} />
 
       <div className="label">Your apps</div>
       <a className="card row" href="#/apps"><span className="app-row">{A.apps(state).slice(0, 5).map((a) => <span key={a.id} className="app-ic sm" style={{ background: a.bg }}>{a.mark}</span>)}</span><span className="grow mute">{A.apps(state).filter((a) => a.on).length} connected</span><b>›</b></a>
 
-      <div className="label">You</div>
-      <Person m={state.person} you act={act} />
       <Phones tick={tick} />
 
       <div className="label">Look</div>
@@ -1077,21 +1071,34 @@ function HouseGoogle({ on, steps, refresh }: { on: boolean; steps?: A.GoogleStep
   </>);
 }
 
-function Person({ m, you, act }: { m: Json; you: boolean; act: (fn: () => Promise<unknown>, ok?: string) => unknown }) {
+/** The person's own settings in one card: their name, what Chief calls them, quiet hours and the crew's share of
+ *  their AI. The stored default name "Owner" reads as no name yet, as it does on Hello. */
+function You({ state, act }: { state: Json; act: (fn: () => Promise<unknown>, ok?: string) => unknown }) {
+  const m = state.person;
+  const named = m.name && m.name !== 'Owner' ? m.name : '';
+  const [name, setName] = useState(named);
   const [address, setAddress] = useState(m.address ?? '');
+  useEffect(() => setName(named), [named]);
   useEffect(() => setAddress(m.address ?? ''), [m.address]);
   const [from, to] = (m.quiet ?? '22:00-07:00').split('-');
+  const share = A.share(state);
   return (
     <div className="card person">
       <div className="row">
-        <span className="initial">{(m.name ?? '?')[0]}</span>
-        <div className="grow"><b>{m.name}</b>{you && <span className="tag">you</span>}{m.id === A.OWNER && <span className="tag">owner</span>}
-          <div className="mute small">{m.address ? `Chief calls ${you ? 'you' : 'them'} “${m.address}”` : `Chief will say hello the first time ${you ? 'you open' : 'they open'} Crewhouse`}</div></div>
+        <span className="initial">{(named || m.address || 'You')[0]}</span>
+        <div className="grow"><b>{named || m.address || 'You'}</b>
+          <div className="mute small">{m.address ? `Chief calls you “${m.address}”` : 'Chief will say hello the first time you open Crewhouse'}</div></div>
       </div>
-      <label className="field">Chief calls {you ? 'you' : 'them'}
+      <label className="field">Your name
+        <input className="input" value={name} placeholder="Your name" autoComplete="given-name" onChange={(e) => setName(e.target.value)} onBlur={() => name.trim() && name !== named && act(() => api.person(m.id, { name }), 'Saved')} /></label>
+      <label className="field">Chief calls you
         <input className="input" value={address} placeholder="sir, ma'am, or a name" onChange={(e) => setAddress(e.target.value)} onBlur={() => address.trim() && address !== m.address && act(() => api.person(m.id, { address }), 'Saved')} /></label>
-      <label className="toggle-row"><span className="grow">Quiet hours{m.quiet ? `, ${from} to ${to}` : ''}<div className="mute small">Nothing new pings {you ? 'you' : 'them'} then; the crew keeps going on what's already OK.</div></span>
+      <label className="toggle-row"><span className="grow">Quiet hours{m.quiet ? `, ${from} to ${to}` : ''}<div className="mute small">Nothing new pings you then; the crew keeps going on what's already OK.</div></span>
         <input type="checkbox" role="switch" checked={!!m.quiet} onChange={(e) => act(() => api.person(m.id, { quiet: e.target.checked ? '22:00-07:00' : null }))} /></label>
+      <div className="field">How much of your AI the crew may use
+        <div className="seg">{A.SHARES.map((o) => <button key={o.key} className={share.choice === o.key ? 'on' : ''} title={o.says}
+          onClick={() => act(() => api.person(m.id, { share: o.key }), o.says)}>{o.label}</button>)}</div>
+        <span className="mute small">{A.SHARES.find((o) => o.key === share.choice)?.says}. {share.today} {share.week}</span></div>
     </div>
   );
 }
