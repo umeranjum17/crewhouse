@@ -7,7 +7,7 @@ import { createServer, type Server } from 'node:http';
 import { networkInterfaces } from 'node:os';
 import { join } from 'node:path';
 import { WebSocketServer } from 'ws';
-import { Host, keyPair, keyPairFrom, parseOffer, encodeOffer, type Grant, type PairRequest, type Role } from '@byokit/link';
+import { Host, keyPair, keyPairFrom, parseOffer, encodeOffer, b64url, type Grant, type PairRequest, type Role } from '@byokit/link';
 import { advertise, routes, tailscaleState as kitTailscaleState, isPeer, type Bonjour, type TailscaleState } from '@byokit/reach';
 import { RelayClient, isExpoToken, linkUrl, type RelayStatus } from '@byokit/relay';
 import type { Config } from './config.ts';
@@ -65,8 +65,6 @@ export const NEWS = 'Crewhouse has news';
 /** The relay's WebSocket origin, from the https/wss address Settings keeps. */
 const wsOrigin = (url: string) => url.replace(/^http/, 'ws');
 
-// Migration debt (G07): link lacks migrateGrant(raw, {format:'crewhouse-v0'}) for pre-kit base64 keys.
-const b64url = (s: string) => s.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); // phones paired before 0.1.0 were stored as base64
 const pushOf = (v?: string) => (v === 'missing' || v === 'off' ? v : v ? 'on' : undefined);
 const memberOf = (g: Grant) => (g.meta as { member?: number } | undefined)?.member ?? 1;
 
@@ -144,7 +142,7 @@ export class Link {
   // Grants live in the devices table: one row per phone, with the member it acts as.
   private load(): Grant[] {
     return this.db.all('SELECT * FROM devices ORDER BY created_at').map((d) => ({
-      id: d.id, key: b64url(d.pk), name: d.name, role: d.role, created: d.created_at, lastSeen: d.last_seen ?? undefined, meta: { member: d.member ?? 1 } }));
+      id: d.id, key: b64url(new Uint8Array(Buffer.from(d.pk, 'base64'))), name: d.name, role: d.role, created: d.created_at, lastSeen: d.last_seen ?? undefined, meta: { member: d.member ?? 1 } }));
   }
   private save(grants: Grant[]) {
     const before = new Map(this.load().map((g) => [g.id, g]));
