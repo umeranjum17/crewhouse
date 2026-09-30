@@ -395,6 +395,7 @@ test('first success: starters never dead-end, and setup stays in Settings', () =
   const web = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
   assert.doesNotMatch(web, /MemberRow|memberSetup|set me up for you/, 'Home and Hello serve one person');
   assert.match(web, /<SetupRow state=\{state\}/, 'the person keeps the setup checklist');
+  assert.doesNotMatch(web, /A\.OWNER/, 'setup serves the person without a household role selector');
   const phone = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
   const hello = phone.slice(phone.indexOf('function Hello('), phone.indexOf('// ---------- asks ----------'));
   assert.doesNotMatch(hello, /named|A\.OWNER/, 'the phone has one Hello flow');

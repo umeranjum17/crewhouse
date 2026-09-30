@@ -952,13 +952,12 @@ function HomeSetup({ state, accounts, tick }: { state: Json; accounts: Json[] | 
 
 function Settings({ state, refresh, tick, accounts, look, setLook }: Ctx & { look: string; setLook: (l: string) => void }) {
   const [signing, setSigning] = useState<{ ai: (typeof A.AIS)[number]; tab: Window | null } | null | false>(sheet === 'signin' ? null : false);
-  const owner = state.person.id === A.OWNER;
   const act = (fn: () => Promise<unknown>, ok?: string) => attempt(async () => { await fn(); refresh(); }, ok);
   return (
     <div className="page settings">
       <h1>Settings</h1>
       <p className="mute small">{A.atHome().join(' ')}</p>
-      {owner && <HomeSetup state={state} accounts={accounts} tick={tick} />}
+      <HomeSetup state={state} accounts={accounts} tick={tick} />
 
       <div className="label">You</div>
       <You state={state} act={act} />

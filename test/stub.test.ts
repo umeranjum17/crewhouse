@@ -25,7 +25,7 @@ const daemon = spawn(process.execPath, [join(import.meta.dirname, '..', 'src', '
 after(() => daemon.kill());
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-const { PROVIDERS, OWNER } = await import('../src/accounts.ts');
+const { PROVIDERS } = await import('../src/accounts.ts');
 async function api(method: string, path: string, body?: unknown, headers: Record<string, string> = { 'x-crewhouse': '1' }) {
   const res = await fetch(base + path, { method, headers: { 'content-type': 'application/json', ...headers }, body: body ? JSON.stringify(body) : undefined });
   return { status: res.status, body: await res.json() };

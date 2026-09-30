@@ -14,7 +14,7 @@ import * as A from '../web/src/adapter.ts';
 
 const { Crew, quietNow, short, cleanReply } = await import('../src/crew.ts');
 const { classify: classifyText } = await import('@byokit/accounts');
-const { Accounts, OWNER, PROVIDERS } = await import('../src/accounts.ts');
+const { Accounts, PROVIDERS } = await import('../src/accounts.ts');
 const { effectOf, browserAsk, coversOf, toolWords, orderOf } = await import('../src/policy.ts');
 const kit = await import('../src/tools.ts');
 const disk = await import('../src/bots.ts');
