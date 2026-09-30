@@ -337,7 +337,7 @@ test('Do it now on a share-parked routine restarts the run clock: an hour-old ta
 test('Do it now recovers a sign-in-parked routine once signed in, and refuses honestly while still signed out', async () => {
   const { db, crew, done } = setup();
   const keys = ['chatgpt', 'grok', 'copilot', 'openrouter', 'minimax', 'claude'];
-  for (const k of keys) (crew.accounts as any).ready.set(`1:${k}`, false);
+  for (const k of keys) (crew.accounts as any).ready.set(k, false);
   const r = crew.addRoutine({ bot: 'reel', schedule: 'every day 7:00', task: 'check the prices', name: 'Deal check' }, 'person');
   crew.runRoutine(r.id);
   const t = db.get('SELECT * FROM tasks WHERE routine = ?', r.id)!;
@@ -355,7 +355,7 @@ test('Do it now recovers a sign-in-parked routine once signed in, and refuses ho
   assert.equal(state(db, t.id), 'paused');
 
   // Signed in since, with no sign-in event reaching it: the same tap runs the parked task.
-  for (const k of keys) (crew.accounts as any).ready.delete(`1:${k}`);
+  for (const k of keys) (crew.accounts as any).ready.delete(k);
   crew.runRoutine(r.id);
   await settled(db, t.id);
   assert.equal(state(db, t.id), 'done', 'the parked task runs once the account is back');
@@ -367,7 +367,7 @@ test('Do it now recovers a sign-in-parked routine once signed in, and refuses ho
 test('a scheduled tick recovers a sign-in-parked routine once signed in, and stays quiet while signed out', async () => {
   const { db, crew, done } = setup();
   const keys = ['chatgpt', 'grok', 'copilot', 'openrouter', 'minimax', 'claude'];
-  for (const k of keys) (crew.accounts as any).ready.set(`1:${k}`, false);
+  for (const k of keys) (crew.accounts as any).ready.set(k, false);
   const r = crew.addRoutine({ bot: 'reel', schedule: 'every day 7:00', task: 'check the prices', name: 'Deal check' }, 'person');
   crew.runRoutine(r.id);
   const t = db.get('SELECT * FROM tasks WHERE routine = ?', r.id)!;
@@ -382,7 +382,7 @@ test('a scheduled tick recovers a sign-in-parked routine once signed in, and sta
   assert.equal(state(db, t.id), 'paused');
 
   // Due once signed in: the parked task runs by itself.
-  for (const k of keys) (crew.accounts as any).ready.delete(`1:${k}`);
+  for (const k of keys) (crew.accounts as any).ready.delete(k);
   db.run('UPDATE routines SET next_at = ? WHERE id = ?', Date.now() - 1000, r.id);
   crew.schedule();
   await until('scheduled tick retries the parked task', () => state(db, t.id) !== 'paused');

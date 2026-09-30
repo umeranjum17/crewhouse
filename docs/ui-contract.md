@@ -90,13 +90,13 @@ Her Chief thread then starts with that request. From the goal starter it also ca
 
 ## Sign in with ChatGPT (today)
 
-`GET /api/accounts` rows `{member, account, name, signedIn, restingUntil, signIn, notIncluded, work}`; the app reads `account: 'chatgpt'` for the viewer's member id.
+`GET /api/accounts` rows `{account, name, signedIn, restingUntil, signIn, notIncluded, work}` for the person's accounts; the app reads `account: 'chatgpt'`. The `:member` segment on account actions stays for compatibility and is ignored.
 `POST /api/accounts/:member/chatgpt/login` answers at once with `signIn: {state: 'waiting', via: 'browser', url}`: ChatGPT's own page, which the app opens in a tab it opened in the same tap (so it is never blocked as a pop-up). ChatGPT sends that tab back to crewd's own listener on port 1455, which shows Crewhouse's words only once the sign-in works; the sheet moves on when `signedIn` turns true.
 `{via: 'code'}` ("Having trouble?") turns the same sign-in into `{via: 'code', code, url}`; crewd does it by itself when the page hasn't come back in three minutes. `{fresh: true}` asks ChatGPT's page which account again ("Use my personal account").
 A sign-in that fails ends as `signIn: {state: 'failed', error, why?}`: `why: 'declined'` (Cancel on ChatGPT's page), `why: 'busy'` (something else on this computer is signing in to ChatGPT), or `error` saying "expired"/"took too long"; each has its own words in the app.
 `work` is the email of a work ChatGPT (Business, Enterprise, Edu), read from the sign-in itself; the app offers "Use my personal account".
 `notIncluded`: the plan has no helpers (ChatGPT's `usage_not_included`). `…/retry` is "I've changed my plan".
-`…/cancel` stops a sign-in, `…/logout` signs out. No other provider is shown. Claude is never offered.
+`…/cancel` stops a sign-in, `…/logout` signs out. Other supported accounts use the same actions with their account key in place of `chatgpt`; the offered list is in [supported-subscriptions.md](supported-subscriptions.md).
 
 ## Connecting an app (today)
 
@@ -136,8 +136,8 @@ Both retry by themselves and say "Back in touch" when it answers again.
 
 ## Learning and the work trail
 
-`GET /api/learned` → `[{id, skill, at, state}]` — the skills the engine learned from this member's own work (`state: 'applied'` is what the rows show); `POST /api/learned/forget {id, skill}` puts one back the way it was (the engine's own restore; nothing else runs). The bot page's settings show these as **Learned · Forget** rows under the **Learn from how I work** switch.
-`GET /api/learning` → `{on}` and `POST /api/learning {on}` are that switch: the engine's own learning mode, on by default. Both answer only for the viewer's own member.
+`GET /api/learned` → `[{id, skill, at, state}]` — the skills the engine learned from your work (`state: 'applied'` is what the rows show); `POST /api/learned/forget {id, skill}` puts one back the way it was (the engine's own restore; nothing else runs). The bot page's settings show these as **Learned · Forget** rows under the **Learn from how I work** switch.
+`GET /api/learning` → `{on}` and `POST /api/learning {on}` are that switch: the engine's own learning mode, on by default. The switch applies to your crew.
 `GET /api/task/:id/trail` → `[{at, words, ok}]` — one plain-words row per tool call of one task, recorded by crewd itself (`run.call`), redacted to words; only the task's member (or the owner) may read it. The "How I did it" drawer renders it collapsed by default.
 
 `GET /api/events?after=` returns up to 200 newer events in sequence order. The web socket and paired phones receive every live event; helper trails retain their own event kinds without a viewer filter. New durable events have no member tag except `alert` (push routing). `bot.models` carries only `{by: 'person'}` and `system.engine` carries `{}`; each database open also scrubs the historical payloads of both kinds.

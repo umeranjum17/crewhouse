@@ -56,14 +56,13 @@ test('sign-in: the code is shown, and the card finishes when the engine does', a
   try {
     await f.started;
     const steps: SignInStep[] = [];
-    const end = await ending((on) => f.runtime.signIn(1, 'chatgpt', 'code', (s) => { steps.push(s); on(s); }));
+    const end = await ending((on) => f.runtime.signIn('chatgpt', 'code', (s) => { steps.push(s); on(s); }));
     assert.equal(end.done, true, JSON.stringify(end));
     assert.ok(steps.some((s) => s.code === 'CREW-2026' && s.waiting), 'the device code reached the card');
     const start = f.fake.calls.find((c) => c.method === 'openclaw.setup.auth.start')!.params as any;
     assert.deepEqual([start.agentId, start.authChoice], ['m1', 'openai-device-code']);
     assert.ok(!f.fake.calls.some((c) => c.method === 'wizard.status'), 'the drive pulls steps; wizard.status is not part of it');
-    assert.equal(await f.runtime.signedIn(1, 'chatgpt'), true);
-    assert.equal(await f.runtime.signedIn(2, 'chatgpt'), false, 'one member\'s sign-in is theirs alone');
+    assert.equal(await f.runtime.signedIn('chatgpt'), true);
   } finally { await f.done(); }
 });
 
@@ -71,7 +70,7 @@ test('sign-in: giving up cancels its own wizard session, in the account\'s own w
   const f = faked({}, { 'wizard.next': () => ({ done: false }) });
   try {
     await f.started;
-    const end = await ending((on) => f.runtime.signIn(1, 'grok', 'code', on));
+    const end = await ending((on) => f.runtime.signIn('grok', 'code', on));
     assert.match(end.error ?? '', /took too long.*Grok/);
     assert.doesNotMatch(end.error ?? '', /ChatGPT/);
     const cancels = f.fake.calls.filter((c) => c.method === 'wizard.cancel');
@@ -91,7 +90,7 @@ test('sign-in: the browser comes back to the callback port, and the address reac
   try {
     await f.started;
     const steps: SignInStep[] = [];
-    const finished = ending((on) => f.runtime.signIn(1, 'chatgpt', 'browser', (s) => { steps.push(s); on(s); }));
+    const finished = ending((on) => f.runtime.signIn('chatgpt', 'browser', (s) => { steps.push(s); on(s); }));
     let back: Response | undefined;
     for (const until = Date.now() + 5_000; !back && Date.now() < until;)
       back = await fetch(`http://127.0.0.1:${CALLBACK_PORT}/auth/callback?code=good&state=st`).catch(() => new Promise<undefined>((r) => setTimeout(r, 50)));
@@ -108,7 +107,7 @@ test('sign-in: a callback port already taken is said plainly, and blames no acco
   await new Promise<void>((r) => taken.listen(CALLBACK_PORT, '127.0.0.1', r));
   try {
     await f.started;
-    const end = await ending((on) => f.runtime.signIn(1, 'chatgpt', 'browser', on));
+    const end = await ending((on) => f.runtime.signIn('chatgpt', 'browser', on));
     assert.match(end.error ?? '', /Another sign-in is already in progress/);
     assert.doesNotMatch(end.error ?? '', /ChatGPT/);
   } finally { taken.close(); await f.done(); }
@@ -119,7 +118,7 @@ test('sign-in: the person cancels, the wizard session is cancelled with it and t
   try {
     await f.started;
     const steps: SignInStep[] = [];
-    const handle = f.runtime.signIn(1, 'chatgpt', 'code', (s) => steps.push(s));
+    const handle = f.runtime.signIn('chatgpt', 'code', (s) => steps.push(s));
     for (const until = Date.now() + 5_000; !f.fake.calls.some((c) => c.method === 'wizard.next') && Date.now() < until;) await new Promise((r) => setTimeout(r, 20));
     handle.cancel();
     for (const until = Date.now() + 5_000; !f.fake.calls.some((c) => c.method === 'wizard.cancel') && Date.now() < until;) await new Promise((r) => setTimeout(r, 20));

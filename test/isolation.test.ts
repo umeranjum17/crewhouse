@@ -98,7 +98,7 @@ test("the owner's own Pi is never read or written, and never run", async () => {
   const browsed = (await api('POST', '/api/bots/reel/messages', { text: 'browse [tool browser {"args":["goto","https://example.test/"]}]' })).task;
   await finished(browsed);
   await api('POST', '/api/accounts/1/grok/login', { via: 'code' });
-  await until(async () => (await api('GET', '/api/accounts')).find((a: any) => a.member === 1 && a.account === 'grok').signedIn);
+  await until(async () => (await api('GET', '/api/accounts')).find((a: any) => a.account === 'grok').signedIn);
   const { task } = await api('POST', '/api/bots/reel/messages', { text: 'ask permission while [tool crew_read {"path":"files/a.txt"}]' });
   await until(async () => (await api('GET', '/api/bots/reel')).trail.find((e: any) => e.kind === 'run.tool' && e.data.task === task));
   daemon.kill('SIGKILL');

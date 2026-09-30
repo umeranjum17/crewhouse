@@ -87,14 +87,14 @@ function useTab(first: Window | null | undefined) {
  * on only when crewd has a sign-in that works. The code is the fallback ("Having trouble?", or by itself when the page
  * never comes back). Every other ending has its own words: declined, busy, expired, a work account, offline.
  */
-export function SignIn({ me, ai = A.AIS[0], tab: first, onReady, onClose }: { me: number; ai?: { key: string; name: string; bg: string }; tab?: Window | null; onReady: () => void; onClose: () => void }) {
+export function SignIn({ ai = A.AIS[0], tab: first, onReady, onClose }: { ai?: { key: string; name: string; bg: string }; tab?: Window | null; onReady: () => void; onClose: () => void }) {
   const name = ai.name;
   const { value, offline } = usePoll(() => api.accounts(), 1500);
-  const g = A.account(value, me, ai.key);
+  const g = A.account(value, ai.key);
   const [cancelled, setCancelled] = useState(false);
   const [keepWork, setKeepWork] = useState(false);
   const tab = useTab(first);
-  const start = (body: { fresh?: boolean; via?: 'code' } = {}) => { setCancelled(false); void api.signIn(me, ai.key, body).catch(() => {}); };
+  const start = (body: { fresh?: boolean; via?: 'code' } = {}) => { setCancelled(false); void api.signIn(ai.key, body).catch(() => {}); };
   const again = (body: { fresh?: boolean } = {}) => { tab.fresh(); start(body); };
   useEffect(() => { if (!pinned) start(); }, []);
   const live: Phase = offline ? 'offline' : cancelled ? 'cancelled' : g.state === 'ready' ? (g.work && !keepWork ? 'work' : 'done')
@@ -103,8 +103,8 @@ export function SignIn({ me, ai = A.AIS[0], tab: first, onReady, onClose }: { me
   useEffect(() => { if (phase === 'waiting') tab.goTo(g.page); else if (phase !== 'opening') tab.drop(); }, [phase, g.page]);
   // Signed in: the sheet says so, then gets out of the way; the waiting request is already under way.
   useEffect(() => { if (phase === 'done' && !pinned) { const t = setTimeout(onReady, 1600); return () => clearTimeout(t); } }, [phase]);
-  const cancel = () => { void api.signInCancel(me, ai.key).catch(() => {}); setCancelled(true); };
-  const close = () => { if (phase === 'waiting' || phase === 'opening' || phase === 'code') void api.signInCancel(me, ai.key).catch(() => {}); onClose(); };
+  const cancel = () => { void api.signInCancel(ai.key).catch(() => {}); setCancelled(true); };
+  const close = () => { if (phase === 'waiting' || phase === 'opening' || phase === 'code') void api.signInCancel(ai.key).catch(() => {}); onClose(); };
   const code = g.signing?.code || 'WB60-FFV06';
   const page = g.signing?.url || (ai.key === 'chatgpt' ? 'https://auth.openai.com/codex/device' : '');
   const at = phase === 'done' || phase === 'work' ? 3 : phase === 'waiting' || phase === 'code' ? 1 : 0;
@@ -134,7 +134,7 @@ export function SignIn({ me, ai = A.AIS[0], tab: first, onReady, onClose }: { me
         <button className="btn go big" onClick={onReady}>Let's go</button></>}
       {phase === 'work' && <><h2>That looks like your work {name}</h2>
         <p className="mute">Signed in as <b>{g.work || 'a work account'}</b>. Your work's rules would apply to your helpers. Use your personal {name} instead?</p>
-        <button className="btn go big" onClick={() => attempt(async () => { await api.signOut(me, ai.key); setKeepWork(false); again({ fresh: true }); })}>Use my personal account</button>
+        <button className="btn go big" onClick={() => attempt(async () => { await api.signOut(ai.key); setKeepWork(false); again({ fresh: true }); })}>Use my personal account</button>
         <button className="link" onClick={() => { setKeepWork(true); onReady(); }}>Keep this one</button></>}
       {phase === 'cancelled' && <><h2>No problem</h2><p className="mute">Nothing was changed. You can sign in whenever you like.</p>
         <button className="btn go big" onClick={() => again()}>Try again</button>{notNow}</>}
@@ -154,7 +154,7 @@ export function SignIn({ me, ai = A.AIS[0], tab: first, onReady, onClose }: { me
  * will use), or, for a plan without helpers, the ways forward. Taps: Sign in (1), her account (2), Continue (3).
  */
 /** The sign-in card, in the ask-card anatomy (§4.11) with the ChatGPT button as primary. */
-export function AccountCard({ me, g, inChat, onReady }: { me: number; g: ReturnType<typeof A.account>; inChat?: boolean; onReady: () => void }) {
+export function AccountCard({ g, inChat, onReady }: { g: ReturnType<typeof A.account>; inChat?: boolean; onReady: () => void }) {
   const [signing, setSigning] = useState<Window | null | false>(sheet === 'signin' ? null : false);
   const [noAccount, setNoAccount] = useState(false);
   const ai = A.AIS[0];
@@ -165,7 +165,7 @@ export function AccountCard({ me, g, inChat, onReady }: { me: number; g: ReturnT
       {!inChat && <p className="mute small">Everything else in {ai.name} is fine. {ai.name} Plus includes it.</p>}
       <div className="btns">
         <a className="btn go" href="https://chatgpt.com/#pricing" target="_blank" rel="noreferrer">See {ai.name} plans ↗</a>
-        <button className="btn ghost always" onClick={() => attempt(async () => { await api.retryAccount(me, ai.key); onReady(); }, 'Trying again')}>I've changed my plan</button>
+        <button className="btn ghost always" onClick={() => attempt(async () => { await api.retryAccount(ai.key); onReady(); }, 'Trying again')}>I've changed my plan</button>
       </div>
     </div>
   );
@@ -178,7 +178,7 @@ export function AccountCard({ me, g, inChat, onReady }: { me: number; g: ReturnT
         <button className="link" onClick={() => { setNoAccount(true); window.open('https://chatgpt.com/', '_blank'); }}>No {ai.name} account? Make a free one</button>
       </div>
       {noAccount && <p className="mute small">{ai.name} opened in a new tab: sign up with Google or Apple in a few taps, then come straight back and tap Sign in.</p>}
-      {signing !== false && <SignIn me={me} tab={signing} onReady={() => { setSigning(false); onReady(); }} onClose={() => setSigning(false)} />}
+      {signing !== false && <SignIn tab={signing} onReady={() => { setSigning(false); onReady(); }} onClose={() => setSigning(false)} />}
     </div>
   );
 }

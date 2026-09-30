@@ -195,7 +195,7 @@ function inhibitor() {
  *  the person takes the wheel, and the recorder may need the browser's one DevTools connection; the next call re-attaches). */
 interface Browser { run: (args: string[], signal?: AbortSignal) => Promise<string>; end: () => void; release: () => void }
 
-/** A run's place in the crew: which task, whose account, its session key, and the browser if it has one. */
+/** A run's place in the crew: which task, account and session key, and the browser if it has one. */
 interface Live { key: string; task: number; member: number; account: string; model?: string; grants: string[]; browser?: Browser; page?: string; snapshot?: string; apps?: Record<string, AppTool>;
   /** The tools crewd runs for this run: the sandboxed shell, the browser AXI, the person's connected apps'. */
   shell?: CrewTool; browserTool?: CrewTool; appTools?: Map<string, CrewTool>;
@@ -254,8 +254,8 @@ export class Crew {
     this.runtime = cfg.engine === 'stub' ? new StubRuntime() : new OpenClawRuntime(cfg.stateDir, cfg.crewDir);
     this.accounts = new Accounts(this.runtime);
     // A scripted/custom model provider stands in for the person's own ChatGPT, exactly as the stub model always did.
-    if (cfg.engineProvider) this.accounts.ready.set(`${OWNER}:chatgpt`, true);
-    this.accounts.onSignedIn = (member) => this.wake(member, `You're signed in. I'll start now.`);
+    if (cfg.engineProvider) this.accounts.ready.set('chatgpt', true);
+    this.accounts.onSignedIn = () => this.wake(`You're signed in. I'll start now.`);
     this.connections = new Connections(cfg, `http://${cfg.host}:${cfg.port}/connect/callback`);
     this.connections.onChange = (_member, app) => this.db.event('app.changed', null, { app });
     this.connections.onExpired = (member, app) => this.say(CHIEF, 'system', `Your ${this.connections.apps[app].name} connection has run out. Connect it again under Settings, Connections, whenever you like.`, null, member);
@@ -306,24 +306,16 @@ export class Crew {
     this.dispatch();
   }
 
-  /** One-time per member (spec §6): `migrate` stages the member's old engine sign-in where the engine's doctor
-   *  imports it while the gateway is still down and retires nothing; `confirm` moves the copy aside only once the
-   *  gateway reports the member signed in. Anything else stays put and retries on the next boot — never a second
-   *  sign-in for the person. */
+  /** Stage the person's old sign-in offline; retire it only after the gateway witnesses the import. */
   private async eachLegacy(method: 'migrate' | 'confirm') {
-    const fn = (this.runtime as { migrate?: (member: number, path: string) => Promise<boolean>; confirm?: (member: number, path: string) => Promise<boolean> })[method];
-    if (!fn) return;
-    for (const m of this.members()) {
-      const legacy = this.legacyAuth(m.id);
-      if (!existsSync(legacy) && !existsSync(`${legacy}.moved-to-engine`)) continue;
-      try { await fn.call(this.runtime, m.id, legacy); }
-      catch (e) { console.error(`engine migration m${m.id}:`, e); }
-    }
+    const fn = (this.runtime as { migrate?: (path: string) => Promise<boolean>; confirm?: (path: string) => Promise<boolean> })[method];
+    const legacy = join(this.cfg.stateDir, 'people', '1', 'engine', 'auth.json');
+    if (!fn || (!existsSync(legacy) && !existsSync(`${legacy}.moved-to-engine`))) return;
+    try { await fn.call(this.runtime, legacy); }
+    catch (e) { console.error('engine migration:', e); }
   }
 
-  private legacyAuth(id: number) { return join(this.cfg.stateDir, 'people', String(id), 'engine', 'auth.json'); }
-
-  /** The "Learn from how I work" switch: the household's choice, kept in crewhouse's own db (default on), applied to
+  /** The "Learn from how I work" switch: the person's choice, kept in crewhouse's own db (default on), applied to
    *  the engine's learning mode whenever the engine comes up. */
   learningOn() { try { return this.db.get("SELECT value FROM settings WHERE key = 'learning'")?.value !== 'off'; } catch { return true; } }
   async setLearning(on: boolean) {
@@ -333,31 +325,29 @@ export class Crew {
 
   /** The weekly tidy of what was learned, on crewhouse's own boundary: capture first — refusing the whole review if
    *  the capture cannot be verified — then the engine's review inside the armed window, then the plain-words record.
-   *  Runs weekly per member; every path goes through this one pre-change step (handled inbox 003, option B). */
+   *  Every review goes through this one pre-change step. */
   private async weeklyCuration() {
     this.curationAt = Date.now() + 7 * 86_400_000;
-    for (const m of this.members()) {
-      const runtime = this.runtime as { runCollectionReview?: (member: number) => Promise<{ capture: string; kept: string[]; written: string[]; dropped: string[] }> };
-      if (!runtime.runCollectionReview) continue;
-      try {
-        const outcome = await runtime.runCollectionReview(m.id);
-        const parts = [outcome.written.length ? `rewrote ${outcome.written.join(', ')}` : '',
-          outcome.dropped.length ? `set aside ${outcome.dropped.join(', ')}` : '',
-          !outcome.written.length && !outcome.dropped.length ? 'nothing needed changing' : ''].filter(Boolean);
-        this.db.tx(() => {
-          this.say(CHIEF, 'bot', `Tidied what ${this.member(m.id).name}'s crew learned: ${parts.join('; ')}. Set-aside skills can come back.`, null, m.id);
-          this.db.event('learn.curated', CHIEF, { capture: outcome.capture, kept: outcome.kept, written: outcome.written, dropped: outcome.dropped });
-        });
-      } catch (e) {
-        // Refused (usually the capture): the data stays exactly as it was, and the person hears why — unless
-        // the member has no learned skills at all (a fresh household), where there is nothing to leave untouched.
-        console.error(`curation m${m.id}:`, e);
-        const learned = await this.runtime.learned(m.id).catch(() => []);
-        this.db.tx(() => {
-          this.db.event('learn.curated', CHIEF, { refused: String(e).slice(0, 200) });
-          if (learned.length) this.say(CHIEF, 'system', `I left ${this.member(m.id).name}'s learned skills untouched this week — tidying them didn't feel safe just now.`, null, m.id);
-        });
-      }
+    const runtime = this.runtime as { runCollectionReview?: () => Promise<{ capture: string; kept: string[]; written: string[]; dropped: string[] }> };
+    if (!runtime.runCollectionReview) return;
+    try {
+      const outcome = await runtime.runCollectionReview();
+      const parts = [outcome.written.length ? `rewrote ${outcome.written.join(', ')}` : '',
+        outcome.dropped.length ? `set aside ${outcome.dropped.join(', ')}` : '',
+        !outcome.written.length && !outcome.dropped.length ? 'nothing needed changing' : ''].filter(Boolean);
+      this.db.tx(() => {
+        this.say(CHIEF, 'bot', `Tidied what your crew learned: ${parts.join('; ')}. Set-aside skills can come back.`, null, OWNER);
+        this.db.event('learn.curated', CHIEF, { capture: outcome.capture, kept: outcome.kept, written: outcome.written, dropped: outcome.dropped });
+      });
+    } catch (e) {
+      // Refused (usually the capture): the data stays exactly as it was, and the person hears why — unless
+      // the person has no learned skills yet, where there is nothing to leave untouched.
+      console.error('curation:', e);
+      const learned = await this.runtime.learned().catch(() => []);
+      this.db.tx(() => {
+        this.db.event('learn.curated', CHIEF, { refused: String(e).slice(0, 200) });
+        if (learned.length) this.say(CHIEF, 'system', `I left your learned skills untouched this week — tidying them didn't feel safe just now.`, null, OWNER);
+      });
     }
   }
 
@@ -400,11 +390,11 @@ export class Crew {
   bots() { return this.db.all('SELECT * FROM bots ORDER BY created_at'); }
   activeTask(bot: string) { return this.db.get("SELECT * FROM tasks WHERE bot = ? AND state IN ('working', 'needs_you') ORDER BY id LIMIT 1", bot); }
 
-  /** 0 when the member's account is available; otherwise when it stops resting. */
-  restingUntil(account: string, member = OWNER) { return this.accounts.restingUntil(member, account); }
+  /** 0 when the person's account is available; otherwise when it stops resting. */
+  restingUntil(account: string) { return this.accounts.restingUntil(account); }
 
   /** The accounts a task may run on, in order: its own choice, the bot's fallback order, then any other account its
-   *  member has signed in to (someone who only has Grok still gets a working crew). Never another member's. */
+   *  person has signed in to (someone who only has Grok still gets a working crew). */
   choices(task: Row) {
     return disk.dedupe([...(task.brain ? [disk.parseBrain(task.brain)] : []), ...disk.brains(this.cfg, task.bot), ...Object.keys(PROVIDERS).map((provider) => ({ provider }))]);
   }
@@ -412,8 +402,7 @@ export class Crew {
   /** What the bot page and crew cards show: "Thinks with ChatGPT, then Grok". Account names only, never model ids. */
   thinks(id: string) {
     try {
-      const member = this.bot(id)?.member ?? OWNER;
-      return disk.dedupe(disk.brains(this.cfg, id).map((b) => ({ provider: b.provider }))).map((b) => ({ key: b.provider, name: disk.brainName(b), restingUntil: this.restingUntil(b.provider, member) }));
+      return disk.dedupe(disk.brains(this.cfg, id).map((b) => ({ provider: b.provider }))).map((b) => ({ key: b.provider, name: disk.brainName(b), restingUntil: this.restingUntil(b.provider) }));
     } catch { return []; } // a hand-edited bot.json with a bad model must not take the whole app down
   }
 
@@ -505,8 +494,8 @@ export class Crew {
       room: (() => { const r = this.room(me.id); return { last: r.lines.at(-1) ?? null, busy: r.busy }; })(),
       asks: this.db.all("SELECT * FROM asks WHERE state = 'open' AND COALESCE(member, ?) = ? ORDER BY id", OWNER, me.id).map((a) => this.askView(a)),
       events: this.db.events(0, 80),
-      /** This member's AI accounts that are resting now, and until when (docs/ui-contract.md). */
-      resting: Object.fromEntries(Object.keys(PROVIDERS).map((k) => [k, this.restingUntil(k, me.id)]).filter(([, t]) => t)),
+      /** The person's AI accounts that are resting now, and until when (docs/ui-contract.md). */
+      resting: Object.fromEntries(Object.keys(PROVIDERS).map((k) => [k, this.restingUntil(k)]).filter(([, t]) => t)),
       /** The apps this member has connected, by the app screen's own names. */
       connections: this.connections.on(me.id),
       /** Whether the owner has switched Google on for the house (Calendar, Gmail and Drive need it), and its four steps as
@@ -818,7 +807,7 @@ export class Crew {
   }
 
   private async retryPausedWhenSignedIn(r: Row, open: Row, why: 'schedule' | 'late' | 'file' | 'wake') {
-    try { if (!await this.usable(open.member ?? OWNER, this.choices(open))) return; } catch { return; }
+    try { if (!await this.usable(this.choices(open))) return; } catch { return; }
     try {
       const cur = this.db.get('SELECT state, wake_at FROM tasks WHERE id = ?', open.id);
       if (!cur || cur.state !== 'paused' || cur.wake_at != null) return;
@@ -958,7 +947,7 @@ export class Crew {
         const t = disk.loadTemplate(this.cfg, bot ?? '');
         const hired = this.bots().find((b) => b.template === t.id)?.id;
         const brains = hired ? disk.brains(this.cfg, hired) : (t.models ?? ['chatgpt']).map(disk.parseBrain);
-        if (brains.some((b) => !this.accounts.unready(member, b.provider) && !this.accounts.notIncluded(member, b.provider))) to = hired ?? this.recruit(t.id, undefined, 'person', member).id;
+        if (brains.some((b) => !this.accounts.unready(b.provider) && !this.accounts.notIncluded(b.provider))) to = hired ?? this.recruit(t.id, undefined, 'person', member).id;
       } catch { /* Chief */ }
     }
     // The address is already stored in people; the Hello screen already greeted her, so the thread starts empty and renders ChiefIdeas.
@@ -1116,10 +1105,10 @@ export class Crew {
     const earlier: string | undefined = /^https?:\/\/\S+$/i.test(text) && previous && /\b(market|marketing|promote|launch)\b/i.test(previous) ? previous : undefined;
     const body = earlier ? `${earlier}\n${text}` : text;
     const to = await route({ text, earlier }, helpers);
-    // A spreadsheet the rules miss goes straight to Scribe, hired silently when the member's account can run helpers.
+    // A spreadsheet the rules miss goes straight to Scribe, hired silently when the person's account can run helpers.
     const helper = (!to.abstained && helpers.find((b) => b.id === to.answer))
       || (/\b(excel|spreadsheet|xlsx|workbook|tracker)\b/i.test(body) && !chiefWork.test(body)
-        && await this.usable(member, this.choices({ bot: 'scribe' } as Row)) && (this.bots().find((b) => b.template === 'scribe') ?? this.recruit('scribe', undefined, 'person', member)));
+        && await this.usable(this.choices({ bot: 'scribe' } as Row)) && (this.bots().find((b) => b.template === 'scribe') ?? this.recruit('scribe', undefined, 'person', member)));
     if (!helper) return this.addTask(CHIEF, body, 'person', model, member, undefined, text, pics, { room, key });
     const r = this.addTask(helper.id, body, CHIEF, model, member, undefined, body, pics, { room, key });
     this.say(CHIEF, 'person', text + r.shown, null, member);
@@ -1294,18 +1283,18 @@ export class Crew {
     }
   }
 
-  /** Start (or continue) a task in its own engine session, on its member's own accounts, never anyone else's. */
+  /** Start (or continue) a task in its own engine session, on the person's accounts. */
   private async run(task: Row) {
     const bot = this.bot(task.bot)!;
     const member = task.member ?? OWNER;
     try {
       const choices = this.choices(task);
-      const brain = await this.usable(member, choices);
+      const brain = await this.usable(choices);
       if (!brain) return this.pause(task, choices);
       if (task.origin === 'routine' && this.overShare(member)) return this.waitForTomorrow(task);
       this.setTask(task, 'working');
-      if (this.runtime.memoryLimited?.(member)) {
-        const key = `memory.limited.${member}`;
+      if (this.runtime.memoryLimited?.()) {
+        const key = 'memory.limited.1';
         if (!this.db.get('SELECT 1 FROM settings WHERE key = ?', key)) {
           this.say(bot.id, 'system', 'Memory features are limited: no subscription-backed or local search is set up. Keyword search still works; no paid search was tried.', task.id);
           this.db.run('INSERT INTO settings (key, value) VALUES (?, ?)', key, 'shown');
@@ -1313,8 +1302,8 @@ export class Crew {
       }
       const handoff = this.handoffs.get(task.id);
       this.handoffs.delete(task.id);
-      const resumes = !!task.session && task.session.startsWith('agent:m');
-      const l = await this.open(bot, task, member, brain);
+      const resumes = !!task.session && task.session.startsWith('agent:m1:');
+      const l = await this.open(bot, task, brain);
       this.db.run("UPDATE bots SET state = 'on' WHERE id = ?", bot.id);
       this.db.event('run.started', bot.id, { task: task.id, account: brain.provider, name: disk.brainName(brain) });
       if (handoff && resumes) this.db.event('run.resumed', bot.id, { task: task.id, why: handoff });
@@ -1348,17 +1337,17 @@ export class Crew {
   private refusedNet(botId: string, to: string) { this.db.event('net.refused', botId, { task: this.activeTask(botId)?.id, to: to.slice(0, 260) }); }
 
   /** A run's setup: the bot's folder as its space, its granted tools behind crewd's gate, its own session key. */
-  private async open(bot: Row, task: Row, member: number, brain: disk.Brain) {
+  private async open(bot: Row, task: Row, brain: disk.Brain) {
     this.close(bot.id);
     const space = disk.botDir(this.cfg, bot.id);
     const conf = disk.botConfig(this.cfg, bot.id);
     const g = resolveGrants(this.cfg, conf.tools ?? [], { 'bot.dir': space, 'bot.id': bot.id });
     const net = this.netOf(bot.id);
-    const l = { key: `agent:m${member}:crewhouse:${bot.id}:${task.id}`, task: task.id, member, account: brain.provider, model: brain.model, grants: g.tools } as Live;
+    const l = { key: `agent:m1:crewhouse:${bot.id}:${task.id}`, task: task.id, member: 1, account: brain.provider, model: brain.model, grants: g.tools } as Live;
     // The bot's shell: bubblewrap, where its space is the only writable part of the disk.
     if (g.tools.includes('files') && sandboxReady()) l.shell = bashTool(space, [this.cfg.toolsDir], { ...g.env, PATH: toolBin(this.cfg) }, net?.sock);
     // The person's connected apps (their Notion, their Google…): every helper working for them can use them, through the gate.
-    const apps = await this.connections.tools(member);
+    const apps = await this.connections.tools(OWNER);
     l.apps = apps.effects;
     l.appTools = new Map(apps.tools.map((t) => [t.name, t]));
     const axi = g.axi.browser;
@@ -1414,7 +1403,7 @@ export class Crew {
     this.db.event('run.prompted', botId, { task: l.task, ...(images?.length ? { photos: images.length } : {}) });
     this.busy.add(botId);
     const spec: RunSpec = {
-      key: l.key, member: l.member, bot: botId, task: l.task, account: l.account, ...(l.model ? { model: l.model } : {}),
+      key: l.key, bot: botId, task: l.task, account: l.account, ...(l.model ? { model: l.model } : {}),
       cwd: disk.botDir(this.cfg, botId), system: this.systemPromptFor(botId, l), message: text,
       ...(images?.length ? { images } : {}),
       thinking: botId === CHIEF ? 'low' : undefined, builtins: [],
@@ -1475,10 +1464,10 @@ export class Crew {
     // task continues in its own session on the next account, conversation and all.
     if (end.kind === 'resting') {
       const until = end.until ?? Date.now() + 60 * 60_000;
-      this.accounts.rest(l.member, l.account, until);
+      this.accounts.rest(l.account, until);
       this.db.event('account.resting', null, { account: l.account, name, until });
-    } else if (end.kind === 'plan') this.accounts.notIncluded(l.member, l.account, true);
-    else this.accounts.expired.add(`${l.member}:${l.account}`);
+    } else if (end.kind === 'plan') this.accounts.notIncluded(l.account, true);
+    else this.accounts.expired.add(l.account);
     this.close(botId);
     this.handoffs.set(task.id, words);
     this.db.tx(() => {
@@ -1488,11 +1477,11 @@ export class Crew {
     this.dispatch();
   }
 
-  /** The first of these brains the member can think with now: signed in, and not resting. */
-  private async usable(member: number, choices: disk.Brain[]) {
+  /** The first of these brains the person can think with now: signed in, and not resting. */
+  private async usable(choices: disk.Brain[]) {
     for (const b of choices) {
-      if (!await this.accounts.signedIn(member, b.provider).catch(() => false)) continue;
-      const until = this.accounts.restingUntil(member, b.provider);
+      if (!await this.accounts.signedIn(b.provider).catch(() => false)) continue;
+      const until = this.accounts.restingUntil(b.provider);
       if (until && until > Date.now()) continue;
       return b;
     }
@@ -1503,17 +1492,16 @@ export class Crew {
    *  or a plan without helpers): the task waits for this person's own account, nobody else's, and starts by itself once
    *  they sign in. The app shows the sign-in (or the plan's options) right under these words. */
   private pause(task: Row, choices: disk.Brain[]) {
-    const member = task.member ?? OWNER;
     const name = PROVIDERS[choices[0]?.provider]?.name ?? 'ChatGPT';
     const who = this.bot(task.bot)!.display;
-    // Only accounts the member has: a resting one wakes up; one never signed in doesn't.
-    const rests = choices.filter((b) => !this.accounts.unready(member, b.provider)).map((b) => this.restingUntil(b.provider, member)).filter(Boolean);
+    // Only accounts the person has: a resting one wakes up; one never signed in doesn't.
+    const rests = choices.filter((b) => !this.accounts.unready(b.provider)).map((b) => this.restingUntil(b.provider)).filter(Boolean);
     let wake: number | null, state: string, words: string, voice: string;
     if (!rests.length) {
       const handoff = this.handoffs.get(task.id) ?? '';
       this.handoffs.delete(task.id);
-      const plan = choices.some((b) => this.accounts.notIncluded(member, b.provider));
-      const first = !this.db.get("SELECT 1 FROM tasks WHERE member = ? AND id != ? AND state != 'paused'", member, task.id);
+      const plan = choices.some((b) => this.accounts.notIncluded(b.provider));
+      const first = !this.db.get("SELECT 1 FROM tasks WHERE id != ? AND state != 'paused'", task.id);
       wake = null;
       state = plan ? `Waiting for a ${name} plan with helpers.` : `Waiting for you to sign in with ${name}.`;
       words = plan ? `Your ${name} plan doesn't include helpers yet. Everything else in ${name} is fine. ${name} Plus includes it.`
@@ -1535,21 +1523,21 @@ export class Crew {
     });
   }
 
-  /** The member can think again (signed in, or their plan changed): what was waiting for them starts now. */
-  wake(member: number, words?: string) {
-    const waiting = this.db.all("SELECT * FROM tasks WHERE state = 'paused' AND wake_at IS NULL AND member = ?", member);
+  /** The person can think again (signed in, or their plan changed): what was waiting for them starts now. */
+  wake(words?: string) {
+    const waiting = this.db.all("SELECT * FROM tasks WHERE state = 'paused' AND wake_at IS NULL");
     if (!waiting.length) return;
     this.db.tx(() => {
       for (const t of waiting) this.setTask(t, 'queued');
-      if (words) this.say(CHIEF, 'bot', words, null, member);
+      if (words) this.say(CHIEF, 'bot', words, null, OWNER);
     });
     this.dispatch();
   }
 
   /** "I've changed my plan": try the account again. */
-  retryAccount(member: number, key: string) {
-    this.accounts.notIncluded(member, key, false);
-    this.wake(member);
+  retryAccount(key: string) {
+    this.accounts.notIncluded(key, false);
+    this.wake();
   }
 
   private teamJob(task: Row) {
@@ -1561,11 +1549,11 @@ export class Crew {
   /** After a real engine run: any skill the engine's reviewer applied lands as one plain line with a Forget. */
   private async surfaceLearned(botId: string, l: Live) {
     if (this.cfg.engine === 'stub') return;
-    const learned = await this.runtime.learned(l.member).catch(() => [] as { id: string; skill: string; at: number; state: string }[]);
+    const learned = await this.runtime.learned().catch(() => [] as { id: string; skill: string; at: number; state: string }[]);
     const applied = learned.filter((p) => p.state === 'applied');
     for (const p of applied) {
-      if (this.seenLearned.has(`${l.member}:${p.id}`)) continue;
-      this.seenLearned.add(`${l.member}:${p.id}`);
+      if (this.seenLearned.has(p.id)) continue;
+      this.seenLearned.add(p.id);
       this.db.tx(() => {
         this.say(botId, 'system', `Learned: ${p.skill} — I'll do it this way next time. You can Forget it on ${this.bot(botId)?.display ?? 'its'} page.`, l.task);
         this.db.event('learn.applied', botId, { task: l.task, id: p.id, skill: p.skill });
@@ -1611,11 +1599,11 @@ export class Crew {
     this.dispatch();
   }
 
-  /** Host half of the replaceable agent runtime. The task id and member are checked before any tool is considered. */
+  /** Host half of the replaceable agent runtime. The task and live run are checked before any tool is considered. */
   toolHost(): ToolHost {
     const own = (run: RunRef) => {
       const task = this.activeTask(run.bot);
-      if (!task || task.id !== run.task || (task.member ?? OWNER) !== run.member || this.live.get(run.bot)?.task !== run.task)
+      if (!task || task.id !== run.task || this.live.get(run.bot)?.task !== run.task)
         throw new Error('Unknown or stale task');
       return task;
     };
@@ -2329,7 +2317,6 @@ export class Crew {
     const list = items.map((s) => String(s).trim().slice(0, 200)).filter(Boolean);
     if (!q) throw new Error('say the one question every item should answer');
     if (!list.length) throw new Error('list the items to research, each a short name');
-    const member = task.member ?? OWNER;
     const trimmed = list.slice(0, MAX_ITEMS);
     const answers: BatchAnswer[] = new Array(trimmed.length);
     let at = 0, tired = 0;
@@ -2340,7 +2327,7 @@ export class Crew {
         const wave = trimmed.slice(at, at + MAX_PARALLEL).map((item, k) => (async () => {
           const i = at + k;
           const end = await this.runtime.run({
-            key: `agent:m${member}:crewhouse:${botId}:${task.id}:batch:${i}`, member, bot: botId, task: task.id,
+            key: `agent:m1:crewhouse:${botId}:${task.id}:batch:${i}`, bot: botId, task: task.id,
             account: l.account, cwd: disk.botDir(this.cfg, botId), system: BATCH_SYSTEM,
             message: subMessage(q, item), builtins: [],
           }, () => {});
@@ -2348,8 +2335,8 @@ export class Crew {
             answers[i] = { item, ok: false, text: 'this item was stopped before it answered.' };
           } else if (!end.ok && (end.kind === 'resting' || end.kind === 'plan')) {
             tired++;
-            if (end.kind === 'resting') this.accounts.rest(member, l.account, end.until ?? Date.now() + 60 * 60_000);
-            else this.accounts.notIncluded(member, l.account, true);
+            if (end.kind === 'resting') this.accounts.rest(l.account, end.until ?? Date.now() + 60 * 60_000);
+            else this.accounts.notIncluded(l.account, true);
             answers[i] = { item, ok: false, text: `${disk.brainName({ provider: l.account })} is resting; this item was not researched.` };
           } else if (!end.ok) {
             answers[i] = { item, ok: false, text: `this item could not be researched (${end.message.slice(0, 120)}).` };

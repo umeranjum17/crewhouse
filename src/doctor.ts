@@ -17,7 +17,7 @@ line(maj > 22 || (maj === 22 && (min > 22 || (min === 22 && patch >= 3))), `Node
 line(true, `Engine: OpenClaw ${ENGINE_VERSION}, Crewhouse's own copy`, `it runs under ${cfg.stateDir}/openclaw; your own OpenClaw and ~/.openclaw are never used`);
 line(sandboxReady() || null, sandboxReady() ? "Bots' shell runs in a sandbox (bubblewrap)" : 'no sandbox here: bots work without a shell',
   sandboxReady() ? '' : 'install bubblewrap (apt install bubblewrap, dnf install bubblewrap, pacman -S bubblewrap), and allow unprivileged user namespaces');
-console.log('AI accounts: each person signs in from the app, under Settings, AI accounts.');
+console.log('AI accounts: sign in from the app, under Settings, AI accounts.');
 
 console.log('\nTool kit:');
 for (const t of toolStatus(cfg)) {

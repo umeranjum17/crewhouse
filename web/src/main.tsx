@@ -41,7 +41,7 @@ type Ctx = { state: Json; me: number; tick: number; refresh: () => void; night: 
 
 /** What Chief knows from the app itself, not the state: the computer out of reach, his composer, the sign-in. */
 function chiefLocal(ctx: Ctx, listen = false): A.ChiefLocal {
-  const g = A.account(ctx.accounts, ctx.me);
+  const g = A.account(ctx.accounts);
   return { offline: ctx.offline, listen, signedOut: g.state === 'signed-out' || g.notIncluded };
 }
 
@@ -173,7 +173,7 @@ function Chats({ state, refresh }: { state: Json; refresh: () => void }) {
 function SetupRow({ state, accounts, tick }: { state: Json; accounts: Json[] | null; tick: number }) {
   const [link, setLink] = useState<Json>(null);
   useEffect(() => { api.phoneLink().then(setLink).catch(() => {}); }, [tick]);
-  const { left } = A.homeSetup(state, A.account(accounts, A.OWNER), link);
+  const { left } = A.homeSetup(state, A.account(accounts), link);
   if (!left) return null;
   return <a className="card nudge" href="#/settings"><span className="grow">Home setup: {left} {left === 1 ? 'thing' : 'things'} left</span><b>›</b></a>;
 }
@@ -246,14 +246,14 @@ function Home(ctx: Ctx) {
   const works = A.work(state).filter((w) => !w.waiting);
   const day = new Date(); day.setHours(0, 0, 0, 0);
   const todays = A.things(state).filter((t) => t.at >= day.getTime());
-  const g = A.account(accounts, me);
+  const g = A.account(accounts);
   const toChief = async (t: string) => { const ok = await attempt(() => api.post('chief', t), undefined, true); if (ok) { refresh(); go('#/chief'); } return ok; };
   const needsHead = <div className="section-head"><span className="label">Needs you{cards.length > 0 && <span className="count">{cards.length}</span>}</span>{cards.length > 3 && <button className="link" onClick={() => setAllNeeds(!allNeeds)}>{allNeeds ? 'Show less' : `See all ${cards.length}`}</button>}</div>;
   // The office is Home's top frame, inside the hero card: one room, drawn once for whichever frame is showing.
   const wide = useWide();
   const office = (frame: 'phone' | 'desk') => (frame === 'desk') === wide && <Office state={state} night={ctx.night} />;
   const nudges = <>
-    {(g.state === 'signed-out' || g.notIncluded) && <AccountCard me={me} g={g} onReady={refresh} />}
+    {(g.state === 'signed-out' || g.notIncluded) && <AccountCard g={g} onReady={refresh} />}
     {state.person.id === A.OWNER && <SetupRow state={state} accounts={accounts} tick={tick} />}
     {state.person.id !== A.OWNER && <MemberRow state={state} />}
     {A.resting(state) && <div className="card nudge"><span className="grow">{A.resting(state)}. I'll pick things back up then.</span></div>}
@@ -373,7 +373,7 @@ function PhoneCard({ offer, reload }: { offer: Json; reload: () => void }) {
   </div>;
 }
 function Chat({ id, m, state, me, tick, refresh, accounts }: Ctx & { id: string; m?: string }) {
-  const g = A.account(accounts, me);
+  const g = A.account(accounts);
   const [page, setPage] = useState<Json>(null);
   const [pending, setPending] = useState<{ text: string; after: number } | null>(null);
   const [partial, setPartial] = useState('');
@@ -453,7 +453,7 @@ function Chat({ id, m, state, me, tick, refresh, accounts }: Ctx & { id: string;
           <div id={`m${l.id}`} className={`line ${l.from}${l.unsure ? ' unsure' : ''}${l.id > (opened.current ?? Infinity) ? ' fresh' : ''}${i && lines[i - 1].from === l.from && l.from !== 'me' ? ' consecutive' : ''}`}>
             {l.from !== 'me' && l.from !== 'note' && <div className="line-by"><Face who={l.from === 'chief' ? 'chief' : h ?? 'chief'} size={28} /><span className="who">{l.from === 'chief' ? 'Chief' : name}</span><time>{l.at ? A.clock(l.at) : ''}</time></div>}
             {l.text && (l.detail ? <ChiefAsk l={{ text: l.text, detail: l.detail }} /> : <div className="bubble-text"><ChatText text={l.text} /></div>)}
-            {id === 'chief' && l.text === 'Sign in with ChatGPT.' && <AccountCard me={me} g={{ ...g, state: 'signed-out' }} inChat onReady={() => { void load(); refresh(); }} />}
+            {id === 'chief' && l.text === 'Sign in with ChatGPT.' && <AccountCard g={{ ...g, state: 'signed-out' }} inChat onReady={() => { void load(); refresh(); }} />}
             {l.files.map((f) => <Media key={f.url} f={f} big />)}
             {phoneOffer?.message === l.id && <PhoneCard offer={phoneOffer} reload={() => void load()} />}
             {cards.filter((c) => lines.findLastIndex((x) => (x.at ?? 0) <= c.at) === i).map((c) => c.kind === 'connect' ? <ConnectCard key={c.id} c={c} helper={h?.name} state={state} onDone={refresh} /> : <AskCard key={c.id} c={c} who={h} onDone={refresh} />)}
@@ -466,7 +466,7 @@ function Chat({ id, m, state, me, tick, refresh, accounts }: Ctx & { id: string;
         {last?.choices.length ? <div className="chips">{last.choices.map((c) => <button key={c} className="chip" onClick={() => send(c)}>{c}</button>)}</div> : null}
         {cards.filter((c) => !lines.length || lines.every((x) => (x.at ?? 0) > c.at)).map((c) => c.kind === 'connect' ? <ConnectCard key={c.id} c={c} helper={h?.name} state={state} onDone={refresh} /> : <AskCard key={c.id} c={c} who={h} onDone={refresh} />)}
         {h && <Stuck h={h} refresh={refresh} />}
-        {(g.state === 'signed-out' || g.notIncluded) && <AccountCard me={me} g={g} inChat onReady={() => { void load(); refresh(); }} />}
+        {(g.state === 'signed-out' || g.notIncluded) && <AccountCard g={g} inChat onReady={() => { void load(); refresh(); }} />}
         {g.state === 'ready' && !g.notIncluded && A.resting(state) && <div className="card nudge"><span className="grow">{A.resting(state)}. {name === 'Chief' ? "I'll" : `${name} will`} finish then.</span></div>}
         <div ref={end} className="end" />
       </div>
@@ -948,7 +948,7 @@ function Phones({ tick }: { tick: number }) {
 function HomeSetup({ state, accounts, tick }: { state: Json; accounts: Json[] | null; tick: number }) {
   const [link, setLink] = useState<Json>(null);
   useEffect(() => { api.phoneLink().then(setLink).catch(() => {}); }, [tick]);
-  const { rows, left } = A.homeSetup(state, A.account(accounts, A.OWNER), link);
+  const { rows, left } = A.homeSetup(state, A.account(accounts), link);
   const jump = (key: string) => document.getElementById(`setup-${key}`)?.scrollIntoView({ behavior: 'smooth' });
   return (<>
     <div className="label">Home setup</div>
@@ -976,7 +976,7 @@ function Settings({ state, me, refresh, tick, accounts, look, setLook, switchTo 
         <div className="chips">{state.members.map((m: Json) => <button key={m.id} className={`chip ${m.id === me ? 'on' : ''}`} onClick={() => switchTo(m.id)}>{m.name}</button>)}</div></>)}
 
       <div className="label">Your AI accounts</div>
-      <AiAccounts me={me} accounts={accounts} refresh={refresh} signIn={(ai) => setSigning({ ai, tab: openTab() })} />
+      <AiAccounts accounts={accounts} refresh={refresh} signIn={(ai) => setSigning({ ai, tab: openTab() })} />
 
       <div className="label">How much of it the crew may use</div>
       <div className="seg">{A.SHARES.map((o) => <button key={o.key} className={A.share(state).choice === o.key ? 'on' : ''} title={o.says}
@@ -996,20 +996,20 @@ function Settings({ state, me, refresh, tick, accounts, look, setLook, switchTo 
       <div className="seg">{[['auto', 'Evenings dark'], ['day', 'Day'], ['night', 'Night']].map(([k, l]) => <button key={k} className={look === k ? 'on' : ''} onClick={() => setLook(k)}>{l}</button>)}</div>
       {owner && <Money state={state} refresh={refresh} />}
       {owner && <HouseGoogle on={!!state.house?.google} steps={state.house?.steps} refresh={refresh} />}
-      {signing !== false && <SignIn me={me} ai={signing?.ai} tab={signing?.tab} onReady={() => { setSigning(false); refresh(); }} onClose={() => setSigning(false)} />}
+      {signing !== false && <SignIn ai={signing?.ai} tab={signing?.tab} onReady={() => { setSigning(false); refresh(); }} onClose={() => setSigning(false)} />}
     </div>
   );
 }
 
 /** The accounts the crew thinks with, signed in first; every other route waits quietly under "More ways to sign in". */
-function AiAccounts({ me, accounts, refresh, signIn }: { me: number; accounts: Json[] | null; refresh: () => void; signIn: (ai: (typeof A.AIS)[number]) => void }) {
-  const { mine, more } = A.aiList(accounts, me);
+function AiAccounts({ accounts, refresh, signIn }: { accounts: Json[] | null; refresh: () => void; signIn: (ai: (typeof A.AIS)[number]) => void }) {
+  const { mine, more } = A.aiList(accounts);
   const row = ({ ai, g, says }: ReturnType<typeof A.aiList>['more'][number]) => (
     <div key={ai.key} className="ai-row">
       <AiMark ai={ai} />
       <div className="grow"><b>{ai.name}</b><div className="mute small">{says}</div></div>
       {g.state === 'signed-out' && <button className={`btn ${mine.some((r) => r.ai === ai) ? 'go' : 'quiet'}`} onClick={() => signIn(ai)}>Sign in</button>}
-      {g.state === 'ready' && <button className="link" onClick={() => attempt(async () => { await api.signOut(me, ai.key); refresh(); }, `Signed out of ${ai.name}`)}>Sign out</button>}
+      {g.state === 'ready' && <button className="link" onClick={() => attempt(async () => { await api.signOut(ai.key); refresh(); }, `Signed out of ${ai.name}`)}>Sign out</button>}
     </div>
   );
   return (<>

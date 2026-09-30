@@ -1,5 +1,5 @@
-// The engine port on the BYOKit OpenClaw kit. This file is the only one that imports the kit: it maps Crewhouse's
-// members, accounts, runs and tools onto the kit's, and keeps the crew's own learned-skill capture beside it.
+// The engine port on the BYOKit OpenClaw kit. This file is the only one that imports the kit: it maps the
+// person's accounts, runs and tools onto the kit's, and keeps the crew's own learned-skill capture beside it.
 import { randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
@@ -8,7 +8,7 @@ import { OpenClawKit, type KitOptions, type ToolSpec } from '@byokit/openclaw';
 import { PROVIDERS } from '../accounts.ts';
 import { commit } from '../bots.ts';
 import { CALLBACK_PORT } from '../callback-port.ts';
-import type { AgentRuntime, Member, RunEnd, RunEvent, RunRef, RunSpec, SignInStep, ToolHost } from '../runtime.ts';
+import type { AgentRuntime, RunEnd, RunEvent, RunRef, RunSpec, SignInStep, ToolHost } from '../runtime.ts';
 
 export { ENGINE_VERSION } from '@byokit/openclaw';
 
@@ -23,7 +23,7 @@ const CODE_CHOICE: Record<string, string> = {
   chatgpt: 'openai-device-code', grok: 'xai-device-code', openrouter: 'openrouter-oauth', minimax: 'minimax-global-oauth',
 };
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-const m = (member: Member) => `m${member}`;
+const ME = 'm1';
 /** The engine-side name of a Crewhouse tool and back: only the shell differs. */
 const crewName = (tool: string) => tool === 'shell' ? 'bash' : tool;
 
@@ -66,9 +66,9 @@ export const TOOLS: ToolSpec[] = ['shell', 'browser', 'calendar', 'mail', 'crew_
   parameters: SCHEMAS[name] ?? { type: 'object', additionalProperties: true } }));
 
 /** Crewhouse's engine config, merged under the kit's invariants on every prepare. The learning mode is left to the
- *  engine's saved config: crewd applies the household's switch whenever the engine comes up (Crew.setLearning). */
+ *  engine's saved config: crewd applies the person's switch whenever the engine comes up (Crew.setLearning). */
 const CONFIG = {
-  // An empty allow list: the engine otherwise narrows to its model map, and the family's other providers vanish.
+  // An empty allow list: the engine otherwise narrows to its model map, and the person's other providers vanish.
   agents: { defaults: { sandbox: { mode: 'off' }, modelPolicy: { allow: [] } } },
   tools: { profile: 'coding', alsoAllow: TOOLS.map((t) => t.name), deny: ['group:fs', 'group:runtime', 'group:automation', 'group:messaging', 'group:nodes', 'group:ui', 'sessions_send', 'sessions_spawn', 'conversations_send', 'conversations_turn', 'subagents', 'code_execution', 'gateway', 'openclaw', 'plugins', 'cron', 'ask_user', 'suggest_task'], fs: { workspaceOnly: true }, exec: { security: 'deny', ask: 'always' }, elevated: { enabled: false }, agentToAgent: { enabled: false }, sessions: { visibility: 'agent' } },
   // `paths: []` drops the plugin folder older Crewhouse builds loaded; the kit adds its own bridge plugin.
@@ -114,25 +114,25 @@ export class OpenClawRuntime implements AgentRuntime {
   }
   async start(host: ToolHost) { this.host = host; await this.kit.start(); }
   async stop() { await this.kit.stop(); }
-  memoryLimited(member: number) { return this.kit.memoryLimited(m(member)); }
+  memoryLimited() { return this.kit.memoryLimited(ME); }
 
   // ---- accounts: the engine owns credentials; the kit drives its wizard and reads its status ----
 
-  async signedIn(member: number, account: string) {
+  async signedIn(account: string) {
     const provider = PROVIDER_OF[account];
-    return provider ? this.kit.signedIn(m(member), provider) : false;
+    return provider ? this.kit.signedIn(ME, provider) : false;
   }
 
   /** The engine's provider-owned login; the kit holds the ChatGPT callback port during a browser sign-in and the
    *  device code covers the phone and the no-browser path. The card hears the kit's views in Crewhouse's words. */
-  signIn(member: number, account: string, via: 'browser' | 'code', on: (step: SignInStep) => void): { paste(text: string): void; cancel(): void } {
+  signIn(account: string, via: 'browser' | 'code', on: (step: SignInStep) => void): { paste(text: string): void; cancel(): void } {
     const authChoice = via === 'code' ? CODE_CHOICE[account] ?? AUTH_CHOICE[account] : AUTH_CHOICE[account];
     if (!authChoice) {
       queueMicrotask(() => on({ waiting: false, error: `Sign-in for ${account} is not connected yet` }));
       return { paste() {}, cancel() {} };
     }
     const name = PROVIDERS[account]?.name ?? account;
-    return this.kit.signIn(m(member), { authChoice, via }, (v) => {
+    return this.kit.signIn(ME, { authChoice, via }, (v) => {
       if (v.state === 'waiting') on({ waiting: true, ...(v.url ? { url: v.url } : {}), ...(v.code ? { code: v.code } : {}), ...(v.error ? { error: v.error } : {}) });
       else if (v.state === 'done') on({ waiting: false, done: true });
       else if (v.why === 'busy') on({ waiting: false, error: 'Another sign-in is already in progress. Finish or cancel it, then try again.' });
@@ -141,18 +141,18 @@ export class OpenClawRuntime implements AgentRuntime {
     });
   }
 
-  async signOut(member: number, account: string) {
+  async signOut(account: string) {
     const provider = PROVIDER_OF[account];
     if (!provider) throw new Error('no such AI account');
-    await this.kit.signOut(m(member), provider);
+    await this.kit.signOut(ME, provider);
   }
 
-  /** One-time per member (spec §6): stage the member's old engine sign-in for the engine's doctor, offline, before
+  /** One-time (spec §6): stage the person's old engine sign-in for the engine's doctor, offline, before
    *  start(). Nothing is retired here: the copy moves aside only once the gateway confirms the import (confirm). */
-  async migrate(member: Member, legacyAuthPath: string) {
-    return await this.kit.migrateRetainedLogin(m(member), { path: legacyAuthPath }) === 'staged';
+  async migrate(legacyAuthPath: string) {
+    return await this.kit.migrateRetainedLogin(ME, { path: legacyAuthPath }) === 'staged';
   }
-  confirm(member: Member, legacyAuthPath: string) { return this.kit.confirmRetainedLogin(m(member), { path: legacyAuthPath }); }
+  confirm(legacyAuthPath: string) { return this.kit.confirmRetainedLogin(ME, { path: legacyAuthPath }); }
 
   /** Point this engine at a custom OpenAI-compatible provider (the tests' scripted model; a self-hosted gateway later).
    *  Sets the provider and makes it every agent's primary model. */
@@ -179,7 +179,7 @@ export class OpenClawRuntime implements AgentRuntime {
     if (register) this.runs.set(spec.key, spec);
     const provider = PROVIDER_OF[spec.account]; // the run's own account: this provider is the one called and billed
     try {
-      return await this.kit.run({ sessionKey: spec.key, member: m(spec.member), message: spec.message, system: spec.system,
+      return await this.kit.run({ sessionKey: spec.key, member: ME, message: spec.message, system: spec.system,
         ...(spec.model && provider ? { model: `${provider}/${spec.model}` } : {}), ...(spec.images?.length ? { images: spec.images } : {}), ...(spec.thinking ? { thinking: spec.thinking } : {}), register },
         (e) => on(e.type === 'tool' ? { ...e, name: crewName(e.name) } : e));
     } catch (error) { return { ok: false, kind: 'other', message: String(error) }; }
@@ -188,9 +188,9 @@ export class OpenClawRuntime implements AgentRuntime {
   steer(key: string, text: string) { return this.kit.steer(key, text); }
   abort(key: string) { return this.kit.abort(key); }
   async trail(_key: string) { return []; }
-  /** The member's applied learned skills (the workshop's proposals, applied state last). */
-  async learned(member: number) {
-    const { agentId } = await this.kit.ensureMember(m(member));
+  /** The person's applied learned skills (the workshop's proposals, applied state last). */
+  async learned() {
+    const { agentId } = await this.kit.ensureMember(ME);
     const list = await this.kit.call('skills.proposals.list', { agentId }, { timeoutMs: 20_000 }).catch(() => undefined) as { proposals?: any[] } | undefined;
     return (list?.proposals ?? []).map((p) => ({
       id: String(p.id ?? ''),
@@ -200,11 +200,11 @@ export class OpenClawRuntime implements AgentRuntime {
     })).filter((p) => p.id);
   }
 
-  /** The member's learned-skills folder, and its pre-change capture: crewhouse's own git versioning. A capture that
+  /** The person's learned-skills folder, and its pre-change capture: crewhouse's own git versioning. A capture that
    *  cannot be verified throws, and the caller must refuse the review — the data stays. */
-  workspaceOf(member: number) { return join(this.stateDir, 'openclaw/workspaces', m(member), 'skills'); }
-  captureLearned(member: number): string {
-    const dir = this.workspaceOf(member);
+  workspaceOf() { return join(this.stateDir, 'openclaw/workspaces', ME, 'skills'); }
+  captureLearned(): string {
+    const dir = this.workspaceOf();
     if (!existsSync(join(dir, '.git'))) mkdirSync(dir, { recursive: true });
     const hash = commit(dir, ['.'], 'Before the skill collection review');
     if (!hash) throw new Error('the learned-skills capture failed; the review was refused');
@@ -215,8 +215,8 @@ export class OpenClawRuntime implements AgentRuntime {
    *  inside it (`<name>/SKILL.md`, never `skills/<name>/SKILL.md`). The capture is read before anything is written —
    *  a restore that cannot be verified throws and leaves the workspace untouched. The blob is written as raw bytes,
    *  so the restore is byte-for-byte: leading and trailing whitespace and the final newline all survive. */
-  restoreLearned(member: number, name: string, hash?: string) {
-    const dir = this.workspaceOf(member);
+  restoreLearned(name: string, hash?: string) {
+    const dir = this.workspaceOf();
     const git = (argv: string[]) => execFileSync('git', ['-c', 'user.name=Crewhouse', '-c', 'user.email=crewhouse@localhost', ...argv], { cwd: dir, stdio: 'pipe' });
     const at = (hash ?? git(['rev-parse', '--short', 'HEAD'])).toString().trim();
     let body: Buffer;
@@ -228,21 +228,21 @@ export class OpenClawRuntime implements AgentRuntime {
     return at;
   }
 
-  /** The workshop window for the member's own collection review: its reconcile only, one call wide. The engine mints
+  /** The workshop window for the person's own collection review: its reconcile only, one call wide. The engine mints
    *  the reviewer's session key fresh per run (`incognito-<uuid>`), so the first qualifying call is the captured one. */
-  armCuration(member: number, ms = 10 * 60_000) {
-    this.kit.allowOnce({ keyPrefix: `agent:${m(member)}:skill-collection-review:`, tool: 'skill_workshop', input: (i) => i.action === 'reconcile' }, ms);
+  armCuration(ms = 10 * 60_000) {
+    this.kit.allowOnce({ keyPrefix: `agent:${ME}:skill-collection-review:`, tool: 'skill_workshop', input: (i) => i.action === 'reconcile' }, ms);
   }
 
   /** The collection review, on crewhouse's own boundary: capture first (refusing everything on failure), open the
-   *  workshop window only for the member's own reviewer and its reconcile — one call wide — run the review, close
+   *  workshop window only for the person's own reviewer and its reconcile — one call wide — run the review, close
    *  it, and report kept/rewritten/dropped. */
-  async runCollectionReview(member: number) {
-    const capture = this.captureLearned(member);
+  async runCollectionReview() {
+    const capture = this.captureLearned();
     const jobs = await this.kit.call('cron.list', { limit: 100 }, { timeoutMs: 20_000 }) as { jobs?: { id: string; name: string; enabled: boolean }[] };
-    const job = jobs.jobs?.find((j) => j.name === `skill-collection-review-${m(member)}`);
+    const job = jobs.jobs?.find((j) => j.name === `skill-collection-review-${ME}`);
     if (!job?.enabled) throw new Error('the collection review is not enabled');
-    this.armCuration(member);
+    this.armCuration();
     try {
       const kicked = await this.kit.call('cron.run', { id: job.id, mode: 'force' } as { id: string }, { timeoutMs: 30_000 }) as { runId?: string };
       for (const end = Date.now() + 240_000; Date.now() < end;) {
@@ -259,14 +259,14 @@ export class OpenClawRuntime implements AgentRuntime {
 
   /** Forget one learned skill. Pending proposals are rejected directly; an applied one is restored by a one-shot
    *  turn whose only possible tool is the workshop's own restore (spec §5.4) — no other tool can run on it. */
-  async forget(member: number, id: string, skill = '') {
-    const { agentId } = await this.kit.ensureMember(m(member));
+  async forget(id: string, skill = '') {
+    const { agentId } = await this.kit.ensureMember(ME);
     for (const method of ['skills.proposals.reject', 'skills.proposals.quarantine'] as const) {
       const ok = await this.kit.call(method, { agentId, proposalId: id } as any, { timeoutMs: 20_000 }).then(() => true).catch(() => false);
       if (ok) return;
     }
     // Applied: a one-shot turn, unregistered (so the gate allows only the workshop's restore), then forgotten for good.
-    const end = await this.run({ key: `agent:m${member}:crewhouse:forget:${randomUUID()}`, member, bot: 'chief', task: 0, account: 'chatgpt',
+    const end = await this.run({ key: `agent:${ME}:crewhouse:forget:${randomUUID()}`, bot: 'chief', task: 0, account: 'chatgpt',
       cwd: '', system: 'You are the crew\'s own workshop assistant. Use skill_workshop with action "restore_collection" and nothing else.', message: `Forget the learned skill "${skill}" (proposal ${id}): use skill_workshop with action "restore_collection" and nothing else.`, builtins: [] }, () => {}, { register: false });
     if (!end.ok) throw new Error('Forget failed');
   }
