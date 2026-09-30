@@ -131,6 +131,49 @@ test('push through a stubbed Expo: exactly one content-free push per paired phon
   db.close();
 });
 
+test('questions, finished helper jobs and Chief lines push only content-free news to the person’s phones', async (t) => {
+  const got: any[][] = [];
+  const expo = http1((req, res) => {
+    let body = '';
+    req.on('data', (c) => { body += c; });
+    req.on('end', () => {
+      const msgs = JSON.parse(body);
+      got.push(msgs);
+      res.end(JSON.stringify({ data: msgs.map(() => ({ status: 'ok' })) }));
+    });
+  });
+  await new Promise<void>((r) => expo.listen(0, '127.0.0.1', r));
+  t.after(() => expo.close());
+  const db = new Store(temp('crewhouse-news'));
+  t.after(() => db.close());
+  const devices = ['pixel', 'moto'].map((id) => ({ id, meta: { member: 1 } }));
+  const link = Object.assign(new Link({} as any, db, async () => null) as any, {
+    host: { devices: () => devices }, pushUrl: `http://127.0.0.1:${(expo.address() as AddressInfo).port}/push`,
+  });
+  for (const d of devices) await link.request('POST /api/push', { expo: `ExponentPushToken[${d.id}]` }, d);
+  // news() is fire-and-forget: retain the real sends so silence and exact counts can be checked without a sleep.
+  const pending: Promise<void>[] = [];
+  const tell = link.tell.bind(link);
+  link.tell = (member: number, id: string) => { const send = tell(member, id); pending.push(send); return send; };
+  db.run("INSERT INTO asks (id, bot, member, title, detail) VALUES (1, 'scout', 1, 'Private question', 'Private detail')");
+  db.run("INSERT INTO tasks (id, bot, member, state, result) VALUES (1, 'scout', 1, 'done', 'Private finished work')");
+  db.run("INSERT INTO messages (id, bot, member, author, text) VALUES (1, 'chief', 1, 'bot', 'Private Chief line')");
+  for (const [i, event] of [
+    { kind: 'ask.opened', bot: 'scout', data: { ask: 1 } },
+    { kind: 'task.done', bot: 'scout', data: { task: 1 } },
+    { kind: 'message', bot: 'chief', data: { id: 1, author: 'bot' } },
+  ].entries()) {
+    link.news({ seq: i + 1, ...event });
+    await Promise.all(pending);
+    assert.equal(got.length, i + 1, `${event.kind} sends exactly one batch`);
+    assert.deepEqual(got[i], devices.map((d) => ({ to: `ExponentPushToken[${d.id}]`, title: NEWS, sound: 'default', collapseId: `e${i + 1}` })));
+  }
+  db.run("INSERT INTO tasks (id, bot, member, state, result, routine) VALUES (2, 'chief', 1, 'done', 'All clear', 1), (3, 'chief', 1, 'done', 'Private Chief result', NULL), (4, 'scout', 1, 'done', 'All clear', 2)");
+  for (const task of [2, 3, 4]) link.news({ seq: task + 2, kind: 'task.done', bot: task === 4 ? 'scout' : 'chief', data: { task } });
+  await Promise.all(pending);
+  assert.equal(got.length, 3, 'All clear routines and Chief task completion give no push');
+});
+
 test('the computer tells a phone whether its Tailscale has that phone as a peer', async () => {
   const dir = temp('crewhouse-peer');
   const cli = (name: string, out: string) => { const bin = join(dir, name); writeFileSync(bin, `#!/bin/sh\ncat <<'X'\n${out}\nX\n`, { mode: 0o755 }); return bin; };

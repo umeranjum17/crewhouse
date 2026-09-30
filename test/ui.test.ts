@@ -681,6 +681,13 @@ test('a checkout asks for review first: the yes names the order, an unreadable t
   assert.deepEqual(lookup.choices.map((c) => c.label), ['OK, spend it', 'Not now']);
 });
 
+test('Settings keeps the person’s Chief address, quiet-hours switch and crew share controls', () => {
+  const src = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
+  assert.match(src, /<label[^>]*>Chief calls (?:you|\{you \? 'you' : 'them'\})\s*<input[^>]*[\s\S]*?api\.person\([^\n]*\{ address \}/, 'Chief calls you stays editable and saves the address');
+  assert.match(src, /<label[^>]*><span[^>]*>Quiet hours[\s\S]*?<input type="checkbox" role="switch"[^\n]*api\.person\([^\n]*\{ quiet:/, 'quiet hours stays a switch that saves the preference');
+  assert.match(src, /How much of it the crew may use[\s\S]*?onClick=\{[^\n]*api\.person\([^\n]*\{ share:/, 'the person can still set the crew’s share in Settings');
+});
+
 test('the crew\'s share is words, never a number; money is whole dollars and only for the owner', () => {
   for (const s of [{ choice: 'light', used: false }, { choice: 'light', used: true }, { choice: 'full', used: false }]) {
     const v = A.share({ share: s });
