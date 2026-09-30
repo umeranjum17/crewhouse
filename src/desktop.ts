@@ -36,16 +36,16 @@ function xauthority(n: number, cookie: Buffer) {
 }
 
 /** A client-facing session event, as @desklink/react-native's Signaling.subscribe expects it. */
-export type DeskEvent = { kind: 'description'; description: unknown } | { kind: 'candidate'; candidate: unknown }
-  | { kind: 'state'; capture: string; transport: string; firstFrame: boolean } | { kind: 'revoked'; reason: string };
+export type DeskEvent = ({ kind: 'description'; description: unknown } | { kind: 'candidate'; candidate: unknown }
+  | { kind: 'state'; capture: string; transport: string; firstFrame: boolean } | { kind: 'revoked'; reason: string; code?: string }) & { sessionId?: string };
 
 function unwrap(e: EngineEvent): DeskEvent | null {
   const p: any = e.params;
   switch (e.event) {
-    case 'session.description': return { kind: 'description', description: p.description };
-    case 'session.candidate': return { kind: 'candidate', candidate: { candidate: p.candidate, sdpMid: p.sdpMid, sdpMLineIndex: p.sdpMLineIndex } };
-    case 'session.state': return { kind: 'state', capture: p.capture, transport: p.transport, firstFrame: p.firstFrame };
-    case 'session.revoked': return { kind: 'revoked', reason: p.reason };
+    case 'session.description': return { kind: 'description', sessionId: p.sessionId, description: p.description };
+    case 'session.candidate': return { kind: 'candidate', sessionId: p.sessionId, candidate: { candidate: p.candidate, sdpMid: p.sdpMid, sdpMLineIndex: p.sdpMLineIndex } };
+    case 'session.state': return { kind: 'state', sessionId: p.sessionId, capture: p.capture, transport: p.transport, firstFrame: p.firstFrame };
+    case 'session.revoked': return { kind: 'revoked', sessionId: p.sessionId, reason: p.reason, code: p.code };
     default: return null; // restore tokens stay with the host
   }
 }

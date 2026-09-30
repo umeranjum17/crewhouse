@@ -95,6 +95,7 @@ test('watching: crewd picks the display and the permissions', { skip: noXvfb }, 
   assert.deepEqual([view.source.width, view.source.height], [1280, 800]);
   for (let i = 0; i < 100 && !a.seen.some((e) => e.kind === 'description'); i++) await sleep(100);
   assert.ok(a.seen.some((e) => e.kind === 'description'), 'the offer reaches the watcher');
+  assert.ok(a.seen.every((e) => e.sessionId === view.sessionId), 'engine events retain their session for viewer recovery');
   await assert.rejects(desks.signal('reel', b, 'session.candidate', { session_id: view.sessionId, candidate: '' }, false), { code: 'not-authorized' });
   await assert.rejects(desks.signal('reel', b, 'session.restart_ice', { session_id: view.sessionId, generation: view.generation }, false), { code: 'not-authorized' });
   await assert.rejects(desks.signal('reel', a, 'session.restart_ice', { session_id: 'someone-else', generation: view.generation }, false), { code: 'not-authorized' });
