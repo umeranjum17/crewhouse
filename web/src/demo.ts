@@ -133,8 +133,8 @@ if (many) {
 }
 
 const state = {
-  person: me === 1 ? { id: 1, name: 'Umer', address: 'Umer', onboarded: variant === 'hello' || variant === 'signin' ? 0 : 1 }
-    : { id: 2, name: 'Nadia', address: 'Nadia', onboarded: variant === 'hello' || variant === 'signin' ? 0 : 1 },
+  person: me === 1 ? { id: 1, name: 'Umer', address: 'Umer', quiet: '23:00-07:00', onboarded: variant === 'hello' || variant === 'signin' ? 0 : 1 }
+    : { id: 2, name: 'Nadia', address: 'Nadia', quiet: '22:00-07:00', onboarded: variant === 'hello' || variant === 'signin' ? 0 : 1 },
   members: me === 1 ? [{ id: 1, name: 'Umer', address: 'Umer', quiet: '23:00-07:00' }] : [
     { id: 1, name: 'Umer', address: 'sir', quiet: '23:00-07:00' },
     { id: 2, name: 'Nadia', address: 'Nadia', quiet: '22:00-07:00' },

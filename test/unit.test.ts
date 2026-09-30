@@ -607,8 +607,6 @@ test('steer: a word from the person reaches the bot mid-task without starting ov
   const t = crew.assign('reel', 'ask permission to render', 'chief').task;
   await holding(crew, 'reel');
   crew.steer('reel', 'make it faster');
-  const sam = crew.addMember('Sam').id as number;
-  assert.throws(() => crew.steer('reel', 'make it slower', sam), /someone else/, 'another member cannot steer this job');
   await release(crew, 'reel');
   await settled(db, t);
   assert.ok(db.get("SELECT 1 FROM messages WHERE bot = 'reel' AND author = 'person' AND text = 'make it faster'"));
@@ -707,7 +705,7 @@ test('accounts: the person keeps their address and every account rests together'
   const { cfg, db, crew, done } = setup();
   crew.onboard('Sam');
   crew.recruit('reel', 'Reel', 'person');
-  assert.equal(crew.member(1).address, 'Sam');
+  assert.equal(crew.person().address, 'Sam');
   disk.setBrains(cfg, 'reel', ['grok']);
   await crew.accounts.login('grok');
   await crew.accounts.finished('grok');
@@ -726,46 +724,31 @@ test('accounts: the person keeps their address and every account rests together'
   done();
 });
 
-test('task and file projections keep legacy scope; event history has no viewer filter', () => {
+test('task and file projections show delivered work and the active job’s output before its inputs', () => {
   const { cfg, db, crew, done } = setup();
   crew.recruit('scout', 'Scout', 'person');
-  const guest = crew.addMember('Guest').id;
-  const owner = Number(db.run("INSERT INTO tasks (bot, title, body, result, state, member) VALUES ('scout', 'owner title', 'owner secret', 'owner result', 'done', 1)").lastInsertRowid);
-  const other = Number(db.run("INSERT INTO tasks (bot, title, body, result, state, member) VALUES ('scout', 'guest title', 'guest secret', 'guest result', 'done', ?)", guest).lastInsertRowid);
-  db.event('task.done', 'scout', { task: owner, title: 'owner secret' });
-  db.event('task.done', 'scout', { task: other, title: 'guest secret' });
-  db.event('file.delivered', 'scout', { task: owner, path: 'files/owner.txt', note: 'owner file' });
-  db.event('file.delivered', 'scout', { task: other, path: 'files/guest.txt', note: 'guest file' });
+  const finished = Number(db.run("INSERT INTO tasks (bot, title, body, result, state) VALUES ('scout', 'finished title', 'body', 'result', 'done')").lastInsertRowid);
+  db.event('task.done', 'scout', { task: finished, title: 'finished title' });
+  db.event('file.delivered', 'scout', { task: finished, path: 'files/finished.txt', note: 'finished file' });
   const files = join(cfg.crewDir, 'bots', 'scout', 'files');
-  writeFileSync(join(files, 'owner.txt'), 'owner');
-  writeFileSync(join(files, 'guest.txt'), 'guest');
-  const view = crew.botPage('scout', guest);
-  assert.deepEqual(view.tasks.map((t: any) => t.id), [other]);
-  assert.deepEqual(view.files.map((f: any) => f.path), ['guest.txt']);
-  assert.ok(view.trail.some((e: any) => e.data.task === owner) && view.trail.some((e: any) => e.data.task === other), 'bot trail includes every remaining task');
-  assert.equal(crew.snapshot(guest).bots.find((b: any) => b.id === 'scout')?.task, null);
-  assert.deepEqual(crew.snapshot(guest).events, crew.snapshot(OWNER).events, 'snapshots share the event stream');
-  assert.deepEqual(crew.botPage('scout', OWNER).tasks.map((t: any) => t.id), [owner]);
-  // An active job's delivered things ride on its own task only: own output first, handed-over inputs marked.
-  const wOwner = Number(db.run("INSERT INTO tasks (bot, title, body, result, state, member) VALUES ('scout', 'owner job', 'body', NULL, 'working', 1)").lastInsertRowid);
-  db.event('file.delivered', 'scout', { task: wOwner, path: 'files/from-reel/lead.png', note: 'from Reel', input: true });
-  db.event('file.delivered', 'scout', { task: wOwner, path: 'files/owner-first-look.png', note: 'First look: the opening' });
-  const wGuest = Number(db.run("INSERT INTO tasks (bot, title, body, result, state, member) VALUES ('scout', 'guest job', 'body', NULL, 'working', ?)", guest).lastInsertRowid);
-  db.event('file.delivered', 'scout', { task: wGuest, path: 'files/guest-first-look.png', note: 'First look' });
-  const stranger = crew.addMember('Stranger').id;
-  assert.equal(crew.snapshot(stranger).bots.find((b: any) => b.id === 'scout')?.task, null, 'a guest sees no active task on a shared helper');
-  assert.ok(!JSON.stringify(crew.snapshot(stranger).bots).includes('first-look'), 'they get no files either');
-  const guestTask = crew.snapshot(guest).bots.find((b: any) => b.id === 'scout')?.task;
-  assert.deepEqual(guestTask?.files.map((f: any) => f.path), ['files/guest-first-look.png'], 'their own desk only');
-  const ownerTask = crew.snapshot(OWNER).bots.find((b: any) => b.id === 'scout')?.task;
-  assert.deepEqual(ownerTask?.files.map((f: any) => f.path), ['files/owner-first-look.png', 'files/from-reel/lead.png'], 'own output first');
-  assert.deepEqual(ownerTask?.files.map((f: any) => !!f.input), [false, true], 'handed-over inputs marked');
-  assert.ok(ownerTask?.files.every((f: any) => typeof f.at === 'number' && typeof f.note === 'string'), 'each thing carries when it landed and the helper\'s note');
-  assert.ok(!JSON.stringify(crew.snapshot(guest).bots).includes('owner-first-look'), 'no first look leaks across members');
+  writeFileSync(join(files, 'finished.txt'), 'finished');
+  writeFileSync(join(files, 'undelivered.txt'), 'private draft');
+  const view = crew.botPage('scout');
+  assert.deepEqual(view.tasks.map((t: any) => t.id), [finished]);
+  assert.deepEqual(view.files.map((f: any) => f.path), ['finished.txt']);
+  assert.ok(view.trail.some((e: any) => e.data.task === finished));
+  assert.equal(crew.snapshot().bots.find((b: any) => b.id === 'scout')?.task, null);
+  const working = Number(db.run("INSERT INTO tasks (bot, title, body, state) VALUES ('scout', 'current job', 'body', 'working')").lastInsertRowid);
+  db.event('file.delivered', 'scout', { task: working, path: 'files/from-reel/lead.png', note: 'from Reel', input: true });
+  db.event('file.delivered', 'scout', { task: working, path: 'files/first-look.png', note: 'First look: the opening' });
+  const active = crew.snapshot().bots.find((b: any) => b.id === 'scout')?.task;
+  assert.deepEqual(active?.files.map((f: any) => f.path), ['files/first-look.png', 'files/from-reel/lead.png']);
+  assert.deepEqual(active?.files.map((f: any) => !!f.input), [false, true]);
+  assert.ok(active?.files.every((f: any) => typeof f.at === 'number' && typeof f.note === 'string'));
   done();
 });
 
-test('household: quiet hours park questions at once; settings validate', async () => {
+test('quiet hours park questions at once; settings validate', async () => {
   const { root, db, crew, done } = setup();
   crew.onboard('sir');
   crew.recruit('reel', 'Reel', 'person');
@@ -779,12 +762,11 @@ test('household: quiet hours park questions at once; settings validate', async (
   assert.equal(crew.updateMember(1, { name: 'Alex', quiet: '00:00-23:59' }).name, 'Alex');
 
   const started = Date.now();
-  const t = (await crew.post('reel', `copy it ${call('crew_write', { path: join(root, 'elsewhere', 'b.txt'), content: 'x' })}`, undefined, 1))!.task;
+  const t = (await crew.post('reel', `copy it ${call('crew_write', { path: join(root, 'elsewhere', 'b.txt'), content: 'x' })}`, undefined))!.task;
   await until('parked', () => db.get("SELECT 1 FROM events WHERE kind = 'ask.parked'"));
   assert.ok(Date.now() - started < 3000, 'no hold while they sleep');
   assert.equal(task(db, t).state, 'needs_you');
-  assert.equal(crew.snapshot(1).asks.length, 1, 'the question waits for the morning');
-  assert.equal(crew.snapshot(crew.addMember('Sam').id).asks.length, 0, 'and only for them');
+  assert.equal(crew.snapshot().asks.length, 1, 'the question waits for the morning');
   crew.updateMember(1, { quiet: null });
   done();
 });
@@ -869,7 +851,7 @@ test('routing: a spreadsheet request goes straight to Scribe, hiring Scribe if n
   crew.onboard('sir');
   const said = (bot: string) => db.all("SELECT text FROM messages WHERE bot = ? AND author = 'bot' ORDER BY id", bot).map((m: any) => m.text);
 
-  // Chief-only crew: Scribe is hired silently on the member's own account; no Chief task, no Chief turn.
+  // Chief-only crew: Scribe is hired silently on the person's own account; no Chief task, no Chief turn.
   const s = (await crew.post('chief', 'make me an Excel for reception'))!.task;
   assert.equal(task(db, s).bot, 'scribe');
   assert.equal(task(db, s).origin, 'chief');
@@ -920,7 +902,7 @@ test("a helper's question round-trips in Chief's thread: one answer, then the fi
   assert.ok(question.startsWith('Scribe asks: '));
   assert.ok(question.endsWith('?'));
   assert.equal(db.get("SELECT task_id AS id FROM messages WHERE bot = 'chief' AND author = 'bot' AND text = ?", question)?.id, first);
-  let page = await crew.botPage('chief', OWNER);
+  let page = await crew.botPage('chief');
   assert.deepEqual(page.messages.find((m: any) => m.task_id === first)?.files, [], 'a line with a task and no files adds no card');
 
   // Posting the answer starts a fresh Scribe task carrying the context, skipping routing and Chief.
@@ -933,7 +915,7 @@ test("a helper's question round-trips in Chief's thread: one answer, then the fi
   // The carried "ask permission" holds the fresh turn too; releasing it finishes the workbook and its card.
   await release(crew, 'scribe', 'The reception workbook is ready.');
   await settled(db, second);
-  page = await crew.botPage('chief', OWNER);
+  page = await crew.botPage('chief');
   assert.ok(page.messages.find((m: any) => m.task_id === second)?.files.some((f: any) => f.path.endsWith('.xlsx')), "the workbook card lands in Chief's thread");
   assert.deepEqual(page.messages.find((m: any) => m.task_id === first)?.files, [], 'the question line stays card-free');
 
@@ -963,7 +945,7 @@ test('routing: explicit helpers are direct; uncertain requests start Chief witho
   await settled(db, a);
   assert.equal(db.get("SELECT text FROM messages WHERE bot = 'chief' ORDER BY id DESC")!.text, 'The result is ready.', 'an incomplete helper reply is not cut into a headline');
 
-  // "@Scout" anywhere is a rule too: the member's AI (here set to say Reel) is never asked.
+  // "@Scout" anywhere is a rule too: the person's AI (here set to say Reel) is never asked.
   const m = (await crew.post('chief', 'could you look into standing desks for me @Scout [route reel]'))!.task;
   assert.equal(task(db, m).bot, 'scout');
   await settled(db, m);
@@ -1012,17 +994,13 @@ test('routing: explicit helpers are direct; uncertain requests start Chief witho
   assert.equal(routeChecks, 0);
   await settled(db, c);
 
-  // Ambiguity is not a guessed helper selection. Legacy task and message scope stays intact; engine work uses m1.
-  const sara = crew.addMember('Sara').id;
-  crew.onboard('Sara', sara);
+  // Ambiguity becomes a Chief task on the retained m1 agent.
   pendingBody = 'something about the screenshots [route ?]';
-  const d = (await crew.post('chief', pendingBody, undefined, sara))!.task;
+  const d = (await crew.post('chief', pendingBody, undefined))!.task;
   assert.equal(task(db, d).bot, 'chief');
-  assert.equal(task(db, d).member, sara);
   assert.equal(routingCalls, 0);
   assert.equal(routeChecks, 0);
   assert.equal(db.get("SELECT COUNT(*) AS n FROM events WHERE kind = 'route.asked'")!.n, 0);
-  assert.equal(db.get("SELECT member FROM messages WHERE task_id = ?", d)!.member, sara);
   await settled(db, d);
   const spec = (crew.runtime as any).specOf(`agent:m1:crewhouse:chief:${d}`);
   assert.equal(spec?.task, d, 'the run uses the retained m1 agent');
@@ -1030,11 +1008,11 @@ test('routing: explicit helpers are direct; uncertain requests start Chief witho
   done();
 });
 
-test('chats: each thread\'s last line and unread count are the viewer\'s own; reading clears it; search finds words', async () => {
+test('chats: each thread\'s last line and unread count are the person\'s; reading clears it; search finds words', async () => {
   const { db, crew, done } = setup();
   crew.onboard('sir');
   crew.recruit('reel', 'Reel', 'person');
-  const view = (member = 1) => Object.fromEntries(crew.snapshot(member).bots.map((b: any) => [b.id, { last: b.last, unread: b.unread }]));
+  const view = () => Object.fromEntries(crew.snapshot().bots.map((b: any) => [b.id, { last: b.last, unread: b.unread }]));
   assert.equal(view().reel.unread, 0, 'a new helper starts read');
   const chiefBefore = view().chief.unread;
 
@@ -1046,22 +1024,15 @@ test('chats: each thread\'s last line and unread count are the viewer\'s own; re
   assert.equal(v.reel.unread, 1, 'the reply is new; the person\'s own line is not');
   assert.equal(v.chief.unread, chiefBefore);
 
-  // Someone else in the house has their own threads: nothing of the owner's shows, or counts.
-  const sara = crew.addMember('Sara').id;
-  assert.match(view(sara).reel.last.text, /joined the crew/, 'only the house-wide note');
-  assert.equal(view(sara).reel.unread, 0);
-  assert.equal(view(sara).chief.unread, 1, 'her greeting from Chief');
-
-  crew.read('reel', 1);
+  crew.read('reel');
   assert.equal(view().reel.unread, 0);
-  assert.throws(() => crew.read('nobody', 1), /no such bot/);
+  assert.throws(() => crew.read('nobody'), /no such bot/);
 
-  const found = crew.search('birthday', 1);
+  const found = crew.search('birthday');
   assert.ok(found.messages.some((m: any) => m.bot === 'reel'));
   assert.ok(found.things.some((x: any) => x.id === t));
-  assert.deepEqual(crew.search('birthday', sara), { messages: [], things: [] }, 'only your own');
-  assert.deepEqual(crew.search('b', 1), { messages: [], things: [] }, 'one letter finds nothing');
-  assert.deepEqual(crew.search('100%_', 1).messages, [], 'LIKE wildcards are plain characters');
+  assert.deepEqual(crew.search('b'), { messages: [], things: [] }, 'one letter finds nothing');
+  assert.deepEqual(crew.search('100%_').messages, [], 'LIKE wildcards are plain characters');
   done();
 });
 
@@ -1200,7 +1171,7 @@ test('Write it for me: crew_job takes the nested five-part shape too, and the th
   assert.deepEqual(disk.readJob(crew['cfg'], 'scout'), parts);
   // The draft route shows the person's rough words in Chief's thread, never the internal prompt.
   const idea = 'sort my bills and letters, oldest first, do not pay or send anything';
-  const { task: t2 } = (crew as any).requestChief(`Write Scout's job from: ${idea}. Use crew_job.`, 1, idea);
+  const { task: t2 } = (crew as any).requestChief(`Write Scout's job from: ${idea}. Use crew_job.`, idea);
   const shown = db.get("SELECT text FROM messages WHERE task_id = ? AND author = 'person'", t2)?.text;
   assert.equal(shown, idea);
   assert.doesNotMatch(shown!, /crew_job/);
@@ -1213,11 +1184,11 @@ test('photos with a message: kept in the helper\'s files, shown in the chat, see
   crew.onboard('sir');
   crew.recruit('reel', 'Reel', 'person');
   const png = { type: 'image/png', data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==' };
-  await assert.rejects(crew.post('reel', 'x', undefined, 1, [png, png, png, png, png]), /up to four/);
-  await assert.rejects(crew.post('reel', 'x', undefined, 1, [{ type: 'image/gif', data: png.data }]), /JPEG or PNG/);
-  await assert.rejects(crew.post('reel', '  ', undefined, 1, []), /empty message/);
+  await assert.rejects(crew.post('reel', 'x', undefined, [png, png, png, png, png]), /up to four/);
+  await assert.rejects(crew.post('reel', 'x', undefined, [{ type: 'image/gif', data: png.data }]), /JPEG or PNG/);
+  await assert.rejects(crew.post('reel', '  ', undefined, []), /empty message/);
 
-  const { task: t } = (await crew.post('reel', '', undefined, 1, [png]))!;
+  const { task: t } = (await crew.post('reel', '', undefined, [png]))!;
   assert.equal(task(db, t).body, 'Here is a photo.');
   assert.deepEqual(JSON.parse(task(db, t).photos), [`files/photos/${t}-1.png`]);
   assert.ok(existsSync(join(cfg.crewDir, 'bots', 'reel', 'files', 'photos', `${t}-1.png`)));
@@ -1228,7 +1199,7 @@ test('photos with a message: kept in the helper\'s files, shown in the chat, see
   assert.ok(crew.snapshot().tasks.find((x: any) => x.id === t)!.files.includes(`files/photos/${t}-1.png`), 'and it is in Things');
 
   // Through Chief: the photo goes to the helper that takes the job, and shows in Chief's thread where it was sent.
-  const { task: c } = (await crew.post('chief', 'put this poster in the family video @Reel', undefined, 1, [png]))!;
+  const { task: c } = (await crew.post('chief', 'put this poster in the family video @Reel', undefined, [png]))!;
   assert.equal(task(db, c).bot, 'reel');
   assert.match(db.get("SELECT text FROM messages WHERE bot = 'chief' AND author = 'person' ORDER BY id DESC")!.text, new RegExp(`\\[photo reel\\] files/photos/${c}-1\\.png$`));
   await settled(db, c);
@@ -1261,11 +1232,11 @@ test('a search landing on an old line: botPage opens a window around it', async 
   const { crew, db } = setup();
   const now = Date.now();
   for (let i = 1; i <= 220; i++) db.run('INSERT INTO messages (bot, author, text, at, member) VALUES (?, ?, ?, ?, ?)', 'chief', 'person', `line ${i}`, now + i, 1);
-  const fresh = crew.botPage('chief', 1);
+  const fresh = crew.botPage('chief');
   assert.equal(fresh.messages.length, 200, 'the newest 200, as always');
   assert.equal(fresh.messages[0].text, 'line 21');
   assert.ok(!fresh.messages.some((m: any) => m.id === 5), 'line 5 is history now');
-  const around = crew.botPage('chief', 1, 5);
+  const around = crew.botPage('chief', 5);
   const ids = around.messages.map((m: any) => m.id);
   assert.ok(ids.length <= 200, 'a window, not the whole thread');
   assert.ok(ids.includes(5), 'the anchored line is in it');

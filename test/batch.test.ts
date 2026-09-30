@@ -51,7 +51,7 @@ test('one question over three items: three parallel sessions, one merged answer,
     assert.deepEqual(returned.answers.map((a: any) => a.item), items);
     assert.ok(returned.answers.every((a: any) => a.ok));
 
-    // ...which it puts into a single workbook, delivered to its own member only.
+    // ...which it puts into a single workbook, delivered to the person.
     const sheet = { name: 'Soup compare', sheets: [{ name: 'Soups', columns: [{ header: 'Place' }, { header: 'Soup' }, { header: 'Source' }],
       rows: items.map((p) => [p, 'tomato', 'menu']) }] };
     const wb = (await crew.post('scout', `now the sheet ${call('crew_workbook', sheet)}`))!.task;
@@ -59,8 +59,7 @@ test('one question over three items: three parallel sessions, one merged answer,
     assert.equal(task(db, wb).state, 'done');
     const delivered = db.all("SELECT data FROM events WHERE kind = 'file.delivered'").map((e: any) => JSON.parse(e.data));
     assert.equal(delivered.length, 1, 'one spreadsheet per job, not one per item');
-    const sam = crew.addMember('Sam').id as number;
-    await assert.rejects(() => crew.workbookView('scout', delivered[0].path, sam), /not delivered to you/);
+    assert.ok(await crew.workbookView('scout', delivered[0].path));
   } finally { done(); }
 });
 

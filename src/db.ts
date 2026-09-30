@@ -6,7 +6,7 @@ import type { Config } from './config.ts';
 export type Row = Record<string, any>;
 
 const SCHEMA = `
--- Household members. Id 1 is the owner. Each member signs in to their own AI accounts.
+-- The person is id 1. Legacy member columns stay for upgrade compatibility.
 CREATE TABLE IF NOT EXISTS people (id INTEGER PRIMARY KEY, name TEXT, address TEXT, onboarded INTEGER DEFAULT 0, created_at INTEGER, quiet TEXT);
 CREATE TABLE IF NOT EXISTS bots (
   id TEXT PRIMARY KEY, display TEXT NOT NULL, role TEXT, template TEXT, runtime TEXT, model TEXT,
@@ -26,8 +26,8 @@ CREATE TABLE IF NOT EXISTS routines (
   kind TEXT DEFAULT 'task', state TEXT DEFAULT 'on', next_at INTEGER, last_at INTEGER, last_task INTEGER, created_at INTEGER);
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);
 CREATE TABLE IF NOT EXISTS devices (id TEXT PRIMARY KEY, name TEXT, pk TEXT UNIQUE, role TEXT, member INTEGER DEFAULT 1, created_at INTEGER, last_seen INTEGER);
--- What the crew used of each member's AI each day (weighted tokens), for their share. Never shown as a number.
--- The last message each member has seen in each bot's thread: what makes a chat unread.
+-- What the crew used of the person's AI each day (weighted tokens), for their share. Never shown as a number.
+-- The last message the person has seen in each bot's thread: what makes a chat unread.
 CREATE TABLE IF NOT EXISTS reads (member INTEGER, bot TEXT, seen INTEGER, PRIMARY KEY (member, bot));
 CREATE TABLE IF NOT EXISTS usage (member INTEGER, day TEXT, tokens INTEGER, PRIMARY KEY (member, day));
 CREATE TABLE IF NOT EXISTS events (seq INTEGER PRIMARY KEY, at INTEGER, kind TEXT, bot TEXT, data TEXT);

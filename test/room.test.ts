@@ -7,7 +7,7 @@ import * as disk from '../src/bots.ts';
 
 const pass = '[tool crew_pass {"bot":"scout","task":"Find the sources. Done means: three links","files":["files/story.md"]}]';
 
-test('handoff copies only the passer’s files and the room is member-scoped', async () => {
+test('handoff copies only the passer’s files into the crew room', async () => {
   const { db, cfg, crew, done } = setup();
   crew.onboard('Sara');
   crew.recruit('reel', 'Reel', 'person'); crew.recruit('scout', 'Scout', 'person');
@@ -18,8 +18,10 @@ test('handoff copies only the passer’s files and the room is member-scoped', a
   const next = db.get("SELECT * FROM tasks WHERE bot = 'scout'")!;
   assert.equal(next.parent, first); assert.equal(next.root, first);
   assert.ok(existsSync(join(disk.botDir(cfg, 'scout'), 'files/from-reel/story.md')));
-  assert.ok(crew.room(1).lines.some((l) => l.from === 'reel' && l.files.some((f: any) => f.path === 'files/from-reel/story.md')));
-  assert.equal(crew.room(2).lines.length, 0);
+  assert.ok(crew.room().lines.some((l) => l.from === 'reel' && l.files.some((f: any) => f.path === 'files/from-reel/story.md')));
+  assert.equal(crew.snapshot().room.last?.id, crew.room().lines.at(-1)?.id, 'the snapshot keeps the room preview');
+  const before = crew.room().lines.at(-1)!.id;
+  assert.ok(crew.room(before).lines.every((l) => l.id < before), 'room paging uses the message cursor');
   await holding(crew, 'reel');
   await assert.rejects(async () => (crew as any).pass('reel', 'scout', 'bad', ['../secret']), /outside|ENOENT/);
   await release(crew, 'reel', 'Passed it on.'); await settled(db, first); await settled(db, next.id);
@@ -56,7 +58,7 @@ test('handoff check waits, survives a restart, and never has a standing answer',
   assert.equal(db.get("SELECT 1 FROM tasks WHERE bot = 'scout'"), undefined);
   const shown = crew.snapshot().asks.find((a: any) => a.id === card.id)!;
   assert.equal(shown.detail.always, undefined); assert.equal(shown.detail.pass.root, first);
-  assert.ok(crew.room(1).asks.some((a) => a.id === card.id));
+  assert.ok(crew.room().asks.some((a) => a.id === card.id));
   await release(crew, 'reel', 'Waiting for your check.'); await settled(db, first);
   // Rebuild on the same database: a proposal is durable even when the passer finished.
   crew.stop();
@@ -138,13 +140,10 @@ test('Things foregrounds a task’s own output ahead of handed-over input', asyn
   assert.equal(things.length, 1);
   assert.equal(things[0].files[0], 'files/family-checklist.md');
   assert.ok(things[0].files.includes('files/from-scout/fdic-basics.md'));
-  // Exact member checks: another member sees none of it.
-  const sam = crew.addMember('Sam').id as number;
-  assert.equal(crew.snapshot(sam).tasks.filter((t: any) => t.bot === 'scribe').length, 0);
   done();
 });
 
-test('a first look delivered mid-job shows on the member\u2019s own desk only', async () => {
+test('a first look delivered mid-job shows on the person\u2019s desk', async () => {
   const { db, cfg, crew, done } = setup();
   for (const t of ['reel', 'scout', 'scribe', 'helper', 'tracer'])
     assert.match(readFileSync(join(cfg.repoDir, `templates/${t}/AGENTS.md`), 'utf8'), /share a first look with crew_deliver.*note starting `First look:`/, `${t} shares first looks`);
@@ -160,9 +159,6 @@ test('a first look delivered mid-job shows on the member\u2019s own desk only', 
   const mine = crew.snapshot().bots.find((b: any) => b.id === 'scout')?.task;
   assert.deepEqual(mine?.files.map((f: any) => f.path), ['files/opening.md'], 'the desk shows the first look mid-job');
   assert.equal(mine?.files[0].note, 'First look: the opening outline');
-  const sam = crew.addMember('Sam').id as number;
-  assert.equal(crew.snapshot(sam).bots.find((b: any) => b.id === 'scout')?.task, null, 'another member sees no task');
-  assert.ok(!JSON.stringify(crew.snapshot(sam).bots).includes('opening.md'), 'and no first look leaks across members');
   await release(crew, 'scout', 'Still working.'); await settled(db, first);
   done();
 });
@@ -190,13 +186,13 @@ test('Things foregrounds own output ahead of an untagged legacy handoff copy', a
 test('room replies rejoin a job; plain routed work stays out', async () => {
   const { db, crew, done } = setup();
   crew.onboard('Sara'); crew.recruit('scout', 'Scout', 'person');
-  const room = (await crew.post('scout', 'First request', undefined, 1, undefined, true))!.task;
-  const follow = (await crew.post('scout', 'One more thing', undefined, 1, undefined, true))!.task;
+  const room = (await crew.post('scout', 'First request', undefined, undefined, true))!.task;
+  const follow = (await crew.post('scout', 'One more thing', undefined, undefined, true))!.task;
   assert.equal(task(db, room).room, 1); assert.equal(task(db, follow).root, room);
   const plain = (await crew.post('scout', 'Private errand'))!.task;
   assert.equal(task(db, plain).room, 0);
-  assert.ok(crew.room(1).lines.some((l) => l.text === 'One more thing'));
-  assert.ok(!crew.room(1).lines.some((l) => l.text === 'Private errand'));
+  assert.ok(crew.room().lines.some((l) => l.text === 'One more thing'));
+  assert.ok(!crew.room().lines.some((l) => l.text === 'Private errand'));
   await settled(db, room); await settled(db, follow); await settled(db, plain);
   done();
 });

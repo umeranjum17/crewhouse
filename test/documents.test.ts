@@ -64,7 +64,7 @@ test('the document crewd writes is a real .docx: its headings, lists, table and 
   assert.match(xml, /<w:numPr>/, 'the bullets are real list items');
 });
 
-test('a helper makes one in its own chat: the file lands in files/, is delivered, and only its member may read it', async () => {
+test('a helper makes one in its own chat: the file lands in files/, is delivered, and only delivered files open', async () => {
   const { cfg, db, crew } = setup();
   crew.onboard('sir');
   crew.recruit('scribe', 'Quill', 'person');
@@ -80,36 +80,33 @@ test('a helper makes one in its own chat: the file lands in files/, is delivered
   assert.match(delivered[0].note, /^The Front-desk handbook is ready: /, 'the card line names the result, not a section count');
   assert.doesNotMatch(delivered[0].note, /A document in|\b\d+ sections?\b/);
 
-  const view = await crew.documentView('quill', rel, 1);
+  const view = await crew.documentView('quill', rel);
   assert.equal((view as any).parts.length, 9);
-  await assert.rejects(() => crew.documentView('quill', rel, 2), /not delivered to you/, 'another member screen never sees it');
-  await assert.rejects(() => crew.documentView('quill', 'work/draft.md', 1), /not delivered to you/, 'a path nobody delivered is no window into the folder');
+  await assert.rejects(() => crew.documentView('quill', 'work/draft.md'), /not delivered to you/, 'a path nobody delivered is no window into the folder');
 
   // A delivered .md leaves as its own words for the app's shared safe renderer — never opened as the raw file.
   writeFileSync(join(disk.botDir(cfg, 'quill'), 'files', 'weekly-dinners.md'),
     '# This week\'s dinners\n\n- [x] Basmati rice\n- [ ] Yoghurt\n');
   const listed = (await crew.post('quill', `and the dinners list ${call('crew_deliver', { path: 'files/weekly-dinners.md' })}`))!.task;
   await settled(db, listed);
-  const md = await crew.documentView('quill', 'files/weekly-dinners.md', 1) as any;
+  const md = await crew.documentView('quill', 'files/weekly-dinners.md') as any;
   assert.equal(md.text, "# This week's dinners\n\n- [x] Basmati rice\n- [ ] Yoghurt\n");
-  await assert.rejects(() => crew.documentView('quill', 'files/weekly-dinners.md', 2), /not delivered to you/);
 
   // A delivered file that is not a readable page is still not read as one.
   writeFileSync(join(disk.botDir(cfg, 'quill'), 'files', 'table.csv'), 'a,b\n1,2');
   const other = (await crew.post('quill', `and a table ${call('crew_deliver', { path: 'files/table.csv' })}`))!.task;
   await settled(db, other);
-  await assert.rejects(() => crew.documentView('quill', 'files/table.csv', 1), /no such document/, 'only a page is read as one');
+  await assert.rejects(() => crew.documentView('quill', 'files/table.csv'), /no such document/, 'only a page is read as one');
 });
 
 
-test('two members ask for the same title: each task gets its own file, and neither preview opens the other', async () => {
+test('repeated requests for the same title get separate delivered files that both open', async () => {
   const { db, crew } = setup();
   crew.onboard('sir');
   crew.recruit('scribe', 'Quill', 'person');
-  const sam = crew.addMember('Sam').id as number;
   const mine = (await crew.post('quill', `the desk rules ${call('crew_document', spec)}`))!.task;
   await settled(db, mine);
-  const theirs = (await crew.post('quill', `the desk rules ${call('crew_document', spec)}`, undefined, sam))!.task;
+  const theirs = (await crew.post('quill', `the desk rules ${call('crew_document', spec)}`, undefined))!.task;
   await settled(db, theirs);
   assert.equal(task(db, mine).state, 'done');
   assert.equal(task(db, theirs).state, 'done');
@@ -117,6 +114,6 @@ test('two members ask for the same title: each task gets its own file, and neith
   assert.equal(new Set(paths).size, 2, 'one file per task, no overwrite');
   assert.ok(paths.every((p: string) => new RegExp(`-t(${mine}|${theirs})\\.docx$`).test(p)));
   const [a, b] = paths;
-  await assert.rejects(() => crew.documentView('quill', b, 1), /not delivered to you/);
-  await assert.rejects(() => crew.documentView('quill', a, sam), /not delivered to you/);
+  assert.ok(await crew.documentView('quill', b));
+  assert.ok(await crew.documentView('quill', a));
 });

@@ -8,7 +8,7 @@ import { CHIEF, type Config } from './config.ts';
 import type { Row, Store } from './db.ts';
 import * as disk from './bots.ts';
 import { Desktops, browserBin, missing as desktopMissing, type Watcher } from './desktop.ts';
-import { Accounts, OWNER, PROVIDERS, clock } from './accounts.ts';
+import { Accounts, PROVIDERS, clock } from './accounts.ts';
 import { Connections, type AppTool, APPS } from './connections.ts';
 import { bashTool, readPage, runAxi, runSandboxed, q, sandboxReady, tool, webTools, type CrewTool } from './engine.ts';
 import { allowed, proxy } from './net.ts';
@@ -38,13 +38,13 @@ const TASK_TIMEOUT_MS = 60 * 60_000;
 const taskTokenCap = () => Number(process.env.CREWHOUSE_TASK_TOKENS || 500_000); // ponytail: one house number, not per template; per-template bot.json field if Scribe and Reel diverge.
 
 /** OpenClaw's own tools crewhouse adopts once their policy effects are reviewed: reads, recall and media on the
- *  member's own sign-in. Any future native tool not reviewed here fails closed until a bump reviews it. */
+ *  person's own sign-in. Any future native tool not reviewed here fails closed until a bump reviews it. */
 const NATIVE_TOOLS = new Set(['web_search', 'web_fetch', 'memory_search', 'memory_get', 'view_image', 'pdf', 'image_generate']);
 
 /** At most n characters, cut at a word boundary with an ellipsis: titles on cards and in the digest. */
 export const short = (s: string, n: number) => (s = s.trim(), s.length > n ? `${s.slice(0, n - 1).replace(/\s+\S*$/, '')}…` : s);
 
-/** How much of a member's AI the crew may use in a day: a share of `dayBudget`, as the person picks it in plain words. */
+/** How much of the person's AI the crew may use in a day: a share of `dayBudget`, as the person picks it in plain words. */
 export const SHARES: Record<string, number> = { light: 0.25, normal: 0.6, full: Infinity };
 /** ponytail: one fixed guess at a day of a ChatGPT plan, weighted like its limits (cached reading is cheap); the vendors
  *  publish no allowance to read, so tune this, or read the plan's own when one is published. */
@@ -71,7 +71,7 @@ const TRAIL = ['task.created', 'task.working', 'task.done', 'task.failed', 'task
   'ask.opened', 'ask.answered', 'ask.parked', 'file.delivered', 'memory.learned', 'memory.undone', 'bot.recruited', 'bot.allowed', 'run.resumed',
   'skill.learned', 'skill.removed', 'soul.changed'];
 
-/** Whether a member's quiet hours ("22:00-07:00", may wrap past midnight) cover this moment. */
+/** Whether the person's quiet hours ("22:00-07:00", may wrap past midnight) cover this moment. */
 export function quietNow(quiet: string | null | undefined, at = new Date()) {
   const m = /^(\d\d):(\d\d)-(\d\d):(\d\d)$/.exec(quiet ?? '');
   if (!m) return false;
@@ -196,7 +196,7 @@ function inhibitor() {
 interface Browser { run: (args: string[], signal?: AbortSignal) => Promise<string>; end: () => void; release: () => void }
 
 /** A run's place in the crew: which task, account and session key, and the browser if it has one. */
-interface Live { key: string; task: number; member: number; account: string; model?: string; grants: string[]; browser?: Browser; page?: string; snapshot?: string; apps?: Record<string, AppTool>;
+interface Live { key: string; task: number; account: string; model?: string; grants: string[]; browser?: Browser; page?: string; snapshot?: string; apps?: Record<string, AppTool>;
   /** The tools crewd runs for this run: the sandboxed shell, the browser AXI, the person's connected apps'. */
   shell?: CrewTool; browserTool?: CrewTool; appTools?: Map<string, CrewTool>;
   /** Lines the helper typed on this page that no card has shown yet (an unsigned register's claim form). */
@@ -218,7 +218,7 @@ export class Crew {
   private timer?: NodeJS.Timeout;
   /** Bots with a run in flight (the engine is working). */
   readonly busy = new Set<string>();
-  /** Applied learning the person has already been told about, keyed member:id. */
+  /** Applied learning the person has already been told about, keyed by skill id. */
   private seenLearned = new Set<string>();
   /** When to next check the engine's collection-review job (the weekly tidy, run on crewhouse's own boundary). */
   private curationAt = 0;
@@ -258,7 +258,7 @@ export class Crew {
     this.accounts.onSignedIn = () => this.wake(`You're signed in. I'll start now.`);
     this.connections = new Connections(cfg, `http://${cfg.host}:${cfg.port}/connect/callback`);
     this.connections.onChange = (app) => this.db.event('app.changed', null, { app });
-    this.connections.onExpired = (app) => this.say(CHIEF, 'system', `Your ${this.connections.apps[app].name} connection has run out. Connect it again under Settings, Connections, whenever you like.`, null, OWNER);
+    this.connections.onExpired = (app) => this.say(CHIEF, 'system', `Your ${this.connections.apps[app].name} connection has run out. Connect it again under Settings, Connections, whenever you like.`, null);
   }
 
   init() {
@@ -270,16 +270,16 @@ export class Crew {
       this.db.run("UPDATE asks SET state = 'withdrawn' WHERE state = 'open' AND kind != 'propose' AND (task_id IS NULL OR task_id NOT IN (SELECT id FROM tasks WHERE state IN ('working', 'needs_you')))");
       this.db.run("UPDATE bots SET state = 'off'");
       this.db.event('system.started', null, {});
-      // Chats were unread-less before: an existing house starts with everything already seen.
-      if (!this.db.get('SELECT 1 FROM reads')) this.db.run('INSERT INTO reads (member, bot, seen) SELECT p.id, b.id, COALESCE((SELECT MAX(id) FROM messages), 0) FROM people p, bots b');
-      for (const m of this.members()) this.ensureDigest(m.id);
+      // Chats were unread-less before: an existing install starts with everything already seen.
+      if (!this.db.get('SELECT 1 FROM reads')) this.db.run('INSERT INTO reads (member, bot, seen) SELECT 1, b.id, COALESCE((SELECT MAX(id) FROM messages), 0) FROM bots b');
+      this.ensureDigest();
     });
     for (const b of this.bots()) {
       let tpl: disk.Template | null = null;
       try { tpl = disk.loadTemplate(this.cfg, b.template); } catch { /* a template since removed: its bot keeps its folder as is */ }
       disk.upgradeFolder(this.cfg, b.id, tpl, b.display);
     }
-    if (!this.member(OWNER).onboarded && !this.db.get('SELECT 1 FROM messages WHERE bot = ?', CHIEF)) this.say(CHIEF, 'bot', chiefGreeting(), null, OWNER);
+    if (!this.person().onboarded && !this.db.get('SELECT 1 FROM messages WHERE bot = ?', CHIEF)) this.say(CHIEF, 'bot', chiefGreeting(), null);
     this.timer = setInterval(() => this.tick(), 1500);
     this.recover();
     // A cold boot replays the sleep line: the last tick survived in settings, so a gap still names the
@@ -336,7 +336,7 @@ export class Crew {
         outcome.dropped.length ? `set aside ${outcome.dropped.join(', ')}` : '',
         !outcome.written.length && !outcome.dropped.length ? 'nothing needed changing' : ''].filter(Boolean);
       this.db.tx(() => {
-        this.say(CHIEF, 'bot', `Tidied what your crew learned: ${parts.join('; ')}. Set-aside skills can come back.`, null, OWNER);
+        this.say(CHIEF, 'bot', `Tidied what your crew learned: ${parts.join('; ')}. Set-aside skills can come back.`, null);
         this.db.event('learn.curated', CHIEF, { capture: outcome.capture, kept: outcome.kept, written: outcome.written, dropped: outcome.dropped });
       });
     } catch (e) {
@@ -346,7 +346,7 @@ export class Crew {
       const learned = await this.runtime.learned().catch(() => []);
       this.db.tx(() => {
         this.db.event('learn.curated', CHIEF, { refused: String(e).slice(0, 200) });
-        if (learned.length) this.say(CHIEF, 'system', `I left your learned skills untouched this week — tidying them didn't feel safe just now.`, null, OWNER);
+        if (learned.length) this.say(CHIEF, 'system', `I left your learned skills untouched this week — tidying them didn't feel safe just now.`, null);
       });
     }
   }
@@ -376,16 +376,13 @@ export class Crew {
   }
 
   // ---- reads ----
-  member(id: number): Row {
-    const m = this.db.get('SELECT * FROM people WHERE id = ?', id);
+  person(): Row {
+    const m = this.db.get('SELECT * FROM people WHERE id = 1');
     if (!m) throw Object.assign(new Error('no such person'), { status: 404 });
     return m;
   }
-  members(): Row[] { return this.db.all('SELECT * FROM people ORDER BY id').map((m) => ({ ...m, quietNow: quietNow(m.quiet) })); }
-  /** Who is looking. The web app says so in a header; an unknown id falls back to the owner (a view, never an authorization). */
-  viewer(id: unknown) { return this.db.get('SELECT * FROM people WHERE id = ?', Number(id) || OWNER) ?? this.member(OWNER); }
-  /** "sir", "Sam", or "the person": how a member is named in prompts. */
-  private called(member: number) { return this.member(member).name || 'the person'; }
+  /** "sir", "Sam", or "the person": how the person is named in prompts. */
+  private called() { return this.person().name || 'the person'; }
   bot(id: string) { return this.db.get('SELECT rowid + 100 AS n, * FROM bots WHERE id = ?', id); }
   bots() { return this.db.all('SELECT * FROM bots ORDER BY created_at'); }
   activeTask(bot: string) { return this.db.get("SELECT * FROM tasks WHERE bot = ? AND state IN ('working', 'needs_you') ORDER BY id LIMIT 1", bot); }
@@ -434,12 +431,12 @@ export class Crew {
   }
 
   /** A bot as the app sees it: no token, no model, nothing technical. */
-  private pub(b: Row, viewer = OWNER) {
-    const task = this.db.get("SELECT * FROM tasks WHERE bot = ? AND COALESCE(member, ?) = ? AND state IN ('working', 'needs_you') ORDER BY id LIMIT 1", b.id, OWNER, viewer);
-    return { id: b.id, display: b.display, role: b.role, template: b.template, color: b.color, member: b.member, state: b.state, created_at: b.created_at,
+  private pub(b: Row) {
+    const task = this.db.get("SELECT * FROM tasks WHERE bot = ? AND state IN ('working', 'needs_you') ORDER BY id LIMIT 1", b.id);
+    return { id: b.id, display: b.display, role: b.role, template: b.template, color: b.color, state: b.state, created_at: b.created_at,
       thinks: this.thinks(b.id), ...this.screenOf(b.id), live: this.liveState(b.id), task: task ? { ...this.task(task), files: this.activeFiles(task.id) } : null, ...this.progress(b.id, task),
-      queued: this.db.get("SELECT COUNT(*) AS n FROM tasks WHERE bot = ? AND COALESCE(member, ?) = ? AND state = 'queued'", b.id, OWNER, viewer)!.n,
-      pausedUntil: this.db.get("SELECT MIN(wake_at) AS w FROM tasks WHERE bot = ? AND COALESCE(member, ?) = ? AND state = 'paused'", b.id, OWNER, viewer)!.w };
+      queued: this.db.get("SELECT COUNT(*) AS n FROM tasks WHERE bot = ? AND state = 'queued'", b.id)!.n,
+      pausedUntil: this.db.get("SELECT MIN(wake_at) AS w FROM tasks WHERE bot = ? AND state = 'paused'", b.id)!.w };
   }
 
   private liveState(id: string) { return !this.live.get(id) ? 'off' : this.busy.has(id) ? 'working' : 'idle'; }
@@ -474,25 +471,26 @@ export class Crew {
     return [...rows.filter((d) => !this.isInput(d)), ...rows.filter((d) => this.isInput(d))];
   }
 
-  /** The viewer's active task carries its delivered files for the office desk: path, the helper's note and when
+  /** The active task carries its delivered files for the office desk: path, the helper's note and when
    *  it landed, own output first, handed-over inputs marked. Photos ride along for the chat, not the desk. */
   private activeFiles(task: number) {
     return this.taskFiles(task).map((d) => ({ path: d.path, note: d.note ?? '', at: d.at,
       ...(d.photo ? { photo: true } : {}), ...(this.isInput(d) ? { input: true } : {}) }));
   }
 
-  snapshot(viewer = OWNER) {
+  snapshot() {
     const files = (task: number) => this.taskFiles(task).map((d) => d.path);
-    const me = this.viewer(viewer);
+    const person: Row = this.person();
+    person.quietNow = quietNow(person.quiet);
     return {
-      person: { ...me, quietNow: quietNow(me.quiet) },
-      members: this.members(),
-      bots: this.bots().map((b) => ({ ...this.pub(b, me.id), ...this.chat(b.id, me.id) })),
+      person,
+      members: [person],
+      bots: this.bots().map((b) => ({ ...this.pub(b), ...this.chat(b.id) })),
       templates: disk.listTemplates(this.cfg).map((t) => ({ id: t.id, display: t.display, role: t.role, color: t.color, kit: disk.templateKit(this.cfg, t) })),
-      tasks: this.db.all('SELECT * FROM tasks WHERE bot != ? AND member = ? ORDER BY id DESC LIMIT 50', CHIEF, me.id).map((t) => ({ ...this.task(t), files: t.state === 'done' ? files(t.id) : [] })),
+      tasks: this.db.all('SELECT * FROM tasks WHERE bot != ? ORDER BY id DESC LIMIT 50', CHIEF).map((t) => ({ ...this.task(t), files: t.state === 'done' ? files(t.id) : [] })),
       ideas: this.ideas(),
-      room: (() => { const r = this.room(me.id); return { last: r.lines.at(-1) ?? null, busy: r.busy }; })(),
-      asks: this.db.all("SELECT * FROM asks WHERE state = 'open' AND COALESCE(member, ?) = ? ORDER BY id", OWNER, me.id).map((a) => this.askView(a)),
+      room: (() => { const r = this.room(); return { last: r.lines.at(-1) ?? null, busy: r.busy }; })(),
+      asks: this.db.all("SELECT * FROM asks WHERE state = 'open' ORDER BY id").map((a) => this.askView(a)),
       events: this.db.events(0, 80),
       /** The person's AI accounts that are resting now, and until when (docs/ui-contract.md). */
       resting: Object.fromEntries(Object.keys(PROVIDERS).map((k) => [k, this.restingUntil(k)]).filter(([, t]) => t)),
@@ -502,23 +500,23 @@ export class Crew {
        *  far as Google's own answers show: checked, missing, or only said done. */
       house: { google: this.connections.houseGoogle(), steps: this.connections.houseSteps() },
       desktops: { ready: desktopMissing().length === 0 },
-      routines: this.routines(me.id),
-      /** The viewer's pick for the crew's share of their AI, and whether today's is used up. Never a number. */
-      share: { choice: me.share ?? 'light', used: this.overShare(me.id), week: this.week(me.id) },
+      routines: this.routines(),
+      /** The person's pick for the crew's share of their AI, and whether today's is used up. Never a number. */
+      share: { choice: person.share ?? 'light', used: this.overShare(), week: this.week() },
       money: { cap: this.moneyCap(), spent: this.spentThisMonth() },
     };
   }
 
   /** Only jobs started in the room or involving a helper-to-helper pass belong here. */
-  room(member = OWNER, before?: number) {
-    const roots = `SELECT root FROM tasks WHERE member = ? GROUP BY root HAVING MAX(room) = 1 OR SUM(CASE WHEN parent IS NOT NULL AND origin != '${CHIEF}' THEN 1 ELSE 0 END) > 0 OR EXISTS (SELECT 1 FROM asks a WHERE a.state = 'open' AND json_extract(a.detail, '$.pass.root') = tasks.root)`;
+  room(before?: number) {
+    const roots = `SELECT root FROM tasks GROUP BY root HAVING MAX(room) = 1 OR SUM(CASE WHEN parent IS NOT NULL AND origin != '${CHIEF}' THEN 1 ELSE 0 END) > 0 OR EXISTS (SELECT 1 FROM asks a WHERE a.state = 'open' AND json_extract(a.detail, '$.pass.root') = tasks.root)`;
     const lines = this.db.all(`SELECT m.*, t.origin, t.parent, t.root FROM messages m JOIN tasks t ON t.id = m.task_id
-      WHERE t.member = ? AND t.root IN (${roots}) AND m.id < ? ORDER BY m.id DESC LIMIT 200`, member, member, before ?? Number.MAX_SAFE_INTEGER).reverse();
+      WHERE t.root IN (${roots}) AND m.id < ? ORDER BY m.id DESC LIMIT 200`, before ?? Number.MAX_SAFE_INTEGER).reverse();
     return { lines: lines.map((m) => ({ id: m.id, bot: m.bot, author: m.author, to: m.parent && m.author === m.origin ? m.bot : undefined,
       from: m.parent && m.author === m.origin ? m.origin : undefined, text: cleanReply(m.text), at: m.at,
       files: m.parent && m.author === m.origin ? this.taskFiles(m.task_id).map((d) => ({ bot: m.bot, path: d.path })) : [] })),
-      busy: this.db.all(`SELECT DISTINCT bot FROM tasks WHERE member = ? AND root IN (${roots}) AND state IN ('queued','working','needs_you','paused')`, member, member).map((r) => r.bot),
-      asks: this.db.all(`SELECT * FROM asks WHERE state = 'open' AND COALESCE(member, ?) = ? AND (json_extract(detail, '$.pass.root') IN (${roots}) OR task_id IN (SELECT id FROM tasks WHERE root IN (${roots})))`, OWNER, member, member, member).map((a) => this.askView(a)) };
+      busy: this.db.all(`SELECT DISTINCT bot FROM tasks WHERE root IN (${roots}) AND state IN ('queued','working','needs_you','paused')`).map((r) => r.bot),
+      asks: this.db.all(`SELECT * FROM asks WHERE state = 'open' AND (json_extract(detail, '$.pass.root') IN (${roots}) OR task_id IN (SELECT id FROM tasks WHERE root IN (${roots})))`).map((a) => this.askView(a)) };
   }
 
   private wrap(root: number) {
@@ -526,58 +524,57 @@ export class Crew {
     if (tasks.length < 2 || tasks.some((t) => !['done', 'failed', 'unsure'].includes(t.state)) ||
       this.db.get("SELECT 1 FROM asks WHERE state = 'open' AND json_extract(detail, '$.pass.root') = ?", root) ||
       this.db.get("SELECT 1 FROM events WHERE kind = 'room.wrap' AND json_extract(data, '$.root') = ?", root)) return;
-    const member = tasks[0].member ?? OWNER;
     const parts = tasks.filter((t) => t.bot !== CHIEF).map((t) => t.state === 'done'
       ? `${this.bot(t.bot)?.display ?? t.bot} finished. ${relayResult(t.result || 'Done')}`
       : `${this.bot(t.bot)?.display ?? t.bot} ${t.state === 'unsure' ? "isn't sure it worked" : "couldn't finish"}.`);
     const text = `${tasks.some((t) => t.state !== 'done') ? 'The crew has stopped.' : 'All done.'}\n${parts.join('\n')}`;
-    this.say(CHIEF, 'bot', text, root, member);
+    this.say(CHIEF, 'bot', text, root);
     this.db.event('room.wrap', CHIEF, { root });
   }
 
-  // ---- chats: each thread's last line and what the member hasn't seen ----
+  // ---- chats: each thread's last line and what the person hasn't seen ----
   /** Lines that make a thread unread: the bot's and Chief's words, anything in Chief's thread, and a helper's delivered files. */
   private static UNSEEN = "author != 'person' AND (author != 'system' OR bot = 'chief' OR text LIKE 'Delivered %')";
-  private chat(bot: string, member: number) {
-    const mine = 'bot = ? AND COALESCE(member, ?) = ?';
-    const last = this.db.get(`SELECT author, substr(text, 1, 160) AS text, at FROM messages WHERE ${mine} ORDER BY id DESC LIMIT 1`, bot, member, member);
+  private chat(bot: string) {
+    const mine = 'bot = ?';
+    const last = this.db.get(`SELECT author, substr(text, 1, 160) AS text, at FROM messages WHERE ${mine} ORDER BY id DESC LIMIT 1`, bot);
     if (last) last.text = cleanReply(last.text);
-    const seen = this.db.get('SELECT seen FROM reads WHERE member = ? AND bot = ?', member, bot)?.seen ?? 0;
-    const unread = this.db.get(`SELECT COUNT(*) AS n FROM messages WHERE ${mine} AND id > ? AND ${Crew.UNSEEN}`, bot, member, member, seen)!.n as number;
+    const seen = this.db.get('SELECT seen FROM reads WHERE bot = ?', bot)?.seen ?? 0;
+    const unread = this.db.get(`SELECT COUNT(*) AS n FROM messages WHERE ${mine} AND id > ? AND ${Crew.UNSEEN}`, bot, seen)!.n as number;
     return { last: last ?? null, unread };
   }
 
-  /** The member has read this thread up to now. */
-  read(bot: string, member: number) {
+  /** The person has read this thread up to now. */
+  read(bot: string) {
     if (!this.bot(bot)) throw fail('no such bot', 404);
-    const top = this.db.get('SELECT MAX(id) AS id FROM messages WHERE bot = ? AND COALESCE(member, ?) = ?', bot, member, member)!.id ?? 0;
-    this.db.run('INSERT INTO reads (member, bot, seen) VALUES (?, ?, ?) ON CONFLICT(member, bot) DO UPDATE SET seen = MAX(seen, excluded.seen)', member, bot, top);
+    const top = this.db.get('SELECT MAX(id) AS id FROM messages WHERE bot = ?', bot)!.id ?? 0;
+    this.db.run('INSERT INTO reads (member, bot, seen) VALUES (1, ?, ?) ON CONFLICT(member, bot) DO UPDATE SET seen = MAX(seen, excluded.seen)', bot, top);
   }
 
-  /** Words across the member's own chats and finished work, newest first. Plain LIKE: a house has thousands of lines, not millions. */
-  search(q: string, member: number) {
+  /** Words across the person's chats and finished work, newest first. Plain LIKE: an install has thousands of lines, not millions. */
+  search(q: string) {
     const like = `%${String(q).trim().replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
     if (like.length < 4) return { messages: [], things: [] };
     return {
-      messages: this.db.all("SELECT id, bot, author, substr(text, 1, 200) AS text, at FROM messages WHERE COALESCE(member, ?) = ? AND text LIKE ? ESCAPE '\\' ORDER BY id DESC LIMIT 50", member, member, like)
+      messages: this.db.all("SELECT id, bot, author, substr(text, 1, 200) AS text, at FROM messages WHERE text LIKE ? ESCAPE '\\' ORDER BY id DESC LIMIT 50", like)
         .map((m: Row) => ({ ...m, text: cleanReply(m.text) })),
-      things: this.db.all("SELECT id, bot, title, updated_at AS at FROM tasks WHERE member = ? AND bot != ? AND state = 'done' AND (title LIKE ? ESCAPE '\\' OR result LIKE ? ESCAPE '\\') ORDER BY id DESC LIMIT 20", member, CHIEF, like, like),
+      things: this.db.all("SELECT id, bot, title, updated_at AS at FROM tasks WHERE bot != ? AND state = 'done' AND (title LIKE ? ESCAPE '\\' OR result LIKE ? ESCAPE '\\') ORDER BY id DESC LIMIT 20", CHIEF, like, like),
     };
   }
 
-  // ---- the share: what a run used lands on its member's day; each task also stops at its own ceiling (see onEvent) ----
+  // ---- the share: what a run used lands on the person's day; each task also stops at its own ceiling (see onEvent) ----
 
-  /** The member's routines and check-ins have had their share of today. Things they ask for directly never wait on it. */
-  overShare(member: number) {
-    const used = this.db.get('SELECT tokens FROM usage WHERE member = ? AND day = ?', member, dayOf())?.tokens ?? 0;
-    return used >= dayBudget() * (SHARES[this.member(member).share ?? 'light'] ?? SHARES.light);
+  /** The person's routines and check-ins have had their share of today. Things they ask for directly never wait on it. */
+  overShare() {
+    const used = this.db.get('SELECT tokens FROM usage WHERE day = ?', dayOf())?.tokens ?? 0;
+    return used >= dayBudget() * (SHARES[this.person().share ?? 'light'] ?? SHARES.light);
   }
 
-  /** How this week is going against the member's share, in thirds: 'small', 'fair' or 'most'. Null on "as much as it needs". */
-  week(member: number) {
-    const share = SHARES[this.member(member).share ?? 'light'] ?? SHARES.light;
+  /** How this week is going against the person's share, in thirds: 'small', 'fair' or 'most'. Null on "as much as it needs". */
+  week() {
+    const share = SHARES[this.person().share ?? 'light'] ?? SHARES.light;
     if (!Number.isFinite(share)) return null;
-    const used = this.db.get('SELECT COALESCE(SUM(tokens), 0) AS n FROM usage WHERE member = ? AND day > ?', member, dayOf(Date.now() - 7 * 86_400_000))!.n as number;
+    const used = this.db.get('SELECT COALESCE(SUM(tokens), 0) AS n FROM usage WHERE day > ?', dayOf(Date.now() - 7 * 86_400_000))!.n as number;
     const part = used / (dayBudget() * share * 7);
     return part < 1 / 3 ? 'small' : part < 2 / 3 ? 'fair' : 'most';
   }
@@ -586,14 +583,13 @@ export class Crew {
   private waitForTomorrow(task: Row) {
     const now = new Date();
     const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime();
-    const member = task.member ?? OWNER;
     this.db.tx(() => {
       this.db.run('UPDATE tasks SET wake_at = ? WHERE id = ?', midnight, task.id);
       this.setTask(task, 'paused', 'Waiting for tomorrow: the crew has had its share of your AI today.');
       if (this.db.get("SELECT 1 FROM events WHERE kind = 'share.reached' AND json_extract(data, '$.day') = ?", dayOf())) return;
       this.db.event('share.reached', null, { day: dayOf() });
       this.say(CHIEF, 'bot', `I've stopped the routines and check-ins for today so your ${PROVIDERS.chatgpt.name} stays free for you. ` +
-        'They start again tomorrow morning. Anything you ask for yourself still goes ahead.', null, member);
+        'They start again tomorrow morning. Anything you ask for yourself still goes ahead.', null);
     });
   }
 
@@ -610,9 +606,9 @@ export class Crew {
   }
 
   // ---- routines: time-based, deterministic, no model call to decide when ----
-  /** One member's routines: those they set up, and their own morning digest. */
-  routines(member = OWNER) {
-    return this.db.all('SELECT * FROM routines WHERE member = ? ORDER BY kind, id', member).map(({ brain, ...r }): Row => ({
+  /** The person's routines and morning digest. */
+  routines() {
+    return this.db.all('SELECT * FROM routines ORDER BY kind, id').map(({ brain, ...r }): Row => ({
       ...r, words: r.schedule ? describe(parseSchedule(r.schedule)) : '',
       on: r.trigger ? describeTrigger(parseTrigger(r.trigger), this.bot(r.bot)?.display ?? r.bot) : '',
       thinks: brain ? disk.brainName(disk.parseBrain(brain)) : null,
@@ -636,11 +632,11 @@ export class Crew {
     return r;
   }
 
-  /** Every member's morning digest is on from the start; they can move or pause it, not delete it. */
-  private ensureDigest(member: number) {
-    if (this.db.get("SELECT 1 FROM routines WHERE kind = 'digest' AND member = ?", member)) return;
-    this.db.run("INSERT INTO routines (bot, name, schedule, kind, member, next_at, created_at) VALUES (?, 'Morning digest', 'every day 8:00', 'digest', ?, ?, ?)",
-      CHIEF, member, nextRun(parseSchedule('every day 8:00'), Date.now()), Date.now());
+  /** The morning digest is on from the start; the person can move or pause it, not delete it. */
+  private ensureDigest() {
+    if (this.db.get("SELECT 1 FROM routines WHERE kind = 'digest'")) return;
+    this.db.run("INSERT INTO routines (bot, name, schedule, kind, next_at, created_at) VALUES (?, 'Morning digest', 'every day 8:00', 'digest', ?, ?)",
+      CHIEF, nextRun(parseSchedule('every day 8:00'), Date.now()), Date.now());
   }
 
   /** Check a routine request and fill in its defaults — the one plan behind Chief's confirmation card and the person's own add.
@@ -665,25 +661,25 @@ export class Crew {
     return { bot, watch, body, when, on, brain, first, name, quiet: b.quiet === true || !!watch };
   }
 
-  /** A routine is its setter's: the member who added it, or the one Chief set it up for. Its runs use their accounts. */
-  addRoutine(b: { bot?: string; schedule?: string; on?: string; task?: string; model?: string; name?: string; quiet?: boolean; watch?: string }, by: string, member = by === CHIEF ? this.chiefFor() : OWNER) {
+  /** A routine added by the person or Chief runs on the person's accounts. */
+  addRoutine(b: { bot?: string; schedule?: string; on?: string; task?: string; model?: string; name?: string; quiet?: boolean; watch?: string }, by: string) {
     const plan = this.planRoutine(b);
     const words = [plan.when ? describe(plan.when) : '', plan.on ? describeTrigger(parseTrigger(plan.on), plan.bot.display) : ''].filter(Boolean).join('; ');
     return this.db.tx(() => {
-      const r = this.db.run('INSERT INTO routines (bot, name, schedule, body, brain, member, quiet, watch, trigger, next_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        plan.bot.id, plan.name, String(b.schedule ?? '').trim(), plan.body, plan.brain, member, plan.quiet ? 1 : 0, plan.watch, plan.on, plan.when ? nextRun(plan.when, Date.now()) : null, Date.now());
+      const r = this.db.run('INSERT INTO routines (bot, name, schedule, body, brain, quiet, watch, trigger, next_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        plan.bot.id, plan.name, String(b.schedule ?? '').trim(), plan.body, plan.brain, plan.quiet ? 1 : 0, plan.watch, plan.on, plan.when ? nextRun(plan.when, Date.now()) : null, Date.now());
       const row = this.routine(Number(r.lastInsertRowid));
       if (plan.on) mkdirSync(this.inbox(plan.bot.id), { recursive: true });
       this.db.event('routine.created', plan.bot.id, { routine: row.id, name: plan.name, words, by });
-      if (by === CHIEF) this.say(CHIEF, 'system', `Routine added: “${plan.name}” for ${plan.bot.display}, ${words}.${plan.when ? ` First run ${clock(row.next_at)}.` : ''}`, null, member);
+      if (by === CHIEF) this.say(CHIEF, 'system', `Routine added: “${plan.name}” for ${plan.bot.display}, ${words}.${plan.when ? ` First run ${clock(row.next_at)}.` : ''}`, null);
       return row;
     });
   }
 
   /** Chief's offer, in the person's plain words: cadence, what happens, quiet behaviour, first run. The routine is made
    *  only when the person says yes (`adopt`); `answer` applies a changed time first. A helper offers its own check-ins
-   *  the same way, for the member the running task belongs to. */
-  private offerRoutine(p: Parameters<Crew['planRoutine']>[0], member?: number) {
+   *  the same way, for the person. */
+  private offerRoutine(p: Parameters<Crew['planRoutine']>[0]) {
     const plan = this.planRoutine(p);
     const host = plan.watch ? new URL(plan.watch).hostname.replace(/^www\./, '') : '';
     const what = plan.watch ? `Keeps an eye on ${host}` : `${plan.bot.display} will ${plan.first.charAt(0).toLowerCase()}${plan.first.slice(1)}`;
@@ -695,7 +691,7 @@ export class Crew {
     return this.propose(CHIEF, words, {
       routine: { bot: plan.bot.id, schedule: String(p.schedule ?? '').trim(), on: plan.on, task: p.task, name: p.name, model: p.model, quiet: p.quiet, watch: p.watch },
       preview: { head: 'A new routine', body: lines.join('\n') },
-    }, member);
+    });
   }
 
   /** Pause, resume or move a routine, or make it a quiet check-in. Resuming counts from now: a paused routine never catches up. */
@@ -754,7 +750,7 @@ export class Crew {
   }
 
   private sendDigest(r: Row, why: string, now: number, day?: { at: number | null; title: string }[]) {
-    this.db.tx(() => { this.say(CHIEF, 'bot', this.digest(r.member, r.last_at ?? now - 86_400_000, day), null, r.member); this.db.run('UPDATE routines SET last_at = ? WHERE id = ?', now, r.id); this.db.event('routine.fired', CHIEF, { routine: r.id, name: r.name, why }); });
+    this.db.tx(() => { this.say(CHIEF, 'bot', this.digest(r.last_at ?? now - 86_400_000, day), null); this.db.run('UPDATE routines SET last_at = ? WHERE id = ?', now, r.id); this.db.event('routine.fired', CHIEF, { routine: r.id, name: r.name, why }); });
   }
 
   private fire(r: Row, why: 'schedule' | 'late' | 'now' | 'file' | 'wake', note?: string) {
@@ -787,7 +783,7 @@ export class Crew {
       return;
     }
     if (r.watch) return void this.check(r, why);
-    const { task } = this.addTask(r.bot, note ? `${r.body}\n\n[Crewhouse] ${note}` : r.body, why === 'now' ? 'routine.now' : 'routine', r.brain ?? undefined, r.member, r);
+    const { task } = this.addTask(r.bot, note ? `${r.body}\n\n[Crewhouse] ${note}` : r.body, why === 'now' ? 'routine.now' : 'routine', r.brain ?? undefined, r);
     this.db.tx(() => {
       this.db.run('UPDATE routines SET last_at = ?, last_task = ? WHERE id = ?', now, task, r.id);
       this.db.event('routine.fired', r.bot, { routine: r.id, name: r.name, why, task });
@@ -795,7 +791,7 @@ export class Crew {
   }
 
   /** A manual run retries a sign-in-parked last run: the same task, queued again — never a second stacked task and
-   *  never a silent skip. A scheduled tick retries it only once the member signed in since, and stays quiet either way. */
+   *  never a silent skip. A scheduled tick retries it only once the person signed in since, and stays quiet either way. */
   private retryPaused(r: Row, open: Row, origin: string, why: 'schedule' | 'late' | 'now' | 'file' | 'wake') {
     const now = Date.now();
     this.db.run('UPDATE tasks SET origin = ?, created_at = ? WHERE id = ?', origin, now, open.id);
@@ -836,7 +832,7 @@ export class Crew {
       if (before === null) return seen('started');
       if (before === now) return seen('same');
       const { task } = this.addTask(r.bot, `${r.body}\n\n[Crewhouse] The page you watch (${r.watch}) changed since the last check.\n${changed(before, now)}`,
-        why === 'now' ? 'routine.now' : 'routine', r.brain ?? undefined, r.member, r);
+        why === 'now' ? 'routine.now' : 'routine', r.brain ?? undefined, r);
       seen('changed', task);
     } finally { this.checking.delete(r.id); }
   }
@@ -850,24 +846,24 @@ export class Crew {
     const line = down && was + 1 === 2 ? `I couldn't open the page for “${r.name}” twice now. It may be down, or need a sign-in. I'll keep trying, and tell you when it works again.`
       : !down && was >= 2 ? `The page for “${r.name}” opens again. I'm back to keeping an eye on it.` : '';
     if (!line) return;
-    this.say(r.bot, 'bot', line, null, r.member);
-    this.alert(r.member);
+    this.say(r.bot, 'bot', line, null);
+    this.alert();
   }
 
-  /** Chief's "while you were away" for one member: what finished, what needs them, what is coming up. No model call. */
-  digest(member: number, since: number, day?: { at: number | null; title: string }[]) {
-    const address = this.member(member).address;
+  /** Chief's "while you were away" for the person: what finished, what needs them, what is coming up. No model call. */
+  digest(since: number, day?: { at: number | null; title: string }[]) {
+    const address = this.person().address;
     const name = (id: string) => this.bot(id)?.display ?? id;
     const list = (xs: string[]) => xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join('; ')} and ${xs.at(-1)}`;
-    const done = this.db.all("SELECT * FROM tasks WHERE bot != ? AND member = ? AND state = 'done' AND updated_at >= ? AND COALESCE(result, '') != ? ORDER BY id", CHIEF, member, since, ALL_CLEAR_RESULT);
-    const ended = (state: string) => this.db.all('SELECT * FROM tasks WHERE bot != ? AND member = ? AND state = ? AND updated_at >= ? ORDER BY id', CHIEF, member, state, since);
+    const done = this.db.all("SELECT * FROM tasks WHERE bot != ? AND state = 'done' AND updated_at >= ? AND COALESCE(result, '') != ? ORDER BY id", CHIEF, since, ALL_CLEAR_RESULT);
+    const ended = (state: string) => this.db.all('SELECT * FROM tasks WHERE bot != ? AND state = ? AND updated_at >= ? ORDER BY id', CHIEF, state, since);
     const failed = ended('failed'), unsure = ended('unsure');
-    const asks = this.db.all("SELECT * FROM asks WHERE state = 'open' AND COALESCE(member, ?) = ? ORDER BY id", OWNER, member);
-    const learned = this.db.all("SELECT bot, data FROM events WHERE kind = 'memory.learned' AND at >= ? AND COALESCE(json_extract(data, '$.member'), ?) = ? ORDER BY seq", since, OWNER, member);
-    const soon = this.db.all("SELECT * FROM routines WHERE state = 'on' AND kind != 'digest' AND member = ? AND next_at <= ? ORDER BY next_at", member, Date.now() + 86_400_000);
-    const scout = this.bots().find((b) => b.template === 'scout' && (b.member ?? OWNER) === member)?.id;
+    const asks = this.db.all("SELECT * FROM asks WHERE state = 'open' ORDER BY id");
+    const learned = this.db.all("SELECT bot, data FROM events WHERE kind = 'memory.learned' AND at >= ? ORDER BY seq", since);
+    const soon = this.db.all("SELECT * FROM routines WHERE state = 'on' AND kind != 'digest' AND next_at <= ? ORDER BY next_at", Date.now() + 86_400_000);
+    const scout = this.bots().find((b) => b.template === 'scout')?.id;
     const goal = scout && (disk.readNotes(this.cfg, { bot: scout }).split('\n').some((l) => l.replace(/^- /, '').startsWith('Goal:')) ||
-      this.db.get('SELECT 1 FROM tasks WHERE member = ? AND bot = ?', member, scout));
+      this.db.get('SELECT 1 FROM tasks WHERE bot = ?', scout));
     const lines = [`Good ${partOfDay()}${address ? `, ${address}` : ''}. While you were away:`];
     lines.push(done.length ? `- Finished: ${list(done.slice(0, 5).map((t) => `${name(t.bot)}, “${t.title}”`))}${done.length > 5 ? `, and ${done.length - 5} more` : ''}.` : '- Nothing new was finished.');
     if (failed.length) lines.push(`- Did not go well: ${list(failed.slice(0, 3).map((t) => `${name(t.bot)}, “${t.title}” (${String(t.result ?? '').slice(0, 80)})`))}.`);
@@ -880,13 +876,12 @@ export class Crew {
     return lines.join('\n');
   }
 
-  botPage(id: string, viewer = OWNER, around?: number) {
+  botPage(id: string, around?: number) {
     const b = this.needBot(id);
     const undone = new Set(this.db.eventsForBot(id, ['memory.undone'], 10000).map((e) => e.data.seq));
     return {
-      bot: this.pub(b, viewer),
+      bot: this.pub(b),
       job: disk.readJob(this.cfg, id),
-      // Each member has their own thread with a bot; notes to the whole house (member NULL) show to everyone.
       // A search landing on an old line gets a window around it: the newest 200 would miss it entirely.
       phoneOffer: id === CHIEF && !around ? (() => {
         const value = this.db.get("SELECT value FROM settings WHERE key = 'phone.offer.1'")?.value;
@@ -897,18 +892,18 @@ export class Crew {
       })() : null,
       messages: (around
         ? this.db.all(`SELECT * FROM (
-            SELECT * FROM (SELECT * FROM messages WHERE bot = ? AND COALESCE(member, ?) = ? AND id >= ? ORDER BY id LIMIT 100)
+            SELECT * FROM (SELECT * FROM messages WHERE bot = ? AND id >= ? ORDER BY id LIMIT 100)
             UNION ALL
-            SELECT * FROM (SELECT * FROM messages WHERE bot = ? AND COALESCE(member, ?) = ? AND id < ? ORDER BY id DESC LIMIT 99)
-          ) ORDER BY id`, id, viewer, viewer, around, id, viewer, viewer, around)
-        : this.db.all('SELECT * FROM (SELECT * FROM messages WHERE bot = ? AND COALESCE(member, ?) = ? ORDER BY id DESC LIMIT 200) ORDER BY id', id, viewer, viewer))
+            SELECT * FROM (SELECT * FROM messages WHERE bot = ? AND id < ? ORDER BY id DESC LIMIT 99)
+          ) ORDER BY id`, id, around, id, around)
+        : this.db.all('SELECT * FROM (SELECT * FROM messages WHERE bot = ? ORDER BY id DESC LIMIT 200) ORDER BY id', id))
         .map((m: Row): Row => ({ ...m, text: cleanReply(m.text),
           files: id === CHIEF && m.author === 'bot' && m.task_id
             ? this.db.all("SELECT bot, data FROM events WHERE kind = 'file.delivered' AND json_extract(data, '$.task') IN (SELECT id FROM tasks WHERE root = (SELECT COALESCE(root,id) FROM tasks WHERE id = ?)) AND json_extract(data, '$.input') IS NULL AND json_extract(data, '$.path') NOT LIKE 'files/from-%'", m.task_id)
               .map((e) => ({ bot: e.bot, path: JSON.parse(e.data).path })) : [],
           // Chief's hand-off in a helper's chat collapses to its task's title, with the full words behind Show details.
           ...(id !== CHIEF && m.author === 'chief' && m.task_id ? { title: this.db.get('SELECT title FROM tasks WHERE id = ?', m.task_id)?.title } : {}) })),
-      tasks: this.db.all('SELECT * FROM tasks WHERE bot = ? AND COALESCE(member, ?) = ? ORDER BY id DESC LIMIT 50', id, OWNER, viewer).map((t) => this.task(t)),
+      tasks: this.db.all('SELECT * FROM tasks WHERE bot = ? ORDER BY id DESC LIMIT 50', id).map((t) => this.task(t)),
       // What this helper learned about the person.
       notes: disk.readNotes(this.cfg, { bot: id }),
       notesCap: disk.NOTES_CAP,
@@ -917,7 +912,7 @@ export class Crew {
       skills: disk.listSkills(this.cfg, id),
       tools: disk.botTools(this.cfg, id),
       files: disk.listFiles(this.cfg, id, new Set(this.db.all(`SELECT json_extract(e.data, '$.path') AS path FROM events e JOIN tasks t ON t.id = json_extract(e.data, '$.task')
-        WHERE e.bot = ? AND e.kind = 'file.delivered' AND COALESCE(t.member, ?) = ?`, id, OWNER, viewer).map((e) => String(e.path).replace(/^files\//, '')))),
+        WHERE e.bot = ? AND e.kind = 'file.delivered'`, id).map((e) => String(e.path).replace(/^files\//, '')))),
       trail: this.db.eventsForBot(id, TRAIL).map((e) => ({ ...e, ...(e.kind === 'memory.learned' && undone.has(e.seq) ? { undone: true } : {}) })),
       // Standing answers in plain words; taking one back sends the words back.
       allow: (disk.botConfig(this.cfg, id).allow ?? []).map(coversOf),
@@ -935,45 +930,32 @@ export class Crew {
 
   // ---- people ----
   /** First meeting: the person tells Chief how to be addressed. Stored per person, used by every bot. */
-  onboard(address: string, member = OWNER, ask?: string, bot?: string): { task: number } | void {
+  onboard(address: string, ask?: string, bot?: string): { task: number } | void {
     const a = needText(address, 40, 'say how Chief should address you');
     const hello = ask?.trim();
     let to = CHIEF;
     if (hello) {
-      // A Hello goal tap starts in its helper's thread: hired silently when the member's account runs
+      // A Hello goal tap starts in its helper's thread: hired silently when the person's account runs
       // helpers, or with Chief when it names no template or the plan has none.
       try {
         const t = disk.loadTemplate(this.cfg, bot ?? '');
         const hired = this.bots().find((b) => b.template === t.id)?.id;
         const brains = hired ? disk.brains(this.cfg, hired) : (t.models ?? ['chatgpt']).map(disk.parseBrain);
-        if (brains.some((b) => !this.accounts.unready(b.provider) && !this.accounts.notIncluded(b.provider))) to = hired ?? this.recruit(t.id, undefined, 'person', member).id;
+        if (brains.some((b) => !this.accounts.unready(b.provider) && !this.accounts.notIncluded(b.provider))) to = hired ?? this.recruit(t.id, undefined, 'person').id;
       } catch { /* Chief */ }
     }
     // The address is already stored in people; the Hello screen already greeted her, so the thread starts empty and renders ChiefIdeas.
     this.db.tx(() => {
-      this.db.run("DELETE FROM messages WHERE bot = ? AND member = ? AND author = 'bot'", CHIEF, member);
-      this.db.run('UPDATE people SET address = ?, onboarded = 1 WHERE id = ?', a, member);
+      this.db.run("DELETE FROM messages WHERE bot = ? AND author = 'bot'", CHIEF);
+      this.db.run('UPDATE people SET address = ?, onboarded = 1 WHERE id = 1', a);
       this.db.event('person.onboarded', null, { address: a });
     });
-    if (hello) return this.addTask(to, hello, 'person', undefined, member);
-  }
-
-  /** Someone else in the house. Chief greets them in their own thread; they sign in to their own AI accounts in Settings. */
-  addMember(name: string) {
-    const n = needText(name, 32, 'give them a name');
-    if (this.db.get('SELECT 1 FROM people WHERE lower(name) = lower(?)', n)) throw Object.assign(new Error(`${n} is already here`), { status: 409 });
-    return this.db.tx(() => {
-      const id = Number(this.db.run('INSERT INTO people (name, created_at) VALUES (?, ?)', n, Date.now()).lastInsertRowid);
-      this.say(CHIEF, 'bot', chiefGreeting(), null, id);
-      this.db.event('person.added', null, { name: n });
-      this.ensureDigest(id);
-      return this.member(id);
-    });
+    if (hello) return this.addTask(to, hello, 'person', undefined);
   }
 
   /** Name, how Chief addresses them, and quiet hours ("22:00-07:00", or null for none). */
   updateMember(id: number, body: { name?: unknown; address?: unknown; quiet?: unknown; share?: unknown }) {
-    this.member(id);
+    this.person();
     if (body.name !== undefined) {
       const n = needText(body.name, 32, 'give them a name');
       this.db.run('UPDATE people SET name = ? WHERE id = ?', n, id);
@@ -988,21 +970,19 @@ export class Crew {
       if (!(typeof body.share === 'string' && body.share in SHARES)) throw fail('the crew\'s share is light, normal or full');
       this.db.run('UPDATE people SET share = ? WHERE id = ?', body.share, id);
     }
-    if (body.address !== undefined) this.setAddress(String(body.address), id);
+    if (body.address !== undefined) this.setAddress(String(body.address));
     this.db.event('person.updated', null);
-    return this.member(id);
+    return this.person();
   }
 
   // ---- crew ----
-  private addBot(tpl: disk.Template, display: string, id: string, by: string, member = OWNER) {
+  private addBot(tpl: disk.Template, display: string, id: string, by: string) {
     disk.createBotFolder(this.cfg, id, tpl, display);
-    this.db.run('INSERT INTO bots (id, display, role, template, color, token, created_at, member) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      id, display, tpl.role, tpl.id, tpl.color, randomBytes(16).toString('hex'), Date.now(), member);
+    this.db.run('INSERT INTO bots (id, display, role, template, color, token, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      id, display, tpl.role, tpl.id, tpl.color, randomBytes(16).toString('hex'), Date.now());
     this.db.event('bot.recruited', id, { display, template: tpl.id, by });
   }
 
-  /** The member Chief is working for right now: whoever asked for his current task. */
-  chiefFor() { return this.activeTask(CHIEF)?.member ?? OWNER; }
   /** The bot, or a 404. */
   private needBot(id: string) {
     const b = this.bot(id);
@@ -1010,51 +990,50 @@ export class Crew {
     return b;
   }
 
-  /** A new bot is its recruiter's: the member who hired it, or the one Chief recruited it for. */
-  recruit(template: string, name: string | undefined, by: string, member = by === CHIEF ? this.chiefFor() : OWNER) {
+  /** The person or Chief can recruit a helper. */
+  recruit(template: string, name: string | undefined, by: string) {
     const tpl = disk.loadTemplate(this.cfg, template);
     if (template === 'chief') throw Object.assign(new Error('there is only one Chief'), { status: 400 });
     const display = (name || tpl.display).trim().slice(0, 32);
     const id = disk.slug(display);
     if (this.bot(id) || id === CHIEF) throw Object.assign(new Error(`there is already a bot called ${display}`), { status: 409 });
     this.db.tx(() => {
-      this.addBot(tpl, display, id, by, member);
+      this.addBot(tpl, display, id, by);
       this.say(id, 'system', `${display} joined the crew (${tpl.role.toLowerCase()}).`);
     });
     return this.bot(id)!;
   }
 
   // ---- work ----
-  /** A message in a bot's thread: the member's own thread when it belongs to their task, the whole house's otherwise. */
-  say(bot: string, author: string, text: string, taskId: number | null = null, member?: number | null) {
+  /** A message in the person's thread with a bot. */
+  say(bot: string, author: string, text: string, taskId: number | null = null) {
     if (author === 'bot') text = cleanReply(text);
-    const m = member !== undefined ? member : taskId ? this.db.get('SELECT member FROM tasks WHERE id = ?', taskId)?.member ?? null : null;
-    const id = Number(this.db.run('INSERT INTO messages (bot, author, text, task_id, at, member) VALUES (?, ?, ?, ?, ?, ?)', bot, author, text, taskId, Date.now(), m).lastInsertRowid);
+    const id = Number(this.db.run('INSERT INTO messages (bot, author, text, task_id, at) VALUES (?, ?, ?, ?, ?)', bot, author, text, taskId, Date.now()).lastInsertRowid);
     this.db.event('message', bot, { id, author, text: text.slice(0, 280) });
     return id;
   }
 
   /** A person's message in a bot's thread is a task for that bot; in Chief's thread it goes where `route` says. */
   /** `photos` from the phone or the share sheet: the helper sees them with the words, and they are kept in its files. */
-  async post(botId: string, text: string, model?: string, member = OWNER, photos?: unknown, room = false, key?: string) {
+  async post(botId: string, text: string, model?: string, photos?: unknown, room = false, key?: string) {
     const bot = this.bot(botId);
     if (!bot) throw Object.assign(new Error('no such bot'), { status: 404 });
     const pics = checkPhotos(photos);
     if (!text.trim() && !pics.length) throw Object.assign(new Error('empty message'), { status: 400 });
     const words = text.trim() || (pics.length === 1 ? 'Here is a photo.' : 'Here are some photos.');
-    if (botId === CHIEF && !this.member(member).onboarded) { this.say(CHIEF, 'person', words, null, member); return this.onboard(words, member); }
+    if (botId === CHIEF && !this.person().onboarded) { this.say(CHIEF, 'person', words, null); return this.onboard(words); }
     if (botId === CHIEF && !pics.length && (asksForPhone(words) || inlineHowTo(words) === 'signin' || inlineHowTo(words) === 'app')) {
-      this.say(CHIEF, 'person', words, null, member);
+      this.say(CHIEF, 'person', words, null);
       if (asksForPhone(words)) { await this.addPhone(); return; }
-      if (inlineHowTo(words) === 'signin') { this.say(CHIEF, 'bot', 'Sign in with ChatGPT.', null, member); return; }
+      if (inlineHowTo(words) === 'signin') { this.say(CHIEF, 'bot', 'Sign in with ChatGPT.', null); return; }
       const app = /\b(calendar|gmail|drive|notion|canva)\b/i.exec(words)?.[1].toLowerCase() ?? 'calendar';
-      this.say(CHIEF, 'bot', `Connect ${this.connections.apps[app].name}.`, null, member);
-      if (!this.connections.connected(app)) this.openAsk(CHIEF, undefined, `Connect ${this.connections.apps[app].name}`, { app, words: `Connect your ${this.connections.apps[app].name}` }, 'connect', member);
+      this.say(CHIEF, 'bot', `Connect ${this.connections.apps[app].name}.`, null);
+      if (!this.connections.connected(app)) this.openAsk(CHIEF, undefined, `Connect ${this.connections.apps[app].name}`, { app, words: `Connect your ${this.connections.apps[app].name}` }, 'connect');
       return;
     }
-    if (botId === CHIEF) return this.route(words, model, member, pics, room, key);
-    const latest = room ? this.db.get('SELECT root FROM tasks WHERE room = 1 AND member = ? AND bot = ? ORDER BY id DESC LIMIT 1', member, botId) : undefined;
-    return this.addTask(botId, words, 'person', model, member, undefined, words, pics, { room, root: latest?.root, key });
+    if (botId === CHIEF) return this.route(words, model, pics, room, key);
+    const latest = room ? this.db.get('SELECT root FROM tasks WHERE room = 1 AND bot = ? ORDER BY id DESC LIMIT 1', botId) : undefined;
+    return this.addTask(botId, words, 'person', model, undefined, words, pics, { room, root: latest?.root, key });
   }
 
   /** One pairing offer, using the same one-use code as Settings. Never give its ticket to a model. */
@@ -1062,7 +1041,7 @@ export class Crew {
     if (!this.phoneLink) throw fail('Phone pairing is not ready yet', 503);
     const token = randomBytes(16).toString('hex');
     const { qr, typed, expires } = await this.phoneLink.offer('control', token);
-    const message = this.say(CHIEF, 'bot', 'Open Crewhouse on your phone and scan this, or type the code.', null, OWNER);
+    const message = this.say(CHIEF, 'bot', 'Open Crewhouse on your phone and scan this, or type the code.', null);
     this.db.run("INSERT INTO settings (key, value) VALUES ('phone.offer.1', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", JSON.stringify({ qr, typed, expires, message, token }));
     return { shown: true }; // the model never sees the one-use ticket
   }
@@ -1080,38 +1059,38 @@ export class Crew {
   }
 
   /** A targeted request that must stay with Chief rather than pass through helper routing. */
-  requestChief(text: string, member = OWNER, said?: string) {
+  requestChief(text: string, said?: string) {
     if (!text.trim()) throw Object.assign(new Error('empty message'), { status: 400 });
     // The thread shows the person's own words (`said`), never crewd's instruction to the model.
-    return this.addTask(CHIEF, text.trim(), 'person', undefined, member, undefined, said?.trim() ? said.trim() : text.trim());
+    return this.addTask(CHIEF, text.trim(), 'person', undefined, undefined, said?.trim() ? said.trim() : text.trim());
   }
 
   /** Plainly addressed helper requests go straight there; unresolved requests become Chief tasks immediately.
    *  Chief can ask or hand off in his task, without a separate model turn delaying the person's first words. */
-  private async route(text: string, model: string | undefined, member: number, pics: Photo[] = [], room = false, key?: string) {
+  private async route(text: string, model: string | undefined, pics: Photo[] = [], room = false, key?: string) {
     const helpers = this.bots().filter((b) => b.id !== CHIEF) as Helper[];
-    const lastBot = this.db.get("SELECT text, task_id, at FROM messages WHERE bot = ? AND member = ? AND author = 'bot' ORDER BY id DESC LIMIT 1", CHIEF, member);
+    const lastBot = this.db.get("SELECT text, task_id, at FROM messages WHERE bot = ? AND author = 'bot' ORDER BY id DESC LIMIT 1", CHIEF);
     const replyTo = text.length < 120 && !/\[tool\b/.test(text) && lastBot && lastBot.task_id && lastBot.at > Date.now() - 30 * 60_000 && /\?\s*$/.test(lastBot.text)
       ? this.db.get('SELECT bot, body FROM tasks WHERE id = ?', lastBot.task_id) : undefined;
-    if (replyTo?.bot === CHIEF) return this.addTask(CHIEF, text, 'person', model, member, undefined, text, pics, { room, key });
+    if (replyTo?.bot === CHIEF) return this.addTask(CHIEF, text, 'person', model, undefined, text, pics, { room, key });
     // An answer to a helper's question skips routing and Chief: a fresh task carrying the question and its answer.
     if (replyTo && lastBot && replyTo.bot !== CHIEF && this.bot(replyTo.bot)) {
-      const r = this.addTask(replyTo.bot, `${replyTo.body}\nAsked: ${lastBot.text}\nAnswer: ${text}`, CHIEF, model, member, undefined, text, pics, { room, key });
-      this.say(CHIEF, 'person', text + r.shown, null, member);
+      const r = this.addTask(replyTo.bot, `${replyTo.body}\nAsked: ${lastBot.text}\nAnswer: ${text}`, CHIEF, model, undefined, text, pics, { room, key });
+      this.say(CHIEF, 'person', text + r.shown, null);
       return { task: r.task };
     }
-    const previous = this.db.get("SELECT text FROM messages WHERE bot = ? AND member = ? AND author = 'person' ORDER BY id DESC LIMIT 1", CHIEF, member)?.text as string | undefined;
+    const previous = this.db.get("SELECT text FROM messages WHERE bot = ? AND author = 'person' ORDER BY id DESC LIMIT 1", CHIEF)?.text as string | undefined;
     const earlier: string | undefined = /^https?:\/\/\S+$/i.test(text) && previous && /\b(market|marketing|promote|launch)\b/i.test(previous) ? previous : undefined;
     const body = earlier ? `${earlier}\n${text}` : text;
     const to = await route({ text, earlier }, helpers);
     // A spreadsheet the rules miss goes straight to Scribe, hired silently when the person's account can run helpers.
     const helper = (!to.abstained && helpers.find((b) => b.id === to.answer))
       || (/\b(excel|spreadsheet|xlsx|workbook|tracker)\b/i.test(body) && !chiefWork.test(body)
-        && await this.usable(this.choices({ bot: 'scribe' } as Row)) && (this.bots().find((b) => b.template === 'scribe') ?? this.recruit('scribe', undefined, 'person', member)));
-    if (!helper) return this.addTask(CHIEF, body, 'person', model, member, undefined, text, pics, { room, key });
-    const r = this.addTask(helper.id, body, CHIEF, model, member, undefined, body, pics, { room, key });
-    this.say(CHIEF, 'person', text + r.shown, null, member);
-    this.say(CHIEF, 'bot', `${helper.display} is on it.`, null, member);
+        && await this.usable(this.choices({ bot: 'scribe' } as Row)) && (this.bots().find((b) => b.template === 'scribe') ?? this.recruit('scribe', undefined, 'person')));
+    if (!helper) return this.addTask(CHIEF, body, 'person', model, undefined, text, pics, { room, key });
+    const r = this.addTask(helper.id, body, CHIEF, model, undefined, body, pics, { room, key });
+    this.say(CHIEF, 'person', text + r.shown, null);
+    this.say(CHIEF, 'bot', `${helper.display} is on it.`, null);
     return { task: r.task };
   }
 
@@ -1119,8 +1098,8 @@ export class Crew {
   assign(botId: string, text: string, by: string, model?: string, title?: string) {
     if (!this.bot(botId)) throw Object.assign(new Error(`no bot called ${botId}; see crew roster`), { status: 404 });
     if (botId === CHIEF) throw Object.assign(new Error('Chief cannot assign to himself'), { status: 400 });
-    // Chief's hand-offs are for whoever asked Chief, and run on that member's own accounts.
-    return this.addTask(botId, text.trim(), by, model, by === CHIEF ? this.chiefFor() : this.bot(botId)!.member ?? OWNER, undefined, text.trim(), [], { parent: by === CHIEF ? this.activeTask(CHIEF)?.id : undefined, title });
+    // Chief's hand-offs run on the person's accounts.
+    return this.addTask(botId, text.trim(), by, model, undefined, text.trim(), [], { parent: by === CHIEF ? this.activeTask(CHIEF)?.id : undefined, title });
   }
 
   /** Chief's job of several `steps` goes on a plan card first and starts on Go; the gate still asks every send, spend or change. */
@@ -1131,12 +1110,12 @@ export class Crew {
     if (plan.length > 10 || plan.some((x) => x.length > 300)) throw fail('keep the plan to ten short steps');
     const what = taskTitle(title || text);
     this.propose(CHIEF, `Here’s the plan for “${what}”. ${this.bot(botId)!.display} starts when you say Go.`,
-      { plan: { bot: botId, text: text.trim(), model, title: what, steps: plan }, preview: { body: plan.map((x, i) => `${i + 1}. ${x}`).join('\n') } }, this.chiefFor());
+      { plan: { bot: botId, text: text.trim(), model, title: what, steps: plan }, preview: { body: plan.map((x, i) => `${i + 1}. ${x}`).join('\n') } });
     return { asked: true, note: 'The person sees your plan on a card. Nothing starts until they say Go; do not assign it again.' };
   }
 
   /** `said` is what the thread shows, when it isn't the whole body. */
-  private addTask(bot: string, body: string, origin: string, model: string | undefined, member: number, routine?: Row, said = body, pics: Photo[] = [], link: { parent?: number; root?: number; room?: boolean; hops?: number; title?: string; key?: string } = {}) {
+  private addTask(bot: string, body: string, origin: string, model: string | undefined, routine?: Row, said = body, pics: Photo[] = [], link: { parent?: number; root?: number; room?: boolean; hops?: number; title?: string; key?: string } = {}) {
     const brain = model ? disk.brainKey(disk.parseBrain(model)) : null;
     const title = routine?.name ? short(routine.name, 80) : link.title ? taskTitle(link.title) : taskTitle(body);
     let shown = '';
@@ -1147,10 +1126,10 @@ export class Crew {
     }
     const id = this.db.tx(() => {
       const now = Date.now();
-      const r = this.db.run('INSERT INTO tasks (bot, title, body, origin, state, created_at, updated_at, brain, member, routine) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        bot, title, body, origin, 'queued', now, now, brain, member, routine?.id ?? null);
+      const r = this.db.run('INSERT INTO tasks (bot, title, body, origin, state, created_at, updated_at, brain, routine) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        bot, title, body, origin, 'queued', now, now, brain, routine?.id ?? null);
       const id = Number(r.lastInsertRowid);
-      const parent = link.parent ? this.db.get('SELECT root, room FROM tasks WHERE id = ? AND member = ?', link.parent, member) : undefined;
+      const parent = link.parent ? this.db.get('SELECT root, room FROM tasks WHERE id = ?', link.parent) : undefined;
       this.db.run('UPDATE tasks SET parent = ?, root = ?, room = ?, hops = ? WHERE id = ?', link.parent ?? null, link.root ?? parent?.root ?? id, Number(link.room ?? !!parent?.room), link.hops ?? 0, id);
       // Photos are kept in the helper's files (so they show in the person's Things) and shown in the chat by that path.
       const kept = pics.map((p, i) => {
@@ -1197,28 +1176,26 @@ export class Crew {
     });
   }
 
-  /** A job that didn't work always says so, in words crewd writes: a routine's in the member's Chief thread (with when it
+  /** A job that didn't work always says so, in words crewd writes: a routine's in Chief's thread (with when it
    *  tries again), anything else in its own chat. Never silent, and never a model call. A job that acted but couldn't
    *  confirm it worked (`unsure`) says so the same way: not sure is never reported as done. */
   private failedLine(task: Row, result: string, unsure = false) {
-    const member = task.member ?? OWNER;
     const b = this.bot(task.bot)?.display ?? task.bot;
     const r = task.routine && this.db.get('SELECT * FROM routines WHERE id = ?', task.routine);
     if (r) {
-      if (unsure) return void this.say(CHIEF, 'bot', `${b} isn't sure “${r.name}” worked. ${result}`, null, member);
+      if (unsure) return void this.say(CHIEF, 'bot', `${b} isn't sure “${r.name}” worked. ${result}`, null);
       const again = r.state === 'on' && r.next_at ? ` It will try again ${clock(r.next_at)}.` : '';
-      return void this.say(CHIEF, 'bot', `${b} couldn't finish “${r.name}”. ${result}${again}`, null, member);
+      return void this.say(CHIEF, 'bot', `${b} couldn't finish “${r.name}”. ${result}${again}`, null);
     }
-    this.say(task.bot, 'bot', unsure ? `${UNSURE} ${result}` : result, task.id, member);
-    this.alert(member);
+    this.say(task.bot, 'bot', unsure ? `${UNSURE} ${result}` : result, task.id);
+    this.alert();
   }
 
   /** A line in a helper's chat that the person should hear about even with the app closed: the phone gets a push. */
-  private alert(member: number) { this.db.event('alert', null, { member }); }
+  private alert() { this.db.event('alert', null); }
 
   private prompt(task: Row) {
-    const member = this.member(task.member ?? OWNER);
-    const who = task.origin === 'person' ? this.called(member.id) : task.origin === CHIEF ? 'Chief' : this.bot(task.origin)?.display ?? task.origin;
+    const who = task.origin === 'person' ? this.called() : task.origin === CHIEF ? 'Chief' : this.bot(task.origin)?.display ?? task.origin;
     const r = task.routine && this.db.get('SELECT name, quiet FROM routines WHERE id = ?', task.routine);
     const routine = r?.name;
     // A quiet check-in only speaks up when something needs the person.
@@ -1228,24 +1205,21 @@ export class Crew {
       'call crew_remember with `text` set to one short line (and `replaces` naming an old note to correct one). Set `everyone` when every helper should know it ' +
       '(family, diet, units, where they live); leave it out for how they like your own work. Otherwise save nothing.';
     // A new job in a chat often answers the last thing said there ("OK, post it"): a new session carries that line.
-    const said = task.origin === 'person' && task.bot !== CHIEF && this.db.get("SELECT text FROM messages WHERE bot = ? AND author = 'bot' AND COALESCE(member, ?) = ? AND COALESCE(task_id, 0) != ? AND at > ? ORDER BY id DESC LIMIT 1",
-      task.bot, member.id, member.id, task.id, Date.now() - 2 * 86_400_000)?.text;
+    const said = task.origin === 'person' && task.bot !== CHIEF && this.db.get("SELECT text FROM messages WHERE bot = ? AND author = 'bot' AND COALESCE(task_id, 0) != ? AND at > ? ORDER BY id DESC LIMIT 1", task.bot, task.id, Date.now() - 2 * 86_400_000)?.text;
     const last = said ? `[Crewhouse] Your last message in this chat, which this may answer: “${short(said, 800)}”\n` : '';
-    if (task.bot !== CHIEF) return `${this.memory(task.bot)}${last}[Crewhouse task #${task.id} from ${routine ? `the routine “${routine}”, set up by ${this.called(member.id)}` : who}]\n${task.body}${quiet}${debrief}`;
+    if (task.bot !== CHIEF) return `${this.memory(task.bot)}${last}[Crewhouse task #${task.id} from ${routine ? `the routine “${routine}”, set up by ${this.called()}` : who}]\n${task.body}${quiet}${debrief}`;
     // The crew by name only: crew_roster already lists roles, busy state and recruitable templates on demand,
     // so the standing prompt need not carry them (and their staleness) on every turn.
     const crew = this.bots().filter((b) => b.id !== CHIEF)
       .map((b) => `${b.display} (id ${b.id})`).join('; ') || 'nobody yet';
-    const history = this.db.all("SELECT author, text FROM messages WHERE bot = ? AND member = ? AND id < (SELECT MIN(id) FROM messages WHERE task_id = ?) ORDER BY id DESC LIMIT 6", CHIEF, member.id, task.id)
+    const history = this.db.all("SELECT author, text FROM messages WHERE bot = ? AND id < (SELECT MIN(id) FROM messages WHERE task_id = ?) ORDER BY id DESC LIMIT 6", CHIEF, task.id)
       .reverse().map((m) => `${m.author === 'person' ? 'Person' : 'Chief'}: ${short(String(m.text).split('[tool ')[0], 300)}`).join('\n').slice(0, 1500);
     return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}.\n${history ? `Earlier in this chat:\n${history}\n` : ''}The person says: ${task.body}`;
   }
 
-  /** What this member's crew actually finished: titles and delivered files, for Chief's crew_status.
-   *  Only the task's own member's, never another member's. */
-  private finishedList(member: number) {
-    const rows = this.db.all("SELECT id, bot, title FROM tasks WHERE bot != ? AND member = ? AND state = 'done' AND updated_at >= ? AND COALESCE(result, '') != ? ORDER BY id DESC LIMIT 10",
-      CHIEF, member, Date.now() - 30 * 86_400_000, ALL_CLEAR_RESULT);
+  /** What the crew actually finished: titles and delivered files, for Chief's crew_status. */
+  private finishedList() {
+    const rows = this.db.all("SELECT id, bot, title FROM tasks WHERE bot != ? AND state = 'done' AND updated_at >= ? AND COALESCE(result, '') != ? ORDER BY id DESC LIMIT 10", CHIEF, Date.now() - 30 * 86_400_000, ALL_CLEAR_RESULT);
     return rows.map((t) => {
       const files = this.taskFiles(t.id);
       return {
@@ -1263,7 +1237,7 @@ export class Crew {
     const on = disk.botConfig(this.cfg, id).memory !== false;
     const about = on ? disk.readNotes(this.cfg, { bot: null }).trim() : '';
     const notes = on ? disk.readNotes(this.cfg, { bot: id }).trim() : '';
-    return `[Crewhouse] ${disk.addressLine(this.member(OWNER).address)}` +
+    return `[Crewhouse] ${disk.addressLine(this.person().address)}` +
       `${about ? `\nWhat the whole crew knows about the person:\n${about}` : ''}` +
       `${notes ? `\nYour notes (what you have learned about how they like your work):\n${notes}` : ''}\n\n`;
   }
@@ -1285,12 +1259,11 @@ export class Crew {
   /** Start (or continue) a task in its own engine session, on the person's accounts. */
   private async run(task: Row) {
     const bot = this.bot(task.bot)!;
-    const member = task.member ?? OWNER;
     try {
       const choices = this.choices(task);
       const brain = await this.usable(choices);
       if (!brain) return this.pause(task, choices);
-      if (task.origin === 'routine' && this.overShare(member)) return this.waitForTomorrow(task);
+      if (task.origin === 'routine' && this.overShare()) return this.waitForTomorrow(task);
       this.setTask(task, 'working');
       if (this.runtime.memoryLimited?.()) {
         const key = 'memory.limited.1';
@@ -1342,7 +1315,7 @@ export class Crew {
     const conf = disk.botConfig(this.cfg, bot.id);
     const g = resolveGrants(this.cfg, conf.tools ?? [], { 'bot.dir': space, 'bot.id': bot.id });
     const net = this.netOf(bot.id);
-    const l = { key: `agent:m1:crewhouse:${bot.id}:${task.id}`, task: task.id, member: 1, account: brain.provider, model: brain.model, grants: g.tools } as Live;
+    const l = { key: `agent:m1:crewhouse:${bot.id}:${task.id}`, task: task.id, account: brain.provider, model: brain.model, grants: g.tools } as Live;
     // The bot's shell: bubblewrap, where its space is the only writable part of the disk.
     if (g.tools.includes('files') && sandboxReady()) l.shell = bashTool(space, [this.cfg.toolsDir], { ...g.env, PATH: toolBin(this.cfg) }, net?.sock);
     // The person's connected apps (their Notion, their Google…): every helper working for them can use them, through the gate.
@@ -1428,7 +1401,7 @@ export class Crew {
     if (e.type === 'text') this.db.live('reply.partial', botId, { task: l.task, member: 1, text: cleanReply(e.text).slice(0, 280) });
     else if (e.type === 'usage' && e.tokens) {
       this.db.run('UPDATE tasks SET tokens = tokens + ? WHERE id = ?', Math.round(e.tokens), l.task);
-      this.db.run('INSERT INTO usage (member, day, tokens) VALUES (?, ?, ?) ON CONFLICT(member, day) DO UPDATE SET tokens = tokens + excluded.tokens', l.member, dayOf(), Math.round(e.tokens));
+      this.db.run('INSERT INTO usage (member, day, tokens) VALUES (1, ?, ?) ON CONFLICT(member, day) DO UPDATE SET tokens = tokens + excluded.tokens', dayOf(), Math.round(e.tokens));
       const t = this.db.get('SELECT * FROM tasks WHERE id = ?', l.task);
       if (t && t.state === 'working' && t.tokens >= taskTokenCap()) { this.close(botId); this.setTask(t, 'failed', 'This one was getting long, so I stopped it before it used more of your AI.'); }
     }
@@ -1528,7 +1501,7 @@ export class Crew {
     if (!waiting.length) return;
     this.db.tx(() => {
       for (const t of waiting) this.setTask(t, 'queued');
-      if (words) this.say(CHIEF, 'bot', words, null, OWNER);
+      if (words) this.say(CHIEF, 'bot', words, null);
     });
     this.dispatch();
   }
@@ -1581,7 +1554,7 @@ export class Crew {
       if (unchecked || (said ? !said.worked : task.acted)) {
         this.setTask(task, 'unsure', unchecked ? `I suggested a change (${unchecked}) for the maintainer to review, but it wasn't seen to fail before it and pass after it. Check it before you use it.`
           : said?.seen || `I did something on ${task.acted}, but I didn't see it confirmed. Worth checking there yourself.`);
-        if (task.origin === CHIEF && !this.teamJob(task)) this.say(CHIEF, 'bot', `${b.display} isn't sure “${short(task.title, 60)}” worked. It's in ${b.display}'s chat.`, null, task.member ?? OWNER);
+        if (task.origin === CHIEF && !this.teamJob(task)) this.say(CHIEF, 'bot', `${b.display} isn't sure “${short(task.title, 60)}” worked. It's in ${b.display}'s chat.`, null);
         return;
       }
       this.setTask(task, 'done', clear ? ALL_CLEAR_RESULT : text || 'Done.');
@@ -1590,8 +1563,8 @@ export class Crew {
         const files = this.db.all("SELECT data FROM events WHERE kind = 'file.delivered' AND bot = ? AND json_extract(data, '$.task') = ? AND json_extract(data, '$.input') IS NULL AND json_extract(data, '$.path') NOT LIKE 'files/from-%'", botId, task.id);
         const note = files.map((e) => JSON.parse(e.data).note as string).find(Boolean) ?? '';
         // One clarifying question round-trips word for word, carrying its task so the answer finds it again.
-        if (!files.length && /\?\s*$/.test(text)) this.say(CHIEF, 'bot', `${b.display} asks: ${text}`, task.id, task.member ?? OWNER);
-        else this.say(CHIEF, 'bot', relayResult(text, note), files.length ? task.id : null, task.member ?? OWNER);
+        if (!files.length && /\?\s*$/.test(text)) this.say(CHIEF, 'bot', `${b.display} asks: ${text}`, task.id);
+        else this.say(CHIEF, 'bot', relayResult(text, note), files.length ? task.id : null);
       }
     });
     if (task && !parked && !this.held.has(botId)) this.close(botId);
@@ -1714,7 +1687,7 @@ export class Crew {
       bot: this.bot(botId)!.display, space: disk.botDir(this.cfg, botId), page: this.live.get(botId)?.page, signedIn: conf.signedIn ?? [], apps: this.live.get(botId)?.apps,
       filledHost: this.live.get(botId)?.fills?.length ? this.hostOf(this.live.get(botId)?.page) : undefined,
       run: Object.fromEntries(registry(this.cfg).filter((t) => t.run && granted.has(t.id)).map((t) => [t.id.replace(/-/g, '_'), { name: t.name, ...t.run! }])),
-      // Sign-ins and keys: every member's, the engine's, and other programs'. Nothing reads them through a bot.
+      // Sign-ins and keys: the person's, former people's, the engine's, and other programs'. Nothing reads them through a bot.
       secret: [this.cfg.stateDir, this.cfg.toolsDir, ...['.pi', '.ssh', '.gnupg', '.aws', '.config/gh', '.treg', '.codex', '.claude', '.claude.json'].map((d) => join(homedir(), d))],
     };
   }
@@ -1853,13 +1826,11 @@ export class Crew {
 
   private async ask(botId: string, task: Row | undefined, e: Extract<Effect, { words: string }>, checkout?: { page: string; total: number | null }): Promise<string | null> {
     // The same call asked again (the bot resumed after a restart) takes over the card already shown.
-    // Scoped to the asking member, like the card itself: one member's parked card never answers another's wait.
-    const who = task?.member ?? this.bot(botId)?.member ?? OWNER;
-    const same = this.db.all("SELECT id FROM asks WHERE bot = ? AND kind = 'permission' AND state = 'open' AND title = ? AND COALESCE(member, ?) = ?", botId, e.words, OWNER, who).find((a) => !this.holds.has(a.id));
+    const same = this.db.all("SELECT id FROM asks WHERE bot = ? AND kind = 'permission' AND state = 'open' AND title = ?", botId, e.words).find((a) => !this.holds.has(a.id));
     const askId = same ? same.id : this.openAsk(botId, task, e.words, { effect: e.kind, key: e.key, ...(e.cost !== undefined ? { cost: e.cost } : {}), ...(e.preview ? { preview: e.preview } : {}), ...(checkout ? { checkout } : {}), ...(e.press ? { press: true } : {}), ...(e.fill ? { fill: true } : {}) });
     if (same && task) this.setTask(task, 'needs_you');
     // In their quiet hours nobody will answer soon: park at once instead of holding the bot.
-    const quiet = quietNow(this.member(task?.member ?? this.bot(botId)?.member ?? OWNER).quiet);
+    const quiet = quietNow(this.person().quiet);
     const answer = await new Promise<string | null>((resolve) => {
       const t = setTimeout(() => { this.holds.delete(askId); resolve(null); }, quiet ? 0 : HOLD_MS);
       this.holds.set(askId, (a) => { clearTimeout(t); resolve(a); });
@@ -1869,10 +1840,9 @@ export class Crew {
     return answer;
   }
 
-  private openAsk(bot: string, task: Row | undefined, title: string, detail: Row, kind = 'permission', to?: number) {
+  private openAsk(bot: string, task: Row | undefined, title: string, detail: Row, kind = 'permission') {
     return this.db.tx(() => {
-      const member = to ?? task?.member ?? this.bot(bot)?.member ?? OWNER;
-      const r = this.db.run('INSERT INTO asks (bot, task_id, kind, title, detail, at, member) VALUES (?, ?, ?, ?, ?, ?, ?)', bot, task?.id ?? null, kind, title, JSON.stringify(detail), Date.now(), member);
+      const r = this.db.run('INSERT INTO asks (bot, task_id, kind, title, detail, at) VALUES (?, ?, ?, ?, ?, ?)', bot, task?.id ?? null, kind, title, JSON.stringify(detail), Date.now());
       if (task) this.setTask(task, 'needs_you');
       this.db.event('ask.opened', bot, { ask: Number(r.lastInsertRowid), task: task?.id, title, effect: detail.effect });
       return Number(r.lastInsertRowid);
@@ -1882,17 +1852,16 @@ export class Crew {
   private defer(ask: Row) { // "Not now, remind me tomorrow": a one-shot routine, fired once by schedule(), then gone
     const next = new Date(); next.setDate(next.getDate() + 1); next.setHours(9, 0, 0, 0);
     const name = short(String(ask.title ?? 'a deferred question'), 60);
-    const id = this.db.run("INSERT INTO routines (bot, name, schedule, body, kind, member, next_at, created_at) VALUES (?, ?, '', ?, 'once', ?, ?, ?)", ask.bot, name, `The person said not now and asked to be reminded: "${name}". Raise it with them again now.`, ask.member ?? OWNER, next.getTime(), Date.now()).lastInsertRowid;
+    const id = this.db.run("INSERT INTO routines (bot, name, schedule, body, kind, next_at, created_at) VALUES (?, ?, '', ?, 'once', ?, ?)", ask.bot, name, `The person said not now and asked to be reminded: "${name}". Raise it with them again now.`, next.getTime(), Date.now()).lastInsertRowid;
     this.db.event('routine.created', ask.bot, { routine: Number(id), name, words: 'Reminds you tomorrow' });
   }
 
   /** Allow once, for this task, or always for the bot; or not now — with a reminder tomorrow when asked. Spending is never more than once. */
-  async answer(askId: number, body: { answer?: string; scope?: string; schedule?: string; change?: string; text?: string; remind?: boolean }, viewer = OWNER, key?: string) {
+  async answer(askId: number, body: { answer?: string; scope?: string; schedule?: string; change?: string; text?: string; remind?: boolean }, key?: string) {
     const ask = this.db.get("SELECT * FROM asks WHERE id = ? AND state = 'open'", askId);
     // A replayed phone answer lands here when the first one acted but its reply never shipped: already settled, same key.
     if (!ask && key && this.db.get('SELECT 1 FROM settings WHERE key = ?', `link.key.${key}`)) return;
     if (!ask) throw fail('that question is already settled', 409);
-    if ((ask.member ?? OWNER) !== viewer) throw fail('that question is someone else’s', 403);
     const detail = JSON.parse(ask.detail || '{}');
     if (!['allow', 'deny'].includes(body.answer ?? '')) throw fail('answer allow or deny');
     const scope = body.answer === 'allow' ? body.scope ?? 'once' : 'once';
@@ -1913,7 +1882,7 @@ export class Crew {
         detail.draft = { ...detail.draft, sha: sha(text), edited: true };
       }
     }
-    if (ask.kind === 'propose' && body.answer === 'allow') this.adopt(ask.bot, detail, ask.member ?? OWNER);
+    if (ask.kind === 'propose' && body.answer === 'allow') this.adopt(ask.bot, detail);
     if (ask.kind === 'propose' && body.answer === 'deny' && detail.draft) this.db.event('draft.rejected', ask.bot, { ...detail.draft, task: detail.task });
     const change = ask.kind === 'propose' && detail.plan && body.answer === 'deny' ? String(body.change ?? '').trim().slice(0, 2000) : '';
     const shown = change ? 'change it' : body.answer === 'deny' ? 'not now' : scope === 'task' ? 'allowed for this task' : scope === 'always' ? `always allowed for ${who}` : 'allowed once';
@@ -1937,8 +1906,8 @@ export class Crew {
     });
     if (held) { held(body.answer!); this.holds.delete(askId); return; }
     // Change it: the person's own words go back to Chief with the plan they are about, for a new card.
-    if (change) this.requestChief(`[Crewhouse] ${this.called(ask.member ?? OWNER)} wants a change to your plan for ${detail.plan.bot}: ${detail.plan.text}\nSteps:\n` +
-      `${detail.plan.steps.map((x: string, i: number) => `${i + 1}. ${x}`).join('\n')}\nThey say: ${change}\nOffer the changed plan with crew_assign and steps.`, ask.member ?? OWNER, change);
+    if (change) this.requestChief(`[Crewhouse] ${this.called()} wants a change to your plan for ${detail.plan.bot}: ${detail.plan.text}\nSteps:\n` +
+      `${detail.plan.steps.map((x: string, i: number) => `${i + 1}. ${x}`).join('\n')}\nThey say: ${change}\nOffer the changed plan with crew_assign and steps.`, change);
     if (ask.kind === 'propose') return;
     if (ask.kind === 'connect' && task && body.answer === 'allow' && this.live.get(ask.bot)?.task === task.id) {
       // Connected: the app's tools arrive with a fresh session, so the task picks up in its own conversation with them.
@@ -1952,25 +1921,24 @@ export class Crew {
     if (body.answer === 'allow') this.granted.add(`${ask.bot}\n${ask.title}`);
     const l = this.live.get(ask.bot);
     if (!task || !l || l.task !== task.id) return; // not running now (after a restart): it asks again when it resumes, and goes through
-    this.turn(ask.bot, l, `[Crewhouse] ${this.called(task.member ?? OWNER).replace(/^the/, 'The')} has answered your request ("${ask.title}"): ` +
+    this.turn(ask.bot, l, `[Crewhouse] ${this.called().replace(/^the/, 'The')} has answered your request ("${ask.title}"): ` +
       (body.answer === 'allow' ? 'allowed. Go ahead and continue the task.' : 'not now. Continue without it, or explain what you need.'));
   }
 
-  /** "Chief, call me Umer": for Chief's current member unless another is named. */
-  setAddress(address: string, member = this.chiefFor()) {
+  /** "Chief, call me Umer": for the person. */
+  setAddress(address: string) {
     const a = needText(address, 40, 'say how to address them');
-    this.db.run('UPDATE people SET address = ?, onboarded = 1 WHERE id = ?', a, member);
+    this.db.run('UPDATE people SET address = ?, onboarded = 1 WHERE id = 1', a);
     this.db.event('person.onboarded', null, { address: a });
   }
 
-  /** The person adds a word while the bot works: it reads it after its current step, without starting over. Only that job's own member may steer it. */
-  steer(botId: string, text: string, member = OWNER) {
+  /** The person adds a word while the bot works: it reads it after its current step, without starting over.  */
+  steer(botId: string, text: string) {
     const l = this.live.get(botId);
     if (!text.trim()) throw fail('empty message');
     if (!l || !this.busy.has(botId)) throw fail(`${this.bot(botId)?.display ?? 'That bot'} isn't working on anything right now; send it as a message`, 409);
-    if ((l.member ?? OWNER) !== member) throw fail('that job is someone else’s', 403);
     void this.runtime.steer(l.key, text.trim()).catch(() => {});
-    this.say(botId, 'person', text.trim(), l.task, member);
+    this.say(botId, 'person', text.trim(), l.task);
     this.db.event('run.typed', botId, { task: l.task });
   }
 
@@ -2063,7 +2031,7 @@ export class Crew {
         'you only when it changed, so a quiet day costs the person no AI — prefer it. `quiet`: you look each time but speak only when something ' +
         'changed; use it when the page draws what matters with JavaScript, so only your own browser can read it. Say in `task` what you are looking for.',
         { when: Type.Optional(Type.String()), on: Type.Optional(Type.String()), task: Type.String(), name: Type.Optional(Type.String()), quiet: Type.Optional(Type.Boolean()), watch: Type.Optional(Type.String()) },
-        (p) => this.offerRoutine({ bot: botId, schedule: p.when, on: p.on, task: p.task, name: p.name, quiet: p.quiet, watch: p.watch }, this.activeTask(botId)?.member)));
+        (p) => this.offerRoutine({ bot: botId, schedule: p.when, on: p.on, task: p.task, name: p.name, quiet: p.quiet, watch: p.watch })));
       const others = this.bots().filter((b) => b.id !== CHIEF && b.id !== botId).map((b) => `${b.id} (${b.role})`).join('; ');
       if (!others) return own;
       return [...own, tool('crew_pass', `Hand the next step to another helper, for the same person: ${others}. Write what they should do and what "done" means. ` +
@@ -2093,8 +2061,8 @@ export class Crew {
         'The person sees a card with the cadence and first run; nothing runs until they start it.',
         { bot: Type.String(), when: Type.Optional(Type.String()), on: Type.Optional(Type.String()), task: Type.String(), name: Type.Optional(Type.String()), account: Type.Optional(Type.String()), quiet: Type.Optional(Type.Boolean()), watch: Type.Optional(Type.String()) },
         (p) => this.offerRoutine({ bot: p.bot, schedule: p.when, on: p.on, task: p.task, name: p.name, model: p.account, quiet: p.quiet, watch: p.watch })),
-      tool('crew_routines', 'The routines and when each runs next.', {}, () => this.routines(this.chiefFor()).map((x) => ({ id: x.id, bot: x.bot, name: x.name, when: x.words, on: x.on ?? '', state: x.state, next: x.next_at ? new Date(x.next_at).toString() : '' }))),
-      tool('crew_status', 'Open tasks, and what this person’s crew finished recently (titles and delivered files).', {}, () => ({ open: this.db.all("SELECT id, bot, title, state FROM tasks WHERE state IN ('queued','working','needs_you','paused') ORDER BY id"), finished: this.finishedList(this.chiefFor()) })),
+      tool('crew_routines', 'The routines and when each runs next.', {}, () => this.routines().map((x) => ({ id: x.id, bot: x.bot, name: x.name, when: x.words, on: x.on ?? '', state: x.state, next: x.next_at ? new Date(x.next_at).toString() : '' }))),
+      tool('crew_status', 'Open tasks, and what this person’s crew finished recently (titles and delivered files).', {}, () => ({ open: this.db.all("SELECT id, bot, title, state FROM tasks WHERE state IN ('queued','working','needs_you','paused') ORDER BY id"), finished: this.finishedList() })),
       tool('crew_suggest', 'Suggest a change to how a helper comes across (its personality), when the person asks for one. ' +
         '`text`: the whole new personality, a few short plain lines in the second person ("You are Reel. …"). The person sees it and says yes or no.',
         { bot: Type.String(), text: Type.String() }, (p) => {
@@ -2151,7 +2119,7 @@ export class Crew {
     });
   }
 
-  /** A helper hands the next step to another, for the same member. Three hand-offs from one request at most, so two
+  /** A helper hands the next step to another, for the person. Three hand-offs from one request at most, so two
    *  helpers can't pass a job back and forth for ever. Chief is not handed work: the person talks to him. */
   private pass(from: string, to: string, text: string, files: string[] = []) {
     const task = this.activeTask(from);
@@ -2163,7 +2131,7 @@ export class Crew {
     if (hops > 3) throw fail('this job has been handed on three times already; finish it yourself, or tell the person what is left');
     if (!Array.isArray(files) || files.length > 20 || files.some((f) => typeof f !== 'string')) throw fail('pass up to twenty files');
     const checked = this.handFiles(from, files);
-    const detail = { to, text: text.trim(), files: files.slice(), root: task.root ?? task.id, parent: task.id, member: task.member ?? OWNER, hops };
+    const detail = { to, text: text.trim(), files: files.slice(), root: task.root ?? task.id, parent: task.id, hops };
     if (disk.botConfig(this.cfg, from).handoff === 'ask') return this.propose(from,
       `${this.bot(from)!.display} wants to hand this to ${b.display}: ${short(text, 160)}${files.length ? `, with ${files.map((f) => basename(f)).join(', ')}` : ''}`,
       { pass: detail, preview: { head: `${this.bot(from)!.display} → ${b.display}`, body: text.trim() } });
@@ -2181,18 +2149,16 @@ export class Crew {
       if (!realpathSync(dirname(target)).startsWith(root + '/') || (existsSync(target) && !realpathSync(target).startsWith(root + '/'))) throw fail('receiver file is outside its files/');
       copyFileSync(files[i].full, target);
     }
-    const { task: id } = this.addTask(d.to, `${d.text}${paths.length ? `\n\nFiles handed over:\n${paths.join('\n')}` : ''}`, from, undefined, d.member,
-      undefined, d.text, [], { parent: d.parent, root: d.root, hops: d.hops });
+    const { task: id } = this.addTask(d.to, `${d.text}${paths.length ? `\n\nFiles handed over:\n${paths.join('\n')}` : ''}`, from, undefined, undefined, d.text, [], { parent: d.parent, root: d.root, hops: d.hops });
     for (const path of paths) this.db.event('file.delivered', d.to, { task: id, path, note: `from ${this.bot(from)!.display}`, input: true, size: statSync(join(disk.botDir(this.cfg, d.to), path)).size });
     return { passed: { to: this.bot(d.to)!.display, task: id }, note: `${this.bot(d.to)!.display} has it. The person can follow along in The crew.` };
   }
 
   /** A suggestion card: nothing changes until the person says yes, and the bot carries on meanwhile. */
-  private propose(botId: string, title: string, detail: Row, member?: number) {
+  private propose(botId: string, title: string, detail: Row) {
     const t = this.activeTask(botId);
-    const who = member ?? t?.member ?? this.bot(botId)?.member ?? OWNER;
-    if (!this.db.get("SELECT 1 FROM asks WHERE bot = ? AND kind = 'propose' AND state = 'open' AND title = ? AND member = ?", botId, title, who)) {
-      this.openAsk(botId, undefined, title, { ...detail, task: t?.id }, 'propose', who);
+    if (!this.db.get("SELECT 1 FROM asks WHERE bot = ? AND kind = 'propose' AND state = 'open' AND title = ?", botId, title)) {
+      this.openAsk(botId, undefined, title, { ...detail, task: t?.id }, 'propose');
     }
     return { asked: true, note: 'The person sees your suggestion on a card. Carry on; nothing changes unless they say yes.' };
   }
@@ -2215,7 +2181,7 @@ export class Crew {
   }
 
   /** The person said yes to a suggestion. */
-  private adopt(botId: string, d: Row, member: number) {
+  private adopt(botId: string, d: Row) {
     if (d.skill) {
       disk.saveSkill(this.cfg, botId, disk.draftSkill(this.cfg, botId, d.skill));
       this.db.event('skill.learned', botId, { name: disk.slug(d.skill.name), says: d.skill.says });
@@ -2226,31 +2192,31 @@ export class Crew {
     } else if (d.soul) {
       disk.writeSoul(this.cfg, d.soul.bot, d.soul.text, 'Personality changed, as Chief suggested');
       this.db.event('soul.changed', d.soul.bot, { by: CHIEF });
-    } else if (d.routine) this.addRoutine(d.routine, CHIEF, member);
-    else if (d.create) this.create(d.create, member);
+    } else if (d.routine) this.addRoutine(d.routine, CHIEF);
+    else if (d.create) this.create(d.create);
     else if (d.draft) this.db.event('draft.approved', botId, { ...d.draft, task: d.task });
     else if (d.plan) {
       if (!this.bot(d.plan.bot)) throw fail('that helper has left the crew', 409);
       const steps = d.plan.steps.map((x: string, i: number) => `${i + 1}. ${x}`).join('\n');
-      this.addTask(d.plan.bot, `${d.plan.text}\n\n[Crewhouse] The plan ${this.called(member)} said Go to:\n${steps}\nIt approves no send, purchase or change by itself: those still ask.`,
-        CHIEF, d.plan.model, member, undefined, d.plan.text, [], { parent: d.task, title: d.plan.title });
+      this.addTask(d.plan.bot, `${d.plan.text}\n\n[Crewhouse] The plan ${this.called()} said Go to:\n${steps}\nIt approves no send, purchase or change by itself: those still ask.`,
+        CHIEF, d.plan.model, undefined, d.plan.text, [], { parent: d.task, title: d.plan.title });
     }
   }
 
   /** A helper Chief made up, on the person's yes: the plain base template with the job and personality from the card,
    *  and the request that prompted it as its first task. It gets the base tools only: nothing that spends money. */
-  private create(c: { name: string; job: disk.Job; soul: string; first?: string }, member: number) {
+  private create(c: { name: string; job: disk.Job; soul: string; first?: string }) {
     const id = disk.slug(c.name);
     if (this.bot(id)) throw fail(`there is already a helper called ${c.name}`, 409);
     const tpl = disk.loadTemplate(this.cfg, 'helper');
     this.db.tx(() => {
-      this.addBot({ ...tpl, role: short(c.job.does.split(/\n|(?<=[.!?])\s/)[0].replace(/[.!?]$/, ''), 80) }, c.name, id, CHIEF, member);
+      this.addBot({ ...tpl, role: short(c.job.does.split(/\n|(?<=[.!?])\s/)[0].replace(/[.!?]$/, ''), 80) }, c.name, id, CHIEF);
       this.say(id, 'system', `${c.name} joined the crew.`);
     });
     disk.writeJob(this.cfg, id, c.job);
     disk.writeSoul(this.cfg, id, c.soul, 'Who it is, as Chief suggested and the person agreed');
-    this.say(CHIEF, 'bot', `${c.name} has joined the crew.${c.first ? ` I've handed ${c.name} your request; results will reach you in ${c.name}'s chat.` : ''}`, null, member);
-    if (c.first?.trim()) this.addTask(id, c.first.trim(), CHIEF, undefined, member);
+    this.say(CHIEF, 'bot', `${c.name} has joined the crew.${c.first ? ` I've handed ${c.name} your request; results will reach you in ${c.name}'s chat.` : ''}`, null);
+    if (c.first?.trim()) this.addTask(id, c.first.trim(), CHIEF, undefined);
   }
 
   /** A helper needs one of the person's apps: an in-chat Connect card, answered once it is connected (or Not now). */
@@ -2300,8 +2266,8 @@ export class Crew {
   /** Tasks with a batch running now: a batch item answers its own item only, never starts another batch. */
   private batching = new Set<number>();
 
-  /** crew_batch: one question fanned out over many items, each its own engine session on this member and task
-   *  (same gate, same subscription, same member boundary — never another member's). At most MAX_PARALLEL sessions
+  /** crew_batch: one question fanned out over many items, each its own engine session on this task
+   *  (same gate and subscription). At most MAX_PARALLEL sessions
    *  run at once; the model merges the returned answers into one crew_workbook. A resting account stops new waves
    *  early with plain words, exactly as a normal turn would rest it. */
   private async batch(botId: string, question: string, items: string[]) {
@@ -2365,16 +2331,16 @@ export class Crew {
     return { ok: true, path: rel, sheets: built.sheets };
   }
 
-  /** A raw file only opens for the member it was delivered to — the same check the previews use. */
-  fileFor(botId: string, path: string, viewer: number) {
+  /** A raw file only opens after delivery, the same check the previews use. */
+  fileFor(botId: string, path: string) {
     return !!this.db.get("SELECT 1 AS ok FROM events e JOIN tasks t ON t.id = json_extract(e.data, '$.task') " +
-      "WHERE e.bot = ? AND e.kind = 'file.delivered' AND json_extract(e.data, '$.path') = ? AND COALESCE(t.member, ?) = ?", botId, String(path ?? ''), viewer, viewer);
+      "WHERE e.bot = ? AND e.kind = 'file.delivered' AND json_extract(e.data, '$.path') = ?", botId, String(path ?? ''));
   }
 
-  /** The app's read-only preview of a workbook the bot delivered to this member: words and counts, never the file or its path. */
-  async workbookView(botId: string, path: string, viewer: number) {
+  /** The app's read-only preview of a workbook the bot delivered: words and counts, never the file or its path. */
+  async workbookView(botId: string, path: string) {
     const rel = String(path ?? '');
-    if (!this.fileFor(botId, rel, viewer)) throw Object.assign(new Error('that spreadsheet was not delivered to you'), { status: 403 });
+    if (!this.fileFor(botId, rel)) throw Object.assign(new Error('that spreadsheet was not delivered to you'), { status: 403 });
     const full = disk.insideBot(this.cfg, botId, rel);
     if (!/\.xlsx$/i.test(full) || !existsSync(full) || statSync(full).size > 20_000_000) throw Object.assign(new Error('no such spreadsheet'), { status: 404 });
     return readWorkbook(full);
@@ -2396,22 +2362,22 @@ export class Crew {
     return { ok: true, path: rel, sections };
   }
 
-  /** The app's read-only preview of a document the bot delivered to this member: plain parts for a .docx, the file's
-   *  own words for a delivered .md or .txt (for the shared safe renderer) — never a path, only to the member it went to. */
-  async documentView(botId: string, path: string, viewer: number) {
+  /** The app's read-only preview of a document the bot delivered: plain parts for a .docx, the file's
+   *  own words for a delivered .md or .txt (for the shared safe renderer) — never a path, only after delivery. */
+  async documentView(botId: string, path: string) {
     const rel = String(path ?? '');
-    if (!this.fileFor(botId, rel, viewer)) throw Object.assign(new Error('that document was not delivered to you'), { status: 403 });
+    if (!this.fileFor(botId, rel)) throw Object.assign(new Error('that document was not delivered to you'), { status: 403 });
     const full = disk.insideBot(this.cfg, botId, rel);
     if (!/\.(docx|md|txt)$/i.test(full) || !existsSync(full) || statSync(full).size > 20_000_000) throw Object.assign(new Error('no such document'), { status: 404 });
     // A delivered .md or .txt leaves as its own words (capped), read by the app's shared safe markdown renderer;
-    // a .docx leaves as plain parts. Either way crewd reads the file, only for the member it was delivered to.
+    // a .docx leaves as plain parts. Either way crewd reads the file, only after delivery.
     return /\.(md|txt)$/i.test(full) ? { text: readFileSync(full, 'utf8').slice(0, 100_000) } : readDocument(full);
   }
 
-  /** A delivered video, in base64 slices (a phone fetches it piece by piece over the link), only for the member it was delivered to. */
-  async videoSlice(botId: string, path: string, after: number, viewer: number) {
+  /** A delivered video, in base64 slices (a phone fetches it piece by piece over the link), only after delivery. */
+  async videoSlice(botId: string, path: string, after: number) {
     const rel = String(path ?? '');
-    if (!this.fileFor(botId, rel, viewer)) throw Object.assign(new Error('that video was not delivered to you'), { status: 403 });
+    if (!this.fileFor(botId, rel)) throw Object.assign(new Error('that video was not delivered to you'), { status: 403 });
     const full = disk.insideBot(this.cfg, botId, rel);
     if (!/\.(mp4|webm|mov)$/i.test(rel) || !existsSync(full) || !statSync(full).isFile()) throw Object.assign(new Error('no such video'), { status: 404 });
     const size = statSync(full).size;
@@ -2428,8 +2394,6 @@ export class Crew {
     const active = this.activeTask(botId);
     const task = active?.id;
     if (task && this.db.get(`SELECT 1 FROM events WHERE kind = 'file.delivered' AND bot = ? AND json_extract(data, '$.task') = ? AND json_extract(data, '$.path') = ?`, botId, task, rel)) return { ok: true, already: true };
-    const clash = this.db.get(`SELECT COALESCE(tm.member, ?) AS m, json_extract(e.data, '$.task') AS other FROM events e LEFT JOIN tasks tm ON tm.id = json_extract(e.data, '$.task') WHERE e.kind = 'file.delivered' AND e.bot = ? AND json_extract(e.data, '$.path') = ?`, OWNER, botId, rel);
-    if (clash && (clash.other ?? undefined) !== task && clash.m !== (active?.member ?? OWNER)) throw Object.assign(new Error(`${rel} was already delivered for someone else`), { status: 409 });
     this.db.event('file.delivered', botId, { task, path: rel, note: short(clean(note, 1000), 200), size: statSync(full).size });
     // A patch is only ever a suggested change for the maintainer to review, in crewd's own words, never the model's.
     this.say(botId, 'system', /\.(patch|diff)$/.test(rel) ? `Delivered ${rel}: Suggested change (for the maintainer to review)${this.db.get("SELECT 1 FROM events WHERE kind = 'verify.result' AND bot = ? AND json_extract(data, '$.passed') AND json_extract(data, '$.sha') = ?", botId, sha(readFileSync(full, 'utf8'))) ? ': passed its own check' : ''}` : `Delivered ${rel}${note ? `: ${note}` : ''}`, task ?? null);
@@ -2463,7 +2427,7 @@ export class Crew {
     this.dispatch();
   }
 
-  /** The computer slept from `from` to `to`: each member whose routines were missed hears which ones run now, once.
+  /** The computer slept from `from` to `to`: the person hears which missed routines run now, once.
    *  Call it before `schedule()`, which does the catching up. The morning digest speaks for itself. */
   slept(from: number, to: number) {
     this.db.tx(() => {
@@ -2471,11 +2435,11 @@ export class Crew {
       // Only those that really run now: one whose last run is still open is skipped, not caught up.
       const missed = this.db.all("SELECT * FROM routines WHERE state = 'on' AND kind != 'digest' AND next_at <= ? AND (last_task IS NULL OR last_task NOT IN " +
         "(SELECT id FROM tasks WHERE state IN ('queued', 'working', 'needs_you', 'paused'))) ORDER BY next_at", to);
-      for (const member of new Set(missed.map((r) => r.member as number))) {
-        const names = missed.filter((r) => r.member === member).map((r) => `“${r.name}”`);
+      if (missed.length) {
+        const names = missed.map((r) => `“${r.name}”`);
         const list = names.length < 2 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
         this.say(CHIEF, 'bot', `The crew was off from ${clock(from)} to ${clock(to)}, so jobs paused. ` +
-          `I'm running ${list} now, once, to catch up.`, null, member);
+          `I'm running ${list} now, once, to catch up.`, null);
       }
     });
     // Wake triggers: chores the person asked to start on waking, through the same fire path as a time.
@@ -2536,7 +2500,7 @@ export class Crew {
     });
     const l = this.live.get(botId);
     if (task && l) {
-      const who = this.called(task.member ?? OWNER).replace(/^the/, 'The');
+      const who = this.called().replace(/^the/, 'The');
       this.turn(botId, l, `[Crewhouse] ${who} took the controls of your screen and has given them back. ` +
         `${did ? `What they did: ${did}. ` : 'They left no note. '}Look at your screen again before you carry on with task #${task.id}.`);
     } else this.dispatch();

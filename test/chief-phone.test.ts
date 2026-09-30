@@ -19,8 +19,8 @@ test('Chief offers every phone phrasing to the person', async () => {
   crew.onboard('Owner');
   for (const phrase of phrases) {
     assert.equal(asksForPhone(phrase), true, phrase);
-    await crew.post('chief', phrase, undefined, 1);
-    const page = crew.botPage('chief', 1);
+    await crew.post('chief', phrase, undefined);
+    const page = crew.botPage('chief');
     assert.equal(page.phoneOffer.qr, offer.qr);
     assert.equal(page.phoneOffer.typed, offer.typed);
     assert.ok(page.phoneOffer.expires > Date.now());
@@ -30,7 +30,7 @@ test('Chief offers every phone phrasing to the person', async () => {
     assert.ok(!JSON.stringify(page.messages).includes(offer.qr), 'ticket is not in chat text');
   }
   assert.equal(minted, phrases.length);
-  const page = crew.botPage('chief', 1);
+  const page = crew.botPage('chief');
   const renewed = await crew.refreshPhone(page.phoneOffer.message);
   assert.equal(renewed.message, page.phoneOffer.message);
   assert.notEqual(renewed.token, page.phoneOffer.token);
@@ -51,7 +51,7 @@ test('a Chief hand-off in a helper chat carries its task title, for the collapse
   assert.match(l.detail!, /Done means/);
 });
 
-test('a delivered video comes over in slices for its member, and nobody else', async () => {
+test('a delivered video comes over in slices, and undelivered files stay closed', async () => {
   const { crew, db, cfg } = setup();
   crew.onboard('Owner');
   crew.recruit('reel', 'Reel', 'system');
@@ -60,15 +60,14 @@ test('a delivered video comes over in slices for its member, and nobody else', a
   mkdirSync(join(botDir(cfg, 'reel'), 'files'), { recursive: true });
   writeFileSync(join(botDir(cfg, 'reel'), 'files', 'demo.mp4'), Buffer.alloc(700_000, 7));
   db.event('file.delivered', 'reel', { task: r.task, path: 'files/demo.mp4', size: 700_000 });
-  const first = await crew.videoSlice('reel', 'files/demo.mp4', 0, 1);
+  const first = await crew.videoSlice('reel', 'files/demo.mp4', 0);
   assert.equal(first.size, 700_000);
   assert.equal(Buffer.from(first.data, 'base64').length, 600_000, 'one link frame\'s worth at a time');
   assert.equal(first.more, true);
-  const last = await crew.videoSlice('reel', 'files/demo.mp4', 600_000, 1);
+  const last = await crew.videoSlice('reel', 'files/demo.mp4', 600_000);
   assert.equal(last.more, false);
   assert.equal(Buffer.from(last.data, 'base64').length, 100_000);
-  await assert.rejects(crew.videoSlice('reel', 'files/demo.mp4', 0, 2), /delivered to you/);
-  await assert.rejects(crew.videoSlice('reel', 'files/notes.txt', 0, 1), /delivered to you/, 'only what was delivered, whatever it is');
+  await assert.rejects(crew.videoSlice('reel', 'files/notes.txt', 0), /delivered to you/, 'only what was delivered, whatever it is');
 });
 
 test('Chief offers actions rather than directions for sign-in, apps and routines', async () => {

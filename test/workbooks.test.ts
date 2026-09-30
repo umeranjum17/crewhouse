@@ -142,7 +142,7 @@ test('the preview JSON: every sheet, its headings and its first rows, as words a
   assert.deepEqual(JSON.parse(JSON.stringify(json)), json, 'plain JSON: no dates, no library objects');
 });
 
-test('a helper makes one in its own chat: the file lands in files/, is delivered, and only its member may read it', async () => {
+test('a helper makes one in its own chat: the file lands in files/, is delivered, and only delivered files open', async () => {
   const { cfg, db, crew } = setup();
   crew.onboard('sir');
   crew.recruit('scribe', 'Quill', 'person');
@@ -159,26 +159,24 @@ test('a helper makes one in its own chat: the file lands in files/, is delivered
   assert.match(delivered[0].note, /^3 sheets: Daily dashboard, Booking and check-in, Rooms and housekeeping$/, 'the card line says what is in it');
   assert.ok((db.get("SELECT text FROM messages WHERE bot = 'quill' AND author = 'system' AND text LIKE 'Delivered%'") as any).text.startsWith(`Delivered ${rel}: 3 sheets:`));
 
-  const view = await crew.workbookView('quill', rel, 1);
+  const view = await crew.workbookView('quill', rel);
   assert.deepEqual((view as any).sheets.map((s: any) => s.name), ['Daily dashboard', 'Booking and check-in', 'Rooms and housekeeping']);
-  await assert.rejects(() => crew.workbookView('quill', rel, 2), /not delivered to you/, 'another member screen never sees it');
-  await assert.rejects(() => crew.workbookView('quill', 'work/notes.md', 1), /not delivered to you/, 'a path nobody delivered is no window into the folder');
+  await assert.rejects(() => crew.workbookView('quill', 'work/notes.md'), /not delivered to you/, 'a path nobody delivered is no window into the folder');
 
   // A delivered file that is not a workbook is not read as one.
   writeFileSync(join(disk.botDir(cfg, 'quill'), 'files', 'notes.txt'), 'a note instead');
   const other = (await crew.post('quill', `and a note ${call('crew_deliver', { path: 'files/notes.txt' })}`))!.task;
   await settled(db, other);
-  await assert.rejects(() => crew.workbookView('quill', 'files/notes.txt', 1), /no such spreadsheet/, 'only a spreadsheet is read as one');
+  await assert.rejects(() => crew.workbookView('quill', 'files/notes.txt'), /no such spreadsheet/, 'only a spreadsheet is read as one');
 });
 
-test('two members ask for the same title: each task gets its own file, and neither preview opens the other', async () => {
+test('repeated requests for the same title get separate delivered files that both open', async () => {
   const { db, crew } = setup();
   crew.onboard('sir');
   crew.recruit('scribe', 'Quill', 'person');
-  const sam = crew.addMember('Sam').id as number;
   const mine = (await crew.post('quill', `a reception sheet ${call('crew_workbook', spec)}`))!.task;
   await settled(db, mine);
-  const theirs = (await crew.post('quill', `a reception sheet ${call('crew_workbook', spec)}`, undefined, sam))!.task;
+  const theirs = (await crew.post('quill', `a reception sheet ${call('crew_workbook', spec)}`, undefined))!.task;
   await settled(db, theirs);
   assert.equal(task(db, mine).state, 'done');
   assert.equal(task(db, theirs).state, 'done');
@@ -186,8 +184,8 @@ test('two members ask for the same title: each task gets its own file, and neith
   assert.equal(new Set(paths).size, 2, 'one file per task, no overwrite');
   assert.ok(paths.every((p: string) => new RegExp(`-t(${mine}|${theirs})\\.xlsx$`).test(p)));
   const [a, b] = paths;
-  await assert.rejects(() => crew.workbookView('quill', b, 1), /not delivered to you/);
-  await assert.rejects(() => crew.workbookView('quill', a, sam), /not delivered to you/);
+  assert.ok(await crew.workbookView('quill', b));
+  assert.ok(await crew.workbookView('quill', a));
 });
 
 test('the make-spreadsheet skill carries the question, the spec shape and a buildable reception outline', async () => {
@@ -216,19 +214,4 @@ test('the make-spreadsheet skill carries the question, the spec shape and a buil
   assert.deepEqual(built.sheets, outline.sheets.map((s: any) => s.name));
   const view = await readWorkbook(file);
   assert.deepEqual(view.sheets[1].rows[1], ['Amina Khan', '204', '2026-10-01', 'Checked in']);
-});
-
-test('a file delivered for one member cannot be taken by another member’s task', async () => {
-  const { cfg, db, crew } = setup();
-  crew.onboard('sir');
-  crew.recruit('scribe', 'Quill', 'person');
-  const sam = crew.addMember('Sam').id as number;
-  writeFileSync(join(disk.botDir(cfg, 'quill'), 'files', 'shared.txt'), 'mine');
-  const mine = (await crew.post('quill', `take it ${call('crew_deliver', { path: 'files/shared.txt' })}`))!.task;
-  await settled(db, mine);
-  const theirs = (await crew.post('quill', `take it ${call('crew_deliver', { path: 'files/shared.txt' })}`, undefined, sam))!.task;
-  await settled(db, theirs);
-  const delivered = db.all("SELECT data FROM events WHERE kind = 'file.delivered' AND json_extract(data, '$.path') = 'files/shared.txt'")
-    .map((e: any) => JSON.parse(e.data).task);
-  assert.deepEqual(delivered, [mine], 'the second task is refused, never an overwrite');
 });

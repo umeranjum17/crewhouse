@@ -141,7 +141,7 @@ test('a Chief reply streams partial words before its durable message', async () 
   } finally { ws.close(); }
 });
 
-test('household asks reach Chief words before the model, including ambiguous asks', async () => {
+test('personal requests reach Chief words before the model, including ambiguous asks', async () => {
   await ready();
   if (!(await api('GET', '/api/state')).body.person.onboarded) await say('chief', 'Alex');
   const events: any[] = [];
@@ -478,7 +478,7 @@ test('suggestions: a helper keeps a skill, and Chief changes a personality, only
   assert.equal((await api('GET', '/api/bots/reel')).body.soul, '# Reel\n\nYou are Reel. Brief and cheerful.\n');
 });
 
-test('room API: a message starts and rejoins the member’s room job', async () => {
+test('room API: a message starts and rejoins the person’s room job', async () => {
   await ready();
   const first = (await api('POST', '/api/bots/reel/messages', { text: 'A room job', room: true })).body.task;
   await done('reel', first);
@@ -574,16 +574,15 @@ test('one chat end to end on the stub: excel request, one question, bookings, th
   assert.equal(task(db, second).bot, 'scribe');
   await release(crew, 'scribe', 'The reception workbook is ready.');
   await settled(db, second);
-  const page = await crew.botPage('chief', OWNER);
+  const page = await crew.botPage('chief');
   const card = page.messages.find((m: any) => m.task_id === second)?.files.find((f: any) => f.path.endsWith('.xlsx'));
   assert.ok(card, "the finished spreadsheet's card is in Chief's thread");
 
   // The preview behind the card carries row numbers and cell roles, in plain words.
-  const view = await crew.workbookView('scribe', card.path, OWNER) as any;
+  const view = await crew.workbookView('scribe', card.path) as any;
   assert.deepEqual(view.sheets.map((s: any) => s.name), ['Bookings']);
   assert.ok(view.sheets[0].roles.flat().includes('head'), 'header cells read as headers');
   assert.ok(view.sheets[0].roles.flat().includes('in'), 'dropdown cells read as inputs');
   assert.equal(view.sheets[0].nums.length, view.sheets[0].rows.length, 'every row has a number');
-  await assert.rejects(() => crew.workbookView('scribe', card.path, OWNER + 1), /not delivered to you/, 'another member never sees it');
   done();
 });
