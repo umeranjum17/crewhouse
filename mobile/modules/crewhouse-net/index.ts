@@ -1,4 +1,4 @@
-// This phone's own IPv4 addresses (Android; elsewhere none, so the offline words stay general).
+// Migration debt (G06): reach has no nativeAddresses() API. This phone's own IPv4 addresses (Android; elsewhere none, so the offline words stay general).
 import { requireOptionalNativeModule } from 'expo';
 
 const net = requireOptionalNativeModule<{ addresses(): Promise<string[]> }>('CrewhouseNet');

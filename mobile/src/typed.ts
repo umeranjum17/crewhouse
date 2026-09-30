@@ -1,4 +1,4 @@
-// The one code box: what a typed code is. A direct code is the long letter envelope (src/typed-code.ts); a relay
+// The one code box: what a typed code is. A direct code is the long letter envelope (@byokit/link); a relay
 // code carries its relay inside itself — SHORT-CODE@relay — so the person types one thing and nothing else.
 export type Typed =
   | { kind: 'direct'; text: string }

@@ -146,6 +146,9 @@ test('Tailscale in three plain states, from its own status: signed in, signed ou
   assert.equal(await tailscaleState(false, running), 'home', 'running but no address bound yet');
   assert.equal(await tailscaleState(true, cli('ts-out', { BackendState: 'NeedsLogin', Self: {} })), 'signin');
   assert.equal(await tailscaleState(true, cli('ts-expired', { BackendState: 'Running', Self: { KeyExpiry: '2020-01-01T00:00:00Z' } })), 'signin', 'its key ran out');
+  assert.equal(await tailscaleState(true, cli('ts-auth', { BackendState: 'NeedsMachineAuth' })), 'signin', 'machine approval keeps the existing words');
+  assert.equal(await tailscaleState(false, cli('ts-stopped', { BackendState: 'Stopped', Self: { KeyExpiry: '2020-01-01T00:00:00Z' } })), 'home', 'a stopped backend keeps the existing words');
+  assert.equal(await tailscaleState(true, cli('ts-invalid-expiry', { BackendState: 'Running', Self: { KeyExpiry: 'unknown' } })), 'anywhere', 'unknown expiry does not invent a sign-out');
   assert.equal(await tailscaleState(false, join(root, 'no-such-tailscale')), 'home', 'not installed');
   assert.equal(await tailscaleState(true, cli('ts-broken', null)), 'anywhere', 'not answering: the bound address decides');
 

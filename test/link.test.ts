@@ -11,7 +11,7 @@ import { temp } from './tmp.ts';
 import { DeviceLink, pairWithOffer, type DeviceGrant, type LinkStatus, encodeOffer, offerText, parseOffer } from '@byokit/link';
 import { Link, NEWS, linkHosts, phoneAddresses, tailscalePeer } from '../src/link.ts';
 import { Store } from '../src/db.ts';
-import { decodeTyped, encodeTyped } from '../src/typed-code.ts';
+import { decodeOffer as decodeTyped, encodeOffer as encodeTyped } from '@byokit/link';
 import { b64url } from '@byokit/link';
 
 test('typed envelope carries addresses, port, key and one-use secret; errors are plain', () => {
@@ -45,6 +45,10 @@ test('the link binds loopback and Tailscale by default; the home network only wh
   assert.deepEqual(phoneAddresses(['127.0.0.1'], ifaces), ['127.0.0.1']);
   assert.deepEqual(phoneAddresses(['0.0.0.0'], ifaces), ['192.168.1.20', '100.101.2.3'], 'home network first; container bridges skipped');
   assert.deepEqual(linkHosts('', false, { lo: at('127.0.0.1', true), eth0: at('192.168.1.20') }), ['127.0.0.1'], 'no Tailscale: loopback only');
+  const unnamed = { en0: at('192.168.1.20'), utun3: at('100.101.2.3'), wt0: at('100.90.1.2') };
+  assert.deepEqual(linkHosts('', false, unnamed, ['100.101.2.3']), ['127.0.0.1', '100.101.2.3'], 'CLI evidence identifies unnamed Tailscale; another overlay stays closed');
+  assert.deepEqual(linkHosts('', false, unnamed), ['127.0.0.1'], 'CGNAT alone is not Tailscale evidence');
+  assert.deepEqual(phoneAddresses(['0.0.0.0'], unnamed, ['100.101.2.3']), ['192.168.1.20', '100.101.2.3']);
 });
 
 test('paired phone dispatch preserves its member for the shared page API', async () => {
@@ -134,6 +138,8 @@ test('the computer tells a phone whether its Tailscale has that phone as a peer'
   assert.equal(await tailscalePeer('100.90.1.1', ts), true, 'shared with this phone\'s account');
   assert.equal(await tailscalePeer('100.90.9.9', ts), false, 'not shared: the computer never sees it');
   assert.equal(await tailscalePeer('100.90.1.1', cli('broken', 'no')), undefined, 'no Tailscale here to ask');
+  assert.equal(await tailscalePeer('100.90.1.1', cli('absent', JSON.stringify({ Self: {} }))), undefined, 'missing peer map is unknown');
+  assert.equal(await tailscalePeer('100.90.1.1', cli('empty', JSON.stringify({ Self: {}, Peer: {} }))), false, 'an observed empty peer map means no');
 });
 
 test('a paired phone renews the Add-a-phone code it is looking at; the rest of phone admin stays on the computer', async () => {
@@ -215,7 +221,7 @@ test('pairing with a yes at the computer, grants, approvals from the phone, and 
   const grant = await pairPhone((await http('POST', '/api/phones/pair', { role: 'control' })).body.qr, 'Pixel');
   assert.equal(grant.device.role, 'control');
   const late = (await http('POST', '/api/phones/pair', { role: 'control' })).body.qr;
-  await sleep(3200);
+  await until(async () => Date.now() > parseOffer(late, 0).expires);
   await assert.rejects(pairWithOffer(late, { name: 'Late', onWords: () => {} }), /run out/, 'codes expire');
 
   // The grant is durable: the phone connects with its key alone, as the member whose screen showed the code.

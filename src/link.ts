@@ -2,15 +2,13 @@
 // opens itself. By default it listens on loopback and Tailscale only; the home network opens for the two minutes a
 // pairing code lasts, and stays open only when the owner turns it on. Crewhouse's part
 // is where it listens, who a phone acts as, what a phone may not do, and the person at the computer saying yes.
-import { execFile } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import { networkInterfaces } from 'node:os';
 import { join } from 'node:path';
 import { WebSocketServer } from 'ws';
-import { Host, keyPair, keyPairFrom, parseOffer, type Grant, type PairRequest, type Role } from '@byokit/link';
-import { encodeTyped } from './typed-code.ts';
-import { advertise, routes, tailscaleState as kitTailscaleState, isPeer, type Bonjour } from '@byokit/reach';
+import { Host, keyPair, keyPairFrom, parseOffer, encodeOffer, type Grant, type PairRequest, type Role } from '@byokit/link';
+import { advertise, routes, tailscaleState as kitTailscaleState, isPeer, type Bonjour, type TailscaleState } from '@byokit/reach';
 import { RelayClient, isExpoToken, linkUrl, type RelayStatus } from '@byokit/relay';
 import type { Config } from './config.ts';
 import type { Store } from './db.ts';
@@ -26,24 +24,20 @@ export const PAIR_MS = Number(process.env.CREWHOUSE_PAIR_MS || 120_000); // a pa
 export type Handler = (method: string, path: string, body: any, member: number, key?: string) => Promise<unknown>;
 type Ifaces = ReturnType<typeof networkInterfaces>;
 
-// Tailscale is recognised by its address range (100.64.0.0/10); tailscaled is asked only whether it needs signing in.
-const tailscale = (ip: string) => /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(ip);
-// reach excludes Tailscale interfaces from routes(); keep only the product's direct-tailnet selection here.
-const tailAddresses = (ifaces: Ifaces) => [...routes(ifaces).private.map((r) => r.address), ...Object.entries(ifaces)
-  .filter(([name]) => /^tailscale/i.test(name)).flatMap(([, list]) => list ?? [])
-  .filter((a) => a.family === 'IPv4' && !a.internal).map((a) => a.address)].filter(tailscale);
-
+// Migration debt (G05): reach has no directRoutes({listen:{loopback,tailnet,lan}}) for multiple listeners.
+// Keep the product's binding policy; the kit supplies all interface and tailnet classification.
 /** Where the link listens: loopback and Tailscale; every interface only when the owner opts in to the LAN. */
-export function linkHosts(pinned: string, lan: boolean, ifaces: Ifaces = networkInterfaces()): string[] {
+export function linkHosts(pinned: string, lan: boolean, ifaces: Ifaces = networkInterfaces(), tailnetIPs: readonly string[] = []): string[] {
   if (pinned) return pinned.split(',').map((h) => h.trim()).filter(Boolean);
-  return lan ? ['0.0.0.0'] : ['127.0.0.1', ...tailAddresses(ifaces)];
+  return lan ? ['0.0.0.0'] : ['127.0.0.1', ...routes(ifaces, tailnetIPs).tailscale];
 }
 
 /** Addresses a phone can dial for those hosts: home network first, then Tailscale. Loopback only when there is
  *  nothing else, which reaches an emulator or a phone forwarded over USB. */
-export function phoneAddresses(hosts: string[], ifaces: Ifaces = networkInterfaces()): string[] {
-  const ips = hosts.includes('0.0.0.0') ? [...routes(ifaces).lan, ...tailAddresses(ifaces)] : hosts.filter((h) => !/^127\.|^localhost$/.test(h));
-  const out = [...ips.filter((ip) => !tailscale(ip)), ...ips.filter(tailscale)];
+export function phoneAddresses(hosts: string[], ifaces: Ifaces = networkInterfaces(), tailnetIPs: readonly string[] = []): string[] {
+  const found = routes(ifaces, tailnetIPs);
+  const ips = hosts.includes('0.0.0.0') ? [...found.lan, ...found.tailscale] : hosts.filter((h) => !/^127\.|^localhost$/.test(h));
+  const out = [...ips.filter((ip) => !found.tailscale.includes(ip)), ...ips.filter((ip) => found.tailscale.includes(ip))];
   return out.length ? out : ['127.0.0.1'];
 }
 
@@ -52,21 +46,15 @@ export function phoneAddresses(hosts: string[], ifaces: Ifaces = networkInterfac
  *  address, never Serve or Funnel: the link does its own encryption, and a shared computer is reachable the same way. */
 export type Anywhere = 'home' | 'anywhere' | 'signin';
 export async function tailscaleState(bound: boolean, bin = 'tailscale'): Promise<Anywhere> {
-  const s = await kitTailscaleState({ bin, timeoutMs: 5000 });
-  // reach's snapshot omits KeyExpiry; preserve the product's expired-key words until it exposes it.
-  const raw = s.backendState === 'Running' ? await tsStatus(bin, false) : undefined;
-  const expired = raw?.Self?.KeyExpiry && Date.parse(raw.Self.KeyExpiry) < Date.now();
-  return s.needsSignin || s.backendState === 'NeedsMachineAuth' || expired ? 'signin' : bound ? 'anywhere' : 'home';
+  return anywhereOf(await kitTailscaleState({ bin, timeoutMs: 5000 }), bound);
 }
-const tsStatus = (bin: string, peers: boolean) => new Promise<any>((resolve) => execFile(bin, ['status', '--json', `--peers=${peers}`], { timeout: 5000 }, (_e, out) => {
-  try { resolve(JSON.parse(out)); } catch { resolve(null); }
-}));
+const anywhereOf = (s: TailscaleState, bound: boolean): Anywhere =>
+  s.needsSignin || s.backendState === 'NeedsMachineAuth' || (s.backendState === 'Running' && s.keyExpiry && Date.parse(s.keyExpiry) < Date.now()) ? 'signin' : bound ? 'anywhere' : 'home';
 
-/** Whether this computer's Tailscale has a phone's Tailscale address among its peers: a phone whose account the computer
- *  was never shared with is not one. Undefined when this computer's Tailscale can't say. */
+/** Peer membership is a discovery hint; undefined means Tailscale could not provide its peer map. */
 export async function tailscalePeer(ip: string, bin = 'tailscale'): Promise<boolean | undefined> {
-  const s = await tsStatus(bin, true);
-  return s?.Self ? isPeer(s, ip) : undefined;
+  const s = await kitTailscaleState({ bin, timeoutMs: 5000 });
+  return s.Peer ? isPeer(s, ip) : undefined;
 }
 
 /** The routes a phone reaches this computer by, as it reports them (`GET /api/reach {via}`). */
@@ -77,6 +65,7 @@ export const NEWS = 'Crewhouse has news';
 /** The relay's WebSocket origin, from the https/wss address Settings keeps. */
 const wsOrigin = (url: string) => url.replace(/^http/, 'ws');
 
+// Migration debt (G07): link lacks migrateGrant(raw, {format:'crewhouse-v0'}) for pre-kit base64 keys.
 const b64url = (s: string) => s.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); // phones paired before 0.1.0 were stored as base64
 const pushOf = (v?: string) => (v === 'missing' || v === 'off' ? v : v ? 'on' : undefined);
 const memberOf = (g: Grant) => (g.meta as { member?: number } | undefined)?.member ?? 1;
@@ -106,6 +95,7 @@ export class Link {
   ifaces: () => Ifaces = networkInterfaces;
   bonjour?: Bonjour;
   tailscaleBin = 'tailscale';
+  private tailnetIPs: string[] = [];
   /** Expo's push service: it holds the app's Android push credential, so crewd sends with no secret of its own. */
   pushUrl = process.env.CREWHOUSE_PUSH_URL || 'https://exp.host/--/api/v2/push/send';
   private anywhere: Anywhere = 'home';
@@ -209,12 +199,14 @@ export class Link {
   private reached(id: string): Record<string, number> { return JSON.parse(this.setting(`phone.reach.${id}`) ?? '{}'); }
 
   get lan() { return this.db.get("SELECT value FROM settings WHERE key = 'link.lan'")?.value === '1'; }
-  hosts() { return linkHosts(this.cfg.linkHost, this.lan || Date.now() < this.pairing, this.ifaces()); }
+  hosts() { return linkHosts(this.cfg.linkHost, this.lan || Date.now() < this.pairing, this.ifaces(), this.tailnetIPs); }
 
   /** Listen on exactly the addresses `hosts()` names now, then tell paired phones if where to dial changed.
    *  Rerun when the LAN setting changes, and every half minute for Tailscale coming up or the home address moving. */
   async bind() {
     if (!this.cfg.linkPort) return this.follow();
+    const state = await kitTailscaleState({ bin: this.tailscaleBin, timeoutMs: 5000 });
+    this.tailnetIPs = state.ips;
     const want = new Set(this.hosts());
     const before = [...this.servers.keys()].join(', ');
     for (const [host, s] of this.servers) if (!want.has(host)) { s.close(); this.servers.delete(host); }
@@ -231,7 +223,7 @@ export class Link {
     if (now !== before) console.log(`phone link (Noise-encrypted) on port ${this.cfg.linkPort}: ${now || 'nowhere'}${this.lan ? ' (home network on)' : ''}`);
     this.follow();
     await (this.announcing = this.announcing.then(() => this.announce()));
-    this.anywhere = await tailscaleState(tailAddresses(this.ifaces()).length > 0, this.tailscaleBin);
+    this.anywhere = anywhereOf(state, routes(this.ifaces(), this.tailnetIPs).tailscale.length > 0);
   }
 
   /** While the home network is open, say so over mDNS, so a paired phone finds this computer after the router gives it a
@@ -242,13 +234,13 @@ export class Link {
     this.advertised = url;
     await this.mdns?.stop().catch(() => {});
     this.mdns = undefined;
-    if (url) this.mdns = await advertise({ type: 'crewhouse', port: this.cfg.linkPort, txt: { id: this.host.id, url }, addresses: phoneAddresses([...this.servers.keys()], this.ifaces()), bonjour: this.bonjour })
+    if (url) this.mdns = await advertise({ type: 'crewhouse', port: this.cfg.linkPort, txt: { id: this.host.id, url }, addresses: phoneAddresses([...this.servers.keys()], this.ifaces(), this.tailnetIPs), bonjour: this.bonjour })
       .catch((e) => { console.error('phone link: mDNS:', e.message); return undefined; });
   }
 
   /** Every address a phone can dial now: the home network, Tailscale, then the family's relay. */
   urls() {
-    const direct = this.servers.size ? phoneAddresses([...this.servers.keys()], this.ifaces()).map((ip) => `ws://${ip}:${this.cfg.linkPort}/link`) : [];
+    const direct = this.servers.size ? phoneAddresses([...this.servers.keys()], this.ifaces(), this.tailnetIPs).map((ip) => `ws://${ip}:${this.cfg.linkPort}/link`) : [];
     return [...direct, ...(this.relayUrl() ? [this.relayUrl()] : [])];
   }
 
@@ -389,7 +381,7 @@ export class Link {
   status() {
     // `push: 'missing'`: this app build, or Expo, has no Android push credential yet (README, "Phone notifications").
     const missing = this.setting('push.refused') || this.host?.devices().some((g) => this.setting(`phone.push.${g.id}`) === 'missing');
-    return { on: this.cfg.linkPort > 0, lan: this.lan, pinned: !!this.cfg.linkHost, hosts: [...this.servers.keys()], tailscale: tailAddresses(this.ifaces()).length > 0, anywhere: this.anywhere,
+    return { on: this.cfg.linkPort > 0, lan: this.lan, pinned: !!this.cfg.linkHost, hosts: [...this.servers.keys()], tailscale: routes(this.ifaces(), this.tailnetIPs).tailscale.length > 0, anywhere: this.anywhere,
       relay: this.relay, relayStatus: this.relayStatus, push: missing ? 'missing' : 'ready',
       asking: [...this.asking.values()].map(({ id, name, words, role, member, offer }) => ({ id, name, words, role, member, offer })) };
   }
@@ -406,7 +398,7 @@ export class Link {
     const urls = this.urls();
     const { text, expires } = this.host.offer({ role, urls, meta: { member, offer } });
     const raw = parseOffer(text);
-    return { qr: text, typed: encodeTyped(raw), expires, urls };
+    return { qr: text, typed: encodeOffer(raw), expires, urls };
   }
 
   /** Codes to type instead of scanning, through the relay: its short code (which computer) and link's pairing code. */
@@ -442,7 +434,7 @@ export class Link {
     if (op === 'GET /api/reach') {
       const a = (body ?? {}) as { via?: unknown; ip?: unknown };
       if (ROUTES.includes(a.via as string)) this.put(`phone.reach.${g.id}`, JSON.stringify({ ...this.reached(g.id), [a.via as string]: Date.now() }));
-      const peer = typeof a.ip === 'string' && tailscale(a.ip) ? await tailscalePeer(a.ip, this.tailscaleBin) : undefined;
+      const peer = typeof a.ip === 'string' ? await tailscalePeer(a.ip, this.tailscaleBin) : undefined;
       return { status: 200, body: { urls: this.urls(), anywhere: this.anywhere, peer, reached: this.reached(g.id) } };
     }
     // Its push address: an Expo token (kept here; crewd sends through Expo), `{missing}` when this app build has no push
