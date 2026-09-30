@@ -138,7 +138,7 @@ export class Link {
       onError: (e) => console.error('phone link:', e),
     });
     this.wss.on('connection', (ws) => this.host.accept(ws as any));
-    this.db.onEvent((e) => this.host.broadcast(e, (g) => this.db.visibleEvent(e, memberOf(g))));
+    this.db.onEvent((e) => this.host.broadcast(e));
   }
 
   // Grants live in the devices table: one row per phone, with the member it acts as.
@@ -152,7 +152,7 @@ export class Link {
       this.db.run('DELETE FROM devices');
       for (const g of grants) this.db.run('INSERT INTO devices (id, name, pk, role, member, created_at, last_seen) VALUES (?, ?, ?, ?, ?, ?, ?)', g.id, g.name, g.key, g.role, memberOf(g), g.created, g.lastSeen ?? null);
       for (const g of grants) if (!before.has(g.id)) {
-        this.db.event('device.paired', null, { id: g.id, name: g.name, role: g.role, member: memberOf(g) });
+        this.db.event('device.paired', null, { id: g.id, name: g.name, role: g.role });
         const value = this.db.get("SELECT value FROM settings WHERE key = 'phone.offer.1'")?.value;
         if (value && (g.meta as any)?.offer) {
           const card = JSON.parse(value);

@@ -49,6 +49,7 @@ export class Store {
       ['bots', 'account INTEGER'], ['tasks', 'member INTEGER DEFAULT 1'], ['messages', 'member INTEGER'], ['asks', 'member INTEGER'], ['tasks', 'routine INTEGER'], ['tasks', 'session TEXT'], ['routines', 'quiet INTEGER DEFAULT 0'], ['people', 'share TEXT'], ['routines', 'watch TEXT'], ['routines', 'trigger TEXT'], ['routines', 'cursor TEXT'], ['tasks', 'hops INTEGER DEFAULT 0'], ['routines', 'down INTEGER DEFAULT 0'], ['tasks', 'photos TEXT'], ['tasks', 'acted TEXT'], ['tasks', 'outcome TEXT'], ['tasks', 'tokens INTEGER DEFAULT 0'], ['tasks', 'parent INTEGER'], ['tasks', 'root INTEGER'], ['tasks', 'room INTEGER DEFAULT 0'], ['tasks', 'reask INTEGER DEFAULT 0']]) {
       if (!this.all(`PRAGMA table_info(${table})`).some((c) => c.name === col.split(' ')[0])) this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${col}`);
     }
+    this.db.exec("UPDATE events SET data = '{}' WHERE kind IN ('system.engine','bot.models') AND data != '{}'");
   }
 
   all(sql: string, ...args: any[]): Row[] { return this.db.prepare(sql).all(...args) as Row[]; }
@@ -113,26 +114,13 @@ export class Store {
 
   onEvent(l: (e: Row) => void) { this.listeners.add(l); return () => this.listeners.delete(l); }
 
-  /** An event belongs to its task or ask first, then its explicit member. Unattributed events aren't private activity. */
-  private static readonly eventMember = `CASE
-    WHEN events.kind = 'system.recovered' THEN 1
-    WHEN json_type(events.data, '$.task') = 'integer' THEN (SELECT COALESCE(member, 1) FROM tasks WHERE id = json_extract(events.data, '$.task'))
-    WHEN json_type(events.data, '$.ask') = 'integer' THEN (SELECT COALESCE(member, 1) FROM asks WHERE id = json_extract(events.data, '$.ask'))
-    ELSE json_extract(events.data, '$.member') END`;
-
-  visibleEvent(e: Row, member: number): boolean {
-    if (!e.seq) return e.data?.member === member; // live stream events have no durable task row
-    return !!this.get(`SELECT 1 FROM events WHERE seq = ? AND (${Store.eventMember}) = ?`, e.seq, member);
+  eventsForBot(bot: string, kinds: string[], limit = 300): Row[] {
+    return this.all(`SELECT * FROM events WHERE bot = ? AND kind IN (${kinds.map(() => '?').join(', ')}) ORDER BY seq DESC LIMIT ?`,
+      bot, ...kinds, limit).map((e) => ({ ...e, data: JSON.parse(e.data) }));
   }
 
-  eventsForBot(bot: string, kinds: string[], member: number, limit = 300): Row[] {
-    return this.all(`SELECT * FROM events WHERE bot = ? AND kind IN (${kinds.map(() => '?').join(', ')}) AND (${Store.eventMember}) = ? ORDER BY seq DESC LIMIT ?`,
-      bot, ...kinds, member, limit).map((e) => ({ ...e, data: JSON.parse(e.data) }));
-  }
-
-  events(after = 0, limit = 200, member?: number): Row[] {
-    return this.all(`SELECT * FROM events WHERE seq > ? ${member === undefined ? '' : `AND (${Store.eventMember}) = ?`} ORDER BY seq DESC LIMIT ?`,
-      ...(member === undefined ? [after, limit] : [after, member, limit]))
+  events(after = 0, limit = 200): Row[] {
+    return this.all('SELECT * FROM events WHERE seq > ? ORDER BY seq DESC LIMIT ?', after, limit)
       .map((e) => ({ ...e, data: JSON.parse(e.data) })).reverse();
   }
 

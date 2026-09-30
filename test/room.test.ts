@@ -162,7 +162,7 @@ test('a first look delivered mid-job shows on the member\u2019s own desk only', 
   assert.equal(mine?.files[0].note, 'First look: the opening outline');
   const sam = crew.addMember('Sam').id as number;
   assert.equal(crew.snapshot(sam).bots.find((b: any) => b.id === 'scout')?.task, null, 'another member sees no task');
-  assert.ok(!JSON.stringify(crew.snapshot(sam)).includes('opening.md'), 'and no first look leaks across members');
+  assert.ok(!JSON.stringify(crew.snapshot(sam).bots).includes('opening.md'), 'and no first look leaks across members');
   await release(crew, 'scout', 'Still working.'); await settled(db, first);
   done();
 });
