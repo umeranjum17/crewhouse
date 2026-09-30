@@ -1,4 +1,4 @@
-// Two small fixes to native modules, applied after install; each is idempotent. Drop one once its module ships the fix.
+// Small fixes to native modules, applied after install; each is idempotent. Drop one once its module ships the fix.
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 
 function patch(rel, done, edit) {
@@ -25,3 +25,8 @@ patch('expo-share-intent/android/src/main/java/expo/modules/shareintent/ExpoShar
   .replace('            } else {\n                // files / medias\n', '            } else try {\n                // files / medias\n')
   .replace('                    notifyError("Invalid action for file sharing: " + intent.action)\n                }\n            }\n',
     '                    notifyError("Invalid action for file sharing: " + intent.action)\n                }\n            } catch (e: Exception) {\n                notifyError("crewhouse: unreadable share")\n            }\n'));
+
+// ponytail: @bacons/apple-targets 5.0.0 takes over any widget target it finds when its own is not there yet, so on a
+// fresh prebuild it grabbed expo-widgets' Live Activity target and crashed. It only updates the one with its own name.
+patch('@bacons/apple-targets/build/with-xcode-changes.js', 'crewhouse: own target only', (s) => s
+  .replace('_a !== void 0 ? _a : targets[0];', '_a !== void 0 ? _a : undefined; // crewhouse: own target only'));

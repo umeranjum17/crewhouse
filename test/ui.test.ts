@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
-import { build } from 'esbuild';
+import { build, type Plugin } from 'esbuild';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { join } from 'node:path';
@@ -827,6 +827,68 @@ test('the bubble and the chip share one quick-action list: fill a box, never sen
   for (const a of q) assert.doesNotMatch(`${a.label}`, FORBIDDEN);
   // Every address is one the app reads (mobile/src/ask.ts), landing in that helper's box.
   for (const a of q.filter((x) => x.url.startsWith('crewhouse://ask'))) assert.ok(askOf(a.url, [{ id: 'scribe', template: 'scribe' }, { id: 'reel', template: 'reel' }]));
+});
+
+test('the iPhone\'s Live Activity: the chip\'s own status, counts only until unlocked, started by work and ended by quiet', async () => {
+  // Built for real from mobile/src/island.ios.tsx, with expo-widgets and @expo/ui swapped for a recorder.
+  const stubs: Plugin = { name: 'stubs', setup(b) {
+    b.onResolve({ filter: /^(@expo\/ui|expo-widgets)/ }, (a) => ({ path: a.path, namespace: 'stub' }));
+    b.onLoad({ filter: /.*/, namespace: 'stub' }, (a) => ({ contents: {
+      '@expo/ui/swift-ui': "export const [HStack, Image, Link, Text, VStack] = ['HStack', 'Image', 'Link', 'Text', 'VStack'];",
+      '@expo/ui/swift-ui/modifiers': 'const m = (n) => (x) => ({ [n]: x }); export const font = m("font"), minimumScaleFactor = m("scale"), opacity = m("opacity"), padding = m("padding");',
+      'expo-widgets': `export const createLiveActivity = (name, layout) => (globalThis.activity = { name, layout, on: [], getInstances() { return [...this.on]; },
+        start(s, url, stale) { const a = { s, stale, update: async (s, stale) => Object.assign(a, { s, stale }), end: async () => void this.on.splice(this.on.indexOf(a), 1) }; this.on.push(a); return a; } });`,
+    }[a.path] }));
+  } };
+  const dir = mkdtempSync(join(process.cwd(), 'test/.island-'));
+  try {
+    await build({ entryPoints: [join(import.meta.dirname, '..', 'mobile', 'src', 'island.ios.tsx')], outfile: join(dir, 'island.mjs'), bundle: true, platform: 'node', format: 'esm', jsx: 'automatic', external: ['react'], plugins: [stubs], logLevel: 'error' });
+    const { island } = await import(join(dir, 'island.mjs'));
+    const la = (globalThis as any).activity;
+    const words = (n: any): string => typeof n === 'string' || typeof n === 'number' ? String(n) : Array.isArray(n) ? n.map(words).filter(Boolean).join(' ')
+      : n?.props ? [n.props.label, n.props.destination, words(n.props.children)].filter(Boolean).join(' ') : '';
+    const st = A.status(state)!; // Scout's job is working; Reel's waits on Nadia
+    const view = la.layout(st, { colorScheme: 'light' });
+    for (const k of ['banner', 'compactLeading', 'compactTrailing', 'minimal']) {
+      for (const b of state.bots) assert.ok(!words(view[k]).includes(b.display), `${b.display} where a locked phone shows it (${k})`);
+    }
+    assert.equal(words(view.banner), st.publicText, 'the Lock Screen: counts only');
+    assert.equal(words(view.minimal), st.chip);
+    assert.equal(words(view.compactTrailing), st.chip);
+    assert.equal(words(view.expandedCenter), `${st.title} ${st.text}`, 'names only in the expanded island');
+    assert.deepEqual(view.expandedBottom.props.children.map((l: any) => [l.props.label, l.props.destination]),
+      [['See what needs you', 'crewhouse://needs'], ['Ask Chief', 'crewhouse://ask']], 'its buttons open the addresses the app already takes');
+    assert.deepEqual(la.layout(A.status(state, false), { colorScheme: 'light' }).expandedBottom.props.children, [], 'a watching phone gets no buttons');
+    assert.deepEqual(la.layout(st, { colorScheme: 'light', isStale: true }).banner.props.modifiers.at(-1), { opacity: 0.5 }, 'out of date, it says so by fading');
+
+    const waiting = A.status({ ...state, bots: [bot('chief'), bot('reel', { task: { id: 5, title: 'Birthday video', state: 'needs_you' } })] });
+    island(waiting);
+    assert.equal(la.on.length, 0, 'something waiting alone never starts one: that is the push\'s job');
+    const t = Date.now();
+    island(st);
+    assert.equal(la.on.length, 1, 'a working job starts it');
+    assert.ok(Math.abs(la.on[0].stale - t - 15 * 60_000) < 5000, 'marked out of date 15 minutes after the last refresh');
+    island(st);
+    assert.equal(la.on.length, 1, 'a refresh updates the one there is');
+    island(waiting);
+    assert.equal(la.on[0].s, waiting, 'the job done but something still waiting: it stays, and says so');
+    island(null);
+    assert.equal(la.on.length, 0, 'a quiet crew, or an app out of touch, ends it');
+    island(st);
+    la.on.length = 0; // the person swipes it away
+    island(st);
+    assert.equal(la.on.length, 0, 'swiped away, it stays away while the same work goes on');
+    island(waiting); island(st);
+    assert.equal(la.on.length, 1, 'new work starts a new one');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+  // expo-widgets and @expo/ui are imported in one place; the app shows the chip's own status there, local updates only.
+  const mobile = join(import.meta.dirname, '..', 'mobile');
+  const users = [...readdirSync(join(mobile, 'src')).map((f) => join('src', f)), 'App.tsx', 'index.ts'].filter((f) => /'(expo-widgets|@expo\/ui)/.test(readFileSync(join(mobile, f), 'utf8')));
+  assert.deepEqual(users, [join('src', 'island.ios.tsx')], 'Android loads island.tsx, where neither is linked');
+  // Metro tries every platform's .ts before any .tsx: a stand-in with another extension would win on the iPhone too.
+  assert.deepEqual(readdirSync(join(mobile, 'src')).filter((f) => f.startsWith('island.')).sort(), ['island.ios.tsx', 'island.tsx']);
+  assert.match(readFileSync(join(mobile, 'App.tsx'), 'utf8'), /\{ chip\(s\); island\(s\); \}/);
+  assert.ok(JSON.parse(readFileSync(join(mobile, 'app.json'), 'utf8')).expo.plugins.includes('expo-widgets'), 'no push settings: nothing but the app updates it');
 });
 
 test('the phone\'s one code box reads either kind by its shape, and rejects what it cannot dial', () => {
