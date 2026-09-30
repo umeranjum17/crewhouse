@@ -24,6 +24,7 @@ export type SignInStep = { url?: string; code?: string; waiting: boolean; done?:
 export interface AgentRuntime {
   start(host: ToolHost): Promise<unknown>;
   stop(): Promise<void>;
+  signInRecovery?(): string;
   signedIn(account: string): Promise<boolean>;
   signIn(account: string, via: 'browser' | 'code', on: (step: SignInStep) => void): { paste(text: string): void; cancel(): void };
   signOut(account: string): Promise<void>;
