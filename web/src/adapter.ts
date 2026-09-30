@@ -7,8 +7,6 @@ import type { Json } from './api.ts';
 import { safeLink } from './chat-md.ts';
 import { PALS, type Kind, type Mood } from './art.ts';
 
-export const OWNER = 1;
-
 export type Helper = {
   id: string; name: string; kind: Kind; mood: Mood; ring: 'working' | 'needs' | ''; status: string; role: string;
   computer: boolean; driving: boolean; stuckFor: number; quietSince: number; things: FileView[];

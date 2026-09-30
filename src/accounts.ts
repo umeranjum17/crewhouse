@@ -4,8 +4,6 @@
 import { REST_MS, classify, offered } from '@byokit/accounts';
 import type { AgentRuntime, SignInStep } from './runtime.ts';
 
-export const OWNER = 1;
-
 /** The offered accounts: every subscription route the pinned engine supports. ChatGPT is the one front door; the
  *  rest are quiet "more options" paths. `cli`: the sign-in needs a tool installed and logged in on this computer. */
 export const PROVIDERS: Record<string, { key: string; name: string; cli?: string }> = {

@@ -7,7 +7,6 @@ import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'no
 import { join } from 'node:path';
 import { setup, settled, task, until } from './lab.ts';
 
-const { OWNER } = await import('../src/accounts.ts');
 const { connectError } = await import('../src/connections.ts');
 const disk = await import('../src/bots.ts');
 
@@ -206,7 +205,7 @@ test('a send reuses the app listing: one handshake per connection set, not per t
   const empty = await crew.connections.tools();
   assert.equal(await crew.connections.tools(), empty, 'no apps: the same listing, no refetch');
   // The callback's write, as finish() would store it: the set changes, so the next send lists again.
-  const dir = join(crew['cfg'].stateDir, 'people', String(OWNER));
+  const dir = join(crew['cfg'].stateDir, 'people', '1');
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, 'connections.json'), JSON.stringify({ mocknote: { access: 'A1', refresh: 'R1', expires: Date.now() + 3600_000 } }));
   const listed = await crew.connections.tools();
