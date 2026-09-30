@@ -11,6 +11,7 @@ import { temp } from './tmp.ts';
 import { DeviceLink, pairWithOffer, type DeviceGrant, type LinkStatus, encodeOffer, offerText, parseOffer } from '@byokit/link';
 import { Link, NEWS, linkHosts, phoneAddresses, tailscalePeer } from '../src/link.ts';
 import { Store } from '../src/db.ts';
+import { DatabaseSync } from 'node:sqlite';
 import { decodeOffer as decodeTyped, encodeOffer as encodeTyped } from '@byokit/link';
 import { b64url } from '@byokit/link';
 
@@ -205,11 +206,13 @@ const free = () => new Promise<number>((r) => { const s = createServer().listen(
 const port = await free();
 const linkPort = await free();
 const base = `http://127.0.0.1:${port}`;
-const daemon = spawn(process.execPath, [join(import.meta.dirname, '..', 'src', 'main.ts')], {
+let pushUrl = '';
+const startDaemon = () => spawn(process.execPath, [join(import.meta.dirname, '..', 'src', 'main.ts')], {
   env: { ...process.env, CREWHOUSE_ENGINE: 'stub', CREWHOUSE_PAIR_MS: '3000', CREWHOUSE_HOLD_MS: '5000', CREWHOUSE_PORT: String(port), CREWHOUSE_LINK_PORT: String(linkPort),
-    CREWHOUSE_LINK_HOST: '127.0.0.1', CREWHOUSE_STATE_DIR: join(root, 'state'), CREWHOUSE_CREW_DIR: join(root, 'crew'), CREWHOUSE_TOOLS_DIR: join(root, 'tools') },
+    CREWHOUSE_PUSH_URL: pushUrl, CREWHOUSE_LINK_HOST: '127.0.0.1', CREWHOUSE_STATE_DIR: join(root, 'state'), CREWHOUSE_CREW_DIR: join(root, 'crew'), CREWHOUSE_TOOLS_DIR: join(root, 'tools') },
   stdio: ['ignore', 'pipe', 'inherit'],
 });
+let daemon = startDaemon();
 after(() => daemon.kill());
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -236,13 +239,14 @@ async function pairPhone(qr: string, name: string, yes = true) {
 /** A paired phone's live link, answered like HTTP (as the app's transport reads it). */
 function open(grant: DeviceGrant) {
   const events: any[] = [];
+  let stored: DeviceGrant | null = grant;
   let status: LinkStatus = 'connecting';
-  const link = new DeviceLink(grant, { onEvent: (e) => events.push(e), onStatus: (s) => { status = s; } });
+  const link = new DeviceLink(grant, { store: { save: (g) => { stored = g; }, clear: () => { stored = null; } }, onEvent: (e) => events.push(e), onStatus: (s) => { status = s; } });
   const req = async (method: string, path: string, body?: unknown) => {
     try { return await link.request(`${method} ${path}`, body) as { status: number; body: any }; }
     catch (e: any) { return { status: e.code === 'view-only' ? 403 : 0, body: { error: e.code } }; }
   };
-  return { link, req, events, status: () => status };
+  return { link, req, events, stored: () => stored, status: () => status };
 }
 
 test('pairing with a yes at the computer, grants, approvals from the phone, and removal', async () => {
@@ -278,7 +282,7 @@ test('pairing with a yes at the computer, grants, approvals from the phone, and 
   assert.equal((await a.req('POST', '/api/people', { name: 'Mallory' })).status, 403, 'and so does adding people');
   assert.equal((await a.req('POST', '/api/connections/notion')).status, 403, 'and connecting apps');
   assert.equal((await a.req('PUT', '/api/house/google', { id: 'x', secret: 'y' })).status, 403, 'and the house Google app');
-  assert.equal((await a.req('GET', '/api/people')).status, 200);
+  assert.equal((await a.req('GET', '/api/state')).status, 200);
   assert.equal((await a.req('GET', '/files/chief/x')).status, 404);
   // The phone says which route it came by; Settings shows when each phone last reached the computer, and how.
   assert.deepEqual(Object.keys((await a.req('GET', '/api/reach', { via: 'home' })).body.reached), ['home']);
@@ -297,8 +301,6 @@ test('pairing with a yes at the computer, grants, approvals from the phone, and 
   assert.equal(waiting.name, 'Inline phone');
   assert.equal((await http('POST', '/api/phones/answer', { id: waiting.id, yes: true, offer: 'wrong' })).status, 403);
   assert.equal((await a.req('POST', '/api/phones/answer', { id: waiting.id, yes: true, offer: card.token })).status, 403, 'phone cannot approve itself');
-  const sam = (await http('POST', '/api/people', { name: 'Sam' })).body;
-  assert.equal((await http('POST', '/api/phones/answer', { id: waiting.id, yes: true, offer: card.token }, { 'x-crewhouse': '1', 'x-crewhouse-member': String(sam.id) })).status, 403);
   assert.equal((await http('POST', '/api/phones/answer', { id: waiting.id, yes: true, offer: card.token })).status, 200);
   await pairing;
   await until(async () => (await http('GET', '/api/bots/chief')).body.phoneOffer.joined === 'Inline phone');
@@ -318,8 +320,6 @@ test('pairing with a yes at the computer, grants, approvals from the phone, and 
   assert.equal(readFileSync(outside, 'utf8'), 'from the phone');
 
   // Another member cannot mint a code; the owner's view-only tablet can watch but not answer.
-  assert.equal((await http('POST', '/api/phones/pair', { role: 'view' }, { 'x-crewhouse': '1', 'x-crewhouse-member': String(sam.id) })).status, 403);
-  assert.equal((await http('POST', '/api/phones/code', { role: 'view' }, { 'x-crewhouse': '1', 'x-crewhouse-member': String(sam.id) })).status, 403);
   const offer = (await http('POST', '/api/phones/pair', { role: 'view' })).body;
   const watcher = open(await pairPhone(offer.qr, 'Tablet'));
   assert.equal(watcher.link.grant.device.role, 'view');
@@ -408,73 +408,65 @@ test('a bot\'s screen over the link: a watch-only phone may open it, and crewd a
   w.link.stop();
 });
 
-test('the owner picks whose phone it is: the grant acts as that member alone, and nobody else can pick', async () => {
+
+
+test('upgrade removes a former person’s phone before grants load; the person’s phones, push and quiet hold survive', async () => {
+  const aGrant = await pairPhone((await http('POST', '/api/phones/pair', { role: 'control' })).body.qr, 'Kept phone');
+  const bGrant = await pairPhone((await http('POST', '/api/phones/pair', { role: 'control' })).body.qr, 'Former phone');
+  const viewGrant = await pairPhone((await http('POST', '/api/phones/pair', { role: 'view' })).body.qr, 'Kept tablet');
+  daemon.kill();
+  await new Promise((r) => daemon.once('exit', r));
+  const db = new DatabaseSync(join(root, 'state', 'crew.db'));
+  db.prepare("INSERT INTO people (id, name) VALUES (2, 'Former person')").run();
+  db.prepare('UPDATE devices SET member = 2 WHERE id = ?').run(bGrant.device.id);
+  const hour = new Date().getHours();
+  const time = (h: number) => `${String((h + 24) % 24).padStart(2, '0')}:00`;
+  db.prepare('UPDATE people SET quiet = ? WHERE id = 1').run(`${time(hour - 1)}-${time(hour + 1)}`);
+  db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('push.held.1', '1')").run();
+  for (const [id, token] of [[aGrant.device.id, 'ExponentPushToken[kept]'], [bGrant.device.id, 'ExponentPushToken[former]']])
+    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(`phone.push.${id}`, token);
+  db.close();
+  const pushes: any[][] = [];
+  const expo = http1((q, r) => { let body = ''; q.on('data', (c) => { body += c; }); q.on('end', () => { const messages = JSON.parse(body); pushes.push(messages); r.end(JSON.stringify({ data: messages.map(() => ({ status: 'ok' })) })); }); });
+  await new Promise<void>((r) => expo.listen(0, '127.0.0.1', r));
+  after(() => expo.close());
+  pushUrl = `http://127.0.0.1:${(expo.address() as AddressInfo).port}/push`;
+  daemon = startDaemon();
   await until(async () => (await fetch(`${base}/api/state`).catch(() => null))?.ok);
-  // Three people in the house: the owner, Umer and Zara.
-  const umer = (await http('POST', '/api/people', { name: 'Umer' })).body.id;
-  const zara = (await http('POST', '/api/people', { name: 'Zara' })).body.id;
-  const as = (id: number) => ({ 'x-crewhouse': '1', 'x-crewhouse-member': String(id) });
-
-  // Only the owner mints a code, for anyone; the person has to exist.
-  for (const member of [umer, zara, 1, undefined]) {
-    assert.equal((await http('POST', '/api/phones/pair', { role: 'control', member }, as(umer))).status, 403, `Umer cannot pair a phone for ${member}`);
-    assert.equal((await http('POST', '/api/phones/code', { role: 'control', member }, as(zara))).status, 403, `Zara cannot type one for ${member}`);
-  }
-  assert.equal((await http('POST', '/api/phones/pair', { role: 'control', member: 999 })).status, 404, 'nobody by that number');
-  assert.equal((await http('POST', '/api/phones/pair', { role: 'control', member: 'Umer' })).status, 404, 'a name is not a person id');
-
-  // The owner pairs Umer's phone and their own; the computer's question says whose it will be.
-  let words = '';
-  const pairing = pairWithOffer((await http('POST', '/api/phones/pair', { role: 'control', member: umer })).body.qr, { name: 'Umer phone', onWords: (w) => { words = w; } });
-  const asking = await until(async () => (await http('GET', '/api/phones/link')).body.asking.find((a: any) => a.name === 'Umer phone'));
-  assert.equal(asking.member, umer);
-  assert.equal(asking.words, words);
-  assert.equal((await http('POST', '/api/phones/answer', { id: asking.id, yes: true }, as(umer))).status, 403, 'Umer cannot approve her own phone');
-  await http('POST', '/api/phones/answer', { id: asking.id, yes: true });
-  const n = open(await pairing);
-  const o = open(await pairPhone((await http('POST', '/api/phones/pair', { role: 'control' })).body.qr, 'Owner phone'));
-  const listed = (await http('GET', '/api/phones')).body;
-  assert.deepEqual([listed.find((p: any) => p.name === 'Umer phone')].map((p) => [p.member, p.person]), [[umer, 'Umer']]);
-  assert.equal(listed.find((p: any) => p.name === 'Owner phone').member, 1, 'no choice means the owner');
-
-  // Umer's phone acts as Umer: her state, her thread, her events; never the owner's or Zara's.
-  assert.equal((await n.req('GET', '/api/state')).body.person.id, umer);
-  assert.equal((await o.req('GET', '/api/state')).body.person.id, 1);
-  await http('POST', '/api/bots/chief/messages', { text: 'owner private words' });
-  await http('POST', '/api/bots/chief/messages', { text: 'zara private words' }, as(zara));
-  assert.equal((await n.req('POST', '/api/bots/chief/messages', { text: 'umer own words' })).status, 200);
-  const said = (e: any, text: string) => e.kind === 'message' && e.data.text === text;
-  await until(async () => o.events.find((e) => said(e, 'owner private words')));
-  await until(async () => n.events.find((e) => said(e, 'umer own words')));
-  await until(async () => (await http('GET', '/api/bots/chief', undefined, as(zara))).body.messages.some((m: any) => m.text === 'zara private words'));
-  assert.ok(!n.events.some((e) => said(e, 'owner private words') || said(e, 'zara private words')), "the owner's and Zara's words never reach Umer's phone");
-  assert.ok(!o.events.some((e) => said(e, 'umer own words') || said(e, 'zara private words')), "and Umer's and Zara's never reach the owner's");
-  const thread = (await n.req('GET', '/api/bots/chief')).body.messages.map((m: any) => m.text);
-  assert.ok(thread.includes('umer own words') && !thread.some((t: string) => /owner private|zara private/.test(t)), 'her Chief thread is hers alone');
-  assert.equal((await n.req('GET', '/api/bots/chief')).body.phoneOffer, null, 'no pairing card for a member');
-  assert.ok((await n.req('GET', '/api/events')).body.every((e: any) => !said(e, 'owner private words') && !said(e, 'zara private words')));
-
-  // Chief's card: the owner switches it to Zara, and the phone that joins through it is Zara's. Umer's phone cannot switch it.
-  await http('POST', '/api/bots/chief/messages', { text: 'pair my phone' });
-  const card = await until(async () => (await http('GET', '/api/bots/chief')).body.phoneOffer);
-  assert.equal(card.member ?? 1, 1, 'the card starts as the owner\'s');
-  assert.equal((await n.req('POST', '/api/phones/refresh', { message: card.message, member: umer })).status, 403, "a member's phone administers nothing");
-  assert.equal((await http('POST', '/api/phones/refresh', { message: card.message, member: zara }, as(zara))).status, 403);
-  assert.equal((await http('POST', '/api/phones/refresh', { message: card.message, member: 999 })).status, 404);
-  const forZara = (await http('POST', '/api/phones/refresh', { message: card.message, member: zara })).body;
-  assert.equal(forZara.member, zara);
-  await assert.rejects(pairWithOffer(card.qr, { name: 'Old code', onWords: () => {} }), /code|used|match|run out/i, "the owner's code on the card died when it became Zara's");
-  assert.equal((await o.req('POST', '/api/phones/refresh', { message: card.message })).body.member, zara, "a renewal keeps the card's person");
-  const shown = (await http('GET', '/api/bots/chief')).body.phoneOffer;
-  const zaraPairing = pairWithOffer(shown.qr, { name: 'Zara phone', onWords: () => {} });
-  const waiting = await until(async () => (await http('GET', '/api/bots/chief')).body.phoneOffer.waiting);
-  assert.equal((await http('POST', '/api/phones/answer', { id: waiting.id, yes: true, offer: shown.token }, as(zara))).status, 403);
-  assert.equal((await http('POST', '/api/phones/answer', { id: waiting.id, yes: true, offer: shown.token })).status, 200);
-  const z = open(await zaraPairing);
-  assert.equal((await z.req('GET', '/api/state')).body.person.id, zara);
-  assert.equal((await http('GET', '/api/phones')).body.find((p: any) => p.name === 'Zara phone').member, zara);
-  assert.ok(!(await z.req('GET', '/api/bots/chief')).body.messages.some((m: any) => /owner private|umer own/.test(m.text)));
-
-  for (const p of (await http('GET', '/api/phones')).body) await http('DELETE', `/api/phones/${p.id}`);
-  for (const x of [n, o, z]) x.link.stop();
+  const a = open(aGrant); const b = open(bGrant); const view = open(viewGrant);
+  try {
+    await until(async () => b.status() === 'removed');
+    await until(async () => b.stored() === null);
+    assert.equal((await b.req('GET', '/api/state')).status, 0, 'removed phone cannot fetch the person’s state');
+    assert.equal(b.events.length, 0, 'no person’s activity arrives before refusal');
+    const phones = (await http('GET', '/api/phones')).body;
+    assert.ok(!phones.some((p: any) => p.id === bGrant.device.id));
+    assert.ok(phones.some((p: any) => p.id === aGrant.device.id));
+    assert.equal((await a.req('GET', '/api/state')).body.person.id, 1);
+    assert.equal((await view.req('GET', '/api/state')).status, 200);
+    assert.equal((await view.req('POST', '/api/bots/chief/messages', { text: 'no' })).status, 403);
+    assert.equal(pushes.length, 0, 'quiet hours still hold news across the upgrade');
+    const live = new DatabaseSync(join(root, 'state', 'crew.db'));
+    try {
+      assert.equal(live.prepare("SELECT value FROM settings WHERE key = 'push.held.1'").get()!.value, '1');
+      assert.equal(live.prepare('SELECT 1 FROM devices WHERE id = ?').get(bGrant.device.id), undefined);
+      live.prepare('UPDATE people SET quiet = NULL WHERE id = 1').run();
+      await until(async () => pushes.length > 0, 40_000);
+      assert.deepEqual(pushes.flat().map((p) => [p.to, p.title]), [['ExponentPushToken[kept]', NEWS]], 'only the retained phone gets content-free held news');
+      await until(async () => !live.prepare("SELECT 1 FROM settings WHERE key = 'push.held.1'").get());
+      await a.req('POST', '/api/bots/chief/messages', { text: 'hello after upgrade' });
+      await until(async () => pushes.length >= 2);
+      assert.ok(pushes.flat().every((p) => p.to === 'ExponentPushToken[kept]' && p.title === NEWS));
+    } finally { live.close(); }
+    assert.equal((await http('PUT', '/api/people/42', { name: 'Umer' })).status, 200, 'legacy route shape edits only the person');
+    const snapshot = (await a.req('GET', '/api/state')).body;
+    assert.deepEqual(snapshot.members.map((m: any) => [m.id, m.name]), [[1, 'Umer']], 'old phone builds keep their members array');
+    assert.equal(typeof snapshot.house.google, 'boolean');
+    assert.ok(Object.hasOwn(snapshot.house, 'steps'));
+    assert.equal((await http('POST', '/api/accounts/42/chatgpt/retry')).status, 200, 'account route ignores the former member segment');
+    assert.equal((await http('POST', '/api/people', { name: 'Another' })).status, 404);
+    assert.equal((await http('GET', '/api/people')).status, 404);
+    assert.equal((await http('POST', '/api/house/ask', { app: 'calendar' })).status, 404);
+    assert.equal((await http('POST', '/api/accounts/1/chatgpt/ask-owner')).status, 404);
+  } finally { a.link.stop(); b.link.stop(); view.link.stop(); }
 });

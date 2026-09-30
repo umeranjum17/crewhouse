@@ -219,7 +219,7 @@ test("a job proposal card names the helper's proposed job, never a memory headin
 
 test('Home commits nothing: a row opens the review sheet, and a starter fills the box without sending', () => {
   const src = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
-  const home = src.slice(src.indexOf('function NeedsRows('), src.indexOf("const ownerName"));
+  const home = src.slice(src.indexOf('function NeedsRows('), src.indexOf('/** The standing'));
   assert.ok(!home.includes('<AskCard'), 'ask cards with buttons sat right on Home; a row opens the sheet instead');
   assert.match(home, /needs-row/, 'the compact Needs-you rows');
   assert.match(home, /href=\{`#\/ask\/\$\{c\.id\}`\}/, 'every row opens the existing review sheet');
@@ -273,7 +273,7 @@ test('Home keeps a standing "hand me a job" list, straight from crewd\'s ideas: 
   assert.equal(these.choices[0].label, 'Yes, fill these in', 'more than one line, these in');
   assert.equal(fill.choices.find((c: any) => c.body.scope === 'always'), undefined, 'and still no standing answer');
   const src = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
-  const home = src.slice(src.indexOf('function Home('), src.indexOf('const ownerName'));
+  const home = src.slice(src.indexOf('function Home('), src.indexOf('/** The standing'));
   assert.match(home, /<JobList state=\{state\} refresh=\{refresh\} \/>/, 'the desk\'s frame beside Working now and Done today');
   assert.match(home, /<JobList state=\{state\} phone refresh=\{refresh\} \/>/, 'and under the chats on a phone');
   const list = src.slice(src.indexOf('function JobList('), src.indexOf('function JobList(') + 1800);
@@ -388,13 +388,6 @@ test('first success: starters never dead-end, and the house setup is the owner\'
   assert.equal(off.length, 3);
   assert.ok(!off.some((i) => i.label.includes("What's on this week")), 'the calendar starter waits for the house');
   assert.ok(off.some((i) => /birthday party/i.test(i.label)));
-  // The setup ask: plain words on the owner's list; the asker sees it only as 'Asked' on her own card.
-  const asks = [{ id: 90, bot: 'chief', task_id: null, kind: 'setup', state: 'open', at: now, member: 1, title: 'Sara would like Calendar', detail: { app: 'calendar', person: 'Sara' } }];
-  const owner = { ...state, asks, person: { ...state.person, id: 1 } };
-  const [mine] = A.needsYou(owner);
-  assert.equal(mine.kind, 'setup');
-  assert.match(mine.words, /Sara would like Google Calendar.*Setting Google up is a one-time job, about 20 minutes/);
-  assert.equal(A.needsYou({ ...owner, person: { ...owner.person, id: 3, name: 'Sam' } }).filter((c) => c.kind === 'setup').length, 0, 'the asker has no card to act on');
   // The house's three jobs, and how many are left.
   assert.equal(A.homeSetup({ house: { google: true } }, { state: 'ready' }, { anywhere: 'anywhere' }).left, 0);
   const half = A.homeSetup({ house: { google: false } }, { state: 'ready' }, { anywhere: 'anywhere' });

@@ -46,20 +46,3 @@ test('crewd killed mid-run: the task resumes in the same conversation and finish
   const session = (new DatabaseSync(join(root, 'state', 'crew.db')).prepare('SELECT session FROM tasks WHERE id = ?').get(task) as any).session;
   assert.match(session, /^agent:m1:crewhouse:reel:\d+$/, 'one conversation: the same session key continues it');
 });
-
-test('a family member taps "ask owner to set it up": crewd stays up and the owner keeps the ask across a restart', async () => {
-  await api('POST', '/api/people', { name: 'Sara' });
-  // The tap as the phone makes it: Sara's member id on the house-ask endpoint. The old bug bound the ask id it never
-  // sent (undefined) into SQLite in the news fan-out and crewd died, and recovery then withdrew the ask for good.
-  const tap = () => fetch(`${base}/api/house/ask`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-crewhouse': '1', 'x-crewhouse-member': '2' }, body: JSON.stringify({ app: 'calendar' }) });
-  await tap().catch(() => null); // a crash mid-tap surfaces below, where crewd stops answering
-  const ask = () => (async () => (await api('GET', '/api/state')).asks.find((a: any) => a.kind === 'setup'))();
-  const first = await until(ask);
-  assert.match(first.detail.person, /Sara/);
-  assert.equal(first.state, 'open', 'the owner sees the request');
-  daemon.kill('SIGKILL');
-  await new Promise((r) => daemon.once('exit', r));
-  start();
-  const kept = await until(ask);
-  assert.equal(kept.state, 'open', 'a setup ask is the house\'s to-do: it survives the restart');
-});

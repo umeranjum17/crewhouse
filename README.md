@@ -148,6 +148,8 @@ The same app works at desktop and phone width, and switches to night colours in 
 - **Picks up after a restart.** Stop the computer mid-job, start it again, and the job carries on in the same conversation. A question waiting on you is still there.
 - **Learns how you work.** After a long job the helper can keep what it learned as a skill. You'll see a "Learned: …" line with Forget next to it, and Settings can switch this off.
 
+Existing shared installs upgrade to the person who set them up (person 1). Before changing live data, Crewhouse saves the full database as `crew-before-one-person.db` in its state folder. Other people's jobs, messages and phones leave the live install; their files and sign-ins stay untouched on disk. Your sign-ins, connections, memory, phones and settings keep working. Watch baselines for removed routines are kept with a `.before-one-person` suffix so a new routine starts fresh. Downgrading to a build before this migration is unsupported: an older build could reuse a former person's id and files.
+
 ## Quick start
 
 Crewhouse is self-hosted only. There is no hosted service and no account with us. Your personal assistant runs on your computer. You use it from a browser or the phone app.

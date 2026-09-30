@@ -36,20 +36,17 @@ async function state(member?: number) {
   throw new Error('crewd did not answer');
 }
 
-test('a newer release is offered to the owner in words, never to anyone else, and nothing when it is not newer', async () => {
+test('a newer release is offered to the person in words, and nothing when it is not newer', async () => {
   let s: any;
   for (let i = 0; i < 50 && !(s = await state()).update; i++) await sleep(100);
   assert.deepEqual(s.update, { version: '99.0.0', url: 'https://github.com/umeranjum17/crewhouse/releases/tag/v99.0.0' });
   assert.deepEqual(s.installing, [], 'not the downloaded app: nothing installs by itself');
   assert.equal(A.update(s)!.words, 'A new Crewhouse is ready (99.0.0). Download it and open it, and the crew carries on where it was.');
-  await fetch(`${base}/api/people`, { method: 'POST', headers: { 'x-crewhouse': '1', 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Sara' }) });
-  assert.equal((await state(2)).update, undefined, 'only the owner sees it');
 
   daemon.kill();
   await new Promise((r) => daemon.once('exit', r));
   tag = `v${ours}`;
   daemon = start();
-  await sleep(300);
   assert.equal((await state()).update, undefined, 'the same version is not an update');
 });
 

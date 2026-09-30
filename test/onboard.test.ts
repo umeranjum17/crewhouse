@@ -34,7 +34,7 @@ test('sign-in: the one button completes, and the member it was for is the one si
 
 test('first run: her first request waits for her own sign-in, Chief says why in one line, and it starts by itself after', async () => {
   const { db, crew, done } = setup();
-  const sara = crew.addMember('Sara').id;
+  const sara = 1;
   // Nobody signed in: her request is not failed, it waits for her (never the owner's account).
   only(crew, sara, []);
   // The first-run screen: she taps an idea; that is both "call me Sara" and her first request.
@@ -56,11 +56,11 @@ test('first run: her first request waits for her own sign-in, Chief says why in 
   done();
 });
 
-test('a ChatGPT plan without helpers: said plainly with the way forward; "ask the owner" and "I changed my plan"', async () => {
+test('a ChatGPT plan without helpers: said plainly with the way forward; "I changed my plan"', async () => {
   const { cfg, db, crew, done } = setup();
   assert.equal(classifyText("Your plan doesn't include this model.")?.kind, 'not_included');
   assert.equal(classifyText('You have hit your ChatGPT usage limit (plus plan). Try again in ~30 min.')?.kind, 'rate_limit');
-  const sara = crew.addMember('Sara').id;
+  const sara = 1;
   crew.onboard('Sara', sara);
   crew.recruit('scout', 'Scout', 'person');
   disk.setBrains(cfg, 'scout', ['chatgpt']);
@@ -71,10 +71,7 @@ test('a ChatGPT plan without helpers: said plainly with the way forward; "ask th
   assert.equal(task(db, t).wake_at, null);
   assert.equal(crew.accounts.notIncluded(sara, 'chatgpt'), true);
   assert.equal(db.get("SELECT text FROM messages WHERE bot = 'scout' ORDER BY id DESC")!.text,
-    "Your ChatGPT plan doesn't include helpers yet. Everything else in ChatGPT is fine. ChatGPT Plus includes it, or you can ask Umer to cover it.".replace('Umer', crew.member(1).name));
-  crew.askOwner(sara, 'chatgpt');
-  assert.ok(db.get("SELECT 1 FROM messages WHERE bot = 'chief' AND member = ? AND text LIKE 'Sara asked if you could cover their helpers.%'", 1), 'the owner hears, in his own thread');
-  assert.throws(() => crew.askOwner(1, 'chatgpt'), /owner/);
+    "Your ChatGPT plan doesn't include helpers yet. Everything else in ChatGPT is fine. ChatGPT Plus includes it.".replace('Umer', crew.member(1).name));
   // "I've changed my plan": tried again, and it goes through.
   crew.retryAccount(sara, 'chatgpt');
   await settled(db, t);
@@ -110,7 +107,7 @@ test('typed-name onboarding ends on ideas, not an open question', async () => {
 test('a Hello goal tap goes straight to Scout: hired silently with no Chief task; an excluded plan stays with Chief', async () => {
   const { db, crew, done } = setup();
   // An excluded plan first, while Scout is still missing: no hire, Chief instead.
-  const sara = crew.addMember('Sara').id;
+  const sara = 1;
   crew.accounts.notIncluded(sara, 'chatgpt', true);
   const { task: u } = crew.onboard('Sara', sara, 'Help me earn a little on the side', 'scout') as { task: number };
   await settled(db, u);
@@ -118,13 +115,15 @@ test('a Hello goal tap goes straight to Scout: hired silently with no Chief task
   assert.equal(task(db, u).member, sara);
   assert.equal(crew.bot('scout'), undefined, 'no silent hire on an excluded plan');
   // A usable account: Scout is hired silently and her request starts in his thread.
+  crew.retryAccount(1, 'chatgpt');
+  await settled(db, u);
   const { task: t } = crew.onboard('sir', 1, 'Help me earn a little on the side', 'scout') as { task: number };
   await settled(db, t);
   assert.ok(crew.bot('scout'), 'Scout is hired silently');
   assert.equal(task(db, t).bot, 'scout');
   assert.equal(task(db, t).origin, 'person');
   assert.equal(task(db, t).state, 'done');
-  assert.equal(db.get("SELECT 1 FROM tasks WHERE bot = 'chief' AND member = 1"), undefined, 'no Chief task for the goal tap');
+  assert.equal(db.get("SELECT 1 FROM tasks WHERE bot = 'chief' AND member = 1 AND id != ?", u), undefined, 'no Chief task for the goal tap');
   assert.equal(db.get("SELECT text FROM messages WHERE bot = 'scout' AND author = 'person'")!.text, 'Help me earn a little on the side');
   done();
 });

@@ -489,7 +489,7 @@ test('limits: a limit rests that account and the task carries on in the same con
   await settled(db, b);
   assert.equal(task(db, b).state, 'paused');
   assert.ok(Math.abs(task(db, b).wake_at - (Date.now() + 60_000)) < 1000, 'earliest reset: Copilot in a minute, not ChatGPT in half an hour');
-  assert.match(task(db, b).result, /All AI accounts are resting until \d+:\d\d [ap]m/);
+  assert.match(task(db, b).result, /All your AI accounts are resting until \d+:\d\d [ap]m/);
   (crew.accounts as any).rests.clear();
   db.run('UPDATE tasks SET wake_at = ? WHERE id = ?', Date.now() - 1, b);
   crew.dispatch();
@@ -755,7 +755,7 @@ test('household: bots and tasks belong to a member and run on that member\'s own
   await settled(db, e);
   await settled(db, f);
   assert.equal(task(db, e).state, 'paused');
-  assert.match(task(db, e).result, /All Sam's AI accounts are resting/);
+  assert.match(task(db, e).result, /All your AI accounts are resting/);
   assert.equal(task(db, f).state, 'done');
 
   // What each person sees: their own tasks and questions, their own accounts.
@@ -1309,15 +1309,4 @@ test('a search landing on an old line: botPage opens a window around it', async 
   assert.ok(ids.includes(5), 'the anchored line is in it');
   assert.deepEqual(ids.filter((n: number) => n < 5), [1, 2, 3, 4], 'a little before');
   assert.ok(ids.includes(104), 'a little after');
-});
-
-test('a family member asks the owner for the house setup; one ask, on the owner\u0019s list, for everyone to see', () => {
-  const { crew } = setup();
-  crew.askSetup('calendar', 1);
-  crew.askSetup('calendar', 1); // however many taps, one ask
-  const asks = crew.snapshot(1).asks.filter((a: any) => a.kind === 'setup');
-  assert.equal(asks.length, 1);
-  assert.equal(asks[0].detail.app, 'calendar');
-  assert.equal(asks[0].detail.person, 'Owner');
-  assert.equal(asks[0].state, 'open', 'the owner sees it in Needs you');
 });

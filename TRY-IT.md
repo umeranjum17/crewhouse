@@ -29,7 +29,7 @@ Everything lives in `~/.local/state/crewhouse/` (the database, the engine's own 
 6. **A routine.** Tell Chief: *Every weekday at 9am, have Scout check the top 3 Hacker News stories and send me the titles.* Open **Routines**:
    - Press **Run now** on the new routine. It shows *Done · run by you* when Scout finishes.
    - Press **Run now** on **Morning digest**. Chief posts what finished, what needs you and what is coming up, in your thread.
-7. **People (existing feature).** Under **Settings, People**, add someone. Pick them under **Who is using this screen?** and they get their own Chief thread, which asks how to address them, and their own **Sign in with ChatGPT**. Until they sign in, their requests wait for them, with the sign-in right there; yours is never lent.
+7. **Your settings.** Under **Settings, People**, edit your name, how Chief addresses you and your quiet hours. One install is for you and your crew.
 8. **An app.** Ask Scribe to find something in your Notion: Scribe asks for it with a **Connect Notion** card in the chat. Tap it, allow Crewhouse on Notion's page, and Scribe carries on; reading runs at once, adding a page asks first. (Or connect ahead of time under **Settings, Your apps**.) For Google Calendar, Gmail and Drive, first switch Google on for your crew under **Settings, Google for your crew** ([docs/google-setup.md](docs/google-setup.md)).
 9. **Restart mid-task.** While Reel is working (or waiting on you), press Ctrl-C in the crewd terminal, then run `./crewhouse start` again. Reel's **What I did** tab shows *Picked up where it left off*, and a waiting approval can still be answered.
 
@@ -58,11 +58,7 @@ To pair:
 
 ## Known issues
 
-- **Phone app:** it can't watch a helper's screen, set up routines or connect apps yet, and files open on the computer. Adding people and AI sign-ins stay on the computer by design.
+- **Phone app:** it can't watch a helper's screen, set up routines or connect apps yet, and files open on the computer. AI sign-ins stay on the computer by design.
 - **Bots recruited before the engine change** keep their old instructions (they mention a `crew` command). Recruit them again to pick up the new ones.
 - **Chief's wording:** he sometimes rewords a task awkwardly, e.g. *Use its browser to open…*.
-- **People (existing feature):**
-  - Everyone sees the whole crew. Tasks, questions, the Chief thread and AI accounts are per person.
-  - With two or more people, the sidebar shows your name as *Owner* until you rename yourself under **Settings, People**.
-  - Signing someone in from a phone uses the code (Having trouble?); ChatGPT asks each account to allow device codes once, under its Settings, Security. Catching ChatGPT's page on the phone itself is the next step.
 - **Setup:** it prints an npm warning that esbuild's install script was blocked. The web build still works.

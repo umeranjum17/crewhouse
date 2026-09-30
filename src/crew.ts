@@ -267,8 +267,7 @@ export class Crew {
       if (!this.bot(CHIEF)) this.addBot(disk.loadTemplate(this.cfg, 'chief'), 'Chief', CHIEF, 'system');
       // Questions whose task is over have no one left to answer them.
       // A suggestion (a skill to keep, a new personality) belongs to no running task, so it waits for its answer across restarts.
-      // So does a setup ask: the house's to-do, not any task's.
-      this.db.run("UPDATE asks SET state = 'withdrawn' WHERE state = 'open' AND kind NOT IN ('propose', 'setup') AND (task_id IS NULL OR task_id NOT IN (SELECT id FROM tasks WHERE state IN ('working', 'needs_you')))");
+      this.db.run("UPDATE asks SET state = 'withdrawn' WHERE state = 'open' AND kind != 'propose' AND (task_id IS NULL OR task_id NOT IN (SELECT id FROM tasks WHERE state IN ('working', 'needs_you')))");
       this.db.run("UPDATE bots SET state = 'off'");
       this.db.event('system.started', null, {});
       // Chats were unread-less before: an existing house starts with everything already seen.
@@ -468,30 +467,9 @@ export class Crew {
     const d = JSON.parse(detail || '{}');
     const covers = d.key ? coversOf(d.key) : null;
     if (a.kind === 'connect') return { ...a, detail: { app: d.app, words: d.words } };
-    if (a.kind === 'setup') return { ...a, detail: { app: d.app, person: d.person } };
     if (a.kind === 'propose') return { ...a, detail: { words: a.title, preview: d.preview, ...(d.create ? { yes: `Yes, take ${d.create.name} on` } : d.draft ? { yes: 'Approve' } : {}), ...(d.draft ? { draft: d.draft } : {}), ...(d.job ? { job: d.job } : {}), ...(d.pass ? { pass: { root: d.pass.root, files: d.pass.files.map((f: string) => basename(f)) } } : {}), ...(d.routine ? { routine: d.routine } : {}), ...(d.plan ? { plan: { bot: d.plan.bot, steps: d.plan.steps } } : {}) } };
     return { ...a, detail: { effect: d.effect, words: a.title, spends: d.effect === 'spend', covers, ...(covers ? { always: covers } : {}), ...(d.preview ? { preview: d.preview } : {}), ...(d.press ? { press: true } : {}), ...(d.fill ? { fill: true } : {}),
       ...(d.checkout ? { order: { shown: d.checkout.shown ?? '', known: Number.isFinite(d.checkout.total), dollars: d.checkout.currency === '$' } } : {}) } };
-  }
-
-  /** What one member sees: the whole crew, but their own tasks, questions and accounts. */
-  /** A family member asks the owner to switch Google on for the house: one ask on the owner's list (the asker sees
-   *  it too, as the 'Asked {owner}' state on her card). It closes itself the moment the house is ready. */
-  askSetup(app: string, viewer: number) {
-    const me = this.viewer(viewer);
-    const existing = this.db.get("SELECT * FROM asks WHERE kind = 'setup' AND state = 'open' AND json_extract(detail, '$.app') = ?", app);
-    if (existing) return this.askView(existing);
-    const person = String(me.address || me.name || 'Someone');
-    // The event carries the ask's id like every ask.opened: phones fan the news out by it.
-    // The card is the owner's to-do (member 1); the asker's id rides the detail so her own
-    // snapshot keeps the 'Asked {owner}' state while uninvolved members see nothing; answering stays owner's.
-    const id = this.db.tx(() => {
-      const r = this.db.run("INSERT INTO asks (bot, kind, title, detail, at, member) VALUES ('chief', 'setup', ?, ?, ?, ?)",
-        `${person} would like ${app}`, JSON.stringify({ app, person, asker: me.id }), Date.now(), OWNER);
-      this.db.event('ask.opened', 'chief', { kind: 'setup', app, ask: Number(r.lastInsertRowid) });
-      return Number(r.lastInsertRowid);
-    });
-    return this.askView(this.db.get('SELECT * FROM asks WHERE id = ?', id)!);
   }
 
   /** A delivered file handed over from another helper is that task's input, never its result. New rows carry
@@ -515,8 +493,6 @@ export class Crew {
   }
 
   snapshot(viewer = OWNER) {
-    // The house being ready settles every outstanding 'set it up' ask by itself.
-    if (this.connections.houseGoogle()) this.db.run("UPDATE asks SET state = 'withdrawn', answer = 'house-ready' WHERE kind = 'setup' AND state = 'open'");
     const files = (task: number) => this.taskFiles(task).map((d) => d.path);
     const me = this.viewer(viewer);
     return {
@@ -527,7 +503,7 @@ export class Crew {
       tasks: this.db.all('SELECT * FROM tasks WHERE bot != ? AND member = ? ORDER BY id DESC LIMIT 50', CHIEF, me.id).map((t) => ({ ...this.task(t), files: t.state === 'done' ? files(t.id) : [] })),
       ideas: this.ideas(me.id),
       room: (() => { const r = this.room(me.id); return { last: r.lines.at(-1) ?? null, busy: r.busy }; })(),
-      asks: this.db.all("SELECT * FROM asks WHERE state = 'open' AND (COALESCE(member, ?) = ? OR (kind = 'setup' AND json_extract(detail, '$.asker') = ?)) ORDER BY id", OWNER, me.id, me.id).map((a) => this.askView(a)),
+      asks: this.db.all("SELECT * FROM asks WHERE state = 'open' AND COALESCE(member, ?) = ? ORDER BY id", OWNER, me.id).map((a) => this.askView(a)),
       events: this.db.events(0, 80, me.id),
       /** This member's AI accounts that are resting now, and until when (docs/ui-contract.md). */
       resting: Object.fromEntries(Object.keys(PROVIDERS).map((k) => [k, this.restingUntil(k, me.id)]).filter(([, t]) => t)),
@@ -1280,10 +1256,9 @@ export class Crew {
     // so the standing prompt need not carry them (and their staleness) on every turn.
     const crew = this.bots().filter((b) => b.id !== CHIEF)
       .map((b) => `${b.display} (id ${b.id})`).join('; ') || 'nobody yet';
-    const house = this.members().length > 1 ? ` You are speaking with ${member.name}, one of the household; each person has their own crew thread and AI accounts.` : '';
     const history = this.db.all("SELECT author, text FROM messages WHERE bot = ? AND member = ? AND id < (SELECT MIN(id) FROM messages WHERE task_id = ?) ORDER BY id DESC LIMIT 6", CHIEF, member.id, task.id)
       .reverse().map((m) => `${m.author === 'person' ? 'Person' : 'Chief'}: ${short(String(m.text).split('[tool ')[0], 300)}`).join('\n').slice(0, 1500);
-    return `${this.memory(task.bot, member.id)}[Crewhouse]${house} Crew: ${crew}.\n${history ? `Earlier in this chat:\n${history}\n` : ''}The person says: ${task.body}`;
+    return `${this.memory(task.bot, member.id)}[Crewhouse] Crew: ${crew}.\n${history ? `Earlier in this chat:\n${history}\n` : ''}The person says: ${task.body}`;
   }
 
   /** What this member's crew actually finished: titles and delivered files, for Chief's crew_status.
@@ -1537,7 +1512,6 @@ export class Crew {
    *  they sign in. The app shows the sign-in (or the plan's options) right under these words. */
   private pause(task: Row, choices: disk.Brain[]) {
     const member = task.member ?? OWNER;
-    const whose = this.members().length > 1 ? `${this.member(member).name}'s` : '';
     const name = PROVIDERS[choices[0]?.provider]?.name ?? 'ChatGPT';
     const who = this.bot(task.bot)!.display;
     // Only accounts the member has: a resting one wakes up; one never signed in doesn't.
@@ -1547,18 +1521,17 @@ export class Crew {
       const handoff = this.handoffs.get(task.id) ?? '';
       this.handoffs.delete(task.id);
       const plan = choices.some((b) => this.accounts.notIncluded(member, b.provider));
-      const owner = member !== OWNER ? this.member(OWNER).name : '';
       const first = !this.db.get("SELECT 1 FROM tasks WHERE member = ? AND id != ? AND state != 'paused'", member, task.id);
       wake = null;
       state = plan ? `Waiting for a ${name} plan with helpers.` : `Waiting for you to sign in with ${name}.`;
-      words = plan ? `Your ${name} plan doesn't include helpers yet. Everything else in ${name} is fine. ${name} Plus includes it${owner ? `, or you can ask ${owner} to cover it` : ''}.`
+      words = plan ? `Your ${name} plan doesn't include helpers yet. Everything else in ${name} is fine. ${name} Plus includes it.`
         : /sign in again/.test(handoff) ? signedOutWords(name)
         : first && task.bot === CHIEF ? `The crew uses your ${name} account. Sign in when you're ready and I'll start.`
         : `${task.bot === CHIEF ? 'I' : who} will start the moment you sign in with ${name}.`;
       voice = task.bot === CHIEF ? 'bot' : 'system';
     } else {
       wake = Math.min(...rests);
-      const why = choices.length === 1 ? `Your ${name} is resting until ${clock(wake)}` : `All ${whose ? whose + ' ' : ''}AI accounts are resting until ${clock(wake)}`;
+      const why = choices.length === 1 ? `Your ${name} is resting until ${clock(wake)}` : `All your AI accounts are resting until ${clock(wake)}`;
       state = `${why}.`;
       words = `${why}. ${choices.length === 1 ? `${who} will finish this then` : "I'll pick this up then"}.`;
       voice = 'system';
@@ -1585,14 +1558,6 @@ export class Crew {
   retryAccount(member: number, key: string) {
     this.accounts.notIncluded(member, key, false);
     this.wake(member);
-  }
-
-  /** "Ask the owner to cover it": a note in the owner's own Chief thread, in plain words. Nothing is spent by asking. */
-  askOwner(member: number, key: string) {
-    if (member === OWNER) throw fail('you are the owner');
-    const m = this.member(member);
-    this.say(CHIEF, 'bot', `${m.name} asked if you could cover their helpers. Their ${PROVIDERS[key].name} plan doesn't include them yet; ${PROVIDERS[key].name} Plus does.`, null, OWNER);
-    this.say(CHIEF, 'bot', `I've asked ${this.member(OWNER).name} for you. I'll carry on the moment it's sorted.`, null, member);
   }
 
   private teamJob(task: Row) {

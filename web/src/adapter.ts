@@ -15,7 +15,7 @@ export type Helper = {
 };
 export type Choice = { label: string; body: Json; primary?: boolean };
 export type Card = {
-  id: number; helper: string; kind: 'ok' | 'spend' | 'question' | 'connect' | 'routine' | 'setup' | 'plan'; head: string; words: string;
+  id: number; helper: string; kind: 'ok' | 'spend' | 'question' | 'connect' | 'routine' | 'plan'; head: string; words: string;
   preview?: { head?: string; body: string }; choices: Choice[]; reply: boolean; app?: App; at: number;
   /** Chief's offered routine: the lines to confirm (cadence, what, quiet, first run), the schedule words to edit, and
    *  the time-zone line when the home computer's clock sits in another zone from this device's. */
@@ -31,7 +31,7 @@ export type Card = {
   draftText?: string;
 };
 /** The small line above an ask's title: what kind of yes it wants, so the title itself can stay plain. */
-export const askTag = (c: Card) => ({ spend: 'Wants to spend money', question: 'Has a question', routine: 'A routine to start', plan: 'A plan to start', setup: 'Home setup', connect: 'Wants an app' } as Record<string, string>)[c.kind] ?? 'Needs your OK';
+export const askTag = (c: Card) => ({ spend: 'Wants to spend money', question: 'Has a question', routine: 'A routine to start', plan: 'A plan to start', connect: 'Wants an app' } as Record<string, string>)[c.kind] ?? 'Needs your OK';
 export type Work = { helper: string; title: string; line: string; waiting: boolean; things: FileView[] };
 export type Thing = { id: number; helper: string; title: string; at: number; summary: string; files: FileView[] };
 export type FileView = { url: string; kind: 'video' | 'image' | 'doc' | 'sheet' | 'page'; name: string };
@@ -517,7 +517,6 @@ export const briefTime = (t: number) => { const m = Math.floor((Date.now() - t) 
 export function needsYou(state: Json): Card[] {
   const rank = (a: Json) => {
     const d = a.detail ?? {};
-    if (a.kind === 'setup') return state.person.id === OWNER ? 1 : 3; // the owner's to-do, not the asker's
     if (a.kind === 'propose') return d.draft ? 1 : 3; // a draft needs the person's yes; other suggestions live in the chat
     if (a.kind === 'connect' || d.app) return 3;
     if (d.spends || d.effect === 'spend' || d.effect === 'send') return 0;
@@ -558,13 +557,6 @@ export function card(a: Json, state: Json): Card {
   const name = crewName(state, a.bot);
   const d = a.detail ?? {};
   const base = { id: a.id, helper: a.bot, at: a.at, reply: false };
-  if (a.kind === 'setup') {
-    // The house isn't ready for this app: the ask on the owner's list, and how the asker sees it afterwards.
-    const app = apps(state).find((x) => x.id === d.app);
-    return { ...base, kind: 'setup', status: 'Home setup', head: `${d.person ?? 'Someone'} would like ${app?.name ?? 'an app'}`,
-      words: `${d.person ?? 'Someone'} would like ${app?.name ?? 'an app'} in this house. Setting Google up is a one-time job, about 20 minutes, and then everyone can use it.`,
-      choices: [] };
-  }
   if (a.kind === 'connect' || d.app) {
     const app = apps(state).find((x) => x.id === d.app) ?? APPS[0];
     return { ...base, kind: 'connect', app, status: `Wants to use ${app.name}`, head: `${name} could use ${app.name}`, words: plain(d.words ?? `${name} can do this with your ${app.name}. Connect it?`),
