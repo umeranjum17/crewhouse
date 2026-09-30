@@ -283,6 +283,7 @@ export function anywhere(link: Json) {
 /** What a quick knock on the computer's address found: `answers` (something is listening), `refused` (the computer
  *  answered, but nothing listens there), `timeout` (nothing came back within the bound). Never hangs: `ms` ends it. */
 export type Knock = 'answers' | 'refused' | 'timeout';
+// Migration debt (G06): reach has no portable probe(url, {timeout}) API.
 export async function knock(url: string, ms = 4000, get: typeof fetch = fetch): Promise<Knock> {
   const stop = new AbortController();
   const started = Date.now();
