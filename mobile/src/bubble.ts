@@ -2,7 +2,10 @@
 // Off until the person switches it on in Settings. While it is on, it holds the phone's link (src/link.ts), so his face
 // follows the crew from the same refresh as every screen: it changes only when something lands, never on a timer.
 // A tap opens his panel (src/panel.tsx). On iPhone the kit is unsupported and every call is a no-op.
+// Write it here: the box the person is typing in is read once, on that tap, through Crewhouse's own accessibility
+// service (the crewhouse-net module) — never in the background, and never a password box (the kit skips those).
 import { overlay, stateWords, words, type OverlayState } from '@byokit/overlay';
+import { focusedField } from '@byokit/overlay/focused-field';
 import * as SecureStore from 'expo-secure-store';
 import * as A from '../../web/src/adapter.ts';
 import { api, setTransport, type Json } from '../../web/src/api.ts';
@@ -69,10 +72,42 @@ export async function bubbleResume(grant: Grant) {
 }
 
 export const closePanel = () => overlay.closePanel();
+/** What to do when the phone greys out a switch for an app installed outside its store. */
+export const restrictedWords = () => words('overlay.restricted');
 /** Hand my screen to…: the panel steps aside, the phone asks (every time) and takes one still of the screen, and the
  *  panel comes back with it to pick who gets it. A no leaves nothing behind. */
 export async function handScreen() {
   await overlay.closePanel();
   const frame = await screenFrame().catch(() => '');
   if (frame) await overlay.openPanel({ frame });
+}
+
+/** The box in focus when he was tapped: its words and the part the person picked ('' for none), or 'off' while the
+ *  phone hasn't let him see it, or null for none. */
+export type Box = { app: string; text: string; picked: string } | 'off' | null;
+let box: Promise<Box> = Promise.resolve(null);
+// Read on the tap itself, both asks at once: his panel opens on the same tap and takes the focus with it.
+overlay.on('tap', () => {
+  box = Promise.all([focusedField.available(), focusedField.read()]).then(([on, f]) =>
+    (!on ? 'off' : f ? { app: f.app, text: f.text, picked: f.selection ? f.text.slice(f.selection.start, f.selection.end).trim() && f.text.slice(f.selection.start, f.selection.end) : '' } : null), () => null);
+});
+/** The panel takes the tap's box once; a panel opened any other way has none. */
+export function tappedBox() { const b = box; box = Promise.resolve(null); return b; }
+
+/** Put it in: the panel steps aside and the words become what the box the person was in says (or, with a part
+ *  picked, go over that part). Nothing is sent: they press the app's own Send. An app that turns the words away gets
+ *  them copied, and he says how to paste. If the box in focus is no longer the one read on the tap (another app, or
+ *  its words changed), nothing is put in: he says the draft waits in `who`'s chat. */
+export async function putIn(text: string, who: string, was: { app: string; text: string; picked: string }) {
+  let gone = () => {};
+  const closed = new Promise<void>((done) => { gone = done; setTimeout(done, 2000); }); // a panel already closed says nothing
+  const off = overlay.on('panel', (e) => { if (!e.open) gone(); });
+  await overlay.closePanel();
+  await closed;
+  off();
+  const now = await focusedField.read().catch(() => null);
+  const same = !!now && now.app === was.app && now.text === was.text;
+  const r = same ? await focusedField.insert(text, { replace: was.picked ? 'selection' : 'all', attempts: 13, retryMs: 150, acceptNewlineLoss: true }).catch(() => 'failed' as const) : 'failed';
+  if (r === 'copied') overlay.say('Copied: hold the box and paste', 'chief_idle', 6000, { announce: true });
+  else if (r === 'failed') overlay.say(`Couldn't put it in. It's in ${who}'s chat.`, 'chief_worried', 6000, { announce: true });
 }

@@ -810,8 +810,20 @@ test('Chief on the screen: off until switched on, one door to the overlay kit, a
   const files = [...readdirSync(join(mobile, 'src')).map((f) => join('src', f)), 'App.tsx', 'index.ts'];
   assert.deepEqual(files.filter((f) => readFileSync(join(mobile, f), 'utf8').includes('@byokit/overlay')), [join('src', 'bubble.ts')]);
   const bubble = readFileSync(join(mobile, 'src', 'bubble.ts'), 'utf8');
-  assert.match(bubble, /host: 'window'/, 'no accessibility service: nothing is read from other apps');
-  assert.doesNotMatch(bubble + readFileSync(join(mobile, 'src', 'panel.tsx'), 'utf8'), /focused-field|setInterval/, 'no field reading, no timers');
+  assert.match(bubble, /host: 'window'/, 'the bubble floats in its own window, not the accessibility service');
+  assert.doesNotMatch(bubble + readFileSync(join(mobile, 'src', 'panel.tsx'), 'utf8'), /setInterval/, 'no timers');
+  // Write it here: the box is read once, on the person's tap, and filled only through the kit; the app's own
+  // accessibility service does nothing but hand itself to the kit.
+  assert.deepEqual([...bubble.matchAll(/focusedField\.read\(/g)].length, 2, 'on the tap, and Put it in checking it is still that box');
+  assert.match(bubble.slice(bubble.indexOf('export async function putIn')), /const now = await focusedField\.read\(\)[\s\S]*const same = !!now && now\.app === was\.app && now\.text === was\.text;[\s\S]*same \? await focusedField\.insert/);
+  assert.match(bubble, /overlay\.on\('tap', \(\) => \{\n  box = Promise\.all\(\[focusedField\.available\(\), focusedField\.read\(\)\]\)/);
+  const a11y = join(mobile, 'modules', 'crewhouse-net', 'android', 'src', 'main');
+  const service = readFileSync(join(a11y, 'java', 'expo', 'modules', 'crewhousenet', 'CrewhouseAccessibilityService.kt'), 'utf8');
+  assert.match(service, /override fun onServiceConnected\(\) = ByokitAccessibility\.attach\(this\)/);
+  assert.match(service, /ByokitAccessibility\.detach\(this\)/);
+  assert.match(service, /override fun onAccessibilityEvent\(event: AccessibilityEvent\?\) \{\}/, 'it watches nothing itself');
+  assert.match(readFileSync(join(a11y, 'res', 'xml', 'crewhouse_accessibility.xml'), 'utf8'), /flagRetrieveInteractiveWindows[\s\S]*canRetrieveWindowContent="true"/);
+  assert.match(readFileSync(join(a11y, 'AndroidManifest.xml'), 'utf8'), /CrewhouseAccessibilityService"[\s\S]*BIND_ACCESSIBILITY_SERVICE/);
   // Every mood it can wear is a still the config plugin copies in, and the notification's glyph is there too.
   const app = JSON.parse(readFileSync(join(mobile, 'app.json'), 'utf8'));
   const moods = app.expo.plugins.find((p: unknown) => Array.isArray(p) && p[0] === '@byokit/overlay')[1].moods as Record<string, string>;
@@ -824,16 +836,43 @@ test('Chief on the screen: off until switched on, one door to the overlay kit, a
 test('the bubble and the chip share one quick-action list: fill a box, never send, and only this crew\'s helpers', () => {
   const s = { ...state, bots: [...state.bots.filter((b) => b.id !== 'scribe'), bot('scribe')],
     ideas: [{ bot: 'scribe', ask: 'Scribe, turn this into posts: ' }, { bot: 'reel', ask: 'Reel, edit my clip', needs: ['An app'] }] };
-  const q = A.quick(s);
-  assert.deepEqual(q.map((a) => a.id), ['needs', 'ask', 'screen', 'write', 'demo']);
-  assert.equal(q.find((a) => a.id === 'write')!.url, `crewhouse://ask?to=scribe&text=${encodeURIComponent('Scribe, turn this into posts: ')}`);
+  const q = A.quick(s, true, true);
+  assert.deepEqual(q.map((a) => a.id), ['needs', 'ask', 'write', 'screen', 'demo']);
+  assert.deepEqual(q.find((a) => a.id === 'write'), { id: 'write', label: 'Write it here', url: '' }, 'the bubble\'s own flow, never a box to send from');
+  assert.deepEqual(A.quick(s).map((a) => a.id), ['needs', 'ask', 'screen', 'demo'], 'no box in focus (or a password box): no Write it here');
   assert.equal(q.find((a) => a.id === 'demo')!.url, 'crewhouse://ask?to=reel&text=', 'a job waiting on an app never fills the box');
-  assert.deepEqual(A.quick({ ...s, bots: s.bots.filter((b) => b.template !== 'scribe' && b.template !== 'reel') }).map((a) => a.id), ['needs', 'ask', 'screen']);
-  assert.deepEqual(A.quick(s, false), [], 'a watching phone gets no actions');
+  assert.deepEqual(A.quick({ ...s, bots: s.bots.filter((b) => b.template !== 'scribe' && b.template !== 'reel') }, true, true).map((a) => a.id), ['needs', 'ask', 'screen'], 'no writer, no Write it here');
+  assert.deepEqual(A.quick(s, false, true), [], 'a watching phone gets no actions');
   assert.deepEqual(A.status(s)!.actions, q.slice(0, 2).map(({ id, label }) => ({ id, label })), 'the chip takes the first two');
   for (const a of q) assert.doesNotMatch(`${a.label}`, FORBIDDEN);
   // Every address is one the app reads (mobile/src/ask.ts), landing in that helper's box.
   for (const a of q.filter((x) => x.url.startsWith('crewhouse://ask'))) assert.ok(askOf(a.url, [{ id: 'scribe', template: 'scribe' }, { id: 'reel', template: 'reel' }]));
+  assert.equal(A.writer(s)?.id, 'scribe');
+});
+
+test('Write it here: the writer is asked in plain words, and its draft is the job\'s own reply', () => {
+  const tail = 'as plain text: no file, no notes.', decide = 'Don\'t ask me anything first: decide what fits and write it.';
+  assert.equal(A.writeAsk(' say no politely, offer Thursday ', { text: 'Hi Sara,\n', picked: '' }),
+    `Write it here: say no politely, offer Thursday\nThat's for the text box I'm typing in on my phone. It says so far: “Hi Sara,”\n${decide}\nReply with only what the whole box should say, keeping what I wrote where it fits, ${tail}`);
+  assert.equal(A.writeAsk('a thank-you note', { text: '  ', picked: '' }, 'Thanks!'),
+    `Write it here: a thank-you note\nThat's for the text box I'm typing in on my phone.\nNot this one: “Thanks!”\n${decide}\nReply with only what the whole box should say, ${tail}`, 'an empty box says nothing; Try again names the one passed on');
+  assert.equal(A.writeAsk('make it warmer', { text: 'Dear Sam, no. Best, Umer', picked: 'no.' }),
+    `Write it here: make it warmer\nThat's for the part I picked in a text box I'm typing in on my phone: “no.”. The whole box says: “Dear Sam, no. Best, Umer”\n${decide}\nReply with only the words to put in place of the part I picked, ${tail}`, 'a picked part is all that changes');
+  const page = (state: string, result?: string) => ({ tasks: [{ id: 7, state, ...(result === undefined ? {} : { result }) }, { id: 6, state: 'done', result: 'older' }],
+    messages: [{ task_id: 7, author: 'person', text: 'ask' }, { task_id: 7, author: 'bot', text: 'Sorry, Thursday works better.' }] });
+  assert.equal(A.draftOf(page('working'), 7), null, 'still writing');
+  assert.equal(A.draftOf(page('queued'), 7), null);
+  assert.equal(A.draftOf(page('done', ' Sorry, Thursday? '), 7), 'Sorry, Thursday?');
+  assert.equal(A.draftOf(page('done', 'Done.'), 7), '', 'an empty reply is not a draft to put in');
+  assert.equal(A.draftOf(page('failed', 'boom'), 7), '', 'it couldn\'t: nothing to put in');
+  assert.equal(A.draftOf(page('unsure'), 7), '');
+  assert.equal(A.draftOf({ tasks: [] }, 7), null);
+  assert.equal(A.waitOf(page('working'), 7), '', 'writing: nothing to wait for');
+  assert.equal(A.waitOf(page('paused', 'Waiting for you to sign in with ChatGPT.'), 7), 'Waiting for you to sign in with ChatGPT.', 'a paused job says why, never "writing" forever');
+  assert.equal(A.waitOf(page('needs_you'), 7), 'It needs your OK first.');
+  assert.equal(A.draftOf(page('paused'), 7), null);
+  for (const w of ['Write it here', 'What should it say?', 'Let Chief see the box you\'re typing in', 'Put it in', 'Try again', 'Not now', 'Copied: hold the box and paste'])
+    assert.doesNotMatch(w, FORBIDDEN);
 });
 
 test('the iPhone\'s Live Activity: the chip\'s own status, counts only until unlocked, started by work and ended by quiet', async () => {
@@ -1596,7 +1635,8 @@ test('speaking to Chief stays on the device and only fills the box: the person s
   // What was heard goes into the box through the composer's own change; the send button stays the only way out.
   const parts = src('web/src/parts.tsx'), app = src('mobile/App.tsx');
   assert.match(parts, /useVoice\(chat === 'chief', text, \(t\) => change\(t\)\)/);
-  assert.match(app, /<Mic on=\{chat === 'chief'\} text=\{text\} put=\{change\} \/>/);
+  assert.match(app, /mic = chat === 'chief' \}/, 'Chief\'s box, and Write it here\'s (mobile/src/panel.tsx), hear');
+  assert.match(app, /<Mic on=\{mic\} text=\{text\} put=\{change\} \/>/);
   for (const f of [parts.slice(parts.indexOf('function useVoice'), parts.indexOf('export function Composer')), app.slice(app.indexOf('function Mic('), app.indexOf('function Composer('))])
     assert.doesNotMatch(f, /send\(|onSend|api\./, 'the mic never sends');
 });

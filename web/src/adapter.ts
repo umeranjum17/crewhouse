@@ -665,24 +665,57 @@ export function status(state: Json, canAct = true): CrewStatus | null {
 
 /** The phone's quick actions, one list for every view of the crew (the status-bar chip takes its first two, the bubble's
  *  panel all of them). Each opens a crewhouse:// address the app already reads, where words wait in a box, never sent;
- *  `screen` is the phone's own (its screen, handed to a helper). A helper's row shows only when it is in this crew. A
- *  watching phone gets none. */
+ *  `write` and `screen` are the bubble's own. Write it here shows only while `box` (a text box had focus when he was
+ *  tapped, or the phone hasn't let him see one yet) and a writer is in this crew: it drafts, the person puts it in.
+ *  A helper's row shows only when it is in this crew. A watching phone gets none. */
 export type QuickAction = { id: 'needs' | 'ask' | 'screen' | 'write' | 'demo'; label: string; url: string };
-export function quick(state: Json, canAct = true): QuickAction[] {
+export function quick(state: Json, canAct = true, box = false): QuickAction[] {
   if (!canAct) return [];
   const needs = homeCounts(state).needs;
   const ask = (id: QuickAction['id'], template: string, label: (name: string) => string): QuickAction[] => {
-    const h = crew(state).find((x) => state.bots.find((b: Json) => b.id === x.id)?.template === template);
+    const h = hired(state, template);
     const words = String((state.ideas ?? []).find((i: Json) => i.bot === h?.id && !i.needs?.length)?.ask ?? '');
     return h ? [{ id, label: label(h.name), url: `crewhouse://ask?to=${template}&text=${encodeURIComponent(words)}` }] : [];
   };
   return [
     ...(needs ? [{ id: 'needs' as const, label: 'See what needs you', url: 'crewhouse://needs' }] : []),
     { id: 'ask', label: 'Ask Chief', url: 'crewhouse://ask' },
+    ...(box && writer(state) ? [{ id: 'write' as const, label: 'Write it here', url: '' }] : []),
     { id: 'screen', label: 'Hand my screen to…', url: '' },
-    ...ask('write', 'scribe', (n) => `Write with ${n}`),
     ...ask('demo', 'reel', (n) => `Record a demo with ${n}`),
   ];
+}
+const hired = (state: Json, template: string) => crew(state).find((x) => state.bots.find((b: Json) => b.id === x.id)?.template === template);
+/** Who drafts for Write it here: this crew's Scribe. */
+export const writer = (state: Json) => hired(state, 'scribe');
+/** Write it here's ask, in the writer's chat like any other (its first line is the job's title): what the person
+ *  wants, what the box says, and (on Try again) the draft they passed on. The draft is what the whole box should say,
+ *  keeping what they wrote; with some of it picked, it is only what goes in place of that part. */
+export function writeAsk(want: string, box: { text: string; picked: string }, not = '') {
+  const sofar = box.text.trim(), picked = box.picked.trim();
+  return [
+    `Write it here: ${want.trim()}`,
+    picked ? `That's for the part I picked in a text box I'm typing in on my phone: “${picked}”. The whole box says: “${sofar}”`
+      : `That's for the text box I'm typing in on my phone.${sofar ? ` It says so far: “${sofar}”` : ''}`,
+    not && `Not this one: “${not}”`,
+    "Don't ask me anything first: decide what fits and write it.",
+    picked ? 'Reply with only the words to put in place of the part I picked, as plain text: no file, no notes.'
+      : `Reply with only what the whole box should say${sofar ? ', keeping what I wrote where it fits' : ''}, as plain text: no file, no notes.`,
+  ].filter(Boolean).join('\n');
+}
+/** That ask's draft, from the writer's page: its job's reply once done, '' when it couldn't (crewd's "Done." is an
+ *  empty reply), null while it writes. */
+export function draftOf(page: Json, task: number): string | null {
+  const t = (page?.tasks ?? []).find((x: Json) => x.id === task);
+  if (!t || !['done', 'failed', 'unsure'].includes(t.state)) return null;
+  const r = t.state === 'done' ? String(t.result ?? '').trim() : '';
+  return r === 'Done.' ? '' : r;
+}
+/** Why that job isn't writing yet, in crewd's own words ('' while it writes): paused for a sign-in or a rest, or
+ *  waiting on the person. */
+export function waitOf(page: Json, task: number): string {
+  const t = (page?.tasks ?? []).find((x: Json) => x.id === task);
+  return t?.state === 'paused' ? plain(t.result ?? '') || 'Waiting for you.' : t?.state === 'needs_you' ? 'It needs your OK first.' : '';
 }
 
 /** Home's standing "hand me a job" list: the jobs the crew offers to do end to end, from crewd's `ideas[]` — which is
