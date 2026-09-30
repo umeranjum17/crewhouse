@@ -75,8 +75,8 @@ export class Store {
         (SELECT COALESCE(member, 1) FROM asks WHERE json_type(e.data, '$.ask') = 'integer' AND id = json_extract(e.data, '$.ask')),
         json_extract(e.data, '$.member'),
         (SELECT COALESCE(member, 1) FROM routines WHERE id = json_extract(e.data, '$.routine'))) AS m FROM events e;
-      UPDATE events SET data = json_remove(data, '$.ask') WHERE kind = 'money.spent' AND seq IN (SELECT seq FROM split_owner WHERE m IS NOT 1);
-      DELETE FROM events WHERE kind NOT LIKE 'money.%' AND seq IN (SELECT seq FROM split_owner WHERE m IS NOT 1);
+      UPDATE events SET data = json_remove(data, '$.ask') WHERE kind = 'money.spent' AND seq IN (SELECT seq FROM split_owner WHERE m IS NOT NULL AND m != 1);
+      DELETE FROM events WHERE kind NOT LIKE 'money.%' AND seq IN (SELECT seq FROM split_owner WHERE m IS NOT NULL AND m != 1);
       DROP TABLE split_owner;
       DELETE FROM devices WHERE COALESCE(member, 1) != 1;
       DELETE FROM tasks WHERE COALESCE(member, 1) != 1;

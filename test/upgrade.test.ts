@@ -39,9 +39,9 @@ function seed() {
   for (const [key, value] of Object.entries({ 'memory.limited.1': 'true', 'push.held.1': '1', 'phone.push.mine': 'ExponentPushToken[mine]', 'phone.push.former': 'ExponentPushToken[former]', 'phone.offer.1': JSON.stringify({ message: 1, member: 2 }) }))
     db.run('INSERT INTO settings (key, value) VALUES (?, ?)', key, value);
   db.event('learn.applied', 'chief', { task: 0, member: 2, skill: 'former private skill' });
-  db.event('desktop.giveback', 'chief', { note: 'former private card' });
-  db.event('run.call', 'chief', { task: 0 });
-  db.event('net.refused', 'chief', { to: 'https://private.example/' });
+  db.event('desktop.giveback', 'chief', { member: 2, note: 'former private card' });
+  db.event('run.call', 'chief', { task: 2 });
+  db.event('net.refused', 'chief', { member: 2, to: 'https://private.example/' });
   db.event('routine.fired', 'chief', { routine: 2, watch: 'changed' });
   db.event('task.done', 'chief', { task: 2 });
   const now = new Date();
@@ -55,6 +55,10 @@ function seed() {
 
 test('upgrade preserves the person, spending and all files; former live actors and private events leave together', async () => {
   const { db, cfg, files, baseline, rows } = seed();
+  db.event('bot.settings', 'chief', { by: 'person' });
+  db.event('system.slept', null, { from: 10, to: 20 });
+  db.event('money.spent', 'chief', { ask: 999, amount: 0 });
+  const unassigned = db.all("SELECT * FROM events WHERE kind IN ('bot.settings', 'system.started', 'system.slept') OR (kind = 'money.spent' AND json_extract(data, '$.ask') = 999)");
   const before = rows();
   const bytes = files.map((f) => readFileSync(f));
   const settings = db.all("SELECT * FROM settings WHERE key != 'phone.offer.1'");
@@ -67,6 +71,7 @@ test('upgrade preserves the person, spending and all files; former live actors a
   db.single(cfg);
   assert.ok(existsSync(backup));
   assert.ok(!existsSync(`${backup}.part`) && !existsSync(`${backup}.part-journal`));
+  assert.deepEqual(db.all("SELECT * FROM events WHERE seq IN (" + unassigned.map((e) => e.seq).join(',') + ")"), unassigned, 'member-less bot, crew-wide and spending events survive byte-for-byte');
   const saved = new DatabaseSync(backup, { readOnly: true });
   assert.equal(saved.prepare('SELECT COUNT(*) AS n FROM people').get()!.n, 2);
   assert.equal(saved.prepare('SELECT COUNT(*) AS n FROM tasks WHERE member = 2').get()!.n, 3);
