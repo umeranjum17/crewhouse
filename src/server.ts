@@ -212,26 +212,26 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/messages$/)) && m === 'POST') { const b = body; return crew.post(r[1], b.text ?? '', b.model, me, b.photos, b.room === true, key); }
     if ((r = p.match(/^\/api\/people\/(\d+)$/)) && m === 'PUT') return crew.updateMember(OWNER, body);
     if (m === 'GET' && p === '/api/accounts') {
-      // Everyone's AI accounts: signed in or not (the engine's own local check), resting until when, and any sign-in in progress.
+      // The person's AI accounts: signed in or not (the engine's own local check), resting until when, and any sign-in in progress.
       // A work ChatGPT (Business, Enterprise, Edu) is flagged by its email, so the app can steer to a personal one.
-      return Promise.all(crew.members().flatMap((mm) => Object.entries(PROVIDERS).map(async ([key, pr]) => {
-        const signedIn = await crew.accounts.signedIn(mm.id, key);
-        return { member: mm.id, account: key, name: pr.name, signedIn, restingUntil: crew.restingUntil(key, mm.id), signIn: crew.accounts.view(mm.id, key),
-          notIncluded: crew.accounts.notIncluded(mm.id, key), work: false };
-      })));
+      return Promise.all(Object.entries(PROVIDERS).map(async ([key, pr]) => {
+        const signedIn = await crew.accounts.signedIn(key);
+        return { account: key, name: pr.name, signedIn, restingUntil: crew.restingUntil(key), signIn: crew.accounts.view(key),
+          notIncluded: crew.accounts.notIncluded(key), work: false };
+      }));
     }
     // "Sign in with …": start (the page by default, `via: 'code'` for the code), paste the address the browser landed on,
     // cancel, sign out; "I've changed my plan" (retry).
     if ((r = p.match(/^\/api\/accounts\/(\d+)\/([a-z]+)\/(login|paste|cancel|logout|retry)$/)) && m === 'POST') {
-      const [who, key, act] = [OWNER, r[2], r[3]];
+      const [key, act] = [r[2], r[3]];
       provider(key);
       const b = body;
-      if (act === 'login') return { ok: true, signIn: await crew.accounts.login(who, key, b.via === 'code' ? 'code' : 'browser', !!b.fresh) };
-      else if (act === 'retry') crew.retryAccount(who, key);
-      else if (act === 'paste') crew.accounts.paste(who, key, String(b.text ?? ''));
-      else if (act === 'cancel') crew.accounts.cancel(who, key);
-      else await crew.accounts.logout(who, key);
-      return { ok: true, signIn: crew.accounts.view(who, key) };
+      if (act === 'login') return { ok: true, signIn: await crew.accounts.login(key, b.via === 'code' ? 'code' : 'browser', !!b.fresh) };
+      else if (act === 'retry') crew.retryAccount(key);
+      else if (act === 'paste') crew.accounts.paste(key, String(b.text ?? ''));
+      else if (act === 'cancel') crew.accounts.cancel(key);
+      else await crew.accounts.logout(key);
+      return { ok: true, signIn: crew.accounts.view(key) };
     }
     // Connections: the viewer's own apps (Notion, Canva, Google…), connected on the app's own page (docs/ui-contract.md).
     if (m === 'GET' && p === '/api/connections') return crew.connections.list(me);
@@ -245,10 +245,10 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
         .map((e: any) => { const d = JSON.parse(e.data); let input = {}; try { input = JSON.parse(d.input ?? '{}'); } catch { /* unreadable input: words only */ }
           return { at: e.at, words: toolWords(d.tool, input) || `Used ${String(d.tool).replace(/_/g, ' ')}`, ok: d.ok !== false && !String(d.head ?? '').startsWith('error:') }; });
     }
-    // What the engine learned from this member's work, and Forget.
-    if (m === 'GET' && p === '/api/learned') return crew.runtime.learned ? crew.runtime.learned(me) : [];
+    // What the engine learned from your work, and Forget.
+    if (m === 'GET' && p === '/api/learned') return crew.runtime.learned ? crew.runtime.learned() : [];
     if ((r = p.match(/^\/api\/learned\/forget$/)) && m === 'POST') {
-      if (body.id) await crew.runtime.forget?.(me, String(body.id), String(body.skill ?? ''));
+      if (body.id) await crew.runtime.forget?.(String(body.id), String(body.skill ?? ''));
       return { ok: true };
     }
     if (m === 'GET' && p === '/api/learning') return { on: await Promise.resolve(crew.learningOn()) };

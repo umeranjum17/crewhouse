@@ -4,7 +4,7 @@ import { join, resolve } from 'node:path';
 /** Everything the daemon needs to know about where it lives. All overridable by env,
  *  because the tests need their own data dir. Never inside the repo. */
 export interface Config {
-  /** SQLite, the endpoint file, the engine's own folder and each member's sign-ins live here. */
+  /** SQLite, the endpoint file, the engine's own folder and the person's sign-ins live here. */
   stateDir: string;
   /** Human-visible crew folder: bots/<name>/, crew/. */
   crewDir: string;

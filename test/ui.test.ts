@@ -84,7 +84,7 @@ const FORBIDDEN = /fc-list|2>&1|\| ?head|\bBash\b|claude|anthropic|codex|sonnet|
 const shown = (x: unknown) => JSON.stringify(x, (k, v) => (k === 'url' || k === 'at' || k === 'quietSince' ? undefined : v));
 
 test('nothing technical survives the adapter', () => {
-  const h = A.chatgpt([{ member: 2, account: 'chatgpt', name: 'ChatGPT', signedIn: false, signIn: { state: 'waiting', url: 'https://auth.openai.com/codex/device', code: 'AB12-CDE34' } }], 2);
+  const h = A.chatgpt([{ account: 'chatgpt', name: 'ChatGPT', signedIn: false, signIn: { state: 'waiting', url: 'https://auth.openai.com/codex/device', code: 'AB12-CDE34' } }]);
   const views = {
     crew: A.crew(state), chief: A.chief(state), cards: A.cards(state), work: A.work(state), things: A.things(state), ideas: A.ideas(state),
     steps: A.steps(page.trail, undefined, true), lines: A.lines(page, 'reel'), memories: A.memories(page.notes), personality: A.personality(page.soul), knows: A.knows(page.skills), routines: A.routines(state), gallery: A.gallery(state),
@@ -108,9 +108,9 @@ test('the account list is the one crewd really serves: every route, none made up
   const providers = Object.keys(PROVIDERS);
   assert.deepEqual(A.AIS.map((ai) => ai.key), providers);
   assert.equal(A.AIS[0].key, 'chatgpt');
-  const rows = providers.flatMap((key) => [1, 2].map((member) => ({ member, account: key, name: key, signedIn: false, restingUntil: 0 })));
+  const rows = providers.map((key) => ({ account: key, name: key, signedIn: false, restingUntil: 0 }));
   for (const ai of A.AIS) {
-    const g = A.account(rows, 1, ai.key);
+    const g = A.account(rows, ai.key);
     assert.equal(g.state, 'signed-out');
     assert.ok(!/connected|ready/i.test(JSON.stringify(g)), 'a route without an account never reads as tested');
   }
@@ -471,7 +471,7 @@ test('the phone app moves only through mobile/src/motion.ts, where Reduce Motion
 });
 
 test('sign-in states reach the screens as plain states, never the engine\'s words', () => {
-  const row = (signIn: any, extra = {}) => A.account([{ member: 2, account: 'chatgpt', name: 'ChatGPT', signedIn: false, signIn, ...extra }], 2);
+  const row = (signIn: any, extra = {}) => A.account([{ account: 'chatgpt', name: 'ChatGPT', signedIn: false, signIn, ...extra }]);
   const page = row({ state: 'waiting', via: 'browser', url: 'https://auth.openai.com/oauth/authorize?x' });
   assert.equal(page.page, 'https://auth.openai.com/oauth/authorize?x', 'the redirect: a page to open, no code');
   assert.equal(page.signing, null);

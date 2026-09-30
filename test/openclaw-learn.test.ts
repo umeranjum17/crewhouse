@@ -33,12 +33,12 @@ const runE2E = process.env.CREWHOUSE_LEARN_E2E === '1';
     assert.equal(applied.record?.status ?? applied.status, 'applied', 'the proposal is applied');
 
     // The runtime's learned record shows it, as the crew's Learned rows read it.
-    const learned = await runtime.learned(1);
+    const learned = await runtime.learned();
     assert.ok(learned.some((p) => p.state === 'applied' && p.skill === 'Fare Check'), JSON.stringify(learned));
 
     // Forget: the one-shot restore turn runs with only the workshop available, and the skill leaves the workspace.
-    await runtime.forget(1, learned.find((p) => p.skill === 'Fare Check')!.id, 'Fare Check');
-    const left = () => existsQuiet(runtime.workspaceOf(1)).filter((n) => /fare/i.test(n));
+    await runtime.forget(learned.find((p) => p.skill === 'Fare Check')!.id, 'Fare Check');
+    const left = () => existsQuiet(runtime.workspaceOf()).filter((n) => /fare/i.test(n));
     for (const until = Date.now() + 10_000; left().length && Date.now() < until;) await new Promise((r) => setTimeout(r, 100));
     assert.deepEqual(left(), [], 'the forgotten skill left the workspace');
   } finally {

@@ -952,8 +952,8 @@ export const AI_ROUTES = 'Each one uses a plan you already pay for. Paying for e
 
 /** One of the person's own AI accounts: signed in; a sign-in in progress (ChatGPT's page to say yes on, or the fallback
  *  code); how a sign-in ended (declined, the port busy, expired, failed); a plan without helpers; a work account. */
-export function account(accounts: Json[] | null, member: number, key = 'chatgpt') {
-  const a = accounts?.find((x) => x.member === member && x.account === key);
+export function account(accounts: Json[] | null, key = 'chatgpt') {
+  const a = accounts?.find((x) => x.account === key);
   const none = { signing: null, page: '', expired: false, failed: false, declined: false, busy: false, resting: '', notIncluded: false, work: '' };
   if (!a) return { state: 'checking' as const, ...none };
   const s = a.signIn;
@@ -970,14 +970,14 @@ export function account(accounts: Json[] | null, member: number, key = 'chatgpt'
     resting: a.restingUntil > 0 ? `Resting until ${clock(a.restingUntil)}` : '', notIncluded: !!a.notIncluded,
     work: a.work ? (typeof a.work === 'string' ? a.work : 'a work account') : '' };
 }
-export const chatgpt = (accounts: Json[] | null, member: number) => account(accounts, member, 'chatgpt');
+export const chatgpt = (accounts: Json[] | null) => account(accounts, 'chatgpt');
 
 /** Settings' account list: the accounts signed in first (or ChatGPT, the front door, while none is), every other route
  *  under "More ways to sign in". Each row's one line says where it stands in plain words; a route nobody has signed in
  *  to here is "not set up", never connected. */
-export function aiList(accounts: Json[] | null, member: number) {
+export function aiList(accounts: Json[] | null) {
   const rows = AIS.map((ai) => {
-    const g = account(accounts, member, ai.key);
+    const g = account(accounts, ai.key);
     const says = g.state === 'ready'
       ? g.notIncluded ? "Signed in, but your plan doesn't include helpers yet." : g.resting ? `Signed in. ${g.resting}.` : `Signed in${g.work ? ` as ${g.work}, a work account` : ''}. The crew uses it.`
       : g.state === 'checking' ? 'Checking…'
@@ -991,9 +991,9 @@ export function aiList(accounts: Json[] | null, member: number) {
   return { mine: front, more: rows.filter((r) => !front.includes(r)) };
 }
 /** The account the crew thinks with: the first one signed in. Null while checking, 'none' when there is none yet. */
-export function thinking(accounts: Json[] | null, member: number) {
+export function thinking(accounts: Json[] | null) {
   if (!accounts) return null;
-  return AIS.find((a) => account(accounts, member, a.key).state === 'ready') ?? 'none';
+  return AIS.find((a) => account(accounts, a.key).state === 'ready') ?? 'none';
 }
 
 /** Whose sign-in page an app opens: "Google" for Gmail, Calendar and Drive. */

@@ -37,10 +37,10 @@ test('ChatGPT uses the canonical gateway auth provider for status, logout and mi
   try {
     await f.started;
     writeFileSync(legacy, legacyAuth());
-    assert.equal(await f.runtime.signedIn(1, 'chatgpt'), true);
-    await f.runtime.signOut(1, 'chatgpt');
+    assert.equal(await f.runtime.signedIn('chatgpt'), true);
+    await f.runtime.signOut('chatgpt');
     assert.deepEqual(f.fake.calls.find((c) => c.method === 'models.authLogout')?.params, { provider: 'openai', agentId: 'm1' });
-    assert.equal(await f.runtime.confirm(1, legacy), true);
+    assert.equal(await f.runtime.confirm(legacy), true);
     assert.ok(existsSync(`${legacy}.moved-to-engine`));
   } finally { await f.done(); await stop(); }
 });
@@ -76,17 +76,17 @@ test('a previously retired legacy import repairs through doctor without touching
       { env, cwd: env.HOME, timeout: 120_000, stdio: 'pipe' }).status, 0);
     renameSync(legacy, `${legacy}.moved-to-engine`);
     await runtime.start(host);
-    assert.equal(await runtime.signedIn(1, 'chatgpt'), false, 'legacy recognition is not canonical route access');
-    const denied = await runtime.run({ key: 'agent:m1:crewhouse:chief:before', member: 1, bot: 'chief', task: 1,
+    assert.equal(await runtime.signedIn('chatgpt'), false, 'legacy recognition is not canonical route access');
+    const denied = await runtime.run({ key: 'agent:m1:crewhouse:chief:before', bot: 'chief', task: 1,
       account: 'chatgpt', cwd: '', system: 'Be brief.', message: 'Hello', builtins: [] }, () => {});
     assert.ok(!denied.ok && 'message' in denied);
     assert.match(denied.message, /No route-compatible authentication source/);
     await runtime.stop();
-    assert.equal(await runtime.migrate(1, legacy), true, 'the retained original is repaired offline');
+    assert.equal(await runtime.migrate(legacy), true, 'the retained original is repaired offline');
     await runtime.start(host);
-    assert.equal(await runtime.signedIn(1, 'chatgpt'), true);
-    assert.equal(await runtime.confirm(1, legacy), true);
-    assert.equal(await runtime.migrate(1, legacy), false, 'confirmed repairs are not repeated on restart');
+    assert.equal(await runtime.signedIn('chatgpt'), true);
+    assert.equal(await runtime.confirm(legacy), true);
+    assert.equal(await runtime.migrate(legacy), false, 'confirmed repairs are not repeated on restart');
     const db = new DatabaseSync(join(agentDir, 'openclaw-agent.sqlite'));
     const profiles = JSON.parse((db.prepare('SELECT store_json FROM auth_profile_store').get() as { store_json: string }).store_json).profiles;
     db.close();
@@ -107,13 +107,13 @@ test('a preserved sign-in survives the upgrade, a failed import stays recoverabl
     const stub = await startModelStub();
     try {
       writeFileSync(legacy, legacyAuth());
-      assert.equal(await runtime.migrate(1, legacy), true, 'the import ran once the engine was in place');
+      assert.equal(await runtime.migrate(legacy), true, 'the import ran once the engine was in place');
       assert.ok(existsSync(legacy), 'crewhouse\u2019s copy is not retired before the gateway confirms the import');
       await runtime.start(host);
-      assert.equal(await runtime.confirm(1, legacy), true, 'the gateway reports the preserved sign-in');
+      assert.equal(await runtime.confirm(legacy), true, 'the gateway reports the preserved sign-in');
       assert.ok(!existsSync(legacy), 'only a confirmed import retires crewhouse\u2019s copy');
       assert.ok(readFileSync(`${legacy}.moved-to-engine`, 'utf8').includes('a-preserved'), 'the retire is a rename, not a rewrite');
-      assert.equal(await runtime.signedIn(1, 'chatgpt'), true, 'the gateway reports the canonical provider signed in — no second login asked');
+      assert.equal(await runtime.signedIn('chatgpt'), true, 'the gateway reports the canonical provider signed in — no second login asked');
       const db = new DatabaseSync(join(runtime.stateDir, 'openclaw/state/agents/m1/agent/openclaw-agent.sqlite'));
       const stored = JSON.parse((db.prepare('SELECT store_json FROM auth_profile_store').get() as { store_json: string }).store_json).profiles;
       db.close();
@@ -125,7 +125,7 @@ test('a preserved sign-in survives the upgrade, a failed import stays recoverabl
       assert.equal(config.config.agents.defaults.models['openai/*'].agentRuntime.id, 'openclaw');
       assert.deepEqual(config.config.agents.defaults.modelPolicy.allow, [], 'other members’ models remain selectable');
       await runtime.configureModelProvider(stub.url, 'stub-m1');
-      const end = await runtime.run({ key: 'agent:m1:crewhouse:chief:migration', member: 1, bot: 'chief', task: 1,
+      const end = await runtime.run({ key: 'agent:m1:crewhouse:chief:migration', bot: 'chief', task: 1,
         account: 'chatgpt', cwd: '', system: 'Be brief.', message: 'Hello', builtins: [] }, () => {});
       assert.ok(end.ok && end.text.includes('Hello'), JSON.stringify(end));
       assert.ok(stub.calls.length > 0, 'real agent RPC reached the local scripted model');
@@ -136,12 +136,12 @@ test('a preserved sign-in survives the upgrade, a failed import stays recoverabl
     const { legacy, runtime, stop } = await house();
     try {
       writeFileSync(legacy, legacyAuth());
-      await runtime.migrate(1, legacy);
-      assert.equal(await runtime.confirm(1, legacy), false, 'nothing is confirmed while the gateway is down');
+      await runtime.migrate(legacy);
+      assert.equal(await runtime.confirm(legacy), false, 'nothing is confirmed while the gateway is down');
       assert.ok(existsSync(legacy), 'the original sign-in survives a failed import');
       await runtime.start(host);
-      assert.equal(await runtime.confirm(1, legacy), true, 'the retry succeeds');
-      assert.equal(await runtime.signedIn(1, 'chatgpt'), true, 'still the one preserved sign-in, never a second login');
+      assert.equal(await runtime.confirm(legacy), true, 'the retry succeeds');
+      assert.equal(await runtime.signedIn('chatgpt'), true, 'still the one preserved sign-in, never a second login');
     } finally { await stop(); }
   }
   // A doctor run that imports nothing (an auth the engine cannot read) is never a confirmed migration.
@@ -149,9 +149,9 @@ test('a preserved sign-in survives the upgrade, a failed import stays recoverabl
     const { legacy, runtime, stop } = await house();
     try {
       writeFileSync(legacy, JSON.stringify({ openai: { type: 'nonsense', provider: 'openai' } }));
-      await runtime.migrate(1, legacy);
+      await runtime.migrate(legacy);
       await runtime.start(host);
-      assert.equal(await runtime.confirm(1, legacy), false, 'an import that never lands is not confirmed');
+      assert.equal(await runtime.confirm(legacy), false, 'an import that never lands is not confirmed');
       assert.ok(existsSync(legacy), 'the original sign-in is intact when the import fails');
       assert.ok(!existsSync(`${legacy}.moved-to-engine`), 'nothing was retired');
     } finally { await stop(); }

@@ -147,7 +147,7 @@ case "${1:-}" in
       case "$a" in --all) all=1 ;; --yes|-y) yes=1 ;; *) echo "usage: ./crewhouse uninstall [--all] [--yes]" >&2; exit 2 ;; esac
     done
     echo "This removes what Crewhouse installed:"
-    echo "  $STATE  (the database, the engine's own folder, household members' own AI sign-ins, desktops, log)"
+    echo "  $STATE  (the database, the engine's own folder, saved AI sign-ins, desktops, log)"
     echo "  $TOOLS  (pinned tools)"
     echo "  node_modules and web/dist in $(pwd)"
     if [ -n "$all" ]; then echo "  $CREW  (your crew: every bot's notes, skills and files)"

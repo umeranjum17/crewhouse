@@ -13,10 +13,10 @@ test('a run\'s tool call crosses the gate as the crew\'s own run; an unknown run
   const f = faked({ call: (_run, tool, input) => `${tool}: ${input.text}` });
   try {
     await f.started;
-    const end = await f.runtime.run({ key: 'agent:m1:crewhouse:chief:1', member: 1, bot: 'chief', task: 1, account: 'chatgpt',
+    const end = await f.runtime.run({ key: 'agent:m1:crewhouse:chief:1', bot: 'chief', task: 1, account: 'chatgpt',
       cwd: '', system: 'Be brief.', message: '[tool crew_report {"text":"Working"}]', builtins: [] }, () => {});
     assert.ok(end.ok, JSON.stringify(end));
-    assert.deepEqual(f.seen.gated.map(([run, tool]) => [run.bot, run.task, run.member, tool]), [['chief', 1, 1, 'crew_report']]);
+    assert.deepEqual(f.seen.gated.map(([run, tool]) => [run.bot, run.task, tool]), [['chief', 1, 'crew_report']]);
     assert.deepEqual(f.seen.called.map(([run, tool, input]) => [run.bot, run.task, tool, input]), [['chief', 1, 'crew_report', { text: 'Working' }]]);
     // Once the run is over its key is gone: a late gate is refused without asking Crewhouse.
     assert.equal((await f.ask({ kind: 'gate', key: 'agent:m1:crewhouse:chief:1', tool: 'crew_report', input: { text: 'late' } })).allow, false);
@@ -27,15 +27,15 @@ test('a run\'s tool call crosses the gate as the crew\'s own run; an unknown run
     const denied = faked({ gate: () => ({ allow: false, reason: 'The person has not approved this.', park: true }) });
     try {
       await denied.started;
-      await denied.runtime.run({ key: 'agent:m2:crewhouse:scout:4', member: 2, bot: 'scout', task: 4, account: 'chatgpt',
+      await denied.runtime.run({ key: 'agent:m1:crewhouse:scout:4', bot: 'scout', task: 4, account: 'chatgpt',
         cwd: '', system: '', message: '[tool shell {"command":"ls"}]', builtins: [] }, () => {});
-      assert.deepEqual(denied.seen.gated.map(([run, tool]) => [run.member, run.bot, tool]), [[2, 'scout', 'bash']]);
+      assert.deepEqual(denied.seen.gated.map(([run, tool]) => [run.bot, tool]), [['scout', 'bash']]);
       assert.equal(denied.seen.called.length, 0);
     } finally { await denied.done(); }
   } finally { await f.done(); }
 });
 
-test('the curation window: the member\'s own reviewer, its reconcile, one call wide', async () => {
+test('the curation window: the person\'s own reviewer, its reconcile, one call wide', async () => {
   const f = faked();
   try {
     await f.started;
@@ -43,10 +43,10 @@ test('the curation window: the member\'s own reviewer, its reconcile, one call w
     // and the real reviewer session is keyed `agent:<agentId>:skill-collection-review:incognito-<uuid>`.
     const shop = { kind: 'gate', key: 'agent:m1:skill-collection-review:incognito-abc', tool: 'skill_workshop', input: { action: 'reconcile' } };
     assert.equal((await f.ask(shop)).allow, false, 'unregistered workshop calls are denied');
-    f.runtime.armCuration(1, -1);
+    f.runtime.armCuration(-1);
     assert.equal((await f.ask(shop)).allow, false, 'outside the window (expired) everything is denied');
-    f.runtime.armCuration(1);
-    assert.equal((await f.ask({ ...shop, key: 'agent:m2:skill-collection-review:incognito-def' })).allow, false, 'another member is denied');
+    f.runtime.armCuration();
+    assert.equal((await f.ask({ ...shop, key: 'agent:m2:skill-collection-review:incognito-def' })).allow, false, "a leftover agent's review is denied");
     assert.equal((await f.ask({ ...shop, input: { action: 'restore_collection' } })).allow, false, 'a different action is denied');
     assert.equal((await f.ask({ ...shop, tool: 'bash', input: { command: 'ls' } })).allow, false, 'every other tool is denied');
     assert.equal((await f.ask(shop)).allow, true, 'armed: the exact captured review call may run');
@@ -79,18 +79,18 @@ test('a run carries its own account to the engine: the picked provider is the on
   const f = faked({}, { 'models.authStatus': () => ({ providers: [{ provider: 'openai' }] }) });
   try {
     await f.started;
-    const end = await f.runtime.run({ key: 'agent:m1:crewhouse:chief:1', member: 1, bot: 'chief', task: 1, account: 'chatgpt',
+    const end = await f.runtime.run({ key: 'agent:m1:crewhouse:chief:1', bot: 'chief', task: 1, account: 'chatgpt',
       model: 'gpt-5.1', cwd: '', system: '', message: 'Say hello.', builtins: [] }, () => {});
     assert.ok(end.ok, JSON.stringify(end));
     const agent = f.fake.calls.find((c) => c.method === 'agent');
     assert.deepEqual([(agent?.params as any)?.provider, (agent?.params as any)?.model], ['openai', 'gpt-5.1']);
     // A provider the member never signed in to ends signed-out, and the engine is never asked.
-    const out = await f.runtime.run({ key: 'agent:m1:crewhouse:chief:2', member: 1, bot: 'chief', task: 2, account: 'grok',
+    const out = await f.runtime.run({ key: 'agent:m1:crewhouse:chief:2', bot: 'chief', task: 2, account: 'grok',
       model: 'grok-4', cwd: '', system: '', message: 'Say hello.', builtins: [] }, () => {});
     assert.equal(!out.ok && 'kind' in out && out.kind, 'signed-out');
     assert.equal(f.fake.calls.filter((c) => c.method === 'agent').length, 1);
     // A brain that named no model sends the same request as before, with no provider override.
-    const plain = await f.runtime.run({ key: 'agent:m1:crewhouse:chief:3', member: 1, bot: 'chief', task: 3, account: 'chatgpt',
+    const plain = await f.runtime.run({ key: 'agent:m1:crewhouse:chief:3', bot: 'chief', task: 3, account: 'chatgpt',
       cwd: '', system: '', message: 'Say hello.', builtins: [] }, () => {});
     assert.ok(plain.ok, JSON.stringify(plain));
     const agents = f.fake.calls.filter((c) => c.method === 'agent');

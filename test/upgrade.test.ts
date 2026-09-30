@@ -98,12 +98,12 @@ test('upgrade preserves the person, spending and all files; former live actors a
   assert.equal(statSync(backup).mtimeMs, backupTime);
 
   const crew = new Crew(cfg, db);
-  const staged: [number, string][] = [];
-  Object.assign(crew.runtime, { migrate: async (member: number, path: string) => { staged.push([member, path]); return false; }, confirm: async () => false });
+  const staged: string[] = [];
+  Object.assign(crew.runtime, { migrate: async (path: string) => { staged.push(path); return false; }, confirm: async () => false });
   try {
     crew.init();
     await until('legacy staging', () => staged.length === 1);
-    assert.deepEqual(staged, [[1, join(cfg.stateDir, 'people', '1', 'engine', 'auth.json')]]);
+    assert.deepEqual(staged, [join(cfg.stateDir, 'people', '1', 'engine', 'auth.json')]);
     assert.deepEqual(rows(), before, 'boot does not rewrite the person’s retained rows');
     assert.equal(db.get("SELECT state FROM asks WHERE id = 3")!.state, 'withdrawn', 'obsolete setup ask closes on boot');
     assert.equal(db.get("SELECT 1 FROM events WHERE kind IN ('alert', 'task.failed', 'run.started')"), undefined);

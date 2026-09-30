@@ -45,9 +45,9 @@ export class StubRuntime implements AgentRuntime {
   steerOf(key: string) { return this.steered.get(key); }
   async start(host: ToolHost) { this.host = host; }
   async stop() { this.host = undefined; this.holds.clear(); this.transcripts.clear(); this.specs.clear(); this.steered.clear(); this.cancelled.clear(); }
-  // Grok stands in for an account that must be signed in first; the rest the member has.
-  async signedIn(_member: number, account: string) { return account !== 'grok'; }
-  signIn(_member: number, _account: string, via: 'browser' | 'code', on: (step: any) => void) {
+  // Grok stands in for an account that must be signed in first; the rest the person has.
+  async signedIn(account: string) { return account !== 'grok'; }
+  signIn(_account: string, via: 'browser' | 'code', on: (step: any) => void) {
     // Grok stands in for an account that must be signed in first: the code shows, then it succeeds.
     if (via === 'code') on({ waiting: true, code: 'CREW-2026', url: 'https://example.test/xai/device' });
     const timer = setTimeout(() => on({ waiting: false, done: true }), 100);
@@ -93,8 +93,8 @@ export class StubRuntime implements AgentRuntime {
   async steer(key: string, text: string) { this.steered.set(key, text); }
   async abort(key: string) { this.cancelled.add(key); this.release(key); }
   async trail(_key: string) { return []; }
-  async learned(_member: number) { return []; }
-  async forget(_member: number, _id: string) {}
+  async learned() { return []; }
+  async forget(_id: string) {}
   private learningOn = true;
   async setLearning(on: boolean) { this.learningOn = on; }
   learning() { return this.learningOn; }

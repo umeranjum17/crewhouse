@@ -34,7 +34,7 @@ test('pinned engine uses isolated home, loopback token and no Control UI', { tim
     assert.equal(safeConfig.memory.search.provider, 'none');
     assert.equal(safeConfig.memory.search.fallback, 'none');
     assert.equal(safeConfig.agents.entries.m9.memory.search.provider, 'none');
-    assert.equal(runtime.memoryLimited(9), true);
+    assert.equal(kit.memoryLimited('m9'), true);
     const { env } = kit.doctorContext();
     assert.equal(env.HOME, join(engine, 'home'));
     assert.equal(env.OPENAI_API_KEY, undefined);

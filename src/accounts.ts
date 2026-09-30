@@ -1,9 +1,8 @@
-// Per-person AI accounts: each member signs in to their own, from inside the app, and nothing ever falls back to
-// another member's account (vendor terms). The engine (OpenClaw) holds the credentials, the sign-in wizard and the
+// The person's AI accounts: the engine holds the credentials, the sign-in wizard and the
 // cooldowns; this file says which accounts Crewhouse offers, keeps the person-facing sign-in view, and tracks the
 // states the product words are built from (signed out, plan without helpers, resting until).
 import { REST_MS, classify, offered } from '@byokit/accounts';
-import type { AgentRuntime, Member, SignInStep } from './runtime.ts';
+import type { AgentRuntime, SignInStep } from './runtime.ts';
 
 export const OWNER = 1;
 
@@ -29,7 +28,7 @@ type View = { state: 'waiting' | 'done' | 'failed'; via: 'browser' | 'code'; url
 /** The person-facing half of the engine's sign-in: who is signed in to what, and the one card that drives the
  *  engine's own wizard. The credentials themselves never pass through here. */
 export class Accounts {
-  /** Which member has which account ready. Undefined means ask the engine (its own sign-in state). */
+  /** Which accounts are ready. Undefined means ask the engine (its own sign-in state). */
   readonly ready = new Map<string, boolean>();
   /** States the product words come from: a sign-in that stopped working, a plan without helpers, a cooldown. */
   readonly expired = new Set<string>();
@@ -37,8 +36,8 @@ export class Accounts {
   private rests = new Map<string, number>();
   private views = new Map<string, View>();
   private running = new Map<string, { paste(text: string): void; cancel(): void; finished: Promise<void> }>();
-  /** Set by Crew: a member signed in, so what was waiting for them starts now. */
-  onSignedIn?: (member: Member) => void;
+  /** Set by Crew: the person signed in, so waiting work starts now. */
+  onSignedIn?: () => void;
 
   private runtime: AgentRuntime;
   constructor(runtime: AgentRuntime) {
@@ -46,81 +45,74 @@ export class Accounts {
     // The methods are handed around (server handlers, tests that stand in for signedIn): they must survive losing `this`.
     for (const k of Object.getOwnPropertyNames(Accounts.prototype)) if (k !== 'constructor') (this as any)[k] = (this as any)[k].bind(this);
   }
-  private key(member: Member, account: string) { return `${member}:${account}`; }
 
-  async signedIn(member: Member, account: string) {
-    const k = this.key(member, account);
-    if (this.expired.has(k) || this.excluded.has(k)) return false;
-    const r = this.ready.get(k);
+  async signedIn(account: string) {
+    if (this.expired.has(account) || this.excluded.has(account)) return false;
+    const r = this.ready.get(account);
     if (r !== undefined) return r;
-    return this.runtime.signedIn(member, account).catch(() => false);
+    return this.runtime.signedIn(account).catch(() => false);
   }
-  restingUntil(member: Member, account: string) { return this.rests.get(this.key(member, account)) ?? 0; }
-  /** An account this member doesn't have: never signed in, or a sign-in that stopped working. */
-  unready(member: Member, account: string) {
-    const k = this.key(member, account);
-    return this.expired.has(k) || this.ready.get(k) === false;
+  restingUntil(account: string) { return this.rests.get(account) ?? 0; }
+  /** An account the person doesn't have: never signed in, or a sign-in that stopped working. */
+  unready(account: string) {
+    return this.expired.has(account) || this.ready.get(account) === false;
   }
   /** The account hit trouble: rest it, flag it signed out, or mark the plan. Null: not about the account. */
-  failed(member: Member, account: string, error: string) {
-    const k = this.key(member, account);
+  failed(account: string, error: string) {
     const f = classify(error);
     if (!f) return null;
-    if (f.kind === 'not_included') this.excluded.add(k);
-    else if (f.kind === 'signed_out') this.expired.add(k);
-    else if (f.kind !== 'network') this.rests.set(k, f.until || Date.now() + REST_MS[f.kind]);
+    if (f.kind === 'not_included') this.excluded.add(account);
+    else if (f.kind === 'signed_out') this.expired.add(account);
+    else if (f.kind !== 'network') this.rests.set(account, f.until || Date.now() + REST_MS[f.kind]);
     return f;
   }
-  rest(member: Member, account: string, until: number) { this.rests.set(this.key(member, account), until); }
-  cleared(member: Member, account: string) { this.rests.delete(this.key(member, account)); this.expired.delete(this.key(member, account)); }
-  notIncluded(member: Member, account: string, on?: boolean) {
-    const k = this.key(member, account);
-    if (on !== undefined) on ? this.excluded.add(k) : this.excluded.delete(k);
-    return this.excluded.has(k);
+  rest(account: string, until: number) { this.rests.set(account, until); }
+  cleared(account: string) { this.rests.delete(account); this.expired.delete(account); }
+  notIncluded(account: string, on?: boolean) {
+    if (on !== undefined) on ? this.excluded.add(account) : this.excluded.delete(account);
+    return this.excluded.has(account);
   }
 
-  /** Start the engine's sign-in for this member's account; the wizard's steps become the card's words. */
-  async login(member: Member, account: string, via: 'browser' | 'code' = 'browser', fresh = false) {
+  /** Start the engine's sign-in for the person's account; the wizard's steps become the card's words. */
+  async login(account: string, via: 'browser' | 'code' = 'browser', fresh = false) {
     if (!PROVIDERS[account]) throw Object.assign(new Error('no such AI account'), { status: 404 });
-    const k = this.key(member, account);
-    if (this.running.has(k)) return this.view(member, account);
+    if (this.running.has(account)) return this.view(account);
     const view: View = { state: 'waiting', via };
-    this.views.set(k, view);
+    this.views.set(account, view);
     let over: () => void = () => {};
     const finished = new Promise<void>((yes) => { over = yes; });
     const done = (ok: boolean) => {
       if (view.state !== 'waiting') return;
       view.state = ok ? 'done' : 'failed';
-      if (ok) { this.ready.set(k, true); this.expired.delete(k); this.excluded.delete(k); this.rests.delete(k); this.onSignedIn?.(member); }
-      this.running.delete(k);
+      if (ok) { this.ready.set(account, true); this.expired.delete(account); this.excluded.delete(account); this.rests.delete(account); this.onSignedIn?.(); }
+      this.running.delete(account);
       over();
     };
-    const handle = this.runtime.signIn(member, account, via, (step: SignInStep) => {
+    const handle = this.runtime.signIn(account, via, (step: SignInStep) => {
       if (step.url) view.url = step.url;
       if (step.code) view.code = step.code;
       if (step.error) view.error = step.error;
       if (step.done) done(true);
       else if (step.error && step.waiting === false) done(false);
     });
-    this.running.set(k, {
+    this.running.set(account, {
       paste: (t) => handle.paste(t),
-      cancel: () => { handle.cancel(); done(false); this.views.delete(k); },
+      cancel: () => { handle.cancel(); done(false); this.views.delete(account); },
       finished,
     });
-    return this.view(member, account);
+    return this.view(account);
   }
-  paste(member: Member, account: string, text: string) { this.running.get(this.key(member, account))?.paste(text); }
+  paste(account: string, text: string) { this.running.get(account)?.paste(text); }
 
-  cancel(member: Member, account: string) { this.running.get(this.key(member, account))?.cancel(); }
-  async logout(member: Member, account: string) {
-    const k = this.key(member, account);
-    this.views.delete(k);
-    await this.runtime.signOut(member, account).catch(() => {});
-    this.ready.delete(k);
-    this.expired.add(k);
+  cancel(account: string) { this.running.get(account)?.cancel(); }
+  async logout(account: string) {
+    this.views.delete(account);
+    await this.runtime.signOut(account).catch(() => {});
+    this.ready.delete(account);
+    this.expired.add(account);
   }
   /** The sign-in is over (either way): the card's last word is in. */
-  async finished(member: Member, account: string) { await this.running.get(this.key(member, account))?.finished.catch(() => {}); }
-  view(member: Member, account: string) { return this.views.get(this.key(member, account)) ?? null; }
+  async finished(account: string) { await this.running.get(account)?.finished.catch(() => {}); }
+  view(account: string) { return this.views.get(account) ?? null; }
   stop() { for (const [, handle] of this.running) handle.cancel(); this.running.clear(); }
 }

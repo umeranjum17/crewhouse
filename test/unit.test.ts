@@ -483,7 +483,7 @@ test('limits: a limit rests that account and the task carries on in the same con
 
   // Every account resting: the task pauses with a wake-up time, and resumes when it passes.
   const others = ['copilot', 'openrouter', 'minimax', 'claude']; // the stub counts these as signed in; Grok is not
-  for (const k of others) await crew.accounts.failed(OWNER, k, `usage limit, try again in ${k === 'copilot' ? 1 : 2} min`);
+  for (const k of others) await crew.accounts.failed(k, `usage limit, try again in ${k === 'copilot' ? 1 : 2} min`);
   const b = crew.assign('scout', 'look it up again', 'chief').task;
   await settled(db, b);
   assert.equal(task(db, b).state, 'paused');
@@ -514,7 +514,7 @@ test('limits: a limit rests that account and the task carries on in the same con
   // Signing in starts it by itself, and Chief says so.
   crew.accounts.signedIn = signedIn;
   (crew.accounts as any).ready = new Map();
-  crew.accounts.onSignedIn!(OWNER);
+  crew.accounts.onSignedIn!();
   await settled(db, d);
   assert.equal(task(db, d).state, 'done');
   assert.ok(db.get("SELECT 1 FROM messages WHERE bot = 'chief' AND text = ?", "You're signed in. I'll start now."));
@@ -703,64 +703,26 @@ test('home facts: ideas only from ready tools, stuck after quiet, memory switch'
 });
 
 
-test('household: bots and tasks belong to a member and run on that member\'s own sign-ins, never anyone else\'s', async () => {
+test('accounts: the person keeps their address and every account rests together', async () => {
   const { cfg, db, crew, done } = setup();
-  crew.onboard('sir');
+  crew.onboard('Sam');
   crew.recruit('reel', 'Reel', 'person');
-  const sam = crew.addMember('Sam').id;
-  assert.throws(() => crew.addMember('sam'), /already here/);
-
-  // Sam meets Chief in their own thread; the owner's conversation isn't in it.
-  assert.match(crew.botPage('chief', sam).messages.map((m: any) => m.text).join('\n'), /What should I call you/);
-  assert.ok(!crew.botPage('chief', sam).messages.some((m: any) => m.text === 'sir'));
-  crew.post('chief', 'Sam', undefined, sam);
-  assert.equal(crew.member(sam).address, 'Sam');
-  assert.equal(crew.member(OWNER).address, 'sir', 'each person keeps their own form of address');
-
-  // Only Sam signs in to Grok: Sam's Grok task runs, the owner's can't borrow it.
+  assert.equal(crew.member(1).address, 'Sam');
   disk.setBrains(cfg, 'reel', ['grok']);
-  await crew.accounts.login(sam, 'grok');
-  await crew.accounts.finished(sam, 'grok');
-  assert.equal(crew.accounts.view(sam, 'grok')?.state, 'done');
-  const a = (await crew.post('reel', 'a demo for Sam', undefined, sam))!.task;
+  await crew.accounts.login('grok');
+  await crew.accounts.finished('grok');
+  const a = (await crew.post('reel', 'a demo for Sam'))!.task;
   await settled(db, a);
   assert.equal(task(db, a).state, 'done');
-  assert.equal(task(db, JSON.parse(db.get("SELECT data FROM events WHERE kind = 'run.started' ORDER BY seq DESC")!.data).task).member, sam);
-  assert.match((crew.runtime as any).specOf(`agent:m${sam}:crewhouse:reel:${a}`)?.message ?? '', /task #\d+ from Sam\]/);
-  assert.match((crew.runtime as any).specOf(`agent:m${sam}:crewhouse:reel:${a}`)?.message ?? '', /likes to be called "Sam"/);
-  const b = (await crew.post('reel', 'owner demo', undefined, OWNER))!.task;
+  assert.equal(JSON.parse(db.get("SELECT data FROM events WHERE kind = 'run.started' ORDER BY seq DESC")!.data).account, 'grok');
+  assert.match((crew.runtime as any).specOf(`agent:m1:crewhouse:reel:${a}`)?.message ?? '', /likes to be called "Sam"/);
+  for (const k of ['chatgpt', 'grok', 'copilot', 'openrouter', 'minimax', 'claude']) crew.accounts.failed(k, 'usage limit, try again in 1 min');
+  assert.ok(crew.restingUntil('chatgpt') > Date.now());
+  const b = (await crew.post('reel', 'another demo'))!.task;
   await settled(db, b);
-  const ran = JSON.parse(db.get("SELECT data FROM events WHERE kind = 'run.started' ORDER BY seq DESC")!.data);
-  assert.deepEqual([task(db, ran.task).member, ran.account], [OWNER, 'chatgpt'], 'the owner never borrows Sam\'s Grok; the owner\'s own ChatGPT does it');
-  assert.ok(crew.botPage('reel', sam).messages.some((m: any) => m.text === 'a demo for Sam'));
-  assert.ok(!crew.botPage('reel', OWNER).messages.some((m: any) => m.text === 'a demo for Sam'), 'threads are per person');
-
-  // Chief works for whoever asked him: what he recruits and hands over is theirs, on their accounts.
-  const c = (await crew.post('chief', 'ask permission to find me a researcher', undefined, sam))!.task;
-  await holding(crew, 'chief');
-  assert.equal(task(db, c).member, sam);
-  assert.equal(crew.recruit('scout', 'Scout', 'chief').member, sam);
-  const d = crew.assign('scout', 'look it up', 'chief').task;
-  await settled(db, d);
-  assert.equal(task(db, d).member, sam);
-  await release(crew, 'chief', 'Scout is on it.');
-
-  // One person's limit rests only their own account.
-  disk.setBrains(cfg, 'reel', ['chatgpt']);
-  for (const k of ['chatgpt', 'grok', 'copilot', 'openrouter', 'minimax', 'claude']) await crew.accounts.failed(sam, k, 'usage limit, try again in 1 min');
-  assert.equal(crew.restingUntil('chatgpt', OWNER), 0);
-  const e = (await crew.post('reel', 'another for Sam', undefined, sam))!.task;
-  const f = (await crew.post('scout', 'owner lookup', undefined, OWNER))!.task;
-  await settled(db, e);
-  await settled(db, f);
-  assert.equal(task(db, e).state, 'paused');
-  assert.match(task(db, e).result, /All your AI accounts are resting/);
-  assert.equal(task(db, f).state, 'done');
-
-  // What each person sees: their own tasks and questions, their own accounts.
-  assert.deepEqual(crew.snapshot(sam).tasks.map((t: any) => t.id).sort(), [a, d, e].sort());
-  assert.ok(crew.snapshot(sam).resting.chatgpt > 0);
-  assert.deepEqual(crew.snapshot(OWNER).resting, {});
+  assert.equal(task(db, b).state, 'paused');
+  assert.match(task(db, b).result, /All your AI accounts are resting/);
+  assert.ok(crew.snapshot().resting.chatgpt > 0);
   done();
 });
 
@@ -874,32 +836,31 @@ test('restart: a parked question stays open, and its answer reaches the resumed 
 });
 
 
-test('sign-in: one button shows a code, finishes by itself, and is that person\'s alone; sign out', async () => {
+test('sign-in: one button shows a code, finishes by itself, and signs the person in; sign out', async () => {
   const { crew, done } = setup();
-  assert.equal(await crew.accounts.signedIn(OWNER, 'grok'), false);
-  const shown = await crew.accounts.login(OWNER, 'grok', 'code');
+  assert.equal(await crew.accounts.signedIn('grok'), false);
+  const shown = await crew.accounts.login('grok', 'code');
   assert.equal(shown?.state, 'waiting');
   assert.equal(shown?.code, 'CREW-2026');
-  await crew.accounts.finished(OWNER, 'grok');
-  assert.equal(crew.accounts.view(OWNER, 'grok')!.state, 'done');
-  await until('the account is ready', () => crew.accounts.signedIn(OWNER, 'grok'));
-  assert.equal(await crew.accounts.signedIn(crew.addMember('Sam').id, 'grok'), false, "one person's sign-in is theirs alone");
-  await crew.accounts.logout(OWNER, 'grok');
-  assert.equal(await crew.accounts.signedIn(OWNER, 'grok'), false);
-  await assert.rejects(crew.accounts.login(OWNER, 'muse'), /no such AI account/, 'no Meta');
+  await crew.accounts.finished('grok');
+  assert.equal(crew.accounts.view('grok')!.state, 'done');
+  await until('the account is ready', () => crew.accounts.signedIn('grok'));
+  await crew.accounts.logout('grok');
+  assert.equal(await crew.accounts.signedIn('grok'), false);
+  await assert.rejects(crew.accounts.login('muse'), /no such AI account/, 'no Meta');
   done();
 });
 
 test('sign-in: a cancelled sign-in keeps nothing, signed in nothing', async () => {
   const { crew, done } = setup();
-  const p = crew.accounts.login(OWNER, 'grok', 'code');
+  const p = crew.accounts.login('grok', 'code');
   await sleep(20);
-  const flow = crew.accounts.finished(OWNER, 'grok');
-  crew.accounts.cancel(OWNER, 'grok');
+  const flow = crew.accounts.finished('grok');
+  crew.accounts.cancel('grok');
   await p;
   await flow;
-  assert.equal(crew.accounts.view(OWNER, 'grok'), null, 'nothing kept, nothing shown');
-  assert.equal(await crew.accounts.signedIn(OWNER, 'grok'), false);
+  assert.equal(crew.accounts.view('grok'), null, 'nothing kept, nothing shown');
+  assert.equal(await crew.accounts.signedIn('grok'), false);
   done();
 });
 
@@ -930,7 +891,7 @@ test('routing: a spreadsheet request goes straight to Scribe, hiring Scribe if n
   await settled(db, n);
 
   // A plan without helpers stays with Chief instead of stalling on Scribe.
-  for (const p of Object.keys(PROVIDERS)) crew.accounts.notIncluded(OWNER, p, true);
+  for (const p of Object.keys(PROVIDERS)) crew.accounts.notIncluded(p, true);
   const e = (await crew.post('chief', 'make me a workbook for reception'))!.task;
   assert.equal(task(db, e).bot, 'chief');
   await settled(db, e);
@@ -1051,7 +1012,7 @@ test('routing: explicit helpers are direct; uncertain requests start Chief witho
   assert.equal(routeChecks, 0);
   await settled(db, c);
 
-  // Ambiguity is not a guessed helper selection. Another household member retains their own task and account boundary.
+  // Ambiguity is not a guessed helper selection. Legacy task and message scope stays intact; engine work uses m1.
   const sara = crew.addMember('Sara').id;
   crew.onboard('Sara', sara);
   pendingBody = 'something about the screenshots [route ?]';
@@ -1063,7 +1024,9 @@ test('routing: explicit helpers are direct; uncertain requests start Chief witho
   assert.equal(db.get("SELECT COUNT(*) AS n FROM events WHERE kind = 'route.asked'")!.n, 0);
   assert.equal(db.get("SELECT member FROM messages WHERE task_id = ?", d)!.member, sara);
   await settled(db, d);
-  assert.equal((crew.runtime as any).specOf(`agent:m${sara}:crewhouse:chief:${d}`)?.member, sara, 'the run uses Sara\'s account context');
+  const spec = (crew.runtime as any).specOf(`agent:m1:crewhouse:chief:${d}`);
+  assert.equal(spec?.task, d, 'the run uses the retained m1 agent');
+  assert.equal(spec.account, 'chatgpt', 'the run keeps the selected account');
   done();
 });
 

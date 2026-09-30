@@ -175,7 +175,7 @@ When run in a terminal, `setup` asks two things:
 
 `./crewhouse doctor` shows what's installed and what's missing. The helpers' sandboxed shell needs [bubblewrap](https://github.com/containers/bubblewrap), and their own screens need Xvfb and Chromium. Crewhouse is built and tested on Linux. On macOS, helpers get no shell or screens, and autostart isn't available.
 
-Everything Crewhouse writes lives in `~/.local/state/crewhouse/` (the database, the engine and everyone's sign-ins), `~/Crewhouse/` (helpers and what they know about each person) and `~/.local/share/crewhouse/tools/` (the tool kit). `./crewhouse uninstall` removes all of it, but keeps your crew folder unless you add `--all`.
+Everything Crewhouse writes lives in `~/.local/state/crewhouse/` (the database, the engine and saved sign-ins), `~/Crewhouse/` (helpers and what they know about each person) and `~/.local/share/crewhouse/tools/` (the tool kit). `./crewhouse uninstall` removes all of it, but keeps your crew folder unless you add `--all`.
 
 | Command | What it does |
 |---|---|
@@ -199,7 +199,7 @@ Phone notifications currently use raw Expo registration, delivery and a local qu
  crewd ── SQLite (state, append-only events, per-helper queue)
    │ supervised child process, loopback + token
    ▼
- the bundled OpenClaw engine ── one engine agent per person: only their own sign-ins
+ the bundled OpenClaw engine ── the retained m1 agent: your own sign-ins
    └─ one session per task ── every tool call passes crewd's gate first
         └─ tools: the helper's files, a sandboxed shell, the web, its own browser, the person's connected apps
 ```
@@ -209,7 +209,7 @@ Phone notifications currently use raw Expo registration, delivery and a local qu
 
 - **crewd** (`src/`) is one Node process with one SQLite file. Every change is an event, and the web app and paired phones follow one event stream for the person. Model choices and engine failures keep their internal details out of that stream, including historical payloads. The web app reads crewd only through `web/src/adapter.ts`. The contract is [docs/ui-contract.md](docs/ui-contract.md).
 - **The engine** is [OpenClaw](https://www.npmjs.com/package/openclaw), pinned and installed with scripts off by the pinned npm [`@byokit/openclaw`](https://github.com/umeranjum17/byokit) kit's `prepare()` during setup, update, packaging and CI (`scripts/prepare-engine.mjs`), and run through `src/openclaw/runtime.ts` as a child process with an environment built from nothing. It uses loopback only, with token auth, and channels, Control UI, Tailscale and mDNS are all off. Crewhouse never reads or runs your own agent setup (`~/.openclaw`, `~/.codex`, `~/.pi` and the like). `test/openclaw.test.ts` and `test/isolation.test.ts` check that on every CI run.
-- **Tasks** are engine sessions keyed by person, helper and task. A restart, or switching to another account when one hits its limit, continues the same session.
+- **Tasks** are engine sessions on the retained `m1` agent, keyed by helper and task. A restart, or switching to another account when one hits its limit, continues the same session.
 - **The gate** (`src/policy.ts`) decides every tool call from the tool and its input, never from the model's words. Unknown tools fail closed. Sign-in and key folders are refused outright. A question waits a few minutes, then the helper parks, and your later answer resumes it.
 - **The shell** currently runs in bubblewrap (sandbox and network-proxy foundations are BYOKit migration debt): `/usr` and `/etc` read-only, an empty `/home` with only the helper's folder in it, and no inherited environment. A template can restrict a helper to a list of hosts, reached only through crewd's allowlisting proxy (`src/net.ts`).
 - **On disk:** a helper is `~/Crewhouse/bots/<id>/` (`soul.md`, `AGENTS.md` for its job, `bot.json`, `skills/`, `files/`). What the crew knows about a person is in `~/Crewhouse/people/<id>/` (`about.md` and one `notes/<helper>.md` per helper), and every change is a git commit.
@@ -222,7 +222,7 @@ Phone notifications currently use raw Expo registration, delivery and a local qu
 
 ## Not yet
 
-- An iPhone build, and a signed Android release. The iPhone app is set up (share sheet, shortcuts, Control Center buttons in `mobile/targets/actions`, and the crew on the Lock Screen and Dynamic Island in `mobile/src/island.ios.tsx`) but has never been built or signed. The Android app is a debug-signed preview, and its push notifications need the builder's own push credential. Editing a helper, signing people in and connecting apps stay on the computer.
+- An iPhone build, and a signed Android release. The iPhone app is set up (share sheet, shortcuts, Control Center buttons in `mobile/targets/actions`, and the crew on the Lock Screen and Dynamic Island in `mobile/src/island.ios.tsx`) but has never been built or signed. The Android app is a debug-signed preview, and its push notifications need the builder's own push credential. Editing a helper, signing in and connecting apps stay on the computer.
 - Helpers' shell and screens on macOS and Windows, and a desktop download. Today you install from source.
 - Signing in from the phone. For now, everyone signs in on the computer, in the browser, with a one-time code as the fallback.
 - A per-person login. Anyone at the computer can pick who they are.

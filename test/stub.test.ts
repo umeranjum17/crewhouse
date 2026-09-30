@@ -251,7 +251,8 @@ test('nothing technical reaches the app; the person\'s own files ask in one plai
   }
   assert.doesNotMatch(seen, /\d%/, 'no usage percentages');
   const accounts = (await api('GET', '/api/accounts')).body;
-  assert.deepEqual(accounts.filter((a: any) => a.member === 1).map((a: any) => a.name), ['ChatGPT', 'Grok', 'GitHub Copilot', 'OpenRouter', 'MiniMax', 'Claude']);
+  assert.ok(accounts.every((a: any) => !('member' in a)), 'account rows belong to the person');
+  assert.deepEqual(accounts.map((a: any) => a.name), ['ChatGPT', 'Grok', 'GitHub Copilot', 'OpenRouter', 'MiniMax', 'Claude']);
 
   // Touching the person's own files asks, in one plain sentence; the answer comes from the app.
   const outside = join(root, 'Documents', 'plan.txt');
@@ -277,12 +278,12 @@ test('connecting an app, as the app screen asks for it: not yet, or the app\'s o
 
 test('sign in from the app: a code to show and a page to open, then signed in', async () => {
   await ready();
-  const grok = async () => (await api('GET', '/api/accounts')).body.find((a: any) => a.member === 1 && a.account === 'grok');
+  const grok = async () => (await api('GET', '/api/accounts')).body.find((a: any) => a.account === 'grok');
   assert.equal((await grok()).signedIn, false);
   // Claude is offered through the engine's own route; the card labels its prerequisite as a product name, not an acronym.
   assert.equal((PROVIDERS.claude?.cli ?? '').includes('Claude Code'), true, 'the prerequisite is said plainly');
   assert.equal((await api('POST', '/api/accounts/1/grok/login', { via: 'code' }, {})).status, 403, 'cross-site pages cannot start a sign-in');
-  const started = await api('POST', '/api/accounts/1/grok/login', { via: 'code' });
+  const started = await api('POST', '/api/accounts/999/grok/login', { via: 'code' });
   assert.equal(started.status, 200);
   assert.deepEqual([started.body.signIn.code, started.body.signIn.url], ['CREW-2026', 'https://example.test/xai/device'], 'a code to show and a page to open');
   await until(async () => (await grok()).signedIn);

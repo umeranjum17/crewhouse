@@ -1,13 +1,13 @@
 // Batch researcher to spreadsheet: one question fanned out over many items in parallel, merged into one
-// workbook. Sub-runs reuse the run path (same member, same task, same gate); the spreadsheet is delivered once,
-// to the asking member only.
+// workbook. Sub-runs reuse the run path (same task and gate); the spreadsheet is delivered once,
+// to the person.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { pool, MAX_ITEMS, MAX_PARALLEL, subMessage } from '../src/batch.ts';
 import { setup, settled, task } from './lab.ts';
 
 const call = (tool: string, input: object) => `[tool ${tool} ${JSON.stringify(input)}]`;
-const batchKey = (member: number, bot: string, t: number, i: number) => `agent:m${member}:crewhouse:${bot}:${t}:batch:${i}`;
+const batchKey = (bot: string, t: number, i: number) => `agent:m1:crewhouse:${bot}:${t}:batch:${i}`;
 const specOf = (crew: any, key: string) => (crew.runtime as any).specOf(key);
 const transcript = (crew: any, key: string) => (crew.runtime as any).transcript(key);
 
@@ -35,15 +35,15 @@ test('one question over three items: three parallel sessions, one merged answer,
     await settled(db, id);
     assert.equal(task(db, id).state, 'done');
 
-    // Three sub-runs, one member's own sessions, same task, distinct keys.
+    // Three sub-runs, the person's sessions, same task, distinct keys.
     for (const [i, item] of items.entries()) {
-      const spec = specOf(crew, batchKey(1, 'scout', id, i));
+      const spec = specOf(crew, batchKey('scout', id, i));
       assert.ok(spec, `item ${i} ran its own session`);
-      assert.equal(spec.member, 1);
+      assert.equal(spec.key.startsWith('agent:m1:'), true);
       assert.equal(spec.task, id);
       assert.ok(spec.message.includes(item) && spec.message.includes(question), 'the item hears its item and the one question');
     }
-    assert.equal(specOf(crew, batchKey(1, 'scout', id, 3)), undefined, 'no fourth session');
+    assert.equal(specOf(crew, batchKey('scout', id, 3)), undefined, 'no fourth session');
 
     // The parent got one JSON array back, in item order.
     const parent = transcript(crew, `agent:m1:crewhouse:scout:${id}`);
@@ -73,7 +73,7 @@ test('a batch item cannot start another batch: nesting is refused, never fanned 
     await settled(db, id);
     assert.equal(task(db, id).state, 'done', 'a refused batch is a result the model reads, never a crashed run');
     assert.match(transcript(crew, `agent:m1:crewhouse:scout:${id}`), /cannot start another batch/);
-    assert.equal(specOf(crew, batchKey(1, 'scout', id, 0)), undefined, 'no sub-run started from the nested call');
+    assert.equal(specOf(crew, batchKey('scout', id, 0)), undefined, 'no sub-run started from the nested call');
   } finally { done(); }
 });
 
@@ -84,13 +84,13 @@ test('a resting account stops later waves early and says so in plain words', asy
     const id = (await crew.post('scout', `compare ${call('crew_batch', { question: 'hit the limit on prices today', items })}`))!.task;
     await settled(db, id);
     assert.equal(task(db, id).state, 'done', 'a tired account is a result the model reads, never a crashed run');
-    assert.ok(specOf(crew, batchKey(1, 'scout', id, 7)), 'the first wave of eight ran');
-    assert.equal(specOf(crew, batchKey(1, 'scout', id, 8)), undefined, 'the second wave never started');
+    assert.ok(specOf(crew, batchKey('scout', id, 7)), 'the first wave of eight ran');
+    assert.equal(specOf(crew, batchKey('scout', id, 8)), undefined, 'the second wave never started');
     const parent = transcript(crew, `agent:m1:crewhouse:scout:${id}`);
     const returned = JSON.parse(/crew_batch: (\{.*\})$/m.exec(parent)![1]);
     assert.ok(returned.answers.slice(0, 8).every((a: any) => !a.ok));
     assert.match(returned.note, /resting/);
-    assert.ok((crew as any).accounts.restingUntil(1, 'chatgpt') > Date.now(), 'the account rests like any other tired turn');
+    assert.ok((crew as any).accounts.restingUntil('chatgpt') > Date.now(), 'the account rests like any other tired turn');
   } finally { done(); }
 });
 
@@ -100,8 +100,8 @@ test('at most 24 items per job: the rest are named, not silently dropped', async
     const items = Array.from({ length: 30 }, (_, i) => `Place ${i + 1}`);
     const id = (await crew.post('scout', `compare ${call('crew_batch', { question: 'soup prices', items })}`))!.task;
     await settled(db, id);
-    assert.ok(specOf(crew, batchKey(1, 'scout', id, MAX_ITEMS - 1)));
-    assert.equal(specOf(crew, batchKey(1, 'scout', id, MAX_ITEMS)), undefined);
+    assert.ok(specOf(crew, batchKey('scout', id, MAX_ITEMS - 1)));
+    assert.equal(specOf(crew, batchKey('scout', id, MAX_ITEMS)), undefined);
     const parent = transcript(crew, `agent:m1:crewhouse:scout:${id}`);
     assert.match(parent, new RegExp(`only the first ${MAX_ITEMS} of 30 items`));
   } finally { done(); }
@@ -114,7 +114,7 @@ test('an empty question or item list is a plain error, not a run of nothing', as
     await settled(db, id);
     assert.equal(task(db, id).state, 'done');
     assert.match(transcript(crew, `agent:m1:crewhouse:scout:${id}`), /error: (say the one question|list the items)/);
-    assert.equal(specOf(crew, batchKey(1, 'scout', id, 0)), undefined, 'nothing ran');
+    assert.equal(specOf(crew, batchKey('scout', id, 0)), undefined, 'nothing ran');
   } finally { done(); }
 });
 
