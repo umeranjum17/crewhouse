@@ -2,7 +2,7 @@
 // another member's account (vendor terms). The engine (OpenClaw) holds the credentials, the sign-in wizard and the
 // cooldowns; this file says which accounts Crewhouse offers, keeps the person-facing sign-in view, and tracks the
 // states the product words are built from (signed out, plan without helpers, resting until).
-import { REST_MS, classifyText } from './failures.ts';
+import { REST_MS, classify, offered } from '@byokit/accounts';
 import type { AgentRuntime, Member, SignInStep } from './runtime.ts';
 
 export const OWNER = 1;
@@ -10,10 +10,7 @@ export const OWNER = 1;
 /** The offered accounts: every subscription route the pinned engine supports. ChatGPT is the one front door; the
  *  rest are quiet "more options" paths. `cli`: the sign-in needs a tool installed and logged in on this computer. */
 export const PROVIDERS: Record<string, { key: string; name: string; cli?: string }> = {
-  chatgpt: { key: 'chatgpt', name: 'ChatGPT' },
-  grok: { key: 'grok', name: 'Grok' },
-  copilot: { key: 'copilot', name: 'GitHub Copilot' },
-  openrouter: { key: 'openrouter', name: 'OpenRouter' },
+  ...Object.fromEntries(offered(['chatgpt', 'grok', 'copilot', 'openrouter']).map(({ key, name }) => [key, { key, name }])),
   minimax: { key: 'minimax', name: 'MiniMax' },
   claude: { key: 'claude', name: 'Claude', cli: 'Claude Code, installed and signed in on this computer' },
 };
@@ -67,7 +64,7 @@ export class Accounts {
   /** The account hit trouble: rest it, flag it signed out, or mark the plan. Null: not about the account. */
   failed(member: Member, account: string, error: string) {
     const k = this.key(member, account);
-    const f = classifyText(error);
+    const f = classify(error);
     if (!f) return null;
     if (f.kind === 'not_included') this.excluded.add(k);
     else if (f.kind === 'signed_out') this.expired.add(k);

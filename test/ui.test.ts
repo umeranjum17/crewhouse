@@ -486,6 +486,15 @@ test('sign-in states reach the screens as plain states, never the engine\'s word
   assert.ok(row({ state: 'failed', why: 'declined', error: 'The sign-in was declined' }).declined);
   assert.ok(row({ state: 'failed', why: 'busy', error: 'Something else…' }).busy);
   assert.ok(row({ state: 'failed', error: 'The sign-in took too long.' }).expired);
+  for (const signIn of [null, { state: 'waiting' }, { state: 'done', url: 'https://old.test', code: 'OLD' }, { state: 'failed', error: 'Other problem', url: 'https://old.test' }]) {
+    const g = row(signIn);
+    assert.equal(g.page, '', 'a missing, finished or failed sign-in never opens an old page');
+    assert.equal(g.signing, null, 'only a waiting sign-in offers a code');
+  }
+  const mixed = row({ state: 'failed', why: 'busy', error: 'The sign-in expired.' });
+  assert.ok(mixed.busy && mixed.expired && !mixed.failed, 'keep the independent screen flags');
+  assert.ok(row({ state: 'failed', why: 'expired', error: 'Other problem' }).failed, 'the existing view uses the expiry words');
+  assert.equal(row({ state: 'waiting', code: 'AB12-CD34' }, { signedIn: true }).signing?.code, 'AB12-CD34', 'a new sign-in stays visible while the account is ready');
   const ready = row(null, { signedIn: true, notIncluded: true, work: 'sara@acme.com' });
   assert.deepEqual([ready.state, ready.notIncluded, ready.work], ['ready', true, 'sara@acme.com']);
   assert.equal(A.resting({ resting: { chatgpt: Date.now() + 3600_000 } }).startsWith('Your ChatGPT is resting until'), true);
