@@ -64,9 +64,11 @@ test('real Gateway tool call crosses fail-closed Crewhouse gate', { timeout: 420
     const m2Keys = stub.calls.slice(stubCallsBefore).map((c) => c.authorization);
     assert.ok(m2Keys.length > 0, "member two's run reached the stub provider");
     assert.ok(m2Keys.every((k) => k === 'Bearer stub-m2'), `member two's session only ever used its own key: ${m2Keys.join()}`);
-    // A member never speaks in another member's session.
-    const crossed = await runtime.run(spec('agent:m1:crewhouse:scout:9', 2, 'scout', 9, 'hello'), () => {});
+    // A leftover agent's key is refused on m1.
+    const beforeCrossed = stub.calls.length;
+    const crossed = await runtime.run(spec('agent:m2:crewhouse:scout:9', 1, 'scout', 9, 'hello'), () => {});
     assert.ok(!crossed.ok && 'message' in crossed && /refused/.test(crossed.message), JSON.stringify(crossed));
+    assert.equal(stub.calls.length, beforeCrossed, 'a leftover session never reaches the provider on m1');
 
     await kit.patchConfig({ memory: { search: { provider: 'ollama', model: 'local-test', remote: { baseUrl: stub.url.replace(/\/v1$/, '') } } } });
     await runtime.stop();
