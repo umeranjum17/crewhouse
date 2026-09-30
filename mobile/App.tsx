@@ -828,16 +828,15 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
 // ---------- first run ----------
 function Hello({ state, refresh, go }: Ctx) {
   const me = state.person;
-  const named = me.name && !(me.id === A.OWNER && me.name === 'Owner') ? me.name : '';
-  const [address, setAddress] = useState<string>(me.address || named);
+  const [address, setAddress] = useState<string>(me.address || '');
   const [own, setOwn] = useState(false);
   const [words, setWords] = useState('');
   const t = useLook();
-  // Named by the owner: the ideas come first and the name waits at the bottom; nameless, the name comes first.
+  // Ask for the name first when it has not been set yet.
   const name = <>
     <Label>What shall I call you?</Label>
     <TextInput style={[s.input, { color: t.ink, borderColor: t.line }]} value={address} onChangeText={setAddress} placeholder="What shall I call you?" placeholderTextColor={t.mute} accessibilityLabel="What shall I call you?" />
-    <View style={s.chips}>{['Sir', "Ma'am", ...(named ? [named] : [])].map((q) => <Btn key={q} label={q} onPress={() => setAddress(q)} />)}</View>
+    <View style={s.chips}>{['Sir', "Ma'am"].map((q) => <Btn key={q} label={q} onPress={() => setAddress(q)} />)}</View>
   </>;
   const pick = (ask?: string, bot?: string) => {
     if (!address.trim()) return say('First, what shall I call you?');
@@ -856,7 +855,7 @@ function Hello({ state, refresh, go }: Ctx) {
         {[A.atHome('the home computer')[0], A.atHome('the home computer')[1], "I'll ask before sending messages, deleting things or spending money."].map((l) =>
           <View key={l} style={[s.row, { alignItems: 'flex-start' }]}><T style={{ color: t.ok, fontWeight: '700' }}>✓</T><T tone="ink2" style={{ flex: 1 }}>{l}</T></View>)}
       </Card></motion.Rise>
-      {!named && name}
+      {name}
       <Label>What can I take off your plate?</Label>
       {A.firstIdeas(state).map((i) => <Pressable key={i.label} onPress={() => pick(i.label, i.bot)} accessibilityRole="button" accessibilityLabel={i.label}
         style={({ pressed }) => [s.idea, { backgroundColor: t.card, borderColor: t.line }, pressed && { opacity: 0.6 }]}>
@@ -867,7 +866,6 @@ function Hello({ state, refresh, go }: Ctx) {
         <TextInput style={[s.input, { color: useLook().ink, borderColor: useLook().line }]} value={words} onChangeText={setWords} placeholder="Ask for anything…" placeholderTextColor={useLook().mute} accessibilityLabel="Your first ask" />
         <Btn go big label="Send" disabled={!words.trim()} onPress={() => pick(words.trim())} />
       </> : <Btn ghost label="Or ask in your own words" onPress={() => setOwn(true)} />}
-      {!!named && name}
     </Page>
   );
 }
@@ -1150,15 +1148,14 @@ function Home(ctx: Ctx) {
 
 /** A helper's desk, opened from the office: what it is on, its steps with the latest marked now, what it has made for
  *  this job so far, and its question with a Review that opens the same sheet as Needs you — over the desk, as a file
- *  does (iOS won't present a new sheet while this one is still sliding away). A helper busy with someone else's job
- *  shows only that. Never its live screen: that opens from its chat. */
+ *  does (iOS won't present a new sheet while this one is still sliding away). Its live screen opens from its chat. */
 function DeskSheet({ desk, state, offline, canAct, go, refresh, onClose }: Ctx & { desk: { c: A.OfficeMember; state: Json }; onClose: () => void }) {
   const t = useLook();
   const reduce = motion.useReduceMotion();
   const [asking, setAsking] = useState(false);
   const id = desk.c.id;
   // The room's own row (live events included) until the next refresh, then the snapshot again.
-  const c = desk.state === state ? desk.c : A.office(state, { busyElsewhere: true }).crew.find((x) => x.id === id);
+  const c = desk.state === state ? desk.c : A.office(state).crew.find((x) => x.id === id);
   const h = A.crew(state).find((x) => x.id === id);
   if (!c || !h) return null;
   const job = A.work(state).find((w) => w.helper === id);
@@ -1173,10 +1170,9 @@ function DeskSheet({ desk, state, offline, canAct, go, refresh, onClose }: Ctx &
           <Btn label="Close" onPress={onClose} />
         </View>
         <View style={{ flexDirection: 'row' }}>{offline ? <Pill tone="off">{OUT}</Pill>
-          : <Pill tone={c.ring === 'needs' ? 'wait' : c.ring ? 'ok' : 'off'}>{c.busyElsewhere ? A.BUSY_ELSEWHERE : c.ring === 'working' ? 'Working' : c.status}</Pill>}</View>
+          : <Pill tone={c.ring === 'needs' ? 'wait' : c.ring ? 'ok' : 'off'}>{c.ring === 'working' ? 'Working' : c.status}</Pill>}</View>
         <ScrollView contentContainerStyle={{ gap: 12 }}>
-          {!offline && c.busyElsewhere && <T tone="ink2">{`${c.name} is on another job right now. Anything you ask for waits its turn.`}</T>}
-          {!offline && !c.busyElsewhere && !!job && <View style={[s.ev, { backgroundColor: t.sunken }]}>
+          {!offline && !!job && <View style={[s.ev, { backgroundColor: t.sunken }]}>
             <T tone="ink2" style={s.label}>{job.waiting && c.ring !== 'needs' ? 'Up next' : 'Working on'}</T>
             <T style={[s.rowTitle, s.b]}>{job.title}</T>
           </View>}
@@ -1185,8 +1181,8 @@ function DeskSheet({ desk, state, offline, canAct, go, refresh, onClose }: Ctx &
             <T tone="ink2" lines={3}>{c.ask.words}</T>
             <View style={s.chips}><Btn go label="Review" onPress={() => setAsking(true)} /></View>
           </Card>}
-          {!offline && !c.busyElsewhere && c.steps.length > 0 && <View><Label>Steps</Label><Steps steps={c.steps} /></View>}
-          {!offline && !c.busyElsewhere && c.things.length > 0 && <View><Label>On the desk</Label><Card>{c.things.map((f) => <FileRow key={f.url} f={f} />)}</Card></View>}
+          {!offline && c.steps.length > 0 && <View><Label>Steps</Label><Steps steps={c.steps} /></View>}
+          {!offline && c.things.length > 0 && <View><Label>On the desk</Label><Card>{c.things.map((f) => <FileRow key={f.url} f={f} />)}</Card></View>}
           <Btn big label={`Open ${c.name}'s chat`} onPress={() => to({ view: 'helper', id })} />
         </ScrollView>
         {asking && c.ask && <AskSheet c={c.ask} who={h} chiefSays={state.asks.find((a: Json) => a.id === c.ask!.id)?.detail?.chief} canAct={canAct}

@@ -34,7 +34,7 @@ test('the office is flat 2D: no 3D library in any bundle or in the dependencies'
 });
 
 test('floorPlan: needs-you always keeps a desk, seats keep the crew order, and the rest fold behind "+N more"', () => {
-  const who = (i: number, ring: OfficeMember['ring']): OfficeMember => ({ id: `h${i}`, name: `H${i}`, kind: 'pip', mood: 'idle', ring, status: '', step: '', steps: [], things: [], busyElsewhere: false });
+  const who = (i: number, ring: OfficeMember['ring']): OfficeMember => ({ id: `h${i}`, name: `H${i}`, kind: 'pip', mood: 'idle', ring, status: '', step: '', steps: [], things: [] });
   const crew = Array.from({ length: 30 }, (_, i) => who(i, i % 4 === 3 ? 'needs' : i % 4 === 1 ? 'working' : ''));
   const p = floorPlan(crew, 320); // a phone: three desks and four lounge seats across
   assert.equal(p.cols, 3);
@@ -128,9 +128,9 @@ test('the office keeps the battery budget: nothing moves while quiet, Reduce Mot
   await b.send('Emulation.setEmulatedMedia', { features: [] });
 });
 
-// Helpers who need her in each household (web/src/demo.ts): Scribe, Reel, Scout and Pip, then every eighth made-up one.
-// ?demo=office has four helpers: Reel, Scout and Scribe need her, with first looks on their desks; Pip is busy elsewhere.
-const HOUSES: [string, number, number][] = [['crew1', 1, 1], ['crew5', 5, 4], ['crew12', 12, 5], ['crew30', 30, 7], ['office', 5, 4]];
+// Helpers needing you in each demo (web/src/demo.ts), then every eighth made-up helper.
+// Office includes Tracer and Pip's pending question: all five helpers have a Review.
+const HOUSES: [string, number, number][] = [['crew1', 1, 1], ['crew5', 5, 4], ['crew12', 12, 5], ['crew30', 30, 7], ['office', 5, 5]];
 test('at 1, 5, 12 and 30 crew, on a phone and a computer, no bubble or desk thing covers another or a sprite, and every Review shows', { skip: !bin && 'no Chromium here' }, async () => {
   const b = await browse();
   await b.send('Page.enable'); await b.send('Runtime.enable');
@@ -156,7 +156,7 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, no bubble or desk thin
         const at = `${demo} ${theme} at ${width}`;
         assert.equal(m.out, 0, `${at}: every card inside the room`);
         assert.equal(m.over, 0, `${at}: no card covers another card or a sprite`);
-        assert.equal(m.reviews, needs, `${at}: every helper who needs her shows Review`);
+        assert.equal(m.reviews, needs, `${at}: every helper who needs you shows Review`);
         assert.equal(m.seated + m.more, n, `${at}: everyone is in the room or behind "+N more"`);
         if (n === 30) assert.ok(m.more > 0, `${at}: a big crew folds behind "+N more"`);
       }

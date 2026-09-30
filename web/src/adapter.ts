@@ -259,7 +259,7 @@ export function anywhere(link: Json) {
   }[state];
   const steps = [
     'Install Tailscale on this computer and sign in with Google.',
-    'On your phone, install Tailscale and sign in with the same Google account as this computer.',
+    "On your phone, install Tailscale and sign in with the same Google account as this computer, or share this computer with that phone's account in Tailscale.",
     'Then pair your phone here.',
   ];
   return { state, words, steps: state === 'home' ? steps : state === 'anywhere' ? steps.slice(1) : [] };
@@ -292,14 +292,14 @@ export function away(f: { home?: boolean; tailnet?: boolean; vpn?: boolean; anyw
     if (f.knock === 'answers') return "You're on the home Wi-Fi and Crewhouse on the home computer answers; this phone is getting back in touch.";
     return "You're on the home Wi-Fi, but the home computer doesn't answer at all. Check it's switched on and awake.";
   }
-  if (!f.tailnet) return "Away from home, this phone reaches the home computer through Tailscale, and that isn't set up yet. Ask whoever set up Crewhouse to share the computer with you in Tailscale.";
+  if (!f.tailnet) return "Away from home, this phone reaches the home computer through Tailscale, and that isn't set up yet. Sign in to Tailscale on this computer and your phone with the same account, or share this computer with that phone's account in Tailscale.";
   if (!f.vpn) return 'Tailscale is off on this phone. Open the Tailscale app and switch it on.';
-  if (f.anywhere === 'signin') return "The home computer's Tailscale needs signing in again. Ask whoever set up Crewhouse to open Tailscale there and sign in.";
+  if (f.anywhere === 'signin') return "The home computer's Tailscale needs signing in again. Open Tailscale on the computer and sign in.";
   if (f.knock === 'answers') return 'The home computer answers over Tailscale, so it is on; this phone is getting back in touch. If this lasts, restart Crewhouse on the computer.';
-  if (f.knock === 'refused') return "The home computer answers over Tailscale, but Crewhouse isn't running on it. Ask whoever set it up to open Crewhouse on the computer.";
-  if (f.peer === false) return "The home computer isn't shared with this phone's Tailscale account: it checked when this phone was last in touch. Ask whoever set up Crewhouse to share it with you in Tailscale, then tap Accept on this phone.";
+  if (f.knock === 'refused') return "The home computer answers over Tailscale, but Crewhouse isn't running on it. Open Crewhouse on the computer.";
+  if (f.peer === false) return "The home computer isn't shared with this phone's Tailscale account: it checked when this phone was last in touch. Sign this phone in to the same Tailscale account as the computer, or share this computer with that phone's account in Tailscale and tap Accept on this phone.";
   if (f.reached?.tailscale) return `The home computer doesn't answer over Tailscale. This phone has reached it that way before (last ${clock(f.reached.tailscale)}), so sharing works: it's most likely asleep, switched off, or its Tailscale is off.`;
-  return "This phone can't reach the home computer over Tailscale, and hasn't yet from away. Either the computer is asleep or off, or it hasn't been shared with this phone's Tailscale account: ask whoever set up Crewhouse to check both.";
+  return "This phone can't reach the home computer over Tailscale, and hasn't yet from away. Either the computer is asleep or off, or it hasn't been shared with this phone's Tailscale account: check both. Sign this phone in to the same Tailscale account, or share this computer with that phone's account in Tailscale.";
 }
 
 /** Settings, Phones: when a paired phone last reached this computer, and over which route; a phone that never has from
@@ -737,17 +737,6 @@ export function homeSetup(state: Json, g: Json | null, link: Json | null) {
   return { rows, left: rows.filter((r) => !r.done).length };
 }
 
-/** A non-owner member's first-week checklist: their own calendar connection, and handing the crew one
- *  job. Sign-in stays out: a signed-out member already sees an AccountCard. Until both are done, their Home
- *  carries the same row the owner's house setup gets. Everything here is the viewer's own snapshot. */
-export function memberSetup(state: Json) {
-  const rows = [
-    { key: 'calendar', says: 'Connect your calendar', done: (state.connections ?? []).includes('calendar') },
-    { key: 'job', says: 'Hand the crew one job', done: (state.tasks ?? []).length > 0 },
-  ];
-  return { rows, left: rows.filter((r) => !r.done).length };
-}
-
 /** Ideas are promises from a named helper; Chief offers three of his own when the crew has none.
  *  A job still waiting on an app the person hasn't connected belongs on Home (jobs), not among these chips.
  *  Offer-to-hire rows stay on Home too: a chip can only fill a box, never bring a helper on. */
@@ -1011,23 +1000,15 @@ const APPS: App[] = [
 export const apps = (state: Json): App[] => APPS.map((a) => ({ ...a, on: !!state.connections?.includes?.(a.id) }));
 
 // ---------- the office ----------
-/** One character in the office: a helper as its viewer may see it. Every word comes from the adapter views above
- *  (crew, chief, work, cards, things) plus the step/file worders, never raw state — so the room a member sees holds
- *  only their own jobs, and a helper busy with someone else's job carries no title, step or member, ever. */
+/** One helper in the person's office, from the plain-words adapter views. */
 export type OfficeMember = { id: string; name: string; kind: Kind; mood: Mood; ring: Helper['ring']; status: string;
-  step: string; steps: Step[]; things: FileView[]; ask?: Card; busyElsewhere: boolean };
+  step: string; steps: Step[]; things: FileView[]; ask?: Card };
 export type OfficeView = { chief: ChiefView; crew: OfficeMember[]; done: Thing[];
   counts: { needs: number; working: number; done: number } };
-export type OfficeOpts = { busyElsewhere?: boolean };
-/** "Busy with another job", said once: the room's honest word when a helper works for someone else. */
-export const BUSY_ELSEWHERE = 'Busy with another job';
-/** A helper the viewer can read as busy elsewhere: working on the bot, with no task of the viewer's (src/crew.ts
- *  pub/liveState). Bot-level signals only — never a title, step or member. */
-const isBusyElsewhere = (b: Json) => b?.live === 'working' && !b?.task;
 
 /** The question that matters most comes first: money, then anything sent in the person's name, then the rest. */
 export const askRank = (c: Card) => (c.kind === 'spend' ? 0 : c.kind === 'ok' ? 1 : 2);
-export function office(state: Json, opts: OfficeOpts = {}): OfficeView {
+export function office(state: Json): OfficeView {
   const helpers = crew(state);
   const raw = new Map((state.bots as Json[] ?? []).map((b: Json) => [b.id, b]));
   const lines = new Map(work(state).map((w) => [w.helper, w]));
@@ -1036,10 +1017,6 @@ export function office(state: Json, opts: OfficeOpts = {}): OfficeView {
   const crewRows: OfficeMember[] = helpers.map((h) => {
     const b = raw.get(h.id) ?? {};
     const task = b.task ?? null;
-    if (opts.busyElsewhere && isBusyElsewhere(b)) {
-      return { id: h.id, name: h.name, kind: h.kind, mood: 'work' as Mood, ring: '' as const,
-        status: BUSY_ELSEWHERE, step: '', steps: [], things: [], ask: undefined, busyElsewhere: true };
-    }
     const now = task ? steps(events, task.id, true) : [];
     // The desk holds the task's delivered files first (they survive the 80-event window), then any live
     // arrival the snapshot predates; a path delivered again (a first look, then the finished one) is one thing.
@@ -1050,7 +1027,7 @@ export function office(state: Json, opts: OfficeOpts = {}): OfficeView {
     const w = lines.get(h.id);
     return { id: h.id, name: h.name, kind: h.kind, mood: h.mood, ring: h.ring, status: h.status,
       step: (b.step && step(b.step)) || (w && !w.waiting ? 'Getting started…' : ''), steps: now, things: made,
-      ask: open.filter((c) => c.helper === h.id).sort((a, b) => askRank(a) - askRank(b))[0], busyElsewhere: false };
+      ask: open.filter((c) => c.helper === h.id).sort((a, b) => askRank(a) - askRank(b))[0] };
   });
   const done = things(state);
   return { chief: chief(state), crew: crewRows, done,
@@ -1059,8 +1036,7 @@ export function office(state: Json, opts: OfficeOpts = {}): OfficeView {
 }
 
 /** The office between refreshes: crewd's debounced snapshot stays the source of truth, and each live event only
- *  moves the words it carries (report §7). Pure — the passed view is never changed.
- *  A busy-elsewhere row ignores step/file updates defensively. */
+ *  moves the words it carries (report §7). Pure — the passed view is never changed. */
 export function officeEvent(view: OfficeView, e: Json): OfficeView {
   const touch = (id: string, f: (c: OfficeMember) => OfficeMember): OfficeView => {
     const crew = view.crew.map((c) => (c.id === id ? f(c) : c));
@@ -1078,16 +1054,15 @@ export function officeEvent(view: OfficeView, e: Json): OfficeView {
   switch (e.kind) {
     case 'run.tool': {
       const text = d.words ? plain(d.words) : 'Worked on it';
-      return touch(String(e.bot), (c) => (c.busyElsewhere ? c : say(c, text)));
+      return touch(String(e.bot), (c) => say(c, text));
     }
     case 'task.progress': {
       const text = plain(d.text ?? '');
       if (!text) return view;
-      return touch(String(e.bot), (c) => (c.busyElsewhere ? c : say(c, text)));
+      return touch(String(e.bot), (c) => say(c, text));
     }
     case 'file.delivered': {
       return touch(String(e.bot), (c) => {
-        if (c.busyElsewhere) return c;
         const withStep = say(c, step(e) ?? c.step);
         const f = fileView(c.id, String(d.path ?? ''));
         return d.photo ? withStep : { ...withStep, things: [...withStep.things.filter((x) => x.url !== f.url), f] };
@@ -1095,9 +1070,9 @@ export function officeEvent(view: OfficeView, e: Json): OfficeView {
     }
     case 'task.created':
     case 'task.working':
-      return touch(String(e.bot), (c) => ({ ...c, busyElsewhere: false, ring: 'working' as const,
+      return touch(String(e.bot), (c) => ({ ...c, ring: 'working' as const,
         mood: c.mood === 'idle' ? 'work' as Mood : c.mood,
-        status: d.title ? plain(d.title) : c.status === BUSY_ELSEWHERE ? 'Getting started\u2026' : c.status }));
+        status: d.title ? plain(d.title) : c.status }));
     case 'task.paused':
       return touch(String(e.bot), (c) => ({ ...c, ring: '' as const, step: '', steps: [], status: 'Free to help' }));
     case 'task.done': {
@@ -1105,17 +1080,16 @@ export function officeEvent(view: OfficeView, e: Json): OfficeView {
       const thing: Thing = { id: typeof d.task === 'number' ? d.task : Date.now(), helper: String(e.bot),
         title: plain(d.title ?? ''), at: e.at ?? Date.now(), summary: teaser(d.result ?? '').slice(0, 220), files };
       const crew = view.crew.map((c) => (c.id === String(e.bot)
-        ? { ...c, busyElsewhere: false, ring: '' as const, mood: 'happy' as Mood, status: 'Free to help', step: '', steps: [], things: [], ask: undefined } : c));
+        ? { ...c, ring: '' as const, mood: 'happy' as Mood, status: 'Free to help', step: '', steps: [], things: [], ask: undefined } : c));
       return { ...view, crew, done: [thing, ...view.done],
         counts: { needs: crew.filter((c) => c.ring === 'needs').length,
           working: crew.filter((c) => c.ring === 'working').length, done: view.done.length + 1 } };
     }
     case 'task.failed':
     case 'task.unsure':
-      return touch(String(e.bot), (c) => (c.busyElsewhere ? c : { ...c, ring: '' as const, mood: 'error' as Mood, step: step(e) ?? c.step }));
+      return touch(String(e.bot), (c) => ({ ...c, ring: '' as const, mood: 'error' as Mood, step: step(e) ?? c.step }));
     case 'ask.opened':
-      return touch(String(e.bot), (c) => (c.busyElsewhere ? c
-        : { ...c, ring: 'needs' as const, mood: 'ask' as Mood, status: 'Needs you', step: 'Waiting for your OK' }));
+      return touch(String(e.bot), (c) => ({ ...c, ring: 'needs' as const, mood: 'ask' as Mood, status: 'Needs you', step: 'Waiting for your OK' }));
     case 'ask.answered':
     case 'ask.parked':
       return touch(String(e.bot), (c) => {

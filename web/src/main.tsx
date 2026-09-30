@@ -59,15 +59,13 @@ function useAccounts(poll: number, tick = 0) {
 }
 
 /**
- * First run, as the onboarding prototype: Chief greets her by the name the owner gave, two promises, and three things he
- * can take off her plate. One tap on an idea is both "hello" and her first job; the sign-in comes right after, in the
- * chat, when she already wants something. Nothing to type.
+ * First run, as the onboarding prototype: Chief greets you by your name, two promises, and three things he
+ * can take off your plate. One tap on an idea is both "hello" and your first job; the sign-in comes right after, in the
+ * chat, when you already want something. Nothing to type.
  */
 function Hello({ state, refresh, night }: Ctx) {
   const me = state.person;
-  const isOwner = me.id === A.OWNER;
-  const owner = state.members.find((m: Json) => m.id === A.OWNER)?.name ?? 'the owner';
-  const named = me.name && !(isOwner && me.name === 'Owner') ? me.name : '';
+  const named = me.name && me.name !== 'Owner' ? me.name : '';
   const [address, setAddress] = useState<string>(me.address || named);
   const [other, setOther] = useState(!named);
   const input = useRef<HTMLInputElement>(null);
@@ -85,7 +83,7 @@ function Hello({ state, refresh, night }: Ctx) {
       <span className="halo"><ChiefArt mood={tipped ? 'idle' : 'hello'} d={8.5} hero /></span>
       <div className="speech">
         <h1>{A.greeting()}{address.trim() ? `, ${address.trim()}` : ''}</h1>
-        <p className="lead">I'm Chief, your personal assistant. I run your crew of helpers{isOwner ? '.' : `; ${owner} set me up for you.`}</p>
+        <p className="lead">I'm Chief, your personal assistant. I run your crew of helpers.</p>
       </div>
       <ul className="promises">
         <li>Your helpers live on this computer, and think with your own ChatGPT.</li>
@@ -178,15 +176,6 @@ function SetupRow({ state, accounts, tick }: { state: Json; accounts: Json[] | n
   return <a className="card nudge" href="#/settings"><span className="grow">Getting set up: {left} {left === 1 ? 'thing' : 'things'} left</span><b>›</b></a>;
 }
 
-/** The same row for a non-owner member until their first week is done: their calendar and one job.
- *  Sign-in stays out — a signed-out member already sees an AccountCard above. Tapping opens the apps
- *  screen, where the calendar connects; the job list sits on this same Home below. */
-function MemberRow({ state }: { state: Json }) {
-  const { left } = A.memberSetup(state);
-  if (!left) return null;
-  return <a className="card nudge" href="#/apps"><span className="grow">Getting started: {left} {left === 1 ? 'thing' : 'things'} left</span><b>›</b></a>;
-}
-
 /** Needs-you rows only open the review sheet; nothing commits from Home. */
 function NeedsRows({ state, cards, quiet, all = false }: { state: Json; cards: A.Card[]; quiet?: boolean; all?: boolean }) {
   const crew = A.crew(state);
@@ -254,8 +243,7 @@ function Home(ctx: Ctx) {
   const office = (frame: 'phone' | 'desk') => (frame === 'desk') === wide && <Office state={state} night={ctx.night} />;
   const nudges = <>
     {(g.state === 'signed-out' || g.notIncluded) && <AccountCard g={g} onReady={refresh} />}
-    {state.person.id === A.OWNER && <SetupRow state={state} accounts={accounts} tick={tick} />}
-    {state.person.id !== A.OWNER && <MemberRow state={state} />}
+    <SetupRow state={state} accounts={accounts} tick={tick} />
     {A.resting(state) && <div className="card nudge"><span className="grow">{A.resting(state)}. I'll pick things back up then.</span></div>}
     {A.gettingReady(state) && <div className="card nudge"><span className="grow">{A.gettingReady(state)}</span></div>}
     {A.update(state) && <div className="card nudge"><span className="grow">{A.update(state)!.words}</span><a className="btn go" href={A.update(state)!.url} target="_blank" rel="noreferrer">Download</a></div>}
@@ -1192,7 +1180,7 @@ function App() {
   const ctx: Ctx | null = useMemo(() => (state ? { state, tick, refresh, night, offline, accounts } : null), [state, tick, refresh, night, offline, accounts]);
 
   const splash = <Splash done={!!ctx || offline} />;
-  if (!ctx) return <>{splash}{offline && <Unreachable retry={refresh} owner />}</>;
+  if (!ctx) return <>{splash}{offline && <Unreachable retry={refresh} />}</>;
   // Every little Chief face on the page carries the mood from here, the way the night palette does.
   setChiefMood(A.chief(ctx.state, chiefLocal(ctx)).mood);
   if (!ctx.state.person.onboarded) return <>{splash}<Hello {...ctx} /><Toasts /></>;
