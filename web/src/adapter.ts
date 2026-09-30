@@ -698,17 +698,24 @@ export function writeAsk(want: string, box: { text: string; picked: string }, no
     picked ? `That's for the part I picked in a text box I'm typing in on my phone: “${picked}”. The whole box says: “${sofar}”`
       : `That's for the text box I'm typing in on my phone.${sofar ? ` It says so far: “${sofar}”` : ''}`,
     not && `Not this one: “${not}”`,
+    "Don't ask me anything first: decide what fits and write it.",
     picked ? 'Reply with only the words to put in place of the part I picked, as plain text: no file, no notes.'
       : `Reply with only what the whole box should say${sofar ? ', keeping what I wrote where it fits' : ''}, as plain text: no file, no notes.`,
   ].filter(Boolean).join('\n');
 }
-/** That ask's draft, from the writer's page: its job's reply once done, '' when it couldn't, null while it writes. */
+/** That ask's draft, from the writer's page: its job's reply once done, '' when it couldn't (crewd's "Done." is an
+ *  empty reply), null while it writes. */
 export function draftOf(page: Json, task: number): string | null {
   const t = (page?.tasks ?? []).find((x: Json) => x.id === task);
   if (!t || !['done', 'failed', 'unsure'].includes(t.state)) return null;
-  if (t.state !== 'done') return '';
-  const said = [...(page.messages ?? [])].reverse().find((m: Json) => m.task_id === task && m.author === 'bot')?.text;
-  return String(t.result ?? said ?? '').trim();
+  const r = t.state === 'done' ? String(t.result ?? '').trim() : '';
+  return r === 'Done.' ? '' : r;
+}
+/** Why that job isn't writing yet, in crewd's own words ('' while it writes): paused for a sign-in or a rest, or
+ *  waiting on the person. */
+export function waitOf(page: Json, task: number): string {
+  const t = (page?.tasks ?? []).find((x: Json) => x.id === task);
+  return t?.state === 'paused' ? plain(t.result ?? '') || 'Waiting for you.' : t?.state === 'needs_you' ? 'It needs your OK first.' : '';
 }
 
 /** Home's standing "hand me a job" list: the jobs the crew offers to do end to end, from crewd's `ideas[]` — which is

@@ -72,6 +72,8 @@ export async function bubbleResume(grant: Grant) {
 }
 
 export const closePanel = () => overlay.closePanel();
+/** What to do when the phone greys out a switch for an app installed outside its store. */
+export const restrictedWords = () => words('overlay.restricted');
 /** Hand my screen to…: the panel steps aside, the phone asks (every time) and takes one still of the screen, and the
  *  panel comes back with it to pick who gets it. A no leaves nothing behind. */
 export async function handScreen() {
@@ -82,27 +84,30 @@ export async function handScreen() {
 
 /** The box in focus when he was tapped: its words and the part the person picked ('' for none), or 'off' while the
  *  phone hasn't let him see it, or null for none. */
-export type Box = { text: string; picked: string } | 'off' | null;
+export type Box = { app: string; text: string; picked: string } | 'off' | null;
 let box: Promise<Box> = Promise.resolve(null);
 // Read on the tap itself, both asks at once: his panel opens on the same tap and takes the focus with it.
 overlay.on('tap', () => {
   box = Promise.all([focusedField.available(), focusedField.read()]).then(([on, f]) =>
-    (!on ? 'off' : f ? { text: f.text, picked: f.selection ? f.text.slice(f.selection.start, f.selection.end) : '' } : null), () => null);
+    (!on ? 'off' : f ? { app: f.app, text: f.text, picked: f.selection ? f.text.slice(f.selection.start, f.selection.end).trim() && f.text.slice(f.selection.start, f.selection.end) : '' } : null), () => null);
 });
 /** The panel takes the tap's box once; a panel opened any other way has none. */
 export function tappedBox() { const b = box; box = Promise.resolve(null); return b; }
 
 /** Put it in: the panel steps aside and the words become what the box the person was in says (or, with a part
- *  `picked`, go over that part). Nothing is sent: they press the app's own Send. An app that turns the words away gets
- *  them copied, and he says how to paste; one with no box left to fill is told the draft waits in `who`'s chat. */
-export async function putIn(text: string, who: string, picked: boolean) {
+ *  picked, go over that part). Nothing is sent: they press the app's own Send. An app that turns the words away gets
+ *  them copied, and he says how to paste. If the box in focus is no longer the one read on the tap (another app, or
+ *  its words changed), nothing is put in: he says the draft waits in `who`'s chat. */
+export async function putIn(text: string, who: string, was: { app: string; text: string; picked: string }) {
   let gone = () => {};
   const closed = new Promise<void>((done) => { gone = done; setTimeout(done, 2000); }); // a panel already closed says nothing
   const off = overlay.on('panel', (e) => { if (!e.open) gone(); });
   await overlay.closePanel();
   await closed;
   off();
-  const r = await focusedField.insert(text, { replace: picked ? 'selection' : 'all', attempts: 13, retryMs: 150, acceptNewlineLoss: true }).catch(() => 'failed' as const);
+  const now = await focusedField.read().catch(() => null);
+  const same = !!now && now.app === was.app && now.text === was.text;
+  const r = same ? await focusedField.insert(text, { replace: was.picked ? 'selection' : 'all', attempts: 13, retryMs: 150, acceptNewlineLoss: true }).catch(() => 'failed' as const) : 'failed';
   if (r === 'copied') overlay.say('Copied: hold the box and paste', 'chief_idle', 6000, { announce: true });
   else if (r === 'failed') overlay.say(`Couldn't put it in. It's in ${who}'s chat.`, 'chief_worried', 6000, { announce: true });
 }

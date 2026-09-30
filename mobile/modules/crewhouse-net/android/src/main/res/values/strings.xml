@@ -1,4 +1,4 @@
 <resources>
   <string name="crewhouse_accessibility_label">Crewhouse: Write it here</string>
-  <string name="crewhouse_accessibility_description">Lets Chief see the box you are typing in when you tap him, so Write it here can draft for it and put in the words you approve. Nothing is sent.</string>
+  <string name="crewhouse_accessibility_description">Lets Chief see the box you are typing in when you tap him. If you pick Write it here, what the box says goes to your crew on your home computer to draft from, and only the words you approve are put in. Nothing is posted for you.</string>
 </resources>

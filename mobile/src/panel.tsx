@@ -8,7 +8,7 @@ import { KeyboardAvoidingView, Linking, Pressable, ScrollView, StyleSheet, useCo
 import * as A from '../../web/src/adapter.ts';
 import { api, setTransport, type Json } from '../../web/src/api.ts';
 import { AskSheet, attempt, Btn, Composer, Face, look, s, ShareIn, T, Theme, Toast } from '../App';
-import { closePanel, handScreen, putIn, showCrew, tappedBox, type Box } from './bubble';
+import { closePanel, handScreen, putIn, restrictedWords, showCrew, tappedBox, type Box } from './bubble';
 import { connect, loadGrant, type Grant, type Status } from './link';
 
 export function Panel({ frame }: { frame?: string }) {
@@ -59,7 +59,8 @@ function Body({ grant, frame, box }: { grant: Grant; frame?: string; box: Box })
   if (!state) return <View style={s.row}><Face who="chief" size={40} mood="work" /><T tone="ink2" style={{ flex: 1 }}>{status === 'offline' ? "Can't reach the home computer right now." : 'Waking the crew…'}</T></View>;
   if (frame && canAct) return <ShareIn state={state} shared={{ text: '', files: [{ path: frame, mimeType: 'image/png' }] }} go={() => void closePanel()} onDone={() => void closePanel()} />;
   const writer = A.writer(state);
-  if (writing && box && writer && canAct) return <Write box={box} who={writer} state={state} />;
+  // Only a phone that may ask; a link blip keeps the job (and its draft) on screen until the link is back.
+  if (writing && box && writer && grant.device.role === 'control') return <Write box={box} who={writer} state={state} />;
   const chief = online ? A.chief(state) : { mood: 'rest' as const, line: "Can't reach the home computer right now" };
   const needs = A.needsYou(state);
   const crew = A.crew(state);
@@ -102,17 +103,20 @@ function Write({ box, who, state }: { box: Exclude<Box, null>; who: A.Helper; st
   const [want, setWant] = useState('');
   const [task, setTask] = useState(0);
   const [draft, setDraft] = useState<string | null>(null);
+  const [waits, setWaits] = useState('');
+  const [trying, setTrying] = useState(false);
   // Every refresh (something landed on the link) looks at the writer's page for this job's reply.
-  useEffect(() => { if (task) api.bot(who.id).then((p) => setDraft(A.draftOf(p, task)), () => {}); }, [state, task, who.id]);
+  useEffect(() => { if (task) api.bot(who.id).then((p) => { setDraft(A.draftOf(p, task)); setWaits(A.waitOf(p, task)); }, () => {}); }, [state, task, who.id]);
   if (box === 'off') return <>
     <View style={s.row}><Face who="chief" size={40} mood="hello" /><T style={[s.h2, { flex: 1 }]}>Let Chief see the box you're typing in</T></View>
-    <T tone="ink2">Switch on Crewhouse on the next page. Then tap me in any box and pick Write it here.</T>
+    <T tone="ink2">{`Switch on Crewhouse on the next page. Then tap me in any box and pick Write it here. ${restrictedWords()}`}</T>
     <Btn go big label="Open the settings" onPress={() => void Linking.sendIntent('android.settings.ACCESSIBILITY_SETTINGS').catch(() => {}).then(closePanel)} />
   </>;
-  const ask = async (words: string, not = '') => {
+  // The first ask's box says "Not sent" itself; Try again has only the toast.
+  const ask = async (words: string, not = '', quiet = true) => {
     let r: Json = null;
-    if (!await attempt(async () => { r = await api.post(who.id, A.writeAsk(words, box, not)); }, undefined, true) || !r?.task) return false;
-    setWant(words); setDraft(null); setTask(r.task);
+    if (!await attempt(async () => { r = await api.post(who.id, A.writeAsk(words, box, not)); }, undefined, quiet) || !r?.task) return false;
+    setWant(words); setDraft(null); setWaits(''); setTask(r.task);
     return true;
   };
   const sofar = (box.picked || box.text).trim().split('\n')[0];
@@ -121,18 +125,21 @@ function Write({ box, who, state }: { box: Exclude<Box, null>; who: A.Helper; st
     {!!sofar && <T tone="ink2" style={s.small} lines={1}>{`${box.picked ? 'You picked' : 'It says'}: “${sofar}”`}</T>}
     <Composer placeholder="Say no politely, offer Thursday" onSend={(words) => ask(words)} photos={false} mic />
   </>;
-  if (draft === null) return <View style={s.row}>
-    <Face who={who} size={40} /><T tone="ink2" style={{ flex: 1 }}>{`${who.name} is writing…`}</T>
-    <Btn ghost label="Not now" onPress={() => void closePanel()} />
-  </View>;
+  if (draft === null) return <>
+    <View style={s.row}><Face who={who} size={40} /><T tone="ink2" style={{ flex: 1 }}>{waits || `${who.name} is writing…`}</T></View>
+    <View style={s.chips}>
+      {!!waits && <Btn label="Open Crewhouse" onPress={() => void Linking.openURL('crewhouse://').catch(() => {}).then(closePanel)} />}
+      <Btn ghost label="Not now" onPress={() => void closePanel()} />
+    </View>
+  </>;
   return <>
     <View style={s.row}><Face who={who} size={40} /><T style={[s.h2, { flex: 1 }]}>{draft ? 'Here it is' : `${who.name} couldn't write this one`}</T></View>
     {!!draft && <ScrollView style={[s.listGroup, { backgroundColor: t.solid, borderColor: t.line, maxHeight: 240 }]} contentContainerStyle={{ padding: 12 }}>
       <T>{draft}</T>
     </ScrollView>}
     <View style={s.chips}>
-      {!!draft && <Btn go label="Put it in" onPress={() => void putIn(draft, who.name, !!box.picked)} />}
-      <Btn label="Try again" onPress={() => void ask(want, draft)} />
+      {!!draft && <Btn go label="Put it in" onPress={() => void putIn(draft, who.name, box)} />}
+      <Btn label="Try again" disabled={trying} onPress={() => { setTrying(true); void ask(want, draft, false).finally(() => setTrying(false)); }} />
       <Btn ghost label="Not now" onPress={() => void closePanel()} />
     </View>
   </>;
