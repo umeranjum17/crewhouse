@@ -388,6 +388,6 @@ test('done needs proof: a job that acts but sees no confirmation, or says nothin
   await until('routine settled', () => { const t = db.get('SELECT state FROM tasks WHERE routine = ? ORDER BY id DESC', r.id); return t && !['queued', 'working'].includes(t.state); });
   assert.equal(db.get('SELECT state FROM tasks WHERE routine = ? ORDER BY id DESC', r.id)!.state, 'unsure');
   assert.match(db.get("SELECT text FROM messages WHERE bot = 'chief' ORDER BY id DESC")!.text, /^Quill isn't sure “.+” worked\. I did something on your Mocknote/);
-  assert.match(crew.digest(OWNER, 0), /- Not sure it worked: Quill, /);
+  assert.match(crew.digest(0), /- Not sure it worked: Quill, /);
   done();
 });

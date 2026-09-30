@@ -30,7 +30,7 @@ test('a turn cut by a network drop is requeued, not failed', async () => {
   const { db, crew, done } = lab();
   try {
     crew.recruit('reel', 'Reel', 'person');
-    const { task: id } = await (crew as any).post('reel', 'check the prices; the link is down today', undefined, 1);
+    const { task: id } = await (crew as any).post('reel', 'check the prices; the link is down today', undefined);
     await settled(db, id);
     assert.equal(db.get('SELECT state FROM tasks WHERE id = ?', id)!.state, 'done', 'retried after the drop and finished');
     await prompted(db, id, 2);
@@ -68,7 +68,7 @@ test("a replayed phone request returns its first answer: one job, even across a 
     first.crew.recruit('reel', 'Reel', 'person');
     const wire = (db: Store, crew: Crew) => new Link(first.cfg, db, (m, p, body, key?: string) => {
       const r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/messages$/);
-      if (r && m === 'POST') return (crew as any).post(r[1], body.text, undefined, 1, undefined, false, key);
+      if (r && m === 'POST') return (crew as any).post(r[1], body.text, undefined, undefined, false, key);
       throw Object.assign(new Error('not found'), { status: 404 });
     });
     const via = { id: 'phone-1', role: 'control' } as any;
@@ -110,7 +110,7 @@ test('a job that acted before a restart asks again, even under an always grant',
   const first = lab();
   try {
     first.crew.recruit('reel', 'Reel', 'person');
-    const { task: id } = await (first.crew as any).post('reel', 'file it [tool crew_write {"path": "/tmp/reask-probe.txt", "text": "hello"}]', undefined, 1);
+    const { task: id } = await (first.crew as any).post('reel', 'file it [tool crew_write {"path": "/tmp/reask-probe.txt", "text": "hello"}]', undefined);
     await settled(first.db, id);
     assert.equal(first.db.get('SELECT state FROM tasks WHERE id = ?', id)!.state, 'needs_you', 'the call parks on a card');
     const ask = first.db.get("SELECT * FROM asks WHERE task_id = ? AND state = 'open'", id)!;

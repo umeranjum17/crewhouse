@@ -5,7 +5,7 @@ import { extname, join } from 'node:path';
 import { WebSocketServer } from 'ws';
 import type { Config } from './config.ts';
 import type { Store } from './db.ts';
-import type { Crew } from './crew.ts';
+import { quietNow, type Crew } from './crew.ts';
 import * as disk from './bots.ts';
 import { toolStatus } from './tools.ts';
 import { OWNER, PROVIDERS, clock, provider } from './accounts.ts';
@@ -65,12 +65,12 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
   const installing = new Set<string>();
   const teacher = new Teacher();
   /** "Done showing": the wheel goes back, and the bot gets the steps (and a few page pictures) to keep as a skill. */
-  const shown = async (bot: string, member: number, keep: boolean) => {
+  const shown = async (bot: string, keep: boolean) => {
     const s = teacher.stop(bot);
     if (!s) throw Object.assign(new Error('nothing is being shown'), { status: 409 });
     await crew.giveBack(bot).catch(() => {});
     if (!keep || !s.steps.length) return { steps: s.steps.length };
-    await crew.post(bot, lesson(s.what, s.steps), undefined, member, s.shots);
+    await crew.post(bot, lesson(s.what, s.steps), undefined, s.shots);
     return { steps: s.steps.length };
   };
   /** Installs take minutes (the browser downloads Chromium) and run npm, pip and downloads one after another, so each
@@ -106,10 +106,10 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
   if (packaged || process.env.CREWHOUSE_RELEASES) { void checkUpdate(); setInterval(checkUpdate, 86_400_000).unref(); }
   const localHost = (h = '') => /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/.test(h);
   // Every paired phone uses the person's crew.
-  const link = new Link(cfg, db, (m, path, body, key) => { const u = new URL(path, 'http://x'); return api(m, u.pathname, u.searchParams, body, OWNER, key); });
+  const link = new Link(cfg, db, (m, path, body, key) => { const u = new URL(path, 'http://x'); return api(m, u.pathname, u.searchParams, body, key); });
   crew.phoneLink = link;
   link.desk = { signal: (bot, w, method, params, canControl) => crew.desktopSignal(bot, w, method, params, canControl), release: (w) => crew.desktops.release(w) };
-  link.quiet = () => !!crew.members().find((x) => x.id === OWNER)?.quietNow;
+  link.quiet = () => quietNow(crew.person().quiet);
 
   const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://x');
@@ -121,8 +121,6 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       if (p.startsWith('/api/')) {
         // Mutations need a custom header, which a cross-site page cannot send without a preflight we never allow.
         if (req.method !== 'GET' && req.headers['x-crewhouse'] !== '1') return send(res, 403, { error: 'missing x-crewhouse header' });
-        // Which household member is using this screen. It picks whose threads and accounts are shown, never what is allowed.
-        const me = crew.viewer(req.headers['x-crewhouse-member']).id as number;
         // Phones: pairing and grants answer on this computer only, never over the phone link.
         if (p === '/api/phones' && req.method === 'GET') return send(res, 200, link.devices());
         if (p === '/api/phones/link' && req.method === 'GET') return send(res, 200, link.status());
@@ -143,7 +141,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
           link.answer(Number(b.id), b.yes === true); return send(res, 200, { ok: true }); }
         const phone = p.match(/^\/api\/phones\/([\w-]+)$/);
         if (phone && req.method === 'DELETE') { await link.revoke(phone[1]); return send(res, 200, { ok: true }); }
-        return send(res, 200, await api(req.method!, p, url.searchParams, req.method === 'GET' ? {} : await readJson(req), me));
+        return send(res, 200, await api(req.method!, p, url.searchParams, req.method === 'GET' ? {} : await readJson(req)));
       }
 
       // An app's sign-in page sends the browser back here; the tab says, in words, how it went.
@@ -156,8 +154,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       const file = p.match(/^\/files\/([a-z0-9-]+)\/(.+)$/);
       if (file) {
         const rel = join('files', decodeURIComponent(file[2])); if (rel !== 'files' && !rel.startsWith('files/')) return send(res, 404, { error: 'no such file' });
-        const me = crew.viewer(req.headers['x-crewhouse-member']).id as number;
-        if (me !== OWNER && !crew.fileFor(file[1], rel, me)) return send(res, 403, { error: 'not delivered to you' });
+        if (!crew.fileFor(file[1], rel)) return send(res, 403, { error: 'not delivered to you' });
         const full = disk.insideBot(cfg, file[1], rel);
         if (!existsSync(full)) return send(res, 404, { error: 'no such file' });
         return sendFile(req, res, full);
@@ -177,13 +174,13 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     }
   });
 
-  /** The app API, shared by the web app (HTTP) and paired phones (the link). `me` is the member using it. */
-  async function api(m: string, p: string, q: URLSearchParams, body: any, me: number, key?: string) {
+  /** The app API, shared by the web app (HTTP) and paired phones (the link). Every screen uses the person’s crew. */
+  async function api(m: string, p: string, q: URLSearchParams, body: any, key?: string) {
     let r: RegExpMatchArray | null;
     // What is installing now, and a newer Crewhouse to download.
-    if (m === 'GET' && p === '/api/state') return { ...crew.snapshot(me), zone: Intl.DateTimeFormat().resolvedOptions().timeZone, installing: [...installing], showing: teacher.showing(), ...(update ? { update } : {}) };
+    if (m === 'GET' && p === '/api/state') return { ...crew.snapshot(), zone: Intl.DateTimeFormat().resolvedOptions().timeZone, installing: [...installing], showing: teacher.showing(), ...(update ? { update } : {}) };
     if (m === 'GET' && p === '/api/events') return db.events(Number(q.get('after') || 0), 200);
-    if (m === 'GET' && p === '/api/room') return crew.room(me, Number(q.get('before')) || undefined);
+    if (m === 'GET' && p === '/api/room') return crew.room(Number(q.get('before')) || undefined);
     // The one phone-admin call a paired phone makes itself: renewing the Add-a-phone code it is looking at, so the
     // card on the phone refreshes like the web card's.
     if (m === 'POST' && p === '/api/phones/refresh') return crew.refreshPhone(Number(body?.message));
@@ -203,13 +200,13 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       if (!re.test(rel)) throw Object.assign(new Error(word), { status: 404 });
       return fn(rel);
     };
-    if (m === 'GET' && p === '/api/workbook') return preview(/^files\/[\w./-]+\.xlsx$/i, 'not a spreadsheet', (rel) => crew.workbookView(String(q.get('bot') ?? ''), rel, me));
-    if (m === 'GET' && p === '/api/document') return preview(/^files\/[\w./-]+\.(docx|md|txt)$/i, 'not a document', (rel) => crew.documentView(String(q.get('bot') ?? ''), rel, me));
-    if (m === 'GET' && p === '/api/video') return preview(/^files\/[\w./-]+\.(mp4|webm|mov)$/i, 'not a video', (rel) => crew.videoSlice(String(q.get('bot') ?? ''), rel, Number(q.get('after')) || 0, me));
-    if (m === 'POST' && p === '/api/onboard') { const b = body; return crew.onboard(b.address ?? '', me, b.ask, typeof b.bot === 'string' ? b.bot : undefined) ?? { ok: true }; }
-    if (m === 'POST' && p === '/api/recruit') { const b = body; const { token, ...bot } = crew.recruit(b.template, b.name, 'person', me); return bot; }
-    if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)$/)) && m === 'GET') return crew.botPage(r[1], me, Number(q.get('around')) || undefined);
-    if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/messages$/)) && m === 'POST') { const b = body; return crew.post(r[1], b.text ?? '', b.model, me, b.photos, b.room === true, key); }
+    if (m === 'GET' && p === '/api/workbook') return preview(/^files\/[\w./-]+\.xlsx$/i, 'not a spreadsheet', (rel) => crew.workbookView(String(q.get('bot') ?? ''), rel));
+    if (m === 'GET' && p === '/api/document') return preview(/^files\/[\w./-]+\.(docx|md|txt)$/i, 'not a document', (rel) => crew.documentView(String(q.get('bot') ?? ''), rel));
+    if (m === 'GET' && p === '/api/video') return preview(/^files\/[\w./-]+\.(mp4|webm|mov)$/i, 'not a video', (rel) => crew.videoSlice(String(q.get('bot') ?? ''), rel, Number(q.get('after')) || 0));
+    if (m === 'POST' && p === '/api/onboard') { const b = body; return crew.onboard(b.address ?? '', b.ask, typeof b.bot === 'string' ? b.bot : undefined) ?? { ok: true }; }
+    if (m === 'POST' && p === '/api/recruit') { const b = body; const { token, ...bot } = crew.recruit(b.template, b.name, 'person'); return bot; }
+    if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)$/)) && m === 'GET') return crew.botPage(r[1], Number(q.get('around')) || undefined);
+    if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/messages$/)) && m === 'POST') { const b = body; return crew.post(r[1], b.text ?? '', b.model, b.photos, b.room === true, key); }
     if ((r = p.match(/^\/api\/people\/(\d+)$/)) && m === 'PUT') return crew.updateMember(OWNER, body);
     if (m === 'GET' && p === '/api/accounts') {
       // The person's AI accounts: signed in or not (the engine's own local check), resting until when, and any sign-in in progress.
@@ -233,14 +230,13 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       else await crew.accounts.logout(key);
       return { ok: true, signIn: crew.accounts.view(key) };
     }
-    // Connections: the viewer's own apps (Notion, Canva, Google…), connected on the app's own page (docs/ui-contract.md).
+    // Connections: the person's apps (Notion, Canva, Google…), connected on the app's own page (docs/ui-contract.md).
     if (m === 'GET' && p === '/api/connections') return crew.connections.list();
     // The "How I did it" drawer: one plain row per tool call of a task, recorded by crewd, redacted to words.
     if ((r = p.match(/^\/api\/task\/(\d+)\/trail$/)) && m === 'GET') {
       const id = Number(r[1]);
       const task = db.get('SELECT * FROM tasks WHERE id = ?', id);
       if (!task) throw Object.assign(new Error('no such task'), { status: 404 });
-      if ((task.member ?? OWNER) !== me && me !== OWNER) throw Object.assign(new Error('not yours'), { status: 403 });
       return db.all("SELECT at, data FROM events WHERE kind = 'run.call' AND json_extract(data, '$.task') = ? ORDER BY seq", id)
         .map((e: any) => { const d = JSON.parse(e.data); let input = {}; try { input = JSON.parse(d.input ?? '{}'); } catch { /* unreadable input: words only */ }
           return { at: e.at, words: toolWords(d.tool, input) || `Used ${String(d.tool).replace(/_/g, ' ')}`, ok: d.ok !== false && !String(d.head ?? '').startsWith('error:') }; });
@@ -286,7 +282,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       const b = crew.botPage(r[1]).bot;
       const idea = String(body.idea ?? '').replace(/\r/g, '').trim();
       if (!idea || idea.length > 600) throw Object.assign(new Error('describe the job in under 600 characters'), { status: 400 });
-      crew.requestChief(`Write ${b.display}'s job from: ${idea}. Use crew_job.`, me, idea);
+      crew.requestChief(`Write ${b.display}'s job from: ${idea}. Use crew_job.`, idea);
       return { ok: true };
     }
     // What a helper learned about the person, and what the whole crew knows about them.
@@ -306,7 +302,6 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       const e = db.get("SELECT * FROM events WHERE seq = ? AND bot = ? AND kind = 'memory.learned'", Number(r[2]), r[1]);
       if (!e) throw Object.assign(new Error('no such memory'), { status: 404 });
       const d = JSON.parse(e.data);
-      if ((d.member ?? 1) !== OWNER) throw Object.assign(new Error('no such memory'), { status: 404 });
       if (db.get("SELECT 1 FROM events WHERE kind = 'memory.undone' AND json_extract(data, '$.seq') = ?", e.seq)) throw Object.assign(new Error('already undone'), { status: 409 });
       const commit = disk.forget(cfg, { bot: d.everyone ? null : r[1] }, { added: d.added ?? `- ${d.text}`, removed: d.removed ?? null, commit: d.commit ?? null });
       db.event('memory.undone', r[1], { seq: e.seq, text: d.text, commit });
@@ -346,9 +341,9 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       db.event('bot.settings', r[1], { by: 'person' });
       return { ok: true };
     }
-    if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/read$/)) && m === 'POST') { crew.read(r[1], me); return { ok: true }; }
-    if (m === 'GET' && p === '/api/search') return crew.search(q.get('q') ?? '', me);
-    if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/steer$/)) && m === 'POST') { crew.steer(r[1], String(body.text ?? ''), me); return { ok: true }; }
+    if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/read$/)) && m === 'POST') { crew.read(r[1]); return { ok: true }; }
+    if (m === 'GET' && p === '/api/search') return crew.search(q.get('q') ?? '');
+    if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/steer$/)) && m === 'POST') { crew.steer(r[1], String(body.text ?? '')); return { ok: true }; }
     if ((r = p.match(/^\/api\/tools\/([a-z0-9-]+)\/install$/)) && m === 'POST') {
       if (installing.has(r[1])) return { ok: true, already: true };
       void install(r[1]);
@@ -365,12 +360,12 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       if (!desk.cdp) throw Object.assign(new Error(`${b.display}'s computer has no browser to show it on`), { status: 409 });
       await crew.takeOver(b.id);
       const bot = b.id;
-      await teacher.start(bot, what, desk.cdp, () => void shown(bot, me, true).catch(() => {}));
+      await teacher.start(bot, what, desk.cdp, () => void shown(bot, true).catch(() => {}));
       db.event('teach.started', bot, { what });
       return { ok: true };
     }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/shown$/)) && m === 'POST') {
-      const out = await shown(r[1], me, body.keep !== false);
+      const out = await shown(r[1], body.keep !== false);
       db.event('teach.done', r[1], { steps: out.steps, kept: body.keep !== false });
       return out;
     }
@@ -390,11 +385,11 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       // screen away from home name the time zone (and only then).
       return { words: describe(when), next, first: clock(next), zone: Intl.DateTimeFormat().resolvedOptions().timeZone };
     }
-    if (m === 'POST' && p === '/api/routines') { const row = crew.addRoutine(body, 'person', me); return crew.routines(me).find((x) => x.id === row.id); }
+    if (m === 'POST' && p === '/api/routines') { const row = crew.addRoutine(body, 'person'); return crew.routines().find((x) => x.id === row.id); }
     if ((r = p.match(/^\/api\/routines\/(\d+)$/)) && m === 'PUT') { crew.updateRoutine(Number(r[1]), body); return { ok: true }; }
     if ((r = p.match(/^\/api\/routines\/(\d+)$/)) && m === 'DELETE') { crew.deleteRoutine(Number(r[1])); return { ok: true }; }
     if ((r = p.match(/^\/api\/routines\/(\d+)\/run$/)) && m === 'POST') { crew.runRoutine(Number(r[1])); return { ok: true }; }
-    if ((r = p.match(/^\/api\/asks\/(\d+)\/answer$/)) && m === 'POST') { await crew.answer(Number(r[1]), body, me, key); return { ok: true }; }
+    if ((r = p.match(/^\/api\/asks\/(\d+)\/answer$/)) && m === 'POST') { await crew.answer(Number(r[1]), body, key); return { ok: true }; }
     throw Object.assign(new Error('not found'), { status: 404 });
   }
 
@@ -405,7 +400,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     if (!localHost(req.headers.host) || (origin && !localHost(new URL(origin).host)) || !req.url?.startsWith('/ws')) return socket.destroy();
     const bot = /^\/ws\/desktop\/([a-z0-9-]+)$/.exec(req.url)?.[1];
     if (bot) return desk.handleUpgrade(req, socket, head, (ws) => watch(ws, bot));
-    wss.handleUpgrade(req, socket, head, (ws) => { (ws as any).member = crew.viewer(new URL(req.url!, 'http://x').searchParams.get('member')).id; wss.emit('connection', ws); });
+    wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws));
   });
 
   /** One socket per watching screen: desklink signaling in, desktop events out. Closing it ends the session. */

@@ -1,9 +1,6 @@
 // The whole client contract with crewd. Framework-free so the Expo app can reuse it.
 export type Json = any;
 
-/** Which household member is using this screen: picks whose threads, questions and accounts crewd returns. */
-let member = 1;
-export const setMember = (id: number) => { member = id; };
 
 /** `?demo` runs the screens on a personal assistant demo (web/src/demo.ts): for design review and screenshots. */
 export const demo = typeof location !== 'undefined' && new URLSearchParams(location.search).has('demo');
@@ -17,7 +14,7 @@ async function http(method: string, path: string, body?: Json) {
   if (demo) return (await import('./demo.ts')).demoCall(method, path, body);
   const res = await fetch(path, {
     method,
-    headers: { 'content-type': 'application/json', 'x-crewhouse': '1', 'x-crewhouse-member': String(member) },
+    headers: { 'content-type': 'application/json', 'x-crewhouse': '1' },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const out = await res.json().catch(() => ({}));
@@ -47,13 +44,13 @@ export const api = {
    *  `{data, more, size}` from byte `after`. */
   video: (bot: string, path: string, after: number) => call('GET', `/api/video?bot=${encodeURIComponent(bot)}&path=${encodeURIComponent(path)}&after=${after}`) as Promise<{ data: string; more: boolean; size: number }>,
   post: (id: string, text: string, photos?: { type: string; data: string }[] | { room: boolean }) => call('POST', `/api/bots/${id}/messages`, { text, ...(Array.isArray(photos) && photos.length ? { photos } : {}), ...(!Array.isArray(photos) && photos ? photos : {}) }),
-  /** A word to a helper's running job: it reads it after its current step, without starting over. Only that job's own member may. */
+  /** A word to a helper's running job: it reads it after its current step, without starting over. */
   steer: (id: string, text: string) => call('POST', `/api/bots/${id}/steer`, { text }),
   /** First run: how Chief addresses the person, and (from an idea card) their first request, in one tap.
    *  A goal card also names its helper, so the request starts there instead of with Chief. */
   onboard: (address: string, ask?: string, bot?: string) => call('POST', '/api/onboard', { address, ask, bot }),
   recruit: (template: string, name: string) => call('POST', '/api/recruit', { template, name }),
-  /** What one helper learned about this member, and what the whole crew knows about them: each person's own. */
+  /** What one helper learned about the person, and what the whole crew knows about them. */
   notes: (id: string, text: string) => call('PUT', `/api/bots/${id}/notes`, { text }),
   about: () => call('GET', '/api/about'),
   setAbout: (text: string) => call('PUT', '/api/about', { text }),
@@ -69,7 +66,7 @@ export const api = {
   undoMemory: (id: string, seq: number) => call('POST', `/api/bots/${id}/memory/${seq}/undo`),
   /** How one job was done, step by step, in plain words — recorded by crewd, on demand. */
   taskTrail: (id: number) => call('GET', `/api/task/${id}/trail`) as Promise<{ at: number; words: string; ok: boolean }[]>,
-  /** What the engine learned from this member's work, and Forget for one of them. */
+  /** What the engine learned from the person's work, and Forget for one of them. */
   learned: () => call('GET', '/api/learned') as Promise<{ id: string; skill: string; at: number; state: string }[]>,
   forgetLearned: (id: string, skill: string) => call('POST', '/api/learned/forget', { id, skill }),
   /** "Learn from how I work": the engine's own learning switch. */
@@ -156,7 +153,7 @@ export function subscribe(onEvent: (e: Json) => void) {
   if (demo) return () => {};
   let ws: WebSocket | undefined, stopped = false;
   const open = () => {
-    ws = new WebSocket(`${wsBase()}/ws?member=${member}`);
+    ws = new WebSocket(`${wsBase()}/ws`);
     ws.onmessage = (m) => onEvent(JSON.parse(m.data));
     ws.onclose = () => { if (!stopped) setTimeout(open, 1500); };
     ws.onopen = () => onEvent({ kind: 'connected' });

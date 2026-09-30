@@ -139,7 +139,7 @@ test('morning digest: on by default at 8:00, says what finished, what needs you,
 
 test('digest nudges toward a goal until Scout has a goal task', async () => {
   const { db, crew, done } = setup();
-  const nudges = () => crew.digest(1, 0).split('Want help starting something on the side? Tap to begin.').length - 1;
+  const nudges = () => crew.digest(0).split('Want help starting something on the side? Tap to begin.').length - 1;
   assert.equal(nudges(), 1, 'the nudge is there once');
   crew.recruit('scout', 'Scout', 'person');
   assert.equal(nudges(), 1, 'a Scout with no goal yet still gets the nudge');
@@ -148,34 +148,27 @@ test('digest nudges toward a goal until Scout has a goal task', async () => {
   done();
 });
 
-test('digest nudges until a goal note exists, per member', () => {
+test('digest nudges until a goal note exists', () => {
   const { crew, cfg, done } = setup();
   crew.recruit('scout', 'Scout', 'person');
-  assert.match(crew.digest(1, 0), /Want help starting something on the side\? Tap to begin\./);
+  assert.match(crew.digest(0), /Want help starting something on the side\? Tap to begin\./);
   disk.remember(cfg, { bot: 'scout' }, 'Goal: weekend dog walking');
-  assert.doesNotMatch(crew.digest(1, 0), /Want help starting/);
-  const sam = crew.addMember('Sam').id;
-  crew.onboard('Sam', sam);
-  assert.match(crew.digest(sam, 0), /Want help starting/, 'another member without a goal still gets the nudge');
+  assert.doesNotMatch(crew.digest(0), /Want help starting/);
   done();
 });
 
-test('household: a member\'s routines run as them, and each member gets their own digest in their own thread', async () => {
+test('one morning digest reports the person’s routines in Chief’s thread', async () => {
   const { db, crew, done } = setup();
-  const sam = crew.addMember('Sam').id;
-  crew.onboard('Sam', sam);
-  const digests = db.all("SELECT * FROM routines WHERE kind = 'digest' ORDER BY member");
-  assert.deepEqual(digests.map((r) => r.member), [1, sam], 'one digest each');
-  const r = crew.addRoutine({ bot: 'reel', schedule: 'every day 9:00', task: 'Sam\'s daily clip' }, 'person', sam);
-  assert.equal(crew.routines(1).some((x) => x.id === r.id), false, 'the owner does not see Sam\'s routines');
-  assert.ok(crew.routines(sam).some((x) => x.id === r.id));
+  crew.onboard('Sam');
+  const digests = db.all("SELECT * FROM routines WHERE kind = 'digest'");
+  assert.equal(digests.length, 1);
+  const r = crew.addRoutine({ bot: 'reel', schedule: 'every day 9:00', task: "Sam's daily clip" }, 'person');
+  assert.ok(crew.routines().some((x) => x.id === r.id));
   crew.runRoutine(r.id);
   const t = db.get('SELECT * FROM tasks WHERE routine = ?', r.id)!;
-  assert.equal(t.member, sam, 'runs on Sam\'s accounts');
   await settled(db, t.id);
-  crew.runRoutine(digests[1].id);
+  crew.runRoutine(digests[0].id);
   const mine = db.get("SELECT * FROM messages WHERE bot = 'chief' AND author = 'bot' ORDER BY id DESC")!;
-  assert.equal(mine.member, sam);
   assert.match(mine.text, /^Good \w+, Sam\. While you were away:\n- Finished: Reel, “Sam's daily clip”/);
   done();
 });
@@ -196,17 +189,17 @@ test('quiet check-ins: all clear says nothing and stays out of the digest; anyth
   assert.deepEqual(said(), [], 'all clear: nothing in the thread');
   assert.equal(db.get('SELECT result FROM tasks WHERE id = ?', first)!.result, 'All clear');
   assert.equal(crew.routines().find((x) => x.id === r.id)!.history[0].clear, true);
-  assert.match(crew.digest(1, 0), /Nothing new was finished/, 'and nothing in the digest');
+  assert.match(crew.digest(0), /Nothing new was finished/, 'and nothing in the digest');
   await run('Three new photos from Saturday are in the shared folder.');
   assert.deepEqual(said(), ['Three new photos from Saturday are in the shared folder.']);
-  assert.match(crew.digest(1, 0), /Finished: Reel/);
+  assert.match(crew.digest(0), /Finished: Reel/);
   crew.updateRoutine(r.id, { quiet: false });
   assert.equal(db.get('SELECT quiet FROM routines WHERE id = ?', r.id)!.quiet, 0);
   assert.throws(() => crew.updateRoutine(db.get("SELECT id FROM routines WHERE kind = 'digest'")!.id, { quiet: true }), /helper's routine/);
   done();
 });
 
-test('sleep: missed routines are named once in each member\'s Chief thread, and a working crew keeps idle sleep away', async () => {
+test('sleep: missed routines are named once in Chief\'s thread, and a working crew keeps idle sleep away', async () => {
   const { db, crew, done } = setup();
   const said = () => db.all("SELECT text FROM messages WHERE bot = 'chief' AND author = 'bot' AND text LIKE 'The crew was off%'").map((m) => m.text);
   const awake: boolean[] = [];
@@ -243,7 +236,7 @@ test('the crew\'s share: routines wait for tomorrow once it is used up, what the
   process.env.CREWHOUSE_DAY_TOKENS = '1'; // any turn at all uses up a Light share
   try {
     assert.deepEqual([crew.snapshot().share.choice, crew.snapshot().share.used], ['light', false]);
-    const { task: asked } = (crew as any).addTask('reel', 'make the card', 'person', undefined, 1);
+    const { task: asked } = (crew as any).addTask('reel', 'make the card', 'person', undefined);
     await settled(db, asked);
     assert.equal(state(db, asked), 'done');
     assert.ok(db.get('SELECT tokens FROM usage WHERE member = 1')!.tokens > 0, 'the turn was counted');
@@ -290,7 +283,7 @@ test('the crew\'s share: routines wait for tomorrow once it is used up, what the
     assert.equal(state(db, direct.id), 'done');
 
     // What the person asks for goes ahead anyway.
-    const { task: again } = (crew as any).addTask('reel', 'one more card', 'person', undefined, 1);
+    const { task: again } = (crew as any).addTask('reel', 'one more card', 'person', undefined);
     await settled(db, again);
     assert.equal(state(db, again), 'done');
 
@@ -311,7 +304,7 @@ test('Do it now on a share-parked routine restarts the run clock: an hour-old ta
   process.env.CREWHOUSE_DAY_TOKENS = '1'; // any turn at all uses up a Light share
   try {
     // The person's own ask uses up the day's share, so the routine's own run parks for tomorrow.
-    const { task: asked } = (crew as any).addTask('reel', 'make the card', 'person', undefined, 1);
+    const { task: asked } = (crew as any).addTask('reel', 'make the card', 'person', undefined);
     await settled(db, asked);
     db.run('UPDATE routines SET next_at = ? WHERE id = ?', Date.now() - 1000, r.id);
     crew.schedule();
@@ -397,9 +390,6 @@ test('money cap: each spend still asks, and past the month\'s cap the crew canno
   crew.recruit('tracer', 'Tracer', 'person');
   const gate = (cost: number) => (crew as any).gate('tracer', 'people_search', { args: ['call', 'treg.people.phone.find', '--header', `X-Treg-Route-Max-Cost: ${cost}`] });
   assert.deepEqual(crew.snapshot().money, { cap: 20, spent: 0 });
-  assert.equal(crew.snapshot(2 as any).money?.cap, 20, 'an unknown viewer is shown as the owner');
-  crew.addMember('Sara');
-  assert.deepEqual(crew.snapshot(2).money, { cap: 20, spent: 0 }, 'the cap is install-wide');
 
   const first = gate(15);
   await until('asked', () => db.get("SELECT id FROM asks WHERE bot = 'tracer' AND state = 'open'"));
@@ -754,7 +744,7 @@ test('a failed trigger-only routine says so with no time to try again', async ()
 
 test('not now, remind me tomorrow: the question comes back once, then the reminder is gone', async () => {
   const { db, crew, done } = setup();
-  const ask = (title: string) => Number(db.run("INSERT INTO asks (bot, kind, title, detail, at, member) VALUES ('reel', 'permission', ?, '{}', ?, 1)", title, Date.now()).lastInsertRowid);
+  const ask = (title: string) => Number(db.run("INSERT INTO asks (bot, kind, title, detail, at) VALUES ('reel', 'permission', ?, '{}', ?)", title, Date.now()).lastInsertRowid);
 
   // A plain Not now files nothing.
   await crew.answer(ask('Reel wants to look through your Pictures folder.'), { answer: 'deny' });

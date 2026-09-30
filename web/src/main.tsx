@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { qrMatrix } from '@byokit/ui-core';
-import { api, demo, setMember, subscribe, type Json } from './api.ts';
+import { api, demo, subscribe, type Json } from './api.ts';
 import * as A from './adapter.ts';
 import * as art from './art.ts';
 type Helper = ReturnType<typeof A.crew>[number];
@@ -37,7 +37,7 @@ const hrefOf = (id: string) => (id === 'chief' ? '#/chief' : id === 'room' ? '#/
 /** Which chat each composer writes into: its held draft lives in web/src/draft.ts. */
 const typeInto = (id: string) => ({ chat: id });
 
-type Ctx = { state: Json; me: number; tick: number; refresh: () => void; night: boolean; offline: boolean; accounts: Json[] | null };
+type Ctx = { state: Json; tick: number; refresh: () => void; night: boolean; offline: boolean; accounts: Json[] | null };
 
 /** What Chief knows from the app itself, not the state: the computer out of reach, his composer, the sign-in. */
 function chiefLocal(ctx: Ctx, listen = false): A.ChiefLocal {
@@ -240,7 +240,7 @@ function useWide() {
 const Empty = ({ children }: { children: ReactNode }) => <div className="frame-empty"><span className="art orn" aria-hidden>{art.ORNAMENT}</span>{children}</div>;
 
 function Home(ctx: Ctx) {
-  const { state, me, refresh, tick, accounts } = ctx;
+  const { state, refresh, tick, accounts } = ctx;
   const cards = A.needsYou(state);
   const [allNeeds, setAllNeeds] = useState(false);
   const works = A.work(state).filter((w) => !w.waiting);
@@ -372,7 +372,7 @@ function PhoneCard({ offer, reload }: { offer: Json; reload: () => void }) {
       </div></>}
   </div>;
 }
-function Chat({ id, m, state, me, tick, refresh, accounts }: Ctx & { id: string; m?: string }) {
+function Chat({ id, m, state, tick, refresh, accounts }: Ctx & { id: string; m?: string }) {
   const g = A.account(accounts);
   const [page, setPage] = useState<Json>(null);
   const [pending, setPending] = useState<{ text: string; after: number } | null>(null);
@@ -963,7 +963,7 @@ function HomeSetup({ state, accounts, tick }: { state: Json; accounts: Json[] | 
   </>);
 }
 
-function Settings({ state, me, refresh, tick, accounts, look, setLook, switchTo }: Ctx & { look: string; setLook: (l: string) => void; switchTo: (id: number) => void }) {
+function Settings({ state, refresh, tick, accounts, look, setLook }: Ctx & { look: string; setLook: (l: string) => void }) {
   const [signing, setSigning] = useState<{ ai: (typeof A.AIS)[number]; tab: Window | null } | null | false>(sheet === 'signin' ? null : false);
   const owner = state.person.id === A.OWNER;
   const act = (fn: () => Promise<unknown>, ok?: string) => attempt(async () => { await fn(); refresh(); }, ok);
@@ -972,24 +972,22 @@ function Settings({ state, me, refresh, tick, accounts, look, setLook, switchTo 
       <h1>Settings</h1>
       <p className="mute small">{A.atHome().join(' ')}</p>
       {owner && <HomeSetup state={state} accounts={accounts} tick={tick} />}
-      {state.members.length > 1 && (<><div className="label">Who's using this screen</div>
-        <div className="chips">{state.members.map((m: Json) => <button key={m.id} className={`chip ${m.id === me ? 'on' : ''}`} onClick={() => switchTo(m.id)}>{m.name}</button>)}</div></>)}
 
       <div className="label">Your AI accounts</div>
       <AiAccounts accounts={accounts} refresh={refresh} signIn={(ai) => setSigning({ ai, tab: openTab() })} />
 
       <div className="label">How much of it the crew may use</div>
       <div className="seg">{A.SHARES.map((o) => <button key={o.key} className={A.share(state).choice === o.key ? 'on' : ''} title={o.says}
-        onClick={() => act(() => api.person(me, { share: o.key }), o.says)}>{o.label}</button>)}</div>
+        onClick={() => act(() => api.person(state.person.id, { share: o.key }), o.says)}>{o.label}</button>)}</div>
       <p className="mute small">{A.SHARES.find((o) => o.key === A.share(state).choice)?.says}. {A.share(state).today} {A.share(state).week}</p>
 
-      <AboutYou key={me} tick={tick} />
+      <AboutYou tick={tick} />
 
       <div className="label">Your apps</div>
       <a className="card row" href="#/apps"><span className="app-row">{A.apps(state).slice(0, 5).map((a) => <span key={a.id} className="app-ic sm" style={{ background: a.bg }}>{a.mark}</span>)}</span><span className="grow mute">{A.apps(state).filter((a) => a.on).length} connected</span><b>›</b></a>
 
       <div className="label">You</div>
-      {state.members.map((m: Json) => <Person key={m.id} m={m} you={m.id === me} act={act} />)}
+      <Person m={state.person} you act={act} />
       <Phones tick={tick} />
 
       <div className="label">Look</div>
@@ -1161,8 +1159,6 @@ function App() {
   const seenDone = useRef<Set<number> | null>(null);
   const heard = useRef(0); // when the home computer last answered
   const { look, setLook, night } = useLook();
-  const [me, setMe] = useState(() => { const id = Number(localStorage.getItem('crewhouse.member')) || 1; setMember(id); return id; });
-  const switchTo = useCallback((id: number) => { localStorage.setItem('crewhouse.member', String(id)); setMember(id); setMe(id); }, []);
   const refresh = useCallback(() => {
     api.state().then((s) => { setState(s); setOffline(false); heard.current = Date.now(); }).catch(() => setOffline(true));
     setTick((t) => t + 1);
@@ -1176,12 +1172,9 @@ function App() {
     const poll = setInterval(refresh, 15000); // belt and braces if the socket is quietly gone
     if (new URLSearchParams(location.search).has('celebrate')) setParty({ title: "Mum's birthday video", helper: 'reel' });
     return () => { removeEventListener('hashchange', onHash); stop(); clearInterval(poll); };
-  }, [refresh, me]);
-  useEffect(() => { refresh(); }, [me, refresh]);
+  }, [refresh]);
   const wasOffline = useRef(false);
   useEffect(() => { if (wasOffline.current && !offline && state) toast('Back in touch with the home computer ✓'); wasOffline.current = offline; }, [offline]);
-  // crewd shows the owner for an id it doesn't know (a fresh install, say); follow it.
-  useEffect(() => { if (state && state.person.id !== me) switchTo(state.person.id); }, [state, me, switchTo]);
   // A job that finishes while you watch gets a little party.
   useEffect(() => {
     if (!state) return;
@@ -1189,10 +1182,10 @@ function App() {
     if (seenDone.current) { const fresh = done.find((t) => !seenDone.current!.has(t.id)); if (fresh) setParty({ title: fresh.title, helper: fresh.helper }); }
     seenDone.current = new Set(done.map((t) => t.id));
   }, [state]);
-  const ctx: Ctx | null = useMemo(() => (state ? { state, me, tick, refresh, night, offline, accounts } : null), [state, me, tick, refresh, night, offline, accounts]);
+  const ctx: Ctx | null = useMemo(() => (state ? { state, tick, refresh, night, offline, accounts } : null), [state, tick, refresh, night, offline, accounts]);
 
   const splash = <Splash done={!!ctx || offline} />;
-  if (!ctx) return <>{splash}{offline && <Unreachable retry={refresh} owner={me === A.OWNER} />}</>;
+  if (!ctx) return <>{splash}{offline && <Unreachable retry={refresh} owner />}</>;
   // Every little Chief face on the page carries the mood from here, the way the night palette does.
   setChiefMood(A.chief(ctx.state, chiefLocal(ctx)).mood);
   if (!ctx.state.person.onboarded) return <>{splash}<Hello {...ctx} /><Toasts /></>;
@@ -1224,7 +1217,7 @@ function App() {
           {v.view === 'helper' && v.id && <HelperPage {...ctx} id={v.id} tab={v.tab!} />}
           {v.view === 'things' && <Things {...ctx} id={v.id} />}
           {v.view === 'routines' && <Routines {...ctx} />}
-          {v.view === 'settings' && <Settings {...ctx} look={look} setLook={setLook} switchTo={switchTo} />}
+          {v.view === 'settings' && <Settings {...ctx} look={look} setLook={setLook} />}
           {v.view === 'apps' && <Apps {...ctx} />}
           {v.view === 'share' && <Share {...ctx} />}
         </main>

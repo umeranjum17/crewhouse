@@ -27,7 +27,7 @@ test('bot file tools write where the gate allowed, and never travel through a sy
   } finally { rmSync(bot, { recursive: true, force: true }); rmSync(outside, { recursive: true, force: true }); }
 });
 
-// The spreadsheet preview over HTTP: plain words for the member it was delivered to, nothing for anyone else.
+// The spreadsheet preview over HTTP: plain words only for a delivered file.
 const root = temp('crewhouse-files-http');
 const port = await new Promise<number>((r) => { const s = createServer().listen(0, '127.0.0.1', () => { const { port } = s.address() as AddressInfo; s.close(() => r(port)); }); });
 const base = `http://127.0.0.1:${port}`;
@@ -54,7 +54,7 @@ const ready = () => until(async () => (await fetch(`${base}/api/state`).catch(()
 // Whatever crewd sends, nothing a person reads may show a path, a command, an engine name or a percentage.
 const FORBIDDEN = /fc-list|2>&1|\| ?head|\bBash\b|claude|anthropic|codex|sonnet|haiku|opus|gpt-|mcp__|\/home\/|~\/|files\/|\.md\b|\bpane\b|terminal|\d+ ?%|a command|ffmpeg|magick|\bls -la\b|```|`|\besc\b|529/i;
 
-test('GET /api/workbook is plain words for the owner, and nothing for another member', async () => {
+test('GET /api/workbook is plain words only for a delivered file', async () => {
   await ready();
   await say('chief', 'Sir');
   await api('POST', '/api/recruit', { template: 'scribe', name: 'Scribe' });
@@ -66,7 +66,7 @@ test('GET /api/workbook is plain words for the owner, and nothing for another me
   assert.match(rel, /^files\/[\w./-]+\.xlsx$/, 'the run reports the finished spreadsheet');
 
   const view = await api('GET', `/api/workbook?bot=scribe&path=${encodeURIComponent(rel)}`);
-  assert.equal(view.status, 200, 'the member it was delivered to reads the preview');
+  assert.equal(view.status, 200, 'the person reads the delivered preview');
   assert.deepEqual(view.body.sheets.map((s: any) => s.name), ['Bookings']);
   assert.ok(view.body.sheets[0].roles.flat().includes('head'), 'header cells read as headers');
   assert.ok(view.body.sheets[0].roles.flat().includes('in'), 'dropdown cells read as inputs');

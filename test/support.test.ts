@@ -66,7 +66,6 @@ test('the person can change a draft before Approve: their words are the ones kep
   let id = await draft('Hello, the form is in the bag.\n');
   await assert.rejects(crew.answer(id, { answer: 'deny', text: 'Mine' }), /only a draft you approve/, 'a no keeps no words');
   await assert.rejects(crew.answer(id, { answer: 'allow', text: '   ' }), /empty/);
-  await assert.rejects(crew.answer(id, { answer: 'allow', text: 'Mine' }, 2), /someone else/, 'only the person it is for can change it');
   await crew.answer(id, { answer: 'allow', text: '  Hello, the signed form is in Ayaan\'s bag.\n\nThank you, Umer  ' });
   assert.equal(readFileSync(file, 'utf8'), "Hello, the signed form is in Ayaan's bag.\n\nThank you, Umer\n", 'the person\'s version is the draft now');
   const ok = events(db, 'draft.approved').at(-1);
