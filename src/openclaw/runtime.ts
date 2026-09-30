@@ -1,10 +1,10 @@
 // The BYOKit engine port: accounts, runs, tools and Crewhouse's learned-skill capture.
 import { randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { OpenClawKit, type KitOptions, type ToolSpec } from '@byokit/openclaw';
-import { hostKeySeal, osKeyringSeal } from '@byokit/secrets';
+import { osKeyringSeal } from '@byokit/secrets';
 import { PROVIDERS } from '../accounts.ts';
 import { commit } from '../bots.ts';
 import { CALLBACK_PORT } from '../callback-port.ts';
@@ -88,9 +88,7 @@ export class OpenClawRuntime implements AgentRuntime {
     this.stateDir = stateDir;
     this.kit = new OpenClawKit({
       stateDir, engineDir: join(repo, 'runtime/openclaw'), plugin: { id: 'crewhouse' }, tools: TOOLS, config: CONFIG,
-      authSeal: 'authSeal' in o ? o.authSeal : process.env.CREWHOUSE_AUTH_KEY_FILE
-        ? hostKeySeal({ key: () => readFileSync(process.env.CREWHOUSE_AUTH_KEY_FILE!), service: 'crewhouse-engine' })
-        : osKeyringSeal({ service: 'crewhouse-engine' }),
+      authSeal: 'authSeal' in o ? o.authSeal : osKeyringSeal({ service: 'crewhouse-engine' }),
       permitted: (tool) => tool.startsWith('crew_'), callbackPort: CALLBACK_PORT,
       installPolicy: { trustedSkills: join(import.meta.dirname, 'trusted-skills.json'), ownRoots: [repo, crewDir].filter(Boolean) },
       host: {
