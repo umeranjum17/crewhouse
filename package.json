@@ -33,12 +33,10 @@
   "devDependencies": {
     "@desklink/react-native": "^0.1.0",
     "@types/node": "^22.10.0",
-    "@types/qrcode": "^1.5.6",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@types/ws": "^8.18.1",
     "esbuild": "^0.28.0",
-    "qrcode": "^1.5.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "typescript": "^5.7.0"

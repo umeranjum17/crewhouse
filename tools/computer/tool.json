@@ -22,5 +22,6 @@
   "grant": {
     "default": false
   },
-  "note": "Linux only for now. Nothing reaches your own screen: the bot's display has its own X cookie."
+  "note": "Linux only for now. Nothing reaches your own screen: the bot's display has its own X cookie.",
+  "migrationDebt": "Raw tool installation/execution and third-party SDK ownership must move to published BYOKit capabilities; this manifest records current behavior, not an approved bypass."
 }

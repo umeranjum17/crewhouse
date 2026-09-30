@@ -25,7 +25,7 @@ import { File, Paths } from 'expo-file-system';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { useShareIntent } from 'expo-share-intent';
-import QRCode from 'qrcode';
+import { qrMatrix } from '@byokit/ui-core';
 import * as motion from './src/motion';
 import { MARKS } from './src/marks';
 import { askOf, sharedOf } from './src/ask';
@@ -223,14 +223,14 @@ function PhoneCard({ offer, reload, members }: { offer: NonNullable<ReturnType<t
   useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer); }, []);
   useEffect(() => { if (now >= current.expires && now - active.current < 10 * 60_000 && !offer.waiting && !offer.joined) void renew(); }, [now, current.expires, offer.waiting, offer.joined]);
   const left = Math.max(0, Math.ceil((current.expires - now) / 1000));
-  const qr = current.qr.startsWith('byokit-link:') ? QRCode.create(current.qr, { errorCorrectionLevel: 'M' }).modules : null;
+  const qr = current.qr.startsWith('byokit-link:') ? qrMatrix(current.qr, { border: 0 }) : null;
   const whose = A.phoneFor(members, current.member ?? A.OWNER, 'control', true);
   return <Card style={{ gap: 10, marginLeft: 36 }} onTouchStart={() => { active.current = Date.now(); }}>
     <T style={s.b}>Add a phone</T>
     {!offer.joined && !!whose.people.length && <>{!offer.waiting && <><T tone="ink2">Whose phone is it?</T>
       <View style={s.chips}>{whose.people.map((m) => <Btn key={m.id} go={m.id === (current.member ?? A.OWNER)} label={m.name} onPress={() => { active.current = Date.now(); void renew(m.id); }} />)}</View></>}
       <T tone="mute">{whose.says}</T></>}
-    {!offer.joined && !offer.waiting && left > 0 && qr && <View accessibilityLabel="Scan to pair another phone" style={{ width: 220, height: 220, backgroundColor: 'white', padding: 8 }}><View style={{ flex: 1 }}>{Array.from({ length: qr.size }, (_, y) => <View key={y} style={{ flex: 1, flexDirection: 'row' }}>{Array.from({ length: qr.size }, (_, x) => <View key={x} style={{ flex: 1, backgroundColor: qr.get(x, y) ? 'black' : 'white' }} />)}</View>)}</View></View>}
+    {!offer.joined && !offer.waiting && left > 0 && qr && <View accessibilityLabel="Scan to pair another phone" style={{ width: 220, height: 220, backgroundColor: 'white', padding: 8 }}><View style={{ flex: 1 }}>{qr.map((row, y) => <View key={y} style={{ flex: 1, flexDirection: 'row' }}>{row.map((dark, x) => <View key={x} style={{ flex: 1, backgroundColor: dark ? 'black' : 'white' }} />)}</View>)}</View></View>}
     {offer.joined ? <T style={s.b}>Paired: {offer.joined}</T> : offer.waiting ? <><T>{offer.waiting.name} is waiting. Check these two words: {offer.waiting.words}</T><T tone="mute">For your safety, approve on the computer where this code was shown.</T></> : left ? <><T>Scan this with the other phone, or type this code there. Approve on the computer.</T><T style={s.b}>{current.typed}</T><Btn label="Copy code" onPress={() => { Clipboard.setString(current.typed); say('Code copied'); }} /><T tone="mute">Works once · {Math.floor(left / 60)}:{String(left % 60).padStart(2, '0')} left</T></>
       : <><T tone="mute">That code has run out.</T><Btn go label="Show a new code" onPress={() => { active.current = Date.now(); void renew(); }} /></>}
   </Card>;

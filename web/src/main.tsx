@@ -2,7 +2,7 @@
 // plain-words view models (adapter.ts), never crewd's raw rows.
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
-import QRCode from 'qrcode';
+import { qrMatrix } from '@byokit/ui-core';
 import { api, demo, setMember, subscribe, type Json } from './api.ts';
 import * as A from './adapter.ts';
 import * as art from './art.ts';
@@ -342,14 +342,19 @@ function ChiefAsk({ l }: { l: { text: string; detail: string } }) {
 }
 
 // ---------- a chat ----------
+function PairQR({ text }: { text: string }) {
+  const rows = useMemo(() => qrMatrix(text, { border: 1 }), [text]);
+  return <svg viewBox={`0 0 ${rows.length} ${rows.length}`} role="img" aria-label="Scan to pair a phone" shapeRendering="crispEdges">
+    <rect width="100%" height="100%" fill="white" />
+    <path fill="black" d={rows.flatMap((row, y) => row.map((dark, x) => dark ? `M${x} ${y}h1v1h-1z` : '')).join('')} />
+  </svg>;
+}
 function PhoneCard({ offer, reload, members }: { offer: Json; reload: () => void; members: Json[] }) {
   const [current, setCurrent] = useState<Json>(offer);
-  const [svg, setSvg] = useState('');
   const [now, setNow] = useState(Date.now());
   const active = useRef(Date.now());
   const busy = useRef(false);
   useEffect(() => { if (offer.token !== current.token) setCurrent(offer); }, [offer.token]);
-  useEffect(() => { void QRCode.toString(current.qr, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' }).then(setSvg); }, [current.qr]);
   const picked = useRef<number | undefined>(undefined); // a person tapped while a new code was on its way
   const renew = async (member?: number) => {
     if (busy.current) { if (member !== undefined) picked.current = member; return; }
@@ -366,7 +371,7 @@ function PhoneCard({ offer, reload, members }: { offer: Json; reload: () => void
   const whose = A.phoneFor(members, current.member ?? A.OWNER);
   return <div className="card pair" aria-label="Add a phone" onPointerDown={() => { active.current = Date.now(); }}>
     {offer.joined ? <b>Paired: {offer.joined}</b> : offer.waiting ? <div className="grow"><b>{offer.waiting.name} would like to join</b><p>Do these two words match the phone? <b>{offer.waiting.words}</b></p>{!!whose.people.length && <p className="mute small">{whose.says}</p>}<div className="btns"><button className="btn go" onClick={() => attempt(async () => { await api.answerPhone(offer.waiting.id, true, offer.token); reload(); })}>Yes, they match</button><button className="btn" onClick={() => attempt(async () => { await api.answerPhone(offer.waiting.id, false, offer.token); reload(); })}>No</button></div></div> : <>
-      {left ? <div className="qr" dangerouslySetInnerHTML={{ __html: svg }} /> : <div className="qr expired">Code expired</div>}
+      {left ? <div className="qr"><PairQR text={current.qr} /></div> : <div className="qr expired">Code expired</div>}
       <div className="grow"><b>Add a phone</b><p className="small">Scan this in the phone app or type the code.</p>
         {!!whose.people.length && <><p className="small">Whose phone is it?</p><div className="chips">{whose.people.map((m) => <button key={m.id} className={`chip ${m.id === (current.member ?? A.OWNER) ? 'on' : ''}`} onClick={() => { active.current = Date.now(); void renew(m.id); }}>{m.name}</button>)}</div>
           <p className="mute small">{whose.says}</p></>}
@@ -866,14 +871,12 @@ function Phones({ tick, members, owner }: { tick: number; members: Json[]; owner
   const [whose, setWhose] = useState(A.OWNER);
   const [link, setLink] = useState<Json>(null);
   const [offer, setOffer] = useState<Json>(null);
-  const [qr, setQr] = useState('');
   const [typed, setTyped] = useState<Json>(null);
   const [relay, setRelay] = useState<string | null>(null);
   const [enrol, setEnrol] = useState('');
   const [now, setNow] = useState(Date.now());
   const load = () => Promise.all([api.phones(), api.phoneLink()]).then(([p, l]) => { setPhones(p); setLink(l); }).catch(() => setPhones(null));
   useEffect(() => { void load(); }, [tick]);
-  useEffect(() => { if (offer) QRCode.toString(offer.qr, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' }).then(setQr); }, [offer]);
   useEffect(() => { if (!offer) return; const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, [offer]);
   // The code closes by itself once a phone uses it.
   const joined = offer && phones?.find((p) => !offer.had.includes(p.id));
@@ -914,7 +917,7 @@ function Phones({ tick, members, owner }: { tick: number; members: Json[]; owner
       ))}
       {offer && !link.asking.length && (
         <div className="card pair">
-          {left > 0 ? <div className="qr" dangerouslySetInnerHTML={{ __html: qr }} /> : <div className="qr expired">This code ran out.</div>}
+          {left > 0 ? <div className="qr"><PairQR text={offer.qr} /></div> : <div className="qr expired">This code ran out.</div>}
           <div className="grow">
             <b>Scan this with the Crewhouse app</b>
             <p className="mute small">{A.phoneFor(members, offer.member, offer.role).says}</p>

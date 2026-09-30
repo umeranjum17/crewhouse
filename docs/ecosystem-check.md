@@ -1,13 +1,15 @@
 # Ecosystem-first check (ClawHub and the bundled OpenClaw 2026.8.1 catalog)
 
-Owner directive, 2026-09-27: before retaining or building any custom tool, skill, integration or helper, check
+Historical investigation, 2026-09-27 (the directive recorded at that time): before retaining or building any custom tool, skill, integration or helper, check
 ClawHub and the official OpenClaw ecosystem for a mature supported equivalent; prefer upstream plus the smallest
 adapter. This is the bounded, inspectable record for the B2 build. Method: `openclaw skills search` and
 `openclaw plugins search` on the pinned 2026.8.1 CLI (read-only; no installs, no sign-ins, isolated HOME), plus the
 bundled skill list in the pinned tarball. Popularity and catalog presence were not treated as trust: only the
 bundled (tarball-provenance) set and `@openclaw`-scope releases are trusted in v1 (spec §5.2).
 
-## Adopted from the ecosystem (upstream capability + smallest adapter)
+This records what the earlier investigation actually ran, including direct OpenClaw CLI discovery; it is not an approved integration workflow. The current boundary requires BYOKit for every third-party and foundational path. Missing kit capabilities are migration debt to fix and publish upstream before deleting the raw implementation. Product policy and presentation stay here: the policy gate row below remains app-owned; its execution foundations need kits.
+
+## Historical ecosystem adoption
 
 | Capability | Source | Crewhouse adapter |
 |---|---|---|
@@ -20,7 +22,7 @@ bundled (tarball-provenance) set and `@openclaw`-scope releases are trusted in v
 | Clip ingredients | Bundled `video-frames`, `openai-whisper`, `summarize`, `nano-pdf`, `diagram-maker` | `allowBundled` after SKILL.md review; ffmpeg/whisper as kit tools |
 | Run/tool event stream | Core protocol (`tool-events` cap) | crewd's own `run.call` record + the drawer |
 
-## Checked, kept bespoke — the justified gap list
+## Historical bespoke decisions and remaining migration debt
 
 | Crewhouse component | Strongest catalog/native alternative | Why the ecosystem answer loses |
 |---|---|---|
@@ -37,7 +39,7 @@ The 51 bundled skills in the pinned tarball were reviewed as a set (spec §5.1):
 (`himalaya`, `gog`, `github`, `notion`, `ordercli`, `1password`, …) stay off; the developer/operator ones (`clawhub`,
 `skill-creator`, `mcporter`, `tmux`, …) stay off; only the reviewed media/summarizing set is allowlisted.
 
-## Maintenance reduced by this build
+## Historical maintenance reduction
 
 Pi's in-process engine, its session plumbing, the resource-loader discovery suppression (`isolate.ts`), and
-`@byokit/accounts` sign-in/refresh/resting are deleted: their duties are upstream's now, on the pin.
+the then-used `@byokit/accounts` sign-in/refresh/resting controller were deleted in that build. This did not resolve all kit reuse: the current OpenClaw kit owns the engine and wizard, while account state/failover, usage, persistence, sandbox/browser/desktop, app connections, documents and scheduling still require upstream kit contracts. The historical bespoke table is not an exception to that boundary.
