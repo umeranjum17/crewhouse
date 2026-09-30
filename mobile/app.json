@@ -82,6 +82,21 @@
       ],
       "expo-notifications",
       "@byokit/status",
+      [
+        "@byokit/overlay",
+        {
+          "moods": {
+            "chief_idle": "./assets/bubble/chief-idle.png",
+            "chief_work": "./assets/bubble/chief-work.png",
+            "chief_ask": "./assets/bubble/chief-ask.png",
+            "chief_happy": "./assets/bubble/chief-happy.png",
+            "chief_rest": "./assets/bubble/chief-rest.png",
+            "chief_worried": "./assets/bubble/chief-worried.png",
+            "chief_error": "./assets/bubble/chief-error.png",
+            "chief_glyph": "./assets/bubble/glyph.png"
+          }
+        }
+      ],
       "@bacons/apple-targets",
       "./plugins/shortcuts.js"
     ],

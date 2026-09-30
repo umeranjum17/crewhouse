@@ -110,7 +110,30 @@ export function desktopSignaling(bot: string) {
 const liveListeners = new Set<(e: any) => void>();
 export const onLive = (fn: (e: any) => void) => { liveListeners.add(fn); return () => { liveListeners.delete(fn); }; };
 
+type Holder = { onEvent: (e: any) => void; onStatus: (s: Status) => void };
+type Open = ReturnType<typeof open> & { holders: Set<Holder>; status?: Status };
+let shared: Open | null = null;
+
+/** This phone's one link to its computer, shared by whoever holds it: the app's screens, the bubble while it is on, and
+ *  its panel. The first hold dials; each holder hears every event and status; the last `release` hangs up. */
 export function connect(grant: Grant, onEvent: (e: any) => void, onStatus: (s: Status) => void) {
+  if (shared?.link.grant.secretKey !== grant.secretKey) {
+    shared?.link.stop();
+    const o = { holders: new Set<Holder>() } as Open;
+    shared = Object.assign(o, open(grant, (e) => o.holders.forEach((h) => h.onEvent(e)), (st) => {
+      o.status = st;
+      if (st === 'removed' && shared === o) shared = null; // the computer let this phone go: a new pairing dials afresh
+      o.holders.forEach((h) => h.onStatus(st));
+    }));
+  }
+  const o = shared!, me: Holder = { onEvent, onStatus };
+  o.holders.add(me);
+  if (o.status) { const st = o.status; queueMicrotask(() => o.holders.has(me) && onStatus(st)); } // joined a live link
+  const release = () => { o.holders.delete(me); if (o.holders.size) return; o.link.stop(); if (shared === o) shared = null; };
+  return { link: o.link, call: o.call, learn: o.learn, facts: o.facts, push: o.push, release };
+}
+
+function open(grant: Grant, onEvent: (e: any) => void, onStatus: (s: Status) => void) {
   // The computer says where else it can be reached (Tailscale came up, its home address moved): remember each one.
   const heard = (e: any) => { if (e?.kind === 'link.urls') (e.data?.urls ?? []).forEach((u: string) => link.addUrl(u)); else { liveListeners.forEach((fn) => fn(e)); onEvent(e); } };
   // Out of touch: look for this phone's own computer on the Wi-Fi (the router may have given it a new address).

@@ -12,3 +12,11 @@ export function askOf(url: string, crew: { id: string; template?: string }[]): A
   const h = crew.find((c) => c.template === q.to);
   return { chat: h?.id ?? 'chief', text: q.text ?? '' };
 }
+
+/** Text picked in another app ("Ask Crewhouse", modules/crewhouse-net AskActivity) opens crewhouse://share?text=<words>:
+ *  the share screen, words in its box, for the person to pick who gets them. */
+export function sharedOf(url: string): string | null {
+  const m = /^crewhouse:\/\/share\/?\?text=([^&]*)$/.exec(url);
+  if (!m) return null;
+  try { return decodeURIComponent(m[1]); } catch { return null; }
+}

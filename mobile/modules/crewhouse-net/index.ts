@@ -10,3 +10,7 @@ export const canHear = (): Promise<boolean> => voice?.canHear().catch(() => fals
 /** What was heard ('' for nothing); fails `blocked` without the microphone, `unready` without the voice pack. */
 export const hear = (): Promise<string> => voice?.hear() ?? Promise.resolve('');
 export const stopHearing = () => { void voice?.stop().catch(() => {}); };
+
+// One still of this phone's screen after its own consent dialog (Android; elsewhere none): its file:// address, or ''.
+const screen = requireOptionalNativeModule<{ frame(): Promise<string> }>('CrewhouseScreen');
+export const screenFrame = (): Promise<string> => screen?.frame() ?? Promise.resolve('');

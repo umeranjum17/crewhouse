@@ -12,6 +12,7 @@ import type { Bitmap, Kind } from '../web/src/art.ts';
 import { PROVIDERS } from '../src/accounts.ts';
 import * as A from '../web/src/adapter.ts';
 import { readTyped } from '../mobile/src/typed.ts';
+import { askOf } from '../mobile/src/ask.ts';
 import { draftOf, keepDraft, sent } from '../web/src/draft.ts';
 import { chatTokens, safeLink } from '../web/src/chat-md.ts';
 import { api, setTransport } from '../web/src/api.ts';
@@ -20,8 +21,8 @@ import { cycle } from '../web/src/dialog.ts';
 
 const now = Date.now();
 
-/** The phone app's screens: App.tsx and the office room beside it. */
-const PHONE_SCREENS = ['App.tsx', 'src/office.tsx'].map((f) => join(import.meta.dirname, '..', 'mobile', f));
+/** The phone app's screens: App.tsx, the office room beside it, and the bubble's panel. */
+const PHONE_SCREENS = ['App.tsx', 'src/office.tsx', 'src/panel.tsx'].map((f) => join(import.meta.dirname, '..', 'mobile', f));
 
 test('crew room lines and handoff checks hide machinery', () => {
   const s: Json = { bots: [{ id: 'scout', display: 'Scout', template: 'scout', task: null }], events: [], asks: [] };
@@ -795,6 +796,37 @@ test('the status-bar chip: this person\'s jobs only, counts only where a locked 
   const mobile = join(import.meta.dirname, '..', 'mobile');
   const users = [...readdirSync(join(mobile, 'src')).map((f) => join('src', f)), 'App.tsx', 'index.ts'].filter((f) => readFileSync(join(mobile, f), 'utf8').includes('@byokit/status'));
   assert.deepEqual(users, [join('src', 'chip.ts')]);
+});
+
+test('Chief on the screen: off until switched on, one door to the overlay kit, and his stills drawn from his bitmap', () => {
+  const mobile = join(import.meta.dirname, '..', 'mobile');
+  const files = [...readdirSync(join(mobile, 'src')).map((f) => join('src', f)), 'App.tsx', 'index.ts'];
+  assert.deepEqual(files.filter((f) => readFileSync(join(mobile, f), 'utf8').includes('@byokit/overlay')), [join('src', 'bubble.ts')]);
+  const bubble = readFileSync(join(mobile, 'src', 'bubble.ts'), 'utf8');
+  assert.match(bubble, /host: 'window'/, 'no accessibility service: nothing is read from other apps');
+  assert.doesNotMatch(bubble + readFileSync(join(mobile, 'src', 'panel.tsx'), 'utf8'), /focused-field|setInterval/, 'no field reading, no timers');
+  // Every mood it can wear is a still the config plugin copies in, and the notification's glyph is there too.
+  const app = JSON.parse(readFileSync(join(mobile, 'app.json'), 'utf8'));
+  const moods = app.expo.plugins.find((p: unknown) => Array.isArray(p) && p[0] === '@byokit/overlay')[1].moods as Record<string, string>;
+  for (const m of [...bubble.matchAll(/'(chief_\w+)'/g)].map((x) => x[1]).concat(['idle', 'work', 'ask', 'happy', 'rest', 'worried', 'error'].map((m) => `chief_${m}`)))
+    assert.ok(moods[m] && readFileSync(join(mobile, moods[m])).length > 0, m);
+  // The one link is shared: the app, the bubble and its panel each let go of their hold, never hang up on the others.
+  assert.doesNotMatch(readFileSync(join(mobile, 'App.tsx'), 'utf8'), /return \(\) => l\.stop\(\)/);
+});
+
+test('the bubble and the chip share one quick-action list: fill a box, never send, and only this crew\'s helpers', () => {
+  const s = { ...state, bots: [...state.bots.filter((b) => b.id !== 'scribe'), bot('scribe')],
+    ideas: [{ bot: 'scribe', ask: 'Scribe, turn this into posts: ' }, { bot: 'reel', ask: 'Reel, edit my clip', needs: ['An app'] }] };
+  const q = A.quick(s);
+  assert.deepEqual(q.map((a) => a.id), ['needs', 'ask', 'screen', 'write', 'demo']);
+  assert.equal(q.find((a) => a.id === 'write')!.url, `crewhouse://ask?to=scribe&text=${encodeURIComponent('Scribe, turn this into posts: ')}`);
+  assert.equal(q.find((a) => a.id === 'demo')!.url, 'crewhouse://ask?to=reel&text=', 'a job waiting on an app never fills the box');
+  assert.deepEqual(A.quick({ ...s, bots: s.bots.filter((b) => b.template !== 'scribe' && b.template !== 'reel') }).map((a) => a.id), ['needs', 'ask', 'screen']);
+  assert.deepEqual(A.quick(s, false), [], 'a watching phone gets no actions');
+  assert.deepEqual(A.status(s)!.actions, q.slice(0, 2).map(({ id, label }) => ({ id, label })), 'the chip takes the first two');
+  for (const a of q) assert.doesNotMatch(`${a.label}`, FORBIDDEN);
+  // Every address is one the app reads (mobile/src/ask.ts), landing in that helper's box.
+  for (const a of q.filter((x) => x.url.startsWith('crewhouse://ask'))) assert.ok(askOf(a.url, [{ id: 'scribe', template: 'scribe' }, { id: 'reel', template: 'reel' }]));
 });
 
 test('the phone\'s one code box reads either kind by its shape, and rejects what it cannot dial', () => {

@@ -1,0 +1,31 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!-- One still of the screen for "Hand my screen to…" (CrewhouseScreenModule.kt): the phone asks every time. -->
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+  <application>
+    <!-- "Ask Crewhouse" on text picked in any app: the words go to the share screen, where the person picks who gets them. -->
+    <activity
+      android:name="expo.modules.crewhousenet.AskActivity"
+      android:label="Ask Crewhouse"
+      android:theme="@android:style/Theme.Translucent.NoTitleBar"
+      android:excludeFromRecents="true"
+      android:taskAffinity=""
+      android:exported="true">
+      <intent-filter>
+        <action android:name="android.intent.action.PROCESS_TEXT" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <data android:mimeType="text/plain" />
+      </intent-filter>
+    </activity>
+    <activity
+      android:name="expo.modules.crewhousenet.ScreenFrameActivity"
+      android:theme="@android:style/Theme.Translucent.NoTitleBar"
+      android:excludeFromRecents="true"
+      android:taskAffinity=""
+      android:exported="false" />
+    <service
+      android:name="expo.modules.crewhousenet.ScreenFrameService"
+      android:foregroundServiceType="mediaProjection"
+      android:exported="false" />
+  </application>
+</manifest>
