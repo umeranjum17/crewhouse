@@ -347,9 +347,9 @@ export function gettingReady(state: Json) {
 /** For the owner: a newer Crewhouse to download, in words. */
 export const update = (state: Json) => (state.update ? { words: `A new Crewhouse is ready (${state.update.version}). Download it and open it, and the crew carries on where it was.`, url: String(state.update.url) } : null);
 
-/** The owner's steps to switch Google on for the house, each with the Google page it happens on (docs/google-setup.md). */
+/** The owner's steps to switch Google on for your crew, each with the Google page it happens on (docs/google-setup.md). */
 export const GOOGLE_STEPS = [
-  { title: 'Make a project', url: 'https://console.cloud.google.com/projectcreate', says: 'Name it “Crewhouse (family)” and press Create. No billing needed.' },
+  { title: 'Make a project', url: 'https://console.cloud.google.com/projectcreate', says: 'Name it “Crewhouse (personal)” and press Create. No billing needed.' },
   { title: 'Switch on Calendar, Gmail and Drive', url: 'https://console.cloud.google.com/apis/library', says: 'Search “Google Calendar API” and press Enable. Do the same for “Gmail API” and “Google Drive API”.' },
   { title: 'Describe the app', url: 'https://console.cloud.google.com/auth/overview', says: 'Pick External, call it “Crewhouse”, give your email. Under Data access add calendar.events, gmail.readonly and drive.file. Under Audience press Publish app, so it says “In production”.' },
   { title: 'Make the key', url: 'https://console.cloud.google.com/apis/credentials', says: 'Create credentials → OAuth client ID → type “Desktop app”. Paste the Client ID and Client secret below.' },
@@ -361,7 +361,7 @@ export const STEP_MARK = { checked: '✓ Checked', said: 'You said done', missin
 export const googleHeadline = (steps?: GoogleStep[] | null) => {
   const missing = steps?.findIndex((s) => s.state === 'missing') ?? -1;
   if (missing >= 0) return `Step ${missing + 1} is missing`;
-  return steps?.every((s) => s.state === 'checked') ? 'Google is on for the house ✓' : 'Google key saved and checked by Google';
+  return steps?.every((s) => s.state === 'checked') ? 'Google is on for your crew ✓' : 'Google key saved and checked by Google';
 };
 
 /** The one code a phone away from home types: the short code and the pairing code, with the go-between's own
@@ -750,13 +750,13 @@ export function firstIdeas(state: Json) {
   return FIRST_IDEAS.filter((i) => !i.label.startsWith("What's on this week")).concat({ icon: '🎈', label: 'Help me plan a birthday party' });
 }
 
-/** The owner's three setup jobs: what the crew thinks with, the phones reaching it, and Google for the house.
+/** The owner's three setup jobs: what the crew thinks with, the phones reaching it, and Google for your crew.
  *  Until all three are done, the owner's Home says how many are left. */
 export function homeSetup(state: Json, g: Json | null, link: Json | null) {
   const rows = [
     { key: 'chatgpt', says: 'ChatGPT signed in', done: g?.state === 'ready' && !g?.notIncluded },
     { key: 'phones', says: 'Phones can reach the crew from anywhere', done: link?.anywhere === 'anywhere' },
-    { key: 'google', says: 'Google for the house', done: state.house?.google !== false },
+    { key: 'google', says: 'Google for your crew', done: state.house?.google !== false },
   ];
   return { rows, left: rows.filter((r) => !r.done).length };
 }
@@ -1019,7 +1019,7 @@ export function thinking(accounts: Json[] | null, member: number) {
 /** Whose sign-in page an app opens: "Google" for Gmail, Calendar and Drive. */
 export const signsInWith = (app: App) => ({ gmail: 'Google', calendar: 'Google', drive: 'Google' } as Record<string, string>)[app.id] ?? app.name;
 export const appById = (state: Json, id: string) => apps(state).find((a) => a.id === id);
-/** Google's apps wait for the owner to switch Google on for the house (once, in Settings). */
+/** Google's apps wait for the owner to switch Google on for your crew (once, in Settings). */
 export const needsHouse = (state: Json, app: App) => signsInWith(app) === 'Google' && state.house?.google === false;
 
 // v1: Drive, Calendar and Gmail on the household's Google app, then Notion and Canva. Sharing from the phone needs no

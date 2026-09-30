@@ -638,7 +638,7 @@ function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
     <Center>
       <Halo><ChiefArt mood="hello" size={120} /></Halo>
       <T style={s.display}>Crewhouse</T>
-      <T tone="ink2" style={[s.centerText, { marginTop: -6 }]}>Your crew, in your pocket.</T>
+      <T tone="ink2" style={[s.centerText, { marginTop: -6 }]}>Your personal assistant, in your pocket.</T>
       <Card style={{ alignSelf: 'stretch', gap: 10, marginVertical: 6 }}>
         {['On your computer, open Crewhouse, then Settings, Phones, Add a phone.', 'Scan the code it shows, or type it in here.'].map((l, i) =>
           <View key={l} style={[s.row, { alignItems: 'flex-start' }]}><Text style={[s.stepNum, { backgroundColor: t.soft, color: t.ink }]}>{i + 1}</Text><T tone="ink2" style={{ flex: 1 }}>{l}</T></View>)}
@@ -857,7 +857,7 @@ function Hello({ state, refresh, go }: Ctx) {
       <motion.Rise reduce={reduce} delay={80}><View style={[s.speech, { backgroundColor: t.solid, borderColor: t.line }]}>
         <View style={[s.speechTail, { backgroundColor: t.solid, borderColor: t.line }]} />
         <T style={[s.h1, s.centerText, { fontSize: 26, lineHeight: 32, marginVertical: 0 }]}>{A.greeting()}{address.trim() ? `, ${address.trim()}` : ''}</T>
-        <T tone="ink2" style={s.centerText}>I'm Chief. I run the crew in this house.</T>
+        <T tone="ink2" style={s.centerText}>I'm Chief, your personal assistant. I run your crew of helpers.</T>
       </View></motion.Rise>
       <motion.Rise reduce={reduce} delay={160}><Card style={{ gap: 10 }}>
         {[A.atHome('the home computer')[0], A.atHome('the home computer')[1], "I'll ask before sending messages, deleting things or spending money."].map((l) =>

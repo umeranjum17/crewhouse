@@ -5,7 +5,7 @@ export type Json = any;
 let member = 1;
 export const setMember = (id: number) => { member = id; };
 
-/** `?demo` runs the screens on a made-up household (web/src/demo.ts): for design review and screenshots. */
+/** `?demo` runs the screens on a personal assistant demo (web/src/demo.ts): for design review and screenshots. */
 export const demo = typeof location !== 'undefined' && new URLSearchParams(location.search).has('demo');
 
 /** How a call reaches crewd: HTTP on this computer; the phone app swaps in its encrypted link. */

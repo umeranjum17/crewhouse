@@ -12,7 +12,7 @@ const helperTasks = (db: any) => db.all("SELECT * FROM tasks WHERE bot = 'scout'
 
 test('a job of several steps shows Chief’s plan first and starts only on Go', async () => {
   const { db, crew, done } = setup();
-  crew.onboard('Nadia');
+  crew.onboard('Umer');
   crew.recruit('scout', 'Scout', 'person');
 
   // The card: the steps in plain words, and nothing handed to Scout yet.

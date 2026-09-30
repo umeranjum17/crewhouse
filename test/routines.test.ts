@@ -404,7 +404,7 @@ test('money cap: each spend still asks, and past the month\'s cap the crew canno
   // $15 + $10 would pass $20: refused at once, no card.
   const refused = await gate(10);
   assert.equal(refused.block, true);
-  assert.match(refused.reason, /past the \$20 the household set/);
+  assert.match(refused.reason, /past the \$20 you set/);
   assert.equal(db.get("SELECT COUNT(*) AS n FROM asks WHERE bot = 'tracer'")!.n, 1);
 
   assert.throws(() => crew.setMoneyCap(-1), /between/);

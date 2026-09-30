@@ -1,18 +1,18 @@
-# Switching Google on for the house
+# Switching Google on for your crew
 
-Once, by the owner, about twenty minutes, free. After this, anyone in the house can let a helper use their own Google Calendar, Gmail or Drive with a tap on the Connect card in a chat.
-Until it is done, those cards say the app needs Google switched on for the house first, which the owner does once in Settings, and nobody reaches a broken Google page.
+Set this up once, about twenty minutes, free. After this, you can let a helper use your Google Calendar, Gmail or Drive with a tap on the Connect card in a chat.
+Until it is done, those cards say the app needs Google switched on for your crew first, which you do once in Settings, and nobody reaches a broken Google page.
 
 Notion, Canva, sharing from the phone and ChatGPT need none of this.
 
 ## What you are making
 
-A private Google "app" called Crewhouse that only your family uses.
-Google allows that without its review for personal use by fewer than 100 people: each person clicks through one "unverified app" warning, once ([Google: when verification is not needed](https://support.google.com/cloud/answer/13464323)).
+A private Google "app" called Crewhouse for your personal assistant.
+Google allows that without its review for personal use by fewer than 100 people: you click through one "unverified app" warning, once ([Google: when verification is not needed](https://support.google.com/cloud/answer/13464323)).
 
 ## Steps
 
-1. Open the [Google Cloud console](https://console.cloud.google.com/) with your own Google account, and create a project named **Crewhouse (family)**. No billing account is needed.
+1. Open the [Google Cloud console](https://console.cloud.google.com/) with your own Google account, and create a project named **Crewhouse (personal)**. No billing account is needed.
 2. **APIs & Services → Library**: enable the **Google Calendar API**, the **Gmail API** and the **Google Drive API**.
 3. **APIs & Services → OAuth consent screen** (Google now calls it *Google Auth Platform*):
    - User type **External**. App name **Crewhouse**, your email as the support and developer contact.
@@ -23,36 +23,36 @@ Google allows that without its review for personal use by fewer than 100 people:
 4. **APIs & Services → Credentials → Create credentials → OAuth client ID**:
    - Application type **Desktop app**, name **Crewhouse home computer**.
    - Copy the **Client ID** (it ends in `.apps.googleusercontent.com`) and the **Client secret**.
-5. In Crewhouse on the home computer: **Settings → Google for the house**, paste both, and press **Switch it on**.
+5. In Crewhouse on the home computer: **Settings → Google for your crew**, paste both, and press **Switch it on**.
 
 Backend migration debt: Google OAuth, client verification, API probes and credential storage currently live in `src/connections.ts`; they must move to published BYOKit OAuth/keystore/Google capabilities. The steps here describe the person-facing setup, not permission to add raw integrations.
 
 That's all. The Client ID and secret stay on the home computer, in Crewhouse's own folder; nobody's Google password or token ever passes through them.
 
-## What each person sees when they connect
+## What you see when you connect
 
 | Service | Taps | Why |
 |---|---|---|
-| Google Drive | 3: Connect → their account → Continue | Crewhouse only asks for the files it makes or they pick (`drive.file`), which Google counts as non-sensitive: no warning. |
-| Google Calendar | 5: Connect → account → **Advanced** → **Go to Crewhouse (unsafe)** → Continue | Calendar is a *sensitive* scope, so Google shows its "This app isn't verified" screen. The Connect card warns them first, in one line. |
-| Gmail (read only) | 5, the same way | Gmail is a *restricted* scope. The warning stays: removing it needs a paid yearly security assessment, which a family app doesn't need. |
+| Google Drive | 3: Connect → your account → Continue | Crewhouse only asks for the files it makes or you pick (`drive.file`), which Google counts as non-sensitive: no warning. |
+| Google Calendar | 5: Connect → account → **Advanced** → **Go to Crewhouse (unsafe)** → Continue | Calendar is a *sensitive* scope, so Google shows its "This app isn't verified" screen. The Connect card warns you first, in one line. |
+| Gmail (read only) | 5, the same way | Gmail is a *restricted* scope. The warning stays: removing it needs a paid yearly security assessment, which a personal app doesn't need. |
 
 The warning is Google's, and "unsafe" is Google's word for an app it has not reviewed.
-If someone taps **Back to safety**, nothing is connected and Crewhouse says so kindly, with Try again.
+If you tap **Back to safety**, nothing is connected and Crewhouse says so kindly, with Try again.
 
 ## Costs
 
-Nothing. The Cloud project, the APIs and the OAuth client are free at a family's usage, and no billing account is attached.
+Nothing. The Cloud project, the APIs and the OAuth client are free for personal use, and no billing account is attached.
 
 Optional, later: Google's free *sensitive-scope verification* (a privacy policy, a homepage on a domain you own, a short demo video, a few weeks of review) removes the warning for Calendar, making it 3 taps.
 Gmail's warning can only go with the paid assessment (CASA), so it stays at 5.
 
 ## How Crewhouse checks each step
 
-Crewhouse never calls a step done on your word alone. Settings → Google for the house shows each step as **Checked** (Google's own answer proved it), **Missing** (Google's answer showed it isn't done, with the page to fix it) or **You said done** (nobody has connected yet, so there is nothing to check it with).
+Crewhouse never calls a step done on your word alone. Settings → Google for your crew shows each step as **Checked** (Google's own answer proved it), **Missing** (Google's answer showed it isn't done, with the page to fix it) or **You said done** (nobody has connected yet, so there is nothing to check it with).
 
 - **Pasting the key** (steps 1 and 4): Crewhouse asks Google whether it knows the Client ID and secret, and whether the key takes this computer's address, before keeping it. A secret in the ID box, the ID pasted twice, a key Google doesn't know, a secret from another key, or a *Web application* key is each said in plain words, and nothing is saved.
-- **Each person's first Connect** (steps 2 and 3): after the yes on Google's page, Crewhouse reads one small thing back (a calendar event, the Gmail address, the Drive user) before it says Connected. If Google answers that the API is off, the card names it and points to step 2. If Google says the connection only lasts a week, the app is still in *Testing*: the card points to step 3, **Publish app**, and nothing is connected, because it would stop working within the week.
+- **Your first Connect** (steps 2 and 3): after the yes on Google's page, Crewhouse reads one small thing back (a calendar event, the Gmail address, the Drive user) before it says Connected. If Google answers that the API is off, the card names it and points to step 2. If Google says the connection only lasts a week, the app is still in *Testing*: the card points to step 3, **Publish app**, and nothing is connected, because it would stop working within the week.
 - **A box left unticked** on Google's page: the card says which one ("Google Calendar still isn't ticked") and Try again reopens the page.
 - **Back to safety** on Google's warning: nothing is connected, and the card says so, with Try again.
 - **Connections lapse after about six months unused, or after a password change (Gmail)**: Chief says so once, and the next Connect card brings it back.

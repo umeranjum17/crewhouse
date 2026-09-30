@@ -361,55 +361,55 @@ test('a bot\'s screen over the link: a watch-only phone may open it, and crewd a
 
 test('the owner picks whose phone it is: the grant acts as that member alone, and nobody else can pick', async () => {
   await until(async () => (await fetch(`${base}/api/state`).catch(() => null))?.ok);
-  // Three people in the house: the owner, Nadia and Zara.
-  const nadia = (await http('POST', '/api/people', { name: 'Nadia' })).body.id;
+  // Three people in the house: the owner, Umer and Zara.
+  const umer = (await http('POST', '/api/people', { name: 'Umer' })).body.id;
   const zara = (await http('POST', '/api/people', { name: 'Zara' })).body.id;
   const as = (id: number) => ({ 'x-crewhouse': '1', 'x-crewhouse-member': String(id) });
 
   // Only the owner mints a code, for anyone; the person has to exist.
-  for (const member of [nadia, zara, 1, undefined]) {
-    assert.equal((await http('POST', '/api/phones/pair', { role: 'control', member }, as(nadia))).status, 403, `Nadia cannot pair a phone for ${member}`);
+  for (const member of [umer, zara, 1, undefined]) {
+    assert.equal((await http('POST', '/api/phones/pair', { role: 'control', member }, as(umer))).status, 403, `Umer cannot pair a phone for ${member}`);
     assert.equal((await http('POST', '/api/phones/code', { role: 'control', member }, as(zara))).status, 403, `Zara cannot type one for ${member}`);
   }
   assert.equal((await http('POST', '/api/phones/pair', { role: 'control', member: 999 })).status, 404, 'nobody by that number');
-  assert.equal((await http('POST', '/api/phones/pair', { role: 'control', member: 'Nadia' })).status, 404, 'a name is not a person id');
+  assert.equal((await http('POST', '/api/phones/pair', { role: 'control', member: 'Umer' })).status, 404, 'a name is not a person id');
 
-  // The owner pairs Nadia's phone and their own; the computer's question says whose it will be.
+  // The owner pairs Umer's phone and their own; the computer's question says whose it will be.
   let words = '';
-  const pairing = pairWithOffer((await http('POST', '/api/phones/pair', { role: 'control', member: nadia })).body.qr, { name: 'Nadia phone', onWords: (w) => { words = w; } });
-  const asking = await until(async () => (await http('GET', '/api/phones/link')).body.asking.find((a: any) => a.name === 'Nadia phone'));
-  assert.equal(asking.member, nadia);
+  const pairing = pairWithOffer((await http('POST', '/api/phones/pair', { role: 'control', member: umer })).body.qr, { name: 'Umer phone', onWords: (w) => { words = w; } });
+  const asking = await until(async () => (await http('GET', '/api/phones/link')).body.asking.find((a: any) => a.name === 'Umer phone'));
+  assert.equal(asking.member, umer);
   assert.equal(asking.words, words);
-  assert.equal((await http('POST', '/api/phones/answer', { id: asking.id, yes: true }, as(nadia))).status, 403, 'Nadia cannot approve her own phone');
+  assert.equal((await http('POST', '/api/phones/answer', { id: asking.id, yes: true }, as(umer))).status, 403, 'Umer cannot approve her own phone');
   await http('POST', '/api/phones/answer', { id: asking.id, yes: true });
   const n = open(await pairing);
   const o = open(await pairPhone((await http('POST', '/api/phones/pair', { role: 'control' })).body.qr, 'Owner phone'));
   const listed = (await http('GET', '/api/phones')).body;
-  assert.deepEqual([listed.find((p: any) => p.name === 'Nadia phone')].map((p) => [p.member, p.person]), [[nadia, 'Nadia']]);
+  assert.deepEqual([listed.find((p: any) => p.name === 'Umer phone')].map((p) => [p.member, p.person]), [[umer, 'Umer']]);
   assert.equal(listed.find((p: any) => p.name === 'Owner phone').member, 1, 'no choice means the owner');
 
-  // Nadia's phone acts as Nadia: her state, her thread, her events; never the owner's or Zara's.
-  assert.equal((await n.req('GET', '/api/state')).body.person.id, nadia);
+  // Umer's phone acts as Umer: her state, her thread, her events; never the owner's or Zara's.
+  assert.equal((await n.req('GET', '/api/state')).body.person.id, umer);
   assert.equal((await o.req('GET', '/api/state')).body.person.id, 1);
   await http('POST', '/api/bots/chief/messages', { text: 'owner private words' });
   await http('POST', '/api/bots/chief/messages', { text: 'zara private words' }, as(zara));
-  assert.equal((await n.req('POST', '/api/bots/chief/messages', { text: 'nadia own words' })).status, 200);
+  assert.equal((await n.req('POST', '/api/bots/chief/messages', { text: 'umer own words' })).status, 200);
   const said = (e: any, text: string) => e.kind === 'message' && e.data.text === text;
   await until(async () => o.events.find((e) => said(e, 'owner private words')));
-  await until(async () => n.events.find((e) => said(e, 'nadia own words')));
+  await until(async () => n.events.find((e) => said(e, 'umer own words')));
   await until(async () => (await http('GET', '/api/bots/chief', undefined, as(zara))).body.messages.some((m: any) => m.text === 'zara private words'));
-  assert.ok(!n.events.some((e) => said(e, 'owner private words') || said(e, 'zara private words')), "the owner's and Zara's words never reach Nadia's phone");
-  assert.ok(!o.events.some((e) => said(e, 'nadia own words') || said(e, 'zara private words')), "and Nadia's and Zara's never reach the owner's");
+  assert.ok(!n.events.some((e) => said(e, 'owner private words') || said(e, 'zara private words')), "the owner's and Zara's words never reach Umer's phone");
+  assert.ok(!o.events.some((e) => said(e, 'umer own words') || said(e, 'zara private words')), "and Umer's and Zara's never reach the owner's");
   const thread = (await n.req('GET', '/api/bots/chief')).body.messages.map((m: any) => m.text);
-  assert.ok(thread.includes('nadia own words') && !thread.some((t: string) => /owner private|zara private/.test(t)), 'her Chief thread is hers alone');
+  assert.ok(thread.includes('umer own words') && !thread.some((t: string) => /owner private|zara private/.test(t)), 'her Chief thread is hers alone');
   assert.equal((await n.req('GET', '/api/bots/chief')).body.phoneOffer, null, 'no pairing card for a member');
   assert.ok((await n.req('GET', '/api/events')).body.every((e: any) => !said(e, 'owner private words') && !said(e, 'zara private words')));
 
-  // Chief's card: the owner switches it to Zara, and the phone that joins through it is Zara's. Nadia's phone cannot switch it.
+  // Chief's card: the owner switches it to Zara, and the phone that joins through it is Zara's. Umer's phone cannot switch it.
   await http('POST', '/api/bots/chief/messages', { text: 'pair my phone' });
   const card = await until(async () => (await http('GET', '/api/bots/chief')).body.phoneOffer);
   assert.equal(card.member ?? 1, 1, 'the card starts as the owner\'s');
-  assert.equal((await n.req('POST', '/api/phones/refresh', { message: card.message, member: nadia })).status, 403, "a member's phone administers nothing");
+  assert.equal((await n.req('POST', '/api/phones/refresh', { message: card.message, member: umer })).status, 403, "a member's phone administers nothing");
   assert.equal((await http('POST', '/api/phones/refresh', { message: card.message, member: zara }, as(zara))).status, 403);
   assert.equal((await http('POST', '/api/phones/refresh', { message: card.message, member: 999 })).status, 404);
   const forZara = (await http('POST', '/api/phones/refresh', { message: card.message, member: zara })).body;
@@ -424,7 +424,7 @@ test('the owner picks whose phone it is: the grant acts as that member alone, an
   const z = open(await zaraPairing);
   assert.equal((await z.req('GET', '/api/state')).body.person.id, zara);
   assert.equal((await http('GET', '/api/phones')).body.find((p: any) => p.name === 'Zara phone').member, zara);
-  assert.ok(!(await z.req('GET', '/api/bots/chief')).body.messages.some((m: any) => /owner private|nadia own/.test(m.text)));
+  assert.ok(!(await z.req('GET', '/api/bots/chief')).body.messages.some((m: any) => /owner private|umer own/.test(m.text)));
 
   for (const p of (await http('GET', '/api/phones')).body) await http('DELETE', `/api/phones/${p.id}`);
   for (const x of [n, o, z]) x.link.stop();

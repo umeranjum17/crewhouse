@@ -1836,7 +1836,7 @@ export class Crew {
     }
     if (e.kind === 'spend' && e.cost !== undefined && this.spentThisMonth() + e.cost > this.moneyCap()) {
       this.db.event('money.refused', botId, { task: task?.id, cost: e.cost });
-      return { block: true, reason: `That would take this month's spending past the $${this.moneyCap()} the household set. Tell the person, in one line; the owner can raise the limit in Settings.` };
+      return { block: true, reason: `That would take this month's spending past the $${this.moneyCap()} you set. Tell the person, in one line; the owner can raise the limit in Settings.` };
     }
     if (this.granted.delete(`${botId}\n${e.words}`)) return undefined; // answered "allow" after the turn had parked
     const standing = e.key && [...(task && this.taskGrants.get(task.id) || []), ...(disk.botConfig(this.cfg, botId).allow ?? [])].includes(e.key);

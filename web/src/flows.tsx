@@ -188,7 +188,7 @@ export function AccountCard({ me, owner, isOwner, g, inChat, onReady }: { me: nu
 /**
  * Connecting an app: its own page opens in the tap (Google, Notion or Canva), the person says yes there, and the sheet
  * turns to done by itself. Calendar and Gmail warn about Google's "unverified app" screen before it appears. Google's
- * apps before the owner has switched Google on for the house say so instead of opening a broken page.
+ * apps before the owner has switched Google on for your crew say so instead of opening a broken page.
  */
 export function ConnectApp({ app, helper, state, tab: first, ask, onConnected, onDone, onClose }: { app: A.App; helper?: string; state: Json; tab?: Window | null; ask?: number; onConnected?: () => void; onDone: () => void; onClose: () => void }) {
   const [phase, setPhase] = useState<Phase>(pinned ?? 'opening');
@@ -217,7 +217,7 @@ export function ConnectApp({ app, helper, state, tab: first, ask, onConnected, o
   useEffect(() => { if (phase === 'done' && !pinned) onConnected?.(); }, [phase]);
   const cancel = () => { void api.disconnect(app.id).catch(() => {}); setPhase('cancelled'); };
   const at = phase === 'done' ? 3 : phase === 'waiting' ? 1 : 0;
-  const warn = app.warns && <p className="warn-line">Google shows a warning for apps it hasn't reviewed — a family app always gets it. Tap <b>Advanced</b>, then <b>Go to Crewhouse</b>.</p>;
+  const warn = app.warns && <p className="warn-line">Google shows a warning for apps it hasn't reviewed — a personal app always gets it. Tap <b>Advanced</b>, then <b>Go to Crewhouse</b>.</p>;
   const notNow = <button className="link" onClick={onClose}>Not now</button>;
   return (
     <Sheet label={`Connect ${app.name}`} onClose={onClose}>
@@ -235,7 +235,7 @@ export function ConnectApp({ app, helper, state, tab: first, ask, onConnected, o
       {phase === 'done' && <><h2>{app.name} is connected</h2><p>{app.does}</p>{helper && <p className="mute">{helper} is carrying on with it now.</p>}
         <button className="btn go big" onClick={onDone}>Done</button></>}
       {phase === 'cancelled' && <><h2>No problem</h2><p className="mute">Nothing was connected{helper ? `, and ${helper} will manage without it` : ''}.
-        {app.warns ? ` Google shows that warning for every app it hasn't reviewed — a family app always gets it. Crewhouse is ${owner}'s app, running on your own computer. Tap Advanced, then Go to Crewhouse.` : ` You can connect ${app.name} any time.`}</p>
+        {app.warns ? ` Google shows that warning for every app it hasn't reviewed — a personal app always gets it. Crewhouse is ${owner}'s app, running on your own computer. Tap Advanced, then Go to Crewhouse.` : ` You can connect ${app.name} any time.`}</p>
         <button className="btn go big" onClick={again}>Try again</button>{notNow}</>}
       {phase === 'unticked' && <><h2>Almost: tick the box</h2><p className="mute">{app.name} still isn't ticked. Tap Try again, then tick {app.name} on Google's page.</p>
         <button className="btn go big" onClick={again}>Try again</button>{notNow}</>}
@@ -248,7 +248,7 @@ export function ConnectApp({ app, helper, state, tab: first, ask, onConnected, o
         : <><h2>That didn't go through</h2><p className="mute">{poll.value?.error ?? `${who} didn't finish connecting. No harm done; let's try once more.`}</p>
           <button className="btn go big" onClick={again}>Try again</button>{notNow}</>)}
       {phase === 'offline' && <OfflineWords onClose={onClose} />}
-      {phase === 'house' && (isOwner ? <><h2>Switch Google on for the house</h2><p className="mute">It's a one-time setup, about twenty minutes, and then everyone in the house can connect Calendar, Gmail and Drive.</p>
+      {phase === 'house' && (isOwner ? <><h2>Switch Google on for your crew</h2><p className="mute">It's a one-time setup, about twenty minutes, and then you can connect Calendar, Gmail and Drive.</p>
         <a className="btn go big" href="#/settings" onClick={onClose}>Open Settings</a>{notNow}</>
         : <><h2>{app.name} isn't set up in this house yet</h2><p className="mute">{owner} can switch it on once, for everyone.</p>
           <button className="btn go big" onClick={() => { setAskedAt(Date.now()); void api.houseAsk(app.id).catch(() => {}); setPhase('asked'); }}>Ask {owner} to set it up</button>
@@ -281,7 +281,7 @@ export function ConnectCard({ c, helper, state, onDone }: { c: A.Card; helper?: 
       </div>
       <p className="ask-words">{c.words}</p>
       {asked && <p className="mute small">Asked {owner} · {A.clock(asked.at)}</p>}
-      {app.warns && !asked && <p className="warn-line">Google shows a warning for apps it hasn't reviewed — a family app always gets it. Tap <b>Advanced</b>, then <b>Go to Crewhouse</b>.</p>}
+      {app.warns && !asked && <p className="warn-line">Google shows a warning for apps it hasn't reviewed — a personal app always gets it. Tap <b>Advanced</b>, then <b>Go to Crewhouse</b>.</p>}
       <div className="btns">
         {!asked && <button className="btn go" onClick={() => setOpen(A.needsHouse(state, app) ? null : openTab())}>Connect {app.name}</button>}
         <button className="btn" onClick={no}>{asked ? `Do it without ${app.name}` : 'Not now'}</button>

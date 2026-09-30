@@ -216,7 +216,7 @@ test('a send reuses the app listing: one handshake per connection set, not per t
   done();
 });
 
-test("Google for the house: the pasted key is checked with Google before it's kept, and each wrong paste is named", async () => {
+test("Google for your crew: the pasted key is checked with Google before it's kept, and each wrong paste is named", async () => {
   const { crew, done } = googleLab();
   const ID = gid('123-house');
   assert.match(await paste(crew, SECRET, ID), /^That's the Client secret\. It goes in the second box/);
@@ -241,14 +241,14 @@ test("Google: after the yes, one read back before connected; Google's real failu
   google.ticked = 'https://www.googleapis.com/auth/gmail.readonly';
   // Still in Testing: it would work for a week, so it isn't called connected.
   google.testing = true;
-  assert.equal(await yes(crew, 'gmail'), "The house's Google app is still in Testing, so Google would cut Gmail off within a week. Step 3 of Google for the house: press Publish app.");
+  assert.equal(await yes(crew, 'gmail'), "Your Google app is still in Testing, so Google would cut Gmail off within a week. Step 3 of Google for your crew: press Publish app.");
   assert.deepEqual(crew.connections.status(OWNER, 'gmail'), { state: 'failed', error: (crew.connections.view(OWNER, 'gmail') as any).error, step: 3 });
   assert.equal(crew.connections.connected(OWNER, 'gmail'), false);
   assert.deepEqual(crew.connections.houseSteps()![2], { state: 'missing', note: 'Still in Testing: press Publish app under Audience.' });
   google.testing = false;
   // The Gmail API never enabled: Google's 403 on the read back names it.
   google.off = ['gmail'];
-  assert.equal(await yes(crew, 'gmail'), "Gmail API isn't switched on in the house's Google project yet. Step 2 of Google for the house: enable Gmail API.");
+  assert.equal(await yes(crew, 'gmail'), "Gmail API isn't switched on in your Google project yet. Step 2 of Google for your crew: enable Gmail API.");
   assert.equal(crew.connections.status(OWNER, 'gmail').step, 2);
   assert.equal(crew.connections.connected(OWNER, 'gmail'), false);
   assert.deepEqual(crew.connections.houseSteps()![1], { state: 'missing', note: 'Gmail API is still off. Enable it.' });
@@ -269,9 +269,9 @@ test("Google: after the yes, one read back before connected; Google's real failu
   assert.deepEqual(crew.connections.houseSteps()!.map((s: any) => s.state), ['checked', 'checked', 'checked', 'checked']);
   // A Workspace app left Internal: step 3; a key Google stopped knowing (deleted after the paste): step 4.
   crew.connections.disconnect(OWNER, 'calendar');
-  assert.equal(await back(crew, await start(crew, 'calendar'), { error: 'org_internal' }), "The house's Google app is set to Internal, so Google turns everyone else away. Step 3 of Google for the house: make it External.");
+  assert.equal(await back(crew, await start(crew, 'calendar'), { error: 'org_internal' }), "Your Google app is set to Internal, so Google turns everyone else away. Step 3 of Google for your crew: make it External.");
   assert.equal(crew.connections.status(OWNER, 'calendar').step, 3);
-  assert.match(connectError('Gmail', 'invalid_client'), /^Google didn't accept the house's key\. Step 4 of Google for the house: make a “Desktop app” key/);
+  assert.match(connectError('Gmail', 'invalid_client'), /^Google didn't accept your key\. Step 4 of Google for your crew: make a “Desktop app” key/);
   done();
 });
 
@@ -279,8 +279,8 @@ test("Google: one service per connection, only after the owner switched it on fo
   const { crew, done } = googleLab();
   assert.deepEqual(Object.keys(crew.connections.apps).filter((k) => k !== 'mocknote'), ['drive', 'calendar', 'gmail', 'notion', 'canva'], 'v1: no Outlook, no OneDrive');
   // Before the owner's setup: nobody is sent to Google's "OAuth client not found" page.
-  await assert.rejects(crew.connections.connect(OWNER, 'calendar'), (e: any) => e.status === 409 && /Google switched on for the house/.test(e.message));
-  assert.match(crew.connections.list(OWNER).find((c: any) => c.app === 'gmail')!.house!, /owner does it once in Settings/);
+  await assert.rejects(crew.connections.connect(OWNER, 'calendar'), (e: any) => e.status === 409 && /Google switched on for your crew/.test(e.message));
+  assert.match(crew.connections.list(OWNER).find((c: any) => c.app === 'gmail')!.house!, /set it up once in Settings/);
   await house(crew);
   assert.deepEqual(crew.connections.list(OWNER).filter((c: any) => c.warns).map((c: any) => c.app), ['calendar', 'gmail'], 'Drive shows no unverified-app warning');
 

@@ -51,7 +51,7 @@ test('Home lists the family desk and the meals beside the money ones, each sayin
   done();
 });
 
-const reply = 'Subject: Ayaan’s trip form — Friday\\n\\nHello, the signed trip form is in Ayaan’s bag this morning. He takes the packed-lunch option, and I can walk with the group if you are still short of adults.\\n\\nThank you,\\nNadia';
+const reply = 'Subject: Ayaan’s trip form — Friday\\n\\nHello, the signed trip form is in Ayaan’s bag this morning. He takes the packed-lunch option, and I can walk with the group if you are still short of adults.\\n\\nThank you,\\nUmer';
 
 test('a reply to the school is a draft card: the yes approves it, nothing is sent, and the job says so', async () => {
   const { db, crew, done } = setup();
@@ -101,7 +101,7 @@ test('a school form on its site: the lines are free to type, and the submit card
   const live = (crew as any).live.get('scout');
   live.page = 'https://school.example/forms/trip';
   live.snapshot = tripForm;
-  for (const [ref, value] of [['e5', 'Ayaan Ali'], ['e6', 'Nadia Ali'], ['e7', 'packed']] as const) {
+  for (const [ref, value] of [['e5', 'Ayaan Ali'], ['e6', 'Umer Ali'], ['e7', 'packed']] as const) {
     assert.equal(await (crew as any).gate('scout', 'browser', { args: ['fill', ref, value] }), undefined, 'typing a line asks nothing by itself');
     assert.equal(db.get("SELECT COUNT(*) AS n FROM asks WHERE bot = 'scout' AND state = 'open'")!.n, 0);
   }
@@ -113,7 +113,7 @@ test('a school form on its site: the lines are free to type, and the submit card
   assert.equal(card.detail.fill, true, 'a form card fills, it does not press');
   assert.equal(card.detail.words, 'Scout wants to fill in 3 lines on the claim form at school.example.');
   assert.equal(card.detail.preview.head, 'What Scout will fill in on school.example');
-  assert.deepEqual(card.detail.preview.body.split('\n'), ["Pupil's full name: Ayaan Ali", 'Parent or carer: Nadia Ali', 'Lunch: packed or school: packed'],
+  assert.deepEqual(card.detail.preview.body.split('\n'), ["Pupil's full name: Ayaan Ali", 'Parent or carer: Umer Ali', 'Lunch: packed or school: packed'],
     'every line, the label as the page writes it and the value from the call');
   assert.equal(JSON.parse(ask.detail).key, undefined, 'submitting carries no key: asked every time');
   assert.equal(card.detail.always, undefined, 'and the card offers no Always OK');

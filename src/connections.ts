@@ -60,10 +60,10 @@ const CONNECT_MS = Number(process.env.CREWHOUSE_SIGNIN_MS || 15 * 60_000);
 
 /** A failed connection in one plain sentence with one next step. */
 export function connectError(name: string, error: string, api = name) {
-  if (error === 'testing') return `The house's Google app is still in Testing, so Google would cut ${name} off within a week. Step 3 of Google for the house: press Publish app.`;
-  if (error === 'org_internal') return `The house's Google app is set to Internal, so Google turns everyone else away. Step 3 of Google for the house: make it External.`;
-  if (error === 'disabled') return `${api} isn't switched on in the house's Google project yet. Step 2 of Google for the house: enable ${api}.`;
-  if (stepOf(error) === 4) return `Google didn't accept the house's key. Step 4 of Google for the house: make a “Desktop app” key and paste it again.`;
+  if (error === 'testing') return `Your Google app is still in Testing, so Google would cut ${name} off within a week. Step 3 of Google for your crew: press Publish app.`;
+  if (error === 'org_internal') return `Your Google app is set to Internal, so Google turns everyone else away. Step 3 of Google for your crew: make it External.`;
+  if (error === 'disabled') return `${api} isn't switched on in your Google project yet. Step 2 of Google for your crew: enable ${api}.`;
+  if (stepOf(error) === 4) return `Google didn't accept your key. Step 4 of Google for your crew: make a “Desktop app” key and paste it again.`;
   if (error === 'unread') return `${name} said yes, but Crewhouse couldn't read anything back from it, so it isn't connected. Tap Connect to try again.`;
   if (/unticked/.test(error)) return `${name} still isn't ticked. Tap Connect, then tick ${name} on Google's page.`;
   if (/access_denied|denied|declined/i.test(error)) return `No problem, nothing was connected. Tap Connect whenever you'd like to try again.`;
@@ -189,7 +189,7 @@ export class Connections {
   list(member: number) {
     return Object.entries(this.apps).map(([id, a]) => ({
       app: id, name: a.name, connected: this.connected(member, id), connecting: this.view(member, id), warns: !!a.warns,
-      house: a.google && !this.houseGoogle() ? `${a.name} needs Google switched on for the house first; the owner does it once in Settings.` : null,
+      house: a.google && !this.houseGoogle() ? `${a.name} needs Google switched on for your crew first; set it up once in Settings.` : null,
     }));
   }
 

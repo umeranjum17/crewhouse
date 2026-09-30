@@ -85,7 +85,7 @@ function Hello({ state, refresh, night }: Ctx) {
       <span className="halo"><ChiefArt mood={tipped ? 'idle' : 'hello'} d={8.5} hero /></span>
       <div className="speech">
         <h1>{A.greeting()}{address.trim() ? `, ${address.trim()}` : ''}</h1>
-        <p className="lead">I'm Chief. I run the crew in this house{isOwner ? '.' : `; ${owner} set me up for you.`}</p>
+        <p className="lead">I'm Chief, your personal assistant. I run your crew of helpers{isOwner ? '.' : `; ${owner} set me up for you.`}</p>
       </div>
       <ul className="promises">
         <li>Your helpers live on this computer, and think with your own ChatGPT.</li>
@@ -939,7 +939,7 @@ function Phones({ tick, members, owner }: { tick: number; members: Json[]; owner
         <b>Reach it from anywhere</b>
         <p className="mute small">{A.anywhere(link).words}</p>
         {!!A.anywhere(link).steps.length && <ol className="how">{A.anywhere(link).steps.map((s) => <li key={s}>{s}</li>)}</ol>}
-        <p className="mute small"><a href="https://tailscale.com/download" target="_blank" rel="noreferrer">Get Tailscale ↗</a> · Free for a family. Tailscale sees which devices are yours, never what they say.</p>
+        <p className="mute small"><a href="https://tailscale.com/download" target="_blank" rel="noreferrer">Get Tailscale ↗</a> · For your own devices. Tailscale sees which devices are yours, never what they say.</p>
       </div>
       <details className="card" open={!!link.relay}><summary className="small">Another way in: run your own go-between</summary>
       <form className="form" onSubmit={(e) => { e.preventDefault(); void attempt(async () => { setLink(await api.phoneRelay((relay ?? link.relay).trim(), enrol)); setRelay(null); setEnrol(''); }, 'Saved'); }}>
@@ -1058,7 +1058,7 @@ function Money({ state, refresh }: { state: Json; refresh: () => void }) {
   </>);
 }
 
-/** Owner only: switch Google on for the house, once. Each step opens the Google page it happens on, in turn, and the
+/** Owner only: switch Google on for your crew, once. Each step opens the Google page it happens on, in turn, and the
  *  last one ends with two things to paste here (docs/google-setup.md has the same steps with the why). */
 function HouseGoogle({ on, steps, refresh }: { on: boolean; steps?: A.GoogleStep[] | null; refresh: () => void }) {
   const [edit, setEdit] = useState(false);
@@ -1068,7 +1068,7 @@ function HouseGoogle({ on, steps, refresh }: { on: boolean; steps?: A.GoogleStep
   const last = step === A.GOOGLE_STEPS.length - 1;
   const s = A.GOOGLE_STEPS[step];
   return (<>
-    <div className="label" id="setup-google">Google for the house</div>
+    <div className="label" id="setup-google">Google for your crew</div>
     {on && !edit ? <div className="card">
         <div className="row"><span className="grow"><b>{A.googleHeadline(steps)}</b><div className="mute small">What Google itself has answered so far. Steps nobody has tried yet say “you said done”.</div></span>
           <button className="btn" onClick={() => { setEdit(true); setStep(A.GOOGLE_STEPS.length - 1); }}>Change key</button></div>
@@ -1077,9 +1077,9 @@ function HouseGoogle({ on, steps, refresh }: { on: boolean; steps?: A.GoogleStep
           {m.state === 'missing' && <a className="btn go" href={A.GOOGLE_STEPS[i].url} target="_blank" rel="noreferrer">Open Google's page</a>}
         </div>)}
       </div>
-      : <form className="card form" onSubmit={(e) => { e.preventDefault(); void attempt(async () => { await api.houseGoogle(id, secret); setEdit(false); refresh(); }, 'Google is on for the house'); }}>
-        <b>Switch Google on, once for everyone</b>
-        <p className="mute small">About twenty minutes on Google's own pages, free. Then anyone here can let a helper use their Calendar, Gmail or Drive with one tap.</p>
+      : <form className="card form" onSubmit={(e) => { e.preventDefault(); void attempt(async () => { await api.houseGoogle(id, secret); setEdit(false); refresh(); }, 'Google is on for your crew'); }}>
+        <b>Switch Google on for your crew</b>
+        <p className="mute small">About twenty minutes on Google's own pages, free. Then you can let a helper use your Calendar, Gmail or Drive with one tap.</p>
         <div className="mute small">Step {step + 1} of {A.GOOGLE_STEPS.length}</div>
         <b>{s.title}</b>
         <p className="small">{s.says}</p>

@@ -36,8 +36,8 @@ const bot = (id: string, extra = {}) => ({ id, display: id[0].toUpperCase() + id
   thinks: [{ key: 'claude:sonnet', name: 'Claude Sonnet' }], state: 'on', computer: true, controls: 'bot', task: null, queued: 0, pausedUntil: null, ...extra });
 // The owner's screenshot, as crewd sends it today: a raw fc-list approval, "Claude · 9% of 5h used", the prompt as the task.
 const state = {
-  person: { id: 2, name: 'Nadia', address: 'Nadia', onboarded: 1 },
-  members: [{ id: 1, name: 'Umer' }, { id: 2, name: 'Nadia' }],
+  person: { id: 2, name: 'Umer', address: 'Umer', onboarded: 1 },
+  members: [{ id: 1, name: 'Umer' }, { id: 2, name: 'Umer' }],
   bots: [
     bot('chief'),
     bot('reel', { task: { id: 5, title: 'Make a birthday video for mum', state: 'needs_you' }, stuck: true, quietSince: now - 6 * 60_000,
@@ -74,7 +74,7 @@ const page = { messages: [
   { id: 1, author: 'person', text: 'can you make a birthday video for mum' },
   { id: 2, author: 'bot', text: 'Done! I ran `ffmpeg -i /home/alex/Crewhouse/bots/reel/files/in.mp4 out.mp4` with Claude Code.\n```sh\nls -la\n```' },
   { id: 3, author: 'system', text: 'Delivered files/mum-birthday_v2.mp4: first cut' },
-], notes: '# Notes\n- Nadia likes soft piano\n- Keep videos in ~/Crewhouse/bots/reel/files', trail: state.events,
+], notes: '# Notes\n- Umer likes soft piano\n- Keep videos in ~/Crewhouse/bots/reel/files', trail: state.events,
   soul: '# Reel\n\nYou are Reel.\n\n## Voice\n- Upbeat. Say what you made, never `ffmpeg -i in.mp4`.',
   skills: [{ name: 'make-reel', description: 'Turn screenshots into a demo video (mp4) with ffmpeg.', says: 'Turn photos into a short video' }, { name: 'plan-dinners', description: 'Uses the browser MCP tools' }] };
 
@@ -178,7 +178,7 @@ test('a helper\'s draft waits in Needs you, named for who it goes to; the row\'s
   crew.onboard('sir');
   crew.recruit('scout', 'Scout', 'person');
   await crew.post('scout', 'Draft the reply on a card in front of me. '
-    + '[tool crew_write {"path":"files/reply-trip-form.md","content":"Hello, the signed trip form is in Ayaan\'s bag this morning. Thank you, Nadia"}] '
+    + '[tool crew_write {"path":"files/reply-trip-form.md","content":"Hello, the signed trip form is in Ayaan\'s bag this morning. Thank you, Umer"}] '
     + '[tool crew_draft {"path":"files/reply-trip-form.md","to":"the school office"}]');
   await until('the draft ask in the served view', () => crew.snapshot().asks.some((a: any) => a.kind === 'propose' && a.detail.draft));
   const s: Json = crew.snapshot();
@@ -189,7 +189,7 @@ test('a helper\'s draft waits in Needs you, named for who it goes to; the row\'s
   assert.equal(c.head, 'Scout drafted a message for the school office', 'the card says what it is and who it is for, never "learned something"');
   assert.deepEqual(c.choices.map((x: any) => x.label), ['Approve', 'Not now'], 'the no-send approval stays');
   assert.match(c.preview?.body ?? '', /trip form/, 'the sheet the row opens shows the words');
-  assert.equal(c.draftText, "Hello, the signed trip form is in Ayaan's bag this morning. Thank you, Nadia", 'the words to change are the draft itself, not a tidied copy');
+  assert.equal(c.draftText, "Hello, the signed trip form is in Ayaan's bag this morning. Thank you, Umer", 'the words to change are the draft itself, not a tidied copy');
   const rows = A.needsYou(s);
   assert.equal(rows.find((r: any) => r.id === ask.id)?.head, 'Scout drafted a message for the school office', 'the draft is a Needs-you row, ready to tap');
   assert.ok(!rows.some((r: any) => /learned something/.test(r.head)));
@@ -229,7 +229,7 @@ test('Home commits nothing: a row opens the review sheet, and a starter fills th
 
 test('Home keeps a standing "hand me a job" list, straight from crewd\'s ideas: a goal first, then money back, and a job that needs an app says so', () => {
   const withJobs = { ...state, ideas: [
-    { bot: 'scout', promise: 'I\'ll search the government\'s unclaimed-money registers for our family\'s names and get the claims ready to file. I\'ll file it end to end — you just tap approve.', ask: 'Search for money owed to us that nobody has claimed', group: 'money', needs: [] },
+    { bot: 'scout', promise: 'I\'ll search the government\'s unclaimed-money registers for your name and get the claims ready to file. I\'ll file it end to end — you just tap approve.', ask: 'Search for money owed to me that nobody has claimed', group: 'money', needs: [] },
     { bot: 'scout', promise: 'I\'ll claim the money back the day the price drops. I\'ll do it end to end — you just tap approve.', ask: 'Watch something I bought', group: 'money', needs: ['Gmail'] },
     { bot: 'scribe', promise: 'Say who it is for and the email is written', ask: 'Write an email to ' },
     { bot: 'reel', promise: 'Turn photos into a short video', ask: 'Make a video from these photos: ' },
@@ -237,7 +237,7 @@ test('Home keeps a standing "hand me a job" list, straight from crewd\'s ideas: 
   const rows = A.jobs(withJobs);
   assert.deepEqual(rows.map((r) => [r.bot, r.needs.length]), [['scout', 0], ['scout', 1], ['scribe', 0], ['reel', 0]], 'money back leads — the job that waits on nothing first — and a waiting row keeps its needs');
   assert.equal(rows[0].label, withJobs.ideas[0].ask, 'Home uses the short ask as the row');
-  assert.equal(A.jobs({ ...withJobs, bots: [...state.bots, { id: 'scout', display: 'Scout' }] })[0].says, 'Scout · I\'ll search the government\'s unclaimed-money registers for our family\'s names and get the claims ready to file.', 'under it, whose job it is and one sentence of the promise');
+  assert.equal(A.jobs({ ...withJobs, bots: [...state.bots, { id: 'scout', display: 'Scout' }] })[0].says, 'Scout · I\'ll search the government\'s unclaimed-money registers for your name and get the claims ready to file.', 'under it, whose job it is and one sentence of the promise');
   for (const r of rows) assert.ok((r.says.match(/[.!?](\s|$)/g) ?? []).length <= 1, `at most one sentence of a promise: ${r.says}`);
   assert.equal(A.jobs({ ...state, ideas: [{ bot: 'chief', promise: "What's on this week?", ask: "What's on this week?" }] })[0].says, '', 'a promise that only repeats the ask adds no line');
   assert.match(A.homeSummary({ ...withJobs, asks: [], bots: [] }), /0 things need you · 0 helpers working/, 'the summary follows the rows, not demo copy');
@@ -776,7 +776,7 @@ test('no jargon anywhere: the machinery\'s words never reach a person', () => {
 
 test('the status-bar chip: this person\'s jobs only, counts only where a locked phone shows it, and one door to the kit', () => {
   const st = A.status(state)!;
-  // Scout's job is working; Reel's waits on Nadia. Tracer is busy, but only bot-wide (`live`): not her job, not counted.
+  // Scout's job is working; Reel's waits on Umer. Tracer is busy, but only bot-wide (`live`): not her job, not counted.
   const s2 = { ...state, bots: state.bots.map((b) => (b.id === 'tracer' ? { ...b, live: 'working' } : b)) };
   assert.deepEqual(A.status(s2), st, 'a helper busy on someone else\'s job never shows');
   assert.equal(st.active, true);
@@ -856,7 +856,7 @@ test('the iPhone\'s Live Activity: the chip\'s own status, counts only until unl
     const la = (globalThis as any).activity;
     const words = (n: any): string => typeof n === 'string' || typeof n === 'number' ? String(n) : Array.isArray(n) ? n.map(words).filter(Boolean).join(' ')
       : n?.props ? [n.props.label, n.props.destination, words(n.props.children)].filter(Boolean).join(' ') : '';
-    const st = A.status(state)!; // Scout's job is working; Reel's waits on Nadia
+    const st = A.status(state)!; // Scout's job is working; Reel's waits on Umer
     const view = la.layout(st, { colorScheme: 'light' });
     for (const k of ['banner', 'compactLeading', 'compactTrailing', 'minimal']) {
       for (const b of state.bots) assert.ok(!words(view[k]).includes(b.display), `${b.display} where a locked phone shows it (${k})`);
@@ -1443,8 +1443,8 @@ test('a delivered .mp4 shows a video badge, never DOCX', () => {
 // ?demo=fresh: the Chief-only Home a new person gets — no helpers hired yet, so Home has nothing to hand over,
 // nothing needs them, and Chief's own three starters fill the empty chat. Renders through every Home view with no errors.
 test('?demo=fresh renders the Chief-only Home with no errors', () => {
-  const fresh: Json = { person: { id: 2, name: 'Nadia', address: 'Nadia', onboarded: 1 },
-    members: [{ id: 1, name: 'Umer' }, { id: 2, name: 'Nadia' }],
+  const fresh: Json = { person: { id: 2, name: 'Umer', address: 'Umer', onboarded: 1 },
+    members: [{ id: 1, name: 'Umer' }, { id: 2, name: 'Umer' }],
     bots: [{ id: 'chief', display: 'Chief', template: 'chief', role: 'Runs the crew and answers to you', state: 'on', controls: 'bot', task: null, queued: 0, pausedUntil: null }],
     templates: [{ id: 'chief', display: 'Chief' }],
     tasks: [], ideas: [], asks: [], events: [], routines: [], resting: {}, connections: [] };
@@ -1496,8 +1496,8 @@ test('a Chief-only Home offers its helpers for hire: jobs carry hire, the tap hi
 });
 
 // The office: one room per viewer from the adapter views, holding only their own jobs. Ported from the office-view
-// board fixture (data/ch-office-view/board/kit/data.js): Nadia (2), Umer (1, owner), Sam (3); reel/scout/scribe work
-// for Nadia, pip/tracer for Umer; a helper busy with someone else's job reads live 'working' with no task of yours.
+// board fixture (data/ch-office-view/board/kit/data.js): Umer (2), Umer (1, owner), Sam (3); reel/scout/scribe work
+// for Umer, pip/tracer for Umer; a helper busy with someone else's job reads live 'working' with no task of yours.
 const OTN = Date.now();
 const oBot = (id: string, name: string, extra: Json = {}) => ({ id, display: name, template: id, role: `${name} helps out`,
   controls: 'bot', computer: false, queued: 0, pausedUntil: null, unread: 0, stuck: false, ...extra });
@@ -1542,20 +1542,20 @@ function officeState(viewer: number): Json {
 const OJARGON = /\b(relay|noise|tickets?|grants?|daemon|crewd|engine|tokens?|ports?|stub|hosted?|links?|host)\b/i;
 
 test('the office: one room per viewer, holding only their own jobs', () => {
-  const nadia = A.office(officeState(2), { busyElsewhere: true });
-  assert.deepEqual(nadia.crew.map((c) => c.id), ['reel', 'scout', 'scribe', 'pip'], 'everyone is in the room; Tracer stays with the owner');
-  const reel = nadia.crew.find((c) => c.id === 'reel')!;
+  const memberView = A.office(officeState(2), { busyElsewhere: true });
+  assert.deepEqual(memberView.crew.map((c) => c.id), ['reel', 'scout', 'scribe', 'pip'], 'everyone is in the room; Tracer stays with the owner');
+  const reel = memberView.crew.find((c) => c.id === 'reel')!;
   assert.deepEqual([reel.status, reel.step, reel.ring, reel.busyElsewhere], ["Mum's birthday video", 'Timing the photos to the music', 'working', false]);
   assert.equal(reel.things[0].kind, 'image', 'the first look sits on the desk');
   assert.ok(reel.steps.some((s) => s.now), 'the latest step is marked now');
-  const scribe = nadia.crew.find((c) => c.id === 'scribe')!;
+  const scribe = memberView.crew.find((c) => c.id === 'scribe')!;
   assert.equal(scribe.ring, 'needs');
   assert.match(scribe.ask?.head ?? '', /ready to send/, 'the question waits on the desk');
   assert.match(scribe.ask?.words ?? '', /Aunty Sara/);
-  assert.equal(nadia.chief.line, 'Scribe needs you', 'Chief names the headline');
-  assert.deepEqual(nadia.counts, { needs: 1, working: 2, done: 1 });
-  // Pip works for Umer: Nadia sees it busy, with nothing of his.
-  const pip = nadia.crew.find((c) => c.id === 'pip')!;
+  assert.equal(memberView.chief.line, 'Scribe needs you', 'Chief names the headline');
+  assert.deepEqual(memberView.counts, { needs: 1, working: 2, done: 1 });
+  // Pip works for Umer: Umer sees it busy, with nothing of his.
+  const pip = memberView.crew.find((c) => c.id === 'pip')!;
   assert.deepEqual([pip.status, pip.step, pip.ring, pip.busyElsewhere], [A.BUSY_ELSEWHERE, '', '', true]);
   assert.deepEqual([pip.things, pip.steps, pip.ask], [[], [], undefined]);
   assert.doesNotMatch(shown(pip), /Car insurance|renewal|51|Umer/, 'no title, no step, no member');
@@ -1565,7 +1565,7 @@ test('the office: one room per viewer, holding only their own jobs', () => {
   assert.equal(umer.crew.find((c) => c.id === 'pip')!.status, 'Car insurance renewal');
   assert.equal(umer.crew.find((c) => c.id === 'tracer')!.ring, 'needs');
   assert.equal(umer.crew.find((c) => c.id === 'reel')!.busyElsewhere, true);
-  assert.doesNotMatch(shown(umer.crew.find((c) => c.id === 'reel')), /Mum|birthday|Nadia/);
+  assert.doesNotMatch(shown(umer.crew.find((c) => c.id === 'reel')), /Mum|birthday|Umer/);
   assert.deepEqual(umer.counts, { needs: 1, working: 1, done: 1 });
   // Sam's evening: nothing of his on the go, and nobody else's words.
   const sam = A.office(officeState(3));
@@ -1575,9 +1575,9 @@ test('the office: one room per viewer, holding only their own jobs', () => {
   assert.ok(sam.crew.every((c) => c.status === 'Free to help' && !c.busyElsewhere), "today's rule: someone else's job looks free");
   const samBusy = A.office(officeState(3), { busyElsewhere: true });
   assert.ok(samBusy.crew.every((c) => c.busyElsewhere), 'with the decision on: busy, and still wordless');
-  for (const c of samBusy.crew) assert.doesNotMatch(shown(c), /Mum|birthday|Flights|Lahore|Aunty|insurance|email|Nadia|Umer/);
+  for (const c of samBusy.crew) assert.doesNotMatch(shown(c), /Mum|birthday|Flights|Lahore|Aunty|insurance|email|Umer|Umer/);
   // Whatever the room holds, no machinery reaches it.
-  for (const v of [nadia, umer, sam, samBusy]) {
+  for (const v of [umer, umer, sam, samBusy]) {
     assert.doesNotMatch(shown(v), FORBIDDEN, 'no paths, engines, percentages or prompts');
     const words = (x: unknown): string => typeof x === 'string' ? x : Array.isArray(x) ? x.map(words).join(' ')
       : x && typeof x === 'object' ? Object.entries(x).filter(([k]) => k !== 'url' && k !== 'at').map(([, w]) => words(w)).join(' ') : '';

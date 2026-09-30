@@ -130,7 +130,7 @@ test('the office keeps the battery budget: nothing moves while quiet, Reduce Mot
 
 // Helpers who need her in each household (web/src/demo.ts): Scribe, Reel, Scout and Pip, then every eighth made-up one.
 // ?demo=office has four helpers: Reel, Scout and Scribe need her, with first looks on their desks; Pip is busy elsewhere.
-const HOUSES: [string, number, number][] = [['crew1', 1, 1], ['crew5', 5, 4], ['crew12', 12, 5], ['crew30', 30, 7], ['office', 4, 3]];
+const HOUSES: [string, number, number][] = [['crew1', 1, 1], ['crew5', 5, 4], ['crew12', 12, 5], ['crew30', 30, 7], ['office', 5, 4]];
 test('at 1, 5, 12 and 30 crew, on a phone and a computer, no bubble or desk thing covers another or a sprite, and every Review shows', { skip: !bin && 'no Chromium here' }, async () => {
   const b = await browse();
   await b.send('Page.enable'); await b.send('Runtime.enable');
