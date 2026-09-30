@@ -29,7 +29,7 @@ Everything lives in `~/.local/state/crewhouse/` (the database, the engine's own 
 6. **A routine.** Tell Chief: *Every weekday at 9am, have Scout check the top 3 Hacker News stories and send me the titles.* Open **Routines**:
    - Press **Run now** on the new routine. It shows *Done · run by you* when Scout finishes.
    - Press **Run now** on **Morning digest**. Chief posts what finished, what needs you and what is coming up, in your thread.
-7. **Your settings.** Under **Settings, People**, edit your name, how Chief addresses you and your quiet hours. One install is for you and your crew.
+7. **Your settings.** Under **Settings, You**, edit your name, how Chief addresses you, your quiet hours and how much of your AI the crew may use. One install is for you and your crew.
 8. **An app.** Ask Scribe to find something in your Notion: Scribe asks for it with a **Connect Notion** card in the chat. Tap it, allow Crewhouse on Notion's page, and Scribe carries on; reading runs at once, adding a page asks first. (Or connect ahead of time under **Settings, Your apps**.) For Google Calendar, Gmail and Drive, first switch Google on under **Settings, Google setup** ([docs/google-setup.md](docs/google-setup.md)).
 9. **Restart mid-task.** While Reel is working (or waiting on you), press Ctrl-C in the crewd terminal, then run `./crewhouse start` again. Reel's **What I did** tab shows *Picked up where it left off*, and a waiting approval can still be answered.
 

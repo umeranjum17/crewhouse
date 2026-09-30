@@ -8,7 +8,7 @@ import type { Store } from './db.ts';
 import { quietNow, type Crew } from './crew.ts';
 import * as disk from './bots.ts';
 import { toolStatus } from './tools.ts';
-import { OWNER, PROVIDERS, clock, provider } from './accounts.ts';
+import { PROVIDERS, clock, provider } from './accounts.ts';
 import { coversOf, toolWords } from './policy.ts';
 import { describe, nextRun, parseSchedule } from './routines.ts';
 import { Link } from './link.ts';
@@ -207,7 +207,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     if (m === 'POST' && p === '/api/recruit') { const b = body; const { token, ...bot } = crew.recruit(b.template, b.name, 'person'); return bot; }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)$/)) && m === 'GET') return crew.botPage(r[1], Number(q.get('around')) || undefined);
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/messages$/)) && m === 'POST') { const b = body; return crew.post(r[1], b.text ?? '', b.model, b.photos, b.room === true, key); }
-    if ((r = p.match(/^\/api\/people\/(\d+)$/)) && m === 'PUT') return crew.updateMember(OWNER, body);
+    if ((r = p.match(/^\/api\/people\/(\d+)$/)) && m === 'PUT') return crew.updatePerson(body);
     if (m === 'GET' && p === '/api/accounts') {
       // The person's AI accounts: signed in or not (the engine's own local check), resting until when, and any sign-in in progress.
       // A work ChatGPT (Business, Enterprise, Edu) is flagged by its email, so the app can steer to a personal one.

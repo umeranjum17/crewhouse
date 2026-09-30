@@ -288,8 +288,8 @@ test('the crew\'s share: routines wait for tomorrow once it is used up, what the
     assert.equal(state(db, again), 'done');
 
     // "As much as it needs" lifts it; a made-up choice is refused.
-    assert.throws(() => crew.updateMember(1, { share: 'lots' }), /light, normal or full/);
-    crew.updateMember(1, { share: 'full' });
+    assert.throws(() => crew.updatePerson({ share: 'lots' }), /light, normal or full/);
+    crew.updatePerson({ share: 'full' });
     assert.deepEqual(crew.snapshot().share, { choice: 'full', used: false, week: null });
   } finally {
     if (before === undefined) delete process.env.CREWHOUSE_DAY_TOKENS; else process.env.CREWHOUSE_DAY_TOKENS = before;
@@ -544,7 +544,7 @@ test('the digest reads today\'s calendar itself once Calendar is connected, and 
   assert.equal(crew.snapshot().share.week, 'fair');
   db.run('INSERT INTO usage (member, day, tokens) VALUES (1, ?, ?)', day(9), Math.round(budget * 5));
   assert.equal(crew.snapshot().share.week, 'fair', 'older than a week does not count');
-  crew.updateMember(1, { share: 'full' });
+  crew.updatePerson({ share: 'full' });
   assert.equal(crew.snapshot().share.week, null);
   done();
 });

@@ -757,9 +757,9 @@ test('quiet hours park questions at once; settings validate', async () => {
   assert.equal(quietNow('22:00-07:00', new Date(2026, 0, 1, 7, 0)), false);
   assert.equal(quietNow('13:00-14:00', new Date(2026, 0, 1, 13, 15)), true);
   assert.equal(quietNow(null), false);
-  assert.throws(() => crew.updateMember(1, { quiet: '10pm-7am' }), /22:00-07:00/);
-  assert.throws(() => crew.updateMember(1, { name: '  ' }), /name/);
-  assert.equal(crew.updateMember(1, { name: 'Alex', quiet: '00:00-23:59' }).name, 'Alex');
+  assert.throws(() => crew.updatePerson({ quiet: '10pm-7am' }), /22:00-07:00/);
+  assert.throws(() => crew.updatePerson({ name: '  ' }), /name/);
+  assert.equal(crew.updatePerson({ name: 'Alex', quiet: '00:00-23:59' }).name, 'Alex');
 
   const started = Date.now();
   const t = (await crew.post('reel', `copy it ${call('crew_write', { path: join(root, 'elsewhere', 'b.txt'), content: 'x' })}`, undefined))!.task;
@@ -767,7 +767,7 @@ test('quiet hours park questions at once; settings validate', async () => {
   assert.ok(Date.now() - started < 3000, 'no hold while they sleep');
   assert.equal(task(db, t).state, 'needs_you');
   assert.equal(crew.snapshot().asks.length, 1, 'the question waits for the morning');
-  crew.updateMember(1, { quiet: null });
+  crew.updatePerson({ quiet: null });
   done();
 });
 
