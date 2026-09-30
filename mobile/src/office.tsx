@@ -3,9 +3,7 @@
 // size: a desk for Chief and each helper on a job of yours, the lounge sofa for everyone else, "+N more" past two rows
 // of each, so a bubble lives in its own seat and never covers another. The crew are the mascot sprites from
 // web/src/art.ts (./marks.ts); the room's colours are tokens.ts `room`. Every word and mood comes from A.office and
-// A.officeEvent: a member's room holds only their own jobs, and a helper busy with someone else's reads "Busy with
-// another job" and nothing more. It moves only when something lands, through ./motion.ts: a quiet room runs no
-// animation and no timer.
+// A.officeEvent. It moves only when something lands, through ./motion.ts: a quiet room runs no animation or timer.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Image, Pressable, Text, View, type ViewStyle } from 'react-native';
 import * as A from '../../web/src/adapter.ts';
@@ -22,8 +20,7 @@ const OUT = 'Out of reach for now';
 const DESK_H = 156, LOUNGE_H = 96, FLOOR = 12;
 
 /** How a helper reads to a screen reader, in the room's own words. */
-const said = (c: A.OfficeMember) => (c.busyElsewhere ? `${c.name}, ${A.BUSY_ELSEWHERE.toLowerCase()}`
-  : A.waitsOnYou(c) ? `${c.name} needs you` : c.ring === 'working' ? `${c.name}, working on ${c.status}` : `${c.name}, ${c.status.toLowerCase()}`);
+const said = (c: A.OfficeMember) => (A.waitsOnYou(c) ? `${c.name} needs you` : c.ring === 'working' ? `${c.name}, working on ${c.status}` : `${c.name}, ${c.status.toLowerCase()}`);
 
 /** The room, `width` points wide. Tapping a helper opens its desk (`onDesk`), Review its question (`onAsk`), Chief his
  *  chat, the tray the Things. */
@@ -33,7 +30,7 @@ export function Office({ state, night, offline, width, onChief, onDesk, onAsk, o
 }) {
   const view = useOffice(state);
   // What this phone kept says how things were: while out of reach nobody claims to be busy (App.tsx OUT).
-  const crew = offline ? view.crew.map((c) => ({ ...c, mood: 'rest' as Mood, ring: '' as const, busyElsewhere: false, ask: undefined, status: OUT, step: '', steps: [] })) : view.crew;
+  const crew = offline ? view.crew.map((c) => ({ ...c, mood: 'rest' as Mood, ring: '' as const, ask: undefined, status: OUT, step: '', steps: [] })) : view.crew;
   const chief = offline ? { mood: 'rest' as Mood, line: OUT } : view.chief;
   const t = night ? color.night : color.day;
   const r = night ? ROOM.night : ROOM.day;
@@ -50,7 +47,7 @@ export function Office({ state, night, offline, width, onChief, onDesk, onAsk, o
   const day = new Date().setHours(0, 0, 0, 0);
   const today = view.done.filter((d) => d.at >= day).length; // the tray holds today's, as Home's count does (A.homeCounts)
   const calm = offline ? OUT : crew.some((c) => c.ring || c.ask) ? '' : !crew.length ? 'Nothing on the go yet.'
-    : `Nothing of yours on the go. ${crew.some((c) => c.busyElsewhere) ? 'Some of the crew are busy with other jobs.' : 'The crew is free.'}`;
+    : 'Nothing on the go. The crew is free.';
   const sofas = (plan.loungeCols - ((plan.lounge.length + (plan.more > 0 || folds ? 1 : 0)) % plan.loungeCols)) % plan.loungeCols;
   const byId = new Map(view.crew.map((c) => [c.id, c]));
   return (
@@ -114,12 +111,12 @@ export function Office({ state, night, offline, width, onChief, onDesk, onAsk, o
       </View>
       {(plan.lounge.length > 0 || plan.more > 0 || folds) && <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
         {plan.lounge.map((c) => <Cell key={c.id} w={lw} h={LOUNGE_H} r={r} lounge label={said(c)} onPress={() => onDesk(c)}>
-          <motion.Hop beat={`${byId.get(c.id)?.ring}|${byId.get(c.id)?.mood}|${c.busyElsewhere}`} reduce={reduce} awake={awake} style={{ position: 'absolute', left: lw / 2 - 20, bottom: 42 }}>
+          <motion.Hop beat={`${byId.get(c.id)?.ring}|${byId.get(c.id)?.mood}`} reduce={reduce} awake={awake} style={{ position: 'absolute', left: lw / 2 - 20, bottom: 42 }}>
             <Pal id={`${c.kind}-${c.mood}`} dot={2} />
           </motion.Hop>
           <Sofa r={r} />
           <View pointerEvents="none" style={{ position: 'absolute', left: 3, right: 3, bottom: 14, flexDirection: 'row', gap: 4, alignItems: 'center', justifyContent: 'center' }}>
-            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: c.status === 'Up next' ? t.amber : c.busyElsewhere ? t.mute : t.line2 }} />
+            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: c.status === 'Up next' ? t.amber : t.line2 }} />
             <Text numberOfLines={1} style={{ flexShrink: 1, fontFamily: 'Inter', fontSize: 11.5, lineHeight: 14, fontWeight: '600', color: t.ink, backgroundColor: t.surface,
               borderRadius: 999, borderWidth: 1, borderColor: t.line, paddingHorizontal: 6, paddingVertical: 1, overflow: 'hidden' }}>{c.name}</Text>
           </View>
@@ -139,7 +136,7 @@ export function Office({ state, night, offline, width, onChief, onDesk, onAsk, o
 
 /** The office view: the snapshot, moved by live events until the next refresh starts it again. */
 function useOffice(state: Json) {
-  const base = useMemo(() => A.office(state, { busyElsewhere: true }), [state]);
+  const base = useMemo(() => A.office(state), [state]);
   const [live, setLive] = useState<A.OfficeView | null>(null);
   const from = useRef(base);
   from.current = base;

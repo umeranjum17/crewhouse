@@ -65,7 +65,7 @@ For Waybar, add `custom/crewhouse` to `modules-right` (or another module list) a
 }
 ```
 
-This view is for the owner's computer session; it has no household-member selector. Clicking opens Crewhouse, where you can respond on each card.
+This view is for your computer session. Clicking opens Crewhouse, where you can respond on each card.
 
 ## Why Crewhouse exists
 
@@ -112,7 +112,7 @@ Ask for a spreadsheet or a document and you get a real `.xlsx` or `.docx`. The h
 Each helper has a soul (who it is, written by you), a job, its own skills and tools, and notes about the people it works for. Every note it keeps is a git commit you can undo. Add a helper from a template, or describe one to Chief and approve what he suggests.
 
 <p align="center">
-  <img src="docs/screenshots/readme/crew.webp" alt="The crew screen: Chief, Reel, Scout, Scribe and Pip, each with what it is doing now, and Add a helper" width="300" />
+  <img src="docs/screenshots/readme/crew.webp" alt="The crew screen: Chief, Reel, Scout, Scribe, Pip and Tracer, each with what it is doing now, and Add a helper" width="300" />
 </p>
 
 ### Routines, without the setup

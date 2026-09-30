@@ -285,7 +285,7 @@ function OfflineWords({ onClose }: { onClose: () => void }) {
 }
 
 /** Full screen when Crewhouse can't be reached at all: never a blank page or an error code. */
-export function Unreachable({ retry, owner }: { retry: () => void; owner: boolean }) {
+export function Unreachable({ retry }: { retry: () => void }) {
   const [n, setN] = useState(5);
   useEffect(() => { const t = setInterval(() => setN((x) => (x <= 1 ? (retry(), 5) : x - 1)), 1000); return () => clearInterval(t); }, [retry]);
   return (
@@ -297,7 +297,7 @@ export function Unreachable({ retry, owner }: { retry: () => void; owner: boolea
       <h1>The home computer isn't answering</h1>
       <p className="lead">It may be asleep, switched off, or offline. Crewhouse and your helpers live there, so everything picks up again the moment it's back.</p>
       <div className="card tips">
-        <div><Face who="chief" size={34} /><span>{owner ? 'Check the home computer is on and connected to the internet.' : 'Ask whoever looks after the home computer to check it is on.'}</span></div>
+        <div><Face who="chief" size={34} /><span>Check the home computer is on and connected to the internet.</span></div>
       </div>
       <button className="btn go big" onClick={() => { setN(5); retry(); }}>Try now</button>
       <p className="mute small">Trying again in {n}s</p>

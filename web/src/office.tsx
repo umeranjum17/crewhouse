@@ -25,12 +25,10 @@ type Tone = { cls: string; pill: 'ok' | 'wait' | 'off' };
 function tone(c: A.OfficeMember): Tone {
   if (A.waitsOnYou(c)) return { cls: 'needs', pill: 'wait' };
   if (c.ring === 'working') return { cls: 'work', pill: 'ok' };
-  if (c.busyElsewhere) return { cls: 'away', pill: 'off' };
   if (c.status === 'Up next') return { cls: 'next', pill: 'off' };
   return { cls: 'free', pill: 'off' };
 }
-const said = (c: A.OfficeMember) => (c.busyElsewhere ? `${c.name}, ${A.BUSY_ELSEWHERE.toLowerCase()}`
-  : A.waitsOnYou(c) ? `${c.name} needs you` : c.ring === 'working' ? `${c.name}, working on ${c.status}` : `${c.name}, ${c.status.toLowerCase()}`);
+const said = (c: A.OfficeMember) => (A.waitsOnYou(c) ? `${c.name} needs you` : c.ring === 'working' ? `${c.name}, working on ${c.status}` : `${c.name}, ${c.status.toLowerCase()}`);
 
 /** A mascot as crisp square pixels with an ink edge, `dot` px a pixel; one image per face, made once. */
 const urls = new Map<string, string>();
@@ -56,7 +54,7 @@ function Sprite({ who, mood, dot, night, className = '', beat }: { who: art.Kind
 const KIND_WORDS: Record<A.FileView['kind'], string> = { image: 'a picture', video: 'a video', sheet: 'a spreadsheet', page: 'a document', doc: 'a file' };
 
 export function Office({ state, night }: { state: Json; night: boolean }) {
-  const view = useMemo(() => A.office(state, { busyElsewhere: true }), [state]);
+  const view = useMemo(() => A.office(state), [state]);
   const [live, setLive] = useState(view);
   useEffect(() => setLive(view), [view]);
   useEffect(() => {
@@ -114,7 +112,7 @@ export function Office({ state, night }: { state: Json; night: boolean }) {
   const day = new Date(); day.setHours(0, 0, 0, 0);
   const today = live.done.filter((t) => t.at >= day.getTime()).length; // the tray holds today's, as Home's count does
   const calm = crew.some((c) => c.ring || c.ask) ? '' : !crew.length ? 'Nothing on the go yet.'
-    : crew.some((c) => c.busyElsewhere) ? 'Nothing of yours on the go right now.' : 'Nothing of yours on the go. The crew is free.';
+    : 'Nothing on the go. The crew is free.';
   const chiefBusy = live.chief.mood === 'ask' ? 'needs' : live.chief.mood === 'work' ? 'work' : '';
 
   return (
@@ -157,7 +155,7 @@ export function Office({ state, night }: { state: Json; night: boolean }) {
         {(plan.lounge.length > 0 || plan.more > 0 || folds) && <div className="o-lounge" style={{ ['--cols' as string]: plan.loungeCols }}>
           {plan.lounge.map((c) => (
             <div key={c.id} className="o-cell">
-              <Sprite who={c.kind} mood={c.mood} dot={2} night={night} beat={`${c.ring}|${c.mood}|${c.busyElsewhere}`} />
+              <Sprite who={c.kind} mood={c.mood} dot={2} night={night} beat={`${c.ring}|${c.mood}`} />
               <div className="o-sofa" />
               <div className={`o-chip ${tone(c).cls}`}><i /><b>{c.name}</b></div>
               <button className="o-hit" onClick={() => setOpen(c.id)} aria-label={said(c)} />
@@ -199,8 +197,7 @@ function HelperSheet({ c, h, state, asks, onClose }: { c: A.OfficeMember; h: A.H
   const job = A.work(state).find((w) => w.helper === c.id);
   const t = tone(c);
   let body: ReactNode;
-  if (c.busyElsewhere) body = <p className="o-note">{c.name} is busy with another job. It isn't yours, so what it is stays private. Anything you ask for waits its turn.</p>;
-  else if (!c.ring && !c.ask) body = <p className="o-note">{c.status === 'Up next' ? `Your job is next in line. ${c.name} starts it as soon as the desk is clear.` : `${c.name} is free to help. Tell Chief what you need, and he'll pass it over.`}</p>;
+  if (!c.ring && !c.ask) body = <p className="o-note">{c.status === 'Up next' ? `Your job is next in line. ${c.name} starts it as soon as the desk is clear.` : `${c.name} is free to help. Tell Chief what you need, and he'll pass it over.`}</p>;
   return (
     <div className="scrim o-scrim" onClick={onClose}>
       <div ref={box} className="o-sheet" role="dialog" aria-modal aria-label={c.name} onClick={(e) => e.stopPropagation()}>
@@ -211,7 +208,7 @@ function HelperSheet({ c, h, state, asks, onClose }: { c: A.OfficeMember; h: A.H
         </header>
         <Pill tone={t.pill} live={c.ring === 'working'}>{c.ring === 'working' ? 'Working' : c.status}</Pill>
         {(c.ring || c.ask) && job && <div className="o-sec"><div className="o-eyebrow">{c.ring === 'needs' ? 'Waiting on you' : 'Working on'}</div><h3>{job.title}</h3></div>}
-        {!c.busyElsewhere && asks.map((a) => <div key={a.id} className="o-ask big"><div className="o-ask-tag"><i /><span>{a.head}</span></div><p>{a.words}</p><a className="btn go" href={`#/ask/${a.id}`}>Review</a></div>)}
+        {asks.map((a) => <div key={a.id} className="o-ask big"><div className="o-ask-tag"><i /><span>{a.head}</span></div><p>{a.words}</p><a className="btn go" href={`#/ask/${a.id}`}>Review</a></div>)}
         {c.steps.length > 0 && <Steps steps={c.steps} max={5} />}
         {c.things.length > 0 && <div className="o-sec"><div className="o-eyebrow">{c.ring ? 'First looks' : 'Made for you'}</div>
           {c.things.map((f, i) => <Media key={i} f={f} />)}</div>}
