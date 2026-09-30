@@ -15,12 +15,12 @@
     "check": "tsc"
   },
   "dependencies": {
-    "@byokit/accounts": "0.7.1",
-    "@byokit/decide": "0.4.1",
+    "@byokit/accounts": "0.8.0",
+    "@byokit/decide": "0.4.2",
     "@byokit/link": "0.5.0",
-    "@byokit/openclaw": "0.1.4",
+    "@byokit/openclaw": "0.2.2",
     "@byokit/reach": "0.4.0",
-    "@byokit/relay": "0.3.0",
+    "@byokit/relay": "0.4.0",
     "@byokit/ui-core": "0.3.0",
     "@desklink/host": "^0.1.0",
     "docx": "9.7.2",
