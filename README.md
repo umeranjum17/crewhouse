@@ -175,6 +175,10 @@ When run in a terminal, `setup` asks two things:
 
 `./crewhouse doctor` shows what's installed and what's missing. The helpers' sandboxed shell needs [bubblewrap](https://github.com/containers/bubblewrap), and their own screens need Xvfb and Chromium. Crewhouse is built and tested on Linux. On macOS, helpers get no shell or screens, and autostart isn't available.
 
+Engine sign-ins use BYOKit's sealing: the stopped engine keeps `auth-store.sealed`, and the next start restores the same login. Verified legacy copies and migration archives leave no plaintext credential copy. Desktop installs need an accessible OS keyring (Linux Secret Service); there is no plaintext fallback. A headless host can explicitly set `CREWHOUSE_AUTH_KEY_FILE` to a separately provisioned, private 0600 file containing exactly 32 raw bytes, held outside the state directory and its backups. Keep that key or the OS keyring when restoring a backup; an older build cannot open the sealed store.
+
+Credentials remain plaintext while the engine or migration doctor runs. Orderly shutdown waits for sealing; a crash is recovered on the next prepare once the old engine has stopped. Use encrypted storage and exclude live engine state from backups. This does not protect against another process running as the same OS user.
+
 Everything Crewhouse writes lives in `~/.local/state/crewhouse/` (the database, the engine and saved sign-ins), `~/Crewhouse/` (helpers and what they know about each person) and `~/.local/share/crewhouse/tools/` (the tool kit). `./crewhouse uninstall` removes all of it, but keeps your crew folder unless you add `--all`.
 
 | Command | What it does |
