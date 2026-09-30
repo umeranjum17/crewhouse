@@ -12,6 +12,7 @@ import { DeviceLink, pairWithOffer, type DeviceGrant, type LinkStatus, encodeOff
 import { Link, NEWS, linkHosts, phoneAddresses, tailscalePeer } from '../src/link.ts';
 import { Store } from '../src/db.ts';
 import { DatabaseSync } from 'node:sqlite';
+import * as A from '../web/src/adapter.ts';
 import { decodeOffer as decodeTyped, encodeOffer as encodeTyped } from '@byokit/link';
 import { b64url } from '@byokit/link';
 
@@ -88,7 +89,7 @@ test('push through a stubbed Expo: exactly one content-free push per paired phon
   const db = new Store(temp('crewhouse-push'));
   const devices = [{ id: 'pixel' }, { id: 'moto' }, { id: 'ipad' }];
   const link = Object.assign(new Link({} as any, db, async () => null) as any, { host: { devices: () => devices }, pushUrl: `http://127.0.0.1:${(expo.address() as AddressInfo).port}/push` });
-  const phone = (id: string, body: unknown) => link.request('POST /api/push', body, { id, role: 'control' });
+  const phone = (id: string, body: unknown) => link.request('POST /api/push', { ...body as object, build: 'p9b' }, { id, role: 'control' });
   assert.equal((await phone('pixel', { expo: 'ExponentPushToken[pixel-1]' })).status, 200);
   assert.equal((await phone('moto', { expo: 'ExponentPushToken[moto-1]' })).status, 200);
   assert.equal((await phone('ipad', { expo: 'not a token' })).status, 409, 'only an Expo token, or saying why there is none');
@@ -139,7 +140,7 @@ test('questions, finished helper jobs and Chief lines push only content-free new
   const link = Object.assign(new Link({} as any, db, async () => null) as any, {
     host: { devices: () => devices }, pushUrl: `http://127.0.0.1:${(expo.address() as AddressInfo).port}/push`,
   });
-  for (const d of devices) await link.request('POST /api/push', { expo: `ExponentPushToken[${d.id}]` }, d);
+  for (const d of devices) await link.request('POST /api/push', { expo: `ExponentPushToken[${d.id}]`, build: 'p9b' }, d);
   // news() is fire-and-forget: retain the real sends so silence and exact counts can be checked without a sleep.
   const pending: Promise<void>[] = [];
   const tell = link.tell.bind(link);
@@ -179,7 +180,7 @@ test('a paired phone renews the Add-a-phone code it is looking at; the rest of p
   const seen: string[] = [];
   const link = new Link({} as any, db, async (m: string, path: string) => { seen.push(`${m} ${path}`); return { message: 7, token: 'fresh' }; });
   const phone = { id: 'pixel' };
-  const renew = (g: { id: string }, op: string) => (link as any).request(op, { message: 7 }, g);
+  const renew = (g: { id: string }, op: string) => (link as any).request(op, { message: 7, build: 'p9b' }, g);
   assert.deepEqual(await renew(phone, 'POST /api/phones/refresh'), { status: 200, body: { message: 7, token: 'fresh' } }, "the person's phone asks for its own fresh code");
   assert.deepEqual(seen, ['POST /api/phones/refresh'], 'the ask reaches crewd');
   assert.equal((await renew(phone, 'POST /api/phones/pair')).status, 403, 'minting a first code stays on the computer');
@@ -230,11 +231,44 @@ function open(grant: DeviceGrant) {
   let status: LinkStatus = 'connecting';
   const link = new DeviceLink(grant, { store: { save: (g) => { stored = g; }, clear: () => { stored = null; } }, onEvent: (e) => events.push(e), onStatus: (s) => { status = s; } });
   const req = async (method: string, path: string, body?: unknown) => {
-    try { return await link.request(`${method} ${path}`, body) as { status: number; body: any }; }
+    try { return await link.request(`${method} ${path}`, { ...body as object, build: 'p9b' }) as { status: number; body: any }; }
     catch (e: any) { return { status: e.code === 'view-only' ? 403 : 0, body: { error: e.code } }; }
   };
   return { link, req, events, stored: () => stored, status: () => status };
 }
+
+test('an unmarked old phone reads only the update notice; a marked current phone reads the crew and can act', async () => {
+  await until(async () => (await fetch(`${base}/api/state`).catch(() => null))?.ok);
+  const phone = open(await pairPhone((await http('POST', '/api/phones/pair', { role: 'control' })).body.qr, 'Build check'));
+  const live = new DatabaseSync(join(root, 'state', 'crew.db'));
+  const ask = live.prepare("INSERT INTO asks (bot, kind, title, detail) VALUES ('chief', 'propose', 'Private question', '{}')").run().lastInsertRowid;
+  try {
+    const current = await phone.req('GET', '/api/state');
+    assert.equal(current.status, 200);
+    assert.ok(current.body.asks.some((a: any) => a.title === 'Private question'));
+    assert.equal(Object.hasOwn(current.body, 'members'), false);
+    const old = await phone.link.request('GET /api/state') as { status: number; body: any };
+    assert.equal(old.status, 200, 'old screens swallow API errors, so the notice is a readable Home');
+    assert.equal(Object.hasOwn(old.body, 'members'), false);
+    assert.equal(old.body.person.onboarded, 1, 'control phones open Home, never Hello');
+    assert.deepEqual(old.body.asks, []);
+    assert.deepEqual(old.body.tasks, []);
+    assert.deepEqual(old.body.events, []);
+    assert.equal(A.chats(old.body)[0].line, 'Update the Crewhouse app', 'Chief’s chat row shows the plain notice');
+    assert.doesNotThrow(() => { A.office(old.body); A.homeCounts(old.body); A.jobs(old.body); A.status(old.body); });
+    assert.doesNotMatch(JSON.stringify(old.body), /Private question/);
+    for (const [op, body] of [
+      ['POST /api/bots/chief/messages', { text: 'do work' }],
+      ['POST /api/phones/refresh', { message: 7, member: 1 }],
+      ['POST /api/push', { off: true }],
+      ['GET /api/bots/chief', undefined],
+    ] as const) assert.deepEqual(await phone.link.request(op, body), { status: 426, body: { error: 'Update the Crewhouse app' } }, op);
+    const desktop = await phone.link.stream('desktop', { bot: 'chief' });
+    assert.equal(await new Promise((r) => { desktop.onEnd = r; }), 'Update the Crewhouse app', 'old desktop controls cannot act either');
+    assert.equal((await phone.req('POST', '/api/push', { off: true })).status, 200, 'marked current requests retain their effects');
+    assert.equal(live.prepare('SELECT value FROM settings WHERE key = ?').get(`phone.push.${phone.link.grant.device.id}`)!.value, 'off');
+  } finally { live.prepare('DELETE FROM asks WHERE id = ?').run(ask); live.close(); phone.link.stop(); await http('DELETE', `/api/phones/${phone.link.grant.device.id}`); }
+});
 
 test('pairing with a yes at the computer, grants, approvals from the phone, and removal', async () => {
   await until(async () => (await fetch(`${base}/api/state`).catch(() => null))?.ok);
@@ -316,10 +350,13 @@ test('pairing with a yes at the computer, grants, approvals from the phone, and 
   // The person's paired phone renews a code that is showing, so its card refreshes itself (docs/ui-contract.md).
   await http('POST', '/api/bots/chief/messages', { text: 'pair my phone' });
   const live = (await http('GET', '/api/bots/chief')).body.phoneOffer;
-  const fromPhone = await a.req('POST', '/api/phones/refresh', { message: live.message, member: 2 });
+  const oldRefresh = await a.req('POST', '/api/phones/refresh', { message: live.message, member: 2 });
+  assert.deepEqual(oldRefresh, { status: 426, body: { error: 'Update the Crewhouse app' } });
+  assert.equal((await http('POST', '/api/phones/refresh', { message: live.message, member: 1 })).status, 426);
+  const fromPhone = await a.req('POST', '/api/phones/refresh', { message: live.message });
   assert.equal(fromPhone.status, 200);
   assert.ok(fromPhone.body.token && fromPhone.body.token !== live.token, 'a fresh code, minted at the phone\'s ask');
-  assert.equal(fromPhone.body.member, undefined, 'legacy member input is ignored');
+  assert.equal(fromPhone.body.member, undefined, 'renewed codes have no person selector');
 
   // Settings lists both; removing one closes its link, the phone forgets its grant, and its key is refused.
   const phones = (await http('GET', '/api/phones')).body;
@@ -379,7 +416,7 @@ test('a bot\'s screen over the link: a watch-only phone may open it, and crewd a
   const grant = await pairPhone((await http('POST', '/api/phones/pair', { role: 'view' })).body.qr, 'Watcher');
   const w = open(grant);
   await until(async () => w.status() === 'online');
-  const s = await w.link.stream('desktop', { bot: 'chief' });
+  const s = await w.link.stream('desktop', { bot: 'chief', build: 'p9b' });
   const lines: any[] = [];
   let buf = '';
   s.onData = (c) => { buf += new TextDecoder().decode(c); for (let i; (i = buf.indexOf('\n')) >= 0; buf = buf.slice(i + 1)) lines.push(JSON.parse(buf.slice(0, i))); };
@@ -394,7 +431,7 @@ test('a bot\'s screen over the link: a watch-only phone may open it, and crewd a
   assert.deepEqual([added.status, added.body.id], [200, 'quill']);
   c.link.stop();
   // A stream for anything else, or a bot name that isn't one, is turned away.
-  const bad = await w.link.stream('desktop', { bot: '../x' });
+  const bad = await w.link.stream('desktop', { bot: '../x', build: 'p9b' });
   const ended = await new Promise<string | undefined>((r) => { bad.onEnd = r; });
   assert.equal(ended, 'not-supported');
   w.link.stop();
@@ -402,15 +439,14 @@ test('a bot\'s screen over the link: a watch-only phone may open it, and crewd a
 
 
 
-test('upgrade removes a former person’s phone before grants load; the person’s phones, push and quiet hold survive', async () => {
+test('phones, push and quiet hold survive a restart after the P1 migration', async () => {
   const aGrant = await pairPhone((await http('POST', '/api/phones/pair', { role: 'control' })).body.qr, 'Kept phone');
   const bGrant = await pairPhone((await http('POST', '/api/phones/pair', { role: 'control' })).body.qr, 'Former phone');
   const viewGrant = await pairPhone((await http('POST', '/api/phones/pair', { role: 'view' })).body.qr, 'Kept tablet');
+  await http('DELETE', `/api/phones/${bGrant.device.id}`); // P1 already retired the other person's phone.
   daemon.kill();
   await new Promise((r) => daemon.once('exit', r));
   const db = new DatabaseSync(join(root, 'state', 'crew.db'));
-  db.prepare("INSERT INTO people (id, name) VALUES (2, 'Former person')").run();
-  db.prepare('UPDATE devices SET member = 2 WHERE id = ?').run(bGrant.device.id);
   const pk = db.prepare('SELECT pk FROM devices WHERE id = ?').get(aGrant.device.id)!.pk as string;
   db.prepare('UPDATE devices SET pk = ? WHERE id = ?').run(Buffer.from(pk, 'base64url').toString('base64'), aGrant.device.id);
   const hour = new Date().getHours();
@@ -454,7 +490,8 @@ test('upgrade removes a former person’s phone before grants load; the person�
     } finally { live.close(); }
     assert.equal((await http('PUT', '/api/people/42', { name: 'Umer' })).status, 200, 'legacy route shape edits only the person');
     const snapshot = (await a.req('GET', '/api/state')).body;
-    assert.deepEqual(snapshot.members.map((m: any) => [m.id, m.name]), [[1, 'Umer']], 'old phone builds keep their members array');
+    assert.equal(snapshot.person.name, 'Umer');
+    assert.equal(Object.hasOwn(snapshot, 'members'), false, 'current phones use person alone');
     assert.equal(typeof snapshot.house.google, 'boolean');
     assert.ok(Object.hasOwn(snapshot.house, 'steps'));
     assert.equal((await http('POST', '/api/accounts/42/chatgpt/retry')).status, 200, 'account route ignores the former member segment');

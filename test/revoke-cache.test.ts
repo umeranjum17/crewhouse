@@ -48,7 +48,7 @@ test('revoking a phone prevents its cached protected reply from being fetched ag
   const phone = new DeviceLink(grant, {});
   after(() => phone.stop());
 
-  const protectedReply = await phone.request('GET /api/state') as any;
+  const protectedReply = await phone.request('GET /api/state', { build: 'p9b' }) as any;
   assert.ok(protectedReply && typeof protectedReply === 'object', 'the phone received a protected state reply');
   await http('DELETE', `/api/phones/${grant.device.id}`);
   await until('phone learns it was removed', async () => phone.status === 'removed' || false);

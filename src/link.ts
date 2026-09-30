@@ -62,6 +62,8 @@ const ROUTES = ['home', 'tailscale', 'relay'];
 
 /** Every notification says only this; the phone fetches the words over the link (the relay enforces it too). */
 export const NEWS = 'Crewhouse has news';
+const UPDATE_APP = 'Update the Crewhouse app';
+const currentPhone = (body: any) => body?.build === 'p9b';
 /** The relay's WebSocket origin, from the https/wss address Settings keeps. */
 const wsOrigin = (url: string) => url.replace(/^http/, 'ws');
 
@@ -300,6 +302,7 @@ export class Link {
   /** A phone watching (and, holding the controls, driving) a bot's screen: one JSON message per line each way,
    *  {id, method, params} in and {id, result | error} or {event} out, as on the computer's own socket. */
   private desktop(s: import('@byokit/link').LinkStream, args: any, g: Grant) {
+    if (!currentPhone(args)) return s.end(UPDATE_APP);
     const bot = String(args?.bot ?? '');
     if (s.op !== 'desktop' || !/^[a-z0-9-]+$/.test(bot) || !this.desk) return s.end('not-supported');
     const desk = this.desk;
@@ -411,6 +414,11 @@ export class Link {
    *  device's idempotency key; mutating handlers record it with their effect (same transaction). */
   private async request(op: string, body: unknown, g: Grant, key?: string): Promise<{ status: number; body: unknown }> {
     const [method, path = ''] = op.split(' ', 2);
+    // Old screens swallow API errors: an empty Home with Chief's notice is the one view they can read safely.
+    if (!currentPhone(body)) return op === 'GET /api/state' ? { status: 200, body: {
+      person: { id: 1, name: '', address: '', onboarded: 1 }, bots: [{ id: 'chief', display: 'Chief', last: { author: 'bot', text: UPDATE_APP } }],
+      asks: [], tasks: [], events: [], ideas: [], templates: [], routines: [], resting: {}, connections: [], room: { last: null, busy: [] },
+    } } : { status: 426, body: { error: UPDATE_APP } };
     if (!path.startsWith('/api/')) return { status: 404, body: { error: 'not found' } };
     // The phone's own: every address it can reach this computer at now (a phone paired at home learns Tailscale and the
     // relay), and its push address.

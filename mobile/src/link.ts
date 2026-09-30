@@ -73,7 +73,7 @@ export function desktopSignaling(bot: string) {
   let buf = '';
   const opened = (async () => {
     if (!current) throw new Error("Can't reach the home computer");
-    const s = await current.stream('desktop', { bot });
+    const s = await current.stream('desktop', { bot, build: 'p9b' });
     s.onData = (chunk) => {
       buf += new TextDecoder().decode(chunk);
       for (let i; (i = buf.indexOf('\n')) >= 0; buf = buf.slice(i + 1)) {
@@ -140,7 +140,7 @@ function open(grant: Grant, onEvent: (e: any) => void, onStatus: (s: Status) => 
   /** The Transport for web/src/api.ts: crewd's answer, or an error with the HTTP status the screens understand. */
   const call = async (method: string, path: string, body?: unknown) => {
     let r: { status: number; body: any };
-    try { r = (await link.request(`${method} ${path}`, body)) as typeof r; } catch (e) {
+    try { r = (await link.request(`${method} ${path}`, { ...body as object, build: 'p9b' })) as typeof r; } catch (e) {
       // No status means "can't reach the home computer"; a view-only phone is told it can't, as crewd would.
       throw Object.assign(new Error((e as Error).message), e instanceof LinkError && e.code === 'view-only' ? { status: 403 } : {});
     }

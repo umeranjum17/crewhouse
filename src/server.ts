@@ -126,7 +126,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
         if (p === '/api/phones/link' && req.method === 'GET') return send(res, 200, link.status());
         // Pairing always adds a phone to the person's crew.
         if (p === '/api/phones/pair' && req.method === 'POST') { const b = await readJson(req); return send(res, 200, await link.offer(b.role ?? 'control')); }
-        if (p === '/api/phones/refresh' && req.method === 'POST') { const b = await readJson(req); return send(res, 200, await crew.refreshPhone(Number(b.message))); }
+        if (p === '/api/phones/refresh' && req.method === 'POST') { const b = await readJson(req); return send(res, 200, await api(req.method, p, url.searchParams, b)); }
         if (p === '/api/phones/pending' && req.method === 'GET') return send(res, 200, link.status().asking);
         if (p === '/api/phones/approve' && req.method === 'POST') { link.approve(String((await readJson(req)).words ?? '')); return send(res, 200, { ok: true }); }
         if (p === '/api/phones/lan' && req.method === 'PUT') { await link.setLan(!!(await readJson(req)).on); return send(res, 200, link.status()); }
@@ -183,7 +183,10 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     if (m === 'GET' && p === '/api/room') return crew.room(Number(q.get('before')) || undefined);
     // The one phone-admin call a paired phone makes itself: renewing the Add-a-phone code it is looking at, so the
     // card on the phone refreshes like the web card's.
-    if (m === 'POST' && p === '/api/phones/refresh') return crew.refreshPhone(Number(body?.message));
+    if (m === 'POST' && p === '/api/phones/refresh') {
+      if (Object.hasOwn(body ?? {}, 'member')) throw Object.assign(new Error('Update the Crewhouse app'), { status: 426 });
+      return crew.refreshPhone(Number(body?.message));
+    }
     // A sent photo for the phone, which can't open this computer's /files address: small enough for one link frame.
     if (m === 'GET' && p === '/api/photo') {
       const rel = String(q.get('path') ?? '');

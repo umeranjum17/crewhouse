@@ -85,10 +85,10 @@ test("a replayed phone request returns its first answer: one job, even across a 
     await assert.rejects(store.get('phone-1', 'k1'), 'a malformed record refuses rather than reruns');
     first.db.run("DELETE FROM settings WHERE key = 'link.ans.phone-1.k1'");
 
-    const r1 = await (a as any).request('POST /api/bots/reel/messages', { text: 'check the prices' }, via, 'phone-1:k1');
+    const r1 = await (a as any).request('POST /api/bots/reel/messages', { text: 'check the prices', build: 'p9b' }, via, 'phone-1:k1');
     assert.equal(r1.status, 200);
     await settled(first.db, r1.body.task);
-    const r2 = await (a as any).request('POST /api/bots/reel/messages', { text: 'check the prices' }, via, 'phone-1:k1');
+    const r2 = await (a as any).request('POST /api/bots/reel/messages', { text: 'check the prices', build: 'p9b' }, via, 'phone-1:k1');
     assert.deepEqual(r2, r1, 'same key, same answer, no second job');
     assert.equal(first.db.get('SELECT COUNT(*) AS n FROM tasks')!.n, 1);
     const { cfg } = first;
@@ -99,7 +99,7 @@ test("a replayed phone request returns its first answer: one job, even across a 
     try {
       crew.init();
       const b = wire(db, crew);
-      const r3 = await (b as any).request('POST /api/bots/reel/messages', { text: 'check the prices' }, via, 'phone-1:k1');
+      const r3 = await (b as any).request('POST /api/bots/reel/messages', { text: 'check the prices', build: 'p9b' }, via, 'phone-1:k1');
       assert.deepEqual(r3.body, r1.body, 'the first answer comes back after a restart');
       assert.equal(db.get('SELECT COUNT(*) AS n FROM tasks')!.n, 1, 'still one job');
     } finally { await until('second crew up', () => (crew as any).curationAt > 0); crew.stop(); db.close(); }
