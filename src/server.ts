@@ -182,7 +182,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     let r: RegExpMatchArray | null;
     // What is installing now, and (for the owner) a newer Crewhouse to download.
     if (m === 'GET' && p === '/api/state') return { ...crew.snapshot(me), zone: Intl.DateTimeFormat().resolvedOptions().timeZone, installing: [...installing], showing: teacher.showing(), ...(update && me === OWNER ? { update } : {}) };
-    if (m === 'GET' && p === '/api/events') return db.events(Number(q.get('after') || 0), 200, me);
+    if (m === 'GET' && p === '/api/events') return db.events(Number(q.get('after') || 0), 200);
     if (m === 'GET' && p === '/api/room') return crew.room(me, Number(q.get('before')) || undefined);
     // The one phone-admin call a paired phone makes itself: renewing the Add-a-phone code it is looking at, so the
     // card on the phone refreshes like the web card's (crew.refreshPhone answers only the owner).
@@ -274,14 +274,14 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/models$/)) && m === 'PUT') {
       crew.botPage(r[1]); // 404 for unknown bots
-      const models = disk.setBrains(cfg, r[1], body.models);
-      db.event('bot.models', r[1], { by: 'person', models });
+      disk.setBrains(cfg, r[1], body.models);
+      db.event('bot.models', r[1], { by: 'person' });
       return { thinks: crew.thinks(r[1]) };
     }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/job$/)) && m === 'PUT') {
       crew.botPage(r[1]);
       disk.writeJob(cfg, r[1], body);
-      db.event('job.changed', r[1], { by: 'person', member: me });
+      db.event('job.changed', r[1], { by: 'person' });
       return { job: disk.readJob(cfg, r[1]) };
     }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/job\/draft$/)) && m === 'POST') {
@@ -295,13 +295,13 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/notes$/)) && m === 'PUT') {
       crew.botPage(r[1]); // 404 for unknown bots
       disk.writeNotes(cfg, { member: me, bot: r[1] }, body.text ?? '');
-      db.event('memory.edited', r[1], { by: 'person', member: me });
+      db.event('memory.edited', r[1], { by: 'person' });
       return { ok: true };
     }
     if (p === '/api/about' && m === 'GET') return { notes: disk.readNotes(cfg, { member: me, bot: null }), cap: disk.ABOUT_CAP };
     if (p === '/api/about' && m === 'PUT') {
       disk.writeNotes(cfg, { member: me, bot: null }, body.text ?? '');
-      db.event('memory.edited', null, { by: 'person', member: me, everyone: true });
+      db.event('memory.edited', null, { by: 'person', everyone: true });
       return { ok: true };
     }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/memory\/(\d+)\/undo$/)) && m === 'POST') {
@@ -311,26 +311,26 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       if ((d.member ?? 1) !== me) throw Object.assign(new Error('that is someone else\'s'), { status: 403 });
       if (db.get("SELECT 1 FROM events WHERE kind = 'memory.undone' AND json_extract(data, '$.seq') = ?", e.seq)) throw Object.assign(new Error('already undone'), { status: 409 });
       const commit = disk.forget(cfg, { member: me, bot: d.everyone ? null : r[1] }, { added: d.added ?? `- ${d.text}`, removed: d.removed ?? null, commit: d.commit ?? null });
-      db.event('memory.undone', r[1], { seq: e.seq, text: d.text, commit, member: me });
+      db.event('memory.undone', r[1], { seq: e.seq, text: d.text, commit });
       return { ok: true };
     }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/skills\/([a-z0-9-]+)$/)) && m === 'DELETE') {
       crew.botPage(r[1]); // 404 for unknown bots
       const k = disk.archiveSkill(cfg, r[1], r[2]);
-      db.event('skill.removed', r[1], { name: k.name, says: k.says, member: me });
+      db.event('skill.removed', r[1], { name: k.name, says: k.says });
       return { ok: true };
     }
     // Who a helper is: the person writes it, a bot never does. "Put back" is the template's, under the helper's own name.
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/soul$/)) && m === 'PUT') {
       crew.botPage(r[1]); // 404 for unknown bots
       disk.writeSoul(cfg, r[1], body.text ?? '');
-      db.event('soul.changed', r[1], { by: 'person', member: me });
+      db.event('soul.changed', r[1], { by: 'person' });
       return { soul: disk.readSoul(cfg, r[1]) };
     }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/soul\/reset$/)) && m === 'POST') {
       const b = crew.botPage(r[1]).bot;
       disk.writeSoul(cfg, r[1], disk.templateSoul(cfg, disk.loadTemplate(cfg, b.template), b.display), 'Put back how it started');
-      db.event('soul.changed', r[1], { by: 'person', member: me, reset: true });
+      db.event('soul.changed', r[1], { by: 'person', reset: true });
       return { soul: disk.readSoul(cfg, r[1]) };
     }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/tools$/)) && m === 'PUT') {
@@ -368,12 +368,12 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       await crew.takeOver(b.id);
       const bot = b.id;
       await teacher.start(bot, what, desk.cdp, () => void shown(bot, me, true).catch(() => {}));
-      db.event('teach.started', bot, { what, member: me });
+      db.event('teach.started', bot, { what });
       return { ok: true };
     }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/shown$/)) && m === 'POST') {
       const out = await shown(r[1], me, body.keep !== false);
-      db.event('teach.done', r[1], { steps: out.steps, kept: body.keep !== false, member: me });
+      db.event('teach.done', r[1], { steps: out.steps, kept: body.keep !== false });
       return out;
     }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/takeover$/)) && m === 'POST') { await crew.takeOver(r[1]); return { ok: true }; }
@@ -425,7 +425,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     });
     ws.on('close', () => crew.desktops.release(watcher));
   }
-  db.onEvent((e) => { const s = JSON.stringify(e); for (const c of wss.clients) if (c.readyState === 1 && db.visibleEvent(e, (c as any).member)) c.send(s); });
+  db.onEvent((e) => { const s = JSON.stringify(e); for (const c of wss.clients) if (c.readyState === 1) c.send(s); });
 
   await link.listen();
   server.on('close', () => link.close());

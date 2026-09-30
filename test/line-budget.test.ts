@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-const BUDGET = 6968;
+const BUDGET = 6956;
 
 test('src stays within its line budget', () => {
   const root = join(import.meta.dirname, '..', 'src');

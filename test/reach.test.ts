@@ -64,7 +64,8 @@ test('reachable from anywhere: enrol once, pair by typed code, talk through the 
   const grant = await paired;
   assert.deepEqual(grant.urls, [url]);
 
-  const phone = new DeviceLink(grant, {});
+  const events: any[] = [];
+  const phone = new DeviceLink(grant, { onEvent: (e) => events.push(e) });
   after(() => phone.stop());
   const req = (op: string, body?: unknown) => phone.request(op, body) as Promise<{ status: number; body: any }>;
   assert.equal((await req('GET /api/state')).status, 200, 'the app, through the relay');
@@ -79,6 +80,12 @@ test('reachable from anywhere: enrol once, pair by typed code, talk through the 
   await until('a push', () => pushed.length > 0);
   assert.equal(pushed[0].title, NEWS);
   assert.doesNotMatch(JSON.stringify(pushed), /dentist|Chief|sir|tomorrow/);
+
+  // A settings change with no task or member tag reaches the paired phone live and through history.
+  await http('PUT', '/api/bots/chief/models', { models: ['chatgpt'] });
+  const changed = await until('phone settings event', () => events.find((e) => e.kind === 'bot.models'));
+  assert.deepEqual(changed.data, { by: 'person' });
+  assert.ok((await req('GET /api/events')).body.some((e: any) => e.seq === changed.seq));
 
   // Removing the phone at the computer works through the relay too.
   const [device] = (await http('GET', '/api/phones')).body;

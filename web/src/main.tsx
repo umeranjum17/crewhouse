@@ -394,9 +394,9 @@ function Chat({ id, m, state, me, tick, refresh, accounts }: Ctx & { id: string;
   const waiting = pending && !partial && !(page?.messages ?? []).some((x: Json) => x.author === 'bot' && x.id > pending.after);
   useEffect(() => subscribe((e) => {
     if (e.bot !== id) return;
-    if (e.kind === 'reply.partial' && e.data?.member === me) setPartial(/\bstub [\w-]+:/.test(e.data.text) ? '' : e.data.text);
+    if (e.kind === 'reply.partial') setPartial(/\bstub [\w-]+:/.test(e.data.text) ? '' : e.data.text);
     if (e.kind === 'message' && e.data?.author === 'bot') setPartial('');
-  }), [id, me]);
+  }), [id]);
   useEffect(() => { if ((page?.messages ?? []).some((x: Json) => x.author === 'bot' && x.text === partial)) setPartial(''); }, [page, partial]);
   const phoneOffer = id === 'chief' ? A.phoneOffer(page, me) : null;
   const box = useRef<HTMLDivElement>(null);

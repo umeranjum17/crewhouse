@@ -155,3 +155,25 @@ test('a failed backup leaves the live install intact and main stops before liste
   // The lab's cleanup calls close too; reopen its handle so cleanup remains valid.
   db.db = new DatabaseSync(join(cfg.stateDir, 'crew.db'));
 });
+
+
+test('every database open scrubs old model ids and engine errors, even without a shared-install split', async () => {
+  const { db, cfg, crew, done } = setup();
+  Object.assign(crew.runtime, { start: async () => { throw new Error('engine internal /private/path'); } });
+  await until('engine failure event', () => db.get("SELECT 1 FROM events WHERE kind = 'system.engine'"));
+  assert.deepEqual(db.events().find((e) => e.kind === 'system.engine')!.data, {}, 'new engine errors stay off the event stream');
+  assert.equal(db.all('SELECT id FROM people').length, 1);
+  db.event('system.engine', null, { error: 'engine internal /private/path' });
+  db.event('bot.models', 'chief', { models: ['chatgpt:internal-model'] });
+  const keep = db.event('memory.learned', 'chief', { member: 1, text: 'Keep my note' });
+  done();
+  for (let n = 0; n < 2; n++) {
+    const reopened = new Store(cfg.stateDir);
+    try {
+      assert.deepEqual(reopened.eventsForBot('chief', ['bot.models'])[0].data, {});
+      assert.deepEqual(reopened.events().filter((e) => e.kind === 'system.engine').map((e) => e.data), [{}, {}]);
+      assert.deepEqual(reopened.events().find((e) => e.seq === keep.seq)!.data, keep.data);
+      assert.ok(!existsSync(join(cfg.stateDir, 'crew-before-one-person.db')), 'scrub does not depend on single()');
+    } finally { reopened.close(); }
+  }
+});

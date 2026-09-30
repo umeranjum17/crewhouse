@@ -512,7 +512,19 @@ test('the person’s bot page, events and live activity keep their delivered wor
     try {
       await new Promise<void>((resolve) => socket.once('open', () => resolve()));
       await api('PUT', '/api/bots/reel/notes', { text: 'my live notes' });
-      await until(async () => received.find((e) => e.kind === 'memory.edited' && e.data.member === 1));
+      const edited = await until(async () => received.find((e) => e.kind === 'memory.edited'));
+      assert.equal(edited.data.member, undefined);
+      await api('PUT', '/api/bots/reel/models', { models: ['chatgpt'] });
+      const models = await until(async () => received.find((e) => e.kind === 'bot.models'));
+      assert.deepEqual(models.data, { by: 'person' }, 'model choices emit only person-facing metadata');
+      const state = (await api('GET', '/api/state')).body;
+      assert.ok(state.events.some((e: any) => e.seq === models.seq));
+      assert.ok(state.events.length <= 80, 'snapshot keeps its bounded event window');
+      const history = (await api('GET', `/api/events?after=${edited.seq}`)).body;
+      assert.ok(history.some((e: any) => e.seq === models.seq));
+      assert.ok(history.every((e: any) => e.seq > edited.seq), 'event paging keeps its after cursor');
+      const trail = (await api('GET', '/api/bots/reel')).body.trail;
+      assert.ok(trail.some((e: any) => e.kind === 'task.done') && trail.some((e: any) => e.kind === 'file.delivered'), 'trail retains multiple events');
     } finally { socket.close(); }
   } finally { db.close(); }
 });

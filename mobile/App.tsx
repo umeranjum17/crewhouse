@@ -1243,9 +1243,9 @@ function Chat({ id, m, state, tick, refresh, canAct, offline, open }: Ctx & { id
   const [partial, setPartial] = useState('');
   useEffect(() => onLive((e) => {
     if (e.bot !== id) return;
-    if (e.kind === 'reply.partial' && e.data?.member === state.person?.id) setPartial(/\bstub [\w-]+:/.test(e.data.text) ? '' : e.data.text);
+    if (e.kind === 'reply.partial') setPartial(/\bstub [\w-]+:/.test(e.data.text) ? '' : e.data.text);
     if (e.kind === 'message' && e.data?.author === 'bot') setPartial('');
-  }), [id, state.person?.id]);
+  }), [id]);
   // A search landing on an old line loads a window around it; once you send, the anchor goes and the thread reads to the end.
   const [around, setAround] = useState(m ?? 0);
   const load = useCallback((ar = around) => api.bot(id, ar || undefined).then((p) => { setPage(p); kept.chat(id, p); }).catch(() => {}), [id, around]);

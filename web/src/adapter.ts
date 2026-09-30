@@ -1076,8 +1076,8 @@ export function office(state: Json, opts: OfficeOpts = {}): OfficeView {
 }
 
 /** The office between refreshes: crewd's debounced snapshot stays the source of truth, and each live event only
- *  moves the words it carries (report §7). Pure — the passed view is never changed. Someone else's events never
- *  reach a view (db.visibleEvent), and a busy-elsewhere row ignores step/file updates defensively. */
+ *  moves the words it carries (report §7). Pure — the passed view is never changed.
+ *  A busy-elsewhere row ignores step/file updates defensively. */
 export function officeEvent(view: OfficeView, e: Json): OfficeView {
   const touch = (id: string, f: (c: OfficeMember) => OfficeMember): OfficeView => {
     const crew = view.crew.map((c) => (c.id === id ? f(c) : c));

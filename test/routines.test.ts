@@ -259,6 +259,14 @@ test('the crew\'s share: routines wait for tomorrow once it is used up, what the
     assert.ok(wake > Date.now() && wake - Date.now() <= 86_400_000);
     const chief = () => db.all("SELECT text FROM messages WHERE bot = 'chief' AND text LIKE 'I''ve stopped the routines%'");
     assert.equal(chief().length, 1);
+    const reached = db.events().find((e) => e.kind === 'share.reached')!;
+    assert.equal(reached.data.member, undefined);
+    const second = crew.addRoutine({ bot: 'reel', schedule: 'every day 9:00', task: 'check again' }, 'person');
+    db.run('UPDATE routines SET next_at = ? WHERE id = ?', Date.now() - 1000, second.id);
+    crew.schedule();
+    await until('second routine waiting for tomorrow', () => db.get('SELECT state FROM tasks WHERE routine = ?', second.id)?.state === 'paused');
+    assert.equal(chief().length, 1, 'a member-free share event still suppresses the next notice that day');
+    assert.equal(db.all("SELECT 1 FROM events WHERE kind = 'share.reached'").length, 1);
     const parked = crew.routines().find((x) => x.id === r.id)!.history[0];
     assert.doesNotMatch(A.routines(crew.snapshot()).find((x: any) => x.id === r.id)!.last, /Last ran/);
     assert.match(A.routines(crew.snapshot()).find((x: any) => x.id === r.id)!.last, /Waiting until tomorrow/);
