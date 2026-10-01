@@ -4,12 +4,13 @@ import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const prefix = 'crewhouse-test-';
-for (const name of readdirSync(tmpdir()).filter((name) => name.startsWith(prefix))) {
-  const pid = Number(name.slice(prefix.length).split('-')[0]);
+const rootPrefix = 'cw-test-'; // leave room for Unix socket paths beneath an on-disk TMPDIR
+for (const name of readdirSync(tmpdir()).filter((name) => name.startsWith(rootPrefix))) {
+  const pid = Number(name.slice(rootPrefix.length).split('-')[0]);
   if (!Number.isInteger(pid) || pid <= 0) continue;
   try { process.kill(pid, 0); } catch (error) { if (error.code === 'ESRCH') rmSync(join(tmpdir(), name), { recursive: true, force: true }); }
 }
-const root = mkdtempSync(join(tmpdir(), `${prefix}${process.pid}-`));
+const root = mkdtempSync(join(tmpdir(), `${rootPrefix}${process.pid}-`));
 mkdirSync(join(root, 'home'));
 mkdirSync(join(root, 'tmp'));
 const scratch = join(root, 'tmp');
@@ -23,11 +24,17 @@ const cleanup = () => rmSync(root, { recursive: true, force: true });
 for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => { cleanup(); process.kill(process.pid, signal); });
 const files = readdirSync('test').filter((name) => name.endsWith('.test.ts')).map((name) => join('test', name));
 // Serial files: the engine tests each spawn a real gateway; parallel runs starve them past their timeouts.
-const result = spawnSync(process.execPath, ['--test', '--test-concurrency=1', ...files], {
-  stdio: 'inherit', env,
-});
+// Ubuntu CI bounds each file's whole process group: 295 seconds plus five to stop its children.
+const bounded = process.env.CI === 'true' && process.platform === 'linux';
+const results = (bounded ? files.map((file) => [file]) : [files]).map((group) => spawnSync(
+  bounded ? 'timeout' : process.execPath,
+  [...(bounded ? ['--kill-after=5s', '295s', process.execPath] : []), '--test', '--test-concurrency=1', ...group],
+  { stdio: 'inherit', env },
+));
 const leaked = readdirSync(scratch).filter((name) => name.startsWith(prefix) && !before.has(name));
 cleanup();
 if (leaked.length) { console.error(`Test scratch leaked from ${scratch}:\n${leaked.map((name) => `  ${join(scratch, name)}`).join('\n')}`); process.exitCode = 1; }
-if (result.error) throw result.error;
-process.exitCode ||= result.status ?? 1;
+for (const result of results) {
+  if (result.error) throw result.error;
+  process.exitCode ||= result.status ?? 1;
+}
