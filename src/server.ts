@@ -359,7 +359,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       if (!disk.canUse(cfg, b.id, 'computer')) throw Object.assign(new Error(`${b.display} has no computer of its own to show it on`), { status: 409 });
       const what = String(body.what ?? '').replace(/\s+/g, ' ').trim().slice(0, 120);
       if (!what) throw Object.assign(new Error('say in a few words what you are showing'), { status: 400 });
-      const desk = await crew.desktops.ensure(b.id, b.n, disk.botDir(cfg, b.id));
+      const desk = await crew.desktops.ensure(b.id, disk.botDir(cfg, b.id));
       if (!desk.cdp) throw Object.assign(new Error(`${b.display}'s computer has no browser to show it on`), { status: 409 });
       await crew.takeOver(b.id);
       const bot = b.id;
