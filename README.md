@@ -96,7 +96,8 @@ Helpers work in their own folders without bothering you. Anything that costs mon
 When a helper writes in your name (a reply to the school, a refund chase, a cancellation email), it arrives as a draft. You approve it or you don't, and nothing is sent either way. The helper hands you the words to send yourself.
 
 <p align="center">
-  <img src="docs/screenshots/readme/draft.webp" alt="Scout's draft of a refund chase to a shop's support inbox, marked 'A draft for you to send, nothing is sent'" width="300" />
+  <img src="docs/screenshots/readme/draft.webp" alt="DEMO: Scout's refund email, with its recipient and subject separate from the message, marked 'Nothing is sent, send it yourself'" width="300" />
+  <br /><em>DEMO</em>
 </p>
 
 ### Real files, ready to use

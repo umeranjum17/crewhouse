@@ -66,6 +66,12 @@ test('model-visible crew tools tell the model the required arguments', () => {
   assert.deepEqual(document.parameters.required, ['name', 'blocks']);
   assert.equal(document.parameters.properties.blocks.type, 'array');
   assert.match(document.description, /blocks/);
+  const draft = tools.get('crew_draft')!;
+  assert.deepEqual(draft.parameters.required, ['path', 'channel', 'to']);
+  assert.deepEqual(draft.parameters.properties.channel.enum, ['email', 'text', 'post', 'reply']);
+  assert.equal(draft.parameters.properties.subject.type, 'string');
+  assert.match(draft.description, /ONLY the message body/);
+  assert.match(draft.description, /actual recipient/);
 });
 
 test('only the engine port imports the kit', () => {

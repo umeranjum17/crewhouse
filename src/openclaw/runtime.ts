@@ -27,7 +27,6 @@ const ME = 'm1';
 /** The engine-side name of a Crewhouse tool and back: only the shell differs. */
 const crewName = (tool: string) => tool === 'shell' ? 'bash' : tool;
 
-// Model-visible tools: `shell` avoids the engine rewriting `bash` to its own exec before the gate.
 const args = { type: 'object', properties: { args: { type: 'array', items: { type: 'string' } } }, required: ['args'], additionalProperties: false };
 const SCHEMAS: Record<string, object> = {
   shell: { type: 'object', properties: { command: { type: 'string' } }, required: ['command'], additionalProperties: false },
@@ -44,6 +43,7 @@ const SCHEMAS: Record<string, object> = {
       items: { type: 'object', additionalProperties: true }, minItems: 1 },
   }, required: ['name', 'blocks'], additionalProperties: false },
   crew_report: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'], additionalProperties: false },
+  crew_draft: { type: 'object', properties: { path: { type: 'string' }, channel: { type: 'string', enum: ['email', 'text', 'post', 'reply'] }, to: { type: 'string' }, subject: { type: 'string' } }, required: ['path', 'channel', 'to'], additionalProperties: false },
   crew_batch: { type: 'object', properties: { question: { type: 'string' }, items: { type: 'array', items: { type: 'string' } } }, required: ['question', 'items'], additionalProperties: false },
 };
 const ABOUT: Record<string, string> = {
@@ -55,6 +55,7 @@ const ABOUT: Record<string, string> = {
   crew_remember: 'Save a lasting preference: pass {text: "one short line"}; optionally replaces and everyone. Do not save how to address the person.',
   crew_batch: 'Research several items at once against one question, then merge the answers into your spreadsheet.',
   crew_document: 'Write and deliver an editable document: pass {name: "title", blocks: [{heading: "Title"}, {text: "Paragraph"}, {bullets: ["Item"]}]}. Crewhouse writes the file; do not make it yourself.',
+  crew_draft: 'Show ONE finished message for approval; nothing is sent. path: file containing ONLY the message body, preserving line breaks; no subject, headings, variants or planning notes. channel: email, text, post (social), reply (site). to: actual recipient name/address or site, NEVER a job title. subject: required for email, separate from body.',
 };
 export const TOOLS: ToolSpec[] = ['shell', 'browser', 'calendar', 'mail', 'crew_app', 'crew_web_fetch', 'crew_web_search', 'crew_read', 'crew_write',
   'crew_edit', 'crew_ls', 'crew_grep', 'crew_find', 'crew_connect', 'crew_outcome', 'crew_report', 'crew_batch', 'crew_deliver', 'crew_workbook', 'crew_document',
@@ -63,7 +64,6 @@ export const TOOLS: ToolSpec[] = ['shell', 'browser', 'calendar', 'mail', 'crew_
 ].map((name) => ({ name, description: ABOUT[name] ?? `Crewhouse ${name.slice(5).replaceAll('_', ' ')}. The person sees the result in their crew.`,
   parameters: SCHEMAS[name] ?? { type: 'object', additionalProperties: true } }));
 
-/** Crewhouse's engine config, merged under the kit's invariants on every prepare. */
 const CONFIG = {
   // An empty allow list: the engine otherwise narrows to its model map, and the person's other providers vanish.
   agents: { defaults: { sandbox: { mode: 'off' }, modelPolicy: { allow: [] } } },
