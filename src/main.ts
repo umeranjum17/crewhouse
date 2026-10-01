@@ -16,6 +16,7 @@ const db = new Store(cfg.stateDir);
 db.single();
 const url = `http://${cfg.host}:${cfg.port}`;
 const crew = new Crew(cfg, db);
+await crew.connections.ready;
 const server = await startServer(cfg, db, crew);
 crew.init();
 writeFileSync(join(cfg.stateDir, 'endpoint'), url + '\n');

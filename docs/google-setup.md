@@ -25,7 +25,7 @@ Google allows that without its review for personal use by fewer than 100 people:
    - Copy the **Client ID** (it ends in `.apps.googleusercontent.com`) and the **Client secret**.
 5. In Crewhouse on the home computer: **Settings → Google setup**, paste both, and press **Switch it on**.
 
-Backend migration debt: Google OAuth, client verification, API probes and credential storage currently live in `src/connections.ts`; they must move to published BYOKit OAuth/keystore/Google capabilities. The steps here describe the person-facing setup, not permission to add raw integrations.
+Sign-in, grants, refresh and remote app tools use the pinned BYOKit connection kit. Saved sign-ins and the setup key use its documented sealed-store adapter. Existing connections must be reconnected after this change; no old sign-ins or setup keys are imported.
 
 That's all. The Client ID and secret stay on the home computer, in Crewhouse's own folder; nobody's Google password or token ever passes through them.
 
@@ -49,13 +49,13 @@ Gmail's warning can only go with the paid assessment (CASA), so it stays at 5.
 
 ## How Crewhouse checks each step
 
-Crewhouse never calls a step done on your word alone. Settings → Google setup shows each step as **Checked** (Google's own answer proved it), **Missing** (Google's answer showed it isn't done, with the page to fix it) or **You said done** (you have not connected yet, so there is nothing to check it with).
+Settings → Google setup distinguishes **Checked** (a completed sign-in proved it) from **You said done** (check it on Google's own pages).
 
-- **Pasting the key** (steps 1 and 4): Crewhouse asks Google whether it knows the Client ID and secret, and whether the key takes this computer's address, before keeping it. A secret in the ID box, the ID pasted twice, a key Google doesn't know, a secret from another key, or a *Web application* key is each said in plain words, and nothing is saved.
-- **Your first Connect** (steps 2 and 3): after the yes on Google's page, Crewhouse reads one small thing back (a calendar event, the Gmail address, the Drive user) before it says Connected. If Google answers that the API is off, the card names it and points to step 2. If Google says the connection only lasts a week, the app is still in *Testing*: the card points to step 3, **Publish app**, and nothing is connected, because it would stop working within the week.
-- **A box left unticked** on Google's page: the card says which one ("Google Calendar still isn't ticked") and Try again reopens the page.
+- **Pasting the key**: Crewhouse checks the boxes' shapes and saves the key sealed on this computer. It does not ask Google to verify the key before saving. A completed Connect proves Google accepted the key and knows the project. Sign-in failures use the kit's plain typed errors; they cannot yet distinguish an unknown ID, a mismatched secret or the wrong client type.
+- **API enablement and publishing**: check steps 2 and 3 on Google's pages. The kit does not expose refresh-token lifetime or provider error causes, so Crewhouse cannot yet detect Testing, Internal audience or a disabled API, and these steps stay **You said done**. It does not perform a separate API probe after sign-in.
+- **A box left unticked** on the sign-in page: the kit refuses an incomplete grant. The card says which service to tick, and Try again reopens the page.
 - **Back to safety** on Google's warning: nothing is connected, and the card says so, with Try again.
-- **Connections lapse after about six months unused, or after a password change (Gmail)**: Chief says so once, and the next Connect card brings it back.
+- **A revoked connection**: the kit removes it only when the provider explicitly refuses its refresh grant. Chief says so once; the next Connect brings it back. A temporary connection failure keeps the saved sign-in.
 
 ## Later: the phone
 

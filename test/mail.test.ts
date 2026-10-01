@@ -1,9 +1,8 @@
+import { signInApp } from './connect-fixture.ts';
 // mail-axi against a stand-in Gmail (its REST API, in memory): what is new, a search, a conversation without its quoted
 // history and cut to size; and the gate: everything it can do is reading, anything else is refused.
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { setup, settled, task } from './lab.ts';
 
 const { GMAIL, ageOf, bodyOf, runMail } = await import('../src/mail.ts');
@@ -80,8 +79,7 @@ test('a helper reads the connected Gmail through crewd: no Google MCP, the token
   const { db, crew, cfg, done } = setup();
   crew.onboard('sir');
   crew.recruit('scribe', 'Quill', 'person');
-  mkdirSync(join(cfg.stateDir, 'people', '1'), { recursive: true });
-  writeFileSync(join(cfg.stateDir, 'people', '1', 'connections.json'), JSON.stringify({ gmail: { access: 'tok', expires: Date.now() + 3_600_000 } }));
+  await signInApp(crew.connections, 'gmail');
   asked.length = 0;
   const t = crew.assign('quill', 'check [tool mail {"args":["search","from:school"]}]', 'chief').task;
   await settled(db, t);

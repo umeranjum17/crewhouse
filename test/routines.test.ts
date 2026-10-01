@@ -513,11 +513,9 @@ test('tell me when something\'s wrong: a routine that fails says so in Chief\'s 
 
 test('the digest reads today\'s calendar itself once Calendar is connected, and the share has a weekly line in thirds', async () => {
   const { db, crew, cfg, done } = setup();
-  const { mkdirSync: mk, writeFileSync: wf } = await import('node:fs');
-  const { join: j } = await import('node:path');
+  const { signInApp } = await import('./connect-fixture.ts');
   const { CALENDAR } = await import('../src/connections.ts');
-  mk(j(cfg.stateDir, 'people', '1'), { recursive: true });
-  wf(j(cfg.stateDir, 'people', '1', 'connections.json'), JSON.stringify({ calendar: { access: 'tok', expires: Date.now() + 3_600_000 } }));
+  await signInApp(crew.connections, 'calendar');
   const nine = new Date(); nine.setHours(9, 0, 0, 0);
   const real = globalThis.fetch;
   let asked = '';

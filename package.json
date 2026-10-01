@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@byokit/accounts": "0.13.0",
+    "@byokit/connect": "0.1.0",
     "@byokit/decide": "0.4.7",
     "@byokit/link": "0.7.0",
     "@byokit/openclaw": "0.3.5",

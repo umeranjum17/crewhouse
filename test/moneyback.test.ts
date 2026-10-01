@@ -1,3 +1,4 @@
+import { signInApp, setUpGoogle } from './connect-fixture.ts';
 // The first money-back job: Scout's price-drop promise on Home, the watch that sees the price go under what the person
 // paid, the claim press that asks with the page's own words, and no "money back" without the shop's page as evidence.
 import { test } from 'node:test';
@@ -41,10 +42,9 @@ test('Home lists the price-drop job, and says what it waits on rather than dead-
   assert.match(row(crew).ask, /claim the difference back/);
   assert.equal(row(crew).group, 'money', 'money back leads the list');
   assert.deepEqual(row(crew).needs, ['Google'], 'Google is not on for the house: the row says what it needs first');
-  writeFileSync(join(cfg.stateDir, 'apps.json'), JSON.stringify({ google: { id: 'crew.apps', secret: 'pasted' } }), { mode: 0o600 });
+  await setUpGoogle(crew.connections);
   assert.deepEqual(row(crew).needs, ['Gmail'], 'Google is on; now it waits on this person’s own Gmail');
-  mkdirSync(join(cfg.stateDir, 'people', '1'), { recursive: true });
-  writeFileSync(join(cfg.stateDir, 'people', '1', 'connections.json'), JSON.stringify({ gmail: { access: 'tok', expires: Date.now() + 3_600_000 } }));
+  await signInApp(crew.connections, 'gmail');
   assert.deepEqual(row(crew).needs, [], 'connected: the job can be handed over');
 
   // The six-row cap counts the jobs they can hand over now; a job waiting on an app rides along beside them.
@@ -392,10 +392,9 @@ test('Home lists the renewal job with the money-back three, and says what it wai
   assert.match(renewal(crew).promise, /have the cancellation email ready/, 'the promise is a ready draft, never a cancellation already made');
   assert.match(renewal(crew).promise, /Every step asks you first, on its own card/);
   assert.deepEqual(renewal(crew).needs, ['Google'], 'Google is not on for the house: the row says what it needs first');
-  writeFileSync(join(cfg.stateDir, 'apps.json'), JSON.stringify({ google: { id: 'crew.apps', secret: 'pasted' } }), { mode: 0o600 });
+  await setUpGoogle(crew.connections);
   assert.deepEqual(renewal(crew).needs, ['Gmail'], 'Google is on; now it waits on this person’s own Gmail');
-  mkdirSync(join(cfg.stateDir, 'people', '1'), { recursive: true });
-  writeFileSync(join(cfg.stateDir, 'people', '1', 'connections.json'), JSON.stringify({ gmail: { access: 'tok', expires: Date.now() + 3_600_000 } }));
+  await signInApp(crew.connections, 'gmail');
   assert.deepEqual(renewal(crew).needs, [], 'Gmail connected: the job can be handed over');
   done();
 });
