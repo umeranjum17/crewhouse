@@ -1387,10 +1387,10 @@ export class Crew {
   private systemPromptFor(botId: string, l: Live) {
     const skills = disk.listSkills(this.cfg, botId);
     const apps = [...(l.appTools?.keys() ?? [])].filter((n) => n !== 'calendar' && n !== 'mail')
-      .map((n) => `${n} (${l.apps?.[n]?.app ?? 'app'})`);
+      .map((n) => `${n} (${l.apps?.[n]?.app ?? 'app'})`).concat(Object.entries(this.seen(botId).run).map(([n, t]) => `${n} (${t.name}; input: {args: [...]})`));
     return disk.systemPrompt(this.cfg, botId, botId === CHIEF)
       + (skills.length ? `\n## Skills you follow\n${skills.map((s) => `- ${s.name}: ${s.description || 'how you do this kind of job'} (in ${join(disk.botDir(this.cfg, botId), 'skills', s.name)})`).join('\n')}\n` : '')
-      + (apps.length ? `\nThe person's connected apps give you more tools through crew_app: pass \`tool\` (one of ${apps.join(', ')}) and \`input\` (its arguments).\n` : '');
+      + (apps.length ? `\nThe person's apps and granted tools give you more tools through crew_app: pass \`tool\` (one of ${apps.join(', ')}) and \`input\` (its arguments).\n` : '');
   }
 
   /** Only assistant prose is visible; tool arguments and reasoning never ride the live feed. */
@@ -1590,8 +1590,8 @@ export class Crew {
             this.refusedNet(run.bot, name);
             return { allow: false, reason: 'This helper can read only the places on its list. Use its checked web tool.' };
           }
-          // crew_app rides on the inner tool being one of this run's connected apps; everything else by grant.
-          const ok = tool === 'crew_app' ? (this.live.get(run.bot)?.appTools?.has(name) ?? false)
+          // crew_app carries connected app tools and granted command tools; the policy still checks each call.
+          const ok = tool === 'crew_app' ? (this.live.get(run.bot)?.appTools?.has(name) ?? false) || Object.hasOwn(this.seen(run.bot).run, name)
             : this.toolAllowed(run.bot, name);
           if (!ok) return { allow: false, reason: 'This run does not have that tool.' };
           const result = await this.gate(run.bot, name, input);
