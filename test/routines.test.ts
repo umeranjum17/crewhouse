@@ -732,7 +732,7 @@ test('a failed trigger-only routine says so with no time to try again', async ()
   const r = crew.addRoutine({ bot: 'reel', on: 'when this computer wakes up', task: 'ask permission: say good morning', name: 'Wake up' }, 'person');
   crew.runRoutine(r.id);
   const t = db.get('SELECT id FROM tasks WHERE routine = ?', r.id)!.id;
-  await until('working', () => state(db, t) === 'working');
+  await holding(crew, 'reel');
   db.run('UPDATE tasks SET updated_at = ? WHERE id = ?', Date.now() - 2 * 3_600_000, t);
   (crew as any).tick();
   await until('failed', () => state(db, t) === 'failed');

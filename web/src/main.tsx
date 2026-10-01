@@ -1099,7 +1099,7 @@ function Apps({ state, refresh }: Ctx) {
       <h1>Your apps</h1>
       <p className="lead">Connect an app when a helper asks for it.</p>
       <div className="label">Apps</div><div className="card list apps-list">
-        {list.map((a) => <div key={a.id} className="row-item app-row-item"><span className="app-ic" style={{ background: a.bg }}>{a.mark}</span><span className="grow"><b>{a.name}</b><span className="mute small">{a.on ? 'On · read only' : 'Not connected'}</span></span>
+        {list.map((a) => <div key={a.id} className="row-item app-row-item"><span className="app-ic" style={{ background: a.bg }}>{a.mark}</span><div className="grow"><b>{a.name}</b><div className="mute small">{a.on ? 'On · read only' : 'Not connected'}</div></div>
           {a.on ? <button className="link" onClick={() => confirm(`Disconnect ${a.name}? Your helpers will stop using it.`) && attempt(async () => { await api.disconnect(a.id); refresh(); }, `${a.name} disconnected`)}>Turn off</button>
             : <button className="btn" onClick={() => setConnecting({ app: a, tab: A.needsHouse(state, a) ? null : openTab() })}>Connect</button>}</div>)}
       </div>
