@@ -97,6 +97,14 @@ overlay.on('tap', () => {
 });
 /** The panel takes the tap's box once; a panel opened any other way has none. */
 export function tappedBox() { const b = box; box = Promise.resolve(null); return b; }
+/** The tap log, which orders the panel's buttons: a press is kept as its app and button (never words, gone after 30
+ *  days), and `used` counts them for one app ('' when no box named it). */
+export const logTap = (app: string, action: string) => void overlay.logTap({ app, action }).catch(() => {});
+export async function used(app: string) {
+  const n: Record<string, number> = {};
+  for (const t of await overlay.taps().catch(() => [])) if (t.app === app) n[t.action] = (n[t.action] ?? 0) + 1;
+  return n;
+}
 
 /** Put it in: the panel steps aside and the words become what the box the person was in says (or, with a part
  *  picked, go over that part). Nothing is sent: they press the app's own Send. An app that turns the words away gets

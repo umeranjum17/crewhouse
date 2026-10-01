@@ -1,7 +1,9 @@
 // Chief's panel: what a tap on the bubble opens, over whatever app is in front (src/bubble.ts; index.ts registers it).
 // It is its own screen on the phone's one link (src/link.ts): who is on what, what needs you (with that helper's
-// screen a tap away), the bubble's buttons (A.bubble: fixed words to one helper, its reply shown here), and Chief's
-// box, typed or spoken. Write it here: the writer drafts for the box the person was typing in, and Put it in fills it.
+// screen a tap away), up to three buttons for this screen (A.quick's rules table: fixed words to one helper, its reply
+// shown here; Remember this keeps words for the whole crew), and Chief's box, typed or spoken, which answers who is on
+// what and what the crew knows about the person itself. Write it here: the writer drafts for the box the person was
+// typing in, and Put it in fills it.
 // Nothing is sent that the person didn't send. `frame` is a still back from the phone's ask, for helper `to` with
 // `words` in the box; `listen` opens with the mic on (a long press on the bubble).
 import { useCallback, useContext, useEffect, useRef, useState } from 'react';
@@ -10,21 +12,25 @@ import { KeyboardAvoidingView, Linking, Pressable, ScrollView, StyleSheet, useCo
 import * as A from '../../web/src/adapter.ts';
 import { api, setTransport, type Json } from '../../web/src/api.ts';
 import { AskSheet, attempt, Btn, Composer, Face, look, s, say, ShareIn, T, Theme, Toast } from '../App';
-import { closePanel, handScreen, putIn, restrictedWords, showCrew, tappedBox, type Box } from './bubble';
+import { closePanel, handScreen, logTap, putIn, restrictedWords, showCrew, tappedBox, used as usedIn, type Box } from './bubble';
 import { connect, loadGrant, type Grant, type Status } from './link';
 
 export function Panel({ frame, to, words, listen }: { frame?: string; to?: string; words?: string; listen?: string }) {
   const t = look(useColorScheme() === 'dark');
   const [paired, setPaired] = useState<Grant | null | undefined>(undefined);
   const [box, setBox] = useState<Box>(null);
-  useEffect(() => { loadGrant().then(setPaired, () => setPaired(null)); tappedBox().then(setBox, () => {}); }, []);
+  const [used, setUsed] = useState<Record<string, number>>({});
+  useEffect(() => {
+    loadGrant().then(setPaired, () => setPaired(null));
+    tappedBox().then((b) => { setBox(b); return usedIn(b && b !== 'off' ? b.app : '').then(setUsed); }).catch(() => {});
+  }, []);
   return (
     <Theme.Provider value={t}>
       <Pressable style={s.scrim} onPress={() => void closePanel()} accessibilityLabel="Close">
         <KeyboardAvoidingView behavior="padding">
           <Pressable style={[s.sheet, { backgroundColor: t.surface, paddingBottom: 28 }]} onPress={() => {}}>
             <View style={[s.grabber, { backgroundColor: t.line2 }]} />
-            {paired === null ? <Unpaired /> : paired ? <Body grant={paired} still={frame ? { path: frame, mimeType: 'image/png', to: to ?? '', words: words ?? '' } : undefined} box={box} listen={!!listen} /> : null}
+            {paired === null ? <Unpaired /> : paired ? <Body grant={paired} still={frame ? { path: frame, mimeType: 'image/png', to: to ?? '', words: words ?? '' } : undefined} box={box} used={used} listen={!!listen} /> : null}
           </Pressable>
         </KeyboardAvoidingView>
       </Pressable>
@@ -45,7 +51,7 @@ const open = async (url: string) => { await Linking.openURL(url).catch(() => {})
 
 type Shared = { path: string; mimeType: string; to: string; words: string };
 
-function Body({ grant, still, box, listen }: { grant: Grant; still?: Shared; box: Box; listen: boolean }) {
+function Body({ grant, still, box, used, listen }: { grant: Grant; still?: Shared; box: Box; used: Record<string, number>; listen: boolean }) {
   const t = useContext(Theme);
   const [state, setState] = useState<Json | null>(null);
   const [status, setStatus] = useState<Status>('connecting');
@@ -54,6 +60,8 @@ function Body({ grant, still, box, listen }: { grant: Grant; still?: Shared; box
   const [shared, setShared] = useState(still);
   const [asked, setAsked] = useState<{ to: string; task: number } | null>(null);
   const [hold, setHold] = useState(listen);
+  const [said, setSaid] = useState<{ ask: string; answer: string; title: string } | null>(null);
+  const [kept, setKept] = useState('');
   const hired = useRef('');
   const refresh = useCallback(() => { api.state().then((st) => { setState(st); showCrew(st); }).catch(() => {}); }, []);
   useEffect(() => {
@@ -84,21 +92,36 @@ function Body({ grant, still, box, listen }: { grant: Grant; still?: Shared; box
   // Only a phone that may ask; a link blip keeps the job (and its draft) on screen until the link is back.
   if (writer && box && grant.device.role === 'control') return <Write box={box} who={writer} state={state} />;
   const replier = asked && crew.find((h) => h.id === asked.to);
+  if (said) return <Said {...said} canAct={canAct} onDone={() => setSaid(null)} />;
+  if (kept) return <Kept line={kept} />;
   if (replier && asked) return <Reply who={replier} task={asked.task} state={state} onAsk={setAsking} asking={asking} canAct={canAct} refresh={refresh} />;
   const chief = online ? A.chief(state) : { mood: 'rest' as const, line: "Can't reach the home computer right now" };
   const line = online ? A.crewLine(state) : '';
   const needs = A.needsYou(state);
   const top = needs.slice(0, 3).map((c) => crew.find((h) => h.id === c.helper)).find((h) => h?.computer);
-  const buttons = A.bubble(state, box, canAct);
-  const more = A.quick(state, canAct).filter((a) => a.id !== 'needs' && a.id !== 'ask'); // those two are the list and the box
+  const buttons = A.quick(state, { box, used }, canAct);
   const toChief = async (text: string, photos: { type: string; data: string }[]) => {
+    // Who is on what and what the crew knows about you: answered here, from what the phone has, with no model.
+    const kind = photos.length ? '' : A.cannedOf(text);
+    const plan = A.planDay(state); // with Google not connected it goes to Chief like any other ask
+    if (kind === 'plan' && !plan.needs.length) return press(plan).then(() => true);
+    if (kind === 'status') { setSaid({ ask: text, title: 'Who is on what', answer: A.canned(state, kind) }); return true; }
+    if (kind === 'details') return attempt(async () => setSaid({ ask: text, title: 'What the crew knows about you', answer: A.canned(state, kind, (await api.about())?.notes ?? '') }));
     const ok = await attempt(() => api.post('chief', text, photos.map(({ type, data }) => ({ type, data }))), undefined, true);
     if (ok) await open('crewhouse://ask'); // his chat, where the answer lands
     return ok;
   };
   // A button's job: the box, a still, a photo, or the words, to its helper (A.handTo).
   const press = async (b: A.BubbleButton) => {
+    if (b.id !== 'plan') logTap(box && box !== 'off' ? box.app : '', b.id);
     if (b.needs.length) return open('crewhouse://settings');
+    // Remember this: refused on the phone when it looks like a secret, before anything is sent; nobody is hired for it.
+    if (b.from === 'keep') return attempt(async () => {
+      const r = A.keep((await api.about())?.notes ?? '', b.ask);
+      if ('refuse' in r) return say(r.refuse);
+      await api.setAbout(r.notes);
+      setKept(r.line);
+    });
     if (b.from === 'box' && box === 'off') return setWriting('off'); // the switch first; nobody is hired for it
     if (b.from === 'screen') return handScreen(b.to.id || hired.current, b.ask); // a helper is hired once the still is back
     if (b.from === 'camera') {
@@ -136,9 +159,8 @@ function Body({ grant, still, box, listen }: { grant: Grant; still?: Shared; box
         {canAct && <Btn label={`Take the wheel from ${top.name}`} onPress={() => void attempt(async () => { await api.takeOver(top.id); await open(`crewhouse://screen?bot=${top.id}`); })} />}
         <Btn ghost label={`Watch ${top.name}`} onPress={() => void open(`crewhouse://screen?bot=${top.id}&watch=1`)} />
       </View>}
-      {buttons.length + more.length > 0 && <View style={s.chips}>
+      {buttons.length > 0 && <View style={s.chips}>
         {buttons.map((b) => <Btn key={b.id} ghost={b.needs.length > 0} label={b.label} onPress={() => void press(b)} />)}
-        {more.map((a) => <Btn key={a.id} label={a.label} onPress={() => void open(a.url)} />)}
       </View>}
     </View>
     {canAct ? <Composer placeholder="Ask Chief anything" onSend={toChief} chat="chief" listen={hold} />
@@ -168,6 +190,32 @@ function Reply({ who, task, state, onAsk, asking, canAct, refresh }: { who: A.He
       <Btn ghost label={reply === null ? 'Not now' : 'Done'} onPress={() => void closePanel()} />
     </View>
     {asking && <AskSheet c={asking} who={who} canAct={canAct} onClose={() => { onAsk(null); refresh(); }} />}
+  </>;
+}
+
+/** Chief's own answer to who is on what or what the crew knows about you, with Chief one tap away for more. */
+function Said({ ask, answer, title, canAct, onDone }: { ask: string; answer: string; title: string; canAct: boolean; onDone: () => void }) {
+  const t = useContext(Theme);
+  return <>
+    <View style={s.row}><Face who="chief" size={40} /><T style={[s.h2, { flex: 1 }]}>{title}</T></View>
+    <ScrollView style={[s.listGroup, { backgroundColor: t.solid, borderColor: t.line, maxHeight: 280 }]} contentContainerStyle={{ padding: 12 }}><T>{answer}</T></ScrollView>
+    <View style={s.chips}>
+      {canAct && <Btn label="Ask Chief anyway" onPress={() => void attempt(() => api.post('chief', ask)).then((ok) => { if (ok) void open('crewhouse://ask'); })} />}
+      <Btn ghost label="Done" onPress={onDone} />
+    </View>
+  </>;
+}
+
+/** Remember this, kept: the line every helper now reads, with Undo. */
+function Kept({ line }: { line: string }) {
+  const [gone, setGone] = useState(false);
+  return <>
+    <View style={s.row}><Face who="chief" size={40} mood={gone ? 'idle' : 'happy'} /><T style={[s.h2, { flex: 1 }]}>{gone ? 'Taken back out' : 'The whole crew knows now'}</T></View>
+    <T tone="ink2">{`“${line}”`}</T>
+    <View style={s.chips}>
+      {!gone && <Btn label="Undo" onPress={() => void attempt(async () => { await api.setAbout(A.unkeep((await api.about())?.notes ?? '', line)); setGone(true); })} />}
+      <Btn ghost label="Done" onPress={() => void closePanel()} />
+    </View>
   </>;
 }
 
