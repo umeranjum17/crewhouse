@@ -48,9 +48,13 @@ function chiefLocal(ctx: Ctx, listen = false): A.ChiefLocal {
 // ---------- first run ----------
 function useAccounts(poll: number, tick = 0) {
   const [list, setList] = useState<Json[] | null>(null);
+  const pending = useRef<Promise<Json[]> | null>(null);
   useEffect(() => {
     let alive = true;
-    const pull = () => api.accounts().then((l) => alive && setList(l)).catch(() => {});
+    const pull = () => {
+      pending.current ??= api.accounts().finally(() => { pending.current = null; });
+      void pending.current.then((l) => alive && setList(l)).catch(() => {});
+    };
     pull();
     const t = poll ? setInterval(pull, poll) : undefined;
     return () => { alive = false; clearInterval(t); };

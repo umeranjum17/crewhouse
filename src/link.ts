@@ -62,7 +62,7 @@ const ROUTES = ['home', 'tailscale', 'relay'];
 
 /** Every notification says only this; the phone fetches the words over the link (the relay enforces it too). */
 export const NEWS = 'Crewhouse has news';
-const UPDATE_APP = 'Update the Crewhouse app';
+const UPDATE_APP = 'Get the latest Crewhouse app to keep chatting.';
 const currentPhone = (body: any) => body?.build === 'p9b';
 /** The relay's WebSocket origin, from the https/wss address Settings keeps. */
 const wsOrigin = (url: string) => url.replace(/^http/, 'ws');
@@ -414,8 +414,7 @@ export class Link {
    *  device's idempotency key; mutating handlers record it with their effect (same transaction). */
   private async request(op: string, body: unknown, g: Grant, key?: string): Promise<{ status: number; body: unknown }> {
     const [method, path = ''] = op.split(' ', 2);
-    // Old screens swallow API errors: an empty Home with Chief's notice is the one view they can read safely.
-    if (!currentPhone(body)) return op === 'GET /api/state' ? { status: 200, body: {
+    if (!currentPhone(body)) return op === 'GET /api/bots/chief' ? { status: 200, body: { messages: [{ id: 1, author: 'bot', text: '[Get the latest Crewhouse app](https://github.com/umeranjum17/crewhouse/releases/tag/v1.0.0-preview.20261001.16) to keep chatting.' }], tasks: [] } } : op === 'GET /api/state' ? { status: 200, body: {
       person: { id: 1, name: '', address: '', onboarded: 1 }, bots: [{ id: 'chief', display: 'Chief', last: { author: 'bot', text: UPDATE_APP } }],
       asks: [], tasks: [], events: [], ideas: [], templates: [], routines: [], resting: {}, connections: [], room: { last: null, busy: [] },
     } } : { status: 426, body: { error: UPDATE_APP } };

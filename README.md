@@ -33,7 +33,7 @@
 
 ## Download
 
-- **Phone app (Android, preview):** [CREWHOUSE-APK-1.0.0-preview.20260929.15.apk](https://github.com/umeranjum17/crewhouse/releases/download/v1.0.0-preview.20260929.15/CREWHOUSE-APK-1.0.0-preview.20260929.15.apk) — v1.0.0-preview.20260929.15, ~139 MB, SHA-256 `e2c8fbe2e18123162c11b5d3525b23073cef496c94964a41d2545be2bdbe4c78`. Debug-signed preview; updates the previous preview in place. Pair it under Settings, Phones on the computer (see [TRY-IT.md](TRY-IT.md#3-the-phone-app)).
+- **Phone app (Android, preview):** [CREWHOUSE-APK-1.0.0-preview.20261001.16.apk](https://github.com/umeranjum17/crewhouse/releases/download/v1.0.0-preview.20261001.16/CREWHOUSE-APK-1.0.0-preview.20261001.16.apk) — v1.0.0-preview.20261001.16, ~90 MB, SHA-256 `bae601ad5cf62c9e226d8cced397bb9aba18bebddc41b3cf9e8a6818c21598c6`. Debug-signed preview; updates the previous preview in place. Pair it under Settings, Phones on the computer (see [TRY-IT.md](TRY-IT.md#3-the-phone-app)).
 - **Computer:** Crewhouse is self-hosted and installs from source — see [Quick start](#quick-start) (`git clone` + `./crewhouse setup`). There is no desktop installer.
 
 There is no full release yet, only phone-app previews, so GitHub's `/releases/latest` links don't apply (GitHub skips prereleases there). The link above names the current preview; for anything newer, check the [releases page](https://github.com/umeranjum17/crewhouse/releases).
@@ -150,7 +150,7 @@ The same app works at desktop and phone width, and switches to night colours in 
 
 Existing shared installs must first update through the one-person migration release (P1, `bc37c20`) before installing this build; otherwise startup refuses without changing their live data. That release upgrades to the person who set them up (person 1). Before changing live data, the P1 release saves the full database as `crew-before-one-person.db` in its state folder. Other people's jobs, messages and phones leave the live install; their files and sign-ins stay untouched on disk. Your sign-ins, connections, memory, phones and settings keep working. Watch baselines for removed routines are kept with a `.before-one-person` suffix so a new routine starts fresh. Downgrading to a build before this migration is unsupported: an older build could reuse a former person's id and files.
 
-Phone builds older than P9b are unsupported. Update the Crewhouse app alongside the computer: unmarked phone requests receive only an empty Home with “Update the Crewhouse app” in Chief’s chat row; their actions are refused. P9b phone builds identify themselves on each encrypted request.
+Keep the phone app up to date alongside the computer. An older preview shows “Get the latest Crewhouse app to keep chatting.” Open Chief’s chat and tap the sentence to download the current preview.
 
 ## Quick start
 
