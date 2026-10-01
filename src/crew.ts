@@ -1247,8 +1247,8 @@ export class Crew {
       if (this.runtime.memoryLimited?.()) {
         const key = 'memory.limited.1';
         if (!this.db.get('SELECT 1 FROM settings WHERE key = ?', key)) {
-          this.say(bot.id, 'system', 'Memory features are limited: no subscription-backed or local search is set up. Keyword search still works; no paid search was tried.', task.id);
-          this.db.run('INSERT INTO settings (key, value) VALUES (?, ?)', key, 'shown');
+          this.db.event('memory.limited', bot.id, { task: task.id });
+          this.db.run('INSERT INTO settings (key, value) VALUES (?, ?)', key, 'logged');
         }
       }
       const handoff = this.handoffs.get(task.id);
