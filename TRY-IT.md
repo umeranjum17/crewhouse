@@ -4,7 +4,7 @@ A first walk through your Crewhouse personal assistant on your own computer, abo
 
 ## 1. Install and start
 
-You need Node 22.19 or later, and bubblewrap for the bots' shell (`./crewhouse doctor` tells you what is missing). No CLIs and no terminal sign-ins: the engine ships inside Crewhouse.
+You need Node 22.22.3 or later, and bubblewrap for the bots' shell (`./crewhouse doctor` tells you what is missing). Crewhouse brings what it needs; sign in from the app.
 
 ```bash
 git clone https://github.com/umeranjum17/crewhouse ~/crewhouse && cd ~/crewhouse
@@ -18,7 +18,7 @@ Everything lives in `~/.local/state/crewhouse/` (the database, the engine's own 
 
 ## 2. What to test first
 
-1. **Chief and ChatGPT.** He greets you and offers three ideas; tap one (**Call me something else** changes how he addresses you). He asks you to **Sign in with ChatGPT** right under his line: ChatGPT's page opens, pick your account, tap **Continue** (the page says *Codex*: that's the part of ChatGPT the crew uses), and the app moves on by itself, and your request starts. **Having trouble?** switches to a code.
+1. **Chief and ChatGPT.** He greets you and offers three ideas; tap one (**Call me something else** changes how he addresses you). He asks you to **Sign in with ChatGPT** right under his line: ChatGPT's page opens, pick your account, tap **Continue** and the app moves on by itself, and your request starts. **Having trouble?** switches to a code.
 2. **Reel and a video.** Tell Chief: *Please recruit Reel and have it make a 6 second title card that says Crewhouse.* Reel works in its own folder without asking you anything. After a few minutes the video plays in Reel's chat and appears on its **Files** tab.
 3. **An approval, at phone width.** Tell Reel: *Save a copy of the video in my Documents folder.* That is your own folder, so Reel asks first, in one sentence. Make the browser window narrow (or use the browser's device mode) to see the phone layout, then answer.
 4. **Scout and its browser.** Tell Chief: *Please recruit Scout and have it use its browser to open news.ycombinator.com and tell me the top 3 story titles.* The answer takes about a minute.
@@ -31,34 +31,24 @@ Everything lives in `~/.local/state/crewhouse/` (the database, the engine's own 
    - Press **Run now** on **Morning digest**. Chief posts what finished, what needs you and what is coming up, in your thread.
 7. **Your settings.** Under **Settings, You**, edit your name, how Chief addresses you, your quiet hours and how much of your AI the crew may use. One install is for you and your crew.
 8. **An app.** Ask Scribe to find something in your Notion: Scribe asks for it with a **Connect Notion** card in the chat. Tap it, allow Crewhouse on Notion's page, and Scribe carries on; reading runs at once, adding a page asks first. (Or connect ahead of time under **Settings, Your apps**.) For Google Calendar, Gmail and Drive, first switch Google on under **Settings, Google setup** ([docs/google-setup.md](docs/google-setup.md)).
-9. **Restart mid-task.** While Reel is working (or waiting on you), press Ctrl-C in the crewd terminal, then run `./crewhouse start` again. Reel's **What I did** tab shows *Picked up where it left off*, and a waiting approval can still be answered.
+9. **Restart mid-task.** While Reel is working (or waiting on you), press Ctrl-C in the computer terminal, then run `./crewhouse start` again. Reel's **What I did** tab shows *Picked up where it left off*, and a waiting approval can still be answered.
 
 Then run `./crewhouse doctor` in a second terminal.
 
 ## 3. The phone app
 
-crewd now carries the phone link. On start it prints `phone link (Noise-encrypted) on port 7712: 127.0.0.1, <your Tailscale address>`.
-
-Install the APK from the draft release [Phone app preview (debug-signed APK)](https://github.com/umeranjum17/crewhouse/releases/tag/untagged-1276d44f733d753e4f66):
-
-```bash
-gh release download untagged-1276d44f733d753e4f66 -R umeranjum17/crewhouse -p '*.apk'
-sha256sum crewhouse-phone-debug.apk   # 480f6810a021ca6d4c80d9890ea9e2bf32e84dd2e54690510df869dffd02f8dd
-adb install -r crewhouse-phone-debug.apk   # phone on USB with USB debugging on
-```
-
-Or open the release page on the phone while signed in to GitHub, download the APK and allow installing from the browser.
+Install [Crewhouse phone preview .16](https://github.com/umeranjum17/crewhouse/releases/download/v1.0.0-preview.20261001.16/CREWHOUSE-APK-1.0.0-preview.20261001.16.apk), version **1.0.0-preview.20261001.16**, on your Android phone. Open the download and allow installing from your browser when Android asks. It updates the previous preview in place.
 
 To pair:
 
-1. The phone needs to reach this computer. Either turn on Tailscale on the phone, or tick **Phones on this Wi-Fi can reach the crew** under **Settings, Phones**.
-2. Open **http://127.0.0.1:7711**, then **Settings, Phones, Add a phone**.
-3. In the app, press **Scan the code** and scan it within 2 minutes. The phone shows two words, and the computer asks whether it may join: press **Yes, the words match** only if the words are the same. A phone paired before this version keeps working without pairing again.
-4. In the app, tell Reel: *Save a copy of the video in my Documents folder.* When the question shows on the app's Home, tap **Yes, go ahead**.
+1. The phone needs to reach this computer. For the same Wi-Fi, turn on **Phones on this Wi-Fi can reach the crew** under **Settings → Phones**. To reach it from away, turn on Tailscale on both devices.
+2. On the computer, open **Crewhouse → Settings → Phones → Add a phone**.
+3. On the phone, press **Type a code** and paste the whole code shown on the computer, then press **Pair**. You can also press **Scan the code** and scan it. The code lasts two minutes.
+4. Check that the two words on the phone match the ones on the computer, then press **Yes, the words match** on the computer.
+5. Finish the phone's notification choice and open your crew. Home greets you by name. Tap **Chief**, write a message and press **Send** to see his reply in the same thread.
 
-## Known issues
+A phone on an older preview can open Chief's chat and use **Get the latest Crewhouse app** to download this build.
 
-- **Phone app:** it can't watch a helper's screen, set up routines or connect apps yet, and files open on the computer. AI sign-ins stay on the computer by design.
-- **Bots recruited before the engine change** keep their old instructions (they mention a `crew` command). Recruit them again to pick up the new ones.
-- **Chief's wording:** he sometimes rewords a task awkwardly, e.g. *Use its browser to open…*.
-- **Setup:** it prints an npm warning that esbuild's install script was blocked. The web build still works.
+## Known limits
+
+AI sign-ins and connecting apps stay on the computer. Android notifications need the builder's push credential; without it, news appears when you open Crewhouse. The iPhone build is not available yet.

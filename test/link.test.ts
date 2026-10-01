@@ -254,17 +254,21 @@ test('an unmarked old phone reads only the update notice; a marked current phone
     assert.deepEqual(old.body.asks, []);
     assert.deepEqual(old.body.tasks, []);
     assert.deepEqual(old.body.events, []);
-    assert.equal(A.chats(old.body)[0].line, 'Update the Crewhouse app', 'Chief’s chat row shows the plain notice');
+    assert.equal(A.chats(old.body)[0].line, 'Get the latest Crewhouse app to keep chatting.', 'Chief’s chat row shows the plain notice');
     assert.doesNotThrow(() => { A.office(old.body); A.homeCounts(old.body); A.jobs(old.body); A.status(old.body); });
     assert.doesNotMatch(JSON.stringify(old.body), /Private question/);
     for (const [op, body] of [
       ['POST /api/bots/chief/messages', { text: 'do work' }],
       ['POST /api/phones/refresh', { message: 7, member: 1 }],
       ['POST /api/push', { off: true }],
-      ['GET /api/bots/chief', undefined],
-    ] as const) assert.deepEqual(await phone.link.request(op, body), { status: 426, body: { error: 'Update the Crewhouse app' } }, op);
+    ] as const) assert.deepEqual(await phone.link.request(op, body), { status: 426, body: { error: 'Get the latest Crewhouse app to keep chatting.' } }, op);
+    const notice = await phone.link.request('GET /api/bots/chief') as { status: number; body: any };
+    assert.equal(notice.status, 200, 'the old phone can open the update link in Chief’s chat');
+    assert.equal(notice.body.messages.length, 1);
+    assert.match(A.lines(notice.body, 'chief')[0].text, /\[Get the latest Crewhouse app\]\(https:\/\/github.com\/umeranjum17\/crewhouse\/releases\/tag\/v1.0.0-preview.20261001.16\) to keep chatting\./);
+    assert.doesNotMatch(JSON.stringify(notice.body), /Private question/);
     const desktop = await phone.link.stream('desktop', { bot: 'chief' });
-    assert.equal(await new Promise((r) => { desktop.onEnd = r; }), 'Update the Crewhouse app', 'old desktop controls cannot act either');
+    assert.equal(await new Promise((r) => { desktop.onEnd = r; }), 'Get the latest Crewhouse app to keep chatting.', 'old desktop controls cannot act either');
     assert.equal((await phone.req('POST', '/api/push', { off: true })).status, 200, 'marked current requests retain their effects');
     assert.equal(live.prepare('SELECT value FROM settings WHERE key = ?').get(`phone.push.${phone.link.grant.device.id}`)!.value, 'off');
   } finally { live.prepare('DELETE FROM asks WHERE id = ?').run(ask); live.close(); phone.link.stop(); await http('DELETE', `/api/phones/${phone.link.grant.device.id}`); }
@@ -351,7 +355,7 @@ test('pairing with a yes at the computer, grants, approvals from the phone, and 
   await http('POST', '/api/bots/chief/messages', { text: 'pair my phone' });
   const live = (await http('GET', '/api/bots/chief')).body.phoneOffer;
   const oldRefresh = await a.req('POST', '/api/phones/refresh', { message: live.message, member: 2 });
-  assert.deepEqual(oldRefresh, { status: 426, body: { error: 'Update the Crewhouse app' } });
+  assert.deepEqual(oldRefresh, { status: 426, body: { error: 'Get the latest Crewhouse app to keep chatting.' } });
   assert.equal((await http('POST', '/api/phones/refresh', { message: live.message, member: 1 })).status, 426);
   const fromPhone = await a.req('POST', '/api/phones/refresh', { message: live.message });
   assert.equal(fromPhone.status, 200);

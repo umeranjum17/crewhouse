@@ -184,7 +184,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     // The one phone-admin call a paired phone makes itself: renewing the Add-a-phone code it is looking at, so the
     // card on the phone refreshes like the web card's.
     if (m === 'POST' && p === '/api/phones/refresh') {
-      if (Object.hasOwn(body ?? {}, 'member')) throw Object.assign(new Error('Update the Crewhouse app'), { status: 426 });
+      if (Object.hasOwn(body ?? {}, 'member')) throw Object.assign(new Error('Get the latest Crewhouse app to keep chatting.'), { status: 426 });
       return crew.refreshPhone(Number(body?.message));
     }
     // A sent photo for the phone, which can't open this computer's /files address: small enough for one link frame.
