@@ -1338,7 +1338,9 @@ test('the words people read make only claims Crewhouse can keep', () => {
     assert.doesNotMatch(src, /so it's safe|stays in this house|treat them like you|plenty left|never more than this in a month|that's us/i, f);
   }
   // The usage line describes the crew's own share, never a provider balance.
-  assert.equal(A.meter({ share: { used: false } }), 'ChatGPT: the crew is within its share today');
+  assert.equal(A.meter({ share: { used: false } }), '');
+  assert.equal(A.meter({ share: { used: true } }), 'The crew will carry on tomorrow');
+  assert.equal(A.lines({ messages: [{ id: 1, author: 'bot', text: 'Good morning. Everything is quiet.', recap: true }] }, 'chief')[0].recap, true);
   assert.equal(A.share({ share: { choice: 'light', used: false } }).today, 'The crew stays within the share you gave it.');
 });
 

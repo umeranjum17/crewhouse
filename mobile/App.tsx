@@ -1307,7 +1307,7 @@ function Chat({ id, m, state, tick, refresh, canAct, offline, open }: Ctx & { id
         {lines.map((l, i) => start && i === 0 && l.from === 'note' && l.text.startsWith(`${name} joined the crew`) ? null : <View key={l.id} style={{ gap: 10 }}>{dayOf(l.at)}<motion.Rise reduce={reduce || l.id <= (opened.current ?? Infinity)}>
           <View onLayout={(e) => ys.current.set(l.id, e.nativeEvent.layout.y)}
             style={[s.line, l.from === 'me' && { alignSelf: 'flex-end', maxWidth: '82%' }, l.from === 'note' && { maxWidth: '92%' }]}>
-            {l.from !== 'me' && l.from !== 'note' && !(i && lines[i - 1].from === l.from) && <View style={s.row}><Face who={l.from === 'chief' ? 'chief' : h ?? 'chief'} size={28} /><T style={[s.small, s.b]}>{l.from === 'chief' ? 'Chief' : name}</T><T tone="mute" style={s.time}>{l.at ? A.clock(l.at) : ''}</T></View>}
+            {l.from !== 'me' && l.from !== 'note' && !(i && lines[i - 1].from === l.from && !l.recap && !lines[i - 1].recap) && <View style={s.row}><Face who={l.from === 'chief' ? 'chief' : h ?? 'chief'} size={28} /><T style={[s.small, s.b]}>{l.from === 'chief' ? 'Chief' : name}</T><T tone="mute" style={s.time}>{l.at ? A.clock(l.at) : ''}</T></View>}
             {!!l.text && (l.detail ? <ChiefAsk l={{ text: l.text, detail: l.detail }} /> : l.from === 'me'
               ? <View style={[s.bubbleText, { backgroundColor: t.go, borderBottomRightRadius: 6 }]}><Theme.Provider value={mine}><ChatText text={l.text} /></Theme.Provider></View>
               : <View style={{ paddingLeft: 36 }}><ChatText text={l.text} /></View>)}

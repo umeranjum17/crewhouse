@@ -438,7 +438,7 @@ function Chat({ id, m, state, tick, refresh, accounts }: Ctx & { id: string; m?:
           ? <ChiefIdeas state={state} chat={id} picked={() => setSeed((n) => n + 1)} />
           : <HelperIdeas state={state} chat={id} picked={() => setSeed((n) => n + 1)} />)}
         {lines.map((l, i) => start && i === 0 && l.from === 'note' && l.text.startsWith(`${name} joined the crew`) ? null : <div key={l.id} className="line-wrap">{dayOf(l.at)}
-          <div id={`m${l.id}`} className={`line ${l.from}${l.unsure ? ' unsure' : ''}${l.id > (opened.current ?? Infinity) ? ' fresh' : ''}${i && lines[i - 1].from === l.from && l.from !== 'me' ? ' consecutive' : ''}`}>
+          <div id={`m${l.id}`} className={`line ${l.from}${l.unsure ? ' unsure' : ''}${l.recap ? ' recap' : ''}${l.id > (opened.current ?? Infinity) ? ' fresh' : ''}${i && lines[i - 1].from === l.from && l.from !== 'me' && !l.recap && !lines[i - 1].recap ? ' consecutive' : ''}`}>
             {l.from !== 'me' && l.from !== 'note' && <div className="line-by"><Face who={l.from === 'chief' ? 'chief' : h ?? 'chief'} size={28} /><span className="who">{l.from === 'chief' ? 'Chief' : name}</span><time>{l.at ? A.clock(l.at) : ''}</time></div>}
             {l.text && (l.detail ? <ChiefAsk l={{ text: l.text, detail: l.detail }} /> : <div className="bubble-text"><ChatText text={l.text} /></div>)}
             {id === 'chief' && l.text === 'Sign in with ChatGPT.' && <AccountCard g={{ ...g, state: 'signed-out' }} inChat onReady={() => { void load(); refresh(); }} />}
@@ -459,7 +459,7 @@ function Chat({ id, m, state, tick, refresh, accounts }: Ctx & { id: string; m?:
         <div ref={end} className="end" />
       </div>
       <aside className="working-on">
-        {live && h && <section className="working-on-frame"><div className="label">Working on</div><div className="list-group"><div className="work-title"><b>{A.plain(live.title)}</b><span className="small">{h.status}</span></div>{trail.length > 0 && <Steps steps={trail} max={3} />}<a className="link" href={`#/h/${id}/did`}>Every step ›</a></div></section>}
+        {live && h && <section className="working-on-frame"><div className="label">Working on</div><div className="list-group"><div className="work-title"><b>{A.plain(live.title)}</b><span className="small">{h.status}</span></div>{trail.length > 0 && <Steps steps={trail} max={3} />}<a className="link" href={`#/h/${id}/did`}>What happened ›</a></div></section>}
         {A.things(state).filter((x) => x.helper === id).length > 0 && <section className="home-section"><div className="label">Made in this chat</div><div className="list-group">{A.things(state).filter((x) => x.helper === id).map((x) => { const t = A.fileTarget(x.files[0]); return <a className="list-row" key={x.id} href={t?.href.startsWith('#') ? t.href : `#/things/t${x.id}`}><span className="file-chip">{t?.chip ?? '—'}</span><span className="grow"><b className="clamp1">{x.title}</b><span className="small clamp1">{x.summary}</span></span></a>; })}</div></section>}
       </aside>
       <div className="dock"><Composer key={seed} placeholder={id === 'chief' ? 'Ask Chief anything…' : `Message ${name}…`} onSend={send} {...typeInto(id)} /></div>
@@ -496,7 +496,7 @@ function ChiefPage(ctx: Ctx & { m?: string }) {
     <div className="page chat-page">
       <header className="chat-head sticky-top"><a href="#/" className="back" aria-label="Back" onClick={(e) => { e.preventDefault(); back(); }}>‹</a><Face who="chief" size={32} />
         <div className="grow"><b>Chief</b><div className="mute small clamp1">{line}</div></div>
-        <button className="link" onClick={() => go('#/h/chief/did')}>Every step</button></header>
+        <button className="link" onClick={() => go('#/h/chief/did')}>What happened</button></header>
       <Chat {...ctx} id="chief" m={ctx.m} />
     </div>
   );
@@ -572,7 +572,7 @@ function HelperPage(ctx: Ctx & { id: string; tab: string }) {
           <h2 className="plate">Now</h2>
           {b?.task ? (trail.length ? <Steps steps={trail} max={7} /> : <p className="mute">Working on “{A.plain(b.task.title)}”. Steps show as they happen.</p>)
             : <p className="mute">Nothing right now.</p>}
-          <a className="link" href={`#/h/${id}/did`}>Every step</a>
+          <a className="link" href={`#/h/${id}/did`}>What happened</a>
           <h2 className="plate">Things</h2>
           <ThingsGrid list={A.things(state).filter((t) => t.helper === id)} state={state} empty={`${h.name}'s finished work shows up here.`} />
           <h2 className="plate">Routines</h2>
@@ -599,9 +599,9 @@ function HelperPage(ctx: Ctx & { id: string; tab: string }) {
       {tab === 'did' && (page ? <>
         <div className="sticky-top"><header className="chat-head">
           <a href={id === 'chief' ? '#/chief' : `#/h/${id}/details`} className="back" aria-label="Back" onClick={(e) => { e.preventDefault(); back(); }}>‹</a>
-          <div className="grow"><b>Every step</b></div>
+          <div className="grow"><b>What happened</b></div>
         </header></div>
-        <p className="lead">Every step {name} takes, as it happens. Recorded by Crewhouse, not remembered by {name}.</p>
+        <p className="lead">What {name} does, as it happens. Recorded by Crewhouse, not remembered by {name}.</p>
         {A.steps(page.trail ?? []).length ? <Steps steps={A.steps(page.trail ?? [])} max={40} onUndo={(s) => attempt(async () => { await api.undoMemory(id, s.seq); void load(); }, 'Forgotten')} />
           : <div className="card empty">Nothing yet. Give {name} something to do.</div>}
       </> : null)}
@@ -1199,7 +1199,7 @@ function App() {
           {nav.map(([h, l, i]) => <a key={h} href={h} className={`side-nav ${active(h) ? 'on' : ''}`}><span className="ic"><Dots rows={art.TABS[i]} pal={{ x: 'currentColor' }} d={16 / 9} crisp /></span>{l}{h === '#/' && asks > 0 && <span className="badge">{asks}</span>}</a>)}
           <SideCrew state={ctx.state} view={v.view} id={v.id} />
           <div className="grow" />
-          <a href="#/settings" className="side-meter mute small">{A.meter(ctx.state)}</a>
+          {A.meter(ctx.state) && <a href="#/settings" className="side-meter mute small">{A.meter(ctx.state)}</a>}
         </aside>
         <main className="main">
           {offline && <div className="offline" role="status">The home computer isn't answering. If it's asleep, the crew has paused and carries on when it wakes. Last heard from it at {A.clock(heard.current)}. Reconnecting… <button className="link inline" onClick={refresh}>Try now</button></div>}

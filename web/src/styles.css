@@ -892,3 +892,11 @@ details.card[open] > summary { margin-bottom: 10px; }
   .hero .office { margin-top: 10px; }
   .o-scrim { align-items: end; }
 }
+
+/* A recap is its own message, even when Chief spoke immediately before it. */
+.line.recap { padding: 16px; background: var(--card); border: 1px solid var(--line); border-radius: 16px; }
+.chat-page .lines { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+.chat-page .lines::-webkit-scrollbar { width: 6px; }
+.chat-page .lines::-webkit-scrollbar-track { background: transparent; }
+.chat-page .lines::-webkit-scrollbar-thumb { background: var(--line); border-radius: 6px; }
+.chat-page .lines::-webkit-scrollbar-button { display: none; }

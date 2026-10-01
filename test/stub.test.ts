@@ -43,13 +43,17 @@ const ready = () => until(async () => (await fetch(`${base}/api/state`).catch(()
 test('chief onboarding, recruit, assign, grants', async () => {
   await ready();
 
-  // Chief greets first and asks how to address the person; the first reply is stored as the address.
+  // Chief greets first; an ordinary first request is a task, never a name.
   let page = (await api('GET', '/api/bots/chief')).body;
   assert.match(page.messages[0].text, /I am Chief, of the Crewhouse/);
-  assert.match(page.messages[0].text, /What should I call you/);
+  assert.match(page.messages[0].text, /What would you like help with/);
   assert.match(page.messages[0].text, /stop and ask you first before sending anything, spending money/, 'his stop-and-ask rules come first');
   assert.doesNotMatch(page.messages[0].text, /Master|aye/i);
-  await say('chief', 'Sir');
+  const first = (await say('chief', 'Reply with exactly: Hello.')).body.task;
+  await done('chief', first);
+  assert.equal((await api('GET', '/api/state')).body.person.address, null);
+  assert.equal((await api('GET', '/api/state')).body.person.name, 'Owner');
+  await api('POST', '/api/onboard', { address: 'Sir' });
   assert.equal((await api('GET', '/api/state')).body.person.address, 'Sir');
 
   // Cross-site writes are refused.
