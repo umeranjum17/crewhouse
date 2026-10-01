@@ -1,7 +1,7 @@
 // Chief on the phone's screen, over other apps (Android), through @byokit/overlay: the one file that imports the kit.
 // Off until the person switches it on in Settings. While it is on, it holds the phone's link (src/link.ts), so his face
 // follows the crew from the same refresh as every screen: it changes only when something lands, never on a timer.
-// A tap opens his panel (src/panel.tsx). On iPhone the kit is unsupported and every call is a no-op.
+// A tap opens his panel (src/panel.tsx), a long press opens it listening. On iPhone the kit is unsupported and every call is a no-op.
 // Write it here: the box the person is typing in is read once, on that tap, through Crewhouse's own accessibility
 // service (the crewhouse-net module) — never in the background, and never a password box (the kit skips those).
 import { overlay, stateWords, words, type OverlayState } from '@byokit/overlay';
@@ -74,13 +74,17 @@ export async function bubbleResume(grant: Grant) {
 export const closePanel = () => overlay.closePanel();
 /** What to do when the phone greys out a switch for an app installed outside its store. */
 export const restrictedWords = () => words('overlay.restricted');
-/** Hand my screen to…: the panel steps aside, the phone asks (every time) and takes one still of the screen, and the
- *  panel comes back with it to pick who gets it. A no leaves nothing behind. */
-export async function handScreen() {
+/** Deal with this, or a button that needs a still: the panel steps aside, the phone asks (every time) and takes one
+ *  still of the screen, and the panel comes back with it, `to` that helper with `words` in the box, to send or pick
+ *  someone else. A no leaves nothing behind. */
+export async function handScreen(to = '', words = '') {
   await overlay.closePanel();
   const frame = await screenFrame().catch(() => '');
-  if (frame) await overlay.openPanel({ frame });
+  if (frame) await overlay.openPanel({ frame, to, words });
 }
+// Hold him to talk to Chief: the panel opens already listening (the mic starts there, never from the bubble's own
+// window), and what was heard waits in the box until the person sends it.
+overlay.on('longPress', () => { void overlay.openPanel({ listen: '1' }); });
 
 /** The box in focus when he was tapped: its words and the part the person picked ('' for none), or 'off' while the
  *  phone hasn't let him see it, or null for none. */

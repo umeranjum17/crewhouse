@@ -664,12 +664,10 @@ export function status(state: Json, canAct = true): CrewStatus | null {
 }
 
 /** The phone's quick actions, one list for every view of the crew (the status-bar chip takes its first two, the bubble's
- *  panel all of them). Each opens a crewhouse:// address the app already reads, where words wait in a box, never sent;
- *  `write` and `screen` are the bubble's own. Write it here shows only while `box` (a text box had focus when he was
- *  tapped, or the phone hasn't let him see one yet) and a writer is in this crew: it drafts, the person puts it in.
- *  A helper's row shows only when it is in this crew. A watching phone gets none. */
-export type QuickAction = { id: 'needs' | 'ask' | 'screen' | 'write' | 'demo'; label: string; url: string };
-export function quick(state: Json, canAct = true, box = false): QuickAction[] {
+ *  panel the rest beside its own buttons, `bubble()`). Each opens a crewhouse:// address the app already reads, where
+ *  words wait in a box, never sent. A helper's row shows only when it is in this crew. A watching phone gets none. */
+export type QuickAction = { id: 'needs' | 'ask' | 'demo'; label: string; url: string };
+export function quick(state: Json, canAct = true): QuickAction[] {
   if (!canAct) return [];
   const needs = homeCounts(state).needs;
   const ask = (id: QuickAction['id'], template: string, label: (name: string) => string): QuickAction[] => {
@@ -680,14 +678,64 @@ export function quick(state: Json, canAct = true, box = false): QuickAction[] {
   return [
     ...(needs ? [{ id: 'needs' as const, label: 'See what needs you', url: 'crewhouse://needs' }] : []),
     { id: 'ask', label: 'Ask Chief', url: 'crewhouse://ask' },
-    ...(box && writer(state) ? [{ id: 'write' as const, label: 'Write it here', url: '' }] : []),
-    { id: 'screen', label: 'Hand my screen to…', url: '' },
     ...ask('demo', 'reel', (n) => `Record a demo with ${n}`),
   ];
 }
 const hired = (state: Json, template: string) => crew(state).find((x) => state.bots.find((b: Json) => b.id === x.id)?.template === template);
-/** Who drafts for Write it here: this crew's Scribe. */
-export const writer = (state: Json) => hired(state, 'scribe');
+/** Who a bubble job goes to: that template's helper, else the general Helper. `id` is '' while nobody is either: the
+ *  tap hires the Helper first, never Chief, whose hand-offs carry no photos. */
+export type Hand = { id: string; name: string };
+export function handTo(state: Json, template: string): Hand {
+  const h = hired(state, template) ?? hired(state, 'helper');
+  return h ? { id: h.id, name: h.name } : { id: '', name: 'Helper' };
+}
+/** Who drafts for Write it here: this crew's Scribe, else the general Helper. */
+export const writer = (state: Json) => handTo(state, 'scribe');
+
+/** The bubble's own buttons (Android): fixed, never picked by a model; the only question is whether the tap read words
+ *  (`box`: the focused box's words and the part picked; null for none, 'off' while the phone doesn't let him see it).
+ *  Each is fixed words to one helper (`handTo`), so its reply is an ordinary job. `from` is what goes with them: `box`
+ *  is Write it here's own flow, `text` sends what the box says (the part picked, if any), `screen` a still (the phone
+ *  asks every time) and `camera` a photo, both to the share screen with that helper picked and the words in its box,
+ *  `none` nothing. A button that needs an app the person hasn't connected says so in its label (`needs`), and its tap
+ *  opens Settings, like Home's jobs. Choosing among more of them is the picker's job, later. A watching phone gets none. */
+export type BubbleButton = { id: 'write' | 'calendar' | 'real' | 'short' | 'lookup' | 'deal' | 'letter' | 'plan'; label: string; to: Hand; ask: string;
+  from: 'box' | 'text' | 'screen' | 'camera' | 'none'; needs: string[] };
+const REAL = "Point out the warning signs you can see, and anything that looks normal. Don't tell me it's safe or a scam, and don't open or look up any web address in it. End with how I can check for myself: in the official app, or on the official website typed in by hand.";
+/** Web addresses written so no tool follows them by accident: hxxp://, and [.] before the last part of a name. */
+export const defang = (text: string) => text.replace(/\bhttp(s?):\/\//gi, 'hxxp$1://').replace(/\b([a-z0-9-]+)\.(?=[a-z]{2,}\b)/gi, '$1[.]');
+export function bubble(state: Json, box: { text: string; picked: string } | 'off' | null, canAct = true): BubbleButton[] {
+  if (!canAct) return [];
+  const read = box && box !== 'off' ? box : null;
+  const said = (read?.picked.trim() || read?.text.trim()) ?? '';
+  const quote = `\n“${said}”`;
+  const google = (...apps: string[]) => (apps.every((a) => state.connections?.includes?.(a)) ? [] : ['Google']);
+  const b = (id: BubbleButton['id'], label: string, from: BubbleButton['from'], ask = '', needs: string[] = []): BubbleButton =>
+    ({ id, label: needs.length ? `${label} · needs ${needs.join(' and ')}` : label, to: handTo(state, id === 'write' ? 'scribe' : 'scout'), ask, from, needs });
+  return [
+    ...(box ? [b('write', 'Write it here', 'box')] : []),
+    ...(said ? [
+      b('calendar', 'Put this date in my calendar', 'text', `Put this date in my Google Calendar:${quote}\nWork out the date and time from it. If there isn't a clear one, say so instead of guessing.`, google('calendar')),
+      b('real', 'Is this real?', 'text', `Is this real? Here's what it says:\n“${defang(said)}”\n${REAL}`),
+      b('short', 'Short version', 'text', `Give me the short version, in three lines or fewer:${quote}`),
+      b('lookup', 'Look it up', 'text', `Look this up and tell me in a few lines what it is, and where you found it:${quote}`),
+    ] : [
+      b('deal', 'Deal with this', 'screen'),
+      b('real', 'Is this real?', 'screen', `Is this real? It's on my phone's screen, in the picture.\n${REAL}`),
+      b('letter', 'Scan a letter', 'camera', "Read this letter: who it's from, what it wants and by when, in a few lines. If it has a date to keep, offer to put it on my calendar."),
+    ]),
+    b('plan', 'Plan my day', 'none', "Give me my day: what's on, what's waiting on me, what to do first", google('calendar', 'gmail')),
+  ];
+}
+
+/** Who is on what, in one plain line from state alone (no model turn): each of the crew that is working, waiting on the
+ *  person, gone quiet, paused while they drive or resting, then when a resting account is back. '' when nobody is. */
+export function crewLine(state: Json) {
+  const lead = (state.bots as Json[]).find((b) => b.id === 'chief');
+  const each = crew(state).map((h) => (h.ring === 'needs' ? `${h.name} needs you` : h.driving ? `${h.name} waits while you drive`
+    : h.stuckFor ? `${h.name} has gone quiet` : h.ring === 'working' ? `${h.name} is on “${h.status}”` : h.status.startsWith('Resting') ? `${h.name} is ${h.status.replace(/^Resting/, 'resting')}` : ''));
+  return [lead?.task?.state === 'working' ? `Chief is on “${plain(lead.task.title)}”` : '', ...each, resting(state)].filter(Boolean).map((l) => `${l}.`).join(' ');
+}
 /** Write it here's ask, in the writer's chat like any other (its first line is the job's title): what the person
  *  wants, what the box says, and (on Try again) the draft they passed on. The draft is what the whole box should say,
  *  keeping what they wrote; with some of it picked, it is only what goes in place of that part. */

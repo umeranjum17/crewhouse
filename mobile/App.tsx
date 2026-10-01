@@ -251,17 +251,15 @@ async function shrink(uri: string): Promise<Photo> {
 
 /** The voice note to Chief: a mic in the box when this phone can hear on the phone itself (web/src/parts.tsx
  *  useVoice). What was said lands after what is already there, for the person to read and send; speaking sends nothing. */
-function Mic({ on, text, put }: { on: boolean; text: string; put: (t: string) => void }) {
+function Mic({ on, text, put, listen = false }: { on: boolean; text: string; put: (t: string) => void; listen?: boolean }) {
   const t = useLook();
   const [can, setCan] = useState(false);
   const [listening, setListening] = useState(false);
   const now = useRef(text);
   now.current = text;
-  useEffect(() => { if (on) void canHear().then(setCan); }, [on]);
   const shown = useRef(true);
   useEffect(() => () => { shown.current = false; }, []);
   useEffect(() => (listening ? () => stopHearing() : undefined), [listening]); // leaving the box turns the mic off
-  if (!can) return null;
   const start = async () => {
     setListening(true);
     const mic = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO, { title: 'Speak to Chief',
@@ -273,6 +271,9 @@ function Mic({ on, text, put }: { on: boolean; text: string; put: (t: string) =>
         : "Speaking isn't ready on this phone yet. Type instead, or use the keyboard's mic."))
       .finally(() => setListening(false));
   };
+  // `listen`: opened by holding the bubble, so the mic starts at once (it is this screen's, never the bubble's).
+  useEffect(() => { if (on) void canHear().then((c) => { setCan(c); if (c && listen && shown.current) void start(); }); }, [on]);
+  if (!can) return null;
   return <Pressable onPress={() => (listening ? stopHearing() : void start())} accessibilityRole="button" accessibilityLabel={listening ? 'Stop listening' : 'Speak to Chief'}
     accessibilityState={{ selected: listening }} style={[s.send, { backgroundColor: listening ? t.pink : 'transparent' }]}>
     {listening ? <View style={{ width: 12, height: 12, borderRadius: 3, backgroundColor: '#fff' }} />
@@ -286,7 +287,7 @@ function Mic({ on, text, put }: { on: boolean; text: string; put: (t: string) =>
 
 /** The message box: words (the phone keyboard's own mic dictates them; Chief's box has its own) and up to four
  *  photos. A send that didn't go through keeps both with a Retry; each chat holds its own words (web/src/draft.ts). */
-function Composer({ placeholder, onSend, chat, photos: canPhoto = true, mic = chat === 'chief' }: { placeholder: string; onSend: (t: string, photos: Photo[]) => unknown; chat?: string; photos?: boolean; mic?: boolean }) {
+function Composer({ placeholder, onSend, chat, photos: canPhoto = true, mic = chat === 'chief', listen }: { placeholder: string; onSend: (t: string, photos: Photo[]) => unknown; chat?: string; photos?: boolean; mic?: boolean; listen?: boolean }) {
   const t = useLook();
   const [text, setText] = useState(() => (chat ? draftOf(chat).text : ''));
   const [pics, setPics] = useState<Photo[]>([]);
@@ -327,7 +328,7 @@ function Composer({ placeholder, onSend, chat, photos: canPhoto = true, mic = ch
           <Text style={{ color: t.ink, fontSize: 20 }}>＋</Text>
         </Pressable>}
         <TextInput style={[s.composerInput, { color: t.ink }]} value={text} onChangeText={change} multiline placeholder={placeholder} placeholderTextColor={t.mute} accessibilityLabel={placeholder} />
-        <Mic on={mic} text={text} put={change} />
+        <Mic on={mic} text={text} put={change} listen={listen} />
         <Pressable onPress={() => void send()} disabled={!ready || busy} accessibilityLabel="Send" style={[s.send, { backgroundColor: t.go, opacity: ready && !busy ? 1 : 0.4 }]}>
           <Text style={{ color: t.goInk, fontSize: 18, fontWeight: '900' }}>↑</Text>
         </Pressable>
@@ -740,6 +741,9 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
   }, []);
   useEffect(() => {
     if (asked && /^crewhouse:\/\/needs\/?$/.test(asked)) { setAsked(null); Linking.clearInitialURL(); go({ view: 'home' }, true); return; } // Home leads with what needs you
+    // The bubble's panel: Settings (a button waiting on an app), or a helper's own screen to take the wheel or watch.
+    const to = asked && (/^crewhouse:\/\/settings\/?$/.test(asked) ? { view: 'phone' as const } : /^crewhouse:\/\/screen\?bot=([a-z0-9-]+)(&watch=1)?$/.exec(asked));
+    if (to) { setAsked(null); Linking.clearInitialURL(); go(Array.isArray(to) ? { view: 'helper', id: to[1], tab: to[2] ? 'watch' : 'screen' } : to); return; }
     const picked = asked ? sharedOf(asked) : null;
     if (picked !== null) { setAsked(null); Linking.clearInitialURL(); setPicked(picked); return; } // "Ask Crewhouse" on text in another app
     const a = asked && state ? askOf(asked, A.crew(state).map((h) => ({ id: h.id, template: state.bots.find((b: Json) => b.id === h.id)?.template }))) : null;
@@ -1393,6 +1397,12 @@ function HelperPage(ctx: Ctx & { id: string; tab: string; m?: number; setTab: (t
   // The chat is the page; everything else lives behind Details. Old deep links to a section land on Details too.
   const details = tab !== 'chat';
   const trail = A.steps(page?.trail ?? []);
+  // Opened from the bubble ('screen' after taking the wheel, or 'watch'): the screen leads and opens by itself.
+  const screenFirst = tab === 'screen' || tab === 'watch';
+  const screen = h.computer && desktopAvailable && <>
+    <T style={s.b}>{`See ${h.name}'s screen`}</T>
+    <Screen bot={{ ...page?.bot, ...b }} canAct={canAct} showing={A.showing(state, id)} watchNow={screenFirst} refresh={() => { refresh(); void load(); }} />
+  </>;
   return (
     <View style={{ flex: 1 }}>
       {tab === 'chat' ? <>
@@ -1410,6 +1420,7 @@ function HelperPage(ctx: Ctx & { id: string; tab: string; m?: number; setTab: (t
           <Btn ghost label="Chat" onPress={() => setTab('chat')} />
         </Head>
         <ScrollView contentContainerStyle={{ padding: 16, gap: 10 }}>
+          {screenFirst && screen}
           <T style={s.b}>Now</T>
           {b?.task ? (trail.length ? <Card><Steps steps={A.steps(page?.trail ?? [], b.task.id, true)} max={all ? 40 : 7} /></Card> : <T tone="mute">{`Working on “${A.plain(b.task.title)}”. Steps show as they happen.`}</T>)
             : <T tone="mute">Nothing right now.</T>}
@@ -1433,10 +1444,7 @@ function HelperPage(ctx: Ctx & { id: string; tab: string; m?: number; setTab: (t
                 <Btn ghost label="Forget" onPress={() => attempt(async () => { await api.forget(id, h); load(); }, 'Forgotten')} />
               </View>))}</Card>
           </>}
-          {h.computer && desktopAvailable && <>
-            <T style={s.b}>{`See ${h.name}'s screen`}</T>
-            <Screen bot={{ ...page?.bot, ...b }} canAct={canAct} showing={A.showing(state, id)} refresh={() => { refresh(); void load(); }} />
-          </>}
+          {!screenFirst && screen}
         </ScrollView>
       </>}
     </View>
@@ -1445,7 +1453,7 @@ function HelperPage(ctx: Ctx & { id: string; tab: string; m?: number; setTab: (t
 
 /** A bot's own screen on the phone, through desklink over the encrypted link: Watch, Take the wheel, Hand it back.
  *  Taking the wheel is the whole page: one status line, the screen, Hand it back pinned at the bottom. */
-function Screen({ bot, canAct, refresh, showing }: { bot: Json; canAct: boolean; refresh: () => void; showing?: { words: string } | null }) {
+function Screen({ bot, canAct, refresh, showing, watchNow }: { bot: Json; canAct: boolean; refresh: () => void; showing?: { words: string } | null; watchNow?: boolean }) {
   const t = useLook();
   const reduce = motion.useReduceMotion();
   const control = bot.controls === 'person';
@@ -1479,6 +1487,7 @@ function Screen({ bot, canAct, refresh, showing }: { bot: Json; canAct: boolean;
   // Never drive from a phone in someone's pocket: input goes off in the background, and back on when it returns.
   useEffect(() => { const sub = AppState.addEventListener('change', (st) => session.setInputEnabled(st === 'active' && controlRef.current && canAct)); return () => sub.remove(); }, []);
   const watch = () => { setErr(''); watching.current = true; void open(); };
+  useEffect(() => { if (watchNow) watch(); }, []);
   const stop = () => { watching.current = false; void session.close().then(() => sig.current?.close()); };
   const act = (fn: () => Promise<unknown>) => async () => { setErr(''); if (await attempt(fn)) refresh(); };
   const [help, setHelp] = useState(false);
@@ -1619,9 +1628,9 @@ function RoutineRow({ r, h, act, go, canAct }: { r: Json; h: A.Helper | undefine
 }
 
 /** Something shared from another app (a photo of the school poster, a link, some text): who should have it, and a word. */
-function ShareIn({ state, shared, onDone, go }: { state: Json; shared: { text: string; files: { path: string; mimeType: string }[] }; onDone: () => void; go: Ctx['go'] }) {
+function ShareIn({ state, shared, onDone, go, to: first = 'chief' }: { state: Json; shared: { text: string; files: { path: string; mimeType: string }[] }; onDone: () => void; go: Ctx['go']; to?: string }) {
   const t = useLook();
-  const [to, setTo] = useState('chief');
+  const [to, setTo] = useState(first);
   const [text, setText] = useState(shared.text);
   const [pics, setPics] = useState<Photo[] | null>(null);
   useEffect(() => {
@@ -1635,7 +1644,7 @@ function ShareIn({ state, shared, onDone, go }: { state: Json; shared: { text: s
     go(to === 'chief' ? { view: 'chief' } : { view: 'helper', id: to });
   }, 'Sent');
   return (
-    <Page title="Send this to…" lead="Chief will see it into the right hands, or pick a helper yourself.">
+    <Page title="Send this to…" lead={first === 'chief' ? 'Chief will see it into the right hands, or pick a helper yourself.' : 'Send it as it is, or pick someone else.'}>
       {pics === null ? <ActivityIndicator color={t.pink} /> : pics.length > 0 && <View style={{ flexDirection: 'row', gap: 6 }}>{pics.map((p) => <Image key={p.uri} source={{ uri: p.uri }} style={{ width: 72, height: 72, borderRadius: 12 }} />)}</View>}
       <View style={s.chips}>
         <Btn label="Chief" go={to === 'chief'} onPress={() => setTo('chief')} />
@@ -1906,4 +1915,4 @@ const s = StyleSheet.create({
 });
 
 // The bubble's panel (src/panel.tsx) is its own screen over other apps, built from these same pieces.
-export { AskSheet, attempt, Btn, Card, Composer, Face, look, s, ShareIn, T, Theme, Toast };
+export { AskSheet, attempt, Btn, Card, Composer, Face, look, s, say, ShareIn, T, Theme, Toast };

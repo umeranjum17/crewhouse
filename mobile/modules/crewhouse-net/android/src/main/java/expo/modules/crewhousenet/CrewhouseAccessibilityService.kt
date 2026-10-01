@@ -15,6 +15,12 @@ class CrewhouseAccessibilityService : AccessibilityService() {
     return super.onUnbind(intent)
   }
 
+  // A service the system kills without unbinding never reaches onUnbind: let go here too (the kit's README).
+  override fun onDestroy() {
+    ByokitAccessibility.detach(this)
+    super.onDestroy()
+  }
+
   override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
 
   override fun onInterrupt() {}
