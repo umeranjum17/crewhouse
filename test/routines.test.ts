@@ -137,23 +137,42 @@ test('morning digest: on by default at 8:00, says what finished, what needs you,
   done();
 });
 
-test('digest nudges toward a goal until Scout has a goal task', async () => {
-  const { db, crew, done } = setup();
-  const nudges = () => crew.digest(0).split('Want help starting something on the side? Tap to begin.').length - 1;
-  assert.equal(nudges(), 1, 'the nudge is there once');
-  crew.recruit('scout', 'Scout', 'person');
-  assert.equal(nudges(), 1, 'a Scout with no goal yet still gets the nudge');
-  await settled(db, crew.assign('scout', 'Help me earn a little on the side', 'person').task);
-  assert.equal(nudges(), 0, 'a Scout goal task drops the nudge');
-  done();
-});
-
-test('digest nudges until a goal note exists', () => {
-  const { crew, cfg, done } = setup();
-  crew.recruit('scout', 'Scout', 'person');
-  assert.match(crew.digest(0), /Want help starting something on the side\? Tap to begin\./);
-  disk.remember(cfg, { bot: 'scout' }, 'Goal: weekend dog walking');
-  assert.doesNotMatch(crew.digest(0), /Want help starting/);
+test('recap keeps an unknown name out, stays quiet on an empty day, and is a separate daily message', async () => {
+  const { db, crew, cfg, done } = lab();
+  const first = await crew.post('chief', 'Reply with exactly: Hello.');
+  await settled(db, first!.task);
+  assert.equal(crew.person().address, null);
+  assert.equal(disk.readNotes(cfg, { bot: null }), '');
+  assert.equal(disk.readNotes(cfg, { bot: 'chief' }), '');
+  assert.match(crew.digest(0), /^Good \w+\. Everything is quiet\.$/);
+  crew.recruit('reel', 'Reel', 'person');
+  crew.addRoutine({ bot: 'reel', schedule: 'every hour', task: 'Check the school letter' }, 'person');
+  assert.match(crew.digest(0), /^Good \w+\. While you were away:/);
+  assert.doesNotMatch(crew.digest(0), /Nothing new|Nothing needs|Nothing is scheduled|Tap to begin/);
+  crew.setAddress('Umer.');
+  const digest = crew.routines().find((r) => r.kind === 'digest')!;
+  crew.runRoutine(digest.id);
+  const recap = crew.botPage('chief').messages.at(-1)!;
+  assert.equal(recap.recap, true);
+  assert.equal(recap.task_id, null);
+  const answer = crew.botPage('chief').messages.find((m: any) => m.author === 'bot' && m.task_id === first!.task)!;
+  assert.ok(answer, 'the ordinary answer stays in the thread');
+  assert.doesNotMatch(answer.text, /While you were away|Everything is quiet/);
+  assert.match(recap.text, /^Good \w+, Umer\. While you were away:/);
+  assert.doesNotMatch(recap.text, /\.\./);
+  crew.runRoutine(digest.id);
+  assert.equal(crew.botPage('chief').messages.at(-1)!.id, recap.id, 'manual reruns keep one recap per day');
+  db.run('UPDATE routines SET next_at = ? WHERE id = ?', Date.now() - 1000, digest.id);
+  crew.schedule();
+  assert.equal(crew.botPage('chief').messages.at(-1)!.id, recap.id, 'the tick also keeps one recap per day');
+  const { Crew } = await import('../src/crew.ts');
+  const restarted = new Crew(cfg, db);
+  restarted.runRoutine(digest.id);
+  assert.equal(restarted.botPage('chief').messages.at(-1)!.id, recap.id, 'a new crew reads the same daily record');
+  db.run('UPDATE routines SET last_at = ? WHERE id = ?', Date.now() - 86_400_000, digest.id);
+  restarted.runRoutine(digest.id);
+  assert.ok(restarted.botPage('chief').messages.at(-1)!.id > recap.id, 'the following day gets its own recap');
+  restarted.stop();
   done();
 });
 
@@ -189,7 +208,7 @@ test('quiet check-ins: all clear says nothing and stays out of the digest; anyth
   assert.deepEqual(said(), [], 'all clear: nothing in the thread');
   assert.equal(db.get('SELECT result FROM tasks WHERE id = ?', first)!.result, 'All clear');
   assert.equal(crew.routines().find((x) => x.id === r.id)!.history[0].clear, true);
-  assert.match(crew.digest(0), /Nothing new was finished/, 'and nothing in the digest');
+  assert.doesNotMatch(crew.digest(0), /Finished:|Nothing new/, 'no all-clear result or negative filler in the digest');
   await run('Three new photos from Saturday are in the shared folder.');
   assert.deepEqual(said(), ['Three new photos from Saturday are in the shared folder.']);
   assert.match(crew.digest(0), /Finished: Reel/);

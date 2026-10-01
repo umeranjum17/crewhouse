@@ -131,13 +131,13 @@ export function chiefFirst(body: string) {
 }
 
 const partOfDay = () => { const h = new Date().getHours(); return h >= 5 && h < 12 ? 'morning' : h >= 12 && h < 18 ? 'afternoon' : 'evening'; };
-/** Chief's first words (plan 3, section 3.13). Deterministic: no model call before we know how to address the person. */
+/** Chief's first words before the person opens Hello or sends a task. */
 export const chiefGreeting = () =>
   `Good ${partOfDay()}. I am Chief, of the Crewhouse. I help get things done with your crew.\n\n` +
   '- The crew works on this computer and pauses when it sleeps.\n' +
   '- We stop and ask you first before sending anything, spending money or touching your own files.\n' +
   '- Your AI account does the thinking; your sign-ins stay yours.\n\n' +
-  'What should I call you?';
+  'What would you like help with?';
 
 /** A sign-in that stopped working (a password change, usually), and what happens next. */
 const signedOutWords = (name: string) => `${name} signed you out. That happens after a password change. Sign in again and the crew picks up where it left off.`;
@@ -748,7 +748,13 @@ export class Crew {
   }
 
   private sendDigest(r: Row, why: string, now: number, day?: { at: number | null; title: string }[]) {
-    this.db.tx(() => { this.say(CHIEF, 'bot', this.digest(r.last_at ?? now - 86_400_000, day), null); this.db.run('UPDATE routines SET last_at = ? WHERE id = ?', now, r.id); this.db.event('routine.fired', CHIEF, { routine: r.id, name: r.name, why }); });
+    this.db.tx(() => {
+      const last = this.routine(r.id).last_at;
+      if (last && new Date(last).toDateString() === new Date(now).toDateString()) return;
+      const message = this.say(CHIEF, 'bot', this.digest(last ?? now - 86_400_000, day), null);
+      this.db.run('UPDATE routines SET last_at = ? WHERE id = ?', now, r.id);
+      this.db.event('routine.fired', CHIEF, { routine: r.id, name: r.name, why, message });
+    });
   }
 
   private fire(r: Row, why: 'schedule' | 'late' | 'now' | 'file' | 'wake', note?: string) {
@@ -850,7 +856,7 @@ export class Crew {
 
   /** Chief's "while you were away" for the person: what finished, what needs them, what is coming up. No model call. */
   digest(since: number, day?: { at: number | null; title: string }[]) {
-    const address = this.person().address;
+    const address = String(this.person().address ?? '').trim().replace(/[.!?]+$/, '');
     const name = (id: string) => this.bot(id)?.display ?? id;
     const list = (xs: string[]) => xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join('; ')} and ${xs.at(-1)}`;
     const done = this.db.all("SELECT * FROM tasks WHERE bot != ? AND state = 'done' AND updated_at >= ? AND COALESCE(result, '') != ? ORDER BY id", CHIEF, since, ALL_CLEAR_RESULT);
@@ -859,18 +865,15 @@ export class Crew {
     const asks = this.db.all("SELECT * FROM asks WHERE state = 'open' ORDER BY id");
     const learned = this.db.all("SELECT bot, data FROM events WHERE kind = 'memory.learned' AND at >= ? ORDER BY seq", since);
     const soon = this.db.all("SELECT * FROM routines WHERE state = 'on' AND kind != 'digest' AND next_at <= ? ORDER BY next_at", Date.now() + 86_400_000);
-    const scout = this.bots().find((b) => b.template === 'scout')?.id;
-    const goal = scout && (disk.readNotes(this.cfg, { bot: scout }).split('\n').some((l) => l.replace(/^- /, '').startsWith('Goal:')) ||
-      this.db.get('SELECT 1 FROM tasks WHERE bot = ?', scout));
     const lines = [`Good ${partOfDay()}${address ? `, ${address}` : ''}. While you were away:`];
-    lines.push(done.length ? `- Finished: ${list(done.slice(0, 5).map((t) => `${name(t.bot)}, “${t.title}”`))}${done.length > 5 ? `, and ${done.length - 5} more` : ''}.` : '- Nothing new was finished.');
+    if (done.length) lines.push(`- Finished: ${list(done.slice(0, 5).map((t) => `${name(t.bot)}, “${t.title}”`))}${done.length > 5 ? `, and ${done.length - 5} more` : ''}.`);
     if (failed.length) lines.push(`- Did not go well: ${list(failed.slice(0, 3).map((t) => `${name(t.bot)}, “${t.title}” (${String(t.result ?? '').slice(0, 80)})`))}.`);
     if (unsure.length) lines.push(`- Not sure it worked: ${list(unsure.slice(0, 3).map((t) => `${name(t.bot)}, “${t.title}” (${String(t.result ?? '').slice(0, 80)})`))}.`);
-    lines.push(asks.length ? `- Needs you: ${list(asks.slice(0, 3).map((a) => a.title))}. It is under Needs you.` : '- Nothing needs you.');
+    if (asks.length) lines.push(`- Needs you: ${list(asks.slice(0, 3).map((a) => a.title))}. It is under Needs you.`);
     for (const l of learned.slice(0, 3)) lines.push(`- ${name(l.bot)} learned: ${JSON.parse(l.data).text}`);
-    if (day) lines.push(day.length ? `- Today on your calendar: ${list(day.map((e) => e.at ? `${clock(e.at)}, ${e.title}` : `${e.title} (all day)`))}.` : '- Nothing on your calendar today.');
-    lines.push(soon.length ? `- Coming up: ${list(soon.map((r) => `“${r.name}” with ${name(r.bot)}, ${clock(r.next_at)}`))}.` : '- Nothing is scheduled for the next day.');
-    if (!goal) lines.push('- Want help starting something on the side? Tap to begin.');
+    if (day?.length) lines.push(`- Today on your calendar: ${list(day.map((e) => e.at ? `${clock(e.at)}, ${e.title}` : `${e.title} (all day)`))}.`);
+    if (soon.length) lines.push(`- Coming up: ${list(soon.map((r) => `“${r.name}” with ${name(r.bot)}, ${clock(r.next_at)}`))}.`);
+    if (lines.length === 1) return lines[0].replace(' While you were away:', ' Everything is quiet.');
     return lines.join('\n');
   }
 
@@ -895,7 +898,7 @@ export class Crew {
             SELECT * FROM (SELECT * FROM messages WHERE bot = ? AND id < ? ORDER BY id DESC LIMIT 99)
           ) ORDER BY id`, id, around, id, around)
         : this.db.all('SELECT * FROM (SELECT * FROM messages WHERE bot = ? ORDER BY id DESC LIMIT 200) ORDER BY id', id))
-        .map((m: Row): Row => ({ ...m, text: cleanReply(m.text),
+        .map((m: Row): Row => ({ ...m, text: cleanReply(m.text), recap: id === CHIEF && !m.task_id && !!this.db.get("SELECT 1 FROM events WHERE kind = 'routine.fired' AND json_extract(data, '$.message') = ?", m.id),
           files: id === CHIEF && m.author === 'bot' && m.task_id
             ? this.db.all("SELECT bot, data FROM events WHERE kind = 'file.delivered' AND json_extract(data, '$.task') IN (SELECT id FROM tasks WHERE root = (SELECT COALESCE(root,id) FROM tasks WHERE id = ?)) AND json_extract(data, '$.input') IS NULL AND json_extract(data, '$.path') NOT LIKE 'files/from-%'", m.task_id)
               .map((e) => ({ bot: e.bot, path: JSON.parse(e.data).path })) : [],
@@ -927,14 +930,12 @@ export class Crew {
   }
 
   // ---- people ----
-  /** First meeting: the person tells Chief how to be addressed. Stored per person, used by every bot. */
   onboard(address: string, ask?: string, bot?: string): { task: number } | void {
     const a = needText(address, 40, 'say how Chief should address you');
     const hello = ask?.trim();
     let to = CHIEF;
     if (hello) {
-      // A Hello goal tap starts in its helper's thread: hired silently when the person's account runs
-      // helpers, or with Chief when it names no template or the plan has none.
+      // Hello goal taps hire their helper when the person's account supports it.
       try {
         const t = disk.loadTemplate(this.cfg, bot ?? '');
         const hired = this.bots().find((b) => b.template === t.id)?.id;
@@ -942,7 +943,6 @@ export class Crew {
         if (brains.some((b) => !this.accounts.unready(b.provider) && !this.accounts.notIncluded(b.provider))) to = hired ?? this.recruit(t.id, undefined, 'person').id;
       } catch { /* Chief */ }
     }
-    // The address is already stored in people; the Hello screen already greeted her, so the thread starts empty and renders ChiefIdeas.
     this.db.tx(() => {
       this.db.run("DELETE FROM messages WHERE bot = ? AND author = 'bot'", CHIEF);
       this.db.run('UPDATE people SET address = ?, onboarded = 1 WHERE id = 1', a);
@@ -1019,7 +1019,7 @@ export class Crew {
     const pics = checkPhotos(photos);
     if (!text.trim() && !pics.length) throw Object.assign(new Error('empty message'), { status: 400 });
     const words = text.trim() || (pics.length === 1 ? 'Here is a photo.' : 'Here are some photos.');
-    if (botId === CHIEF && !this.person().onboarded) { this.say(CHIEF, 'person', words, null); return this.onboard(words); }
+    if (botId === CHIEF && !this.person().onboarded) this.db.run('UPDATE people SET onboarded = 1 WHERE id = 1');
     if (botId === CHIEF && !pics.length && (asksForPhone(words) || inlineHowTo(words) === 'signin' || inlineHowTo(words) === 'app')) {
       this.say(CHIEF, 'person', words, null);
       if (asksForPhone(words)) { await this.addPhone(); return; }
@@ -2103,7 +2103,7 @@ export class Crew {
           disk.validateJob(job);
           return this.propose(CHIEF, `Chief wrote ${b.display}'s job`, { job: { bot: b.id, ...job }, preview: { head: `${b.display}'s job`, body: disk.jobPreview(job) } });
         }),
-      tool('crew_call_me', 'Change how the person is addressed, when they ask.', { how: Type.String() }, (p) => { this.setAddress(String(p.how ?? '')); }),
+      tool('crew_call_me', 'Change how the person is addressed only when they explicitly give a name or title to call them. Never infer it from a task or other message.', { how: Type.String() }, (p) => { this.setAddress(String(p.how ?? '')); }),
     ];
   }
 

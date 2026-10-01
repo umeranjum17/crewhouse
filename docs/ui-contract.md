@@ -67,6 +67,8 @@ The same shape of story for documents: a delivered `*.docx` (made by `crew_docum
 
 `messages[]` `{author: person|bot|chief|system, text}`; a system text `Delivered files/x.mp4: note` becomes a media card. Chief's hand-off in a helper's thread also carries its task's `title`; `adapter.lines()` collapses it to one short ask — `Chief asked: <title>`, the full assignment words behind **Show details** (`line.detail`) — so the result leads. A teaser (`things[].summary`, the chat list's line) reads as plain words with no raw `**` emphasis (`adapter.teaser`).
 A job ends `done`, `failed` or `unsure`: it acted out in the world (sent, bought, deleted, pressed or typed on a page) and the helper didn't say it saw it work. crewd then writes a bot line starting "Not sure it worked:" in the helper's chat (a routine's goes to Chief's thread as "Pip isn't sure “…” worked. …"), raises the same `alert` a failure does, and the trail gets `task.unsure`; `adapter.lines()` marks such a line `unsure` and the chat sets it apart.
+Chief's daily recap is a separate message with `recap: true`, supplied by the routine's recorded message id. Both apps keep its author and time visible even after another Chief message; the web sets it apart as a card. It appears at most once per local day, including after a restart. Quiet days get one calm line; other recaps include only useful updates.
+
 **Wanted**: `choices: string[]` on a bot message, shown as tap-to-reply chips ("Soft & sweet", "Upbeat").
 `trail` (events) becomes the "What I did" step list; `run.tool` events carry crewd's own plain `words` ("Searched the web for “school trips”", "Worked on a video", "Used its browser").
 **Wanted**: a crewd-written `task.progress` for each meaningful step ("Picked 8 photos from Eid"), because that is what makes the list worth reading.
@@ -84,7 +86,7 @@ A **suggestion** is an ask with `kind: 'propose'` and `detail.{words, preview: {
 
 ## First run (today)
 
-`POST /api/onboard` `{address, ask, bot?}`: how Chief addresses the person and, from an idea card, their first request, in one tap.
+`POST /api/onboard` `{address, ask, bot?}`: how Chief addresses the person and, from an idea card, their first request, in one tap. Only this explicit choice, Settings, or a request to change how they are addressed supplies the name; an ordinary first chat message starts a task with no name.
 Her Chief thread then starts with that request. From the goal starter it also carries `bot: 'scout'`: crewd hires Scout when missing and the person's account runs helpers, and the request starts as her own Scout task instead. On a plan without helpers it starts with Chief. With no AI account yet it waits (a `paused` task with no wake time) and Chief says one line ("Delighted, Sara. To think, the crew uses your own ChatGPT, the same one you already use."); the app shows the sign-in right under it. Signing in starts it by itself, and Chief says "You're signed in. Thank you, Sara. On it now."
 
 ## Sign in with ChatGPT (today)

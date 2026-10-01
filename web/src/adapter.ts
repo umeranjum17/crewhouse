@@ -42,7 +42,7 @@ export type DocPart = { kind: 'heading' | 'p' | 'li' | 'table'; text?: string; b
 export type DocView = { name: string; parts: DocPart[] };
 export type Step = { at: number; text: string; now?: boolean; asked?: boolean; seq: number; undo?: boolean };
 /** `unsure`: crewd's line for a job that acted but couldn't confirm it worked, shown apart from the helper's own words. */
-export type Line = { id: number; from: 'me' | 'them' | 'chief' | 'note'; text: string; files: FileView[]; choices: string[]; at?: number; unsure?: boolean;
+export type Line = { id: number; from: 'me' | 'them' | 'chief' | 'note'; text: string; files: FileView[]; choices: string[]; at?: number; unsure?: boolean; recap?: boolean;
   /** Chief's full assignment in a helper's chat, behind Show details: the line itself stays one short ask. */
   detail?: string;
   /** What a delivered workbook or document holds, said once: the web's card says it itself, the phone shows these. */
@@ -379,7 +379,7 @@ export const SHARES = [
 ];
 /** The small line at the bottom of the side rail: how the crew's share of ChatGPT stands today. It says what Crewhouse
  *  itself knows — the share this household gave the crew — never how much of the provider's allowance is left. */
-export const meter = (state: Json) => (state.share?.used ? 'ChatGPT: the crew has had its share today' : resting(state) ? `${resting(state)}` : 'ChatGPT: the crew is within its share today');
+export const meter = (state: Json) => (state.share?.used ? 'The crew will carry on tomorrow' : resting(state) ? `${resting(state)}` : '');
 export function share(state: Json) {
   const s = state.share ?? { choice: 'light', used: false };
   const part: Record<string, string> = { small: 'a small part', fair: 'a fair part', most: 'most' };
@@ -975,7 +975,7 @@ export function lines(page: Json, bot: string): Line[] {
       text: `Chief asked: ${plain(String(m.title ?? text.split('\n')[0])).slice(0, 80)}`, detail: chatWords(text),
       files: [...pics, ...(m.files ?? []).map((f: Json) => fileView(f.bot, f.path))], choices: [] };
     return { id: m.id, from: m.author === 'person' ? 'me' : 'them',
-      text: m.author === 'person' ? (pics.length && /^Here (is a photo|are some photos)\.$/.test(text) ? '' : noTools(text)) : chatWords(text), files: [...pics, ...(m.files ?? []).map((f: Json) => fileView(f.bot, f.path))], choices: (m.choices ?? []).map(plain), at: m.at ? at(m.at) : undefined, unsure: m.author === 'bot' && /^Not sure it worked:|^[^.]{1,40} isn't sure “/.test(text) };
+      recap: m.recap === true, text: m.author === 'person' ? (pics.length && /^Here (is a photo|are some photos)\.$/.test(text) ? '' : noTools(text)) : chatWords(text), files: [...pics, ...(m.files ?? []).map((f: Json) => fileView(f.bot, f.path))], choices: (m.choices ?? []).map(plain), at: m.at ? at(m.at) : undefined, unsure: m.author === 'bot' && /^Not sure it worked:|^[^.]{1,40} isn't sure “/.test(text) };
   }).filter((l: Line) => l.text || l.files.length);
 }
 
