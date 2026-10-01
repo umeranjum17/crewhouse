@@ -10,7 +10,7 @@ import WebSocket from 'ws';
 import { join } from 'node:path';
 import { temp } from './tmp.ts';
 import { EngineClient, resolveEngine } from '@desklink/host';
-import { browserBin, deskFor, Desktops, missing, type DeskEvent } from '../src/desktop.ts';
+import { browserBin, Desktops, missing, type DeskEvent } from '../src/desktop.ts';
 import { bashTool, sandboxReady } from '../src/engine.ts';
 import { setup } from './lab.ts';
 import { Teacher } from '../src/teach.ts';
@@ -19,9 +19,6 @@ import { effectOf } from '../src/policy.ts';
 const root = temp('crewhouse-desk');
 const botDir = join(root, 'bots', 'reel');
 mkdirSync(join(botDir, '.crewhouse'), { recursive: true });
-// A display number nobody holds, so side-by-side runs and a real X server never collide.
-let n = 190 + Math.floor(Math.random() * 60);
-while (existsSync(`/tmp/.X${n}-lock`) || existsSync(`/tmp/.X11-unix/X${n}`)) n++;
 /** Loopback ports this test's own processes listen on (crewd's relays, the bots' browsers, the decoy): the attack scans
  *  these and leaves every other program's alone, including other test files' browsers running alongside. */
 function ours() {
@@ -39,18 +36,48 @@ function ours() {
     .filter((c) => c[3] === '0A' && inodes.has(c[9])).map((c) => String(parseInt(c[1].split(':')[1], 16)));
 }
 const desks = new Desktops(join(root, 'state'));
-const xauth = deskFor(join(root, 'state'), 'reel', n).xauth;
 after(() => desks.stopAll());
 const noXvfb = missing().some((m) => m.startsWith('Xvfb')) && 'Xvfb is not installed';
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const watcher = () => { const seen: DeskEvent[] = []; return { seen, send: (e: DeskEvent) => { seen.push(e); } }; };
 
+test('independent installs reserve private displays and stop only their own', { skip: noXvfb }, async (t) => {
+  const installs = ['foreign', 'one', 'two'].map((id) => {
+    const dir = join(root, id); mkdirSync(dir, { recursive: true });
+    return { dir, desktops: new Desktops(join(dir, 'state')) };
+  });
+  t.after(() => Promise.all(installs.map((i) => i.desktops.stopAll())));
+  const [foreign, one, two] = installs;
+  const held = await foreign.desktops.ensure('same', foreign.dir);
+  const foreignSocket = statSync(`/tmp/.X11-unix/X${held.n}`).ino;
+  const [a, b, again] = await Promise.all([one.desktops.ensure('same', one.dir),
+    two.desktops.ensure('same', two.dir), one.desktops.ensure('same', one.dir)]);
+  assert.equal(a, again, 'concurrent requests share one owned display');
+  assert.equal(new Set([held.display, a.display, b.display]).size, 3, 'the same helper row never chooses another install’s display');
+  assert.equal(statSync(`/tmp/.X11-unix/X${held.n}`).ino, foreignSocket, 'allocation preserves the foreign socket itself');
+  assert.equal((await probe(a.display, b.xauth))?.available, false, 'another install’s cookie cannot drive this display');
+  assert.ok(existsSync(`/tmp/.X11-unix/X${held.n}`));
+  await one.desktops.stopAll();
+  assert.ok(!existsSync(`/tmp/.X11-unix/X${a.n}`), 'shutdown waits for its display socket to go');
+  assert.ok(existsSync(`/tmp/.X11-unix/X${held.n}`), 'the foreign display survives');
+  assert.equal(statSync(`/tmp/.X11-unix/X${held.n}`).ino, foreignSocket, 'shutdown never replaces or unlinks the foreign socket');
+  assert.ok(existsSync(`/tmp/.X11-unix/X${b.n}`), 'the other install survives');
+  assert.equal(two.desktops.info('same')?.display, b.display);
+  const restarted = await one.desktops.ensure('same', one.dir);
+  assert.notEqual(restarted.display, held.display);
+  assert.notEqual(restarted.display, b.display);
+  one.desktops.stop('same');
+  const rapid = await one.desktops.ensure('same', one.dir);
+  assert.ok(existsSync(`/tmp/.X11-unix/X${rapid.n}`), 'rapid restart waits for its own shutdown');
+  assert.equal(statSync(`/tmp/.X11-unix/X${held.n}`).ino, foreignSocket);
+});
+
 /** What the engine sees on a display, given an X cookie file. Null when the engine can't run here. */
-async function probe(xauth: string) {
+async function probe(display: string, xauth: string) {
   const e = resolveEngine();
   if (!e) return null;
   try {
-    const c = await EngineClient.start(e.command, e.args, {}, { ...process.env, DISPLAY: `:${n}`, XAUTHORITY: xauth });
+    const c = await EngineClient.start(e.command, e.args, {}, { ...process.env, DISPLAY: display, XAUTHORITY: xauth });
     const caps = await c.capabilities();
     await c.stop();
     return caps.x11;
@@ -61,16 +88,16 @@ async function probe(xauth: string) {
 }
 
 test('display lifecycle: start once, own cookie, idle stop', { skip: noXvfb }, async (t) => {
-  const d = await desks.ensure('reel', n, botDir);
-  assert.equal(d.display, `:${n}`);
-  assert.ok(existsSync(`/tmp/.X11-unix/X${n}`), 'the display is up');
+  const d = await desks.ensure('reel', botDir);
+  assert.match(d.display, /^:\d+$/);
+  assert.ok(existsSync(`/tmp/.X11-unix/X${d.n}`), 'the display is up');
   assert.equal(statSync(d.xauth).mode & 0o777, 0o600, 'cookie readable by the owner only');
-  assert.equal(await desks.ensure('reel', n, botDir), d, 'a second run reuses the same desktop');
+  assert.equal(await desks.ensure('reel', botDir), d, 'a second run reuses the same desktop');
 
-  const withCookie = await probe(d.xauth);
+  const withCookie = await probe(d.display, d.xauth);
   if (withCookie) {
     assert.deepEqual(withCookie, { available: true, size: [1280, 800] });
-    assert.equal((await probe('/dev/null'))?.available, false, 'no cookie, no display');
+    assert.equal((await probe(d.display, '/dev/null'))?.available, false, 'no cookie, no display');
   } else t.diagnostic('desklink engine unavailable here; cookie check skipped');
 
   desks.sweep(() => true, Date.now() + 60 * 60_000);
@@ -79,13 +106,13 @@ test('display lifecycle: start once, own cookie, idle stop', { skip: noXvfb }, a
   assert.ok(desks.running('reel'), 'not idle long enough yet');
   desks.sweep(() => false, Date.now() + 11 * 60_000);
   assert.ok(!desks.running('reel'), 'idle for ten minutes: stopped');
-  for (let i = 0; i < 100 && existsSync(`/tmp/.X11-unix/X${n}`); i++) await sleep(100);
-  assert.ok(!existsSync(`/tmp/.X11-unix/X${n}`), 'the display is gone');
+  for (let i = 0; i < 100 && existsSync(`/tmp/.X11-unix/X${d.n}`); i++) await sleep(100);
+  assert.ok(!existsSync(`/tmp/.X11-unix/X${d.n}`), 'the display is gone');
 });
 
 test('watching: crewd picks the display and the permissions', { skip: noXvfb }, async (t) => {
-  await desks.ensure('reel', n, botDir);
-  if (!(await probe(xauth))) return t.skip('desklink engine unavailable here');
+  const d = await desks.ensure('reel', botDir);
+  if (!(await probe(d.display, d.xauth))) return t.skip('desklink engine unavailable here');
   const a = watcher(), b = watcher();
   await assert.rejects(desks.signal('reel', a, 'session.open', { permissions: ['view'], source: { kind: 'portal' } }, false), { code: 'source' });
   await assert.rejects(desks.signal('reel', a, 'session.open', { permissions: ['view', 'control'] }, false), { code: 'permission' });
@@ -137,13 +164,11 @@ test("a bot's shell cannot find or drive another bot's browser", { skip: noAttac
   decoy.stderr!.on('data', (c) => { said = (said + c).slice(-1000); });
   decoy.on('error', (e) => { said = `${said}\nspawn error: ${e.message}`.slice(-1000); });
   t.after(async () => { pages.close(); decoy.kill('SIGKILL'); await Promise.all([new Promise((r) => (decoy.exitCode === null && decoy.signalCode === null ? decoy.once('exit', r) : r(0))), desks.stopAll()]); });
-  const d = await desks.ensure('reel', n, botDir);
+  const d = await desks.ensure('reel', botDir);
   // The attacker, maya, has a computer and browser of its own too.
   const space = join(root, 'bots', 'maya');
   mkdirSync(join(space, '.crewhouse'), { recursive: true });
-  let m = n + 1;
-  while (existsSync(`/tmp/.X${m}-lock`) || existsSync(`/tmp/.X11-unix/X${m}`)) m++;
-  const own = await desks.ensure('maya', m, space);
+  const own = await desks.ensure('maya', space);
   // A cold Chrome on a busy CI runner can take a while to open its port. A Chromium that DIED (crash, sandbox,
   // singleton) never will: say so at once with its last words, instead of burning the whole bound on an empty wait.
   await until(`the decoy's DevTools port (Chrome said: ${said.slice(-300)})`, () => {
@@ -217,7 +242,7 @@ test("a show is recorded through crewd's own endpoint to the bot's browser", { s
   const url = `http://127.0.0.1:${(site.address() as AddressInfo).port}`;
   const teacher = new Teacher();
   t.after(async () => { teacher.stop('reel'); site.close(); await desks.stopAll(); });
-  const d = await desks.ensure('reel', n, botDir);
+  const d = await desks.ensure('reel', botDir);
   // The bot's browser was on the page (its own tool had it open, then let go when the person took the wheel).
   const bot = new WebSocket(d.cdp!);
   await new Promise((r, j) => { bot.once('open', r); bot.once('error', j); });
@@ -249,9 +274,7 @@ test('give back reads its tabs and keeps what the person ticked', { skip: noXvfb
   crew.recruit('reel', 'Reel', 'person');
   const space = join(cfg.crewDir, 'bots', 'reel');
   const host = (s: any) => `http://127.0.0.1:${(s.address() as AddressInfo).port}`;
-  let m = n + 1;
-  while (existsSync(`/tmp/.X${m}-lock`) || existsSync(`/tmp/.X11-unix/X${m}`)) m++;
-  const desk = await crew.desktops.ensure('reel', m, space);
+  const desk = await crew.desktops.ensure('reel', space);
   t.after(async () => { front.close(); behind.close(); await crew.desktops.stopAll(); done(); });
   assert.deepEqual(await crew.desktops.pages('reel'), [], 'nothing signed in to yet: no tabs at all');
 

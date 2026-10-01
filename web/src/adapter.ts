@@ -934,11 +934,8 @@ export function step(e: Json): string | null {
     case 'file.delivered': return d.photo ? 'You sent a photo' : /\.(patch|diff)$/.test(String(d.path)) ? `Suggested a change for the maintainer to review: “${pretty(String(d.path))}”` : `Made “${pretty(d.path)}”`;
     case 'memory.learned': return `${d.everyone ? 'Learned, for the whole crew' : 'Learned'}: ${plain(d.text)}`;
     case 'memory.undone': return `You undid: ${plain(d.text)}`;
-    case 'skill.learned': return `Learned how to: ${plain(d.says ?? d.name)}`;
-    case 'skill.removed': return `You put away: ${plain(d.says || d.name)}`;
     case 'soul.changed': return d.by === 'chief' ? 'Took on the personality Chief suggested' : d.reset ? 'Went back to how it started' : 'You changed how it comes across';
     case 'run.resumed': return 'Picked up where it left off';
-    case 'learn.applied': return `Learned: ${plain(d.skill)} — it will do it this way next time`;
     case 'desktop.takeover': return 'You took the wheel';
     case 'desktop.giveback': return 'You handed the wheel back';
     case 'task.paused': return `Paused “${plain(d.title)}” for now`;

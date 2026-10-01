@@ -1,8 +1,8 @@
-// Each bot has its own Xvfb/X cookie, Chromium and desklink stream — never the owner's display.
+// Private authenticated Xvfb displays and Chromium, streamed through the capture kit; never the owner's display.
 import { spawn, type ChildProcess } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, readlinkSync, realpathSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { EngineClient, resolveEngine, explainMissingEngine, type EngineEvent } from '@desklink/host';
 import { WebSocket, WebSocketServer } from 'ws';
@@ -22,13 +22,8 @@ export function missing() {
   return out;
 }
 
-/** Display :N and its cookie file. N is stable per bot, so a restarted desktop keeps its address. */
-export function deskFor(stateDir: string, bot: string, n: number) {
-  return { n, display: `:${n}`, xauth: join(stateDir, 'desktops', `${bot}.xauth`) };
-}
-
 /** An Xauthority file with one wildcard MIT-MAGIC-COOKIE-1 entry: only holders of this file may use the display. */
-function xauthority(n: number, cookie: Buffer) {
+function xauthority(n: number | string, cookie: Buffer) {
   const field = (b: Buffer) => { const len = Buffer.alloc(2); len.writeUInt16BE(b.length); return Buffer.concat([len, b]); };
   const family = Buffer.from([0xff, 0xff]); // FamilyWild
   return Buffer.concat([family, field(Buffer.alloc(0)), field(Buffer.from(String(n))), field(Buffer.from('MIT-MAGIC-COOKIE-1')), field(cookie)]);
@@ -67,6 +62,8 @@ const refused = (message: string, code = 'permission') => Object.assign(new Erro
 
 export class Desktops {
   private desks = new Map<string, Desk>();
+  private starts = new Map<string, Promise<Desk>>();
+  private ends = new Map<string, Promise<unknown>>();
   private stateDir: string;
   constructor(stateDir: string) { this.stateDir = stateDir; }
 
@@ -77,7 +74,18 @@ export class Desktops {
   }
 
   /** Start the bot's display and browser if they aren't up. Idempotent; called before every run that needs a screen. */
-  async ensure(bot: string, n: number, botDir: string) {
+  ensure(bot: string, botDir: string): Promise<Desk> {
+    const have = this.starts.get(bot);
+    if (have) return have;
+    const pending = this.start(bot, botDir);
+    this.starts.set(bot, pending);
+    void pending.finally(() => this.starts.delete(bot)).catch(() => {});
+    return pending;
+  }
+
+  private async start(bot: string, botDir: string) {
+    await this.ends.get(bot);
+    botDir = realpathSync(botDir);
     const have = this.desks.get(bot);
     if (have) {
       have.used = Date.now();
@@ -86,32 +94,35 @@ export class Desktops {
     }
     const why = missing().find((m) => m.startsWith('Xvfb'));
     if (why) throw new Error(`bot desktops need ${why}`);
-    const d = deskFor(this.stateDir, bot, n);
+    const xauth = join(this.stateDir, 'desktops', `${bot}.xauth`), cookie = randomBytes(16);
     mkdirSync(join(this.stateDir, 'desktops'), { recursive: true });
-    this.reapOrphan(d.display, d.xauth);
-    const sock = `/tmp/.X11-unix/X${n}`;
-    if (existsSync(sock)) throw new Error(`display ${d.display} is already in use by another program`);
-    writeFileSync(d.xauth, xauthority(n, randomBytes(16)), { mode: 0o600 });
-    const xvfb = spawn('Xvfb', [d.display, '-screen', '0', `${WIDTH}x${HEIGHT}x24`, '-nolisten', 'tcp', '-auth', d.xauth], { stdio: ['ignore', 'ignore', 'pipe'] });
+    this.reapOrphan(xauth, botDir);
+    writeFileSync(xauth, xauthority('', cookie), { mode: 0o600 });
+    // Xvfb atomically reserves a free display; no SQL-derived address or check-then-start race.
+    const xvfb = spawn('Xvfb', ['-displayfd', '3', '-screen', '0', `${WIDTH}x${HEIGHT}x24`, '-nolisten', 'tcp', '-auth', xauth],
+      { cwd: botDir, stdio: ['ignore', 'ignore', 'pipe', 'pipe'] });
     let err = '';
     xvfb.stderr!.on('data', (c) => { err = (err + c).slice(-2000); });
-    for (let i = 0; !existsSync(sock); i++) {
-      if (xvfb.exitCode !== null || i > 50) { xvfb.kill(); throw new Error(`Xvfb ${d.display} did not start: ${err.trim().split('\n').pop() ?? ''}`); }
-      await new Promise((r) => setTimeout(r, 100));
-    }
-    const desk: Desk = { bot, ...d, xvfb, used: Date.now(), early: [] };
+    const n = await new Promise<number>((resolve, reject) => {
+      const done = (v: number | Error) => { clearTimeout(timer); v instanceof Error ? reject(v) : resolve(v); };
+      const failed = (why = err.trim().split('\n').pop()) => done(new Error(`Xvfb did not start: ${why || 'exited'}`));
+      const timer = setTimeout(() => failed('timed out reserving a display'), 5000);
+      xvfb.once('error', (e) => failed(e.message)); xvfb.once('exit', () => failed());
+      let ready = '';
+      xvfb.stdio[3]!.on('data', (c) => { ready += String(c); if (/^\d+\n$/.test(ready)) done(Number(ready.trim())); });
+    }).catch((e) => { xvfb.kill(); throw e; });
+    const desk: Desk = { bot, n, display: `:${n}`, xauth, xvfb, used: Date.now(), early: [] };
     xvfb.on('exit', () => { if (this.desks.get(bot) === desk) this.stop(bot); });
     this.desks.set(bot, desk);
-    await this.browser(desk, botDir);
+    try { writeFileSync(xauth, xauthority(n, cookie), { mode: 0o600 }); await this.browser(desk, botDir); } catch (e) { await this.stop(bot); throw e; }
     return desk;
   }
 
   /** A crewd that died leaves its Xvfb behind; ours is recognisable by our own cookie path on its command line. */
-  private reapOrphan(display: string, xauth: string) {
-    // ponytail: scans /proc once per desktop start; fine for a handful of bots.
+  private reapOrphan(xauth: string, botDir: string) {
     for (const pid of existsSync('/proc') ? readdirSync('/proc').filter((p) => /^\d+$/.test(p)).map(Number) : []) {
       const cmd = (() => { try { return readFileSync(`/proc/${pid}/cmdline`, 'utf8').split('\0'); } catch { return []; } })();
-      if (/Xvfb$/.test(cmd[0] ?? '') && cmd[1] === display && cmd.includes(xauth)) try { process.kill(pid); } catch { /* gone */ }
+      try { if (/Xvfb$/.test(cmd[0] ?? '') && cmd[cmd.indexOf('-auth') + 1] === xauth && readlinkSync(`/proc/${pid}/cwd`) === botDir) process.kill(pid); } catch { /* gone */ }
     }
   }
 
@@ -286,22 +297,26 @@ export class Desktops {
 
   stop(bot: string) {
     const d = this.desks.get(bot);
-    if (!d) return;
+    if (!d) return this.ends.get(bot);
     this.desks.delete(bot);
     d.session?.watcher.send({ kind: 'revoked', reason: 'the desktop stopped' });
-    void d.engine?.stop().catch(() => {});
+    const gone = Promise.all([d.engine?.stop().catch(() => {}), ...[d.chrome, d.xvfb].map((p) =>
+      p && p.exitCode === null && p.signalCode === null ? new Promise((r) => p.once('exit', r)) : undefined)]);
+    this.ends.set(bot, gone);
+    void gone.finally(() => { if (this.ends.get(bot) === gone) this.ends.delete(bot); });
     const chrome = d.chrome;
     chrome?.kill();
     // A Chromium that won't finish shutting down is not left running.
     if (chrome) setTimeout(() => { if (chrome.exitCode === null && chrome.signalCode === null) chrome.kill('SIGKILL'); }, 3000).unref();
     d.devtools?.close();
     d.xvfb.kill();
+    return gone;
   }
 
-  /** Stop every desktop; settles once each bot's Chromium has exited (it writes its profile on the way out). */
-  stopAll() {
-    const gone = [...this.desks.values()].map((d) => d.chrome && d.chrome.exitCode === null && d.chrome.signalCode === null && new Promise((r) => d.chrome!.once('exit', r)));
+  /** Wait for owned displays, browsers and captures, including a start or shutdown already in flight. */
+  async stopAll() {
+    await Promise.all([...this.starts.values()].map((p) => p.catch(() => {})));
     for (const bot of [...this.desks.keys()]) this.stop(bot);
-    return Promise.all(gone);
+    return Promise.all(this.ends.values());
   }
 }
