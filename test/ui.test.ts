@@ -860,7 +860,7 @@ test('suggest for this screen: the rules table picks at most three buttons from 
   const s = { ...state, bots: [bot('chief'), bot('scout'), bot('scribe')], asks: [], connections: ['calendar', 'gmail'] };
   const box = (text: string, app = 'com.example.notes', picked = '') => ({ app, text, picked });
   const ids = (b: A.Screen['box'], used?: Record<string, number>) => A.quick(s, { box: b, used }).map((x) => x.id);
-  // No box: the kit names the app only with a box in focus (focusedField.read() is null, and @byokit/overlay 0.2.5 has
+  // No box: the kit names the app only with a box in focus (focusedField.read() is null, and @byokit/overlay 0.3.0 has
   // no other foreground-app read in JS), so the two buttons that work on any screen.
   assert.deepEqual(ids(null), ['deal', 'letter']);
   assert.deepEqual(ids('off'), ['write', 'deal', 'letter'], 'the box not readable yet: Write it here explains the switch');
