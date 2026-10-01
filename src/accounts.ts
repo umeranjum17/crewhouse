@@ -111,6 +111,6 @@ export class Accounts {
   }
   /** The sign-in is over (either way): the card's last word is in. */
   async finished(account: string) { await this.running.get(account)?.finished.catch(() => {}); }
-  view(account: string) { return this.views.get(account) ?? null; }
+  view(account: string): View | null { const error = this.runtime.signInRecovery?.(); return error ? { state: 'failed', via: 'browser', error, why: 'locked' } : this.views.get(account) ?? null; }
   stop() { for (const [, handle] of this.running) handle.cancel(); this.running.clear(); }
 }

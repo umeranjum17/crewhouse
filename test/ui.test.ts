@@ -480,6 +480,7 @@ test('sign-in states reach the screens as plain states, never the engine\'s word
     assert.equal(g.page, '', 'a missing, finished or failed sign-in never opens an old page');
     assert.equal(g.signing, null, 'only a waiting sign-in offers a code');
   }
+  assert.match(row({ state: 'failed', why: 'locked', error: 'Unlock your password storage, then try again.' }).recovery, /Unlock.*try again/);
   const mixed = row({ state: 'failed', why: 'busy', error: 'The sign-in expired.' });
   assert.ok(mixed.busy && mixed.expired && !mixed.failed, 'keep the independent screen flags');
   assert.ok(row({ state: 'failed', why: 'expired', error: 'Other problem' }).failed, 'the existing view uses the expiry words');

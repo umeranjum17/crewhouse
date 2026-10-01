@@ -1,10 +1,10 @@
-// The engine port on the BYOKit OpenClaw kit. This file is the only one that imports the kit: it maps the
-// person's accounts, runs and tools onto the kit's, and keeps the crew's own learned-skill capture beside it.
+// The BYOKit engine port: accounts, runs, tools and Crewhouse's learned-skill capture.
 import { randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { OpenClawKit, type KitOptions, type ToolSpec } from '@byokit/openclaw';
+import { OpenClawKit, stateWords, type KitOptions, type ToolSpec } from '@byokit/openclaw';
+import { osKeyringSeal } from '@byokit/secrets';
 import { PROVIDERS } from '../accounts.ts';
 import { commit } from '../bots.ts';
 import { CALLBACK_PORT } from '../callback-port.ts';
@@ -27,9 +27,7 @@ const ME = 'm1';
 /** The engine-side name of a Crewhouse tool and back: only the shell differs. */
 const crewName = (tool: string) => tool === 'shell' ? 'bash' : tool;
 
-// The model-visible tools. Names are Crewhouse's: `shell` is crewd's sandboxed shell (Crewhouse's `bash`; the engine
-// would rewrite a tool called bash to its own exec before the gate saw it), `browser` the bot's own browser,
-// `calendar`/`mail` the two read-mostly app AXIs, `crew_app` a remote app's tools, `crew_*` the crew's own.
+// Model-visible tools: `shell` avoids the engine rewriting `bash` to its own exec before the gate.
 const args = { type: 'object', properties: { args: { type: 'array', items: { type: 'string' } } }, required: ['args'], additionalProperties: false };
 const SCHEMAS: Record<string, object> = {
   shell: { type: 'object', properties: { command: { type: 'string' } }, required: ['command'], additionalProperties: false },
@@ -65,20 +63,15 @@ export const TOOLS: ToolSpec[] = ['shell', 'browser', 'calendar', 'mail', 'crew_
 ].map((name) => ({ name, description: ABOUT[name] ?? `Crewhouse ${name.slice(5).replaceAll('_', ' ')}. The person sees the result in their crew.`,
   parameters: SCHEMAS[name] ?? { type: 'object', additionalProperties: true } }));
 
-/** Crewhouse's engine config, merged under the kit's invariants on every prepare. The learning mode is left to the
- *  engine's saved config: crewd applies the person's switch whenever the engine comes up (Crew.setLearning). */
+/** Crewhouse's engine config, merged under the kit's invariants on every prepare. */
 const CONFIG = {
   // An empty allow list: the engine otherwise narrows to its model map, and the person's other providers vanish.
   agents: { defaults: { sandbox: { mode: 'off' }, modelPolicy: { allow: [] } } },
   tools: { profile: 'coding', alsoAllow: TOOLS.map((t) => t.name), deny: ['group:fs', 'group:runtime', 'group:automation', 'group:messaging', 'group:nodes', 'group:ui', 'sessions_send', 'sessions_spawn', 'conversations_send', 'conversations_turn', 'subagents', 'code_execution', 'gateway', 'openclaw', 'plugins', 'cron', 'ask_user', 'suggest_task'], fs: { workspaceOnly: true }, exec: { security: 'deny', ask: 'always' }, elevated: { enabled: false }, agentToAgent: { enabled: false }, sessions: { visibility: 'agent' } },
-  // `paths: []` drops the plugin folder older Crewhouse builds loaded; the kit adds its own bridge plugin.
   plugins: { load: { paths: [] }, allow: ['crewhouse', 'memory-core', 'openai'], entries: {
     'memory-core': { config: { dreaming: { enabled: false } } },
-    // The Codex app-server harness is deferred (spec §5.1): leaving it unconfigured keeps its install off.
     codex: { enabled: false },
   } },
-  // Only skills reviewed against the tarball and this repo's own content may exist; installs go through the kit's
-  // operator policy with Crewhouse's trusted list (trusted-skills.json) and fail closed without it.
   skills: { allowBundled: ['video-frames', 'openai-whisper', 'summarize', 'nano-pdf', 'diagram-maker'], workshop: { approvalPolicy: 'auto' } },
 };
 
@@ -86,12 +79,12 @@ export class OpenClawRuntime implements AgentRuntime {
   readonly kit: OpenClawKit;
   readonly stateDir: string;
   private host?: ToolHost;
-  /** Crewhouse's own record of each registered run (bot and task), keyed by session. */
   private runs = new Map<string, RunRef>();
   constructor(stateDir: string, crewDir = '', o: Partial<KitOptions> = {}) {
     this.stateDir = stateDir;
     this.kit = new OpenClawKit({
       stateDir, engineDir: join(repo, 'runtime/openclaw'), plugin: { id: 'crewhouse' }, tools: TOOLS, config: CONFIG,
+      authSeal: 'authSeal' in o ? o.authSeal : osKeyringSeal({ service: 'crewhouse-engine', dualWrap: true }),
       permitted: (tool) => tool.startsWith('crew_'), callbackPort: CALLBACK_PORT,
       installPolicy: { trustedSkills: join(import.meta.dirname, 'trusted-skills.json'), ownRoots: [repo, crewDir].filter(Boolean) },
       host: {
@@ -114,6 +107,7 @@ export class OpenClawRuntime implements AgentRuntime {
   }
   async start(host: ToolHost) { this.host = host; await this.kit.start(); }
   async stop() { await this.kit.stop(); }
+  signInRecovery() { return this.kit.state.phase === 'locked' ? stateWords(this.kit.state) : ''; }
   memoryLimited() { return this.kit.memoryLimited(ME); }
 
   // ---- accounts: the engine owns credentials; the kit drives its wizard and reads its status ----
@@ -123,9 +117,13 @@ export class OpenClawRuntime implements AgentRuntime {
     return provider ? this.kit.signedIn(ME, provider) : false;
   }
 
-  /** The engine's provider-owned login; the kit holds the ChatGPT callback port during a browser sign-in and the
-   *  device code covers the phone and the no-browser path. The card hears the kit's views in Crewhouse's words. */
   signIn(account: string, via: 'browser' | 'code', on: (step: SignInStep) => void): { paste(text: string): void; cancel(): void } {
+    if (this.signInRecovery()) {
+      let cancelled = false;
+      void this.kit.start().then(async () => { if (!cancelled) on({ waiting: false, ...(await this.signedIn(account) ? { done: true } : { error: this.signInRecovery() || 'Please try again.' }) }); })
+        .catch(() => { if (!cancelled) on({ waiting: false, error: 'Please try again.' }); });
+      return { paste() {}, cancel() { cancelled = true; } };
+    }
     const authChoice = via === 'code' ? CODE_CHOICE[account] ?? AUTH_CHOICE[account] : AUTH_CHOICE[account];
     if (!authChoice) {
       queueMicrotask(() => on({ waiting: false, error: `Sign-in for ${account} is not connected yet` }));
@@ -147,15 +145,13 @@ export class OpenClawRuntime implements AgentRuntime {
     await this.kit.signOut(ME, provider);
   }
 
-  /** One-time (spec §6): stage the person's old engine sign-in for the engine's doctor, offline, before
-   *  start(). Nothing is retired here: the copy moves aside only once the gateway confirms the import (confirm). */
+  /** Stage offline through the kit; confirmation removes the verified source without a plaintext archive. */
   async migrate(legacyAuthPath: string) {
     return await this.kit.migrateRetainedLogin(ME, { path: legacyAuthPath }) === 'staged';
   }
   confirm(legacyAuthPath: string) { return this.kit.confirmRetainedLogin(ME, { path: legacyAuthPath }); }
 
-  /** Point this engine at a custom OpenAI-compatible provider (the tests' scripted model; a self-hosted gateway later).
-   *  Sets the provider and makes it every agent's primary model. */
+  /** Set the custom OpenAI-compatible provider and primary model (the tests' scripted model). */
   async configureModelProvider(baseUrl: string, apiKey: string, modelRef = 'crewhouse-stub/test') {
     await this.kit.patchConfig({
       models: { providers: { 'crewhouse-stub': {

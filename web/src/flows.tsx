@@ -142,7 +142,7 @@ export function SignIn({ ai = A.AIS[0], tab: first, onReady, onClose }: { ai?: {
         <button className="btn go big" onClick={() => again()}>Try again</button>{ai.key === 'chatgpt' && <button className="link" onClick={() => start({ via: 'code' })}>Use a code instead</button>}</>}
       {phase === 'expired' && <><h2>That ran out of time</h2><p className="mute">Sign-ins only wait a few minutes, to keep your account safe. Let's start a fresh one.</p>
         <button className="btn go big" onClick={() => again()}>Start again</button>{notNow}</>}
-      {phase === 'failed' && <><h2>That didn't go through</h2><p className="mute">{name} didn't finish the sign-in. No harm done; let's try once more.</p>
+      {phase === 'failed' && <><h2>That didn't go through</h2><p className="mute">{g.recovery || <>{name} didn't finish the sign-in. No harm done; let's try once more.</>}</p>
         <button className="btn go big" onClick={() => again()}>Try again</button>{notNow}</>}
       {phase === 'offline' && <OfflineWords onClose={onClose} />}
     </Sheet>
@@ -172,7 +172,7 @@ export function AccountCard({ g, inChat, onReady }: { g: ReturnType<typeof A.acc
   return (
     <div className="card ask">
       <div className="ask-head"><Face who="chief" size={28} /><div className="grow"><b>Chief</b><div className="ask-status"><i />Needs a sign-in</div></div></div>
-      <p className="ask-words">{ai.name} asks you once. If it mentions <b>"Codex"</b>, that's the part your helpers use.</p>
+      <p className="ask-words">{g.recovery || <>{ai.name} asks you once. If it mentions <b>"Codex"</b>, that's the part your helpers use.</>}</p>
       <div className="btns">
         <button className="btn go big" onClick={() => setSigning(openTab())}><AiMark ai={ai} size={24} />Sign in with {ai.name}</button>
         <button className="link" onClick={() => { setNoAccount(true); window.open('https://chatgpt.com/', '_blank'); }}>No {ai.name} account? Make a free one</button>

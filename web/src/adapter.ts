@@ -970,7 +970,7 @@ export const AI_ROUTES = 'Each one uses a plan you already pay for. Paying for e
  *  code); how a sign-in ended (declined, the port busy, expired, failed); a plan without helpers; a work account. */
 export function account(accounts: Json[] | null, key = 'chatgpt') {
   const a = accounts?.find((x) => x.account === key);
-  const none = { signing: null, page: '', expired: false, failed: false, declined: false, busy: false, resting: '', notIncluded: false, work: '' };
+  const none = { recovery: '', signing: null, page: '', expired: false, failed: false, declined: false, busy: false, resting: '', notIncluded: false, work: '' };
   if (!a) return { state: 'checking' as const, ...none };
   const s = a.signIn;
   const phase = phaseOf({ signIn: s });
@@ -982,7 +982,7 @@ export function account(accounts: Json[] | null, key = 'chatgpt') {
   const busy = phase === 'busy';
   // 'unavailable' was the CLI missing; the engine now ships inside Crewhouse, so there is always something to sign in to.
   return { state: a.signedIn ? 'ready' as const : 'signed-out' as const as 'ready' | 'signed-out' | 'unavailable',
-    signing, page: waiting && !s?.code ? s?.url ?? '' : '', expired, declined, busy, failed: s?.state === 'failed' && !expired && !declined && !busy,
+    recovery: s?.why === 'locked' ? plain(s.error) : '', signing, page: waiting && !s?.code ? s?.url ?? '' : '', expired, declined, busy, failed: s?.state === 'failed' && !expired && !declined && !busy,
     resting: a.restingUntil > 0 ? `Resting until ${clock(a.restingUntil)}` : '', notIncluded: !!a.notIncluded,
     work: a.work ? (typeof a.work === 'string' ? a.work : 'a work account') : '' };
 }
@@ -996,7 +996,7 @@ export function aiList(accounts: Json[] | null) {
     const g = account(accounts, ai.key);
     const says = g.state === 'ready'
       ? g.notIncluded ? "Signed in, but your plan doesn't include helpers yet." : g.resting ? `Signed in. ${g.resting}.` : `Signed in${g.work ? ` as ${g.work}, a work account` : ''}. The crew uses it.`
-      : g.state === 'checking' ? 'Checking…'
+      : g.recovery ? g.recovery : g.state === 'checking' ? 'Checking…'
       : ai.key === 'chatgpt' ? `Not signed in yet. You'll say yes once on ${ai.name}.`
       : ai.cli ? `Not set up. Needs ${ai.cli} first.`
       : `Not set up. Uses your own ${ai.name} plan.`;
