@@ -150,11 +150,13 @@ test('a helper makes one in its own chat: the file lands in files/, is delivered
   await settled(db, id);
   assert.equal(task(db, id).state, 'done');
 
-  const rel = `files/hotel-guest-reception-t${id}.xlsx`;
+  const rel = JSON.parse(db.get("SELECT data FROM events WHERE kind = 'file.delivered' AND json_extract(data, '$.task') = ?", id)!.data).path;
   const full = join(disk.botDir(cfg, 'quill'), rel);
   assert.ok(existsSync(full), 'the workbook is in the helper folder');
   const delivered = db.all("SELECT data FROM events WHERE kind = 'file.delivered'").map((e: any) => JSON.parse(e.data));
   assert.deepEqual(delivered.map((d) => d.path), [rel]);
+  assert.equal(delivered[0].title, spec.name);
+  assert.equal(crew.fileFor('quill', rel)?.title, spec.name);
   assert.equal(delivered[0].task, id);
   assert.match(delivered[0].note, /^3 sheets: Daily dashboard, Booking and check-in, Rooms and housekeeping$/, 'the card line says what is in it');
   assert.ok((db.get("SELECT text FROM messages WHERE bot = 'quill' AND author = 'system' AND text LIKE 'Delivered%'") as any).text.startsWith(`Delivered ${rel}: 3 sheets:`));
@@ -182,7 +184,7 @@ test('repeated requests for the same title get separate delivered files that bot
   assert.equal(task(db, theirs).state, 'done');
   const paths = db.all("SELECT data FROM events WHERE kind = 'file.delivered'").map((e: any) => JSON.parse(e.data).path);
   assert.equal(new Set(paths).size, 2, 'one file per task, no overwrite');
-  assert.ok(paths.every((p: string) => new RegExp(`-t(${mine}|${theirs})\\.xlsx$`).test(p)));
+  assert.ok(paths.every((p: string) => /^files\/[a-f0-9]{64}\.xlsx$/.test(p)), 'opaque storage names contain no human title or task suffix');
   const [a, b] = paths;
   assert.ok(await crew.workbookView('quill', b));
   assert.ok(await crew.workbookView('quill', a));

@@ -46,7 +46,7 @@ export async function buildDocument(file: string, spec: DocumentSpec) {
     }
     return [];
   });
-  const doc = new Document({ creator: 'Crewhouse', sections: [{ children }] });
+  const doc = new Document({ creator: 'Crewhouse', title: spec.name, sections: [{ children }] });
   await Packer.toBuffer(doc).then((buf: Uint8Array) => import('node:fs').then((fs) => fs.writeFileSync(file, buf)));
   return { parts: blocks.length };
 }

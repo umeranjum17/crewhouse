@@ -72,11 +72,13 @@ test('a helper makes one in its own chat: the file lands in files/, is delivered
   await settled(db, id);
   assert.equal(task(db, id).state, 'done');
 
-  const rel = `files/front-desk-handbook-t${id}.docx`;
+  const rel = JSON.parse(db.get("SELECT data FROM events WHERE kind = 'file.delivered' AND json_extract(data, '$.task') = ?", id)!.data).path;
   const full = join(disk.botDir(cfg, 'quill'), rel);
   assert.ok(existsSync(full), 'the document is in the helper folder');
   const delivered = db.all("SELECT data FROM events WHERE kind = 'file.delivered'").map((e: any) => JSON.parse(e.data));
   assert.deepEqual(delivered.map((d) => d.path), [rel]);
+  assert.equal(delivered[0].title, spec.name);
+  assert.equal(crew.fileFor('quill', rel)?.title, spec.name);
   assert.match(delivered[0].note, /^The Front-desk handbook is ready: /, 'the card line names the result, not a section count');
   assert.doesNotMatch(delivered[0].note, /A document in|\b\d+ sections?\b/);
 
@@ -87,10 +89,11 @@ test('a helper makes one in its own chat: the file lands in files/, is delivered
   // A delivered .md leaves as its own words for the app's shared safe renderer — never opened as the raw file.
   writeFileSync(join(disk.botDir(cfg, 'quill'), 'files', 'weekly-dinners.md'),
     '# This week\'s dinners\n\n- [x] Basmati rice\n- [ ] Yoghurt\n');
-  const listed = (await crew.post('quill', `and the dinners list ${call('crew_deliver', { path: 'files/weekly-dinners.md' })}`))!.task;
+  const listed = (await crew.post('quill', `and the dinners list ${call('crew_deliver', { path: 'files/weekly-dinners.md', title: "This week's dinners — Maya" })}`))!.task;
   await settled(db, listed);
   const md = await crew.documentView('quill', 'files/weekly-dinners.md') as any;
   assert.equal(md.text, "# This week's dinners\n\n- [x] Basmati rice\n- [ ] Yoghurt\n");
+  assert.equal(md.title, "This week's dinners — Maya");
 
   // A delivered file that is not a readable page is still not read as one.
   writeFileSync(join(disk.botDir(cfg, 'quill'), 'files', 'table.csv'), 'a,b\n1,2');
@@ -112,8 +115,60 @@ test('repeated requests for the same title get separate delivered files that bot
   assert.equal(task(db, theirs).state, 'done');
   const paths = db.all("SELECT data FROM events WHERE kind = 'file.delivered'").map((e: any) => JSON.parse(e.data).path);
   assert.equal(new Set(paths).size, 2, 'one file per task, no overwrite');
-  assert.ok(paths.every((p: string) => new RegExp(`-t(${mine}|${theirs})\\.docx$`).test(p)));
+  assert.ok(paths.every((p: string) => /^files\/[a-f0-9]{64}\.docx$/.test(p)), 'opaque storage names contain no human title or task suffix');
   const [a, b] = paths;
   assert.ok(await crew.documentView('quill', b));
   assert.ok(await crew.documentView('quill', a));
+});
+
+
+test('producer titles survive registration, previews and core metadata without becoming storage paths', async () => {
+  const { cfg, db, crew } = setup();
+  crew.onboard('sir');
+  crew.recruit('scribe', 'Quill', 'person');
+  const JSZip = (await import('jszip')).default;
+  const { xml2js } = await import('xml-js');
+  const titles = [
+    'Refund follow-up — stroller return',
+    'Babyzen YOYO2 vs Bugaboo Butterfly for a four-year-old',
+    'Why Dubai evenings get so humid in autumn',
+    'Thank-you to Maya — case, punctuation & café',
+    '../../outside/Refund \\ Maya: follow-up',
+    'Refund follow-up — stroller return',
+  ];
+  for (const tool of ['crew_document', 'crew_workbook']) {
+    const paths = new Set<string>();
+    for (const [n, title] of titles.entries()) {
+      const body = `result ${n}`;
+      const input = tool === 'crew_document' ? { name: title, blocks: [{ text: body }] }
+        : { name: title, sheets: [{ name: 'Answer', columns: [{ header: 'Result' }], rows: [[body]] }] };
+      const id = (await crew.post('quill', `Make this ${call(tool, input)}`))!.task;
+      await settled(db, id);
+      assert.equal(task(db, id).state, 'done');
+      const delivery = JSON.parse(db.get("SELECT data FROM events WHERE kind = 'file.delivered' AND json_extract(data, '$.task') = ?", id)!.data);
+      assert.equal(delivery.title, title, 'authoritative human title is verbatim, not a slug or free-form note');
+      assert.match(delivery.path, /^files\/[a-f0-9]{64}\.(docx|xlsx)$/);
+      assert.ok(!paths.has(delivery.path), 'same title in another task must not overwrite its predecessor');
+      paths.add(delivery.path);
+      const full = disk.insideBot(cfg, 'quill', delivery.path);
+      assert.ok(full.startsWith(join(disk.botDir(cfg, 'quill'), 'files') + '/'));
+      const core = await (await JSZip.loadAsync(readFileSync(full))).file('docProps/core.xml')!.async('string');
+      assert.equal((xml2js(core, { compact: true }) as any)['cp:coreProperties']['dc:title']._text, title);
+      const view = tool === 'crew_document' ? await crew.documentView('quill', delivery.path) : await crew.workbookView('quill', delivery.path);
+      assert.equal(view.title, title);
+      assert.ok(JSON.stringify(view).includes(body), 'the delivered body belongs to this task');
+      assert.equal(crew.snapshot().tasks.find((t: any) => t.id === id)!.fileTitles[delivery.path], title);
+      assert.equal(crew.botPage('quill').files.find((f: any) => 'files/' + f.path === delivery.path)!.title, title);
+      assert.equal(crew.fileFor('chief', delivery.path), undefined, 'another bot cannot open this file');
+      await assert.rejects(() => crew.documentView('quill', '../../outside.docx'), /not delivered/);
+      await assert.rejects(() => crew.workbookView('quill', '../../outside.xlsx'), /not delivered/);
+    }
+    // Every earlier task still opens with its own body and title after later duplicate-title requests.
+    const deliveries = db.all("SELECT data FROM events WHERE kind = 'file.delivered' ORDER BY seq").map((e: any) => JSON.parse(e.data)).filter((d: any) => paths.has(d.path));
+    for (const [n, d] of deliveries.entries()) {
+      const view = tool === 'crew_document' ? await crew.documentView('quill', d.path) : await crew.workbookView('quill', d.path);
+      assert.equal(view.title, titles[n]);
+      assert.ok(JSON.stringify(view).includes(`result ${n}`));
+    }
+  }
 });

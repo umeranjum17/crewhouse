@@ -461,7 +461,7 @@ export class Crew {
   /** The active task carries its delivered files for the office desk: path, the helper's note and when
    *  it landed, own output first, handed-over inputs marked. Photos ride along for the chat, not the desk. */
   private activeFiles(task: number) {
-    return this.taskFiles(task).map((d) => ({ path: d.path, note: d.note ?? '', at: d.at,
+    return this.taskFiles(task).map((d) => ({ path: d.path, title: d.title, note: d.note ?? '', at: d.at,
       ...(d.photo ? { photo: true } : {}), ...(this.isInput(d) ? { input: true } : {}) }));
   }
 
@@ -473,7 +473,7 @@ export class Crew {
       person,
       bots: this.bots().map((b) => ({ ...this.pub(b), ...this.chat(b.id) })),
       templates: disk.listTemplates(this.cfg).map((t) => ({ id: t.id, display: t.display, role: t.role, color: t.color, kit: disk.templateKit(this.cfg, t) })),
-      tasks: this.db.all('SELECT * FROM tasks WHERE bot != ? ORDER BY id DESC LIMIT 50', CHIEF).map((t) => ({ ...this.task(t), files: t.state === 'done' ? files(t.id) : [] })),
+      tasks: this.db.all('SELECT * FROM tasks WHERE bot != ? ORDER BY id DESC LIMIT 50', CHIEF).map((t) => ({ ...this.task(t), files: t.state === 'done' ? files(t.id) : [], fileTitles: Object.fromEntries(this.taskFiles(t.id).filter((d) => d.title).map((d) => [d.path, d.title])) })),
       ideas: this.ideas(),
       room: (() => { const r = this.room(); return { last: r.lines.at(-1) ?? null, busy: r.busy }; })(),
       asks: this.db.all("SELECT * FROM asks WHERE state = 'open' ORDER BY id").map((a) => this.askView(a)),
@@ -500,7 +500,7 @@ export class Crew {
       WHERE t.root IN (${roots}) AND m.id < ? ORDER BY m.id DESC LIMIT 200`, before ?? Number.MAX_SAFE_INTEGER).reverse();
     return { lines: lines.map((m) => ({ id: m.id, bot: m.bot, author: m.author, to: m.parent && m.author === m.origin ? m.bot : undefined,
       from: m.parent && m.author === m.origin ? m.origin : undefined, text: cleanReply(m.text), at: m.at,
-      files: m.parent && m.author === m.origin ? this.taskFiles(m.task_id).map((d) => ({ bot: m.bot, path: d.path })) : [] })),
+      files: m.parent && m.author === m.origin ? this.taskFiles(m.task_id).map((d) => ({ bot: m.bot, path: d.path, title: d.title })) : [] })),
       busy: this.db.all(`SELECT DISTINCT bot FROM tasks WHERE root IN (${roots}) AND state IN ('queued','working','needs_you','paused')`).map((r) => r.bot),
       asks: this.db.all(`SELECT * FROM asks WHERE state = 'open' AND (json_extract(detail, '$.pass.root') IN (${roots}) OR task_id IN (SELECT id FROM tasks WHERE root IN (${roots})))`).map((a) => this.askView(a)) };
   }
@@ -889,7 +889,7 @@ export class Crew {
         .map((m: Row): Row => ({ ...m, text: cleanReply(m.text), recap: id === CHIEF && !m.task_id && !!this.db.get("SELECT 1 FROM events WHERE kind = 'routine.fired' AND json_extract(data, '$.message') = ?", m.id),
           files: id === CHIEF && m.author === 'bot' && m.task_id
             ? this.db.all("SELECT bot, data FROM events WHERE kind = 'file.delivered' AND json_extract(data, '$.task') IN (SELECT id FROM tasks WHERE root = (SELECT COALESCE(root,id) FROM tasks WHERE id = ?)) AND json_extract(data, '$.input') IS NULL AND json_extract(data, '$.path') NOT LIKE 'files/from-%'", m.task_id)
-              .map((e) => ({ bot: e.bot, path: JSON.parse(e.data).path })) : [],
+              .map((e) => ({ bot: e.bot, path: JSON.parse(e.data).path, title: JSON.parse(e.data).title })) : [],
           // Chief's hand-off in a helper's chat collapses to its task's title, with the full words behind Show details.
           ...(id !== CHIEF && m.author === 'chief' && m.task_id ? { title: this.db.get('SELECT title FROM tasks WHERE id = ?', m.task_id)?.title } : {}) })),
       tasks: this.db.all('SELECT * FROM tasks WHERE bot = ? ORDER BY id DESC LIMIT 50', id).map((t) => this.task(t)),
@@ -901,7 +901,7 @@ export class Crew {
       skills: disk.listSkills(this.cfg, id),
       tools: disk.botTools(this.cfg, id),
       files: disk.listFiles(this.cfg, id, new Set(this.db.all(`SELECT json_extract(e.data, '$.path') AS path FROM events e JOIN tasks t ON t.id = json_extract(e.data, '$.task')
-        WHERE e.bot = ? AND e.kind = 'file.delivered'`, id).map((e) => String(e.path).replace(/^files\//, '')))),
+        WHERE e.bot = ? AND e.kind = 'file.delivered'`, id).map((e) => String(e.path).replace(/^files\//, '')))).map((f) => ({ ...f, title: this.fileFor(id, join('files', f.path))?.title })),
       trail: this.db.eventsForBot(id, TRAIL).map((e) => ({ ...e, ...(e.kind === 'memory.learned' && undone.has(e.seq) ? { undone: true } : {}) })),
       // Standing answers in plain words; taking one back sends the words back.
       allow: (disk.botConfig(this.cfg, id).allow ?? []).map(coversOf),
@@ -1949,7 +1949,7 @@ export class Crew {
           if (id) this.db.run('UPDATE tasks SET outcome = ? WHERE id = ?', JSON.stringify({ worked: p.worked === true, seen }), id);
         }),
       tool('crew_report', 'A one-line progress note the person sees.', { text: Type.String() }, (p) => { this.db.event('task.progress', botId, { task: task(), text: clean(p.text, 200) }); }),
-      tool('crew_deliver', 'Register a finished file (a path in your folder, usually under files/).', { path: Type.String(), note: Type.Optional(Type.String()) }, (p) => this.deliver(botId, p.path, p.note)),
+      tool('crew_deliver', 'Register a finished file in your folder; title is its human name, separate from the path.', { path: Type.String(), note: Type.Optional(Type.String()), title: Type.Optional(Type.String()) }, (p) => this.deliver(botId, p.path, p.note, clean(p.title, 200) || undefined)),
       tool('crew_workbook', 'Make a real spreadsheet the person can use straight away (.xlsx), in your files/, and deliver it. `name` is the title; '
         + '`sheets` is [{ name, columns: [{ header, width?, options? }], rows: [[cell, …], …] }]. `options` on a column makes it a dropdown; a cell that '
         + 'starts with "=" is a formula. crewd writes the file, so never make the binary yourself. Make it finished: a real heading on every sheet and at '
@@ -2304,36 +2304,37 @@ export class Crew {
 
   /** crew_workbook: crewd writes the .xlsx itself (src/workbooks.ts) into the bot's files/ and delivers it like any other file. */
   private async workbook(botId: string, name: string, sheets: unknown) {
-    const title = clean(name, 60) || 'Workbook';
+    const title = clean(name, 200) || 'Workbook';
     const task = this.activeTask(botId)?.id;
-    const rel = join('files', `${disk.slug(title)}${task ? `-t${task}` : ''}.xlsx`);
+    const rel = join('files', `${sha(JSON.stringify([task ?? randomBytes(16).toString('hex'), title]))}.xlsx`);
     const full = disk.insideBot(this.cfg, botId, rel);
     mkdirSync(dirname(full), { recursive: true });
     const built = await buildWorkbook(full, { name: title, sheets } as any);
-    await this.deliver(botId, rel, `${built.sheets.length === 1 ? 'One sheet' : `${built.sheets.length} sheets`}: ${built.sheets.slice(0, 4).join(', ')}`);
+    await this.deliver(botId, rel, `${built.sheets.length === 1 ? 'One sheet' : `${built.sheets.length} sheets`}: ${built.sheets.slice(0, 4).join(', ')}`, title);
     return { ok: true, path: rel, sheets: built.sheets };
   }
 
   /** A raw file only opens after delivery, the same check the previews use. */
   fileFor(botId: string, path: string) {
-    return !!this.db.get("SELECT 1 AS ok FROM events e JOIN tasks t ON t.id = json_extract(e.data, '$.task') " +
+    return this.db.get("SELECT json_extract(e.data, '$.title') AS title FROM events e JOIN tasks t ON t.id = json_extract(e.data, '$.task') " +
       "WHERE e.bot = ? AND e.kind = 'file.delivered' AND json_extract(e.data, '$.path') = ?", botId, String(path ?? ''));
   }
 
   /** The app's read-only preview of a workbook the bot delivered: words and counts, never the file or its path. */
   async workbookView(botId: string, path: string) {
     const rel = String(path ?? '');
-    if (!this.fileFor(botId, rel)) throw Object.assign(new Error('that spreadsheet was not delivered to you'), { status: 403 });
+    const delivery = this.fileFor(botId, rel);
+    if (!delivery) throw Object.assign(new Error('that spreadsheet was not delivered to you'), { status: 403 });
     const full = disk.insideBot(this.cfg, botId, rel);
     if (!/\.xlsx$/i.test(full) || !existsSync(full) || statSync(full).size > 20_000_000) throw Object.assign(new Error('no such spreadsheet'), { status: 404 });
-    return readWorkbook(full);
+    return { ...await readWorkbook(full), title: delivery.title };
   }
 
   /** crew_document: crewd writes the .docx itself (src/documents.ts) into the bot's files/ and delivers it like any other file. */
   private async document(botId: string, name: string, blocks: unknown) {
-    const title = clean(name, 60) || 'Document';
+    const title = clean(name, 200) || 'Document';
     const task = this.activeTask(botId)?.id;
-    const rel = join('files', `${disk.slug(title)}${task ? `-t${task}` : ''}.docx`);
+    const rel = join('files', `${sha(JSON.stringify([task ?? randomBytes(16).toString('hex'), title]))}.docx`);
     const full = disk.insideBot(this.cfg, botId, rel);
     mkdirSync(dirname(full), { recursive: true });
     await buildDocument(full, { name: title, blocks } as any);
@@ -2341,20 +2342,19 @@ export class Crew {
       .map((b: any) => clean(b.heading, 45).replace(/[.!?:;]+$/, '').toLowerCase()).filter(Boolean);
     const sections = Math.max(1, headings.length);
     const headline = `The ${title} is ready${headings.length ? `: ${headings.slice(0, 3).join(', ')}` : ''}.`;
-    await this.deliver(botId, rel, headline);
+    await this.deliver(botId, rel, headline, title);
     return { ok: true, path: rel, sections };
   }
 
-  /** The app's read-only preview of a document the bot delivered: plain parts for a .docx, the file's
-   *  own words for a delivered .md or .txt (for the shared safe renderer) — never a path, only after delivery. */
+  /** Delivery owns the preview title; never derive it from a storage path or free-form note. */
   async documentView(botId: string, path: string) {
     const rel = String(path ?? '');
-    if (!this.fileFor(botId, rel)) throw Object.assign(new Error('that document was not delivered to you'), { status: 403 });
+    const delivery = this.fileFor(botId, rel);
+    if (!delivery) throw Object.assign(new Error('that document was not delivered to you'), { status: 403 });
     const full = disk.insideBot(this.cfg, botId, rel);
     if (!/\.(docx|md|txt)$/i.test(full) || !existsSync(full) || statSync(full).size > 20_000_000) throw Object.assign(new Error('no such document'), { status: 404 });
-    // A delivered .md or .txt leaves as its own words (capped), read by the app's shared safe markdown renderer;
-    // a .docx leaves as plain parts. Either way crewd reads the file, only after delivery.
-    return /\.(md|txt)$/i.test(full) ? { text: readFileSync(full, 'utf8').slice(0, 100_000) } : readDocument(full);
+    // Delivered text is capped; documents are parsed into plain parts, never served as their binary.
+    return { ...(/\.(md|txt)$/i.test(full) ? { text: readFileSync(full, 'utf8').slice(0, 100_000) } : await readDocument(full)), title: delivery.title };
   }
 
   /** A delivered video, in base64 slices (a phone fetches it piece by piece over the link), only after delivery. */
@@ -2370,14 +2370,14 @@ export class Crew {
   }
 
   /** A finished file, registered once per task (a retried call is a no-op). Only inside the bot's own folder. */
-  private deliver(botId: string, path: string, note?: string) {
+  private deliver(botId: string, path: string, note?: string, title?: string) {
     const full = disk.insideBot(this.cfg, botId, String(path ?? ''));
     if (!existsSync(full)) throw new Error(`no file at ${path}`);
     const rel = full.slice(disk.botDir(this.cfg, botId).length + 1);
     const active = this.activeTask(botId);
     const task = active?.id;
     if (task && this.db.get(`SELECT 1 FROM events WHERE kind = 'file.delivered' AND bot = ? AND json_extract(data, '$.task') = ? AND json_extract(data, '$.path') = ?`, botId, task, rel)) return { ok: true, already: true };
-    this.db.event('file.delivered', botId, { task, path: rel, note: short(clean(note, 1000), 200), size: statSync(full).size });
+    this.db.event('file.delivered', botId, { task, path: rel, ...(title ? { title } : {}), note: short(clean(note, 1000), 200), size: statSync(full).size });
     // A patch is only ever a suggested change for the maintainer to review, in crewd's own words, never the model's.
     this.say(botId, 'system', /\.(patch|diff)$/.test(rel) ? `Delivered ${rel}: Suggested change (for the maintainer to review)${this.db.get("SELECT 1 FROM events WHERE kind = 'verify.result' AND bot = ? AND json_extract(data, '$.passed') AND json_extract(data, '$.sha') = ?", botId, sha(readFileSync(full, 'utf8'))) ? ': passed its own check' : ''}` : `Delivered ${rel}${note ? `: ${note}` : ''}`, task ?? null);
     return { ok: true };
