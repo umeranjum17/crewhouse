@@ -107,7 +107,7 @@ export class OpenClawRuntime implements AgentRuntime {
   }
   async start(host: ToolHost) { this.host = host; await this.kit.start(); }
   async stop() { await this.kit.stop(); }
-  signInRecovery() { return this.kit.state.phase === 'locked' ? stateWords(this.kit.state) : ''; }
+  signInRecovery() { return this.kit.state.phase === 'locked' || this.kit.state.why === 'engine-already-running' ? stateWords(this.kit.state) : ''; }
   memoryLimited() { return this.kit.memoryLimited(ME); }
 
   // ---- accounts: the engine owns credentials; the kit drives its wizard and reads its status ----
