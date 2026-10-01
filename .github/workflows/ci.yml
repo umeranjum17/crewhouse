@@ -15,7 +15,7 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15 # includes install, audit and the serial engine checks
     strategy:
       matrix:
         node: ['22.22.3', '24'] # OpenClaw's supported Node floor and the current LTS
