@@ -758,7 +758,8 @@ test('no jargon anywhere: the machinery\'s words never reach a person', () => {
     push: A.pushWords(linkView), typed: A.phoneTyped({ short: 'K7M2QX', code: '7KQ4-M2XP-9RTH', relay: 'https://go.example.com' }),
     anywhere: A.anywhere(linkView), away: A.away({ tailnet: true, vpn: true, knock: 'timeout', reached: { tailscale: now - 3.6e6 } }),
     status: A.status(state), crewLine: A.crewLine(state),
-    bubble: [null, 'off' as const, { text: 'Friday 3pm www.x.top', picked: '' }, { text: 'a', picked: 'a' }].flatMap((b) => A.bubble({ ...state, connections: [] }, b)).map(({ label, ask }) => ({ label, ask })),
+    bubble: [null, 'off' as const, { text: 'Friday 3pm www.x.top order', picked: '' }, { text: 'a', picked: 'a' }].flatMap((box) => A.quick({ ...state, connections: [] }, { box })).map(({ label, ask }) => ({ label, ask })),
+    canned: [A.canned(state, 'status'), A.canned(state, 'details', '- Vegetarian at home'), A.secretOf('PIN 1234'), A.secretOf('www.x.top')],
   };
   const words = (x: unknown): string => typeof x === 'string' ? x : Array.isArray(x) ? x.map(words).join(' ')
     : x && typeof x === 'object' ? Object.entries(x).filter(([k]) => k !== 'url' && k !== 'at').map(([, v]) => words(v)).join(' ') : '';
@@ -844,35 +845,46 @@ test('Chief on the screen: off until switched on, one door to the overlay kit, a
   assert.doesNotMatch(readFileSync(join(mobile, 'App.tsx'), 'utf8'), /return \(\) => l\.stop\(\)/);
 });
 
-test('the bubble and the chip share one quick-action list: open the app, never send, and only this crew\'s helpers', () => {
-  const s = { ...state, bots: [...state.bots.filter((b) => b.id !== 'scribe'), bot('scribe')],
-    ideas: [{ bot: 'scribe', ask: 'Scribe, turn this into posts: ' }, { bot: 'reel', ask: 'Reel, edit my clip', needs: ['An app'] }] };
-  const q = A.quick(s, true);
-  assert.deepEqual(q.map((a) => a.id), ['needs', 'ask', 'demo']);
-  assert.equal(q.find((a) => a.id === 'demo')!.url, 'crewhouse://ask?to=reel&text=', 'a job waiting on an app never fills the box');
-  assert.deepEqual(A.quick({ ...s, bots: s.bots.filter((b) => b.template !== 'reel') }).map((a) => a.id), ['needs', 'ask'], 'no Reel, no demo');
-  assert.deepEqual(A.quick(s, false), [], 'a watching phone gets no actions');
-  assert.deepEqual(A.status(s)!.actions, q.slice(0, 2).map(({ id, label }) => ({ id, label })), 'the chip takes the first two');
-  for (const a of q) assert.doesNotMatch(`${a.label}`, FORBIDDEN);
-  // Every address is one the app reads (mobile/src/ask.ts), landing in that helper's box.
-  for (const a of q.filter((x) => x.url.startsWith('crewhouse://ask'))) assert.ok(askOf(a.url, [{ id: 'scribe', template: 'scribe' }, { id: 'reel', template: 'reel' }]));
+test('the chip\'s two doors, and who writes for Write it here', () => {
+  assert.deepEqual(A.status(state)!.actions, [{ id: 'needs', label: 'See what needs you' }, { id: 'ask', label: 'Ask Chief' }]);
+  assert.deepEqual(A.status(state, false)!.actions, [], 'a watching phone gets no actions');
   // Write it here's writer: Scribe, else the general Helper (whatever it is called), else the Helper the tap hires.
+  const s = { ...state, bots: [...state.bots, bot('scribe')] };
   assert.deepEqual(A.writer(s), { id: 'scribe', name: 'Scribe' });
   const none = { ...s, bots: s.bots.filter((b) => b.template !== 'scribe') };
   assert.deepEqual(A.writer(none), { id: '', name: 'Helper' }, 'nobody to write: the tap hires the Helper, never Chief');
   assert.deepEqual(A.writer({ ...none, bots: [...none.bots, bot('pip', { template: 'helper', display: 'Pip' })] }), { id: 'pip', name: 'Pip' });
 });
 
-test('the bubble\'s buttons: fixed words to one helper, never Chief, and only whether the tap read words changes them', () => {
+test('suggest for this screen: the rules table picks at most three buttons from what the tap read, no model', () => {
   const s = { ...state, bots: [bot('chief'), bot('scout'), bot('scribe')], asks: [], connections: ['calendar', 'gmail'] };
-  const ids = (box: Parameters<typeof A.bubble>[1]) => A.bubble(s, box).map((b) => b.id);
-  const box = (text: string, picked = '') => ({ text, picked });
-  assert.deepEqual(ids(null), ['deal', 'real', 'letter', 'plan'], 'no box: a still, a photo of a letter, or the day');
-  assert.deepEqual(ids('off'), ['write', 'deal', 'real', 'letter', 'plan'], 'the box not readable yet: Write it here explains the switch');
-  assert.deepEqual(ids(box('  ')), ['write', 'deal', 'real', 'letter', 'plan'], 'an empty box: the screen buttons');
-  assert.deepEqual(ids(box('See you Friday at 3pm?')), ['write', 'calendar', 'real', 'short', 'lookup', 'plan'], 'words: the buttons that act on them');
-  // The words are fixed, with the box's words (the part picked, when there is one) quoted under the job's title line.
-  const by = (b: Parameters<typeof A.bubble>[1], id: string) => A.bubble(s, b).find((x) => x.id === id)!;
+  const box = (text: string, app = 'com.example.notes', picked = '') => ({ app, text, picked });
+  const ids = (b: A.Screen['box'], used?: Record<string, number>) => A.quick(s, { box: b, used }).map((x) => x.id);
+  // No box: the kit names the app only with a box in focus (focusedField.read() is null, and @byokit/overlay 0.2.5 has
+  // no other foreground-app read in JS), so the two buttons that work on any screen.
+  assert.deepEqual(ids(null), ['deal', 'letter']);
+  assert.deepEqual(ids('off'), ['write', 'deal', 'letter'], 'the box not readable yet: Write it here explains the switch');
+  // Two screens, two different sets: a chat with a date, and a scam text with an address in it.
+  assert.deepEqual(ids(box('See you Friday at 3pm?', 'com.whatsapp')), ['write', 'calendar', 'short']);
+  assert.deepEqual(ids(box('Your parcel is held: pay £1.99 at https://royalmail-redelivery.top/pay now', 'com.google.android.apps.messaging')), ['write', 'real', 'short']);
+  assert.deepEqual(ids(box('Where is my order from last week?', 'com.google.android.gm')), ['write', 'mail', 'short']);
+  assert.deepEqual(ids(box('My son starts at Oak Lane School', 'com.example.notes', 'Oak Lane School')), ['write', 'remember', 'lookup']);
+  assert.deepEqual(ids(box('hello there')), ['write', 'short', 'lookup'], 'words that fit nothing: the ones that work on any words');
+  assert.deepEqual(ids(box('Marco said 5 more minutes', 'com.whatsapp')), ['write', 'short', 'lookup'], 'no date in a name that starts like a month');
+  assert.deepEqual(ids(box('Your account is on hold, sign in at hmrc-refund.site', 'com.whatsapp')), ['write', 'real', 'short']);
+  assert.deepEqual(ids(box('  ', 'com.whatsapp')), ['write', 'real', 'deal'], 'an empty box in a chat: a still of what was sent');
+  assert.deepEqual(ids(box('', 'com.example.notes')), ['write', 'deal', 'letter']);
+  for (const b of [null, 'off' as const, box('x'), box('Friday 3pm www.x.top order', 'com.whatsapp', 'Friday'), box('a'.repeat(400))]) assert.ok(A.quick(s, { box: b }).length <= 3);
+  // The tap log orders them by what the person picks most in this app; it never adds one or drops one.
+  assert.deepEqual(ids(box('See you Friday at 3pm?', 'com.whatsapp'), { short: 4, calendar: 1, deal: 9 }), ['short', 'calendar', 'write']);
+  assert.deepEqual(ids(null, { letter: 2 }), ['letter', 'deal']);
+  assert.deepEqual(A.quick(s, { box: box('Friday') }, false), [], 'a watching phone gets none');
+});
+
+test('the bubble\'s buttons: fixed words to one helper, never Chief, and what needs Google says so', () => {
+  const s = { ...state, bots: [bot('chief'), bot('scout'), bot('scribe')], asks: [], connections: ['calendar', 'gmail'] };
+  const box = (text: string, picked = '', app = 'com.example.notes') => ({ app, text, picked });
+  const by = (b: A.Screen['box'], id: string, st: Json = s) => A.quick(st, { box: b }).find((x) => x.id === id)!;
   const real = by(box('Your parcel is held: pay £1.99 at https://royalmail-redelivery.top/pay now'), 'real');
   assert.deepEqual([real.from, real.to], ['text', { id: 'scout', name: 'Scout' }]);
   assert.equal(real.ask.split('\n')[0], "Is this real? Here's what it says:");
@@ -884,22 +896,30 @@ test('the bubble\'s buttons: fixed words to one helper, never Chief, and only wh
   assert.equal(by(box('Who is Dr Rana Malik, really?', 'Dr Rana Malik'), 'lookup').ask.split('\n')[1], '“Dr Rana Malik”', 'only what was picked');
   assert.match(by(box('Friday 3pm, the dentist'), 'calendar').ask, /^Put this date in my Google Calendar:\n“Friday 3pm, the dentist”\n.*say so instead of guessing/);
   assert.equal(by(box('a long letter'), 'short').ask, 'Give me the short version, in three lines or fewer:\n“a long letter”');
-  const still = by(null, 'real'), letter = by(null, 'letter'), deal = by(null, 'deal'), plan = by(null, 'plan');
-  assert.deepEqual([still.from, letter.from, deal.from, plan.from, deal.ask], ['screen', 'camera', 'screen', 'none', ''], 'Deal with this: the person says what to do');
-  const scoutDay = JSON.parse(readFileSync(join(import.meta.dirname, '..', 'templates', 'scout', 'bot.json'), 'utf8')).ideas.find((i: Json) => /my day/.test(i.ask)).ask;
-  assert.equal(plan.ask, scoutDay, 'Plan my day is Scout\'s own ask, the one its day plan answers');
+  // Find that email: read-only, on the mail tool, through a helper.
+  const mail = by(box('my flight booking to Lahore'), 'mail');
+  assert.deepEqual([mail.label, mail.from, mail.to.id], ['Find that email', 'text', 'scout']);
+  assert.match(mail.ask, /^Find the email in my Gmail this is about.*Only look: don't change, move, send or delete anything\.\n“my flight booking to Lahore”$/s);
+  const still = by(box('', '', 'com.whatsapp'), 'real'), letter = by(null, 'letter'), deal = by(null, 'deal');
+  assert.deepEqual([still.from, letter.from, deal.from, deal.ask], ['screen', 'camera', 'screen', ''], 'Deal with this: the person says what to do');
   assert.deepEqual([by(box('hi'), 'write').from, by(box('hi'), 'write').to], ['box', { id: 'scribe', name: 'Scribe' }]);
+  const keep = by(box('Ali is allergic to peanuts', 'allergic to peanuts'), 'remember');
+  assert.deepEqual([keep.label, keep.from, keep.ask], ['Remember this', 'keep', 'allergic to peanuts'], 'only what was picked, kept as the person picked it');
+  // Plan my day is said, not a button: Scout's own ask, the one its day plan answers.
+  const plan = A.planDay(s);
+  const scoutDay = JSON.parse(readFileSync(join(import.meta.dirname, '..', 'templates', 'scout', 'bot.json'), 'utf8')).ideas.find((i: Json) => /my day/.test(i.ask)).ask;
+  assert.deepEqual([plan.ask, plan.from, plan.to.id], [scoutDay, 'none', 'scout']);
   // What needs Google says so until it is on, and a tap goes to Settings (mobile/src/panel.tsx): the calendar needs
-  // Calendar, the day plan Calendar and Gmail.
-  const off = A.bubble({ ...s, connections: [] }, box('Friday 3pm'));
-  assert.deepEqual(off.filter((b) => b.needs.length).map((b) => [b.id, b.label]), [['calendar', 'Put this date in my calendar · needs Google'], ['plan', 'Plan my day · needs Google']]);
-  assert.deepEqual(A.bubble({ ...s, connections: ['calendar'] }, box('Friday 3pm')).filter((b) => b.needs.length).map((b) => b.id), ['plan']);
+  // Calendar, finding an email Gmail, the day plan both.
+  const off = { ...s, connections: [] };
+  assert.equal(by(box('Friday 3pm'), 'calendar', off).label, 'Put this date in my calendar · needs Google');
+  assert.equal(by(box('the booking'), 'mail', off).label, 'Find that email · needs Google');
+  assert.deepEqual(A.planDay({ ...s, connections: ['calendar'] }).needs, ['Google']);
+  assert.deepEqual(A.planDay(s).needs, []);
   // No Scout: the general Helper; nobody at all: '' — the tap hires the Helper first. Never Chief.
-  const helper = A.bubble({ ...s, bots: [bot('chief'), bot('pip', { template: 'helper', display: 'Pip' })] }, box('Friday'));
-  assert.deepEqual([...new Set(helper.map((b) => b.to.id))], ['pip']);
-  for (const b of A.bubble({ ...s, bots: [bot('chief')] }, null)) assert.deepEqual(b.to, { id: '', name: 'Helper' });
-  assert.deepEqual(A.bubble(s, box('Friday'), false), [], 'a watching phone gets none');
-  for (const b of [...A.bubble(s, null), ...A.bubble(s, box('Friday 3pm', 'Friday')), ...off]) {
+  assert.deepEqual([...new Set(A.quick({ ...s, bots: [bot('chief'), bot('pip', { template: 'helper', display: 'Pip' })] }, { box: box('Friday') }).map((b) => b.to.id))], ['pip']);
+  for (const b of A.quick({ ...s, bots: [bot('chief')] }, { box: null })) assert.deepEqual(b.to, { id: '', name: 'Helper' });
+  for (const b of [...A.quick(s, { box: null }), ...A.quick(off, { box: box('Friday 3pm order', 'Friday') }), ...A.quick(s, { box: box('a', '', 'com.whatsapp') }), plan]) {
     assert.doesNotMatch(b.label, FORBIDDEN);
     assert.doesNotMatch(b.ask.replace(/“[^”]*”/g, ''), FORBIDDEN);
   }
@@ -912,7 +932,58 @@ test('the bubble\'s buttons: fixed words to one helper, never Chief, and only wh
     assert.ok(panel.includes(u), u);
     assert.match(u.replace(/^open\(['`]|['`]\)$/g, '').replace('${top.id}', 'scout'), /crewhouse:\/\/settings/.test(u) ? settingsAt : screenAt, u);
   }
+  assert.ok(askOf('crewhouse://ask', []) !== undefined, 'Chief\'s chat, where Ask Chief anyway lands');
   assert.match(app, /watchNow=\{screenFirst\}/, 'after taking the wheel the screen opens by itself, as the app\'s own button does');
+  // The panel asks the table with the tap's box and the tap log, logs each press (app and button, never words), and
+  // shows nothing beside the table's buttons but Chief's box.
+  assert.match(panel, /const buttons = A\.quick\(state, \{ box, used \}, canAct\);/);
+  assert.match(panel, /logTap\(box && box !== 'off' \? box\.app : '', b\.id\)/);
+  assert.doesNotMatch(panel, /A\.bubble\(|more\.map/);
+  assert.match(readFileSync(join(mobile, 'src', 'bubble.ts'), 'utf8'), /overlay\.logTap\(\{ app, action \}\)/);
+});
+
+test('Remember this: refused on the phone when it looks like a secret, before anything is sent', () => {
+  const NO = /PIN, a card number or a code/;
+  for (const t of ['PIN 1234', 'my code is 482913', '4111 1111 1111 1111', '4111-1111-1111-1111', 'card 5500005555555559', 'the door is 0451',
+    'Your verification number', 'the alarm passcode', 'CVV 123', 'sort code 12-34-56', 'login code: 77 31 09', 'otp 9921',
+    'PIN1234', 'Visa4111111111111111', 'door code 2014', 'gate 1999', '١٢٣٤', '１２３４５６', 'acct 12-34-56'])
+    assert.match(A.secretOf(t), NO, t);
+  for (const t of ['Ali is allergic to peanuts', 'the dress is blue', 'my mobile is 07700 900123', 'call me on +44 7700 900123', 'Flat 4, 221B Baker Street',
+    'Zara (9) and Ali (6)', 'school starts 8:45', 'rent is £1,250', 'moved here 12/03/2019', 'trip 2026-10-01'])
+    assert.equal(A.secretOf(t), '', t);
+  assert.match(A.secretOf('see www.example.com'), /not web or email addresses/);
+  assert.match(A.secretOf('write to sam@example.com'), /not web or email addresses/);
+  assert.match(A.secretOf('keys are in /home/sam/.ssh/'), /not web or email addresses/);
+  // Kept as one plain line of what the whole crew knows, the same shape crewd keeps (`- …`), and Undo takes it back out.
+  const notes = '- Vegetarian at home\n';
+  assert.deepEqual(A.keep(notes, '  Ali   is allergic\nto peanuts '), { notes: '- Vegetarian at home\n- Ali is allergic to peanuts\n', line: 'Ali is allergic to peanuts' });
+  assert.deepEqual(A.keep('', 'Oak Lane School'), { notes: '- Oak Lane School\n', line: 'Oak Lane School' });
+  assert.deepEqual(A.keep('# Family\n\n- Wife: Sara\n\n', 'Oak Lane School'), { notes: '# Family\n\n- Wife: Sara\n- Oak Lane School\n', line: 'Oak Lane School' }, 'the person\'s own spacing stays');
+  assert.match((A.keep(notes, 'PIN 1234') as { refuse: string }).refuse, NO);
+  assert.match((A.keep(notes, 'Vegetarian at home') as { refuse: string }).refuse, /already/);
+  assert.match((A.keep('- x'.repeat(499), 'Oak Lane School') as { refuse: string }).refuse, /full/);
+  assert.match((A.keep(notes, 'word '.repeat(60)) as { refuse: string }).refuse, /a lot/);
+  assert.equal(A.unkeep('- Vegetarian at home\n- Oak Lane School\n- Later\n', 'Oak Lane School'), '- Vegetarian at home\n- Later\n');
+  for (const t of ['PIN 1234', 'see www.example.com', 'x'.repeat(201), '']) assert.doesNotMatch(A.secretOf(t) + JSON.stringify(A.keep('', t)), FORBIDDEN);
+  // The panel checks before it writes: keep() decides, and only its yes reaches PUT /api/about.
+  const panel = readFileSync(join(import.meta.dirname, '..', 'mobile', 'src', 'panel.tsx'), 'utf8');
+  assert.match(panel, /const r = A\.keep\([^\n]*\n\s*if \('refuse' in r\) return say\(r\.refuse\);\n\s*await api\.setAbout\(r\.notes\);/);
+});
+
+test('Chief\'s box answers who is on what and what the crew knows about you itself, with no model; a day plan is a job', () => {
+  for (const t of ["What's everyone doing?", 'what is the crew up to', 'Status', "how's it going", 'who is working?']) assert.equal(A.cannedOf(t), 'status', t);
+  for (const t of ['My details', 'what do you know about me?', "what's my address", 'who am I']) assert.equal(A.cannedOf(t), 'details', t);
+  for (const t of ['Plan my day', "what's on today", 'plan for today']) assert.equal(A.cannedOf(t), 'plan', t);
+  for (const t of ['Book a table for Friday', 'Remember my status at work', 'What is everyone saying about the new phone?', 'Status of my refund?',
+    'who is working on the tax return, and can they hurry', 'my details changed: new address is 4 Elm Road', 'plan my day around the dentist at 3'])
+    assert.equal(A.cannedOf(t), '', t);
+  assert.equal(A.canned(state, 'status'), `${A.crewLine(state)} ${A.homeCounts(state).needs} things need you.`);
+  assert.equal(A.canned({ ...state, asks: [], resting: {}, bots: [bot('chief'), bot('scout')] }, 'status'), 'Nobody is on a job right now.');
+  assert.equal(A.canned(state, 'details', '- Vegetarian at home\n- Two children: Zara (9) and Ali (6)\n'), "You're Umer.\nWhat the crew knows about you:\n• Vegetarian at home\n• Two children: Zara (9) and Ali (6)");
+  assert.match(A.canned(state, 'details', ''), /^You're Umer\.\nThe crew knows nothing else about you yet\./);
+  for (const k of ['status', 'details'] as const) assert.doesNotMatch(A.canned(state, k, '- See files/x.md'), FORBIDDEN);
+  const panel = readFileSync(join(import.meta.dirname, '..', 'mobile', 'src', 'panel.tsx'), 'utf8');
+  assert.match(panel, /const kind = photos\.length \? '' : A\.cannedOf\(text\);\n.*\n\s*if \(kind === 'plan' && !plan\.needs\.length\) return press\(plan\)/);
 });
 
 test('who is on what: one plain line from state alone, resting included, no model', () => {
@@ -1707,6 +1778,14 @@ test('speaking to Chief stays on the device and only fills the box: the person s
   assert.doesNotMatch(web, /^import|\bfetch\(|XMLHttpRequest|WebSocket|api\./m, 'the voice helper talks to nothing but the recognizer');
   assert.match(src('mobile/modules/crewhouse-net/android/src/main/java/expo/modules/crewhousenet/CrewhouseVoiceModule.kt'), /createOnDeviceSpeechRecognizer/, 'the phone uses its on-device recognizer only');
   assert.doesNotMatch(src('mobile/modules/crewhouse-net/android/src/main/java/expo/modules/crewhousenet/CrewhouseVoiceModule.kt'), /createSpeechRecognizer\(/);
+  // The phone hears through @byokit/dictation: the Kotlin recognizer is the system engine the kit asks its app to inject,
+  // on the phone only, and the app reaches the kit through that one file.
+  const net = src('mobile/modules/crewhouse-net/index.ts');
+  assert.match(net, /new Dictation\(\{ engine: systemEngine\(\{/);
+  assert.match(net, /dictation\.listen\(\{ onDeviceOnly: true \}\)/);
+  assert.match(net, /requireOptionalNativeModule<[^\n]*>\('CrewhouseVoice'\)/);
+  const mobile = join(import.meta.dirname, '..', 'mobile');
+  assert.deepEqual([...readdirSync(join(mobile, 'src')).map((f) => join('src', f)), 'App.tsx', 'index.ts'].filter((f) => readFileSync(join(mobile, f), 'utf8').includes('@byokit/dictation')), []);
   // What was heard goes into the box through the composer's own change; the send button stays the only way out.
   const parts = src('web/src/parts.tsx'), app = src('mobile/App.tsx');
   assert.match(parts, /useVoice\(chat === 'chief', text, \(t\) => change\(t\)\)/);

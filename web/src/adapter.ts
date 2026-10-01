@@ -659,28 +659,10 @@ export function status(state: Json, canAct = true): CrewStatus | null {
     text: n && needs ? need : chief(state).line,
     publicText: [n ? `${n} working` : '', needs ? need : ''].filter(Boolean).join(' · '),
     chip: needs ? 'Needs' : n > 1 && n < 10 ? `${n} busy` : 'Busy',
-    actions: quick(state, canAct).filter((a) => a.id === 'needs' || a.id === 'ask').map(({ id, label }) => ({ id: id as 'needs' | 'ask', label })),
+    actions: canAct ? [...(needs ? [{ id: 'needs' as const, label: 'See what needs you' }] : []), { id: 'ask' as const, label: 'Ask Chief' }] : [],
   };
 }
 
-/** The phone's quick actions, one list for every view of the crew (the status-bar chip takes its first two, the bubble's
- *  panel the rest beside its own buttons, `bubble()`). Each opens a crewhouse:// address the app already reads, where
- *  words wait in a box, never sent. A helper's row shows only when it is in this crew. A watching phone gets none. */
-export type QuickAction = { id: 'needs' | 'ask' | 'demo'; label: string; url: string };
-export function quick(state: Json, canAct = true): QuickAction[] {
-  if (!canAct) return [];
-  const needs = homeCounts(state).needs;
-  const ask = (id: QuickAction['id'], template: string, label: (name: string) => string): QuickAction[] => {
-    const h = hired(state, template);
-    const words = String((state.ideas ?? []).find((i: Json) => i.bot === h?.id && !i.needs?.length)?.ask ?? '');
-    return h ? [{ id, label: label(h.name), url: `crewhouse://ask?to=${template}&text=${encodeURIComponent(words)}` }] : [];
-  };
-  return [
-    ...(needs ? [{ id: 'needs' as const, label: 'See what needs you', url: 'crewhouse://needs' }] : []),
-    { id: 'ask', label: 'Ask Chief', url: 'crewhouse://ask' },
-    ...ask('demo', 'reel', (n) => `Record a demo with ${n}`),
-  ];
-}
 const hired = (state: Json, template: string) => crew(state).find((x) => state.bots.find((b: Json) => b.id === x.id)?.template === template);
 /** Who a bubble job goes to: that template's helper, else the general Helper. `id` is '' while nobody is either: the
  *  tap hires the Helper first, never Chief, whose hand-offs carry no photos. */
@@ -692,42 +674,124 @@ export function handTo(state: Json, template: string): Hand {
 /** Who drafts for Write it here: this crew's Scribe, else the general Helper. */
 export const writer = (state: Json) => handTo(state, 'scribe');
 
-/** The bubble's own buttons (Android): fixed, never picked by a model; the only question is whether the tap read words
- *  (`box`: the focused box's words and the part picked; null for none, 'off' while the phone doesn't let him see it).
- *  Each is fixed words to one helper (`handTo`), so its reply is an ordinary job. `from` is what goes with them: `box`
- *  is Write it here's own flow, `text` sends what the box says (the part picked, if any), `screen` a still (the phone
- *  asks every time) and `camera` a photo, both to the share screen with that helper picked and the words in its box,
- *  `none` nothing. A button that needs an app the person hasn't connected says so in its label (`needs`), and its tap
- *  opens Settings, like Home's jobs. Choosing among more of them is the picker's job, later. A watching phone gets none. */
-export type BubbleButton = { id: 'write' | 'calendar' | 'real' | 'short' | 'lookup' | 'deal' | 'letter' | 'plan'; label: string; to: Hand; ask: string;
-  from: 'box' | 'text' | 'screen' | 'camera' | 'none'; needs: string[] };
+/** What a tap on the bubble read (Android): the box in focus, its app, words and the part picked ('off' while the phone
+ *  doesn't let him see it, null for none: then the app is unknown too, since the overlay kit names the app only with a
+ *  box), and how often the person picked each button in that app (the kit's tap log, which keeps no words). */
+export type Screen = { box: { app?: string; text: string; picked: string } | 'off' | null; used?: Record<string, number> };
+/** A bubble button: fixed words to one helper (`handTo`), so its reply is an ordinary job. `from` is what goes with
+ *  them: `box` is Write it here's own flow, `text` sends what the box says (the part picked, if any), `keep` puts the
+ *  part picked in what the whole crew knows about the person (`keep()`, no helper), `screen` a still (the phone asks
+ *  every time) and `camera` a photo, both to the share screen with that helper picked and the words in its box. A
+ *  button that needs an app the person hasn't connected says so in its label (`needs`), and its tap opens Settings. */
+export type BubbleButton = { id: 'write' | 'calendar' | 'real' | 'mail' | 'remember' | 'short' | 'lookup' | 'deal' | 'letter' | 'plan'; label: string; to: Hand; ask: string;
+  from: 'box' | 'text' | 'keep' | 'screen' | 'camera' | 'none'; needs: string[] };
 const REAL = "Point out the warning signs you can see, and anything that looks normal. Don't tell me it's safe or a scam, and don't open or look up any web address in it. End with how I can check for myself: in the official app, or on the official website typed in by hand.";
 /** Web addresses written so no tool follows them by accident: hxxp://, and [.] before the last part of a name. */
 export const defang = (text: string) => text.replace(/\bhttp(s?):\/\//gi, 'hxxp$1://').replace(/\b([a-z0-9-]+)\.(?=[a-z]{2,}\b)/gi, '$1[.]');
-export function bubble(state: Json, box: { text: string; picked: string } | 'off' | null, canAct = true): BubbleButton[] {
+// What the words and the app look like. ponytail: word lists, not understanding; a miss only leaves a button for the
+// rows below it, and anything else is one sentence in Chief's box.
+const MONTH = '(jan(uary)?|feb(ruary)?|mar(ch)?|apr(il)?|may|june?|july?|aug(ust)?|sep(t(ember)?)?|oct(ober)?|nov(ember)?|dec(ember)?)';
+const DATE = new RegExp(`\\b(mon|tues|wednes|thurs|fri|satur|sun)day\\b|\\b${MONTH}\\.? \\d|\\b\\d{1,2}(st|nd|rd|th)? ${MONTH}\\b|\\d ?[ap]m\\b|\\b\\d{1,2}:\\d\\d\\b|\\b(today|tonight|tomorrow|next week)\\b|\\b\\d{1,2}\\/\\d{1,2}\\b`, 'i');
+const LINK = /\bhttps?:\/\/|\bwww\.|\b[a-z0-9-]+\.(com|co|uk|org|net|top|xyz|info|io|app|ly|me|link|click|site|online|shop|store|live|biz|cc|pk|in|ru|cn)\b/i;
+const PRESSURE = /\b(urgent|immediately|suspended|locked|verify|pay now|overdue|final notice|prize|gift card|act now|within 24 hours|unusual activity)\b/i;
+const BOOKING = /\b(booking|booked|reservation|order|receipt|invoice|ticket|flight|confirmation|delivery|tracking|e-?mail(ed)?|sent you|inbox)\b/i;
+const CHAT = /whatsapp|telegram|securesms|messaging|orca|slack|discord|viber|teams|instagram/i, MAIL = /\.gm$|mail|outlook/i;
+type Seen = { box: Screen['box']; said: string; picked: string; app: string };
+/** The bubble's rules table: the first three rows that fit what the tap read are its buttons, never chosen by a model.
+ *  Phase 0's buttons came first; each now shows when its words fit, then whatever fits any words (or none). */
+const ROWS: [BubbleButton['id'], (s: Seen) => unknown][] = [
+  ['write', (s) => s.box],
+  ['calendar', (s) => DATE.test(s.said)],
+  ['real', (s) => LINK.test(s.said) || PRESSURE.test(s.said) || (!s.said && (CHAT.test(s.app) || MAIL.test(s.app)))],
+  ['mail', (s) => BOOKING.test(s.said) || (s.said && MAIL.test(s.app))],
+  ['remember', (s) => s.picked],
+  ['lookup', (s) => s.picked && s.picked.length <= 100],
+  ['short', (s) => s.said.length > 280],
+  ['short', (s) => s.said], ['lookup', (s) => s.said], ['real', (s) => s.said],
+  // No words, and with no box no app either: the two that work on any screen.
+  ['deal', (s) => !s.said], ['letter', (s) => !s.said],
+];
+/** The bubble's buttons (Android): at most three, the table's first rows that fit this screen, the one the person
+ *  picks most in this app first (the tap log only orders them, it never adds one). A watching phone gets none. */
+export function quick(state: Json, screen: Screen, canAct = true): BubbleButton[] {
   if (!canAct) return [];
-  const read = box && box !== 'off' ? box : null;
-  const said = (read?.picked.trim() || read?.text.trim()) ?? '';
+  const read = screen.box && screen.box !== 'off' ? screen.box : null, picked = read?.picked.trim() ?? '';
+  const seen: Seen = { box: screen.box, picked, said: picked || read?.text.trim() || '', app: read?.app ?? '' };
+  const used = screen.used ?? {};
+  return [...new Set(ROWS.filter(([, fits]) => fits(seen)).map(([id]) => id))].slice(0, 3)
+    .sort((a, b) => (used[b] ?? 0) - (used[a] ?? 0)).map((id) => button(state, id, seen.said));
+}
+function button(state: Json, id: BubbleButton['id'], said: string): BubbleButton {
   const quote = `\n“${said}”`;
-  const google = (...apps: string[]) => (apps.every((a) => state.connections?.includes?.(a)) ? [] : ['Google']);
-  const b = (id: BubbleButton['id'], label: string, from: BubbleButton['from'], ask = '', needs: string[] = []): BubbleButton =>
+  const google = (app: string) => (state.connections?.includes?.(app) ? [] : ['Google']);
+  const b = (label: string, from: BubbleButton['from'], ask = '', needs: string[] = []): BubbleButton =>
     ({ id, label: needs.length ? `${label} · needs ${needs.join(' and ')}` : label, to: handTo(state, id === 'write' ? 'scribe' : 'scout'), ask, from, needs });
-  return [
-    ...(box ? [b('write', 'Write it here', 'box')] : []),
-    ...(said ? [
-      b('calendar', 'Put this date in my calendar', 'text', `Put this date in my Google Calendar:${quote}\nWork out the date and time from it. If there isn't a clear one, say so instead of guessing.`, google('calendar')),
-      b('real', 'Is this real?', 'text', `Is this real? Here's what it says:\n“${defang(said)}”\n${REAL}`),
-      b('short', 'Short version', 'text', `Give me the short version, in three lines or fewer:${quote}`),
-      b('lookup', 'Look it up', 'text', `Look this up and tell me in a few lines what it is, and where you found it:${quote}`),
-    ] : [
-      b('deal', 'Deal with this', 'screen'),
-      b('real', 'Is this real?', 'screen', `Is this real? It's on my phone's screen, in the picture.\n${REAL}`),
-      b('letter', 'Scan a letter', 'camera', "Read this letter: who it's from, what it wants and by when, in a few lines. If it has a date to keep, offer to put it on my calendar."),
-    ]),
-    b('plan', 'Plan my day', 'none', "Give me my day: what's on, what's waiting on me, what to do first", google('calendar', 'gmail')),
-  ];
+  if (id === 'write') return b('Write it here', 'box');
+  if (id === 'calendar') return b('Put this date in my calendar', 'text', `Put this date in my Google Calendar:${quote}\nWork out the date and time from it. If there isn't a clear one, say so instead of guessing.`, google('calendar'));
+  if (id === 'real') return said ? b('Is this real?', 'text', `Is this real? Here's what it says:\n“${defang(said)}”\n${REAL}`) : b('Is this real?', 'screen', `Is this real? It's on my phone's screen, in the picture.\n${REAL}`);
+  if (id === 'mail') return b('Find that email', 'text', `Find the email in my Gmail this is about, and tell me in a few lines what it says, who sent it and when. Only look: don't change, move, send or delete anything.${quote}`, google('gmail'));
+  if (id === 'remember') return b('Remember this', 'keep', said);
+  if (id === 'short') return b('Short version', 'text', `Give me the short version, in three lines or fewer:${quote}`);
+  if (id === 'lookup') return b('Look it up', 'text', `Look this up and tell me in a few lines what it is, and where you found it:${quote}`);
+  if (id === 'deal') return b('Deal with this', 'screen');
+  if (id === 'plan') return b('Plan my day', 'none', "Give me my day: what's on, what's waiting on me, what to do first", [...new Set([...google('calendar'), ...google('gmail')])]);
+  return b('Scan a letter', 'camera', "Read this letter: who it's from, what it wants and by when, in a few lines. If it has a date to keep, offer to put it on my calendar.");
 }
 
+// Remember this: kept on the phone's tap, straight into what the whole crew knows (GET/PUT /api/about), with no model.
+// It never keeps a secret: digits that look like a PIN, a card number or a one-time code are refused before anything is
+// sent, and so are web and email addresses (crewd's own rule for remembered lines, src/bots.ts RISKY).
+const SECRET = /(^|[^\p{L}])(pins?|codes?|passcodes?|passwords?|otp|cvv|cvc)(?!\p{L})|one[- ]time|verification|security code|sort code/iu;
+const ADDRESS = /https?:|www\.|[\w.+-]+@[\w-]+\.[a-z]|(^|\s)~?\/[\w.-]*\/|`|\$\(|&&/i;
+const DATES = /\b\d{4}-\d{1,2}-\d{1,2}\b|\b\d{1,2}[/.]\d{1,2}[/.]\d{2,4}\b/g;
+/** Why these words can't be kept ('' when they can): any digits in a run of 4 to 8 look like a PIN or a code, and 12
+ *  or more like a card number (spaces and dashes between, any script's digits, letters beside them or not); a phone
+ *  number (9 to 11, or after +) and a written date are fine. ponytail: a year alone is refused too; a door code
+ *  looks just like one. */
+export function secretOf(text: string) {
+  const runs = [...text.replace(DATES, ' ').matchAll(/(?<![+\p{Nd}])\p{Nd}(?:[ -]?\p{Nd})*/gu)].map((m) => m[0].replace(/[^\p{Nd}]/gu, '').length);
+  if (SECRET.test(text) || runs.some((n) => n >= 12 || (n >= 4 && n <= 8)))
+    return "That looks like a PIN, a card number or a code, so I won't keep it. Keep those in your phone's password manager.";
+  if (ADDRESS.test(text)) return 'I only keep plain words about you, not web or email addresses.';
+  return '';
+}
+/** Plan my day is said, not a button: Scout's own day-plan ask, a job like the buttons' (a model turn, never canned). */
+export const planDay = (state: Json) => button(state, 'plan', '');
+/** What the whole crew knows about the person with `text` kept as one more line, or why not. */
+export function keep(notes: string, text: string): { notes: string; line: string } | { refuse: string } {
+  const line = text.replace(/\s+/g, ' ').trim();
+  const why = !line ? 'Pick the words to keep first.' : line.length > 200 ? 'That is a lot to keep. Pick a sentence or two.' : secretOf(line);
+  if (why) return { refuse: why };
+  if (notes.split('\n').includes(`- ${line}`)) return { refuse: 'The crew knows that already.' };
+  // ponytail: read, add a line, write the whole file back; a line the crew kept in that second is lost (crewd has no
+  // append for the person's edits, and src/ has no lines to spare).
+  const next = `${notes.replace(/\n*$/, '')}${notes.trim() ? '\n' : ''}- ${line}\n`;
+  return next.length > 1500 ? { refuse: 'What the crew knows about you is full. Tidy it in Crewhouse on your computer, then try again.' } : { notes: next, line };
+}
+/** Undo for Remember this: that line taken back out, whatever was kept since. */
+export const unkeep = (notes: string, line: string) => notes.split('\n').filter((l) => l !== `- ${line}`).join('\n');
+
+// Chief's box in the panel answers two things itself, from what the phone already has and with no model: who is on
+// what, and what the crew knows about the person. Everything else (a day plan too) is a job.
+const STATUS = /^(status|what('?s| is| are) (every(one|body)|the crew|my crew|you all|y'?all|the team) (doing|up to|working on)( (right )?now| today)?|how('?s| is) (it|everything|the crew) going|who('?s| is) (working|busy|on what))\W*$/i;
+const DETAILS = /^(my details|what do (you|we|they) know about me|what('?s| is) my (address|name|info)|who am i)\W*$/i;
+const PLAN = /^(plan (my|the) day|plan (for )?today|what('?s| is) (on|happening) (for )?(today|my day))\W*$/i;
+/** Which of the two `ask` is, or `plan` for the day plan (a job: `planDay`), or '' for none. */
+export const cannedOf = (ask: string): '' | 'status' | 'details' | 'plan' => {
+  const a = ask.trim();
+  return STATUS.test(a) ? 'status' : DETAILS.test(a) ? 'details' : PLAN.test(a) ? 'plan' : '';
+};
+/** The answer, in plain words: who is on what (`crewLine`) and what needs the person; or their name and what the crew
+ *  knows about them (`notes`, from GET /api/about). */
+export function canned(state: Json, kind: 'status' | 'details', notes = '') {
+  if (kind === 'status') {
+    const needs = homeCounts(state).needs;
+    return [crewLine(state) || 'Nobody is on a job right now.', needs ? `${needs} ${needs === 1 ? 'thing needs' : 'things need'} you.` : ''].filter(Boolean).join(' ');
+  }
+  const name = String(state.person?.name ?? '').trim();
+  const lines = notes.split('\n').map((l) => plain(l.replace(/^\s*[-*]\s*/, ''))).filter(Boolean);
+  return [name ? `You're ${name}.` : '', lines.length ? `What the crew knows about you:\n${lines.map((l) => `• ${l}`).join('\n')}` : 'The crew knows nothing else about you yet. Pick some words in any app, tap me and choose Remember this.'].filter(Boolean).join('\n');
+}
 /** Who is on what, in one plain line from state alone (no model turn): each of the crew that is working, waiting on the
  *  person, gone quiet, paused while they drive or resting, then when a resting account is back. '' when nobody is. */
 export function crewLine(state: Json) {
