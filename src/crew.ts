@@ -10,7 +10,7 @@ import * as disk from './bots.ts';
 import { Desktops, browserBin, missing as desktopMissing, type Watcher } from './desktop.ts';
 import { Accounts, PROVIDERS, clock } from './accounts.ts';
 import { Connections, type AppTool, APPS } from './connections.ts';
-import { bashTool, readPage, runAxi, runSandboxed, q, sandboxReady, tool, webTools, type CrewTool } from './engine.ts';
+import { bashTool, readPage, runAxi, runSandboxed, q, sandboxReady, said, tool, webTools, type CrewTool } from './engine.ts';
 import { allowed, proxy } from './net.ts';
 import type { Server } from 'node:net';
 import { acts, claimOf, coversOf, effectOf, orderOf, pressOf, toolWords, type Effect } from './policy.ts';
@@ -371,7 +371,7 @@ export class Crew {
     for (const [id, l] of this.live) { this.live.delete(id); l.browser?.end(); }
     for (const n of this.nets.values()) n.close();
     this.accounts.stop();
-    return Promise.all([this.runtime.stop(), this.desktops.stopAll()]);
+    return Promise.all([this.runtime.stop(), this.desktops.stopAll(), this.connections.stop()]);
   }
 
   // ---- reads ----
@@ -1644,7 +1644,7 @@ export class Crew {
         }
         if ((name === 'calendar' || name === 'mail' || tool === 'crew_app') && l?.appTools?.has(name)) {
           const app = l.appTools.get(name)!;
-          return String(await app.run(input, signal));
+          return said(app, input, signal);
         }
         // Command-line tools that need the person's own sign-in: fixed argv on this computer, outside the sandbox.
         const runTool = registry(this.cfg).find((t) => t.run && (l?.grants ?? []).includes(t.id) && t.id.replace(/-/g, '_') === name);

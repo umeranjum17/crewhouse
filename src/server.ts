@@ -146,7 +146,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
 
       // An app's sign-in page sends the browser back here; the tab says, in words, how it went.
       if (p === '/connect/callback') {
-        const words = await crew.connections.finish(url.searchParams);
+        const words = await crew.connections.finish(new URL(req.url!, `http://${cfg.host}:${cfg.port}`));
         res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
         return res.end(resultPage('Crewhouse', words, /connected\./.test(words)));
       }
@@ -267,7 +267,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       const app = r[1];
       if (m === 'POST') { const v = await crew.connections.connect(app); return v.state === 'done' ? { state: 'on' } : v.state === 'failed' ? Promise.reject(Object.assign(new Error(v.error), { status: 502 })) : { url: v.url }; }
       if (m === 'GET') return crew.connections.status(app);
-      if (m === 'DELETE') { crew.connections.cancel(app); return { ok: true }; }
+      if (m === 'DELETE') { await crew.connections.cancel(app); return { ok: true }; }
     }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/models$/)) && m === 'PUT') {
       crew.botPage(r[1]); // 404 for unknown bots

@@ -181,6 +181,8 @@ Engine sign-ins use BYOKit's sealing: the stopped engine keeps `auth-store.seale
 
 On Linux the kit's host key lives at `$XDG_STATE_HOME/byokit-<SHA-256 of crewhouse-engine>/host-key/` (the state root defaults to `~/.local/state`), beside the default `crewhouse/` state directory. Exclude that key directory from sealed-store backups; keep it separately for restores. Crewhouse does not copy or export it. Stop all writers before any kit-managed rotation; never edit key files yourself. Losing the original key or OS keyring makes the sealed store unrecoverable; an older build cannot open it.
 
+App connections use the pinned BYOKit connection kit and its documented sealed-store adapter, with the same dual wrapping under the separate `crewhouse-connect` service. The person's `app-signins/` folder holds ciphertext, including the setup key and refreshed grants. Keep this service's host key separate from ciphertext backups too. Old app sign-ins and setup keys are not imported; reconnect apps after upgrading.
+
 Credentials remain plaintext while the engine or migration doctor runs. Orderly shutdown waits for sealing; a crash is recovered on the next prepare once the old engine has stopped. Use encrypted storage and exclude live engine state from backups. This does not protect against another process running as the same OS user.
 
 Everything Crewhouse writes lives in `~/.local/state/crewhouse/` (the database, the engine and saved sign-ins), `~/Crewhouse/` (helpers and what they know about each person) and `~/.local/share/crewhouse/tools/` (the tool kit). `./crewhouse uninstall` removes all of it, but keeps your crew folder unless you add `--all`.

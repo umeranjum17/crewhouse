@@ -1,3 +1,4 @@
+import { signInApp, setUpGoogle } from './connect-fixture.ts';
 // The family skills on Home: Scout sorts the paper (letters and forms read, what's due on the calendar, replies only
 // ever drafts) and plans the meals (the list, the shop day, the cart only through its checkout card). The machinery is
 // the money jobs' own: draft cards, the form card that names every line, and the checkout card.
@@ -24,25 +25,21 @@ function setup() {
 }
 const paper = (crew: any) => crew.snapshot().ideas.find((i: any) => /letters and forms/.test(i.promise));
 const meals = (crew: any) => crew.snapshot().ideas.find((i: any) => /seven dinners/.test(i.promise));
-const house = (cfg: any) => writeFileSync(join(cfg.stateDir, 'apps.json'), JSON.stringify({ google: { id: 'crew.apps', secret: 'pasted' } }), { mode: 0o600 });
-const connect = (cfg: any, ...ids: string[]) => {
-  mkdirSync(join(cfg.stateDir, 'people', '1'), { recursive: true });
-  writeFileSync(join(cfg.stateDir, 'people', '1', 'connections.json'),
-    JSON.stringify(Object.fromEntries(ids.map((id) => [id, { access: 'tok', expires: Date.now() + 3_600_000 }]))));
-};
+const house = (crew: any) => setUpGoogle(crew.connections);
+const connect = async (crew: any, ...ids: string[]) => { for (const id of ids) await signInApp(crew.connections, id); };
 
-test('Home lists the family desk and the meals beside the money ones, each saying what it waits on', () => {
+test('Home lists the family desk and the meals beside the money ones, each saying what it waits on', async () => {
   const { crew, cfg, done } = setup();
   assert.equal(paper(crew).bot, 'scout');
   assert.equal(paper(crew).group, 'life', 'an everyday job, beside the money ones');
   assert.deepEqual(paper(crew).needs, ['Google'], 'the mail and the calendar are the desk: without Google it says so');
   assert.equal(meals(crew).group, 'life');
   assert.deepEqual(meals(crew).needs, [], 'recipes and prices are read without an account, so the row is ready to hand over');
-  house(cfg);
+  await house(crew);
   assert.deepEqual(paper(crew).needs, ['Gmail', 'Google Calendar'], 'Google is on; now it waits on this person’s own apps');
-  connect(cfg, 'gmail');
+  await connect(crew, 'gmail');
   assert.deepEqual(paper(crew).needs, ['Google Calendar']);
-  connect(cfg, 'gmail', 'calendar');
+  await connect(crew, 'gmail', 'calendar');
   assert.deepEqual(paper(crew).needs, [], 'connected: the desk can be handed over');
   const ready = crew.snapshot().ideas;
   assert.ok(ready.slice(0, 6).some((i: any) => /letters and forms/.test(i.promise)), 'a job ready to hand over counts against the six');

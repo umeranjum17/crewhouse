@@ -532,11 +532,9 @@ test('tell me when something\'s wrong: a routine that fails says so in Chief\'s 
 
 test('the digest reads today\'s calendar itself once Calendar is connected, and the share has a weekly line in thirds', async () => {
   const { db, crew, cfg, done } = setup();
-  const { mkdirSync: mk, writeFileSync: wf } = await import('node:fs');
-  const { join: j } = await import('node:path');
+  const { signInApp } = await import('./connect-fixture.ts');
   const { CALENDAR } = await import('../src/connections.ts');
-  mk(j(cfg.stateDir, 'people', '1'), { recursive: true });
-  wf(j(cfg.stateDir, 'people', '1', 'connections.json'), JSON.stringify({ calendar: { access: 'tok', expires: Date.now() + 3_600_000 } }));
+  await signInApp(crew.connections, 'calendar');
   const nine = new Date(); nine.setHours(9, 0, 0, 0);
   const real = globalThis.fetch;
   let asked = '';
@@ -753,7 +751,7 @@ test('a failed trigger-only routine says so with no time to try again', async ()
   const r = crew.addRoutine({ bot: 'reel', on: 'when this computer wakes up', task: 'ask permission: say good morning', name: 'Wake up' }, 'person');
   crew.runRoutine(r.id);
   const t = db.get('SELECT id FROM tasks WHERE routine = ?', r.id)!.id;
-  await until('working', () => state(db, t) === 'working');
+  await holding(crew, 'reel');
   db.run('UPDATE tasks SET updated_at = ? WHERE id = ?', Date.now() - 2 * 3_600_000, t);
   (crew as any).tick();
   await until('failed', () => state(db, t) === 'failed');

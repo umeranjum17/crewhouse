@@ -1,9 +1,8 @@
+import { signInApp } from './connect-fixture.ts';
 // calendar-axi against a stand-in Google Calendar (its REST API, in memory): short answers, an add that is safe to repeat,
 // a move that keeps the length, and the gate: looking is free, adding and moving ask, cancelling asks as a delete.
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { setup, settled, task, until } from './lab.ts';
 
 const { CALENDAR, parseWhen, runCalendar, whenOf } = await import('../src/calendar.ts');
@@ -109,8 +108,7 @@ test('a helper uses the connected calendar through crewd: no Google MCP, the tok
   const { db, crew, cfg, done } = setup();
   crew.onboard('sir');
   crew.recruit('scribe', 'Quill', 'person');
-  mkdirSync(join(cfg.stateDir, 'people', '1'), { recursive: true });
-  writeFileSync(join(cfg.stateDir, 'people', '1', 'connections.json'), JSON.stringify({ calendar: { access: 'tok', expires: Date.now() + 3_600_000 } }));
+  await signInApp(crew.connections, 'calendar');
   store.clear(); asked.length = 0;
   const t = crew.assign('quill', 'look [tool calendar {"args":["week"]}]', 'chief').task;
   await settled(db, t);

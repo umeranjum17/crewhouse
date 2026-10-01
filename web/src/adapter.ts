@@ -345,7 +345,7 @@ export const STEP_MARK = { checked: '✓ Checked', said: 'You said done', missin
 export const googleHeadline = (steps?: GoogleStep[] | null) => {
   const missing = steps?.findIndex((s) => s.state === 'missing') ?? -1;
   if (missing >= 0) return `Step ${missing + 1} is missing`;
-  return steps?.every((s) => s.state === 'checked') ? 'Google is on ✓' : 'Google key saved and checked by Google';
+  return steps?.every((s) => s.state === 'checked') ? 'Google is on ✓' : 'Google key saved';
 };
 
 /** The one code a phone away from home types: the short code and the pairing code, with the go-between's own

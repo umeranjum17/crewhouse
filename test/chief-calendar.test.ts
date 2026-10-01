@@ -1,8 +1,7 @@
+import { signInApp } from './connect-fixture.ts';
 // P7: Chief reads the person's own calendar himself instead of handing that to a helper.
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { setup, settled, task, until } from './lab.ts';
 import { chiefFirst } from '../src/crew.ts';
 
@@ -22,8 +21,7 @@ after(() => { globalThis.fetch = real; });
 test("Chief answers his own calendar question: one Chief task, no asks, the reply in his thread", async () => {
   const { db, crew, cfg, done } = setup();
   crew.onboard('Umer');
-  mkdirSync(join(cfg.stateDir, 'people', '1'), { recursive: true });
-  writeFileSync(join(cfg.stateDir, 'people', '1', 'connections.json'), JSON.stringify({ calendar: { access: 'tok', expires: Date.now() + 3_600_000 } }));
+  await signInApp(crew.connections, 'calendar');
   const r = await crew.post('chief', 'what are my next meetings [tool calendar {"args":["next","2"]}]') as { task?: number };
   assert.ok(r?.task, 'the question becomes a task');
   await settled(db, r.task);
