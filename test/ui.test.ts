@@ -757,7 +757,8 @@ test('no jargon anywhere: the machinery\'s words never reach a person', () => {
     reach: A.reach(linkView), reached: A.reached({ reached: { home: now, tailscale: now - 9e6, relay: now - 5e6 } }),
     push: A.pushWords(linkView), typed: A.phoneTyped({ short: 'K7M2QX', code: '7KQ4-M2XP-9RTH', relay: 'https://go.example.com' }),
     anywhere: A.anywhere(linkView), away: A.away({ tailnet: true, vpn: true, knock: 'timeout', reached: { tailscale: now - 3.6e6 } }),
-    status: A.status(state),
+    status: A.status(state), crewLine: A.crewLine(state),
+    bubble: [null, 'off' as const, { text: 'Friday 3pm www.x.top', picked: '' }, { text: 'a', picked: 'a' }].flatMap((b) => A.bubble({ ...state, connections: [] }, b)).map(({ label, ask }) => ({ label, ask })),
   };
   const words = (x: unknown): string => typeof x === 'string' ? x : Array.isArray(x) ? x.map(words).join(' ')
     : x && typeof x === 'object' ? Object.entries(x).filter(([k]) => k !== 'url' && k !== 'at').map(([, v]) => words(v)).join(' ') : '';
@@ -821,7 +822,7 @@ test('Chief on the screen: off until switched on, one door to the overlay kit, a
   const a11y = join(mobile, 'modules', 'crewhouse-net', 'android', 'src', 'main');
   const service = readFileSync(join(a11y, 'java', 'expo', 'modules', 'crewhousenet', 'CrewhouseAccessibilityService.kt'), 'utf8');
   assert.match(service, /override fun onServiceConnected\(\) = ByokitAccessibility\.attach\(this\)/);
-  assert.match(service, /ByokitAccessibility\.detach\(this\)/);
+  assert.match(service, /override fun onUnbind[\s\S]*?ByokitAccessibility\.detach\(this\)[\s\S]*?override fun onDestroy\(\) \{\n    ByokitAccessibility\.detach\(this\)/, 'let go on unbind and on destroy (the kit\'s README)');
   assert.match(service, /override fun onAccessibilityEvent\(event: AccessibilityEvent\?\) \{\}/, 'it watches nothing itself');
   assert.match(readFileSync(join(a11y, 'res', 'xml', 'crewhouse_accessibility.xml'), 'utf8'), /flagRetrieveInteractiveWindows[\s\S]*canRetrieveWindowContent="true"/);
   assert.match(readFileSync(join(a11y, 'AndroidManifest.xml'), 'utf8'), /CrewhouseAccessibilityService"[\s\S]*BIND_ACCESSIBILITY_SERVICE/);
@@ -830,25 +831,98 @@ test('Chief on the screen: off until switched on, one door to the overlay kit, a
   const moods = app.expo.plugins.find((p: unknown) => Array.isArray(p) && p[0] === '@byokit/overlay')[1].moods as Record<string, string>;
   for (const m of [...bubble.matchAll(/'(chief_\w+)'/g)].map((x) => x[1]).concat(['idle', 'work', 'ask', 'happy', 'rest', 'worried', 'error'].map((m) => `chief_${m}`)))
     assert.ok(moods[m] && readFileSync(join(mobile, moods[m])).length > 0, m);
+  // Hold him to talk: the long press only opens the panel listening; the mic is the panel's Chief box (App.tsx Mic),
+  // started there and never from the bubble's window, and what was heard waits in the box until the person sends it.
+  assert.match(bubble, /overlay\.on\('longPress', \(\) => \{ void overlay\.openPanel\(\{ listen: '1' \}\); \}\);/);
+  const panel = readFileSync(join(mobile, 'src', 'panel.tsx'), 'utf8');
+  assert.match(panel, /<Body [^>]*listen=\{!!listen\} \/>/, 'the panel hands the long press to its body');
+  assert.match(panel, /<Composer placeholder="Ask Chief anything" onSend=\{toChief\} chat="chief" listen=\{hold\} \/>/);
+  assert.match(panel, /useEffect\(\(\) => \{ if \(state && canAct\) setHold\(false\); \}/, 'once per opening: a link blip never starts the mic again');
+  assert.match(readFileSync(join(mobile, 'App.tsx'), 'utf8'), /if \(c && listen && shown\.current\) void start\(\);/);
+  assert.doesNotMatch(bubble, /hear\(|RECORD_AUDIO/, 'no mic from the bubble itself');
   // The one link is shared: the app, the bubble and its panel each let go of their hold, never hang up on the others.
   assert.doesNotMatch(readFileSync(join(mobile, 'App.tsx'), 'utf8'), /return \(\) => l\.stop\(\)/);
 });
 
-test('the bubble and the chip share one quick-action list: fill a box, never send, and only this crew\'s helpers', () => {
+test('the bubble and the chip share one quick-action list: open the app, never send, and only this crew\'s helpers', () => {
   const s = { ...state, bots: [...state.bots.filter((b) => b.id !== 'scribe'), bot('scribe')],
     ideas: [{ bot: 'scribe', ask: 'Scribe, turn this into posts: ' }, { bot: 'reel', ask: 'Reel, edit my clip', needs: ['An app'] }] };
-  const q = A.quick(s, true, true);
-  assert.deepEqual(q.map((a) => a.id), ['needs', 'ask', 'write', 'screen', 'demo']);
-  assert.deepEqual(q.find((a) => a.id === 'write'), { id: 'write', label: 'Write it here', url: '' }, 'the bubble\'s own flow, never a box to send from');
-  assert.deepEqual(A.quick(s).map((a) => a.id), ['needs', 'ask', 'screen', 'demo'], 'no box in focus (or a password box): no Write it here');
+  const q = A.quick(s, true);
+  assert.deepEqual(q.map((a) => a.id), ['needs', 'ask', 'demo']);
   assert.equal(q.find((a) => a.id === 'demo')!.url, 'crewhouse://ask?to=reel&text=', 'a job waiting on an app never fills the box');
-  assert.deepEqual(A.quick({ ...s, bots: s.bots.filter((b) => b.template !== 'scribe' && b.template !== 'reel') }, true, true).map((a) => a.id), ['needs', 'ask', 'screen'], 'no writer, no Write it here');
-  assert.deepEqual(A.quick(s, false, true), [], 'a watching phone gets no actions');
+  assert.deepEqual(A.quick({ ...s, bots: s.bots.filter((b) => b.template !== 'reel') }).map((a) => a.id), ['needs', 'ask'], 'no Reel, no demo');
+  assert.deepEqual(A.quick(s, false), [], 'a watching phone gets no actions');
   assert.deepEqual(A.status(s)!.actions, q.slice(0, 2).map(({ id, label }) => ({ id, label })), 'the chip takes the first two');
   for (const a of q) assert.doesNotMatch(`${a.label}`, FORBIDDEN);
   // Every address is one the app reads (mobile/src/ask.ts), landing in that helper's box.
   for (const a of q.filter((x) => x.url.startsWith('crewhouse://ask'))) assert.ok(askOf(a.url, [{ id: 'scribe', template: 'scribe' }, { id: 'reel', template: 'reel' }]));
-  assert.equal(A.writer(s)?.id, 'scribe');
+  // Write it here's writer: Scribe, else the general Helper (whatever it is called), else the Helper the tap hires.
+  assert.deepEqual(A.writer(s), { id: 'scribe', name: 'Scribe' });
+  const none = { ...s, bots: s.bots.filter((b) => b.template !== 'scribe') };
+  assert.deepEqual(A.writer(none), { id: '', name: 'Helper' }, 'nobody to write: the tap hires the Helper, never Chief');
+  assert.deepEqual(A.writer({ ...none, bots: [...none.bots, bot('pip', { template: 'helper', display: 'Pip' })] }), { id: 'pip', name: 'Pip' });
+});
+
+test('the bubble\'s buttons: fixed words to one helper, never Chief, and only whether the tap read words changes them', () => {
+  const s = { ...state, bots: [bot('chief'), bot('scout'), bot('scribe')], asks: [], connections: ['calendar', 'gmail'] };
+  const ids = (box: Parameters<typeof A.bubble>[1]) => A.bubble(s, box).map((b) => b.id);
+  const box = (text: string, picked = '') => ({ text, picked });
+  assert.deepEqual(ids(null), ['deal', 'real', 'letter', 'plan'], 'no box: a still, a photo of a letter, or the day');
+  assert.deepEqual(ids('off'), ['write', 'deal', 'real', 'letter', 'plan'], 'the box not readable yet: Write it here explains the switch');
+  assert.deepEqual(ids(box('  ')), ['write', 'deal', 'real', 'letter', 'plan'], 'an empty box: the screen buttons');
+  assert.deepEqual(ids(box('See you Friday at 3pm?')), ['write', 'calendar', 'real', 'short', 'lookup', 'plan'], 'words: the buttons that act on them');
+  // The words are fixed, with the box's words (the part picked, when there is one) quoted under the job's title line.
+  const by = (b: Parameters<typeof A.bubble>[1], id: string) => A.bubble(s, b).find((x) => x.id === id)!;
+  const real = by(box('Your parcel is held: pay £1.99 at https://royalmail-redelivery.top/pay now'), 'real');
+  assert.deepEqual([real.from, real.to], ['text', { id: 'scout', name: 'Scout' }]);
+  assert.equal(real.ask.split('\n')[0], "Is this real? Here's what it says:");
+  assert.equal(real.ask.split('\n')[1], '“Your parcel is held: pay £1.99 at hxxps://royalmail-redelivery[.]top/pay now”', 'its addresses defanged, so nothing follows them');
+  assert.match(real.ask, /warning signs/, 'signs, never a verdict');
+  assert.match(real.ask, /Don't tell me it's safe or a scam, and don't open or look up any web address in it\./, 'and never fetching what it points at');
+  assert.match(real.ask, /official app/);
+  assert.equal(A.defang('www.bank.co.uk or http://x.top, £1.99'), 'www[.]bank[.]co[.]uk or hxxp://x[.]top, £1.99');
+  assert.equal(by(box('Who is Dr Rana Malik, really?', 'Dr Rana Malik'), 'lookup').ask.split('\n')[1], '“Dr Rana Malik”', 'only what was picked');
+  assert.match(by(box('Friday 3pm, the dentist'), 'calendar').ask, /^Put this date in my Google Calendar:\n“Friday 3pm, the dentist”\n.*say so instead of guessing/);
+  assert.equal(by(box('a long letter'), 'short').ask, 'Give me the short version, in three lines or fewer:\n“a long letter”');
+  const still = by(null, 'real'), letter = by(null, 'letter'), deal = by(null, 'deal'), plan = by(null, 'plan');
+  assert.deepEqual([still.from, letter.from, deal.from, plan.from, deal.ask], ['screen', 'camera', 'screen', 'none', ''], 'Deal with this: the person says what to do');
+  const scoutDay = JSON.parse(readFileSync(join(import.meta.dirname, '..', 'templates', 'scout', 'bot.json'), 'utf8')).ideas.find((i: Json) => /my day/.test(i.ask)).ask;
+  assert.equal(plan.ask, scoutDay, 'Plan my day is Scout\'s own ask, the one its day plan answers');
+  assert.deepEqual([by(box('hi'), 'write').from, by(box('hi'), 'write').to], ['box', { id: 'scribe', name: 'Scribe' }]);
+  // What needs Google says so until it is on, and a tap goes to Settings (mobile/src/panel.tsx): the calendar needs
+  // Calendar, the day plan Calendar and Gmail.
+  const off = A.bubble({ ...s, connections: [] }, box('Friday 3pm'));
+  assert.deepEqual(off.filter((b) => b.needs.length).map((b) => [b.id, b.label]), [['calendar', 'Put this date in my calendar · needs Google'], ['plan', 'Plan my day · needs Google']]);
+  assert.deepEqual(A.bubble({ ...s, connections: ['calendar'] }, box('Friday 3pm')).filter((b) => b.needs.length).map((b) => b.id), ['plan']);
+  // No Scout: the general Helper; nobody at all: '' — the tap hires the Helper first. Never Chief.
+  const helper = A.bubble({ ...s, bots: [bot('chief'), bot('pip', { template: 'helper', display: 'Pip' })] }, box('Friday'));
+  assert.deepEqual([...new Set(helper.map((b) => b.to.id))], ['pip']);
+  for (const b of A.bubble({ ...s, bots: [bot('chief')] }, null)) assert.deepEqual(b.to, { id: '', name: 'Helper' });
+  assert.deepEqual(A.bubble(s, box('Friday'), false), [], 'a watching phone gets none');
+  for (const b of [...A.bubble(s, null), ...A.bubble(s, box('Friday 3pm', 'Friday')), ...off]) {
+    assert.doesNotMatch(b.label, FORBIDDEN);
+    assert.doesNotMatch(b.ask.replace(/“[^”]*”/g, ''), FORBIDDEN);
+  }
+  // Every address the panel opens is one App.tsx reads: Settings, and a helper's screen to take the wheel or watch.
+  const mobile = join(import.meta.dirname, '..', 'mobile');
+  const panel = readFileSync(join(mobile, 'src', 'panel.tsx'), 'utf8'), app = readFileSync(join(mobile, 'App.tsx'), 'utf8');
+  const settingsAt = /^crewhouse:\/\/settings\/?$/, screenAt = /^crewhouse:\/\/screen\?bot=([a-z0-9-]+)(&watch=1)?$/;
+  assert.ok(app.includes(`${settingsAt}`.slice(1, -1)) && app.includes(`${screenAt}`.slice(1, -1)), 'App.tsx parses exactly these');
+  for (const u of ["open('crewhouse://settings')", 'open(`crewhouse://screen?bot=${top.id}`)', 'open(`crewhouse://screen?bot=${top.id}&watch=1`)']) {
+    assert.ok(panel.includes(u), u);
+    assert.match(u.replace(/^open\(['`]|['`]\)$/g, '').replace('${top.id}', 'scout'), /crewhouse:\/\/settings/.test(u) ? settingsAt : screenAt, u);
+  }
+  assert.match(app, /watchNow=\{screenFirst\}/, 'after taking the wheel the screen opens by itself, as the app\'s own button does');
+});
+
+test('who is on what: one plain line from state alone, resting included, no model', () => {
+  assert.equal(A.crewLine(state), `Reel needs you. Scout is on “Flights”. The crew is resting until ${A.clock(now + 3600_000)}.`);
+  const st = { ...state, resting: {}, bots: [bot('chief', { task: { id: 9, title: 'Plan dinners', state: 'working' } }), bot('scout', { task: { id: 6, title: 'Flights', state: 'working' }, controls: 'person' }),
+    bot('scribe', { task: { id: 7, title: 'Post', state: 'working' }, stuck: true, quietSince: now - 9 * 60_000 }), bot('reel', { pausedUntil: now + 600_000 }), bot('tracer')] };
+  assert.equal(A.crewLine(st), `Chief is on “Plan dinners”. Scout waits while you drive. Scribe has gone quiet. Reel is resting until ${A.clock(now + 600_000)}.`);
+  assert.equal(A.crewLine({ ...st, bots: [bot('chief'), bot('tracer')] }), '', 'a quiet crew says nothing (Chief\'s own line stands)');
+  assert.equal(A.crewLine({ ...st, bots: [bot('chief'), bot('reel', { pausedUntil: now + 600_000, queued: 1 })] }), '', 'a job waiting its turn is nobody working yet');
+  assert.doesNotMatch(A.crewLine(state), FORBIDDEN);
 });
 
 test('Write it here: the writer is asked in plain words, and its draft is the job\'s own reply', () => {
@@ -1636,8 +1710,8 @@ test('speaking to Chief stays on the device and only fills the box: the person s
   // What was heard goes into the box through the composer's own change; the send button stays the only way out.
   const parts = src('web/src/parts.tsx'), app = src('mobile/App.tsx');
   assert.match(parts, /useVoice\(chat === 'chief', text, \(t\) => change\(t\)\)/);
-  assert.match(app, /mic = chat === 'chief' \}/, 'Chief\'s box, and Write it here\'s (mobile/src/panel.tsx), hear');
-  assert.match(app, /<Mic on=\{mic\} text=\{text\} put=\{change\} \/>/);
+  assert.match(app, /mic = chat === 'chief', listen \}/, 'Chief\'s box, and Write it here\'s (mobile/src/panel.tsx), hear');
+  assert.match(app, /<Mic on=\{mic\} text=\{text\} put=\{change\} listen=\{listen\} \/>/, 'held bubble: the same mic, started at once, still only filling the box');
   for (const f of [parts.slice(parts.indexOf('function useVoice'), parts.indexOf('export function Composer')), app.slice(app.indexOf('function Mic('), app.indexOf('function Composer('))])
     assert.doesNotMatch(f, /send\(|onSend|api\./, 'the mic never sends');
 });
