@@ -218,7 +218,7 @@ export class Crew {
   private timer?: NodeJS.Timeout;
   /** Bots with a run in flight (the engine is working). */
   readonly busy = new Set<string>();
-  /** Applied learning the person has already been told about, keyed by skill id. */
+  /** Applied learning already recorded in the log, keyed by skill id. */
   private seenLearned = new Set<string>();
   /** When to next check the engine's collection-review job (the weekly tidy, run on crewhouse's own boundary). */
   private curationAt = 0;
@@ -324,7 +324,7 @@ export class Crew {
   }
 
   /** The weekly tidy of what was learned, on crewhouse's own boundary: capture first — refusing the whole review if
-   *  the capture cannot be verified — then the engine's review inside the armed window, then the plain-words record.
+   *  the capture cannot be verified — then the engine's review inside the armed window, then the log record.
    *  Every review goes through this one pre-change step. */
   private async weeklyCuration() {
     this.curationAt = Date.now() + 7 * 86_400_000;
@@ -332,22 +332,10 @@ export class Crew {
     if (!runtime.runCollectionReview) return;
     try {
       const outcome = await runtime.runCollectionReview();
-      const parts = [outcome.written.length ? `rewrote ${outcome.written.join(', ')}` : '',
-        outcome.dropped.length ? `set aside ${outcome.dropped.join(', ')}` : '',
-        !outcome.written.length && !outcome.dropped.length ? 'nothing needed changing' : ''].filter(Boolean);
-      this.db.tx(() => {
-        this.say(CHIEF, 'bot', `Tidied what your crew learned: ${parts.join('; ')}. Set-aside skills can come back.`, null);
-        this.db.event('learn.curated', CHIEF, { capture: outcome.capture, kept: outcome.kept, written: outcome.written, dropped: outcome.dropped });
-      });
+      this.db.event('learn.curated', CHIEF, { capture: outcome.capture, kept: outcome.kept, written: outcome.written, dropped: outcome.dropped });
     } catch (e) {
-      // Refused (usually the capture): the data stays exactly as it was, and the person hears why — unless
-      // the person has no learned skills yet, where there is nothing to leave untouched.
       console.error('curation:', e);
-      const learned = await this.runtime.learned().catch(() => []);
-      this.db.tx(() => {
-        this.db.event('learn.curated', CHIEF, { refused: String(e).slice(0, 200) });
-        if (learned.length) this.say(CHIEF, 'system', `I left your learned skills untouched this week — tidying them didn't feel safe just now.`, null);
-      });
+      this.db.event('learn.curated', CHIEF, { refused: String(e).slice(0, 200) });
     }
   }
 
@@ -382,7 +370,7 @@ export class Crew {
   }
   /** "sir", "Sam", or "the person": how the person is named in prompts. */
   private called() { return this.person().name || 'the person'; }
-  bot(id: string) { return this.db.get('SELECT rowid + 100 AS n, * FROM bots WHERE id = ?', id); }
+  bot(id: string) { return this.db.get('SELECT * FROM bots WHERE id = ?', id); }
   bots() { return this.db.all('SELECT * FROM bots ORDER BY created_at'); }
   activeTask(bot: string) { return this.db.get("SELECT * FROM tasks WHERE bot = ? AND state IN ('working', 'needs_you') ORDER BY id LIMIT 1", bot); }
 
@@ -1266,8 +1254,8 @@ export class Crew {
       if (this.runtime.memoryLimited?.()) {
         const key = 'memory.limited.1';
         if (!this.db.get('SELECT 1 FROM settings WHERE key = ?', key)) {
-          this.say(bot.id, 'system', 'Memory features are limited: no subscription-backed or local search is set up. Keyword search still works; no paid search was tried.', task.id);
-          this.db.run('INSERT INTO settings (key, value) VALUES (?, ?)', key, 'shown');
+          this.db.event('memory.limited', bot.id, { task: task.id });
+          this.db.run('INSERT INTO settings (key, value) VALUES (?, ?)', key, 'logged');
         }
       }
       const handoff = this.handoffs.get(task.id);
@@ -1324,7 +1312,7 @@ export class Crew {
     if (axi) {
       // With its own computer, the browser tool drives the visible Chromium crewd keeps on the bot's display.
       const onScreen = g.tools.includes('computer') && !!browserBin() && this.cfg.engine !== 'stub';
-      if (onScreen) await this.desktops.ensure(bot.id, bot.n, space);
+      if (onScreen) await this.desktops.ensure(bot.id, space);
       // Its own HOME and XDG folders (the playwright daemon's state lives there), never the person's.
       const env = axiEnv(join(this.cfg.stateDir, 'homes', bot.id), { ...axi.env, PLAYWRIGHT_CLI_SESSION: bot.id });
       const run = (args: string[], signal?: AbortSignal) => runAxi(axi.script, args, space, env, signal);
@@ -1332,7 +1320,7 @@ export class Crew {
       // task reopens it; an idle timeout when the engine has one.
       let started: Promise<string> | undefined;
       const start = async () => {
-        const cdp = onScreen ? (await this.desktops.ensure(bot.id, bot.n, space)).cdp : undefined;
+        const cdp = onScreen ? (await this.desktops.ensure(bot.id, space)).cdp : undefined;
         return run(cdp ? ['attach', '--cdp', cdp] : ['open', '--persistent', '--profile', join(space, 'browser')]);
       };
       l.browser = {
@@ -1410,7 +1398,7 @@ export class Crew {
     this.busy.delete(botId);
     if (this.live.get(botId) !== l) return; // replaced or reset
     if (end.ok) {
-      void this.surfaceLearned(botId, l).catch(() => {});
+      void this.recordLearned(botId, l).catch(() => {});
       return this.finish(botId, end.text); // a rest expires by its own time; a success never clears one early
     }
     if ('aborted' in end) return; // stopped on purpose: Take over, Stop, or a parked question
@@ -1516,18 +1504,15 @@ export class Crew {
       !!this.db.get("SELECT 1 FROM asks WHERE state = 'open' AND json_extract(detail, '$.pass.root') = ?", root);
   }
 
-  /** After a real engine run: any skill the engine's reviewer applied lands as one plain line with a Forget. */
-  private async surfaceLearned(botId: string, l: Live) {
+  /** Record automatic learning after a run; the person's learned list supplies its Forget action. */
+  private async recordLearned(botId: string, l: Live) {
     if (this.cfg.engine === 'stub') return;
     const learned = await this.runtime.learned().catch(() => [] as { id: string; skill: string; at: number; state: string }[]);
     const applied = learned.filter((p) => p.state === 'applied');
     for (const p of applied) {
       if (this.seenLearned.has(p.id)) continue;
       this.seenLearned.add(p.id);
-      this.db.tx(() => {
-        this.say(botId, 'system', `Learned: ${p.skill} — I'll do it this way next time. You can Forget it on ${this.bot(botId)?.display ?? 'its'} page.`, l.task);
-        this.db.event('learn.applied', botId, { task: l.task, id: p.id, skill: p.skill });
-      });
+      this.db.event('learn.applied', botId, { task: l.task, id: p.id, skill: p.skill });
     }
   }
 
@@ -2453,7 +2438,7 @@ export class Crew {
     const bot = this.needBot(botId);
     if (method === 'session.open') {
       if (!disk.canUse(this.cfg, botId, 'computer')) throw Object.assign(new Error(`${bot.display} has no computer; grant it on the Tools tab`), { code: 'no-screen' });
-      await this.desktops.ensure(botId, bot.n, disk.botDir(this.cfg, botId));
+      await this.desktops.ensure(botId, disk.botDir(this.cfg, botId));
     }
     return this.desktops.signal(botId, watcher, method, params, canControl && this.held.has(botId));
   }
@@ -2528,7 +2513,7 @@ export class Crew {
     const bot = this.needBot(botId);
     try {
       if (disk.canUse(this.cfg, botId, 'computer')) {
-        await this.desktops.ensure(botId, bot.n, disk.botDir(this.cfg, botId));
+        await this.desktops.ensure(botId, disk.botDir(this.cfg, botId));
         await this.desktops.clearSite(botId, host);
       }
     } catch {

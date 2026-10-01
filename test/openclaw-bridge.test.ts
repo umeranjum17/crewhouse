@@ -35,6 +35,29 @@ test('a run\'s tool call crosses the gate as the crew\'s own run; an unknown run
   } finally { await f.done(); }
 });
 
+test('the engine adapter preserves full final output and respects silent or empty replies', async () => {
+  const full = JSON.stringify({ rows: Array.from({ length: 180 }, (_, i) => ({ day: i + 1, note: 'Family plans, meals and reminders '.repeat(5) })) });
+  assert.ok(full.length > 4096);
+  for (const disposition of ['text', 'silent', 'empty']) {
+    const f = faked({}, {
+      agent: () => ({ runId: 'full-output', status: 'ok', result: { payloads: [{ text: full }] } }),
+      'agent.wait': () => ({ status: 'ok', terminalReply: { disposition, text: full.slice(0, 4096) } }),
+    });
+    const texts: string[] = [];
+    try {
+      await f.started;
+      const end = await f.runtime.run({ key: 'agent:m1:crewhouse:chief:1', bot: 'chief', task: 1,
+        account: 'chatgpt', cwd: '', system: '', message: 'Make the family plan.', builtins: [] },
+        (event) => { if (event.type === 'text') texts.push(event.text); });
+      assert.ok(end.ok, JSON.stringify(end));
+      const expected = disposition === 'text' ? full : '';
+      assert.equal(end.text, expected);
+      assert.equal(texts.at(-1), expected, 'the final callback agrees with the result');
+      if (expected) assert.deepEqual(JSON.parse(end.text), JSON.parse(full));
+    } finally { await f.done(); }
+  }
+});
+
 test('the curation window: the person\'s own reviewer, its reconcile, one call wide', async () => {
   const f = faked();
   try {

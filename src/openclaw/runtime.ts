@@ -202,7 +202,7 @@ export class OpenClawRuntime implements AgentRuntime {
   captureLearned(): string {
     const dir = this.workspaceOf();
     if (!existsSync(join(dir, '.git'))) mkdirSync(dir, { recursive: true });
-    const hash = commit(dir, ['.'], 'Before the skill collection review');
+    const hash = commit(dir, ['.'], 'Before the skill collection review', true);
     if (!hash) throw new Error('the learned-skills capture failed; the review was refused');
     return hash;
   }

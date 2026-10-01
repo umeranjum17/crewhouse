@@ -71,7 +71,7 @@ test('queue: one task at a time per bot, and a global cap across bots', async ()
   done();
 });
 
-test('limited memory is disclosed once in the person-visible thread', async () => {
+test('limited memory is logged once without a chat notice', async () => {
   const { db, crew, done } = setup();
   crew.onboard('sir');
   (crew.runtime as any).memoryLimited = () => true;
@@ -81,8 +81,10 @@ test('limited memory is disclosed once in the person-visible thread', async () =
   const second = crew.assign('reel', 'second request', 'chief').task;
   await settled(db, second);
   const notices = db.all("SELECT text FROM messages WHERE author = 'system' AND text LIKE 'Memory features are limited:%'");
-  assert.equal(notices.length, 1);
-  assert.match(notices[0].text, /no paid search was tried/i);
+  assert.equal(notices.length, 0);
+  const logged = db.all("SELECT * FROM events WHERE kind = 'memory.limited'");
+  assert.equal(logged.length, 1);
+  assert.deepEqual(A.steps(logged), [], 'maintenance logs never become visible steps');
   done();
 });
 
