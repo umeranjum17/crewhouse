@@ -596,11 +596,100 @@ test('give back keeps the sites the person ticked, and Forget takes one back', a
   await assert.rejects(crew.forget('reel', 'shop.example'), /Couldn't sign Reel out of shop\.example just now; it still asks/);
   assert.deepEqual(signedIn('reel'), ['shop.example', 'mail.example'], 'a failed clear keeps the site on the list');
   (crew.desktops as any).ensure = async () => ({});
-  (crew.desktops as any).clearSite = async () => {};
+  (crew.desktops as any).clearSite = async () => true;
   await crew.forget('reel', 'shop.example');
   assert.deepEqual(signedIn('reel'), ['mail.example'], 'Forget drops the site once its data is cleared');
   assert.ok(db.get("SELECT 1 FROM events WHERE kind = 'signin.forgot' AND bot = 'reel'"));
   done();
+});
+
+test('Forget keeps synthetic sign-ins through unavailable, revoked and restored Computer', async () => {
+  const { db, crew, cfg, done } = setup();
+  try {
+    crew.onboard('sir');
+    crew.recruit('reel', 'Reel', 'person');
+    disk.setSignedIn(cfg, 'reel', ['shop.example']);
+    // Disposable registry/profile only: no browser or real cookies. Readiness is independent of the grant.
+    const manifest = join(cfg.toolsDir, 'repo', 'tools', 'computer', 'tool.json');
+    mkdirSync(join(cfg.toolsDir, 'repo', 'tools', 'computer'), { recursive: true });
+    cfg.repoDir = join(cfg.toolsDir, 'repo');
+    const ready = (on: boolean) => writeFileSync(manifest, JSON.stringify({ id: 'computer', source: 'system', bins: [on ? 'ch03-computer' : 'ch03-unavailable'], install: {} }));
+    fakeBin(kit.toolBin(cfg), 'ch03-computer');
+    ready(false);
+    disk.setGrants(cfg, 'reel', ['computer']);
+    let ensures = 0, clears = 0;
+    (crew.desktops as any).ensure = async () => { ensures++; };
+    (crew.desktops as any).clearSite = async () => { clears++; return true; };
+    const retained = () => {
+      assert.deepEqual(disk.botConfig(cfg, 'reel').signedIn, ['shop.example']);
+      assert.equal(db.get("SELECT count(*) AS n FROM events WHERE kind = 'signin.forgot'")!.n, 0);
+    };
+    const rejected = () => assert.rejects(crew.forget('reel', 'shop.example'), (e: any) => e.status === 409 && /Couldn't sign Reel out/.test(e.message));
+    await rejected();
+    retained();
+    assert.deepEqual([ensures, clears], [0, 0], 'unavailable must not start or clear a browser');
+    assert.deepEqual(disk.botConfig(cfg, 'reel').tools, ['crew', 'computer'], 'unreadiness does not revoke the grant');
+    disk.setGrants(cfg, 'reel', []);
+    ready(true);
+    await rejected();
+    retained();
+    assert.deepEqual([ensures, clears], [0, 0], 'restored tooling without authorization must not clear');
+    assert.deepEqual(disk.botConfig(cfg, 'reel').tools, ['crew'], 'Forget never reacquires a revoked grant');
+    disk.setGrants(cfg, 'reel', ['computer']);
+    retained(); // Restoration cannot leave an unmarked session.
+    (crew.desktops as any).clearSite = async () => { clears++; return false; };
+    await rejected();
+    retained();
+    (crew.desktops as any).clearSite = async () => { clears++; throw new Error('synthetic clear failure'); };
+    await rejected();
+    retained();
+    (crew.desktops as any).ensure = async () => { ensures++; disk.setGrants(cfg, 'reel', []); };
+    await rejected();
+    retained();
+    assert.deepEqual([ensures, clears], [3, 2], 'revocation while starting the browser prevents clearing');
+    disk.setGrants(cfg, 'reel', ['computer']);
+    (crew.desktops as any).ensure = async () => { ensures++; };
+    (crew.desktops as any).clearSite = async () => { clears++; return true; };
+    await crew.forget('reel', 'shop.example');
+    assert.deepEqual([ensures, clears], [4, 3]);
+    assert.deepEqual(disk.botConfig(cfg, 'reel').signedIn, []);
+    assert.equal(db.get("SELECT count(*) AS n FROM events WHERE kind = 'signin.forgot'")!.n, 1);
+  } finally { done(); }
+});
+
+test('Forget clear contract distinguishes a CDP success result from an error without a result', async () => {
+  const { crew, done } = setup();
+  try {
+    for (const result of [{}, undefined, false]) {
+      const cleared: string[] = [];
+      let detached = false;
+      (crew.desktops as any).withPipe = async (bot: string, run: any) => {
+        assert.equal(bot, 'reel');
+        return run(async (method: string, params: any, sessionId?: string) => {
+          if (method === 'Target.getTargets') return { targetInfos: [{ type: 'page', targetId: 'synthetic-page' }] };
+          if (method === 'Target.attachToTarget') {
+            assert.deepEqual(params, { targetId: 'synthetic-page', flatten: true });
+            return { sessionId: 'synthetic-session' };
+          }
+          if (method === 'Target.detachFromTarget') {
+            assert.deepEqual(params, { sessionId: 'synthetic-session' });
+            detached = true;
+            return {};
+          }
+          assert.equal(method, 'Storage.clearDataForOrigin');
+          assert.equal(sessionId, 'synthetic-session', 'clear uses this bot\'s page session, not browser root');
+          assert.deepEqual(params, { origin: `${cleared.length ? 'http' : 'https'}://shop.example`, storageTypes: 'all' });
+          cleared.push(params.origin);
+          return result;
+        });
+      };
+      assert.equal(await crew.desktops.clearSite('reel', 'shop.example'), Boolean(result));
+      assert.equal(detached, true, 'page session is detached even after a rejected clear');
+      assert.equal(cleared.length, result ? 2 : 1, 'both origins must acknowledge success');
+    }
+    (crew.desktops as any).withPipe = async (_bot: string, run: any) => run(async () => ({ targetInfos: [] }));
+    assert.equal(await crew.desktops.clearSite('reel', 'shop.example'), false, 'no page context cannot verify clearing');
+  } finally { done(); }
 });
 
 test('steer: a word from the person reaches the bot mid-task without starting over', async () => {

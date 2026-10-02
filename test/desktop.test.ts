@@ -284,8 +284,29 @@ test('give back reads its tabs and keeps what the person ticked', { skip: noXvfb
   await crew.giveBack('reel', '', []);
   assert.deepEqual(crew.botPage('reel').signedIn, ['127.0.0.1'], 'an empty sheet keeps the list as it was');
 
+  // Real CDP, but only a disposable profile and a synthetic cookie on our own fake HTTP site.
+  const cookie = (set = false) => (crew.desktops as any).withPipe('reel', async (call: any) => {
+    const { targetInfos } = await call('Target.getTargets');
+    const target = targetInfos.find((p: any) => p.type === 'page' && p.url.startsWith(host(front)));
+    assert.ok(target, 'the fake shop has a page target');
+    const { sessionId } = await call('Target.attachToTarget', { targetId: target.targetId, flatten: true });
+    try {
+      if (set) assert.equal((await call('Network.setCookie', { name: 'ch03', value: 'synthetic', url: host(front) }, sessionId)).success, true);
+      const { cookies } = await call('Network.getCookies', { urls: [host(front)] }, sessionId);
+      return cookies.filter((c: any) => c.name === 'ch03');
+    } finally { await call('Target.detachFromTarget', { sessionId }); }
+  });
+  assert.equal((await cookie(true)).length, 1, 'synthetic cookie exists before Forget');
+  const path = process.env.PATH;
+  try {
+    process.env.PATH = cfg.toolsDir; // Existing browser survives, but Computer is unavailable.
+    await assert.rejects(crew.forget('reel', '127.0.0.1'), /Couldn't sign Reel out/);
+    assert.deepEqual(crew.botPage('reel').signedIn, ['127.0.0.1'], 'unavailable Computer retains the marker');
+  } finally { process.env.PATH = path; }
+  assert.equal((await cookie()).length, 1, 'failed Forget did not clear the synthetic cookie');
   await crew.forget('reel', '127.0.0.1');
   assert.deepEqual(crew.botPage('reel').signedIn, [], 'Forget takes the site back off the list');
+  assert.equal((await cookie()).length, 0, 'authorized page-level clear removes the fake HTTP cookie');
 });
 
 async function until(what: string, fn: () => unknown, ms = 15_000) {
