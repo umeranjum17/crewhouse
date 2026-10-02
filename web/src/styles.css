@@ -926,6 +926,8 @@ h1 { font: 400 32px/36px var(--serif); letter-spacing: -.005em; }
 .m-needs i { background: var(--pink); } .m-needs[data-n="0"] i { background: var(--line2); }
 .home-bar.is-chat { align-items: center; }
 .home-bar.is-chat .home-meta { margin: 0; font-size: 15px; }
+/* B1 phone Chat: the bar is the gear and the switch; the hero's caption and Needs you carry the counts. */
+@media (max-width: 899px) { .home-bar.is-chat .home-meta { display: none; } }
 .home-bar.is-chat .m-needs:not([data-n="0"]) { color: var(--pink-ink); font-weight: 600; }
 .home-bar.is-chat .m-working i { background: var(--ok); box-shadow: none; }
 .m-quiet { color: var(--ink2); } .m-quiet .lucide { flex: none; }
