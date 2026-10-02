@@ -1165,6 +1165,13 @@ export type Seat = 'needs' | 'chat' | 'working' | 'failed' | 'next' | 'resting' 
 export const seatOf = (c: OfficeMember): Seat => (c.ask ? 'needs' : c.ring === 'needs' ? 'chat' : c.ring === 'working' ? 'working'
   : c.mood === 'error' ? 'failed' : c.status === 'Up next' ? 'next' : c.mood === 'rest' ? 'resting' : 'free');
 export const SEAT_WORDS: Record<Seat, string> = { needs: 'Needs you', chat: 'Waiting on your reply', working: 'Working', failed: "Couldn't finish", next: 'Up next', resting: 'Resting', free: 'Free' };
+/** The rail's word for one helper: its seat, except that a free helper whose latest job landed today says which
+ *  (Main590 6: the rail shows Reel done after a hand-off). Any newer seat (working, needs you, …) replaces it. */
+export function railWord(c: OfficeMember, v: OfficeView): { word: string; seat: Seat | 'done' } {
+  const seat = seatOf(c);
+  const last = seat === 'free' ? v.done.filter((t) => t.helper === c.id).sort((a, b) => b.at - a.at)[0] : undefined;
+  return last ? { word: `Done: ${last.title || 'a job'}`, seat: 'done' } : { word: SEAT_WORDS[seat], seat };
+}
 /** Who comes first when there is one seat less than helpers: whoever needs you, then working, then the rest. */
 const SEAT_ORDER: Seat[] = ['needs', 'chat', 'working', 'failed', 'next', 'free', 'resting'];
 /** The whole crew, the one who matters most first (crew order inside each seat): the phone's dock and the web rail. */

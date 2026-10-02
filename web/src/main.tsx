@@ -1155,7 +1155,7 @@ function SideCrew({ state, live, view, id }: { state: Json; live: A.OfficeView; 
   const row = (cid: string, face: ReactNode, name: string, word: string, seat = '') => {
     const c = chats.get(cid);
     return <a key={cid} href={hrefOf(cid)} className={`side-row ${id === cid || (view === 'room' && cid === 'room') || (view === 'chief' && cid === 'chief') ? 'on' : ''}`}>
-      {face}<span className="grow"><b className="clamp1">{name}</b>{word && <span className={`side-seat ${seat}`}><i />{word}</span>}</span>{(c?.unread ?? 0) > 0 && <span className="badge">{A.unreadBadge(c!.unread)}</span>}
+      {face}<span className="grow"><b className="clamp1">{name}</b>{word && <span className={`side-seat ${seat}`}><i /><span className="clamp1">{word}</span></span>}</span>{(c?.unread ?? 0) > 0 && <span className="badge">{A.unreadBadge(c!.unread)}</span>}
     </a>;
   };
   const chiefSeat = A.chiefAsks(live).length ? 'needs' : live.chief.mood === 'work' ? 'working' : '';
@@ -1164,7 +1164,7 @@ function SideCrew({ state, live, view, id }: { state: Json; live: A.OfficeView; 
       <div className="label">Your crew</div>
       {row('chief', <Face who="chief" size={22} ring={chiefSeat === 'needs' ? 'needs' : ''} />, 'Chief', chiefSeat === 'needs' ? A.SEAT_WORDS.needs : chiefSeat === 'working' ? A.SEAT_WORDS.working : '', chiefSeat)}
       {live.crew.length > 1 && row('room', <span className="side-room">{live.crew.slice(0, 2).map((h) => <Face key={h.id} who={{ kind: h.kind, name: h.name, mood: h.mood }} size={18} />)}</span>, 'The crew', '')}
-      {A.roster(live.crew).map((h) => row(h.id, <Face who={{ kind: h.kind, name: h.name, mood: h.mood }} size={22} ring={h.ring} />, h.name, A.SEAT_WORDS[A.seatOf(h)], A.seatOf(h)))}
+      {A.roster(live.crew).map((h) => { const r = A.railWord(h, live); return row(h.id, <Face who={{ kind: h.kind, name: h.name, mood: h.mood }} size={22} ring={h.ring} />, h.name, r.word, r.seat); })}
       {!live.crew.length && <div className="mute small side-blank">No helpers yet.</div>}
     </>
   );

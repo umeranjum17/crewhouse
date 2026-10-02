@@ -102,6 +102,12 @@ test('office truth: the room, its counts, the tray, the roster and Needs you rea
   assert.equal(opened.counts.needs, 2);
   const done = A.officeEvent(v, { kind: 'task.done', bot: 'scout', at: now, data: { task: 1, title: 'Job 1' } });
   assert.equal(done.counts.done, 2);
+  // The rail says a free helper's latest job landed (Main590 6); a newer seat replaces it.
+  assert.deepEqual(A.railWord(done.crew.find((c) => c.id === 'scout')!, done), { word: 'Done: Job 1', seat: 'done' });
+  assert.deepEqual(A.railWord(v.crew.find((c) => c.id === 'scout')!, v), { word: 'Working', seat: 'working' }, 'working beats an earlier finish');
+  assert.deepEqual(A.railWord(v.crew.find((c) => c.id === 'h7')!, v), { word: 'Free', seat: 'free' }, 'nothing landed: just free');
+  const again = A.officeEvent(done, { kind: 'task.working', bot: 'scout', data: { title: 'Job 4' } });
+  assert.equal(A.railWord(again.crew.find((c) => c.id === 'scout')!, again).word, 'Working', 'a new job replaces the cue');
   assert.equal(done.counts.working, 0);
   // Out of reach: nobody claims to be busy or waiting.
   const away = A.officeAway(v);

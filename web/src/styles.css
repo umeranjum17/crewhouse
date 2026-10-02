@@ -924,7 +924,8 @@ details.card[open] > summary { margin-bottom: 10px; }
   .side-seat { display: flex; gap: 5px; align-items: center; font: 500 12px/16px var(--ui); color: var(--ink2); }
   .side-seat i { width: 6px; height: 6px; border-radius: 50%; background: var(--line2); flex: none; }
   .side-seat.needs i, .side-seat.chat i { background: var(--pink); }
-  .side-seat.working i { background: var(--ok); }
+  .side-seat.working i, .side-seat.done i { background: var(--ok); }
+  .side-seat { min-width: 0; }
   .side-seat.failed i { background: var(--danger); }
   .side-seat.next i { background: var(--amber); }
 }
