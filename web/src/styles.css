@@ -1037,3 +1037,46 @@ h1 { font: 400 32px/36px var(--serif); letter-spacing: -.005em; }
 .c-clip { width: 34px; height: 34px; display: grid; place-items: center; border: 0; border-radius: 10px; background: none; color: var(--ink2); }
 .c-clip:disabled { opacity: .45; cursor: not-allowed; }
 .c-chip { height: 28px; max-width: 160px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line2); background: var(--solid); font: 500 12.5px/26px var(--ui); color: var(--ink2); white-space: nowrap; }
+
+/* Chief's hero over his chat (B1 polish): his figure, the serif name, his own line in a bubble, the crew with a badge each. */
+.chief-hero { display: flex; gap: 20px; align-items: center; padding: 18px 22px; margin: 4px 0 12px; background: var(--solid); border: 1px solid var(--line2); border-radius: 24px; box-shadow: 0 1px 2px rgba(20, 26, 42, .04), 0 14px 32px -22px rgba(20, 26, 42, .32); }
+.ch-art { flex: none; display: grid; }
+.ch-body { min-width: 0; flex: 1; display: grid; gap: 10px; justify-items: start; }
+.ch-name { margin: 0; font: 400 48px/1 var(--serif); letter-spacing: -.01em; color: var(--ink); }
+.ch-name small { font: 400 13px/1 var(--ui); color: var(--mute); letter-spacing: 0; margin-left: 6px; }
+.ch-say { margin: 0; padding: 12px 18px; border: 1px solid var(--line2); border-radius: 16px; font: 400 16px/1.45 var(--ui); color: var(--ink); max-width: 60ch; }
+.ch-crew { display: flex; gap: 8px; align-items: center; }
+.ch-face { position: relative; display: grid; border-radius: 50%; box-shadow: 0 0 0 1px var(--line2); text-decoration: none; }
+.ch-badge { position: absolute; right: -3px; bottom: -3px; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; font: 700 10px/1 var(--ui); font-style: normal; color: #fff; border: 2px solid var(--solid); background: var(--mute); }
+.ch-badge.needs, .ch-badge.chat, .ch-badge.failed { background: #D63A1E; }
+.ch-badge.working { background: #1F9D62; }
+.ch-badge.done { background: #3B6FE0; }
+.ch-more { font: 600 13px/1 var(--ui); color: var(--ink2); text-decoration: none; padding: 0 4px; }
+.ch-caption { margin: -2px 0 0; font: 400 13px/18px var(--ui); color: var(--ink2); }
+@media (max-width: 899px) {
+  .chief-hero { padding: 16px; gap: 12px; align-items: flex-start; }
+  .ch-art svg { width: 96px; height: auto; }
+  .ch-name { font-size: 40px; }
+  .ch-say { font-size: 15px; padding: 10px 14px; }
+}
+
+/* The Tonight rail beside Chief's chat on a desk: card per helper or tray item, and a plain line where a section is empty. */
+.tonight-rail { display: grid; align-content: start; gap: 10px; }
+.tonight-rail .label { margin: 10px 0 0; }
+.tr-card { position: relative; display: flex; gap: 14px; align-items: center; padding: 14px 16px; background: var(--solid); border: 1px solid var(--line); border-radius: 18px; text-decoration: none; color: var(--ink); }
+.tr-card .grow { min-width: 0; display: grid; gap: 2px; }
+.tr-card b { font: 600 15px/20px var(--ui); }
+.tr-card .grow > span { font: 400 13px/18px var(--ui); color: var(--ink2); }
+.tr-card em { position: absolute; top: 12px; right: 14px; font: 400 12px/16px var(--ui); font-style: normal; color: var(--mute); }
+.tr-empty { margin: 0; padding: 4px 2px; font: 400 13px/18px var(--ui); color: var(--mute); }
+
+/* Messages (B1): the crew's lines in white bordered cards with the face beside them, yours in a filled ink block, the
+   name and clock kept for screen readers; the day line carries the time. */
+.line:not(.me):not(.note) { display: grid; grid-template-columns: 36px minmax(0, 1fr); column-gap: 10px; align-items: end; }
+.line:not(.me):not(.note) > :not(.line-by) { grid-column: 2; }
+.line:not(.me):not(.note) > .line-by { grid-column: 1; grid-row: 1 / span 9; align-self: end; margin: 0; }
+.line-by .who, .line-by time { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.line:not(.me):not(.note) .bubble-text { margin: 0; width: fit-content; padding: 12px 16px; background: var(--solid); border: 1px solid var(--line2); border-radius: 18px; }
+.line:not(.me):not(.note) > .ask, .line:not(.me):not(.note) > .card { margin-left: 0; }
+.line.me .bubble-text { border-radius: 14px; }
+.line.consecutive:not(.me):not(.note) > .line-by { display: flex; visibility: hidden; }
