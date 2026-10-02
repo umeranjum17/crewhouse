@@ -1889,11 +1889,13 @@ test('J5 repairs stay in: the night look paints first, the job row is never cut 
   // 152: the page reaches the mouth whole (offset .72), settles in, and fades only after .88; the box is drawn in front.
   assert.match(office, /\{ transform: at\(0, 1\), opacity: 1, offset: \.72 \}/); assert.match(office, /\{ transform: at\(\.35, \.92\), opacity: 1, offset: \.88 \}/);
   assert.ok(office.indexOf('<TrayBox x={trayX}') > office.indexOf('{order.map((m) => m === \'chief\''), 'the tray box is drawn after (in front of) every figure');
-  assert.match(office, /left=\{bubble\} y=\{Y\(G - 64\)\}/, 'the Tray bubble sits low over its box, placed clear of every ink');
-  assert.doesNotMatch(office, /HIGH|packed\(/, 'no raised, detached bubble');
+  assert.match(office, /left=\{bubble\} y=\{tight \? G \+ 5 : Y\(G - 64\)\} below=\{tight\}/, 'the Tray bubble sits low over its box, clear of every ink; a packed row captions it under the box');
+  assert.match(office, /H = tight \? G \+ 25 : 210/, 'the floor band grows by the caption only in a packed row');
+  assert.doesNotMatch(office, /HIGH/, 'no raised, detached bubble');
   // 147/148: a crowded row packs its desks (compact) before it scales, all five standing; the page is
   // drawn at the figures' size on both sides.
-  assert.match(office, /return full\.s < 1 \? layAt\(order, sts, trayText, true\) : full;/, 'a crowded row packs before it scales');
+  assert.match(office, /return full\.s < 1 \? packed\(order, sts\) : full;/, 'a crowded row packs before it scales');
+  assert.match(office, /it\.tray \? \[all\[i - 1\]\?\.st === 'chief' \? 34 : 24, 20\]/, 'a packed row reserves only the box, no bubble width');
   assert.match(office, /needs: \[26, 28\], monitor: \[26, 28\], failed: \[26, 28\]/); assert.match(office, /data-scale=\{s\.toFixed\(3\)\}/);
   assert.doesNotMatch(office, /MOCK|floorPlan\(crew, /, 'no seat cap below five for size');
   assert.match(office, /getScreenCTM\(\)\?\.a \?\? 1\) \* Number\(room\.dataset\.scale \?\? 1\), pw = 14 \* k, ph = 18 \* k/);

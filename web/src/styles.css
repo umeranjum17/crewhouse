@@ -755,8 +755,8 @@ details.card[open] > summary { margin-bottom: 10px; }
    one Tray bubble, and the strip naming every figure left to right. Colours come from tokens.ts `room` as --r-*. */
 .office { margin-top: 0; }
 .o-room { position: relative; border-radius: 20px; overflow: hidden; background: var(--r-wall); border: 1.5px solid var(--ink); display: flex; flex-direction: column; }
-.o-art { display: block; width: 100%; height: auto; aspect-ratio: 360 / 210; }
-.o-room.wide .o-art { aspect-ratio: 360 / 244; max-height: calc(100dvh - 240px); } /* the room keeps to its content (Y0 = -34 gives the wall above the window) */
+.o-art { display: block; width: 100%; height: auto; aspect-ratio: var(--ar, 360 / 210); }   /* the viewBox own aspect, set on the svg */
+.o-room.wide .o-art { max-height: calc(100dvh - 240px); } /* the room keeps to its content (Y0 = -34 gives the wall above the window) */
 .o-cell { cursor: pointer; outline: none; }
 .o-cell:focus-visible .o-sprite { outline: 2px solid var(--pink); outline-offset: 2px; }
 .o-tag { cursor: pointer; }

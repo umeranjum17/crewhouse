@@ -114,12 +114,12 @@ export function Office({ state, live, night }: { state: Json; live: A.OfficeView
     : null;
   const more = plan.more.length, moreBusy = plan.more.filter((c) => A.seatOf(c) === 'working').length;
   const id = useId().replace(/:/g, '');
-  const Y0 = wide ? -34 : 0, H = 210;
+  const Y0 = wide ? -34 : 0, H = tight ? G + 25 : 210;   // a packed row's Tray caption sits in the floor band under its box
 
   return (
     <section className="office" aria-label="The office">
       <div ref={box} className={`o-room${wide ? ' wide' : ''}`} style={vars} data-scale={s.toFixed(3)} data-tight={tight || undefined}>
-        <svg className="o-art" viewBox={`0 ${Y0} 360 ${H - Y0}`} preserveAspectRatio={wide ? 'xMidYMid meet' : 'none'} xmlns="http://www.w3.org/2000/svg">
+        <svg className="o-art" style={{ ['--ar' as string]: `360 / ${H - Y0}` }} viewBox={`0 ${Y0} 360 ${H - Y0}`} preserveAspectRatio={wide ? 'xMidYMid meet' : 'none'} xmlns="http://www.w3.org/2000/svg">
           <defs>
             <filter id={`${id}bl`} x="-50%" y="-200%" width="200%" height="500%"><feGaussianBlur stdDeviation="2" /></filter>
             <radialGradient id={`${id}lamp`} cx=".5" cy="0" r="1"><stop offset="0" stopColor="#FFE7A3" stopOpacity=".9" /><stop offset="1" stopColor="#FFE7A3" stopOpacity="0" /></radialGradient>
@@ -134,7 +134,7 @@ export function Office({ state, live, night }: { state: Json; live: A.OfficeView
                   label={said(m) + (m.things.length ? `, made ${m.things.map((f) => KIND_WORDS[f.kind]).join(', ')}` : '')} onOpen={() => setOpen(m.id)} />)}
             <TrayBox x={trayX} n={live.counts.done} />   {/* in front of the figures, as the mock draws it: never hidden by a desk or a body */}
           </g>
-          <Tag key={live.counts.done} x={X(trayX)} left={bubble} y={Y(G - 64)} text={trayText} tail cls={`o-tray${trayWas.current !== undefined && trayWas.current !== live.counts.done ? ' bump' : ''}`} href="#/things" label={`Your tray: ${live.counts.done} done today`} />
+          <Tag key={live.counts.done} x={X(trayX)} left={bubble} y={tight ? G + 5 : Y(G - 64)} below={tight} text={trayText} tail cls={`o-tray${trayWas.current !== undefined && trayWas.current !== live.counts.done ? ' bump' : ''}`} href="#/things" label={`Your tray: ${live.counts.done} done today`} />
           {pill && <Tag x={X(spotOf(pill.m).x)} y={pill.m === 'chief' ? Y(G - 80.8) - 14 : Y(102)} text={A.SEAT_WORDS.needs} hot href={pill.href} label={pill.label} />}
         </svg>
         <div className="o-strip" style={{ ['--n' as string]: order.length + (more ? 1 : 0) }}>
@@ -165,7 +165,7 @@ function Scene({ id, wide }: { id: string; wide: boolean }) {
   return <g aria-hidden className="o-scene">
     <rect x="-400" y={wide ? -400 : 0} width="1160" height={G + (wide ? 400 : 0)} fill="var(--r-wall)" />
     <ellipse cx="180" cy="56" rx="92" ry="64" fill={`url(#${id}glow)`} />
-    <rect x="-400" y={G} width="1160" height={wide ? 400 : 20} fill="var(--r-floor)" />
+    <rect x="-400" y={G} width="1160" height={wide ? 400 : 40} fill="var(--r-floor)" />
     <path d={`M-400 ${G}H760`} stroke={ink} strokeWidth="1.8" />
     <rect x="136" y="22" width="88" height="64" rx="6" fill="var(--r-window)" stroke={ink} strokeWidth="1.8" />
     <path d="M180 22v64M136 54h88" stroke={ink} strokeWidth="1.6" />
@@ -198,7 +198,6 @@ const G = 196, W = 346;
  *  waiting note and flag, a screen, Scribe's pen, Pip's z's. The bubble never covers any of it; the low finished helper and
  *  a standing one may sit under it, as in the mock. */
 const INK: Partial<Record<Station, [number, number]>> = { chief: [-31, 44], needs: [-40, 31.5], monitor: [16, 50], failed: [16, 50], writing: [-21, -12], rest: [-2, 13] };
-const INK_TIGHT: typeof INK = { ...INK, needs: [-11, 31.5], monitor: [-17, 17], failed: [-17, 17] };
 /** Left to right in the given order, the tray just before whoever finished (or before the resting); the row scales down
  *  about the floor line to fit, and centres when it is short. The Tray bubble never sits over a figure or past the
  *  room's edge: the tray keeps room for it beside a tall neighbour (INK: Chief's cue, a waiting flag, a screen) and at the
@@ -206,12 +205,24 @@ const INK_TIGHT: typeof INK = { ...INK, needs: [-11, 31.5], monitor: [-17, 17], 
  *  ponytail: four passes for that room under scaling, exact enough for six stations. */
 function lay(order: (A.OfficeMember | 'chief')[], v: A.OfficeView, trayText: string) {
   const sts = order.map((m) => (m === 'chief' ? 'chief' : stationOf(m, v)) as Station);
-  const full = layAt(order, sts, trayText, false);
+  const full = layAt(order, sts, trayText);
   // A row too long for the stage at the mock's size packs its desks (TIGHT) before anyone shrinks; only the rest scales.
-  return full.s < 1 ? layAt(order, sts, trayText, true) : full;
+  return full.s < 1 ? packed(order, sts) : full;
 }
-function layAt(order: (A.OfficeMember | 'chief')[], sts: Station[], trayText: string, tight: boolean) {
-  const pad = tight ? TIGHT : PAD, ink = tight ? INK_TIGHT : INK;
+/** A packed row: compact desks, the tray box alone at the row's end (clear of Chief's cane), and its Tray caption in the
+ *  floor band under the box, so no bubble width is reserved in the row and nobody shrinks for a label. */
+function packed(order: (A.OfficeMember | 'chief')[], sts: Station[]) {
+  let cur = 0;
+  const spots: Spot[] = [...order.map((m, i) => ({ m, st: sts[i], tray: false })), { m: 'tray' as const, st: 'tray' as Station, tray: true }].map((it, i, all) => {
+    const [l, r] = it.tray ? [all[i - 1]?.st === 'chief' ? 34 : 24, 20] : TIGHT[it.st];
+    const x = cur + l; cur = x + r;
+    return { ...it, x, tight: true };
+  });
+  const s = Math.min(1, W / cur), x0 = 180 - (cur * s) / 2;
+  return { spots, s, x0, X: (x: number) => x0 + x * s, Y: (y: number) => G + (y - G) * s, tight: true, bubble: undefined };
+}
+function layAt(order: (A.OfficeMember | 'chief')[], sts: Station[], trayText: string) {
+  const pad = PAD, ink = INK, tight = false;
   let at = sts.indexOf('done');
   const items: { m: Spot['m']; st: Station; tray: boolean }[] = order.map((m, i) => ({ m, st: sts[i], tray: i === at }));
   if (at < 0) { const r = sts.indexOf('rest'); items.splice(r < 0 ? items.length : r, 0, { m: 'tray', st: 'tray', tray: true }); at = r < 0 ? items.length - 1 : r; }
@@ -338,9 +349,16 @@ function TrayBox({ x, n }: { x: number; n: number }) {
 }
 
 /** A label in the room: the accent pill for what needs you, or a white speech bubble with a tail. */
-function Tag({ x, y, left: at, text, hot, tail, cls = '', href, label }: { x: number; y: number; left?: number; text: string; hot?: boolean; tail?: boolean; cls?: string; href: string; label: string }) {
+function Tag({ x, y, left: at, below, text, hot, tail, cls = '', href, label }: { x: number; y: number; left?: number; below?: boolean; text: string; hot?: boolean; tail?: boolean; cls?: string; href: string; label: string }) {
   const w = text.length * 6.6 + 22, ink = 'var(--r-edge)';
   const left = at ?? Math.max(4, Math.min(x - w / 2, 356 - w));
+  // Under its box (a packed row): a short caption whose pointer reaches up to the box, in the floor band.
+  if (below) return <a className={`o-tag ${cls}`} href={href} aria-label={label}>
+    <path d={`M${x - 4} ${y + 0.6}l4 -4.6 4 4.6`} fill="var(--solid)" stroke={ink} strokeWidth="1.3" strokeLinejoin="round" />
+    <rect x={left} y={y} width={w} height="18" rx="9" fill="var(--solid)" stroke={ink} strokeWidth="1.3" />
+    <path d={`M${x - 3} ${y + 0.6}h6`} stroke="var(--solid)" strokeWidth="2" />
+    <text x={left + w / 2} y={y + 13} textAnchor="middle" fontFamily="Inter, system-ui, sans-serif" fontWeight="600" fontSize="11" fill="var(--ink)">{text}</text>
+  </a>;
   return <a className={`o-tag ${hot ? 'o-pill' : ''} ${cls}`} href={href} aria-label={label}>
     {tail && <path d={`M${x - 4} ${y + 10}l2 8 7-8`} fill="var(--solid)" stroke={ink} strokeWidth="1.3" strokeLinejoin="round" />}
     <rect x={left} y={y - 11} width={w} height="22" rx="11" fill={hot ? '#F0482A' : 'var(--solid)'} stroke={hot ? 'none' : ink} strokeWidth="1.3" />

@@ -270,13 +270,15 @@ test('at 1, 5, 12 and 30 crew and in the B1 mock\'s house, on a phone and a comp
           // Home has no tab bar (B1): on a computer the rail's Chief count is the badge, on a phone the pinned count is
           const badge = parseInt(document.querySelector('.side-nav[href="#/"] .side-count')?.textContent ?? (innerWidth < 900 ? String(pinned) : '0'), 10);
           const more = Number(document.querySelector('.o-more')?.dataset.more ?? 0);
-          // 152: the tray box stands on the floor in front of everyone (what is drawn at its middle is the box), the Tray
-          // bubble's tail is over it and close above it, and the bubble covers no ink: a pen, the z's, a screen.
+          // 152/153: the tray box stands on the floor in front of everyone (what is drawn at its middle is the box), the Tray
+          // bubble's tail is over it and close above it (a packed row: the caption's pointer close under it, in the floor
+          // band), and the label covers no ink: a pen, the z's, a screen.
+          const packedRow = document.querySelector('.o-room')?.dataset.tight === 'true';
           const tb = document.querySelector('.o-traybox > path')?.getBoundingClientRect(), tt = document.querySelector('a.o-tray > path')?.getBoundingClientRect();
           const bub = document.querySelector('a.o-tray rect')?.getBoundingClientRect(), unit = document.querySelector('.o-art').getScreenCTM().a;
           const inked = bub ? [...document.querySelectorAll('.o-pen, .o-zz, .o-mon')].map(box).filter((c) => hit(bub, c)).length : -1;
           const tray = tb && tt ? { onTop: !!document.elementFromPoint(tb.left + tb.width / 2, tb.top + tb.height * 0.6)?.closest('.o-traybox'), over: tt.left + tt.width / 2 >= tb.left && tt.left + tt.width / 2 <= tb.right,
-            gap: (tb.top - tt.bottom) / unit, inked } : null;
+            gap: (packedRow ? tt.top - tb.bottom : tb.top - tt.bottom) / unit, below: tt.top >= tb.bottom - 1, inked } : null;
           return { pairs, seen: st.height > 0 && st.top >= bar - 1 && st.top < innerHeight - 40, out, over, clipped, pills, stat, badge, busy, onIt, waits, pinned, all,
             seated: document.querySelectorAll('.o-cell .o-sprite').length - 1, more: more || 0, caps: document.querySelectorAll('.o-strip .o-cap:not(.o-more)').length,
             tray2: tray, scale: Number(document.querySelector('.o-room')?.dataset.scale), tight: document.querySelector('.o-room')?.dataset.tight === 'true', roster: document.querySelectorAll('.side-row').length, tray: document.querySelector('.o-tray')?.getAttribute('aria-label') ?? null };
@@ -301,14 +303,15 @@ test('at 1, 5, 12 and 30 crew and in the B1 mock\'s house, on a phone and a comp
         }
         if (n === 30) assert.ok(m.more > 0, `${at}: a big crew is counted under "+N"`);
         // Mock size (147, 148, 152): a row the stage holds is at scale 1; one it does not first packs its desks and only then
-        // scales. Five waiting on you is the tightest ordinary row: all five stand, packed, with the Tray bubble attached
-        // beside Chief's cue, at 0.748 (the floor; 0.884 once Reel has finished).
+        // scales. Five waiting on you is the tightest ordinary row: all five stand, packed, at 0.892 (0.956 once Reel has
+        // finished), the Tray caption under its box in the floor band rather than a bubble's width in the row.
         assert.ok(m.tight || m.scale === 1, `${at}: a row that is not packed stands at the mock's own scale (${m.scale})`);
-        assert.ok(m.scale >= 0.74, `${at}: no row of five shrinks past the packed five-waiting row (${m.scale})`);
+        assert.ok(m.scale >= 0.89, `${at}: no row of five shrinks past the packed five-waiting row (${m.scale})`);
         if (demo === 'office' || demo === 'after') assert.deepEqual([m.seated, m.more, m.tight], [5, 0, true], `${at}: five on the floor, packed, nobody under "+N"`);
         if (demo === 'b1' || demo === 'b1after') assert.deepEqual([m.seated, m.scale, m.tight], [5, 1, false], `${at}: the B1 house stands all five at the mock's own spacing and scale`);
         assert.ok(m.tray2?.onTop, `${at}: the tray box is on the floor in front of everyone, never behind a desk or a body (${JSON.stringify(m.tray2)})`);
-        assert.ok(m.tray2.over && m.tray2.gap >= 0 && m.tray2.gap <= 40, `${at}: the Tray bubble's tail is over the box and close above it (${JSON.stringify(m.tray2)})`);
+        assert.ok(m.tray2.over && m.tray2.gap >= 0 && m.tray2.gap <= 40, `${at}: the Tray label's pointer is on the box and close to it (${JSON.stringify(m.tray2)})`);
+        assert.equal(m.tray2.below, m.tight, `${at}: the caption sits under the box exactly when the row is packed`);
         assert.equal(m.tray2.inked, 0, `${at}: the Tray bubble covers no pen, z or screen`);
         // The B1 mock's own state, exactly: 1 needs you, 2 working, Tracer's list the one page in the tray.
         if (demo === 'b1') assert.deepEqual([m.stat, m.busy, m.tray], [1, 2, 'Your tray: 1 done today'], `${at}: the mock's counts`);
