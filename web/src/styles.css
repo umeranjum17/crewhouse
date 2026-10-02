@@ -1,5 +1,6 @@
 /* Mirrors the shared values in tokens.ts. */
 @font-face { font-family: Inter; src: url(/fonts/InterVariable.woff2) format('woff2'); font-weight: 100 900; font-display: swap; }
+@font-face { font-family: 'Instrument Serif'; src: url(/fonts/InstrumentSerif-Regular.ttf) format('truetype'); font-weight: 400; font-display: swap; }
 @font-face { font-family: 'JetBrains Mono'; src: url(/fonts/JetBrainsMono.woff2) format('woff2'); font-display: block; }
 :root {
   --bg: #FAF9F7; --solid: #FFFFFF; --soft: #F3F1EE; --line: #E7E4DF; --line2: #D9D5CF;
@@ -208,7 +209,7 @@ video.media { width: auto; max-width: 100%; max-height: 360px; height: auto; obj
 
 /* hello */
 .hello { max-width: 440px; margin: 0 auto; padding: 36px 20px 40px; display: grid; justify-items: center; text-align: center; gap: 4px; }
-.hello h1 { font-size: 28px; margin-top: 6px; }
+.hello h1 { font: 400 38px/40px 'Instrument Serif', Georgia, serif; letter-spacing: 0; margin-top: 6px; }
 .hello .lead { font-size: 16px; }
 .hello .input.name { text-align: center; font-weight: 600; font-size: 18px; padding: 15px; border-radius: 999px; }
 /* Chief's three promises: one quiet card, each line with a tick and a hanging indent. */
@@ -548,7 +549,7 @@ button.code { border: 0; color: var(--ink); cursor: pointer; display: grid; gap:
   /* A phone sees Chief, the greeting and the first idea without scrolling far. */
   .hello { padding-top: 20px; }
   .hello > .halo { zoom: .7; }
-  .hello h1 { font-size: 26px; line-height: 1.2; }
+  .hello h1 { font-size: 34px; line-height: 36px; }
 }
 .hello h2.plate { font-size: 18px; margin: 18px 0 6px; }
 .ideas { display: grid; gap: 10px; width: 100%; }
@@ -886,7 +887,7 @@ details.card[open] > summary { margin-bottom: 10px; }
 .o-sheet { position: relative; background: var(--solid); width: min(480px, 100%); max-height: 86vh; overflow: auto; overscroll-behavior: contain; border-radius: 22px 22px 0 0;
   padding: 18px 18px 28px; box-shadow: var(--e2); display: flex; flex-direction: column; gap: 14px; animation: up 300ms var(--ease); outline: none; }
 .o-sh-head { display: flex; gap: 12px; align-items: center; }
-.o-sh-head h2 { margin: 0; font: 650 22px/28px var(--ui); letter-spacing: -.02em; }
+.o-sh-head h2 { margin: 0; font: 400 28px/30px 'Instrument Serif', Georgia, serif; letter-spacing: 0; }
 .o-sh-head .mute { display: block; }
 .o-sec { display: grid; gap: 8px; }
 .o-sec h3 { margin: 0; font: 650 17px/23px var(--ui); letter-spacing: -.01em; }
@@ -962,7 +963,7 @@ details.card[open] > summary { margin-bottom: 10px; }
 .o-flyer { position: absolute; z-index: 6; width: 14px; height: 18px; background: #fff; border: 1.5px solid var(--r-edge); border-radius: 2px; pointer-events: none; }
 /* Chief's profile over the office (office.tsx ChiefSheet): above every page heading, Office still selected beneath. */
 .o-scrim { z-index: 60; }
-.o-profile .o-sh-head h2 { font-family: 'Instrument Serif', Georgia, serif; font-weight: 400; font-size: 30px; line-height: 32px; letter-spacing: 0; }
+.o-profile .o-sh-head h2 { font-size: 30px; line-height: 32px; }
 .o-state { display: flex; gap: 6px; align-items: center; font: 600 13px/18px var(--ui); color: var(--ink2); margin-top: 2px; }
 .o-state i { width: 7px; height: 7px; border-radius: 50%; background: var(--line2); }
 .o-state.work { color: var(--ok); } .o-state.work i { background: var(--ok); }

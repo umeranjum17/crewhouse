@@ -79,7 +79,7 @@ function Toast() {
 
 export default function App() {
   const t = look(useColorScheme() === 'dark');
-  const [fontsReady, fontError] = useFonts({ Inter: require('./assets/fonts/InterVariable.ttf') });
+  const [fontsReady, fontError] = useFonts({ Inter: require('./assets/fonts/InterVariable.ttf'), 'Instrument Serif': require('./assets/fonts/InstrumentSerif-Regular.ttf') });
   const [grant, setGrant] = useState<Grant | null | undefined>(undefined);
   useEffect(() => { loadGrant().then(setGrant).catch(() => setGrant(null)); }, []);
   return (
@@ -622,7 +622,7 @@ function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="height">
         <ScrollView contentContainerStyle={s.centerScroll} keyboardShouldPersistTaps="handled">
           <ChiefArt mood="listen" size={72} whole />
-          <T style={s.h1}>Type a code</T>
+          <T style={[s.h1, s.serif, { fontSize: 32, lineHeight: 36 }]}>Type a code</T>
           <T tone="ink2" style={s.centerText}>Enter the code under Add a phone on your computer, or one someone there sent you.</T>
           <TextInput style={[s.input, { alignSelf: 'stretch', color: t.ink, borderColor: t.line }]} value={code} onChangeText={setCode} placeholder="Type or paste the code" placeholderTextColor={t.mute}
             accessibilityLabel="Pairing code" autoCapitalize="characters" autoCorrect={false} />
@@ -857,7 +857,7 @@ function Hello({ state, refresh, go }: Ctx) {
       <motion.Rise reduce={reduce}><View style={{ alignItems: 'center', paddingTop: 8 }}><ChiefArt mood="hello" size={96} whole /></View></motion.Rise>
       <motion.Rise reduce={reduce} delay={80}><View style={[s.speech, { backgroundColor: t.solid, borderColor: t.line }]}>
         <View style={[s.speechTail, { backgroundColor: t.solid, borderColor: t.line }]} />
-        <T style={[s.h1, s.centerText, { fontSize: 26, lineHeight: 32, marginVertical: 0 }]}>{A.greeting()}{address.trim() ? `, ${address.trim()}` : ''}</T>
+        <T style={[s.h1, s.serif, s.centerText, { fontSize: 34, lineHeight: 38, marginVertical: 0 }]}>{A.greeting()}{address.trim() ? `, ${address.trim()}` : ''}</T>
         <T tone="ink2" style={s.centerText}>I'm Chief, your personal assistant. I run your crew of helpers.</T>
       </View></motion.Rise>
       <motion.Rise reduce={reduce} delay={160}><Card style={{ gap: 10 }}>
@@ -1199,7 +1199,7 @@ function ChiefSheet({ view, state, offline, go, onClose }: Ctx & { view: A.Offic
         <View style={[s.grabber, { backgroundColor: t.line2 }]} />
         <View style={s.row}>
           <Face who="chief" size={60} mood={view.chief.mood} />
-          <View style={{ flex: 1 }}><T style={s.h2}>Chief</T><T tone="ink2" style={s.small}>Runs your crew</T>
+          <View style={{ flex: 1 }}><T style={[s.h2, s.serif, { fontSize: 28, lineHeight: 32 }]}>Chief</T><T tone="ink2" style={s.small}>Runs your crew</T>
             <T style={[s.small, s.b, { color: word === 'Needs you' ? t.pinkInk : word === 'Working' ? t.green : t.ink2 }]}>{word}</T></View>
           <Btn label="Close" onPress={onClose} />
         </View>
@@ -1240,7 +1240,7 @@ function DeskSheet({ desk, state, offline, canAct, go, refresh, onClose }: Ctx &
         <View style={[s.grabber, { backgroundColor: t.line2 }]} />
         <View style={s.row}>
           <Face who={offline ? { ...h, ring: '' as const, mood: 'rest' as const } : { ...h, mood: c.mood, ring: c.ring }} size={52} />
-          <View style={{ flex: 1 }}><T style={s.h2}>{c.name}</T><T tone="ink2" style={s.small} lines={2}>{h.role}</T></View>
+          <View style={{ flex: 1 }}><T style={[s.h2, s.serif, { fontSize: 26, lineHeight: 30 }]}>{c.name}</T><T tone="ink2" style={s.small} lines={2}>{h.role}</T></View>
           <Btn label="Close" onPress={onClose} />
         </View>
         <View style={{ flexDirection: 'row' }}>{offline ? <Pill tone="off">{OUT}</Pill>
@@ -1904,7 +1904,9 @@ const s = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   text: { fontFamily: 'Inter', fontSize: 15, lineHeight: 22, fontVariant: ['tabular-nums'] },
   h1: { fontSize: 26, lineHeight: 32, fontWeight: '700', letterSpacing: -0.6, marginVertical: 4 },
-  display: { fontSize: 32, lineHeight: 38, fontWeight: '700', letterSpacing: -0.9, textAlign: 'center' },
+  display: { fontFamily: 'Instrument Serif', fontSize: 38, lineHeight: 42, fontWeight: '400', letterSpacing: 0, textAlign: 'center' },
+  // B1 headings and names: Instrument Serif 400 (welcome, pairing, Hello, the office's sheets).
+  serif: { fontFamily: 'Instrument Serif', fontWeight: '400', letterSpacing: 0 },
   stepNum: { width: 22, height: 22, borderRadius: 11, textAlign: 'center', lineHeight: 22, fontSize: 12, fontWeight: '700', overflow: 'hidden', marginTop: 0 },
   h2: { fontSize: 17, fontWeight: '600', lineHeight: 24 },
   b: { fontWeight: '600' },
