@@ -48,19 +48,19 @@ test('Home lists the family desk and the meals beside the money ones, each sayin
   done();
 });
 
-const reply = 'Subject: Ayaan’s trip form — Friday\\n\\nHello, the signed trip form is in Ayaan’s bag this morning. He takes the packed-lunch option, and I can walk with the group if you are still short of adults.\\n\\nThank you,\\nUmer';
+const reply = 'Hello, the signed trip form is in Ayaan’s bag this morning. He takes the packed-lunch option, and I can walk with the group if you are still short of adults.\\n\\nThank you,\\nUmer';
 
 test('a reply to the school is a draft card: the yes approves it, nothing is sent, and the job says so', async () => {
   const { db, crew, done } = setup();
   const { task: t } = (await crew.post('scout', 'The school wants the trip form back. Sort it: the reply on a card in front of me, and ask permission before anything more. '
     + `[tool crew_write {"path":"files/reply-trip-form.md","content":"${reply}"}] `
-    + '[tool crew_draft {"path":"files/reply-trip-form.md","to":"the school office"}] '
+    + '[tool crew_draft {"path":"files/reply-trip-form.md","channel":"email","subject":"Ayaan’s trip form — Friday","to":"the school office"}] '
     + '[tool crew_outcome {"worked": true, "seen": "The reply to the school office is a draft on your card; posting it is yours."}]'))!;
   await until('working', () => crew.sessionOf('scout'));
   await until('the draft card', () => db.get("SELECT * FROM asks WHERE bot = 'scout' AND kind = 'propose' AND state = 'open'"));
   const ask = db.get("SELECT * FROM asks WHERE bot = 'scout' AND kind = 'propose' AND state = 'open'")!;
-  assert.match(ask.title, /drafted something for the school office/);
-  assert.match(ask.title, /Nothing is sent: you post it yourself/);
+  assert.match(ask.title, /wrote your email/);
+  assert.doesNotMatch(ask.title, /post it yourself/);
   const d = JSON.parse(ask.detail);
   assert.equal(d.draft.to, 'the school office');
   assert.match(d.preview.body, /trip form/, 'the card shows the whole reply before any yes');

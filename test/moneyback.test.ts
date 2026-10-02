@@ -332,19 +332,20 @@ test('starting a return: the press asks first, on a card naming the button, the 
 
 test('the chase email is a draft in the person\u2019s name: the yes records the approval, and nothing is sent', async () => {
   const { db, crew, done } = setup();
-  const chase = 'Subject: Order 98765 — returned 16 May, no refund yet.\n\nHello, my return reached you on 16 May, inside your own 30-day window. The order page still shows no refund. Please confirm the payment. Regards,';
+  const chase = 'Hello, my return reached you on 16 May, inside your own 30-day window. The order page still shows no refund. Please confirm the payment. Regards,';
   const { task: t } = (await crew.post('scout', 'The shop is past its own window. Write the chase email, put it in front of me, and ask permission before anything more. '
     + `[tool crew_write {"path":"files/chase-order-98765.md","content":"${chase.replace(/\n/g, '\\n')}"}] `
-    + '[tool crew_draft {"path":"files/chase-order-98765.md","to":"the shop\u2019s support inbox"}] '
+    + '[tool crew_draft {"path":"files/chase-order-98765.md","channel":"email","subject":"Order 98765 — returned 16 May, no refund yet","to":"the shop\u2019s support inbox"}] '
     + '[tool crew_outcome {"worked": false, "seen": "The chase email is a draft on your card; reading it and sending it is yours."}]'))!;
   await until('working', () => crew.sessionOf('scout'));
   await until('the draft card', () => db.get("SELECT * FROM asks WHERE bot = 'scout' AND kind = 'propose' AND state = 'open'"));
   const ask = db.get("SELECT * FROM asks WHERE bot = 'scout' AND kind = 'propose' AND state = 'open'")!;
-  assert.match(ask.title, /drafted something for the shop.s support inbox/);
-  assert.match(ask.title, /Nothing is sent: you post it yourself/);
+  assert.match(ask.title, /wrote your email/);
+  assert.doesNotMatch(ask.title, /post it yourself/);
   const d = JSON.parse(ask.detail);
   assert.equal(d.draft.to, 'the shop\u2019s support inbox');
-  assert.match(d.preview.body, /Order 98765/, 'the card shows the whole draft before any yes');
+  assert.match(d.draft.subject, /Order 98765/, 'the email subject is separate');
+  assert.match(d.preview.body, /Hello, my return/, 'the card shows only the message');
   const view = crew.snapshot().asks.find((a: any) => a.id === ask.id)!;
   assert.equal(view.detail.yes, 'Approve', 'the yes approves the draft; it is never a send');
   await crew.answer(ask.id, { answer: 'allow' });
@@ -401,16 +402,16 @@ test('Home lists the renewal job with the money-back three, and says what it wai
 
 test('a renewal caught ahead of the bill: the warning plus a cancellation email that stays a draft', async () => {
   const { db, crew, done } = setup();
-  const letter = 'Subject: Family plan — please cancel before 14 June\n\nHello, my Family plan renews on 14 June at $18.99. Please cancel it from that date and confirm in writing that nothing further will be charged to my card. Regards, Umer';
+  const letter = 'Hello, my Family plan renews on 14 June at $18.99. Please cancel it from that date and confirm in writing that nothing further will be charged to my card. Regards, Umer';
   const { task: t } = (await crew.post('scout', 'ask permission: my streaming plan renews 14 June, write the cancellation and put it in front of me. '
     + `[tool crew_write {"path":"files/cancel-family-plan.md","content":"${letter.replace(/\n/g, '\\n')}"}] `
-    + '[tool crew_draft {"path":"files/cancel-family-plan.md","to":"the streaming service’s support inbox"}] '
+    + '[tool crew_draft {"path":"files/cancel-family-plan.md","channel":"email","subject":"Family plan — please cancel before 14 June","to":"the streaming service’s support inbox"}] '
     + '[tool crew_outcome {"worked": false, "seen": "Your Family plan renews 14 June at $18.99, ten days ahead; the cancellation is a draft on your card, so reading it and sending it is yours."}]'))!;
   await until('working', () => crew.sessionOf('scout'));
   await until('the draft card', () => db.get("SELECT * FROM asks WHERE bot = 'scout' AND kind = 'propose' AND state = 'open'"));
   const ask = db.get("SELECT * FROM asks WHERE bot = 'scout' AND kind = 'propose' AND state = 'open'")!;
-  assert.match(ask.title, /drafted something for the streaming service.s support inbox/);
-  assert.match(ask.title, /Nothing is sent: you post it yourself/);
+  assert.match(ask.title, /wrote your email/);
+  assert.doesNotMatch(ask.title, /post it yourself/);
   const d = JSON.parse(ask.detail);
   assert.match(d.preview.body, /renews on 14 June at \$18\.99/, 'the card holds the letter ahead of any yes');
   assert.match(d.preview.body, /confirm in writing/, 'it asks for the line that protects the person');

@@ -525,12 +525,10 @@ function AskEvidence({ c, open, readAll }: { c: Card; open: boolean; readAll: Re
     return at > 0 ? <div key={i} className="ev-line"><span>{l.slice(0, at)}</span><b>{l.slice(at + 2)}</b></div> : <div key={i}>{l}</div>;
   })}</div>;
   if (c.evidence === 'draft') {
-    const at = body.indexOf('\n');
     return <div className="ev">
       {c.draftTo && <div className="ev-to">To {c.draftTo}</div>}
-      <b className="ev-subject">{(at < 0 ? body : body.slice(0, at)).replace(/^Subject: /, '')}</b>
-      <div className={`ev-body${open ? '' : ' clamp4'}`}>{(at < 0 ? '' : body.slice(at + 1)).trim()}</div>
-      {!open && readAll}
+      {c.draftSubject && <b className="ev-subject">Subject: {c.draftSubject}</b>}
+      <div className="ev-body draft-body">{body}</div>
     </div>;
   }
   if (c.lines) return <div className="ev">{c.lines.map((l, i) => <div key={i} className={i && c.kind === 'routine' ? 'ev-quiet' : undefined}>{l}</div>)}</div>;

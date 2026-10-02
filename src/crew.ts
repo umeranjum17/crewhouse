@@ -80,7 +80,6 @@ export function quietNow(quiet: string | null | undefined, at = new Date()) {
 }
 
 const sha = (s: string) => createHash('sha256').update(s).digest('hex');
-/** A draft in the person's name fits on its card whole, so what they approve (or change) is all of it. */
 const DRAFT_CAP = 20_000;
 const clean = (s: unknown, n: number) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n);
 /** What each batch item hears: its one item and the shared question. The parent's own prompt stays out of it,
@@ -1996,16 +1995,17 @@ export class Crew {
           const change = disk.remember(this.cfg, { bot: everyone ? null : botId }, String(p.text ?? ''), String(p.replaces ?? ''));
           this.db.event('memory.learned', botId, { task: task(), text: change.added.slice(2, 202), ...(everyone ? { everyone } : {}), ...change });
         }),
-      tool('crew_draft', 'Put a draft that would go out in the person\'s name (a reply, a post, an email) in front of them on a card. Nothing is ' +
-        'sent either way: they post it themselves if they approve. `path`: the draft in your folder; `to`: where it would go ("muxr issue #208").',
-        { path: Type.String(), to: Type.String() }, (p) => {
+      tool('crew_draft', 'Show ONE finished message for approval; nothing is sent. `path`: a file containing ONLY the message body, with its line breaks, no subject, headings, variants or planning notes. ' +
+        '`channel`: email, text, post (social), or reply (a site). `to`: the actual recipient name/address or site, NEVER a job title. `subject`: required for email, separate from the body.',
+        { path: Type.String(), channel: Type.Union(['email', 'text', 'post', 'reply'].map((x) => Type.Literal(x))), to: Type.String(), subject: Type.Optional(Type.String()) }, (p) => {
           const full = disk.insideBot(this.cfg, botId, String(p.path ?? ''));
           if (!existsSync(full)) throw new Error(`no file at ${p.path}`);
-          const text = readFileSync(full, 'utf8').trim(), to = clean(p.to, 80), b = this.bot(botId)!;
+          const text = readFileSync(full, 'utf8').trim(), to = clean(p.to, 80), channel = String(p.channel), subject = clean(p.subject, 160);
+          if (!to || !['email', 'text', 'post', 'reply'].includes(channel) || (channel === 'email' && !subject)) throw new Error('give the channel, recipient and email subject separately');
           if (!text) throw new Error('the draft is empty');
           if (text.length > DRAFT_CAP) throw new Error(`the draft is over ${DRAFT_CAP} characters; shorten it`);
-          return this.propose(botId, `${b.display} drafted something for ${to}. Nothing is sent: you post it yourself.`,
-            { draft: { to, path: full.slice(disk.botDir(this.cfg, botId).length + 1), sha: sha(text) }, preview: { head: `Draft for ${to}`, body: text } });
+          return this.propose(botId, `${this.bot(botId)!.display} wrote your ${channel}.`,
+            { draft: { channel, to, subject, path: full.slice(disk.botDir(this.cfg, botId).length + 1), sha: sha(text) }, preview: { body: text } });
         }),
       tool('crew_verify', 'Have Crewhouse itself check a fix you propose to a git checkout in your folder: it applies only the check (`tests`, the ' +
         'paths in the patch that test the fix) to `base` and runs `command`, which must fail; then the whole patch, which must pass; it runs in a ' +
@@ -2155,7 +2155,7 @@ export class Crew {
   /** A suggestion card: nothing changes until the person says yes, and the bot carries on meanwhile. */
   private propose(botId: string, title: string, detail: Row) {
     const t = this.activeTask(botId);
-    if (!this.db.get("SELECT 1 FROM asks WHERE bot = ? AND kind = 'propose' AND state = 'open' AND title = ?", botId, title)) {
+    if (!this.db.get("SELECT 1 FROM asks WHERE bot = ? AND kind = 'propose' AND state = 'open' AND title = ? AND COALESCE(json_extract(detail, '$.draft'), '') = ?", botId, title, detail.draft ? JSON.stringify(detail.draft) : '')) {
       this.openAsk(botId, undefined, title, { ...detail, task: t?.id }, 'propose');
     }
     return { asked: true, note: 'The person sees your suggestion on a card. Carry on; nothing changes unless they say yes.' };
