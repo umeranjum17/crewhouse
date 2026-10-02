@@ -561,6 +561,15 @@ test('the mascots: every app mood wears one of B1\'s five poses, and every pose 
   // Each drawing is one SVG whose clip ids never collide on a page with many faces.
   const ids = [art.chiefSvg(), art.chiefSvg()].map((x) => x.match(/id="(\w+)"/)![1]);
   assert.notEqual(ids[0], ids[1]);
+  // 159: Chief's side shading is the old ellipse's own arc (cx 156 cy 178 rx 30 ry 120), still clipped to his body,
+  // closed at the art's floor (y 240, below the body's 232) so no part of him measures below his feet.
+  for (const p of art.POSES) {
+    const s = art.chiefSvg(p), m = /<g clip-path="url\(#ch\d+c\)"><path d="M([\d.]+) (\d+)A30 120 0 1 1 ([\d.]+) (\d+)Z"/.exec(s);
+    assert.ok(m && !/ry="120"/.test(s), `${p}: the shading is the bounded arc inside the body clip`);
+    const [x1, y1, x2, y2] = m!.slice(1).map(Number), on = (x: number, y: number) => ((x - 156) / 30) ** 2 + ((y - 178) / 120) ** 2;
+    assert.ok(Math.abs(on(x1, y1) - 1) < 1e-5 && Math.abs(on(x2, y2) - 1) < 1e-5 && x1 + x2 === 312, `${p}: both ends lie on the old ellipse`);
+    assert.ok(y1 === 240 && y2 === 240 && /<clipPath id="ch\d+c"><path d="M52 232V/.test(s), `${p}: closed at the floor, below the body clip's 232`);
+  }
 });
 
 test('the phone mascot set matches art.ts: everyone whole and as a head, in every pose', async () => {
@@ -1892,12 +1901,8 @@ test('J5 repairs stay in: the night look paints first, the job row is never cut 
   assert.match(office, /left=\{bubble\} y=\{tight \? G \+ 7 : Y\(G - 64\)\} below=\{tight\}/, 'the Tray bubble sits low over its box, clear of every ink; a packed row captions it under the box');
   assert.match(office, /H = tight \? G \+ 27 : 210/, 'the floor band grows by the caption only in a packed row');
   assert.doesNotMatch(office, /HIGH/, 'no raised, detached bubble');
-  // 155: the caption's top clears every foot shadow and its pointer stands in the box's own column, outside the label;
-  // Chief's room art is a plain group at the art's own 0.4 (viewBox 24 30 176 210 into 70.4x84 at x - 30.4, G - 80.8),
-  // never a nested svg, whose measured box ran to the room's floor edge (157).
+  // 155: the caption's top clears every foot shadow and its pointer stands in the box's own column, outside the label.
   assert.match(office, /<path className="o-pointer" d=\{`M\$\{x - 4\} \$\{y \+ 1\}L\$\{x\} \$\{G \+ 1\.2\}/);
-  assert.doesNotMatch(office, /o-sprite ink|<svg x=/); assert.match(office, /`<g transform="translate\(\$\{x - 40\} \$\{G - 92\.8\}\) scale\(\.4\)">`/);
-  assert.doesNotMatch(read('web', 'src', 'styles.css'), /\.chief(\.pose-\w+)? svg \.|\.o-sprite svg/, 'the room animates Chief\'s own groups, with no nested svg in between');
   // 147/148: a crowded row packs its desks (compact) before it scales, all five standing; the page is
   // drawn at the figures' size on both sides.
   assert.match(office, /return full\.s < 1 \? packed\(order, sts\) : full;/, 'a crowded row packs before it scales');

@@ -31,6 +31,9 @@ const Z = 'font-family="Instrument Serif, Georgia, serif" font-style="italic"';
 let uid = 0;
 
 /** Chief whole (viewBox 0 0 200 250, feet on y 232). */
+/** Chief's side shading: the arc of the ellipse cx 156 cy 178 rx 30 ry 120, closed along the art's floor (y 240) instead of
+ *  running on to y 298, so what the body clip paints is unchanged and nothing measures below his feet. */
+const SHADE = 'M130.3144 240A30 120 0 1 1 181.6856 240Z';
 export function chiefSvg(mood: Mood | Pose = 'idle', o: Opts = {}) {
   const m = poseOf(mood), g = `ch${++uid}`, lw = 3.4;
   const body = 'M52 232V120a48 48 0 0 1 96 0V232Z';
@@ -61,7 +64,7 @@ export function chiefSvg(mood: Mood | Pose = 'idle', o: Opts = {}) {
     : m === 'work' ? `<path d="M30 96l8 4M26 112h9" stroke="${RED}" stroke-width="3" stroke-linecap="round"/>` : '';
   return `<svg viewBox="${o.vb ?? '0 0 200 250'}" xmlns="http://www.w3.org/2000/svg"><defs><clipPath id="${g}c"><path d="${body}"/></clipPath></defs>`
     + (o.floor === false ? '' : `<ellipse cx="100" cy="235" rx="58" ry="4.5" fill="${INK}" opacity=".1"/>`)
-    + `<g class="body"><path d="${body}" fill="#fff"/><g clip-path="url(#${g}c)"><ellipse cx="156" cy="178" rx="30" ry="120" fill="#EEF1F6"/></g>`
+    + `<g class="body"><path d="${body}" fill="#fff"/><g clip-path="url(#${g}c)"><path d="${SHADE}" fill="#EEF1F6"/></g>`
     + `<path d="${body}" fill="none" stroke="${INK}" stroke-width="${lw}" stroke-linejoin="round"/>`
     + `<circle cx="76" cy="134" r="6.5" fill="${RED}" opacity=".2"/><circle cx="124" cy="134" r="6.5" fill="${RED}" opacity=".2"/>`
     + `<g class="eyes">${eyes}</g>${brow ? `<path d="${brow}" stroke="${INK}" stroke-width="3.6" fill="none" stroke-linecap="round"/>` : ''}${tash}${mouth}`

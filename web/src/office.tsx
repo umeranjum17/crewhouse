@@ -287,7 +287,7 @@ const Desk = ({ x, w }: { x: number; w: number }) => <g className="o-desk"><rect
 function Seat({ spot, id, kind, pose, seat, second, dataId, beat, label, onOpen }: { spot: Spot; id: string; kind: art.Kind | 'chief'; pose: art.Pose; seat: A.Seat;
   second?: boolean; dataId?: string; beat: string; label: string; onOpen: () => void }) {
   const { x, st, tight } = spot, ink = 'var(--r-edge)', red = '#F0482A', fill = kind === 'chief' ? '#fff' : art.PALS[kind].body;
-  const chief = useMemo(() => (kind === 'chief' ? art.chiefSvg(pose, { vb: '24 30 176 210' }).replace(/^<svg [^>]*>/, `<g transform="translate(${x - 40} ${G - 92.8}) scale(.4)">`).replace(/<\/svg>$/, '</g>') : ''), [kind, pose, x]);
+  const chief = useMemo(() => (kind === 'chief' ? art.chiefSvg(pose, { vb: '24 30 176 210' }).replace('<svg ', `<svg x="${x - 30.4}" y="${G - 80.8}" width="70.4" height="84" `) : ''), [kind, pose, x]);
   const fig = useRef<SVGGElement>(null);
   // A hop when their news lands (a new ring, mood or thing): once, never on the first paint, never with Reduce Motion.
   const was = useRef(beat);
@@ -300,7 +300,7 @@ function Seat({ spot, id, kind, pose, seat, second, dataId, beat, label, onOpen 
   const sprite = (body: ReactNode) => <g ref={fig} className={`o-sprite ${kind} st-${st}${second ? ' second' : ''}`}>{body}</g>;
   return <g className="o-cell" data-id={dataId} data-seat={seat} role="button" tabIndex={0} aria-label={label} onClick={onOpen} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(); } }}>
     <rect x={x - l} y={G - 100} width={l + r} height="104" fill="transparent" />
-    {st === 'chief' && <><ellipse cx={x} cy={G + 2} rx="22" ry="3.2" fill={ink} opacity=".1" filter={`url(#${id}bl)`} /><g ref={fig} className={`o-sprite chief pose-${pose}`} dangerouslySetInnerHTML={{ __html: chief }} /></>}
+    {st === 'chief' && <><ellipse cx={x} cy={G + 2} rx="22" ry="3.2" fill={ink} opacity=".1" filter={`url(#${id}bl)`} /><g ref={fig} className={`o-sprite ink chief pose-${pose}`} dangerouslySetInnerHTML={{ __html: chief }} /></>}
     {st === 'needs' && <>
       {tight ? <Desk x={x - 26} w={52} /> : <Desk x={x - 48} w={72} />}
       {(() => { const n = tight ? x - 11 : x - 40; return <><rect x={n} y="132" width="22" height="18" rx="2" fill="var(--r-desk)" stroke={ink} strokeWidth="1.6" /><path d={`M${n + 4} 139h14M${n + 4} 144h9`} stroke={ink} strokeWidth="1.3" /></>; })()}

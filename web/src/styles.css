@@ -777,14 +777,14 @@ details.card[open] > summary { margin-bottom: 10px; }
    the pen, done settles once. Loops pause while the room is off screen (.off, office.tsx), and Reduce Motion runs none:
    every station is drawn to read on its own. */
 @media (prefers-reduced-motion: no-preference) {
-  .o-room .o-nod, .o-room .o-pen, .o-room .o-breath, .o-room .o-wave, .o-room .o-zz, .o-room .st-done, .o-sprite .watch { transform-box: fill-box; transform-origin: 50% 100%; }
+  .o-room .o-nod, .o-room .o-pen, .o-room .o-breath, .o-room .o-wave, .o-room .o-zz, .o-room .st-done, .o-sprite svg .watch { transform-box: fill-box; transform-origin: 50% 100%; }
   .o-room .o-nod { animation: o-nod 1.4s ease-in-out infinite; }
   .o-room .o-pen { transform-origin: 0 100%; animation: o-pen .7s ease-in-out infinite alternate; }
   .o-room .o-breath { animation: o-breathe 3.2s ease-in-out infinite; }
   .o-room .o-zz { animation: o-zz 3.2s ease-in-out infinite; }
   .o-room .o-wave { transform-origin: 0 100%; animation: o-cue 1.6s ease-in-out infinite; }
-  .o-room .pose-needs.chief .hat { animation: o-tip 2.4s ease-in-out infinite; transform-box: fill-box; transform-origin: 100% 100%; }
-  .o-room .chief.pose-work .watch { transform-origin: 50% 0; animation: o-swing 2s ease-in-out infinite; }
+  .o-room .pose-needs.chief svg .hat { animation: o-tip 2.4s ease-in-out infinite; transform-box: fill-box; transform-origin: 100% 100%; }
+  .o-room .chief.pose-work svg .watch { transform-origin: 50% 0; animation: o-swing 2s ease-in-out infinite; }
   .o-room .st-done { animation: o-settle 700ms var(--ease) 1; }
   .o-tray.bump { animation: o-bump 600ms var(--ease); transform-box: fill-box; transform-origin: 50% 100%; }
   .o-room.off *, .o-room.off *::after { animation-play-state: paused !important; }
