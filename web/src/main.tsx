@@ -7,7 +7,7 @@ import { api, demo, subscribe, type Json } from './api.ts';
 import * as A from './adapter.ts';
 import * as art from './art.ts';
 type Helper = ReturnType<typeof A.crew>[number];
-import { AiMark, AskCard, Banner, AskSheet, attempt, Celebrate, setAway, setChiefMood, setNight, ChiefArt, Composer, Face, Dots, Icon, Logo, Media, ChatText, PalArt, Pill, Splash, Steps, Toasts, toast, useListen, PreviewPanel } from './parts.tsx';
+import { AiMark, AskCard, Banner, AskSheet, attempt, Celebrate, setAway, setChiefMood, setNight, ChiefArt, Composer, Face, Icon, Logo, Media, ChatText, PalArt, Pill, Splash, Steps, Toasts, toast, useListen, PreviewPanel } from './parts.tsx';
 import { keepDraft } from './draft.ts';
 import type { IconName } from './icons.ts';
 import { Screen } from './screen.tsx';
@@ -623,7 +623,7 @@ function Crew(ctx: Ctx) {
   const { state } = ctx;
   const chief = A.chief(state, chiefLocal(ctx));
   const helpers = A.crew(state);
-  return <div className="page rest-screen"><h1>Your crew</h1><p className="lead">Everyone answers to Chief.</p><div className="card list">
+  return <div className="page rest-screen"><a href="#/" className="back phone-only">‹ Home</a><h1>Your crew</h1><p className="lead">Everyone answers to Chief.</p><div className="card list">
     <a className="row-item crew-row" href="#/chief"><Face who="chief" size={44} ring={chief.tone === 'wait' ? 'needs' : undefined} /><span className="grow"><b>Chief</b><span className="mute small clamp1">Runs the crew and answers to you</span></span><span className="status-word">{chief.line}</span></a>
     {helpers.map((h) => <a key={h.id} className="row-item crew-row" href={hrefOf(h.id)}><Face who={h} size={44} ring={h.ring} /><span className="grow"><b>{h.name}</b><span className="mute small clamp1">{h.role}</span></span><span className={`status-word ${h.ring === 'needs' ? 'bad' : ''}`}><i className={h.ring === 'needs' ? 'needs' : h.ring ? 'working' : ''} />{h.status}</span></a>)}
     <a className="row-item crew-row" href="#/crew/add"><span className="face add" style={{ width: 44, height: 44 }}>+</span><span className="grow">Add a helper</span><span className="mute">›</span></a>
@@ -880,7 +880,7 @@ function Things({ state, id }: Ctx & { id?: string }) {
     const t = setTimeout(() => el.classList.remove('land'), 1300);
     return () => clearTimeout(t);
   }, [want, list.length]);
-  return <div className="page rest-screen"><h1>Things</h1><p className="lead">Everything the crew has made for you.</p>{(['Today', 'Yesterday', 'Earlier'] as const).map((group) => {
+  return <div className="page rest-screen"><a href="#/" className="back phone-only">‹ Home</a><h1>Things</h1><p className="lead">Everything the crew has made for you.</p>{(['Today', 'Yesterday', 'Earlier'] as const).map((group) => {
     const now = new Date(); now.setHours(0, 0, 0, 0);
     const start = group === 'Today' ? now.getTime() : group === 'Yesterday' ? now.getTime() - 86400000 : 0;
     const end = group === 'Today' ? now.getTime() + 86400000 : now.getTime();
@@ -958,7 +958,7 @@ function RoutineAsk() {
   );
 }
 function Routines(ctx: Ctx) {
-  return <div className="page rest-screen"><h1>Routines</h1><p className="lead">What the crew does on a schedule or when something happens, and whether it's on.</p><RoutineList {...ctx} /><p className="mute small routine-footnote">The crew only runs routines you have approved.</p><div className="label">New routine</div><RoutineAsk /></div>;
+  return <div className="page rest-screen"><a href="#/" className="back phone-only">‹ Home</a><h1>Routines</h1><p className="lead">What the crew does on a schedule or when something happens, and whether it's on.</p><RoutineList {...ctx} /><p className="mute small routine-footnote">The crew only runs routines you have approved.</p><div className="label">New routine</div><RoutineAsk /></div>;
 }
 
 // ---------- settings ----------
@@ -1066,13 +1066,17 @@ function HomeSetup({ state, accounts, tick }: { state: Json; accounts: Json[] | 
   </>);
 }
 
+const GO_TO: [string, string, IconName][] = [['#/things', 'Your things', 'things'], ['#/routines', 'Routines', 'routines'], ['#/apps', 'Apps', 'apps'], ['#/crew', 'Your crew', 'chief']];
 function Settings({ state, refresh, tick, accounts, look, setLook }: Ctx & { look: string; setLook: (l: string) => void }) {
   const [signing, setSigning] = useState<{ ai: (typeof A.AIS)[number]; tab: Window | null } | null | false>(sheet === 'signin' ? null : false);
   const act = (fn: () => Promise<unknown>, ok?: string) => attempt(async () => { await fn(); refresh(); }, ok);
   return (
     <div className="page settings">
+      <a href="#/" className="back phone-only">‹ Home</a>
       <h1>Settings</h1>
       <p className="mute small">{A.atHome().join(' ')}</p>
+      {/* No tab bar on a phone (B1): the desk rail's places, reached from here. */}
+      <div className="card list phone-only">{GO_TO.map(([h, l, i]) => <a key={h} href={h} className="row-item go-to"><span className="o-ic"><Icon name={i} /></span><span className="grow">{l}</span><Icon name="next" /></a>)}</div>
       <HomeSetup state={state} accounts={accounts} tick={tick} />
 
       <div className="label">You</div>
@@ -1310,8 +1314,6 @@ function App() {
   const asks = ctx.live.needs.length; // the badge counts only what Needs you shows
   const sheet = route.view === 'ask' ? A.cards(ctx.state).find((c) => String(c.id) === route.id) : undefined;
   const book = route.file && route.id ? { bot: route.id, path: route.file } : undefined;
-  const nav: [string, string, art.Tab][] = [['#/', 'Home', 'home'], ['#/crew', 'Crew', 'crew'], ['#/things', 'Things', 'things'], ['#/routines', 'Routines', 'routines'], ['#/settings', 'Settings', 'settings']];
-  const active = (h: string) => (h === '#/' ? ['home', 'helper', 'chief', 'room'].includes(v.view) : h === '#/crew' ? ['crew', 'add'].includes(v.view) : h === `#/${v.view}` || (h === '#/settings' && v.view === 'apps'));
   // The desk rail (B1): Chief, your things, routines and apps; the crew under it; you and the gear at the foot.
   const rail: [string, string, IconName, number][] = [['#/', 'Chief', 'chief', asks], ['#/things', 'Your things', 'things', ctx.live.counts.done], ['#/routines', 'Routines', 'routines', 0], ['#/apps', 'Apps', 'apps', 0]];
   const railOn = (h: string) => (h === '#/' ? ['home', 'chief'].includes(v.view) : h === `#/${v.view}`);
@@ -1344,7 +1346,6 @@ function App() {
           {v.view === 'apps' && <Apps {...ctx} />}
           {v.view === 'share' && <Share {...ctx} />}
         </main>
-        <nav className="tabbar">{nav.map(([h, l, i]) => <a key={h} href={h} className={active(h) ? 'on' : ''}><span className="ic"><Dots rows={art.TABS[i]} pal={{ x: 'currentColor' }} d={22 / 9} crisp /></span>{l}{h === '#/' && asks > 0 && <span className="badge">{asks}</span>}</a>)}</nav>
       </div>
       {sheet && <AskSheet c={sheet} who={crew.find((h) => h.id === sheet.helper)} chiefSays={ctx.state.asks.find((a: Json) => a.id === sheet.id)?.detail?.chief} onClose={() => history.length > 1 ? history.back() : go('#/')} />}
       {book && <PreviewPanel bot={book.bot} path={book.path} onClose={() => history.length > 1 ? history.back() : go('#/')} />}
