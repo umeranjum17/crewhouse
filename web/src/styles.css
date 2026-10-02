@@ -1043,6 +1043,9 @@ h1 { font: 400 32px/36px var(--serif); letter-spacing: -.005em; }
   .chief-hero { padding: 16px; gap: 12px; align-items: flex-start; }
   .ch-art svg { width: 96px; height: auto; }
   .ch-name { font-size: 40px; }
+  /* B1 phone: the five faces sit in one row under his line (zoom scales the badge with its face). */
+  .ch-crew { gap: 4px; }
+  .ch-face { zoom: .74; }
   .ch-say { font-size: 15px; padding: 10px 14px; }
   /* B1 phone: hero and card scroll with the thread, in the mock's order; nothing sticks over the hero. */
   .home-chat > .home-top { position: static; max-height: none; overflow: visible; }
