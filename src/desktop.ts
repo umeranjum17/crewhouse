@@ -273,9 +273,9 @@ export class Desktops {
     return [...new Set(hosts)];
   }
 
-  /** Clear one site's cookies and storage out of the bot's running browser (Forget). */
+  /** True only for a CDP clear acknowledgment; an error has no result (Forget must retain the site). */
   async clearSite(bot: string, host: string) {
-    await this.withPipe(bot, (call) => call('Storage.clearDataForOrigin', { origin: `https://${host}`, storageTypes: ['all'] }));
+    return Boolean(await this.withPipe(bot, (call) => call('Storage.clearDataForOrigin', { origin: `https://${host}`, storageTypes: ['all'] })));
   }
 
   /** Stop desktops nobody is watching and no task needs, after the idle window. */

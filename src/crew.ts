@@ -2520,17 +2520,16 @@ export class Crew {
     return this.held.has(botId) ? this.desktops.pages(botId) : Promise.resolve([] as string[]);
   }
 
-  /** The person takes a site back off the list. Its cookies and storage go from the bot's own browser FIRST: only a
-   *  successful clear removes the host, because a host off the list with cookies still in its browser would let
-   *  presses there run silently — exactly the gap this closes. No computer granted means there is no browser and
-   *  nothing to clear, so the host goes. */
+  /** Remove a site only after its browser data is cleared: an unmarked signed-in site could allow silent presses.
+   *  Unavailable or revoked Computer access cannot prove sign-out, so it keeps the site asking. */
   async forget(botId: string, host: string) {
     const bot = this.needBot(botId);
     try {
-      if (disk.canUse(this.cfg, botId, 'computer')) {
-        await this.desktops.ensure(botId, bot.n, disk.botDir(this.cfg, botId));
-        await this.desktops.clearSite(botId, host);
-      }
+      if (!disk.botConfig(this.cfg, botId).tools.includes('computer')) throw new Error('Computer access revoked');
+      if (!disk.botTools(this.cfg, botId).find((t) => t.id === 'computer')?.ready) throw new Error('Computer unavailable');
+      await this.desktops.ensure(botId, bot.n, disk.botDir(this.cfg, botId));
+      if (!disk.botConfig(this.cfg, botId).tools.includes('computer')) throw new Error('Computer access revoked');
+      if (await this.desktops.clearSite(botId, host) !== true) throw new Error('Sign-out not confirmed');
     } catch {
       throw Object.assign(new Error(`Couldn't sign ${bot.display} out of ${host} just now; it still asks before acting there`), { status: 409 });
     }
