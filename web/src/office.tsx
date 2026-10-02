@@ -114,7 +114,7 @@ export function Office({ state, live, night }: { state: Json; live: A.OfficeView
     : null;
   const more = plan.more.length, moreBusy = plan.more.filter((c) => A.seatOf(c) === 'working').length;
   const id = useId().replace(/:/g, '');
-  const Y0 = wide ? -34 : 0, H = tight ? G + 25 : 210;   // a packed row's Tray caption sits in the floor band under its box
+  const Y0 = wide ? -34 : 0, H = tight ? G + 27 : 210;   // a packed row's Tray caption sits in the floor band under its box
 
   return (
     <section className="office" aria-label="The office">
@@ -134,7 +134,7 @@ export function Office({ state, live, night }: { state: Json; live: A.OfficeView
                   label={said(m) + (m.things.length ? `, made ${m.things.map((f) => KIND_WORDS[f.kind]).join(', ')}` : '')} onOpen={() => setOpen(m.id)} />)}
             <TrayBox x={trayX} n={live.counts.done} />   {/* in front of the figures, as the mock draws it: never hidden by a desk or a body */}
           </g>
-          <Tag key={live.counts.done} x={X(trayX)} left={bubble} y={tight ? G + 5 : Y(G - 64)} below={tight} text={trayText} tail cls={`o-tray${trayWas.current !== undefined && trayWas.current !== live.counts.done ? ' bump' : ''}`} href="#/things" label={`Your tray: ${live.counts.done} done today`} />
+          <Tag key={live.counts.done} x={X(trayX)} left={bubble} y={tight ? G + 7 : Y(G - 64)} below={tight} text={trayText} tail cls={`o-tray${trayWas.current !== undefined && trayWas.current !== live.counts.done ? ' bump' : ''}`} href="#/things" label={`Your tray: ${live.counts.done} done today`} />
           {pill && <Tag x={X(spotOf(pill.m).x)} y={pill.m === 'chief' ? Y(G - 80.8) - 14 : Y(102)} text={A.SEAT_WORDS.needs} hot href={pill.href} label={pill.label} />}
         </svg>
         <div className="o-strip" style={{ ['--n' as string]: order.length + (more ? 1 : 0) }}>
@@ -300,7 +300,7 @@ function Seat({ spot, id, kind, pose, seat, second, dataId, beat, label, onOpen 
   const sprite = (body: ReactNode) => <g ref={fig} className={`o-sprite ${kind} st-${st}${second ? ' second' : ''}`}>{body}</g>;
   return <g className="o-cell" data-id={dataId} data-seat={seat} role="button" tabIndex={0} aria-label={label} onClick={onOpen} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(); } }}>
     <rect x={x - l} y={G - 100} width={l + r} height="104" fill="transparent" />
-    {st === 'chief' && <><ellipse cx={x} cy={G + 2} rx="22" ry="3.2" fill={ink} opacity=".1" filter={`url(#${id}bl)`} /><g ref={fig} className={`o-sprite ink chief pose-${pose}`} dangerouslySetInnerHTML={{ __html: chief }} /></>}
+    {st === 'chief' && <><ellipse cx={x} cy={G + 2} rx="22" ry="3.2" fill={ink} opacity=".1" filter={`url(#${id}bl)`} /><g ref={fig} className={`o-sprite chief pose-${pose}`} dangerouslySetInnerHTML={{ __html: chief }} /></>}
     {st === 'needs' && <>
       {tight ? <Desk x={x - 26} w={52} /> : <Desk x={x - 48} w={72} />}
       {(() => { const n = tight ? x - 11 : x - 40; return <><rect x={n} y="132" width="22" height="18" rx="2" fill="var(--r-desk)" stroke={ink} strokeWidth="1.6" /><path d={`M${n + 4} 139h14M${n + 4} 144h9`} stroke={ink} strokeWidth="1.3" /></>; })()}
@@ -352,13 +352,14 @@ function TrayBox({ x, n }: { x: number; n: number }) {
 function Tag({ x, y, left: at, below, text, hot, tail, cls = '', href, label }: { x: number; y: number; left?: number; below?: boolean; text: string; hot?: boolean; tail?: boolean; cls?: string; href: string; label: string }) {
   const w = text.length * 6.6 + 22, ink = 'var(--r-edge)';
   const left = at ?? Math.max(4, Math.min(x - w / 2, 356 - w));
-  // Under its box (a packed row): a short caption whose pointer reaches up to the box, in the floor band.
-  if (below) return <a className={`o-tag ${cls}`} href={href} aria-label={label}>
-    <path d={`M${x - 4} ${y + 0.6}l4 -4.6 4 4.6`} fill="var(--solid)" stroke={ink} strokeWidth="1.3" strokeLinejoin="round" />
-    <rect x={left} y={y} width={w} height="18" rx="9" fill="var(--solid)" stroke={ink} strokeWidth="1.3" />
-    <path d={`M${x - 3} ${y + 0.6}h6`} stroke="var(--solid)" strokeWidth="2" />
-    <text x={left + w / 2} y={y + 13} textAnchor="middle" fontFamily="Inter, system-ui, sans-serif" fontWeight="600" fontSize="11" fill="var(--ink)">{text}</text>
-  </a>;
+  // Under its box (a packed row): a short caption in the floor band, its top (G + 7) below every foot shadow (G + 5.2 at
+  // most), and a pointer up to the box's own floor edge in the box's column, where nothing else stands.
+  if (below) return <>
+    <path className="o-pointer" d={`M${x - 4} ${y + 1}L${x} ${G + 1.2}L${x + 4} ${y + 1}`} fill="var(--solid)" stroke={ink} strokeWidth="1.3" strokeLinejoin="round" />
+    <a className={`o-tag ${cls}`} href={href} aria-label={label}>
+      <rect x={left} y={y} width={w} height="18" rx="9" fill="var(--solid)" stroke={ink} strokeWidth="1.3" />
+      <text x={left + w / 2} y={y + 13} textAnchor="middle" fontFamily="Inter, system-ui, sans-serif" fontWeight="600" fontSize="11" fill="var(--ink)">{text}</text>
+    </a></>;
   return <a className={`o-tag ${hot ? 'o-pill' : ''} ${cls}`} href={href} aria-label={label}>
     {tail && <path d={`M${x - 4} ${y + 10}l2 8 7-8`} fill="var(--solid)" stroke={ink} strokeWidth="1.3" strokeLinejoin="round" />}
     <rect x={left} y={y - 11} width={w} height="22" rx="11" fill={hot ? '#F0482A' : 'var(--solid)'} stroke={hot ? 'none' : ink} strokeWidth="1.3" />

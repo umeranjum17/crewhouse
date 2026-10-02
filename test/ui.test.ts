@@ -1889,9 +1889,13 @@ test('J5 repairs stay in: the night look paints first, the job row is never cut 
   // 152: the page reaches the mouth whole (offset .72), settles in, and fades only after .88; the box is drawn in front.
   assert.match(office, /\{ transform: at\(0, 1\), opacity: 1, offset: \.72 \}/); assert.match(office, /\{ transform: at\(\.35, \.92\), opacity: 1, offset: \.88 \}/);
   assert.ok(office.indexOf('<TrayBox x={trayX}') > office.indexOf('{order.map((m) => m === \'chief\''), 'the tray box is drawn after (in front of) every figure');
-  assert.match(office, /left=\{bubble\} y=\{tight \? G \+ 5 : Y\(G - 64\)\} below=\{tight\}/, 'the Tray bubble sits low over its box, clear of every ink; a packed row captions it under the box');
-  assert.match(office, /H = tight \? G \+ 25 : 210/, 'the floor band grows by the caption only in a packed row');
+  assert.match(office, /left=\{bubble\} y=\{tight \? G \+ 7 : Y\(G - 64\)\} below=\{tight\}/, 'the Tray bubble sits low over its box, clear of every ink; a packed row captions it under the box');
+  assert.match(office, /H = tight \? G \+ 27 : 210/, 'the floor band grows by the caption only in a packed row');
   assert.doesNotMatch(office, /HIGH/, 'no raised, detached bubble');
+  // 155: the caption's top clears every foot shadow and its pointer stands in the box's own column, outside the label;
+  // Chief's room art keeps its own size (never the avatars' .ink 100% box).
+  assert.match(office, /<path className="o-pointer" d=\{`M\$\{x - 4\} \$\{y \+ 1\}L\$\{x\} \$\{G \+ 1\.2\}/);
+  assert.doesNotMatch(office, /o-sprite ink/); assert.match(read('web', 'src', 'styles.css'), /\.o-sprite svg \{ overflow: visible; \}/);
   // 147/148: a crowded row packs its desks (compact) before it scales, all five standing; the page is
   // drawn at the figures' size on both sides.
   assert.match(office, /return full\.s < 1 \? packed\(order, sts\) : full;/, 'a crowded row packs before it scales');

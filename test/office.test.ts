@@ -6,7 +6,7 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
-import { cpSync, existsSync, readdirSync, readFileSync, statSync, symlinkSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { extname, join } from 'node:path';
 import WebSocket from 'ws';
@@ -254,7 +254,7 @@ test('at 1, 5, 12 and 30 crew and in the B1 mock\'s house, on a phone and a comp
           const hit = (a, c) => a.left < c.right - 0.5 && c.left < a.right - 0.5 && a.top < c.bottom - 0.5 && c.top < a.bottom - 0.5;
           const out = cards.filter((x) => x.left < st.left - 1 || x.right > st.right + 1 || x.top < st.top - 1 || x.bottom > st.bottom + 1).length;
           const els = [...document.querySelectorAll('.o-tag')], sps = [...document.querySelectorAll('.o-sprite')];
-          const say = (e, r) => (e.closest('[data-id]')?.dataset.id ?? 'chief') + ' ' + e.getAttribute('class') + ' ' + Math.round(r.top) + '-' + Math.round(r.bottom);
+          const say = (e, r) => (e.closest('[data-id]')?.dataset.id ?? 'chief') + ' ' + e.getAttribute('class') + ' ' + Math.round(r.top) + '-' + Math.round(r.bottom) + ' x' + Math.round(r.left) + '-' + Math.round(r.right);
           const pairs = [];
           cards.forEach((a, i) => cards.slice(i + 1).forEach((c, j) => { if (hit(a, c)) pairs.push(say(els[i], a) + ' x ' + say(els[i + 1 + j], c)); }));
           cards.forEach((a, i) => sprites.forEach((c, j) => { if (hit(a, c)) pairs.push(say(els[i], a) + ' x ' + say(sps[j], c)); }));
@@ -274,7 +274,7 @@ test('at 1, 5, 12 and 30 crew and in the B1 mock\'s house, on a phone and a comp
           // bubble's tail is over it and close above it (a packed row: the caption's pointer close under it, in the floor
           // band), and the label covers no ink: a pen, the z's, a screen.
           const packedRow = document.querySelector('.o-room')?.dataset.tight === 'true';
-          const tb = document.querySelector('.o-traybox > path')?.getBoundingClientRect(), tt = document.querySelector('a.o-tray > path')?.getBoundingClientRect();
+          const tb = document.querySelector('.o-traybox > path')?.getBoundingClientRect(), tt = document.querySelector('a.o-tray > path, .o-pointer')?.getBoundingClientRect();
           const bub = document.querySelector('a.o-tray rect')?.getBoundingClientRect(), unit = document.querySelector('.o-art').getScreenCTM().a;
           const inked = bub ? [...document.querySelectorAll('.o-pen, .o-zz, .o-mon')].map(box).filter((c) => hit(bub, c)).length : -1;
           const tray = tb && tt ? { onTop: !!document.elementFromPoint(tb.left + tb.width / 2, tb.top + tb.height * 0.6)?.closest('.o-traybox'), over: tt.left + tt.width / 2 >= tb.left && tt.left + tt.width / 2 <= tb.right,
@@ -284,6 +284,7 @@ test('at 1, 5, 12 and 30 crew and in the B1 mock\'s house, on a phone and a comp
             tray2: tray, scale: Number(document.querySelector('.o-room')?.dataset.scale), tight: document.querySelector('.o-room')?.dataset.tight === 'true', roster: document.querySelectorAll('.side-row').length, tray: document.querySelector('.o-tray')?.getAttribute('aria-label') ?? null };
         })()`);
         const at = `${demo} ${theme} at ${width}`;
+        try {
         assert.ok(m.seen, `${at}: Office opens on its room, below the bar and on screen, not just somewhere on the page`);
         assert.equal(m.out, 0, `${at}: every card inside the room`);
         assert.equal(m.over, 0, `${at}: no card covers another card or a sprite: ${m.pairs.join('; ')}`);
@@ -315,6 +316,20 @@ test('at 1, 5, 12 and 30 crew and in the B1 mock\'s house, on a phone and a comp
         assert.equal(m.tray2.inked, 0, `${at}: the Tray bubble covers no pen, z or screen`);
         // The B1 mock's own state, exactly: 1 needs you, 2 working, Tracer's list the one page in the tray.
         if (demo === 'b1') assert.deepEqual([m.stat, m.busy, m.tray], [1, 2, 'Your tray: 1 done today'], `${at}: the mock's counts`);
+        } catch (e) {
+          // 155: a failed case leaves its evidence, the frame as drawn and every sprite's and label's box, in the job's dir.
+          const dir = process.env.OFFICE_SHOTS;
+          if (dir) {
+            mkdirSync(dir, { recursive: true });
+            const name = `grid-fail-${demo}-${theme}-${width}`;
+            writeFileSync(join(dir, `${name}.png`), Buffer.from((await b.send('Page.captureScreenshot', { format: 'png' })).data, 'base64'));
+            writeFileSync(join(dir, `${name}.json`), JSON.stringify(await b.run(`[...document.querySelectorAll('.o-room .o-sprite, .o-room .o-tag, .o-room .o-traybox, .o-room .o-pointer, .o-room svg svg')].map((e) => {
+              const r = e.getBoundingClientRect(), cs = getComputedStyle(e);
+              return { cls: e.getAttribute('class'), tag: e.tagName, box: [r.left, r.top, r.right, r.bottom].map(Math.round), w: cs.width, h: cs.height, attrs: [e.getAttribute('width'), e.getAttribute('height')] };
+            })`), null, 1));
+          }
+          throw e;
+        }
       }
     }
     // The furniture is scenery: a tap on a desk lands on its seat and opens that helper.
