@@ -138,7 +138,7 @@ export function Office({ state, live, night }: { state: Json; live: A.OfficeView
             <Sprite who="chief" mood={live.chief.mood} dot={3} night={night} beat={live.chief.mood} />
             <div className="o-seat" />
             {chiefAsk
-              ? <Bubble cls="needs" name="Chief"><a href={`#/ask/${chiefAsk.id}`} aria-label={`Review what Chief needs: ${chiefAsk.head}`}>Review</a></Bubble>
+              ? <Bubble cls="needs" name="Chief"><Cue href={`#/ask/${chiefAsk.id}`} label={`Review what Chief needs: ${chiefAsk.head}`} /></Bubble>
               : <Bubble cls={chiefBusy} name="Chief" line={A.chiefWord(live)} />}
             <button className="o-hit" onClick={() => setProfile(true)} aria-label={`Chief: ${live.chief.line}`} />
           </div>
@@ -154,9 +154,9 @@ export function Office({ state, live, night }: { state: Json; live: A.OfficeView
               })}</div>}
               <button className="o-hit" onClick={() => setOpen(c.id)} aria-label={said(c) + (c.things.length ? `, made ${c.things.map((f) => KIND_WORDS[f.kind]).join(', ')}` : '')} />
               {c.ask
-                ? <Bubble cls="needs" name={c.name}><a href={`#/ask/${c.ask.id}`} aria-label={`Review what ${c.name} needs: ${c.ask.head}`}>Review</a></Bubble>
+                ? <Bubble cls="needs" name={c.name}><Cue href={`#/ask/${c.ask.id}`} label={`Review what ${c.name} needs: ${c.ask.head}`} /></Bubble>
                 : A.seatOf(c) === 'chat'
-                  ? <Bubble cls="needs" name={c.name}><a href={`#/h/${c.id}`} aria-label={`Reply to ${c.name} in their chat`}>Reply</a></Bubble>
+                  ? <Bubble cls="needs" name={c.name}><Cue href={`#/h/${c.id}`} label={`Reply to ${c.name} in their chat`} word="Reply" /></Bubble>
                   : <Bubble cls={tone(c).cls} name={c.name} line={A.SEAT_WORDS.working} typing />}
             </div>
           ) : (
@@ -250,14 +250,19 @@ function ChiefSheet({ live, state, roles, onClose }: { live: A.OfficeView; state
   );
 }
 
-/** The card over a seat: a name and one short word that always fits (the step itself is in the feed's On it now),
- *  the typing dots while working, and a Review or Reply when it waits on you. */
+/** The card over a seat, just above whoever sits there: a name and one short word that always fits (the step itself is
+ *  in the feed's On it now), the typing dots while working, or a quiet cue when it waits on you. */
 function Bubble({ cls, name, line, typing, children }: { cls: string; name: string; line?: string; typing?: boolean; children?: ReactNode }) {
   return <div className={`o-bub ${cls}`} aria-hidden={!children}>
     <b>{name}</b>
     {children ?? <span className="o-st">{typing ? <Typing /> : <i />}<span>{line}</span></span>}
   </div>;
 }
+
+/** Waiting on you, said quietly: a pink dot and the seat's word, a link to the question (Needs you above holds the
+ *  same row), never a filled button per seat. */
+const Cue = ({ href, label, word = A.SEAT_WORDS.needs }: { href: string; label: string; word?: string }) =>
+  <a className="o-st o-cue" href={href} aria-label={label}><i /><span>{word}</span></a>;
 
 const Typing = () => <span className="o-typing" aria-hidden><i /><i /><i /></span>;
 

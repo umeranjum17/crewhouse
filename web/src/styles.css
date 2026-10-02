@@ -773,7 +773,7 @@ details.card[open] > summary { margin-bottom: 10px; }
 .o-tray { margin-left: auto; flex: none; font: 600 12px/16px var(--ui); color: var(--ink); text-decoration: none; background: var(--solid); border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; }
 .o-tray:hover { border-color: var(--line2); }
 .o-desks, .o-lounge { display: grid; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); }
-.o-cell { position: relative; height: 172px; min-width: 0; }
+.o-cell { position: relative; height: 156px; min-width: 0; }
 .o-lounge .o-cell { height: 96px; }
 /* The floor under every seat, and the skirting board above it: seats side by side make one floor. */
 .o-cell::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 12px; background: var(--r-floor); box-shadow: 0 -2px 0 var(--r-skirt); }
@@ -794,12 +794,12 @@ details.card[open] > summary { margin-bottom: 10px; }
 .o-scr i { display: block; height: 2px; width: 80%; background: var(--r-edge); opacity: .55; justify-self: start; }
 .o-scr i:nth-child(2) { width: 55%; } .o-scr i:nth-child(3) { width: 70%; }
 .o-scr.needs { background: #FFE9E3; }
-.o-things { position: absolute; right: 14%; top: 70px; z-index: 3; display: flex; gap: 3px; align-items: flex-end; }
+.o-things { position: absolute; right: 14%; bottom: 84px; z-index: 3; display: flex; gap: 3px; align-items: flex-end; }
 .o-thing { position: relative; width: 13px; height: 16px; background: #fff; border: 1px solid var(--r-edge); display: block; }
 .o-thing.o-pin { background: var(--c); border: 2px solid #fff; outline: 1px solid var(--r-edge); height: 13px; }
 .o-thing.o-paper::before { content: ''; position: absolute; left: 2px; right: 2px; top: 3px; height: 7px; background: repeating-linear-gradient(transparent 0 1px, #b9b3aa 1px 2px, transparent 2px 3px); }
 .o-thing.drop { animation: drop 720ms cubic-bezier(.2,.9,.25,1.2) both; }
-.o-new { position: absolute; top: -14px; left: -4px; background: var(--pink); color: var(--on-pink); font: 700 9px/12px var(--ui); letter-spacing: .04em; text-transform: uppercase; padding: 0 4px; border-radius: 999px; }
+.o-new { position: absolute; top: -6px; left: -4px; background: var(--pink); color: var(--on-pink); font: 700 9px/12px var(--ui); letter-spacing: .04em; text-transform: uppercase; padding: 0 4px; border-radius: 999px; }
 @keyframes drop { 0% { opacity: 0; transform: translateY(-44px) scale(.86) rotate(-4deg); } 55% { opacity: 1; transform: translateY(4px) scale(1.02) rotate(1deg); } 78% { transform: translateY(-2px); } 100% { transform: none; } }
 /* Chief's armchair, and the spare corners: an empty desk, or a window and a plant. */
 .o-chair, .o-seat { display: none; }
@@ -807,19 +807,20 @@ details.card[open] > summary { margin-bottom: 10px; }
   background-image: linear-gradient(var(--r-frame), var(--r-frame)), linear-gradient(var(--r-frame), var(--r-frame)); background-size: 2px 100%, 100% 2px; background-position: center; background-repeat: no-repeat; }
 .o-plant { position: absolute; left: 50%; bottom: 12px; width: 18px; height: 16px; transform: translateX(-50%); background: var(--r-pot); border: 2px solid var(--r-edge); border-bottom: 0; border-radius: 2px 2px 0 0; }
 .o-plant::before { content: ''; position: absolute; left: 1px; bottom: 14px; width: 12px; height: 20px; border: 2px solid var(--r-leaf); border-radius: 0 100% 0 100%; }
-/* A bubble over a seat: the helper's name and what they are on (Chief's line for him), or pink with Review when they
-   need her. It stays inside its own seat: two lines at most, clipped with an ellipsis. */
-.o-bub { position: absolute; left: 4px; right: 4px; top: 6px; z-index: 4; background: var(--solid); border: 1.5px solid var(--r-edge); border-radius: 12px; padding: 4px 7px 5px; box-shadow: var(--e1); display: grid; gap: 3px; pointer-events: none; }
+/* A bubble over a seat, its foot just above the figure (and above what they made), its tail at the figure: the
+   helper's name and what they are on (Chief's line for him), or a quiet pink dot and "Needs you" when they need her.
+   It stays inside its own seat: two lines at most, clipped with an ellipsis. */
+.o-bub { position: absolute; left: 4px; right: 4px; bottom: 106px; z-index: 4; background: var(--solid); border: 1.5px solid var(--r-edge); border-radius: 12px; padding: 4px 7px 5px; box-shadow: var(--e1); display: grid; gap: 3px; pointer-events: none; }
 .o-bub::after { content: ''; position: absolute; left: 50%; bottom: -5px; width: 8px; height: 8px; background: var(--solid); border: solid var(--r-edge); border-width: 0 1.5px 1.5px 0; transform: translateX(-50%) rotate(45deg); }
 .o-bub b, .o-chip b { font: 650 12.5px/15px var(--ui); letter-spacing: -.005em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .o-st { display: flex; gap: 5px; align-items: center; font: 500 11px/14px var(--ui); color: var(--ink2); min-width: 0; }
 .o-st > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .o-st > i { width: 6px; height: 6px; border-radius: 50%; background: var(--line2); flex: none; }
+.o-cell[data-id] .o-bub::after { left: calc(50% - 22px); }
 .o-bub.work { border-color: var(--ok); } .o-bub.work::after { border-color: var(--ok); }
-.o-bub.needs { border-color: var(--pink); box-shadow: 0 6px 16px -8px color-mix(in srgb, var(--pink) 60%, transparent); } .o-bub.needs::after { border-color: var(--pink); }
 .o-bub.needs .o-st > i { background: var(--pink); }
-.o-bub a { pointer-events: auto; font: 650 12px/16px var(--ui); text-align: center; color: var(--on-pink); background: var(--pink); border-radius: 999px; padding: 3px 8px; text-decoration: none; }
-.o-bub a::after { content: ' ›'; }
+.o-cue { pointer-events: auto; color: var(--ink); text-decoration: none; }
+.o-cue:hover > span { text-decoration: underline; }
 .o-typing { display: inline-flex; gap: 2px; flex: none; }
 .o-typing i { width: 4px; height: 4px; border-radius: 50%; background: var(--ok); opacity: .7; }
 /* The lounge: one long sofa across the row, and a name chip under each sprite, its dot saying up next or busy. */
@@ -843,7 +844,7 @@ details.card[open] > summary { margin-bottom: 10px; }
   .o-room .pose-rest svg .body { animation: o-breathe 3.2s ease-in-out infinite; }
   .o-room .pose-rest svg .zz { animation: o-zz 3.2s ease-in-out infinite; }
   .o-room .pose-needs svg .cue { animation: o-cue 1.6s ease-in-out infinite; }
-  .o-room .pose-needs.chief svg .hat { animation: o-cue 2.4s ease-in-out infinite; transform-box: fill-box; transform-origin: 0 100%; }
+  .o-room .pose-needs.chief svg .hat { animation: o-tip 2.4s ease-in-out infinite; transform-box: fill-box; transform-origin: 100% 100%; }
   .o-room .pose-work svg .prop { transform-origin: 50% 50%; animation: o-nod 1.4s ease-in-out infinite; }
   .o-room .scribe.pose-work svg .prop { transform-origin: 100% 0; animation: o-pen .7s ease-in-out infinite alternate; }
   .o-room .scout.pose-work svg .prop { animation: o-browse 2.4s ease-in-out infinite; }
@@ -858,6 +859,7 @@ details.card[open] > summary { margin-bottom: 10px; }
 }
 @keyframes o-breathe { 50% { transform: scaleY(1.03); } }
 @keyframes o-zz { 0% { opacity: .2; transform: translate(0, 4px); } 50% { opacity: 1; } 100% { opacity: 0; transform: translate(4px, -8px); } }
+@keyframes o-tip { 50% { transform: rotate(3deg); } }
 @keyframes o-cue { 50% { transform: rotate(-6deg) translateY(-2px); } }
 @keyframes o-nod { 50% { transform: translateY(2px) rotate(-3deg); } }
 @keyframes o-pen { to { transform: rotate(-14deg) translateX(-3px); } }
@@ -953,6 +955,8 @@ details.card[open] > summary { margin-bottom: 10px; }
 /* "See all N" opens the list inside the pin, never over Chief's thread or box. */
 .needs-pin .list-group { max-height: 36dvh; overflow-y: auto; }
 .home-chat .dock { bottom: 64px; }
+/* Office scrolls as one page under the bar's first screen, so the whole room fits above Chief's box. */
+.home-office > .home-top { position: static; max-height: none; }
 @media (min-width: 900px) {
   .home-top { position: static; flex: none; max-width: 1072px; }
   .home-office > .home-top { margin-right: 32px; }

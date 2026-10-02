@@ -19,7 +19,8 @@ import * as motion from './motion';
 
 type Look = typeof color.day;
 type Room = typeof ROOM.day;
-const DESK_H = 156, LOUNGE_H = 96, FLOOR = 12, COLS = 3, WALL_H = 64;
+// A bubble's foot sits BUB above the seat's floor: over the figure's head and the things on the wall, under nothing.
+const DESK_H = 156, LOUNGE_H = 96, FLOOR = 12, COLS = 3, WALL_H = 64, BUB = 106;
 
 /** How a helper reads to a screen reader, in the room's own words. */
 const said = (c: A.OfficeMember) => {
@@ -62,7 +63,7 @@ export function Office({ view, night, offline, width, onChief, onDesk, onAsk, on
           <motion.Hop beat={chief.mood} reduce={reduce} awake={awake} style={{ position: 'absolute', left: dw / 2 - 30, bottom: FLOOR }}>
             <motion.Loop pose={poseOf(chief.mood)} reduce={reduce} awake={awake}><Image source={PALS[`chief-${poseOf(chief.mood)}`]} style={{ width: 60, height: 75 }} /></motion.Loop>
           </motion.Hop>
-          {chiefAsk ? <Bubble t={t} tone={t.pink} name="Chief"><Review t={t} night={night} label={`Review what Chief needs: ${chiefAsk.head}`} onPress={() => onAsk(chiefAsk)} /></Bubble>
+          {chiefAsk ? <Bubble t={t} tone={t.line2} name="Chief"><Cue t={t} label={`Review what Chief needs: ${chiefAsk.head}`} onPress={() => onAsk(chiefAsk)} /></Bubble>
             : <Bubble t={t} tone={chief.mood === 'work' && !offline ? t.green : t.line2} name="Chief" line={offline ? 'Asleep' : A.chiefWord(view)} />}
         </Cell>
         {Array.from({ length: nooks }, (_, i) => plan.desks[i]).map((c, i) => {
@@ -80,7 +81,7 @@ export function Office({ view, night, offline, width, onChief, onDesk, onAsk, on
               style={{ position: 'absolute', right: dw * 0.14 + 10, top: 80, width: 14, height: 18, backgroundColor: '#fff', borderWidth: 1.5, borderColor: r.edge, borderRadius: 2 }}><View /></motion.Fly>}
             <Desk w={dw} r={r} />
             <Monitor w={dw} r={r}><Screen c={c} t={t} r={r} /></Monitor>
-            {c.things.length > 0 && <View pointerEvents="none" style={{ position: 'absolute', right: dw * 0.14, top: 56, flexDirection: 'row', gap: 3, alignItems: 'flex-end' }}>
+            {c.things.length > 0 && <View pointerEvents="none" style={{ position: 'absolute', right: dw * 0.14, bottom: 84, flexDirection: 'row', gap: 3, alignItems: 'flex-end' }}>
               {c.things.slice(-2).map((f) => <motion.Land key={f.url} fresh={!seen.current!.has(f.url)} reduce={reduce} awake={awake}>
                 {f.kind === 'image' || f.kind === 'video'
                   ? <View style={{ width: 15, height: 15, backgroundColor: COLOURS[c.kind].body, borderWidth: 2, borderColor: '#fff' }} />
@@ -90,8 +91,8 @@ export function Office({ view, night, offline, width, onChief, onDesk, onAsk, on
               </motion.Land>)}
             </View>}
             {c.ask
-              ? <Bubble t={t} tone={t.pink} name={c.name}><Review t={t} night={night} label={`Review what ${c.name} needs: ${c.ask.head}`} onPress={() => onAsk(c.ask!)} /></Bubble>
-              : <Bubble t={t} tone={k === 'chat' ? t.pink : t.green} name={c.name} line={A.SEAT_WORDS[k]} typing={k === 'working'} />}
+              ? <Bubble t={t} tone={t.line2} name={c.name} tail={-22}><Cue t={t} label={`Review what ${c.name} needs: ${c.ask.head}`} onPress={() => onAsk(c.ask!)} /></Bubble>
+              : <Bubble t={t} tone={k === 'chat' ? t.line2 : t.green} dot={k === 'chat' ? t.pink : undefined} name={c.name} line={A.SEAT_WORDS[k]} typing={k === 'working'} tail={-22} />}
           </Cell>;
         })}
         {Array.from({ length: spare }, (_, i) => <Cell key={`spare${i}`} w={dw} h={DESK_H} r={r}>
@@ -147,10 +148,12 @@ function Dock({ view, t, onDesk }: { view: A.OfficeView; t: Look; onDesk: (c: A.
 
 const dot = (t: Look, k: A.Seat) => (k === 'needs' || k === 'chat' ? t.pink : k === 'working' ? t.green : k === 'failed' ? t.danger : k === 'next' ? t.amber : t.line2);
 
-/** Review, inside a seat's card: opens the same sheet as Needs you. */
-function Review({ t, night, label, onPress }: { t: Look; night: boolean; label: string; onPress: () => void }) {
-  return <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label} hitSlop={6} style={{ backgroundColor: t.pink, borderRadius: 999, paddingVertical: 3 }}>
-    <Text style={{ fontFamily: 'Inter', fontSize: 12, lineHeight: 16, fontWeight: '600', color: night ? '#1B1A1F' : '#FFFFFF', textAlign: 'center' }}>Review ›</Text>
+/** Waiting on you, said quietly inside a seat's card: a pink dot and "Needs you", opening the same sheet as Needs you
+ *  (which already lists the row), never a filled button per seat. */
+function Cue({ t, label, onPress }: { t: Look; label: string; onPress: () => void }) {
+  return <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label} hitSlop={6} style={{ flexDirection: 'row', gap: 5, alignItems: 'center' }}>
+    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: t.pink }} />
+    <Text numberOfLines={1} style={{ flex: 1, fontFamily: 'Inter', fontSize: 11, lineHeight: 14, fontWeight: '500', color: t.ink }}>{A.SEAT_WORDS.needs}</Text>
   </Pressable>;
 }
 
@@ -235,16 +238,17 @@ function Sofa({ r }: { r: Room }) {
   return <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, bottom: 30, height: 16, backgroundColor: r.sofa, borderTopWidth: 2, borderBottomWidth: 2, borderColor: r.sofaDark }} />;
 }
 
-/** The card over a seat: a name and one line, the typing dots while working, or what `children` puts under the name
- *  (the Review). Two lines at most, inside its own seat. */
-function Bubble({ t, tone, name, line, typing, children }: { t: Look; tone: string; name: string; line?: string; typing?: boolean; children?: ReactNode }) {
-  const tail: ViewStyle = { position: 'absolute', left: '50%', bottom: -5, marginLeft: -4, width: 8, height: 8, backgroundColor: t.surface, borderRightWidth: 1.5, borderBottomWidth: 1.5, borderColor: tone, transform: [{ rotate: '45deg' }] };
-  return <View pointerEvents="box-none" style={{ position: 'absolute', left: 4, right: 4, top: 6, backgroundColor: t.surface, borderWidth: 1.5, borderColor: tone, borderRadius: 12, paddingHorizontal: 7, paddingTop: 4, paddingBottom: 5, gap: 3 }}>
+/** The card over a seat, its foot just above the figure and what they made, its tail `tail` points off centre at the
+ *  figure: a name and one line, the typing dots while working, or what `children` puts under the name (the quiet
+ *  needs-you cue). Two lines at most, inside its own seat. */
+function Bubble({ t, tone, dot: mark, name, line, typing, tail: off = 0, children }: { t: Look; tone: string; dot?: string; name: string; line?: string; typing?: boolean; tail?: number; children?: ReactNode }) {
+  const tail: ViewStyle = { position: 'absolute', left: '50%', bottom: -5, marginLeft: off - 4, width: 8, height: 8, backgroundColor: t.surface, borderRightWidth: 1.5, borderBottomWidth: 1.5, borderColor: tone, transform: [{ rotate: '45deg' }] };
+  return <View pointerEvents="box-none" style={{ position: 'absolute', left: 4, right: 4, bottom: BUB, backgroundColor: t.surface, borderWidth: 1.5, borderColor: tone, borderRadius: 12, paddingHorizontal: 7, paddingTop: 4, paddingBottom: 5, gap: 3 }}>
     <View pointerEvents="none" style={tail} />
     <Text numberOfLines={1} style={{ fontFamily: 'Inter', fontSize: 12.5, lineHeight: 15, fontWeight: '600', color: t.ink }}>{name}</Text>
     {children ?? <View pointerEvents="none" style={{ flexDirection: 'row', gap: 5, alignItems: 'center' }}>
       {typing ? <View style={{ flexDirection: 'row', gap: 2 }}>{[0, 1, 2].map((i) => <View key={i} style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: t.green, opacity: 0.7 }} />)}</View>
-        : <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: tone === t.line2 ? t.line2 : tone }} />}
+        : <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: mark ?? tone }} />}
       <Text numberOfLines={1} style={{ flex: 1, fontFamily: 'Inter', fontSize: 11, lineHeight: 14, fontWeight: '500', color: t.ink2 }}>{line}</Text>
     </View>}
   </View>;

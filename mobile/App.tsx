@@ -1151,7 +1151,8 @@ function Home(ctx: Ctx) {
   const [room, setRoom] = useState(0);
   const [desk, setDesk] = useState<{ c: A.OfficeMember; state: Json } | null>(null);
   const [profile, setProfile] = useState(false);
-  // The top stays put in both views: the bar, then Needs you's first row and an exact "See all N".
+  // The top: the bar, then Needs you's first row and an exact "See all N". It stays put over Chief's thread; in Office
+  // it scrolls with the room, so the whole room fits between it and Chief's box.
   const top = <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4, gap: 10 }}>
     <HomeBar state={state} view={view} offline={offline} go={go} mode={mode} pick={pick} />
     {needs.length > 0 && <View><Label count={needs.length}>Needs you</Label><ScrollView style={[s.listGroup, { backgroundColor: t.solid, borderColor: t.line, maxHeight: 280, flexGrow: 0 }]} nestedScrollEnabled><NeedsRows state={state} cards={needs} open={open} few={1} /></ScrollView></View>}
@@ -1159,8 +1160,8 @@ function Home(ctx: Ctx) {
   if (mode === 'chat') return <View style={{ flex: 1 }}>{top}<Chat {...ctx} id="chief" /></View>;
   return (
     <View style={{ flex: 1 }}>
-      {top}
       <ScrollView contentContainerStyle={s.page} keyboardShouldPersistTaps="handled">
+        <View style={{ margin: -16, marginBottom: 0 }}>{top}</View>
         <View onLayout={(e) => setRoom(e.nativeEvent.layout.width)} style={[s.office, { backgroundColor: t.soft, borderColor: t.line }]}>
           {room > 0 && <Office view={view} night={t.night} offline={offline} width={room - 2} onChief={() => setProfile(true)} onDesk={(c) => setDesk({ c, state })} onAsk={open} onTray={() => go({ view: 'things' })} onCrew={() => go({ view: 'crew' })} />}
         </View>
