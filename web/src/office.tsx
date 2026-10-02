@@ -186,8 +186,9 @@ const stationOf = (c: A.OfficeMember, v: A.OfficeView): Station => {
 type Spot = { m: A.OfficeMember | 'chief' | 'tray'; st: Station; x: number; tray: boolean };
 const G = 196, X0 = 14, W = 346;
 /** Left to right in the given order, the tray just before whoever finished (or before the resting); the row scales down
- *  about the floor line to fit, and centres when it is short. The Tray bubble never sits over Chief: a tray right after
- *  him gets room for its bubble. ponytail: two passes for that room under scaling, exact enough for six stations. */
+ *  about the floor line to fit, and centres when it is short. The Tray bubble never sits over a figure or past the
+ *  room's edge: the tray keeps room for it on both sides (more beside Chief, whose hat and cane reach 40 to his right).
+ *  ponytail: four passes for that room under scaling, exact enough for six stations. */
 function lay(order: (A.OfficeMember | 'chief')[], v: A.OfficeView, trayText: string) {
   const sts = order.map((m) => (m === 'chief' ? 'chief' : stationOf(m, v)) as Station);
   let at = sts.indexOf('done');
@@ -195,11 +196,13 @@ function lay(order: (A.OfficeMember | 'chief')[], v: A.OfficeView, trayText: str
   if (at < 0) { const r = sts.indexOf('rest'); items.splice(r < 0 ? items.length : r, 0, { m: 'tray', st: 'tray', tray: true }); at = r < 0 ? items.length - 1 : r; }
   const half = (trayText.length * 6.6 + 22) / 2;
   let s = 1, spots: Spot[] = [], total = 0;
-  for (let pass = 0; pass < 2; pass++) {
+  for (let pass = 0; pass < 4; pass++) {
     let cur = 0;
     spots = items.map((it, i) => {
       let [l, r] = PAD[it.st];
-      if (it.tray && items[i - 1]?.st === 'chief') l = Math.max(l, 14 + (it.st === 'done' ? 20 : 0) + (half + 4) / s);
+      // The bubble is centred over the tray, 20 left of a done figure; its half plus a gap, unscaled, clears each neighbour.
+      const b = (half + 4) / s, dx = it.st === 'done' ? 20 : 0;
+      if (it.tray) { l = Math.max(l, (items[i - 1]?.st === 'chief' ? 14 : 0) + dx + b); r = Math.max(r, b - dx); }
       const x = cur + l; cur = x + r;
       return { ...it, x };
     });
