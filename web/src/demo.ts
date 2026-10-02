@@ -449,10 +449,10 @@ if (variant === 'b1') {
   (state as Json).tasks = [task(52, 'tracer', 'Dinner list', 'done', { updated_at: now - 12 * min, result: 'Seven dinners and one shopping list, sorted by aisle.', files: ['files/dinner-list.pdf'] }), ...state.tasks];
   events.push(ev(20, 13, 'file.delivered', 'tracer', { task: 52, path: 'files/dinner-list.pdf' }), ev(21, 12, 'task.done', 'tracer', { task: 52, title: 'Dinner list' }));
   pages.chief = { messages: [
-    { id: 1, author: 'person', text: 'Can you get me to Lahore on Friday? Morning if possible.' },
-    { id: 2, author: 'chief', text: "On it. I've asked Scout to look." },
-    { id: 3, author: 'chief', text: "Scout found three flights. Friday's 08:40 is cheapest: $412, one stop, bag included. It's on the card above for your yes." },
-    { id: 4, author: 'chief', text: "Reel is picking the music and Scribe is writing your note. I'll tell you when they're done." },
+    { id: 1, author: 'person', text: 'Can you get me to Lahore on Friday? Morning if possible.', at: now - 20 * min },
+    { id: 2, author: 'chief', text: "On it. I've asked Scout to look.", at: now - 19 * min },
+    { id: 3, author: 'chief', text: "Scout found three flights. Friday's 08:40 is cheapest: $412, one stop, bag included. It's on the card above for your yes.", at: now - 14 * min },
+    { id: 4, author: 'chief', text: "Reel is picking the music and Scribe is writing your note. I'll tell you when they're done.", at: now - min },
   ] };
 }
 if (variant === 'wheeled') { Object.assign(bots.find((b) => b.id === 'scout')!, { controls: 'person' }); pages.scout = { ...pages.scout, signedIn: ['shop.example'] }; }

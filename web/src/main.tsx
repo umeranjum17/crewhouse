@@ -263,14 +263,17 @@ function NeedsCard({ state, c, flat, onLater }: { state: Json; c: A.Card; flat?:
   const who = A.crew(state).find((h) => h.id === c.helper);
   const name = who?.name ?? 'Chief';
   const yes = c.choices[0]?.body.answer === 'allow' ? c.choices[0] : null;
-  const lines = (c.preview?.body ?? '').split('\n').map((l) => l.trim()).filter(Boolean).slice(0, 2);
-  const price = c.order?.known ? c.order.shown : '';
+  // A known total shows once, in whole dollars when it has no cents ("$412"); the preview's own repeat of it is dropped.
+  const shown = c.order?.known ? c.order.shown : '', price = shown.replace(/\.00$/, '');
+  const lines = (c.preview?.body ?? '').split('\n').map((l) => l.trim()).filter(Boolean)
+    .filter((l) => !shown || !l.startsWith('Total ')).map((l) => (shown ? l.replace(` — ${shown}`, '') : l)).slice(0, flat ? 1 : 2);
   const question = c.review && c.preview?.head ? c.preview.head : c.words;
   const ask = () => { keepDraft('chief', `About ${name}'s question (${c.head}): `); go('#/chief'); };
   return (
     <article className="needs-row needs-big" aria-label={`${name} needs you: ${c.head}`}>
       <div className="nb-top">
-        <Face who={who ?? { kind: 'pip', name }} size={40} />
+        {flat ? <span className="nb-av">{who ? <PalArt kind={who.kind} mood={who.mood} d={44 / 12} name={name} /> : <ChiefArt d={3} />}</span>
+          : <Face who={who ?? { kind: 'pip', name }} size={40} />}
         {flat
           ? <div className="grow"><b className="nb-title">{question}</b>{lines.length > 0 && <span className="nb-ask">{lines.join(' · ')}</span>}</div>
           : <div className="grow"><b className="nb-title">{name} needs you</b><span className="nb-ask">{question}</span></div>}
@@ -281,7 +284,7 @@ function NeedsCard({ state, c, flat, onLater }: { state: Json; c: A.Card; flat?:
         {price && <span className="nb-price">{price}</span>}
       </div>}
       <div className="nb-acts">
-        <a className="btn go" href={`#/ask/${c.id}`}><Icon name="check" />{yes ? `${yes.label}…` : c.reply ? `Answer ${name}…` : 'Review…'}</a>
+        <a className="btn go" href={`#/ask/${c.id}`}><Icon name="check" />{yes ? (flat ? yes.label.replace(shown, price) : `${yes.label}…`) : c.reply ? `Answer ${name}…` : 'Review…'}</a>
         <button className="btn" onClick={ask}>Ask Chief</button>
         {onLater && <button className="btn ghost" onClick={() => onLater(c.id)}>Not now</button>}
       </div>
@@ -488,7 +491,7 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
   const load = useCallback((ar = around) => api.bot(id, ar || undefined).then(setPage).catch(() => {}), [id, around]);
   useEffect(() => { void load(); }, [load, tick]);
   const end = useRef<HTMLDivElement>(null);
-  const lines = A.lines(page, id);
+  const lines = hero ? A.trayNotes(state, A.lines(page, id)) : A.lines(page, id);
   const echoed = pending && !(page?.messages ?? []).some((x: Json) => x.author === 'person' && x.id > pending.after && A.plain(x.text) === A.plain(pending.text));
   const waiting = pending && !partial && !(page?.messages ?? []).some((x: Json) => x.author === 'bot' && x.id > pending.after);
   useEffect(() => subscribe((e) => {
@@ -563,6 +566,7 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
         {lines.map((l, i) => start && i === 0 && l.from === 'note' && l.text.startsWith(`${name} joined the crew`) ? null : <div key={l.id} className="line-wrap">{dayOf(l.at)}
           <div id={`m${l.id}`} className={`line ${l.from}${l.unsure ? ' unsure' : ''}${l.recap ? ' recap' : ''}${l.id > (opened.current ?? Infinity) ? ' fresh' : ''}${i && lines[i - 1].from === l.from && l.from !== 'me' && !l.recap && !lines[i - 1].recap ? ' consecutive' : ''}`}>
             {l.from !== 'me' && l.from !== 'note' && <div className="line-by"><Face who={l.from === 'chief' ? 'chief' : h ?? 'chief'} size={28} /><span className="who">{l.from === 'chief' ? 'Chief' : name}</span><time>{l.at ? A.clock(l.at) : ''}</time></div>}
+            {l.by && <span className="note-by"><Face who={A.crew(state).find((x) => x.id === l.by) ?? 'chief'} size={20} /></span>}
             {l.text && (l.detail ? <ChiefAsk l={{ text: l.text, detail: l.detail }} /> : <div className="bubble-text"><ChatText text={l.text} /></div>)}
             {id === 'chief' && l.text === 'Sign in with ChatGPT.' && <AccountCard g={{ ...g, state: 'signed-out' }} inChat onReady={() => { void load(); refresh(); }} />}
             {l.files.map((f) => <Media key={f.url} f={f} big />)}

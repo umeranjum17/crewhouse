@@ -43,6 +43,8 @@ export type DocView = { name: string; parts: DocPart[] };
 export type Step = { at: number; text: string; now?: boolean; asked?: boolean; seq: number; undo?: boolean };
 /** `unsure`: crewd's line for a job that acted but couldn't confirm it worked, shown apart from the helper's own words. */
 export type Line = { id: number; from: 'me' | 'them' | 'chief' | 'note'; text: string; files: FileView[]; choices: string[]; at?: number; unsure?: boolean; recap?: boolean;
+  /** A tray notice's helper (Chief's thread): the small face beside "Tracer finished … · it's in your tray". */
+  by?: string;
   /** Chief's full assignment in a helper's chat, behind Show details: the line itself stays one short ask. */
   detail?: string;
   /** What a delivered workbook or document holds, said once: the web's card says it itself, the phone shows these. */
@@ -989,6 +991,18 @@ export function lines(page: Json, bot: string): Line[] {
     return { id: m.id, from: m.author === 'person' ? 'me' : 'them',
       recap: m.recap === true, text: m.author === 'person' ? (pics.length && /^Here (is a photo|are some photos)\.$/.test(text) ? '' : noTools(text)) : chatWords(text), files: [...pics, ...(m.files ?? []).map((f: Json) => fileView(f.bot, f.path))], choices: (m.choices ?? []).map(plain), at: m.at ? at(m.at) : undefined, unsure: m.author === 'bot' && /^Not sure it worked:|^[^.]{1,40} isn't sure “/.test(text) };
   }).filter((l: Line) => l.text || l.files.length);
+}
+
+/** Chief's thread (B1): one plain notice where a helper's finished job, with a file, landed in the tray — only from a done
+ *  task that delivered files, placed by its time among the dated lines it falls after; nothing before the thread began. */
+export function trayNotes(state: Json, lines: Line[]): Line[] {
+  const first = lines.find((l) => l.at)?.at;
+  if (!first) return lines;
+  const notes = things(state).filter((t) => t.helper !== 'chief' && t.files.length && at(t.at) >= first)
+    .map((t): Line => ({ id: -t.id, from: 'note', by: t.helper, text: `${crewName(state, t.helper)} finished ${t.title || 'a job'} · it's in your tray`, files: [], choices: [], at: at(t.at) }));
+  const out = [...lines];
+  for (const n of notes.sort((a, b) => a.at! - b.at!)) { const i = out.findLastIndex((l) => (l.at ?? 0) <= n.at!); out.splice(i + 1, 0, n); }
+  return out;
 }
 
 /** A file build underway: the chat's task is live on a workbook or document job, and its file hasn't

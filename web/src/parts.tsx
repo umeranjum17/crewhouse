@@ -156,7 +156,7 @@ export function Ink({ svg, w, h = w, label, className = '' }: { svg: string; w: 
 export function ChiefArt({ mood = 'idle', d = 6, hero, whole }: { mood?: art.Mood; d?: number; dark?: boolean; hero?: boolean; whole?: boolean }) {
   const flash = useChangeBlink(!!hero, mood);
   const m = flash ? 'blink' : mood, pose = art.poseOf(m), w = d * 14;
-  const svg = useMemo(() => whole ? art.chiefSvg(pose) : art.headSvg('chief', pose), [pose, whole]);
+  const svg = useMemo(() => whole ? art.chiefSvg(pose, { wave: hero }) : art.headSvg('chief', pose), [pose, whole, hero]);
   return <Ink svg={svg} w={w} h={whole ? w * 1.25 : w} label="Chief" className={`pose-${pose}`} />;
 }
 export function PalArt({ kind, mood = 'idle', d = 4, name }: { kind: art.Kind; mood?: art.Mood; d?: number; name?: string; crisp?: boolean }) {
@@ -506,7 +506,7 @@ export function Composer({ placeholder, onSend, chat, chips }: { placeholder: st
         onFocus={() => { setFocused(true); hear(true, text); }} onBlur={() => { setFocused(false); hear(false, text); }}
         onChange={(e) => change(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(); } }} />
       {chips && <div className="c-bar">
-        <button type="button" className="c-clip" disabled aria-label="Attach a file: not available yet" title="Attaching files isn't available yet"><Icon name="clip" size={18} /></button>
+        <button type="button" className="c-clip" disabled aria-label="Attach a file: not available yet" title="Attaching files isn't available yet"><span className="desk-only"><Icon name="clip" size={18} /></span><span className="phone-only"><Icon name="plus" size={20} /></span></button>
         {chips.slice(0, 2).map((c) => <button type="button" key={c.ask} className="c-chip clamp1" onClick={() => change(c.ask)}>{c.label}</button>)}
       </div>}
       {voice}

@@ -26,7 +26,7 @@ export type Pose = 'listen' | 'work' | 'needs' | 'pleased' | 'rest';
 export const POSES: Pose[] = ['listen', 'work', 'needs', 'pleased', 'rest'];
 export const poseOf = (m: Mood | Pose = 'idle'): Pose =>
   m === 'needs' || m === 'pleased' ? m : m === 'work' ? 'work' : m === 'happy' ? 'pleased' : m === 'rest' ? 'rest' : m === 'ask' || m === 'worried' || m === 'error' ? 'needs' : 'listen';
-type Opts = { vb?: string; floor?: boolean };
+type Opts = { vb?: string; floor?: boolean; wave?: boolean };
 const Z = 'font-family="Instrument Serif, Georgia, serif" font-style="italic"';
 let uid = 0;
 
@@ -45,16 +45,18 @@ export function chiefSvg(mood: Mood | Pose = 'idle', o: Opts = {}) {
   const arm = (d: string) => `<path d="${d}" stroke="${INK}" stroke-width="${lw}" fill="none" stroke-linecap="round"/>`;
   // The bowler never leaves his head: a pose only tilts it about the crown's seat (or pulls it over his eyes to nap).
   // A thin paper edge keeps the black hat whole against a night background.
-  const hatAt = { listen: 'rotate(4 100 76)', work: '', needs: 'rotate(-7 100 78)', pleased: 'rotate(-5 100 78)', rest: 'translate(0 16) rotate(2 100 76)' }[m];
+  // `wave` (Chief's hero only, B1): calling for you, he lifts the bowler off his head by its brim instead of tipping it.
+  const wave = !!o.wave && m === 'needs';
+  const hatAt = wave ? 'translate(14 -34) rotate(-14 100 78)' : { listen: 'rotate(4 100 76)', work: '', needs: 'rotate(-7 100 78)', pleased: 'rotate(-5 100 78)', rest: 'translate(0 16) rotate(2 100 76)' }[m];
   const hat = `<g class="hat"><g transform="${hatAt}"><path d="M50 78Q100 94 150 78" stroke="#fff" stroke-width="9.6" fill="none" stroke-linecap="round"/><path d="M68 77C68 51 82 37 100 37C118 37 132 51 132 77Z" fill="${INK}" stroke="#fff" stroke-width="2.2" stroke-linejoin="round"/><path d="M69 71H131" stroke="${RED}" stroke-width="5"/><path d="M50 78Q100 94 150 78" stroke="${INK}" stroke-width="5.2" fill="none" stroke-linecap="round"/><path d="M80 60C80 52 86 46 93 44" stroke="rgba(255,255,255,.28)" stroke-width="3" fill="none" stroke-linecap="round"/></g></g>`;
   const arms = {
     listen: arm('M54 166C44 184 44 198 48 210') + hand(48, 213) + arm('M146 164C160 160 156 148 132 146') + hand(128, 146),
     work: arm('M54 166C60 184 74 192 88 192') + hand(90, 192) + `<g class="watch"><circle cx="102" cy="196" r="12" fill="#fff" stroke="${INK}" stroke-width="2.8"/><path d="M102 189v7l5 3" stroke="${INK}" stroke-width="2.4" fill="none" stroke-linecap="round"/></g><path d="M114 192C124 186 132 178 134 168" stroke="${INK}" stroke-width="1.6" fill="none" stroke-dasharray="2 3"/>` + arm('M146 166C156 184 156 198 152 210') + hand(152, 213),
-    needs: arm('M54 166C44 184 44 198 48 210') + hand(48, 213) + arm('M146 162C166 146 172 112 160 80') + hand(158, 76),
+    needs: arm('M54 166C44 184 44 198 48 210') + hand(48, 213) + (wave ? arm('M146 162C172 140 178 82 164 42') + hand(163, 38) : arm('M146 162C166 146 172 112 160 80') + hand(158, 76)),
     pleased: arm('M54 166C38 172 30 160 32 148') + hand(32, 144) + arm('M146 166C162 172 170 160 168 148') + hand(168, 144),
     rest: arm('M54 170C70 190 112 190 132 176') + arm('M146 170C130 190 88 190 68 176') + hand(66, 175) + hand(134, 175),
   }[m];
-  const marks = m === 'needs' ? `<path class="cue" d="M178 56l9 -9M186 70l12 -3M170 48l2 -12" stroke="${RED}" stroke-width="3.4" stroke-linecap="round"/>`
+  const marks = m === 'needs' ? `<path class="cue" d="${wave ? 'M180 62l9 -9M186 78l12 -3M176 50l6 -10' : 'M178 56l9 -9M186 70l12 -3M170 48l2 -12'}" stroke="${RED}" stroke-width="3.4" stroke-linecap="round"/>`
     : m === 'rest' ? `<g class="zz"><text x="150" y="62" ${Z} font-size="30" fill="${INK}" opacity=".55">z</text><text x="168" y="40" ${Z} font-size="21" fill="${INK}" opacity=".4">z</text></g>`
     : m === 'work' ? `<path d="M30 96l8 4M26 112h9" stroke="${RED}" stroke-width="3" stroke-linecap="round"/>` : '';
   return `<svg viewBox="${o.vb ?? '0 0 200 250'}" xmlns="http://www.w3.org/2000/svg"><defs><clipPath id="${g}c"><path d="${body}"/></clipPath></defs>`

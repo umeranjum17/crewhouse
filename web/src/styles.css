@@ -1129,3 +1129,25 @@ h1 { font: 400 32px/36px var(--serif); letter-spacing: -.005em; }
   .o-pop .o-profile .o-sh-head h2 { font-size: 34px; line-height: 36px; }
   @keyframes pop { from { opacity: 0; transform: translateY(8px) scale(.98); } }
 }
+
+/* Main599 (B1 phone chat): Chief's hero keeps his line and the faces at the card's foot, no caption under them; the pinned
+   ask has a bare face and one detail line; a tray notice is a quiet line with its helper's face; the composer is one row
+   (+, words, mic, a dark send) on a solid dock, so no thread line shows under it. */
+.line.note:has(.note-by) { display: flex; gap: 8px; align-items: center; color: var(--ink2); font: 400 13.5px/18px var(--ui); }
+.note-by { display: grid; flex: none; }
+.nb-av { flex: none; display: grid; width: 44px; height: 44px; place-items: center; }
+@media (max-width: 899px) {
+  .ch-body { display: flex; flex-direction: column; align-items: flex-start; }
+  .ch-crew { margin-top: auto; }
+  .ch-caption { display: none; }
+  .needs-pin.flat .nb-acts { flex-wrap: nowrap; gap: 6px; }
+  .needs-pin.flat .nb-acts .btn { padding: 9px 12px; white-space: nowrap; }
+  .needs-pin.flat .nb-acts .btn.ghost { padding: 9px 6px; }
+  .home-chat .dock { background: var(--bg); }
+  .home-chat .composer.has-bar { flex-wrap: nowrap; align-items: center; border-radius: 999px; padding: 6px 6px 6px 8px; }
+  .home-chat .composer.has-bar textarea { flex: 1; padding: 9px 0; }
+  .home-chat .c-bar { flex: none; order: -1; }
+  .home-chat .c-chip { display: none; }
+  .home-chat .send:disabled { background: var(--ink); color: var(--solid); transform: none; }
+}
+
