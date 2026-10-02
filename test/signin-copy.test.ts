@@ -5,7 +5,6 @@ import { join } from 'node:path';
 import { build } from 'esbuild';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createElement } from 'react';
-import { tmpdir } from 'node:os';
 
 // Render the real shared sheet (also used by the phone) without making an account request or opening a browser.
 test('the shared sign-in sheet reserves ChatGPT instructions for ChatGPT', async () => {
@@ -18,7 +17,7 @@ test('the shared sign-in sheet reserves ChatGPT instructions for ChatGPT', async
       } }],
     });
     const names = ['ChatGPT', 'Grok', 'GitHub Copilot', 'OpenRouter', 'MiniMax', 'Claude'];
-    for (const phase of ['waiting', 'code', 'busy']) {
+    for (const phase of ['opening', 'waiting', 'code', 'done', 'work', 'busy', 'cancelled', 'expired', 'failed', 'offline']) {
       (globalThis as any).location = { search: `?demo&phase=${phase}` };
       (globalThis as any).document = { body: {} };
       const { SignIn } = await import(`${join(dir, 'flows.mjs')}?${phase}`);
@@ -26,8 +25,9 @@ test('the shared sign-in sheet reserves ChatGPT instructions for ChatGPT', async
         // The demo pin bypasses live requests; each provider is selected via the component's real ai prop.
         const html = renderToStaticMarkup(createElement(SignIn, { me: 1, owner: 'Owner', ai: { key: name === 'ChatGPT' ? 'chatgpt' : name === 'GitHub Copilot' ? 'copilot' : name.toLowerCase(), name }, onReady() {}, onClose() {} }));
         assert.match(html, new RegExp(`Sign in with ${name}`));
-        assert.equal(html.includes('Codex'), phase === 'waiting' && name === 'ChatGPT', `${phase}: ${name} Codex`);
-        assert.equal(html.includes('Device code authorization'), phase === 'code' && name === 'ChatGPT', `${phase}: ${name} device setting`);
+        const words = html.replace(/<[^>]*>/g, '');
+        assert.doesNotMatch(words, /Codex|device code|engine|Settings.*Security|ChatGPT signed in/i, `${phase}: ${name}`);
+        assert.equal(html.includes('Open ChatGPT settings'), phase === 'code' && name === 'ChatGPT');
         if (phase === 'waiting' || phase === 'busy') assert.equal(html.includes('Use a code instead'), name === 'ChatGPT');
         if (phase === 'busy') {
           assert.match(html, /Another sign-in is already in progress/);

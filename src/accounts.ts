@@ -33,7 +33,7 @@ export class Accounts {
   readonly excluded = new Set<string>();
   private rests = new Map<string, number>();
   private views = new Map<string, View>();
-  private running = new Map<string, { paste(text: string): void; cancel(): void; finished: Promise<void> }>();
+  private running = new Map<string, { paste(text: string): void; cancel(): Promise<unknown> | void; finished: Promise<void> }>();
   /** Set by Crew: the person signed in, so waiting work starts now. */
   onSignedIn?: () => void;
 
@@ -95,14 +95,14 @@ export class Accounts {
     });
     this.running.set(account, {
       paste: (t) => handle.paste(t),
-      cancel: () => { handle.cancel(); done(false); this.views.delete(account); },
+      cancel: () => { handle.cancel(); done(false); this.views.delete(account); return handle.done; },
       finished,
     });
     return this.view(account);
   }
   paste(account: string, text: string) { this.running.get(account)?.paste(text); }
 
-  cancel(account: string) { this.running.get(account)?.cancel(); }
+  cancel(account: string) { return this.running.get(account)?.cancel(); }
   async logout(account: string) {
     this.views.delete(account);
     await this.runtime.signOut(account).catch(() => {});

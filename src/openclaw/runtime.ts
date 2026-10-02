@@ -116,7 +116,7 @@ export class OpenClawRuntime implements AgentRuntime {
     return provider ? this.kit.signedIn(ME, provider) : false;
   }
 
-  signIn(account: string, via: 'browser' | 'code', on: (step: SignInStep) => void): { paste(text: string): void; cancel(): void } {
+  signIn(account: string, via: 'browser' | 'code', on: (step: SignInStep) => void): { paste(text: string): void; cancel(): void; done?: Promise<unknown> } {
     if (this.signInRecovery()) {
       let cancelled = false;
       void this.kit.start().then(async () => { if (!cancelled) on({ waiting: false, ...(await this.signedIn(account) ? { done: true } : { error: this.signInRecovery() || 'Please try again.' }) }); })

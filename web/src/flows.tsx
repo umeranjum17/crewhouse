@@ -94,7 +94,10 @@ export function SignIn({ ai = A.AIS[0], tab: first, onReady, onClose }: { ai?: {
   const [cancelled, setCancelled] = useState(false);
   const [keepWork, setKeepWork] = useState(false);
   const tab = useTab(first);
-  const start = (body: { fresh?: boolean; via?: 'code' } = {}) => { setCancelled(false); void api.signIn(ai.key, body).catch(() => {}); };
+  const start = (body: { fresh?: boolean; via?: 'code' } = {}) => { setCancelled(false); void (async () => {
+    if (body.via === 'code') await api.signInCancel(ai.key);
+    await api.signIn(ai.key, body);
+  })().catch(() => {}); };
   const again = (body: { fresh?: boolean } = {}) => { tab.fresh(); start(body); };
   useEffect(() => { if (!pinned) start(); }, []);
   const live: Phase = offline ? 'offline' : cancelled ? 'cancelled' : g.state === 'ready' ? (g.work && !keepWork ? 'work' : 'done')
@@ -116,7 +119,7 @@ export function SignIn({ ai = A.AIS[0], tab: first, onReady, onClose }: { ai?: {
       {phase === 'opening' && <><h2>Opening {name}…</h2><div className="dotdot" aria-hidden><i /><i /><i /></div><button className="link" onClick={cancel}>Cancel</button></>}
       {phase === 'waiting' && <>
         <h2>Say yes on {name}'s page</h2>
-        <p className="mute">{ai.key === 'chatgpt' ? <>Pick your account, then tap <b>Continue</b>. If {name} mentions <b>“Codex”</b>, that's the part your helpers use.</> : <>Follow {name}'s instructions on its page.</>} Come back here after; this moves on by itself.</p>
+        <p className="mute">{ai.key === 'chatgpt' ? <>Pick your account, then tap <b>Continue</b>.</> : <>Follow {name}'s instructions on its page.</>} Come back here after; this moves on by itself.</p>
         {!tab.open() && <a className="btn go big" href={g.page || '#'} target="_blank" rel="noreferrer">Open {name} ↗</a>}
         <Pill tone="wait" live>Waiting for {name}…</Pill>
         {ai.key === 'chatgpt' && <button className="link" onClick={() => start({ via: 'code' })}>Having trouble? Use a code instead</button>}
@@ -127,7 +130,7 @@ export function SignIn({ ai = A.AIS[0], tab: first, onReady, onClose }: { ai?: {
         <p className="mute">Type this on {name}'s page instead. Come back after; this moves on by itself.</p>
         <button className="code" onClick={() => navigator.clipboard?.writeText(code).then(() => toast('Code copied'), () => {})} aria-label={`Code ${code.split('').join(' ')}. Tap to copy.`}>{code}<span>Tap to copy</span></button>
         {page && <a className="btn go big" href={page} target="_blank" rel="noreferrer">Open {name} ↗</a>}
-        {ai.key === 'chatgpt' && <p className="mute small">If {name} says <b>device code sign-in is off</b>: in {name} open Settings → Security, turn on <b>Device code authorization</b>, then tap Open {name} again. ({name} only says this after you sign in.)</p>}
+        {ai.key === 'chatgpt' && <a className="link" href="https://chatgpt.com/#settings/Security" target="_blank" rel="noreferrer">Open {name} settings</a>}
         <button className="link" onClick={cancel}>Cancel</button>
       </>}
       {phase === 'done' && <><h2>You're signed in!</h2><p>The crew thinks with your own {name} now. Your password stayed with {name}.</p>
@@ -150,14 +153,15 @@ export function SignIn({ ai = A.AIS[0], tab: first, onReady, onClose }: { ai?: {
 }
 
 /**
- * In a chat, right under Chief's line, while the crew can't think yet: the sign-in (with the one word ChatGPT's page
- * will use), or, for a plan without helpers, the ways forward. Taps: Sign in (1), her account (2), Continue (3).
+ * In a chat, right under Chief's line, while the crew can't think yet: the sign-in,
+ * or, for a plan without helpers, the ways forward. Taps: Sign in (1), her account (2), Continue (3).
  */
 /** The sign-in card, in the ask-card anatomy (§4.11) with the ChatGPT button as primary. */
 export function AccountCard({ g, inChat, onReady }: { g: ReturnType<typeof A.account>; inChat?: boolean; onReady: () => void }) {
   const [signing, setSigning] = useState<Window | null | false>(sheet === 'signin' ? null : false);
   const [noAccount, setNoAccount] = useState(false);
   const ai = A.AIS[0];
+  if (g.state !== 'signed-out' && !g.notIncluded && signing === false) return null;
   if (g.notIncluded) return (
     <div className="card ask">
       <div className="ask-head"><Face who="chief" size={28} /><div className="grow"><b>Chief</b><div className="ask-status"><i />Needs a bigger plan</div></div></div>
@@ -172,7 +176,7 @@ export function AccountCard({ g, inChat, onReady }: { g: ReturnType<typeof A.acc
   return (
     <div className="card ask">
       <div className="ask-head"><Face who="chief" size={28} /><div className="grow"><b>Chief</b><div className="ask-status"><i />Needs a sign-in</div></div></div>
-      <p className="ask-words">{g.recovery || <>{ai.name} asks you once. If it mentions <b>"Codex"</b>, that's the part your helpers use.</>}</p>
+      <p className="ask-words">{g.recovery || <>Say yes once on {ai.name}'s page. Your job starts when you come back.</>}</p>
       <div className="btns">
         <button className="btn go big" onClick={() => setSigning(openTab())}><AiMark ai={ai} size={24} />Sign in with {ai.name}</button>
         <button className="link" onClick={() => { setNoAccount(true); window.open('https://chatgpt.com/', '_blank'); }}>No {ai.name} account? Make a free one</button>
