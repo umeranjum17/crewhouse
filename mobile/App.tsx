@@ -111,11 +111,12 @@ function Dots({ rows, pal, d, crisp = false }: { rows: art.Bitmap; pal: art.Pale
   );
 }
 /** Chief or a helper in B1 line ink, head and shoulders (`whole` for all of him): the PNGs scripts/icons.mjs renders. */
-function Ink({ who, mood = 'idle', size, whole }: { who: art.Kind | 'chief'; mood?: art.Mood; size: number; whole?: boolean }) {
-  return <Image source={PALS[`${whole ? '' : 'head-'}${who}-${art.poseOf(mood)}`]} style={{ width: size, height: whole ? size * 1.25 : size }} accessibilityIgnoresInvertColors />;
+function Ink({ who, mood = 'idle', size, whole, wave }: { who: art.Kind | 'chief'; mood?: art.Mood; size: number; whole?: boolean; wave?: boolean }) {
+  const pose = art.poseOf(mood);
+  return <Image source={PALS[wave && whole && who === 'chief' && pose === 'needs' ? 'chief-wave' : `${whole ? '' : 'head-'}${who}-${pose}`]} style={{ width: size, height: whole ? size * 1.25 : size }} accessibilityIgnoresInvertColors />;
 }
-function ChiefArt({ mood = 'idle', size, whole }: { mood?: art.Mood; size: number; whole?: boolean }) {
-  return <Ink who="chief" mood={mood} size={size} whole={whole} />;
+function ChiefArt({ mood = 'idle', size, whole, wave }: { mood?: art.Mood; size: number; whole?: boolean; wave?: boolean }) {
+  return <Ink who="chief" mood={mood} size={size} whole={whole} wave={wave} />;
 }
 /** A round face: Chief or a pal, with a ring when it's working or needs you. */
 function Face({ who, size = 44, mood }: { who: A.Helper | 'chief' | { kind: art.Kind; name: string; mood?: art.Mood }; size?: number; mood?: art.Mood }) {
@@ -1177,10 +1178,9 @@ function ChiefHero({ live, state, go }: { live: A.OfficeView; state: Json; go: C
   const t = useLook();
   const narrow = useWindowDimensions().width < 380;
   const crew = A.roster(live.crew);
-  // ponytail: the phone has no lifted-hat ("wave") PNG yet, so calling for you he shows his ask pose (hat tipped).
   return (
     <View style={[s.askCard, { flexDirection: 'row', minHeight: narrow ? 180 : 220, overflow: 'hidden', backgroundColor: t.solid, borderColor: t.line2, borderWidth: 1, borderRadius: 24 }]} accessibilityLabel="Chief">
-      <View style={{ width: narrow ? 104 : 150, justifyContent: 'flex-end', marginLeft: narrow ? -8 : 0 }}><ChiefArt mood={live.chief.mood} size={narrow ? 120 : 160} whole /></View>
+      <View style={{ width: narrow ? 104 : 150, justifyContent: 'flex-end', marginLeft: narrow ? -8 : 0 }}><ChiefArt mood={live.chief.mood} size={narrow ? 120 : 160} whole wave /></View>
       <View style={{ flex: 1, minWidth: 0, gap: 10, paddingTop: 18, paddingRight: 12, paddingBottom: 14, paddingLeft: 4 }}>
         <T style={[s.serif, { fontSize: 40, lineHeight: 44 }]}>Chief <Text style={[s.small, { fontFamily: 'Inter', color: t.mute }]}>Studio Chief</Text></T>
         <View style={{ alignSelf: 'flex-start', borderWidth: 1, borderColor: t.line2, borderRadius: 16, paddingVertical: 10, paddingHorizontal: 14 }}><T>{A.chiefSaid(state) || live.chief.line}</T></View>

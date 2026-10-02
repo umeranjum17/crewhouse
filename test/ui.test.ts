@@ -571,6 +571,7 @@ test('the phone mascot set matches art.ts: everyone whole and as a head, in ever
     files.set(`${who}-${p}.png`, who === 'chief' ? [180, 225] : [144, 180]);
     files.set(`head-${who}-${p}.png`, [168, 168]);
   }
+  files.set('chief-wave.png', [180, 225]);   // the hero's lifted hat
   const dir = join(import.meta.dirname, '..', 'mobile', 'assets', 'pals');
   assert.deepEqual(new Set(readdirSync(dir).filter((f) => f.endsWith('.png'))), new Set(files.keys()), 'a pose without a picture, or a picture without a pose');
   for (const [f, [w, h]] of files) {

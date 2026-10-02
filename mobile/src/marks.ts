@@ -35,6 +35,7 @@ export const PALS: Record<string, number> = {
   'pip-work': require('../assets/pals/pip-work.png'),
   'head-pip-work': require('../assets/pals/head-pip-work.png'),
   'chief-needs': require('../assets/pals/chief-needs.png'),
+  'chief-wave': require('../assets/pals/chief-wave.png'),
   'head-chief-needs': require('../assets/pals/head-chief-needs.png'),
   'reel-needs': require('../assets/pals/reel-needs.png'),
   'head-reel-needs': require('../assets/pals/head-reel-needs.png'),

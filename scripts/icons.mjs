@@ -80,6 +80,7 @@ for (const p of POSES) {
   sprite(`head-chief-${p}`, headSvg('chief', p), 168, 168);
   for (const kind of Object.keys(PALS)) { sprite(`${kind}-${p}`, beanSvg(kind, p), 144, 180); sprite(`head-${kind}-${p}`, headSvg(kind, p), 168, 168); }
 }
+sprite('chief-wave', chiefSvg('needs', { wave: true }), 180, 225);   // the hero's lifted hat (ChiefHero)
 console.log('sprites written into mobile/assets/pals/');
 // The phone's on-screen bubble (@byokit/overlay, mobile/src/bubble.ts): Chief's head on a paper disc, one still per
 // mood he can wear on Home; `ask` wears the red dot. 168 px is the bubble's 56 dp at the densest screens. The glyph is
