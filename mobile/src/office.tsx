@@ -107,7 +107,7 @@ export function Office({ view, night, offline, width, onChief, onDesk, onAsk, on
               {m.second ? <View style={{ filter: [{ hueRotate: '48deg' }] }}>{img}</View> : img}
             </motion.Hop>
             {(() => { const n = view.done.filter((d) => d.helper === m.id).length, from = fromOf(m.id, n, x);
-              return <motion.Fly beat={n} dx={u(318 - from)} dy={u(36)} reduce={reduce} awake={awake}
+              return <motion.Fly beat={n} dx={u(318 - from)} dy={u(28)} sink={u(10)} reduce={reduce} awake={awake}
               style={{ position: 'absolute', left: u(24 + from - x), top: u(40), width: u(14), height: u(18), backgroundColor: '#fff', borderWidth: 1.5, borderColor: ink, borderRadius: 2 }}><View /></motion.Fly>; })()}
           </Pressable>;
         })}

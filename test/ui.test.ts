@@ -1886,16 +1886,20 @@ test('J5 repairs stay in: the night look paints first, the job row is never cut 
   assert.match(office, /new ResizeObserver\(\(\[en\]\) => \{ setWide\(en\.contentRect\.width >= 560\); desks\.current = spritesIn\(el\); \}\)/);
   assert.match(office, /useEffect\(\(\) => \{ desks\.current = spritesIn\(box\.current\); \}, \[wide\]\);/);
   assert.match(office, /querySelector\('\.o-traybox > path'\)/); assert.doesNotMatch(office, /querySelector\('\.o-tray rect'\)/);
-  assert.match(office, /\{ opacity: 1, offset: \.9 \}/);
-  // 147/148: a crowded row packs (compact desks, the tray at the end) before it scales, all five standing; the page is
+  // 152: the page reaches the mouth whole (offset .72), settles in, and fades only after .88; the box is drawn in front.
+  assert.match(office, /\{ transform: at\(0, 1\), opacity: 1, offset: \.72 \}/); assert.match(office, /\{ transform: at\(\.35, \.92\), opacity: 1, offset: \.88 \}/);
+  assert.ok(office.indexOf('<TrayBox x={trayX}') > office.indexOf('{order.map((m) => m === \'chief\''), 'the tray box is drawn after (in front of) every figure');
+  assert.match(office, /left=\{bubble\} y=\{Y\(G - 64\)\}/, 'the Tray bubble sits low over its box, placed clear of every ink');
+  assert.doesNotMatch(office, /HIGH|packed\(/, 'no raised, detached bubble');
+  // 147/148: a crowded row packs its desks (compact) before it scales, all five standing; the page is
   // drawn at the figures' size on both sides.
-  assert.match(office, /return full\.s < 1 \? packed\(order, sts\) : full;/, 'a crowded row packs before it scales');
+  assert.match(office, /return full\.s < 1 \? layAt\(order, sts, trayText, true\) : full;/, 'a crowded row packs before it scales');
   assert.match(office, /needs: \[26, 28\], monitor: \[26, 28\], failed: \[26, 28\]/); assert.match(office, /data-scale=\{s\.toFixed\(3\)\}/);
   assert.doesNotMatch(office, /MOCK|floorPlan\(crew, /, 'no seat cap below five for size');
   assert.match(office, /getScreenCTM\(\)\?\.a \?\? 1\) \* Number\(room\.dataset\.scale \?\? 1\), pw = 14 \* k, ph = 18 \* k/);
   assert.match(read('mobile', 'src', 'office.tsx'), /width: u\(14\), height: u\(18\)/);
-  assert.match(read('mobile', 'src', 'office.tsx'), /dx=\{u\(318 - from\)\} dy=\{u\(36\)\}/, 'the phone page drops into its floor box');
-  assert.match(read('mobile', 'src', 'motion.ts'), /inputRange: \[0, 0\.9, 1\], outputRange: \[1, 1, 0\]/);
+  assert.match(read('mobile', 'src', 'office.tsx'), /dx=\{u\(318 - from\)\} dy=\{u\(28\)\} sink=\{u\(10\)\}/, 'the phone page drops into its floor box');
+  assert.match(read('mobile', 'src', 'motion.ts'), /inputRange: \[0, 0\.88, 1\], outputRange: \[1, 1, 0\]/);
   // The phone's page flies on the same truth, the helper's done count, from where they stood before the re-lay.
   assert.match(read('mobile', 'src', 'office.tsx'), /const n = view\.done\.filter\(\(d\) => d\.helper === m\.id\)\.length, from = fromOf\(m\.id, n, x\);\s*return <motion\.Fly beat=\{n\}/);
   // Scribe's pen is held in the left hand: the Tray bubble floats over the right of that desk.

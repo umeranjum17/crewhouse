@@ -101,7 +101,7 @@ export function Office({ state, live, night }: { state: Json; live: A.OfficeView
   const waits = plan.seats.filter(A.waitsOnYou).length;
   const order: (A.OfficeMember | 'chief')[] = [...plan.seats.slice(0, waits), 'chief', ...plan.seats.slice(waits)];
   const trayText = `Tray · ${live.counts.done}`;
-  const { spots, s, X, Y, tight } = lay(order, live, trayText);
+  const { spots, s, X, Y, tight, bubble } = lay(order, live, trayText);
   const spotOf = (m: A.OfficeMember | 'chief') => spots.find((p) => p.m === m)!;
   const trayAt = spots.find((p) => p.tray)!, trayX = trayAt.st === 'done' ? trayAt.x - 20 : trayAt.x;
   // One accent pill, over whoever's question matters most (money, then your name, then the rest; Chief's own last).
@@ -127,14 +127,14 @@ export function Office({ state, live, night }: { state: Json; live: A.OfficeView
           </defs>
           <Scene id={id} wide={wide} />
           <g transform={`translate(${X(0)} ${G}) scale(${s}) translate(0 ${-G})`}>
-            <TrayBox x={trayX} n={live.counts.done} />
             {order.map((m) => m === 'chief'
               ? <Seat key="chief" spot={spotOf(m)} id={id} kind="chief" pose={art.poseOf(live.chief.mood)} seat={chiefAsk ? 'needs' : live.chief.mood === 'work' ? 'working' : 'free'} beat={live.chief.mood}
                   label={`Chief: ${live.chief.line}`} onOpen={() => setProfile(true)} />
               : <Seat key={m.id} spot={spotOf(m)} id={id} kind={m.kind} pose={art.poseOf(m.mood)} seat={A.seatOf(m)} second={m.second} dataId={m.id} beat={`${m.ring}|${m.mood}|${m.things.length}|${m.ask?.id ?? ''}`}
                   label={said(m) + (m.things.length ? `, made ${m.things.map((f) => KIND_WORDS[f.kind]).join(', ')}` : '')} onOpen={() => setOpen(m.id)} />)}
+            <TrayBox x={trayX} n={live.counts.done} />   {/* in front of the figures, as the mock draws it: never hidden by a desk or a body */}
           </g>
-          <Tag key={live.counts.done} x={tight ? Math.max(X(trayX), 230 + (trayText.length * 6.6 + 22) / 2) : X(trayX)} y={tight ? HIGH : Y(G - 64)} text={trayText} tail cls={`o-tray${trayWas.current !== undefined && trayWas.current !== live.counts.done ? ' bump' : ''}`} href="#/things" label={`Your tray: ${live.counts.done} done today`} />
+          <Tag key={live.counts.done} x={X(trayX)} left={bubble} y={Y(G - 64)} text={trayText} tail cls={`o-tray${trayWas.current !== undefined && trayWas.current !== live.counts.done ? ' bump' : ''}`} href="#/things" label={`Your tray: ${live.counts.done} done today`} />
           {pill && <Tag x={X(spotOf(pill.m).x)} y={pill.m === 'chief' ? Y(G - 80.8) - 14 : Y(102)} text={A.SEAT_WORDS.needs} hot href={pill.href} label={pill.label} />}
         </svg>
         <div className="o-strip" style={{ ['--n' as string]: order.length + (more ? 1 : 0) }}>
@@ -193,32 +193,25 @@ const stationOf = (c: A.OfficeMember, v: A.OfficeView): Station => {
 };
 const TALL: Station[] = ['chief', 'monitor', 'failed', 'needs'];
 type Spot = { m: A.OfficeMember | 'chief' | 'tray'; st: Station; x: number; tray: boolean; tight?: boolean };
-const G = 196, W = 346, HIGH = 78;   // the floor line, the stage's width, and a crowded row's Tray bubble: above every head and pill, below the clock, right of the window
+const G = 196, W = 346;
+/** Ink at the Tray bubble's height (y 115 to 150), left and right of where a station stands: Chief's hat, arm and cue, a
+ *  waiting note and flag, a screen, Scribe's pen, Pip's z's. The bubble never covers any of it; the low finished helper and
+ *  a standing one may sit under it, as in the mock. */
+const INK: Partial<Record<Station, [number, number]>> = { chief: [-31, 44], needs: [-40, 31.5], monitor: [16, 50], failed: [16, 50], writing: [-21, -12], rest: [-2, 13] };
+const INK_TIGHT: typeof INK = { ...INK, needs: [-11, 31.5], monitor: [-17, 17], failed: [-17, 17] };
 /** Left to right in the given order, the tray just before whoever finished (or before the resting); the row scales down
  *  about the floor line to fit, and centres when it is short. The Tray bubble never sits over a figure or past the
- *  room's edge: the tray keeps room for it beside anyone reaching its height (Chief's hat and cane reach 40 to his
- *  right, a screen, a raised pen and the pill above it) and at the room's end; it floats over a low neighbour as in the
- *  mock (a writer, the finished, the resting) while the row is at 3/4 size or more, where it clears their heads.
+ *  room's edge: the tray keeps room for it beside a tall neighbour (INK: Chief's cue, a waiting flag, a screen) and at the
+ *  room's ends; it floats over a low neighbour as in the mock, and bubbleAt slides it clear of ink further off.
  *  ponytail: four passes for that room under scaling, exact enough for six stations. */
 function lay(order: (A.OfficeMember | 'chief')[], v: A.OfficeView, trayText: string) {
   const sts = order.map((m) => (m === 'chief' ? 'chief' : stationOf(m, v)) as Station);
-  const full = layAt(order, sts, trayText);
-  return full.s < 1 ? packed(order, sts) : full;
+  const full = layAt(order, sts, trayText, false);
+  // A row too long for the stage at the mock's size packs its desks (TIGHT) before anyone shrinks; only the rest scales.
+  return full.s < 1 ? layAt(order, sts, trayText, true) : full;
 }
-/** A row too long for the stage at the mock's size first gives back what is not ink, before anyone shrinks: compact desks
- *  (TIGHT), and the tray on its own at the row's end (as the phone's corner tray) with its bubble raised to HIGH, so it
- *  reserves only the box (34 beside Chief's cane). Only what still does not fit scales. */
-function packed(order: (A.OfficeMember | 'chief')[], sts: Station[]) {
-  let cur = 0;
-  const spots: Spot[] = [...order.map((m, i) => ({ m, st: sts[i], tray: false })), { m: 'tray' as const, st: 'tray' as Station, tray: true }].map((it, i, all) => {
-    const [l, r] = it.tray ? [all[i - 1]?.st === 'chief' ? 34 : 24, 20] : TIGHT[it.st];
-    const x = cur + l; cur = x + r;
-    return { ...it, x, tight: true };
-  });
-  const s = Math.min(1, W / cur), x0 = 180 - (cur * s) / 2;
-  return { spots, s, x0, X: (x: number) => x0 + x * s, Y: (y: number) => G + (y - G) * s, tight: true };
-}
-function layAt(order: (A.OfficeMember | 'chief')[], sts: Station[], trayText: string) {
+function layAt(order: (A.OfficeMember | 'chief')[], sts: Station[], trayText: string, tight: boolean) {
+  const pad = tight ? TIGHT : PAD, ink = tight ? INK_TIGHT : INK;
   let at = sts.indexOf('done');
   const items: { m: Spot['m']; st: Station; tray: boolean }[] = order.map((m, i) => ({ m, st: sts[i], tray: i === at }));
   if (at < 0) { const r = sts.indexOf('rest'); items.splice(r < 0 ? items.length : r, 0, { m: 'tray', st: 'tray', tray: true }); at = r < 0 ? items.length - 1 : r; }
@@ -226,20 +219,35 @@ function layAt(order: (A.OfficeMember | 'chief')[], sts: Station[], trayText: st
   let s = 1, spots: Spot[] = [], total = 0;
   for (let pass = 0; pass < 4; pass++) {
     let cur = 0;
-    spots = items.map((it, i) => {
-      let [l, r] = PAD[it.st];
-      // The bubble is centred over the tray, 20 left of a done figure; its half plus a gap, unscaled, clears each neighbour.
-      const b = (half + 4) / s, dx = it.st === 'done' ? 20 : 0;
-      const tall = (n?: { st: Station }) => !n || s < 0.75 || TALL.includes(n.st);
-      if (it.tray && tall(items[i - 1])) l = Math.max(l, (items[i - 1]?.st === 'chief' ? 14 : 0) + dx + b);
-      if (it.tray && tall(items[i + 1])) r = Math.max(r, b - dx);
+    spots = [];
+    items.forEach((it, i) => {
+      let [l, r] = pad[it.st];
+      // The bubble is centred over the tray box, 20 left of a done figure; its half plus a gap, unscaled, clears the ink
+      // of a tall neighbour on either side (and the room's ends); a low one may sit under it.
+      const b = (half + 4) / s, dx = it.st === 'done' ? 20 : 0, p = spots[i - 1], q = items[i + 1];
+      const tall = (n?: { st: Station }) => n && TALL.includes(n.st) ? ink[n.st] : undefined;
+      if (it.tray) {
+        const pi = tall(p), qi = tall(q);
+        if (!p) l = Math.max(l, dx + b); else if (pi) l = Math.max(l, p.x + pi[1] + dx + b - cur);
+        if (!q) r = Math.max(r, b - dx); else if (qi) r = Math.max(r, b - dx - pad[q.st][0] - qi[0]);
+      }
       const x = cur + l; cur = x + r;
-      return { ...it, x };
+      spots.push({ ...it, x, tight });
     });
     total = cur; s = Math.min(1, W / total);
   }
-  const x0 = 180 - (total * s) / 2;   // the crew centred under the window (x 180), as the mock
-  return { spots, s, x0, X: (x: number) => x0 + x * s, Y: (y: number) => G + (y - G) * s, tight: false };
+  const x0 = 180 - (total * s) / 2, X = (x: number) => x0 + x * s;   // the crew centred under the window (x 180), as the mock
+  return { spots, s, x0, X, Y: (y: number) => G + (y - G) * s, tight, bubble: bubbleAt(spots, X, ink, half * 2) };
+}
+/** The Tray bubble's left edge: as near centred over the box as clears every ink in the row (a neighbour two stations off,
+ *  Chief's cue past a low writer, too), its tail always on the box and the bubble inside the room. */
+function bubbleAt(spots: Spot[], X: (x: number) => number, ink: typeof INK, w: number) {
+  const t = spots.find((p) => p.tray)!, tx = X(t.st === 'done' ? t.x - 20 : t.x);
+  const blocks = spots.flatMap((p) => { const k = ink[p.st]; return k ? [[X(p.x + k[0]) - 4, X(p.x + k[1]) + 4]] : []; });
+  const lo = Math.max(4, tx + 13 - w), hi = Math.min(356 - w, tx - 12), ideal = Math.min(hi, Math.max(lo, tx - w / 2));
+  const free = (L: number) => blocks.every(([a, b]) => L + w <= a || L >= b);
+  return [ideal, ...blocks.flatMap(([a, b]) => [b, a - w])].filter((L) => L >= lo && L <= hi && free(L))
+    .sort((p, q) => Math.abs(p - ideal) - Math.abs(q - ideal))[0] ?? ideal;
 }
 
 /** A bean on the floor, feet at y: front on (two eyes, or shut asleep), or side on facing their work (one eye, a nose
@@ -330,9 +338,9 @@ function TrayBox({ x, n }: { x: number; n: number }) {
 }
 
 /** A label in the room: the accent pill for what needs you, or a white speech bubble with a tail. */
-function Tag({ x, y, text, hot, tail, cls = '', href, label }: { x: number; y: number; text: string; hot?: boolean; tail?: boolean; cls?: string; href: string; label: string }) {
+function Tag({ x, y, left: at, text, hot, tail, cls = '', href, label }: { x: number; y: number; left?: number; text: string; hot?: boolean; tail?: boolean; cls?: string; href: string; label: string }) {
   const w = text.length * 6.6 + 22, ink = 'var(--r-edge)';
-  const left = Math.max(4, Math.min(x - w / 2, 356 - w));
+  const left = at ?? Math.max(4, Math.min(x - w / 2, 356 - w));
   return <a className={`o-tag ${hot ? 'o-pill' : ''} ${cls}`} href={href} aria-label={label}>
     {tail && <path d={`M${x - 4} ${y + 10}l2 8 7-8`} fill="var(--solid)" stroke={ink} strokeWidth="1.3" strokeLinejoin="round" />}
     <rect x={left} y={y - 11} width={w} height="22" rx="11" fill={hot ? '#F0482A' : 'var(--solid)'} stroke={hot ? 'none' : ink} strokeWidth="1.3" />
@@ -347,9 +355,9 @@ function handOff(room: HTMLElement | null, ids: string[], desks: Map<string, { x
   const tray = room?.querySelector('.o-traybox > path');   // the box itself, not the page already in it
   if (!room || !tray || reduced()) return;
   // The page is drawn at the figures' size (14x18 room units at the row's scale, as at 390 where it reads with the
-  // beans), and ends centred on the box's mouth, its lower part inside, so it reads as dropped in.
+  // beans). It reaches the box's mouth whole (its lower quarter inside), settles in, and only then fades as it drops.
   const k = ((room.querySelector('.o-art') as SVGSVGElement).getScreenCTM()?.a ?? 1) * Number(room.dataset.scale ?? 1), pw = 14 * k, ph = 18 * k;
-  const t = tray.getBoundingClientRect(), base = room.getBoundingClientRect(), to = { x: t.left - base.left + t.width / 2 - pw / 2, y: t.top - base.top - ph / 2 - k };
+  const t = tray.getBoundingClientRect(), base = room.getBoundingClientRect(), to = { x: t.left - base.left + t.width / 2 - pw / 2, y: t.top - base.top - ph * 0.75 };
   for (const id of new Set(ids)) {
     const from = desks.get(id);
     if (!from) continue;
@@ -359,7 +367,9 @@ function handOff(room: HTMLElement | null, ids: string[], desks: Map<string, { x
     const x = from.x - pw / 2;   // centred over the helper's head, where they stood
     Object.assign(page.style, { left: `${x}px`, top: `${from.y}px`, width: `${pw}px`, height: `${ph}px` });
     room.appendChild(page);
-    page.animate([{ transform: 'none', opacity: 1 }, { opacity: 1, offset: .9 }, { transform: `translate(${to.x - x}px, ${to.y - from.y}px) scale(.8) rotate(8deg)`, opacity: 0 }], { duration: 1300, easing: 'ease-in-out' }).finished.finally(() => page.remove());
+    const at = (drop: number, size: number) => `translate(${to.x - x}px, ${to.y - from.y + ph * drop}px) rotate(8deg) scale(${size})`;
+    page.animate([{ transform: 'none', opacity: 1, easing: 'ease-in-out' }, { transform: at(0, 1), opacity: 1, offset: .72 },   // at the mouth, whole
+      { transform: at(.35, .92), opacity: 1, offset: .88 }, { transform: at(.7, .85), opacity: 0 }], { duration: 1700 }).finished.finally(() => page.remove());
   }
 }
 /** Where each helper stands in the room now, relative to the room's box: the hand-off's start next time. */

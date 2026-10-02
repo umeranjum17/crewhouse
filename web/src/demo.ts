@@ -435,7 +435,7 @@ if (variant.startsWith('job')) pages.pip.job = { does: 'Keep Umer’s calendar i
 // the wheel back — the give-back sheet lists the tabs crewd read itself, and Details lists what it is signed in to.
 // ?demo=b1: the household the B1 mocks draw — Scout needs you on a $412 flight, Reel and Scribe working, Tracer's
 // dinner list landed today, Pip resting until 3 pm. The M5 side-by-sides compare against it.
-if (variant === 'b1' || variant === 'b1handoff') {
+if (variant === 'b1' || variant === 'b1handoff' || variant === 'b1after') {
   const b = (id: string) => bots.find((x) => x.id === id)!;
   Object.assign(b('scout'), { task: task(42, 'scout', 'Book Friday’s flight to Lahore?', 'working'), step: { kind: 'task.progress', at: now - min, data: { text: 'Waiting for your yes' } } });
   Object.assign(b('reel'), { task: task(41, 'reel', "Mum's birthday video", 'working'), step: { kind: 'task.progress', at: now - 2 * min, data: { text: 'Picking the music' } } });
@@ -473,18 +473,21 @@ const accounts = AIS.map((ai) => ({ account: ai.key, name: ai.name,
 
 // ?demo=handoff: Reel finishes while you watch. 4 s after the page opens the snapshot changes and the two events
 // crewd would send land through the live path, so the room's hand-off, the tray and the feed all move as they would.
-// ?demo=b1handoff is the same finish in the B1 household (Reel working on the same job, Tracer's list already in).
+// ?demo=b1handoff is the same finish in the B1 household (Reel working on the same job, Tracer's list already in);
+// ?demo=after and ?demo=b1after open on the room just after it, for the still checks.
+const finish = () => {
+  const done = task(41, 'reel', "Mum's birthday video", 'done', { updated_at: Date.now(), result: 'A one-minute video for Mum, with the piano song and her title.', files: ['files/happy-birthday-first-cut.mp4'] });
+  Object.assign(bots.find((b) => b.id === 'reel')!, { task: null, step: undefined });
+  state.tasks.unshift(done);
+  (state as Json).asks = state.asks.filter((a: Json) => a.bot !== 'reel');
+  const heard = [ev(14, 0, 'file.delivered', 'reel', { task: 41, path: done.files[0] }), ev(15, 0, 'task.done', 'reel', { task: 41, title: done.title, result: done.result, files: done.files })];
+  events.push(...heard);
+  return heard;
+};
+if (variant === 'after' || variant === 'b1after') finish();
 export function demoLive(hear: (e: Json) => void) {
   if (variant !== 'handoff' && variant !== 'b1handoff') return () => {};
-  const t = setTimeout(() => {
-    const done = task(41, 'reel', "Mum's birthday video", 'done', { updated_at: Date.now(), result: 'A one-minute video for Mum, with the piano song and her title.', files: ['files/happy-birthday-first-cut.mp4'] });
-    Object.assign(bots.find((b) => b.id === 'reel')!, { task: null, step: undefined });
-    state.tasks.unshift(done);
-    (state as Json).asks = state.asks.filter((a: Json) => a.bot !== 'reel');
-    const heard = [ev(14, 0, 'file.delivered', 'reel', { task: 41, path: done.files[0] }), ev(15, 0, 'task.done', 'reel', { task: 41, title: done.title, result: done.result, files: done.files })];
-    events.push(...heard);
-    heard.forEach(hear);
-  }, 4000);
+  const t = setTimeout(() => finish().forEach(hear), 4000);
   return () => clearTimeout(t);
 }
 

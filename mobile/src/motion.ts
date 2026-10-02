@@ -146,9 +146,13 @@ export function Note({ reduce, awake, style, children }: { reduce: boolean; awak
 
 /** Done hand-off: a page travels `dx`,`dy` points (desk into the tray box), whole until it lands, once when `beat` changes, then is gone. Reduce Motion
  *  and the background skip the journey: the tray's count is the end state. */
-export function Fly({ beat, dx, dy, reduce, awake, style, children }: { beat: unknown; dx: number; dy: number; reduce: boolean; awake: boolean; style?: StyleProp<ViewStyle>; children: ReactNode }) {
+/** The done page: it reaches the box's mouth (dx, dy) whole by 72%, settles in by `sink`, and fades only after 88%. */
+export function Fly({ beat, dx, dy, sink, reduce, awake, style, children }: { beat: unknown; dx: number; dy: number; sink: number; reduce: boolean; awake: boolean; style?: StyleProp<ViewStyle>; children: ReactNode }) {
   const [v] = useState(() => new Animated.Value(1));
-  useOnBeat(beat, reduce || !awake, () => v.setValue(1), () => { v.setValue(0); return Animated.timing(v, { toValue: 1, duration: 1300, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }); });
-  return createElement(Animated.View, { pointerEvents: 'none', style: [style, { opacity: v.interpolate({ inputRange: [0, 0.9, 1], outputRange: [1, 1, 0] }),
-    transform: [{ translateX: v.interpolate({ inputRange: [0, 1], outputRange: [0, dx] }) }, { translateY: v.interpolate({ inputRange: [0, 1], outputRange: [0, dy] }) }, { scale: v.interpolate({ inputRange: [0, 1], outputRange: [1, 0.7] }) }] }] }, children);
+  useOnBeat(beat, reduce || !awake, () => v.setValue(1), () => { v.setValue(0); return Animated.timing(v, { toValue: 1, duration: 1700, easing: Easing.linear, useNativeDriver: true }); });
+  const go = Easing.inOut(Easing.cubic);
+  return createElement(Animated.View, { pointerEvents: 'none', style: [style, { opacity: v.interpolate({ inputRange: [0, 0.88, 1], outputRange: [1, 1, 0] }),
+    transform: [{ translateX: v.interpolate({ inputRange: [0, 0.72, 1], outputRange: [0, dx, dx], easing: go }) },
+      { translateY: v.interpolate({ inputRange: [0, 0.72, 0.88, 1], outputRange: [0, dy, dy + sink / 2, dy + sink], easing: go }) },
+      { scale: v.interpolate({ inputRange: [0, 0.72, 1], outputRange: [1, 1, 0.85] }) }] }] }, children);
 }
