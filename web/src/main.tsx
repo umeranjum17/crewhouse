@@ -155,10 +155,13 @@ function Stuck({ h, refresh }: { h: A.Helper; refresh: () => void }) {
 
 /** The phone's chats, with Chief and the crew pinned before the recent helpers. */
 function Chats({ state, refresh, desk }: { state: Json; refresh: () => void; desk?: boolean }) {
-  const crew = A.crew(state);
+  const crew = A.crew(state), list = A.chats(state);
+  // The desk feed shows the two most recent (B1), and any helper gone quiet, so Stuck's choices never hide.
+  const [all, setAll] = useState(false);
+  const shown = desk && !all ? list.filter((c, i) => i < 2 || (c.who !== 'chief' && c.who.stuckFor)) : list;
   return <section className={`home-section${desk ? '' : ' phone-only'}`} aria-label="Chats">
-    <div className="label">Chats</div><div className="list-group chats">
-      {A.chats(state).map((c) => {
+    <div className="section-head"><span className="label">Chats</span>{desk && list.length > shown.length && !all && <button className="link" onClick={() => setAll(true)}>{`See all ${list.length}`}</button>}{desk && all && <button className="link" onClick={() => setAll(false)}>Show less</button>}</div><div className="list-group chats">
+      {shown.map((c) => {
         const h = c.who === 'chief' ? undefined : c.who;
         return <div key={c.id}>
           <a className="list-row" href={hrefOf(c.id)}>
@@ -238,12 +241,46 @@ function OnItNow({ live, waiting }: { live: A.OfficeView; waiting: number }) {
 /** Needs you, pinned in both views: its first row, and every row behind an exact "See all N". */
 function NeedsPin({ state, cards }: { state: Json; cards: A.Card[] }) {
   const [all, setAll] = useState(false);
+  // "Not now" moves a card behind the others on this screen only: the question stays open and counted until answered.
+  const [later, setLater] = useState<number[]>([]);
   if (!cards.length) return null;
+  const order = [...cards.filter((c) => !later.includes(c.id)), ...later.map((id) => cards.find((c) => c.id === id)).filter((c): c is A.Card => !!c)];
   return (
     <section className="home-section needs-pin" aria-label="Needs you">
       <div className="section-head"><span className="label">Needs you<span className="count">{cards.length}</span></span>{cards.length > 1 && <button className="link" onClick={() => setAll(!all)}>{all ? 'Show less' : `See all ${cards.length}`}</button>}</div>
-      <div className="list-group needs-card"><NeedsRows state={state} cards={all ? cards : cards.slice(0, 1)} all /></div>
+      <NeedsCard state={state} c={order.slice(0, 1)[0]} onLater={cards.length > 1 ? (id) => setLater([...later.filter((x) => x !== id), id]) : undefined} />
+      {all && <div className="list-group needs-card"><NeedsRows state={state} cards={order.slice(1)} all /></div>}
     </section>
+  );
+}
+
+/** The pinned question as the B1 card: who, what they ask, the evidence's first lines and the money read from the
+ *  page, then the three ways on. Home commits nothing: the yes opens the review sheet (its "…" says so), Ask Chief
+ *  fills Chief's box without sending, Not now only moves the card back (offered when there is another to show). */
+function NeedsCard({ state, c, onLater }: { state: Json; c: A.Card; onLater?: (id: number) => void }) {
+  const who = A.crew(state).find((h) => h.id === c.helper);
+  const name = who?.name ?? 'Chief';
+  const yes = c.choices[0]?.body.answer === 'allow' ? c.choices[0] : null;
+  const lines = (c.preview?.body ?? '').split('\n').map((l) => l.trim()).filter(Boolean).slice(0, 2);
+  const price = c.order?.known ? c.order.shown : '';
+  const ask = () => { keepDraft('chief', `About ${name}'s question (${c.head}): `); go('#/chief'); };
+  return (
+    <article className="needs-row needs-big" aria-label={`${name} needs you: ${c.head}`}>
+      <div className="nb-top">
+        <Face who={who ?? { kind: 'pip', name }} size={40} />
+        <div className="grow"><b className="nb-title">{name} needs you</b><span className="nb-ask clamp2">{c.review && c.preview?.head ? c.preview.head : c.words}</span></div>
+        <time className="nb-when">{A.briefTime(c.at)}</time>
+      </div>
+      {(lines.length > 0 || price) && <div className="nb-detail">
+        <div className="grow">{lines.map((l, i) => (i ? <span key={i} className="clamp1">{l}</span> : <b key={i} className="clamp1">{l}</b>))}</div>
+        {price && <span className="nb-price">{price}</span>}
+      </div>}
+      <div className="nb-acts">
+        <a className="btn go" href={`#/ask/${c.id}`}><Icon name="check" />{yes ? `${yes.label}…` : c.reply ? `Answer ${name}…` : 'Review…'}</a>
+        <button className="btn" onClick={ask}>Ask Chief</button>
+        {onLater && <button className="btn ghost" onClick={() => onLater(c.id)}>Not now</button>}
+      </div>
+    </article>
   );
 }
 
@@ -295,7 +332,7 @@ function Home(ctx: Ctx) {
         <OnItNow live={live} waiting={waiting} />
         <Chats state={state} refresh={refresh} desk />
         <JobList state={state} few refresh={refresh} />
-        <div className="feed-ask"><Composer placeholder="Ask Chief anything" onSend={toChief} {...typeInto('chief')} /></div>
+        <div className="feed-ask"><Composer placeholder="Ask Chief anything…" onSend={toChief} {...typeInto('chief')} chips={A.ideas(state).map((i: Json) => ({ label: i.ask.trim(), ask: i.ask }))} /></div>
       </aside>
       <div className="dock phone-only"><Composer placeholder="Ask Chief anything" onSend={toChief} {...typeInto('chief')} /></div>
     </div>
@@ -310,7 +347,7 @@ function JobList({ state, phone, few, refresh }: { state: Json; phone?: boolean;
   const crew = A.crew(state);
   const rows = A.jobs(state);
   const [all, setAll] = useState(false);
-  const shown = phone || (few && !all) ? rows.slice(0, 3) : rows;
+  const shown = phone ? rows.slice(0, 3) : few && !all ? rows.slice(0, 1) : rows; // the desk feed shows one, as B1 does
   const hand = (ask: string) => { keepDraft('chief', ask); go('#/chief'); };
   // The gallery hire, then the words in the new helper's own box: nothing starts until they send.
   const hire = async (template: string, ask: string) => {
@@ -319,12 +356,12 @@ function JobList({ state, phone, few, refresh }: { state: Json; phone?: boolean;
     if (await attempt(async () => { id = (await api.recruit(template, name)).id; }, `${name} joined the crew`)) { refresh(); keepDraft(id, ask); go(`#/h/${id}`); }
   };
   return (
-    <section className={`home-section jobs${phone ? ' phone-only' : ''}`} aria-label="Hand the crew a job">
-      <div className="section-head"><span className="label">Hand the crew a job</span>{few && rows.length > 3 && <button className="link" onClick={() => setAll(!all)}>{all ? 'Show less' : `See all ${rows.length}`}</button>}</div><div className="list-group">
+    <section className={`home-section jobs${phone ? ' phone-only' : ''}`} aria-label="Hand me a job">
+      <div className="section-head"><span className="label">Hand me a job</span>{few && rows.length > 1 && <button className="link" onClick={() => setAll(!all)}>{all ? 'Show less' : `See all ${rows.length}`}</button>}</div><div className="list-group">
       {shown.length ? shown.map((j) => {
         const h = crew.find((x) => x.id === j.bot);
         const body = <><Face who={h ?? { kind: 'pip', name: j.bot }} size={phone ? 28 : 36} />
-          <span className="grow"><b className="clamp">{j.label}</b>{j.says && <span className="small mute clamp1">{j.says}</span>}{j.needs.length > 0 && <span className="small clamp1">{A.jobNeeds(j.needs)}</span>}</span><span className="mute" aria-hidden>›</span></>;
+          <span className="grow"><b className="clamp">{j.label}</b>{j.says && <span className="small mute clamp1">{j.says}</span>}{j.needs.length > 0 && <span className="small clamp1">{A.jobNeeds(j.needs)}</span>}</span><span className="mute" aria-hidden><Icon name="next" /></span></>;
         return j.needs.length ? <a key={j.bot + j.label} className="list-row" href="#/apps">{body}</a>
           : j.hire ? <button key={j.bot + j.label} className="list-row" onClick={() => hire(j.hire!, j.ask)}>{body}</button>
           : <button key={j.bot + j.label} className="list-row" onClick={() => hand(j.ask)}>{body}</button>;

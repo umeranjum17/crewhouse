@@ -501,8 +501,11 @@ test('Home opens on Chat at every launch, with Office one tap away and never sto
   assert.match(home, /<NeedsPin state=\{state\} cards=\{live\.needs\} \/>/, 'Needs you pinned from the office\'s one list');
   assert.match(home, /<div className="feed-ask"><Composer/, 'Office keeps Chief\'s box on a desk');
   assert.match(home, /<div className="dock phone-only"><Composer/, 'and on a phone');
-  const pin = web.slice(web.indexOf('function NeedsPin('), web.indexOf('function NeedsPin(') + 900);
-  assert.match(pin, /cards\.slice\(0, 1\)/, 'one pinned row');
+  const pin = web.slice(web.indexOf('function NeedsPin('), web.indexOf('function NeedsPin(') + 1400);
+  assert.match(pin, /<NeedsCard state=\{state\} c=\{order\.slice\(0, 1\)\[0\]\}/, 'one pinned card (B1)');
+  const card = web.slice(web.indexOf('function NeedsCard('), web.indexOf('/** An empty list'));
+  assert.match(card, /<a className="btn go" href=\{`#\/ask\/\$\{c\.id\}`\}>/, 'its yes opens the review sheet: Home commits nothing');
+  assert.doesNotMatch(card, /api\.|answer\(/, 'no answer is sent from the card');
   assert.match(pin, /`See all \$\{cards\.length\}`/, 'and an exact "See all N"');
 });
 

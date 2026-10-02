@@ -474,7 +474,9 @@ function useVoice(on: boolean, text: string, put: (t: string) => void) {
  * The message box. `chat` ties it to one conversation's held draft. A send that doesn't go through keeps the words
  * here with a Retry: nothing a person typed is ever thrown away (web/src/draft.ts).
  */
-export function Composer({ placeholder, onSend, chat }: { placeholder: string; onSend: (t: string) => Promise<unknown> | unknown; chat?: string }) {
+/** Chief's box. With `chips` (the desk feed, B1) a bar under the words: attach (not available yet, and it says so), a
+ *  starter or two that fill the box without sending, then the mic and send. */
+export function Composer({ placeholder, onSend, chat, chips }: { placeholder: string; onSend: (t: string) => Promise<unknown> | unknown; chat?: string; chips?: { label: string; ask: string }[] }) {
   const [text, setText] = useState(() => (chat ? draftOf(chat).text : ''));
   const voice = useVoice(chat === 'chief', text, (t) => change(t));
   const [busy, setBusy] = useState(false);
@@ -497,12 +499,16 @@ export function Composer({ placeholder, onSend, chat }: { placeholder: string; o
     if (ok) { setText(''); setFailed(false); hear(focused, ''); if (chat) keepDraft(chat, ''); } else { setFailed(true); if (chat) sent(chat, false, text); }
   };
   return (
-    <form className="composer" onSubmit={(e) => { e.preventDefault(); void send(); }}>
+    <form className={`composer${chips ? ' has-bar' : ''}`} onSubmit={(e) => { e.preventDefault(); void send(); }}>
       {away ? <div className="send-away" role="status">Reconnecting… your words stay here until the home computer answers.</div>
         : failed && <div className="send-failed" role="alert">Not sent — it's kept here. <button type="button" className="link inline" onClick={() => void send()}>Retry</button></div>}
       <textarea rows={1} value={text} placeholder={placeholder} aria-label={placeholder}
         onFocus={() => { setFocused(true); hear(true, text); }} onBlur={() => { setFocused(false); hear(false, text); }}
         onChange={(e) => change(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(); } }} />
+      {chips && <div className="c-bar">
+        <button type="button" className="c-clip" disabled aria-label="Attach a file: not available yet" title="Attaching files isn't available yet"><Icon name="clip" size={18} /></button>
+        {chips.slice(0, 2).map((c) => <button type="button" key={c.ask} className="c-chip clamp1" onClick={() => change(c.ask)}>{c.label}</button>)}
+      </div>}
       {voice}
       <button className="send" aria-label="Send" disabled={!away && (!text.trim() || busy)} aria-disabled={away || undefined}>↑</button>
     </form>
