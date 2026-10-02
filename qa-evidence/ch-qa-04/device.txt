@@ -1,9 +1,0 @@
-ro.build.version.release=15
-ro.build.version.sdk=35
-ro.build.fingerprint=google/sdk_gphone64_x86_64/emu64xa:15/AE3A.240806.043/12960925:userdebug/dev-keys
-ro.product.model=sdk_gphone64_x86_64
-Physical size: 320x640
-Physical density: 160
-ime=com.google.android.inputmethod.latin/com.android.inputmethod.latin.LatinIME
-com.google.android.inputmethod.latin/com.android.inputmethod.latin.LatinIME
-com.google.android.tts/com.google.android.apps.speech.tts.googletts.settings.asr.voiceime.VoiceInputMethodService
