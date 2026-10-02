@@ -615,17 +615,20 @@ function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
     );
   }
   if (typing) {
+    // The keyboard takes half a small screen: the window shrinks to what's left and the form scrolls, so the field and Pair stay reachable.
     return (
-      <Center>
-        <ChiefArt mood="listen" size={120} />
-        <T style={s.h1}>Type a code</T>
-        <T tone="ink2" style={s.centerText}>Enter the code under Add a phone on your computer, or one someone there sent you.</T>
-        <TextInput style={[s.input, { alignSelf: 'stretch', color: t.ink, borderColor: t.line }]} value={code} onChangeText={setCode} placeholder="Type or paste the code" placeholderTextColor={t.mute}
-          accessibilityLabel="Pairing code" autoCapitalize="characters" autoCorrect={false} />
-        {busy ? <ActivityIndicator color={t.pink} style={{ margin: 20 }} /> : <Btn go big label="Pair" disabled={!code.trim()} onPress={typed} />}
-        {!!err && <T tone="pinkInk" style={s.centerText}>{err}</T>}
-        <Btn label="Scan instead" onPress={() => { setTyping(false); setErr(''); }} />
-      </Center>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="height">
+        <ScrollView contentContainerStyle={s.centerScroll} keyboardShouldPersistTaps="handled">
+          <ChiefArt mood="listen" size={120} />
+          <T style={s.h1}>Type a code</T>
+          <T tone="ink2" style={s.centerText}>Enter the code under Add a phone on your computer, or one someone there sent you.</T>
+          <TextInput style={[s.input, { alignSelf: 'stretch', color: t.ink, borderColor: t.line }]} value={code} onChangeText={setCode} placeholder="Type or paste the code" placeholderTextColor={t.mute}
+            accessibilityLabel="Pairing code" autoCapitalize="characters" autoCorrect={false} />
+          {busy ? <ActivityIndicator color={t.pink} style={{ margin: 20 }} /> : <Btn go big label="Pair" disabled={!code.trim()} onPress={typed} />}
+          {!!err && <T tone="pinkInk" style={s.centerText}>{err}</T>}
+          <Btn label="Scan instead" onPress={() => { setTyping(false); setErr(''); }} />
+        </ScrollView>
+      </KeyboardAvoidingView>
     );
   }
   return (
@@ -1821,6 +1824,7 @@ function ThisPhone({ grant, status, onForget, onClear }: { grant: Grant; status:
 
 const s = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 28, gap: 12 },
+  centerScroll: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', padding: 28, gap: 12 },
   centerText: { textAlign: 'center' },
   page: { padding: 16, gap: 12, paddingBottom: 32 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
