@@ -499,7 +499,7 @@ function FileActions({ f, name }: { f: A.FileView; name: string }) {
     part.create({ overwrite: true });
     let after = 0;
     for (;;) {
-      const chunk = await api.video(src.bot, src.path, after); // the bounded delivery-checked slice route (docs/ui-contract.md)
+      const chunk = await api.file(src.bot, src.path, after);
       const got = A.base64Bytes(chunk.data);
       if (!got && chunk.more) throw new Error('no progress');
       part.write(chunk.data, { encoding: 'base64', append: after > 0 });

@@ -1856,7 +1856,7 @@ test('a delivered file is named by its registered title everywhere it shows', ()
   assert.match(main, /<PreviewPanel [^>]*title=\{A\.fileTitle\(/, 'the web panel opens already named, before its preview arrives');
 });
 
-test("the phone's reader downloads and shares the file itself, named by its title, and opens the whole page", () => {
+test("the phone's reader downloads and shares the file itself, named by its title, and opens the whole page", async () => {
   const f = A.fileView('scribe', 'files/4f0c2b9e7a.docx', 'Refund follow-up: stroller / return?');
   assert.deepEqual(A.saveAs(f), { name: 'Refund follow-up- stroller - return-.docx',
     mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }, 'the title as written, only unsavable characters dashed, the real extension');
@@ -1870,6 +1870,12 @@ test("the phone's reader downloads and shares the file itself, named by its titl
   assert.match(acts, /label="Download"[\s\S]*label="Share"/);
   assert.match(acts, /Directory\.pickDirectoryAsync\(\)/, 'Download saves into a folder the person picks');
   assert.match(acts, /Sharing\.shareAsync\(/, 'Share hands over the file itself, not its words');
+  assert.match(acts, /await api\.file\(src\.bot, src\.path, after\)[\s\S]{0,200}A\.base64Bytes\(chunk\.data\)[\s\S]{0,200}after \+= got[\s\S]{0,200}if \(!chunk\.more\) break/,
+    'bytes come over /api/file, the next offset adds the decoded length, until more is false');
+  const calls: string[] = [];
+  setTransport((method, path) => { calls.push(`${method} ${path}`); return Promise.resolve({ data: '', more: false, size: 0 }); });
+  await api.file('scribe', 'files/4f0c2b9e7a.docx', 600000);
+  assert.deepEqual(calls, ['GET /api/file?bot=scribe&path=files%2F4f0c2b9e7a.docx&after=600000']);
   assert.match(acts, /\/cancel\/i[\s\S]{0,40}return ''/, 'a closed picker is not a failure');
   assert.match(app.slice(app.indexOf('function VideoSheet(')), /<FileActions f=\{f\}/, 'a video too');
   assert.match(sheet, /page\?\.title/, "the reader's title is crewd's registered one");
