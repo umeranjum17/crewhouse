@@ -361,7 +361,7 @@ function Home(ctx: Ctx) {
     {A.update(state) && <div className="card nudge"><span className="grow">{A.update(state)!.words}</span><a className="btn go" href={A.update(state)!.url} target="_blank" rel="noreferrer">Download</a></div>}
   </>;
   // Chat: Chief's own thread, its box and (on a wide desk) its side column of who is on what.
-  if (mode === 'chat') return <div className="page chat-page home-chat"><div className="home-top">{top}<div className="desk-only"><ChiefHero live={live} /></div><NeedsPin state={state} cards={live.needs} flat /></div><Chat {...ctx} id="chief" head={<div className="phone-only"><ChiefHero live={live} /></div>} rail={<TonightRail live={live} />} /></div>;
+  if (mode === 'chat') return <div className="page chat-page home-chat"><div className="home-top">{top}<ChiefHero live={live} /><NeedsPin state={state} cards={live.needs} flat /></div><Chat {...ctx} id="chief" hero rail={<TonightRail live={live} />} /></div>;
   // Office (B1): the greeting and the room with its strip in the middle; Tonight down the right on a computer (Needs you,
   // On it now, chats, a job to hand over, Chief's box), and under the room on a phone.
   return (
@@ -475,7 +475,7 @@ function PhoneCard({ offer, reload }: { offer: Json; reload: () => void }) {
       </div></>}
   </div>;
 }
-function Chat({ id, m, state, tick, refresh, accounts, head, rail }: Ctx & { id: string; m?: string; head?: ReactNode; rail?: ReactNode }) {
+function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id: string; m?: string; hero?: boolean; rail?: ReactNode }) {
   const g = A.account(accounts);
   const [page, setPage] = useState<Json>(null);
   const [pending, setPending] = useState<{ text: string; after: number } | null>(null);
@@ -544,8 +544,7 @@ function Chat({ id, m, state, tick, refresh, accounts, head, rail }: Ctx & { id:
   return (
     <div className={`chat${live && h ? ' with-live' : ''}`}>
       <div className="lines" ref={box}>
-        {head}
-        {start && !head && <div className="chat-intro">
+        {start && !hero && <div className="chat-intro">
           <span className="halo">{h ? <PalArt kind={h.kind} mood={h.mood} d={4.4} name={h.name} /> : <ChiefArt mood="idle" d={3.6} />}</span>
           <b>{name}</b><span>{h ? h.role : 'Runs the crew and answers to you'}</span>
         </div>}
@@ -579,7 +578,7 @@ function Chat({ id, m, state, tick, refresh, accounts, head, rail }: Ctx & { id:
         {live && h && <section className="working-on-frame"><div className="label">Working on</div><div className="list-group"><div className="work-title"><b>{A.plain(live.title)}</b><span className="small">{h.status}</span></div>{trail.length > 0 && <Steps steps={trail} max={3} />}<a className="link" href={`#/h/${id}/did`}>What happened ›</a></div></section>}
         {A.things(state).filter((x) => x.helper === id).length > 0 && <section className="home-section"><div className="label">Made in this chat</div><div className="list-group">{A.things(state).filter((x) => x.helper === id).map((x) => { const t = A.fileTarget(x.files[0]); return <a className="list-row" key={x.id} href={t?.href.startsWith('#') ? t.href : `#/things/t${x.id}`}><span className="file-chip">{t?.chip ?? '—'}</span><span className="grow"><b className="clamp1">{x.title}</b><span className="small clamp1">{x.summary}</span></span></a>; })}</div></section>}
       </aside>
-      <div className="dock"><Composer key={seed} placeholder={id === 'chief' ? 'Ask Chief anything…' : `Message ${name}…`} onSend={send} {...typeInto(id)} /></div>
+      <div className="dock"><Composer key={seed} placeholder={id === 'chief' ? 'Ask Chief anything…' : `Message ${name}…`} onSend={send} chips={hero ? A.ideas(state).map((i: Json) => ({ label: i.ask.trim(), ask: i.ask })) : undefined} {...typeInto(id)} /></div>
     </div>
   );
 }
