@@ -1,5 +1,4 @@
-// Each bot's own desktop (plan 3, section 3.15): an Xvfb display with its own X cookie, the bot's own Chromium on it,
-// and, while a person watches, a desklink engine streaming it. Never the owner's display.
+// Each bot has its own Xvfb/X cookie, Chromium and desklink stream — never the owner's display.
 import { spawn, type ChildProcess } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
@@ -116,10 +115,8 @@ export class Desktops {
     }
   }
 
-  /** The bot's own Chromium: its own profile in its folder, maximized on its display; the bot's browser tool drives it.
-   *  Its DevTools speak over a pipe to crewd, never a TCP port: every bot's sandboxed shell shares the machine's
-   *  loopback, and an open port would let any bot drive any bot's browser. crewd relays the pipe on a loopback
-   *  WebSocket whose path is a fresh secret, which only the bot's own browser tool is given. */
+  /** Its own profile/display. DevTools uses a pipe: bot shells share loopback, so a TCP endpoint is unsafe.
+   *  crewd relays it only at a fresh secret WebSocket path given to this bot's browser tool. */
   private async browser(d: Desk, botDir: string) {
     const bin = browserBin();
     if (!bin) return;
@@ -160,10 +157,7 @@ export class Desktops {
     return { ...rest, DISPLAY: d.display, XAUTHORITY: d.xauth, XDG_SESSION_TYPE: 'x11' };
   }
 
-  /**
-   * One signaling request from a watcher. crewd, not the client, picks the display and the permissions:
-   * `control` is granted only while the person holds the controls.
-   */
+  /** crewd picks the display/permissions, not the watcher; control requires the person holding the wheel. */
   async signal(bot: string, watcher: Watcher, method: string, params: Record<string, any>, mayControl: boolean) {
     const d = this.desks.get(bot);
     if (!d) throw refused(`${bot}'s desktop is not running`, 'no-screen');
@@ -232,8 +226,7 @@ export class Desktops {
     if (d?.session?.control) await this.closeSession(d, 'The controls went back to the bot');
   }
 
-  /** One round of commands over crewd's own relay. Only one client fits the pipe at a time, so this is for while the
-   *  person holds the wheel and the bot's own browser tool is off it (Take over releases the tool's attach). */
+  /** One pipe client at a time: use only while the person holds the wheel and the bot's browser tool is detached. */
   private async withPipe<T>(bot: string, run: (call: (method: string, params?: Record<string, unknown>, sessionId?: string) => Promise<any>) => Promise<T>): Promise<T> {
     const d = this.desks.get(bot);
     if (!d?.cdp || !d.chrome || d.chrome.exitCode !== null) throw new Error("the bot's browser is not running");
@@ -250,9 +243,7 @@ export class Desktops {
     } finally { ws.close(); }
   }
 
-  /** The hosts on its tabs, the one on screen first: the give-back sheet asks "did you sign it in here?" from this list,
-   *  read by crewd itself, never from the note or what the bot says. Hosts only — `www.` stripped, no path, the same
-   *  words the gate compares (src/policy.ts). */
+  /** crewd reads bare hosts (`www.` stripped, matching policy.ts), visible first; never trust the bot's sign-in claim. */
   async pages(bot: string): Promise<string[]> {
     const host = (url: string) => { try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return ''; } };
     const out: { host: string; on: boolean }[] = [];
@@ -273,9 +264,19 @@ export class Desktops {
     return [...new Set(hosts)];
   }
 
-  /** True only for a CDP clear acknowledgment; an error has no result (Forget must retain the site). */
+  /** Clear both site origins on this bot's page session; missing context or acknowledgment retains the marker. */
   async clearSite(bot: string, host: string) {
-    return Boolean(await this.withPipe(bot, (call) => call('Storage.clearDataForOrigin', { origin: `https://${host}`, storageTypes: ['all'] })));
+    return this.withPipe(bot, async (call) => {
+      const { targetInfos } = await call('Target.getTargets');
+      const page = targetInfos?.find((t: { type: string }) => t.type === 'page');
+      if (!page) return false;
+      const { sessionId } = await call('Target.attachToTarget', { targetId: page.targetId, flatten: true });
+      if (!sessionId) return false;
+      try {
+        for (const scheme of ['https', 'http']) if (!await call('Storage.clearDataForOrigin', { origin: `${scheme}://${host}`, storageTypes: 'all' }, sessionId)) return false;
+        return true;
+      } finally { await call('Target.detachFromTarget', { sessionId }); }
+    });
   }
 
   /** Stop desktops nobody is watching and no task needs, after the idle window. */

@@ -661,13 +661,34 @@ test('Forget clear contract distinguishes a CDP success result from an error wit
   const { crew, done } = setup();
   try {
     for (const result of [{}, undefined, false]) {
-      (crew.desktops as any).withPipe = async (_bot: string, run: any) => run(async (method: string, params: any) => {
-        assert.equal(method, 'Storage.clearDataForOrigin');
-        assert.deepEqual(params, { origin: 'https://shop.example', storageTypes: ['all'] });
-        return result;
-      });
+      const cleared: string[] = [];
+      let detached = false;
+      (crew.desktops as any).withPipe = async (bot: string, run: any) => {
+        assert.equal(bot, 'reel');
+        return run(async (method: string, params: any, sessionId?: string) => {
+          if (method === 'Target.getTargets') return { targetInfos: [{ type: 'page', targetId: 'synthetic-page' }] };
+          if (method === 'Target.attachToTarget') {
+            assert.deepEqual(params, { targetId: 'synthetic-page', flatten: true });
+            return { sessionId: 'synthetic-session' };
+          }
+          if (method === 'Target.detachFromTarget') {
+            assert.deepEqual(params, { sessionId: 'synthetic-session' });
+            detached = true;
+            return {};
+          }
+          assert.equal(method, 'Storage.clearDataForOrigin');
+          assert.equal(sessionId, 'synthetic-session', 'clear uses this bot\'s page session, not browser root');
+          assert.deepEqual(params, { origin: `${cleared.length ? 'http' : 'https'}://shop.example`, storageTypes: 'all' });
+          cleared.push(params.origin);
+          return result;
+        });
+      };
       assert.equal(await crew.desktops.clearSite('reel', 'shop.example'), Boolean(result));
+      assert.equal(detached, true, 'page session is detached even after a rejected clear');
+      assert.equal(cleared.length, result ? 2 : 1, 'both origins must acknowledge success');
     }
+    (crew.desktops as any).withPipe = async (_bot: string, run: any) => run(async () => ({ targetInfos: [] }));
+    assert.equal(await crew.desktops.clearSite('reel', 'shop.example'), false, 'no page context cannot verify clearing');
   } finally { done(); }
 });
 
