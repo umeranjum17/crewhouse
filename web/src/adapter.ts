@@ -1338,10 +1338,11 @@ export const waitsOnYou = (c: OfficeMember) => c.ring === 'needs' || !!c.ask;
 export const handedIn = (was: OfficeView, now: OfficeView) => [...new Set(now.done.filter((t) => !was.done.some((w) => w.id === t.id)).map((t) => t.helper))];
 export const SEATS = 5;
 export type FloorPlan = { seats: OfficeMember[]; more: OfficeMember[] };
-/** Who stands on the office's one floor, one rule for the web and the phone (B1): five spots in the roster's order,
- *  whoever waits on you first, then working, then the rest, resting last; everyone else is counted under "+N"
- *  (`more`, roster order), never drawn smaller. The rail and the dock still name the whole crew. */
-export function floorPlan(crew: OfficeMember[]): FloorPlan {
+/** Who stands on the office's one floor, one rule for the web and the phone (B1): up to five spots in the roster's
+ *  order, whoever waits on you first, then working, then the rest, resting last; everyone else is counted under "+N"
+ *  (`more`, roster order), never drawn smaller. A room that cannot stand five at the mock's size asks for fewer
+ *  (`seats`). The rail and the dock still name the whole crew. */
+export function floorPlan(crew: OfficeMember[], seats = SEATS): FloorPlan {
   const order = roster(crew);
-  return { seats: order.slice(0, SEATS), more: order.slice(SEATS) };
+  return { seats: order.slice(0, seats), more: order.slice(seats) };
 }

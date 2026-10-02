@@ -1887,6 +1887,12 @@ test('J5 repairs stay in: the night look paints first, the job row is never cut 
   assert.match(office, /useEffect\(\(\) => \{ desks\.current = spritesIn\(box\.current\); \}, \[wide\]\);/);
   assert.match(office, /querySelector\('\.o-traybox > path'\)/); assert.doesNotMatch(office, /querySelector\('\.o-tray rect'\)/);
   assert.match(office, /\{ opacity: 1, offset: \.9 \}/);
+  // 147: the crew stands at the mock's size in every state, fewer standing rather than everyone shrunk, and the page is
+  // drawn at the figures' size on both sides.
+  assert.match(office, /for \(let k = A\.SEATS - 1; k >= 1 && fit\.s < MOCK; k--\) fit = stand\(k\);/);
+  assert.match(office, /MOCK = 0\.85;/); assert.match(office, /data-scale=\{s\.toFixed\(3\)\}/);
+  assert.match(office, /getScreenCTM\(\)\?\.a \?\? 1\) \* Number\(room\.dataset\.scale \?\? 1\), pw = 14 \* k, ph = 18 \* k/);
+  assert.match(read('mobile', 'src', 'office.tsx'), /width: u\(14\), height: u\(18\)/);
   assert.match(read('mobile', 'src', 'office.tsx'), /dx=\{u\(318 - from\)\} dy=\{u\(36\)\}/, 'the phone page drops into its floor box');
   assert.match(read('mobile', 'src', 'motion.ts'), /inputRange: \[0, 0\.9, 1\], outputRange: \[1, 1, 0\]/);
   // The phone's page flies on the same truth, the helper's done count, from where they stood before the re-lay.

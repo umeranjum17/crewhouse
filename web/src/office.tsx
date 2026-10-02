@@ -94,14 +94,19 @@ export function Office({ state, live, night }: { state: Json; live: A.OfficeView
 
   const r = night ? ROOM.night : ROOM.day;
   const vars = { '--r-wall': r.wall, '--r-floor': r.floor, '--r-desk': r.desk, '--r-edge': r.edge, '--r-screen': r.screen, '--r-sofa': r.sofa, '--r-window': r.window } as CSSProperties;
-  const plan = A.floorPlan(crew);
   const chiefAsk = A.chiefAsks(live).sort((a, b) => A.askRank(a) - A.askRank(b))[0];
   // One floor, left to right in the roster's order (whoever waits on you, then working, then the rest, resting last),
-  // Chief standing just after whoever waits on you.
-  const waits = plan.seats.filter(A.waitsOnYou).length;
-  const order: (A.OfficeMember | 'chief')[] = [...plan.seats.slice(0, waits), 'chief', ...plan.seats.slice(waits)];
+  // Chief standing just after whoever waits on you. Everyone stands at the mock's size in every state: the room
+  // stands as many as the stage holds at MOCK scale or more, up to five, and counts the rest under "+N" (A.floorPlan).
   const trayText = `Tray · ${live.counts.done}`;
-  const { spots, s, X, Y } = lay(order, live, trayText);
+  const stand = (k: number) => {
+    const plan = A.floorPlan(crew, k), waits = plan.seats.filter(A.waitsOnYou).length;
+    const order: (A.OfficeMember | 'chief')[] = [...plan.seats.slice(0, waits), 'chief', ...plan.seats.slice(waits)];
+    return { plan, order, ...lay(order, live, trayText) };
+  };
+  let fit = stand(A.SEATS);
+  for (let k = A.SEATS - 1; k >= 1 && fit.s < MOCK; k--) fit = stand(k);
+  const { plan, order, spots, s, X, Y } = fit;
   const spotOf = (m: A.OfficeMember | 'chief') => spots.find((p) => p.m === m)!;
   const trayAt = spots.find((p) => p.tray)!, trayX = trayAt.st === 'done' ? trayAt.x - 20 : trayAt.x;
   // One accent pill, over whoever's question matters most (money, then your name, then the rest; Chief's own last).
@@ -118,7 +123,7 @@ export function Office({ state, live, night }: { state: Json; live: A.OfficeView
 
   return (
     <section className="office" aria-label="The office">
-      <div ref={box} className={`o-room${wide ? ' wide' : ''}`} style={vars}>
+      <div ref={box} className={`o-room${wide ? ' wide' : ''}`} style={vars} data-scale={s.toFixed(3)}>
         <svg className="o-art" viewBox={`0 ${Y0} 360 ${H - Y0}`} preserveAspectRatio={wide ? 'xMidYMid meet' : 'none'} xmlns="http://www.w3.org/2000/svg">
           <defs>
             <filter id={`${id}bl`} x="-50%" y="-200%" width="200%" height="500%"><feGaussianBlur stdDeviation="2" /></filter>
@@ -190,7 +195,7 @@ const stationOf = (c: A.OfficeMember, v: A.OfficeView): Station => {
 };
 const TALL: Station[] = ['chief', 'monitor', 'failed', 'needs'];
 type Spot = { m: A.OfficeMember | 'chief' | 'tray'; st: Station; x: number; tray: boolean };
-const G = 196, W = 346;
+const G = 196, W = 346, MOCK = 0.85;   // the floor line, the stage's width, and the least row scale that reads as the mock's size
 /** Left to right in the given order, the tray just before whoever finished (or before the resting); the row scales down
  *  about the floor line to fit, and centres when it is short. The Tray bubble never sits over a figure or past the
  *  room's edge: the tray keeps room for it beside anyone reaching its height (Chief's hat and cane reach 40 to his
@@ -325,16 +330,18 @@ function Tag({ x, y, text, hot, tail, cls = '', href, label }: { x: number; y: n
 function handOff(room: HTMLElement | null, ids: string[], desks: Map<string, { x: number; y: number }>) {
   const tray = room?.querySelector('.o-traybox > path');   // the box itself, not the page already in it
   if (!room || !tray || reduced()) return;
-  // The page (14x18) ends centred on the box's mouth, its lower part inside, so it reads as dropped in.
-  const t = tray.getBoundingClientRect(), base = room.getBoundingClientRect(), to = { x: t.left - base.left + t.width / 2 - 7, y: t.top - base.top - 10 };
+  // The page is drawn at the figures' size (14x18 room units at the row's scale, as at 390 where it reads with the
+  // beans), and ends centred on the box's mouth, its lower part inside, so it reads as dropped in.
+  const k = ((room.querySelector('.o-art') as SVGSVGElement).getScreenCTM()?.a ?? 1) * Number(room.dataset.scale ?? 1), pw = 14 * k, ph = 18 * k;
+  const t = tray.getBoundingClientRect(), base = room.getBoundingClientRect(), to = { x: t.left - base.left + t.width / 2 - pw / 2, y: t.top - base.top - ph / 2 - k };
   for (const id of new Set(ids)) {
     const from = desks.get(id);
     if (!from) continue;
     const page = document.createElement('i');
     page.className = 'o-flyer';
     page.dataset.from = id;
-    const x = from.x - 7;   // centred over the helper's head, where they stood
-    page.style.left = `${x}px`; page.style.top = `${from.y}px`;
+    const x = from.x - pw / 2;   // centred over the helper's head, where they stood
+    Object.assign(page.style, { left: `${x}px`, top: `${from.y}px`, width: `${pw}px`, height: `${ph}px` });
     room.appendChild(page);
     page.animate([{ transform: 'none', opacity: 1 }, { opacity: 1, offset: .9 }, { transform: `translate(${to.x - x}px, ${to.y - from.y}px) scale(.8) rotate(8deg)`, opacity: 0 }], { duration: 1300, easing: 'ease-in-out' }).finished.finally(() => page.remove());
   }
