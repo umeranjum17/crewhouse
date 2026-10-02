@@ -1026,11 +1026,13 @@ h1 { font: 400 32px/36px var(--serif); letter-spacing: -.005em; }
 .c-clip:disabled { opacity: .45; cursor: not-allowed; }
 .c-chip { height: 28px; max-width: 160px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line2); background: var(--solid); font: 500 12.5px/26px var(--ui); color: var(--ink2); white-space: nowrap; }
 
-/* Chief's hero over his chat (B1 polish): his figure, the serif name, his own line in a bubble, the crew with a badge each. */
-.chief-hero { display: flex; gap: 20px; align-items: center; padding: 18px 22px; margin: 4px 0 12px; background: var(--solid); border: 1px solid var(--line2); border-radius: 24px; box-shadow: 0 1px 2px rgba(20, 26, 42, .04), 0 14px 32px -22px rgba(20, 26, 42, .32); }
-.ch-art { flex: none; display: grid; }
-.ch-body { min-width: 0; flex: 1; display: grid; gap: 10px; justify-items: start; }
-.ch-name { margin: 0; font: 400 48px/1 var(--serif); letter-spacing: -.01em; color: var(--ink); }
+/* Chief's hero over his chat (B1 polish): his whole figure in its own column, feet on the card's floor (200px of 230 on a
+   desk, 150 on a phone), the serif name, his own line in a bubble, the crew with a badge each. */
+.chief-hero { display: grid; grid-template-columns: 230px minmax(0, 1fr); min-height: 268px; overflow: hidden; margin: 4px 0 12px; background: var(--solid); border: 1px solid var(--line2); border-radius: 24px; box-shadow: 0 1px 2px rgba(20, 26, 42, .04), 0 14px 32px -22px rgba(20, 26, 42, .32); }
+.ch-art { align-self: end; display: grid; padding-left: 16px; }
+.ch-art svg { width: 200px; height: auto; }
+.ch-body { min-width: 0; display: grid; gap: 10px; justify-items: start; align-content: start; padding: 30px 28px 22px 6px; }
+.ch-name { margin: 0; font: 400 52px/1 var(--serif); letter-spacing: -.01em; color: var(--ink); }
 .ch-name small { font: 400 13px/1 var(--ui); color: var(--mute); letter-spacing: 0; margin-left: 6px; }
 .ch-say { margin: 0; padding: 12px 18px; border: 1px solid var(--line2); border-radius: 16px; font: 400 16px/1.45 var(--ui); color: var(--ink); max-width: 60ch; }
 .ch-crew { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
@@ -1042,8 +1044,10 @@ h1 { font: 400 32px/36px var(--serif); letter-spacing: -.005em; }
 .ch-more { font: 600 13px/1 var(--ui); color: var(--ink2); text-decoration: none; padding: 0 4px; }
 .ch-caption { margin: -2px 0 0; font: 400 13px/18px var(--ui); color: var(--ink2); }
 @media (max-width: 899px) {
-  .chief-hero { padding: 16px; gap: 12px; align-items: flex-start; }
-  .ch-art svg { width: 96px; height: auto; }
+  .chief-hero { grid-template-columns: 150px minmax(0, 1fr); min-height: 236px; }
+  .ch-art { padding-left: 2px; }
+  .ch-art svg { width: 150px; }
+  .ch-body { padding: 20px 16px 14px 4px; }
   .ch-name { font-size: 40px; }
   /* B1 phone: the five faces sit in one row under his line (zoom scales the badge with its face). */
   .ch-crew { gap: 4px; }
@@ -1051,6 +1055,10 @@ h1 { font: 400 32px/36px var(--serif); letter-spacing: -.005em; }
   .ch-say { font-size: 15px; padding: 10px 14px; }
   /* B1 phone: hero and card scroll with the thread, in the mock's order; nothing sticks over the hero. */
   .home-chat > .home-top { position: static; max-height: none; overflow: visible; }
+}
+@media (max-width: 359px) {
+  .chief-hero { grid-template-columns: 112px minmax(0, 1fr); min-height: 0; }
+  .ch-art svg { width: 112px; }
 }
 
 /* The Tonight rail beside Chief's chat on a desk: card per helper or tray item, and a plain line where a section is empty. */
@@ -1112,7 +1120,10 @@ h1 { font: 400 32px/36px var(--serif); letter-spacing: -.005em; }
 
 /* B1 desk: Chief's profile is a popover card over the page, not a full-height side panel. */
 @media (min-width: 900px) {
-  .o-scrim.o-pop { place-items: start center; padding: 72px 12px 24px; background: rgba(12, 10, 16, .28); }
-  .o-pop > .o-profile { width: min(420px, 100%); height: auto; max-height: calc(100dvh - 96px); animation: pop 220ms var(--ease); }
+  .o-scrim.o-pop { place-items: start center; padding: 72px 12px 24px; }
+  .o-pop > .o-profile { width: min(372px, 100%); height: auto; max-height: calc(100dvh - 96px); padding: 18px; gap: 12px; border-radius: 22px;
+    box-shadow: 0 0 0 1px var(--line2), 0 30px 60px -28px rgba(20, 26, 42, .45); animation: pop 220ms var(--ease); }
+  .o-pop.at > .o-profile { position: fixed; left: var(--pop-x); top: var(--pop-y); max-height: calc(100dvh - var(--pop-y) - 16px); }
+  .o-pop .o-profile .o-sh-head h2 { font-size: 34px; line-height: 36px; }
   @keyframes pop { from { opacity: 0; transform: translateY(8px) scale(.98); } }
 }

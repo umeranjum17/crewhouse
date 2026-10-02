@@ -324,6 +324,9 @@ function handOff(room: HTMLElement | null, ids: string[]) {
 /** Chief up close: how to reach him, the crew's computers (watching first), and what the crew made today. */
 function ChiefSheet({ live, state, roles, onClose }: { live: A.OfficeView; state: Json; roles: Map<string, A.Helper>; onClose: () => void }) {
   const box = useRef<HTMLDivElement>(null);
+  // B1 desk: the card opens beside the Chief you tapped (the focused opener), kept inside the window.
+  const [at] = useState(() => { const r = document.activeElement?.closest('button')?.getBoundingClientRect();
+    return r ? { '--pop-x': `${Math.round(Math.max(12, Math.min(r.right - 16, innerWidth - 384)))}px`, '--pop-y': `${Math.round(Math.max(72, Math.min(r.top, innerHeight - 560)))}px` } : undefined; });
   useDialogOwn(box, onClose);
   const [phones, setPhones] = useState<number | null>(null);
   useEffect(() => { api.phones().then((p) => setPhones(p.length)).catch(() => setPhones(null)); }, []);
@@ -336,7 +339,7 @@ function ChiefSheet({ live, state, roles, onClose }: { live: A.OfficeView; state
     ...live.done.map((t) => ({ key: `t${t.id}`, at: t.at, text: `${roles.get(t.helper)?.name ?? 'The crew'} finished ${t.title || 'a job'}`, href: `#/things/t${t.id}` }))]
     .sort((x, y) => y.at - x.at).slice(0, 3);
   return (
-    <div className="scrim o-scrim o-pop" onClick={onClose}>
+    <div className={`scrim o-scrim o-pop${at ? ' at' : ''}`} style={at as CSSProperties} onClick={onClose}>
       <div ref={box} className="o-sheet o-profile" role="dialog" aria-modal aria-label="Chief" onClick={(e) => e.stopPropagation()}>
         <header className="o-sh-head">
           <Face who="chief" size={64} />
