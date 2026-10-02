@@ -242,7 +242,7 @@ function Home(ctx: Ctx) {
   // The office is Home's top frame, inside the hero card: one room, drawn once for whichever frame is showing.
   const wide = useWide();
   const office = (frame: 'phone' | 'desk') => (frame === 'desk') === wide && <Office state={state} live={live} night={ctx.night} />;
-  const working = live.crew.filter((c) => c.ring === 'working');
+  const working = live.crew.filter((c) => A.seatOf(c) === 'working'), waiting = live.crew.filter(A.waitsOnYou).length;
   const day = new Date(); day.setHours(0, 0, 0, 0);
   const todays = A.things(state).filter((t) => t.at >= day.getTime());
   const nudges = <>
@@ -254,8 +254,10 @@ function Home(ctx: Ctx) {
   </>;
   return (
     <div className="home">
-      <div className="phone-only"><HomeHero ctx={ctx}>{office('phone')}</HomeHero>{nudges}</div>
+      {/* On a phone, Needs you comes before the room so its first rows sit on the first screen, above Chief's box. */}
+      <div className="phone-only"><HomeHero ctx={ctx} />{nudges}</div>
       {cards.length > 0 && <section className="home-section phone-only" aria-label="Needs you">{needsHead}<div className="list-group needs-card"><NeedsRows state={state} cards={cards} all={allNeeds} /></div></section>}
+      <div className="phone-only home-room">{office('phone')}</div>
       <Chats state={state} refresh={refresh} /><JobList state={state} phone refresh={refresh} />
       <div className="home-desk desk-only">
         <div className="room-col"><HomeHero ctx={ctx}>{office('desk')}</HomeHero></div>
@@ -265,7 +267,7 @@ function Home(ctx: Ctx) {
           <section className="home-section working" aria-label="On it now"><div className="section-head"><span className="label">On it now</span>{working.length > 0 && <span className="small mute">{working.length} working</span>}</div><div className="list-group">
             {working.length ? working.map((c) => <a key={c.id} className="list-row" href={hrefOf(c.id)}>
               <Face who={{ kind: c.kind, name: c.name, mood: c.mood }} size={36} ring="working" /><span className="grow"><b className="clamp1">{c.name}</b><span className="small clamp1">{c.step || c.status}</span></span>
-            </a>) : <Empty>Nothing right now. The crew is free.</Empty>}
+            </a>) : <Empty>{waiting ? `Nothing moves until you answer: ${waiting} waiting on you.` : 'Nothing right now. The crew is free.'}</Empty>}
           </div></section>
           {todays.length > 0 && <section className="home-section done" aria-label="Done today"><div className="label">Done today</div><div className="list-group">
             {todays.map((t) => { const target = A.fileTarget(t.files[0]); return <div key={t.id} className="list-row"><span className="file-chip">{target?.chip ?? '—'}</span><span className="grow"><b className="clamp1">{t.title}</b><span className="small clamp1">{t.summary}</span></span><a className="btn sm" href={target?.href ?? hrefOf(t.helper)}>Open</a></div>; })}

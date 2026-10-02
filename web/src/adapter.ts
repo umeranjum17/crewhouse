@@ -633,10 +633,7 @@ export function things(state: Json): Thing[] {
 export type Job = { bot: string; label: string; ask: string; says: string; goal: boolean; money: boolean; needs: string[]; hire?: string };
 
 /** Home's three counts, from the same rows shown below them: what needs you, who is working, what got done today. */
-export function homeCounts(state: Json) {
-  const day = new Date(); day.setHours(0, 0, 0, 0);
-  return { needs: needsYou(state).length, working: work(state).filter((w) => !w.waiting).length, done: things(state).filter((t) => t.at >= day.getTime()).length };
-}
+export const homeCounts = (state: Json) => office(state).counts;
 /** Home's one-line state, from the same needs and work rows shown below it. */
 export function homeSummary(state: Json) {
   const { needs, working } = homeCounts(state);
@@ -1151,8 +1148,8 @@ export const apps = (state: Json): App[] => APPS.map((a) => ({ ...a, on: !!state
 export type OfficeMember = { id: string; name: string; kind: Kind; mood: Mood; ring: Helper['ring']; status: string;
   step: string; steps: Step[]; things: FileView[]; ask?: Card; second?: boolean };
 /** The one state source every office surface reads: the room, its header counts, the tray, the dock or rail roster
- *  and Needs you. `needs` is Needs you itself; `counts.needs` is its length, `working` the helpers on a job of
- *  yours right now (one may also wait on you: their seat says needs, the count still says working), `done` what
+ *  and Needs you. `needs` is Needs you itself; `counts.needs` is its length, `working` the helpers whose seat is
+ *  working (one waiting on you counts once, under needs, wherever they show), `done` what
  *  landed in the tray today. */
 export type OfficeView = { chief: ChiefView; crew: OfficeMember[]; done: Thing[]; needs: Card[];
   counts: { needs: number; working: number; done: number } };
@@ -1172,7 +1169,7 @@ export const roster = (crew: OfficeMember[]) => SEAT_ORDER.flatMap((k) => crew.f
 export const askRank = (c: Card) => (c.kind === 'spend' ? 0 : c.kind === 'ok' ? 1 : 2);
 const tally = (crew: OfficeMember[], needs: Card[], done: Thing[]) => {
   const day = new Date().setHours(0, 0, 0, 0);
-  return { needs: needs.length, working: crew.filter((c) => c.ring === 'working').length, done: done.filter((t) => t.at >= day).length };
+  return { needs: needs.length, working: crew.filter((c) => seatOf(c) === 'working').length, done: done.filter((t) => t.at >= day).length };
 };
 /** The member's Needs-you row: the first in Needs you's own order. */
 const askFor = (needs: Card[], id: string) => needs.find((c) => c.helper === id);

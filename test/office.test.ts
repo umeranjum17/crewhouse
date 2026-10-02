@@ -210,11 +210,13 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, nothing covers anythin
           const clipped = [...document.querySelectorAll('.o-bub b, .o-st > span, .o-chip b')].filter((e) => e.scrollWidth > e.clientWidth + 1).length;
           const asks = [...document.querySelectorAll('.o-bub.needs a[href^="#/ask/"]')].map((a) => a.getAttribute('href'));
           const office = document.querySelector('.office:not([hidden])');
-          const hero = office.closest('.hero');
-          const stat = parseInt(hero.querySelector('.stat').textContent, 10);
+          const hero = [...document.querySelectorAll('.hero')].find((h) => h.offsetParent);
+          const [stat, busy] = [...hero.querySelectorAll('.stat')].map((e) => parseInt(e.textContent, 10));
+          const names = (q) => [...document.querySelectorAll(q)].map((e) => e.textContent);
+          const onIt = names('.feed .working .list-row .grow > b'), waits = names('.side-row:has(.side-seat.needs, .side-seat.chat) .grow > b');
           const badge = parseInt(document.querySelector('.tabbar a .badge, .side-nav .badge')?.textContent ?? '0', 10);
           const more = Number(document.querySelector('.o-more')?.dataset.more ?? 0);
-          return { out, over, clipped, asks, unique: new Set(asks).size, stat, badge,
+          return { out, over, clipped, asks, unique: new Set(asks).size, stat, badge, busy, onIt, waits,
             seated: document.querySelectorAll('.o-cell .o-sprite').length - 1, more: more || 0,
             roster: document.querySelectorAll('.side-row').length };
         })()`);
@@ -227,14 +229,18 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, nothing covers anythin
         assert.equal(m.stat, m.badge, `${at}: the header's count is the Needs-you badge`);
         assert.equal(m.seated + m.more, n, `${at}: everyone is in the room or counted under "+N"`);
         assert.ok(m.seated <= Math.max(4, reviews) + 3, `${at}: the room never grows past its desks and lounge`);
-        if (!mobile) assert.equal(m.roster, n + (n > 1 ? 2 : 1), `${at}: the rail names the whole crew`);
+        if (!mobile) {
+          assert.equal(m.roster, n + (n > 1 ? 2 : 1), `${at}: the rail names the whole crew`);
+          assert.equal(m.busy, m.onIt.length, `${at}: the header's working count is On it now`);
+          assert.deepEqual(m.onIt.filter((x: string) => m.waits.includes(x)), [], `${at}: one state per helper: waiting is never also on it now`);
+        }
         if (n === 30) assert.ok(m.more > 0, `${at}: a big crew is counted under "+N"`);
       }
     }
     // The furniture is scenery: a tap on a desk front lands on its seat and opens that helper.
     await b.open('demo=crew5&day');
     await until('the room', () => b.run(room), 30_000);
-    await b.run("(() => { const r = document.querySelector('.o-cell[data-seat] .o-deskf').getBoundingClientRect(); document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2).click(); })()");
+    await b.run("(() => { const d = document.querySelector('.o-cell[data-seat] .o-deskf'); d.scrollIntoView({ block: 'center' }); const r = d.getBoundingClientRect(); document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2).click(); })()");
     await until('the helper\'s panel', () => b.run("!!document.querySelector('.o-sheet')"), 5000);
     // "+N" leads to the whole crew.
     await b.open('demo=crew30&day');

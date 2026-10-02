@@ -211,8 +211,8 @@ function HelperSheet({ c, h, state, asks, onClose }: { c: A.OfficeMember; h: A.H
           <span className="grow"><h2>{c.name}</h2>{h?.role && <span className="mute small">{h.role}</span>}</span>
           <button className="icon-btn" onClick={onClose} aria-label="Close">✕</button>
         </header>
-        <Pill tone={t.pill} live={c.ring === 'working'}>{c.ring === 'working' ? 'Working' : c.status}</Pill>
-        {(c.ring || c.ask) && job && <div className="o-sec"><div className="o-eyebrow">{c.ring === 'needs' ? 'Waiting on you' : 'Working on'}</div><h3>{job.title}</h3></div>}
+        <Pill tone={t.pill} live={A.seatOf(c) === 'working'}>{A.seatOf(c) === 'working' ? 'Working' : A.waitsOnYou(c) ? A.SEAT_WORDS[A.seatOf(c)] : c.status}</Pill>
+        {(c.ring || c.ask) && job && <div className="o-sec"><div className="o-eyebrow">{A.waitsOnYou(c) ? 'Waiting on you' : 'Working on'}</div><h3>{job.title}</h3></div>}
         {asks.map((a) => <div key={a.id} className="o-ask big"><div className="o-ask-tag"><i /><span>{a.head}</span></div><p>{a.words}</p><a className="btn go" href={`#/ask/${a.id}`}>Review</a></div>)}
         {c.steps.length > 0 && <Steps steps={c.steps} max={5} />}
         {c.things.length > 0 && <div className="o-sec"><div className="o-eyebrow">{c.ring ? 'First looks' : 'Made for you'}</div>

@@ -1133,6 +1133,8 @@ function Home(ctx: Ctx) {
     <View style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={s.page} keyboardShouldPersistTaps="handled">
         <HomeHero state={state} view={view} offline={offline} go={go} />
+        {/* Needs you before the room, so its first rows sit on the first screen above Chief's box. */}
+        {needs.length > 0 && <View><Label count={needs.length}>Needs you</Label><View style={[s.listGroup, { backgroundColor: t.solid, borderColor: t.line }]}><NeedsRows state={state} cards={needs} open={open} /></View></View>}
         <View onLayout={(e) => setRoom(e.nativeEvent.layout.width)} style={[s.office, { backgroundColor: t.soft, borderColor: t.line }]}>
           {room > 0 && <Office view={view} night={t.night} offline={offline} width={room - 2} onChief={() => go({ view: 'chief' })} onDesk={(c) => setDesk({ c, state })} onAsk={open} onTray={() => go({ view: 'things' })} onCrew={() => go({ view: 'crew' })} />}
         </View>
@@ -1141,7 +1143,6 @@ function Home(ctx: Ctx) {
           <AiMark ai={A.AIS[0]} size={30} />
           <View style={{ flex: 1 }}><T style={s.rowTitle}>Your AI accounts</T><T tone="ink2" style={s.small} lines={2}>You sign in on the home computer, in Settings.</T></View><T tone="mute">›</T>
         </Pressable>
-        {needs.length > 0 && <View><Label count={needs.length}>Needs you</Label><View style={[s.listGroup, { backgroundColor: t.solid, borderColor: t.line }]}><NeedsRows state={state} cards={needs} open={open} /></View></View>}
         <ChatList state={state} go={go} mood={chief.mood} />
         <JobList state={state} go={go} refresh={refresh} />
       </ScrollView>
@@ -1175,7 +1176,7 @@ function DeskSheet({ desk, state, offline, canAct, go, refresh, onClose }: Ctx &
           <Btn label="Close" onPress={onClose} />
         </View>
         <View style={{ flexDirection: 'row' }}>{offline ? <Pill tone="off">{OUT}</Pill>
-          : <Pill tone={c.ring === 'needs' ? 'wait' : c.ring ? 'ok' : 'off'}>{c.ring === 'working' ? 'Working' : c.status}</Pill>}</View>
+          : <Pill tone={A.waitsOnYou(c) ? 'wait' : c.ring ? 'ok' : 'off'}>{A.waitsOnYou(c) ? A.SEAT_WORDS[A.seatOf(c)] : c.ring === 'working' ? 'Working' : c.status}</Pill>}</View>
         <ScrollView contentContainerStyle={{ gap: 12 }}>
           {!offline && !!job && <View style={[s.ev, { backgroundColor: t.sunken }]}>
             <T tone="ink2" style={s.label}>{job.waiting && c.ring !== 'needs' ? 'Up next' : 'Working on'}</T>
