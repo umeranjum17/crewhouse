@@ -251,6 +251,7 @@ video.media { width: auto; max-width: 100%; max-height: 360px; height: auto; obj
 .list-row b.clamp { display: -webkit-box; }
 .list-row .small { color: var(--ink2); display: block; }
 .list-row .mute { color: var(--mute); }
+.job-ic { flex: none; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; border: 1.5px solid var(--ink); background: #DDF4E6; color: #1C1C1E; } /* a money-back job wears the mock's dollar, not a face */
 .chat-end { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; min-width: 36px; color: var(--mute); font-size: 12px; }
 .chat-end .badge { margin: 0; }
 .need-dot { width: 6px; height: 6px; background: var(--pink); border-radius: 50%; }

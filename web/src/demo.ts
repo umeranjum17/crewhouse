@@ -151,7 +151,7 @@ const state = {
   ],
   ideas: [
     { bot: 'scout', promise: "I'll keep an eye on what you just bought, and tell you the day you can claim the money back. I'll do it end to end — you just tap approve.", ask: 'Watch something I bought and tell me when I can claim the difference back', group: 'money', needs: ['Gmail'] },
-    { bot: 'scout', promise: "I'll search the government's unclaimed-money registers for your name and get the claims ready to file. I'll file it end to end — you just tap approve.", ask: 'Search for money owed to me that nobody has claimed', group: 'money', needs: [] },
+    { bot: 'scout', promise: "I'll search the government's unclaimed-money registers for your name and get the claims ready to file. I'll file it end to end — you just tap approve.", ask: 'Search for money owed to me that nobody has claimed', group: 'money', title: 'Find money owed to you', line: 'checks the unclaimed-money lists', needs: [] },
     { bot: 'scout', promise: "I'll set up the return, keep the label, and keep checking until the shop says the refund is on its way. Every step asks you first, on its own card.", ask: 'Help me return this and get the refund', group: 'money', needs: [] },
     { bot: 'scout', promise: "I'll turn your mail, your calendar and what's still open into what today actually is.", ask: "Give me my day: what's on, what's waiting on me, what to do first", needs: dayNeeds },
     { bot: 'scout', promise: "I'll read the letters and forms coming into your mail, put what's due on your calendar, and draft every reply — you read, tap approve, and send.", ask: "Sort the paperwork: what's due, and draft the replies", needs: paperNeeds },

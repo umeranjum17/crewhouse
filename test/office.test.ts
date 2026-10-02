@@ -217,8 +217,8 @@ test('the office keeps the battery budget: calm CSS loops while it shows, none o
 
 // Each demo house (web/src/demo.ts) and its crew size. Every house has something waiting on you (?demo keeps Tracer's
 // question after a crewN swap), so the room shows its one pill.
-const HOUSES: [string, number][] = [['crew1', 1], ['crew5', 5], ['crew12', 12], ['crew30', 30], ['office', 5]];
-test('at 1, 5, 12 and 30 crew, on a phone and a computer, nothing covers anything, the one pill is real, and counts agree', { skip: !bin && 'no Chromium here' }, async () => {
+const HOUSES: [string, number][] = [['crew1', 1], ['crew5', 5], ['crew12', 12], ['crew30', 30], ['office', 5], ['b1', 5]];
+test('at 1, 5, 12 and 30 crew and in the B1 mock\'s house, on a phone and a computer, nothing covers anything, the one pill is real, and counts agree', { skip: !bin && 'no Chromium here' }, async () => {
   const b = await browse();
   await b.send('Page.enable'); await b.send('Runtime.enable');
   for (const [width, height, mobile] of [[390, 844, true], [1440, 900, false]] as const) {
@@ -266,7 +266,7 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, nothing covers anythin
           const more = Number(document.querySelector('.o-more')?.dataset.more ?? 0);
           return { pairs, seen: st.height > 0 && st.top >= bar - 1 && st.top < innerHeight - 40, out, over, clipped, pills, stat, badge, busy, onIt, waits, pinned, all,
             seated: document.querySelectorAll('.o-cell .o-sprite').length - 1, more: more || 0, caps: document.querySelectorAll('.o-strip .o-cap:not(.o-more)').length,
-            roster: document.querySelectorAll('.side-row').length };
+            roster: document.querySelectorAll('.side-row').length, tray: document.querySelector('.o-tray')?.getAttribute('aria-label') ?? null };
         })()`);
         const at = `${demo} ${theme} at ${width}`;
         assert.ok(m.seen, `${at}: Office opens on its room, below the bar and on screen, not just somewhere on the page`);
@@ -287,6 +287,8 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, nothing covers anythin
           assert.deepEqual(m.onIt.filter((x: string) => m.waits.includes(x)), [], `${at}: one state per helper: waiting is never also on it now`);
         }
         if (n === 30) assert.ok(m.more > 0, `${at}: a big crew is counted under "+N"`);
+        // The B1 mock's own state, exactly: 1 needs you, 2 working, Tracer's list the one page in the tray.
+        if (demo === 'b1') assert.deepEqual([m.stat, m.busy, m.tray], [1, 2, 'Your tray: 1 done today'], `${at}: the mock's counts`);
       }
     }
     // The furniture is scenery: a tap on a desk lands on its seat and opens that helper.

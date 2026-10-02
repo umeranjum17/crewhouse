@@ -860,19 +860,20 @@ export function waitOf(page: Json, task: number): string {
  *  unhired template a tap brings on first (docs/ui-contract.md). */
 export function jobs(state: Json): Job[] {
   const rows: Job[] = (state.ideas ?? []).map((i: Json) => ({
-    bot: String(i.bot ?? 'chief'), label: plain(i.ask ?? ''), ask: String(i.ask ?? ''), says: promiseLine(state, i),
+    bot: String(i.bot ?? 'chief'), label: plain(i.title ?? i.ask ?? ''), ask: String(i.ask ?? ''), says: promiseLine(state, i),
     goal: i.group === 'goal', money: i.group === 'money', needs: ((i.needs ?? []) as string[]).map((w) => plain(w)).filter(Boolean),
     ...(typeof i.hire === 'string' && i.hire ? { hire: i.hire } : {}),
   }));
   return rows.sort((a, b) => Number(b.goal) - Number(a.goal) || Number(b.money) - Number(a.money) || a.needs.length - b.needs.length);
 }
-/** Under a job row, whose job it is and the first sentence of its promise: "Scout · I'll search …". Empty when the
- *  promise only repeats the ask. */
+/** Under a job row, whose job it is: the template's own short `line` ("Scout checks the unclaimed-money lists"), else the
+ *  first sentence of its promise ("Scout · I'll search …"), empty when that only repeats the ask. */
 function promiseLine(state: Json, i: Json) {
+  const name = i.bot === 'chief' || !i.bot ? 'Chief' : state.bots?.find((x: Json) => x.id === i.bot)?.display ?? i.bot;
+  if (i.line) return `${name} ${plain(i.line)}`;
   const first = (/^.*?[.!?](?=\s|$)/s.exec(plain(i.promise ?? '')) ?? [plain(i.promise ?? '')])[0].trim();
   const [a, b] = [first, plain(i.ask ?? '')].map((w) => w.toLowerCase().replace(/[.!?\s]+$/, ''));
   if (!first || a.startsWith(b) || b.startsWith(a)) return '';
-  const name = i.bot === 'chief' || !i.bot ? 'Chief' : state.bots?.find((x: Json) => x.id === i.bot)?.display ?? i.bot;
   return `${name} · ${first}`;
 }
 /** What a job that can't run yet would need first, in one plain line. */

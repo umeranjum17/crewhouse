@@ -308,7 +308,7 @@ test('Home keeps a standing "hand me a job" list, straight from crewd\'s ideas: 
   const home = src.slice(src.indexOf('function Home('), src.indexOf('/** The standing'));
   assert.match(home, /<JobList state=\{state\} few refresh=\{refresh\} \/>/, 'the desk\'s feed, beside On it now and Done today');
   assert.match(home, /<JobList state=\{state\} phone refresh=\{refresh\} \/>/, 'and under the chats on a phone');
-  const list = src.slice(src.indexOf('function JobList('), src.indexOf('function JobList(') + 1800);
+  const list = src.slice(src.indexOf('function JobList('), src.indexOf('function ChiefIdeas('));
   assert.match(list, /A\.jobs\(state\)/, 'the rows are the ideas, not a list written in the app');
   assert.match(list, /keepDraft\('chief', ask\)/, 'a tap fills Chief\'s box; it never sends');
   assert.match(list, /className="list-row"/, 'Home uses a whole-row target on both widths');

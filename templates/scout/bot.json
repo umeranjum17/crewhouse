@@ -107,7 +107,9 @@
       ],
       "group": "money",
       "promise": "I'll search the government's unclaimed-money registers for your name and get the claims ready to file. I'll file it end to end — you just tap approve.",
-      "ask": "Search for money owed to me that nobody has claimed"
+      "ask": "Search for money owed to me that nobody has claimed",
+      "title": "Find money owed to you",
+      "line": "checks the unclaimed-money lists"
     },
     {
       "needs": [
