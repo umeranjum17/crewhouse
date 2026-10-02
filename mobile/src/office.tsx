@@ -51,7 +51,8 @@ export function Office({ view, night, offline, width, onChief, onDesk, onAsk, on
   const pill = urgent && (!chiefAsk || A.askRank(urgent.ask!) <= A.askRank(chiefAsk)) ? { at: order.indexOf(urgent), ask: urgent.ask!, who: urgent.name }
     : chiefAsk ? { at: order.indexOf('chief'), ask: chiefAsk, who: 'Chief' } : null;
   const more = plan.more.length, moreBusy = plan.more.filter((c) => A.seatOf(c) === 'working').length;
-  // A done page leaves from where the helper stood before the room re-laid them as done (the web's handOff): per helper,
+  // A done page leaves from where the helper stood before the room re-laid them as done and drops into the tray box
+  // on the floor (centre 318, mouth at G - 14; the web's handOff). Per helper,
   // their done count, where they stood last render, and where the current page started. Idempotent, so safe in render.
   const stood = useRef(new Map<string, { n: number; x: number; from: number }>()).current;
   const fromOf = (id: string, n: number, x: number) => {
@@ -106,7 +107,7 @@ export function Office({ view, night, offline, width, onChief, onDesk, onAsk, on
               {m.second ? <View style={{ filter: [{ hueRotate: '48deg' }] }}>{img}</View> : img}
             </motion.Hop>
             {(() => { const n = view.done.filter((d) => d.helper === m.id).length, from = fromOf(m.id, n, x);
-              return <motion.Fly beat={n} dx={u(318 - from)} dy={u(-20)} reduce={reduce} awake={awake}
+              return <motion.Fly beat={n} dx={u(318 - from)} dy={u(36)} reduce={reduce} awake={awake}
               style={{ position: 'absolute', left: u(24 + from - x), top: u(40), width: 14, height: 18, backgroundColor: '#fff', borderWidth: 1.5, borderColor: ink, borderRadius: 2 }}><View /></motion.Fly>; })()}
           </Pressable>;
         })}

@@ -64,21 +64,22 @@ export function Office({ state, live, night }: { state: Json; live: A.OfficeView
   // The room's loops pause while it is off screen; from a computer's width the wall and floor fill a taller card.
   const box = useRef<HTMLDivElement>(null);
   const [wide, setWide] = useState(false);
+  // Where each helper stands now, in the room's current layout: the done page's start (below).
+  const desks = useRef(new Map<string, { x: number; y: number }>());
   useLayoutEffect(() => {
     const el = box.current;
     if (!el) return;
-    const ro = new ResizeObserver(([en]) => setWide(en.contentRect.width >= 560));
+    const ro = new ResizeObserver(([en]) => { setWide(en.contentRect.width >= 560); desks.current = spritesIn(el); });
     ro.observe(el);
     const io = new IntersectionObserver(([en]) => el.classList.toggle('off', !en.isIntersecting));
     io.observe(el);
     return () => { ro.disconnect(); io.disconnect(); };
   }, []);
 
-  // Whoever finished hands a page to the tray, and the tray's count bumps. The page leaves from where their desk was
-  // before the room re-laid them as done (ponytail: measured at the last change; a resize in between starts it from
-  // the old spot, re-measure on resize if that shows).
+  // Whoever finished hands a page to the tray box, and the tray's count bumps. The page leaves from where their desk was
+  // before the room re-laid them as done: measured after every change, every resize and the switch to the wide room
+  // (whose first layout is measured before it is ever painted, so it must be measured again).
   const seen = useRef<A.OfficeView | null>(null);
-  const desks = useRef(new Map<string, { x: number; y: number }>());
   useEffect(() => {
     const was = seen.current, from = desks.current;
     seen.current = live;
@@ -87,6 +88,7 @@ export function Office({ state, live, night }: { state: Json; live: A.OfficeView
     const got = A.handedIn(was, live);
     if (got.length) handOff(box.current, got, from);
   }, [live]);
+  useEffect(() => { desks.current = spritesIn(box.current); }, [wide]);
   const trayWas = useRef<number | undefined>(undefined);
   useEffect(() => { trayWas.current = live.counts.done; }, [live.counts.done]);
 
@@ -318,21 +320,23 @@ function Tag({ x, y, text, hot, tail, cls = '', href, label }: { x: number; y: n
   </a>;
 }
 
-/** Done hand-off: a page travels from the helper's desk to the tray, then the tray's count bumps. Reduce Motion skips
+/** Done hand-off: a page travels from the helper's desk into the tray box on the floor, then the tray's count bumps. Reduce Motion skips
  *  the journey and lands on the end state, which the refresh already shows. */
 function handOff(room: HTMLElement | null, ids: string[], desks: Map<string, { x: number; y: number }>) {
-  const tray = room?.querySelector('.o-tray rect');
+  const tray = room?.querySelector('.o-traybox > path');   // the box itself, not the page already in it
   if (!room || !tray || reduced()) return;
-  const t = tray.getBoundingClientRect(), base = room.getBoundingClientRect(), to = { x: t.left - base.left, y: t.top - base.top };
+  // The page (14x18) ends centred on the box's mouth, its lower part inside, so it reads as dropped in.
+  const t = tray.getBoundingClientRect(), base = room.getBoundingClientRect(), to = { x: t.left - base.left + t.width / 2 - 7, y: t.top - base.top - 10 };
   for (const id of new Set(ids)) {
     const from = desks.get(id);
     if (!from) continue;
     const page = document.createElement('i');
     page.className = 'o-flyer';
     page.dataset.from = id;
-    page.style.left = `${from.x}px`; page.style.top = `${from.y}px`;
+    const x = from.x - 7;   // centred over the helper's head, where they stood
+    page.style.left = `${x}px`; page.style.top = `${from.y}px`;
     room.appendChild(page);
-    page.animate([{ transform: 'none' }, { transform: `translate(${to.x - from.x}px, ${to.y - from.y}px) scale(.7) rotate(8deg)`, opacity: .2 }], { duration: 1300, easing: 'ease-in-out' }).finished.finally(() => page.remove());
+    page.animate([{ transform: 'none', opacity: 1 }, { opacity: 1, offset: .9 }, { transform: `translate(${to.x - x}px, ${to.y - from.y}px) scale(.8) rotate(8deg)`, opacity: 0 }], { duration: 1300, easing: 'ease-in-out' }).finished.finally(() => page.remove());
   }
 }
 /** Where each helper stands in the room now, relative to the room's box: the hand-off's start next time. */

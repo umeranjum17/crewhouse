@@ -1881,6 +1881,14 @@ test('J5 repairs stay in: the night look paints first, the job row is never cut 
   // The hand-off page leaves from where the desk was before the room re-laid them, not from their new spot by the tray.
   assert.match(office, /const was = seen\.current, from = desks\.current;\s*seen\.current = live;\s*desks\.current = spritesIn\(box\.current\);/);
   assert.match(office, /const got = A\.handedIn\(was, live\);\s*if \(got\.length\) handOff\(box\.current, got, from\)/, 'who handed in comes from the done list');
+  // 144: the start is measured in the room's current layout (every resize and the switch to wide, whose first layout is
+  // measured unpainted), and the page lands in the tray box on the floor, whole until it lands, not the floating label.
+  assert.match(office, /new ResizeObserver\(\(\[en\]\) => \{ setWide\(en\.contentRect\.width >= 560\); desks\.current = spritesIn\(el\); \}\)/);
+  assert.match(office, /useEffect\(\(\) => \{ desks\.current = spritesIn\(box\.current\); \}, \[wide\]\);/);
+  assert.match(office, /querySelector\('\.o-traybox > path'\)/); assert.doesNotMatch(office, /querySelector\('\.o-tray rect'\)/);
+  assert.match(office, /\{ opacity: 1, offset: \.9 \}/);
+  assert.match(read('mobile', 'src', 'office.tsx'), /dx=\{u\(318 - from\)\} dy=\{u\(36\)\}/, 'the phone page drops into its floor box');
+  assert.match(read('mobile', 'src', 'motion.ts'), /inputRange: \[0, 0\.9, 1\], outputRange: \[1, 1, 0\]/);
   // The phone's page flies on the same truth, the helper's done count, from where they stood before the re-lay.
   assert.match(read('mobile', 'src', 'office.tsx'), /const n = view\.done\.filter\(\(d\) => d\.helper === m\.id\)\.length, from = fromOf\(m\.id, n, x\);\s*return <motion\.Fly beat=\{n\}/);
   // Scribe's pen is held in the left hand: the Tray bubble floats over the right of that desk.

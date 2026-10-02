@@ -144,11 +144,11 @@ export function Note({ reduce, awake, style, children }: { reduce: boolean; awak
     transform: [{ translateX: v.interpolate({ inputRange: [0, 1], outputRange: [0, 8] }) }, { translateY: v.interpolate({ inputRange: [0, 1], outputRange: [6, -14] }) }] }] }, children);
 }
 
-/** Done hand-off: a page travels `dx`,`dy` points (desk to tray) once when `beat` changes, then is gone. Reduce Motion
+/** Done hand-off: a page travels `dx`,`dy` points (desk into the tray box), whole until it lands, once when `beat` changes, then is gone. Reduce Motion
  *  and the background skip the journey: the tray's count is the end state. */
 export function Fly({ beat, dx, dy, reduce, awake, style, children }: { beat: unknown; dx: number; dy: number; reduce: boolean; awake: boolean; style?: StyleProp<ViewStyle>; children: ReactNode }) {
   const [v] = useState(() => new Animated.Value(1));
   useOnBeat(beat, reduce || !awake, () => v.setValue(1), () => { v.setValue(0); return Animated.timing(v, { toValue: 1, duration: 1300, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }); });
-  return createElement(Animated.View, { pointerEvents: 'none', style: [style, { opacity: v.interpolate({ inputRange: [0, 0.9, 1], outputRange: [1, 0.6, 0] }),
+  return createElement(Animated.View, { pointerEvents: 'none', style: [style, { opacity: v.interpolate({ inputRange: [0, 0.9, 1], outputRange: [1, 1, 0] }),
     transform: [{ translateX: v.interpolate({ inputRange: [0, 1], outputRange: [0, dx] }) }, { translateY: v.interpolate({ inputRange: [0, 1], outputRange: [0, dy] }) }, { scale: v.interpolate({ inputRange: [0, 1], outputRange: [1, 0.7] }) }] }] }, children);
 }
