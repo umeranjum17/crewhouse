@@ -446,7 +446,10 @@ if (variant === 'b1') {
     words: 'Scout wants to place this order at flights.example: Fri 3 Oct 08:40 → 11:10, one stop, seat 14A, bag included. Total $412.00.',
     preview: { head: 'The order at flights.example', body: 'Fri 3 Oct 08:40 → 11:10 · one stop · seat 14A · bag included — $412.00\nTotal $412.00' },
     order: { shown: '$412.00', known: true, dollars: true }, yes: 'Book for $412.00' } }];
-  (state as Json).tasks = [task(52, 'tracer', 'your dinner list', 'done', { updated_at: now - 12 * min, result: 'Seven dinners and one shopping list, sorted by aisle.', files: ['files/dinner-list.pdf'] }), ...state.tasks];
+  // Only Tracer's list is done today, as the mocks' "Tray · 1": the base household's other jobs done today are dropped here.
+  const day = new Date(now).setHours(0, 0, 0, 0);
+  (state as Json).tasks = [task(52, 'tracer', 'your dinner list', 'done', { updated_at: Math.max(day, now - 12 * min), result: 'Seven dinners and one shopping list, sorted by aisle.', files: ['files/dinner-list.pdf'] }),
+    ...state.tasks.filter((t: Json) => !(t.state === 'done' && t.updated_at >= day))];
   events.push(ev(20, 13, 'file.delivered', 'tracer', { task: 52, path: 'files/dinner-list.pdf' }), ev(21, 12, 'task.done', 'tracer', { task: 52, title: 'your dinner list' }));
   pages.chief = { messages: [
     { id: 1, author: 'person', text: 'Can you get me to Lahore on Friday? Morning if possible.', at: now - 20 * min },
