@@ -461,7 +461,7 @@ function DocSheet({ f, onClose }: { f: A.FileView; onClose: () => void }) {
       <Pressable style={[s.sheet, { backgroundColor: t.bg, maxHeight: '88%' }]} onPress={() => {}}>
         <View style={s.row}>
           <View style={[s.fileIc, { backgroundColor: t.solid, borderColor: t.line }]}><T tone={f.kind === 'sheet' ? undefined : 'ink2'} style={[s.fileGlyph, f.kind === 'sheet' && { color: t.ok }]}>{f.kind === 'sheet' ? '▦' : '▤'}</T></View>
-          <T style={[s.h2, { flex: 1 }]} lines={2}>{name}</T></View>
+          <T style={[s.h2, { flex: 1 }]}>{name}</T></View>
         <View style={[s.row, { flexWrap: 'wrap', paddingBottom: 12, borderBottomWidth: 1, borderColor: t.line }]}>
           <FileActions f={f} name={name} /><View style={{ flex: 1 }} /><Btn label="Close" onPress={onClose} /></View>
         <ScrollView style={{ flexShrink: 1 }}>
