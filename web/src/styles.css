@@ -848,6 +848,10 @@ details.card[open] > summary { margin-bottom: 10px; }
   .home-desk { display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; align-items: start; margin-right: 32px; }
   .feed { display: flex; flex-direction: column; min-width: 0; }
   .feed .home-section { margin-bottom: 20px; }
+  /* the desk feed's job row is B1's compact card: as wide as the feed (no .jobs side inset), the mock's gap, padding and line */
+  .feed .jobs { padding-inline: 0; }
+  .feed .jobs .list-row { gap: 10px; padding: 10px 12px; }
+  .feed .jobs .list-row .small { font-size: 12.5px; line-height: 17px; }
   .feed-ask { position: sticky; bottom: 0; padding: 12px 0 16px; background: var(--bg); margin-top: auto; }
   .feed-ask .composer { box-shadow: none; }
   .side-seat { display: flex; gap: 5px; align-items: center; font: 500 12px/16px var(--ui); color: var(--ink2); }
