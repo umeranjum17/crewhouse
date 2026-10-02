@@ -63,13 +63,13 @@ const asks = [
     preview: { head: 'How Scout would do it', body: '1. Five dinners, vegetarian, nothing over forty minutes.\n2. One shopping list, grouped by aisle.\n3. Keep Friday for pizza night.' } } },
   { id: 11, bot: 'scout', task_id: 42, kind: 'permission', at: now - 30_000, member: 1, title: '', detail: {
     effect: 'spend', spends: true, ...(variant === 'unknown' ? {
-      words: "Scout wants to act on a checkout page at shop.example. I couldn't read the total on this page.",
-      preview: { head: 'The order at shop.example', body: "Garlic, 2 kg — $6.20\nWhole milk (1 gal) x2\nBasmati rice 10 lb\nTotal: couldn’t read it on this page" },
+      words: "Scout wants to act on a checkout page at flights.example. I couldn't read the total on this page.",
+      preview: { head: 'The order at flights.example', body: "London to Lahore, Fri 12 Dec, 1 adult\nChecked bag, 23 kg\nTotal: couldn’t read it on this page" },
       order: { shown: '', known: false, dollars: false },
     } : {
-      words: 'Scout wants to place this order at shop.example: Garlic, 2 kg, Whole milk (1 gal) x2, Basmati rice 10 lb. Total $43.10.',
-      preview: { head: 'The order at shop.example', body: 'Garlic, 2 kg — $6.20\nWhole milk (1 gal) x2 — $7.90\nBasmati rice 10 lb $24.00\nTotal $43.10' },
-      order: { shown: '$43.10', known: true, dollars: true },
+      words: 'Scout wants to place this order at flights.example: London to Lahore, Fri 12 Dec, 1 adult, Checked bag, 23 kg. Total $684.00.',
+      preview: { head: 'The order at flights.example', body: 'London to Lahore, Fri 12 Dec, 1 adult — $639.00\nChecked bag, 23 kg — $45.00\nTotal $684.00' },
+      order: { shown: '$684.00', known: true, dollars: true },
     }) } },
   { id: 8, bot: 'reel', task_id: 41, kind: 'connect', at: now - min, member: 1, title: '', detail: { app: 'drive', words: 'Want a copy in your Drive too?' } },
   { id: 12, bot: 'reel', task_id: 41, kind: 'question', at: now - 2 * min, member: 1, title: '', detail: { question: 'Include the baby photos Mum sent, or just the recent ones?' } },
