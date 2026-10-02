@@ -631,8 +631,9 @@ function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
       </KeyboardAvoidingView>
     );
   }
+  // Scrolls on short screens: a centered View spills past both safe-area edges instead.
   return (
-    <Center>
+    <ScrollView contentContainerStyle={s.centerScroll}>
       <Halo><ChiefArt mood="hello" size={120} /></Halo>
       <T style={s.display}>Crewhouse</T>
       <T tone="ink2" style={[s.centerText, { marginTop: -6 }]}>Your personal assistant, in your pocket.</T>
@@ -650,7 +651,7 @@ function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
       {!!err && /camera/.test(err) && <Btn label="Open phone settings" onPress={() => void Linking.openSettings()} />}
       {!busy && <Btn label="Type a code" onPress={() => { setTyping(true); setErr(''); }} />}
       <T tone="mute" style={[s.small, s.centerText, { marginTop: 20 }]}>🔒 Only your computer can read what this phone sends. Anything passing it along can't read it.</T>
-    </Center>
+    </ScrollView>
   );
 }
 
