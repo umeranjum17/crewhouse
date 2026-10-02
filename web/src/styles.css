@@ -939,6 +939,7 @@ h1 { font: 400 32px/36px var(--serif); letter-spacing: -.005em; }
 .home-mode button { border-radius: 10px; padding: 7px 14px; font: 600 14px/18px var(--ui); }
 .home-mode button.on { box-shadow: 0 0 0 1px var(--line), 0 1px 2px #0001; }
 
+.feed-list { display: contents; }
 .feed-head { display: flex; align-items: baseline; gap: 8px; margin: 0 0 4px; font: 400 30px/34px var(--serif); }
 .feed-head small { font: 400 13px var(--ui); color: var(--mute); }
 .on-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
@@ -981,7 +982,10 @@ h1 { font: 400 32px/36px var(--serif); letter-spacing: -.005em; }
 @media (min-width: 1200px) {
   .home-office { grid-template-columns: minmax(0, 1fr) 420px; padding: 0; }
   .office-main { padding: 26px 30px; height: 100dvh; min-height: 0; position: sticky; top: 0; }
-  .home-office > .feed { border-left: 1.5px solid var(--ink); padding: 24px 22px 0; height: 100dvh; position: sticky; top: 0; overflow-y: auto; overscroll-behavior: contain; gap: 10px; }
+  /* The rail's content scrolls on its own above Chief's box, which stands apart under it. */
+  .home-office > .feed { border-left: 1.5px solid var(--ink); padding: 24px 0 0; height: 100dvh; position: sticky; top: 0; }
+  .home-office > .feed > .feed-list { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 10px; padding: 0 22px; }
+  .home-office > .feed > .feed-ask { position: static; padding: 12px 22px 16px; }
   /* The room fills the column under the greeting, as the mock: the wall and floor drawn past the viewBox show above and below. */
   .office-main > .office { flex: 1; min-height: 0; display: flex; flex-direction: column; }
   .office-main .o-room { flex: 1; min-height: 0; }

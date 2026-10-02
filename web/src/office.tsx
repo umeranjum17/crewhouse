@@ -183,11 +183,14 @@ const stationOf = (c: A.OfficeMember, v: A.OfficeView): Station => {
   return k === 'needs' || k === 'chat' ? 'needs' : k === 'working' ? (c.kind === 'scribe' ? 'writing' : 'monitor') : k === 'failed' ? 'failed'
     : k === 'resting' ? 'rest' : stripSeat(c, v) === 'done' ? 'done' : 'stand';
 };
+const TALL: Station[] = ['chief', 'monitor', 'failed', 'needs'];
 type Spot = { m: A.OfficeMember | 'chief' | 'tray'; st: Station; x: number; tray: boolean };
 const G = 196, X0 = 14, W = 346;
 /** Left to right in the given order, the tray just before whoever finished (or before the resting); the row scales down
  *  about the floor line to fit, and centres when it is short. The Tray bubble never sits over a figure or past the
- *  room's edge: the tray keeps room for it on both sides (more beside Chief, whose hat and cane reach 40 to his right).
+ *  room's edge: the tray keeps room for it beside anyone reaching its height (Chief's hat and cane reach 40 to his
+ *  right, a screen, a raised pen and the pill above it) and at the room's end; it floats over a low neighbour as in the
+ *  mock (a writer, the finished, the resting) while the row is at 3/4 size or more, where it clears their heads.
  *  ponytail: four passes for that room under scaling, exact enough for six stations. */
 function lay(order: (A.OfficeMember | 'chief')[], v: A.OfficeView, trayText: string) {
   const sts = order.map((m) => (m === 'chief' ? 'chief' : stationOf(m, v)) as Station);
@@ -202,7 +205,9 @@ function lay(order: (A.OfficeMember | 'chief')[], v: A.OfficeView, trayText: str
       let [l, r] = PAD[it.st];
       // The bubble is centred over the tray, 20 left of a done figure; its half plus a gap, unscaled, clears each neighbour.
       const b = (half + 4) / s, dx = it.st === 'done' ? 20 : 0;
-      if (it.tray) { l = Math.max(l, (items[i - 1]?.st === 'chief' ? 14 : 0) + dx + b); r = Math.max(r, b - dx); }
+      const tall = (n?: { st: Station }) => !n || s < 0.75 || TALL.includes(n.st);
+      if (it.tray && tall(items[i - 1])) l = Math.max(l, (items[i - 1]?.st === 'chief' ? 14 : 0) + dx + b);
+      if (it.tray && tall(items[i + 1])) r = Math.max(r, b - dx);
       const x = cur + l; cur = x + r;
       return { ...it, x };
     });

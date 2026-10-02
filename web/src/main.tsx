@@ -381,11 +381,13 @@ function Home(ctx: Ctx) {
         </div>
       </div>
       <aside className="feed desk-only" aria-label="What's going on">
-        {tonight()}
-        <NeedsPin state={state} cards={live.needs} />
-        <OnItNow live={live} waiting={waiting} />
-        <Chats state={state} refresh={refresh} desk />
-        <JobList state={state} few refresh={refresh} />
+        <div className="feed-list">
+          {tonight()}
+          <NeedsPin state={state} cards={live.needs} />
+          <OnItNow live={live} waiting={waiting} />
+          <Chats state={state} refresh={refresh} desk />
+          <JobList state={state} few refresh={refresh} />
+        </div>
         <div className="feed-ask"><Composer placeholder="Ask Chief anything…" onSend={toChief} {...typeInto('chief')} chips={A.ideas(state).map((i: Json) => ({ label: i.ask.trim(), ask: i.ask }))} /></div>
       </aside>
       <div className="dock phone-only"><Composer placeholder="Ask Chief anything" onSend={toChief} {...typeInto('chief')} chips={[]} /></div>
