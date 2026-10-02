@@ -4,7 +4,8 @@
 // counts everyone else (the rail's crew list names them all). Every word and count comes from A.office, the one
 // state source Home's header, tray, rail and Needs you also read; Review shows only for a row that is in Needs you.
 // Nothing is decided here: a question opens its review sheet, a helper opens their panel (the "Home commits nothing"
-// rule). Nothing moves while the room is quiet: a helper hops once when their news lands, and Reduce Motion skips it.
+// rule). Motion is CSS: each member wears a calm loop for their status (styles.css, paused off screen), a helper hops
+// once when their news lands, a done page travels to the tray; Reduce Motion shows the poses and end states only.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { Json } from './api.ts';
@@ -30,17 +31,13 @@ const said = (c: A.OfficeMember) => {
   return k === 'needs' ? `${c.name} needs you: ${c.ask!.head}` : k === 'working' ? `${c.name}, working on ${c.status}` : k === 'free' || k === 'resting' ? `${c.name}, ${c.status.toLowerCase()}` : `${c.name}, ${A.SEAT_WORDS[k].toLowerCase()}`;
 };
 
-/** A mascot as crisp square pixels with an ink edge, `dot` px a pixel; one image per face, made once. */
-const urls = new Map<string, string>();
-function Sprite({ who, mood, dot, night, className = '', beat }: { who: art.Kind | 'chief'; mood: art.Mood; dot: number; night: boolean; className?: string; beat?: string }) {
-  const key = `${who}-${mood}-${night && who === 'chief' ? 'n' : 'd'}`;
-  let url = urls.get(key);
-  if (!url) {
-    const svg = who === 'chief' ? art.spriteSvg(art.chief(mood), night ? art.CHIEF_PAL_NIGHT : art.CHIEF_PAL, 1, art.EDGE) : art.spriteSvg(art.pal(who, mood), art.palPalette(who), 1, art.EDGE);
-    urls.set(key, url = `data:image/svg+xml,${encodeURIComponent(svg)}`);
-  }
-  const [w, h] = who === 'chief' ? [24, 25] : [20, 19];
-  const img = useRef<HTMLImageElement>(null);
+/** A mascot whole, in B1 line ink (art.ts), `dot` scaling the old sprite footprint. Its pose class drives the calm
+ *  per-status loop in styles.css (work, needs, rest), which Reduce Motion stops at the pose itself. */
+function Sprite({ who, mood, dot, className = '', beat }: { who: art.Kind | 'chief'; mood: art.Mood; dot: number; night?: boolean; className?: string; beat?: string }) {
+  const pose = art.poseOf(mood);
+  const svg = useMemo(() => who === 'chief' ? art.chiefSvg(pose) : art.beanSvg(who, pose), [who, pose]);
+  const [w, h] = who === 'chief' ? [20 * dot, 25 * dot] : [16 * dot, 20 * dot];
+  const img = useRef<HTMLSpanElement>(null);
   // A hop when their news lands (a new ring, mood or thing): once, never on the first paint, never with Reduce Motion.
   const was = useRef(beat);
   useEffect(() => {
@@ -48,7 +45,7 @@ function Sprite({ who, mood, dot, night, className = '', beat }: { who: art.Kind
     was.current = beat;
     if (!reduced()) img.current?.animate([{ translate: '0 0' }, { translate: '0 -10px', offset: 0.35 }, { translate: '0 0', offset: 0.7 }, { translate: '0 -3px', offset: 0.85 }, { translate: '0 0' }], { duration: 560, easing: 'ease-out' });
   }, [beat]);
-  return <img ref={img} className={`o-px o-sprite ${className}`} src={url} alt="" width={w * dot} height={h * dot} draggable={false} />;
+  return <span ref={img} className={`o-sprite ink ${who} pose-${pose} ${className}`} style={{ width: w, height: h }} aria-hidden dangerouslySetInnerHTML={{ __html: svg }} />;
 }
 
 const KIND_WORDS: Record<A.FileView['kind'], string> = { image: 'a picture', video: 'a video', sheet: 'a spreadsheet', page: 'a document', doc: 'a file' };
@@ -89,7 +86,10 @@ export function Office({ state, live, night }: { state: Json; live: A.OfficeView
     setWidth(el.clientWidth);
     const ro = new ResizeObserver(([en]) => setWidth(Math.round(en.contentRect.width)));
     ro.observe(el);
-    return () => ro.disconnect();
+    // The room's loops pause while it is off screen.
+    const io = new IntersectionObserver(([en]) => el.classList.toggle('off', !en.isIntersecting));
+    io.observe(el);
+    return () => { ro.disconnect(); io.disconnect(); };
   }, []);
   const cols = (width || 360) >= 500 ? 5 : 3;
   const plan = A.floorPlan(crew);
@@ -110,6 +110,7 @@ export function Office({ state, live, night }: { state: Json; live: A.OfficeView
     for (const c of live.crew) for (let i = was.get(c.id) ?? c.things.length; i < c.things.length; i++) got.add(`${c.id}:${i}`);
     if (!got.size) return;
     setFresh((f) => new Set([...f, ...got]));
+    handOff(box.current, [...got].map((k) => k.split(':')[0]));
     // Its own timer, kept past the next change: a step arriving a second later must not leave "New" up for good.
     timers.current.push(window.setTimeout(() => setFresh((f) => new Set([...f].filter((k) => !got.has(k)))), 6000));
   }, [live]);
@@ -119,14 +120,17 @@ export function Office({ state, live, night }: { state: Json; live: A.OfficeView
     '--r-bezel': r.bezel, '--r-screen': r.screen, '--r-sofa': r.sofa, '--r-sofa-dark': r.sofaDark, '--r-window': r.window, '--r-frame': r.frame, '--r-leaf': r.leaf, '--r-pot': r.pot } as CSSProperties;
   const chiefAsk = A.chiefAsks(live).sort((a, b) => A.askRank(a) - A.askRank(b))[0];
   const chiefBusy = chiefAsk ? 'needs' : live.chief.mood === 'work' ? 'work' : '';
+  const trayWas = useRef<number | undefined>(undefined);
+  useEffect(() => { trayWas.current = live.counts.done; }, [live.counts.done]);
   const more = plan.more.length, moreBusy = plan.more.filter((c) => A.seatOf(c) === 'working').length;
 
   return (
     <section className="office" aria-label="The office">
       <div ref={box} className="o-room" style={vars}>
         <div className="o-head">
-          <a className="o-tray" href="#/things" aria-label={`Your tray: ${live.counts.done} done today`}>Your tray · {live.counts.done}</a>
+          <a key={live.counts.done} className={`o-tray${trayWas.current !== undefined && trayWas.current !== live.counts.done ? ' bump' : ''}`} href="#/things" aria-label={`Your tray: ${live.counts.done} done today`}>Your tray · {live.counts.done}</a>
         </div>
+        <Wall wide={cols === 5} />
         <div className="o-desks" style={{ ['--cols' as string]: cols }}>
           <div className="o-cell chief">
             <div className="o-chair" />
@@ -138,7 +142,7 @@ export function Office({ state, live, night }: { state: Json; live: A.OfficeView
             <button className="o-hit" onClick={() => go('#/chief')} aria-label={`Chief: ${live.chief.line}`} />
           </div>
           {Array.from({ length: nooks }, (_, i) => plan.desks[i]).map((c, i) => c ? (
-            <div key={c.id} className="o-cell" data-seat={A.seatOf(c)}>
+            <div key={c.id} className="o-cell" data-seat={A.seatOf(c)} data-id={c.id}>
               <Sprite who={c.kind} mood={c.mood} dot={3} night={night} className={`at-desk${c.second ? ' second' : ''}`} beat={`${c.ring}|${c.mood}|${c.things.length}|${c.ask?.id ?? ''}`} />
               <div className="o-deskf" />
               <div className="o-mon"><Screen c={c} /></div>
@@ -175,6 +179,35 @@ export function Office({ state, live, night }: { state: Json; live: A.OfficeView
         asks={asks.get(open) ?? []} onClose={() => setOpen(null)} />, document.body)}
     </section>
   );
+}
+
+/** The wall above the desks, in the room's ink: a shelf, the night window and the clock. */
+function Wall({ wide }: { wide: boolean }) {
+  const w = wide ? 700 : 360, c = w / 2;
+  return <div className="o-wall" aria-hidden><svg viewBox={`0 0 ${w} 64`} preserveAspectRatio="xMidYMid meet" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+    <path d={`M${c - 150} 50h70`} /><rect x={c - 140} y="34" width="9" height="16" rx="1.5" fill="#DCEBFF" /><rect x={c - 128} y="38" width="8" height="12" rx="1.5" fill="#FFE3DB" />
+    <path d={`M${c - 104} 50v-8h12v8M${c - 98} 42c-6 -6 -4 -12 0 -14c4 2 6 8 0 14`} />
+    <rect x={c - 34} y="8" width="68" height="48" rx="4" fill="var(--r-window)" /><path d={`M${c} 8v48M${c - 34} 32h68`} />
+    <circle cx={c + 20} cy="20" r="4" fill="#FFF3C8" stroke="none" />
+    <circle cx={c + 110} cy="30" r="13" fill="var(--solid)" /><path d={`M${c + 110} 22v8l5 3`} />
+  </svg></div>;
+}
+
+/** Done hand-off: a page travels from the helper's desk to the tray, then the tray's count bumps. Reduce Motion skips
+ *  the journey and lands on the end state, which the refresh already shows. */
+function handOff(room: HTMLElement | null, ids: string[]) {
+  const tray = room?.querySelector('.o-tray');
+  if (!room || !tray || reduced()) return;
+  const to = tray.getBoundingClientRect(), base = room.getBoundingClientRect();
+  for (const id of new Set(ids)) {
+    const from = room.querySelector(`.o-cell[data-id="${CSS.escape(id)}"] .o-mon`)?.getBoundingClientRect();
+    if (!from) continue;
+    const page = document.createElement('i');
+    page.className = 'o-flyer';
+    page.style.left = `${from.left - base.left}px`; page.style.top = `${from.top - base.top}px`;
+    room.appendChild(page);
+    page.animate([{ transform: 'none' }, { transform: `translate(${to.left - from.left}px, ${to.top - from.top}px) scale(.7) rotate(8deg)`, opacity: .2 }], { duration: 1300, easing: 'ease-in-out' }).finished.finally(() => page.remove());
+  }
 }
 
 /** The card over a seat: a name and one short word that always fits (the step itself is in the feed's On it now),

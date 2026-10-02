@@ -8,7 +8,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { join } from 'node:path';
 import type { Json } from '../web/src/api.ts';
-import type { Bitmap, Kind } from '../web/src/art.ts';
+import type { Kind } from '../web/src/art.ts';
 import { PROVIDERS } from '../src/accounts.ts';
 import * as A from '../web/src/adapter.ts';
 import { readTyped } from '../mobile/src/typed.ts';
@@ -548,58 +548,41 @@ test('sign-in states reach the screens as plain states, never the engine\'s word
   assert.ok(!A.needsHouse({ house: { google: false } }, A.apps({})[3]), 'Notion needs no setup');
 });
 
-test('the mascots: every mood draws a whole grid in known colours, and Chief\'s moods all look different', async () => {
+test('the mascots: every app mood wears one of B1\'s five poses, and every pose of everyone looks different', async () => {
   const art = await import('../web/src/art.ts');
-  const moods = ['blink', 'twitch', 'hello', 'happy', 'work', 'ask', 'listen', 'rest', 'worried', 'error'] as const;
-  const faces = [
-    ...[undefined, ...moods].map((m) => [art.chief(m), art.CHIEF_PAL] as const),
-    ...[undefined, ...moods].map((m) => [art.chiefSmall(m), art.CHIEF_PAL] as const),
-    ...(['reel', 'scout', 'scribe', 'pip', 'tracer'] as const).flatMap((k) => [undefined, ...moods].map((m) => [art.pal(k, m), art.palPalette(k)] as const)),
-  ];
-  for (const [rows, pal] of faces) {
-    assert.ok(rows.every((r) => r.length === rows[0].length), 'a ragged bitmap breaks the dot grid');
-    for (const k of rows.join('').replace(/\./g, '')) assert.ok(pal[k], `no colour for "${k}"`);
-  }
-  assert.equal(new Set(moods.map((m) => art.chief(m).join())).size, moods.length, 'two of Chief\'s moods look the same');
-  // The redraw: content is a ∪ (ends curled up, lowest dots in the centre), sad lost the sweat drop, worried keeps it,
-  // and content still smiles in the small cut that draws every face under 48 px.
-  const shape = (r: string) => [...r].map((c) => (c === 'm' ? 'm' : '.')).join('').replace(/^\.+|\.+$/g, '');
-  assert.deepEqual(art.chief('idle').filter((r) => r.includes('m')).slice(-4).map(shape),
-    ['m..............m', 'mm...mmmmmm...mm', 'mmmmmmmmmmmmmm', 'mmmmmmmm'], 'content: a ∪ moustache, lowest dots in the centre');
-  assert.ok(!art.chief('error').join().includes('d'), 'sad lost the sweat drop');
-  assert.ok(art.chief('worried').join().includes('d'), 'worried keeps the drop');
-  assert.notEqual(art.chiefSmall('idle').join(), art.chiefSmall('error').join(), 'small content is not the small cut');
-  assert.deepEqual(art.chiefSmall('idle').filter((r) => r.includes('m')).map(shape), ['m.......m', 'mmmmmmm'], 'small content: the moustache line curls \\u2228');
+  assert.deepEqual(new Set(art.MOODS.map(art.poseOf)), new Set(art.POSES), 'every pose is reachable');
+  const chief = (p: (typeof art.POSES)[number]) => art.chiefSvg(p).replace(/ch\d+c/g, '');
+  assert.equal(new Set(art.POSES.map(chief)).size, 5, 'two of Chief\'s poses look the same');
+  // A helper's face says done (a tick) or resting (eyes shut); the rest of their status is the room's loop and label.
+  for (const k of ['reel', 'scout', 'scribe', 'tracer'] as Kind[]) assert.equal(new Set((['listen', 'pleased', 'rest'] as const).map((p) => art.beanSvg(k, p))).size, 3, k);
+  // Each drawing is one SVG whose clip ids never collide on a page with many faces.
+  const ids = [art.chiefSvg(), art.chiefSvg()].map((x) => x.match(/id="(\w+)"/)![1]);
+  assert.notEqual(ids[0], ids[1]);
 });
 
-test('the phone office sprite set matches art.ts kinds × moods', async () => {
-  // P4: scripts/icons.mjs renders every mascot in every mood into mobile/assets/pals/ (art.spriteSvg: square pixels
-  // with a one-dot ink edge), required from mobile/src/marks.ts. The phone office draws those PNGs instead of one View
-  // per dot. Chief ships a night set; the pals' palette is the same day and night, so they render once.
+test('the phone mascot set matches art.ts: everyone whole and as a head, in every pose', async () => {
+  // scripts/icons.mjs renders every B1 drawing into mobile/assets/pals/ at 3x, required from mobile/src/marks.ts.
   const art = await import('../web/src/art.ts');
-  const files = new Map<string, Bitmap>();
-  for (const m of art.MOODS) {
-    files.set(`chief-${m}.png`, art.chief(m));
-    files.set(`chief-${m}-night.png`, art.chief(m));
-    for (const k of Object.keys(art.PALS)) files.set(`${k}-${m}.png`, art.pal(k as Kind, m));
+  const files = new Map<string, [number, number]>();
+  for (const p of art.POSES) for (const who of ['chief', ...Object.keys(art.PALS)]) {
+    files.set(`${who}-${p}.png`, who === 'chief' ? [180, 225] : [144, 180]);
+    files.set(`head-${who}-${p}.png`, [168, 168]);
   }
   const dir = join(import.meta.dirname, '..', 'mobile', 'assets', 'pals');
-  assert.deepEqual(new Set(readdirSync(dir).filter((f) => f.endsWith('.png'))), new Set(files.keys()),
-    'a mood without a sprite, or a sprite without a mood');
-  for (const [f, rows] of files) {
+  assert.deepEqual(new Set(readdirSync(dir).filter((f) => f.endsWith('.png'))), new Set(files.keys()), 'a pose without a picture, or a picture without a pose');
+  for (const [f, [w, h]] of files) {
     const b = readFileSync(join(dir, f));
     assert.deepEqual(b.subarray(0, 8), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), `${f} is no PNG`);
-    assert.equal(b.readUInt32BE(16), (rows[0].length + 2) * 8, `${f} width is not its bitmap and edge at 8 px a dot`);
-    assert.equal(b.readUInt32BE(20), (rows.length + 2) * 8, `${f} height is not its bitmap and edge at 8 px a dot`);
+    assert.deepEqual([b.readUInt32BE(16), b.readUInt32BE(20)], [w, h], `${f} is not drawn at 3x`);
   }
   const wired = new Set([...readFileSync(join(import.meta.dirname, '..', 'mobile', 'src', 'marks.ts'), 'utf8')
     .matchAll(/require\('\.\.\/assets\/pals\/([\w-]+\.png)'\)/g)].map((m) => m[1]));
   assert.deepEqual(wired, new Set(files.keys()), 'mobile/src/marks.ts does not require the whole set');
 });
 
-test('the phone office: one flat room, a crew that moves only when news lands', () => {
+test('the phone office: one flat room, a crew whose moves run on the native driver only', () => {
   // The room is drawn in Views on A.floorPlan, as the web's is: no pictures of a room, no isometric plan.
-  // The battery budget: no timer or beat keeps a quiet room moving, moves wait for the app to be on screen, the live
+  // The battery budget: no JS timer or beat moves the room (its loops are native-driver animations), moves wait for the app to be on screen, the live
   // desktop never opens here, and the room reads the shared view model for the person.
   const office = readFileSync(join(import.meta.dirname, '..', 'mobile', 'src', 'office.tsx'), 'utf8');
   assert.match(office, /A\.floorPlan\(crew\)/);

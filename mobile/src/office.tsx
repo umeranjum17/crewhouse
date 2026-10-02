@@ -3,14 +3,15 @@
 // grows, four desks go to whoever waits on you and then whoever is working, a three-seat lounge takes the rest and
 // "+N" counts everyone else. Under the room the dock is its tappable, screen-reader index: every helper the one who
 // matters most first (A.roster), so whoever is only counted under "+N" is still one tap away. The crew are the
-// mascot sprites from web/src/art.ts (./marks.ts); the room's colours are tokens.ts `room`. Every word, count and
-// Review comes from the one A.office view Home also reads (useOffice). It moves only when something lands, through
-// ./motion.ts: a quiet room runs no animation or timer.
+// B1 drawings from web/src/art.ts (./marks.ts); the room's colours are tokens.ts `room`. Every word, count and
+// Review comes from the one A.office view Home also reads (useOffice). Motion lives in ./motion.ts: a calm loop per
+// status, a hop when news lands and a done page carried to the tray, all on the native driver and none under Reduce
+// Motion or in the background.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Image, Pressable, ScrollView, Text, View, type ViewStyle } from 'react-native';
 import * as A from '../../web/src/adapter.ts';
 import type { Json } from '../../web/src/api.ts';
-import { PALS as COLOURS } from '../../web/src/art.ts';
+import { PALS as COLOURS, poseOf } from '../../web/src/art.ts';
 import { color, room as ROOM } from '../../web/src/tokens.ts';
 import { onLive } from './link';
 import { PALS } from './marks';
@@ -18,7 +19,7 @@ import * as motion from './motion';
 
 type Look = typeof color.day;
 type Room = typeof ROOM.day;
-const DESK_H = 156, LOUNGE_H = 96, FLOOR = 12, COLS = 3;
+const DESK_H = 156, LOUNGE_H = 96, FLOOR = 12, COLS = 3, WALL_H = 64;
 
 /** How a helper reads to a screen reader, in the room's own words. */
 const said = (c: A.OfficeMember) => {
@@ -50,19 +51,17 @@ export function Office({ view, night, offline, width, onChief, onDesk, onAsk, on
   return (
     <View style={{ width }}>
     <View style={{ width, backgroundColor: r.wall, overflow: 'hidden' }}>
-      {Array.from({ length: Math.ceil(width / 24) }, (_, i) => <View key={i} pointerEvents="none" style={{ position: 'absolute', top: 0, bottom: 0, left: i * 24 + 18, width: 6, backgroundColor: r.stripe }} />)}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 10, paddingTop: 8, minHeight: 34 }}>
         <Pressable onPress={onTray} accessibilityRole="button" accessibilityLabel={`Your tray: ${view.counts.done} done today`} hitSlop={8} style={{ marginLeft: 'auto' }}>
-          <Tag t={t}>{`Your tray · ${view.counts.done}`}</Tag>
+          <motion.Hop beat={view.counts.done} reduce={reduce} awake={awake}><Tag t={t}>{`Your tray · ${view.counts.done}`}</Tag></motion.Hop>
         </Pressable>
       </View>
+      <Wall w={width} r={r} />
       <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
         <Cell w={dw} h={DESK_H} r={r} label={`Chief: ${chief.line}`} onPress={onChief} onReview={chiefAsk ? () => onAsk(chiefAsk) : undefined}>
-          <View pointerEvents="none" style={{ position: 'absolute', left: dw / 2 - 46, bottom: FLOOR, width: 92, height: 58, backgroundColor: r.sofa, borderTopLeftRadius: 14, borderTopRightRadius: 14, borderBottomWidth: 6, borderColor: r.sofaDark }} />
-          <motion.Hop beat={chief.mood} reduce={reduce} awake={awake} style={{ position: 'absolute', left: dw / 2 - 36, bottom: 20 }}>
-            <Image source={PALS[`chief-${chief.mood}${night ? '-night' : ''}`]} style={{ width: 72, height: 75 }} />
+          <motion.Hop beat={chief.mood} reduce={reduce} awake={awake} style={{ position: 'absolute', left: dw / 2 - 30, bottom: FLOOR }}>
+            <motion.Loop pose={poseOf(chief.mood)} reduce={reduce} awake={awake}><Image source={PALS[`chief-${poseOf(chief.mood)}`]} style={{ width: 60, height: 75 }} /></motion.Loop>
           </motion.Hop>
-          <View pointerEvents="none" style={{ position: 'absolute', left: dw / 2 - 54, bottom: FLOOR, width: 108, height: 16, backgroundColor: r.sofa, borderTopLeftRadius: 8, borderTopRightRadius: 8, borderBottomWidth: 4, borderColor: r.sofaDark }} />
           {chiefAsk ? <Bubble t={t} tone={t.pink} name="Chief"><Review t={t} night={night} label={`Review what Chief needs: ${chiefAsk.head}`} onPress={() => onAsk(chiefAsk)} /></Bubble>
             : <Bubble t={t} tone={chief.mood === 'work' && !offline ? t.green : t.line2} name="Chief" line={offline ? 'Asleep' : chief.mood === 'work' ? 'Working' : 'On watch'} />}
         </Cell>
@@ -71,12 +70,17 @@ export function Office({ view, night, offline, width, onChief, onDesk, onAsk, on
           const k = A.seatOf(c);
           return <Cell key={c.id} w={dw} h={DESK_H} r={r} label={said(c)} onPress={() => onDesk(c)} onReview={c.ask ? () => onAsk(c.ask!) : undefined}>
             <motion.Hop beat={`${c.ring}|${c.mood}|${c.things.length}|${c.ask?.id ?? ''}`} times={c.mood === 'happy' ? 2 : 1} reduce={reduce} awake={awake}
-              style={{ position: 'absolute', left: dw / 2 - 46, bottom: 26 }}>
-              <Pal id={`${c.kind}-${c.mood}`} dot={3} step={c.step} reduce={reduce} awake={awake} second={c.second} />
+              style={{ position: 'absolute', left: dw / 2 - 46, bottom: FLOOR }}>
+              <Pal kind={c.kind} mood={c.mood} size={48} reduce={reduce} awake={awake} second={c.second} />
             </motion.Hop>
+            {c.kind === 'reel' && k === 'working' && <motion.Note reduce={reduce} awake={awake} style={{ position: 'absolute', left: dw / 2 - 2, bottom: 62 }}>
+              <Text style={{ fontSize: 15, lineHeight: 16, fontWeight: '700', color: r.edge }}>{'\u266A'}</Text>
+            </motion.Note>}
+            {c.things.length > 0 && <motion.Fly beat={c.things.length} dx={width - 70 - (dw * ((i + 1) % COLS) + dw * 0.86 - 24)} dy={-(DESK_H * Math.floor((i + 1) / COLS) + WALL_H + 78)} reduce={reduce} awake={awake}
+              style={{ position: 'absolute', right: dw * 0.14 + 10, top: 80, width: 14, height: 18, backgroundColor: '#fff', borderWidth: 1.5, borderColor: r.edge, borderRadius: 2 }}><View /></motion.Fly>}
             <Desk w={dw} r={r} />
             <Monitor w={dw} r={r}><Screen c={c} t={t} r={r} /></Monitor>
-            {c.things.length > 0 && <View pointerEvents="none" style={{ position: 'absolute', right: dw * 0.14, top: 70, flexDirection: 'row', gap: 3, alignItems: 'flex-end' }}>
+            {c.things.length > 0 && <View pointerEvents="none" style={{ position: 'absolute', right: dw * 0.14, top: 56, flexDirection: 'row', gap: 3, alignItems: 'flex-end' }}>
               {c.things.slice(-2).map((f) => <motion.Land key={f.url} fresh={!seen.current!.has(f.url)} reduce={reduce} awake={awake}>
                 {f.kind === 'image' || f.kind === 'video'
                   ? <View style={{ width: 15, height: 15, backgroundColor: COLOURS[c.kind].body, borderWidth: 2, borderColor: '#fff' }} />
@@ -91,18 +95,18 @@ export function Office({ view, night, offline, width, onChief, onDesk, onAsk, on
           </Cell>;
         })}
         {Array.from({ length: spare }, (_, i) => <Cell key={`spare${i}`} w={dw} h={DESK_H} r={r}>
-          <View style={{ position: 'absolute', left: dw / 2 - 27, top: 22, width: 54, height: 44, backgroundColor: r.window, borderWidth: 4, borderColor: r.frame }}>
-            <View style={{ position: 'absolute', left: 21.5, top: 0, bottom: 0, width: 3, backgroundColor: r.frame }} />
-            <View style={{ position: 'absolute', top: 16.5, left: 0, right: 0, height: 3, backgroundColor: r.frame }} />
+          <View style={{ position: 'absolute', left: dw / 2 - 27, top: 22, width: 54, height: 44, backgroundColor: r.window, borderWidth: 2, borderColor: r.frame, borderRadius: 4 }}>
+            <View style={{ position: 'absolute', left: 24, top: 0, bottom: 0, width: 2, backgroundColor: r.frame }} />
+            <View style={{ position: 'absolute', top: 19, left: 0, right: 0, height: 2, backgroundColor: r.frame }} />
           </View>
-          <View style={{ position: 'absolute', left: dw / 2 - 18, bottom: FLOOR + 16, width: 36, height: 26, borderRadius: 14, backgroundColor: r.leaf }} />
-          <View style={{ position: 'absolute', left: dw / 2 - 10, bottom: FLOOR, width: 20, height: 18, backgroundColor: r.pot }} />
+          <View style={{ position: 'absolute', left: dw / 2 - 6, bottom: FLOOR + 14, width: 12, height: 20, borderWidth: 2, borderColor: r.leaf, borderTopRightRadius: 12, borderBottomLeftRadius: 12 }} />
+          <View style={{ position: 'absolute', left: dw / 2 - 9, bottom: FLOOR, width: 18, height: 16, backgroundColor: r.pot, borderWidth: 2, borderBottomWidth: 0, borderColor: r.edge, borderTopLeftRadius: 2, borderTopRightRadius: 2 }} />
         </Cell>)}
       </View>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
         {Array.from({ length: A.LOUNGE_SEATS }, (_, i) => plan.lounge[i]).map((c, i) => c ? <Cell key={c.id} w={lw} h={LOUNGE_H} r={r} lounge label={said(c)} onPress={() => onDesk(c)}>
-          <motion.Hop beat={`${c.ring}|${c.mood}`} reduce={reduce} awake={awake} style={{ position: 'absolute', left: lw / 2 - 20, bottom: 42 }}>
-            <Pal id={`${c.kind}-${c.mood}`} dot={2} second={c.second} />
+          <motion.Hop beat={`${c.ring}|${c.mood}`} reduce={reduce} awake={awake} style={{ position: 'absolute', left: lw / 2 - 16, bottom: 40 }}>
+            <Pal kind={c.kind} mood={c.mood} size={32} reduce={reduce} awake={awake} second={c.second} />
           </motion.Hop>
           <Sofa r={r} />
           <View pointerEvents="none" style={{ position: 'absolute', left: 3, right: 3, bottom: 14, flexDirection: 'row', gap: 4, alignItems: 'center', justifyContent: 'center' }}>
@@ -133,7 +137,7 @@ function Dock({ view, t, onDesk }: { view: A.OfficeView; t: Look; onDesk: (c: A.
       const k = A.seatOf(c);
       return <Pressable key={c.id} onPress={() => onDesk(c)} accessibilityRole="button" accessibilityLabel={`${c.name}, ${A.SEAT_WORDS[k].toLowerCase()}`} style={{ alignItems: 'center', gap: 4, width: 56 }}>
         <View style={{ width: 48, height: 48, borderRadius: 24, borderWidth: 2, borderColor: k === 'needs' || k === 'chat' ? t.pink : k === 'working' ? t.green : t.line, backgroundColor: t.surface, alignItems: 'center', justifyContent: 'center' }}>
-          <Pal id={`${c.kind}-${c.mood}`} dot={1.6} second={c.second} />
+          <Image source={PALS[`head-${c.kind}-${poseOf(c.mood)}`]} style={{ width: 38, height: 38 }} />
         </View>
         <Text numberOfLines={1} style={{ fontFamily: 'Inter', fontSize: 11.5, lineHeight: 14, fontWeight: '600', color: t.ink, maxWidth: 56 }}>{c.name}</Text>
       </Pressable>;
@@ -167,10 +171,7 @@ export function useOffice(state: Json, offline: boolean, away: string) {
  *  the whole seat as the tap target when it holds someone. */
 function Cell({ w, h, r, lounge, label, onPress, onReview, children }: { w: number; h: number; r: Room; lounge?: boolean; label?: string; onPress?: () => void; onReview?: () => void; children: ReactNode }) {
   const floor = <>
-    {lounge && <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, top: 30, height: 20, backgroundColor: r.sofaDark }} />}
-    <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: FLOOR + 3, backgroundColor: r.floor, borderTopWidth: 3, borderColor: r.skirt }}>
-      {Array.from({ length: Math.floor(w / 32) }, (_, i) => <View key={i} style={{ position: 'absolute', left: i * 32 + 30, top: 0, bottom: 0, width: 2, backgroundColor: r.seam }} />)}
-    </View>
+    <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: FLOOR + 2, backgroundColor: r.floor, borderTopWidth: 2, borderColor: r.skirt }} />
   </>;
   if (!onPress) return <View style={{ width: w, height: h }}>{floor}{children}</View>;
   // A screen reader reads the seat as one button, so the Review inside it is offered as the seat's own action too.
@@ -179,39 +180,59 @@ function Cell({ w, h, r, lounge, label, onPress, onReview, children }: { w: numb
 }
 
 /** A mascot sprite, `dot` points a pixel (the PNGs carry an ink edge a pixel wide), blinking for a moment on news. */
-function Pal({ id, dot, step, reduce = true, awake = false, second }: { id: string; dot: number; step?: string; reduce?: boolean; awake?: boolean; second?: boolean }) {
-  const blink = motion.useBlink(step, reduce, awake);
-  const src = PALS[blink ? id.replace(/-(\w+)$/, '-blink') : id] ?? PALS[id];
+/** A helper whole, `size` points wide, wearing their status loop. */
+function Pal({ kind, mood, size, reduce = true, awake = false, second }: { kind: A.OfficeMember['kind']; mood: A.OfficeMember['mood']; size: number; reduce?: boolean; awake?: boolean; second?: boolean }) {
+  const pose = poseOf(mood);
   // Another helper of a kind is hue-shifted, as on the web (where the platform has no filter, its name still shows).
-  const img = <Image source={src} style={{ width: 20 * dot, height: 19 * dot }} />;
+  const img = <motion.Loop pose={pose} reduce={reduce} awake={awake}><Image source={PALS[`${kind}-${pose}`]} style={{ width: size, height: size * 1.25 }} /></motion.Loop>;
   return second ? <View style={{ filter: [{ hueRotate: '48deg' }] }}>{img}</View> : img;
 }
 
+/** A desk in ink: a top board on two legs, open underneath so whoever sits there shows through. */
 function Desk({ w, r }: { w: number; r: Room }) {
-  return <View pointerEvents="none" style={{ position: 'absolute', left: w * 0.1, right: w * 0.1, bottom: FLOOR, height: 24, backgroundColor: r.desk, borderTopWidth: 4, borderTopColor: r.top, borderBottomWidth: 3, borderBottomColor: r.edge, alignItems: 'center' }}>
-    <View style={{ marginTop: 7, width: '26%', height: 3, backgroundColor: r.edge }} />
+  return <View pointerEvents="none" style={{ position: 'absolute', left: w * 0.08, right: w * 0.08, bottom: FLOOR, height: 34, borderColor: r.edge, borderLeftWidth: 2, borderRightWidth: 2, borderTopWidth: 0 }}>
+    <View style={{ position: 'absolute', left: -2, right: -2, top: 0, height: 7, backgroundColor: r.desk, borderWidth: 2, borderColor: r.edge, borderRadius: 3 }} />
+  </View>;
+}
+
+/** The wall above the desks, in the room's ink: a shelf, the night window and the clock. Scenery only. */
+function Wall({ w, r }: { w: number; r: Room }) {
+  const c = w / 2;
+  return <View pointerEvents="none" style={{ height: WALL_H, marginTop: -26 }}>
+    <View style={{ position: 'absolute', left: c - 150, top: 49, width: 70, height: 2, backgroundColor: r.edge }} />
+    <View style={{ position: 'absolute', left: c - 140, top: 34, width: 9, height: 16, borderRadius: 1.5, borderWidth: 2, borderColor: r.edge, backgroundColor: COLOURS.reel.body }} />
+    <View style={{ position: 'absolute', left: c - 128, top: 38, width: 8, height: 12, borderRadius: 1.5, borderWidth: 2, borderColor: r.edge, backgroundColor: COLOURS.scout.body }} />
+    <View style={{ position: 'absolute', left: c - 34, top: 8, width: 68, height: 48, borderRadius: 4, borderWidth: 2, borderColor: r.frame, backgroundColor: r.window }}>
+      <View style={{ position: 'absolute', left: 31, top: 0, bottom: 0, width: 2, backgroundColor: r.frame }} />
+      <View style={{ position: 'absolute', top: 21, left: 0, right: 0, height: 2, backgroundColor: r.frame }} />
+      <View style={{ position: 'absolute', right: 8, top: 6, width: 8, height: 8, borderRadius: 4, backgroundColor: '#FFF3C8' }} />
+    </View>
+    <View style={{ position: 'absolute', left: c + 97, top: 17, width: 26, height: 26, borderRadius: 13, borderWidth: 2, borderColor: r.edge }}>
+      <View style={{ position: 'absolute', left: 10, top: 4, width: 2, height: 8, backgroundColor: r.edge }} />
+      <View style={{ position: 'absolute', left: 11, top: 11, width: 6, height: 2, backgroundColor: r.edge }} />
+    </View>
   </View>;
 }
 
 function Monitor({ w, r, children }: { w: number; r: Room; children: ReactNode }) {
-  return <View pointerEvents="none" style={{ position: 'absolute', right: w * 0.14, bottom: 36, width: 30, height: 22, backgroundColor: r.bezel, padding: 3 }}>
+  return <View pointerEvents="none" style={{ position: 'absolute', right: w * 0.14, bottom: 52, width: 34, height: 26, borderWidth: 2, borderColor: r.bezel, borderRadius: 4, backgroundColor: r.screen, padding: 2 }}>
     {children}
-    <View style={{ position: 'absolute', left: 11, bottom: -4, width: 8, height: 4, backgroundColor: r.bezel }} />
+    <View style={{ position: 'absolute', left: 14, bottom: -8, width: 2, height: 6, backgroundColor: r.bezel }} />
   </View>;
 }
 
 /** The monitor's face: dark when free, lines while working, pink with the question's mark when it needs her. */
 function Screen({ c, t, r }: { c: A.OfficeMember; t: Look; r: Room }) {
-  if (A.waitsOnYou(c)) return <View style={{ flex: 1, backgroundColor: `${t.pink}55`, alignItems: 'center', justifyContent: 'center' }}>
+  if (A.waitsOnYou(c)) return <View style={{ flex: 1, backgroundColor: '#FFE9E3', alignItems: 'center', justifyContent: 'center' }}>
     <Text style={{ color: t.pink, fontSize: 12, lineHeight: 13, fontWeight: '800' }}>{c.ask?.kind === 'spend' ? '$' : '!'}</Text>
   </View>;
   return <View style={{ flex: 1, backgroundColor: r.screen, padding: 2, gap: 2, justifyContent: 'center' }}>
-    {c.ring === 'working' && [80, 55, 70].map((w) => <View key={w} style={{ height: 2, width: `${w}%`, backgroundColor: '#A9A3C8' }} />)}
+    {c.ring === 'working' && [80, 55, 70].map((w) => <View key={w} style={{ height: 2, width: `${w}%`, backgroundColor: r.edge, opacity: 0.55 }} />)}
   </View>;
 }
 
 function Sofa({ r }: { r: Room }) {
-  return <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, bottom: 34, height: 14, backgroundColor: r.sofa, borderBottomWidth: 3, borderColor: r.sofaDark }} />;
+  return <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, bottom: 30, height: 16, backgroundColor: r.sofa, borderTopWidth: 2, borderBottomWidth: 2, borderColor: r.sofaDark }} />;
 }
 
 /** The card over a seat: a name and one line, the typing dots while working, or what `children` puts under the name

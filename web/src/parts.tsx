@@ -1,5 +1,5 @@
 // The shared pieces: dot art, the ASCII moments, ask cards and the approval sheet, media, steps, the composer.
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { api, trouble, type Json } from './api.ts';
 import { draftOf, keepDraft, sent } from './draft.ts';
 import { canHear, hear } from './voice.ts';
@@ -142,22 +142,29 @@ export const setNight = (n: boolean) => { night = n; };
 let chiefMood: art.Mood = 'idle';
 export const setChiefMood = (m: art.Mood) => { chiefMood = m; };
 
-/** Chief. `d` is sized for the old 14-dot head, so callers keep their footprint; small sizes get the 12-dot cut.
- *  `hero` marks the one face on screen that lives: it blinks and shows the 170 ms change-blink. */
-export function ChiefArt({ mood = 'idle', d = 6, dark, hero }: { mood?: art.Mood; d?: number; dark?: boolean; hero?: boolean }) {
-  const flash = useChangeBlink(!!hero, mood);
-  const m = flash ? 'blink' : mood;
-  const dd = (d * 14) / 22, small = d * 14 < 24;
-  return <Dots rows={small ? art.chiefSmall(m) : art.chief(m)} pal={dark ?? night ? art.CHIEF_PAL_NIGHT : art.CHIEF_PAL} d={small ? (dd * 22) / 12 : dd} label="Chief" crisp={d * 14 < 96} />;
+/** A B1 drawing (art.ts) as a picture: crisp at any size, and never markup in the page. */
+export function Ink({ svg, w, h = w, label, className = '' }: { svg: string; w: number; h?: number; label?: string; className?: string }) {
+  return <img className={`ink ${className}`} src={`data:image/svg+xml,${encodeURIComponent(svg)}`} width={w} height={h} alt={label ?? ''} aria-hidden={label ? undefined : true} draggable={false} />;
 }
-export function PalArt({ kind, mood = 'idle', d = 4, name, crisp = false }: { kind: art.Kind; mood?: art.Mood; d?: number; name?: string; crisp?: boolean }) {
-  return <Dots rows={art.pal(kind, mood)} pal={art.palPalette(kind)} d={(d * 12) / 18} label={name} crisp={crisp} />;
+
+/** Chief, head and shoulders (`whole` for all of him). `d` keeps the old 14-dot footprint, so callers keep their size.
+ *  `hero` marks the one face on screen that lives: it shows the 170 ms change-blink. */
+export function ChiefArt({ mood = 'idle', d = 6, hero, whole }: { mood?: art.Mood; d?: number; dark?: boolean; hero?: boolean; whole?: boolean }) {
+  const flash = useChangeBlink(!!hero, mood);
+  const m = flash ? 'blink' : mood, pose = art.poseOf(m), w = d * 14;
+  const svg = useMemo(() => whole ? art.chiefSvg(pose) : art.headSvg('chief', pose), [pose, whole]);
+  return <Ink svg={svg} w={w} h={whole ? w * 1.25 : w} label="Chief" className={`pose-${pose}`} />;
+}
+export function PalArt({ kind, mood = 'idle', d = 4, name }: { kind: art.Kind; mood?: art.Mood; d?: number; name?: string; crisp?: boolean }) {
+  const pose = art.poseOf(mood);
+  const svg = useMemo(() => art.headSvg(kind, pose), [kind, pose]);
+  return <Ink svg={svg} w={d * 12} label={name} className={`pose-${pose}`} />;
 }
 
 /** A round face: Chief or a pal, with a ring when it's working or needs you. */
 export function Face({ who, size = 44, ring = '' }: { who: Helper | 'chief' | { kind: art.Kind; name: string; mood?: art.Mood }; size?: number; ring?: string }) {
   const chief = who === 'chief';
-  const soft = chief ? (night ? '#2A2622' : '#FFF3E0') : art.PALS[who.kind].soft;
+  const soft = chief ? (night ? '#2A2622' : '#EEF1F6') : art.PALS[who.kind].soft;
   return (
     <span className={`face ${ring}`} style={{ width: size, height: size, background: night && !chief ? `color-mix(in srgb, ${soft} 16%, var(--solid))` : soft }}>
       {chief ? <ChiefArt d={size * .74 / 14} mood={chiefMood} /> : <PalArt kind={who.kind} mood={who.mood} d={size * .74 / 12} name={who.name} crisp={size < 96} />}
@@ -169,7 +176,7 @@ export function Face({ who, size = 44, ring = '' }: { who: Helper | 'chief' | { 
 export function Logo({ night }: { night?: boolean }) {
   return (
     <span className="logo" aria-label="Crewhouse">
-      <Dots rows={art.chiefSmall()} pal={night ? art.CHIEF_PAL_NIGHT : art.CHIEF_PAL} d={1.8} crisp />
+      <ChiefArt d={1.8} />
       <span>Crewhouse</span>
     </span>
   );
@@ -223,7 +230,7 @@ export function Splash({ done: ready }: { done: boolean }) {
       <pre className="art field" aria-hidden>{art.field(t, 200, 72)}</pre>
       <div className="splash-in">
         <Banner />
-        <ChiefArt mood="work" d={7} dark />
+        <ChiefArt mood="work" d={7} whole />
         <Laptop />
         <div className="splash-line">{words.slice(0, Math.min(words.length, 4 + t))}<span className="cur" /></div>
       </div>

@@ -27,7 +27,7 @@ import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { useShareIntent } from 'expo-share-intent';
 import { qrMatrix } from '@byokit/ui-core';
 import * as motion from './src/motion';
-import { MARKS } from './src/marks';
+import { MARKS, PALS } from './src/marks';
 import { askOf, sharedOf } from './src/ask';
 import { bubbleOff, bubbleOn, bubbleResume, bubbleState, bubbleWords, openBubblePermission, showCrew, wanted, type OverlayState } from './src/bubble';
 import { chip, chipSettings, chipState, chipWords, onChip, type StatusState } from './src/chip';
@@ -110,21 +110,22 @@ function Dots({ rows, pal, d, crisp = false }: { rows: art.Bitmap; pal: art.Pale
     </View>
   );
 }
-function ChiefArt({ mood = 'idle', size }: { mood?: art.Mood; size: number }) {
-  const small = size < 24;
-  const rows = small ? art.chiefSmall(mood) : art.chief(mood);
-  return <Dots rows={rows} pal={useLook().night ? art.CHIEF_PAL_NIGHT : art.CHIEF_PAL} d={size / rows[0].length} crisp={size < 96} />;
+/** Chief or a helper in B1 line ink, head and shoulders (`whole` for all of him): the PNGs scripts/icons.mjs renders. */
+function Ink({ who, mood = 'idle', size, whole }: { who: art.Kind | 'chief'; mood?: art.Mood; size: number; whole?: boolean }) {
+  return <Image source={PALS[`${whole ? '' : 'head-'}${who}-${art.poseOf(mood)}`]} style={{ width: size, height: whole ? size * 1.25 : size }} accessibilityIgnoresInvertColors />;
+}
+function ChiefArt({ mood = 'idle', size, whole }: { mood?: art.Mood; size: number; whole?: boolean }) {
+  return <Ink who="chief" mood={mood} size={size} whole={whole} />;
 }
 /** A round face: Chief or a pal, with a ring when it's working or needs you. */
 function Face({ who, size = 44, mood }: { who: A.Helper | 'chief' | { kind: art.Kind; name: string; mood?: art.Mood }; size?: number; mood?: art.Mood }) {
   const t = useLook();
   const chief = who === 'chief';
   const ring = chief || !('ring' in who) ? '' : who.ring;
-  const rows = chief ? [] : art.pal(who.kind, who.mood);
   return (
     <View style={{ width: size, height: size, borderRadius: size, alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
-      backgroundColor: chief ? (t.night ? '#2A2622' : '#FFF3E0') : t.night ? t.surface : art.PALS[who.kind].soft, borderWidth: ring ? 2 : 0, borderColor: ring === 'needs' ? t.pink : t.green }}>
-      {chief ? <ChiefArt mood={mood ?? 'idle'} size={size * 0.74} /> : <Dots rows={rows} pal={art.palPalette(who.kind)} d={(size * 0.74) / rows[0].length} crisp={size < 96} />}
+      backgroundColor: chief ? (t.night ? '#2A2622' : '#EEF1F6') : t.night ? t.surface : art.PALS[who.kind].soft, borderWidth: ring ? 2 : 0, borderColor: ring === 'needs' ? t.pink : t.green }}>
+      <Ink who={chief ? 'chief' : who.kind} mood={chief ? mood : who.mood} size={size * 0.8} />
     </View>
   );
 }
@@ -1322,7 +1323,7 @@ function Chat({ id, m, state, tick, refresh, canAct, offline, open }: Ctx & { id
       <ScrollView ref={scroll} style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 10 }}
         onContentSizeChange={() => { if (!around) scroll.current?.scrollToEnd({ animated: false }); }}>
         {start && <View style={s.intro}>
-          <View style={[s.halo, { backgroundColor: t.soft }]}>{h ? <Dots rows={art.pal(h.kind, h.mood)} pal={art.palPalette(h.kind)} d={72 / 18} /> : <ChiefArt size={72} />}</View>
+          <View style={[s.halo, { backgroundColor: t.soft }]}><Ink who={h ? h.kind : 'chief'} mood={h?.mood} size={72} /></View>
           <T style={s.introName}>{name}</T><T tone="ink2" style={[s.centerText, { maxWidth: 300 }]}>{h ? h.role : 'Runs the crew and answers to you'}</T>
         </View>}
         {!page && <View style={{ gap: 12, paddingLeft: 36, paddingTop: 20 }} accessibilityLabel="Opening the chat">{['62%', '84%', '40%'].map((w) => <View key={w} style={[s.bar, { width: w as any, backgroundColor: t.soft }]} />)}</View>}

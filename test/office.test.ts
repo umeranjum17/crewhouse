@@ -1,6 +1,6 @@
 // The office's battery and layout rules, measured in a real browser on the ?demo households (web/src/office.tsx): the
-// room is flat 2D with no 3D library anywhere, a quiet room asks for no frame and runs no animation, Reduce Motion
-// runs none at all, and at every crew size (?demo=crew1, crew5, crew12, crew30) on a phone and a computer every bubble
+// room is flat 2D with no 3D library anywhere, its motion is calm CSS loops that ask for no frame and stop off screen,
+// Reduce Motion runs none at all, and at every crew size (?demo=crew1, crew5, crew12, crew30) on a phone and a computer every bubble
 // sits inside the room, clear of the others and of every sprite, with each helper who needs her showing Review.
 // Needs a Chromium on PATH (skipped without one).
 import { test, after } from 'node:test';
@@ -160,7 +160,6 @@ async function browse() {
 
 /** Measuring that nothing happens needs a window, so this one is a measurement, not a wait. */
 const WINDOW_MS = 2000;
-const quiet = (b: Awaited<ReturnType<typeof browse>>) => b.run("({ raf: __o.raf, running: document.getAnimations().filter((a) => a.playState === 'running').length })");
 const room = "!!document.querySelector('.o-room .o-cell')";
 /** Home opens on Chat; the room is the Office view, one tap away. */
 const toOffice = async (b: Awaited<ReturnType<typeof browse>>) => {
@@ -169,25 +168,39 @@ const toOffice = async (b: Awaited<ReturnType<typeof browse>>) => {
   await until('the room', () => b.run(room), 30_000);
 };
 
-test('the office keeps the battery budget: nothing moves while quiet, Reduce Motion moves nothing', { skip: !bin && 'no Chromium here' }, async () => {
+// What runs: CSS loops only (never a frame callback), each inside the room, and how many are playing.
+const loops = (b: Awaited<ReturnType<typeof browse>>) => b.run(`(() => {
+  const on = document.getAnimations().filter((a) => a.playState === 'running');
+  return { raf: __o.raf, running: on.length, css: on.filter((a) => a.constructor.name === 'CSSAnimation').length,
+    outside: on.filter((a) => !a.effect?.target?.closest?.('.o-room')).length,
+    working: [...document.querySelectorAll('.o-cell[data-seat=working] .o-sprite')].length };
+})()`);
+
+test('the office keeps the battery budget: calm CSS loops while it shows, none off screen or with Reduce Motion', { skip: !bin && 'no Chromium here' }, async () => {
   const b = await browse();
   await b.send('Page.enable'); await b.send('Runtime.enable');
   for (const demo of ['calm', 'office']) {
     await b.open(`demo=${demo}&day`);
+    // Chat by default: no room, so nothing of the office runs.
+    await until('Chief\'s box', () => b.run("!!document.querySelector('.home-chat .composer')"), 30_000);
+    assert.equal((await loops(b)).outside, 0, `${demo}: Chat runs no office motion`);
     await toOffice(b);
-    // What is on the desks when the room opens is simply there: no hop, no drop on the first paint.
-    await until('the room to settle', () => b.run("window.__o.pending.size === 0 && document.getAnimations().every((a) => a.playState !== 'running')"), 15_000);
-    const q0 = await quiet(b);
+    await until('the room to settle', () => b.run('window.__o.pending.size === 0'), 15_000);
+    const q0 = await loops(b);
     await new Promise((r) => setTimeout(r, WINDOW_MS));
-    assert.deepEqual(await quiet(b), { ...q0, running: 0 }, `${demo}: no frame asked for and no animation running`);
+    const q1 = await loops(b);
+    assert.equal(q1.raf, q0.raf, `${demo}: no frame asked for`);
+    assert.equal(q1.running, q1.css, `${demo}: every move is a CSS loop`);
+    assert.equal(q1.outside, 0, `${demo}: and every loop is in the room`);
+    if (q1.working) assert.ok(q1.running > 0, `${demo}: someone working is seen working`);
+    // Scrolled out of view, the room's loops hold still.
+    await b.run("document.querySelector('.o-room').classList.add('off')");
+    assert.equal((await loops(b)).running, 0, `${demo}: off screen, nothing plays`);
   }
-  // Someone of hers gets news: they hop once, and the room is still again after.
-  await b.run("document.querySelector('.o-sprite.at-desk').animate([{ translate: '0 -10px' }, { translate: '0 0' }], 300).finished.then(() => true)");
-  assert.equal((await quiet(b)).running, 0);
   await b.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
   await b.open('demo=office&day');
   await toOffice(b);
-  assert.equal((await quiet(b)).running, 0, 'Reduce Motion: nothing animates');
+  assert.equal((await loops(b)).running, 0, 'Reduce Motion: nothing animates, every pose and count is the end state');
   await b.send('Emulation.setEmulatedMedia', { features: [] });
 });
 

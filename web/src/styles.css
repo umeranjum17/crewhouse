@@ -86,6 +86,8 @@ b { font-weight: 600; }
 .dots.crisp { gap: 0; image-rendering: pixelated; }
 .dots.crisp b { border-radius: 0; }
 .face .dots b:not(.on), .halo .dots b:not(.on), .logo .dots b:not(.on) { background: transparent; }
+.ink { display: inline-block; flex: none; line-height: 0; }
+.ink svg { display: block; width: 100%; height: 100%; overflow: visible; }
 .halo { display: grid; place-items: center; padding: 18px; border-radius: 50%; background: var(--soft); }
 .face { border-radius: 50%; display: inline-grid; place-items: center; flex: none; position: relative; }
 .face.working::after, .face.needs::after { content: ''; position: absolute; inset: 0; border: 2px solid var(--ok); border-radius: 50%; box-shadow: 0 0 0 2px var(--bg) inset; pointer-events: none; }
@@ -759,8 +761,10 @@ details.card[open] > summary { margin-bottom: 10px; }
    sofa for everyone else. Seats sit edge to edge on a grid (A.floorPlan says how many across), so a bubble lives in
    its own seat and can never cover another. The room's colours come from tokens.ts `room` as --r-* properties. */
 .office { margin-top: 12px; }
-.o-room { position: relative; border-radius: 16px; overflow: hidden; background: var(--r-wall);
-  background-image: repeating-linear-gradient(90deg, transparent 0 18px, var(--r-stripe) 18px 24px); }
+.o-room { position: relative; border-radius: 16px; overflow: hidden; background: var(--r-wall); border: 1px solid var(--line); }
+/* The wall above the desks: a shelf, the night window and the clock, in the room's ink line. Scenery only. */
+.o-wall { position: relative; height: 64px; margin: -26px 0 0; pointer-events: none; color: var(--r-edge); }
+.o-wall svg { position: absolute; inset: 0; width: 100%; height: 100%; }
 .o-head { display: flex; align-items: center; gap: 8px; justify-content: space-between; padding: 8px 10px 0; min-height: 34px; }
 .o-calm { font: 500 12.5px/16px var(--ui); color: var(--ink2); min-width: 0; }
 .o-tray { margin-left: auto; flex: none; font: 600 12px/16px var(--ui); color: var(--ink); text-decoration: none; background: var(--solid); border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; }
@@ -769,26 +773,25 @@ details.card[open] > summary { margin-bottom: 10px; }
 .o-cell { position: relative; height: 156px; min-width: 0; }
 .o-lounge .o-cell { height: 96px; }
 /* The floor under every seat, and the skirting board above it: seats side by side make one floor. */
-.o-cell::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 12px; background: var(--r-floor);
-  background-image: repeating-linear-gradient(90deg, transparent 0 30px, var(--r-seam) 30px 32px); box-shadow: 0 -3px 0 var(--r-skirt); }
+.o-cell::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 12px; background: var(--r-floor); box-shadow: 0 -2px 0 var(--r-skirt); }
 .o-hit { position: absolute; inset: 0; z-index: 1; background: none; border: 0; padding: 0; border-radius: 0; cursor: pointer; }
 .o-hit:focus-visible { outline: 2px solid var(--pink); outline-offset: -3px; }
 /* The room's furniture is scenery: a tap on a desk, a monitor or the sofa opens whoever sits there. */
 .o-deskf, .o-mon, .o-things, .o-chair, .o-seat, .o-win, .o-plant, .o-sofa { pointer-events: none; }
-.o-px { position: absolute; display: block; image-rendering: pixelated; pointer-events: none; }
-.o-sprite { left: 50%; bottom: 20px; z-index: 2; transform: translateX(-50%); }
-.o-sprite.at-desk { left: calc(50% - 46px); bottom: 26px; transform: none; }
-.o-lounge .o-sprite { bottom: 42px; }
+.o-sprite { position: absolute; left: 50%; bottom: 12px; z-index: 2; transform: translateX(-50%); pointer-events: none; }
+.o-sprite.at-desk { left: calc(50% - 46px); transform: none; }
+.o-lounge .o-sprite { bottom: 40px; }
 /* A desk: the top, the front with its drawer line, the monitor on it, and what the helper made pinned on the wall. */
-.o-deskf { position: absolute; left: 10%; right: 10%; bottom: 12px; height: 24px; z-index: 3; background: var(--r-desk); box-shadow: inset 0 4px 0 var(--r-top), inset 0 -3px 0 var(--r-edge); }
-.o-deskf::before { content: ''; position: absolute; left: 50%; top: 11px; width: 26%; height: 3px; background: var(--r-edge); transform: translateX(-50%); }
-.o-mon { position: absolute; right: 14%; bottom: 36px; width: 30px; height: 22px; z-index: 3; background: var(--r-bezel); padding: 3px; }
-.o-mon::after { content: ''; position: absolute; left: 11px; bottom: -4px; width: 8px; height: 4px; background: var(--r-bezel); }
-.o-scr { width: 100%; height: 100%; background: var(--r-screen); display: grid; place-items: center; align-content: center; gap: 2px; padding: 2px; color: var(--pink); font: 800 12px/1 var(--ui); }
-.o-scr i { display: block; height: 2px; width: 80%; background: #a9a3c8; justify-self: start; }
+/* A desk in ink: a top board on two legs, open underneath so whoever sits there shows through. */
+.o-deskf { position: absolute; left: 8%; right: 8%; bottom: 12px; height: 34px; z-index: 3; border: solid var(--r-edge); border-width: 6px 2px 0; border-radius: 3px 3px 0 0; background: none; }
+.o-deskf::before { content: ''; position: absolute; left: -2px; right: -2px; top: -6px; height: 6px; background: var(--r-desk); border: 2px solid var(--r-edge); border-radius: 3px; box-sizing: border-box; }
+.o-mon { position: absolute; right: 14%; bottom: 52px; width: 34px; height: 26px; z-index: 3; border: 2px solid var(--r-bezel); border-radius: 4px; background: var(--r-screen); }
+.o-mon::after { content: ''; position: absolute; left: 50%; bottom: -8px; width: 2px; height: 6px; background: var(--r-bezel); transform: translateX(-50%); }
+.o-scr { width: 100%; height: 100%; display: grid; place-items: center; align-content: center; gap: 2px; padding: 3px; color: var(--accent, #F0482A); font: 800 12px/1 var(--ui); }
+.o-scr i { display: block; height: 2px; width: 80%; background: var(--r-edge); opacity: .55; justify-self: start; }
 .o-scr i:nth-child(2) { width: 55%; } .o-scr i:nth-child(3) { width: 70%; }
-.o-scr.needs { background: color-mix(in srgb, var(--pink) 28%, var(--r-screen)); }
-.o-things { position: absolute; right: 14%; top: 70px; z-index: 3; display: flex; gap: 3px; align-items: flex-end; }
+.o-scr.needs { background: #FFE9E3; }
+.o-things { position: absolute; right: 14%; top: 56px; z-index: 3; display: flex; gap: 3px; align-items: flex-end; }
 .o-thing { position: relative; width: 13px; height: 16px; background: #fff; border: 1px solid var(--r-edge); display: block; }
 .o-thing.o-pin { background: var(--c); border: 2px solid #fff; outline: 1px solid var(--r-edge); height: 13px; }
 .o-thing.o-paper::before { content: ''; position: absolute; left: 2px; right: 2px; top: 3px; height: 7px; background: repeating-linear-gradient(transparent 0 1px, #b9b3aa 1px 2px, transparent 2px 3px); }
@@ -796,16 +799,15 @@ details.card[open] > summary { margin-bottom: 10px; }
 .o-new { position: absolute; top: -14px; left: -4px; background: var(--pink); color: var(--on-pink); font: 700 9px/12px var(--ui); letter-spacing: .04em; text-transform: uppercase; padding: 0 4px; border-radius: 999px; }
 @keyframes drop { 0% { opacity: 0; transform: translateY(-44px) scale(.86) rotate(-4deg); } 55% { opacity: 1; transform: translateY(4px) scale(1.02) rotate(1deg); } 78% { transform: translateY(-2px); } 100% { transform: none; } }
 /* Chief's armchair, and the spare corners: an empty desk, or a window and a plant. */
-.o-chair { position: absolute; left: 50%; bottom: 12px; width: 92px; height: 58px; transform: translateX(-50%); background: var(--r-sofa); border-radius: 14px 14px 0 0; box-shadow: inset 0 -6px 0 var(--r-sofa-dark); z-index: 1; }
-.o-seat { position: absolute; left: 50%; bottom: 12px; width: 108px; height: 16px; transform: translateX(-50%); background: var(--r-sofa); border-radius: 8px 8px 0 0; box-shadow: inset 0 -4px 0 var(--r-sofa-dark); z-index: 3; }
-.o-win { position: absolute; left: 50%; top: 22px; width: 54px; height: 44px; transform: translateX(-50%); background: var(--r-window); border: 4px solid var(--r-frame);
-  background-image: linear-gradient(var(--r-frame), var(--r-frame)), linear-gradient(var(--r-frame), var(--r-frame)); background-size: 3px 100%, 100% 3px; background-position: center; background-repeat: no-repeat; }
-.o-plant { position: absolute; left: 50%; bottom: 12px; width: 20px; height: 18px; transform: translateX(-50%); background: var(--r-pot); }
-.o-plant::before { content: ''; position: absolute; left: -8px; bottom: 16px; width: 36px; height: 26px; background: var(--r-leaf); border-radius: 50% 50% 40% 40%; }
+.o-chair, .o-seat { display: none; }
+.o-win { position: absolute; left: 50%; top: 22px; width: 54px; height: 44px; transform: translateX(-50%); background: var(--r-window); border: 2px solid var(--r-frame); border-radius: 4px;
+  background-image: linear-gradient(var(--r-frame), var(--r-frame)), linear-gradient(var(--r-frame), var(--r-frame)); background-size: 2px 100%, 100% 2px; background-position: center; background-repeat: no-repeat; }
+.o-plant { position: absolute; left: 50%; bottom: 12px; width: 18px; height: 16px; transform: translateX(-50%); background: var(--r-pot); border: 2px solid var(--r-edge); border-bottom: 0; border-radius: 2px 2px 0 0; }
+.o-plant::before { content: ''; position: absolute; left: 1px; bottom: 14px; width: 12px; height: 20px; border: 2px solid var(--r-leaf); border-radius: 0 100% 0 100%; }
 /* A bubble over a seat: the helper's name and what they are on (Chief's line for him), or pink with Review when they
    need her. It stays inside its own seat: two lines at most, clipped with an ellipsis. */
-.o-bub { position: absolute; left: 4px; right: 4px; top: 6px; z-index: 4; background: var(--solid); border: 1.5px solid var(--line2); border-radius: 12px; padding: 4px 7px 5px; box-shadow: var(--e1); display: grid; gap: 3px; pointer-events: none; }
-.o-bub::after { content: ''; position: absolute; left: 50%; bottom: -5px; width: 8px; height: 8px; background: var(--solid); border: solid var(--line2); border-width: 0 1.5px 1.5px 0; transform: translateX(-50%) rotate(45deg); }
+.o-bub { position: absolute; left: 4px; right: 4px; top: 6px; z-index: 4; background: var(--solid); border: 1.5px solid var(--r-edge); border-radius: 12px; padding: 4px 7px 5px; box-shadow: var(--e1); display: grid; gap: 3px; pointer-events: none; }
+.o-bub::after { content: ''; position: absolute; left: 50%; bottom: -5px; width: 8px; height: 8px; background: var(--solid); border: solid var(--r-edge); border-width: 0 1.5px 1.5px 0; transform: translateX(-50%) rotate(45deg); }
 .o-bub b, .o-chip b { font: 650 12.5px/15px var(--ui); letter-spacing: -.005em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .o-st { display: flex; gap: 5px; align-items: center; font: 500 11px/14px var(--ui); color: var(--ink2); min-width: 0; }
 .o-st > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
@@ -818,8 +820,9 @@ details.card[open] > summary { margin-bottom: 10px; }
 .o-typing { display: inline-flex; gap: 2px; flex: none; }
 .o-typing i { width: 4px; height: 4px; border-radius: 50%; background: var(--ok); opacity: .7; }
 /* The lounge: one long sofa across the row, and a name chip under each sprite, its dot saying up next or busy. */
-.o-lounge .o-cell::before { content: ''; position: absolute; left: 0; right: 0; top: 30px; height: 20px; background: var(--r-sofa-dark); }
-.o-sofa { position: absolute; left: 0; right: 0; bottom: 34px; height: 14px; background: var(--r-sofa); z-index: 3; box-shadow: inset 0 -3px 0 var(--r-sofa-dark); }
+.o-sofa { position: absolute; left: 0; right: 0; bottom: 30px; height: 16px; background: var(--r-sofa); z-index: 3; border-block: 2px solid var(--r-sofa-dark); }
+.o-lounge .o-cell:first-child .o-sofa { border-left: 2px solid var(--r-sofa-dark); border-radius: 8px 0 0 8px; left: 8px; }
+.o-lounge .o-cell:last-child .o-sofa { border-right: 2px solid var(--r-sofa-dark); border-radius: 0 8px 8px 0; right: 8px; }
 .o-chip { position: absolute; left: 3px; right: 3px; bottom: 14px; z-index: 4; display: flex; gap: 4px; align-items: center; justify-content: center; pointer-events: none; }
 .o-chip b { font-size: 11.5px; line-height: 14px; background: var(--solid); border-radius: 999px; padding: 1px 6px; border: 1px solid var(--line); }
 .o-chip > i { width: 6px; height: 6px; border-radius: 50%; flex: none; background: var(--line2); }
@@ -827,6 +830,41 @@ details.card[open] > summary { margin-bottom: 10px; }
 .o-more { position: absolute; inset: 14px 6px 18px; z-index: 4; border-radius: 14px; border: 1.5px dashed var(--line2); background: var(--solid); font: 650 12.5px/16px var(--ui); color: var(--ink); cursor: pointer; }
 .o-more:hover { border-color: var(--ink2); }
 @media (prefers-reduced-motion: no-preference) { .o-bub, .o-chip { transition: border-color 200ms var(--ease); } }
+
+/* B1 motion: each member in the room wears a calm loop for their status, in CSS alone (no frame callbacks). Working is
+   visible work (Reel's notes, Scribe's pen, Scout browsing, the screen typing, Chief's watch), resting breathes, needs
+   you nods for attention, done settles once. Loops pause while the room is off screen (.off, office.tsx), and Reduce
+   Motion runs none: every pose is drawn to read on its own. */
+@media (prefers-reduced-motion: no-preference) {
+  .o-sprite svg .body, .o-sprite svg .prop, .o-sprite svg .cue, .o-sprite svg .watch, .o-sprite svg .zz { transform-box: fill-box; transform-origin: 50% 100%; }
+  .o-room .pose-rest svg .body { animation: o-breathe 3.2s ease-in-out infinite; }
+  .o-room .pose-rest svg .zz { animation: o-zz 3.2s ease-in-out infinite; }
+  .o-room .pose-needs svg .cue { animation: o-cue 1.6s ease-in-out infinite; }
+  .o-room .pose-needs.chief svg .hat { animation: o-cue 2.4s ease-in-out infinite; transform-box: fill-box; transform-origin: 0 100%; }
+  .o-room .pose-work svg .prop { transform-origin: 50% 50%; animation: o-nod 1.4s ease-in-out infinite; }
+  .o-room .scribe.pose-work svg .prop { transform-origin: 100% 0; animation: o-pen .7s ease-in-out infinite alternate; }
+  .o-room .scout.pose-work svg .prop { animation: o-browse 2.4s ease-in-out infinite; }
+  .o-room .chief.pose-work svg .watch { transform-origin: 50% 0; animation: o-swing 2s ease-in-out infinite; }
+  .o-room .reel.pose-work::after { content: '\266A'; position: absolute; right: -6px; top: 4px; font: 700 15px/1 var(--ui); color: var(--r-edge); animation: o-note 2.4s ease-out infinite; }
+  .o-room .pose-pleased svg .body { animation: o-settle 700ms var(--ease) 1; }
+  .o-cell[data-seat=working] .o-scr i { animation: o-type 1.4s steps(5) infinite; }
+  .o-cell[data-seat=working] .o-scr i:nth-child(2) { animation-delay: .45s; } .o-cell[data-seat=working] .o-scr i:nth-child(3) { animation-delay: .9s; }
+  .o-tray.bump { animation: o-bump 600ms var(--ease); }
+  .o-bub.flip { animation: o-flip 420ms var(--ease); }
+  .o-room.off *, .o-room.off *::after { animation-play-state: paused !important; }
+}
+@keyframes o-breathe { 50% { transform: scaleY(1.03); } }
+@keyframes o-zz { 0% { opacity: .2; transform: translate(0, 4px); } 50% { opacity: 1; } 100% { opacity: 0; transform: translate(4px, -8px); } }
+@keyframes o-cue { 50% { transform: rotate(-6deg) translateY(-2px); } }
+@keyframes o-nod { 50% { transform: translateY(2px) rotate(-3deg); } }
+@keyframes o-pen { to { transform: rotate(-14deg) translateX(-3px); } }
+@keyframes o-browse { 0%, 100% { transform: rotate(0); } 30% { transform: rotate(-8deg) translateX(-2px); } 60% { transform: rotate(4deg) translateX(2px); } }
+@keyframes o-swing { 50% { transform: rotate(10deg); } }
+@keyframes o-note { 0% { opacity: 0; transform: translate(0, 6px); } 30% { opacity: 1; } 100% { opacity: 0; transform: translate(8px, -14px); } }
+@keyframes o-settle { 0% { transform: translateY(-6px); } 60% { transform: translateY(1px); } 100% { transform: none; } }
+@keyframes o-type { 0% { width: 15%; } 100% { width: 85%; } }
+@keyframes o-bump { 40% { transform: scale(1.14); } }
+@keyframes o-flip { 0% { transform: scale(.94); opacity: .6; } 100% { transform: none; opacity: 1; } }
 
 .o-ask { width: 100%; background: var(--solid); border: 1.5px solid var(--pink); border-radius: 14px; padding: 8px 8px 8px 10px; box-shadow: 0 8px 24px -8px color-mix(in srgb, var(--pink) 45%, transparent); display: grid; gap: 6px; }
 .o-ask .btn.sm { width: 100%; }
@@ -919,3 +957,4 @@ details.card[open] > summary { margin-bottom: 10px; }
 @media (min-width: 1200px) {
   .home-office > .home-top { margin-right: 0; }
 }
+.o-flyer { position: absolute; z-index: 6; width: 14px; height: 18px; background: #fff; border: 1.5px solid var(--r-edge); border-radius: 2px; pointer-events: none; }
