@@ -195,6 +195,10 @@ const TOOL_FRAGMENT = /\[tool\b[\s\S]*$/i; // ...and a cut-off one (task titles 
 const JSON_BLOB = /\{(?:[^{}]|\{[^{}]*\})*\}/g; // nor is a raw JSON object, one nesting level deep
 export const noTools = (text = '') => text.replace(TOOL_CALL, ' ').replace(JSON_BLOB, ' ').replace(TOOL_FRAGMENT, '').replace(/\s{2,}/g, ' ').trim();
 
+/** A helper's words naming a delivered file by its storage path say its registered title instead (before `plain`). */
+export const named = (text: string, titles: [string, string | undefined][]) =>
+  titles.reduce((t, [path, title]) => (title && path ? t.replace(new RegExp(`\`?${path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\`?`, 'g'), `“${title}”`) : t), text);
+
 export function plain(text = '') {
   if (/\bstub [\w-]+:/.test(text)) return 'On it.';
   // Heading markers strip before noTools collapses whitespace (D23): a later heading must still sit at a line
@@ -643,7 +647,7 @@ export function work(state: Json): Work[] {
 
 export function things(state: Json): Thing[] {
   return state.tasks.filter((t: Json) => t.state === 'done').map((t: Json) => ({
-    id: t.id, helper: t.bot, title: plain(t.title), at: t.updated_at, summary: teaser(t.result ?? '').slice(0, 220),
+    id: t.id, helper: t.bot, title: plain(t.title), at: t.updated_at, summary: teaser(named(t.result ?? '', Object.entries(t.fileTitles ?? {}))).slice(0, 220),
     files: (t.files ?? []).map((f: string) => fileView(t.bot, f, t.fileTitles?.[f])),
   }));
 }
@@ -926,7 +930,7 @@ export function step(e: Json): string | null {
     case 'run.allowed': return 'Went ahead, as you allowed';
     case 'ask.opened': return 'Asked for your OK';
     case 'ask.answered': return `You said ${ANSWER[d.answer] ?? (/always/.test(d.answer) ? 'always OK' : /task/.test(d.answer) ? 'yes for this job' : 'what to do')}`;
-    case 'file.delivered': return d.photo ? 'You sent a photo' : /\.(patch|diff)$/.test(String(d.path)) ? `Suggested a change for the maintainer to review: “${pretty(String(d.path))}”` : `Made “${fileView('', String(d.path ?? ''), d.title).name}”`;
+    case 'file.delivered': return d.photo ? 'You sent a photo' : /\.(patch|diff)$/.test(String(d.path)) ? `Suggested a change for the maintainer to review: “${fileView('', String(d.path ?? ''), d.title).name}”` : `Made “${fileView('', String(d.path ?? ''), d.title).name}”`;
     case 'memory.learned': return `${d.everyone ? 'Learned, for the whole crew' : 'Learned'}: ${plain(d.text)}`;
     case 'memory.undone': return `You undid: ${plain(d.text)}`;
     case 'soul.changed': return d.by === 'chief' ? 'Took on the personality Chief suggested' : d.reset ? 'Went back to how it started' : 'You changed how it comes across';
@@ -972,9 +976,11 @@ export function room(page: Json, state: Json) {
 const chatWords = (text: string) => text.replace(/```[\s\S]*?```/g, '').split('\n').map(plain).join('\n').trim();
 
 export function lines(page: Json, bot: string): Line[] {
+  const titles: [string, string | undefined][] = (page?.files ?? []).map((x: Json) => [`files/${x?.path}`, x?.title]);
   return (page?.messages ?? []).filter((m: Json) => !/\bstub [\w-]+:/.test(String(m.text ?? ''))).map((m: Json) => {
     const pics = photos(String(m.text ?? ''));
-    const text = String(m.text ?? '').replace(PHOTO, '').trim();
+    const raw = String(m.text ?? '').replace(PHOTO, '').trim();
+    const text = m.author === 'system' ? raw : named(raw, [...titles, ...(m.files ?? []).map((f: Json): [string, string | undefined] => [f.path, f.title])]);
     if (m.author === 'system') {
       const f = /^Delivered (files\/.+?)(?::\s|$)/.exec(text);
       if (!f) return { id: m.id, from: 'note', text: plain(text), files: [], choices: [] };

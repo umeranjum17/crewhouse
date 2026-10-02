@@ -1847,6 +1847,13 @@ test('a delivered file is named by its registered title everywhere it shows', ()
   assert.equal(office.crew[0].things[0].name, title, 'the office desk, live');
   const done = A.officeEvent(office, { kind: 'task.done', bot: 'scribe', seq: 2, at: 2, data: { task: 7, title: 'Refund', files: [path] } });
   assert.equal(done.done[0].files[0].name, title, 'a job finishing keeps the name its desk had');
+  const said = A.lines({ files: page.files, messages: [{ id: 3, author: 'bot', text: `Saved it as \`${path}\`, ready to send.` }] }, 'scribe')[0].text;
+  assert.equal(said, `Saved it as “${title}”, ready to send.`, "a helper naming the storage path says the file's title");
+  assert.equal(A.things({ tasks: [{ ...state.tasks[0], result: `Done: ${path}` }] })[0].summary, `Done: “${title}”`, 'the Things summary too');
+  assert.equal(A.step({ kind: 'file.delivered', data: { path: 'files/ab12.patch', title: 'Fix the sign-in loop' } }),
+    'Suggested a change for the maintainer to review: “Fix the sign-in loop”');
+  const main = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
+  assert.match(main, /<PreviewPanel [^>]*title=\{A\.fileTitle\(/, 'the web panel opens already named, before its preview arrives');
 });
 
 test("the phone's reader shares the file's words and opens the whole page", () => {

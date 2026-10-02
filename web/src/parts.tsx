@@ -380,11 +380,11 @@ function DocBody({ doc }: { doc: DocView }) {
  * tables. On a desk it is a panel beside the chat it came from; on a phone it is the whole screen. Reading edits
  * nothing, and Download hands over the file itself.
  */
-export function PreviewPanel({ bot, path, onClose }: { bot: string; path: string; onClose: () => void }) {
+export function PreviewPanel({ bot, path, title: known, onClose }: { bot: string; path: string; title?: string; onClose: () => void }) {
   const box = useRef<HTMLDivElement>(null);
   const [tab, setTab] = useState(0);
   useDialogOwn(box, onClose);
-  const file = fileView(bot, path);
+  const file = fileView(bot, path, known);
   const { book, doc, text, title } = usePreview(file);
   const f = title ? { ...file, name: title } : file;
   const sheets = book?.sheets ?? [];
