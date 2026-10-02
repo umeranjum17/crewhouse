@@ -1030,7 +1030,7 @@ h1 { font: 400 32px/36px var(--serif); letter-spacing: -.005em; }
    desk, 150 on a phone), the serif name, his own line in a bubble, the crew with a badge each. */
 .chief-hero { display: grid; grid-template-columns: 230px minmax(0, 1fr); min-height: 268px; overflow: hidden; margin: 4px 0 12px; background: var(--solid); border: 1px solid var(--line2); border-radius: 24px; box-shadow: 0 1px 2px rgba(20, 26, 42, .04), 0 14px 32px -22px rgba(20, 26, 42, .32); }
 .ch-art { align-self: end; display: grid; padding-left: 16px; }
-.ch-art svg { width: 200px; height: auto; }
+.ch-art .ink { width: 200px; height: auto; }
 .ch-body { min-width: 0; display: grid; gap: 10px; justify-items: start; align-content: start; padding: 30px 28px 22px 6px; }
 .ch-name { margin: 0; font: 400 52px/1 var(--serif); letter-spacing: -.01em; color: var(--ink); }
 .ch-name small { font: 400 13px/1 var(--ui); color: var(--mute); letter-spacing: 0; margin-left: 6px; }
@@ -1046,7 +1046,7 @@ h1 { font: 400 32px/36px var(--serif); letter-spacing: -.005em; }
 @media (max-width: 899px) {
   .chief-hero { grid-template-columns: 150px minmax(0, 1fr); min-height: 236px; }
   .ch-art { padding-left: 2px; }
-  .ch-art svg { width: 150px; }
+  .ch-art .ink { width: 150px; }
   .ch-body { padding: 20px 16px 14px 4px; }
   .ch-name { font-size: 40px; }
   /* B1 phone: the five faces sit in one row under his line (zoom scales the badge with its face). */
@@ -1058,7 +1058,7 @@ h1 { font: 400 32px/36px var(--serif); letter-spacing: -.005em; }
 }
 @media (max-width: 359px) {
   .chief-hero { grid-template-columns: 112px minmax(0, 1fr); min-height: 0; }
-  .ch-art svg { width: 112px; }
+  .ch-art .ink { width: 112px; }
 }
 
 /* The Tonight rail beside Chief's chat on a desk: card per helper or tray item, and a plain line where a section is empty. */
