@@ -41,7 +41,7 @@ export async function buildWorkbook(file: string, spec: WorkbookSpec) {
   const sheets = Array.isArray(spec?.sheets) ? spec.sheets.slice(0, MAX.sheets) : [];
   if (!sheets.length) throw new Error('say what the workbook should have: at least one sheet with columns');
   const wb = new ExcelJS.Workbook();
-  wb.creator = 'Crewhouse'; wb.created = new Date();
+  wb.creator = 'Crewhouse'; wb.title = spec.name; wb.created = new Date();
   wb.calcProperties.fullCalcOnLoad = true;
   const taken = new Set<string>();
   sheets.forEach((s, n) => {

@@ -197,7 +197,6 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       return { type: ext === 'jpg' ? 'image/jpeg' : `image/${ext}`, data: readFileSync(full).toString('base64') };
     }
     // A delivered file as words for the app's read-only preview: crewd parses it, the app never opens the raw file.
-    // A finished video comes in pieces for the phone, which can't reach this computer's /files address.
     const preview = async (re: RegExp, word: string, fn: (rel: string) => unknown) => {
       const rel = String(q.get('path') ?? '');
       if (!re.test(rel)) throw Object.assign(new Error(word), { status: 404 });
@@ -205,7 +204,8 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     };
     if (m === 'GET' && p === '/api/workbook') return preview(/^files\/[\w./-]+\.xlsx$/i, 'not a spreadsheet', (rel) => crew.workbookView(String(q.get('bot') ?? ''), rel));
     if (m === 'GET' && p === '/api/document') return preview(/^files\/[\w./-]+\.(docx|md|txt)$/i, 'not a document', (rel) => crew.documentView(String(q.get('bot') ?? ''), rel));
-    if (m === 'GET' && p === '/api/video') return preview(/^files\/[\w./-]+\.(mp4|webm|mov)$/i, 'not a video', (rel) => crew.videoSlice(String(q.get('bot') ?? ''), rel, Number(q.get('after')) || 0));
+    if (m === 'GET' && p === '/api/video') return preview(/^files\/[\w./-]+\.(mp4|webm|mov)$/i, 'not a video', (rel) => crew.fileSlice(String(q.get('bot') ?? ''), rel, Number(q.get('after')) || 0, 'video'));
+    if (m === 'GET' && p === '/api/file') return preview(/^files\//, 'not a file', (rel) => crew.fileSlice(String(q.get('bot') ?? ''), rel, Number(q.get('after')) || 0));
     if (m === 'POST' && p === '/api/onboard') { const b = body; return crew.onboard(b.address ?? '', b.ask, typeof b.bot === 'string' ? b.bot : undefined) ?? { ok: true }; }
     if (m === 'POST' && p === '/api/recruit') { const b = body; const { token, ...bot } = crew.recruit(b.template, b.name, 'person'); return bot; }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)$/)) && m === 'GET') return crew.botPage(r[1], Number(q.get('around')) || undefined);
