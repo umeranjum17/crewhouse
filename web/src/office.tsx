@@ -95,13 +95,17 @@ export function Office({ state, live, night }: { state: Json; live: A.OfficeView
   // Chief standing just after whoever waits on you.
   const waits = plan.seats.filter(A.waitsOnYou).length;
   const order: (A.OfficeMember | 'chief')[] = [...plan.seats.slice(0, waits), 'chief', ...plan.seats.slice(waits)];
-  const xs = spots(order.length);
+  const trayText = `Tray · ${live.counts.done}`;
+  const { spots, s, X, Y } = lay(order, live, trayText);
+  const spotOf = (m: A.OfficeMember | 'chief') => spots.find((p) => p.m === m)!;
+  const trayAt = spots.find((p) => p.tray)!, trayX = trayAt.st === 'done' ? trayAt.x - 20 : trayAt.x;
   // One accent pill, over whoever's question matters most (money, then your name, then the rest; Chief's own last).
   const urgent = plan.seats.filter((c) => c.ask).sort((a, b) => A.askRank(a.ask!) - A.askRank(b.ask!))[0];
+  const chat = plan.seats.find((c) => A.seatOf(c) === 'chat');
   const pill = urgent && (!chiefAsk || A.askRank(urgent.ask!) <= A.askRank(chiefAsk))
-    ? { at: order.indexOf(urgent), href: `#/ask/${urgent.ask!.id}`, label: `Review what ${urgent.name} needs: ${urgent.ask!.head}` }
-    : chiefAsk ? { at: order.indexOf('chief'), href: `#/ask/${chiefAsk.id}`, label: `Review what Chief needs: ${chiefAsk.head}` }
-    : plan.seats.find((c) => A.seatOf(c) === 'chat') ? (() => { const c = plan.seats.find((m) => A.seatOf(m) === 'chat')!; return { at: order.indexOf(c), href: `#/h/${c.id}`, label: `Reply to ${c.name} in their chat` }; })()
+    ? { m: urgent as A.OfficeMember | 'chief', href: `#/ask/${urgent.ask!.id}`, label: `Review what ${urgent.name} needs: ${urgent.ask!.head}` }
+    : chiefAsk ? { m: 'chief' as const, href: `#/ask/${chiefAsk.id}`, label: `Review what Chief needs: ${chiefAsk.head}` }
+    : chat ? { m: chat as A.OfficeMember | 'chief', href: `#/h/${chat.id}`, label: `Reply to ${chat.name} in their chat` }
     : null;
   const more = plan.more.length, moreBusy = plan.more.filter((c) => A.seatOf(c) === 'working').length;
   const id = useId().replace(/:/g, '');
@@ -117,13 +121,16 @@ export function Office({ state, live, night }: { state: Json; live: A.OfficeView
             <radialGradient id={`${id}glow`} cx=".5" cy=".5" r=".5"><stop offset="0" stopColor="#C9D6FF" stopOpacity=".5" /><stop offset="1" stopColor="#C9D6FF" stopOpacity="0" /></radialGradient>
           </defs>
           <Scene id={id} wide={wide} />
-          {order.map((m, i) => m === 'chief'
-            ? <Seat key="chief" x={xs[i]} id={id} who="chief" mood={live.chief.mood} seat={chiefAsk ? 'needs' : live.chief.mood === 'work' ? 'working' : 'free'} beat={live.chief.mood}
-                label={`Chief: ${live.chief.line}`} onOpen={() => setProfile(true)} />
-            : <Seat key={m.id} x={xs[i]} id={id} who={m.kind} mood={m.mood} seat={A.seatOf(m)} second={m.second} dataId={m.id} beat={`${m.ring}|${m.mood}|${m.things.length}|${m.ask?.id ?? ''}`}
-                label={said(m) + (m.things.length ? `, made ${m.things.map((f) => KIND_WORDS[f.kind]).join(', ')}` : '')} onOpen={() => setOpen(m.id)} />)}
-          <Tray id={id} n={live.counts.done} bump={trayWas.current !== undefined && trayWas.current !== live.counts.done} />
-          {pill && <Tag x={Math.min(306, Math.max(46, xs[pill.at]))} y={order[pill.at] === 'chief' ? 100 : 114} text={A.SEAT_WORDS.needs} hot href={pill.href} label={pill.label} />}
+          <g transform={`translate(${X(0)} ${G}) scale(${s}) translate(0 ${-G})`}>
+            <TrayBox x={trayX} n={live.counts.done} />
+            {order.map((m) => m === 'chief'
+              ? <Seat key="chief" spot={spotOf(m)} id={id} kind="chief" pose={art.poseOf(live.chief.mood)} seat={chiefAsk ? 'needs' : live.chief.mood === 'work' ? 'working' : 'free'} beat={live.chief.mood}
+                  label={`Chief: ${live.chief.line}`} onOpen={() => setProfile(true)} />
+              : <Seat key={m.id} spot={spotOf(m)} id={id} kind={m.kind} pose={art.poseOf(m.mood)} seat={A.seatOf(m)} second={m.second} dataId={m.id} beat={`${m.ring}|${m.mood}|${m.things.length}|${m.ask?.id ?? ''}`}
+                  label={said(m) + (m.things.length ? `, made ${m.things.map((f) => KIND_WORDS[f.kind]).join(', ')}` : '')} onOpen={() => setOpen(m.id)} />)}
+          </g>
+          <Tag key={live.counts.done} x={X(trayX)} y={Y(G - 64)} text={trayText} tail cls={`o-tray${trayWas.current !== undefined && trayWas.current !== live.counts.done ? ' bump' : ''}`} href="#/things" label={`Your tray: ${live.counts.done} done today`} />
+          {pill && <Tag x={X(spotOf(pill.m).x)} y={pill.m === 'chief' ? Y(G - 80.8) - 14 : 102} text={A.SEAT_WORDS.needs} hot href={pill.href} label={pill.label} />}
         </svg>
         <div className="o-strip" style={{ ['--n' as string]: order.length + (more ? 1 : 0) }}>
           {order.map((m) => {
@@ -147,10 +154,6 @@ type StripSeat = A.Seat | 'done' | 'here';
 const STRIP: Record<StripSeat, string> = { needs: 'needs you', chat: 'needs you', working: 'working', failed: 'stuck', next: 'up next', resting: 'resting', free: 'free', done: 'done', here: 'here' };
 const stripSeat = (c: A.OfficeMember, v: A.OfficeView): StripSeat => { const r = A.railWord(c, v); return r.seat; };
 
-/** Where each figure stands on the floor (viewBox x), clear of the tray's corner on the right. */
-const G = 196, L = 32, R = 244; // R + 35 (Chief's half width) stays left of the Tray bubble at x 281
-const spots = (k: number) => { const span = Math.min(R - L, (k - 1) * 58), x0 = (L + R) / 2 - span / 2; return Array.from({ length: k }, (_, i) => (k === 1 ? (L + R) / 2 : x0 + (i * span) / (k - 1))); };
-
 /** The room itself: wall, floor line, a shelf with a plant, the night window and a clock (B1 Studio). */
 function Scene({ id, wide }: { id: string; wide: boolean }) {
   const ink = 'var(--r-edge)';
@@ -169,15 +172,70 @@ function Scene({ id, wide }: { id: string; wide: boolean }) {
   </g>;
 }
 
-/** One figure where it stands, with what its seat puts round it: a desk and a page when it needs you, a desk, a lamp and
- *  a playing screen while working, a cushion while resting. The whole group is the button that opens them. */
-function Seat({ x, id, who, mood, seat, second, dataId, beat, label, onOpen }: { x: number; id: string; who: art.Kind | 'chief'; mood: art.Mood; seat: A.Seat;
+/** Each figure stands at a station drawn for what they are doing (the B1 Studio scene, recipe/b1-staging-v3-office.html):
+ *  waiting on you at a writing desk with a raised pen, working at a desk under a playing screen (Scribe writes a sheet
+ *  instead), stuck at a screen with a "!", done by the tray, resting asleep on a cushion, anyone else standing by.
+ *  PAD is the room each takes left and right of where they stand, the mock's own spacing. */
+type Station = 'needs' | 'monitor' | 'writing' | 'failed' | 'done' | 'rest' | 'stand' | 'chief' | 'tray';
+const PAD: Record<Station, [number, number]> = { needs: [48, 24], chief: [38, 26], monitor: [20, 58], failed: [20, 58], writing: [22, 28], done: [20, 18], rest: [22, 22], stand: [18, 18], tray: [48, 30] };
+const stationOf = (c: A.OfficeMember, v: A.OfficeView): Station => {
+  const k = A.seatOf(c);
+  return k === 'needs' || k === 'chat' ? 'needs' : k === 'working' ? (c.kind === 'scribe' ? 'writing' : 'monitor') : k === 'failed' ? 'failed'
+    : k === 'resting' ? 'rest' : stripSeat(c, v) === 'done' ? 'done' : 'stand';
+};
+type Spot = { m: A.OfficeMember | 'chief' | 'tray'; st: Station; x: number; tray: boolean };
+const G = 196, X0 = 14, W = 346;
+/** Left to right in the given order, the tray just before whoever finished (or before the resting); the row scales down
+ *  about the floor line to fit, and centres when it is short. The Tray bubble never sits over Chief: a tray right after
+ *  him gets room for its bubble. ponytail: two passes for that room under scaling, exact enough for six stations. */
+function lay(order: (A.OfficeMember | 'chief')[], v: A.OfficeView, trayText: string) {
+  const sts = order.map((m) => (m === 'chief' ? 'chief' : stationOf(m, v)) as Station);
+  let at = sts.indexOf('done');
+  const items: { m: Spot['m']; st: Station; tray: boolean }[] = order.map((m, i) => ({ m, st: sts[i], tray: i === at }));
+  if (at < 0) { const r = sts.indexOf('rest'); items.splice(r < 0 ? items.length : r, 0, { m: 'tray', st: 'tray', tray: true }); at = r < 0 ? items.length - 1 : r; }
+  const half = (trayText.length * 6.6 + 22) / 2;
+  let s = 1, spots: Spot[] = [], total = 0;
+  for (let pass = 0; pass < 2; pass++) {
+    let cur = 0;
+    spots = items.map((it, i) => {
+      let [l, r] = PAD[it.st];
+      if (it.tray && items[i - 1]?.st === 'chief') l = Math.max(l, 14 + (it.st === 'done' ? 20 : 0) + (half + 4) / s);
+      const x = cur + l; cur = x + r;
+      return { ...it, x };
+    });
+    total = cur; s = Math.min(1, W / total);
+  }
+  const x0 = X0 + Math.max(0, (W - total) / 2);
+  return { spots, s, x0, X: (x: number) => x0 + x * s, Y: (y: number) => G + (y - G) * s };
+}
+
+/** A bean on the floor, feet at y: front on (two eyes, or shut asleep), or side on facing their work (one eye, a nose
+ *  bump, a brow looking up at a screen or a lid looking down at a page). */
+function Bean({ x, y = G, fill, h = 46, w = 30, side, gaze, sleep, id, children }: { x: number; y?: number; fill: string; h?: number; w?: number; side?: 'l' | 'r';
+  gaze?: 'up' | 'down'; sleep?: boolean; id: string; children?: ReactNode }) {
+  const ink = 'var(--r-edge)', top = y - h, s = side === 'l' ? -1 : 1;
+  const ex = x + s * (w / 2 - 6), ey = top + (gaze === 'up' ? 8 : 11), ny = top + 13, nx = x + s * Math.sqrt((w / 2) ** 2 - (ny - top - w / 2) ** 2);
+  const line = { stroke: ink, strokeWidth: 1.6, fill: 'none', strokeLinecap: 'round' as const };
+  return <>
+    <ellipse cx={x} cy={y + 2} rx={w * 0.62} ry="3.2" fill={ink} opacity=".1" filter={`url(#${id}bl)`} />
+    <path d={`M${x - w / 2} ${y}V${top + w / 2}a${w / 2} ${w / 2} 0 0 1 ${w} 0V${y}z`} fill={fill} stroke={ink} strokeWidth="1.8" strokeLinejoin="round" />
+    {side ? <>
+      <ellipse cx={ex + s * 0.5} cy={ey + (gaze === 'up' ? -0.6 : 0.6)} rx="1.9" ry="2.3" fill={ink} />
+      <path d={gaze === 'up' ? `M${ex - 3.5 * s} ${ey - 4.5}q${3.5 * s} -2.2 ${7 * s} -.8` : `M${ex - 3 * s} ${ey - 3}q${3 * s} -.8 ${6 * s} 1.4`} {...line} strokeWidth={1.4} />
+      <path d={`M${nx} ${ny - 1.8}q${2.4 * s} 1.8 0 3.6`} fill={fill} stroke={ink} strokeWidth="1.6" strokeLinecap="round" />
+    </> : sleep ? <path d={`M${x - 7} ${top + 17}q3 2 6 0M${x + 2} ${top + 17}q3 2 6 0`} {...line} />
+      : <><circle cx={x - 5} cy={top + 16} r="1.9" fill={ink} /><circle cx={x + 5} cy={top + 16} r="1.9" fill={ink} /></>}
+    {children}
+  </>;
+}
+const Desk = ({ x, w }: { x: number; w: number }) => <g className="o-desk"><rect x={x} y="150" width={w} height="5" rx="2" fill="var(--r-desk)" stroke="var(--r-edge)" strokeWidth="1.8" />
+  <path d={`M${x + 6} 155V${G}M${x + w - 6} 155V${G}`} stroke="var(--r-edge)" strokeWidth="1.8" /></g>;
+
+/** One station: its furniture and the figure, the whole group the button that opens them. */
+function Seat({ spot, id, kind, pose, seat, second, dataId, beat, label, onOpen }: { spot: Spot; id: string; kind: art.Kind | 'chief'; pose: art.Pose; seat: A.Seat;
   second?: boolean; dataId?: string; beat: string; label: string; onOpen: () => void }) {
-  const ink = 'var(--r-edge)', pose = art.poseOf(mood);
-  const lift = seat === 'resting' && who !== 'pip' && who !== 'chief' ? 8 : 0;
-  const svg = useMemo(() => who === 'chief'
-    ? art.chiefSvg(pose, { vb: '24 30 176 210' }).replace('<svg ', `<svg x="${x - 35}" y="${G - 81}" width="70" height="84" `)
-    : art.beanSvg(who, pose, { vb: '0 18 120 132' }).replace('<svg ', `<svg x="${x - 30}" y="${G - 61 - lift}" width="60" height="66" `), [who, pose, x, lift]);
+  const { x, st } = spot, ink = 'var(--r-edge)', red = '#F0482A', fill = kind === 'chief' ? '#fff' : art.PALS[kind].body;
+  const chief = useMemo(() => (kind === 'chief' ? art.chiefSvg(pose, { vb: '24 30 176 210' }).replace('<svg ', `<svg x="${x - 30.4}" y="${G - 80.8}" width="70.4" height="84" `) : ''), [kind, pose, x]);
   const fig = useRef<SVGGElement>(null);
   // A hop when their news lands (a new ring, mood or thing): once, never on the first paint, never with Reduce Motion.
   const was = useRef(beat);
@@ -186,35 +244,58 @@ function Seat({ x, id, who, mood, seat, second, dataId, beat, label, onOpen }: {
     was.current = beat;
     if (!reduced()) fig.current?.animate([{ translate: '0 0' }, { translate: '0 -10px', offset: 0.35 }, { translate: '0 0', offset: 0.7 }, { translate: '0 -3px', offset: 0.85 }, { translate: '0 0' }], { duration: 560, easing: 'ease-out' });
   }, [beat]);
-  const desk = seat === 'needs' || seat === 'chat' || seat === 'working' || seat === 'failed';
+  const [l, r] = PAD[st];
+  const sprite = (body: ReactNode) => <g ref={fig} className={`o-sprite ${kind} st-${st}${second ? ' second' : ''}`}>{body}</g>;
   return <g className="o-cell" data-id={dataId} data-seat={seat} role="button" tabIndex={0} aria-label={label} onClick={onOpen} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(); } }}>
-    <rect x={x - 26} y={G - 100} width="52" height="104" fill="transparent" />
-    {seat === 'working' && <ellipse cx={x} cy="150" rx="34" ry="14" fill={`url(#${id}lamp)`} opacity=".85" />}
-    {desk && <g className="o-desk"><rect x={x - 21} y="150" width="42" height="5" rx="2" fill="var(--r-desk)" stroke={ink} strokeWidth="1.8" /><path d={`M${x - 16} 155V${G}M${x + 16} 155V${G}`} stroke={ink} strokeWidth="1.8" /></g>}
-    {(seat === 'needs' || seat === 'chat') && <g><rect x={x - 11} y="131" width="22" height="18" rx="2" fill="var(--r-desk)" stroke={ink} strokeWidth="1.6" /><path d={`M${x - 7} 138h14M${x - 7} 143h9`} stroke={ink} strokeWidth="1.3" /></g>}
-    {(seat === 'working' || seat === 'failed') && <g className="o-mon"><rect x={x - 16} y="120" width="32" height="22" rx="3" fill={seat === 'failed' ? '#FFE9E3' : 'var(--r-screen)'} stroke={ink} strokeWidth="1.7" />
-      {seat === 'failed' ? <text x={x} y="136" textAnchor="middle" fontFamily="Inter" fontWeight="800" fontSize="13" fill="#F0482A">!</text> : <path d={`M${x - 3} 126l7 5-7 5z`} fill={ink} />}
-      <path d={`M${x} 142v8`} stroke={ink} strokeWidth="1.7" /></g>}
-    {lift > 0 && <ellipse cx={x} cy={G - 5} rx="22" ry="7" fill="var(--r-sofa)" stroke={ink} strokeWidth="1.6" />}
-    <ellipse cx={x} cy={G + 2} rx="18" ry="3.2" fill={ink} opacity=".1" filter={`url(#${id}bl)`} />
-    <g ref={fig} className={`o-sprite ink ${who} pose-${pose}${second ? ' second' : ''}`} dangerouslySetInnerHTML={{ __html: svg }} />
+    <rect x={x - l} y={G - 100} width={l + r} height="104" fill="transparent" />
+    {st === 'chief' && <><ellipse cx={x} cy={G + 2} rx="22" ry="3.2" fill={ink} opacity=".1" filter={`url(#${id}bl)`} /><g ref={fig} className={`o-sprite ink chief pose-${pose}`} dangerouslySetInnerHTML={{ __html: chief }} /></>}
+    {st === 'needs' && <>
+      <Desk x={x - 48} w={72} />
+      <rect x={x - 40} y="132" width="22" height="18" rx="2" fill="var(--r-desk)" stroke={ink} strokeWidth="1.6" /><path d={`M${x - 36} 139h14M${x - 36} 144h9`} stroke={ink} strokeWidth="1.3" />
+      {sprite(<Bean x={x} fill={fill} id={id}><g className="o-wave"><path d={`M${x + 15} ${G - 30}l12-20`} stroke={ink} strokeWidth="1.8" strokeLinecap="round" /><circle cx={x + 28} cy={G - 52} r="3.5" fill={red} stroke={ink} strokeWidth="1.5" /></g></Bean>)}
+    </>}
+    {(st === 'monitor' || st === 'failed') && <>
+      <Desk x={x - 20} w={78} />
+      {st === 'monitor' && <ellipse cx={x + 30} cy="150" rx="40" ry="16" fill={`url(#${id}lamp)`} opacity=".85" />}
+      <g className="o-mon"><rect x={x + 16} y="118" width="34" height="24" rx="3" fill={st === 'failed' ? '#FFE9E3' : 'var(--r-screen)'} stroke={ink} strokeWidth="1.7" />
+        {st === 'failed' ? <text x={x + 33} y="135" textAnchor="middle" fontFamily="Inter" fontWeight="800" fontSize="13" fill={red}>!</text> : <path d={`M${x + 30} 125l7 5-7 5z`} fill={ink} />}
+        <path d={`M${x + 33} 142v8`} stroke={ink} strokeWidth="1.7" /></g>
+      {sprite(<g className={st === 'monitor' ? 'o-nod' : undefined}><Bean x={x} fill={fill} side="r" gaze="up" id={id}>
+        {kind === 'reel' && <><path d={`M${x - 6} 158C${x - 7} 146 ${x + 6} 145 ${x + 10} 151`} stroke={ink} strokeWidth="2.4" fill="none" strokeLinecap="round" /><rect x={x - 10.5} y="157" width="9" height="13" rx="4" fill={ink} /></>}
+      </Bean></g>)}
+    </>}
+    {st === 'writing' && <>
+      <ellipse cx={x + 2} cy="150" rx="30" ry="12" fill={`url(#${id}lamp)`} opacity=".7" />
+      <Desk x={x - 18} w={46} />
+      <path d={`M${x - 6} 150l10-6 10 6z`} fill="var(--r-desk)" stroke={ink} strokeWidth="1.4" />
+      {sprite(<Bean x={x} h={44} fill={fill} side="r" gaze="down" id={id}>
+        <path d={`M${x + 1} 170l13-4 3 10-13 4z`} fill="#fff" stroke={ink} strokeWidth="1.4" strokeLinejoin="round" /><path d={`M${x + 4} 173.5l8-2.5M${x + 5.5} 177l6-1.8`} stroke={ink} strokeWidth="1" />
+        <g className="o-pen"><path d={`M${x + 10.5} 175l5-8`} stroke={ink} strokeWidth="1.8" strokeLinecap="round" /><path d={`M${x + 10.5} 175l.9-1.5`} stroke={red} strokeWidth="1.8" strokeLinecap="round" /><circle cx={x + 13} cy="171.5" r="2.4" fill={fill} stroke={ink} strokeWidth="1.3" /></g>
+      </Bean>)}
+    </>}
+    {st === 'done' && sprite(<Bean x={x} h={40} fill={fill} side="l" gaze="down" id={id}>
+      <path d={`M${x + 2} ${G - 14}l3 3 6-6`} stroke={ink} strokeWidth="1.7" fill="none" strokeLinecap="round" /><path d={`M${x - 14} ${G - 18}q-5-4-7-11`} stroke={ink} strokeWidth="1.8" fill="none" strokeLinecap="round" />
+    </Bean>)}
+    {st === 'rest' && <>
+      <ellipse cx={x} cy={G - 6} rx="22" ry="8" fill={fill} stroke={ink} strokeWidth="1.6" />
+      {sprite(<g className="o-breath"><Bean x={x} y={G - 10} h={30} w={26} sleep fill={fill} id={id} /></g>)}
+      <g className="o-zz" fontFamily="Instrument Serif, Georgia, serif" fontStyle="italic" fill={ink}><text x={x - 2} y={G - 46} fontSize="13" opacity=".6">z</text><text x={x + 5} y={G - 55} fontSize="10" opacity=".45">z</text></g>
+    </>}
+    {st === 'stand' && sprite(<Bean x={x} fill={fill} id={id} />)}
   </g>;
 }
 
-/** The tray in the room's corner, and its one speech bubble with today's count; the bubble leads to your things. */
-function Tray({ id, n, bump }: { id: string; n: number; bump: boolean }) {
+/** The tray on the floor (beside whoever finished, or on its own spot), with a page in it once anything is done. */
+function TrayBox({ x, n }: { x: number; n: number }) {
   const ink = 'var(--r-edge)';
-  return <g>
-    <g aria-hidden><path d={`M300 ${G}l3 -14h30l3 14z`} fill="var(--r-desk)" stroke={ink} strokeWidth="1.6" strokeLinejoin="round" /><path d={`M305 ${G - 9}h26`} stroke={ink} strokeWidth="1.3" />
-      {n > 0 && <g><path d={`M306 ${G - 22}l12-2 2 12-12 2z`} fill="#fff" stroke={ink} strokeWidth="1.4" strokeLinejoin="round" /><path d={`M309 ${G - 17}l7-1`} stroke={ink} strokeWidth=".9" /></g>}</g>
-    <Tag key={n} x={318} y={G - 58} text={`Tray · ${n}`} tail cls={`o-tray${bump ? ' bump' : ''}`} href="#/things" label={`Your tray: ${n} done today`} />
-  </g>;
+  return <g aria-hidden className="o-traybox"><path d={`M${x - 16} ${G}l3 -14h26l3 14z`} fill="var(--r-desk)" stroke={ink} strokeWidth="1.6" strokeLinejoin="round" /><path d={`M${x - 11} ${G - 9}h22`} stroke={ink} strokeWidth="1.3" />
+    {n > 0 && <g><path d={`M${x - 10} ${G - 22}l12-2 2 12-12 2z`} fill="#fff" stroke={ink} strokeWidth="1.4" strokeLinejoin="round" /><path d={`M${x - 7} ${G - 17}l7-1`} stroke={ink} strokeWidth=".9" /></g>}</g>;
 }
 
 /** A label in the room: the accent pill for what needs you, or a white speech bubble with a tail. */
 function Tag({ x, y, text, hot, tail, cls = '', href, label }: { x: number; y: number; text: string; hot?: boolean; tail?: boolean; cls?: string; href: string; label: string }) {
   const w = text.length * 6.6 + 22, ink = 'var(--r-edge)';
-  const left = Math.min(x - w / 2, 356 - w);
+  const left = Math.max(4, Math.min(x - w / 2, 356 - w));
   return <a className={`o-tag ${hot ? 'o-pill' : ''} ${cls}`} href={href} aria-label={label}>
     {tail && <path d={`M${x - 4} ${y + 10}l2 8 7-8`} fill="var(--solid)" stroke={ink} strokeWidth="1.3" strokeLinejoin="round" />}
     <rect x={left} y={y - 11} width={w} height="22" rx="11" fill={hot ? '#F0482A' : 'var(--solid)'} stroke={hot ? 'none' : ink} strokeWidth="1.3" />

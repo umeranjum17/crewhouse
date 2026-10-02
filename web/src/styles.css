@@ -781,21 +781,20 @@ details.card[open] > summary { margin-bottom: 10px; }
 .o-cap.failed i { background: var(--danger); }
 .o-room.wide .o-cap { padding: 12px 6px; } .o-room.wide .o-cap b { font-size: 14px; line-height: 18px; } .o-room.wide .o-cap span { font-size: 12.5px; line-height: 16px; } .o-room.wide .o-cap i { display: inline-block; }
 
-/* B1 motion: each member in the room wears a calm loop for their status, in CSS alone (no frame callbacks). Working is
-   visible work (Reel's notes, Scribe's pen, Scout browsing, the screen typing, Chief's watch), resting breathes, needs
-   you nods for attention, done settles once. Loops pause while the room is off screen (.off, office.tsx), and Reduce
-   Motion runs none: every pose is drawn to read on its own. */
+/* B1 motion: each member in the room wears a calm loop for their station, in CSS alone (no frame callbacks). Working
+   is visible work (a nod at the screen, Scribe's pen, Chief's watch), resting breathes under its z's, needs you waves
+   the pen, done settles once. Loops pause while the room is off screen (.off, office.tsx), and Reduce Motion runs none:
+   every station is drawn to read on its own. */
 @media (prefers-reduced-motion: no-preference) {
-  .o-sprite svg .body, .o-sprite svg .prop, .o-sprite svg .cue, .o-sprite svg .watch, .o-sprite svg .zz { transform-box: fill-box; transform-origin: 50% 100%; }
-  .o-room .pose-rest svg .body { animation: o-breathe 3.2s ease-in-out infinite; }
-  .o-room .pose-rest svg .zz { animation: o-zz 3.2s ease-in-out infinite; }
-  .o-room .pose-needs svg .cue { animation: o-cue 1.6s ease-in-out infinite; }
+  .o-room .o-nod, .o-room .o-pen, .o-room .o-breath, .o-room .o-wave, .o-room .o-zz, .o-room .st-done, .o-sprite svg .watch { transform-box: fill-box; transform-origin: 50% 100%; }
+  .o-room .o-nod { animation: o-nod 1.4s ease-in-out infinite; }
+  .o-room .o-pen { transform-origin: 0 100%; animation: o-pen .7s ease-in-out infinite alternate; }
+  .o-room .o-breath { animation: o-breathe 3.2s ease-in-out infinite; }
+  .o-room .o-zz { animation: o-zz 3.2s ease-in-out infinite; }
+  .o-room .o-wave { transform-origin: 0 100%; animation: o-cue 1.6s ease-in-out infinite; }
   .o-room .pose-needs.chief svg .hat { animation: o-tip 2.4s ease-in-out infinite; transform-box: fill-box; transform-origin: 100% 100%; }
-  .o-room .pose-work svg .prop { transform-origin: 50% 50%; animation: o-nod 1.4s ease-in-out infinite; }
-  .o-room .scribe.pose-work svg .prop { transform-origin: 100% 0; animation: o-pen .7s ease-in-out infinite alternate; }
-  .o-room .scout.pose-work svg .prop { animation: o-browse 2.4s ease-in-out infinite; }
   .o-room .chief.pose-work svg .watch { transform-origin: 50% 0; animation: o-swing 2s ease-in-out infinite; }
-  .o-room .pose-pleased svg .body { animation: o-settle 700ms var(--ease) 1; }
+  .o-room .st-done { animation: o-settle 700ms var(--ease) 1; }
   .o-tray.bump { animation: o-bump 600ms var(--ease); transform-box: fill-box; transform-origin: 50% 100%; }
   .o-room.off *, .o-room.off *::after { animation-play-state: paused !important; }
 }
@@ -805,7 +804,6 @@ details.card[open] > summary { margin-bottom: 10px; }
 @keyframes o-cue { 50% { transform: rotate(-6deg) translateY(-2px); } }
 @keyframes o-nod { 50% { transform: translateY(2px) rotate(-3deg); } }
 @keyframes o-pen { to { transform: rotate(-14deg) translateX(-3px); } }
-@keyframes o-browse { 0%, 100% { transform: rotate(0); } 30% { transform: rotate(-8deg) translateX(-2px); } 60% { transform: rotate(4deg) translateX(2px); } }
 @keyframes o-swing { 50% { transform: rotate(10deg); } }
 @keyframes o-settle { 0% { transform: translateY(-6px); } 60% { transform: translateY(1px); } 100% { transform: none; } }
 @keyframes o-bump { 40% { transform: scale(1.14); } }
@@ -998,4 +996,18 @@ h1 { font: 400 32px/36px var(--serif); letter-spacing: -.005em; }
   .office-main { padding: 26px 30px; height: 100dvh; min-height: 0; position: sticky; top: 0; }
   .home-office > .feed { border-left: 1.5px solid var(--ink); padding: 24px 22px 0; min-height: 100dvh; gap: 10px; }
   .home-office > .feed .label { margin: 10px 0 8px; }
+}
+
+/* Office header grid (B1 phone and desk): greeting | switch, then counts | quiet hours. On a phone the name takes the
+   second line and the switch sits beside it, as in the mock; a long name stops short of the switch. */
+.home-bar:not(.is-chat) { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 8px 14px; }
+.home-bar:not(.is-chat) .home-meta { margin: 0; }
+.home-bar:not(.is-chat) .home-tools { flex-direction: row; flex-wrap: nowrap; }
+.home-aside { justify-self: end; }
+.home-aside .m-quiet { display: inline-flex; gap: 5px; align-items: center; font: 500 12px/16px var(--ui); white-space: nowrap; }
+@media (max-width: 899px) {
+  .home-bar:not(.is-chat) .home-greet { grid-column: 1 / -1; grid-row: 1; }
+  .home-bar:not(.is-chat) .home-tools { grid-column: 2; grid-row: 1; align-self: end; margin-bottom: 2px; }
+  .home-greet .nm { display: block; }
+  .home-greet .nm i { display: inline-block; max-width: calc(100% - 200px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; padding-right: .1em; }
 }

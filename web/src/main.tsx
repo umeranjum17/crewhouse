@@ -199,8 +199,8 @@ function NeedsRows({ state, cards, quiet, all = false }: { state: Json; cards: A
   );
 }
 
-/** Home's top (B1): in Office the serif greeting with the counts under it, the Chat | Office switch and your quiet
- *  hours to the right; in Chat the counts and quiet hours in one line. Counts come from `A.office` alone (a helper
+/** Home's top (B1): in Office the serif greeting with the Chat | Office switch beside it (on a phone the name wraps
+ *  under "Good evening," and the switch sits beside the name), then the counts with your quiet hours to the right; in Chat the counts and quiet hours in one line. Counts come from `A.office` alone (a helper
  *  waiting on you counts once, under needs you). On a narrow screen the gear sits by the switch: there is no tab bar. */
 function HomeBar({ ctx, mode, pick }: { ctx: Ctx; mode: HomeMode; pick: (m: HomeMode) => void }) {
   const n = ctx.live.counts, name = String(ctx.state.person?.name ?? '').trim(), quiet = A.quietLine(ctx.state.person);
@@ -210,13 +210,14 @@ function HomeBar({ ctx, mode, pick }: { ctx: Ctx; mode: HomeMode; pick: (m: Home
   const tools = <div className="home-tools">
     <a className="icon-btn home-gear" href="#/settings" aria-label="Settings"><Icon name="settings" size={18} /></a>
     <div className="seg home-mode" role="tablist" aria-label="Home view">{HOME_MODES.map(([m, l]) => <button key={m} role="tab" aria-selected={mode === m} data-mode={m} className={mode === m ? 'on' : ''} onClick={() => pick(m)}><Icon name={m === 'chat' ? 'chief' : 'office'} />{l}</button>)}</div>
-    {mode === 'office' && still}
   </div>;
   if (mode === 'chat') return <header className="home-bar is-chat"><div className="home-meta">{needs}{busy}{still}</div>{tools}</header>;
   return (
     <header className="home-bar">
-      <div className="home-hi"><h1 className="home-greet">{A.greeting()}{name && <>, <i>{name}</i></>}</h1><div className="home-meta">{busy}{needs}</div></div>
+      <h1 className="home-greet">{A.greeting()}{name && <>,<span className="nm"> <i>{name}</i></span></>}</h1>
       {tools}
+      <div className="home-meta">{busy}{needs}</div>
+      <div className="home-aside">{still}</div>
     </header>
   );
 }
