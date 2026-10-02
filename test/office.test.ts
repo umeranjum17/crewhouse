@@ -173,6 +173,8 @@ const loops = (b: Awaited<ReturnType<typeof browse>>) => b.run(`(() => {
   const on = document.getAnimations().filter((a) => a.playState === 'running');
   return { raf: __o.raf, running: on.length, css: on.filter((a) => a.constructor.name === 'CSSAnimation').length,
     outside: on.filter((a) => !a.effect?.target?.closest?.('.o-room')).length,
+    // a loop that never ends, other than the thread's own loading skeleton (main's, gone once the thread has loaded)
+    forever: on.filter((a) => a.effect?.getComputedTiming().iterations === Infinity && !a.effect?.target?.closest?.('.skeleton')).length,
     names: on.map((a) => (a.animationName ?? a.constructor.name) + ' on ' + (a.effect?.target?.getAttribute?.('class') ?? a.effect?.target?.tagName ?? '?') + ' (' + a.effect?.getComputedTiming().iterations + ')'),
     working: [...document.querySelectorAll('.o-cell[data-seat=working] .o-sprite')].length };
 })()`);
@@ -184,12 +186,12 @@ test('the office keeps the battery budget: calm CSS loops while it shows, none o
     await b.open(`demo=${demo}&day`);
     // Chat by default: no room, so nothing of the office runs.
     await until('Chief\'s box', () => b.run("!!document.querySelector('.home-chat .composer')"), 30_000);
-    // What plays as Chat opens is the page's own entrances, each of them finite; once they have played nothing runs,
-    // and a loop that never ends fails here at the bound.
+    // What plays as Chat opens is the page's own entrances (each finite) and, while Chief's thread loads, main's loading
+    // skeleton; once the thread is in, nothing runs, and any other loop that never ends fails here.
     const opening = await loops(b);
     t.diagnostic(`${demo}: Chat at first paint runs ${opening.running}: ${opening.names.join('; ') || 'nothing'}`);
-    assert.ok(!opening.names.some((n: string) => n.endsWith('(Infinity)')), `${demo}: nothing in Chat loops (${opening.names.join('; ')})`);
-    await until(`${demo}: Chat to be still`, async () => (await loops(b)).running === 0, 10_000);
+    assert.equal(opening.forever, 0, `${demo}: nothing in Chat loops but the loading skeleton (${opening.names.join('; ')})`);
+    await until(`${demo}: Chat to be still once the thread has loaded`, async () => !(await b.run("!!document.querySelector('.skeleton')")) && (await loops(b)).running === 0, 10_000);
     await toOffice(b);
     await until('the room to settle', () => b.run('window.__o.pending.size === 0'), 15_000);
     const q0 = await loops(b);
