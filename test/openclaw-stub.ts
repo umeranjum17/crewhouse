@@ -40,7 +40,7 @@ export function toolCalls(text: string) {
 const words = (m: any) => typeof m?.content === 'string' ? m.content : Array.isArray(m?.content) ? m.content.map((c: any) => c.text ?? '').join('') : '';
 
 /** One loopback HTTP server that speaks the script. `keyFor` names the hold a request's body waits on. */
-export function startModelStub() {
+export function startModelStub(promptTokens?: number) {
   const calls: { authorization: string; path: string; body: any }[] = [];
   const server: Server = createServer(async (req, res) => {
     const chunks: Buffer[] = [];
@@ -112,6 +112,8 @@ export function startModelStub() {
     }
     send({ role: 'assistant', content: text });
     send({}, 'stop');
+    // A scripted usage receipt lets maintenance tests cross a token threshold without a huge HTTP fixture.
+    if (promptTokens !== undefined) res.write(`data: ${JSON.stringify({ id, object: 'chat.completion.chunk', created: Math.floor(Date.now() / 1000), model: body.model, choices: [], usage: { prompt_tokens: promptTokens, completion_tokens: 20, total_tokens: promptTokens + 20 } })}\n\n`);
     res.end('data: [DONE]\n\n');
   });
   return new Promise<{ url: string; calls: typeof calls; close: () => Promise<void> }>((resolve) => {
