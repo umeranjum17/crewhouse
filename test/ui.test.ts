@@ -1907,6 +1907,11 @@ test('J5 repairs stay in: the night look paints first, the job row is never cut 
   // drawn at the figures' size on both sides.
   assert.match(office, /return full\.s < 1 \? packed\(order, sts\) : full;/, 'a crowded row packs before it scales');
   assert.match(office, /it\.tray \? \[all\[i - 1\]\?\.st === 'chief' \? 34 : 24, 20\]/, 'a packed row reserves only the box, no bubble width');
+  // 162: the box on clear floor beside whoever finished when the row has room (36 left of them, their station 56); the
+  // bubble clears furniture as well as ink, and a full row keeps the ink rule.
+  assert.match(office, /const clear = layAt\(order, sts, trayText, true\);\n\s*if \(clear\.s >= 1\) return clear;/);
+  assert.match(office, /off = clear \? 36 : 20/); assert.match(office, /it\.tray && it\.st === 'done' && clear \? \[56, pad\.done\[1\]\]/);
+  assert.match(office, /return at\(\[INK, FOOT\]\) \?\? at\(\[INK\]\) \?\? ideal;/);
   assert.match(office, /needs: \[26, 28\], monitor: \[26, 28\], failed: \[26, 28\]/); assert.match(office, /data-scale=\{s\.toFixed\(3\)\}/);
   assert.doesNotMatch(office, /MOCK|floorPlan\(crew, /, 'no seat cap below five for size');
   assert.match(office, /getScreenCTM\(\)\?\.a \?\? 1\) \* Number\(room\.dataset\.scale \?\? 1\), pw = 14 \* k, ph = 18 \* k/);

@@ -277,8 +277,15 @@ test('at 1, 5, 12 and 30 crew and in the B1 mock\'s house, on a phone and a comp
           const tb = document.querySelector('.o-traybox > path')?.getBoundingClientRect(), tt = document.querySelector('a.o-tray > path, .o-pointer')?.getBoundingClientRect();
           const bub = document.querySelector('a.o-tray rect')?.getBoundingClientRect(), unit = document.querySelector('.o-art').getScreenCTM().a;
           const inked = bub ? [...document.querySelectorAll('.o-pen, .o-zz, .o-mon')].map(box).filter((c) => hit(bub, c)).length : -1;
+          // 162: the box covers no part of any figure (their drawn parts, not the soft foot shadow under them), and the whole
+          // label, tail too, rests on no furniture: a desk, a note, a screen, a lamp's glow.
+          const part = (e) => (e.getAttribute('class') ?? e.tagName) + ' of ' + (e.closest('[data-id]')?.dataset.id ?? 'chief');
+          const boxed = tb ? [...document.querySelectorAll('.o-sprite *')].filter((e) => !/^(g|svg|defs|clipPath|mask|linearGradient|radialGradient|stop)$/.test(e.tagName) && !e.closest('defs, clipPath, mask') && !(e.tagName === 'ellipse' && e.getAttribute('filter')))
+            .filter((e) => hit(tb, box(e))).map(part) : ['no box'];
+          const lab = document.querySelector('a.o-tray')?.getBoundingClientRect();
+          const furn = lab ? [...document.querySelectorAll('.o-desk, .o-note, .o-mon, ellipse[fill*="lamp"]')].filter((e) => hit(lab, box(e))).map(part) : ['no label'];
           const tray = tb && tt ? { onTop: !!document.elementFromPoint(tb.left + tb.width / 2, tb.top + tb.height * 0.6)?.closest('.o-traybox'), over: tt.left + tt.width / 2 >= tb.left && tt.left + tt.width / 2 <= tb.right,
-            gap: (packedRow ? tt.top - tb.bottom : tb.top - tt.bottom) / unit, below: tt.top >= tb.bottom - 1, inked } : null;
+            gap: (packedRow ? tt.top - tb.bottom : tb.top - tt.bottom) / unit, below: tt.top >= tb.bottom - 1, inked, boxed, furn } : null;
           return { pairs, seen: st.height > 0 && st.top >= bar - 1 && st.top < innerHeight - 40, out, over, clipped, pills, stat, badge, busy, onIt, waits, pinned, all,
             seated: document.querySelectorAll('.o-cell .o-sprite').length - 1, more: more || 0, caps: document.querySelectorAll('.o-strip .o-cap:not(.o-more)').length,
             tray2: tray, scale: Number(document.querySelector('.o-room')?.dataset.scale), tight: document.querySelector('.o-room')?.dataset.tight === 'true', roster: document.querySelectorAll('.side-row').length, tray: document.querySelector('.o-tray')?.getAttribute('aria-label') ?? null };
@@ -314,6 +321,8 @@ test('at 1, 5, 12 and 30 crew and in the B1 mock\'s house, on a phone and a comp
         assert.ok(m.tray2.over && m.tray2.gap >= 0 && m.tray2.gap <= 40, `${at}: the Tray label's pointer is on the box and close to it (${JSON.stringify(m.tray2)})`);
         assert.equal(m.tray2.below, m.tight, `${at}: the caption sits under the box exactly when the row is packed`);
         assert.equal(m.tray2.inked, 0, `${at}: the Tray bubble covers no pen, z or screen`);
+        assert.deepEqual(m.tray2.boxed, [], `${at}: the tray box stands on clear floor, in front of no figure`);
+        assert.deepEqual(m.tray2.furn, [], `${at}: the Tray label rests on no desk, note, screen or lamp`);
         // The B1 mock's own state, exactly: 1 needs you, 2 working, Tracer's list the one page in the tray.
         if (demo === 'b1') assert.deepEqual([m.stat, m.busy, m.tray], [1, 2, 'Your tray: 1 done today'], `${at}: the mock's counts`);
         } catch (e) {

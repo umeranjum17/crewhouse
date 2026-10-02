@@ -101,9 +101,8 @@ export function Office({ state, live, night }: { state: Json; live: A.OfficeView
   const waits = plan.seats.filter(A.waitsOnYou).length;
   const order: (A.OfficeMember | 'chief')[] = [...plan.seats.slice(0, waits), 'chief', ...plan.seats.slice(waits)];
   const trayText = `Tray · ${live.counts.done}`;
-  const { spots, s, X, Y, tight, bubble } = lay(order, live, trayText);
+  const { spots, s, X, Y, tight, bubble, trayX } = lay(order, live, trayText);
   const spotOf = (m: A.OfficeMember | 'chief') => spots.find((p) => p.m === m)!;
-  const trayAt = spots.find((p) => p.tray)!, trayX = trayAt.st === 'done' ? trayAt.x - 20 : trayAt.x;
   // One accent pill, over whoever's question matters most (money, then your name, then the rest; Chief's own last).
   const urgent = plan.seats.filter((c) => c.ask).sort((a, b) => A.askRank(a.ask!) - A.askRank(b.ask!))[0];
   const chat = plan.seats.find((c) => A.seatOf(c) === 'chat');
@@ -198,6 +197,8 @@ const G = 196, W = 346;
  *  waiting note and flag, a screen, Scribe's pen, Pip's z's. The bubble never covers any of it; the low finished helper and
  *  a standing one may sit under it, as in the mock. */
 const INK: Partial<Record<Station, [number, number]>> = { chief: [-31, 44], needs: [-40, 31.5], monitor: [16, 50], failed: [16, 50], writing: [-21, -12], rest: [-2, 13] };
+/** Furniture under the Tray bubble's tail (y 150): a desk, a note, a lamp's glow. The bubble never rests on it either. */
+const FOOT: Partial<Record<Station, [number, number]>> = { needs: [-48, 24], monitor: [-20, 70], failed: [-20, 58], writing: [-28, 32] };
 /** Left to right in the given order, the tray just before whoever finished (or before the resting); the row scales down
  *  about the floor line to fit, and centres when it is short. The Tray bubble never sits over a figure or past the
  *  room's edge: the tray keeps room for it beside a tall neighbour (INK: Chief's cue, a waiting flag, a screen) and at the
@@ -205,8 +206,12 @@ const INK: Partial<Record<Station, [number, number]>> = { chief: [-31, 44], need
  *  ponytail: four passes for that room under scaling, exact enough for six stations. */
 function lay(order: (A.OfficeMember | 'chief')[], v: A.OfficeView, trayText: string) {
   const sts = order.map((m) => (m === 'chief' ? 'chief' : stationOf(m, v)) as Station);
-  const full = layAt(order, sts, trayText);
-  // A row too long for the stage at the mock's size packs its desks (TIGHT) before anyone shrinks; only the rest scales.
+  // The tray box stands on clear floor beside whoever finished when the row has room for it; a row that is full at the
+  // mock's size keeps the mock's box at their feet. A row too long even then packs its desks (TIGHT) before anyone
+  // shrinks; only the rest scales.
+  const clear = layAt(order, sts, trayText, true);
+  if (clear.s >= 1) return clear;
+  const full = layAt(order, sts, trayText, false);
   return full.s < 1 ? packed(order, sts) : full;
 }
 /** A packed row: compact desks, the tray box alone at the row's end (clear of Chief's cane), and its Tray caption in the
@@ -219,23 +224,25 @@ function packed(order: (A.OfficeMember | 'chief')[], sts: Station[]) {
     return { ...it, x, tight: true };
   });
   const s = Math.min(1, W / cur), x0 = 180 - (cur * s) / 2;
-  return { spots, s, x0, X: (x: number) => x0 + x * s, Y: (y: number) => G + (y - G) * s, tight: true, bubble: undefined };
+  return { spots, s, x0, X: (x: number) => x0 + x * s, Y: (y: number) => G + (y - G) * s, tight: true, bubble: undefined, trayX: spots[spots.length - 1].x };
 }
-function layAt(order: (A.OfficeMember | 'chief')[], sts: Station[], trayText: string) {
+function layAt(order: (A.OfficeMember | 'chief')[], sts: Station[], trayText: string, clear: boolean) {
   const pad = PAD, ink = INK, tight = false;
   let at = sts.indexOf('done');
   const items: { m: Spot['m']; st: Station; tray: boolean }[] = order.map((m, i) => ({ m, st: sts[i], tray: i === at }));
   if (at < 0) { const r = sts.indexOf('rest'); items.splice(r < 0 ? items.length : r, 0, { m: 'tray', st: 'tray', tray: true }); at = r < 0 ? items.length - 1 : r; }
-  const half = (trayText.length * 6.6 + 22) / 2;
+  // The box's centre left of a done figure: 36 clears their body (to 15.9 with its line) by 2, their station then starting
+  // 56 left so it clears the neighbour too; 20 is the mock's, the box over their feet.
+  const half = (trayText.length * 6.6 + 22) / 2, off = clear ? 36 : 20;
   let s = 1, spots: Spot[] = [], total = 0;
   for (let pass = 0; pass < 4; pass++) {
     let cur = 0;
     spots = [];
     items.forEach((it, i) => {
-      let [l, r] = pad[it.st];
-      // The bubble is centred over the tray box, 20 left of a done figure; its half plus a gap, unscaled, clears the ink
+      let [l, r] = it.tray && it.st === 'done' && clear ? [56, pad.done[1]] : pad[it.st];
+      // The bubble is centred over the tray box, off left of a done figure; its half plus a gap, unscaled, clears the ink
       // of a tall neighbour on either side (and the room's ends); a low one may sit under it.
-      const b = (half + 4) / s, dx = it.st === 'done' ? 20 : 0, p = spots[i - 1], q = items[i + 1];
+      const b = (half + 4) / s, dx = it.st === 'done' ? off : 0, p = spots[i - 1], q = items[i + 1];
       const tall = (n?: { st: Station }) => n && TALL.includes(n.st) ? ink[n.st] : undefined;
       if (it.tray) {
         const pi = tall(p), qi = tall(q);
@@ -248,17 +255,20 @@ function layAt(order: (A.OfficeMember | 'chief')[], sts: Station[], trayText: st
     total = cur; s = Math.min(1, W / total);
   }
   const x0 = 180 - (total * s) / 2, X = (x: number) => x0 + x * s;   // the crew centred under the window (x 180), as the mock
-  return { spots, s, x0, X, Y: (y: number) => G + (y - G) * s, tight, bubble: bubbleAt(spots, X, ink, half * 2) };
+  const t = spots.find((p) => p.tray)!, trayX = t.st === 'done' ? t.x - off : t.x;
+  return { spots, s, x0, X, Y: (y: number) => G + (y - G) * s, tight, bubble: bubbleAt(spots, X, X(trayX), half * 2), trayX };
 }
-/** The Tray bubble's left edge: as near centred over the box as clears every ink in the row (a neighbour two stations off,
- *  Chief's cue past a low writer, too), its tail always on the box and the bubble inside the room. */
-function bubbleAt(spots: Spot[], X: (x: number) => number, ink: typeof INK, w: number) {
-  const t = spots.find((p) => p.tray)!, tx = X(t.st === 'done' ? t.x - 20 : t.x);
-  const blocks = spots.flatMap((p) => { const k = ink[p.st]; return k ? [[X(p.x + k[0]) - 4, X(p.x + k[1]) + 4]] : []; });
+/** The Tray bubble's left edge: as near centred over the box as clears every ink and furniture in the row (a neighbour
+ *  two stations off, Chief's cue past a low writer, too), its tail always on the box and the bubble inside the room. */
+function bubbleAt(spots: Spot[], X: (x: number) => number, tx: number, w: number) {
   const lo = Math.max(4, tx + 13 - w), hi = Math.min(356 - w, tx - 12), ideal = Math.min(hi, Math.max(lo, tx - w / 2));
-  const free = (L: number) => blocks.every(([a, b]) => L + w <= a || L >= b);
-  return [ideal, ...blocks.flatMap(([a, b]) => [b, a - w])].filter((L) => L >= lo && L <= hi && free(L))
-    .sort((p, q) => Math.abs(p - ideal) - Math.abs(q - ideal))[0] ?? ideal;
+  const at = (keep: (typeof INK)[]) => {
+    const blocks = spots.flatMap((p) => keep.flatMap((k) => k[p.st] ? [[X(p.x + k[p.st]![0]) - 4, X(p.x + k[p.st]![1]) + 4]] : []));
+    const free = (L: number) => blocks.every(([a, b]) => L + w <= a || L >= b);
+    return [ideal, ...blocks.flatMap(([a, b]) => [b, a - w])].filter((L) => L >= lo && L <= hi && free(L)).sort((p, q) => Math.abs(p - ideal) - Math.abs(q - ideal))[0];
+  };
+  // A row full at the mock's size (the B1 house before anyone finishes) has no clear air over its writer's desk: the ink still wins.
+  return at([INK, FOOT]) ?? at([INK]) ?? ideal;
 }
 
 /** A bean on the floor, feet at y: front on (two eyes, or shut asleep), or side on facing their work (one eye, a nose
@@ -303,7 +313,7 @@ function Seat({ spot, id, kind, pose, seat, second, dataId, beat, label, onOpen 
     {st === 'chief' && <><ellipse cx={x} cy={G + 2} rx="22" ry="3.2" fill={ink} opacity=".1" filter={`url(#${id}bl)`} /><g ref={fig} className={`o-sprite ink chief pose-${pose}`} dangerouslySetInnerHTML={{ __html: chief }} /></>}
     {st === 'needs' && <>
       {tight ? <Desk x={x - 26} w={52} /> : <Desk x={x - 48} w={72} />}
-      {(() => { const n = tight ? x - 11 : x - 40; return <><rect x={n} y="132" width="22" height="18" rx="2" fill="var(--r-desk)" stroke={ink} strokeWidth="1.6" /><path d={`M${n + 4} 139h14M${n + 4} 144h9`} stroke={ink} strokeWidth="1.3" /></>; })()}
+      {(() => { const n = tight ? x - 11 : x - 40; return <><rect className="o-note" x={n} y="132" width="22" height="18" rx="2" fill="var(--r-desk)" stroke={ink} strokeWidth="1.6" /><path d={`M${n + 4} 139h14M${n + 4} 144h9`} stroke={ink} strokeWidth="1.3" /></>; })()}
       {sprite(<Bean x={x} fill={fill} id={id}><g className="o-wave"><path d={`M${x + 15} ${G - 30}l12-20`} stroke={ink} strokeWidth="1.8" strokeLinecap="round" /><circle cx={x + 28} cy={G - 52} r="3.5" fill={red} stroke={ink} strokeWidth="1.5" /></g></Bean>)}
     </>}
     {(st === 'monitor' || st === 'failed') && <>
