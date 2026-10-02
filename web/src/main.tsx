@@ -504,15 +504,10 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
   const box = useRef<HTMLDivElement>(null);
   // The thread scrolls by its own column on a desk (a scrollIntoView here once dragged the whole page up with it,
   // leaving a dead band on top); the phone keeps the document scroll. An anchored landing scrolls to the line instead.
-  // Home's Chief chat on a phone opens at its top, Chief's hero and Needs you first (B1); only a line that arrives
-  // after that scrolls to the newest.
-  const landed = useRef(false);
+  // Every chat, Home's Chief chat included (Main600), opens at its newest line; his hero is above, a scroll away.
   useEffect(() => {
     if (around) return;
-    const desk = matchMedia('(min-width: 900px)').matches, first = !landed.current && lines.length > 0;
-    if (first) landed.current = true;
-    if (desk) { const el = box.current; if (el) el.scrollTop = el.scrollHeight; }
-    else if (hero && first) scrollTo(0, 0);
+    if (matchMedia('(min-width: 900px)').matches) { const el = box.current; if (el) el.scrollTop = el.scrollHeight; }
     else end.current?.scrollIntoView({ block: 'end' });
   }, [lines.length, around, !!echoed, !!waiting, partial]);
   // The landing itself: the matched line, centred, with the one motion that explains where you are.
@@ -590,7 +585,7 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
         {live && h && <section className="working-on-frame"><div className="label">Working on</div><div className="list-group"><div className="work-title"><b>{A.plain(live.title)}</b><span className="small">{h.status}</span></div>{trail.length > 0 && <Steps steps={trail} max={3} />}<a className="link" href={`#/h/${id}/did`}>What happened ›</a></div></section>}
         {A.things(state).filter((x) => x.helper === id).length > 0 && <section className="home-section"><div className="label">Made in this chat</div><div className="list-group">{A.things(state).filter((x) => x.helper === id).map((x) => { const t = A.fileTarget(x.files[0]); return <a className="list-row" key={x.id} href={t?.href.startsWith('#') ? t.href : `#/things/t${x.id}`}><span className="file-chip">{t?.chip ?? '—'}</span><span className="grow"><b className="clamp1">{x.title}</b><span className="small clamp1">{x.summary}</span></span></a>; })}</div></section>}
       </aside>
-      <div className="dock"><Composer key={seed} placeholder={id === 'chief' ? 'Ask Chief anything…' : `Message ${name}…`} onSend={send} chips={hero ? A.ideas(state).map((i: Json) => ({ label: i.ask.trim(), ask: i.ask })) : undefined} {...typeInto(id)} /></div>
+      <div className="dock"><Composer key={seed} placeholder={id === 'chief' ? (hero && !matchMedia('(min-width: 900px)').matches ? 'Ask Chief anything' : 'Ask Chief anything…') : `Message ${name}…`} onSend={send} chips={hero ? A.ideas(state).map((i: Json) => ({ label: i.ask.trim(), ask: i.ask })) : undefined} {...typeInto(id)} /></div>
     </div>
   );
 }

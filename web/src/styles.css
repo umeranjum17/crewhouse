@@ -1148,6 +1148,12 @@ h1 { font: 400 32px/36px var(--serif); letter-spacing: -.005em; }
   .home-chat .composer.has-bar textarea { flex: 1; padding: 9px 0; }
   .home-chat .c-bar { flex: none; order: -1; }
   .home-chat .c-chip { display: none; }
+  .home-chat .send { border-radius: 12px; }
   .home-chat .send:disabled { background: var(--ink); color: var(--solid); transform: none; }
+  /* Main600: the pinned ask's title holds one line at 390 (the mock's face, gap and padding); 320 and large type wrap. */
+  .needs-pin.flat { padding: 14px 14px 16px; }
+  .needs-pin.flat .nb-top { gap: 10px; }
+  .needs-pin.flat .nb-av { width: 34px; height: 34px; }
+  .needs-pin.flat .nb-av .ink { width: 34px; height: auto; }
 }
 
