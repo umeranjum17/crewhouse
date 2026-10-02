@@ -287,7 +287,7 @@ const Desk = ({ x, w }: { x: number; w: number }) => <g className="o-desk"><rect
 function Seat({ spot, id, kind, pose, seat, second, dataId, beat, label, onOpen }: { spot: Spot; id: string; kind: art.Kind | 'chief'; pose: art.Pose; seat: A.Seat;
   second?: boolean; dataId?: string; beat: string; label: string; onOpen: () => void }) {
   const { x, st, tight } = spot, ink = 'var(--r-edge)', red = '#F0482A', fill = kind === 'chief' ? '#fff' : art.PALS[kind].body;
-  const chief = useMemo(() => (kind === 'chief' ? art.chiefSvg(pose, { vb: '24 30 176 210' }).replace('<svg ', `<svg x="${x - 30.4}" y="${G - 80.8}" width="70.4" height="84" `) : ''), [kind, pose, x]);
+  const chief = useMemo(() => (kind === 'chief' ? art.chiefSvg(pose, { vb: '24 30 176 210' }).replace(/^<svg [^>]*>/, `<g transform="translate(${x - 40} ${G - 92.8}) scale(.4)">`).replace(/<\/svg>$/, '</g>') : ''), [kind, pose, x]);
   const fig = useRef<SVGGElement>(null);
   // A hop when their news lands (a new ring, mood or thing): once, never on the first paint, never with Reduce Motion.
   const was = useRef(beat);

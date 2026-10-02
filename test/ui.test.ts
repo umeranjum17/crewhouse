@@ -1893,9 +1893,11 @@ test('J5 repairs stay in: the night look paints first, the job row is never cut 
   assert.match(office, /H = tight \? G \+ 27 : 210/, 'the floor band grows by the caption only in a packed row');
   assert.doesNotMatch(office, /HIGH/, 'no raised, detached bubble');
   // 155: the caption's top clears every foot shadow and its pointer stands in the box's own column, outside the label;
-  // Chief's room art keeps its own size (never the avatars' .ink 100% box).
+  // Chief's room art is a plain group at the art's own 0.4 (viewBox 24 30 176 210 into 70.4x84 at x - 30.4, G - 80.8),
+  // never a nested svg, whose measured box ran to the room's floor edge (157).
   assert.match(office, /<path className="o-pointer" d=\{`M\$\{x - 4\} \$\{y \+ 1\}L\$\{x\} \$\{G \+ 1\.2\}/);
-  assert.doesNotMatch(office, /o-sprite ink/); assert.match(read('web', 'src', 'styles.css'), /\.o-sprite svg \{ overflow: visible; \}/);
+  assert.doesNotMatch(office, /o-sprite ink|<svg x=/); assert.match(office, /`<g transform="translate\(\$\{x - 40\} \$\{G - 92\.8\}\) scale\(\.4\)">`/);
+  assert.doesNotMatch(read('web', 'src', 'styles.css'), /\.chief(\.pose-\w+)? svg \.|\.o-sprite svg/, 'the room animates Chief\'s own groups, with no nested svg in between');
   // 147/148: a crowded row packs its desks (compact) before it scales, all five standing; the page is
   // drawn at the figures' size on both sides.
   assert.match(office, /return full\.s < 1 \? packed\(order, sts\) : full;/, 'a crowded row packs before it scales');
