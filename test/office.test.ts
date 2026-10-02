@@ -272,7 +272,7 @@ test('at 1, 5, 12 and 30 crew and in the B1 mock\'s house, on a phone and a comp
           const more = Number(document.querySelector('.o-more')?.dataset.more ?? 0);
           return { pairs, seen: st.height > 0 && st.top >= bar - 1 && st.top < innerHeight - 40, out, over, clipped, pills, stat, badge, busy, onIt, waits, pinned, all,
             seated: document.querySelectorAll('.o-cell .o-sprite').length - 1, more: more || 0, caps: document.querySelectorAll('.o-strip .o-cap:not(.o-more)').length,
-            scale: Number(document.querySelector('.o-room')?.dataset.scale), roster: document.querySelectorAll('.side-row').length, tray: document.querySelector('.o-tray')?.getAttribute('aria-label') ?? null };
+            scale: Number(document.querySelector('.o-room')?.dataset.scale), tight: document.querySelector('.o-room')?.dataset.tight === 'true', roster: document.querySelectorAll('.side-row').length, tray: document.querySelector('.o-tray')?.getAttribute('aria-label') ?? null };
         })()`);
         const at = `${demo} ${theme} at ${width}`;
         assert.ok(m.seen, `${at}: Office opens on its room, below the bar and on screen, not just somewhere on the page`);
@@ -293,10 +293,13 @@ test('at 1, 5, 12 and 30 crew and in the B1 mock\'s house, on a phone and a comp
           assert.deepEqual(m.onIt.filter((x: string) => m.waits.includes(x)), [], `${at}: one state per helper: waiting is never also on it now`);
         }
         if (n === 30) assert.ok(m.more > 0, `${at}: a big crew is counted under "+N"`);
-        // Mock size in every state (147): the row stands fewer at the mock's scale rather than shrinking everyone.
-        assert.ok(m.scale >= 0.85, `${at}: the crew stands at the mock's size (row scale ${m.scale})`);
-        if (demo === 'office') assert.deepEqual([m.seated, m.more], [3, 2], `${at}: five waiting on you stand three at mock size, two under "+N"`);
-        if (demo === 'b1') assert.deepEqual([m.seated, m.scale], [5, 1], `${at}: the B1 house stands all five at the mock's own scale`);
+        // Mock size (147, 148): a row the stage holds is at scale 1; one it does not first packs (compact desks, the tray
+        // alone at the end) and only then scales. Five waiting on you is the tightest ordinary row: all five stand, packed,
+        // at 0.892 (5 x 54 + Chief 64 + tray 44 = 378 against 346), never below that.
+        assert.ok(m.tight || m.scale === 1, `${at}: a row that is not packed stands at the mock's own scale (${m.scale})`);
+        assert.ok(m.scale >= 0.89, `${at}: no row of five shrinks past the packed five-waiting row (${m.scale})`);
+        if (demo === 'office') assert.deepEqual([m.seated, m.more, m.tight], [5, 0, true], `${at}: five waiting on you all stand, packed`);
+        if (demo === 'b1') assert.deepEqual([m.seated, m.scale, m.tight], [5, 1, false], `${at}: the B1 house stands all five at the mock's own spacing and scale`);
         // The B1 mock's own state, exactly: 1 needs you, 2 working, Tracer's list the one page in the tray.
         if (demo === 'b1') assert.deepEqual([m.stat, m.busy, m.tray], [1, 2, 'Your tray: 1 done today'], `${at}: the mock's counts`);
       }

@@ -96,17 +96,12 @@ export function Office({ state, live, night }: { state: Json; live: A.OfficeView
   const vars = { '--r-wall': r.wall, '--r-floor': r.floor, '--r-desk': r.desk, '--r-edge': r.edge, '--r-screen': r.screen, '--r-sofa': r.sofa, '--r-window': r.window } as CSSProperties;
   const chiefAsk = A.chiefAsks(live).sort((a, b) => A.askRank(a) - A.askRank(b))[0];
   // One floor, left to right in the roster's order (whoever waits on you, then working, then the rest, resting last),
-  // Chief standing just after whoever waits on you. Everyone stands at the mock's size in every state: the room
-  // stands as many as the stage holds at MOCK scale or more, up to five, and counts the rest under "+N" (A.floorPlan).
+  // Chief standing just after whoever waits on you.
+  const plan = A.floorPlan(crew);
+  const waits = plan.seats.filter(A.waitsOnYou).length;
+  const order: (A.OfficeMember | 'chief')[] = [...plan.seats.slice(0, waits), 'chief', ...plan.seats.slice(waits)];
   const trayText = `Tray · ${live.counts.done}`;
-  const stand = (k: number) => {
-    const plan = A.floorPlan(crew, k), waits = plan.seats.filter(A.waitsOnYou).length;
-    const order: (A.OfficeMember | 'chief')[] = [...plan.seats.slice(0, waits), 'chief', ...plan.seats.slice(waits)];
-    return { plan, order, ...lay(order, live, trayText) };
-  };
-  let fit = stand(A.SEATS);
-  for (let k = A.SEATS - 1; k >= 1 && fit.s < MOCK; k--) fit = stand(k);
-  const { plan, order, spots, s, X, Y } = fit;
+  const { spots, s, X, Y, tight } = lay(order, live, trayText);
   const spotOf = (m: A.OfficeMember | 'chief') => spots.find((p) => p.m === m)!;
   const trayAt = spots.find((p) => p.tray)!, trayX = trayAt.st === 'done' ? trayAt.x - 20 : trayAt.x;
   // One accent pill, over whoever's question matters most (money, then your name, then the rest; Chief's own last).
@@ -123,7 +118,7 @@ export function Office({ state, live, night }: { state: Json; live: A.OfficeView
 
   return (
     <section className="office" aria-label="The office">
-      <div ref={box} className={`o-room${wide ? ' wide' : ''}`} style={vars} data-scale={s.toFixed(3)}>
+      <div ref={box} className={`o-room${wide ? ' wide' : ''}`} style={vars} data-scale={s.toFixed(3)} data-tight={tight || undefined}>
         <svg className="o-art" viewBox={`0 ${Y0} 360 ${H - Y0}`} preserveAspectRatio={wide ? 'xMidYMid meet' : 'none'} xmlns="http://www.w3.org/2000/svg">
           <defs>
             <filter id={`${id}bl`} x="-50%" y="-200%" width="200%" height="500%"><feGaussianBlur stdDeviation="2" /></filter>
@@ -139,7 +134,7 @@ export function Office({ state, live, night }: { state: Json; live: A.OfficeView
               : <Seat key={m.id} spot={spotOf(m)} id={id} kind={m.kind} pose={art.poseOf(m.mood)} seat={A.seatOf(m)} second={m.second} dataId={m.id} beat={`${m.ring}|${m.mood}|${m.things.length}|${m.ask?.id ?? ''}`}
                   label={said(m) + (m.things.length ? `, made ${m.things.map((f) => KIND_WORDS[f.kind]).join(', ')}` : '')} onOpen={() => setOpen(m.id)} />)}
           </g>
-          <Tag key={live.counts.done} x={X(trayX)} y={Y(G - 64)} text={trayText} tail cls={`o-tray${trayWas.current !== undefined && trayWas.current !== live.counts.done ? ' bump' : ''}`} href="#/things" label={`Your tray: ${live.counts.done} done today`} />
+          <Tag key={live.counts.done} x={tight ? Math.max(X(trayX), 230 + (trayText.length * 6.6 + 22) / 2) : X(trayX)} y={tight ? HIGH : Y(G - 64)} text={trayText} tail cls={`o-tray${trayWas.current !== undefined && trayWas.current !== live.counts.done ? ' bump' : ''}`} href="#/things" label={`Your tray: ${live.counts.done} done today`} />
           {pill && <Tag x={X(spotOf(pill.m).x)} y={pill.m === 'chief' ? Y(G - 80.8) - 14 : Y(102)} text={A.SEAT_WORDS.needs} hot href={pill.href} label={pill.label} />}
         </svg>
         <div className="o-strip" style={{ ['--n' as string]: order.length + (more ? 1 : 0) }}>
@@ -188,14 +183,17 @@ function Scene({ id, wide }: { id: string; wide: boolean }) {
  *  PAD is the room each takes left and right of where they stand, the mock's own spacing. */
 type Station = 'needs' | 'monitor' | 'writing' | 'failed' | 'done' | 'rest' | 'stand' | 'chief' | 'tray';
 const PAD: Record<Station, [number, number]> = { needs: [48, 24], chief: [38, 26], monitor: [20, 58], failed: [20, 58], writing: [22, 28], done: [20, 18], rest: [22, 22], stand: [18, 18], tray: [48, 30] };
+/** A crowded row packs its desks as the phone does (compact): a 52-wide desk centred on the helper, the note or screen
+ *  over their head; a waiting flag (to 31.5 right) clears the next desk at that pitch. */
+const TIGHT: Record<Station, [number, number]> = { ...PAD, needs: [26, 28], monitor: [26, 28], failed: [26, 28] };
 const stationOf = (c: A.OfficeMember, v: A.OfficeView): Station => {
   const k = A.seatOf(c);
   return k === 'needs' || k === 'chat' ? 'needs' : k === 'working' ? (c.kind === 'scribe' ? 'writing' : 'monitor') : k === 'failed' ? 'failed'
     : k === 'resting' ? 'rest' : stripSeat(c, v) === 'done' ? 'done' : 'stand';
 };
 const TALL: Station[] = ['chief', 'monitor', 'failed', 'needs'];
-type Spot = { m: A.OfficeMember | 'chief' | 'tray'; st: Station; x: number; tray: boolean };
-const G = 196, W = 346, MOCK = 0.85;   // the floor line, the stage's width, and the least row scale that reads as the mock's size
+type Spot = { m: A.OfficeMember | 'chief' | 'tray'; st: Station; x: number; tray: boolean; tight?: boolean };
+const G = 196, W = 346, HIGH = 78;   // the floor line, the stage's width, and a crowded row's Tray bubble: above every head and pill, below the clock, right of the window
 /** Left to right in the given order, the tray just before whoever finished (or before the resting); the row scales down
  *  about the floor line to fit, and centres when it is short. The Tray bubble never sits over a figure or past the
  *  room's edge: the tray keeps room for it beside anyone reaching its height (Chief's hat and cane reach 40 to his
@@ -204,6 +202,23 @@ const G = 196, W = 346, MOCK = 0.85;   // the floor line, the stage's width, and
  *  ponytail: four passes for that room under scaling, exact enough for six stations. */
 function lay(order: (A.OfficeMember | 'chief')[], v: A.OfficeView, trayText: string) {
   const sts = order.map((m) => (m === 'chief' ? 'chief' : stationOf(m, v)) as Station);
+  const full = layAt(order, sts, trayText);
+  return full.s < 1 ? packed(order, sts) : full;
+}
+/** A row too long for the stage at the mock's size first gives back what is not ink, before anyone shrinks: compact desks
+ *  (TIGHT), and the tray on its own at the row's end (as the phone's corner tray) with its bubble raised to HIGH, so it
+ *  reserves only the box (34 beside Chief's cane). Only what still does not fit scales. */
+function packed(order: (A.OfficeMember | 'chief')[], sts: Station[]) {
+  let cur = 0;
+  const spots: Spot[] = [...order.map((m, i) => ({ m, st: sts[i], tray: false })), { m: 'tray' as const, st: 'tray' as Station, tray: true }].map((it, i, all) => {
+    const [l, r] = it.tray ? [all[i - 1]?.st === 'chief' ? 34 : 24, 20] : TIGHT[it.st];
+    const x = cur + l; cur = x + r;
+    return { ...it, x, tight: true };
+  });
+  const s = Math.min(1, W / cur), x0 = 180 - (cur * s) / 2;
+  return { spots, s, x0, X: (x: number) => x0 + x * s, Y: (y: number) => G + (y - G) * s, tight: true };
+}
+function layAt(order: (A.OfficeMember | 'chief')[], sts: Station[], trayText: string) {
   let at = sts.indexOf('done');
   const items: { m: Spot['m']; st: Station; tray: boolean }[] = order.map((m, i) => ({ m, st: sts[i], tray: i === at }));
   if (at < 0) { const r = sts.indexOf('rest'); items.splice(r < 0 ? items.length : r, 0, { m: 'tray', st: 'tray', tray: true }); at = r < 0 ? items.length - 1 : r; }
@@ -224,7 +239,7 @@ function lay(order: (A.OfficeMember | 'chief')[], v: A.OfficeView, trayText: str
     total = cur; s = Math.min(1, W / total);
   }
   const x0 = 180 - (total * s) / 2;   // the crew centred under the window (x 180), as the mock
-  return { spots, s, x0, X: (x: number) => x0 + x * s, Y: (y: number) => G + (y - G) * s };
+  return { spots, s, x0, X: (x: number) => x0 + x * s, Y: (y: number) => G + (y - G) * s, tight: false };
 }
 
 /** A bean on the floor, feet at y: front on (two eyes, or shut asleep), or side on facing their work (one eye, a nose
@@ -252,7 +267,7 @@ const Desk = ({ x, w }: { x: number; w: number }) => <g className="o-desk"><rect
 /** One station: its furniture and the figure, the whole group the button that opens them. */
 function Seat({ spot, id, kind, pose, seat, second, dataId, beat, label, onOpen }: { spot: Spot; id: string; kind: art.Kind | 'chief'; pose: art.Pose; seat: A.Seat;
   second?: boolean; dataId?: string; beat: string; label: string; onOpen: () => void }) {
-  const { x, st } = spot, ink = 'var(--r-edge)', red = '#F0482A', fill = kind === 'chief' ? '#fff' : art.PALS[kind].body;
+  const { x, st, tight } = spot, ink = 'var(--r-edge)', red = '#F0482A', fill = kind === 'chief' ? '#fff' : art.PALS[kind].body;
   const chief = useMemo(() => (kind === 'chief' ? art.chiefSvg(pose, { vb: '24 30 176 210' }).replace('<svg ', `<svg x="${x - 30.4}" y="${G - 80.8}" width="70.4" height="84" `) : ''), [kind, pose, x]);
   const fig = useRef<SVGGElement>(null);
   // A hop when their news lands (a new ring, mood or thing): once, never on the first paint, never with Reduce Motion.
@@ -262,22 +277,23 @@ function Seat({ spot, id, kind, pose, seat, second, dataId, beat, label, onOpen 
     was.current = beat;
     if (!reduced()) fig.current?.animate([{ translate: '0 0' }, { translate: '0 -10px', offset: 0.35 }, { translate: '0 0', offset: 0.7 }, { translate: '0 -3px', offset: 0.85 }, { translate: '0 0' }], { duration: 560, easing: 'ease-out' });
   }, [beat]);
-  const [l, r] = PAD[st];
+  const [l, r] = (tight ? TIGHT : PAD)[st];
   const sprite = (body: ReactNode) => <g ref={fig} className={`o-sprite ${kind} st-${st}${second ? ' second' : ''}`}>{body}</g>;
   return <g className="o-cell" data-id={dataId} data-seat={seat} role="button" tabIndex={0} aria-label={label} onClick={onOpen} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(); } }}>
     <rect x={x - l} y={G - 100} width={l + r} height="104" fill="transparent" />
     {st === 'chief' && <><ellipse cx={x} cy={G + 2} rx="22" ry="3.2" fill={ink} opacity=".1" filter={`url(#${id}bl)`} /><g ref={fig} className={`o-sprite ink chief pose-${pose}`} dangerouslySetInnerHTML={{ __html: chief }} /></>}
     {st === 'needs' && <>
-      <Desk x={x - 48} w={72} />
-      <rect x={x - 40} y="132" width="22" height="18" rx="2" fill="var(--r-desk)" stroke={ink} strokeWidth="1.6" /><path d={`M${x - 36} 139h14M${x - 36} 144h9`} stroke={ink} strokeWidth="1.3" />
+      {tight ? <Desk x={x - 26} w={52} /> : <Desk x={x - 48} w={72} />}
+      {(() => { const n = tight ? x - 11 : x - 40; return <><rect x={n} y="132" width="22" height="18" rx="2" fill="var(--r-desk)" stroke={ink} strokeWidth="1.6" /><path d={`M${n + 4} 139h14M${n + 4} 144h9`} stroke={ink} strokeWidth="1.3" /></>; })()}
       {sprite(<Bean x={x} fill={fill} id={id}><g className="o-wave"><path d={`M${x + 15} ${G - 30}l12-20`} stroke={ink} strokeWidth="1.8" strokeLinecap="round" /><circle cx={x + 28} cy={G - 52} r="3.5" fill={red} stroke={ink} strokeWidth="1.5" /></g></Bean>)}
     </>}
     {(st === 'monitor' || st === 'failed') && <>
-      <Desk x={x - 20} w={78} />
-      {st === 'monitor' && <ellipse cx={x + 30} cy="150" rx="40" ry="16" fill={`url(#${id}lamp)`} opacity=".85" />}
-      <g className="o-mon"><rect x={x + 16} y="118" width="34" height="24" rx="3" fill={st === 'failed' ? '#FFE9E3' : 'var(--r-screen)'} stroke={ink} strokeWidth="1.7" />
-        {st === 'failed' ? <text x={x + 33} y="135" textAnchor="middle" fontFamily="Inter" fontWeight="800" fontSize="13" fill={red}>!</text> : <path d={`M${x + 30} 125l7 5-7 5z`} fill={ink} />}
-        <path d={`M${x + 33} 142v8`} stroke={ink} strokeWidth="1.7" /></g>
+      {tight ? <Desk x={x - 26} w={52} /> : <Desk x={x - 20} w={78} />}
+      {(() => { const c = tight ? x : x + 33; return <>   {/* the screen's centre: beside them, or over their head on a compact desk */}
+        {st === 'monitor' && <ellipse cx={c - 3} cy="150" rx={tight ? 26 : 40} ry="16" fill={`url(#${id}lamp)`} opacity=".85" />}
+        <g className="o-mon"><rect x={c - 17} y="118" width="34" height="24" rx="3" fill={st === 'failed' ? '#FFE9E3' : 'var(--r-screen)'} stroke={ink} strokeWidth="1.7" />
+          {st === 'failed' ? <text x={c} y="135" textAnchor="middle" fontFamily="Inter" fontWeight="800" fontSize="13" fill={red}>!</text> : <path d={`M${c - 3} 125l7 5-7 5z`} fill={ink} />}
+          <path d={`M${c} 142v8`} stroke={ink} strokeWidth="1.7" /></g></>; })()}
       {/* At work the helper faces you under the playing screen, as the B1 mock (Reel in their headphones); stuck, they turn to the "!". */}
       {sprite(<g className={st === 'monitor' ? 'o-nod' : undefined}><Bean x={x} fill={fill} side={st === 'failed' ? 'r' : undefined} gaze={st === 'failed' ? 'up' : undefined} id={id}>
         {kind === 'reel' && (st === 'failed'

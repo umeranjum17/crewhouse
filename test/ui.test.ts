@@ -1887,10 +1887,11 @@ test('J5 repairs stay in: the night look paints first, the job row is never cut 
   assert.match(office, /useEffect\(\(\) => \{ desks\.current = spritesIn\(box\.current\); \}, \[wide\]\);/);
   assert.match(office, /querySelector\('\.o-traybox > path'\)/); assert.doesNotMatch(office, /querySelector\('\.o-tray rect'\)/);
   assert.match(office, /\{ opacity: 1, offset: \.9 \}/);
-  // 147: the crew stands at the mock's size in every state, fewer standing rather than everyone shrunk, and the page is
+  // 147/148: a crowded row packs (compact desks, the tray at the end) before it scales, all five standing; the page is
   // drawn at the figures' size on both sides.
-  assert.match(office, /for \(let k = A\.SEATS - 1; k >= 1 && fit\.s < MOCK; k--\) fit = stand\(k\);/);
-  assert.match(office, /MOCK = 0\.85;/); assert.match(office, /data-scale=\{s\.toFixed\(3\)\}/);
+  assert.match(office, /return full\.s < 1 \? packed\(order, sts\) : full;/, 'a crowded row packs before it scales');
+  assert.match(office, /needs: \[26, 28\], monitor: \[26, 28\], failed: \[26, 28\]/); assert.match(office, /data-scale=\{s\.toFixed\(3\)\}/);
+  assert.doesNotMatch(office, /MOCK|floorPlan\(crew, /, 'no seat cap below five for size');
   assert.match(office, /getScreenCTM\(\)\?\.a \?\? 1\) \* Number\(room\.dataset\.scale \?\? 1\), pw = 14 \* k, ph = 18 \* k/);
   assert.match(read('mobile', 'src', 'office.tsx'), /width: u\(14\), height: u\(18\)/);
   assert.match(read('mobile', 'src', 'office.tsx'), /dx=\{u\(318 - from\)\} dy=\{u\(36\)\}/, 'the phone page drops into its floor box');
