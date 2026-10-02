@@ -267,7 +267,7 @@ function NeedsCard({ state, c, flat, onLater }: { state: Json; c: A.Card; flat?:
   const shown = c.order?.known ? c.order.shown : '', price = shown.replace(/\.00$/, '');
   const lines = (c.preview?.body ?? '').split('\n').map((l) => l.trim()).filter(Boolean)
     .filter((l) => !shown || !l.startsWith('Total ')).map((l) => (shown ? l.replace(` — ${shown}`, '') : l)).slice(0, flat ? 1 : 2);
-  const question = c.review && c.preview?.head ? c.preview.head : c.words;
+  const question = c.question ?? (c.review && c.preview?.head ? c.preview.head : c.words);
   const ask = () => { keepDraft('chief', `About ${name}'s question (${c.head}): `); go('#/chief'); };
   return (
     <article className="needs-row needs-big" aria-label={`${name} needs you: ${c.head}`}>
@@ -298,7 +298,7 @@ const BADGE: Partial<Record<A.Seat | 'done', string>> = { needs: '!', chat: '!',
 
 /** Home's chat opens on Chief (B1): his figure, his own line in a bubble, and the crew in a row with a badge each and
  *  one plain caption, every word from the office's state. */
-function ChiefHero({ live }: { live: A.OfficeView }) {
+function ChiefHero({ live, state }: { live: A.OfficeView; state: Json }) {
   const crew = A.roster(live.crew), seat = (c: A.OfficeMember) => A.railWord(c, live).seat;
   const by = (k: (A.Seat | 'done')[]) => crew.filter((c) => k.includes(seat(c))).map((c) => c.name);
   const said = [[by(['needs', 'chat']), 'needs you', 'need you'], [by(['working']), 'working', 'working'], [by(['failed']), 'stuck', 'stuck'], [by(['resting']), 'resting', 'resting']] as const;
@@ -308,7 +308,7 @@ function ChiefHero({ live }: { live: A.OfficeView }) {
       <span className="ch-art"><ChiefArt mood={live.chief.mood} d={9} hero whole /></span>
       <div className="ch-body">
         <h2 className="ch-name">Chief <small>Studio Chief</small></h2>
-        <p className="ch-say">{live.chief.line}</p>
+        <p className="ch-say">{A.chiefSaid(state) || live.chief.line}</p>
         {crew.length > 0 && <div className="ch-crew">{crew.slice(0, 5).map((c) => { const k = seat(c); return <a key={c.id} href={hrefOf(c.id)} className="ch-face" aria-label={`${c.name}: ${A.railWord(c, live).word}`}>
           <Face who={c} size={44} />{BADGE[k] !== undefined && <i className={`ch-badge ${k}`} aria-hidden>{BADGE[k]}</i>}</a>; })}
           {crew.length > 5 && <a className="ch-more" href="#/crew">+{crew.length - 5}</a>}</div>}
@@ -366,7 +366,7 @@ function Home(ctx: Ctx) {
     {A.update(state) && <div className="card nudge"><span className="grow">{A.update(state)!.words}</span><a className="btn go" href={A.update(state)!.url} target="_blank" rel="noreferrer">Download</a></div>}
   </>;
   // Chat: Chief's own thread, its box and (on a wide desk) its side column of who is on what.
-  if (mode === 'chat') return <div className="page chat-page home-chat"><div className="home-top">{top}<ChiefHero live={live} /><NeedsPin state={state} cards={live.needs} flat /></div><Chat {...ctx} id="chief" hero rail={<TonightRail live={live} />} /></div>;
+  if (mode === 'chat') return <div className="page chat-page home-chat"><div className="home-top">{top}<ChiefHero live={live} state={state} /><NeedsPin state={state} cards={live.needs} flat /></div><Chat {...ctx} id="chief" hero rail={<TonightRail live={live} />} /></div>;
   // Office (B1): the greeting and the room with its strip in the middle; Tonight down the right on a computer (Needs you,
   // On it now, chats, a job to hand over, Chief's box), and under the room on a phone.
   return (

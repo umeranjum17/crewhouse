@@ -435,19 +435,19 @@ if (variant.startsWith('job')) pages.pip.job = { does: 'Keep Umer’s calendar i
 // dinner list landed today, Pip resting until 3 pm. The M5 side-by-sides compare against it.
 if (variant === 'b1') {
   const b = (id: string) => bots.find((x) => x.id === id)!;
-  Object.assign(b('scout'), { task: task(42, 'scout', "Friday's flight to Lahore", 'working'), step: { kind: 'task.progress', at: now - min, data: { text: 'Waiting for your yes' } } });
+  Object.assign(b('scout'), { task: task(42, 'scout', 'Book Friday’s flight to Lahore?', 'working'), step: { kind: 'task.progress', at: now - min, data: { text: 'Waiting for your yes' } } });
   Object.assign(b('reel'), { task: task(41, 'reel', "Mum's birthday video", 'working'), step: { kind: 'task.progress', at: now - 2 * min, data: { text: 'Picking the music' } } });
   Object.assign(b('scribe'), { task: task(43, 'scribe', 'Thank-you note for Aunty Sara', 'working'), step: { kind: 'task.progress', at: now - 3 * min, data: { text: 'Writing your note' } } });
   Object.assign(b('tracer'), { task: null, step: undefined });
   Object.assign(b('pip'), { pausedUntil: new Date(now).setHours(15, 0, 0, 0) + (new Date(now).getHours() >= 15 ? 86_400_000 : 0) });
-  Object.assign(b('chief'), { last: { author: 'bot', text: "Reel is picking the music and Scribe is writing your note. I'll tell you when they're done.", at: now - min }, unread: 1 });
+  Object.assign(b('chief'), { last: { author: 'bot', text: 'Scout found your Friday flight. It’s waiting for your yes.', at: now - min }, unread: 1 });
   (state as Json).asks = [{ id: 11, bot: 'scout', task_id: 42, kind: 'permission', at: now - 30_000, member: 1, title: '', detail: {
     effect: 'spend', spends: true,
     words: 'Scout wants to place this order at flights.example: Fri 3 Oct 08:40 → 11:10, one stop, seat 14A, bag included. Total $412.00.',
     preview: { head: 'The order at flights.example', body: 'Fri 3 Oct 08:40 → 11:10 · one stop · seat 14A · bag included — $412.00\nTotal $412.00' },
-    order: { shown: '$412.00', known: true, dollars: true } } }];
-  (state as Json).tasks = [task(52, 'tracer', 'Dinner list', 'done', { updated_at: now - 12 * min, result: 'Seven dinners and one shopping list, sorted by aisle.', files: ['files/dinner-list.pdf'] }), ...state.tasks];
-  events.push(ev(20, 13, 'file.delivered', 'tracer', { task: 52, path: 'files/dinner-list.pdf' }), ev(21, 12, 'task.done', 'tracer', { task: 52, title: 'Dinner list' }));
+    order: { shown: '$412.00', known: true, dollars: true }, yes: 'Book for $412.00' } }];
+  (state as Json).tasks = [task(52, 'tracer', 'your dinner list', 'done', { updated_at: now - 12 * min, result: 'Seven dinners and one shopping list, sorted by aisle.', files: ['files/dinner-list.pdf'] }), ...state.tasks];
+  events.push(ev(20, 13, 'file.delivered', 'tracer', { task: 52, path: 'files/dinner-list.pdf' }), ev(21, 12, 'task.done', 'tracer', { task: 52, title: 'your dinner list' }));
   pages.chief = { messages: [
     { id: 1, author: 'person', text: 'Can you get me to Lahore on Friday? Morning if possible.', at: now - 20 * min },
     { id: 2, author: 'chief', text: "On it. I've asked Scout to look.", at: now - 19 * min },

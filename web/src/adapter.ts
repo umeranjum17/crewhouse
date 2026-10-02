@@ -25,6 +25,9 @@ export type Card = {
    *  the evidence block and the button words. `evidence` picks the sunken block — a form's or a job's
    *  label-over-value lines, or a draft's to/subject/body — an order is a `review`, anything else a plain preview. */
   status: string; evidence?: 'lines' | 'draft'; draftTo?: string; draftSubject?: string;
+  /** The person's own question for an OK or a spend: their task's title, with a question mark if it has no ending of its
+   *  own. The tool's words (site, lines) stay on the review sheet. */
+  question?: string;
   /** A draft's own words, unscrubbed: the person may change them before Approve, and their version is what is kept. */
   draftText?: string;
 };
@@ -485,6 +488,11 @@ export function preview(last: Json | null | undefined, status = '') {
   if (f) return `Sent “${pretty(f[1])}”`;
   return last.author === 'person' ? `You: ${text.replace(/\s+/g, ' ')}` : teaser(text.replace(/\s+/g, ' '));
 }
+/** What Chief last said himself, for his hero (B1): his own message, never the person's; '' when he has said nothing. */
+export function chiefSaid(state: Json): string {
+  const last = state.bots.find((b: Json) => b.id === 'chief')?.last;
+  return last && last.author !== 'person' && String(last.text ?? '').trim() ? preview(last) : '';
+}
 export function chats(state: Json): Chat[] {
   const bot = (id: string) => state.bots.find((b: Json) => b.id === id) ?? {};
   const c = chief(state);
@@ -550,6 +558,8 @@ export function card(a: Json, state: Json): Card {
   const name = crewName(state, a.bot);
   const d = a.detail ?? {};
   const base = { id: a.id, helper: a.bot, at: a.at, reply: false };
+  const title = plain(String(state.bots.find((b: Json) => b.task?.id === a.task_id)?.task?.title ?? state.tasks?.find((t: Json) => t.id === a.task_id)?.title ?? '')).trim();
+  const question = title ? (/[?.!]$/.test(title) ? title : `${title}?`) : undefined;
   if (a.kind === 'connect' || d.app) {
     const app = apps(state).find((x) => x.id === d.app) ?? APPS[0];
     return { ...base, kind: 'connect', app, status: `Wants to use ${app.name}`, head: `${name} could use ${app.name}`, words: plain(d.words ?? `${name} can do this with your ${app.name}. Connect it?`),
@@ -604,9 +614,9 @@ export function card(a: Json, state: Json): Card {
   const order = d.order as Card['order'] | undefined;
   if (spend && order) {
     const choices: Choice[] = order.known
-      ? [{ label: `Place order · ${order.shown}`, body: { answer: 'allow', scope: 'once' } }, { label: "Don't place order", body: { answer: 'deny' } }]
+      ? [{ label: d.yes ? plain(d.yes) : `Place order · ${order.shown}`, body: { answer: 'allow', scope: 'once' } }, { label: "Don't place order", body: { answer: 'deny' } }]
       : [{ label: "Don't place order", body: { answer: 'deny' } }, { label: "I'll buy it myself", body: { answer: 'deny' } }];
-    return { ...base, kind: 'spend', review: true, order, status: 'Wants to spend money', words, choices, head: `Review ${name}'s order`,
+    return { ...base, kind: 'spend', review: true, order, question, status: 'Wants to spend money', words, choices, head: `Review ${name}'s order`,
       preview: d.preview ? { head: d.preview.head ? plain(d.preview.head) : undefined, body: plain(d.preview.body ?? '') } : undefined };
   }
   // A press on a site they signed the bot in to is not a message going out: the card says acting, not sending. (docs/ui-contract.md)
@@ -621,7 +631,7 @@ export function card(a: Json, state: Json): Card {
   choices.push({ label: 'Not now', body: { answer: 'deny' } });
   return {
     ...base, kind: spend ? 'spend' : 'ok', status: spend ? 'Wants to spend money' : fill ? 'Wants to fill in a form' : press ? 'Wants to press a button' : d.effect === 'send' ? 'Wants to send an email' : 'Needs your OK',
-    evidence: fill ? 'lines' : undefined, words, choices,
+    evidence: fill ? 'lines' : undefined, words, choices, question,
     head: spend ? `${name} needs your OK to spend` : press ? `${name} wants to act on a site` : d.effect === 'send' ? `${name}'s ${d.thing ?? 'message'} is ready to send` : `${name} would like your OK`,
     preview: d.preview ? { head: d.preview.head ? plain(d.preview.head) : undefined, body: plain(d.preview.body ?? '') } : undefined,
   };
