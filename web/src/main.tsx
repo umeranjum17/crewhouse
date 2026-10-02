@@ -239,16 +239,16 @@ function OnItNow({ live, waiting }: { live: A.OfficeView; waiting: number }) {
 }
 
 /** Needs you, pinned in both views: its first row, and every row behind an exact "See all N". */
-function NeedsPin({ state, cards }: { state: Json; cards: A.Card[] }) {
+function NeedsPin({ state, cards, flat }: { state: Json; cards: A.Card[]; flat?: boolean }) {
   const [all, setAll] = useState(false);
   // "Not now" moves a card behind the others on this screen only: the question stays open and counted until answered.
   const [later, setLater] = useState<number[]>([]);
   if (!cards.length) return null;
   const order = [...cards.filter((c) => !later.includes(c.id)), ...later.map((id) => cards.find((c) => c.id === id)).filter((c): c is A.Card => !!c)];
   return (
-    <section className="home-section needs-pin" aria-label="Needs you">
+    <section className={`home-section needs-pin${flat ? ' flat' : ''}`} aria-label="Needs you">
       <div className="section-head"><span className="label">Needs you<span className="count">{cards.length}</span></span>{cards.length > 1 && <button className="link" onClick={() => setAll(!all)}>{all ? 'Show less' : `See all ${cards.length}`}</button>}</div>
-      <NeedsCard state={state} c={order.slice(0, 1)[0]} onLater={cards.length > 1 ? (id) => setLater([...later.filter((x) => x !== id), id]) : undefined} />
+      <NeedsCard state={state} c={order.slice(0, 1)[0]} flat={flat} onLater={cards.length > 1 ? (id) => setLater([...later.filter((x) => x !== id), id]) : undefined} />
       {all && <div className="list-group needs-card"><NeedsRows state={state} cards={order.slice(1)} all /></div>}
     </section>
   );
@@ -257,21 +257,24 @@ function NeedsPin({ state, cards }: { state: Json; cards: A.Card[] }) {
 /** The pinned question as the B1 card: who, what they ask, the evidence's first lines and the money read from the
  *  page, then the three ways on. Home commits nothing: the yes opens the review sheet (its "…" says so), Ask Chief
  *  fills Chief's box without sending, Not now only moves the card back (offered when there is another to show). */
-function NeedsCard({ state, c, onLater }: { state: Json; c: A.Card; onLater?: (id: number) => void }) {
+function NeedsCard({ state, c, flat, onLater }: { state: Json; c: A.Card; flat?: boolean; onLater?: (id: number) => void }) {
   const who = A.crew(state).find((h) => h.id === c.helper);
   const name = who?.name ?? 'Chief';
   const yes = c.choices[0]?.body.answer === 'allow' ? c.choices[0] : null;
   const lines = (c.preview?.body ?? '').split('\n').map((l) => l.trim()).filter(Boolean).slice(0, 2);
   const price = c.order?.known ? c.order.shown : '';
+  const question = c.review && c.preview?.head ? c.preview.head : c.words;
   const ask = () => { keepDraft('chief', `About ${name}'s question (${c.head}): `); go('#/chief'); };
   return (
     <article className="needs-row needs-big" aria-label={`${name} needs you: ${c.head}`}>
       <div className="nb-top">
         <Face who={who ?? { kind: 'pip', name }} size={40} />
-        <div className="grow"><b className="nb-title">{name} needs you</b><span className="nb-ask clamp2">{c.review && c.preview?.head ? c.preview.head : c.words}</span></div>
-        <time className="nb-when">{A.briefTime(c.at)}</time>
+        {flat
+          ? <div className="grow"><b className="nb-title clamp2">{question}</b>{lines.length > 0 && <span className="nb-ask clamp2">{lines.join(' · ')}</span>}</div>
+          : <div className="grow"><b className="nb-title">{name} needs you</b><span className="nb-ask clamp2">{question}</span></div>}
+        {flat ? price && <span className="nb-price">{price}</span> : <time className="nb-when">{A.briefTime(c.at)}</time>}
       </div>
-      {(lines.length > 0 || price) && <div className="nb-detail">
+      {!flat && (lines.length > 0 || price) && <div className="nb-detail">
         <div className="grow">{lines.map((l, i) => (i ? <span key={i} className="clamp1">{l}</span> : <b key={i} className="clamp1">{l}</b>))}</div>
         {price && <span className="nb-price">{price}</span>}
       </div>}
@@ -358,7 +361,7 @@ function Home(ctx: Ctx) {
     {A.update(state) && <div className="card nudge"><span className="grow">{A.update(state)!.words}</span><a className="btn go" href={A.update(state)!.url} target="_blank" rel="noreferrer">Download</a></div>}
   </>;
   // Chat: Chief's own thread, its box and (on a wide desk) its side column of who is on what.
-  if (mode === 'chat') return <div className="page chat-page home-chat"><div className="home-top">{top}<div className="desk-only"><ChiefHero live={live} /></div><NeedsPin state={state} cards={live.needs} /></div><Chat {...ctx} id="chief" head={<div className="phone-only"><ChiefHero live={live} /></div>} rail={<TonightRail live={live} />} /></div>;
+  if (mode === 'chat') return <div className="page chat-page home-chat"><div className="home-top">{top}<div className="desk-only"><ChiefHero live={live} /></div><NeedsPin state={state} cards={live.needs} flat /></div><Chat {...ctx} id="chief" head={<div className="phone-only"><ChiefHero live={live} /></div>} rail={<TonightRail live={live} />} /></div>;
   // Office (B1): the greeting and the room with its strip in the middle; Tonight down the right on a computer (Needs you,
   // On it now, chats, a job to hand over, Chief's box), and under the room on a phone.
   return (

@@ -497,8 +497,8 @@ test('Home opens on Chat at every launch, with Office one tap away and never sto
   }
   const web = src('web/src/main.tsx');
   const home = web.slice(web.indexOf('function Home('), web.indexOf('/** The standing'));
-  assert.match(home, /if \(mode === 'chat'\) return <div className="page chat-page home-chat"><div className="home-top">\{top\}<div className="desk-only"><ChiefHero live=\{live\} \/><\/div><NeedsPin state=\{state\} cards=\{live\.needs\} \/><\/div><Chat \{\.\.\.ctx\} id="chief" head=\{<div className="phone-only"><ChiefHero live=\{live\} \/><\/div>\} rail=\{<TonightRail live=\{live\} \/>\} \/><\/div>;/, 'web Chat (B1): the top, Chief\'s hero (above the thread on a desk, at its head on a phone) and Needs you over his own thread, box and Tonight rail');
-  assert.match(home, /<NeedsPin state=\{state\} cards=\{live\.needs\} \/>/, 'Needs you pinned from the office\'s one list');
+  assert.match(home, /if \(mode === 'chat'\) return <div className="page chat-page home-chat"><div className="home-top">\{top\}<div className="desk-only"><ChiefHero live=\{live\} \/><\/div><NeedsPin state=\{state\} cards=\{live\.needs\} flat \/><\/div><Chat \{\.\.\.ctx\} id="chief" head=\{<div className="phone-only"><ChiefHero live=\{live\} \/><\/div>\} rail=\{<TonightRail live=\{live\} \/>\} \/><\/div>;/, 'web Chat (B1): the top, Chief\'s hero (above the thread on a desk, at its head on a phone) and Needs you over his own thread, box and Tonight rail');
+  assert.match(home, /<NeedsPin state=\{state\} cards=\{live\.needs\}( flat)? \/>/, 'Needs you pinned from the office\'s one list');
   assert.match(home, /<div className="feed-ask"><Composer/, 'Office keeps Chief\'s box on a desk');
   assert.match(home, /<div className="dock phone-only"><Composer/, 'and on a phone');
   const pin = web.slice(web.indexOf('function NeedsPin('), web.indexOf('function NeedsPin(') + 1400);

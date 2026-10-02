@@ -1080,3 +1080,12 @@ h1 { font: 400 32px/36px var(--serif); letter-spacing: -.005em; }
 .line:not(.me):not(.note) > .ask, .line:not(.me):not(.note) > .card { margin-left: 0; }
 .line.me .bubble-text { border-radius: 14px; }
 .line.consecutive:not(.me):not(.note) > .line-by { display: flex; visibility: hidden; }
+
+/* In Chief's chat the pinned question is one flat card (B1 chat): the accent label inside it, the question in serif
+   with the evidence on one line under it and the money to the right, then the three ways on. */
+.needs-pin.flat { padding: 14px 18px 16px; background: var(--solid); border: 1px solid var(--line2); border-radius: 20px; box-shadow: 0 1px 2px rgba(20, 26, 42, .04), 0 14px 32px -22px rgba(20, 26, 42, .32); }
+.needs-pin.flat .section-head .label { color: var(--pink-ink); }
+.needs-pin.flat .section-head .label .count::before { content: '· '; }
+.needs-pin.flat .needs-big { padding: 0; border: 0; box-shadow: none; background: none; border-radius: 0; }
+.needs-pin.flat .nb-top { align-items: center; }
+.needs-pin.flat .nb-acts { margin-top: 12px; }
