@@ -417,7 +417,7 @@ function JobList({ state, phone, few, refresh }: { state: Json; phone?: boolean;
       {shown.length ? shown.map((j) => {
         const h = crew.find((x) => x.id === j.bot);
         const body = <>{j.money ? <span className="job-ic" aria-hidden><Icon name="money" /></span> : <Face who={h ?? { kind: 'pip', name: j.bot }} size={phone ? 28 : 36} />}
-          <span className="grow"><b className="clamp">{j.label}</b>{j.says && <span className="small mute clamp1">{j.says}</span>}{j.needs.length > 0 && <span className="small clamp1">{A.jobNeeds(j.needs)}</span>}</span><span className="mute" aria-hidden><Icon name="next" /></span></>;
+          <span className="grow"><b className="clamp">{j.label}</b>{j.says && <span className="small mute clamp">{j.says}</span>}{j.needs.length > 0 && <span className="small clamp1">{A.jobNeeds(j.needs)}</span>}</span><span className="mute" aria-hidden><Icon name="next" /></span></>;
         return j.needs.length ? <a key={j.bot + j.label} className="list-row" href="#/apps">{body}</a>
           : j.hire ? <button key={j.bot + j.label} className="list-row" onClick={() => hire(j.hire!, j.ask)}>{body}</button>
           : <button key={j.bot + j.label} className="list-row" onClick={() => hand(j.ask)}>{body}</button>;

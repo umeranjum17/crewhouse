@@ -1865,3 +1865,22 @@ test('a desk shows the job\'s first looks from its task, never a raw path', () =
   for (const view of [h, w, v]) assert.doesNotMatch(shown(view), FORBIDDEN, 'things never render a raw path');
   assert.doesNotMatch(h.things.map((f) => f.name).join(' '), /files\/|\.png/i, 'names are said, not pathed');
 });
+
+test('J5 repairs stay in: the night look paints first, the job row is never cut to one line, the page leaves the old desk, the pen clears the tray', () => {
+  const read = (...p: string[]) => readFileSync(join(import.meta.dirname, '..', ...p), 'utf8');
+  const html = read('web', 'index.html'), main = read('web', 'src', 'main.tsx'), css = read('web', 'src', 'styles.css'), office = read('web', 'src', 'office.tsx');
+  // The look is set before the first paint, by the same rule useLook keeps after (a night viewer never sees a day frame).
+  const pre = html.slice(html.indexOf('<script>'), html.indexOf('</script>'));
+  assert.ok(html.indexOf('<script>') < html.indexOf('<body>'), 'the look is set in the head, before the body paints');
+  for (const w of ["'crewhouse.look'", "q.has('night')", "q.has('day')", 'h >= 19 || h < 7']) assert.ok(pre.includes(w), `index.html's first look reads ${w}`);
+  assert.match(main, /localStorage\.getItem\('crewhouse\.look'\)/); assert.match(main, /hour >= 19 \|\| hour < 7/);
+  // The job row: no old inset narrows it, the mock's metrics on both widths, and its line wraps rather than being cut.
+  assert.doesNotMatch(css, /^\.jobs \{ padding/m, 'the old .jobs inset is gone');
+  assert.match(css, /^\.jobs \.list-row \{ gap: 10px; padding: 10px 12px; \}/m);
+  assert.match(main, /j\.says && <span className="small mute clamp">/, 'a job row\'s line wraps to two lines, never an ellipsis on one');
+  // The hand-off page leaves from where the desk was before the room re-laid them, not from their new spot by the tray.
+  assert.match(office, /const was = seen\.current, from = desks\.current;\s*seen\.current = now;\s*desks\.current = spritesIn\(box\.current\);/);
+  assert.match(office, /handOff\(box\.current, got, from\)/);
+  // Scribe's pen is held in the left hand: the Tray bubble floats over the right of that desk.
+  assert.match(office, /<g transform=\{`translate\(\$\{2 \* x\} 0\) scale\(-1 1\)`\}><path className="o-pen"/);
+});

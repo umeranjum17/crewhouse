@@ -74,15 +74,19 @@ export function Office({ state, live, night }: { state: Json; live: A.OfficeView
     return () => { ro.disconnect(); io.disconnect(); };
   }, []);
 
-  // Whoever finished hands a page to the tray, and the tray's count bumps.
+  // Whoever finished hands a page to the tray, and the tray's count bumps. The page leaves from where their desk was
+  // before the room re-laid them as done (ponytail: measured at the last change; a resize in between starts it from
+  // the old spot, re-measure on resize if that shows).
   const seen = useRef<Map<string, number> | null>(null);
+  const desks = useRef(new Map<string, { x: number; y: number }>());
   useEffect(() => {
     const now = new Map(live.crew.map((c) => [c.id, c.things.length]));
-    const was = seen.current;
+    const was = seen.current, from = desks.current;
     seen.current = now;
+    desks.current = spritesIn(box.current);
     if (!was) return;
     const got = live.crew.filter((c) => c.things.length > (was.get(c.id) ?? c.things.length)).map((c) => c.id);
-    if (got.length) handOff(box.current, got);
+    if (got.length) handOff(box.current, got, from);
   }, [live]);
   const trayWas = useRef<number | undefined>(undefined);
   useEffect(() => { trayWas.current = live.counts.done; }, [live.counts.done]);
@@ -279,8 +283,9 @@ function Seat({ spot, id, kind, pose, seat, second, dataId, beat, label, onOpen 
       <ellipse cx={x + 2} cy="150" rx="30" ry="12" fill={`url(#${id}lamp)`} opacity=".7" />
       <Desk x={x - 18} w={46} />
       <path d={`M${x - 6} 150l10-6 10 6z`} fill="var(--r-desk)" stroke={ink} strokeWidth="1.4" />
-      {/* Writing at the desk, facing you, the pen moving on the page beside the note (the B1 mock). */}
-      <path className="o-pen" d={`M${x + 12} 147l9-14`} stroke={ink} strokeWidth="1.8" strokeLinecap="round" />
+      {/* Writing at the desk, facing you, the pen moving on the page beside the note (the B1 mock), held in the left hand
+          so the Tray bubble that floats over this desk never covers it; the mirror keeps the loop's motion. */}
+      <g transform={`translate(${2 * x} 0) scale(-1 1)`}><path className="o-pen" d={`M${x + 12} 147l9-14`} stroke={ink} strokeWidth="1.8" strokeLinecap="round" /></g>
       {sprite(<Bean x={x} h={44} fill={fill} id={id} />)}
     </>}
     {st === 'done' && sprite(<Bean x={x} h={40} fill={fill} side="l" gaze="down" id={id}>
@@ -316,20 +321,29 @@ function Tag({ x, y, text, hot, tail, cls = '', href, label }: { x: number; y: n
 
 /** Done hand-off: a page travels from the helper's desk to the tray, then the tray's count bumps. Reduce Motion skips
  *  the journey and lands on the end state, which the refresh already shows. */
-function handOff(room: HTMLElement | null, ids: string[]) {
+function handOff(room: HTMLElement | null, ids: string[], desks: Map<string, { x: number; y: number }>) {
   const tray = room?.querySelector('.o-tray rect');
   if (!room || !tray || reduced()) return;
-  const to = tray.getBoundingClientRect(), base = room.getBoundingClientRect();
+  const t = tray.getBoundingClientRect(), base = room.getBoundingClientRect(), to = { x: t.left - base.left, y: t.top - base.top };
   for (const id of new Set(ids)) {
-    const from = room.querySelector(`.o-cell[data-id="${CSS.escape(id)}"] .o-sprite`)?.getBoundingClientRect();
+    const from = desks.get(id);
     if (!from) continue;
     const page = document.createElement('i');
     page.className = 'o-flyer';
-    page.style.left = `${from.left - base.left}px`; page.style.top = `${from.top - base.top}px`;
+    page.dataset.from = id;
+    page.style.left = `${from.x}px`; page.style.top = `${from.y}px`;
     room.appendChild(page);
-    page.animate([{ transform: 'none' }, { transform: `translate(${to.left - from.left}px, ${to.top - from.top}px) scale(.7) rotate(8deg)`, opacity: .2 }], { duration: 1300, easing: 'ease-in-out' }).finished.finally(() => page.remove());
+    page.animate([{ transform: 'none' }, { transform: `translate(${to.x - from.x}px, ${to.y - from.y}px) scale(.7) rotate(8deg)`, opacity: .2 }], { duration: 1300, easing: 'ease-in-out' }).finished.finally(() => page.remove());
   }
 }
+/** Where each helper stands in the room now, relative to the room's box: the hand-off's start next time. */
+const spritesIn = (room: HTMLElement | null) => {
+  const base = room?.getBoundingClientRect();
+  return new Map(Array.from(room?.querySelectorAll<SVGGraphicsElement>('.o-cell[data-id] .o-sprite') ?? []).map((e) => {
+    const r = e.getBoundingClientRect();
+    return [(e.closest('.o-cell') as HTMLElement).dataset.id!, { x: r.left - base!.left + r.width / 2, y: r.top - base!.top }] as const;
+  }));
+};
 
 /** Chief up close: how to reach him, the crew's computers (watching first), and what the crew made today. */
 function ChiefSheet({ live, state, roles, onClose }: { live: A.OfficeView; state: Json; roles: Map<string, A.Helper>; onClose: () => void }) {
