@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { setup, settled } from './lab.ts';
 import { asksForPhone, inlineHowTo } from '../src/crew.ts';
@@ -60,14 +60,52 @@ test('a delivered video comes over in slices, and undelivered files stay closed'
   mkdirSync(join(botDir(cfg, 'reel'), 'files'), { recursive: true });
   writeFileSync(join(botDir(cfg, 'reel'), 'files', 'demo.mp4'), Buffer.alloc(700_000, 7));
   db.event('file.delivered', 'reel', { task: r.task, path: 'files/demo.mp4', size: 700_000 });
-  const first = await crew.videoSlice('reel', 'files/demo.mp4', 0);
+  const first = await crew.fileSlice('reel', 'files/demo.mp4', 0);
   assert.equal(first.size, 700_000);
   assert.equal(Buffer.from(first.data, 'base64').length, 600_000, 'one link frame\'s worth at a time');
   assert.equal(first.more, true);
-  const last = await crew.videoSlice('reel', 'files/demo.mp4', 600_000);
+  const last = await crew.fileSlice('reel', 'files/demo.mp4', 600_000);
   assert.equal(last.more, false);
   assert.equal(Buffer.from(last.data, 'base64').length, 100_000);
-  await assert.rejects(crew.videoSlice('reel', 'files/notes.txt', 0), /delivered to you/, 'only what was delivered, whatever it is');
+  await assert.rejects(crew.fileSlice('reel', 'files/notes.txt', 0), /delivered to you/, 'only what was delivered, whatever it is');
+});
+
+test('delivered file slices preserve bytes, bounds and bot containment for every file kind', async () => {
+  const { crew, db, cfg, root } = setup();
+  crew.onboard('Owner');
+  crew.recruit('scribe', 'Scribe', 'system');
+  const { task } = crew.assign('scribe', 'Prepare the files', 'chief');
+  await settled(db, task);
+  const dir = join(botDir(cfg, 'scribe'), 'files');
+  mkdirSync(dir, { recursive: true });
+  const bytes = Buffer.from(Array.from({ length: 1_200_017 }, (_, i) => i % 251));
+  for (const name of ['plan.docx', 'budget.xlsx', 'notes.txt', 'Other file.bin']) {
+    const path = `files/${name}`;
+    writeFileSync(join(dir, name), bytes);
+    db.event('file.delivered', 'scribe', { task, path });
+    const chunks = [];
+    for (let after = 0; after < bytes.length; after += 600_000) {
+      const slice = await crew.fileSlice('scribe', path, after);
+      assert.equal(slice.size, bytes.length);
+      assert.equal(slice.more, after + 600_000 < bytes.length);
+      const chunk = Buffer.from(slice.data, 'base64');
+      assert.ok(chunk.length <= 600_000);
+      chunks.push(chunk);
+    }
+    assert.deepEqual(Buffer.concat(chunks), bytes, name);
+    assert.deepEqual(await crew.fileSlice('scribe', path, bytes.length + 10), { size: bytes.length, more: false, data: '' });
+    assert.equal((await crew.fileSlice('scribe', path, -1)).data, chunks[0].toString('base64'));
+    await assert.rejects(crew.fileSlice('chief', path, 0), /delivered to you/);
+  }
+  await assert.rejects(crew.fileSlice('scribe', 'files/not-delivered.txt', 0), /delivered to you/);
+  for (const path of ['files/../../outside.txt', 'files/missing.txt', 'files/directory', 'files/escape.txt'])
+    db.event('file.delivered', 'scribe', { task, path });
+  mkdirSync(join(dir, 'directory'));
+  writeFileSync(join(root, 'outside.txt'), 'private');
+  symlinkSync(join(root, 'outside.txt'), join(dir, 'escape.txt'));
+  await assert.rejects(crew.fileSlice('scribe', 'files/../../outside.txt', 0), /outside/);
+  for (const path of ['files/missing.txt', 'files/directory', 'files/escape.txt'])
+    await assert.rejects(crew.fileSlice('scribe', path, 0), /no such file/);
 });
 
 test('Chief offers actions rather than directions for sign-in, apps and routines', async () => {

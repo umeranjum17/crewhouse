@@ -2357,12 +2357,12 @@ export class Crew {
     return { ...(/\.(md|txt)$/i.test(full) ? { text: readFileSync(full, 'utf8').slice(0, 100_000) } : await readDocument(full)), title: delivery.title };
   }
 
-  /** A delivered video, in base64 slices (a phone fetches it piece by piece over the link), only after delivery. */
-  async videoSlice(botId: string, path: string, after: number) {
+  /** A delivered file, in base64 slices for the phone, only after delivery. */
+  async fileSlice(botId: string, path: string, after: number, word = 'file') {
     const rel = String(path ?? '');
-    if (!this.fileFor(botId, rel)) throw Object.assign(new Error('that video was not delivered to you'), { status: 403 });
+    if (!this.fileFor(botId, rel)) throw Object.assign(new Error(`that ${word} was not delivered to you`), { status: 403 });
     const full = disk.insideBot(this.cfg, botId, rel);
-    if (!/\.(mp4|webm|mov)$/i.test(rel) || !existsSync(full) || !statSync(full).isFile()) throw Object.assign(new Error('no such video'), { status: 404 });
+    if (!rel.startsWith('files/') || !existsSync(full) || !statSync(full).isFile() || !realpathSync(full).startsWith(realpathSync(disk.botDir(this.cfg, botId)) + '/')) throw Object.assign(new Error(`no such ${word}`), { status: 404 });
     const size = statSync(full).size;
     const start = Math.max(0, Math.min(after, size));
     const end = Math.min(size, start + 600_000); // one link frame's worth, like the photo cap
