@@ -242,12 +242,15 @@ function NeedsPin({ state, cards, flat }: { state: Json; cards: A.Card[]; flat?:
   const [all, setAll] = useState(false);
   // "Not now" moves a card behind the others on this screen only: the question stays open and counted until answered.
   const [later, setLater] = useState<number[]>([]);
+  // With one card, "Not now" folds it under its heading (still counted); a different question unfolds it.
+  const [folded, setFolded] = useState<number | null>(null);
   if (!cards.length) return null;
+  const fold = cards.length === 1 && folded === cards[0].id;
   const order = [...cards.filter((c) => !later.includes(c.id)), ...later.map((id) => cards.find((c) => c.id === id)).filter((c): c is A.Card => !!c)];
   return (
     <section className={`home-section needs-pin${flat ? ' flat' : ''}`} aria-label="Needs you">
-      <div className="section-head"><span className="label">Needs you<span className="count">{cards.length}</span></span>{cards.length > 1 && <button className="link" onClick={() => setAll(!all)}>{all ? 'Show less' : `See all ${cards.length}`}</button>}</div>
-      <NeedsCard state={state} c={order.slice(0, 1)[0]} flat={flat} onLater={cards.length > 1 ? (id) => setLater([...later.filter((x) => x !== id), id]) : undefined} />
+      <div className="section-head"><span className="label">Needs you<span className="count">{cards.length}</span></span>{cards.length > 1 && <button className="link" onClick={() => setAll(!all)}>{all ? 'Show less' : `See all ${cards.length}`}</button>}{fold && <button className="link" onClick={() => setFolded(null)}>Show</button>}</div>
+      {!fold && <NeedsCard state={state} c={order.slice(0, 1)[0]} flat={flat} onLater={(id) => (cards.length > 1 ? setLater([...later.filter((x) => x !== id), id]) : setFolded(id))} />}
       {all && <div className="list-group needs-card"><NeedsRows state={state} cards={order.slice(1)} all /></div>}
     </section>
   );
@@ -255,7 +258,7 @@ function NeedsPin({ state, cards, flat }: { state: Json; cards: A.Card[]; flat?:
 
 /** The pinned question as the B1 card: who, what they ask, the evidence's first lines and the money read from the
  *  page, then the three ways on. Home commits nothing: the yes opens the review sheet (its "…" says so), Ask Chief
- *  fills Chief's box without sending, Not now only moves the card back (offered when there is another to show). */
+ *  fills Chief's box without sending, Not now moves the card back, or folds the only one under its heading; it stays counted either way. */
 function NeedsCard({ state, c, flat, onLater }: { state: Json; c: A.Card; flat?: boolean; onLater?: (id: number) => void }) {
   const who = A.crew(state).find((h) => h.id === c.helper);
   const name = who?.name ?? 'Chief';
