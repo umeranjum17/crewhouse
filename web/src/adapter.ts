@@ -154,14 +154,19 @@ export function docLinks(text: string): { text: string; href?: string }[] {
 /** A bare source URL as a tappable label: its site, never the raw address (which wraps as "https: //…"). */
 export const sourceLabel = (href: string) => { try { return new URL(href).host.replace(/^www\./, ''); } catch { return href; } };
 
-/** A finished file's words for the phone's share sheet: its name, then its text, lists, tables and sheets as plain lines. */
-export function shareWords(name: string, book: Workbook | null, doc: DocView | null, text: string | null) {
-  const row = (r: string[]) => r.join(' | ');
-  const body = book ? book.sheets.flatMap((x) => [x.name, ...[x.head, ...x.rows].map(row), ''])
-    : doc ? doc.parts.flatMap((p) => p.kind === 'table' ? [row(p.head ?? []), ...(p.rows ?? []).map(row)] : [p.kind === 'li' ? `• ${p.text}` : p.text ?? ''])
-    : [text ?? ''];
-  return [name, '', ...body].join('\n').trim();
+const MIME: Record<string, string> = { docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', md: 'text/markdown', txt: 'text/plain', pdf: 'application/pdf',
+  mp4: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp' };
+/** What a delivered file is saved or shared as on the phone: its registered title (only the characters a file name can't
+ *  hold become dashes) with the stored file's own extension, and that extension's type. */
+export function saveAs(f: FileView) {
+  const ext = (f.url.split('?')[0].match(/\.([a-z0-9]+)$/i)?.[1] ?? '').toLowerCase();
+  const base = f.name.replace(/[\/\\:*?"<>|\u0000-\u001f]+/g, '-').replace(/\s+/g, ' ').trim().slice(0, 120) || 'File';
+  return { name: ext ? `${base}.${ext}` : base, mime: MIME[ext] ?? 'application/octet-stream' };
 }
+
+/** How many bytes a base64 slice holds. */
+export const base64Bytes = (b64: string) => Math.floor(b64.length * 3 / 4) - (b64.endsWith('==') ? 2 : b64.endsWith('=') ? 1 : 0);
 
 /** A delivered document is the person's file, not bot chatter: preserve its words, including URLs and product names. */
 export function document(json: Json, name: string): DocView {

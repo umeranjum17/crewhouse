@@ -5,7 +5,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useFonts } from 'expo-font';
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
-  ActivityIndicator, AppState, BackHandler, Clipboard, Image, KeyboardAvoidingView, Modal, PermissionsAndroid, Platform, Pressable, ScrollView, Share, StatusBar, StyleSheet, Switch, Text, TextInput, useColorScheme, View,} from 'react-native';
+  ActivityIndicator, AppState, BackHandler, Clipboard, Image, KeyboardAvoidingView, Modal, PermissionsAndroid, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Switch, Text, TextInput, useColorScheme, View,} from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import * as A from '../web/src/adapter.ts';
 import { chatTokens, safeLink } from '../web/src/chat-md.ts';
@@ -21,7 +21,8 @@ import * as Linking from 'expo-linking';
 // React Native always defines this; @types/react-native is not installed, so say so once for tsc.
 declare const __DEV__: boolean;
 import * as Notifications from 'expo-notifications';
-import { File, Paths } from 'expo-file-system';
+import { Directory, File, Paths } from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { useShareIntent } from 'expo-share-intent';
@@ -458,11 +459,11 @@ function DocSheet({ f, onClose }: { f: A.FileView; onClose: () => void }) {
   return <Modal visible transparent animationType={motion.sheet(reduce)} onRequestClose={onClose}>
     <Pressable style={s.scrim} onPress={onClose}>
       <Pressable style={[s.sheet, { backgroundColor: t.bg, maxHeight: '88%' }]} onPress={() => {}}>
-        <View style={[s.row, { paddingBottom: 12, borderBottomWidth: 1, borderColor: t.line }]}>
+        <View style={s.row}>
           <View style={[s.fileIc, { backgroundColor: t.solid, borderColor: t.line }]}><T tone={f.kind === 'sheet' ? undefined : 'ink2'} style={[s.fileGlyph, f.kind === 'sheet' && { color: t.ok }]}>{f.kind === 'sheet' ? '▦' : '▤'}</T></View>
-          <T style={[s.h2, { flex: 1 }]} lines={2}>{name}</T>
-          {(book || doc || text) && <Btn label="Share" onPress={() => void Share.share({ title: name, message: A.shareWords(name, book, doc, text) }).catch(() => {})} />}
-          <Btn label="Close" onPress={onClose} /></View>
+          <T style={[s.h2, { flex: 1 }]} lines={2}>{name}</T></View>
+        <View style={[s.row, { flexWrap: 'wrap', paddingBottom: 12, borderBottomWidth: 1, borderColor: t.line }]}>
+          <FileActions f={f} name={name} /><View style={{ flex: 1 }} /><Btn label="Close" onPress={onClose} /></View>
         <ScrollView style={{ flexShrink: 1 }}>
           {page === null && <T tone="mute">Opening “{name}”…</T>}
           {page !== null && !book && !doc && !text && <T tone="mute">There is nothing in it to show yet.</T>}
@@ -477,6 +478,60 @@ function DocSheet({ f, onClose }: { f: A.FileView; onClose: () => void }) {
       </Pressable>
     </Pressable>
   </Modal>;
+}
+
+/** Download and Share for a finished file: the file itself, brought over the link in slices into the phone's cache under
+ *  its registered title. Download saves a copy into a folder the person picks; Share hands it to the phone's share sheet.
+ *  A closed picker or sheet is nothing happening, never a failure. */
+function FileActions({ f, name }: { f: A.FileView; name: string }) {
+  const [busy, setBusy] = useState('');
+  const [note, setNote] = useState('');
+  const box = useRef<Directory | null>(null);
+  useEffect(() => () => { try { box.current?.delete(); } catch {} }, []);
+  const as = A.saveAs({ ...f, name });
+  const bring = async () => {
+    const src = A.fileSource(f.url);
+    if (!src) throw new Error('no such file');
+    if (!box.current) { box.current = new Directory(Paths.cache, `crewhouse-file-${Date.now()}`); box.current.create(); }
+    const file = new File(box.current, as.name);
+    if (file.exists) return file;
+    const part = new File(box.current, `${as.name}.part`);
+    part.create({ overwrite: true });
+    let after = 0;
+    for (;;) {
+      const chunk = await api.video(src.bot, src.path, after); // the bounded delivery-checked slice route (docs/ui-contract.md)
+      const got = A.base64Bytes(chunk.data);
+      if (!got && chunk.more) throw new Error('no progress');
+      part.write(chunk.data, { encoding: 'base64', append: after > 0 });
+      after += got;
+      setBusy(`Getting it… ${chunk.size ? Math.min(100, Math.round((after / chunk.size) * 100)) : 0}%`);
+      if (!chunk.more) break;
+    }
+    await part.move(file);
+    return file;
+  };
+  const run = (fn: () => Promise<string>) => async () => {
+    if (busy) return;
+    setNote(''); setBusy('Getting it…');
+    try { setNote(await fn()); } catch { setNote("Couldn't bring it over. Check the home computer is awake, then try again."); } finally { setBusy(''); }
+  };
+  const save = run(async () => {
+    let dir: Directory;
+    try { dir = await Directory.pickDirectoryAsync(); } catch (e: any) { if (/cancel/i.test(String(e?.message ?? e))) return ''; throw e; }
+    const file = await bring();
+    try { dir.createFile(as.name, as.mime).write(await file.bytes()); } catch { return "Couldn't save it in that folder. Try another one."; }
+    return `Saved “${as.name}” in the folder you picked.`;
+  });
+  const share = run(async () => {
+    if (!(await Sharing.isAvailableAsync())) return "This phone can't share files from here.";
+    await Sharing.shareAsync((await bring()).uri, { mimeType: as.mime, dialogTitle: name });
+    return '';
+  });
+  return <>
+    <Btn label="Download" onPress={save} disabled={!!busy} />
+    <Btn label="Share" onPress={share} disabled={!!busy} />
+    {!!(busy || note) && <T tone="mute" style={[s.small, { flexBasis: '100%' }]}>{busy || note}</T>}
+  </>;
 }
 
 /** A finished video, brought over the link in pieces and played here — the phone can't reach the computer's own address. */
@@ -515,7 +570,8 @@ function VideoSheet({ f, onClose }: { f: A.FileView; onClose: () => void }) {
   return <Modal visible transparent animationType={motion.sheet(reduce)} onRequestClose={onClose}>
     <Pressable style={s.scrim} onPress={onClose}>
       <Pressable style={[s.sheet, { backgroundColor: t.bg }]} onPress={() => {}}>
-        <View style={s.row}><T tone="mute">▶</T><T style={[s.h2, { flex: 1 }]}>{f.name}</T><Btn label="Close" onPress={onClose} /></View>
+        <View style={s.row}><T tone="mute">▶</T><T style={[s.h2, { flex: 1 }]}>{f.name}</T></View>
+        <View style={[s.row, { flexWrap: 'wrap' }]}><FileActions f={f} name={f.name} /><View style={{ flex: 1 }} /><Btn label="Close" onPress={onClose} /></View>
         {uri ? <VideoView player={player} contentFit="contain" style={{ width: '100%', aspectRatio: 16 / 9, borderRadius: 12, backgroundColor: '#000' }} accessibilityLabel={`Playing ${f.name}`} />
           : err ? <T tone="pinkInk">{err}</T>
           : <T tone="mute">Getting it from your computer… {size ? `${Math.min(100, Math.round((part / size) * 100))}%` : ''}</T>}

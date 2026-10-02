@@ -1856,13 +1856,22 @@ test('a delivered file is named by its registered title everywhere it shows', ()
   assert.match(main, /<PreviewPanel [^>]*title=\{A\.fileTitle\(/, 'the web panel opens already named, before its preview arrives');
 });
 
-test("the phone's reader shares the file's words and opens the whole page", () => {
-  const doc = A.document({ parts: [{ kind: 'heading', text: 'Steps' }, { kind: 'li', text: 'Find the bank' }, { kind: 'table', head: ['A', 'B'], rows: [['1', '2']] }] }, 'Family FDIC checklist');
-  assert.equal(A.shareWords('Family FDIC checklist', null, doc, null), 'Family FDIC checklist\n\nSteps\n• Find the bank\nA | B\n1 | 2');
-  assert.equal(A.shareWords('Notes', null, null, '# Hi\nthere'), 'Notes\n\n# Hi\nthere');
+test("the phone's reader downloads and shares the file itself, named by its title, and opens the whole page", () => {
+  const f = A.fileView('scribe', 'files/4f0c2b9e7a.docx', 'Refund follow-up: stroller / return?');
+  assert.deepEqual(A.saveAs(f), { name: 'Refund follow-up- stroller - return-.docx',
+    mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }, 'the title as written, only unsavable characters dashed, the real extension');
+  assert.equal(A.saveAs(A.fileView('reel', 'files/ab.mp4', 'Mum’s birthday film')).name, 'Mum’s birthday film.mp4');
+  assert.equal(A.saveAs(A.fileView('x', 'files/notes.txt')).mime, 'text/plain');
+  for (const bytes of [0, 1, 2, 3, 599_999]) assert.equal(A.base64Bytes(Buffer.alloc(bytes).toString('base64')), bytes);
   const app = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
   const sheet = app.slice(app.indexOf('function DocSheet('), app.indexOf('function VideoSheet('));
-  assert.match(sheet, /label="Share"[\s\S]{0,200}<Btn label="Close"/, 'Share sits next to Close');
+  assert.match(sheet, /<FileActions f=\{f\} name=\{name\} \/>[\s\S]{0,80}<Btn label="Close"/, 'Download and Share sit next to Close');
+  const acts = app.slice(app.indexOf('function FileActions('), app.indexOf('function VideoSheet('));
+  assert.match(acts, /label="Download"[\s\S]*label="Share"/);
+  assert.match(acts, /Directory\.pickDirectoryAsync\(\)/, 'Download saves into a folder the person picks');
+  assert.match(acts, /Sharing\.shareAsync\(/, 'Share hands over the file itself, not its words');
+  assert.match(acts, /\/cancel\/i[\s\S]{0,40}return ''/, 'a closed picker is not a failure');
+  assert.match(app.slice(app.indexOf('function VideoSheet(')), /<FileActions f=\{f\}/, 'a video too');
   assert.match(sheet, /page\?\.title/, "the reader's title is crewd's registered one");
   assert.match(sheet, /<ChatText text=\{text\} whole \/>/, 'a delivered page opens whole, not clipped behind More');
   assert.match(app, /function DocText[\s\S]{0,300}A\.docLinks/, 'document sources are tappable labels on the phone too');
