@@ -173,17 +173,22 @@ const loops = (b: Awaited<ReturnType<typeof browse>>) => b.run(`(() => {
   const on = document.getAnimations().filter((a) => a.playState === 'running');
   return { raf: __o.raf, running: on.length, css: on.filter((a) => a.constructor.name === 'CSSAnimation').length,
     outside: on.filter((a) => !a.effect?.target?.closest?.('.o-room')).length,
+    names: on.map((a) => (a.animationName ?? a.constructor.name) + ' on ' + (a.effect?.target?.getAttribute?.('class') ?? a.effect?.target?.tagName ?? '?') + ' (' + a.effect?.getComputedTiming().iterations + ')'),
     working: [...document.querySelectorAll('.o-cell[data-seat=working] .o-sprite')].length };
 })()`);
 
-test('the office keeps the battery budget: calm CSS loops while it shows, none off screen or with Reduce Motion', { skip: !bin && 'no Chromium here' }, async () => {
+test('the office keeps the battery budget: calm CSS loops while it shows, none off screen or with Reduce Motion', { skip: !bin && 'no Chromium here' }, async (t) => {
   const b = await browse();
   await b.send('Page.enable'); await b.send('Runtime.enable');
   for (const demo of ['calm', 'office']) {
     await b.open(`demo=${demo}&day`);
     // Chat by default: no room, so nothing of the office runs.
     await until('Chief\'s box', () => b.run("!!document.querySelector('.home-chat .composer')"), 30_000);
-    // Once the page's own entrances have played, nothing runs: a loop that never ends fails here at the bound.
+    // What plays as Chat opens is the page's own entrances, each of them finite; once they have played nothing runs,
+    // and a loop that never ends fails here at the bound.
+    const opening = await loops(b);
+    t.diagnostic(`${demo}: Chat at first paint runs ${opening.running}: ${opening.names.join('; ') || 'nothing'}`);
+    assert.ok(!opening.names.some((n: string) => n.endsWith('(Infinity)')), `${demo}: nothing in Chat loops (${opening.names.join('; ')})`);
     await until(`${demo}: Chat to be still`, async () => (await loops(b)).running === 0, 10_000);
     await toOffice(b);
     await until('the room to settle', () => b.run('window.__o.pending.size === 0'), 15_000);
@@ -237,9 +242,12 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, nothing covers anythin
           const sprites = [...document.querySelectorAll('.o-sprite')].map(box);
           const hit = (a, c) => a.left < c.right - 0.5 && c.left < a.right - 0.5 && a.top < c.bottom - 0.5 && c.top < a.bottom - 0.5;
           const out = cards.filter((x) => x.left < st.left - 1 || x.right > st.right + 1 || x.top < st.top - 1 || x.bottom > st.bottom + 1).length;
-          let over = 0;
-          cards.forEach((a, i) => cards.slice(i + 1).forEach((c) => { if (hit(a, c)) over++; }));
-          cards.forEach((a) => sprites.forEach((c) => { if (hit(a, c)) over++; }));
+          const els = [...document.querySelectorAll('.o-bub, .o-chip b, .o-more, .o-tray, .o-thing')], sps = [...document.querySelectorAll('.o-sprite')];
+          const say = (e, r) => (e.closest('[data-id]')?.dataset.id ?? 'chief') + ' ' + e.className + ' ' + Math.round(r.top) + '-' + Math.round(r.bottom);
+          const pairs = [];
+          cards.forEach((a, i) => cards.slice(i + 1).forEach((c, j) => { if (hit(a, c)) pairs.push(say(els[i], a) + ' x ' + say(els[i + 1 + j], c)); }));
+          cards.forEach((a, i) => sprites.forEach((c, j) => { if (hit(a, c)) pairs.push(say(els[i], a) + ' x ' + say(sps[j], c)); }));
+          const over = pairs.length;
           // a label wider than its box is clipped
           const clipped = [...document.querySelectorAll('.o-bub b, .o-st > span, .o-chip b')].filter((e) => e.scrollWidth > e.clientWidth + 1).length;
           const asks = [...document.querySelectorAll('.o-bub.needs a[href^="#/ask/"]')].map((a) => a.getAttribute('href'));
@@ -251,14 +259,14 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, nothing covers anythin
           const onIt = names('.feed .working .list-row .grow > b'), waits = names('.side-row:has(.side-seat.needs, .side-seat.chat) .grow > b');
           const badge = parseInt(document.querySelector('.tabbar a .badge, .side-nav .badge')?.textContent ?? '0', 10);
           const more = Number(document.querySelector('.o-more')?.dataset.more ?? 0);
-          return { seen: st.height > 0 && st.top >= bar - 1 && st.top < innerHeight - 40, out, over, clipped, asks, unique: new Set(asks).size, stat, badge, busy, onIt, waits, pinned, all,
+          return { pairs, seen: st.height > 0 && st.top >= bar - 1 && st.top < innerHeight - 40, out, over, clipped, asks, unique: new Set(asks).size, stat, badge, busy, onIt, waits, pinned, all,
             seated: document.querySelectorAll('.o-cell .o-sprite').length - 1, more: more || 0,
             roster: document.querySelectorAll('.side-row').length };
         })()`);
         const at = `${demo} ${theme} at ${width}`;
         assert.ok(m.seen, `${at}: Office opens on its room, below the bar and on screen, not just somewhere on the page`);
         assert.equal(m.out, 0, `${at}: every card inside the room`);
-        assert.equal(m.over, 0, `${at}: no card covers another card or a sprite`);
+        assert.equal(m.over, 0, `${at}: no card covers another card or a sprite: ${m.pairs.join('; ')}`);
         assert.equal(m.clipped, 0, `${at}: no label in the room is cut off`);
         assert.equal(m.asks.length, reviews, `${at}: one Review per helper with a row in Needs you`);
         assert.equal(m.unique, m.asks.length, `${at}: no row has two Reviews`);
