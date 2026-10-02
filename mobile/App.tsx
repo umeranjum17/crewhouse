@@ -150,7 +150,7 @@ function AiMark({ ai, size = 32 }: { ai: { key: string; bg: string }; size?: num
 /** Chief's warm halo, where he greets you: first run, pairing, the words to check. */
 function Halo({ children }: { children: ReactNode }) {
   const t = useLook();
-  return <View style={[s.halo, s.warmRing, { backgroundColor: t.night ? '#2B2319' : '#FFF1DC', borderColor: t.night ? '#221C15' : '#FFF7EC' }]}>{children}</View>;
+  return <View style={[s.halo, s.warmRing, { backgroundColor: t.night ? '#2A2638' : '#EEF1F6', borderColor: t.night ? '#221F2E' : '#F6F7F9' }]}>{children}</View>;
 }
 function Center({ children }: { children: ReactNode }) { return <View style={s.center}>{children}</View>; }
 function T({ children, style, tone = 'ink', lines }: { children: ReactNode; style?: any; tone?: 'ink' | 'ink2' | 'mute' | 'pinkInk'; lines?: number }) {
@@ -585,7 +585,7 @@ function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
   if (done) {
     return (
       <Center>
-        <Halo><ChiefArt mood="happy" size={120} /></Halo>
+        <ChiefArt mood="happy" size={104} whole />
         <T style={s.display}>You're in</T>
         <T tone="ink2" style={s.centerText}>This phone is paired with your computer{done.device.role === 'view' ? '. It can watch the crew, not answer' : ''}.</T>
         {checked && push === 'missing' && <T tone="mute" style={s.centerText}>{PUSH_WORDS.missing}</T>}
@@ -596,7 +596,7 @@ function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
   if (words) {
     return (
       <Center>
-        <Halo><ChiefArt mood="listen" size={120} /></Halo>
+        <ChiefArt mood="listen" size={104} whole />
         <T style={s.display}>Check the words</T>
         <T tone="ink2" style={s.centerText}>Your computer is asking whether this phone may join. Say yes there only if it shows these same two words:</T>
         <Text style={[s.fp, { color: t.pinkInk }]}>{words}</Text>
@@ -620,7 +620,7 @@ function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
     return (
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="height">
         <ScrollView contentContainerStyle={s.centerScroll} keyboardShouldPersistTaps="handled">
-          <ChiefArt mood="listen" size={120} />
+          <ChiefArt mood="listen" size={72} whole />
           <T style={s.h1}>Type a code</T>
           <T tone="ink2" style={s.centerText}>Enter the code under Add a phone on your computer, or one someone there sent you.</T>
           <TextInput style={[s.input, { alignSelf: 'stretch', color: t.ink, borderColor: t.line }]} value={code} onChangeText={setCode} placeholder="Type or paste the code" placeholderTextColor={t.mute}
@@ -634,7 +634,7 @@ function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
   }
   return (
     <Center>
-      <Halo><ChiefArt mood="hello" size={120} /></Halo>
+      <ChiefArt mood="hello" size={104} whole />
       <T style={s.display}>Crewhouse</T>
       <T tone="ink2" style={[s.centerText, { marginTop: -6 }]}>Your personal assistant, in your pocket.</T>
       <Card style={{ alignSelf: 'stretch', gap: 10, marginVertical: 6 }}>
@@ -762,7 +762,7 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
   if (status === 'refused') {
     return (
       <Center>
-        <ChiefArt mood="error" size={140} />
+        <ChiefArt mood="error" size={112} whole />
         <T style={s.h1}>Not recognised</T>
         <T tone="ink2" style={s.centerText}>Your computer didn't accept this phone. It may have been removed in Settings, Phones, or Crewhouse was set up again.</T>
         <Btn go big label="Pair again" onPress={forget} />
@@ -773,7 +773,7 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
   if (!state) {
     return (
       <Center>
-        <ChiefArt mood="work" size={140} />
+        <ChiefArt mood="work" size={112} whole />
         <T tone="ink2" style={s.centerText}>{out ? `Can't reach the home computer. ${missing || 'Checking why…'} Trying again by itself.` : 'Waking the crew…'}</T>
       </Center>
     );
@@ -800,7 +800,7 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
       <Modal visible={why} transparent animationType={motion.sheet(reduce)} onRequestClose={() => setWhy(false)}>
         <Pressable style={s.scrim} onPress={() => setWhy(false)}>
           <Pressable style={[s.sheet, { backgroundColor: t.bg }]} onPress={() => {}}>
-            <View style={{ alignItems: 'center' }}><ChiefArt mood="rest" size={88} /></View>
+            <View style={{ alignItems: 'center' }}><ChiefArt mood="rest" size={72} whole /></View>
             <T style={s.h2}>The home computer isn't answering</T>
             <T tone="ink2">{missing || 'Checking why…'} If it's asleep, the crew has paused and carries on when it wakes. This phone keeps trying by itself.</T>
             <T tone="ink2">Meanwhile you can read your recent chats. You can reply once it's back.</T>
@@ -853,7 +853,7 @@ function Hello({ state, refresh, go }: Ctx) {
   const reduce = motion.useReduceMotion();
   return (
     <Page>
-      <motion.Rise reduce={reduce}><View style={{ alignItems: 'center', paddingTop: 8 }}><Halo><ChiefArt mood="hello" size={104} /></Halo></View></motion.Rise>
+      <motion.Rise reduce={reduce}><View style={{ alignItems: 'center', paddingTop: 8 }}><ChiefArt mood="hello" size={96} whole /></View></motion.Rise>
       <motion.Rise reduce={reduce} delay={80}><View style={[s.speech, { backgroundColor: t.solid, borderColor: t.line }]}>
         <View style={[s.speechTail, { backgroundColor: t.solid, borderColor: t.line }]} />
         <T style={[s.h1, s.centerText, { fontSize: 26, lineHeight: 32, marginVertical: 0 }]}>{A.greeting()}{address.trim() ? `, ${address.trim()}` : ''}</T>
@@ -1149,6 +1149,7 @@ function Home(ctx: Ctx) {
   const toChief = async (x: string, p: Photo[] = []) => { const ok = await attempt(() => api.post('chief', x, p.map(({ type, data }) => ({ type, data }))), undefined, true); if (ok) { refresh(); go({ view: 'chief' }); } return ok; };
   const [room, setRoom] = useState(0);
   const [desk, setDesk] = useState<{ c: A.OfficeMember; state: Json } | null>(null);
+  const [profile, setProfile] = useState(false);
   // The top stays put in both views: the bar, then Needs you's first row and an exact "See all N".
   const top = <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4, gap: 10 }}>
     <HomeBar state={state} view={view} offline={offline} go={go} mode={mode} pick={pick} />
@@ -1160,7 +1161,7 @@ function Home(ctx: Ctx) {
       {top}
       <ScrollView contentContainerStyle={s.page} keyboardShouldPersistTaps="handled">
         <View onLayout={(e) => setRoom(e.nativeEvent.layout.width)} style={[s.office, { backgroundColor: t.soft, borderColor: t.line }]}>
-          {room > 0 && <Office view={view} night={t.night} offline={offline} width={room - 2} onChief={() => go({ view: 'chief' })} onDesk={(c) => setDesk({ c, state })} onAsk={open} onTray={() => go({ view: 'things' })} onCrew={() => go({ view: 'crew' })} />}
+          {room > 0 && <Office view={view} night={t.night} offline={offline} width={room - 2} onChief={() => setProfile(true)} onDesk={(c) => setDesk({ c, state })} onAsk={open} onTray={() => go({ view: 'things' })} onCrew={() => go({ view: 'crew' })} />}
         </View>
         {!!A.resting(state) && <Card><T>{A.resting(state)}. I'll pick things back up then.</T></Card>}
         <Pressable onPress={() => go({ view: 'phone' })} accessibilityRole="button" accessibilityLabel="Check AI account sign-in on the home computer" style={({ pressed }) => [s.listRow, s.listGroup, { backgroundColor: t.solid, borderColor: t.line }, pressed && { opacity: 0.6 }]}>
@@ -1172,8 +1173,50 @@ function Home(ctx: Ctx) {
       </ScrollView>
       {canAct && <View style={s.dock}><Composer placeholder="Ask Chief anything" onSend={toChief} chat="chief" /></View>}
       {!!desk && <DeskSheet desk={desk} {...ctx} onClose={() => setDesk(null)} />}
+      {profile && <ChiefSheet view={view} {...ctx} onClose={() => setProfile(false)} />}
     </View>
   );
+}
+
+/** Chief up close, over the office (which stays selected beneath): how to reach him, the crew's computers (watching
+ *  first) and what the crew made. The sheet is only as tall as what it holds. */
+function ChiefSheet({ view, state, offline, go, onClose }: Ctx & { view: A.OfficeView; onClose: () => void }) {
+  const t = useLook();
+  const reduce = motion.useReduceMotion();
+  const crew = A.crew(state);
+  const computers = desktopAvailable ? view.crew.filter((c) => crew.find((h) => h.id === c.id)?.computer) : [];
+  const made = A.things(state).slice(0, 4);
+  const word = offline ? OUT : A.chiefWord(view);
+  const to = (r: Route) => { onClose(); go(r); };
+  const row = (key: string, label: string, sub: string, onPress: () => void, end: ReactNode = <T tone="mute">›</T>, face?: ReactNode) =>
+    <Pressable key={key} onPress={onPress} accessibilityRole="button" accessibilityLabel={`${label}, ${sub}`} style={({ pressed }) => [{ minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8, borderBottomWidth: 1, borderColor: t.line }, pressed && { opacity: 0.6 }]}>
+      {face}<View style={{ flex: 1, minWidth: 0 }}><T style={s.b}>{label}</T>{!!sub && <T tone="ink2" style={s.small} lines={1}>{sub}</T>}</View>{end}
+    </Pressable>;
+  return <Modal visible transparent animationType={motion.sheet(reduce)} onRequestClose={onClose}>
+    <Pressable style={s.scrim} onPress={onClose}>
+      <Pressable style={[s.sheet, { backgroundColor: t.surface, maxHeight: '88%' }]} onPress={() => {}}>
+        <View style={[s.grabber, { backgroundColor: t.line2 }]} />
+        <View style={s.row}>
+          <Face who="chief" size={60} mood={view.chief.mood} />
+          <View style={{ flex: 1 }}><T style={s.h2}>Chief</T><T tone="ink2" style={s.small}>Runs your crew</T>
+            <T style={[s.small, s.b, { color: word === 'Needs you' ? t.pinkInk : word === 'Working' ? t.green : t.ink2 }]}>{word}</T></View>
+          <Btn label="Close" onPress={onClose} />
+        </View>
+        <ScrollView style={{ flexGrow: 0 }} contentContainerStyle={{ gap: 6 }}>
+          <Label>Ways to reach</Label>
+          {row('chat', 'Message in Chat', '', () => to({ view: 'chief' }))}
+          {computers.length > 0 && <Label>Crew computers</Label>}
+          {computers.map((c) => {
+            const k = A.seatOf(c), h = crew.find((x) => x.id === c.id)!;
+            return row(c.id, `${c.name}'s computer`, h.driving ? 'You have the wheel' : `Watch ${c.name}`, () => to({ view: 'helper', id: c.id, tab: 'watch' }),
+              <Pill tone={A.waitsOnYou(c) ? 'wait' : k === 'working' ? 'ok' : 'off'}>{offline ? OUT : A.waitsOnYou(c) ? 'Needs you' : k === 'working' ? 'Working' : 'Resting'}</Pill>, <Face who={h} size={36} />);
+          })}
+          {made.length > 0 && <Label>Outputs</Label>}
+          {made.map((m) => row(String(m.id), m.title, `From ${crew.find((h) => h.id === m.helper)?.name ?? 'the crew'}`, () => to({ view: 'helper', id: m.helper })))}
+        </ScrollView>
+      </Pressable>
+    </Pressable>
+  </Modal>;
 }
 
 /** A helper's desk, opened from the office: what it is on, its steps with the latest marked now, what it has made for
@@ -1214,6 +1257,11 @@ function DeskSheet({ desk, state, offline, canAct, go, refresh, onClose }: Ctx &
           {!offline && c.steps.length > 0 && <View><Label>Steps</Label><Steps steps={c.steps} /></View>}
           {!offline && c.things.length > 0 && <View><Label>On the desk</Label><Card>{c.things.map((f) => <FileRow key={f.url} f={f} />)}</Card></View>}
           <Btn big label={`Open ${c.name}'s chat`} onPress={() => to({ view: 'helper', id })} />
+          {/* Their own computer: watching is the default; taking the wheel pauses them until it is handed back. */}
+          {!offline && h.computer && desktopAvailable && <View style={s.chips}>
+            <Btn label={`Watch ${c.name}`} onPress={() => to({ view: 'helper', id, tab: 'watch' })} />
+            {canAct && <Btn label="Take the wheel" onPress={() => void attempt(async () => { await api.takeOver(id); to({ view: 'helper', id, tab: 'screen' }); })} />}
+          </View>}
         </ScrollView>
         {asking && c.ask && <AskSheet c={c.ask} who={h} chiefSays={state.asks.find((a: Json) => a.id === c.ask!.id)?.detail?.chief} canAct={canAct}
           onClose={() => { setAsking(false); refresh(); }} />}

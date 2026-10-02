@@ -63,7 +63,7 @@ export function Office({ view, night, offline, width, onChief, onDesk, onAsk, on
             <motion.Loop pose={poseOf(chief.mood)} reduce={reduce} awake={awake}><Image source={PALS[`chief-${poseOf(chief.mood)}`]} style={{ width: 60, height: 75 }} /></motion.Loop>
           </motion.Hop>
           {chiefAsk ? <Bubble t={t} tone={t.pink} name="Chief"><Review t={t} night={night} label={`Review what Chief needs: ${chiefAsk.head}`} onPress={() => onAsk(chiefAsk)} /></Bubble>
-            : <Bubble t={t} tone={chief.mood === 'work' && !offline ? t.green : t.line2} name="Chief" line={offline ? 'Asleep' : chief.mood === 'work' ? 'Working' : 'On watch'} />}
+            : <Bubble t={t} tone={chief.mood === 'work' && !offline ? t.green : t.line2} name="Chief" line={offline ? 'Asleep' : A.chiefWord(view)} />}
         </Cell>
         {Array.from({ length: nooks }, (_, i) => plan.desks[i]).map((c, i) => {
           if (!c) return <Cell key={`nook${i}`} w={dw} h={DESK_H} r={r}><Desk w={dw} r={r} /><Monitor w={dw} r={r}><View style={{ flex: 1, backgroundColor: r.screen }} /></Monitor></Cell>;

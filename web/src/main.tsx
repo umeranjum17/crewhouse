@@ -84,7 +84,7 @@ function Hello({ state, refresh, night }: Ctx) {
   return (
     <div className="hello">
       <div className="hello-brand" role="img" aria-label="Crewhouse"><Banner /></div>
-      <span className="halo"><ChiefArt mood={tipped ? 'idle' : 'hello'} d={8.5} hero /></span>
+      <span className="halo"><ChiefArt mood={tipped ? 'idle' : 'hello'} d={7.4} hero whole /></span>
       <div className="speech">
         <h1>{A.greeting()}{address.trim() ? `, ${address.trim()}` : ''}</h1>
         <p className="lead">I'm Chief, your personal assistant. I run your crew of helpers.</p>

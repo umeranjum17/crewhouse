@@ -1208,6 +1208,8 @@ export function office(state: Json): OfficeView {
 
 /** Needs-you rows no helper in the room holds (Chief's own, or one left by a helper since let go): Chief carries
  *  them, so every row in Needs you has a Review somewhere in the room. */
+/** Chief's state in one word, the same in the room, his profile and on the phone. */
+export const chiefWord = (v: OfficeView) => (chiefAsks(v).length ? 'Needs you' : v.chief.mood === 'work' ? 'Working' : 'On watch');
 export const chiefAsks = (view: OfficeView) => view.needs.filter((c) => !view.crew.some((m) => m.id === c.helper));
 
 /** The office while the home computer is out of reach: nobody claims to be busy or waiting, and nothing asks. */

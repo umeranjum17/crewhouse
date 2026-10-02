@@ -8,11 +8,11 @@
 // once when their news lands, a done page travels to the tray; Reduce Motion shows the poses and end states only.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import type { Json } from './api.ts';
+import { api, type Json } from './api.ts';
 import * as A from './adapter.ts';
 import * as art from './art.ts';
 import { room as ROOM } from './tokens.ts';
-import { Face, Media, Pill, Steps, useDialogOwn } from './parts.tsx';
+import { attempt, Face, Media, Pill, Steps, useDialogOwn } from './parts.tsx';
 
 // Live events reach the room straight from the socket the shell already holds (main.tsx): a step swaps the bubble
 // and a new thing lands by the desk before the debounced refresh lands, and the refresh stays the source of truth.
@@ -120,6 +120,7 @@ export function Office({ state, live, night }: { state: Json; live: A.OfficeView
     '--r-bezel': r.bezel, '--r-screen': r.screen, '--r-sofa': r.sofa, '--r-sofa-dark': r.sofaDark, '--r-window': r.window, '--r-frame': r.frame, '--r-leaf': r.leaf, '--r-pot': r.pot } as CSSProperties;
   const chiefAsk = A.chiefAsks(live).sort((a, b) => A.askRank(a) - A.askRank(b))[0];
   const chiefBusy = chiefAsk ? 'needs' : live.chief.mood === 'work' ? 'work' : '';
+  const [profile, setProfile] = useState(false);
   const trayWas = useRef<number | undefined>(undefined);
   useEffect(() => { trayWas.current = live.counts.done; }, [live.counts.done]);
   const more = plan.more.length, moreBusy = plan.more.filter((c) => A.seatOf(c) === 'working').length;
@@ -138,8 +139,8 @@ export function Office({ state, live, night }: { state: Json; live: A.OfficeView
             <div className="o-seat" />
             {chiefAsk
               ? <Bubble cls="needs" name="Chief"><a href={`#/ask/${chiefAsk.id}`} aria-label={`Review what Chief needs: ${chiefAsk.head}`}>Review</a></Bubble>
-              : <Bubble cls={chiefBusy} name="Chief" line={chiefBusy === 'work' ? 'Working' : 'On watch'} />}
-            <button className="o-hit" onClick={() => go('#/chief')} aria-label={`Chief: ${live.chief.line}`} />
+              : <Bubble cls={chiefBusy} name="Chief" line={A.chiefWord(live)} />}
+            <button className="o-hit" onClick={() => setProfile(true)} aria-label={`Chief: ${live.chief.line}`} />
           </div>
           {Array.from({ length: nooks }, (_, i) => plan.desks[i]).map((c, i) => c ? (
             <div key={c.id} className="o-cell" data-seat={A.seatOf(c)} data-id={c.id}>
@@ -175,6 +176,7 @@ export function Office({ state, live, night }: { state: Json; live: A.OfficeView
           <div className="o-cell"><div className="o-sofa" />{more > 0 && <a className="o-more" data-more={more} href="#/crew" aria-label={`${more} more of the crew${moreBusy ? `, ${moreBusy} working` : ''}: see everyone`}>+{more}{moreBusy > 0 && <small>{moreBusy} working</small>}</a>}</div>
         </div>
       </div>
+      {profile && createPortal(<ChiefSheet live={live} state={state} roles={roles} onClose={() => setProfile(false)} />, document.body)}
       {open && crew.some((c) => c.id === open) && createPortal(<HelperSheet c={crew.find((c) => c.id === open)!} h={roles.get(open)} state={state}
         asks={asks.get(open) ?? []} onClose={() => setOpen(null)} />, document.body)}
     </section>
@@ -208,6 +210,44 @@ function handOff(room: HTMLElement | null, ids: string[]) {
     room.appendChild(page);
     page.animate([{ transform: 'none' }, { transform: `translate(${to.left - from.left}px, ${to.top - from.top}px) scale(.7) rotate(8deg)`, opacity: .2 }], { duration: 1300, easing: 'ease-in-out' }).finished.finally(() => page.remove());
   }
+}
+
+/** Chief up close: how to reach him, the crew's computers (watching first), and what the crew made today. */
+function ChiefSheet({ live, state, roles, onClose }: { live: A.OfficeView; state: Json; roles: Map<string, A.Helper>; onClose: () => void }) {
+  const box = useRef<HTMLDivElement>(null);
+  useDialogOwn(box, onClose);
+  const [phones, setPhones] = useState<number | null>(null);
+  useEffect(() => { api.phones().then((p) => setPhones(p.length)).catch(() => setPhones(null)); }, []);
+  const computers = live.crew.filter((c) => roles.get(c.id)?.computer);
+  const made = A.things(state).slice(0, 4);
+  const word = A.chiefWord(live);
+  return (
+    <div className="scrim o-scrim" onClick={onClose}>
+      <div ref={box} className="o-sheet o-profile" role="dialog" aria-modal aria-label="Chief" onClick={(e) => e.stopPropagation()}>
+        <header className="o-sh-head">
+          <Face who="chief" size={64} />
+          <span className="grow"><h2>Chief</h2><span className="mute small">Runs your crew</span>
+            <span className={`o-state ${word === 'Needs you' ? 'needs' : word === 'Working' ? 'work' : ''}`}><i />{word}</span></span>
+          <button className="icon-btn" onClick={onClose} aria-label="Close">✕</button>
+        </header>
+        <div className="o-sec"><div className="o-eyebrow">Ways to reach</div>
+          <div className="card list">
+            <a className="row-item" href="#/chief" onClick={onClose}><span className="grow">Message in Chat</span><b>›</b></a>
+            <a className="row-item" href="#/settings" onClick={onClose}><span className="grow">On your phone<small className="mute block">{phones ? `${phones} paired` : 'Not set up'}</small></span>{!phones && <b className="o-setup">Set up</b>}</a>
+          </div></div>
+        {computers.length > 0 && <div className="o-sec"><div className="o-eyebrow">Crew computers</div>
+          <div className="card list">{computers.map((c) => {
+            const k = A.seatOf(c);
+            return <a key={c.id} className="row-item" href={`#/h/${c.id}/screen`} onClick={onClose}>
+              <Face who={{ kind: c.kind, name: c.name, mood: c.mood }} size={36} />
+              <span className="grow">{c.name}'s computer<small className="mute block">{roles.get(c.id)?.driving ? 'You have the wheel' : `Watch ${c.name}`}</small></span>
+              <Pill tone={k === 'needs' || k === 'chat' ? 'wait' : k === 'working' ? 'ok' : 'off'}>{A.waitsOnYou(c) ? 'Needs you' : k === 'working' ? 'Working' : 'Resting'}</Pill></a>;
+          })}</div></div>}
+        {made.length > 0 && <div className="o-sec"><div className="o-eyebrow">Outputs</div>
+          <div className="o-made">{made.map((m) => <a key={m.id} className="card" href={`#/h/${m.helper}`} onClick={onClose}><b>{m.title}</b><small className="mute">From {roles.get(m.helper)?.name ?? 'the crew'}</small></a>)}</div></div>}
+      </div>
+    </div>
+  );
 }
 
 /** The card over a seat: a name and one short word that always fits (the step itself is in the feed's On it now),
@@ -252,6 +292,9 @@ function HelperSheet({ c, h, state, asks, onClose }: { c: A.OfficeMember; h: A.H
           {c.things.map((f, i) => <Media key={i} f={f} />)}</div>}
         {body}
         <a className="btn o-chat" href={`#/h/${c.id}`}>Open {c.name}'s chat</a>
+        {h?.computer && <div className="o-sec"><div className="o-eyebrow">{c.name}'s computer</div>
+          <div className="chips"><a className="btn" href={`#/h/${c.id}/screen`}>Watch {c.name}</a>
+            <button className="btn" onClick={() => attempt(async () => { await api.takeOver(c.id); go(`#/h/${c.id}/screen`); })}>Take the wheel</button></div></div>}
       </div>
     </div>
   );

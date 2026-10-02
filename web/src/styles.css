@@ -728,7 +728,7 @@ details.card[open] > summary { margin-bottom: 10px; }
 .hello-brand .banner { font-size: clamp(4px, 1.15vw, 6.5px); line-height: 1.02; }
 .banner i { color: var(--line2); }
 .banner i.ink { color: var(--ink); }
-.hello > .halo { background: var(--warm); box-shadow: 0 0 0 10px color-mix(in srgb, var(--warm) 45%, transparent); }
+.hello > .halo { background: none; box-shadow: none; padding: 0; border-radius: 0; }
 .speech { position: relative; width: 100%; margin-top: 18px; background: var(--solid); border: 1px solid var(--line); border-radius: 20px; padding: 16px 18px 14px; box-shadow: var(--e1); }
 .speech::before { content: ''; position: absolute; top: -8px; left: 50%; width: 14px; height: 14px; margin-left: -7px; background: var(--solid); border-left: 1px solid var(--line); border-top: 1px solid var(--line); border-top-left-radius: 3px; transform: rotate(45deg); }
 .speech h1 { margin: 0 0 4px; text-wrap: balance; }
@@ -958,3 +958,16 @@ details.card[open] > summary { margin-bottom: 10px; }
   .home-office > .home-top { margin-right: 0; }
 }
 .o-flyer { position: absolute; z-index: 6; width: 14px; height: 18px; background: #fff; border: 1.5px solid var(--r-edge); border-radius: 2px; pointer-events: none; }
+/* Chief's profile over the office (office.tsx ChiefSheet): above every page heading, Office still selected beneath. */
+.o-scrim { z-index: 60; }
+.o-profile .o-sh-head h2 { font-family: 'Instrument Serif', Georgia, serif; font-weight: 400; font-size: 30px; line-height: 32px; letter-spacing: 0; }
+.o-state { display: flex; gap: 6px; align-items: center; font: 600 13px/18px var(--ui); color: var(--ink2); margin-top: 2px; }
+.o-state i { width: 7px; height: 7px; border-radius: 50%; background: var(--line2); }
+.o-state.work { color: var(--ok); } .o-state.work i { background: var(--ok); }
+.o-state.needs { color: var(--pink); } .o-state.needs i { background: var(--pink); }
+.o-profile .row-item { display: flex; gap: 10px; align-items: center; color: inherit; text-decoration: none; min-height: 52px; }
+.o-profile .block { display: block; }
+.o-setup { color: var(--pink); font-weight: 650; }
+.o-made { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.o-made .card { display: grid; gap: 2px; padding: 12px 14px; color: inherit; text-decoration: none; min-width: 0; }
+.o-made b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
