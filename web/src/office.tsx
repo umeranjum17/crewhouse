@@ -1,8 +1,8 @@
-// The office at the top of Home: Chief and the crew in one flat room, drawn front on like a cut-open dollhouse, with
-// what each helper is making for you pinned beside their desk. The phone draws the same room (mobile/src/office.tsx),
-// and A.floorPlan (web/src/adapter.ts) says who sits where at any crew size: a desk for Chief and for each helper on a
-// job of yours, the lounge sofa for everyone else, "+N more" past two rows of each. Every word comes from A.office:
-// a member's room holds only their own jobs, and a helper busy with someone else's shows just "Busy with another job".
+// The office at the top of Home: Chief and the crew in one room, drawn front on like a cut-open dollhouse. The phone
+// draws the same room (mobile/src/office.tsx). A.floorPlan (web/src/adapter.ts) hot-desks it: the room never grows,
+// four desks go to whoever waits on you and then whoever is working, a three-seat lounge takes the rest, and "+N"
+// counts everyone else (the rail's crew list names them all). Every word and count comes from A.office, the one
+// state source Home's header, tray, rail and Needs you also read; Review shows only for a row that is in Needs you.
 // Nothing is decided here: a question opens its review sheet, a helper opens their panel (the "Home commits nothing"
 // rule). Nothing moves while the room is quiet: a helper hops once when their news lands, and Reduce Motion skips it.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
@@ -22,13 +22,13 @@ const go = (hash: string) => { location.hash = hash; };
 const reduced = () => typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 type Tone = { cls: string; pill: 'ok' | 'wait' | 'off' };
-function tone(c: A.OfficeMember): Tone {
-  if (A.waitsOnYou(c)) return { cls: 'needs', pill: 'wait' };
-  if (c.ring === 'working') return { cls: 'work', pill: 'ok' };
-  if (c.status === 'Up next') return { cls: 'next', pill: 'off' };
-  return { cls: 'free', pill: 'off' };
-}
-const said = (c: A.OfficeMember) => (A.waitsOnYou(c) ? `${c.name} needs you` : c.ring === 'working' ? `${c.name}, working on ${c.status}` : `${c.name}, ${c.status.toLowerCase()}`);
+const TONES: Record<A.Seat, Tone> = { needs: { cls: 'needs', pill: 'wait' }, chat: { cls: 'needs', pill: 'wait' }, working: { cls: 'work', pill: 'ok' },
+  failed: { cls: 'failed', pill: 'wait' }, next: { cls: 'next', pill: 'off' }, resting: { cls: 'free', pill: 'off' }, free: { cls: 'free', pill: 'off' } };
+const tone = (c: A.OfficeMember) => TONES[A.seatOf(c)];
+const said = (c: A.OfficeMember) => {
+  const k = A.seatOf(c);
+  return k === 'needs' ? `${c.name} needs you: ${c.ask!.head}` : k === 'working' ? `${c.name}, working on ${c.status}` : k === 'free' || k === 'resting' ? `${c.name}, ${c.status.toLowerCase()}` : `${c.name}, ${A.SEAT_WORDS[k].toLowerCase()}`;
+};
 
 /** A mascot as crisp square pixels with an ink edge, `dot` px a pixel; one image per face, made once. */
 const urls = new Map<string, string>();
@@ -53,28 +53,34 @@ function Sprite({ who, mood, dot, night, className = '', beat }: { who: art.Kind
 
 const KIND_WORDS: Record<A.FileView['kind'], string> = { image: 'a picture', video: 'a video', sheet: 'a spreadsheet', page: 'a document', doc: 'a file' };
 
-export function Office({ state, night }: { state: Json; night: boolean }) {
-  const view = useMemo(() => A.office(state), [state]);
+/** The live office: the snapshot's view, moved by live events until the next refresh. Home reads it once and hands
+ *  it to the room and the feed, so they can never disagree. */
+export function useOffice(state: Json, offline = false): A.OfficeView | null {
+  const view = useMemo(() => (state ? A.office(state) : null), [state]);
   const [live, setLive] = useState(view);
   useEffect(() => setLive(view), [view]);
   useEffect(() => {
-    const f = (e: Json) => setLive((v) => A.officeEvent(v, e));
+    const f = (e: Json) => setLive((v) => v && A.officeEvent(v, e));
     ears.add(f);
     return () => { ears.delete(f); };
   }, []);
+  // What was last heard says how things were: while the home computer is out of reach nobody claims to be busy.
+  return live && offline ? A.officeAway(live, 'The home computer is asleep') : live;
+}
+
+export function Office({ state, live, night }: { state: Json; live: A.OfficeView; night: boolean }) {
   const roles = useMemo(() => new Map(A.crew(state).map((h) => [h.id, h])), [state]);
   // Every question a helper has open, the one that matters most first (A.askRank), for their panel.
   const asks = useMemo(() => {
     const by = new Map<string, A.Card[]>();
-    for (const c of A.cards(state)) by.set(c.helper, [...(by.get(c.helper) ?? []), c]);
+    for (const c of live.needs) by.set(c.helper, [...(by.get(c.helper) ?? []), c]);
     for (const l of by.values()) l.sort((a, b) => A.askRank(a) - A.askRank(b));
     return by;
-  }, [state]);
+  }, [live]);
   const crew = live.crew;
   const [open, setOpen] = useState<string | null>(null);
-  const [all, setAll] = useState(false);
 
-  // The room is as many seats across as it is wide: measured before the first paint, then on every resize.
+  // Three seats across on a phone, the whole row of five from a computer's room card.
   const box = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   useLayoutEffect(() => {
@@ -85,8 +91,10 @@ export function Office({ state, night }: { state: Json; night: boolean }) {
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  const plan = A.floorPlan(crew, width || 360, all);
-  const folds = all && A.floorPlan(crew, width || 360).more > 0;
+  const cols = (width || 360) >= 500 ? 5 : 3;
+  const plan = A.floorPlan(crew);
+  const nooks = Math.max(A.NOOKS, plan.desks.length);
+  const spare = (cols - ((nooks + 1) % cols)) % cols;
 
   // A thing that just arrived wears "New" for a moment and drops in.
   const seen = useRef<Map<string, number> | null>(null);
@@ -109,30 +117,29 @@ export function Office({ state, night }: { state: Json; night: boolean }) {
   const r = night ? ROOM.night : ROOM.day;
   const vars = { '--r-wall': r.wall, '--r-stripe': r.stripe, '--r-skirt': r.skirt, '--r-floor': r.floor, '--r-seam': r.seam, '--r-desk': r.desk, '--r-top': r.top, '--r-edge': r.edge,
     '--r-bezel': r.bezel, '--r-screen': r.screen, '--r-sofa': r.sofa, '--r-sofa-dark': r.sofaDark, '--r-window': r.window, '--r-frame': r.frame, '--r-leaf': r.leaf, '--r-pot': r.pot } as CSSProperties;
-  const day = new Date(); day.setHours(0, 0, 0, 0);
-  const today = live.done.filter((t) => t.at >= day.getTime()).length; // the tray holds today's, as Home's count does
-  const calm = crew.some((c) => c.ring || c.ask) ? '' : !crew.length ? 'Nothing on the go yet.'
-    : 'Nothing on the go. The crew is free.';
-  const chiefBusy = live.chief.mood === 'ask' ? 'needs' : live.chief.mood === 'work' ? 'work' : '';
+  const chiefAsk = A.chiefAsks(live).sort((a, b) => A.askRank(a) - A.askRank(b))[0];
+  const chiefBusy = chiefAsk ? 'needs' : live.chief.mood === 'work' ? 'work' : '';
+  const more = plan.more.length, moreBusy = plan.more.filter((c) => A.seatOf(c) === 'working').length;
 
   return (
     <section className="office" aria-label="The office">
       <div ref={box} className="o-room" style={vars}>
         <div className="o-head">
-          {calm && <span className="o-calm">{calm}</span>}
-          <a className="o-tray" href="#/things" aria-label={`Your tray: ${today} done today`}>Your tray · {today}</a>
+          <a className="o-tray" href="#/things" aria-label={`Your tray: ${live.counts.done} done today`}>Your tray · {live.counts.done}</a>
         </div>
-        <div className="o-desks" style={{ ['--cols' as string]: plan.cols }}>
+        <div className="o-desks" style={{ ['--cols' as string]: cols }}>
           <div className="o-cell chief">
             <div className="o-chair" />
             <Sprite who="chief" mood={live.chief.mood} dot={3} night={night} beat={live.chief.mood} />
             <div className="o-seat" />
-            <Bubble cls={chiefBusy} name="Chief" line={live.chief.line} />
+            {chiefAsk
+              ? <Bubble cls="needs" name="Chief"><a href={`#/ask/${chiefAsk.id}`} aria-label={`Review what Chief needs: ${chiefAsk.head}`}>Review</a></Bubble>
+              : <Bubble cls={chiefBusy} name="Chief" line={chiefBusy === 'work' ? 'Working' : 'On watch'} />}
             <button className="o-hit" onClick={() => go('#/chief')} aria-label={`Chief: ${live.chief.line}`} />
           </div>
-          {plan.desks.map((c) => (
-            <div key={c.id} className="o-cell">
-              <Sprite who={c.kind} mood={c.mood} dot={3} night={night} className="at-desk" beat={`${c.ring}|${c.mood}|${c.things.length}|${c.ask?.id ?? ''}`} />
+          {Array.from({ length: nooks }, (_, i) => plan.desks[i]).map((c, i) => c ? (
+            <div key={c.id} className="o-cell" data-seat={A.seatOf(c)}>
+              <Sprite who={c.kind} mood={c.mood} dot={3} night={night} className={`at-desk${c.second ? ' second' : ''}`} beat={`${c.ring}|${c.mood}|${c.things.length}|${c.ask?.id ?? ''}`} />
               <div className="o-deskf" />
               <div className="o-mon"><Screen c={c} /></div>
               {c.things.length > 0 && <div className="o-things" aria-hidden>{c.things.slice(-2).map((f, j) => {
@@ -141,31 +148,28 @@ export function Office({ state, night }: { state: Json; night: boolean }) {
                   style={{ ['--c' as string]: art.PALS[c.kind].body }} title={f.name}>{fresh.has(k) && <span className="o-new">New</span>}</span>;
               })}</div>}
               <button className="o-hit" onClick={() => setOpen(c.id)} aria-label={said(c) + (c.things.length ? `, made ${c.things.map((f) => KIND_WORDS[f.kind]).join(', ')}` : '')} />
-              {A.waitsOnYou(c) && c.ask
-                ? <Bubble cls="needs" name={c.name} line={c.ask.head}><a href={`#/ask/${c.ask.id}`} aria-label={`Review what ${c.name} needs: ${c.ask.head}`}>Review</a></Bubble>
-                : <Bubble cls={tone(c).cls} name={c.name} line={c.step || c.status} typing={c.ring === 'working'} />}
+              {c.ask
+                ? <Bubble cls="needs" name={c.name}><a href={`#/ask/${c.ask.id}`} aria-label={`Review what ${c.name} needs: ${c.ask.head}`}>Review</a></Bubble>
+                : A.seatOf(c) === 'chat'
+                  ? <Bubble cls="needs" name={c.name}><a href={`#/h/${c.id}`} aria-label={`Reply to ${c.name} in their chat`}>Reply</a></Bubble>
+                  : <Bubble cls={tone(c).cls} name={c.name} line={A.SEAT_WORDS.working} typing />}
             </div>
+          ) : (
+            <div key={`nook${i}`} className="o-cell" aria-hidden><div className="o-deskf" /><div className="o-mon"><div className="o-scr" /></div></div>
           ))}
-          {Array.from({ length: plan.spare }, (_, i) => (
-            <div key={`spare${i}`} className="o-cell" aria-hidden>
-              {i % 2 ? <><div className="o-deskf" /><div className="o-mon"><div className="o-scr" /></div></> : <><div className="o-win" /><div className="o-plant" /></>}
-            </div>
-          ))}
+          {Array.from({ length: spare }, (_, i) => <div key={`spare${i}`} className="o-cell" aria-hidden><div className="o-win" /><div className="o-plant" /></div>)}
         </div>
-        {(plan.lounge.length > 0 || plan.more > 0 || folds) && <div className="o-lounge" style={{ ['--cols' as string]: plan.loungeCols }}>
-          {plan.lounge.map((c) => (
-            <div key={c.id} className="o-cell">
-              <Sprite who={c.kind} mood={c.mood} dot={2} night={night} beat={`${c.ring}|${c.mood}`} />
+        <div className="o-lounge" style={{ ['--cols' as string]: A.LOUNGE_SEATS + 1 }}>
+          {Array.from({ length: A.LOUNGE_SEATS }, (_, i) => plan.lounge[i]).map((c, i) => c ? (
+            <div key={c.id} className="o-cell" data-seat={A.seatOf(c)}>
+              <Sprite who={c.kind} mood={c.mood} dot={2} night={night} className={c.second ? 'second' : ''} beat={`${c.ring}|${c.mood}`} />
               <div className="o-sofa" />
               <div className={`o-chip ${tone(c).cls}`}><i /><b>{c.name}</b></div>
               <button className="o-hit" onClick={() => setOpen(c.id)} aria-label={said(c)} />
             </div>
-          ))}
-          {plan.more > 0 && <div className="o-cell"><div className="o-sofa" /><button className="o-more" onClick={() => setAll(true)} aria-label={`Show ${plan.more} more of the crew`}>+{plan.more} more</button></div>}
-          {folds && <div className="o-cell"><div className="o-sofa" /><button className="o-more" onClick={() => setAll(false)}>Show fewer</button></div>}
-          {Array.from({ length: (plan.loungeCols - ((plan.lounge.length + (plan.more > 0 || folds ? 1 : 0)) % plan.loungeCols)) % plan.loungeCols }, (_, i) =>
-            <div key={`sofa${i}`} className="o-cell" aria-hidden><div className="o-sofa" /></div>)}
-        </div>}
+          ) : <div key={`sofa${i}`} className="o-cell" aria-hidden><div className="o-sofa" /></div>)}
+          <div className="o-cell"><div className="o-sofa" />{more > 0 && <a className="o-more" data-more={more} href="#/crew" aria-label={`${more} more of the crew${moreBusy ? `, ${moreBusy} working` : ''}: see everyone`}>+{more}{moreBusy > 0 && <small>{moreBusy} working</small>}</a>}</div>
+        </div>
       </div>
       {open && crew.some((c) => c.id === open) && createPortal(<HelperSheet c={crew.find((c) => c.id === open)!} h={roles.get(open)} state={state}
         asks={asks.get(open) ?? []} onClose={() => setOpen(null)} />, document.body)}
@@ -173,8 +177,9 @@ export function Office({ state, night }: { state: Json; night: boolean }) {
   );
 }
 
-/** The card over a seat: a name and one line, the typing dots while working, and a Review when it needs her. */
-function Bubble({ cls, name, line, typing, children }: { cls: string; name: string; line: string; typing?: boolean; children?: ReactNode }) {
+/** The card over a seat: a name and one short word that always fits (the step itself is in the feed's On it now),
+ *  the typing dots while working, and a Review or Reply when it waits on you. */
+function Bubble({ cls, name, line, typing, children }: { cls: string; name: string; line?: string; typing?: boolean; children?: ReactNode }) {
   return <div className={`o-bub ${cls}`} aria-hidden={!children}>
     <b>{name}</b>
     {children ?? <span className="o-st">{typing ? <Typing /> : <i />}<span>{line}</span></span>}

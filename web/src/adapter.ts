@@ -480,12 +480,14 @@ export function chats(state: Json): Chat[] {
   const c = chief(state);
   // A helper's suggestion ("learned something", Chief has a suggestion) lives in its chat; its row carries the dot.
   const suggested = new Set((state.asks as Json[]).filter((a) => a.kind === 'propose').map((a) => a.bot as string));
+  // The words the office uses: a row in Needs you says so, a job stopped for an answer in the chat says that.
+  const waiting = new Set(needsYou(state).map((c) => c.helper));
   const lead: Chat = { id: 'chief', name: 'Chief', who: 'chief', line: preview(bot('chief').last, c.line), at: at(bot('chief').last?.at ?? 0) || 0, unread: (bot('chief').unread ?? 0) + (suggested.has('chief') && !(bot('chief').unread ?? 0) ? 1 : 0), ring: c.mood === 'ask' ? 'needs' : '' };
   const rest = crew(state).map((h): Chat => {
     const b = bot(h.id);
     // Working or waiting on the person says more than the last line did.
-    const line = h.ring === 'needs' ? 'Needs you' : h.driving ? h.status : h.ring === 'working' ? `Working on: ${h.status}` : preview(b.last, h.role);
-    return { id: h.id, name: h.name, who: h, line, at: at(b.last?.at ?? 0) || 0, unread: (b.unread ?? 0) + (suggested.has(h.id) && !(b.unread ?? 0) ? 1 : 0), ring: h.ring };
+    const line = waiting.has(h.id) ? SEAT_WORDS.needs : h.ring === 'needs' ? SEAT_WORDS.chat : h.driving ? h.status : h.ring === 'working' ? `Working on: ${h.status}` : preview(b.last, h.role);
+    return { id: h.id, name: h.name, who: h, line, at: at(b.last?.at ?? 0) || 0, unread: (b.unread ?? 0) + (suggested.has(h.id) && !(b.unread ?? 0) ? 1 : 0), ring: waiting.has(h.id) ? 'needs' : h.ring };
   }).sort((a, b) => b.at - a.at);
   const room = state.room ?? {};
   const pin: Chat = { id: 'room', name: 'The crew', who: 'chief', line: room.last ? plain(room.last.text) : 'Watch the crew work together', at: at(room.last?.at ?? 0), unread: 0, ring: room.busy?.length ? 'working' : '' };
@@ -1143,20 +1145,44 @@ const APPS: App[] = [
 export const apps = (state: Json): App[] => APPS.map((a) => ({ ...a, on: !!state.connections?.includes?.(a.id) }));
 
 // ---------- the office ----------
-/** One helper in the person's office, from the plain-words adapter views. */
+/** One helper in the person's office, from the plain-words adapter views. `ask` is that helper's first row in
+ *  Needs you (A.needsYou), never a suggestion that lives in its chat; `second` marks another helper of a kind that
+ *  came earlier in the crew, so the room and the dock can tell the two apart. */
 export type OfficeMember = { id: string; name: string; kind: Kind; mood: Mood; ring: Helper['ring']; status: string;
-  step: string; steps: Step[]; things: FileView[]; ask?: Card };
-export type OfficeView = { chief: ChiefView; crew: OfficeMember[]; done: Thing[];
+  step: string; steps: Step[]; things: FileView[]; ask?: Card; second?: boolean };
+/** The one state source every office surface reads: the room, its header counts, the tray, the dock or rail roster
+ *  and Needs you. `needs` is Needs you itself; `counts.needs` is its length, `working` the helpers on a job of
+ *  yours right now (one may also wait on you: their seat says needs, the count still says working), `done` what
+ *  landed in the tray today. */
+export type OfficeView = { chief: ChiefView; crew: OfficeMember[]; done: Thing[]; needs: Card[];
   counts: { needs: number; working: number; done: number } };
+
+/** Where a helper is, in one word the whole office agrees on: a row of theirs in Needs you, a job stopped for an
+ *  answer that lives in their chat, working, a job that just failed, next in line, resting, or free. */
+export type Seat = 'needs' | 'chat' | 'working' | 'failed' | 'next' | 'resting' | 'free';
+export const seatOf = (c: OfficeMember): Seat => (c.ask ? 'needs' : c.ring === 'needs' ? 'chat' : c.ring === 'working' ? 'working'
+  : c.mood === 'error' ? 'failed' : c.status === 'Up next' ? 'next' : c.mood === 'rest' ? 'resting' : 'free');
+export const SEAT_WORDS: Record<Seat, string> = { needs: 'Needs you', chat: 'Waiting on your reply', working: 'Working', failed: "Couldn't finish", next: 'Up next', resting: 'Resting', free: 'Free' };
+/** Who comes first when there is one seat less than helpers: whoever needs you, then working, then the rest. */
+const SEAT_ORDER: Seat[] = ['needs', 'chat', 'working', 'failed', 'next', 'free', 'resting'];
+/** The whole crew, the one who matters most first (crew order inside each seat): the phone's dock and the web rail. */
+export const roster = (crew: OfficeMember[]) => SEAT_ORDER.flatMap((k) => crew.filter((c) => seatOf(c) === k));
 
 /** The question that matters most comes first: money, then anything sent in the person's name, then the rest. */
 export const askRank = (c: Card) => (c.kind === 'spend' ? 0 : c.kind === 'ok' ? 1 : 2);
+const tally = (crew: OfficeMember[], needs: Card[], done: Thing[]) => {
+  const day = new Date().setHours(0, 0, 0, 0);
+  return { needs: needs.length, working: crew.filter((c) => c.ring === 'working').length, done: done.filter((t) => t.at >= day).length };
+};
+/** The member's Needs-you row: the first in Needs you's own order. */
+const askFor = (needs: Card[], id: string) => needs.find((c) => c.helper === id);
 export function office(state: Json): OfficeView {
   const helpers = crew(state);
   const raw = new Map((state.bots as Json[] ?? []).map((b: Json) => [b.id, b]));
   const lines = new Map(work(state).map((w) => [w.helper, w]));
-  const open = cards(state);
+  const needs = needsYou(state);
   const events = (state.events ?? []) as Json[];
+  const kinds = new Set<Kind>();
   const crewRows: OfficeMember[] = helpers.map((h) => {
     const b = raw.get(h.id) ?? {};
     const task = b.task ?? null;
@@ -1168,30 +1194,40 @@ export function office(state: Json): OfficeView {
     const extra = paths.filter((p, i) => paths.lastIndexOf(p) === i && !desk.some((f) => f.url === fileView(h.id, p).url));
     const made = [...desk, ...extra.map((p) => fileView(h.id, p))];
     const w = lines.get(h.id);
+    const second = kinds.has(h.kind);
+    kinds.add(h.kind);
     return { id: h.id, name: h.name, kind: h.kind, mood: h.mood, ring: h.ring, status: h.status,
       step: (b.step && step(b.step)) || (w && !w.waiting ? 'Getting started…' : ''), steps: now, things: made,
-      ask: open.filter((c) => c.helper === h.id).sort((a, b) => askRank(a) - askRank(b))[0] };
+      ask: askFor(needs, h.id), ...(second ? { second } : {}) };
   });
   const done = things(state);
-  return { chief: chief(state), crew: crewRows, done,
-    counts: { needs: crewRows.filter((c) => c.ring === 'needs').length,
-      working: crewRows.filter((c) => c.ring === 'working').length, done: done.length } };
+  return { chief: chief(state), crew: crewRows, done, needs, counts: tally(crewRows, needs, done) };
+}
+
+/** Needs-you rows no helper in the room holds (Chief's own, or one left by a helper since let go): Chief carries
+ *  them, so every row in Needs you has a Review somewhere in the room. */
+export const chiefAsks = (view: OfficeView) => view.needs.filter((c) => !view.crew.some((m) => m.id === c.helper));
+
+/** The office while the home computer is out of reach: nobody claims to be busy or waiting, and nothing asks. */
+export function officeAway(view: OfficeView, line = 'Out of reach for now'): OfficeView {
+  const crew = view.crew.map((c) => ({ ...c, mood: 'rest' as Mood, ring: '' as const, ask: undefined, status: line, step: '', steps: [] }));
+  return { ...view, chief: { ...view.chief, mood: 'rest', line }, crew, needs: [], counts: { ...tally(crew, [], view.done) } };
 }
 
 /** The office between refreshes: crewd's debounced snapshot stays the source of truth, and each live event only
- *  moves the words it carries (report §7). Pure — the passed view is never changed. */
+ *  moves the words it carries (report §7). Pure — the passed view is never changed. A question that opens waits for
+ *  the refresh to bring its Needs-you row, so Review never shows before there is something to review. */
 export function officeEvent(view: OfficeView, e: Json): OfficeView {
+  const next = (crew: OfficeMember[], done = view.done, needs = view.needs): OfficeView => ({ ...view, crew, done, needs, counts: tally(crew, needs, done) });
   const touch = (id: string, f: (c: OfficeMember) => OfficeMember): OfficeView => {
     const crew = view.crew.map((c) => (c.id === id ? f(c) : c));
-    if (crew.every((c, i) => c === view.crew[i])) return view;
-    return { ...view, crew, counts: { needs: crew.filter((c) => c.ring === 'needs').length,
-      working: crew.filter((c) => c.ring === 'working').length, done: view.done.length } };
+    return crew.every((c, i) => c === view.crew[i]) ? view : next(crew);
   };
   const say = (c: OfficeMember, text: string): OfficeMember => {
     const last = c.steps.at(-1);
     const seq = typeof e.seq === 'number' ? e.seq : (last?.seq ?? 0) + 1;
-    const next = last?.text === text ? c.steps : [...c.steps, { at: e.at == null ? Date.now() : at(e.at), text, seq }].slice(-80);
-    return { ...c, step: text, steps: next.map((s, i, a) => ({ ...s, now: i === a.length - 1 })) };
+    const steps = last?.text === text ? c.steps : [...c.steps, { at: e.at == null ? Date.now() : at(e.at), text, seq }].slice(-80);
+    return { ...c, step: text, steps: steps.map((s, i, a) => ({ ...s, now: i === a.length - 1 })) };
   };
   const d = e.data ?? {};
   switch (e.kind) {
@@ -1224,9 +1260,7 @@ export function officeEvent(view: OfficeView, e: Json): OfficeView {
         title: plain(d.title ?? ''), at: e.at ?? Date.now(), summary: teaser(d.result ?? '').slice(0, 220), files };
       const crew = view.crew.map((c) => (c.id === String(e.bot)
         ? { ...c, ring: '' as const, mood: 'happy' as Mood, status: 'Free to help', step: '', steps: [], things: [], ask: undefined } : c));
-      return { ...view, crew, done: [thing, ...view.done],
-        counts: { needs: crew.filter((c) => c.ring === 'needs').length,
-          working: crew.filter((c) => c.ring === 'working').length, done: view.done.length + 1 } };
+      return next(crew, [thing, ...view.done], view.needs.filter((c) => c.helper !== String(e.bot)));
     }
     case 'task.failed':
     case 'task.unsure':
@@ -1234,42 +1268,40 @@ export function officeEvent(view: OfficeView, e: Json): OfficeView {
     case 'ask.opened':
       return touch(String(e.bot), (c) => ({ ...c, ring: 'needs' as const, mood: 'ask' as Mood, status: 'Needs you', step: 'Waiting for your OK' }));
     case 'ask.answered':
-    case 'ask.parked':
-      return touch(String(e.bot), (c) => {
-        if (c.ring !== 'needs') return { ...c, ask: undefined };
-        // The question is answered: back to the last step the refresh knew, since the snapshot stays the source
-        // of truth and this row only bridges the gap between refreshes.
+    case 'ask.parked': {
+      // The row leaves Needs you at once; the helper goes back to the last step the refresh knew, since the snapshot
+      // stays the source of truth and this only bridges the gap between refreshes.
+      const needs = view.needs.filter((c) => c.id !== d.ask);
+      const crew = view.crew.map((c) => {
+        if (c.id !== String(e.bot)) return c;
+        const ask = askFor(needs, c.id);
+        if (c.ring !== 'needs' || ask) return { ...c, ask };
         const back = c.steps.at(-1);
-        return { ...c, ask: undefined, ring: back ? 'working' as const : '' as const,
+        return { ...c, ask, ring: back ? 'working' as const : '' as const,
           mood: back ? 'work' as Mood : 'idle' as Mood, status: back ? back.text : 'Free to help', step: back ? back.text : '' };
       });
+      return next(crew, view.done, needs);
+    }
     default:
       return view;
   }
 }
 
-/** A helper waiting on you: a job of yours stopped for your answer, or a question open on a card. */
+/** A helper waiting on you: a row in Needs you, or a job stopped for an answer in their chat. */
 export const waitsOnYou = (c: OfficeMember) => c.ring === 'needs' || !!c.ask;
-/** The narrowest a desk and a lounge seat may be, in points: the floor plan fits as many across as the room is wide. */
-export const DESK_W = 100, LOUNGE_W = 72;
-export type FloorPlan = { cols: number; desks: OfficeMember[]; spare: number; loungeCols: number; lounge: OfficeMember[]; more: number };
-/** Who sits where in the flat office, one rule for the web and the phone at any crew size. Chief and every helper
- *  on a job of yours sit at desks, with room over their heads for a bubble; everyone else is in the lounge, a smaller
- *  sprite with a name chip. Folded (the default), the desks take two rows and the lounge two, and the rest wait behind
- *  "+N more" (the lounge's last seat); a helper who needs you always keeps a desk, however many there are. Seats keep
- *  the crew's own order, so nobody changes desk when someone else's news lands. `spare` empty desks finish the row. */
-export function floorPlan(crew: OfficeMember[], width: number, all = false): FloorPlan {
-  const cols = Math.max(2, Math.min(8, Math.floor(width / DESK_W)));
-  const loungeCols = Math.max(3, Math.min(12, Math.floor(width / LOUNGE_W)));
-  const busy = crew.filter((c) => waitsOnYou(c) || c.ring === 'working');
-  const idle = crew.filter((c) => !busy.includes(c));
-  let desks = busy, lounge = idle;
-  if (!all) {
-    const first = [...busy.filter(waitsOnYou), ...busy.filter((c) => !waitsOnYou(c))];
-    const keep = new Set(first.slice(0, Math.max(2 * cols - 1, busy.filter(waitsOnYou).length))); // Chief has a desk too
-    desks = busy.filter((c) => keep.has(c));
-    const seats = 2 * loungeCols;
-    lounge = desks.length < busy.length || idle.length > seats ? idle.slice(0, seats - 1) : idle;
-  }
-  return { cols, desks, spare: (cols - ((desks.length + 1) % cols)) % cols, loungeCols, lounge, more: crew.length - desks.length - lounge.length };
+export const NOOKS = 4, LOUNGE_SEATS = 3;
+export type FloorPlan = { desks: OfficeMember[]; lounge: OfficeMember[]; more: OfficeMember[] };
+/** Hot-desking: who sits where at any crew size, one rule for the web and the phone. The room never grows: four
+ *  desks and a three-seat lounge, with Chief at his own table. A desk goes to whoever waits on you, then whoever is
+ *  working (crew order inside each, so nobody changes desk when someone else's news lands); a helper who waits on
+ *  you always gets one, even past four. The lounge takes the rest in roster order, and everyone else is counted
+ *  under "+N" (`more`, roster order), never drawn smaller; the full roster (the dock, the rail) still names them. */
+export function floorPlan(crew: OfficeMember[]): FloorPlan {
+  const order = roster(crew);
+  const waits = order.filter(waitsOnYou), busy = order.filter((c) => !waitsOnYou(c) && seatOf(c) === 'working');
+  const desks = [...waits, ...busy.slice(0, Math.max(0, NOOKS - waits.length))];
+  const rest = order.filter((c) => !desks.includes(c));
+  const lounge = rest.filter((c) => seatOf(c) !== 'working').slice(0, LOUNGE_SEATS);
+  const seated = new Set([...desks, ...lounge]);
+  return { desks: crew.filter((c) => desks.includes(c)), lounge, more: order.filter((c) => !seated.has(c)) };
 }

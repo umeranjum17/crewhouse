@@ -401,7 +401,7 @@ input[role='switch']:checked::after { left: 19px; }
 
 /* shell: phone first, a tab bar at the bottom */
 .side, .rail { display: none; }
-.desk, .working-on, .desk-only { display: none; }
+.working-on, .desk-only { display: none; }
 .main { min-width: 0; padding-bottom: 76px; }
 .tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; display: flex; justify-content: space-around; background: var(--solid); border-top: 1px solid var(--line); min-height: 82px; padding: 8px 4px calc(8px + env(safe-area-inset-bottom)); }
 .tabbar a { display: grid; justify-items: center; align-content: start; gap: 4px; font: 500 11px/14px var(--ui); color: var(--mute); padding: 4px 8px; position: relative; min-width: 56px; }
@@ -435,10 +435,8 @@ input[role='switch']:checked::after { left: 19px; }
   .side-nav .ic { width: 16px; height: 16px; flex: none; }
   .home, .page { padding: 32px; }
   .home { max-width: none; padding-right: 0; }
-  .desk-col { width: 100%; min-width: 0; }
   .phone-only { display: none; }
   .desk-only { display: block; }
-  .desk { display: grid; grid-template-columns: minmax(0, 720px); gap: 32px; }
   .home-head h1 { font-size: 28px; line-height: 34px; letter-spacing: -.02em; }
   .home > .dock { margin: auto 0 0; padding: 20px 0; background: var(--bg); max-width: 720px; }
   .dock { padding: 18px 32px 16px; margin: 8px -32px 0; }
@@ -458,8 +456,6 @@ input[role='switch']:checked::after { left: 19px; }
   .frame-row { display: flex; gap: 12px; align-items: center; padding: 11px 0; }
   .frame-row + .frame-row { border-top: 1px solid var(--line); }
   .frame .steps { background: transparent; box-shadow: none; border-radius: 0; padding: 6px 0; margin: 0; }
-  .desk-side { min-width: 0; }
-  .desk-side > p { margin: 12px 4px; }
   .home { flex: 1; display: flex; flex-direction: column; }
   .home .dock { position: sticky; bottom: 0; }
   .frame .step .ascii { color: var(--ok); }
@@ -486,8 +482,6 @@ input[role='switch']:checked::after { left: 19px; }
   .shell { grid-template-columns: 248px minmax(0, 1fr); }
   .home, .page { padding: 40px 48px 44px; }
   .home { padding-left: 32px; padding-right: 20px; }
-  .desk { grid-template-columns: minmax(0, 720px) 320px; max-width: 1072px; margin-left: auto; }
-  .home > .dock { width: calc(100% - 352px); max-width: 720px; flex: none; margin-left: 0; margin-right: 352px; }
   .dock { padding: 18px 48px 16px; margin: 8px -48px 0; }
   .home .dock { padding: 20px 0; }
   .page.chat-page .chat { display: grid; grid-template-columns: minmax(0, 720px) 320px; gap: 0 32px; grid-template-rows: minmax(0, 1fr) auto; justify-content: space-between; }
@@ -764,8 +758,6 @@ details.card[open] > summary { margin-bottom: 10px; }
   .hero-field { font-size: 12px; }
   .hero h1 { font-size: 40px; line-height: 46px; letter-spacing: -.032em; margin: 8px 0 16px; }
   .stats { max-width: 520px; }
-  .desk-main .home-section { margin-top: 28px; margin-bottom: 0; }
-  .desk-side .label { margin-top: 4px; }
 }
 /* A page's title is the page's one display line, the same voice as Home's greeting. */
 .page > h1 { font: 650 28px/34px var(--ui); letter-spacing: -.025em; margin: 4px 0 6px; }
@@ -879,11 +871,6 @@ details.card[open] > summary { margin-bottom: 10px; }
 .o-chat { align-self: flex-start; }
 .o-sheet .pill { align-self: flex-start; }
 @media (min-width: 900px) {
-  .desk-top { grid-column: 1 / -1; }
-  .desk-top .hero { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 32px; align-items: end; }
-  .desk-top .hero > .eyebrow, .desk-top .hero > h1, .desk-top .hero > .hero-chief { grid-column: 1; }
-  .desk-top .hero > .stats { grid-column: 2; grid-row: 1 / 4; align-self: end; width: 420px; margin: 0; }
-  .desk-top .hero > .office, .desk-top .hero > .hero-ask { grid-column: 1 / -1; }
   .o-scrim { place-items: stretch end; padding: 12px; }
   .o-sheet { width: min(440px, 44vw); max-height: none; height: 100%; border-radius: 22px; padding: 22px 22px 28px; animation: side 340ms var(--ease); }
   @keyframes side { from { opacity: 0; transform: translateX(28px); } }
@@ -900,3 +887,30 @@ details.card[open] > summary { margin-bottom: 10px; }
 .chat-page .lines::-webkit-scrollbar-track { background: transparent; }
 .chat-page .lines::-webkit-scrollbar-thumb { background: var(--line); border-radius: 6px; }
 .chat-page .lines::-webkit-scrollbar-button { display: none; }
+
+/* Home on a computer: the room in the middle, one feed down the right (Needs you, on it now, chats, a job to hand
+   over, Chief's box). Below 1200 px the feed sits under the room. The rail's crew list is the room's full index. */
+@media (min-width: 900px) {
+  .main > .home { margin: 0; width: 100%; }
+  .home-desk { display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; align-items: start; margin-right: 32px; }
+  .room-col .hero { margin: 0; }
+  .feed { display: flex; flex-direction: column; min-width: 0; }
+  .feed .home-section { margin-bottom: 20px; }
+  .feed-ask { position: sticky; bottom: 0; padding: 12px 0 16px; background: var(--bg); margin-top: auto; }
+  .feed-ask .composer { box-shadow: none; }
+  .side-seat { display: flex; gap: 5px; align-items: center; font: 500 12px/16px var(--ui); color: var(--ink2); }
+  .side-seat i { width: 6px; height: 6px; border-radius: 50%; background: var(--line2); flex: none; }
+  .side-seat.needs i, .side-seat.chat i { background: var(--pink); }
+  .side-seat.working i { background: var(--ok); }
+  .side-seat.failed i { background: var(--danger); }
+  .side-seat.next i { background: var(--amber); }
+}
+@media (min-width: 1200px) {
+  .home-desk { grid-template-columns: minmax(0, 1fr) 360px; min-height: calc(100vh - 80px); margin-right: 0; }
+  .room-col { position: sticky; top: 36px; }
+  .feed { align-self: stretch; }
+}
+.o-more small { display: block; font: 500 11px/14px var(--ui); color: var(--ink2); }
+.o-more { display: grid; place-content: center; text-decoration: none; }
+.o-sprite.second { filter: hue-rotate(48deg) saturate(1.1); }
+.o-bub.failed, .o-chip.failed > i { border-color: var(--danger); } .o-chip.failed > i { background: var(--danger); }

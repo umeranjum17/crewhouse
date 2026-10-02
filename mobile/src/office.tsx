@@ -1,14 +1,16 @@
 // The office at the top of the phone's Home: one flat room, front on like a cut-open dollhouse, the same room the web
-// draws (web/src/office.tsx, same sizes in points). A.floorPlan (web/src/adapter.ts) says who sits where at any crew
-// size: a desk for Chief and each helper on a job of yours, the lounge sofa for everyone else, "+N more" past two rows
-// of each, so a bubble lives in its own seat and never covers another. The crew are the mascot sprites from
-// web/src/art.ts (./marks.ts); the room's colours are tokens.ts `room`. Every word and mood comes from A.office and
-// A.officeEvent. It moves only when something lands, through ./motion.ts: a quiet room runs no animation or timer.
+// draws (web/src/office.tsx, same sizes in points). A.floorPlan (web/src/adapter.ts) hot-desks it: the room never
+// grows, four desks go to whoever waits on you and then whoever is working, a three-seat lounge takes the rest and
+// "+N" counts everyone else. Under the room the dock is its tappable, screen-reader index: every helper the one who
+// matters most first (A.roster), so whoever is only counted under "+N" is still one tap away. The crew are the
+// mascot sprites from web/src/art.ts (./marks.ts); the room's colours are tokens.ts `room`. Every word, count and
+// Review comes from the one A.office view Home also reads (useOffice). It moves only when something lands, through
+// ./motion.ts: a quiet room runs no animation or timer.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Image, Pressable, Text, View, type ViewStyle } from 'react-native';
+import { Image, Pressable, ScrollView, Text, View, type ViewStyle } from 'react-native';
 import * as A from '../../web/src/adapter.ts';
 import type { Json } from '../../web/src/api.ts';
-import { PALS as COLOURS, type Mood } from '../../web/src/art.ts';
+import { PALS as COLOURS } from '../../web/src/art.ts';
 import { color, room as ROOM } from '../../web/src/tokens.ts';
 import { onLive } from './link';
 import { PALS } from './marks';
@@ -16,65 +18,61 @@ import * as motion from './motion';
 
 type Look = typeof color.day;
 type Room = typeof ROOM.day;
-const OUT = 'Out of reach for now';
-const DESK_H = 156, LOUNGE_H = 96, FLOOR = 12;
+const DESK_H = 156, LOUNGE_H = 96, FLOOR = 12, COLS = 3;
 
 /** How a helper reads to a screen reader, in the room's own words. */
-const said = (c: A.OfficeMember) => (A.waitsOnYou(c) ? `${c.name} needs you` : c.ring === 'working' ? `${c.name}, working on ${c.status}` : `${c.name}, ${c.status.toLowerCase()}`);
+const said = (c: A.OfficeMember) => {
+  const k = A.seatOf(c);
+  return k === 'needs' ? `${c.name} needs you: ${c.ask!.head}` : k === 'working' ? `${c.name}, working on ${c.status}` : k === 'free' || k === 'resting' ? `${c.name}, ${c.status.toLowerCase()}` : `${c.name}, ${A.SEAT_WORDS[k].toLowerCase()}`;
+};
 
-/** The room, `width` points wide. Tapping a helper opens its desk (`onDesk`), Review its question (`onAsk`), Chief his
- *  chat, the tray the Things. */
-export function Office({ state, night, offline, width, onChief, onDesk, onAsk, onTray }: {
-  state: Json; night: boolean; offline: boolean; width: number;
-  onChief: () => void; onDesk: (c: A.OfficeMember) => void; onAsk: (c: A.Card) => void; onTray: () => void;
+/** The room, `width` points wide, with its dock. Tapping a helper opens its desk (`onDesk`), Review its question
+ *  (`onAsk`), Chief his chat, the tray the Things, "+N" the whole crew. */
+export function Office({ view, night, offline, width, onChief, onDesk, onAsk, onTray, onCrew }: {
+  view: A.OfficeView; night: boolean; offline: boolean; width: number;
+  onChief: () => void; onDesk: (c: A.OfficeMember) => void; onAsk: (c: A.Card) => void; onTray: () => void; onCrew: () => void;
 }) {
-  const view = useOffice(state);
-  // What this phone kept says how things were: while out of reach nobody claims to be busy (App.tsx OUT).
-  const crew = offline ? view.crew.map((c) => ({ ...c, mood: 'rest' as Mood, ring: '' as const, ask: undefined, status: OUT, step: '', steps: [] })) : view.crew;
-  const chief = offline ? { mood: 'rest' as Mood, line: OUT } : view.chief;
+  const crew = view.crew, chief = view.chief;
   const t = night ? color.night : color.day;
   const r = night ? ROOM.night : ROOM.day;
   const reduce = motion.useReduceMotion();
   const awake = motion.useAwake();
-  const [all, setAll] = useState(false);
   // What was on the desks when the room opened is simply there; only things arriving later drop in.
   const seen = useRef<Set<string> | null>(null);
   seen.current ??= new Set(crew.flatMap((c) => c.things.map((f) => f.url)));
-  const plan = A.floorPlan(crew, width, all);
-  const folds = all && A.floorPlan(crew, width).more > 0;
+  const plan = A.floorPlan(crew);
+  const nooks = Math.max(A.NOOKS, plan.desks.length);
+  const spare = (COLS - ((nooks + 1) % COLS)) % COLS;
   // Whole points: fractional seats add up past the row in Yoga's floats and wrap the last one onto a line of its own.
-  const dw = Math.floor(width / plan.cols), lw = Math.floor(width / plan.loungeCols);
-  const day = new Date().setHours(0, 0, 0, 0);
-  const today = view.done.filter((d) => d.at >= day).length; // the tray holds today's, as Home's count does (A.homeCounts)
-  const calm = offline ? OUT : crew.some((c) => c.ring || c.ask) ? '' : !crew.length ? 'Nothing on the go yet.'
-    : 'Nothing on the go. The crew is free.';
-  const sofas = (plan.loungeCols - ((plan.lounge.length + (plan.more > 0 || folds ? 1 : 0)) % plan.loungeCols)) % plan.loungeCols;
-  const byId = new Map(view.crew.map((c) => [c.id, c]));
+  const dw = Math.floor(width / COLS), lw = Math.floor(width / (A.LOUNGE_SEATS + 1));
+  const chiefAsk = offline ? undefined : A.chiefAsks(view).sort((a, b) => A.askRank(a) - A.askRank(b))[0];
+  const more = plan.more.length, moreBusy = plan.more.filter((c) => A.seatOf(c) === 'working').length;
   return (
+    <View style={{ width }}>
     <View style={{ width, backgroundColor: r.wall, overflow: 'hidden' }}>
       {Array.from({ length: Math.ceil(width / 24) }, (_, i) => <View key={i} pointerEvents="none" style={{ position: 'absolute', top: 0, bottom: 0, left: i * 24 + 18, width: 6, backgroundColor: r.stripe }} />)}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 10, paddingTop: 8, minHeight: 34 }}>
-        {!!calm && <Text style={{ flex: 1, fontFamily: 'Inter', fontSize: 12.5, lineHeight: 16, fontWeight: '500', color: t.ink2 }}>{calm}</Text>}
-        <Pressable onPress={onTray} accessibilityRole="button" accessibilityLabel={`Your tray: ${today} done today`} hitSlop={8} style={{ marginLeft: 'auto' }}>
-          <Tag t={t}>{`Your tray · ${today}`}</Tag>
+        <Pressable onPress={onTray} accessibilityRole="button" accessibilityLabel={`Your tray: ${view.counts.done} done today`} hitSlop={8} style={{ marginLeft: 'auto' }}>
+          <Tag t={t}>{`Your tray · ${view.counts.done}`}</Tag>
         </Pressable>
       </View>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-        <Cell w={dw} h={DESK_H} r={r} label={`Chief: ${chief.line}`} onPress={onChief}>
+        <Cell w={dw} h={DESK_H} r={r} label={`Chief: ${chief.line}`} onPress={onChief} onReview={chiefAsk ? () => onAsk(chiefAsk) : undefined}>
           <View pointerEvents="none" style={{ position: 'absolute', left: dw / 2 - 46, bottom: FLOOR, width: 92, height: 58, backgroundColor: r.sofa, borderTopLeftRadius: 14, borderTopRightRadius: 14, borderBottomWidth: 6, borderColor: r.sofaDark }} />
-          <motion.Hop beat={view.chief.mood} reduce={reduce} awake={awake} style={{ position: 'absolute', left: dw / 2 - 36, bottom: 20 }}>
+          <motion.Hop beat={chief.mood} reduce={reduce} awake={awake} style={{ position: 'absolute', left: dw / 2 - 36, bottom: 20 }}>
             <Image source={PALS[`chief-${chief.mood}${night ? '-night' : ''}`]} style={{ width: 72, height: 75 }} />
           </motion.Hop>
           <View pointerEvents="none" style={{ position: 'absolute', left: dw / 2 - 54, bottom: FLOOR, width: 108, height: 16, backgroundColor: r.sofa, borderTopLeftRadius: 8, borderTopRightRadius: 8, borderBottomWidth: 4, borderColor: r.sofaDark }} />
-          <Bubble t={t} tone={view.chief.mood === 'ask' && !offline ? t.pink : view.chief.mood === 'work' && !offline ? t.green : t.line2} name="Chief" line={chief.line} />
+          {chiefAsk ? <Bubble t={t} tone={t.pink} name="Chief"><Review t={t} night={night} label={`Review what Chief needs: ${chiefAsk.head}`} onPress={() => onAsk(chiefAsk)} /></Bubble>
+            : <Bubble t={t} tone={chief.mood === 'work' && !offline ? t.green : t.line2} name="Chief" line={offline ? 'Asleep' : chief.mood === 'work' ? 'Working' : 'On watch'} />}
         </Cell>
-        {plan.desks.map((c) => {
-          const live = byId.get(c.id) ?? c;
-          const needs = A.waitsOnYou(c);
-          return <Cell key={c.id} w={dw} h={DESK_H} r={r} label={said(c)} onPress={() => onDesk(c)} onReview={needs && c.ask ? () => onAsk(c.ask!) : undefined}>
-            <motion.Hop beat={`${live.ring}|${live.mood}|${live.things.length}|${live.ask?.id ?? ''}`} times={live.mood === 'happy' ? 2 : 1} reduce={reduce} awake={awake}
+        {Array.from({ length: nooks }, (_, i) => plan.desks[i]).map((c, i) => {
+          if (!c) return <Cell key={`nook${i}`} w={dw} h={DESK_H} r={r}><Desk w={dw} r={r} /><Monitor w={dw} r={r}><View style={{ flex: 1, backgroundColor: r.screen }} /></Monitor></Cell>;
+          const k = A.seatOf(c);
+          return <Cell key={c.id} w={dw} h={DESK_H} r={r} label={said(c)} onPress={() => onDesk(c)} onReview={c.ask ? () => onAsk(c.ask!) : undefined}>
+            <motion.Hop beat={`${c.ring}|${c.mood}|${c.things.length}|${c.ask?.id ?? ''}`} times={c.mood === 'happy' ? 2 : 1} reduce={reduce} awake={awake}
               style={{ position: 'absolute', left: dw / 2 - 46, bottom: 26 }}>
-              <Pal id={`${c.kind}-${c.mood}`} dot={3} step={live.step} reduce={reduce} awake={awake} />
+              <Pal id={`${c.kind}-${c.mood}`} dot={3} step={c.step} reduce={reduce} awake={awake} second={c.second} />
             </motion.Hop>
             <Desk w={dw} r={r} />
             <Monitor w={dw} r={r}><Screen c={c} t={t} r={r} /></Monitor>
@@ -87,62 +85,82 @@ export function Office({ state, night, offline, width, onChief, onDesk, onAsk, o
                   </View>}
               </motion.Land>)}
             </View>}
-            {needs && c.ask
-              ? <Bubble t={t} tone={t.pink} name={c.name}>
-                <Pressable onPress={() => onAsk(c.ask!)} accessibilityRole="button" accessibilityLabel={`Review what ${c.name} needs: ${c.ask.head}`} hitSlop={6}
-                  style={{ backgroundColor: t.pink, borderRadius: 999, paddingVertical: 3 }}>
-                  <Text style={{ fontFamily: 'Inter', fontSize: 12, lineHeight: 16, fontWeight: '600', color: night ? '#1B1A1F' : '#FFFFFF', textAlign: 'center' }}>Review ›</Text>
-                </Pressable>
-              </Bubble>
-              : <Bubble t={t} tone={c.ring === 'working' ? t.green : t.line2} name={c.name} line={c.step || c.status} typing={c.ring === 'working'} />}
+            {c.ask
+              ? <Bubble t={t} tone={t.pink} name={c.name}><Review t={t} night={night} label={`Review what ${c.name} needs: ${c.ask.head}`} onPress={() => onAsk(c.ask!)} /></Bubble>
+              : <Bubble t={t} tone={k === 'chat' ? t.pink : t.green} name={c.name} line={A.SEAT_WORDS[k]} typing={k === 'working'} />}
           </Cell>;
         })}
-        {Array.from({ length: plan.spare }, (_, i) => <Cell key={`spare${i}`} w={dw} h={DESK_H} r={r}>
-          {i % 2 ? <><Desk w={dw} r={r} /><Monitor w={dw} r={r}><View style={{ flex: 1, backgroundColor: r.screen }} /></Monitor></>
-            : <>
-              <View style={{ position: 'absolute', left: dw / 2 - 27, top: 22, width: 54, height: 44, backgroundColor: r.window, borderWidth: 4, borderColor: r.frame }}>
-                <View style={{ position: 'absolute', left: 21.5, top: 0, bottom: 0, width: 3, backgroundColor: r.frame }} />
-                <View style={{ position: 'absolute', top: 16.5, left: 0, right: 0, height: 3, backgroundColor: r.frame }} />
-              </View>
-              <View style={{ position: 'absolute', left: dw / 2 - 18, bottom: FLOOR + 16, width: 36, height: 26, borderRadius: 14, backgroundColor: r.leaf }} />
-              <View style={{ position: 'absolute', left: dw / 2 - 10, bottom: FLOOR, width: 20, height: 18, backgroundColor: r.pot }} />
-            </>}
+        {Array.from({ length: spare }, (_, i) => <Cell key={`spare${i}`} w={dw} h={DESK_H} r={r}>
+          <View style={{ position: 'absolute', left: dw / 2 - 27, top: 22, width: 54, height: 44, backgroundColor: r.window, borderWidth: 4, borderColor: r.frame }}>
+            <View style={{ position: 'absolute', left: 21.5, top: 0, bottom: 0, width: 3, backgroundColor: r.frame }} />
+            <View style={{ position: 'absolute', top: 16.5, left: 0, right: 0, height: 3, backgroundColor: r.frame }} />
+          </View>
+          <View style={{ position: 'absolute', left: dw / 2 - 18, bottom: FLOOR + 16, width: 36, height: 26, borderRadius: 14, backgroundColor: r.leaf }} />
+          <View style={{ position: 'absolute', left: dw / 2 - 10, bottom: FLOOR, width: 20, height: 18, backgroundColor: r.pot }} />
         </Cell>)}
       </View>
-      {(plan.lounge.length > 0 || plan.more > 0 || folds) && <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-        {plan.lounge.map((c) => <Cell key={c.id} w={lw} h={LOUNGE_H} r={r} lounge label={said(c)} onPress={() => onDesk(c)}>
-          <motion.Hop beat={`${byId.get(c.id)?.ring}|${byId.get(c.id)?.mood}`} reduce={reduce} awake={awake} style={{ position: 'absolute', left: lw / 2 - 20, bottom: 42 }}>
-            <Pal id={`${c.kind}-${c.mood}`} dot={2} />
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+        {Array.from({ length: A.LOUNGE_SEATS }, (_, i) => plan.lounge[i]).map((c, i) => c ? <Cell key={c.id} w={lw} h={LOUNGE_H} r={r} lounge label={said(c)} onPress={() => onDesk(c)}>
+          <motion.Hop beat={`${c.ring}|${c.mood}`} reduce={reduce} awake={awake} style={{ position: 'absolute', left: lw / 2 - 20, bottom: 42 }}>
+            <Pal id={`${c.kind}-${c.mood}`} dot={2} second={c.second} />
           </motion.Hop>
           <Sofa r={r} />
           <View pointerEvents="none" style={{ position: 'absolute', left: 3, right: 3, bottom: 14, flexDirection: 'row', gap: 4, alignItems: 'center', justifyContent: 'center' }}>
-            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: c.status === 'Up next' ? t.amber : t.line2 }} />
+            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: dot(t, A.seatOf(c)) }} />
             <Text numberOfLines={1} style={{ flexShrink: 1, fontFamily: 'Inter', fontSize: 11.5, lineHeight: 14, fontWeight: '600', color: t.ink, backgroundColor: t.surface,
               borderRadius: 999, borderWidth: 1, borderColor: t.line, paddingHorizontal: 6, paddingVertical: 1, overflow: 'hidden' }}>{c.name}</Text>
           </View>
-        </Cell>)}
-        {(plan.more > 0 || folds) && <Cell w={lw} h={LOUNGE_H} r={r} lounge>
+        </Cell> : <Cell key={`sofa${i}`} w={lw} h={LOUNGE_H} r={r} lounge><Sofa r={r} /></Cell>)}
+        <Cell w={lw} h={LOUNGE_H} r={r} lounge>
           <Sofa r={r} />
-          <Pressable onPress={() => setAll(!folds)} accessibilityRole="button" accessibilityLabel={folds ? 'Show fewer of the crew' : `Show ${plan.more} more of the crew`}
+          {more > 0 && <Pressable onPress={onCrew} accessibilityRole="button" accessibilityLabel={`${more} more of the crew${moreBusy ? `, ${moreBusy} working` : ''}: see everyone`}
             style={{ position: 'absolute', top: 14, left: 6, right: 6, bottom: 18, borderRadius: 14, borderWidth: 1.5, borderStyle: 'dashed', borderColor: t.line2, backgroundColor: t.surface, alignItems: 'center', justifyContent: 'center' }}>
-            <Text style={{ fontFamily: 'Inter', fontSize: 12.5, lineHeight: 16, fontWeight: '600', color: t.ink, textAlign: 'center' }}>{folds ? 'Show fewer' : `+${plan.more} more`}</Text>
-          </Pressable>
-        </Cell>}
-        {Array.from({ length: sofas }, (_, i) => <Cell key={`sofa${i}`} w={lw} h={LOUNGE_H} r={r} lounge><Sofa r={r} /></Cell>)}
-      </View>}
+            <Text style={{ fontFamily: 'Inter', fontSize: 12.5, lineHeight: 16, fontWeight: '600', color: t.ink, textAlign: 'center' }}>{`+${more}`}</Text>
+            {moreBusy > 0 && <Text style={{ fontFamily: 'Inter', fontSize: 10.5, lineHeight: 13, fontWeight: '500', color: t.ink2, textAlign: 'center' }}>{`${moreBusy} working`}</Text>}
+          </Pressable>}
+        </Cell>
+      </View>
+    </View>
+    {crew.length > 0 && <Dock view={view} t={t} onDesk={onDesk} />}
     </View>
   );
 }
 
-/** The office view: the snapshot, moved by live events until the next refresh starts it again. */
-function useOffice(state: Json) {
+/** The room's index: one button per helper, the one who matters most first, each named with its office word. */
+function Dock({ view, t, onDesk }: { view: A.OfficeView; t: Look; onDesk: (c: A.OfficeMember) => void }) {
+  return <ScrollView horizontal showsHorizontalScrollIndicator={false} accessibilityLabel="Your crew" contentContainerStyle={{ gap: 10, paddingHorizontal: 10, paddingVertical: 10 }}>
+    {A.roster(view.crew).map((c) => {
+      const k = A.seatOf(c);
+      return <Pressable key={c.id} onPress={() => onDesk(c)} accessibilityRole="button" accessibilityLabel={`${c.name}, ${A.SEAT_WORDS[k].toLowerCase()}`} style={{ alignItems: 'center', gap: 4, width: 56 }}>
+        <View style={{ width: 48, height: 48, borderRadius: 24, borderWidth: 2, borderColor: k === 'needs' || k === 'chat' ? t.pink : k === 'working' ? t.green : t.line, backgroundColor: t.surface, alignItems: 'center', justifyContent: 'center' }}>
+          <Pal id={`${c.kind}-${c.mood}`} dot={1.6} second={c.second} />
+        </View>
+        <Text numberOfLines={1} style={{ fontFamily: 'Inter', fontSize: 11.5, lineHeight: 14, fontWeight: '600', color: t.ink, maxWidth: 56 }}>{c.name}</Text>
+      </Pressable>;
+    })}
+  </ScrollView>;
+}
+
+const dot = (t: Look, k: A.Seat) => (k === 'needs' || k === 'chat' ? t.pink : k === 'working' ? t.green : k === 'failed' ? t.danger : k === 'next' ? t.amber : t.line2);
+
+/** Review, inside a seat's card: opens the same sheet as Needs you. */
+function Review({ t, night, label, onPress }: { t: Look; night: boolean; label: string; onPress: () => void }) {
+  return <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label} hitSlop={6} style={{ backgroundColor: t.pink, borderRadius: 999, paddingVertical: 3 }}>
+    <Text style={{ fontFamily: 'Inter', fontSize: 12, lineHeight: 16, fontWeight: '600', color: night ? '#1B1A1F' : '#FFFFFF', textAlign: 'center' }}>Review ›</Text>
+  </Pressable>;
+}
+
+/** The office view: the snapshot, moved by live events until the next refresh starts it again. Home reads it once and
+ *  hands it to the hero counts, the room and Needs you, so they can never disagree. While out of reach, what this
+ *  phone kept says how things were and nobody claims to be busy (App.tsx OUT). */
+export function useOffice(state: Json, offline: boolean, away: string) {
   const base = useMemo(() => A.office(state), [state]);
   const [live, setLive] = useState<A.OfficeView | null>(null);
   const from = useRef(base);
   from.current = base;
   useEffect(() => { setLive(null); }, [base]);
   useEffect(() => onLive((e) => setLive((v) => A.officeEvent(v ?? from.current, e))), []);
-  return live ?? base;
+  return offline ? A.officeAway(live ?? base, away) : live ?? base;
 }
 
 /** One seat: the plank floor and skirting under it (seats side by side make one floor), the lounge's sofa back, and
@@ -161,10 +179,12 @@ function Cell({ w, h, r, lounge, label, onPress, onReview, children }: { w: numb
 }
 
 /** A mascot sprite, `dot` points a pixel (the PNGs carry an ink edge a pixel wide), blinking for a moment on news. */
-function Pal({ id, dot, step, reduce = true, awake = false }: { id: string; dot: number; step?: string; reduce?: boolean; awake?: boolean }) {
+function Pal({ id, dot, step, reduce = true, awake = false, second }: { id: string; dot: number; step?: string; reduce?: boolean; awake?: boolean; second?: boolean }) {
   const blink = motion.useBlink(step, reduce, awake);
   const src = PALS[blink ? id.replace(/-(\w+)$/, '-blink') : id] ?? PALS[id];
-  return <Image source={src} style={{ width: 20 * dot, height: 19 * dot }} />;
+  // Another helper of a kind is hue-shifted, as on the web (where the platform has no filter, its name still shows).
+  const img = <Image source={src} style={{ width: 20 * dot, height: 19 * dot }} />;
+  return second ? <View style={{ filter: [{ hueRotate: '48deg' }] }}>{img}</View> : img;
 }
 
 function Desk({ w, r }: { w: number; r: Room }) {

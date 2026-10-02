@@ -32,7 +32,7 @@ import { askOf, sharedOf } from './src/ask';
 import { bubbleOff, bubbleOn, bubbleResume, bubbleState, bubbleWords, openBubblePermission, showCrew, wanted, type OverlayState } from './src/bubble';
 import { chip, chipSettings, chipState, chipWords, onChip, type StatusState } from './src/chip';
 import { island } from './src/island';
-import { Office } from './src/office';
+import { Office, useOffice } from './src/office';
 import { canHear, hear, stopHearing } from './modules/crewhouse-net';
 import { connect, desktopSignaling, forgetGrant, kept, loadGrant, onLive, pair, pairTypedCode, type Grant, type Status } from './src/link';
 
@@ -1099,10 +1099,10 @@ function NeedsRows({ state, cards, open }: { state: Json; cards: A.Card[]; open:
 
 /** Home's first impression: the day, the greeting, Chief's one line beside his face, and the three counts the rows
  *  below add up to (web/src/main.tsx HomeHero is the same). */
-function HomeHero({ state, offline, go }: { state: Json; offline: boolean; go: Ctx['go'] }) {
+function HomeHero({ state, view, offline, go }: { state: Json; view: A.OfficeView; offline: boolean; go: Ctx['go'] }) {
   const t = useLook();
   const c = chiefNow(state, offline);
-  const n = A.homeCounts(state);
+  const n = view.counts;
   return (
     <View style={[s.hero, { backgroundColor: t.solid, borderColor: t.line }]}>
       {[300, 240, 180, 120].map((r) => <View key={r} style={[s.heroWarm, { width: r * 2, height: r * 2, borderRadius: r, top: -r - 30, left: -r + 10, backgroundColor: t.night ? '#2B2319' : '#FFF1DC' }]} />)}
@@ -1112,7 +1112,7 @@ function HomeHero({ state, offline, go }: { state: Json; offline: boolean; go: C
         <Face who="chief" size={36} mood={c.mood} />
         <View style={[s.says, { backgroundColor: t.bg, borderColor: t.line }]}><T style={s.saysText} lines={2}>{c.line}</T></View>
       </Pressable>
-      <View style={s.stats} accessible accessibilityLabel={A.homeSummary(state)}>
+      <View style={s.stats} accessible accessibilityLabel={`${n.needs} ${n.needs === 1 ? 'thing needs' : 'things need'} you · ${n.working} ${n.working === 1 ? 'helper' : 'helpers'} working · ${n.done} done today`}>
         {([[n.needs, n.needs === 1 ? 'needs you' : 'need you', true], [n.working, 'working', false], [n.done, 'done today', false]] as const).map(([k, l, hot]) =>
           <View key={l} style={[s.stat, { backgroundColor: t.soft }]}><T style={[s.statNum, hot && k > 0 && { color: t.pinkInk }]}>{k}</T><T tone="ink2" style={s.statLabel}>{l}</T></View>)}
       </View>
@@ -1123,7 +1123,8 @@ function HomeHero({ state, offline, go }: { state: Json; offline: boolean; go: C
 function Home(ctx: Ctx) {
   const t = useLook();
   const { state, go, refresh, canAct, offline, open } = ctx;
-  const needs = A.needsYou(state);
+  const view = useOffice(state, offline, OUT);
+  const needs = view.needs;
   const chief = chiefNow(state, offline);
   const toChief = async (x: string, p: Photo[] = []) => { const ok = await attempt(() => api.post('chief', x, p.map(({ type, data }) => ({ type, data }))), undefined, true); if (ok) { refresh(); go({ view: 'chief' }); } return ok; };
   const [room, setRoom] = useState(0);
@@ -1131,9 +1132,9 @@ function Home(ctx: Ctx) {
   return (
     <View style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={s.page} keyboardShouldPersistTaps="handled">
-        <HomeHero state={state} offline={offline} go={go} />
+        <HomeHero state={state} view={view} offline={offline} go={go} />
         <View onLayout={(e) => setRoom(e.nativeEvent.layout.width)} style={[s.office, { backgroundColor: t.soft, borderColor: t.line }]}>
-          {room > 0 && <Office state={state} night={t.night} offline={offline} width={room - 2} onChief={() => go({ view: 'chief' })} onDesk={(c) => setDesk({ c, state })} onAsk={open} onTray={() => go({ view: 'things' })} />}
+          {room > 0 && <Office view={view} night={t.night} offline={offline} width={room - 2} onChief={() => go({ view: 'chief' })} onDesk={(c) => setDesk({ c, state })} onAsk={open} onTray={() => go({ view: 'things' })} onCrew={() => go({ view: 'crew' })} />}
         </View>
         {!!A.resting(state) && <Card><T>{A.resting(state)}. I'll pick things back up then.</T></Card>}
         <Pressable onPress={() => go({ view: 'phone' })} accessibilityRole="button" accessibilityLabel="Check AI account sign-in on the home computer" style={({ pressed }) => [s.listRow, s.listGroup, { backgroundColor: t.solid, borderColor: t.line }, pressed && { opacity: 0.6 }]}>

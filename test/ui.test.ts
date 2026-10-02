@@ -273,7 +273,7 @@ test('Home keeps a standing "hand me a job" list, straight from crewd\'s ideas: 
   assert.equal(fill.choices.find((c: any) => c.body.scope === 'always'), undefined, 'and still no standing answer');
   const src = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
   const home = src.slice(src.indexOf('function Home('), src.indexOf('/** The standing'));
-  assert.match(home, /<JobList state=\{state\} refresh=\{refresh\} \/>/, 'the desk\'s frame beside Working now and Done today');
+  assert.match(home, /<JobList state=\{state\} few refresh=\{refresh\} \/>/, 'the desk\'s feed, beside On it now and Done today');
   assert.match(home, /<JobList state=\{state\} phone refresh=\{refresh\} \/>/, 'and under the chats on a phone');
   const list = src.slice(src.indexOf('function JobList('), src.indexOf('function JobList(') + 1800);
   assert.match(list, /A\.jobs\(state\)/, 'the rows are the ideas, not a list written in the app');
@@ -547,7 +547,8 @@ test('the phone office: one flat room, a crew that moves only when news lands', 
   // The battery budget: no timer or beat keeps a quiet room moving, moves wait for the app to be on screen, the live
   // desktop never opens here, and the room reads the shared view model for the person.
   const office = readFileSync(join(import.meta.dirname, '..', 'mobile', 'src', 'office.tsx'), 'utf8');
-  assert.match(office, /A\.floorPlan\(crew, width, all\)/);
+  assert.match(office, /A\.floorPlan\(crew\)/);
+  assert.match(office, /A\.roster\(view\.crew\)/, "the dock indexes the whole crew");
   assert.doesNotMatch(office, /setInterval|setTimeout|useBeat|requestAnimationFrame|DesktopView|desktopSignaling/);
   assert.match(office, /A\.office\(state\)/);
   assert.match(office, /A\.officeEvent\(/);
@@ -1765,7 +1766,8 @@ test('the office moves on live events; the refresh stays the source of truth', (
   let u = A.office(officeState());
   u = A.officeEvent(u, { seq: 26, at: OTN, kind: 'ask.opened', bot: 'pip', data: { task: 51 } });
   assert.deepEqual([u.crew.find((c) => c.id === 'pip')!.ring, u.crew.find((c) => c.id === 'pip')!.status], ['needs', 'Needs you']);
-  assert.equal(u.counts.needs, 3);
+  assert.equal(u.counts.needs, 2, 'the count waits for the refresh to bring the actual Needs-you row');
+  assert.equal(A.seatOf(u.crew.find((c) => c.id === 'pip')!), 'chat', 'and so does Review');
   u = A.officeEvent(u, { seq: 27, at: OTN, kind: 'ask.answered', bot: 'pip', data: { task: 51, answer: 'allow' } });
   assert.equal(u.crew.find((c) => c.id === 'pip')!.ring, 'working', 'answered: back on the job');
   u = A.officeEvent(u, { seq: 28, at: OTN, kind: 'task.failed', bot: 'pip', data: { task: 51, title: 'Car insurance renewal' } });
