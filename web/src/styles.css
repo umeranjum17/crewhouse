@@ -1097,3 +1097,15 @@ h1 { font: 400 32px/36px var(--serif); letter-spacing: -.005em; }
 /* Settings on a phone: the places the desk rail reaches, one row each (B1 has no tab bar). */
 .go-to { color: inherit; text-decoration: none; min-height: 52px; font: 500 15px/20px var(--ui); }
 .card.list > .go-to:first-child { border-top: 0; }
+
+/* B1 desk Chat: Tonight runs the full height on the right, beside the bar, the hero, Needs you, the thread and the box.
+   The chat's own box lets its children join this grid (display: contents) so the rail is not pushed below the hero. */
+@media (min-width: 900px) {
+  .page.chat-page.home-chat { display: grid; grid-template-columns: minmax(0, 720px) 320px; grid-template-rows: auto minmax(0, 1fr) auto; gap: 0 32px; justify-content: space-between; }
+  .page.chat-page.home-chat > .home-top { grid-column: 1; grid-row: 1; max-width: none; }
+  .page.chat-page.home-chat > .chat { display: contents; }
+  .page.chat-page.home-chat > .chat > .lines { grid-column: 1; grid-row: 2; }
+  .page.chat-page.home-chat > .chat > .dock { grid-column: 1; grid-row: 3; }
+  .page.chat-page.home-chat > .chat > .working-on { grid-column: 2; grid-row: 1 / -1; min-height: 0; overflow-y: auto; padding-top: 24px; }
+  .with-book .page.chat-page.home-chat { grid-template-columns: minmax(0, 720px); }
+}
