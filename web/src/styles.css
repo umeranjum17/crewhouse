@@ -773,7 +773,7 @@ details.card[open] > summary { margin-bottom: 10px; }
 .o-tray { margin-left: auto; flex: none; font: 600 12px/16px var(--ui); color: var(--ink); text-decoration: none; background: var(--solid); border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; }
 .o-tray:hover { border-color: var(--line2); }
 .o-desks, .o-lounge { display: grid; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); }
-.o-cell { position: relative; height: 156px; min-width: 0; }
+.o-cell { position: relative; height: 172px; min-width: 0; }
 .o-lounge .o-cell { height: 96px; }
 /* The floor under every seat, and the skirting board above it: seats side by side make one floor. */
 .o-cell::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 12px; background: var(--r-floor); box-shadow: 0 -2px 0 var(--r-skirt); }
@@ -794,7 +794,7 @@ details.card[open] > summary { margin-bottom: 10px; }
 .o-scr i { display: block; height: 2px; width: 80%; background: var(--r-edge); opacity: .55; justify-self: start; }
 .o-scr i:nth-child(2) { width: 55%; } .o-scr i:nth-child(3) { width: 70%; }
 .o-scr.needs { background: #FFE9E3; }
-.o-things { position: absolute; right: 14%; top: 56px; z-index: 3; display: flex; gap: 3px; align-items: flex-end; }
+.o-things { position: absolute; right: 14%; top: 70px; z-index: 3; display: flex; gap: 3px; align-items: flex-end; }
 .o-thing { position: relative; width: 13px; height: 16px; background: #fff; border: 1px solid var(--r-edge); display: block; }
 .o-thing.o-pin { background: var(--c); border: 2px solid #fff; outline: 1px solid var(--r-edge); height: 13px; }
 .o-thing.o-paper::before { content: ''; position: absolute; left: 2px; right: 2px; top: 3px; height: 7px; background: repeating-linear-gradient(transparent 0 1px, #b9b3aa 1px 2px, transparent 2px 3px); }

@@ -183,7 +183,8 @@ test('the office keeps the battery budget: calm CSS loops while it shows, none o
     await b.open(`demo=${demo}&day`);
     // Chat by default: no room, so nothing of the office runs.
     await until('Chief\'s box', () => b.run("!!document.querySelector('.home-chat .composer')"), 30_000);
-    assert.equal((await loops(b)).outside, 0, `${demo}: Chat runs no office motion`);
+    // Once the page's own entrances have played, nothing runs: a loop that never ends fails here at the bound.
+    await until(`${demo}: Chat to be still`, async () => (await loops(b)).running === 0, 10_000);
     await toOffice(b);
     await until('the room to settle', () => b.run('window.__o.pending.size === 0'), 15_000);
     const q0 = await loops(b);
