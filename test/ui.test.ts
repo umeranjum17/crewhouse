@@ -599,9 +599,9 @@ test('the phone office: one flat room, a crew whose moves run on the native driv
   assert.match(motion, /if \(still \|\| beat == null\) \{ rest\(\); return; \}/, 'no office move starts under Reduce Motion or in the background');
   const home = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
   const top = home.slice(home.indexOf('function Home('), home.indexOf('function ChatList('));
-  assert.ok(top.indexOf('<HomeBar') < top.indexOf("{mode === 'chat' && pinned}") && top.indexOf('<Office') < top.lastIndexOf('{pinned}'), 'Needs you is pinned under the bar in Chat, and right under the room in Office (B1)');
-  assert.match(top, /few=\{1\}/, 'one pinned row, and "See all N" for the rest');
-  assert.match(top, /if \(mode === 'chat'\) return <View style=\{\{ flex: 1 \}\}>\{top\}<Chat \{\.\.\.ctx\} id="chief" \/><\/View>;/, 'Chat: the same top over Chief\'s own thread and box');
+  assert.ok(top.indexOf('<HomeBar') < top.indexOf('<ChiefHero') && top.indexOf('<ChiefHero') < top.indexOf('<NeedsPin') && top.indexOf('<Office') < top.lastIndexOf('{pinned}'), 'Chat: the bar, Chief\'s hero, then Needs you pinned; Office: Needs you right under the room (B1)');
+  assert.match(top, /few=\{1\}/, 'one pinned row in Office, and "See all N" for the rest');
+  assert.match(top, /if \(mode === 'chat'\) return <View style=\{\{ flex: 1 \}\}>\{top\}<Chat \{\.\.\.ctx\} id="chief" hero=\{/, 'Chat: the bar over Chief\'s own thread, which carries his hero and Needs you, and his box');
 });
 
 test("Chief's mood is the first matching row of the table, and the line follows the face", () => {
