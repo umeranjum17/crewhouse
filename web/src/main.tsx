@@ -219,8 +219,7 @@ function HomeBar({ ctx, mode, pick }: { ctx: Ctx; mode: HomeMode; pick: (m: Home
     <header className="home-bar">
       <h1 className="home-greet">{A.greeting()}{name && <>,<span className="nm"> <i>{name}</i></span></>}</h1>
       {tools}
-      <div className="home-meta">{busy}{needs}</div>
-      <div className="home-aside">{still}</div>
+      <div className="home-sub"><div className="home-meta">{busy}{needs}</div><div className="home-aside">{still}</div></div>
     </header>
   );
 }
@@ -233,7 +232,7 @@ function OnItNow({ live, waiting }: { live: A.OfficeView; waiting: number }) {
   const working = live.crew.filter((c) => A.seatOf(c) === 'working');
   return <section className="home-section working" aria-label="On it now"><div className="section-head"><span className="label">On it now</span><span className="small mute">{working.length} working</span></div>
     {working.length ? <div className="on-cards">{working.map((c) => <a key={c.id} className="list-row on-card" href={hrefOf(c.id)}>
-      <Face who={{ kind: c.kind, name: c.name, mood: c.mood }} size={36} /><span className="grow"><b className="clamp1">{c.name}</b><span className="small clamp1">{c.step || c.status}</span></span>
+      <Face who={{ kind: c.kind, name: c.name, mood: c.mood }} size={36} /><span className="grow"><b className="clamp1">{c.name}</b><span className="small">{c.step || c.status}</span></span>
     </a>)}</div> : <Empty>{waiting ? `Nobody is working: ${waiting} waiting on you.` : 'Nobody is working right now. The crew is free.'}</Empty>}
   </section>;
 }
@@ -270,12 +269,12 @@ function NeedsCard({ state, c, flat, onLater }: { state: Json; c: A.Card; flat?:
       <div className="nb-top">
         <Face who={who ?? { kind: 'pip', name }} size={40} />
         {flat
-          ? <div className="grow"><b className="nb-title clamp2">{question}</b>{lines.length > 0 && <span className="nb-ask clamp2">{lines.join(' · ')}</span>}</div>
-          : <div className="grow"><b className="nb-title">{name} needs you</b><span className="nb-ask clamp2">{question}</span></div>}
+          ? <div className="grow"><b className="nb-title">{question}</b>{lines.length > 0 && <span className="nb-ask">{lines.join(' · ')}</span>}</div>
+          : <div className="grow"><b className="nb-title">{name} needs you</b><span className="nb-ask">{question}</span></div>}
         {flat ? price && <span className="nb-price">{price}</span> : <time className="nb-when">{A.briefTime(c.at)}</time>}
       </div>
       {!flat && (lines.length > 0 || price) && <div className="nb-detail">
-        <div className="grow">{lines.map((l, i) => (i ? <span key={i} className="clamp1">{l}</span> : <b key={i} className="clamp1">{l}</b>))}</div>
+        <div className="grow">{lines.map((l, i) => (i ? <span key={i}>{l}</span> : <b key={i}>{l}</b>))}</div>
         {price && <span className="nb-price">{price}</span>}
       </div>}
       <div className="nb-acts">
@@ -499,9 +498,15 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
   const box = useRef<HTMLDivElement>(null);
   // The thread scrolls by its own column on a desk (a scrollIntoView here once dragged the whole page up with it,
   // leaving a dead band on top); the phone keeps the document scroll. An anchored landing scrolls to the line instead.
+  // Home's Chief chat on a phone opens at its top, Chief's hero and Needs you first (B1); only a line that arrives
+  // after that scrolls to the newest.
+  const landed = useRef(false);
   useEffect(() => {
     if (around) return;
-    if (matchMedia('(min-width: 900px)').matches) { const el = box.current; if (el) el.scrollTop = el.scrollHeight; }
+    const desk = matchMedia('(min-width: 900px)').matches, first = !landed.current && lines.length > 0;
+    if (first) landed.current = true;
+    if (desk) { const el = box.current; if (el) el.scrollTop = el.scrollHeight; }
+    else if (hero && first) scrollTo(0, 0);
     else end.current?.scrollIntoView({ block: 'end' });
   }, [lines.length, around, !!echoed, !!waiting, partial]);
   // The landing itself: the matched line, centred, with the one motion that explains where you are.
