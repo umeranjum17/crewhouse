@@ -3,10 +3,11 @@
 @font-face { font-family: 'Instrument Serif'; src: url(/fonts/InstrumentSerif-Regular.ttf) format('truetype'); font-weight: 400; font-display: swap; }
 @font-face { font-family: 'JetBrains Mono'; src: url(/fonts/JetBrainsMono.woff2) format('woff2'); font-display: block; }
 :root {
-  --bg: #FAF9F7; --solid: #FFFFFF; --soft: #F3F1EE; --line: #E7E4DF; --line2: #D9D5CF;
-  --ink: #1B1A1F; --ink2: #56525D; --mute: #8B8792; --go: #1B1A1F; --go-ink: #FFFFFF;
-  --pink: #D23369; --ok: #1E9A58; --amber: #B86E00; --danger: #C4372C;
-  --card: var(--solid); --warm: #FFF1DC; --on-pink: #FFFFFF; --pink-ink: var(--pink); --ok-ink: var(--ok); --wait: var(--pink); --shadow: var(--line2);
+  --bg: #F6F7F9; --solid: #FFFFFF; --soft: #EEF0F4; --line: #E3E6EC; --line2: #D2D7E0;
+  --ink: #141A2A; --ink2: #4D566B; --mute: #8A92A5; --go: #141A2A; --go-ink: #FFFFFF;
+  --pink: #F0482A; --ok: #1E9A58; --amber: #B86E00; --danger: #C4372C; --soft-accent: #FFE9E3;
+  --card: var(--solid); --warm: #FFF1DC; --on-pink: #FFFFFF; --pink-ink: #D63A1E;
+  --serif: 'Instrument Serif', Georgia, serif; --ok-ink: var(--ok); --wait: var(--pink); --shadow: var(--line2);
   --cell-in: #FFEFB8; --cell-calc: #DAE8FB;
   --e1: 0 1px 2px rgba(20,18,26,.04), 0 4px 16px rgba(20,18,26,.06);
   --e2: 0 16px 48px rgba(20,18,26,.16), 0 2px 6px rgba(20,18,26,.06);
@@ -16,7 +17,7 @@
 [data-theme='night'] {
   --bg: #111014; --solid: #1A191E; --soft: #151418; --line: #2A2830; --line2: #36333D;
   --ink: #F1EFEA; --ink2: #ABA7B1; --mute: #78747E; --go: #F1EFEA; --go-ink: #111014;
-  --pink: #FF6B9A; --ok: #4BD08A; --amber: #F2B04B; --danger: #FF6B5E;
+  --pink: #FF6A4D; --ok: #4BD08A; --amber: #F2B04B; --danger: #FF6B5E; --soft-accent: #3A2220; --pink-ink: #FF8A70;
   --e1: 0 0 0 1px var(--line), 0 4px 16px #0003;
   --e2: 0 0 0 1px var(--line2), 0 16px 48px #0008;
   --warm: #2B2319; --on-pink: #1A0F14; --cell-in: #3A3118; --cell-calc: #1B2B42;
@@ -758,81 +759,27 @@ details.card[open] > summary { margin-bottom: 10px; }
    is always in view (flex: 1 let a long thread stretch the page past the screen). */
 @media (min-width: 900px) { .main > .page.chat-page { flex: none; height: 100dvh; } }
 
-/* The office (web/src/office.tsx): Home's Office view. One flat room, front on, like a dollhouse
-   cut open: a wall, a plank floor, Chief in his armchair and a desk for each helper on a job of hers, then the lounge
-   sofa for everyone else. Seats sit edge to edge on a grid (A.floorPlan says how many across), so a bubble lives in
-   its own seat and can never cover another. The room's colours come from tokens.ts `room` as --r-* properties. */
-.office { margin-top: 12px; }
-.o-room { position: relative; border-radius: 16px; overflow: hidden; background: var(--r-wall); border: 1px solid var(--line); }
-/* The wall above the desks: a shelf, the night window and the clock, in the room's ink line. Scenery only. */
-.o-wall { position: relative; height: 64px; margin: -26px 0 0; pointer-events: none; color: var(--r-edge); }
-.o-wall svg { position: absolute; inset: 0; width: 100%; height: 100%; }
-.o-head { display: flex; align-items: center; gap: 8px; justify-content: space-between; padding: 8px 10px 0; min-height: 34px; }
-.o-calm { font: 500 12.5px/16px var(--ui); color: var(--ink2); min-width: 0; }
-.o-tray { margin-left: auto; flex: none; font: 600 12px/16px var(--ui); color: var(--ink); text-decoration: none; background: var(--solid); border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; }
-.o-tray:hover { border-color: var(--line2); }
-.o-desks, .o-lounge { display: grid; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); }
-.o-cell { position: relative; height: 156px; min-width: 0; }
-.o-lounge .o-cell { height: 96px; }
-/* The floor under every seat, and the skirting board above it: seats side by side make one floor. */
-.o-cell::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 12px; background: var(--r-floor); box-shadow: 0 -2px 0 var(--r-skirt); }
-.o-hit { position: absolute; inset: 0; z-index: 1; background: none; border: 0; padding: 0; border-radius: 0; cursor: pointer; }
-.o-hit:focus-visible { outline: 2px solid var(--pink); outline-offset: -3px; }
-/* The room's furniture is scenery: a tap on a desk, a monitor or the sofa opens whoever sits there. */
-.o-deskf, .o-mon, .o-things, .o-chair, .o-seat, .o-win, .o-plant, .o-sofa { pointer-events: none; }
-.o-sprite { position: absolute; left: 50%; bottom: 12px; z-index: 2; transform: translateX(-50%); pointer-events: none; }
-.o-sprite.at-desk { left: calc(50% - 46px); transform: none; }
-.o-lounge .o-sprite { bottom: 40px; }
-/* A desk: the top, the front with its drawer line, the monitor on it, and what the helper made pinned on the wall. */
-/* A desk in ink: a top board on two legs, open underneath so whoever sits there shows through. */
-.o-deskf { position: absolute; left: 8%; right: 8%; bottom: 12px; height: 34px; z-index: 3; border: solid var(--r-edge); border-width: 6px 2px 0; border-radius: 3px 3px 0 0; background: none; }
-.o-deskf::before { content: ''; position: absolute; left: -2px; right: -2px; top: -6px; height: 6px; background: var(--r-desk); border: 2px solid var(--r-edge); border-radius: 3px; box-sizing: border-box; }
-.o-mon { position: absolute; right: 14%; bottom: 52px; width: 34px; height: 26px; z-index: 3; border: 2px solid var(--r-bezel); border-radius: 4px; background: var(--r-screen); }
-.o-mon::after { content: ''; position: absolute; left: 50%; bottom: -8px; width: 2px; height: 6px; background: var(--r-bezel); transform: translateX(-50%); }
-.o-scr { width: 100%; height: 100%; display: grid; place-items: center; align-content: center; gap: 2px; padding: 3px; color: var(--accent, #F0482A); font: 800 12px/1 var(--ui); }
-.o-scr i { display: block; height: 2px; width: 80%; background: var(--r-edge); opacity: .55; justify-self: start; }
-.o-scr i:nth-child(2) { width: 55%; } .o-scr i:nth-child(3) { width: 70%; }
-.o-scr.needs { background: #FFE9E3; }
-.o-things { position: absolute; right: 14%; bottom: 84px; z-index: 3; display: flex; gap: 3px; align-items: flex-end; }
-.o-thing { position: relative; width: 13px; height: 16px; background: #fff; border: 1px solid var(--r-edge); display: block; }
-.o-thing.o-pin { background: var(--c); border: 2px solid #fff; outline: 1px solid var(--r-edge); height: 13px; }
-.o-thing.o-paper::before { content: ''; position: absolute; left: 2px; right: 2px; top: 3px; height: 7px; background: repeating-linear-gradient(transparent 0 1px, #b9b3aa 1px 2px, transparent 2px 3px); }
-.o-thing.drop { animation: drop 720ms cubic-bezier(.2,.9,.25,1.2) both; }
-.o-new { position: absolute; top: -6px; left: -4px; background: var(--pink); color: var(--on-pink); font: 700 9px/12px var(--ui); letter-spacing: .04em; text-transform: uppercase; padding: 0 4px; border-radius: 999px; }
-@keyframes drop { 0% { opacity: 0; transform: translateY(-44px) scale(.86) rotate(-4deg); } 55% { opacity: 1; transform: translateY(4px) scale(1.02) rotate(1deg); } 78% { transform: translateY(-2px); } 100% { transform: none; } }
-/* Chief's armchair, and the spare corners: an empty desk, or a window and a plant. */
-.o-chair, .o-seat { display: none; }
-.o-win { position: absolute; left: 50%; top: 22px; width: 54px; height: 44px; transform: translateX(-50%); background: var(--r-window); border: 2px solid var(--r-frame); border-radius: 4px;
-  background-image: linear-gradient(var(--r-frame), var(--r-frame)), linear-gradient(var(--r-frame), var(--r-frame)); background-size: 2px 100%, 100% 2px; background-position: center; background-repeat: no-repeat; }
-.o-plant { position: absolute; left: 50%; bottom: 12px; width: 18px; height: 16px; transform: translateX(-50%); background: var(--r-pot); border: 2px solid var(--r-edge); border-bottom: 0; border-radius: 2px 2px 0 0; }
-.o-plant::before { content: ''; position: absolute; left: 1px; bottom: 14px; width: 12px; height: 20px; border: 2px solid var(--r-leaf); border-radius: 0 100% 0 100%; }
-/* A bubble over a seat, its foot just above the figure (and above what they made), its tail at the figure: the
-   helper's name and what they are on (Chief's line for him), or a quiet pink dot and "Needs you" when they need her.
-   It stays inside its own seat: two lines at most, clipped with an ellipsis. */
-.o-bub { position: absolute; left: 4px; right: 4px; bottom: 106px; z-index: 4; background: var(--solid); border: 1.5px solid var(--r-edge); border-radius: 12px; padding: 4px 7px 5px; box-shadow: var(--e1); display: grid; gap: 3px; pointer-events: none; }
-.o-bub::after { content: ''; position: absolute; left: 50%; bottom: -5px; width: 8px; height: 8px; background: var(--solid); border: solid var(--r-edge); border-width: 0 1.5px 1.5px 0; transform: translateX(-50%) rotate(45deg); }
-.o-bub b, .o-chip b { font: 650 12.5px/15px var(--ui); letter-spacing: -.005em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.o-st { display: flex; gap: 5px; align-items: center; font: 500 11px/14px var(--ui); color: var(--ink2); min-width: 0; }
-.o-st > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.o-st > i { width: 6px; height: 6px; border-radius: 50%; background: var(--line2); flex: none; }
-.o-cell[data-id] .o-bub::after { left: calc(50% - 22px); }
-.o-bub.work { border-color: var(--ok); } .o-bub.work::after { border-color: var(--ok); }
-.o-bub.needs .o-st > i { background: var(--pink); }
-.o-cue { pointer-events: auto; color: var(--ink); text-decoration: none; }
-.o-cue:hover > span { text-decoration: underline; }
-.o-typing { display: inline-flex; gap: 2px; flex: none; }
-.o-typing i { width: 4px; height: 4px; border-radius: 50%; background: var(--ok); opacity: .7; }
-/* The lounge: one long sofa across the row, and a name chip under each sprite, its dot saying up next or busy. */
-.o-sofa { position: absolute; left: 0; right: 0; bottom: 30px; height: 16px; background: var(--r-sofa); z-index: 3; border-block: 2px solid var(--r-sofa-dark); }
-.o-lounge .o-cell:first-child .o-sofa { border-left: 2px solid var(--r-sofa-dark); border-radius: 8px 0 0 8px; left: 8px; }
-.o-lounge .o-cell:last-child .o-sofa { border-right: 2px solid var(--r-sofa-dark); border-radius: 0 8px 8px 0; right: 8px; }
-.o-chip { position: absolute; left: 3px; right: 3px; bottom: 14px; z-index: 4; display: flex; gap: 4px; align-items: center; justify-content: center; pointer-events: none; }
-.o-chip b { font-size: 11.5px; line-height: 14px; background: var(--solid); border-radius: 999px; padding: 1px 6px; border: 1px solid var(--line); }
-.o-chip > i { width: 6px; height: 6px; border-radius: 50%; flex: none; background: var(--line2); }
-.o-chip.next > i { background: var(--amber); }
-.o-more { position: absolute; inset: 14px 6px 18px; z-index: 4; border-radius: 14px; border: 1.5px dashed var(--line2); background: var(--solid); font: 650 12.5px/16px var(--ui); color: var(--ink); cursor: pointer; }
-.o-more:hover { border-color: var(--ink2); }
-@media (prefers-reduced-motion: no-preference) { .o-bub, .o-chip { transition: border-color 200ms var(--ease); } }
+/* The office (web/src/office.tsx): Home's Office view, the B1 Studio room. One floor drawn in one ink line in a single
+   SVG (wall, night window, shelf, clock, figures at their desks), one accent pill over whoever's question matters most,
+   one Tray bubble, and the strip naming every figure left to right. Colours come from tokens.ts `room` as --r-*. */
+.office { margin-top: 0; }
+.o-room { position: relative; border-radius: 20px; overflow: hidden; background: var(--r-wall); border: 1.5px solid var(--ink); display: flex; flex-direction: column; }
+.o-art { display: block; width: 100%; height: auto; aspect-ratio: 360 / 210; }
+.o-room.wide .o-art { flex: 1; height: 0; min-height: 260px; aspect-ratio: auto; }
+.o-cell { cursor: pointer; outline: none; }
+.o-cell:focus-visible .o-sprite { outline: 2px solid var(--pink); outline-offset: 2px; }
+.o-tag { cursor: pointer; }
+.o-tag:focus-visible rect { stroke: var(--ink); stroke-width: 2.5; }
+.o-strip { display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); border-top: 1.5px solid var(--ink); background: var(--solid); }
+.o-cap { display: grid; justify-items: center; align-content: center; gap: 1px; min-width: 0; padding: 7px 3px 8px; border: 0; border-radius: 0; background: none; color: var(--ink); text-align: center; text-decoration: none; cursor: pointer; }
+.o-cap + .o-cap { border-left: 1px solid var(--line); }
+.o-cap b { font: 600 11.5px/14px var(--ui); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.o-cap span { display: flex; align-items: center; justify-content: center; gap: 4px; font: 500 10.5px/13px var(--ui); color: var(--mute); max-width: 100%; }
+.o-cap i { display: none; width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--line2); }
+.o-cap.needs, .o-cap.chat { background: var(--soft-accent); } .o-cap.needs span, .o-cap.chat span { color: var(--pink-ink); }
+.o-cap.needs i, .o-cap.chat i { background: var(--pink); } .o-cap.working i { background: none; box-shadow: inset 0 0 0 1.6px var(--ink); } .o-cap.done i, .o-cap.here i { background: var(--ink); }
+.o-cap.failed i { background: var(--danger); }
+.o-room.wide .o-cap { padding: 12px 6px; } .o-room.wide .o-cap b { font-size: 14px; line-height: 18px; } .o-room.wide .o-cap span { font-size: 12.5px; line-height: 16px; } .o-room.wide .o-cap i { display: inline-block; }
 
 /* B1 motion: each member in the room wears a calm loop for their status, in CSS alone (no frame callbacks). Working is
    visible work (Reel's notes, Scribe's pen, Scout browsing, the screen typing, Chief's watch), resting breathes, needs
@@ -848,12 +795,8 @@ details.card[open] > summary { margin-bottom: 10px; }
   .o-room .scribe.pose-work svg .prop { transform-origin: 100% 0; animation: o-pen .7s ease-in-out infinite alternate; }
   .o-room .scout.pose-work svg .prop { animation: o-browse 2.4s ease-in-out infinite; }
   .o-room .chief.pose-work svg .watch { transform-origin: 50% 0; animation: o-swing 2s ease-in-out infinite; }
-  .o-room .reel.pose-work::after { content: '\266A'; position: absolute; right: -6px; top: 4px; font: 700 15px/1 var(--ui); color: var(--r-edge); animation: o-note 2.4s ease-out infinite; }
   .o-room .pose-pleased svg .body { animation: o-settle 700ms var(--ease) 1; }
-  .o-cell[data-seat=working] .o-scr i { animation: o-type 1.4s steps(5) infinite; }
-  .o-cell[data-seat=working] .o-scr i:nth-child(2) { animation-delay: .45s; } .o-cell[data-seat=working] .o-scr i:nth-child(3) { animation-delay: .9s; }
-  .o-tray.bump { animation: o-bump 600ms var(--ease); }
-  .o-bub.flip { animation: o-flip 420ms var(--ease); }
+  .o-tray.bump { animation: o-bump 600ms var(--ease); transform-box: fill-box; transform-origin: 50% 100%; }
   .o-room.off *, .o-room.off *::after { animation-play-state: paused !important; }
 }
 @keyframes o-breathe { 50% { transform: scaleY(1.03); } }
@@ -864,11 +807,8 @@ details.card[open] > summary { margin-bottom: 10px; }
 @keyframes o-pen { to { transform: rotate(-14deg) translateX(-3px); } }
 @keyframes o-browse { 0%, 100% { transform: rotate(0); } 30% { transform: rotate(-8deg) translateX(-2px); } 60% { transform: rotate(4deg) translateX(2px); } }
 @keyframes o-swing { 50% { transform: rotate(10deg); } }
-@keyframes o-note { 0% { opacity: 0; transform: translate(0, 6px); } 30% { opacity: 1; } 100% { opacity: 0; transform: translate(8px, -14px); } }
 @keyframes o-settle { 0% { transform: translateY(-6px); } 60% { transform: translateY(1px); } 100% { transform: none; } }
-@keyframes o-type { 0% { width: 15%; } 100% { width: 85%; } }
 @keyframes o-bump { 40% { transform: scale(1.14); } }
-@keyframes o-flip { 0% { transform: scale(.94); opacity: .6; } 100% { transform: none; opacity: 1; } }
 
 .o-ask { width: 100%; background: var(--solid); border: 1.5px solid var(--pink); border-radius: 14px; padding: 8px 8px 8px 10px; box-shadow: 0 8px 24px -8px color-mix(in srgb, var(--pink) 45%, transparent); display: grid; gap: 6px; }
 .o-ask .btn.sm { width: 100%; }
@@ -935,10 +875,7 @@ details.card[open] > summary { margin-bottom: 10px; }
   .room-col { position: sticky; top: 36px; }
   .feed { align-self: stretch; }
 }
-.o-more small { display: block; font: 500 11px/14px var(--ui); color: var(--ink2); }
-.o-more { display: grid; place-content: center; text-decoration: none; }
 .o-sprite.second { filter: hue-rotate(48deg) saturate(1.1); }
-.o-bub.failed, .o-chip.failed > i { border-color: var(--danger); } .o-chip.failed > i { background: var(--danger); }
 
 /* Home: one bar (Chief's line, the counts, Chat | Office) and the pinned Needs you, over Chief's thread or the room.
    On a phone the top stays in view while the thread scrolls, so what needs you never leaves the first screen. */
@@ -980,3 +917,88 @@ details.card[open] > summary { margin-bottom: 10px; }
 .o-made { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .o-made .card { display: grid; gap: 2px; padding: 12px 14px; color: inherit; text-decoration: none; min-width: 0; }
 .o-made b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── B1 Studio (Main597): one display serif, one accent, the desk rail, Home's greeting and the Tonight column. ── */
+h1 { font: 400 32px/36px var(--serif); letter-spacing: -.005em; }
+.logo { gap: 10px; }
+.logo span { font: 400 24px/1 var(--serif); letter-spacing: 0; }
+.demo-tag { margin-left: auto; font: 600 9.5px/1 var(--ui); letter-spacing: .1em; text-transform: uppercase; color: var(--mute); border: 1px solid var(--line2); border-radius: 5px; padding: 3px 5px; }
+.label { font-size: 11px; line-height: 14px; letter-spacing: .09em; color: var(--mute); }
+.label .count { background: none; color: var(--pink-ink); padding: 0; min-width: 0; margin-left: 8px; font-size: 11px; }
+.icon-btn .lucide { width: 18px; height: 18px; }
+.seg button { display: inline-flex; gap: 6px; align-items: center; }
+.seg button .lucide { display: none; }
+
+.home-bar { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 10px 16px; margin: 0 0 14px; }
+.home-hi { min-width: 0; flex: 1 1 260px; }
+.home-greet { font: 400 38px/40px var(--serif); letter-spacing: -.01em; margin: 0; }
+.home-greet i { font-style: italic; }
+.home-meta { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 6px; font: 500 13px/18px var(--ui); color: var(--ink2); }
+.home-meta > span { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.home-meta i { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.m-working i { box-shadow: inset 0 0 0 1.6px var(--ink); }
+.m-needs i { background: var(--pink); } .m-needs[data-n="0"] i { background: var(--line2); }
+.home-bar.is-chat { align-items: center; }
+.home-bar.is-chat .home-meta { margin: 0; font-size: 15px; }
+.home-bar.is-chat .m-needs:not([data-n="0"]) { color: var(--pink-ink); font-weight: 600; }
+.home-bar.is-chat .m-working i { background: var(--ok); box-shadow: none; }
+.m-quiet { color: var(--ink2); } .m-quiet .lucide { flex: none; }
+.home-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px 12px; }
+.home-bar:not(.is-chat) .home-tools { flex-direction: column; align-items: flex-end; }
+.home-bar:not(.is-chat) .home-tools .home-gear { display: none; }
+.home-tools .m-quiet { display: inline-flex; gap: 5px; align-items: center; font: 500 12px/16px var(--ui); white-space: nowrap; }
+.home-mode { border-radius: 14px; padding: 4px; background: var(--soft); }
+.home-mode button { border-radius: 10px; padding: 7px 14px; font: 600 14px/18px var(--ui); }
+.home-mode button.on { box-shadow: 0 0 0 1px var(--line), 0 1px 2px #0001; }
+
+.feed-head { display: flex; align-items: baseline; gap: 8px; margin: 0 0 4px; font: 400 30px/34px var(--serif); }
+.feed-head small { font: 400 13px var(--ui); color: var(--mute); }
+.on-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.on-card { background: var(--solid); border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 1px 2px rgba(20,26,42,.04); padding: 10px 12px; min-width: 0; }
+.home-section .section-head .small { margin-left: auto; }
+.office-main { min-width: 0; display: flex; flex-direction: column; }
+.office-main > .phone-only .home-section { margin-top: 18px; }
+
+/* Phone and narrow web: no tab bar on Home; the gear by the switch reaches settings and everything else. */
+.is-chat .tabbar { display: none; }
+.is-chat .main { padding-bottom: 0; }
+.home-chat .dock, .home .dock { bottom: 0; }
+@media (max-width: 899px) {
+  .home-bar:not(.is-chat) .home-tools .home-gear { display: inline-grid; }
+  .home-bar:not(.is-chat) .home-tools { flex-direction: row; flex-wrap: wrap; }
+  .home-greet { font-size: 34px; line-height: 36px; }
+}
+
+@media (min-width: 900px) {
+  .side { background: var(--bg); border-right: 1.5px solid var(--ink); padding: 22px 14px 16px; gap: 2px; }
+  .brand { display: flex; align-items: center; padding: 0 8px 24px; }
+  .side-navs { display: grid; gap: 2px; }
+  .side-nav { gap: 10px; height: 34px; min-height: 34px; padding: 0 10px; border-radius: 10px; font: 500 14px/1 var(--ui); color: var(--ink2); }
+  .side-nav.on { background: var(--solid); color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--ink); }
+  .side-count { margin-left: auto; font: 600 12px var(--ui); color: var(--mute); }
+  .side-count.hot { color: var(--pink-ink); }
+  .side-crew { margin-top: 24px; display: grid; gap: 0; }
+  .side .side-label { display: flex; margin: 0; padding: 0 10px 8px; color: var(--mute); text-decoration: none; }
+  .side-label span { margin-left: auto; letter-spacing: 0; }
+  .side-row { height: 38px; min-height: 38px; padding: 0 10px; gap: 10px; font: 500 14px/1 var(--ui); }
+  .side-row .face { flex: none; }
+  .side-row b { font-weight: 500; }
+  .side-row .side-seat { flex: none; max-width: 52%; font: 400 12px/16px var(--ui); color: var(--mute); }
+  .side-row .side-seat.needs, .side-row .side-seat.chat { color: var(--pink-ink); font-weight: 600; }
+  .side-seat.working i { background: none; box-shadow: inset 0 0 0 1.6px var(--ink); } .side-seat.done i { background: var(--ink); }
+  .side-me { display: flex; align-items: center; gap: 10px; margin: 12px 0 0; padding: 12px 10px 0; border-top: 1px solid var(--line); color: var(--mute); text-decoration: none; }
+  .side-me .grow { display: grid; } .side-me b { font: 600 14px/18px var(--ui); color: var(--ink); } .side-me .grow > span { font: 400 12px/16px var(--ui); }
+  .me-av { width: 30px; height: 30px; flex: none; border-radius: 50%; display: grid; place-items: center; border: 1.5px solid var(--ink); font: 400 17px/1 var(--serif); color: var(--ink); }
+  .home-office { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 28px; }
+  .office-main { min-height: calc(100dvh - 64px); }
+  .office-main .office { flex: 1; display: flex; flex-direction: column; }
+  .office-main .o-room { flex: 1; }
+  .home-greet { font-size: 52px; line-height: 54px; }
+  .home-bar { margin-bottom: 18px; }
+}
+@media (min-width: 1200px) {
+  .home-office { grid-template-columns: minmax(0, 1fr) 420px; padding: 0; }
+  .office-main { padding: 26px 30px; height: 100dvh; min-height: 0; position: sticky; top: 0; }
+  .home-office > .feed { border-left: 1.5px solid var(--ink); padding: 24px 22px 0; min-height: 100dvh; gap: 10px; }
+  .home-office > .feed .label { margin: 10px 0 8px; }
+}

@@ -821,7 +821,7 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
         {route.view === 'things' && <Page title="Things" lead="Everything the crew has made for you."><ThingsList list={A.things(state)} state={state} empty="Videos, lists, letters and plans the crew makes for you land here." /></Page>}
         {route.view === 'phone' && <ThisPhone grant={grant} status={status} onForget={forget} onClear={() => { kept.clear(); say('Cleared from this phone ✓'); }} />}
       </View>
-      <View style={[s.tabbar, { backgroundColor: t.surface, borderColor: t.line }]}>
+      {route.view !== 'home' && <View style={[s.tabbar, { backgroundColor: t.surface, borderColor: t.line }]}>
         {nav.map(([v, label, icon]) => (
           <Pressable key={v} style={s.tab} onPress={() => go({ view: v }, true)} accessibilityRole="tab" accessibilityLabel={label}>
             <View style={[s.tabIcon, active === v && { backgroundColor: t.soft }]}><Dots rows={art.TABS[icon]} pal={{ x: active === v ? t.ink : t.mute }} d={22 / 9} crisp /></View>
@@ -829,7 +829,7 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
             {v === 'home' && A.needsYou(state).length > 0 && <Text style={[s.badge, { backgroundColor: t.pink }]}>{A.needsYou(state).length}</Text>}
           </Pressable>
         ))}
-      </View>
+      </View>}
       {live && <AskSheet c={live} who={A.crew(state).find((h) => h.id === live.helper)} chiefSays={state.asks.find((a: Json) => a.id === live.id)?.detail?.chief} canAct={canAct} onClose={() => { setSheet(null); refresh(); }} />}
     </KeyboardAvoidingView>
   );
@@ -1104,34 +1104,42 @@ function NeedsRows({ state, cards, open, few = 3 }: { state: Json; cards: A.Card
 
 /** Home's top, in Chat and Office alike (web/src/main.tsx HomeBar is the same): Chief's line, the Chat | Office switch,
  *  and the three counts from the office's one state; working leads to the crew, done today to the tray. */
-function HomeBar({ state, view, offline, go, mode, pick }: { state: Json; view: A.OfficeView; offline: boolean; go: Ctx['go']; mode: HomeMode; pick: (m: HomeMode) => void }) {
+function HomeBar({ state, view, go, mode, pick }: { state: Json; view: A.OfficeView; offline: boolean; go: Ctx['go']; mode: HomeMode; pick: (m: HomeMode) => void }) {
   const t = useLook();
-  const c = chiefNow(state, offline);
-  const n = view.counts;
-  const counts = [[n.needs, n.needs === 1 ? 'needs you' : 'need you', null], [n.working, 'working', 'crew'], [n.done, 'done today', 'things']] as const;
+  const n = view.counts, name = String(state.person?.name ?? '').trim(), quiet = A.quietLine(state.person);
+  // B1: no tab bar on Home. The gear by the Chat | Office switch reaches settings (and the rest of the app from there).
+  const tools = <View style={[s.row, { gap: 8 }]}>
+    <Pressable onPress={() => go({ view: 'phone' })} accessibilityRole="button" accessibilityLabel="Settings" hitSlop={8} style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }}><T tone="ink2" style={{ fontSize: 20, lineHeight: 22 }}>{'\u2699'}</T></Pressable>
+    <View accessibilityRole="tablist" accessibilityLabel="Home view" style={[s.seg, { backgroundColor: t.soft, borderRadius: 14, padding: 4 }]}>
+      {HOME_MODES.map(([m, l]) => <Pressable key={m} onPress={() => pick(m)} accessibilityRole="tab" accessibilityState={{ selected: mode === m }} style={[s.segBtn, { borderRadius: 10 }, mode === m && { backgroundColor: t.solid }]}>
+        <T tone={mode === m ? undefined : 'ink2'} style={[s.small, s.b]}>{l}</T>
+      </Pressable>)}
+    </View>
+  </View>;
+  const dot = (c: string, ring = false) => <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: ring ? 'transparent' : c, borderWidth: ring ? 1.6 : 0, borderColor: c }} />;
+  const needs = <View style={[s.row, { gap: 6 }]}>{dot(n.needs ? t.fill : t.line2)}<T tone={mode === 'chat' && n.needs ? undefined : 'ink2'} style={[s.small, { fontWeight: '500' }, mode === 'chat' && n.needs ? { color: t.pinkInk, fontWeight: '600' } : null]}>{n.needs ? `${n.needs} ${n.needs === 1 ? 'needs' : 'need'} you` : 'Nothing needs you'}</T></View>;
+  const busy = <View style={[s.row, { gap: 6 }]}>{mode === 'chat' ? dot(t.green) : dot(t.ink, true)}<T tone="ink2" style={[s.small, { fontWeight: '500' }]}>{`${n.working} working`}</T></View>;
+  const still = !!quiet && <T tone="ink2" style={[s.small, { fontWeight: '500' }]}>{`\u263E ${quiet}`}</T>;
+  if (mode === 'chat') return <View style={[s.row, { flexWrap: 'wrap', gap: 10 }]}><View style={[s.row, { flex: 1, flexWrap: 'wrap', gap: 12, minWidth: 160 }]}>{needs}{busy}{still}</View>{tools}</View>;
   return (
-    <View style={{ gap: 10 }}>
-      <View style={s.row}>
-        <Pressable onPress={() => go({ view: 'chief' })} accessibilityRole="button" accessibilityLabel={`Chief: ${c.line}`} style={[s.row, { flex: 1 }]}>
-          <Face who="chief" size={32} mood={c.mood} />
-          <View style={{ flex: 1 }}><T style={s.rowTitle}>Chief</T><T tone="ink2" style={s.small} lines={1}>{c.line}</T></View>
-        </Pressable>
-        <View accessibilityRole="tablist" accessibilityLabel="Home view" style={[s.seg, { backgroundColor: t.soft }]}>
-          {HOME_MODES.map(([m, l]) => <Pressable key={m} onPress={() => pick(m)} accessibilityRole="tab" accessibilityState={{ selected: mode === m }} style={[s.segBtn, mode === m && { backgroundColor: t.solid }]}>
-            <T tone={mode === m ? undefined : 'ink2'} style={[s.small, s.b]}>{l}</T>
-          </Pressable>)}
-        </View>
-      </View>
-      <View style={[s.stats, { marginTop: 0 }]}>
-        {counts.map(([k, l, to], i) => {
-          const box = [{ backgroundColor: t.soft }, s.stat];
-          const words = <><T style={[s.statNum, i === 0 && k > 0 && { color: t.pinkInk }]}>{k}</T><T tone="ink2" style={s.statLabel}>{l}</T></>;
-          return to ? <Pressable key={l} onPress={() => go({ view: to })} accessibilityRole="button" accessibilityLabel={`${k} ${l}`} style={box}>{words}</Pressable>
-            : <View key={l} accessible accessibilityLabel={`${k} ${l}`} style={box}>{words}</View>;
-        })}
-      </View>
+    <View style={{ gap: 6 }}>
+      <View style={[s.row, { justifyContent: 'flex-end' }]}>{tools}</View>
+      <T style={[s.serif, { fontSize: 38, lineHeight: 40 }]}>{A.greeting()}{name ? <>{', '}<Text style={{ fontStyle: 'italic' }}>{name}</Text></> : null}</T>
+      <View style={[s.row, { flexWrap: 'wrap', gap: 14 }]}>{busy}{needs}<View style={{ flex: 1 }} />{still}</View>
     </View>
   );
+}
+
+/** On it now (B1): a card per helper at work, their face, name and step; honest when nobody is. */
+function OnItNow({ view }: { view: A.OfficeView }) {
+  const t = useLook();
+  const working = view.crew.filter((c) => A.seatOf(c) === 'working'), waiting = view.crew.filter(A.waitsOnYou).length;
+  return <View style={{ gap: 8 }}>
+    <View style={[s.row, { justifyContent: 'space-between' }]}><Label>On it now</Label><T tone="mute" style={s.small}>{`${working.length} working`}</T></View>
+    {working.length ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{working.map((c) => <View key={c.id} style={[s.listRow, { flexBasis: '47%', flexGrow: 1, minWidth: 0, borderWidth: 1, borderColor: t.line, borderRadius: 16, backgroundColor: t.solid }]}>
+      <Face who={{ kind: c.kind, name: c.name, mood: c.mood }} size={34} /><View style={{ flex: 1, minWidth: 0 }}><T style={s.b} lines={1}>{c.name}</T><T tone="ink2" style={s.small} lines={1}>{c.step || c.status}</T></View>
+    </View>)}</View> : <Card><T tone="ink2">{waiting ? `Nobody is working: ${waiting} waiting on you.` : 'Nobody is working right now. The crew is free.'}</T></Card>}
+  </View>;
 }
 
 /** Home opens on Chat every time the app starts (kept in memory only, never stored): Chief's thread under the bar and
@@ -1154,9 +1162,10 @@ function Home(ctx: Ctx) {
   const [profile, setProfile] = useState(false);
   // The top: the bar, then Needs you's first row and an exact "See all N". It stays put over Chief's thread; in Office
   // it scrolls with the room, so the whole room fits between it and Chief's box.
+  const pinned = needs.length > 0 && <View><Label count={needs.length}>Needs you</Label><ScrollView style={[s.listGroup, { backgroundColor: t.solid, borderColor: t.line, maxHeight: 280, flexGrow: 0 }]} nestedScrollEnabled><NeedsRows state={state} cards={needs} open={open} few={1} /></ScrollView></View>;
   const top = <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4, gap: 10 }}>
     <HomeBar state={state} view={view} offline={offline} go={go} mode={mode} pick={pick} />
-    {needs.length > 0 && <View><Label count={needs.length}>Needs you</Label><ScrollView style={[s.listGroup, { backgroundColor: t.solid, borderColor: t.line, maxHeight: 280, flexGrow: 0 }]} nestedScrollEnabled><NeedsRows state={state} cards={needs} open={open} few={1} /></ScrollView></View>}
+    {mode === 'chat' && pinned}
   </View>;
   if (mode === 'chat') return <View style={{ flex: 1 }}>{top}<Chat {...ctx} id="chief" /></View>;
   return (
@@ -1166,6 +1175,8 @@ function Home(ctx: Ctx) {
         <View onLayout={(e) => setRoom(e.nativeEvent.layout.width)} style={[s.office, { backgroundColor: t.soft, borderColor: t.line }]}>
           {room > 0 && <Office view={view} night={t.night} offline={offline} width={room - 2} onChief={() => setProfile(true)} onDesk={(c) => setDesk({ c, state })} onAsk={open} onTray={() => go({ view: 'things' })} onCrew={() => go({ view: 'crew' })} />}
         </View>
+        {pinned}
+        <OnItNow view={view} />
         {!!A.resting(state) && <Card><T>{A.resting(state)}. I'll pick things back up then.</T></Card>}
         <Pressable onPress={() => go({ view: 'phone' })} accessibilityRole="button" accessibilityLabel="Check AI account sign-in on the home computer" style={({ pressed }) => [s.listRow, s.listGroup, { backgroundColor: t.solid, borderColor: t.line }, pressed && { opacity: 0.6 }]}>
           <AiMark ai={A.AIS[0]} size={30} />

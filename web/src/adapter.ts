@@ -60,6 +60,14 @@ export const clock = (t: number) => {
 };
 const at = (t: number | string) => (typeof t === 'number' ? (t < 1e12 ? t * 1000 : t) : Date.parse(t));
 export const greeting = (h = new Date().getHours()) => (h < 5 ? 'Good evening' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening');
+/** The person's quiet hours in Home's words ("Quiet from 11 pm", "Quiet until 7 am"); '' when they have none. */
+export function quietLine(person: Json): string {
+  const q = String(person?.quiet ?? '');
+  const m = /^(\d\d):(\d\d)-(\d\d):(\d\d)$/.exec(q);
+  if (!m) return '';
+  const say = (h: number, min: number) => `${h % 12 || 12}${min ? `:${String(min).padStart(2, '0')}` : ''} ${h < 12 ? 'am' : 'pm'}`;
+  return person.quietNow ? `Quiet until ${say(+m[3], +m[4])}` : `Quiet from ${say(+m[1], +m[2])}`;
+}
 /** The small line over Home's greeting: the day, in the reader's own words ("Sunday 28 September"). */
 export const today = (d = new Date()) => d.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' });
 /** The marker between chat lines from different days: Today, Yesterday, or the date. */
@@ -1216,7 +1224,7 @@ export function office(state: Json): OfficeView {
 /** Needs-you rows no helper in the room holds (Chief's own, or one left by a helper since let go): Chief carries
  *  them, so every row in Needs you has a Review somewhere in the room. */
 /** Chief's state in one word, the same in the room, his profile and on the phone. */
-export const chiefWord = (v: OfficeView) => (chiefAsks(v).length ? 'Needs you' : v.chief.mood === 'work' ? 'Working' : 'On watch');
+export const chiefWord = (v: OfficeView) => (chiefAsks(v).length ? 'Needs you' : v.chief.mood === 'work' ? 'Working' : 'Here');
 export const chiefAsks = (view: OfficeView) => view.needs.filter((c) => !view.crew.some((m) => m.id === c.helper));
 
 /** The office while the home computer is out of reach: nobody claims to be busy or waiting, and nothing asks. */
@@ -1300,19 +1308,12 @@ export function officeEvent(view: OfficeView, e: Json): OfficeView {
 
 /** A helper waiting on you: a row in Needs you, or a job stopped for an answer in their chat. */
 export const waitsOnYou = (c: OfficeMember) => c.ring === 'needs' || !!c.ask;
-export const NOOKS = 4, LOUNGE_SEATS = 3;
-export type FloorPlan = { desks: OfficeMember[]; lounge: OfficeMember[]; more: OfficeMember[] };
-/** Hot-desking: who sits where at any crew size, one rule for the web and the phone. The room never grows: four
- *  desks and a three-seat lounge, with Chief at his own table. A desk goes to whoever waits on you, then whoever is
- *  working (crew order inside each, so nobody changes desk when someone else's news lands); a helper who waits on
- *  you always gets one, even past four. The lounge takes the rest in roster order, and everyone else is counted
- *  under "+N" (`more`, roster order), never drawn smaller; the full roster (the dock, the rail) still names them. */
+export const SEATS = 5;
+export type FloorPlan = { seats: OfficeMember[]; more: OfficeMember[] };
+/** Who stands on the office's one floor, one rule for the web and the phone (B1): five spots in the roster's order,
+ *  whoever waits on you first, then working, then the rest, resting last; everyone else is counted under "+N"
+ *  (`more`, roster order), never drawn smaller. The rail and the dock still name the whole crew. */
 export function floorPlan(crew: OfficeMember[]): FloorPlan {
   const order = roster(crew);
-  const waits = order.filter(waitsOnYou), busy = order.filter((c) => !waitsOnYou(c) && seatOf(c) === 'working');
-  const desks = [...waits, ...busy.slice(0, Math.max(0, NOOKS - waits.length))];
-  const rest = order.filter((c) => !desks.includes(c));
-  const lounge = rest.filter((c) => seatOf(c) !== 'working').slice(0, LOUNGE_SEATS);
-  const seated = new Set([...desks, ...lounge]);
-  return { desks: crew.filter((c) => desks.includes(c)), lounge, more: order.filter((c) => !seated.has(c)) };
+  return { seats: order.slice(0, SEATS), more: order.slice(SEATS) };
 }

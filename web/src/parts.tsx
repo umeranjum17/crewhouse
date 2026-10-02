@@ -1,5 +1,5 @@
 // The shared pieces: dot art, the ASCII moments, ask cards and the approval sheet, media, steps, the composer.
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { createElement, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { api, trouble, type Json } from './api.ts';
 import { draftOf, keepDraft, sent } from './draft.ts';
 import { canHear, hear } from './voice.ts';
@@ -7,6 +7,7 @@ import { cycle, type Focused } from './dialog.ts';
 import { chatTokens, safeLink } from './chat-md.ts';
 import * as art from './art.ts';
 import { MARKS } from './logos.ts';
+import { ICONS, type IconName } from './icons.ts';
 import { clock, column, docLinks, document as docView, fileSource, fileView, mdPlain, pageWords, sheetWords, workbook, type Card, type DocPart, type DocView, type FileView, type Helper, type Sheet, type Step, type Workbook } from './adapter.ts';
 
 /** Markdown inline runs, from the shared safe tokens (web/src/chat-md.ts): no raw HTML, http(s) links only. */
@@ -175,15 +176,22 @@ export function Face({ who, size = 44, ring = '' }: { who: Helper | 'chief' | { 
   );
 }
 
-/** The mark is Chief himself (the app icon's 12-dot cut), then the wordmark. */
+/** The mark is Chief's bowler on a paper tile (B1), then the wordmark in the display serif. */
 export function Logo({ night }: { night?: boolean }) {
   return (
     <span className="logo" aria-label="Crewhouse">
-      <ChiefArt d={1.8} />
+      <svg viewBox="0 0 64 64" width="28" height="28" aria-hidden><rect x="2" y="2" width="60" height="60" rx="15" fill="var(--solid)" stroke="var(--ink)" strokeWidth="3" /><g transform="translate(10 9) scale(1.84)" fill="none" stroke="var(--ink)" strokeWidth="1.6" strokeLinecap="round"><path d="M6.6 14.2c0-4.4 2.4-7.7 5.4-7.7s5.4 3.3 5.4 7.7" /><path d="M3 14.6c2.8 1.7 5.8 2.4 9 2.4s6.2-.7 9-2.4" /><path d="M6.9 12.3h10.2" stroke="#F0482A" /></g></svg>
       <span>Crewhouse</span>
     </span>
   );
 }
+
+/** One B1 line icon (icons.ts), in the text's colour. */
+// Each mark is a constant from icons.ts, drawn as elements (never markup): `<path d="…"/>` -> createElement('path', {d}).
+const marks = (src: string) => [...src.matchAll(/<(\w+)([^>]*)\/>/g)].map(([, tag, attrs], i) =>
+  createElement(tag, { key: i, ...Object.fromEntries([...attrs.matchAll(/([\w-]+)="([^"]*)"/g)].map(([, k, v]) => [k, v])) }));
+export const Icon = ({ name, size = 16 }: { name: IconName; size?: number }) =>
+  <svg className="lucide" viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>{marks(ICONS[name])}</svg>;
 
 /** An AI account's own mark, white on its brand tile. */
 export function AiMark({ ai, size = 36 }: { ai: { key: string; bg: string }; size?: number }) {

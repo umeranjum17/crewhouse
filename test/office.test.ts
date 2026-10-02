@@ -1,7 +1,7 @@
 // The office's battery and layout rules, measured in a real browser on the ?demo households (web/src/office.tsx): the
 // room is flat 2D with no 3D library anywhere, its motion is calm CSS loops that ask for no frame and stop off screen,
-// Reduce Motion runs none at all, and at every crew size (?demo=crew1, crew5, crew12, crew30) on a phone and a computer every bubble
-// sits inside the room, clear of the others and of every sprite, with each helper who needs her showing Review.
+// Reduce Motion runs none at all, and at every crew size (?demo=crew1, crew5, crew12, crew30) on a phone and a computer the
+// room's two labels (the one Needs you pill and the Tray bubble) sit inside it, clear of each other and of every figure.
 // Needs a Chromium on PATH (skipped without one).
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -35,25 +35,17 @@ test('the office is flat 2D: no 3D library in any bundle or in the dependencies'
   assert.equal({ ...pkg.dependencies, ...pkg.devDependencies }.three, undefined);
 });
 
-test('hot-desking: the room never grows, whoever waits on you always has a desk, everyone else is counted', () => {
+test('one floor: five spots in roster order, whoever waits on you first, everyone else counted', () => {
   const who = (i: number, ring: OfficeMember['ring'], extra: Partial<OfficeMember> = {}): OfficeMember => ({ id: `h${i}`, name: `H${i}`, kind: 'pip', mood: 'idle', ring, status: '', step: '', steps: [], things: [], ...extra });
   const crew = Array.from({ length: 30 }, (_, i) => who(i, i % 4 === 3 ? 'needs' : i % 4 === 1 ? 'working' : ''));
   const p = floorPlan(crew);
-  assert.equal(p.desks.length, 7, 'all seven who wait on you, past the four desks');
-  assert.ok(p.desks.every((c) => c.ring === 'needs'));
-  assert.deepEqual(p.desks.map((c) => c.id), crew.filter((c) => c.ring === 'needs').map((c) => c.id), "in the crew's own order");
-  assert.equal(p.lounge.length, 3);
-  assert.ok(p.lounge.every((c) => !c.ring), 'nobody working lounges');
-  assert.equal(p.desks.length + p.lounge.length + p.more.length, 30, 'everyone is seated or counted under +N');
-  assert.deepEqual(p.more.slice(0, 7).map((c) => c.ring), Array(7).fill('working'), '+N names the working first');
-  const few = floorPlan([who(0, 'working'), who(1, ''), who(2, 'needs')]);
-  assert.deepEqual(few.desks.map((c) => c.id), ['h0', 'h2']);
-  assert.deepEqual(few.lounge.map((c) => c.id), ['h1']);
+  assert.equal(p.seats.length, 5, 'the floor never grows');
+  assert.ok(p.seats.every((c) => c.ring === 'needs'), 'whoever waits on you stands first');
+  assert.deepEqual(p.seats.map((c) => c.id), crew.filter((c) => c.ring === 'needs').slice(0, 5).map((c) => c.id), "in the crew's own order");
+  assert.equal(p.seats.length + p.more.length, 30, 'everyone is drawn or counted under +N');
+  const few = floorPlan([who(0, 'working'), who(1, '', { mood: 'rest' }), who(2, 'needs'), who(3, '')]);
+  assert.deepEqual(few.seats.map((c) => c.id), ['h2', 'h0', 'h3', 'h1'], 'needs you, working, free, resting last');
   assert.equal(few.more.length, 0);
-  const busy = floorPlan(Array.from({ length: 6 }, (_, i) => who(i, 'working')));
-  assert.equal(busy.desks.length, 4, 'four desks, the room does not grow');
-  assert.deepEqual(busy.more.map((c) => c.id), ['h4', 'h5']);
-  assert.equal(busy.lounge.length, 0);
 });
 
 test('office truth: the room, its counts, the tray, the roster and Needs you read one state', () => {
@@ -218,15 +210,15 @@ test('the office keeps the battery budget: calm CSS loops while it shows, none o
   await b.send('Emulation.setEmulatedMedia', { features: [] });
 });
 
-// Each demo house (web/src/demo.ts): its crew size, and how many Reviews the room shows — one per helper with a row in
-// Needs you, plus Chief's for rows no helper in the room holds (?demo keeps Tracer's question after a crewN swap).
-const HOUSES: [string, number, number][] = [['crew1', 1, 2], ['crew5', 5, 5], ['crew12', 12, 6], ['crew30', 30, 8], ['office', 5, 5]];
-test('at 1, 5, 12 and 30 crew, on a phone and a computer, nothing covers anything, every Review is real, and counts agree', { skip: !bin && 'no Chromium here' }, async () => {
+// Each demo house (web/src/demo.ts) and its crew size. Every house has something waiting on you (?demo keeps Tracer's
+// question after a crewN swap), so the room shows its one pill.
+const HOUSES: [string, number][] = [['crew1', 1], ['crew5', 5], ['crew12', 12], ['crew30', 30], ['office', 5]];
+test('at 1, 5, 12 and 30 crew, on a phone and a computer, nothing covers anything, the one pill is real, and counts agree', { skip: !bin && 'no Chromium here' }, async () => {
   const b = await browse();
   await b.send('Page.enable'); await b.send('Runtime.enable');
   for (const [width, height, mobile] of [[390, 844, true], [1440, 900, false]] as const) {
     await b.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile });
-    for (const [demo, n, reviews] of HOUSES) {
+    for (const [demo, n] of HOUSES) {
       for (const theme of ['day', 'night']) {
         await b.open(`demo=${demo}&${theme}`);
         // Each launch opens on Chat: no room drawn, and the pinned Needs you and Chief's box are on the first screen.
@@ -246,29 +238,29 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, nothing covers anythin
         const m = await b.run(`(() => {
           const box = (e) => e.getBoundingClientRect(), st = box(document.querySelector('.o-room'));
           const bar = box(document.querySelector('.home-top')).bottom;
-          const cards = [...document.querySelectorAll('.o-bub, .o-chip b, .o-more, .o-tray, .o-thing')].map(box);
+          const cards = [...document.querySelectorAll('.o-tag')].map(box);
           const sprites = [...document.querySelectorAll('.o-sprite')].map(box);
           const hit = (a, c) => a.left < c.right - 0.5 && c.left < a.right - 0.5 && a.top < c.bottom - 0.5 && c.top < a.bottom - 0.5;
           const out = cards.filter((x) => x.left < st.left - 1 || x.right > st.right + 1 || x.top < st.top - 1 || x.bottom > st.bottom + 1).length;
-          const els = [...document.querySelectorAll('.o-bub, .o-chip b, .o-more, .o-tray, .o-thing')], sps = [...document.querySelectorAll('.o-sprite')];
-          const say = (e, r) => (e.closest('[data-id]')?.dataset.id ?? 'chief') + ' ' + e.className + ' ' + Math.round(r.top) + '-' + Math.round(r.bottom);
+          const els = [...document.querySelectorAll('.o-tag')], sps = [...document.querySelectorAll('.o-sprite')];
+          const say = (e, r) => (e.closest('[data-id]')?.dataset.id ?? 'chief') + ' ' + e.getAttribute('class') + ' ' + Math.round(r.top) + '-' + Math.round(r.bottom);
           const pairs = [];
           cards.forEach((a, i) => cards.slice(i + 1).forEach((c, j) => { if (hit(a, c)) pairs.push(say(els[i], a) + ' x ' + say(els[i + 1 + j], c)); }));
           cards.forEach((a, i) => sprites.forEach((c, j) => { if (hit(a, c)) pairs.push(say(els[i], a) + ' x ' + say(sps[j], c)); }));
           const over = pairs.length;
-          // a label wider than its box is clipped
-          const clipped = [...document.querySelectorAll('.o-bub b, .o-st > span, .o-chip b')].filter((e) => e.scrollWidth > e.clientWidth + 1).length;
-          const asks = [...document.querySelectorAll('.o-bub.needs a[href^="#/ask/"]')].map((a) => a.getAttribute('href'));
-          const office = document.querySelector('.office:not([hidden])');
-          const [stat, busy] = [...document.querySelectorAll('.home-bar .stat')].map((e) => parseInt(e.textContent, 10));
+          // a strip name or word wider than its cell is clipped
+          const clipped = [...document.querySelectorAll('.o-cap b, .o-cap > span')].filter((e) => e.scrollWidth > e.clientWidth + 1).length;
+          const pills = [...document.querySelectorAll('.o-pill')].map((a) => a.getAttribute('href'));
+          const stat = Number(document.querySelector('.home-meta .m-needs')?.dataset.n), busy = Number(document.querySelector('.home-meta .m-working')?.dataset.n);
           const pinned = parseInt(document.querySelector('.needs-pin .count')?.textContent ?? '0', 10);
           const all = document.querySelector('.needs-pin .section-head .link')?.textContent ?? '';
           const names = (q) => [...document.querySelectorAll(q)].map((e) => e.textContent);
-          const onIt = names('.feed .working .list-row .grow > b'), waits = names('.side-row:has(.side-seat.needs, .side-seat.chat) .grow > b');
-          const badge = parseInt(document.querySelector('.tabbar a .badge, .side-nav .badge')?.textContent ?? '0', 10);
+          const onIt = names('.feed .working .on-card .grow > b'), waits = names('.side-row:has(.side-seat.needs, .side-seat.chat) > b');
+          // Home has no tab bar (B1): on a computer the rail's Chief count is the badge, on a phone the pinned count is
+          const badge = parseInt(document.querySelector('.side-nav[href="#/"] .side-count')?.textContent ?? (innerWidth < 900 ? String(pinned) : '0'), 10);
           const more = Number(document.querySelector('.o-more')?.dataset.more ?? 0);
-          return { pairs, seen: st.height > 0 && st.top >= bar - 1 && st.top < innerHeight - 40, out, over, clipped, asks, unique: new Set(asks).size, stat, badge, busy, onIt, waits, pinned, all,
-            seated: document.querySelectorAll('.o-cell .o-sprite').length - 1, more: more || 0,
+          return { pairs, seen: st.height > 0 && st.top >= bar - 1 && st.top < innerHeight - 40, out, over, clipped, pills, stat, badge, busy, onIt, waits, pinned, all,
+            seated: document.querySelectorAll('.o-cell .o-sprite').length - 1, more: more || 0, caps: document.querySelectorAll('.o-strip .o-cap:not(.o-more)').length,
             roster: document.querySelectorAll('.side-row').length };
         })()`);
         const at = `${demo} ${theme} at ${width}`;
@@ -276,25 +268,26 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, nothing covers anythin
         assert.equal(m.out, 0, `${at}: every card inside the room`);
         assert.equal(m.over, 0, `${at}: no card covers another card or a sprite: ${m.pairs.join('; ')}`);
         assert.equal(m.clipped, 0, `${at}: no label in the room is cut off`);
-        assert.equal(m.asks.length, reviews, `${at}: one Review per helper with a row in Needs you`);
-        assert.equal(m.unique, m.asks.length, `${at}: no row has two Reviews`);
+        assert.equal(m.pills.length, m.badge > 0 ? 1 : 0, `${at}: one Needs you pill while anything waits on you, none otherwise`);
+        assert.ok(m.pills.every((h: string) => /^#\/(ask|h)\/\w+/.test(h)), `${at}: the pill opens a real question or chat (${m.pills})`);
         assert.equal(m.stat, m.badge, `${at}: the header's count is the Needs-you badge`);
         assert.equal(m.pinned, m.badge, `${at}: the pinned Needs you counts the same rows`);
         if (m.badge > 1) assert.equal(m.all, `See all ${m.badge}`, `${at}: "See all N" is exact`);
         assert.equal(m.seated + m.more, n, `${at}: everyone is in the room or counted under "+N"`);
-        assert.ok(m.seated <= Math.max(4, reviews) + 3, `${at}: the room never grows past its desks and lounge`);
+        assert.ok(m.seated <= 5, `${at}: the room never stands more than five helpers`);
+        assert.equal(m.caps, m.seated + 1, `${at}: the strip names everyone standing in the room, Chief too`);
         if (!mobile) {
-          assert.equal(m.roster, n + (n > 1 ? 2 : 1), `${at}: the rail names the whole crew`);
+          assert.equal(m.roster, n, `${at}: the rail names the whole crew`);
           assert.equal(m.busy, m.onIt.length, `${at}: the header's working count is On it now`);
           assert.deepEqual(m.onIt.filter((x: string) => m.waits.includes(x)), [], `${at}: one state per helper: waiting is never also on it now`);
         }
         if (n === 30) assert.ok(m.more > 0, `${at}: a big crew is counted under "+N"`);
       }
     }
-    // The furniture is scenery: a tap on a desk front lands on its seat and opens that helper.
+    // The furniture is scenery: a tap on a desk lands on its seat and opens that helper.
     await b.open('demo=crew5&day');
     await toOffice(b);
-    await b.run("(() => { const d = document.querySelector('.o-cell[data-seat] .o-deskf'); d.scrollIntoView({ block: 'center' }); const r = d.getBoundingClientRect(); document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2).click(); })()");
+    await b.run("(() => { const d = document.querySelector('.o-cell[data-seat] .o-desk'); d.scrollIntoView({ block: 'center' }); const r = d.getBoundingClientRect(); document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2).click(); })()");
     await until('the helper\'s panel', () => b.run("!!document.querySelector('.o-sheet')"), 5000);
     // "+N" leads to the whole crew.
     await b.open('demo=crew30&day');

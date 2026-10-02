@@ -497,7 +497,7 @@ test('Home opens on Chat at every launch, with Office one tap away and never sto
   }
   const web = src('web/src/main.tsx');
   const home = web.slice(web.indexOf('function Home('), web.indexOf('/** The standing'));
-  assert.match(home, /if \(mode === 'chat'\) return <div className="page chat-page home-chat"><div className="home-top">\{top\}<\/div><Chat \{\.\.\.ctx\} id="chief" \/><\/div>;/, 'web Chat: the top over Chief\'s own thread and box');
+  assert.match(home, /if \(mode === 'chat'\) return <div className="page chat-page home-chat"><div className="home-top">\{top\}<NeedsPin state=\{state\} cards=\{live\.needs\} \/><\/div><Chat \{\.\.\.ctx\} id="chief" \/><\/div>;/, 'web Chat: the top and Needs you over Chief\'s own thread and box');
   assert.match(home, /<NeedsPin state=\{state\} cards=\{live\.needs\} \/>/, 'Needs you pinned from the office\'s one list');
   assert.match(home, /<div className="feed-ask"><Composer/, 'Office keeps Chief\'s box on a desk');
   assert.match(home, /<div className="dock phone-only"><Composer/, 'and on a phone');
@@ -586,7 +586,7 @@ test('the phone office: one flat room, a crew whose moves run on the native driv
   // desktop never opens here, and the room reads the shared view model for the person.
   const office = readFileSync(join(import.meta.dirname, '..', 'mobile', 'src', 'office.tsx'), 'utf8');
   assert.match(office, /A\.floorPlan\(crew\)/);
-  assert.match(office, /A\.roster\(view\.crew\)/, "the dock indexes the whole crew");
+  assert.match(office, /plan\.more\.length/, 'past five, the strip says "+N" and leads to the whole crew');
   assert.doesNotMatch(office, /setInterval|setTimeout|useBeat|requestAnimationFrame|DesktopView|desktopSignaling/);
   assert.match(office, /A\.office\(state\)/);
   assert.match(office, /A\.officeEvent\(/);
@@ -596,7 +596,7 @@ test('the phone office: one flat room, a crew whose moves run on the native driv
   assert.match(motion, /if \(still \|\| beat == null\) \{ rest\(\); return; \}/, 'no office move starts under Reduce Motion or in the background');
   const home = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
   const top = home.slice(home.indexOf('function Home('), home.indexOf('function ChatList('));
-  assert.ok(top.indexOf('<HomeBar') < top.indexOf('<Label count={needs.length}>Needs you') && top.indexOf('<Label count={needs.length}>Needs you') < top.indexOf('<Office'), 'Needs you is pinned under the bar, above the room');
+  assert.ok(top.indexOf('<HomeBar') < top.indexOf("{mode === 'chat' && pinned}") && top.indexOf('<Office') < top.lastIndexOf('{pinned}'), 'Needs you is pinned under the bar in Chat, and right under the room in Office (B1)');
   assert.match(top, /few=\{1\}/, 'one pinned row, and "See all N" for the rest');
   assert.match(top, /if \(mode === 'chat'\) return <View style=\{\{ flex: 1 \}\}>\{top\}<Chat \{\.\.\.ctx\} id="chief" \/><\/View>;/, 'Chat: the same top over Chief\'s own thread and box');
 });
@@ -1654,7 +1654,7 @@ test('a delivered markdown file opens rendered, and no screen leads to the raw f
   assert.doesNotMatch(demo, /stub [\w-]+:/i, 'demo replies never expose the test model');
   assert.match(demo, /dinners-and-shopping-list\.md'\) \? \{ text:/, 'the demo serves the plan the way crewd does: its own words');
   const main = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
-  assert.match(main, /A\.fileTarget\(t\.files\[0\]\)/, 'Home opens a finished thing the same rendered way');
+  assert.match(main, /A\.fileTarget\(x\.files\[0\]\)/, 'a chat\'s finished things open the same rendered way (B1 Home sends done work to the tray, which is Things)');
   assert.doesNotMatch(main, /files\[0\]\?\.url/, 'no raw file address on a Home row');
 });
 
@@ -1665,7 +1665,7 @@ test('a delivered .mp4 shows a video badge, never DOCX', () => {
   assert.equal(f.kind, 'video', 'the chat card plays it as a video');
   assert.equal(A.fileTarget(f)!.chip, 'MP4', 'the chip names the real kind');
   const [thing] = A.things({ tasks: [{ id: 9, bot: 'reel', title: "Mum's birthday film", state: 'done', updated_at: now, files: ['files/mum-birthday_v2.mp4'] }] });
-  assert.equal(A.fileTarget(thing.files[0])!.chip, 'MP4', 'Home "Done today" and Things show the same file-derived chip');
+  assert.equal(A.fileTarget(thing.files[0])!.chip, 'MP4', 'a chat\'s list and Things show the same file-derived chip');
   const app = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
   assert.doesNotMatch(app, /'DOCX'|'XLSX'|'PDF'/, 'no badge is a hardcoded default; every chip comes from the file');
 });
