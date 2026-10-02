@@ -1089,3 +1089,14 @@ h1 { font: 400 32px/36px var(--serif); letter-spacing: -.005em; }
 .needs-pin.flat .needs-big { padding: 0; border: 0; box-shadow: none; background: none; border-radius: 0; }
 .needs-pin.flat .nb-top { align-items: center; }
 .needs-pin.flat .nb-acts { margin-top: 12px; }
+
+/* Chief's profile (B1 573): serif name, a status in its colour, icon rows, a running computer with its Live chip, recent
+   activity with times, and outputs naming who made them and what kind of file. */
+.o-profile .o-sh-head h2 { font-size: 40px; line-height: 42px; }
+.o-ic { width: 36px; height: 36px; flex: none; display: grid; place-items: center; border-radius: 10px; background: var(--soft); color: var(--ink2); }
+.o-profile .row-item > .lucide { color: var(--mute); flex: none; }
+.o-thumb { width: 78px; height: 56px; flex: none; display: grid; place-items: center; align-content: center; gap: 2px; border: 1px solid var(--line2); border-radius: 10px; background: var(--soft); }
+.o-thumb small { font: 600 10px/12px var(--ui); color: var(--ink2); }
+.o-live { display: inline-flex; gap: 5px; align-items: center; margin-top: 4px; padding: 2px 9px; border-radius: 999px; background: color-mix(in srgb, var(--ok) 14%, transparent); color: var(--ok); font: 600 12px/18px var(--ui); width: max-content; }
+.o-live i { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); }
+.o-profile .o-note { margin: 4px 2px 0; font: 400 13px/18px var(--ui); color: var(--mute); }

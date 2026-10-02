@@ -12,7 +12,7 @@ import { api, type Json } from './api.ts';
 import * as A from './adapter.ts';
 import * as art from './art.ts';
 import { room as ROOM } from './tokens.ts';
-import { attempt, Face, Media, Pill, Steps, useDialogOwn } from './parts.tsx';
+import { attempt, Face, Icon, Media, Pill, Steps, useDialogOwn } from './parts.tsx';
 
 // Live events reach the room straight from the socket the shell already holds (main.tsx): a step swaps the bubble
 // and a new thing lands by the desk before the debounced refresh lands, and the refresh stays the source of truth.
@@ -327,33 +327,39 @@ function ChiefSheet({ live, state, roles, onClose }: { live: A.OfficeView; state
   useDialogOwn(box, onClose);
   const [phones, setPhones] = useState<number | null>(null);
   useEffect(() => { api.phones().then((p) => setPhones(p.length)).catch(() => setPhones(null)); }, []);
-  const computers = live.crew.filter((c) => roles.get(c.id)?.computer);
+  // A crew computer shows while its helper is working on it; the picture of it is the live view itself, one tap away.
+  const computers = live.crew.filter((c) => roles.get(c.id)?.computer && A.seatOf(c) === 'working');
   const made = A.things(state).slice(0, 4);
   const word = A.chiefWord(live);
+  // What happened lately, from the state alone: questions put to you and jobs that landed in the tray.
+  const recent = [...live.needs.map((c) => ({ key: `a${c.id}`, at: c.at, text: c.head, href: `#/ask/${c.id}` })),
+    ...live.done.map((t) => ({ key: `t${t.id}`, at: t.at, text: `${roles.get(t.helper)?.name ?? 'The crew'} finished ${t.title || 'a job'}`, href: `#/things/t${t.id}` }))]
+    .sort((x, y) => y.at - x.at).slice(0, 3);
   return (
     <div className="scrim o-scrim" onClick={onClose}>
       <div ref={box} className="o-sheet o-profile" role="dialog" aria-modal aria-label="Chief" onClick={(e) => e.stopPropagation()}>
         <header className="o-sh-head">
           <Face who="chief" size={64} />
           <span className="grow"><h2>Chief</h2><span className="mute small">Runs your crew</span>
-            <span className={`o-state ${word === 'Needs you' ? 'needs' : word === 'Working' ? 'work' : ''}`}><i />{word}</span></span>
+            <span className={`o-state ${word === 'Needs you' ? 'needs' : word === 'Working' ? 'work' : ''}`}><i />{word === 'Working' ? 'Working now' : word}</span></span>
           <button className="icon-btn" onClick={onClose} aria-label="Close">✕</button>
         </header>
         <div className="o-sec"><div className="o-eyebrow">Ways to reach</div>
           <div className="card list">
-            <a className="row-item" href="#/chief" onClick={onClose}><span className="grow">Message in Chat</span><b>›</b></a>
-            <a className="row-item" href="#/settings" onClick={onClose}><span className="grow">On your phone<small className="mute block">{phones ? `${phones} paired` : 'Not set up'}</small></span>{!phones && <b className="o-setup">Set up</b>}</a>
+            <a className="row-item" href="#/chief" onClick={onClose}><span className="o-ic"><Icon name="chief" size={18} /></span><span className="grow">Message in Chat</span><Icon name="next" /></a>
+            <a className="row-item" href="#/settings" onClick={onClose}><span className="o-ic"><Icon name="phone" size={18} /></span><span className="grow">On your phone<small className="mute block">{phones ? `${phones} paired` : 'Not set up'}</small></span>{phones ? <Icon name="next" /> : <b className="o-setup">Set up</b>}</a>
           </div></div>
-        {computers.length > 0 && <div className="o-sec"><div className="o-eyebrow">Crew computers</div>
-          <div className="card list">{computers.map((c) => {
-            const k = A.seatOf(c);
-            return <a key={c.id} className="row-item" href={`#/h/${c.id}/screen`} onClick={onClose}>
-              <Face who={{ kind: c.kind, name: c.name, mood: c.mood }} size={36} />
-              <span className="grow">{c.name}'s computer<small className="mute block">{roles.get(c.id)?.driving ? 'You have the wheel' : `Watch ${c.name}`}</small></span>
-              <Pill tone={k === 'needs' || k === 'chat' ? 'wait' : k === 'working' ? 'ok' : 'off'}>{A.waitsOnYou(c) ? 'Needs you' : k === 'working' ? 'Working' : 'Resting'}</Pill></a>;
-          })}</div></div>}
-        {made.length > 0 && <div className="o-sec"><div className="o-eyebrow">Outputs</div>
-          <div className="o-made">{made.map((m) => <a key={m.id} className="card" href={`#/h/${m.helper}`} onClick={onClose}><b>{m.title}</b><small className="mute">From {roles.get(m.helper)?.name ?? 'the crew'}</small></a>)}</div></div>}
+        <div className="o-sec"><div className="o-eyebrow">Crew computers</div>
+          {computers.length ? <div className="card list">{computers.map((c) => <a key={c.id} className="row-item" href={`#/h/${c.id}/screen`} onClick={onClose}>
+            <span className="o-thumb" aria-hidden><Face who={{ kind: c.kind, name: c.name, mood: c.mood }} size={30} /><small>Watch</small></span>
+            <span className="grow"><b>{c.name}'s computer</b><small className="mute block clamp1">{roles.get(c.id)?.driving ? 'You have the wheel' : c.step || c.status}</small><span className="o-live"><i />Live</span></span><Icon name="next" /></a>)}</div>
+            : <p className="o-note">No crew computer is running right now.</p>}</div>
+        <div className="o-sec"><div className="o-eyebrow">Recent activity</div>
+          {recent.length ? <div className="card list">{recent.map((r) => <a key={r.key} className="row-item" href={r.href} onClick={onClose}><span className="grow clamp1">{r.text}</span><time className="mute small">{A.clock(r.at)}</time></a>)}</div>
+            : <p className="o-note">Nothing yet today.</p>}</div>
+        <div className="o-sec"><div className="o-eyebrow">Outputs</div>
+          {made.length ? <div className="o-made">{made.map((m) => <a key={m.id} className="card" href={`#/things/t${m.id}`} onClick={onClose}><b>{m.title}</b><small className="mute">From {roles.get(m.helper)?.name ?? 'the crew'}{m.files[0] ? ` · ${KIND_WORDS[m.files[0].kind].replace(/^an? /, '')}` : ''}</small></a>)}</div>
+            : <p className="o-note">Nothing made yet.</p>}</div>
       </div>
     </div>
   );
