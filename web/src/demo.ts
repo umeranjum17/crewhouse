@@ -16,6 +16,8 @@ import { describe, nextRun, parseSchedule } from '../../src/routines.ts';
 
 const variant = new URLSearchParams(typeof location === 'undefined' ? '' : location.search).get('demo') || 'umer';
 const now = Date.now();
+// The local day's start, as the app counts "done today": jobs meant to be done today never slip into yesterday after midnight.
+const today = new Date(now).setHours(0, 0, 0, 0);
 const min = 60_000;
 const signin = ['signin', 'hello', 'first', 'work'].includes(variant);
 const firstRun = ['first', 'answer', 'plan', 'work'].includes(variant);
@@ -141,11 +143,11 @@ const state = {
     { id: 'tracer', display: 'Tracer', role: "Finds a person's work email or number" },
   ],
   tasks: [
-    task(40, 'scout', "This week's dinners", 'done', { updated_at: now - 50 * min, result: 'Seven dinners the kids will actually eat, and one shopping list sorted by aisle.', files: ['files/dinners-and-shopping-list.pdf'] }),
+    task(40, 'scout', "This week's dinners", 'done', { updated_at: Math.max(today, now - 50 * min), result: 'Seven dinners the kids will actually eat, and one shopping list sorted by aisle.', files: ['files/dinners-and-shopping-list.pdf'] }),
     task(38, 'reel', 'Eid photo collage', 'done', { updated_at: now - 26 * 60 * min, result: 'A collage of the twelve best Eid photos, sized for WhatsApp.', files: [svg('#ffc27a', '#ff7aa2', 'Eid Mubarak ♡')] }),
     task(36, 'scribe', 'Letter to the school about the trip', 'done', { updated_at: now - 50 * 60 * min, result: 'A short, polite letter asking to move Ayaan to the Friday group.', files: ['files/letter-to-school.pdf'] }),
     task(35, 'pip', 'Sports day in the calendar', 'done', { updated_at: now - 3 * 24 * 60 * min, result: 'Added sports day, Friday 9 am, with a reminder the night before.' }),
-    task(46, 'scribe', 'Hotel guest reception', 'done', { updated_at: now - 22 * min, result: 'A workbook the front desk can run the day on: the dashboard, the booking log, the room board and the payments.', files: ['files/hotel-guest-reception.xlsx'] }),
+    task(46, 'scribe', 'Hotel guest reception', 'done', { updated_at: Math.max(today, now - 22 * min), result: 'A workbook the front desk can run the day on: the dashboard, the booking log, the room board and the payments.', files: ['files/hotel-guest-reception.xlsx'] }),
   ],
   ideas: [
     { bot: 'scout', promise: "I'll keep an eye on what you just bought, and tell you the day you can claim the money back. I'll do it end to end — you just tap approve.", ask: 'Watch something I bought and tell me when I can claim the difference back', group: 'money', needs: ['Gmail'] },
@@ -447,9 +449,8 @@ if (variant === 'b1') {
     preview: { head: 'The order at flights.example', body: 'Fri 3 Oct 08:40 → 11:10 · one stop · seat 14A · bag included — $412.00\nTotal $412.00' },
     order: { shown: '$412.00', known: true, dollars: true }, yes: 'Book for $412.00' } }];
   // Only Tracer's list is done today, as the mocks' "Tray · 1": the base household's other jobs done today are dropped here.
-  const day = new Date(now).setHours(0, 0, 0, 0);
-  (state as Json).tasks = [task(52, 'tracer', 'your dinner list', 'done', { updated_at: Math.max(day, now - 12 * min), result: 'Seven dinners and one shopping list, sorted by aisle.', files: ['files/dinner-list.pdf'] }),
-    ...state.tasks.filter((t: Json) => !(t.state === 'done' && t.updated_at >= day))];
+  (state as Json).tasks = [task(52, 'tracer', 'your dinner list', 'done', { updated_at: Math.max(today, now - 12 * min), result: 'Seven dinners and one shopping list, sorted by aisle.', files: ['files/dinner-list.pdf'] }),
+    ...state.tasks.filter((t: Json) => !(t.state === 'done' && t.updated_at >= today))];
   events.push(ev(20, 13, 'file.delivered', 'tracer', { task: 52, path: 'files/dinner-list.pdf' }), ev(21, 12, 'task.done', 'tracer', { task: 52, title: 'your dinner list' }));
   pages.chief = { messages: [
     { id: 1, author: 'person', text: 'Can you get me to Lahore on Friday? Morning if possible.', at: now - 20 * min },
