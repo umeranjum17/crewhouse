@@ -7,7 +7,7 @@ import { cycle, type Focused } from './dialog.ts';
 import { chatTokens, safeLink } from './chat-md.ts';
 import * as art from './art.ts';
 import { MARKS } from './logos.ts';
-import { clock, column, docLinks, sourceLabel, document as docView, fileSource, fileView, mdPlain, pageWords, sheetWords, workbook, type Card, type DocPart, type DocView, type FileView, type Helper, type Sheet, type Step, type Workbook } from './adapter.ts';
+import { clock, column, docLinks, sourceLabel, document as docView, fileSource, fileView, mdPlain, pageWords, saveAs, sheetWords, workbook, type Card, type DocPart, type DocView, type FileView, type Helper, type Sheet, type Step, type Workbook } from './adapter.ts';
 
 /** Markdown inline runs, from the shared safe tokens (web/src/chat-md.ts): no raw HTML, http(s) links only. */
 const mdInline = (tokens: any[]): ReactNode => tokens.map((t, i) => t.type === 'strong' ? <strong key={i}>{mdInline(t.tokens)}</strong>
@@ -396,7 +396,7 @@ export function PreviewPanel({ bot, path, title: known, onClose }: { bot: string
         <header className="wb-head">
           <span className={`wb-ic wb-${f.kind}`} aria-hidden>{f.kind === 'page' ? '▤' : '▦'}</span>
           <span className="grow wb-what"><b>{f.name}</b><span className="mute small">{about}</span></span>
-          <a className="btn" href={f.url} target="_blank" rel="noreferrer">Download</a>
+          <a className="btn" href={f.url} download={saveAs(f).name}>Download</a>
           <button className="icon-btn" onClick={onClose} aria-label="Close">✕</button>
         </header>
         {!book && !doc && text === null && <div className="mute">Opening “{f.name}”…</div>}
