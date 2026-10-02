@@ -902,7 +902,7 @@ details.card[open] > summary { margin-bottom: 10px; }
 .o-setup { color: var(--pink); font-weight: 650; }
 .o-made { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .o-made .card { display: grid; gap: 2px; padding: 12px 14px; color: inherit; text-decoration: none; min-width: 0; }
-.o-made b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.o-made b { overflow-wrap: anywhere; }
 
 /* ── B1 Studio (Main597): one display serif, one accent, the desk rail, Home's greeting and the Tonight column. ── */
 h1 { font: 400 32px/36px var(--serif); letter-spacing: -.005em; }
@@ -1026,11 +1026,12 @@ h1 { font: 400 32px/36px var(--serif); letter-spacing: -.005em; }
 .c-clip:disabled { opacity: .45; cursor: not-allowed; }
 .c-chip { height: 28px; max-width: 160px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line2); background: var(--solid); font: 500 12.5px/26px var(--ui); color: var(--ink2); white-space: nowrap; }
 
-/* Chief's hero over his chat (B1 polish): his whole figure in its own column, feet on the card's floor (200px of 230 on a
-   desk, 150 on a phone), the serif name, his own line in a bubble, the crew with a badge each. */
-.chief-hero { display: grid; grid-template-columns: 230px minmax(0, 1fr); min-height: 268px; overflow: hidden; margin: 4px 0 12px; background: var(--solid); border: 1px solid var(--line2); border-radius: 24px; box-shadow: 0 1px 2px rgba(20, 26, 42, .04), 0 14px 32px -22px rgba(20, 26, 42, .32); }
-.ch-art { align-self: end; display: grid; padding-left: 16px; }
-.ch-art .ink { width: 200px; height: auto; }
+/* Chief's hero over his chat (B1 polish): his whole figure in its own column, feet on the card's floor, the serif name,
+   his own line in a bubble, the crew with a badge each. The figure's box keeps headroom over the hat for his poses, so it
+   is drawn larger than the mock's (240px on a desk, 180 on a phone) and that headroom slides under the card's top edge. */
+.chief-hero { display: grid; grid-template-columns: 256px minmax(0, 1fr); min-height: 268px; overflow: hidden; margin: 4px 0 12px; background: var(--solid); border: 1px solid var(--line2); border-radius: 24px; box-shadow: 0 1px 2px rgba(20, 26, 42, .04), 0 14px 32px -22px rgba(20, 26, 42, .32); }
+.ch-art { align-self: end; display: grid; padding-left: 16px; margin-top: -32px; }
+.ch-art .ink { width: 240px; height: auto; }
 .ch-body { min-width: 0; display: grid; gap: 10px; justify-items: start; align-content: start; padding: 30px 28px 22px 6px; }
 .ch-name { margin: 0; font: 400 52px/1 var(--serif); letter-spacing: -.01em; color: var(--ink); }
 .ch-name small { font: 400 13px/1 var(--ui); color: var(--mute); letter-spacing: 0; margin-left: 6px; }
@@ -1044,13 +1045,13 @@ h1 { font: 400 32px/36px var(--serif); letter-spacing: -.005em; }
 .ch-more { font: 600 13px/1 var(--ui); color: var(--ink2); text-decoration: none; padding: 0 4px; }
 .ch-caption { margin: -2px 0 0; font: 400 13px/18px var(--ui); color: var(--ink2); }
 @media (max-width: 899px) {
-  .chief-hero { grid-template-columns: 150px minmax(0, 1fr); min-height: 236px; }
-  .ch-art { padding-left: 2px; }
-  .ch-art .ink { width: 150px; }
-  .ch-body { padding: 20px 16px 14px 4px; }
+  .chief-hero { grid-template-columns: 164px minmax(0, 1fr); min-height: 236px; }
+  .ch-art { padding-left: 0; margin: 0 0 0 -14px; }
+  .ch-art .ink { width: 180px; }
+  .ch-body { padding: 20px 12px 14px 4px; }
   .ch-name { font-size: 40px; }
   /* B1 phone: the five faces sit in one row under his line (zoom scales the badge with its face). */
-  .ch-crew { gap: 4px; }
+  .ch-crew { gap: 3px; }
   .ch-face { zoom: .74; }
   .ch-say { font-size: 15px; padding: 10px 14px; }
   /* B1 phone: hero and card scroll with the thread, in the mock's order; nothing sticks over the hero. */
@@ -1058,7 +1059,8 @@ h1 { font: 400 32px/36px var(--serif); letter-spacing: -.005em; }
 }
 @media (max-width: 359px) {
   .chief-hero { grid-template-columns: 112px minmax(0, 1fr); min-height: 0; }
-  .ch-art .ink { width: 112px; }
+  .ch-art { margin-left: -8px; }
+  .ch-art .ink { width: 120px; }
 }
 
 /* The Tonight rail beside Chief's chat on a desk: card per helper or tray item, and a plain line where a section is empty. */
