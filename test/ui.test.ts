@@ -429,6 +429,9 @@ test('plain() keeps what a person wrote and drops the machinery', () => {
   assert.equal(A.plain('Saved it to /home/alex/x/report.pdf for you'), 'Saved it to “Report” for you');
   assert.equal(A.plain('I used `ls -la` and it worked'), 'I used and it worked');
   assert.equal(A.plain('Your `Birthday` video'), 'Your Birthday video');
+  assert.equal(A.plain('- `--branch`: open a branch\n- `--web`: open it in the browser'), '- --branch: open a branch\n- --web: open it in the browser',
+    'a lone option named as a label keeps its words (real Scout output lost both)');
+  assert.equal(A.plain('Run `gh repo view --web` now'), 'Run now', 'a whole command still leaves');
   assert.equal(A.plain('It is saved at `files/birthday-card.mp4` and is 1080p.'), 'It is saved at “Birthday card” and is 1080p.', 'a file named by the bot keeps its name');
   assert.equal(A.plain('She said 3/4 of us are in'), 'She said 3/4 of us are in');
   assert.equal(A.pretty('files/mum-birthday_v2.mp4'), 'Mum birthday v2');
@@ -1497,7 +1500,9 @@ test('a delivered document is a card in the chat, and opens as a read-only docum
   assert.deepEqual(A.document(null, 'Nothing').parts, []);
   const source = doc.parts[1].text!;
   const links = A.docLinks(source);
-  assert.equal(links.map((p) => p.text).join(''), source, 'reader never changes the source text');
+  assert.equal(links.map((p) => p.text).join(''), 'Claude Code and Codex: see sec.gov” for details.', 'a bare source reads as its site, a tappable label');
+  assert.ok(A.docLinks('BankFind: https://banks.data.fdic.gov/bankfind-suite/bankfind').every((p) => !/https?:/.test(p.text)),
+    'no raw address left to wrap as "https: //" on a phone');
   assert.deepEqual(links.filter((p) => p.href).map((p) => p.href), ['https://www.sec.gov/rules/'], 'source URLs link without the smart quote');
   assert.equal(A.docLinks('javascript:alert(1) and ftp://example.org').some((p) => p.href), false, 'only http(s) is linked');
   assert.deepEqual(A.docLinks('[SEC](https://www.sec.gov/x)'), [{ text: 'SEC', href: 'https://www.sec.gov/x' }],
@@ -1818,4 +1823,40 @@ test('a desk shows the job\'s first looks from its task, never a raw path', () =
   assert.deepEqual(v.crew.find((c) => c.id === 'reel')!.things.map((f) => f.name), ['Party plan first look', 'Venue lead']);
   for (const view of [h, w, v]) assert.doesNotMatch(shown(view), FORBIDDEN, 'things never render a raw path');
   assert.doesNotMatch(h.things.map((f) => f.name).join(' '), /files\/|\.png/i, 'names are said, not pathed');
+});
+
+// PR258's titles are authoritative: crewd registers the human name beside an opaque storage path, and every place a
+// file is named shows that name as written — never one rebuilt from the path.
+test('a delivered file is named by its registered title everywhere it shows', () => {
+  const path = 'files/4f0c2b9e7a.docx', title = 'Refund follow-up — stroller return';
+  assert.equal(A.fileView('scribe', path, title).name, title, 'punctuation and case kept');
+  assert.equal(A.fileView('scribe', 'files/thank-you-to-maya.md').name, 'Thank you to maya', 'a file delivered without one keeps the old fallback');
+  const state = { bots: [{ id: 'scout', task: { id: 8, files: [{ path: 'files/9a.xlsx', title: 'Stroller costs, by month', note: '', at: 1 }] },
+    last: { author: 'system', text: 'Delivered files/9a.xlsx: One sheet: Costs', at: 2 } }],
+    tasks: [{ id: 7, bot: 'scribe', state: 'done', title: 'Refund', updated_at: 1, files: [path], fileTitles: { [path]: title } }], asks: [], events: [] };
+  assert.equal(A.things(state)[0].files[0].name, title, 'Things');
+  assert.equal(A.deskThings('scout', state.bots[0].task)[0].name, 'Stroller costs, by month', 'the desk');
+  assert.equal(A.fileTitle(state, 'scribe', path), title);
+  assert.equal(A.preview({ bot: 'scribe', author: 'system', text: `Delivered ${path}: The refund is ready.` }, '', state), `Sent “${title}”`, 'the chat list');
+  const page = { files: [{ path: '4f0c2b9e7a.docx', title }], messages: [{ id: 1, author: 'system', text: `Delivered ${path}: The ${title} is ready.` }] };
+  assert.equal(A.lines(page, 'scribe')[0].files[0].name, title, 'the chat card');
+  assert.equal(A.lines({ messages: [{ id: 2, author: 'bot', text: 'Here', files: [{ bot: 'scribe', path, title }] }] }, 'chief')[0].files[0].name, title, "Chief's thread");
+  assert.equal(A.step({ kind: 'file.delivered', data: { path, title } }), `Made “${title}”`, 'the trail');
+  const office = A.officeEvent({ chief: {} as any, crew: [{ id: 'scribe', things: [], steps: [], step: '', ring: 'working', mood: 'work', status: '' } as any], done: [], counts: { needs: 0, working: 1, done: 0 } },
+    { kind: 'file.delivered', bot: 'scribe', seq: 1, at: 1, data: { task: 7, path, title } });
+  assert.equal(office.crew[0].things[0].name, title, 'the office desk, live');
+  const done = A.officeEvent(office, { kind: 'task.done', bot: 'scribe', seq: 2, at: 2, data: { task: 7, title: 'Refund', files: [path] } });
+  assert.equal(done.done[0].files[0].name, title, 'a job finishing keeps the name its desk had');
+});
+
+test("the phone's reader shares the file's words and opens the whole page", () => {
+  const doc = A.document({ parts: [{ kind: 'heading', text: 'Steps' }, { kind: 'li', text: 'Find the bank' }, { kind: 'table', head: ['A', 'B'], rows: [['1', '2']] }] }, 'Family FDIC checklist');
+  assert.equal(A.shareWords('Family FDIC checklist', null, doc, null), 'Family FDIC checklist\n\nSteps\n• Find the bank\nA | B\n1 | 2');
+  assert.equal(A.shareWords('Notes', null, null, '# Hi\nthere'), 'Notes\n\n# Hi\nthere');
+  const app = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
+  const sheet = app.slice(app.indexOf('function DocSheet('), app.indexOf('function VideoSheet('));
+  assert.match(sheet, /label="Share"[\s\S]{0,200}<Btn label="Close"/, 'Share sits next to Close');
+  assert.match(sheet, /page\?\.title/, "the reader's title is crewd's registered one");
+  assert.match(sheet, /<ChatText text=\{text\} whole \/>/, 'a delivered page opens whole, not clipped behind More');
+  assert.match(app, /function DocText[\s\S]{0,300}A\.docLinks/, 'document sources are tappable labels on the phone too');
 });

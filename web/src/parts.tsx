@@ -7,12 +7,12 @@ import { cycle, type Focused } from './dialog.ts';
 import { chatTokens, safeLink } from './chat-md.ts';
 import * as art from './art.ts';
 import { MARKS } from './logos.ts';
-import { clock, column, docLinks, document as docView, fileSource, fileView, mdPlain, pageWords, sheetWords, workbook, type Card, type DocPart, type DocView, type FileView, type Helper, type Sheet, type Step, type Workbook } from './adapter.ts';
+import { clock, column, docLinks, sourceLabel, document as docView, fileSource, fileView, mdPlain, pageWords, sheetWords, workbook, type Card, type DocPart, type DocView, type FileView, type Helper, type Sheet, type Step, type Workbook } from './adapter.ts';
 
 /** Markdown inline runs, from the shared safe tokens (web/src/chat-md.ts): no raw HTML, http(s) links only. */
 const mdInline = (tokens: any[]): ReactNode => tokens.map((t, i) => t.type === 'strong' ? <strong key={i}>{mdInline(t.tokens)}</strong>
   : t.type === 'em' ? <em key={i}>{mdInline(t.tokens)}</em>
-  : t.type === 'link' && safeLink(t.href) ? <a className="chat-link" key={i} href={safeLink(t.href)} target="_blank" rel="noopener noreferrer">{mdInline(t.tokens)}</a>
+  : t.type === 'link' && safeLink(t.href) ? <a className="chat-link" key={i} href={safeLink(t.href)} target="_blank" rel="noopener noreferrer">{t.text === t.href ? sourceLabel(safeLink(t.href)) : mdInline(t.tokens)}</a>
   : t.type === 'codespan' ? <span key={i}>{t.text}</span>
   : t.type === 'br' ? <br key={i} />
   : t.type === 'html' ? t.raw : t.tokens ? <span key={i}>{mdInline(t.tokens)}</span> : t.text ?? t.raw);
@@ -259,16 +259,17 @@ export function Media({ f, big }: { f: FileView; big?: boolean }) {
  *  the panel open the same file, so they share one read instead of asking the home computer twice. */
 const previews = new Map<string, Promise<Json>>();
 function usePreview(f: FileView) {
-  const [read, setRead] = useState<{ book: Workbook | null; doc: DocView | null; text: string | null }>({ book: null, doc: null, text: null });
+  const [read, setRead] = useState<{ book: Workbook | null; doc: DocView | null; text: string | null; title?: string }>({ book: null, doc: null, text: null });
   useEffect(() => {
     const src = fileSource(f.url);
     if (!src) return;
     let on = true;
     let got = previews.get(f.url);
     if (!got) previews.set(f.url, got = f.kind === 'page' ? api.document(src.bot, src.path) : api.workbook(src.bot, src.path));
-    got.then((j) => on && setRead(f.kind === 'page'
+    // crewd's registered title names the file wherever it opens, even from a bare `#/f/…` address.
+    got.then((j) => on && setRead({ title: typeof j?.title === 'string' && j.title.trim() ? j.title.trim() : undefined, ...(f.kind === 'page'
       ? (typeof j?.text === 'string' ? { book: null, doc: null, text: mdPlain(j.text) } : { book: null, doc: docView(j, f.name), text: null })
-      : { book: workbook(j, f.name), doc: null, text: null }))
+      : { book: workbook(j, f.name), doc: null, text: null }) }))
       .catch(() => on && setRead({ book: null, doc: null, text: null }));
     return () => { on = false; };
   }, [f.url, f.name]);
@@ -314,8 +315,9 @@ export function Thumb({ name, book, doc, text }: { name: string; book: Workbook 
 
 /** A finished file the helper made — a workbook or a document — in the chat: a peek inside, then what kind of file it
  *  is, its name, a line about it, and Open. */
-export function PreviewCard({ f, big }: { f: FileView; big?: boolean }) {
-  const { book, doc, text } = usePreview(f);
+export function PreviewCard({ f: given, big }: { f: FileView; big?: boolean }) {
+  const { book, doc, text, title } = usePreview(given);
+  const f = title ? { ...given, name: title } : given;
   const src = fileSource(f.url);
   const about = aboutFile(f, book, doc);
   return (
@@ -382,8 +384,9 @@ export function PreviewPanel({ bot, path, onClose }: { bot: string; path: string
   const box = useRef<HTMLDivElement>(null);
   const [tab, setTab] = useState(0);
   useDialogOwn(box, onClose);
-  const f = fileView(bot, path);
-  const { book, doc, text } = usePreview(f);
+  const file = fileView(bot, path);
+  const { book, doc, text, title } = usePreview(file);
+  const f = title ? { ...file, name: title } : file;
   const sheets = book?.sheets ?? [];
   const s = sheets[Math.min(tab, Math.max(0, sheets.length - 1))];
   const about = aboutFile(f, book, doc);

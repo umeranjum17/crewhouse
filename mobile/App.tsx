@@ -5,7 +5,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useFonts } from 'expo-font';
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
-  ActivityIndicator, AppState, BackHandler, Clipboard, Image, KeyboardAvoidingView, Modal, PermissionsAndroid, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Switch, Text, TextInput, useColorScheme, View,} from 'react-native';
+  ActivityIndicator, AppState, BackHandler, Clipboard, Image, KeyboardAvoidingView, Modal, PermissionsAndroid, Platform, Pressable, ScrollView, Share, StatusBar, StyleSheet, Switch, Text, TextInput, useColorScheme, View,} from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import * as A from '../web/src/adapter.ts';
 import { chatTokens, safeLink } from '../web/src/chat-md.ts';
@@ -165,14 +165,14 @@ function Btn({ label, onPress, go, ghost, big, disabled }: { label: string; onPr
     </Pressable>
   );
 }
-function ChatText({ text }: { text: string }) {
+function ChatText({ text, whole }: { text: string; whole?: boolean }) {
   const t = useLook();
   const [more, setMore] = useState(false);
-  const long = text.length > 700 || text.split('\n').length > 10;
+  const long = !whole && (text.length > 700 || text.split('\n').length > 10);
   const shown = long && !more ? text.slice(0, 650).replace(/\s+\S*$/, '') : text;
   const inline = (tokens: any[]): ReactNode => tokens.map((x, i) => x.type === 'strong' ? <Text key={i} style={s.b}>{inline(x.tokens)}</Text>
     : x.type === 'em' ? <Text key={i} style={{ fontStyle: 'italic' }}>{inline(x.tokens)}</Text>
-    : x.type === 'link' && safeLink(x.href) ? <Text key={i} accessibilityRole="link" onPress={() => void Linking.openURL(safeLink(x.href))} style={{ textDecorationLine: 'underline', backgroundColor: t.soft, color: t.ink }}>{inline(x.tokens)}</Text>
+    : x.type === 'link' && safeLink(x.href) ? <Text key={i} accessibilityRole="link" onPress={() => void Linking.openURL(safeLink(x.href))} style={{ textDecorationLine: 'underline', backgroundColor: t.soft, color: t.ink }}>{x.text === x.href ? A.sourceLabel(safeLink(x.href)) : inline(x.tokens)}</Text>
     : x.type === 'html' ? x.raw : x.tokens ? <Text key={i}>{inline(x.tokens)}</Text> : x.text ?? x.raw);
   const blocks = (tokens: any[]): ReactNode => tokens.map((x, i) => x.type === 'heading' ? <T key={i} style={{ fontSize: 18, lineHeight: 25, fontWeight: '600', marginTop: 8 }}>{inline(x.tokens)}</T>
     : x.type === 'paragraph' || x.type === 'text' ? <T key={i}>{inline(x.tokens ?? [{ text: x.text }])}</T>
@@ -418,15 +418,23 @@ function SheetGrid({ head, rows, nums, roles }: { head: string[]; rows: string[]
   </View>;
 }
 
+/** A document's words with its sources as tappable labels, as the web's reader links them (A.docLinks). */
+function DocText({ text = '' }: { text?: string }) {
+  const t = useLook();
+  return <>{A.docLinks(text).map((part, i) => part.href
+    ? <Text key={i} accessibilityRole="link" onPress={() => void Linking.openURL(part.href!)} style={{ textDecorationLine: 'underline', color: t.ink }}>{part.text}</Text>
+    : part.text)}</>;
+}
+
 /** A document's parts as the web's reader shows them: headings, paragraphs, bullets and tables. */
 function DocParts({ parts }: { parts: A.DocPart[] }) {
   const runs: (A.DocPart | A.DocPart[])[] = [];
   parts.forEach((p) => { const last = runs.at(-1); if (p.kind === 'li' && Array.isArray(last)) last.push(p); else if (p.kind === 'li') runs.push([p]); else runs.push(p); });
   return <View style={{ gap: 12, paddingTop: 12, paddingBottom: 24 }}>{runs.map((run, i) => Array.isArray(run)
-    ? <View key={i} style={{ gap: 6 }}>{run.map((li, j) => <View key={j} style={{ flexDirection: 'row', gap: 8 }}><T style={s.read}>•</T><T style={[s.read, { flex: 1 }]}>{li.text}</T></View>)}</View>
-    : run.kind === 'heading' ? <T key={i} style={{ fontSize: 18, lineHeight: 25, fontWeight: '600', marginTop: i ? 6 : 0 }}>{run.text}</T>
+    ? <View key={i} style={{ gap: 6 }}>{run.map((li, j) => <View key={j} style={{ flexDirection: 'row', gap: 8 }}><T style={s.read}>•</T><T style={[s.read, { flex: 1 }]}><DocText text={li.text} /></T></View>)}</View>
+    : run.kind === 'heading' ? <T key={i} style={{ fontSize: 18, lineHeight: 25, fontWeight: '600', marginTop: i ? 6 : 0 }}><DocText text={run.text} /></T>
     : run.kind === 'table' ? <Wide key={i}><SheetGrid head={run.head ?? []} rows={run.rows ?? []} /></Wide>
-    : <T key={i} style={[s.read, run.bold && s.b]}>{run.text}</T>)}</View>;
+    : <T key={i} style={[s.read, run.bold && s.b]}><DocText text={run.text} /></T>)}</View>;
 }
 
 /** One rendered file over the link, read-only: a spreadsheet is its sheets as tables, a document its headings,
@@ -440,8 +448,9 @@ function DocSheet({ f, onClose }: { f: A.FileView; onClose: () => void }) {
     const src = A.fileSource(f.url);
     if (src) void (f.kind === 'sheet' ? api.workbook(src.bot, src.path) : api.document(src.bot, src.path)).then(setPage).catch(() => {});
   }, [f.url]);
-  const book = f.kind === 'sheet' && page ? A.workbook(page, f.name) : null;
-  const doc = f.kind === 'page' && page && Array.isArray(page?.parts) ? A.document(page, f.name) : null;
+  const name = typeof page?.title === 'string' && page.title.trim() ? page.title.trim() : f.name; // crewd's registered title
+  const book = f.kind === 'sheet' && page ? A.workbook(page, name) : null;
+  const doc = f.kind === 'page' && page && Array.isArray(page?.parts) ? A.document(page, name) : null;
   const text = page && !book && !doc ? A.mdPlain(String(page?.text ?? '')) : null;
   const sheets = book?.sheets ?? [];
   const sNow = sheets[Math.min(tab, Math.max(0, sheets.length - 1))];
@@ -451,14 +460,16 @@ function DocSheet({ f, onClose }: { f: A.FileView; onClose: () => void }) {
       <Pressable style={[s.sheet, { backgroundColor: t.bg, maxHeight: '88%' }]} onPress={() => {}}>
         <View style={[s.row, { paddingBottom: 12, borderBottomWidth: 1, borderColor: t.line }]}>
           <View style={[s.fileIc, { backgroundColor: t.solid, borderColor: t.line }]}><T tone={f.kind === 'sheet' ? undefined : 'ink2'} style={[s.fileGlyph, f.kind === 'sheet' && { color: t.ok }]}>{f.kind === 'sheet' ? '▦' : '▤'}</T></View>
-          <T style={[s.h2, { flex: 1 }]} lines={2}>{f.name}</T><Btn label="Close" onPress={onClose} /></View>
+          <T style={[s.h2, { flex: 1 }]} lines={2}>{name}</T>
+          {(book || doc || text) && <Btn label="Share" onPress={() => void Share.share({ title: name, message: A.shareWords(name, book, doc, text) }).catch(() => {})} />}
+          <Btn label="Close" onPress={onClose} /></View>
         <ScrollView style={{ flexShrink: 1 }}>
-          {page === null && <T tone="mute">Opening “{f.name}”…</T>}
+          {page === null && <T tone="mute">Opening “{name}”…</T>}
           {page !== null && !book && !doc && !text && <T tone="mute">There is nothing in it to show yet.</T>}
           {sNow && <View style={{ gap: 8, paddingTop: 12 }}><Wide><SheetGrid head={sNow.head} rows={sNow.rows} nums={sNow.nums} roles={sNow.roles} /></Wide>
             {more > 0 && <T tone="mute" style={s.small}>{`…and ${more === 1 ? 'one more row' : `${more} more rows`}. Open it on the computer to see the whole sheet.`}</T>}</View>}
           {doc && (doc.parts.length ? <DocParts parts={doc.parts} /> : <T tone="mute">There is nothing in it to show yet.</T>)}
-          {text != null && text !== '' && <ChatText text={text} />}
+          {text != null && text !== '' && <ChatText text={text} whole />}
         </ScrollView>
         {/* the sheet's tabs sit under it, as in the file's own program */}
         {sheets.length > 0 && <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, borderTopWidth: 1, borderColor: t.line, paddingTop: 8 }}
