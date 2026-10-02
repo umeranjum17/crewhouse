@@ -103,6 +103,24 @@ test('a run carries its own account to the engine: the picked provider is the on
   } finally { await f.done(); }
 });
 
+test('resolved engine config disables silent memory flush and heartbeat without disabling the workshop', async () => {
+  const f = faked();
+  const configPath = join(f.state, 'openclaw', 'openclaw.json');
+  try {
+    await f.started;
+    const saved = JSON.parse(readFileSync(configPath, 'utf8'));
+    saved.agents.defaults.compaction.memoryFlush.enabled = true;
+    saved.agents.defaults.heartbeat.every = '30m';
+    writeFileSync(configPath, JSON.stringify(saved));
+    await f.runtime.kit.prepare();
+    const config = JSON.parse(readFileSync(configPath, 'utf8'));
+    assert.equal(config.agents.defaults.compaction.memoryFlush.enabled, false);
+    assert.equal(config.agents.defaults.heartbeat.every, '0m');
+    assert.equal(config.skills.workshop.approvalPolicy, 'auto');
+    assert.equal(config.plugins.entries['memory-core'].config.dreaming.enabled, false);
+  } finally { await f.done(); }
+});
+
 // Exercise the kit's real installation branch, replacing only npm with an offline recorder.
 test('prepare installs and repairs the kit pin with scripts off and an isolated home; a matching engine is reused', async () => {
   const state = mkdtempSync(join(tmpdir(), 'ch-install-'));
