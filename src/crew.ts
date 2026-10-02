@@ -694,17 +694,14 @@ export class Crew {
   /** Pause, resume or move a routine, or make it a quiet check-in. Resuming counts from now: a paused routine never catches up. */
   updateRoutine(id: number, b: { state?: string; schedule?: string; quiet?: boolean }) {
     const r = this.routine(id);
-    if (b.quiet !== undefined) {
-      if (typeof b.quiet !== 'boolean' || r.kind === 'digest') throw Object.assign(new Error('only a helper\'s routine can be a quiet check-in'), { status: 400 });
-      this.db.run('UPDATE routines SET quiet = ? WHERE id = ?', b.quiet ? 1 : 0, id);
-      if (b.state === undefined && b.schedule === undefined) return;
-    }
+    if (b.quiet !== undefined && (typeof b.quiet !== 'boolean' || r.kind === 'digest'))
+      throw Object.assign(new Error('only a helper\'s routine can be a quiet check-in'), { status: 400 });
     const state = b.state ?? r.state;
     if (!['on', 'paused'].includes(state)) throw Object.assign(new Error('a routine is on or paused'), { status: 400 });
     const schedule = b.schedule?.trim() || r.schedule;
-    const next = schedule ? nextRun(paced(parseSchedule(schedule)), Date.now()) : null;
+    const next = b.quiet !== undefined && b.state === undefined && b.schedule === undefined ? r.next_at : schedule ? nextRun(paced(parseSchedule(schedule)), Date.now()) : null;
     this.db.tx(() => {
-      this.db.run('UPDATE routines SET state = ?, schedule = ?, next_at = ? WHERE id = ?', state, schedule, next, id);
+      this.db.run('UPDATE routines SET quiet = ?, state = ?, schedule = ?, next_at = ? WHERE id = ?', b.quiet === undefined ? r.quiet : b.quiet ? 1 : 0, state, schedule, next, id);
       this.db.event(state !== r.state ? `routine.${state === 'on' ? 'resumed' : 'paused'}` : 'routine.changed', r.bot, { routine: id, name: r.name,
         words: [schedule ? describe(parseSchedule(schedule)) : '', r.trigger ? describeTrigger(parseTrigger(r.trigger), this.bot(r.bot)?.display ?? r.bot) : ''].filter(Boolean).join('; ') });
     });
