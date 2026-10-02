@@ -288,7 +288,7 @@ function Mic({ on, text, put, listen = false }: { on: boolean; text: string; put
 
 /** The message box: words (the phone keyboard's own mic dictates them; Chief's box has its own) and up to four
  *  photos. A send that didn't go through keeps both with a Retry; each chat holds its own words (web/src/draft.ts). */
-function Composer({ placeholder, onSend, chat, photos: canPhoto = true, mic = chat === 'chief', listen }: { placeholder: string; onSend: (t: string, photos: Photo[]) => unknown; chat?: string; photos?: boolean; mic?: boolean; listen?: boolean }) {
+function Composer({ placeholder, onSend, chat, photos: canPhoto = true, away, mic = chat === 'chief', listen }: { placeholder: string; onSend: (t: string, photos: Photo[]) => unknown; chat?: string; photos?: boolean; mic?: boolean; listen?: boolean; away?: boolean }) {
   const t = useLook();
   const [text, setText] = useState(() => (chat ? draftOf(chat).text : ''));
   const [pics, setPics] = useState<Photo[]>([]);
@@ -297,7 +297,7 @@ function Composer({ placeholder, onSend, chat, photos: canPhoto = true, mic = ch
   const ready = !!text.trim() || pics.length > 0;
   const change = (x: string) => { setText(x); setFailed(false); if (chat) keepDraft(chat, x); };
   const send = async () => {
-    if (busy || (!text.trim() && !pics.length)) return;
+    if (away || busy || (!text.trim() && !pics.length)) return;
     const x = text.trim(), p = pics;
     setBusy(true);
     let ok = false;
@@ -313,7 +313,8 @@ function Composer({ placeholder, onSend, chat, photos: canPhoto = true, mic = ch
   });
   return (
     <View style={{ gap: 6 }}>
-      {failed && <View style={s.row}>
+      {away && <T tone="ink2" style={[s.small, { paddingHorizontal: 8 }]}>Reconnecting… your words stay here until the home computer answers.</T>}
+      {!away && failed && <View style={s.row}>
         <T tone="pinkInk" style={[s.small, { flex: 1 }]}>Not sent — it's kept here.</T>
         <Btn label="Retry" onPress={() => void send()} />
       </View>}
@@ -330,7 +331,7 @@ function Composer({ placeholder, onSend, chat, photos: canPhoto = true, mic = ch
         </Pressable>}
         <TextInput style={[s.composerInput, { color: t.ink }]} value={text} onChangeText={change} multiline placeholder={placeholder} placeholderTextColor={t.mute} accessibilityLabel={placeholder} />
         <Mic on={mic} text={text} put={change} listen={listen} />
-        <Pressable onPress={() => void send()} disabled={!ready || busy} accessibilityLabel="Send" style={[s.send, { backgroundColor: t.go, opacity: ready && !busy ? 1 : 0.4 }]}>
+        <Pressable onPress={() => void send()} disabled={away || !ready || busy} accessibilityLabel="Send" accessibilityState={{ disabled: away || !ready || busy }} style={[s.send, { backgroundColor: t.go, opacity: ready && !busy && !away ? 1 : 0.4 }]}>
           <Text style={{ color: t.goInk, fontSize: 18, fontWeight: '900' }}>↑</Text>
         </Pressable>
       </View>
@@ -658,7 +659,7 @@ function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
 // ---------- the app ----------
 type Route = { view: 'home' | 'chief' | 'room' | 'crew' | 'helper' | 'things' | 'routines' | 'add' | 'phone'; id?: string; tab?: string; m?: number };
 /** `offline`: the screens show what this phone kept, read-only, until the home computer answers again. */
-type Ctx = { state: Json; tick: number; refresh: () => void; go: (r: Route, replace?: boolean) => void; back: () => void; canAct: boolean; offline: boolean; open: (c: A.Card) => void };
+type Ctx = { state: Json; tick: number; refresh: () => void; go: (r: Route, replace?: boolean) => void; back: () => void; canAct: boolean; offline: boolean; open: (c: A.Card) => void; writer?: boolean };
 
 function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }) {
   const t = useLook();
@@ -780,7 +781,7 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
   }
   const offline = status !== 'online';
   const canAct = grant.device.role === 'control' && !offline;
-  const ctx: Ctx = { state, tick, refresh, go, back: () => { back(); }, canAct, offline, open: setSheet };
+  const ctx: Ctx = { state, tick, refresh, go, back: () => { back(); }, canAct, offline, open: setSheet, writer: grant.device.role === 'control' };
   const shared = hasShareIntent && canAct && state.person.onboarded
     ? { text: [shareIntent.text, shareIntent.webUrl].filter((x, i, a) => x && a.indexOf(x) === i).join('\n'), files: (shareIntent.files ?? []).map((f) => ({ path: f.path, mimeType: f.mimeType })) } : null;
   if (shared) return <ShareIn state={state} shared={shared} go={go} onDone={() => resetShareIntent()} />;
@@ -1171,7 +1172,7 @@ function Home(ctx: Ctx) {
         <ChatList state={state} go={go} mood={chief.mood} />
         <JobList state={state} go={go} refresh={refresh} />
       </ScrollView>
-      {canAct && <View style={s.dock}><Composer placeholder="Ask Chief anything" onSend={toChief} chat="chief" /></View>}
+      {(canAct || ctx.writer) && <View style={s.dock}><Composer placeholder="Ask Chief anything" onSend={toChief} chat="chief" away={offline} /></View>}
       {!!desk && <DeskSheet desk={desk} {...ctx} onClose={() => setDesk(null)} />}
       {profile && <ChiefSheet view={view} {...ctx} onClose={() => setProfile(false)} />}
     </View>
@@ -1302,7 +1303,7 @@ function JobList({ state, go, refresh }: { state: Json; go: Ctx['go']; refresh: 
 }
 
 // ---------- a chat ----------
-function Chat({ id, m, state, tick, refresh, canAct, offline, open }: Ctx & { id: string; m?: number }) {
+function Chat({ id, m, state, tick, refresh, canAct, offline, open, writer }: Ctx & { id: string; m?: number }) {
   const t = useLook();
   // The computer's page when it answers; otherwise the lines this phone kept, until it does.
   const [page, setPage] = useState<Json>(() => kept.page(id));
@@ -1399,7 +1400,7 @@ function Chat({ id, m, state, tick, refresh, canAct, offline, open }: Ctx & { id
         {canAct && !!last?.choices.length && <View style={s.chips}>{last.choices.map((c) => <Btn key={c} label={c} onPress={() => send(c)} />)}</View>}
         {cards.filter((c) => !lines.length || lines.every((x) => (x.at ?? 0) > c.at)).map((c) => <AskCard key={c.id} c={c} who={h} state={state} onDone={refresh} canAct={canAct} offline={offline} open={open} />)}
       </ScrollView>
-      {canAct ? <View style={s.dock}><Composer key={seed} placeholder={id === 'chief' ? 'Ask Chief anything…' : `Message ${name}…`} onSend={send} chat={id} /></View>
+      {canAct || writer ? <View style={s.dock}><Composer key={seed} placeholder={id === 'chief' ? 'Ask Chief anything…' : `Message ${name}…`} onSend={send} chat={id} away={offline} /></View>
         : <T tone="mute" style={[s.small, { padding: 16 }]}>{offline ? "You can reply once the home computer is back." : "This phone watches the crew; it can't send messages."}</T>}
     </View>
   );

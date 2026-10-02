@@ -139,6 +139,9 @@ export function useListen() {
  *  Chief face (avatars, headers) carries the mood without each caller holding the state. */
 let night = false;
 export const setNight = (n: boolean) => { night = n; };
+/** Set by the shell while the home computer isn't answering: every composer keeps its words and holds Send. */
+let away = false;
+export const setAway = (a: boolean) => { away = a; };
 let chiefMood: art.Mood = 'idle';
 export const setChiefMood = (m: art.Mood) => { chiefMood = m; };
 
@@ -478,7 +481,7 @@ export function Composer({ placeholder, onSend, chat }: { placeholder: string; o
   const change = (t: string) => { setText(t); setFailed(false); hear(focused, t); if (chat) keepDraft(chat, t); };
   const send = async () => {
     const t = text.trim();
-    if (!t || busy) return;
+    if (!t || busy || away) return;
     setBusy(true);
     let ok = false;
     try { ok = !!(await onSend(t)); } catch { ok = false; }
@@ -487,12 +490,13 @@ export function Composer({ placeholder, onSend, chat }: { placeholder: string; o
   };
   return (
     <form className="composer" onSubmit={(e) => { e.preventDefault(); void send(); }}>
-      {failed && <div className="send-failed" role="alert">Not sent — it's kept here. <button type="button" className="link inline" onClick={() => void send()}>Retry</button></div>}
+      {away ? <div className="send-away" role="status">Reconnecting… your words stay here until the home computer answers.</div>
+        : failed && <div className="send-failed" role="alert">Not sent — it's kept here. <button type="button" className="link inline" onClick={() => void send()}>Retry</button></div>}
       <textarea rows={1} value={text} placeholder={placeholder} aria-label={placeholder}
         onFocus={() => { setFocused(true); hear(true, text); }} onBlur={() => { setFocused(false); hear(false, text); }}
         onChange={(e) => change(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(); } }} />
       {voice}
-      <button className="send" aria-label="Send" disabled={!text.trim() || busy}>↑</button>
+      <button className="send" aria-label="Send" disabled={!away && (!text.trim() || busy)} aria-disabled={away || undefined}>↑</button>
     </form>
   );
 }

@@ -284,6 +284,8 @@ video.media { width: auto; max-width: 100%; max-height: 360px; height: auto; obj
 /* A send that didn't go through stays with its words until the Retry works. */
 .composer:has(.send-failed) { flex-wrap: wrap; border-radius: 22px; }
 .send-failed { flex-basis: 100%; font-size: 13.5px; font-weight: 700; color: var(--pink-ink); padding: 8px 12px 2px; }
+.send-away { flex-basis: 100%; font-size: 13.5px; font-weight: 600; color: var(--ink2); padding: 8px 12px 2px; }
+.send[aria-disabled] { opacity: .45; cursor: default; }
 .send { width: 38px; height: 38px; border-radius: 50%; border: 0; background: var(--go); color: var(--go-ink); font: 600 17px var(--ui); flex: none; transition: transform 160ms var(--ease), background 120ms var(--ease); }
 .send:disabled { background: var(--soft); color: var(--mute); cursor: default; transform: scale(.9); }
 .send:not(:disabled):active { transform: scale(.92); }

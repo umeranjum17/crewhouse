@@ -7,7 +7,7 @@ import { api, demo, subscribe, type Json } from './api.ts';
 import * as A from './adapter.ts';
 import * as art from './art.ts';
 type Helper = ReturnType<typeof A.crew>[number];
-import { AiMark, AskCard, Banner, AskSheet, attempt, Celebrate, setChiefMood, setNight, ChiefArt, Composer, Face, Dots, Logo, Media, ChatText, PalArt, Pill, Splash, Steps, Toasts, toast, useListen, PreviewPanel } from './parts.tsx';
+import { AiMark, AskCard, Banner, AskSheet, attempt, Celebrate, setAway, setChiefMood, setNight, ChiefArt, Composer, Face, Dots, Logo, Media, ChatText, PalArt, Pill, Splash, Steps, Toasts, toast, useListen, PreviewPanel } from './parts.tsx';
 import { keepDraft } from './draft.ts';
 import { Screen } from './screen.tsx';
 import { hear, Office, useOffice } from './office.tsx';
@@ -1177,6 +1177,7 @@ function App() {
   const [state, setState] = useState<Json>(null);
   const [tick, setTick] = useState(0);
   const [offline, setOffline] = useState(false);
+  setAway(offline);
   const [party, setParty] = useState<{ title: string; helper: string } | null>(null);
   const accounts = useAccounts(0, tick);
   const seenDone = useRef<Set<number> | null>(null);
