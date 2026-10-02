@@ -1879,8 +1879,10 @@ test('J5 repairs stay in: the night look paints first, the job row is never cut 
   assert.match(css, /^\.jobs \.list-row \{ gap: 10px; padding: 10px 12px; \}/m);
   assert.match(main, /j\.says && <span className="small mute clamp">/, 'a job row\'s line wraps to two lines, never an ellipsis on one');
   // The hand-off page leaves from where the desk was before the room re-laid them, not from their new spot by the tray.
-  assert.match(office, /const was = seen\.current, from = desks\.current;\s*seen\.current = now;\s*desks\.current = spritesIn\(box\.current\);/);
-  assert.match(office, /handOff\(box\.current, got, from\)/);
+  assert.match(office, /const was = seen\.current, from = desks\.current;\s*seen\.current = live;\s*desks\.current = spritesIn\(box\.current\);/);
+  assert.match(office, /const got = A\.handedIn\(was, live\);\s*if \(got\.length\) handOff\(box\.current, got, from\)/, 'who handed in comes from the done list');
+  // The phone's page flies on the same truth, the helper's done count, from where they stood before the re-lay.
+  assert.match(read('mobile', 'src', 'office.tsx'), /const n = view\.done\.filter\(\(d\) => d\.helper === m\.id\)\.length, from = fromOf\(m\.id, n, x\);\s*return <motion\.Fly beat=\{n\}/);
   // Scribe's pen is held in the left hand: the Tray bubble floats over the right of that desk.
   assert.match(office, /<g transform=\{`translate\(\$\{2 \* x\} 0\) scale\(-1 1\)`\}><path className="o-pen"/);
 });

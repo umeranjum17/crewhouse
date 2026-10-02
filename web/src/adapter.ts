@@ -1333,6 +1333,9 @@ export function officeEvent(view: OfficeView, e: Json): OfficeView {
 
 /** A helper waiting on you: a row in Needs you, or a job stopped for an answer in their chat. */
 export const waitsOnYou = (c: OfficeMember) => c.ring === 'needs' || !!c.ask;
+/** Who handed a finished job to the tray between two views: a done row the earlier view lacked. The done list is what
+ *  the tray counts, so the hand-off follows it, however the events were grouped into commits. */
+export const handedIn = (was: OfficeView, now: OfficeView) => [...new Set(now.done.filter((t) => !was.done.some((w) => w.id === t.id)).map((t) => t.helper))];
 export const SEATS = 5;
 export type FloorPlan = { seats: OfficeMember[]; more: OfficeMember[] };
 /** Who stands on the office's one floor, one rule for the web and the phone (B1): five spots in the roster's order,

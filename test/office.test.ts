@@ -101,6 +101,12 @@ test('office truth: the room, its counts, the tray, the roster and Needs you rea
   const again = A.officeEvent(done, { kind: 'task.working', bot: 'scout', data: { title: 'Job 4' } });
   assert.equal(A.railWord(again.crew.find((c) => c.id === 'scout')!, again).word, 'Working', 'a new job replaces the cue');
   assert.equal(done.counts.working, 0);
+  // The hand-off follows the done list, not the helper's things: the demo hears file.delivered and task.done in one
+  // commit, and task.done empties the desk, so a things-grew diff saw nothing and no page ever flew (J5 at 4ab7e00).
+  const pair = A.officeEvent(A.officeEvent(v, { kind: 'file.delivered', bot: 'scout', data: { task: 1, path: 'files/a.pdf' } }), { kind: 'task.done', bot: 'scout', at: now, data: { task: 1, title: 'Job 1' } });
+  assert.ok(pair.crew.find((c) => c.id === 'scout')!.things.length <= v.crew.find((c) => c.id === 'scout')!.things.length, 'the old signal: no growth');
+  assert.deepEqual(A.handedIn(v, pair), ['scout'], 'one page, from the helper who finished');
+  assert.deepEqual(A.handedIn(pair, A.officeEvent(pair, { kind: 'task.done', bot: 'scout', at: now, data: { task: 1, title: 'Job 1' } })), [], 'the same job again (the refresh) flies nothing');
   // Out of reach: nobody claims to be busy or waiting.
   const away = A.officeAway(v);
   assert.deepEqual(away.counts, { needs: 0, working: 0, done: 1 });

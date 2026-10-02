@@ -51,6 +51,14 @@ export function Office({ view, night, offline, width, onChief, onDesk, onAsk, on
   const pill = urgent && (!chiefAsk || A.askRank(urgent.ask!) <= A.askRank(chiefAsk)) ? { at: order.indexOf(urgent), ask: urgent.ask!, who: urgent.name }
     : chiefAsk ? { at: order.indexOf('chief'), ask: chiefAsk, who: 'Chief' } : null;
   const more = plan.more.length, moreBusy = plan.more.filter((c) => A.seatOf(c) === 'working').length;
+  // A done page leaves from where the helper stood before the room re-laid them as done (the web's handOff): per helper,
+  // their done count, where they stood last render, and where the current page started. Idempotent, so safe in render.
+  const stood = useRef(new Map<string, { n: number; x: number; from: number }>()).current;
+  const fromOf = (id: string, n: number, x: number) => {
+    const e = stood.get(id), from = !e ? x : e.n !== n ? e.x : e.from;
+    stood.set(id, { n, x, from });
+    return from;
+  };
   const ink = r.edge, line = (x: number, y: number, w: number, h: number, c = ink): ViewStyle => ({ position: 'absolute', left: u(x), top: u(y), width: u(w), height: u(h), backgroundColor: c });
   return (
     <View style={{ width }}>
@@ -97,8 +105,9 @@ export function Office({ view, night, offline, width, onChief, onDesk, onAsk, on
             <motion.Hop beat={`${m.ring}|${m.mood}|${m.things.length}|${m.ask?.id ?? ''}`} times={m.mood === 'happy' ? 2 : 1} reduce={reduce} awake={awake} style={{ position: 'absolute', left: 0, top: u(30 - lift) }}>
               {m.second ? <View style={{ filter: [{ hueRotate: '48deg' }] }}>{img}</View> : img}
             </motion.Hop>
-            {m.things.length > 0 && <motion.Fly beat={m.things.length} dx={u(318 - x)} dy={u(-20)} reduce={reduce} awake={awake}
-              style={{ position: 'absolute', left: u(24), top: u(40), width: 14, height: 18, backgroundColor: '#fff', borderWidth: 1.5, borderColor: ink, borderRadius: 2 }}><View /></motion.Fly>}
+            {(() => { const n = view.done.filter((d) => d.helper === m.id).length, from = fromOf(m.id, n, x);
+              return <motion.Fly beat={n} dx={u(318 - from)} dy={u(-20)} reduce={reduce} awake={awake}
+              style={{ position: 'absolute', left: u(24 + from - x), top: u(40), width: 14, height: 18, backgroundColor: '#fff', borderWidth: 1.5, borderColor: ink, borderRadius: 2 }}><View /></motion.Fly>; })()}
           </Pressable>;
         })}
         {/* the tray in the corner and its one bubble */}

@@ -77,15 +77,14 @@ export function Office({ state, live, night }: { state: Json; live: A.OfficeView
   // Whoever finished hands a page to the tray, and the tray's count bumps. The page leaves from where their desk was
   // before the room re-laid them as done (ponytail: measured at the last change; a resize in between starts it from
   // the old spot, re-measure on resize if that shows).
-  const seen = useRef<Map<string, number> | null>(null);
+  const seen = useRef<A.OfficeView | null>(null);
   const desks = useRef(new Map<string, { x: number; y: number }>());
   useEffect(() => {
-    const now = new Map(live.crew.map((c) => [c.id, c.things.length]));
     const was = seen.current, from = desks.current;
-    seen.current = now;
+    seen.current = live;
     desks.current = spritesIn(box.current);
     if (!was) return;
-    const got = live.crew.filter((c) => c.things.length > (was.get(c.id) ?? c.things.length)).map((c) => c.id);
+    const got = A.handedIn(was, live);
     if (got.length) handOff(box.current, got, from);
   }, [live]);
   const trayWas = useRef<number | undefined>(undefined);
