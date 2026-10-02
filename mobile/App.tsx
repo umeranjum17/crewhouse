@@ -615,17 +615,20 @@ function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
     );
   }
   if (typing) {
+    // The keyboard takes half a small screen: the window shrinks to what's left and the form scrolls, so the field and Pair stay reachable.
     return (
-      <Center>
-        <ChiefArt mood="listen" size={120} />
-        <T style={s.h1}>Type a code</T>
-        <T tone="ink2" style={s.centerText}>Enter the code under Add a phone on your computer, or one someone there sent you.</T>
-        <TextInput style={[s.input, { alignSelf: 'stretch', color: t.ink, borderColor: t.line }]} value={code} onChangeText={setCode} placeholder="Type or paste the code" placeholderTextColor={t.mute}
-          accessibilityLabel="Pairing code" autoCapitalize="characters" autoCorrect={false} />
-        {busy ? <ActivityIndicator color={t.pink} style={{ margin: 20 }} /> : <Btn go big label="Pair" disabled={!code.trim()} onPress={typed} />}
-        {!!err && <T tone="pinkInk" style={s.centerText}>{err}</T>}
-        <Btn label="Scan instead" onPress={() => { setTyping(false); setErr(''); }} />
-      </Center>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="height">
+        <ScrollView contentContainerStyle={s.centerScroll} keyboardShouldPersistTaps="handled">
+          <ChiefArt mood="listen" size={120} />
+          <T style={s.h1}>Type a code</T>
+          <T tone="ink2" style={s.centerText}>Enter the code under Add a phone on your computer, or one someone there sent you.</T>
+          <TextInput style={[s.input, { alignSelf: 'stretch', color: t.ink, borderColor: t.line }]} value={code} onChangeText={setCode} placeholder="Type or paste the code" placeholderTextColor={t.mute}
+            accessibilityLabel="Pairing code" autoCapitalize="characters" autoCorrect={false} />
+          {busy ? <ActivityIndicator color={t.pink} style={{ margin: 20 }} /> : <Btn go big label="Pair" disabled={!code.trim()} onPress={typed} />}
+          {!!err && <T tone="pinkInk" style={s.centerText}>{err}</T>}
+          <Btn label="Scan instead" onPress={() => { setTyping(false); setErr(''); }} />
+        </ScrollView>
+      </KeyboardAvoidingView>
     );
   }
   return (
@@ -896,12 +899,10 @@ function AskEvidence({ c, open, readAll }: { c: A.Card; open: boolean; readAll?:
       : <T key={i}>{l}</T>;
   })}</View>;
   if (c.evidence === 'draft') {
-    const at = body.indexOf('\n');
     return <View style={[s.ev, { backgroundColor: t.sunken }]}>
       {!!c.draftTo && <T tone="mute" style={s.small}>To {c.draftTo}</T>}
-      <T style={{ fontWeight: '500' }}>{(at < 0 ? body : body.slice(0, at)).replace(/^Subject: /, '')}</T>
-      <T tone="ink2" lines={open ? undefined : 4}>{(at < 0 ? '' : body.slice(at + 1)).trim()}</T>
-      {!open && readAll}
+      {!!c.draftSubject && <T style={{ fontWeight: '500' }}>Subject: {c.draftSubject}</T>}
+      <ScrollView style={{ maxHeight: 240 }} nestedScrollEnabled><T tone="ink2">{body}</T></ScrollView>
     </View>;
   }
   if (c.lines) return <View style={[s.ev, { backgroundColor: t.sunken }]}>{c.lines.map((l, i) =>
@@ -1054,9 +1055,10 @@ function AskSheet({ c, who, chiefSays, canAct, onClose }: { c: A.Card; who: A.He
           {!!chiefSays && <View style={s.row}><Face who="chief" size={20} /><T tone="ink2" style={{ flex: 1 }}><Text style={s.b}>Chief:</Text> {A.plain(chiefSays)}</T></View>}
           {oops && <T tone="pinkInk" style={s.small}>That didn't go through. Try again.</T>}
           {canAct ? <>
+            {c.evidence === 'draft' && yes && <Btn go big label={yes.label} disabled={edit.empty} onPress={() => act(edit.yes(yes.body))} />}
             {edit.can && <Btn big label={edit.editing ? 'Use the original' : 'Edit'} onPress={edit.toggle} />}
             {rest.map((x) => <Btn key={x.label} big label={x.label} onPress={() => act(x.body)} />)}
-            {yes && <Btn go big label={yes.label} disabled={edit.empty} onPress={() => act(edit.yes(yes.body))} />}
+            {c.evidence !== 'draft' && yes && <Btn go big label={yes.label} disabled={edit.empty} onPress={() => act(edit.yes(yes.body))} />}
           </> : <Btn big label="Close" onPress={onClose} />}
           {always && canAct && <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: t.line, paddingTop: 10 }}><Btn ghost big label={always.label} onPress={() => act(always.body)} /></View>}
           {c.kind === 'spend' && <T tone="mute" style={[s.small, { textAlign: 'center' }]}>Anything that costs money asks you every time.</T>}
@@ -1845,6 +1847,7 @@ function ThisPhone({ grant, status, onForget, onClear }: { grant: Grant; status:
 
 const s = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 28, gap: 12 },
+  centerScroll: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', padding: 28, gap: 12 },
   centerText: { textAlign: 'center' },
   page: { padding: 16, gap: 12, paddingBottom: 32 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10 },

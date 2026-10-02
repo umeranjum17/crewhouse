@@ -178,21 +178,54 @@ test('a helper\'s draft waits in Needs you, named for who it goes to; the row\'s
   crew.recruit('scout', 'Scout', 'person');
   await crew.post('scout', 'Draft the reply on a card in front of me. '
     + '[tool crew_write {"path":"files/reply-trip-form.md","content":"Hello, the signed trip form is in Ayaan\'s bag this morning. Thank you, Umer"}] '
-    + '[tool crew_draft {"path":"files/reply-trip-form.md","to":"the school office"}]');
+    + '[tool crew_draft {"path":"files/reply-trip-form.md","channel":"email","subject":"Ayaan’s trip form — Friday","to":"the school office"}]');
   await until('the draft ask in the served view', () => crew.snapshot().asks.some((a: any) => a.kind === 'propose' && a.detail.draft));
   const s: Json = crew.snapshot();
   const ask = s.asks.find((a: any) => a.kind === 'propose' && a.detail.draft)!;
   assert.equal(ask.detail.draft.to, 'the school office', 'askView passes the draft through; without it Home drops the row');
   assert.equal(ask.detail.yes, 'Approve', 'the yes approves the draft; it is never a send');
   const c = A.card(ask, s);
-  assert.equal(c.head, 'Scout drafted a message for the school office', 'the card says what it is and who it is for, never "learned something"');
-  assert.deepEqual(c.choices.map((x: any) => x.label), ['Approve', 'Not now'], 'the no-send approval stays');
+  assert.equal(c.head, 'Scout wrote your email', 'the card says what it is and who it is for, never "learned something"');
+  assert.deepEqual(c.choices.map((x: any) => x.label), ['Approve', 'Reject'], 'the no-send approval stays');
   assert.match(c.preview?.body ?? '', /trip form/, 'the sheet the row opens shows the words');
   assert.equal(c.draftText, "Hello, the signed trip form is in Ayaan's bag this morning. Thank you, Umer", 'the words to change are the draft itself, not a tidied copy');
   const rows = A.needsYou(s);
-  assert.equal(rows.find((r: any) => r.id === ask.id)?.head, 'Scout drafted a message for the school office', 'the draft is a Needs-you row, ready to tap');
+  assert.equal(rows.find((r: any) => r.id === ask.id)?.head, 'Scout wrote your email', 'the draft is a Needs-you row, ready to tap');
   assert.ok(!rows.some((r: any) => /learned something/.test(r.head)));
   done();
+});
+
+test('draft cards keep the recipient, email subject and exact message separate across channels', async () => {
+  const { setup: lab, settled } = await import('./lab.ts');
+  const { crew, db, done } = lab();
+  crew.onboard('sir');
+  crew.recruit('scribe', 'Scribe', 'person');
+  try {
+    for (const [channel, to, subject, message] of [
+      ['email', 'returns@shop.example', 'Order 98765 refund', 'Hello,\n\nPlease confirm my refund.\n\nThanks,\nUmer'],
+      ['email', 'office@school.example', 'Friday trip', 'Hello,\n\nThe form is in the bag.\n\nThanks,\nUmer'],
+      ['text', 'Sara', '', 'Can we meet at 6?'],
+      ['post', 'X', '', 'One small win today.\n\nThe seedlings are up. #garden'],
+    ]) {
+      const tool = (name: string, args: Json) => `[tool ${name} ${JSON.stringify(args)}]`;
+      const { task } = (await crew.post('scribe', 'Recommended: X1. Draft only. This is the TASK TITLE. '
+        + tool('crew_write', { path: 'files/message.md', content: message }) + ' '
+        + tool('crew_draft', { path: 'files/message.md', channel, to, ...(subject ? { subject } : {}) })))!;
+      await settled(db, task);
+      const state = crew.snapshot();
+      const ask = state.asks.find((a: Json) => a.detail.draft?.to === to)!;
+      const c = A.card(ask, state);
+      assert.equal(c.head, `Scribe wrote your ${channel}`);
+      assert.equal(c.words, c.head, 'the headline never repeats job text or recipient');
+      assert.equal(c.draftTo, to);
+      assert.equal(c.draftSubject, subject || undefined);
+      assert.equal(c.preview?.body, message, 'paragraphs, first line and hashtags stay intact');
+      assert.equal(c.draftText, message, 'Edit starts with exactly the message on the card');
+      assert.equal(c.status, `Nothing is sent · ${channel === 'post' ? 'post' : 'send'} it yourself`);
+      assert.deepEqual(c.choices.map((x) => x.label), ['Approve', 'Reject']);
+    }
+    assert.equal(crew.snapshot().asks.filter((a: Json) => a.detail.draft).length, 4, 'two email cards with the same short headline both arrive');
+  } finally { done(); }
 });
 
 test("a job proposal card names the helper's proposed job, never a memory heading", async () => {

@@ -145,6 +145,7 @@ textarea.input { resize: vertical; }
 .ev { background: var(--soft); border-radius: 10px; padding: 12px 16px; margin-top: 12px; text-align: left; width: 100%; font-size: 15px; line-height: 1.5; display: grid; gap: 6px; align-content: start; align-items: baseline; }
 .ev .grow { flex: 1; }
 .ev-body { white-space: pre-line; color: var(--ink2); }
+.draft-body { white-space: pre-wrap; max-height: 240px; overflow: auto; }
 .ev-to { font: 400 13px/18px var(--ui); color: var(--mute); }
 .ev-subject { font-weight: 500; color: var(--ink); }
 .ev-quiet { color: var(--mute); font-size: 13px; line-height: 18px; }

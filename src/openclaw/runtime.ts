@@ -27,7 +27,6 @@ const ME = 'm1';
 /** The engine-side name of a Crewhouse tool and back: only the shell differs. */
 const crewName = (tool: string) => tool === 'shell' ? 'bash' : tool;
 
-// Model-visible tools: `shell` avoids the engine rewriting `bash` to its own exec before the gate.
 const args = { type: 'object', properties: { args: { type: 'array', items: { type: 'string' } } }, required: ['args'], additionalProperties: false };
 const SCHEMAS: Record<string, object> = {
   shell: { type: 'object', properties: { command: { type: 'string' } }, required: ['command'], additionalProperties: false },
@@ -44,6 +43,7 @@ const SCHEMAS: Record<string, object> = {
       items: { type: 'object', additionalProperties: true }, minItems: 1 },
   }, required: ['name', 'blocks'], additionalProperties: false },
   crew_report: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'], additionalProperties: false },
+  crew_draft: { type: 'object', properties: { path: { type: 'string' }, channel: { type: 'string', enum: ['email', 'text', 'post', 'reply'] }, to: { type: 'string' }, subject: { type: 'string' } }, required: ['path', 'channel', 'to'], additionalProperties: false },
   crew_batch: { type: 'object', properties: { question: { type: 'string' }, items: { type: 'array', items: { type: 'string' } } }, required: ['question', 'items'], additionalProperties: false },
 };
 const ABOUT: Record<string, string> = {
@@ -63,10 +63,9 @@ export const TOOLS: ToolSpec[] = ['shell', 'browser', 'calendar', 'mail', 'crew_
 ].map((name) => ({ name, description: ABOUT[name] ?? `Crewhouse ${name.slice(5).replaceAll('_', ' ')}. The person sees the result in their crew.`,
   parameters: SCHEMAS[name] ?? { type: 'object', additionalProperties: true } }));
 
-/** Crewhouse's engine config, merged under the kit's invariants on every prepare. */
 const CONFIG = {
   // An empty allow list: the engine otherwise narrows to its model map, and the person's other providers vanish.
-  agents: { defaults: { sandbox: { mode: 'off' }, modelPolicy: { allow: [] } } },
+  agents: { defaults: { sandbox: { mode: 'off' }, modelPolicy: { allow: [] }, compaction: { memoryFlush: { enabled: false } }, heartbeat: { every: '0m' } } },
   tools: { profile: 'coding', alsoAllow: TOOLS.map((t) => t.name), deny: ['group:fs', 'group:runtime', 'group:automation', 'group:messaging', 'group:nodes', 'group:ui', 'sessions_send', 'sessions_spawn', 'conversations_send', 'conversations_turn', 'subagents', 'code_execution', 'gateway', 'openclaw', 'plugins', 'cron', 'ask_user', 'suggest_task'], fs: { workspaceOnly: true }, exec: { security: 'deny', ask: 'always' }, elevated: { enabled: false }, agentToAgent: { enabled: false }, sessions: { visibility: 'agent' } },
   plugins: { load: { paths: [] }, allow: ['crewhouse', 'memory-core', 'openai'], entries: {
     'memory-core': { config: { dreaming: { enabled: false } } },

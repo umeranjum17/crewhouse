@@ -66,6 +66,10 @@ test('model-visible crew tools tell the model the required arguments', () => {
   assert.deepEqual(document.parameters.required, ['name', 'blocks']);
   assert.equal(document.parameters.properties.blocks.type, 'array');
   assert.match(document.description, /blocks/);
+  const draft = tools.get('crew_draft')!;
+  assert.deepEqual(draft.parameters.required, ['path', 'channel', 'to']);
+  assert.deepEqual(draft.parameters.properties.channel.enum, ['email', 'text', 'post', 'reply']);
+  assert.equal(draft.parameters.properties.subject.type, 'string');
 });
 
 test('only the engine port imports the kit', () => {
@@ -96,6 +100,24 @@ test('a run carries its own account to the engine: the picked provider is the on
     const agents = f.fake.calls.filter((c) => c.method === 'agent');
     assert.equal(agents.length, 2);
     assert.ok(!('provider' in (agents[1].params as any)) && !('model' in (agents[1].params as any)));
+  } finally { await f.done(); }
+});
+
+test('resolved engine config disables silent memory flush and heartbeat without disabling the workshop', async () => {
+  const f = faked();
+  const configPath = join(f.state, 'openclaw', 'openclaw.json');
+  try {
+    await f.started;
+    const saved = JSON.parse(readFileSync(configPath, 'utf8'));
+    saved.agents.defaults.compaction.memoryFlush.enabled = true;
+    saved.agents.defaults.heartbeat.every = '30m';
+    writeFileSync(configPath, JSON.stringify(saved));
+    await f.runtime.kit.prepare();
+    const config = JSON.parse(readFileSync(configPath, 'utf8'));
+    assert.equal(config.agents.defaults.compaction.memoryFlush.enabled, false);
+    assert.equal(config.agents.defaults.heartbeat.every, '0m');
+    assert.equal(config.skills.workshop.approvalPolicy, 'auto');
+    assert.equal(config.plugins.entries['memory-core'].config.dreaming.enabled, false);
   } finally { await f.done(); }
 });
 

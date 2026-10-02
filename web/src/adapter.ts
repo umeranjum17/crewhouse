@@ -24,7 +24,7 @@ export type Card = {
   /** One ask-card layout for every kind (§4.4): the kind changes only the status line under the helper's name,
    *  the evidence block and the button words. `evidence` picks the sunken block — a form's or a job's
    *  label-over-value lines, or a draft's to/subject/body — an order is a `review`, anything else a plain preview. */
-  status: string; evidence?: 'lines' | 'draft'; draftTo?: string;
+  status: string; evidence?: 'lines' | 'draft'; draftTo?: string; draftSubject?: string;
   /** A draft's own words, unscrubbed: the person may change them before Approve, and their version is what is kept. */
   draftText?: string;
 };
@@ -569,12 +569,17 @@ export function card(a: Json, state: Json): Card {
       preview: { head: `${crewName(state, d.job.bot)}'s job`, body: labels.map((label, i) => `${label}: ${plain(d.job[keys[i]])}`).join('\n\n') },
       choices: [{ label: 'Use it', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
   }
+  if (a.kind === 'propose' && d.draft) {
+    const head = `${name} wrote your ${d.draft.channel}`;
+    const body = String(d.preview?.body ?? '').trim();
+    return { ...base, kind: 'ok', status: `Nothing is sent · ${d.draft.channel === 'post' ? 'post' : 'send'} it yourself`, evidence: 'draft',
+      draftTo: plain(d.draft.to), draftSubject: plain(d.draft.subject) || undefined, draftText: body, head, words: head, preview: { body },
+      choices: [{ label: 'Approve', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Reject', body: { answer: 'deny' } }] };
+  }
   if (a.kind === 'propose') {
     // A suggestion: a skill a helper would like to keep, or a new personality from Chief. Nothing changes without a yes.
-    // A helper's draft is a message in the person's name: the card says who it's for, and approving never sends it.
-    return { ...base, kind: 'ok', status: d.draft ? 'A draft for you to send · nothing is sent' : 'Would like to remember this', evidence: d.draft ? 'draft' : undefined, draftTo: d.draft ? plain(d.draft.to) : undefined,
-      draftText: d.draft ? String(d.preview?.body ?? '').trim() || undefined : undefined,
-      head: d.draft ? `${name} drafted a message for ${plain(d.draft.to)}` : a.bot === 'chief' ? 'Chief has a suggestion' : `${name} learned something`, words: plain(d.words ?? `${name} has a suggestion.`),
+    return { ...base, kind: 'ok', status: 'Would like to remember this',
+      head: a.bot === 'chief' ? 'Chief has a suggestion' : `${name} learned something`, words: plain(d.words ?? `${name} has a suggestion.`),
       preview: d.preview ? { head: d.preview.head ? plain(d.preview.head) : undefined, body: plain(d.preview.body ?? '') } : undefined,
       choices: [{ label: d.yes ? plain(d.yes) : a.bot === 'chief' ? 'Yes, change it' : 'Yes, keep it', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
   }

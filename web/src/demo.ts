@@ -53,9 +53,9 @@ const bots = [
 if (firstRun || variant === 'connect') for (const b of bots) Object.assign(b, { task: b.id === 'pip' && variant === 'connect' ? task(45, 'pip', "What's on this week?", 'needs_you') : null, step: undefined });
 
 const asks = [
-  { id: 7, bot: 'scribe', task_id: 43, kind: 'propose', at: now - 3 * min, member: 1, title: 'Scribe drafted a message for Aunty Sara', detail: {
-    words: 'Scribe drafted a message for Aunty Sara. Nothing is sent: you post it yourself.',
-    draft: { to: 'Aunty Sara' }, yes: 'Approve',
+  { id: 7, bot: 'scribe', task_id: 43, kind: 'propose', at: now - 3 * min, member: 1, title: 'Scribe wrote your text', detail: {
+    words: 'Scribe wrote your text.',
+    draft: { channel: 'text', to: 'Aunty Sara' }, yes: 'Approve',
     preview: { head: 'Draft for Aunty Sara', body: "Dear Aunty Sara, thank you so much for the lovely dinner on Sunday. Mum hasn't stopped talking about your biryani, and neither have I. Next time, it's at ours! With love, Umer" },
   } },
   { id: 10, bot: 'scout', task_id: null, kind: 'propose', at: now - 4 * min, member: 1, title: 'Scout would like to remember how to do this: Plan the week’s dinners, with a shopping list', detail: {
@@ -176,18 +176,18 @@ const state = {
         effect: 'send', press: true, spends: false,
         words: 'Scout wants to press “Start return” on shop.example, a site you signed it in to.',
         preview: { head: 'What Scout will press on shop.example', body: 'Espresso machine — delivered 12 May\nReturns are free within 30 days. Starting a return books a collection and tells the shop to expect the item.\nStart return' } } }]
-    : variant === 'chase' ? [{ id: 17, bot: 'scout', task_id: 48, kind: 'propose', at: now - 30_000, member: 1, title: 'Scout drafted something for the shop’s support inbox. Nothing is sent: you post it yourself.', detail: {
-        words: 'Scout drafted something for the shop’s support inbox. Nothing is sent: you post it yourself.',
-        draft: { to: 'the shop’s support inbox', path: 'files/chase-order-98765.md', sha: 'demo' }, yes: 'Approve',
-        preview: { head: 'Draft for the shop’s support inbox', body: 'Subject: Order 98765 — returned 16 May, no refund yet\n\nHello, my return reached you on 16 May, inside your own 30-day window. The order page still shows no refund.\n\nPlease confirm when the refund goes back to my card. Regards,\nUmer' } } }]
-    : variant === 'renewal' ? [{ id: 18, bot: 'scout', task_id: 49, kind: 'propose', at: now - 30_000, member: 1, title: 'Scout drafted something for the streaming service’s support inbox. Nothing is sent: you post it yourself.', detail: {
-        words: 'Scout drafted something for the streaming service’s support inbox. Nothing is sent: you post it yourself.',
-        draft: { to: 'the streaming service’s support inbox', path: 'files/cancel-family-plan.md', sha: 'demo' }, yes: 'Approve',
-        preview: { head: 'Draft for the streaming service’s support inbox', body: 'Subject: Streaming plan — please cancel before 14 June\n\nHello, my Streaming plan renews on 14 June at $18.99. Please cancel it from that date and confirm in writing that nothing further will be charged to my card.\n\nRegards,\nUmer' } } }]
-    : variant === 'paper' ? [{ id: 19, bot: 'scout', task_id: 50, kind: 'propose', at: now - 30_000, member: 1, title: 'Scout drafted something for the school office. Nothing is sent: you post it yourself.', detail: {
-        words: 'Scout drafted something for the school office. Nothing is sent: you post it yourself.',
-        draft: { to: 'the school office', path: 'files/reply-trip-form.md', sha: 'demo' }, yes: 'Approve',
-        preview: { head: 'Draft for the school office', body: 'Subject: Ayaan’s trip form — Friday\n\nHello, the signed trip form is in Ayaan’s bag this morning. He takes the packed-lunch option, and I can walk with the group if you are still short of adults.\n\nThank you,\nUmer' } } }]
+    : variant === 'chase' ? [{ id: 17, bot: 'scout', task_id: 48, kind: 'propose', at: now - 30_000, member: 1, title: 'Scout wrote your email.', detail: {
+        words: 'Scout wrote your email.',
+        draft: { channel: 'email', subject: 'Order 98765 — returned 16 May, no refund yet', to: 'the shop’s support inbox', path: 'files/chase-order-98765.md', sha: 'demo' }, yes: 'Approve',
+        preview: { head: 'Draft for the shop’s support inbox', body: 'Hello, my return reached you on 16 May, inside your own 30-day window. The order page still shows no refund.\n\nPlease confirm when the refund goes back to my card. Regards,\nUmer' } } }]
+    : variant === 'renewal' ? [{ id: 18, bot: 'scout', task_id: 49, kind: 'propose', at: now - 30_000, member: 1, title: 'Scout wrote your email.', detail: {
+        words: 'Scout wrote your email.',
+        draft: { channel: 'email', subject: 'Streaming plan — please cancel before 14 June', to: 'the streaming service’s support inbox', path: 'files/cancel-family-plan.md', sha: 'demo' }, yes: 'Approve',
+        preview: { head: 'Draft for the streaming service’s support inbox', body: 'Hello, my Streaming plan renews on 14 June at $18.99. Please cancel it from that date and confirm in writing that nothing further will be charged to my card.\n\nRegards,\nUmer' } } }]
+    : variant === 'paper' ? [{ id: 19, bot: 'scout', task_id: 50, kind: 'propose', at: now - 30_000, member: 1, title: 'Scout wrote your email.', detail: {
+        words: 'Scout wrote your email.',
+        draft: { channel: 'email', subject: 'Ayaan’s trip form — Friday', to: 'the school office', path: 'files/reply-trip-form.md', sha: 'demo' }, yes: 'Approve',
+        preview: { head: 'Draft for the school office', body: 'Hello, the signed trip form is in Ayaan’s bag this morning. He takes the packed-lunch option, and I can walk with the group if you are still short of adults.\n\nThank you,\nUmer' } } }]
     : variant === 'meals' ? [{ id: 20, bot: 'scout', task_id: 51, kind: 'permission', at: now - 30_000, member: 1, title: '', detail: {
         effect: 'spend', spends: true,
         words: 'Scout wants to place this order at grocer.example: Basmati rice 10 lb, Whole milk (1 gal) x2, Garlic, 2 kg. Total $43.10.',

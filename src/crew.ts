@@ -80,7 +80,6 @@ export function quietNow(quiet: string | null | undefined, at = new Date()) {
 }
 
 const sha = (s: string) => createHash('sha256').update(s).digest('hex');
-/** A draft in the person's name fits on its card whole, so what they approve (or change) is all of it. */
 const DRAFT_CAP = 20_000;
 const clean = (s: unknown, n: number) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n);
 /** What each batch item hears: its one item and the shared question. The parent's own prompt stays out of it,
@@ -695,17 +694,14 @@ export class Crew {
   /** Pause, resume or move a routine, or make it a quiet check-in. Resuming counts from now: a paused routine never catches up. */
   updateRoutine(id: number, b: { state?: string; schedule?: string; quiet?: boolean }) {
     const r = this.routine(id);
-    if (b.quiet !== undefined) {
-      if (typeof b.quiet !== 'boolean' || r.kind === 'digest') throw Object.assign(new Error('only a helper\'s routine can be a quiet check-in'), { status: 400 });
-      this.db.run('UPDATE routines SET quiet = ? WHERE id = ?', b.quiet ? 1 : 0, id);
-      if (b.state === undefined && b.schedule === undefined) return;
-    }
+    if (b.quiet !== undefined && (typeof b.quiet !== 'boolean' || r.kind === 'digest'))
+      throw Object.assign(new Error('only a helper\'s routine can be a quiet check-in'), { status: 400 });
     const state = b.state ?? r.state;
     if (!['on', 'paused'].includes(state)) throw Object.assign(new Error('a routine is on or paused'), { status: 400 });
     const schedule = b.schedule?.trim() || r.schedule;
-    const next = schedule ? nextRun(paced(parseSchedule(schedule)), Date.now()) : null;
+    const next = b.quiet !== undefined && b.state === undefined && b.schedule === undefined ? r.next_at : schedule ? nextRun(paced(parseSchedule(schedule)), Date.now()) : null;
     this.db.tx(() => {
-      this.db.run('UPDATE routines SET state = ?, schedule = ?, next_at = ? WHERE id = ?', state, schedule, next, id);
+      this.db.run('UPDATE routines SET quiet = ?, state = ?, schedule = ?, next_at = ? WHERE id = ?', b.quiet === undefined ? r.quiet : b.quiet ? 1 : 0, state, schedule, next, id);
       this.db.event(state !== r.state ? `routine.${state === 'on' ? 'resumed' : 'paused'}` : 'routine.changed', r.bot, { routine: id, name: r.name,
         words: [schedule ? describe(parseSchedule(schedule)) : '', r.trigger ? describeTrigger(parseTrigger(r.trigger), this.bot(r.bot)?.display ?? r.bot) : ''].filter(Boolean).join('; ') });
     });
@@ -954,22 +950,19 @@ export class Crew {
   /** The person's name, how Chief addresses them, quiet hours ("22:00-07:00", or null for none) and the crew's share. */
   updatePerson(body: { name?: unknown; address?: unknown; quiet?: unknown; share?: unknown }) {
     this.person();
-    if (body.name !== undefined) {
-      const n = needText(body.name, 32, 'give yourself a name');
-      this.db.run('UPDATE people SET name = ? WHERE id = 1', n);
+    const name = body.name === undefined ? undefined : needText(body.name, 32, 'give yourself a name');
+    if (body.quiet !== undefined && body.quiet !== null && !(typeof body.quiet === 'string' && /^([01]\d|2[0-3]):[0-5]\d-([01]\d|2[0-3]):[0-5]\d$/.test(body.quiet))) {
+      throw Object.assign(new Error('quiet hours look like 22:00-07:00'), { status: 400 });
     }
-    if (body.quiet !== undefined) {
-      if (body.quiet !== null && !(typeof body.quiet === 'string' && /^([01]\d|2[0-3]):[0-5]\d-([01]\d|2[0-3]):[0-5]\d$/.test(body.quiet))) {
-        throw Object.assign(new Error('quiet hours look like 22:00-07:00'), { status: 400 });
-      }
-      this.db.run('UPDATE people SET quiet = ? WHERE id = 1', body.quiet);
-    }
-    if (body.share !== undefined) {
-      if (!(typeof body.share === 'string' && body.share in SHARES)) throw fail('the crew\'s share is light, normal or full');
-      this.db.run('UPDATE people SET share = ? WHERE id = 1', body.share);
-    }
-    if (body.address !== undefined) this.setAddress(String(body.address));
-    this.db.event('person.updated', null);
+    if (body.share !== undefined && !(typeof body.share === 'string' && body.share in SHARES)) throw fail('the crew\'s share is light, normal or full');
+    const address = body.address === undefined ? undefined : needText(String(body.address), 40, 'say how to address them');
+    this.db.tx(() => {
+      if (name !== undefined) this.db.run('UPDATE people SET name = ? WHERE id = 1', name);
+      if (body.quiet !== undefined) this.db.run('UPDATE people SET quiet = ? WHERE id = 1', body.quiet);
+      if (body.share !== undefined) this.db.run('UPDATE people SET share = ? WHERE id = 1', body.share);
+      if (address !== undefined) this.setAddress(address);
+      this.db.event('person.updated', null);
+    });
     return this.person();
   }
 
@@ -1996,16 +1989,17 @@ export class Crew {
           const change = disk.remember(this.cfg, { bot: everyone ? null : botId }, String(p.text ?? ''), String(p.replaces ?? ''));
           this.db.event('memory.learned', botId, { task: task(), text: change.added.slice(2, 202), ...(everyone ? { everyone } : {}), ...change });
         }),
-      tool('crew_draft', 'Put a draft that would go out in the person\'s name (a reply, a post, an email) in front of them on a card. Nothing is ' +
-        'sent either way: they post it themselves if they approve. `path`: the draft in your folder; `to`: where it would go ("muxr issue #208").',
-        { path: Type.String(), to: Type.String() }, (p) => {
+      tool('crew_draft', 'Show ONE finished message for approval; nothing is sent. `path`: a file containing ONLY the message body, with its line breaks, no subject, headings, variants or planning notes. ' +
+        '`channel`: email, text, post (social), or reply (a site). `to`: the actual recipient name/address or site, NEVER a job title. `subject`: required for email, separate from the body.',
+        { path: Type.String(), channel: Type.Union(['email', 'text', 'post', 'reply'].map((x) => Type.Literal(x))), to: Type.String(), subject: Type.Optional(Type.String()) }, (p) => {
           const full = disk.insideBot(this.cfg, botId, String(p.path ?? ''));
           if (!existsSync(full)) throw new Error(`no file at ${p.path}`);
-          const text = readFileSync(full, 'utf8').trim(), to = clean(p.to, 80), b = this.bot(botId)!;
+          const text = readFileSync(full, 'utf8').trim(), to = clean(p.to, 80), channel = String(p.channel), subject = clean(p.subject, 160);
+          if (!to || !['email', 'text', 'post', 'reply'].includes(channel) || (channel === 'email' && !subject)) throw new Error('give the channel, recipient and email subject separately');
           if (!text) throw new Error('the draft is empty');
           if (text.length > DRAFT_CAP) throw new Error(`the draft is over ${DRAFT_CAP} characters; shorten it`);
-          return this.propose(botId, `${b.display} drafted something for ${to}. Nothing is sent: you post it yourself.`,
-            { draft: { to, path: full.slice(disk.botDir(this.cfg, botId).length + 1), sha: sha(text) }, preview: { head: `Draft for ${to}`, body: text } });
+          return this.propose(botId, `${this.bot(botId)!.display} wrote your ${channel}.`,
+            { draft: { channel, to, subject, path: full.slice(disk.botDir(this.cfg, botId).length + 1), sha: sha(text) }, preview: { body: text } });
         }),
       tool('crew_verify', 'Have Crewhouse itself check a fix you propose to a git checkout in your folder: it applies only the check (`tests`, the ' +
         'paths in the patch that test the fix) to `base` and runs `command`, which must fail; then the whole patch, which must pass; it runs in a ' +
@@ -2155,7 +2149,7 @@ export class Crew {
   /** A suggestion card: nothing changes until the person says yes, and the bot carries on meanwhile. */
   private propose(botId: string, title: string, detail: Row) {
     const t = this.activeTask(botId);
-    if (!this.db.get("SELECT 1 FROM asks WHERE bot = ? AND kind = 'propose' AND state = 'open' AND title = ?", botId, title)) {
+    if (!this.db.get("SELECT 1 FROM asks WHERE bot = ? AND kind = 'propose' AND state = 'open' AND title = ? AND COALESCE(json_extract(detail, '$.draft'), '') = ?", botId, title, detail.draft ? JSON.stringify(detail.draft) : '')) {
       this.openAsk(botId, undefined, title, { ...detail, task: t?.id }, 'propose');
     }
     return { asked: true, note: 'The person sees your suggestion on a card. Carry on; nothing changes unless they say yes.' };
@@ -2520,17 +2514,16 @@ export class Crew {
     return this.held.has(botId) ? this.desktops.pages(botId) : Promise.resolve([] as string[]);
   }
 
-  /** The person takes a site back off the list. Its cookies and storage go from the bot's own browser FIRST: only a
-   *  successful clear removes the host, because a host off the list with cookies still in its browser would let
-   *  presses there run silently — exactly the gap this closes. No computer granted means there is no browser and
-   *  nothing to clear, so the host goes. */
+  /** Remove a site only after its browser data is cleared: an unmarked signed-in site could allow silent presses.
+   *  Unavailable or revoked Computer access cannot prove sign-out, so it keeps the site asking. */
   async forget(botId: string, host: string) {
     const bot = this.needBot(botId);
     try {
-      if (disk.canUse(this.cfg, botId, 'computer')) {
-        await this.desktops.ensure(botId, bot.n, disk.botDir(this.cfg, botId));
-        await this.desktops.clearSite(botId, host);
-      }
+      if (!disk.botConfig(this.cfg, botId).tools.includes('computer')) throw new Error('Computer access revoked');
+      if (!disk.botTools(this.cfg, botId).find((t) => t.id === 'computer')?.ready) throw new Error('Computer unavailable');
+      await this.desktops.ensure(botId, bot.n, disk.botDir(this.cfg, botId));
+      if (!disk.botConfig(this.cfg, botId).tools.includes('computer')) throw new Error('Computer access revoked');
+      if (await this.desktops.clearSite(botId, host) !== true) throw new Error('Sign-out not confirmed');
     } catch {
       throw Object.assign(new Error(`Couldn't sign ${bot.display} out of ${host} just now; it still asks before acting there`), { status: 409 });
     }
