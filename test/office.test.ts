@@ -143,7 +143,12 @@ async function browse() {
   const send = (method: string, params: object = {}) => new Promise<any>((r, j) => {
     const n = ++id; waiting.set(n, (m) => (m.error ? j(new Error(`${method}: ${m.error.message}`)) : r(m.result))); ws.send(JSON.stringify({ id: n, method, params }));
   });
-  const run = async (expression: string) => (await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true })).result.value;
+  // A page error fails the test where it happens, never as a later timeout (send already rejects on protocol errors).
+  const run = async (expression: string) => {
+    const r = await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true });
+    if (r.exceptionDetails) throw new Error(`page error: ${r.exceptionDetails.exception?.description ?? r.exceptionDetails.text}`);
+    return r.result.value;
+  };
   // Count animation frames asked for, and those still pending.
   await send('Page.addScriptToEvaluateOnNewDocument', { source: `(() => {
     const n = window.__o = { raf: 0, pending: new Set() };
@@ -287,8 +292,12 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, nothing covers anythin
     // The furniture is scenery: a tap on a desk lands on its seat and opens that helper.
     await b.open('demo=crew5&day');
     await toOffice(b);
-    await b.run("(() => { const d = document.querySelector('.o-cell[data-seat] .o-desk'); d.scrollIntoView({ block: 'center' }); const r = d.getBoundingClientRect(); document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2).click(); })()");
+    // A real click (SVG has no .click()) at the desk's centre, and the sheet that opens is that desk's helper.
+    const desk = await b.run("(() => { const d = document.querySelector('.o-cell[data-seat] .o-desk'); d.scrollIntoView({ block: 'center' }); const r = d.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, who: d.closest('.o-cell').getAttribute('aria-label') }; })()");
+    for (const type of ['mousePressed', 'mouseReleased']) await b.send('Input.dispatchMouseEvent', { type, x: desk.x, y: desk.y, button: 'left', clickCount: 1 });
     await until('the helper\'s panel', () => b.run("!!document.querySelector('.o-sheet')"), 5000);
+    const sheet = await b.run("document.querySelector('.o-sheet').getAttribute('aria-label')");
+    assert.ok(sheet && desk.who.startsWith(sheet), `a tap on a desk opens that desk's helper: "${sheet}" for "${desk.who}"`);
     // "+N" leads to the whole crew.
     await b.open('demo=crew30&day');
     await toOffice(b);
