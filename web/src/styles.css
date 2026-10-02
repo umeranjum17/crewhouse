@@ -679,31 +679,16 @@ details.card[open] > summary { margin-bottom: 10px; }
 .main > .page, .main > .home { animation: fade 200ms var(--ease) both; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
-/* Home's hero: the day, the greeting, Chief's line beside his face, three counts. The splash's glyph field, frozen,
-   sits faintly in the corner; it is texture, never words. */
-.hero { position: relative; isolation: isolate; overflow: hidden; background: var(--solid); border: 1px solid var(--line); border-radius: 20px; padding: 18px 18px 16px; margin: 0 0 8px; box-shadow: var(--e1); }
-.hero::before { content: ''; position: absolute; inset: 0; z-index: -1; background: radial-gradient(90% 130% at 0% 0%, var(--warm) 0%, transparent 65%); }
-.hero-field { position: absolute; right: -6px; top: -2px; z-index: -1; font-size: 11px; line-height: 1.12; color: var(--pink); opacity: .16; pointer-events: none; user-select: none;
-  mask-image: radial-gradient(130% 110% at 100% 0%, #000 0%, transparent 62%); }
-.eyebrow { font: 600 11.5px/16px var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--ink2); }
-.hero h1 { font: 650 30px/36px var(--ui); letter-spacing: -.028em; margin: 6px 0 14px; text-wrap: balance; }
-.hero-chief { display: flex; gap: 10px; align-items: flex-end; width: fit-content; max-width: 100%; border-radius: 16px; }
-.hero-chief .face { flex: none; }
-.hero-chief .says { background: var(--bg); border: 1px solid var(--line); border-radius: 16px 16px 16px 4px; padding: 7px 12px; font: 500 14.5px/20px var(--ui); color: var(--ink); min-width: 0; transition: border-color 120ms var(--ease); }
-.hero-chief:hover .says { border-color: var(--line2); }
 .stats { display: flex; gap: 8px; margin-top: 16px; }
 .stat { flex: 1 1 0; min-width: 0; display: grid; padding: 8px 12px 9px; border-radius: 12px; background: var(--soft); font: 500 12.5px/16px var(--ui); color: var(--ink2); }
 .stat b { font: 650 22px/28px var(--ui); letter-spacing: -.02em; color: var(--ink); }
 .stat.hot b { color: var(--pink-ink); }
-.hero-ask { margin-top: 18px; }
 @media (max-width: 899px) {
   /* On a phone the counts stay one quiet row, so the first rows that need you are on the first screen. */
   .stats { gap: 6px; margin-top: 14px; }
   .stat { padding: 6px 10px 7px; font-size: 12px; border-radius: 10px; }
   .stat b { font-size: 18px; line-height: 22px; }
-  .home .phone-only + .home-section, .home .phone-only + .chats-section { margin-top: 22px; }
 }
-.hero-ask .composer { box-shadow: none; background: var(--bg); }
 .home .card.nudge { margin-top: 8px; }
 .list-row { transition: background 120ms var(--ease); }
 
@@ -755,9 +740,6 @@ details.card[open] > summary { margin-bottom: 10px; }
 .idea:active { transform: scale(.985); }
 
 @media (min-width: 900px) {
-  .hero { padding: 28px 28px 24px; margin-bottom: 12px; }
-  .hero-field { font-size: 12px; }
-  .hero h1 { font-size: 40px; line-height: 46px; letter-spacing: -.032em; margin: 8px 0 16px; }
   .stats { max-width: 520px; }
 }
 /* A page's title is the page's one display line, the same voice as Home's greeting. */
@@ -771,7 +753,7 @@ details.card[open] > summary { margin-bottom: 10px; }
    is always in view (flex: 1 let a long thread stretch the page past the screen). */
 @media (min-width: 900px) { .main > .page.chat-page { flex: none; height: 100dvh; } }
 
-/* The office (web/src/office.tsx): Home's top frame, inside the hero card. One flat room, front on, like a dollhouse
+/* The office (web/src/office.tsx): Home's Office view. One flat room, front on, like a dollhouse
    cut open: a wall, a plank floor, Chief in his armchair and a desk for each helper on a job of hers, then the lounge
    sofa for everyone else. Seats sit edge to edge on a grid (A.floorPlan says how many across), so a bubble lives in
    its own seat and can never cover another. The room's colours come from tokens.ts `room` as --r-* properties. */
@@ -877,7 +859,6 @@ details.card[open] > summary { margin-bottom: 10px; }
   @keyframes side { from { opacity: 0; transform: translateX(28px); } }
 }
 @media (max-width: 899px) {
-  .hero .office { margin-top: 10px; }
   .o-scrim { align-items: end; }
 }
 
@@ -894,7 +875,6 @@ details.card[open] > summary { margin-bottom: 10px; }
 @media (min-width: 900px) {
   .main > .home { margin: 0; width: 100%; }
   .home-desk { display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; align-items: start; margin-right: 32px; }
-  .room-col .hero { margin: 0; }
   .feed { display: flex; flex-direction: column; min-width: 0; }
   .feed .home-section { margin-bottom: 20px; }
   .feed-ask { position: sticky; bottom: 0; padding: 12px 0 16px; background: var(--bg); margin-top: auto; }
@@ -915,3 +895,26 @@ details.card[open] > summary { margin-bottom: 10px; }
 .o-more { display: grid; place-content: center; text-decoration: none; }
 .o-sprite.second { filter: hue-rotate(48deg) saturate(1.1); }
 .o-bub.failed, .o-chip.failed > i { border-color: var(--danger); } .o-chip.failed > i { background: var(--danger); }
+
+/* Home: one bar (Chief's line, the counts, Chat | Office) and the pinned Needs you, over Chief's thread or the room.
+   On a phone the top stays in view while the thread scrolls, so what needs you never leaves the first screen. */
+.home-bar { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; margin-bottom: 10px; }
+.home-chief { display: flex; gap: 10px; align-items: center; flex: 1 1 220px; min-width: 0; color: inherit; text-decoration: none; }
+.home-chief .grow { display: grid; min-width: 0; }
+.home-bar .stats { margin: 0; flex: 1 1 260px; }
+.home-bar .stat { padding: 5px 10px 6px; text-decoration: none; }
+.home-bar .stat b { font-size: 17px; line-height: 22px; }
+.home-mode { flex: none; }
+.home-top { position: sticky; top: 0; z-index: 4; background: var(--bg); padding: 4px 0 2px; max-height: 55dvh; overflow-y: auto; }
+.needs-pin { margin-bottom: 8px; }
+/* "See all N" opens the list inside the pin, never over Chief's thread or box. */
+.needs-pin .list-group { max-height: 36dvh; overflow-y: auto; }
+.home-chat .dock { bottom: 64px; }
+@media (min-width: 900px) {
+  .home-top { position: static; flex: none; max-width: 1072px; }
+  .home-office > .home-top { margin-right: 32px; }
+  .home-chat .dock { bottom: 0; }
+}
+@media (min-width: 1200px) {
+  .home-office > .home-top { margin-right: 0; }
+}

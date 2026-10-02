@@ -198,26 +198,33 @@ function NeedsRows({ state, cards, quiet, all = false }: { state: Json; cards: A
   );
 }
 
-/** Home's first impression: the day, the greeting, Chief's one line for the whole crew beside his face, and the three
- *  counts the rows below add up to. A still glyph field (the splash's, frozen) sits faintly in the corner. */
-function HomeHero({ ctx, children }: { ctx: Ctx; children?: ReactNode }) {
-  const { state } = ctx;
-  const c = A.chief(state, chiefLocal(ctx));
+/** Home's top bar, the same in Chat and Office: Chief's one line, the three counts (one state source, `A.office`: a
+ *  helper waiting on you counts once, under need you), the tray, and the Chat | Office switch. */
+function HomeBar({ ctx, mode, pick }: { ctx: Ctx; mode: HomeMode; pick: (m: HomeMode) => void }) {
+  const c = A.chief(ctx.state, chiefLocal(ctx));
   const n = ctx.live.counts;
-  const texture = useMemo(() => art.field(9, 64, 12), []);
   return (
-    <header className="hero">
-      <pre className="art hero-field" aria-hidden>{texture}</pre>
-      <div className="eyebrow">{A.today()}</div>
-      <h1>{A.greeting()}, {state.person.address ?? state.person.name}</h1>
-      <a className="hero-chief" href="#/chief" aria-label={`Chief: ${c.line}`}><Face who="chief" size={36} /><span className="says">{c.line}</span></a>
+    <header className="home-bar">
+      <a className="home-chief" href="#/chief" aria-label={`Chief: ${c.line}`}><Face who="chief" size={32} /><span className="grow"><b>Chief</b><span className="mute small clamp1">{c.line}</span></span></a>
       <div className="stats" aria-label={`${n.needs} ${n.needs === 1 ? 'thing needs' : 'things need'} you · ${n.working} ${n.working === 1 ? 'helper' : 'helpers'} working · ${n.done} done today`}>
         <span className={`stat${n.needs ? ' hot' : ''}`}><b>{n.needs}</b>{n.needs === 1 ? 'needs you' : 'need you'}</span>
-        <span className="stat"><b>{n.working}</b>working</span>
-        <span className="stat"><b>{n.done}</b>done today</span>
+        <a className="stat" href="#/crew"><b>{n.working}</b>working</a>
+        <a className="stat" href="#/things"><b>{n.done}</b>done today</a>
       </div>
-      {children}
+      <div className="seg home-mode" role="tablist" aria-label="Home view">{HOME_MODES.map(([m, l]) => <button key={m} role="tab" aria-selected={mode === m} data-mode={m} className={mode === m ? 'on' : ''} onClick={() => pick(m)}>{l}</button>)}</div>
     </header>
+  );
+}
+
+/** Needs you, pinned in both views: its first row, and every row behind an exact "See all N". */
+function NeedsPin({ state, cards }: { state: Json; cards: A.Card[] }) {
+  const [all, setAll] = useState(false);
+  if (!cards.length) return null;
+  return (
+    <section className="home-section needs-pin" aria-label="Needs you">
+      <div className="section-head"><span className="label">Needs you<span className="count">{cards.length}</span></span>{cards.length > 1 && <button className="link" onClick={() => setAll(!all)}>{all ? 'Show less' : `See all ${cards.length}`}</button>}</div>
+      <div className="list-group needs-card"><NeedsRows state={state} cards={all ? cards : cards.slice(0, 1)} all /></div>
+    </section>
   );
 }
 
@@ -232,38 +239,43 @@ function useWide() {
 /** An empty list, said warmly: a small mark and a plain line, never a blank box. */
 const Empty = ({ children }: { children: ReactNode }) => <div className="frame-empty"><span className="art orn" aria-hidden>{art.ORNAMENT}</span>{children}</div>;
 
+/** Home opens on Chat every time the app starts (kept in memory only, never stored): Chief's thread under the bar and
+ *  the pinned Needs you. Office is the optional view of the same state; neither view hides Needs you or Chief's box. */
+type HomeMode = 'chat' | 'office';
+const HOME_MODES: [HomeMode, string][] = [['chat', 'Chat'], ['office', 'Office']];
+let homeMode: HomeMode = 'chat';
+
 function Home(ctx: Ctx) {
   const { state, live, refresh, tick, accounts } = ctx;
-  const cards = live.needs;
-  const [allNeeds, setAllNeeds] = useState(false);
+  const [mode, setMode] = useState(homeMode);
+  const pick = (m: HomeMode) => { homeMode = m; setMode(m); };
   const g = A.account(accounts);
   const toChief = async (t: string) => { const ok = await attempt(() => api.post('chief', t), undefined, true); if (ok) { refresh(); go('#/chief'); } return ok; };
-  const needsHead = <div className="section-head"><span className="label">Needs you{cards.length > 0 && <span className="count">{cards.length}</span>}</span>{cards.length > 3 && <button className="link" onClick={() => setAllNeeds(!allNeeds)}>{allNeeds ? 'Show less' : `See all ${cards.length}`}</button>}</div>;
-  // The office is Home's top frame, inside the hero card: one room, drawn once for whichever frame is showing.
   const wide = useWide();
   const office = (frame: 'phone' | 'desk') => (frame === 'desk') === wide && <Office state={state} live={live} night={ctx.night} />;
   const working = live.crew.filter((c) => A.seatOf(c) === 'working'), waiting = live.crew.filter(A.waitsOnYou).length;
   const day = new Date(); day.setHours(0, 0, 0, 0);
   const todays = A.things(state).filter((t) => t.at >= day.getTime());
-  const nudges = <>
-    {(g.state === 'signed-out' || g.notIncluded) && <AccountCard g={g} onReady={refresh} />}
+  const top = <>
+    <HomeBar ctx={ctx} mode={mode} pick={pick} />
+    {/* Chief's thread shows its own sign-in card and resting line; Office shows them here. */}
+    {mode === 'office' && (g.state === 'signed-out' || g.notIncluded) && <AccountCard g={g} onReady={refresh} />}
     <SetupRow state={state} accounts={accounts} tick={tick} />
-    {A.resting(state) && <div className="card nudge"><span className="grow">{A.resting(state)}. I'll pick things back up then.</span></div>}
+    {mode === 'office' && A.resting(state) && <div className="card nudge"><span className="grow">{A.resting(state)}. I'll pick things back up then.</span></div>}
     {A.gettingReady(state) && <div className="card nudge"><span className="grow">{A.gettingReady(state)}</span></div>}
     {A.update(state) && <div className="card nudge"><span className="grow">{A.update(state)!.words}</span><a className="btn go" href={A.update(state)!.url} target="_blank" rel="noreferrer">Download</a></div>}
+    <NeedsPin state={state} cards={live.needs} />
   </>;
+  // Chat: Chief's own thread, its box and (on a wide desk) its side column of who is on what.
+  if (mode === 'chat') return <div className="page chat-page home-chat"><div className="home-top">{top}</div><Chat {...ctx} id="chief" /></div>;
   return (
-    <div className="home">
-      {/* On a phone, Needs you comes before the room so its first rows sit on the first screen, above Chief's box. */}
-      <div className="phone-only"><HomeHero ctx={ctx} />{nudges}</div>
-      {cards.length > 0 && <section className="home-section phone-only" aria-label="Needs you">{needsHead}<div className="list-group needs-card"><NeedsRows state={state} cards={cards} all={allNeeds} /></div></section>}
+    <div className="home home-office">
+      <div className="home-top">{top}</div>
       <div className="phone-only home-room">{office('phone')}</div>
       <Chats state={state} refresh={refresh} /><JobList state={state} phone refresh={refresh} />
       <div className="home-desk desk-only">
-        <div className="room-col"><HomeHero ctx={ctx}>{office('desk')}</HomeHero></div>
+        <div className="room-col">{office('desk')}</div>
         <aside className="feed" aria-label="What's going on">
-          {nudges}
-          <section className="home-section needs" aria-label="Needs you">{needsHead}<div className="list-group">{cards.length ? <NeedsRows state={state} cards={cards} all={allNeeds} /> : <Empty>All clear. Nothing needs you.</Empty>}</div></section>
           <section className="home-section working" aria-label="On it now"><div className="section-head"><span className="label">On it now</span>{working.length > 0 && <span className="small mute">{working.length} working</span>}</div><div className="list-group">
             {working.length ? working.map((c) => <a key={c.id} className="list-row" href={hrefOf(c.id)}>
               <Face who={{ kind: c.kind, name: c.name, mood: c.mood }} size={36} ring="working" /><span className="grow"><b className="clamp1">{c.name}</b><span className="small clamp1">{c.step || c.status}</span></span>

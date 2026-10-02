@@ -451,6 +451,28 @@ test('the screens read view models only, and the mono face draws art only', () =
   }
 });
 
+// Main563/565: the app opens on Chat with Chief; the Office is the optional view of the same state, off at every launch.
+test('Home opens on Chat at every launch, with Office one tap away and never stored', () => {
+  const src = (f: string) => readFileSync(join(import.meta.dirname, '..', f), 'utf8');
+  for (const f of ['web/src/main.tsx', 'mobile/App.tsx']) {
+    const app = src(f);
+    assert.match(app, /let homeMode: HomeMode = 'chat';/, `${f}: each launch starts on Chat`);
+    assert.match(app, /const HOME_MODES: \[HomeMode, string\]\[\] = \[\['chat', 'Chat'\], \['office', 'Office'\]\];/, `${f}: one Chat | Office switch`);
+    assert.doesNotMatch(app, /(localStorage|AsyncStorage|SecureStore|kept\.\w+)\([^)]*homeMode/, `${f}: the view is never stored`);
+    const home = app.slice(app.indexOf('function Home('));
+    assert.match(home.slice(0, 2600), /<HomeBar [^>]*mode=\{mode\} pick=\{pick\} \/>/, `${f}: the switch shows in both views`);
+  }
+  const web = src('web/src/main.tsx');
+  const home = web.slice(web.indexOf('function Home('), web.indexOf('/** The standing'));
+  assert.match(home, /if \(mode === 'chat'\) return <div className="page chat-page home-chat"><div className="home-top">\{top\}<\/div><Chat \{\.\.\.ctx\} id="chief" \/><\/div>;/, 'web Chat: the top over Chief\'s own thread and box');
+  assert.match(home, /<NeedsPin state=\{state\} cards=\{live\.needs\} \/>/, 'Needs you pinned from the office\'s one list');
+  assert.match(home, /<div className="feed-ask"><Composer/, 'Office keeps Chief\'s box on a desk');
+  assert.match(home, /<div className="dock phone-only"><Composer/, 'and on a phone');
+  const pin = web.slice(web.indexOf('function NeedsPin('), web.indexOf('function NeedsPin(') + 900);
+  assert.match(pin, /cards\.slice\(0, 1\)/, 'one pinned row');
+  assert.match(pin, /`See all \$\{cards\.length\}`/, 'and an exact "See all N"');
+});
+
 test('Home renders once: a second full Home (bd51524) put a second composer below the first', () => {
   const src = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
   assert.equal([...src.matchAll(/<Home\b/g)].length, 1, 'the app is one page per view, never two');
@@ -558,7 +580,9 @@ test('the phone office: one flat room, a crew that moves only when news lands', 
   assert.match(motion, /if \(still \|\| beat == null\) \{ rest\(\); return; \}/, 'no office move starts under Reduce Motion or in the background');
   const home = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
   const top = home.slice(home.indexOf('function Home('), home.indexOf('function ChatList('));
-  assert.ok(top.indexOf('<HomeHero') < top.indexOf('<Label count={needs.length}>Needs you') && top.indexOf('<Label count={needs.length}>Needs you') < top.indexOf('<Office'), 'Needs you sits on the first screen, then the room');
+  assert.ok(top.indexOf('<HomeBar') < top.indexOf('<Label count={needs.length}>Needs you') && top.indexOf('<Label count={needs.length}>Needs you') < top.indexOf('<Office'), 'Needs you is pinned under the bar, above the room');
+  assert.match(top, /few=\{1\}/, 'one pinned row, and "See all N" for the rest');
+  assert.match(top, /if \(mode === 'chat'\) return <View style=\{\{ flex: 1 \}\}>\{top\}<Chat \{\.\.\.ctx\} id="chief" \/><\/View>;/, 'Chat: the same top over Chief\'s own thread and box');
 });
 
 test("Chief's mood is the first matching row of the table, and the line follows the face", () => {

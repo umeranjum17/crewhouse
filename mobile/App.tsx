@@ -1076,12 +1076,12 @@ function HelperPill({ h, offline }: { h: A.Helper; offline: boolean }) {
 
 /** Needs you as one compact list: a number, the face, the subject, one plain line; a row opens the review sheet.
  *  Nothing commits from Home. At most three rows, then "N more", which expands in place. */
-function NeedsRows({ state, cards, open }: { state: Json; cards: A.Card[]; open: (c: A.Card) => void }) {
+function NeedsRows({ state, cards, open, few = 3 }: { state: Json; cards: A.Card[]; open: (c: A.Card) => void; few?: number }) {
   const t = useLook();
   const crew = A.crew(state);
   const [all, setAll] = useState(false);
-  const shown = all ? cards : cards.slice(0, 3);
-  const more = cards.length - 3;
+  const shown = all ? cards : cards.slice(0, few);
+  const more = cards.length - few;
   return (
     <View>
       {shown.map((c, i) => (
@@ -1097,28 +1097,43 @@ function NeedsRows({ state, cards, open }: { state: Json; cards: A.Card[]; open:
   );
 }
 
-/** Home's first impression: the day, the greeting, Chief's one line beside his face, and the three counts the rows
- *  below add up to (web/src/main.tsx HomeHero is the same). */
-function HomeHero({ state, view, offline, go }: { state: Json; view: A.OfficeView; offline: boolean; go: Ctx['go'] }) {
+/** Home's top, in Chat and Office alike (web/src/main.tsx HomeBar is the same): Chief's line, the Chat | Office switch,
+ *  and the three counts from the office's one state; working leads to the crew, done today to the tray. */
+function HomeBar({ state, view, offline, go, mode, pick }: { state: Json; view: A.OfficeView; offline: boolean; go: Ctx['go']; mode: HomeMode; pick: (m: HomeMode) => void }) {
   const t = useLook();
   const c = chiefNow(state, offline);
   const n = view.counts;
+  const counts = [[n.needs, n.needs === 1 ? 'needs you' : 'need you', null], [n.working, 'working', 'crew'], [n.done, 'done today', 'things']] as const;
   return (
-    <View style={[s.hero, { backgroundColor: t.solid, borderColor: t.line }]}>
-      {[300, 240, 180, 120].map((r) => <View key={r} style={[s.heroWarm, { width: r * 2, height: r * 2, borderRadius: r, top: -r - 30, left: -r + 10, backgroundColor: t.night ? '#2B2319' : '#FFF1DC' }]} />)}
-      <T tone="ink2" style={s.eyebrow}>{A.today().toUpperCase()}</T>
-      <T style={s.heroH1}>{A.greeting()}, {state.person.address ?? state.person.name}</T>
-      <Pressable onPress={() => go({ view: 'chief' })} accessibilityRole="button" accessibilityLabel={`Chief: ${c.line}`} style={s.heroChief}>
-        <Face who="chief" size={36} mood={c.mood} />
-        <View style={[s.says, { backgroundColor: t.bg, borderColor: t.line }]}><T style={s.saysText} lines={2}>{c.line}</T></View>
-      </Pressable>
-      <View style={s.stats} accessible accessibilityLabel={`${n.needs} ${n.needs === 1 ? 'thing needs' : 'things need'} you · ${n.working} ${n.working === 1 ? 'helper' : 'helpers'} working · ${n.done} done today`}>
-        {([[n.needs, n.needs === 1 ? 'needs you' : 'need you', true], [n.working, 'working', false], [n.done, 'done today', false]] as const).map(([k, l, hot]) =>
-          <View key={l} style={[s.stat, { backgroundColor: t.soft }]}><T style={[s.statNum, hot && k > 0 && { color: t.pinkInk }]}>{k}</T><T tone="ink2" style={s.statLabel}>{l}</T></View>)}
+    <View style={{ gap: 10 }}>
+      <View style={s.row}>
+        <Pressable onPress={() => go({ view: 'chief' })} accessibilityRole="button" accessibilityLabel={`Chief: ${c.line}`} style={[s.row, { flex: 1 }]}>
+          <Face who="chief" size={32} mood={c.mood} />
+          <View style={{ flex: 1 }}><T style={s.rowTitle}>Chief</T><T tone="ink2" style={s.small} lines={1}>{c.line}</T></View>
+        </Pressable>
+        <View accessibilityRole="tablist" accessibilityLabel="Home view" style={[s.seg, { backgroundColor: t.soft }]}>
+          {HOME_MODES.map(([m, l]) => <Pressable key={m} onPress={() => pick(m)} accessibilityRole="tab" accessibilityState={{ selected: mode === m }} style={[s.segBtn, mode === m && { backgroundColor: t.solid }]}>
+            <T tone={mode === m ? undefined : 'ink2'} style={[s.small, s.b]}>{l}</T>
+          </Pressable>)}
+        </View>
+      </View>
+      <View style={[s.stats, { marginTop: 0 }]}>
+        {counts.map(([k, l, to], i) => {
+          const box = [{ backgroundColor: t.soft }, s.stat];
+          const words = <><T style={[s.statNum, i === 0 && k > 0 && { color: t.pinkInk }]}>{k}</T><T tone="ink2" style={s.statLabel}>{l}</T></>;
+          return to ? <Pressable key={l} onPress={() => go({ view: to })} accessibilityRole="button" accessibilityLabel={`${k} ${l}`} style={box}>{words}</Pressable>
+            : <View key={l} accessible accessibilityLabel={`${k} ${l}`} style={box}>{words}</View>;
+        })}
       </View>
     </View>
   );
 }
+
+/** Home opens on Chat every time the app starts (kept in memory only, never stored): Chief's thread under the bar and
+ *  the pinned Needs you. Office is the optional view of the same state; neither view hides Needs you or Chief's box. */
+type HomeMode = 'chat' | 'office';
+const HOME_MODES: [HomeMode, string][] = [['chat', 'Chat'], ['office', 'Office']];
+let homeMode: HomeMode = 'chat';
 
 function Home(ctx: Ctx) {
   const t = useLook();
@@ -1126,15 +1141,21 @@ function Home(ctx: Ctx) {
   const view = useOffice(state, offline, OUT);
   const needs = view.needs;
   const chief = chiefNow(state, offline);
+  const [mode, setMode] = useState(homeMode);
+  const pick = (m: HomeMode) => { homeMode = m; setMode(m); };
   const toChief = async (x: string, p: Photo[] = []) => { const ok = await attempt(() => api.post('chief', x, p.map(({ type, data }) => ({ type, data }))), undefined, true); if (ok) { refresh(); go({ view: 'chief' }); } return ok; };
   const [room, setRoom] = useState(0);
   const [desk, setDesk] = useState<{ c: A.OfficeMember; state: Json } | null>(null);
+  // The top stays put in both views: the bar, then Needs you's first row and an exact "See all N".
+  const top = <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4, gap: 10 }}>
+    <HomeBar state={state} view={view} offline={offline} go={go} mode={mode} pick={pick} />
+    {needs.length > 0 && <View><Label count={needs.length}>Needs you</Label><ScrollView style={[s.listGroup, { backgroundColor: t.solid, borderColor: t.line, maxHeight: 280, flexGrow: 0 }]} nestedScrollEnabled><NeedsRows state={state} cards={needs} open={open} few={1} /></ScrollView></View>}
+  </View>;
+  if (mode === 'chat') return <View style={{ flex: 1 }}>{top}<Chat {...ctx} id="chief" /></View>;
   return (
     <View style={{ flex: 1 }}>
+      {top}
       <ScrollView contentContainerStyle={s.page} keyboardShouldPersistTaps="handled">
-        <HomeHero state={state} view={view} offline={offline} go={go} />
-        {/* Needs you before the room, so its first rows sit on the first screen above Chief's box. */}
-        {needs.length > 0 && <View><Label count={needs.length}>Needs you</Label><View style={[s.listGroup, { backgroundColor: t.solid, borderColor: t.line }]}><NeedsRows state={state} cards={needs} open={open} /></View></View>}
         <View onLayout={(e) => setRoom(e.nativeEvent.layout.width)} style={[s.office, { backgroundColor: t.soft, borderColor: t.line }]}>
           {room > 0 && <Office view={view} night={t.night} offline={offline} width={room - 2} onChief={() => go({ view: 'chief' })} onDesk={(c) => setDesk({ c, state })} onAsk={open} onTray={() => go({ view: 'things' })} onCrew={() => go({ view: 'crew' })} />}
         </View>
@@ -1849,14 +1870,9 @@ const s = StyleSheet.create({
   label: { fontSize: 12, lineHeight: 16, fontWeight: '600', letterSpacing: 0.7, textTransform: 'uppercase' },
   count: { minWidth: 18, height: 18, borderRadius: 9, paddingHorizontal: 5, fontSize: 11, lineHeight: 18, fontWeight: '700', textAlign: 'center', overflow: 'hidden' },
   office: { borderWidth: 1, borderRadius: 20, overflow: 'hidden' },
-  hero: { borderWidth: 1, borderRadius: 20, padding: 18, overflow: 'hidden', shadowColor: '#14121a', shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
-  heroWarm: { position: 'absolute', opacity: 0.3 },
-  eyebrow: { fontSize: 11.5, lineHeight: 16, fontWeight: '600', letterSpacing: 0.9 },
-  heroH1: { fontSize: 29, lineHeight: 35, fontWeight: '700', letterSpacing: -0.8, marginTop: 6, marginBottom: 14 },
-  heroChief: { flexDirection: 'row', alignItems: 'flex-end', gap: 10, alignSelf: 'flex-start', maxWidth: '100%' },
-  says: { borderWidth: 1, borderRadius: 16, borderBottomLeftRadius: 4, paddingVertical: 7, paddingHorizontal: 12, flexShrink: 1 },
-  saysText: { fontSize: 14.5, lineHeight: 20, fontWeight: '500' },
   stats: { flexDirection: 'row', gap: 6, marginTop: 14 },
+  seg: { flexDirection: 'row', borderRadius: 10, padding: 3, gap: 4 },
+  segBtn: { borderRadius: 8, paddingVertical: 6, paddingHorizontal: 12 },
   stat: { flex: 1, borderRadius: 10, paddingVertical: 6, paddingHorizontal: 10 },
   statNum: { fontSize: 18, lineHeight: 22, fontWeight: '700', letterSpacing: -0.3 },
   statLabel: { fontSize: 12, lineHeight: 16 },

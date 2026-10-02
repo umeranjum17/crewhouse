@@ -162,13 +162,19 @@ async function browse() {
 const WINDOW_MS = 2000;
 const quiet = (b: Awaited<ReturnType<typeof browse>>) => b.run("({ raf: __o.raf, running: document.getAnimations().filter((a) => a.playState === 'running').length })");
 const room = "!!document.querySelector('.o-room .o-cell')";
+/** Home opens on Chat; the room is the Office view, one tap away. */
+const toOffice = async (b: Awaited<ReturnType<typeof browse>>) => {
+  await until('the Chat | Office switch', () => b.run("!!document.querySelector('.home-mode [data-mode=office]')"), 30_000);
+  await b.run("document.querySelector('.home-mode [data-mode=office]').click()");
+  await until('the room', () => b.run(room), 30_000);
+};
 
 test('the office keeps the battery budget: nothing moves while quiet, Reduce Motion moves nothing', { skip: !bin && 'no Chromium here' }, async () => {
   const b = await browse();
   await b.send('Page.enable'); await b.send('Runtime.enable');
   for (const demo of ['calm', 'office']) {
     await b.open(`demo=${demo}&day`);
-    await until('the room', () => b.run(room), 30_000);
+    await toOffice(b);
     // What is on the desks when the room opens is simply there: no hop, no drop on the first paint.
     await until('the room to settle', () => b.run("window.__o.pending.size === 0 && document.getAnimations().every((a) => a.playState !== 'running')"), 15_000);
     const q0 = await quiet(b);
@@ -180,7 +186,7 @@ test('the office keeps the battery budget: nothing moves while quiet, Reduce Mot
   assert.equal((await quiet(b)).running, 0);
   await b.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
   await b.open('demo=office&day');
-  await until('the room', () => b.run(room), 30_000);
+  await toOffice(b);
   assert.equal((await quiet(b)).running, 0, 'Reduce Motion: nothing animates');
   await b.send('Emulation.setEmulatedMedia', { features: [] });
 });
@@ -196,7 +202,18 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, nothing covers anythin
     for (const [demo, n, reviews] of HOUSES) {
       for (const theme of ['day', 'night']) {
         await b.open(`demo=${demo}&${theme}`);
-        await until('the room', () => b.run(room), 30_000);
+        // Each launch opens on Chat: no room drawn, and the pinned Needs you and Chief's box are on the first screen.
+        await until('Chief\'s box', () => b.run("!!document.querySelector('.home-chat .composer')"), 30_000);
+        const first = await b.run(`(() => {
+          const seen = (e) => { if (!e) return false; const r = e.getBoundingClientRect(); return r.height > 0 && r.top >= 0 && r.bottom <= innerHeight; };
+          return { room: !!document.querySelector('.o-room'), pin: seen(document.querySelector('.needs-pin .needs-row')), box: seen(document.querySelector('.home-chat .composer')),
+            all: document.querySelector('.needs-pin .section-head .link')?.textContent ?? '', rows: document.querySelectorAll('.needs-pin .needs-row').length };
+        })()`);
+        const lead = `${demo} ${theme} at ${width}, first open`;
+        assert.equal(first.room, false, `${lead}: Chat by default, the room is not drawn`);
+        assert.ok(first.pin && first.box, `${lead}: one pinned Needs you row and Chief's box on the first screen`);
+        assert.equal(first.rows, 1, `${lead}: one pinned row`);
+        await toOffice(b);
         const m = await b.run(`(() => {
           const box = (e) => e.getBoundingClientRect(), st = box(document.querySelector('.o-room'));
           const cards = [...document.querySelectorAll('.o-bub, .o-chip b, .o-more, .o-tray, .o-thing')].map(box);
@@ -210,13 +227,14 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, nothing covers anythin
           const clipped = [...document.querySelectorAll('.o-bub b, .o-st > span, .o-chip b')].filter((e) => e.scrollWidth > e.clientWidth + 1).length;
           const asks = [...document.querySelectorAll('.o-bub.needs a[href^="#/ask/"]')].map((a) => a.getAttribute('href'));
           const office = document.querySelector('.office:not([hidden])');
-          const hero = [...document.querySelectorAll('.hero')].find((h) => h.offsetParent);
-          const [stat, busy] = [...hero.querySelectorAll('.stat')].map((e) => parseInt(e.textContent, 10));
+          const [stat, busy] = [...document.querySelectorAll('.home-bar .stat')].map((e) => parseInt(e.textContent, 10));
+          const pinned = parseInt(document.querySelector('.needs-pin .count')?.textContent ?? '0', 10);
+          const all = document.querySelector('.needs-pin .section-head .link')?.textContent ?? '';
           const names = (q) => [...document.querySelectorAll(q)].map((e) => e.textContent);
           const onIt = names('.feed .working .list-row .grow > b'), waits = names('.side-row:has(.side-seat.needs, .side-seat.chat) .grow > b');
           const badge = parseInt(document.querySelector('.tabbar a .badge, .side-nav .badge')?.textContent ?? '0', 10);
           const more = Number(document.querySelector('.o-more')?.dataset.more ?? 0);
-          return { out, over, clipped, asks, unique: new Set(asks).size, stat, badge, busy, onIt, waits,
+          return { out, over, clipped, asks, unique: new Set(asks).size, stat, badge, busy, onIt, waits, pinned, all,
             seated: document.querySelectorAll('.o-cell .o-sprite').length - 1, more: more || 0,
             roster: document.querySelectorAll('.side-row').length };
         })()`);
@@ -227,6 +245,8 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, nothing covers anythin
         assert.equal(m.asks.length, reviews, `${at}: one Review per helper with a row in Needs you`);
         assert.equal(m.unique, m.asks.length, `${at}: no row has two Reviews`);
         assert.equal(m.stat, m.badge, `${at}: the header's count is the Needs-you badge`);
+        assert.equal(m.pinned, m.badge, `${at}: the pinned Needs you counts the same rows`);
+        if (m.badge > 1) assert.equal(m.all, `See all ${m.badge}`, `${at}: "See all N" is exact`);
         assert.equal(m.seated + m.more, n, `${at}: everyone is in the room or counted under "+N"`);
         assert.ok(m.seated <= Math.max(4, reviews) + 3, `${at}: the room never grows past its desks and lounge`);
         if (!mobile) {
@@ -239,12 +259,12 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, nothing covers anythin
     }
     // The furniture is scenery: a tap on a desk front lands on its seat and opens that helper.
     await b.open('demo=crew5&day');
-    await until('the room', () => b.run(room), 30_000);
+    await toOffice(b);
     await b.run("(() => { const d = document.querySelector('.o-cell[data-seat] .o-deskf'); d.scrollIntoView({ block: 'center' }); const r = d.getBoundingClientRect(); document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2).click(); })()");
     await until('the helper\'s panel', () => b.run("!!document.querySelector('.o-sheet')"), 5000);
     // "+N" leads to the whole crew.
     await b.open('demo=crew30&day');
-    await until('the room', () => b.run(room), 30_000);
+    await toOffice(b);
     await b.run("document.querySelector('.o-more').click()");
     await until('the crew page', () => b.run("location.hash === '#/crew'"), 5000);
   }
