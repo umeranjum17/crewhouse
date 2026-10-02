@@ -229,7 +229,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       if (act === 'login') return { ok: true, signIn: await crew.accounts.login(key, b.via === 'code' ? 'code' : 'browser', !!b.fresh) };
       else if (act === 'retry') crew.retryAccount(key);
       else if (act === 'paste') crew.accounts.paste(key, String(b.text ?? ''));
-      else if (act === 'cancel') crew.accounts.cancel(key);
+      else if (act === 'cancel') await crew.accounts.cancel(key);
       else await crew.accounts.logout(key);
       return { ok: true, signIn: crew.accounts.view(key) };
     }

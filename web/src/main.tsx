@@ -246,7 +246,7 @@ function Home(ctx: Ctx) {
   const wide = useWide();
   const office = (frame: 'phone' | 'desk') => (frame === 'desk') === wide && <Office state={state} night={ctx.night} />;
   const nudges = <>
-    {(g.state === 'signed-out' || g.notIncluded) && <AccountCard g={g} onReady={refresh} />}
+    <AccountCard g={g} onReady={refresh} />
     <SetupRow state={state} accounts={accounts} tick={tick} />
     {A.resting(state) && <div className="card nudge"><span className="grow">{A.resting(state)}. I'll pick things back up then.</span></div>}
     {A.gettingReady(state) && <div className="card nudge"><span className="grow">{A.gettingReady(state)}</span></div>}
@@ -445,7 +445,6 @@ function Chat({ id, m, state, tick, refresh, accounts }: Ctx & { id: string; m?:
           <div id={`m${l.id}`} className={`line ${l.from}${l.unsure ? ' unsure' : ''}${l.recap ? ' recap' : ''}${l.id > (opened.current ?? Infinity) ? ' fresh' : ''}${i && lines[i - 1].from === l.from && l.from !== 'me' && !l.recap && !lines[i - 1].recap ? ' consecutive' : ''}`}>
             {l.from !== 'me' && l.from !== 'note' && <div className="line-by"><Face who={l.from === 'chief' ? 'chief' : h ?? 'chief'} size={28} /><span className="who">{l.from === 'chief' ? 'Chief' : name}</span><time>{l.at ? A.clock(l.at) : ''}</time></div>}
             {l.text && (l.detail ? <ChiefAsk l={{ text: l.text, detail: l.detail }} /> : <div className="bubble-text"><ChatText text={l.text} /></div>)}
-            {id === 'chief' && l.text === 'Sign in with ChatGPT.' && <AccountCard g={{ ...g, state: 'signed-out' }} inChat onReady={() => { void load(); refresh(); }} />}
             {l.files.map((f) => <Media key={f.url} f={f} big />)}
             {phoneOffer?.message === l.id && <PhoneCard offer={phoneOffer} reload={() => void load()} />}
             {cards.filter((c) => lines.findLastIndex((x) => (x.at ?? 0) <= c.at) === i).map((c) => c.kind === 'connect' ? <ConnectCard key={c.id} c={c} helper={h?.name} state={state} onDone={refresh} /> : <AskCard key={c.id} c={c} who={h} onDone={refresh} />)}
@@ -458,7 +457,7 @@ function Chat({ id, m, state, tick, refresh, accounts }: Ctx & { id: string; m?:
         {last?.choices.length ? <div className="chips">{last.choices.map((c) => <button key={c} className="chip" onClick={() => send(c)}>{c}</button>)}</div> : null}
         {cards.filter((c) => !lines.length || lines.every((x) => (x.at ?? 0) > c.at)).map((c) => c.kind === 'connect' ? <ConnectCard key={c.id} c={c} helper={h?.name} state={state} onDone={refresh} /> : <AskCard key={c.id} c={c} who={h} onDone={refresh} />)}
         {h && <Stuck h={h} refresh={refresh} />}
-        {(g.state === 'signed-out' || g.notIncluded) && <AccountCard g={g} inChat onReady={() => { void load(); refresh(); }} />}
+        <AccountCard g={g} inChat onReady={() => { void load(); refresh(); }} />
         {g.state === 'ready' && !g.notIncluded && A.resting(state) && <div className="card nudge"><span className="grow">{A.resting(state)}. {name === 'Chief' ? "I'll" : `${name} will`} finish then.</span></div>}
         <div ref={end} className="end" />
       </div>

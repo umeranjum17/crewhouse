@@ -26,7 +26,7 @@ export interface AgentRuntime {
   stop(): Promise<void>;
   signInRecovery?(): string;
   signedIn(account: string): Promise<boolean>;
-  signIn(account: string, via: 'browser' | 'code', on: (step: SignInStep) => void): { paste(text: string): void; cancel(): void };
+  signIn(account: string, via: 'browser' | 'code', on: (step: SignInStep) => void): { paste(text: string): void; cancel(): void; done?: Promise<unknown> };
   signOut(account: string): Promise<void>;
   run(spec: RunSpec, on: (event: RunEvent) => void): Promise<RunEnd>;
   steer(key: string, text: string): Promise<void>;

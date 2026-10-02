@@ -485,6 +485,7 @@ test('sign-in states reach the screens as plain states, never the engine\'s word
   assert.ok(mixed.busy && mixed.expired && !mixed.failed, 'keep the independent screen flags');
   assert.ok(row({ state: 'failed', why: 'expired', error: 'Other problem' }).failed, 'the existing view uses the expiry words');
   assert.equal(row({ state: 'waiting', code: 'AB12-CD34' }, { signedIn: true }).signing?.code, 'AB12-CD34', 'a new sign-in stays visible while the account is ready');
+  assert.equal(row({ state: 'waiting', code: 'AB12-CD34' }, { signedIn: true }).state, 'signed-out', 'an unfinished sign-in never becomes a success sheet');
   const ready = row(null, { signedIn: true, notIncluded: true, work: 'sara@acme.com' });
   assert.deepEqual([ready.state, ready.notIncluded, ready.work], ['ready', true, 'sara@acme.com']);
   assert.equal(A.resting({ resting: { chatgpt: Date.now() + 3600_000 } }).startsWith('Your ChatGPT is resting until'), true);

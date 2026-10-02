@@ -835,10 +835,17 @@ test('sign-in: one button shows a code, finishes by itself, and signs the person
 
 test('sign-in: a cancelled sign-in keeps nothing, signed in nothing', async () => {
   const { crew, done } = setup();
+  const begin = crew.runtime.signIn.bind(crew.runtime);
+  let freed!: () => void;
+  const admission = new Promise<void>((resolve) => { freed = resolve; });
+  crew.runtime.signIn = (...args) => ({ ...begin(...args), done: admission });
   const p = crew.accounts.login('grok', 'code');
-  await sleep(20);
+  await until('the sign-in code is shown', () => crew.accounts.view('grok')?.code);
   const flow = crew.accounts.finished('grok');
-  crew.accounts.cancel('grok');
+  const cancelled = crew.accounts.cancel('grok');
+  assert.equal(cancelled, admission, 'the caller can wait until the kit frees setup admission');
+  freed();
+  await cancelled;
   await p;
   await flow;
   assert.equal(crew.accounts.view('grok'), null, 'nothing kept, nothing shown');
