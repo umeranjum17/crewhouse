@@ -107,7 +107,7 @@ export function Office({ view, night, offline, width, onChief, onDesk, onAsk, on
           <motion.Hop beat={view.counts.done} reduce={reduce} awake={awake}><Tag t={t} k={k} ink={ink}>{`Tray · ${view.counts.done}`}</Tag></motion.Hop>
         </Pressable>
         {pill && <Pressable onPress={() => onAsk(pill.ask)} accessibilityRole="button" accessibilityLabel={`Review what ${pill.who} needs: ${pill.ask.head}`} hitSlop={6}
-          style={{ position: 'absolute', left: u(Math.min(306, Math.max(46, xs[pill.at])) - 42), top: u(89), width: u(84), alignItems: 'center' }}>
+          style={{ position: 'absolute', left: u(Math.min(306, Math.max(46, xs[pill.at])) - 42), top: u(order[pill.at] === 'chief' ? 78 : 96), width: u(84), alignItems: 'center' }}>
           <Tag t={t} k={k} hot>{A.SEAT_WORDS.needs}</Tag>
         </Pressable>}
       </View>

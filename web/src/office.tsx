@@ -123,7 +123,7 @@ export function Office({ state, live, night }: { state: Json; live: A.OfficeView
             : <Seat key={m.id} x={xs[i]} id={id} who={m.kind} mood={m.mood} seat={A.seatOf(m)} second={m.second} dataId={m.id} beat={`${m.ring}|${m.mood}|${m.things.length}|${m.ask?.id ?? ''}`}
                 label={said(m) + (m.things.length ? `, made ${m.things.map((f) => KIND_WORDS[f.kind]).join(', ')}` : '')} onOpen={() => setOpen(m.id)} />)}
           <Tray id={id} n={live.counts.done} bump={trayWas.current !== undefined && trayWas.current !== live.counts.done} />
-          {pill && <Tag x={Math.min(306, Math.max(46, xs[pill.at]))} y={100} text={A.SEAT_WORDS.needs} hot href={pill.href} label={pill.label} />}
+          {pill && <Tag x={Math.min(306, Math.max(46, xs[pill.at]))} y={order[pill.at] === 'chief' ? 100 : 114} text={A.SEAT_WORDS.needs} hot href={pill.href} label={pill.label} />}
         </svg>
         <div className="o-strip" style={{ ['--n' as string]: order.length + (more ? 1 : 0) }}>
           {order.map((m) => {
