@@ -446,7 +446,7 @@ if (variant === 'b1') {
   (state as Json).asks = [{ id: 11, bot: 'scout', task_id: 42, kind: 'permission', at: now - 30_000, member: 1, title: '', detail: {
     effect: 'spend', spends: true,
     words: 'Scout wants to place this order at flights.example: Fri 3 Oct 08:40 → 11:10, one stop, seat 14A, bag included. Total $412.00.',
-    preview: { head: 'The order at flights.example', body: 'Fri 3 Oct 08:40 → 11:10 · one stop · seat 14A · bag included — $412.00\nTotal $412.00' },
+    preview: { head: 'The order at flights.example', body: 'Fri 3 Oct · 08:40 → 11:10\nOne stop · seat 14A · bag included — $412.00\nTotal $412.00' },
     order: { shown: '$412.00', known: true, dollars: true }, yes: 'Book for $412.00' } }];
   // Only Tracer's list is done today, as the mocks' "Tray · 1": the base household's other jobs done today are dropped here.
   (state as Json).tasks = [task(52, 'tracer', 'your dinner list', 'done', { updated_at: Math.max(today, now - 12 * min), result: 'Seven dinners and one shopping list, sorted by aisle.', files: ['files/dinner-list.pdf'] }),

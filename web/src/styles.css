@@ -943,7 +943,8 @@ h1 { font: 400 32px/36px var(--serif); letter-spacing: -.005em; }
 .feed-head { display: flex; align-items: baseline; gap: 8px; margin: 0 0 4px; font: 400 30px/34px var(--serif); }
 .feed-head small { font: 400 13px var(--ui); color: var(--mute); }
 .on-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-.on-card { background: var(--solid); border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 1px 2px rgba(20,26,42,.04); padding: 10px 12px; min-width: 0; }
+.on-card { background: var(--solid); border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 1px 2px rgba(20,26,42,.04); padding: 10px 12px; min-width: 0; gap: 10px; } /* B1's card: a 30px face, 10px gap, the step at 13/17 */
+.on-card .small { line-height: 17px; }
 .home-section .section-head .small { margin-left: auto; }
 .office-main { min-width: 0; display: flex; flex-direction: column; }
 .office-main > .phone-only .home-section { margin-top: 18px; }

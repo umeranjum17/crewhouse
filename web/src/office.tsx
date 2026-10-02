@@ -185,7 +185,7 @@ const stationOf = (c: A.OfficeMember, v: A.OfficeView): Station => {
 };
 const TALL: Station[] = ['chief', 'monitor', 'failed', 'needs'];
 type Spot = { m: A.OfficeMember | 'chief' | 'tray'; st: Station; x: number; tray: boolean };
-const G = 196, X0 = 14, W = 346;
+const G = 196, W = 346;
 /** Left to right in the given order, the tray just before whoever finished (or before the resting); the row scales down
  *  about the floor line to fit, and centres when it is short. The Tray bubble never sits over a figure or past the
  *  room's edge: the tray keeps room for it beside anyone reaching its height (Chief's hat and cane reach 40 to his
@@ -213,7 +213,7 @@ function lay(order: (A.OfficeMember | 'chief')[], v: A.OfficeView, trayText: str
     });
     total = cur; s = Math.min(1, W / total);
   }
-  const x0 = X0 + Math.max(0, (W - total) / 2);
+  const x0 = 180 - (total * s) / 2;   // the crew centred under the window (x 180), as the mock
   return { spots, s, x0, X: (x: number) => x0 + x * s, Y: (y: number) => G + (y - G) * s };
 }
 
@@ -268,18 +268,20 @@ function Seat({ spot, id, kind, pose, seat, second, dataId, beat, label, onOpen 
       <g className="o-mon"><rect x={x + 16} y="118" width="34" height="24" rx="3" fill={st === 'failed' ? '#FFE9E3' : 'var(--r-screen)'} stroke={ink} strokeWidth="1.7" />
         {st === 'failed' ? <text x={x + 33} y="135" textAnchor="middle" fontFamily="Inter" fontWeight="800" fontSize="13" fill={red}>!</text> : <path d={`M${x + 30} 125l7 5-7 5z`} fill={ink} />}
         <path d={`M${x + 33} 142v8`} stroke={ink} strokeWidth="1.7" /></g>
-      {sprite(<g className={st === 'monitor' ? 'o-nod' : undefined}><Bean x={x} fill={fill} side="r" gaze="up" id={id}>
-        {kind === 'reel' && <><path d={`M${x - 6} 158C${x - 7} 146 ${x + 6} 145 ${x + 10} 151`} stroke={ink} strokeWidth="2.4" fill="none" strokeLinecap="round" /><rect x={x - 10.5} y="157" width="9" height="13" rx="4" fill={ink} /></>}
+      {/* At work the helper faces you under the playing screen, as the B1 mock (Reel in their headphones); stuck, they turn to the "!". */}
+      {sprite(<g className={st === 'monitor' ? 'o-nod' : undefined}><Bean x={x} fill={fill} side={st === 'failed' ? 'r' : undefined} gaze={st === 'failed' ? 'up' : undefined} id={id}>
+        {kind === 'reel' && (st === 'failed'
+          ? <><path d={`M${x - 6} 158C${x - 7} 146 ${x + 6} 145 ${x + 10} 151`} stroke={ink} strokeWidth="2.4" fill="none" strokeLinecap="round" /><rect x={x - 10.5} y="157" width="9" height="13" rx="4" fill={ink} /></>
+          : <><path d={`M${x - 15} 167C${x - 15} 144 ${x + 15} 144 ${x + 15} 167`} stroke={ink} strokeWidth="2.4" fill="none" strokeLinecap="round" /><rect x={x - 18} y="162" width="6" height="11" rx="3" fill={ink} /><rect x={x + 12} y="162" width="6" height="11" rx="3" fill={ink} /></>)}
       </Bean></g>)}
     </>}
     {st === 'writing' && <>
       <ellipse cx={x + 2} cy="150" rx="30" ry="12" fill={`url(#${id}lamp)`} opacity=".7" />
       <Desk x={x - 18} w={46} />
       <path d={`M${x - 6} 150l10-6 10 6z`} fill="var(--r-desk)" stroke={ink} strokeWidth="1.4" />
-      {sprite(<Bean x={x} h={44} fill={fill} side="r" gaze="down" id={id}>
-        <path d={`M${x + 1} 170l13-4 3 10-13 4z`} fill="#fff" stroke={ink} strokeWidth="1.4" strokeLinejoin="round" /><path d={`M${x + 4} 173.5l8-2.5M${x + 5.5} 177l6-1.8`} stroke={ink} strokeWidth="1" />
-        <g className="o-pen"><path d={`M${x + 10.5} 175l5-8`} stroke={ink} strokeWidth="1.8" strokeLinecap="round" /><path d={`M${x + 10.5} 175l.9-1.5`} stroke={red} strokeWidth="1.8" strokeLinecap="round" /><circle cx={x + 13} cy="171.5" r="2.4" fill={fill} stroke={ink} strokeWidth="1.3" /></g>
-      </Bean>)}
+      {/* Writing at the desk, facing you, the pen moving on the page beside the note (the B1 mock). */}
+      <path className="o-pen" d={`M${x + 12} 147l9-14`} stroke={ink} strokeWidth="1.8" strokeLinecap="round" />
+      {sprite(<Bean x={x} h={44} fill={fill} id={id} />)}
     </>}
     {st === 'done' && sprite(<Bean x={x} h={40} fill={fill} side="l" gaze="down" id={id}>
       <path d={`M${x + 2} ${G - 14}l3 3 6-6`} stroke={ink} strokeWidth="1.7" fill="none" strokeLinecap="round" /><path d={`M${x - 14} ${G - 18}q-5-4-7-11`} stroke={ink} strokeWidth="1.8" fill="none" strokeLinecap="round" />

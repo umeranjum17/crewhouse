@@ -232,7 +232,7 @@ function OnItNow({ live, waiting }: { live: A.OfficeView; waiting: number }) {
   const working = live.crew.filter((c) => A.seatOf(c) === 'working');
   return <section className="home-section working" aria-label="On it now"><div className="section-head"><span className="label">On it now</span><span className="small mute">{working.length} working</span></div>
     {working.length ? <div className="on-cards">{working.map((c) => <a key={c.id} className="list-row on-card" href={hrefOf(c.id)}>
-      <Face who={{ kind: c.kind, name: c.name, mood: c.mood }} size={36} /><span className="grow"><b className="clamp1">{c.name}</b><span className="small">{c.step || c.status}</span></span>
+      <Face who={{ kind: c.kind, name: c.name, mood: c.mood }} size={30} /><span className="grow"><b className="clamp1">{c.name}</b><span className="small">{c.step || c.status}</span></span>
     </a>)}</div> : <Empty>{waiting ? `Nobody is working: ${waiting} waiting on you.` : 'Nobody is working right now. The crew is free.'}</Empty>}
   </section>;
 }
