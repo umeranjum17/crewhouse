@@ -336,7 +336,7 @@ function ChiefSheet({ live, state, roles, onClose }: { live: A.OfficeView; state
     ...live.done.map((t) => ({ key: `t${t.id}`, at: t.at, text: `${roles.get(t.helper)?.name ?? 'The crew'} finished ${t.title || 'a job'}`, href: `#/things/t${t.id}` }))]
     .sort((x, y) => y.at - x.at).slice(0, 3);
   return (
-    <div className="scrim o-scrim" onClick={onClose}>
+    <div className="scrim o-scrim o-pop" onClick={onClose}>
       <div ref={box} className="o-sheet o-profile" role="dialog" aria-modal aria-label="Chief" onClick={(e) => e.stopPropagation()}>
         <header className="o-sh-head">
           <Face who="chief" size={64} />

@@ -1109,3 +1109,10 @@ h1 { font: 400 32px/36px var(--serif); letter-spacing: -.005em; }
   .page.chat-page.home-chat > .chat > .working-on { grid-column: 2; grid-row: 1 / -1; min-height: 0; overflow-y: auto; padding-top: 24px; }
   .with-book .page.chat-page.home-chat { grid-template-columns: minmax(0, 720px); }
 }
+
+/* B1 desk: Chief's profile is a popover card over the page, not a full-height side panel. */
+@media (min-width: 900px) {
+  .o-scrim.o-pop { place-items: start center; padding: 72px 12px 24px; background: rgba(12, 10, 16, .28); }
+  .o-pop > .o-profile { width: min(420px, 100%); height: auto; max-height: calc(100dvh - 96px); animation: pop 220ms var(--ease); }
+  @keyframes pop { from { opacity: 0; transform: translateY(8px) scale(.98); } }
+}
