@@ -164,7 +164,8 @@ export function Office({ state, live, night }: { state: Json; live: A.OfficeView
           ))}
           {Array.from({ length: spare }, (_, i) => <div key={`spare${i}`} className="o-cell" aria-hidden><div className="o-win" /><div className="o-plant" /></div>)}
         </div>
-        <div className="o-lounge" style={{ ['--cols' as string]: A.LOUNGE_SEATS + 1 }}>
+        {/* The lounge only when someone sits there or "+N" counts more: an empty sofa row means nothing to her. */}
+        {(plan.lounge.length > 0 || more > 0) && <div className="o-lounge" style={{ ['--cols' as string]: A.LOUNGE_SEATS + 1 }}>
           {Array.from({ length: A.LOUNGE_SEATS }, (_, i) => plan.lounge[i]).map((c, i) => c ? (
             <div key={c.id} className="o-cell" data-seat={A.seatOf(c)}>
               <Sprite who={c.kind} mood={c.mood} dot={2} night={night} className={c.second ? 'second' : ''} beat={`${c.ring}|${c.mood}`} />
@@ -174,7 +175,7 @@ export function Office({ state, live, night }: { state: Json; live: A.OfficeView
             </div>
           ) : <div key={`sofa${i}`} className="o-cell" aria-hidden><div className="o-sofa" /></div>)}
           <div className="o-cell"><div className="o-sofa" />{more > 0 && <a className="o-more" data-more={more} href="#/crew" aria-label={`${more} more of the crew${moreBusy ? `, ${moreBusy} working` : ''}: see everyone`}>+{more}{moreBusy > 0 && <small>{moreBusy} working</small>}</a>}</div>
-        </div>
+        </div>}
       </div>
       {profile && createPortal(<ChiefSheet live={live} state={state} roles={roles} onClose={() => setProfile(false)} />, document.body)}
       {open && crew.some((c) => c.id === open) && createPortal(<HelperSheet c={crew.find((c) => c.id === open)!} h={roles.get(open)} state={state}

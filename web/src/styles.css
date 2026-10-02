@@ -259,7 +259,6 @@ video.media { width: auto; max-width: 100%; max-height: 360px; height: auto; obj
 .needs-quiet { padding: 16px; color: var(--ink2); }
 /* An empty list: a small mark and a plain line, never a blank box. */
 .frame-empty { display: flex; gap: 12px; align-items: center; padding: 16px; color: var(--ink2); font-size: 14px; }
-.frame-empty .orn { color: var(--mute); font-size: 12px; flex: none; }
 .jobs.phone-only { padding-bottom: 48px; }
 .home > .dock { margin-left: -16px; margin-right: -16px; }
 .home .section-head .label { margin-bottom: 8px; }
@@ -957,6 +956,8 @@ details.card[open] > summary { margin-bottom: 10px; }
 .home-chat .dock { bottom: 64px; }
 /* Office scrolls as one page under the bar's first screen, so the whole room fits above Chief's box. */
 .home-office > .home-top { position: static; max-height: none; }
+/* Chief's box over the scrolling office is solid: nothing below the room shows through it as a cut-off letter. */
+.home-office > .dock { background: var(--bg); mask-image: none; }
 @media (min-width: 900px) {
   .home-top { position: static; flex: none; max-width: 1072px; }
   .home-office > .home-top { margin-right: 32px; }

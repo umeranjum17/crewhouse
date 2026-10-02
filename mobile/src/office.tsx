@@ -104,7 +104,8 @@ export function Office({ view, night, offline, width, onChief, onDesk, onAsk, on
           <View style={{ position: 'absolute', left: dw / 2 - 9, bottom: FLOOR, width: 18, height: 16, backgroundColor: r.pot, borderWidth: 2, borderBottomWidth: 0, borderColor: r.edge, borderTopLeftRadius: 2, borderTopRightRadius: 2 }} />
         </Cell>)}
       </View>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+      {/* The lounge only when someone sits there or "+N" counts more: an empty sofa row means nothing to her. */}
+      {(plan.lounge.length > 0 || more > 0) && <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
         {Array.from({ length: A.LOUNGE_SEATS }, (_, i) => plan.lounge[i]).map((c, i) => c ? <Cell key={c.id} w={lw} h={LOUNGE_H} r={r} lounge label={said(c)} onPress={() => onDesk(c)}>
           <motion.Hop beat={`${c.ring}|${c.mood}`} reduce={reduce} awake={awake} style={{ position: 'absolute', left: lw / 2 - 16, bottom: 40 }}>
             <Pal kind={c.kind} mood={c.mood} size={32} reduce={reduce} awake={awake} second={c.second} />
@@ -124,7 +125,7 @@ export function Office({ view, night, offline, width, onChief, onDesk, onAsk, on
             {moreBusy > 0 && <Text style={{ fontFamily: 'Inter', fontSize: 10.5, lineHeight: 13, fontWeight: '500', color: t.ink2, textAlign: 'center' }}>{`${moreBusy} working`}</Text>}
           </Pressable>}
         </Cell>
-      </View>
+      </View>}
     </View>
     {crew.length > 0 && <Dock view={view} t={t} onDesk={onDesk} />}
     </View>

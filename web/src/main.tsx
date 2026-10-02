@@ -237,7 +237,7 @@ function useWide() {
 }
 
 /** An empty list, said warmly: a small mark and a plain line, never a blank box. */
-const Empty = ({ children }: { children: ReactNode }) => <div className="frame-empty"><span className="art orn" aria-hidden>{art.ORNAMENT}</span>{children}</div>;
+const Empty = ({ children }: { children: ReactNode }) => <div className="frame-empty">{children}</div>;
 
 /** Home opens on Chat every time the app starts (kept in memory only, never stored): Chief's thread under the bar and
  *  the pinned Needs you. Office is the optional view of the same state; neither view hides Needs you or Chief's box. */
