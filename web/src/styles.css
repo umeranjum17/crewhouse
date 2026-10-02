@@ -1028,10 +1028,10 @@ h1 { font: 400 32px/36px var(--serif); letter-spacing: -.005em; }
 
 /* Chief's hero over his chat (B1 polish): his whole figure in its own column, feet on the card's floor, the serif name,
    his own line in a bubble, the crew with a badge each. The figure's box keeps headroom over the hat for his poses, so it
-   is drawn larger than the mock's (240px on a desk, 180 on a phone) and that headroom slides under the card's top edge. */
+   is drawn larger than the mock's (214px on a desk, the hero's 268px tall, 180 on a phone); the lifted hat uses it. */
 .chief-hero { display: grid; grid-template-columns: 256px minmax(0, 1fr); min-height: 268px; overflow: hidden; margin: 4px 0 12px; background: var(--solid); border: 1px solid var(--line2); border-radius: 24px; box-shadow: 0 1px 2px rgba(20, 26, 42, .04), 0 14px 32px -22px rgba(20, 26, 42, .32); }
-.ch-art { align-self: end; display: grid; padding-left: 16px; margin-top: -32px; }
-.ch-art .ink { width: 240px; height: auto; }
+.ch-art { align-self: end; display: grid; padding-left: 16px; }
+.ch-art .ink { width: 214px; height: auto; }
 .ch-body { min-width: 0; display: grid; gap: 10px; justify-items: start; align-content: start; padding: 30px 28px 22px 6px; }
 .ch-name { margin: 0; font: 400 52px/1 var(--serif); letter-spacing: -.01em; color: var(--ink); }
 .ch-name small { font: 400 13px/1 var(--ui); color: var(--mute); letter-spacing: 0; margin-left: 6px; }
@@ -1140,8 +1140,8 @@ h1 { font: 400 32px/36px var(--serif); letter-spacing: -.005em; }
   .ch-body { display: flex; flex-direction: column; align-items: flex-start; }
   .ch-crew { margin-top: auto; }
   .ch-caption { display: none; }
-  .needs-pin.flat .nb-acts { flex-wrap: nowrap; gap: 6px; }
-  .needs-pin.flat .nb-acts .btn { padding: 9px 12px; white-space: nowrap; }
+  .needs-pin.flat .nb-acts { gap: 6px; }
+  .needs-pin.flat .nb-acts .btn { padding: 9px 12px; }
   .needs-pin.flat .nb-acts .btn.ghost { padding: 9px 6px; }
   .home-chat .dock { background: var(--bg); }
   .home-chat .composer.has-bar { flex-wrap: nowrap; align-items: center; border-radius: 999px; padding: 6px 6px 6px 8px; }
