@@ -213,9 +213,12 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, nothing covers anythin
         assert.equal(first.room, false, `${lead}: Chat by default, the room is not drawn`);
         assert.ok(first.pin && first.box, `${lead}: one pinned Needs you row and Chief's box on the first screen`);
         assert.equal(first.rows, 1, `${lead}: one pinned row`);
+        // A long thread leaves the page scrolled to its end; Office must still open on its room.
+        await b.run('scrollTo(0, document.documentElement.scrollHeight)');
         await toOffice(b);
         const m = await b.run(`(() => {
           const box = (e) => e.getBoundingClientRect(), st = box(document.querySelector('.o-room'));
+          const bar = box(document.querySelector('.home-top')).bottom;
           const cards = [...document.querySelectorAll('.o-bub, .o-chip b, .o-more, .o-tray, .o-thing')].map(box);
           const sprites = [...document.querySelectorAll('.o-sprite')].map(box);
           const hit = (a, c) => a.left < c.right - 0.5 && c.left < a.right - 0.5 && a.top < c.bottom - 0.5 && c.top < a.bottom - 0.5;
@@ -234,11 +237,12 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, nothing covers anythin
           const onIt = names('.feed .working .list-row .grow > b'), waits = names('.side-row:has(.side-seat.needs, .side-seat.chat) .grow > b');
           const badge = parseInt(document.querySelector('.tabbar a .badge, .side-nav .badge')?.textContent ?? '0', 10);
           const more = Number(document.querySelector('.o-more')?.dataset.more ?? 0);
-          return { out, over, clipped, asks, unique: new Set(asks).size, stat, badge, busy, onIt, waits, pinned, all,
+          return { seen: st.height > 0 && st.top >= bar - 1 && st.top < innerHeight - 40, out, over, clipped, asks, unique: new Set(asks).size, stat, badge, busy, onIt, waits, pinned, all,
             seated: document.querySelectorAll('.o-cell .o-sprite').length - 1, more: more || 0,
             roster: document.querySelectorAll('.side-row').length };
         })()`);
         const at = `${demo} ${theme} at ${width}`;
+        assert.ok(m.seen, `${at}: Office opens on its room, below the bar and on screen, not just somewhere on the page`);
         assert.equal(m.out, 0, `${at}: every card inside the room`);
         assert.equal(m.over, 0, `${at}: no card covers another card or a sprite`);
         assert.equal(m.clipped, 0, `${at}: no label in the room is cut off`);

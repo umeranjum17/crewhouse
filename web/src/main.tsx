@@ -248,7 +248,9 @@ let homeMode: HomeMode = 'chat';
 function Home(ctx: Ctx) {
   const { state, live, refresh, tick, accounts } = ctx;
   const [mode, setMode] = useState(homeMode);
-  const pick = (m: HomeMode) => { homeMode = m; setMode(m); };
+  // On a phone Chief's thread holds the page scrolled to its newest line; the other view starts at its top, or Office
+  // opens scrolled past its room.
+  const pick = (m: HomeMode) => { homeMode = m; setMode(m); scrollTo(0, 0); };
   const g = A.account(accounts);
   const toChief = async (t: string) => { const ok = await attempt(() => api.post('chief', t), undefined, true); if (ok) { refresh(); go('#/chief'); } return ok; };
   const wide = useWide();
