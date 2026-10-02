@@ -1054,8 +1054,6 @@ h1 { font: 400 32px/36px var(--serif); letter-spacing: -.005em; }
   .ch-crew { gap: 3px; }
   .ch-face { zoom: .74; }
   .ch-say { font-size: 15px; padding: 10px 14px; }
-  /* B1 phone: hero and card scroll with the thread, in the mock's order; nothing sticks over the hero. */
-  .home-chat > .home-top { position: static; max-height: none; overflow: visible; }
 }
 @media (max-width: 359px) {
   .chief-hero { grid-template-columns: 112px minmax(0, 1fr); min-height: 0; }
@@ -1157,3 +1155,33 @@ h1 { font: 400 32px/36px var(--serif); letter-spacing: -.005em; }
   .needs-pin.flat .nb-av .ink { width: 34px; height: auto; }
 }
 
+
+/* 096 (B1 phone chat): one screen. The bar, Chief's hero and the pinned ask stay put; only the thread scrolls, opened
+   at its newest line, above a composer docked at the foot (clear of the home indicator). On a short screen the top
+   shrinks and scrolls by itself so the thread keeps its room. The thread and the ask take the mock's compact sizes. */
+@media (max-width: 899px) {
+  .page.chat-page.home-chat { height: 100dvh; display: flex; flex-direction: column; padding-bottom: 0; overflow: hidden; }
+  .home-chat > .home-top { position: static; flex: 0 1 auto; min-height: 0; max-height: none; overflow-y: auto; }
+  .home-chat > .chat { flex: 1 1 0; min-height: 168px; }
+  .home-chat .lines { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 0 10px; }
+  .home-chat .lines > :first-child { margin-top: auto; }
+  .home-chat .dock { position: static; flex: none; margin: 0 -16px; padding: 6px 16px max(12px, env(safe-area-inset-bottom)); mask-image: none; }
+  .home-chat .day { margin-top: 12px; }
+  .home-chat .line { margin-top: 9px; }
+  .home-chat .line:not(.me):not(.note) { grid-template-columns: 28px minmax(0, 1fr); column-gap: 8px; }
+  .home-chat .line:not(.me):not(.note) .bubble-text { font: 400 15px/21px var(--ui); padding: 8px 12px; border-radius: 16px 16px 16px 6px; }
+  .home-chat .line.me .bubble-text { font: 400 15px/21px var(--ui); padding: 8px 12px; border-radius: 16px 16px 6px 16px; }
+  .home-chat .line.note:has(.note-by) { align-self: center; justify-content: center; gap: 7px; max-width: none; font: 500 12px/16px var(--ui); }
+  .home-chat .line.note .bubble-text { margin: 0; font: inherit; }
+  .home-chat .needs-pin.flat .section-head { margin-bottom: 4px; }
+  .home-chat .needs-pin.flat .nb-title { font-size: 21px; }
+  .home-chat .needs-pin.flat .nb-ask { font: 400 13px/17px var(--ui); }
+  .home-chat .needs-pin.flat .nb-acts { margin-top: 10px; }
+  /* Office's box is the same one-row composer as Chief's chat. */
+  .home-office .composer.has-bar { flex-wrap: nowrap; align-items: center; border-radius: 999px; padding: 6px 6px 6px 8px; }
+  .home-office .composer.has-bar textarea { flex: 1; padding: 9px 0; }
+  .home-office .c-bar { flex: none; order: -1; }
+  .home-office .c-chip { display: none; }
+  .home-office .send { border-radius: 12px; }
+  .home-office .send:disabled { background: var(--ink); color: var(--solid); transform: none; }
+}

@@ -284,7 +284,7 @@ function NeedsCard({ state, c, flat, onLater }: { state: Json; c: A.Card; flat?:
         {price && <span className="nb-price">{price}</span>}
       </div>}
       <div className="nb-acts">
-        <a className="btn go" href={`#/ask/${c.id}`}><Icon name="check" />{yes ? (flat ? yes.label.replace(shown, price) : `${yes.label}…`) : c.reply ? `Answer ${name}…` : 'Review…'}</a>
+        <a className="btn go" href={`#/ask/${c.id}`}><Icon name="check" />{yes ? yes.label.replace(shown, price) : c.reply ? `Answer ${name}…` : 'Review…'}</a>
         <button className="btn" onClick={ask}>Ask Chief</button>
         {onLater && <button className="btn ghost" onClick={() => onLater(c.id)}>Not now</button>}
       </div>
@@ -388,7 +388,7 @@ function Home(ctx: Ctx) {
         <JobList state={state} few refresh={refresh} />
         <div className="feed-ask"><Composer placeholder="Ask Chief anything…" onSend={toChief} {...typeInto('chief')} chips={A.ideas(state).map((i: Json) => ({ label: i.ask.trim(), ask: i.ask }))} /></div>
       </aside>
-      <div className="dock phone-only"><Composer placeholder="Ask Chief anything" onSend={toChief} {...typeInto('chief')} /></div>
+      <div className="dock phone-only"><Composer placeholder="Ask Chief anything" onSend={toChief} {...typeInto('chief')} chips={[]} /></div>
     </div>
   );
 }
@@ -502,14 +502,14 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
   useEffect(() => { if ((page?.messages ?? []).some((x: Json) => x.author === 'bot' && x.text === partial)) setPartial(''); }, [page, partial]);
   const phoneOffer = id === 'chief' ? A.phoneOffer(page) : null;
   const box = useRef<HTMLDivElement>(null);
-  // The thread scrolls by its own column on a desk (a scrollIntoView here once dragged the whole page up with it,
-  // leaving a dead band on top); the phone keeps the document scroll. An anchored landing scrolls to the line instead.
-  // Every chat, Home's Chief chat included (Main600), opens at its newest line; his hero is above, a scroll away.
+  // The thread scrolls by its own column on a desk and in Home's chat on a phone (a scrollIntoView here once dragged the
+  // whole page up with it, hiding Chief's hero); other phone chats keep the document scroll. An anchored landing
+  // scrolls to the line instead. Every chat opens at its newest line (Main600) under a hero that stays in place (096).
   useEffect(() => {
     if (around) return;
-    if (matchMedia('(min-width: 900px)').matches) { const el = box.current; if (el) el.scrollTop = el.scrollHeight; }
+    if (hero || matchMedia('(min-width: 900px)').matches) { const el = box.current; if (el) el.scrollTop = el.scrollHeight; }
     else end.current?.scrollIntoView({ block: 'end' });
-  }, [lines.length, around, !!echoed, !!waiting, partial]);
+  }, [lines.length, around, !!echoed, !!waiting, partial, hero]);
   // The landing itself: the matched line, centred, with the one motion that explains where you are.
   useEffect(() => {
     if (!around || !lines.length) return;

@@ -1235,7 +1235,7 @@ function Home(ctx: Ctx) {
   const top = <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4, gap: 10 }}>
     <HomeBar state={state} view={view} offline={offline} go={go} mode={mode} pick={pick} />
   </View>;
-  // Chat: Chief's hero and Needs you open his thread and scroll with it, so the keyboard leaves the newest lines room.
+  // Chat: Chief's hero and Needs you stay over his thread, which scrolls on its own to the newest line.
   if (mode === 'chat') return <View style={{ flex: 1 }}>{top}<Chat {...ctx} id="chief" hero={<View style={{ gap: 12 }}><ChiefHero live={view} state={state} go={go} /><NeedsPin state={state} cards={needs} open={open} go={go} /></View>} /></View>;
   return (
     <View style={{ flex: 1 }}>
@@ -1385,8 +1385,8 @@ function JobList({ state, go, refresh }: { state: Json; go: Ctx['go']; refresh: 
 }
 
 // ---------- a chat ----------
-/** `hero`: Home's Chief thread (B1) opens on it at its top, with the tray's notices among his lines; only what arrives
- *  after that scrolls to the newest line. */
+/** `hero`: Home's Chief thread (B1): the hero and pinned ask stay above the thread, which opens at its newest line with
+ *  the tray's notices among his lines. */
 function Chat({ id, m, state, tick, refresh, canAct, offline, open, writer, hero }: Ctx & { id: string; m?: number; hero?: ReactNode }) {
   const t = useLook();
   // The computer's page when it answers; otherwise the lines this phone kept, until it does.
@@ -1453,12 +1453,13 @@ function Chat({ id, m, state, tick, refresh, canAct, offline, open, writer, hero
   const who = (f: string) => <View style={s.row}><Face who={f === 'chief' ? 'chief' : h ?? 'chief'} size={28} /><T style={[s.small, s.b]}>{f === 'chief' ? 'Chief' : name}</T></View>;
   return (
     <View style={{ flex: 1 }}>
-      <ScrollView ref={scroll} style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 10 }}
+      {/* Home's hero and pinned ask stay in place over the thread (096); on a short screen they shrink and scroll alone. */}
+      {hero && <ScrollView style={{ flexGrow: 0, flexShrink: 1 }} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 4 }}>{hero}</ScrollView>}
+      <ScrollView ref={scroll} style={{ flex: 1, minHeight: hero ? 168 : undefined }} contentContainerStyle={{ padding: 16, gap: 10, flexGrow: hero ? 1 : undefined, justifyContent: hero ? 'flex-end' : undefined }}
         onContentSizeChange={() => {
           if (around) return;
           scroll.current?.scrollToEnd({ animated: false });
         }}>
-        {hero}
         {start && !hero && <View style={s.intro}>
           <View style={[s.halo, { backgroundColor: t.soft }]}><Ink who={h ? h.kind : 'chief'} mood={h?.mood} size={72} /></View>
           <T style={s.introName}>{name}</T><T tone="ink2" style={[s.centerText, { maxWidth: 300 }]}>{h ? h.role : 'Runs the crew and answers to you'}</T>
