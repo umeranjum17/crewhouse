@@ -150,7 +150,7 @@ export function desktopSignaling(bot: string) {
 
 /** Live events; reconnects forever. Returns a stop function. */
 export function subscribe(onEvent: (e: Json) => void) {
-  if (demo) return () => {};
+  if (demo) { let stop = () => {}; void import('./demo.ts').then((m) => { stop = m.demoLive(onEvent); }); return () => stop(); }
   let ws: WebSocket | undefined, stopped = false;
   const open = () => {
     ws = new WebSocket(`${wsBase()}/ws`);

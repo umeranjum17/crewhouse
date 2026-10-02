@@ -443,11 +443,27 @@ const accounts = AIS.map((ai) => ({ account: ai.key, name: ai.name,
   work: ai.key === 'chatgpt' && variant === 'work' ? 'umer@acme.com' : false,
   signIn: ai.key === 'chatgpt' && variant === 'signin' ? { state: 'waiting', via: 'browser', url: 'https://auth.openai.com/oauth/authorize' } : null }));
 
+// ?demo=handoff: Reel finishes while you watch. 4 s after the page opens the snapshot changes and the two events
+// crewd would send land through the live path, so the room's hand-off, the tray and the feed all move as they would.
+export function demoLive(hear: (e: Json) => void) {
+  if (variant !== 'handoff') return () => {};
+  const t = setTimeout(() => {
+    const done = task(41, 'reel', "Mum's birthday video", 'done', { updated_at: Date.now(), result: 'A one-minute video for Mum, with the piano song and her title.', files: ['files/happy-birthday-first-cut.mp4'] });
+    Object.assign(bots.find((b) => b.id === 'reel')!, { task: null, step: undefined });
+    state.tasks.unshift(done);
+    (state as Json).asks = state.asks.filter((a: Json) => a.bot !== 'reel');
+    const heard = [ev(14, 0, 'file.delivered', 'reel', { task: 41, path: done.files[0] }), ev(15, 0, 'task.done', 'reel', { task: 41, title: done.title, result: done.result, files: done.files })];
+    events.push(...heard);
+    heard.forEach(hear);
+  }, 4000);
+  return () => clearTimeout(t);
+}
+
 let calls = 0;
 export async function demoCall(method: string, path: string, body?: Json) {
   // "offline": the home computer never answers; "lost": it answers once, then goes quiet.
   if (variant === 'offline' || (variant === 'lost' && calls++ > 0)) throw new TypeError('Failed to fetch');
-  if (method === 'GET' && path === '/api/state') return state;
+  if (method === 'GET' && path === '/api/state') return { ...state };   // a new snapshot each read, as crewd's would be
   // The give-back sheet's ticks: the hosts on its tabs, only while the person holds the wheel.
   const scr = /^\/api\/bots\/([a-z0-9-]+)\/screen$/.exec(path);
   if (method === 'GET' && scr) return { pages: variant === 'wheeled' && scr[1] === 'scout' ? ['shop.example', 'mail.example'] : [] };
