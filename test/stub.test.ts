@@ -18,10 +18,11 @@ const port = await new Promise<number>((r) => { const s = createServer().listen(
 const base = `http://127.0.0.1:${port}`;
 // Fixture writers share crewd's WAL file and its bounded SQLite contention handler.
 const openDb = () => new DatabaseSync(join(root, 'state', 'crew.db'), { timeout: 3000 });
-const daemon = spawn(process.execPath, [join(import.meta.dirname, '..', 'src', 'main.ts')], {
+const startDaemon = () => spawn(process.execPath, [join(import.meta.dirname, '..', 'src', 'main.ts')], {
   env: { ...process.env, CREWHOUSE_ENGINE: 'stub', CREWHOUSE_HOLD_MS: '5000', CREWHOUSE_PORT: String(port), CREWHOUSE_STATE_DIR: join(root, 'state'), CREWHOUSE_CREW_DIR: join(root, 'crew'), CREWHOUSE_TOOLS_DIR: join(root, 'tools') },
   stdio: ['ignore', 'pipe', 'inherit'],
 });
+let daemon = startDaemon();
 after(() => daemon.kill());
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -314,6 +315,72 @@ test('screen: take over and give back through the API; watching needs the Comput
   ws.close();
   const foreign = new WebSocket(`ws://127.0.0.1:${port}/ws/desktop/reel`, { origin: 'https://evil.example' });
   assert.equal(await new Promise((r) => { foreign.once('open', () => r('open')); foreign.once('error', () => r('refused')); }), 'refused');
+});
+
+test('routine PUT validates the whole update and commits fields and event together', async (t) => {
+  await ready();
+  await api('POST', '/api/recruit', { template: 'scout', name: 'Scout' });
+  const rejected = [
+    { quiet: true, state: 'invalid' },
+    { quiet: true, state: 'paused', schedule: 'invalid' },
+    { state: 'invalid' },
+    { schedule: 'invalid' },
+    { quiet: 'true', state: 'paused', schedule: 'weekdays 10am' },
+    { quiet: true, schedule: 'every minute' },
+  ];
+  for (const body of rejected) await t.test(`reject ${JSON.stringify(body)} without writing`, async () => {
+    const made = await api('POST', '/api/routines', { bot: 'scout', schedule: 'weekdays 9am', task: 'Check the synthetic list', quiet: false });
+    assert.equal(made.status, 200);
+    const db = openDb();
+    try {
+      const row = () => db.prepare('SELECT * FROM routines WHERE id = ?').get(made.body.id);
+      const events = () => db.prepare("SELECT * FROM events WHERE json_extract(data, '$.routine') = ?").all(made.body.id);
+      const before = { row: row(), events: events() };
+      assert.equal((await api('PUT', `/api/routines/${made.body.id}`, body)).status, 400);
+      const after = { row: row(), events: events() };
+      console.log(JSON.stringify({ body, before, after }));
+      assert.deepEqual(after, before, '400 preserves quiet/state/schedule/next_at and events');
+      daemon.kill();
+      await until(async () => daemon.exitCode !== null || daemon.signalCode !== null);
+      daemon = startDaemon();
+      await ready();
+      const reloaded = (await api('GET', '/api/state')).body.routines.find((r: any) => r.id === made.body.id);
+      for (const key of ['quiet', 'state', 'schedule', 'next_at']) assert.equal(reloaded[key], before.row![key]);
+    } finally { db.close(); await api('DELETE', `/api/routines/${made.body.id}`); }
+  });
+  await t.test('valid mixed PUT persists, and a failed event rolls back every field', async () => {
+    const made = await api('POST', '/api/routines', { bot: 'scout', schedule: 'weekdays 9am', task: 'Check the synthetic list', quiet: false });
+    const id = made.body.id;
+    const db = openDb();
+    try {
+      const row = () => db.prepare('SELECT * FROM routines WHERE id = ?').get(id)!;
+      const events = () => db.prepare("SELECT COUNT(*) AS n FROM events WHERE json_extract(data, '$.routine') = ?").get(id)!.n;
+      const before = { row: row(), events: events() };
+      db.exec("CREATE TRIGGER reject_routine_event BEFORE INSERT ON events WHEN NEW.kind = 'routine.paused' BEGIN SELECT RAISE(ABORT, 'synthetic event failure'); END");
+      const refused = await api('PUT', `/api/routines/${id}`, { quiet: true, state: 'paused', schedule: 'weekdays 10am' });
+      assert.equal(refused.status, 400);
+      assert.match(refused.body.error, /synthetic event failure/);
+      assert.deepEqual({ row: row(), events: events() }, before, 'event failure rolls back quiet too');
+      db.exec('DROP TRIGGER reject_routine_event');
+      assert.equal((await api('PUT', `/api/routines/${id}`, { quiet: true, state: 'paused', schedule: 'weekdays 10am' })).status, 200);
+      assert.equal(events(), Number(before.events) + 1);
+      const updated = row();
+      assert.deepEqual([updated.quiet, updated.state, updated.schedule], [1, 'paused', 'weekdays 10am']);
+      assert.equal(new Date(Number(updated.next_at)).getHours(), 10);
+      assert.equal((await api('PUT', `/api/routines/${id}`, { quiet: false })).status, 200);
+      assert.deepEqual([row().quiet, row().state, row().schedule, row().next_at], [0, updated.state, updated.schedule, updated.next_at], 'quiet-only keeps the run time');
+      const reopened = openDb();
+      try { assert.deepEqual(reopened.prepare('SELECT * FROM routines WHERE id = ?').get(id), row(), 'fresh connection confirms durable fields'); } finally { reopened.close(); }
+      daemon.kill();
+      await until(async () => daemon.exitCode !== null || daemon.signalCode !== null);
+      daemon = startDaemon();
+      await ready();
+      const reloaded = (await api('GET', '/api/state')).body.routines.find((r: any) => r.id === id);
+      for (const key of ['quiet', 'state', 'schedule', 'next_at']) assert.equal(reloaded[key], row()[key]);
+      const digest = (await api('GET', '/api/state')).body.routines.find((r: any) => r.kind === 'digest');
+      assert.equal((await api('PUT', `/api/routines/${digest.id}`, { quiet: true, state: 'paused' })).status, 400);
+    } finally { db.exec('DROP TRIGGER IF EXISTS reject_routine_event'); db.close(); await api('DELETE', `/api/routines/${id}`); }
+  });
 });
 
 test('routines: Chief offers one as a card, the person starts it (or changes the time), it fires on schedule, the person manages it', async () => {
