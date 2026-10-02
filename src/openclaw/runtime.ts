@@ -55,7 +55,6 @@ const ABOUT: Record<string, string> = {
   crew_remember: 'Save a lasting preference: pass {text: "one short line"}; optionally replaces and everyone. Do not save how to address the person.',
   crew_batch: 'Research several items at once against one question, then merge the answers into your spreadsheet.',
   crew_document: 'Write and deliver an editable document: pass {name: "title", blocks: [{heading: "Title"}, {text: "Paragraph"}, {bullets: ["Item"]}]}. Crewhouse writes the file; do not make it yourself.',
-  crew_draft: 'Show ONE finished message for approval; nothing is sent. path: file containing ONLY the message body, preserving line breaks; no subject, headings, variants or planning notes. channel: email, text, post (social), reply (site). to: actual recipient name/address or site, NEVER a job title. subject: required for email, separate from body.',
 };
 export const TOOLS: ToolSpec[] = ['shell', 'browser', 'calendar', 'mail', 'crew_app', 'crew_web_fetch', 'crew_web_search', 'crew_read', 'crew_write',
   'crew_edit', 'crew_ls', 'crew_grep', 'crew_find', 'crew_connect', 'crew_outcome', 'crew_report', 'crew_batch', 'crew_deliver', 'crew_workbook', 'crew_document',

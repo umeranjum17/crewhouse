@@ -407,6 +407,10 @@ test('bots on disk: persona rename, capped notes, folder confinement, slugs', ()
   assert.ok(!existsSync(join(dir, 'CLAUDE.md')) && !existsSync(join(dir, '.claude')), 'no CLI wiring in a bot folder');
   assert.match(disk.systemPrompt(cfg, 'frames', false), /Your id in Crewhouse is frames\./);
   assert.match(disk.systemPrompt(cfg, 'frames', false), /Never introduce yourself as a new assistant or ask the person to name you after a task/);
+  // A message the person sends themselves goes on a draft card, whatever an older job or skill says; Chief has no crew_draft.
+  assert.match(disk.systemPrompt(cfg, 'frames', false), /crew_draft \(an email, text or social post[^)]*never a document, whatever a job or skill says\)/);
+  assert.doesNotMatch(disk.systemPrompt(cfg, 'frames', false), /drafts, a table\), goes in a document/);
+  assert.doesNotMatch(disk.systemPrompt(cfg, 'chief', true), /crew_draft/);
   assert.throws(() => crew.recruit('reel', 'Frames', 'person'), /already a bot/);
   assert.throws(() => crew.recruit('chief', 'Deputy', 'person'), /only one Chief/);
   const mine = { bot: 'frames' };
