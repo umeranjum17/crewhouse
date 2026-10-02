@@ -211,9 +211,10 @@ function Wall({ w, r }: { w: number; r: Room }) {
       <View style={{ position: 'absolute', top: 21, left: 0, right: 0, height: 2, backgroundColor: r.frame }} />
       <View style={{ position: 'absolute', right: 8, top: 6, width: 8, height: 8, borderRadius: 4, backgroundColor: '#FFF3C8' }} />
     </View>
-    <View style={{ position: 'absolute', left: c + 97, top: 17, width: 26, height: 26, borderRadius: 13, borderWidth: 2, borderColor: r.edge }}>
-      <View style={{ position: 'absolute', left: 10, top: 4, width: 2, height: 8, backgroundColor: r.edge }} />
-      <View style={{ position: 'absolute', left: 11, top: 11, width: 6, height: 2, backgroundColor: r.edge }} />
+    {/* The clock sits left of the window, clear of the tray pill in the right corner (Main596). */}
+    <View style={{ position: 'absolute', left: c - 69, top: 18, width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: r.edge }}>
+      <View style={{ position: 'absolute', left: 9, top: 3, width: 2, height: 8, backgroundColor: r.edge }} />
+      <View style={{ position: 'absolute', left: 10, top: 10, width: 5, height: 2, backgroundColor: r.edge }} />
     </View>
   </View>;
 }

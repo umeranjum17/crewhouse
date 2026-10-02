@@ -184,7 +184,8 @@ export function Office({ state, live, night }: { state: Json; live: A.OfficeView
   );
 }
 
-/** The wall above the desks, in the room's ink: a shelf, the night window and the clock. */
+/** The wall above the desks, in the room's ink: a shelf, the clock and the night window. The clock sits left of the
+ *  window, clear of the tray pill in the right corner at every width (Main596). */
 function Wall({ wide }: { wide: boolean }) {
   const w = wide ? 700 : 360, c = w / 2;
   return <div className="o-wall" aria-hidden><svg viewBox={`0 0 ${w} 64`} preserveAspectRatio="xMidYMid meet" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -192,7 +193,7 @@ function Wall({ wide }: { wide: boolean }) {
     <path d={`M${c - 104} 50v-8h12v8M${c - 98} 42c-6 -6 -4 -12 0 -14c4 2 6 8 0 14`} />
     <rect x={c - 34} y="8" width="68" height="48" rx="4" fill="var(--r-window)" /><path d={`M${c} 8v48M${c - 34} 32h68`} />
     <circle cx={c + 20} cy="20" r="4" fill="#FFF3C8" stroke="none" />
-    <circle cx={c + 110} cy="30" r="13" fill="var(--solid)" /><path d={`M${c + 110} 22v8l5 3`} />
+    <circle cx={c - 57} cy="30" r="12" fill="var(--solid)" /><path d={`M${c - 57} 23v7l5 3`} />
   </svg></div>;
 }
 
