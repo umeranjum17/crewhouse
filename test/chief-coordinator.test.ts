@@ -46,6 +46,9 @@ test('a pending Chief review survives restart with its source task, history and 
     assert.equal(task(s.db, review.id).session, review.session);
     assert.equal(task(s.db, review.id).parent, id);
     assert.match(s.db.get("SELECT text FROM messages WHERE bot = 'chief' AND task_id = ? AND author = 'bot' ORDER BY id DESC", id)!.text, /Friday.*https:\/\/example.test\/notice/s);
+    const receipt = crew.botPage('chief').messages.find((m: any) => m.task_id === id && m.outcome)!;
+    assert.equal(receipt.outcome.state, 'done');
+    assert.equal(JSON.parse(s.db.get('SELECT data FROM events WHERE seq = ?', receipt.outcome.event)!.data).task, id);
     assert.ok(s.db.get("SELECT 1 FROM messages WHERE bot = 'scout' AND task_id = ? AND author = 'bot'", id), 'the internal history remains');
   } finally { await crew.stop(); }
 });
@@ -187,4 +190,49 @@ test('routine steps remain internal; a meaningful deadline review binds its even
   assert.match(line, /Friday.*https:\/\/example.test\/notice/s); assert.doesNotMatch(line, /Reading section/);
   await release(crew, 'scout', 'ALL-CLEAR'); await settled(db, id);
   assert.equal(db.get("SELECT COUNT(*) AS n FROM tasks WHERE parent = ? AND origin = 'report'", id)!.n, 1);
+});
+
+test('only event-bound terminal review messages carry immutable outcomes, never prior questions or progress', async () => {
+  const { db, crew } = setup(); crew.onboard('Test'); crew.recruit('scout', 'Scout', 'person');
+  const id = crew.assign('scout', 'ask permission: produce a controlled result', 'chief').task;
+  await holding(crew, 'scout');
+  await tools(crew, 'scout').find((t: any) => t.name === 'crew_report').run({ text: 'The comparison is underway.' });
+  await until('progress review', () => crew.botPage('chief').messages.some((m: any) => m.task_id === id));
+  await release(crew, 'scout', 'Which receipt should be compared?'); await settled(db, id);
+  const prior = crew.botPage('chief').messages.filter((m: any) => m.task_id === id);
+  assert.ok(prior.length >= 2); assert.ok(prior.every((m: any) => !m.outcome));
+  assert.equal(crew.assign('scout', 'Use the controlled receipt; ask permission before continuing', 'chief').task, id);
+  await release(crew, 'scout', 'The controlled comparison is complete.'); await settled(db, id);
+  const final = crew.botPage('chief').messages.find((m: any) => m.task_id === id && m.outcome)!;
+  assert.ok(final); assert.equal(final.outcome.state, 'done');
+  const event = final.outcome.event, source = task(db, id);
+  assert.equal(db.get('SELECT kind FROM events WHERE seq = ?', event)!.kind, 'task.done');
+  assert.ok(crew.botPage('chief').messages.filter((m: any) => prior.some((p: any) => p.id === m.id)).every((m: any) => !m.outcome));
+  const review = db.get("SELECT * FROM tasks WHERE parent = ? AND origin = 'report' ORDER BY id DESC", id)!;
+  assert.equal((crew as any).reportToChief(source, false, event).task, review.id, 'same event reuses review identity');
+  db.run("UPDATE tasks SET state = 'queued' WHERE id = ?", review.id); (crew as any).dispatch(); await settled(db, review.id);
+  assert.equal(crew.botPage('chief').messages.filter((m: any) => m.outcome?.event === event).length, 1, 'same-event retry cannot duplicate a receipt');
+  (crew as any).setTask(source, 'needs_you', 'A later question.');
+  assert.deepEqual(crew.botPage('chief').messages.find((m: any) => m.id === final.id)!.outcome, { state: 'done', event });
+  const read = JSON.parse(await tools(crew, 'chief').find((t: any) => t.name === 'crew_status').run({ task: id, event }));
+  assert.equal(read.report.state, 'done'); assert.equal(read.report.result, 'The controlled comparison is complete.', 'event evidence is not replaced by mutable retry state');
+  (crew as any).setTask(source, 'done', 'A later result.');
+  for (const state of ['unsure', 'failed']) {
+    const next = crew.assign('scout', 'ask permission: another controlled result', 'chief').task;
+    await holding(crew, 'scout');
+    (crew as any).close('scout');
+    (crew as any).setTask(task(db, next), state, `Controlled ${state}.`);
+    await settled(db, next);
+    const line = crew.botPage('chief').messages.find((m: any) => m.task_id === next && m.outcome)!;
+    assert.equal(line.outcome.state, state); assert.equal(db.get('SELECT kind FROM events WHERE seq = ?', line.outcome.event)!.kind, `task.${state}`);
+  }
+  const malformed = (crew as any).addTask('chief', 'ask permission: inspect malformed binding', 'report', undefined, undefined, '', [], { parent: id, review: { source: id, purpose: 'terminal', state: 'failed', event } }).task;
+  await release(crew, 'chief', 'A disagreeing binding is not a receipt.'); await settled(db, malformed);
+  const untagged = crew.botPage('chief').messages.filter((m: any) => m.task_id === id).at(-1)!;
+  assert.equal(untagged.outcome, undefined);
+  const foreign = db.get("SELECT seq FROM events WHERE kind = 'task.failed' ORDER BY seq DESC")!.seq;
+  db.event('message.outcome', 'chief', { message: untagged.id, task: id, outcome: { state: 'failed', event: foreign } });
+  assert.equal(crew.botPage('chief').messages.find((m: any) => m.id === untagged.id)!.outcome, undefined, 'wrong source binding fails closed');
+  db.event('message.outcome', 'chief', { message: prior[0].id, task: id, outcome: { state: 'done', event: -1 } });
+  assert.equal(crew.botPage('chief').messages.find((m: any) => m.id === prior[0].id)!.outcome, undefined, 'absent event never creates a receipt');
 });
