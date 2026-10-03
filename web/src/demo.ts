@@ -111,7 +111,7 @@ if (variant === 'office') {
     ev(15, 1, 'file.delivered', 'scout', { task: 42, path: 'files/flights-to-lahore.xlsx' }));
 }
 if (variant === 'calm') for (const b of bots) Object.assign(b, { task: null, step: undefined });
-// ?demo=crew1, crew5, crew12, crew30: the office at that many helpers. Scribe needs you at crew1;
+// ?demo=crew1, crew5, crew12, crew30: the office at that many helpers. Scribe waits on Chief at crew1;
 // larger crews add working helpers, questions and free desks.
 const many = /^crew(\d+)$/.exec(variant);
 if (many) {
@@ -440,11 +440,11 @@ for (const b of bots) pages[b.id] ??= { messages: [], notes: '', tasks: [] };
 if (variant.startsWith('job')) pages.pip.job = { does: 'Keep Umer’s calendar in order.', aim: 'Help Umer know what is coming.', gets: 'Events and reminders from the person.', how: 'Check dates, add reminders only when asked, and explain changes.', great: 'A clear, accurate week; for example, sports day with a reminder the evening before.' };
 // "Wheeled": the person is holding Scout's controls at its screen, signed it in to a shop, and is about to hand
 // the wheel back — the give-back sheet lists the tabs crewd read itself, and Details lists what it is signed in to.
-// ?demo=b1: the household the B1 mocks draw — Scout needs you on a $412 flight, Reel and Scribe working, Tracer's
+// ?demo=b1: the household the B1 mocks draw — Scout waits on Chief for your yes on a $412 flight, Reel and Scribe working, Tracer's
 // dinner list landed today, Pip resting until 3 pm. The M5 side-by-sides compare against it.
 if (variant === 'b1' || variant === 'b1handoff' || variant === 'b1after') {
   const b = (id: string) => bots.find((x) => x.id === id)!;
-  Object.assign(b('scout'), { task: task(42, 'scout', 'Book Friday’s flight to Lahore?', 'working'), step: { kind: 'task.progress', at: now - min, data: { text: 'Waiting for your yes' } } });
+  Object.assign(b('scout'), { task: task(42, 'scout', 'Book Friday’s flight to Lahore?', 'needs_you'), step: { kind: 'task.progress', at: now - min, data: { text: 'Found three flights' } } });
   Object.assign(b('reel'), { task: task(41, 'reel', "Mum's birthday video", 'working'), step: { kind: 'task.progress', at: now - 2 * min, data: { text: 'Picking the music' } } });
   Object.assign(b('scribe'), { task: task(43, 'scribe', 'Thank-you note for Aunty Sara', 'working'), step: { kind: 'task.progress', at: now - 3 * min, data: { text: 'Writing your note' } } });
   Object.assign(b('tracer'), { task: null, step: undefined });

@@ -8,12 +8,14 @@ import { safeLink } from './chat-md.ts';
 import { PALS, type Kind, type Mood } from './art.ts';
 
 export type Helper = {
-  id: string; name: string; kind: Kind; mood: Mood; ring: 'working' | 'needs' | ''; status: string; role: string;
+  id: string; name: string; kind: Kind; mood: Mood; ring: 'working' | 'waiting' | ''; status: string; role: string;
   computer: boolean; driving: boolean; stuckFor: number; quietSince: number; things: FileView[];
 };
 export type Choice = { label: string; body: Json; primary?: boolean };
+/** An open request the person decides, always brought by Chief: `helper` is whose job it came from (the asking bot,
+ *  'chief' for his own), `about` that helper's name as context — never the speaker. */
 export type Card = {
-  id: number; helper: string; kind: 'ok' | 'spend' | 'question' | 'connect' | 'routine' | 'plan'; head: string; words: string;
+  id: number; helper: string; about?: string; kind: 'ok' | 'spend' | 'question' | 'connect' | 'routine' | 'plan'; head: string; words: string;
   preview?: { head?: string; body: string }; choices: Choice[]; reply: boolean; app?: App; at: number;
   /** Chief's offered routine: the lines to confirm (cadence, what, quiet, first run), the schedule words to edit, and
    *  the time-zone line when the home computer's clock sits in another zone from this device's. */
@@ -46,7 +48,8 @@ export type DocView = { name: string; parts: DocPart[] };
 export type Step = { at: number; text: string; now?: boolean; asked?: boolean; seq: number; undo?: boolean };
 /** `unsure`: crewd's line for a job that acted but couldn't confirm it worked, shown apart from the helper's own words. */
 export type Line = { id: number; from: 'me' | 'them' | 'chief' | 'note'; text: string; files: FileView[]; choices: string[]; at?: number; unsure?: boolean; recap?: boolean;
-  /** A tray notice's helper (Chief's thread): the small face beside "Tracer finished … · it's in your tray". */
+  /** Whose job a Chief-thread line is about: the small face beside "Tracer finished … · it's in your tray", and the
+   *  helper a receipt on Chief's line passes on (its Watch names them). */
   by?: string;
   /** Chief's full assignment in a helper's chat, behind Show details: the line itself stays one short ask. */
   detail?: string;
@@ -239,21 +242,22 @@ export function helper(b: Json, events: Json[] = []): Helper {
   const needs = b.task?.state === 'needs_you';
   const stuck = !!b.stuck;
   const driving = b.controls === 'person';
-  const status = driving ? 'Paused while you drive' : needs ? 'Needs you' : stuck ? 'Quiet for a while' : b.task ? b.task.title
+  const status = driving ? 'Paused while you drive' : needs ? 'Waiting on Chief' : stuck ? 'Quiet for a while' : b.task ? b.task.title
     : b.queued ? 'Up next' : b.pausedUntil ? `Resting until ${clock(at(b.pausedUntil))}` : 'Free to help';
   return {
     id: b.id, name: b.display, kind: kindOf(b), role: plain(b.role ?? ''), status: plain(status), computer: !!b.computer, driving,
     mood: helperMood(b, needs, stuck, events),
-    ring: needs ? 'needs' : b.task ? 'working' : '',
+    ring: needs ? 'waiting' : b.task ? 'working' : '',
     stuckFor: stuck ? Math.max(1, Math.round((Date.now() - b.quietSince) / 60_000)) : 0, quietSince: b.quietSince ?? 0,
     things: deskThings(b.id, b.task ?? null),
   };
 }
 
-/** A helper's face follows the same story as Chief's: waiting on you, gone quiet, an unread failure, fresh work, on the
+/** A helper's face follows the same story as Chief's: waiting on Chief, gone quiet, an unread failure, fresh work, on the
  *  job, paused, else content. The failure window is 30 minutes and needs the bot's chat unread; fresh work is 5 minutes. */
 function helperMood(b: Json, needs: boolean, stuck: boolean, events: Json[]): Mood {
-  if (needs) return 'ask';
+  // A helper never asks the person: waiting on Chief is a calm, listening wait.
+  if (needs) return 'idle';
   if (stuck) return 'worried';
   const now = Date.now();
   if ((b.unread ?? 0) > 0 && events.some((e) => (e.kind === 'task.failed' || e.kind === 'task.unsure') && e.bot === b.id && now - at(e.at) < 30 * 60_000)) return 'error';
@@ -439,8 +443,9 @@ function chiefRow(state: Json, local: ChiefLocal): ChiefView {
   const all = crew(state);
   const now = Date.now();
   const events = (state.events ?? []) as Json[];
-  const asks = state.asks.length;
-  const needs = all.find((h) => h.ring === 'needs');
+  // Every open request is Chief's to bring (needsYou); a helper only waits on him.
+  const asks = needsYou(state).length;
+  const waiting = all.find((h) => h.ring === 'waiting');
   const stuck = all.find((h) => h.stuckFor > 0);
   const busy = all.filter((h) => h.ring === 'working');
   const rest = resting(state);
@@ -450,8 +455,8 @@ function chiefRow(state: Json, local: ChiefLocal): ChiefView {
     .find((e) => ((botOf(String(e.bot))?.unread ?? 0) > 0));
   const done = recent('task.done', 5 * 60_000)[0];
   const name = (id: string) => crewName(state, id);
-  const line = needs ? `${needs.name} needs you`
-    : asks ? `${name(state.asks[0].bot)} needs you`
+  const line = asks ? `${asks === 1 ? 'One thing' : `${asks} things`} for you to decide`
+    : waiting ? `${waiting.name} is waiting on Chief`
     : busy.length === 1 ? `${busy[0].name} is on “${busy[0].status}”`
     : busy.length > 1 ? `${busy.map((h) => h.name).join(' and ')} are working`
     : rest || 'Keeping an eye on things';
@@ -459,7 +464,7 @@ function chiefRow(state: Json, local: ChiefLocal): ChiefView {
     failure ? { mood: 'error', line: `${name(String(failure.bot))} couldn't finish “${plain(failure.data?.title ?? '') || 'its job'}”`, tone: 'wait', rank: 3 }
     : stuck ? { mood: 'worried', line: `${stuck.name} has gone quiet`, tone: 'wait', rank: 4 }
     : local.signedOut ? { mood: 'worried', line: 'Waiting for your sign-in', tone: 'wait', rank: 4 }
-    : needs || asks ? { mood: 'ask', line, tone: 'wait', rank: 5 }
+    : asks ? { mood: 'ask', line, tone: 'wait', rank: 5 }
     : done ? { mood: 'happy', line: `${name(String(done.bot))} finished “${plain(done.data?.title ?? '') || 'a job'}”`, tone: 'ok', rank: 6 }
     : busy.length ? { mood: 'work', line, tone: 'ok', rank: 7 }
     : rest ? { mood: 'rest', line: rest, tone: 'off', rank: 8 }
@@ -481,7 +486,7 @@ export function crew(state: Json) {
 }
 
 /** One thread in the chat list: Chief pinned on top, then the helpers, the latest talk first. */
-export type Chat = { id: string; name: string; who: Helper | 'chief'; line: string; at: number; unread: number; ring: Helper['ring'] };
+export type Chat = { id: string; name: string; who: Helper | 'chief'; line: string; at: number; unread: number; ring: Helper['ring'] | 'needs' };
 /** A thread's last line as the list shows it: "You: …", "Sent “Birthday video”", or the bot's words. */
 export function preview(last: Json | null | undefined, status = '') {
   if (!last) return status || 'Say hello';
@@ -500,16 +505,14 @@ export function chiefSaid(state: Json): string {
 export function chats(state: Json): Chat[] {
   const bot = (id: string) => state.bots.find((b: Json) => b.id === id) ?? {};
   const c = chief(state);
-  // A helper's suggestion ("learned something", Chief has a suggestion) lives in its chat; its row carries the dot.
-  const suggested = new Set((state.asks as Json[]).filter((a) => a.kind === 'propose').map((a) => a.bot as string));
-  // The words the office uses: a row in Needs you says so, a job stopped for an answer in the chat says that.
-  const waiting = new Set(needsYou(state).map((c) => c.helper));
-  const lead: Chat = { id: 'chief', name: 'Chief', who: 'chief', line: preview(bot('chief').last, c.line), at: at(bot('chief').last?.at ?? 0) || 0, unread: (bot('chief').unread ?? 0) + (suggested.has('chief') && !(bot('chief').unread ?? 0) ? 1 : 0), ring: c.mood === 'ask' ? 'needs' : '' };
+  // Every open request lives in Chief's thread, so his row alone carries the dot; a helper's row is a work record.
+  const asks = needsYou(state).length;
+  const lead: Chat = { id: 'chief', name: 'Chief', who: 'chief', line: preview(bot('chief').last, c.line), at: at(bot('chief').last?.at ?? 0) || 0, unread: (bot('chief').unread ?? 0) + (asks && !(bot('chief').unread ?? 0) ? 1 : 0), ring: asks ? 'needs' : '' };
   const rest = crew(state).map((h): Chat => {
     const b = bot(h.id);
-    // Working or waiting on the person says more than the last line did.
-    const line = waiting.has(h.id) ? SEAT_WORDS.needs : h.ring === 'needs' ? SEAT_WORDS.chat : h.driving ? h.status : h.ring === 'working' ? `Working on: ${h.status}` : preview(b.last, h.role);
-    return { id: h.id, name: h.name, who: h, line, at: at(b.last?.at ?? 0) || 0, unread: (b.unread ?? 0) + (suggested.has(h.id) && !(b.unread ?? 0) ? 1 : 0), ring: waiting.has(h.id) ? 'needs' : h.ring };
+    // Working or waiting on Chief says more than the last line did. No unread count: nothing here addresses the person.
+    const line = h.ring === 'waiting' ? SEAT_WORDS.waiting : h.driving ? h.status : h.ring === 'working' ? `Working on: ${h.status}` : preview(b.last, h.role);
+    return { id: h.id, name: h.name, who: h, line, at: at(b.last?.at ?? 0) || 0, unread: 0, ring: h.ring };
   }).sort((a, b) => b.at - a.at);
   const room = state.room ?? {};
   const pin: Chat = { id: 'room', name: 'The crew', who: 'chief', line: room.last ? plain(room.last.text) : 'Watch the crew work together', at: at(room.last?.at ?? 0), unread: 0, ring: room.busy?.length ? 'working' : '' };
@@ -518,17 +521,18 @@ export function chats(state: Json): Chat[] {
 export const unreadBadge = (n: number) => (n > 9 ? '9+' : String(n));
 export const briefTime = (t: number) => { const m = Math.floor((Date.now() - t) / 60_000); return m >= 0 && m < 60 ? `${Math.max(1, m)}m` : clock(t); };
 
-/** Home's Needs you, one compact list: spending and sending first, then questions, newest first inside each group.
- *  A draft for the person to send belongs here; a plain suggestion or an app connection stays in its helper's chat — nothing to act on from Home itself. */
+/** Chief's inbox, one compact list of every open request, whoever's job it came from: spending and sending first, then
+ *  OKs and drafts, then questions, then suggestions and app connections; newest first inside each group. None is left
+ *  out: a request only a helper's chat showed would be one the person never sees (Chief is their only contact). */
 export function needsYou(state: Json): Card[] {
   const rank = (a: Json) => {
     const d = a.detail ?? {};
-    if (a.kind === 'propose') return d.draft ? 1 : 3; // a draft needs the person's yes; other suggestions live in the chat
+    if (a.kind === 'propose') return d.draft ? 1 : 3;
     if (a.kind === 'connect' || d.app) return 3;
     if (d.spends || d.effect === 'spend' || d.effect === 'send') return 0;
     return a.kind === 'permission' ? 1 : 2;
   };
-  return (state.asks as Json[]).map((a) => ({ a, c: card(a, state) })).filter((x) => rank(x.a) < 3)
+  return (state.asks as Json[]).map((a) => ({ a, c: card(a, state) }))
     .sort((x, y) => rank(x.a) - rank(y.a) || y.c.at - x.c.at).map((x) => x.c);
 }
 
@@ -561,12 +565,13 @@ export function gallery(state: Json) {
 export function card(a: Json, state: Json): Card {
   const name = crewName(state, a.bot);
   const d = a.detail ?? {};
-  const base = { id: a.id, helper: a.bot, at: a.at, reply: false };
+  const base = { id: a.id, helper: a.bot, at: a.at, reply: false, ...(a.bot === 'chief' ? {} : { about: name }) };
   const title = plain(String(state.bots.find((b: Json) => b.task?.id === a.task_id)?.task?.title ?? state.tasks?.find((t: Json) => t.id === a.task_id)?.title ?? '')).trim();
   const question = title ? (/[?.!]$/.test(title) ? title : `${title}?`) : undefined;
   if (a.kind === 'connect' || d.app) {
-    const app = apps(state).find((x) => x.id === d.app) ?? APPS[0];
-    return { ...base, kind: 'connect', app, status: `Wants to use ${app.name}`, head: `${name} could use ${app.name}`, words: plain(d.words ?? `${name} can do this with your ${app.name}. Connect it?`),
+    // An app this screen doesn't know is named as one, never as another app.
+    const app = apps(state).find((x) => x.id === d.app) ?? { id: String(d.app ?? ''), name: 'an app', mark: '?', bg: 'var(--line2)', on: false, does: '' };
+    return { ...base, kind: 'connect', app, status: `Wants to use ${app.name}`, head: `Connect ${app.name} for ${name}?`, words: plain(d.words ?? `${name} can do this with your ${app.name}. Connect it?`),
       choices: [{ label: `Connect ${app.name}`, body: { answer: 'allow' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
   }
   if (a.kind === 'propose' && d.routine) {
@@ -583,7 +588,7 @@ export function card(a: Json, state: Json): Card {
   if (a.kind === 'propose' && d.plan) return { ...base, kind: 'plan', status: 'A plan to start', head: "Chief's plan", words: plain(d.words ?? a.title),
     lines: (d.plan.steps ?? []).map((x: string, i: number) => `${i + 1}. ${plain(x)}`),
     choices: [{ label: 'Go', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
-  if (a.kind === 'propose' && d.pass) return { ...base, kind: 'ok', status: 'Wants to hand work on', head: `${name} wants to hand work on`, words: plain(d.words ?? a.title),
+  if (a.kind === 'propose' && d.pass) return { ...base, kind: 'ok', status: 'Wants to hand work on', head: `Hand ${name}'s work on?`, words: plain(d.words ?? a.title),
     lines: (d.pass.files ?? []).map((f: string) => `With “${pretty(f)}”`),
     choices: [{ label: 'Hand it on', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
   if (a.kind === 'propose' && d.job) {
@@ -594,7 +599,7 @@ export function card(a: Json, state: Json): Card {
       choices: [{ label: 'Use it', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
   }
   if (a.kind === 'propose' && d.draft) {
-    const head = `${name} wrote your ${d.draft.channel}`;
+    const head = `A draft of your ${d.draft.channel}, from ${name}`;
     const body = String(d.preview?.body ?? '').trim();
     return { ...base, kind: 'ok', status: `Nothing is sent · ${d.draft.channel === 'post' ? 'post' : 'send'} it yourself`, evidence: 'draft',
       draftTo: plain(d.draft.to), draftSubject: plain(d.draft.subject) || undefined, draftText: body, head, words: head, preview: { body },
@@ -603,16 +608,16 @@ export function card(a: Json, state: Json): Card {
   if (a.kind === 'propose') {
     // A suggestion: a skill a helper would like to keep, or a new personality from Chief. Nothing changes without a yes.
     return { ...base, kind: 'ok', status: 'Would like to remember this',
-      head: a.bot === 'chief' ? 'Chief has a suggestion' : `${name} learned something`, words: plain(d.words ?? `${name} has a suggestion.`),
+      head: a.bot === 'chief' ? 'Chief has a suggestion' : `Keep what ${name} learned?`, words: plain(d.words ?? `${name} has a suggestion.`),
       preview: d.preview ? { head: d.preview.head ? plain(d.preview.head) : undefined, body: plain(d.preview.body ?? '') } : undefined,
       choices: [{ label: d.yes ? plain(d.yes) : a.bot === 'chief' ? 'Yes, change it' : 'Yes, keep it', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
   }
   if (a.kind !== 'permission') {
-    return { ...base, kind: 'question', reply: true, status: 'Has a question', head: `${name} has a question`,
-      words: d.question ? plain(d.question) : `${name} stopped to check something with you. Tell ${name} what to do:`, choices: [] };
+    return { ...base, kind: 'question', reply: true, status: 'Has a question', head: `A question on ${name}'s job`,
+      words: d.question ? plain(d.question) : `${name} stopped to check something. Tell me what ${name} should do:`, choices: [] };
   }
   const spend = !!d.spends || d.effect === 'spend';
-  const words = d.words ? plain(d.words) : spend ? `${name} wants to use something that costs money. Is that all right?` : `${name} would like your OK to carry on.`;
+  const words = d.words ? plain(d.words) : spend ? `${name} wants to use something that costs money. Is that all right?` : `${name} stopped for your OK before carrying on.`;
   // A checkout is review-first: the inbox only opens the review and offers the way out; the sheet's yes names the order.
   // With no readable total there is no yes at all — the person finishes that purchase themselves.
   const order = d.order as Card['order'] | undefined;
@@ -636,7 +641,7 @@ export function card(a: Json, state: Json): Card {
   return {
     ...base, kind: spend ? 'spend' : 'ok', status: spend ? 'Wants to spend money' : fill ? 'Wants to fill in a form' : press ? 'Wants to press a button' : d.effect === 'send' ? 'Wants to send an email' : 'Needs your OK',
     evidence: fill ? 'lines' : undefined, words, choices, question,
-    head: spend ? `${name} needs your OK to spend` : press ? `${name} wants to act on a site` : d.effect === 'send' ? `${name}'s ${d.thing ?? 'message'} is ready to send` : `${name} would like your OK`,
+    head: spend ? `OK to spend, for ${name}'s job?` : press ? `OK to act on a site, for ${name}'s job?` : d.effect === 'send' ? `${name}'s ${d.thing ?? 'message'} is ready to send` : `Your OK, for ${name}'s job`,
     preview: d.preview ? { head: d.preview.head ? plain(d.preview.head) : undefined, body: plain(d.preview.body ?? '') } : undefined,
   };
 }
@@ -648,7 +653,7 @@ export function work(state: Json): Work[] {
   return state.bots.filter((b: Json) => mine.has(b.id) && (b.task || b.queued)).map((b: Json) => {
     const s = b.step && step(b.step);
     const needs = b.task?.state === 'needs_you';
-    return { helper: b.id, title: plain(b.task?.title ?? 'Up next'), line: needs ? 'Waiting for your OK' : s ? s : b.task ? 'Getting started…' : 'Waiting its turn', waiting: !b.task || needs, things: deskThings(b.id, b.task ?? null) };
+    return { helper: b.id, title: plain(b.task?.title ?? 'Up next'), line: needs ? 'Waiting on Chief' : s ? s : b.task ? 'Getting started…' : 'Waiting its turn', waiting: !b.task || needs, things: deskThings(b.id, b.task ?? null) };
   });
 }
 
@@ -666,7 +671,7 @@ export const homeCounts = (state: Json) => office(state).counts;
 /** Home's one-line state, from the same needs and work rows shown below it. */
 export function homeSummary(state: Json) {
   const { needs, working } = homeCounts(state);
-  return `${needs} ${needs === 1 ? 'thing needs' : 'things need'} you · ${working} ${working === 1 ? 'helper' : 'helpers'} working`;
+  return `${needs} ${needs === 1 ? 'thing' : 'things'} for you · ${working} ${working === 1 ? 'helper' : 'helpers'} working`;
 }
 
 /** The phone's status-bar chip and its notification, one more view of Home's own numbers; null when nothing is working
@@ -680,14 +685,14 @@ export function status(state: Json, canAct = true): CrewStatus | null {
   const working = (state.bots as Json[]).filter((b) => mine.has(b.id) && b.task?.state === 'working').map((b) => (b.id === 'chief' ? 'Chief' : String(b.display)));
   const n = working.length, needs = homeCounts(state).needs;
   if (!n && !needs) return null;
-  const need = `${needs} ${needs === 1 ? 'needs' : 'need'} you`;
+  const need = `${needs} for you`;
   return {
     active: n > 0, needsYou: needs,
     title: n === 1 ? `${working[0]} is working` : n ? `${n} helpers working` : need,
     text: n && needs ? need : chief(state).line,
     publicText: [n ? `${n} working` : '', needs ? need : ''].filter(Boolean).join(' · '),
-    chip: needs ? 'Needs' : n > 1 && n < 10 ? `${n} busy` : 'Busy',
-    actions: canAct ? [...(needs ? [{ id: 'needs' as const, label: 'See what needs you' }] : []), { id: 'ask' as const, label: 'Ask Chief' }] : [],
+    chip: needs ? 'For you' : n > 1 && n < 10 ? `${n} busy` : 'Busy',
+    actions: canAct ? [...(needs ? [{ id: 'needs' as const, label: "See what's for you" }] : []), { id: 'ask' as const, label: 'Ask Chief' }] : [],
   };
 }
 
@@ -699,6 +704,8 @@ export function handTo(state: Json, template: string): Hand {
   const h = hired(state, template) ?? hired(state, 'helper');
   return h ? { id: h.id, name: h.name } : { id: '', name: 'Helper' };
 }
+/** A job for a helper, as the person would put it to Chief: "Scout: …" (his routing hands it on), plain for his own. */
+export const forHelper = (state: Json, bot: string, ask: string) => (bot && bot !== 'chief' ? `${crewName(state, bot)}: ${ask}` : ask);
 /** Who drafts for Write it here: this crew's Scribe, else the general Helper. */
 export const writer = (state: Json) => handTo(state, 'scribe');
 
@@ -809,22 +816,22 @@ export const cannedOf = (ask: string): '' | 'status' | 'details' | 'plan' => {
   const a = ask.trim();
   return STATUS.test(a) ? 'status' : DETAILS.test(a) ? 'details' : PLAN.test(a) ? 'plan' : '';
 };
-/** The answer, in plain words: who is on what (`crewLine`) and what needs the person; or their name and what the crew
+/** The answer, in plain words: who is on what (`crewLine`) and how much waits on the person's say; or their name and what the crew
  *  knows about them (`notes`, from GET /api/about). */
 export function canned(state: Json, kind: 'status' | 'details', notes = '') {
   if (kind === 'status') {
     const needs = homeCounts(state).needs;
-    return [crewLine(state) || 'Nobody is on a job right now.', needs ? `${needs} ${needs === 1 ? 'thing needs' : 'things need'} you.` : ''].filter(Boolean).join(' ');
+    return [crewLine(state) || 'Nobody is on a job right now.', needs ? `${needs} ${needs === 1 ? 'thing' : 'things'} for you to decide.` : ''].filter(Boolean).join(' ');
   }
   const name = String(state.person?.name ?? '').trim();
   const lines = notes.split('\n').map((l) => plain(l.replace(/^\s*[-*]\s*/, ''))).filter(Boolean);
   return [name ? `You're ${name}.` : '', lines.length ? `What the crew knows about you:\n${lines.map((l) => `• ${l}`).join('\n')}` : 'The crew knows nothing else about you yet. Pick some words in any app, tap me and choose Remember this.'].filter(Boolean).join('\n');
 }
-/** Who is on what, in one plain line from state alone (no model turn): each of the crew that is working, waiting on the
- *  person, gone quiet, paused while they drive or resting, then when a resting account is back. '' when nobody is. */
+/** Who is on what, in one plain line from state alone (no model turn): each of the crew that is working, waiting on
+ *  Chief, gone quiet, paused while they drive or resting, then when a resting account is back. '' when nobody is. */
 export function crewLine(state: Json) {
   const lead = (state.bots as Json[]).find((b) => b.id === 'chief');
-  const each = crew(state).map((h) => (h.ring === 'needs' ? `${h.name} needs you` : h.driving ? `${h.name} waits while you drive`
+  const each = crew(state).map((h) => (h.ring === 'waiting' ? `${h.name} is waiting on Chief` : h.driving ? `${h.name} waits while you drive`
     : h.stuckFor ? `${h.name} has gone quiet` : h.ring === 'working' ? `${h.name} is on “${h.status}”` : h.status.startsWith('Resting') ? `${h.name} is ${h.status.replace(/^Resting/, 'resting')}` : ''));
   return [lead?.task?.state === 'working' ? `Chief is on “${plain(lead.task.title)}”` : '', ...each, resting(state)].filter(Boolean).map((l) => `${l}.`).join(' ');
 }
@@ -852,10 +859,10 @@ export function draftOf(page: Json, task: number): string | null {
   return r === 'Done.' ? '' : r;
 }
 /** Why that job isn't writing yet, in crewd's own words ('' while it writes): paused for a sign-in or a rest, or
- *  waiting on the person. */
+ *  waiting on an OK the person gives in Chief's chat. */
 export function waitOf(page: Json, task: number): string {
   const t = (page?.tasks ?? []).find((x: Json) => x.id === task);
-  return t?.state === 'paused' ? plain(t.result ?? '') || 'Waiting for you.' : t?.state === 'needs_you' ? 'It needs your OK first.' : '';
+  return t?.state === 'paused' ? plain(t.result ?? '') || 'Waiting for you.' : t?.state === 'needs_you' ? "It's waiting on an OK, in Chief's chat." : '';
 }
 
 /** Home's standing "hand me a job" list: the jobs the crew offers to do end to end, from crewd's `ideas[]` — which is
@@ -983,12 +990,21 @@ export function room(page: Json, state: Json) {
 
 const chatWords = (text: string) => text.replace(/```[\s\S]*?```/g, '').split('\n').map(plain).join('\n').trim();
 
-export function lines(page: Json, bot: string): Line[] {
+export function lines(page: Json, bot: string, state?: Json): Line[] {
   const ls = said(page, bot);
-  if (bot === 'chief') return ls; // Chief's thread has its own relay and tray notices
+  const task = new Map<number, number>((page?.messages ?? []).map((m: Json) => [m.id, m.task_id]));
+  if (bot === 'chief') {
+    // Chief's receipt: his line passing on a helper's result carries that task (crewd sets it when files came back),
+    // and is marked only once the snapshot says the task ended done — never his own words alone, never a question back.
+    const done = new Map<number, string>((state?.tasks ?? []).filter((t: Json) => t.state === 'done').map((t: Json) => [t.id, String(t.bot)]));
+    for (const l of ls) {
+      const by = done.get(task.get(l.id) ?? -1);
+      if (by && l.from === 'them' && !/\?\s*$/.test(l.text)) Object.assign(l, { done: true, by });
+    }
+    return ls;
+  }
   // A receipt marks the line crewd ended a task on, once crewd says done (never unsure, failed or waiting): the reply
   // whose words are the task's result, else, with no words, its last delivered file; never a question back.
-  const task = new Map<number, number>((page?.messages ?? []).map((m: Json) => [m.id, m.task_id]));
   for (const t of page?.tasks ?? []) {
     const own = ls.filter((l) => task.get(l.id) === t.id);
     const made = own.filter((l) => l.from === 'note' && l.files.length > 0);
@@ -1202,33 +1218,32 @@ const APPS: App[] = [
 export const apps = (state: Json): App[] => APPS.map((a) => ({ ...a, on: !!state.connections?.includes?.(a.id) }));
 
 // ---------- the office ----------
-/** One helper in the person's office, from the plain-words adapter views. `ask` is that helper's first row in
- *  Needs you (A.needsYou), never a suggestion that lives in its chat; `second` marks another helper of a kind that
- *  came earlier in the crew, so the room and the dock can tell the two apart. */
+/** One helper in the person's office, from the plain-words adapter views. A helper holds no request of the person's:
+ *  those are all Chief's (`OfficeView.needs`). `second` marks another helper of a kind that came earlier in the crew,
+ *  so the room and the dock can tell the two apart. */
 export type OfficeMember = { id: string; name: string; kind: Kind; mood: Mood; ring: Helper['ring']; status: string;
-  step: string; steps: Step[]; things: FileView[]; ask?: Card; second?: boolean };
+  step: string; steps: Step[]; things: FileView[]; second?: boolean };
 /** The one state source every office surface reads: the room, its header counts, the tray, the dock or rail roster
- *  and Needs you. `needs` is Needs you itself; `counts.needs` is its length, `working` the helpers whose seat is
- *  working (one waiting on you counts once, under needs, wherever they show), `done` what
- *  landed in the tray today. */
+ *  and Chief's inbox. `needs` is that inbox (needsYou), all of it Chief's to bring; `counts.needs` is its length,
+ *  `working` the helpers whose seat is working, `done` what landed in the tray today. */
 export type OfficeView = { chief: ChiefView; crew: OfficeMember[]; done: Thing[]; needs: Card[];
   counts: { needs: number; working: number; done: number } };
 
-/** Where a helper is, in one word the whole office agrees on: a row of theirs in Needs you, a job stopped for an
- *  answer that lives in their chat, working, a job that just failed, next in line, resting, or free. */
-export type Seat = 'needs' | 'chat' | 'working' | 'failed' | 'next' | 'resting' | 'free';
-export const seatOf = (c: OfficeMember): Seat => (c.ask ? 'needs' : c.ring === 'needs' ? 'chat' : c.ring === 'working' ? 'working'
+/** Where a helper is, in one word the whole office agrees on: a job stopped until Chief brings the person's answer,
+ *  working, a job that just failed, next in line, resting, or free. Never a call on the person. */
+export type Seat = 'waiting' | 'working' | 'failed' | 'next' | 'resting' | 'free';
+export const seatOf = (c: OfficeMember): Seat => (c.ring === 'waiting' ? 'waiting' : c.ring === 'working' ? 'working'
   : c.mood === 'error' ? 'failed' : c.status === 'Up next' ? 'next' : c.mood === 'rest' ? 'resting' : 'free');
-export const SEAT_WORDS: Record<Seat, string> = { needs: 'Needs you', chat: 'Waiting on your reply', working: 'Working', failed: "Couldn't finish", next: 'Up next', resting: 'Resting', free: 'Free' };
+export const SEAT_WORDS: Record<Seat, string> = { waiting: 'Waiting on Chief', working: 'Working', failed: "Couldn't finish", next: 'Up next', resting: 'Resting', free: 'Free' };
 /** The rail's word for one helper: its seat, except that a free helper whose latest job landed today says which
- *  (Main590 6: the rail shows Reel done after a hand-off). Any newer seat (working, needs you, …) replaces it. */
+ *  (Main590 6: the rail shows Reel done after a hand-off). Any newer seat (working, waiting, …) replaces it. */
 export function railWord(c: OfficeMember, v: OfficeView): { word: string; seat: Seat | 'done' } {
   const seat = seatOf(c);
   const last = seat === 'free' ? v.done.filter((t) => t.helper === c.id).sort((a, b) => b.at - a.at)[0] : undefined;
   return last ? { word: `Done: ${last.title || 'a job'}`, seat: 'done' } : { word: SEAT_WORDS[seat], seat };
 }
-/** Who comes first when there is one seat less than helpers: whoever needs you, then working, then the rest. */
-const SEAT_ORDER: Seat[] = ['needs', 'chat', 'working', 'failed', 'next', 'free', 'resting'];
+/** Who comes first when there is one seat less than helpers: whoever waits on Chief, then working, then the rest. */
+const SEAT_ORDER: Seat[] = ['waiting', 'working', 'failed', 'next', 'free', 'resting'];
 /** The whole crew, the one who matters most first (crew order inside each seat): the phone's dock and the web rail. */
 export const roster = (crew: OfficeMember[]) => SEAT_ORDER.flatMap((k) => crew.filter((c) => seatOf(c) === k));
 
@@ -1238,8 +1253,6 @@ const tally = (crew: OfficeMember[], needs: Card[], done: Thing[]) => {
   const day = new Date().setHours(0, 0, 0, 0);
   return { needs: needs.length, working: crew.filter((c) => seatOf(c) === 'working').length, done: done.filter((t) => t.at >= day).length };
 };
-/** The member's Needs-you row: the first in Needs you's own order. */
-const askFor = (needs: Card[], id: string) => needs.find((c) => c.helper === id);
 export function office(state: Json): OfficeView {
   const helpers = crew(state);
   const raw = new Map((state.bots as Json[] ?? []).map((b: Json) => [b.id, b]));
@@ -1262,27 +1275,26 @@ export function office(state: Json): OfficeView {
     kinds.add(h.kind);
     return { id: h.id, name: h.name, kind: h.kind, mood: h.mood, ring: h.ring, status: h.status,
       step: (b.step && step(b.step)) || (w && !w.waiting ? 'Getting started…' : ''), steps: now, things: made,
-      ask: askFor(needs, h.id), ...(second ? { second } : {}) };
+      ...(second ? { second } : {}) };
   });
   const done = things(state);
   return { chief: chief(state), crew: crewRows, done, needs, counts: tally(crewRows, needs, done) };
 }
 
-/** Needs-you rows no helper in the room holds (Chief's own, or one left by a helper since let go): Chief carries
- *  them, so every row in Needs you has a Review somewhere in the room. */
 /** Chief's state in one word, the same in the room, his profile and on the phone. */
-export const chiefWord = (v: OfficeView) => (chiefAsks(v).length ? 'Needs you' : v.chief.mood === 'work' ? 'Working' : 'Here');
-export const chiefAsks = (view: OfficeView) => view.needs.filter((c) => !view.crew.some((m) => m.id === c.helper));
+export const chiefWord = (v: OfficeView) => (chiefAsks(v).length ? 'Has things for you' : v.chief.mood === 'work' ? 'Working' : 'Here');
+/** What Chief brings the person: every open request, whoever's job it came from, so each has its Review on Chief. */
+export const chiefAsks = (view: OfficeView) => [...view.needs];
 
 /** The office while the home computer is out of reach: nobody claims to be busy or waiting, and nothing asks. */
 export function officeAway(view: OfficeView, line = 'Out of reach for now'): OfficeView {
-  const crew = view.crew.map((c) => ({ ...c, mood: 'rest' as Mood, ring: '' as const, ask: undefined, status: line, step: '', steps: [] }));
+  const crew = view.crew.map((c) => ({ ...c, mood: 'rest' as Mood, ring: '' as const, status: line, step: '', steps: [] }));
   return { ...view, chief: { ...view.chief, mood: 'rest', line }, crew, needs: [], counts: { ...tally(crew, [], view.done) } };
 }
 
 /** The office between refreshes: crewd's debounced snapshot stays the source of truth, and each live event only
- *  moves the words it carries (report §7). Pure — the passed view is never changed. A question that opens waits for
- *  the refresh to bring its Needs-you row, so Review never shows before there is something to review. */
+ *  moves the words it carries (report §7). Pure — the passed view is never changed. A request that opens waits for
+ *  the refresh to bring its row in Chief's inbox, so Review never shows before there is something to review. */
 export function officeEvent(view: OfficeView, e: Json): OfficeView {
   const next = (crew: OfficeMember[], done = view.done, needs = view.needs): OfficeView => ({ ...view, crew, done, needs, counts: tally(crew, needs, done) });
   const touch = (id: string, f: (c: OfficeMember) => OfficeMember): OfficeView => {
@@ -1325,25 +1337,24 @@ export function officeEvent(view: OfficeView, e: Json): OfficeView {
       const thing: Thing = { id: typeof d.task === 'number' ? d.task : Date.now(), helper: String(e.bot),
         title: plain(d.title ?? ''), at: e.at ?? Date.now(), summary: teaser(d.result ?? '').slice(0, 220), files };
       const crew = view.crew.map((c) => (c.id === String(e.bot)
-        ? { ...c, ring: '' as const, mood: 'happy' as Mood, status: 'Free to help', step: '', steps: [], things: [], ask: undefined } : c));
+        ? { ...c, ring: '' as const, mood: 'happy' as Mood, status: 'Free to help', step: '', steps: [], things: [] } : c));
       return next(crew, [thing, ...view.done], view.needs.filter((c) => c.helper !== String(e.bot)));
     }
     case 'task.failed':
     case 'task.unsure':
       return touch(String(e.bot), (c) => ({ ...c, ring: '' as const, mood: 'error' as Mood, step: step(e) ?? c.step }));
     case 'ask.opened':
-      return touch(String(e.bot), (c) => ({ ...c, ring: 'needs' as const, mood: 'ask' as Mood, status: 'Needs you', step: 'Waiting for your OK' }));
-    case 'ask.answered':
-    case 'ask.parked': {
-      // The row leaves Needs you at once; the helper goes back to the last step the refresh knew, since the snapshot
-      // stays the source of truth and this only bridges the gap between refreshes.
+      return touch(String(e.bot), (c) => ({ ...c, ring: 'waiting' as const, mood: 'idle' as Mood, status: 'Waiting on Chief', step: 'Waiting on Chief' }));
+    // A parked request is still open (it waits in Chief's inbox for the person), so nothing moves.
+    case 'ask.parked': return view;
+    case 'ask.answered': {
+      // The row leaves Chief's inbox at once; the helper goes back to the last step the refresh knew, since the
+      // snapshot stays the source of truth and this only bridges the gap between refreshes.
       const needs = view.needs.filter((c) => c.id !== d.ask);
       const crew = view.crew.map((c) => {
-        if (c.id !== String(e.bot)) return c;
-        const ask = askFor(needs, c.id);
-        if (c.ring !== 'needs' || ask) return { ...c, ask };
+        if (c.id !== String(e.bot) || c.ring !== 'waiting' || needs.some((n) => n.helper === c.id)) return c;
         const back = c.steps.at(-1);
-        return { ...c, ask, ring: back ? 'working' as const : '' as const,
+        return { ...c, ring: back ? 'working' as const : '' as const,
           mood: back ? 'work' as Mood : 'idle' as Mood, status: back ? back.text : 'Free to help', step: back ? back.text : '' };
       });
       return next(crew, view.done, needs);
@@ -1353,15 +1364,15 @@ export function officeEvent(view: OfficeView, e: Json): OfficeView {
   }
 }
 
-/** A helper waiting on you: a row in Needs you, or a job stopped for an answer in their chat. */
-export const waitsOnYou = (c: OfficeMember) => c.ring === 'needs' || !!c.ask;
+/** A helper whose job is stopped until Chief brings the person's answer. */
+export const waitsOnChief = (c: OfficeMember) => c.ring === 'waiting';
 /** Who handed a finished job to the tray between two views: a done row the earlier view lacked. The done list is what
  *  the tray counts, so the hand-off follows it, however the events were grouped into commits. */
 export const handedIn = (was: OfficeView, now: OfficeView) => [...new Set(now.done.filter((t) => !was.done.some((w) => w.id === t.id)).map((t) => t.helper))];
 export const SEATS = 5;
 export type FloorPlan = { seats: OfficeMember[]; more: OfficeMember[] };
 /** Who stands on the office's one floor, one rule for the web and the phone (B1): five spots in the roster's order,
- *  whoever waits on you first, then working, then the rest, resting last; everyone else is counted under "+N"
+ *  whoever waits on Chief first, then working, then the rest, resting last; everyone else is counted under "+N"
  *  (`more`, roster order), never drawn smaller. The rail and the dock still name the whole crew. */
 export function floorPlan(crew: OfficeMember[]): FloorPlan {
   const order = roster(crew);

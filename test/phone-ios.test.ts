@@ -7,11 +7,11 @@ import { askOf } from '../mobile/src/ask.ts';
 
 const root = join(import.meta.dirname, '..');
 const read = (f: string) => readFileSync(join(root, f), 'utf8');
-const crew = [{ id: 'scribe', template: 'scribe' }, { id: 'reel-2', template: 'reel' }, { id: 'pip', template: 'helper' }];
+const crew = [{ id: 'scribe', template: 'scribe', name: 'Scribe' }, { id: 'reel-2', template: 'reel', name: 'Reel Two' }, { id: 'pip', template: 'helper', name: 'Pip' }];
 
-test('an ask from a shortcut fills the helper from that template, or Chief, and never sends', () => {
-  assert.deepEqual(askOf('crewhouse://ask?to=scribe&text=turn%20this%20into%20posts', crew), { chat: 'scribe', text: 'turn this into posts' });
-  assert.deepEqual(askOf('crewhouse://ask?to=reel&text=a%20demo%3A%201%2B1%3D2%20%26%20more', crew), { chat: 'reel-2', text: 'a demo: 1+1=2 & more' }, 'a renamed helper is found by its template');
+test("an ask from a shortcut fills Chief's box, led by the helper from that template, and never sends", () => {
+  assert.deepEqual(askOf('crewhouse://ask?to=scribe&text=turn%20this%20into%20posts', crew), { chat: 'chief', text: 'Scribe: turn this into posts' });
+  assert.deepEqual(askOf('crewhouse://ask?to=reel&text=a%20demo%3A%201%2B1%3D2%20%26%20more', crew), { chat: 'chief', text: 'Reel Two: a demo: 1+1=2 & more' }, 'a renamed helper is found by its template');
   assert.deepEqual(askOf('crewhouse://ask?to=reel', []), { chat: 'chief', text: '' }, 'no such helper: Chief');
   assert.deepEqual(askOf('crewhouse://ask', crew), { chat: 'chief', text: '' });
   assert.deepEqual(askOf('crewhouse://ask?to=chief&text=%E0%A4%A', crew), { chat: 'chief', text: '' }, 'broken words are dropped, not thrown');

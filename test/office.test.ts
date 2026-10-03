@@ -1,7 +1,7 @@
 // The office's battery and layout rules, measured in a real browser on the ?demo households (web/src/office.tsx): the
 // room is flat 2D with no 3D library anywhere, its motion is calm CSS loops that ask for no frame and stop off screen,
 // Reduce Motion runs none at all, and at every crew size (?demo=crew1, crew5, crew12, crew30) on a phone and a computer the
-// room's two labels (the one Needs you pill and the Tray bubble) sit inside it, clear of each other and of every figure.
+// room's two labels (Chief's one pill and the Tray bubble) sit inside it, clear of each other and of every figure.
 // Needs a Chromium on PATH (skipped without one).
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -35,20 +35,20 @@ test('the office is flat 2D: no 3D library in any bundle or in the dependencies'
   assert.equal({ ...pkg.dependencies, ...pkg.devDependencies }.three, undefined);
 });
 
-test('one floor: five spots in roster order, whoever waits on you first, everyone else counted', () => {
+test('one floor: five spots in roster order, whoever waits on Chief first, everyone else counted', () => {
   const who = (i: number, ring: OfficeMember['ring'], extra: Partial<OfficeMember> = {}): OfficeMember => ({ id: `h${i}`, name: `H${i}`, kind: 'pip', mood: 'idle', ring, status: '', step: '', steps: [], things: [], ...extra });
-  const crew = Array.from({ length: 30 }, (_, i) => who(i, i % 4 === 3 ? 'needs' : i % 4 === 1 ? 'working' : ''));
+  const crew = Array.from({ length: 30 }, (_, i) => who(i, i % 4 === 3 ? 'waiting' : i % 4 === 1 ? 'working' : ''));
   const p = floorPlan(crew);
   assert.equal(p.seats.length, 5, 'the floor never grows');
-  assert.ok(p.seats.every((c) => c.ring === 'needs'), 'whoever waits on you stands first');
-  assert.deepEqual(p.seats.map((c) => c.id), crew.filter((c) => c.ring === 'needs').slice(0, 5).map((c) => c.id), "in the crew's own order");
+  assert.ok(p.seats.every((c) => c.ring === 'waiting'), 'whoever waits on Chief stands first');
+  assert.deepEqual(p.seats.map((c) => c.id), crew.filter((c) => c.ring === 'waiting').slice(0, 5).map((c) => c.id), "in the crew's own order");
   assert.equal(p.seats.length + p.more.length, 30, 'everyone is drawn or counted under +N');
-  const few = floorPlan([who(0, 'working'), who(1, '', { mood: 'rest' }), who(2, 'needs'), who(3, '')]);
-  assert.deepEqual(few.seats.map((c) => c.id), ['h2', 'h0', 'h3', 'h1'], 'needs you, working, free, resting last');
+  const few = floorPlan([who(0, 'working'), who(1, '', { mood: 'rest' }), who(2, 'waiting'), who(3, '')]);
+  assert.deepEqual(few.seats.map((c) => c.id), ['h2', 'h0', 'h3', 'h1'], 'waiting on Chief, working, free, resting last');
   assert.equal(few.more.length, 0);
 });
 
-test('office truth: the room, its counts, the tray, the roster and Needs you read one state', () => {
+test('office truth: the room, its counts, the tray, the roster and Chief\'s inbox read one state', () => {
   const now = Date.now(), min = 60_000;
   const bot = (id: string, extra: Json = {}) => ({ id, display: id[0].toUpperCase() + id.slice(1), template: id, ...extra });
   const task = (id: number, bot: string, state: string) => ({ id, bot, title: `Job ${id}`, state, files: [] });
@@ -59,7 +59,7 @@ test('office truth: the room, its counts, the tray, the roster and Needs you rea
       bot('h6', { display: 'Bea', template: 'reel', queued: 1 }), bot('h7', { display: 'Kit', template: 'scout' })],
     asks: [
       { id: 10, bot: 'reel', task_id: 2, kind: 'question', at: now - min, detail: { question: 'Which song?' } },
-      // a suggestion lives in Scribe's chat: no Review in the room, no count, never in Needs you
+      // a suggestion from Scribe's job is Chief's to bring too: counted, never left in Scribe's thread
       { id: 11, bot: 'scribe', task_id: 3, kind: 'propose', at: now - min, detail: { words: 'Keep this?' } },
       { id: 12, bot: 'chief', kind: 'question', at: now - 2 * min, detail: { question: 'Which day?' } },
     ],
@@ -68,30 +68,30 @@ test('office truth: the room, its counts, the tray, the roster and Needs you rea
   };
   const v = A.office(state);
   const seat = Object.fromEntries(v.crew.map((c) => [c.id, A.seatOf(c)]));
-  assert.deepEqual(seat, { scout: 'working', reel: 'needs', scribe: 'chat', tracer: 'failed', pip: 'resting', h6: 'next', h7: 'free' });
-  assert.deepEqual(v.needs.map((c) => c.id), A.needsYou(state).map((c) => c.id), 'Needs you is the office\'s own list');
-  assert.equal(v.counts.needs, 2, 'Reel\'s question and Chief\'s; the suggestion is not counted');
-  assert.equal(v.crew.find((c) => c.id === 'scribe')!.ask, undefined, 'no Review for a suggestion');
-  assert.deepEqual(A.chiefAsks(v).map((c) => c.id), [12], 'Chief carries his own row');
-  // every Needs-you row has exactly one Review holder in the room
-  const holders = v.needs.map((c) => (v.crew.find((m) => m.ask?.id === c.id) ? 1 : 0) + (A.chiefAsks(v).includes(c) ? 1 : 0));
-  assert.deepEqual(holders, [1, 1]);
+  assert.deepEqual(seat, { scout: 'working', reel: 'waiting', scribe: 'waiting', tracer: 'failed', pip: 'resting', h6: 'next', h7: 'free' });
+  assert.deepEqual(v.needs.map((c) => c.id), A.needsYou(state).map((c) => c.id), 'Chief\'s inbox is the office\'s own list');
+  assert.deepEqual(v.needs.map((c) => c.id).sort(), [10, 11, 12], 'every open request, the suggestion too');
+  assert.equal(v.counts.needs, 3);
+  // Chief holds the Review for every row; no helper holds one.
+  assert.deepEqual(A.chiefAsks(v), v.needs);
+  assert.ok(v.crew.every((m) => !('ask' in m)), 'a helper holds no request of the person\'s');
   assert.equal(v.counts.working, A.homeCounts(state).working, 'Home\'s working count');
   assert.equal(v.counts.working, 1);
   assert.equal(v.counts.done, 1, 'the tray holds today\'s');
   assert.ok(v.crew.find((c) => c.id === 'h6')!.second && v.crew.find((c) => c.id === 'h7')!.second, 'a second of a kind is marked');
   assert.deepEqual(A.roster(v.crew).map((c) => c.id), ['reel', 'scribe', 'scout', 'tracer', 'h6', 'h7', 'pip']);
   const chats = new Map(A.chats(state).map((c) => [c.id, c.line]));
-  assert.equal(chats.get('reel'), 'Needs you');
-  assert.equal(chats.get('scribe'), A.SEAT_WORDS.chat, 'the chat list says what the rail says');
+  assert.equal(chats.get('reel'), 'Waiting on Chief');
+  assert.equal(chats.get('scribe'), A.SEAT_WORDS.waiting, 'the chat list says what the rail says');
   // Live events move every count together.
   const answered = A.officeEvent(v, { kind: 'ask.answered', bot: 'reel', data: { ask: 10 } });
-  assert.equal(answered.counts.needs, 1);
-  assert.equal(answered.needs.length, 1);
+  assert.equal(answered.counts.needs, 2);
+  assert.equal(answered.needs.length, 2);
   assert.equal(A.seatOf(answered.crew.find((c) => c.id === 'reel')!), 'free', 'back to what the refresh knew');
   const opened = A.officeEvent(v, { kind: 'ask.opened', bot: 'scout', data: { ask: 13 } });
-  assert.equal(opened.crew.find((c) => c.id === 'scout')!.ask, undefined, 'Review waits for the refresh to bring the row');
-  assert.equal(opened.counts.needs, 2);
+  assert.equal(A.seatOf(opened.crew.find((c) => c.id === 'scout')!), 'waiting');
+  assert.ok(!A.chiefAsks(opened).some((c) => c.helper === 'scout'), 'Review waits for the refresh to bring the row');
+  assert.equal(opened.counts.needs, 3);
   const done = A.officeEvent(v, { kind: 'task.done', bot: 'scout', at: now, data: { task: 1, title: 'Job 1' } });
   assert.equal(done.counts.done, 2);
   // The rail says a free helper's latest job landed (Main590 6); a newer seat replaces it.
@@ -221,8 +221,8 @@ test('the office keeps the battery budget: calm CSS loops while it shows, none o
   await b.send('Emulation.setEmulatedMedia', { features: [] });
 });
 
-// Each demo house (web/src/demo.ts) and its crew size. Every house has something waiting on you (?demo keeps Tracer's
-// question after a crewN swap), so the room shows its one pill.
+// Each demo house (web/src/demo.ts) and its crew size. Every house has something for the person to decide (?demo keeps
+// Tracer's question after a crewN swap), so the room shows Chief's one pill.
 const HOUSES: [string, number][] = [['crew1', 1], ['crew5', 5], ['crew12', 12], ['crew30', 30], ['office', 5], ['after', 5], ['b1', 5], ['b1after', 5]];
 test('at 1, 5, 12 and 30 crew and in the B1 mock\'s house, on a phone and a computer, nothing covers anything, the one pill is real, and counts agree', { skip: !bin && 'no Chromium here' }, async () => {
   const b = await browse();
@@ -232,7 +232,7 @@ test('at 1, 5, 12 and 30 crew and in the B1 mock\'s house, on a phone and a comp
     for (const [demo, n] of HOUSES) {
       for (const theme of ['day', 'night']) {
         await b.open(`demo=${demo}&${theme}`);
-        // Each launch opens on Chat: no room drawn, and the pinned Needs you and Chief's box are on the first screen.
+        // Each launch opens on Chat: no room drawn, and Chief's pinned request and his box are on the first screen.
         await until('Chief\'s box', () => b.run("!!document.querySelector('.home-chat .composer')"), 30_000);
         const first = await b.run(`(() => {
           const seen = (e) => { if (!e) return false; const r = e.getBoundingClientRect(); return r.height > 0 && r.top >= 0 && r.bottom <= innerHeight; };
@@ -241,7 +241,7 @@ test('at 1, 5, 12 and 30 crew and in the B1 mock\'s house, on a phone and a comp
         })()`);
         const lead = `${demo} ${theme} at ${width}, first open`;
         assert.equal(first.room, false, `${lead}: Chat by default, the room is not drawn`);
-        assert.ok(first.pin && first.box, `${lead}: one pinned Needs you row and Chief's box on the first screen`);
+        assert.ok(first.pin && first.box, `${lead}: one pinned row from Chief and his box on the first screen`);
         assert.equal(first.rows, 1, `${lead}: one pinned row`);
         // A long thread leaves the page scrolled to its end; Office must still open on its room.
         await b.run('scrollTo(0, document.documentElement.scrollHeight)');
@@ -266,7 +266,7 @@ test('at 1, 5, 12 and 30 crew and in the B1 mock\'s house, on a phone and a comp
           const pinned = parseInt(document.querySelector('.needs-pin .count')?.textContent ?? '0', 10);
           const all = document.querySelector('.needs-pin .section-head .link')?.textContent ?? '';
           const names = (q) => [...document.querySelectorAll(q)].map((e) => e.textContent);
-          const onIt = names('.feed .working .on-card .grow > b'), waits = names('.side-row:has(.side-seat.needs, .side-seat.chat) > b');
+          const onIt = names('.feed .working .on-card .grow > b'), waits = names('.side-row:has(.side-seat.waiting) > b');
           // Home has no tab bar (B1): on a computer the rail's Chief count is the badge, on a phone the pinned count is
           const badge = parseInt(document.querySelector('.side-nav[href="#/"] .side-count')?.textContent ?? (innerWidth < 900 ? String(pinned) : '0'), 10);
           const more = Number(document.querySelector('.o-more')?.dataset.more ?? 0);
@@ -296,10 +296,10 @@ test('at 1, 5, 12 and 30 crew and in the B1 mock\'s house, on a phone and a comp
         assert.equal(m.out, 0, `${at}: every card inside the room`);
         assert.equal(m.over, 0, `${at}: no card covers another card or a sprite: ${m.pairs.join('; ')}`);
         assert.equal(m.clipped, 0, `${at}: no label in the room is cut off`);
-        assert.equal(m.pills.length, m.badge > 0 ? 1 : 0, `${at}: one Needs you pill while anything waits on you, none otherwise`);
-        assert.ok(m.pills.every((h: string) => /^#\/(ask|h)\/\w+/.test(h)), `${at}: the pill opens a real question or chat (${m.pills})`);
-        assert.equal(m.stat, m.badge, `${at}: the header's count is the Needs-you badge`);
-        assert.equal(m.pinned, m.badge, `${at}: the pinned Needs you counts the same rows`);
+        assert.equal(m.pills.length, m.badge > 0 ? 1 : 0, `${at}: Chief's one pill while anything is for the person, none otherwise`);
+        assert.ok(m.pills.every((h: string) => /^#\/ask\/\d+$/.test(h)), `${at}: the pill opens a real request (${m.pills})`);
+        assert.equal(m.stat, m.badge, `${at}: the header's count is Chief's badge`);
+        assert.equal(m.pinned, m.badge, `${at}: Chief's pinned list counts the same rows`);
         if (m.badge > 1) assert.equal(m.all, `See all ${m.badge}`, `${at}: "See all N" is exact`);
         assert.equal(m.seated + m.more, n, `${at}: everyone is in the room or counted under "+N"`);
         assert.ok(m.seated <= 5, `${at}: the room never stands more than five helpers`);
@@ -311,7 +311,7 @@ test('at 1, 5, 12 and 30 crew and in the B1 mock\'s house, on a phone and a comp
         }
         if (n === 30) assert.ok(m.more > 0, `${at}: a big crew is counted under "+N"`);
         // Mock size (147, 148, 152): a row the stage holds is at scale 1; one it does not first packs its desks and only then
-        // scales. Five waiting on you is the tightest ordinary row: all five stand, packed, at the floor's one scale 0.953
+        // scales. Five waiting on Chief is the tightest ordinary row: all five stand, packed, at the floor's one scale 0.953
         // before and after Reel finishes (172), the box just right of Chief and the Tray caption under it in the floor band.
         assert.ok(m.tight || m.scale === 1, `${at}: a row that is not packed stands at the mock's own scale (${m.scale})`);
         assert.ok(m.scale >= 0.89, `${at}: no row of five shrinks past the packed five-waiting row (${m.scale})`);
@@ -323,7 +323,7 @@ test('at 1, 5, 12 and 30 crew and in the B1 mock\'s house, on a phone and a comp
         assert.equal(m.tray2.inked, 0, `${at}: the Tray bubble covers no pen, z or screen`);
         assert.deepEqual(m.tray2.boxed, [], `${at}: the tray box stands on clear floor, in front of no figure`);
         assert.deepEqual(m.tray2.furn, [], `${at}: the Tray label rests on no desk, note, screen or lamp`);
-        // The B1 mock's own state, exactly: 1 needs you, 2 working, Tracer's list the one page in the tray.
+        // The B1 mock's own state, exactly: 1 for the person (Scout's flight, brought by Chief), 2 working, Tracer's list the one page in the tray.
         if (demo === 'b1') assert.deepEqual([m.stat, m.busy, m.tray], [1, 2, 'Your tray: 1 done today'], `${at}: the mock's counts`);
         } catch (e) {
           // 155: a failed case leaves its evidence, the frame as drawn and every sprite's and label's box, in the job's dir.

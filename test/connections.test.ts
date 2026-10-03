@@ -6,6 +6,7 @@ import { createServer } from 'node:http';
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { setup, settled, task, until } from './lab.ts';
+import * as A from '../web/src/adapter.ts';
 
 const { Connections, connectError } = await import('../src/connections.ts');
 const disk = await import('../src/bots.ts');
@@ -325,7 +326,7 @@ test("Google: one service per connection, only after its one-time setup; Google'
   done();
 });
 
-test('in chat: a helper asks for an app, the person connects it from the card, and the task carries on with it', async () => {
+test('in Chief\'s chat: a helper\'s job needs an app, the person connects it from Chief\'s card, and the task carries on with it', async () => {
   const { db, crew, done } = lab();
   crew.onboard('sir');
   crew.recruit('scribe', 'Quill', 'person');
@@ -333,6 +334,10 @@ test('in chat: a helper asks for an app, the person connects it from the card, a
   await until('asked', () => task(db, t).state === 'needs_you');
   const ask = crew.snapshot().asks.find((a: any) => a.kind === 'connect')!;
   assert.deepEqual(ask.detail, { app: 'mocknote', words: 'Let Quill use your Mocknote' });
+  // Chief brings it: a connect card in his inbox, Quill named only as whose job it is, never left in Quill's thread.
+  const card = A.needsYou(crew.snapshot()).find((c) => c.id === ask.id)!;
+  assert.deepEqual([card.kind, card.helper, card.about], ['connect', 'quill', 'Quill']);
+  assert.deepEqual(card.choices.map((c) => c.body), [{ answer: 'allow' }, { answer: 'deny' }], 'the card\'s two answers are the ones sent below');
   const v = await crew.connections.connect('mocknote');
   await back(crew, v.url!, { code: 'good' });
   await crew.answer(ask.id, { answer: 'allow' });

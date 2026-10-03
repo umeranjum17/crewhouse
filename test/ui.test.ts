@@ -143,10 +143,12 @@ test('the give-back sheet and the signed-in list name bare hosts, never paths or
 
 test('asks become plain cards: money never gets "always", a blocked terminal becomes a question', () => {
   const [run, spend, question, keep] = A.cards(state);
-  assert.equal(keep.head, 'Reel learned something');
+  assert.equal(keep.head, 'Keep what Reel learned?');
   assert.deepEqual(keep.choices.map((c) => c.label), ['Yes, keep it', 'Not now'], 'a suggestion is yes or no, never "always"');
   assert.equal(keep.preview?.head, 'How Reel would do it');
-  assert.equal(run.words, 'Reel would like your OK to carry on.');
+  assert.equal(run.words, 'Reel stopped for your OK before carrying on.');
+  assert.equal(run.head, "Your OK, for Reel's job", 'Chief brings it; Reel is named only as whose job it is');
+  assert.equal(run.about, 'Reel');
   assert.deepEqual(run.choices.map((c) => c.label), ['Yes, go ahead', 'Always OK for Reel', 'Not now']);
   assert.equal(spend.kind, 'spend');
   assert.ok(!spend.choices.some((c) => /always/i.test(c.label)));
@@ -159,13 +161,63 @@ test('asks become plain cards: money never gets "always", a blocked terminal bec
   assert.equal(A.card({ id: 8, bot: 'reel', kind: 'connect', at: now, detail: { app: 'drive' } }, state).app?.name, 'Google Drive');
 });
 
-test('Needs you: spending and sending first, then questions; a suggestion waits in its helper\'s chat', () => {
+test('Chief\'s inbox: spending and sending first, then questions, then suggestions; every open request is his', () => {
   const rows = A.needsYou(state);
-  assert.deepEqual(rows.map((c) => c.kind), ['spend', 'ok', 'question'], 'money and messages, then OKs, then questions');
-  assert.ok(!rows.some((c) => /learned something/.test(c.head)), 'a proposal never sits on Home; it lives in the helper\'s chat');
-  // and the proposal's dot moves to that helper's row in the list
-  assert.equal(A.chats(state).find((c) => c.id === 'reel')?.unread, 1, 'the unread dot carries the suggestion');
-  assert.equal(A.chats(state).find((c) => c.id === 'scout')?.unread, 0, 'nobody else\'s dot moves');
+  assert.deepEqual(rows.map((c) => c.kind), ['spend', 'ok', 'question', 'ok'], 'money and messages, then OKs, then questions, then suggestions');
+  assert.deepEqual(rows.map((c) => c.id).sort(), state.asks.map((a) => a.id).sort(), 'nothing is left in a helper\'s chat');
+  // The dot is Chief's alone: a helper's row is a work record that never addresses the person.
+  assert.equal(A.chats(state).find((c) => c.id === 'chief')?.ring, 'needs');
+  for (const c of A.chats(state).filter((c) => c.id !== 'chief' && c.id !== 'room')) assert.equal(c.unread, 0, `${c.id} carries no dot`);
+});
+
+// Chief is the only contact (D1–D3): every open request reaches his inbox, and nothing a helper shows calls on the person.
+test('every open request is in Chief\'s inbox, connect and suggestions too; no helper word calls on the person', () => {
+  const s: Json = { ...state, asks: [...state.asks,
+    { id: 5, bot: 'tracer', task_id: null, kind: 'connect', at: now, detail: { app: 'gmail' } },
+    { id: 6, bot: 'scout', task_id: 6, kind: 'propose', at: now, detail: { draft: { channel: 'email', to: 'the school office' }, yes: 'Approve', preview: { body: 'Hello' } } },
+    { id: 7, bot: 'chief', task_id: null, kind: 'propose', at: now, detail: { words: 'A calmer Chief?' } },
+  ] };
+  const ids = s.asks.map((a: Json) => a.id).sort();
+  assert.deepEqual(A.needsYou(s).map((c) => c.id).sort(), ids, 'nothing dropped: connect and plain suggestions included');
+  assert.deepEqual(A.cards(s).map((c) => c.id).sort(), ids);
+  const room = A.office(s);
+  assert.deepEqual(A.chiefAsks(room).map((c) => c.id).sort(), ids, 'Chief brings every one');
+  assert.equal(room.counts.needs, ids.length);
+  for (const c of A.needsYou(s)) {
+    assert.equal(c.about, c.helper === 'chief' ? undefined : s.bots.find((b: Json) => b.id === c.helper).display, 'the helper is context, never the speaker');
+    assert.doesNotMatch(c.head, /needs you|would like your|wants your/i, `${c.id}: Chief's voice`);
+  }
+  const NEEDS = /need[\s\S]*\byou\b|waiting on your?\b/i;
+  const helperWords = [
+    ...A.crew(s).flatMap((h) => [h.status, h.ring]),
+    ...A.chats(s).filter((c) => c.id !== 'chief').flatMap((c) => [c.line, c.ring, String(c.unread)]),
+    ...room.crew.flatMap((m) => [m.status, m.step, A.seatOf(m), A.railWord(m, room).word]),
+    ...Object.values(A.SEAT_WORDS), ...A.work(s).map((w) => w.line), A.crewLine(s),
+  ];
+  for (const w of helperWords) assert.doesNotMatch(w, NEEDS, w);
+  assert.ok(A.crew(s).every((h) => h.mood !== 'ask' && (h.ring as string) !== 'needs'), 'no helper wears the asking face or ring');
+  assert.ok(A.chats(s).filter((c) => c.id !== 'chief').every((c) => !c.unread && c.ring !== 'needs'), 'no helper row carries a dot');
+});
+
+test('Chief is the only composer: a helper\'s thread has no box, and shares go to Chief', () => {
+  const read = (f: string) => readFileSync(join(import.meta.dirname, '..', f), 'utf8');
+  const web = read('web/src/main.tsx'), app = read('mobile/App.tsx');
+  // Every post names Chief, except the thread's own send, whose box only Chief's thread shows.
+  for (const [f, src] of [['web', web], ['phone', app]]) {
+    const to = [...src.matchAll(/api\.post\(([^,)]+)/g)].map((m) => m[1]);
+    assert.ok(to.length && to.every((x) => x === "'chief'" || x === 'id'), `${f} posts only to Chief: ${to.join(' ')}`);
+  }
+  const chat = web.slice(web.indexOf('function Chat('), web.indexOf('function Room('));
+  assert.match(chat, /\{h \? <div className="dock report-dock">[\s\S]*?keepDraft\('chief', [\s\S]*?Ask Chief about this<\/button><\/div>\n\s*: <div className="dock"><Composer /, 'web: a helper\'s thread ends in Ask Chief about this, never a box');
+  assert.equal([...chat.matchAll(/<Composer /g)].length, 1);
+  const phone = app.slice(app.indexOf('function Chat('), app.indexOf('function Room('));
+  assert.match(phone, /\{!chief \? <View style=\{\[s\.dock[\s\S]*?Ask Chief about this" onPress=\{\(\) => \{ keepDraft\('chief', [\s\S]*?: canAct \|\| writer \? <View[^\n]*<Composer key=\{seed\} placeholder="Ask Chief anything" onSend=\{send\}/, 'phone: the same');
+  assert.equal([...phone.matchAll(/<Composer /g)].length, 1);
+  for (const dock of [chat, phone]) assert.doesNotMatch(dock.slice(dock.indexOf('Ask Chief about this') - 400, dock.indexOf('Ask Chief about this') + 200), /api\.|send\(/, 'asking about a job only fills Chief\'s box');
+  const share = app.slice(app.indexOf('function ShareIn('), app.indexOf('/** Add a helper from the gallery'));
+  assert.deepEqual([...share.matchAll(/api\.post\(([^,)]+)/g)].map((m) => m[1]), ["'chief'"], 'a share goes to Chief, the helper only named in its words');
+  const webShare = web.slice(web.indexOf('function Share('), web.indexOf('function Share(') + 900);
+  assert.deepEqual([...webShare.matchAll(/api\.post\(([^,)]+)/g)].map((m) => m[1]), ["'chief'"]);
 });
 
 test('a helper\'s draft waits in Needs you, named for who it goes to; the row\'s tap opens the review, and approving never sends', async () => {
@@ -185,12 +237,13 @@ test('a helper\'s draft waits in Needs you, named for who it goes to; the row\'s
   assert.equal(ask.detail.draft.to, 'the school office', 'askView passes the draft through; without it Home drops the row');
   assert.equal(ask.detail.yes, 'Approve', 'the yes approves the draft; it is never a send');
   const c = A.card(ask, s);
-  assert.equal(c.head, 'Scout wrote your email', 'the card says what it is and who it is for, never "learned something"');
+  assert.equal(c.head, 'A draft of your email, from Scout', 'the card says what it is and whose job it came from, never "learned something"');
+  assert.equal(c.about, 'Scout', 'Scout is context; Chief brings it');
   assert.deepEqual(c.choices.map((x: any) => x.label), ['Approve', 'Reject'], 'the no-send approval stays');
   assert.match(c.preview?.body ?? '', /trip form/, 'the sheet the row opens shows the words');
   assert.equal(c.draftText, "Hello, the signed trip form is in Ayaan's bag this morning. Thank you, Umer", 'the words to change are the draft itself, not a tidied copy');
   const rows = A.needsYou(s);
-  assert.equal(rows.find((r: any) => r.id === ask.id)?.head, 'Scout wrote your email', 'the draft is a Needs-you row, ready to tap');
+  assert.equal(rows.find((r: any) => r.id === ask.id)?.head, 'A draft of your email, from Scout', 'the draft is a row in Chief\'s inbox, ready to tap');
   assert.ok(!rows.some((r: any) => /learned something/.test(r.head)));
   done();
 });
@@ -215,7 +268,7 @@ test('draft cards keep the recipient, email subject and exact message separate a
       const state = crew.snapshot();
       const ask = state.asks.find((a: Json) => a.detail.draft?.to === to)!;
       const c = A.card(ask, state);
-      assert.equal(c.head, `Scribe wrote your ${channel}`);
+      assert.equal(c.head, `A draft of your ${channel}, from Scribe`);
       assert.equal(c.words, c.head, 'the headline never repeats job text or recipient');
       assert.equal(c.draftTo, to);
       assert.equal(c.draftSubject, subject || undefined);
@@ -272,7 +325,7 @@ test('Home keeps a standing "hand me a job" list, straight from crewd\'s ideas: 
   assert.equal(A.jobs({ ...withJobs, bots: [...state.bots, { id: 'scout', display: 'Scout' }] })[0].says, 'Scout · I\'ll search the government\'s unclaimed-money registers for your name and get the claims ready to file.', 'under it, whose job it is and one sentence of the promise');
   for (const r of rows) assert.ok((r.says.match(/[.!?](\s|$)/g) ?? []).length <= 1, `at most one sentence of a promise: ${r.says}`);
   assert.equal(A.jobs({ ...state, ideas: [{ bot: 'chief', promise: "What's on this week?", ask: "What's on this week?" }] })[0].says, '', 'a promise that only repeats the ask adds no line');
-  assert.match(A.homeSummary({ ...withJobs, asks: [], bots: [] }), /0 things need you · 0 helpers working/, 'the summary follows the rows, not demo copy');
+  assert.match(A.homeSummary({ ...withJobs, asks: [], bots: [] }), /0 things for you · 0 helpers working/, 'the summary follows the rows, not demo copy');
   assert.deepEqual(A.ideas(withJobs).map((i: any) => i.bot), ['scout', 'scribe', 'reel'], 'Chief\'s chips stay jobs the crew can run now — the unclaimed search needs nothing, so it chips too');
   assert.match(A.jobNeeds(rows.find((r) => r.needs.length)!.needs), /^Needs Gmail first\.$/);
   assert.doesNotMatch(shown(rows), FORBIDDEN, 'the list is a person\'s sentence, not a screen of details');
@@ -282,7 +335,7 @@ test('Home keeps a standing "hand me a job" list, straight from crewd\'s ideas: 
     detail: { effect: 'send', press: true, spends: false,
       words: 'Scout wants to press “Request price adjustment” on shop.example, a site you signed it in to. The page shows $999.00.',
       preview: { head: 'What Scout will press on shop.example', body: "You'd get $50.00 back.\nPaid on 12 March: $999.00\nRequest price adjustment" } } }, withJobs);
-  assert.equal(press.head, 'Scout wants to act on a site', 'a press is not called a message ready to send');
+  assert.equal(press.head, "OK to act on a site, for Scout's job?", 'a press is not called a message ready to send');
   assert.match(press.choices[0].label, /press it/i);
   assert.match(press.preview!.body, /Request price adjustment/, 'the button, as the page writes it');
   assert.match(press.preview!.body, /You'd get \$50\.00 back\./, 'and what they get back, when the page wrote both prices');
@@ -294,7 +347,7 @@ test('Home keeps a standing "hand me a job" list, straight from crewd\'s ideas: 
     detail: { effect: 'send', press: true, fill: true, spends: false,
       words: 'Scout wants to fill “Owner\'s full name” on unclaimed.example, a site you signed it in to.',
       preview: { head: 'What Scout will fill in on unclaimed.example', body: "Owner's full name: Ada Lovelace" } } }, withJobs);
-  assert.equal(fill.head, 'Scout wants to act on a site', 'a form line is the same acting-on-a-site card');
+  assert.equal(fill.head, "OK to act on a site, for Scout's job?", 'a form line is the same acting-on-a-site card');
   assert.match(fill.preview!.body, /Owner's full name: Ada Lovelace/, 'the line, label then value');
   assert.equal(fill.choices[0].label, 'Yes, fill it in');
   const these = A.card({ id: 11, bot: 'scout', kind: 'permission', state: 'open',
@@ -343,7 +396,7 @@ test('every job that sends or spends names its ask-first step, and Home shows it
   assert.doesNotMatch(web, NO_TIME_FIGURE, 'no time figure beside the counts');
 });
 
-test('a freshly recruited helper opens on its own starters, and a tap fills the box without sending', () => {
+test('a freshly recruited helper opens on its own starters, and a tap fills Chief\'s box without sending', () => {
   const withJobs = { ...state, ideas: [
     { bot: 'scout', promise: 'Ask me anything and I will answer with sources', ask: 'Find out ', group: 'life', needs: [] },
     { bot: 'scribe', promise: 'Say who it is for and the email is written', ask: 'Write an email to ', group: 'life', needs: [] },
@@ -351,24 +404,24 @@ test('a freshly recruited helper opens on its own starters, and a tap fills the 
   const own = A.ideas(withJobs).filter((i: any) => i.bot === 'scout');
   assert.deepEqual(own.map((i: any) => i.bot), ['scout'], 'a helper sees its own rows, never another helper\'s');
   assert.equal(own[0].ask, 'Find out ', 'the chip carries the ask words');
-  // A tap fills the box: the composer remounts from the draft (key={seed}) and nothing is posted.
-  keepDraft('scout', own[0].ask);
-  assert.equal(draftOf('scout').text, 'Find out ', 'the tap filled the helper\'s box');
-  keepDraft('scout', '');
+  // A tap fills Chief's box (the only one there is): his composer mounts from the draft and nothing is posted.
+  keepDraft('chief', own[0].ask);
+  assert.equal(draftOf('chief').text, 'Find out ', 'the tap filled Chief\'s box');
+  keepDraft('chief', '');
   const src = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
   assert.match(src, /const fresh = !lines\.length/, 'the hidden join note counts as a fresh chat, not only an empty one');
   assert.match(src, /joined the crew`\)\)/, 'fresh means only that note');
   assert.match(src, /<HelperIdeas state=\{state\} chat=\{id\}/, 'a helper gets its own chips beside Chief\'s');
   const helper = src.slice(src.indexOf('function HelperIdeas'), src.indexOf('function HelperIdeas') + 700);
   assert.match(helper, /i\.bot === chat/, 'the helper\'s chips are its own ready rows');
-  assert.match(helper, /keepDraft\(chat, i\.ask\)/, 'a tap fills the box');
+  assert.match(helper, /keepDraft\('chief', A\.forHelper\(state, i\.bot, i\.ask\)\); go\('#\/chief'\)/, 'a tap fills Chief\'s box, led by the helper\'s name, and opens his thread');
   assert.doesNotMatch(helper, /api\.post/, 'it never sends');
   const chat = src.slice(src.indexOf('function Chat('), src.indexOf('function Chat(') + 9500);
   assert.match(chat, /fresh && page/, 'the fresh chat renders the starters');
   const app = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
   const phone = app.slice(app.indexOf('function Chat('), app.indexOf('function Chat(') + 9000);
   assert.match(phone, /joined the crew`\)\)/, 'the phone uses the same fresh condition');
-  assert.match(phone, /i\.bot === id/, 'the phone filters to the helper\'s own rows too');
+  assert.match(phone, /const own = chief \? A\.ideas\(state\) : \[\]/, 'the phone offers starters in Chief\'s thread only: a helper\'s has no box to fill');
   assert.match(phone, /keepDraft\(id, i\.ask\)/, 'a phone tap fills the box');
   assert.doesNotMatch(phone.slice(phone.indexOf('s.chips'), phone.indexOf('s.chips') + 600), /api\.post/, 'and never sends');
 });
@@ -497,12 +550,12 @@ test('Home opens on Chat at every launch, with Office one tap away and never sto
   }
   const web = src('web/src/main.tsx');
   const home = web.slice(web.indexOf('function Home('), web.indexOf('/** The standing'));
-  assert.match(home, /if \(mode === 'chat'\) return <div className="page chat-page home-chat"><div className="home-top">\{top\}<ChiefHero live=\{live\} state=\{state\} \/><NeedsPin state=\{state\} cards=\{live\.needs\} flat \/><\/div><Chat \{\.\.\.ctx\} id="chief" hero rail=\{<TonightRail live=\{live\} \/>\} \/><\/div>;/, 'web Chat (B1): the top, Chief\'s hero then Needs you (the mock\'s order, both sizes) over his own thread, box and Tonight rail');
-  assert.match(home, /<NeedsPin state=\{state\} cards=\{live\.needs\}( flat)? \/>/, 'Needs you pinned from the office\'s one list');
+  assert.match(home, /if \(mode === 'chat'\) return <div className="page chat-page home-chat"><div className="home-top">\{top\}<ChiefHero live=\{live\} state=\{state\} \/><NeedsPin cards=\{live\.needs\} flat \/><\/div><Chat \{\.\.\.ctx\} id="chief" hero rail=\{<TonightRail live=\{live\} \/>\} \/><\/div>;/, 'web Chat (B1): the top, Chief\'s hero then what he has for you (the mock\'s order, both sizes) over his own thread, box and Tonight rail');
+  assert.match(home, /<NeedsPin cards=\{live\.needs\}( flat)? \/>/, 'Chief\'s inbox pinned from the office\'s one list');
   assert.match(home, /<div className="feed-ask"><Composer/, 'Office keeps Chief\'s box on a desk');
   assert.match(home, /<div className="dock phone-only"><Composer/, 'and on a phone');
   const pin = web.slice(web.indexOf('function NeedsPin('), web.indexOf('function NeedsPin(') + 1400);
-  assert.match(pin, /<NeedsCard state=\{state\} c=\{order\.slice\(0, 1\)\[0\]\}/, 'one pinned card (B1)');
+  assert.match(pin, /<NeedsCard c=\{order\.slice\(0, 1\)\[0\]\}/, 'one pinned card (B1)');
   const card = web.slice(web.indexOf('function NeedsCard('), web.indexOf('/** An empty list'));
   assert.match(card, /<a className="btn go" href=\{`#\/ask\/\$\{c\.id\}`\}>/, 'its yes opens the review sheet: Home commits nothing');
   assert.doesNotMatch(card, /api\.|answer\(/, 'no answer is sent from the card');
@@ -642,15 +695,16 @@ test("Chief's mood is the first matching row of the table, and the line follows 
   assert.equal(A.chief({ ...failed, events: [{ kind: 'task.failed', bot: 'reel', at: ago(31), data: { title: 'Flights' } }] }).mood, 'idle', 'over half an hour old: over it');
   assert.equal(A.chief({ ...failed, bots: [bot('chief'), bot('reel')] }).mood, 'idle', 'read: over it');
   assert.equal(A.chief({ ...failed, events: [{ kind: 'task.unsure', bot: 'reel', at: ago(2), data: { title: 'Booking' } }] }).mood, 'error', 'unsure counts too');
-  // 4 · a helper gone quiet, or the sign-in out, is worried — and beats waiting on you
+  // 4 · a helper gone quiet, or the sign-in out, is worried — and beats something for you to decide
   const worried = A.chief(withBots(bot('reel', { stuck: true, quietSince: ago(6) }), bot('scout', { task: { id: 2, title: 'Flights', state: 'needs_you' } })));
   assert.deepEqual([worried.mood, worried.line], ['worried', 'Reel has gone quiet']);
   assert.equal(A.chief(base, { signedOut: true }).line, 'Waiting for your sign-in');
-  // 5 · waiting on you
-  const ask = A.chief(withBots(bot('reel', { task: { id: 3, title: 'A video', state: 'needs_you' } })));
-  assert.deepEqual([ask.mood, ask.tone, ask.line], ['ask', 'wait', 'Reel needs you']);
-  const askCard = A.chief({ ...base, asks: [{ id: 1, bot: 'scout' }] });
-  assert.deepEqual([askCard.mood, askCard.line], ['ask', 'Scout needs you']);
+  // 5 · something for you to decide: every open request is Chief's to bring, never a helper's call on you
+  const ask = A.chief({ ...withBots(bot('reel', { task: { id: 3, title: 'A video', state: 'needs_you' } })), asks: [{ id: 1, bot: 'reel', task_id: 3 }] });
+  assert.deepEqual([ask.mood, ask.tone, ask.line], ['ask', 'wait', 'One thing for you to decide']);
+  const askCard = A.chief({ ...base, asks: [{ id: 1, bot: 'scout' }, { id: 2, bot: 'chief' }] });
+  assert.deepEqual([askCard.mood, askCard.line], ['ask', '2 things for you to decide']);
+  assert.doesNotMatch(ask.line + askCard.line, /needs you/i, 'no helper is named as needing the person');
   // 6 · fresh finished work is pleased
   const done = { ...base, bots: [bot('chief'), bot('reel', { task: { id: 4, title: 'A video', state: 'working' } }), bot('scout')], events: [{ kind: 'task.done', bot: 'scout', at: ago(2), data: { title: 'Dinners' } }] };
   const pleased = A.chief(done);
@@ -664,11 +718,11 @@ test("Chief's mood is the first matching row of the table, and the line follows 
   assert.deepEqual([rest.mood, rest.tone], ['rest', 'off']);
   assert.match(rest.line, /resting until/);
   // And the whole ladder, top down: each row beats the one under it.
-  const ladder = { ...failed, events: [...failed.events, { kind: 'task.done', bot: 'scout', at: ago(1), data: { title: 'Dinners' } }], bots: [...failed.bots, bot('scout', { stuck: true, quietSince: ago(6), task: { id: 9, title: 'Flights', state: 'needs_you' } })] };
+  const ladder = { ...failed, asks: [{ id: 4, bot: 'scout', task_id: 9 }], events: [...failed.events, { kind: 'task.done', bot: 'scout', at: ago(1), data: { title: 'Dinners' } }], bots: [...failed.bots, bot('scout', { stuck: true, quietSince: ago(6), task: { id: 9, title: 'Flights', state: 'needs_you' } })] };
   assert.equal(mood(A.chief(ladder)), 'error', 'sad over worried');
   assert.equal(mood(A.chief({ ...ladder, bots: (ladder.bots as Json[]).map((b) => (b.id === 'reel' ? { ...b, unread: 0 } : b)) })), 'worried', 'worried over ask');
   const askOver = withBots(bot('scout', { task: { id: 5, title: 'Flights', state: 'needs_you' } }), bot('pip', { task: { id: 6, title: 'Week', state: 'working' } }));
-  assert.equal(mood(A.chief({ ...askOver, events: [{ kind: 'task.done', bot: 'pip', at: ago(1), data: { title: 'Week' } }] })), 'ask', 'ask over happy');
+  assert.equal(mood(A.chief({ ...askOver, asks: [{ id: 3, bot: 'scout', task_id: 5 }], events: [{ kind: 'task.done', bot: 'pip', at: ago(1), data: { title: 'Week' } }] })), 'ask', 'ask over happy');
   assert.equal(mood(A.chief({ ...done, resting: { chatgpt: Date.now() + min } })), 'happy', 'happy over work');
   assert.equal(A.chief({ ...resting, asks: [{ id: 2, bot: 'reel' }] }).rank, 5, 'the rank rides along for the hold');
 });
@@ -681,7 +735,7 @@ test('helpers wear the same story on their own faces', () => {
   ], bots: [
     { id: 'chief', display: 'Chief' },
     { id: 'scribe', display: 'Scribe', template: 'scribe', unread: 1 },                       // unread failure → sad
-    { id: 'reel', display: 'Reel', template: 'reel', task: { id: 1, title: 'A video', state: 'needs_you' } }, // → ask
+    { id: 'reel', display: 'Reel', template: 'reel', task: { id: 1, title: 'A video', state: 'needs_you' } }, // → waiting on Chief: calm
     { id: 'scout', display: 'Scout', template: 'scout' },                                     // fresh work → happy
     { id: 'pip', display: 'Pip', template: 'scout', stuck: true, quietSince: ago(7) },        // → worried
     { id: 'tracer', display: 'Tracer', template: 'tracer', task: { id: 2, title: 'An email', state: 'working' } }, // → work
@@ -689,7 +743,9 @@ test('helpers wear the same story on their own faces', () => {
     { id: 'ink', display: 'Ink', template: 'reel' },                                          // → idle
   ] } as Json;
   const moodOf = (id: string) => A.crew(s).find((h) => h.id === id)!.mood;
-  assert.deepEqual(['scribe', 'reel', 'scout', 'pip', 'tracer', 'muse', 'ink'].map(moodOf), ['error', 'ask', 'happy', 'worried', 'work', 'rest', 'idle']);
+  assert.deepEqual(['scribe', 'reel', 'scout', 'pip', 'tracer', 'muse', 'ink'].map(moodOf), ['error', 'idle', 'happy', 'worried', 'work', 'rest', 'idle']);
+  const reel = A.crew(s).find((h) => h.id === 'reel')!;
+  assert.deepEqual([reel.ring, reel.status], ['waiting', 'Waiting on Chief'], 'a helper waits on Chief, never on the person');
   assert.equal(moodOf('scribe') === 'error' && A.crew(s).find((h) => h.id === 'scribe')!.ring, '', 'sad is a face, not a ring');
   // Tracer is visible in the crew; here the mapping is what matters.
 });
@@ -766,7 +822,9 @@ test('chats: Chief first, then the latest talk; last lines in plain words, never
   assert.equal(c[3].line, 'You: find rentals in Phuket');
   assert.equal(c[4].line, 'Working on: Plan the week');
   assert.equal(c[5].line, 'Drafts letters', 'nothing said yet: what it does');
-  assert.equal(A.unreadBadge(c[2].unread), '9+');
+  assert.equal(c[0].unread, 2, 'Chief\'s row carries the dot');
+  assert.equal(c[2].unread, 0, 'a helper\'s thread is a work record reported to Chief: no dot of its own');
+  assert.equal(A.unreadBadge(12), '9+');
   assert.doesNotMatch(shown(c), FORBIDDEN);
   const f = A.found(s, { messages: [{ id: 3, bot: 'reel', author: 'system', text: 'Delivered files/x.mp4', at: now }], things: [{ id: 4, bot: 'scout', title: 'Rentals in Phuket', at: now }] });
   assert.deepEqual(f.map((x) => [x.name, x.text]), [['Scout', 'Made “Rentals in Phuket”'], ['Reel', 'Sent “X”']]);
@@ -832,13 +890,14 @@ test('no jargon anywhere: the machinery\'s words never reach a person', () => {
 
 test('the status-bar chip: this person\'s jobs only, counts only where a locked phone shows it, and one door to the kit', () => {
   const st = A.status(state)!;
-  // Scout's job is working; Reel's waits on Umer. Tracer is busy, but only bot-wide (`live`): not her job, not counted.
+  // Scout's job is working; Reel's waits on Chief, who has Umer's decisions. Tracer is busy, but only bot-wide (`live`): not her job, not counted.
   const s2 = { ...state, bots: state.bots.map((b) => (b.id === 'tracer' ? { ...b, live: 'working' } : b)) };
   assert.deepEqual(A.status(s2), st, 'a helper busy on someone else\'s job never shows');
   assert.equal(st.active, true);
   assert.equal(st.title, 'Scout is working', 'names only in the unlocked lines');
-  assert.equal(st.publicText, `1 working · ${st.needsYou} need${st.needsYou === 1 ? 's' : ''} you`);
-  assert.equal(st.chip, 'Needs');
+  assert.equal(st.publicText, `1 working · ${st.needsYou} for you`);
+  assert.equal(st.needsYou, state.asks.length, 'every open request counts: Chief brings them all');
+  assert.equal(st.chip, 'For you');
   assert.deepEqual(st.actions.map((a) => a.id), ['needs', 'ask']);
   assert.deepEqual(A.status(state, false)!.actions, [], 'a watching phone only opens the app');
   const many = (n: number, extra: Json[] = []) => A.status({ ...state, asks: [], bots: [...Array.from({ length: n }, (_, i) => bot(`helper${i}`, { display: `Helper ${i}`, task: { id: i, title: 'Tax return', state: 'working' } })), ...extra] })!;
@@ -901,7 +960,7 @@ test('Chief on the screen: off until switched on, one door to the overlay kit, a
 });
 
 test('the chip\'s two doors, and who writes for Write it here', () => {
-  assert.deepEqual(A.status(state)!.actions, [{ id: 'needs', label: 'See what needs you' }, { id: 'ask', label: 'Ask Chief' }]);
+  assert.deepEqual(A.status(state)!.actions, [{ id: 'needs', label: "See what's for you" }, { id: 'ask', label: 'Ask Chief' }]);
   assert.deepEqual(A.status(state, false)!.actions, [], 'a watching phone gets no actions');
   // Write it here's writer: Scribe, else the general Helper (whatever it is called), else the Helper the tap hires.
   const s = { ...state, bots: [...state.bots, bot('scribe')] };
@@ -1032,7 +1091,7 @@ test('Chief\'s box answers who is on what and what the crew knows about you itse
   for (const t of ['Book a table for Friday', 'Remember my status at work', 'What is everyone saying about the new phone?', 'Status of my refund?',
     'who is working on the tax return, and can they hurry', 'my details changed: new address is 4 Elm Road', 'plan my day around the dentist at 3'])
     assert.equal(A.cannedOf(t), '', t);
-  assert.equal(A.canned(state, 'status'), `${A.crewLine(state)} ${A.homeCounts(state).needs} things need you.`);
+  assert.equal(A.canned(state, 'status'), `${A.crewLine(state)} ${A.homeCounts(state).needs} things for you to decide.`);
   assert.equal(A.canned({ ...state, asks: [], resting: {}, bots: [bot('chief'), bot('scout')] }, 'status'), 'Nobody is on a job right now.');
   assert.equal(A.canned(state, 'details', '- Vegetarian at home\n- Two children: Zara (9) and Ali (6)\n'), "You're Umer.\nWhat the crew knows about you:\n• Vegetarian at home\n• Two children: Zara (9) and Ali (6)");
   assert.match(A.canned(state, 'details', ''), /^You're Umer\.\nThe crew knows nothing else about you yet\./);
@@ -1042,7 +1101,7 @@ test('Chief\'s box answers who is on what and what the crew knows about you itse
 });
 
 test('who is on what: one plain line from state alone, resting included, no model', () => {
-  assert.equal(A.crewLine(state), `Reel needs you. Scout is on “Flights”. The crew is resting until ${A.clock(now + 3600_000)}.`);
+  assert.equal(A.crewLine(state), `Reel is waiting on Chief. Scout is on “Flights”. The crew is resting until ${A.clock(now + 3600_000)}.`);
   const st = { ...state, resting: {}, bots: [bot('chief', { task: { id: 9, title: 'Plan dinners', state: 'working' } }), bot('scout', { task: { id: 6, title: 'Flights', state: 'working' }, controls: 'person' }),
     bot('scribe', { task: { id: 7, title: 'Post', state: 'working' }, stuck: true, quietSince: now - 9 * 60_000 }), bot('reel', { pausedUntil: now + 600_000 }), bot('tracer')] };
   assert.equal(A.crewLine(st), `Chief is on “Plan dinners”. Scout waits while you drive. Scribe has gone quiet. Reel is resting until ${A.clock(now + 600_000)}.`);
@@ -1070,7 +1129,7 @@ test('Write it here: the writer is asked in plain words, and its draft is the jo
   assert.equal(A.draftOf({ tasks: [] }, 7), null);
   assert.equal(A.waitOf(page('working'), 7), '', 'writing: nothing to wait for');
   assert.equal(A.waitOf(page('paused', 'Waiting for you to sign in with ChatGPT.'), 7), 'Waiting for you to sign in with ChatGPT.', 'a paused job says why, never "writing" forever');
-  assert.equal(A.waitOf(page('needs_you'), 7), 'It needs your OK first.');
+  assert.equal(A.waitOf(page('needs_you'), 7), "It's waiting on an OK, in Chief's chat.");
   assert.equal(A.draftOf(page('paused'), 7), null);
   for (const w of ['Write it here', 'What should it say?', 'Let Chief see the box you\'re typing in', 'Put it in', 'Try again', 'Not now', 'Copied: hold the box and paste'])
     assert.doesNotMatch(w, FORBIDDEN);
@@ -1094,7 +1153,7 @@ test('the iPhone\'s Live Activity: the chip\'s own status, counts only until unl
     const la = (globalThis as any).activity;
     const words = (n: any): string => typeof n === 'string' || typeof n === 'number' ? String(n) : Array.isArray(n) ? n.map(words).filter(Boolean).join(' ')
       : n?.props ? [n.props.label, n.props.destination, words(n.props.children)].filter(Boolean).join(' ') : '';
-    const st = A.status(state)!; // Scout's job is working; Reel's waits on Umer
+    const st = A.status(state)!; // Scout's job is working; Reel's waits on Chief
     const view = la.layout(st, { colorScheme: 'light' });
     for (const k of ['banner', 'compactLeading', 'compactTrailing', 'minimal']) {
       for (const b of state.bots) assert.ok(!words(view[k]).includes(b.display), `${b.display} where a locked phone shows it (${k})`);
@@ -1104,7 +1163,7 @@ test('the iPhone\'s Live Activity: the chip\'s own status, counts only until unl
     assert.equal(words(view.compactTrailing), st.chip);
     assert.equal(words(view.expandedCenter), `${st.title} ${st.text}`, 'names only in the expanded island');
     assert.deepEqual(view.expandedBottom.props.children.map((l: any) => [l.props.label, l.props.destination]),
-      [['See what needs you', 'crewhouse://needs'], ['Ask Chief', 'crewhouse://ask']], 'its buttons open the addresses the app already takes');
+      [["See what's for you", 'crewhouse://needs'], ['Ask Chief', 'crewhouse://ask']], 'its buttons open the addresses the app already takes');
     assert.deepEqual(la.layout(A.status(state, false), { colorScheme: 'light' }).expandedBottom.props.children, [], 'a watching phone gets no buttons');
     assert.deepEqual(la.layout(st, { colorScheme: 'light', isStale: true }).banner.props.modifiers.at(-1), { opacity: 0.5 }, 'out of date, it says so by fading');
 
@@ -1270,8 +1329,8 @@ test('a routine offered by Chief is a confirmation card: lines, Start it / Not n
   const [line, note] = [A.card(away.asks[0], away).lines!.at(-1), A.zoneNote(away)];
   if (Intl.DateTimeFormat().resolvedOptions().timeZone === 'Asia/Karachi') { assert.equal(note, ''); }
   else { assert.match(note, /^Times follow the home computer's clock \(Asia\/Karachi\)\.$/); assert.equal(line, note); }
-  // Stays off Home like every suggestion, and the last run links out.
-  assert.equal(A.needsYou(s).length, 0);
+  // In Chief's inbox like every open request, and the last run links out.
+  assert.deepEqual(A.needsYou(s).map((x) => x.id), [1]);
   const rs = { routines: [{ id: 2, bot: 'reel', name: 'Weekly demo', words: 'Every Monday at 9:00', next_at: now, state: 'on', kind: 'task',
     history: [{ at: now, kind: 'routine.fired', state: 'done', task: 7, thing: 7, msg: 21 }] }] };
   assert.deepEqual(A.routines(rs)[0].result, { thing: 7 }, 'the last run opens the thing it made');
@@ -1692,7 +1751,7 @@ test('?demo=fresh renders the Chief-only Home with no errors', () => {
     templates: [{ id: 'chief', display: 'Chief' }],
     tasks: [], ideas: [], asks: [], events: [], routines: [], resting: {}, connections: [] };
   assert.deepEqual(A.jobs(fresh), [], 'no helpers yet, so nothing to hand over');
-  assert.match(A.homeSummary(fresh), /0 things need you · 0 helpers working/);
+  assert.match(A.homeSummary(fresh), /0 things for you · 0 helpers working/);
   assert.equal(A.ideas(fresh).length, 3, "Chief's own three starters fill the empty chat");
   assert.deepEqual(A.crew(fresh), [], 'nobody else in the crew');
   const room = A.office(fresh);
@@ -1705,7 +1764,7 @@ test('?demo=fresh renders the Chief-only Home with no errors', () => {
 });
 
 // Offer-to-hire rows on a Chief-only Home: unhired templates offer goal rows needing nothing, tagged with the
-// template to hire. Home's list carries them; a tap brings the helper on then fills their box; chips never do.
+// template to hire. Home's list carries them; a tap brings the helper on then fills Chief's box; chips never do.
 test('a Chief-only Home offers its helpers for hire: jobs carry hire, the tap hires first', () => {
   // The fresh Home's rows, straight from the templates' goal rows so the copy cannot drift.
   const goals = ['scout', 'scribe', 'reel'].map((t) => {
@@ -1724,18 +1783,18 @@ test('a Chief-only Home offers its helpers for hire: jobs carry hire, the tap hi
   const demo = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'demo.ts'), 'utf8');
   assert.match(demo, /ideas: freshHire/, 'fresh ships the hire rows');
   for (const g of goals) assert.ok(demo.includes(g.ask), `fresh repeats “${g.ask}”`);
-  // A tap runs the gallery hire, then fills that helper's box: nothing starts until they send.
+  // A tap runs the gallery hire, then fills Chief's box (the only one there is): nothing starts until they send.
   const web = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
   const list = web.slice(web.indexOf('function JobList('), web.indexOf('function JobList(') + 2200);
   assert.match(list, /api\.recruit\(template, name\)/, 'a tap hires the offered template');
-  assert.match(list, /keepDraft\(id, ask\)/, 'then fills that helper\'s box');
-  assert.match(list, /go\(`#\/h\/\$\{id\}`\)/, 'and opens their chat');
+  assert.match(list, /refresh\(\); hand\(`\$\{name\}: \$\{ask\}`\);/, 'then fills Chief\'s box, led by the new helper\'s name so he hands it on');
+  assert.doesNotMatch(list, /keepDraft\(id,|go\(`#\/h\//, 'never a helper\'s box: helpers have none');
   assert.match(list, /j\.hire \? <button/, 'the offer is a button, while a waiting row still links to the apps screen');
   assert.match(list, /keepDraft\('chief', ask\)/, 'a hired helper\'s row still fills Chief\'s box');
   const app = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
   const phone = app.slice(app.indexOf('function JobList('), app.indexOf('function JobList(') + 1500);
   assert.match(phone, /j\.hire\) void hire\(j\.hire, j\.ask\)/, 'the phone hires first too');
-  assert.match(phone, /keepDraft\(b\.id, ask\)/, 'then fills that helper\'s box');
+  assert.match(phone, /keepDraft\('chief', `\$\{name\}: \$\{ask\}`\); go\(\{ view: 'chief' \}/, 'then fills Chief\'s box, naming the new helper');
 });
 
 // The office holds all of the person's helper jobs, steps, questions and first looks.
@@ -1777,13 +1836,17 @@ test('the office holds the person’s whole crew and all their jobs', () => {
   assert.equal(reel.things[0].kind, 'image');
   assert.ok(reel.steps.some((s) => s.now));
   const scribe = room.crew.find((c) => c.id === 'scribe')!;
-  assert.equal(scribe.ring, 'needs');
-  assert.match(scribe.ask?.head ?? '', /ready to send/);
-  assert.match(scribe.ask?.words ?? '', /Aunty Sara/);
+  assert.deepEqual([scribe.ring, scribe.status, A.seatOf(scribe)], ['waiting', 'Waiting on Chief', 'waiting'], 'a helper waits on Chief, never on the person');
+  // Scribe's send is Chief's to bring: in his inbox, Scribe named as whose job it is.
+  const send = A.chiefAsks(room).find((c) => c.id === 7)!;
+  assert.equal(send.about, 'Scribe');
+  assert.match(send.head, /ready to send/);
+  assert.match(send.words, /Aunty Sara/);
+  assert.deepEqual(A.chiefAsks(room).map((c) => c.id), [7, 8], 'every open request, whoever\'s job it came from');
   const pip = room.crew.find((c) => c.id === 'pip')!;
   assert.equal(pip.status, 'Car insurance renewal');
   assert.equal(pip.things[0].kind, 'sheet');
-  assert.equal(room.crew.find((c) => c.id === 'tracer')!.ring, 'needs');
+  assert.equal(room.crew.find((c) => c.id === 'tracer')!.ring, 'waiting');
   assert.deepEqual(room.counts, { needs: 2, working: 3, done: 1 });
   assert.doesNotMatch(shown(room), FORBIDDEN);
   const words = (x: unknown): string => typeof x === 'string' ? x : Array.isArray(x) ? x.map(words).join(' ')
@@ -1819,9 +1882,10 @@ test('the office moves on live events; the refresh stays the source of truth', (
   // A question, then its answer.
   let u = A.office(officeState());
   u = A.officeEvent(u, { seq: 26, at: OTN, kind: 'ask.opened', bot: 'pip', data: { task: 51 } });
-  assert.deepEqual([u.crew.find((c) => c.id === 'pip')!.ring, u.crew.find((c) => c.id === 'pip')!.status], ['needs', 'Needs you']);
-  assert.equal(u.counts.needs, 2, 'the count waits for the refresh to bring the actual Needs-you row');
-  assert.equal(A.seatOf(u.crew.find((c) => c.id === 'pip')!), 'chat', 'and so does Review');
+  assert.deepEqual([u.crew.find((c) => c.id === 'pip')!.ring, u.crew.find((c) => c.id === 'pip')!.status], ['waiting', 'Waiting on Chief']);
+  assert.equal(u.counts.needs, 2, 'the count waits for the refresh to bring the actual row in Chief\'s inbox');
+  assert.equal(A.seatOf(u.crew.find((c) => c.id === 'pip')!), 'waiting', 'and so does Review');
+  assert.equal(A.officeEvent(u, { seq: 30, at: OTN, kind: 'ask.parked', bot: 'scribe', data: { ask: 7 } }), u, 'a parked request stays open in Chief\'s inbox');
   u = A.officeEvent(u, { seq: 27, at: OTN, kind: 'ask.answered', bot: 'pip', data: { task: 51, answer: 'allow' } });
   assert.equal(u.crew.find((c) => c.id === 'pip')!.ring, 'working', 'answered: back on the job');
   u = A.officeEvent(u, { seq: 28, at: OTN, kind: 'task.failed', bot: 'pip', data: { task: 51, title: 'Car insurance renewal' } });
@@ -1922,7 +1986,7 @@ test('J5 repairs stay in: the night look paints first, the job row is never cut 
   assert.match(office, /if \(p\?\.st === 'chief' && it\.st === 'writing'\) l = Math\.max\(l, 33\);/);
   assert.match(office, /const c = tight \? x \+ 3 : x \+ 33;/); assert.match(office, /monitor: \[-14, 20\], failed: \[-14, 20\]/);
   assert.match(read('web', 'src', 'styles.css'), /\.office-main \.o-room \{ flex: 0 1 auto; min-height: 0; \}/);
-  assert.match(office, /needs: \[26, 28\], monitor: \[26, 28\], failed: \[26, 28\]/); assert.match(office, /data-scale=\{s\.toFixed\(3\)\}/);
+  assert.match(office, /waiting: \[26, 28\], monitor: \[26, 28\], failed: \[26, 28\]/); assert.match(office, /data-scale=\{s\.toFixed\(3\)\}/);
   assert.doesNotMatch(office, /MOCK|floorPlan\(crew, /, 'no seat cap below five for size');
   assert.match(office, /getScreenCTM\(\)\?\.a \?\? 1\) \* Number\(room\.dataset\.scale \?\? 1\), pw = 14 \* k, ph = 18 \* k/);
   assert.match(read('mobile', 'src', 'office.tsx'), /width: u\(14\), height: u\(18\)/);

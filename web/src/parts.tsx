@@ -165,7 +165,7 @@ export function PalArt({ kind, mood = 'idle', d = 4, name }: { kind: art.Kind; m
   return <Ink svg={svg} w={d * 12} label={name} className={`pose-${pose}`} />;
 }
 
-/** A round face: Chief or a pal, with a ring when it's working or needs you. */
+/** A round face: Chief or a pal, with a ring when it's working, waiting on Chief, or (Chief only) has things for you. */
 export function Face({ who, size = 44, ring = '' }: { who: Helper | 'chief' | { kind: art.Kind; name: string; mood?: art.Mood }; size?: number; ring?: string }) {
   const chief = who === 'chief';
   const soft = chief ? (night ? '#2A2622' : '#EEF1F6') : art.PALS[who.kind].soft;
@@ -565,12 +565,12 @@ function AskEvidence({ c, open, readAll }: { c: Card; open: boolean; readAll: Re
   return null;
 }
 
-/** The ask card's head: the asker's face and name, the status line with the pink dot, the time on the right. */
-function AskHead({ c, who }: { c: Card; who: Helper | undefined }) {
-  const name = c.helper === 'chief' ? 'Chief' : who?.name ?? c.head;
+/** The ask card's head: Chief brings every request, so his face and name, the status line with the pink dot, whose
+ *  job it is about as context only, and the time on the right. */
+export function AskHead({ c }: { c: Card }) {
   return <div className="ask-head">
-    {c.helper === 'chief' ? <Face who="chief" size={28} /> : who ? <Face who={{ ...who, mood: 'ask' }} size={28} /> : null}
-    <div className="grow"><b>{name}</b><div className="ask-status"><i />{c.status}</div></div>
+    <Face who="chief" size={28} />
+    <div className="grow"><b>Chief</b><div className="ask-status"><i />{c.status}</div>{c.about && <div className="ask-about">About {c.about}'s job</div>}</div>
     <time className="mute small">{clock(c.at)}</time>
   </div>;
 }
@@ -590,7 +590,7 @@ function useDraftEdit(c: Card) {
 
 /** The plain-language ask card, in the thread: one decision with the evidence in front of you. A checkout opens the
  *  review before any yes; spending always says the footer note. */
-export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; onDone: () => void }) {
+export function AskCard({ c, onDone }: { c: Card; onDone: () => void }) {
   const [reply, setReply] = useState('');
   const [oops, setOops] = useState(false);
   const last = useRef<Json | null>(null);
@@ -611,7 +611,7 @@ export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; 
   const edit = useDraftEdit(c);
   return (
     <div className="card ask">
-      <AskHead c={c} who={who} />
+      <AskHead c={c} />
       <p className="ask-words">{question}</p>
       {edit.box || <AskEvidence c={c} open={false} readAll={<a className="link" href={`#/ask/${c.id}`}>Read all</a>} />}
       {oops && <div className="send-failed" role="alert">That didn't go through. <button type="button" className="link inline" onClick={() => last.current && act(last.current)}>Try again</button></div>}
@@ -644,7 +644,7 @@ export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; 
         </>
       ) : c.reply ? (
         <form className="row" onSubmit={(e) => { e.preventDefault(); if (reply.trim()) act({ text: reply.trim() }); }}>
-          <input className="input grow" value={reply} onChange={(e) => setReply(e.target.value)} placeholder={`Tell ${who?.name ?? 'them'} what to do`} />
+          <input className="input grow" value={reply} onChange={(e) => setReply(e.target.value)} placeholder="Tell Chief…" />
           <button className="btn go" disabled={!reply.trim()}>Send</button>
         </form>
       ) : c.review ? (
@@ -671,7 +671,7 @@ export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; 
 /** The approval moment: who, the status, exactly what goes out, and the choices — a centred dialog on a desk,
  *  a bottom sheet on a phone. A checkout reviews the whole order here, with a yes that names the order; an order
  *  without a readable total offers no yes at all. */
-export function AskSheet({ c, who, chiefSays, onClose }: { c: Card; who: Helper | undefined; chiefSays?: string; onClose: () => void }) {
+export function AskSheet({ c, chiefSays, onClose }: { c: Card; chiefSays?: string; onClose: () => void }) {
   const [open, setOpen] = useState(false);
   const [oops, setOops] = useState(false);
   const last = useRef<Json | null>(null);
@@ -688,7 +688,7 @@ export function AskSheet({ c, who, chiefSays, onClose }: { c: Card; who: Helper 
   return (
     <div className="scrim" onClick={onClose}>
       <div ref={box} className="sheet approve" role="dialog" aria-modal aria-label={c.head} onClick={(e) => e.stopPropagation()}>
-        <AskHead c={c} who={who} />
+        <AskHead c={c} />
         <h2 className="ask-words">{question}</h2>
         {edit.box || <AskEvidence c={c} open={open} readAll={<button className="link" onClick={() => setOpen(true)}>Read all</button>} />}
         {c.review && c.order && !c.order.known && <div className="mute small">So nothing is counted against the monthly limit.</div>}

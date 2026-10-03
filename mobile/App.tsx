@@ -118,14 +118,14 @@ function Ink({ who, mood = 'idle', size, whole, wave }: { who: art.Kind | 'chief
 function ChiefArt({ mood = 'idle', size, whole, wave }: { mood?: art.Mood; size: number; whole?: boolean; wave?: boolean }) {
   return <Ink who="chief" mood={mood} size={size} whole={whole} wave={wave} />;
 }
-/** A round face: Chief or a pal, with a ring when it's working or needs you. */
+/** A round face: Chief or a pal, with a ring when it's working (green) or waiting on Chief (quiet). */
 function Face({ who, size = 44, mood }: { who: A.Helper | 'chief' | { kind: art.Kind; name: string; mood?: art.Mood }; size?: number; mood?: art.Mood }) {
   const t = useLook();
   const chief = who === 'chief';
   const ring = chief || !('ring' in who) ? '' : who.ring;
   return (
     <View style={{ width: size, height: size, borderRadius: size, alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
-      backgroundColor: chief ? (t.night ? '#2A2622' : '#EEF1F6') : t.night ? t.surface : art.PALS[who.kind].soft, borderWidth: ring ? 2 : 0, borderColor: ring === 'needs' ? t.pink : t.green }}>
+      backgroundColor: chief ? (t.night ? '#2A2622' : '#EEF1F6') : t.night ? t.surface : art.PALS[who.kind].soft, borderWidth: ring ? 2 : 0, borderColor: ring === 'working' ? t.green : t.line2 }}>
       <Ink who={chief ? 'chief' : who.kind} mood={chief ? mood : who.mood} size={size * 0.8} />
     </View>
   );
@@ -230,7 +230,7 @@ function PhoneCard({ offer, reload }: { offer: NonNullable<ReturnType<typeof A.p
       : <><T tone="mute">That code has run out.</T><Btn go label="Show a new code" onPress={() => { active.current = Date.now(); void renew(); }} /></>}
   </Card>;
 }
-/** A section's name, in small capitals; `count` is the pink number beside Needs you. */
+/** A section's name, in small capitals; `count` is the pink number beside Chief's inbox. */
 function Label({ children, count }: { children: ReactNode; count?: number }) {
   const t = useLook();
   return <View style={s.labelRow}><T tone="ink2" style={s.label}>{children}</T>{!!count && <Text style={[s.count, { backgroundColor: t.pink, color: t.night ? '#1A0F14' : '#fff' }]}>{count}</Text>}</View>;
@@ -751,18 +751,18 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
     return () => { sub.remove(); off(); };
   }, []);
   useEffect(() => {
-    if (asked && /^crewhouse:\/\/needs\/?$/.test(asked)) { setAsked(null); Linking.clearInitialURL(); go({ view: 'home' }, true); return; } // Home leads with what needs you
+    if (asked && /^crewhouse:\/\/needs\/?$/.test(asked)) { setAsked(null); Linking.clearInitialURL(); go({ view: 'home' }, true); return; } // Home leads with what Chief has for you
     // The bubble's panel: Settings (a button waiting on an app), or a helper's own screen to take the wheel or watch.
     const to = asked && (/^crewhouse:\/\/settings\/?$/.test(asked) ? { view: 'phone' as const } : /^crewhouse:\/\/screen\?bot=([a-z0-9-]+)(&watch=1)?$/.exec(asked));
     if (to) { setAsked(null); Linking.clearInitialURL(); go(Array.isArray(to) ? { view: 'helper', id: to[1], tab: to[2] ? 'watch' : 'screen' } : to); return; }
     const picked = asked ? sharedOf(asked) : null;
     if (picked !== null) { setAsked(null); Linking.clearInitialURL(); setPicked(picked); return; } // "Ask Crewhouse" on text in another app
-    const a = asked && state ? askOf(asked, A.crew(state).map((h) => ({ id: h.id, template: state.bots.find((b: Json) => b.id === h.id)?.template }))) : null;
+    const a = asked && state ? askOf(asked, A.crew(state).map((h) => ({ id: h.id, name: h.name, template: state.bots.find((b: Json) => b.id === h.id)?.template }))) : null;
     if (!a) return;
     setAsked(null);
     Linking.clearInitialURL();
     if (a.text) keepDraft(a.chat, a.text);
-    go(a.chat === 'chief' ? { view: 'chief' } : { view: 'helper', id: a.chat });
+    go({ view: 'chief' });
   }, [asked, !!state]);
   const forget = async () => { await bubbleOff().catch(() => {}); link.current?.stop(); await forgetGrant(); onRemoved(); };
 
@@ -824,7 +824,7 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
         {route.view === 'things' && <Page title="Things" lead="Everything the crew has made for you." back={toHome}><ThingsList list={A.things(state)} state={state} empty="Videos, lists, letters and plans the crew makes for you land here." /></Page>}
         {route.view === 'phone' && <ThisPhone grant={grant} status={status} go={go} back={toHome} onForget={forget} onClear={() => { kept.clear(); say('Cleared from this phone ✓'); }} />}
       </View>
-      {live && <AskSheet c={live} who={A.crew(state).find((h) => h.id === live.helper)} chiefSays={state.asks.find((a: Json) => a.id === live.id)?.detail?.chief} canAct={canAct} onClose={() => { setSheet(null); refresh(); }} />}
+      {live && <AskSheet c={live} chiefSays={state.asks.find((a: Json) => a.id === live.id)?.detail?.chief} canAct={canAct} onClose={() => { setSheet(null); refresh(); }} />}
     </KeyboardAvoidingView>
   );
 }
@@ -913,14 +913,15 @@ function AskEvidence({ c, open, readAll }: { c: A.Card; open: boolean; readAll?:
 }
 
 /** The ask card's head: the asker's face and name, the status line with the pink dot, the time on the right. */
-function AskHead({ c, who }: { c: A.Card; who: A.Helper | undefined }) {
+/** Every request is Chief's to bring: his face and name, the helper whose job it came from only as context. */
+function AskHead({ c }: { c: A.Card }) {
   const t = useLook();
-  const name = c.helper === 'chief' ? 'Chief' : who?.name ?? c.head;
   return <View style={s.row}>
-    {c.helper === 'chief' ? <Face who="chief" size={28} /> : who ? <Face who={{ ...who, mood: 'ask' }} size={28} /> : null}
+    <Face who="chief" size={28} />
     <View style={{ flex: 1 }}>
-      <T style={{ fontWeight: '500' }}>{name}</T>
+      <T style={{ fontWeight: '500' }}>Chief</T>
       <View style={s.askStatus}><View style={[s.statusDot, { backgroundColor: t.pink }]} /><T tone="ink2" style={s.small}>{c.status}</T></View>
+      {!!c.about && <T tone="mute" style={s.small}>{`About ${c.about}'s job`}</T>}
     </View>
     <T tone="mute" style={s.small}>{A.clock(c.at)}</T>
   </View>;
@@ -941,7 +942,7 @@ function useDraftEdit(c: A.Card) {
   };
 }
 
-function AskCard({ c, who, state, onDone, canAct, offline, open }: { c: A.Card; who: A.Helper | undefined; state: Json; onDone: () => void; canAct: boolean; offline: boolean; open: (c: A.Card) => void }) {
+function AskCard({ c, state, onDone, canAct, offline, open }: { c: A.Card; state: Json; onDone: () => void; canAct: boolean; offline: boolean; open: (c: A.Card) => void }) {
   const [reply, setReply] = useState('');
   const [oops, setOops] = useState(false);
   const last = useRef<Json | null>(null);
@@ -965,14 +966,14 @@ function AskCard({ c, who, state, onDone, canAct, offline, open }: { c: A.Card; 
   const edit = useDraftEdit(c);
   return (
     <Card ask>
-      <AskHead c={c} who={who} />
+      <AskHead c={c} />
       <T style={s.askWords}>{question}</T>
       {edit.box || <AskEvidence c={c} open={false} readAll={<Btn label="Read all" onPress={() => open(c)} />} />}
       {oops && <T tone="pinkInk" style={s.small}>That didn't go through. Try again.</T>}
       {offline ? <T tone="mute" style={s.small}>You can answer once the home computer is back.</T>
         : !canAct ? <T tone="mute" style={s.small}>This phone watches; answer on another phone or the computer.</T> : c.kind === 'connect' ? (
         <View style={{ gap: 8 }}>
-          <T tone="mute" style={s.small}>Finish on the computer: it's waiting in this chat there.</T>
+          <T tone="mute" style={s.small}>Finish on the computer: it's waiting in Chief's chat there.</T>
           <Btn label={`Do it without ${c.app!.name}`} onPress={() => act({ answer: 'deny' })} />
         </View>
       ) : c.kind === 'routine' ? (
@@ -1002,7 +1003,7 @@ function AskCard({ c, who, state, onDone, canAct, offline, open }: { c: A.Card; 
         </>
       ) : c.reply ? (
         <View style={s.row}>
-          <TextInput style={[s.input, { flex: 1, color: t.ink, borderColor: t.line }]} value={reply} onChangeText={setReply} placeholder={`Tell ${who?.name ?? 'them'} what to do`} placeholderTextColor={t.mute} />
+          <TextInput style={[s.input, { flex: 1, color: t.ink, borderColor: t.line }]} value={reply} onChangeText={setReply} placeholder={c.about ? `Tell Chief what ${c.about} should do` : 'Tell Chief what to do'} placeholderTextColor={t.mute} />
           <Btn go label="Send" disabled={!reply.trim()} onPress={() => act({ text: reply.trim() })} />
         </View>
       ) : c.review ? (
@@ -1027,7 +1028,7 @@ function AskCard({ c, who, state, onDone, canAct, offline, open }: { c: A.Card; 
 /** The approval moment, mirroring web/src/parts.tsx AskSheet (§4.4): who, the status, exactly what goes out, and
  *  the choices — full-width buttons, the primary above its way out; a checkout reviews the whole order here, and an
  *  order without a readable total offers no yes at all. */
-function AskSheet({ c, who, chiefSays, canAct, onClose }: { c: A.Card; who: A.Helper | undefined; chiefSays?: string; canAct: boolean; onClose: () => void }) {
+function AskSheet({ c, chiefSays, canAct, onClose }: { c: A.Card; chiefSays?: string; canAct: boolean; onClose: () => void }) {
   const t = useLook();
   const [open, setOpen] = useState(false);
   const [oops, setOops] = useState(false);
@@ -1045,7 +1046,7 @@ function AskSheet({ c, who, chiefSays, canAct, onClose }: { c: A.Card; who: A.He
       <Pressable style={s.scrim} onPress={onClose}>
         <Pressable style={[s.sheet, { backgroundColor: t.surface }]} onPress={() => {}}>
           <View style={[s.grabber, { backgroundColor: t.line2 }]} />
-          <AskHead c={c} who={who} />
+          <AskHead c={c} />
           <T style={s.askQ}>{question}</T>
           {edit.box || <AskEvidence c={c} open={open} readAll={<Btn label="Read all" onPress={() => setOpen(true)} />} />}
           {c.review && c.order && !c.order.known && <T tone="mute" style={s.small}>So nothing is counted against the monthly limit.</T>}
@@ -1070,14 +1071,13 @@ function AskSheet({ c, who, chiefSays, canAct, onClose }: { c: A.Card; who: A.He
 const OUT = 'Out of reach for now';
 const chiefNow = (state: Json, offline: boolean) => (offline ? { mood: 'rest' as const, line: OUT } : A.chief(state));
 function HelperPill({ h, offline }: { h: A.Helper; offline: boolean }) {
-  return offline ? <Pill tone="off">{OUT}</Pill> : <Pill tone={h.ring === 'needs' ? 'wait' : h.ring ? 'ok' : 'off'}>{h.status}</Pill>;
+  return offline ? <Pill tone="off">{OUT}</Pill> : <Pill tone={h.ring === 'working' ? 'ok' : 'off'}>{h.status}</Pill>;
 }
 
-/** Needs you as one compact list: a number, the face, the subject, one plain line; a row opens the review sheet.
+/** Chief's inbox as one compact list: his face, the subject, one plain line; a row opens the review sheet.
  *  Nothing commits from Home. At most three rows, then "N more", which expands in place. */
 function NeedsRows({ state, cards, open, few = 3 }: { state: Json; cards: A.Card[]; open: (c: A.Card) => void; few?: number }) {
   const t = useLook();
-  const crew = A.crew(state);
   const [all, setAll] = useState(false);
   const shown = all ? cards : cards.slice(0, few);
   const more = cards.length - few;
@@ -1086,7 +1086,7 @@ function NeedsRows({ state, cards, open, few = 3 }: { state: Json; cards: A.Card
       {shown.map((c, i) => (
         <Pressable key={c.id} style={[s.listRow, { borderTopWidth: i ? StyleSheet.hairlineWidth : 0, borderTopColor: t.line }]}
           onPress={() => open(c)} accessibilityLabel={c.head}>
-          <Face who={crew.find((h) => h.id === c.helper) ?? { kind: 'pip', name: c.helper }} size={36} />
+          <Face who="chief" size={36} />
           <View style={{ flex: 1 }}><T style={s.rowTitle} lines={1}>{c.head}</T><T tone="ink2" style={s.small} lines={1}>{c.words}</T></View>
           <View style={{ alignItems: 'flex-end', gap: 4 }}><T tone="mute" style={s.time}>{A.briefTime(c.at)}</T><View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: t.pink }} /></View>
         </Pressable>
@@ -1110,7 +1110,7 @@ function HomeBar({ state, view, go, mode, pick }: { state: Json; view: A.OfficeV
   </View>;
   const tools = <View style={[s.row, { justifyContent: 'space-between' }]}>{gear}{seg}</View>;
   const dot = (c: string, ring = false) => <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: ring ? 'transparent' : c, borderWidth: ring ? 1.6 : 0, borderColor: c }} />;
-  const needs = <View style={[s.row, { gap: 6 }]}>{dot(n.needs ? t.fill : t.line2)}<T tone="ink2" style={[s.small, { fontWeight: '500' }]}>{n.needs ? `${n.needs} ${n.needs === 1 ? 'needs' : 'need'} you` : 'Nothing needs you'}</T></View>;
+  const needs = <View style={[s.row, { gap: 6 }]}>{dot(n.needs ? t.fill : t.line2)}<T tone="ink2" style={[s.small, { fontWeight: '500' }]}>{n.needs ? `${n.needs} for you` : 'Nothing for you'}</T></View>;
   const busy = <View style={[s.row, { gap: 6 }]}>{dot(t.ink, true)}<T tone="ink2" style={[s.small, { fontWeight: '500' }]}>{`${n.working} working`}</T></View>;
   const still = !!quiet && <T tone="ink2" style={[s.small, { fontWeight: '500' }]}>{`\u263E ${quiet}`}</T>;
   if (mode === 'chat') return tools;
@@ -1123,7 +1123,7 @@ function HomeBar({ state, view, go, mode, pick }: { state: Json; view: A.OfficeV
   );
 }
 
-/** Needs you pinned over Chief's thread (web/src/main.tsx NeedsPin, flat): one card with the most pressing question,
+/** Chief's inbox pinned over his thread (web/src/main.tsx NeedsPin, flat): one card with the most pressing request,
  *  every other behind an exact "See all N". Home commits nothing: the yes opens the review sheet, Ask Chief fills his
  *  box without sending, Not now moves the card back (or folds the only one under its heading); it stays counted. */
 function NeedsPin({ state, cards, open, go }: { state: Json; cards: A.Card[]; open: (c: A.Card) => void; go: Ctx['go'] }) {
@@ -1135,7 +1135,6 @@ function NeedsPin({ state, cards, open, go }: { state: Json; cards: A.Card[]; op
   const fold = cards.length === 1 && folded === cards[0].id;
   const order = [...cards.filter((c) => !later.includes(c.id)), ...later.map((id) => cards.find((c) => c.id === id)).filter((c): c is A.Card => !!c)];
   const c = order[0];
-  const who = A.crew(state).find((h) => h.id === c.helper), name = who?.name ?? 'Chief';
   const yes = c.choices[0]?.body.answer === 'allow' ? c.choices[0] : null;
   // A known total shows once, in whole dollars when it has no cents ("$412"); the preview's own repeat of it is dropped.
   const shown = c.order?.known ? c.order.shown : '', price = shown.replace(/\.00$/, '');
@@ -1144,24 +1143,25 @@ function NeedsPin({ state, cards, open, go }: { state: Json; cards: A.Card[]; op
   const question = c.question ?? (c.review && c.preview?.head ? c.preview.head : c.words);
   const link = (label: string, onPress: () => void) => <Pressable onPress={onPress} accessibilityRole="button" hitSlop={8}><T style={[s.small, s.b]}>{label}</T></Pressable>;
   return (
-    <View style={[s.card, s.askCard, { backgroundColor: t.solid, borderColor: t.line2, borderWidth: 1, borderRadius: 20, paddingVertical: 14, gap: 10 }]} accessibilityLabel="Needs you">
+    <View style={[s.card, s.askCard, { backgroundColor: t.solid, borderColor: t.line2, borderWidth: 1, borderRadius: 20, paddingVertical: 14, gap: 10 }]} accessibilityLabel="For you, from Chief">
       <View style={[s.row, { justifyContent: 'space-between' }]}>
-        <T style={[s.label, { color: t.pinkInk }]}>{`Needs you \u00B7 ${cards.length}`}</T>
+        <T style={[s.label, { color: t.pinkInk }]}>{`For you \u00B7 ${cards.length}`}</T>
         {cards.length > 1 && link(all ? 'Show less' : `See all ${cards.length}`, () => setAll(!all))}
         {fold && link('Show', () => setFolded(null))}
       </View>
       {!fold && <>
-        <View style={s.row} accessible accessibilityLabel={`${name} needs you: ${c.head}`}>
-          <Ink who={who ? who.kind : 'chief'} mood={who?.mood} size={44} />
+        <View style={s.row} accessible accessibilityLabel={`Chief: ${c.head}`}>
+          <Ink who="chief" size={44} />
           <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+            {!!c.about && <T tone="mute" style={s.small}>{`About ${c.about}'s job`}</T>}
             <T style={[s.serif, { fontSize: 22, lineHeight: 26 }]}>{question}</T>
             {!!detail && <T tone="ink2" style={{ fontSize: 14, lineHeight: 19 }}>{detail}</T>}
           </View>
           {!!price && <T style={[s.serif, { fontSize: 32, lineHeight: 36 }]}>{price}</T>}
         </View>
         <View style={s.chips}>
-          <Btn go label={yes ? yes.label.replace(shown, price) : c.reply ? `Answer ${name}\u2026` : 'Review\u2026'} onPress={() => open(c)} />
-          <Btn label="Ask Chief" onPress={() => { keepDraft('chief', `About ${name}'s question (${c.head}): `); go({ view: 'chief' }); }} />
+          <Btn go label={yes ? yes.label.replace(shown, price) : c.reply ? 'Answer\u2026' : 'Review\u2026'} onPress={() => open(c)} />
+          <Btn label="Ask Chief" onPress={() => { keepDraft('chief', `About ${c.about ? `${c.about}'s job` : 'this'} (${c.head}): `); go({ view: 'chief' }); }} />
           <Btn ghost label="Not now" onPress={() => (cards.length > 1 ? setLater([...later.filter((x) => x !== c.id), c.id]) : setFolded(c.id))} />
         </View>
       </>}
@@ -1170,8 +1170,9 @@ function NeedsPin({ state, cards, open, go }: { state: Json; cards: A.Card[]; op
   );
 }
 
-const BADGE: Partial<Record<A.Seat | 'done', string>> = { needs: '!', chat: '!', working: '', failed: '!', done: '\u2713', resting: 'z' };
-const BADGE_BG: Partial<Record<A.Seat | 'done', string>> = { needs: '#D63A1E', chat: '#D63A1E', failed: '#D63A1E', working: '#1F9D62', done: '#3B6FE0' };
+// No badge calls on the person: a helper waiting on Chief wears a quiet one.
+const BADGE: Partial<Record<A.Seat | 'done', string>> = { waiting: '\u2026', working: '', failed: '!', done: '\u2713', resting: 'z' };
+const BADGE_BG: Partial<Record<A.Seat | 'done', string>> = { failed: '#D63A1E', working: '#1F9D62', done: '#3B6FE0' };
 /** Home's chat opens on Chief (web/src/main.tsx ChiefHero, B1 phone): his whole figure, his own last words in a
  *  bubble, and the crew's faces at the card's foot with a badge each; no caption on the phone. */
 function ChiefHero({ live, state, go }: { live: A.OfficeView; state: Json; go: Ctx['go'] }) {
@@ -1202,17 +1203,17 @@ function ChiefHero({ live, state, go }: { live: A.OfficeView; state: Json; go: C
 /** On it now (B1): a card per helper at work, their face, name and step; honest when nobody is. */
 function OnItNow({ view }: { view: A.OfficeView }) {
   const t = useLook();
-  const working = view.crew.filter((c) => A.seatOf(c) === 'working'), waiting = view.crew.filter(A.waitsOnYou).length;
+  const working = view.crew.filter((c) => A.seatOf(c) === 'working'), waiting = view.crew.filter(A.waitsOnChief).length;
   return <View style={{ gap: 8 }}>
     <View style={[s.row, { justifyContent: 'space-between' }]}><Label>On it now</Label><T tone="mute" style={s.small}>{`${working.length} working`}</T></View>
     {working.length ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{working.map((c) => <View key={c.id} style={[s.listRow, { flexBasis: '47%', flexGrow: 1, minWidth: 0, borderWidth: 1, borderColor: t.line, borderRadius: 16, backgroundColor: t.solid }]}>
       <Face who={{ kind: c.kind, name: c.name, mood: c.mood }} size={34} /><View style={{ flex: 1, minWidth: 0 }}><T style={s.b} lines={1}>{c.name}</T><T tone="ink2" style={s.small} lines={1}>{c.step || c.status}</T></View>
-    </View>)}</View> : <Card><T tone="ink2">{waiting ? `Nobody is working: ${waiting} waiting on you.` : 'Nobody is working right now. The crew is free.'}</T></Card>}
+    </View>)}</View> : <Card><T tone="ink2">{waiting ? `Nobody is working: ${waiting} waiting on Chief.` : 'Nobody is working right now. The crew is free.'}</T></Card>}
   </View>;
 }
 
 /** Home opens on Chat every time the app starts (kept in memory only, never stored): Chief's thread under the bar and
- *  the pinned Needs you. Office is the optional view of the same state; neither view hides Needs you or Chief's box. */
+ *  Chief's pinned inbox. Office is the optional view of the same state; neither view hides his inbox or his box. */
 type HomeMode = 'chat' | 'office';
 const HOME_MODES: [HomeMode, string][] = [['chat', 'Chat'], ['office', 'Office']];
 let homeMode: HomeMode = 'chat';
@@ -1229,13 +1230,13 @@ function Home(ctx: Ctx) {
   const [room, setRoom] = useState(0);
   const [desk, setDesk] = useState<{ c: A.OfficeMember; state: Json } | null>(null);
   const [profile, setProfile] = useState(false);
-  // The bar stays put over Chief's thread; in Office it scrolls with the room, Needs you under it, so the whole room
+  // The bar stays put over Chief's thread; in Office it scrolls with the room, Chief's inbox under it, so the whole room
   // fits between the bar and Chief's box.
-  const pinned = mode === 'office' && needs.length > 0 && <View><Label count={needs.length}>Needs you</Label><ScrollView style={[s.listGroup, { backgroundColor: t.solid, borderColor: t.line, maxHeight: 280, flexGrow: 0 }]} nestedScrollEnabled><NeedsRows state={state} cards={needs} open={open} few={1} /></ScrollView></View>;
+  const pinned = mode === 'office' && needs.length > 0 && <View><Label count={needs.length}>From Chief</Label><ScrollView style={[s.listGroup, { backgroundColor: t.solid, borderColor: t.line, maxHeight: 280, flexGrow: 0 }]} nestedScrollEnabled><NeedsRows state={state} cards={needs} open={open} few={1} /></ScrollView></View>;
   const top = <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4, gap: 10 }}>
     <HomeBar state={state} view={view} offline={offline} go={go} mode={mode} pick={pick} />
   </View>;
-  // Chat: Chief's hero and Needs you stay over his thread, which scrolls on its own to the newest line.
+  // Chat: Chief's hero and his inbox stay over his thread, which scrolls on its own to the newest line.
   if (mode === 'chat') return <View style={{ flex: 1 }}>{top}<Chat {...ctx} id="chief" hero={<View style={{ gap: 12 }}><ChiefHero live={view} state={state} go={go} /><NeedsPin state={state} cards={needs} open={open} go={go} /></View>} /></View>;
   return (
     <View style={{ flex: 1 }}>
@@ -1282,7 +1283,7 @@ function ChiefSheet({ view, state, offline, go, onClose }: Ctx & { view: A.Offic
         <View style={s.row}>
           <Face who="chief" size={60} mood={view.chief.mood} />
           <View style={{ flex: 1 }}><T style={[s.h2, s.serif, { fontSize: 28, lineHeight: 32 }]}>Chief</T><T tone="ink2" style={s.small}>Runs your crew</T>
-            <T style={[s.small, s.b, { color: word === 'Needs you' ? t.pinkInk : word === 'Working' ? t.green : t.ink2 }]}>{word}</T></View>
+            <T style={[s.small, s.b, { color: word === 'Has things for you' ? t.pinkInk : word === 'Working' ? t.green : t.ink2 }]}>{word}</T></View>
           <Btn label="Close" onPress={onClose} />
         </View>
         <ScrollView style={{ flexGrow: 0 }} contentContainerStyle={{ gap: 6 }}>
@@ -1292,7 +1293,7 @@ function ChiefSheet({ view, state, offline, go, onClose }: Ctx & { view: A.Offic
           {computers.map((c) => {
             const k = A.seatOf(c), h = crew.find((x) => x.id === c.id)!;
             return row(c.id, `${c.name}'s computer`, h.driving ? 'You have the wheel' : `Watch ${c.name}`, () => to({ view: 'helper', id: c.id, tab: 'watch' }),
-              <Pill tone={A.waitsOnYou(c) ? 'wait' : k === 'working' ? 'ok' : 'off'}>{offline ? OUT : A.waitsOnYou(c) ? 'Needs you' : k === 'working' ? 'Working' : 'Resting'}</Pill>, <Face who={h} size={36} />);
+              <Pill tone={k === 'working' ? 'ok' : 'off'}>{offline ? OUT : A.waitsOnChief(c) ? A.SEAT_WORDS.waiting : k === 'working' ? 'Working' : 'Resting'}</Pill>, <Face who={h} size={36} />);
           })}
           {made.length > 0 && <Label>Outputs</Label>}
           {made.map((m) => row(String(m.id), m.title, `From ${crew.find((h) => h.id === m.helper)?.name ?? 'the crew'}`, () => to({ view: 'helper', id: m.helper })))}
@@ -1303,12 +1304,10 @@ function ChiefSheet({ view, state, offline, go, onClose }: Ctx & { view: A.Offic
 }
 
 /** A helper's desk, opened from the office: what it is on, its steps with the latest marked now, what it has made for
- *  this job so far, and its question with a Review that opens the same sheet as Needs you — over the desk, as a file
- *  does (iOS won't present a new sheet while this one is still sliding away). Its live screen opens from its chat. */
-function DeskSheet({ desk, state, offline, canAct, go, refresh, onClose }: Ctx & { desk: { c: A.OfficeMember; state: Json }; onClose: () => void }) {
+ *  this job so far and, while it waits, a way to Chief, who holds every request. Its live screen opens from its work. */
+function DeskSheet({ desk, state, offline, canAct, go, onClose }: Ctx & { desk: { c: A.OfficeMember; state: Json }; onClose: () => void }) {
   const t = useLook();
   const reduce = motion.useReduceMotion();
-  const [asking, setAsking] = useState(false);
   const id = desk.c.id;
   // The room's own row (live events included) until the next refresh, then the snapshot again.
   const c = desk.state === state ? desk.c : A.office(state).crew.find((x) => x.id === id);
@@ -1326,28 +1325,25 @@ function DeskSheet({ desk, state, offline, canAct, go, refresh, onClose }: Ctx &
           <Btn label="Close" onPress={onClose} />
         </View>
         <View style={{ flexDirection: 'row' }}>{offline ? <Pill tone="off">{OUT}</Pill>
-          : <Pill tone={A.waitsOnYou(c) ? 'wait' : c.ring ? 'ok' : 'off'}>{A.waitsOnYou(c) ? A.SEAT_WORDS[A.seatOf(c)] : c.ring === 'working' ? 'Working' : c.status}</Pill>}</View>
+          : <Pill tone={c.ring === 'working' ? 'ok' : 'off'}>{A.waitsOnChief(c) ? A.SEAT_WORDS.waiting : c.ring === 'working' ? 'Working' : c.status}</Pill>}</View>
         <ScrollView contentContainerStyle={{ gap: 12 }}>
           {!offline && !!job && <View style={[s.ev, { backgroundColor: t.sunken }]}>
-            <T tone="ink2" style={s.label}>{job.waiting && c.ring !== 'needs' ? 'Up next' : 'Working on'}</T>
+            <T tone="ink2" style={s.label}>{job.waiting && c.ring !== 'waiting' ? 'Up next' : 'Working on'}</T>
             <T style={[s.rowTitle, s.b]}>{job.title}</T>
           </View>}
-          {!offline && c.ask && <Card ask>
-            <T style={s.b}>{c.ask.head}</T>
-            <T tone="ink2" lines={3}>{c.ask.words}</T>
-            <View style={s.chips}><Btn go label="Review" onPress={() => setAsking(true)} /></View>
+          {!offline && A.waitsOnChief(c) && <Card>
+            <T tone="ink2">{`${A.SEAT_WORDS.waiting}: what ${c.name} needs is in Chief's chat.`}</T>
+            <View style={s.chips}><Btn go label="Open Chief" onPress={() => to({ view: 'chief' })} /></View>
           </Card>}
           {!offline && c.steps.length > 0 && <View><Label>Steps</Label><Steps steps={c.steps} /></View>}
           {!offline && c.things.length > 0 && <View><Label>On the desk</Label><Card>{c.things.map((f) => <FileRow key={f.url} f={f} />)}</Card></View>}
-          <Btn big label={`Open ${c.name}'s chat`} onPress={() => to({ view: 'helper', id })} />
+          <Btn big label={`See ${c.name}'s work`} onPress={() => to({ view: 'helper', id })} />
           {/* Their own computer: watching is the default; taking the wheel pauses them until it is handed back. */}
           {!offline && h.computer && desktopAvailable && <View><Label>{`${c.name}'s computer`}</Label><View style={s.chips}>
             <Btn label={`Watch ${c.name}`} onPress={() => to({ view: 'helper', id, tab: 'watch' })} />
             {canAct && <Btn label="Take the wheel" onPress={() => void attempt(async () => { await api.takeOver(id); to({ view: 'helper', id, tab: 'screen' }); })} />}
           </View></View>}
         </ScrollView>
-        {asking && c.ask && <AskSheet c={c.ask} who={h} chiefSays={state.asks.find((a: Json) => a.id === c.ask!.id)?.detail?.chief} canAct={canAct}
-          onClose={() => { setAsking(false); refresh(); }} />}
       </Pressable>
     </Pressable>
   </Modal>;
@@ -1373,11 +1369,11 @@ function JobList({ state, go, refresh }: { state: Json; go: Ctx['go']; refresh: 
   // The gallery hire, then the words in the new helper's own box: nothing starts until they send.
   const hire = async (template: string, ask: string) => {
     const name = state.templates.find((x: Json) => x.id === template)?.display ?? template;
-    await attempt(async () => { const b = await api.recruit(template, name); refresh(); keepDraft(b.id, ask); go({ view: 'helper', id: b.id }, true); }, `${name} joined the crew`);
+    await attempt(async () => { const b = await api.recruit(template, name); refresh(); keepDraft('chief', `${name}: ${ask}`); go({ view: 'chief' }, true); }, `${name} joined the crew`);
   };
   return <View><Label>Hand me a job</Label><View style={[s.listGroup, { backgroundColor: t.solid, borderColor: t.line }]}>
     {A.jobs(state).slice(0, 3).map((j, i) => <Pressable key={j.bot + j.label} style={[s.listRow, { borderTopColor: t.line, borderTopWidth: i ? StyleSheet.hairlineWidth : 0 }]}
-      onPress={() => { if (j.needs.length) go({ view: 'phone' }); else if (j.hire) void hire(j.hire, j.ask); else { keepDraft('chief', j.ask); go({ view: 'chief' }); } }}>
+      onPress={() => { if (j.needs.length) go({ view: 'phone' }); else if (j.hire) void hire(j.hire, j.ask); else { keepDraft('chief', A.forHelper(state, j.bot, j.ask)); go({ view: 'chief' }); } }}>
       <Face who={A.crew(state).find((h) => h.id === j.bot) ?? { kind: 'pip', name: j.bot }} size={28} />
       <View style={{ flex: 1 }}><T style={s.rowTitle} lines={2}>{j.label}</T>{!!j.says && <T tone="mute" style={s.small} lines={1}>{j.says}</T>}{!!j.needs.length && <T tone="mute" style={s.small}>{A.jobNeeds(j.needs)}</T>}</View><T tone="mute">›</T>
     </Pressable>)}
@@ -1386,7 +1382,8 @@ function JobList({ state, go, refresh }: { state: Json; go: Ctx['go']; refresh: 
 
 // ---------- a chat ----------
 /** `hero`: Home's Chief thread (B1): the hero and pinned ask stay above the thread, which opens at its newest line with
- *  the tray's notices among his lines. */
+ *  the tray's notices among his lines. Chief's is the only conversation and holds every open request; a helper's
+ *  thread is a read-only record of its work, reported to Chief, with a way to ask Chief about it (never sent). */
 function Chat({ id, m, state, tick, refresh, canAct, offline, open, writer, hero, go }: Ctx & { id: string; m?: number; hero?: ReactNode }) {
   const t = useLook();
   // The computer's page when it answers; otherwise the lines this phone kept, until it does.
@@ -1406,7 +1403,7 @@ function Chat({ id, m, state, tick, refresh, canAct, offline, open, writer, hero
   const ys = useRef(new Map<number, number>()); // each line's y, for landing on the matched one
   const landed = useRef(0); // the anchor we already landed on: once per line, never again on every tick
 
-  const lines = hero ? A.trayNotes(state, A.lines(page, id)) : A.lines(page, id);
+  const lines = hero ? A.trayNotes(state, A.lines(page, id, state)) : A.lines(page, id, state);
   const phoneOffer = id === 'chief' ? A.phoneOffer(page) : null;
   const echoed = pending && !(page?.messages ?? []).some((x: Json) => x.author === 'person' && x.id > pending.after && A.plain(x.text) === A.plain(pending.text));
   const waiting = pending && !partial && !(page?.messages ?? []).some((x: Json) => x.author === 'bot' && x.id > pending.after);
@@ -1414,13 +1411,14 @@ function Chat({ id, m, state, tick, refresh, canAct, offline, open, writer, hero
   const h = A.crew(state).find((x) => x.id === id);
   const b = state.bots.find((x: Json) => x.id === id);
   const trail = b?.task && page ? A.steps(page.trail ?? [], b.task.id, true) : [];
-  const cards = A.cards(state).filter((c) => c.helper === id);
+  const chief = id === 'chief';
+  const cards = chief ? A.cards(state) : [];
   const last = lines.at(-1);
   const name = h?.name ?? 'Chief';
   // A fresh chat shows starters: nothing yet, or only the hidden "X joined the crew" note from recruiting.
   const fresh = !lines.length || (lines.length === 1 && lines[0].from === 'note' && lines[0].text.startsWith(`${name} joined the crew`));
   // A helper's starters are its own ready rows only, never another helper's; Chief keeps every row.
-  const own = id === 'chief' ? A.ideas(state) : A.ideas(state).filter((i: Json) => i.bot === id);
+  const own = chief ? A.ideas(state) : [];
   // Seen: the chat's unread count goes once its newest line is on screen (a watch-only phone can't mark it).
   const newest = last?.id;
   useEffect(() => { if (canAct && newest && b?.unread) void api.read(id).then(refresh).catch(() => {}); }, [canAct, newest, b?.unread, id, refresh]);
@@ -1472,16 +1470,17 @@ function Chat({ id, m, state, tick, refresh, canAct, offline, open, writer, hero
           <View onLayout={(e) => ys.current.set(l.id, e.nativeEvent.layout.y)}
             style={[s.line, l.from === 'me' && { alignSelf: 'flex-end', maxWidth: '82%' }, l.from === 'note' && { maxWidth: '92%' }]}>
             {l.from !== 'me' && l.from !== 'note' && !(i && lines[i - 1].from === l.from && !l.recap && !lines[i - 1].recap) && <View style={s.row}><Face who={l.from === 'chief' ? 'chief' : h ?? 'chief'} size={28} /><T style={[s.small, s.b]}>{l.from === 'chief' ? 'Chief' : name}</T><T tone="mute" style={s.time}>{l.at ? A.clock(l.at) : ''}</T></View>}
-            {!!l.by && <View style={[s.row, { gap: 8, paddingLeft: 36 }]}><Face who={A.crew(state).find((x) => x.id === l.by) ?? 'chief'} size={20} /><T tone="ink2" style={[s.small, { flex: 1 }]}>{l.text}</T></View>}
-            {!!l.text && !l.by && (l.detail ? <ChiefAsk l={{ text: l.text, detail: l.detail }} /> : l.from === 'me'
+            {!!l.by && l.from === 'note' && <View style={[s.row, { gap: 8, paddingLeft: 36 }]}><Face who={A.crew(state).find((x) => x.id === l.by) ?? 'chief'} size={20} /><T tone="ink2" style={[s.small, { flex: 1 }]}>{l.text}</T></View>}
+            {!!l.text && !(l.by && l.from === 'note') && (l.detail ? <ChiefAsk l={{ text: l.text, detail: l.detail }} /> : l.from === 'me'
               ? <View style={[s.bubbleText, { backgroundColor: t.go, borderBottomRightRadius: 6 }]}><Theme.Provider value={mine}><ChatText text={l.text} /></Theme.Provider></View>
               : <View style={[{ paddingLeft: 36 }, (l.unsure || l.failed) && { borderLeftWidth: 2, borderLeftColor: t.amber, marginLeft: 36, paddingLeft: 12 }]}><ChatText text={l.text} /></View>)}
             {!l.text && !!l.about && <View style={{ paddingLeft: 36 }}><ChatText text={l.about} /></View>}
             {l.files.map((f) => <Card key={f.url}><FileRow f={f} /></Card>)}
-            {l.done && <View style={[s.row, { paddingLeft: 36 }]}><T style={[s.small, { flex: 1, color: t.green, fontWeight: '600' }]}>✓ Done</T>
-              {!offline && h?.computer && desktopAvailable && <Btn ghost label={`Watch ${name}`} onPress={() => go({ view: 'helper', id, tab: 'watch' })} />}</View>}
+            {l.done && (() => { const w = l.by ? A.crew(state).find((x) => x.id === l.by) : h; // on Chief's line: the helper it passes on
+              return <View style={[s.row, { paddingLeft: 36 }]}><T style={[s.small, { flex: 1, color: t.green, fontWeight: '600' }]}>✓ Done</T>
+                {!offline && w?.computer && desktopAvailable && <Btn ghost label={`Watch ${w.name}`} onPress={() => go({ view: 'helper', id: w.id, tab: 'watch' })} />}</View>; })()}
             {phoneOffer?.message === l.id && <PhoneCard offer={phoneOffer} reload={() => void load()} />}
-            {cards.filter((c) => lines.findLastIndex((x) => (x.at ?? 0) <= c.at) === i).map((c) => <AskCard key={c.id} c={c} who={h} state={state} onDone={refresh} canAct={canAct} offline={offline} open={open} />)}
+            {cards.filter((c) => lines.findLastIndex((x) => (x.at ?? 0) <= c.at) === i).map((c) => <AskCard key={c.id} c={c} state={state} onDone={refresh} canAct={canAct} offline={offline} open={open} />)}
           </View></motion.Rise></View>
         )}
         {echoed && <motion.Rise reduce={reduce}><View style={[s.line, s.bubbleText, { alignSelf: 'flex-end', maxWidth: '82%', backgroundColor: t.go, borderBottomRightRadius: 6 }]}><T style={{ color: t.goInk }}>{pending.text}</T></View></motion.Rise>}
@@ -1489,10 +1488,15 @@ function Chat({ id, m, state, tick, refresh, canAct, offline, open, writer, hero
           <View style={s.typing}>{[0, 1, 2].map((k) => <View key={k} style={[s.typingDot, { backgroundColor: t.ink2, opacity: reduce ? 0.6 : beat % 3 === k ? 1 : 0.3, transform: [{ translateY: !reduce && beat % 3 === k ? -3 : 0 }] }]} />)}</View>
         </View></motion.Rise>}
         {!!partial && <View style={s.line} accessibilityLiveRegion="polite">{who(id)}<View style={{ paddingLeft: 36 }}><T>{partial}<Text style={{ color: t.pink, opacity: reduce || beat % 2 === 0 ? 1 : 0 }}> ▍</Text></T></View></View>}
-        {canAct && !!last?.choices.length && <View style={s.chips}>{last.choices.map((c) => <Btn key={c} label={c} onPress={() => send(c)} />)}</View>}
-        {cards.filter((c) => !lines.length || lines.every((x) => (x.at ?? 0) > c.at)).map((c) => <AskCard key={c.id} c={c} who={h} state={state} onDone={refresh} canAct={canAct} offline={offline} open={open} />)}
+        {chief && canAct && !!last?.choices.length && <View style={s.chips}>{last.choices.map((c) => <Btn key={c} label={c} onPress={() => send(c)} />)}</View>}
+        {cards.filter((c) => !lines.length || lines.every((x) => (x.at ?? 0) > c.at)).map((c) => <AskCard key={c.id} c={c} state={state} onDone={refresh} canAct={canAct} offline={offline} open={open} />)}
       </ScrollView>
-      {canAct || writer ? <View style={[s.dock, !!hero && { backgroundColor: t.bg }]}><Composer key={seed} placeholder={id === 'chief' ? 'Ask Chief anything' : `Message ${name}…`} onSend={send} chat={id} away={offline} /></View>
+      {!chief ? <View style={[s.dock, { gap: 8 }]}>
+          {h?.ring === 'waiting' && <Pressable onPress={() => go({ view: 'chief' })} accessibilityRole="button" style={s.row}><T tone="ink2" style={[s.small, { flex: 1 }]}>{A.SEAT_WORDS.waiting}</T><T tone="mute">›</T></Pressable>}
+          <View style={s.row}><T tone="mute" style={[s.small, { flex: 1 }]}>{`${name}'s work, as reported to Chief.`}</T>
+            {(canAct || writer) && <Btn label="Ask Chief about this" onPress={() => { keepDraft('chief', `About ${name}'s job${b?.task ? ` “${A.plain(b.task.title)}”` : ''}: `); go({ view: 'chief' }); }} />}</View>
+        </View>
+        : canAct || writer ? <View style={[s.dock, !!hero && { backgroundColor: t.bg }]}><Composer key={seed} placeholder="Ask Chief anything" onSend={send} chat={id} away={offline} /></View>
         : <T tone="mute" style={[s.small, { padding: 16 }]}>{offline ? "You can reply once the home computer is back." : "This phone watches the crew; it can't send messages."}</T>}
     </View>
   );
@@ -1584,7 +1588,7 @@ function HelperPage(ctx: Ctx & { id: string; tab: string; m?: number; setTab: (t
         <Head onBack={() => setTab('chat')}>
           <Face who={h} size={64} />
           <View style={{ flex: 1 }}><T style={s.b}>{h.name}</T><T tone="mute" style={s.small} lines={2}>{h.role}</T></View>
-          <Btn ghost label="Chat" onPress={() => setTab('chat')} />
+          <Btn ghost label="Work" onPress={() => setTab('chat')} />
         </Head>
         <ScrollView contentContainerStyle={{ padding: 16, gap: 10 }}>
           {screenFirst && screen}
@@ -1794,29 +1798,26 @@ function RoutineRow({ r, h, act, go, canAct }: { r: Json; h: A.Helper | undefine
   );
 }
 
-/** Something shared from another app (a photo of the school poster, a link, some text): who should have it, and a word. */
-function ShareIn({ state, shared, onDone, go, to: first = 'chief' }: { state: Json; shared: { text: string; files: { path: string; mimeType: string }[] }; onDone: () => void; go: Ctx['go']; to?: string }) {
+/** Something shared from another app (a photo of the school poster, a link, some text): always to Chief, with a word.
+ *  `to`, a helper the bubble picked for it, only leads the words ("Scout: …") so Chief hands it on; the person still
+ *  sees and sends it. */
+function ShareIn({ state, shared, onDone, go, to }: { state: Json; shared: { text: string; files: { path: string; mimeType: string }[] }; onDone: () => void; go: Ctx['go']; to?: string }) {
   const t = useLook();
-  const [to, setTo] = useState(first);
-  const [text, setText] = useState(shared.text);
+  const helper = A.crew(state).find((h) => h.id === to);
+  const [text, setText] = useState(helper && shared.text ? `${helper.name}: ${shared.text}` : shared.text);
   const [pics, setPics] = useState<Photo[] | null>(null);
   useEffect(() => {
     const images = shared.files.filter((f) => f.mimeType.startsWith('image/')).slice(0, 4);
     void Promise.all(images.map((f) => shrink(f.path.startsWith('file:') || f.path.startsWith('content:') ? f.path : `file://${f.path}`))).then(setPics, () => setPics([]));
   }, []);
-  const crew = A.crew(state);
   const send = () => attempt(async () => {
-    await api.post(to, text.trim(), (pics ?? []).map(({ type, data }) => ({ type, data })));
+    await api.post('chief', (helper && !text.trim() ? `${helper.name}: ` : '') + text.trim(), (pics ?? []).map(({ type, data }) => ({ type, data })));
     onDone();
-    go(to === 'chief' ? { view: 'chief' } : { view: 'helper', id: to });
+    go({ view: 'chief' });
   }, 'Sent');
   return (
-    <Page title="Send this to…" lead={first === 'chief' ? 'Chief will see it into the right hands, or pick a helper yourself.' : 'Send it as it is, or pick someone else.'}>
+    <Page title="Send this to Chief" lead={helper ? `Chief will hand it to ${helper.name}.` : 'Chief will see it into the right hands.'}>
       {pics === null ? <ActivityIndicator color={t.pink} /> : pics.length > 0 && <View style={{ flexDirection: 'row', gap: 6 }}>{pics.map((p) => <Image key={p.uri} source={{ uri: p.uri }} style={{ width: 72, height: 72, borderRadius: 12 }} />)}</View>}
-      <View style={s.chips}>
-        <Btn label="Chief" go={to === 'chief'} onPress={() => setTo('chief')} />
-        {crew.map((h) => <Btn key={h.id} label={h.name} go={to === h.id} onPress={() => setTo(h.id)} />)}
-      </View>
       <TextInput style={[s.input, { color: t.ink, borderColor: t.line, minHeight: 80 }]} value={text} onChangeText={setText} multiline placeholder="What should they do with it? For example: put this in the calendar" placeholderTextColor={t.mute} accessibilityLabel="What should they do with it" />
       <View style={s.chips}>
         <Btn go label="Send" disabled={pics === null || (!text.trim() && !pics.length)} onPress={send} />

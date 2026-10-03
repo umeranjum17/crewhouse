@@ -65,7 +65,7 @@ b { font-weight: 600; }
 .status-word { display: inline-flex; align-items: center; gap: 7px; color: var(--ink2); font-size: 13px; white-space: nowrap; }
 .status-word i { width: 6px; height: 6px; border-radius: 50%; background: var(--mute); }
 .status-word i.working { background: var(--ok); }
-.status-word i.needs { background: var(--pink); }
+.status-word i.waiting { background: none; box-shadow: inset 0 0 0 1.6px var(--ink2); }
 .starter-row { min-height: 68px; }
 .starter-name { width: 100%; border: 0; border-radius: 0; background: transparent; padding: 0; font: 500 15px/22px var(--ui); outline-offset: 3px; }
 .thing-list { padding-top: 0; padding-bottom: 0; }
@@ -93,7 +93,8 @@ b { font-weight: 600; }
 .halo { display: grid; place-items: center; padding: 18px; border-radius: 50%; background: var(--soft); }
 .face { border-radius: 50%; display: inline-grid; place-items: center; flex: none; position: relative; }
 .face.working::after, .face.needs::after { content: ''; position: absolute; inset: 0; border: 2px solid var(--ok); border-radius: 50%; box-shadow: 0 0 0 2px var(--bg) inset; pointer-events: none; }
-.face.needs::after { border-color: var(--pink); }
+.face.needs::after { border-color: var(--pink); } /* Chief only: he has things for you */
+.face.waiting::after { content: ''; position: absolute; inset: 0; border: 2px dashed var(--line2); border-radius: 50%; pointer-events: none; }
 .face.add { background: transparent; border: 2px dashed var(--shadow); color: var(--mute); font-size: 24px; }
 .logo { display: inline-flex; gap: 8px; align-items: center; font: 600 15px/22px var(--ui); letter-spacing: -.01em; }
 .laptop { font-size: 9px; color: var(--mute); margin-top: -10px; }
@@ -140,6 +141,7 @@ textarea.input { resize: vertical; }
 .ask-head b { font-weight: 500; }
 .ask-status { display: flex; gap: 6px; align-items: center; font: 400 13px/18px var(--ui); color: var(--ink2); }
 .ask-status i { width: 6px; height: 6px; border-radius: 50%; background: var(--pink); flex: none; }
+.ask-about { font: 400 12px/16px var(--ui); color: var(--mute); }
 .ask-words { font: 600 17px/24px var(--ui); letter-spacing: -.01em; margin: 10px 0 0; }
 .sheet .ask-words { font-size: 20px; line-height: 26px; }
 .clamp3, .clamp4 { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; }
@@ -312,6 +314,8 @@ video.media { width: auto; max-width: 100%; max-height: 360px; height: auto; obj
 a.back:not([aria-label]) { font: 500 15px/20px var(--ui); padding: 0 8px; margin-bottom: 6px; justify-content: flex-start; }
 .chat { display: flex; flex-direction: column; min-height: calc(100dvh - 190px); }
 .chat > .dock { margin-left: -16px; margin-right: -16px; }
+.report-dock { display: flex; gap: 12px; align-items: center; }
+.waiting-chief { display: block; color: var(--ink2); text-decoration: none; }
 .lines { flex: 1; display: flex; flex-direction: column; padding-bottom: 6px; }
 .line { max-width: 560px; margin-top: 20px; }
 .line.consecutive { margin-top: 12px; }
@@ -771,8 +775,8 @@ details.card[open] > summary { margin-bottom: 10px; }
 .o-cap b { font: 600 11.5px/14px var(--ui); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .o-cap span { display: flex; align-items: center; justify-content: center; gap: 4px; font: 500 10.5px/13px var(--ui); color: var(--mute); max-width: 100%; }
 .o-cap i { display: none; width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--line2); }
-.o-cap.needs, .o-cap.chat { background: var(--soft-accent); } .o-cap.needs span, .o-cap.chat span { color: var(--pink-ink); }
-.o-cap.needs i, .o-cap.chat i { background: var(--pink); } .o-cap.working i { background: none; box-shadow: inset 0 0 0 1.6px var(--ink); } .o-cap.done i, .o-cap.here i { background: var(--ink); }
+.o-cap.needs { background: var(--soft-accent); } .o-cap.needs span { color: var(--pink-ink); }
+.o-cap.needs i { background: var(--pink); } .o-cap.waiting i { background: none; box-shadow: inset 0 0 0 1.6px var(--ink2); } .o-cap.working i { background: none; box-shadow: inset 0 0 0 1.6px var(--ink); } .o-cap.done i, .o-cap.here i { background: var(--ink); }
 .o-cap.failed i { background: var(--danger); }
 .o-room.wide .o-cap { padding: 12px 6px; } .o-room.wide .o-cap b { font-size: 14px; line-height: 18px; } .o-room.wide .o-cap span { font-size: 12.5px; line-height: 16px; } .o-room.wide .o-cap i { display: inline-block; }
 
@@ -857,7 +861,7 @@ details.card[open] > summary { margin-bottom: 10px; }
   .feed-ask .composer { box-shadow: none; }
   .side-seat { display: flex; gap: 5px; align-items: center; font: 500 12px/16px var(--ui); color: var(--ink2); }
   .side-seat i { width: 6px; height: 6px; border-radius: 50%; background: var(--line2); flex: none; }
-  .side-seat.needs i, .side-seat.chat i { background: var(--pink); }
+  .side-seat.waiting i { background: none; box-shadow: inset 0 0 0 1.6px var(--ink2); }
   .side-seat.working i, .side-seat.done i { background: var(--ok); }
   .side-seat { min-width: 0; }
   .side-seat.failed i { background: var(--danger); }
@@ -977,7 +981,6 @@ h1 { font: 400 32px/36px var(--serif); letter-spacing: -.005em; }
   .side-row .face { flex: none; }
   .side-row b { font-weight: 500; }
   .side-row .side-seat { flex: none; max-width: 52%; font: 400 12px/16px var(--ui); color: var(--mute); }
-  .side-row .side-seat.needs, .side-row .side-seat.chat { color: var(--pink-ink); font-weight: 600; }
   .side-seat.working i { background: none; box-shadow: inset 0 0 0 1.6px var(--ink); } .side-seat.done i { background: var(--ink); }
   .side-me { display: flex; align-items: center; gap: 10px; margin: 12px 0 0; padding: 12px 10px 0; border-top: 1px solid var(--line); color: var(--mute); text-decoration: none; }
   .side-me .grow { display: grid; } .side-me b { font: 600 14px/18px var(--ui); color: var(--ink); } .side-me .grow > span { font: 400 12px/16px var(--ui); }
@@ -1015,7 +1018,7 @@ h1 { font: 400 32px/36px var(--serif); letter-spacing: -.005em; }
   .home-greet .nm i { display: inline-block; max-width: calc(100% - 200px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; padding-right: .1em; }
 }
 
-/* The pinned Needs-you card (B1 polish .ask): serif who-needs-you, the evidence's first lines over a hairline, the
+/* Chief's pinned inbox card (B1 polish .ask): his serif head, whose job as a quiet line, the evidence's first lines over a hairline, the
    page's own money in serif, then the yes (it opens the review), Ask Chief and Not now. */
 .needs-big { display: block; padding: 16px; background: var(--solid); border: 1px solid var(--line2); border-radius: 20px; box-shadow: 0 1px 2px rgba(20, 26, 42, .04), 0 14px 32px -22px rgba(20, 26, 42, .32); }
 .nb-top { display: flex; gap: 12px; align-items: flex-start; }
@@ -1054,7 +1057,7 @@ h1 { font: 400 32px/36px var(--serif); letter-spacing: -.005em; }
 .ch-crew { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .ch-face { position: relative; display: grid; border-radius: 50%; box-shadow: 0 0 0 1px var(--line2); text-decoration: none; }
 .ch-badge { position: absolute; right: -3px; bottom: -3px; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; font: 700 10px/1 var(--ui); font-style: normal; color: #fff; border: 2px solid var(--solid); background: var(--mute); }
-.ch-badge.needs, .ch-badge.chat, .ch-badge.failed { background: #D63A1E; }
+.ch-badge.failed { background: #D63A1E; }
 .ch-badge.working { background: #1F9D62; }
 .ch-badge.done { background: #3B6FE0; }
 .ch-more { font: 600 13px/1 var(--ui); color: var(--ink2); text-decoration: none; padding: 0 4px; }

@@ -6,7 +6,7 @@ import { createPortal } from 'react-dom';
 import { api, demo, trouble, type Json } from './api.ts';
 import * as A from './adapter.ts';
 import * as art from './art.ts';
-import { AiMark, attempt, ChiefArt, Dots, Face, Laptop, Pill, toast, useDialogOwn } from './parts.tsx';
+import { AiMark, AskHead, attempt, ChiefArt, Dots, Face, Laptop, Pill, toast, useDialogOwn } from './parts.tsx';
 
 type Phase = 'opening' | 'waiting' | 'code' | 'done' | 'work' | 'busy' | 'cancelled' | 'unticked' | 'expired' | 'failed' | 'offline' | 'unavailable' | 'house';
 /** ?demo&phase=expired pins a flow to one state, for design review and screenshots. */
@@ -252,21 +252,16 @@ export function ConnectApp({ app, helper, state, tab: first, ask, onConnected, o
   );
 }
 
-/** The in-chat offer, only when a task needs the app: one ask card (§4.4, connect). "Connect {App}" opens the app's
+/** The offer in Chief's chat, only when a task needs the app: one ask card (§4.4, connect), Chief's like every request. "Connect {App}" opens the app's
  *  page in that tap. */
 export function ConnectCard({ c, helper, state, onDone }: { c: A.Card; helper?: string; state: Json; onDone: () => void }) {
   const [open, setOpen] = useState<Window | null | false>(sheet === 'connect' ? null : false);
   const app = c.app!;
-  const who = A.crew(state).find((x) => x.id === c.helper);
   const no = () => api.answer(c.id, { answer: 'deny' }).then(onDone, () => toast("Can't reach the home computer right now."));
   const yes = () => void api.answer(c.id, { answer: 'allow' }).catch(() => {}).then(onDone);
   return (
     <div className="card ask">
-      <div className="ask-head">
-        {who ? <Face who={{ ...who, mood: 'ask' }} size={28} /> : <span className="app-ic" style={{ background: app.bg }}>{app.mark}</span>}
-        <div className="grow"><b>{who?.name ?? helper ?? 'The crew'}</b><div className="ask-status"><i />{c.status}</div></div>
-        <time className="mute small">{A.clock(c.at)}</time>
-      </div>
+      <AskHead c={c} />
       <p className="ask-words">{c.words}</p>
       {app.warns && <p className="warn-line">Google shows a warning for apps it hasn't reviewed — a personal app always gets it. Tap <b>Advanced</b>, then <b>Go to Crewhouse</b>.</p>}
       <div className="btns">

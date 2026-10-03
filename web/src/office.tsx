@@ -1,10 +1,11 @@
 // The office on Home (B1 Studio): Chief and the crew on one floor, side on, each posed at what they are doing. The phone
 // draws the same room (mobile/src/office.tsx). A.floorPlan (web/src/adapter.ts) stands five helpers in roster order
-// (whoever waits on you first, Chief just after them) and the strip's "+N" counts the rest (the rail names them all).
-// Every word and count comes from A.office, the one state source Home's header, tray, rail and Needs you also read; the
-// one accent pill sits over the most urgent question that is in Needs you, and the Tray bubble counts what is done.
-// Nothing is decided here: a question opens its review sheet, a helper opens their panel (the "Home commits nothing"
-// rule). Motion is CSS: each member wears a calm loop for their status (styles.css, paused off screen), a helper hops
+// (whoever waits on Chief first, Chief just after them) and the strip's "+N" counts the rest (the rail names them all).
+// Every word and count comes from A.office, the one state source Home's header, tray, rail and Needs you also read.
+// Chief is the only one who asks the person anything: the one accent pill is his, over everything open (A.chiefAsks),
+// and a helper only ever waits on Chief. The Tray bubble counts what is done.
+// Nothing is decided here: the pill opens the most urgent review sheet, a helper opens their panel (the "Home commits
+// nothing" rule). Motion is CSS: each member wears a calm loop for their status (styles.css, paused off screen), a helper hops
 // once when their news lands, a done page travels to the tray; Reduce Motion shows the poses and end states only.
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
@@ -12,6 +13,7 @@ import { api, type Json } from './api.ts';
 import * as A from './adapter.ts';
 import * as art from './art.ts';
 import { room as ROOM } from './tokens.ts';
+import { keepDraft } from './draft.ts';
 import { attempt, Face, Icon, Media, Pill, Steps, useDialogOwn } from './parts.tsx';
 
 // Live events reach the room straight from the socket the shell already holds (main.tsx): a step swaps the bubble
@@ -22,13 +24,11 @@ export const hear = (e: Json) => ears.forEach((f) => f(e));
 const go = (hash: string) => { location.hash = hash; };
 const reduced = () => typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-type Tone = { cls: string; pill: 'ok' | 'wait' | 'off' };
-const TONES: Record<A.Seat, Tone> = { needs: { cls: 'needs', pill: 'wait' }, chat: { cls: 'needs', pill: 'wait' }, working: { cls: 'work', pill: 'ok' },
-  failed: { cls: 'failed', pill: 'wait' }, next: { cls: 'next', pill: 'off' }, resting: { cls: 'free', pill: 'off' }, free: { cls: 'free', pill: 'off' } };
-const tone = (c: A.OfficeMember) => TONES[A.seatOf(c)];
+// A helper waiting on Chief is a calm state, never the accent: only Chief's own count wears it.
+const TONES: Record<A.Seat, 'ok' | 'wait' | 'off'> = { waiting: 'off', working: 'ok', failed: 'wait', next: 'off', resting: 'off', free: 'off' };
 const said = (c: A.OfficeMember) => {
   const k = A.seatOf(c);
-  return k === 'needs' ? `${c.name} needs you: ${c.ask!.head}` : k === 'working' ? `${c.name}, working on ${c.status}` : k === 'free' || k === 'resting' ? `${c.name}, ${c.status.toLowerCase()}` : `${c.name}, ${A.SEAT_WORDS[k].toLowerCase()}`;
+  return k === 'waiting' ? `${c.name}, waiting on Chief` : k === 'working' ? `${c.name}, working on ${c.status}` : k === 'free' || k === 'resting' ? `${c.name}, ${c.status.toLowerCase()}` : `${c.name}, ${A.SEAT_WORDS[k].toLowerCase()}`;
 };
 
 const KIND_WORDS: Record<A.FileView['kind'], string> = { image: 'a picture', video: 'a video', sheet: 'a spreadsheet', page: 'a document', doc: 'a file' };
@@ -50,13 +50,6 @@ export function useOffice(state: Json, offline = false): A.OfficeView | null {
 
 export function Office({ state, live, night }: { state: Json; live: A.OfficeView; night: boolean }) {
   const roles = useMemo(() => new Map(A.crew(state).map((h) => [h.id, h])), [state]);
-  // Every question a helper has open, the one that matters most first (A.askRank), for their panel.
-  const asks = useMemo(() => {
-    const by = new Map<string, A.Card[]>();
-    for (const c of live.needs) by.set(c.helper, [...(by.get(c.helper) ?? []), c]);
-    for (const l of by.values()) l.sort((a, b) => A.askRank(a) - A.askRank(b));
-    return by;
-  }, [live]);
   const crew = live.crew;
   const [open, setOpen] = useState<string | null>(null);
   const [profile, setProfile] = useState(false);
@@ -94,23 +87,18 @@ export function Office({ state, live, night }: { state: Json; live: A.OfficeView
 
   const r = night ? ROOM.night : ROOM.day;
   const vars = { '--r-wall': r.wall, '--r-floor': r.floor, '--r-desk': r.desk, '--r-edge': r.edge, '--r-screen': r.screen, '--r-sofa': r.sofa, '--r-window': r.window } as CSSProperties;
-  const chiefAsk = A.chiefAsks(live).sort((a, b) => A.askRank(a) - A.askRank(b))[0];
-  // One floor, left to right in the roster's order (whoever waits on you, then working, then the rest, resting last),
-  // Chief standing just after whoever waits on you.
+  // Everything open is Chief's to bring (A.chiefAsks), the one that matters most first (money, then your name, then the rest).
+  const asks = A.chiefAsks(live), chiefAsk = [...asks].sort((a, b) => A.askRank(a) - A.askRank(b))[0];
+  // One floor, left to right in the roster's order (whoever waits on Chief, then working, then the rest, resting last),
+  // Chief standing just after whoever waits on him.
   const plan = A.floorPlan(crew);
-  const waits = plan.seats.filter(A.waitsOnYou).length;
+  const waits = plan.seats.filter(A.waitsOnChief).length;
   const order: (A.OfficeMember | 'chief')[] = [...plan.seats.slice(0, waits), 'chief', ...plan.seats.slice(waits)];
   const trayText = `Tray · ${live.counts.done}`;
   const { spots, s, X, Y, tight, bubble, trayX } = lay(order, live, trayText);
   const spotOf = (m: A.OfficeMember | 'chief') => spots.find((p) => p.m === m)!;
-  // One accent pill, over whoever's question matters most (money, then your name, then the rest; Chief's own last).
-  const urgent = plan.seats.filter((c) => c.ask).sort((a, b) => A.askRank(a.ask!) - A.askRank(b.ask!))[0];
-  const chat = plan.seats.find((c) => A.seatOf(c) === 'chat');
-  const pill = urgent && (!chiefAsk || A.askRank(urgent.ask!) <= A.askRank(chiefAsk))
-    ? { m: urgent as A.OfficeMember | 'chief', href: `#/ask/${urgent.ask!.id}`, label: `Review what ${urgent.name} needs: ${urgent.ask!.head}` }
-    : chiefAsk ? { m: 'chief' as const, href: `#/ask/${chiefAsk.id}`, label: `Review what Chief needs: ${chiefAsk.head}` }
-    : chat ? { m: chat as A.OfficeMember | 'chief', href: `#/h/${chat.id}`, label: `Reply to ${chat.name} in their chat` }
-    : null;
+  // One accent pill, only ever over Chief: how many things he has for you, opening the one that matters most.
+  const forYou = `${asks.length} for you`;
   const more = plan.more.length, moreBusy = plan.more.filter((c) => A.seatOf(c) === 'working').length;
   const id = useId().replace(/:/g, '');
   const Y0 = wide ? -34 : 0, H = tight ? G + 27 : 210;   // a packed row's Tray caption sits in the floor band under its box
@@ -127,20 +115,20 @@ export function Office({ state, live, night }: { state: Json; live: A.OfficeView
           <Scene id={id} wide={wide} />
           <g transform={`translate(${X(0)} ${G}) scale(${s}) translate(0 ${-G})`}>
             {order.map((m) => m === 'chief'
-              ? <Seat key="chief" spot={spotOf(m)} id={id} kind="chief" pose={art.poseOf(live.chief.mood)} seat={chiefAsk ? 'needs' : live.chief.mood === 'work' ? 'working' : 'free'} beat={live.chief.mood}
+              ? <Seat key="chief" spot={spotOf(m)} id={id} kind="chief" pose={art.poseOf(live.chief.mood)} seat={chiefAsk ? 'for-you' : live.chief.mood === 'work' ? 'working' : 'free'} beat={live.chief.mood}
                   label={`Chief: ${live.chief.line}`} onOpen={() => setProfile(true)} />
-              : <Seat key={m.id} spot={spotOf(m)} id={id} kind={m.kind} pose={art.poseOf(m.mood)} seat={A.seatOf(m)} second={m.second} dataId={m.id} beat={`${m.ring}|${m.mood}|${m.things.length}|${m.ask?.id ?? ''}`}
+              : <Seat key={m.id} spot={spotOf(m)} id={id} kind={m.kind} pose={art.poseOf(m.mood)} seat={A.seatOf(m)} second={m.second} dataId={m.id} beat={`${m.ring}|${m.mood}|${m.things.length}`}
                   label={said(m) + (m.things.length ? `, made ${m.things.map((f) => KIND_WORDS[f.kind]).join(', ')}` : '')} onOpen={() => setOpen(m.id)} />)}
             <TrayBox x={trayX} n={live.counts.done} />   {/* in front of the figures, as the mock draws it: never hidden by a desk or a body */}
           </g>
           <Tag key={live.counts.done} x={X(trayX)} left={bubble} y={tight ? G + 7 : Y(G - 64)} below={tight} text={trayText} tail cls={`o-tray${trayWas.current !== undefined && trayWas.current !== live.counts.done ? ' bump' : ''}`} href="#/things" label={`Your tray: ${live.counts.done} done today`} />
-          {pill && <Tag x={X(spotOf(pill.m).x)} y={pill.m === 'chief' ? Y(G - 80.8) - 14 : Y(102)} text={A.SEAT_WORDS.needs} hot href={pill.href} label={pill.label} />}
+          {chiefAsk && <Tag x={X(spotOf('chief').x)} y={Y(G - 80.8) - 14} text={forYou} hot href={`#/ask/${chiefAsk.id}`} label={`Chief has ${forYou}: ${chiefAsk.head}`} />}
         </svg>
         <div className="o-strip" style={{ ['--n' as string]: order.length + (more ? 1 : 0) }}>
           {order.map((m) => {
-            const k = m === 'chief' ? (chiefAsk ? 'needs' : live.chief.mood === 'work' ? 'working' : 'here') : stripSeat(m, live);
+            const k = m === 'chief' ? (chiefAsk ? 'for-you' : live.chief.mood === 'work' ? 'working' : 'here') : stripSeat(m, live);
             const name = m === 'chief' ? 'Chief' : m.name;
-            return <button key={m === 'chief' ? 'chief' : m.id} className={`o-cap ${k}`} onClick={() => (m === 'chief' ? setProfile(true) : setOpen(m.id))}
+            return <button key={m === 'chief' ? 'chief' : m.id} className={`o-cap ${k === 'for-you' ? 'needs' : k}`} onClick={() => (m === 'chief' ? setProfile(true) : setOpen(m.id))}
               aria-label={m === 'chief' ? `Chief: ${A.chiefWord(live)}` : said(m)}><b>{name}</b><span><i />{STRIP[k]}</span></button>;
           })}
           {more > 0 && <a className="o-cap o-more" data-more={more} href="#/crew" aria-label={`${more} more of the crew${moreBusy ? `, ${moreBusy} working` : ''}: see everyone`}><b>+{more}</b><span>{moreBusy ? `${moreBusy} working` : 'more'}</span></a>}
@@ -148,14 +136,15 @@ export function Office({ state, live, night }: { state: Json; live: A.OfficeView
       </div>
       {profile && createPortal(<ChiefSheet live={live} state={state} roles={roles} onClose={() => setProfile(false)} />, document.body)}
       {open && crew.some((c) => c.id === open) && createPortal(<HelperSheet c={crew.find((c) => c.id === open)!} h={roles.get(open)} state={state}
-        asks={asks.get(open) ?? []} onClose={() => setOpen(null)} />, document.body)}
+        onClose={() => setOpen(null)} />, document.body)}
     </section>
   );
 }
 
-/** The strip's word for each figure, short enough for a sixth of a phone: waiting on you is one word whatever it is. */
-type StripSeat = A.Seat | 'done' | 'here';
-const STRIP: Record<StripSeat, string> = { needs: 'needs you', chat: 'needs you', working: 'working', failed: 'stuck', next: 'up next', resting: 'resting', free: 'free', done: 'done', here: 'here' };
+/** The strip's word for each figure, short enough for a sixth of a phone: a helper waiting on Chief just "waiting", and
+ *  "for you" only ever under Chief. */
+type StripSeat = A.Seat | 'done' | 'here' | 'for-you';
+const STRIP: Record<StripSeat, string> = { 'for-you': 'for you', waiting: 'waiting', working: 'working', failed: 'stuck', next: 'up next', resting: 'resting', free: 'free', done: 'done', here: 'here' };
 const stripSeat = (c: A.OfficeMember, v: A.OfficeView): StripSeat => { const r = A.railWord(c, v); return r.seat; };
 
 /** The room itself: wall, floor line, a shelf with a plant, the night window and a clock (B1 Studio). */
@@ -177,31 +166,31 @@ function Scene({ id, wide }: { id: string; wide: boolean }) {
 }
 
 /** Each figure stands at a station drawn for what they are doing (the B1 Studio scene, recipe/b1-staging-v3-office.html):
- *  waiting on you at a writing desk with a raised pen, working at a desk under a playing screen (Scribe writes a sheet
+ *  waiting on Chief calmly at a desk with a note, working at a desk under a playing screen (Scribe writes a sheet
  *  instead), stuck at a screen with a "!", done by the tray, resting asleep on a cushion, anyone else standing by.
  *  PAD is the room each takes left and right of where they stand, the mock's own spacing. */
-type Station = 'needs' | 'monitor' | 'writing' | 'failed' | 'done' | 'rest' | 'stand' | 'chief' | 'tray';
-const PAD: Record<Station, [number, number]> = { needs: [48, 24], chief: [38, 26], monitor: [20, 58], failed: [20, 58], writing: [22, 28], done: [20, 18], rest: [22, 22], stand: [18, 18], tray: [48, 30] };
+type Station = 'waiting' | 'monitor' | 'writing' | 'failed' | 'done' | 'rest' | 'stand' | 'chief' | 'tray';
+const PAD: Record<Station, [number, number]> = { waiting: [48, 24], chief: [38, 26], monitor: [20, 58], failed: [20, 58], writing: [22, 28], done: [20, 18], rest: [22, 22], stand: [18, 18], tray: [48, 30] };
 /** A crowded row packs its desks as the phone does (compact): a 52-wide desk centred on the helper, the note or screen
  *  over their head; a waiting flag (to 31.5 right) clears the next desk at that pitch. */
-const TIGHT: Record<Station, [number, number]> = { ...PAD, needs: [26, 28], monitor: [26, 28], failed: [26, 28] };
+const TIGHT: Record<Station, [number, number]> = { ...PAD, waiting: [26, 28], monitor: [26, 28], failed: [26, 28] };
 const stationOf = (c: A.OfficeMember, v: A.OfficeView): Station => {
   const k = A.seatOf(c);
-  return k === 'needs' || k === 'chat' ? 'needs' : k === 'working' ? (c.kind === 'scribe' ? 'writing' : 'monitor') : k === 'failed' ? 'failed'
+  return k === 'waiting' ? 'waiting' : k === 'working' ? (c.kind === 'scribe' ? 'writing' : 'monitor') : k === 'failed' ? 'failed'
     : k === 'resting' ? 'rest' : stripSeat(c, v) === 'done' ? 'done' : 'stand';
 };
-const TALL: Station[] = ['chief', 'monitor', 'failed', 'needs'];
+const TALL: Station[] = ['chief', 'monitor', 'failed', 'waiting'];
 type Spot = { m: A.OfficeMember | 'chief' | 'tray'; st: Station; x: number; tray: boolean; tight?: boolean };
 const G = 196, W = 346;
 /** Ink at the Tray bubble's height (y 115 to 150), left and right of where a station stands: Chief's hat, arm and cue, a
  *  waiting note and flag, a screen, Scribe's pen, Pip's z's. The bubble never covers any of it; the low finished helper and
  *  a standing one may sit under it, as in the mock. */
-const INK: Partial<Record<Station, [number, number]>> = { chief: [-31, 44], needs: [-40, 31.5], monitor: [16, 50], failed: [16, 50], writing: [-21, -12], rest: [-2, 13] };
+const INK: Partial<Record<Station, [number, number]>> = { chief: [-31, 44], waiting: [-40, 31.5], monitor: [16, 50], failed: [16, 50], writing: [-21, -12], rest: [-2, 13] };
 /** Furniture under the Tray bubble's tail (y 150): a desk, a note, a lamp's glow. The bubble never rests on it either. */
-const FOOT: Partial<Record<Station, [number, number]>> = { needs: [-48, 24], monitor: [-20, 70], failed: [-20, 58], writing: [-28, 32] };
+const FOOT: Partial<Record<Station, [number, number]>> = { waiting: [-48, 24], monitor: [-20, 70], failed: [-20, 58], writing: [-28, 32] };
 /** The same on a compact desk: the note or screen over their head, the 52-wide desk and its lamp centred on them. */
-const INKT: typeof INK = { ...INK, needs: [-11, 31.5], monitor: [-14, 20], failed: [-14, 20] };
-const FOOTT: typeof FOOT = { ...FOOT, needs: [-26, 26], monitor: [-26, 26], failed: [-26, 26] };
+const INKT: typeof INK = { ...INK, waiting: [-11, 31.5], monitor: [-14, 20], failed: [-14, 20] };
+const FOOTT: typeof FOOT = { ...FOOT, waiting: [-26, 26], monitor: [-26, 26], failed: [-26, 26] };
 /** Left to right in the given order, the tray just before whoever finished (or before the resting); the row scales down
  *  about the floor line to fit, and centres when it is short. The Tray bubble never sits over a figure or past the
  *  room's edge: the tray keeps room for it beside a tall neighbour (INK: Chief's cue, a waiting flag, a screen) and at the
@@ -306,7 +295,7 @@ const Desk = ({ x, w }: { x: number; w: number }) => <g className="o-desk"><rect
   <path d={`M${x + 6} 155V${G}M${x + w - 6} 155V${G}`} stroke="var(--r-edge)" strokeWidth="1.8" /></g>;
 
 /** One station: its furniture and the figure, the whole group the button that opens them. */
-function Seat({ spot, id, kind, pose, seat, second, dataId, beat, label, onOpen }: { spot: Spot; id: string; kind: art.Kind | 'chief'; pose: art.Pose; seat: A.Seat;
+function Seat({ spot, id, kind, pose, seat, second, dataId, beat, label, onOpen }: { spot: Spot; id: string; kind: art.Kind | 'chief'; pose: art.Pose; seat: A.Seat | 'for-you';
   second?: boolean; dataId?: string; beat: string; label: string; onOpen: () => void }) {
   const { x, st, tight } = spot, ink = 'var(--r-edge)', red = '#F0482A', fill = kind === 'chief' ? '#fff' : art.PALS[kind].body;
   const chief = useMemo(() => (kind === 'chief' ? art.chiefSvg(pose, { vb: '24 30 176 210' }).replace('<svg ', `<svg x="${x - 30.4}" y="${G - 80.8}" width="70.4" height="84" `) : ''), [kind, pose, x]);
@@ -323,10 +312,11 @@ function Seat({ spot, id, kind, pose, seat, second, dataId, beat, label, onOpen 
   return <g className="o-cell" data-id={dataId} data-seat={seat} role="button" tabIndex={0} aria-label={label} onClick={onOpen} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(); } }}>
     <rect x={x - l} y={G - 100} width={l + r} height="104" fill="transparent" />
     {st === 'chief' && <><ellipse cx={x} cy={G + 2} rx="22" ry="3.2" fill={ink} opacity=".1" filter={`url(#${id}bl)`} /><g ref={fig} className={`o-sprite ink chief pose-${pose}`} dangerouslySetInnerHTML={{ __html: chief }} /></>}
-    {st === 'needs' && <>
+    {st === 'waiting' && <>
       {tight ? <Desk x={x - 26} w={52} /> : <Desk x={x - 48} w={72} />}
       {(() => { const n = tight ? x - 11 : x - 40; return <><rect className="o-note" x={n} y="132" width="22" height="18" rx="2" fill="var(--r-desk)" stroke={ink} strokeWidth="1.6" /><path d={`M${n + 4} 139h14M${n + 4} 144h9`} stroke={ink} strokeWidth="1.3" /></>; })()}
-      {sprite(<Bean x={x} fill={fill} id={id}><g className="o-wave"><path d={`M${x + 15} ${G - 30}l12-20`} stroke={ink} strokeWidth="1.8" strokeLinecap="round" /><circle cx={x + 28} cy={G - 52} r="3.5" fill={red} stroke={ink} strokeWidth="1.5" /></g></Bean>)}
+      {/* Waiting on Chief, not on you: no flag, just a calm breath at the desk. */}
+      {sprite(<g className="o-breath"><Bean x={x} fill={fill} id={id} /></g>)}
     </>}
     {(st === 'monitor' || st === 'failed') && <>
       {tight ? <Desk x={x - 26} w={52} /> : <Desk x={x - 20} w={78} />}
@@ -370,7 +360,7 @@ function TrayBox({ x, n }: { x: number; n: number }) {
     {n > 0 && <g><path d={`M${x - 10} ${G - 22}l12-2 2 12-12 2z`} fill="#fff" stroke={ink} strokeWidth="1.4" strokeLinejoin="round" /><path d={`M${x - 7} ${G - 17}l7-1`} stroke={ink} strokeWidth=".9" /></g>}</g>;
 }
 
-/** A label in the room: the accent pill for what needs you, or a white speech bubble with a tail. */
+/** A label in the room: Chief's accent pill for what he has for you, or a white speech bubble with a tail. */
 function Tag({ x, y, left: at, below, text, hot, tail, cls = '', href, label }: { x: number; y: number; left?: number; below?: boolean; text: string; hot?: boolean; tail?: boolean; cls?: string; href: string; label: string }) {
   const w = text.length * 6.6 + 22, ink = 'var(--r-edge)';
   const left = at ?? Math.max(4, Math.min(x - w / 2, 356 - w));
@@ -435,7 +425,7 @@ function ChiefSheet({ live, state, roles, onClose }: { live: A.OfficeView; state
   const computers = live.crew.filter((c) => roles.get(c.id)?.computer && A.seatOf(c) === 'working');
   const made = A.things(state).slice(0, 4);
   const word = A.chiefWord(live);
-  // What happened lately, from the state alone: questions put to you and jobs that landed in the tray.
+  // What happened lately, from the state alone: what Chief has for you and jobs that landed in the tray.
   const recent = [...live.needs.map((c) => ({ key: `a${c.id}`, at: c.at, text: c.head, href: `#/ask/${c.id}` })),
     ...live.done.map((t) => ({ key: `t${t.id}`, at: t.at, text: `${roles.get(t.helper)?.name ?? 'The crew'} finished ${t.title || 'a job'}`, href: `#/things/t${t.id}` }))]
     .sort((x, y) => y.at - x.at).slice(0, 3);
@@ -445,12 +435,12 @@ function ChiefSheet({ live, state, roles, onClose }: { live: A.OfficeView; state
         <header className="o-sh-head">
           <Face who="chief" size={64} />
           <span className="grow"><h2>Chief</h2><span className="mute small">Runs your crew</span>
-            <span className={`o-state ${word === 'Needs you' ? 'needs' : word === 'Working' ? 'work' : ''}`}><i />{word === 'Working' ? 'Working now' : word}</span></span>
+            <span className={`o-state ${word === 'Has things for you' ? 'needs' : word === 'Working' ? 'work' : ''}`}><i />{word === 'Working' ? 'Working now' : word}</span></span>
           <button className="icon-btn" onClick={onClose} aria-label="Close">✕</button>
         </header>
         <div className="o-sec"><div className="o-eyebrow">Ways to reach</div>
           <div className="card list">
-            <a className="row-item" href="#/chief" onClick={onClose}><span className="o-ic"><Icon name="chief" size={18} /></span><span className="grow">Message in Chat</span><Icon name="next" /></a>
+            <a className="row-item" href="#/chief" onClick={onClose}><span className="o-ic"><Icon name="chief" size={18} /></span><span className="grow">Message Chief</span><Icon name="next" /></a>
             <a className="row-item" href="#/settings" onClick={onClose}><span className="o-ic"><Icon name="phone" size={18} /></span><span className="grow">On your phone<small className="mute block">{phones ? `${phones} paired` : 'Not set up'}</small></span>{phones ? <Icon name="next" /> : <b className="o-setup">Set up</b>}</a>
           </div></div>
         <div className="o-sec"><div className="o-eyebrow">Crew computers</div>
@@ -469,14 +459,17 @@ function ChiefSheet({ live, state, roles, onClose }: { live: A.OfficeView; state
   );
 }
 
-/** One helper, up close: what they are on, the steps so far, anything waiting on you, and what they have made. */
-function HelperSheet({ c, h, state, asks, onClose }: { c: A.OfficeMember; h: A.Helper | undefined; state: Json; asks: A.Card[]; onClose: () => void }) {
+/** One helper, up close: what they are on, the steps so far and what they have made. Anything they need goes through
+ *  Chief, so here is only their work and the way to Chief about it (a draft in his box, never sent from here). */
+function HelperSheet({ c, h, state, onClose }: { c: A.OfficeMember; h: A.Helper | undefined; state: Json; onClose: () => void }) {
   const box = useRef<HTMLDivElement>(null);
   useDialogOwn(box, onClose);
   const job = A.work(state).find((w) => w.helper === c.id);
-  const t = tone(c);
+  const seat = A.seatOf(c);
+  const askChief = () => { keepDraft('chief', `About ${c.name}'s job${job ? ` (${job.title})` : ''}: `); onClose(); go('#/chief'); };
   let body: ReactNode;
-  if (!c.ring && !c.ask) body = <p className="o-note">{c.status === 'Up next' ? `Your job is next in line. ${c.name} starts it as soon as the desk is clear.` : `${c.name} is free to help. Tell Chief what you need, and he'll pass it over.`}</p>;
+  if (seat === 'waiting') body = <p className="o-note">{c.name} is waiting on Chief, and Chief has it with what's for you.</p>;
+  else if (!c.ring) body = <p className="o-note">{c.status === 'Up next' ? `Your job is next in line. ${c.name} starts it as soon as the desk is clear.` : `${c.name} is free to help. Tell Chief what you need, and he'll pass it over.`}</p>;
   return (
     <div className="scrim o-scrim" onClick={onClose}>
       <div ref={box} className="o-sheet" role="dialog" aria-modal aria-label={c.name} onClick={(e) => e.stopPropagation()}>
@@ -485,14 +478,14 @@ function HelperSheet({ c, h, state, asks, onClose }: { c: A.OfficeMember; h: A.H
           <span className="grow"><h2>{c.name}</h2>{h?.role && <span className="mute small">{h.role}</span>}</span>
           <button className="icon-btn" onClick={onClose} aria-label="Close">✕</button>
         </header>
-        <Pill tone={t.pill} live={A.seatOf(c) === 'working'}>{A.seatOf(c) === 'working' ? 'Working' : A.waitsOnYou(c) ? A.SEAT_WORDS[A.seatOf(c)] : c.status}</Pill>
-        {(c.ring || c.ask) && job && <div className="o-sec"><div className="o-eyebrow">{A.waitsOnYou(c) ? 'Waiting on you' : 'Working on'}</div><h3>{job.title}</h3></div>}
-        {asks.map((a) => <div key={a.id} className="o-ask big"><div className="o-ask-tag"><i /><span>{a.head}</span></div><p>{a.words}</p><a className="btn go" href={`#/ask/${a.id}`}>Review</a></div>)}
+        <Pill tone={TONES[seat]} live={seat === 'working'}>{seat === 'working' || seat === 'waiting' ? A.SEAT_WORDS[seat] : c.status}</Pill>
+        {c.ring && job && <div className="o-sec"><div className="o-eyebrow">{seat === 'waiting' ? 'Waiting on Chief' : 'Working on'}</div><h3>{job.title}</h3></div>}
         {c.steps.length > 0 && <Steps steps={c.steps} max={5} />}
         {c.things.length > 0 && <div className="o-sec"><div className="o-eyebrow">{c.ring ? 'First looks' : 'Made for you'}</div>
           {c.things.map((f, i) => <Media key={i} f={f} />)}</div>}
         {body}
-        <a className="btn o-chat" href={`#/h/${c.id}`}>Open {c.name}'s chat</a>
+        <div className="chips"><button className="btn go" onClick={askChief}>Ask Chief about this</button><a className="btn" href="#/chief" onClick={onClose}>Open Chief</a></div>
+        <a className="btn o-chat" href={`#/h/${c.id}`}>See {c.name}'s reports to Chief</a>
         {h?.computer && <div className="o-sec"><div className="o-eyebrow">{c.name}'s computer</div>
           <div className="chips"><a className="btn" href={`#/h/${c.id}/screen`}>Watch {c.name}</a>
             <button className="btn" onClick={() => attempt(async () => { await api.takeOver(c.id); go(`#/h/${c.id}/screen`); })}>Take the wheel</button></div></div>}

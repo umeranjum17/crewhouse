@@ -1,8 +1,8 @@
 // Chief's panel: what a tap on the bubble opens, over whatever app is in front (src/bubble.ts; index.ts registers it).
-// It is its own screen on the phone's one link (src/link.ts): who is on what, what needs you (with that helper's
-// screen a tap away), up to three buttons for this screen (A.quick's rules table: fixed words to one helper, its reply
-// shown here; Remember this keeps words for the whole crew), and Chief's box, typed or spoken, which answers who is on
-// what and what the crew knows about the person itself. Write it here: the writer drafts for the box the person was
+// It is its own screen on the phone's one link (src/link.ts): who is on what, what Chief has for you (with that
+// helper's screen a tap away), up to three buttons for this screen (A.quick's rules table: fixed words through Chief to
+// one helper, its reply shown here; Remember this keeps words for the whole crew), and Chief's box, typed or spoken,
+// which answers who is on what and what the crew knows about the person itself. Write it here: the writer drafts for the box the person was
 // typing in, and Put it in fills it.
 // Nothing is sent that the person didn't send. `frame` is a still back from the phone's ask, for helper `to` with
 // `words` in the box; `listen` opens with the mic on (a long press on the bubble).
@@ -135,7 +135,8 @@ function Body({ grant, still, box, used, listen }: { grant: Grant; still?: Share
     const to = await hire(b.to);
     if (!to) return;
     if (b.from === 'box') return setWriting(to);
-    await attempt(async () => { const r: Json = await api.post(to, b.ask); if (r?.task) setAsked({ to, task: r.task }); });
+    // Through Chief, who hands the words on to that helper by name (src/route.ts); the reply is still the helper's job.
+    await attempt(async () => { const r: Json = await api.post('chief', `${b.to.name}: ${b.ask}`); if (r?.task) setAsked({ to, task: r.task }); });
   };
   return <>
     <View style={s.row}>
@@ -148,7 +149,7 @@ function Body({ grant, still, box, used, listen }: { grant: Grant; still?: Share
       {needs.length > 0 && <View style={[s.listGroup, { backgroundColor: t.solid, borderColor: t.line }]}>
         {needs.slice(0, 3).map((c, i) => <Pressable key={c.id} onPress={() => setAsking(c)} accessibilityRole="button" accessibilityLabel={c.head}
           style={[s.listRow, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: t.line }]}>
-          <Face who={crew.find((h) => h.id === c.helper) ?? 'chief'} size={32} />
+          <Face who="chief" size={32} />
           <View style={{ flex: 1 }}><T style={s.rowTitle} lines={1}>{c.head}</T><T tone="ink2" style={s.small} lines={1}>{c.words}</T></View>
           <T tone="mute">›</T>
         </Pressable>)}
@@ -165,31 +166,31 @@ function Body({ grant, still, box, used, listen }: { grant: Grant; still?: Share
     </View>
     {canAct ? <Composer placeholder="Ask Chief anything" onSend={toChief} chat="chief" listen={hold} />
       : <T tone="mute" style={s.small}>{online ? "This phone watches the crew; it can't send messages." : 'You can ask once the home computer is back.'}</T>}
-    {asking && <AskSheet c={asking} who={crew.find((h) => h.id === asking.helper)} chiefSays={state.asks.find((x: Json) => x.id === asking.id)?.detail?.chief}
+    {asking && <AskSheet c={asking} chiefSays={state.asks.find((x: Json) => x.id === asking.id)?.detail?.chief}
       canAct={canAct} onClose={() => { setAsking(null); refresh(); }} />}
   </>;
 }
 
-/** A button's job, answered here: an honest wait while the helper works, why it waits (an OK to give, with its card a
- *  tap away), then the reply, with the chat a tap away. */
+/** A button's job, answered here: an honest wait while the helper works, why it waits (an OK Chief brings, its card a
+ *  tap away), then what the helper reported, with Chief's chat a tap away. */
 function Reply({ who, task, state, onAsk, asking, canAct, refresh }: { who: A.Helper; task: number; state: Json; onAsk: (c: A.Card | null) => void; asking: A.Card | null; canAct: boolean; refresh: () => void }) {
   const t = useContext(Theme);
   const [reply, setReply] = useState<string | null>(null);
   const [waits, setWaits] = useState('');
   useEffect(() => { api.bot(who.id).then((p) => { setReply(A.draftOf(p, task)); setWaits(A.waitOf(p, task)); }, () => {}); }, [state, task, who.id]);
   const card = A.needsYou(state).find((c) => c.helper === who.id);
-  const chat = () => void open(`crewhouse://ask?to=${state.bots.find((b: Json) => b.id === who.id)?.template ?? ''}`);
+  const chat = () => void open('crewhouse://ask');
   return <>
-    <View style={s.row}><Face who={who} size={40} /><T style={[s.h2, { flex: 1 }]}>{reply ? `${who.name} says` : reply === '' ? `${who.name} couldn't do this one` : waits || `${who.name} is on it…`}</T></View>
+    <View style={s.row}><Face who={who} size={40} /><T style={[s.h2, { flex: 1 }]}>{reply ? `${who.name} reported back` : reply === '' ? `${who.name} couldn't do this one` : waits || `${who.name} is on it…`}</T></View>
     {!!reply && <ScrollView style={[s.listGroup, { backgroundColor: t.solid, borderColor: t.line, maxHeight: 280 }]} contentContainerStyle={{ padding: 12 }}>
       <T>{reply}</T>
     </ScrollView>}
     <View style={s.chips}>
-      {reply === null && card && <Btn go label="See what it needs" onPress={() => onAsk(card)} />}
-      <Btn label={`Open ${who.name}'s chat`} onPress={chat} />
+      {reply === null && card && <Btn go label="Review with Chief" onPress={() => onAsk(card)} />}
+      <Btn label="Open Chief" onPress={chat} />
       <Btn ghost label={reply === null ? 'Not now' : 'Done'} onPress={() => void closePanel()} />
     </View>
-    {asking && <AskSheet c={asking} who={who} canAct={canAct} onClose={() => { onAsk(null); refresh(); }} />}
+    {asking && <AskSheet c={asking} canAct={canAct} onClose={() => { onAsk(null); refresh(); }} />}
   </>;
 }
 

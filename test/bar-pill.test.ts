@@ -34,7 +34,7 @@ test('desktop bar reads only the owner and exposes counts, then clears stale sta
   };
   assert.deepEqual(await run(), { text: '1 working', tooltip: '1 working', class: 'working' });
   state = { person: { id: 1 }, tasks: [], asks: [{ id: 1, bot: 'scout', kind: 'question', detail: { words: 'Private question' } }], events: [], bots: [bot('scout', null)] };
-  assert.deepEqual(await run(), { text: '1 needs you', tooltip: '1 needs you', class: 'ask' });
+  assert.deepEqual(await run(), { text: '1 for you', tooltip: '1 for you', class: 'ask' });
   state = { person: { id: 1 }, tasks: [], asks: [], events: [], bots: [{ ...bot('other', null), live: 'working' }] };
   assert.deepEqual(await run(), empty, 'another member working does not count');
   state = { person: { id: 2 } };

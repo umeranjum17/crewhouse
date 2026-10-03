@@ -44,8 +44,8 @@ export function Rise({ reduce, delay = 0, children }: { reduce: boolean; delay?:
 }
 
 // ---------- the office ----------
-// Each member wears a calm loop for their status (working, resting, needs you), and a move lands with news (a step,
-// a new thing, a question, a finished job). Every move runs on the native driver, never a JS timer; with the app put
+// Each member wears a calm loop for their status (working, resting, and Chief's lean-in while he holds something for
+// you), and a move lands with news (a step, a new thing, a question, a finished job). Every move runs on the native driver, never a JS timer; with the app put
 // away none runs, and Reduce Motion keeps the room still on each pose as drawn.
 
 /** Whether the app is on screen. */
