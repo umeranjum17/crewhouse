@@ -470,16 +470,16 @@ if (variant === 'b1' || variant === 'b1handoff' || variant === 'b1after') {
 }
 // ?demo=rule | rule-saved | rule-cancelled: a standing rule from Chief's chat (hand-written fixture, as crewd's records
 // would carry it): the confirm card, then the final state crewd writes on Chief's message, and the settings list.
-const ruleSaid = 'Never act without my approval. Drafts only.';
+const ruleSaid = 'Never act without my approval. Drafts only. And leave the reply to the school as it was.';
 const rule = { title: 'Drafts only', text: 'Only prepare drafts for me to read. Do not send messages, submit forms or buy anything. I do those myself.' };
 const rulesKept: Json[] = variant === 'rule-saved' ? [{ id: 1, ...rule, at: now - min }] : [];
 if (variant.startsWith('rule')) {
   (state as Json).asks = variant === 'rule' ? [{ id: 30, bot: 'chief', task_id: null, kind: 'propose', at: now - min, member: 1, title: rule.title, detail: { rule: { ...rule, said: ruleSaid } } }] : [];
   pages.chief = { messages: [
-    { id: 1, author: 'person', text: `${ruleSaid} And leave the reply to the school as it was.`, at: now - 3 * min },
+    { id: 1, author: 'person', text: ruleSaid, at: now - 3 * min },
     { id: 2, author: 'chief', text: "Chief wrote your words as one rule. Read it on the card. Nothing is saved before you tap Create rule.\n\nChief cancelled the change to Scribe's reply to the school. The original draft did not change.", at: now - 2 * min },
-    ...(variant === 'rule-saved' ? [{ id: 3, author: 'chief', text: 'Saved. Find the rule in Settings › Rules. Chief and the crew use it from now on.', at: now - min, rule: { state: 'saved', ...rule } }] : []),
-    ...(variant === 'rule-cancelled' ? [{ id: 3, author: 'chief', text: 'Cancelled. Chief did not save the rule. Nothing changed.', at: now - min, rule: { state: 'cancelled', ...rule } }] : []),
+    ...(variant === 'rule-saved' ? [{ id: 3, author: 'chief', text: 'Chief saved the rule.\nOpen Rules in Settings.', at: now - min, rule: { state: 'saved', ...rule } }] : []),
+    ...(variant === 'rule-cancelled' ? [{ id: 3, author: 'chief', text: 'Chief cancelled this proposed rule.\nNo rule was saved from this card.', at: now - min, rule: { state: 'cancelled', ...rule } }] : []),
   ] };
 }
 if (variant === 'wheeled') { Object.assign(bots.find((b) => b.id === 'scout')!, { controls: 'person' }); pages.scout = { ...pages.scout, signedIn: ['shop.example'] }; }

@@ -18,7 +18,7 @@ test('a done job is marked once, on its result; working, a question back, unsure
   crew.recruit('scribe', 'Quill', 'person');
 
   // A question back ends its turn done in crewd, but nothing was made: no mark.
-  const q = (await crew.post('quill', 'make a reception sheet, ask permission first'))!.task;
+  const q = crew.assign('quill', 'make a reception sheet, ask permission first', 'chief').task;
   await holding(crew, 'quill');
   await release(crew, 'quill', 'Is this the desk’s own day sheet, or the manager’s log?');
   await settled(db, q);
@@ -26,7 +26,7 @@ test('a done job is marked once, on its result; working, a question back, unsure
   assert.deepEqual(marked(crew, 'quill'), [], 'a question is not a finished job');
 
   // Mid-job: the sheet is already delivered, but the turn is held, so nothing says done yet.
-  const held = (await crew.post('quill', `the desk's own ${call('crew_workbook', sheet)} then ask permission`))!.task;
+  const held = crew.assign('quill', `the desk's own ${call('crew_workbook', sheet)} then ask permission`, 'chief').task;
   await holding(crew, 'quill');
   assert.equal(task(db, held).state, 'working');
   assert.ok(A.lines(crew.botPage('quill'), 'quill').some((l) => l.files.some((f) => f.kind === 'sheet')), 'the file shows as it lands');
@@ -45,7 +45,7 @@ test('a done job is marked once, on its result; working, a question back, unsure
 
   // Opened on an old line, a window that leaves out the result marks nothing in its place.
   assert.deepEqual(marked(crew, 'quill', note.id).map((l) => l.id), [r.id]);
-  const q2 = (await crew.post('quill', 'a second sheet, ask permission first'))!.task;
+  const q2 = crew.assign('quill', 'a second sheet, ask permission first', 'chief').task;
   await holding(crew, 'quill');
   const asked = db.get("SELECT id FROM messages WHERE bot = 'quill' AND author = 'person' AND task_id = ?", q2)!.id;
   await release(crew, 'quill', 'Here it is.');
@@ -55,14 +55,14 @@ test('a done job is marked once, on its result; working, a question back, unsure
   assert.ok(!A.lines(page, 'quill').some((l) => l.done && l.id > r.id));
 
   // It acted and said it didn't see it work: unsure, in crewd's words, with no mark.
-  const unsure = (await crew.post('quill', `book it ${call('crew_outcome', { worked: false, seen: 'No confirmation came.' })}`))!.task;
+  const unsure = crew.assign('quill', `book it ${call('crew_outcome', { worked: false, seen: 'No confirmation came.' })}`, 'chief').task;
   await settled(db, unsure);
   assert.equal(task(db, unsure).state, 'unsure');
   const after = A.lines(crew.botPage('quill'), 'quill');
   assert.ok(after.at(-1)!.unsure && !after.at(-1)!.done);
 
   // Stopped by the person: failed in crewd, no line written, so nothing is marked.
-  const stopped = (await crew.post('quill', 'one more sheet, ask permission first'))!.task;
+  const stopped = crew.assign('quill', 'one more sheet, ask permission first', 'chief').task;
   await holding(crew, 'quill');
   await crew.resetBot('quill');
   await settled(db, stopped);

@@ -228,9 +228,9 @@ test('a helper\'s draft waits in Needs you, named for who it goes to; the row\'s
   const { crew, done } = lab();
   crew.onboard('sir');
   crew.recruit('scout', 'Scout', 'person');
-  await crew.post('scout', 'Draft the reply on a card in front of me. '
+  crew.assign('scout', 'Draft the reply on a card in front of me. '
     + '[tool crew_write {"path":"files/reply-trip-form.md","content":"Hello, the signed trip form is in Ayaan\'s bag this morning. Thank you, Umer"}] '
-    + '[tool crew_draft {"path":"files/reply-trip-form.md","channel":"email","subject":"Ayaan’s trip form — Friday","to":"the school office"}]');
+    + '[tool crew_draft {"path":"files/reply-trip-form.md","channel":"email","subject":"Ayaan’s trip form — Friday","to":"the school office"}]', 'chief');
   await until('the draft ask in the served view', () => crew.snapshot().asks.some((a: any) => a.kind === 'propose' && a.detail.draft));
   const s: Json = crew.snapshot();
   const ask = s.asks.find((a: any) => a.kind === 'propose' && a.detail.draft)!;
@@ -261,9 +261,9 @@ test('draft cards keep the recipient, email subject and exact message separate a
       ['post', 'X', '', 'One small win today.\n\nThe seedlings are up. #garden'],
     ]) {
       const tool = (name: string, args: Json) => `[tool ${name} ${JSON.stringify(args)}]`;
-      const { task } = (await crew.post('scribe', 'Recommended: X1. Draft only. This is the TASK TITLE. '
+      const { task } = crew.assign('scribe', 'Recommended: X1. Draft only. This is the TASK TITLE. '
         + tool('crew_write', { path: 'files/message.md', content: message }) + ' '
-        + tool('crew_draft', { path: 'files/message.md', channel, to, ...(subject ? { subject } : {}) })))!;
+        + tool('crew_draft', { path: 'files/message.md', channel, to, ...(subject ? { subject } : {}) }), 'chief');
       await settled(db, task);
       const state = crew.snapshot();
       const ask = state.asks.find((a: Json) => a.detail.draft?.to === to)!;
