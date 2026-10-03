@@ -468,6 +468,20 @@ if (variant === 'b1' || variant === 'b1handoff' || variant === 'b1after') {
     { id: 4, author: 'chief', text: 'Reel picks the music. Scribe writes your note. Chief tells you only when a task is done or waits for your answer.', at: now - min },
   ] };
 }
+// ?demo=rule | rule-saved | rule-cancelled: a standing rule from Chief's chat (hand-written fixture, as crewd's records
+// would carry it): the confirm card, then the final state crewd writes on Chief's message, and the settings list.
+const ruleSaid = 'Never act without my approval. Drafts only.';
+const rule = { title: 'Drafts only', text: 'Only prepare drafts for me to read. Do not send messages, submit forms or buy anything. I do those myself.' };
+const rulesKept: Json[] = variant === 'rule-saved' ? [{ id: 1, ...rule, at: now - min }] : [];
+if (variant.startsWith('rule')) {
+  (state as Json).asks = variant === 'rule' ? [{ id: 30, bot: 'chief', task_id: null, kind: 'propose', at: now - min, member: 1, title: rule.title, detail: { rule: { ...rule, said: ruleSaid } } }] : [];
+  pages.chief = { messages: [
+    { id: 1, author: 'person', text: `${ruleSaid} And leave the reply to the school as it was.`, at: now - 3 * min },
+    { id: 2, author: 'chief', text: "Chief wrote your words as one rule. Read it on the card. Nothing is saved before you tap Create rule.\n\nChief cancelled the change to Scribe's reply to the school. The original draft did not change.", at: now - 2 * min },
+    ...(variant === 'rule-saved' ? [{ id: 3, author: 'chief', text: 'Saved. Find the rule in Settings › Rules. Chief and the crew use it from now on.', at: now - min, rule: { state: 'saved', ...rule } }] : []),
+    ...(variant === 'rule-cancelled' ? [{ id: 3, author: 'chief', text: 'Cancelled. Chief did not save the rule. Nothing changed.', at: now - min, rule: { state: 'cancelled', ...rule } }] : []),
+  ] };
+}
 if (variant === 'wheeled') { Object.assign(bots.find((b) => b.id === 'scout')!, { controls: 'person' }); pages.scout = { ...pages.scout, signedIn: ['shop.example'] }; }
 for (const [id, p] of Object.entries(pages)) p.trail = events.filter((e) => e.bot === id);
 
@@ -533,6 +547,10 @@ export async function demoCall(method: string, path: string, body?: Json) {
     const things = state.tasks.filter((t: Json) => `${t.title} ${t.result ?? ''}`.toLowerCase().includes(q)).map((t: Json) => ({ id: t.id, bot: t.bot, title: t.title, at: t.updated_at }));
     return { messages: messages.slice(0, 50), things: things.slice(0, 20) };
   }
+  if (method === 'GET' && path === '/api/rules') return { rules: rulesKept };
+  const rr = /^\/api\/rules\/(\d+)$/.exec(path);
+  if (rr && method === 'PUT') { const r = rulesKept.find((x) => x.id === Number(rr[1])); if (r) r.text = String(body?.text ?? r.text); return { ok: true }; }
+  if (rr && method === 'DELETE') { rulesKept.splice(rulesKept.findIndex((x) => x.id === Number(rr[1])), 1); return { ok: true }; }
   if (method === 'GET' && path.startsWith('/api/accounts')) return accounts;
   // The workbook crewd reads for the card and the panel (src/workbooks.ts): the tabs, headings and first rows.
   if (method === 'GET' && path.startsWith('/api/workbook')) return path.includes('flights') ? flights : book;

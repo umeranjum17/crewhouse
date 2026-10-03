@@ -449,6 +449,15 @@ function ChiefAsk({ l }: { l: { text: string; detail: string } }) {
     {open && <ChatText text={l.detail} />}</div>;
 }
 
+/** A standing rule's final state on its own card, from crewd's message only: Saved (and where to find it) or Cancelled. */
+function RuleEnd({ r }: { r: A.RuleEnd }) {
+  return <div className={`card rule-end ${r.state}`}>
+    <div className="row"><b className="grow">{r.title || 'Rule'}</b><span className="rule-state">{r.state === 'saved' ? 'Saved' : 'Cancelled'}</span></div>
+    <div className="rule-text">{r.text}</div>
+    <div className="mute small">{r.state === 'saved' ? <>Find it in <a href="#/settings">Settings › Rules</a>.</> : 'Chief did not save this rule.'}</div>
+  </div>;
+}
+
 /** The receipt on the line a finished job ended on, once crewd says done: in the helper's record, or on Chief's line
  *  passing it on (`Line.by`). Watch opens that helper's screen, the one way in to see the work. */
 function Receipt({ who, offline }: { who?: Helper; offline: boolean }) {
@@ -574,6 +583,7 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
             {id === 'chief' && l.text === 'Sign in with ChatGPT.' && <AccountCard g={{ ...g, state: 'signed-out' }} inChat onReady={() => { void load(); refresh(); }} />}
             {l.files.map((f) => <Media key={f.url} f={f} big />)}
             {l.done && <Receipt who={h ?? crew.find((x) => x.id === l.by)} offline={offline} />}
+            {l.rule && <RuleEnd r={l.rule} />}
             {phoneOffer?.message === l.id && <PhoneCard offer={phoneOffer} reload={() => void load()} />}
             {cards.filter((c) => lines.findLastIndex((x) => (x.at ?? 0) <= c.at) === i).map((c) => c.kind === 'connect' ? <ConnectCard key={c.id} c={c} helper={c.about} state={state} onDone={refresh} /> : <AskCard key={c.id} c={c} onDone={refresh} />)}
           </div></div>
@@ -867,6 +877,34 @@ function AboutYou({ tick }: { tick: number }) {
   );
 }
 
+/** The person's standing rules, as crewd keeps them. Change saves the person's own words as typed; a new rule starts
+ *  in Chief's chat, where it needs Create rule on its card. */
+function Rules({ tick }: { tick: number }) {
+  const [list, setList] = useState<A.Rule[] | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [editing, setEditing] = useState<{ id: number; text: string } | null>(null);
+  const load = useCallback(() => api.rules().then((r) => { setList(A.rules(r)); setFailed(false); }).catch(() => setFailed(true)), []);
+  useEffect(() => { void load(); }, [load, tick]);
+  return (
+    <>
+      <div className="label" id="rules">Rules</div>
+      <p className="mute small">Rules that you confirmed for Chief and the crew.</p>
+      {failed ? <div className="card empty">Chief cannot show the rules now.</div>
+        : list === null ? null
+        : list.length ? <div className="card list">{list.map((r) => <div key={r.id} className="row-item rule-row">
+          {editing?.id === r.id
+            ? <span className="grow"><textarea className="input" rows={3} aria-label={`Change ${r.title || 'this rule'}`} value={editing.text} onChange={(e) => setEditing({ id: r.id, text: e.target.value })} />
+              <span className="btns"><button className="btn go" disabled={!editing.text.trim()} onClick={() => attempt(async () => { await api.setRule(r.id, editing.text.trim()); setEditing(null); await load(); }, 'Saved')}>Save</button>
+                <button className="btn ghost" onClick={() => setEditing(null)}>Cancel</button></span></span>
+            : <><span className="grow">{r.title && <b>{r.title}</b>}<div>{r.text}</div></span>
+              <button className="link" onClick={() => setEditing({ id: r.id, text: r.text })}>Change</button>
+              <button className="link" onClick={() => confirm('Remove this rule?') && attempt(async () => { await api.removeRule(r.id); await load(); }, 'Removed')}>Remove</button></>}
+        </div>)}</div>
+        : <div className="card empty">No rules yet. Tell Chief a rule in the chat. For example: “Only make drafts. I send them myself.”</div>}
+    </>
+  );
+}
+
 // ---------- things ----------
 function ThingsGrid({ list, state, empty }: { list: A.Thing[]; state: Json; empty: string }) {
   const crew = A.crew(state);
@@ -1103,6 +1141,7 @@ function Settings({ state, refresh, tick, accounts, look, setLook }: Ctx & { loo
       <div className="label">You</div>
       <You state={state} act={act} />
       <AboutYou tick={tick} />
+      <Rules tick={tick} />
 
       <div className="label" id="setup-chatgpt">Your AI accounts</div>
       <AiAccounts accounts={accounts} refresh={refresh} signIn={(ai) => setSigning({ ai, tab: openTab() })} />

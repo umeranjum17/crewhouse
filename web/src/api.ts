@@ -53,6 +53,10 @@ export const api = {
   /** What one helper learned about the person, and what the whole crew knows about them. */
   notes: (id: string, text: string) => call('PUT', `/api/bots/${id}/notes`, { text }),
   about: () => call('GET', '/api/about'),
+  /** The person's standing rules (`docs/ui-contract.md`, Rules): a change here is the person's own words, saved as typed. */
+  rules: () => call('GET', '/api/rules'),
+  setRule: (id: number, text: string) => call('PUT', `/api/rules/${id}`, { text }),
+  removeRule: (id: number) => call('DELETE', `/api/rules/${id}`),
   setAbout: (text: string) => call('PUT', '/api/about', { text }),
   /** Who a helper is, in the person's words; `soulReset` puts back how it started. */
   job: (id: string, parts: Json) => call('PUT', `/api/bots/${id}/job`, parts),

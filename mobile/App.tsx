@@ -1480,6 +1480,9 @@ function Chat({ id, m, state, tick, refresh, canAct, offline, open, writer, hero
             {l.done && (() => { const w = l.by ? A.crew(state).find((x) => x.id === l.by) : h; // on Chief's line: the helper it passes on
               return <View style={[s.row, { paddingLeft: 36 }]}><T style={[s.small, { flex: 1, color: t.green, fontWeight: '600' }]}>✓ Done</T>
                 {!offline && w?.computer && desktopAvailable && <Btn ghost label={`Watch ${w.name}`} onPress={() => go({ view: 'helper', id: w.id, tab: 'watch' })} />}</View>; })()}
+            {l.rule && <Card style={{ gap: 6 }}><View style={s.row}><T style={{ flex: 1, fontWeight: '700' }}>{l.rule.title || 'Rule'}</T>
+              <T style={[s.small, { fontWeight: '600', color: l.rule.state === 'saved' ? t.green : t.ink2 }]}>{l.rule.state === 'saved' ? 'Saved' : 'Cancelled'}</T></View>
+              <T>{l.rule.text}</T><T tone="mute" style={s.small}>{l.rule.state === 'saved' ? 'Find it in Settings › Rules on your computer.' : 'Chief did not save this rule.'}</T></Card>}
             {phoneOffer?.message === l.id && <PhoneCard offer={phoneOffer} reload={() => void load()} />}
             {cards.filter((c) => lines.findLastIndex((x) => (x.at ?? 0) <= c.at) === i).map((c) => <AskCard key={c.id} c={c} state={state} onDone={refresh} canAct={canAct} offline={offline} open={open} />)}
           </View></motion.Rise></View>

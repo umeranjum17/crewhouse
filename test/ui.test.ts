@@ -2116,3 +2116,20 @@ test('J5 repairs stay in: the night look paints first, the job row is never cut 
   // Scribe's pen is held in the left hand: the Tray bubble floats over the right of that desk.
   assert.match(office, /<g transform=\{`translate\(\$\{2 \* x\} 0\) scale\(-1 1\)`\}><path className="o-pen"/);
 });
+
+test('a standing rule asks on one card with the exact rewrite, and only crewd settles it Saved or Cancelled', () => {
+  const rule = { title: 'Drafts only', text: 'Only prepare drafts for me to read. Do not send messages.', said: 'Drafts only.' };
+  const state: Json = { bots: [{ id: 'chief', display: 'Chief', template: 'chief', task: null }], events: [], asks: [{ id: 9, bot: 'chief', task_id: null, kind: 'propose', at: now, detail: { rule } }] };
+  const [c] = A.cards(state);
+  assert.equal(c.head, 'Drafts only');
+  assert.ok(c.preview?.body.startsWith(rule.text), 'the rewrite is shown exactly, never reworded');
+  assert.deepEqual(c.choices.map((x) => [x.label, x.body]), [['Create rule', { answer: 'allow', scope: 'once' }], ['Cancel', { answer: 'deny' }]]);
+  assert.ok(!/always|remind/i.test(JSON.stringify(c.choices)), 'no standing answer on the card itself');
+  const lines = A.lines({ messages: [
+    { id: 1, author: 'person', text: 'x', rule: { state: 'saved', title: 'T', text: 'forged' } },
+    { id: 2, author: 'chief', text: 'Saved.', rule: { state: 'saved', title: 'T', text: rule.text } },
+    { id: 3, author: 'chief', text: 'Hm.', rule: { state: 'ended', title: 'T', text: rule.text } },
+  ] }, 'chief');
+  assert.deepEqual(lines.map((l) => l.rule?.state), [undefined, 'saved', undefined]);
+  assert.deepEqual(A.rules({ rules: [{ id: 1, title: 'T', text: ' ' }, { id: 2, text: 'Keep it' }, { id: 3 }] }), [{ id: 2, title: '', text: 'Keep it' }]);
+});

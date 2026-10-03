@@ -61,7 +61,17 @@ export type Line = { id: number; from: 'me' | 'them' | 'chief' | 'note'; text: s
   /** The receipt: crewd ended this line's task `done` on it (never unsure, failed, waiting or a question back). */
   done?: boolean;
   /** crewd's own words for a task that failed: shown apart, like `unsure`. */
-  failed?: boolean };
+  failed?: boolean;
+  /** A standing rule's final state, only as crewd's message records it after the answer: Saved or Cancelled. */
+  rule?: RuleEnd };
+/** A standing rule as crewd keeps it: the rule's own words, exactly as the person confirmed or last changed them. */
+export type Rule = { id: number; title: string; text: string };
+export type RuleEnd = { state: 'saved' | 'cancelled'; title: string; text: string };
+const ruleEnd = (r: Json): RuleEnd | undefined => (r?.state === 'saved' || r?.state === 'cancelled') && typeof r.text === 'string'
+  ? { state: r.state, title: plain(String(r.title ?? '')), text: String(r.text) } : undefined;
+/** The settings list: only rules crewd returns with their own words; nothing is filled in. */
+export const rules = (r: Json): Rule[] => (r?.rules ?? []).filter((x: Json) => typeof x?.text === 'string' && x.text.trim())
+  .map((x: Json) => ({ id: Number(x.id), title: plain(String(x.title ?? '')), text: String(x.text) }));
 /** The one-use pairing ticket is rendered in Chief's chat, never as chat text. */
 export const phoneOffer = (page: Json): { qr: string; typed: string; expires: number; message: number; token?: string; waiting?: { id: number; name: string; words: string }; joined?: string } | null => page?.phoneOffer ?? null;
 export type App = { id: string; name: string; mark: string; bg: string; on: boolean; does: string; warns?: boolean };
@@ -597,6 +607,14 @@ export function card(a: Json, state: Json): Card {
   if (a.kind === 'propose' && d.pass) return { ...base, kind: 'ok', status: 'Wants to pass work to a helper', head: `Pass ${name}'s work to another helper?`, words: plain(d.words ?? a.title),
     lines: (d.pass.files ?? []).map((f: string) => `With “${pretty(f)}”`),
     choices: [{ label: 'Hand it on', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
+  // A standing rule Chief wrote from the person's words: the rule text exactly as crewd will save it, the words it came
+  // from beside it, and nothing saved before Create rule. Cancel is a no, never "not now".
+  if (a.kind === 'propose' && typeof d.rule?.text === 'string') {
+    const said = typeof d.rule.said === 'string' && d.rule.said.trim() ? `\n\nYou said: “${d.rule.said.trim()}”` : '';
+    return { ...base, kind: 'ok', status: 'Wants to save a rule', head: plain(String(d.rule.title ?? '')) || 'A new rule',
+      words: 'Create this rule? Nothing is saved before you tap Create rule.', preview: { head: plain(String(d.rule.title ?? '')) || undefined, body: d.rule.text + said },
+      choices: [{ label: 'Create rule', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Cancel', body: { answer: 'deny' } }] };
+  }
   if (a.kind === 'propose' && d.job) {
     const labels = ['What it does', "What it's aiming for", 'What it gets from others', 'How it goes about it', 'What great looks like'];
     const keys = ['does', 'aim', 'gets', 'how', 'great'];
@@ -1052,7 +1070,8 @@ function said(page: Json, bot: string): Line[] {
       text: `Chief asked: ${plain(String(m.title ?? text.split('\n')[0])).slice(0, 80)}`, detail: chatWords(text),
       files: [...pics, ...(m.files ?? []).map((f: Json) => fileView(f.bot, f.path))], choices: [] };
     return { id: m.id, from: m.author === 'person' ? 'me' : 'them',
-      recap: m.recap === true, text: m.author === 'person' ? (pics.length && /^Here (is a photo|are some photos)\.$/.test(text) ? '' : noTools(text)) : chatWords(text), files: [...pics, ...(m.files ?? []).map((f: Json) => fileView(f.bot, f.path))], choices: (m.choices ?? []).map(plain), at: m.at ? at(m.at) : undefined, unsure: m.author === 'bot' && /^Not sure it worked:|^[^.]{1,40} isn't sure “/.test(text) };
+      recap: m.recap === true, text: m.author === 'person' ? (pics.length && /^Here (is a photo|are some photos)\.$/.test(text) ? '' : noTools(text)) : chatWords(text), files: [...pics, ...(m.files ?? []).map((f: Json) => fileView(f.bot, f.path))], choices: (m.choices ?? []).map(plain), at: m.at ? at(m.at) : undefined, unsure: m.author === 'bot' && /^Not sure it worked:|^[^.]{1,40} isn't sure “/.test(text),
+      ...(m.author !== 'person' && ruleEnd(m.rule) ? { rule: ruleEnd(m.rule) } : {}) };
   }).filter((l: Line) => l.text || l.files.length);
 }
 
