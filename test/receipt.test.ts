@@ -47,7 +47,7 @@ test('a done job is marked once, on its result; working, a question back, unsure
   assert.deepEqual(marked(crew, 'quill', note.id).map((l) => l.id), [r.id]);
   const q2 = crew.assign('quill', 'a second sheet, ask permission first', 'chief').task;
   await holding(crew, 'quill');
-  const asked = db.get("SELECT id FROM messages WHERE bot = 'quill' AND author = 'person' AND task_id = ?", q2)!.id;
+  const asked = db.get("SELECT id FROM messages WHERE bot = 'quill' AND author = 'chief' AND task_id = ?", q2)!.id;
   await release(crew, 'quill', 'Here it is.');
   await settled(db, q2);
   const page = crew.botPage('quill');
