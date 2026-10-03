@@ -336,8 +336,8 @@ test('pairing with a yes at the computer, grants, approvals from the phone, and 
 
   // An approval answered from the phone: the gate holds the bot's write until the phone says yes.
   await http('POST', '/api/recruit', { template: 'reel', name: 'Reel' });
-  const outside = join(root, 'Documents', 'from-handset.txt'); // not "phone": Chief's pairing check reads the whole message
-  await a.req('POST', '/api/bots/chief/messages', { text: `save it [tool crew_assign ${JSON.stringify({ bot: 'reel', task: `save it [tool crew_write ${JSON.stringify({ content: 'from the phone', path: outside })}]` })}]` });
+  const outside = join(root, 'Documents', 'from-phone.txt');
+  await a.req('POST', '/api/bots/chief/messages', { text: `save it [tool crew_assign ${JSON.stringify({ bot: 'reel', task: `save it [tool crew_write ${JSON.stringify({ path: outside, content: 'from the phone' })}]` })}]` });
   const ask = await until(async () => (await a.req('GET', '/api/state')).body.asks.find((x: any) => x.kind === 'permission'));
   const job = ask.task_id;
   assert.match(ask.title, /Reel wants to change a file/);

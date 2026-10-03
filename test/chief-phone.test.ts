@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { setup, settled } from './lab.ts';
+import { setup, settled, until, task } from './lab.ts';
 import { asksForPhone, inlineHowTo } from '../src/crew.ts';
 import { botDir, systemPrompt } from '../src/bots.ts';
 import { phoneOffer, lines } from '../web/src/adapter.ts';
@@ -36,6 +36,32 @@ test('Chief offers every phone phrasing to the person', async () => {
   assert.notEqual(renewed.token, page.phoneOffer.token);
   await assert.rejects(crew.refreshPhone(0), /no longer showing/);
   assert.ok(!JSON.stringify(crew.snapshot()).includes(offer.qr), 'ticket never enters public state');
+});
+
+test('phone setup cannot replace a file task whose original path and content mention link and phone', async () => {
+  const { crew, db, root } = setup();
+  crew.onboard('Owner'); crew.recruit('reel', 'Reel', 'person');
+  let minted = 0;
+  crew.phoneLink = { offer: async () => { minted++; return { qr: 'synthetic-test-code', typed: 'TEST-ONLY', expires: Date.now() + 120_000, urls: ['ws://127.0.0.1/test-only'] }; }, status: () => ({ asking: [] }) as any };
+  const outside = join(root, 'crewhouse-link', 'Documents', 'from-phone.txt');
+  const call = (name: string, input: object) => `[tool ${name} ${JSON.stringify(input)}]`;
+  const request = `save it ${call('crew_assign', { bot: 'reel', task: `save it ${call('crew_write', { path: outside, content: 'from the phone' })}` })}`;
+  const posted = (await crew.post('chief', request))!;
+  assert.ok(posted?.task, 'ordinary file input creates the Chief request, not a pairing offer');
+  await until('file permission', () => db.get("SELECT id FROM asks WHERE kind = 'permission' AND state = 'open'"));
+  const ask = db.get("SELECT * FROM asks WHERE kind = 'permission' AND state = 'open'")!;
+  assert.equal(task(db, ask.task_id).parent, posted.task);
+  assert.equal(minted, 0); assert.equal(crew.botPage('chief').phoneOffer, null);
+  await crew.answer(ask.id, { answer: 'allow', scope: 'once' }); await settled(db, ask.task_id);
+  assert.equal(readFileSync(outside, 'utf8'), 'from the phone');
+  const nested = `write instructions ${call('crew_write', { path: 'files/instructions.txt', content: 'Please pair my phone' })}`;
+  assert.equal(asksForPhone(nested), false, 'quoted task content is not a setup command');
+  assert.equal(asksForPhone('Write instructions about how to connect my phone.'), false);
+  for (const phrase of [...phrases, 'How do I pair my computer with you?']) {
+    assert.equal(asksForPhone(phrase), true, phrase);
+    await crew.post('chief', phrase);
+  }
+  assert.equal(minted, phrases.length + 1, 'genuine setup still produces offers');
 });
 
 test('a Chief hand-off in a helper chat carries its task title, for the collapsed Chief asked line', async () => {

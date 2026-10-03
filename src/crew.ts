@@ -26,7 +26,7 @@ import { StubRuntime } from './stub-runtime.ts';
 import { fileTool } from './files.ts';
 
 /** Phone pairing stays with Chief, including 'pair my computer with you' said on the home computer. */
-export const asksForPhone = (text: string) => /\b(pair|connect|link|add|use|install)\b[\s\S]{0,65}\b(phone|mobile|computer|crewhouse app)\b|\b(phone|mobile|computer)\b[\s\S]{0,35}\b(pair|connect|link)\b/i.test(text);
+export const asksForPhone = (text: string) => /^(?:(?:how (?:do|can) i|can (?:i|you)|please|i (?:want|need|would like) to)\s+)?(?:(?:pair|connect|link|add)\s+(?:(?:my|a|the|this|another)\s+)?(?:phone|mobile|computer)(?:\s+(?:with you|to (?:you|crewhouse)))?|(?:use|install)(?:\s+(?:the )?crewhouse(?: app)?)?\s+on\s+(?:my|a|the)\s+(?:phone|mobile|computer))[.!?]*$/i.test(text.trim());
 export const inlineHowTo = (text: string): 'signin' | 'app' | 'routine' | null =>
   /\b(sign[ -]?in|log[ -]?in)\b/i.test(text) && /\b(chatgpt|ai account|crewhouse)\b/i.test(text) ? 'signin' :
   /\b(connect|link|add)\b[\s\S]{0,45}\b(google calendar|calendar|gmail|drive|notion|canva)\b/i.test(text) ? 'app' :

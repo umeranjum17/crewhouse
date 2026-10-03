@@ -17,12 +17,12 @@ test('a done job is marked once, on its result; working, a question back, unsure
   crew.onboard('Umer');
   crew.recruit('scribe', 'Quill', 'person');
 
-  // A question back ends its turn done in crewd, but nothing was made: no mark.
+  // The helper turn ended; the original task awaits Chief review, not finished: no mark.
   const q = crew.assign('quill', 'make a reception sheet, ask permission first', 'chief').task;
   await holding(crew, 'quill');
   await release(crew, 'quill', 'Is this the desk’s own day sheet, or the manager’s log?');
   await settled(db, q);
-  assert.equal(task(db, q).state, 'done');
+  assert.equal(task(db, q).state, 'needs_you');
   assert.deepEqual(marked(crew, 'quill'), [], 'a question is not a finished job');
 
   // Mid-job: the sheet is already delivered, but the turn is held, so nothing says done yet.
