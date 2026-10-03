@@ -55,7 +55,7 @@ export async function pair(scanned: string, onWords: (w: string) => void): Promi
 export async function pairTypedCode(text: string, onWords: (w: string) => void): Promise<Grant> {
   const t = readTyped(text);
   if (t.kind === 'direct') return pair(offerText(decodeOffer(t.text)), onWords);
-  if (t.kind === 'unknown') throw new Error('That code is missing where to look it up. Copy the whole code from your computer, then try again.');
+  if (t.kind === 'unknown') throw new Error('That code is not complete. Copy the full code from your computer. Then try again.');
   const name = (Device.deviceName || Device.modelName || 'Phone').slice(0, 40);
   const g = await pairWithCode(await findHost(t.base, t.short), t.code, { name, onWords });
   await store.save(g);
@@ -72,7 +72,7 @@ export function desktopSignaling(bot: string) {
   let next = 1;
   let buf = '';
   const opened = (async () => {
-    if (!current) throw new Error("Can't reach the home computer");
+    if (!current) throw new Error('The phone cannot reach the home computer');
     const s = await current.stream('desktop', { bot, build: 'p9b' });
     s.onData = (chunk) => {
       buf += new TextDecoder().decode(chunk);
@@ -85,7 +85,7 @@ export function desktopSignaling(bot: string) {
         else p?.resolve(msg.result);
       }
     };
-    s.onEnd = () => { for (const p of pending.values()) p.reject(new Error('Lost touch with the home computer')); pending.clear(); };
+    s.onEnd = () => { for (const p of pending.values()) p.reject(new Error('The connection to the home computer stopped')); pending.clear(); };
     return s;
   })();
   return {

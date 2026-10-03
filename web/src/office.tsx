@@ -28,7 +28,7 @@ const reduced = () => typeof matchMedia !== 'undefined' && matchMedia('(prefers-
 const TONES: Record<A.Seat, 'ok' | 'wait' | 'off'> = { waiting: 'off', working: 'ok', failed: 'wait', next: 'off', resting: 'off', free: 'off' };
 const said = (c: A.OfficeMember) => {
   const k = A.seatOf(c);
-  return k === 'waiting' ? `${c.name}, waiting on Chief` : k === 'working' ? `${c.name}, working on ${c.status}` : k === 'free' || k === 'resting' ? `${c.name}, ${c.status.toLowerCase()}` : `${c.name}, ${A.SEAT_WORDS[k].toLowerCase()}`;
+  return k === 'waiting' ? `${c.name}, waiting for Chief` : k === 'working' ? `${c.name}, working on ${c.status}` : k === 'free' || k === 'resting' ? `${c.name}, ${c.status.toLowerCase()}` : `${c.name}, ${A.SEAT_WORDS[k].toLowerCase()}`;
 };
 
 const KIND_WORDS: Record<A.FileView['kind'], string> = { image: 'a picture', video: 'a video', sheet: 'a spreadsheet', page: 'a document', doc: 'a file' };
@@ -144,7 +144,7 @@ export function Office({ state, live, night }: { state: Json; live: A.OfficeView
 /** The strip's word for each figure, short enough for a sixth of a phone: a helper waiting on Chief just "waiting", and
  *  "for you" only ever under Chief. */
 type StripSeat = A.Seat | 'done' | 'here' | 'for-you';
-const STRIP: Record<StripSeat, string> = { 'for-you': 'for you', waiting: 'waiting', working: 'working', failed: 'stuck', next: 'up next', resting: 'resting', free: 'free', done: 'done', here: 'here' };
+const STRIP: Record<StripSeat, string> = { 'for-you': 'for you', waiting: 'waiting', working: 'working', failed: 'stuck', next: 'next', resting: 'resting', free: 'free', done: 'done', here: 'here' };
 const stripSeat = (c: A.OfficeMember, v: A.OfficeView): StripSeat => { const r = A.railWord(c, v); return r.seat; };
 
 /** The room itself: wall, floor line, a shelf with a plant, the night window and a clock (B1 Studio). */
@@ -435,7 +435,7 @@ function ChiefSheet({ live, state, roles, onClose }: { live: A.OfficeView; state
         <header className="o-sh-head">
           <Face who="chief" size={64} />
           <span className="grow"><h2>Chief</h2><span className="mute small">Runs your crew</span>
-            <span className={`o-state ${word === 'Has things for you' ? 'needs' : word === 'Working' ? 'work' : ''}`}><i />{word === 'Working' ? 'Working now' : word}</span></span>
+            <span className={`o-state ${word === 'Has requests for you' ? 'needs' : word === 'Working' ? 'work' : ''}`}><i />{word === 'Working' ? 'Working now' : word}</span></span>
           <button className="icon-btn" onClick={onClose} aria-label="Close">✕</button>
         </header>
         <div className="o-sec"><div className="o-eyebrow">Ways to reach</div>
@@ -446,8 +446,8 @@ function ChiefSheet({ live, state, roles, onClose }: { live: A.OfficeView; state
         <div className="o-sec"><div className="o-eyebrow">Crew computers</div>
           {computers.length ? <div className="card list">{computers.map((c) => <a key={c.id} className="row-item" href={`#/h/${c.id}/screen`} onClick={onClose}>
             <span className="o-thumb" aria-hidden><Face who={{ kind: c.kind, name: c.name, mood: c.mood }} size={30} /><small>Watch</small></span>
-            <span className="grow"><b>{c.name}'s computer</b><small className="mute block clamp1">{roles.get(c.id)?.driving ? 'You have the wheel' : c.step || c.status}</small><span className="o-live"><i />Live</span></span><Icon name="next" /></a>)}</div>
-            : <p className="o-note">No crew computer is running right now.</p>}</div>
+            <span className="grow"><b>{c.name}'s computer</b><small className="mute block clamp1">{roles.get(c.id)?.driving ? 'You control the screen' : c.step || c.status}</small><span className="o-live"><i />Live</span></span><Icon name="next" /></a>)}</div>
+            : <p className="o-note">No crew computer is on now.</p>}</div>
         <div className="o-sec"><div className="o-eyebrow">Recent activity</div>
           {recent.length ? <div className="card list">{recent.map((r) => <a key={r.key} className="row-item" href={r.href} onClick={onClose}><span className="grow clamp1">{r.text}</span><time className="mute small">{A.clock(r.at)}</time></a>)}</div>
             : <p className="o-note">Nothing yet today.</p>}</div>
@@ -468,8 +468,8 @@ function HelperSheet({ c, h, state, onClose }: { c: A.OfficeMember; h: A.Helper 
   const seat = A.seatOf(c);
   const askChief = () => { keepDraft('chief', `About ${c.name}'s job${job ? ` (${job.title})` : ''}: `); onClose(); go('#/chief'); };
   let body: ReactNode;
-  if (seat === 'waiting') body = <p className="o-note">{c.name} is waiting on Chief, and Chief has it with what's for you.</p>;
-  else if (!c.ring) body = <p className="o-note">{c.status === 'Up next' ? `Your job is next in line. ${c.name} starts it as soon as the desk is clear.` : `${c.name} is free to help. Tell Chief what you need, and he'll pass it over.`}</p>;
+  if (seat === 'waiting') body = <p className="o-note">{c.name} waits for Chief. Chief shows it to you with your other requests.</p>;
+  else if (!c.ring) body = <p className="o-note">{c.status === 'Up next' ? `Your job is next. ${c.name} starts it when the current job is done.` : `${c.name} is free to help. Tell Chief what you need. Chief gives the job to ${c.name}.`}</p>;
   return (
     <div className="scrim o-scrim" onClick={onClose}>
       <div ref={box} className="o-sheet" role="dialog" aria-modal aria-label={c.name} onClick={(e) => e.stopPropagation()}>
@@ -479,7 +479,7 @@ function HelperSheet({ c, h, state, onClose }: { c: A.OfficeMember; h: A.Helper 
           <button className="icon-btn" onClick={onClose} aria-label="Close">✕</button>
         </header>
         <Pill tone={TONES[seat]} live={seat === 'working'}>{seat === 'working' || seat === 'waiting' ? A.SEAT_WORDS[seat] : c.status}</Pill>
-        {c.ring && job && <div className="o-sec"><div className="o-eyebrow">{seat === 'waiting' ? 'Waiting on Chief' : 'Working on'}</div><h3>{job.title}</h3></div>}
+        {c.ring && job && <div className="o-sec"><div className="o-eyebrow">{seat === 'waiting' ? 'Waiting for Chief' : 'Working on'}</div><h3>{job.title}</h3></div>}
         {c.steps.length > 0 && <Steps steps={c.steps} max={5} />}
         {c.things.length > 0 && <div className="o-sec"><div className="o-eyebrow">{c.ring ? 'First looks' : 'Made for you'}</div>
           {c.things.map((f, i) => <Media key={i} f={f} />)}</div>}
@@ -488,7 +488,7 @@ function HelperSheet({ c, h, state, onClose }: { c: A.OfficeMember; h: A.Helper 
         <a className="btn o-chat" href={`#/h/${c.id}`}>See {c.name}'s reports to Chief</a>
         {h?.computer && <div className="o-sec"><div className="o-eyebrow">{c.name}'s computer</div>
           <div className="chips"><a className="btn" href={`#/h/${c.id}/screen`}>Watch {c.name}</a>
-            <button className="btn" onClick={() => attempt(async () => { await api.takeOver(c.id); go(`#/h/${c.id}/screen`); })}>Take the wheel</button></div></div>}
+            <button className="btn" onClick={() => attempt(async () => { await api.takeOver(c.id); go(`#/h/${c.id}/screen`); })}>Take control</button></div></div>}
       </div>
     </div>
   );

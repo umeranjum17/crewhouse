@@ -53,9 +53,9 @@ export async function attempt(fn: () => Promise<unknown>, ok?: string, quiet = f
   try { await fn(); if (ok) toast(ok); return true; } catch (e: any) { if (!quiet) toast(FRIENDLY[trouble(e)]); return false; }
 }
 const FRIENDLY = {
-  missing: "That isn't ready yet. It arrives with the next Crewhouse update.",
-  offline: "Can't reach the home computer right now. Check it's on, then try again.",
-  failed: 'That didn’t work. Please try again.',
+  missing: 'That is not ready yet. It comes with the next Crewhouse update.',
+  offline: 'I cannot reach the home computer now. Make sure that it is on. Then try again.',
+  failed: 'That did not work. Please try again.',
 };
 
 // ---------- dialogs ----------
@@ -461,8 +461,8 @@ function useVoice(on: boolean, text: string, put: (t: string) => void) {
     const h = hear();
     setEar(h);
     setListen('chief', true);
-    h.words.then((w) => { if (w) put(now.current.trim() ? `${now.current.trimEnd()} ${w}` : w); else toast("I didn't catch that. Try again."); },
-      (e) => toast(e.message === 'blocked' ? 'Allow the microphone for this page, then try again.' : "Speaking isn't ready on this computer. Type instead."))
+    h.words.then((w) => { if (w) put(now.current.trim() ? `${now.current.trimEnd()} ${w}` : w); else toast('I did not hear that. Try again.'); },
+      (e) => toast(e.message === 'blocked' ? 'Allow the microphone for this page. Then try again.' : 'Voice input is not available on this computer. Type your message.'))
       .finally(() => { setEar(null); setListen('chief', false); });
   };
   return <button type="button" className={`mic${ear ? ' on' : ''}`} aria-label={ear ? 'Stop listening' : 'Speak to Chief'} aria-pressed={!!ear}
@@ -500,8 +500,8 @@ export function Composer({ placeholder, onSend, chat, chips }: { placeholder: st
   };
   return (
     <form className={`composer${chips ? ' has-bar' : ''}`} onSubmit={(e) => { e.preventDefault(); void send(); }}>
-      {away ? <div className="send-away" role="status">Reconnecting… your words stay here until the home computer answers.</div>
-        : failed && <div className="send-failed" role="alert">Not sent — it's kept here. <button type="button" className="link inline" onClick={() => void send()}>Retry</button></div>}
+      {away ? <div className="send-away" role="status">Connecting again… Your words stay here until the home computer answers.</div>
+        : failed && <div className="send-failed" role="alert">Not sent. Your words stay here. <button type="button" className="link inline" onClick={() => void send()}>Retry</button></div>}
       <textarea rows={1} value={text} placeholder={placeholder} aria-label={placeholder}
         onFocus={() => { setFocused(true); hear(true, text); }} onBlur={() => { setFocused(false); hear(false, text); }}
         onChange={(e) => change(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(); } }} />
@@ -516,7 +516,7 @@ export function Composer({ placeholder, onSend, chat, chips }: { placeholder: st
 }
 
 // ---------- asks ----------
-const answer = (c: Card, body: Json) => attempt(() => api.answer(c.id, body), body.change ? 'Chief will change the plan' : body.remind ? 'OK, back tomorrow' : body.answer === 'deny' ? 'OK, not now' : 'Done. Carrying on.');
+const answer = (c: Card, body: Json) => attempt(() => api.answer(c.id, body), body.change ? 'Chief will change the plan' : body.remind ? 'OK. I will ask again tomorrow.' : body.answer === 'deny' ? 'OK, not now' : 'Done. The work continues.');
 
 /** A waiting-for-the-computer schedule preview: the words in plain time, and the first run on the computer's own clock. */
 function useSchedule(text: string | null) {
@@ -614,14 +614,14 @@ export function AskCard({ c, onDone }: { c: Card; onDone: () => void }) {
       <AskHead c={c} />
       <p className="ask-words">{question}</p>
       {edit.box || <AskEvidence c={c} open={false} readAll={<a className="link" href={`#/ask/${c.id}`}>Read all</a>} />}
-      {oops && <div className="send-failed" role="alert">That didn't go through. <button type="button" className="link inline" onClick={() => last.current && act(last.current)}>Try again</button></div>}
+      {oops && <div className="send-failed" role="alert">That did not work. <button type="button" className="link inline" onClick={() => last.current && act(last.current)}>Try again</button></div>}
       {c.kind === 'routine' ? (
         <>
           {when !== null && <form className="row routine-edit" onSubmit={(e) => { e.preventDefault(); if (!stuck) void start(); }}>
             <input className="input grow" value={when} onChange={(e) => setWhen(e.target.value)} placeholder="When? For example: every Saturday 10am" aria-label="When" />
           </form>}
           {when !== null && preview && !preview.bad && <div className="mute small routine-note">{preview.words}. First time {preview.first}. {c.zoneNote}</div>}
-          {when !== null && preview?.bad && <div className="mute small routine-note">I didn't catch that time. Try “every Monday 9:00”.</div>}
+          {when !== null && preview?.bad && <div className="mute small routine-note">I do not understand that time. Try “every Monday 9:00”.</div>}
           <div className="btns">
             <button className="btn go" disabled={stuck} onClick={start}>Start it</button>
             <button className="btn" aria-pressed={when !== null} onClick={() => { setWhen(when === null ? c.schedule || '' : null); }}>{when === null ? 'Change time' : 'Keep the time'}</button>
@@ -662,8 +662,8 @@ export function AskCard({ c, onDone }: { c: Card; onDone: () => void }) {
           {always && <button className="btn ghost always" onClick={() => act(always.body)}>{always.label}</button>}
         </div>
       ) : null}
-      {c.kind === 'spend' && <p className="ask-note">Anything that costs money asks you every time.</p>}
-      {c.kind === 'plan' && <p className="ask-note">Saying Go doesn’t OK any sending or spending. Those still ask you each time.</p>}
+      {c.kind === 'spend' && <p className="ask-note">Chief asks you every time something costs money.</p>}
+      {c.kind === 'plan' && <p className="ask-note">Go does not approve a message or a payment. Chief still asks you about each one.</p>}
     </div>
   );
 }
@@ -691,10 +691,10 @@ export function AskSheet({ c, onClose }: { c: Card; onClose: () => void }) {
         <AskHead c={c} />
         <h2 className="ask-words">{question}</h2>
         {edit.box || <AskEvidence c={c} open={open} readAll={<button className="link" onClick={() => setOpen(true)}>Read all</button>} />}
-        {c.review && c.order && !c.order.known && <div className="mute small">So nothing is counted against the monthly limit.</div>}
+        {c.review && c.order && !c.order.known && <div className="mute small">So this does not count against the monthly limit.</div>}
         {c.inApp && <div className="mute small">In {c.inApp}</div>}
         {c.chief && <div className="chief-says"><Face who="chief" size={20} /><span><b>Chief:</b> {c.chief}</span></div>}
-        {oops && <div className="send-failed" role="alert">That didn't go through. <button type="button" className="link inline" onClick={() => last.current && act(last.current)}>Try again</button></div>}
+        {oops && <div className="send-failed" role="alert">That did not work. <button type="button" className="link inline" onClick={() => last.current && act(last.current)}>Try again</button></div>}
         <div className="approve-btns">
           {edit.can && <button className="btn big" aria-pressed={edit.editing} onClick={edit.toggle}>{edit.editing ? 'Use the original' : 'Edit'}</button>}
           {remind && <button className="btn big ghost" onClick={() => act({ ...remind.body, remind: true })}>Remind me tomorrow</button>}
@@ -702,7 +702,7 @@ export function AskSheet({ c, onClose }: { c: Card; onClose: () => void }) {
           {yes && <button className="btn go big" disabled={edit.empty} onClick={() => act(edit.yes(yes.body))}>{yes.label}</button>}
         </div>
         {always && <button className="btn ghost always" onClick={() => act(always.body)}>{always.label}</button>}
-        {c.kind === 'spend' && <p className="ask-note">Anything that costs money asks you every time.</p>}
+        {c.kind === 'spend' && <p className="ask-note">Chief asks you every time something costs money.</p>}
       </div>
     </div>
   );

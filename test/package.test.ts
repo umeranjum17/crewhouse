@@ -41,7 +41,7 @@ test('a newer release is offered to the person in words, and nothing when it is 
   for (let i = 0; i < 50 && !(s = await state()).update; i++) await sleep(100);
   assert.deepEqual(s.update, { version: '99.0.0', url: 'https://github.com/umeranjum17/crewhouse/releases/tag/v99.0.0' });
   assert.deepEqual(s.installing, [], 'not the downloaded app: nothing installs by itself');
-  assert.equal(A.update(s)!.words, 'A new Crewhouse is ready (99.0.0). Download it and open it, and the crew carries on where it was.');
+  assert.equal(A.update(s)!.words, 'A new Crewhouse is ready (99.0.0). Download it. Then open it. The crew continues from where it stopped.');
 
   daemon.kill();
   await new Promise((r) => daemon.once('exit', r));
@@ -52,7 +52,7 @@ test('a newer release is offered to the person in words, and nothing when it is 
 
 test('the downloaded app\'s words: tools getting ready, and Google in steps on Google\'s own pages', () => {
   assert.equal(A.gettingReady({ installing: [] }), '');
-  assert.match(A.gettingReady({ installing: ['browser', 'documents'] }), /helpers' own web browser ready/);
+  assert.match(A.gettingReady({ installing: ['browser', 'documents'] }), /helpers' own web browser downloads now/);
   assert.equal(A.update({}), null);
   for (const s of A.GOOGLE_STEPS) assert.match(s.url, /^https:\/\/console\.cloud\.google\.com\//);
   assert.equal(A.GOOGLE_STEPS.length, 4);
@@ -79,7 +79,7 @@ test('the downloaded app keeps answering while it fetches the helpers\' tools on
   const t0 = Date.now();
   const r = await fetch(`http://127.0.0.1:${p2}/api/state`, { signal: AbortSignal.timeout(2000) });
   assert.ok(r.ok && Date.now() - t0 < 1000, 'and crewd answers at once meanwhile');
-  assert.match(A.gettingReady(await r.json()), /getting|Getting/);
+  assert.match(A.gettingReady(await r.json()), /download now|downloads now/);
   for (let i = 0; i < 50 && !existsSync(join(root, 'install-env')); i++) await sleep(100);
   // The installers run one after another and each re-opens the file with `>` (truncating) before `env` writes, so wait
   // for words in it, not mere existence: a busy CI box reads between the truncate and the write and sees nothing.

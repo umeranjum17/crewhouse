@@ -281,7 +281,7 @@ test('the crew\'s share: routines wait for tomorrow once it is used up, what the
     assert.equal(db.all("SELECT 1 FROM events WHERE kind = 'share.reached'").length, 1);
     const parked = crew.routines().find((x) => x.id === r.id)!.history[0];
     assert.doesNotMatch(A.routines(crew.snapshot()).find((x: any) => x.id === r.id)!.last, /Last ran/);
-    assert.match(A.routines(crew.snapshot()).find((x: any) => x.id === r.id)!.last, /Waiting until tomorrow/);
+    assert.match(A.routines(crew.snapshot()).find((x: any) => x.id === r.id)!.last, /This job waits until tomorrow/);
     assert.equal(parked.state, 'paused');
     assert.equal(db.get("SELECT COUNT(*) AS n FROM events WHERE kind = 'task.done' AND json_extract(data, '$.task') = ?", t.id)!.n, 0, 'no completion event for the phone');
     assert.equal(A.work(crew.snapshot()).some((w) => w.title === 'Deal check'), false, 'Home does not claim parked work is running');
@@ -515,7 +515,7 @@ test('tell me when something\'s wrong: a routine that fails says so in Chief\'s 
   await timeOut(db.get('SELECT id FROM tasks WHERE routine = ?', r.id)!.id);
   assert.match(lastSaid(db, 'chief')!, /^Reel couldn't finish “Deal check”\. Took longer than an hour, so I stopped it\. It will try again .*\.$/);
   const last = A.routines(crew.snapshot()).find((x: any) => x.id === r.id)!.last;
-  assert.match(last, /^Didn't finish: Took longer than an hour, so I stopped it\.$/);
+  assert.match(last, /^Did not finish: Took longer than an hour, so I stopped it\.$/);
   assert.doesNotMatch(last, /Last ran|token|engine/);
 
   const { task: t } = (await crew.post('reel', 'ask permission: make the card'))!;

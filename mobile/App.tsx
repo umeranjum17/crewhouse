@@ -56,9 +56,9 @@ const mix = (a: string, b: string, f: number) => {
 const toasts: ((m: string) => void)[] = [];
 const say = (m: string) => toasts.at(-1)?.(m);
 const FRIENDLY = {
-  missing: "That isn't ready yet. It arrives with the next Crewhouse update.",
-  offline: "Can't reach the home computer right now. Check it's on, then try again.",
-  failed: 'That didn’t work. Please try again.',
+  missing: 'That is not ready yet. It comes with the next Crewhouse update.',
+  offline: 'The phone cannot reach the home computer now. Make sure that the computer is on. Then try again.',
+  failed: 'That did not work. Please try again.',
 };
 /** Run an action; a failure becomes a friendly toast, never an error message (web/src/parts.tsx attempt). `quiet`
  *  leaves the word to the caller — the composer's own "Not sent. Retry" line. */
@@ -215,7 +215,7 @@ function PhoneCard({ offer, reload }: { offer: NonNullable<ReturnType<typeof A.p
   const renew = async () => {
     if (busy.current) return;
     busy.current = true;
-    try { setCurrent(await api.refreshPhone(current.message)); reload(); } catch { active.current = 0; say('Could not show a new code'); }
+    try { setCurrent(await api.refreshPhone(current.message)); reload(); } catch { active.current = 0; say('The phone could not show a new code'); }
     finally { busy.current = false; }
   };
   useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer); }, []);
@@ -227,7 +227,7 @@ function PhoneCard({ offer, reload }: { offer: NonNullable<ReturnType<typeof A.p
     {!offer.joined && <T tone="mute">The other phone will answer the crew and give them jobs, as you.</T>}
     {!offer.joined && !offer.waiting && left > 0 && qr && <View accessibilityLabel="Scan to pair another phone" style={{ width: 220, height: 220, backgroundColor: 'white', padding: 8 }}><View style={{ flex: 1 }}>{qr.map((row, y) => <View key={y} style={{ flex: 1, flexDirection: 'row' }}>{row.map((dark, x) => <View key={x} style={{ flex: 1, backgroundColor: dark ? 'black' : 'white' }} />)}</View>)}</View></View>}
     {offer.joined ? <T style={s.b}>Paired: {offer.joined}</T> : offer.waiting ? <><T>{offer.waiting.name} is waiting. Check these two words: {offer.waiting.words}</T><T tone="mute">For your safety, approve on the computer where this code was shown.</T></> : left ? <><T>Scan this with the other phone, or type this code there. Approve on the computer.</T><T style={s.b}>{current.typed}</T><Btn label="Copy code" onPress={() => { Clipboard.setString(current.typed); say('Code copied'); }} /><T tone="mute">Works once · {Math.floor(left / 60)}:{String(left % 60).padStart(2, '0')} left</T></>
-      : <><T tone="mute">That code has run out.</T><Btn go label="Show a new code" onPress={() => { active.current = Date.now(); void renew(); }} /></>}
+      : <><T tone="mute">That code expired.</T><Btn go label="Show a new code" onPress={() => { active.current = Date.now(); void renew(); }} /></>}
   </Card>;
 }
 /** A section's name, in small capitals; `count` is the pink number beside Chief's inbox. */
@@ -269,10 +269,10 @@ function Mic({ on, text, put, listen = false }: { on: boolean; text: string; put
     const mic = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO, { title: 'Speak to Chief',
       message: 'Crewhouse hears you only while the mic is on, on this phone. Your words wait in the box until you send them.', buttonPositive: 'OK' });
     if (!shown.current) return;
-    if (mic !== PermissionsAndroid.RESULTS.GRANTED) { setListening(false); return say('Allow the microphone for Crewhouse in your phone settings, then try again.'); }
-    hear().then((w) => { if (w) put(now.current.trim() ? `${now.current.trimEnd()} ${w}` : w); else say("I didn't catch that. Try again."); },
-      (e) => say(/blocked/.test(`${e?.code} ${e?.message}`) ? 'Allow the microphone for Crewhouse in your phone settings, then try again.'
-        : "Speaking isn't ready on this phone yet. Type instead, or use the keyboard's mic."))
+    if (mic !== PermissionsAndroid.RESULTS.GRANTED) { setListening(false); return say('Allow the microphone for Crewhouse in your phone settings. Then try again.'); }
+    hear().then((w) => { if (w) put(now.current.trim() ? `${now.current.trimEnd()} ${w}` : w); else say('I did not hear that. Try again.'); },
+      (e) => say(/blocked/.test(`${e?.code} ${e?.message}`) ? 'Allow the microphone for Crewhouse in your phone settings. Then try again.'
+        : 'Speech input is not ready on this phone yet. Type your words, or use the microphone on the keyboard.'))
       .finally(() => setListening(false));
   };
   // `listen`: opened by holding the bubble, so the mic starts at once (it is this screen's, never the bubble's).
@@ -318,9 +318,9 @@ function Composer({ placeholder, onSend, chat, photos: canPhoto = true, away, mi
   });
   return (
     <View style={{ gap: 6 }}>
-      {away && <T tone="ink2" style={[s.small, { paddingHorizontal: 8 }]}>Reconnecting… your words stay here until the home computer answers.</T>}
+      {away && <T tone="ink2" style={[s.small, { paddingHorizontal: 8 }]}>Connecting again… Your words stay here until the home computer answers.</T>}
       {!away && failed && <View style={s.row}>
-        <T tone="pinkInk" style={[s.small, { flex: 1 }]}>Not sent — it's kept here.</T>
+        <T tone="pinkInk" style={[s.small, { flex: 1 }]}>Not sent. Your words stay here.</T>
         <Btn label="Retry" onPress={() => void send()} />
       </View>}
       {pics.length > 0 && <View style={{ flexDirection: 'row', gap: 6, paddingHorizontal: 8 }}>
@@ -486,7 +486,7 @@ function VideoSheet({ f, onClose }: { f: A.FileView; onClose: () => void }) {
   const player = useVideoPlayer(uri ? { uri } : null);
   useEffect(() => {
     const src = A.fileSource(f.url);
-    if (!src) { setErr("This video can't open here."); return; }
+    if (!src) { setErr('The phone cannot open this video.'); return; }
     let on = true;
     const file = new File(Paths.cache, `crewhouse-video-${Date.now()}${(f.url.match(/\.(mp4|webm|mov)$/i) ?? ['.mp4'])[0]}`);
     (async () => {
@@ -503,7 +503,7 @@ function VideoSheet({ f, onClose }: { f: A.FileView; onClose: () => void }) {
           if (!chunk.more) break;
         }
         if (on) setUri(file.uri);
-      } catch { if (on) setErr("Couldn't bring it over. Check the home computer is awake, then try again."); }
+      } catch { if (on) setErr('The phone could not get the file. Make sure that the home computer is on. Then try again.'); }
     })();
     return () => { on = false; file.delete(); };
   }, [f.url]);
@@ -514,7 +514,7 @@ function VideoSheet({ f, onClose }: { f: A.FileView; onClose: () => void }) {
         <View style={s.row}><T tone="mute">▶</T><T style={[s.h2, { flex: 1 }]}>{f.name}</T><Btn label="Close" onPress={onClose} /></View>
         {uri ? <VideoView player={player} contentFit="contain" style={{ width: '100%', aspectRatio: 16 / 9, borderRadius: 12, backgroundColor: '#000' }} accessibilityLabel={`Playing ${f.name}`} />
           : err ? <T tone="pinkInk">{err}</T>
-          : <T tone="mute">Getting it from your computer… {size ? `${Math.min(100, Math.round((part / size) * 100))}%` : ''}</T>}
+          : <T tone="mute">The phone gets the file from your computer… {size ? `${Math.min(100, Math.round((part / size) * 100))}%` : ''}</T>}
       </Pressable>
     </Pressable>
   </Modal>;
@@ -524,11 +524,11 @@ function VideoSheet({ f, onClose }: { f: A.FileView; onClose: () => void }) {
 /** One plain line for a pairing failure, and the retry is the action — never the machinery's own words. */
 const pairWords = (e: any): string => {
   const m = String(e?.message ?? e ?? '');
-  if (/run out|expired/i.test(m)) return 'That code has run out. Show a new one on your computer, then try again.';
+  if (/run out|expired/i.test(m)) return 'That code expired. Show a new code on your computer. Then try again.';
   if (/copy the whole code/i.test(m)) return m; // already said for the person
-  if (/match|refus|wrong|no such|not found|unknown/i.test(m)) return "That code didn't match. Show a fresh one and try again.";
-  if (/reach|network|timeout|address|relay|host/i.test(m)) return "Couldn't reach your computer. Check it's awake, then try again.";
-  return 'That didn\'t go through. Check the code, then try again.';
+  if (/match|refus|wrong|no such|not found|unknown/i.test(m)) return 'That code did not match. Show a new code on your computer. Then try again.';
+  if (/reach|network|timeout|address|relay|host/i.test(m)) return 'The phone could not reach your computer. Make sure that it is on. Then try again.';
+  return 'That did not work. Make sure that the code is correct. Then try again.';
 };
 /** What this phone knows about its own news: allowed and working (on), said no (off), or this build can't push at all
  *  (missing — the phone still shows everything the moment the app is opened). */
@@ -542,7 +542,7 @@ async function pushState(ask = false): Promise<'on' | 'off' | 'missing'> {
 const PUSH_WORDS = {
   on: 'On',
   off: 'Notifications are off for Crewhouse on this phone',
-  missing: "Notifications aren't switched on yet. You'll see news when you open Crewhouse.",
+  missing: 'Notifications are not on yet. You will see news when you open Crewhouse.',
 };
 
 function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
@@ -592,7 +592,7 @@ function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
     return (
       <Center>
         <ChiefArt mood="happy" size={104} whole />
-        <T style={s.display}>You're in</T>
+        <T style={s.display}>This phone is paired</T>
         <T tone="ink2" style={s.centerText}>This phone is paired with your computer{done.device.role === 'view' ? '. It can watch the crew, not answer' : ''}.</T>
         {checked && push === 'missing' && <T tone="mute" style={s.centerText}>{PUSH_WORDS.missing}</T>}
         <Btn go big label="Open Crewhouse" onPress={() => onPaired(done)} />
@@ -604,7 +604,7 @@ function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
       <Center>
         <ChiefArt mood="listen" size={104} whole />
         <T style={s.display}>Check the words</T>
-        <T tone="ink2" style={s.centerText}>Your computer is asking whether this phone may join. Say yes there only if it shows these same two words:</T>
+        <T tone="ink2" style={s.centerText}>Your computer asks if this phone can join. Say yes on the computer only if it shows these two words:</T>
         <Text style={[s.fp, { color: t.pinkInk }]}>{words}</Text>
         <ActivityIndicator color={t.pink} />
       </Center>
@@ -674,7 +674,7 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
   // A share the phone wouldn't let Crewhouse read: said plainly, and nothing else happens.
   useEffect(() => {
     if (!shareError) return;
-    say("That photo couldn't be opened here. Share it again from your gallery, or tap + in a chat to pick it.");
+    say('The phone could not open that photo. Share it again from your gallery. Or tap + in a chat and select the photo.');
     resetShareIntent();
   }, [shareError]);
   // Opens on what this phone kept, so recent chats read even while the home computer is asleep.
@@ -730,7 +730,7 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
     return () => clearInterval(t);
   }, [out]);
   const was = useRef<Status>('connecting');
-  useEffect(() => { if (status === 'online' && was.current === 'offline' && state) say('Back in touch with the home computer ✓'); was.current = status; }, [status]);
+  useEffect(() => { if (status === 'online' && was.current === 'offline' && state) say('Connected to the home computer again ✓'); was.current = status; }, [status]);
 
   const go = (r: Route, replace = false) => setStack((st) => (replace ? [r] : [...st, r]));
   const back = useCallback(() => {
@@ -770,8 +770,8 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
     return (
       <Center>
         <ChiefArt mood="error" size={112} whole />
-        <T style={s.h1}>Not recognised</T>
-        <T tone="ink2" style={s.centerText}>Your computer didn't accept this phone. It may have been removed in Settings, Phones, or Crewhouse was set up again.</T>
+        <T style={s.h1}>Not recognized</T>
+        <T tone="ink2" style={s.centerText}>Your computer did not accept this phone. Maybe someone removed it in Settings, Phones. Or someone set up Crewhouse again.</T>
         <Btn go big label="Pair again" onPress={forget} />
         <Btn label="Try again" onPress={() => link.current?.retry()} />
       </Center>
@@ -781,7 +781,7 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
     return (
       <Center>
         <ChiefArt mood="work" size={112} whole />
-        <T tone="ink2" style={s.centerText}>{out ? `Can't reach the home computer. ${missing || 'Checking why…'} Trying again by itself.` : 'Waking the crew…'}</T>
+        <T tone="ink2" style={s.centerText}>{out ? `The phone cannot reach the home computer. ${missing || 'The phone looks for the cause…'} It tries again automatically.` : 'The phone connects to the crew…'}</T>
       </Center>
     );
   }
@@ -799,16 +799,16 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
     <KeyboardAvoidingView style={{ flex: 1 }} behavior="height">
       {offline && (
         <Pressable onPress={() => setWhy(true)} style={[s.offline, { backgroundColor: t.amber }]} accessibilityRole="button" accessibilityHint="Explains what is happening">
-          <Text style={[s.offlineText, { color: color.day.ink }]} numberOfLines={1}>{`Can't reach the home computer${heard.current ? ` · last heard ${A.clock(heard.current)}` : ''}`}</Text>
+          <Text style={[s.offlineText, { color: color.day.ink }]} numberOfLines={1}>{`The phone cannot reach the home computer${heard.current ? ` · last heard ${A.clock(heard.current)}` : ''}`}</Text>
         </Pressable>
       )}
       <Modal visible={why} transparent animationType={motion.sheet(reduce)} onRequestClose={() => setWhy(false)}>
         <Pressable style={s.scrim} onPress={() => setWhy(false)}>
           <Pressable style={[s.sheet, { backgroundColor: t.bg }]} onPress={() => {}}>
             <View style={{ alignItems: 'center' }}><ChiefArt mood="rest" size={72} whole /></View>
-            <T style={s.h2}>The home computer isn't answering</T>
-            <T tone="ink2">{missing || 'Checking why…'} If it's asleep, the crew has paused and carries on when it wakes. This phone keeps trying by itself.</T>
-            <T tone="ink2">Meanwhile you can read your recent chats. You can reply once it's back.</T>
+            <T style={s.h2}>The home computer does not answer</T>
+            <T tone="ink2">{missing || 'Checking why…'} If the computer is asleep, the crew pauses. The crew continues when the computer wakes. This phone tries again automatically.</T>
+            <T tone="ink2">While you wait, you can read your recent chats. You can reply when the computer connects again.</T>
             <Btn go big label="OK" onPress={() => setWhy(false)} />
           </Pressable>
         </Pressable>
@@ -821,7 +821,7 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
         {route.view === 'helper' && <HelperPage key={stack.length} {...ctx} id={route.id!} tab={route.tab ?? 'chat'} m={route.m} setTab={(tab) => setStack((st) => [...st.slice(0, -1), { ...route, tab }])} />}
         {route.view === 'routines' && <Page title="Routines" lead="Jobs the crew does on a schedule." back={toHome}><RoutineList {...ctx} /></Page>}
         {route.view === 'add' && <AddHelper {...ctx} />}
-        {route.view === 'things' && <Page title="Things" lead="Everything the crew has made for you." back={toHome}><ThingsList list={A.things(state)} state={state} empty="Videos, lists, letters and plans the crew makes for you land here." /></Page>}
+        {route.view === 'things' && <Page title="Things" lead="Everything the crew has made for you." back={toHome}><ThingsList list={A.things(state)} state={state} empty="Videos, lists, letters and plans that the crew makes for you show here." /></Page>}
         {route.view === 'phone' && <ThisPhone grant={grant} status={status} go={go} back={toHome} onForget={forget} onClear={() => { kept.clear(); say('Cleared from this phone ✓'); }} />}
       </View>
       {live && <AskSheet c={live} canAct={canAct} onClose={() => { setSheet(null); refresh(); }} />}
@@ -838,12 +838,12 @@ function Hello({ state, refresh, go }: Ctx) {
   const t = useLook();
   // Ask for the name first when it has not been set yet.
   const name = <>
-    <Label>What shall I call you?</Label>
-    <TextInput style={[s.input, { color: t.ink, borderColor: t.line }]} value={address} onChangeText={setAddress} placeholder="What shall I call you?" placeholderTextColor={t.mute} accessibilityLabel="What shall I call you?" />
+    <Label>What do you want me to call you?</Label>
+    <TextInput style={[s.input, { color: t.ink, borderColor: t.line }]} value={address} onChangeText={setAddress} placeholder="What do you want me to call you?" placeholderTextColor={t.mute} accessibilityLabel="What do you want me to call you?" />
     <View style={s.chips}>{['Sir', "Ma'am"].map((q) => <Btn key={q} label={q} onPress={() => setAddress(q)} />)}</View>
   </>;
   const pick = (ask?: string, bot?: string) => {
-    if (!address.trim()) return say('First, what shall I call you?');
+    if (!address.trim()) return say('First, tell me what to call you.');
     void attempt(async () => { await api.onboard(address.trim(), ask, bot); refresh(); go({ view: 'chief' }, true); });
   };
   const reduce = motion.useReduceMotion();
@@ -853,14 +853,14 @@ function Hello({ state, refresh, go }: Ctx) {
       <motion.Rise reduce={reduce} delay={80}><View style={[s.speech, { backgroundColor: t.solid, borderColor: t.line }]}>
         <View style={[s.speechTail, { backgroundColor: t.solid, borderColor: t.line }]} />
         <T style={[s.h1, s.serif, s.centerText, { fontSize: 34, lineHeight: 38, marginVertical: 0 }]}>{A.greeting()}{address.trim() ? `, ${address.trim()}` : ''}</T>
-        <T tone="ink2" style={s.centerText}>I'm Chief, your personal assistant. I run your crew of helpers.</T>
+        <T tone="ink2" style={s.centerText}>I am Chief, your personal assistant. I manage your crew of helpers.</T>
       </View></motion.Rise>
       <motion.Rise reduce={reduce} delay={160}><Card style={{ gap: 10 }}>
-        {[A.atHome('the home computer')[0], A.atHome('the home computer')[1], "I'll ask before sending messages, deleting things or spending money."].map((l) =>
+        {[A.atHome('the home computer')[0], A.atHome('the home computer')[1], 'I ask you before I send messages, delete things or spend money.'].map((l) =>
           <View key={l} style={[s.row, { alignItems: 'flex-start' }]}><T style={{ color: t.ok, fontWeight: '700' }}>✓</T><T tone="ink2" style={{ flex: 1 }}>{l}</T></View>)}
       </Card></motion.Rise>
       {name}
-      <Label>What can I take off your plate?</Label>
+      <Label>What can I do for you?</Label>
       {A.firstIdeas(state).map((i) => <Pressable key={i.label} onPress={() => pick(i.label, i.bot)} accessibilityRole="button" accessibilityLabel={i.label}
         style={({ pressed }) => [s.idea, { backgroundColor: t.card, borderColor: t.line }, pressed && { opacity: 0.6 }]}>
         <View style={[s.ideaIcon, { backgroundColor: t.soft }]}><Text style={{ fontSize: 18 }}>{i.icon}</Text></View>
@@ -875,7 +875,7 @@ function Hello({ state, refresh, go }: Ctx) {
 }
 
 // ---------- asks ----------
-const answer = (c: A.Card, body: Json) => attempt(() => api.answer(c.id, body), body.change ? 'Chief will change the plan' : body.answer === 'deny' ? 'OK, not now' : 'Done. Carrying on.');
+const answer = (c: A.Card, body: Json) => attempt(() => api.answer(c.id, body), body.change ? 'Chief will change the plan' : body.answer === 'deny' ? 'OK, not now' : 'Done. The work continues.');
 
 /** The ask's evidence in the sunken block, mirroring web/src/parts.tsx AskEvidence (§4.4): the order's lines with
  *  the total above a hairline, a form's or a job's label-over-value lines, a draft, the routine's confirmation
@@ -969,11 +969,11 @@ function AskCard({ c, state, onDone, canAct, offline, open }: { c: A.Card; state
       <AskHead c={c} />
       <T style={s.askWords}>{question}</T>
       {edit.box || <AskEvidence c={c} open={false} readAll={<Btn label="Read all" onPress={() => open(c)} />} />}
-      {oops && <T tone="pinkInk" style={s.small}>That didn't go through. Try again.</T>}
-      {offline ? <T tone="mute" style={s.small}>You can answer once the home computer is back.</T>
-        : !canAct ? <T tone="mute" style={s.small}>This phone watches; answer on another phone or the computer.</T> : c.kind === 'connect' ? (
+      {oops && <T tone="pinkInk" style={s.small}>That did not work. Try again.</T>}
+      {offline ? <T tone="mute" style={s.small}>You can answer when the home computer connects again.</T>
+        : !canAct ? <T tone="mute" style={s.small}>This phone can only watch. Answer on another phone or on the computer.</T> : c.kind === 'connect' ? (
         <View style={{ gap: 8 }}>
-          <T tone="mute" style={s.small}>Finish on the computer: it's waiting in Chief's chat there.</T>
+          <T tone="mute" style={s.small}>Finish this on the computer. It waits in Chief's chat there.</T>
           <Btn label={`Do it without ${c.app!.name}`} onPress={() => act({ answer: 'deny' })} />
         </View>
       ) : c.kind === 'routine' ? (
@@ -981,7 +981,7 @@ function AskCard({ c, state, onDone, canAct, offline, open }: { c: A.Card; state
           {when !== null && <TextInput style={[s.input, { color: t.ink, borderColor: t.line }]} value={when} onChangeText={setWhen} autoFocus
             placeholder="When? For example: every Saturday 10am" placeholderTextColor={t.mute} accessibilityLabel="When" autoCapitalize="none" />}
           {when !== null && !!sched && !sched.bad && <T tone="mute" style={s.small}>{sched.words}. First time {sched.first}.{c.zoneNote ? ` ${c.zoneNote}` : ''}</T>}
-          {when !== null && !!sched?.bad && <T tone="mute" style={s.small}>I didn't catch that time. Try “every Monday 9:00”.</T>}
+          {when !== null && !!sched?.bad && <T tone="mute" style={s.small}>I do not understand that time. Try “every Monday 9:00”.</T>}
           <View style={s.chips}>
             <Btn go label="Start it" disabled={stuck} onPress={() => act({ answer: 'allow', scope: 'once', ...(when !== null && when.trim() && when.trim() !== c.schedule ? { schedule: when.trim() } : {}) })} />
             <Btn label={when === null ? 'Change time' : 'Keep the time'} onPress={() => setWhen(when === null ? c.schedule || '' : null)} />
@@ -1019,8 +1019,8 @@ function AskCard({ c, state, onDone, canAct, offline, open }: { c: A.Card; state
         </View>
       ) : null}
       {always && <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: t.line, paddingTop: 10, width: '100%' }}><Btn ghost label={always.label} onPress={() => act(always.body)} /></View>}
-      {c.kind === 'spend' && <T tone="mute" style={[s.small, { textAlign: 'center' }]}>Anything that costs money asks you every time.</T>}
-      {c.kind === 'plan' && <T tone="mute" style={[s.small, { textAlign: 'center' }]}>Saying Go doesn’t OK any sending or spending. Those still ask you each time.</T>}
+      {c.kind === 'spend' && <T tone="mute" style={[s.small, { textAlign: 'center' }]}>Chief asks you every time something costs money.</T>}
+      {c.kind === 'plan' && <T tone="mute" style={[s.small, { textAlign: 'center' }]}>Go does not approve a message or a payment. Chief still asks you about each one.</T>}
     </Card>
   );
 }
@@ -1049,10 +1049,10 @@ function AskSheet({ c, canAct, onClose }: { c: A.Card; canAct: boolean; onClose:
           <AskHead c={c} />
           <T style={s.askQ}>{question}</T>
           {edit.box || <AskEvidence c={c} open={open} readAll={<Btn label="Read all" onPress={() => setOpen(true)} />} />}
-          {c.review && c.order && !c.order.known && <T tone="mute" style={s.small}>So nothing is counted against the monthly limit.</T>}
+          {c.review && c.order && !c.order.known && <T tone="mute" style={s.small}>So this does not count against the monthly limit.</T>}
           {!!c.inApp && <T tone="mute" style={s.small}>{`In ${c.inApp}`}</T>}
           {!!c.chief && <View style={s.row}><Face who="chief" size={20} /><T tone="ink2" style={{ flex: 1 }}><Text style={s.b}>Chief:</Text> {c.chief}</T></View>}
-          {oops && <T tone="pinkInk" style={s.small}>That didn't go through. Try again.</T>}
+          {oops && <T tone="pinkInk" style={s.small}>That did not work. Try again.</T>}
           {canAct ? <>
             {c.evidence === 'draft' && yes && <Btn go big label={yes.label} disabled={edit.empty} onPress={() => act(edit.yes(yes.body))} />}
             {edit.can && <Btn big label={edit.editing ? 'Use the original' : 'Edit'} onPress={edit.toggle} />}
@@ -1060,7 +1060,7 @@ function AskSheet({ c, canAct, onClose }: { c: A.Card; canAct: boolean; onClose:
             {c.evidence !== 'draft' && yes && <Btn go big label={yes.label} disabled={edit.empty} onPress={() => act(edit.yes(yes.body))} />}
           </> : <Btn big label="Close" onPress={onClose} />}
           {always && canAct && <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: t.line, paddingTop: 10 }}><Btn ghost big label={always.label} onPress={() => act(always.body)} /></View>}
-          {c.kind === 'spend' && <T tone="mute" style={[s.small, { textAlign: 'center' }]}>Anything that costs money asks you every time.</T>}
+          {c.kind === 'spend' && <T tone="mute" style={[s.small, { textAlign: 'center' }]}>Chief asks you every time something costs money.</T>}
         </Pressable>
       </Pressable>
     </Modal>
@@ -1069,7 +1069,7 @@ function AskSheet({ c, canAct, onClose }: { c: A.Card; canAct: boolean; onClose:
 
 // ---------- home ----------
 // What this phone kept says how things were, not how they are: while the computer is out of reach, nobody claims to be busy.
-const OUT = 'Out of reach for now';
+const OUT = 'Not connected now';
 const chiefNow = (state: Json, offline: boolean) => (offline ? { mood: 'rest' as const, line: OUT } : A.chief(state));
 function HelperPill({ h, offline }: { h: A.Helper; offline: boolean }) {
   return offline ? <Pill tone="off">{OUT}</Pill> : <Pill tone={h.ring === 'working' ? 'ok' : 'off'}>{h.status}</Pill>;
@@ -1206,10 +1206,10 @@ function OnItNow({ view }: { view: A.OfficeView }) {
   const t = useLook();
   const working = view.crew.filter((c) => A.seatOf(c) === 'working'), waiting = view.crew.filter(A.waitsOnChief).length;
   return <View style={{ gap: 8 }}>
-    <View style={[s.row, { justifyContent: 'space-between' }]}><Label>On it now</Label><T tone="mute" style={s.small}>{`${working.length} working`}</T></View>
+    <View style={[s.row, { justifyContent: 'space-between' }]}><Label>Working now</Label><T tone="mute" style={s.small}>{`${working.length} working`}</T></View>
     {working.length ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{working.map((c) => <View key={c.id} style={[s.listRow, { flexBasis: '47%', flexGrow: 1, minWidth: 0, borderWidth: 1, borderColor: t.line, borderRadius: 16, backgroundColor: t.solid }]}>
       <Face who={{ kind: c.kind, name: c.name, mood: c.mood }} size={34} /><View style={{ flex: 1, minWidth: 0 }}><T style={s.b} lines={1}>{c.name}</T><T tone="ink2" style={s.small} lines={1}>{c.step || c.status}</T></View>
-    </View>)}</View> : <Card><T tone="ink2">{waiting ? `Nobody is working: ${waiting} waiting on Chief.` : 'Nobody is working right now. The crew is free.'}</T></Card>}
+    </View>)}</View> : <Card><T tone="ink2">{waiting ? `No helper is busy. ${waiting} ${waiting === 1 ? 'waits' : 'wait'} for Chief.` : 'No helper is busy now. The crew is free.'}</T></Card>}
   </View>;
 }
 
@@ -1248,7 +1248,7 @@ function Home(ctx: Ctx) {
         </View>
         {pinned}
         <OnItNow view={view} />
-        {!!A.resting(state) && <Card><T>{A.resting(state)}. I'll pick things back up then.</T></Card>}
+        {!!A.resting(state) && <Card><T>{A.resting(state)}. I will continue the work then.</T></Card>}
         <Pressable onPress={() => go({ view: 'phone' })} accessibilityRole="button" accessibilityLabel="Check AI account sign-in on the home computer" style={({ pressed }) => [s.listRow, s.listGroup, { backgroundColor: t.solid, borderColor: t.line }, pressed && { opacity: 0.6 }]}>
           <AiMark ai={A.AIS[0]} size={30} />
           <View style={{ flex: 1 }}><T style={s.rowTitle}>Your AI accounts</T><T tone="ink2" style={s.small} lines={2}>You sign in on the home computer, in Settings.</T></View><T tone="mute">›</T>
@@ -1284,7 +1284,7 @@ function ChiefSheet({ view, state, offline, go, onClose }: Ctx & { view: A.Offic
         <View style={s.row}>
           <Face who="chief" size={60} mood={view.chief.mood} />
           <View style={{ flex: 1 }}><T style={[s.h2, s.serif, { fontSize: 28, lineHeight: 32 }]}>Chief</T><T tone="ink2" style={s.small}>Runs your crew</T>
-            <T style={[s.small, s.b, { color: word === 'Has things for you' ? t.pinkInk : word === 'Working' ? t.green : t.ink2 }]}>{word}</T></View>
+            <T style={[s.small, s.b, { color: word === 'Has requests for you' ? t.pinkInk : word === 'Working' ? t.green : t.ink2 }]}>{word}</T></View>
           <Btn label="Close" onPress={onClose} />
         </View>
         <ScrollView style={{ flexGrow: 0 }} contentContainerStyle={{ gap: 6 }}>
@@ -1293,7 +1293,7 @@ function ChiefSheet({ view, state, offline, go, onClose }: Ctx & { view: A.Offic
           {computers.length > 0 && <Label>Crew computers</Label>}
           {computers.map((c) => {
             const k = A.seatOf(c), h = crew.find((x) => x.id === c.id)!;
-            return row(c.id, `${c.name}'s computer`, h.driving ? 'You have the wheel' : `Watch ${c.name}`, () => to({ view: 'helper', id: c.id, tab: 'watch' }),
+            return row(c.id, `${c.name}'s computer`, h.driving ? 'You control the screen' : `Watch ${c.name}`, () => to({ view: 'helper', id: c.id, tab: 'watch' }),
               <Pill tone={k === 'working' ? 'ok' : 'off'}>{offline ? OUT : A.waitsOnChief(c) ? A.SEAT_WORDS.waiting : k === 'working' ? 'Working' : 'Resting'}</Pill>, <Face who={h} size={36} />);
           })}
           {made.length > 0 && <Label>Outputs</Label>}
@@ -1342,7 +1342,7 @@ function DeskSheet({ desk, state, offline, canAct, go, onClose }: Ctx & { desk: 
           {/* Their own computer: watching is the default; taking the wheel pauses them until it is handed back. */}
           {!offline && h.computer && desktopAvailable && <View><Label>{`${c.name}'s computer`}</Label><View style={s.chips}>
             <Btn label={`Watch ${c.name}`} onPress={() => to({ view: 'helper', id, tab: 'watch' })} />
-            {canAct && <Btn label="Take the wheel" onPress={() => void attempt(async () => { await api.takeOver(id); to({ view: 'helper', id, tab: 'screen' }); })} />}
+            {canAct && <Btn label="Take control" onPress={() => void attempt(async () => { await api.takeOver(id); to({ view: 'helper', id, tab: 'screen' }); })} />}
           </View></View>}
         </ScrollView>
       </Pressable>
@@ -1372,7 +1372,7 @@ function JobList({ state, go, refresh }: { state: Json; go: Ctx['go']; refresh: 
     const name = state.templates.find((x: Json) => x.id === template)?.display ?? template;
     await attempt(async () => { const b = await api.recruit(template, name); refresh(); keepDraft('chief', `${name}: ${ask}`); go({ view: 'chief' }, true); }, `${name} joined the crew`);
   };
-  return <View><Label>Hand me a job</Label><View style={[s.listGroup, { backgroundColor: t.solid, borderColor: t.line }]}>
+  return <View><Label>Give me a job</Label><View style={[s.listGroup, { backgroundColor: t.solid, borderColor: t.line }]}>
     {A.jobs(state).slice(0, 3).map((j, i) => <Pressable key={j.bot + j.label} style={[s.listRow, { borderTopColor: t.line, borderTopWidth: i ? StyleSheet.hairlineWidth : 0 }]}
       onPress={() => { if (j.needs.length) go({ view: 'phone' }); else if (j.hire) void hire(j.hire, j.ask); else { keepDraft('chief', A.forHelper(state, j.bot, j.ask)); go({ view: 'chief' }); } }}>
       <Face who={A.crew(state).find((h) => h.id === j.bot) ?? { kind: 'pip', name: j.bot }} size={28} />
@@ -1461,9 +1461,9 @@ function Chat({ id, m, state, tick, refresh, canAct, offline, open, writer, hero
         }}>
         {start && !hero && <View style={s.intro}>
           <View style={[s.halo, { backgroundColor: t.soft }]}><Ink who={h ? h.kind : 'chief'} mood={h?.mood} size={72} /></View>
-          <T style={s.introName}>{name}</T><T tone="ink2" style={[s.centerText, { maxWidth: 300 }]}>{h ? h.role : 'Runs the crew and answers to you'}</T>
+          <T style={s.introName}>{name}</T><T tone="ink2" style={[s.centerText, { maxWidth: 300 }]}>{h ? h.role : 'Manages the crew for you'}</T>
         </View>}
-        {!page && <View style={{ gap: 12, paddingLeft: 36, paddingTop: 20 }} accessibilityLabel="Opening the chat">{['62%', '84%', '40%'].map((w) => <View key={w} style={[s.bar, { width: w as any, backgroundColor: t.soft }]} />)}</View>}
+        {!page && <View style={{ gap: 12, paddingLeft: 36, paddingTop: 20 }} accessibilityLabel="The chat opens">{['62%', '84%', '40%'].map((w) => <View key={w} style={[s.bar, { width: w as any, backgroundColor: t.soft }]} />)}</View>}
         {fresh && page && canAct && own.length > 0 && <View style={[s.chips, { justifyContent: 'center' }]}>
             {own.map((i: Json) => <Btn key={i.bot + i.label} label={`✦ ${i.label}`} onPress={() => { keepDraft(id, i.ask); setSeed((n) => n + 1); }} />)}
           </View>}
@@ -1485,7 +1485,7 @@ function Chat({ id, m, state, tick, refresh, canAct, offline, open, writer, hero
           </View></motion.Rise></View>
         )}
         {echoed && <motion.Rise reduce={reduce}><View style={[s.line, s.bubbleText, { alignSelf: 'flex-end', maxWidth: '82%', backgroundColor: t.go, borderBottomRightRadius: 6 }]}><T style={{ color: t.goInk }}>{pending.text}</T></View></motion.Rise>}
-        {waiting && id === 'chief' && <motion.Rise reduce={reduce}><View style={s.line} accessible accessibilityLabel="Chief is on it" accessibilityLiveRegion="polite">{who('chief')}
+        {waiting && id === 'chief' && <motion.Rise reduce={reduce}><View style={s.line} accessible accessibilityLabel="Chief works on it" accessibilityLiveRegion="polite">{who('chief')}
           <View style={s.typing}>{[0, 1, 2].map((k) => <View key={k} style={[s.typingDot, { backgroundColor: t.ink2, opacity: reduce ? 0.6 : beat % 3 === k ? 1 : 0.3, transform: [{ translateY: !reduce && beat % 3 === k ? -3 : 0 }] }]} />)}</View>
         </View></motion.Rise>}
         {!!partial && <View style={s.line} accessibilityLiveRegion="polite">{who(id)}<View style={{ paddingLeft: 36 }}><T>{partial}<Text style={{ color: t.pink, opacity: reduce || beat % 2 === 0 ? 1 : 0 }}> ▍</Text></T></View></View>}
@@ -1498,7 +1498,7 @@ function Chat({ id, m, state, tick, refresh, canAct, offline, open, writer, hero
             {(canAct || writer) && <Btn label="Ask Chief about this" onPress={() => { keepDraft('chief', `About ${name}'s job${b?.task ? ` “${A.plain(b.task.title)}”` : ''}: `); go({ view: 'chief' }); }} />}</View>
         </View>
         : canAct || writer ? <View style={[s.dock, !!hero && { backgroundColor: t.bg }]}><Composer key={seed} placeholder="Ask Chief anything" onSend={send} chat={id} away={offline} /></View>
-        : <T tone="mute" style={[s.small, { padding: 16 }]}>{offline ? "You can reply once the home computer is back." : "This phone watches the crew; it can't send messages."}</T>}
+        : <T tone="mute" style={[s.small, { padding: 16 }]}>{offline ? 'You can reply when the home computer connects again.' : 'This phone only watches the crew. It cannot send messages.'}</T>}
     </View>
   );
 }
@@ -1538,8 +1538,8 @@ function Room(ctx: Ctx) {
     <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>{lines.map((l: { id: number; who?: A.Helper; from?: string; to?: string; text: string; at: number; author: string; files: A.FileView[] }) => <View key={l.id} style={{ maxWidth: '92%', alignSelf: l.author === 'person' ? 'flex-end' : 'flex-start' }}>
       {l.who && <View style={s.row}><Face who={l.who} size={28} /><T style={s.rowTitle}>{l.from && l.to ? `${l.from} → ${l.to}` : l.who.name}</T><T tone="mute" style={s.time}>{A.clock(l.at)}</T></View>}
       <View style={{ paddingLeft: l.author === 'person' ? 0 : 36 }}><ChatText text={l.text} /></View>{l.files.map((f) => <Card key={f.url}><FileRow f={f} /></Card>)}
-    </View>)}{!lines.length && <T tone="mute">Start a job here and follow along as the crew works together.</T>}</ScrollView>
-    {canAct ? <View style={s.dock}><Composer placeholder="Message the crew" onSend={send} chat="room" /></View> : <T tone="mute" style={[s.small, { padding: 16 }]}>{offline ? "You can reply once the home computer is back." : "This phone watches the crew; it can't send messages."}</T>}
+    </View>)}{!lines.length && <T tone="mute">Start a job here. Then watch the crew work together.</T>}</ScrollView>
+    {canAct ? <View style={s.dock}><Composer placeholder="Message the crew" onSend={send} chat="room" /></View> : <T tone="mute" style={[s.small, { padding: 16 }]}>{offline ? 'You can reply when the home computer connects again.' : 'This phone only watches the crew. It cannot send messages.'}</T>}
   </View>;
 }
 
@@ -1551,8 +1551,8 @@ function Crew(ctx: Ctx) {
   const row = (key: string, face: ReactNode, name: string, role: string, status: ReactNode, route: Route) => <Pressable key={key} onPress={() => go(route)} style={{ minHeight: 68, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 12, borderBottomWidth: 1, borderColor: t.line }}>
     {face}<View style={{ flex: 1, minWidth: 0 }}><T style={s.b}>{name}</T><T tone="mute" style={s.small} lines={1}>{role}</T></View>{status}
   </Pressable>;
-  return <Page title="Your crew" lead="Everyone answers to Chief." back={['Home', () => go({ view: 'home' }, true)]}><Card>
-    {row('chief', <Face who="chief" size={44} />, 'Chief', 'Runs the crew and answers to you', <Pill tone={chief.mood === 'rest' ? 'off' : 'ok'}>{chief.line}</Pill>, { view: 'chief' })}
+  return <Page title="Your crew" lead="All helpers report to Chief." back={['Home', () => go({ view: 'home' }, true)]}><Card>
+    {row('chief', <Face who="chief" size={44} />, 'Chief', 'Manages the crew for you', <Pill tone={chief.mood === 'rest' ? 'off' : 'ok'}>{chief.line}</Pill>, { view: 'chief' })}
     {A.crew(state).map((h) => row(h.id, <Face who={h} size={44} />, h.name, h.role, <HelperPill h={h} offline={ctx.offline} />, { view: 'helper', id: h.id }))}
     {ctx.canAct && <Pressable onPress={() => go({ view: 'add' })} style={{ minHeight: 68, flexDirection: 'row', alignItems: 'center', gap: 12 }}><View style={{ width: 44, height: 44, borderRadius: 22, borderWidth: 1, borderStyle: 'dashed', borderColor: t.line, alignItems: 'center', justifyContent: 'center' }}><T tone="mute">+</T></View><T style={{ flex: 1 }}>Add a helper</T><T tone="mute">›</T></Pressable>}
   </Card></Page>;}
@@ -1594,11 +1594,11 @@ function HelperPage(ctx: Ctx & { id: string; tab: string; m?: number; setTab: (t
         <ScrollView contentContainerStyle={{ padding: 16, gap: 10 }}>
           {screenFirst && screen}
           <T style={s.b}>Now</T>
-          {b?.task ? (trail.length ? <Card><Steps steps={A.steps(page?.trail ?? [], b.task.id, true)} max={all ? 40 : 7} /></Card> : <T tone="mute">{`Working on “${A.plain(b.task.title)}”. Steps show as they happen.`}</T>)
+          {b?.task ? (trail.length ? <Card><Steps steps={A.steps(page?.trail ?? [], b.task.id, true)} max={all ? 40 : 7} /></Card> : <T tone="mute">{`Current job: “${A.plain(b.task.title)}”. Each step shows here when it occurs.`}</T>)
             : <T tone="mute">Nothing right now.</T>}
           {trail.length > 7 && <Btn ghost label={all ? 'Just now' : 'Every step'} onPress={() => setAll((v) => !v)} />}
           <T style={s.b}>Things</T>
-          <ThingsList list={A.things(state).filter((x) => x.helper === id)} state={state} empty={`${h.name}'s finished work shows up here.`} />
+          <ThingsList list={A.things(state).filter((x) => x.helper === id)} state={state} empty={`${h.name}'s finished work shows here.`} />
           <T style={s.b}>Routines</T>
           <RoutineList {...ctx} bot={id} />
           <T style={s.b}>{`About ${h.name}`}</T>
@@ -1651,7 +1651,7 @@ function Screen({ bot, canAct, refresh, showing, watchNow }: { bot: Json; canAct
       sig.current = desktopSignaling(bot.id);
       return { signaling: sig.current as any, session: { permissions: controlRef.current && canAct ? CONTROL_PERMISSIONS : ['view'], maxFps: 15 } };
     },
-    onError: () => setErr(`Couldn't open ${bot.display}'s screen. Try again in a moment.`),
+    onError: () => setErr(`The phone could not open ${bot.display}'s screen. Try again soon.`),
   });
   const open = () => session.connect().then(() => session.setInputEnabled(controlRef.current && canAct));
   useEffect(() => { if (watching.current) void session.close().then(open); }, [control]);
@@ -1665,17 +1665,17 @@ function Screen({ bot, canAct, refresh, showing, watchNow }: { bot: Json; canAct
   const [help, setHelp] = useState(false);
   const live = session.snapshot.status;
   const idle = live === 'idle' || live === 'ended' || live === 'failed';
-  const words: Record<string, string> = { opening: 'Opening…', connecting: 'Connecting…', live: 'Live', reconnecting: 'Reconnecting…', failed: "Couldn't open it" };
+  const words: Record<string, string> = { opening: 'Opening…', connecting: 'Connecting…', live: 'Live', reconnecting: 'Reconnecting…', failed: 'Could not open it' };
   // Taking the wheel: the whole page, the header and tab bar behind it. One status line, the screen, and
   // Hand it back pinned at the bottom with Keyboard beside the "?".
   if (canAct && control) return (
     <Modal visible animationType={motion.sheet(reduce)} onRequestClose={() => {}}>
       <View style={{ flex: 1, backgroundColor: t.bg }}>
-        <T style={[s.centerText, { padding: 12 }]}><Text style={s.b}>You're in control</Text>{` · ${bot.display} waits`}</T>
+        <T style={[s.centerText, { padding: 12 }]}><Text style={s.b}>You control the screen</Text>{` · ${bot.display} waits`}</T>
         <View style={{ flex: 1, margin: 12, borderRadius: 16, overflow: 'hidden', backgroundColor: t.line }}>
           <DesktopView sessionId={session.nativeId} style={{ flex: 1 }} accessibilityLabel={`${bot.display}'s screen`} keyboardClearance={120} />
           {/* one calm grey line, with the way forward — never a doubled failure */}
-          {idle && <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center', padding: 16 }]}><T tone="mute" style={s.centerText}>{live === 'failed' ? "Couldn't open it. Try again in a moment." : `Opening ${bot.display}'s screen…`}</T></View>}
+          {idle && <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center', padding: 16 }]}><T tone="mute" style={s.centerText}>{live === 'failed' ? 'The phone could not open it. Try again soon.' : `${bot.display}'s screen opens…`}</T></View>}
         </View>
         <View style={{ padding: 12, gap: 8 }}>
           {tabs.length > 0 && <View style={s.chips}>
@@ -1683,12 +1683,12 @@ function Screen({ bot, canAct, refresh, showing, watchNow }: { bot: Json; canAct
               onPress={() => setKeep(keep.includes(h) ? keep.filter((x) => x !== h) : [...keep, h])} />)}
           </View>}
           <TextInput style={[s.input, { color: t.ink, borderColor: t.line }]} value={note} onChangeText={setNote} placeholder={`What did you do? ${bot.display} reads this`} placeholderTextColor={t.mute} accessibilityLabel="What did you do" />
-          <Btn go big label="Hand it back" onPress={act(async () => { await api.giveBack(bot.id, note, keep); setNote(''); })} />
+          <Btn go big label="Return control" onPress={act(async () => { await api.giveBack(bot.id, note, keep); setNote(''); })} />
           <View style={[s.chips, { justifyContent: 'center' }]}>
             <Btn label="Keyboard" onPress={() => session.showKeyboard()} />
             <Btn ghost label="?" onPress={() => setHelp((v) => !v)} />
           </View>
-          {help && <T tone="mute" style={s.small}>{bot.display} has its own computer at home, separate from yours. Taking the wheel pauses it, for a sign-in or anything it's stuck on; handing back lets it carry on.</T>}
+          {help && <T tone="mute" style={s.small}>{bot.display} has its own computer at home, separate from yours. When you take control, it pauses. Use this for a sign-in or for a problem that stops it. When you return control, it continues.</T>}
         </View>
       </View>
     </Modal>
@@ -1706,12 +1706,12 @@ function Screen({ bot, canAct, refresh, showing, watchNow }: { bot: Json; canAct
       {!!err && <T tone="pinkInk">{err}</T>}
       <View style={s.chips}>
         {idle ? <Btn go label={`Watch ${bot.display}`} onPress={watch} /> : <Btn label="Close" onPress={stop} />}
-        {canAct && <Btn label="Take the wheel" onPress={act(async () => { await api.takeOver(bot.id); watching.current = true; if (idle) watch(); })} />}
+        {canAct && <Btn label="Take control" onPress={act(async () => { await api.takeOver(bot.id); watching.current = true; if (idle) watch(); })} />}
         {what === null && <Btn label={`Show ${bot.display} how`} onPress={() => setWhat('')} />}
       </View>
       {what !== null && (
         <View style={{ gap: 8 }}>
-          <TextInput style={[s.input, { color: t.ink, borderColor: t.line }]} value={what} onChangeText={setWhat} placeholder="What are you showing? For example: pull the newsletter stats" placeholderTextColor={t.mute} accessibilityLabel="What are you showing" />
+          <TextInput style={[s.input, { color: t.ink, borderColor: t.line }]} value={what} onChangeText={setWhat} placeholder="What do you want to show? For example: pull the newsletter stats" placeholderTextColor={t.mute} accessibilityLabel="What are you showing" />
           <View style={s.chips}>
             <Btn go label="Start" disabled={!what.trim()} onPress={act(async () => { await api.show(bot.id, what); setWhat(null); watching.current = true; if (idle) watch(); })} />
             <Btn ghost label="Cancel" onPress={() => setWhat(null)} />
@@ -1720,11 +1720,11 @@ function Screen({ bot, canAct, refresh, showing, watchNow }: { bot: Json; canAct
       )}
       {canAct && showing && (
         <View style={{ gap: 8 }}>
-          <T>{showing.words} I write down where you go and what you tap, never what you type.</T>
+          <T>{showing.words} I record where you go and what you tap. I never record what you type.</T>
           <View style={s.chips}><Btn go label="Done showing" onPress={act(() => api.shown(bot.id, true))} /><Btn ghost label="Cancel" onPress={act(() => api.shown(bot.id, false))} /></View>
         </View>
       )}
-      <T tone="mute" style={s.small}>{bot.display} has its own computer at home, separate from yours. Taking the wheel pauses it, for a sign-in or anything it's stuck on; handing back lets it carry on.</T>
+      <T tone="mute" style={s.small}>{bot.display} has its own computer at home, separate from yours. When you take control, it pauses. Use this for a sign-in or for a problem that stops it. When you return control, it continues.</T>
     </Card>
   );
 }
@@ -1744,7 +1744,7 @@ function RoutineList({ state, refresh, canAct, bot, go }: Ctx & { bot?: string; 
         <View style={s.row}>
           <Face who="chief" size={36} />
           <View style={{ flex: 1 }}><T style={s.b}>Tell Chief what should happen regularly</T>
-            <T tone="mute" style={s.small}>In your own words. He brings it back as a card to start.</T></View>
+            <T tone="mute" style={s.small}>Use your own words. Chief sends you a card to start it.</T></View>
         </View>
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 10, alignItems: 'center' }}>
           <TextInput style={[s.input, { flex: 1, color: t.ink, borderColor: t.line }]} value={text} onChangeText={setText}
@@ -1777,15 +1777,15 @@ function RoutineRow({ r, h, act, go, canAct }: { r: Json; h: A.Helper | undefine
         <Face who={h ?? 'chief'} size={40} />
         <View style={{ flex: 1 }}><T style={s.b}>{r.name}</T>
           {canAct ? <Pressable onPress={() => { setWhen(r.when); setMoving(true); }} accessibilityLabel="Change when it runs">
-            <T tone="mute" style={s.small}>{`${r.watching ? `Keeps an eye on ${r.watching} · ` : ''}${r.when}${r.paused ? ' · paused' : ` · next ${r.next}`}`}</T>
-          </Pressable> : <T tone="mute" style={s.small}>{`${r.watching ? `Keeps an eye on ${r.watching} · ` : ''}${r.when}${r.paused ? ' · paused' : ` · next ${r.next}`}`}</T>}
+            <T tone="mute" style={s.small}>{`${r.watching ? `Watches ${r.watching} · ` : ''}${r.when}${r.paused ? ' · paused' : ` · next ${r.next}`}`}</T>
+          </Pressable> : <T tone="mute" style={s.small}>{`${r.watching ? `Watches ${r.watching} · ` : ''}${r.when}${r.paused ? ' · paused' : ` · next ${r.next}`}`}</T>}
           {!!r.last && (r.result ? <Pressable onPress={open} accessibilityLabel="See result"><T tone="pinkInk" style={s.small}>{`${r.last} · See result`}</T></Pressable>
             : <T tone="mute" style={s.small}>{r.last}</T>)}</View>
       </View>
       {moving && <View style={{ marginTop: 8, gap: 6 }}>
         <TextInput style={[s.input, { color: t.ink, borderColor: t.line }]} value={when} onChangeText={setWhen} autoFocus
           placeholder="When? For example: every Saturday 10am" placeholderTextColor={t.mute} accessibilityLabel="When" autoCapitalize="none" />
-        {!!preview && <T tone="mute" style={s.small}>{preview.bad ? "I didn't catch that time. Try “every Monday 9:00”." : `${preview.words}. First time ${preview.first}.`}</T>}
+        {!!preview && <T tone="mute" style={s.small}>{preview.bad ? "I do not understand that time. Try “every Monday 9:00”." : `${preview.words}. First time ${preview.first}.`}</T>}
         <View style={s.chips}>
           <Btn go label="Save" disabled={!when.trim() || !preview || preview.bad} onPress={() => void save()} />
           <Btn ghost label="Cancel" onPress={() => setMoving(false)} />
@@ -1817,7 +1817,7 @@ function ShareIn({ state, shared, onDone, go, to }: { state: Json; shared: { tex
     go({ view: 'chief' });
   }, 'Sent');
   return (
-    <Page title="Send this to Chief" lead={helper ? `Chief will hand it to ${helper.name}.` : 'Chief will see it into the right hands.'}>
+    <Page title="Send this to Chief" lead={helper ? `Chief will hand it to ${helper.name}.` : 'Chief will give it to the correct helper.'}>
       {pics === null ? <ActivityIndicator color={t.pink} /> : pics.length > 0 && <View style={{ flexDirection: 'row', gap: 6 }}>{pics.map((p) => <Image key={p.uri} source={{ uri: p.uri }} style={{ width: 72, height: 72, borderRadius: 12 }} />)}</View>}
       <TextInput style={[s.input, { color: t.ink, borderColor: t.line, minHeight: 80 }]} value={text} onChangeText={setText} multiline placeholder="What should they do with it? For example: put this in the calendar" placeholderTextColor={t.mute} accessibilityLabel="What should they do with it" />
       <View style={s.chips}>
@@ -1978,7 +1978,7 @@ function ThisPhone({ grant, status, go, back, onForget, onClear }: { grant: Gran
       <Card>
         <T style={s.b}>{grant.device.name}</T>
         <T tone="mute">{grant.device.role === 'view' ? 'Watches the crew; can’t answer or give jobs.' : 'Answers the crew and gives them jobs, as you.'}</T>
-        <View style={[s.row, { marginTop: 6 }]}><Pill tone={status === 'online' ? 'ok' : 'wait'}>{status === 'online' ? 'With the home computer' : 'Looking for the home computer…'}</Pill></View>
+        <View style={[s.row, { marginTop: 6 }]}><Pill tone={status === 'online' ? 'ok' : 'wait'}>{status === 'online' ? 'With the home computer' : 'The phone looks for the home computer…'}</Pill></View>
       </Card>
       <Label>Your AI accounts</Label>
       <PhoneAccounts />

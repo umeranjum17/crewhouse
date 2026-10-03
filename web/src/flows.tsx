@@ -116,33 +116,33 @@ export function SignIn({ ai = A.AIS[0], tab: first, onReady, onClose }: { ai?: {
       {phase === 'opening' && <><h2>Opening {name}…</h2><div className="dotdot" aria-hidden><i /><i /><i /></div><button className="link" onClick={cancel}>Cancel</button></>}
       {phase === 'waiting' && <>
         <h2>Say yes on {name}'s page</h2>
-        <p className="mute">{ai.key === 'chatgpt' ? <>Pick your account, then tap <b>Continue</b>. If {name} mentions <b>“Codex”</b>, that's the part your helpers use.</> : <>Follow {name}'s instructions on its page.</>} Come back here after; this moves on by itself.</p>
+        <p className="mute">{ai.key === 'chatgpt' ? <>Pick your account. Then tap <b>Continue</b>. If {name} shows <b>“Codex”</b>, that is the part that your helpers use.</> : <>Follow {name}'s instructions on its page.</>} Then come back here. This screen changes by itself.</p>
         {!tab.open() && <a className="btn go big" href={g.page || '#'} target="_blank" rel="noreferrer">Open {name} ↗</a>}
         <Pill tone="wait" live>Waiting for {name}…</Pill>
-        {ai.key === 'chatgpt' && <button className="link" onClick={() => start({ via: 'code' })}>Having trouble? Use a code instead</button>}
+        {ai.key === 'chatgpt' && <button className="link" onClick={() => start({ via: 'code' })}>Is there a problem? Use a code instead</button>}
         <button className="link" onClick={cancel}>Cancel</button>
       </>}
       {phase === 'code' && <>
-        <h2>Let's try it with a code</h2>
-        <p className="mute">Type this on {name}'s page instead. Come back after; this moves on by itself.</p>
+        <h2>Use a code</h2>
+        <p className="mute">Type this code on {name}'s page. Then come back here. This screen changes by itself.</p>
         <button className="code" onClick={() => navigator.clipboard?.writeText(code).then(() => toast('Code copied'), () => {})} aria-label={`Code ${code.split('').join(' ')}. Tap to copy.`}>{code}<span>Tap to copy</span></button>
         {page && <a className="btn go big" href={page} target="_blank" rel="noreferrer">Open {name} ↗</a>}
-        {ai.key === 'chatgpt' && <p className="mute small">If {name} says <b>device code sign-in is off</b>: in {name} open Settings → Security, turn on <b>Device code authorization</b>, then tap Open {name} again. ({name} only says this after you sign in.)</p>}
+        {ai.key === 'chatgpt' && <div className="mute small">If {name} says <b>device code sign-in is off</b>, do these steps:<ol><li>In {name}, open Settings → Security.</li><li>Set <b>Device code authorization</b> to on.</li><li>Tap Open {name} again.</li></ol>({name} shows this message only after you sign in.)</div>}
         <button className="link" onClick={cancel}>Cancel</button>
       </>}
-      {phase === 'done' && <><h2>You're signed in!</h2><p>The crew thinks with your own {name} now. Your password stayed with {name}.</p>
-        <button className="btn go big" onClick={onReady}>Let's go</button></>}
-      {phase === 'work' && <><h2>That looks like your work {name}</h2>
-        <p className="mute">Signed in as <b>{g.work || 'a work account'}</b>. Your work's rules would apply to your helpers. Use your personal {name} instead?</p>
+      {phase === 'done' && <><h2>You are signed in.</h2><p>The crew now uses your own {name}. Your password stays with {name}.</p>
+        <button className="btn go big" onClick={onReady}>Start</button></>}
+      {phase === 'work' && <><h2>This is possibly your work {name}</h2>
+        <p className="mute">You signed in as <b>{g.work || 'a work account'}</b>. The rules of your work would apply to your helpers. Do you want to use your personal {name}?</p>
         <button className="btn go big" onClick={() => attempt(async () => { await api.signOut(ai.key); setKeepWork(false); again({ fresh: true }); })}>Use my personal account</button>
         <button className="link" onClick={() => { setKeepWork(true); onReady(); }}>Keep this one</button></>}
-      {phase === 'cancelled' && <><h2>No problem</h2><p className="mute">Nothing was changed. You can sign in whenever you like.</p>
+      {phase === 'cancelled' && <><h2>OK</h2><p className="mute">Nothing changed. You can sign in at any time.</p>
         <button className="btn go big" onClick={() => again()}>Try again</button>{notNow}</>}
-      {phase === 'busy' && <><h2>One moment</h2><p className="mute">Another sign-in is already in progress. Finish or cancel it, then try again.</p>
+      {phase === 'busy' && <><h2>One moment</h2><p className="mute">Another sign-in is already in progress. Finish it or cancel it. Then try again.</p>
         <button className="btn go big" onClick={() => again()}>Try again</button>{ai.key === 'chatgpt' && <button className="link" onClick={() => start({ via: 'code' })}>Use a code instead</button>}</>}
-      {phase === 'expired' && <><h2>That ran out of time</h2><p className="mute">Sign-ins only wait a few minutes, to keep your account safe. Let's start a fresh one.</p>
+      {phase === 'expired' && <><h2>The time limit ended</h2><p className="mute">A sign-in waits only a few minutes. This keeps your account safe. Start a new sign-in.</p>
         <button className="btn go big" onClick={() => again()}>Start again</button>{notNow}</>}
-      {phase === 'failed' && <><h2>That didn't go through</h2><p className="mute">{g.recovery || <>{name} didn't finish the sign-in. No harm done; let's try once more.</>}</p>
+      {phase === 'failed' && <><h2>That did not work</h2><p className="mute">{g.recovery || <>{name} did not complete the sign-in. Nothing changed. Try again.</>}</p>
         <button className="btn go big" onClick={() => again()}>Try again</button>{notNow}</>}
       {phase === 'offline' && <OfflineWords onClose={onClose} />}
     </Sheet>
@@ -161,7 +161,7 @@ export function AccountCard({ g, inChat, onReady }: { g: ReturnType<typeof A.acc
   if (g.notIncluded) return (
     <div className="card ask">
       <div className="ask-head"><Face who="chief" size={28} /><div className="grow"><b>Chief</b><div className="ask-status"><i />Needs a bigger plan</div></div></div>
-      <p className="ask-words">Your {ai.name} plan doesn't include helpers yet</p>
+      <p className="ask-words">Your {ai.name} plan does not include helpers yet</p>
       {!inChat && <p className="mute small">Everything else in {ai.name} is fine. {ai.name} Plus includes it.</p>}
       <div className="btns">
         <a className="btn go" href="https://chatgpt.com/#pricing" target="_blank" rel="noreferrer">See {ai.name} plans ↗</a>
@@ -172,12 +172,12 @@ export function AccountCard({ g, inChat, onReady }: { g: ReturnType<typeof A.acc
   return (
     <div className="card ask">
       <div className="ask-head"><Face who="chief" size={28} /><div className="grow"><b>Chief</b><div className="ask-status"><i />Needs a sign-in</div></div></div>
-      <p className="ask-words">{g.recovery || <>{ai.name} asks you once. If it mentions <b>"Codex"</b>, that's the part your helpers use.</>}</p>
+      <p className="ask-words">{g.recovery || <>{ai.name} asks you once. If it shows <b>"Codex"</b>, that is the part that your helpers use.</>}</p>
       <div className="btns">
         <button className="btn go big" onClick={() => setSigning(openTab())}><AiMark ai={ai} size={24} />Sign in with {ai.name}</button>
         <button className="link" onClick={() => { setNoAccount(true); window.open('https://chatgpt.com/', '_blank'); }}>No {ai.name} account? Make a free one</button>
       </div>
-      {noAccount && <p className="mute small">{ai.name} opened in a new tab: sign up with Google or Apple in a few taps, then come straight back and tap Sign in.</p>}
+      {noAccount && <p className="mute small">{ai.name} opened in a new tab. Sign up with Google or Apple. Then come back here and tap Sign in.</p>}
       {signing !== false && <SignIn tab={signing} onReady={() => { setSigning(false); onReady(); }} onClose={() => setSigning(false)} />}
     </div>
   );
@@ -213,7 +213,7 @@ export function ConnectApp({ app, helper, state, tab: first, ask, onConnected, o
   useEffect(() => { if (phase === 'done' && !pinned) onConnected?.(); }, [phase]);
   const cancel = () => { void api.disconnect(app.id).catch(() => {}); setPhase('cancelled'); };
   const at = phase === 'done' ? 3 : phase === 'waiting' ? 1 : 0;
-  const warn = app.warns && <p className="warn-line">Google shows a warning for apps it hasn't reviewed — a personal app always gets it. Tap <b>Advanced</b>, then <b>Go to Crewhouse</b>.</p>;
+  const warn = app.warns && <p className="warn-line">Google shows a warning for apps that it did not review. A personal app always gets this warning. Tap <b>Advanced</b>. Then tap <b>Go to Crewhouse</b>.</p>;
   const notNow = <button className="link" onClick={onClose}>Not now</button>;
   return (
     <Sheet label={`Connect ${app.name}`} onClose={onClose}>
@@ -222,31 +222,31 @@ export function ConnectApp({ app, helper, state, tab: first, ask, onConnected, o
       {phase === 'opening' && <><h2>Opening {who}'s page…</h2><div className="dotdot" aria-hidden><i /><i /><i /></div><button className="link" onClick={cancel}>Cancel</button></>}
       {phase === 'waiting' && <>
         <h2>Say yes on {who}'s page</h2>
-        <p className="mute">Pick your account, then tap <b>{who === 'Google' ? 'Continue' : 'Allow'}</b>. It's {who}'s own page, so your password stays with them.</p>
+        <p className="mute">Pick your account. Then tap <b>{who === 'Google' ? 'Continue' : 'Allow'}</b>. This is {who}'s own page, so your password stays with {who}.</p>
         {warn}
         {!tab.open() && url && <a className="btn go big" href={url} target="_blank" rel="noreferrer">Open {who} ↗</a>}
         <Pill tone="wait" live>Waiting for {who}…</Pill>
         <button className="link" onClick={cancel}>Cancel</button>
       </>}
-      {phase === 'done' && <><h2>{app.name} is connected</h2><p>{app.does}</p>{helper && <p className="mute">{helper} is carrying on with it now.</p>}
+      {phase === 'done' && <><h2>{app.name} is connected</h2><p>{app.does}</p>{helper && <p className="mute">{helper} continues the job now.</p>}
         <button className="btn go big" onClick={onDone}>Done</button></>}
-      {phase === 'cancelled' && <><h2>No problem</h2><p className="mute">Nothing was connected{helper ? `, and ${helper} will manage without it` : ''}.
-        {app.warns ? ` Google shows that warning for every app it hasn't reviewed — a personal app always gets it. Crewhouse is your app, running on your own computer. Tap Advanced, then Go to Crewhouse.` : ` You can connect ${app.name} any time.`}</p>
+      {phase === 'cancelled' && <><h2>OK</h2><p className="mute">I did not connect anything{helper ? `. ${helper} will continue without it` : ''}.
+        {app.warns ? ` Google shows that warning for each app that it did not review. A personal app always gets it. Crewhouse is your app, and it runs on your own computer. Tap Advanced. Then tap Go to Crewhouse.` : ` You can connect ${app.name} any time.`}</p>
         <button className="btn go big" onClick={again}>Try again</button>{notNow}</>}
-      {phase === 'unticked' && <><h2>Almost: tick the box</h2><p className="mute">{app.name} still isn't ticked. Tap Try again, then tick {app.name} on Google's page.</p>
+      {phase === 'unticked' && <><h2>Almost: tick the box</h2><p className="mute">The {app.name} box is not ticked. Tap Try again. Then tick {app.name} on Google's page.</p>
         <button className="btn go big" onClick={again}>Try again</button>{notNow}</>}
-      {phase === 'expired' && <><h2>That page timed out</h2><p className="mute">{who}'s page only waits a few minutes. Let's open a fresh one.</p>
+      {phase === 'expired' && <><h2>The time limit ended</h2><p className="mute">{who}'s page waits only a few minutes. Open a new page.</p>
         <button className="btn go big" onClick={again}>Start again</button>{notNow}</>}
       {phase === 'failed' && (poll.value?.step
         // Google answered that one of the four setup steps isn't done: say which, and point to it.
         ? <><h2>A Google setup step is missing</h2><p className="mute">{poll.value.error}</p>
           <a className="btn go big" href="#/settings" onClick={onClose}>Open Settings</a>{notNow}</>
-        : <><h2>That didn't go through</h2><p className="mute">{poll.value?.error ?? `${who} didn't finish connecting. No harm done; let's try once more.`}</p>
+        : <><h2>That did not work</h2><p className="mute">{poll.value?.error ?? `${who} did not complete the connection. Nothing changed. Try again.`}</p>
           <button className="btn go big" onClick={again}>Try again</button>{notNow}</>)}
       {phase === 'offline' && <OfflineWords onClose={onClose} />}
-      {phase === 'house' && <><h2>Switch Google on</h2><p className="mute">It's a one-time setup, about twenty minutes, and then you can connect Calendar, Gmail and Drive.</p>
+      {phase === 'house' && <><h2>Switch Google on</h2><p className="mute">This is a one-time setup of about twenty minutes. Then you can connect Calendar, Gmail and Drive.</p>
         <a className="btn go big" href="#/settings" onClick={onClose}>Open Settings</a>{notNow}</>}
-      {phase === 'unavailable' && <><h2>Coming very soon</h2><p className="mute">Connecting {app.name} arrives with the next Crewhouse update.</p>
+      {phase === 'unavailable' && <><h2>This comes soon</h2><p className="mute">You can connect {app.name} after the next Crewhouse update.</p>
         <button className="btn go big" onClick={onClose}>OK</button></>}
     </Sheet>
   );
@@ -257,13 +257,13 @@ export function ConnectApp({ app, helper, state, tab: first, ask, onConnected, o
 export function ConnectCard({ c, helper, state, onDone }: { c: A.Card; helper?: string; state: Json; onDone: () => void }) {
   const [open, setOpen] = useState<Window | null | false>(sheet === 'connect' ? null : false);
   const app = c.app!;
-  const no = () => api.answer(c.id, { answer: 'deny' }).then(onDone, () => toast("Can't reach the home computer right now."));
+  const no = () => api.answer(c.id, { answer: 'deny' }).then(onDone, () => toast('I cannot reach the home computer now.'));
   const yes = () => void api.answer(c.id, { answer: 'allow' }).catch(() => {}).then(onDone);
   return (
     <div className="card ask">
       <AskHead c={c} />
       <p className="ask-words">{c.words}</p>
-      {app.warns && <p className="warn-line">Google shows a warning for apps it hasn't reviewed — a personal app always gets it. Tap <b>Advanced</b>, then <b>Go to Crewhouse</b>.</p>}
+      {app.warns && <p className="warn-line">Google shows a warning for apps that it did not review. A personal app always gets this warning. Tap <b>Advanced</b>. Then tap <b>Go to Crewhouse</b>.</p>}
       <div className="btns">
         <button className="btn go" onClick={() => setOpen(A.needsHouse(state, app) ? null : openTab())}>Connect {app.name}</button>
         <button className="btn" onClick={no}>Not now</button>
@@ -275,7 +275,7 @@ export function ConnectCard({ c, helper, state, onDone }: { c: A.Card; helper?: 
 
 // ---------- the home computer out of reach ----------
 function OfflineWords({ onClose }: { onClose: () => void }) {
-  return <><h2>Can't reach the home computer</h2><p className="mute">It may be asleep, switched off, or offline. Your helpers live there, so they'll carry on the moment it's back. I'll keep trying, and pick up right here.</p>
+  return <><h2>I cannot reach the home computer</h2><p className="mute">It may be asleep, off, or offline. Your helpers live there. They continue when the computer is back. I will try again and continue from here.</p>
     <Pill tone="off">Trying again…</Pill><button className="link" onClick={onClose}>Close for now</button></>;
 }
 
@@ -289,10 +289,10 @@ export function Unreachable({ retry }: { retry: () => void }) {
         <pre className="art zzz" aria-hidden>{'      z\n    z\n  z'}</pre>
         <Dots rows={art.HOUSE.map((r, i) => (i === 6 ? r.replace(/e/g, 'p') : r))} pal={art.HOUSE_PAL} d={9} label="Crewhouse, asleep" />
       </div>
-      <h1>The home computer isn't answering</h1>
-      <p className="lead">It may be asleep, switched off, or offline. Crewhouse and your helpers live there, so everything picks up again the moment it's back.</p>
+      <h1>The home computer does not answer</h1>
+      <p className="lead">It may be asleep, off, or offline. Crewhouse and your helpers live there. Everything continues when the computer is back.</p>
       <div className="card tips">
-        <div><Face who="chief" size={34} /><span>Check the home computer is on and connected to the internet.</span></div>
+        <div><Face who="chief" size={34} /><span>Make sure that the home computer is on and connected to the internet.</span></div>
       </div>
       <button className="btn go big" onClick={() => { setN(5); retry(); }}>Try now</button>
       <p className="mute small">Trying again in {n}s</p>

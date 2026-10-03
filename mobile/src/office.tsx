@@ -22,7 +22,7 @@ type Room = typeof ROOM.day;
 const G = 196, H = 210, L = 32, R = 244, ACCENT = '#F0482A';
 const spots = (k: number) => { const span = Math.min(R - L, (k - 1) * 58), x0 = (L + R) / 2 - span / 2; return Array.from({ length: k }, (_, i) => (k === 1 ? (L + R) / 2 : x0 + (i * span) / (k - 1))); };
 type StripSeat = A.Seat | 'done' | 'here' | 'mine';
-const STRIP: Record<StripSeat, string> = { mine: 'for you', waiting: 'waiting on Chief', working: 'working', failed: 'stuck', next: 'up next', resting: 'resting', free: 'free', done: 'done', here: 'here' };
+const STRIP: Record<StripSeat, string> = { mine: 'for you', waiting: 'waits for Chief', working: 'working', failed: 'stuck', next: 'next', resting: 'resting', free: 'free', done: 'done', here: 'here' };
 
 /** How a helper reads to a screen reader, in the room's own words. */
 const said = (c: A.OfficeMember) => {

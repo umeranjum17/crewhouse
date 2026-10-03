@@ -56,9 +56,9 @@ export function Screen({ bot, refresh, showing }: { bot: Json; refresh: () => vo
     <div className="card screen">
       <div className="row">
         <b className="grow">{bot.display}'s screen</b>
-        <Pill tone={live === 'live' ? 'ok' : 'off'}>{control ? 'You have the wheel' : STATUS[live] ?? 'Opening…'}</Pill>
+        <Pill tone={live === 'live' ? 'ok' : 'off'}>{control ? 'You control the screen' : STATUS[live] ?? 'Opening…'}</Pill>
       </div>
-      {control && <p className="nudge-line">You're driving. {bot.display} waits until you hand the wheel back.</p>}
+      {control && <p className="nudge-line">You control the screen. {bot.display} waits until you return control.</p>}
       {/* desklink types through its own hidden textarea; a click on the picture must focus it, or keys never reach the bot's desktop. */}
       <div onPointerDownCapture={() => { if (control) session.showKeyboard(); }}>
         <DesktopView
@@ -71,7 +71,7 @@ export function Screen({ bot, refresh, showing }: { bot: Json; refresh: () => vo
       {err && <p className="nudge-line">{err}</p>}
       <div className="btns">
         {idle ? <button className="btn go" onClick={watch}>Watch {bot.display}</button> : <button className="btn" onClick={stop}>Stop watching</button>}
-        {!control && <button className="btn" onClick={act(async () => { await api.takeOver(bot.id); watching.current = true; })}>Take the wheel</button>}
+        {!control && <button className="btn" onClick={act(async () => { await api.takeOver(bot.id); watching.current = true; })}>Take control</button>}
         {!control && what === null && <button className="btn" onClick={() => setWhat('')}>Show {bot.display} how</button>}
       </div>
       {what !== null && !control && (
@@ -89,7 +89,7 @@ export function Screen({ bot, refresh, showing }: { bot: Json; refresh: () => vo
       {control && !showing && (
         <form className="row" onSubmit={(e) => { e.preventDefault(); void act(async () => { await api.giveBack(bot.id, note, keep); setNote(''); })(); }}>
           <input className="input grow" value={note} onChange={(e) => setNote(e.target.value)} placeholder={`What did you do? ${bot.display} reads this when it carries on`} />
-          <button className="btn go">Hand it back</button>
+          <button className="btn go">Return control</button>
         </form>
       )}
       {control && !showing && tabs.length > 0 && (
@@ -103,7 +103,7 @@ export function Screen({ bot, refresh, showing }: { bot: Json; refresh: () => vo
           ))}
         </div>
       )}
-      <p className="mute small">{bot.display} has its own computer at home, separate from yours. Taking the wheel pauses it; handing back lets it carry on.</p>
+      <p className="mute small">{bot.display} has its own computer at home, separate from yours. When you take control, it pauses. When you return control, it continues.</p>
     </div>
   );
 }

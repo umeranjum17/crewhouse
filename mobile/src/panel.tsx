@@ -42,7 +42,7 @@ export function Panel({ frame, to, words, listen }: { frame?: string; to?: strin
 function Unpaired() {
   return <>
     <View style={s.row}><Face who="chief" size={40} mood="hello" /><T style={[s.h2, { flex: 1 }]}>Pair this phone first</T></View>
-    <T tone="ink2">Open Crewhouse and scan the code on your computer. Then I can help from here.</T>
+    <T tone="ink2">Open Crewhouse. Scan the code on your computer. Then I can help you from here.</T>
     <Btn go big label="Open Crewhouse" onPress={() => void open('crewhouse://')} />
   </>;
 }
@@ -84,7 +84,7 @@ function Body({ grant, still, box, used, listen }: { grant: Grant; still?: Share
   };
   // A still back from the phone's ask with nobody picked yet: its helper is hired now.
   useEffect(() => { if (shared && !shared.to && state && canAct) void hire(A.handTo(state, 'scout')).then((to) => (to ? setShared({ ...shared, to }) : closePanel())); }, [!!state, canAct]);
-  if (!state) return <View style={s.row}><Face who="chief" size={40} mood="work" /><T tone="ink2" style={{ flex: 1 }}>{status === 'offline' ? "Can't reach the home computer right now." : 'Waking the crew…'}</T></View>;
+  if (!state) return <View style={s.row}><Face who="chief" size={40} mood="work" /><T tone="ink2" style={{ flex: 1 }}>{status === 'offline' ? 'The phone cannot reach the home computer now.' : 'The phone connects to the crew…'}</T></View>;
   const crew = A.crew(state);
   if (shared && canAct && shared.to) return <ShareIn state={state} to={shared.to} shared={{ text: shared.words, files: [shared] }} go={() => void closePanel()} onDone={() => void closePanel()} />;
   if (writing === 'off' && box === 'off') return <SwitchOn />;
@@ -95,7 +95,7 @@ function Body({ grant, still, box, used, listen }: { grant: Grant; still?: Share
   if (said) return <Said {...said} canAct={canAct} onDone={() => setSaid(null)} />;
   if (kept) return <Kept line={kept} />;
   if (replier && asked) return <Reply who={replier} task={asked.task} state={state} onAsk={setAsking} asking={asking} canAct={canAct} refresh={refresh} />;
-  const chief = online ? A.chief(state) : { mood: 'rest' as const, line: "Can't reach the home computer right now" };
+  const chief = online ? A.chief(state) : { mood: 'rest' as const, line: 'The phone cannot reach the home computer now' };
   const line = online ? A.crewLine(state) : '';
   const needs = A.needsYou(state);
   const top = needs.slice(0, 3).map((c) => crew.find((h) => h.id === c.helper)).find((h) => h?.computer);
@@ -105,7 +105,7 @@ function Body({ grant, still, box, used, listen }: { grant: Grant; still?: Share
     const kind = photos.length ? '' : A.cannedOf(text);
     const plan = A.planDay(state); // with Google not connected it goes to Chief like any other ask
     if (kind === 'plan' && !plan.needs.length) return press(plan).then(() => true);
-    if (kind === 'status') { setSaid({ ask: text, title: 'Who is on what', answer: A.canned(state, kind) }); return true; }
+    if (kind === 'status') { setSaid({ ask: text, title: 'Who does what', answer: A.canned(state, kind) }); return true; }
     if (kind === 'details') return attempt(async () => setSaid({ ask: text, title: 'What the crew knows about you', answer: A.canned(state, kind, (await api.about())?.notes ?? '') }));
     const ok = await attempt(() => api.post('chief', text, photos.map(({ type, data }) => ({ type, data }))), undefined, true);
     if (ok) await open('crewhouse://ask'); // his chat, where the answer lands
@@ -125,7 +125,7 @@ function Body({ grant, still, box, used, listen }: { grant: Grant; still?: Share
     if (b.from === 'box' && box === 'off') return setWriting('off'); // the switch first; nobody is hired for it
     if (b.from === 'screen') return handScreen(b.to.id || hired.current, b.ask); // a helper is hired once the still is back
     if (b.from === 'camera') {
-      if (!(await ImagePicker.requestCameraPermissionsAsync().catch(() => null))?.granted) return say('Allow the camera for Crewhouse in your phone settings, then try again.');
+      if (!(await ImagePicker.requestCameraPermissionsAsync().catch(() => null))?.granted) return say('Allow the camera for Crewhouse in your phone settings. Then try again.');
       const r = await ImagePicker.launchCameraAsync({ quality: 1 }).catch(() => null);
       const a = r && !r.canceled ? r.assets[0] : null;
       const to = a ? await hire(b.to) : '';
@@ -165,7 +165,7 @@ function Body({ grant, still, box, used, listen }: { grant: Grant; still?: Share
       </View>}
     </View>
     {canAct ? <Composer placeholder="Ask Chief anything" onSend={toChief} chat="chief" listen={hold} />
-      : <T tone="mute" style={s.small}>{online ? "This phone watches the crew; it can't send messages." : 'You can ask once the home computer is back.'}</T>}
+      : <T tone="mute" style={s.small}>{online ? 'This phone only watches the crew. It cannot send messages.' : 'You can ask when the home computer connects again.'}</T>}
     {asking && <AskSheet c={asking}
       canAct={canAct} onClose={() => { setAsking(null); refresh(); }} />}
   </>;
@@ -184,7 +184,7 @@ function Reply({ who, task, state, onAsk, asking, canAct, refresh }: { who: A.He
   const card = A.needsYou(state).find((c) => c.helper === who.id);
   const chat = () => void open('crewhouse://ask');
   return <>
-    <View style={s.row}><Face who={who} size={40} /><T style={[s.h2, { flex: 1 }]}>{reply ? `${who.name} reported back` : reply === '' ? (inChat ? "Chief answered in his chat" : `${who.name} couldn't do this one`) : waits || (by === who.id ? `${who.name} is on it…` : 'Chief is on it…')}</T></View>
+    <View style={s.row}><Face who={who} size={40} /><T style={[s.h2, { flex: 1 }]}>{reply ? `${who.name} sent an answer` : reply === '' ? (inChat ? "Chief answered in his chat" : `${who.name} could not do this job`) : waits || (by === who.id ? `${who.name} works on it…` : 'Chief works on it…')}</T></View>
     {!!reply && <ScrollView style={[s.listGroup, { backgroundColor: t.solid, borderColor: t.line, maxHeight: 280 }]} contentContainerStyle={{ padding: 12 }}>
       <T>{reply}</T>
     </ScrollView>}
@@ -214,7 +214,7 @@ function Said({ ask, answer, title, canAct, onDone }: { ask: string; answer: str
 function Kept({ line }: { line: string }) {
   const [gone, setGone] = useState(false);
   return <>
-    <View style={s.row}><Face who="chief" size={40} mood={gone ? 'idle' : 'happy'} /><T style={[s.h2, { flex: 1 }]}>{gone ? 'Taken back out' : 'The whole crew knows now'}</T></View>
+    <View style={s.row}><Face who="chief" size={40} mood={gone ? 'idle' : 'happy'} /><T style={[s.h2, { flex: 1 }]}>{gone ? 'I removed it' : 'The whole crew knows now'}</T></View>
     <T tone="ink2">{`“${line}”`}</T>
     <View style={s.chips}>
       {!gone && <Btn label="Undo" onPress={() => void attempt(async () => { await api.setAbout(A.unkeep((await api.about())?.notes ?? '', line)); setGone(true); })} />}
@@ -226,8 +226,8 @@ function Kept({ line }: { line: string }) {
 /** Write it here, before the phone lets Chief see the box: where its switch is. */
 function SwitchOn() {
   return <>
-    <View style={s.row}><Face who="chief" size={40} mood="hello" /><T style={[s.h2, { flex: 1 }]}>Let Chief see the box you're typing in</T></View>
-    <T tone="ink2">{`Switch on Crewhouse on the next page. Then tap me in any box and pick Write it here. ${restrictedWords()}`}</T>
+    <View style={s.row}><Face who="chief" size={40} mood="hello" /><T style={[s.h2, { flex: 1 }]}>Let Chief see the box where you type</T></View>
+    <T tone="ink2">{`On the next page, set Crewhouse to on. Then tap me in any box. Select Write it here. ${restrictedWords()}`}</T>
     <Btn go big label="Open the settings" onPress={() => void Linking.sendIntent('android.settings.ACCESSIBILITY_SETTINGS').catch(() => {}).then(closePanel)} />
   </>;
 }
@@ -261,14 +261,14 @@ function Write({ box, who, state }: { box: Exclude<Box, null>; who: A.Helper; st
     <Composer placeholder="Say no politely, offer Thursday" onSend={(words) => ask(words)} photos={false} mic />
   </>;
   if (draft === null) return <>
-    <View style={s.row}><Face who={who} size={40} /><T tone="ink2" style={{ flex: 1 }}>{waits || (by === who.id ? `${who.name} is writing…` : 'Chief is on it…')}</T></View>
+    <View style={s.row}><Face who={who} size={40} /><T tone="ink2" style={{ flex: 1 }}>{waits || (by === who.id ? `${who.name} writes…` : 'Chief works on it…')}</T></View>
     <View style={s.chips}>
       {!!waits && <Btn label="Open Crewhouse" onPress={() => void Linking.openURL('crewhouse://').catch(() => {}).then(closePanel)} />}
       <Btn ghost label="Not now" onPress={() => void closePanel()} />
     </View>
   </>;
   return <>
-    <View style={s.row}><Face who={who} size={40} /><T style={[s.h2, { flex: 1 }]}>{draft ? 'Here it is' : inChat ? 'No draft came back. Chief answered in his chat' : `${who.name} couldn't write this one`}</T></View>
+    <View style={s.row}><Face who={who} size={40} /><T style={[s.h2, { flex: 1 }]}>{draft ? 'Here it is' : inChat ? 'Chief sent no draft. Chief answered in his chat' : `${who.name} could not write this`}</T></View>
     {!!draft && <ScrollView style={[s.listGroup, { backgroundColor: t.solid, borderColor: t.line, maxHeight: 240 }]} contentContainerStyle={{ padding: 12 }}>
       <T>{draft}</T>
     </ScrollView>}
