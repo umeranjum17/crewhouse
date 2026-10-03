@@ -209,11 +209,11 @@ const FOOTT: typeof FOOT = { ...FOOT, needs: [-26, 26], monitor: [-29, 26], fail
  *  ponytail: four passes for that room under scaling, exact enough for six stations. */
 function lay(order: (A.OfficeMember | 'chief')[], v: A.OfficeView, trayText: string) {
   const sts = order.map((m) => (m === 'chief' ? 'chief' : stationOf(m, v)) as Station);
-  // The tray box stands on clear floor beside whoever finished, its bubble over it: at the mock's desks when the row has
-  // room, else on the compact desks at the mock's scale (the B1 house before anyone finishes). A row too long even then
-  // packs (TIGHT, the caption under the box) before anyone shrinks; only the rest scales.
-  const full = layAt(order, sts, trayText, false);
-  if (full.s >= 1) return full;
+  // The tray box stands on clear floor beside whoever finished, its bubble over it. A floor of five helpers always works
+  // at the compact desks (at the mock's scale), so a finish never swaps the furniture; a smaller crew keeps the mock's
+  // desks while they fit. A row too long even on compact desks packs (the caption under the box); only the rest scales.
+  const full = order.length > 5 ? undefined : layAt(order, sts, trayText, false);
+  if (full && full.s >= 1) return full;
   const compact = layAt(order, sts, trayText, true);
   return compact.s < 1 ? packed(order, sts) : compact;
 }

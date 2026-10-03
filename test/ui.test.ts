@@ -1907,8 +1907,8 @@ test('J5 repairs stay in: the night look paints first, the job row is never cut 
   // drawn at the figures' size on both sides.
   assert.match(office, /it\.tray \? \[all\[i - 1\]\?\.st === 'chief' \? 34 : 24, 20\]/, 'a packed row reserves only the box, no bubble width');
   // 162/163: the box on clear floor beside whoever finished (34 left of them, their station 55), the bubble clear of ink
-  // and furniture; a row full at the mock's desks takes the compact ones at scale 1 before it packs.
-  assert.match(office, /const full = layAt\(order, sts, trayText, false\);\n\s*if \(full\.s >= 1\) return full;\n\s*const compact = layAt\(order, sts, trayText, true\);\n\s*return compact\.s < 1 \? packed\(order, sts\) : compact;/, 'a crowded row packs before it scales');
+  // and furniture; a floor of five always takes the compact ones (no swap at a finish), a smaller row only when full.
+  assert.match(office, /const full = order\.length > 5 \? undefined : layAt\(order, sts, trayText, false\);\n\s*if \(full && full\.s >= 1\) return full;\n\s*const compact = layAt\(order, sts, trayText, true\);\n\s*return compact\.s < 1 \? packed\(order, sts\) : compact;/, 'a crowded row packs before it scales');
   assert.match(office, /off = 34;/); assert.match(office, /it\.tray && it\.st === 'done' \? \[55, pad\.done\[1\]\]/);
   assert.match(office, /compact && p\?\.st === 'chief' && \(it\.st === 'monitor' \|\| it\.st === 'failed'\)\) l = Math\.max\(l, 33\)/);
   assert.match(office, /return at\(\[INK, FOOT\]\) \?\? at\(\[INK\]\) \?\? ideal;/);
