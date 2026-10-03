@@ -1,16 +1,17 @@
 // Shared web/phone values; styles.css mirrors these as custom properties.
 export const color = {
   day: {
-    bg: '#FAF9F7', surface: '#FFFFFF', sunken: '#F3F1EE', line: '#E7E4DF', line2: '#D9D5CF',
-    ink: '#1B1A1F', ink2: '#56525D', mute: '#8B8792', accent: '#1B1A1F', onAccent: '#FFFFFF',
-    pink: '#D23369', green: '#1E9A58', amber: '#B86E00', danger: '#C4372C',
+    bg: '#F6F7F9', surface: '#FFFFFF', sunken: '#EEF0F4', line: '#E3E6EC', line2: '#D2D7E0',
+    ink: '#141A2A', ink2: '#4D566B', mute: '#8A92A5', accent: '#141A2A', onAccent: '#FFFFFF',
+    // B1's one accent (#F0482A fills), a shade deeper wherever it is text on white
+    pink: '#D63A1E', fill: '#F0482A', softAccent: '#FFE9E3', green: '#1E9A58', amber: '#B86E00', danger: '#C4372C',
     // a spreadsheet's cells: soft yellow for what the person fills in, soft blue for what works itself out
     cellIn: '#FFEFB8', cellCalc: '#DAE8FB',
   },
   night: {
     bg: '#111014', surface: '#1A191E', sunken: '#151418', line: '#2A2830', line2: '#36333D',
     ink: '#F1EFEA', ink2: '#ABA7B1', mute: '#78747E', accent: '#F1EFEA', onAccent: '#111014',
-    pink: '#FF6B9A', green: '#4BD08A', amber: '#F2B04B', danger: '#FF6B5E',
+    pink: '#FF8A70', fill: '#FF6A4D', softAccent: '#3A2220', green: '#4BD08A', amber: '#F2B04B', danger: '#FF6B5E',
     cellIn: '#3A3118', cellCalc: '#1B2B42',
   },
 };
@@ -21,11 +22,13 @@ export const type = {
   rowTitle: [15, 22, 500], small: [13, 18, 400], label: [12, 16, 500], micro: [11, 14, 500],
 } as const;
 export const motion = { fast: 120, base: 200, slow: 280, exit: 160 };
-export const font = { ui: "'Inter', system-ui, sans-serif", art: "'JetBrains Mono', ui-monospace, monospace" };
+export const font = { ui: "'Inter', system-ui, sans-serif", serif: "'Instrument Serif', Georgia, serif", art: "'JetBrains Mono', ui-monospace, monospace" };
 /** The office room's flat colours (web/src/office.tsx, mobile/src/office.tsx): one room, day and night. */
 export const room = {
-  day: { wall: '#FFF1DC', stripe: '#FBE5C8', skirt: '#E7C9A3', floor: '#E2C49F', seam: '#CDAA80', desk: '#D39A66', top: '#EDB985', edge: '#9A6238',
-    bezel: '#3B3552', screen: '#2C2A39', sofa: '#FF9BB3', sofaDark: '#E97B98', window: '#BFE3FF', frame: '#FFFFFF', leaf: '#5FC27E', pot: '#FFB199' },
-  night: { wall: '#39334F', stripe: '#342E49', skirt: '#27222F', floor: '#4A4157', seam: '#3B3346', desk: '#6B4F3A', top: '#80604A', edge: '#43301F',
-    bezel: '#15131A', screen: '#1F1D29', sofa: '#C2475F', sofaDark: '#9E3A50', window: '#1E2A55', frame: '#524A64', leaf: '#3F9D63', pot: '#B8664F' },
+  // B1: a paper room drawn in one ink line (desks, sofa and monitor are white or pastel with an ink edge, a night window).
+  day: { wall: '#F4F6FA', stripe: '#F3F5FA', skirt: '#141A2A', floor: '#E9ECF3', seam: '#E9ECF3', desk: '#FFFFFF', top: '#141A2A', edge: '#141A2A',
+    bezel: '#141A2A', screen: '#FFF3C8', sofa: '#ECE6FF', sofaDark: '#141A2A', window: '#1D2A55', frame: '#141A2A', leaf: '#141A2A', pot: '#FFFFFF' },
+  // No B1 night palette was designed: the same shapes, with the app's night contrast (light ink on a dark room).
+  night: { wall: '#1F1C2B', stripe: '#1F1C2B', skirt: '#C9C4DA', floor: '#2A2638', seam: '#2A2638', desk: '#2C2839', top: '#C9C4DA', edge: '#C9C4DA',
+    bezel: '#C9C4DA', screen: '#4A4532', sofa: '#3A3456', sofaDark: '#C9C4DA', window: '#0F1631', frame: '#C9C4DA', leaf: '#C9C4DA', pot: '#2C2839' },
 };

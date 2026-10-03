@@ -25,6 +25,9 @@ export type Card = {
    *  the evidence block and the button words. `evidence` picks the sunken block — a form's or a job's
    *  label-over-value lines, or a draft's to/subject/body — an order is a `review`, anything else a plain preview. */
   status: string; evidence?: 'lines' | 'draft'; draftTo?: string; draftSubject?: string;
+  /** The person's own question for an OK or a spend: their task's title, with a question mark if it has no ending of its
+   *  own. The tool's words (site, lines) stay on the review sheet. */
+  question?: string;
   /** A draft's own words, unscrubbed: the person may change them before Approve, and their version is what is kept. */
   draftText?: string;
 };
@@ -43,6 +46,8 @@ export type DocView = { name: string; parts: DocPart[] };
 export type Step = { at: number; text: string; now?: boolean; asked?: boolean; seq: number; undo?: boolean };
 /** `unsure`: crewd's line for a job that acted but couldn't confirm it worked, shown apart from the helper's own words. */
 export type Line = { id: number; from: 'me' | 'them' | 'chief' | 'note'; text: string; files: FileView[]; choices: string[]; at?: number; unsure?: boolean; recap?: boolean;
+  /** A tray notice's helper (Chief's thread): the small face beside "Tracer finished … · it's in your tray". */
+  by?: string;
   /** Chief's full assignment in a helper's chat, behind Show details: the line itself stays one short ask. */
   detail?: string;
   /** What a delivered workbook or document holds, said once: the web's card says it itself, the phone shows these. */
@@ -60,6 +65,14 @@ export const clock = (t: number) => {
 };
 const at = (t: number | string) => (typeof t === 'number' ? (t < 1e12 ? t * 1000 : t) : Date.parse(t));
 export const greeting = (h = new Date().getHours()) => (h < 5 ? 'Good evening' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening');
+/** The person's quiet hours in Home's words ("Quiet from 11 pm", "Quiet until 7 am"); '' when they have none. */
+export function quietLine(person: Json): string {
+  const q = String(person?.quiet ?? '');
+  const m = /^(\d\d):(\d\d)-(\d\d):(\d\d)$/.exec(q);
+  if (!m) return '';
+  const say = (h: number, min: number) => `${h % 12 || 12}${min ? `:${String(min).padStart(2, '0')}` : ''} ${h < 12 ? 'am' : 'pm'}`;
+  return person.quietNow ? `Quiet until ${say(+m[3], +m[4])}` : `Quiet from ${say(+m[1], +m[2])}`;
+}
 /** The small line over Home's greeting: the day, in the reader's own words ("Sunday 28 September"). */
 export const today = (d = new Date()) => d.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' });
 /** The marker between chat lines from different days: Today, Yesterday, or the date. */
@@ -475,17 +488,24 @@ export function preview(last: Json | null | undefined, status = '') {
   if (f) return `Sent “${pretty(f[1])}”`;
   return last.author === 'person' ? `You: ${text.replace(/\s+/g, ' ')}` : teaser(text.replace(/\s+/g, ' '));
 }
+/** What Chief last said himself, for his hero (B1): his own message, never the person's; '' when he has said nothing. */
+export function chiefSaid(state: Json): string {
+  const last = state.bots.find((b: Json) => b.id === 'chief')?.last;
+  return last && last.author !== 'person' && String(last.text ?? '').trim() ? preview(last) : '';
+}
 export function chats(state: Json): Chat[] {
   const bot = (id: string) => state.bots.find((b: Json) => b.id === id) ?? {};
   const c = chief(state);
   // A helper's suggestion ("learned something", Chief has a suggestion) lives in its chat; its row carries the dot.
   const suggested = new Set((state.asks as Json[]).filter((a) => a.kind === 'propose').map((a) => a.bot as string));
+  // The words the office uses: a row in Needs you says so, a job stopped for an answer in the chat says that.
+  const waiting = new Set(needsYou(state).map((c) => c.helper));
   const lead: Chat = { id: 'chief', name: 'Chief', who: 'chief', line: preview(bot('chief').last, c.line), at: at(bot('chief').last?.at ?? 0) || 0, unread: (bot('chief').unread ?? 0) + (suggested.has('chief') && !(bot('chief').unread ?? 0) ? 1 : 0), ring: c.mood === 'ask' ? 'needs' : '' };
   const rest = crew(state).map((h): Chat => {
     const b = bot(h.id);
     // Working or waiting on the person says more than the last line did.
-    const line = h.ring === 'needs' ? 'Needs you' : h.driving ? h.status : h.ring === 'working' ? `Working on: ${h.status}` : preview(b.last, h.role);
-    return { id: h.id, name: h.name, who: h, line, at: at(b.last?.at ?? 0) || 0, unread: (b.unread ?? 0) + (suggested.has(h.id) && !(b.unread ?? 0) ? 1 : 0), ring: h.ring };
+    const line = waiting.has(h.id) ? SEAT_WORDS.needs : h.ring === 'needs' ? SEAT_WORDS.chat : h.driving ? h.status : h.ring === 'working' ? `Working on: ${h.status}` : preview(b.last, h.role);
+    return { id: h.id, name: h.name, who: h, line, at: at(b.last?.at ?? 0) || 0, unread: (b.unread ?? 0) + (suggested.has(h.id) && !(b.unread ?? 0) ? 1 : 0), ring: waiting.has(h.id) ? 'needs' : h.ring };
   }).sort((a, b) => b.at - a.at);
   const room = state.room ?? {};
   const pin: Chat = { id: 'room', name: 'The crew', who: 'chief', line: room.last ? plain(room.last.text) : 'Watch the crew work together', at: at(room.last?.at ?? 0), unread: 0, ring: room.busy?.length ? 'working' : '' };
@@ -538,6 +558,8 @@ export function card(a: Json, state: Json): Card {
   const name = crewName(state, a.bot);
   const d = a.detail ?? {};
   const base = { id: a.id, helper: a.bot, at: a.at, reply: false };
+  const title = plain(String(state.bots.find((b: Json) => b.task?.id === a.task_id)?.task?.title ?? state.tasks?.find((t: Json) => t.id === a.task_id)?.title ?? '')).trim();
+  const question = title ? (/[?.!]$/.test(title) ? title : `${title}?`) : undefined;
   if (a.kind === 'connect' || d.app) {
     const app = apps(state).find((x) => x.id === d.app) ?? APPS[0];
     return { ...base, kind: 'connect', app, status: `Wants to use ${app.name}`, head: `${name} could use ${app.name}`, words: plain(d.words ?? `${name} can do this with your ${app.name}. Connect it?`),
@@ -592,9 +614,9 @@ export function card(a: Json, state: Json): Card {
   const order = d.order as Card['order'] | undefined;
   if (spend && order) {
     const choices: Choice[] = order.known
-      ? [{ label: `Place order · ${order.shown}`, body: { answer: 'allow', scope: 'once' } }, { label: "Don't place order", body: { answer: 'deny' } }]
+      ? [{ label: d.yes ? plain(d.yes) : `Place order · ${order.shown}`, body: { answer: 'allow', scope: 'once' } }, { label: "Don't place order", body: { answer: 'deny' } }]
       : [{ label: "Don't place order", body: { answer: 'deny' } }, { label: "I'll buy it myself", body: { answer: 'deny' } }];
-    return { ...base, kind: 'spend', review: true, order, status: 'Wants to spend money', words, choices, head: `Review ${name}'s order`,
+    return { ...base, kind: 'spend', review: true, order, question, status: 'Wants to spend money', words, choices, head: `Review ${name}'s order`,
       preview: d.preview ? { head: d.preview.head ? plain(d.preview.head) : undefined, body: plain(d.preview.body ?? '') } : undefined };
   }
   // A press on a site they signed the bot in to is not a message going out: the card says acting, not sending. (docs/ui-contract.md)
@@ -609,7 +631,7 @@ export function card(a: Json, state: Json): Card {
   choices.push({ label: 'Not now', body: { answer: 'deny' } });
   return {
     ...base, kind: spend ? 'spend' : 'ok', status: spend ? 'Wants to spend money' : fill ? 'Wants to fill in a form' : press ? 'Wants to press a button' : d.effect === 'send' ? 'Wants to send an email' : 'Needs your OK',
-    evidence: fill ? 'lines' : undefined, words, choices,
+    evidence: fill ? 'lines' : undefined, words, choices, question,
     head: spend ? `${name} needs your OK to spend` : press ? `${name} wants to act on a site` : d.effect === 'send' ? `${name}'s ${d.thing ?? 'message'} is ready to send` : `${name} would like your OK`,
     preview: d.preview ? { head: d.preview.head ? plain(d.preview.head) : undefined, body: plain(d.preview.body ?? '') } : undefined,
   };
@@ -636,10 +658,7 @@ export function things(state: Json): Thing[] {
 export type Job = { bot: string; label: string; ask: string; says: string; goal: boolean; money: boolean; needs: string[]; hire?: string };
 
 /** Home's three counts, from the same rows shown below them: what needs you, who is working, what got done today. */
-export function homeCounts(state: Json) {
-  const day = new Date(); day.setHours(0, 0, 0, 0);
-  return { needs: needsYou(state).length, working: work(state).filter((w) => !w.waiting).length, done: things(state).filter((t) => t.at >= day.getTime()).length };
-}
+export const homeCounts = (state: Json) => office(state).counts;
 /** Home's one-line state, from the same needs and work rows shown below it. */
 export function homeSummary(state: Json) {
   const { needs, working } = homeCounts(state);
@@ -841,19 +860,20 @@ export function waitOf(page: Json, task: number): string {
  *  unhired template a tap brings on first (docs/ui-contract.md). */
 export function jobs(state: Json): Job[] {
   const rows: Job[] = (state.ideas ?? []).map((i: Json) => ({
-    bot: String(i.bot ?? 'chief'), label: plain(i.ask ?? ''), ask: String(i.ask ?? ''), says: promiseLine(state, i),
+    bot: String(i.bot ?? 'chief'), label: plain(i.title ?? i.ask ?? ''), ask: String(i.ask ?? ''), says: promiseLine(state, i),
     goal: i.group === 'goal', money: i.group === 'money', needs: ((i.needs ?? []) as string[]).map((w) => plain(w)).filter(Boolean),
     ...(typeof i.hire === 'string' && i.hire ? { hire: i.hire } : {}),
   }));
   return rows.sort((a, b) => Number(b.goal) - Number(a.goal) || Number(b.money) - Number(a.money) || a.needs.length - b.needs.length);
 }
-/** Under a job row, whose job it is and the first sentence of its promise: "Scout · I'll search …". Empty when the
- *  promise only repeats the ask. */
+/** Under a job row, whose job it is: the template's own short `line` ("Scout checks the unclaimed-money lists"), else the
+ *  first sentence of its promise ("Scout · I'll search …"), empty when that only repeats the ask. */
 function promiseLine(state: Json, i: Json) {
+  const name = i.bot === 'chief' || !i.bot ? 'Chief' : state.bots?.find((x: Json) => x.id === i.bot)?.display ?? i.bot;
+  if (i.line) return `${name} ${plain(i.line)}`;
   const first = (/^.*?[.!?](?=\s|$)/s.exec(plain(i.promise ?? '')) ?? [plain(i.promise ?? '')])[0].trim();
   const [a, b] = [first, plain(i.ask ?? '')].map((w) => w.toLowerCase().replace(/[.!?\s]+$/, ''));
   if (!first || a.startsWith(b) || b.startsWith(a)) return '';
-  const name = i.bot === 'chief' || !i.bot ? 'Chief' : state.bots?.find((x: Json) => x.id === i.bot)?.display ?? i.bot;
   return `${name} · ${first}`;
 }
 /** What a job that can't run yet would need first, in one plain line. */
@@ -982,6 +1002,18 @@ export function lines(page: Json, bot: string): Line[] {
     return { id: m.id, from: m.author === 'person' ? 'me' : 'them',
       recap: m.recap === true, text: m.author === 'person' ? (pics.length && /^Here (is a photo|are some photos)\.$/.test(text) ? '' : noTools(text)) : chatWords(text), files: [...pics, ...(m.files ?? []).map((f: Json) => fileView(f.bot, f.path))], choices: (m.choices ?? []).map(plain), at: m.at ? at(m.at) : undefined, unsure: m.author === 'bot' && /^Not sure it worked:|^[^.]{1,40} isn't sure “/.test(text) };
   }).filter((l: Line) => l.text || l.files.length);
+}
+
+/** Chief's thread (B1): one plain notice where a helper's finished job, with a file, landed in the tray — only from a done
+ *  task that delivered files, placed by its time among the dated lines it falls after; nothing before the thread began. */
+export function trayNotes(state: Json, lines: Line[]): Line[] {
+  const first = lines.find((l) => l.at)?.at;
+  if (!first) return lines;
+  const notes = things(state).filter((t) => t.helper !== 'chief' && t.files.length && at(t.at) >= first)
+    .map((t): Line => ({ id: -t.id, from: 'note', by: t.helper, text: `${crewName(state, t.helper)} finished ${t.title || 'a job'} · it's in your tray`, files: [], choices: [], at: at(t.at) }));
+  const out = [...lines];
+  for (const n of notes.sort((a, b) => a.at! - b.at!)) { const i = out.findLastIndex((l) => (l.at ?? 0) <= n.at!); out.splice(i + 1, 0, n); }
+  return out;
 }
 
 /** A file build underway: the chat's task is live on a workbook or document job, and its file hasn't
@@ -1148,20 +1180,51 @@ const APPS: App[] = [
 export const apps = (state: Json): App[] => APPS.map((a) => ({ ...a, on: !!state.connections?.includes?.(a.id) }));
 
 // ---------- the office ----------
-/** One helper in the person's office, from the plain-words adapter views. */
+/** One helper in the person's office, from the plain-words adapter views. `ask` is that helper's first row in
+ *  Needs you (A.needsYou), never a suggestion that lives in its chat; `second` marks another helper of a kind that
+ *  came earlier in the crew, so the room and the dock can tell the two apart. */
 export type OfficeMember = { id: string; name: string; kind: Kind; mood: Mood; ring: Helper['ring']; status: string;
-  step: string; steps: Step[]; things: FileView[]; ask?: Card };
-export type OfficeView = { chief: ChiefView; crew: OfficeMember[]; done: Thing[];
+  step: string; steps: Step[]; things: FileView[]; ask?: Card; second?: boolean };
+/** The one state source every office surface reads: the room, its header counts, the tray, the dock or rail roster
+ *  and Needs you. `needs` is Needs you itself; `counts.needs` is its length, `working` the helpers whose seat is
+ *  working (one waiting on you counts once, under needs, wherever they show), `done` what
+ *  landed in the tray today. */
+export type OfficeView = { chief: ChiefView; crew: OfficeMember[]; done: Thing[]; needs: Card[];
   counts: { needs: number; working: number; done: number } };
+
+/** Where a helper is, in one word the whole office agrees on: a row of theirs in Needs you, a job stopped for an
+ *  answer that lives in their chat, working, a job that just failed, next in line, resting, or free. */
+export type Seat = 'needs' | 'chat' | 'working' | 'failed' | 'next' | 'resting' | 'free';
+export const seatOf = (c: OfficeMember): Seat => (c.ask ? 'needs' : c.ring === 'needs' ? 'chat' : c.ring === 'working' ? 'working'
+  : c.mood === 'error' ? 'failed' : c.status === 'Up next' ? 'next' : c.mood === 'rest' ? 'resting' : 'free');
+export const SEAT_WORDS: Record<Seat, string> = { needs: 'Needs you', chat: 'Waiting on your reply', working: 'Working', failed: "Couldn't finish", next: 'Up next', resting: 'Resting', free: 'Free' };
+/** The rail's word for one helper: its seat, except that a free helper whose latest job landed today says which
+ *  (Main590 6: the rail shows Reel done after a hand-off). Any newer seat (working, needs you, …) replaces it. */
+export function railWord(c: OfficeMember, v: OfficeView): { word: string; seat: Seat | 'done' } {
+  const seat = seatOf(c);
+  const last = seat === 'free' ? v.done.filter((t) => t.helper === c.id).sort((a, b) => b.at - a.at)[0] : undefined;
+  return last ? { word: `Done: ${last.title || 'a job'}`, seat: 'done' } : { word: SEAT_WORDS[seat], seat };
+}
+/** Who comes first when there is one seat less than helpers: whoever needs you, then working, then the rest. */
+const SEAT_ORDER: Seat[] = ['needs', 'chat', 'working', 'failed', 'next', 'free', 'resting'];
+/** The whole crew, the one who matters most first (crew order inside each seat): the phone's dock and the web rail. */
+export const roster = (crew: OfficeMember[]) => SEAT_ORDER.flatMap((k) => crew.filter((c) => seatOf(c) === k));
 
 /** The question that matters most comes first: money, then anything sent in the person's name, then the rest. */
 export const askRank = (c: Card) => (c.kind === 'spend' ? 0 : c.kind === 'ok' ? 1 : 2);
+const tally = (crew: OfficeMember[], needs: Card[], done: Thing[]) => {
+  const day = new Date().setHours(0, 0, 0, 0);
+  return { needs: needs.length, working: crew.filter((c) => seatOf(c) === 'working').length, done: done.filter((t) => t.at >= day).length };
+};
+/** The member's Needs-you row: the first in Needs you's own order. */
+const askFor = (needs: Card[], id: string) => needs.find((c) => c.helper === id);
 export function office(state: Json): OfficeView {
   const helpers = crew(state);
   const raw = new Map((state.bots as Json[] ?? []).map((b: Json) => [b.id, b]));
   const lines = new Map(work(state).map((w) => [w.helper, w]));
-  const open = cards(state);
+  const needs = needsYou(state);
   const events = (state.events ?? []) as Json[];
+  const kinds = new Set<Kind>();
   const crewRows: OfficeMember[] = helpers.map((h) => {
     const b = raw.get(h.id) ?? {};
     const task = b.task ?? null;
@@ -1173,30 +1236,42 @@ export function office(state: Json): OfficeView {
     const extra = paths.filter((p, i) => paths.lastIndexOf(p) === i && !desk.some((f) => f.url === fileView(h.id, p).url));
     const made = [...desk, ...extra.map((p) => fileView(h.id, p))];
     const w = lines.get(h.id);
+    const second = kinds.has(h.kind);
+    kinds.add(h.kind);
     return { id: h.id, name: h.name, kind: h.kind, mood: h.mood, ring: h.ring, status: h.status,
       step: (b.step && step(b.step)) || (w && !w.waiting ? 'Getting started…' : ''), steps: now, things: made,
-      ask: open.filter((c) => c.helper === h.id).sort((a, b) => askRank(a) - askRank(b))[0] };
+      ask: askFor(needs, h.id), ...(second ? { second } : {}) };
   });
   const done = things(state);
-  return { chief: chief(state), crew: crewRows, done,
-    counts: { needs: crewRows.filter((c) => c.ring === 'needs').length,
-      working: crewRows.filter((c) => c.ring === 'working').length, done: done.length } };
+  return { chief: chief(state), crew: crewRows, done, needs, counts: tally(crewRows, needs, done) };
+}
+
+/** Needs-you rows no helper in the room holds (Chief's own, or one left by a helper since let go): Chief carries
+ *  them, so every row in Needs you has a Review somewhere in the room. */
+/** Chief's state in one word, the same in the room, his profile and on the phone. */
+export const chiefWord = (v: OfficeView) => (chiefAsks(v).length ? 'Needs you' : v.chief.mood === 'work' ? 'Working' : 'Here');
+export const chiefAsks = (view: OfficeView) => view.needs.filter((c) => !view.crew.some((m) => m.id === c.helper));
+
+/** The office while the home computer is out of reach: nobody claims to be busy or waiting, and nothing asks. */
+export function officeAway(view: OfficeView, line = 'Out of reach for now'): OfficeView {
+  const crew = view.crew.map((c) => ({ ...c, mood: 'rest' as Mood, ring: '' as const, ask: undefined, status: line, step: '', steps: [] }));
+  return { ...view, chief: { ...view.chief, mood: 'rest', line }, crew, needs: [], counts: { ...tally(crew, [], view.done) } };
 }
 
 /** The office between refreshes: crewd's debounced snapshot stays the source of truth, and each live event only
- *  moves the words it carries (report §7). Pure — the passed view is never changed. */
+ *  moves the words it carries (report §7). Pure — the passed view is never changed. A question that opens waits for
+ *  the refresh to bring its Needs-you row, so Review never shows before there is something to review. */
 export function officeEvent(view: OfficeView, e: Json): OfficeView {
+  const next = (crew: OfficeMember[], done = view.done, needs = view.needs): OfficeView => ({ ...view, crew, done, needs, counts: tally(crew, needs, done) });
   const touch = (id: string, f: (c: OfficeMember) => OfficeMember): OfficeView => {
     const crew = view.crew.map((c) => (c.id === id ? f(c) : c));
-    if (crew.every((c, i) => c === view.crew[i])) return view;
-    return { ...view, crew, counts: { needs: crew.filter((c) => c.ring === 'needs').length,
-      working: crew.filter((c) => c.ring === 'working').length, done: view.done.length } };
+    return crew.every((c, i) => c === view.crew[i]) ? view : next(crew);
   };
   const say = (c: OfficeMember, text: string): OfficeMember => {
     const last = c.steps.at(-1);
     const seq = typeof e.seq === 'number' ? e.seq : (last?.seq ?? 0) + 1;
-    const next = last?.text === text ? c.steps : [...c.steps, { at: e.at == null ? Date.now() : at(e.at), text, seq }].slice(-80);
-    return { ...c, step: text, steps: next.map((s, i, a) => ({ ...s, now: i === a.length - 1 })) };
+    const steps = last?.text === text ? c.steps : [...c.steps, { at: e.at == null ? Date.now() : at(e.at), text, seq }].slice(-80);
+    return { ...c, step: text, steps: steps.map((s, i, a) => ({ ...s, now: i === a.length - 1 })) };
   };
   const d = e.data ?? {};
   switch (e.kind) {
@@ -1229,9 +1304,7 @@ export function officeEvent(view: OfficeView, e: Json): OfficeView {
         title: plain(d.title ?? ''), at: e.at ?? Date.now(), summary: teaser(d.result ?? '').slice(0, 220), files };
       const crew = view.crew.map((c) => (c.id === String(e.bot)
         ? { ...c, ring: '' as const, mood: 'happy' as Mood, status: 'Free to help', step: '', steps: [], things: [], ask: undefined } : c));
-      return { ...view, crew, done: [thing, ...view.done],
-        counts: { needs: crew.filter((c) => c.ring === 'needs').length,
-          working: crew.filter((c) => c.ring === 'working').length, done: view.done.length + 1 } };
+      return next(crew, [thing, ...view.done], view.needs.filter((c) => c.helper !== String(e.bot)));
     }
     case 'task.failed':
     case 'task.unsure':
@@ -1239,42 +1312,36 @@ export function officeEvent(view: OfficeView, e: Json): OfficeView {
     case 'ask.opened':
       return touch(String(e.bot), (c) => ({ ...c, ring: 'needs' as const, mood: 'ask' as Mood, status: 'Needs you', step: 'Waiting for your OK' }));
     case 'ask.answered':
-    case 'ask.parked':
-      return touch(String(e.bot), (c) => {
-        if (c.ring !== 'needs') return { ...c, ask: undefined };
-        // The question is answered: back to the last step the refresh knew, since the snapshot stays the source
-        // of truth and this row only bridges the gap between refreshes.
+    case 'ask.parked': {
+      // The row leaves Needs you at once; the helper goes back to the last step the refresh knew, since the snapshot
+      // stays the source of truth and this only bridges the gap between refreshes.
+      const needs = view.needs.filter((c) => c.id !== d.ask);
+      const crew = view.crew.map((c) => {
+        if (c.id !== String(e.bot)) return c;
+        const ask = askFor(needs, c.id);
+        if (c.ring !== 'needs' || ask) return { ...c, ask };
         const back = c.steps.at(-1);
-        return { ...c, ask: undefined, ring: back ? 'working' as const : '' as const,
+        return { ...c, ask, ring: back ? 'working' as const : '' as const,
           mood: back ? 'work' as Mood : 'idle' as Mood, status: back ? back.text : 'Free to help', step: back ? back.text : '' };
       });
+      return next(crew, view.done, needs);
+    }
     default:
       return view;
   }
 }
 
-/** A helper waiting on you: a job of yours stopped for your answer, or a question open on a card. */
+/** A helper waiting on you: a row in Needs you, or a job stopped for an answer in their chat. */
 export const waitsOnYou = (c: OfficeMember) => c.ring === 'needs' || !!c.ask;
-/** The narrowest a desk and a lounge seat may be, in points: the floor plan fits as many across as the room is wide. */
-export const DESK_W = 100, LOUNGE_W = 72;
-export type FloorPlan = { cols: number; desks: OfficeMember[]; spare: number; loungeCols: number; lounge: OfficeMember[]; more: number };
-/** Who sits where in the flat office, one rule for the web and the phone at any crew size. Chief and every helper
- *  on a job of yours sit at desks, with room over their heads for a bubble; everyone else is in the lounge, a smaller
- *  sprite with a name chip. Folded (the default), the desks take two rows and the lounge two, and the rest wait behind
- *  "+N more" (the lounge's last seat); a helper who needs you always keeps a desk, however many there are. Seats keep
- *  the crew's own order, so nobody changes desk when someone else's news lands. `spare` empty desks finish the row. */
-export function floorPlan(crew: OfficeMember[], width: number, all = false): FloorPlan {
-  const cols = Math.max(2, Math.min(8, Math.floor(width / DESK_W)));
-  const loungeCols = Math.max(3, Math.min(12, Math.floor(width / LOUNGE_W)));
-  const busy = crew.filter((c) => waitsOnYou(c) || c.ring === 'working');
-  const idle = crew.filter((c) => !busy.includes(c));
-  let desks = busy, lounge = idle;
-  if (!all) {
-    const first = [...busy.filter(waitsOnYou), ...busy.filter((c) => !waitsOnYou(c))];
-    const keep = new Set(first.slice(0, Math.max(2 * cols - 1, busy.filter(waitsOnYou).length))); // Chief has a desk too
-    desks = busy.filter((c) => keep.has(c));
-    const seats = 2 * loungeCols;
-    lounge = desks.length < busy.length || idle.length > seats ? idle.slice(0, seats - 1) : idle;
-  }
-  return { cols, desks, spare: (cols - ((desks.length + 1) % cols)) % cols, loungeCols, lounge, more: crew.length - desks.length - lounge.length };
+/** Who handed a finished job to the tray between two views: a done row the earlier view lacked. The done list is what
+ *  the tray counts, so the hand-off follows it, however the events were grouped into commits. */
+export const handedIn = (was: OfficeView, now: OfficeView) => [...new Set(now.done.filter((t) => !was.done.some((w) => w.id === t.id)).map((t) => t.helper))];
+export const SEATS = 5;
+export type FloorPlan = { seats: OfficeMember[]; more: OfficeMember[] };
+/** Who stands on the office's one floor, one rule for the web and the phone (B1): five spots in the roster's order,
+ *  whoever waits on you first, then working, then the rest, resting last; everyone else is counted under "+N"
+ *  (`more`, roster order), never drawn smaller. The rail and the dock still name the whole crew. */
+export function floorPlan(crew: OfficeMember[]): FloorPlan {
+  const order = roster(crew);
+  return { seats: order.slice(0, SEATS), more: order.slice(SEATS) };
 }

@@ -5,7 +5,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useFonts } from 'expo-font';
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
-  ActivityIndicator, AppState, BackHandler, Clipboard, Image, KeyboardAvoidingView, Modal, PermissionsAndroid, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Switch, Text, TextInput, useColorScheme, View,} from 'react-native';
+  ActivityIndicator, AppState, BackHandler, Clipboard, Image, KeyboardAvoidingView, Modal, PermissionsAndroid, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Switch, Text, TextInput, useColorScheme, useWindowDimensions, View,} from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import * as A from '../web/src/adapter.ts';
 import { chatTokens, safeLink } from '../web/src/chat-md.ts';
@@ -27,12 +27,12 @@ import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { useShareIntent } from 'expo-share-intent';
 import { qrMatrix } from '@byokit/ui-core';
 import * as motion from './src/motion';
-import { MARKS } from './src/marks';
+import { MARKS, PALS } from './src/marks';
 import { askOf, sharedOf } from './src/ask';
 import { bubbleOff, bubbleOn, bubbleResume, bubbleState, bubbleWords, openBubblePermission, showCrew, wanted, type OverlayState } from './src/bubble';
 import { chip, chipSettings, chipState, chipWords, onChip, type StatusState } from './src/chip';
 import { island } from './src/island';
-import { Office } from './src/office';
+import { Office, useOffice } from './src/office';
 import { canHear, hear, stopHearing } from './modules/crewhouse-net';
 import { connect, desktopSignaling, forgetGrant, kept, loadGrant, onLive, pair, pairTypedCode, type Grant, type Status } from './src/link';
 
@@ -79,7 +79,7 @@ function Toast() {
 
 export default function App() {
   const t = look(useColorScheme() === 'dark');
-  const [fontsReady, fontError] = useFonts({ Inter: require('./assets/fonts/InterVariable.ttf') });
+  const [fontsReady, fontError] = useFonts({ Inter: require('./assets/fonts/InterVariable.ttf'), 'Instrument Serif': require('./assets/fonts/InstrumentSerif-Regular.ttf') });
   const [grant, setGrant] = useState<Grant | null | undefined>(undefined);
   useEffect(() => { loadGrant().then(setGrant).catch(() => setGrant(null)); }, []);
   return (
@@ -110,21 +110,23 @@ function Dots({ rows, pal, d, crisp = false }: { rows: art.Bitmap; pal: art.Pale
     </View>
   );
 }
-function ChiefArt({ mood = 'idle', size }: { mood?: art.Mood; size: number }) {
-  const small = size < 24;
-  const rows = small ? art.chiefSmall(mood) : art.chief(mood);
-  return <Dots rows={rows} pal={useLook().night ? art.CHIEF_PAL_NIGHT : art.CHIEF_PAL} d={size / rows[0].length} crisp={size < 96} />;
+/** Chief or a helper in B1 line ink, head and shoulders (`whole` for all of him): the PNGs scripts/icons.mjs renders. */
+function Ink({ who, mood = 'idle', size, whole, wave }: { who: art.Kind | 'chief'; mood?: art.Mood; size: number; whole?: boolean; wave?: boolean }) {
+  const pose = art.poseOf(mood);
+  return <Image source={PALS[wave && whole && who === 'chief' && pose === 'needs' ? 'chief-wave' : `${whole ? '' : 'head-'}${who}-${pose}`]} style={{ width: size, height: whole ? size * 1.25 : size }} accessibilityIgnoresInvertColors />;
+}
+function ChiefArt({ mood = 'idle', size, whole, wave }: { mood?: art.Mood; size: number; whole?: boolean; wave?: boolean }) {
+  return <Ink who="chief" mood={mood} size={size} whole={whole} wave={wave} />;
 }
 /** A round face: Chief or a pal, with a ring when it's working or needs you. */
 function Face({ who, size = 44, mood }: { who: A.Helper | 'chief' | { kind: art.Kind; name: string; mood?: art.Mood }; size?: number; mood?: art.Mood }) {
   const t = useLook();
   const chief = who === 'chief';
   const ring = chief || !('ring' in who) ? '' : who.ring;
-  const rows = chief ? [] : art.pal(who.kind, who.mood);
   return (
     <View style={{ width: size, height: size, borderRadius: size, alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
-      backgroundColor: chief ? (t.night ? '#2A2622' : '#FFF3E0') : t.night ? t.surface : art.PALS[who.kind].soft, borderWidth: ring ? 2 : 0, borderColor: ring === 'needs' ? t.pink : t.green }}>
-      {chief ? <ChiefArt mood={mood ?? 'idle'} size={size * 0.74} /> : <Dots rows={rows} pal={art.palPalette(who.kind)} d={(size * 0.74) / rows[0].length} crisp={size < 96} />}
+      backgroundColor: chief ? (t.night ? '#2A2622' : '#EEF1F6') : t.night ? t.surface : art.PALS[who.kind].soft, borderWidth: ring ? 2 : 0, borderColor: ring === 'needs' ? t.pink : t.green }}>
+      <Ink who={chief ? 'chief' : who.kind} mood={chief ? mood : who.mood} size={size * 0.8} />
     </View>
   );
 }
@@ -149,7 +151,7 @@ function AiMark({ ai, size = 32 }: { ai: { key: string; bg: string }; size?: num
 /** Chief's warm halo, where he greets you: first run, pairing, the words to check. */
 function Halo({ children }: { children: ReactNode }) {
   const t = useLook();
-  return <View style={[s.halo, s.warmRing, { backgroundColor: t.night ? '#2B2319' : '#FFF1DC', borderColor: t.night ? '#221C15' : '#FFF7EC' }]}>{children}</View>;
+  return <View style={[s.halo, s.warmRing, { backgroundColor: t.night ? '#2A2638' : '#EEF1F6', borderColor: t.night ? '#221F2E' : '#F6F7F9' }]}>{children}</View>;
 }
 function Center({ children }: { children: ReactNode }) { return <View style={s.center}>{children}</View>; }
 function T({ children, style, tone = 'ink', lines }: { children: ReactNode; style?: any; tone?: 'ink' | 'ink2' | 'mute' | 'pinkInk'; lines?: number }) {
@@ -233,9 +235,11 @@ function Label({ children, count }: { children: ReactNode; count?: number }) {
   const t = useLook();
   return <View style={s.labelRow}><T tone="ink2" style={s.label}>{children}</T>{!!count && <Text style={[s.count, { backgroundColor: t.pink, color: t.night ? '#1A0F14' : '#fff' }]}>{count}</Text>}</View>;
 }
-function Page({ title, lead, children }: { title?: string; lead?: string; children: ReactNode }) {
+/** A screen of its own. `back` is its way out (B1 has no tab bar): "‹ Home", or the screen it came from. */
+function Page({ title, lead, back, children }: { title?: string; lead?: string; back?: [string, () => void]; children: ReactNode }) {
   return (
     <ScrollView contentContainerStyle={s.page} keyboardShouldPersistTaps="handled">
+      {!!back && <Pressable onPress={back[1]} accessibilityRole="button" hitSlop={8} style={{ alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center' }}><T tone="ink2" style={s.b}>{`\u2039 ${back[0]}`}</T></Pressable>}
       {!!title && <T style={s.h1}>{title}</T>}
       {!!lead && <T tone="ink2" style={{ marginBottom: 6 }}>{lead}</T>}
       {children}
@@ -287,16 +291,18 @@ function Mic({ on, text, put, listen = false }: { on: boolean; text: string; put
 
 /** The message box: words (the phone keyboard's own mic dictates them; Chief's box has its own) and up to four
  *  photos. A send that didn't go through keeps both with a Retry; each chat holds its own words (web/src/draft.ts). */
-function Composer({ placeholder, onSend, chat, photos: canPhoto = true, mic = chat === 'chief', listen }: { placeholder: string; onSend: (t: string, photos: Photo[]) => unknown; chat?: string; photos?: boolean; mic?: boolean; listen?: boolean }) {
+function Composer({ placeholder, onSend, chat, photos: canPhoto = true, away, mic = chat === 'chief', listen }: { placeholder: string; onSend: (t: string, photos: Photo[]) => unknown; chat?: string; photos?: boolean; mic?: boolean; listen?: boolean; away?: boolean }) {
   const t = useLook();
   const [text, setText] = useState(() => (chat ? draftOf(chat).text : ''));
   const [pics, setPics] = useState<Photo[]>([]);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
   const ready = !!text.trim() || pics.length > 0;
+  // Chief's box (B1): the send stays dark while there is nothing to send, never a faded accent.
+  const dark = chat === 'chief', on = ready && !busy && !away;
   const change = (x: string) => { setText(x); setFailed(false); if (chat) keepDraft(chat, x); };
   const send = async () => {
-    if (busy || (!text.trim() && !pics.length)) return;
+    if (away || busy || (!text.trim() && !pics.length)) return;
     const x = text.trim(), p = pics;
     setBusy(true);
     let ok = false;
@@ -312,7 +318,8 @@ function Composer({ placeholder, onSend, chat, photos: canPhoto = true, mic = ch
   });
   return (
     <View style={{ gap: 6 }}>
-      {failed && <View style={s.row}>
+      {away && <T tone="ink2" style={[s.small, { paddingHorizontal: 8 }]}>Reconnecting… your words stay here until the home computer answers.</T>}
+      {!away && failed && <View style={s.row}>
         <T tone="pinkInk" style={[s.small, { flex: 1 }]}>Not sent — it's kept here.</T>
         <Btn label="Retry" onPress={() => void send()} />
       </View>}
@@ -329,8 +336,8 @@ function Composer({ placeholder, onSend, chat, photos: canPhoto = true, mic = ch
         </Pressable>}
         <TextInput style={[s.composerInput, { color: t.ink }]} value={text} onChangeText={change} multiline placeholder={placeholder} placeholderTextColor={t.mute} accessibilityLabel={placeholder} />
         <Mic on={mic} text={text} put={change} listen={listen} />
-        <Pressable onPress={() => void send()} disabled={!ready || busy} accessibilityLabel="Send" style={[s.send, { backgroundColor: t.go, opacity: ready && !busy ? 1 : 0.4 }]}>
-          <Text style={{ color: t.goInk, fontSize: 18, fontWeight: '900' }}>↑</Text>
+        <Pressable onPress={() => void send()} disabled={away || !ready || busy} accessibilityLabel="Send" accessibilityState={{ disabled: away || !ready || busy }} style={[s.send, dark ? { backgroundColor: on ? t.go : t.ink, borderRadius: 10 } : { backgroundColor: t.go, opacity: on ? 1 : 0.4 }]}>
+          <Text style={{ color: dark && !on ? t.solid : t.goInk, fontSize: 18, fontWeight: '900' }}>↑</Text>
         </Pressable>
       </View>
     </View>
@@ -584,7 +591,7 @@ function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
   if (done) {
     return (
       <Center>
-        <Halo><ChiefArt mood="happy" size={120} /></Halo>
+        <ChiefArt mood="happy" size={104} whole />
         <T style={s.display}>You're in</T>
         <T tone="ink2" style={s.centerText}>This phone is paired with your computer{done.device.role === 'view' ? '. It can watch the crew, not answer' : ''}.</T>
         {checked && push === 'missing' && <T tone="mute" style={s.centerText}>{PUSH_WORDS.missing}</T>}
@@ -595,7 +602,7 @@ function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
   if (words) {
     return (
       <Center>
-        <Halo><ChiefArt mood="listen" size={120} /></Halo>
+        <ChiefArt mood="listen" size={104} whole />
         <T style={s.display}>Check the words</T>
         <T tone="ink2" style={s.centerText}>Your computer is asking whether this phone may join. Say yes there only if it shows these same two words:</T>
         <Text style={[s.fp, { color: t.pinkInk }]}>{words}</Text>
@@ -619,8 +626,8 @@ function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
     return (
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="height">
         <ScrollView contentContainerStyle={s.centerScroll} keyboardShouldPersistTaps="handled">
-          <ChiefArt mood="listen" size={120} />
-          <T style={s.h1}>Type a code</T>
+          <ChiefArt mood="listen" size={72} whole />
+          <T style={[s.h1, s.serif, { fontSize: 32, lineHeight: 36 }]}>Type a code</T>
           <T tone="ink2" style={s.centerText}>Enter the code under Add a phone on your computer, or one someone there sent you.</T>
           <TextInput style={[s.input, { alignSelf: 'stretch', color: t.ink, borderColor: t.line }]} value={code} onChangeText={setCode} placeholder="Type or paste the code" placeholderTextColor={t.mute}
             accessibilityLabel="Pairing code" autoCapitalize="characters" autoCorrect={false} />
@@ -634,7 +641,7 @@ function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
   // Scrolls on short screens: a centered View spills past both safe-area edges instead.
   return (
     <ScrollView contentContainerStyle={s.centerScroll}>
-      <Halo><ChiefArt mood="hello" size={120} /></Halo>
+      <ChiefArt mood="hello" size={104} whole />
       <T style={s.display}>Crewhouse</T>
       <T tone="ink2" style={[s.centerText, { marginTop: -6 }]}>Your personal assistant, in your pocket.</T>
       <Card style={{ alignSelf: 'stretch', gap: 10, marginVertical: 6 }}>
@@ -658,7 +665,7 @@ function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
 // ---------- the app ----------
 type Route = { view: 'home' | 'chief' | 'room' | 'crew' | 'helper' | 'things' | 'routines' | 'add' | 'phone'; id?: string; tab?: string; m?: number };
 /** `offline`: the screens show what this phone kept, read-only, until the home computer answers again. */
-type Ctx = { state: Json; tick: number; refresh: () => void; go: (r: Route, replace?: boolean) => void; back: () => void; canAct: boolean; offline: boolean; open: (c: A.Card) => void };
+type Ctx = { state: Json; tick: number; refresh: () => void; go: (r: Route, replace?: boolean) => void; back: () => void; canAct: boolean; offline: boolean; open: (c: A.Card) => void; writer?: boolean };
 
 function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }) {
   const t = useLook();
@@ -762,7 +769,7 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
   if (status === 'refused') {
     return (
       <Center>
-        <ChiefArt mood="error" size={140} />
+        <ChiefArt mood="error" size={112} whole />
         <T style={s.h1}>Not recognised</T>
         <T tone="ink2" style={s.centerText}>Your computer didn't accept this phone. It may have been removed in Settings, Phones, or Crewhouse was set up again.</T>
         <Btn go big label="Pair again" onPress={forget} />
@@ -773,23 +780,21 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
   if (!state) {
     return (
       <Center>
-        <ChiefArt mood="work" size={140} />
+        <ChiefArt mood="work" size={112} whole />
         <T tone="ink2" style={s.centerText}>{out ? `Can't reach the home computer. ${missing || 'Checking why…'} Trying again by itself.` : 'Waking the crew…'}</T>
       </Center>
     );
   }
   const offline = status !== 'online';
   const canAct = grant.device.role === 'control' && !offline;
-  const ctx: Ctx = { state, tick, refresh, go, back: () => { back(); }, canAct, offline, open: setSheet };
+  const ctx: Ctx = { state, tick, refresh, go, back: () => { back(); }, canAct, offline, open: setSheet, writer: grant.device.role === 'control' };
   const shared = hasShareIntent && canAct && state.person.onboarded
     ? { text: [shareIntent.text, shareIntent.webUrl].filter((x, i, a) => x && a.indexOf(x) === i).join('\n'), files: (shareIntent.files ?? []).map((f) => ({ path: f.path, mimeType: f.mimeType })) } : null;
   if (shared) return <ShareIn state={state} shared={shared} go={go} onDone={() => resetShareIntent()} />;
   if (picked !== null && canAct && state.person.onboarded) return <ShareIn state={state} shared={{ text: picked, files: [] }} go={go} onDone={() => setPicked(null)} />;
   if (!state.person.onboarded && canAct) return <Hello {...ctx} />;
-  const nav: [Route['view'], string, art.Tab][] = [['home', 'Home', 'home'], ['crew', 'Crew', 'crew'], ['things', 'Things', 'things'], ['routines', 'Routines', 'routines'], ['phone', 'Settings', 'settings']];
-  // In any chat Chats is lit; Crew is lit only on Crew and Add.
-  const active = route.view === 'add' ? 'crew' : ['chief', 'helper', 'room'].includes(route.view) ? 'home' : route.view;
   const live = sheet && A.cards(state).find((c) => c.id === sheet.id);
+  const toHome: [string, () => void] = ['Home', () => go({ view: 'home' }, true)];
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior="height">
       {offline && (
@@ -800,7 +805,7 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
       <Modal visible={why} transparent animationType={motion.sheet(reduce)} onRequestClose={() => setWhy(false)}>
         <Pressable style={s.scrim} onPress={() => setWhy(false)}>
           <Pressable style={[s.sheet, { backgroundColor: t.bg }]} onPress={() => {}}>
-            <View style={{ alignItems: 'center' }}><ChiefArt mood="rest" size={88} /></View>
+            <View style={{ alignItems: 'center' }}><ChiefArt mood="rest" size={72} whole /></View>
             <T style={s.h2}>The home computer isn't answering</T>
             <T tone="ink2">{missing || 'Checking why…'} If it's asleep, the crew has paused and carries on when it wakes. This phone keeps trying by itself.</T>
             <T tone="ink2">Meanwhile you can read your recent chats. You can reply once it's back.</T>
@@ -814,19 +819,10 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
         {route.view === 'room' && <Room {...ctx} />}
         {route.view === 'crew' && <Crew {...ctx} />}
         {route.view === 'helper' && <HelperPage key={stack.length} {...ctx} id={route.id!} tab={route.tab ?? 'chat'} m={route.m} setTab={(tab) => setStack((st) => [...st.slice(0, -1), { ...route, tab }])} />}
-        {route.view === 'routines' && <Page title="Routines" lead="Jobs the crew does on a schedule."><RoutineList {...ctx} /></Page>}
+        {route.view === 'routines' && <Page title="Routines" lead="Jobs the crew does on a schedule." back={toHome}><RoutineList {...ctx} /></Page>}
         {route.view === 'add' && <AddHelper {...ctx} />}
-        {route.view === 'things' && <Page title="Things" lead="Everything the crew has made for you."><ThingsList list={A.things(state)} state={state} empty="Videos, lists, letters and plans the crew makes for you land here." /></Page>}
-        {route.view === 'phone' && <ThisPhone grant={grant} status={status} onForget={forget} onClear={() => { kept.clear(); say('Cleared from this phone ✓'); }} />}
-      </View>
-      <View style={[s.tabbar, { backgroundColor: t.surface, borderColor: t.line }]}>
-        {nav.map(([v, label, icon]) => (
-          <Pressable key={v} style={s.tab} onPress={() => go({ view: v }, true)} accessibilityRole="tab" accessibilityLabel={label}>
-            <View style={[s.tabIcon, active === v && { backgroundColor: t.soft }]}><Dots rows={art.TABS[icon]} pal={{ x: active === v ? t.ink : t.mute }} d={22 / 9} crisp /></View>
-            <Text style={[s.tabLabel, { color: active === v ? t.ink : t.mute }]}>{label}</Text>
-            {v === 'home' && A.needsYou(state).length > 0 && <Text style={[s.badge, { backgroundColor: t.pink }]}>{A.needsYou(state).length}</Text>}
-          </Pressable>
-        ))}
+        {route.view === 'things' && <Page title="Things" lead="Everything the crew has made for you." back={toHome}><ThingsList list={A.things(state)} state={state} empty="Videos, lists, letters and plans the crew makes for you land here." /></Page>}
+        {route.view === 'phone' && <ThisPhone grant={grant} status={status} go={go} back={toHome} onForget={forget} onClear={() => { kept.clear(); say('Cleared from this phone ✓'); }} />}
       </View>
       {live && <AskSheet c={live} who={A.crew(state).find((h) => h.id === live.helper)} chiefSays={state.asks.find((a: Json) => a.id === live.id)?.detail?.chief} canAct={canAct} onClose={() => { setSheet(null); refresh(); }} />}
     </KeyboardAvoidingView>
@@ -853,10 +849,10 @@ function Hello({ state, refresh, go }: Ctx) {
   const reduce = motion.useReduceMotion();
   return (
     <Page>
-      <motion.Rise reduce={reduce}><View style={{ alignItems: 'center', paddingTop: 8 }}><Halo><ChiefArt mood="hello" size={104} /></Halo></View></motion.Rise>
+      <motion.Rise reduce={reduce}><View style={{ alignItems: 'center', paddingTop: 8 }}><ChiefArt mood="hello" size={96} whole /></View></motion.Rise>
       <motion.Rise reduce={reduce} delay={80}><View style={[s.speech, { backgroundColor: t.solid, borderColor: t.line }]}>
         <View style={[s.speechTail, { backgroundColor: t.solid, borderColor: t.line }]} />
-        <T style={[s.h1, s.centerText, { fontSize: 26, lineHeight: 32, marginVertical: 0 }]}>{A.greeting()}{address.trim() ? `, ${address.trim()}` : ''}</T>
+        <T style={[s.h1, s.serif, s.centerText, { fontSize: 34, lineHeight: 38, marginVertical: 0 }]}>{A.greeting()}{address.trim() ? `, ${address.trim()}` : ''}</T>
         <T tone="ink2" style={s.centerText}>I'm Chief, your personal assistant. I run your crew of helpers.</T>
       </View></motion.Rise>
       <motion.Rise reduce={reduce} delay={160}><Card style={{ gap: 10 }}>
@@ -1079,12 +1075,12 @@ function HelperPill({ h, offline }: { h: A.Helper; offline: boolean }) {
 
 /** Needs you as one compact list: a number, the face, the subject, one plain line; a row opens the review sheet.
  *  Nothing commits from Home. At most three rows, then "N more", which expands in place. */
-function NeedsRows({ state, cards, open }: { state: Json; cards: A.Card[]; open: (c: A.Card) => void }) {
+function NeedsRows({ state, cards, open, few = 3 }: { state: Json; cards: A.Card[]; open: (c: A.Card) => void; few?: number }) {
   const t = useLook();
   const crew = A.crew(state);
   const [all, setAll] = useState(false);
-  const shown = all ? cards : cards.slice(0, 3);
-  const more = cards.length - 3;
+  const shown = all ? cards : cards.slice(0, few);
+  const more = cards.length - few;
   return (
     <View>
       {shown.map((c, i) => (
@@ -1100,57 +1096,210 @@ function NeedsRows({ state, cards, open }: { state: Json; cards: A.Card[]; open:
   );
 }
 
-/** Home's first impression: the day, the greeting, Chief's one line beside his face, and the three counts the rows
- *  below add up to (web/src/main.tsx HomeHero is the same). */
-function HomeHero({ state, offline, go }: { state: Json; offline: boolean; go: Ctx['go'] }) {
+/** Home's top (web/src/main.tsx HomeBar): in Chat just the gear on the left and the Chat | Office switch on the right
+ *  (B1 phone); in Office the greeting and the counts from the office's one state as well. */
+function HomeBar({ state, view, go, mode, pick }: { state: Json; view: A.OfficeView; offline: boolean; go: Ctx['go']; mode: HomeMode; pick: (m: HomeMode) => void }) {
   const t = useLook();
-  const c = chiefNow(state, offline);
-  const n = A.homeCounts(state);
+  const n = view.counts, name = String(state.person?.name ?? '').trim(), quiet = A.quietLine(state.person);
+  // B1: no tab bar on Home. The gear by the Chat | Office switch reaches settings (and the rest of the app from there).
+  const gear = <Pressable onPress={() => go({ view: 'phone' })} accessibilityRole="button" accessibilityLabel="Settings" hitSlop={8} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}><T tone="ink2" style={{ fontSize: 22, lineHeight: 26 }}>{'\u2699'}</T></Pressable>;
+  const seg = <View accessibilityRole="tablist" accessibilityLabel="Home view" style={[s.seg, { backgroundColor: t.soft, borderRadius: 14, padding: 4 }]}>
+    {HOME_MODES.map(([m, l]) => <Pressable key={m} onPress={() => pick(m)} accessibilityRole="tab" accessibilityState={{ selected: mode === m }} style={[s.segBtn, { borderRadius: 10 }, mode === m && { backgroundColor: t.solid }]}>
+      <T tone={mode === m ? undefined : 'ink2'} style={[s.small, s.b]}>{l}</T>
+    </Pressable>)}
+  </View>;
+  const tools = <View style={[s.row, { justifyContent: 'space-between' }]}>{gear}{seg}</View>;
+  const dot = (c: string, ring = false) => <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: ring ? 'transparent' : c, borderWidth: ring ? 1.6 : 0, borderColor: c }} />;
+  const needs = <View style={[s.row, { gap: 6 }]}>{dot(n.needs ? t.fill : t.line2)}<T tone="ink2" style={[s.small, { fontWeight: '500' }]}>{n.needs ? `${n.needs} ${n.needs === 1 ? 'needs' : 'need'} you` : 'Nothing needs you'}</T></View>;
+  const busy = <View style={[s.row, { gap: 6 }]}>{dot(t.ink, true)}<T tone="ink2" style={[s.small, { fontWeight: '500' }]}>{`${n.working} working`}</T></View>;
+  const still = !!quiet && <T tone="ink2" style={[s.small, { fontWeight: '500' }]}>{`\u263E ${quiet}`}</T>;
+  if (mode === 'chat') return tools;
   return (
-    <View style={[s.hero, { backgroundColor: t.solid, borderColor: t.line }]}>
-      {[300, 240, 180, 120].map((r) => <View key={r} style={[s.heroWarm, { width: r * 2, height: r * 2, borderRadius: r, top: -r - 30, left: -r + 10, backgroundColor: t.night ? '#2B2319' : '#FFF1DC' }]} />)}
-      <T tone="ink2" style={s.eyebrow}>{A.today().toUpperCase()}</T>
-      <T style={s.heroH1}>{A.greeting()}, {state.person.address ?? state.person.name}</T>
-      <Pressable onPress={() => go({ view: 'chief' })} accessibilityRole="button" accessibilityLabel={`Chief: ${c.line}`} style={s.heroChief}>
-        <Face who="chief" size={36} mood={c.mood} />
-        <View style={[s.says, { backgroundColor: t.bg, borderColor: t.line }]}><T style={s.saysText} lines={2}>{c.line}</T></View>
-      </Pressable>
-      <View style={s.stats} accessible accessibilityLabel={A.homeSummary(state)}>
-        {([[n.needs, n.needs === 1 ? 'needs you' : 'need you', true], [n.working, 'working', false], [n.done, 'done today', false]] as const).map(([k, l, hot]) =>
-          <View key={l} style={[s.stat, { backgroundColor: t.soft }]}><T style={[s.statNum, hot && k > 0 && { color: t.pinkInk }]}>{k}</T><T tone="ink2" style={s.statLabel}>{l}</T></View>)}
+    <View style={{ gap: 6 }}>
+      {tools}
+      <T style={[s.serif, { fontSize: 38, lineHeight: 40 }]}>{A.greeting()}{name ? <>{', '}<Text style={{ fontStyle: 'italic' }}>{name}</Text></> : null}</T>
+      <View style={[s.row, { flexWrap: 'wrap', gap: 14 }]}>{busy}{needs}<View style={{ flex: 1 }} />{still}</View>
+    </View>
+  );
+}
+
+/** Needs you pinned over Chief's thread (web/src/main.tsx NeedsPin, flat): one card with the most pressing question,
+ *  every other behind an exact "See all N". Home commits nothing: the yes opens the review sheet, Ask Chief fills his
+ *  box without sending, Not now moves the card back (or folds the only one under its heading); it stays counted. */
+function NeedsPin({ state, cards, open, go }: { state: Json; cards: A.Card[]; open: (c: A.Card) => void; go: Ctx['go'] }) {
+  const t = useLook();
+  const [all, setAll] = useState(false);
+  const [later, setLater] = useState<number[]>([]);
+  const [folded, setFolded] = useState<number | null>(null);
+  if (!cards.length) return null;
+  const fold = cards.length === 1 && folded === cards[0].id;
+  const order = [...cards.filter((c) => !later.includes(c.id)), ...later.map((id) => cards.find((c) => c.id === id)).filter((c): c is A.Card => !!c)];
+  const c = order[0];
+  const who = A.crew(state).find((h) => h.id === c.helper), name = who?.name ?? 'Chief';
+  const yes = c.choices[0]?.body.answer === 'allow' ? c.choices[0] : null;
+  // A known total shows once, in whole dollars when it has no cents ("$412"); the preview's own repeat of it is dropped.
+  const shown = c.order?.known ? c.order.shown : '', price = shown.replace(/\.00$/, '');
+  const detail = (c.preview?.body ?? '').split('\n').map((l) => l.trim()).filter(Boolean)
+    .filter((l) => !shown || !l.startsWith('Total ')).map((l) => (shown ? l.replace(` — ${shown}`, '') : l))[0];
+  const question = c.question ?? (c.review && c.preview?.head ? c.preview.head : c.words);
+  const link = (label: string, onPress: () => void) => <Pressable onPress={onPress} accessibilityRole="button" hitSlop={8}><T style={[s.small, s.b]}>{label}</T></Pressable>;
+  return (
+    <View style={[s.card, s.askCard, { backgroundColor: t.solid, borderColor: t.line2, borderWidth: 1, borderRadius: 20, paddingVertical: 14, gap: 10 }]} accessibilityLabel="Needs you">
+      <View style={[s.row, { justifyContent: 'space-between' }]}>
+        <T style={[s.label, { color: t.pinkInk }]}>{`Needs you \u00B7 ${cards.length}`}</T>
+        {cards.length > 1 && link(all ? 'Show less' : `See all ${cards.length}`, () => setAll(!all))}
+        {fold && link('Show', () => setFolded(null))}
+      </View>
+      {!fold && <>
+        <View style={s.row} accessible accessibilityLabel={`${name} needs you: ${c.head}`}>
+          <Ink who={who ? who.kind : 'chief'} mood={who?.mood} size={44} />
+          <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+            <T style={[s.serif, { fontSize: 22, lineHeight: 26 }]}>{question}</T>
+            {!!detail && <T tone="ink2" style={{ fontSize: 14, lineHeight: 19 }}>{detail}</T>}
+          </View>
+          {!!price && <T style={[s.serif, { fontSize: 32, lineHeight: 36 }]}>{price}</T>}
+        </View>
+        <View style={s.chips}>
+          <Btn go label={yes ? yes.label.replace(shown, price) : c.reply ? `Answer ${name}\u2026` : 'Review\u2026'} onPress={() => open(c)} />
+          <Btn label="Ask Chief" onPress={() => { keepDraft('chief', `About ${name}'s question (${c.head}): `); go({ view: 'chief' }); }} />
+          <Btn ghost label="Not now" onPress={() => (cards.length > 1 ? setLater([...later.filter((x) => x !== c.id), c.id]) : setFolded(c.id))} />
+        </View>
+      </>}
+      {all && <View style={[s.listGroup, { borderColor: t.line }]}><NeedsRows state={state} cards={order.slice(1)} open={open} few={order.length} /></View>}
+    </View>
+  );
+}
+
+const BADGE: Partial<Record<A.Seat | 'done', string>> = { needs: '!', chat: '!', working: '', failed: '!', done: '\u2713', resting: 'z' };
+const BADGE_BG: Partial<Record<A.Seat | 'done', string>> = { needs: '#D63A1E', chat: '#D63A1E', failed: '#D63A1E', working: '#1F9D62', done: '#3B6FE0' };
+/** Home's chat opens on Chief (web/src/main.tsx ChiefHero, B1 phone): his whole figure, his own last words in a
+ *  bubble, and the crew's faces at the card's foot with a badge each; no caption on the phone. */
+function ChiefHero({ live, state, go }: { live: A.OfficeView; state: Json; go: Ctx['go'] }) {
+  const t = useLook();
+  const narrow = useWindowDimensions().width < 380;
+  const crew = A.roster(live.crew);
+  return (
+    <View style={[s.askCard, { flexDirection: 'row', minHeight: narrow ? 180 : 220, overflow: 'hidden', backgroundColor: t.solid, borderColor: t.line2, borderWidth: 1, borderRadius: 24 }]} accessibilityLabel="Chief">
+      <View style={{ width: narrow ? 104 : 150, justifyContent: 'flex-end', marginLeft: narrow ? -8 : 0 }}><ChiefArt mood={live.chief.mood} size={narrow ? 120 : 160} whole wave /></View>
+      <View style={{ flex: 1, minWidth: 0, gap: 10, paddingTop: 18, paddingRight: 12, paddingBottom: 14, paddingLeft: 4 }}>
+        <T style={[s.serif, { fontSize: 40, lineHeight: 44 }]}>Chief <Text style={[s.small, { fontFamily: 'Inter', color: t.mute }]}>Studio Chief</Text></T>
+        <View style={{ alignSelf: 'flex-start', borderWidth: 1, borderColor: t.line2, borderRadius: 16, paddingVertical: 10, paddingHorizontal: 14 }}><T>{A.chiefSaid(state) || live.chief.line}</T></View>
+        <View style={{ flex: 1 }} />
+        {crew.length > 0 && <View style={[s.row, { flexWrap: 'wrap', gap: 4 }]}>
+          {crew.slice(0, 5).map((c) => { const k = A.railWord(c, live).seat, b = BADGE[k];
+            return <Pressable key={c.id} onPress={() => go({ view: 'helper', id: c.id })} accessibilityRole="button" accessibilityLabel={`${c.name}: ${A.railWord(c, live).word}`} hitSlop={4}>
+              <Face who={c} size={34} />
+              {b !== undefined && <View style={{ position: 'absolute', right: -3, bottom: -3, width: 16, height: 16, borderRadius: 8, borderWidth: 2, borderColor: t.solid, backgroundColor: BADGE_BG[k] ?? t.mute, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ color: '#fff', fontSize: 8, lineHeight: 10, fontWeight: '700' }}>{b}</Text></View>}
+            </Pressable>; })}
+          {crew.length > 5 && <Pressable onPress={() => go({ view: 'crew' })} accessibilityRole="button" accessibilityLabel={`${crew.length - 5} more of the crew`} hitSlop={8}><T tone="ink2" style={[s.small, s.b]}>{`+${crew.length - 5}`}</T></Pressable>}
+        </View>}
       </View>
     </View>
   );
 }
 
+/** On it now (B1): a card per helper at work, their face, name and step; honest when nobody is. */
+function OnItNow({ view }: { view: A.OfficeView }) {
+  const t = useLook();
+  const working = view.crew.filter((c) => A.seatOf(c) === 'working'), waiting = view.crew.filter(A.waitsOnYou).length;
+  return <View style={{ gap: 8 }}>
+    <View style={[s.row, { justifyContent: 'space-between' }]}><Label>On it now</Label><T tone="mute" style={s.small}>{`${working.length} working`}</T></View>
+    {working.length ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{working.map((c) => <View key={c.id} style={[s.listRow, { flexBasis: '47%', flexGrow: 1, minWidth: 0, borderWidth: 1, borderColor: t.line, borderRadius: 16, backgroundColor: t.solid }]}>
+      <Face who={{ kind: c.kind, name: c.name, mood: c.mood }} size={34} /><View style={{ flex: 1, minWidth: 0 }}><T style={s.b} lines={1}>{c.name}</T><T tone="ink2" style={s.small} lines={1}>{c.step || c.status}</T></View>
+    </View>)}</View> : <Card><T tone="ink2">{waiting ? `Nobody is working: ${waiting} waiting on you.` : 'Nobody is working right now. The crew is free.'}</T></Card>}
+  </View>;
+}
+
+/** Home opens on Chat every time the app starts (kept in memory only, never stored): Chief's thread under the bar and
+ *  the pinned Needs you. Office is the optional view of the same state; neither view hides Needs you or Chief's box. */
+type HomeMode = 'chat' | 'office';
+const HOME_MODES: [HomeMode, string][] = [['chat', 'Chat'], ['office', 'Office']];
+let homeMode: HomeMode = 'chat';
+
 function Home(ctx: Ctx) {
   const t = useLook();
   const { state, go, refresh, canAct, offline, open } = ctx;
-  const needs = A.needsYou(state);
+  const view = useOffice(state, offline, OUT);
+  const needs = view.needs;
   const chief = chiefNow(state, offline);
+  const [mode, setMode] = useState(homeMode);
+  const pick = (m: HomeMode) => { homeMode = m; setMode(m); };
   const toChief = async (x: string, p: Photo[] = []) => { const ok = await attempt(() => api.post('chief', x, p.map(({ type, data }) => ({ type, data }))), undefined, true); if (ok) { refresh(); go({ view: 'chief' }); } return ok; };
   const [room, setRoom] = useState(0);
   const [desk, setDesk] = useState<{ c: A.OfficeMember; state: Json } | null>(null);
+  const [profile, setProfile] = useState(false);
+  // The bar stays put over Chief's thread; in Office it scrolls with the room, Needs you under it, so the whole room
+  // fits between the bar and Chief's box.
+  const pinned = mode === 'office' && needs.length > 0 && <View><Label count={needs.length}>Needs you</Label><ScrollView style={[s.listGroup, { backgroundColor: t.solid, borderColor: t.line, maxHeight: 280, flexGrow: 0 }]} nestedScrollEnabled><NeedsRows state={state} cards={needs} open={open} few={1} /></ScrollView></View>;
+  const top = <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4, gap: 10 }}>
+    <HomeBar state={state} view={view} offline={offline} go={go} mode={mode} pick={pick} />
+  </View>;
+  // Chat: Chief's hero and Needs you stay over his thread, which scrolls on its own to the newest line.
+  if (mode === 'chat') return <View style={{ flex: 1 }}>{top}<Chat {...ctx} id="chief" hero={<View style={{ gap: 12 }}><ChiefHero live={view} state={state} go={go} /><NeedsPin state={state} cards={needs} open={open} go={go} /></View>} /></View>;
   return (
     <View style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={s.page} keyboardShouldPersistTaps="handled">
-        <HomeHero state={state} offline={offline} go={go} />
+        <View style={{ margin: -16, marginBottom: 0 }}>{top}</View>
         <View onLayout={(e) => setRoom(e.nativeEvent.layout.width)} style={[s.office, { backgroundColor: t.soft, borderColor: t.line }]}>
-          {room > 0 && <Office state={state} night={t.night} offline={offline} width={room - 2} onChief={() => go({ view: 'chief' })} onDesk={(c) => setDesk({ c, state })} onAsk={open} onTray={() => go({ view: 'things' })} />}
+          {room > 0 && <Office view={view} night={t.night} offline={offline} width={room - 2} onChief={() => setProfile(true)} onDesk={(c) => setDesk({ c, state })} onAsk={open} onTray={() => go({ view: 'things' })} onCrew={() => go({ view: 'crew' })} />}
         </View>
+        {pinned}
+        <OnItNow view={view} />
         {!!A.resting(state) && <Card><T>{A.resting(state)}. I'll pick things back up then.</T></Card>}
         <Pressable onPress={() => go({ view: 'phone' })} accessibilityRole="button" accessibilityLabel="Check AI account sign-in on the home computer" style={({ pressed }) => [s.listRow, s.listGroup, { backgroundColor: t.solid, borderColor: t.line }, pressed && { opacity: 0.6 }]}>
           <AiMark ai={A.AIS[0]} size={30} />
           <View style={{ flex: 1 }}><T style={s.rowTitle}>Your AI accounts</T><T tone="ink2" style={s.small} lines={2}>You sign in on the home computer, in Settings.</T></View><T tone="mute">›</T>
         </Pressable>
-        {needs.length > 0 && <View><Label count={needs.length}>Needs you</Label><View style={[s.listGroup, { backgroundColor: t.solid, borderColor: t.line }]}><NeedsRows state={state} cards={needs} open={open} /></View></View>}
         <ChatList state={state} go={go} mood={chief.mood} />
         <JobList state={state} go={go} refresh={refresh} />
       </ScrollView>
-      {canAct && <View style={s.dock}><Composer placeholder="Ask Chief anything" onSend={toChief} chat="chief" /></View>}
+      {(canAct || ctx.writer) && <View style={s.dock}><Composer placeholder="Ask Chief anything" onSend={toChief} chat="chief" away={offline} /></View>}
       {!!desk && <DeskSheet desk={desk} {...ctx} onClose={() => setDesk(null)} />}
+      {profile && <ChiefSheet view={view} {...ctx} onClose={() => setProfile(false)} />}
     </View>
   );
+}
+
+/** Chief up close, over the office (which stays selected beneath): how to reach him, the crew's computers (watching
+ *  first) and what the crew made. The sheet is only as tall as what it holds. */
+function ChiefSheet({ view, state, offline, go, onClose }: Ctx & { view: A.OfficeView; onClose: () => void }) {
+  const t = useLook();
+  const reduce = motion.useReduceMotion();
+  const crew = A.crew(state);
+  const computers = desktopAvailable ? view.crew.filter((c) => crew.find((h) => h.id === c.id)?.computer) : [];
+  const made = A.things(state).slice(0, 4);
+  const word = offline ? OUT : A.chiefWord(view);
+  const to = (r: Route) => { onClose(); go(r); };
+  const row = (key: string, label: string, sub: string, onPress: () => void, end: ReactNode = <T tone="mute">›</T>, face?: ReactNode) =>
+    <Pressable key={key} onPress={onPress} accessibilityRole="button" accessibilityLabel={`${label}, ${sub}`} style={({ pressed }) => [{ minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8, borderBottomWidth: 1, borderColor: t.line }, pressed && { opacity: 0.6 }]}>
+      {face}<View style={{ flex: 1, minWidth: 0 }}><T style={s.b}>{label}</T>{!!sub && <T tone="ink2" style={s.small} lines={1}>{sub}</T>}</View>{end}
+    </Pressable>;
+  return <Modal visible transparent animationType={motion.sheet(reduce)} onRequestClose={onClose}>
+    <Pressable style={s.scrim} onPress={onClose}>
+      <Pressable style={[s.sheet, { backgroundColor: t.surface, maxHeight: '88%' }]} onPress={() => {}}>
+        <View style={[s.grabber, { backgroundColor: t.line2 }]} />
+        <View style={s.row}>
+          <Face who="chief" size={60} mood={view.chief.mood} />
+          <View style={{ flex: 1 }}><T style={[s.h2, s.serif, { fontSize: 28, lineHeight: 32 }]}>Chief</T><T tone="ink2" style={s.small}>Runs your crew</T>
+            <T style={[s.small, s.b, { color: word === 'Needs you' ? t.pinkInk : word === 'Working' ? t.green : t.ink2 }]}>{word}</T></View>
+          <Btn label="Close" onPress={onClose} />
+        </View>
+        <ScrollView style={{ flexGrow: 0 }} contentContainerStyle={{ gap: 6 }}>
+          <Label>Ways to reach</Label>
+          {row('chat', 'Message in Chat', '', () => to({ view: 'chief' }))}
+          {computers.length > 0 && <Label>Crew computers</Label>}
+          {computers.map((c) => {
+            const k = A.seatOf(c), h = crew.find((x) => x.id === c.id)!;
+            return row(c.id, `${c.name}'s computer`, h.driving ? 'You have the wheel' : `Watch ${c.name}`, () => to({ view: 'helper', id: c.id, tab: 'watch' }),
+              <Pill tone={A.waitsOnYou(c) ? 'wait' : k === 'working' ? 'ok' : 'off'}>{offline ? OUT : A.waitsOnYou(c) ? 'Needs you' : k === 'working' ? 'Working' : 'Resting'}</Pill>, <Face who={h} size={36} />);
+          })}
+          {made.length > 0 && <Label>Outputs</Label>}
+          {made.map((m) => row(String(m.id), m.title, `From ${crew.find((h) => h.id === m.helper)?.name ?? 'the crew'}`, () => to({ view: 'helper', id: m.helper })))}
+        </ScrollView>
+      </Pressable>
+    </Pressable>
+  </Modal>;
 }
 
 /** A helper's desk, opened from the office: what it is on, its steps with the latest marked now, what it has made for
@@ -1173,11 +1322,11 @@ function DeskSheet({ desk, state, offline, canAct, go, refresh, onClose }: Ctx &
         <View style={[s.grabber, { backgroundColor: t.line2 }]} />
         <View style={s.row}>
           <Face who={offline ? { ...h, ring: '' as const, mood: 'rest' as const } : { ...h, mood: c.mood, ring: c.ring }} size={52} />
-          <View style={{ flex: 1 }}><T style={s.h2}>{c.name}</T><T tone="ink2" style={s.small} lines={2}>{h.role}</T></View>
+          <View style={{ flex: 1 }}><T style={[s.h2, s.serif, { fontSize: 26, lineHeight: 30 }]}>{c.name}</T><T tone="ink2" style={s.small} lines={2}>{h.role}</T></View>
           <Btn label="Close" onPress={onClose} />
         </View>
         <View style={{ flexDirection: 'row' }}>{offline ? <Pill tone="off">{OUT}</Pill>
-          : <Pill tone={c.ring === 'needs' ? 'wait' : c.ring ? 'ok' : 'off'}>{c.ring === 'working' ? 'Working' : c.status}</Pill>}</View>
+          : <Pill tone={A.waitsOnYou(c) ? 'wait' : c.ring ? 'ok' : 'off'}>{A.waitsOnYou(c) ? A.SEAT_WORDS[A.seatOf(c)] : c.ring === 'working' ? 'Working' : c.status}</Pill>}</View>
         <ScrollView contentContainerStyle={{ gap: 12 }}>
           {!offline && !!job && <View style={[s.ev, { backgroundColor: t.sunken }]}>
             <T tone="ink2" style={s.label}>{job.waiting && c.ring !== 'needs' ? 'Up next' : 'Working on'}</T>
@@ -1191,6 +1340,11 @@ function DeskSheet({ desk, state, offline, canAct, go, refresh, onClose }: Ctx &
           {!offline && c.steps.length > 0 && <View><Label>Steps</Label><Steps steps={c.steps} /></View>}
           {!offline && c.things.length > 0 && <View><Label>On the desk</Label><Card>{c.things.map((f) => <FileRow key={f.url} f={f} />)}</Card></View>}
           <Btn big label={`Open ${c.name}'s chat`} onPress={() => to({ view: 'helper', id })} />
+          {/* Their own computer: watching is the default; taking the wheel pauses them until it is handed back. */}
+          {!offline && h.computer && desktopAvailable && <View><Label>{`${c.name}'s computer`}</Label><View style={s.chips}>
+            <Btn label={`Watch ${c.name}`} onPress={() => to({ view: 'helper', id, tab: 'watch' })} />
+            {canAct && <Btn label="Take the wheel" onPress={() => void attempt(async () => { await api.takeOver(id); to({ view: 'helper', id, tab: 'screen' }); })} />}
+          </View></View>}
         </ScrollView>
         {asking && c.ask && <AskSheet c={c.ask} who={h} chiefSays={state.asks.find((a: Json) => a.id === c.ask!.id)?.detail?.chief} canAct={canAct}
           onClose={() => { setAsking(false); refresh(); }} />}
@@ -1221,7 +1375,7 @@ function JobList({ state, go, refresh }: { state: Json; go: Ctx['go']; refresh: 
     const name = state.templates.find((x: Json) => x.id === template)?.display ?? template;
     await attempt(async () => { const b = await api.recruit(template, name); refresh(); keepDraft(b.id, ask); go({ view: 'helper', id: b.id }, true); }, `${name} joined the crew`);
   };
-  return <View><Label>Hand the crew a job</Label><View style={[s.listGroup, { backgroundColor: t.solid, borderColor: t.line }]}>
+  return <View><Label>Hand me a job</Label><View style={[s.listGroup, { backgroundColor: t.solid, borderColor: t.line }]}>
     {A.jobs(state).slice(0, 3).map((j, i) => <Pressable key={j.bot + j.label} style={[s.listRow, { borderTopColor: t.line, borderTopWidth: i ? StyleSheet.hairlineWidth : 0 }]}
       onPress={() => { if (j.needs.length) go({ view: 'phone' }); else if (j.hire) void hire(j.hire, j.ask); else { keepDraft('chief', j.ask); go({ view: 'chief' }); } }}>
       <Face who={A.crew(state).find((h) => h.id === j.bot) ?? { kind: 'pip', name: j.bot }} size={28} />
@@ -1231,7 +1385,9 @@ function JobList({ state, go, refresh }: { state: Json; go: Ctx['go']; refresh: 
 }
 
 // ---------- a chat ----------
-function Chat({ id, m, state, tick, refresh, canAct, offline, open }: Ctx & { id: string; m?: number }) {
+/** `hero`: Home's Chief thread (B1): the hero and pinned ask stay above the thread, which opens at its newest line with
+ *  the tray's notices among his lines. */
+function Chat({ id, m, state, tick, refresh, canAct, offline, open, writer, hero }: Ctx & { id: string; m?: number; hero?: ReactNode }) {
   const t = useLook();
   // The computer's page when it answers; otherwise the lines this phone kept, until it does.
   const [page, setPage] = useState<Json>(() => kept.page(id));
@@ -1250,7 +1406,7 @@ function Chat({ id, m, state, tick, refresh, canAct, offline, open }: Ctx & { id
   const ys = useRef(new Map<number, number>()); // each line's y, for landing on the matched one
   const landed = useRef(0); // the anchor we already landed on: once per line, never again on every tick
 
-  const lines = A.lines(page, id);
+  const lines = hero ? A.trayNotes(state, A.lines(page, id)) : A.lines(page, id);
   const phoneOffer = id === 'chief' ? A.phoneOffer(page) : null;
   const echoed = pending && !(page?.messages ?? []).some((x: Json) => x.author === 'person' && x.id > pending.after && A.plain(x.text) === A.plain(pending.text));
   const waiting = pending && !partial && !(page?.messages ?? []).some((x: Json) => x.author === 'bot' && x.id > pending.after);
@@ -1297,10 +1453,15 @@ function Chat({ id, m, state, tick, refresh, canAct, offline, open }: Ctx & { id
   const who = (f: string) => <View style={s.row}><Face who={f === 'chief' ? 'chief' : h ?? 'chief'} size={28} /><T style={[s.small, s.b]}>{f === 'chief' ? 'Chief' : name}</T></View>;
   return (
     <View style={{ flex: 1 }}>
-      <ScrollView ref={scroll} style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 10 }}
-        onContentSizeChange={() => { if (!around) scroll.current?.scrollToEnd({ animated: false }); }}>
-        {start && <View style={s.intro}>
-          <View style={[s.halo, { backgroundColor: t.soft }]}>{h ? <Dots rows={art.pal(h.kind, h.mood)} pal={art.palPalette(h.kind)} d={72 / 18} /> : <ChiefArt size={72} />}</View>
+      {/* Home's hero and pinned ask stay in place over the thread (096); on a short screen they shrink and scroll alone. */}
+      {hero && <ScrollView style={{ flexGrow: 0, flexShrink: 1 }} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 4 }}>{hero}</ScrollView>}
+      <ScrollView ref={scroll} style={{ flex: 1, minHeight: hero ? 168 : undefined }} contentContainerStyle={{ padding: 16, gap: 10, flexGrow: hero ? 1 : undefined, justifyContent: hero ? 'flex-end' : undefined }}
+        onContentSizeChange={() => {
+          if (around) return;
+          scroll.current?.scrollToEnd({ animated: false });
+        }}>
+        {start && !hero && <View style={s.intro}>
+          <View style={[s.halo, { backgroundColor: t.soft }]}><Ink who={h ? h.kind : 'chief'} mood={h?.mood} size={72} /></View>
           <T style={s.introName}>{name}</T><T tone="ink2" style={[s.centerText, { maxWidth: 300 }]}>{h ? h.role : 'Runs the crew and answers to you'}</T>
         </View>}
         {!page && <View style={{ gap: 12, paddingLeft: 36, paddingTop: 20 }} accessibilityLabel="Opening the chat">{['62%', '84%', '40%'].map((w) => <View key={w} style={[s.bar, { width: w as any, backgroundColor: t.soft }]} />)}</View>}
@@ -1311,7 +1472,8 @@ function Chat({ id, m, state, tick, refresh, canAct, offline, open }: Ctx & { id
           <View onLayout={(e) => ys.current.set(l.id, e.nativeEvent.layout.y)}
             style={[s.line, l.from === 'me' && { alignSelf: 'flex-end', maxWidth: '82%' }, l.from === 'note' && { maxWidth: '92%' }]}>
             {l.from !== 'me' && l.from !== 'note' && !(i && lines[i - 1].from === l.from && !l.recap && !lines[i - 1].recap) && <View style={s.row}><Face who={l.from === 'chief' ? 'chief' : h ?? 'chief'} size={28} /><T style={[s.small, s.b]}>{l.from === 'chief' ? 'Chief' : name}</T><T tone="mute" style={s.time}>{l.at ? A.clock(l.at) : ''}</T></View>}
-            {!!l.text && (l.detail ? <ChiefAsk l={{ text: l.text, detail: l.detail }} /> : l.from === 'me'
+            {!!l.by && <View style={[s.row, { gap: 8, paddingLeft: 36 }]}><Face who={A.crew(state).find((x) => x.id === l.by) ?? 'chief'} size={20} /><T tone="ink2" style={[s.small, { flex: 1 }]}>{l.text}</T></View>}
+            {!!l.text && !l.by && (l.detail ? <ChiefAsk l={{ text: l.text, detail: l.detail }} /> : l.from === 'me'
               ? <View style={[s.bubbleText, { backgroundColor: t.go, borderBottomRightRadius: 6 }]}><Theme.Provider value={mine}><ChatText text={l.text} /></Theme.Provider></View>
               : <View style={{ paddingLeft: 36 }}><ChatText text={l.text} /></View>)}
             {!l.text && !!l.about && <View style={{ paddingLeft: 36 }}><ChatText text={l.about} /></View>}
@@ -1328,7 +1490,7 @@ function Chat({ id, m, state, tick, refresh, canAct, offline, open }: Ctx & { id
         {canAct && !!last?.choices.length && <View style={s.chips}>{last.choices.map((c) => <Btn key={c} label={c} onPress={() => send(c)} />)}</View>}
         {cards.filter((c) => !lines.length || lines.every((x) => (x.at ?? 0) > c.at)).map((c) => <AskCard key={c.id} c={c} who={h} state={state} onDone={refresh} canAct={canAct} offline={offline} open={open} />)}
       </ScrollView>
-      {canAct ? <View style={s.dock}><Composer key={seed} placeholder={id === 'chief' ? 'Ask Chief anything…' : `Message ${name}…`} onSend={send} chat={id} /></View>
+      {canAct || writer ? <View style={[s.dock, !!hero && { backgroundColor: t.bg }]}><Composer key={seed} placeholder={id === 'chief' ? 'Ask Chief anything' : `Message ${name}…`} onSend={send} chat={id} away={offline} /></View>
         : <T tone="mute" style={[s.small, { padding: 16 }]}>{offline ? "You can reply once the home computer is back." : "This phone watches the crew; it can't send messages."}</T>}
     </View>
   );
@@ -1382,7 +1544,7 @@ function Crew(ctx: Ctx) {
   const row = (key: string, face: ReactNode, name: string, role: string, status: ReactNode, route: Route) => <Pressable key={key} onPress={() => go(route)} style={{ minHeight: 68, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 12, borderBottomWidth: 1, borderColor: t.line }}>
     {face}<View style={{ flex: 1, minWidth: 0 }}><T style={s.b}>{name}</T><T tone="mute" style={s.small} lines={1}>{role}</T></View>{status}
   </Pressable>;
-  return <Page title="Your crew" lead="Everyone answers to Chief."><Card>
+  return <Page title="Your crew" lead="Everyone answers to Chief." back={['Home', () => go({ view: 'home' }, true)]}><Card>
     {row('chief', <Face who="chief" size={44} />, 'Chief', 'Runs the crew and answers to you', <Pill tone={chief.mood === 'rest' ? 'off' : 'ok'}>{chief.line}</Pill>, { view: 'chief' })}
     {A.crew(state).map((h) => row(h.id, <Face who={h} size={44} />, h.name, h.role, <HelperPill h={h} offline={ctx.offline} />, { view: 'helper', id: h.id }))}
     {ctx.canAct && <Pressable onPress={() => go({ view: 'add' })} style={{ minHeight: 68, flexDirection: 'row', alignItems: 'center', gap: 12 }}><View style={{ width: 44, height: 44, borderRadius: 22, borderWidth: 1, borderStyle: 'dashed', borderColor: t.line, alignItems: 'center', justifyContent: 'center' }}><T tone="mute">+</T></View><T style={{ flex: 1 }}>Add a helper</T><T tone="mute">›</T></Pressable>}
@@ -1663,11 +1825,11 @@ function ShareIn({ state, shared, onDone, go, to: first = 'chief' }: { state: Js
 }
 
 /** Add a helper from the gallery, as on the computer. */
-function AddHelper({ state, refresh, go }: Ctx) {
+function AddHelper({ state, refresh, go, back }: Ctx) {
   const t = useLook();
   const [names, setNames] = useState<Record<string, string>>({});
   return (
-    <Page title="Add a helper" lead="Pick a starter, or tell Chief what you need.">
+    <Page title="Add a helper" lead="Pick a starter, or tell Chief what you need." back={['Your crew', back]}>
       <Label>Starters</Label><Card>{A.gallery(state).map((g: Json) => {
         const name = (names[g.id] ?? g.name).trim() || g.name;
         return <View key={g.id} style={{ minHeight: 68, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8, borderBottomWidth: 1, borderColor: t.line }}>
@@ -1788,12 +1950,26 @@ function BubbleRow({ grant }: { grant: Grant }) {
   );
 }
 
-function ThisPhone({ grant, status, onForget, onClear }: { grant: Grant; status: Status; onForget: () => void; onClear: () => void }) {
+/** The places the desk's rail reaches, listed first in Settings on the phone (web/src/main.tsx GO_TO): no tab bar. */
+const GO_TO: [Route['view'] | null, string, art.Tab | null][] = [['things', 'Your things', 'things'], ['routines', 'Routines', 'routines'], [null, 'Apps', null], ['crew', 'Your crew', 'crew']];
+function ThisPhone({ grant, status, go, back, onForget, onClear }: { grant: Grant; status: Status; go: Ctx['go']; back: [string, () => void]; onForget: () => void; onClear: () => void }) {
+  const t = useLook();
   // This phone knows its own news state: allowed and working, said no, or this build can't push at all.
   const [push, setPush] = useState<'on' | 'off' | 'missing' | null>(null);
   useEffect(() => { void pushState().then(setPush).catch(() => {}); }, []);
   return (
-    <Page title="Settings">
+    <Page title="Settings" back={back}>
+      <View style={[s.listGroup, { backgroundColor: t.solid, borderColor: t.line }]}>{GO_TO.map(([v, label, icon], i) => {
+        const body = <>
+          <View style={{ width: 24, alignItems: 'center' }}>{icon && <Dots rows={art.TABS[icon]} pal={{ x: t.ink2 }} d={20 / 9} crisp />}</View>
+          {/* Apps connect where the sign-in happens; this phone has no apps screen of its own. */}
+          <View style={{ flex: 1 }}><T style={s.rowTitle}>{label}</T>{!v && <T tone="mute" style={s.small}>Connected on the home computer, in Apps.</T>}</View>
+          {!!v && <T tone="mute">›</T>}
+        </>;
+        const line = { borderTopWidth: i ? StyleSheet.hairlineWidth : 0, borderTopColor: t.line };
+        return v ? <Pressable key={label} onPress={() => go({ view: v })} accessibilityRole="button" accessibilityLabel={label} style={({ pressed }) => [s.listRow, line, pressed && { opacity: 0.6 }]}>{body}</Pressable>
+          : <View key={label} style={[s.listRow, line]}>{body}</View>;
+      })}</View>
       <Label>This phone</Label>
       <Card>
         <T style={s.b}>{grant.device.name}</T>
@@ -1832,7 +2008,9 @@ const s = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   text: { fontFamily: 'Inter', fontSize: 15, lineHeight: 22, fontVariant: ['tabular-nums'] },
   h1: { fontSize: 26, lineHeight: 32, fontWeight: '700', letterSpacing: -0.6, marginVertical: 4 },
-  display: { fontSize: 32, lineHeight: 38, fontWeight: '700', letterSpacing: -0.9, textAlign: 'center' },
+  display: { fontFamily: 'Instrument Serif', fontSize: 38, lineHeight: 42, fontWeight: '400', letterSpacing: 0, textAlign: 'center' },
+  // B1 headings and names: Instrument Serif 400 (welcome, pairing, Hello, the office's sheets).
+  serif: { fontFamily: 'Instrument Serif', fontWeight: '400', letterSpacing: 0 },
   stepNum: { width: 22, height: 22, borderRadius: 11, textAlign: 'center', lineHeight: 22, fontSize: 12, fontWeight: '700', overflow: 'hidden', marginTop: 0 },
   h2: { fontSize: 17, fontWeight: '600', lineHeight: 24 },
   b: { fontWeight: '600' },
@@ -1851,14 +2029,9 @@ const s = StyleSheet.create({
   label: { fontSize: 12, lineHeight: 16, fontWeight: '600', letterSpacing: 0.7, textTransform: 'uppercase' },
   count: { minWidth: 18, height: 18, borderRadius: 9, paddingHorizontal: 5, fontSize: 11, lineHeight: 18, fontWeight: '700', textAlign: 'center', overflow: 'hidden' },
   office: { borderWidth: 1, borderRadius: 20, overflow: 'hidden' },
-  hero: { borderWidth: 1, borderRadius: 20, padding: 18, overflow: 'hidden', shadowColor: '#14121a', shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
-  heroWarm: { position: 'absolute', opacity: 0.3 },
-  eyebrow: { fontSize: 11.5, lineHeight: 16, fontWeight: '600', letterSpacing: 0.9 },
-  heroH1: { fontSize: 29, lineHeight: 35, fontWeight: '700', letterSpacing: -0.8, marginTop: 6, marginBottom: 14 },
-  heroChief: { flexDirection: 'row', alignItems: 'flex-end', gap: 10, alignSelf: 'flex-start', maxWidth: '100%' },
-  says: { borderWidth: 1, borderRadius: 16, borderBottomLeftRadius: 4, paddingVertical: 7, paddingHorizontal: 12, flexShrink: 1 },
-  saysText: { fontSize: 14.5, lineHeight: 20, fontWeight: '500' },
   stats: { flexDirection: 'row', gap: 6, marginTop: 14 },
+  seg: { flexDirection: 'row', borderRadius: 10, padding: 3, gap: 4 },
+  segBtn: { borderRadius: 8, paddingVertical: 6, paddingHorizontal: 12 },
   stat: { flex: 1, borderRadius: 10, paddingVertical: 6, paddingHorizontal: 10 },
   statNum: { fontSize: 18, lineHeight: 22, fontWeight: '700', letterSpacing: -0.3 },
   statLabel: { fontSize: 12, lineHeight: 16 },
@@ -1896,12 +2069,7 @@ const s = StyleSheet.create({
   fileGlyph: { fontSize: 20, lineHeight: 24 },
   fileOpen: { borderRadius: radius.control, borderWidth: 1, paddingVertical: 7, paddingHorizontal: 14 },
   head: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1 },
-  tabbar: { flexDirection: 'row', borderTopWidth: 1, minHeight: 82, paddingVertical: 8 },
-  tab: { flex: 1, alignItems: 'center', gap: 4, justifyContent: 'flex-start' },
-  tabIcon: { height: 30, width: 54, borderRadius: 15, alignItems: 'center', justifyContent: 'center', marginTop: -4 },
-  tabLabel: { fontFamily: 'Inter', fontSize: 11, fontWeight: '500' },
   unread: { minWidth: 20, height: 20, borderRadius: 10, color: '#2e2a40', fontSize: 12, fontWeight: '900', textAlign: 'center', overflow: 'hidden', paddingHorizontal: 5, lineHeight: 20 },
-  badge: { position: 'absolute', top: 0, left: '58%', minWidth: 18, height: 18, borderRadius: 9, color: '#fff', fontSize: 11, fontWeight: '800', textAlign: 'center', overflow: 'hidden', paddingHorizontal: 4 },
   offline: { paddingVertical: 7, paddingHorizontal: 16 },
   offlineText: { textAlign: 'center', fontSize: 13, fontWeight: '700' },
   toast: { position: 'absolute', bottom: 84, alignSelf: 'center', paddingHorizontal: 16, paddingVertical: 10, borderRadius: radius.pill, fontWeight: '500', overflow: 'hidden', maxWidth: '90%' },

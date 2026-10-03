@@ -1,5 +1,5 @@
 // The shared pieces: dot art, the ASCII moments, ask cards and the approval sheet, media, steps, the composer.
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { createElement, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { api, trouble, type Json } from './api.ts';
 import { draftOf, keepDraft, sent } from './draft.ts';
 import { canHear, hear } from './voice.ts';
@@ -7,6 +7,7 @@ import { cycle, type Focused } from './dialog.ts';
 import { chatTokens, safeLink } from './chat-md.ts';
 import * as art from './art.ts';
 import { MARKS } from './logos.ts';
+import { ICONS, type IconName } from './icons.ts';
 import { clock, column, docLinks, document as docView, fileSource, fileView, mdPlain, pageWords, sheetWords, workbook, type Card, type DocPart, type DocView, type FileView, type Helper, type Sheet, type Step, type Workbook } from './adapter.ts';
 
 /** Markdown inline runs, from the shared safe tokens (web/src/chat-md.ts): no raw HTML, http(s) links only. */
@@ -139,25 +140,35 @@ export function useListen() {
  *  Chief face (avatars, headers) carries the mood without each caller holding the state. */
 let night = false;
 export const setNight = (n: boolean) => { night = n; };
+/** Set by the shell while the home computer isn't answering: every composer keeps its words and holds Send. */
+let away = false;
+export const setAway = (a: boolean) => { away = a; };
 let chiefMood: art.Mood = 'idle';
 export const setChiefMood = (m: art.Mood) => { chiefMood = m; };
 
-/** Chief. `d` is sized for the old 14-dot head, so callers keep their footprint; small sizes get the 12-dot cut.
- *  `hero` marks the one face on screen that lives: it blinks and shows the 170 ms change-blink. */
-export function ChiefArt({ mood = 'idle', d = 6, dark, hero }: { mood?: art.Mood; d?: number; dark?: boolean; hero?: boolean }) {
-  const flash = useChangeBlink(!!hero, mood);
-  const m = flash ? 'blink' : mood;
-  const dd = (d * 14) / 22, small = d * 14 < 24;
-  return <Dots rows={small ? art.chiefSmall(m) : art.chief(m)} pal={dark ?? night ? art.CHIEF_PAL_NIGHT : art.CHIEF_PAL} d={small ? (dd * 22) / 12 : dd} label="Chief" crisp={d * 14 < 96} />;
+/** A B1 drawing (art.ts) as a picture: crisp at any size, and never markup in the page. */
+export function Ink({ svg, w, h = w, label, className = '' }: { svg: string; w: number; h?: number; label?: string; className?: string }) {
+  return <img className={`ink ${className}`} src={`data:image/svg+xml,${encodeURIComponent(svg)}`} width={w} height={h} alt={label ?? ''} aria-hidden={label ? undefined : true} draggable={false} />;
 }
-export function PalArt({ kind, mood = 'idle', d = 4, name, crisp = false }: { kind: art.Kind; mood?: art.Mood; d?: number; name?: string; crisp?: boolean }) {
-  return <Dots rows={art.pal(kind, mood)} pal={art.palPalette(kind)} d={(d * 12) / 18} label={name} crisp={crisp} />;
+
+/** Chief, head and shoulders (`whole` for all of him). `d` keeps the old 14-dot footprint, so callers keep their size.
+ *  `hero` marks the one face on screen that lives: it shows the 170 ms change-blink. */
+export function ChiefArt({ mood = 'idle', d = 6, hero, whole }: { mood?: art.Mood; d?: number; dark?: boolean; hero?: boolean; whole?: boolean }) {
+  const flash = useChangeBlink(!!hero, mood);
+  const m = flash ? 'blink' : mood, pose = art.poseOf(m), w = d * 14;
+  const svg = useMemo(() => whole ? art.chiefSvg(pose, { wave: hero }) : art.headSvg('chief', pose), [pose, whole, hero]);
+  return <Ink svg={svg} w={w} h={whole ? w * 1.25 : w} label="Chief" className={`pose-${pose}`} />;
+}
+export function PalArt({ kind, mood = 'idle', d = 4, name }: { kind: art.Kind; mood?: art.Mood; d?: number; name?: string; crisp?: boolean }) {
+  const pose = art.poseOf(mood);
+  const svg = useMemo(() => art.headSvg(kind, pose), [kind, pose]);
+  return <Ink svg={svg} w={d * 12} label={name} className={`pose-${pose}`} />;
 }
 
 /** A round face: Chief or a pal, with a ring when it's working or needs you. */
 export function Face({ who, size = 44, ring = '' }: { who: Helper | 'chief' | { kind: art.Kind; name: string; mood?: art.Mood }; size?: number; ring?: string }) {
   const chief = who === 'chief';
-  const soft = chief ? (night ? '#2A2622' : '#FFF3E0') : art.PALS[who.kind].soft;
+  const soft = chief ? (night ? '#2A2622' : '#EEF1F6') : art.PALS[who.kind].soft;
   return (
     <span className={`face ${ring}`} style={{ width: size, height: size, background: night && !chief ? `color-mix(in srgb, ${soft} 16%, var(--solid))` : soft }}>
       {chief ? <ChiefArt d={size * .74 / 14} mood={chiefMood} /> : <PalArt kind={who.kind} mood={who.mood} d={size * .74 / 12} name={who.name} crisp={size < 96} />}
@@ -165,15 +176,22 @@ export function Face({ who, size = 44, ring = '' }: { who: Helper | 'chief' | { 
   );
 }
 
-/** The mark is Chief himself (the app icon's 12-dot cut), then the wordmark. */
+/** The mark is Chief's bowler on a paper tile (B1), then the wordmark in the display serif. */
 export function Logo({ night }: { night?: boolean }) {
   return (
     <span className="logo" aria-label="Crewhouse">
-      <Dots rows={art.chiefSmall()} pal={night ? art.CHIEF_PAL_NIGHT : art.CHIEF_PAL} d={1.8} crisp />
+      <svg viewBox="0 0 64 64" width="28" height="28" aria-hidden><rect x="2" y="2" width="60" height="60" rx="15" fill="var(--solid)" stroke="var(--ink)" strokeWidth="3" /><g transform="translate(10 9) scale(1.84)" fill="none" stroke="var(--ink)" strokeWidth="1.6" strokeLinecap="round"><path d="M6.6 14.2c0-4.4 2.4-7.7 5.4-7.7s5.4 3.3 5.4 7.7" /><path d="M3 14.6c2.8 1.7 5.8 2.4 9 2.4s6.2-.7 9-2.4" /><path d="M6.9 12.3h10.2" stroke="#F0482A" /></g></svg>
       <span>Crewhouse</span>
     </span>
   );
 }
+
+/** One B1 line icon (icons.ts), in the text's colour. */
+// Each mark is a constant from icons.ts, drawn as elements (never markup): `<path d="…"/>` -> createElement('path', {d}).
+const marks = (src: string) => [...src.matchAll(/<(\w+)([^>]*)\/>/g)].map(([, tag, attrs], i) =>
+  createElement(tag, { key: i, ...Object.fromEntries([...attrs.matchAll(/([\w-]+)="([^"]*)"/g)].map(([, k, v]) => [k, v])) }));
+export const Icon = ({ name, size = 16 }: { name: IconName; size?: number }) =>
+  <svg className="lucide" viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>{marks(ICONS[name])}</svg>;
 
 /** An AI account's own mark, white on its brand tile. */
 export function AiMark({ ai, size = 36 }: { ai: { key: string; bg: string }; size?: number }) {
@@ -223,7 +241,7 @@ export function Splash({ done: ready }: { done: boolean }) {
       <pre className="art field" aria-hidden>{art.field(t, 200, 72)}</pre>
       <div className="splash-in">
         <Banner />
-        <ChiefArt mood="work" d={7} dark />
+        <ChiefArt mood="work" d={7} whole />
         <Laptop />
         <div className="splash-line">{words.slice(0, Math.min(words.length, 4 + t))}<span className="cur" /></div>
       </div>
@@ -456,7 +474,9 @@ function useVoice(on: boolean, text: string, put: (t: string) => void) {
  * The message box. `chat` ties it to one conversation's held draft. A send that doesn't go through keeps the words
  * here with a Retry: nothing a person typed is ever thrown away (web/src/draft.ts).
  */
-export function Composer({ placeholder, onSend, chat }: { placeholder: string; onSend: (t: string) => Promise<unknown> | unknown; chat?: string }) {
+/** Chief's box. With `chips` (the desk feed, B1) a bar under the words: attach (not available yet, and it says so), a
+ *  starter or two that fill the box without sending, then the mic and send. */
+export function Composer({ placeholder, onSend, chat, chips }: { placeholder: string; onSend: (t: string) => Promise<unknown> | unknown; chat?: string; chips?: { label: string; ask: string }[] }) {
   const [text, setText] = useState(() => (chat ? draftOf(chat).text : ''));
   const voice = useVoice(chat === 'chief', text, (t) => change(t));
   const [busy, setBusy] = useState(false);
@@ -471,7 +491,7 @@ export function Composer({ placeholder, onSend, chat }: { placeholder: string; o
   const change = (t: string) => { setText(t); setFailed(false); hear(focused, t); if (chat) keepDraft(chat, t); };
   const send = async () => {
     const t = text.trim();
-    if (!t || busy) return;
+    if (!t || busy || away) return;
     setBusy(true);
     let ok = false;
     try { ok = !!(await onSend(t)); } catch { ok = false; }
@@ -479,13 +499,18 @@ export function Composer({ placeholder, onSend, chat }: { placeholder: string; o
     if (ok) { setText(''); setFailed(false); hear(focused, ''); if (chat) keepDraft(chat, ''); } else { setFailed(true); if (chat) sent(chat, false, text); }
   };
   return (
-    <form className="composer" onSubmit={(e) => { e.preventDefault(); void send(); }}>
-      {failed && <div className="send-failed" role="alert">Not sent — it's kept here. <button type="button" className="link inline" onClick={() => void send()}>Retry</button></div>}
+    <form className={`composer${chips ? ' has-bar' : ''}`} onSubmit={(e) => { e.preventDefault(); void send(); }}>
+      {away ? <div className="send-away" role="status">Reconnecting… your words stay here until the home computer answers.</div>
+        : failed && <div className="send-failed" role="alert">Not sent — it's kept here. <button type="button" className="link inline" onClick={() => void send()}>Retry</button></div>}
       <textarea rows={1} value={text} placeholder={placeholder} aria-label={placeholder}
         onFocus={() => { setFocused(true); hear(true, text); }} onBlur={() => { setFocused(false); hear(false, text); }}
         onChange={(e) => change(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(); } }} />
+      {chips && <div className="c-bar">
+        <button type="button" className="c-clip" disabled aria-label="Attach a file: not available yet" title="Attaching files isn't available yet"><span className="desk-only"><Icon name="clip" size={18} /></span><span className="phone-only"><Icon name="plus" size={20} /></span></button>
+        {chips.slice(0, 2).map((c) => <button type="button" key={c.ask} className="c-chip clamp1" onClick={() => change(c.ask)}>{c.label}</button>)}
+      </div>}
       {voice}
-      <button className="send" aria-label="Send" disabled={!text.trim() || busy}>↑</button>
+      <button className="send" aria-label="Send" disabled={!away && (!text.trim() || busy)} aria-disabled={away || undefined}>↑</button>
     </form>
   );
 }

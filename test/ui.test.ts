@@ -8,7 +8,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { join } from 'node:path';
 import type { Json } from '../web/src/api.ts';
-import type { Bitmap, Kind } from '../web/src/art.ts';
+import type { Kind } from '../web/src/art.ts';
 import { PROVIDERS } from '../src/accounts.ts';
 import * as A from '../web/src/adapter.ts';
 import { readTyped } from '../mobile/src/typed.ts';
@@ -306,9 +306,9 @@ test('Home keeps a standing "hand me a job" list, straight from crewd\'s ideas: 
   assert.equal(fill.choices.find((c: any) => c.body.scope === 'always'), undefined, 'and still no standing answer');
   const src = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
   const home = src.slice(src.indexOf('function Home('), src.indexOf('/** The standing'));
-  assert.match(home, /<JobList state=\{state\} refresh=\{refresh\} \/>/, 'the desk\'s frame beside Working now and Done today');
+  assert.match(home, /<JobList state=\{state\} few refresh=\{refresh\} \/>/, 'the desk\'s feed, beside On it now and Done today');
   assert.match(home, /<JobList state=\{state\} phone refresh=\{refresh\} \/>/, 'and under the chats on a phone');
-  const list = src.slice(src.indexOf('function JobList('), src.indexOf('function JobList(') + 1800);
+  const list = src.slice(src.indexOf('function JobList('), src.indexOf('function ChiefIdeas('));
   assert.match(list, /A\.jobs\(state\)/, 'the rows are the ideas, not a list written in the app');
   assert.match(list, /keepDraft\('chief', ask\)/, 'a tap fills Chief\'s box; it never sends');
   assert.match(list, /className="list-row"/, 'Home uses a whole-row target on both widths');
@@ -484,6 +484,31 @@ test('the screens read view models only, and the mono face draws art only', () =
   }
 });
 
+// Main563/565: the app opens on Chat with Chief; the Office is the optional view of the same state, off at every launch.
+test('Home opens on Chat at every launch, with Office one tap away and never stored', () => {
+  const src = (f: string) => readFileSync(join(import.meta.dirname, '..', f), 'utf8');
+  for (const f of ['web/src/main.tsx', 'mobile/App.tsx']) {
+    const app = src(f);
+    assert.match(app, /let homeMode: HomeMode = 'chat';/, `${f}: each launch starts on Chat`);
+    assert.match(app, /const HOME_MODES: \[HomeMode, string\]\[\] = \[\['chat', 'Chat'\], \['office', 'Office'\]\];/, `${f}: one Chat | Office switch`);
+    assert.doesNotMatch(app, /(localStorage|AsyncStorage|SecureStore|kept\.\w+)\([^)]*homeMode/, `${f}: the view is never stored`);
+    const home = app.slice(app.indexOf('function Home('));
+    assert.match(home.slice(0, 2600), /<HomeBar [^>]*mode=\{mode\} pick=\{pick\} \/>/, `${f}: the switch shows in both views`);
+  }
+  const web = src('web/src/main.tsx');
+  const home = web.slice(web.indexOf('function Home('), web.indexOf('/** The standing'));
+  assert.match(home, /if \(mode === 'chat'\) return <div className="page chat-page home-chat"><div className="home-top">\{top\}<ChiefHero live=\{live\} state=\{state\} \/><NeedsPin state=\{state\} cards=\{live\.needs\} flat \/><\/div><Chat \{\.\.\.ctx\} id="chief" hero rail=\{<TonightRail live=\{live\} \/>\} \/><\/div>;/, 'web Chat (B1): the top, Chief\'s hero then Needs you (the mock\'s order, both sizes) over his own thread, box and Tonight rail');
+  assert.match(home, /<NeedsPin state=\{state\} cards=\{live\.needs\}( flat)? \/>/, 'Needs you pinned from the office\'s one list');
+  assert.match(home, /<div className="feed-ask"><Composer/, 'Office keeps Chief\'s box on a desk');
+  assert.match(home, /<div className="dock phone-only"><Composer/, 'and on a phone');
+  const pin = web.slice(web.indexOf('function NeedsPin('), web.indexOf('function NeedsPin(') + 1400);
+  assert.match(pin, /<NeedsCard state=\{state\} c=\{order\.slice\(0, 1\)\[0\]\}/, 'one pinned card (B1)');
+  const card = web.slice(web.indexOf('function NeedsCard('), web.indexOf('/** An empty list'));
+  assert.match(card, /<a className="btn go" href=\{`#\/ask\/\$\{c\.id\}`\}>/, 'its yes opens the review sheet: Home commits nothing');
+  assert.doesNotMatch(card, /api\.|answer\(/, 'no answer is sent from the card');
+  assert.match(pin, /`See all \$\{cards\.length\}`/, 'and an exact "See all N"');
+});
+
 test('Home renders once: a second full Home (bd51524) put a second composer below the first', () => {
   const src = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
   assert.equal([...src.matchAll(/<Home\b/g)].length, 1, 'the app is one page per view, never two');
@@ -526,61 +551,56 @@ test('sign-in states reach the screens as plain states, never the engine\'s word
   assert.ok(!A.needsHouse({ house: { google: false } }, A.apps({})[3]), 'Notion needs no setup');
 });
 
-test('the mascots: every mood draws a whole grid in known colours, and Chief\'s moods all look different', async () => {
+test('the mascots: every app mood wears one of B1\'s five poses, and every pose of everyone looks different', async () => {
   const art = await import('../web/src/art.ts');
-  const moods = ['blink', 'twitch', 'hello', 'happy', 'work', 'ask', 'listen', 'rest', 'worried', 'error'] as const;
-  const faces = [
-    ...[undefined, ...moods].map((m) => [art.chief(m), art.CHIEF_PAL] as const),
-    ...[undefined, ...moods].map((m) => [art.chiefSmall(m), art.CHIEF_PAL] as const),
-    ...(['reel', 'scout', 'scribe', 'pip', 'tracer'] as const).flatMap((k) => [undefined, ...moods].map((m) => [art.pal(k, m), art.palPalette(k)] as const)),
-  ];
-  for (const [rows, pal] of faces) {
-    assert.ok(rows.every((r) => r.length === rows[0].length), 'a ragged bitmap breaks the dot grid');
-    for (const k of rows.join('').replace(/\./g, '')) assert.ok(pal[k], `no colour for "${k}"`);
+  assert.deepEqual(new Set(art.MOODS.map(art.poseOf)), new Set(art.POSES), 'every pose is reachable');
+  const chief = (p: (typeof art.POSES)[number]) => art.chiefSvg(p).replace(/ch\d+c/g, '');
+  assert.equal(new Set(art.POSES.map(chief)).size, 5, 'two of Chief\'s poses look the same');
+  // A helper's face says done (a tick) or resting (eyes shut); the rest of their status is the room's loop and label.
+  for (const k of ['reel', 'scout', 'scribe', 'tracer'] as Kind[]) assert.equal(new Set((['listen', 'pleased', 'rest'] as const).map((p) => art.beanSvg(k, p))).size, 3, k);
+  // Each drawing is one SVG whose clip ids never collide on a page with many faces.
+  const ids = [art.chiefSvg(), art.chiefSvg()].map((x) => x.match(/id="(\w+)"/)![1]);
+  assert.notEqual(ids[0], ids[1]);
+  // 159/174: Chief's side shading is the old ellipse's own arc (cx 156 cy 178 rx 30 ry 120), still clipped to his body: the
+  // old arc's first third (where it leaves his body over the dome), closed outside the body (x 150, y 240), so it paints
+  // what the whole arc did and no part of it measures past his outline or below his feet.
+  for (const p of art.POSES) {
+    const s = art.chiefSvg(p), m = /<g clip-path="url\(#ch\d+c\)"><path d="M([\d.]+) (\d+)A30 120 0 0 1 ([\d.]+) ([\d.]+)H150V240Z"/.exec(s);
+    assert.ok(m && !/ry="120"/.test(s), `${p}: the shading is the bounded arc inside the body clip`);
+    const [x1, y1, x2, y2] = m!.slice(1).map(Number), on = (x: number, y: number) => ((x - 156) / 30) ** 2 + ((y - 178) / 120) ** 2;
+    assert.ok(Math.abs(on(x1, y1) - 1) < 1e-5 && Math.abs(on(x2, y2) - 1) < 1e-5 && x1 === 130.3144, `${p}: both ends lie on the old ellipse, from its old start`);
+    assert.ok(y1 === 240 && (x2 - 100) ** 2 + (y2 - 120) ** 2 > 48 ** 2 && y2 < 120 && /<clipPath id="ch\d+c"><path d="M52 232V/.test(s), `${p}: it leaves the body over the dome and closes outside the clip`);
   }
-  assert.equal(new Set(moods.map((m) => art.chief(m).join())).size, moods.length, 'two of Chief\'s moods look the same');
-  // The redraw: content is a ∪ (ends curled up, lowest dots in the centre), sad lost the sweat drop, worried keeps it,
-  // and content still smiles in the small cut that draws every face under 48 px.
-  const shape = (r: string) => [...r].map((c) => (c === 'm' ? 'm' : '.')).join('').replace(/^\.+|\.+$/g, '');
-  assert.deepEqual(art.chief('idle').filter((r) => r.includes('m')).slice(-4).map(shape),
-    ['m..............m', 'mm...mmmmmm...mm', 'mmmmmmmmmmmmmm', 'mmmmmmmm'], 'content: a ∪ moustache, lowest dots in the centre');
-  assert.ok(!art.chief('error').join().includes('d'), 'sad lost the sweat drop');
-  assert.ok(art.chief('worried').join().includes('d'), 'worried keeps the drop');
-  assert.notEqual(art.chiefSmall('idle').join(), art.chiefSmall('error').join(), 'small content is not the small cut');
-  assert.deepEqual(art.chiefSmall('idle').filter((r) => r.includes('m')).map(shape), ['m.......m', 'mmmmmmm'], 'small content: the moustache line curls \\u2228');
 });
 
-test('the phone office sprite set matches art.ts kinds × moods', async () => {
-  // P4: scripts/icons.mjs renders every mascot in every mood into mobile/assets/pals/ (art.spriteSvg: square pixels
-  // with a one-dot ink edge), required from mobile/src/marks.ts. The phone office draws those PNGs instead of one View
-  // per dot. Chief ships a night set; the pals' palette is the same day and night, so they render once.
+test('the phone mascot set matches art.ts: everyone whole and as a head, in every pose', async () => {
+  // scripts/icons.mjs renders every B1 drawing into mobile/assets/pals/ at 3x, required from mobile/src/marks.ts.
   const art = await import('../web/src/art.ts');
-  const files = new Map<string, Bitmap>();
-  for (const m of art.MOODS) {
-    files.set(`chief-${m}.png`, art.chief(m));
-    files.set(`chief-${m}-night.png`, art.chief(m));
-    for (const k of Object.keys(art.PALS)) files.set(`${k}-${m}.png`, art.pal(k as Kind, m));
+  const files = new Map<string, [number, number]>();
+  for (const p of art.POSES) for (const who of ['chief', ...Object.keys(art.PALS)]) {
+    files.set(`${who}-${p}.png`, who === 'chief' ? [180, 225] : [144, 180]);
+    files.set(`head-${who}-${p}.png`, [168, 168]);
   }
+  files.set('chief-wave.png', [180, 225]);   // the hero's lifted hat
   const dir = join(import.meta.dirname, '..', 'mobile', 'assets', 'pals');
-  assert.deepEqual(new Set(readdirSync(dir).filter((f) => f.endsWith('.png'))), new Set(files.keys()),
-    'a mood without a sprite, or a sprite without a mood');
-  for (const [f, rows] of files) {
+  assert.deepEqual(new Set(readdirSync(dir).filter((f) => f.endsWith('.png'))), new Set(files.keys()), 'a pose without a picture, or a picture without a pose');
+  for (const [f, [w, h]] of files) {
     const b = readFileSync(join(dir, f));
     assert.deepEqual(b.subarray(0, 8), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), `${f} is no PNG`);
-    assert.equal(b.readUInt32BE(16), (rows[0].length + 2) * 8, `${f} width is not its bitmap and edge at 8 px a dot`);
-    assert.equal(b.readUInt32BE(20), (rows.length + 2) * 8, `${f} height is not its bitmap and edge at 8 px a dot`);
+    assert.deepEqual([b.readUInt32BE(16), b.readUInt32BE(20)], [w, h], `${f} is not drawn at 3x`);
   }
   const wired = new Set([...readFileSync(join(import.meta.dirname, '..', 'mobile', 'src', 'marks.ts'), 'utf8')
     .matchAll(/require\('\.\.\/assets\/pals\/([\w-]+\.png)'\)/g)].map((m) => m[1]));
   assert.deepEqual(wired, new Set(files.keys()), 'mobile/src/marks.ts does not require the whole set');
 });
 
-test('the phone office: one flat room, a crew that moves only when news lands', () => {
+test('the phone office: one flat room, a crew whose moves run on the native driver only', () => {
   // The room is drawn in Views on A.floorPlan, as the web's is: no pictures of a room, no isometric plan.
-  // The battery budget: no timer or beat keeps a quiet room moving, moves wait for the app to be on screen, the live
+  // The battery budget: no JS timer or beat moves the room (its loops are native-driver animations), moves wait for the app to be on screen, the live
   // desktop never opens here, and the room reads the shared view model for the person.
   const office = readFileSync(join(import.meta.dirname, '..', 'mobile', 'src', 'office.tsx'), 'utf8');
-  assert.match(office, /A\.floorPlan\(crew, width, all\)/);
+  assert.match(office, /A\.floorPlan\(crew\)/);
+  assert.match(office, /plan\.more\.length/, 'past five, the strip says "+N" and leads to the whole crew');
   assert.doesNotMatch(office, /setInterval|setTimeout|useBeat|requestAnimationFrame|DesktopView|desktopSignaling/);
   assert.match(office, /A\.office\(state\)/);
   assert.match(office, /A\.officeEvent\(/);
@@ -590,7 +610,9 @@ test('the phone office: one flat room, a crew that moves only when news lands', 
   assert.match(motion, /if \(still \|\| beat == null\) \{ rest\(\); return; \}/, 'no office move starts under Reduce Motion or in the background');
   const home = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
   const top = home.slice(home.indexOf('function Home('), home.indexOf('function ChatList('));
-  assert.ok(top.indexOf('<HomeHero') < top.indexOf('<Office') && top.indexOf('<Office') < top.indexOf('Needs you'), 'the office sits at the top of Home');
+  assert.ok(top.indexOf('<HomeBar') < top.indexOf('<ChiefHero') && top.indexOf('<ChiefHero') < top.indexOf('<NeedsPin') && top.indexOf('<Office') < top.lastIndexOf('{pinned}'), 'Chat: the bar, Chief\'s hero, then Needs you pinned; Office: Needs you right under the room (B1)');
+  assert.match(top, /few=\{1\}/, 'one pinned row in Office, and "See all N" for the rest');
+  assert.match(top, /if \(mode === 'chat'\) return <View style=\{\{ flex: 1 \}\}>\{top\}<Chat \{\.\.\.ctx\} id="chief" hero=\{/, 'Chat: the bar over Chief\'s own thread, which carries his hero and Needs you, and his box');
 });
 
 test("Chief's mood is the first matching row of the table, and the line follows the face", () => {
@@ -1646,7 +1668,7 @@ test('a delivered markdown file opens rendered, and no screen leads to the raw f
   assert.doesNotMatch(demo, /stub [\w-]+:/i, 'demo replies never expose the test model');
   assert.match(demo, /dinners-and-shopping-list\.md'\) \? \{ text:/, 'the demo serves the plan the way crewd does: its own words');
   const main = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
-  assert.match(main, /A\.fileTarget\(t\.files\[0\]\)/, 'Home opens a finished thing the same rendered way');
+  assert.match(main, /A\.fileTarget\(x\.files\[0\]\)/, 'a chat\'s finished things open the same rendered way (B1 Home sends done work to the tray, which is Things)');
   assert.doesNotMatch(main, /files\[0\]\?\.url/, 'no raw file address on a Home row');
 });
 
@@ -1657,7 +1679,7 @@ test('a delivered .mp4 shows a video badge, never DOCX', () => {
   assert.equal(f.kind, 'video', 'the chat card plays it as a video');
   assert.equal(A.fileTarget(f)!.chip, 'MP4', 'the chip names the real kind');
   const [thing] = A.things({ tasks: [{ id: 9, bot: 'reel', title: "Mum's birthday film", state: 'done', updated_at: now, files: ['files/mum-birthday_v2.mp4'] }] });
-  assert.equal(A.fileTarget(thing.files[0])!.chip, 'MP4', 'Home "Done today" and Things show the same file-derived chip');
+  assert.equal(A.fileTarget(thing.files[0])!.chip, 'MP4', 'a chat\'s list and Things show the same file-derived chip');
   const app = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
   assert.doesNotMatch(app, /'DOCX'|'XLSX'|'PDF'/, 'no badge is a hardcoded default; every chip comes from the file');
 });
@@ -1798,7 +1820,8 @@ test('the office moves on live events; the refresh stays the source of truth', (
   let u = A.office(officeState());
   u = A.officeEvent(u, { seq: 26, at: OTN, kind: 'ask.opened', bot: 'pip', data: { task: 51 } });
   assert.deepEqual([u.crew.find((c) => c.id === 'pip')!.ring, u.crew.find((c) => c.id === 'pip')!.status], ['needs', 'Needs you']);
-  assert.equal(u.counts.needs, 3);
+  assert.equal(u.counts.needs, 2, 'the count waits for the refresh to bring the actual Needs-you row');
+  assert.equal(A.seatOf(u.crew.find((c) => c.id === 'pip')!), 'chat', 'and so does Review');
   u = A.officeEvent(u, { seq: 27, at: OTN, kind: 'ask.answered', bot: 'pip', data: { task: 51, answer: 'allow' } });
   assert.equal(u.crew.find((c) => c.id === 'pip')!.ring, 'working', 'answered: back on the job');
   u = A.officeEvent(u, { seq: 28, at: OTN, kind: 'task.failed', bot: 'pip', data: { task: 51, title: 'Car insurance renewal' } });
@@ -1851,4 +1874,62 @@ test('a desk shows the job\'s first looks from its task, never a raw path', () =
   assert.deepEqual(v.crew.find((c) => c.id === 'reel')!.things.map((f) => f.name), ['Party plan first look', 'Venue lead']);
   for (const view of [h, w, v]) assert.doesNotMatch(shown(view), FORBIDDEN, 'things never render a raw path');
   assert.doesNotMatch(h.things.map((f) => f.name).join(' '), /files\/|\.png/i, 'names are said, not pathed');
+});
+
+test('J5 repairs stay in: the night look paints first, the job row is never cut to one line, the page leaves the old desk, the pen clears the tray', () => {
+  const read = (...p: string[]) => readFileSync(join(import.meta.dirname, '..', ...p), 'utf8');
+  const html = read('web', 'index.html'), main = read('web', 'src', 'main.tsx'), css = read('web', 'src', 'styles.css'), office = read('web', 'src', 'office.tsx');
+  // The look is set before the first paint, by the same rule useLook keeps after (a night viewer never sees a day frame).
+  const pre = html.slice(html.indexOf('<script>'), html.indexOf('</script>'));
+  assert.ok(html.indexOf('<script>') < html.indexOf('<body>'), 'the look is set in the head, before the body paints');
+  for (const w of ["'crewhouse.look'", "q.has('night')", "q.has('day')", 'h >= 19 || h < 7']) assert.ok(pre.includes(w), `index.html's first look reads ${w}`);
+  assert.match(main, /localStorage\.getItem\('crewhouse\.look'\)/); assert.match(main, /hour >= 19 \|\| hour < 7/);
+  // The job row: no old inset narrows it, the mock's metrics on both widths, and its line wraps rather than being cut.
+  assert.doesNotMatch(css, /^\.jobs \{ padding/m, 'the old .jobs inset is gone');
+  assert.match(css, /^\.jobs \.list-row \{ gap: 10px; padding: 10px 12px; \}/m);
+  assert.match(main, /j\.says && <span className="small mute clamp">/, 'a job row\'s line wraps to two lines, never an ellipsis on one');
+  // The hand-off page leaves from where the desk was before the room re-laid them, not from their new spot by the tray.
+  assert.match(office, /const was = seen\.current, from = desks\.current;\s*seen\.current = live;\s*desks\.current = spritesIn\(box\.current\);/);
+  assert.match(office, /const got = A\.handedIn\(was, live\);\s*if \(got\.length\) handOff\(box\.current, got, from\)/, 'who handed in comes from the done list');
+  // 144: the start is measured in the room's current layout (every resize and the switch to wide, whose first layout is
+  // measured unpainted), and the page lands in the tray box on the floor, whole until it lands, not the floating label.
+  assert.match(office, /new ResizeObserver\(\(\[en\]\) => \{ setWide\(en\.contentRect\.width >= 560\); desks\.current = spritesIn\(el\); \}\)/);
+  assert.match(office, /useEffect\(\(\) => \{ desks\.current = spritesIn\(box\.current\); \}, \[wide\]\);/);
+  assert.match(office, /querySelector\('\.o-traybox > path'\)/); assert.doesNotMatch(office, /querySelector\('\.o-tray rect'\)/);
+  // 152: the page reaches the mouth whole (offset .72), settles in, and fades only after .88; the box is drawn in front.
+  assert.match(office, /\{ transform: at\(0, 1\), opacity: 1, offset: \.72 \}/); assert.match(office, /\{ transform: at\(\.35, \.92\), opacity: 1, offset: \.88 \}/);
+  assert.ok(office.indexOf('<TrayBox x={trayX}') > office.indexOf('{order.map((m) => m === \'chief\''), 'the tray box is drawn after (in front of) every figure');
+  assert.match(office, /left=\{bubble\} y=\{tight \? G \+ 7 : Y\(G - 64\)\} below=\{tight\}/, 'the Tray bubble sits low over its box, clear of every ink; a packed row captions it under the box');
+  assert.match(office, /H = tight \? G \+ 27 : 210/, 'the floor band grows by the caption only in a packed row');
+  assert.doesNotMatch(office, /HIGH/, 'no raised, detached bubble');
+  // 155: the caption's top clears every foot shadow and its pointer stands in the box's own column, outside the label.
+  assert.match(office, /<path className="o-pointer" d=\{`M\$\{x - 4\} \$\{y \+ 1\}L\$\{x\} \$\{G \+ 1\.2\}/);
+  // 147/148: a crowded row packs its desks (compact) before it scales, all five standing; the page is
+  // drawn at the figures' size on both sides.
+  assert.match(office, /it\.tray \? \[15, 20\] : it\.st === 'chief' \? \[32, 26\] : TIGHT\[it\.st\]/, 'a packed row reserves only the box, no bubble width');
+  // 172: the packed box stands just right of Chief, and the floor keeps one scale whatever its states.
+  assert.match(office, /items\.splice\(sts\.indexOf\('chief'\) \+ 1, 0, \{ m: 'tray', st: 'tray', tray: true \}\);/);
+  assert.match(office, /const span = Math\.max\(cur, 54 \* \(order\.length - 1\) \+ 93\), s = Math\.min\(1, W \/ span\)/);
+  // 162/163: the box on clear floor beside whoever finished (34 left of them, their station 55), the bubble clear of ink
+  // and furniture; a floor of five always takes the compact ones (no swap at a finish), a smaller row only when full.
+  assert.match(office, /const full = order\.length > 5 \? undefined : layAt\(order, sts, trayText, false\);\n\s*if \(full && full\.s >= 1\) return full;\n\s*const compact = layAt\(order, sts, trayText, true\);\n\s*return compact\.s < 1 \? packed\(order, sts\) : compact;/, 'a crowded row packs before it scales');
+  assert.match(office, /off = 34;/); assert.match(office, /it\.tray && it\.st === 'done' \? \[55, pad\.done\[1\]\]/);
+  assert.match(office, /compact && p\?\.st === 'chief' && \(it\.st === 'monitor' \|\| it\.st === 'failed'\)\) l = Math\.max\(l, 33\)/);
+  assert.match(office, /return at\(\[INK, FOOT\]\) \?\? at\(\[INK\]\) \?\? ideal;/);
+  // 169: Scout and Chief stand still through a finish on a floor of five (it starts at the left edge), the compact screen
+  // and Scribe's pen clear Chief's cue, and the desk room keeps to its picture (no floor band under the row).
+  assert.match(office, /const x0 = compact && order\.length > 5 && s >= 1 \? 180 - W \/ 2 : 180 - \(total \* s\) \/ 2/);
+  assert.match(office, /if \(p\?\.st === 'chief' && it\.st === 'writing'\) l = Math\.max\(l, 33\);/);
+  assert.match(office, /const c = tight \? x \+ 3 : x \+ 33;/); assert.match(office, /monitor: \[-14, 20\], failed: \[-14, 20\]/);
+  assert.match(read('web', 'src', 'styles.css'), /\.office-main \.o-room \{ flex: 0 1 auto; min-height: 0; \}/);
+  assert.match(office, /needs: \[26, 28\], monitor: \[26, 28\], failed: \[26, 28\]/); assert.match(office, /data-scale=\{s\.toFixed\(3\)\}/);
+  assert.doesNotMatch(office, /MOCK|floorPlan\(crew, /, 'no seat cap below five for size');
+  assert.match(office, /getScreenCTM\(\)\?\.a \?\? 1\) \* Number\(room\.dataset\.scale \?\? 1\), pw = 14 \* k, ph = 18 \* k/);
+  assert.match(read('mobile', 'src', 'office.tsx'), /width: u\(14\), height: u\(18\)/);
+  assert.match(read('mobile', 'src', 'office.tsx'), /dx=\{u\(318 - from\)\} dy=\{u\(28\)\} sink=\{u\(10\)\}/, 'the phone page drops into its floor box');
+  assert.match(read('mobile', 'src', 'motion.ts'), /inputRange: \[0, 0\.88, 1\], outputRange: \[1, 1, 0\]/);
+  // The phone's page flies on the same truth, the helper's done count, from where they stood before the re-lay.
+  assert.match(read('mobile', 'src', 'office.tsx'), /const n = view\.done\.filter\(\(d\) => d\.helper === m\.id\)\.length, from = fromOf\(m\.id, n, x\);\s*return <motion\.Fly beat=\{n\}/);
+  // Scribe's pen is held in the left hand: the Tray bubble floats over the right of that desk.
+  assert.match(office, /<g transform=\{`translate\(\$\{2 \* x\} 0\) scale\(-1 1\)`\}><path className="o-pen"/);
 });

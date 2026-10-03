@@ -3,7 +3,7 @@
 // request, waiting for his sign-in), ?demo=answer (Chief's first answer), ?demo=plan (a plan without helpers),
 // ?demo=resting, ?demo=connect (a helper asks for Google Calendar in chat), ?demo=nogoogle (Google not set up yet), ?demo=share (the crew's share used up today, $4 spent), ?demo=claim (Scout asks to fill a line of an unclaimed-money claim),
 // ?demo=return (Scout asks to press a shop's Start return), ?demo=chase (Scout's chase email as a draft to send), ?demo=renewal (Scout's renewal warning and the cancellation email as a draft to send), ?demo=day (Scout's plan of the day, three things in order),
-// ?demo=paper (Scout's reply to the school as a draft to approve — the paper, sorted), ?demo=meals (this week's dinners shopped into a cart, waiting on its checkout card),
+// ?demo=b1 (the B1 mocks' household), ?demo=paper (Scout's reply to the school as a draft to approve — the paper, sorted), ?demo=meals (this week's dinners shopped into a cart, waiting on its checkout card),
 // ?demo=watch (the name watch heard: one source-linked line), ?demo=neighbour (the weekly brief as a document), ?demo=brief (the month in brief as a document),
 // ?demo=office (Home's office with first looks on the desks), ?demo=calm (nothing on the go),
 // ?demo=fresh (the Chief-only Home a new person gets: no helpers hired yet, nothing to hand over),
@@ -16,6 +16,8 @@ import { describe, nextRun, parseSchedule } from '../../src/routines.ts';
 
 const variant = new URLSearchParams(typeof location === 'undefined' ? '' : location.search).get('demo') || 'umer';
 const now = Date.now();
+// The local day's start, as the app counts "done today": jobs meant to be done today never slip into yesterday after midnight.
+const today = new Date(now).setHours(0, 0, 0, 0);
 const min = 60_000;
 const signin = ['signin', 'hello', 'first', 'work'].includes(variant);
 const firstRun = ['first', 'answer', 'plan', 'work'].includes(variant);
@@ -63,13 +65,13 @@ const asks = [
     preview: { head: 'How Scout would do it', body: '1. Five dinners, vegetarian, nothing over forty minutes.\n2. One shopping list, grouped by aisle.\n3. Keep Friday for pizza night.' } } },
   { id: 11, bot: 'scout', task_id: 42, kind: 'permission', at: now - 30_000, member: 1, title: '', detail: {
     effect: 'spend', spends: true, ...(variant === 'unknown' ? {
-      words: "Scout wants to act on a checkout page at shop.example. I couldn't read the total on this page.",
-      preview: { head: 'The order at shop.example', body: "Garlic, 2 kg — $6.20\nWhole milk (1 gal) x2\nBasmati rice 10 lb\nTotal: couldn’t read it on this page" },
+      words: "Scout wants to act on a checkout page at flights.example. I couldn't read the total on this page.",
+      preview: { head: 'The order at flights.example', body: "PIA to Lahore, Fri 19 Dec 23:55, direct, return\nTotal: couldn’t read it on this page" },
       order: { shown: '', known: false, dollars: false },
     } : {
-      words: 'Scout wants to place this order at shop.example: Garlic, 2 kg, Whole milk (1 gal) x2, Basmati rice 10 lb. Total $43.10.',
-      preview: { head: 'The order at shop.example', body: 'Garlic, 2 kg — $6.20\nWhole milk (1 gal) x2 — $7.90\nBasmati rice 10 lb $24.00\nTotal $43.10' },
-      order: { shown: '$43.10', known: true, dollars: true },
+      words: 'Scout wants to place this order at flights.example: PIA to Lahore, Fri 19 Dec 23:55, direct, return. Total $968.00.',
+      preview: { head: 'The order at flights.example', body: 'PIA to Lahore, Fri 19 Dec 23:55, direct, return — $968.00\nTotal $968.00' },
+      order: { shown: '$968.00', known: true, dollars: true },
     }) } },
   { id: 8, bot: 'reel', task_id: 41, kind: 'connect', at: now - min, member: 1, title: '', detail: { app: 'drive', words: 'Want a copy in your Drive too?' } },
   { id: 12, bot: 'reel', task_id: 41, kind: 'question', at: now - 2 * min, member: 1, title: '', detail: { question: 'Include the baby photos Mum sent, or just the recent ones?' } },
@@ -141,15 +143,15 @@ const state = {
     { id: 'tracer', display: 'Tracer', role: "Finds a person's work email or number" },
   ],
   tasks: [
-    task(40, 'scout', "This week's dinners", 'done', { updated_at: now - 50 * min, result: 'Seven dinners the kids will actually eat, and one shopping list sorted by aisle.', files: ['files/dinners-and-shopping-list.pdf'] }),
+    task(40, 'scout', "This week's dinners", 'done', { updated_at: Math.max(today, now - 50 * min), result: 'Seven dinners the kids will actually eat, and one shopping list sorted by aisle.', files: ['files/dinners-and-shopping-list.pdf'] }),
     task(38, 'reel', 'Eid photo collage', 'done', { updated_at: now - 26 * 60 * min, result: 'A collage of the twelve best Eid photos, sized for WhatsApp.', files: [svg('#ffc27a', '#ff7aa2', 'Eid Mubarak ♡')] }),
     task(36, 'scribe', 'Letter to the school about the trip', 'done', { updated_at: now - 50 * 60 * min, result: 'A short, polite letter asking to move Ayaan to the Friday group.', files: ['files/letter-to-school.pdf'] }),
     task(35, 'pip', 'Sports day in the calendar', 'done', { updated_at: now - 3 * 24 * 60 * min, result: 'Added sports day, Friday 9 am, with a reminder the night before.' }),
-    task(46, 'scribe', 'Hotel guest reception', 'done', { updated_at: now - 22 * min, result: 'A workbook the front desk can run the day on: the dashboard, the booking log, the room board and the payments.', files: ['files/hotel-guest-reception.xlsx'] }),
+    task(46, 'scribe', 'Hotel guest reception', 'done', { updated_at: Math.max(today, now - 22 * min), result: 'A workbook the front desk can run the day on: the dashboard, the booking log, the room board and the payments.', files: ['files/hotel-guest-reception.xlsx'] }),
   ],
   ideas: [
     { bot: 'scout', promise: "I'll keep an eye on what you just bought, and tell you the day you can claim the money back. I'll do it end to end — you just tap approve.", ask: 'Watch something I bought and tell me when I can claim the difference back', group: 'money', needs: ['Gmail'] },
-    { bot: 'scout', promise: "I'll search the government's unclaimed-money registers for your name and get the claims ready to file. I'll file it end to end — you just tap approve.", ask: 'Search for money owed to me that nobody has claimed', group: 'money', needs: [] },
+    { bot: 'scout', promise: "I'll search the government's unclaimed-money registers for your name and get the claims ready to file. I'll file it end to end — you just tap approve.", ask: 'Search for money owed to me that nobody has claimed', group: 'money', title: 'Find money owed to you', line: 'checks the unclaimed-money lists', needs: [] },
     { bot: 'scout', promise: "I'll set up the return, keep the label, and keep checking until the shop says the refund is on its way. Every step asks you first, on its own card.", ask: 'Help me return this and get the refund', group: 'money', needs: [] },
     { bot: 'scout', promise: "I'll turn your mail, your calendar and what's still open into what today actually is.", ask: "Give me my day: what's on, what's waiting on me, what to do first", needs: dayNeeds },
     { bot: 'scout', promise: "I'll read the letters and forms coming into your mail, put what's due on your calendar, and draft every reply — you read, tap approve, and send.", ask: "Sort the paperwork: what's due, and draft the replies", needs: paperNeeds },
@@ -431,6 +433,32 @@ for (const b of bots) pages[b.id] ??= { messages: [], notes: '', tasks: [] };
 if (variant.startsWith('job')) pages.pip.job = { does: 'Keep Umer’s calendar in order.', aim: 'Help Umer know what is coming.', gets: 'Events and reminders from the person.', how: 'Check dates, add reminders only when asked, and explain changes.', great: 'A clear, accurate week; for example, sports day with a reminder the evening before.' };
 // "Wheeled": the person is holding Scout's controls at its screen, signed it in to a shop, and is about to hand
 // the wheel back — the give-back sheet lists the tabs crewd read itself, and Details lists what it is signed in to.
+// ?demo=b1: the household the B1 mocks draw — Scout needs you on a $412 flight, Reel and Scribe working, Tracer's
+// dinner list landed today, Pip resting until 3 pm. The M5 side-by-sides compare against it.
+if (variant === 'b1' || variant === 'b1handoff' || variant === 'b1after') {
+  const b = (id: string) => bots.find((x) => x.id === id)!;
+  Object.assign(b('scout'), { task: task(42, 'scout', 'Book Friday’s flight to Lahore?', 'working'), step: { kind: 'task.progress', at: now - min, data: { text: 'Waiting for your yes' } } });
+  Object.assign(b('reel'), { task: task(41, 'reel', "Mum's birthday video", 'working'), step: { kind: 'task.progress', at: now - 2 * min, data: { text: 'Picking the music' } } });
+  Object.assign(b('scribe'), { task: task(43, 'scribe', 'Thank-you note for Aunty Sara', 'working'), step: { kind: 'task.progress', at: now - 3 * min, data: { text: 'Writing your note' } } });
+  Object.assign(b('tracer'), { task: null, step: undefined });
+  Object.assign(b('pip'), { pausedUntil: new Date(now).setHours(15, 0, 0, 0) + (new Date(now).getHours() >= 15 ? 86_400_000 : 0) });
+  Object.assign(b('chief'), { last: { author: 'bot', text: 'Scout found your Friday flight. It’s waiting for your yes.', at: now - min }, unread: 1 });
+  (state as Json).asks = [{ id: 11, bot: 'scout', task_id: 42, kind: 'permission', at: now - 30_000, member: 1, title: '', detail: {
+    effect: 'spend', spends: true,
+    words: 'Scout wants to place this order at flights.example: Fri 3 Oct 08:40 → 11:10, one stop, seat 14A, bag included. Total $412.00.',
+    preview: { head: 'The order at flights.example', body: 'Fri 3 Oct · 08:40 → 11:10\nOne stop · seat 14A · bag included — $412.00\nTotal $412.00' },
+    order: { shown: '$412.00', known: true, dollars: true }, yes: 'Book for $412.00' } }];
+  // Only Tracer's list is done today, as the mocks' "Tray · 1": the base household's other jobs done today are dropped here.
+  (state as Json).tasks = [task(52, 'tracer', 'your dinner list', 'done', { updated_at: Math.max(today, now - 12 * min), result: 'Seven dinners and one shopping list, sorted by aisle.', files: ['files/dinner-list.pdf'] }),
+    ...state.tasks.filter((t: Json) => !(t.state === 'done' && t.updated_at >= today))];
+  events.push(ev(20, 13, 'file.delivered', 'tracer', { task: 52, path: 'files/dinner-list.pdf' }), ev(21, 12, 'task.done', 'tracer', { task: 52, title: 'your dinner list' }));
+  pages.chief = { messages: [
+    { id: 1, author: 'person', text: 'Can you get me to Lahore on Friday? Morning if possible.', at: now - 20 * min },
+    { id: 2, author: 'chief', text: "On it. I've asked Scout to look.", at: now - 19 * min },
+    { id: 3, author: 'chief', text: "Scout found three flights. Friday's 08:40 is cheapest: $412, one stop, bag included. It's on the card above for your yes.", at: now - 14 * min },
+    { id: 4, author: 'chief', text: "Reel is picking the music and Scribe is writing your note. I'll tell you when they're done.", at: now - min },
+  ] };
+}
 if (variant === 'wheeled') { Object.assign(bots.find((b) => b.id === 'scout')!, { controls: 'person' }); pages.scout = { ...pages.scout, signedIn: ['shop.example'] }; }
 for (const [id, p] of Object.entries(pages)) p.trail = events.filter((e) => e.bot === id);
 
@@ -443,11 +471,31 @@ const accounts = AIS.map((ai) => ({ account: ai.key, name: ai.name,
   work: ai.key === 'chatgpt' && variant === 'work' ? 'umer@acme.com' : false,
   signIn: ai.key === 'chatgpt' && variant === 'signin' ? { state: 'waiting', via: 'browser', url: 'https://auth.openai.com/oauth/authorize' } : null }));
 
+// ?demo=handoff: Reel finishes while you watch. 4 s after the page opens the snapshot changes and the two events
+// crewd would send land through the live path, so the room's hand-off, the tray and the feed all move as they would.
+// ?demo=b1handoff is the same finish in the B1 household (Reel working on the same job, Tracer's list already in);
+// ?demo=after and ?demo=b1after open on the room just after it, for the still checks.
+const finish = () => {
+  const done = task(41, 'reel', "Mum's birthday video", 'done', { updated_at: Date.now(), result: 'A one-minute video for Mum, with the piano song and her title.', files: ['files/happy-birthday-first-cut.mp4'] });
+  Object.assign(bots.find((b) => b.id === 'reel')!, { task: null, step: undefined });
+  state.tasks.unshift(done);
+  (state as Json).asks = state.asks.filter((a: Json) => a.bot !== 'reel');
+  const heard = [ev(14, 0, 'file.delivered', 'reel', { task: 41, path: done.files[0] }), ev(15, 0, 'task.done', 'reel', { task: 41, title: done.title, result: done.result, files: done.files })];
+  events.push(...heard);
+  return heard;
+};
+if (variant === 'after' || variant === 'b1after') finish();
+export function demoLive(hear: (e: Json) => void) {
+  if (variant !== 'handoff' && variant !== 'b1handoff') return () => {};
+  const t = setTimeout(() => finish().forEach(hear), 4000);
+  return () => clearTimeout(t);
+}
+
 let calls = 0;
 export async function demoCall(method: string, path: string, body?: Json) {
   // "offline": the home computer never answers; "lost": it answers once, then goes quiet.
   if (variant === 'offline' || (variant === 'lost' && calls++ > 0)) throw new TypeError('Failed to fetch');
-  if (method === 'GET' && path === '/api/state') return state;
+  if (method === 'GET' && path === '/api/state') return { ...state };   // a new snapshot each read, as crewd's would be
   // The give-back sheet's ticks: the hosts on its tabs, only while the person holds the wheel.
   const scr = /^\/api\/bots\/([a-z0-9-]+)\/screen$/.exec(path);
   if (method === 'GET' && scr) return { pages: variant === 'wheeled' && scr[1] === 'scout' ? ['shop.example', 'mail.example'] : [] };

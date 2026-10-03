@@ -7,10 +7,11 @@ import { api, demo, subscribe, type Json } from './api.ts';
 import * as A from './adapter.ts';
 import * as art from './art.ts';
 type Helper = ReturnType<typeof A.crew>[number];
-import { AiMark, AskCard, Banner, AskSheet, attempt, Celebrate, setChiefMood, setNight, ChiefArt, Composer, Face, Dots, Logo, Media, ChatText, PalArt, Pill, Splash, Steps, Toasts, toast, useListen, PreviewPanel } from './parts.tsx';
+import { AiMark, AskCard, Banner, AskSheet, attempt, Celebrate, setAway, setChiefMood, setNight, ChiefArt, Composer, Face, Icon, Logo, Media, ChatText, PalArt, Pill, Splash, Steps, Toasts, toast, useListen, PreviewPanel } from './parts.tsx';
 import { keepDraft } from './draft.ts';
+import type { IconName } from './icons.ts';
 import { Screen } from './screen.tsx';
-import { hear, Office } from './office.tsx';
+import { hear, Office, useOffice } from './office.tsx';
 import { AccountCard, ConnectApp, ConnectCard, openTab, sheet, SignIn, Unreachable } from './flows.tsx';
 
 type View = 'home' | 'chief' | 'room' | 'crew' | 'add' | 'helper' | 'things' | 'routines' | 'settings' | 'apps' | 'ask' | 'share';
@@ -37,7 +38,7 @@ const hrefOf = (id: string) => (id === 'chief' ? '#/chief' : id === 'room' ? '#/
 /** Which chat each composer writes into: its held draft lives in web/src/draft.ts. */
 const typeInto = (id: string) => ({ chat: id });
 
-type Ctx = { state: Json; tick: number; refresh: () => void; night: boolean; offline: boolean; accounts: Json[] | null };
+type Ctx = { state: Json; live: A.OfficeView; tick: number; refresh: () => void; night: boolean; offline: boolean; accounts: Json[] | null };
 
 /** What Chief knows from the app itself, not the state: the computer out of reach, his composer, the sign-in. */
 function chiefLocal(ctx: Ctx, listen = false): A.ChiefLocal {
@@ -84,7 +85,7 @@ function Hello({ state, refresh, night }: Ctx) {
   return (
     <div className="hello">
       <div className="hello-brand" role="img" aria-label="Crewhouse"><Banner /></div>
-      <span className="halo"><ChiefArt mood={tipped ? 'idle' : 'hello'} d={8.5} hero /></span>
+      <span className="halo"><ChiefArt mood={tipped ? 'idle' : 'hello'} d={7.4} hero whole /></span>
       <div className="speech">
         <h1>{A.greeting()}{address.trim() ? `, ${address.trim()}` : ''}</h1>
         <p className="lead">I'm Chief, your personal assistant. I run your crew of helpers.</p>
@@ -153,11 +154,14 @@ function Stuck({ h, refresh }: { h: A.Helper; refresh: () => void }) {
 }
 
 /** The phone's chats, with Chief and the crew pinned before the recent helpers. */
-function Chats({ state, refresh }: { state: Json; refresh: () => void }) {
-  const crew = A.crew(state);
-  return <section className="home-section phone-only" aria-label="Chats">
-    <div className="label">Chats</div><div className="list-group chats">
-      {A.chats(state).map((c) => {
+function Chats({ state, refresh, desk }: { state: Json; refresh: () => void; desk?: boolean }) {
+  const crew = A.crew(state), list = A.chats(state);
+  // The desk feed shows the two most recent (B1), and any helper gone quiet, so Stuck's choices never hide.
+  const [all, setAll] = useState(false);
+  const shown = desk && !all ? list.filter((c, i) => i < 2 || (c.who !== 'chief' && c.who.stuckFor)) : list;
+  return <section className={`home-section${desk ? '' : ' phone-only'}`} aria-label="Chats">
+    <div className="section-head"><span className="label">Chats</span>{desk && list.length > shown.length && !all && <button className="link" onClick={() => setAll(true)}>{`See all ${list.length}`}</button>}{desk && all && <button className="link" onClick={() => setAll(false)}>Show less</button>}</div><div className="list-group chats">
+      {shown.map((c) => {
         const h = c.who === 'chief' ? undefined : c.who;
         return <div key={c.id}>
           <a className="list-row" href={hrefOf(c.id)}>
@@ -198,83 +202,195 @@ function NeedsRows({ state, cards, quiet, all = false }: { state: Json; cards: A
   );
 }
 
-/** Home's first impression: the day, the greeting, Chief's one line for the whole crew beside his face, and the three
- *  counts the rows below add up to. A still glyph field (the splash's, frozen) sits faintly in the corner. */
-function HomeHero({ ctx, children }: { ctx: Ctx; children?: ReactNode }) {
-  const { state } = ctx;
-  const c = A.chief(state, chiefLocal(ctx));
-  const n = A.homeCounts(state);
-  const texture = useMemo(() => art.field(9, 64, 12), []);
+/** Home's top (B1): in Office the serif greeting with the Chat | Office switch beside it (on a phone the name wraps
+ *  under "Good evening," and the switch sits beside the name), then the counts with your quiet hours to the right; in Chat the counts and quiet hours in one line. Counts come from `A.office` alone (a helper
+ *  waiting on you counts once, under needs you). On a narrow screen the gear sits by the switch: there is no tab bar. */
+function HomeBar({ ctx, mode, pick }: { ctx: Ctx; mode: HomeMode; pick: (m: HomeMode) => void }) {
+  const n = ctx.live.counts, name = String(ctx.state.person?.name ?? '').trim(), quiet = A.quietLine(ctx.state.person);
+  const needs = <span className="m-needs" data-n={n.needs}><i />{n.needs ? `${n.needs} ${n.needs === 1 ? 'needs' : 'need'} you` : 'Nothing needs you'}</span>;
+  const busy = <span className="m-working" data-n={n.working}><i />{n.working} working</span>;
+  const still = quiet && <span className="m-quiet"><Icon name="moon" size={14} />{quiet}</span>;
+  const tools = <div className="home-tools">
+    <a className="icon-btn home-gear" href="#/settings" aria-label="Settings"><Icon name="settings" size={18} /></a>
+    <div className="seg home-mode" role="tablist" aria-label="Home view">{HOME_MODES.map(([m, l]) => <button key={m} role="tab" aria-selected={mode === m} data-mode={m} className={mode === m ? 'on' : ''} onClick={() => pick(m)}><Icon name={m === 'chat' ? 'chief' : 'office'} />{l}</button>)}</div>
+  </div>;
+  if (mode === 'chat') return <header className="home-bar is-chat"><div className="home-meta">{needs}{busy}{still}</div>{tools}</header>;
   return (
-    <header className="hero">
-      <pre className="art hero-field" aria-hidden>{texture}</pre>
-      <div className="eyebrow">{A.today()}</div>
-      <h1>{A.greeting()}, {state.person.address ?? state.person.name}</h1>
-      <a className="hero-chief" href="#/chief" aria-label={`Chief: ${c.line}`}><Face who="chief" size={36} /><span className="says">{c.line}</span></a>
-      <div className="stats" aria-label={A.homeSummary(state)}>
-        <span className={`stat${n.needs ? ' hot' : ''}`}><b>{n.needs}</b>{n.needs === 1 ? 'needs you' : 'need you'}</span>
-        <span className="stat"><b>{n.working}</b>working</span>
-        <span className="stat"><b>{n.done}</b>done today</span>
-      </div>
-      {children}
+    <header className="home-bar">
+      <h1 className="home-greet">{A.greeting()}{name && <>,<span className="nm"> <i>{name}</i></span></>}</h1>
+      {tools}
+      <div className="home-sub"><div className="home-meta">{busy}{needs}</div><div className="home-aside">{still}</div></div>
     </header>
   );
 }
 
-/** The desk frame shows from 900 px (styles.css); only the frame on screen holds the office, so it draws once. */
-function useWide() {
-  const q = useMemo(() => matchMedia('(min-width: 900px)'), []);
-  const [wide, setWide] = useState(q.matches);
-  useEffect(() => { const f = () => setWide(q.matches); q.addEventListener('change', f); return () => q.removeEventListener('change', f); }, [q]);
-  return wide;
+/** The right column's heading: the part of the day and the date ("Tonight Wed 1 Oct"). */
+const tonight = (d = new Date()) => <h2 className="feed-head">{d.getHours() >= 17 || d.getHours() < 5 ? 'Tonight' : d.getHours() < 12 ? 'This morning' : 'This afternoon'}<small>{d.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })}</small></h2>;
+
+/** On it now (B1): a card per helper at work, their face, name and the step they are on; honest when nobody is. */
+function OnItNow({ live, waiting }: { live: A.OfficeView; waiting: number }) {
+  const working = live.crew.filter((c) => A.seatOf(c) === 'working');
+  return <section className="home-section working" aria-label="On it now"><div className="section-head"><span className="label">On it now</span><span className="small mute">{working.length} working</span></div>
+    {working.length ? <div className="on-cards">{working.map((c) => <a key={c.id} className="list-row on-card" href={hrefOf(c.id)}>
+      <Face who={{ kind: c.kind, name: c.name, mood: c.mood }} size={30} /><span className="grow"><b className="clamp1">{c.name}</b><span className="small">{c.step || c.status}</span></span>
+    </a>)}</div> : <Empty>{waiting ? `Nobody is working: ${waiting} waiting on you.` : 'Nobody is working right now. The crew is free.'}</Empty>}
+  </section>;
+}
+
+/** Needs you, pinned in both views: its first row, and every row behind an exact "See all N". */
+function NeedsPin({ state, cards, flat }: { state: Json; cards: A.Card[]; flat?: boolean }) {
+  const [all, setAll] = useState(false);
+  // "Not now" moves a card behind the others on this screen only: the question stays open and counted until answered.
+  const [later, setLater] = useState<number[]>([]);
+  // With one card, "Not now" folds it under its heading (still counted); a different question unfolds it.
+  const [folded, setFolded] = useState<number | null>(null);
+  if (!cards.length) return null;
+  const fold = cards.length === 1 && folded === cards[0].id;
+  const order = [...cards.filter((c) => !later.includes(c.id)), ...later.map((id) => cards.find((c) => c.id === id)).filter((c): c is A.Card => !!c)];
+  return (
+    <section className={`home-section needs-pin${flat ? ' flat' : ''}`} aria-label="Needs you">
+      <div className="section-head"><span className="label">Needs you<span className="count">{cards.length}</span></span>{cards.length > 1 && <button className="link" onClick={() => setAll(!all)}>{all ? 'Show less' : `See all ${cards.length}`}</button>}{fold && <button className="link" onClick={() => setFolded(null)}>Show</button>}</div>
+      {!fold && <NeedsCard state={state} c={order.slice(0, 1)[0]} flat={flat} onLater={(id) => (cards.length > 1 ? setLater([...later.filter((x) => x !== id), id]) : setFolded(id))} />}
+      {all && <div className="list-group needs-card"><NeedsRows state={state} cards={order.slice(1)} all /></div>}
+    </section>
+  );
+}
+
+/** The pinned question as the B1 card: who, what they ask, the evidence's first lines and the money read from the
+ *  page, then the three ways on. Home commits nothing: the yes opens the review sheet (its "…" says so), Ask Chief
+ *  fills Chief's box without sending, Not now moves the card back, or folds the only one under its heading; it stays counted either way. */
+function NeedsCard({ state, c, flat, onLater }: { state: Json; c: A.Card; flat?: boolean; onLater?: (id: number) => void }) {
+  const who = A.crew(state).find((h) => h.id === c.helper);
+  const name = who?.name ?? 'Chief';
+  const yes = c.choices[0]?.body.answer === 'allow' ? c.choices[0] : null;
+  // A known total shows once, in whole dollars when it has no cents ("$412"); the preview's own repeat of it is dropped.
+  const shown = c.order?.known ? c.order.shown : '', price = shown.replace(/\.00$/, '');
+  const lines = (c.preview?.body ?? '').split('\n').map((l) => l.trim()).filter(Boolean)
+    .filter((l) => !shown || !l.startsWith('Total ')).map((l) => (shown ? l.replace(` — ${shown}`, '') : l)).slice(0, flat ? 1 : 2);
+  const question = c.question ?? (c.review && c.preview?.head ? c.preview.head : c.words);
+  const ask = () => { keepDraft('chief', `About ${name}'s question (${c.head}): `); go('#/chief'); };
+  return (
+    <article className="needs-row needs-big" aria-label={`${name} needs you: ${c.head}`}>
+      <div className="nb-top">
+        {flat ? <span className="nb-av">{who ? <PalArt kind={who.kind} mood={who.mood} d={44 / 12} name={name} /> : <ChiefArt d={3} />}</span>
+          : <Face who={who ?? { kind: 'pip', name }} size={40} />}
+        {flat
+          ? <div className="grow"><b className="nb-title">{question}</b>{lines.length > 0 && <span className="nb-ask">{lines.join(' · ')}</span>}</div>
+          : <div className="grow"><b className="nb-title">{name} needs you</b><span className="nb-ask">{question}</span></div>}
+        {flat ? price && <span className="nb-price">{price}</span> : <time className="nb-when">{A.briefTime(c.at)}</time>}
+      </div>
+      {!flat && (lines.length > 0 || price) && <div className="nb-detail">
+        <div className="grow">{lines.map((l, i) => (i ? <span key={i}>{l}</span> : <b key={i}>{l}</b>))}</div>
+        {price && <span className="nb-price">{price}</span>}
+      </div>}
+      <div className="nb-acts">
+        <a className="btn go" href={`#/ask/${c.id}`}><Icon name="check" />{yes ? yes.label.replace(shown, price) : c.reply ? `Answer ${name}…` : 'Review…'}</a>
+        <button className="btn" onClick={ask}>Ask Chief</button>
+        {onLater && <button className="btn ghost" onClick={() => onLater(c.id)}>Not now</button>}
+      </div>
+    </article>
+  );
+}
+
+/** "Scout", "Reel and Scribe", "Reel, Scribe and Pip". */
+const names = (l: string[]) => (l.length < 2 ? l.join('') : `${l.slice(0, -1).join(', ')} and ${l.at(-1)}`);
+const BADGE: Partial<Record<A.Seat | 'done', string>> = { needs: '!', chat: '!', working: '', failed: '!', done: '✓', resting: 'z' };
+
+/** Home's chat opens on Chief (B1): his figure, his own line in a bubble, and the crew in a row with a badge each and
+ *  one plain caption, every word from the office's state. */
+function ChiefHero({ live, state }: { live: A.OfficeView; state: Json }) {
+  const crew = A.roster(live.crew), seat = (c: A.OfficeMember) => A.railWord(c, live).seat;
+  const by = (k: (A.Seat | 'done')[]) => crew.filter((c) => k.includes(seat(c))).map((c) => c.name);
+  const said = [[by(['needs', 'chat']), 'needs you', 'need you'], [by(['working']), 'working', 'working'], [by(['failed']), 'stuck', 'stuck'], [by(['resting']), 'resting', 'resting']] as const;
+  const caption = said.filter(([l]) => l.length).map(([l, one, many]) => `${names([...l])} ${l.length === 1 ? one : many}`).join(' · ');
+  return (
+    <section className="chief-hero" aria-label="Chief">
+      <span className="ch-art"><ChiefArt mood={live.chief.mood} d={9} hero whole /></span>
+      <div className="ch-body">
+        <h2 className="ch-name">Chief <small>Studio Chief</small></h2>
+        <p className="ch-say">{A.chiefSaid(state) || live.chief.line}</p>
+        {crew.length > 0 && <div className="ch-crew">{crew.slice(0, 5).map((c) => { const k = seat(c); return <a key={c.id} href={hrefOf(c.id)} className="ch-face" aria-label={`${c.name}: ${A.railWord(c, live).word}`}>
+          <Face who={c} size={44} />{BADGE[k] !== undefined && <i className={`ch-badge ${k}`} aria-hidden>{BADGE[k]}</i>}</a>; })}
+          {crew.length > 5 && <a className="ch-more" href="#/crew">+{crew.length - 5}</a>}</div>}
+        {caption && <p className="ch-caption">{caption}</p>}
+      </div>
+    </section>
+  );
+}
+
+/** The desk's right rail beside Chief's chat (B1): tonight's working helpers, what is ready in your tray, and who is
+ *  resting, each a card; a section with nothing in it says so. */
+function TonightRail({ live }: { live: A.OfficeView }) {
+  const crew = A.roster(live.crew), seat = (c: A.OfficeMember) => A.seatOf(c);
+  const working = crew.filter((c) => seat(c) === 'working'), resting = crew.filter((c) => seat(c) === 'resting');
+  const day = new Date().setHours(0, 0, 0, 0), ready = live.done.filter((t) => t.at >= day);
+  const who = (id: string) => live.crew.find((c) => c.id === id);
+  const card = (c: A.OfficeMember, line: string, tag?: string) => <a key={c.id} className="tr-card" href={hrefOf(c.id)}><Face who={c} size={52} /><span className="grow"><b>{c.name}</b><span className="clamp2">{line}</span></span>{tag && <em>{tag}</em>}</a>;
+  return <>
+    {tonight()}
+    <div className="label">On it now</div>
+    {working.length ? working.map((c) => card(c, c.step || c.status, 'Working')) : <p className="tr-empty">Nobody is working right now.</p>}
+    <div className="label">Ready for you</div>
+    {ready.length ? ready.slice(0, 3).map((t) => { const h = who(t.helper); return <a key={t.id} className="tr-card" href={`#/things/t${t.id}`}>{h ? <Face who={h} size={52} /> : <Face who="chief" size={52} />}<span className="grow"><b className="clamp1">{t.title}</b><span className="clamp1">From {h?.name ?? 'Chief'} · in your tray</span></span></a>; })
+      : <p className="tr-empty">Nothing new in your tray today.</p>}
+    <div className="label">Resting</div>
+    {resting.length ? resting.map((c) => card(c, c.status)) : <p className="tr-empty">Nobody is resting.</p>}
+  </>;
 }
 
 /** An empty list, said warmly: a small mark and a plain line, never a blank box. */
-const Empty = ({ children }: { children: ReactNode }) => <div className="frame-empty"><span className="art orn" aria-hidden>{art.ORNAMENT}</span>{children}</div>;
+const Empty = ({ children }: { children: ReactNode }) => <div className="frame-empty">{children}</div>;
+
+/** Home opens on Chat every time the app starts (kept in memory only, never stored): Chief's thread under the bar and
+ *  the pinned Needs you. Office is the optional view of the same state; neither view hides Needs you or Chief's box. */
+type HomeMode = 'chat' | 'office';
+const HOME_MODES: [HomeMode, string][] = [['chat', 'Chat'], ['office', 'Office']];
+let homeMode: HomeMode = 'chat';
 
 function Home(ctx: Ctx) {
-  const { state, refresh, tick, accounts } = ctx;
-  const cards = A.needsYou(state);
-  const [allNeeds, setAllNeeds] = useState(false);
-  const works = A.work(state).filter((w) => !w.waiting);
-  const day = new Date(); day.setHours(0, 0, 0, 0);
-  const todays = A.things(state).filter((t) => t.at >= day.getTime());
+  const { state, live, refresh, tick, accounts } = ctx;
+  const [mode, setMode] = useState(homeMode);
+  // On a phone Chief's thread holds the page scrolled to its newest line; the other view starts at its top, or Office
+  // opens scrolled past its room.
+  const pick = (m: HomeMode) => { homeMode = m; setMode(m); scrollTo(0, 0); };
   const g = A.account(accounts);
   const toChief = async (t: string) => { const ok = await attempt(() => api.post('chief', t), undefined, true); if (ok) { refresh(); go('#/chief'); } return ok; };
-  const needsHead = <div className="section-head"><span className="label">Needs you{cards.length > 0 && <span className="count">{cards.length}</span>}</span>{cards.length > 3 && <button className="link" onClick={() => setAllNeeds(!allNeeds)}>{allNeeds ? 'Show less' : `See all ${cards.length}`}</button>}</div>;
-  // The office is Home's top frame, inside the hero card: one room, drawn once for whichever frame is showing.
-  const wide = useWide();
-  const office = (frame: 'phone' | 'desk') => (frame === 'desk') === wide && <Office state={state} night={ctx.night} />;
-  const nudges = <>
-    {(g.state === 'signed-out' || g.notIncluded) && <AccountCard g={g} onReady={refresh} />}
+  const waiting = live.crew.filter(A.waitsOnYou).length;
+  const top = <>
+    <HomeBar ctx={ctx} mode={mode} pick={pick} />
+    {/* Chief's thread shows its own sign-in card and resting line; Office shows them here. */}
+    {mode === 'office' && (g.state === 'signed-out' || g.notIncluded) && <AccountCard g={g} onReady={refresh} />}
     <SetupRow state={state} accounts={accounts} tick={tick} />
-    {A.resting(state) && <div className="card nudge"><span className="grow">{A.resting(state)}. I'll pick things back up then.</span></div>}
+    {mode === 'office' && A.resting(state) && <div className="card nudge"><span className="grow">{A.resting(state)}. I'll pick things back up then.</span></div>}
     {A.gettingReady(state) && <div className="card nudge"><span className="grow">{A.gettingReady(state)}</span></div>}
     {A.update(state) && <div className="card nudge"><span className="grow">{A.update(state)!.words}</span><a className="btn go" href={A.update(state)!.url} target="_blank" rel="noreferrer">Download</a></div>}
   </>;
+  // Chat: Chief's own thread, its box and (on a wide desk) its side column of who is on what.
+  if (mode === 'chat') return <div className="page chat-page home-chat"><div className="home-top">{top}<ChiefHero live={live} state={state} /><NeedsPin state={state} cards={live.needs} flat /></div><Chat {...ctx} id="chief" hero rail={<TonightRail live={live} />} /></div>;
+  // Office (B1): the greeting and the room with its strip in the middle; Tonight down the right on a computer (Needs you,
+  // On it now, chats, a job to hand over, Chief's box), and under the room on a phone.
   return (
-    <div className="home">
-      <div className="desk-col">
-        <div className="phone-only"><HomeHero ctx={ctx}>{office('phone')}</HomeHero>{nudges}</div>
-        {cards.length > 0 && <section className="home-section phone-only" aria-label="Needs you">{needsHead}<div className="list-group needs-card"><NeedsRows state={state} cards={cards} all={allNeeds} /></div></section>}
-        <Chats state={state} refresh={refresh} /><JobList state={state} phone refresh={refresh} />
-        <div className="desk">
-          <div className="desk-only desk-top"><HomeHero ctx={ctx}>{office('desk')}<div className="hero-ask"><Composer placeholder="Ask Chief anything" onSend={toChief} {...typeInto('chief')} /></div></HomeHero>{nudges}</div>
-          <div className="desk-main">
-            <section className="home-section needs">{needsHead}<div className="list-group">{cards.length ? <NeedsRows state={state} cards={cards} all={allNeeds} /> : <Empty>All clear. Nothing needs you.</Empty>}</div></section>
-            <section className="home-section working"><div className="label">Working now</div><div className="list-group">
-              {works.length ? works.map((w) => { const h = A.crew(state).find((x) => x.id === w.helper); return <a key={w.helper} className="list-row" href={hrefOf(w.helper)}>
-                {h && <Face who={h} size={40} ring="working" />}<span className="grow"><b className="clamp1">{w.title}</b><span className="small clamp1">{h?.name} · {w.line}</span></span><span className="mute" aria-hidden>›</span>
-              </a>; }) : <Empty>Nothing right now. The crew is free.</Empty>}
-            </div></section>
-            <section className="home-section done"><div className="label">Done today</div><div className="list-group">
-              {todays.length ? todays.map((t) => { const target = A.fileTarget(t.files[0]); return <div key={t.id} className="list-row"><span className="file-chip">{target?.chip ?? '—'}</span><span className="grow"><b className="clamp1">{t.title}</b><span className="small clamp1">{t.summary}</span></span><a className="btn sm" href={target?.href ?? hrefOf(t.helper)}>Open</a></div>; }) : <Empty>Nothing yet today.</Empty>}
-            </div></section>
-          </div>
-          <div className="desk-side"><JobList state={state} refresh={refresh} /><p className="small mute">Tap one and Chief gets it ready. Nothing starts until you send.</p></div>
+    <div className="home home-office">
+      <div className="office-main">
+        <div className="home-top">{top}</div>
+        <Office state={state} live={live} night={ctx.night} />
+        <div className="phone-only">
+          <NeedsPin state={state} cards={live.needs} />
+          <OnItNow live={live} waiting={waiting} />
+          <Chats state={state} refresh={refresh} /><JobList state={state} phone refresh={refresh} />
         </div>
       </div>
-      <div className="dock phone-only"><Composer placeholder="Ask Chief anything" onSend={toChief} {...typeInto('chief')} /></div>
+      <aside className="feed desk-only" aria-label="What's going on">
+        <div className="feed-list">
+          {tonight()}
+          <NeedsPin state={state} cards={live.needs} />
+          <OnItNow live={live} waiting={waiting} />
+          <Chats state={state} refresh={refresh} desk />
+          <JobList state={state} few refresh={refresh} />
+        </div>
+        <div className="feed-ask"><Composer placeholder="Ask Chief anything…" onSend={toChief} {...typeInto('chief')} chips={A.ideas(state).map((i: Json) => ({ label: i.ask.trim(), ask: i.ask }))} /></div>
+      </aside>
+      <div className="dock phone-only"><Composer placeholder="Ask Chief anything" onSend={toChief} {...typeInto('chief')} chips={[]} /></div>
     </div>
   );
 }
@@ -283,9 +399,11 @@ function Home(ctx: Ctx) {
  *  first. A row fills Chief's box with the words and never sends; a job still waiting on an app says what it needs and
  *  leads to the apps screen instead of dead-ending. A row offering a helper not hired yet brings them on first, then
  *  fills that helper's box. The same rows sit in the desk's third frame and under the chats on a phone. */
-function JobList({ state, phone, refresh }: { state: Json; phone?: boolean; refresh: () => void }) {
+function JobList({ state, phone, few, refresh }: { state: Json; phone?: boolean; few?: boolean; refresh: () => void }) {
   const crew = A.crew(state);
   const rows = A.jobs(state);
+  const [all, setAll] = useState(false);
+  const shown = phone ? rows.slice(0, 3) : few && !all ? rows.slice(0, 1) : rows; // the desk feed shows one, as B1 does
   const hand = (ask: string) => { keepDraft('chief', ask); go('#/chief'); };
   // The gallery hire, then the words in the new helper's own box: nothing starts until they send.
   const hire = async (template: string, ask: string) => {
@@ -294,12 +412,12 @@ function JobList({ state, phone, refresh }: { state: Json; phone?: boolean; refr
     if (await attempt(async () => { id = (await api.recruit(template, name)).id; }, `${name} joined the crew`)) { refresh(); keepDraft(id, ask); go(`#/h/${id}`); }
   };
   return (
-    <section className={`home-section jobs${phone ? ' phone-only' : ''}`} aria-label="Hand the crew a job">
-      <div className="label">Hand the crew a job</div><div className="list-group">
-      {(phone ? rows.slice(0, 3) : rows).length ? (phone ? rows.slice(0, 3) : rows).map((j) => {
+    <section className={`home-section jobs${phone ? ' phone-only' : ''}`} aria-label="Hand me a job">
+      <div className="section-head"><span className="label">Hand me a job</span>{few && rows.length > 1 && <button className="link" onClick={() => setAll(!all)}>{all ? 'Show less' : `See all ${rows.length}`}</button>}</div><div className="list-group">
+      {shown.length ? shown.map((j) => {
         const h = crew.find((x) => x.id === j.bot);
-        const body = <><Face who={h ?? { kind: 'pip', name: j.bot }} size={phone ? 28 : 36} />
-          <span className="grow"><b className="clamp">{j.label}</b>{j.says && <span className="small mute clamp1">{j.says}</span>}{j.needs.length > 0 && <span className="small clamp1">{A.jobNeeds(j.needs)}</span>}</span><span className="mute" aria-hidden>›</span></>;
+        const body = <>{j.money ? <span className="job-ic" aria-hidden><Icon name="money" /></span> : <Face who={h ?? { kind: 'pip', name: j.bot }} size={phone ? 28 : 36} />}
+          <span className="grow"><b className="clamp">{j.label}</b>{j.says && <span className="small mute clamp">{j.says}</span>}{j.needs.length > 0 && <span className="small clamp1">{A.jobNeeds(j.needs)}</span>}</span><span className="mute" aria-hidden><Icon name="next" /></span></>;
         return j.needs.length ? <a key={j.bot + j.label} className="list-row" href="#/apps">{body}</a>
           : j.hire ? <button key={j.bot + j.label} className="list-row" onClick={() => hire(j.hire!, j.ask)}>{body}</button>
           : <button key={j.bot + j.label} className="list-row" onClick={() => hand(j.ask)}>{body}</button>;
@@ -364,7 +482,7 @@ function PhoneCard({ offer, reload }: { offer: Json; reload: () => void }) {
       </div></>}
   </div>;
 }
-function Chat({ id, m, state, tick, refresh, accounts }: Ctx & { id: string; m?: string }) {
+function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id: string; m?: string; hero?: boolean; rail?: ReactNode }) {
   const g = A.account(accounts);
   const [page, setPage] = useState<Json>(null);
   const [pending, setPending] = useState<{ text: string; after: number } | null>(null);
@@ -375,7 +493,7 @@ function Chat({ id, m, state, tick, refresh, accounts }: Ctx & { id: string; m?:
   const load = useCallback((ar = around) => api.bot(id, ar || undefined).then(setPage).catch(() => {}), [id, around]);
   useEffect(() => { void load(); }, [load, tick]);
   const end = useRef<HTMLDivElement>(null);
-  const lines = A.lines(page, id);
+  const lines = hero ? A.trayNotes(state, A.lines(page, id)) : A.lines(page, id);
   const echoed = pending && !(page?.messages ?? []).some((x: Json) => x.author === 'person' && x.id > pending.after && A.plain(x.text) === A.plain(pending.text));
   const waiting = pending && !partial && !(page?.messages ?? []).some((x: Json) => x.author === 'bot' && x.id > pending.after);
   useEffect(() => subscribe((e) => {
@@ -386,13 +504,14 @@ function Chat({ id, m, state, tick, refresh, accounts }: Ctx & { id: string; m?:
   useEffect(() => { if ((page?.messages ?? []).some((x: Json) => x.author === 'bot' && x.text === partial)) setPartial(''); }, [page, partial]);
   const phoneOffer = id === 'chief' ? A.phoneOffer(page) : null;
   const box = useRef<HTMLDivElement>(null);
-  // The thread scrolls by its own column on a desk (a scrollIntoView here once dragged the whole page up with it,
-  // leaving a dead band on top); the phone keeps the document scroll. An anchored landing scrolls to the line instead.
+  // The thread scrolls by its own column on a desk and in Home's chat on a phone (a scrollIntoView here once dragged the
+  // whole page up with it, hiding Chief's hero); other phone chats keep the document scroll. An anchored landing
+  // scrolls to the line instead. Every chat opens at its newest line (Main600) under a hero that stays in place (096).
   useEffect(() => {
     if (around) return;
-    if (matchMedia('(min-width: 900px)').matches) { const el = box.current; if (el) el.scrollTop = el.scrollHeight; }
+    if (hero || matchMedia('(min-width: 900px)').matches) { const el = box.current; if (el) el.scrollTop = el.scrollHeight; }
     else end.current?.scrollIntoView({ block: 'end' });
-  }, [lines.length, around, !!echoed, !!waiting, partial]);
+  }, [lines.length, around, !!echoed, !!waiting, partial, hero]);
   // The landing itself: the matched line, centred, with the one motion that explains where you are.
   useEffect(() => {
     if (!around || !lines.length) return;
@@ -433,7 +552,7 @@ function Chat({ id, m, state, tick, refresh, accounts }: Ctx & { id: string; m?:
   return (
     <div className={`chat${live && h ? ' with-live' : ''}`}>
       <div className="lines" ref={box}>
-        {start && <div className="chat-intro">
+        {start && !hero && <div className="chat-intro">
           <span className="halo">{h ? <PalArt kind={h.kind} mood={h.mood} d={4.4} name={h.name} /> : <ChiefArt mood="idle" d={3.6} />}</span>
           <b>{name}</b><span>{h ? h.role : 'Runs the crew and answers to you'}</span>
         </div>}
@@ -444,6 +563,7 @@ function Chat({ id, m, state, tick, refresh, accounts }: Ctx & { id: string; m?:
         {lines.map((l, i) => start && i === 0 && l.from === 'note' && l.text.startsWith(`${name} joined the crew`) ? null : <div key={l.id} className="line-wrap">{dayOf(l.at)}
           <div id={`m${l.id}`} className={`line ${l.from}${l.unsure ? ' unsure' : ''}${l.recap ? ' recap' : ''}${l.id > (opened.current ?? Infinity) ? ' fresh' : ''}${i && lines[i - 1].from === l.from && l.from !== 'me' && !l.recap && !lines[i - 1].recap ? ' consecutive' : ''}`}>
             {l.from !== 'me' && l.from !== 'note' && <div className="line-by"><Face who={l.from === 'chief' ? 'chief' : h ?? 'chief'} size={28} /><span className="who">{l.from === 'chief' ? 'Chief' : name}</span><time>{l.at ? A.clock(l.at) : ''}</time></div>}
+            {l.by && <span className="note-by"><Face who={A.crew(state).find((x) => x.id === l.by) ?? 'chief'} size={20} /></span>}
             {l.text && (l.detail ? <ChiefAsk l={{ text: l.text, detail: l.detail }} /> : <div className="bubble-text"><ChatText text={l.text} /></div>)}
             {id === 'chief' && l.text === 'Sign in with ChatGPT.' && <AccountCard g={{ ...g, state: 'signed-out' }} inChat onReady={() => { void load(); refresh(); }} />}
             {l.files.map((f) => <Media key={f.url} f={f} big />)}
@@ -462,11 +582,12 @@ function Chat({ id, m, state, tick, refresh, accounts }: Ctx & { id: string; m?:
         {g.state === 'ready' && !g.notIncluded && A.resting(state) && <div className="card nudge"><span className="grow">{A.resting(state)}. {name === 'Chief' ? "I'll" : `${name} will`} finish then.</span></div>}
         <div ref={end} className="end" />
       </div>
-      <aside className="working-on">
+      <aside className={`working-on${rail ? ' tonight-rail' : ''}`}>
+        {rail}
         {live && h && <section className="working-on-frame"><div className="label">Working on</div><div className="list-group"><div className="work-title"><b>{A.plain(live.title)}</b><span className="small">{h.status}</span></div>{trail.length > 0 && <Steps steps={trail} max={3} />}<a className="link" href={`#/h/${id}/did`}>What happened ›</a></div></section>}
         {A.things(state).filter((x) => x.helper === id).length > 0 && <section className="home-section"><div className="label">Made in this chat</div><div className="list-group">{A.things(state).filter((x) => x.helper === id).map((x) => { const t = A.fileTarget(x.files[0]); return <a className="list-row" key={x.id} href={t?.href.startsWith('#') ? t.href : `#/things/t${x.id}`}><span className="file-chip">{t?.chip ?? '—'}</span><span className="grow"><b className="clamp1">{x.title}</b><span className="small clamp1">{x.summary}</span></span></a>; })}</div></section>}
       </aside>
-      <div className="dock"><Composer key={seed} placeholder={id === 'chief' ? 'Ask Chief anything…' : `Message ${name}…`} onSend={send} {...typeInto(id)} /></div>
+      <div className="dock"><Composer key={seed} placeholder={id === 'chief' ? (hero && !matchMedia('(min-width: 900px)').matches ? 'Ask Chief anything' : 'Ask Chief anything…') : `Message ${name}…`} onSend={send} chips={hero ? A.ideas(state).map((i: Json) => ({ label: i.ask.trim(), ask: i.ask })) : undefined} {...typeInto(id)} /></div>
     </div>
   );
 }
@@ -511,7 +632,7 @@ function Crew(ctx: Ctx) {
   const { state } = ctx;
   const chief = A.chief(state, chiefLocal(ctx));
   const helpers = A.crew(state);
-  return <div className="page rest-screen"><h1>Your crew</h1><p className="lead">Everyone answers to Chief.</p><div className="card list">
+  return <div className="page rest-screen"><a href="#/" className="back phone-only">‹ Home</a><h1>Your crew</h1><p className="lead">Everyone answers to Chief.</p><div className="card list">
     <a className="row-item crew-row" href="#/chief"><Face who="chief" size={44} ring={chief.tone === 'wait' ? 'needs' : undefined} /><span className="grow"><b>Chief</b><span className="mute small clamp1">Runs the crew and answers to you</span></span><span className="status-word">{chief.line}</span></a>
     {helpers.map((h) => <a key={h.id} className="row-item crew-row" href={hrefOf(h.id)}><Face who={h} size={44} ring={h.ring} /><span className="grow"><b>{h.name}</b><span className="mute small clamp1">{h.role}</span></span><span className={`status-word ${h.ring === 'needs' ? 'bad' : ''}`}><i className={h.ring === 'needs' ? 'needs' : h.ring ? 'working' : ''} />{h.status}</span></a>)}
     <a className="row-item crew-row" href="#/crew/add"><span className="face add" style={{ width: 44, height: 44 }}>+</span><span className="grow">Add a helper</span><span className="mute">›</span></a>
@@ -768,7 +889,7 @@ function Things({ state, id }: Ctx & { id?: string }) {
     const t = setTimeout(() => el.classList.remove('land'), 1300);
     return () => clearTimeout(t);
   }, [want, list.length]);
-  return <div className="page rest-screen"><h1>Things</h1><p className="lead">Everything the crew has made for you.</p>{(['Today', 'Yesterday', 'Earlier'] as const).map((group) => {
+  return <div className="page rest-screen"><a href="#/" className="back phone-only">‹ Home</a><h1>Things</h1><p className="lead">Everything the crew has made for you.</p>{(['Today', 'Yesterday', 'Earlier'] as const).map((group) => {
     const now = new Date(); now.setHours(0, 0, 0, 0);
     const start = group === 'Today' ? now.getTime() : group === 'Yesterday' ? now.getTime() - 86400000 : 0;
     const end = group === 'Today' ? now.getTime() + 86400000 : now.getTime();
@@ -846,7 +967,7 @@ function RoutineAsk() {
   );
 }
 function Routines(ctx: Ctx) {
-  return <div className="page rest-screen"><h1>Routines</h1><p className="lead">What the crew does on a schedule or when something happens, and whether it's on.</p><RoutineList {...ctx} /><p className="mute small routine-footnote">The crew only runs routines you have approved.</p><div className="label">New routine</div><RoutineAsk /></div>;
+  return <div className="page rest-screen"><a href="#/" className="back phone-only">‹ Home</a><h1>Routines</h1><p className="lead">What the crew does on a schedule or when something happens, and whether it's on.</p><RoutineList {...ctx} /><p className="mute small routine-footnote">The crew only runs routines you have approved.</p><div className="label">New routine</div><RoutineAsk /></div>;
 }
 
 // ---------- settings ----------
@@ -954,13 +1075,17 @@ function HomeSetup({ state, accounts, tick }: { state: Json; accounts: Json[] | 
   </>);
 }
 
+const GO_TO: [string, string, IconName][] = [['#/things', 'Your things', 'things'], ['#/routines', 'Routines', 'routines'], ['#/apps', 'Apps', 'apps'], ['#/crew', 'Your crew', 'chief']];
 function Settings({ state, refresh, tick, accounts, look, setLook }: Ctx & { look: string; setLook: (l: string) => void }) {
   const [signing, setSigning] = useState<{ ai: (typeof A.AIS)[number]; tab: Window | null } | null | false>(sheet === 'signin' ? null : false);
   const act = (fn: () => Promise<unknown>, ok?: string) => attempt(async () => { await fn(); refresh(); }, ok);
   return (
     <div className="page settings">
+      <a href="#/" className="back phone-only">‹ Home</a>
       <h1>Settings</h1>
       <p className="mute small">{A.atHome().join(' ')}</p>
+      {/* No tab bar on a phone (B1): the desk rail's places, reached from here. */}
+      <div className="card list phone-only">{GO_TO.map(([h, l, i]) => <a key={h} href={h} className="row-item go-to"><span className="o-ic"><Icon name={i} /></span><span className="grow">{l}</span><Icon name="next" /></a>)}</div>
       <HomeSetup state={state} accounts={accounts} tick={tick} />
 
       <div className="label">You</div>
@@ -1128,20 +1253,23 @@ function useLook() {
   return { look, setLook, night };
 }
 
-/** The crew room's wall: every helper, one line each, with a search above. */
-function SideCrew({ state, view, id }: { state: Json; view: View; id?: string }) {
-  const shown = A.chats(state);
+/** The rail's crew list (B1): every helper, the one who matters most first (A.roster), each with the word the office
+ *  uses for them on the right; waiting on you in the accent. Chief has his own line in the nav above. */
+function SideCrew({ state, live, id }: { state: Json; live: A.OfficeView; id?: string }) {
+  const chats = new Map(A.chats(state).map((c) => [c.id, c]));
   return (
-    <>
-      <div className="label">Chats</div>
-      {shown.map((c) => (
-        <a key={c.id} href={hrefOf(c.id)} className={`side-row ${id === c.id || (view === 'room' && c.id === 'room') || (view === 'chief' && c.id === 'chief') ? 'on' : ''}`}>
-          {c.id === 'room' ? <span className="side-room">{A.crew(state).slice(0, 2).map((h) => <Face key={h.id} who={h} size={18} />)}</span> : <Face who={c.who as A.Helper | 'chief'} size={22} ring={c.ring} />}
-          <span className="grow"><b>{c.name}</b></span>{c.unread > 0 && <span className="badge">{A.unreadBadge(c.unread)}</span>}
-        </a>
-      ))}
-      {!shown.length && <div className="mute small side-blank">No chats yet.</div>}
-    </>
+    <div className="side-crew">
+      <a className="label side-label" href="#/crew">Your crew<span>{live.crew.length}</span></a>
+      {A.roster(live.crew).map((h) => {
+        const r = A.railWord(h, live), c = chats.get(h.id);
+        return <a key={h.id} href={hrefOf(h.id)} className={`side-row ${id === h.id ? 'on' : ''}`}>
+          <Face who={{ kind: h.kind, name: h.name, mood: h.mood }} size={26} /><b className="clamp1 grow">{h.name}</b>
+          {(c?.unread ?? 0) > 0 && <span className="badge">{A.unreadBadge(c!.unread)}</span>}
+          <span className={`side-seat ${r.seat}`}><i /><span className="clamp1">{r.seat === 'done' ? 'Done' : r.word}</span></span>
+        </a>;
+      })}
+      {!live.crew.length && <div className="mute small side-blank">No helpers yet.</div>}
+    </div>
   );
 }
 
@@ -1152,6 +1280,7 @@ function App() {
   const [state, setState] = useState<Json>(null);
   const [tick, setTick] = useState(0);
   const [offline, setOffline] = useState(false);
+  setAway(offline);
   const [party, setParty] = useState<{ title: string; helper: string } | null>(null);
   const accounts = useAccounts(0, tick);
   const seenDone = useRef<Set<number> | null>(null);
@@ -1180,7 +1309,9 @@ function App() {
     if (seenDone.current) { const fresh = done.find((t) => !seenDone.current!.has(t.id)); if (fresh) setParty({ title: fresh.title, helper: fresh.helper }); }
     seenDone.current = new Set(done.map((t) => t.id));
   }, [state]);
-  const ctx: Ctx | null = useMemo(() => (state ? { state, tick, refresh, night, offline, accounts } : null), [state, tick, refresh, night, offline, accounts]);
+  // The office's one state source (A.office, moved by live events): Home's room, header, tray, feed and the rail read it.
+  const live = useOffice(state, offline);
+  const ctx: Ctx | null = useMemo(() => (state && live ? { state, live, tick, refresh, night, offline, accounts } : null), [state, live, tick, refresh, night, offline, accounts]);
 
   const splash = <Splash done={!!ctx || offline} />;
   if (!ctx) return <>{splash}{offline && <Unreachable retry={refresh} />}</>;
@@ -1189,21 +1320,26 @@ function App() {
   if (!ctx.state.person.onboarded) return <>{splash}<Hello {...ctx} /><Toasts /></>;
   const v = under.current;
   const crew = A.crew(ctx.state);
-  const asks = A.needsYou(ctx.state).length; // the badge counts only what Needs you shows
+  const asks = ctx.live.needs.length; // the badge counts only what Needs you shows
   const sheet = route.view === 'ask' ? A.cards(ctx.state).find((c) => String(c.id) === route.id) : undefined;
   const book = route.file && route.id ? { bot: route.id, path: route.file } : undefined;
-  const nav: [string, string, art.Tab][] = [['#/', 'Home', 'home'], ['#/crew', 'Crew', 'crew'], ['#/things', 'Things', 'things'], ['#/routines', 'Routines', 'routines'], ['#/settings', 'Settings', 'settings']];
-  const active = (h: string) => (h === '#/' ? ['home', 'helper', 'chief', 'room'].includes(v.view) : h === '#/crew' ? ['crew', 'add'].includes(v.view) : h === `#/${v.view}` || (h === '#/settings' && v.view === 'apps'));
+  // The desk rail (B1): Chief, your things, routines and apps; the crew under it; you and the gear at the foot.
+  const rail: [string, string, IconName, number][] = [['#/', 'Chief', 'chief', asks], ['#/things', 'Your things', 'things', ctx.live.counts.done], ['#/routines', 'Routines', 'routines', 0], ['#/apps', 'Apps', 'apps', 0]];
+  const railOn = (h: string) => (h === '#/' ? ['home', 'chief'].includes(v.view) : h === `#/${v.view}`);
+  const me = String(ctx.state.person?.name ?? '').trim(), quiet = A.quietLine(ctx.state.person);
   return (
     <>
       {splash}
-      <div className={`shell ${['chief', 'helper', 'room'].includes(v.view) ? 'is-chat' : ''}${book ? ' with-book' : ''}`}>
+      <div className={`shell ${['chief', 'helper', 'room', 'home'].includes(v.view) ? 'is-chat' : ''}${book ? ' with-book' : ''}`}>
         <aside className="side">
-          <a href="#/" className="brand"><Logo night={night} /></a>
-          {nav.map(([h, l, i]) => <a key={h} href={h} className={`side-nav ${active(h) ? 'on' : ''}`}><span className="ic"><Dots rows={art.TABS[i]} pal={{ x: 'currentColor' }} d={16 / 9} crisp /></span>{l}{h === '#/' && asks > 0 && <span className="badge">{asks}</span>}</a>)}
-          <SideCrew state={ctx.state} view={v.view} id={v.id} />
+          <a href="#/" className="brand"><Logo night={night} />{demo && <span className="demo-tag">Demo</span>}</a>
+          <nav className="side-navs">{rail.map(([h, l, i, n]) => <a key={h} href={h} className={`side-nav ${railOn(h) ? 'on' : ''}`}><Icon name={i} />{l}{n > 0 && <span className={`side-count${h === '#/' ? ' hot' : ''}`}>{n}</span>}</a>)}</nav>
+          <SideCrew state={ctx.state} live={ctx.live} id={v.view === 'helper' ? v.id : undefined} />
           <div className="grow" />
           {A.meter(ctx.state) && <a href="#/settings" className="side-meter mute small">{A.meter(ctx.state)}</a>}
+          <a href="#/settings" className={`side-me ${v.view === 'settings' ? 'on' : ''}`} aria-label={`Settings${me ? `, ${me}` : ''}`}>
+            <span className="me-av">{(me[0] ?? '·').toUpperCase()}</span><span className="grow"><b className="clamp1">{me || 'You'}</b>{quiet && <span className="clamp1">{quiet}</span>}</span><Icon name="settings" />
+          </a>
         </aside>
         <main className="main">
           {offline && <div className="offline" role="status">The home computer isn't answering. If it's asleep, the crew has paused and carries on when it wakes. Last heard from it at {A.clock(heard.current)}. Reconnecting… <button className="link inline" onClick={refresh}>Try now</button></div>}
@@ -1219,7 +1355,6 @@ function App() {
           {v.view === 'apps' && <Apps {...ctx} />}
           {v.view === 'share' && <Share {...ctx} />}
         </main>
-        <nav className="tabbar">{nav.map(([h, l, i]) => <a key={h} href={h} className={active(h) ? 'on' : ''}><span className="ic"><Dots rows={art.TABS[i]} pal={{ x: 'currentColor' }} d={22 / 9} crisp /></span>{l}{h === '#/' && asks > 0 && <span className="badge">{asks}</span>}</a>)}</nav>
       </div>
       {sheet && <AskSheet c={sheet} who={crew.find((h) => h.id === sheet.helper)} chiefSays={ctx.state.asks.find((a: Json) => a.id === sheet.id)?.detail?.chief} onClose={() => history.length > 1 ? history.back() : go('#/')} />}
       {book && <PreviewPanel bot={book.bot} path={book.path} onClose={() => history.length > 1 ? history.back() : go('#/')} />}

@@ -17,148 +17,96 @@ function draw(w: number, h: number, ...layers: [number, number, string[]][]): Bi
   return out.map((r) => r.join(''));
 }
 
-// Little signs beside a face: a sparkle when done, z's asleep, a sweat drop, sound, a polite "!".
-const SPARKLE = [' * ', '***', ' * '], ZZ = ['ZZ ', ' Z ', 'ZZ ', '   ', 'zz', ' z', 'zz'], SWEAT = [' d', 'dd', 'dd'];
-const SOUND = [' l', '  l', '  l', ' l'], BANG = ['t', 't', 't', ' ', 't'];
-const SIGNS: Palette = { '*': '#ffc23c', z: '#b9b3d4', Z: '#8f88b0', d: '#6aa8ff', l: '#ff7aa2', t: '#ff5f87', k: '#c2475f', c: '#ff9bb3', e: '#2e2a40' };
+// ── Studio Chief (B1): one ink line, dot eyes, paper and vermilion. Chief is the white bean in the black bowler with
+// the red band; his personality lives in the brows, a small handlebar, the hat and two line arms. The crew are pastel
+// beans, each with one prop. Hand-drawn SVG; the phone renders the same drawings to PNGs (scripts/icons.mjs). ──
+export const INK = '#141A2A', RED = '#F0482A';
+/** The drawings have five poses; every app mood wears one. */
+export type Pose = 'listen' | 'work' | 'needs' | 'pleased' | 'rest';
+export const POSES: Pose[] = ['listen', 'work', 'needs', 'pleased', 'rest'];
+export const poseOf = (m: Mood | Pose = 'idle'): Pose =>
+  m === 'needs' || m === 'pleased' ? m : m === 'work' ? 'work' : m === 'happy' ? 'pleased' : m === 'rest' ? 'rest' : m === 'ask' || m === 'worried' || m === 'error' ? 'needs' : 'listen';
+type Opts = { vb?: string; floor?: boolean; wave?: boolean };
+const Z = 'font-family="Instrument Serif, Georgia, serif" font-style="italic"';
+let uid = 0;
 
-// ── Chief, the Gentleman: a round portrait head, 22×23 dots. Big eyes low on the face, brows that act, a walrus
-// handlebar that is his mouth (up when pleased, down when not) and a bowler he raises when he needs you, puts a
-// monocle in to work, and pulls over his eyes to rest. Every dot is placed by hand. ──
-export const CHIEF_PAL: Palette = { ...SIGNS, h: '#3b3552', H: '#6a6190', b: '#ff7aa2', y: '#ffd9a8', n: '#eba277', m: '#7a4b35', s: '#ffffff', T: '#c2475f', g: '#ffc23c' };
-/** At night his bowler catches the light, or it would vanish into the dark. */
-export const CHIEF_PAL_NIGHT: Palette = { ...CHIEF_PAL, h: '#6a5a9a', H: '#9c8cd0', e: '#1d1929' };
-const HEAD = [
-  '       yyyyyy', '      yyyyyyyy', '    yyyyyyyyyyyy', '   yyyyyyyyyyyyyy', '  yyyyyyyyyyyyyyyy', '  yyyyyyyyyyyyyyyy',
-  ' yyyyyyyyyyyyyyyyyy', ' yyyyyyyyyyyyyyyyyy', ' yyyyyyyyyyyyyyyyyy', ' yyyyyyyyyyyyyyyyyy', ' yyyyyyyyyyyyyyyyyy', ' yyyyyyyyyyyyyyyyyy',
-  '  yyyyyyyyyyyyyyyy', '  yyyyyyyyyyyyyyyy', '   yyyyyyyyyyyyyy', '    ssyyyyyyyyss', '   sssttsTTsttsss', '    sstt    ttss',
-];
-const HAT = ['       hhhhhh', '      hhhhhhhh', '      hHhhhhhh', '      hHhhhhhh', '      bbbbbbbb', '  hhhhhhhhhhhhhhhh'];
-// Content is a ∪: ends curled up, the lowest dots in the centre, no lobes — six faces smile through it. Pleased curls
-// deeper, across the whole face; the flat bar is worried; the ∩ stays for sad and rest alone.
-const MO = {
-  idle: ['  m              m', '  mm   mmmmmm   mm', '   mmmmmmmmmmmmmm', '      mmmmmmmm'],
-  up: [' m                m', '  mm            mm', '   mmmmmmmmmmmmmm', '     mmmmmmmmmm', '       mmmmmm'],
-  flat: ['     mmmmmmmmmm', '  mm  mmmmmmmm  mm'],
-  down: ['       mmmmmmmm', '   mmmmmmmmmmmmmm', '  mm            mm', '  m              m'],
-};
-const CHEEK = '  c      nn      c';
-/** One face per mood, from head row 3 down. Column ruler: 01234567890123456789. */
-const FACES: Record<Mood, string[]> = {
-  idle: ['', '    mmm      mmm', '', '     ee      ee', '     ee      ee', CHEEK, ...MO.idle],
-  blink: ['', '    mmm      mmm', '', '', '     ee      ee', CHEEK, ...MO.idle],
-  twitch: ['', '    mmm      mmm', '', '     ee      ee', '     ee      ee', CHEEK, '  m    mmmmmm    m', ...MO.idle.slice(1)],
-  work: ['', '             mmm', '    mmm      gg', '            geeg', '     ee     geeg', '  c      nn  gg  c', ...MO.idle],
-  ask: ['    mmm      mmm', '', '     ee      ee', '     ee      ee', '     ee      ee', CHEEK, ...MO.idle, '         kk'],
-  hello: ['    mmm      mmm', '', '', '     ee      ee', '     ee      ee', CHEEK, ...MO.up],
-  happy: ['    mmm      mmm', '', '', '    e  e    e  e', '   e    e  e    e', '  cc     nn     cc', ...MO.up],
-  listen: ['              mmm', '    mmm', '', '      ee      ee', '      ee      ee', CHEEK, ...MO.idle],
-  rest: ['', '', '', '    e  e    e  e', '     ee      ee', CHEEK, ...MO.down],
-  worried: ['      m      m', '    mm        mm', '', '    eee      eee', '    eee      eee', CHEEK, ...MO.flat],
-  error: ['      m      m', '    mm        mm', '', '     ee      ee', '    e          e', CHEEK, ...MO.down],
-};
-export function chief(mood: Mood = 'idle', bob = 0): Bitmap {
-  const lift = ({ ask: -2, hello: -2, rest: 2, error: -1 } as Record<string, number>)[mood] ?? 0; // raised to ask, over the eyes to rest, askew on error
-  const hat: [number, number, string[]] = [mood === 'error' ? 2 : 1, 2 + bob + lift, HAT];
-  const signs: [number, number, string[]][] = ({
-    happy: [[19, 1, SPARKLE]], rest: [[18, 0, ZZ]], worried: [[19, 8, SWEAT]], listen: [[19, 10, SOUND]], ask: [[20, 0, BANG]],
-  } as Record<string, [number, number, string[]][]>)[mood] ?? [];
-  return draw(22, 23, [1, 5 + bob, HEAD], [1, 8 + bob, FACES[mood]], hat, ...signs);
-}
-/** The cut for 48 px and below (the app icon, avatars, the list rows): the same bowler, band and round face, simplified
- *  to 12×10 dots, so the small one is still Chief. The mood is two cues: the moustache line is the mouth (∪ content,
- *  a deep ∪ pleased, ∩ sad, a wavy level line worried) and the eyes (^ arcs pleased, wide blocks worried, low with a
- *  tear sad, shut asleep). Only needs you (a red !, hat raised) and pleased (a sparkle) keep a sign at the edge. */
-const SMALL_HEAD = ['', '', '  yyyyyyy', ' yyyyyyyyy', 'yyyyyyyyyyy', 'yyyyyyyyyyy', 'yyyyyyyyyyy', 'yyyyyyyyyyy', ' yyyyyyyyy', '  yyyyyyy'];
-const SMALL_HAT = ['   hhhhh', '   bbbbb', 'hhhhhhhhhhh'];
-/** Features from row 4 down. Column ruler: 0123456789A. */
-const SMALL: Record<Mood, string[]> = {
-  idle: ['   e   e', ' c e   e c', ' m       m', '  mmmmmmm'],
-  blink: ['', ' c ee  ee c', ' m       m', '  mmmmmmm'],
-  twitch: ['   e   e', ' c e   e c', 'mm       mm', '  mmmmmmm'],
-  hello: ['   e   e', ' c e   e c', ' m       m', '  mmmmmmm'],
-  happy: ['   e   e', ' ce e e ec', 'm         m', ' m       m', '  mmmmmmm'],
-  work: ['   e  geg', ' c e  ggg', ' m       m', '  mmmmmmm'],
-  ask: ['   e   e', ' c e   e c', ' m       m', '  mmmmmmm'],
-  listen: ['    e   e', ' c  e   e c', '   m   m', '    mmm'],
-  rest: ['', '  ee   ee', '', '   mmmmm'],
-  worried: ['  ee   ee', '  ee   ee', '', ' m m m m m', '  m m m m'],
-  error: ['   e   e', '   e   e', '   d', '   mmmmm', ' mm     mm'],
-};
-export function chiefSmall(mood: Mood = 'idle'): Bitmap {
-  const lift = ({ ask: -1, rest: 1 } as Record<string, number>)[mood] ?? 0;
-  const sign: [number, number, string[]][] = ({ ask: [[11, 2, ['t', 't', ' ', 't']]], happy: [[11, 0, ['*']]] } as Record<string, [number, number, string[]][]>)[mood] ?? [];
-  return draw(12, 10, [0, 0, SMALL_HEAD], [0, 4, SMALL[mood]], [0, lift, SMALL_HAT], ...sign);
+/** Chief whole (viewBox 0 0 200 250, feet on y 232). */
+/** Chief's side shading: the ellipse cx 156 cy 178 rx 30 ry 120, its arc from the art's floor (y 240) up to where it
+ *  leaves his body over the dome (the old whole arc's first third, so it is drawn as the same curve), closed outside
+ *  the body. The body clip paints exactly what it did, and nothing measures past his outline or below his feet. */
+const SHADE = 'M130.3144 240A30 120 0 0 1 136.5685 86.5742H150V240Z';
+export function chiefSvg(mood: Mood | Pose = 'idle', o: Opts = {}) {
+  const m = poseOf(mood), g = `ch${++uid}`, lw = 3.4;
+  const body = 'M52 232V120a48 48 0 0 1 96 0V232Z';
+  const ey = m === 'work' ? 121 : 118;
+  const eyes = m === 'rest' ? '' : m === 'pleased' ? `<path d="M80 ${ey + 1}q6 -7 12 0M108 ${ey + 1}q6 -7 12 0" stroke="${INK}" stroke-width="3.2" fill="none" stroke-linecap="round"/>`
+    : `<circle cx="${m === 'listen' ? 88 : 86}" cy="${ey}" r="5.6" fill="${INK}"/><circle cx="${m === 'listen' ? 116 : 114}" cy="${ey}" r="5.6" fill="${INK}"/>`;
+  const brow = { listen: 'M78 104q8 -4 15 -1M107 100q8 -3 15 2', work: 'M78 106l14 3M108 109l14 -3', needs: 'M77 99q8 -7 16 -2M107 97q8 -5 16 2', pleased: 'M78 104q8 -4 15 0M107 104q8 -4 15 0', rest: '' }[m];
+  const tip = m === 'pleased' ? -5 : 0;
+  const tash = `<path d="M100 131C94 127 86 128 80 132C76 135 72 ${134 + tip} 71 ${129 + tip}C69 ${136 + tip} 74 141 81 140C88 139 95 137 100 135C105 137 112 139 119 140C126 141 131 ${136 + tip} 129 ${129 + tip}C128 ${134 + tip} 124 135 120 132C114 128 106 127 100 131Z" fill="${INK}"/>`;
+  const mouth = m === 'pleased' ? `<path d="M93 145q7 5 14 0" stroke="${INK}" stroke-width="2.8" fill="none" stroke-linecap="round"/>` : m === 'needs' ? `<ellipse cx="100" cy="146" rx="3" ry="2.6" fill="${INK}"/>` : '';
+  const hand = (x: number, y: number) => `<circle cx="${x}" cy="${y}" r="7" fill="#fff" stroke="${INK}" stroke-width="${lw - .6}"/>`;
+  const arm = (d: string) => `<path d="${d}" stroke="${INK}" stroke-width="${lw}" fill="none" stroke-linecap="round"/>`;
+  // The bowler never leaves his head: a pose only tilts it about the crown's seat (or pulls it over his eyes to nap).
+  // A thin paper edge keeps the black hat whole against a night background.
+  // `wave` (Chief's hero only, B1): calling for you, he lifts the bowler off his head by its brim instead of tipping it.
+  const wave = !!o.wave && m === 'needs';
+  const hatAt = wave ? 'translate(14 -34) rotate(-14 100 78)' : { listen: 'rotate(4 100 76)', work: '', needs: 'rotate(-7 100 78)', pleased: 'rotate(-5 100 78)', rest: 'translate(0 16) rotate(2 100 76)' }[m];
+  const hat = `<g class="hat"><g transform="${hatAt}"><path d="M50 78Q100 94 150 78" stroke="#fff" stroke-width="9.6" fill="none" stroke-linecap="round"/><path d="M68 77C68 51 82 37 100 37C118 37 132 51 132 77Z" fill="${INK}" stroke="#fff" stroke-width="2.2" stroke-linejoin="round"/><path d="M69 71H131" stroke="${RED}" stroke-width="5"/><path d="M50 78Q100 94 150 78" stroke="${INK}" stroke-width="5.2" fill="none" stroke-linecap="round"/><path d="M80 60C80 52 86 46 93 44" stroke="rgba(255,255,255,.28)" stroke-width="3" fill="none" stroke-linecap="round"/></g></g>`;
+  const arms = {
+    listen: arm('M54 166C44 184 44 198 48 210') + hand(48, 213) + arm('M146 164C160 160 156 148 132 146') + hand(128, 146),
+    work: arm('M54 166C60 184 74 192 88 192') + hand(90, 192) + `<g class="watch"><circle cx="102" cy="196" r="12" fill="#fff" stroke="${INK}" stroke-width="2.8"/><path d="M102 189v7l5 3" stroke="${INK}" stroke-width="2.4" fill="none" stroke-linecap="round"/></g><path d="M114 192C124 186 132 178 134 168" stroke="${INK}" stroke-width="1.6" fill="none" stroke-dasharray="2 3"/>` + arm('M146 166C156 184 156 198 152 210') + hand(152, 213),
+    needs: arm('M54 166C44 184 44 198 48 210') + hand(48, 213) + (wave ? arm('M146 162C172 140 178 82 164 42') + hand(163, 38) : arm('M146 162C166 146 172 112 160 80') + hand(158, 76)),
+    pleased: arm('M54 166C38 172 30 160 32 148') + hand(32, 144) + arm('M146 166C162 172 170 160 168 148') + hand(168, 144),
+    rest: arm('M54 170C70 190 112 190 132 176') + arm('M146 170C130 190 88 190 68 176') + hand(66, 175) + hand(134, 175),
+  }[m];
+  const marks = m === 'needs' ? `<path class="cue" d="${wave ? 'M180 62l9 -9M186 78l12 -3M176 50l6 -10' : 'M178 56l9 -9M186 70l12 -3M170 48l2 -12'}" stroke="${RED}" stroke-width="3.4" stroke-linecap="round"/>`
+    : m === 'rest' ? `<g class="zz"><text x="150" y="62" ${Z} font-size="30" fill="${INK}" opacity=".55">z</text><text x="168" y="40" ${Z} font-size="21" fill="${INK}" opacity=".4">z</text></g>`
+    : m === 'work' ? `<path d="M30 96l8 4M26 112h9" stroke="${RED}" stroke-width="3" stroke-linecap="round"/>` : '';
+  return `<svg viewBox="${o.vb ?? '0 0 200 250'}" xmlns="http://www.w3.org/2000/svg"><defs><clipPath id="${g}c"><path d="${body}"/></clipPath></defs>`
+    + (o.floor === false ? '' : `<ellipse cx="100" cy="235" rx="58" ry="4.5" fill="${INK}" opacity=".1"/>`)
+    + `<g class="body"><path d="${body}" fill="#fff"/><g clip-path="url(#${g}c)"><path d="${SHADE}" fill="#EEF1F6"/></g>`
+    + `<path d="${body}" fill="none" stroke="${INK}" stroke-width="${lw}" stroke-linejoin="round"/>`
+    + `<circle cx="76" cy="134" r="6.5" fill="${RED}" opacity=".2"/><circle cx="124" cy="134" r="6.5" fill="${RED}" opacity=".2"/>`
+    + `<g class="eyes">${eyes}</g>${brow ? `<path d="${brow}" stroke="${INK}" stroke-width="3.6" fill="none" stroke-linecap="round"/>` : ''}${tash}${mouth}`
+    + `<path d="M100 170L86 162V178ZM100 170L114 162V178Z" fill="${RED}" stroke="${INK}" stroke-width="2.4" stroke-linejoin="round"/><circle cx="100" cy="170" r="3.6" fill="${RED}" stroke="${INK}" stroke-width="2.2"/>`
+    + `${arms}${hat}</g>${marks}</svg>`;
 }
 
-/** The notification glyph: alpha-only, drawn as solid pixels (white on transparent) so it holds at 24 px. */
-export const NOTIFY: Bitmap = [
-  '...xxxxxx...', '..xxxxxxxx..', '..xxxxxxxx..', '............', 'xxxxxxxxxxxx', '............',
-  '..xx....xx..', '..xx....xx..', 'x..........x', 'xx..xxxx..xx', '.xxxxxxxxxx.', '..xxx..xxx..',
-];
+/** A crew member whole (viewBox 0 0 120 150, feet on y 140), with their one prop. */
+export function beanSvg(kind: Kind, mood: Mood | Pose = 'idle', o: Opts = {}) {
+  const m = poseOf(mood), lw = 2.6, f = PALS[kind].body, shut = kind === 'pip' || m === 'rest';
+  const body = 'M30 140V74a30 30 0 0 1 60 0V140Z';
+  const eyes = shut ? `<path d="M44 84q5 4 10 0M66 84q5 4 10 0" stroke="${INK}" stroke-width="2.4" fill="none" stroke-linecap="round"/>`
+    : m === 'pleased' ? `<circle cx="50" cy="80" r="3.4" fill="${INK}"/><circle cx="70" cy="80" r="3.4" fill="${INK}"/><path d="M54 92l5 5l8 -9" stroke="${INK}" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`
+    : `<circle cx="50" cy="82" r="3.6" fill="${INK}"/><circle cx="70" cy="82" r="3.6" fill="${INK}"/>`;
+  const prop = {
+    scout: (m === 'needs' ? `<g class="cue"><path d="M88 104C100 92 104 76 102 62" stroke="${INK}" stroke-width="${lw}" fill="none" stroke-linecap="round"/><circle cx="102" cy="58" r="5.4" fill="${RED}" stroke="${INK}" stroke-width="2"/></g>` : '')
+      + `<g class="prop"><path d="M64 98l26 -12l3 7l-26 12z" fill="#fff" stroke="${INK}" stroke-width="2" stroke-linejoin="round"/><path d="M84 89l3 7" stroke="${RED}" stroke-width="3"/></g>`,
+    reel: `<g class="prop"><path d="M28 80C28 50 92 50 92 80" stroke="${INK}" stroke-width="3.4" fill="none"/><rect x="22" y="74" width="11" height="18" rx="5.5" fill="${INK}"/><rect x="87" y="74" width="11" height="18" rx="5.5" fill="${INK}"/></g>`,
+    scribe: `<path d="M42 90h16M62 90h16" stroke="${INK}" stroke-width="2"/><path d="M42 90a8 6 0 0 0 16 0M62 90a8 6 0 0 0 16 0" fill="rgba(255,255,255,.5)" stroke="${INK}" stroke-width="2"/><rect x="58" y="108" width="30" height="22" rx="2" fill="#fff" stroke="${INK}" stroke-width="2"/><path d="M63 115h18M63 121h12" stroke="${INK}" stroke-width="1.6"/><g class="prop"><path d="M92 102l-10 18" stroke="${INK}" stroke-width="2.6" stroke-linecap="round"/><path d="M92 102l3 -5" stroke="${RED}" stroke-width="2.6" stroke-linecap="round"/></g>`,
+    tracer: `<g class="prop"><rect x="58" y="100" width="30" height="36" rx="3" fill="#fff" stroke="${INK}" stroke-width="2"/><rect x="66" y="96" width="14" height="7" rx="2" fill="${INK}"/><path d="M63 112l3 3l5 -5M63 124l3 3l5 -5" stroke="${RED}" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M74 113h9M74 125h9" stroke="${INK}" stroke-width="1.6"/></g>`,
+    pip: `<path d="M30 76C28 50 50 40 68 44C84 48 98 62 104 84C98 88 92 82 88 74Z" fill="#fff" stroke="${INK}" stroke-width="2.2" stroke-linejoin="round"/><path d="M34 62C46 58 70 58 84 64" stroke="${f}" stroke-width="5"/><circle cx="104" cy="88" r="6" fill="${RED}" stroke="${INK}" stroke-width="2"/>`,
+  }[kind];
+  const zz = shut ? `<text class="zz" x="90" y="34" ${Z} font-size="20" fill="${INK}" opacity=".5">z</text>` : '';
+  const cushion = kind === 'pip' ? `<ellipse cx="60" cy="140" rx="40" ry="9" fill="${f}" stroke="${INK}" stroke-width="2.2"/>` : '';
+  return `<svg viewBox="${o.vb ?? '0 0 120 150'}" xmlns="http://www.w3.org/2000/svg">${o.floor === false ? '' : `<ellipse cx="60" cy="143" rx="34" ry="3.5" fill="${INK}" opacity=".1"/>`}${cushion}`
+    + `<g class="body"><path d="${body}" fill="${f}" stroke="${INK}" stroke-width="${lw}" stroke-linejoin="round"/><g class="eyes">${eyes}</g>${prop}</g>${zz}</svg>`;
+}
 
-// ── The pals: round heads that share Chief's face, one colour each and ONE shape that breaks the silhouette
-// (film-reel ears, an explorer's helmet, an ink-drop point, a sprout, headphones), 18×17 dots ──
+/** Head and shoulders, for faces and avatars: square crops of the same drawings. */
+export const headSvg = (who: Kind | 'chief', mood: Mood | Pose = 'idle') =>
+  who === 'chief' ? chiefSvg(mood, { vb: '30 28 140 140', floor: false }) : beanSvg(who, mood, { vb: '8 26 104 104', floor: false });
+
+// ── The crew's colours: the bean's pastel and the tile behind a face ──
 export type Kind = 'reel' | 'scout' | 'scribe' | 'tracer' | 'pip';
-export const PALS: Record<Kind, { body: string; dark: string; soft: string }> = {
-  reel: { body: '#ffb199', dark: '#e0664a', soft: '#ffe6dd' },
-  scout: { body: '#a9cbff', dark: '#4d7fd6', soft: '#e3eeff' },
-  scribe: { body: '#b5ecc4', dark: '#3f9d63', soft: '#e3f7e9' },
-  tracer: { body: '#d9c2ff', dark: '#8a5fd6', soft: '#f0e8ff' },
-  pip: { body: '#ffe38f', dark: '#d9a21c', soft: '#fff5d6' },
+export const PALS: Record<Kind, { body: string; soft: string }> = {
+  reel: { body: '#DCEBFF', soft: '#EDF4FF' },
+  scout: { body: '#FFE3DB', soft: '#FFF1EC' },
+  scribe: { body: '#FFF3C8', soft: '#FFF9E3' },
+  tracer: { body: '#DDF4E6', soft: '#EEF9F2' },
+  pip: { body: '#ECE6FF', soft: '#F5F2FF' },
 };
-const PAL_SHAPES: Record<Kind, { ey: number; body: string[]; top: string[] }> = {
-  reel: { ey: 10,
-    body: ['', '', '', '', '', '       bbbb', '    bbbbbbbbbb', '   bbbbbbbbbbbb', '  bbbbbbbbbbbbbb', ' bbbbbbbbbbbbbbbb', ' bbbbbbbbbbbbbbbb', ' bbbbbbbbbbbbbbbb', ' bbbbbbbbbbbbbbbb', '  bbbbbbbbbbbbbb', '   bbbbbbbbbbbb', '    bbbbbbbbbb', '       bbbb'],
-    top: ['', '   DD        DD', ' DDDDDD    DDDDDD', ' DDSSDD    DDSSDD', ' DDDDDD    DDDDDD', ' DSDDSD    DSDDSD', ' DDDDDD    DDDDDD', '  DDDD      DDDD'] },
-  scout: { ey: 9,
-    body: ['', '', '', '', '', '      bbbbbb', '     bbbbbbbb', '    bbbbbbbbbb', '   bbbbbbbbbbbb', '   bbbbbbbbbbbb', '   bbbbbbbbbbbb', '   bbbbbbbbbbbb', '   bbbbbbbbbbbb', '   bbbbbbbbbbbb', '    bbbbbbbbbb', '     bbbbbbbb', '       bbbb'],
-    top: ['', '', '     DDDDDDDD', '    DDDSDDDDDD', '    DDDSDDDDDD', '    DDDDDDDDDD', ' DDDDDDDDDDDDDDDD'] },
-  scribe: { ey: 10,
-    body: ['', '        bb', '       bbbb', '       bbbb', '      bbbbbb', '     bbbbbbbb', '     bbbbbbbb', '   bbbbbbbbbbbb', '   bbbbbbbbbbbb', '  bbbbbbbbbbbbbb', '  bbbbbbbbbbbbbb', '  bbbbbbbbbbbbbb', '  bbbbbbbbbbbbbb', '   bbbbbbbbbbbb', '   bbbbbbbbbbbb', '     bbbbbbbb', '       bbbb'],
-    top: ['', '         D', '         D', '         D'] },
-  pip: { ey: 10,
-    body: ['', '', '', '', '', '', '', '     bbbbbbbb', '    bbbbbbbbbb', '   bbbbbbbbbbbb', '   bbbbbbbbbbbb', '   bbbbbbbbbbbb', '   bbbbbbbbbbbb', '   bbbbbbbbbbbb', '    bbbbbbbbbb', '     bbbbbbbb', '      D    D'],
-    top: ['', '          GG', '      GG GGGG', '     GGGG GG', '      GG G', '         G', '         G'] },
-  tracer: { ey: 9,
-    body: ['', '', '', '', '', '     bbbbbbbb', '    bbbbbbbbbb', '   bbbbbbbbbbbb', '  bbbbbbbbbbbbbb', '  bbbbbbbbbbbbbb', '  bbbbbbbbbbbbbb', '  bbbbbbbbbbbbbb', '  bbbbbbbbbbbbbb', '   bbbbbbbbbbbb', '    bbbbbbbbbb', '     bbbbbbbb', '        bb'],
-    top: ['', '', '     DDDDDDDD', '   DDD      DDD', '  DD          DD', ' DD            DD', ' D              D', ' D              D', 'DDD            DDD', 'DDD            DDD', 'DDD            DDD', 'DDD            DDD'] },
-};
-const PAL_EYES: Record<Mood, string[]> = {
-  idle: ['ee', 'ee'], blink: ['', 'ee'], twitch: ['ee', 'ee'], rest: ['', 'ee'], work: ['', 'ee', 'ee'], ask: ['ee', 'ee', 'ee'],
-  hello: [' ee', 'e  e'], happy: [' ee', 'e  e'], listen: [' ee', ' ee'], worried: ['e', 'ee'], error: ['e', 'ee'],
-};
-const PAL_MOUTH: Partial<Record<Mood, string[]>> = { happy: ['k  k', ' kk'], ask: [' kk', ' kk'], error: [' kk', 'k  k'], listen: ['  e'] };
-export function pal(kind: Kind, mood: Mood = 'idle'): Bitmap {
-  const { ey, body, top } = PAL_SHAPES[kind];
-  const a = 5, b = 11, off = mood === 'happy' || mood === 'hello' ? -1 : 0, y = mood === 'ask' ? ey - 1 : ey;
-  const eyes: [number, number, string[]][] = mood === 'rest' ? [[a - 1, ey, ['e  e', ' ee']], [b - 1, ey, ['e  e', ' ee']]] : [[a + off, y, PAL_EYES[mood]], [b + off, y, PAL_EYES[mood]]];
-  const signs: [number, number, string[]][] = ({
-    happy: [[0, 2, SPARKLE], [15, 4, SPARKLE]], rest: [[15, 0, ZZ.slice(0, 3)]], worried: [[16, 6, SWEAT]], ask: [[17, 0, BANG]], listen: [[15, 8, SOUND]],
-  } as Record<string, [number, number, string[]][]>)[mood] ?? [];
-  return draw(18, 17, [0, 0, body], [0, mood === 'ask' ? -1 : 0, top], ...eyes, [7, ey + 3, PAL_MOUTH[mood] ?? [' ee']], [a - 2, ey + 2, ['c']], [b + 3, ey + 2, ['c']], ...signs);
-}
-/** A bitmap as crisp square pixels in an SVG, `pitch` units a dot, each run of one colour a single rect. With an
- *  `outline` colour every lit dot gets a one-dot edge around it (the sprite then grows a dot on each side), so a
- *  mascot reads on any wall. The web office draws it as an image; scripts/icons.mjs renders the phone's PNGs from it. */
-/** The office sprites' edge: Chief's ink. */
-export const EDGE = '#2e2a40';
-export function spriteSvg(rows: Bitmap, pal: Palette, pitch = 1, outline = '') {
-  const pad = outline ? 1 : 0, w = rows[0].length + 2 * pad, h = rows.length + 2 * pad;
-  const lit = (x: number, y: number) => !!pal[rows[y - pad]?.[x - pad]];
-  const at = (x: number, y: number) => (lit(x, y) ? pal[rows[y - pad][x - pad]]
-    : outline && [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => lit(x + dx, y + dy)) ? outline : '');
-  let s = '';
-  for (let y = 0; y < h; y++) for (let x = 0; x < w;) {
-    const c = at(x, y);
-    let n = 1;
-    while (c && x + n < w && at(x + n, y) === c) n++;
-    if (c) s += `<rect x="${x * pitch}" y="${y * pitch}" width="${n * pitch}" height="${pitch}" fill="${c}"/>`;
-    x += n;
-  }
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w * pitch}" height="${h * pitch}" viewBox="0 0 ${w * pitch} ${h * pitch}" shape-rendering="crispEdges">${s}</svg>`;
-}
-export const palPalette = (kind: Kind): Palette => ({ ...SIGNS, b: PALS[kind].body, D: PALS[kind].dark, S: PALS[kind].soft, G: '#5fc27e' });
 
 // ── The logo: a dot house with a smile, and the wordmark in the same dots ──
 export const HOUSE: Bitmap = [

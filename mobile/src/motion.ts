@@ -44,9 +44,9 @@ export function Rise({ reduce, delay = 0, children }: { reduce: boolean; delay?:
 }
 
 // ---------- the office ----------
-// The office moves only when something lands (a step, a new thing, a question, a finished job): never on a timer,
-// so a quiet room runs no animation at all. Each move is short and runs on the native driver; with the app put
-// away none starts, and Reduce Motion keeps the room still.
+// Each member wears a calm loop for their status (working, resting, needs you), and a move lands with news (a step,
+// a new thing, a question, a finished job). Every move runs on the native driver, never a JS timer; with the app put
+// away none runs, and Reduce Motion keeps the room still on each pose as drawn.
 
 /** Whether the app is on screen. */
 export function useAwake() {
@@ -108,17 +108,51 @@ export function Land({ fresh, reduce, awake, style, children }: { fresh: boolean
     transform: [{ translateY: v.interpolate({ inputRange: [0, 1], outputRange: [-16, 0] }) }] }] }, children);
 }
 
-/** A blink when a step lands: true for a moment after `beat` changes. Reduce Motion never blinks. */
-export function useBlink(beat: unknown, reduce: boolean, awake: boolean) {
-  const [on, setOn] = useState(false);
-  const was = useRef(beat);
+/** A member's calm loop for their pose: working nods over the work, resting breathes, needs-you leans in for
+ *  attention; pleased and listening hold still. Stops in the background and under Reduce Motion. */
+export function Loop({ pose, reduce, awake, style, children }: { pose: string; reduce: boolean; awake: boolean; style?: StyleProp<ViewStyle>; children: ReactNode }) {
+  const [v] = useState(() => new Animated.Value(0));
+  const ms = pose === 'work' ? 1400 : pose === 'rest' ? 3200 : pose === 'needs' ? 1600 : 0;
   useEffect(() => {
-    if (Object.is(was.current, beat)) return;
-    was.current = beat;
+    v.setValue(0);
+    if (reduce || !awake || !ms) return;
+    const a = Animated.loop(Animated.sequence([
+      Animated.timing(v, { toValue: 1, duration: ms / 2, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      Animated.timing(v, { toValue: 0, duration: ms / 2, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+    ]));
+    a.start();
+    return () => a.stop();
+  }, [ms, reduce, awake]);
+  const move = pose === 'rest' ? [{ translateY: v.interpolate({ inputRange: [0, 1], outputRange: [0, -1] }) }, { scaleY: v.interpolate({ inputRange: [0, 1], outputRange: [1, 1.03] }) }]
+    : pose === 'needs' ? [{ rotate: v.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '-5deg'] }) }, { translateY: v.interpolate({ inputRange: [0, 1], outputRange: [0, -2] }) }]
+      : [{ translateY: v.interpolate({ inputRange: [0, 1], outputRange: [0, 2] }) }, { rotate: v.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '-2deg'] }) }];
+  return createElement(Animated.View, { style: [style, { transform: move }] }, children);
+}
+
+/** A music note rising off whoever is playing (Reel at work), every 2.4 s; none under Reduce Motion or away. */
+export function Note({ reduce, awake, style, children }: { reduce: boolean; awake: boolean; style?: StyleProp<ViewStyle>; children: ReactNode }) {
+  const [v] = useState(() => new Animated.Value(0));
+  useEffect(() => {
+    v.setValue(0);
     if (reduce || !awake) return;
-    setOn(true);
-    const t = setTimeout(() => setOn(false), 170);
-    return () => { clearTimeout(t); setOn(false); };
-  }, [beat]);
-  return on;
+    const a = Animated.loop(Animated.timing(v, { toValue: 1, duration: 2400, easing: Easing.out(Easing.quad), useNativeDriver: true }));
+    a.start();
+    return () => a.stop();
+  }, [reduce, awake]);
+  if (reduce) return null;
+  return createElement(Animated.View, { pointerEvents: 'none', style: [style, { opacity: v.interpolate({ inputRange: [0, 0.3, 1], outputRange: [0, 1, 0] }),
+    transform: [{ translateX: v.interpolate({ inputRange: [0, 1], outputRange: [0, 8] }) }, { translateY: v.interpolate({ inputRange: [0, 1], outputRange: [6, -14] }) }] }] }, children);
+}
+
+/** Done hand-off: a page travels `dx`,`dy` points (desk into the tray box), whole until it lands, once when `beat` changes, then is gone. Reduce Motion
+ *  and the background skip the journey: the tray's count is the end state. */
+/** The done page: it reaches the box's mouth (dx, dy) whole by 72%, settles in by `sink`, and fades only after 88%. */
+export function Fly({ beat, dx, dy, sink, reduce, awake, style, children }: { beat: unknown; dx: number; dy: number; sink: number; reduce: boolean; awake: boolean; style?: StyleProp<ViewStyle>; children: ReactNode }) {
+  const [v] = useState(() => new Animated.Value(1));
+  useOnBeat(beat, reduce || !awake, () => v.setValue(1), () => { v.setValue(0); return Animated.timing(v, { toValue: 1, duration: 1700, easing: Easing.linear, useNativeDriver: true }); });
+  const go = Easing.inOut(Easing.cubic);
+  return createElement(Animated.View, { pointerEvents: 'none', style: [style, { opacity: v.interpolate({ inputRange: [0, 0.88, 1], outputRange: [1, 1, 0] }),
+    transform: [{ translateX: v.interpolate({ inputRange: [0, 0.72, 1], outputRange: [0, dx, dx], easing: go }) },
+      { translateY: v.interpolate({ inputRange: [0, 0.72, 0.88, 1], outputRange: [0, dy, dy + sink / 2, dy + sink], easing: go }) },
+      { scale: v.interpolate({ inputRange: [0, 0.72, 1], outputRange: [1, 1, 0.85] }) }] }] }, children);
 }

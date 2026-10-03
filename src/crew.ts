@@ -419,11 +419,11 @@ export class Crew {
       const ready = new Set(disk.botTools(this.cfg, b.id).filter((t) => t.granted && t.ready).map((t) => t.id));
       // A tool the bot does not have: the promise is not made. An app they haven't connected: it is, with what's missing.
       return (disk.botConfig(this.cfg, b.id).ideas ?? []).filter((i) => i.needs.every((n) => ready.has(n) || APPS[n]))
-        .map((i) => ({ bot: b.id, promise: i.promise, ask: i.ask, group: i.group ?? 'life',
+        .map((i) => ({ bot: b.id, promise: i.promise, ask: i.ask, title: i.title, line: i.line, group: i.group ?? 'life',
           // Two of the household's Google apps name one thing: the row says "Google", not "Google and Google".
           needs: [...new Set(i.needs.filter((n) => !ready.has(n) && !on.has(n)).map((n) => (APPS[n] ? (APPS[n].google && !house ? 'Google' : APPS[n].name) : '')))] }));
     });
-    const hire = disk.listTemplates(this.cfg).filter((t) => !hired.has(t.id)).flatMap((t) => (t.ideas ?? []).filter((i) => !(i.needs ?? []).length).map((i) => ({ bot: t.id, promise: i.promise, ask: i.ask, group: i.group ?? 'life', needs: [], hire: t.id }))).sort((a, b) => Number(b.group === 'goal') - Number(a.group === 'goal')).slice(0, 3);
+    const hire = disk.listTemplates(this.cfg).filter((t) => !hired.has(t.id)).flatMap((t) => (t.ideas ?? []).filter((i) => !(i.needs ?? []).length).map((i) => ({ bot: t.id, promise: i.promise, ask: i.ask, title: i.title, line: i.line, group: i.group ?? 'life', needs: [], hire: t.id }))).sort((a, b) => Number(b.group === 'goal') - Number(a.group === 'goal')).slice(0, 3);
     // The six-row cap counts the jobs they can hand over now, hired or to hire; waiting rows ride along uncapped (ponytail: no template set has more than a screenful; cap them when one does).
     return [...rows.filter((r) => !r.needs.length).concat(hire).slice(0, 6), ...rows.filter((r) => r.needs.length)];
   }
