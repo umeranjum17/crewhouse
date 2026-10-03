@@ -217,17 +217,21 @@ function lay(order: (A.OfficeMember | 'chief')[], v: A.OfficeView, trayText: str
   const compact = layAt(order, sts, trayText, true);
   return compact.s < 1 ? packed(order, sts) : compact;
 }
-/** A packed row: compact desks, the tray box alone at the row's end (clear of Chief's cane), and its Tray caption in the
- *  floor band under the box, so no bubble width is reserved in the row and nobody shrinks for a label. */
+/** A packed row: compact desks, the tray box on clear floor just right of Chief, under his cue (41 right of him, clear of
+ *  his body and floor shadow), and its Tray caption in the floor band under the box, so no bubble width is reserved in
+ *  the row. The floor keeps one scale whatever its states (five 54-wide stations, Chief and the box), so a finish
+ *  re-lays who moved and never resizes anyone. */
 function packed(order: (A.OfficeMember | 'chief')[], sts: Station[]) {
+  const items: { m: Spot['m']; st: Station; tray: boolean }[] = order.map((m, i) => ({ m, st: sts[i], tray: false }));
+  items.splice(sts.indexOf('chief') + 1, 0, { m: 'tray', st: 'tray', tray: true });
   let cur = 0;
-  const spots: Spot[] = [...order.map((m, i) => ({ m, st: sts[i], tray: false })), { m: 'tray' as const, st: 'tray' as Station, tray: true }].map((it, i, all) => {
-    const [l, r] = it.tray ? [all[i - 1]?.st === 'chief' ? 34 : 24, 20] : TIGHT[it.st];
+  const spots: Spot[] = items.map((it) => {
+    const [l, r] = it.tray ? [15, 20] : it.st === 'chief' ? [32, 26] : TIGHT[it.st];
     const x = cur + l; cur = x + r;
     return { ...it, x, tight: true };
   });
-  const s = Math.min(1, W / cur), x0 = 180 - (cur * s) / 2;
-  return { spots, s, x0, X: (x: number) => x0 + x * s, Y: (y: number) => G + (y - G) * s, tight: true, bubble: undefined, trayX: spots[spots.length - 1].x };
+  const span = Math.max(cur, 54 * (order.length - 1) + 93), s = Math.min(1, W / span), x0 = 180 - (span * s) / 2;
+  return { spots, s, x0, X: (x: number) => x0 + x * s, Y: (y: number) => G + (y - G) * s, tight: true, bubble: undefined, trayX: spots.find((p) => p.tray)!.x };
 }
 function layAt(order: (A.OfficeMember | 'chief')[], sts: Station[], trayText: string, compact: boolean) {
   const pad = compact ? TIGHT : PAD, ink = compact ? INKT : INK;

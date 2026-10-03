@@ -1905,7 +1905,10 @@ test('J5 repairs stay in: the night look paints first, the job row is never cut 
   assert.match(office, /<path className="o-pointer" d=\{`M\$\{x - 4\} \$\{y \+ 1\}L\$\{x\} \$\{G \+ 1\.2\}/);
   // 147/148: a crowded row packs its desks (compact) before it scales, all five standing; the page is
   // drawn at the figures' size on both sides.
-  assert.match(office, /it\.tray \? \[all\[i - 1\]\?\.st === 'chief' \? 34 : 24, 20\]/, 'a packed row reserves only the box, no bubble width');
+  assert.match(office, /it\.tray \? \[15, 20\] : it\.st === 'chief' \? \[32, 26\] : TIGHT\[it\.st\]/, 'a packed row reserves only the box, no bubble width');
+  // 172: the packed box stands just right of Chief, and the floor keeps one scale whatever its states.
+  assert.match(office, /items\.splice\(sts\.indexOf\('chief'\) \+ 1, 0, \{ m: 'tray', st: 'tray', tray: true \}\);/);
+  assert.match(office, /const span = Math\.max\(cur, 54 \* \(order\.length - 1\) \+ 93\), s = Math\.min\(1, W \/ span\)/);
   // 162/163: the box on clear floor beside whoever finished (34 left of them, their station 55), the bubble clear of ink
   // and furniture; a floor of five always takes the compact ones (no swap at a finish), a smaller row only when full.
   assert.match(office, /const full = order\.length > 5 \? undefined : layAt\(order, sts, trayText, false\);\n\s*if \(full && full\.s >= 1\) return full;\n\s*const compact = layAt\(order, sts, trayText, true\);\n\s*return compact\.s < 1 \? packed\(order, sts\) : compact;/, 'a crowded row packs before it scales');

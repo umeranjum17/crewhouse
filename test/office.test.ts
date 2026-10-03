@@ -311,11 +311,11 @@ test('at 1, 5, 12 and 30 crew and in the B1 mock\'s house, on a phone and a comp
         }
         if (n === 30) assert.ok(m.more > 0, `${at}: a big crew is counted under "+N"`);
         // Mock size (147, 148, 152): a row the stage holds is at scale 1; one it does not first packs its desks and only then
-        // scales. Five waiting on you is the tightest ordinary row: all five stand, packed, at 0.892 (0.956 once Reel has
-        // finished), the Tray caption under its box in the floor band rather than a bubble's width in the row.
+        // scales. Five waiting on you is the tightest ordinary row: all five stand, packed, at the floor's one scale 0.953
+        // before and after Reel finishes (172), the box just right of Chief and the Tray caption under it in the floor band.
         assert.ok(m.tight || m.scale === 1, `${at}: a row that is not packed stands at the mock's own scale (${m.scale})`);
         assert.ok(m.scale >= 0.89, `${at}: no row of five shrinks past the packed five-waiting row (${m.scale})`);
-        if (demo === 'office' || demo === 'after') assert.deepEqual([m.seated, m.more, m.tight], [5, 0, true], `${at}: five on the floor, packed, nobody under "+N"`);
+        if (demo === 'office' || demo === 'after') assert.deepEqual([m.seated, m.more, m.tight, m.scale], [5, 0, true, 0.953], `${at}: five on the floor, packed at one scale, nobody under "+N"`);
         if (demo === 'b1' || demo === 'b1after') assert.deepEqual([m.seated, m.scale, m.tight], [5, 1, false], `${at}: the B1 house stands all five at the mock's own spacing and scale`);
         assert.ok(m.tray2?.onTop, `${at}: the tray box is on the floor in front of everyone, never behind a desk or a body (${JSON.stringify(m.tray2)})`);
         assert.ok(m.tray2.over && m.tray2.gap >= 0 && m.tray2.gap <= 40, `${at}: the Tray label's pointer is on the box and close to it (${JSON.stringify(m.tray2)})`);
