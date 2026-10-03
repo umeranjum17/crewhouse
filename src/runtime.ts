@@ -19,7 +19,7 @@ export type RunEvent =
   | { type: 'usage'; tokens: number }
   | { type: 'learned'; skill: string; id: string };
 export type RunEnd = { ok: true; text: string } | { ok: false; aborted: true } |
-  { ok: false; kind: 'signed-out' | 'resting' | 'plan' | 'network' | 'other'; until?: number; message: string };
+  { ok: false; kind: 'signed-out' | 'resting' | 'plan' | 'network' | 'other' | 'output'; until?: number; message: string };
 export type SignInStep = { url?: string; code?: string; waiting: boolean; done?: boolean; error?: string };
 export interface AgentRuntime {
   start(host: ToolHost): Promise<unknown>;

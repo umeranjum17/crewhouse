@@ -26,8 +26,8 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: npm
       - run: npm ci --no-audit --no-fund
-      # Bot desktops and the sandboxed shell, so the cross-bot browser test runs rather than skips (Ubuntu's AppArmor blocks bwrap's namespaces by default).
-      - run: sudo apt-get update -qq && sudo apt-get install -y -qq xvfb bubblewrap && sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      # Private desktops, capture libraries and the sandboxed shell; cookie isolation must run, not skip.
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq xvfb bubblewrap libpipewire-0.3-0t64 libxkbcommon0 libevdev2 libxcursor1 libx11-6 libwayland-client0 libstdc++6 && sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - run: node scripts/prepare-engine.mjs "$RUNNER_TEMP/engine-prepare"
       - run: npm audit signatures --prefix runtime/openclaw
       - run: npm run check

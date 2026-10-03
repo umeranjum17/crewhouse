@@ -12,6 +12,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { OpenClawRuntime } from '../src/openclaw/runtime.ts';
 import { faked } from './kit-fake.ts';
+import { commit } from '../src/bots.ts';
 
 const fixture = () => {
   const state = mkdtempSync(join(tmpdir(), 'crewhouse-curation-'));
@@ -27,6 +28,49 @@ const fixture = () => {
   return { state, runtime, ws, skill, read, git, done: () => rmSync(state, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) };
 };
 
+test('curation snapshots: initial empty, repeated empty and unchanged nonempty have real revisions', () => {
+  const f = fixture();
+  try {
+    const first = f.runtime.captureLearned();
+    assert.equal(f.git('cat-file', '-t', first), 'commit');
+    assert.equal(f.git('ls-tree', '-r', first), '', 'the first snapshot is truly empty');
+    const second = f.runtime.captureLearned();
+    assert.notEqual(second, first);
+    assert.equal(f.git('rev-parse', '--short', `${second}^`), first);
+    assert.equal(f.git('ls-tree', '-r', second), '', 'no placeholder was seeded');
+    f.skill('fare-check', '\n  # Fare Check\n\tkeeps spaces   \n');
+    const learned = f.runtime.captureLearned();
+    const repeated = f.runtime.captureLearned();
+    assert.notEqual(repeated, learned);
+    assert.equal(f.git('cat-file', '-t', repeated), 'commit');
+    assert.equal(f.git('rev-parse', '--short', `${repeated}^`), learned);
+    assert.equal(f.git('rev-parse', `${repeated}^{tree}`), f.git('rev-parse', `${learned}^{tree}`));
+    assert.match(f.git('ls-tree', '-r', repeated), /fare-check\/SKILL.md/);
+    assert.equal(f.git('log', '--format=%s').split('\n').length, 4);
+  } finally { f.done(); }
+});
+
+test('default commits still scope paths and refuse no-change commits', () => {
+  const f = fixture();
+  try {
+    mkdirSync(f.ws(), { recursive: true });
+    assert.equal(commit(f.ws(), ['.'], 'Default empty'), null);
+    writeFileSync(join(f.ws(), 'one'), 'first');
+    writeFileSync(join(f.ws(), 'two'), 'unrelated');
+    assert.ok(commit(f.ws(), ['one'], 'First default'));
+    f.git('add', 'two');
+    writeFileSync(join(f.ws(), 'one'), 'changed');
+    const head = commit(f.ws(), ['one'], 'Changed default');
+    assert.ok(head);
+    assert.match(f.git('ls-tree', '-r', head), /one$/);
+    assert.doesNotMatch(f.git('ls-tree', '-r', head), /two/);
+    assert.match(f.git('status', '--porcelain'), /A  two/);
+    assert.equal(commit(f.ws(), ['one'], 'Unchanged default'), null);
+    assert.equal(f.git('rev-parse', '--short', 'HEAD'), head);
+    assert.match(f.git('status', '--porcelain'), /A  two/);
+  } finally { f.done(); }
+});
+
 test('curation capture: verified before the review, and a failed capture refuses it', async () => {
   const f = fixture();
   try {
@@ -38,11 +82,12 @@ test('curation capture: verified before the review, and a failed capture refuses
     const body = f.git('show', `${hash}:fare-check/SKILL.md`);
     assert.equal(body, '# Fare Check');
 
-    // A workspace that cannot be captured (the folder is gone) refuses the review instead of running it.
-    rmSync(f.ws(), { recursive: true, force: true });
+    // A real index lock refuses capture even though an older valid revision exists.
+    writeFileSync(join(f.ws(), '.git', 'index.lock'), 'owned test lock');
     assert.throws(() => f.runtime.captureLearned(), /capture failed/);
-    // The learned-skill folder is untouched by the refusal: nothing was deleted to make the capture work.
-    f.skill('fare-check', '# Fare Check');
+    assert.equal(f.read('fare-check'), '# Fare Check');
+    assert.equal(f.git('rev-parse', '--short', 'HEAD'), hash);
+    rmSync(join(f.ws(), '.git', 'index.lock'));
     assert.equal(f.runtime.captureLearned().length > 0, true);
   } finally { f.done(); }
 });
@@ -151,14 +196,36 @@ test('the current review end to end: one window allows one reviewer call, and it
   } finally { await f.done(); }
 });
 
-test('curation trigger: a refused capture never opens the workshop window', async () => {
-  const state = mkdtempSync(join(tmpdir(), 'crewhouse-curation-run-'));
-  const runtime = new OpenClawRuntime(state);
-  let armed = 0;
+test('curation trigger: real capture failures never arm or call the engine or mutate skills', async () => {
+  const f = fixture();
+  const { runtime } = f;
+  let armed = 0, calls = 0;
   runtime.kit.allowOnce = () => { armed++; };
+  runtime.kit.call = async () => { calls++; throw new Error('no engine call permitted'); };
+  const oldPath = process.env.PATH;
   try {
-    // No workspace on disk at all: the capture would fail, so the review must be refused and the window never opens.
-    await assert.rejects(() => runtime.runCollectionReview(), /capture failed|not enabled|not ready/i);
-    assert.equal(armed, 0, 'the workshop window never opened');
-  } finally { await runtime.stop().catch(() => {}); rmSync(state, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); }
+    f.skill('fare-check', '  # Fare Check\n\tunchanged bytes   \n');
+    const capture = runtime.captureLearned();
+    const bytes = readFileSync(join(f.ws(), 'fare-check', 'SKILL.md'));
+    for (const failure of ['locked', 'unavailable', 'corrupt']) {
+      if (failure === 'locked') writeFileSync(join(f.ws(), '.git', 'index.lock'), 'owned test lock');
+      if (failure === 'unavailable') process.env.PATH = '';
+      if (failure === 'corrupt') writeFileSync(join(f.ws(), '.git', 'HEAD'), 'invalid reference');
+      const metadata = ['HEAD', 'index'].map((name) => [name, readFileSync(join(f.ws(), '.git', name))] as const);
+      try {
+        await assert.rejects(() => runtime.runCollectionReview(), /capture failed/);
+        assert.equal(armed, 0, failure);
+        assert.equal(calls, 0, failure);
+        assert.ok(readFileSync(join(f.ws(), 'fare-check', 'SKILL.md')).equals(bytes), failure);
+        for (const [name, before] of metadata) assert.ok(readFileSync(join(f.ws(), '.git', name)).equals(before), `${failure}: ${name}`);
+      } finally {
+        if (failure === 'locked') rmSync(join(f.ws(), '.git', 'index.lock'));
+        if (failure === 'unavailable') { if (oldPath === undefined) delete process.env.PATH; else process.env.PATH = oldPath; }
+      }
+      if (failure !== 'corrupt') assert.equal(f.git('rev-parse', '--short', 'HEAD'), capture);
+    }
+  } finally {
+    if (oldPath === undefined) delete process.env.PATH; else process.env.PATH = oldPath;
+    f.done();
+  }
 });

@@ -19,7 +19,7 @@
     "@byokit/connect": "0.1.0",
     "@byokit/decide": "0.4.7",
     "@byokit/link": "0.7.0",
-    "@byokit/openclaw": "0.3.6",
+    "@byokit/openclaw": "0.5.0",
     "@byokit/reach": "0.5.0",
     "@byokit/relay": "0.5.0",
     "@byokit/secrets": "0.5.0",
