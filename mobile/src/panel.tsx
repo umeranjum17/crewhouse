@@ -184,7 +184,7 @@ function Reply({ who, task, state, onAsk, asking, canAct, refresh }: { who: A.He
   const card = A.needsYou(state).find((c) => c.helper === who.id);
   const chat = () => void open('crewhouse://ask');
   return <>
-    <View style={s.row}><Face who={who} size={40} /><T style={[s.h2, { flex: 1 }]}>{reply ? `${who.name} sent an answer` : reply === '' ? (inChat ? "Chief answered in his chat" : `${who.name} could not do this job`) : waits || (by === who.id ? `${who.name} works on it…` : 'Chief works on it…')}</T></View>
+    <View style={s.row}><Face who={who} size={40} /><T style={[s.h2, { flex: 1 }]}>{reply ? `${who.name} sent an answer` : reply === '' ? (inChat ? "Chief answered in Chief's chat" : `${who.name} could not do this job`) : waits || (by === who.id ? `${who.name} works on it…` : 'Chief works on it…')}</T></View>
     {!!reply && <ScrollView style={[s.listGroup, { backgroundColor: t.solid, borderColor: t.line, maxHeight: 280 }]} contentContainerStyle={{ padding: 12 }}>
       <T>{reply}</T>
     </ScrollView>}
@@ -268,7 +268,7 @@ function Write({ box, who, state }: { box: Exclude<Box, null>; who: A.Helper; st
     </View>
   </>;
   return <>
-    <View style={s.row}><Face who={who} size={40} /><T style={[s.h2, { flex: 1 }]}>{draft ? 'Here it is' : inChat ? 'Chief sent no draft. Chief answered in his chat' : `${who.name} could not write this`}</T></View>
+    <View style={s.row}><Face who={who} size={40} /><T style={[s.h2, { flex: 1 }]}>{draft ? 'Here it is' : inChat ? "Chief sent no draft. Chief answered in Chief's chat" : `${who.name} could not write this`}</T></View>
     {!!draft && <ScrollView style={[s.listGroup, { backgroundColor: t.solid, borderColor: t.line, maxHeight: 240 }]} contentContainerStyle={{ padding: 12 }}>
       <T>{draft}</T>
     </ScrollView>}

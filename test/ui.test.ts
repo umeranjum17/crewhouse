@@ -1127,6 +1127,16 @@ test('who is on what: one plain line from state alone, resting included, no mode
   assert.doesNotMatch(A.crewLine(state), FORBIDDEN);
 });
 
+test('the words the app writes about Chief and the crew use no gendered pronouns (STE GR-7)', () => {
+  // Source scan with comments removed; work products and the person's own words (demo drafts, notes, results) are out of scope.
+  const files = ['mobile/src/panel.tsx', 'mobile/src/bubble.ts', 'mobile/App.tsx', 'mobile/src/office.tsx', 'web/src/adapter.ts',
+    'web/src/parts.tsx', 'web/src/main.tsx', 'web/src/screen.tsx', 'web/src/flows.tsx', 'web/src/office.tsx'];
+  for (const f of files) {
+    const src = readFileSync(join(import.meta.dirname, '..', f), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`])\/\/.*$/gm, '$1');
+    assert.doesNotMatch(src, /\b(he|she|him|his|her|hers|himself|herself)\b/i, f);
+  }
+});
+
 test("Chief's alert follows STE; a marketing draft is shown unchanged", () => {
   // ASD-STE100 (Issue 9) principles for the words Chief's layer makes itself. These are mechanical checks only:
   // sentence length (Rule 5.1), a short idiom list, contractions (4.2), semicolons (8.1), a passive pattern (3.6) and

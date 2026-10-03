@@ -1945,7 +1945,7 @@ function BubbleRow({ grant }: { grant: Grant }) {
     <Card>
       <View style={s.row}>
         <View style={{ flex: 1 }}><T style={s.b}>Chief on your screen</T>
-          <T tone="mute">A small Chief you can drag to either side, over your other apps. Tap him to ask, answer, write in the box you're typing in, or hand him your screen.</T></View>
+          <T tone="mute">A small Chief you can drag to either side, over your other apps. Tap Chief to ask, answer, write in the box you're typing in, or give Chief your screen.</T></View>
         <Switch value={want} accessibilityLabel="Chief on your screen" trackColor={{ false: t.line, true: t.ok }} thumbColor={t.solid} onValueChange={(on) => void attempt(() => turn(on))} />
       </View>
       {want && st !== 'on' && <><T tone="ink2">{bubbleWords(st)}</T>

@@ -17,7 +17,7 @@ export const PANEL = 'ChiefPanel';
 const WANTED = 'crewhouse.bubble';
 // The stills scripts/icons.mjs draws into mobile/assets/bubble/, one per mood Chief wears on Home.
 const MOODS = new Set(['idle', 'work', 'ask', 'happy', 'rest', 'worried', 'error']);
-const NOTICE = { channel: 'Chief on your screen', title: 'Chief is on your screen', text: 'Tap him for quick actions.', icon: 'chief_glyph' };
+const NOTICE = { channel: 'Chief on your screen', title: 'Chief is on your screen', text: 'Tap Chief for quick actions.', icon: 'chief_glyph' };
 
 export type { OverlayState };
 export const bubbleState = (): Promise<OverlayState> => overlay.state();
