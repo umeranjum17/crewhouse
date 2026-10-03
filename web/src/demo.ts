@@ -459,6 +459,8 @@ if (variant === 'b1' || variant === 'b1handoff' || variant === 'b1after') {
   (state as Json).tasks = [task(52, 'tracer', 'your dinner list', 'done', { updated_at: Math.max(today, now - 12 * min), result: 'Seven dinners and one shopping list, sorted by aisle.', files: ['files/dinner-list.pdf'] }),
     ...state.tasks.filter((t: Json) => !(t.state === 'done' && t.updated_at >= today))];
   events.push(ev(20, 13, 'file.delivered', 'tracer', { task: 52, path: 'files/dinner-list.pdf' }), ev(21, 12, 'task.done', 'tracer', { task: 52, title: 'your dinner list' }));
+  // Hand-written fixture lines in Chief's coordinator voice (delegation, a recommendation, meaningful-only reports):
+  // they show the screens, not that Chief decides, restarts or monitors on his own.
   pages.chief = { messages: [
     { id: 1, author: 'person', text: 'Can you get me to Lahore on Friday? Morning if possible.', at: now - 20 * min },
     { id: 2, author: 'chief', text: 'I gave this job to Scout. Scout looks only at morning flights, because you asked for the morning. You do not need to do anything now.', at: now - 19 * min },
