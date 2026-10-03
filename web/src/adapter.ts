@@ -1026,12 +1026,13 @@ export function lines(page: Json, bot: string, state?: Json): Line[] {
   const ls = said(page, bot);
   const task = new Map<number, number>((page?.messages ?? []).map((m: Json) => [m.id, m.task_id]));
   if (bot === 'chief') {
-    // Chief's receipt: his line passing on a helper's result carries that task (crewd sets it when files came back),
-    // and is marked only once the snapshot says the task ended done — never his own words alone, never a question back.
-    const done = new Map<number, string>((state?.tasks ?? []).filter((t: Json) => t.state === 'done').map((t: Json) => [t.id, String(t.bot)]));
+    // Chief's receipt: only the exact line crewd bound to its source task's done event (`outcome`), named for the
+    // helper whose task it is — never the task's current state, so earlier progress or a later retry is never marked.
+    const bound = new Map<number, Json>((page?.messages ?? []).map((m: Json) => [m.id, m]));
+    const whose = new Map<number, string>((state?.tasks ?? []).map((t: Json) => [t.id, String(t.bot)]));
     for (const l of ls) {
-      const by = done.get(task.get(l.id) ?? -1);
-      if (by && l.from === 'them' && !l.unsure && !l.failed && !/\?\s*$/.test(l.text)) Object.assign(l, { done: true, by });
+      const by = whose.get(task.get(l.id) ?? -1);
+      if (by && l.from === 'them' && outcomeOf(bound.get(l.id)) === 'done' && !/\?\s*$/.test(l.text)) Object.assign(l, { done: true, by });
     }
     return ls;
   }

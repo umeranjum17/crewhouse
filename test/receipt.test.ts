@@ -108,9 +108,10 @@ test('a failed job\'s own line stands apart; a wordless done job is marked on it
 
 test('Chief\'s thread marks Done only on his line passing on a job crewd ended done, naming whose it was', () => {
   const page = { messages: [
-    { id: 1, author: 'bot', text: 'The birthday video is ready.', task_id: 10 },
-    { id: 2, author: 'bot', text: 'Scout booked it, but no confirmation came.', task_id: 11 },
-    { id: 3, author: 'bot', text: "Pip couldn't finish the renewal.", task_id: 12 },
+    // crewd's read-only phase binding sits only on the terminal lines; progress, questions and words stay untagged.
+    { id: 1, author: 'bot', text: 'The birthday video is ready.', task_id: 10, outcome: { state: 'done', event: 101 } },
+    { id: 2, author: 'bot', text: 'Scout booked it, but no confirmation came.', task_id: 11, outcome: { state: 'unsure', event: 102 } },
+    { id: 3, author: 'bot', text: "Pip couldn't finish the renewal.", task_id: 12, outcome: { state: 'failed', event: 103 } },
     { id: 4, author: 'bot', text: 'Scribe has a draft for you to look at.', task_id: 13 },
     { id: 5, author: 'bot', text: 'Which photos should Reel use?', task_id: 10 },
     { id: 6, author: 'bot', text: 'Hello' },
@@ -121,7 +122,11 @@ test('Chief\'s thread marks Done only on his line passing on a job crewd ended d
   assert.deepEqual(A.lines(page, 'chief', state).filter((l) => l.done).map((l) => [l.id, l.by]), [[1, 'reel']],
     'never unsure, failed, waiting, a question back, his own words or the person\'s');
   assert.ok(!A.lines(page, 'chief').some((l) => l.done), 'no snapshot, no mark');
-  assert.ok(!A.lines(page, 'chief', { tasks: state.tasks.map((t) => ({ ...t, state: 'working' })) }).some((l) => l.done), 'still working: no mark');
+  const working = { messages: [{ id: 8, author: 'bot', text: 'Reel is cutting the video.', task_id: 10 }, { id: 9, author: 'bot', text: 'Which song should Reel use?', task_id: 10 }] };
+  assert.ok(!A.lines(working, 'chief', { tasks: [{ id: 10, bot: 'reel', state: 'working' }] }).some((l) => l.done), 'still working: no mark');
+  // The source retried after its done line: that line keeps its receipt; the newest progress never gains one.
+  const retried = A.lines({ messages: [...page.messages, ...working.messages] }, 'chief', { tasks: [{ id: 10, bot: 'reel', state: 'working' }] });
+  assert.deepEqual(retried.filter((l) => l.done).map((l) => [l.id, l.by]), [[1, 'reel']]);
 });
 
 test('Done renders with Watch only where the helper has a computer and the home computer answers', () => {
