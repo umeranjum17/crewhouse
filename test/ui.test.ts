@@ -1155,6 +1155,8 @@ test('Write it here: Chief is asked for the writer, and the draft is only the an
   // 020 (3): failed or unsure work never falls back to an earlier or unrelated done result.
   assert.equal(out(chief('done'), snap(t(10, 'done', 'first draft'), t(11, 'failed', 'boom'))).text, '', 'newest writer task failed: not its earlier draft');
   assert.equal(out(chief('done'), snap(t(10, 'done', 'first draft'), t(11, 'unsure'))).text, '');
+  assert.equal(out(chief('done'), snap(t(10, 'done', 'first draft'), t(11, 'paused', 'Waiting for you to sign in.'))).text, null, 'a newer attempt still waiting: never the older draft');
+  assert.equal(out(chief('done'), snap(t(11, 'done', 'first draft'), t(10, 'failed'))).text, 'first draft', 'newest is by task id, not list order');
   assert.equal(out(chief('done', 'Scribe could not.'), snap(t(10, 'failed', 'boom'))).text, '', 'never Chief\'s relay');
   assert.equal(out(chief('done'), snap(t(10, 'done', 'Done.'))).text, '', 'an empty reply is not a draft to put in');
   assert.equal(out({ tasks: [] }, snap(t(10, 'done', 'x'))).text, null, 'no request on Chief\'s page: never a guess');
