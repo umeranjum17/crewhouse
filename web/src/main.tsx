@@ -482,7 +482,7 @@ function PhoneCard({ offer, reload }: { offer: Json; reload: () => void }) {
       </div></>}
   </div>;
 }
-function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id: string; m?: string; hero?: boolean; rail?: ReactNode }) {
+function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ctx & { id: string; m?: string; hero?: boolean; rail?: ReactNode }) {
   const g = A.account(accounts);
   const [page, setPage] = useState<Json>(null);
   const [pending, setPending] = useState<{ text: string; after: number } | null>(null);
@@ -561,12 +561,13 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
           ? <ChiefIdeas state={state} chat={id} picked={() => setSeed((n) => n + 1)} />
           : <HelperIdeas state={state} chat={id} picked={() => setSeed((n) => n + 1)} />)}
         {lines.map((l, i) => start && i === 0 && l.from === 'note' && l.text.startsWith(`${name} joined the crew`) ? null : <div key={l.id} className="line-wrap">{dayOf(l.at)}
-          <div id={`m${l.id}`} className={`line ${l.from}${l.unsure ? ' unsure' : ''}${l.recap ? ' recap' : ''}${l.id > (opened.current ?? Infinity) ? ' fresh' : ''}${i && lines[i - 1].from === l.from && l.from !== 'me' && !l.recap && !lines[i - 1].recap ? ' consecutive' : ''}`}>
+          <div id={`m${l.id}`} className={`line ${l.from}${l.unsure || l.failed ? ' unsure' : ''}${l.recap ? ' recap' : ''}${l.id > (opened.current ?? Infinity) ? ' fresh' : ''}${i && lines[i - 1].from === l.from && l.from !== 'me' && !l.recap && !lines[i - 1].recap ? ' consecutive' : ''}`}>
             {l.from !== 'me' && l.from !== 'note' && <div className="line-by"><Face who={l.from === 'chief' ? 'chief' : h ?? 'chief'} size={28} /><span className="who">{l.from === 'chief' ? 'Chief' : name}</span><time>{l.at ? A.clock(l.at) : ''}</time></div>}
             {l.by && <span className="note-by"><Face who={A.crew(state).find((x) => x.id === l.by) ?? 'chief'} size={20} /></span>}
             {l.text && (l.detail ? <ChiefAsk l={{ text: l.text, detail: l.detail }} /> : <div className="bubble-text"><ChatText text={l.text} /></div>)}
             {id === 'chief' && l.text === 'Sign in with ChatGPT.' && <AccountCard g={{ ...g, state: 'signed-out' }} inChat onReady={() => { void load(); refresh(); }} />}
             {l.files.map((f) => <Media key={f.url} f={f} big />)}
+            {l.done && <div className="receipt"><span className="grow"><b>Done</b></span>{h?.computer && !offline && <a className="link" href={`#/h/${id}/screen`}>Watch {name}</a>}</div>}
             {phoneOffer?.message === l.id && <PhoneCard offer={phoneOffer} reload={() => void load()} />}
             {cards.filter((c) => lines.findLastIndex((x) => (x.at ?? 0) <= c.at) === i).map((c) => c.kind === 'connect' ? <ConnectCard key={c.id} c={c} helper={h?.name} state={state} onDone={refresh} /> : <AskCard key={c.id} c={c} who={h} onDone={refresh} />)}
           </div></div>
@@ -730,6 +731,10 @@ function HelperPage(ctx: Ctx & { id: string; tab: string }) {
         {A.steps(page.trail ?? []).length ? <Steps steps={A.steps(page.trail ?? [])} max={40} onUndo={(s) => attempt(async () => { await api.undoMemory(id, s.seq); void load(); }, 'Forgotten')} />
           : <div className="card empty">Nothing yet. Give {name} something to do.</div>}
       </> : null)}
+      {tab === 'screen' && h && <div className="sticky-top"><header className="chat-head">
+        <a href={`#/h/${id}/chat`} className="back" aria-label="Back" onClick={(e) => { e.preventDefault(); back(); }}>‹</a>
+        <div className="grow"><b>{h.name}'s computer</b></div>
+      </header></div>}
       {tab === 'screen' && h && <Screen bot={{ ...page?.bot, ...b }} showing={A.showing(state, id)} refresh={() => { refresh(); void load(); }} />}
     </div>
   );

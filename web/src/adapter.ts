@@ -51,7 +51,11 @@ export type Line = { id: number; from: 'me' | 'them' | 'chief' | 'note'; text: s
   /** Chief's full assignment in a helper's chat, behind Show details: the line itself stays one short ask. */
   detail?: string;
   /** What a delivered workbook or document holds, said once: the web's card says it itself, the phone shows these. */
-  about?: string };
+  about?: string;
+  /** The receipt: crewd ended this line's task `done` on it (never unsure, failed, waiting or a question back). */
+  done?: boolean;
+  /** crewd's own words for a task that failed: shown apart, like `unsure`. */
+  failed?: boolean };
 /** The one-use pairing ticket is rendered in Chief's chat, never as chat text. */
 export const phoneOffer = (page: Json): { qr: string; typed: string; expires: number; message: number; token?: string; waiting?: { id: number; name: string; words: string }; joined?: string } | null => page?.phoneOffer ?? null;
 export type App = { id: string; name: string; mark: string; bg: string; on: boolean; does: string; warns?: boolean };
@@ -980,6 +984,24 @@ export function room(page: Json, state: Json) {
 const chatWords = (text: string) => text.replace(/```[\s\S]*?```/g, '').split('\n').map(plain).join('\n').trim();
 
 export function lines(page: Json, bot: string): Line[] {
+  const ls = said(page, bot);
+  if (bot === 'chief') return ls; // Chief's thread has its own relay and tray notices
+  // A receipt marks the line crewd ended a task on, once crewd says done (never unsure, failed or waiting): the reply
+  // whose words are the task's result, else, with no words, its last delivered file; never a question back.
+  const task = new Map<number, number>((page?.messages ?? []).map((m: Json) => [m.id, m.task_id]));
+  for (const t of page?.tasks ?? []) {
+    const own = ls.filter((l) => task.get(l.id) === t.id);
+    const made = own.filter((l) => l.from === 'note' && l.files.length > 0);
+    const end = own.findLast((l) => l.from === 'them' && l.text === chatWords(String(t.result ?? '')));
+    if (t.state === 'failed' && end) end.failed = true; // a stop writes no line
+    if (t.state !== 'done' || (end && !made.length && /\?\s*$/.test(end.text))) continue;
+    const mark = end ?? (t.result === 'Done.' ? made.at(-1) : undefined);
+    if (mark) mark.done = true;
+  }
+  return ls;
+}
+
+function said(page: Json, bot: string): Line[] {
   return (page?.messages ?? []).filter((m: Json) => !/\bstub [\w-]+:/.test(String(m.text ?? ''))).map((m: Json) => {
     const pics = photos(String(m.text ?? ''));
     const text = String(m.text ?? '').replace(PHOTO, '').trim();

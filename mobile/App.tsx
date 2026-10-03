@@ -1387,7 +1387,7 @@ function JobList({ state, go, refresh }: { state: Json; go: Ctx['go']; refresh: 
 // ---------- a chat ----------
 /** `hero`: Home's Chief thread (B1): the hero and pinned ask stay above the thread, which opens at its newest line with
  *  the tray's notices among his lines. */
-function Chat({ id, m, state, tick, refresh, canAct, offline, open, writer, hero }: Ctx & { id: string; m?: number; hero?: ReactNode }) {
+function Chat({ id, m, state, tick, refresh, canAct, offline, open, writer, hero, go }: Ctx & { id: string; m?: number; hero?: ReactNode }) {
   const t = useLook();
   // The computer's page when it answers; otherwise the lines this phone kept, until it does.
   const [page, setPage] = useState<Json>(() => kept.page(id));
@@ -1475,9 +1475,11 @@ function Chat({ id, m, state, tick, refresh, canAct, offline, open, writer, hero
             {!!l.by && <View style={[s.row, { gap: 8, paddingLeft: 36 }]}><Face who={A.crew(state).find((x) => x.id === l.by) ?? 'chief'} size={20} /><T tone="ink2" style={[s.small, { flex: 1 }]}>{l.text}</T></View>}
             {!!l.text && !l.by && (l.detail ? <ChiefAsk l={{ text: l.text, detail: l.detail }} /> : l.from === 'me'
               ? <View style={[s.bubbleText, { backgroundColor: t.go, borderBottomRightRadius: 6 }]}><Theme.Provider value={mine}><ChatText text={l.text} /></Theme.Provider></View>
-              : <View style={{ paddingLeft: 36 }}><ChatText text={l.text} /></View>)}
+              : <View style={[{ paddingLeft: 36 }, (l.unsure || l.failed) && { borderLeftWidth: 2, borderLeftColor: t.amber, marginLeft: 36, paddingLeft: 12 }]}><ChatText text={l.text} /></View>)}
             {!l.text && !!l.about && <View style={{ paddingLeft: 36 }}><ChatText text={l.about} /></View>}
             {l.files.map((f) => <Card key={f.url}><FileRow f={f} /></Card>)}
+            {l.done && <View style={[s.row, { paddingLeft: 36 }]}><T style={[s.small, { flex: 1, color: t.green, fontWeight: '600' }]}>✓ Done</T>
+              {!offline && h?.computer && desktopAvailable && <Btn ghost label={`Watch ${name}`} onPress={() => go({ view: 'helper', id, tab: 'watch' })} />}</View>}
             {phoneOffer?.message === l.id && <PhoneCard offer={phoneOffer} reload={() => void load()} />}
             {cards.filter((c) => lines.findLastIndex((x) => (x.at ?? 0) <= c.at) === i).map((c) => <AskCard key={c.id} c={c} who={h} state={state} onDone={refresh} canAct={canAct} offline={offline} open={open} />)}
           </View></motion.Rise></View>

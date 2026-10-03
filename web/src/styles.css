@@ -339,6 +339,10 @@ a.back:not([aria-label]) { font: 500 15px/20px var(--ui); padding: 0 8px; margin
 .line.me .chat-md .chat-link { color: inherit; background: transparent; border-color: currentColor; }
 .line.note { max-width: 92%; }
 .line.unsure .bubble-text { border-left: 2px solid var(--amber); padding-left: 12px; }
+/* A task crewd ended done: one quiet line under its result, never on a job that is unsure, failed or waiting. */
+.receipt { display: flex; gap: 12px; align-items: baseline; margin-top: 8px; font: 400 13px/18px var(--ui); color: var(--ink2); }
+.receipt b { color: var(--ok-ink); font-weight: 600; }
+.receipt b::before { content: '✓ '; }
 .lines > .ask, .line .ask { max-width: 440px; margin: 12px 0 0 36px; }
 .work-title { display: grid; gap: 4px; padding: 16px; }
 .work-title .small { color: var(--ink2); }

@@ -282,18 +282,25 @@ if (variant === 'connect') pages.pip = { messages: [
   { id: 2, author: 'bot', text: 'I can do this with your Google Calendar.' },
 ] };
 // A workbook, asked for in one line: one question back, then the finished file. The screens show what crewd read out of it.
+const ask = ['One thing before I build it: is this the desk’s own day sheet, or the manager’s log of every booking?', 'One thing: just for the front-desk team, or one the manager signs off on too?'];
+const made = ['Then one workbook, ready to use: a dashboard for today, the booking and check-in log, the room and housekeeping board, and the payments. Each has an example row and dropdowns where you need them.',
+  'Here’s the front-desk handbook: how the day opens, check-ins, payments, and what to do when the power goes. Say the word and I’ll change anything in it.'];
+// As crewd writes it: a question back ends its own turn, and the answer is a new job that delivers, then says so.
 pages.scribe = { messages: [
-  { id: 1, author: 'person', text: 'create an excel for reception at the hotel' },
-  { id: 2, author: 'bot', text: 'One thing before I build it: is this the desk\u2019s own day sheet, or the manager\u2019s log of every booking?' },
-  { id: 3, author: 'person', text: "the desk's own day sheet" },
-  { id: 4, author: 'bot', text: 'Then one workbook, ready to use: a dashboard for today, the booking and check-in log, the room and housekeeping board, and the payments. Each has an example row and dropdowns where you need them.' },
-  { id: 5, author: 'system', text: 'Delivered files/hotel-guest-reception.xlsx: 4 sheets: Daily dashboard, Booking & check-in, Rooms & housekeeping, Payments' },
-  { id: 6, author: 'person', text: 'now put the desk rules together as a word document for the drawer' },
-  { id: 7, author: 'bot', text: 'One thing: just for the front-desk team, or one the manager signs off on too?' },
-  { id: 8, author: 'person', text: 'just the front-desk team' },
-  { id: 9, author: 'bot', text: 'Done: the front-desk handbook. How the day opens, check-ins, payments, and what to do when the power goes. Say the word and I’ll change anything in it.' },
-  { id: 10, author: 'system', text: 'Delivered files/front-desk-handbook.docx: A document in 3 sections: Front-desk handbook' },
-] };
+  { id: 1, author: 'person', text: 'create an excel for reception at the hotel', task_id: 61 },
+  { id: 2, author: 'bot', text: ask[0], task_id: 61 },
+  { id: 3, author: 'person', text: "the desk's own day sheet", task_id: 62 },
+  { id: 4, author: 'system', text: 'Delivered files/hotel-guest-reception.xlsx: 4 sheets: Daily dashboard, Booking & check-in, Rooms & housekeeping, Payments', task_id: 62 },
+  { id: 5, author: 'bot', text: made[0], task_id: 62 },
+  { id: 6, author: 'person', text: 'now put the desk rules together as a word document for the drawer', task_id: 63 },
+  { id: 7, author: 'bot', text: ask[1], task_id: 63 },
+  { id: 8, author: 'person', text: 'just the front-desk team', task_id: 64 },
+  { id: 9, author: 'system', text: 'Delivered files/front-desk-handbook.docx: A document in 3 sections: Front-desk handbook', task_id: 64 },
+  { id: 10, author: 'bot', text: made[1], task_id: 64 },
+// Each finished job is marked Done on its last reply; each question back is not.
+], tasks: [{ id: 61, state: 'done', title: 'create an excel for reception at the hotel', result: ask[0] }, { id: 62, state: 'done', title: "the desk's own day sheet", result: made[0] },
+  { id: 63, state: 'done', title: 'now put the desk rules together as a word document for the drawer', result: ask[1] },
+  { id: 64, state: 'done', title: 'just the front-desk team', result: made[1] }] };
 // ?demo=building: Scribe mid-build — the question answered, the workbook not yet delivered, so the chat holds its place.
 if (variant === 'building') {
   Object.assign(bots.find((b) => b.id === 'scribe')!, { task: task(43, 'scribe', 'Excel for reception', 'working'), step: undefined });
