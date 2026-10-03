@@ -561,14 +561,15 @@ test('the mascots: every app mood wears one of B1\'s five poses, and every pose 
   // Each drawing is one SVG whose clip ids never collide on a page with many faces.
   const ids = [art.chiefSvg(), art.chiefSvg()].map((x) => x.match(/id="(\w+)"/)![1]);
   assert.notEqual(ids[0], ids[1]);
-  // 159: Chief's side shading is the old ellipse's own arc (cx 156 cy 178 rx 30 ry 120), still clipped to his body,
-  // closed at the art's floor (y 240, below the body's 232) so no part of him measures below his feet.
+  // 159/174: Chief's side shading is the old ellipse's own arc (cx 156 cy 178 rx 30 ry 120), still clipped to his body: the
+  // old arc's first third (where it leaves his body over the dome), closed outside the body (x 150, y 240), so it paints
+  // what the whole arc did and no part of it measures past his outline or below his feet.
   for (const p of art.POSES) {
-    const s = art.chiefSvg(p), m = /<g clip-path="url\(#ch\d+c\)"><path d="M([\d.]+) (\d+)A30 120 0 1 1 ([\d.]+) (\d+)Z"/.exec(s);
+    const s = art.chiefSvg(p), m = /<g clip-path="url\(#ch\d+c\)"><path d="M([\d.]+) (\d+)A30 120 0 0 1 ([\d.]+) ([\d.]+)H150V240Z"/.exec(s);
     assert.ok(m && !/ry="120"/.test(s), `${p}: the shading is the bounded arc inside the body clip`);
     const [x1, y1, x2, y2] = m!.slice(1).map(Number), on = (x: number, y: number) => ((x - 156) / 30) ** 2 + ((y - 178) / 120) ** 2;
-    assert.ok(Math.abs(on(x1, y1) - 1) < 1e-5 && Math.abs(on(x2, y2) - 1) < 1e-5 && x1 + x2 === 312, `${p}: both ends lie on the old ellipse`);
-    assert.ok(y1 === 240 && y2 === 240 && /<clipPath id="ch\d+c"><path d="M52 232V/.test(s), `${p}: closed at the floor, below the body clip's 232`);
+    assert.ok(Math.abs(on(x1, y1) - 1) < 1e-5 && Math.abs(on(x2, y2) - 1) < 1e-5 && x1 === 130.3144, `${p}: both ends lie on the old ellipse, from its old start`);
+    assert.ok(y1 === 240 && (x2 - 100) ** 2 + (y2 - 120) ** 2 > 48 ** 2 && y2 < 120 && /<clipPath id="ch\d+c"><path d="M52 232V/.test(s), `${p}: it leaves the body over the dome and closes outside the clip`);
   }
 });
 

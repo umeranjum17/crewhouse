@@ -31,9 +31,10 @@ const Z = 'font-family="Instrument Serif, Georgia, serif" font-style="italic"';
 let uid = 0;
 
 /** Chief whole (viewBox 0 0 200 250, feet on y 232). */
-/** Chief's side shading: the arc of the ellipse cx 156 cy 178 rx 30 ry 120, closed along the art's floor (y 240) instead of
- *  running on to y 298, so what the body clip paints is unchanged and nothing measures below his feet. */
-const SHADE = 'M130.3144 240A30 120 0 1 1 181.6856 240Z';
+/** Chief's side shading: the ellipse cx 156 cy 178 rx 30 ry 120, its arc from the art's floor (y 240) up to where it
+ *  leaves his body over the dome (the old whole arc's first third, so it is drawn as the same curve), closed outside
+ *  the body. The body clip paints exactly what it did, and nothing measures past his outline or below his feet. */
+const SHADE = 'M130.3144 240A30 120 0 0 1 136.5685 86.5742H150V240Z';
 export function chiefSvg(mood: Mood | Pose = 'idle', o: Opts = {}) {
   const m = poseOf(mood), g = `ch${++uid}`, lw = 3.4;
   const body = 'M52 232V120a48 48 0 0 1 96 0V232Z';
