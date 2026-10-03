@@ -199,6 +199,9 @@ const G = 196, W = 346;
 const INK: Partial<Record<Station, [number, number]>> = { chief: [-31, 44], needs: [-40, 31.5], monitor: [16, 50], failed: [16, 50], writing: [-21, -12], rest: [-2, 13] };
 /** Furniture under the Tray bubble's tail (y 150): a desk, a note, a lamp's glow. The bubble never rests on it either. */
 const FOOT: Partial<Record<Station, [number, number]>> = { needs: [-48, 24], monitor: [-20, 70], failed: [-20, 58], writing: [-28, 32] };
+/** The same on a compact desk: the note or screen over their head, the 52-wide desk and its lamp centred on them. */
+const INKT: typeof INK = { ...INK, needs: [-11, 31.5], monitor: [-17, 17], failed: [-17, 17] };
+const FOOTT: typeof FOOT = { ...FOOT, needs: [-26, 26], monitor: [-29, 26], failed: [-26, 26] };
 /** Left to right in the given order, the tray just before whoever finished (or before the resting); the row scales down
  *  about the floor line to fit, and centres when it is short. The Tray bubble never sits over a figure or past the
  *  room's edge: the tray keeps room for it beside a tall neighbour (INK: Chief's cue, a waiting flag, a screen) and at the
@@ -206,13 +209,13 @@ const FOOT: Partial<Record<Station, [number, number]>> = { needs: [-48, 24], mon
  *  ponytail: four passes for that room under scaling, exact enough for six stations. */
 function lay(order: (A.OfficeMember | 'chief')[], v: A.OfficeView, trayText: string) {
   const sts = order.map((m) => (m === 'chief' ? 'chief' : stationOf(m, v)) as Station);
-  // The tray box stands on clear floor beside whoever finished when the row has room for it; a row that is full at the
-  // mock's size keeps the mock's box at their feet. A row too long even then packs its desks (TIGHT) before anyone
-  // shrinks; only the rest scales.
-  const clear = layAt(order, sts, trayText, true);
-  if (clear.s >= 1) return clear;
+  // The tray box stands on clear floor beside whoever finished, its bubble over it: at the mock's desks when the row has
+  // room, else on the compact desks at the mock's scale (the B1 house before anyone finishes). A row too long even then
+  // packs (TIGHT, the caption under the box) before anyone shrinks; only the rest scales.
   const full = layAt(order, sts, trayText, false);
-  return full.s < 1 ? packed(order, sts) : full;
+  if (full.s >= 1) return full;
+  const compact = layAt(order, sts, trayText, true);
+  return compact.s < 1 ? packed(order, sts) : compact;
 }
 /** A packed row: compact desks, the tray box alone at the row's end (clear of Chief's cane), and its Tray caption in the
  *  floor band under the box, so no bubble width is reserved in the row and nobody shrinks for a label. */
@@ -226,23 +229,25 @@ function packed(order: (A.OfficeMember | 'chief')[], sts: Station[]) {
   const s = Math.min(1, W / cur), x0 = 180 - (cur * s) / 2;
   return { spots, s, x0, X: (x: number) => x0 + x * s, Y: (y: number) => G + (y - G) * s, tight: true, bubble: undefined, trayX: spots[spots.length - 1].x };
 }
-function layAt(order: (A.OfficeMember | 'chief')[], sts: Station[], trayText: string, clear: boolean) {
-  const pad = PAD, ink = INK, tight = false;
+function layAt(order: (A.OfficeMember | 'chief')[], sts: Station[], trayText: string, compact: boolean) {
+  const pad = compact ? TIGHT : PAD, ink = compact ? INKT : INK;
   let at = sts.indexOf('done');
   const items: { m: Spot['m']; st: Station; tray: boolean }[] = order.map((m, i) => ({ m, st: sts[i], tray: i === at }));
   if (at < 0) { const r = sts.indexOf('rest'); items.splice(r < 0 ? items.length : r, 0, { m: 'tray', st: 'tray', tray: true }); at = r < 0 ? items.length - 1 : r; }
-  // The box's centre left of a done figure: 36 clears their body (to 15.9 with its line) by 2, their station then starting
-  // 56 left so it clears the neighbour too; 20 is the mock's, the box over their feet.
-  const half = (trayText.length * 6.6 + 22) / 2, off = clear ? 36 : 20;
+  // The box's centre is 34 left of a done figure, clear of their body (to 15.9 with its line); their station starts 55
+  // left, so the box clears a writing desk beside them too and the bubble over it clears that desk's lamp.
+  const half = (trayText.length * 6.6 + 22) / 2, off = 34;
   let s = 1, spots: Spot[] = [], total = 0;
   for (let pass = 0; pass < 4; pass++) {
     let cur = 0;
     spots = [];
     items.forEach((it, i) => {
-      let [l, r] = it.tray && it.st === 'done' && clear ? [56, pad.done[1]] : pad[it.st];
+      let [l, r] = it.tray && it.st === 'done' ? [55, pad.done[1]] : pad[it.st];
       // The bubble is centred over the tray box, off left of a done figure; its half plus a gap, unscaled, clears the ink
       // of a tall neighbour on either side (and the room's ends); a low one may sit under it.
       const b = (half + 4) / s, dx = it.st === 'done' ? off : 0, p = spots[i - 1], q = items[i + 1];
+      // A screen over the head of someone just after Chief clears his cue (to x + 39.9) by 2.
+      if (compact && p?.st === 'chief' && (it.st === 'monitor' || it.st === 'failed')) l = Math.max(l, 33);
       const tall = (n?: { st: Station }) => n && TALL.includes(n.st) ? ink[n.st] : undefined;
       if (it.tray) {
         const pi = tall(p), qi = tall(q);
@@ -250,24 +255,23 @@ function layAt(order: (A.OfficeMember | 'chief')[], sts: Station[], trayText: st
         if (!q) r = Math.max(r, b - dx); else if (qi) r = Math.max(r, b - dx - pad[q.st][0] - qi[0]);
       }
       const x = cur + l; cur = x + r;
-      spots.push({ ...it, x, tight });
+      spots.push({ ...it, x, tight: compact });
     });
     total = cur; s = Math.min(1, W / total);
   }
   const x0 = 180 - (total * s) / 2, X = (x: number) => x0 + x * s;   // the crew centred under the window (x 180), as the mock
   const t = spots.find((p) => p.tray)!, trayX = t.st === 'done' ? t.x - off : t.x;
-  return { spots, s, x0, X, Y: (y: number) => G + (y - G) * s, tight, bubble: bubbleAt(spots, X, X(trayX), half * 2), trayX };
+  return { spots, s, x0, X, Y: (y: number) => G + (y - G) * s, tight: false, bubble: bubbleAt(spots, X, X(trayX), half * 2), trayX };
 }
 /** The Tray bubble's left edge: as near centred over the box as clears every ink and furniture in the row (a neighbour
  *  two stations off, Chief's cue past a low writer, too), its tail always on the box and the bubble inside the room. */
 function bubbleAt(spots: Spot[], X: (x: number) => number, tx: number, w: number) {
   const lo = Math.max(4, tx + 13 - w), hi = Math.min(356 - w, tx - 12), ideal = Math.min(hi, Math.max(lo, tx - w / 2));
   const at = (keep: (typeof INK)[]) => {
-    const blocks = spots.flatMap((p) => keep.flatMap((k) => k[p.st] ? [[X(p.x + k[p.st]![0]) - 4, X(p.x + k[p.st]![1]) + 4]] : []));
+    const blocks = spots.flatMap((p) => keep.flatMap((t) => { const k = (p.tight ? t === INK ? INKT : FOOTT : t)[p.st]; return k ? [[X(p.x + k[0]) - 4, X(p.x + k[1]) + 4]] : []; }));
     const free = (L: number) => blocks.every(([a, b]) => L + w <= a || L >= b);
     return [ideal, ...blocks.flatMap(([a, b]) => [b, a - w])].filter((L) => L >= lo && L <= hi && free(L)).sort((p, q) => Math.abs(p - ideal) - Math.abs(q - ideal))[0];
   };
-  // A row full at the mock's size (the B1 house before anyone finishes) has no clear air over its writer's desk: the ink still wins.
   return at([INK, FOOT]) ?? at([INK]) ?? ideal;
 }
 
