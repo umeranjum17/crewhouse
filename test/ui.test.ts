@@ -1912,6 +1912,12 @@ test('J5 repairs stay in: the night look paints first, the job row is never cut 
   assert.match(office, /off = 34;/); assert.match(office, /it\.tray && it\.st === 'done' \? \[55, pad\.done\[1\]\]/);
   assert.match(office, /compact && p\?\.st === 'chief' && \(it\.st === 'monitor' \|\| it\.st === 'failed'\)\) l = Math\.max\(l, 33\)/);
   assert.match(office, /return at\(\[INK, FOOT\]\) \?\? at\(\[INK\]\) \?\? ideal;/);
+  // 169: Scout and Chief stand still through a finish on a floor of five (it starts at the left edge), the compact screen
+  // and Scribe's pen clear Chief's cue, and the desk room keeps to its picture (no floor band under the row).
+  assert.match(office, /const x0 = compact && order\.length > 5 && s >= 1 \? 180 - W \/ 2 : 180 - \(total \* s\) \/ 2/);
+  assert.match(office, /if \(p\?\.st === 'chief' && it\.st === 'writing'\) l = Math\.max\(l, 33\);/);
+  assert.match(office, /const c = tight \? x \+ 3 : x \+ 33;/); assert.match(office, /monitor: \[-14, 20\], failed: \[-14, 20\]/);
+  assert.match(read('web', 'src', 'styles.css'), /\.office-main \.o-room \{ flex: 0 1 auto; min-height: 0; \}/);
   assert.match(office, /needs: \[26, 28\], monitor: \[26, 28\], failed: \[26, 28\]/); assert.match(office, /data-scale=\{s\.toFixed\(3\)\}/);
   assert.doesNotMatch(office, /MOCK|floorPlan\(crew, /, 'no seat cap below five for size');
   assert.match(office, /getScreenCTM\(\)\?\.a \?\? 1\) \* Number\(room\.dataset\.scale \?\? 1\), pw = 14 \* k, ph = 18 \* k/);

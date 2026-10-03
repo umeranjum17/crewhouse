@@ -200,8 +200,8 @@ const INK: Partial<Record<Station, [number, number]>> = { chief: [-31, 44], need
 /** Furniture under the Tray bubble's tail (y 150): a desk, a note, a lamp's glow. The bubble never rests on it either. */
 const FOOT: Partial<Record<Station, [number, number]>> = { needs: [-48, 24], monitor: [-20, 70], failed: [-20, 58], writing: [-28, 32] };
 /** The same on a compact desk: the note or screen over their head, the 52-wide desk and its lamp centred on them. */
-const INKT: typeof INK = { ...INK, needs: [-11, 31.5], monitor: [-17, 17], failed: [-17, 17] };
-const FOOTT: typeof FOOT = { ...FOOT, needs: [-26, 26], monitor: [-29, 26], failed: [-26, 26] };
+const INKT: typeof INK = { ...INK, needs: [-11, 31.5], monitor: [-14, 20], failed: [-14, 20] };
+const FOOTT: typeof FOOT = { ...FOOT, needs: [-26, 26], monitor: [-26, 26], failed: [-26, 26] };
 /** Left to right in the given order, the tray just before whoever finished (or before the resting); the row scales down
  *  about the floor line to fit, and centres when it is short. The Tray bubble never sits over a figure or past the
  *  room's edge: the tray keeps room for it beside a tall neighbour (INK: Chief's cue, a waiting flag, a screen) and at the
@@ -246,8 +246,10 @@ function layAt(order: (A.OfficeMember | 'chief')[], sts: Station[], trayText: st
       // The bubble is centred over the tray box, off left of a done figure; its half plus a gap, unscaled, clears the ink
       // of a tall neighbour on either side (and the room's ends); a low one may sit under it.
       const b = (half + 4) / s, dx = it.st === 'done' ? off : 0, p = spots[i - 1], q = items[i + 1];
-      // A screen over the head of someone just after Chief clears his cue (to x + 39.9) by 2.
+      // A screen over the head of someone just after Chief clears his cue (to x + 39.9) by 4.2, and Scribe's pen at the
+      // top of its stroke (x - 14.3, y 131) by 3.9.
       if (compact && p?.st === 'chief' && (it.st === 'monitor' || it.st === 'failed')) l = Math.max(l, 33);
+      if (p?.st === 'chief' && it.st === 'writing') l = Math.max(l, 33);
       const tall = (n?: { st: Station }) => n && TALL.includes(n.st) ? ink[n.st] : undefined;
       if (it.tray) {
         const pi = tall(p), qi = tall(q);
@@ -259,7 +261,9 @@ function layAt(order: (A.OfficeMember | 'chief')[], sts: Station[], trayText: st
     });
     total = cur; s = Math.min(1, W / total);
   }
-  const x0 = 180 - (total * s) / 2, X = (x: number) => x0 + x * s;   // the crew centred under the window (x 180), as the mock
+  // The crew centred under the window (x 180), as the mock; a floor of five helpers starts at the room's left edge
+  // instead, so a finish re-lays only who moved and Scout and Chief stand still.
+  const x0 = compact && order.length > 5 && s >= 1 ? 180 - W / 2 : 180 - (total * s) / 2, X = (x: number) => x0 + x * s;
   const t = spots.find((p) => p.tray)!, trayX = t.st === 'done' ? t.x - off : t.x;
   return { spots, s, x0, X, Y: (y: number) => G + (y - G) * s, tight: false, bubble: bubbleAt(spots, X, X(trayX), half * 2), trayX };
 }
@@ -322,8 +326,8 @@ function Seat({ spot, id, kind, pose, seat, second, dataId, beat, label, onOpen 
     </>}
     {(st === 'monitor' || st === 'failed') && <>
       {tight ? <Desk x={x - 26} w={52} /> : <Desk x={x - 20} w={78} />}
-      {(() => { const c = tight ? x : x + 33; return <>   {/* the screen's centre: beside them, or over their head on a compact desk */}
-        {st === 'monitor' && <ellipse cx={c - 3} cy="150" rx={tight ? 26 : 40} ry="16" fill={`url(#${id}lamp)`} opacity=".85" />}
+      {(() => { const c = tight ? x + 3 : x + 33; return <>   {/* the screen's centre: beside them, or over their head on a compact desk (a little right, clear of Chief's cue) */}
+        {st === 'monitor' && <ellipse cx={tight ? x : c - 3} cy="150" rx={tight ? 26 : 40} ry="16" fill={`url(#${id}lamp)`} opacity=".85" />}
         <g className="o-mon"><rect x={c - 17} y="118" width="34" height="24" rx="3" fill={st === 'failed' ? '#FFE9E3' : 'var(--r-screen)'} stroke={ink} strokeWidth="1.7" />
           {st === 'failed' ? <text x={c} y="135" textAnchor="middle" fontFamily="Inter" fontWeight="800" fontSize="13" fill={red}>!</text> : <path d={`M${c - 3} 125l7 5-7 5z`} fill={ink} />}
           <path d={`M${c} 142v8`} stroke={ink} strokeWidth="1.7" /></g></>; })()}
