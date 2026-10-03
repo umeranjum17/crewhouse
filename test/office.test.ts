@@ -344,6 +344,10 @@ test('at 1, 5, 12 and 30 crew and in the B1 mock\'s house, on a phone and a comp
     // The furniture is scenery: a tap on a desk lands on its seat and opens that helper.
     await b.open('demo=crew5&day');
     await toOffice(b);
+    // A computer commits its wide room asynchronously (a ResizeObserver flips wide after the first narrow layout), so a
+    // desk point sampled on the narrow frame misses the desk once the wide frame lands. Wait until the room's committed
+    // wide mode matches its measured content width before sampling, then press that frozen point.
+    await until('the room\'s wide mode to match its measured width', () => b.run("(() => { const e = document.querySelector('.o-room'), s = getComputedStyle(e); const content = e.clientWidth - parseFloat(s.paddingLeft) - parseFloat(s.paddingRight); return e.classList.contains('wide') === (content >= 560); })()"), 5000);
     // A real click (SVG has no .click()) at the desk's centre, and the sheet that opens is that desk's helper.
     const desk = await b.run("(() => { const d = document.querySelector('.o-cell[data-seat] .o-desk'); d.scrollIntoView({ block: 'center' }); const r = d.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, who: d.closest('.o-cell').getAttribute('aria-label') }; })()");
     for (const type of ['mousePressed', 'mouseReleased']) await b.send('Input.dispatchMouseEvent', { type, x: desk.x, y: desk.y, button: 'left', clickCount: 1 });
