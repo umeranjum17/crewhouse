@@ -40,7 +40,7 @@ export async function until(what: string, fn: () => unknown, ms = 10_000) {
 /** The engine has the task's prompt (the nth one, after a resume or a switch). */
 export const prompted = (db: any, t: number, n = 1) => until(`task #${t} prompted`, () => prompts(db, t) >= n);
 /** The task is past queued and working: done, failed, paused or waiting on the person. */
-export const settled = (db: any, t: number) => until(`task #${t} settled`, () => !['queued', 'working'].includes(task(db, t).state));
+export const settled = (db: any, t: number) => until(`task #${t} settled`, () => !['queued', 'working'].includes(task(db, t).state) && !db.get("SELECT 1 FROM tasks WHERE parent = ? AND origin = 'report' AND state IN ('queued','working')", t));
 /** The stub model is holding the bot's turn ("ask permission"). */
 export const holding = (crew: any, bot: string) => until(`${bot} holding`, () => { const l = crew.sessionOf(bot); return l && (crew.runtime as StubRuntime).holding(l.key); });
 /** Finish a held turn with this reply, as the model would. */

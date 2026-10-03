@@ -1,8 +1,9 @@
 import type { AgentRuntime, RunEnd, RunEvent, RunSpec, ToolHost } from './runtime.ts';
 
 function calls(text: string) {
-  const found: { name: string; input: Record<string, unknown> }[] = [];
-  for (const match of text.matchAll(/\[tool (\w+) \{/g)) {
+  const found: { name: string; input: Record<string, unknown>; start: number; end: number }[] = [];
+  const pattern = /\[tool (\w+) \{/g;
+  for (let match; (match = pattern.exec(text));) {
     const from = match.index + match[0].length - 1;
     let depth = 0, quoted = false, escaped = false, end = from;
     for (; end < text.length; end++) {
@@ -14,7 +15,8 @@ function calls(text: string) {
       if (c === '{') depth++;
       if (c === '}' && --depth === 0) break;
     }
-    found.push({ name: match[1], input: JSON.parse(text.slice(from, end + 1)) });
+    found.push({ name: match[1], input: JSON.parse(text.slice(from, end + 1)), start: match.index, end: end + 1 });
+    pattern.lastIndex = end + 1;
   }
   return found;
 }
@@ -59,8 +61,11 @@ export class StubRuntime implements AgentRuntime {
     this.specs.set(spec.key, spec);
     const said = spec.message;
     let result = '';
-    const seen = calls(said);
-    if (spec.bot === 'chief' && /\[first words\]/.test(said)) on({ type: 'text', text: 'I’ll start by checking the next step.' });
+    const request = said.split('\nThe person says: ').at(-1)!;
+    const report = spec.bot === 'chief' && /^\[Crewhouse\] Review helper task #(\d+)/.exec(request);
+    const seen = report ? [{ name: 'crew_status', input: { task: Number(report[1]), ...(/and event (\d+)/.exec(request) ? { event: Number(/and event (\d+)/.exec(request)![1]) } : {}) }, start: 0, end: 0 }] : calls(request);
+    const signals = seen.reduceRight((text, c) => text.slice(0, c.start) + text.slice(c.end), request);
+    if (spec.bot === 'chief' && /\[first words\]/.test(said)) on({ type: 'text', text: 'Chief will confirm the next step.' });
     for (const { name, input } of seen) {
       on({ type: 'tool', name, phase: 'start' });
       const gate = await this.host.gate(spec, name, input);
@@ -69,12 +74,12 @@ export class StubRuntime implements AgentRuntime {
       on({ type: 'tool', name, phase: 'end', ok: true });
       this.transcripts.set(spec.key, `${this.transcript(spec.key)}${name}: ${result}\n`);
     }
-    if (/link is down/i.test(said)) return { ok: false, kind: 'network', message: 'fetch failed' };
-    if (/hit the limit/i.test(said) && spec.account === 'chatgpt')
+    if (/link is down/i.test(signals)) return { ok: false, kind: 'network', message: 'fetch failed' };
+    if (/hit the limit/i.test(signals) && spec.account === 'chatgpt')
       return { ok: false, kind: 'resting', message: 'You have hit your ChatGPT usage limit (plus plan). Try again in ~30 min.', until: Date.now() + 1_800_000 };
-    if (/no helpers in plan/i.test(said) && spec.account === 'chatgpt')
+    if (/no helpers in plan/i.test(signals) && spec.account === 'chatgpt')
       return { ok: false, kind: 'plan', message: "Your plan doesn't include this model." };
-    if (/sign me out/i.test(said)) return { ok: false, kind: 'signed-out', message: '401 Unauthorized: your sign-in has expired' };
+    if (/sign me out/i.test(signals)) return { ok: false, kind: 'signed-out', message: '401 Unauthorized: your sign-in has expired' };
     const last = said.split('\n').map((line) => line.trim()).filter((line) => line && !line.startsWith('[Crewhouse')).at(-1) ?? '';
     let text = result ? `stub ${spec.bot}: ${seen.at(-1)?.name} said ${result.slice(0, 300)}` : `stub ${spec.bot}: done with "${last.slice(0, 60)}"`;
     if (/\[two-fare-backtest\]/.test(said))
@@ -82,7 +87,13 @@ export class StubRuntime implements AgentRuntime {
     const asked = last.replace(/^The person says: /, '');
     const scripted = process.env.CREWHOUSE_STUB_GOLDEN && spec.bot === 'chief' ? GOLDEN[asked] : undefined;
     text = scripted ?? text;
-    if (/ask permission/i.test(said)) {
+    if (report && result) { // scripted readback, never a real model-language acceptance claim
+      const r = JSON.parse(result), t = r.report;
+      const files = r.files ?? [], evidence = t.result?.startsWith('stub ') ? t.state === 'done' && files.length ? 'The finished file is ready.' : 'No confirmed result was recorded.' : t.result ?? r.progress[0]?.text ?? '';
+      text = `${t.state === 'unsure' ? 'Chief cannot confirm this result.' : t.state === 'failed' ? 'Chief could not complete this task.' : t.state === 'needs_you' ? 'Chief will read the information.' : 'Chief has the report.'}\nTask: “${t.title}”\n${evidence}`;
+      if (t.state === 'failed' && r.routine?.state === 'on' && r.routine.next_at) text += `\nNext run: ${new Date(r.routine.next_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase()}.`;
+    }
+    if (/ask permission/i.test(signals)) {
       text = await new Promise<string>((resolve) => this.holds.set(spec.key, (reply) => resolve(reply || text)));
       if (this.cancelled.delete(spec.key)) return { ok: false, aborted: true }; // stopped on purpose, not finished
     }

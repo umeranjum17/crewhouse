@@ -44,14 +44,14 @@ test('first run: her first request waits for her own sign-in, Chief says why in 
   assert.equal(task(db, t).state, 'paused');
   assert.equal(task(db, t).member, sara);
   const said = () => db.all("SELECT text FROM messages WHERE bot = 'chief' AND author = 'bot'").map((m: any) => m.text);
-  assert.ok(said().includes("The crew uses your ChatGPT account. Sign in when you're ready and I'll start."), said().join('\n'));
+  assert.ok(said().includes("The crew uses your ChatGPT account. Sign in to continue your tasks."), said().join('\n'));
   assert.equal(db.get("SELECT 1 FROM events WHERE kind = 'run.started'"), undefined, 'nothing ran on anyone else\'s account');
   // She signs in: it starts by itself, and Chief thanks her.
   await crew.accounts.login('chatgpt');
   await crew.accounts.finished('chatgpt');
   await settled(db, t);
   assert.equal(task(db, t).state, 'done');
-  assert.ok(said().includes("You're signed in. I'll start now."));
+  assert.ok(said().includes("You are signed in. Chief will continue your tasks."));
   done();
 });
 
@@ -64,7 +64,7 @@ test('a ChatGPT plan without helpers: said plainly with the way forward; "I chan
   crew.recruit('scout', 'Scout', 'person');
   disk.setBrains(cfg, 'scout', ['chatgpt']);
   only(crew, ['chatgpt']);
-  const { task: t } = await crew.post('scout', 'find a plumber, no helpers in plan', undefined) as { task: number };
+  const { task: t } = await crew.assign('scout', 'find a plumber, no helpers in plan', 'chief', undefined) as { task: number };
   await until('waiting on the plan', () => task(db, t).state === 'paused');
   assert.equal(task(db, t).wake_at, null);
   assert.equal(crew.accounts.notIncluded('chatgpt'), true);
@@ -90,7 +90,7 @@ test('a sign-in that stopped working (a password change): signed out for real, s
   await until('waiting for a new sign-in', () => task(db, t).state === 'paused');
   assert.equal(await crew.accounts.signedIn('grok'), false, 'its sign-in is gone, so nothing loops on it');
   assert.equal(db.get("SELECT text FROM messages WHERE bot = 'scout' ORDER BY id DESC")!.text,
-    'Grok signed you out. That happens after a password change. Sign in again and the crew picks up where it left off.');
+    'Your Grok sign-in has expired. Sign in again. The crew will continue your tasks.');
   done();
 });
 
@@ -102,7 +102,7 @@ test('typed-name onboarding ends on ideas, not an open question', async () => {
   done();
 });
 
-test('a Hello goal tap goes straight to Scout: hired silently with no Chief task; an excluded plan stays with Chief', async () => {
+test('Hello goal taps always go to Chief, keeping requested helper context and plan constraints', async () => {
   const { db, crew, done } = setup();
   // An excluded plan first, while Scout is still missing: no hire, Chief instead.
   const sara = 1;
@@ -117,11 +117,12 @@ test('a Hello goal tap goes straight to Scout: hired silently with no Chief task
   await settled(db, u);
   const { task: t } = crew.onboard('sir', 'Help me earn a little on the side', 'scout') as { task: number };
   await settled(db, t);
-  assert.ok(crew.bot('scout'), 'Scout is hired silently');
-  assert.equal(task(db, t).bot, 'scout');
+  assert.equal(crew.bot('scout'), undefined, 'Chief decides whether to recruit');
+  assert.equal(task(db, t).bot, 'chief');
   assert.equal(task(db, t).origin, 'person');
   assert.equal(task(db, t).state, 'done');
-  assert.equal(db.get("SELECT 1 FROM tasks WHERE bot = 'chief' AND member = 1 AND id != ?", u), undefined, 'no Chief task for the goal tap');
-  assert.equal(db.get("SELECT text FROM messages WHERE bot = 'scout' AND author = 'person'")!.text, 'Help me earn a little on the side');
+  assert.ok(db.get("SELECT 1 FROM tasks WHERE bot = 'chief' AND member = 1 AND id = ?", t));
+  assert.match(task(db, t).body, /Requested helper context: scout/);
+  assert.equal(db.get("SELECT text FROM messages WHERE bot = 'chief' AND author = 'person' AND task_id = ?", t)!.text, 'Help me earn a little on the side');
   done();
 });

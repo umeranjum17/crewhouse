@@ -91,7 +91,7 @@ export function validate({ db, crewDir }, id, forbid = []) {
 
   // 3. Each reply was put before the person, and their answer is on the record for these exact words.
   for (const p of delivered.filter((p) => p.endsWith('reply.md'))) {
-    const now = existsSync(join(bot, p)) ? sha(readFileSync(join(bot, p), 'utf8').trim()) : null;
+    const now = existsSync(join(bot, p)) ? sha(readFileSync(join(bot, p), 'utf8')) : null;
     const said = [...ev('draft.approved').map((d) => ({ ...d, a: 'approved' })), ...ev('draft.rejected').map((d) => ({ ...d, a: 'rejected' }))].filter((d) => d.path === p);
     const card = db.get("SELECT 1 FROM asks WHERE kind = 'propose' AND json_extract(detail, '$.task') = ? AND json_extract(detail, '$.draft.path') = ?", id, p);
     if (said.length) row(said.some((d) => d.sha === now) ? 'PASS' : 'FAIL', `answer on ${p}`, said.map((d) => `${d.a}${d.sha === now ? '' : ' (different words)'}`).join(', '));

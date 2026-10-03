@@ -13,7 +13,7 @@ const { ConnectError } = await import('@byokit/connect');
 const grant = { expires: 3600, refresh: 'ok', refreshExpires: 3600 };
 
 
-const seen: { tokens: Record<string, string>[]; auth: string[] } = { tokens: [], auth: [] };
+const seen: { tokens: Record<string, string>[]; auth: string[]; calls: string[] } = { tokens: [], auth: [], calls: [] };
 const app = createServer(async (req, res) => {
   let body = '';
   for await (const c of req) body += c;
@@ -56,6 +56,7 @@ const app = createServer(async (req, res) => {
       { name: 'search', description: 'Search pages', inputSchema: { type: 'object', properties: { q: { type: 'string' } } }, annotations: { readOnlyHint: true } },
       { name: 'create-page', description: 'Create a page', inputSchema: { type: 'object', properties: { title: { type: 'string' } } }, annotations: { title: 'create a page' } },
     ], nextCursor: 'next' } });
+    seen.calls.push(m.params.name);
     // Answered as an event stream, as remote MCP servers may.
     res.writeHead(200, { 'content-type': 'text/event-stream' });
     return res.end(`event: message\ndata: ${JSON.stringify({ jsonrpc: '2.0', id: m.id, result: { ...(m.params.name === 'rich' ? { structuredContent: { rows: [1, 2] }, isError: true } : {}), content: [{ type: 'text', text: `did ${m.params.name} ${JSON.stringify(m.params.arguments)}` }, ...(m.params.name === 'rich' ? [{ type: 'image', data: 'aGVsbG8=', mimeType: 'image/png' }] : [])] } })}\n\n`);
@@ -196,15 +197,15 @@ test('kit refresh stays sealed; transient failures preserve sign-in, expired tok
   grant.refresh = 'invalid_grant';
   await crew.connections.keepFresh();
   assert.equal(crew.connections.connected('mocknote'), false);
-  assert.match(db.get("SELECT text FROM messages WHERE bot = 'chief' ORDER BY id DESC")!.text, /^Your Mocknote connection has run out\. Connect it again under Settings, Connections/);
-  const count = db.get("SELECT COUNT(*) AS n FROM messages WHERE text LIKE 'Your Mocknote connection has run out%'")!.n;
+  assert.match(db.get("SELECT text FROM messages WHERE bot = 'chief' ORDER BY id DESC")!.text, /^Your Mocknote connection has expired\.\nOpen Connections in Settings\.\nConnect Mocknote again\./);
+  const count = db.get("SELECT COUNT(*) AS n FROM messages WHERE text LIKE 'Your Mocknote connection has expired%'")!.n;
   await crew.connections.keepFresh();
-  assert.equal(db.get("SELECT COUNT(*) AS n FROM messages WHERE text LIKE 'Your Mocknote connection has run out%'")!.n, count);
+  assert.equal(db.get("SELECT COUNT(*) AS n FROM messages WHERE text LIKE 'Your Mocknote connection has expired%'")!.n, count);
   grant.expires = 3600; grant.refreshExpires = 3600; grant.refresh = 'ok';
   done();
 });
 
-test('a connected app\'s tools: reading runs silently, changing something asks in plain words', async () => {
+test('connected app reads run; uncovered writes remain unavailable even with a real connection', async () => {
   const { db, crew, done } = lab();
   crew.onboard('sir');
   crew.recruit('scribe', 'Quill', 'person');
@@ -214,15 +215,13 @@ test('a connected app\'s tools: reading runs silently, changing something asks i
   await settled(db, t);
   assert.match(task(db, t).result, /did search/);
   assert.equal(db.all('SELECT * FROM asks').length, 0);
+  const writesBefore = seen.calls.filter(n => n === 'create-page').length;
   const u = crew.assign('quill', 'write it up [tool crew_app {"tool":"mocknote_create_page","input":{"title":"Trip"}}]', 'chief').task;
-  await until('ask', () => db.get("SELECT * FROM asks WHERE state = 'open'"));
-  const ask = db.get("SELECT * FROM asks WHERE state = 'open'")!;
-  assert.equal(ask.title, 'Quill wants to use your Mocknote: create a page.');
-  assert.equal(crew.snapshot().asks[0].detail.covers, '“create a page” in your Mocknote');
-  await crew.answer(ask.id, { answer: 'allow' });
   await settled(db, u);
-  assert.match(db.get("SELECT text FROM messages WHERE bot = 'quill' AND author = 'bot' AND task_id = ? ORDER BY id LIMIT 1", u)!.text, /did create-page/);
-  assert.equal(task(db, u).state, 'unsure', 'it changed something and never said it saw it work');
+  assert.match(task(db, u).result, /unavailable/);
+  assert.doesNotMatch(task(db, u).result, /did create-page/);
+  assert.equal(db.get("SELECT COUNT(*) AS n FROM asks WHERE state = 'open'")!.n, 0);
+  assert.equal(seen.calls.filter(n => n === 'create-page').length, writesBefore, 'the controlled provider received no write');
   assert.ok(seen.auth.every((a) => /^Bearer A[12]$/.test(a)), 'the bot never holds the token; crewd adds it');
   assert.ok(!existsSync(join(crew['cfg'].crewDir, 'bots', 'quill', 'connections.json')));
   done();
@@ -353,55 +352,32 @@ test('in chat: a helper asks for an app, the person connects it from the card, a
   done();
 });
 
-test('done needs proof: a job that acts but sees no confirmation, or says nothing, ends not sure with an alert; never a false done', async () => {
+test('historical acted tasks need confirmation; current blocked writes cannot erase uncertainty', async () => {
   const { cfg, db, crew, done } = lab();
-  crew.onboard('sir');
-  crew.recruit('scribe', 'Quill', 'person');
+  crew.onboard('sir'); crew.recruit('scribe', 'Quill', 'person');
   await back(crew, await start(crew), { code: 'good' });
-  disk.setSettings(cfg, 'quill', { allow: ['app:Mocknote:create a page'] }); // "Always": no card, so the call goes straight through
-  const book = '[tool crew_app {"tool":"mocknote_create_page","input":{"title":"Dentist"}}]';
-  const outcome = (worked: boolean, seen: string) => `[tool crew_outcome ${JSON.stringify({ worked, seen })}]`;
-  const alerts = () => db.get("SELECT COUNT(*) AS n FROM events WHERE kind = 'alert'")!.n as number;
-  const job = async (text: string) => {
-    const before = alerts();
-    const t = (await crew.post('quill', text))!.task;
-    await settled(db, t);
-    const lines = db.all("SELECT text FROM messages WHERE bot = 'quill' AND author = 'bot' AND task_id = ?", t).map((m) => m.text as string);
-    return { ...task(db, t), lines, alerted: alerts() > before, trail: db.all("SELECT kind FROM events WHERE json_extract(data, '$.task') = ?", t).map((e) => e.kind as string) };
+  disk.setSettings(cfg, 'quill', { allow: ['app:Mocknote:create a page'] });
+  const { release, holding } = await import('./lab.ts');
+  const beforeCalls = seen.calls.filter(n => n === 'create-page').length;
+  const historical = async (outcome: object | null) => {
+    const id = crew.assign('quill', 'ask permission: read a historical result', 'chief').task;
+    await holding(crew, 'quill');
+    // A controlled persisted record represents an action from an earlier run, not execution in this test.
+    db.run('UPDATE tasks SET acted = ?, outcome = ? WHERE id = ?', 'your Mocknote', outcome ? JSON.stringify(outcome) : null, id);
+    await release(crew, 'quill', 'Historical result checked.'); await settled(db, id);
+    return { ...task(db, id), line: db.get("SELECT text FROM messages WHERE bot = 'chief' AND task_id = ? ORDER BY id DESC", id)!.text };
   };
-
-  // Clicked through, no confirmation: the helper says so, and that is what the job ends as.
-  const unsure = await job(`book it ${book} ${outcome(false, "I pressed Book, but the page didn't show a confirmation. Worth checking your email for one.")}`);
-  assert.equal(unsure.state, 'unsure');
-  assert.equal(unsure.lines.at(-1), "Not sure it worked: I pressed Book, but the page didn't show a confirmation. Worth checking your email for one.");
-  assert.ok(unsure.alerted, 'the phone hears about it, like a failure');
-  assert.ok(unsure.trail.includes('task.unsure') && !unsure.trail.includes('task.done'));
-
-  // Acted and declared nothing: not sure, in crewd's words, never done.
-  const silent = await job(`book it ${book}`);
-  assert.equal(silent.state, 'unsure');
-  assert.equal(silent.lines.at(-1), "Not sure it worked: I did something on your Mocknote, but I didn't see it confirmed. Worth checking there yourself.");
-  assert.ok(silent.alerted);
-
-  // Said it worked, then acted again: the old "it worked" doesn't cover the new act.
-  const again = await job(`book it ${outcome(true, 'x')} ${book}`);
-  assert.equal(again.state, 'unsure');
-
-  // Confirmed with what it saw: done, and no alert.
-  const sure = await job(`book it ${book} ${outcome(true, 'The page showed confirmation number 4417.')}`);
-  assert.equal(sure.state, 'done');
-  assert.ok(!sure.alerted);
-  assert.ok(!sure.lines.some((l: string) => l.startsWith('Not sure')));
-
-  // Nothing done out in the world: done as before, nothing to declare.
-  assert.equal((await job('what time is it')).state, 'done');
-
-  // A routine's not sure lands in Chief's thread, where every push-worthy Chief line goes.
-  const r = crew.addRoutine({ bot: 'quill', schedule: 'every day 9:00', task: `book it ${book}` }, 'person');
-  crew.runRoutine(r.id);
-  await until('routine settled', () => { const t = db.get('SELECT state FROM tasks WHERE routine = ? ORDER BY id DESC', r.id); return t && !['queued', 'working'].includes(t.state); });
-  assert.equal(db.get('SELECT state FROM tasks WHERE routine = ? ORDER BY id DESC', r.id)!.state, 'unsure');
-  assert.match(db.get("SELECT text FROM messages WHERE bot = 'chief' ORDER BY id DESC")!.text, /^Quill isn't sure “.+” worked\. I did something on your Mocknote/);
+  const unsure = await historical({ worked: false, seen: 'The controlled historical record has no confirmation.' });
+  assert.equal(unsure.state, 'unsure'); assert.match(unsure.line, /cannot confirm.*no confirmation/s);
+  const silent = await historical(null);
+  assert.equal(silent.state, 'unsure'); assert.match(silent.line, /didn't see it confirmed/);
+  const sure = await historical({ worked: true, seen: 'The controlled readback record showed confirmation number 4417.' });
+  assert.equal(sure.state, 'done'); assert.match(sure.line, /report/);
+  const current = crew.assign('quill', '[tool crew_app {"tool":"mocknote_create_page","input":{"title":"Dentist"}}]', 'chief').task;
+  await settled(db, current);
+  assert.match(task(db, current).result, /unavailable/);
+  assert.equal(seen.calls.filter(n => n === 'create-page').length, beforeCalls, 'even a real old grant causes no current provider write');
+  assert.equal(db.get("SELECT COUNT(*) AS n FROM events WHERE kind = 'send.done'")!.n, 0);
   assert.match(crew.digest(0), /- Not sure it worked: Quill, /);
   done();
 });

@@ -31,7 +31,7 @@ test('one question over three items: three parallel sessions, one merged answer,
   try {
     const items = ['Bluebird Cafe', 'Narrowfare Books', 'Fareboard Deli'];
     const question = 'What is the lunch soup price today, with sources?';
-    const id = (await crew.post('scout', `compare soups ${call('crew_batch', { question, items })}`))!.task;
+    const id = (await crew.assign('scout', `compare soups ${call('crew_batch', { question, items })}`, 'chief'))!.task;
     await settled(db, id);
     assert.equal(task(db, id).state, 'done');
 
@@ -54,7 +54,7 @@ test('one question over three items: three parallel sessions, one merged answer,
     // ...which it puts into a single workbook, delivered to the person.
     const sheet = { name: 'Soup compare', sheets: [{ name: 'Soups', columns: [{ header: 'Place' }, { header: 'Soup' }, { header: 'Source' }],
       rows: items.map((p) => [p, 'tomato', 'menu']) }] };
-    const wb = (await crew.post('scout', `now the sheet ${call('crew_workbook', sheet)}`))!.task;
+    const wb = (await crew.assign('scout', `now the sheet ${call('crew_workbook', sheet)}`, 'chief'))!.task;
     await settled(db, wb);
     assert.equal(task(db, wb).state, 'done');
     const delivered = db.all("SELECT data FROM events WHERE kind = 'file.delivered'").map((e: any) => JSON.parse(e.data));
@@ -67,7 +67,7 @@ test('a batch item cannot start another batch: nesting is refused, never fanned 
   const { db, crew, done } = scouted();
   try {
     // A batch already running for this task is exactly what a sub-run's own call would find: refuse it.
-    const id = (await crew.post('scout', `compare ${call('crew_batch', { question: 'soup prices', items: ['Solo'] })}`))!.task;
+    const id = (await crew.assign('scout', `compare ${call('crew_batch', { question: 'soup prices', items: ['Solo'] })}`, 'chief'))!.task;
     (crew as any).batching.add(id);
     await settled(db, id);
     assert.equal(task(db, id).state, 'done', 'a refused batch is a result the model reads, never a crashed run');
@@ -80,7 +80,7 @@ test('a resting account stops later waves early and says so in plain words', asy
   const { db, crew, done } = scouted();
   try {
     const items = Array.from({ length: 10 }, (_, i) => `Place ${i + 1}`);
-    const id = (await crew.post('scout', `compare ${call('crew_batch', { question: 'hit the limit on prices today', items })}`))!.task;
+    const id = (await crew.assign('scout', `compare ${call('crew_batch', { question: 'hit the limit on prices today', items })}`, 'chief'))!.task;
     await settled(db, id);
     assert.equal(task(db, id).state, 'done', 'a tired account is a result the model reads, never a crashed run');
     assert.ok(specOf(crew, batchKey('scout', id, 7)), 'the first wave of eight ran');
@@ -97,7 +97,7 @@ test('at most 24 items per job: the rest are named, not silently dropped', async
   const { db, crew, done } = scouted();
   try {
     const items = Array.from({ length: 30 }, (_, i) => `Place ${i + 1}`);
-    const id = (await crew.post('scout', `compare ${call('crew_batch', { question: 'soup prices', items })}`))!.task;
+    const id = (await crew.assign('scout', `compare ${call('crew_batch', { question: 'soup prices', items })}`, 'chief'))!.task;
     await settled(db, id);
     assert.ok(specOf(crew, batchKey('scout', id, MAX_ITEMS - 1)));
     assert.equal(specOf(crew, batchKey('scout', id, MAX_ITEMS)), undefined);
@@ -109,7 +109,7 @@ test('at most 24 items per job: the rest are named, not silently dropped', async
 test('an empty question or item list is a plain error, not a run of nothing', async () => {
   const { db, crew, done } = scouted();
   try {
-    const id = (await crew.post('scout', `compare ${call('crew_batch', { question: '', items: [] })}`))!.task;
+    const id = (await crew.assign('scout', `compare ${call('crew_batch', { question: '', items: [] })}`, 'chief'))!.task;
     await settled(db, id);
     assert.equal(task(db, id).state, 'done');
     assert.match(transcript(crew, `agent:m1:crewhouse:scout:${id}`), /error: (say the one question|list the items)/);
