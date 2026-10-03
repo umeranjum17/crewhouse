@@ -898,7 +898,7 @@ export function firstIdeas(state: Json) {
  *  Until all three are done, the owner's Home says how many are left. */
 export function homeSetup(state: Json, g: Json | null, link: Json | null) {
   const rows = [
-    { key: 'chatgpt', says: 'ChatGPT signed in', done: g?.state === 'ready' && !g?.notIncluded },
+    { key: 'chatgpt', says: 'Your ChatGPT account', done: g?.state === 'ready' && !g?.notIncluded },
     { key: 'phones', says: 'Phones can reach the crew from anywhere', done: link?.anywhere === 'anywhere' },
     { key: 'google', says: 'Google setup', done: state.house?.google !== false },
   ];
@@ -1127,7 +1127,7 @@ export function account(accounts: Json[] | null, key = 'chatgpt') {
   const declined = phase === 'cancelled';
   const busy = phase === 'busy';
   // 'unavailable' was the CLI missing; the engine now ships inside Crewhouse, so there is always something to sign in to.
-  return { state: a.signedIn ? 'ready' as const : 'signed-out' as const as 'ready' | 'signed-out' | 'unavailable',
+  return { state: a.signedIn && !waiting ? 'ready' as const : 'signed-out' as const as 'ready' | 'signed-out' | 'unavailable',
     recovery: s?.why === 'locked' ? plain(s.error) : '', signing, page: waiting && !s?.code ? s?.url ?? '' : '', expired, declined, busy, failed: s?.state === 'failed' && !expired && !declined && !busy,
     resting: a.restingUntil > 0 ? `Resting until ${clock(a.restingUntil)}` : '', notIncluded: !!a.notIncluded,
     work: a.work ? (typeof a.work === 'string' ? a.work : 'a work account') : '' };
