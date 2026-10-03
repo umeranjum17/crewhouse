@@ -1031,7 +1031,7 @@ export function lines(page: Json, bot: string, state?: Json): Line[] {
     const done = new Map<number, string>((state?.tasks ?? []).filter((t: Json) => t.state === 'done').map((t: Json) => [t.id, String(t.bot)]));
     for (const l of ls) {
       const by = done.get(task.get(l.id) ?? -1);
-      if (by && l.from === 'them' && !/\?\s*$/.test(l.text)) Object.assign(l, { done: true, by });
+      if (by && l.from === 'them' && !l.unsure && !l.failed && !/\?\s*$/.test(l.text)) Object.assign(l, { done: true, by });
     }
     return ls;
   }
@@ -1048,6 +1048,10 @@ export function lines(page: Json, bot: string, state?: Json): Line[] {
   }
   return ls;
 }
+
+/** crewd's own binding of Chief's final line to its source task's terminal event; absent on progress, questions and old lines. */
+const outcomeOf = (m: Json): 'done' | 'unsure' | 'failed' | undefined =>
+  ['done', 'unsure', 'failed'].includes(m?.outcome?.state) && Number.isInteger(m.outcome.event) && m.task_id != null ? m.outcome.state : undefined;
 
 function said(page: Json, bot: string): Line[] {
   return (page?.messages ?? []).filter((m: Json) => !/\bstub [\w-]+:/.test(String(m.text ?? ''))).map((m: Json) => {
@@ -1070,7 +1074,8 @@ function said(page: Json, bot: string): Line[] {
       text: `Chief asked: ${plain(String(m.title ?? text.split('\n')[0])).slice(0, 80)}`, detail: chatWords(text),
       files: [...pics, ...(m.files ?? []).map((f: Json) => fileView(f.bot, f.path))], choices: [] };
     return { id: m.id, from: m.author === 'person' ? 'me' : 'them',
-      recap: m.recap === true, text: m.author === 'person' ? (pics.length && /^Here (is a photo|are some photos)\.$/.test(text) ? '' : noTools(text)) : chatWords(text), files: [...pics, ...(m.files ?? []).map((f: Json) => fileView(f.bot, f.path))], choices: (m.choices ?? []).map(plain), at: m.at ? at(m.at) : undefined, unsure: m.author === 'bot' && /^Not sure it worked:|^[^.]{1,40} isn't sure “/.test(text),
+      recap: m.recap === true, text: m.author === 'person' ? (pics.length && /^Here (is a photo|are some photos)\.$/.test(text) ? '' : noTools(text)) : chatWords(text), files: [...pics, ...(m.files ?? []).map((f: Json) => fileView(f.bot, f.path))], choices: (m.choices ?? []).map(plain), at: m.at ? at(m.at) : undefined, unsure: m.author === 'bot' && (bot === 'chief' ? outcomeOf(m) === 'unsure' : /^Not sure it worked:|^[^.]{1,40} isn't sure “/.test(text)),
+      ...(bot === 'chief' && m.author === 'bot' && outcomeOf(m) === 'failed' ? { failed: true } : {}),
       ...(m.author !== 'person' && ruleEnd(m.rule) ? { rule: ruleEnd(m.rule) } : {}) };
   }).filter((l: Line) => l.text || l.files.length);
 }

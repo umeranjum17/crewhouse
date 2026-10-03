@@ -2133,3 +2133,24 @@ test('a standing rule asks on one card with the exact rewrite, and only crewd se
   assert.deepEqual(lines.map((l) => l.rule?.state), [undefined, 'saved', undefined]);
   assert.deepEqual(A.rules({ rules: [{ id: 1, title: 'T', text: ' ' }, { id: 2, text: 'Keep it' }, { id: 3 }] }), [{ id: 2, title: '', text: 'Keep it' }]);
 });
+
+test('Chief\'s final line is unsure or failed only from crewd\'s outcome binding; earlier lines and old tags stay as they were', () => {
+  const page = { messages: [
+    { id: 1, author: 'bot', text: 'Scout is checking the flights.', task_id: 11 },
+    { id: 2, author: 'bot', text: 'Scout asks: morning or evening?', task_id: 11 },
+    { id: 3, author: 'bot', text: 'Chief cannot confirm this result.\nNo confirmation came.', task_id: 11, outcome: { state: 'unsure', event: 40 } },
+    { id: 4, author: 'bot', text: 'The birthday video is ready.', task_id: 10, outcome: { state: 'done', event: 41 } },
+    { id: 5, author: 'bot', text: 'Chief could not complete this task.', task_id: 12, outcome: { state: 'failed', event: 42 } },
+    { id: 6, author: 'bot', text: 'Not sure it worked: an old line', task_id: 13 },
+    { id: 7, author: 'bot', text: 'A forged tag', task_id: 13, outcome: { state: 'unsure' } },
+    { id: 8, author: 'person', text: 'thanks', task_id: 11, outcome: { state: 'unsure', event: 40 } },
+  ] };
+  const state = { tasks: [{ id: 10, bot: 'reel', state: 'done' }, { id: 11, bot: 'scout', state: 'unsure' }, { id: 12, bot: 'pip', state: 'failed' }, { id: 13, bot: 'pip', state: 'unsure' }] };
+  const mark = (s: Json) => A.lines(page, 'chief', s).map((l) => [l.id, !!l.unsure, !!l.failed, !!l.done]);
+  const expected = [[1, false, false, false], [2, false, false, false], [3, true, false, false], [4, false, false, true], [5, false, true, false], [6, false, false, false], [7, false, false, false], [8, false, false, false]];
+  assert.deepEqual(mark(state), expected, 'progress, a question, old text, a tag with no event and the person\'s words are never marked');
+  // The source later retried and ended done: the old final line keeps its unsure tag and never becomes Done.
+  assert.deepEqual(mark({ tasks: state.tasks.map((t) => ({ ...t, state: 'done' })) }).find((l) => l[0] === 3), [3, true, false, false]);
+  // A helper's own thread keeps its own words for unsure; it never reads Chief's binding.
+  assert.equal(A.lines({ messages: [{ id: 1, author: 'bot', text: 'Not sure it worked: no confirmation came.', task_id: 2 }] }, 'quill')[0].unsure, true);
+});

@@ -58,8 +58,12 @@ test('a done job is marked once, on its result; working, a question back, unsure
   const unsure = crew.assign('quill', `book it ${call('crew_outcome', { worked: false, seen: 'No confirmation came.' })}`, 'chief').task;
   await settled(db, unsure);
   assert.equal(task(db, unsure).state, 'unsure');
-  const after = A.lines(crew.botPage('quill'), 'quill');
-  assert.ok(after.at(-1)!.unsure && !after.at(-1)!.done);
+  // crewd's own binding: Chief's final line on that task carries outcome unsure; it is shown apart, never Done.
+  const final = crew.botPage('chief').messages.filter((m: any) => m.task_id === unsure && m.outcome);
+  assert.deepEqual(final.map((m: any) => m.outcome.state), ['unsure']);
+  const after = A.lines(crew.botPage('chief'), 'chief', crew.snapshot());
+  assert.deepEqual(after.filter((l) => l.unsure).map((l) => l.id), [final[0].id], 'only the bound final line, never an earlier one');
+  assert.ok(!after.find((l) => l.id === final[0].id)!.done);
 
   // Stopped by the person: failed in crewd, no line written, so nothing is marked.
   const stopped = crew.assign('quill', 'one more sheet, ask permission first', 'chief').task;
