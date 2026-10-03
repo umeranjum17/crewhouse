@@ -178,12 +178,13 @@ function Reply({ who, task, state, onAsk, asking, canAct, refresh }: { who: A.He
   const [reply, setReply] = useState<string | null>(null);
   const [waits, setWaits] = useState('');
   const [by, setBy] = useState<string | null>(null);
+  const [inChat, setInChat] = useState(false);
   // The job is Chief's request: its answer comes only from that request and the work linked to it (A.outcome).
-  useEffect(() => { api.bot('chief').then((p) => { const o = A.outcome(p, state, task); setReply(o.text); setWaits(o.waits); setBy(o.by); }, () => {}); }, [state, task]);
+  useEffect(() => { api.bot('chief').then((p) => { const o = A.outcome(p, state, task, who.id); setReply(o.text); setWaits(o.waits); setBy(o.by); setInChat(o.chief); }, () => {}); }, [state, task, who.id]);
   const card = A.needsYou(state).find((c) => c.helper === who.id);
   const chat = () => void open('crewhouse://ask');
   return <>
-    <View style={s.row}><Face who={who} size={40} /><T style={[s.h2, { flex: 1 }]}>{reply ? `${who.name} reported back` : reply === '' ? `${who.name} couldn't do this one` : waits || (by === who.id ? `${who.name} is on it…` : 'Chief is on it…')}</T></View>
+    <View style={s.row}><Face who={who} size={40} /><T style={[s.h2, { flex: 1 }]}>{reply ? `${who.name} reported back` : reply === '' ? (inChat ? "Chief answered in his chat" : `${who.name} couldn't do this one`) : waits || (by === who.id ? `${who.name} is on it…` : 'Chief is on it…')}</T></View>
     {!!reply && <ScrollView style={[s.listGroup, { backgroundColor: t.solid, borderColor: t.line, maxHeight: 280 }]} contentContainerStyle={{ padding: 12 }}>
       <T>{reply}</T>
     </ScrollView>}
@@ -241,9 +242,10 @@ function Write({ box, who, state }: { box: Exclude<Box, null>; who: A.Helper; st
   const [draft, setDraft] = useState<string | null>(null);
   const [waits, setWaits] = useState('');
   const [by, setBy] = useState<string | null>(null);
+  const [inChat, setInChat] = useState(false);
   const [trying, setTrying] = useState(false);
   // Every refresh (something landed on the link) looks at Chief's request and the work linked to it.
-  useEffect(() => { if (task) api.bot('chief').then((p) => { const o = A.outcome(p, state, task); setDraft(o.text); setWaits(o.waits); setBy(o.by); }, () => {}); }, [state, task]);
+  useEffect(() => { if (task) api.bot('chief').then((p) => { const o = A.outcome(p, state, task, who.id); setDraft(o.text); setWaits(o.waits); setBy(o.by); setInChat(o.chief); }, () => {}); }, [state, task, who.id]);
   if (box === 'off') return <SwitchOn />;
   // The first ask's box says "Not sent" itself; Try again has only the toast.
   const ask = async (words: string, not = '', quiet = true) => {
@@ -266,12 +268,13 @@ function Write({ box, who, state }: { box: Exclude<Box, null>; who: A.Helper; st
     </View>
   </>;
   return <>
-    <View style={s.row}><Face who={who} size={40} /><T style={[s.h2, { flex: 1 }]}>{draft ? 'Here it is' : `${who.name} couldn't write this one`}</T></View>
+    <View style={s.row}><Face who={who} size={40} /><T style={[s.h2, { flex: 1 }]}>{draft ? 'Here it is' : inChat ? 'No draft came back. Chief answered in his chat' : `${who.name} couldn't write this one`}</T></View>
     {!!draft && <ScrollView style={[s.listGroup, { backgroundColor: t.solid, borderColor: t.line, maxHeight: 240 }]} contentContainerStyle={{ padding: 12 }}>
       <T>{draft}</T>
     </ScrollView>}
     <View style={s.chips}>
       {!!draft && <Btn go label="Put it in" onPress={() => void putIn(draft, who.name, box)} />}
+      {!draft && inChat && <Btn label="Open Crewhouse" onPress={() => void Linking.openURL('crewhouse://').catch(() => {}).then(closePanel)} />}
       <Btn label="Try again" disabled={trying} onPress={() => { setTrying(true); void ask(want, draft, false).finally(() => setTrying(false)); }} />
       <Btn ghost label="Not now" onPress={() => void closePanel()} />
     </View>

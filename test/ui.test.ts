@@ -1135,29 +1135,37 @@ test('Write it here: Chief is asked for the writer, and the draft is only the an
     `Write it here: a thank-you note\nThat's for the text box I'm typing in on my phone.\nNot this one: “Thanks!”\n${decide}\nReply with only what the whole box should say, ${tail}`, 'an empty box says nothing; Try again names the one passed on');
   assert.equal(A.writeAsk('make it warmer', { text: 'Dear Sam, no. Best, Umer', picked: 'no.' }),
     `Write it here: make it warmer\nThat's for the part I picked in a text box I'm typing in on my phone: “no.”. The whole box says: “Dear Sam, no. Best, Umer”\n${decide}\nReply with only the words to put in place of the part I picked, ${tail}`, 'a picked part is all that changes');
-  // The post returns Chief's request id (7). The answer is only what is linked to it: Chief's request on his page and the
-  // tasks whose root is 7 in the snapshot; Scribe's latest job (9, another request) is never taken.
-  const chief = (state: string, result?: string) => ({ tasks: [{ id: 7, bot: 'chief', state, ...(result === undefined ? {} : { result }) }, { id: 5, bot: 'chief', state: 'done', result: 'older' }] });
+  // The post returns Chief's request id (7), asked for Scribe. Root links say what belongs to the request; only Scribe's
+  // newest linked task is the deliverable. Scribe's job 9 for another request (root 8) is never taken.
+  const chief = (state: string, result?: string, ...own: Json[]) => ({ tasks: [{ id: 7, bot: 'chief', state, ...(result === undefined ? {} : { result }) }, { id: 5, bot: 'chief', state: 'done', result: 'older' }, ...own] });
   const snap = (...linked: Json[]) => ({ tasks: [{ id: 9, bot: 'scribe', root: 8, state: 'done', result: 'Not yours' }, ...linked] });
   const t = (id: number, state: string, result?: string, bot = 'scribe') => ({ id, bot, root: 7, parent: 7, state, ...(result === undefined ? {} : { result }) });
-  assert.deepEqual(A.outcome(chief('working'), snap(), 7), { text: null, waits: '', by: null }, 'Chief has not handed it on yet: nothing to show, nobody else named');
-  assert.deepEqual(A.outcome(chief('done', 'I asked Scribe.'), snap(t(10, 'working')), 7), { text: null, waits: '', by: 'scribe' }, 'the linked job is still writing');
-  assert.equal(A.outcome(chief('working'), snap(t(10, 'done', ' Sorry, Thursday? ')), 7).text, 'Sorry, Thursday?', 'the linked job\'s confirmed reply, even while Chief is still relaying it');
-  assert.equal(A.outcome(chief('done', 'Passed on.'), snap(t(10, 'done', 'first'), t(11, 'done', 'final', 'helper')), 7).text, 'final', 'a job passed on: the newest linked result');
-  assert.equal(A.outcome(chief('done'), snap(t(10, 'done', 'Done.')), 7).text, '', 'an empty reply is not a draft to put in');
-  assert.equal(A.outcome(chief('done', 'Scribe could not.'), snap(t(10, 'failed', 'boom')), 7).text, '', 'it couldn\'t: nothing to put in, never Chief\'s relay');
-  assert.equal(A.outcome(chief('working'), snap(t(10, 'unsure')), 7).text, null, 'nothing linked is done and Chief is still on it: no verdict yet');
-  assert.equal(A.outcome(chief('done', 'Dear Sam, sorry.'), snap(), 7).text, 'Dear Sam, sorry.', 'Chief wrote it himself: his own done reply');
-  assert.equal(A.outcome(chief('failed', 'boom'), snap(), 7).text, '');
-  assert.equal(A.outcome({ tasks: [] }, snap(t(10, 'done', 'x')), 7).text, null, 'no request on Chief\'s page: never a guess');
-  assert.equal(A.outcome(chief('done'), snap(t(10, 'paused', 'Waiting for you to sign in with ChatGPT.')), 7).waits, 'Waiting for you to sign in with ChatGPT.', 'a paused job says why, never "writing" forever');
-  assert.equal(A.outcome(chief('needs_you'), snap(), 7).waits, "It's waiting on an OK, in Chief's chat.");
+  const out = (page: Json, st: Json) => A.outcome(page, st, 7, 'scribe');
+  assert.deepEqual(out(chief('working'), snap()), { text: null, waits: '', by: null, chief: false }, 'Chief has not handed it on yet: nothing to show, nobody else named');
+  assert.deepEqual(out(chief('done', 'I asked Scribe.'), snap(t(10, 'working'))), { text: null, waits: '', by: 'scribe', chief: false }, 'the linked job is still writing');
+  // 020 (1): Chief's delegation acknowledgement is never draft text.
+  assert.deepEqual(out(chief('done', "I've asked Scribe to write it."), snap()), { text: '', waits: '', by: null, chief: true }, 'his ack with no Scribe task: no draft, his reply is in his chat');
+  assert.equal(out(chief('done', 'Dear Sam, sorry.'), snap()).text, '', 'even words that look like a draft: Chief\'s reply is never Put it in');
+  // 020 (2): a finished research step while the writing is still to come never enables Put it in.
+  assert.equal(out(chief('done', 'Scout looked, Scribe writes.'), snap(t(10, 'done', 'Three facts about Sam', 'scout'), t(11, 'queued'))).text, null, 'writing queued');
+  assert.equal(out(chief('working'), snap(t(10, 'done', 'Three facts about Sam', 'scout'))).text, null, 'research done, Chief still deciding: no answer');
+  assert.equal(out(chief('done', 'Hand-off', { id: 12, bot: 'chief', root: 7, state: 'working' }), snap(t(10, 'done', 'Three facts', 'scout'))).text, null, 'Chief\'s own follow-up on the request is still open');
+  assert.equal(out(chief('done'), snap(t(10, 'done', 'Three facts about Sam', 'scout'))).text, '', 'all ended and Scribe never wrote: no draft, never the research');
+  assert.equal(out(chief('done'), snap(t(10, 'done', 'Three facts', 'scout'), t(11, 'done', ' Sorry, Thursday? '))).text, 'Sorry, Thursday?', 'the writer\'s own done reply');
+  // 020 (3): failed or unsure work never falls back to an earlier or unrelated done result.
+  assert.equal(out(chief('done'), snap(t(10, 'done', 'first draft'), t(11, 'failed', 'boom'))).text, '', 'newest writer task failed: not its earlier draft');
+  assert.equal(out(chief('done'), snap(t(10, 'done', 'first draft'), t(11, 'unsure'))).text, '');
+  assert.equal(out(chief('done', 'Scribe could not.'), snap(t(10, 'failed', 'boom'))).text, '', 'never Chief\'s relay');
+  assert.equal(out(chief('done'), snap(t(10, 'done', 'Done.'))).text, '', 'an empty reply is not a draft to put in');
+  assert.equal(out({ tasks: [] }, snap(t(10, 'done', 'x'))).text, null, 'no request on Chief\'s page: never a guess');
+  assert.equal(out(chief('done'), snap(t(10, 'paused', 'Waiting for you to sign in with ChatGPT.'))).waits, 'Waiting for you to sign in with ChatGPT.', 'a paused job says why, never "writing" forever');
+  assert.equal(out(chief('needs_you'), snap()).waits, "It's waiting on an OK, in Chief's chat.");
   assert.equal(A.forHelper({ bots: [{ id: 'scribe', display: 'Scribe' }] }, 'scribe', 'Write it here: x'), 'Scribe: Write it here: x', 'asked of Chief, the writer named as context');
   // Source: the panel posts only to Chief and reads only Chief's page for these answers, never a helper's.
   const panel = readFileSync(join(import.meta.dirname, '..', 'mobile', 'src', 'panel.tsx'), 'utf8');
   assert.doesNotMatch(panel, /api\.post\((?!'chief')/, 'every panel post goes to Chief');
   assert.doesNotMatch(panel, /api\.bot\((?!'chief')/, 'no answer is read off a helper\'s page');
-  assert.equal((panel.match(/A\.outcome\(p, state, task\)/g) ?? []).length, 2, 'Write it here and the quick ask both wait on the linked answer');
+  assert.equal((panel.match(/A\.outcome\(p, state, task, who\.id\)/g) ?? []).length, 2, 'Write it here and the quick ask both wait on the linked answer');
   for (const w of ['Write it here', 'What should it say?', 'Let Chief see the box you\'re typing in', 'Put it in', 'Try again', 'Not now', 'Copied: hold the box and paste'])
     assert.doesNotMatch(w, FORBIDDEN);
 });

@@ -856,23 +856,28 @@ export function writeAsk(want: string, box: { text: string; picked: string }, no
       : `Reply with only what the whole box should say${sofar ? ', keeping what I wrote where it fits' : ''}, as plain text: no file, no notes.`,
   ].filter(Boolean).join('\n');
 }
-/** A job asked of Chief from the phone (Write it here, a quick ask): its answer, found only by the request id the post
- *  returned. The work is Chief's request on his page plus the tasks whose `root` is that id (his hand-off and anything
- *  passed on from it) in `/api/state.tasks`; never the latest task of some helper. `text` is null while any of it is
- *  still open (or Chief is and nothing linked is done), then the newest linked task that ended `done` (else Chief's own `done` reply), '' when none did (crewd's
- *  "Done." is an empty reply). `waits` is why it isn't moving, in crewd's words; `by` the helper doing it now. */
-export function outcome(chiefPage: Json, state: Json, request: number): { text: string | null; waits: string; by: string | null } {
+/** A job asked of Chief from the phone for one helper (Write it here, a quick ask): its answer, found only by the
+ *  request id the post returned. Root links say which tasks belong to the request (his hand-offs, what was passed on,
+ *  his own follow-ups, from his page and `/api/state.tasks`), not which one is the deliverable: that is only the
+ *  newest linked task of the helper it was asked for. `text` is null while anything in the request is still open (a
+ *  finished research step never stands in for writing still to come), then that task's reply if it ended `done`, else ''
+ *  (failed or unsure never falls back to an earlier result, and crewd's "Done." is an empty reply). Chief's own words,
+ *  such as "I've asked Scribe", are never the answer: with no task of that helper, `text` is '' and `chief` says his
+ *  reply is in his chat. `waits` is why it isn't moving, in crewd's words; `by` the helper doing it now. */
+export function outcome(chiefPage: Json, state: Json, request: number, helper: string): { text: string | null; waits: string; by: string | null; chief: boolean } {
   const req = (chiefPage?.tasks ?? []).find((t: Json) => t.id === request);
-  const linked = ((state?.tasks ?? []) as Json[]).filter((t) => t.root === request && t.id !== request).sort((a, b) => b.id - a.id);
+  const seen = new Map<number, Json>();
+  for (const t of [...(chiefPage?.tasks ?? []), ...(state?.tasks ?? [])]) if (t.root === request && t.id !== request) seen.set(t.id, t);
+  const linked = [...seen.values()].sort((a, b) => b.id - a.id);
   const ended = (t: Json) => ['done', 'failed', 'unsure'].includes(t.state);
   const open = [req, ...linked].filter((t) => t && !ended(t));
   const stuck = open.find((t) => t.state === 'paused' || t.state === 'needs_you');
   const waits = !stuck ? '' : stuck.state === 'paused' ? plain(stuck.result ?? '') || 'Waiting for you.' : "It's waiting on an OK, in Chief's chat.";
-  const by = linked.find((t) => !ended(t))?.bot ?? null;
-  const done = linked.find((t) => t.state === 'done') ?? (!linked.length && req?.state === 'done' ? req : null);
-  if (!req || by || (!done && !ended(req))) return { text: null, waits, by };
-  const r = done ? String(done.result ?? '').trim() : '';
-  return { text: r === 'Done.' ? '' : r, waits, by };
+  const by = linked.find((t) => !ended(t) && t.bot !== 'chief')?.bot ?? null;
+  if (!req || open.length) return { text: null, waits, by, chief: false };
+  const last = linked.find((t) => t.bot === helper);
+  const r = last?.state === 'done' ? String(last.result ?? '').trim() : '';
+  return { text: r === 'Done.' ? '' : r, waits, by, chief: !last };
 }
 /** Home's standing "hand me a job" list: the jobs the crew offers to do end to end, from crewd's `ideas[]` — which is
  *  already only what this crew can do. A goal first, then money back, then the everyday jobs. A row that needs an app the person
