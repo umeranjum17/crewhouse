@@ -479,7 +479,7 @@ function HelperSheet({ c, h, state, onClose }: { c: A.OfficeMember; h: A.Helper 
           <button className="icon-btn" onClick={onClose} aria-label="Close">✕</button>
         </header>
         <Pill tone={TONES[seat]} live={seat === 'working'}>{seat === 'working' || seat === 'waiting' ? A.SEAT_WORDS[seat] : c.status}</Pill>
-        {c.ring && job && <div className="o-sec"><div className="o-eyebrow">{seat === 'waiting' ? 'Waiting for Chief' : 'Working on'}</div><h3>{job.title}</h3></div>}
+        {c.ring && job && <div className="o-sec"><div className="o-eyebrow">{seat === 'waiting' ? 'Waits for Chief' : 'Working on'}</div><h3>{job.title}</h3></div>}
         {c.steps.length > 0 && <Steps steps={c.steps} max={5} />}
         {c.things.length > 0 && <div className="o-sec"><div className="o-eyebrow">{c.ring ? 'First looks' : 'Made for you'}</div>
           {c.things.map((f, i) => <Media key={i} f={f} />)}</div>}

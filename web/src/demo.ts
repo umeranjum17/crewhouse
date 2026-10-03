@@ -39,7 +39,7 @@ const bot = (id: string, display: string, role: string, extra: Json = {}) => ({
 const task = (id: number, b: string, title: string, state: string, extra: Json = {}) => ({ id, bot: b, title, state, member: 1, updated_at: now - 20 * min, files: [], ...extra });
 
 const bots = [
-  bot('chief', 'Chief', 'Manages the crew for you', { last: { author: 'bot', text: 'Scout found three flights to Lahore. Do you want me to book the Friday one?', at: now - 4 * min }, unread: 1 }),
+  bot('chief', 'Chief', 'Manages the crew for you', { last: { author: 'bot', text: 'Scout found three flights to Lahore. Do you want Chief to book the Friday one?', at: now - 4 * min }, unread: 1 }),
   bot('reel', 'Reel', 'Makes videos and posters from your photos', {
     task: task(41, 'reel', "Mum's birthday video", 'working'), step: { kind: 'task.progress', at: now - 2 * min, data: { text: 'Picking the music…' } },
   }),
@@ -253,14 +253,14 @@ const pages: Record<string, Json> = {
     { id: 2, author: 'chief', text: 'Thank you, Umer. The crew uses your own ChatGPT. It is the same one that you already use.' },
     ...(variant === 'plan' ? [{ id: 3, author: 'chief', text: "Your ChatGPT plan doesn't include helpers yet. Everything else in ChatGPT is fine. ChatGPT Plus includes it, or you can ask Umer to cover it." }] : []),
     ...(variant === 'answer' ? [
-      { id: 3, author: 'chief', text: 'You are signed in. Thank you, Umer. I start the job now.' },
+      { id: 3, author: 'chief', text: 'You are signed in. Thank you, Umer. Chief starts the task now.' },
       { id: 4, author: 'chief', text: 'Dinners this week: Mon dal & rice · Tue chicken wraps · Wed pasta bake · Thu fish tikka · Fri pizza night.\n\nShopping list (18 items): lentils, rice, onions, garlic, ginger, tomatoes, chicken thighs, wraps, lettuce, yoghurt, pasta, cheddar, passata, white fish, tikka paste, pizza bases, mozzarella, peppers.' },
-      { id: 5, author: 'chief', text: 'Do you want me to do this every Sunday evening?', choices: ['Yes, Sundays', 'Not now'] },
+      { id: 5, author: 'chief', text: 'Do you want Chief to do this every Sunday evening?', choices: ['Yes, Sundays', 'Not now'] },
     ] : []),
   ] } : variant === 'connect' ? { messages: [] } : { messages: [
     { id: 1, author: 'chief', text: `${variant === 'umer' ? 'Good evening, sir.' : 'Good evening, Umer.'} Two requests need your answer. Scribe's note for Aunty Sara is ready to send. Reel wants to save a copy of Mum's video. Scout expects to find flights in ten minutes.` },
     { id: 2, author: 'person', text: 'great, and can scout find somewhere nice for dinner on saturday too?' },
-    { id: 3, author: 'chief', text: 'OK. I asked Scout to look after the flights are done. Do I tell Scout four people, near home?', choices: ['Yes, four, near home', 'Six people', 'Somewhere special'] },
+    { id: 3, author: 'chief', text: 'OK. Chief asked Scout to look after the flights are done. Does Chief tell Scout four people, near home?', choices: ['Yes, four, near home', 'Six people', 'Somewhere special'] },
     { id: 4, author: 'person', text: "every weekday morning, have Pip plan the week's dinners" },
     { id: 5, author: 'chief', text: 'OK. Pip makes the plan, and you approve it. Here it is. Start it. The first plan comes tomorrow morning.' },
   ] },
@@ -274,8 +274,8 @@ const pages: Record<string, Json> = {
   skills: [{ name: 'make-reel', says: 'Turn photos and screenshots into a short video' }, { name: 'birthday-video', says: 'Make a birthday video from your photos', learned: true }] },
 };
 if (variant === 'job-plan') pages.chief.messages.push({ id: 71, author: 'person', text: 'find me a good stroller under $400, compare the best five' },
-  { id: 72, author: 'chief', text: 'OK, Umer. Scout will do this job. Here is the plan. Nothing starts before you say Go.' });
-if (variant === 'room') pages.chief.messages.push({ id: 70, author: 'bot', text: 'The jobs are done, Umer. Scout: three stories. Scribe: a newsletter draft that needs your yes.' });
+  { id: 72, author: 'chief', text: 'OK, Umer. Scout will do this task. Here is the plan. Nothing starts before you say Go.' });
+if (variant === 'room') pages.chief.messages.push({ id: 70, author: 'bot', text: 'The tasks are done, Umer. Scout: three stories. Scribe: a newsletter draft that needs your yes.' });
 if (fresh) pages.chief = { messages: [] };
 if (variant === 'connect') pages.pip = { messages: [
   { id: 1, author: 'person', text: "What's on this week?" },
@@ -463,9 +463,9 @@ if (variant === 'b1' || variant === 'b1handoff' || variant === 'b1after') {
   // they show the screens, not that Chief decides, restarts or monitors on his own.
   pages.chief = { messages: [
     { id: 1, author: 'person', text: 'Can you get me to Lahore on Friday? Morning if possible.', at: now - 20 * min },
-    { id: 2, author: 'chief', text: 'I gave this job to Scout. Scout looks only at morning flights, because you asked for the morning. You do not need to do anything now.', at: now - 19 * min },
-    { id: 3, author: 'chief', text: "Scout found three flights. I recommend Friday's 08:40 flight. It is the cheapest: $412, one stop, bag included. Nothing is booked before you say yes on the card above.", at: now - 14 * min },
-    { id: 4, author: 'chief', text: 'Reel picks the music. Scribe writes your note. I tell you only when a job is done or needs your answer.', at: now - min },
+    { id: 2, author: 'chief', text: 'Chief gave this task to Scout. Scout looks only at morning flights, because you asked for the morning. You do not have to do anything at this time.', at: now - 19 * min },
+    { id: 3, author: 'chief', text: "Scout found three flights. Chief recommends Friday's 08:40 flight. It is the cheapest: $412, one stop, bag included. Nothing is booked before you say yes on the card above.", at: now - 14 * min },
+    { id: 4, author: 'chief', text: 'Reel picks the music. Scribe writes your note. Chief tells you only when a task is done or waits for your answer.', at: now - min },
   ] };
 }
 if (variant === 'wheeled') { Object.assign(bots.find((b) => b.id === 'scout')!, { controls: 'person' }); pages.scout = { ...pages.scout, signedIn: ['shop.example'] }; }
@@ -498,7 +498,7 @@ function context(a: Json): Json {
   const why = (state.tasks.find((t: Json) => t.id === a.task_id) ?? state.bots.find((b: Json) => b.task?.id === a.task_id)?.task)?.title ?? null;
   const what = a.title || a.detail?.words || a.detail?.question;
   const who = a.bot === 'chief' ? '' : ` for ${state.bots.find((b: Json) => b.id === a.bot)?.display ?? a.bot}`;
-  return { app: null, why, ...(what ? { chief: `I have a request${who}: ${what}. Use its card to answer.${why ? ` Task: ${why}.` : ''}` } : {}), ...a };
+  return { app: null, why, ...(what ? { chief: `Chief has a request${who}: ${what}. Use its card to answer.${why ? ` Task: ${why}.` : ''}` } : {}), ...a };
 }
 export function demoLive(hear: (e: Json) => void) {
   if (variant !== 'handoff' && variant !== 'b1handoff') return () => {};
@@ -520,7 +520,7 @@ export async function demoCall(method: string, path: string, body?: Json) {
     { id: 81, bot: 'scout', author: 'person', text: 'Find three stories about the neighbourhood.', at: now - 5 * min },
     { id: 82, bot: 'scout', author: 'bot', text: 'Three stories worth telling: a new park, a school garden, and a night market.', at: now - 4 * min },
     { id: 83, bot: 'scribe', author: 'scout', from: 'scout', to: 'scribe', text: 'Draft the story for your newsletter.', at: now - 2 * min, files: [{ bot: 'scribe', path: 'files/from-scout/stories.md' }] },
-    { id: 84, bot: 'chief', author: 'bot', text: 'The jobs are done, Umer. Scout: three stories. Scribe: a newsletter draft that needs your yes.', at: now - min },
+    { id: 84, bot: 'chief', author: 'bot', text: 'The tasks are done, Umer. Scout: three stories. Scribe: a newsletter draft that needs your yes.', at: now - min },
   ], busy: ['scout', 'scribe'], asks: state.asks.filter((a: Json) => a.detail?.pass) };
   if (method === 'GET' && path.startsWith('/api/bots/scout')) return { ...pages.scout, handoff: 'ask', bot: bots.find((x) => x.id === 'scout') };
   const b = /^\/api\/bots\/([a-z0-9-]+)(?:\?.*)?$/.exec(path);

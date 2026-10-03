@@ -81,7 +81,7 @@ test('office truth: the room, its counts, the tray, the roster and Chief\'s inbo
   assert.ok(v.crew.find((c) => c.id === 'h6')!.second && v.crew.find((c) => c.id === 'h7')!.second, 'a second of a kind is marked');
   assert.deepEqual(A.roster(v.crew).map((c) => c.id), ['reel', 'scribe', 'scout', 'tracer', 'h6', 'h7', 'pip']);
   const chats = new Map(A.chats(state).map((c) => [c.id, c.line]));
-  assert.equal(chats.get('reel'), 'Waiting for Chief');
+  assert.equal(chats.get('reel'), 'Waits for Chief');
   assert.equal(chats.get('scribe'), A.SEAT_WORDS.waiting, 'the chat list says what the rail says');
   // Live events move every count together.
   const answered = A.officeEvent(v, { kind: 'ask.answered', bot: 'reel', data: { ask: 10 } });

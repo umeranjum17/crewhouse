@@ -245,7 +245,7 @@ export function helper(b: Json, events: Json[] = []): Helper {
   const needs = b.task?.state === 'needs_you';
   const stuck = !!b.stuck;
   const driving = b.controls === 'person';
-  const status = driving ? 'Paused while you drive' : needs ? 'Waiting for Chief' : stuck ? 'Quiet for a while' : b.task ? b.task.title
+  const status = driving ? 'Paused while you drive' : needs ? 'Waits for Chief' : stuck ? 'Quiet for a while' : b.task ? b.task.title
     : b.queued ? 'Up next' : b.pausedUntil ? `Resting until ${clock(at(b.pausedUntil))}` : 'Free to help';
   return {
     id: b.id, name: b.display, kind: kindOf(b), role: plain(b.role ?? ''), status: plain(status), computer: !!b.computer, driving,
@@ -342,7 +342,7 @@ export const pushWords = (link: Json) => (link?.push === 'missing' ? "Phone noti
 /** A show in progress on a helper's screen: what, and how many steps so far, in words. */
 export function showing(state: Json, bot: string) {
   const s = state.showing?.[bot];
-  return s ? { what: plain(s.what), words: s.steps ? `You showed me ${s.steps} step${s.steps === 1 ? '' : 's'} of how to ${plain(s.what)}.` : `Show me how to ${plain(s.what)}. I watch each step.` } : null;
+  return s ? { what: plain(s.what), words: s.steps ? `You showed Chief ${s.steps} step${s.steps === 1 ? '' : 's'} of how to ${plain(s.what)}.` : `Show Chief how to ${plain(s.what)}. Chief watches each step.` } : null;
 }
 
 /** The helpers' tools the downloaded app is still fetching, in one sentence; empty when none. */
@@ -407,7 +407,7 @@ export const meter = (state: Json) => (state.share?.used ? 'The crew will contin
 export function share(state: Json) {
   const s = state.share ?? { choice: 'light', used: false };
   const part: Record<string, string> = { small: 'a small part', fair: 'a fair part', most: 'most' };
-  return { choice: s.choice as string, week: part[s.week] ? `This week, the crew used ${part[s.week]} of its share of your ChatGPT.` : '', today: s.used ? 'The crew used all of its share for today. Routines and check-ins start again tomorrow morning. The crew still does the jobs that you ask for.'
+  return { choice: s.choice as string, week: part[s.week] ? `This week, the crew used ${part[s.week]} of its share of your ChatGPT.` : '', today: s.used ? 'The crew used all of its share for today. Routines and check-ins start again tomorrow morning. The crew continues to do the tasks that you give it.'
     : s.choice === 'full' ? 'When ChatGPT needs a rest, the crew waits and says so.' : 'The crew stays within the share you gave it.' };
 }
 
@@ -461,17 +461,17 @@ function chiefRow(state: Json, local: ChiefLocal): ChiefView {
   const line = asks ? `${asks === 1 ? 'One thing' : `${asks} things`} for you to decide`
     : waiting ? `${waiting.name} waits for Chief`
     : busy.length === 1 ? `${busy[0].name} works on “${busy[0].status}”`
-    : busy.length > 1 ? `${busy.map((h) => h.name).join(' and ')} work on their jobs`
-    : rest || 'I monitor the crew';
+    : busy.length > 1 ? `${busy.map((h) => h.name).join(' and ')} work on their tasks`
+    : rest || 'Chief monitors the crew';
   const view: ChiefView =
-    failure ? { mood: 'error', line: `${name(String(failure.bot))} could not finish “${plain(failure.data?.title ?? '') || 'its job'}”`, tone: 'wait', rank: 3 }
+    failure ? { mood: 'error', line: `${name(String(failure.bot))} could not finish “${plain(failure.data?.title ?? '') || 'its task'}”`, tone: 'wait', rank: 3 }
     : stuck ? { mood: 'worried', line: `${stuck.name} sends no updates`, tone: 'wait', rank: 4 }
     : local.signedOut ? { mood: 'worried', line: 'The crew waits for your sign-in', tone: 'wait', rank: 4 }
     : asks ? { mood: 'ask', line, tone: 'wait', rank: 5 }
-    : done ? { mood: 'happy', line: `${name(String(done.bot))} finished “${plain(done.data?.title ?? '') || 'a job'}”`, tone: 'ok', rank: 6 }
+    : done ? { mood: 'happy', line: `${name(String(done.bot))} finished “${plain(done.data?.title ?? '') || 'a task'}”`, tone: 'ok', rank: 6 }
     : busy.length ? { mood: 'work', line, tone: 'ok', rank: 7 }
     : rest ? { mood: 'rest', line: rest, tone: 'off', rank: 8 }
-    : { mood: 'idle', line: 'I monitor the crew', tone: 'ok', rank: 9 };
+    : { mood: 'idle', line: 'Chief monitors the crew', tone: 'ok', rank: 9 };
   return view;
 }
 const crewName = (state: Json, id: string) => state.bots.find((b: Json) => b.id === id)?.display ?? 'The crew';
@@ -619,11 +619,11 @@ export function card(a: Json, state: Json): Card {
       choices: [{ label: d.yes ? plain(d.yes) : a.bot === 'chief' ? 'Yes, change it' : 'Yes, keep it', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
   }
   if (a.kind !== 'permission') {
-    return { ...base, kind: 'question', reply: true, status: 'Has a question', head: `A question on ${name}'s job`,
-      words: d.question ? plain(d.question) : `${name} stopped because it has a question. Tell me what ${name} should do:`, choices: [] };
+    return { ...base, kind: 'question', reply: true, status: 'Has a question', head: `A question on ${name}'s task`,
+      words: d.question ? plain(d.question) : `${name} stopped because it has a question. Tell Chief the next step for ${name}:`, choices: [] };
   }
   const spend = !!d.spends || d.effect === 'spend';
-  const words = d.words ? plain(d.words) : spend ? `${name} wants to use something that costs money. Is this OK?` : `${name} stopped and needs your OK to continue.`;
+  const words = d.words ? plain(d.words) : spend ? `${name} wants to use something that costs money. Do you approve this?` : `${name} stopped. ${name} can continue after your approval.`;
   // A checkout is review-first: the inbox only opens the review and offers the way out; the sheet's yes names the order.
   // With no readable total there is no yes at all — the person finishes that purchase themselves.
   const order = d.order as Card['order'] | undefined;
@@ -647,7 +647,7 @@ export function card(a: Json, state: Json): Card {
   return {
     ...base, kind: spend ? 'spend' : 'ok', status: spend ? 'Wants to spend money' : fill ? 'Wants to fill in a form' : press ? 'Wants to press a button' : d.effect === 'send' ? 'Wants to send an email' : 'Needs your OK',
     evidence: fill ? 'lines' : undefined, words, choices, question,
-    head: spend ? `OK to spend, for ${name}'s job?` : press ? `OK to act on a site, for ${name}'s job?` : d.effect === 'send' ? `${name}'s ${d.thing ?? 'message'} is ready to send` : `Your OK, for ${name}'s job`,
+    head: spend ? `OK to spend, for ${name}'s task?` : press ? `OK to act on a site, for ${name}'s task?` : d.effect === 'send' ? `${name}'s ${d.thing ?? 'message'} is ready to send` : `Your OK, for ${name}'s task`,
     preview: d.preview ? { head: d.preview.head ? plain(d.preview.head) : undefined, body: plain(d.preview.body ?? '') } : undefined,
   };
 }
@@ -659,7 +659,7 @@ export function work(state: Json): Work[] {
   return state.bots.filter((b: Json) => mine.has(b.id) && (b.task || b.queued)).map((b: Json) => {
     const s = b.step && step(b.step);
     const needs = b.task?.state === 'needs_you';
-    return { helper: b.id, title: plain(b.task?.title ?? 'Up next'), line: needs ? 'Waiting for Chief' : s ? s : b.task ? 'Starts now…' : 'Waits for its turn', waiting: !b.task || needs, things: deskThings(b.id, b.task ?? null) };
+    return { helper: b.id, title: plain(b.task?.title ?? 'Up next'), line: needs ? 'Waits for Chief' : s ? s : b.task ? 'Starts now…' : 'Waits for its turn', waiting: !b.task || needs, things: deskThings(b.id, b.task ?? null) };
   });
 }
 
@@ -792,8 +792,8 @@ const DATES = /\b\d{4}-\d{1,2}-\d{1,2}\b|\b\d{1,2}[/.]\d{1,2}[/.]\d{2,4}\b/g;
 export function secretOf(text: string) {
   const runs = [...text.replace(DATES, ' ').matchAll(/(?<![+\p{Nd}])\p{Nd}(?:[ -]?\p{Nd})*/gu)].map((m) => m[0].replace(/[^\p{Nd}]/gu, '').length);
   if (SECRET.test(text) || runs.some((n) => n >= 12 || (n >= 4 && n <= 8)))
-    return "That looks like a PIN, a card number or a code. I do not keep these. Keep them in your phone's password manager.";
-  if (ADDRESS.test(text)) return 'I only keep plain words about you, not web or email addresses.';
+    return "That text can be a PIN, a card number or a code. Chief does not keep these. Keep them in your phone's password manager.";
+  if (ADDRESS.test(text)) return 'Chief keeps only plain words about you. Chief does not keep web or email addresses.';
   return '';
 }
 /** Plan my day is said, not a button: Scout's own day-plan ask, a job like the buttons' (a model turn, never canned). */
@@ -827,11 +827,11 @@ export const cannedOf = (ask: string): '' | 'status' | 'details' | 'plan' => {
 export function canned(state: Json, kind: 'status' | 'details', notes = '') {
   if (kind === 'status') {
     const needs = homeCounts(state).needs;
-    return [crewLine(state) || 'Nobody works on a job now.', needs ? `${needs} ${needs === 1 ? 'thing' : 'things'} for you to decide.` : ''].filter(Boolean).join(' ');
+    return [crewLine(state) || 'No helper works on a task at this time.', needs ? `${needs} ${needs === 1 ? 'thing' : 'things'} for you to decide.` : ''].filter(Boolean).join(' ');
   }
   const name = String(state.person?.name ?? '').trim();
   const lines = notes.split('\n').map((l) => plain(l.replace(/^\s*[-*]\s*/, ''))).filter(Boolean);
-  return [name ? `You are ${name}.` : '', lines.length ? `What the crew knows about you:\n${lines.map((l) => `• ${l}`).join('\n')}` : 'The crew knows nothing else about you yet. To add a note:\n1. Select some words in any app.\n2. Tap me.\n3. Choose Remember this.'].filter(Boolean).join('\n');
+  return [name ? `You are ${name}.` : '', lines.length ? `What the crew knows about you:\n${lines.map((l) => `• ${l}`).join('\n')}` : 'The crew knows nothing else about you yet. To add a note:\n1. Select some words in any app.\n2. Tap Chief.\n3. Choose Remember this.'].filter(Boolean).join('\n');
 }
 /** Who is on what, in one plain line from state alone (no model turn): each of the crew that is working, waiting on
  *  Chief, gone quiet, paused while they drive or resting, then when a resting account is back. '' when nobody is. */
@@ -872,7 +872,7 @@ export function outcome(chiefPage: Json, state: Json, request: number, helper: s
   const ended = (t: Json) => ['done', 'failed', 'unsure'].includes(t.state);
   const open = [req, ...linked].filter((t) => t && !ended(t));
   const stuck = open.find((t) => t.state === 'paused' || t.state === 'needs_you');
-  const waits = !stuck ? '' : stuck.state === 'paused' ? plain(stuck.result ?? '') || 'Waiting for you.' : "It needs an OK. Give it in Chief's chat.";
+  const waits = !stuck ? '' : stuck.state === 'paused' ? plain(stuck.result ?? '') || 'Waiting for you.' : "It waits for your approval. Give it in Chief's chat.";
   const by = linked.find((t) => !ended(t) && t.bot !== 'chief')?.bot ?? null;
   if (!req || open.length) return { text: null, waits, by, chief: false };
   const last = linked.find((t) => t.bot === helper);
@@ -1147,7 +1147,7 @@ function lastRun(h: Json) {
   if (h.task && h.state !== 'done') return `Waiting for a result from ${at}`;
   if (h.watch === 'same') return `Checked ${at}, no change`;
   if (h.watch === 'started') return `Started watching ${at}`;
-  if (h.watch === 'unreachable') return `Could not open the page ${at}. I will try again next time`;
+  if (h.watch === 'unreachable') return `Could not open the page ${at}. The next check tries again`;
   if (h.watch === 'changed') return `Changed ${at}${h.clear ? ', but nothing important for you' : ''}`;
   return `Last ran ${at}${h.clear ? ', no problems found' : ''}`;
 }
@@ -1248,7 +1248,7 @@ export type OfficeView = { chief: ChiefView; crew: OfficeMember[]; done: Thing[]
 export type Seat = 'waiting' | 'working' | 'failed' | 'next' | 'resting' | 'free';
 export const seatOf = (c: OfficeMember): Seat => (c.ring === 'waiting' ? 'waiting' : c.ring === 'working' ? 'working'
   : c.mood === 'error' ? 'failed' : c.status === 'Up next' ? 'next' : c.mood === 'rest' ? 'resting' : 'free');
-export const SEAT_WORDS: Record<Seat, string> = { waiting: 'Waiting for Chief', working: 'Working', failed: 'Could not finish', next: 'Up next', resting: 'Resting', free: 'Free' };
+export const SEAT_WORDS: Record<Seat, string> = { waiting: 'Waits for Chief', working: 'Working', failed: 'Could not finish', next: 'Up next', resting: 'Resting', free: 'Free' };
 /** The rail's word for one helper: its seat, except that a free helper whose latest job landed today says which
  *  (Main590 6: the rail shows Reel done after a hand-off). Any newer seat (working, waiting, …) replaces it. */
 export function railWord(c: OfficeMember, v: OfficeView): { word: string; seat: Seat | 'done' } {
@@ -1358,7 +1358,7 @@ export function officeEvent(view: OfficeView, e: Json): OfficeView {
     case 'task.unsure':
       return touch(String(e.bot), (c) => ({ ...c, ring: '' as const, mood: 'error' as Mood, step: step(e) ?? c.step }));
     case 'ask.opened':
-      return touch(String(e.bot), (c) => ({ ...c, ring: 'waiting' as const, mood: 'idle' as Mood, status: 'Waiting for Chief', step: 'Waiting for Chief' }));
+      return touch(String(e.bot), (c) => ({ ...c, ring: 'waiting' as const, mood: 'idle' as Mood, status: 'Waits for Chief', step: 'Waits for Chief' }));
     // A parked request is still open (it waits in Chief's inbox for the person), so nothing moves.
     case 'ask.parked': return view;
     case 'ask.answered': {

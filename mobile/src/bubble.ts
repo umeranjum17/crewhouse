@@ -121,5 +121,5 @@ export async function putIn(text: string, who: string, was: { app: string; text:
   const same = !!now && now.app === was.app && now.text === was.text;
   const r = same ? await focusedField.insert(text, { replace: was.picked ? 'selection' : 'all', attempts: 13, retryMs: 150, acceptNewlineLoss: true }).catch(() => 'failed' as const) : 'failed';
   if (r === 'copied') overlay.say('Copied. Hold your finger on the box, then paste.', 'chief_idle', 6000, { announce: true });
-  else if (r === 'failed') overlay.say(`I could not put it in the box. It is in ${who}'s chat.`, 'chief_worried', 6000, { announce: true });
+  else if (r === 'failed') overlay.say(`Chief could not put it in the box. It is in ${who}'s chat.`, 'chief_worried', 6000, { announce: true });
 }

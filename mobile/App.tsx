@@ -270,7 +270,7 @@ function Mic({ on, text, put, listen = false }: { on: boolean; text: string; put
       message: 'Crewhouse hears you only while the mic is on, on this phone. Your words wait in the box until you send them.', buttonPositive: 'OK' });
     if (!shown.current) return;
     if (mic !== PermissionsAndroid.RESULTS.GRANTED) { setListening(false); return say('Allow the microphone for Crewhouse in your phone settings. Then try again.'); }
-    hear().then((w) => { if (w) put(now.current.trim() ? `${now.current.trimEnd()} ${w}` : w); else say('I did not hear that. Try again.'); },
+    hear().then((w) => { if (w) put(now.current.trim() ? `${now.current.trimEnd()} ${w}` : w); else say('Chief did not hear that. Try again.'); },
       (e) => say(/blocked/.test(`${e?.code} ${e?.message}`) ? 'Allow the microphone for Crewhouse in your phone settings. Then try again.'
         : 'Speech input is not ready on this phone yet. Type your words, or use the microphone on the keyboard.'))
       .finally(() => setListening(false));
@@ -838,12 +838,12 @@ function Hello({ state, refresh, go }: Ctx) {
   const t = useLook();
   // Ask for the name first when it has not been set yet.
   const name = <>
-    <Label>What do you want me to call you?</Label>
-    <TextInput style={[s.input, { color: t.ink, borderColor: t.line }]} value={address} onChangeText={setAddress} placeholder="What do you want me to call you?" placeholderTextColor={t.mute} accessibilityLabel="What do you want me to call you?" />
+    <Label>What do you want Chief to call you?</Label>
+    <TextInput style={[s.input, { color: t.ink, borderColor: t.line }]} value={address} onChangeText={setAddress} placeholder="What do you want Chief to call you?" placeholderTextColor={t.mute} accessibilityLabel="What do you want Chief to call you?" />
     <View style={s.chips}>{['Sir', "Ma'am"].map((q) => <Btn key={q} label={q} onPress={() => setAddress(q)} />)}</View>
   </>;
   const pick = (ask?: string, bot?: string) => {
-    if (!address.trim()) return say('First, tell me what to call you.');
+    if (!address.trim()) return say('First, tell Chief what to call you.');
     void attempt(async () => { await api.onboard(address.trim(), ask, bot); refresh(); go({ view: 'chief' }, true); });
   };
   const reduce = motion.useReduceMotion();
@@ -853,14 +853,14 @@ function Hello({ state, refresh, go }: Ctx) {
       <motion.Rise reduce={reduce} delay={80}><View style={[s.speech, { backgroundColor: t.solid, borderColor: t.line }]}>
         <View style={[s.speechTail, { backgroundColor: t.solid, borderColor: t.line }]} />
         <T style={[s.h1, s.serif, s.centerText, { fontSize: 34, lineHeight: 38, marginVertical: 0 }]}>{A.greeting()}{address.trim() ? `, ${address.trim()}` : ''}</T>
-        <T tone="ink2" style={s.centerText}>I am Chief, your personal assistant. I manage your crew of helpers.</T>
+        <T tone="ink2" style={s.centerText}>Chief is your personal assistant. Chief manages your crew of helpers.</T>
       </View></motion.Rise>
       <motion.Rise reduce={reduce} delay={160}><Card style={{ gap: 10 }}>
-        {[A.atHome('the home computer')[0], A.atHome('the home computer')[1], 'I ask you before I send messages, delete things or spend money.'].map((l) =>
+        {[A.atHome('the home computer')[0], A.atHome('the home computer')[1], 'Chief asks you before Chief sends messages, deletes things or spends money.'].map((l) =>
           <View key={l} style={[s.row, { alignItems: 'flex-start' }]}><T style={{ color: t.ok, fontWeight: '700' }}>✓</T><T tone="ink2" style={{ flex: 1 }}>{l}</T></View>)}
       </Card></motion.Rise>
       {name}
-      <Label>What can I do for you?</Label>
+      <Label>What can Chief do for you?</Label>
       {A.firstIdeas(state).map((i) => <Pressable key={i.label} onPress={() => pick(i.label, i.bot)} accessibilityRole="button" accessibilityLabel={i.label}
         style={({ pressed }) => [s.idea, { backgroundColor: t.card, borderColor: t.line }, pressed && { opacity: 0.6 }]}>
         <View style={[s.ideaIcon, { backgroundColor: t.soft }]}><Text style={{ fontSize: 18 }}>{i.icon}</Text></View>
@@ -981,7 +981,7 @@ function AskCard({ c, state, onDone, canAct, offline, open }: { c: A.Card; state
           {when !== null && <TextInput style={[s.input, { color: t.ink, borderColor: t.line }]} value={when} onChangeText={setWhen} autoFocus
             placeholder="When? For example: every Saturday 10am" placeholderTextColor={t.mute} accessibilityLabel="When" autoCapitalize="none" />}
           {when !== null && !!sched && !sched.bad && <T tone="mute" style={s.small}>{sched.words}. First time {sched.first}.{c.zoneNote ? ` ${c.zoneNote}` : ''}</T>}
-          {when !== null && !!sched?.bad && <T tone="mute" style={s.small}>I do not understand that time. Try “every Monday 9:00”.</T>}
+          {when !== null && !!sched?.bad && <T tone="mute" style={s.small}>Chief does not understand that time. Try “every Monday 9:00”.</T>}
           <View style={s.chips}>
             <Btn go label="Start it" disabled={stuck} onPress={() => act({ answer: 'allow', scope: 'once', ...(when !== null && when.trim() && when.trim() !== c.schedule ? { schedule: when.trim() } : {}) })} />
             <Btn label={when === null ? 'Change time' : 'Keep the time'} onPress={() => setWhen(when === null ? c.schedule || '' : null)} />
@@ -1248,7 +1248,7 @@ function Home(ctx: Ctx) {
         </View>
         {pinned}
         <OnItNow view={view} />
-        {!!A.resting(state) && <Card><T>{A.resting(state)}. I will continue the work then.</T></Card>}
+        {!!A.resting(state) && <Card><T>{A.resting(state)}. The crew will continue the work then.</T></Card>}
         <Pressable onPress={() => go({ view: 'phone' })} accessibilityRole="button" accessibilityLabel="Check AI account sign-in on the home computer" style={({ pressed }) => [s.listRow, s.listGroup, { backgroundColor: t.solid, borderColor: t.line }, pressed && { opacity: 0.6 }]}>
           <AiMark ai={A.AIS[0]} size={30} />
           <View style={{ flex: 1 }}><T style={s.rowTitle}>Your AI accounts</T><T tone="ink2" style={s.small} lines={2}>You sign in on the home computer, in Settings.</T></View><T tone="mute">›</T>
@@ -1720,7 +1720,7 @@ function Screen({ bot, canAct, refresh, showing, watchNow }: { bot: Json; canAct
       )}
       {canAct && showing && (
         <View style={{ gap: 8 }}>
-          <T>{showing.words} I record where you go and what you tap. I never record what you type.</T>
+          <T>{showing.words} Chief records where you go and what you tap. Chief never records what you type.</T>
           <View style={s.chips}><Btn go label="Done showing" onPress={act(() => api.shown(bot.id, true))} /><Btn ghost label="Cancel" onPress={act(() => api.shown(bot.id, false))} /></View>
         </View>
       )}
@@ -1785,7 +1785,7 @@ function RoutineRow({ r, h, act, go, canAct }: { r: Json; h: A.Helper | undefine
       {moving && <View style={{ marginTop: 8, gap: 6 }}>
         <TextInput style={[s.input, { color: t.ink, borderColor: t.line }]} value={when} onChangeText={setWhen} autoFocus
           placeholder="When? For example: every Saturday 10am" placeholderTextColor={t.mute} accessibilityLabel="When" autoCapitalize="none" />
-        {!!preview && <T tone="mute" style={s.small}>{preview.bad ? "I do not understand that time. Try “every Monday 9:00”." : `${preview.words}. First time ${preview.first}.`}</T>}
+        {!!preview && <T tone="mute" style={s.small}>{preview.bad ? "Chief does not understand that time. Try “every Monday 9:00”." : `${preview.words}. First time ${preview.first}.`}</T>}
         <View style={s.chips}>
           <Btn go label="Save" disabled={!when.trim() || !preview || preview.bad} onPress={() => void save()} />
           <Btn ghost label="Cancel" onPress={() => setMoving(false)} />

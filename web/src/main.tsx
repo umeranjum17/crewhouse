@@ -79,7 +79,7 @@ function Hello({ state, refresh, night }: Ctx) {
   const [words, setWords] = useState('');
   useEffect(() => { const t = setTimeout(() => setTipped(true), 2400); return () => clearTimeout(t); }, []);
   const pick = (ask: string, bot?: string) => {
-    if (!address.trim()) { setOther(true); toast('First, tell me what to call you.'); input.current?.focus(); return; }
+    if (!address.trim()) { setOther(true); toast('First, tell Chief what to call you.'); input.current?.focus(); return; }
     void attempt(async () => { await api.onboard(address.trim(), ask, bot); refresh(); go('#/chief'); });
   };
   return (
@@ -88,14 +88,14 @@ function Hello({ state, refresh, night }: Ctx) {
       <span className="halo"><ChiefArt mood={tipped ? 'idle' : 'hello'} d={7.4} hero whole /></span>
       <div className="speech">
         <h1>{A.greeting()}{address.trim() ? `, ${address.trim()}` : ''}</h1>
-        <p className="lead">I am Chief, your personal assistant. I manage your crew of helpers.</p>
+        <p className="lead">Chief is your personal assistant. Chief manages your crew of helpers.</p>
       </div>
       <ul className="promises">
         <li>Your helpers live on this computer. They use your own ChatGPT to think.</li>
         <li>{A.atHome()[1]}</li>
-        <li>I ask you before I send messages, delete things or spend money.</li>
+        <li>Chief asks you before Chief sends messages, deletes things or spends money.</li>
       </ul>
-      <h2 className="plate">What can I do for you?</h2>
+      <h2 className="plate">What can Chief do for you?</h2>
       <div className="ideas">
         {A.firstIdeas(state).map((i) => <button key={i.label} className="idea" onClick={() => pick(i.label, i.bot)}><span aria-hidden>{i.icon}</span><b>{i.label}</b><i aria-hidden>›</i></button>)}
       </div>
@@ -106,7 +106,7 @@ function Hello({ state, refresh, night }: Ctx) {
       </div>
         : <button className="link" onClick={() => setOwn(true)}>Or ask in your own words</button>}
       {other ? <>
-        <input ref={input} className="input name" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="What do you want me to call you?" aria-label="What do you want me to call you?" />
+        <input ref={input} className="input name" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="What do you want Chief to call you?" aria-label="What do you want Chief to call you?" />
         <div className="chips center">{['Sir', "Ma'am", ...(named ? [named] : [])].map((q) => <button key={q} className={`chip ${address === q ? 'on' : ''}`} onClick={() => setAddress(q)}>{q}</button>)}</div>
       </> : <button className="link" onClick={() => setOther(true)}>Call me something else</button>}
     </div>
@@ -120,11 +120,11 @@ function Share({ refresh }: Ctx) {
   const [other, setOther] = useState(false);
   const home = () => { history.replaceState(null, '', '/#/chief'); dispatchEvent(new HashChangeEvent('hashchange')); };
   const send = async (what: string) => { if (await attempt(() => api.post('chief', `${what}\n\nWhat I shared:\n${text}`), undefined, true)) { refresh(); home(); } return true; };
-  if (!text) return <div className="page"><div className="card empty">I did not get anything. Share it again.</div></div>;
+  if (!text) return <div className="page"><div className="card empty">Chief did not get anything. Share it again.</div></div>;
   return (
     <div className="page share">
       <div className="card shared"><div className="mute small">Shared with Crewhouse</div><div className="clamp">{text}</div></div>
-      <div className="line chief"><div className="bubble-text">I have it. What do you want the crew to do with this?</div></div>
+      <div className="line chief"><div className="bubble-text">Chief has it. What do you want the crew to do with it?</div></div>
       <div className="chips">
         <button className="chip on" onClick={() => send('Add this to my calendar and remind me the day before')}>📅 Add to my calendar + remind me</button>
         <button className="chip" onClick={() => send('Just remember this for me')}>Just remember it</button>
@@ -143,7 +143,7 @@ function Stuck({ h, refresh }: { h: A.Helper; refresh: () => void }) {
   if (!h.stuckFor || leftAlone.get(h.id) === h.quietSince) return null;
   return (
     <div className="stuck">
-      <span><Face who="chief" size={20} /> {h.name} sent no update for {h.stuckFor} minute{h.stuckFor === 1 ? '' : 's'}. Do you want me to stop the job? Or do you want to take over?</span>
+      <span><Face who="chief" size={20} /> {h.name} sent no update for {h.stuckFor} minute{h.stuckFor === 1 ? '' : 's'}. Do you want Chief to stop the task? Or do you want to take control?</span>
       <div className="btns">
         <button className="btn" onClick={() => attempt(async () => { await api.reset(h.id); refresh(); }, `Stopped ${h.name}`)}>Stop</button>
         {h.computer && <button className="btn" onClick={() => attempt(async () => { await api.takeOver(h.id); refresh(); go(`#/h/${h.id}/screen`); })}>Take over</button>}
@@ -359,7 +359,7 @@ function Home(ctx: Ctx) {
     {/* Chief's thread shows its own sign-in card and resting line; Office shows them here. */}
     {mode === 'office' && (g.state === 'signed-out' || g.notIncluded) && <AccountCard g={g} onReady={refresh} />}
     <SetupRow state={state} accounts={accounts} tick={tick} />
-    {mode === 'office' && A.resting(state) && <div className="card nudge"><span className="grow">{A.resting(state)}. I will continue the work then.</span></div>}
+    {mode === 'office' && A.resting(state) && <div className="card nudge"><span className="grow">{A.resting(state)}. The crew will continue the work then.</span></div>}
     {A.gettingReady(state) && <div className="card nudge"><span className="grow">{A.gettingReady(state)}</span></div>}
     {A.update(state) && <div className="card nudge"><span className="grow">{A.update(state)!.words}</span><a className="btn go" href={A.update(state)!.url} target="_blank" rel="noreferrer">Download</a></div>}
   </>;
@@ -427,7 +427,7 @@ function JobList({ state, phone, few, refresh }: { state: Json; phone?: boolean;
 
 /** The starters live in Chief's empty chat: a tap fills the box with the words, it never sends. */
 function ChiefIdeas({ state, chat, picked }: { state: Json; chat: string; picked: () => void }) {
-  return <><p className="ideas-intro">I can add Scout for research, Scribe for writing or Reel for videos.</p><div className="chips center">{A.ideas(state).map((i: Json) => (
+  return <><p className="ideas-intro">Chief can add Scout for research, Scribe for writing or Reel for videos.</p><div className="chips center">{A.ideas(state).map((i: Json) => (
     <button key={i.bot + i.label} className="chip" onClick={() => { keepDraft(chat, i.ask); picked(); }}>✦ {i.label}</button>
   ))}</div></>;
 }
@@ -581,13 +581,13 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
         {echoed && <div className="line me fresh"><div className="bubble-text">{pending.text}</div></div>}
         {waiting && id === 'chief' && <div className="line them fresh" role="status"><div className="line-by"><Face who="chief" size={28} /><span className="who">Chief</span></div><div className="bubble-text"><span className="typing" aria-hidden><i /><i /><i /></span><span className="sr">Chief works on it</span></div></div>}
         {!!partial && <div className="line them streaming" aria-live="polite"><div className="line-by"><Face who={h ?? 'chief'} size={28} /><span className="who">{name}</span></div><div className="bubble-text"><ChatText text={partial} /></div></div>}
-        {A.building(lines, live) && <div className="line them" role="status"><div className="line-by"><Face who={h ?? 'chief'} size={28} /><span className="who">{name}</span></div><div className="building-card" aria-label="Building it"><i aria-hidden /><i aria-hidden /><div className="bubble-text">I will share it here when it is ready.</div></div></div>}
+        {A.building(lines, live) && <div className="line them" role="status"><div className="line-by"><Face who={h ?? 'chief'} size={28} /><span className="who">{name}</span></div><div className="building-card" aria-label="Building it"><i aria-hidden /><i aria-hidden /><div className="bubble-text">Chief will share it here when it is ready.</div></div></div>}
         {!h && last?.choices.length ? <div className="chips">{last.choices.map((c) => <button key={c} className="chip" onClick={() => send(c)}>{c}</button>)}</div> : null}
         {cards.filter((c) => !lines.length || lines.every((x) => (x.at ?? 0) > c.at)).map((c) => c.kind === 'connect' ? <ConnectCard key={c.id} c={c} helper={c.about} state={state} onDone={refresh} /> : <AskCard key={c.id} c={c} onDone={refresh} />)}
-        {h?.ring === 'waiting' && <a className="line note waiting-chief" href="#/chief"><span className="bubble-text">Waiting for Chief ›</span></a>}
+        {h?.ring === 'waiting' && <a className="line note waiting-chief" href="#/chief"><span className="bubble-text">Waits for Chief ›</span></a>}
         {h && <Stuck h={h} refresh={refresh} />}
         {(g.state === 'signed-out' || g.notIncluded) && <AccountCard g={g} inChat onReady={() => { void load(); refresh(); }} />}
-        {g.state === 'ready' && !g.notIncluded && A.resting(state) && <div className="card nudge"><span className="grow">{A.resting(state)}. {name === 'Chief' ? 'I will' : `${name} will`} finish then.</span></div>}
+        {g.state === 'ready' && !g.notIncluded && A.resting(state) && <div className="card nudge"><span className="grow">{A.resting(state)}. {name} will finish then.</span></div>}
         <div ref={end} className="end" />
       </div>
       <aside className={`working-on${rail ? ' tonight-rail' : ''}`}>
@@ -951,7 +951,7 @@ function RoutineRow({ r, h, act }: { r: Json; h: Helper | undefined; act: (fn: (
         <button className="btn ghost" type="button" onClick={() => setWhen(null)}>Cancel</button>
       </form>}
       {when !== null && preview && !preview.bad && <div className="mute small">{preview.words}. First time {preview.first}.</div>}
-      {when !== null && preview?.bad && <div className="mute small">I do not understand that time. Try “every Monday 9:00”.</div>}
+      {when !== null && preview?.bad && <div className="mute small">Chief does not understand that time. Try “every Monday 9:00”.</div>}
       <div className="btns">
         <button className="btn" onClick={() => act(() => api.runRoutine(r.id), 'Asked to run')}>Do it now</button>
         <label className="routine-switch"><input type="checkbox" role="switch" checked={!r.paused} aria-label={`${r.paused ? 'Resume' : 'Pause'} ${r.name}`} onChange={(e) => act(() => api.routine(r.id, { state: e.target.checked ? 'on' : 'paused' }))} /><span>{r.paused ? 'Paused' : 'On'}</span></label>        {!r.digest && !r.watching && <button className={`chip ${r.quiet ? 'on' : ''}`} aria-pressed={r.quiet} onClick={() => act(() => api.routine(r.id, { quiet: !r.quiet }), r.quiet ? 'It will always send a report' : 'It will only tell you when there is news')}>Only tell me when there is news</button>}

@@ -82,7 +82,7 @@ export function Screen({ bot, refresh, showing }: { bot: Json; refresh: () => vo
         </form>
       )}
       {showing && (
-        <div className="card nudge row"><span className="grow">{showing.words} I write down where you go and what you click, never what you type.</span>
+        <div className="card nudge row"><span className="grow">{showing.words} Chief records where you go and what you click. Chief never records what you type.</span>
           <button className="btn go" onClick={act(() => api.shown(bot.id, true))}>Done showing</button>
           <button className="btn ghost" onClick={act(() => api.shown(bot.id, false))}>Cancel</button></div>
       )}

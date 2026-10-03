@@ -54,7 +54,7 @@ export async function attempt(fn: () => Promise<unknown>, ok?: string, quiet = f
 }
 const FRIENDLY = {
   missing: 'That is not ready yet. It comes with the next Crewhouse update.',
-  offline: 'I cannot reach the home computer now. Make sure that it is on. Then try again.',
+  offline: 'Chief cannot reach the home computer now. Make sure that it is on. Then try again.',
   failed: 'That did not work. Please try again.',
 };
 
@@ -461,7 +461,7 @@ function useVoice(on: boolean, text: string, put: (t: string) => void) {
     const h = hear();
     setEar(h);
     setListen('chief', true);
-    h.words.then((w) => { if (w) put(now.current.trim() ? `${now.current.trimEnd()} ${w}` : w); else toast('I did not hear that. Try again.'); },
+    h.words.then((w) => { if (w) put(now.current.trim() ? `${now.current.trimEnd()} ${w}` : w); else toast('Chief did not hear that. Try again.'); },
       (e) => toast(e.message === 'blocked' ? 'Allow the microphone for this page. Then try again.' : 'Voice input is not available on this computer. Type your message.'))
       .finally(() => { setEar(null); setListen('chief', false); });
   };
@@ -516,7 +516,7 @@ export function Composer({ placeholder, onSend, chat, chips }: { placeholder: st
 }
 
 // ---------- asks ----------
-const answer = (c: Card, body: Json) => attempt(() => api.answer(c.id, body), body.change ? 'Chief will change the plan' : body.remind ? 'OK. I will ask again tomorrow.' : body.answer === 'deny' ? 'OK, not now' : 'Done. The work continues.');
+const answer = (c: Card, body: Json) => attempt(() => api.answer(c.id, body), body.change ? 'Chief will change the plan' : body.remind ? 'OK. Chief will ask again tomorrow.' : body.answer === 'deny' ? 'OK, not now' : 'Done. The work continues.');
 
 /** A waiting-for-the-computer schedule preview: the words in plain time, and the first run on the computer's own clock. */
 function useSchedule(text: string | null) {
@@ -621,7 +621,7 @@ export function AskCard({ c, onDone }: { c: Card; onDone: () => void }) {
             <input className="input grow" value={when} onChange={(e) => setWhen(e.target.value)} placeholder="When? For example: every Saturday 10am" aria-label="When" />
           </form>}
           {when !== null && preview && !preview.bad && <div className="mute small routine-note">{preview.words}. First time {preview.first}. {c.zoneNote}</div>}
-          {when !== null && preview?.bad && <div className="mute small routine-note">I do not understand that time. Try “every Monday 9:00”.</div>}
+          {when !== null && preview?.bad && <div className="mute small routine-note">Chief does not understand that time. Try “every Monday 9:00”.</div>}
           <div className="btns">
             <button className="btn go" disabled={stuck} onClick={start}>Start it</button>
             <button className="btn" aria-pressed={when !== null} onClick={() => { setWhen(when === null ? c.schedule || '' : null); }}>{when === null ? 'Change time' : 'Keep the time'}</button>

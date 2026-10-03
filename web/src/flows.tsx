@@ -230,7 +230,7 @@ export function ConnectApp({ app, helper, state, tab: first, ask, onConnected, o
       </>}
       {phase === 'done' && <><h2>{app.name} is connected</h2><p>{app.does}</p>{helper && <p className="mute">{helper} continues the job now.</p>}
         <button className="btn go big" onClick={onDone}>Done</button></>}
-      {phase === 'cancelled' && <><h2>OK</h2><p className="mute">I did not connect anything{helper ? `. ${helper} will continue without it` : ''}.
+      {phase === 'cancelled' && <><h2>OK</h2><p className="mute">Chief did not connect anything{helper ? `. ${helper} will continue without it` : ''}.
         {app.warns ? ` Google shows that warning for each app that it did not review. A personal app always gets it. Crewhouse is your app, and it runs on your own computer. Tap Advanced. Then tap Go to Crewhouse.` : ` You can connect ${app.name} any time.`}</p>
         <button className="btn go big" onClick={again}>Try again</button>{notNow}</>}
       {phase === 'unticked' && <><h2>Almost: tick the box</h2><p className="mute">The {app.name} box is not ticked. Tap Try again. Then tick {app.name} on Google's page.</p>
@@ -257,7 +257,7 @@ export function ConnectApp({ app, helper, state, tab: first, ask, onConnected, o
 export function ConnectCard({ c, helper, state, onDone }: { c: A.Card; helper?: string; state: Json; onDone: () => void }) {
   const [open, setOpen] = useState<Window | null | false>(sheet === 'connect' ? null : false);
   const app = c.app!;
-  const no = () => api.answer(c.id, { answer: 'deny' }).then(onDone, () => toast('I cannot reach the home computer now.'));
+  const no = () => api.answer(c.id, { answer: 'deny' }).then(onDone, () => toast('Chief cannot reach the home computer now.'));
   const yes = () => void api.answer(c.id, { answer: 'allow' }).catch(() => {}).then(onDone);
   return (
     <div className="card ask">
@@ -275,7 +275,7 @@ export function ConnectCard({ c, helper, state, onDone }: { c: A.Card; helper?: 
 
 // ---------- the home computer out of reach ----------
 function OfflineWords({ onClose }: { onClose: () => void }) {
-  return <><h2>I cannot reach the home computer</h2><p className="mute">It may be asleep, off, or offline. Your helpers live there. They continue when the computer is back. I will try again and continue from here.</p>
+  return <><h2>Chief cannot reach the home computer</h2><p className="mute">It may be asleep, off, or offline. Your helpers live there. They continue when the computer is back. Chief will try again and continue from here.</p>
     <Pill tone="off">Trying again…</Pill><button className="link" onClick={onClose}>Close for now</button></>;
 }
 

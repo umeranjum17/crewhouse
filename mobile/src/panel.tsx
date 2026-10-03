@@ -42,7 +42,7 @@ export function Panel({ frame, to, words, listen }: { frame?: string; to?: strin
 function Unpaired() {
   return <>
     <View style={s.row}><Face who="chief" size={40} mood="hello" /><T style={[s.h2, { flex: 1 }]}>Pair this phone first</T></View>
-    <T tone="ink2">Open Crewhouse. Scan the code on your computer. Then I can help you from here.</T>
+    <T tone="ink2">Open Crewhouse. Scan the code on your computer. Then Chief can help you from here.</T>
     <Btn go big label="Open Crewhouse" onPress={() => void open('crewhouse://')} />
   </>;
 }
@@ -184,7 +184,7 @@ function Reply({ who, task, state, onAsk, asking, canAct, refresh }: { who: A.He
   const card = A.needsYou(state).find((c) => c.helper === who.id);
   const chat = () => void open('crewhouse://ask');
   return <>
-    <View style={s.row}><Face who={who} size={40} /><T style={[s.h2, { flex: 1 }]}>{reply ? `${who.name} sent an answer` : reply === '' ? (inChat ? "Chief answered in Chief's chat" : `${who.name} could not do this job`) : waits || (by === who.id ? `${who.name} works on it…` : 'Chief works on it…')}</T></View>
+    <View style={s.row}><Face who={who} size={40} /><T style={[s.h2, { flex: 1 }]}>{reply ? `${who.name} sent an answer` : reply === '' ? (inChat ? "Chief answered in Chief's chat" : `${who.name} could not do this task`) : waits || (by === who.id ? `${who.name} works on it…` : 'Chief works on it…')}</T></View>
     {!!reply && <ScrollView style={[s.listGroup, { backgroundColor: t.solid, borderColor: t.line, maxHeight: 280 }]} contentContainerStyle={{ padding: 12 }}>
       <T>{reply}</T>
     </ScrollView>}
@@ -214,7 +214,7 @@ function Said({ ask, answer, title, canAct, onDone }: { ask: string; answer: str
 function Kept({ line }: { line: string }) {
   const [gone, setGone] = useState(false);
   return <>
-    <View style={s.row}><Face who="chief" size={40} mood={gone ? 'idle' : 'happy'} /><T style={[s.h2, { flex: 1 }]}>{gone ? 'I removed it' : 'The whole crew knows now'}</T></View>
+    <View style={s.row}><Face who="chief" size={40} mood={gone ? 'idle' : 'happy'} /><T style={[s.h2, { flex: 1 }]}>{gone ? 'Chief removed it' : 'The whole crew knows now'}</T></View>
     <T tone="ink2">{`“${line}”`}</T>
     <View style={s.chips}>
       {!gone && <Btn label="Undo" onPress={() => void attempt(async () => { await api.setAbout(A.unkeep((await api.about())?.notes ?? '', line)); setGone(true); })} />}
@@ -227,7 +227,7 @@ function Kept({ line }: { line: string }) {
 function SwitchOn() {
   return <>
     <View style={s.row}><Face who="chief" size={40} mood="hello" /><T style={[s.h2, { flex: 1 }]}>Let Chief see the box where you type</T></View>
-    <T tone="ink2">{`On the next page, set Crewhouse to on. Then tap me in any box. Select Write it here. ${restrictedWords()}`}</T>
+    <T tone="ink2">{`On the next page, set Crewhouse to on. Then tap Chief in any box. Select Write it here. ${restrictedWords()}`}</T>
     <Btn go big label="Open the settings" onPress={() => void Linking.sendIntent('android.settings.ACCESSIBILITY_SETTINGS').catch(() => {}).then(closePanel)} />
   </>;
 }

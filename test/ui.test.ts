@@ -146,8 +146,8 @@ test('asks become plain cards: money never gets "always", a blocked terminal bec
   assert.equal(keep.head, 'Keep what Reel learned?');
   assert.deepEqual(keep.choices.map((c) => c.label), ['Yes, keep it', 'Not now'], 'a suggestion is yes or no, never "always"');
   assert.equal(keep.preview?.head, 'How Reel would do it');
-  assert.equal(run.words, 'Reel stopped and needs your OK to continue.');
-  assert.equal(run.head, "Your OK, for Reel's job", 'Chief brings it; Reel is named only as whose job it is');
+  assert.equal(run.words, 'Reel stopped. Reel can continue after your approval.');
+  assert.equal(run.head, "Your OK, for Reel's task", 'Chief brings it; Reel is named only as whose job it is');
   assert.equal(run.about, 'Reel');
   assert.deepEqual(run.choices.map((c) => c.label), ['Yes, go ahead', 'Always OK for Reel', 'Not now']);
   assert.equal(spend.kind, 'spend');
@@ -335,7 +335,7 @@ test('Home keeps a standing "hand me a job" list, straight from crewd\'s ideas: 
     detail: { effect: 'send', press: true, spends: false,
       words: 'Scout wants to press “Request price adjustment” on shop.example, a site you signed it in to. The page shows $999.00.',
       preview: { head: 'What Scout will press on shop.example', body: "You'd get $50.00 back.\nPaid on 12 March: $999.00\nRequest price adjustment" } } }, withJobs);
-  assert.equal(press.head, "OK to act on a site, for Scout's job?", 'a press is not called a message ready to send');
+  assert.equal(press.head, "OK to act on a site, for Scout's task?", 'a press is not called a message ready to send');
   assert.match(press.choices[0].label, /press it/i);
   assert.match(press.preview!.body, /Request price adjustment/, 'the button, as the page writes it');
   assert.match(press.preview!.body, /You'd get \$50\.00 back\./, 'and what they get back, when the page wrote both prices');
@@ -347,7 +347,7 @@ test('Home keeps a standing "hand me a job" list, straight from crewd\'s ideas: 
     detail: { effect: 'send', press: true, fill: true, spends: false,
       words: 'Scout wants to fill “Owner\'s full name” on unclaimed.example, a site you signed it in to.',
       preview: { head: 'What Scout will fill in on unclaimed.example', body: "Owner's full name: Ada Lovelace" } } }, withJobs);
-  assert.equal(fill.head, "OK to act on a site, for Scout's job?", 'a form line is the same acting-on-a-site card');
+  assert.equal(fill.head, "OK to act on a site, for Scout's task?", 'a form line is the same acting-on-a-site card');
   assert.match(fill.preview!.body, /Owner's full name: Ada Lovelace/, 'the line, label then value');
   assert.equal(fill.choices[0].label, 'Yes, fill it in');
   const these = A.card({ id: 11, bot: 'scout', kind: 'permission', state: 'open',
@@ -676,7 +676,7 @@ test("Chief's mood is the first matching row of the table, and the line follows 
   const mood = (v: { mood: string }) => v.mood;
   // 9 · nothing applies: content
   assert.equal(A.chief(base).mood, 'idle');
-  assert.equal(A.chief(base).line, 'I monitor the crew');
+  assert.equal(A.chief(base).line, 'Chief monitors the crew');
   assert.equal(A.chief(base).tone, 'ok');
   // 1 · the computer is asleep, whatever else is true
   const busyHouse = withBots(bot('reel', { task: { id: 1, title: 'A video', state: 'working' } }));
@@ -745,7 +745,7 @@ test('helpers wear the same story on their own faces', () => {
   const moodOf = (id: string) => A.crew(s).find((h) => h.id === id)!.mood;
   assert.deepEqual(['scribe', 'reel', 'scout', 'pip', 'tracer', 'muse', 'ink'].map(moodOf), ['error', 'idle', 'happy', 'worried', 'work', 'rest', 'idle']);
   const reel = A.crew(s).find((h) => h.id === 'reel')!;
-  assert.deepEqual([reel.ring, reel.status], ['waiting', 'Waiting for Chief'], 'a helper waits on Chief, never on the person');
+  assert.deepEqual([reel.ring, reel.status], ['waiting', 'Waits for Chief'], 'a helper waits on Chief, never on the person');
   assert.equal(moodOf('scribe') === 'error' && A.crew(s).find((h) => h.id === 'scribe')!.ring, '', 'sad is a face, not a ring');
   // Tracer is visible in the crew; here the mapping is what matters.
 });
@@ -1065,9 +1065,9 @@ test('Remember this: refused on the phone when it looks like a secret, before an
   for (const t of ['Ali is allergic to peanuts', 'the dress is blue', 'my mobile is 07700 900123', 'call me on +44 7700 900123', 'Flat 4, 221B Baker Street',
     'Zara (9) and Ali (6)', 'school starts 8:45', 'rent is £1,250', 'moved here 12/03/2019', 'trip 2026-10-01'])
     assert.equal(A.secretOf(t), '', t);
-  assert.match(A.secretOf('see www.example.com'), /not web or email addresses/);
-  assert.match(A.secretOf('write to sam@example.com'), /not web or email addresses/);
-  assert.match(A.secretOf('keys are in /home/sam/.ssh/'), /not web or email addresses/);
+  assert.match(A.secretOf('see www.example.com'), /does not keep web or email addresses/);
+  assert.match(A.secretOf('write to sam@example.com'), /does not keep web or email addresses/);
+  assert.match(A.secretOf('keys are in /home/sam/.ssh/'), /does not keep web or email addresses/);
   // Kept as one plain line of what the whole crew knows, the same shape crewd keeps (`- …`), and Undo takes it back out.
   const notes = '- Vegetarian at home\n';
   assert.deepEqual(A.keep(notes, '  Ali   is allergic\nto peanuts '), { notes: '- Vegetarian at home\n- Ali is allergic to peanuts\n', line: 'Ali is allergic to peanuts' });
@@ -1092,7 +1092,7 @@ test('Chief\'s box answers who is on what and what the crew knows about you itse
     'who is working on the tax return, and can they hurry', 'my details changed: new address is 4 Elm Road', 'plan my day around the dentist at 3'])
     assert.equal(A.cannedOf(t), '', t);
   assert.equal(A.canned(state, 'status'), `${A.crewLine(state)} ${A.homeCounts(state).needs} things for you to decide.`);
-  assert.equal(A.canned({ ...state, asks: [], resting: {}, bots: [bot('chief'), bot('scout')] }, 'status'), 'Nobody works on a job now.');
+  assert.equal(A.canned({ ...state, asks: [], resting: {}, bots: [bot('chief'), bot('scout')] }, 'status'), 'No helper works on a task at this time.');
   assert.equal(A.canned(state, 'details', '- Vegetarian at home\n- Two children: Zara (9) and Ali (6)\n'), "You are Umer.\nWhat the crew knows about you:\n• Vegetarian at home\n• Two children: Zara (9) and Ali (6)");
   assert.match(A.canned(state, 'details', ''), /^You are Umer\.\nThe crew knows nothing else about you yet\. To add a note:\n1\. /);
   for (const k of ['status', 'details'] as const) assert.doesNotMatch(A.canned(state, k, '- See files/x.md'), FORBIDDEN);
@@ -1109,7 +1109,7 @@ test('a card carries crewd\'s own context beside it, never in place of it, and n
   assert.equal(c.why, 'Return the kettle');
   assert.equal(c.question, 'Return the kettle?', 'the person\'s own question is the task crewd names');
   assert.equal(c.words, 'Scout wants to press “Start return” on shop.example.', 'the exact action stays the gate\'s own words');
-  assert.equal(c.head, 'OK to act on a site, for Scout\'s job?');
+  assert.equal(c.head, 'OK to act on a site, for Scout\'s task?');
   assert.deepEqual(c.choices.map((x) => x.label), ['Yes, press it', 'Not now'], 'the choices are unchanged by context');
   const bare = A.card({ ...ask, chief: null, app: null, why: null }, st);
   for (const k of ['chief', 'inApp', 'why'] as const) assert.equal(bare[k], undefined, `no ${k} is invented when crewd sends none`);
@@ -1127,7 +1127,15 @@ test('who is on what: one plain line from state alone, resting included, no mode
   assert.doesNotMatch(A.crewLine(state), FORBIDDEN);
 });
 
-test('the words the app writes about Chief and the crew use no gendered pronouns (STE GR-7)', () => {
+test("Chief's own framing names Chief and says task, never I, me or job (STE-style)", () => {
+  // Card titles, fallback words, status and canned lines are Chief speaking; quoted labels, choices and crewd's words are not checked here.
+  const said = [...A.cards(state).flatMap((c) => [c.head, c.words]), A.chief(state).line, A.chief({ ...state, asks: [], bots: [] }).line,
+    A.canned({ ...state, asks: [], resting: {}, bots: [] }, 'status'), A.crewLine(state)];
+  for (const w of said) assert.doesNotMatch(String(w ?? ''), /\b(I|me|my|I'm|I'll|jobs?)\b/, w);
+  assert.ok(said.includes('Reel stopped. Reel can continue after your approval.'), 'the fallback keeps its meaning: Reel waits for approval');
+});
+
+test('the words the app writes about Chief and the crew use no gendered pronouns (STE-style, rule GR-7)', () => {
   // Source scan with comments removed; work products and the person's own words (demo drafts, notes, results) are out of scope.
   const files = ['mobile/src/panel.tsx', 'mobile/src/bubble.ts', 'mobile/App.tsx', 'mobile/src/office.tsx', 'web/src/adapter.ts',
     'web/src/parts.tsx', 'web/src/main.tsx', 'web/src/screen.tsx', 'web/src/flows.tsx', 'web/src/office.tsx'];
@@ -1137,7 +1145,7 @@ test('the words the app writes about Chief and the crew use no gendered pronouns
   }
 });
 
-test("Chief's alert follows STE; a marketing draft is shown unchanged", () => {
+test("Chief's alert is STE-style; a marketing draft is shown unchanged", () => {
   // ASD-STE100 (Issue 9) principles for the words Chief's layer makes itself. These are mechanical checks only:
   // sentence length (Rule 5.1), a short idiom list, contractions (4.2), semicolons (8.1), a passive pattern (3.6) and
   // one instruction per sentence (5.2). They are not a dictionary check: no licensed STE word list is used here.
@@ -1235,7 +1243,7 @@ test('Write it here: Chief is asked for the writer, and the draft is only the an
   assert.equal(out(chief('done'), snap(t(10, 'done', 'Done.'))).text, '', 'an empty reply is not a draft to put in');
   assert.equal(out({ tasks: [] }, snap(t(10, 'done', 'x'))).text, null, 'no request on Chief\'s page: never a guess');
   assert.equal(out(chief('done'), snap(t(10, 'paused', 'Waiting for you to sign in with ChatGPT.'))).waits, 'Waiting for you to sign in with ChatGPT.', 'a paused job says why, never "writing" forever');
-  assert.equal(out(chief('needs_you'), snap()).waits, "It needs an OK. Give it in Chief's chat.");
+  assert.equal(out(chief('needs_you'), snap()).waits, "It waits for your approval. Give it in Chief's chat.");
   assert.equal(A.forHelper({ bots: [{ id: 'scribe', display: 'Scribe' }] }, 'scribe', 'Write it here: x'), 'Scribe: Write it here: x', 'asked of Chief, the writer named as context');
   // Source: the panel posts only to Chief and reads only Chief's page for these answers, never a helper's.
   const panel = readFileSync(join(import.meta.dirname, '..', 'mobile', 'src', 'panel.tsx'), 'utf8');
@@ -1781,7 +1789,7 @@ test('a file build shows a placeholder card until the file lands', () => {
 
   const main = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
   assert.match(main, /A\.building\(lines, live\)/, 'the chat asks the adapter whether a file is on its way');
-  assert.match(main, /I will share it here when it is ready\./, 'the placeholder says so in plain words');
+  assert.match(main, /Chief will share it here when it is ready\./, 'the placeholder says so in plain words');
   assert.match(main, /className="building-card"[\s\S]{0,200}aria-label="Building it"/, 'a skeleton card, named for what it is');
   const demo = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'demo.ts'), 'utf8');
   assert.match(demo, /variant === 'building'/, '?demo=building is wired');
@@ -1947,7 +1955,7 @@ test('the office holds the person’s whole crew and all their jobs', () => {
   assert.equal(reel.things[0].kind, 'image');
   assert.ok(reel.steps.some((s) => s.now));
   const scribe = room.crew.find((c) => c.id === 'scribe')!;
-  assert.deepEqual([scribe.ring, scribe.status, A.seatOf(scribe)], ['waiting', 'Waiting for Chief', 'waiting'], 'a helper waits on Chief, never on the person');
+  assert.deepEqual([scribe.ring, scribe.status, A.seatOf(scribe)], ['waiting', 'Waits for Chief', 'waiting'], 'a helper waits on Chief, never on the person');
   // Scribe's send is Chief's to bring: in his inbox, Scribe named as whose job it is.
   const send = A.chiefAsks(room).find((c) => c.id === 7)!;
   assert.equal(send.about, 'Scribe');
@@ -1993,7 +2001,7 @@ test('the office moves on live events; the refresh stays the source of truth', (
   // A question, then its answer.
   let u = A.office(officeState());
   u = A.officeEvent(u, { seq: 26, at: OTN, kind: 'ask.opened', bot: 'pip', data: { task: 51 } });
-  assert.deepEqual([u.crew.find((c) => c.id === 'pip')!.ring, u.crew.find((c) => c.id === 'pip')!.status], ['waiting', 'Waiting for Chief']);
+  assert.deepEqual([u.crew.find((c) => c.id === 'pip')!.ring, u.crew.find((c) => c.id === 'pip')!.status], ['waiting', 'Waits for Chief']);
   assert.equal(u.counts.needs, 2, 'the count waits for the refresh to bring the actual row in Chief\'s inbox');
   assert.equal(A.seatOf(u.crew.find((c) => c.id === 'pip')!), 'waiting', 'and so does Review');
   assert.equal(A.officeEvent(u, { seq: 30, at: OTN, kind: 'ask.parked', bot: 'scribe', data: { ask: 7 } }), u, 'a parked request stays open in Chief\'s inbox');
