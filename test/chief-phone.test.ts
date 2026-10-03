@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { setup, settled, until, task } from './lab.ts';
 import { asksForPhone, inlineHowTo } from '../src/crew.ts';
 import { botDir, systemPrompt } from '../src/bots.ts';
-import { phoneOffer, lines } from '../web/src/adapter.ts';
+import { phoneOffer, lines, cards } from '../web/src/adapter.ts';
 
 const phrases = ['pair my phone', 'pair my computer with you', 'connect my phone', 'add my phone', 'use crewhouse on my phone', 'install on my phone'];
 
@@ -25,7 +25,7 @@ test('Chief offers every phone phrasing to the person', async () => {
     assert.equal(page.phoneOffer.typed, offer.typed);
     assert.ok(page.phoneOffer.expires > Date.now());
     assert.equal(page.messages.at(-1)!.id, page.phoneOffer.message);
-    assert.equal(page.messages.at(-1)!.text, 'Open Crewhouse on your phone and scan this, or type the code.');
+    assert.equal(page.messages.at(-1)!.text, 'Open Crewhouse on your phone. Scan this code. Alternatively, type the code.');
     assert.equal(phoneOffer(page)?.message, page.messages.at(-1)!.id, 'phone card attaches to this reply');
     assert.ok(!JSON.stringify(page.messages).includes(offer.qr), 'ticket is not in chat text');
   }
@@ -97,16 +97,28 @@ test('a delivered video comes over in slices, and undelivered files stay closed'
 });
 
 test('Chief offers actions rather than directions for sign-in, apps and routines', async () => {
-  const { crew, cfg } = setup();
+  const { crew, cfg, db } = setup();
   crew.onboard('Owner');
   assert.equal(inlineHowTo('how do I sign in to ChatGPT?'), 'signin');
   assert.equal(inlineHowTo('how do I connect Google Calendar?'), 'app');
   assert.equal(inlineHowTo('set a routine every weekday'), 'routine');
-  for (const [request, reply] of [['how do I sign in to ChatGPT?', 'Sign in with ChatGPT.'], ['how do I connect Google Calendar?', 'Connect Google Calendar.']]) {
-    await crew.post('chief', request);
-    assert.equal(crew.botPage('chief').messages.at(-1)?.text, reply);
-  }
-  assert.ok(crew.snapshot().asks.some((a) => a.kind === 'connect' && a.detail.app === 'calendar'));
+  await crew.post('chief', 'how do I sign in to ChatGPT?');
+  assert.equal(crew.botPage('chief').messages.at(-1)?.text, 'Sign in with ChatGPT.');
+  await crew.post('chief', 'how do I connect Google Calendar?');
+  assert.equal(crew.botPage('chief').messages.at(-1)?.text, 'Give your decision to Chief.\nAction: “Connect Google Calendar”\nApp: Google Calendar.\nTask: Not available.\nChief recommends no approval until you read the details.\nGive your decision on this card.');
+  const ask = crew.snapshot().asks.find((a) => a.kind === 'connect' && a.detail.app === 'calendar')!;
+  assert.ok(ask); assert.equal(ask.title, 'Connect Google Calendar'); assert.equal(ask.bot, 'chief');
+  assert.equal(ask.task_id, null); assert.equal(ask.state, 'open');
+  const card = cards(crew.snapshot()).find((c) => c.id === ask.id)!;
+  assert.equal(card.kind, 'connect'); assert.equal(card.app?.id, 'calendar');
+  assert.equal(card.choices[0].label, 'Connect Google Calendar'); assert.deepEqual(card.choices[0].body, { answer: 'allow' });
+  assert.equal(card.choices[1].label, 'Not now'); assert.deepEqual(card.choices[1].body, { answer: 'deny' });
+  assert.equal(crew.connections.connected('calendar'), false, 'a recommendation/card is not a connection');
+  await crew.answer(ask.id, card.choices[1].body);
+  assert.equal(db.get('SELECT state FROM asks WHERE id = ?', ask.id)!.state, 'answered');
+  assert.ok(!crew.snapshot().asks.some((a) => a.id === ask.id));
+  assert.equal(crew.connections.connected('calendar'), false, 'cancellation does not connect or send');
+  await assert.rejects(crew.answer(ask.id, { answer: 'allow' }), /already settled/, 'old card cannot reopen the connection');
   assert.match(readFileSync(join(cfg.repoDir, 'templates/chief/AGENTS.md'), 'utf8'), /routine request offers its approval card/);
   assert.deepEqual(lines({ messages: [{ id: 1, author: 'bot', text: 'stub chief: done with "hi"' }] }, 'chief'), []);
 });
