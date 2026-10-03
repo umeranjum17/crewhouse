@@ -30,6 +30,9 @@ export type Card = {
   /** The person's own question for an OK or a spend: their task's title, with a question mark if it has no ending of its
    *  own. The tool's words (site, lines) stay on the review sheet. */
   question?: string;
+  /** crewd's own context beside the card, never in place of it: Chief's line about the request (`chief`), the app's
+   *  name when crewd's record names one (`inApp`), and the task's title (`why`). Absent when crewd sends none. */
+  chief?: string; inApp?: string; why?: string;
   /** A draft's own words, unscrubbed: the person may change them before Approve, and their version is what is kept. */
   draftText?: string;
 };
@@ -565,8 +568,11 @@ export function gallery(state: Json) {
 export function card(a: Json, state: Json): Card {
   const name = crewName(state, a.bot);
   const d = a.detail ?? {};
-  const base = { id: a.id, helper: a.bot, at: a.at, reply: false, ...(a.bot === 'chief' ? {} : { about: name }) };
-  const title = plain(String(state.bots.find((b: Json) => b.task?.id === a.task_id)?.task?.title ?? state.tasks?.find((t: Json) => t.id === a.task_id)?.title ?? '')).trim();
+  const said = (x: unknown) => (typeof x === 'string' && plain(x).trim()) || undefined;
+  const ctx = { chief: said(a.chief), inApp: a.kind === 'connect' ? undefined : said(a.app), why: said(a.why) };
+  const base = { id: a.id, helper: a.bot, at: a.at, reply: false, ...(a.bot === 'chief' ? {} : { about: name }),
+    ...Object.fromEntries(Object.entries(ctx).filter(([, v]) => v)) };
+  const title = ctx.why ?? plain(String(state.bots.find((b: Json) => b.task?.id === a.task_id)?.task?.title ?? state.tasks?.find((t: Json) => t.id === a.task_id)?.title ?? '')).trim();
   const question = title ? (/[?.!]$/.test(title) ? title : `${title}?`) : undefined;
   if (a.kind === 'connect' || d.app) {
     // An app this screen doesn't know is named as one, never as another app.
@@ -835,7 +841,7 @@ export function crewLine(state: Json) {
     : h.stuckFor ? `${h.name} has gone quiet` : h.ring === 'working' ? `${h.name} is on “${h.status}”` : h.status.startsWith('Resting') ? `${h.name} is ${h.status.replace(/^Resting/, 'resting')}` : ''));
   return [lead?.task?.state === 'working' ? `Chief is on “${plain(lead.task.title)}”` : '', ...each, resting(state)].filter(Boolean).map((l) => `${l}.`).join(' ');
 }
-/** Write it here's ask, in the writer's chat like any other (its first line is the job's title): what the person
+/** Write it here's ask, sent to Chief for the writer (`forHelper`; its first line is the job's title): what the person
  *  wants, what the box says, and (on Try again) the draft they passed on. The draft is what the whole box should say,
  *  keeping what they wrote; with some of it picked, it is only what goes in place of that part. */
 export function writeAsk(want: string, box: { text: string; picked: string }, not = '') {
@@ -850,21 +856,24 @@ export function writeAsk(want: string, box: { text: string; picked: string }, no
       : `Reply with only what the whole box should say${sofar ? ', keeping what I wrote where it fits' : ''}, as plain text: no file, no notes.`,
   ].filter(Boolean).join('\n');
 }
-/** That ask's draft, from the writer's page: its job's reply once done, '' when it couldn't (crewd's "Done." is an
- *  empty reply), null while it writes. */
-export function draftOf(page: Json, task: number): string | null {
-  const t = (page?.tasks ?? []).find((x: Json) => x.id === task);
-  if (!t || !['done', 'failed', 'unsure'].includes(t.state)) return null;
-  const r = t.state === 'done' ? String(t.result ?? '').trim() : '';
-  return r === 'Done.' ? '' : r;
+/** A job asked of Chief from the phone (Write it here, a quick ask): its answer, found only by the request id the post
+ *  returned. The work is Chief's request on his page plus the tasks whose `root` is that id (his hand-off and anything
+ *  passed on from it) in `/api/state.tasks`; never the latest task of some helper. `text` is null while any of it is
+ *  still open (or Chief is and nothing linked is done), then the newest linked task that ended `done` (else Chief's own `done` reply), '' when none did (crewd's
+ *  "Done." is an empty reply). `waits` is why it isn't moving, in crewd's words; `by` the helper doing it now. */
+export function outcome(chiefPage: Json, state: Json, request: number): { text: string | null; waits: string; by: string | null } {
+  const req = (chiefPage?.tasks ?? []).find((t: Json) => t.id === request);
+  const linked = ((state?.tasks ?? []) as Json[]).filter((t) => t.root === request && t.id !== request).sort((a, b) => b.id - a.id);
+  const ended = (t: Json) => ['done', 'failed', 'unsure'].includes(t.state);
+  const open = [req, ...linked].filter((t) => t && !ended(t));
+  const stuck = open.find((t) => t.state === 'paused' || t.state === 'needs_you');
+  const waits = !stuck ? '' : stuck.state === 'paused' ? plain(stuck.result ?? '') || 'Waiting for you.' : "It's waiting on an OK, in Chief's chat.";
+  const by = linked.find((t) => !ended(t))?.bot ?? null;
+  const done = linked.find((t) => t.state === 'done') ?? (!linked.length && req?.state === 'done' ? req : null);
+  if (!req || by || (!done && !ended(req))) return { text: null, waits, by };
+  const r = done ? String(done.result ?? '').trim() : '';
+  return { text: r === 'Done.' ? '' : r, waits, by };
 }
-/** Why that job isn't writing yet, in crewd's own words ('' while it writes): paused for a sign-in or a rest, or
- *  waiting on an OK the person gives in Chief's chat. */
-export function waitOf(page: Json, task: number): string {
-  const t = (page?.tasks ?? []).find((x: Json) => x.id === task);
-  return t?.state === 'paused' ? plain(t.result ?? '') || 'Waiting for you.' : t?.state === 'needs_you' ? "It's waiting on an OK, in Chief's chat." : '';
-}
-
 /** Home's standing "hand me a job" list: the jobs the crew offers to do end to end, from crewd's `ideas[]` — which is
  *  already only what this crew can do. A goal first, then money back, then the everyday jobs. A row that needs an app the person
  *  hasn't connected says what it needs instead of dead-ending, and never fills the box. A row with `hire` names the

@@ -166,7 +166,7 @@ function Body({ grant, still, box, used, listen }: { grant: Grant; still?: Share
     </View>
     {canAct ? <Composer placeholder="Ask Chief anything" onSend={toChief} chat="chief" listen={hold} />
       : <T tone="mute" style={s.small}>{online ? "This phone watches the crew; it can't send messages." : 'You can ask once the home computer is back.'}</T>}
-    {asking && <AskSheet c={asking} chiefSays={state.asks.find((x: Json) => x.id === asking.id)?.detail?.chief}
+    {asking && <AskSheet c={asking}
       canAct={canAct} onClose={() => { setAsking(null); refresh(); }} />}
   </>;
 }
@@ -177,11 +177,13 @@ function Reply({ who, task, state, onAsk, asking, canAct, refresh }: { who: A.He
   const t = useContext(Theme);
   const [reply, setReply] = useState<string | null>(null);
   const [waits, setWaits] = useState('');
-  useEffect(() => { api.bot(who.id).then((p) => { setReply(A.draftOf(p, task)); setWaits(A.waitOf(p, task)); }, () => {}); }, [state, task, who.id]);
+  const [by, setBy] = useState<string | null>(null);
+  // The job is Chief's request: its answer comes only from that request and the work linked to it (A.outcome).
+  useEffect(() => { api.bot('chief').then((p) => { const o = A.outcome(p, state, task); setReply(o.text); setWaits(o.waits); setBy(o.by); }, () => {}); }, [state, task]);
   const card = A.needsYou(state).find((c) => c.helper === who.id);
   const chat = () => void open('crewhouse://ask');
   return <>
-    <View style={s.row}><Face who={who} size={40} /><T style={[s.h2, { flex: 1 }]}>{reply ? `${who.name} reported back` : reply === '' ? `${who.name} couldn't do this one` : waits || `${who.name} is on it…`}</T></View>
+    <View style={s.row}><Face who={who} size={40} /><T style={[s.h2, { flex: 1 }]}>{reply ? `${who.name} reported back` : reply === '' ? `${who.name} couldn't do this one` : waits || (by === who.id ? `${who.name} is on it…` : 'Chief is on it…')}</T></View>
     {!!reply && <ScrollView style={[s.listGroup, { backgroundColor: t.solid, borderColor: t.line, maxHeight: 280 }]} contentContainerStyle={{ padding: 12 }}>
       <T>{reply}</T>
     </ScrollView>}
@@ -229,23 +231,25 @@ function SwitchOn() {
   </>;
 }
 
-/** Write it here: what the box should say, the writer's draft when its job replies, and Put it in. Nothing is sent: the
- *  words land in the box and the person presses the app's own Send. The first time, the phone's switch comes first. */
+/** Write it here: what the box should say, asked of Chief for the writer; the draft is the answer linked to that exact
+ *  request (A.outcome), and Put it in. Nothing is sent: the words land in the box and the person presses the app's own
+ *  Send. The first time, the phone's switch comes first. */
 function Write({ box, who, state }: { box: Exclude<Box, null>; who: A.Helper; state: Json }) {
   const t = useContext(Theme);
   const [want, setWant] = useState('');
   const [task, setTask] = useState(0);
   const [draft, setDraft] = useState<string | null>(null);
   const [waits, setWaits] = useState('');
+  const [by, setBy] = useState<string | null>(null);
   const [trying, setTrying] = useState(false);
-  // Every refresh (something landed on the link) looks at the writer's page for this job's reply.
-  useEffect(() => { if (task) api.bot(who.id).then((p) => { setDraft(A.draftOf(p, task)); setWaits(A.waitOf(p, task)); }, () => {}); }, [state, task, who.id]);
+  // Every refresh (something landed on the link) looks at Chief's request and the work linked to it.
+  useEffect(() => { if (task) api.bot('chief').then((p) => { const o = A.outcome(p, state, task); setDraft(o.text); setWaits(o.waits); setBy(o.by); }, () => {}); }, [state, task]);
   if (box === 'off') return <SwitchOn />;
   // The first ask's box says "Not sent" itself; Try again has only the toast.
   const ask = async (words: string, not = '', quiet = true) => {
     let r: Json = null;
-    if (!await attempt(async () => { r = await api.post(who.id, A.writeAsk(words, box, not)); }, undefined, quiet) || !r?.task) return false;
-    setWant(words); setDraft(null); setWaits(''); setTask(r.task);
+    if (!await attempt(async () => { r = await api.post('chief', A.forHelper(state, who.id, A.writeAsk(words, box, not))); }, undefined, quiet) || !r?.task) return false;
+    setWant(words); setDraft(null); setWaits(''); setBy(null); setTask(r.task);
     return true;
   };
   const sofar = (box.picked || box.text).trim().split('\n')[0];
@@ -255,7 +259,7 @@ function Write({ box, who, state }: { box: Exclude<Box, null>; who: A.Helper; st
     <Composer placeholder="Say no politely, offer Thursday" onSend={(words) => ask(words)} photos={false} mic />
   </>;
   if (draft === null) return <>
-    <View style={s.row}><Face who={who} size={40} /><T tone="ink2" style={{ flex: 1 }}>{waits || `${who.name} is writing…`}</T></View>
+    <View style={s.row}><Face who={who} size={40} /><T tone="ink2" style={{ flex: 1 }}>{waits || (by === who.id ? `${who.name} is writing…` : 'Chief is on it…')}</T></View>
     <View style={s.chips}>
       {!!waits && <Btn label="Open Crewhouse" onPress={() => void Linking.openURL('crewhouse://').catch(() => {}).then(closePanel)} />}
       <Btn ghost label="Not now" onPress={() => void closePanel()} />

@@ -1365,7 +1365,7 @@ function App() {
           {v.view === 'share' && <Share {...ctx} />}
         </main>
       </div>
-      {sheet && <AskSheet c={sheet} chiefSays={ctx.state.asks.find((a: Json) => a.id === sheet.id)?.detail?.chief} onClose={() => history.length > 1 ? history.back() : go('#/')} />}
+      {sheet && <AskSheet c={sheet} onClose={() => history.length > 1 ? history.back() : go('#/')} />}
       {book && <PreviewPanel bot={book.bot} path={book.path} onClose={() => history.length > 1 ? history.back() : go('#/')} />}
       {party && <Celebrate title={party.title} href={hrefOf(party.helper)} onDone={() => setParty(null)} />}
       <Toasts />

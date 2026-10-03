@@ -671,7 +671,7 @@ export function AskCard({ c, onDone }: { c: Card; onDone: () => void }) {
 /** The approval moment: who, the status, exactly what goes out, and the choices — a centred dialog on a desk,
  *  a bottom sheet on a phone. A checkout reviews the whole order here, with a yes that names the order; an order
  *  without a readable total offers no yes at all. */
-export function AskSheet({ c, chiefSays, onClose }: { c: Card; chiefSays?: string; onClose: () => void }) {
+export function AskSheet({ c, onClose }: { c: Card; onClose: () => void }) {
   const [open, setOpen] = useState(false);
   const [oops, setOops] = useState(false);
   const last = useRef<Json | null>(null);
@@ -692,7 +692,8 @@ export function AskSheet({ c, chiefSays, onClose }: { c: Card; chiefSays?: strin
         <h2 className="ask-words">{question}</h2>
         {edit.box || <AskEvidence c={c} open={open} readAll={<button className="link" onClick={() => setOpen(true)}>Read all</button>} />}
         {c.review && c.order && !c.order.known && <div className="mute small">So nothing is counted against the monthly limit.</div>}
-        {chiefSays && <div className="chief-says"><Face who="chief" size={20} /><span><b>Chief:</b> {chiefSays}</span></div>}
+        {c.inApp && <div className="mute small">In {c.inApp}</div>}
+        {c.chief && <div className="chief-says"><Face who="chief" size={20} /><span><b>Chief:</b> {c.chief}</span></div>}
         {oops && <div className="send-failed" role="alert">That didn't go through. <button type="button" className="link inline" onClick={() => last.current && act(last.current)}>Try again</button></div>}
         <div className="approve-btns">
           {edit.can && <button className="btn big" aria-pressed={edit.editing} onClick={edit.toggle}>{edit.editing ? 'Use the original' : 'Edit'}</button>}

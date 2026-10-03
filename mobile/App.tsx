@@ -824,7 +824,7 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
         {route.view === 'things' && <Page title="Things" lead="Everything the crew has made for you." back={toHome}><ThingsList list={A.things(state)} state={state} empty="Videos, lists, letters and plans the crew makes for you land here." /></Page>}
         {route.view === 'phone' && <ThisPhone grant={grant} status={status} go={go} back={toHome} onForget={forget} onClear={() => { kept.clear(); say('Cleared from this phone ✓'); }} />}
       </View>
-      {live && <AskSheet c={live} chiefSays={state.asks.find((a: Json) => a.id === live.id)?.detail?.chief} canAct={canAct} onClose={() => { setSheet(null); refresh(); }} />}
+      {live && <AskSheet c={live} canAct={canAct} onClose={() => { setSheet(null); refresh(); }} />}
     </KeyboardAvoidingView>
   );
 }
@@ -1028,7 +1028,7 @@ function AskCard({ c, state, onDone, canAct, offline, open }: { c: A.Card; state
 /** The approval moment, mirroring web/src/parts.tsx AskSheet (§4.4): who, the status, exactly what goes out, and
  *  the choices — full-width buttons, the primary above its way out; a checkout reviews the whole order here, and an
  *  order without a readable total offers no yes at all. */
-function AskSheet({ c, chiefSays, canAct, onClose }: { c: A.Card; chiefSays?: string; canAct: boolean; onClose: () => void }) {
+function AskSheet({ c, canAct, onClose }: { c: A.Card; canAct: boolean; onClose: () => void }) {
   const t = useLook();
   const [open, setOpen] = useState(false);
   const [oops, setOops] = useState(false);
@@ -1050,7 +1050,8 @@ function AskSheet({ c, chiefSays, canAct, onClose }: { c: A.Card; chiefSays?: st
           <T style={s.askQ}>{question}</T>
           {edit.box || <AskEvidence c={c} open={open} readAll={<Btn label="Read all" onPress={() => setOpen(true)} />} />}
           {c.review && c.order && !c.order.known && <T tone="mute" style={s.small}>So nothing is counted against the monthly limit.</T>}
-          {!!chiefSays && <View style={s.row}><Face who="chief" size={20} /><T tone="ink2" style={{ flex: 1 }}><Text style={s.b}>Chief:</Text> {A.plain(chiefSays)}</T></View>}
+          {!!c.inApp && <T tone="mute" style={s.small}>{`In ${c.inApp}`}</T>}
+          {!!c.chief && <View style={s.row}><Face who="chief" size={20} /><T tone="ink2" style={{ flex: 1 }}><Text style={s.b}>Chief:</Text> {c.chief}</T></View>}
           {oops && <T tone="pinkInk" style={s.small}>That didn't go through. Try again.</T>}
           {canAct ? <>
             {c.evidence === 'draft' && yes && <Btn go big label={yes.label} disabled={edit.empty} onPress={() => act(edit.yes(yes.body))} />}

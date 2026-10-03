@@ -492,6 +492,12 @@ const finish = () => {
   return heard;
 };
 if (variant === 'after' || variant === 'b1after') finish();
+function context(a: Json): Json {
+  const why = (state.tasks.find((t: Json) => t.id === a.task_id) ?? state.bots.find((b: Json) => b.task?.id === a.task_id)?.task)?.title ?? null;
+  const what = a.title || a.detail?.words || a.detail?.question;
+  const who = a.bot === 'chief' ? '' : ` for ${state.bots.find((b: Json) => b.id === a.bot)?.display ?? a.bot}`;
+  return { app: null, why, ...(what ? { chief: `I have a request${who}: ${what}. Use its card to answer.${why ? ` Task: ${why}.` : ''}` } : {}), ...a };
+}
 export function demoLive(hear: (e: Json) => void) {
   if (variant !== 'handoff' && variant !== 'b1handoff') return () => {};
   const t = setTimeout(() => finish().forEach(hear), 4000);
@@ -502,7 +508,8 @@ let calls = 0;
 export async function demoCall(method: string, path: string, body?: Json) {
   // "offline": the home computer never answers; "lost": it answers once, then goes quiet.
   if (variant === 'offline' || (variant === 'lost' && calls++ > 0)) throw new TypeError('Failed to fetch');
-  if (method === 'GET' && path === '/api/state') return { ...state };   // a new snapshot each read, as crewd's would be
+  // A new snapshot each read, as crewd's would be; each ask carries crewd's top-level context as its askView writes it.
+  if (method === 'GET' && path === '/api/state') return { ...state, asks: state.asks.map(context) };
   // The give-back sheet's ticks: the hosts on its tabs, only while the person holds the wheel.
   const scr = /^\/api\/bots\/([a-z0-9-]+)\/screen$/.exec(path);
   if (method === 'GET' && scr) return { pages: variant === 'wheeled' && scr[1] === 'scout' ? ['shop.example', 'mail.example'] : [] };
