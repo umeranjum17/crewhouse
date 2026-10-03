@@ -26,7 +26,7 @@ test('readState aggregates a past state dir read-only and starts nothing', async
   const { db, crew, cfg } = lab();
   crew.onboard('sir');
   crew.recruit('scribe', 'Scribe', 'person');
-  const { task } = (await crew.post('scribe', 'Draft an email to the team'))!;
+  const { task } = (await crew.assign('scribe', 'Draft an email to the team', 'chief'))!;
   await settled(db, task);
   const before = db.get('SELECT COUNT(*) AS n FROM tasks')!.n as number;
   const { byBot, recent } = readState(cfg.stateDir);

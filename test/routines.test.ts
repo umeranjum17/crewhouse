@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { setup as lab, settled, release, holding, until, lastSaid, sleep } from './lab.ts';
+import { setup as lab, settled, release, holding, until, lastSaid, sleep, task } from './lab.ts';
 import * as disk from '../src/bots.ts';
 import * as A from '../web/src/adapter.ts';
 import type { Store } from '../src/db.ts';
@@ -131,7 +131,7 @@ test('morning digest: on by default at 8:00, says what finished, what needs you,
   const text = db.get("SELECT text FROM messages WHERE bot = 'chief' AND author = 'bot' ORDER BY id DESC")!.text;
   assert.match(text, /^Good (morning|afternoon|evening), sir\. While you were away:/);
   assert.match(text, /Finished: Reel, “Make the pairing demo”/);
-  assert.match(text, /Needs you: Reel wants to look through your Pictures folder\./);
+  assert.match(text, /Give your decision to Chief[\s\S]*Helper: Reel[\s\S]*Pictures folder[\s\S]*Give your decision on this card/);
   assert.match(text, /Coming up: “Tidy the screenshots” with Reel/);
   assert.doesNotMatch(text, /Master|aye|!/);
   done();
@@ -235,7 +235,7 @@ test('sleep: missed routines are named once in Chief\'s thread, and a working cr
   crew.slept(Date.now() - 8 * 3_600_000, Date.now());
   crew.schedule();
   assert.equal(said().length, 1);
-  assert.match(said()[0], /jobs paused\. I'm running “Deal check” now, once, to catch up\.$/);
+  assert.match(said()[0], /tasks stopped\. Chief started “Deal check” once after the computer resumed\.$/);
   assert.equal(fired(db, r.id).at(-1).why, 'late');
 
   // Its run holds the machine awake; finishing lets it sleep again.
@@ -269,7 +269,7 @@ test('the crew\'s share: routines wait for tomorrow once it is used up, what the
     const wake = db.get('SELECT wake_at FROM tasks WHERE id = ?', t.id)!.wake_at;
     assert.equal(new Date(wake).getHours(), 0);
     assert.ok(wake > Date.now() && wake - Date.now() <= 86_400_000);
-    const chief = () => db.all("SELECT text FROM messages WHERE bot = 'chief' AND text LIKE 'I''ve stopped the routines%'");
+    const chief = () => db.all("SELECT text FROM messages WHERE bot = 'chief' AND text LIKE 'Chief stopped the routines%'");
     assert.equal(chief().length, 1);
     const reached = db.events().find((e) => e.kind === 'share.reached')!;
     assert.equal(reached.data.member, undefined);
@@ -404,36 +404,24 @@ test('a scheduled tick recovers a sign-in-parked routine once signed in, and sta
   done();
 });
 
-test('money cap: each spend still asks, and past the month\'s cap the crew cannot spend at all', async () => {
+test('money settings retain historical spend, but uncovered purchases remain unavailable at any cap', async () => {
   const { db, crew, done } = setup();
   crew.recruit('tracer', 'Tracer', 'person');
   const gate = (cost: number) => (crew as any).gate('tracer', 'people_search', { args: ['call', 'treg.people.phone.find', '--header', `X-Treg-Route-Max-Cost: ${cost}`] });
   assert.deepEqual(crew.snapshot().money, { cap: 20, spent: 0 });
-
-  const first = gate(15);
-  await until('asked', () => db.get("SELECT id FROM asks WHERE bot = 'tracer' AND state = 'open'"));
-  const ask = db.get("SELECT * FROM asks WHERE bot = 'tracer' AND state = 'open'")!;
-  assert.equal(JSON.parse(ask.detail).cost, 15);
-  await crew.answer(ask.id, { answer: 'allow' });
-  assert.equal(await first, undefined, 'the yes lets it through');
+  // A controlled older record remains accounting history; no purchase is executed here.
+  db.event('money.spent', 'tracer', { amount: 15, month: new Date().toLocaleDateString('en-CA').slice(0, 7), ask: -1 });
   assert.deepEqual(crew.snapshot().money, { cap: 20, spent: 15 });
-
-  // $15 + $10 would pass $20: refused at once, no card.
-  const refused = await gate(10);
-  assert.equal(refused.block, true);
-  assert.match(refused.reason, /past the \$20 monthly limit/);
-  assert.equal(db.get("SELECT COUNT(*) AS n FROM asks WHERE bot = 'tracer'")!.n, 1);
-
+  for (const cost of [15, 10]) {
+    const blocked = await gate(cost); assert.equal(blocked.block, true); assert.match(blocked.reason, /unavailable/);
+  }
   assert.throws(() => crew.setMoneyCap(-1), /between/);
   crew.setMoneyCap(40);
-  const later = gate(10);
-  await until('asked again', () => db.get("SELECT id FROM asks WHERE bot = 'tracer' AND state = 'open'"));
-  await crew.answer(db.get("SELECT id FROM asks WHERE bot = 'tracer' AND state = 'open'")!.id, { answer: 'deny' });
-  assert.equal((await later).block, true);
-  assert.equal(crew.snapshot().money!.spent, 15, 'a no spends nothing');
+  assert.equal((await gate(10)).block, true);
+  assert.equal(db.get("SELECT COUNT(*) AS n FROM asks WHERE bot = 'tracer'")!.n, 0);
+  assert.equal(crew.snapshot().money!.spent, 15, 'a blocked request does not spend');
   done();
 });
-
 test('watches: crewd reads the page, says nothing and uses no AI while it is the same, and wakes the helper when it changes', async () => {
   const { createServer } = await import('node:http');
   let page = '<html><body><h1>Flats</h1><p>Rent: $950 a month</p><script>track()</script></body></html>';
@@ -489,12 +477,12 @@ test('tell me when something\'s wrong: a watched page that stays down is said on
     await run(1);
     assert.deepEqual(lines(), [], 'one failure stays quiet');
     await run(2);
-    assert.deepEqual(lines(), ["I couldn't open the page for “Rentals” twice now. It may be down, or need a sign-in. I'll keep trying, and tell you when it works again."]);
+    assert.deepEqual(lines(), ["Chief could not open the page for “Rentals” on two attempts. The page may require a sign-in. Chief will continue the scheduled checks."]);
     await run(3);
     assert.equal(lines().length, 1, 'one line per outage, not per run');
     up = true;
     await run(4);
-    assert.equal(lines().at(-1), "The page for “Rentals” opens again. I'm back to keeping an eye on it.");
+    assert.equal(lines().at(-1), "The page for “Rentals” opens again. Chief will continue the scheduled checks.");
     assert.equal(alerts(), 2, 'both lines reach the phone');
     await run(5);
     assert.equal(lines().length, 2);
@@ -502,28 +490,28 @@ test('tell me when something\'s wrong: a watched page that stays down is said on
   done();
 });
 
-test('tell me when something\'s wrong: a routine that fails says so in Chief\'s thread, anything else in its own chat; stopping says nothing', async () => {
+test('failures reach Chief with their task identity; stopping adds no completion claim', async () => {
   const { db, crew, done } = setup();
   const timeOut = async (t: number) => {
     await until('working', () => state(db, t) === 'working');
     db.run('UPDATE tasks SET updated_at = ? WHERE id = ?', Date.now() - 2 * 3_600_000, t);
     (crew as any).tick();
-    await until('failed', () => state(db, t) === 'failed');
+    await until('failed', () => state(db, t) === 'failed'); await settled(db, t);
   };
   const r = crew.addRoutine({ bot: 'reel', schedule: 'every day 7:00', task: 'ask permission: check the deals', name: 'Deal check' }, 'person');
   crew.runRoutine(r.id);
   await timeOut(db.get('SELECT id FROM tasks WHERE routine = ?', r.id)!.id);
-  assert.match(lastSaid(db, 'chief')!, /^Reel couldn't finish “Deal check”\. Took longer than an hour, so I stopped it\. It will try again .*\.$/);
+  assert.match(lastSaid(db, 'chief')!, /^Chief could not complete this task\.\nTask: “Deal check”\nThe task exceeded one hour\. Crewhouse stopped the task\.\nNext run: .*\.$/);
   const last = A.routines(crew.snapshot()).find((x: any) => x.id === r.id)!.last;
-  assert.match(last, /^Did not finish: Took longer than an hour, so I stopped it\.$/);
+  assert.match(last, /^Did not finish: The task exceeded one hour\. Crewhouse stopped the task\.$/);
   assert.doesNotMatch(last, /Last ran|token|engine/);
 
-  const { task: t } = (await crew.post('reel', 'ask permission: make the card'))!;
+  const { task: t } = (await crew.assign('reel', 'ask permission: make the card', 'chief'))!;
   await timeOut(t);
-  assert.equal(db.get("SELECT text FROM messages WHERE task_id = ? AND author = 'bot' ORDER BY id DESC", t)!.text, 'Took longer than an hour, so I stopped it.');
-  assert.equal(db.get("SELECT COUNT(*) AS n FROM events WHERE kind = 'alert'")!.n, 1, 'the chat line reaches the phone');
+  assert.match(db.get("SELECT text FROM messages WHERE task_id = ? AND bot = 'chief' AND author = 'bot' ORDER BY id DESC", t)!.text, /Chief could not complete[\s\S]*The task exceeded one hour\. Crewhouse stopped the task\./);
+  assert.equal(db.get("SELECT COUNT(*) AS n FROM events WHERE kind = 'alert'")!.n, 2, 'both task failures emit one notification event each');
 
-  const { task: s } = (await crew.post('reel', 'ask permission: another card'))!;
+  const { task: s } = (await crew.assign('reel', 'ask permission: another card', 'chief'))!;
   await until('working', () => state(db, s) === 'working');
   await crew.resetBot('reel');
   assert.equal(db.get("SELECT COUNT(*) AS n FROM messages WHERE task_id = ? AND author = 'bot'", s)!.n, 0, 'the person stopped it; no line');
@@ -566,15 +554,17 @@ test('the digest reads today\'s calendar itself once Calendar is connected, and 
   done();
 });
 
-test('a new job in a chat carries the chat\'s last line, so "OK, post it" knows what "it" is', async () => {
+test('a public helper follow-up reaches Chief with helper context, not an implicit send approval', async () => {
   const { db, crew, done } = setup();
   const r = crew.addRoutine({ bot: 'reel', schedule: 'every day 7:00', task: 'draft the weekly post', name: 'Weekly post' }, 'person');
   crew.runRoutine(r.id);
   const first = db.get('SELECT id FROM tasks WHERE routine = ?', r.id)!.id;
   await settled(db, first);
   const { task: t } = (await crew.post('reel', 'OK, post it'))!;
-  const prompt = (crew as any).prompt(db.get('SELECT * FROM tasks WHERE id = ?', t));
-  assert.match(prompt, /Your last message in this chat, which this may answer: “stub reel: done with "draft the weekly post"”/);
+  assert.equal(task(db, t).bot, 'chief');
+  assert.match(task(db, t).body, /About Reel's work/);
+  assert.match(task(db, t).body, /OK, post it/);
+  assert.equal(db.get("SELECT COUNT(*) AS n FROM asks WHERE answer IS NOT NULL")!.n, 0, 'words are not card approval');
   await settled(db, t);
   done();
 });
@@ -596,7 +586,7 @@ ${extra}  - text: "Subtotal: $38.10"
   - button "Place order" [ref=e9]
 \`\`\``;
 
-test('the checkout card is read from the page: items and total as the page writes them, one yes per page and total, and the cap holds', async () => {
+test('checkout context comes from the page; uncovered execution never spends or creates an actionable card', async () => {
   const { orderOf } = await import('../src/policy.ts');
   assert.deepEqual(orderOf(snap('$43.10')), {
     items: ['Garlic, 2 kg — $6.20', 'Whole milk (1 gal) x2 — $7.90', 'Basmati rice 10 lb $24.00'], more: 0, total: 43.1, shown: '$43.10', currency: '$', capped: true });
@@ -608,7 +598,7 @@ test('the checkout card is read from the page: items and total as the page write
   const { db, crew, done } = setup();
   crew.setMoneyCap(100);
   crew.recruit('scout', 'Scout', 'person');
-  const { task: t } = (await crew.post('scout', 'ask permission: buy the groceries'))!;
+  const { task: t } = (await crew.assign('scout', 'ask permission: buy the groceries', 'chief'))!;
   await until('working', () => crew.sessionOf('scout'));
   const live = (crew as any).live.get('scout');
   live.page = 'https://www.shop.example/checkout/review?cart=123&token=abc';
@@ -616,35 +606,21 @@ test('the checkout card is read from the page: items and total as the page write
   const open = () => db.get("SELECT * FROM asks WHERE bot = 'scout' AND state = 'open'");
 
   live.snapshot = snap('$43.10');
-  const first = click();
-  await until('asked', open);
-  const card = crew.snapshot().asks.find((a: any) => a.id === open()!.id)!;
-  assert.equal(card.detail.words, 'Scout wants to place this order at shop.example: Garlic, 2 kg, Whole milk (1 gal) x2, Basmati rice 10 lb. Total $43.10.');
-  assert.equal(card.detail.preview.body, 'Garlic, 2 kg — $6.20\nWhole milk (1 gal) x2 — $7.90\nBasmati rice 10 lb $24.00\nTotal $43.10');
-  assert.doesNotMatch(JSON.stringify(card.detail), /checkout\/|cart=|token/, 'the host only, never the path or query');
-  await crew.answer(open()!.id, { answer: 'allow' });
-  assert.equal(await first, undefined);
-  assert.equal(crew.snapshot().money!.spent, 43.1, 'the total counts toward the cap');
-  assert.equal(await click(), undefined, 'the same page and total: the yes covers the next click');
-  assert.equal(db.get("SELECT COUNT(*) AS n FROM asks WHERE bot = 'scout'")!.n, 1);
-
-  // The total changed: asked again. Past the cap: refused before it asks.
-  live.snapshot = snap('$60.00');
-  const over = await click();
-  assert.equal(over.block, true);
-  assert.match(over.reason, /past the \$100/);
-  assert.equal(db.get("SELECT COUNT(*) AS n FROM asks WHERE bot = 'scout'")!.n, 1);
-
-  // A page whose total can't be read: said plainly, and it doesn't count.
+  const order = (crew as any).order('scout', { kind: 'spend', words: 'Place order' });
+  assert.equal(order.effect.words, 'Scout wants to place this order at shop.example: Garlic, 2 kg, Whole milk (1 gal) x2, Basmati rice 10 lb. Total $43.10.');
+  assert.equal(order.effect.preview.body, 'Garlic, 2 kg — $6.20\nWhole milk (1 gal) x2 — $7.90\nBasmati rice 10 lb $24.00\nTotal $43.10');
+  assert.doesNotMatch(JSON.stringify(order.effect), /checkout\/|cart=|token/);
+  for (const total of ['$43.10', '$43.10', '$60.00']) {
+    live.snapshot = snap(total);
+    const blocked = await click();
+    assert.equal(blocked.block, true); assert.match(blocked.reason, /unavailable/);
+    assert.equal(open(), undefined, 'no card offers uncovered purchase execution');
+    assert.equal(crew.snapshot().money!.spent, 0, 'refusal is not money spent');
+  }
   live.snapshot = '- Page Snapshot:\n- button "Pay" [ref=e1]';
-  const unread = click();
-  await until('asked again', open);
-  assert.equal(open()!.title, "Scout wants to act on a checkout page at shop.example. I couldn't read the total on this page.");
-  await crew.answer(open()!.id, { answer: 'deny' });
-  assert.equal((await unread).block, true);
-  assert.equal(crew.snapshot().money!.spent, 43.1);
-  await release(crew, 'scout', 'Done shopping.');
-  await settled(db, t);
+  assert.equal((crew as any).order('scout', { kind: 'spend', words: 'Pay' }).effect.words, "Scout wants to act on a checkout page at shop.example. I couldn't read the total on this page.");
+  assert.equal((await click()).block, true);
+  await release(crew, 'scout', 'The basket was prepared; it was not purchased.'); await settled(db, t);
   done();
 });
 
@@ -730,7 +706,7 @@ test('event triggers: a file arriving in the inbox starts the chore once; waking
 
 test('a helper offers an event chore on a card, and nothing runs until the person starts it', async () => {
   const { db, crew, done } = setup();
-  const { task } = await (crew as any).post('reel', `[tool crew_routine ${JSON.stringify({ on: 'when photos land in the inbox', task: 'tidy the new photos' })}]`);
+  const { task } = await (crew as any).assign('reel', `[tool crew_routine ${JSON.stringify({ on: 'when photos land in the inbox', task: 'tidy the new photos' })}]`, 'chief');
   await until('the card', () => db.get("SELECT * FROM asks WHERE kind = 'propose' AND state = 'open'"));
   const card = db.get("SELECT * FROM asks WHERE kind = 'propose' AND state = 'open'")!;
   const preview = JSON.parse(card.detail).preview.body as string;
@@ -754,8 +730,8 @@ test('a failed trigger-only routine says so with no time to try again', async ()
   await holding(crew, 'reel');
   db.run('UPDATE tasks SET updated_at = ? WHERE id = ?', Date.now() - 2 * 3_600_000, t);
   (crew as any).tick();
-  await until('failed', () => state(db, t) === 'failed');
-  assert.match(lastSaid(db, 'chief')!, /^Reel couldn't finish “Wake up”\. Took longer than an hour, so I stopped it\.$/);
+  await until('failed', () => state(db, t) === 'failed'); await settled(db, t);
+  assert.match(lastSaid(db, 'chief')!, /^Chief could not complete this task\.\nTask: “Wake up”\nThe task exceeded one hour\. Crewhouse stopped the task\.$/);
   done();
 });
 

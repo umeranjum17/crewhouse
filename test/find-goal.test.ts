@@ -34,11 +34,11 @@ test('a goal session delivers the plan, saves the goal, and offers the Monday st
       'Print ten flyers at the library: a few coins, 20 minutes',
       'Walk one booked dog on Saturday: costs nothing, 30 minutes'] },
   ] };
-  const id = (await crew.post('scout', 'I want to earn on the side walking dogs ' +
+  const id = (await crew.assign('scout', 'I want to earn on the side walking dogs ' +
     `${call('crew_document', plan)} ` +
     `${call('crew_remember', { text: 'Goal: weekend dog walking' })} ` +
     `${call('crew_routine', { when: 'every Monday 9:00', name: "The week's goal step",
-      task: 'Take one 30-minute step toward the weekend dog walking: message one neighbour or walk one new route' })}`))!.task;
+      task: 'Take one 30-minute step toward the weekend dog walking: message one neighbour or walk one new route' })}`, 'chief'))!.task;
   await settled(db, id);
   assert.equal(task(db, id).state, 'done');
 

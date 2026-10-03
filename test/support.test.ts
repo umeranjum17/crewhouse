@@ -31,7 +31,7 @@ test('Chief sees what each template knows, and a drafted reply waits on a card t
   writeFileSync(join(dir, 'reply.md'), 'Thanks for the two-day log. Headless, Herdr reports idle, not done (apps/host/src/x.ts:12@abc).\n');
   const draft = call('crew_draft', { path: 'files/support/208/reply.md', channel: 'reply', to: 'muxr issue #208' });
   const card = () => db.get("SELECT * FROM asks WHERE bot = 'desk' AND kind = 'propose' AND state = 'open'");
-  const t = (await crew.post('desk', `draft it ${draft}`))!.task;
+  const t = (await crew.assign('desk', `draft it ${draft}`, 'chief'))!.task;
   await settled(db, t);
   const view = crew.snapshot().asks.find((a: any) => a.id === card()!.id)!;
   assert.equal(view.detail.yes, 'Approve');
@@ -40,7 +40,7 @@ test('Chief sees what each template knows, and a drafted reply waits on a card t
   await crew.answer(card()!.id, { answer: 'deny' });
   assert.equal(events(db, 'draft.rejected')[0].to, 'muxr issue #208');
 
-  const t2 = (await crew.post('desk', `again ${draft}`))!.task;
+  const t2 = (await crew.assign('desk', `again ${draft}`, 'chief'))!.task;
   await settled(db, t2);
   await crew.answer(card()!.id, { answer: 'allow' });
   const ok = events(db, 'draft.approved')[0];
@@ -60,21 +60,21 @@ test('the person can change a draft before Approve: their words are the ones kep
   const card = () => db.get("SELECT * FROM asks WHERE bot = 'desk' AND kind = 'propose' AND state = 'open'");
   const draft = async (words: string) => {
     writeFileSync(file, words);
-    await settled(db, (await crew.post('desk', `draft it ${call('crew_draft', { path: 'files/reply.md', channel: 'text', to: 'the school office' })}`))!.task);
+    await settled(db, (await crew.assign('desk', `draft it ${call('crew_draft', { path: 'files/reply.md', channel: 'text', to: 'the school office' })}`, 'chief'))!.task);
     return card()!.id;
   };
   let id = await draft('Hello, the form is in the bag.\n');
   await assert.rejects(crew.answer(id, { answer: 'deny', text: 'Mine' }), /only a draft you approve/, 'a no keeps no words');
   await assert.rejects(crew.answer(id, { answer: 'allow', text: '   ' }), /empty/);
   await crew.answer(id, { answer: 'allow', text: '  Hello, the signed form is in Ayaan\'s bag.\n\nThank you, Umer  ' });
-  assert.equal(readFileSync(file, 'utf8'), "Hello, the signed form is in Ayaan's bag.\n\nThank you, Umer\n", 'the person\'s version is the draft now');
+  assert.equal(readFileSync(file, 'utf8'), "  Hello, the signed form is in Ayaan's bag.\n\nThank you, Umer  ", 'the person\'s version is the draft now');
   const ok = events(db, 'draft.approved').at(-1);
   assert.equal(ok.edited, true);
-  assert.equal(ok.sha, createHash('sha256').update("Hello, the signed form is in Ayaan's bag.\n\nThank you, Umer").digest('hex'), 'the approval names the words the person kept');
+  assert.equal(ok.sha, createHash('sha256').update("  Hello, the signed form is in Ayaan's bag.\n\nThank you, Umer  ").digest('hex'), 'the approval names the words the person kept');
   assert.equal(db.get("SELECT COUNT(*) AS n FROM events WHERE kind IN ('mail.sent', 'message.sent')")!.n, 0, 'nothing went out');
 
   id = await draft('Same words.\n');
-  await crew.answer(id, { answer: 'allow', text: 'Same words.' });
+  await crew.answer(id, { answer: 'allow', text: 'Same words.\n' });
   assert.ok(!events(db, 'draft.approved').at(-1).edited, 'unchanged words are not an edit');
 
   // A helper that swaps its draft for a link out of its folder can't make the person's yes write there.
@@ -124,7 +124,7 @@ test('a delivered fix ends done only when crewd saw its check fail before and pa
     return `files/${name}`;
   };
   const verify = (p: string) => call('crew_verify', { repo: 'work/app', base, patch: p, tests: ['check.sh'], command: 'sh check.sh' });
-  const job = async (text: string) => { const t = (await crew.post('desk', text))!.task; await settled(db, t); return task(db, t); };
+  const job = async (text: string) => { const t = (await crew.assign('desk', text, 'chief'))!.task; await settled(db, t); return task(db, t); };
 
   // Delivered and never checked: not sure, in crewd's words.
   const good = patch(true, 'fix.patch');
@@ -172,7 +172,7 @@ test('the check runs on the deps the helper installed; a pair that failed only o
     return `files/${name}`;
   };
   const verify = (repo: string, base: string, p: string) => call('crew_verify', { repo, base, patch: p, tests: ['check.sh'], command: 'sh check.sh' });
-  const job = async (text: string) => { const t = (await crew.post('desk', text))!.task; await settled(db, t); return task(db, t); };
+  const job = async (text: string) => { const t = (await crew.assign('desk', text, 'chief'))!.task; await settled(db, t); return task(db, t); };
 
   // The helper installed left-pad in work/app/node_modules (never committed). Its check needs it.
   const app = join(space, 'work', 'app');
@@ -241,7 +241,7 @@ test('the validator checks a run against crewd\'s record: issues read, citations
   };
   const run = async (n: number, fetch: string) => {
     const f = (p: string) => call('crew_deliver', { path: `files/support/${n}/${p}` });
-    const t = (await crew.post('desk', `${fetch} ${f('triage.md')} ${f('reply.md')} ${call('crew_draft', { path: `files/support/${n}/reply.md`, channel: 'reply', to: `app issue #${n}` })}`))!.task;
+    const t = (await crew.assign('desk', `${fetch} ${f('triage.md')} ${f('reply.md')} ${call('crew_draft', { path: `files/support/${n}/reply.md`, channel: 'reply', to: `app issue #${n}` })}`, 'chief'))!.task;
     await settled(db, t);
     return t;
   };

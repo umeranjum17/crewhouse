@@ -275,6 +275,8 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       db.event('bot.models', r[1], { by: 'person' });
       return { thinks: crew.thinks(r[1]) };
     }
+    if (p === '/api/rules' && m === 'GET') return { rules: crew.rules() };
+    if ((r = p.match(/^\/api\/rules\/(\d+)$/)) && ['PUT', 'DELETE'].includes(m)) { if (m === 'PUT' && typeof body.text !== 'string') throw Object.assign(new Error('give the rule text'), { status: 400 }); return crew.changeRule(Number(r[1]), m === 'DELETE' ? undefined : body.text); }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/job$/)) && m === 'PUT') {
       crew.botPage(r[1]);
       disk.writeJob(cfg, r[1], body);
@@ -346,7 +348,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/read$/)) && m === 'POST') { crew.read(r[1]); return { ok: true }; }
     if (m === 'GET' && p === '/api/search') return crew.search(q.get('q') ?? '');
-    if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/steer$/)) && m === 'POST') { crew.steer(r[1], String(body.text ?? '')); return { ok: true }; }
+    if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/steer$/)) && m === 'POST') { return { ok: true, ...await crew.steer(r[1], String(body.text ?? '')) }; }
     if ((r = p.match(/^\/api\/tools\/([a-z0-9-]+)\/install$/)) && m === 'POST') {
       if (installing.has(r[1])) return { ok: true, already: true };
       void install(r[1]);

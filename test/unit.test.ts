@@ -238,8 +238,9 @@ test('approval scopes: once, for this task, always for the bot; spending asks ev
   await holding(crew, 'reel');
   const gate = (tool: string, input: object) => (crew as any).gate('reel', tool, input);
   const ask = async (tool: string, input: object) => {
-    const held = gate(tool, input);
-    await sleep(20);
+    let finished = false;
+    const held = gate(tool, input).then((r: any) => { finished = true; return r; });
+    await until('gate asked or settled', () => openAsk(db) || finished);
     return { held, open: openAsk(db) };
   };
 
@@ -271,18 +272,14 @@ test('approval scopes: once, for this task, always for the bot; spending asks ev
   await crew.answer(a.open!.id, { answer: 'deny' });
   assert.equal((await a.held).block, true);
 
-  // Spending always asks: no standing answer covers it, and the card offers nothing wider than once.
+  // Outward spending is unavailable while the published cancellation primitive is absent.
   disk.setGrants(cfg, 'reel', ['files', 'people-search']);
-  a = await ask('people_search', { args: ['call', 'apollo.people', '-H', 'X-Treg-Route-Max-Cost: 0.05'] });
-  assert.equal(a.open.title, 'Reel wants to make a paid lookup with treg people search, up to $0.05.');
-  assert.equal(crew.snapshot().asks[0].detail.spends, true);
-  await assert.rejects(crew.answer(a.open!.id, { answer: 'allow', scope: 'always' }), /once, for this task, or always/);
-  await crew.answer(a.open!.id, { answer: 'allow' });
-  assert.equal(await a.held, undefined);
-  a = await ask('people_search', { args: ['call', 'apollo.people', '-H', 'X-Treg-Route-Max-Cost: 0.05'] });
-  assert.ok(a.open, 'and asks again next time');
-  await crew.answer(a.open!.id, { answer: 'deny' });
-  await a.held;
+  for (let i = 0; i < 2; i++) {
+    const blocked = await gate('people_search', { args: ['call', 'apollo.people', '-H', 'X-Treg-Route-Max-Cost: 0.05'] });
+    assert.equal(blocked.block, true);
+    assert.match(blocked.reason, /unavailable/);
+    assert.equal(openAsk(db), undefined, 'no actionable purchase card promises uncovered execution');
+  }
   // Taking "always" back on the Tools tab.
   disk.setSettings(cfg, 'reel', { allow: [] });
   assert.deepEqual(crew.botPage('reel').allow, []);
@@ -455,7 +452,7 @@ test('accounts a bot thinks with: fallback order by name only, a per-task choice
   const a = crew.assign('reel', 'rename 400 files', 'chief', 'chatgpt').task;
   await settled(db, a);
   assert.equal(task(db, a).state, 'done');
-  const started = () => JSON.parse(db.get("SELECT data FROM events WHERE kind = 'run.started' ORDER BY seq DESC")!.data);
+  const started = () => JSON.parse(db.get("SELECT data FROM events WHERE kind = 'run.started' AND bot = 'reel' ORDER BY seq DESC")!.data);
   assert.deepEqual([started().account, started().name], ['chatgpt', 'ChatGPT']);
   assert.match(lastSaid(db, 'reel'), /^stub reel: done/);
   const b = crew.assign('reel', 'judge which take is best', 'chief').task;
@@ -521,7 +518,7 @@ test('limits: a limit rests that account and the task carries on in the same con
   crew.accounts.onSignedIn!();
   await settled(db, d);
   assert.equal(task(db, d).state, 'done');
-  assert.ok(db.get("SELECT 1 FROM messages WHERE bot = 'chief' AND text = ?", "You're signed in. I'll start now."));
+  assert.ok(db.get("SELECT 1 FROM messages WHERE bot = 'chief' AND text = ?", "You are signed in. Chief will continue your tasks."));
   done();
 });
 
@@ -692,18 +689,23 @@ test('Forget clear contract distinguishes a CDP success result from an error wit
   } finally { done(); }
 });
 
-test('steer: a word from the person reaches the bot mid-task without starting over', async () => {
+test('public helper steering goes to Chief; Chief steering stays in his active session', async () => {
   const { db, crew, done } = setup();
-  crew.onboard('sir');
-  crew.recruit('reel', 'Reel', 'person');
-  assert.throws(() => crew.steer('reel', 'faster'), /isn't working on anything/);
-  const t = crew.assign('reel', 'ask permission to render', 'chief').task;
+  crew.onboard('sir'); crew.recruit('reel', 'Reel', 'person');
+  const helper = crew.assign('reel', 'ask permission to render', 'chief').task;
   await holding(crew, 'reel');
-  crew.steer('reel', 'make it faster');
-  await release(crew, 'reel');
-  await settled(db, t);
-  assert.ok(db.get("SELECT 1 FROM messages WHERE bot = 'reel' AND author = 'person' AND text = 'make it faster'"));
-  assert.equal((crew.runtime as any).steerOf(`agent:m1:crewhouse:reel:${t}`), 'make it faster', 'it went into the same conversation');
+  const directed = await crew.steer('reel', 'make it faster');
+  assert.ok(directed); assert.equal(task(db, directed.task).bot, 'chief');
+  assert.equal((crew.runtime as any).steerOf(`agent:m1:crewhouse:reel:${helper}`), undefined);
+  await settled(db, directed.task);
+  await assert.rejects(crew.steer('chief', 'faster'), /isn't working on anything/);
+  const chief = (await crew.post('chief', 'ask permission: plan this work'))!.task;
+  await holding(crew, 'chief');
+  await crew.steer('chief', 'keep it concise');
+  assert.equal((crew.runtime as any).steerOf(`agent:m1:crewhouse:chief:${chief}`), 'keep it concise');
+  assert.ok(db.get("SELECT 1 FROM messages WHERE bot = 'chief' AND author = 'person' AND text = 'keep it concise'"));
+  await release(crew, 'chief'); await settled(db, chief);
+  await release(crew, 'reel'); await settled(db, helper);
   done();
 });
 
@@ -802,14 +804,14 @@ test('accounts: the person keeps their address and every account rests together'
   disk.setBrains(cfg, 'reel', ['grok']);
   await crew.accounts.login('grok');
   await crew.accounts.finished('grok');
-  const a = (await crew.post('reel', 'a demo for Sam'))!.task;
+  const a = (await crew.assign('reel', 'a demo for Sam', 'chief'))!.task;
   await settled(db, a);
   assert.equal(task(db, a).state, 'done');
-  assert.equal(JSON.parse(db.get("SELECT data FROM events WHERE kind = 'run.started' ORDER BY seq DESC")!.data).account, 'grok');
+  assert.equal(JSON.parse(db.get("SELECT data FROM events WHERE kind = 'run.started' AND bot = 'reel' ORDER BY seq DESC")!.data).account, 'grok');
   assert.match((crew.runtime as any).specOf(`agent:m1:crewhouse:reel:${a}`)?.message ?? '', /likes to be called "Sam"/);
   for (const k of ['chatgpt', 'grok', 'copilot', 'openrouter', 'minimax', 'claude']) crew.accounts.failed(k, 'usage limit, try again in 1 min');
   assert.ok(crew.restingUntil('chatgpt') > Date.now());
-  const b = (await crew.post('reel', 'another demo'))!.task;
+  const b = (await crew.assign('reel', 'another demo', 'chief'))!.task;
   await settled(db, b);
   assert.equal(task(db, b).state, 'paused');
   assert.match(task(db, b).result, /All your AI accounts are resting/);
@@ -855,7 +857,7 @@ test('quiet hours park questions at once; settings validate', async () => {
   assert.equal(crew.updatePerson({ name: 'Alex', quiet: '00:00-23:59' }).name, 'Alex');
 
   const started = Date.now();
-  const t = (await crew.post('reel', `copy it ${call('crew_write', { path: join(root, 'elsewhere', 'b.txt'), content: 'x' })}`, undefined))!.task;
+  const t = (await crew.assign('reel', `copy it ${call('crew_write', { path: join(root, 'elsewhere', 'b.txt'), content: 'x' })}`, 'chief', undefined))!.task;
   await until('parked', () => db.get("SELECT 1 FROM events WHERE kind = 'ask.parked'"));
   assert.ok(Date.now() - started < 3000, 'no hold while they sleep');
   assert.equal(task(db, t).state, 'needs_you');
@@ -939,19 +941,18 @@ test('sign-in: a cancelled sign-in keeps nothing, signed in nothing', async () =
   done();
 });
 
-test('routing: a spreadsheet request goes straight to Scribe, hiring Scribe if needed', async () => {
+test('public spreadsheet requests and named helpers stay with Chief; no automatic hiring', async () => {
   const { db, crew, done } = setup();
   crew.onboard('sir');
   const said = (bot: string) => db.all("SELECT text FROM messages WHERE bot = ? AND author = 'bot' ORDER BY id", bot).map((m: any) => m.text);
 
-  // Chief-only crew: Scribe is hired silently on the person's own account; no Chief task, no Chief turn.
+  // Chief alone receives the request and decides whether to recruit.
   const s = (await crew.post('chief', 'make me an Excel for reception'))!.task;
-  assert.equal(task(db, s).bot, 'scribe');
-  assert.equal(task(db, s).origin, 'chief');
+  assert.equal(task(db, s).bot, 'chief');
+  assert.equal(task(db, s).origin, 'person');
   assert.equal(task(db, s).parent, null);
-  assert.equal(db.get("SELECT COUNT(*) AS n FROM tasks WHERE bot = 'chief'")!.n, 0, 'no Chief task');
-  assert.equal(crew.bot('scribe')?.template, 'scribe', 'Scribe is hired');
-  assert.ok(said('chief').includes('Scribe is on it.'));
+  assert.equal(db.get("SELECT COUNT(*) AS n FROM tasks WHERE bot = 'chief'")!.n, 1);
+  assert.equal(crew.bot('scribe'), undefined, 'Chief decides recruitment, not a text shortcut');
   await settled(db, s);
 
   // A routine stays with Chief even when it names a tracker.
@@ -962,7 +963,7 @@ test('routing: a spreadsheet request goes straight to Scribe, hiring Scribe if n
   // A plainly named helper wins over the shortcut.
   crew.recruit('reel', 'Reel', 'person');
   const n = (await crew.post('chief', '@Reel make an excel'))!.task;
-  assert.equal(task(db, n).bot, 'reel');
+  assert.equal(task(db, n).bot, 'chief');
   await settled(db, n);
 
   // A plan without helpers stays with Chief instead of stalling on Scribe.
@@ -973,56 +974,36 @@ test('routing: a spreadsheet request goes straight to Scribe, hiring Scribe if n
   done();
 });
 
-test("a helper's question round-trips in Chief's thread: one answer, then the file card", async () => {
+test("a helper's question reaches Chief without completing work; Chief returns the answer internally", async () => {
   const { db, crew, done } = setup();
-  crew.onboard('sir');
-  const chiefBot = () => db.all("SELECT text FROM messages WHERE bot = 'chief' AND author = 'bot' ORDER BY id").map((m: any) => m.text);
-  const scribes = () => db.get("SELECT COUNT(*) AS n FROM tasks WHERE bot = 'scribe'")!.n as number;
-  // A small but real workbook spec: the follow-up run builds it for the card.
+  crew.onboard('sir'); crew.recruit('scribe', 'Scribe', 'person');
   const sheets = [{ name: 'Bookings', columns: [{ header: 'Guest' }, { header: 'Status', options: ['Booked', 'Checked in'] }], rows: [['Amina Khan', 'Booked']] }];
-  const marker = call('crew_workbook', { name: 'Reception log', sheets });
-
-  // The request names a workbook, so it goes straight to the silently hired Scribe; "ask permission" holds the turn.
-  const first = (await crew.post('chief', 'make an excel for reception, ask permission before you build anything'))!.task;
-  assert.equal(task(db, first).bot, 'scribe');
-  assert.equal(task(db, first).origin, 'chief');
-  assert.equal(task(db, first).parent, null);
-  await release(crew, 'scribe', `${marker} Visitor log, bookings, or something else?`);
+  const first = crew.assign('scribe', 'ask permission: make an excel for reception', 'chief').task;
+  await release(crew, 'scribe', 'Visitor log, bookings, or something else?');
   await settled(db, first);
+  assert.equal(task(db, first).state, 'needs_you', 'a question is not done');
+  const question = db.get("SELECT * FROM messages WHERE bot = 'chief' AND task_id = ? AND text LIKE 'Chief will read the information%' ORDER BY id DESC", first)!;
+  assert.match(question.text, /Task:/);
+  assert.deepEqual(crew.botPage('chief').messages.find((m: any) => m.id === question.id)?.files, []);
 
-  // The question reaches Chief's thread word for word, ending in "?", carrying its task but no card.
-  const question = chiefBot().at(-1)!;
-  assert.ok(question.startsWith('Scribe asks: '));
-  assert.ok(question.endsWith('?'));
-  assert.equal(db.get("SELECT task_id AS id FROM messages WHERE bot = 'chief' AND author = 'bot' AND text = ?", question)?.id, first);
-  let page = await crew.botPage('chief');
-  assert.deepEqual(page.messages.find((m: any) => m.task_id === first)?.files, [], 'a line with a task and no files adds no card');
-
-  // Posting the answer starts a fresh Scribe task carrying the context, skipping routing and Chief.
-  const second = (await crew.post('chief', 'bookings'))!.task;
-  assert.equal(task(db, second).bot, 'scribe');
-  assert.equal(task(db, second).origin, 'chief');
-  assert.equal(task(db, second).parent, null);
-  assert.match(task(db, second).body, /excel for reception/);
-  assert.match(task(db, second).body, /bookings/);
-  // The carried "ask permission" holds the fresh turn too; releasing it finishes the workbook and its card.
+  // A public reply still belongs to Chief; it neither grants an ask nor directly starts helper work.
+  const reply = (await crew.post('chief', 'bookings'))!.task;
+  assert.equal(task(db, reply).bot, 'chief');
+  const second = crew.assign('scribe', `Use bookings. ${call('crew_workbook', { name: 'Reception log', sheets })} ask permission before finishing`, 'chief').task;
+  assert.equal(second, first, 'trusted Chief resolves the informational blocker in the same task/session');
   await release(crew, 'scribe', 'The reception workbook is ready.');
   await settled(db, second);
-  page = await crew.botPage('chief');
-  assert.ok(page.messages.find((m: any) => m.task_id === second)?.files.some((f: any) => f.path.endsWith('.xlsx')), "the workbook card lands in Chief's thread");
-  assert.deepEqual(page.messages.find((m: any) => m.task_id === first)?.files, [], 'the question line stays card-free');
-
-  // An unrelated long message after the question routes normally, not into Scribe's thread.
-  const third = (await crew.post('chief', 'plan our anniversary dinner next month with a full week of menus and a shopping list for every single day, please'))!.task;
+  assert.equal(task(db, second).state, 'done');
+  const page = crew.botPage('chief');
+  assert.ok(page.messages.some((m: any) => m.task_id === second && m.files.some((f: any) => f.path.endsWith('.xlsx'))));
+  const third = (await crew.post('chief', 'plan our anniversary dinner next month'))!.task;
   assert.equal(task(db, third).bot, 'chief');
-  assert.equal(scribes(), 2);
-  // The stub holds any prompt containing "ask permission", including this one via the chat history; release it.
-  await release(crew, 'chief', 'Enjoy the anniversary.');
-  await settled(db, third);
+  assert.equal(task(db, third).root, third, 'new work is not swallowed as an answer');
+  await settled(db, reply); await settled(db, third);
   done();
 });
 
-test('routing: explicit helpers are direct; uncertain requests start Chief without a blocking model turn', async () => {
+test('public explicit helpers and uncertain requests start Chief without a separate routing turn', async () => {
   const { db, crew, done } = setup();
   crew.onboard('sir');
   crew.recruit('reel', 'Reel', 'person');
@@ -1032,15 +1013,15 @@ test('routing: explicit helpers are direct; uncertain requests start Chief witho
 
   // A rule: addressed to Reel by name. Reel gets the words as they were said; Chief says who is on it.
   const a = (await crew.post('chief', 'Reel, make a 10 second demo of the signup screen'))!.task;
-  assert.equal(task(db, a).bot, 'reel');
+  assert.equal(task(db, a).bot, 'chief');
   assert.equal(task(db, a).body, 'Reel, make a 10 second demo of the signup screen');
-  assert.equal(chiefSaid(), 'Reel is on it.');
+  assert.notEqual(chiefSaid(), 'Reel is on it.', 'intent is not a started helper');
   await settled(db, a);
-  assert.equal(db.get("SELECT text FROM messages WHERE bot = 'chief' ORDER BY id DESC")!.text, 'The result is ready.', 'an incomplete helper reply is not cut into a headline');
+  assert.equal(db.get("SELECT COUNT(*) AS n FROM tasks WHERE bot = 'reel'")!.n, 0);
 
   // "@Scout" anywhere is a rule too: the person's AI (here set to say Reel) is never asked.
   const m = (await crew.post('chief', 'could you look into standing desks for me @Scout [route reel]'))!.task;
-  assert.equal(task(db, m).bot, 'scout');
+  assert.equal(task(db, m).bot, 'chief');
   await settled(db, m);
 
   // Addressing Chief is a direct task, not a second subscription turn spent asking who should take it.
@@ -1109,13 +1090,13 @@ test('chats: each thread\'s last line and unread count are the person\'s; readin
   assert.equal(view().reel.unread, 0, 'a new helper starts read');
   const chiefBefore = view().chief.unread;
 
-  const { task: t } = (await crew.post('reel', 'make the birthday card'))!;
+  const { task: t } = (await crew.assign('reel', 'make the birthday card', 'chief'))!;
   await settled(db, t);
   const v = view();
   assert.equal(v.reel.last.author, 'bot');
   assert.match(v.reel.last.text, /birthday card/);
-  assert.equal(v.reel.unread, 1, 'the reply is new; the person\'s own line is not');
-  assert.equal(v.chief.unread, chiefBefore);
+  assert.equal(v.reel.unread, 2, 'internal Chief assignment and report are both work-log records');
+  assert.equal(v.chief.unread, chiefBefore + 1, 'Chief is the contact for the result');
 
   crew.read('reel');
   assert.equal(view().reel.unread, 0);
@@ -1134,7 +1115,7 @@ test('passing work on: a helper hands the next step to another for the same pers
   crew.onboard('sir');
   crew.recruit('reel', 'Reel', 'person');
   crew.recruit('scout', 'Scout', 'person');
-  const { task: t } = (await crew.post('reel', 'ask permission [tool crew_pass {"bot":"scout","task":"find three songs for the video. Done means: a list"}]'))!;
+  const { task: t } = (await crew.assign('reel', 'ask permission [tool crew_pass {"bot":"scout","task":"find three songs for the video. Done means: a list"}]', 'chief'))!;
   await holding(crew, 'reel');
   const passed = db.get("SELECT * FROM tasks WHERE bot = 'scout'")!;
   assert.deepEqual([passed.origin, passed.member, passed.hops], ['reel', 1, 1]);
@@ -1185,7 +1166,7 @@ test('Chief makes up a new helper on a card: nothing until the person says yes, 
   assert.match(instructions, /## Boundaries[\s\S]*never sign in/);
   assert.throws(() => disk.writeJob(crew['cfg'], 'pip', { ...pip.job, aim: 'x'.repeat(601) }), /600/);
   assert.equal(readFileSync(join(dir, 'soul.md'), 'utf8'), '# Pip\n\nYou are Pip. Cheerful and quick.\n');
-  assert.match(lastSaid(db, 'chief'), /^Pip has joined the crew\. I've handed Pip your request/);
+  assert.match(lastSaid(db, 'chief'), /^Pip has joined the crew\. Chief gave Pip your task/);
   const first = db.get("SELECT * FROM tasks WHERE bot = 'pip'")!;
   assert.deepEqual([first.origin, first.body], ['chief', 'find me flats in Phuket under $900']);
   await settled(db, first.id);
@@ -1272,7 +1253,7 @@ test('Write it for me: crew_job takes the nested five-part shape too, and the th
   done();
 });
 
-test('photos with a message: kept in the helper\'s files, shown in the chat, seen by the model, and through Chief too', async () => {
+test('public photos stay with Chief, retaining helper context, chat provenance and model input', async () => {
   const { db, crew, cfg, done } = setup();
   crew.onboard('sir');
   crew.recruit('reel', 'Reel', 'person');
@@ -1282,19 +1263,20 @@ test('photos with a message: kept in the helper\'s files, shown in the chat, see
   await assert.rejects(crew.post('reel', '  ', undefined, []), /empty message/);
 
   const { task: t } = (await crew.post('reel', '', undefined, [png]))!;
-  assert.equal(task(db, t).body, 'Here is a photo.');
+  assert.equal(task(db, t).bot, 'chief');
+  assert.match(task(db, t).body, /About Reel's work.*\nHere is a photo\./);
   assert.deepEqual(JSON.parse(task(db, t).photos), [`files/photos/${t}-1.png`]);
-  assert.ok(existsSync(join(cfg.crewDir, 'bots', 'reel', 'files', 'photos', `${t}-1.png`)));
-  assert.equal(db.get("SELECT text FROM messages WHERE task_id = ? AND author = 'person'", t)!.text, `Here is a photo.\n[photo reel] files/photos/${t}-1.png`);
+  assert.ok(existsSync(join(cfg.crewDir, 'bots', 'chief', 'files', 'photos', `${t}-1.png`)));
+  assert.equal(db.get("SELECT text FROM messages WHERE task_id = ? AND author = 'person'", t)!.text, `Here is a photo.\n[photo chief] files/photos/${t}-1.png`);
   await settled(db, t);
   const prompted = JSON.parse(db.get("SELECT data FROM events WHERE kind = 'run.prompted' AND json_extract(data, '$.task') = ?", t)!.data);
   assert.equal(prompted.photos, 1, 'the model is given the photo with the words');
-  assert.ok(crew.snapshot().tasks.find((x: any) => x.id === t)!.files.includes(`files/photos/${t}-1.png`), 'and it is in Things');
+  assert.equal(JSON.parse(db.get("SELECT data FROM events WHERE kind = 'file.delivered' AND json_extract(data, '$.task') = ?", t)!.data).path, `files/photos/${t}-1.png`, 'delivery provenance belongs to the actual Chief request');
 
   // Through Chief: the photo goes to the helper that takes the job, and shows in Chief's thread where it was sent.
   const { task: c } = (await crew.post('chief', 'put this poster in the family video @Reel', undefined, [png]))!;
-  assert.equal(task(db, c).bot, 'reel');
-  assert.match(db.get("SELECT text FROM messages WHERE bot = 'chief' AND author = 'person' ORDER BY id DESC")!.text, new RegExp(`\\[photo reel\\] files/photos/${c}-1\\.png$`));
+  assert.equal(task(db, c).bot, 'chief');
+  assert.match(db.get("SELECT text FROM messages WHERE bot = 'chief' AND author = 'person' ORDER BY id DESC")!.text, new RegExp(`\\[photo chief\\] files/photos/${c}-1\\.png$`));
   await settled(db, c);
   done();
 });

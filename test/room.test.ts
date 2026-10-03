@@ -13,7 +13,7 @@ test('handoff copies only the passer’s files into the crew room', async () => 
   crew.recruit('reel', 'Reel', 'person'); crew.recruit('scout', 'Scout', 'person');
   const file = join(disk.botDir(cfg, 'reel'), 'files', 'story.md');
   mkdirSync(join(disk.botDir(cfg, 'reel'), 'files'), { recursive: true }); writeFileSync(file, 'A source');
-  const first = (await crew.post('reel', `ask permission: please hand it on ${pass}`))!.task;
+  const first = (await crew.assign('reel', `ask permission: please hand it on ${pass}`, 'chief'))!.task;
   await until('pass', () => db.get("SELECT id FROM tasks WHERE bot = 'scout'"));
   const next = db.get("SELECT * FROM tasks WHERE bot = 'scout'")!;
   assert.equal(next.parent, first); assert.equal(next.root, first);
@@ -27,14 +27,14 @@ test('handoff copies only the passer’s files into the crew room', async () => 
   await release(crew, 'reel', 'Passed it on.'); await settled(db, first); await settled(db, next.id);
   const wraps = db.all("SELECT * FROM events WHERE kind = 'room.wrap' AND json_extract(data, '$.root') = ?", first);
   assert.equal(wraps.length, 1);
-  assert.ok(db.get("SELECT text FROM messages WHERE bot = 'chief' AND task_id = ? AND text LIKE 'All done.%'", first));
+  assert.ok(db.get("SELECT text FROM messages WHERE bot = 'chief' AND task_id = ? AND author = 'bot'", next.id));
   done();
 });
 
-test('two passes settle into exactly one wrap-up without per-task completions', async () => {
+test('two passes close the room once and each Chief review retains its exact task identity', async () => {
   const { db, crew, done } = setup();
   crew.onboard('Sara'); crew.recruit('reel', 'Reel', 'person'); crew.recruit('scout', 'Scout', 'person');
-  const first = (await crew.post('reel', 'ask permission: plan the project'))!.task;
+  const first = (await crew.assign('reel', 'ask permission: plan the project', 'chief'))!.task;
   await holding(crew, 'reel');
   (crew as any).pass('reel', 'scout', 'Find links');
   (crew as any).pass('reel', 'scout', 'Check the facts');
@@ -43,7 +43,7 @@ test('two passes settle into exactly one wrap-up without per-task completions', 
   await settled(db, first); for (const p of parts) await settled(db, p.id);
   assert.equal(db.all("SELECT seq FROM events WHERE kind = 'room.wrap' AND json_extract(data, '$.root') = ?", first).length, 1);
   assert.equal(db.all("SELECT id FROM messages WHERE bot = 'chief' AND text LIKE '%has finished%' AND task_id = ?", first).length, 0);
-  assert.match(db.get("SELECT text FROM messages WHERE bot = 'chief' AND task_id = ? AND text LIKE 'All done.%'", first)?.text ?? '', /Scout finished\..*\nScout finished\./);
+  for (const p of parts) assert.equal(db.get("SELECT COUNT(*) AS n FROM messages WHERE bot = 'chief' AND author = 'bot' AND task_id = ?", p.id)!.n, 1);
   done();
 });
 
@@ -52,7 +52,7 @@ test('handoff check waits, survives a restart, and never has a standing answer',
   crew.onboard('Sara'); crew.recruit('reel', 'Reel', 'person'); crew.recruit('scout', 'Scout', 'person');
   disk.setSettings(cfg, 'reel', { handoff: 'ask' });
   writeFileSync(join(disk.botDir(cfg, 'reel'), 'files/story.md'), 'A source');
-  const first = (await crew.post('reel', `ask permission: pass it ${pass}`))!.task;
+  const first = (await crew.assign('reel', `ask permission: pass it ${pass}`, 'chief'))!.task;
   await until('check card', () => db.get("SELECT * FROM asks WHERE kind = 'propose' AND state = 'open' AND json_extract(detail, '$.pass.to') = 'scout'"));
   const card = db.get("SELECT * FROM asks WHERE kind = 'propose' AND state = 'open'")!;
   assert.equal(db.get("SELECT 1 FROM tasks WHERE bot = 'scout'"), undefined);
@@ -76,7 +76,7 @@ test('denied handoff creates no task', async () => {
   const { db, cfg, crew, done } = setup();
   crew.onboard('Sara'); crew.recruit('reel', 'Reel', 'person'); crew.recruit('scout', 'Scout', 'person');
   disk.setSettings(cfg, 'reel', { handoff: 'ask' });
-  const first = (await crew.post('reel', 'ask permission [tool crew_pass {"bot":"scout","task":"Review it"}]'))!.task;
+  const first = (await crew.assign('reel', 'ask permission [tool crew_pass {"bot":"scout","task":"Review it"}]', 'chief'))!.task;
   await until('check', () => db.get("SELECT id FROM asks WHERE kind = 'propose' AND state = 'open'"));
   await crew.answer(db.get("SELECT id FROM asks WHERE state = 'open'")!.id, { answer: 'deny' });
   assert.equal(db.get("SELECT id FROM tasks WHERE bot = 'scout'"), undefined);
@@ -84,19 +84,19 @@ test('denied handoff creates no task', async () => {
   done();
 });
 
-test('final wrap never repeats an in-progress line after the work finished (D37)', async () => {
+test('the final Chief review uses the finished successor, not the earlier handoff progress (D37)', async () => {
   const { db, crew, done } = setup();
   crew.onboard('Sara'); crew.recruit('scout', 'Scout', 'person'); crew.recruit('scribe', 'Scribe', 'person');
-  const first = (await crew.post('scout', 'ask permission: research FDIC basics then hand on'))!.task;
+  const first = (await crew.assign('scout', 'ask permission: research FDIC basics then hand on', 'chief'))!.task;
   await holding(crew, 'scout');
   (crew as any).pass('scout', 'scribe', 'ask permission: write the one-page family checklist from the research');
   await release(crew, 'scout', 'The FDIC research is complete and sourced; Scribe is preparing the one-page checklist now.');
   const second = db.get("SELECT id FROM tasks WHERE bot = 'scribe'")!.id;
   await release(crew, 'scribe', 'Finished the one-page FDIC family checklist with coverage limits and what to do next.');
   await settled(db, first); await settled(db, second);
-  const wrap = db.get("SELECT text FROM messages WHERE bot = 'chief' AND task_id = ? AND text LIKE 'All done.%'", first)?.text ?? '';
-  assert.match(wrap, /Scout finished\./);
-  assert.match(wrap, /Scribe finished\./);
+  const wrap = db.get("SELECT text FROM messages WHERE bot = 'chief' AND author = 'bot' AND task_id = ? ORDER BY id DESC", second)?.text ?? '';
+  assert.match(wrap, /Chief has the report/);
+  assert.match(wrap, /FDIC family checklist/);
   assert.doesNotMatch(wrap, /is preparing/i);
   done();
 });
@@ -105,7 +105,7 @@ test('wrap-up reports an unsure part without saying all done', async () => {
   const { db, crew, done } = setup();
   crew.onboard('Sara'); crew.recruit('reel', 'Reel', 'person'); crew.recruit('scout', 'Scout', 'person');
   const request = 'Review [tool crew_outcome {"worked":false,"seen":"not confirmed"}]';
-  const first = (await crew.post('reel', 'ask permission: hand this on'))!.task;
+  const first = (await crew.assign('reel', 'ask permission: hand this on', 'chief'))!.task;
   await holding(crew, 'reel');
   (crew as any).pass('reel', 'scout', request);
   await release(crew, 'reel', 'Passed on.');
@@ -113,8 +113,9 @@ test('wrap-up reports an unsure part without saying all done', async () => {
   const next = db.get("SELECT id FROM tasks WHERE bot = 'scout'")!.id;
   await settled(db, next); await settled(db, first);
   assert.equal(task(db, next).state, 'unsure');
-  const wrap = db.get("SELECT text FROM messages WHERE bot = 'chief' AND task_id = ? AND text LIKE 'The crew has stopped.%'", first);
-  assert.match(wrap?.text ?? '', /Scout isn't sure it worked/);
+  const wrap = db.get("SELECT text FROM messages WHERE bot = 'chief' AND author = 'bot' AND task_id = ? ORDER BY id DESC", next);
+  assert.match(wrap?.text ?? '', /Chief cannot confirm this result[\s\S]*not confirmed/);
+  assert.doesNotMatch(wrap?.text ?? '', /All done/);
   done();
 });
 
@@ -124,7 +125,7 @@ test('Things foregrounds a task’s own output ahead of handed-over input', asyn
   crew.recruit('scout', 'Scout', 'person'); crew.recruit('scribe', 'Scribe', 'person');
   const scoutFiles = join(disk.botDir(cfg, 'scout'), 'files');
   mkdirSync(scoutFiles, { recursive: true }); writeFileSync(join(scoutFiles, 'fdic-basics.md'), 'research');
-  const first = (await crew.post('scout', 'ask permission: research FDIC insurance'))!.task;
+  const first = (await crew.assign('scout', 'ask permission: research FDIC insurance', 'chief'))!.task;
   await holding(crew, 'scout');
   (crew as any).deliver('scout', 'files/fdic-basics.md', 'research');
   // Scribe's run holds on "ask permission", so its own delivery lands on the handoff task, as in production.
@@ -152,7 +153,7 @@ test('a first look delivered mid-job shows on the person\u2019s desk', async () 
   crew.recruit('scout', 'Scout', 'person');
   const dir = join(disk.botDir(cfg, 'scout'), 'files');
   mkdirSync(dir, { recursive: true }); writeFileSync(join(dir, 'opening.md'), 'draft');
-  const first = (await crew.post('scout', 'ask permission: research the opening'))!.task;
+  const first = (await crew.assign('scout', 'ask permission: research the opening', 'chief'))!.task;
   await holding(crew, 'scout');
   assert.equal((crew.snapshot().bots.find((b: any) => b.id === 'scout')?.task as any)?.state, 'working');
   (crew as any).deliver('scout', 'files/opening.md', 'First look: the opening outline');
@@ -167,7 +168,7 @@ test('Things foregrounds own output ahead of an untagged legacy handoff copy', a
   const { db, cfg, crew, done } = setup();
   crew.onboard('Sara');
   crew.recruit('scout', 'Scout', 'person'); crew.recruit('scribe', 'Scribe', 'person');
-  const first = (await crew.post('scribe', 'ask permission: write the one-page family checklist'))!.task;
+  const first = (await crew.assign('scribe', 'ask permission: write the one-page family checklist', 'chief'))!.task;
   await holding(crew, 'scribe');
   // A handoff recorded before the input:true tag: a plain file.delivered event on the handoff-copy path.
   const legacy = join(disk.botDir(cfg, 'scribe'), 'files', 'from-scout');
@@ -183,13 +184,14 @@ test('Things foregrounds own output ahead of an untagged legacy handoff copy', a
   done();
 });
 
-test('room replies rejoin a job; plain routed work stays out', async () => {
+test('public room requests go to Chief; plain internal work stays out', async () => {
   const { db, crew, done } = setup();
   crew.onboard('Sara'); crew.recruit('scout', 'Scout', 'person');
   const room = (await crew.post('scout', 'First request', undefined, undefined, true))!.task;
   const follow = (await crew.post('scout', 'One more thing', undefined, undefined, true))!.task;
-  assert.equal(task(db, room).room, 1); assert.equal(task(db, follow).root, room);
-  const plain = (await crew.post('scout', 'Private errand'))!.task;
+  assert.equal(task(db, room).bot, 'chief'); assert.equal(task(db, room).room, 1);
+  assert.equal(task(db, follow).bot, 'chief'); assert.equal(task(db, follow).root, follow);
+  const plain = (await crew.assign('scout', 'Private errand', 'chief'))!.task;
   assert.equal(task(db, plain).room, 0);
   assert.ok(crew.room().lines.some((l) => l.text === 'One more thing'));
   assert.ok(!crew.room().lines.some((l) => l.text === 'Private errand'));

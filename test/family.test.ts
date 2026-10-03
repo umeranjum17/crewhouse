@@ -52,10 +52,10 @@ const reply = 'Hello, the signed trip form is in Ayaan’s bag this morning. He 
 
 test('a reply to the school is a draft card: the yes approves it, nothing is sent, and the job says so', async () => {
   const { db, crew, done } = setup();
-  const { task: t } = (await crew.post('scout', 'The school wants the trip form back. Sort it: the reply on a card in front of me, and ask permission before anything more. '
+  const { task: t } = (await crew.assign('scout', 'The school wants the trip form back. Sort it: the reply on a card in front of me, and ask permission before anything more. '
     + `[tool crew_write {"path":"files/reply-trip-form.md","content":"${reply}"}] `
     + '[tool crew_draft {"path":"files/reply-trip-form.md","channel":"email","subject":"Ayaan’s trip form — Friday","to":"the school office"}] '
-    + '[tool crew_outcome {"worked": true, "seen": "The reply to the school office is a draft on your card; posting it is yours."}]'))!;
+    + '[tool crew_outcome {"worked": true, "seen": "The reply to the school office is a draft on your card; posting it is yours."}]', 'chief'))!;
   await until('working', () => crew.sessionOf('scout'));
   await until('the draft card', () => db.get("SELECT * FROM asks WHERE bot = 'scout' AND kind = 'propose' AND state = 'open'"));
   const ask = db.get("SELECT * FROM asks WHERE bot = 'scout' AND kind = 'propose' AND state = 'open'")!;
@@ -91,35 +91,27 @@ const tripForm = `### Page state
   - button "Submit form" [ref=e9]
 \`\`\``;
 
-test('a school form on its site: the lines are free to type, and the submit card names the form and every line', async () => {
+test('a school form remains a local draft; legacy card metadata names every line but cannot submit', async () => {
   const { db, crew, done } = setup();
-  const { task: t } = (await crew.post('scout', 'ask permission: fill the school trip form'))!;
+  const t = crew.assign('scout', 'ask permission: prepare the school trip form', 'chief').task;
   await until('working', () => crew.sessionOf('scout'));
-  const live = (crew as any).live.get('scout');
-  live.page = 'https://school.example/forms/trip';
-  live.snapshot = tripForm;
-  for (const [ref, value] of [['e5', 'Ayaan Ali'], ['e6', 'Umer Ali'], ['e7', 'packed']] as const) {
-    assert.equal(await (crew as any).gate('scout', 'browser', { args: ['fill', ref, value] }), undefined, 'typing a line asks nothing by itself');
-    assert.equal(db.get("SELECT COUNT(*) AS n FROM asks WHERE bot = 'scout' AND state = 'open'")!.n, 0);
+  const live = crew.sessionOf('scout')!;
+  live.page = 'https://school.example/forms/trip'; live.snapshot = tripForm;
+  for (const [ref, value] of [['e5', 'Ayaan Ali'], ['e6', 'Umer Ali'], ['e7', 'packed']]) {
+    const result = await (crew as any).gate('scout', 'browser', { args: ['fill', ref, value] });
+    assert.equal(result.block, true); assert.match(result.reason, /unavailable/);
   }
-  const gated = (crew as any).gate('scout', 'browser', { args: ['click', 'e9'] });
-  await until('asked', () => db.get("SELECT * FROM asks WHERE bot = 'scout' AND state = 'open'"));
-  const ask = db.get("SELECT * FROM asks WHERE bot = 'scout' AND state = 'open'")!;
-  const card = crew.snapshot().asks.find((a: any) => a.id === ask.id)!;
-  assert.equal(card.detail.effect, 'send');
-  assert.equal(card.detail.fill, true, 'a form card fills, it does not press');
-  assert.equal(card.detail.words, 'Scout wants to fill in 3 lines on the claim form at school.example.');
-  assert.equal(card.detail.preview.head, 'What Scout will fill in on school.example');
-  assert.deepEqual(card.detail.preview.body.split('\n'), ["Pupil's full name: Ayaan Ali", 'Parent or carer: Umer Ali', 'Lunch: packed or school: packed'],
-    'every line, the label as the page writes it and the value from the call');
-  assert.equal(JSON.parse(ask.detail).key, undefined, 'submitting carries no key: asked every time');
-  assert.equal(card.detail.always, undefined, 'and the card offers no Always OK');
-  await crew.answer(ask.id, { answer: 'allow' });
-  assert.equal(await gated, undefined, 'the yes submits the form');
-  await release(crew, 'scout', 'I submitted the trip form on the school’s page.');
+  live.fills = [{ label: "Pupil's full name", value: 'Ayaan Ali' }, { label: 'Parent or carer', value: 'Umer Ali' }, { label: 'Lunch: packed or school', value: 'packed' }];
+  const e = (crew as any).press('scout', { kind: 'send', words: 'Submit the form' }, { args: ['click', 'e9'] });
+  assert.equal(e.words, 'Scout wants to fill in 3 lines on the claim form at school.example.');
+  assert.deepEqual(e.preview.body.split('\n'), ["Pupil's full name: Ayaan Ali", 'Parent or carer: Umer Ali', 'Lunch: packed or school: packed']);
+  assert.equal((await (crew as any).gate('scout', 'browser', { args: ['click', 'e9'] })).block, true);
+  const id = (crew as any).openAsk('scout', db.get('SELECT * FROM tasks WHERE id = ?', t), e.words, { effect: 'send', fill: true, preview: e.preview });
+  assert.equal(crew.snapshot().asks.find(a => a.id === id)!.detail.always, undefined);
+  await assert.rejects(crew.answer(id, { answer: 'allow' }), /unavailable/);
+  await crew.answer(id, { answer: 'deny' });
   await settled(db, t);
-  assert.equal(state(db, t), 'unsure', 'it acted in the world and never saw the school receive it');
-  assert.match(lastSaid(db, 'scout')!, /Not sure it worked:/);
+  assert.equal(db.get("SELECT COUNT(*) AS n FROM events WHERE kind = 'run.allowed' AND json_extract(data, '$.task') = ?", t)!.n, 0);
   done();
 });
 
@@ -136,34 +128,20 @@ const basket = `### Page state
   - button "Place order" [ref=e8]
 \`\`\``;
 
-test('the meals cart goes to the checkout only through its card: the order as the page writes it, asked every time', async () => {
+test('the meals checkout retains page-derived prices but uncovered purchase execution stays unavailable', async () => {
   const { db, crew, done } = setup();
-  const { task: t } = (await crew.post('scout', 'ask permission: place the grocery order for this week’s list'))!;
+  const t = crew.assign('scout', 'ask permission: prepare the grocery basket', 'chief').task;
   await until('working', () => crew.sessionOf('scout'));
-  const live = (crew as any).live.get('scout');
-  live.page = 'https://www.grocer.example/cart';
-  live.snapshot = basket;
-  const open = () => db.get("SELECT * FROM asks WHERE bot = 'scout' AND state = 'open'");
-  const buy = (crew as any).gate('scout', 'browser', { args: ['click', 'e8'] });
-  await until('asked', open);
-  assert.equal(state(db, t), 'needs_you', 'nothing is bought while the card waits');
-  const card = crew.snapshot().asks.find((a: any) => a.id === open()!.id)!;
-  assert.equal(card.detail.effect, 'spend');
-  assert.equal(card.detail.words,
-    'Scout wants to place this order at grocer.example: Basmati rice 10 lb, Whole milk (1 gal) x2, Garlic, 2 kg. Total $18.30.',
-    'the items and the total, read from the page, never the model’s words');
-  assert.equal(card.detail.preview.head, 'The order at grocer.example');
-  assert.match(card.detail.preview.body, /Basmati rice 10 lb/);
-  assert.match(card.detail.preview.body, /Total \$18\.30/);
-  assert.doesNotMatch(JSON.stringify(card.detail), /cart/, 'the host only, never the page address');
-  assert.equal(JSON.parse(open()!.detail).key, undefined, 'a checkout carries no key: asked every time');
-  assert.equal(card.detail.always, undefined, 'so the card offers no Always OK');
-  await crew.answer(open()!.id, { answer: 'deny' });
-  assert.equal((await buy).block, true, 'not now buys nothing');
-  await release(crew, 'scout', 'I left the basket at the checkout; placing the order is yours.');
-  await settled(db, t);
-  assert.equal(db.get("SELECT COUNT(*) AS n FROM events WHERE kind = 'run.allowed' AND json_extract(data, '$.task') = ?", t)!.n, 0,
-    'the no kept the order unplaced');
-  assert.doesNotMatch(lastSaid(db, 'scout')!, /placed|ordered/i, 'nothing says the order went in');
+  const live = crew.sessionOf('scout')!; live.page = 'https://www.grocer.example/cart'; live.snapshot = basket;
+  const order = (crew as any).order('scout', { kind: 'spend', words: 'Place order' });
+  assert.equal(order.effect.words, 'Scout wants to place this order at grocer.example: Basmati rice 10 lb, Whole milk (1 gal) x2, Garlic, 2 kg. Total $18.30.');
+  assert.equal(order.effect.preview.head, 'The order at grocer.example');
+  assert.match(order.effect.preview.body, /Total \$18\.30/);
+  assert.equal(order.effect.key, undefined);
+  const blocked = await (crew as any).gate('scout', 'browser', { args: ['click', 'e8'] });
+  assert.equal(blocked.block, true); assert.match(blocked.reason, /unavailable/);
+  assert.equal(db.get("SELECT COUNT(*) AS n FROM asks WHERE bot = 'scout' AND state = 'open'")!.n, 0);
+  await release(crew, 'scout', 'I prepared the basket; it was not ordered.'); await settled(db, t);
+  assert.equal(db.get("SELECT COUNT(*) AS n FROM events WHERE kind = 'money.spent'")!.n, 0);
   done();
 });

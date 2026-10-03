@@ -6,7 +6,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { temp } from './tmp.ts';
-import { setup as lab, settled, release, task } from './lab.ts';
+import { setup as lab, settled, release, task, holding, until as waitFor } from './lab.ts';
 import { createServer, type AddressInfo } from 'node:net';
 import { createServer as createHttpServer } from 'node:http';
 import { DatabaseSync } from 'node:sqlite';
@@ -37,7 +37,13 @@ async function until<T>(fn: () => Promise<T | undefined | false>, ms = 10_000): 
 }
 /** A message the stub model answers with one tool call, then a reply saying what the tool returned. */
 const call = (tool: string, input: object) => `[tool ${tool} ${JSON.stringify(input)}]`;
-const say = (bot: string, text: string) => api('POST', `/api/bots/${bot}/messages`, { text });
+// Script Chief's trusted delegation for helper fixtures; genuine public-route tests still call api directly.
+const say = async (bot: string, text: string) => {
+  if (bot === 'chief') return api('POST', '/api/bots/chief/messages', { text });
+  const request = await api('POST', '/api/bots/chief/messages', { text: call('crew_assign', { bot, task: text }) });
+  const linked = await until(async () => (await api('GET', '/api/state')).body.tasks.find((t: any) => t.bot === bot && t.parent === request.body.task && t.root === request.body.task));
+  return { status: request.status, body: { task: linked.id, request: request.body.task } };
+};
 const done = (bot: string, task: number) => until(async () => (await api('GET', `/api/bots/${bot}`)).body.tasks.find((x: any) => x.id === task && ['done', 'failed'].includes(x.state)));
 const ready = () => until(async () => (await fetch(`${base}/api/state`).catch(() => null))?.ok);
 
@@ -46,9 +52,9 @@ test('chief onboarding, recruit, assign, grants', async () => {
 
   // Chief greets first; an ordinary first request is a task, never a name.
   let page = (await api('GET', '/api/bots/chief')).body;
-  assert.match(page.messages[0].text, /I am Chief, of the Crewhouse/);
-  assert.match(page.messages[0].text, /What would you like help with/);
-  assert.match(page.messages[0].text, /stop and ask you first before sending anything, spending money/, 'his stop-and-ask rules come first');
+  assert.match(page.messages[0].text, /Chief coordinates the Crewhouse crew/);
+  assert.match(page.messages[0].text, /Give Chief a task/);
+  assert.match(page.messages[0].text, /Give card approval before a protected action\. Approval does not confirm completion/, 'his stop-and-ask rules come first');
   assert.doesNotMatch(page.messages[0].text, /Master|aye/i);
   const first = (await say('chief', 'Reply with exactly: Hello.')).body.task;
   await done('chief', first);
@@ -77,25 +83,20 @@ test('chief onboarding, recruit, assign, grants', async () => {
   const hand = (await say('chief', `please ${call('crew_assign', { bot: 'reel', task: 'Make a 10 second demo' })}`)).body.task;
   await done('chief', hand);
   const t = await until(async () => (await api('GET', '/api/bots/reel')).body.tasks.find((x: any) => x.title === 'Make a 10 second demo' && x.state === 'done'));
-  page = (await api('GET', '/api/bots/chief')).body;
-  const said = page.messages.find((m: any) => m.author === 'bot' && m.text.startsWith('All done.'));
-  assert.ok(said, 'Chief gives one wrap-up for the assigned work');
-  assert.equal(page.messages.filter((m: any) => m.author === 'bot' && m.text.startsWith('All done.') && m.task_id === hand).length, 1, 'the finished helper job closes exactly once');
-  assert.equal(said.task_id, hand);
-  assert.doesNotMatch(said.text, /#\d|has finished|Sir/, 'no task number or honorific');
+  const said = await until(async () => (await api('GET', '/api/bots/chief')).body.messages.find((m: any) => m.author === 'bot' && m.task_id === t.id));
+  assert.match(said.text, /Chief has the report/);
+  assert.doesNotMatch(said.text, /#\d|has finished|Sir/);
 
-  // The helper's delivered file shows as a card on that one wrap line; handoff copies stay out.
+  // A receipt card belongs to its actual helper task, not the latest helper or an unbound room wrap.
   const wrapDb = openDb();
   wrapDb.prepare('INSERT INTO events (at, kind, bot, data) VALUES (?, ?, ?, ?)').run(Date.now(), 'file.delivered', 'reel', JSON.stringify({ task: t.id, path: 'files/demo.xlsx', note: 'demo sheet' }));
   wrapDb.prepare('INSERT INTO events (at, kind, bot, data) VALUES (?, ?, ?, ?)').run(Date.now(), 'file.delivered', 'reel', JSON.stringify({ task: t.id, path: 'files/from-reel/copy.txt' }));
   wrapDb.close();
   page = (await api('GET', '/api/bots/chief')).body;
-  const wrapped = page.messages.find((m: any) => m.author === 'bot' && m.text.startsWith('All done.'));
-  assert.equal(page.messages.filter((m: any) => m.author === 'bot' && m.text.startsWith('All done.') && m.task_id === hand).length, 1, 'the finished helper job closes exactly once');
-  assert.ok(wrapped.files.some((f: any) => f.path === 'files/demo.xlsx'), "the wrap line carries the helper's file");
-  assert.ok(!wrapped.files.some((f: any) => f.path === 'files/from-reel/copy.txt'), 'handoff copies stay off the card');
+  const receipt = page.messages.find((m: any) => m.id === said.id);
+  assert.deepEqual(receipt.files.map((f: any) => f.path), ['files/demo.xlsx']);
+  assert.equal(page.messages.filter((m: any) => m.author === 'bot' && m.task_id === t.id).length, 1);
 
-  // Two helpers on one Chief job: each delivered file shows exactly once on the single wrap line.
   await api('POST', '/api/recruit', { template: 'scout', name: 'Scout' });
   const pair = (await say('chief', `two jobs please ${call('crew_assign', { bot: 'reel', task: 'First pair job' })} ${call('crew_assign', { bot: 'scout', task: 'Second pair job' })}`)).body.task;
   const jobA = await until(async () => (await api('GET', '/api/bots/reel')).body.tasks.find((x: any) => x.title === 'First pair job' && x.state === 'done'));
@@ -106,10 +107,12 @@ test('chief onboarding, recruit, assign, grants', async () => {
     pairDb.prepare('INSERT INTO events (at, kind, bot, data) VALUES (?, ?, ?, ?)').run(Date.now(), 'file.delivered', bot, JSON.stringify({ task: id, path: `files/${label}.xlsx`, note: `${label} sheet` }));
   }
   pairDb.close();
-  page = (await api('GET', '/api/bots/chief')).body;
-  const both = page.messages.filter((m: any) => m.author === 'bot' && m.text.startsWith('All done.') && m.task_id === pair);
-  assert.equal(both.length, 1, 'two helpers still close with one wrap line');
-  assert.deepEqual(both[0].files.map((f: any) => f.path).sort(), ['files/first.xlsx', 'files/second.xlsx']);
+  const both = await until(async () => {
+    const lines = (await api('GET', '/api/bots/chief')).body.messages.filter((m: any) => m.author === 'bot' && [jobA.id, jobB.id].includes(m.task_id));
+    return lines.length === 2 && lines;
+  });
+  assert.deepEqual(both.flatMap((m: any) => m.files.map((f: any) => f.path)).sort(), ['files/first.xlsx', 'files/second.xlsx']);
+  assert.equal(both.find((m: any) => m.task_id === jobA.id).files[0].path, 'files/first.xlsx');
 
   // Grants: what the person ticks is what the bot gets.
   const tools = (await api('GET', '/api/bots/reel')).body.tools;
@@ -156,10 +159,10 @@ test('personal requests reach Chief words before the model, including ambiguous 
   try {
     for (const [label, words, expected] of [
       ['dinner', 'Plan dinner for tonight', /dinner plan/],
-      ['research', 'What do people say about standing desks?', /check the question/],
-      ['reminder', 'Remind me about the meeting tomorrow', /reminder/],
-      ['ambiguous', 'Could you handle the screenshots?', /look into that/],
-      ['Chief', 'Chief, help me think through this choice', /look into that/],
+      ['research', 'What do people say about standing desks?', /find the information/],
+      ['reminder', 'Remind me about the meeting tomorrow', /reminder time/],
+      ['ambiguous', 'Could you handle the screenshots?', /read the information/],
+      ['Chief', 'Chief, help me think through this choice', /read the information/],
     ] as const) {
       const started = Date.now();
       const { body } = await say('chief', words);
@@ -192,12 +195,12 @@ test('marketing and URL follow-up show Chief words before a model tool or result
       const { body } = await say('chief', text);
       const first = await until(async () => events.find((e) => e.kind === 'reply.partial' && e.bot === 'chief' && e.data.task === body.task));
       assert.ok(first.at - started < 3000, 'a first line does not wait for the model');
-      assert.match(first.data.text, text.startsWith('https:') ? /Looking at trymuxr\.com now\./ : /next step for your app/);
+      assert.match(first.data.text, text.startsWith('https:') ? /helper to read trymuxr\.com/ : /helper for your launch plan/);
       await done('chief', body.task);
       const trace = events.filter((e) => e.bot === 'chief' && e.data?.task === body.task);
       assert.ok(trace.findIndex((e) => e.kind === 'reply.partial') < trace.findIndex((e) => e.kind === 'run.prompted'), 'the acknowledgement precedes the model');
       if (!text.startsWith('https:')) {
-        assert.ok(trace.some((e) => e.kind === 'reply.partial' && e.data.text.includes('checking the next step')), 'the model prose also streams');
+        assert.ok(trace.some((e) => e.kind === 'reply.partial' && e.data.text.includes('confirm the next step')), 'the model prose also streams');
         assert.ok(trace.findIndex((e) => e.kind === 'reply.partial') < trace.findIndex((e) => e.kind === 'task.progress'));
       }
     }
@@ -216,7 +219,7 @@ test('Chief streams substantive prose before his tool runs', async () => {
     await done('chief', body.task);
     await until(async () => events.find((e) => e.kind === 'task.progress' && e.data.task === body.task));
     const trace = events.filter((e) => e.bot === 'chief' && e.data?.task === body.task);
-    const first = trace.findIndex((e) => e.kind === 'reply.partial' && e.data.text.includes('checking the next step'));
+    const first = trace.findIndex((e) => e.kind === 'reply.partial' && e.data.text.includes('confirm the next step'));
     const tool = trace.findIndex((e) => e.kind === 'task.progress');
     assert.ok(first >= 0 && tool > first, 'the first streamed words precede tool execution');
   } finally { ws.close(); }
@@ -225,7 +228,8 @@ test('Chief streams substantive prose before his tool runs', async () => {
 // This verifies the real tool-fetch mechanics and scripted wording contract, not model judgement.
 test('two-source fare backtest: both local sources fetched and the reply names them plus an unchecked item', async () => {
   await ready();
-  await api('PUT', '/api/bots/chief/tools', { tools: ['crew', 'web'] });
+  if (!(await api('GET', '/api/state')).body.bots.some((b: any) => b.id === 'scout')) await api('POST', '/api/recruit', { template: 'scout', name: 'Scout' });
+  await api('PUT', '/api/bots/scout/tools', { tools: ['crew', 'web'] });
   const fetched = new Set<string>();
   const source = (name: string, fare: number) => createHttpServer((_req, res) => {
     fetched.add(name);
@@ -237,12 +241,12 @@ test('two-source fare backtest: both local sources fetched and the reply names t
     await Promise.all([narrow, fareboard].map((s) => new Promise<void>((resolve) => s.once('listening', resolve))));
     const url = (s: ReturnType<typeof createHttpServer>) => `http://127.0.0.1:${(s.address() as AddressInfo).port}/fare`;
     const text = `[two-fare-backtest] Compare these fares. ${call('crew_web_fetch', { url: url(narrow) })} ${call('crew_web_fetch', { url: url(fareboard) })}`;
-    const task = (await say('chief', text)).body.task;
-    await done('chief', task);
+    const request = (await say('chief', call('crew_assign', { bot: 'scout', task: text }))).body.task;
+    await done('chief', request);
+    const helper = await until(async () => (await api('GET', '/api/state')).body.tasks.find((t: any) => t.parent === request && t.bot === 'scout'));
+    await done('scout', helper.id);
     assert.deepEqual([...fetched].sort(), ['Fareboard', 'Narrowfare']);
-    const messages = (await api('GET', '/api/bots/chief')).body.messages;
-    const reply = messages.findLast((m: any) => m.author === 'bot' && /Fareboard/.test(m.text))?.text;
-    assert.ok(reply);
+    const reply = await until(async () => (await api('GET', '/api/bots/chief')).body.messages.findLast((m: any) => m.author === 'bot' && m.task_id === helper.id && /Fareboard/.test(m.text))?.text);
     assert.match(reply, /Fareboard.*Narrowfare|Narrowfare.*Fareboard/);
     assert.match(reply, /didn't check/);
   } finally { narrow.close(); fareboard.close(); }
@@ -303,7 +307,9 @@ test('screen: take over and give back through the API; watching needs the Comput
   assert.equal((await api('POST', '/api/bots/reel/giveback', { note: 'signed in' })).status, 200);
   assert.equal((await api('POST', '/api/bots/reel/giveback', {})).status, 409);
   assert.equal((await api('POST', '/api/bots/reel/takeover', undefined, {})).status, 403, 'cross-site pages cannot take over');
-  assert.equal((await api('POST', '/api/bots/reel/steer', { text: 'faster' })).status, 409, 'nothing running to steer');
+  const steering = await api('POST', '/api/bots/reel/steer', { text: 'faster' });
+  assert.equal(steering.status, 200, 'helper steering is a new Chief request even without a running helper');
+  await done('chief', steering.body.task);
 
   // Set this test's own grant precondition, even if an earlier onboarding assertion fails.
   await api('PUT', '/api/bots/reel/tools', { tools: ['files', 'media', 'images'] });
@@ -495,7 +501,7 @@ test('memory: the bot proposes a note, crewd caps and commits it, Undo reverts i
   assert.equal((await api('PUT', '/api/bots/quill/job', { ...recipe, great: 'x'.repeat(601) })).status, 400);
   const instructions = readFileSync(join(root, 'crew', 'bots', 'quill', 'AGENTS.md'), 'utf8');
   assert.match(instructions, /## Your job[\s\S]*### What it does[\s\S]*Keep notes tidy/);
-  assert.match(instructions, /## Boundaries\n- Stop and ask first only/);
+  assert.match(instructions, /## Boundaries\n- Report work and blockers to Chief/);
 });
 
 test('suggestions: a helper keeps a skill, and Chief changes a personality, only on the person\'s yes', async () => {
@@ -549,17 +555,18 @@ test('suggestions: a helper keeps a skill, and Chief changes a personality, only
   assert.equal((await api('GET', '/api/bots/reel')).body.soul, '# Reel\n\nYou are Reel. Brief and cheerful.\n');
 });
 
-test('room API: a message starts and rejoins the person’s room job', async () => {
+test('public room API messages belong to Chief with independent request identity', async () => {
   await ready();
   const first = (await api('POST', '/api/bots/reel/messages', { text: 'A room job', room: true })).body.task;
-  await done('reel', first);
+  await done('chief', first);
   const second = (await api('POST', '/api/bots/reel/messages', { text: 'More on that room job', room: true })).body.task;
-  await done('reel', second);
+  await done('chief', second);
   const room = (await api('GET', '/api/room')).body;
   assert.ok(room.lines.some((l: any) => l.text === 'More on that room job'));
   assert.equal(room.lines.filter((l: any) => l.text === 'A room job').length, 1);
   const db = openDb();
-  assert.equal(db.prepare('SELECT root FROM tasks WHERE id = ?').get(second)?.root, first);
+  assert.equal(db.prepare('SELECT root FROM tasks WHERE id = ?').get(second)?.root, second);
+  assert.equal(db.prepare('SELECT bot FROM tasks WHERE id = ?').get(second)?.bot, 'chief');
   db.close();
 });
 
@@ -620,6 +627,34 @@ test('raw /files/ only opens delivered files', async () => {
   }
 });
 
+test('rule HTTP endpoints and final card metadata reflect actual saved and cancelled state', async () => {
+  await ready();
+  const text = 'Never send email. Prepare drafts only.';
+  const proposed = (await say('chief', text + ' ' + call('crew_rule', { title: 'Email drafts', text }))).body.task;
+  await done('chief', proposed);
+  let card = (await api('GET', '/api/state')).body.asks.find((a: any) => a.detail.rule);
+  assert.equal(card.detail.rule.text, text); assert.match(card.detail.rule.said, /^Never send email/);
+  assert.deepEqual((await api('GET', '/api/rules')).body.rules, []);
+  assert.equal((await api('POST', `/api/asks/${card.id}/answer`, { answer: 'allow', scope: 'always' })).status, 400);
+  assert.equal((await api('POST', `/api/asks/${card.id}/answer`, { answer: 'allow', scope: 'once' })).status, 200);
+  const id = (await api('GET', '/api/rules')).body.rules[0].id;
+  let message = (await api('GET', '/api/bots/chief')).body.messages.filter((m: any) => m.rule).at(-1);
+  assert.equal(message.rule.state, 'saved'); assert.equal(message.rule.text, text);
+  assert.equal((await api('PUT', `/api/rules/${id}`, { text: {} })).status, 400);
+  const edited = 'Never send email, including replies. Prepare drafts only.';
+  assert.equal((await api('PUT', `/api/rules/${id}`, { text: edited })).status, 200);
+  assert.equal((await api('GET', '/api/rules')).body.rules[0].text, edited);
+  const change = (await say('chief', 'Change this rule. ' + call('crew_rule', { id, title: 'Email drafts', text }))).body.task;
+  await done('chief', change);
+  card = (await api('GET', '/api/state')).body.asks.find((a: any) => a.detail.rule);
+  assert.equal((await api('POST', `/api/asks/${card.id}/answer`, { answer: 'deny' })).status, 200);
+  message = (await api('GET', '/api/bots/chief')).body.messages.filter((m: any) => m.rule).at(-1);
+  assert.equal(message.rule.state, 'cancelled'); assert.match(message.text, /Current rule:.*including replies/);
+  assert.equal((await api('GET', '/api/rules')).body.rules[0].text, edited);
+  assert.equal((await api('DELETE', `/api/rules/${id}`)).status, 200);
+  assert.deepEqual((await api('GET', '/api/rules')).body.rules, []);
+});
+
 test('one chat end to end on the stub: excel request, one question, bookings, then the xlsx card and its roles', async () => {
   const { db, crew, done } = lab();
   crew.onboard('sir');
@@ -628,26 +663,26 @@ test('one chat end to end on the stub: excel request, one question, bookings, th
   const sheets = [{ name: 'Bookings', columns: [{ header: 'Guest' }, { header: 'Status', options: ['Booked', 'Checked in'] }], rows: [['Amina Khan', 'Booked']] }];
   const marker = call('crew_workbook', { name: 'Reception log', sheets });
 
-  // The request names a workbook, so it goes straight to the silently hired Scribe; "ask permission" holds the turn.
-  const first = (await crew.post('chief', 'make me an Excel for reception, ask permission before you build anything'))!.task;
-  assert.equal(task(db, first).bot, 'scribe');
-  assert.equal(task(db, first).origin, 'chief');
-  await release(crew, 'scribe', `${marker} Visitor log, bookings, or something else?`);
-  await settled(db, first);
+  crew.recruit('scribe', 'Scribe', 'person');
+  const first = (await crew.post('chief', 'Make an Excel for reception. ' + call('crew_assign', { bot: 'scribe', task: 'ask permission: determine the workbook purpose' })))!.task;
+  await holding(crew, 'scribe'); await settled(db, first);
+  const helper = db.get("SELECT id FROM tasks WHERE parent = ? AND root = ? AND bot = 'scribe'", first, first)!.id;
+  assert.equal(task(db, first).bot, 'chief'); assert.equal(task(db, helper).origin, 'chief');
+  await release(crew, 'scribe', 'Visitor log, bookings, or something else?');
+  await waitFor('helper blocker reported', () => task(db, helper).state === 'needs_you');
+  assert.ok(chiefSays().some((text: string) => /Chief will read the information[\s\S]*Visitor log, bookings, or something else\?$/.test(text)));
+  assert.equal(db.get("SELECT COUNT(*) AS n FROM asks WHERE task_id = ?", helper)!.n, 0);
 
-  // The question reaches Chief's thread word for word, ending in "?", carrying its task but no card.
-  const question = chiefSays().at(-1)!;
-  assert.ok(question.startsWith('Scribe asks: '));
-  assert.ok(question.endsWith('?'));
-
-  // Posting the answer builds the workbook, and its card lands in Chief's thread.
-  const second = (await crew.post('chief', 'bookings'))!.task;
-  assert.equal(task(db, second).bot, 'scribe');
+  // The public answer is a Chief request. Only Chief's explicit assignment resumes the original helper identity.
+  const second = (await crew.post('chief', 'bookings ' + call('crew_assign', { bot: 'scribe', task: `Build bookings. ${marker} ask permission: inspect the completed workbook` })))!.task;
+  assert.equal(task(db, second).bot, 'chief'); assert.notEqual(second, first);
+  await holding(crew, 'scribe');
   await release(crew, 'scribe', 'The reception workbook is ready.');
-  await settled(db, second);
+  await settled(db, helper); await settled(db, second);
+  assert.equal(task(db, helper).parent, first); assert.equal(task(db, helper).root, first);
   const page = await crew.botPage('chief');
-  const card = page.messages.find((m: any) => m.task_id === second)?.files.find((f: any) => f.path.endsWith('.xlsx'));
-  assert.ok(card, "the finished spreadsheet's card is in Chief's thread");
+  const card = page.messages.find((m: any) => m.task_id === helper && m.files.some((f: any) => f.path.endsWith('.xlsx')))?.files.find((f: any) => f.path.endsWith('.xlsx'));
+  assert.ok(card, "the confirmed original helper output is in Chief's thread, never picked by latest helper");
 
   // The preview behind the card carries row numbers and cell roles, in plain words.
   const view = await crew.workbookView('scribe', card.path) as any;

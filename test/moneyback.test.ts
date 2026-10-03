@@ -60,7 +60,7 @@ test('Home lists the price-drop job, and says what it waits on rather than dead-
 
 test('a helper asks for its own check-in: a watch when the page can be read, a quiet browser look when it cannot', async () => {
   const { db, crew, done } = setup();
-  const offer = (extra: string) => (crew as any).post('scout', `keep an eye on it ${extra}`);
+  const offer = (extra: string) => (crew as any).assign('scout', `keep an eye on it ${extra}`, 'chief');
   const watchCard = `[tool crew_routine ${JSON.stringify({ when: 'every day 9:00', watch: 'https://shop.example/item', task: 'tell me when it goes under $999.00, the price paid' })}]`;
   const { task } = await offer(watchCard);
   await until('the card', () => db.get("SELECT * FROM asks WHERE kind = 'propose' AND state = 'open'"));
@@ -103,77 +103,56 @@ const register = `### Page state
   - button "Submit claim" [ref=e9]
 \`\`\``;
 
-test('filing a claim: the lines are free to type, and the submit card carries every one of them, signed in or not', async () => {
+test('claim form formatting retains every controlled line; uncovered fill and submit remain unavailable', async () => {
   const { db, crew, done } = setup();
-  const { task: t } = (await crew.post('scout', 'ask permission: file the claim for property PA-88231'))!;
+  const t = crew.assign('scout', 'ask permission: prepare the claim pack', 'chief').task;
   await until('working', () => crew.sessionOf('scout'));
-  const live = (crew as any).live.get('scout');
-  live.page = 'https://unclaimed.example/claim/PA-88231';
-  live.snapshot = register;
-  for (const [ref, value] of [['e5', 'Ada Lovelace'], ['e6', '12 Lovelace Lane'], ['e7', 'ada@example.net']] as const) {
-    assert.equal(await (crew as any).gate('scout', 'browser', { args: ['fill', ref, value] }), undefined, 'typing a line asks nothing by itself');
-    assert.equal(db.get("SELECT COUNT(*) AS n FROM asks WHERE bot = 'scout' AND state = 'open'")!.n, 0);
+  const live = crew.sessionOf('scout')!; live.page = 'https://unclaimed.example/claim/PA-88231'; live.snapshot = register;
+  for (const [ref, value] of [['e5', 'Ada Lovelace'], ['e6', '12 Lovelace Lane'], ['e7', 'ada@example.net']]) {
+    assert.equal((await (crew as any).gate('scout', 'browser', { args: ['fill', ref, value] })).block, true);
   }
-  const gated = (crew as any).gate('scout', 'browser', { args: ['click', 'e9'] });
-  await until('asked', () => db.get("SELECT * FROM asks WHERE bot = 'scout' AND state = 'open'"));
-  const ask = db.get("SELECT * FROM asks WHERE bot = 'scout' AND state = 'open'")!;
-  const card = crew.snapshot().asks.find((a: any) => a.id === ask.id)!;
-  assert.equal(card.detail.effect, 'send');
-  assert.equal(card.detail.fill, true, 'a form card fills, it does not press');
-  assert.equal(card.detail.words, 'Scout wants to fill in 3 lines on the claim form at unclaimed.example.', 'no sign-in is claimed where there is none');
-  assert.equal(card.detail.preview.head, 'What Scout will fill in on unclaimed.example');
-  assert.deepEqual(card.detail.preview.body.split('\n'), ["Owner's full name: Ada Lovelace", 'Address the money was owed at: 12 Lovelace Lane', 'Email for this claim: ada@example.net'],
-    'every line, the label as the page writes it and the value from the call');
-  assert.equal(JSON.parse(ask.detail).key, undefined, 'filing carries no key: asked every time');
-  assert.equal(card.detail.always, undefined, 'and the card offers no Always OK');
-  await crew.answer(ask.id, { answer: 'allow' });
-  assert.equal(await gated, undefined, 'the yes files the claim');
-  await release(crew, 'scout', 'I filled the claim from the pack and the register’s page said it was received.');
-  await settled(db, t);
-  assert.equal(state(db, t), 'unsure', 'it acted in the world and never saw the state pay out');
-  assert.match(lastSaid(db, 'scout')!, /Not sure it worked:/);
-  assert.doesNotMatch(lastSaid(db, 'scout')!, /\bfiled\b|submitted/i, 'nothing says the claim was filed');
+  live.fills = [{ label: "Owner's full name", value: 'Ada Lovelace' }, { label: 'Address the money was owed at', value: '12 Lovelace Lane' }, { label: 'Email for this claim', value: 'ada@example.net' }];
+  const e = (crew as any).press('scout', { kind: 'send', words: 'Submit the claim' }, { args: ['click', 'e9'] });
+  assert.equal(e.words, 'Scout wants to fill in 3 lines on the claim form at unclaimed.example.');
+  assert.equal(e.preview.head, 'What Scout will fill in on unclaimed.example');
+  assert.deepEqual(e.preview.body.split('\n'), ["Owner's full name: Ada Lovelace", 'Address the money was owed at: 12 Lovelace Lane', 'Email for this claim: ada@example.net']);
+  assert.equal(e.key, undefined);
+  const blocked = await (crew as any).gate('scout', 'browser', { args: ['click', 'e9'] });
+  assert.equal(blocked.block, true); assert.match(blocked.reason, /unavailable/);
+  assert.equal(db.get("SELECT COUNT(*) AS n FROM asks WHERE bot = 'scout' AND state = 'open'")!.n, 0);
+  await release(crew, 'scout', 'The claim pack is ready; it was not filed.'); await settled(db, t);
+  assert.equal(db.get("SELECT COUNT(*) AS n FROM events WHERE kind = 'run.allowed' AND json_extract(data, '$.task') = ?", t)!.n, 0);
   done();
 });
-
-test('where the person signed the bot in, each line asks on its own card, and the words say the sign-in', async () => {
+test('signed-in claim fields retain exact label/value metadata but cannot execute', async () => {
   const { db, crew, cfg, done } = setup();
   const file = join(cfg.crewDir, 'bots', 'scout', 'bot.json');
-  writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, 'utf8')), signedIn: ['unclaimed.example'] }, null, 2));
-  const { task: t } = (await crew.post('scout', 'ask permission: file the claim for property PA-88231'))!;
+  writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, 'utf8')), signedIn: ['unclaimed.example'] }));
+  const t = crew.assign('scout', 'ask permission: prepare claim metadata', 'chief').task;
   await until('working', () => crew.sessionOf('scout'));
-  const live = (crew as any).live.get('scout');
-  live.page = 'https://unclaimed.example/claim/PA-88231';
-  live.snapshot = register;
-  const gated = (crew as any).gate('scout', 'browser', { args: ['fill', 'e5', 'Ada Lovelace'] });
-  await until('asked', () => db.get("SELECT * FROM asks WHERE bot = 'scout' AND state = 'open'"));
-  const ask = db.get("SELECT * FROM asks WHERE bot = 'scout' AND state = 'open'")!;
-  const card = crew.snapshot().asks.find((a: any) => a.id === ask.id)!;
-  assert.equal(card.detail.words, 'Scout wants to fill “Owner\'s full name” on unclaimed.example, a site you signed it in to.');
-  assert.equal(card.detail.fill, true, 'a line card fills, it does not press');
-  assert.equal(card.detail.preview.body, "Owner's full name: Ada Lovelace");
-  assert.equal(JSON.parse(ask.detail).key, undefined);
-  await crew.answer(ask.id, { answer: 'allow' });
-  assert.equal(await gated, undefined);
-  await release(crew, 'scout', 'I filled the first line; the rest waits for your OK, one card each.');
-  await settled(db, t);
+  const live = crew.sessionOf('scout')!; live.page = 'https://unclaimed.example/claim/PA-88231'; live.snapshot = register;
+  const e = (crew as any).press('scout', { kind: 'send', words: 'Fill the field' }, { args: ['fill', 'e5', 'Ada Lovelace'] });
+  assert.equal(e.words, 'Scout wants to fill “Owner\'s full name” on unclaimed.example, a site you signed it in to.');
+  assert.equal(e.fill, true); assert.equal(e.preview.body, "Owner's full name: Ada Lovelace"); assert.equal(e.key, undefined);
+  const blocked = await (crew as any).gate('scout', 'browser', { args: ['fill', 'e5', 'Ada Lovelace'] });
+  assert.equal(blocked.block, true); assert.match(blocked.reason, /unavailable/);
+  await release(crew, 'scout', 'The field is a draft; nothing was submitted.'); await settled(db, t);
   done();
 });
-
 test('a claim that asks for an upload or a signature stops with the pack ready and never says filed', async () => {
   const { db, crew, done } = setup();
   const pack = 'Claim pack for property PA-88231: wages held by Acme Corp, $1,240.00, owed at 12 Lovelace Lane. Proof the register asks for: a passport. The form stops at Upload ID — that line is the person\'s.';
-  const { task: t } = (await crew.post('scout', 'Get the claim for PA-88231 ready and ask permission before anything more. '
+  const { task: t } = (await crew.assign('scout', 'Get the claim for PA-88231 ready and ask permission before anything more. '
     + `[tool crew_write {"path":"files/claim-pa-88231.md","content":"${pack}"}] `
     + '[tool crew_deliver {"path":"files/claim-pa-88231.md"}] '
-    + '[tool crew_outcome {"worked": false, "seen": "I stopped where the form asks for a passport upload. The pack is ready in files/claim-pa-88231.md; the upload line is yours to do."}]'))!;
+    + '[tool crew_outcome {"worked": false, "seen": "I stopped where the form asks for a passport upload. The pack is ready in files/claim-pa-88231.md; the upload line is yours to do."}]', 'chief'))!;
   await until('working', () => crew.sessionOf('scout'));
   await release(crew, 'scout', 'The claim needs a passport upload, so I stopped with the pack ready; the upload line is yours.');
   await settled(db, t);
   assert.equal(state(db, t), 'unsure', 'stopped at the upload is not a claim filed');
   assert.match(task(db, t).result!, /pack is ready/, 'the exact line to act on, in the job’s own words');
   assert.ok(db.get("SELECT 1 FROM events WHERE kind = 'file.delivered' AND json_extract(data, '$.task') = ?", t), 'the pack is delivered');
-  assert.match(lastSaid(db, 'scout')!, /Not sure it worked: .*pack is ready/, 'the job says what is left, in crewd’s own unsure words');
+  assert.match(lastSaid(db, 'chief')!, /cannot confirm.*pack is ready/s, 'the job says what is left, in crewd’s own unsure words');
   assert.doesNotMatch(lastSaid(db, 'scout')!, /\bfiled\b/i, 'nothing says the claim was filed');
   done();
 });
@@ -190,7 +169,7 @@ const shop = `### Page state
   - button "Request price adjustment" [ref=e7]
 \`\`\``;
 
-test('the watch sees the price go under what they paid; the claim press asks with the page’s own words, and the job ends not sure', async () => {
+test('the controlled watch detects a price drop; trusted press context survives while execution is unavailable', async () => {
   let price = '$999.00';
   const site = createServer((_q, res) => res.writeHead(200, { 'content-type': 'text/html' }).end(
     `<html><body><h1>Espresso machine</h1><p>Price today: ${price}</p></body></html>`));
@@ -216,60 +195,41 @@ test('the watch sees the price go under what they paid; the claim press asks wit
     const live = (crew as any).live.get('scout');
     live.page = 'https://www.shop.example/order/98765/price-adjustment';
     live.snapshot = shop;
-    const open = () => db.get("SELECT * FROM asks WHERE bot = 'scout' AND state = 'open'");
-    const press = (crew as any).gate('scout', 'browser', { args: ['click', 'e7'] });
-    await until('asked', open);
-    const card = crew.snapshot().asks.find((a: any) => a.id === open()!.id)!;
-    assert.equal(card.detail.effect, 'send');
-    assert.equal(card.detail.words, 'Scout wants to press “Request price adjustment” on shop.example, a site you signed it in to. The page shows $949.00.');
-    assert.equal(card.detail.preview.head, 'What Scout will press on shop.example');
-    assert.match(card.detail.preview.body, /Paid on 12 March: \$999\.00\nToday from this shop: \$949\.00\nItem total: \$949\.00\nRequest price adjustment/);
-    assert.match(card.detail.preview.body, /^You'd get \$50\.00 back\.\n/, "what they get back, from the page's two prices, first: the preview clamps");
-    assert.doesNotMatch(JSON.stringify(card.detail), /98765|price-adjustment/, 'the host only, never the page address');
-    assert.equal(JSON.parse(open()!.detail).key, undefined, 'a press carries no key: there is no standing answer for it');
-    assert.equal(card.detail.always, undefined, 'so the card offers no “Always OK”');
-
-    await crew.answer(open()!.id, { answer: 'allow' });
-    assert.equal(await press, undefined, 'the yes lets the press through');
-    await release(crew, 'scout', 'I pressed Request price adjustment on the shop’s page.');
+    const e = (crew as any).press('scout', { kind: 'send', press: true, words: 'Request price adjustment' }, { args: ['click', 'e7'] });
+    assert.equal(e.words, 'Scout wants to press “Request price adjustment” on shop.example, a site you signed it in to. The page shows $949.00.');
+    assert.match(e.preview.body, /Paid on 12 March: \$999\.00\nToday from this shop: \$949\.00/);
+    assert.match(e.preview.body, /^You'd get \$50\.00 back\.\n/);
+    assert.doesNotMatch(JSON.stringify(e), /98765|price-adjustment/);
+    assert.equal(e.key, undefined);
+    const blocked = await (crew as any).gate('scout', 'browser', { args: ['click', 'e7'] });
+    assert.equal(blocked.block, true); assert.match(blocked.reason, /unavailable/);
+    assert.equal(db.get("SELECT COUNT(*) AS n FROM asks WHERE bot = 'scout' AND state = 'open'")!.n, 0);
+    await release(crew, 'scout', 'The price fell by $50.00 on the controlled page. The adjustment has not been requested.');
     await settled(db, t);
-    assert.equal(state(db, t), 'unsure', 'it acted in the world and never saw the money arrive');
-    assert.match(lastSaid(db, 'chief')!, /Scout isn't sure .* worked/);
-    assert.doesNotMatch(lastSaid(db, 'chief')!, /money back|refund|paid you/i, 'nothing says the money came back');
+    assert.match(lastSaid(db, 'chief')!, /price fell.*not been requested/);
+    assert.equal(db.get("SELECT COUNT(*) AS n FROM events WHERE kind = 'run.allowed' AND json_extract(data, '$.task') = ?", t)!.n, 0);
   } finally { site.close(); }
   done();
 });
 
-test('a press the page cannot name still asks, in the plain sentence', async () => {
+test('unknown page actions stay unavailable and missing price evidence never invents money back', async () => {
   const { db, crew, cfg, done } = setup();
   const file = join(cfg.crewDir, 'bots', 'scout', 'bot.json');
-  writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, 'utf8')), signedIn: ['shop.example'] }, null, 2));
-  const { task: t } = (await crew.post('scout', 'ask permission: claim it'))!;
+  writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, 'utf8')), signedIn: ['shop.example'] }));
+  const t = crew.assign('scout', 'ask permission: inspect the claim', 'chief').task;
   await until('working', () => crew.sessionOf('scout'));
-  const live = (crew as any).live.get('scout');
-  live.page = 'https://www.shop.example/orders';
-  live.snapshot = shop;
-  const gated = (crew as any).gate('scout', 'browser', { args: ['click', 'button.primary'] });
-  await until('asked', () => db.get("SELECT * FROM asks WHERE bot = 'scout' AND state = 'open'"));
-  assert.equal(db.get("SELECT title FROM asks WHERE bot = 'scout' AND state = 'open'")!.title, 'Scout wants to act as you on shop.example, a site you signed it in to.');
-  await crew.answer(db.get("SELECT id FROM asks WHERE bot = 'scout' AND state = 'open'")!.id, { answer: 'deny' });
-  assert.equal((await gated).block, true, 'not now keeps the press unpressed');
-
-  // A page that never writes what they paid: the card names the button and says nothing about money.
-  const first = db.get("SELECT MAX(id) AS id FROM asks")!.id;
+  const live = crew.sessionOf('scout')!; live.page = 'https://www.shop.example/orders'; live.snapshot = shop;
+  const fallback = { kind: 'send', words: 'Scout wants to act as you on shop.example, a site you signed it in to.' };
+  assert.deepEqual((crew as any).press('scout', fallback, { args: ['click', 'button.primary'] }), fallback);
+  assert.equal((await (crew as any).gate('scout', 'browser', { args: ['click', 'button.primary'] })).block, true);
   live.snapshot = shop.replace('Paid on 12 March: $999.00', 'Order 98765');
-  const named = (crew as any).gate('scout', 'browser', { args: ['click', 'e7'] });
-  await until('the named press', () => db.get("SELECT * FROM asks WHERE bot = 'scout' AND state = 'open' AND id > ?", first));
-  const shown = crew.snapshot().asks.find((a: any) => a.id === db.get("SELECT MAX(id) AS id FROM asks WHERE state = 'open'")!.id)!;
-  assert.match(shown.detail.preview.body, /Request price adjustment/, 'the button, as the page writes it');
-  assert.doesNotMatch(JSON.stringify(shown.detail), /\bback\b|refund|save/i, 'one price only: the card says nothing about money');
-  await crew.answer(shown.id, { answer: 'deny' });
-  assert.equal((await named).block, true);
-  await release(crew, 'scout', 'Not without the OK.');
-  await settled(db, t);
+  const shown = (crew as any).press('scout', fallback, { args: ['click', 'e7'] });
+  assert.match(shown.preview.body, /Request price adjustment/);
+  assert.doesNotMatch(JSON.stringify(shown), /\bback\b|refund|save/i, 'one price does not establish savings');
+  assert.equal((await (crew as any).gate('scout', 'browser', { args: ['click', 'e7'] })).block, true);
+  await release(crew, 'scout', 'There is no confirmed refund.'); await settled(db, t);
   done();
 });
-
 // ---- the return-and-chase job: the same Home list, the same press card, a chase that is only ever a draft ----
 
 const returns = (crew: any) => crew.snapshot().ideas.find((i: any) => /return this and get the refund/.test(i.ask));
@@ -294,49 +254,32 @@ test('Home lists the return job beside the other two: the web is enough, and eve
   done();
 });
 
-test('starting a return: the press asks first, on a card naming the button, the site and what it changes', async () => {
+test('a return retains trusted button and site wording but cannot execute through old approvals', async () => {
   const { db, crew, cfg, done } = setup();
   const file = join(cfg.crewDir, 'bots', 'scout', 'bot.json');
-  writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, 'utf8')), signedIn: ['shop.example'] }, null, 2));
-  const { task: t } = (await crew.post('scout', 'ask permission: start the return for order 98765'))!;
+  writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, 'utf8')), signedIn: ['shop.example'], allow: ['send:shop.example'] }));
+  const t = crew.assign('scout', 'ask permission: prepare the return', 'chief').task;
   await until('working', () => crew.sessionOf('scout'));
-  const live = (crew as any).live.get('scout');
-  live.page = 'https://www.shop.example/orders/98765/return';
-  live.snapshot = order;
-  const open = () => db.get("SELECT * FROM asks WHERE bot = 'scout' AND state = 'open'");
-  const press = (crew as any).gate('scout', 'browser', { args: ['click', 'e8'] });
-  await until('asked', open);
-  assert.equal(state(db, t), 'needs_you', 'the return is not started while the card waits');
-  const card = crew.snapshot().asks.find((a: any) => a.id === open()!.id)!;
-  assert.equal(card.detail.effect, 'send');
-  assert.equal(card.detail.press, true, 'acting on a site, never a message ready to send');
-  assert.equal(card.detail.words, 'Scout wants to press “Start return” on shop.example, a site you signed it in to.');
-  assert.equal(card.detail.preview.head, 'What Scout will press on shop.example');
-  assert.match(card.detail.preview.body, /Returns are free within 30 days/, "what it changes, in the page's own words");
-  assert.match(card.detail.preview.body, /Start return/, 'the button, as the page writes it');
-  assert.equal(JSON.parse(open()!.detail).key, undefined, 'a press carries no key: asked every time');
-  assert.equal(card.detail.always, undefined, 'so the card offers no Always OK');
-  await crew.answer(open()!.id, { answer: 'allow' });
-  assert.equal(await press, undefined, 'the yes starts the return');
-
-  // The next press on the same page is its own card again: no standing answer for acting as the person.
-  const again = (crew as any).gate('scout', 'browser', { args: ['click', 'e8'] });
-  await until('asked again', open);
-  assert.notEqual(crew.snapshot().asks.find((a: any) => a.id === open()!.id), card, 'a new card, not the old one');
-  await crew.answer(open()!.id, { answer: 'deny' });
-  assert.equal((await again).block, true, 'the second yes was only ever for the first press');
-  await release(crew, 'scout', 'The return is started; the rest waits on its own cards.');
+  const live = crew.sessionOf('scout')!; live.page = 'https://www.shop.example/orders/98765/return'; live.snapshot = order;
+  const e = (crew as any).press('scout', { kind: 'send', press: true, words: 'Start return' }, { args: ['click', 'e8'] });
+  assert.equal(e.words, 'Scout wants to press “Start return” on shop.example, a site you signed it in to.');
+  assert.equal(e.preview.head, 'What Scout will press on shop.example');
+  assert.match(e.preview.body, /Returns are free within 30 days/); assert.match(e.preview.body, /Start return/); assert.equal(e.key, undefined);
+  for (let n = 0; n < 2; n++) assert.equal((await (crew as any).gate('scout', 'browser', { args: ['click', 'e8'] })).block, true);
+  const ask = (crew as any).openAsk('scout', task(db, t), e.words, { effect: 'send', preview: e.preview, press: true });
+  await assert.rejects(crew.answer(ask, { answer: 'allow' }), /unavailable/);
+  await crew.answer(ask, { answer: 'deny' });
   await settled(db, t);
+  assert.equal(db.get("SELECT COUNT(*) AS n FROM events WHERE kind = 'run.allowed' AND json_extract(data, '$.task') = ?", t)!.n, 0);
   done();
 });
-
 test('the chase email is a draft in the person\u2019s name: the yes records the approval, and nothing is sent', async () => {
   const { db, crew, done } = setup();
   const chase = 'Hello, my return reached you on 16 May, inside your own 30-day window. The order page still shows no refund. Please confirm the payment. Regards,';
-  const { task: t } = (await crew.post('scout', 'The shop is past its own window. Write the chase email, put it in front of me, and ask permission before anything more. '
+  const { task: t } = (await crew.assign('scout', 'The shop is past its own window. Write the chase email, put it in front of me, and ask permission before anything more. '
     + `[tool crew_write {"path":"files/chase-order-98765.md","content":"${chase.replace(/\n/g, '\\n')}"}] `
     + '[tool crew_draft {"path":"files/chase-order-98765.md","channel":"email","subject":"Order 98765 — returned 16 May, no refund yet","to":"the shop\u2019s support inbox"}] '
-    + '[tool crew_outcome {"worked": false, "seen": "The chase email is a draft on your card; reading it and sending it is yours."}]'))!;
+    + '[tool crew_outcome {"worked": false, "seen": "The chase email is a draft on your card; reading it and sending it is yours."}]', 'chief'))!;
   await until('working', () => crew.sessionOf('scout'));
   await until('the draft card', () => db.get("SELECT * FROM asks WHERE bot = 'scout' AND kind = 'propose' AND state = 'open'"));
   const ask = db.get("SELECT * FROM asks WHERE bot = 'scout' AND kind = 'propose' AND state = 'open'")!;
@@ -360,13 +303,13 @@ test('the chase email is a draft in the person\u2019s name: the yes records the 
 
 test('the order page not saying refunded ends the chase not sure, whatever else it says', async () => {
   const { db, crew, done } = setup();
-  const { task: t } = (await crew.post('scout', 'ask permission: check the order page for order 98765 and tell me whether the refund has landed. '
-    + '[tool crew_outcome {"worked": false, "seen": "The shop\u2019s order page says Return received and shows no refund, so I can\u2019t say the money is on its way."}]'))!;
+  const { task: t } = (await crew.assign('scout', 'ask permission: check the order page for order 98765 and tell me whether the refund has landed. '
+    + '[tool crew_outcome {"worked": false, "seen": "The shop\u2019s order page says Return received and shows no refund, so I can\u2019t say the money is on its way."}]', 'chief'))!;
   await until('working', () => crew.sessionOf('scout'));
   await release(crew, 'scout', 'The order page says Return received and shows no refund. I can\u2019t say the money is on its way.');
   await settled(db, t);
   assert.equal(state(db, t), 'unsure', 'without the page saying so, the job is not sure');
-  assert.match(lastSaid(db, 'scout')!, /Not sure it worked: .*Return received/);
+  assert.match(lastSaid(db, 'chief')!, /cannot confirm.*Return received/s);
   assert.doesNotMatch(lastSaid(db, 'scout')!, /refund (is|has|was) (here|arrived|issued|on its way)|refunded|money is back/i,
     'the page never said refunded, so nothing does');
   done();
@@ -403,10 +346,10 @@ test('Home lists the renewal job with the money-back three, and says what it wai
 test('a renewal caught ahead of the bill: the warning plus a cancellation email that stays a draft', async () => {
   const { db, crew, done } = setup();
   const letter = 'Hello, my Family plan renews on 14 June at $18.99. Please cancel it from that date and confirm in writing that nothing further will be charged to my card. Regards, Umer';
-  const { task: t } = (await crew.post('scout', 'ask permission: my streaming plan renews 14 June, write the cancellation and put it in front of me. '
+  const { task: t } = (await crew.assign('scout', 'ask permission: my streaming plan renews 14 June, write the cancellation and put it in front of me. '
     + `[tool crew_write {"path":"files/cancel-family-plan.md","content":"${letter.replace(/\n/g, '\\n')}"}] `
     + '[tool crew_draft {"path":"files/cancel-family-plan.md","channel":"email","subject":"Family plan — please cancel before 14 June","to":"the streaming service’s support inbox"}] '
-    + '[tool crew_outcome {"worked": false, "seen": "Your Family plan renews 14 June at $18.99, ten days ahead; the cancellation is a draft on your card, so reading it and sending it is yours."}]'))!;
+    + '[tool crew_outcome {"worked": false, "seen": "Your Family plan renews 14 June at $18.99, ten days ahead; the cancellation is a draft on your card, so reading it and sending it is yours."}]', 'chief'))!;
   await until('working', () => crew.sessionOf('scout'));
   await until('the draft card', () => db.get("SELECT * FROM asks WHERE bot = 'scout' AND kind = 'propose' AND state = 'open'"));
   const ask = db.get("SELECT * FROM asks WHERE bot = 'scout' AND kind = 'propose' AND state = 'open'")!;
@@ -429,40 +372,23 @@ test('a renewal caught ahead of the bill: the warning plus a cancellation email 
   done();
 });
 
-test('cancelling inside the account is its own card every time, naming the button and what the page says', async () => {
+test('account cancellation names the trusted action but never reports cancellation from approval or intent', async () => {
   const { db, crew, cfg, done } = setup();
   const file = join(cfg.crewDir, 'bots', 'scout', 'bot.json');
-  writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, 'utf8')), signedIn: ['stream.example'], allow: ['send:stream.example'] }, null, 2));
-  const { task: t } = (await crew.post('scout', 'ask permission: cancel my streaming plan in my account'))!;
+  writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, 'utf8')), signedIn: ['stream.example'], allow: ['send:stream.example'] }));
+  const t = crew.assign('scout', 'ask permission: inspect the streaming plan', 'chief').task;
   await until('working', () => crew.sessionOf('scout'));
-  const live = (crew as any).live.get('scout');
-  live.page = 'https://www.stream.example/account/plan';
-  live.snapshot = plan;
-  const open = () => db.get("SELECT * FROM asks WHERE bot = 'scout' AND state = 'open'");
-  const cancel = (crew as any).gate('scout', 'browser', { args: ['click', 'e9'] });
-  await until('asked', open);
-  assert.equal(state(db, t), 'needs_you', 'nothing is cancelled while the card waits');
-  const card = crew.snapshot().asks.find((a: any) => a.id === open()!.id)!;
-  assert.equal(card.detail.effect, 'send');
-  assert.equal(card.detail.press, true, 'acting on the account, never a message ready to send');
-  assert.equal(card.detail.words, 'Scout wants to press “Cancel subscription” on stream.example, a site you signed it in to.');
-  assert.equal(card.detail.preview.head, 'What Scout will press on stream.example');
-  assert.match(card.detail.preview.body, /Family plan — renews 14 June/, "what it changes, in the page's own words");
-  assert.match(card.detail.preview.body, /Cancel subscription$/, 'the button, as the page writes it');
-  assert.equal(JSON.parse(open()!.detail).key, undefined, 'a cancellation carries no key: there is no standing answer for it');
-  assert.equal(card.detail.always, undefined, 'so the card offers no Always OK, however friendly the site');
-  await crew.answer(open()!.id, { answer: 'deny' });
-  assert.equal((await cancel).block, true, 'not now keeps the plan running');
-
-  // The person's word alone never cancels: the next press is a fresh card, asked again on the same page.
-  const again = (crew as any).gate('scout', 'browser', { args: ['click', 'e9'] });
-  await until('asked again', open);
-  assert.notEqual(crew.snapshot().asks.find((a: any) => a.id === open()!.id)!.id, card.id, 'a new card, not the old one');
-  await crew.answer(open()!.id, { answer: 'allow' });
-  assert.equal(await again, undefined, 'the card’s yes is the only thing that presses');
-  await release(crew, 'scout', 'I pressed Cancel subscription on your account page; the page has to say it stopped.');
-  await settled(db, t);
-  assert.equal(state(db, t), 'unsure', 'it acted in the world and never saw the plan cancelled');
-  assert.doesNotMatch(lastSaid(db, 'scout')!, /\bcancelled\b.*(?:✓|done)|you.*(saved|stopped paying)/i, 'no claim that the plan is gone');
+  const live = crew.sessionOf('scout')!; live.page = 'https://www.stream.example/account/plan'; live.snapshot = plan;
+  const e = (crew as any).press('scout', { kind: 'send', press: true, words: 'Cancel subscription' }, { args: ['click', 'e9'] });
+  assert.equal(e.words, 'Scout wants to press “Cancel subscription” on stream.example, a site you signed it in to.');
+  assert.match(e.preview.body, /Family plan — renews 14 June/); assert.match(e.preview.body, /Cancel subscription$/);
+  assert.equal(e.key, undefined);
+  for (let n = 0; n < 2; n++) {
+    const blocked = await (crew as any).gate('scout', 'browser', { args: ['click', 'e9'] });
+    assert.equal(blocked.block, true); assert.match(blocked.reason, /unavailable/);
+  }
+  await release(crew, 'scout', 'The plan has not been cancelled.'); await settled(db, t);
+  assert.equal(db.get("SELECT COUNT(*) AS n FROM events WHERE kind = 'run.allowed' AND json_extract(data, '$.task') = ?", t)!.n, 0);
+  assert.equal(db.get("SELECT COUNT(*) AS n FROM events WHERE kind IN ('send.done','send.cancelled')")!.n, 0);
   done();
 });

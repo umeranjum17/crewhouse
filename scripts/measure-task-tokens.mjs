@@ -59,7 +59,7 @@ export async function measure({ runs = 1 } = {}) {
     crew.recruit('reel', 'Reel', 'person');
     for (let run = 1; run <= runs; run++) {
       for (const { bot, job, text } of JOBS) {
-        const { task } = await crew.post(bot, run > 1 ? `${text} (run ${run})` : text);
+        const { task } = await (bot === 'chief' ? crew.post(bot, run > 1 ? `${text} (run ${run})` : text) : crew.assign(bot, run > 1 ? `${text} (run ${run})` : text, 'chief'));
         await until(`task #${task} settled`, () => !['queued', 'working'].includes(db.get('SELECT state FROM tasks WHERE id = ?', task)?.state));
         const t = db.get('SELECT state, tokens FROM tasks WHERE id = ?', task);
         const turns = db.get("SELECT COUNT(*) AS n FROM events WHERE kind = 'run.prompted' AND json_extract(data, '$.task') = ?", task)?.n ?? 0;
