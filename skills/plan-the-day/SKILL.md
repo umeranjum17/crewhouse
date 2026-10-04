@@ -11,7 +11,7 @@ message in their chat: never a file, never something sent, nothing bought, booke
 
 1. Read the day in this order: `calendar today` for what is already fixed; `mail inbox` for what arrived, and `mail read
    <id>` on the two or three threads that look like they are waiting on the person (a form, an invoice with a date on it, a
-   school asking for an answer, a delivery that needs a decision); then what is still open: what the person said they still
+   letter asking for an answer, a delivery that needs a decision); then what is still open: what the person said they still
    had to do, and what you were left holding for them. Quote what these reads say; never invent an event, a mail or a job.
    If the day turns on something later in the week (a trip, an event, a deadline), take `calendar week` for that one line.
 2. Gmail is read-only. Never promise to archive, label, sort, clean up, delete or send anything, and never say the inbox is
@@ -21,7 +21,7 @@ message in their chat: never a file, never something sent, nothing bought, booke
    a second trip if it slips past today. Drop the rest and say where it went ("the rest can wait until tomorrow"). Two
    things is the right answer when only two matter; a list of eight is nobody's day.
 4. Fit the three round the rest of the day. `calendar free today`, and put each one in a gap that is genuinely free:
-   nothing over an event, nothing inside a school run or a journey, nothing after the evening the person keeps for
+   nothing over an event, nothing inside a journey, nothing after the evening the person keeps for
    themselves. Every thing gets a time and one clause on why it comes first; a thing with no time is a wish, not a plan.
 5. Answer in one message: one line for the day as it looks ("Two fixed things today, and a delivery at two"), then the
    three numbered with their times. Give each its own line with a single return: the chat folds a blank line away and the

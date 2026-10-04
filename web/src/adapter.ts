@@ -402,7 +402,7 @@ export const shares = (plan = 'AI plan') => [
   { key: 'full', label: 'As much as it needs', says: 'Use what the work takes' },
 ];
 /** The small line at the bottom of the side rail: how the crew's share of the account stands today. It says what Crewhouse
- *  itself knows — the share this household gave the crew — never how much of the provider's allowance is left. */
+ *  itself knows — the share the person gave the crew — never how much of the provider's allowance is left. */
 export const meter = (state: Json) => (state.share?.used ? 'The crew will carry on tomorrow' : resting(state) ? `${resting(state)}` : '');
 export function share(state: Json, plan = 'AI plan') {
   const s = state.share ?? { choice: 'light', used: false };
@@ -411,7 +411,7 @@ export function share(state: Json, plan = 'AI plan') {
     : s.choice === 'full' ? `When your ${plan} needs a rest, the crew waits and says so.` : 'The crew stays within the share you gave it.' };
 }
 
-/** The house's monthly money cap, owner only: "This month: nothing spent yet" or "$4 of $20 spent". */
+/** The person's monthly money cap: "This month: nothing spent yet" or "$4 of $20 spent". */
 export function money(state: Json) {
   if (!state.money) return null;
   const { cap, spent } = state.money as { cap: number; spent: number };
@@ -918,7 +918,7 @@ export const FIRST_IDEAS: { icon: string; label: string; bot?: string }[] = [
 ];
 
 /** The starters Hello offers: useful from the first tap, and never one that dead-ends in a connection. With Google
- *  not on for the house, the calendar starter sits out; a party plan takes its place. */
+ *  not set up yet, the calendar starter sits out; a party plan takes its place. */
 export function firstIdeas(state: Json) {
   if (state.house?.google !== false) return FIRST_IDEAS;
   return FIRST_IDEAS.filter((i) => !i.label.startsWith("What's on this week")).concat({ icon: '🎈', label: 'Help me plan a birthday party' });
@@ -1075,7 +1075,7 @@ export function withoutMemory(notes = '', i: number) {
 export const personality = (soul = '') => soul.split('\n').slice(soul.startsWith('# ') ? 1 : 0)
   .map((l) => l.replace(/^#+\s*/, '').replace(/^[-*]\s*/, '').trim()).filter(Boolean).map(plain);
 
-/** The About section, in the family's words: one trait per line, about the helper, never instructions to it.
+/** The About section, in the person's words: one trait per line, about the helper, never instructions to it.
  *  Older souls were written as a prompt ("You are Reel. You love…"): read those as facts about the helper instead. */
 export function aboutTraits(name: string, soul = ''): string[] {
   const lines = soul.split('\n');
@@ -1098,7 +1098,7 @@ export function aboutTraits(name: string, soul = ''): string[] {
 }
 /** What the person edits: the traits, one per line, nothing else. */
 export const aboutDraft = (name: string, soul = '') => aboutTraits(name, soul).join('\n');
-/** The helper's instructions, composed behind the scenes from the family's plain words. */
+/** The helper's instructions, composed behind the scenes from the person's plain words. */
 export const soulText = (name: string, draft: string) => `# ${name}\n\n## How you come across\n${draft.trim().split('\n').map((l) => `- ${l.replace(/^[-*]\s*/, '').trim()}`).filter((l) => l !== '- ').join('\n')}\n`;
 /** What a helper knows how to do, from its skills: their own descriptions, in plain words. */
 export const knows = (skills: Json[] = []) => skills.map((k) => ({ name: String(k.name), says: plain(k.says || String(k.name).replace(/-/g, ' ')), learned: !!k.learned }));
@@ -1220,7 +1220,7 @@ export const appById = (state: Json, id: string) => apps(state).find((a) => a.id
 /** Google's apps wait for the owner to switch Google on for your crew (once, in Settings). */
 export const needsHouse = (state: Json, app: App) => signsInWith(app) === 'Google' && state.house?.google === false;
 
-// v1: Drive, Calendar and Gmail on the household's Google app, then Notion and Canva. Sharing from the phone needs no
+// v1: Drive, Calendar and Gmail on the person's own Google app, then Notion and Canva. Sharing from the phone needs no
 // connection at all. Calendar and Gmail show Google's "unverified app" screen, so their card warns first.
 const APPS: App[] = [
   { id: 'drive', name: 'Google Drive', mark: '▲', bg: '#fbbc04', on: false, does: 'Helpers can save copies of what they make, and open files you pick.' },

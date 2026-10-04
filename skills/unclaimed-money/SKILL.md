@@ -1,7 +1,7 @@
 ---
 name: unclaimed-money
-description: Search the government's own unclaimed-money registers for the family's names and old addresses, and get a claim ready to file. Use for "money owed to us", "unclaimed money", "old deposit or refund nobody claimed".
-says: I'll search the government's unclaimed-money registers for our names and get the claims ready to file
+description: Search the government's own unclaimed-money registers for the person's name and old addresses, and get a claim ready to file. Use for "money owed to me", "unclaimed money", "old deposit or refund nobody claimed".
+says: I'll search the government's unclaimed-money registers for your name and get the claims ready to file
 ---
 
 # Unclaimed money
@@ -13,7 +13,7 @@ once claimed, is theirs alone: Crewhouse never takes a cut, and you never use a 
    treasurer. You can tell one by its home: a government address, and it says search is free. Never use an aggregator or a
    paid finder — their whole business is a fee or a share of what they find. If a page asks for payment to search or to
    claim, leave it and say why in one line.
-2. Search for each person by name, one at a time: current name, and any name they used before (a maiden name, an older
+2. Search for the person by name, one name at a time: current name, and any name they used before (a maiden name, an older
    spelling). Then search again for each old address they give you — property is often filed under where it was owed. Note
    what you searched, so a "nothing found" is a searched nothing, not a skipped one.
 3. Proof is the register's own page and nothing else: the property (wages, a deposit, a refund), the holder holding it, the
@@ -24,7 +24,7 @@ once claimed, is theirs alone: Crewhouse never takes a cut, and you never use a 
    person reads the pack before anything is filed; deliver it with `crew_deliver` so it shows on the card.
 5. Filling the claim happens on the register's own site, and nothing goes in without a card. Where the person signed you
    in to the register, each line asks on its own card; anywhere else the lines wait for the submit card, which names every
-   one — the form's own label and what will go in it. There is no "always": the family's identity is in those lines. Fill
+   one — the form's own label and what will go in it. There is no "always": the person's identity is in those lines. Fill
    only what the form asks. Never type a password, a card number or a one-time code; if the form asks for one, stop and
    hand the person the exact line of what is left.
 6. Documents and signatures stay with the person, always. If the claim wants identity papers uploaded, or a signature, do

@@ -65,7 +65,7 @@
     },
     {
       "needs": [
-        "your home assistant's address and sign-in, kept locked away"
+        "your Home Assistant's address and sign-in, kept locked away"
       ],
       "owner": "anotb",
       "publisher": "anotb",
@@ -81,7 +81,7 @@
       "summary": "Ask about and control the person's Home Assistant: lights, climate, presence, automations.",
       "verdict": "Well-written with its own safety lines (locks, alarms and garage doors always ask first). Off until the person connects their home: the token lives in the crew's locked store, never in chat, and anything touching locks or alarms asks every time.",
       "version": "2.1.0",
-      "why": "“Is anyone home, is the heating on” is a personal-crew question; this answers it where the person already runs a home assistant.",
+      "why": "“Is anyone home, is the heating on” is a personal-crew question; this answers it where the person already runs Home Assistant.",
       "name": "Home Assistant"
     }
   ],
@@ -131,7 +131,7 @@
       "slug": "steipete/openai-whisper"
     },
     {
-      "reason": "A vetting helper for skill authors, not something the household asks for day to day.",
+      "reason": "A vetting helper for skill authors, not something a person asks for day to day.",
       "slug": "spclaudehome/skill-vetter"
     }
   ]

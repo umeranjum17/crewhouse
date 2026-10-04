@@ -59,7 +59,7 @@ if (!(await up())) {
     writeFileSync(page, `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Crewhouse</title>
 <style>
-/* The app's own values (web/src/tokens.ts): the same day and night a family sees everywhere else. */
+/* The app's own values (web/src/tokens.ts): the same day and night the person sees everywhere else. */
 :root{color-scheme:light dark;--bg:#F6F7F9;--surface:#FFF;--ink:#141A2A;--ink2:#4D566B;--mute:#8A92A5;--fill:#F0482A;--line:#E3E6EC}
 @media (prefers-color-scheme:dark){:root{--bg:#111014;--surface:#1A191E;--ink:#F1EFEA;--ink2:#ABA7B1;--mute:#78747E;--fill:#FF6A4D;--line:#2A2830}}
 body{margin:0;background:var(--bg);color:var(--ink);font:400 15px/1.55 'Inter',system-ui,sans-serif}

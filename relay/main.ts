@@ -1,8 +1,8 @@
-// Crewhouse's relay: @byokit/relay with Crewhouse's settings, so a phone reaches the family computer from anywhere
+// Crewhouse's relay: @byokit/relay with Crewhouse's settings, so a phone reaches the person's computer from anywhere
 // without the computer opening a port. It routes link frames it cannot read. Push is content-free: whatever a host
 // asks, a phone is only told "Crewhouse has news" and fetches the text over the encrypted link.
 //
-// Run: `node relay/main.ts` (env below), or the Dockerfile beside it. There is no hosted copy: a family runs
+// Run: `node relay/main.ts` (env below), or the Dockerfile beside it. There is no hosted copy: a person runs
 // their own (relay/README.md) and points Settings, Phones at it.
 //   PORT (7300), HOST (127.0.0.1), RELAY_DATA (./relay-data): where it listens and keeps its state
 //   RELAY_SIGNUP: 'enrol' (default: a host needs a one-use enrolment from the owner) or 'open' (any host that proves

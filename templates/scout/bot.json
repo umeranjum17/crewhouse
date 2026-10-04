@@ -51,8 +51,8 @@
         "web"
       ],
       "group": "life",
-      "promise": "Once a week I'll plan seven dinners everyone will actually eat, write the shopping list sorted by aisle, and put the shop day on your calendar. If you want, I'll fill the cart too — you approve it like any purchase.",
-      "ask": "Plan our dinners for the week and write the shopping list"
+      "promise": "Once a week I'll plan seven dinners you will actually eat, write the shopping list sorted by aisle, and put the shop day on your calendar. If you want, I'll fill the cart too — you approve it like any purchase.",
+      "ask": "Plan my dinners for the week and write the shopping list"
     },
     {
       "needs": [
@@ -132,7 +132,7 @@
         "web"
       ],
       "group": "life",
-      "promise": "Once a month I'll write the short story of what happened in our world — the topics, names and places you care about — with a link for every claim, as a document you keep.",
+      "promise": "Once a month I'll write the short story of what happened in your world — the topics, names and places you care about — with a link for every claim, as a document you keep.",
       "ask": "Write me the month in brief"
     },
     {

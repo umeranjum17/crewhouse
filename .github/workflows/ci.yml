@@ -35,7 +35,7 @@ jobs:
       - run: npm test # stub runner only: no Herdr, no CLI, no model calls
 
   package:
-    # The one download, built and installed as a family would: apt brings bubblewrap and Xvfb, the menu entry's
+    # The one download, built and installed as a person would: apt brings bubblewrap and Xvfb, the menu entry's
     # launcher starts crewd from /opt/crewhouse with its own Node, and the app answers.
     runs-on: ubuntu-latest
     timeout-minutes: 15

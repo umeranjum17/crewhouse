@@ -231,7 +231,7 @@ export class Link {
       .catch((e) => { console.error('phone link: mDNS:', e.message); return undefined; });
   }
 
-  /** Every address a phone can dial now: the home network, Tailscale, then the family's relay. */
+  /** Every address a phone can dial now: the home network, Tailscale, then the person's own relay. */
   urls() {
     const direct = this.servers.size ? phoneAddresses([...this.servers.keys()], this.ifaces(), this.tailnetIPs).map((ip) => `ws://${ip}:${this.cfg.linkPort}/link`) : [];
     return [...direct, ...(this.relayUrl() ? [this.relayUrl()] : [])];
@@ -252,7 +252,7 @@ export class Link {
     await this.bind();
   }
 
-  /** The family's own relay, from Settings, else CREWHOUSE_RELAY. Empty (the default): no relay. */
+  /** The person's own relay, from Settings, else CREWHOUSE_RELAY. Empty (the default): no relay. */
   get relay(): string { return this.db.get("SELECT value FROM settings WHERE key = 'link.relay'")?.value ?? this.cfg.relay; }
 
   /** An `https://` or `wss://` address (`http`/`ws` for a relay on the home network or Tailscale); '' turns the relay
@@ -332,7 +332,7 @@ export class Link {
     const to = this.host.devices().map((g) => g.id);
     const phones = to.map((d) => [d, this.setting(`phone.push.${d}`)]).filter(([, t]) => isExpoToken(t));
     if (phones.length) await this.expo(id, phones as [string, string][]).catch((e) => console.error('push:', e.message));
-    // A browser's Web Push address is kept on the family's relay, which holds the key for it.
+    // A browser's Web Push address is kept on the person's relay, which holds the key for it.
     if (to.length && this.client && this.relayStatus === 'online') await this.client.notify({ id, title: NEWS, to }).catch((e) => console.error('push:', e.message));
   }
 

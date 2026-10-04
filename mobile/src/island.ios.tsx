@@ -1,6 +1,6 @@
 // The crew on the iPhone's Lock Screen and Dynamic Island (a Live Activity), over expo-widgets: the one file that
 // imports it (island.ts stands in on Android, where neither is linked). It shows the same adapter.status() as the Android
-// chip, from the app's own refresh: local updates only, since crewd's pushes carry no content and a family's computer
+// chip, from the app's own refresh: local updates only, since crewd's pushes carry no content and the person's computer
 // holds no Apple push key.
 import { HStack, Image, Link, Text, VStack } from '@expo/ui/swift-ui';
 import { font, minimumScaleFactor, opacity, padding } from '@expo/ui/swift-ui/modifiers';

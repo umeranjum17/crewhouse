@@ -63,7 +63,7 @@ export function browserAsk(command: string, url: string, signedIn: string[], fil
   try { host = new URL(url).hostname.replace(/^www\./, ''); } catch { /* no page yet */ }
   if (PAYMENT.test(url)) return { spend: true, host: host || 'a shop' };
   if (host && signedIn.some((d) => host === d || host.endsWith(`.${d}`))) return { spend: false, host };
-  // Submitting a form the helper typed into asks wherever it is, signed in or not: it files the family's own words.
+  // Submitting a form the helper typed into asks wherever it is, signed in or not: it files the person's own words.
   // More typing on that same form stays free — the lines ride the submit card.
   if (host && host === filledHost && /^(click|dblclick|press)$/.test(command)) return { spend: false, host };
   return null;

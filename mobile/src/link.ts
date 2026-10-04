@@ -193,7 +193,7 @@ type Said = { anywhere?: string; peer?: boolean; reached?: { tailscale?: number 
 const SAID = 'crewhouse.said';
 let said: Said = {};
 void SecureStore.getItemAsync(SAID).then((s) => { if (s) said = { ...JSON.parse(s), ...said }; }).catch(() => {});
-/** Which route an address is: the family's relay, Tailscale, or the home network. */
+/** Which route an address is: the person's relay, Tailscale, or the home network. */
 const route = (u = '') => (/\/link\/v1\//.test(u) ? 'relay' : tailnet(u.replace(/^\w+:\/\//, '')) ? 'tailscale' : 'home');
 
 const tailnet = (ip: string) => /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(ip);
