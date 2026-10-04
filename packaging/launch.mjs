@@ -36,6 +36,7 @@ function show(where) {
   spawn(cmd, args, { detached: true, stdio: 'ignore' }).unref();
 }
 
+let why = 'Crewhouse started, but never answered'; // what actually went wrong, in words the person can act on
 if (!(await up())) {
   // A login service where the desktop has one; otherwise crewd runs on its own until the computer restarts.
   if (!(systemd() && service())) {
@@ -43,7 +44,8 @@ if (!(await up())) {
     mkdirSync(log, { recursive: true });
     const out = openSync(join(log, 'crewd.log'), 'a');
     // It may not even start (a half-removed install); the wait below then shows the plain screen.
-    spawn(node, ['src/main.ts'], { cwd: app, env, detached: true, stdio: ['ignore', out, out] }).on('error', () => {}).unref();
+    spawn(node, ['src/main.ts'], { cwd: app, env, detached: true, stdio: ['ignore', out, out] })
+      .on('error', () => { why = "Crewhouse's own program could not be started on this computer"; }).unref();
   }
   for (let i = 0; i < 60 && !(await up()); i++) await new Promise((r) => setTimeout(r, 500));
   // Nothing came up. From the app menu there is no terminal to read a path in, so the person gets a plain screen instead.
@@ -54,7 +56,8 @@ if (!(await up())) {
     writeFileSync(page, `<!doctype html><meta charset="utf-8"><title>Crewhouse</title>
 <body style="font:16px/1.5 system-ui;margin:12vh auto;max-width:34rem;padding:0 1.5rem">
 <h1 style="font-size:1.4rem">Crewhouse didn't start</h1>
-<p>Nothing is wrong with your computer yet — Crewhouse just needs another try, or a restart.</p>
+<p><b>What happened:</b> ${why}.</p>
+<p>Nothing is wrong with your computer — Crewhouse just needs another try, or a restart.</p>
 <p>Close this window and open Crewhouse again from your app menu. If it keeps happening, restart your computer and try once more.</p></body>`);
     show(`file://${page}`);
     process.exit(1);
