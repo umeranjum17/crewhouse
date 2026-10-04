@@ -1588,6 +1588,37 @@ test('a delivered .mp4 shows a video badge, never DOCX', () => {
   assert.doesNotMatch(app, /'DOCX'|'XLSX'|'PDF'/, 'no badge is a hardcoded default; every chip comes from the file');
 });
 
+// The office holds all of the person's helper jobs, steps, questions and first looks.
+const OTN = Date.now();
+const oBot = (id: string, name: string, extra: Json = {}) => ({ id, display: name, template: id, role: `${name} helps out`,
+  controls: 'bot', computer: false, queued: 0, pausedUntil: null, unread: 0, stuck: false, ...extra });
+const oTask = { reel: { id: 41, title: "Mum's birthday video", state: 'working' },
+  scout: { id: 42, title: 'Flights to Lahore in December', state: 'working' },
+  scribe: { id: 43, title: 'Thank-you note for Aunty Sara', state: 'needs_you' },
+  pip: { id: 51, title: 'Car insurance renewal', state: 'working' },
+  tracer: { id: 44, title: "Sara Malik's work email", state: 'needs_you' } } as Record<string, Json>;
+const oStep = { reel: { seq: 11, at: OTN, kind: 'run.tool', data: { task: 41, words: 'Timing the photos to the music' } },
+  scout: { seq: 12, at: OTN, kind: 'task.progress', data: { task: 42, text: 'Comparing three airlines' } },
+  pip: { seq: 13, at: OTN, kind: 'run.tool', data: { task: 51, words: 'Putting the prices side by side' } } } as Record<string, Json>;
+function officeState(): Json {
+  const bots = ['reel', 'scout', 'scribe', 'pip', 'tracer'].map((id) =>
+    oBot(id, id[0].toUpperCase() + id.slice(1), { task: { ...oTask[id] }, step: oStep[id] ?? null }));
+  const asks = [
+    { id: 7, bot: 'scribe', kind: 'permission', at: OTN, detail: { effect: 'send', words: 'Scribe wants to email your thank-you note to Aunty Sara. Send it?',
+      preview: { head: 'To Aunty Sara', body: 'Dear Aunty Sara, thank you for Sunday dinner' } } },
+    { id: 8, bot: 'tracer', kind: 'permission', at: OTN, detail: { effect: 'spend', spends: true, words: 'Tracer wants one paid lookup to confirm the address. OK?' } },
+  ];
+  const tasks = [{ id: 21, bot: 'scout', title: "This week's dinners", state: 'done', updated_at: OTN,
+    files: ['files/dinners-and-shopping-list.md'], result: 'Seven dinners the kids will actually eat, and one shopping list sorted by aisle.' }];
+  const events = [oStep.reel, oStep.scout, oStep.pip,
+    { seq: 14, at: OTN, kind: 'file.delivered', bot: 'reel', data: { task: 41, path: 'files/birthday-first-look.png', note: 'A still from the opening' } },
+    { seq: 15, at: OTN, kind: 'file.delivered', bot: 'pip', data: { task: 51, path: 'files/car-insurance-prices.xlsx', note: 'This year against two others' } },
+  ];
+  return { person: { id: 1 }, asks, tasks, events, resting: {}, ideas: [],
+    bots: [{ id: 'chief', display: 'Chief', template: 'chief' }, ...bots] };
+}
+const OJARGON = /\b(relay|noise|tickets?|grants?|daemon|crewd|engine|tokens?|ports?|stub|hosted?|links?|host)\b/i;
+
 test('the office holds the person’s whole crew and all their jobs', () => {
   const room = A.office(officeState());
   assert.deepEqual(room.crew.map((c) => c.id), ['reel', 'scout', 'scribe', 'pip', 'tracer']);
