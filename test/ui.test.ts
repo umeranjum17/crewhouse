@@ -422,6 +422,10 @@ test('first success: starters never dead-end, and setup stays in Settings', () =
     'any signed-in account finishes the job, not only the front door');
   const half = A.homeSetup({ house: { google: false } }, [{ account: 'chatgpt', name: 'ChatGPT', signedIn: false }], { anywhere: 'anywhere' });
   assert.deepEqual(half.rows.filter((r) => !r.done).map((r) => r.key), ['signin', 'google']);
+  assert.equal(half.rows[0].says, 'An AI plan the crew can think with', 'nobody signed in: no provider is named');
+  const claude = [{ account: 'chatgpt', signedIn: false }, { account: 'claude', name: 'Claude', signedIn: true }];
+  assert.equal(A.homeSetup({ house: {} }, claude, null).rows[0].says, 'The crew thinks with your Claude plan', 'the plan actually in use, never ChatGPT');
+  assert.equal(A.planName(openrouter), 'OpenRouter account', 'a pay-per-use route is not called a plan');
   const web = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
   assert.doesNotMatch(web, /MemberRow|memberSetup|set me up for you/, 'Home and Hello serve one person');
   assert.match(web, /<SetupRow state=\{state\}/, 'the person keeps the setup checklist');
@@ -436,13 +440,14 @@ test('the runs-at-home line is said once, in the same plain words, in all three 
   const [here, only] = A.atHome();
   assert.equal(here, 'Your helpers live on this computer and use your own sign-ins.', 'no technical words, no vendor voice');
   // honest about what does leave: what a job needs, to ChatGPT or the app it's using (README, "Nothing leaves your machine…")
-  assert.equal(only, "Nothing you tell them is kept anywhere else — only what a job needs goes to your AI account or the app it's using.");
+  assert.equal(only, "Nothing you tell them is kept anywhere else — only what a job needs goes to your AI plan or the app it's using.");
+  assert.match(A.atHome(undefined, 'Claude plan')[1], /goes to your Claude plan or/, 'Settings names the plan in use');
   assert.doesNotMatch(`${here} ${only}`, FORBIDDEN);
   assert.match(A.atHome('the home computer')[0], /^Your helpers live on the home computer and use your own sign-ins\.$/, 'the phone names the home computer');
   const web = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
   assert.equal([...web.matchAll(/A\.atHome\(/g)].length, 2, 'Hello and Settings both quote it; nobody paraphrases it');
   assert.match(web, /<ul className="promises">\s+<li>[^<]+<\/li>\s+<li>\{A\.atHome\(\)\[1\]\}<\/li>\s+<li>[^<]+<\/li>\s+<\/ul>/, "it sits in Hello's promises, the same three rows as before");
-  assert.match(web, /<h1>Settings<\/h1>\s+<p className="mute small">\{A\.atHome\(\)\.join\(' '\)\}<\/p>/, 'Settings says it under the title, in the quiet style');
+  assert.match(web, /<h1>Settings<\/h1>\s+<p className="mute small">\{A\.atHome\(undefined, A\.planName\(accounts\)\)\.join\(' '\)\}<\/p>/, 'Settings says it under the title, in the quiet style');
   const app = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
   assert.equal([...app.matchAll(/A\.atHome\('the home computer'\)/g)].length, 3, 'the phone quotes it at first run (two lines) and on This phone');
   assert.match(app, /\{A\.atHome\('the home computer'\)\.join\(' '\)\}<\/T>\s+<T tone="mute" style=\{s\.small\}>🔒/, 'on This phone it sits above the lock line');
@@ -1314,7 +1319,9 @@ test('a patch is only ever a suggested change, never a fix, wherever the app wor
 });
 
 test('the week under the share is a third in words, never a number', () => {
-  assert.equal(A.share({ share: { choice: 'light', used: false, week: 'fair' } }).week, 'This week the crew has used a fair part of what it may use of your AI account.');
+  assert.equal(A.share({ share: { choice: 'light', used: false, week: 'fair' } }).week, 'This week the crew has used a fair part of what it may use of your AI plan.');
+  assert.equal(A.share({ share: { choice: 'full', used: false } }, 'Claude plan').today, 'When your Claude plan needs a rest, the crew waits and says so.');
+  assert.equal(A.shares('Claude plan')[0].says, 'Leave most of my Claude plan for me');
   assert.equal(A.share({ share: { choice: 'full', used: false, week: null } }).week, '');
   for (const w of ['small', 'fair', 'most']) assert.doesNotMatch(A.share({ share: { choice: 'light', week: w } }).week, /\d|%/);
 });

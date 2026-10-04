@@ -1123,6 +1123,10 @@ test('chats: each thread\'s last line and unread count are the person\'s; readin
   const v = view();
   assert.equal(v.reel.last.author, 'bot');
   assert.match(v.reel.last.text, /birthday card/);
+  const long = `${'Tell me what to take off your plate. '.repeat(5)}And more.`;
+  crew.say('chief', 'bot', long, null);
+  const cut = view().chief.last.text;
+  assert.ok(cut.length <= 160 && cut.endsWith('…') && long.startsWith(`${cut.slice(0, -1)} `), `a long line ends on a whole word with an ellipsis: ${cut}`);
   assert.equal(v.reel.unread, 1, 'the reply is new; the person\'s own line is not');
   assert.equal(v.chief.unread, chiefBefore);
 

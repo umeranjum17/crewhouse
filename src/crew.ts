@@ -560,8 +560,8 @@ export class Crew {
   private static UNSEEN = "author != 'person' AND (author != 'system' OR bot = 'chief' OR text LIKE 'Delivered %')";
   private chat(bot: string) {
     const mine = 'bot = ?';
-    const last = this.db.get(`SELECT author, substr(text, 1, 160) AS text, at FROM messages WHERE ${mine} ORDER BY id DESC LIMIT 1`, bot);
-    if (last) last.text = cleanReply(last.text);
+    const last = this.db.get(`SELECT author, text, at FROM messages WHERE ${mine} ORDER BY id DESC LIMIT 1`, bot);
+    if (last) last.text = short(cleanReply(last.text), 160);
     const seen = this.db.get('SELECT seen FROM reads WHERE bot = ?', bot)?.seen ?? 0;
     const unread = this.db.get(`SELECT COUNT(*) AS n FROM messages WHERE ${mine} AND id > ? AND ${Crew.UNSEEN}`, bot, seen)!.n as number;
     return { last: last ?? null, unread };
