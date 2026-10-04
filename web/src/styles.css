@@ -368,14 +368,6 @@ a.back:not([aria-label]) { font: 500 15px/20px var(--ui); padding: 0 8px; margin
   .crew-grid .pal-card .pill { padding: 2px 0; background: none; box-shadow: none; }
   .crew-grid .pal-card.add { padding: 14px 16px; }
 }
-.grid.things { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
-.thing .media { margin: 0 0 10px; }
-.thing .wb-card, .thing .doc { margin: 0 0 12px; max-width: none; }
-/* In a Things card the whole card opens it, so the name keeps the width an Open button would take. */
-.thing .wb-open, .thing .doc > b { display: none; }
-.thing .cover span { font-size: 20px; padding: 0 40px; }
-.thing p { margin: 4px 0; font-size: 14px; }
-.by { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
 .routine.paused { opacity: .7; }
 .form { display: grid; gap: 10px; }
 .pal-chip { padding: 4px 12px 4px 4px; }

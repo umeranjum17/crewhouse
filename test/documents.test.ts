@@ -8,6 +8,7 @@ import { temp } from './tmp.ts';
 import { setup, settled, task } from './lab.ts';
 import { buildDocument, readDocument } from '../src/documents.ts';
 import * as disk from '../src/bots.ts';
+import * as A from '../web/src/adapter.ts';
 
 const call = (tool: string, input: object) => `[tool ${tool} ${JSON.stringify(input)}]`;
 
@@ -97,6 +98,9 @@ test('a helper makes one in its own chat: the file lands in files/, is delivered
   const other = (await crew.post('quill', `and a table ${call('crew_deliver', { path: 'files/table.csv' })}`))!.task;
   await settled(db, other);
   await assert.rejects(() => crew.documentView('quill', 'files/table.csv'), /no such document/, 'only a page is read as one');
+
+  // Quill's shelf (Details, "What Quill made") is exactly what it delivered, newest first: never the undelivered draft.
+  assert.deepEqual(A.made(crew.snapshot(), 'quill').map((f) => A.fileSource(f.url)?.path), ['files/table.csv', 'files/weekly-dinners.md', rel]);
 });
 
 
