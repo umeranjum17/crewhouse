@@ -4,17 +4,9 @@ A first walk through your Crewhouse personal assistant on your own computer, abo
 
 ## 1. Install and start
 
-You need Node 22.22.3 or later, and bubblewrap for the bots' shell (`./crewhouse doctor` tells you what is missing). Crewhouse brings what it needs; sign in from the app.
+Download **`crewhouse_<version>_amd64.deb`** from the [releases page](https://github.com/umeranjum17/crewhouse/releases) (about 200 MB), double-click it, and press **Install** in your software centre — it brings the helpers' sandbox and screens with it. Then open **Crewhouse** from your app menu; Chief greets you on his own. Nothing to type and no terminal anywhere.
 
-```bash
-git clone https://github.com/umeranjum17/crewhouse ~/crewhouse && cd ~/crewhouse
-./crewhouse setup    # answer Y to install the browser (its own Chromium, about 170 MB) and MarkItDown
-./crewhouse start    # leave it running in this terminal
-```
-
-Open **http://127.0.0.1:7711**.
-
-Everything lives in `~/.local/state/crewhouse/` (the database, the engine's own folder and your sign-ins), `~/Crewhouse/` (the bots) and `~/.local/share/crewhouse/tools/` (the tool kit). Your own `pi`, if you have one, is never touched. `./crewhouse uninstall --all` removes all of it.
+Crewhouse keeps everything in one folder under your system program directory, plus your own crew folder `~/Crewhouse/`. Your own `pi`, if you have one, is never touched. From a checkout, `./crewhouse uninstall --all` removes all of it; on the installed one, your software centre removes it.
 
 ## 2. What to test first
 
@@ -31,9 +23,9 @@ Everything lives in `~/.local/state/crewhouse/` (the database, the engine's own 
    - Press **Run now** on **Morning digest**. Chief posts what finished, what needs you and what is coming up, in your thread.
 7. **Your settings.** Under **Settings, You**, edit your name, how Chief addresses you, your quiet hours and how much of your AI the crew may use. One install is for you and your crew.
 8. **An app.** Ask Scribe to find something in your Notion: Scribe asks for it with a **Connect Notion** card in the chat. Tap it, allow Crewhouse on Notion's page, and Scribe carries on; reading runs at once, adding a page asks first. (Or connect ahead of time under **Settings, Your apps**.) For Google Calendar, Gmail and Drive, first switch Google on under **Settings, Google setup** ([docs/google-setup.md](docs/google-setup.md)).
-9. **Restart mid-task.** While Reel is working (or waiting on you), press Ctrl-C in the computer terminal, then run `./crewhouse start` again. Reel's **What I did** tab shows *Picked up where it left off*, and a waiting approval can still be answered.
+9. **Restart mid-task.** Restart your computer while Reel is working (or waiting on you). Crewhouse starts by itself when you log in, Reel's **What I did** tab shows *Picked up where it left off*, and a waiting approval can still be answered.
 
-Then run `./crewhouse doctor` in a second terminal.
+From a checkout, run `./crewhouse doctor` in a second terminal instead.
 
 ## 3. The phone app
 

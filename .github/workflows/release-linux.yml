@@ -1,0 +1,27 @@
+name: Linux desktop release
+
+# The one download a family installs without a terminal: build the .deb and attach it to a GitHub release.
+# Push a tag (linux-v<version>) and the asset lands there; nobody types a command to install it.
+on:
+  push:
+    tags: ['linux-v*']
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: node scripts/prepare-engine.mjs "$RUNNER_TEMP/engine-prepare"
+      - run: npm run build:web
+      - run: node scripts/package.mjs
+      # The software centre reads the version out of package.json; the tag's own suffix stays off the package version.
+      - run: gh release create "$GITHUB_REF_NAME" --generate-notes --prerelease dist/crewhouse_*_amd64.deb

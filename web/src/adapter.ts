@@ -85,8 +85,8 @@ export const dayLabel = (t: number, now = new Date()) => {
 /**
  * The runs-at-home promise, said once and read in three places: Hello, Settings, and the phone's This phone.
  * Each part is true of the code as it ships — the database, the crew's notes and everyone's sign-ins live on this
- * machine and crewd has no server of its own (README); a job's own words are the only thing sent to ChatGPT or a
- * connected app (src/engine.ts, src/connections.ts); a phone notification carries no words at all (src/link.ts).
+ * machine and crewd has no server of its own (README); a job's own words are the only thing sent to the person's own
+ * AI account or a connected app (src/engine.ts, src/connections.ts); a phone notification carries no words at all (src/link.ts).
  * `home` names the machine from wherever the line is read. Keep it free of technical words; test/ui.test.ts pins it.
  */
 export const atHome = (home = 'this computer') => [

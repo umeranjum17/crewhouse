@@ -458,8 +458,8 @@ if (variant === 'b1' || variant === 'b1handoff' || variant === 'b1after') {
 if (variant === 'wheeled') { Object.assign(bots.find((b) => b.id === 'scout')!, { controls: 'person' }); pages.scout = { ...pages.scout, signedIn: ['shop.example'] }; }
 for (const [id, p] of Object.entries(pages)) p.trail = events.filter((e) => e.bot === id);
 
-// Every subscription route the app really offers, so the demo's Settings shows the honest matrix: ChatGPT carries
-// the sign-in states, the rest stand there untested until you sign in to one.
+// Every subscription route the app really offers, so the demo's Settings shows the honest matrix: the front-door
+// account carries the sign-in states, the rest stand there untested until you sign in to one.
 const accounts = AIS.map((ai) => ({ account: ai.key, name: ai.name,
   signedIn: ai.key === 'chatgpt' && (!signin || variant === 'work'),
   restingUntil: ai.key === 'chatgpt' && variant === 'resting' ? now + 95 * min : 0,
