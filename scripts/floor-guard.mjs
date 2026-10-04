@@ -71,8 +71,9 @@ const isTest = (f) => /\.(test|spec)\.|_test\.|test_/.test(f);
 const isConstraints = (f) => /CONSTRAINTS\.md$/.test(f);
 
 // A `.constraintsignore` (one glob per line, `#` comments) exempts a path from the pattern flags
-// only — the files that must name the floor's own patterns. Structural checks (a deleted test, a
-// removed rule, a moved threshold) still apply to every path, so an ignore never hides a loosening.
+// and counts as a recorded reason for a skip, a deleted test or a removed assertion. Threshold and
+// rule changes in CONSTRAINTS.md still apply to every path, so an ignore never hides a loosening
+// of the bar itself.
 const glob = (g) => new RegExp('^' + g.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*\*/g, '\u0000').replace(/\*/g, '[^/]*').replace(/\u0000/g, '.*') + '$');
 const ignored = (() => {
   try { return readFileSync('.constraintsignore').toString().split('\n')
@@ -87,19 +88,28 @@ const STUBS = /throw new (Error|NotImplemented).*[Nn]ot implemented|catch\s*\(\w
 // 2. A test made easier (added skips).
 const SKIPS = /\.(skip|todo)\b|\bxit\(|\bxdescribe\(|@pytest\.mark\.skip|t\.Skip\(/;
 
+// 2/2b. A skip, a deleted test or a removed assertion passes with a recorded reason and blocks
+// without one (Floor: "without a reason in the commit message"). A reason is a commit in the
+// range whose message names the file (path or basename), or a `.constraintsignore` entry for it.
+const messages = git(['log', '--format=%B', mergeBase + '..HEAD']) ?? '';
+const reasoned = (f) => isIgnored(f) || messages.split('\n').some((l) => {
+  const t = l.trim();
+  return t !== '' && (t.includes(f) || t.includes(f.split('/').pop() ?? f));
+});
+
 for (const { file, text } of added) {
   if (!isIgnored(file)) {
     if (SUPPRESSIONS.test(text)) flag('silenced-checker', file, text);
     if (STUBS.test(text)) flag('unfinished-work', file, text);
-    if (SKIPS.test(text)) flag('test-made-easier', file, text);
+    if (SKIPS.test(text) && !reasoned(file)) flag('test-made-easier', file, text);
   }
   if (isConstraints(file) && /^\| *(W|E)\d+ *\|/.test(text)) flag('new-exception', file, text);
 }
 
 // 2b. A test file deleted, or an assertion removed from a test file that still exists.
-for (const f of deleted) if (isTest(f)) flag('test-deleted', f, 'file deleted');
+for (const f of deleted) if (isTest(f) && !reasoned(f)) flag('test-deleted', f, 'file deleted');
 for (const { file, text } of removed) {
-  if (isTest(file) && !deleted.includes(file) && /\b(expect|assert|should)\b/.test(text)) {
+  if (isTest(file) && !deleted.includes(file) && !reasoned(file) && /\b(expect|assert|should)\b/.test(text)) {
     flag('assertion-removed', file, text);
   }
 }
@@ -164,5 +174,5 @@ for (const f of findings) console.error(`  [${f.rule}] ${f.file}: ${f.text}`);
 if (findings.some((f) => f.rule === 'rule-removed')) {
   console.error("\nA rule-removed finding can also mean the rule's label changed: rename a rule in one commit and change its thresholds in another.");
 }
-console.error('\nEach is a move that lowers the bar. Fix the code, or route it through a tracked exception.');
+console.error('\nEach is a move that lowers the bar. Fix the code, name the file with a reason in the commit message (test rules), or route it through a tracked exception.');
 process.exit(1);
