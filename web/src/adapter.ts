@@ -430,6 +430,13 @@ export function chief(state: Json, local: ChiefLocal = {}): ChiefView {
   return v;
 }
 
+/** Chief's chat top strip: his one line as standing state — who needs you, who is on what, who is resting. Never the
+ *  echo of a job that just finished: when that was the last thing to happen, the strip says how things stand ("All quiet."). */
+export function stripLine(state: Json, local: ChiefLocal = {}) {
+  const v = chief(state, local);
+  return v.mood === 'happy' ? 'All quiet.' : v.line;
+}
+
 /** The priority table, minus the listen row (the caller's `local` carries it, with offline and the sign-in). */
 function chiefRow(state: Json, local: ChiefLocal): ChiefView {
   const all = crew(state);

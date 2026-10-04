@@ -615,11 +615,11 @@ function Room(ctx: Ctx) {
 }
 
 function ChiefPage(ctx: Ctx & { m?: string }) {
-  const { mood, line } = A.chief(ctx.state, chiefLocal(ctx, useListen()));
+  const local = chiefLocal(ctx, useListen());
   return (
     <div className="page chat-page">
       <header className="chat-head sticky-top"><a href="#/" className="back" aria-label="Back" onClick={(e) => { e.preventDefault(); back(); }}>‹</a><Face who="chief" size={32} />
-        <div className="grow"><b>Chief</b><div className="mute small clamp1">{line}</div></div>
+        <div className="grow"><b>Chief</b><div className="mute small clamp1">{A.stripLine(ctx.state, local)}</div></div>
         <button className="link" onClick={() => go('#/h/chief/did')}>What happened</button></header>
       <Chat {...ctx} id="chief" m={ctx.m} />
     </div>
