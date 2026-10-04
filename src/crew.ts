@@ -667,7 +667,7 @@ export class Crew {
   private offerRoutine(p: Parameters<Crew['planRoutine']>[0]) {
     const plan = this.planRoutine(p);
     const host = plan.watch ? new URL(plan.watch).hostname.replace(/^www\./, '') : '';
-    const what = plan.watch ? `Keeps an eye on ${host}` : `${plan.bot.display} will ${plan.first.charAt(0).toLowerCase()}${plan.first.slice(1)}`;
+    const what = plan.watch ? `Keeps an eye on ${p.name?.trim() || host}` : `${plan.bot.display} will ${plan.first.charAt(0).toLowerCase()}${plan.first.slice(1)}`;
     const start = [plan.when ? describe(plan.when) : '', plan.on ? describeTrigger(parseTrigger(plan.on), plan.bot.display) : ''].filter(Boolean);
     const lines = [...start, what,
       plan.watch ? 'Tells you only when the page changes' : plan.quiet ? 'Tells you only when something changed' : 'Tells you each time it runs',
@@ -2134,7 +2134,7 @@ export class Crew {
   /** A suggestion card: nothing changes until the person says yes, and the bot carries on meanwhile. */
   private propose(botId: string, title: string, detail: Row) {
     const t = this.activeTask(botId);
-    if (!this.db.get("SELECT 1 FROM asks WHERE bot = ? AND kind = 'propose' AND state = 'open' AND title = ? AND COALESCE(json_extract(detail, '$.draft'), '') = ?", botId, title, detail.draft ? JSON.stringify(detail.draft) : '')) {
+    if (!this.db.get("SELECT 1 FROM asks WHERE bot = ? AND kind = 'propose' AND state = 'open' AND title = ? AND COALESCE(json_extract(detail, '$.draft.sha'), json_extract(detail, '$.routine.watch')) IS ?", botId, title, detail.draft?.sha ?? detail.routine?.watch ?? null)) {
       this.openAsk(botId, undefined, title, { ...detail, task: t?.id }, 'propose');
     }
     return { asked: true, note: 'The person sees your suggestion on a card. Carry on; nothing changes unless they say yes.' };
