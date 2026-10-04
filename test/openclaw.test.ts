@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { cpSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, readlinkSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, readlinkSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -38,6 +38,9 @@ test('pinned engine uses isolated home, loopback token and no Control UI', { tim
     const { env } = kit.doctorContext();
     assert.equal(env.HOME, join(engine, 'home'));
     assert.equal(env.OPENAI_API_KEY, undefined);
+    // The one PATH the engine may borrow: the folder holding the `claude` CLI the Claude route drives, nothing else.
+    const claudeDirs = (process.env.PATH ?? '').split(':').filter((d) => d && existsSync(join(d, 'claude')));
+    assert.deepEqual(env.PATH.split(':').slice(2), claudeDirs, 'no other folder of the owner\'s PATH reaches the engine');
     await runtime.start({ tools: () => [], gate: async () => ({ allow: false, reason: 'no runs here' }), call: async () => 'no calls here' });
     const health = await kit.call('health', {}) as { ok: boolean; plugins: { loaded: string[] } };
     assert.equal(health.ok, true);
