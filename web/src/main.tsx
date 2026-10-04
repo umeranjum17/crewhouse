@@ -105,10 +105,9 @@ function Hello({ state, refresh, night }: Ctx) {
         <button className="btn go" disabled={!words.trim()} onClick={() => pick(words.trim())}>Send</button>
       </div>
         : <button className="link" onClick={() => setOwn(true)}>Or ask in your own words</button>}
-      {other ? <>
-        <input ref={input} className="input name" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="What shall I call you?" aria-label="What shall I call you?" />
-        <div className="chips center">{['Sir', "Ma'am", ...(named ? [named] : [])].map((q) => <button key={q} className={`chip ${address === q ? 'on' : ''}`} onClick={() => setAddress(q)}>{q}</button>)}</div>
-      </> : <button className="link" onClick={() => setOther(true)}>Call me something else</button>}
+      {other
+        ? <input ref={input} className="input name" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="What shall I call you?" aria-label="What shall I call you?" />
+        : <button className="link" onClick={() => setOther(true)}>Call me something else</button>}
     </div>
   );
 }
@@ -1189,7 +1188,7 @@ function You({ state, act }: { state: Json; act: (fn: () => Promise<unknown>, ok
       <label className="field">Your name
         <input className="input" value={name} placeholder="Your name" autoComplete="given-name" onChange={(e) => setName(e.target.value)} onBlur={() => name.trim() && name !== named && act(() => api.person(m.id, { name }), 'Saved')} /></label>
       <label className="field">Chief calls you
-        <input className="input" value={address} placeholder="sir, ma'am, or a name" onChange={(e) => setAddress(e.target.value)} onBlur={() => address.trim() && address !== m.address && act(() => api.person(m.id, { address }), 'Saved')} /></label>
+        <input className="input" value={address} placeholder="a name, or leave it to Chief" onChange={(e) => setAddress(e.target.value)} onBlur={() => address.trim() && address !== m.address && act(() => api.person(m.id, { address }), 'Saved')} /></label>
       <label className="toggle-row"><span className="grow">Quiet hours{m.quiet ? `, ${from} to ${to}` : ''}<div className="mute small">Nothing new pings you then; the crew keeps going on what's already OK.</div></span>
         <input type="checkbox" role="switch" checked={!!m.quiet} onChange={(e) => act(() => api.person(m.id, { quiet: e.target.checked ? '22:00-07:00' : null }))} /></label>
       <div className="field">How much of your AI the crew may use

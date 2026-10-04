@@ -229,16 +229,7 @@ if (fresh) {
 // ?demo=unknown puts an order crewd couldn't price on Scout's card instead: no yes, the person finishes it themselves.
 const first = "Plan this week's dinners, with a shopping list";
 const pages: Record<string, Json> = {
-  chief: variant === 'voice-before' || variant === 'voice-after' ? { messages: variant === 'voice-before' ? [
-    { id: 1, author: 'person', text: 'hi' },
-    { id: 2, author: 'bot', text: 'Delighted, Sir. To think, the crew uses your own ChatGPT, the same one you already use.' },
-    { id: 3, author: 'person', text: 'how do i pair my computer with you?' },
-    { id: 4, author: 'bot', text: "You're already connected to me here in Crewhouse, sir. Do you mean giving me access to files on this computer, or pairing a different computer?" },
-    { id: 5, author: 'person', text: 'i want to market my app' },
-    { id: 6, author: 'bot', text: "I can help with that, sir. What's the app called, and what does it do?" },
-    { id: 7, author: 'person', text: 'https://trymuxr.com/' },
-    { id: 8, author: 'bot', text: 'Scout has finished “https://trymuxr.com/”, Sir. It’s in Scout’s chat: “Sir, [muxr](https://trymuxr.com/) lets you monitor and control coding agents on your computer from a phone…”' },
-  ] : [
+  chief: variant.startsWith('voice-') ? { messages: [
     { id: 1, author: 'person', text: 'hi' },
     { id: 2, author: 'bot', text: 'Hi. What would you like to work on?' },
     { id: 3, author: 'person', text: 'how do i pair my computer with you?' },
@@ -250,7 +241,7 @@ const pages: Record<string, Json> = {
     { id: 9, author: 'bot', text: 'The muxr launch plan is ready: audience, three channels, first week of posts.', files: [{ bot: 'scout', path: 'files/muxr-launch-plan.docx' }] },
   ] } : firstRun ? { messages: [
     { id: 1, author: 'person', text: first },
-    { id: 2, author: 'chief', text: 'Delighted, Umer. To think, the crew uses your own ChatGPT, the same one you already use.' },
+    { id: 2, author: 'chief', text: 'Before we start: the crew thinks with your own ChatGPT, the same one you already use.' },
     ...(variant === 'plan' ? [{ id: 3, author: 'chief', text: "Your ChatGPT plan doesn't include helpers yet. Everything else in ChatGPT is fine. ChatGPT Plus includes it, or you can ask Umer to cover it." }] : []),
     ...(variant === 'answer' ? [
       { id: 3, author: 'chief', text: "You're signed in. Thank you, Umer. On it now." },
@@ -258,11 +249,11 @@ const pages: Record<string, Json> = {
       { id: 5, author: 'chief', text: 'Shall I do this every Sunday evening?', choices: ['Yes, Sundays', 'Not now'] },
     ] : []),
   ] } : variant === 'connect' ? { messages: [] } : { messages: [
-    { id: 1, author: 'chief', text: `${variant === 'umer' ? 'Good evening, sir.' : 'Good evening, Umer.'} Two small things need you. Scribe's note for Aunty Sara is ready to go, and Reel would like to save a copy of Mum's video. Scout expects to have flights within ten minutes.` },
+    { id: 1, author: 'chief', text: "Good evening, Umer. Two small things need you. Scribe's note for Aunty Sara is ready to go, and Reel would like to save a copy of Mum's video. Scout expects to have flights within ten minutes." },
     { id: 2, author: 'person', text: 'great, and can scout find somewhere nice for dinner on saturday too?' },
     { id: 3, author: 'chief', text: "Of course. I've asked Scout to look once the flights are done. Shall I tell him four people, near home?", choices: ['Yes, four, near home', 'Six people', 'Somewhere special'] },
     { id: 4, author: 'person', text: "every weekday morning, have Pip plan the week's dinners" },
-    { id: 5, author: 'chief', text: "Gladly. Pip plans, you say yes — here it is; start it and the first one lands tomorrow morning." },
+    { id: 5, author: 'chief', text: "Pip has a plan ready. Say yes and it starts; the first run lands tomorrow morning." },
   ] },
   reel: { messages: [
     { id: 1, author: 'person', text: 'can you make a birthday video for mum from the eid photos? something sweet, like 20 secs' },

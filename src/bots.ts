@@ -400,10 +400,10 @@ export function insideBot(cfg: Config, id: string, p: string) {
   return full;
 }
 
-/** How every model turn is told to address the person. A chosen name must not drift back to "sir". */
+/** How every model turn is told to address the person. Only a name: an honorific is never the answer. */
 export function addressLine(address: string | null) {
   if (!address) return 'You do not know what to call the person yet; use no name or title.';
-  return `The person likes to be called "${address}". Use it at most once, when greeting them; never in an ordinary reply.${/^(sir|ma'?am)$/i.test(address) ? '' : ' Never use sir or ma’am instead of their name.'}`;
+  return `The person likes to be called "${address}". Use it at most once, when greeting them; never in an ordinary reply. Never use sir or ma’am instead of their name.`;
 }
 
 /** What the engine is told about the bot for a whole session: who it is (its soul), its job, then how Crewhouse works. */
