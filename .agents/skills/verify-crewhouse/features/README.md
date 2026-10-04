@@ -23,6 +23,9 @@ isolated crewd on the stub engine.
 
 ## Proof and skip reporting
 
+- Every user-visible change also carries the Review evidence set from
+  [`../SKILL.md`](../SKILL.md): the changed screen in dark and light at 390 and 1440, plus
+  one motion recording of the changed interaction, in the evidence folder the PR names.
 - Capture the user action and the resulting state, not only the final screen.
 - UI proof = screenshot plus a geometry/state `eval` (label text, counts) — screenshots alone prove nothing on a text-only read.
 - API proof = the request, the response body, and the durable state (message row, task row, file on disk).
