@@ -38,7 +38,7 @@
 
   1. **Download it** from the releases page. It lands on your Downloads page.
   2. **Double-click the file.** Your software centre opens on it; press **Install**. It brings what the helpers need (the sandbox and their screens) with it, so there is nothing else to tick.
-  3. **Open Crewhouse from your app menu** — the same menu you install from. Chief greets you and offers three things he can take off your plate. Nothing to type, nothing to sign in to but your own ChatGPT, right there in the chat.
+  3. **Open Crewhouse from your app menu** — the same menu you install from. Chief greets you and offers three things he can take off your plate. Nothing to type, nothing to sign in to but your own AI account, right there in the chat.
 
 That is the whole path from download to hello: no terminal, no command, no path to copy anywhere. It installs itself under `/opt/crewhouse`, starts by itself when you log in, and opens its own window with no address bar.
 
