@@ -1,0 +1,28 @@
+# Per-repo no-mistakes overrides for Crewhouse.
+
+# The Test step's runtime proof is the documented real consumer journey in the
+# project-local verify-crewhouse skill — the same procedure a maintainer runs by
+# hand. The repo's own gates stay required; these instructions add to them and
+# never replace or weaken them.
+test:
+  instructions: |
+    Required, in order, from the run worktree with dependencies installed (npm ci):
+    1. npm run check (tsc, strict) and npm test (the isolated stub suite; CI parity).
+    2. node scripts/floor-guard.mjs — the CONSTRAINTS.md floor on this diff. Exit 0
+       required; exit 1 lists violations; exit 2 means the guard could not run and
+       must be reported as such, never treated as clean.
+    3. Runtime proof, for any change touching src/, web/src/, relay/, tools/ or the
+       phone-facing contract: read .agents/skills/verify-crewhouse/SKILL.md and follow
+       its Launch, Doctor, Drive, Evidence and Cleanup exactly — the real crewd on the
+       stub engine (CREWHOUSE_ENGINE=stub), full env mask (env -i; HOME and every XDG
+       var inside a throwaway lab; dead D-Bus path), OS-assigned port, data dirs
+       outside the repo. Drive the mapped feature the change touches (see
+       features/README.md); for UI work include 1440 and 390 widths plus the 320
+       narrow probe with the longest visible title, and record measured geometry and
+       API bodies, not impressions. A change with no runtime-facing surface says so
+       and skips this step.
+    Never sign in, spend, or touch the owner's real crewd install, home, keyring or
+    ~/.pi; never run a second crewd on the default port 7711; evidence lives outside
+    the worktree and survives cleanup; cleanup kills only processes this run started.
+    Report anything not run as NOT RUN with the reason, and never present a
+    stub-engine result as a real-model or real-sign-in result.
