@@ -367,7 +367,7 @@ export class Crew {
     if (!m) throw Object.assign(new Error('no such person'), { status: 404 });
     return m;
   }
-  /** "sir", "Sam", or "the person": how the person is named in prompts. */
+  /** "Sam", or "the person": how the person is named in prompts. */
   private called() { return this.person().name || 'the person'; }
   bot(id: string) { return this.db.get('SELECT * FROM bots WHERE id = ?', id); }
   bots() { return this.db.all('SELECT * FROM bots ORDER BY created_at'); }

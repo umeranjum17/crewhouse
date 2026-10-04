@@ -840,7 +840,6 @@ function Hello({ state, refresh, go }: Ctx) {
   const name = <>
     <Label>What shall I call you?</Label>
     <TextInput style={[s.input, { color: t.ink, borderColor: t.line }]} value={address} onChangeText={setAddress} placeholder="What shall I call you?" placeholderTextColor={t.mute} accessibilityLabel="What shall I call you?" />
-    <View style={s.chips}>{['Sir', "Ma'am"].map((q) => <Btn key={q} label={q} onPress={() => setAddress(q)} />)}</View>
   </>;
   const pick = (ask?: string, bot?: string) => {
     if (!address.trim()) return say('First, what shall I call you?');
