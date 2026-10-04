@@ -63,12 +63,12 @@ export const MIN_EVERY = 15;
 /** crewd's tick is 1.5 s; a gap this long means the computer was asleep. */
 const SLEPT_MS = 60_000;
 const STUCK_MS = Number(process.env.CREWHOUSE_STUCK_MS || 180_000); // working with no news this long: show "stuck?"
-/** Events that make up a bot's plain "what I did" trail. */
 /** A quiet check-in's reply when nothing needs the person, and how its run is recorded. */
 const ALL_CLEAR = 'ALL-CLEAR';
 const ALL_CLEAR_RESULT = 'All clear';
-const TRAIL = ['task.created', 'task.working', 'task.done', 'task.failed', 'task.unsure', 'task.progress', 'run.tool', 'run.allowed', 'run.typed',
-  'ask.opened', 'ask.answered', 'ask.parked', 'file.delivered', 'memory.learned', 'memory.undone', 'bot.recruited', 'bot.allowed', 'run.resumed',
+/** Events that make up a bot's plain "what I did" trail. */
+const TRAIL = ['task.created', 'task.working', 'task.done', 'task.failed', 'task.unsure', 'task.progress', 'run.tool', 'run.allowed',
+  'ask.opened', 'ask.answered', 'ask.parked', 'file.delivered', 'memory.learned', 'memory.undone', 'bot.allowed', 'run.resumed',
   'skill.learned', 'skill.removed', 'soul.changed'];
 
 /** Whether the person's quiet hours ("22:00-07:00", may wrap past midnight) cover this moment. */
@@ -961,7 +961,6 @@ export class Crew {
     disk.createBotFolder(this.cfg, id, tpl, display);
     this.db.run('INSERT INTO bots (id, display, role, template, color, token, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
       id, display, tpl.role, tpl.id, tpl.color, randomBytes(16).toString('hex'), Date.now());
-    this.db.event('bot.recruited', id, { display, template: tpl.id, by });
   }
 
   /** The bot, or a 404. */
@@ -1917,7 +1916,6 @@ export class Crew {
     if (!l || !this.busy.has(botId)) throw fail(`${this.bot(botId)?.display ?? 'That bot'} isn't working on anything right now; send it as a message`, 409);
     void this.runtime.steer(l.key, text.trim()).catch(() => {});
     this.say(botId, 'person', text.trim(), l.task);
-    this.db.event('run.typed', botId, { task: l.task });
   }
 
   // ---- the crew tools: how a bot reports, delivers and remembers, and how Chief runs the crew ----
@@ -2169,8 +2167,9 @@ export class Crew {
       disk.writeJob(this.cfg, d.job.bot, d.job);
       this.db.event('job.changed', d.job.bot, { by: CHIEF });
     } else if (d.soul) {
+      const prev = disk.readSoul(this.cfg, d.soul.bot);
       disk.writeSoul(this.cfg, d.soul.bot, d.soul.text, 'Personality changed, as Chief suggested');
-      this.db.event('soul.changed', d.soul.bot, { by: CHIEF });
+      this.db.event('soul.changed', d.soul.bot, { by: CHIEF, prev });
     } else if (d.routine) this.addRoutine(d.routine, CHIEF);
     else if (d.create) this.create(d.create);
     else if (d.draft) this.db.event('draft.approved', botId, { ...d.draft, task: d.task });
