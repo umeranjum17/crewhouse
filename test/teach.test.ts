@@ -3,8 +3,8 @@
 // (skipped where there is none); nothing leaves the machine.
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync } from 'node:fs';
+import { taskBrowser } from './browser.ts';
 import { createServer as http } from 'node:http';
 import { createServer, type AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -34,17 +34,16 @@ test('a real show: what was clicked and which box was typed in, never the words,
   await new Promise<void>((r) => site.listen(0, '127.0.0.1', r));
   const port = await new Promise<number>((r) => { const s = createServer().listen(0, '127.0.0.1', () => { const { port } = s.address() as AddressInfo; s.close(() => r(port)); }); });
   const profile = mkdtempSync(join(tmpdir(), 'crewhouse-teach-'));
-  const chrome = spawn(browser!, ['--headless=new', '--no-sandbox', '--disable-gpu', '--no-first-run', '--no-default-browser-check', `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'], detached: true });
+  const ownedBrowser = taskBrowser(browser!, ['--headless=new', '--no-sandbox', '--disable-gpu', '--no-first-run', '--no-default-browser-check', `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, 'about:blank'], profile);
+  const { chrome } = ownedBrowser;
   let said = '';
   chrome.stderr!.on('data', (d) => { said = (said + d).slice(-2000); });
   const teacher = new Teacher();
-  // Chrome's helper processes keep writing its profile after the main one exits: end the whole group, then remove it.
+  // Close only this spawned browser over its private pipe; retain the profile if cleanup fails.
   after(async () => {
     teacher.stop('reel');
     site.close();
-    if (chrome.exitCode === null) await new Promise((r) => { chrome.once('exit', r); process.kill(-chrome.pid!); });
-    try { process.kill(-chrome.pid!, 'SIGKILL'); } catch { /* all gone */ }
-    rmSync(profile, { recursive: true, force: true, maxRetries: 30, retryDelay: 100 });
+    await ownedBrowser.close();
   });
   // A cold Chrome on a busy CI runner can take a while to open its port: up to 30 seconds, and say why if it never does.
   const until = async (what: string, fn: () => unknown) => { for (let i = 0; i < 600; i++) { if (await fn()) return; await new Promise((r) => setTimeout(r, 50)); } throw new Error(`timed out: ${what}; recorded ${JSON.stringify(teacher.showing().reel)}; Chrome said: ${said.slice(-600)}`); };

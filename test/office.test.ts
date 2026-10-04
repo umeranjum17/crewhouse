@@ -5,10 +5,12 @@
 // Needs a Chromium on PATH (skipped without one).
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn, spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { extname, join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { taskBrowser } from './browser.ts';
 import WebSocket from 'ws';
 import { browserBin } from '../src/desktop.ts';
 import { temp } from './tmp.ts';
@@ -123,26 +125,22 @@ async function browse() {
   });
   await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
-  const profile = temp(`office-browser-${Date.now()}`);
-  const chrome = spawn(bin!, ['--headless=new', '--disable-dev-shm-usage', '--no-first-run', '--no-default-browser-check',
-    '--remote-debugging-port=0', `--user-data-dir=${profile}`, '--window-size=1440,900', 'about:blank'], { stdio: 'ignore', detached: true });
+  const profile = mkdtempSync(join(tmpdir(), 'office-browser-'));
+  const browser = taskBrowser(bin!, ['--headless=new', '--disable-dev-shm-usage', '--no-first-run', '--no-default-browser-check',
+    '--remote-debugging-port=0', `--user-data-dir=${profile}`, '--window-size=1440,900', 'about:blank'], profile);
+  let ws: WebSocket;
+  after(async () => {
+    ws?.close();
+    server.close();
+    await browser.close();
+  });
   const portFile = join(profile, 'DevToolsActivePort');
   await until('the browser to listen', () => existsSync(portFile) && readFileSync(portFile, 'utf8').includes('\n'), 30_000);
   const port = readFileSync(portFile, 'utf8').split('\n')[0];
   let page: { webSocketDebuggerUrl: string } | undefined;
   await until('a page', async () => (page = ((await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()) as any[]).find((t) => t.type === 'page')), 10_000);
-  const ws = new WebSocket(page!.webSocketDebuggerUrl);
+  ws = new WebSocket(page!.webSocketDebuggerUrl);
   await new Promise((r, j) => { ws.once('open', r); ws.once('error', j); });
-  after(async () => {
-    // Chrome's helper processes keep writing the profile after the main one exits (see test/teach.test.ts):
-    // end the whole group and wait for it, so the scratch cleanup never unlinks a live profile.
-    ws.close();
-    server.close();
-    if (chrome.exitCode === null && chrome.signalCode === null) {
-      try { process.kill(-chrome.pid!, 'SIGKILL'); } catch { /* already gone */ }
-      await until('the browser to exit', () => chrome.exitCode !== null || chrome.signalCode !== null, 10_000);
-    }
-  });
   let id = 0;
   const waiting = new Map<number, (m: any) => void>();
   ws.on('message', (d) => { const m = JSON.parse(String(d)); waiting.get(m.id)?.(m); waiting.delete(m.id); });
