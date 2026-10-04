@@ -119,10 +119,10 @@ export class Connections {
     if (!this.houseGoogle()) return null;
     const accepted = this.on().some((id) => this.apps[id].google);
     return [
-      { state: accepted ? 'checked' : 'said', note: accepted ? 'Google knows the project.' : 'Checked when you connect.' },
+      { state: accepted ? 'checked' : 'said', note: accepted ? 'Google knows this setup.' : 'Checked when you connect.' },
       { state: 'said', note: 'Check that Calendar, Gmail and Drive are enabled on Google’s page.' },
       { state: 'said', note: 'Check that Audience says In production on Google’s page.' },
-      { state: accepted ? 'checked' : 'said', note: accepted ? 'Google took the key.' : 'Key saved. Checked when you connect.' },
+      { state: accepted ? 'checked' : 'said', note: accepted ? 'Google took the sign-in.' : 'Saved. Checked when you connect.' },
     ];
   }
   connected(id: string) { return this.active.has(id); }

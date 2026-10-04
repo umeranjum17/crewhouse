@@ -746,7 +746,7 @@ test('no jargon anywhere: the machinery\'s words never reach a person', () => {
   const app = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
   assert.doesNotMatch(app, /Use a relay code|Relay address|Short relay code|legacy/, 'the phone pairs through one code box; no relay toggle');
   // The adapter is everything a person reads: no view says a machinery word, and Tailscale appears only in the
-  // anywhere setup and the away explainer.
+  // away explainer on the phone — Settings itself never names it.
   const linkView = { on: true, lan: false, pinned: false, tailscale: false, hosts: ['127.0.0.1'], relay: 'https://go.example.com', relayStatus: 'online', push: 'ready', asking: [] };
   const views: Record<string, unknown> = {
     crew: A.crew(state), cards: A.cards(state), chats: A.chats(state), things: A.things(state), ideas: A.ideas(state), jobs: A.jobs(state),
@@ -760,9 +760,9 @@ test('no jargon anywhere: the machinery\'s words never reach a person', () => {
   const words = (x: unknown): string => typeof x === 'string' ? x : Array.isArray(x) ? x.map(words).join(' ')
     : x && typeof x === 'object' ? Object.entries(x).filter(([k]) => k !== 'url' && k !== 'at').map(([, v]) => words(v)).join(' ') : '';
   for (const [name, v] of Object.entries(views)) assert.doesNotMatch(words(v), JARGON, name);
-  assert.match(words(views.typed), /^K7M2QX-7KQ4-M2XP-9RTH@go\.example\.com$/, 'the typed code is one string, the go-between carried inside it');
-  assert.doesNotMatch(words(views.reach) + words(views.reached) + words(views.push) + words(views.typed), /tailscale/i, 'Tailscale is named only where it is set up');
-  for (const name of ['anywhere', 'away'] as const) assert.match(words(views[name]), /Tailscale/, `${name} may name Tailscale`);
+  assert.match(words(views.typed), /^K7M2QX-7KQ4-M2XP-9RTH@go\.example\.com$/, 'the typed code is one string, the mailbox carried inside it');
+  assert.doesNotMatch(words(views.reach) + words(views.reached) + words(views.push) + words(views.typed) + words(views.anywhere), /tailscale/i, 'Tailscale is named only where it is set up');
+  assert.match(words(views.away), /Tailscale/, 'away may name Tailscale');
   // The failure words are people words too: the phone's pairing lines and the toasts on both ends.
   for (const w of ["That code has run out. Show a new one on your computer, then try again.", "That code didn't match. Show a fresh one and try again.",
     "Couldn't reach your computer. Check it's awake, then try again.", "That didn't go through. Check the code, then try again.",
@@ -1096,16 +1096,16 @@ test('reach it from anywhere: three plain states and numbered steps, and the pho
   const home = A.anywhere({ anywhere: 'home', hosts: ['127.0.0.1', '100.101.2.3'], tailscale: false });
   assert.equal(home.state, 'home');
   assert.match(home.words, /^Only at home\./);
-  assert.deepEqual(home.steps.map((x) => x.split(' ').slice(0, 2).join(' ')), ['Install Tailscale', 'On your', 'Then pair']);
+  assert.deepEqual(home.steps.map((x) => x.split(' ').slice(0, 2).join(' ')), ['On this', 'On your', 'Then pair']);
   const anywhere = A.anywhere({ anywhere: 'anywhere', hosts: ['100.101.2.3'] });
   assert.match(anywhere.words, /^Reachable from anywhere\./);
   assert.equal(anywhere.steps.length, 2, 'this computer is done; the steps for your phone stay');
   const signin = A.anywhere({ anywhere: 'signin' });
-  assert.match(signin.words, /^Tailscale needs signing in again/);
+  assert.match(signin.words, /^The connector app needs signing in again/);
   assert.equal(A.anywhere(null).state, 'home');
   for (const x of [home, anywhere, signin]) assert.doesNotMatch(shown(x), TECH);
   assert.match(home.steps[1], /your phone.*same Google account/, 'your phone uses your own account');
-  assert.match(home.steps[1], /or share this computer with that phone's account in Tailscale/, 'another account remains supported');
+  assert.match(home.steps[1], /or share this computer with that phone's account in the app/, 'another account remains supported');
   assert.doesNotMatch(shown(home), /invite/i);
 
   const away = [
@@ -1159,9 +1159,9 @@ test('a knock on the computer\'s address ends within its bound: answers, refused
 
 test('Settings, Phones: when each phone last reached the computer and how, and missing notifications said once', () => {
   assert.equal(A.reached({}), 'Not in touch yet');
-  assert.match(A.reached({ reached: { home: Date.now() } }), /^Last reached it .* over home Wi-Fi · never from away yet$/);
-  assert.match(A.reached({ reached: { home: Date.now() - 9e6, tailscale: Date.now() } }), /over Tailscale$/);
-  assert.match(A.reached({ reached: { tailscale: Date.now() - 9e6, home: Date.now() } }), /over home Wi-Fi$/, 'the latest route, with away proven');
+  assert.match(A.reached({ reached: { home: Date.now() } }), /^Last reached it .* on the home Wi-Fi · never from away yet$/);
+  assert.match(A.reached({ reached: { home: Date.now() - 9e6, tailscale: Date.now() } }), /away from home$/);
+  assert.match(A.reached({ reached: { tailscale: Date.now() - 9e6, home: Date.now() } }), /on the home Wi-Fi$/, 'the latest route, with away proven');
   assert.equal(A.pushWords({ push: 'ready' }), '');
   assert.match(A.pushWords({ push: 'missing' }), /^Phone notifications aren't switched on for this app yet/);
 });

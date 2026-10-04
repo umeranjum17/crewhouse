@@ -214,8 +214,8 @@ const state = {
   share: { choice: 'light', used: variant === 'share' },
   money: { cap: 20, spent: variant === 'share' ? 4 : 0 },
   house: { google: houseGoogle, steps: [
-    { state: 'checked', note: 'Google knows the project.' }, { state: 'missing', note: 'Gmail API is still off. Enable it.' },
-    { state: 'said', note: 'Checked the first time you connect.' }, { state: 'checked', note: 'Google took the key.' }] },
+    { state: 'checked', note: 'Google knows this setup.' }, { state: 'missing', note: 'Gmail is still off. Switch it on.' },
+    { state: 'said', note: 'Checked the first time you connect.' }, { state: 'checked', note: 'Google took the sign-in.' }] },
   desktops: { missing: [] },
 };
 
