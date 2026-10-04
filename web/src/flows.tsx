@@ -80,14 +80,14 @@ function useTab(first: Window | null | undefined) {
   return { tab, goTo, fresh, drop, open: () => !!tab.current && !tab.current.closed && !!went.current };
 }
 
-// ---------- Sign in with ChatGPT ----------
+// ---------- Sign in ----------
 /**
- * "Sign in with ChatGPT": ChatGPT's own page opens in the tap, the person picks their account and taps Continue, and
- * the page comes straight back to the home computer. Three taps, no code. Crewhouse's own sheet is the truth: it moves
+ * "Sign in with X": that account's own page opens in the tap, the person picks their account and says yes, and the
+ * page comes straight back to the home computer. Three taps, no code. Crewhouse's own sheet is the truth: it moves
  * on only when crewd has a sign-in that works. The code is the fallback ("Having trouble?", or by itself when the page
  * never comes back). Every other ending has its own words: declined, busy, expired, a work account, offline.
  */
-export function SignIn({ ai = A.AIS[0], tab: first, onReady, onClose }: { ai?: { key: string; name: string; bg: string }; tab?: Window | null; onReady: () => void; onClose: () => void }) {
+export function SignIn({ ai = A.AIS[0], tab: first, onReady, onClose }: { ai?: (typeof A.AIS)[number]; tab?: Window | null; onReady: () => void; onClose: () => void }) {
   const name = ai.name;
   const { value, offline } = usePoll(() => api.accounts(), 1500);
   const g = A.account(value, ai.key);
@@ -156,19 +156,21 @@ export function SignIn({ ai = A.AIS[0], tab: first, onReady, onClose }: { ai?: {
  * In a chat, right under Chief's line, while the crew can't think yet: the sign-in,
  * or, for a plan without helpers, the ways forward. Taps: Sign in (1), her account (2), Continue (3).
  */
-/** The sign-in card, in the ask-card anatomy (§4.11) with the ChatGPT button as primary. */
-export function AccountCard({ g, inChat, onReady }: { g: ReturnType<typeof A.account>; inChat?: boolean; onReady: () => void }) {
+/** The sign-in card, in the ask-card anatomy (§4.11) with the account the crew will use as primary: whichever one is
+ *  already signed in, or the front door while none is. The links a provider owns (its own site, its plans) sit under
+ *  its own branch; no provider's name is written into another's card. */
+export function AccountCard({ accounts, inChat, onReady }: { accounts: Json[] | null; inChat?: boolean; onReady: () => void }) {
   const [signing, setSigning] = useState<Window | null | false>(sheet === 'signin' ? null : false);
   const [noAccount, setNoAccount] = useState(false);
-  const ai = A.AIS[0];
-  if (g.state !== 'signed-out' && !g.notIncluded && signing === false) return null;
+  const { ai, g } = A.aiList(accounts).mine[0];
+  if (g.state === 'ready' && !g.notIncluded && signing === false) return null;
   if (g.notIncluded) return (
     <div className="card ask">
       <div className="ask-head"><Face who="chief" size={28} /><div className="grow"><b>Chief</b><div className="ask-status"><i />Needs a bigger plan</div></div></div>
       <p className="ask-words">Your {ai.name} plan doesn't include helpers yet</p>
-      {!inChat && <p className="mute small">Everything else in {ai.name} is fine. {ai.name} Plus includes it.</p>}
+      {!inChat && <p className="mute small">Everything else in {ai.name} is fine. A bigger {ai.name} plan includes it.</p>}
       <div className="btns">
-        <a className="btn go" href="https://chatgpt.com/#pricing" target="_blank" rel="noreferrer">See {ai.name} plans ↗</a>
+        {ai.plans && <a className="btn go" href={ai.plans} target="_blank" rel="noreferrer">See {ai.name} plans ↗</a>}
         <button className="btn ghost always" onClick={() => attempt(async () => { await api.retryAccount(ai.key); onReady(); }, 'Trying again')}>I've changed my plan</button>
       </div>
     </div>
@@ -179,10 +181,11 @@ export function AccountCard({ g, inChat, onReady }: { g: ReturnType<typeof A.acc
       <p className="ask-words">{g.recovery || <>Say yes once on {ai.name}'s page. Your job starts when you come back.</>}</p>
       <div className="btns">
         <button className="btn go big" onClick={() => setSigning(openTab())}><AiMark ai={ai} size={24} />Sign in with {ai.name}</button>
-        <button className="link" onClick={() => { setNoAccount(true); window.open('https://chatgpt.com/', '_blank'); }}>No {ai.name} account? Make a free one</button>
+        {ai.site && <button className="link" onClick={() => { setNoAccount(true); window.open(ai.site!, '_blank'); }}>No {ai.name} account? Make a free one</button>}
+        <button className="link" onClick={() => { location.hash = '#/settings'; }}>Another account? All of them are under Settings</button>
       </div>
-      {noAccount && <p className="mute small">{ai.name} opened in a new tab: sign up with Google or Apple in a few taps, then come straight back and tap Sign in.</p>}
-      {signing !== false && <SignIn tab={signing} onReady={() => { setSigning(false); onReady(); }} onClose={() => setSigning(false)} />}
+      {noAccount && <p className="mute small">{ai.name} opened in a new tab: sign up in a few taps, then come straight back and tap Sign in.</p>}
+      {signing !== false && <SignIn ai={ai} tab={signing} onReady={() => { setSigning(false); onReady(); }} onClose={() => setSigning(false)} />}
     </div>
   );
 }

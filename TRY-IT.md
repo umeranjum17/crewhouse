@@ -1,6 +1,6 @@
 # Try it
 
-A first walk through your Crewhouse personal assistant on your own computer, about 30 minutes. It needs your own ChatGPT account (Plus or Pro, or another account under **Settings, AI accounts**).
+A first walk through your Crewhouse personal assistant on your own computer, about 30 minutes. It needs your own AI account — a ChatGPT Plus or Pro subscription, or any other account the crew offers under **Settings, AI accounts** (each row says whether it uses a plan you already pay for or is charged per use).
 
 ## 1. Install and start
 
@@ -18,7 +18,7 @@ Everything lives in `~/.local/state/crewhouse/` (the database, the engine's own 
 
 ## 2. What to test first
 
-1. **Chief and ChatGPT.** He greets you and offers three ideas; tap one (**Call me something else** changes how he addresses you). He asks you to **Sign in with ChatGPT** right under his line: ChatGPT's page opens, pick your account, tap **Continue** and the app moves on by itself, and your request starts. **Having trouble?** switches to a code.
+1. **Chief and your AI account.** He greets you and offers three ideas; tap one (**Call me something else** changes how he addresses you). He asks you to **Sign in with…** right under his line, naming your account: that account's own page opens, you say yes, and the app moves on by itself, and your request starts. **Having trouble?** switches to a code. Other accounts (Grok, GitHub Copilot, OpenRouter, MiniMax, Claude) are under **Settings, AI accounts**.
 2. **Reel and a video.** Tell Chief: *Please recruit Reel and have it make a 6 second title card that says Crewhouse.* Reel works in its own folder without asking you anything. After a few minutes the video plays in Reel's chat and appears on its **Files** tab.
 3. **An approval, at phone width.** Tell Reel: *Save a copy of the video in my Documents folder.* That is your own folder, so Reel asks first, in one sentence. Make the browser window narrow (or use the browser's device mode) to see the phone layout, then answer.
 4. **Scout and its browser.** Tell Chief: *Please recruit Scout and have it use its browser to open news.ycombinator.com and tell me the top 3 story titles.* The answer takes about a minute.

@@ -376,6 +376,13 @@ export class Crew {
   /** 0 when the person's account is available; otherwise when it stops resting. */
   restingUntil(account: string) { return this.accounts.restingUntil(account); }
 
+  /** The account the sign-in words name: the first one this person can think with now, else the front door. ChatGPT is
+   *  one choice among them, and the line never claims a plan that isn't signed in. */
+  frontAccount() {
+    for (const key of Object.keys(PROVIDERS)) if (!this.accounts.unready(key) && !this.accounts.notIncluded(key) && !this.restingUntil(key)) return PROVIDERS[key].name;
+    return PROVIDERS.chatgpt.name;
+  }
+
   /** The accounts a task may run on, in order: its own choice, the bot's fallback order, then any other account its
    *  person has signed in to (someone who only has Grok still gets a working crew). */
   choices(task: Row) {
@@ -1005,7 +1012,7 @@ export class Crew {
     if (botId === CHIEF && !pics.length && (asksForPhone(words) || inlineHowTo(words) === 'signin' || inlineHowTo(words) === 'app')) {
       this.say(CHIEF, 'person', words, null);
       if (asksForPhone(words)) { await this.addPhone(); return; }
-      if (inlineHowTo(words) === 'signin') { this.say(CHIEF, 'bot', 'Sign in with ChatGPT.', null); return; }
+      if (inlineHowTo(words) === 'signin') { this.say(CHIEF, 'bot', `Sign in with ${this.frontAccount()}.`, null); return; }
       const app = /\b(calendar|gmail|drive|notion|canva)\b/i.exec(words)?.[1].toLowerCase() ?? 'calendar';
       this.say(CHIEF, 'bot', `Connect ${this.connections.apps[app].name}.`, null);
       if (!this.connections.connected(app)) this.openAsk(CHIEF, undefined, `Connect ${this.connections.apps[app].name}`, { app, words: `Connect your ${this.connections.apps[app].name}` }, 'connect');

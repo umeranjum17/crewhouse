@@ -1,7 +1,7 @@
 // The thin adapter: crewd's state in, plain words out. Every screen reads these view models and nothing raw,
 // so the engine underneath can change (docs/ui-contract.md) without the screens changing, and nothing technical
 // (commands, file paths, model names, percentages, raw prompts) can reach a person. test/ui.test.ts holds this.
-import { provider } from '@byokit/accounts';
+import { PROVIDERS as ROUTES } from '@byokit/accounts';
 import { phaseOf } from '@byokit/ui-core/phase';
 import type { Json } from './api.ts';
 import { safeLink } from './chat-md.ts';
@@ -91,7 +91,7 @@ export const dayLabel = (t: number, now = new Date()) => {
  */
 export const atHome = (home = 'this computer') => [
   `Your helpers live on ${home} and use your own sign-ins.`,
-  "Nothing you tell them is kept anywhere else — only what a job needs goes to ChatGPT or the app it's using.",
+  "Nothing you tell them is kept anywhere else — only what a job needs goes to your AI account or the app it's using.",
 ];
 
 /** A file's name as a person would say it: "files/mum-birthday_v2.mp4" → "Mum birthday v2". */
@@ -384,20 +384,20 @@ export function reach(link: Json) {
   return { on, online: link?.relayStatus === 'online', words: on ? words[link.relayStatus] ?? words.connecting : 'Off.' };
 }
 
-/** The crew's share of the viewer's ChatGPT, as three choices and one sentence about today. Never a number. */
+/** The crew's share of the viewer's own AI account, as three choices and one sentence about today. Never a number. */
 export const SHARES = [
-  { key: 'light', label: 'Light', says: 'Leave most of my ChatGPT for me' },
+  { key: 'light', label: 'Light', says: 'Leave most of my AI account for me' },
   { key: 'normal', label: 'Normal', says: 'Share it evenly' },
   { key: 'full', label: 'As much as it needs', says: 'Use what the work takes' },
 ];
-/** The small line at the bottom of the side rail: how the crew's share of ChatGPT stands today. It says what Crewhouse
+/** The small line at the bottom of the side rail: how the crew's share of the account stands today. It says what Crewhouse
  *  itself knows — the share this household gave the crew — never how much of the provider's allowance is left. */
 export const meter = (state: Json) => (state.share?.used ? 'The crew will carry on tomorrow' : resting(state) ? `${resting(state)}` : '');
 export function share(state: Json) {
   const s = state.share ?? { choice: 'light', used: false };
   const part: Record<string, string> = { small: 'a small part', fair: 'a fair part', most: 'most' };
-  return { choice: s.choice as string, week: part[s.week] ? `This week the crew has used ${part[s.week]} of what it may use of your ChatGPT.` : '', today: s.used ? 'The crew has had its share for today. Routines and check-ins start again tomorrow morning; anything you ask for still goes ahead.'
-    : s.choice === 'full' ? 'When ChatGPT needs a rest, the crew waits and says so.' : 'The crew stays within the share you gave it.' };
+  return { choice: s.choice as string, week: part[s.week] ? `This week the crew has used ${part[s.week]} of what it may use of your AI account.` : '', today: s.used ? 'The crew has had its share for today. Routines and check-ins start again tomorrow morning; anything you ask for still goes ahead.'
+    : s.choice === 'full' ? 'When the account needs a rest, the crew waits and says so.' : 'The crew stays within the share you gave it.' };
 }
 
 /** The house's monthly money cap, owner only: "This month: nothing spent yet" or "$4 of $20 spent". */
@@ -911,9 +911,9 @@ export function firstIdeas(state: Json) {
 
 /** Your three setup jobs: what the crew thinks with, the phones reaching it, and Google setup.
  *  Until all three are done, the owner's Home says how many are left. */
-export function homeSetup(state: Json, g: Json | null, link: Json | null) {
+export function homeSetup(state: Json, accounts: Json[] | null, link: Json | null) {
   const rows = [
-    { key: 'chatgpt', says: 'Your ChatGPT account', done: g?.state === 'ready' && !g?.notIncluded },
+    { key: 'signin', says: 'An AI account the crew can think with', done: accounts?.some((a) => a.signedIn === true) === true },
     { key: 'phones', says: 'Phones can reach the crew from anywhere', done: link?.anywhere === 'anywhere' },
     { key: 'google', says: 'Google setup', done: state.house?.google !== false },
   ];
@@ -1120,20 +1120,31 @@ function lastRun(h: Json) {
   return `Last ran ${at}${h.clear ? ', all clear' : ''}`;
 }
 
-/** The AI accounts a person can think with, in the order the app offers them: every subscription route the engine
- *  supports, ChatGPT first (the one front door; the rest are quiet paths). `cli`: signing in needs a tool installed
- *  and signed in on this computer first. Kept in step with crewd's own list by test/ui.test.ts. */
-export const AIS = [
-  { key: 'chatgpt', name: provider('chatgpt').name, bg: '#10a37f' },
-  { key: 'grok', name: provider('grok').name, bg: '#1d1d1f' },
-  { key: 'copilot', name: provider('copilot').name, bg: '#24292f' },
-  { key: 'openrouter', name: provider('openrouter').name, bg: '#8b5cf6' },
-  { key: 'minimax', name: 'MiniMax', bg: '#e11d48' },
-  { key: 'claude', name: 'Claude', bg: '#d97757', cli: 'Claude Code, installed and signed in on this computer' },
-];
-/** The honest word under the account list: every one takes a plan the person already pays for; the pay-for-each-use
- *  accounts are not set up, and one nobody has signed in to here is untested, never a green light. */
-export const AI_ROUTES = 'Each one uses a plan you already pay for. Paying for each use isn\u2019t set up.';
+/** The AI accounts a person can think with, in the order the app offers them: every route the engine supports,
+ *  ChatGPT first (the one front door; the rest are quiet paths). Name and billing come from the kit's own catalogue,
+ *  so a new route lands with the bump; `MARKS` is only what the kit can't know — the tile colour, the tool a route
+ *  needs installed (`cli`), and where that provider's own page lives (`site`, `plans`). Kept in step with crewd's
+ *  own list by test/ui.test.ts. */
+const MARKS: Record<string, { bg: string; name?: string; cli?: string; site?: string; plans?: string }> = {
+  chatgpt: { bg: '#10a37f', site: 'https://chatgpt.com/', plans: 'https://chatgpt.com/#pricing' },
+  grok: { bg: '#1d1d1f' },
+  copilot: { bg: '#24292f' },
+  openrouter: { bg: '#8b5cf6' },
+  minimax: { bg: '#e11d48', name: 'MiniMax' },
+  claude: { bg: '#d97757', cli: 'Claude Code, installed and signed in on this computer' },
+};
+export const AIS = ['chatgpt', 'grok', 'copilot', 'openrouter', 'minimax', 'claude'].map((key) => {
+  const mark = MARKS[key];
+  const route = ROUTES[key];
+  return { ...mark, key, name: route?.name ?? mark.name ?? key, billing: route?.billing ?? 'subscription' };
+});
+/** How one account is paid for, in the person's words: their own plan, or money charged for each use. */
+export function paysFor(ai: { name: string; billing: string }) {
+  return ai.billing === 'api' ? `each use is charged to your ${ai.name} account` : `it uses your own ${ai.name} plan`;
+}
+/** The honest word under the account list: which ones come with a plan the person already pays for, and which charge
+ *  them for each use. Built from the rows above, so a new route can never be left unlabelled. */
+export const AI_ROUTES = `Each one uses a plan you already pay for, except ${AIS.filter((a) => a.billing === 'api').map((a) => a.name).join(' and ')}, where ${paysFor(AIS.find((a) => a.billing === 'api')!)}.`;
 
 /** One of the person's own AI accounts: signed in; a sign-in in progress (ChatGPT's page to say yes on, or the fallback
  *  code); how a sign-in ended (declined, the port busy, expired, failed); a plan without helpers; a work account. */
@@ -1164,10 +1175,11 @@ export function aiList(accounts: Json[] | null) {
   const rows = AIS.map((ai) => {
     const g = account(accounts, ai.key);
     const says = g.state === 'ready'
-      ? g.notIncluded ? "Signed in, but your plan doesn't include helpers yet." : g.resting ? `Signed in. ${g.resting}.` : `Signed in${g.work ? ` as ${g.work}, a work account` : ''}. The crew uses it.`
+      ? g.notIncluded ? "Signed in, but your plan doesn't include helpers yet." : g.resting ? `Signed in. ${g.resting}.` : `Signed in${g.work ? ` as ${g.work}, a work account` : ''}. The crew uses it${ai.billing === 'api' ? ', charged per use' : ''}.`
       : g.recovery ? g.recovery : g.state === 'checking' ? 'Checking…'
       : ai.key === 'chatgpt' ? `Not signed in yet. You'll say yes once on ${ai.name}.`
       : ai.cli ? `Not set up. Needs ${ai.cli} first.`
+      : ai.billing === 'api' ? `Not set up. Charged per use on your ${ai.name} account.`
       : `Not set up. Uses your own ${ai.name} plan.`;
     return { ai, g, says };
   });

@@ -91,7 +91,7 @@ function Hello({ state, refresh, night }: Ctx) {
         <p className="lead">I'm Chief, your personal assistant. I run your crew of helpers.</p>
       </div>
       <ul className="promises">
-        <li>Your helpers live on this computer, and think with your own ChatGPT.</li>
+        <li>Your helpers live on this computer, and think with an AI account you already pay for.</li>
         <li>{A.atHome()[1]}</li>
         <li>I'll ask before sending messages, deleting things or spending money.</li>
       </ul>
@@ -178,7 +178,7 @@ function Chats({ state, refresh, desk }: { state: Json; refresh: () => void; des
 function SetupRow({ state, accounts, tick }: { state: Json; accounts: Json[] | null; tick: number }) {
   const [link, setLink] = useState<Json>(null);
   useEffect(() => { api.phoneLink().then(setLink).catch(() => {}); }, [tick]);
-  const { left } = A.homeSetup(state, A.account(accounts), link);
+  const { left } = A.homeSetup(state, accounts, link);
   if (!left) return null;
   return <a className="card nudge" href="#/settings"><span className="grow">Getting set up: {left} {left === 1 ? 'thing' : 'things'} left</span><b>›</b></a>;
 }
@@ -358,7 +358,7 @@ function Home(ctx: Ctx) {
   const top = <>
     <HomeBar ctx={ctx} mode={mode} pick={pick} />
     {/* Chief's thread shows its own sign-in card and resting line; Office shows them here. */}
-    {mode === 'office' && <AccountCard g={g} onReady={refresh} />}
+    {mode === 'office' && <AccountCard accounts={accounts} onReady={refresh} />}
     <SetupRow state={state} accounts={accounts} tick={tick} />
     {mode === 'office' && A.resting(state) && <div className="card nudge"><span className="grow">{A.resting(state)}. I'll pick things back up then.</span></div>}
     {A.gettingReady(state) && <div className="card nudge"><span className="grow">{A.gettingReady(state)}</span></div>}
@@ -576,7 +576,7 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
         {last?.choices.length ? <div className="chips">{last.choices.map((c) => <button key={c} className="chip" onClick={() => send(c)}>{c}</button>)}</div> : null}
         {cards.filter((c) => !lines.length || lines.every((x) => (x.at ?? 0) > c.at)).map((c) => c.kind === 'connect' ? <ConnectCard key={c.id} c={c} helper={h?.name} state={state} onDone={refresh} /> : <AskCard key={c.id} c={c} who={h} onDone={refresh} />)}
         {h && <Stuck h={h} refresh={refresh} />}
-        <AccountCard g={g} inChat onReady={() => { void load(); refresh(); }} />
+        <AccountCard accounts={accounts} inChat onReady={() => { void load(); refresh(); }} />
         {g.state === 'ready' && !g.notIncluded && A.resting(state) && <div className="card nudge"><span className="grow">{A.resting(state)}. {name === 'Chief' ? "I'll" : `${name} will`} finish then.</span></div>}
         <div ref={end} className="end" />
       </div>
@@ -1047,7 +1047,7 @@ function Phones({ tick }: { tick: number }) {
 function HomeSetup({ state, accounts, tick }: { state: Json; accounts: Json[] | null; tick: number }) {
   const [link, setLink] = useState<Json>(null);
   useEffect(() => { api.phoneLink().then(setLink).catch(() => {}); }, [tick]);
-  const { rows, left } = A.homeSetup(state, A.account(accounts), link);
+  const { rows, left } = A.homeSetup(state, accounts, link);
   const jump = (key: string) => document.getElementById(`setup-${key}`)?.scrollIntoView({ behavior: 'smooth' });
   return (<>
     <div className="label">Getting set up</div>
@@ -1079,7 +1079,7 @@ function Settings({ state, refresh, tick, accounts, look, setLook }: Ctx & { loo
       <You state={state} act={act} />
       <AboutYou tick={tick} />
 
-      <div className="label" id="setup-chatgpt">Your AI accounts</div>
+      <div className="label" id="setup-signin">Your AI accounts</div>
       <AiAccounts accounts={accounts} refresh={refresh} signIn={(ai) => setSigning({ ai, tab: openTab() })} />
 
       <div className="label">Your apps</div>

@@ -10,6 +10,7 @@ import { join } from 'node:path';
 import type { Json } from '../web/src/api.ts';
 import type { Kind } from '../web/src/art.ts';
 import { PROVIDERS } from '../src/accounts.ts';
+import { PROVIDERS as ROUTES } from '@byokit/accounts';
 import * as A from '../web/src/adapter.ts';
 import { readTyped } from '../mobile/src/typed.ts';
 import { askOf } from '../mobile/src/ask.ts';
@@ -121,6 +122,16 @@ test('the account list is the one crewd really serves: every route, none made up
   assert.match(A.AI_ROUTES, /plan you already pay for/, 'the limitation is a person\'s words');
   assert.doesNotMatch(A.AI_ROUTES, /API key|bill|\broutes?\b|provider/i, 'no billing or machinery words under the account list');
   for (const ai of A.AIS) assert.doesNotMatch(ai.cli ?? '', /\bCLI\b/, `${ai.name}'s prerequisite names a product, never an acronym`);
+  // Name and billing come from the kit's own catalogue, so a new kit route lands labelled and nothing drifts.
+  for (const ai of A.AIS) if (ROUTES[ai.key]) assert.deepEqual([ai.name, ai.billing], [ROUTES[ai.key].name, ROUTES[ai.key].billing], `${ai.key} is the kit's own row`);
+  // Every route says honestly how the person pays: a plan they already have, or charged per use.
+  const listed = A.aiList(rows).more.map((r) => ({ name: r.ai.name, cli: r.ai.cli, says: r.says }));
+  for (const row of listed) {
+    if (row.cli) continue; // this one needs a tool installed first; its billing shows in the line under the list
+    const api = ROUTES[providers.find((k) => ROUTES[k]?.name === row.name) ?? '']?.billing === 'api';
+    assert.match(row.says, api ? /charged per use/i : /your own .* plan/i, `${row.name}'s row states its billing honestly`);
+  }
+  assert.deepEqual(listed.find((r) => r.name === 'OpenRouter'), { name: 'OpenRouter', cli: undefined, says: 'Not set up. Charged per use on your OpenRouter account.' });
   const phone = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
   assert.match(phone, /<Label>Your AI accounts<\/Label>/);
   assert.match(phone, /\{row\(A\.AIS\[0\]\)\}/, 'ChatGPT, the front door, is named first');
@@ -396,9 +407,11 @@ test('first success: starters never dead-end, and setup stays in Settings', () =
   assert.ok(!off.some((i) => i.label.includes("What's on this week")), 'the calendar starter waits for Google setup');
   assert.ok(off.some((i) => /birthday party/i.test(i.label)));
   // The house's three jobs, and how many are left.
-  assert.equal(A.homeSetup({ house: { google: true } }, { state: 'ready' }, { anywhere: 'anywhere' }).left, 0);
-  const half = A.homeSetup({ house: { google: false } }, { state: 'ready' }, { anywhere: 'anywhere' });
-  assert.deepEqual(half.rows.filter((r) => !r.done).map((r) => r.key), ['google']);
+  const openrouter = [{ account: 'openrouter', name: 'OpenRouter', signedIn: true }];
+  assert.equal(A.homeSetup({ house: { google: true } }, openrouter, { anywhere: 'anywhere' }).left, 0,
+    'any signed-in account finishes the job, not only the front door');
+  const half = A.homeSetup({ house: { google: false } }, [{ account: 'chatgpt', name: 'ChatGPT', signedIn: false }], { anywhere: 'anywhere' });
+  assert.deepEqual(half.rows.filter((r) => !r.done).map((r) => r.key), ['signin', 'google']);
   const web = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
   assert.doesNotMatch(web, /MemberRow|memberSetup|set me up for you/, 'Home and Hello serve one person');
   assert.match(web, /<SetupRow state=\{state\}/, 'the person keeps the setup checklist');
@@ -413,7 +426,7 @@ test('the runs-at-home line is said once, in the same plain words, in all three 
   const [here, only] = A.atHome();
   assert.equal(here, 'Your helpers live on this computer and use your own sign-ins.', 'no technical words, no vendor voice');
   // honest about what does leave: what a job needs, to ChatGPT or the app it's using (README, "Nothing leaves your machine…")
-  assert.equal(only, "Nothing you tell them is kept anywhere else — only what a job needs goes to ChatGPT or the app it's using.");
+  assert.equal(only, "Nothing you tell them is kept anywhere else — only what a job needs goes to your AI account or the app it's using.");
   assert.doesNotMatch(`${here} ${only}`, FORBIDDEN);
   assert.match(A.atHome('the home computer')[0], /^Your helpers live on the home computer and use your own sign-ins\.$/, 'the phone names the home computer');
   const web = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
@@ -1291,7 +1304,7 @@ test('a patch is only ever a suggested change, never a fix, wherever the app wor
 });
 
 test('the week under the share is a third in words, never a number', () => {
-  assert.equal(A.share({ share: { choice: 'light', used: false, week: 'fair' } }).week, 'This week the crew has used a fair part of what it may use of your ChatGPT.');
+  assert.equal(A.share({ share: { choice: 'light', used: false, week: 'fair' } }).week, 'This week the crew has used a fair part of what it may use of your AI account.');
   assert.equal(A.share({ share: { choice: 'full', used: false, week: null } }).week, '');
   for (const w of ['small', 'fair', 'most']) assert.doesNotMatch(A.share({ share: { choice: 'light', week: w } }).week, /\d|%/);
 });
