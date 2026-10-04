@@ -246,8 +246,8 @@ const pages: Record<string, Json> = {
     { id: 9, author: 'bot', text: 'The muxr launch plan is ready: audience, three channels, first week of posts.', files: [{ bot: 'scout', path: 'files/muxr-launch-plan.docx' }] },
   ] } : firstRun ? { messages: [
     { id: 1, author: 'person', text: first },
-    { id: 2, author: 'chief', text: 'Before we start: the crew thinks with your own ChatGPT, the same one you already use.' },
-    ...(variant === 'plan' ? [{ id: 3, author: 'chief', text: "Your ChatGPT plan doesn't include helpers yet. Everything else in ChatGPT is fine. ChatGPT Plus includes it, or you can ask Umer to cover it." }] : []),
+    { id: 2, author: 'chief', text: 'Before we start: the crew thinks with your own AI account, the one you already pay for.' },
+    ...(variant === 'plan' ? [{ id: 3, author: 'chief', text: "Your ChatGPT plan doesn't include helpers yet. Everything else in ChatGPT is fine. A bigger ChatGPT plan includes it, or you can ask Umer to cover it." }] : []),
     ...(variant === 'answer' ? [
       { id: 3, author: 'chief', text: "You're signed in. Thank you, Umer. On it now." },
       { id: 4, author: 'chief', text: 'Dinners this week: Mon dal & rice · Tue chicken wraps · Wed pasta bake · Thu fish tikka · Fri pizza night.\n\nShopping list (18 items): lentils, rice, onions, garlic, ginger, tomatoes, chicken thighs, wraps, lettuce, yoghurt, pasta, cheddar, passata, white fish, tikka paste, pizza bases, mozzarella, peppers.' },

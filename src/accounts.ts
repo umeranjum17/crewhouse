@@ -4,13 +4,21 @@
 import { REST_MS, classify, offered } from '@byokit/accounts';
 import type { AgentRuntime, SignInStep } from './runtime.ts';
 
-/** The offered accounts: every subscription route the pinned engine supports. ChatGPT is the one front door; the
- *  rest are quiet "more options" paths. `cli`: the sign-in needs a tool installed and logged in on this computer. */
-export const PROVIDERS: Record<string, { key: string; name: string; cli?: string }> = {
-  ...Object.fromEntries(offered(['chatgpt', 'grok', 'copilot', 'openrouter']).map(({ key, name }) => [key, { key, name }])),
+export type Provider = { key: string; name: string; billing: 'subscription' | 'api'; cli?: string };
+
+/** Accounts the kit offers but the engine has no route for, or that need a tool on this computer: `cli` names it.
+ *  Both sign in against a plan the person already pays for. */
+const EXTRA: Record<string, Omit<Provider, 'billing'>> = {
   minimax: { key: 'minimax', name: 'MiniMax' },
   claude: { key: 'claude', name: 'Claude', cli: 'Claude Code, installed and signed in on this computer' },
 };
+
+/** The offered accounts, generated from the kit's own catalogue: names and how each one is billed come from there,
+ *  so a new kit route lands with the bump. ChatGPT is the front door; the rest are quiet "more options" paths. */
+export const PROVIDERS: Record<string, Provider> = Object.fromEntries([
+  ...offered(['chatgpt', 'grok', 'copilot', 'openrouter']).map(({ key, name, billing }) => [key, { key, name, billing }]),
+  ...Object.entries(EXTRA).map(([key, v]) => [key, { ...v, billing: 'subscription' as const }]),
+]);
 
 export function provider(key: string) {
   const p = PROVIDERS[key];

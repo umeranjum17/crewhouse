@@ -11,7 +11,7 @@
 
 <p align="center">
   <strong>Your personal assistant — you and your crew of helpers, on your own computer.</strong><br/>
-  You talk to Chief. Chief hands the job to the right helper: Scout looks things up, Scribe drafts, Reel makes videos, Tracer finds leads. Each helper is a folder on your disk that thinks with your own ChatGPT. When a helper wants to send, spend or delete something, it asks you first, in one plain sentence, on your computer or your phone.
+  You talk to Chief. Chief hands the job to the right helper: Scout looks things up, Scribe drafts, Reel makes videos, Tracer finds leads. Each helper is a folder on your disk that thinks with your own AI account. When a helper wants to send, spend or delete something, it asks you first, in one plain sentence, on your computer or your phone.
 </p>
 
 <h3 align="center"><a href="#quick-start"><ins>Run it on your computer</ins></a></h3>
@@ -71,7 +71,7 @@ This view is for your computer session. Clicking opens Crewhouse, where you can 
 
 Your to-do list is full of small jobs that take an afternoon each: chasing a refund, comparing flights, planning the week's dinners, writing the thank-you note. AI can do most of them now, but only if it can act, and nobody wants a chatbot sending emails or placing orders on its own.
 
-Crewhouse is your personal assistant: a crew that does the work and a calm place to say yes. The helpers run on your own computer, with your own ChatGPT sign-in. There is no Crewhouse server and no telemetry. What leaves your computer is what a job needs: your AI account, the pages and searches a helper opens, the apps you connected, and a content-free "Crewhouse has news" ping to your phone.
+Crewhouse is your personal assistant: a crew that does the work and a calm place to say yes. The helpers run on your own computer, with your own AI account sign-in. There is no Crewhouse server and no telemetry. What leaves your computer is what a job needs: your AI account, the pages and searches a helper opens, the apps you connected, and a content-free "Crewhouse has news" ping to your phone.
 
 ## See it in action
 
@@ -118,7 +118,7 @@ Each helper has a soul (who it is, written by you), a job, its own skills and to
 
 ### Routines, without the setup
 
-"Every Friday 5pm" or "weekdays 8am" become routines that run on the computer's own clock. If the computer slept through one, it catches up once. If the last run is still going, the next one is skipped, not stacked. A quiet check-in only tells you when something changed. Chief's morning digest (what finished, what needs you, what's coming) is written by Crewhouse itself, so it uses none of your ChatGPT.
+"Every Friday 5pm" or "weekdays 8am" become routines that run on the computer's own clock. If the computer slept through one, it catches up once. If the last run is still going, the next one is skipped, not stacked. A quiet check-in only tells you when something changed. Chief's morning digest (what finished, what needs you, what's coming) is written by Crewhouse itself, so it uses none of your account.
 
 <p align="center">
   <img src="docs/screenshots/readme/routines.webp" alt="The Routines screen: a box to tell Chief what should happen regularly, Your week every morning, Plan the week's dinners every Saturday, and a paused school newsletter check" width="300" />
@@ -126,7 +126,7 @@ Each helper has a soul (who it is, written by you), a job, its own skills and to
 
 ### Sign in once, inside the app
 
-There are no terminal logins and no API keys. The first time you ask for something, Chief puts a **Sign in with ChatGPT** button under his reply. ChatGPT's own page opens, you tap Continue, and the job starts. A one-time code is the fallback. Other subscriptions the engine supports are under Settings, AI accounts ([the list](docs/supported-subscriptions.md)).
+There are no terminal logins and no API keys. The first time you ask for something, Chief puts a **Sign in with…** button under his reply, naming the account the crew will think with. That account's own page opens, you say yes, and the job starts. A one-time code is the fallback. Every account the engine supports is under Settings, AI accounts ([the list](docs/supported-subscriptions.md)); each row says whether it uses a plan you already pay for or is charged to your account per use.
 
 <p align="center">
   <img src="docs/screenshots/readme/signin.webp" alt="Chief's chat after a first request: 'ChatGPT asks you once', with a Sign in with ChatGPT button" width="300" />
@@ -165,7 +165,7 @@ git clone https://github.com/umeranjum17/crewhouse && cd crewhouse
 ./crewhouse start     # starts Crewhouse and prints the address
 ```
 
-Open **http://127.0.0.1:7711**. Chief greets you and offers three things to take off your plate. Tap one, then **Sign in with ChatGPT** under his reply, and the crew starts work.
+Open **http://127.0.0.1:7711**. Chief greets you and offers three things to take off your plate. Tap one, then **Sign in with…** under his reply, and the crew starts work.
 
 <p align="center">
   <img src="docs/screenshots/readme/hello.webp" alt="The first screen after install: Chief says Good morning, promises to ask before sending, deleting or spending, and offers three jobs" width="760" />
