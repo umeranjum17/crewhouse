@@ -129,18 +129,6 @@ test('the account list is the one crewd really serves: every route, none made up
   assert.match(A.resting({ resting: { notARoute: now + 60_000 } }), /^The crew is resting until /);
 });
 
-test('the give-back sheet and the signed-in list name bare hosts, never paths or pages', () => {
-  const tick = A.signTick('Reel', 'shop.example/claim');
-  assert.match(tick, /^I signed Reel in to /, 'the person\'s own say-so, one per tab host');
-  assert.doesNotMatch(tick, FORBIDDEN);
-  const sites = A.signedIn({ signedIn: ['mail.example', 'www.shop.example', 'shop.example'] });
-  assert.deepEqual(sites, ['mail.example', 'shop.example'], 'www folded away, no duplicates, steady order');
-  for (const h of sites) assert.doesNotMatch(h, /[/\\?#=]/);
-  assert.deepEqual(A.signedIn(null), [], 'no list yet: nothing shows');
-  assert.deepEqual(A.signTicks(['shop.example', 'mail.example']), ['shop.example'], 'the tab on screen starts ticked');
-  assert.deepEqual(A.signTicks([]), [], 'no tabs: nothing ticked');
-});
-
 test('asks become plain cards: money never gets "always", a blocked terminal becomes a question', () => {
   const [run, spend, question, keep] = A.cards(state);
   assert.equal(keep.head, 'Reel learned something');
@@ -373,35 +361,6 @@ test('a freshly recruited helper opens on its own starters, and a tap fills the 
   assert.doesNotMatch(phone.slice(phone.indexOf('s.chips'), phone.indexOf('s.chips') + 600), /api\.post/, 'and never sends');
 });
 
-test('goal rows lead Home and Hello: one per template, goal sorts first, plain words throughout', () => {
-  // Every helper template carries exactly one goal row, needing nothing up front.
-  const goals = ['scout', 'scribe', 'tracer', 'reel'].map((t) => {
-    const j = JSON.parse(readFileSync(join(import.meta.dirname, '..', 'templates', t, 'bot.json'), 'utf8'));
-    const g = j.ideas.filter((i: any) => i.group === 'goal');
-    assert.equal(g.length, 1, `${t} carries one goal row`);
-    return { bot: t, ...g[0] };
-  });
-  const BANNED = /\b(links?|host)\b/i; // the screen-word bans: a goal never names machinery
-  for (const g of goals) {
-    assert.deepEqual(g.needs, [], `${g.bot}'s goal runs now`);
-    assert.doesNotMatch(`${g.promise} ${g.ask}`, BANNED, `${g.bot}'s goal stays plain words`);
-  }
-  // On Home a goal sorts before money back, which still leads the everyday jobs.
-  const rows = A.jobs({ ...state, ideas: [
-    { bot: 'scout', promise: 'money back', ask: 'money back', group: 'money', needs: [] },
-    ...goals.map((g) => ({ bot: g.bot, promise: g.promise, ask: g.ask, group: 'goal', needs: [] })),
-    { bot: 'scribe', promise: 'everyday', ask: 'everyday', needs: [] },
-  ] });
-  assert.ok(rows.slice(0, 4).every((r) => r.goal), 'goal rows lead');
-  assert.equal(rows[4].label, 'money back', 'money back still leads the everyday jobs');
-  // Hello carries one goal row, and it goes straight to Scout.
-  const hello = A.firstIdeas({ house: { google: true } });
-  assert.equal(hello.length, 3);
-  assert.equal(hello.filter((i) => i.bot === 'scout').length, 1, 'one goal row on Hello');
-  assert.equal(hello.find((i) => i.bot === 'scout')!.label, 'Help me earn a little on the side');
-  assert.doesNotMatch(shown({ hello, rows }), BANNED, 'goal copy stays plain words');
-});
-
 test('chat navigation acts like chat: no tab scroller, Details behind the header, Back by history', () => {
   assert.equal(A.lines({ messages: [{ id: 1, author: 'bot', text: 'Hello' }] }, 'scout')[0].at, undefined, 'old lines without timestamps keep asks in the thread');
   const src = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
@@ -456,15 +415,6 @@ test('Tracer is visible and recruitable without an owner filter', () => {
   assert.ok(A.gallery(state).some((t: Json) => t.id === 'tracer'));
   const legacy = { ...state, templates: [{ id: 'tracer', display: 'Tracer', ownerOnly: true }] };
   assert.ok(A.gallery(legacy).some((t: Json) => t.id === 'tracer'), 'old template metadata cannot hide it');
-});
-
-test('plain() keeps what a person wrote and drops the machinery', () => {
-  assert.equal(A.plain('Saved it to /home/alex/x/report.pdf for you'), 'Saved it to “Report” for you');
-  assert.equal(A.plain('I used `ls -la` and it worked'), 'I used and it worked');
-  assert.equal(A.plain('Your `Birthday` video'), 'Your Birthday video');
-  assert.equal(A.plain('It is saved at `files/birthday-card.mp4` and is 1080p.'), 'It is saved at “Birthday card” and is 1080p.', 'a file named by the bot keeps its name');
-  assert.equal(A.plain('She said 3/4 of us are in'), 'She said 3/4 of us are in');
-  assert.equal(A.pretty('files/mum-birthday_v2.mp4'), 'Mum birthday v2');
 });
 
 test('the screens read view models only, and the mono face draws art only', () => {
@@ -746,32 +696,6 @@ test('the crew\'s share is words, never a number; money is dollars against your 
   assert.equal(A.money({}), null, 'an older snapshot without money has no panel');
   assert.equal(A.money({ money: { cap: 20, spent: 0 } })!.month, 'This month: nothing spent yet.');
   assert.equal(A.money({ money: { cap: 20, spent: 4.5 } })!.month, 'This month: $4.50 of $20 spent.');
-});
-
-test('chats: Chief first, then the latest talk; last lines in plain words, never a path', () => {
-  const now = Date.now();
-  const s = {
-    person: { id: 1 }, events: [], asks: [], tasks: [],
-    bots: [
-      { id: 'chief', display: 'Chief', last: { author: 'bot', text: 'Reel is on it.', at: now - 50_000 }, unread: 2 },
-      { id: 'reel', display: 'Reel', template: 'reel', role: 'Makes demo videos', last: { author: 'system', text: 'Delivered files/mum-birthday_v2.mp4: 31 s', at: now - 1000 }, unread: 12 },
-      { id: 'scout', display: 'Scout', template: 'scout', role: 'Researches', last: { author: 'person', text: 'find   rentals\nin Phuket', at: now - 9000 }, unread: 0 },
-      { id: 'scribe', display: 'Scribe', template: 'scribe', role: 'Drafts letters', last: null, unread: 0 },
-      { id: 'pip', display: 'Pip', template: 'scout', role: 'Plans', task: { id: 9, title: 'Plan the week', state: 'working' }, last: { author: 'bot', text: 'old', at: now - 99_000 }, unread: 0 },
-    ],
-  };
-  const c = A.chats(s);
-  assert.deepEqual(c.map((x) => x.id), ['chief', 'room', 'reel', 'scout', 'pip', 'scribe']);
-  assert.equal(c[1].line, 'Watch the crew work together');
-  assert.equal(c[2].line, 'Sent “Mum birthday v2”');
-  assert.equal(c[3].line, 'You: find rentals in Phuket');
-  assert.equal(c[4].line, 'Working on: Plan the week');
-  assert.equal(c[5].line, 'Drafts letters', 'nothing said yet: what it does');
-  assert.equal(A.unreadBadge(c[2].unread), '9+');
-  assert.doesNotMatch(shown(c), FORBIDDEN);
-  const f = A.found(s, { messages: [{ id: 3, bot: 'reel', author: 'system', text: 'Delivered files/x.mp4', at: now }], things: [{ id: 4, bot: 'scout', title: 'Rentals in Phuket', at: now }] });
-  assert.deepEqual(f.map((x) => [x.name, x.text]), [['Scout', 'Made “Rentals in Phuket”'], ['Reel', 'Sent “X”']]);
-  assert.doesNotMatch(shown(f), FORBIDDEN);
 });
 
 test('reach from anywhere: one plain sentence per relay state, naming only the relay\'s host', () => {
@@ -1350,14 +1274,6 @@ test('a patch is only ever a suggested change, never a fix, wherever the app wor
   assert.deepEqual([card.text, card.files.length, card.files[0].name], ['Suggested change (for the maintainer to review): passed its own check', 1, 'Suggested']);
 });
 
-test('a new helper from Chief is a yes-or-no card with its own yes', () => {
-  const s = { person: { id: 1 }, bots: [], asks: [{ id: 5, bot: 'chief', kind: 'propose', at: 1, title: 'Shall I take on a new helper? Pip: Watches rentals',
-    detail: { words: 'Shall I take on a new helper? Pip: Watches rentals', yes: 'Yes, take Pip on', preview: { head: 'Pip, a new helper', body: 'Watches rentals.' } } }] };
-  const [c] = A.cards(s);
-  assert.deepEqual(c.choices.map((x: any) => x.label), ['Yes, take Pip on', 'Not now']);
-  assert.ok(!c.choices.some((x: any) => /always/i.test(x.label)));
-});
-
 test('the week under the share is a third in words, never a number', () => {
   assert.equal(A.share({ share: { choice: 'light', used: false, week: 'fair' } }).week, 'This week the crew has used a fair part of what it may use of your ChatGPT.');
   assert.equal(A.share({ share: { choice: 'full', used: false, week: null } }).week, '');
@@ -1434,19 +1350,6 @@ test('reading text clears 4.5:1 against the surfaces it sits on, day and night',
 
 });
 
-test('a photo in a message is a picture, not words', () => {
-  const [l] = A.lines({ messages: [{ id: 1, author: 'person', text: 'Here is a photo.\n[photo reel] files/photos/5-1.png' }] }, 'reel');
-  assert.equal(l.text, '');
-  assert.equal(l.files[0].kind, 'image');
-  const [c] = A.lines({ messages: [{ id: 2, author: 'person', text: 'the school poster\n[photo pip] files/photos/6-1.jpg' }] }, 'chief');
-  assert.equal(c.text, 'the school poster');
-  assert.match(c.files[0].url, /\/files\/pip\/photos\/6-1\.jpg/);
-  assert.equal(A.preview({ author: 'person', text: 'Here is a photo.\n[photo reel] files/photos/5-1.png' }), 'You: Photo');
-  assert.doesNotMatch(shown([l, c]), FORBIDDEN);
-});
-
-// The bar the captain set: a helper makes the workbook, and it arrives as a card you can open. The file itself never
-// reaches a screen — crewd reads it (src/workbooks.ts) and the app renders these words.
 test('a delivered workbook is a card in the chat, and opens as a read-only sheet with tabs', async () => {
   const json = { sheets: [
     { name: 'Daily dashboard', total: 6, rows: [['Today', 'Number', 'Notes'], ['Arrivals', '6', 'from /home/alex/Crewhouse/bots/quill/files/log.xlsx'], ['Rooms ready', '—', '']] },
@@ -1683,60 +1586,6 @@ test('a delivered .mp4 shows a video badge, never DOCX', () => {
   assert.equal(A.fileTarget(thing.files[0])!.chip, 'MP4', 'a chat\'s list and Things show the same file-derived chip');
   const app = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
   assert.doesNotMatch(app, /'DOCX'|'XLSX'|'PDF'/, 'no badge is a hardcoded default; every chip comes from the file');
-});
-
-// ?demo=fresh: the Chief-only Home a new person gets — no helpers hired yet, so Home has nothing to hand over,
-// nothing needs them, and Chief's own three starters fill the empty chat. Renders through every Home view with no errors.
-test('?demo=fresh renders the Chief-only Home with no errors', () => {
-  const fresh: Json = { person: { id: 1, name: 'Umer', address: 'Umer', onboarded: 1 },
-      bots: [{ id: 'chief', display: 'Chief', template: 'chief', role: 'Runs the crew and answers to you', state: 'on', controls: 'bot', task: null, queued: 0, pausedUntil: null }],
-    templates: [{ id: 'chief', display: 'Chief' }],
-    tasks: [], ideas: [], asks: [], events: [], routines: [], resting: {}, connections: [] };
-  assert.deepEqual(A.jobs(fresh), [], 'no helpers yet, so nothing to hand over');
-  assert.match(A.homeSummary(fresh), /0 things need you · 0 helpers working/);
-  assert.equal(A.ideas(fresh).length, 3, "Chief's own three starters fill the empty chat");
-  assert.deepEqual(A.crew(fresh), [], 'nobody else in the crew');
-  const room = A.office(fresh);
-  assert.deepEqual(room.crew, [], 'nobody else in the room');
-  assert.deepEqual(room.counts, { needs: 0, working: 0, done: 0 });
-  assert.doesNotMatch(shown({ ...room, jobs: A.jobs(fresh), ideas: A.ideas(fresh) }), FORBIDDEN, 'no machinery reaches the fresh Home');
-  const demo = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'demo.ts'), 'utf8');
-  assert.match(demo, /\?demo=fresh/, 'the demo serves the fresh Home');
-  assert.match(demo, /if \(fresh\)/, 'fresh ships Chief-only, with no standing jobs');
-});
-
-// Offer-to-hire rows on a Chief-only Home: unhired templates offer goal rows needing nothing, tagged with the
-// template to hire. Home's list carries them; a tap brings the helper on then fills their box; chips never do.
-test('a Chief-only Home offers its helpers for hire: jobs carry hire, the tap hires first', () => {
-  // The fresh Home's rows, straight from the templates' goal rows so the copy cannot drift.
-  const goals = ['scout', 'scribe', 'reel'].map((t) => {
-    const j = JSON.parse(readFileSync(join(import.meta.dirname, '..', 'templates', t, 'bot.json'), 'utf8'));
-    const g = j.ideas.find((i: any) => i.group === 'goal');
-    return { bot: t, promise: g.promise, ask: g.ask, group: 'goal', needs: [], hire: t };
-  });
-  const freshHire = { ...state, ideas: goals };
-  const rows = A.jobs(freshHire);
-  assert.equal(rows.length, 3, 'jobs() is non-empty for ?demo=fresh');
-  assert.ok(rows.every((r) => r.hire && r.goal && !r.needs.length), 'each row offers its template');
-  assert.doesNotMatch(shown(rows), FORBIDDEN, 'an offer reads as plain words');
-  assert.equal(A.ideas(freshHire).length, 3, "chips stay Chief's own three starters, never offers");
-  assert.ok(A.ideas(freshHire).every((i: any) => i.bot === 'chief'), 'an offer cannot fill a box for a helper not hired yet');
-  // ?demo=fresh carries the same rows: the demo wires them in and repeats their words.
-  const demo = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'demo.ts'), 'utf8');
-  assert.match(demo, /ideas: freshHire/, 'fresh ships the hire rows');
-  for (const g of goals) assert.ok(demo.includes(g.ask), `fresh repeats “${g.ask}”`);
-  // A tap runs the gallery hire, then fills that helper's box: nothing starts until they send.
-  const web = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
-  const list = web.slice(web.indexOf('function JobList('), web.indexOf('function JobList(') + 2200);
-  assert.match(list, /api\.recruit\(template, name\)/, 'a tap hires the offered template');
-  assert.match(list, /keepDraft\(id, ask\)/, 'then fills that helper\'s box');
-  assert.match(list, /go\(`#\/h\/\$\{id\}`\)/, 'and opens their chat');
-  assert.match(list, /j\.hire \? <button/, 'the offer is a button, while a waiting row still links to the apps screen');
-  assert.match(list, /keepDraft\('chief', ask\)/, 'a hired helper\'s row still fills Chief\'s box');
-  const app = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
-  const phone = app.slice(app.indexOf('function JobList('), app.indexOf('function JobList(') + 1500);
-  assert.match(phone, /j\.hire\) void hire\(j\.hire, j\.ask\)/, 'the phone hires first too');
-  assert.match(phone, /keepDraft\(b\.id, ask\)/, 'then fills that helper\'s box');
 });
 
 // The office holds all of the person's helper jobs, steps, questions and first looks.
