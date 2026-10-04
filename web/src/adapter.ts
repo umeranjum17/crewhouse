@@ -655,6 +655,14 @@ export function things(state: Json): Thing[] {
   }));
 }
 
+/** A helper's shelf: the files it delivered on finished jobs, newest first, once each — never a handed-over input,
+ *  a photo or a summary of its own. Each opens in the reader its kind already has (fileTarget, the phone's FileRow). */
+export function made(state: Json, id: string): (FileView & { at: number })[] {
+  const files = things(state).filter((t) => t.helper === id).flatMap((t) => t.files.map((f) => ({ ...f, at: t.at })))
+    .filter((f) => !/^files\/(from-|photos\/)/.test(fileSource(f.url)?.path ?? ''));
+  return files.filter((f, i) => files.findIndex((g) => g.url === f.url) === i);
+}
+
 export type Job = { bot: string; label: string; ask: string; says: string; goal: boolean; money: boolean; needs: string[]; hire?: string };
 
 /** Home's three counts, from the same rows shown below them: what needs you, who is working, what got done today. */

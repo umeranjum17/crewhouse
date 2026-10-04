@@ -697,8 +697,10 @@ function HelperPage(ctx: Ctx & { id: string; tab: string }) {
           {b?.task ? (trail.length ? <Steps steps={trail} max={7} /> : <p className="mute">Working on “{A.plain(b.task.title)}”. Steps show as they happen.</p>)
             : <p className="mute">Nothing right now.</p>}
           <a className="link" href={`#/h/${id}/did`}>What happened</a>
-          <h2 className="plate">Things</h2>
-          <ThingsGrid list={A.things(state).filter((t) => t.helper === id)} state={state} empty={`${h.name}'s finished work shows up here.`} />
+          <h2 className="plate">What {h.name} made</h2>
+          {A.made(state, id).length ? <div className="list-group">{A.made(state, id).map((f) => { const t = A.fileTarget(f)!; const out = !t.href.startsWith('#');
+            return <a key={f.url} className="list-row" href={t.href} target={out ? '_blank' : undefined} rel={out ? 'noreferrer' : undefined}><span className="file-chip">{t.chip}</span><span className="grow"><b className="clamp">{f.name}</b><span className="small">{A.clock(f.at)}</span></span><span className="mute">›</span></a>; })}</div>
+            : <div className="card empty">{h.name}'s finished work shows up here.</div>}
           <h2 className="plate">Routines</h2>
           <RoutineList {...ctx} bot={id} />
           <h2 className="plate">{h.name}'s job</h2>
@@ -855,26 +857,6 @@ function AboutYou({ tick }: { tick: number }) {
 }
 
 // ---------- things ----------
-function ThingsGrid({ list, state, empty }: { list: A.Thing[]; state: Json; empty: string }) {
-  const crew = A.crew(state);
-  if (!list.length) return <div className="card empty"><pre className="art small-art" aria-hidden>{'   ✦  ( •ᴗ• )  ✦'}</pre>{empty}</div>;
-  return (
-    <div className="grid things">
-      {list.map((t) => {
-        const h = A.crew(state).find((x) => x.id === t.helper);
-        return (
-          <div key={t.id} id={`t${t.id}`} className="card thing">
-            {t.files[0] && <Media f={t.files[0]} />}
-            <b>{t.title}</b>
-            {t.summary && <p className="mute clamp">{t.summary}</p>}
-            {t.files.slice(1).map((f) => <Media key={f.url} f={f} />)}
-            <div className="by">{h && <Face who={h} size={26} />}<span className="mute small">{h?.name ?? 'The crew'} · {A.clock(t.at)}</span></div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
 function Things({ state, id }: Ctx & { id?: string }) {
   const list = A.things(state);
   // A search hit for a finished thing lands on the result itself.

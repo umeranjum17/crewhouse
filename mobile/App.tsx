@@ -1590,8 +1590,8 @@ function HelperPage(ctx: Ctx & { id: string; tab: string; m?: number; setTab: (t
           {b?.task ? (trail.length ? <Card><Steps steps={A.steps(page?.trail ?? [], b.task.id, true)} max={all ? 40 : 7} /></Card> : <T tone="mute">{`Working on “${A.plain(b.task.title)}”. Steps show as they happen.`}</T>)
             : <T tone="mute">Nothing right now.</T>}
           {trail.length > 7 && <Btn ghost label={all ? 'Just now' : 'Every step'} onPress={() => setAll((v) => !v)} />}
-          <T style={s.b}>Things</T>
-          <ThingsList list={A.things(state).filter((x) => x.helper === id)} state={state} empty={`${h.name}'s finished work shows up here.`} />
+          <T style={s.b}>{`What ${h.name} made`}</T>
+          {A.made(state, id).length ? <Card>{A.made(state, id).map((f) => <FileRow key={f.url} f={f} />)}</Card> : <Empty>{`${h.name}'s finished work shows up here.`}</Empty>}
           <T style={s.b}>Routines</T>
           <RoutineList {...ctx} bot={id} />
           <T style={s.b}>{`About ${h.name}`}</T>
