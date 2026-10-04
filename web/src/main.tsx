@@ -1016,20 +1016,20 @@ function Phones({ tick }: { tick: number }) {
       <label className="card row">
         <input type="checkbox" checked={link.lan} disabled={link.pinned} onChange={(e) => attempt(async () => setLink(await api.phonesAtHome(e.target.checked)))} />
         <span className="grow"><b>Phones on this Wi-Fi can reach the crew</b>
-          <div className="mute small">Off: the Wi-Fi opens only while a pairing code is showing here, so a phone can join at home. After that it reaches this computer through <a href="https://tailscale.com" target="_blank" rel="noreferrer">Tailscale</a>, from anywhere. Either way everything between them is locked.</div></span>
+          <div className="mute small">Off: the Wi-Fi opens only while a pairing code is showing here, so a phone can join at home. After that it reaches this computer through <a href="https://tailscale.com" target="_blank" rel="noreferrer">the connector app</a>, from anywhere. Either way everything between them is locked.</div></span>
       </label>
       <div className="card anywhere">
         <b>Reach it from anywhere</b>
         <p className="mute small">{A.anywhere(link).words}</p>
         {!!A.anywhere(link).steps.length && <ol className="how">{A.anywhere(link).steps.map((s) => <li key={s}>{s}</li>)}</ol>}
-        <p className="mute small"><a href="https://tailscale.com/download" target="_blank" rel="noreferrer">Get Tailscale ↗</a> · For your own devices. Tailscale sees which devices are yours, never what they say.</p>
+        <p className="mute small"><a href="https://tailscale.com/download" target="_blank" rel="noreferrer">Get the connector app ↗</a> · For your own devices. It sees which devices are yours, never what they say.</p>
       </div>
-      <details className="card" open={!!link.relay}><summary className="small">Another way in: run your own go-between</summary>
+      <details className="card" open={!!link.relay}><summary className="small">Another way in: run your own mailbox</summary>
       <form className="form" onSubmit={(e) => { e.preventDefault(); void attempt(async () => { setLink(await api.phoneRelay((relay ?? link.relay).trim(), enrol)); setRelay(null); setEnrol(''); }, 'Saved'); }}>
         <p className="mute small">{A.reach(link).words}</p>
-        <p className="mute small">A go-between passes messages between your phones and this computer, so this computer opens nothing to the internet. <a href="https://github.com/umeranjum17/crewhouse/blob/main/relay/README.md" target="_blank" rel="noreferrer">Run your own ↗</a></p>
-        <input className="input" value={relay ?? link.relay ?? ''} onChange={(e) => setRelay(e.target.value)} placeholder="Go-between address, like https://go.example.com" aria-label="Go-between address" autoComplete="off" />
-        <input className="input" value={enrol} onChange={(e) => setEnrol(e.target.value)} placeholder="Invitation, if your go-between gave you one" aria-label="Invitation" autoComplete="off" />
+        <p className="mute small">A mailbox passes messages between your phones and this computer, so this computer opens nothing to the internet. <a href="https://github.com/umeranjum17/crewhouse/blob/main/relay/README.md" target="_blank" rel="noreferrer">Run your own ↗</a></p>
+        <input className="input" value={relay ?? link.relay ?? ''} onChange={(e) => setRelay(e.target.value)} placeholder="Mailbox address, like https://go.example.com" aria-label="Mailbox address" autoComplete="off" />
+        <input className="input" value={enrol} onChange={(e) => setEnrol(e.target.value)} placeholder="Invitation, if yours came with one" aria-label="Invitation" autoComplete="off" />
         <div className="btns"><button className="btn go" disabled={relay === null && !enrol}>Save</button>
           {!!link.relay && <button type="button" className="btn ghost" onClick={() => attempt(async () => setLink(await api.phoneRelay('')), 'Turned off')}>Turn off</button>}</div>
       </form></details>
@@ -1141,7 +1141,7 @@ function HouseGoogle({ on, steps, refresh }: { on: boolean; steps?: A.GoogleStep
     <div className="label" id="setup-google">Google setup</div>
     {on && !edit ? <div className="card">
         <div className="row"><span className="grow"><b>{A.googleHeadline(steps)}</b><div className="mute small">Your setup so far. Check the remaining steps on Google’s pages.</div></span>
-          <button className="btn" onClick={() => { setEdit(true); setStep(A.GOOGLE_STEPS.length - 1); }}>Change key</button></div>
+          <button className="btn" onClick={() => { setEdit(true); setStep(A.GOOGLE_STEPS.length - 1); }}>Change sign-in</button></div>
         {steps?.map((m, i) => <div key={i} className="row stack-row">
           <span className="grow"><b>{i + 1}. {A.GOOGLE_STEPS[i].title}</b> <span className={m.state === 'checked' ? 'ok' : m.state === 'missing' ? 'warn-line' : 'mute'}>{A.STEP_MARK[m.state]}</span><div className="mute small">{m.note}</div></span>
           {m.state === 'missing' && <a className="btn go" href={A.GOOGLE_STEPS[i].url} target="_blank" rel="noreferrer">Open Google's page</a>}

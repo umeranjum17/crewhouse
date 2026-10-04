@@ -259,18 +259,18 @@ function helperMood(b: Json, needs: boolean, stuck: boolean, events: Json[]): Mo
   return 'idle';
 }
 
-/** Settings, Phones, "Reach it from anywhere": one of three states in plain words, and the steps still to do. Tailscale
- *  uses the same account on your computer and phone. */
+/** Settings, Phones, "Reach it from anywhere": one of three states in plain words, and the steps still to do. The
+ *  free connector app uses the same account on your computer and phone, so Settings never names it. */
 export function anywhere(link: Json) {
   const state: 'home' | 'anywhere' | 'signin' = link?.anywhere === 'anywhere' || link?.anywhere === 'signin' ? link.anywhere : 'home';
   const words = {
-    home: 'Only at home. Phones reach this computer on the home Wi-Fi. To reach it from anywhere, set up Tailscale, a free app:',
+    home: 'Only at home. Phones reach this computer on the home Wi-Fi. To reach it from anywhere, get the free connector app:',
     anywhere: "Reachable from anywhere. Your phone opens Crewhouse on mobile data too. To add your phone:",
-    signin: "Tailscale needs signing in again on this computer. Until then, phones reach it only on the home Wi-Fi. Open Tailscale here and sign in.",
+    signin: "The connector app needs signing in again on this computer. Until then, phones reach it only on the home Wi-Fi. Open the connector app here and sign in.",
   }[state];
   const steps = [
-    'Install Tailscale on this computer and sign in with Google.',
-    "On your phone, install Tailscale and sign in with the same Google account as this computer, or share this computer with that phone's account in Tailscale.",
+    'On this computer, get the free connector app and sign in with Google.',
+    "On your phone, get the same app and sign in with the same Google account as this computer, or share this computer with that phone's account in the app.",
     'Then pair your phone here.',
   ];
   return { state, words, steps: state === 'home' ? steps : state === 'anywhere' ? steps.slice(1) : [] };
@@ -317,11 +317,11 @@ export function away(f: { home?: boolean; tailnet?: boolean; vpn?: boolean; anyw
  *  away says so, since that is the route that fails unseen. */
 export function reached(p: Json) {
   const r: Record<string, number> = p?.reached ?? {};
-  const names: Record<string, string> = { home: 'home Wi-Fi', tailscale: 'Tailscale', relay: 'your go-between' };
-  const [via, t] = Object.entries(r).filter(([k]) => names[k]).sort((a, b) => b[1] - a[1])[0] ?? [];
+  const away = ['tailscale', 'relay'];
+  const [via, t] = Object.entries(r).filter(([k]) => k === 'home' || away.includes(k)).sort((a, b) => b[1] - a[1])[0] ?? [];
   if (!via) return 'Not in touch yet';
-  const last = `Last reached it ${clock(t)} over ${names[via]}`;
-  return r.tailscale || r.relay ? last : `${last} · never from away yet`;
+  const last = `Last reached it ${clock(t)} ${via === 'home' ? 'on the home Wi-Fi' : 'away from home'}`;
+  return away.some((k) => r[k]) ? last : `${last} · never from away yet`;
 }
 
 /** Settings, Phones: one plain line when notifications can't reach phones yet (README, "Phone notifications"). */
@@ -346,22 +346,22 @@ export const update = (state: Json) => (state.update ? { words: `A new Crewhouse
 
 /** The owner's steps to switch Google on for your crew, each with the Google page it happens on (docs/google-setup.md). */
 export const GOOGLE_STEPS = [
-  { title: 'Make a project', url: 'https://console.cloud.google.com/projectcreate', says: 'Name it “Crewhouse (personal)” and press Create. No billing needed.' },
-  { title: 'Switch on Calendar, Gmail and Drive', url: 'https://console.cloud.google.com/apis/library', says: 'Search “Google Calendar API” and press Enable. Do the same for “Gmail API” and “Google Drive API”.' },
+  { title: 'Make space for Crewhouse', url: 'https://console.cloud.google.com/projectcreate', says: 'Name it “Crewhouse (personal)” and press Create. No billing needed.' },
+  { title: 'Switch on Calendar, Gmail and Drive', url: 'https://console.cloud.google.com/apis/library', says: 'Search “Google Calendar” and press Enable. Do the same for “Gmail” and “Google Drive”.' },
   { title: 'Describe the app', url: 'https://console.cloud.google.com/auth/overview', says: 'Pick External, call it “Crewhouse”, give your email. Under Data access add calendar.events, gmail.readonly and drive.file. Under Audience press Publish app, so it says “In production”.' },
-  { title: 'Make the key', url: 'https://console.cloud.google.com/apis/credentials', says: 'Create credentials → OAuth client ID → type “Desktop app”. Paste the Client ID and Client secret below.' },
+  { title: 'Make the sign-in', url: 'https://console.cloud.google.com/apis/credentials', says: 'Create credentials → OAuth client ID → type “Desktop app”. Paste the Client ID and Client secret below.' },
 ];
 
-/** crewd's word on each step once the key is in (`house.steps`): checked from Google's own answers, or not. */
+/** crewd's word on each step once the sign-in is in (`house.steps`): checked from Google's own answers, or not. */
 export type GoogleStep = { state: 'checked' | 'said' | 'missing'; note: string };
 export const STEP_MARK = { checked: '✓ Checked', said: 'You said done', missing: 'Missing' } as const;
 export const googleHeadline = (steps?: GoogleStep[] | null) => {
   const missing = steps?.findIndex((s) => s.state === 'missing') ?? -1;
   if (missing >= 0) return `Step ${missing + 1} is missing`;
-  return steps?.every((s) => s.state === 'checked') ? 'Google is on ✓' : 'Google key saved';
+  return steps?.every((s) => s.state === 'checked') ? 'Google is on ✓' : 'Google sign-in saved';
 };
 
-/** The one code a phone away from home types: the short code and the pairing code, with the go-between's own
+/** The one code a phone away from home types: the short code and the pairing code, with the mailbox's own
  *  address carried inside it, so the phone knows where to look and nobody types an address. Empty when there is none. */
 export const phoneTyped = (t: Json) => {
   if (!t?.short || !t?.code) return '';
