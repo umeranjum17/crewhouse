@@ -620,7 +620,7 @@ export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; 
           {when !== null && <form className="row routine-edit" onSubmit={(e) => { e.preventDefault(); if (!stuck) void start(); }}>
             <input className="input grow" value={when} onChange={(e) => setWhen(e.target.value)} placeholder="When? For example: every Saturday 10am" aria-label="When" />
           </form>}
-          {when !== null && preview && !preview.bad && <div className="mute small routine-note">{preview.words}. First time {preview.first}. {c.zoneNote}</div>}
+          {when !== null && preview && !preview.bad && <div className="mute small routine-note">{preview.words}.{preview.guessed ? ` Did you mean ${preview.words.split(' at ').pop()}?` : ''} First time {preview.first}. {c.zoneNote}</div>}
           {when !== null && preview?.bad && <div className="mute small routine-note">I didn't catch that time. Try “every Monday 9:00”.</div>}
           <div className="btns">
             <button className="btn go" disabled={stuck} onClick={start}>Start it</button>

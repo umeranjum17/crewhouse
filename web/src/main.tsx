@@ -919,7 +919,7 @@ function RoutineRow({ r, h, act }: { r: Json; h: Helper | undefined; act: (fn: (
         <button className="btn go" disabled={!when.trim() || !preview || preview.bad}>Save</button>
         <button className="btn ghost" type="button" onClick={() => setWhen(null)}>Cancel</button>
       </form>}
-      {when !== null && preview && !preview.bad && <div className="mute small">{preview.words}. First time {preview.first}.</div>}
+      {when !== null && preview && !preview.bad && <div className="mute small">{preview.words}.{preview.guessed ? ` Did you mean ${preview.words.split(' at ').pop()}?` : ''} First time {preview.first}.</div>}
       {when !== null && preview?.bad && <div className="mute small">I didn't catch that time. Try “every Monday 9:00”.</div>}
       <div className="btns">
         <button className="btn" onClick={() => act(() => api.runRoutine(r.id), 'Asked to run')}>Do it now</button>
