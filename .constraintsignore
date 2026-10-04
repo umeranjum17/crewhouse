@@ -1,0 +1,4 @@
+# Files the floor guard's pattern checks skip: these name the floor's own patterns.
+# Structural checks (deleted test, removed rule, moved threshold) still apply everywhere.
+CONSTRAINTS.md
+scripts/floor-guard.mjs
