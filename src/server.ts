@@ -10,7 +10,7 @@ import * as disk from './bots.ts';
 import { toolStatus } from './tools.ts';
 import { PROVIDERS, clock, provider } from './accounts.ts';
 import { coversOf, toolWords } from './policy.ts';
-import { describe, nextRun, parseSchedule } from './routines.ts';
+import { describe, firstRun, nextRun, parseSchedule } from './routines.ts';
 import { Link } from './link.ts';
 import { lesson, Teacher } from './teach.ts';
 
@@ -386,7 +386,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       const next = nextRun(when, Date.now());
       // `first` is the computer's own clock, so the card and the preview read the same words everywhere; `zone` lets a
       // screen away from home name the time zone (and only then).
-      return { words: describe(when), next, first: clock(next), zone: Intl.DateTimeFormat().resolvedOptions().timeZone };
+      return { words: describe(when), next, first: firstRun(next), guessed: 'guessed' in when && when.guessed === true, zone: Intl.DateTimeFormat().resolvedOptions().timeZone };
     }
     if (m === 'POST' && p === '/api/routines') { const row = crew.addRoutine(body, 'person'); return crew.routines().find((x) => x.id === row.id); }
     if ((r = p.match(/^\/api\/routines\/(\d+)$/)) && m === 'PUT') { crew.updateRoutine(Number(r[1]), body); return { ok: true }; }

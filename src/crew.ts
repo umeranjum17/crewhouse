@@ -15,7 +15,7 @@ import { allowed, proxy } from './net.ts';
 import type { Server } from 'node:net';
 import { acts, claimOf, coversOf, effectOf, orderOf, pressOf, toolWords, type Effect } from './policy.ts';
 import { axiEnv, registry, resolveGrants, toolBin, which } from './tools.ts';
-import { describe, describeTrigger, nextRun, parseSchedule, parseTrigger } from './routines.ts';
+import { describe, describeTrigger, firstRun, nextRun, parseSchedule, parseTrigger, timeOf } from './routines.ts';
 import { buildWorkbook, readWorkbook } from './workbooks.ts';
 import { MAX_ITEMS, MAX_PARALLEL, subMessage, type BatchAnswer } from './batch.ts';
 import { buildDocument, readDocument } from './documents.ts';
@@ -656,7 +656,7 @@ export class Crew {
       const row = this.routine(Number(r.lastInsertRowid));
       if (plan.on) mkdirSync(this.inbox(plan.bot.id), { recursive: true });
       this.db.event('routine.created', plan.bot.id, { routine: row.id, name: plan.name, words, by });
-      if (by === CHIEF) this.say(CHIEF, 'system', `Routine added: “${plan.name}” for ${plan.bot.display}, ${words}.${plan.when ? ` First run ${clock(row.next_at)}.` : ''}`, null);
+      if (by === CHIEF) this.say(CHIEF, 'system', `Routine added: “${plan.name}” for ${plan.bot.display}, ${words}.${plan.when ? ` First run ${firstRun(row.next_at)}.` : ''}`, null);
       return row;
     });
   }
@@ -669,9 +669,11 @@ export class Crew {
     const host = plan.watch ? new URL(plan.watch).hostname.replace(/^www\./, '') : '';
     const what = plan.watch ? `Keeps an eye on ${host}` : `${plan.bot.display} will ${plan.first.charAt(0).toLowerCase()}${plan.first.slice(1)}`;
     const start = [plan.when ? describe(plan.when) : '', plan.on ? describeTrigger(parseTrigger(plan.on), plan.bot.display) : ''].filter(Boolean);
-    const lines = [...start, what,
+    // Words that never named a time: say so and ask, rather than let Crewhouse's own hour pass as the person's.
+    const ask = plan.when && 'guessed' in plan.when && plan.when.guessed ? [`Did you mean ${timeOf(plan.when)}?`] : [];
+    const lines = [...start, ...ask, what,
       plan.watch ? 'Tells you only when the page changes' : plan.quiet ? 'Tells you only when something changed' : 'Tells you each time it runs',
-      ...(plan.when ? [`First time: ${clock(nextRun(plan.when, Date.now()))}`] : [])];
+      ...(plan.when ? [`First time: ${firstRun(nextRun(plan.when, Date.now()))}`] : [])];
     const words = `${start.join('; ')}, ${what}.`;
     return this.propose(CHIEF, words, {
       routine: { bot: plan.bot.id, schedule: String(p.schedule ?? '').trim(), on: plan.on, task: p.task, name: p.name, model: p.model, quiet: p.quiet, watch: p.watch },

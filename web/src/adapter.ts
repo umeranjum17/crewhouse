@@ -1082,7 +1082,7 @@ export const knows = (skills: Json[] = []) => skills.map((k) => ({ name: String(
 // ---------- routines, people, accounts, apps ----------
 export function routines(state: Json, bot?: string) {
   return state.routines.filter((r: Json) => !bot || r.bot === bot).map((r: Json) => ({
-    id: r.id, name: plain(r.name), helper: r.kind === 'digest' ? 'chief' : r.bot, when: plain(r.words ?? ''), on: plain(r.on ?? ''), paused: r.state === 'paused', next: r.next_at ? clock(r.next_at) : '', digest: r.kind === 'digest',
+    id: r.id, name: plain(r.name), helper: r.kind === 'digest' ? 'chief' : r.bot, when: plain(r.words ?? ''), on: plain(r.on ?? ''), paused: r.state === 'paused', next: r.next_at ? nextAt(r.next_at) : '', digest: r.kind === 'digest',
     quiet: !!r.quiet, watching: r.watch ? host(r.watch) : '',
     last: r.history?.[0] ? lastRun(r.history[0]) : '',
     // Where the last run ended up: the thing it made, else its line in the helper's chat. A skipped run has neither.
@@ -1091,6 +1091,13 @@ export function routines(state: Json, bot?: string) {
   }));
 }
 const host = (url: string) => { try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return 'a page'; } };
+/** When a routine runs next, in the fewest words that stay true: the day, or the time when it is today. The row already
+ *  says the time of day, so repeating it would only crowd the line. */
+function nextAt(at: number) {
+  const d = new Date(at), today = new Date();
+  if (d.toDateString() === today.toDateString()) return clock(at);
+  return Math.abs(at - today.getTime()) < 6 * 86_400_000 ? d.toLocaleDateString([], { weekday: 'short' }) : `${d.toLocaleDateString([], { weekday: 'short' })}, ${d.toLocaleDateString([], { month: 'short', day: 'numeric' })}`;
+}
 /** A routine's latest run in words; a watch says whether the page changed. */
 function lastRun(h: Json) {
   const at = clock(h.at);

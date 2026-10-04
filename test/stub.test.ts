@@ -388,6 +388,13 @@ test('routines: Chief offers one as a card, the person starts it (or changes the
   const sched = (await api('GET', '/api/schedule?text=' + encodeURIComponent('weekdays at 8am'))).body;
   assert.equal(sched.words, 'Weekdays at 8:00 am');
   assert.match(sched.first, /am|pm/, "the first run in the computer's own words, so every screen reads the same");
+  // Wed 5:36 pm on "weekdays at 8am" is a Thursday morning: the first run names its day unless it is today.
+  const day = (at: number) => new Date(at).toDateString() === new Date().toDateString() ? '' : new Date(at).toLocaleDateString([], { weekday: 'short' });
+  assert.equal(sched.first, `${day(sched.next)} ${sched.words.split(' at ')[1]}`, 'the first run never reads as some other day');
+  assert.equal((await api('GET', '/api/schedule?text=' + encodeURIComponent('every Monday'))).body.guessed, true, 'words that never named a time are a guess, and say so');
+  const monday = (await api('GET', '/api/schedule?text=' + encodeURIComponent('every Monday'))).body;
+  assert.equal(monday.first, `${day(monday.next)} 9:00 am`, 'even a guessed hour is read on the day it lands');
+  assert.equal(sched.guessed, false, 'words that named a time are not a guess');
   assert.equal(typeof sched.zone, 'string', 'the computer names its zone, so a screen away from home can too');
   assert.equal((await api('GET', '/api/schedule?text=someday')).status, 400);
 
@@ -398,6 +405,9 @@ test('routines: Chief offers one as a card, the person starts it (or changes the
   assert.equal(card.detail.words, 'Every Friday at 5:00 pm, Reel will make a demo of what shipped this week.');
   assert.equal(card.detail.preview.head, 'A new routine');
   assert.equal(card.detail.preview.body.split('\n')[0], 'Every Friday at 5:00 pm');
+  // The same words everywhere: the card's last line is the schedule preview's own first run.
+  const friday = (await api('GET', '/api/schedule?text=' + encodeURIComponent('every Friday 17:00'))).body;
+  assert.equal(card.detail.preview.body.split('\n').at(-1), `First time: ${friday.first}`, 'the card and the preview name one first run');
   assert.match(card.detail.preview.body, /Reel will make a demo of what shipped this week/);
   assert.equal((await api('GET', '/api/state')).body.routines.some((x: any) => x.name === 'Make a demo of what shipped this week'), false, 'nothing runs before the yes');
 
@@ -408,9 +418,10 @@ test('routines: Chief offers one as a card, the person starts it (or changes the
   let r = (await api('GET', '/api/state')).body.routines.find((x: any) => x.name === 'Make a demo of what shipped this week');
   assert.equal(r.words, 'Every Friday at 9:00 am');
 
-  // Chief offers another; "Not now" leaves nothing behind.
-  await done('chief', (await say('chief', `and ${call('crew_routine', { bot: 'reel', when: 'every Friday 17:00', task: 'Tidy the screenshots folder' })}`)).body.task);
+  // Chief offers another, this time without a time of day: the card asks about the hour before anything runs. "Not now" leaves nothing behind.
+  await done('chief', (await say('chief', `and ${call('crew_routine', { bot: 'reel', when: 'every Monday', task: 'Tidy the screenshots folder' })}`)).body.task);
   const again = await until(async () => (await api('GET', '/api/state')).body.asks.find((a: any) => a.kind === 'propose' && a.detail.routine));
+  assert.ok(again.detail.preview.body.split('\n').includes('Did you mean 9:00 am?'), 'an odd schedule asks instead of quietly passing a guess as the person\'s');
   assert.equal((await api('POST', `/api/asks/${again.id}/answer`, { answer: 'deny' })).status, 200);
   assert.equal((await api('GET', '/api/state')).body.routines.some((x: any) => x.name === 'Tidy the screenshots folder'), false);
 

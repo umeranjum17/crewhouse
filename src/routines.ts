@@ -2,7 +2,7 @@
 // Times are the computer's local time, so a routine keeps its wall-clock hour across daylight saving.
 
 /** Either a clock time on some weekdays (0 = Sunday), or a fixed interval in minutes. */
-export type Schedule = { days: number[]; at: number } | { every: number };
+export type Schedule = { days: number[]; at: number; guessed?: boolean } | { every: number };
 
 const DAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
 const NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -55,7 +55,8 @@ export function parseSchedule(text: string): Schedule {
   }
   if (!days.size && tod !== undefined) [0, 1, 2, 3, 4, 5, 6].forEach((d) => days.add(d)); // "every evening"
   if (!days.size) throw bad(text);
-  return { days: [...days].sort(), at: at ?? tod ?? 9 * 60 }; // "every Monday" means the start of the working day
+  // "every Monday" means the start of the working day; `guessed` says the words never named a time, so a card asks about it.
+  return { days: [...days].sort(), at: at ?? tod ?? 9 * 60, guessed: at === undefined && tod === undefined };
 }
 
 const hhmm = (at: number) => new Date(2000, 0, 1, Math.floor(at / 60), at % 60).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase();
@@ -68,6 +69,18 @@ export function describe(s: Schedule) {
     : `Every ${s.days.map((x) => NAMES[x]).join(', ').replace(/, ([^,]*)$/, ' and $1')}`;
   return `${days} at ${hhmm(s.at)}`;
 }
+
+/** The time alone, in the same words as `describe`: "9:00 am". */
+export const timeOf = (s: Schedule) => ('every' in s ? '' : hhmm(s.at));
+
+/** The first run in words, naming its day unless it is today: "Thu 8:00 am", so it never reads as some other day. */
+export function firstRun(at: number, now = Date.now()) {
+  const d = new Date(at);
+  if (d.toDateString() === new Date(now).toDateString()) return hhmmOf(d);
+  const day = Math.abs(at - now) < 6 * 86_400_000 ? d.toLocaleDateString([], { weekday: 'short' }) : d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  return `${day} ${hhmmOf(d)}`;
+}
+const hhmmOf = (d: Date) => d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).replace(/\s([AP])M$/, (m) => m.toLowerCase());
 
 /** The first run strictly after `after` (epoch ms). */
 export function nextRun(s: Schedule, after: number) {

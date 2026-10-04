@@ -12,7 +12,7 @@
 // &sheet=signin or &sheet=connect opens that sheet, and &phase=… pins it to one state.
 import type { Json } from './api.ts';
 import { AIS } from './adapter.ts';
-import { describe, nextRun, parseSchedule } from '../../src/routines.ts';
+import { describe, firstRun as firstRunWords, nextRun, parseSchedule } from '../../src/routines.ts';
 
 const variant = new URLSearchParams(typeof location === 'undefined' ? '' : location.search).get('demo') || 'umer';
 const now = Date.now();
@@ -568,7 +568,7 @@ export async function demoCall(method: string, path: string, body?: Json) {
     try {
       const when = parseSchedule(text || 'every Monday 9:00');
       const next = nextRun(when, now);
-      return { words: describe(when), next, first: new Date(next).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', weekday: 'short' }).replace(/ [AP]M/i, (m) => m.toLowerCase()) };
+      return { words: describe(when), next, first: firstRunWords(next, now), guessed: 'guessed' in when && when.guessed === true };
     } catch { return { bad: true };
     }
   }
