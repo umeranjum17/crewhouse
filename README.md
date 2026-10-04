@@ -34,7 +34,15 @@
 ## Download
 
 - **Phone app (Android, preview):** [CREWHOUSE-APK-1.0.0-preview.20261001.16.apk](https://github.com/umeranjum17/crewhouse/releases/download/v1.0.0-preview.20261001.16/CREWHOUSE-APK-1.0.0-preview.20261001.16.apk) — v1.0.0-preview.20261001.16, ~90 MB, SHA-256 `bae601ad5cf62c9e226d8cced397bb9aba18bebddc41b3cf9e8a6818c21598c6`. Debug-signed preview; updates the previous preview in place. Pair it under Settings, Phones on the computer (see [TRY-IT.md](TRY-IT.md#3-the-phone-app)).
-- **Computer:** Crewhouse is self-hosted and installs from source — see [Quick start](#quick-start) (`git clone` + `./crewhouse setup`). There is no desktop installer.
+- **Computer (Linux):** take the **`crewhouse_<version>_amd64.deb`** file from the [releases page](https://github.com/umeranjum17/crewhouse/releases) — about 200 MB. Three steps, no terminal:
+
+  1. **Download it** from the releases page. It lands on your Downloads page.
+  2. **Double-click the file.** Your software centre opens on it; press **Install**. It brings what the helpers need (the sandbox and their screens) with it, so there is nothing else to tick.
+  3. **Open Crewhouse from your app menu** — the same menu you install from. Chief greets you and offers three things he can take off your plate. Nothing to type, nothing to sign in to but your own ChatGPT, right there in the chat.
+
+That is the whole path from download to hello: no terminal, no command, no path to copy anywhere. It installs itself under `/opt/crewhouse`, starts by itself when you log in, and opens its own window with no address bar.
+
+To run it from a checkout instead, see [Quick start](#quick-start).
 
 There is no full release yet, only phone-app previews, so GitHub's `/releases/latest` links don't apply (GitHub skips prereleases there). The link above names the current preview; for anything newer, check the [releases page](https://github.com/umeranjum17/crewhouse/releases).
 
@@ -153,7 +161,9 @@ Existing shared installs must first update through the one-person migration rele
 
 Keep the phone app up to date alongside the computer. An older preview shows “Get the latest Crewhouse app to keep chatting.” Open Chief’s chat and tap the sentence to download the current preview.
 
-## Quick start
+## Quick start (from source)
+
+This is the developer path, for a checkout you already have. Everyone else: the `.deb` in [Download](#download) needs no terminal at all.
 
 Crewhouse is self-hosted only. There is no hosted service and no account with us. Your personal assistant runs on your computer. You use it from a browser or the phone app.
 
