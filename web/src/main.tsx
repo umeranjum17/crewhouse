@@ -1070,13 +1070,13 @@ function Settings({ state, refresh, tick, accounts, look, setLook }: Ctx & { loo
     <div className="page settings">
       <a href="#/" className="back phone-only">‹ Home</a>
       <h1>Settings</h1>
-      <p className="mute small">{A.atHome().join(' ')}</p>
+      <p className="mute small">{A.atHome(undefined, A.planName(accounts)).join(' ')}</p>
       {/* No tab bar on a phone (B1): the desk rail's places, reached from here. */}
       <div className="card list phone-only">{GO_TO.map(([h, l, i]) => <a key={h} href={h} className="row-item go-to"><span className="o-ic"><Icon name={i} /></span><span className="grow">{l}</span><Icon name="next" /></a>)}</div>
       <HomeSetup state={state} accounts={accounts} tick={tick} />
 
       <div className="label">You</div>
-      <You state={state} act={act} />
+      <You state={state} act={act} plan={A.planName(accounts)} />
       <AboutYou tick={tick} />
 
       <div className="label" id="setup-signin">Your AI accounts</div>
@@ -1176,7 +1176,7 @@ function HouseGoogle({ on, steps, refresh }: { on: boolean; steps?: A.GoogleStep
 
 /** The person's own settings in one card: their name, what Chief calls them, quiet hours and the crew's share of
  *  their AI. The stored default name "Owner" reads as no name yet, as it does on Hello. */
-function You({ state, act }: { state: Json; act: (fn: () => Promise<unknown>, ok?: string) => unknown }) {
+function You({ state, act, plan }: { state: Json; act: (fn: () => Promise<unknown>, ok?: string) => unknown; plan: string }) {
   const m = state.person;
   const named = m.name && m.name !== 'Owner' ? m.name : '';
   const [name, setName] = useState(named);
@@ -1184,7 +1184,7 @@ function You({ state, act }: { state: Json; act: (fn: () => Promise<unknown>, ok
   useEffect(() => setName(named), [named]);
   useEffect(() => setAddress(m.address ?? ''), [m.address]);
   const [from, to] = (m.quiet ?? '22:00-07:00').split('-');
-  const share = A.share(state);
+  const share = A.share(state, plan), shares = A.shares(plan);
   return (
     <div className="card person">
       <div className="row">
@@ -1199,9 +1199,9 @@ function You({ state, act }: { state: Json; act: (fn: () => Promise<unknown>, ok
       <label className="toggle-row"><span className="grow">Quiet hours{m.quiet ? `, ${from} to ${to}` : ''}<div className="mute small">Nothing new pings you then; the crew keeps going on what's already OK.</div></span>
         <input type="checkbox" role="switch" checked={!!m.quiet} onChange={(e) => act(() => api.person(m.id, { quiet: e.target.checked ? '22:00-07:00' : null }))} /></label>
       <div className="field">How much of your AI the crew may use
-        <div className="seg">{A.SHARES.map((o) => <button key={o.key} className={share.choice === o.key ? 'on' : ''} title={o.says}
+        <div className="seg">{shares.map((o) => <button key={o.key} className={share.choice === o.key ? 'on' : ''} title={o.says}
           onClick={() => act(() => api.person(m.id, { share: o.key }), o.says)}>{o.label}</button>)}</div>
-        <span className="mute small">{A.SHARES.find((o) => o.key === share.choice)?.says}. {share.today} {share.week}</span></div>
+        <span className="mute small">{shares.find((o) => o.key === share.choice)?.says}. {share.today} {share.week}</span></div>
     </div>
   );
 }

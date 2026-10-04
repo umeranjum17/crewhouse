@@ -87,11 +87,12 @@ export const dayLabel = (t: number, now = new Date()) => {
  * Each part is true of the code as it ships — the database, the crew's notes and everyone's sign-ins live on this
  * machine and crewd has no server of its own (README); a job's own words are the only thing sent to the person's own
  * AI account or a connected app (src/engine.ts, src/connections.ts); a phone notification carries no words at all (src/link.ts).
- * `home` names the machine from wherever the line is read. Keep it free of technical words; test/ui.test.ts pins it.
+ * `home` names the machine from wherever the line is read, `plan` the one the crew thinks with (`planName`). Keep it
+ * free of technical words; test/ui.test.ts pins it.
  */
-export const atHome = (home = 'this computer') => [
+export const atHome = (home = 'this computer', plan = 'AI plan') => [
   `Your helpers live on ${home} and use your own sign-ins.`,
-  "Nothing you tell them is kept anywhere else — only what a job needs goes to your AI account or the app it's using.",
+  `Nothing you tell them is kept anywhere else — only what a job needs goes to your ${plan} or the app it's using.`,
 ];
 
 /** A file's name as a person would say it: "files/mum-birthday_v2.mp4" → "Mum birthday v2". */
@@ -384,20 +385,20 @@ export function reach(link: Json) {
   return { on, online: link?.relayStatus === 'online', words: on ? words[link.relayStatus] ?? words.connecting : 'Off.' };
 }
 
-/** The crew's share of the viewer's own AI account, as three choices and one sentence about today. Never a number. */
-export const SHARES = [
-  { key: 'light', label: 'Light', says: 'Leave most of my AI account for me' },
+/** The crew's share of the viewer's own plan (`planName`), as three choices and one sentence about today. Never a number. */
+export const shares = (plan = 'AI plan') => [
+  { key: 'light', label: 'Light', says: `Leave most of my ${plan} for me` },
   { key: 'normal', label: 'Normal', says: 'Share it evenly' },
   { key: 'full', label: 'As much as it needs', says: 'Use what the work takes' },
 ];
 /** The small line at the bottom of the side rail: how the crew's share of the account stands today. It says what Crewhouse
  *  itself knows — the share this household gave the crew — never how much of the provider's allowance is left. */
 export const meter = (state: Json) => (state.share?.used ? 'The crew will carry on tomorrow' : resting(state) ? `${resting(state)}` : '');
-export function share(state: Json) {
+export function share(state: Json, plan = 'AI plan') {
   const s = state.share ?? { choice: 'light', used: false };
   const part: Record<string, string> = { small: 'a small part', fair: 'a fair part', most: 'most' };
-  return { choice: s.choice as string, week: part[s.week] ? `This week the crew has used ${part[s.week]} of what it may use of your AI account.` : '', today: s.used ? 'The crew has had its share for today. Routines and check-ins start again tomorrow morning; anything you ask for still goes ahead.'
-    : s.choice === 'full' ? 'When the account needs a rest, the crew waits and says so.' : 'The crew stays within the share you gave it.' };
+  return { choice: s.choice as string, week: part[s.week] ? `This week the crew has used ${part[s.week]} of what it may use of your ${plan}.` : '', today: s.used ? 'The crew has had its share for today. Routines and check-ins start again tomorrow morning; anything you ask for still goes ahead.'
+    : s.choice === 'full' ? `When your ${plan} needs a rest, the crew waits and says so.` : 'The crew stays within the share you gave it.' };
 }
 
 /** The house's monthly money cap, owner only: "This month: nothing spent yet" or "$4 of $20 spent". */
@@ -912,8 +913,9 @@ export function firstIdeas(state: Json) {
 /** Your three setup jobs: what the crew thinks with, the phones reaching it, and Google setup.
  *  Until all three are done, the owner's Home says how many are left. */
 export function homeSetup(state: Json, accounts: Json[] | null, link: Json | null) {
+  const plan = planName(accounts);
   const rows = [
-    { key: 'signin', says: 'An AI account the crew can think with', done: accounts?.some((a) => a.signedIn === true) === true },
+    { key: 'signin', says: plan === 'AI plan' ? 'An AI plan the crew can think with' : `The crew thinks with your ${plan}`, done: accounts?.some((a) => a.signedIn === true) === true },
     { key: 'phones', says: 'Phones can reach the crew from anywhere', done: link?.anywhere === 'anywhere' },
     { key: 'google', says: 'Google setup', done: state.house?.google !== false },
   ];
@@ -1191,6 +1193,11 @@ export function aiList(accounts: Json[] | null) {
 export function thinking(accounts: Json[] | null) {
   if (!accounts) return null;
   return AIS.find((a) => account(accounts, a.key).state === 'ready') ?? 'none';
+}
+/** That account as the person says it: "Claude plan", "OpenRouter account" when paid per use; "AI plan" until there is one. */
+export function planName(accounts: Json[] | null) {
+  const ai = thinking(accounts);
+  return ai && ai !== 'none' ? `${ai.name} ${ai.billing === 'api' ? 'account' : 'plan'}` : 'AI plan';
 }
 
 /** Whose sign-in page an app opens: "Google" for Gmail, Calendar and Drive. */
