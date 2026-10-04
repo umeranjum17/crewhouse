@@ -948,7 +948,7 @@ export function step(e: Json): string | null {
     case 'desktop.giveback': return 'You handed the wheel back';
     case 'task.paused': return `Paused “${plain(d.title)}” for now`;
     case 'task.done': return `Finished “${plain(d.title)}”`;
-    case 'task.failed': return `Couldn't finish “${plain(d.title)}”`;
+    case 'task.failed': return d.result === 'Stopped by you.' ? `You stopped “${plain(d.title)}”` : `Couldn't finish “${plain(d.title)}”`;
     case 'task.unsure': return `Not sure “${plain(d.title)}” worked`;
     default: return null;
   }
@@ -963,7 +963,8 @@ export function steps(events: Json[], task?: number, live = false): Step[] {
     if (e.kind === 'task.working') { if (started) continue; started = true; }
     const text = step(e);
     if (!text || out.at(-1)?.text === text) continue;
-    out.push({ at: e.at, text, seq: e.seq, asked: e.kind === 'ask.opened', undo: e.kind === 'memory.learned' && !e.undone });
+    out.push({ at: e.at, text, seq: e.seq, asked: e.kind === 'ask.opened',
+      undo: (e.kind === 'memory.learned' && !e.undone) || (e.kind === 'soul.changed' && !!e.data?.prev) });
   }
   if (live && out.length) out[out.length - 1].now = true;
   return out;

@@ -676,7 +676,7 @@ function HelperPage(ctx: Ctx & { id: string; tab: string }) {
             <a href="#/" className="back" aria-label="Back" onClick={(e) => { e.preventDefault(); back(); }}>‹</a>
             <Face who={h} size={32} ring={h.ring} />
             <div className="grow"><b>{h.name}</b><div className="mute small clamp1">{h.status}</div></div>
-            {b?.task && <button className="btn" onClick={() => confirm(`Stop ${h.name}'s job?`) && attempt(async () => { await api.reset(id); refresh(); }, `Stopped ${h.name}`)}>Stop</button>}
+            {b?.task?.state === 'working' && <button className="btn" onClick={() => confirm(`Stop ${h.name}'s job?`) && attempt(async () => { await api.reset(id); refresh(); }, `Stopped ${h.name}`)}>Stop</button>}
             <button className="link" onClick={() => go(`#/h/${id}/details`)}>Details</button>
           </header>
         </div>
@@ -728,7 +728,14 @@ function HelperPage(ctx: Ctx & { id: string; tab: string }) {
           <div className="grow"><b>What happened</b></div>
         </header></div>
         <p className="lead">What {name} does, as it happens. Recorded by Crewhouse, not remembered by {name}.</p>
-        {A.steps(page.trail ?? []).length ? <Steps steps={A.steps(page.trail ?? [])} max={40} onUndo={(s) => attempt(async () => { await api.undoMemory(id, s.seq); void load(); }, 'Forgotten')} />
+        {A.steps(page.trail ?? []).length ? <Steps steps={A.steps(page.trail ?? [])} max={40} onUndo={(s) => attempt(async () => {
+          const ev = (page.trail ?? []).find((e: Json) => e.seq === s.seq);
+          if (ev?.kind === 'soul.changed') {
+            if (!ev?.data?.prev) throw new Error('Nothing to undo');
+            await api.soul(id, String(ev.data.prev));
+          } else await api.undoMemory(id, s.seq);
+          void load();
+        }, 'Put back')} />
           : <div className="card empty">Nothing yet. Give {name} something to do.</div>}
       </> : null)}
       {tab === 'screen' && h && <Screen bot={{ ...page?.bot, ...b }} showing={A.showing(state, id)} refresh={() => { refresh(); void load(); }} />}

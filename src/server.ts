@@ -319,14 +319,15 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     // Who a helper is: the person writes it, a bot never does. "Put back" is the template's, under the helper's own name.
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/soul$/)) && m === 'PUT') {
       crew.botPage(r[1]); // 404 for unknown bots
+      const prev = disk.readSoul(cfg, r[1]);
       disk.writeSoul(cfg, r[1], body.text ?? '');
-      db.event('soul.changed', r[1], { by: 'person' });
+      db.event('soul.changed', r[1], { by: 'person', prev });
       return { soul: disk.readSoul(cfg, r[1]) };
     }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/soul\/reset$/)) && m === 'POST') {
-      const b = crew.botPage(r[1]).bot;
+      const { bot: b, soul: prev } = crew.botPage(r[1]);
       disk.writeSoul(cfg, r[1], disk.templateSoul(cfg, disk.loadTemplate(cfg, b.template), b.display), 'Put back how it started');
-      db.event('soul.changed', r[1], { by: 'person', reset: true });
+      db.event('soul.changed', r[1], { by: 'person', reset: true, prev });
       return { soul: disk.readSoul(cfg, r[1]) };
     }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/tools$/)) && m === 'PUT') {
