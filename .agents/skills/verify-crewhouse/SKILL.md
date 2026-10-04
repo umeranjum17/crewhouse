@@ -89,9 +89,12 @@ drive. Anything a person sees also owes the Review evidence set below.
 and a signed-in account: run the same launch without `CREWHOUSE_ENGINE=stub`, with HOME/XDG
 under `/home/umer/lab-tmp/crewhouse-retained/home` and `CREWHOUSE_STATE_DIR`/`CREW_DIR`/`TOOLS_DIR`
 pointing at its `run/state`, `run/crew`, `run/tools` (never a copy; one lane at a time, under
-the heavy lock). `GET /api/accounts` shows `signedIn: true` once the engine is ready. A
-`Codex error: The usage limit has been reached` in `run/state/logs/openclaw.log` means the
-account rests: wait it out, never sign in again. That home carries earlier lanes' chat history
+the heavy lock; its `start.sh`/`stop.sh` do this, on port 7751), `PATH=/usr/bin:/bin` and `MISE_OFFLINE=1` (a shell PATH leaks into the
+sealed engine home and can make the reseal too big to boot), and stop it with TERM to crewd and
+its children, waiting for `auth-store.sealed` to replace the plaintext state. `GET /api/accounts`
+shows `signedIn: true` once the engine is ready. A `Codex error: The usage limit has been
+reached` or `asking us to slow down` in `run/state/logs/openclaw.log` means the account rests:
+wait it out, never sign in again. That home carries earlier lanes' chat history
 and notes, which reach Chief's prompt; say so beside any answer it gives.
 
 ## Evidence
