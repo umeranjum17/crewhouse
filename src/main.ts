@@ -3,9 +3,10 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { loadConfig } from './config.ts';
 import { Store } from './db.ts';
-import { Crew } from './crew.ts';
+import { Crew, stamp } from './crew.ts';
 import { startServer } from './server.ts';
 
+stamp('service start');
 const cfg = loadConfig();
 if ((cfg.stateDir + '/').startsWith(cfg.repoDir + '/') || (cfg.crewDir + '/').startsWith(cfg.repoDir + '/')) {
   console.error('crewd: data must live outside the repo; set CREWHOUSE_STATE_DIR / CREWHOUSE_CREW_DIR elsewhere');

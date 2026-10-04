@@ -26,6 +26,10 @@ import { OpenClawRuntime } from './openclaw/runtime.ts';
 import { StubRuntime } from './stub-runtime.ts';
 import { fileTool } from './files.ts';
 
+/** The four marks a first run is timed by, in crewd.log: the service, the engine, the sign-in, the first words. */
+export const stamp = (what: string) => console.log(`[${new Date().toISOString()}] crewd ${what}`);
+let firstWords = true;
+
 /** Phone pairing stays with Chief, including 'pair my computer with you' said on the home computer. */
 export const asksForPhone = (text: string) => /\b(pair|connect|link|add|use|install)\b[\s\S]{0,65}\b(phone|mobile|computer|crewhouse app)\b|\b(phone|mobile|computer)\b[\s\S]{0,35}\b(pair|connect|link)\b/i.test(text);
 export const inlineHowTo = (text: string): 'signin' | 'app' | 'routine' | null =>
@@ -254,7 +258,7 @@ export class Crew {
     this.accounts = new Accounts(this.runtime);
     // A scripted/custom model provider stands in for the person's own ChatGPT, exactly as the stub model always did.
     if (cfg.engineProvider) this.accounts.ready.set('chatgpt', true);
-    this.accounts.onSignedIn = () => this.wake(`You're signed in. I'll start now.`);
+    this.accounts.onSignedIn = () => { stamp('account signed in'); this.wake(`You're signed in. I'll start now.`); };
     this.connections = new Connections(cfg, `http://${cfg.host}:${cfg.port}/connect/callback`);
     this.connections.onChange = (app) => this.db.event('app.changed', null, { app });
     this.connections.onExpired = (app) => this.say(CHIEF, 'system', `Your ${this.connections.apps[app].name} connection has run out. Connect it again under Settings, Connections, whenever you like.`, null);
@@ -289,7 +293,7 @@ export class Crew {
     void this.eachLegacy('migrate').then(async () => {
       if (this.stopped) return; // crewd stopped before the engine came up
       // The engine comes up in the background: a first install can take minutes, and crewd boots without it.
-      const up = await this.runtime.start(this.toolHost()).then(() => true).catch((e) => {
+      const up = await this.runtime.start(this.toolHost()).then(() => { stamp('engine ready'); return true; }).catch((e) => {
         console.error('engine start:', e);
         this.db.event('system.engine', null);
         return false;
@@ -1378,7 +1382,10 @@ export class Crew {
   /** Only assistant prose is visible; tool arguments and reasoning never ride the live feed. */
   private onEvent(botId: string, l: Live, e: RunEvent) {
     if (this.live.get(botId) !== l) return;
-    if (e.type === 'text') this.db.live('reply.partial', botId, { task: l.task, text: cleanReply(e.text).slice(0, 280) });
+    if (e.type === 'text') {
+      if (firstWords) { firstWords = false; stamp('first words'); }
+      this.db.live('reply.partial', botId, { task: l.task, text: cleanReply(e.text).slice(0, 280) });
+    }
     else if (e.type === 'usage' && e.tokens) {
       this.db.run('UPDATE tasks SET tokens = tokens + ? WHERE id = ?', Math.round(e.tokens), l.task);
       this.db.run('INSERT INTO usage (member, day, tokens) VALUES (1, ?, ?) ON CONFLICT(member, day) DO UPDATE SET tokens = tokens + excluded.tokens', dayOf(), Math.round(e.tokens));
