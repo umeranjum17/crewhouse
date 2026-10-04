@@ -110,6 +110,20 @@ A sign-in that fails ends as `signIn: {state: 'failed', error, why?}`: `why: 'de
 
 `drive`, `calendar` and `gmail` are one Google service each, on the personal Google app; `calendar` and `gmail` show Google's "unverified app" screen, which the card warns about first. `notion` and `canva` need nothing set up.
 
+## Skills (today)
+
+The Skills screen (`#/skills`, reached from Apps) lists the reviewed starter set and searches the public catalog.
+Nothing installs by itself: only reviewed skills switch on, through the engine's own install with the trust check.
+
+| Call | Returns |
+|---|---|
+| `GET /api/skills` | `{live, starter: [{slug, owner, version, summary, why, needs, on}]}` — the reviewed set; `on` as the engine sees it. `live: false` on the stand-in engine (all off) |
+| `GET /api/skills/search?q=` | `{results: [{slug, owner, summary, version}]}` — the catalog's own matches, empty while the engine starts |
+| `POST /api/skills/:slug/on` | Switches a reviewed skill on through the engine's install (the trust check still applies); 400 in plain words otherwise |
+| `POST /api/skills/:slug/off` | Switches it off again |
+
+The same skills answer to the OpenClaw way against this install (`openclaw skills search/install/list`), through the same engine and the same trust check — the app and the command line see the same set. Only the crew's own vetted plugins run; plugin installs stay in the official scope.
+
 ## Share to Crewhouse (today)
 
 `web/manifest.webmanifest` makes the installed app a Share target: `/share?title&text&url` opens a card, and Chief asks what to do with it (Add to my calendar + remind me, Just remember it, Something else…). It goes to Chief as a request.

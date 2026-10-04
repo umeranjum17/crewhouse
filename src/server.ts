@@ -37,6 +37,11 @@ async function readJson(req: IncomingMessage): Promise<any> {
   try { return raw ? JSON.parse(raw) : {}; } catch { throw Object.assign(new Error('bad json'), { status: 400 }); }
 }
 
+/** A skill-switch failure in the person's own words: the engine's machinery never reaches the app. */
+const skillWords = (message: string) => /not one of the reviewed starter skills/.test(message) ? message
+  : /starting up|still starting|not ready|ECONNREFUSED|connect/i.test(message) ? 'The crew is starting up; skills switch once it is ready.'
+  : /not a trusted skill|trust/i.test(message) ? 'That skill has not been reviewed yet, so the crew leaves it alone.'
+  : 'That did not go through. Try again in a bit.';
 /** Weak validator: same file (size and mtime) → the browser's copy is still good and the answer is a 304. */
 const etagOf = (path: string) => { const st = statSync(path); return `W/"${st.size.toString(16)}.${Math.floor(st.mtimeMs).toString(16)}"`; };
 /** Content-named bundles (scripts/build-web.mjs) never change, so they cache forever; the shell is revalidated each load. */
@@ -252,6 +257,13 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     }
     if (m === 'GET' && p === '/api/learning') return { on: await Promise.resolve(crew.learningOn()) };
     if ((r = p.match(/^\/api\/learning$/)) && m === 'POST') { await crew.setLearning(body.on === true); return { ok: true, on: body.on === true }; }
+    // The reviewed starter skill set, its on/off as the engine sees it, and switching it the engine's own way.
+    if (m === 'GET' && p === '/api/skills') return crew.starterSkills();
+    if (m === 'GET' && p === '/api/skills/search') return { results: await crew.searchSkills(String(q.get('q') ?? '').slice(0, 80)) };
+    if ((r = p.match(/^\/api\/skills\/([a-z0-9-]+)\/(on|off)$/)) && m === 'POST') {
+      try { await crew.setStarter(r[1], r[2] === 'on'); return { ok: true }; }
+      catch (e: any) { throw Object.assign(new Error(skillWords(String(e?.message ?? e))), { status: 400 }); }
+    }
     // Switch Google on once: the personal Google app's client ID and secret.
     if (m === 'PUT' && p === '/api/house/google') {
       const b = body;

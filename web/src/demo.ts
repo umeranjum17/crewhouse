@@ -558,6 +558,16 @@ export async function demoCall(method: string, path: string, body?: Json) {
   if (method === 'GET' && path === '/api/phones') return [{ id: 1, name: "Umer's phone", seen: now - 5 * min, reached: { home: now - 5 * min }, push: 'on' },
     { id: 2, name: "Umer's other phone", seen: now - 2 * 60 * min, reached: { home: now - 26 * 60 * min, tailscale: now - 2 * 60 * min }, push: 'off' }];
   if (method === 'POST' && path.startsWith('/api/connections/')) return { url: 'https://accounts.google.com/' };
+  // The Skills screen's reviewed set (?demo=skills wires the search box too).
+  if (method === 'GET' && path === '/api/skills') return { live: true, starter: [
+    { slug: 'weather', name: 'Weather', owner: 'steipete', version: '1.0.0', summary: 'Current weather and forecasts, no sign-in needed.', why: 'The crew answers “do I need a jacket” every day.', needs: ['the curl tool, already on this computer'], on: true },
+    { slug: 'github', name: 'GitHub', owner: 'steipete', version: '1.0.0', summary: 'Read issues, pull requests and check runs with the gh tool.', why: 'Reading a check run is step one of desk work.', needs: ['the gh tool and your GitHub sign-in'], on: false },
+  ] };
+  if (method === 'GET' && path.startsWith('/api/skills/search')) return { results: [
+    { slug: 'weather', owner: 'steipete', version: '1.0.0', summary: 'Current weather and forecasts, no sign-in needed.' },
+    { slug: 'obsidian', owner: 'steipete', version: '1.0.0', summary: 'Find and tidy notes in the person\u2019s Obsidian vault.' },
+  ] };
+  if (method === 'POST' && /^\/api\/skills\/[a-z0-9-]+\/(on|off)$/.test(path)) return { ok: true };
   if (method === 'GET' && path.startsWith('/api/connections/')) return { state: 'waiting' };
   if (method === 'GET' && path.startsWith('/api/schedule')) {
     const text = decodeURIComponent(path.split('text=')[1] ?? '').replace(/\+/g, ' ');

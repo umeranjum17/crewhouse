@@ -281,6 +281,23 @@ test('connecting an app, as the app screen asks for it: not yet, or the app\'s o
   assert.equal((await api('DELETE', '/api/connections/notion', undefined, {})).status, 403, 'cross-site pages cannot touch connections');
 });
 
+test('skills: the reviewed starter set lists with on/off; switching needs the real engine', async () => {
+  await ready();
+  const skills = (await api('GET', '/api/skills')).body;
+  assert.equal(skills.live, false, 'the stand-in engine holds nothing');
+  assert.deepEqual(skills.starter.map((s: any) => s.slug), ['weather', 'github', 'obsidian', 'homeassistant-skill']);
+  for (const s of skills.starter) {
+    assert.equal(s.on, false);
+    for (const words of [s.summary, s.why, ...s.needs])
+      assert.doesNotMatch(words, /token|host\b|engine|grant|command|`|\/home\/|\.md\b|\/api\//i, `${s.slug} speaks plainly`);
+  }
+  assert.deepEqual((await api('GET', '/api/skills/search?q=weather')).body, { results: [] }, 'search waits for the engine');
+  const switched = await api('POST', '/api/skills/weather/on', {});
+  assert.equal(switched.status, 400, 'the stand-in cannot switch');
+  assert.doesNotMatch(switched.body.error, /ECONNREFUSED|gateway|skillKey|clawhub:/i, 'the refusal is plain words');
+  assert.equal((await api('POST', '/api/skills/made-up/on', {})).body.error.includes('reviewed starter'), true, 'outside the set stays outside');
+});
+
 test('sign in from the app: a code to show and a page to open, then signed in', async () => {
   await ready();
   const grok = async () => (await api('GET', '/api/accounts')).body.find((a: any) => a.account === 'grok');

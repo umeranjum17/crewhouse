@@ -33,6 +33,16 @@ test('crew room lines and handoff checks hide machinery', () => {
   const c = A.card({ id: 2, bot: 'scout', kind: 'propose', at: now, detail: { pass: { files: ['story.md'] }, words: 'Scout wants to hand this to Scribe' } }, s);
   assert.deepEqual(c.choices?.map((x) => x.label), ['Hand it on', 'Not now']);
 });
+test('the Skills screen reads plain words: starter set and catalog rows', () => {
+  const set = A.starterSkills({ live: true, starter: [
+    { slug: 'weather', summary: 'Current weather and forecasts.', why: 'The daily jacket question.', needs: ['the curl tool'], on: true },
+    { slug: 'homeassistant-skill', summary: 'Ask about the home.', why: '', needs: [], on: false }] });
+  assert.deepEqual(set.map((s) => [s.name, s.on, s.reviewed]), [['Weather', true, true], ['Homeassistant Skill', false, true]]);
+  const rows = A.skillSearch([{ slug: 'obsidian', owner: 'steipete', summary: 'Find notes.' }], set);
+  assert.equal(rows[0].reviewed, false, 'outside the reviewed set says so');
+  assert.doesNotMatch(set.concat(rows).map((s) => [s.name, s.what, s.why, ...s.needs].join(' ')).join(' '),
+    /token|host\b|engine|grant|command|`|\/home\/|\.md\b/i);
+});
 const bot = (id: string, extra = {}) => ({ id, display: id[0].toUpperCase() + id.slice(1), role: 'Makes demo videos from screenshots', template: id, runtime: 'claude', model: 'sonnet',
   thinks: [{ key: 'claude:sonnet', name: 'Claude Sonnet' }], state: 'on', computer: true, controls: 'bot', task: null, queued: 0, pausedUntil: null, ...extra });
 // The owner's screenshot, as crewd sends it today: a raw fc-list approval, "Claude · 9% of 5h used", the prompt as the task.

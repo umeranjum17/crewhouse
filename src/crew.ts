@@ -322,6 +322,33 @@ export class Crew {
     await this.runtime.setLearning?.(on);
   }
 
+  /** The starter skill set for the app's Skills screen: the reviewed set with on/off as the engine sees it.
+   *  Switching and searching run on the real engine; the stand-in answers the list and says the rest needs it. */
+  starterSkills() {
+    const runtime = this.runtime as { starterSkills?: () => { slug: string; owner: string; version: string; summary: string; why: string; needs: string[]; on: boolean }[] };
+    if (runtime.starterSkills) return { starter: runtime.starterSkills(), live: true };
+    // The stand-in engine holds nothing: the reviewed set straight from the shipped file, all off.
+    try {
+      const approved = JSON.parse(readFileSync(join(import.meta.dirname, 'openclaw', 'starter-skills.json'), 'utf8')).approved ?? [];
+      return { live: false, starter: approved.map((s: any) => ({ slug: String(s.slug), name: String(s.name ?? s.slug), owner: String(s.owner),
+        version: String(s.version), summary: String(s.summary), why: String(s.why), needs: (s.needs ?? []).map(String), on: false })) };
+    } catch { return { starter: [], live: false }; }
+  }
+  async setStarter(slug: string, on: boolean) {
+    let approved: any[] = [];
+    try { approved = JSON.parse(readFileSync(join(import.meta.dirname, 'openclaw', 'starter-skills.json'), 'utf8')).approved ?? []; } catch {}
+    if (!approved.some((s) => s.slug === slug)) throw new Error(`“${slug}” is not one of the reviewed starter skills, so the crew leaves it alone.`);
+    const runtime = this.runtime as { setStarter?: (slug: string, on: boolean) => Promise<unknown> };
+    if (!runtime.setStarter) throw new Error('The crew is starting up; skills switch once it is ready');
+    await runtime.setStarter(slug, on);
+    this.db.event('skill.switched', null, { slug, on });
+  }
+  async searchSkills(query: string) {
+    const runtime = this.runtime as { searchSkills?: (query: string) => Promise<unknown[]> };
+    if (!runtime.searchSkills) return [];
+    return runtime.searchSkills(query).catch(() => []);
+  }
+
   /** The weekly tidy of what was learned, on crewhouse's own boundary: capture first — refusing the whole review if
    *  the capture cannot be verified — then the engine's review inside the armed window, then the log record.
    *  Every review goes through this one pre-change step. */
