@@ -14,7 +14,7 @@ import { Screen } from './screen.tsx';
 import { hear, Office, useOffice } from './office.tsx';
 import { AccountCard, ConnectApp, ConnectCard, openTab, sheet, SignIn, Unreachable } from './flows.tsx';
 
-type View = 'home' | 'chief' | 'room' | 'crew' | 'add' | 'helper' | 'things' | 'routines' | 'settings' | 'apps' | 'ask' | 'share';
+type View = 'home' | 'chief' | 'room' | 'crew' | 'add' | 'helper' | 'things' | 'routines' | 'settings' | 'apps' | 'skills' | 'ask' | 'share';
 type Route = { view: View; id?: string; tab?: string; m?: string; file?: string };
 const ANCHOR = /^m(\d+)$/;
 function parseRoute(): Route {
@@ -27,7 +27,7 @@ function parseRoute(): Route {
   if (a === 'chief' && ANCHOR.test(b ?? '')) return { view: 'chief', m: b };
   if (a === 'things' && /^t\d+$/.test(b ?? '')) return { view: 'things', id: b };
   if (a === 'crew' && b === 'add') return { view: 'add' };
-  return { view: (['chief', 'room', 'crew', 'things', 'routines', 'settings', 'apps'].includes(a) ? a : 'home') as View };
+  return { view: (['chief', 'room', 'crew', 'things', 'routines', 'settings', 'apps', 'skills'].includes(a) ? a : 'home') as View };
 }
 const go = (hash: string) => { location.hash = hash; };
 let moved = false; // this session has navigated inside the app, so Back has somewhere to go back to
@@ -1221,8 +1221,52 @@ function Apps({ state, refresh }: Ctx) {
       </div>
       <div className="card row"><span className="app-ic" style={{ background: 'linear-gradient(135deg,#ffc27a,#ff7aa2)' }}>↗</span>
         <span className="grow"><b>Share to Crewhouse</b><div className="mute small">On your phone, tap Share in any app (WhatsApp, Photos, a web page), then Crewhouse. Nothing to connect.</div></span></div>
+      <a className="card row" href="#/skills"><span className="app-ic" style={{ background: 'linear-gradient(135deg,#8ec5fc,#e0c3fc)' }}>✦</span><span className="grow"><b>Skills</b><div className="mute small">Extra abilities for your crew, each reviewed before it arrives.</div></span><b>›</b></a>
       <p className="mute small center">Connecting opens the app's own sign-in page. That's all.</p>
       {connecting && <ConnectApp app={connecting.app} state={state} tab={connecting.tab} onClose={() => setConnecting(null)} onDone={() => { setConnecting(null); refresh(); }} />}
+    </div>
+  );
+}
+
+/** Extra abilities for the crew: the reviewed starter set with on/off each, plus catalog search.
+ *  Only reviewed skills switch on; anything else says so in plain words. Plugins stay with the crew's own set. */
+function Skills({ refresh }: Ctx) {
+  const [got, setGot] = useState<Json>(null);
+  const [q, setQ] = useState('');
+  const [found, setFound] = useState<A.StarterSkill[] | null>(null);
+  const load = () => api.skills().then(setGot).catch(() => setGot({ starter: [] }));
+  useEffect(() => { void load(); }, []);
+  const list = A.starterSkills(got ?? { starter: [] });
+  const search = (e: { preventDefault(): void }) => {
+    e.preventDefault();
+    if (q.trim().length < 2) return;
+    void attempt(async () => setFound(A.skillSearch((await api.skillSearch(q.trim())).results ?? [], list)), '');
+  };
+  const row = (s: A.StarterSkill, i: number) => (
+    <div key={`${s.slug}-${i}`} className="row-item">
+      <span className="grow"><b>{s.name}</b><div className="mute small">{s.what}</div>
+        {!!s.why && <div className="mute small">{s.why}</div>}
+        {!!s.needs.length && <div className="mute small">Needs: {s.needs.join(' · ')}</div>}
+        {!s.reviewed && <div className="mute small">Not reviewed yet, so the crew leaves it alone.</div>}</span>
+      {s.reviewed ? (s.on
+        ? <button className="link" onClick={() => attempt(async () => { await api.skillSwitch(s.slug, false); await load(); refresh(); }, `${s.name} is off`)}>Turn off</button>
+        : <button className="btn" onClick={() => attempt(async () => { await api.skillSwitch(s.slug, true); await load(); refresh(); }, `${s.name} is on`)}>Turn on</button>)
+        : null}
+    </div>);
+  return (
+    <div className="page">
+      <a href="#/apps" className="back">‹ Apps</a>
+      <h1>Skills</h1>
+      <p className="lead">Extra abilities for your crew. Each one was read and approved before it arrived here.</p>
+      <div className="label">Starter skills</div>
+      {got === null ? <div className="card mute">Checking…</div> : <div className="card list">{list.map(row)}{!list.length && <div className="row-item mute small">None yet.</div>}</div>}
+      <div className="label">Find more</div>
+      <form className="card form" onSubmit={search}>
+        <div className="row"><input className="input grow" value={q} onChange={(e) => setQ(e.target.value)} placeholder="What should the crew learn to do?" aria-label="Search skills" autoComplete="off" />
+          <button className="btn" disabled={q.trim().length < 2}>Search</button></div>
+      </form>
+      {found && <div className="card list">{found.map(row)}{!found.length && <div className="row-item mute small">Nothing found. Ask Chief instead.</div>}</div>}
+      <p className="mute small center">Only reviewed skills switch on. Anything new gets read first.</p>
     </div>
   );
 }
@@ -1340,6 +1384,7 @@ function App() {
           {v.view === 'routines' && <Routines {...ctx} />}
           {v.view === 'settings' && <Settings {...ctx} look={look} setLook={setLook} />}
           {v.view === 'apps' && <Apps {...ctx} />}
+          {v.view === 'skills' && <Skills {...ctx} />}
           {v.view === 'share' && <Share {...ctx} />}
         </main>
       </div>

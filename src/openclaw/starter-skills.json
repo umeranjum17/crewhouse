@@ -1,0 +1,138 @@
+{
+  "approved": [
+    {
+      "needs": [
+        "the curl tool, already on this computer"
+      ],
+      "owner": "steipete",
+      "publisher": "Peter Steinberger",
+      "reviewedAt": "2026-10-04",
+      "reviewedBy": "crewhouse build (SKILL.md read in full)",
+      "sha256": "1ca0c8d768ad603ea8d5d47f56a9b435fe575f7f34e719eda85c82003d740e93",
+      "slug": "weather",
+      "stats": {
+        "downloads": 170816,
+        "installs": 6518,
+        "stars": 429
+      },
+      "summary": "Current weather and forecasts, no API key needed.",
+      "verdict": "Read-only calls to two free public endpoints (wttr.in, open-meteo.com). No keys, no sign-in, no installer, nothing leaves the crew. Fits a morning check-in or a routine.",
+      "version": "1.0.0",
+      "why": "A personal crew answers “do I need a jacket” every day; this is the smallest honest way.",
+      "name": "Weather"
+    },
+    {
+      "needs": [
+        "the gh tool and your GitHub sign-in"
+      ],
+      "owner": "steipete",
+      "publisher": "Peter Steinberger",
+      "reviewedAt": "2026-10-04",
+      "reviewedBy": "crewhouse build (SKILL.md read in full)",
+      "sha256": "51b28818a6f0359287d5c8244a6fdc59a4ac5504596deb193b28b81832221c86",
+      "slug": "github",
+      "stats": {
+        "downloads": 199912,
+        "installs": 7642,
+        "stars": 671
+      },
+      "summary": "Read issues, pull requests and check runs with the gh tool.",
+      "verdict": "Read-oriented guidance (issue/pr/run/api reads). Teaches no credential handling and ships no installer. Anything that changes a repo still goes through the crew's own checks; needs gh and the person's sign-in before it can do anything.",
+      "version": "1.0.0",
+      "why": "Your crew does support-desk and patch work; reading a check run is step one.",
+      "name": "GitHub"
+    },
+    {
+      "needs": [
+        "the obsidian tool on this computer, and your say-so on which note folder it may read"
+      ],
+      "owner": "steipete",
+      "publisher": "Peter Steinberger",
+      "reviewedAt": "2026-10-04",
+      "reviewedBy": "crewhouse build (SKILL.md read in full)",
+      "sha256": "dc45b522a0f08fa11762b330b5355ccaca789bd645b0c450fe75026f69d728b2",
+      "slug": "obsidian",
+      "stats": {
+        "downloads": 110791,
+        "installs": 4119,
+        "stars": 459
+      },
+      "summary": "Find and tidy notes in the person's Obsidian vault.",
+      "verdict": "Only touches the person's own note folder; ships no installer. Off until the person connects a vault: reading or changing their notes needs their say-so first, and the crew's own memory stays the record of what it learned.",
+      "version": "1.0.0",
+      "why": "People keep their lives in notes; a helper that can look something up there saves retyping.",
+      "name": "Obsidian"
+    },
+    {
+      "needs": [
+        "your home assistant's address and sign-in, kept locked away"
+      ],
+      "owner": "anotb",
+      "publisher": "anotb",
+      "reviewedAt": "2026-10-04",
+      "reviewedBy": "crewhouse build (SKILL.md read in full)",
+      "sha256": "c090c613489c913a78fb7da426f4361acaaed7ed0c2e8bfd0c0dd124a0ab1b7b",
+      "slug": "homeassistant-skill",
+      "stats": {
+        "downloads": 25389,
+        "installs": 262,
+        "stars": 16
+      },
+      "summary": "Ask about and control the person's Home Assistant: lights, climate, presence, automations.",
+      "verdict": "Well-written with its own safety lines (locks, alarms and garage doors always ask first). Off until the person connects their home: the token lives in the crew's locked store, never in chat, and anything touching locks or alarms asks every time.",
+      "version": "2.1.0",
+      "why": "“Is anyone home, is the heating on” is a personal-crew question; this answers it where the person already runs a home assistant.",
+      "name": "Home Assistant"
+    }
+  ],
+  "rejected": [
+    {
+      "reason": "Sends mail and changes sheets as the person with broad sign-in scopes; the crew's Gmail stays read-only and every write goes on its own approval card.",
+      "slug": "steipete/gog"
+    },
+    {
+      "reason": "Acts in the person's name with broad scopes; overlaps the crew's own per-app connections, which keep read-mostly scopes and a card on every write.",
+      "slug": "steipete/notion"
+    },
+    {
+      "reason": "Sending and triage scope overlaps the crew's read-only Gmail connection; mail never sends without its own card.",
+      "slug": "porteden/email-gmail-outlook"
+    },
+    {
+      "reason": "The crew already searches and reads the web for free with its own fenced helpers; a keyed search bundle adds nothing.",
+      "slug": "jacky1n7/openclaw-tavily-search"
+    },
+    {
+      "reason": "The crew writes finished spreadsheets and documents itself, gated and previewable; prompt packs that teach the model to hand-write files lose that gate.",
+      "slug": "ivangdavila/word-docx"
+    },
+    {
+      "reason": "Same as word-docx: finished files stay crewd-written and previewable.",
+      "slug": "ivangdavila/excel-xlsx"
+    },
+    {
+      "reason": "Keeps its own credential files, state database and memory outside the crew; the crew's secrets stay in its locked store and what it learns stays in the person's notes.",
+      "slug": "mvanhorn/last30days-official"
+    },
+    {
+      "reason": "The crew already learns how the person works and runs routines; a second memory and scheduler fights both.",
+      "slug": "pskoett/self-improving-agent"
+    },
+    {
+      "reason": "Same as self-improving: overlaps the crew's own learning and routines.",
+      "slug": "halthelobster/proactive-agent"
+    },
+    {
+      "reason": "Already trusted as bundled skills in this file; no second listing needed.",
+      "slug": "steipete/nano-pdf"
+    },
+    {
+      "reason": "Already trusted as a bundled skill in this file.",
+      "slug": "steipete/openai-whisper"
+    },
+    {
+      "reason": "A vetting helper for skill authors, not something the household asks for day to day.",
+      "slug": "spclaudehome/skill-vetter"
+    }
+  ]
+}

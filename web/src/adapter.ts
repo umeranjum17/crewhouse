@@ -1199,6 +1199,18 @@ const APPS: App[] = [
 /** The app grid; which ones are on comes from crewd's connections once it has them. */
 export const apps = (state: Json): App[] => APPS.map((a) => ({ ...a, on: !!state.connections?.includes?.(a.id) }));
 
+/** One reviewed starter skill: its name, what it does, why it is in the set, what it needs, and whether it is on. */
+export type StarterSkill = { slug: string; name: string; what: string; why: string; needs: string[]; on: boolean; reviewed: boolean };
+/** The Skills screen's set: the reviewed skills as crewd lists them (`GET /api/skills`), plus catalog search rows. */
+const skillName = (s: Json) => String(s.name ?? String(s.slug).split('-').map((w) => w[0]?.toUpperCase() + w.slice(1)).join(' '));
+export const starterSkills = (skills: Json): StarterSkill[] => ((skills?.starter ?? []) as Json[]).map((s) => ({
+  slug: String(s.slug), name: skillName(s),
+  what: String(s.summary ?? ''), why: String(s.why ?? ''), needs: ((s.needs ?? []) as Json[]).map(String), on: s.on === true, reviewed: true }));
+export const skillSearch = (results: Json[], starter: StarterSkill[]): StarterSkill[] => (results as Json[]).map((r) => ({
+  slug: String(r.slug), name: skillName(r),
+  what: String(r.summary ?? ''), why: '', needs: [], on: starter.some((s) => s.slug === String(r.slug) && s.on),
+  reviewed: starter.some((s) => s.slug === String(r.slug)) }));
+
 // ---------- the office ----------
 /** One helper in the person's office, from the plain-words adapter views. `ask` is that helper's first row in
  *  Needs you (A.needsYou), never a suggestion that lives in its chat; `second` marks another helper of a kind that
