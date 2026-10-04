@@ -41,6 +41,9 @@ sh(join(opt, 'node', 'bin', 'npm'), ['ci', '--omit=dev', '--no-audit', '--no-fun
 const engineState = join(stage, 'engine-prepare');
 sh(join(opt, 'node', 'bin', 'node'), ['scripts/prepare-engine.mjs', engineState], { cwd: app, env: bundledEnv });
 sh(join(opt, 'node', 'bin', 'npm'), ['audit', 'signatures', '--prefix', 'runtime/openclaw'], { cwd: app, env: bundledEnv });
+// The kit locks its engine folders to 0700 for the build user; dpkg unpacks them root-owned, and crewd runs as the
+// person, who then cannot read the engine it was given. Everyone reads it; only crewd's own state stays private.
+sh('chmod', ['-R', 'a+rX', join(app, 'runtime')]);
 rmSync(engineState, { recursive: true, force: true });
 
 // The launcher, the menu entry and the icon.

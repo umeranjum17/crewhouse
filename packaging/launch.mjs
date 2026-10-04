@@ -22,8 +22,11 @@ function service() {
   const unit = join(process.env.XDG_CONFIG_HOME || join(homedir(), '.config'), 'systemd', 'user', 'crewhouse.service');
   const vars = Object.entries(env).filter(([k]) => k.startsWith('CREWHOUSE_')).map(([k, v]) => `Environment=${k}=${v}`).join('\n');
   mkdirSync(dirname(unit), { recursive: true });
+  // The same crewd.log as the no-service path: the marks a first run is timed by are in one file either way.
+  const out = join(process.env.XDG_STATE_HOME || join(homedir(), '.local', 'state'), 'crewhouse', 'crewd.log');
+  mkdirSync(dirname(out), { recursive: true });
   writeFileSync(unit, `[Unit]\nDescription=Crewhouse\nAfter=network-online.target\n\n[Service]\nWorkingDirectory=${app}\n` +
-    `Environment=PATH=${env.PATH}\n${vars}\nExecStart=${node} src/main.ts\nRestart=on-failure\n\n[Install]\nWantedBy=default.target\n`);
+    `Environment=PATH=${env.PATH}\n${vars}\nExecStart=${node} src/main.ts\nStandardOutput=append:${out}\nStandardError=append:${out}\nRestart=on-failure\n\n[Install]\nWantedBy=default.target\n`);
   spawnSync('systemctl', ['--user', 'daemon-reload'], { stdio: 'ignore' });
   return spawnSync('systemctl', ['--user', 'enable', '--now', 'crewhouse.service'], { stdio: 'ignore' }).status === 0;
 }
