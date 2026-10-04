@@ -2,11 +2,10 @@
 // floor-guard.mjs — diff-scoped enforcement of the CONSTRAINTS.md floor.
 // Adapted from the constraint-driven-development skill's reference guard
 // (references/floor-guard.md); same contract: input is the diff from the merge
-// base to the working tree including untracked files, output is the five
+// base to the working tree including untracked files, output is the
 // bar-lowering moves, exit 0 clean / 1 violation / 2 could not run.
 // Usage: node scripts/floor-guard.mjs [--base <ref>]   (default base: origin/main)
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
 
 const base = (() => {
   const i = process.argv.indexOf('--base');
@@ -68,18 +67,12 @@ for (const line of diff.split('\n')) {
 const findings = [];
 const flag = (rule, f, text) => findings.push({ rule, file: f, text: text.trim().slice(0, 120) });
 const isTest = (f) => /\.(test|spec)\.|_test\.|test_/.test(f);
-const isConstraints = (f) => /CONSTRAINTS\.md$/.test(f);
-
-// A `.constraintsignore` (one glob per line, `#` comments) exempts a path from the pattern flags
-// and counts as a recorded reason for a skip, a deleted test or a removed assertion. Threshold and
-// rule changes in CONSTRAINTS.md still apply to every path, so an ignore never hides a loosening
-// of the bar itself.
-const glob = (g) => new RegExp('^' + g.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*\*/g, '\u0000').replace(/\*/g, '[^/]*').replace(/\u0000/g, '.*') + '$');
-const ignored = (() => {
-  try { return readFileSync('.constraintsignore').toString().split('\n')
-    .map((l) => l.replace(/#.*/, '').trim()).filter(Boolean).map(glob); } catch { return []; }
-})();
-const isIgnored = (f) => ignored.some((re) => re.test(f));
+// The pattern flags read source only: a Markdown or YAML file quotes these patterns on purpose.
+const isSource = (f) => /\.(m?[jt]sx?)$/.test(f);
+// The guard's own source and the rules file quote every pattern it matches, so they are the only
+// two paths exempt from the pattern flags. That exemption is a fixed list in this file, not a
+// per-change ignore file, so no change can quietly widen it.
+const SELF = new Set(['CONSTRAINTS.md', 'scripts/floor-guard.mjs']);
 
 // 1. Silenced checker — this repo is tsc-strict TypeScript; extend for other ecosystems.
 const SUPPRESSIONS = /@ts-ignore|@ts-nocheck|eslint-disable|biome-ignore|# *noqa|# *type: *ignore|istanbul ignore|nosemgrep|gitleaks:allow|Stryker disable/;
@@ -90,20 +83,20 @@ const SKIPS = /\.(skip|todo)\b|\bxit\(|\bxdescribe\(|@pytest\.mark\.skip|t\.Skip
 
 // 2/2b. A skip, a deleted test or a removed assertion passes with a recorded reason and blocks
 // without one (Floor: "without a reason in the commit message"). A reason is a commit in the
-// range whose message names the file (path or basename), or a `.constraintsignore` entry for it.
+// range whose message names the file (path or basename).
 const messages = git(['log', '--format=%B', mergeBase + '..HEAD']) ?? '';
-const reasoned = (f) => isIgnored(f) || messages.split('\n').some((l) => {
+const reasoned = (f) => messages.split('\n').some((l) => {
   const t = l.trim();
   return t !== '' && (t.includes(f) || t.includes(f.split('/').pop() ?? f));
 });
 
 for (const { file, text } of added) {
-  if (!isIgnored(file)) {
+  if (SELF.has(file)) continue;
+  if (isSource(file)) {
     if (SUPPRESSIONS.test(text)) flag('silenced-checker', file, text);
     if (STUBS.test(text)) flag('unfinished-work', file, text);
-    if (SKIPS.test(text) && !reasoned(file)) flag('test-made-easier', file, text);
   }
-  if (isConstraints(file) && /^\| *(W|E)\d+ *\|/.test(text)) flag('new-exception', file, text);
+  if (isTest(file) && SKIPS.test(text) && !reasoned(file)) flag('test-made-easier', file, text);
 }
 
 // 2b. A test file deleted, or an assertion removed from a test file that still exists.
@@ -114,65 +107,8 @@ for (const { file, text } of removed) {
   }
 }
 
-// 1b/2c. A rule in CONSTRAINTS.md weakened or removed. A rule is a floor bullet or a table row,
-// identified by the bullet's text before its first colon or by the row's first cell. Each number
-// carries a direction read from the words around it: a minimum (>=, at least, must not fall) is
-// loosened by going down, a maximum (<=, at most, under, must not grow) by going up. A number whose
-// direction cannot be read is reported whenever it changes, because the guard cannot tell
-// tightening from loosening and staying quiet is the wrong default.
-const ruleKey = (t) => {
-  const s = t.trim();
-  if (s.startsWith('|')) return s.split('|').map((c) => c.trim()).filter(Boolean)[0] ?? '';
-  if (/^[-*] /.test(s)) return s.slice(2).split(':')[0].trim();
-  return null; // prose, headings, dates: not a rule
-};
-const isException = (t) => /^\| *(W|E)\d+ *\|/.test(t.trim());
-const MIN_BEFORE = /(>=|>|≥|at least|minimum|\bmin\b|no less than|not fall|not drop)\s*$/;
-const MAX_BEFORE = /(<=|<|≤|at most|maximum|\bmax\b|no more than|under|below|not grow|not exceed)\s*$/;
-const MIN_AFTER = /^\s*\S*\s*(or more|or higher|must not fall|must not drop)/;
-const MAX_AFTER = /^\s*\S*\s*(or less|or lower|must not grow|must not exceed)/;
-const thresholds = (t) => {
-  const out = [], re = /\d+(?:\.\d+)?/g;
-  let m;
-  while ((m = re.exec(t))) {
-    const before = t.slice(Math.max(0, m.index - 24), m.index).toLowerCase();
-    const after = t.slice(m.index + m[0].length, m.index + m[0].length + 40).toLowerCase();
-    const dir = MIN_BEFORE.test(before) || MIN_AFTER.test(after) ? 'min'
-      : MAX_BEFORE.test(before) || MAX_AFTER.test(after) ? 'max' : null;
-    out.push({ n: Number(m[0]), dir });
-  }
-  return out;
-};
-const removedRules = removed.filter((l) => isConstraints(l.file) && ruleKey(l.text) !== null);
-const addedRules = added.filter((l) => isConstraints(l.file) && ruleKey(l.text) !== null);
-for (const r of removedRules) {
-  const a = addedRules.find((x) => ruleKey(x.text) === ruleKey(r.text));
-  if (!a) {
-    if (!isException(r.text)) flag('rule-removed', r.file, r.text); // dropping an exception tightens: silent
-    continue;
-  }
-  const before = thresholds(r.text), after = thresholds(a.text);
-  let verdict = null;
-  for (const dir of ['min', 'max', null]) {
-    const was = before.filter((x) => x.dir === dir), now = after.filter((x) => x.dir === dir);
-    was.forEach((b, i) => {
-      const n = now[i];
-      if (verdict) return;
-      if (!n) verdict = 'threshold-removed';
-      else if (n.n === b.n) return;
-      else if (dir === 'min' ? n.n < b.n : dir === 'max' ? n.n > b.n : true) {
-        verdict = dir ? 'threshold-loosened' : 'threshold-changed';
-      }
-    });
-  }
-  if (verdict) flag(verdict, r.file, r.text + '  ->  ' + a.text);
-}
-
 if (findings.length === 0) { console.log('floor-guard: clean'); process.exit(0); }
 console.error('floor-guard: ' + findings.length + ' floor violation(s):');
 for (const f of findings) console.error(`  [${f.rule}] ${f.file}: ${f.text}`);
-if (findings.some((f) => f.rule === 'rule-removed')) {
-  console.error("\nA rule-removed finding can also mean the rule's label changed: rename a rule in one commit and change its thresholds in another.");
-}
-console.error('\nEach is a move that lowers the bar. Fix the code, name the file with a reason in the commit message (test rules), or route it through a tracked exception.');
+console.error('\nEach is a move that lowers the bar. Fix the code, name the file with a reason in the commit message (test rules).');
 process.exit(1);

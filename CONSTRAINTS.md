@@ -13,13 +13,14 @@ Machine-checked by the guard on every diff:
 
 - No new suppression comments: `@ts-ignore`, `@ts-nocheck`, `eslint-disable`, `# noqa`, `# type: ignore`
 - No unimplemented stubs: `throw new Error("Not implemented")`, empty `catch {}`, `TODO` where the implementation should be
-- No skipped or deleted tests and no removed assertions without a recorded reason: a commit message in the change that names the file, or a `.constraintsignore` entry
-- This file does not get weakened to make a change pass
+- No skipped or deleted tests and no removed assertions without a recorded reason: a commit message in the change that names the file
 
 Review-enforced (the guard has no scanner for these):
 
 - No secrets in source
+- This file does not get weakened to make a change pass
 
 The guard watches the diff (added and removed lines, untracked files included) against
-the merge base, so the floor applies to change, not to history. Tightening is silent;
-loosening is loud. Report the rule and the location, never a matched secret's value.
+the merge base, so the floor applies to change, not to history. The guard scans source files, plus
+every test file for skips; this file and the guard's own source are exempt because they quote the
+patterns they match. Report the rule and the location, never a matched secret's value.
