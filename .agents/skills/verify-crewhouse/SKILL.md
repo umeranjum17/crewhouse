@@ -80,7 +80,7 @@ use the longest visible strings (the standing jobs' idea asks, a helper's displa
 prove placement with `eval` + `getBoundingClientRect`, not by looking at a screenshot.
 `?demo` variants (`?demo=crew1|crew5|crew12|crew30|calm|office`, `web/src/demo.ts`) run
 every screen with no crewd — fine for pure-UI layout checks, never a substitute for a real
-drive.
+drive. Anything a person sees also owes the Review evidence set below.
 
 ## Evidence
 
@@ -92,15 +92,77 @@ row, not just a final screen); verify side effects where the feature has them (f
 `$LAB/crew/bots/<bot>/files/`, rows in `crew.db`); label anything the stub cannot prove
 (no real model words, no real sign-in) as a stub-engine result.
 
+## Review evidence (fleet standard)
+
+Every user-visible change carries its own proof, so no one has to ask for it twice. On
+every run that touches what a person sees, capture **each changed screen in dark and in
+light, at 390 and at 1440** (four files per screen), plus **one motion recording of each
+changed interaction**, into one stable evidence folder that the PR body names. Text-only
+runs (API, data, policy) skip this section — say so in the report rather than leaving it
+silent.
+
+```bash
+export CHROME_DEVTOOLS_AXI_SESSION=<task-name>          # never the shared default session
+export CDP_PORT=9924                                    # Chrome's own port, distinct from the bridge's
+FM_HOME=${FM_HOME:-$HOME/.treehouse/firstmate}          # the supervising firstmate home
+EV=$FM_HOME/evidence/<task-name>/<change-slug>          # stable: named in the PR, survives cleanup
+mkdir -p "$EV/screens" "$EV/motion"
+```
+
+**Four captures per changed screen** — `scripts/screens.sh <dest> <slug> <url> [extra-query]`
+drives the app's own theme switch (`?day` / `?night`, `useLook` in `web/src/main.tsx`; the OS
+colour scheme does nothing here) at both widths, and writes `<slug>-night-1440.png`,
+`<slug>-night-390.png`, `<slug>-day-1440.png`, `<slug>-day-390.png`. Drive the real crewd
+to the screen first; `?demo=…` only when the change is pure layout. Pair each capture with
+the `eval` its feature file asks for — a screenshot alone proves nothing about a text-only
+read.
+
+**One recording per changed interaction** — Chrome's own screencast, so the motion is real
+pixels:
+
+```bash
+# Launch scoped, before the first open of the run: the browser keeps this Chrome
+# answering CDP so the recorder can screencast it. Its port is the bridge's port.
+export CHROME_DEVTOOLS_AXI_CHROME_ARGS="--remote-debugging-port=$CDP_PORT"
+node scripts/record.mjs --cdp "$CDP_PORT" --out "$EV/motion/office-switch.webm" --seconds 8 &
+chrome-devtools-axi click @e12                          # the interaction under proof
+wait                                                     # the recorder prints file + frame count
+```
+
+It prints the frame count and the span (first paint to last, so a settled screen is a
+short clip); fewer than two frames means nothing moved or the wrong page was recording —
+fix that, never file the empty clip. Record the interaction
+a person performs (a tap, a send, the Chat↔Office switch), not a synthetic animation.
+Reduce Motion (`chrome-devtools-axi emulate`, or `?demo=calm`) is its own case: with motion
+off the screen must still say what changed.
+
+**What this app does not have, so this section skips it** — say each skip in the report:
+
+- **The native Expo app (`mobile/`).** A separate surface with its own build: this skill
+  drives the shipped web app on loopback, and a native capture needs an emulator plus
+  task-generated Android credentials that no loopback run has. A PR changing `mobile/` must
+  name its own native proof instead of claiming these four web captures.
+- **A third form factor.** 1440 (desktop) and 390 (phone) are the two widths the app is
+  designed at; 320 stays the narrowest *probe* in the Drive section, reported as measured
+  behaviour, not a fifth capture.
+
+**PR body.** Name the evidence folder and the files (`screens/hello-night-1440.png`,
+`motion/office-switch.webm`, …). Media is never committed; a public repo links the private
+evidence page.
+
 ## Cleanup
 
 Kill only what you started (`kill -TERM $(cat "$LAB/crewd.spawn.pid")`, wait, then the
 browser session: `chrome-devtools-axi` stop). Verify: the port no longer answers, no crewd
-process owns `$LAB/state/crewd.pid`, `$LAB` removed. `$EV` survives — a cleanup that eats
-the proof fails. Never kill by process name.
+process owns `$LAB/state/crewd.pid`, `$LAB` removed. Both `$EV` and the Review evidence
+folder survive — a cleanup that eats the proof fails. Never kill by process name.
 
 ## Helpers
 
+- `scripts/screens.sh <dest> <slug> <url> [query]` — the four design-bar captures of one
+  changed screen (dark and light, 1440 and 390).
+- `scripts/record.mjs --cdp <port> --out <file.webm> --seconds 8` — one motion recording of
+  a changed interaction: screencast frames timed by their own timestamps, muxed by ffmpeg.
 - `node scripts/floor-guard.mjs` — the CONSTRAINTS.md floor on the current diff (exit 0
   clean / 1 violation / 2 could not run). Not app verification; run it before claiming done.
 - `npm run check` (tsc, strict) and `npm test` (`scripts/test.mjs`, full isolated suite)
