@@ -1222,7 +1222,7 @@ function App() {
         <nav className="tabbar">{nav.map(([h, l, i]) => <a key={h} href={h} className={active(h) ? 'on' : ''}><span className="ic"><Dots rows={art.TABS[i]} pal={{ x: 'currentColor' }} d={22 / 9} crisp /></span>{l}{h === '#/' && asks > 0 && <span className="badge">{asks}</span>}</a>)}</nav>
       </div>
       {sheet && <AskSheet c={sheet} who={crew.find((h) => h.id === sheet.helper)} chiefSays={ctx.state.asks.find((a: Json) => a.id === sheet.id)?.detail?.chief} onClose={() => history.length > 1 ? history.back() : go('#/')} />}
-      {book && <PreviewPanel bot={book.bot} path={book.path} onClose={() => history.length > 1 ? history.back() : go('#/')} />}
+      {book && <PreviewPanel bot={book.bot} path={book.path} title={A.fileTitle(ctx.state, book.bot, book.path)} onClose={() => history.length > 1 ? history.back() : go('#/')} />}
       {party && <Celebrate title={party.title} href={hrefOf(party.helper)} onDone={() => setParty(null)} />}
       <Toasts />
     </>

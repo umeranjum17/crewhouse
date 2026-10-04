@@ -89,11 +89,13 @@ export function pretty(path: string) {
 /** The bot and path a file view came from, for the phone's photo fetch: `/files/<bot>/<path under files/>`. */
 export const fileSource = (url: string) => { const m = /^\/files\/([a-z0-9-]+)\/(.+)$/.exec(url); return m ? { bot: m[1], path: `files/${decodeURIComponent(m[2])}` } : null; };
 
-export function fileView(bot: string, path: string): FileView {
+/** A delivered file as the person meets it. `title` is crewd's registered human name (docs/ui-contract.md), shown as
+ *  written; only a file delivered without one falls back to a name read off its path. */
+export function fileView(bot: string, path: string, title?: string): FileView {
   const rel = path.replace(/^files\//, '');
   const url = /^(data:|\/)/.test(path) ? path : `/files/${bot}/${rel.split('/').map(encodeURIComponent).join('/')}`;
   if (path.startsWith('data:image/')) return { url, name: 'A picture', kind: 'image' };
-  return { url, name: pretty(rel), kind: /\.(mp4|webm|mov)$/i.test(rel) ? 'video' : /\.(png|jpe?g|webp|gif)$/i.test(rel) ? 'image' : /\.xlsx?$/i.test(rel) ? 'sheet' : /(\.docx?|\.md|\.txt)$/i.test(rel) ? 'page' : 'doc' };
+  return { url, name: String(title ?? '').trim() || pretty(rel), kind: /\.(mp4|webm|mov)$/i.test(rel) ? 'video' : /\.(png|jpe?g|webp|gif)$/i.test(rel) ? 'image' : /\.xlsx?$/i.test(rel) ? 'sheet' : /(\.docx?|\.md|\.txt)$/i.test(rel) ? 'page' : 'doc' };
 }
 
 /** Where a tap on a delivered file goes: the read-only panel for a page or sheet, the file itself (a PDF, a download)
@@ -145,9 +147,26 @@ export function docLinks(text: string): { text: string; href?: string }[] {
     }
     const url = part.replace(/[”’"')\].,;:]+$/g, '');
     const href = /^https?:\/\//.test(part) ? safeLink(url) : '';
-    return href ? [{ text: url, href }, ...(part.slice(url.length) ? [{ text: part.slice(url.length) }] : [])] : part ? [{ text: part }] : [];
+    return href ? [{ text: sourceLabel(href), href }, ...(part.slice(url.length) ? [{ text: part.slice(url.length) }] : [])] : part ? [{ text: part }] : [];
   });
 }
+
+/** A bare source URL as a tappable label: its site, never the raw address (which wraps as "https: //…"). */
+export const sourceLabel = (href: string) => { try { return new URL(href).host.replace(/^www\./, ''); } catch { return href; } };
+
+const MIME: Record<string, string> = { docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', md: 'text/markdown', txt: 'text/plain', pdf: 'application/pdf',
+  mp4: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp' };
+/** What a delivered file is saved or shared as on the phone: its registered title (only the characters a file name can't
+ *  hold become dashes) with the stored file's own extension, and that extension's type. */
+export function saveAs(f: FileView) {
+  const ext = (f.url.split('?')[0].match(/\.([a-z0-9]+)$/i)?.[1] ?? '').toLowerCase();
+  const base = f.name.replace(/[\/\\:*?"<>|\u0000-\u001f]+/g, '-').replace(/\s+/g, ' ').trim().slice(0, 120) || 'File';
+  return { name: ext ? `${base}.${ext}` : base, mime: MIME[ext] ?? 'application/octet-stream' };
+}
+
+/** How many bytes a base64 slice holds. */
+export const base64Bytes = (b64: string) => Math.floor(b64.length * 3 / 4) - (b64.endsWith('==') ? 2 : b64.endsWith('=') ? 1 : 0);
 
 /** A delivered document is the person's file, not bot chatter: preserve its words, including URLs and product names. */
 export function document(json: Json, name: string): DocView {
@@ -181,13 +200,17 @@ const TOOL_FRAGMENT = /\[tool\b[\s\S]*$/i; // ...and a cut-off one (task titles 
 const JSON_BLOB = /\{(?:[^{}]|\{[^{}]*\})*\}/g; // nor is a raw JSON object, one nesting level deep
 export const noTools = (text = '') => text.replace(TOOL_CALL, ' ').replace(JSON_BLOB, ' ').replace(TOOL_FRAGMENT, '').replace(/\s{2,}/g, ' ').trim();
 
+/** A helper's words naming a delivered file by its storage path say its registered title instead (before `plain`). */
+export const named = (text: string, titles: [string, string | undefined][]) =>
+  titles.reduce((t, [path, title]) => (title && path ? t.replace(new RegExp(`\`?${path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\`?`, 'g'), `“${title}”`) : t), text);
+
 export function plain(text = '') {
   if (/\bstub [\w-]+:/.test(text)) return 'On it.';
   // Heading markers strip before noTools collapses whitespace (D23): a later heading must still sit at a line
   // start to be found — after the collapse every ### but the first survives mid-line as literal markup.
   return noTools(text.replace(/(^|\n)#{1,6}\s+/g, '$1'))
     .replace(/```[\s\S]*?```/g, '')
-    .replace(/`([^`\n]*)`/g, (_, s: string) => (/^[\w.\-~\/]+\.[a-z0-9]{2,4}$/i.test(s) ? `“${pretty(s)}”` : /[\/\\$|]|--?\w/.test(s) ? '' : s))
+    .replace(/`([^`\n]*)`/g, (_, s: string) => (/^[\w.\-~\/]+\.[a-z0-9]{2,4}$/i.test(s) ? `“${pretty(s)}”` : /[\/\\$|]|--?\w/.test(s) && !/^--?[a-z][\w-]*$/i.test(s) ? '' : s))
     .replace(/(^|[\s(“"'])((~|\.{1,2})?\/[\w.\-~]+)+\/?(?=[\s).,;:!?”"']|$)/g, (_, pre: string, p: string) => `${pre}${/\.[a-z0-9]{2,4}$/i.test(p) ? `“${pretty(p)}”` : 'its folder'}`)
     .replace(/\bfiles\/([\w.\-]+)/g, (_, f: string) => `“${pretty(f)}”`)
     .replace(/\b(claude(\s+code)?|anthropic|codex|sonnet|opus|haiku|gpt-[\w.]+|herdr|mcp__\w+|crew_[a-z_]+)\b/gi, 'the crew')
@@ -215,7 +238,8 @@ export function deskThings(id: string, task: Json | null): FileView[] {
     .filter((f) => !f?.photo && !String(f?.path ?? '').startsWith('files/photos/'))
     .map((f) => String(f?.path ?? ''))
     .filter(Boolean);
-  return paths.filter((p, i) => paths.lastIndexOf(p) === i).map((p) => fileView(id, p));
+  const title = (p: string) => (task?.files as Json[]).findLast((f) => f?.path === p)?.title;
+  return paths.filter((p, i) => paths.lastIndexOf(p) === i).map((p) => fileView(id, p, title(p)));
 }
 
 export function helper(b: Json, events: Json[] = []): Helper {
@@ -466,25 +490,30 @@ export function crew(state: Json) {
 /** One thread in the chat list: Chief pinned on top, then the helpers, the latest talk first. */
 export type Chat = { id: string; name: string; who: Helper | 'chief'; line: string; at: number; unread: number; ring: Helper['ring'] };
 /** A thread's last line as the list shows it: "You: …", "Sent “Birthday video”", or the bot's words. */
-export function preview(last: Json | null | undefined, status = '') {
+export function preview(last: Json | null | undefined, status = '', state?: Json) {
   if (!last) return status || 'Say hello';
   const n = photos(String(last.text ?? '')).length;
   const said = String(last.text ?? '').replace(PHOTO, '').trim();
   const text = n && (!said || /^Here (is a photo|are some photos)\.$/.test(said)) ? (n === 1 ? 'Photo' : `${n} photos`) : said;
   const f = /^Delivered (files\/.+?)(?::\s|$)/.exec(text);
-  if (f) return `Sent “${pretty(f[1])}”`;
+  if (f) return `Sent “${fileView('', f[1], state && fileTitle(state, String(last.bot ?? ''), f[1])).name}”`;
   return last.author === 'person' ? `You: ${text.replace(/\s+/g, ' ')}` : teaser(text.replace(/\s+/g, ' '));
+}
+/** A delivered file's registered human name as the snapshot carries it: a finished job's `fileTitles`, a live job's files. */
+export function fileTitle(state: Json, bot: string, path: string): string | undefined {
+  return (state.tasks ?? []).find((t: Json) => t.bot === bot && t.fileTitles?.[path])?.fileTitles[path]
+    ?? ((state.bots ?? []).find((b: Json) => b.id === bot)?.task?.files as Json[] | undefined)?.find((f) => f?.path === path)?.title;
 }
 export function chats(state: Json): Chat[] {
   const bot = (id: string) => state.bots.find((b: Json) => b.id === id) ?? {};
   const c = chief(state);
   // A helper's suggestion ("learned something", Chief has a suggestion) lives in its chat; its row carries the dot.
   const suggested = new Set((state.asks as Json[]).filter((a) => a.kind === 'propose').map((a) => a.bot as string));
-  const lead: Chat = { id: 'chief', name: 'Chief', who: 'chief', line: preview(bot('chief').last, c.line), at: at(bot('chief').last?.at ?? 0) || 0, unread: (bot('chief').unread ?? 0) + (suggested.has('chief') && !(bot('chief').unread ?? 0) ? 1 : 0), ring: c.mood === 'ask' ? 'needs' : '' };
+  const lead: Chat = { id: 'chief', name: 'Chief', who: 'chief', line: preview(bot('chief').last && { bot: 'chief', ...bot('chief').last }, c.line, state), at: at(bot('chief').last?.at ?? 0) || 0, unread: (bot('chief').unread ?? 0) + (suggested.has('chief') && !(bot('chief').unread ?? 0) ? 1 : 0), ring: c.mood === 'ask' ? 'needs' : '' };
   const rest = crew(state).map((h): Chat => {
     const b = bot(h.id);
     // Working or waiting on the person says more than the last line did.
-    const line = h.ring === 'needs' ? 'Needs you' : h.driving ? h.status : h.ring === 'working' ? `Working on: ${h.status}` : preview(b.last, h.role);
+    const line = h.ring === 'needs' ? 'Needs you' : h.driving ? h.status : h.ring === 'working' ? `Working on: ${h.status}` : preview(b.last && { bot: h.id, ...b.last }, h.role, state);
     return { id: h.id, name: h.name, who: h, line, at: at(b.last?.at ?? 0) || 0, unread: (b.unread ?? 0) + (suggested.has(h.id) && !(b.unread ?? 0) ? 1 : 0), ring: h.ring };
   }).sort((a, b) => b.at - a.at);
   const room = state.room ?? {};
@@ -514,7 +543,7 @@ export function found(state: Json, r: Json | null) {
   const name = (id: string) => (id === 'chief' ? 'Chief' : state.bots.find((b: Json) => b.id === id)?.display ?? id);
   return [
     ...(r.things ?? []).map((t: Json) => ({ key: `t${t.id}`, bot: t.bot as string, thing: t.id as number, name: name(t.bot), text: `Made “${plain(t.title)}”`, at: at(t.at) })),
-    ...(r.messages ?? []).map((m: Json) => ({ key: `m${m.id}`, bot: m.bot as string, msg: m.id as number, name: name(m.bot), text: preview(m), at: at(m.at) })),
+    ...(r.messages ?? []).map((m: Json) => ({ key: `m${m.id}`, bot: m.bot as string, msg: m.id as number, name: name(m.bot), text: preview(m, '', state), at: at(m.at) })),
   ];
 }
 
@@ -623,8 +652,8 @@ export function work(state: Json): Work[] {
 
 export function things(state: Json): Thing[] {
   return state.tasks.filter((t: Json) => t.state === 'done').map((t: Json) => ({
-    id: t.id, helper: t.bot, title: plain(t.title), at: t.updated_at, summary: teaser(t.result ?? '').slice(0, 220),
-    files: (t.files ?? []).map((f: string) => fileView(t.bot, f)),
+    id: t.id, helper: t.bot, title: plain(t.title), at: t.updated_at, summary: teaser(named(t.result ?? '', Object.entries(t.fileTitles ?? {}))).slice(0, 220),
+    files: (t.files ?? []).map((f: string) => fileView(t.bot, f, t.fileTitles?.[f])),
   }));
 }
 
@@ -906,7 +935,7 @@ export function step(e: Json): string | null {
     case 'run.allowed': return 'Went ahead, as you allowed';
     case 'ask.opened': return 'Asked for your OK';
     case 'ask.answered': return `You said ${ANSWER[d.answer] ?? (/always/.test(d.answer) ? 'always OK' : /task/.test(d.answer) ? 'yes for this job' : 'what to do')}`;
-    case 'file.delivered': return d.photo ? 'You sent a photo' : /\.(patch|diff)$/.test(String(d.path)) ? `Suggested a change for the maintainer to review: “${pretty(String(d.path))}”` : `Made “${pretty(d.path)}”`;
+    case 'file.delivered': return d.photo ? 'You sent a photo' : /\.(patch|diff)$/.test(String(d.path)) ? `Suggested a change for the maintainer to review: “${fileView('', String(d.path ?? ''), d.title).name}”` : `Made “${fileView('', String(d.path ?? ''), d.title).name}”`;
     case 'memory.learned': return `${d.everyone ? 'Learned, for the whole crew' : 'Learned'}: ${plain(d.text)}`;
     case 'memory.undone': return `You undid: ${plain(d.text)}`;
     case 'soul.changed': return d.by === 'chief' ? 'Took on the personality Chief suggested' : d.reset ? 'Went back to how it started' : 'You changed how it comes across';
@@ -946,23 +975,26 @@ export function room(page: Json, state: Json) {
   return (page?.lines ?? []).map((m: Json) => ({ id: m.id as number, who: people.get(m.bot) as Helper | undefined,
     to: m.to ? (people.get(m.to) as Helper | undefined)?.name : undefined,
     from: m.from ? (people.get(m.from) as Helper | undefined)?.name : undefined,
-    text: chatWords(m.text ?? ''), files: (m.files ?? []).map((f: Json) => fileView(f.bot, f.path)), at: at(m.at), author: m.author }));
+    text: chatWords(m.text ?? ''), files: (m.files ?? []).map((f: Json) => fileView(f.bot, f.path, f.title)), at: at(m.at), author: m.author }));
 }
 
 const chatWords = (text: string) => text.replace(/```[\s\S]*?```/g, '').split('\n').map(plain).join('\n').trim();
 
 export function lines(page: Json, bot: string): Line[] {
+  const titles: [string, string | undefined][] = (page?.files ?? []).map((x: Json) => [`files/${x?.path}`, x?.title]);
   return (page?.messages ?? []).filter((m: Json) => !/\bstub [\w-]+:/.test(String(m.text ?? ''))).map((m: Json) => {
     const pics = photos(String(m.text ?? ''));
-    const text = String(m.text ?? '').replace(PHOTO, '').trim();
+    const raw = String(m.text ?? '').replace(PHOTO, '').trim();
+    const text = m.author === 'system' ? raw : named(raw, [...titles, ...(m.files ?? []).map((f: Json): [string, string | undefined] => [f.path, f.title])]);
     if (m.author === 'system') {
       const f = /^Delivered (files\/.+?)(?::\s|$)/.exec(text);
       if (!f) return { id: m.id, from: 'note', text: plain(text), files: [], choices: [] };
-      const words = plain(text.slice(f[0].length)) || `Here's “${pretty(f[1])}”`;
+      const file = fileView(bot, f[1], (page?.files ?? []).find((x: Json) => `files/${x?.path}` === f[1])?.title);
+      const words = plain(text.slice(f[0].length)) || `Here's “${file.name}”`;
       // A built workbook or document is its card on the web, which says what is in it: no words of its own there. The
       // phone's plainer card has no count, so it keeps them as `about`.
       const card = /\.(xlsx|docx)$/i.test(f[1]);
-      return { id: m.id, from: 'note', text: card ? '' : words, about: card ? words : undefined, files: [fileView(bot, f[1])], choices: [] };
+      return { id: m.id, from: 'note', text: card ? '' : words, about: card ? words : undefined, files: [file], choices: [] };
     }
     // Another helper handing this one a job: a note in its words, "Reel asked: …".
     if (!['person', 'bot', 'chief'].includes(m.author)) return { id: m.id, from: 'note', text: `${String(m.author).replace(/^./, (c) => c.toUpperCase())} asked: ${plain(text)}`, files: [], choices: [] };
@@ -970,9 +1002,9 @@ export function lines(page: Json, bot: string): Line[] {
     // result and the full words (Show details) behind it.
     if (m.author === 'chief' && bot !== 'chief') return { id: m.id, from: 'chief',
       text: `Chief asked: ${plain(String(m.title ?? text.split('\n')[0])).slice(0, 80)}`, detail: chatWords(text),
-      files: [...pics, ...(m.files ?? []).map((f: Json) => fileView(f.bot, f.path))], choices: [] };
+      files: [...pics, ...(m.files ?? []).map((f: Json) => fileView(f.bot, f.path, f.title))], choices: [] };
     return { id: m.id, from: m.author === 'person' ? 'me' : 'them',
-      recap: m.recap === true, text: m.author === 'person' ? (pics.length && /^Here (is a photo|are some photos)\.$/.test(text) ? '' : noTools(text)) : chatWords(text), files: [...pics, ...(m.files ?? []).map((f: Json) => fileView(f.bot, f.path))], choices: (m.choices ?? []).map(plain), at: m.at ? at(m.at) : undefined, unsure: m.author === 'bot' && /^Not sure it worked:|^[^.]{1,40} isn't sure “/.test(text) };
+      recap: m.recap === true, text: m.author === 'person' ? (pics.length && /^Here (is a photo|are some photos)\.$/.test(text) ? '' : noTools(text)) : chatWords(text), files: [...pics, ...(m.files ?? []).map((f: Json) => fileView(f.bot, f.path, f.title))], choices: (m.choices ?? []).map(plain), at: m.at ? at(m.at) : undefined, unsure: m.author === 'bot' && /^Not sure it worked:|^[^.]{1,40} isn't sure “/.test(text) };
   }).filter((l: Line) => l.text || l.files.length);
 }
 
@@ -1161,9 +1193,9 @@ export function office(state: Json): OfficeView {
     // The desk holds the task's delivered files first (they survive the 80-event window), then any live
     // arrival the snapshot predates; a path delivered again (a first look, then the finished one) is one thing.
     const desk = deskThings(h.id, task);
-    const paths = task ? events.filter((e) => e.kind === 'file.delivered' && !e.data?.photo && e.data?.task === task.id).map((e) => String(e.data?.path ?? '')) : [];
-    const extra = paths.filter((p, i) => paths.lastIndexOf(p) === i && !desk.some((f) => f.url === fileView(h.id, p).url));
-    const made = [...desk, ...extra.map((p) => fileView(h.id, p))];
+    const live = task ? events.filter((e) => e.kind === 'file.delivered' && !e.data?.photo && e.data?.task === task.id).map((e) => fileView(h.id, String(e.data?.path ?? ''), e.data?.title)) : [];
+    const extra = live.filter((f, i) => live.findLastIndex((x) => x.url === f.url) === i && !desk.some((x) => x.url === f.url));
+    const made = [...desk, ...extra];
     const w = lines.get(h.id);
     return { id: h.id, name: h.name, kind: h.kind, mood: h.mood, ring: h.ring, status: h.status,
       step: (b.step && step(b.step)) || (w && !w.waiting ? 'Getting started…' : ''), steps: now, things: made,
@@ -1204,7 +1236,7 @@ export function officeEvent(view: OfficeView, e: Json): OfficeView {
     case 'file.delivered': {
       return touch(String(e.bot), (c) => {
         const withStep = say(c, step(e) ?? c.step);
-        const f = fileView(c.id, String(d.path ?? ''));
+        const f = fileView(c.id, String(d.path ?? ''), d.title);
         return d.photo ? withStep : { ...withStep, things: [...withStep.things.filter((x) => x.url !== f.url), f] };
       });
     }
@@ -1216,9 +1248,13 @@ export function officeEvent(view: OfficeView, e: Json): OfficeView {
     case 'task.paused':
       return touch(String(e.bot), (c) => ({ ...c, ring: '' as const, step: '', steps: [], status: 'Free to help' }));
     case 'task.done': {
-      const files = (Array.isArray(d.files) ? d.files : []).map((f: Json) => fileView(String(e.bot), String(f)));
+      const desk = view.crew.find((c) => c.id === String(e.bot))?.things ?? [];
+      const files = (Array.isArray(d.files) ? d.files : []).map((f: Json) => {
+        const v = fileView(String(e.bot), String(f));
+        return desk.find((x) => x.url === v.url) ?? v; // the desk already holds its registered name
+      });
       const thing: Thing = { id: typeof d.task === 'number' ? d.task : Date.now(), helper: String(e.bot),
-        title: plain(d.title ?? ''), at: e.at ?? Date.now(), summary: teaser(d.result ?? '').slice(0, 220), files };
+        title: plain(d.title ?? ''), at: e.at ?? Date.now(), summary: teaser(named(d.result ?? '', desk.map((x) => [fileSource(x.url)?.path ?? '', x.name]))).slice(0, 220), files };
       const crew = view.crew.map((c) => (c.id === String(e.bot)
         ? { ...c, ring: '' as const, mood: 'happy' as Mood, status: 'Free to help', step: '', steps: [], things: [], ask: undefined } : c));
       return { ...view, crew, done: [thing, ...view.done],

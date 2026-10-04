@@ -21,7 +21,8 @@ import * as Linking from 'expo-linking';
 // React Native always defines this; @types/react-native is not installed, so say so once for tsc.
 declare const __DEV__: boolean;
 import * as Notifications from 'expo-notifications';
-import { File, Paths } from 'expo-file-system';
+import { Directory, File, Paths } from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { useShareIntent } from 'expo-share-intent';
@@ -165,18 +166,18 @@ function Btn({ label, onPress, go, ghost, big, disabled }: { label: string; onPr
     </Pressable>
   );
 }
-function ChatText({ text }: { text: string }) {
+function ChatText({ text, whole }: { text: string; whole?: boolean }) {
   const t = useLook();
   const [more, setMore] = useState(false);
-  const long = text.length > 700 || text.split('\n').length > 10;
+  const long = !whole && (text.length > 700 || text.split('\n').length > 10);
   const shown = long && !more ? text.slice(0, 650).replace(/\s+\S*$/, '') : text;
   const inline = (tokens: any[]): ReactNode => tokens.map((x, i) => x.type === 'strong' ? <Text key={i} style={s.b}>{inline(x.tokens)}</Text>
     : x.type === 'em' ? <Text key={i} style={{ fontStyle: 'italic' }}>{inline(x.tokens)}</Text>
-    : x.type === 'link' && safeLink(x.href) ? <Text key={i} accessibilityRole="link" onPress={() => void Linking.openURL(safeLink(x.href))} style={{ textDecorationLine: 'underline', backgroundColor: t.soft, color: t.ink }}>{inline(x.tokens)}</Text>
+    : x.type === 'link' && safeLink(x.href) ? <Text key={i} accessibilityRole="link" onPress={() => void Linking.openURL(safeLink(x.href))} style={{ textDecorationLine: 'underline', backgroundColor: t.soft, color: t.ink }}>{x.text === x.href ? A.sourceLabel(safeLink(x.href)) : inline(x.tokens)}</Text>
     : x.type === 'html' ? x.raw : x.tokens ? <Text key={i}>{inline(x.tokens)}</Text> : x.text ?? x.raw);
   const blocks = (tokens: any[]): ReactNode => tokens.map((x, i) => x.type === 'heading' ? <T key={i} style={{ fontSize: 18, lineHeight: 25, fontWeight: '600', marginTop: 8 }}>{inline(x.tokens)}</T>
     : x.type === 'paragraph' || x.type === 'text' ? <T key={i}>{inline(x.tokens ?? [{ text: x.text }])}</T>
-    : x.type === 'list' ? <View key={i} style={{ gap: 5 }}>{x.items.map((item: any, j: number) => <View key={j} style={{ flexDirection: 'row', gap: 6 }}><T>{item.task ? item.checked ? '☑' : '☐' : '•'}</T><View style={{ flex: 1 }}>{blocks(item.tokens.filter((y: any) => y.type !== 'checkbox'))}</View></View>)}</View>
+    : x.type === 'list' ? <View key={i} style={{ gap: 5 }}>{x.items.map((item: any, j: number) => <View key={j} style={{ flexDirection: 'row', gap: 6 }}><T>{item.task ? item.checked ? '☑' : '☐' : x.ordered ? `${(x.start || 1) + j}.` : '•'}</T><View style={{ flex: 1 }}>{blocks(item.tokens.filter((y: any) => y.type !== 'checkbox'))}</View></View>)}</View>
     : x.type === 'table' ? <Wide key={i}><View>{[x.header, ...x.rows].map((row: any[], j: number) => <View key={j} style={{ flexDirection: 'row' }}>{row.map((c, k) => <View key={k} style={{ minWidth: 90, maxWidth: 200, padding: 6, borderWidth: 1, borderColor: t.line }}><T style={j ? undefined : s.b}>{inline(c.tokens)}</T></View>)}</View>)}</View></Wide>
     : x.type === 'code' ? <T key={i} style={{ backgroundColor: t.soft }}>{x.text}</T>
     : x.type === 'html' ? <T key={i}>{x.raw}</T> : null);
@@ -399,7 +400,7 @@ function Wide({ children }: { children: ReactNode }) {
 /** A table as a grid. A sheet's (given its row numbers and cell roles) reads like the web's panel: letters over the
  *  columns, row numbers down the side, the heading row set apart, soft yellow to fill in, soft blue worked out.
  *  RN has no table layout, so every column gets one width from its longest words and the rows line up. */
-function SheetGrid({ head, rows, nums, roles }: { head: string[]; rows: string[][]; nums?: number[]; roles?: string[][] }) {
+function SheetGrid({ head, rows, nums, roles, links }: { head: string[]; rows: string[][]; nums?: number[]; roles?: string[][]; links?: boolean }) {
   const t = useLook();
   const all = [head, ...rows];
   const cols = [...Array(Math.max(0, ...all.map((r) => r.length))).keys()];
@@ -413,9 +414,17 @@ function SheetGrid({ head, rows, nums, roles }: { head: string[]; rows: string[]
       {nums && <View style={edge}><T tone="mute" style={s.small}>{String(nums[j] ?? j + 1)}</T></View>}
       {cols.map((k) => { const role = roles?.[j]?.[k] || (j ? '' : 'head');
         return <View key={k} style={{ width: w[k], padding: 6, borderWidth: 1, borderColor: t.line, backgroundColor: tint(role), borderBottomWidth: role === 'head' ? 2 : 1, borderBottomColor: role === 'head' ? t.line2 : t.line }}>
-          <T style={role === 'head' ? s.b : undefined}>{row[k] ?? ''}</T></View>; })}
+          <T style={role === 'head' ? s.b : undefined}>{links ? <DocText text={row[k] ?? ''} /> : row[k] ?? ''}</T></View>; })}
     </View>)}
   </View>;
+}
+
+/** A document's words with its sources as tappable labels, as the web's reader links them (A.docLinks). */
+function DocText({ text = '' }: { text?: string }) {
+  const t = useLook();
+  return <>{A.docLinks(text).map((part, i) => part.href
+    ? <Text key={i} accessibilityRole="link" onPress={() => void Linking.openURL(part.href!)} style={{ textDecorationLine: 'underline', color: t.ink }}>{part.text}</Text>
+    : part.text)}</>;
 }
 
 /** A document's parts as the web's reader shows them: headings, paragraphs, bullets and tables. */
@@ -423,10 +432,10 @@ function DocParts({ parts }: { parts: A.DocPart[] }) {
   const runs: (A.DocPart | A.DocPart[])[] = [];
   parts.forEach((p) => { const last = runs.at(-1); if (p.kind === 'li' && Array.isArray(last)) last.push(p); else if (p.kind === 'li') runs.push([p]); else runs.push(p); });
   return <View style={{ gap: 12, paddingTop: 12, paddingBottom: 24 }}>{runs.map((run, i) => Array.isArray(run)
-    ? <View key={i} style={{ gap: 6 }}>{run.map((li, j) => <View key={j} style={{ flexDirection: 'row', gap: 8 }}><T style={s.read}>•</T><T style={[s.read, { flex: 1 }]}>{li.text}</T></View>)}</View>
-    : run.kind === 'heading' ? <T key={i} style={{ fontSize: 18, lineHeight: 25, fontWeight: '600', marginTop: i ? 6 : 0 }}>{run.text}</T>
-    : run.kind === 'table' ? <Wide key={i}><SheetGrid head={run.head ?? []} rows={run.rows ?? []} /></Wide>
-    : <T key={i} style={[s.read, run.bold && s.b]}>{run.text}</T>)}</View>;
+    ? <View key={i} style={{ gap: 6 }}>{run.map((li, j) => <View key={j} style={{ flexDirection: 'row', gap: 8 }}><T style={s.read}>•</T><T style={[s.read, { flex: 1 }]}><DocText text={li.text} /></T></View>)}</View>
+    : run.kind === 'heading' ? <T key={i} style={{ fontSize: 18, lineHeight: 25, fontWeight: '600', marginTop: i ? 6 : 0 }}><DocText text={run.text} /></T>
+    : run.kind === 'table' ? <Wide key={i}><SheetGrid head={run.head ?? []} rows={run.rows ?? []} links /></Wide>
+    : <T key={i} style={[s.read, run.bold && s.b]}><DocText text={run.text} /></T>)}</View>;
 }
 
 /** One rendered file over the link, read-only: a spreadsheet is its sheets as tables, a document its headings,
@@ -440,8 +449,9 @@ function DocSheet({ f, onClose }: { f: A.FileView; onClose: () => void }) {
     const src = A.fileSource(f.url);
     if (src) void (f.kind === 'sheet' ? api.workbook(src.bot, src.path) : api.document(src.bot, src.path)).then(setPage).catch(() => {});
   }, [f.url]);
-  const book = f.kind === 'sheet' && page ? A.workbook(page, f.name) : null;
-  const doc = f.kind === 'page' && page && Array.isArray(page?.parts) ? A.document(page, f.name) : null;
+  const name = typeof page?.title === 'string' && page.title.trim() ? page.title.trim() : f.name; // crewd's registered title
+  const book = f.kind === 'sheet' && page ? A.workbook(page, name) : null;
+  const doc = f.kind === 'page' && page && Array.isArray(page?.parts) ? A.document(page, name) : null;
   const text = page && !book && !doc ? A.mdPlain(String(page?.text ?? '')) : null;
   const sheets = book?.sheets ?? [];
   const sNow = sheets[Math.min(tab, Math.max(0, sheets.length - 1))];
@@ -449,16 +459,18 @@ function DocSheet({ f, onClose }: { f: A.FileView; onClose: () => void }) {
   return <Modal visible transparent animationType={motion.sheet(reduce)} onRequestClose={onClose}>
     <Pressable style={s.scrim} onPress={onClose}>
       <Pressable style={[s.sheet, { backgroundColor: t.bg, maxHeight: '88%' }]} onPress={() => {}}>
-        <View style={[s.row, { paddingBottom: 12, borderBottomWidth: 1, borderColor: t.line }]}>
+        <View style={s.row}>
           <View style={[s.fileIc, { backgroundColor: t.solid, borderColor: t.line }]}><T tone={f.kind === 'sheet' ? undefined : 'ink2'} style={[s.fileGlyph, f.kind === 'sheet' && { color: t.ok }]}>{f.kind === 'sheet' ? '▦' : '▤'}</T></View>
-          <T style={[s.h2, { flex: 1 }]} lines={2}>{f.name}</T><Btn label="Close" onPress={onClose} /></View>
+          <T style={[s.h2, { flex: 1 }]}>{name}</T></View>
+        <View style={[s.row, { flexWrap: 'wrap', paddingBottom: 12, borderBottomWidth: 1, borderColor: t.line }]}>
+          <FileActions f={f} name={name} /><View style={{ flex: 1 }} /><Btn label="Close" onPress={onClose} /></View>
         <ScrollView style={{ flexShrink: 1 }}>
-          {page === null && <T tone="mute">Opening “{f.name}”…</T>}
+          {page === null && <T tone="mute">Opening “{name}”…</T>}
           {page !== null && !book && !doc && !text && <T tone="mute">There is nothing in it to show yet.</T>}
           {sNow && <View style={{ gap: 8, paddingTop: 12 }}><Wide><SheetGrid head={sNow.head} rows={sNow.rows} nums={sNow.nums} roles={sNow.roles} /></Wide>
-            {more > 0 && <T tone="mute" style={s.small}>{`…and ${more === 1 ? 'one more row' : `${more} more rows`}. Open it on the computer to see the whole sheet.`}</T>}</View>}
+            {more > 0 && <T tone="mute" style={s.small}>{`…and ${more === 1 ? 'one more row' : `${more} more rows`}. Download it to see the whole sheet.`}</T>}</View>}
           {doc && (doc.parts.length ? <DocParts parts={doc.parts} /> : <T tone="mute">There is nothing in it to show yet.</T>)}
-          {text != null && text !== '' && <ChatText text={text} />}
+          {text != null && text !== '' && <ChatText text={text} whole />}
         </ScrollView>
         {/* the sheet's tabs sit under it, as in the file's own program */}
         {sheets.length > 0 && <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, borderTopWidth: 1, borderColor: t.line, paddingTop: 8 }}
@@ -466,6 +478,60 @@ function DocSheet({ f, onClose }: { f: A.FileView; onClose: () => void }) {
       </Pressable>
     </Pressable>
   </Modal>;
+}
+
+/** Download and Share for a finished file: the file itself, brought over the link in slices into the phone's cache under
+ *  its registered title. Download saves a copy into a folder the person picks; Share hands it to the phone's share sheet.
+ *  A closed picker or sheet is nothing happening, never a failure. */
+function FileActions({ f, name }: { f: A.FileView; name: string }) {
+  const [busy, setBusy] = useState('');
+  const [note, setNote] = useState('');
+  const box = useRef<Directory | null>(null);
+  useEffect(() => () => { try { box.current?.delete(); } catch {} }, []);
+  const as = A.saveAs({ ...f, name });
+  const bring = async () => {
+    const src = A.fileSource(f.url);
+    if (!src) throw new Error('no such file');
+    if (!box.current) { box.current = new Directory(Paths.cache, `crewhouse-file-${Date.now()}`); box.current.create(); }
+    const file = new File(box.current, as.name);
+    if (file.exists) return file;
+    const part = new File(box.current, `${as.name}.part`);
+    part.create({ overwrite: true });
+    let after = 0;
+    for (;;) {
+      const chunk = await api.file(src.bot, src.path, after);
+      const got = A.base64Bytes(chunk.data);
+      if (!got && chunk.more) throw new Error('no progress');
+      part.write(chunk.data, { encoding: 'base64', append: after > 0 });
+      after += got;
+      setBusy(`Getting it… ${chunk.size ? Math.min(100, Math.round((after / chunk.size) * 100)) : 0}%`);
+      if (!chunk.more) break;
+    }
+    await part.move(file);
+    return file;
+  };
+  const run = (fn: () => Promise<string>) => async () => {
+    if (busy) return;
+    setNote(''); setBusy('Getting it…');
+    try { setNote(await fn()); } catch { setNote("Couldn't bring it over. Check the home computer is awake, then try again."); } finally { setBusy(''); }
+  };
+  const save = run(async () => {
+    let dir: Directory;
+    try { dir = await Directory.pickDirectoryAsync(); } catch (e: any) { if (/cancel/i.test(String(e?.message ?? e))) return ''; throw e; }
+    const file = await bring();
+    try { dir.createFile(as.name, as.mime).write(await file.bytes()); } catch { return "Couldn't save it in that folder. Try another one."; }
+    return `Saved “${as.name}” in the folder you picked.`;
+  });
+  const share = run(async () => {
+    if (!(await Sharing.isAvailableAsync())) return "This phone can't share files from here.";
+    await Sharing.shareAsync((await bring()).uri, { mimeType: as.mime, dialogTitle: name });
+    return '';
+  });
+  return <>
+    <Btn label="Download" onPress={save} disabled={!!busy} />
+    <Btn label="Share" onPress={share} disabled={!!busy} />
+    {!!(busy || note) && <T tone="mute" style={[s.small, { flexBasis: '100%' }]}>{busy || note}</T>}
+  </>;
 }
 
 /** A finished video, brought over the link in pieces and played here — the phone can't reach the computer's own address. */
@@ -504,7 +570,8 @@ function VideoSheet({ f, onClose }: { f: A.FileView; onClose: () => void }) {
   return <Modal visible transparent animationType={motion.sheet(reduce)} onRequestClose={onClose}>
     <Pressable style={s.scrim} onPress={onClose}>
       <Pressable style={[s.sheet, { backgroundColor: t.bg }]} onPress={() => {}}>
-        <View style={s.row}><T tone="mute">▶</T><T style={[s.h2, { flex: 1 }]}>{f.name}</T><Btn label="Close" onPress={onClose} /></View>
+        <View style={s.row}><T tone="mute">▶</T><T style={[s.h2, { flex: 1 }]}>{f.name}</T></View>
+        <View style={[s.row, { flexWrap: 'wrap' }]}><FileActions f={f} name={f.name} /><View style={{ flex: 1 }} /><Btn label="Close" onPress={onClose} /></View>
         {uri ? <VideoView player={player} contentFit="contain" style={{ width: '100%', aspectRatio: 16 / 9, borderRadius: 12, backgroundColor: '#000' }} accessibilityLabel={`Playing ${f.name}`} />
           : err ? <T tone="pinkInk">{err}</T>
           : <T tone="mute">Getting it from your computer… {size ? `${Math.min(100, Math.round((part / size) * 100))}%` : ''}</T>}

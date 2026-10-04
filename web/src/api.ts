@@ -43,6 +43,9 @@ export const api = {
   /** A finished video in pieces for the phone, which can't reach this computer's /files address: base64 slices
    *  `{data, more, size}` from byte `after`. */
   video: (bot: string, path: string, after: number) => call('GET', `/api/video?bot=${encodeURIComponent(bot)}&path=${encodeURIComponent(path)}&after=${after}`) as Promise<{ data: string; more: boolean; size: number }>,
+  /** Any delivered file's own bytes in the same base64 slices, for the phone's Download and Share: the next `after` adds
+   *  the decoded length until `more` is false (docs/ui-contract.md). */
+  file: (bot: string, path: string, after: number) => call('GET', `/api/file?bot=${encodeURIComponent(bot)}&path=${encodeURIComponent(path)}&after=${after}`) as Promise<{ data: string; more: boolean; size: number }>,
   post: (id: string, text: string, photos?: { type: string; data: string }[] | { room: boolean }) => call('POST', `/api/bots/${id}/messages`, { text, ...(Array.isArray(photos) && photos.length ? { photos } : {}), ...(!Array.isArray(photos) && photos ? photos : {}) }),
   /** A word to a helper's running job: it reads it after its current step, without starting over. */
   steer: (id: string, text: string) => call('POST', `/api/bots/${id}/steer`, { text }),
