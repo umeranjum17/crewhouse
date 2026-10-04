@@ -313,9 +313,9 @@ a.back:not([aria-label]) { font: 500 15px/20px var(--ui); padding: 0 8px; margin
 .line .bubble-text { margin-left: 36px; overflow-wrap: anywhere; font: 400 16px/1.5 var(--ui); max-width: 62ch; }
 .chat-md > :first-child { margin-top: 0; }
 .chat-md > :last-child { margin-bottom: 0; }
-.chat-md p, .chat-md ul, .chat-md pre { margin: 0 0 12px; }
+.chat-md p, .chat-md ul, .chat-md ol, .chat-md pre { margin: 0 0 12px; }
 .chat-md h3 { font: 600 18px/1.35 var(--ui); margin: 16px 0 8px; }
-.chat-md ul { padding-left: 22px; }
+.chat-md ul, .chat-md ol { padding-left: 22px; }
 .chat-md li { margin: 4px 0; }
 .chat-md li p { display: inline; }
 .chat-md .chat-link { display: inline-block; color: var(--ink); background: var(--soft); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; text-decoration: underline; text-underline-offset: 2px; }

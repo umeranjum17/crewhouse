@@ -16,10 +16,10 @@ const mdInline = (tokens: any[]): ReactNode => tokens.map((t, i) => t.type === '
   : t.type === 'codespan' ? <span key={i}>{t.text}</span>
   : t.type === 'br' ? <br key={i} />
   : t.type === 'html' ? t.raw : t.tokens ? <span key={i}>{mdInline(t.tokens)}</span> : t.text ?? t.raw);
-/** Markdown blocks from the same tokens: headings, paragraphs, task lists with read-only ticks, tables. */
+/** Markdown blocks from the same tokens: headings, paragraphs, numbered and bulleted lists, task lists with read-only ticks, tables. */
 const mdBlocks = (tokens: any[]): ReactNode => tokens.map((t, i) => t.type === 'heading' ? <h3 key={i}>{mdInline(t.tokens)}</h3>
   : t.type === 'paragraph' || t.type === 'text' ? <p key={i}>{mdInline(t.tokens ?? [{ text: t.text }])}</p>
-  : t.type === 'list' ? <ul key={i}>{t.items.map((item: any, j: number) => <li key={j}>{item.task && <input type="checkbox" checked={item.checked} readOnly aria-label={item.checked ? 'Done' : 'Not done'} />} {mdBlocks(item.tokens.filter((x: any) => x.type !== 'checkbox'))}</li>)}</ul>
+  : t.type === 'list' ? ((items: ReactNode) => t.ordered ? <ol key={i} start={t.start || 1}>{items}</ol> : <ul key={i}>{items}</ul>)(t.items.map((item: any, j: number) => <li key={j}>{item.task && <input type="checkbox" checked={item.checked} readOnly aria-label={item.checked ? 'Done' : 'Not done'} />} {mdBlocks(item.tokens.filter((x: any) => x.type !== 'checkbox'))}</li>))
   : t.type === 'table' ? <div className="chat-table" key={i}><table><thead><tr>{t.header.map((c: any, j: number) => <th key={j}>{mdInline(c.tokens)}</th>)}</tr></thead><tbody>{t.rows.map((row: any[], j: number) => <tr key={j}>{row.map((c, k) => <td key={k}>{mdInline(c.tokens)}</td>)}</tr>)}</tbody></table></div>
   : t.type === 'code' ? <p key={i}>{t.text}</p>
   : t.type === 'html' ? <p key={i}>{t.raw}</p> : null);

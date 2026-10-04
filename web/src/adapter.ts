@@ -1193,9 +1193,9 @@ export function office(state: Json): OfficeView {
     // The desk holds the task's delivered files first (they survive the 80-event window), then any live
     // arrival the snapshot predates; a path delivered again (a first look, then the finished one) is one thing.
     const desk = deskThings(h.id, task);
-    const paths = task ? events.filter((e) => e.kind === 'file.delivered' && !e.data?.photo && e.data?.task === task.id).map((e) => String(e.data?.path ?? '')) : [];
-    const extra = paths.filter((p, i) => paths.lastIndexOf(p) === i && !desk.some((f) => f.url === fileView(h.id, p).url));
-    const made = [...desk, ...extra.map((p) => fileView(h.id, p))];
+    const live = task ? events.filter((e) => e.kind === 'file.delivered' && !e.data?.photo && e.data?.task === task.id).map((e) => fileView(h.id, String(e.data?.path ?? ''), e.data?.title)) : [];
+    const extra = live.filter((f, i) => live.findLastIndex((x) => x.url === f.url) === i && !desk.some((x) => x.url === f.url));
+    const made = [...desk, ...extra];
     const w = lines.get(h.id);
     return { id: h.id, name: h.name, kind: h.kind, mood: h.mood, ring: h.ring, status: h.status,
       step: (b.step && step(b.step)) || (w && !w.waiting ? 'Getting started…' : ''), steps: now, things: made,
@@ -1254,7 +1254,7 @@ export function officeEvent(view: OfficeView, e: Json): OfficeView {
         return desk.find((x) => x.url === v.url) ?? v; // the desk already holds its registered name
       });
       const thing: Thing = { id: typeof d.task === 'number' ? d.task : Date.now(), helper: String(e.bot),
-        title: plain(d.title ?? ''), at: e.at ?? Date.now(), summary: teaser(d.result ?? '').slice(0, 220), files };
+        title: plain(d.title ?? ''), at: e.at ?? Date.now(), summary: teaser(named(d.result ?? '', desk.map((x) => [fileSource(x.url)?.path ?? '', x.name]))).slice(0, 220), files };
       const crew = view.crew.map((c) => (c.id === String(e.bot)
         ? { ...c, ring: '' as const, mood: 'happy' as Mood, status: 'Free to help', step: '', steps: [], things: [], ask: undefined } : c));
       return { ...view, crew, done: [thing, ...view.done],

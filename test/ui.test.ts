@@ -1531,6 +1531,10 @@ test('a delivered document is a card in the chat, and opens as a read-only docum
   const body = parts.slice(parts.indexOf('function DocBody'), parts.indexOf('/**\n * A finished file'));
   assert.match(body, /run\.kind === 'heading' \? <h3 key=\{i\}>/, 'headings as headings');
   assert.match(body, /<ul key=\{i\}>/, 'bullets as bullets');
+  assert.match(parts, /t\.ordered \? <ol key=\{i\} start=\{t\.start \|\| 1\}>/, 'a numbered list keeps its numbers');
+  const phone = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
+  assert.match(phone, /x\.ordered \? `\$\{\(x\.start \|\| 1\) \+ j\}\.`/, 'on the phone too');
+  assert.match(phone, /<SheetGrid head=\{run\.head \?\? \[\]\} rows=\{run\.rows \?\? \[\]\} links \/>/, 'phone table citations are linked too');
   assert.match(body, /<DocText text=\{run\.text\} \/>/, 'paragraphs render through the URL linker');
   assert.match(body, /<DocText text=\{r\[c\] \?\? ''\} \/>/, 'table citations are linked too');
   assert.match(parts, /href=\{part\.href\} target="_blank" rel="noopener noreferrer">\{part\.text\}<\/a>/, 'only safe links are tappable');
@@ -1766,6 +1770,14 @@ test('the office moves on live events; the refresh stays the source of truth', (
   assert.equal(v.done.length, 2);
   assert.equal(v.counts.done, 2);
   assert.match(v.done[0].summary, /Ninety seconds/);
+  // A file that lands before the refresh keeps its registered title, and the finished job's words name it by it.
+  const titled = officeState();
+  titled.events.push({ seq: 16, at: OTN, kind: 'file.delivered', bot: 'pip', data: { task: 51, path: 'files/car-insurance-t51.md', title: 'Car insurance — Maya’s renewal' } });
+  let w = A.office(titled);
+  assert.equal(w.crew.find((c) => c.id === 'pip')!.things.at(-1)?.name, 'Car insurance — Maya’s renewal');
+  w = A.officeEvent(w, { seq: 17, at: OTN, kind: 'task.done', bot: 'pip', data: { task: 51, title: 'Renewal', result: 'Wrote files/car-insurance-t51.md for you.' } });
+  assert.match(w.done[0].summary, /Car insurance — Maya’s renewal/);
+  assert.doesNotMatch(w.done[0].summary, /t51/);
   // A question, then its answer.
   let u = A.office(officeState());
   u = A.officeEvent(u, { seq: 26, at: OTN, kind: 'ask.opened', bot: 'pip', data: { task: 51 } });

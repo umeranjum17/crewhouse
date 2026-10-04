@@ -177,7 +177,7 @@ function ChatText({ text, whole }: { text: string; whole?: boolean }) {
     : x.type === 'html' ? x.raw : x.tokens ? <Text key={i}>{inline(x.tokens)}</Text> : x.text ?? x.raw);
   const blocks = (tokens: any[]): ReactNode => tokens.map((x, i) => x.type === 'heading' ? <T key={i} style={{ fontSize: 18, lineHeight: 25, fontWeight: '600', marginTop: 8 }}>{inline(x.tokens)}</T>
     : x.type === 'paragraph' || x.type === 'text' ? <T key={i}>{inline(x.tokens ?? [{ text: x.text }])}</T>
-    : x.type === 'list' ? <View key={i} style={{ gap: 5 }}>{x.items.map((item: any, j: number) => <View key={j} style={{ flexDirection: 'row', gap: 6 }}><T>{item.task ? item.checked ? '☑' : '☐' : '•'}</T><View style={{ flex: 1 }}>{blocks(item.tokens.filter((y: any) => y.type !== 'checkbox'))}</View></View>)}</View>
+    : x.type === 'list' ? <View key={i} style={{ gap: 5 }}>{x.items.map((item: any, j: number) => <View key={j} style={{ flexDirection: 'row', gap: 6 }}><T>{item.task ? item.checked ? '☑' : '☐' : x.ordered ? `${(x.start || 1) + j}.` : '•'}</T><View style={{ flex: 1 }}>{blocks(item.tokens.filter((y: any) => y.type !== 'checkbox'))}</View></View>)}</View>
     : x.type === 'table' ? <Wide key={i}><View>{[x.header, ...x.rows].map((row: any[], j: number) => <View key={j} style={{ flexDirection: 'row' }}>{row.map((c, k) => <View key={k} style={{ minWidth: 90, maxWidth: 200, padding: 6, borderWidth: 1, borderColor: t.line }}><T style={j ? undefined : s.b}>{inline(c.tokens)}</T></View>)}</View>)}</View></Wide>
     : x.type === 'code' ? <T key={i} style={{ backgroundColor: t.soft }}>{x.text}</T>
     : x.type === 'html' ? <T key={i}>{x.raw}</T> : null);
@@ -400,7 +400,7 @@ function Wide({ children }: { children: ReactNode }) {
 /** A table as a grid. A sheet's (given its row numbers and cell roles) reads like the web's panel: letters over the
  *  columns, row numbers down the side, the heading row set apart, soft yellow to fill in, soft blue worked out.
  *  RN has no table layout, so every column gets one width from its longest words and the rows line up. */
-function SheetGrid({ head, rows, nums, roles }: { head: string[]; rows: string[][]; nums?: number[]; roles?: string[][] }) {
+function SheetGrid({ head, rows, nums, roles, links }: { head: string[]; rows: string[][]; nums?: number[]; roles?: string[][]; links?: boolean }) {
   const t = useLook();
   const all = [head, ...rows];
   const cols = [...Array(Math.max(0, ...all.map((r) => r.length))).keys()];
@@ -414,7 +414,7 @@ function SheetGrid({ head, rows, nums, roles }: { head: string[]; rows: string[]
       {nums && <View style={edge}><T tone="mute" style={s.small}>{String(nums[j] ?? j + 1)}</T></View>}
       {cols.map((k) => { const role = roles?.[j]?.[k] || (j ? '' : 'head');
         return <View key={k} style={{ width: w[k], padding: 6, borderWidth: 1, borderColor: t.line, backgroundColor: tint(role), borderBottomWidth: role === 'head' ? 2 : 1, borderBottomColor: role === 'head' ? t.line2 : t.line }}>
-          <T style={role === 'head' ? s.b : undefined}>{row[k] ?? ''}</T></View>; })}
+          <T style={role === 'head' ? s.b : undefined}>{links ? <DocText text={row[k] ?? ''} /> : row[k] ?? ''}</T></View>; })}
     </View>)}
   </View>;
 }
@@ -434,7 +434,7 @@ function DocParts({ parts }: { parts: A.DocPart[] }) {
   return <View style={{ gap: 12, paddingTop: 12, paddingBottom: 24 }}>{runs.map((run, i) => Array.isArray(run)
     ? <View key={i} style={{ gap: 6 }}>{run.map((li, j) => <View key={j} style={{ flexDirection: 'row', gap: 8 }}><T style={s.read}>•</T><T style={[s.read, { flex: 1 }]}><DocText text={li.text} /></T></View>)}</View>
     : run.kind === 'heading' ? <T key={i} style={{ fontSize: 18, lineHeight: 25, fontWeight: '600', marginTop: i ? 6 : 0 }}><DocText text={run.text} /></T>
-    : run.kind === 'table' ? <Wide key={i}><SheetGrid head={run.head ?? []} rows={run.rows ?? []} /></Wide>
+    : run.kind === 'table' ? <Wide key={i}><SheetGrid head={run.head ?? []} rows={run.rows ?? []} links /></Wide>
     : <T key={i} style={[s.read, run.bold && s.b]}><DocText text={run.text} /></T>)}</View>;
 }
 
@@ -468,7 +468,7 @@ function DocSheet({ f, onClose }: { f: A.FileView; onClose: () => void }) {
           {page === null && <T tone="mute">Opening “{name}”…</T>}
           {page !== null && !book && !doc && !text && <T tone="mute">There is nothing in it to show yet.</T>}
           {sNow && <View style={{ gap: 8, paddingTop: 12 }}><Wide><SheetGrid head={sNow.head} rows={sNow.rows} nums={sNow.nums} roles={sNow.roles} /></Wide>
-            {more > 0 && <T tone="mute" style={s.small}>{`…and ${more === 1 ? 'one more row' : `${more} more rows`}. Open it on the computer to see the whole sheet.`}</T>}</View>}
+            {more > 0 && <T tone="mute" style={s.small}>{`…and ${more === 1 ? 'one more row' : `${more} more rows`}. Download it to see the whole sheet.`}</T>}</View>}
           {doc && (doc.parts.length ? <DocParts parts={doc.parts} /> : <T tone="mute">There is nothing in it to show yet.</T>)}
           {text != null && text !== '' && <ChatText text={text} whole />}
         </ScrollView>
