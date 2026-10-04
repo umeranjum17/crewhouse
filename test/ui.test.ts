@@ -80,7 +80,11 @@ const page = { messages: [
 const FORBIDDEN = /fc-list|2>&1|\| ?head|\bBash\b|claude|anthropic|codex|sonnet|haiku|opus|gpt-|mcp__|\/home\/|~\/|files\/|\.md\b|\bpane\b|terminal|\d+ ?%|a command|ffmpeg|magick|\bls -la\b|```|`|\besc\b|529/i;
 // URLs are for fetching files, never shown as text; nor are times, which are numbers (a timestamp can contain "529"),
 // nor `quietSince`, the machine token behind "Leave it" — never words a person reads.
-const shown = (x: unknown) => JSON.stringify(x, (k, v) => (k === 'url' || k === 'at' || k === 'quietSince' ? undefined : v));
+const shown = (x: unknown) => JSON.stringify(x, function (k, v) {
+  if (this.evidence === 'draft' && k === 'draftText') return undefined;
+  if (this.evidence === 'draft' && k === 'preview') return { ...v, body: undefined };
+  return k === 'url' || k === 'at' || k === 'quietSince' ? undefined : v;
+});
 
 test('nothing technical survives the adapter', () => {
   const h = A.chatgpt([{ account: 'chatgpt', name: 'ChatGPT', signedIn: false, signIn: { state: 'waiting', url: 'https://auth.openai.com/codex/device', code: 'AB12-CDE34' } }]);
@@ -160,14 +164,18 @@ test('a helper\'s draft waits in Needs you, named for who it goes to; the row\'s
   // The real path: a scout job drafts a reply (crew_write then crew_draft) and the ask the app receives
   // is crew.snapshot()\'s — every open ask already through Crew.askView. Web and the phone render from
   // these same adapter calls (mobile/App.tsx imports adapter.ts), so this covers both view models.
-  const { setup: lab, until } = await import('./lab.ts');
-  const { crew, done } = lab();
+  const { setup: lab, settled } = await import('./lab.ts');
+  const { crew, db, done } = lab();
   crew.onboard('sir');
   crew.recruit('scout', 'Scout', 'person');
-  await crew.post('scout', 'Draft the reply on a card in front of me. '
-    + '[tool crew_write {"path":"files/reply-trip-form.md","content":"Hello, the signed trip form is in Ayaan\'s bag this morning. Thank you, Umer"}] '
-    + '[tool crew_draft {"path":"files/reply-trip-form.md","channel":"email","subject":"Ayaan’s trip form — Friday","to":"the school office"}]');
-  await until('the draft ask in the served view', () => crew.snapshot().asks.some((a: any) => a.kind === 'propose' && a.detail.draft));
+  const body = "Hello, the signed trip form is in Ayaan's bag this morning. Thank you, Umer\n\nCrewhouse helps me work with ChatGPT, GPT-5 and `drafts`.";
+  // A skill is kept instructions, so its own words refuse a backtick; the scrubbing below is about model names and paragraphs.
+  const steps = 'Keep the reply short.\n\nGPT-5 never gets to write it for you.';
+  const call = (name: string, args: object) => `[tool ${name} ${JSON.stringify(args)}]`;
+  await settled(db, (await crew.post('scout', 'Draft the reply on a card in front of me. '
+    + call('crew_write', { path: 'files/reply-trip-form.md', content: `  ${body}\n` })
+    + call('crew_draft', { path: 'files/reply-trip-form.md', channel: 'email', subject: 'Ayaan’s trip form — Friday', to: 'the school office' })
+    + call('crew_learn', { name: 'Prepare replies', description: 'When preparing replies', says: 'Prepare a reply', steps })))!.task);
   const s: Json = crew.snapshot();
   const ask = s.asks.find((a: any) => a.kind === 'propose' && a.detail.draft)!;
   assert.equal(ask.detail.draft.to, 'the school office', 'askView passes the draft through; without it Home drops the row');
@@ -176,10 +184,18 @@ test('a helper\'s draft waits in Needs you, named for who it goes to; the row\'s
   assert.equal(c.head, 'Scout wrote your email', 'the card says what it is and who it is for, never "learned something"');
   assert.deepEqual(c.choices.map((x: any) => x.label), ['Approve', 'Reject'], 'the no-send approval stays');
   assert.match(c.preview?.body ?? '', /trip form/, 'the sheet the row opens shows the words');
-  assert.equal(c.draftText, "Hello, the signed trip form is in Ayaan's bag this morning. Thank you, Umer", 'the words to change are the draft itself, not a tidied copy');
+  assert.equal(c.draftText, body, 'the words to change are the draft itself, not a tidied copy');
   const rows = A.needsYou(s);
   assert.equal(rows.find((r: any) => r.id === ask.id)?.head, 'Scout wrote your email', 'the draft is a Needs-you row, ready to tap');
   assert.ok(!rows.some((r: any) => /learned something/.test(r.head)));
+  assert.equal(rows.find((r: any) => r.id === ask.id)?.preview?.body, body, 'Needs you keeps every draft word and paragraph');
+  assert.doesNotMatch(shown(c), FORBIDDEN, 'only the draft body is exempt');
+  // askView never hands the app the skill itself: a proposal that is not a draft is the one to remember.
+  const skill = A.card(s.asks.find((a: any) => a.kind === 'propose' && !a.detail.draft)!, s);
+  assert.doesNotMatch(shown(skill), FORBIDDEN, 'skill bodies are still scrubbed');
+  assert.doesNotMatch(skill.preview?.body ?? '', /GPT-5|\n\n/, 'a skill proposal is still plain: no model name, no paragraph break');
+  assert.match(shown({ evidence: 'lines', preview: { body: 'Use `drafts` with sonnet' } }), FORBIDDEN,
+    'other preview bodies never get the draft exemption');
   done();
 });
 
