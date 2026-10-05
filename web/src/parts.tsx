@@ -598,8 +598,9 @@ function AskHead({ c, who }: { c: Card; who: Helper | undefined }) {
   </div>;
 }
 
-/** A helper's draft takes the person's own words before Approve: their version replaces the draft, and still nothing
- *  is sent. `box` stands in for the evidence while editing; `yes` carries the words only when they changed. */
+/** A helper's draft takes the person's own words before the yes: their version replaces the draft, and still nothing
+ *  is sent. `box` stands in for the evidence while editing; `yes` carries the words only when they changed, and copies
+ *  the words the person sees (their edit when there is one) and opens the draft's link before today's Approve answer. */
 function useDraftEdit(c: Card) {
   const [words, setWords] = useState<string | null>(null);
   const changed = words !== null && words.trim() !== c.draftText;
@@ -607,7 +608,13 @@ function useDraftEdit(c: Card) {
     can: c.evidence === 'draft' && !!c.draftText, editing: words !== null, empty: words !== null && !words.trim(),
     toggle: () => setWords(words === null ? c.draftText ?? '' : null),
     box: words !== null && <textarea className="input draft-edit" rows={8} value={words} onChange={(e) => setWords(e.target.value)} aria-label="Your version of the message" autoFocus />,
-    yes: (body: Json) => (changed ? { ...body, text: words!.trim() } : body),
+    yes: (body: Json) => {
+      if (c.evidence !== 'draft') return body;
+      const text = changed ? words!.trim() : c.draftText ?? '';
+      void navigator.clipboard?.writeText(text).catch(() => { /* the person pastes from the card itself */ });
+      if (c.draftLink) window.open(c.draftLink, '_blank', 'noopener');
+      return changed ? { ...body, text } : body;
+    },
   };
 }
 

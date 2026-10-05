@@ -947,8 +947,8 @@ function AskHead({ c, who }: { c: A.Card; who: A.Helper | undefined }) {
   </View>;
 }
 
-/** A helper's draft takes the person's own words before Approve (web/src/parts.tsx useDraftEdit): their version
- *  replaces the draft, and still nothing is sent. */
+/** A helper's draft takes the person's own words before the yes (web/src/parts.tsx useDraftEdit): their version
+ *  replaces the draft, and still nothing is sent. The yes copies the words they see and opens the draft's link. */
 function useDraftEdit(c: A.Card) {
   const t = useLook();
   const [words, setWords] = useState<string | null>(null);
@@ -958,7 +958,13 @@ function useDraftEdit(c: A.Card) {
     toggle: () => setWords(words === null ? c.draftText ?? '' : null),
     box: words !== null && <TextInput style={[s.input, { color: t.ink, borderColor: t.line, minHeight: 160, textAlignVertical: 'top' }]} value={words} onChangeText={setWords}
       multiline autoFocus accessibilityLabel="Your version of the message" />,
-    yes: (body: Json) => (changed ? { ...body, text: words!.trim() } : body),
+    yes: (body: Json) => {
+      if (c.evidence !== 'draft') return body;
+      const text = changed ? words!.trim() : c.draftText ?? '';
+      Clipboard.setString(text);
+      if (c.draftLink) void Linking.openURL(c.draftLink);
+      return changed ? { ...body, text } : body;
+    },
   };
 }
 

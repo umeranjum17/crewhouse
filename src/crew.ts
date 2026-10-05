@@ -1232,8 +1232,12 @@ export class Crew {
       '(diet, units, where they live); leave it out for how they like your own work. Otherwise save nothing.';
     // A new job in a chat often answers the last thing said there ("OK, post it"): a new session carries that line.
     const said = task.origin === 'person' && task.bot !== CHIEF && this.db.get("SELECT text FROM messages WHERE bot = ? AND author = 'bot' AND COALESCE(task_id, 0) != ? AND at > ? ORDER BY id DESC LIMIT 1", task.bot, task.id, Date.now() - 2 * 86_400_000)?.text;
+    // What the person already chose on drafts, in plain words, so the next job never asks twice.
+    const decided = this.db.all("SELECT kind, data FROM events WHERE kind IN ('draft.approved', 'draft.rejected') ORDER BY seq DESC LIMIT 3")
+      .map((e) => { const d = JSON.parse(String(e.data)) as Row; return `${d.to} — ${e.kind === 'draft.rejected' ? 'they said no' : d.edited ? 'approved after they changed it' : 'approved as written'}`; });
+    const decisions = decided.length ? `\n[Crewhouse] What ${who} already decided on drafts: ${decided.join('; ')}.` : '';
     const last = said ? `[Crewhouse] Your last message in this chat, which this may answer: “${short(said, 800)}”\n` : '';
-    if (task.bot !== CHIEF) return `${this.memory(task.bot)}${last}[Crewhouse task #${task.id} from ${routine ? `the routine “${routine}”, set up by ${this.called()}` : who}]\n${task.body}${quiet}${debrief}`;
+    if (task.bot !== CHIEF) return `${this.memory(task.bot)}${last}[Crewhouse task #${task.id} from ${routine ? `the routine “${routine}”, set up by ${this.called()}` : who}]${decisions}\n${task.body}${quiet}${debrief}`;
     // The crew by name only: crew_roster already lists roles, busy state and recruitable templates on demand,
     // so the standing prompt need not carry them (and their staleness) on every turn.
     const crew = this.bots().filter((b) => b.id !== CHIEF)
@@ -2018,17 +2022,19 @@ export class Crew {
           this.db.event('memory.learned', botId, { task: task(), text: change.added.slice(2, 202), ...(everyone ? { everyone } : {}), ...change });
         }),
       tool('crew_draft', 'Show ONE finished message for approval; nothing is sent. `path`: a file containing ONLY the message body, with its line breaks, no subject, headings, variants or planning notes. ' +
-        '`channel`: email, text, post (social), or reply (a site). `to`: the actual recipient name/address or site, NEVER a job title. `subject`: required for email, separate from the body. ' +
-        '`why`: one short line saying why this one matters now, in the person\'s own words if you have them; it is kept on the receipt and nothing else.',
-        { path: Type.String(), channel: Type.Union(['email', 'text', 'post', 'reply'].map((x) => Type.Literal(x))), to: Type.String(), subject: Type.Optional(Type.String()), why: Type.Optional(Type.String()) }, (p) => {
+        '`channel`: email, text, post (social), or reply (a site). `to`: the actual recipient name/address or site, NEVER a job title. `subject`: required for email, separate from the body. '
+        + '`why`: one short line saying why this one matters now, in the person\'s own words if you have them; it is kept on the receipt and nothing else. '
+        + '`link`: an https page the person should open themselves, to paste or send these words into; the card\'s yes then copies the words and opens it.',
+        { path: Type.String(), channel: Type.Union(['email', 'text', 'post', 'reply'].map((x) => Type.Literal(x))), to: Type.String(), subject: Type.Optional(Type.String()), why: Type.Optional(Type.String()), link: Type.Optional(Type.String()) }, (p) => {
           const full = disk.insideBot(this.cfg, botId, String(p.path ?? ''));
           if (!existsSync(full)) throw new Error(`no file at ${p.path}`);
-          const text = readFileSync(full, 'utf8').trim(), to = clean(p.to, 80), channel = String(p.channel), subject = clean(p.subject, 160);
+          const text = readFileSync(full, 'utf8').trim(), to = clean(p.to, 80), channel = String(p.channel), subject = clean(p.subject, 160), link = String(p.link ?? '').trim();
           if (!to || !['email', 'text', 'post', 'reply'].includes(channel) || (channel === 'email' && !subject)) throw new Error('give the channel, recipient and email subject separately');
+          if (link && (!/^https:\/\/\S+$/.test(link) || link.length > 500)) throw new Error('a draft link must be an https address of at most 500 characters');
           if (!text) throw new Error('the draft is empty');
           if (text.length > DRAFT_CAP) throw new Error(`the draft is over ${DRAFT_CAP} characters; shorten it`);
           return this.propose(botId, `${this.bot(botId)!.display} wrote your ${channel}.`,
-            { draft: { channel, to, subject, why: clean(p.why, 160), path: full.slice(disk.botDir(this.cfg, botId).length + 1), sha: sha(text) }, preview: { body: text } });
+            { draft: { channel, to, subject, why: clean(p.why, 160), path: full.slice(disk.botDir(this.cfg, botId).length + 1), sha: sha(text), ...(link ? { link } : {}) }, preview: { body: text } });
         }),
       tool('crew_verify', 'Have Crewhouse itself check a fix you propose to a git checkout in your folder: it applies only the check (`tests`, the ' +
         'paths in the patch that test the fix) to `base` and runs `command`, which must fail; then the whole patch, which must pass; it runs in a ' +

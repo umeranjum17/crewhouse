@@ -203,7 +203,7 @@ test('a helper\'s draft waits in Needs you, named for who it goes to; the row\'s
   assert.equal(ask.detail.yes, 'Approve', 'the yes approves the draft; it is never a send');
   const c = A.card(ask, s);
   assert.equal(c.head, 'Scout wrote your email', 'the card says what it is and who it is for, never "learned something"');
-  assert.deepEqual(c.choices.map((x: any) => x.label), ['Approve', 'Reject'], 'the no-send approval stays');
+  assert.deepEqual(c.choices.map((x: any) => x.label), ['Copy', 'Reject'], 'with no link the yes copies the words and approves; nothing is sent');
   assert.match(c.preview?.body ?? '', /trip form/, 'the sheet the row opens shows the words');
   assert.equal(c.draftText, body, 'the words to change are the draft itself, not a tidied copy');
   const rows = A.needsYou(s);
@@ -247,7 +247,7 @@ test('draft cards keep the recipient, email subject and exact message separate a
       assert.equal(c.preview?.body, message, 'paragraphs, first line and hashtags stay intact');
       assert.equal(c.draftText, message, 'Edit starts with exactly the message on the card');
       assert.equal(c.status, `Nothing is sent · ${channel === 'post' ? 'post' : 'send'} it yourself`);
-      assert.deepEqual(c.choices.map((x) => x.label), ['Approve', 'Reject']);
+      assert.deepEqual(c.choices.map((x) => x.label), ['Copy', 'Reject']);
     }
     assert.equal(crew.snapshot().asks.filter((a: Json) => a.detail.draft).length, 4, 'two email cards with the same short headline both arrive');
   } finally { done(); }
