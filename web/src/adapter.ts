@@ -18,6 +18,8 @@ export type Card = {
   /** Chief's offered routine: the lines to confirm (cadence, what, quiet, first run), the schedule words to edit, and
    *  the time-zone line when the home computer's clock sits in another zone from this device's. */
   lines?: string[]; schedule?: string; zoneNote?: string;
+  /** A reminder is the person's own one moment: the card says when it is, and offers nothing else to remember. */
+  remind?: boolean;
   /** A checkout: the inbox opens the review before any yes, and the sheet's yes names the order.
    *  `known`: crewd could read the total. Without it, the safe way out is the person buying it themselves. */
   review?: boolean; order?: { shown: string; known: boolean; dollars: boolean };
@@ -606,10 +608,11 @@ export function card(a: Json, state: Json): Card {
     // Chief's offered routine: the lines are the whole confirmation (cadence, what, quiet behaviour, first run). It
     // stays off Home like every suggestion, and nothing runs until the person starts it.
     const note = zoneNote(state);
-    return { ...base, kind: 'routine', status: 'A new routine', head: 'A new routine', words: plain(d.words ?? a.title),
+    const one = !!d.routine.once; // a one-off reminder: the same card, in the words a reminder uses
+    return { ...base, kind: 'routine', status: one ? 'A reminder' : 'A new routine', head: one ? 'A reminder' : 'A new routine', words: plain(d.words ?? a.title),
       lines: String(d.preview?.body ?? '').split('\n').map((l: string) => plain(l)).filter(Boolean).concat(note ? [note] : []),
-      schedule: String(d.routine.schedule ?? ''), zoneNote: note,
-      choices: [{ label: 'Start it', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
+      schedule: String(d.routine.schedule ?? ''), zoneNote: note, remind: one,
+      choices: [{ label: one ? 'Remind me' : 'Start it', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
   }
   // Chief's plan for a job of several steps: the steps are the evidence, and nothing starts before Go. "Change it" is
   // the card's own box (a no that carries the person's words back to Chief), not a choice here.
@@ -1125,14 +1128,23 @@ export const knows = (skills: Json[] = []) => skills.map((k) => ({ name: String(
 
 // ---------- routines, people, accounts, apps ----------
 export function routines(state: Json, bot?: string) {
-  return state.routines.filter((r: Json) => !bot || r.bot === bot).map((r: Json) => ({
-    id: r.id, name: plain(r.name), helper: r.kind === 'digest' ? 'chief' : r.bot, when: plain(r.words ?? ''), on: plain(r.on ?? ''), paused: r.state === 'paused', next: r.next_at ? nextAt(r.next_at) : '', digest: r.kind === 'digest',
+  return state.routines.filter((r: Json) => !bot || r.bot === bot).map((r: Json) => {
+    const one = r.kind === 'remind'; // a reminder is for one moment: its own words, and where it ended up
+    return {
+    id: r.id, name: plain(r.name), helper: r.kind === 'digest' ? 'chief' : r.bot, when: one ? 'One time' : plain(r.words ?? ''), on: one ? '' : plain(r.on ?? ''), paused: r.state === 'paused',
+    next: one ? (r.next_at ? `at ${moment(Number(r.next_at))}` : r.last_at ? `reminded ${clock(Number(r.last_at))}` : '') : r.next_at ? nextAt(r.next_at) : '', digest: r.kind === 'digest', remind: one, reminded: one && !r.next_at,
     quiet: !!r.quiet, watching: r.watch ? host(r.watch) : '',
     last: r.history?.[0] ? lastRun(r.history[0]) : '',
     // Where the last run ended up: the thing it made, else its line in the helper's chat. A skipped run has neither.
     result: r.history?.[0]?.state === 'done' && r.history[0].thing ? { thing: r.history[0].thing } : r.history?.[0]?.state === 'done' && r.history[0].msg ? { msg: r.history[0].msg } : null,
     changes: (r.history ?? []).filter((h: Json) => h.watch === 'changed').length,
-  }));
+  };
+  });
+}
+/** A reminder's moment in full: the clock alone today, the day with it later, so the row never reads as a bare time. */
+function moment(at: number) {
+  const d = new Date(at);
+  return d.toDateString() === new Date().toDateString() ? clock(at) : `${d.toLocaleDateString([], { weekday: 'short' })} ${clock(at)}`;
 }
 const host = (url: string) => { try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return 'a page'; } };
 /** When a routine runs next, in the fewest words that stay true: the day, or the time when it is today. The row already

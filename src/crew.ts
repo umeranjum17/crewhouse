@@ -15,7 +15,7 @@ import { allowed, proxy } from './net.ts';
 import type { Server } from 'node:net';
 import { acts, claimOf, coversOf, effectOf, orderOf, pressOf, toolWords, type Effect } from './policy.ts';
 import { axiEnv, registry, resolveGrants, toolBin, which } from './tools.ts';
-import { describe, describeTrigger, firstRun, nextRun, parseSchedule, parseTrigger, timeOf } from './routines.ts';
+import { describe, describeTrigger, firstRun, nextRun, parseSchedule, parseTrigger, reminderAt, timeOf } from './routines.ts';
 import { buildWorkbook, readWorkbook } from './workbooks.ts';
 import { MAX_ITEMS, MAX_PARALLEL, subMessage, type BatchAnswer } from './batch.ts';
 import { buildDocument, readDocument } from './documents.ts';
@@ -621,7 +621,7 @@ export class Crew {
   /** The person's routines and morning digest. */
   routines() {
     return this.db.all('SELECT * FROM routines ORDER BY kind, id').map(({ brain, ...r }): Row => ({
-      ...r, words: r.schedule ? describe(parseSchedule(r.schedule)) : '',
+      ...r, words: r.schedule && r.kind !== 'remind' ? describe(parseSchedule(r.schedule)) : '',
       on: r.trigger ? describeTrigger(parseTrigger(r.trigger), this.bot(r.bot)?.display ?? r.bot) : '',
       thinks: brain ? disk.brainName(disk.parseBrain(brain)) : null,
       history: this.db.all("SELECT seq, at, kind, data FROM events WHERE kind IN ('routine.fired', 'routine.skipped') AND json_extract(data, '$.routine') = ? ORDER BY seq DESC LIMIT 8", r.id)
@@ -646,10 +646,12 @@ export class Crew {
 
   /** Check a routine request and fill in its defaults — the one plan behind Chief's confirmation card and the person's own add.
    *  A routine starts on its schedule, on its local event (`on`), or either when both are given; a trigger-only
-   *  routine keeps no time at all. Nothing runs until the person says yes on the card. */
-  private planRoutine(b: { bot?: string; schedule?: string; on?: string; task?: string; model?: string; name?: string; quiet?: boolean; watch?: string }) {
-    const bot = this.bot(String(b.bot ?? '').toLowerCase());
-    if (!bot || bot.id === CHIEF) throw Object.assign(new Error(`no bot called ${b.bot}; a routine hands a task to one of the crew`), { status: 404 });
+   *  routine keeps no time at all. A one-off reminder (`once`) keeps only its moment, in the person's own words.
+   *  Nothing runs until the person says yes on the card. */
+  private planRoutine(b: { bot?: string; schedule?: string; on?: string; task?: string; model?: string; name?: string; quiet?: boolean; watch?: string; once?: boolean | number }) {
+    const once = b.once === true || b.once === 1;
+    const bot = once ? this.bot(CHIEF)! : this.bot(String(b.bot ?? '').toLowerCase());
+    if (!bot || (!once && bot.id === CHIEF)) throw Object.assign(new Error(`no bot called ${b.bot}; a routine hands a task to one of the crew`), { status: 404 });
     // A watch: crewd reads the page on schedule and wakes the helper only when it changed.
     const watch = b.watch ? String(b.watch).trim() : null;
     if (watch && !/^https?:$/.test(URL.canParse(watch) ? new URL(watch).protocol : '')) throw fail('a page to watch starts with https://');
@@ -659,24 +661,26 @@ export class Crew {
     if (!body) throw Object.assign(new Error('say what the routine should do'), { status: 400 });
     const schedule = String(b.schedule ?? '').trim();
     if (!schedule && !on) throw Object.assign(new Error('say when it should run, or what should start it'), { status: 400 });
-    const when = schedule ? paced(parseSchedule(schedule)) : null;
+    const at = once ? reminderAt(schedule) : null; // a reminder is a moment, not a repeating schedule
+    const when = schedule && !once ? paced(parseSchedule(schedule)) : null;
     const brain = b.model ? disk.brainKey(disk.parseBrain(b.model)) : null;
     const first = body.split(/\n|(?<=[.!?])\s/)[0].replace(/[.!?]$/, '');
-    const name = String(b.name ?? '').trim().slice(0, 60) || (watch && !b.task ? new URL(watch).hostname.replace(/^www\./, '') : short(first, 60));
-    return { bot, watch, body, when, on, brain, first, name, quiet: b.quiet === true || !!watch };
+    const name = String(b.name ?? '').trim().slice(0, 60) || (watch && !b.task ? new URL(watch).hostname.replace(/^www\./, '') : short(once ? body : first, once ? 160 : 60));
+    return { bot, watch, body, when, at, on, brain, first, name, quiet: b.quiet === true || !!watch };
   }
 
-  /** A routine added by the person or Chief runs on the person's accounts. */
-  addRoutine(b: { bot?: string; schedule?: string; on?: string; task?: string; model?: string; name?: string; quiet?: boolean; watch?: string }, by: string) {
+  /** A routine added by the person or Chief runs on the person's accounts. A reminder belongs to the person alone. */
+  addRoutine(b: { bot?: string; schedule?: string; on?: string; task?: string; model?: string; name?: string; quiet?: boolean; watch?: string; once?: boolean | number }, by: string) {
     const plan = this.planRoutine(b);
-    const words = [plan.when ? describe(plan.when) : '', plan.on ? describeTrigger(parseTrigger(plan.on), plan.bot.display) : ''].filter(Boolean).join('; ');
+    const words = plan.at ? `Reminds you once, at ${firstRun(plan.at)}` :
+      [plan.when ? describe(plan.when) : '', plan.on ? describeTrigger(parseTrigger(plan.on), plan.bot.display) : ''].filter(Boolean).join('; ');
     return this.db.tx(() => {
-      const r = this.db.run('INSERT INTO routines (bot, name, schedule, body, brain, quiet, watch, trigger, next_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        plan.bot.id, plan.name, String(b.schedule ?? '').trim(), plan.body, plan.brain, plan.quiet ? 1 : 0, plan.watch, plan.on, plan.when ? nextRun(plan.when, Date.now()) : null, Date.now());
+      const r = this.db.run('INSERT INTO routines (bot, name, schedule, body, brain, quiet, watch, trigger, next_at, created_at, kind) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        plan.bot.id, plan.name, plan.at ? '' : String(b.schedule ?? '').trim(), plan.body, plan.brain, plan.quiet ? 1 : 0, plan.watch, plan.at ? null : plan.on, plan.at ?? (plan.when ? nextRun(plan.when, Date.now()) : null), Date.now(), plan.at ? 'remind' : 'task');
       const row = this.routine(Number(r.lastInsertRowid));
       if (plan.on) mkdirSync(this.inbox(plan.bot.id), { recursive: true });
       this.db.event('routine.created', plan.bot.id, { routine: row.id, name: plan.name, words, by });
-      if (by === CHIEF) this.say(CHIEF, 'system', `Routine added: “${plan.name}” for ${plan.bot.display}, ${words}.${plan.when ? ` First run ${firstRun(row.next_at)}.` : ''}`, null);
+      if (by === CHIEF) this.say(CHIEF, 'system', plan.at ? `Reminder set: “${plan.name}”, ${firstRun(row.next_at)}.` : `Routine added: “${plan.name}” for ${plan.bot.display}, ${words}.${plan.when ? ` First run ${firstRun(row.next_at)}.` : ''}`, null);
       return row;
     });
   }
@@ -686,6 +690,11 @@ export class Crew {
    *  the same way, for the person. */
   private offerRoutine(p: Parameters<Crew['planRoutine']>[0]) {
     const plan = this.planRoutine(p);
+    // A reminder: two lines, in the person's own words, with the one moment it is for.
+    if (plan.at) return this.propose(CHIEF, `Reminder: “${plan.name}”, ${firstRun(plan.at)}`, {
+      routine: { bot: plan.bot.id, once: 1, schedule: String(p.schedule ?? '').trim(), task: p.task, name: p.name },
+      preview: { head: 'A reminder', body: `At ${firstRun(plan.at)}\n${plan.name}` },
+    });
     const host = plan.watch ? new URL(plan.watch).hostname.replace(/^www\./, '') : '';
     const what = plan.watch ? `Keeps an eye on ${p.name?.trim() || host}` : `${plan.bot.display} will ${plan.first.charAt(0).toLowerCase()}${plan.first.slice(1)}`;
     const start = [plan.when ? describe(plan.when) : '', plan.on ? describeTrigger(parseTrigger(plan.on), plan.bot.display) : ''].filter(Boolean);
@@ -709,11 +718,11 @@ export class Crew {
     const state = b.state ?? r.state;
     if (!['on', 'paused'].includes(state)) throw Object.assign(new Error('a routine is on or paused'), { status: 400 });
     const schedule = b.schedule?.trim() || r.schedule;
-    const next = b.quiet !== undefined && b.state === undefined && b.schedule === undefined ? r.next_at : schedule ? nextRun(paced(parseSchedule(schedule)), Date.now()) : null;
+    const next = b.quiet !== undefined && b.state === undefined && b.schedule === undefined ? r.next_at : schedule ? (r.kind === 'remind' ? reminderAt(schedule) : nextRun(paced(parseSchedule(schedule)), Date.now())) : null;
     this.db.tx(() => {
       this.db.run('UPDATE routines SET quiet = ?, state = ?, schedule = ?, next_at = ? WHERE id = ?', b.quiet === undefined ? r.quiet : b.quiet ? 1 : 0, state, schedule, next, id);
       this.db.event(state !== r.state ? `routine.${state === 'on' ? 'resumed' : 'paused'}` : 'routine.changed', r.bot, { routine: id, name: r.name,
-        words: [schedule ? describe(parseSchedule(schedule)) : '', r.trigger ? describeTrigger(parseTrigger(r.trigger), this.bot(r.bot)?.display ?? r.bot) : ''].filter(Boolean).join('; ') });
+        words: [schedule ? (r.kind === 'remind' ? `Reminds you once, at ${firstRun(next)}` : describe(parseSchedule(schedule))) : '', r.trigger ? describeTrigger(parseTrigger(r.trigger), this.bot(r.bot)?.display ?? r.bot) : ''].filter(Boolean).join('; ') });
     });
   }
 
@@ -727,8 +736,12 @@ export class Crew {
    *  message row it left in Chief's chat. A run that landed nothing is a failure carrying that reason. */
   async runRoutine(id: number) {
     const r = this.routine(id), seq = this.db.get('SELECT COALESCE(MAX(seq), 0) AS seq FROM events')!.seq;
-    const out = this.fire(r, 'now');
-    if (out) await out; // a Calendar-connected digest lands on its own promise
+    // A reminder speaks in the person's own words, never through a helper's turn.
+    if (r.kind === 'remind') { if (!r.next_at) throw Object.assign(new Error(`“${r.name}” already went off.`), { status: 409 }); this.remind(r, 'now'); }
+    else {
+      const out = this.fire(r, 'now');
+      if (out) await out; // a Calendar-connected digest lands on its own promise
+    }
     const e = this.db.get("SELECT kind, data FROM events WHERE kind IN ('routine.fired', 'routine.skipped') AND json_extract(data, '$.routine') = ? AND seq > ? ORDER BY seq DESC", r.id, seq);
     const d = e ? JSON.parse(e.data) : {};
     if (e?.kind !== 'routine.fired' || (d.message && !this.db.get('SELECT 1 FROM messages WHERE id = ? AND bot = ?', d.message, CHIEF))) throw Object.assign(new Error(
@@ -741,11 +754,22 @@ export class Crew {
   schedule(now = Date.now()) {
     for (const r of this.db.all("SELECT * FROM routines WHERE state = 'on' AND (next_at <= ? OR trigger IS NOT NULL)", now)) {
       if (r.trigger) { try { if ('file' in parseTrigger(r.trigger)) this.checkInbox(r); } catch (e) { console.error('trigger', r.id, e); } }
-      if ((!r.schedule && r.kind !== 'once') || r.next_at > now) continue; // trigger-only: no time; wake triggers fire from slept(); a once reminder carries its time in next_at
+      if ((!r.schedule && r.kind === 'task') || r.next_at > now) continue; // trigger-only: no time; wake triggers fire from slept(); a once reminder or an ask carry their time in next_at
+      if (r.kind === 'remind') { try { this.remind(r, now - r.next_at > 60_000 ? 'late' : 'schedule'); } catch (e) { console.error('reminder', r.id, e); } continue; }
       if (r.kind === 'once') this.db.run('DELETE FROM routines WHERE id = ?', r.id); // one-shot: gone as it fires
       else this.db.run('UPDATE routines SET next_at = ? WHERE id = ?', nextRun(parseSchedule(r.schedule), now), r.id);
       try { this.fire(r, now - r.next_at > 60_000 ? 'late' : 'schedule'); } catch (e) { console.error('routine', r.id, e); }
     }
+  }
+
+  /** The moment a reminder is due: crewd's own words, in the person's thread, with no AI and no task, so it cannot be
+   *  swallowed or left waiting on an account. It keeps no next run, so it never fires twice — a restart included. */
+  private remind(r: Row, why: 'schedule' | 'late' | 'now') {
+    this.db.tx(() => {
+      this.db.run('UPDATE routines SET next_at = NULL, last_at = ? WHERE id = ?', Date.now(), r.id);
+      const message = this.say(CHIEF, 'bot', `Reminder: ${r.name}.`, null);
+      this.db.event('routine.fired', CHIEF, { routine: r.id, name: r.name, why, message });
+    });
   }
 
   /** The helper's inbox: the one watched folder a file trigger reads. Fixed per helper, so plain words never carry a path. */
@@ -2047,12 +2071,13 @@ export class Crew {
         { bot: Type.String(), task: Type.String(), title: Type.Optional(Type.String()), account: Type.Optional(Type.String()), steps: Type.Optional(Type.Array(Type.String())) },
         (p) => this.plan(String(p.bot).toLowerCase(), p.task ?? '', p.account, p.title, p.steps)),
       tool('crew_routine', 'Offer the person a routine: the same task on a schedule, for them to say yes or no. `when` is plain words in local time: "every Monday 9:00", "weekdays 8am", "every 2 hours". ' +
+        'Set `once` for a one-off reminder they asked for ("remind me Friday 9am to pack the sports kit"): `when` is then the moment in their words ("Friday 9:00", "tomorrow 8am", "in 20 minutes"), `task` is what to remind them about, and it goes to them once, in your chat, without a helper. ' +
         '`on` starts it on a local event instead of a time: "when a file arrives in the inbox" or "when this computer wakes up" (the card names the inbox; `when` may be empty then). ' +
         '`quiet`: a check-in that only speaks up when something needs the person. `watch`: a page address to keep an eye on; Crewhouse reads it on ' +
         'schedule and wakes the bot only when it changed, and `task` says what matters ("tell me if the price drops below $900"). ' +
         'The person sees a card with the cadence and first run; nothing runs until they start it.',
-        { bot: Type.String(), when: Type.Optional(Type.String()), on: Type.Optional(Type.String()), task: Type.String(), name: Type.Optional(Type.String()), account: Type.Optional(Type.String()), quiet: Type.Optional(Type.Boolean()), watch: Type.Optional(Type.String()) },
-        (p) => this.offerRoutine({ bot: p.bot, schedule: p.when, on: p.on, task: p.task, name: p.name, model: p.account, quiet: p.quiet, watch: p.watch })),
+        { bot: Type.String(), when: Type.Optional(Type.String()), on: Type.Optional(Type.String()), task: Type.String(), name: Type.Optional(Type.String()), account: Type.Optional(Type.String()), quiet: Type.Optional(Type.Boolean()), watch: Type.Optional(Type.String()), once: Type.Optional(Type.Boolean()) },
+        (p) => this.offerRoutine({ bot: p.bot, schedule: p.when, on: p.on, task: p.task, name: p.name, model: p.account, quiet: p.quiet, watch: p.watch, once: p.once })),
       tool('crew_routines', 'The routines and when each runs next.', {}, () => this.routines().map((x) => ({ id: x.id, bot: x.bot, name: x.name, when: x.words, on: x.on ?? '', state: x.state, next: x.next_at ? new Date(x.next_at).toString() : '' }))),
       tool('crew_status', 'Open tasks, and what this person’s crew finished recently (titles and delivered files).', {}, () => ({ open: this.db.all("SELECT id, bot, title, state FROM tasks WHERE state IN ('queued','working','needs_you','paused') ORDER BY id"), finished: this.finishedList() })),
       tool('crew_suggest', 'Suggest a change to how a helper comes across (its personality), when the person asks for one. ' +
@@ -2424,7 +2449,7 @@ export class Crew {
     this.db.tx(() => {
       this.db.event('system.slept', null, { from, to });
       // Only those that really run now: one whose last run is still open is skipped, not caught up.
-      const missed = this.db.all("SELECT * FROM routines WHERE state = 'on' AND kind != 'digest' AND next_at <= ? AND (last_task IS NULL OR last_task NOT IN " +
+      const missed = this.db.all("SELECT * FROM routines WHERE state = 'on' AND kind NOT IN ('digest', 'remind') AND next_at <= ? AND (last_task IS NULL OR last_task NOT IN " +
         "(SELECT id FROM tasks WHERE state IN ('queued', 'working', 'needs_you', 'paused'))) ORDER BY next_at", to);
       if (missed.length) {
         const names = missed.map((r) => `“${r.name}”`);

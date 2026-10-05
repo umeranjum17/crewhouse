@@ -10,7 +10,7 @@ import * as disk from './bots.ts';
 import { toolStatus } from './tools.ts';
 import { PROVIDERS, clock, provider } from './accounts.ts';
 import { coversOf, toolWords } from './policy.ts';
-import { describe, firstRun, nextRun, parseSchedule } from './routines.ts';
+import { describe, firstRun, nextRun, parseSchedule, reminderAt } from './routines.ts';
 import { Link } from './link.ts';
 import { lesson, Teacher } from './teach.ts';
 
@@ -395,11 +395,15 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/forget$/)) && m === 'POST') { await crew.forget(r[1], String(body.host ?? '')); return { ok: true }; }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/reset$/)) && m === 'POST') { await crew.resetBot(r[1]); return { ok: true }; }
     if (m === 'GET' && p === '/api/schedule') {
-      const when = parseSchedule(q.get('text') ?? '');
+      const text = q.get('text') ?? '';
+      const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      // A reminder's time may count from now ("in 20 minutes") or name today or tomorrow; the repeating parser cannot read those.
+      if (/^\s*(in|today|tomorrow)\b/.test(text)) { const next = reminderAt(text); return { words: 'One time', next, first: firstRun(next), guessed: false, zone }; }
+      const when = parseSchedule(text);
       const next = nextRun(when, Date.now());
       // `first` is the computer's own clock, so the card and the preview read the same words everywhere; `zone` lets a
       // screen away from home name the time zone (and only then).
-      return { words: describe(when), next, first: firstRun(next), guessed: 'guessed' in when && when.guessed === true, zone: Intl.DateTimeFormat().resolvedOptions().timeZone };
+      return { words: describe(when), next, first: firstRun(next), guessed: 'guessed' in when && when.guessed === true, zone };
     }
     if (m === 'POST' && p === '/api/routines') { const row = crew.addRoutine(body, 'person'); return crew.routines().find((x) => x.id === row.id); }
     if ((r = p.match(/^\/api\/routines\/(\d+)$/)) && m === 'PUT') { crew.updateRoutine(Number(r[1]), body); return { ok: true }; }
