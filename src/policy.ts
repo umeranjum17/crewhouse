@@ -126,10 +126,8 @@ export function effectOf(tool: string, input: Record<string, any>, s: Seen): Eff
     if (cmd === 'cancel') return { kind: 'delete', words: `${s.bot} wants to cancel an event on your Google Calendar.`, key, covers: coversOf(key) };
     return { kind: 'refuse', why: 'Your calendar can: next, today, week, free, add, move or cancel.' };
   }
-  // mail-axi (src/mail.ts) only reads: its token is gmail.readonly.
-  if (tool === 'mail') {
-    return ['inbox', 'search', 'read'].includes(String(input.args?.[0] ?? 'inbox')) ? { kind: 'safe' } : { kind: 'refuse', why: 'Your email can: search or read (it cannot send or change mail).' };
-  }
+  // mail-axi (src/mail.ts) only reads: its token is gmail.readonly, and nothing here can send or change mail.
+  if (tool === 'mail') return ['inbox', 'search', 'read'].includes(String(input.args?.[0] ?? 'inbox')) ? { kind: 'safe' } : { kind: 'refuse', why: 'Your email can: search or read (it cannot send or change mail).' };
   // The engine's skill workshop writes skills; that is the reviewer's job, not a run's. A run may read.
   if (tool === 'skill_workshop') {
     const action = String(input.action ?? '');

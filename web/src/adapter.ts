@@ -26,7 +26,7 @@ export type Card = {
   /** One ask-card layout for every kind (§4.4): the kind changes only the status line under the helper's name,
    *  the evidence block and the button words. `evidence` picks the sunken block — a form's or a job's
    *  label-over-value lines, or a draft's to/subject/body — an order is a `review`, anything else a plain preview. */
-  status: string; evidence?: 'lines' | 'draft'; draftTo?: string; draftSubject?: string;
+  status: string; evidence?: 'lines' | 'draft'; draftTo?: string; draftSubject?: string; draftWhy?: string;
   /** The person's own question for an OK or a spend: their task's title, with a question mark if it has no ending of its
    *  own. The tool's words (site, lines) stay on the review sheet. */
   question?: string;
@@ -45,7 +45,7 @@ export type Workbook = { name: string; sheets: Sheet[] };
 /** One part of a delivered document, read back by crewd: a heading, a paragraph, a bullet, or a table. */
 export type DocPart = { kind: 'heading' | 'p' | 'li' | 'table'; text?: string; bold?: boolean; items?: string[]; head?: string[]; rows?: string[][] };
 export type DocView = { name: string; parts: DocPart[] };
-export type Step = { at: number; text: string; now?: boolean; asked?: boolean; seq: number; undo?: boolean };
+export type Step = { at: number; text: string; now?: boolean; asked?: boolean; seq: number; undo?: boolean; forget?: string };
 /** `unsure`: crewd's line for a job that acted but couldn't confirm it worked, shown apart from the helper's own words. */
 export type Line = { id: number; from: 'me' | 'them' | 'chief' | 'note'; text: string; files: FileView[]; choices: string[]; at?: number; unsure?: boolean; recap?: boolean;
   /** A tray notice's helper (Chief's thread): the small face beside "Tracer finished … · it's in your tray". */
@@ -662,7 +662,7 @@ export function card(a: Json, state: Json): Card {
     // would otherwise post or mail the marks themselves. A "#hashtag" a post opens with is not a heading.
     const body = String(d.preview?.body ?? '').replace(/^\s{0,3}(?:#{1,6}|>)[ \t]+/gm, '').trim();
     return { ...base, kind: 'ok', status: `Nothing is sent · ${channel === 'post' ? 'post' : 'send'} it yourself`, evidence: 'draft',
-      draftTo: plain(d.draft.to), draftSubject: plain(d.draft.subject) || undefined, draftText: body, head, words: head, preview: { body },
+      draftTo: plain(d.draft.to), draftSubject: plain(d.draft.subject) || undefined, draftText: body, draftWhy: plain(d.draft.why) || undefined, head, words: head, preview: { body },
       choices: [{ label: 'Approve', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Reject', body: { answer: 'deny' } }] };
   }
   // Chief's hire in a glance: who, the role, what it can do and the first job; nothing changes until the yes.
@@ -1034,6 +1034,10 @@ export function step(e: Json): string | null {
     case 'run.allowed': return 'Went ahead, as you allowed';
     case 'ask.opened': return 'Asked for your OK';
     case 'ask.answered': return `You said ${ANSWER[d.answer] ?? (/always/.test(d.answer) ? 'always OK' : /task/.test(d.answer) ? 'yes for this job' : 'what to do')}`;
+    // The receipt for a message the person answered for themselves: what it was, where it went, why it mattered,
+    // and that nothing was sent by the crew. Read long after the fact, in the words of the card and the tool.
+    case 'draft.approved': return receipt(e.kind, d);
+    case 'draft.rejected': return receipt(e.kind, d);
     case 'file.delivered': return d.photo ? 'You sent a photo' : /\.(patch|diff)$/.test(String(d.path)) ? `Suggested a change for the maintainer to review: “${pretty(String(d.path))}”` : `Made “${pretty(d.path)}”`;
     case 'memory.learned': return `${d.everyone ? 'Learned, for the whole crew' : 'Learned'}: ${plain(d.text)}`;
     case 'memory.undone': return `You undid: ${plain(d.text)}`;
@@ -1049,6 +1053,16 @@ export function step(e: Json): string | null {
   }
 }
 
+/** What was answered, where it went, and why it mattered — one line, read long after the fact. Nothing was sent. */
+export function receipt(kind: string, d: Json) {
+  const what = plain(d.subject ? `“${String(d.subject)}”` : d.body ?? '');
+  const where = `to ${plain(d.to ?? '')}`;
+  const why = plain(d.why ?? '');
+  return kind === 'draft.approved'
+    ? `Kept your ${plain(d.channel ?? 'message')} ${what} ${where} · nothing was sent, you send it yourself${why ? ` · because you said “${why}”` : ''}`
+    : `Didn't send that ${plain(d.channel ?? 'message')} ${what} ${where} · you said not now`;
+}
+
 /** A task's steps, oldest first, repeats folded ("Worked on it" once, not forty times). */
 export function steps(events: Json[], task?: number, live = false): Step[] {
   const rows = [...events].sort((a, b) => a.seq - b.seq).filter((e) => task == null || e.data?.task === task);
@@ -1059,6 +1073,8 @@ export function steps(events: Json[], task?: number, live = false): Step[] {
     const text = step(e);
     if (!text || out.at(-1)?.text === text) continue;
     out.push({ at: e.at, text, seq: e.seq, asked: e.kind === 'ask.opened',
+      // A receipt's own reason is a note the person can take back, and the next job reads notes afresh.
+      forget: e.kind === 'draft.approved' ? plain(e.data?.why ?? '') || undefined : undefined,
       undo: (e.kind === 'memory.learned' && !e.undone) || (e.kind === 'soul.changed' && !!e.data?.prev) });
   }
   if (live && out.length) out[out.length - 1].now = true;

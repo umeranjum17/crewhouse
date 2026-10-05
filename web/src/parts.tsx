@@ -450,7 +450,7 @@ export function PreviewPanel({ bot, path, onClose }: { bot: string; path: string
 }
 
 /** "Show the work", as a friendly list of steps. */
-export function Steps({ steps, max = 6, onUndo }: { steps: Step[]; max?: number; onUndo?: (s: Step) => void }) {
+export function Steps({ steps, max = 6, onUndo, onForget }: { steps: Step[]; max?: number; onUndo?: (s: Step) => void; onForget?: (s: Step) => void }) {
   const [all, setAll] = useState(false);
   const shown = all ? steps : steps.slice(-max);
   if (!steps.length) return null;
@@ -461,6 +461,7 @@ export function Steps({ steps, max = 6, onUndo }: { steps: Step[]; max?: number;
         <div key={s.seq} className={`step ${s.now ? 'now' : s.asked ? 'asked' : ''}`}>
           <i className="ascii" /><span className="grow">{s.text}</span>
           {onUndo && s.undo && <button className="link" onClick={() => onUndo(s)}>Undo</button>}
+          {onForget && s.forget && <button className="link" onClick={() => onForget(s)}>Forget that</button>}
           <time>{s.now ? 'now' : clock(s.at)}</time>
         </div>
       ))}
@@ -574,6 +575,7 @@ function AskEvidence({ c, open, readAll }: { c: Card; open: boolean; readAll: Re
     return <div className="ev">
       {c.draftTo && <div className="ev-to">To {c.draftTo}</div>}
       {c.draftSubject && <b className="ev-subject">Subject: {c.draftSubject}</b>}
+      {c.draftWhy && <div className="ev-quiet">Because you said “{c.draftWhy}”</div>}
       <div className="ev-body draft-body">{body}</div>
     </div>;
   }

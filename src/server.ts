@@ -8,7 +8,7 @@ import type { Store } from './db.ts';
 import { quietNow, type Crew } from './crew.ts';
 import * as disk from './bots.ts';
 import { toolStatus } from './tools.ts';
-import { PROVIDERS, clock, provider } from './accounts.ts';
+import { PROVIDERS, provider } from './accounts.ts';
 import { coversOf, toolWords } from './policy.ts';
 import { describe, firstRun, nextRun, parseSchedule, reminderAt } from './routines.ts';
 import { Link } from './link.ts';

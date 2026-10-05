@@ -73,7 +73,7 @@ const ALL_CLEAR_RESULT = 'All clear';
 /** Events that make up a bot's plain "what I did" trail. */
 const TRAIL = ['task.created', 'task.working', 'task.done', 'task.failed', 'task.unsure', 'task.progress', 'run.tool', 'run.allowed',
   'ask.opened', 'ask.answered', 'ask.parked', 'file.delivered', 'memory.learned', 'memory.undone', 'bot.allowed', 'run.resumed',
-  'skill.learned', 'skill.removed', 'soul.changed'];
+  'skill.learned', 'skill.removed', 'soul.changed', 'draft.approved', 'draft.rejected'];
 
 /** Whether the person's quiet hours ("22:00-07:00", may wrap past midnight) cover this moment. */
 export function quietNow(quiet: string | null | undefined, at = new Date()) {
@@ -90,6 +90,7 @@ const clean = (s: unknown, n: number) => String(s ?? '').replace(/\s+/g, ' ').tr
  *  so eight parallel items don't each pay for the whole conversation. */
 const BATCH_SYSTEM = 'You research one item on the web and report back briefly. Read the web; never sign in, post, buy or submit forms. Every claim that matters gets its source.';
 const fail = (message: string, status = 400) => Object.assign(new Error(message), { status });
+const receipt = (d: Row, p?: Row) => ({ channel: d.channel, to: d.to, subject: d.subject, why: d.why, body: short(String(p?.body ?? '').replace(/\s+/g, ' '), 400), edited: d.edited === true, sha: d.sha, path: d.path }); // a receipt: what was answered and where it went, in the words on the card
 /** Person's words, trimmed to `n`: every name and address goes through here, or the card has nothing to show. */
 const needText = (v: unknown, n: number, msg: string) => { const s = clean(v, n); if (!s) throw fail(msg); return s; }
 /** A URL is context for a job, never its name. */
@@ -1898,11 +1899,11 @@ export class Crew {
         // A card from before drafts showed whole may hold only the start of it: changing that would cut the rest.
         if (sha(String(detail.preview?.body ?? '')) !== detail.draft.sha) throw fail('that draft is too long to change here', 409);
         this.keepDraft(ask.bot, detail.draft.path, text);
-        detail.draft = { ...detail.draft, sha: sha(text), edited: true };
+        detail.draft = { ...detail.draft, sha: sha(text), edited: true }; detail.preview = { ...detail.preview, body: text }; // the receipt quotes their words, not the helper's
       }
     }
     if (ask.kind === 'propose' && body.answer === 'allow') this.adopt(ask.bot, detail);
-    if (ask.kind === 'propose' && body.answer === 'deny' && detail.draft) this.db.event('draft.rejected', ask.bot, { ...detail.draft, task: detail.task });
+    if (ask.kind === 'propose' && body.answer === 'deny' && detail.draft) this.db.event('draft.rejected', ask.bot, { ...receipt(detail.draft, detail.preview), task: detail.task });
     const change = ask.kind === 'propose' && detail.plan && body.answer === 'deny' ? String(body.change ?? '').trim().slice(0, 2000) : '';
     const shown = change ? 'change it' : body.answer === 'deny' ? 'not now' : scope === 'task' ? 'allowed for this task' : scope === 'always' ? `always allowed for ${who}` : 'allowed once';
     const held = this.holds.get(askId);
@@ -2017,8 +2018,9 @@ export class Crew {
           this.db.event('memory.learned', botId, { task: task(), text: change.added.slice(2, 202), ...(everyone ? { everyone } : {}), ...change });
         }),
       tool('crew_draft', 'Show ONE finished message for approval; nothing is sent. `path`: a file containing ONLY the message body, with its line breaks, no subject, headings, variants or planning notes. ' +
-        '`channel`: email, text, post (social), or reply (a site). `to`: the actual recipient name/address or site, NEVER a job title. `subject`: required for email, separate from the body.',
-        { path: Type.String(), channel: Type.Union(['email', 'text', 'post', 'reply'].map((x) => Type.Literal(x))), to: Type.String(), subject: Type.Optional(Type.String()) }, (p) => {
+        '`channel`: email, text, post (social), or reply (a site). `to`: the actual recipient name/address or site, NEVER a job title. `subject`: required for email, separate from the body. ' +
+        '`why`: one short line saying why this one matters now, in the person\'s own words if you have them; it is kept on the receipt and nothing else.',
+        { path: Type.String(), channel: Type.Union(['email', 'text', 'post', 'reply'].map((x) => Type.Literal(x))), to: Type.String(), subject: Type.Optional(Type.String()), why: Type.Optional(Type.String()) }, (p) => {
           const full = disk.insideBot(this.cfg, botId, String(p.path ?? ''));
           if (!existsSync(full)) throw new Error(`no file at ${p.path}`);
           const text = readFileSync(full, 'utf8').trim(), to = clean(p.to, 80), channel = String(p.channel), subject = clean(p.subject, 160);
@@ -2026,7 +2028,7 @@ export class Crew {
           if (!text) throw new Error('the draft is empty');
           if (text.length > DRAFT_CAP) throw new Error(`the draft is over ${DRAFT_CAP} characters; shorten it`);
           return this.propose(botId, `${this.bot(botId)!.display} wrote your ${channel}.`,
-            { draft: { channel, to, subject, path: full.slice(disk.botDir(this.cfg, botId).length + 1), sha: sha(text) }, preview: { body: text } });
+            { draft: { channel, to, subject, why: clean(p.why, 160), path: full.slice(disk.botDir(this.cfg, botId).length + 1), sha: sha(text) }, preview: { body: text } });
         }),
       tool('crew_verify', 'Have Crewhouse itself check a fix you propose to a git checkout in your folder: it applies only the check (`tests`, the ' +
         'paths in the patch that test the fix) to `base` and runs `command`, which must fail; then the whole patch, which must pass; it runs in a ' +
@@ -2201,7 +2203,7 @@ export class Crew {
       this.db.event('soul.changed', d.soul.bot, { by: CHIEF, prev });
     } else if (d.routine) this.addRoutine(d.routine, CHIEF);
     else if (d.create) this.create(d.create);
-    else if (d.draft) this.db.event('draft.approved', botId, { ...d.draft, task: d.task });
+    else if (d.draft) this.db.event('draft.approved', botId, { ...receipt(d.draft, d.preview), task: d.task });
     else if (d.plan) {
       if (!this.bot(d.plan.bot)) throw fail('that helper has left the crew', 409);
       const steps = d.plan.steps.map((x: string, i: number) => `${i + 1}. ${x}`).join('\n');
