@@ -1166,7 +1166,7 @@ test('passing work on: a helper hands the next step to another for the same pers
   done();
 });
 
-test('Chief makes up a new helper on a short card: nothing until the person says yes, then it joins with its job, its own look, and its first result in Chief\'s chat', async () => {
+test('Chief makes up a new helper on a short card (or adapts one already on the crew): nothing until the person says yes, then it joins with its job, its own look, and its first result in Chief\'s chat', async () => {
   const { db, crew, done } = setup();
   crew.onboard('sir');
   const create = (args: object) => `[tool crew_create ${JSON.stringify(args)}]`;
@@ -1215,6 +1215,22 @@ test('Chief makes up a new helper on a short card: nothing until the person says
   await settled(db, t3);
   assert.equal(card(), undefined);
   assert.match(lastSaid(db, 'chief')!, /already a helper called Pip/);
+
+  // A job close to Pip's: Chief adapts Pip instead of making another helper, on the same short card and first-job path.
+  const more = { bot: 'pip', role: 'Finds you a flat or a room in Phuket', job: { ...pip.job, does: 'Watches flat and room listings in Phuket.' }, first: 'find me a room in Phuket under $400' };
+  const crewSize = crew.snapshot().bots.length;
+  const { task: t4 } = (await crew.post('chief', `and ${create(more)}`))!;
+  await settled(db, t4);
+  const adapt = A.card(crew.snapshot().asks.find((a: any) => a.id === card()!.id)!, crew.snapshot());
+  assert.deepEqual([adapt.status, adapt.words, adapt.lines?.[0], adapt.choices.map((c: any) => c.label)], ['A new job', 'Shall Pip take this on?', 'Finds you a flat or a room in Phuket.', ['Yes, Pip can take it on', 'Not now']]);
+  await crew.answer(card()!.id, { answer: 'allow' });
+  assert.deepEqual([crew.snapshot().bots.length, crew.bot('pip')!.role, disk.readJob(crew['cfg'], 'pip').does], [crewSize, more.role, more.job.does], 'no new helper: Pip\'s role and job widen');
+  assert.equal(readFileSync(join(dir, 'soul.md'), 'utf8'), '# Pip\n\nYou are Pip. Cheerful and quick.\n', 'who Pip is stays');
+  assert.equal(lastSaid(db, 'chief'), "Pip's job now covers this too. Pip is starting on it now; I'll bring the result back here.");
+  const next = db.get('SELECT * FROM tasks WHERE bot = ? AND body = ?', 'pip', more.first)!;
+  assert.equal(next.origin, 'chief');
+  await settled(db, next.id);
+  assert.equal(lastSaid(db, 'chief'), relayResult(db.get('SELECT result FROM tasks WHERE id = ?', next.id)!.result), 'its first result comes back in Chief\'s chat');
   done();
 });
 
