@@ -43,7 +43,10 @@ export const api = {
   /** A finished video in pieces for the phone, which can't reach this computer's /files address: base64 slices
    *  `{data, more, size}` from byte `after`. */
   video: (bot: string, path: string, after: number) => call('GET', `/api/video?bot=${encodeURIComponent(bot)}&path=${encodeURIComponent(path)}&after=${after}`) as Promise<{ data: string; more: boolean; size: number }>,
-  post: (id: string, text: string, photos?: { type: string; data: string }[] | { room: boolean }) => call('POST', `/api/bots/${id}/messages`, { text, ...(Array.isArray(photos) && photos.length ? { photos } : {}), ...(!Array.isArray(photos) && photos ? photos : {}) }),
+  /** `photos`: up to four, each `{type: 'image/jpeg' | 'image/png' | 'image/webp', data: base64}`. `said` is what the
+   *  person wrote, when the ask the helper reads is not their own words (the bubble builds one): the thread shows
+   *  `said`, the helper gets `text`. */
+  post: (id: string, text: string, photos?: { type: string; data: string }[] | { room: boolean }, said?: string) => call('POST', `/api/bots/${id}/messages`, { text, ...(said ? { said } : {}), ...(Array.isArray(photos) && photos.length ? { photos } : {}), ...(!Array.isArray(photos) && photos ? photos : {}) }),
   /** A word to a helper's running job: it reads it after its current step, without starting over. */
   steer: (id: string, text: string) => call('POST', `/api/bots/${id}/steer`, { text }),
   /** First run: how Chief addresses the person, and (from an idea card) their first request, in one tap.

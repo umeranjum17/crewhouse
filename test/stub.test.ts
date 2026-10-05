@@ -11,6 +11,7 @@ import { createServer, type AddressInfo } from 'node:net';
 import { createServer as createHttpServer } from 'node:http';
 import { DatabaseSync } from 'node:sqlite';
 import { WebSocket } from 'ws';
+import * as A from '../web/src/adapter.ts';
 
 const root = temp('crewhouse-test');
 // A port the OS says is free, not a random guess that another run may hold.
@@ -598,6 +599,23 @@ test('suggestions: a helper keeps a skill, and Chief changes a personality, only
   assert.equal((await api('GET', '/api/bots/reel')).body.soul, soul);
   await answer((await suggest()).id, 'allow');
   assert.equal((await api('GET', '/api/bots/reel')).body.soul, '# Reel\n\nYou are Reel. Brief and cheerful.\n');
+});
+
+test('a built ask reaches the helper while the thread keeps the person’s own words', async () => {
+  await ready();
+  await api('POST', '/api/recruit', { template: 'scribe', name: 'Scribe' });
+  const want = 'agree and say why apprentices matter';
+  const box = { app: 'materialistic', text: 'Apprentices are the real gap', picked: '' };
+  const task = (await api('POST', '/api/bots/scribe/messages', { text: A.writeAsk(want, box), said: A.writeSaid(want, box) })).body.task;
+  const mine = (await until(async () => { const p = (await api('GET', '/api/bots/scribe')).body; return p.tasks.find((t: any) => t.id === task && ['done', 'failed'].includes(t.state)) && p; }));
+  assert.equal(mine.messages.find((m: any) => m.author === 'person' && m.task_id === task).text, `${want}\nApprentices are the real gap`, 'their bubble is their own words, never our ask');
+  assert.match(mine.tasks.find((t: any) => t.id === task).body, /short labelled notes/, 'the helper still reads the whole ask');
+  // The stub's echo is not an answer, so the thread, Made in this chat and the rail cannot disagree about a job with none.
+  assert.deepEqual(A.lines(mine, 'scribe').filter((l) => l.from === 'them'), [], 'no reply to read');
+  assert.deepEqual(A.things({ tasks: mine.tasks.filter((t: any) => t.bot === 'scribe') }), [], 'nothing was made');
+  const state = (await api('GET', '/api/state')).body;
+  const view = A.office({ ...state, tasks: mine.tasks });
+  assert.equal(A.railWord(view.crew.find((c) => c.id === 'scribe')!, view).word, 'Free', 'the rail never says Done for a job with nothing to show');
 });
 
 test('room API: a message starts and rejoins the person’s room job', async () => {

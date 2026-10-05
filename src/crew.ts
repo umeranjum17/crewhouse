@@ -1038,9 +1038,9 @@ export class Crew {
     return id;
   }
 
-  /** A person's message in a bot's thread is a task for that bot; in Chief's thread it goes where `route` says. */
-  /** `photos` from the phone or the share sheet: the helper sees them with the words, and they are kept in its files. */
-  async post(botId: string, text: string, model?: string, photos?: unknown, room = false, key?: string) {
+  /** A person's message in a bot's thread is a task for that bot; in Chief's thread it goes where `route` says.
+   *  `photos` ride along with the words; `said` is what the thread shows when the ask the helper reads is ours, not the person's own words (the bubble builds those). */
+  async post(botId: string, text: string, model?: string, photos?: unknown, room = false, key?: string, said?: string) {
     const bot = this.bot(botId);
     if (!bot) throw Object.assign(new Error('no such bot'), { status: 404 });
     const pics = checkPhotos(photos);
@@ -1056,9 +1056,9 @@ export class Crew {
       if (!this.connections.connected(app)) this.openAsk(CHIEF, undefined, `Connect ${this.connections.apps[app].name}`, { app, words: `Connect your ${this.connections.apps[app].name}` }, 'connect');
       return;
     }
-    if (botId === CHIEF) return this.route(words, model, pics, room, key);
+    if (botId === CHIEF) return this.route(words, model, pics, room, key, said);
     const latest = room ? this.db.get('SELECT root FROM tasks WHERE room = 1 AND bot = ? ORDER BY id DESC LIMIT 1', botId) : undefined;
-    return this.addTask(botId, words, 'person', model, undefined, words, pics, { room, root: latest?.root, key });
+    return this.addTask(botId, words, 'person', model, undefined, said?.trim() || words, pics, { room, root: latest?.root, key });
   }
 
   /** One pairing offer, using the same one-use code as Settings. Never give its ticket to a model. */
@@ -1092,16 +1092,16 @@ export class Crew {
 
   /** Plainly addressed helper requests go straight there; unresolved requests become Chief tasks immediately.
    *  Chief can ask or hand off in his task, without a separate model turn delaying the person's first words. */
-  private async route(text: string, model: string | undefined, pics: Photo[] = [], room = false, key?: string) {
-    const helpers = this.bots().filter((b) => b.id !== CHIEF) as Helper[];
+  private async route(text: string, model: string | undefined, pics: Photo[] = [], room = false, key?: string, said?: string) {
+    const own = said?.trim() || text, helpers = this.bots().filter((b) => b.id !== CHIEF) as Helper[];
     const lastBot = this.db.get("SELECT text, task_id, at FROM messages WHERE bot = ? AND author = 'bot' ORDER BY id DESC LIMIT 1", CHIEF);
     const replyTo = text.length < 120 && !/\[tool\b/.test(text) && lastBot && lastBot.task_id && lastBot.at > Date.now() - 30 * 60_000 && /\?\s*$/.test(lastBot.text)
       ? this.db.get('SELECT bot, body FROM tasks WHERE id = ?', lastBot.task_id) : undefined;
-    if (replyTo?.bot === CHIEF) return this.addTask(CHIEF, text, 'person', model, undefined, text, pics, { room, key });
+    if (replyTo?.bot === CHIEF) return this.addTask(CHIEF, text, 'person', model, undefined, own, pics, { room, key });
     // An answer to a helper's question skips routing and Chief: a fresh task carrying the question and its answer.
     if (replyTo && lastBot && replyTo.bot !== CHIEF && this.bot(replyTo.bot)) {
-      const r = this.addTask(replyTo.bot, `${replyTo.body}\nAsked: ${lastBot.text}\nAnswer: ${text}`, CHIEF, model, undefined, text, pics, { room, key });
-      this.say(CHIEF, 'person', text + r.shown, null);
+      const r = this.addTask(replyTo.bot, `${replyTo.body}\nAsked: ${lastBot.text}\nAnswer: ${text}`, CHIEF, model, undefined, own, pics, { room, key });
+      this.say(CHIEF, 'person', own + r.shown, null);
       return { task: r.task };
     }
     const previous = this.db.get("SELECT text FROM messages WHERE bot = ? AND author = 'person' ORDER BY id DESC LIMIT 1", CHIEF)?.text as string | undefined;
@@ -1112,9 +1112,9 @@ export class Crew {
     const helper = (!to.abstained && helpers.find((b) => b.id === to.answer))
       || (/\b(excel|spreadsheet|xlsx|workbook|tracker)\b/i.test(body) && !chiefWork.test(body)
         && await this.usable(this.choices({ bot: 'scribe' } as Row)) && (this.bots().find((b) => b.template === 'scribe') ?? this.recruit('scribe', undefined, 'person')));
-    if (!helper) return this.addTask(CHIEF, body, 'person', model, undefined, text, pics, { room, key });
+    if (!helper) return this.addTask(CHIEF, body, 'person', model, undefined, own, pics, { room, key });
     const r = this.addTask(helper.id, body, CHIEF, model, undefined, body, pics, { room, key });
-    this.say(CHIEF, 'person', text + r.shown, null);
+    this.say(CHIEF, 'person', own + r.shown, null);
     this.say(CHIEF, 'bot', `${helper.display} is on it.`, null);
     return { task: r.task };
   }

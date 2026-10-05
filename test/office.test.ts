@@ -66,7 +66,9 @@ test('office truth: the room, its counts, the tray, the roster and Needs you rea
       { id: 11, bot: 'scribe', task_id: 3, kind: 'propose', at: now - min, detail: { words: 'Keep this?' } },
       { id: 12, bot: 'chief', kind: 'question', at: now - 2 * min, detail: { question: 'Which day?' } },
     ],
-    tasks: [{ id: 9, bot: 'scout', title: 'Done thing', state: 'done', updated_at: now - min, files: [] },
+    tasks: [{ id: 9, bot: 'scout', title: 'Done thing', state: 'done', result: 'Three stories worth telling.', updated_at: now - min, files: [] },
+      // A job that ended with nothing to say made nothing: never a thing, never the rail's Done.
+      { id: 7, bot: 'scout', title: 'Silent thing', state: 'done', updated_at: now - min, files: [] },
       { id: 8, bot: 'tracer', title: 'Find the email', state: 'failed', updated_at: now - min, files: [] }],
     events: [{ kind: 'task.failed', bot: 'tracer', at: now - min, data: { title: 'Find the email' } }],
   };
@@ -83,6 +85,7 @@ test('office truth: the room, its counts, the tray, the roster and Needs you rea
   assert.equal(v.counts.working, A.homeCounts(state).working, 'Home\'s working count');
   assert.equal(v.counts.working, 1);
   assert.equal(v.counts.done, 1, 'the tray holds today\'s');
+  assert.deepEqual(v.done.map((t) => t.id), [9], 'only the job that said something');
   assert.ok(v.crew.find((c) => c.id === 'h6')!.second && v.crew.find((c) => c.id === 'h7')!.second, 'a second of a kind is marked');
   assert.deepEqual(A.roster(v.crew).map((c) => c.id), ['reel', 'scribe', 'scout', 'tracer', 'pip', 'h6', 'h7']);
   const chats = new Map(A.chats(state).map((c) => [c.id, c.line]));

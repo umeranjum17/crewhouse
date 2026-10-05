@@ -225,10 +225,13 @@ const OBJ = String.raw`\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\}`;
 const TOOL_CALL = new RegExp(String.raw`\[tool \w+ ${OBJ}\s*\]?`, 'g'); // a tool call is an engine event, never a sentence
 const TOOL_FRAGMENT = /\[tool\b[\s\S]*$/i; // ...and a cut-off one (task titles are trimmed) still isn't
 const JSON_BLOB = new RegExp(OBJ, 'g'); // nor is a raw JSON object
+/** The test engine's own prefix, never words a helper would say: the thread drops such a message and `answerOf` reads
+ *  it as no answer at all, so the thread and what it made can never disagree about one. */
+export const STUB = /\bstub [\w-]+:/;
 export const noTools = (text = '') => text.replace(TOOL_CALL, ' ').replace(JSON_BLOB, ' ').replace(TOOL_FRAGMENT, '').replace(/\s{2,}/g, ' ').trim();
 
 export function plain(text = '') {
-  if (/\bstub [\w-]+:/.test(text)) return 'On it.';
+  if (STUB.test(text)) return 'On it.';
   // Heading markers strip before noTools collapses whitespace (D23): a later heading must still sit at a line
   // start to be found — after the collapse every ### but the first survives mid-line as literal markup.
   return noTools(text.replace(/(^|\n)#{1,6}\s+/g, '$1'))
@@ -715,8 +718,8 @@ export function work(state: Json): Work[] {
 }
 
 export function things(state: Json): Thing[] {
-  return state.tasks.filter((t: Json) => t.state === 'done').map((t: Json) => ({
-    id: t.id, helper: t.bot, title: plain(t.title), at: t.updated_at, summary: teaser(t.result ?? '').slice(0, 220),
+  return state.tasks.filter((t: Json) => t.state === 'done' && (answerOf(t) || (t.files ?? []).length)).map((t: Json) => ({
+    id: t.id, helper: t.bot, title: plain(t.title), at: t.updated_at, summary: answerOf(t).slice(0, 220),
     files: (t.files ?? []).map((f: string) => fileView(t.bot, f)),
   }));
 }
@@ -781,9 +784,11 @@ export type Screen = { box: { app?: string; text: string; picked: string } | 'of
  *  part picked in what the whole crew knows about the person (`keep()`, no helper), `screen` a still (the phone asks
  *  every time) and `camera` a photo, both to the share screen with that helper picked and `ask` in its box: words a
  *  person would write, with `brief` (how to go about it) sent after them, never shown in the box. A
- *  button that needs an app the person hasn't connected says so in its label (`needs`), and its tap opens Settings. */
+ *  button that needs an app the person hasn't connected says so in its label (`needs`), and its tap opens Settings.
+ *  `said` is what the person actually wrote — what they picked or typed in the box — the only words of theirs that go
+ *  in their bubble; `ask` and `brief` are ours and reach the helper alone. */
 export type BubbleButton = { id: 'write' | 'calendar' | 'real' | 'mail' | 'remember' | 'short' | 'lookup' | 'deal' | 'letter' | 'plan'; label: string; to: Hand; ask: string;
-  from: 'box' | 'text' | 'keep' | 'screen' | 'camera' | 'none'; needs: string[]; brief: string; put?: 'Put it in' | 'Copy' };
+  from: 'box' | 'text' | 'keep' | 'screen' | 'camera' | 'none'; needs: string[]; brief: string; said: string; put?: 'Put it in' | 'Copy' };
 const REAL = "Point out the warning signs you can see, and anything that looks normal. Don't tell me it's safe or a scam, and don't open or look up any web address in it. End with how I can check for myself: in the official app, or on the official website typed in by hand.";
 /** Web addresses written so no tool follows them by accident: hxxp://, and [.] before the last part of a name. */
 export const defang = (text: string) => text.replace(/\bhttp(s?):\/\//gi, 'hxxp$1://').replace(/\b([a-z0-9-]+)\.(?=[a-z]{2,}\b)/gi, '$1[.]');
@@ -828,7 +833,7 @@ function button(state: Json, id: BubbleButton['id'], said: string, app = ''): Bu
   const quote = `\n“${said}”`;
   const google = (app: string) => (state.connections?.includes?.(app) ? [] : ['Google']);
   const b = (label: string, from: BubbleButton['from'], ask = '', needs: string[] = [], brief = ''): BubbleButton =>
-    ({ id, label: needs.length ? `${label} · needs ${needs.join(' and ')}` : label, to: handTo(state, id === 'write' ? 'scribe' : 'scout'), ask, from, needs, brief });
+    ({ id, label: needs.length ? `${label} · needs ${needs.join(' and ')}` : label, to: handTo(state, id === 'write' ? 'scribe' : 'scout'), ask, from, needs, brief, said });
   if (id === 'write') return { ...b('Write it here', 'box'), put: notesOn(app) ? 'Copy' : 'Put it in' };
   if (id === 'calendar') return b('Put this date in my calendar', 'text', `Put this date in my Google Calendar:${quote}\nWork out the date and time from it. If there isn't a clear one, say so instead of guessing.`, google('calendar'));
   if (id === 'real') return said ? b('Is this real?', 'text', `Is this real? Here's what it says:\n“${defang(said)}”\n${REAL}`) : b('Is this real?', 'screen', 'Is this real?', [], `It's on my phone's screen, in the picture.\n${REAL}`);
@@ -922,13 +927,23 @@ export function writeAsk(want: string, box: { app?: string; text: string; picked
       : `Reply with only what the whole box should say${sofar ? ', keeping what I wrote where it fits' : ''}, as plain text: no file, no notes.`,
   ].filter(Boolean).join('\n');
 }
-/** That ask's draft, from the writer's page: its job's reply once done, '' when it couldn't (crewd's "Done." is an
- *  empty reply), null while it writes. */
+/** What a finished job actually gave the person, in their plain words: '' when the run ended without an answer (crewd's
+ *  "Done." is its empty answer) or said only the test engine's echo. One truth for the thread, Made in this chat, the
+ *  rail's word and the panel's draft: a job with no words and no file made nothing, and says so by not being listed. */
+export const answerOf = (t: Json): string => {
+  const raw = String(t?.result ?? '').trim();
+  return STUB.test(raw) || raw === 'Done.' ? '' : teaser(raw);
+};
+/** What the person wrote for the thread, in their own words: what they asked for, then what they had picked or typed in
+ *  the box. Everything else in `writeAsk` is ours and reaches the helper alone. */
+export function writeSaid(want: string, box: { text: string; picked: string }) {
+  return [want.trim(), (box.picked || box.text).trim()].filter(Boolean).join('\n');
+}
+/** That ask's draft, from the writer's page: its job's own words once done, '' when it couldn't, null while it writes. */
 export function draftOf(page: Json, task: number): string | null {
   const t = (page?.tasks ?? []).find((x: Json) => x.id === task);
   if (!t || !['done', 'failed', 'unsure'].includes(t.state)) return null;
-  const r = t.state === 'done' ? String(t.result ?? '').trim() : '';
-  return r === 'Done.' ? '' : r;
+  return t.state === 'done' ? answerOf(t) : '';
 }
 /** Why that job isn't writing yet, in crewd's own words ('' while it writes): paused for a sign-in or a rest, or
  *  waiting on the person. */
@@ -1064,7 +1079,7 @@ const chatWords = (text: string) => text.replace(/```[\s\S]*?```/g, '').split('\
 
 export function lines(page: Json, bot: string, state: Json = {}): Line[] {
   const checks = reviews(state);
-  return (page?.messages ?? []).filter((m: Json) => !/\bstub [\w-]+:/.test(String(m.text ?? ''))).map((m: Json) => {
+  return (page?.messages ?? []).filter((m: Json) => !STUB.test(String(m.text ?? ''))).map((m: Json) => {
     const pics = photos(String(m.text ?? ''));
     const text = String(m.text ?? '').replace(PHOTO, '').trim();
     if (m.author === 'system') {
