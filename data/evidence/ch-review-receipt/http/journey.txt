@@ -1,0 +1,14 @@
+--- 1. Desk's change, checked against a checkout whose check wants a different answer: the review fails
+{"task":1,"shown":""}
+--- 2. The same change checked again against the checkout it is meant for: that run overturns the first
+{"task":2,"shown":""}
+--- 3. A second change whose check fails before and after it: the review stays a failure
+{"task":3,"shown":""}
+--- crewd's own record of every check it ran, oldest first
+{"patch":"files/toggle.patch","passed":false,"before":1,"after":1,"task":1}
+{"patch":"files/toggle.patch","passed":true,"before":1,"after":0,"task":2}
+{"patch":"files/broken.patch","passed":false,"before":1,"after":1,"task":3}
+--- what the chat says, in order
+1: Desk joined the crew (support desk for a product: reads its public issues, drafts replies, proves fixes in a copy (drafts only)).
+3: Delivered files/toggle.patch: Suggested change (for the maintainer to review): its own check did not pass — the same check still fails after the change
+9: Delivered files/broken.patch: Suggested change (for the maintainer to review): its own check did not pass — the same check still fails after the change

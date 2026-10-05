@@ -273,8 +273,8 @@ export function ReviewCard({ f }: { f: FileView }) {
   return <div className={`review ${r.ok ? 'ok' : 'bad'}`} role={r.ok ? undefined : 'alert'}>
     <b>{r.ok ? 'Its check passed' : 'Its check did not pass'}</b>
     <span>{plainEnd(r.why)}</span>
-    {r.changed && <span className="small">An earlier check said the opposite. This one, at {clock(r.when)}, is the current one.</span>}
-    <span className="small mute">Checked {clock(r.when)}{r.runs > 1 ? `, ${r.runs} times; this ${clock(r.when)} run is the current one` : ''}.</span>
+    {r.changed ? `An earlier check said the opposite, so this ${clock(r.when)} one counts.` : `Checked ${clock(r.when)}.`}
+    {r.runs > 1 && <span className="small mute">Checked {r.runs} times; the last one, at {clock(r.when)}, is the current one.</span>}
     {!r.ok && <button className="btn go" disabled={busy} onClick={again}>{busy ? 'Starting again…' : 'Start it again'}</button>}
   </div>;
 }

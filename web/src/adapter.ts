@@ -110,7 +110,8 @@ export const fileSource = (url: string) => { const m = /^\/files\/([a-z0-9-]+)\/
 /** Crewd's own check on a suggested change, as a person reads it: did it pass, what the check actually found, when, and
  *  whether a newer run overturned an older verdict. Nothing at all when no check ever ran on this change. */
 export type Review = { task: number; ok: boolean; why: string; when: number; runs: number; changed: boolean };
-const WHY = (d: Json) => d.missingDep ? 'the check could not run: something it needs is not installed'
+const WHY = (d: Json) => d.passed ? 'the check failed on the old code and passes with this change'
+  : d.missingDep ? 'the check could not run: something it needs is not installed'
   : Number(d.after) === 0 ? 'the check passes here but never failed before the change, so nothing was proved'
   : Number(d.before) === 0 ? 'the check passed before the change and fails after it: the change broke it'
   : 'the same check still fails after the change';
