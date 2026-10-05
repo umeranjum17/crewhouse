@@ -406,11 +406,11 @@ test('routines: Chief offers one as a card, the person starts it (or changes the
   assert.equal(sched.words, 'Weekdays at 8:00 am');
   assert.match(sched.first, /am|pm/, "the first run in the computer's own words, so every screen reads the same");
   // Wed 5:36 pm on "weekdays at 8am" is a Thursday morning: the first run names its day unless it is today.
-  const day = (at: number) => new Date(at).toDateString() === new Date().toDateString() ? '' : new Date(at).toLocaleDateString([], { weekday: 'short' });
-  assert.equal(sched.first, `${day(sched.next)} ${sched.words.split(' at ')[1]}`, 'the first run never reads as some other day');
+  const day = (at: number) => new Date(at).toDateString() === new Date().toDateString() ? '' : new Date(at).toLocaleDateString([], { weekday: 'short' }) + ' ';
+  assert.equal(sched.first, `${day(sched.next)}${sched.words.split(' at ')[1]}`, 'the first run never reads as some other day');
   assert.equal((await api('GET', '/api/schedule?text=' + encodeURIComponent('every Monday'))).body.guessed, true, 'words that never named a time are a guess, and say so');
   const monday = (await api('GET', '/api/schedule?text=' + encodeURIComponent('every Monday'))).body;
-  assert.equal(monday.first, `${day(monday.next)} 9:00 am`, 'even a guessed hour is read on the day it lands');
+  assert.equal(monday.first, `${day(monday.next)}9:00 am`, 'even a guessed hour is read on the day it lands');
   assert.equal(sched.guessed, false, 'words that named a time are not a guess');
   assert.equal(typeof sched.zone, 'string', 'the computer names its zone, so a screen away from home can too');
   assert.equal((await api('GET', '/api/schedule?text=someday')).status, 400);
