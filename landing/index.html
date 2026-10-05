@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Crewhouse</title>
+<meta name="description" content="A personal assistant that runs on your own computer, with your own AI sign-in. Four jobs to hand it on day one, and the exact words to type.">
+<style>
+  :root {
+    --bg: #fbf8f3; --card: #ffffff; --ink: #1f1d1a; --soft: #5f5a52; --line: #e6e0d6;
+    --accent: #2f6f5e; --accent-ink: #ffffff; --say: #f2eee6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #17181a; --card: #202225; --ink: #f1eee8; --soft: #a9a49b; --line: #33363a;
+      --accent: #7cc4ad; --accent-ink: #10201b; --say: #2a2d31;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #17181a; --card: #202225; --ink: #f1eee8; --soft: #a9a49b; --line: #33363a;
+    --accent: #7cc4ad; --accent-ink: #10201b; --say: #2a2d31;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 17px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 760px; margin: 0 auto; padding: 48px 16px 64px; }
+  h1 { font-size: clamp(30px, 6vw, 44px); line-height: 1.15; margin: 0 0 12px; text-wrap: balance; }
+  h2 { font-size: 22px; line-height: 1.25; margin: 0 0 8px; }
+  p { margin: 0 0 12px; }
+  .lead { font-size: 19px; color: var(--soft); max-width: 36em; }
+  .get {
+    display: inline-block; margin: 8px 0 40px; padding: 12px 20px; border-radius: 999px;
+    background: var(--accent); color: var(--accent-ink); font-weight: 600; text-decoration: none;
+  }
+  .job {
+    background: var(--card); border: 1px solid var(--line); border-radius: 16px;
+    padding: 24px; margin: 0 0 20px;
+  }
+  .job .needs { color: var(--soft); font-size: 15px; }
+  .say-label { font-size: 14px; font-weight: 600; color: var(--soft); margin: 16px 0 6px; }
+  .say { display: flex; gap: 8px; align-items: stretch; }
+  .say pre {
+    flex: 1; margin: 0; padding: 12px 14px; border-radius: 10px; background: var(--say);
+    font: inherit; white-space: pre-wrap; overflow-wrap: anywhere; user-select: all;
+  }
+  .say button {
+    flex: none; min-width: 76px; padding: 0 14px; border-radius: 10px; cursor: pointer;
+    border: 1px solid var(--accent); background: transparent; color: var(--accent); font: inherit; font-weight: 600;
+  }
+  .privacy { border-top: 1px solid var(--line); margin-top: 40px; padding-top: 28px; }
+  .privacy p { color: var(--soft); }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Hand over the jobs that eat your week.</h1>
+  <p class="lead">Crewhouse is a personal assistant that runs on your own computer, with your own AI sign-in. Install it, say hello to Chief, and type one of these.</p>
+  <a class="get" href="https://github.com/umeranjum17/crewhouse#download">Get Crewhouse</a>
+
+  <section class="job">
+    <h2>Plan the week's dinners</h2>
+    <p>Once a week I'll plan seven dinners you will actually eat, write the shopping list sorted by aisle, and put the shop day on your calendar. If you want, I'll fill the cart too — you approve it like any purchase.</p>
+    <p class="say-label">Type this to Chief</p>
+    <div class="say"><pre>Plan my dinners for the week and write the shopping list</pre><button type="button">Copy</button></div>
+  </section>
+
+  <section class="job">
+    <h2>Sort the paperwork</h2>
+    <p>I'll read the letters and forms coming into your mail, put what's due on your calendar, and draft every reply — you read, tap approve, and send.</p>
+    <p class="needs">Needs your mail and calendar connected.</p>
+    <p class="say-label">Type this to Chief</p>
+    <div class="say"><pre>Sort the paperwork: what's due, and draft the replies</pre><button type="button">Copy</button></div>
+  </section>
+
+  <section class="job">
+    <h2>Give me my day</h2>
+    <p>I'll turn your mail, your calendar and what's still open into what today actually is.</p>
+    <p class="needs">Needs your mail and calendar connected.</p>
+    <p class="say-label">Type this to Chief</p>
+    <div class="say"><pre>Give me my day: what's on, what's waiting on me, what to do first</pre><button type="button">Copy</button></div>
+  </section>
+
+  <section class="job">
+    <h2>Catch a renewal before it's charged</h2>
+    <p>I'll catch a renewal or a price rise before it's charged, and have the cancellation email ready. Every step asks you first, on its own card.</p>
+    <p class="needs">Needs your mail connected.</p>
+    <p class="say-label">Type this to Chief</p>
+    <div class="say"><pre>Watch my subscriptions so nothing gets renewed without me hearing about it first</pre><button type="button">Copy</button></div>
+  </section>
+
+  <section class="privacy">
+    <h2>Yours, on your computer</h2>
+    <p>The helpers run on your own computer, with your own AI account sign-in. There is no Crewhouse server and no telemetry. When a helper wants to send, spend or delete something, it asks you first.</p>
+    <p>What leaves your computer is what a job needs: your AI account, the pages and searches a helper opens, the apps you connected, and a content-free "Crewhouse has news" ping to your phone.</p>
+  </section>
+</main>
+<script>
+  // ?day or ?night pins the theme; otherwise the page follows the system.
+  var q = location.search;
+  if (/[?&]day\b/.test(q)) document.documentElement.dataset.theme = 'light';
+  if (/[?&]night\b/.test(q)) document.documentElement.dataset.theme = 'dark';
+  document.querySelectorAll('.say button').forEach(function (button) {
+    button.addEventListener('click', function () {
+      var pre = button.previousElementSibling;
+      var done = function () { button.textContent = 'Copied'; setTimeout(function () { button.textContent = 'Copy'; }, 1500); };
+      // file:// pages may lack the async clipboard; selecting and copying works there.
+      var fallback = function () { getSelection().selectAllChildren(pre); if (document.execCommand('copy')) done(); };
+      if (navigator.clipboard) navigator.clipboard.writeText(pre.textContent).then(done, fallback); else fallback();
+    });
+  });
+</script>
+</body>
+</html>
