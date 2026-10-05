@@ -7,6 +7,7 @@ export type Schedule = { days: number[]; at: number; guessed?: boolean } | { eve
 const DAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
 const NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const bad = (text: string) => Object.assign(new Error(`I can't read "${text}" as a schedule; try "every Monday 9:00", "weekdays at 8am" or "every 2 hours"`), { status: 400 });
+const whenBad = (text: string) => Object.assign(new Error(`I can't read "${text}" as a time; try "Friday 9:00", "tomorrow 8am" or "in 20 minutes"`), { status: 400 });
 
 const NUMS = ['one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve'];
 const numOf = (w: string) => NUMS.indexOf(w) + 1;
@@ -91,6 +92,16 @@ export function nextRun(s: Schedule, after: number) {
     if (c.getTime() > after && s.days.includes(c.getDay())) return c.getTime();
   }
   throw new Error('unreachable: a schedule always has a day');
+}
+
+/** The moment a one-off reminder is due, in the person's own words: "in 20 minutes" counts from now, and "today",
+ *  "tomorrow" and a weekday name ("friday 9:00") are the same clock the routines keep. */
+export function reminderAt(text: string, now = Date.now()) {
+  const day = (n: number) => DAYS[(new Date(now).getDay() + n) % 7];
+  const s = String(text).toLowerCase().trim().replace(/\btomorrow\b/, () => day(1)).replace(/\btoday\b/, () => day(0));
+  const rel = /^in\s+(\d{1,4})\s*(minutes?|mins?|hours?|hrs?)$/.exec(s);
+  if (rel) return now + Number(rel[1]) * (rel[2][0] === 'h' ? 60 : 1) * 60_000;
+  try { return nextRun(parseSchedule(s.replace(/^(at|on)\s+/, '')), now); } catch { throw whenBad(text); }
 }
 
 /** A local event that starts a routine instead of (or as well as) a time: a file arriving in the helper's

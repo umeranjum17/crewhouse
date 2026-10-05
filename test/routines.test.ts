@@ -805,3 +805,43 @@ test('not now, remind me tomorrow: the question comes back once, then the remind
   assert.equal(db.get('SELECT COUNT(*) AS n FROM tasks WHERE routine = ?', r.id)!.n, 1);
   done();
 });
+
+test('a reminder: plain words in, one line in Chief’s thread when it is due, once, and removable after', async () => {
+  const { crew, db, cfg, done } = setup();
+  const { Crew } = await import('../src/crew.ts');
+  // The person says it as they would: no card yet, no routine.
+  const t = (await crew.post('chief', `Remind me in 2 minutes to pack the sports kit [tool crew_routine {"once":true,"when":"in 2 minutes","task":"pack the sports kit"}]`)).task;
+  await settled(db, t);
+  const card = db.get("SELECT * FROM asks WHERE kind = 'propose' AND state = 'open'")!;
+  assert.ok(card, 'the reminder waits on a card');
+  assert.match(JSON.parse(card.detail).preview.body, /^At .*\npack the sports kit$/, 'the card names the moment and the words');
+  assert.equal(db.get("SELECT COUNT(*) AS n FROM routines WHERE kind = 'remind'")!.n, 0, 'nothing is set until they say yes');
+
+  await crew.answer(card.id, { answer: 'allow' });
+  const r = db.get("SELECT * FROM routines WHERE kind = 'remind'")!;
+  assert.equal(r.bot, 'chief', 'it is theirs, not a helper’s');
+  assert.ok(r.next_at > Date.now(), 'it waits for its moment');
+  assert.match(db.get("SELECT text FROM messages WHERE bot = 'chief' AND text LIKE 'Reminder set:%'")!.text, /Reminder set: “pack the sports kit”, \d{1,2}:\d\d (am|pm)\./, 'set in plain words');
+
+  // crewd restarts with the reminder still set: nothing about it was in memory.
+  await crew.stop();
+  const again = new Crew(cfg, db); again.init();
+  db.run('UPDATE routines SET next_at = ? WHERE id = ?', Date.now() - 1000, r.id);
+  again.schedule(); again.schedule();
+  const said = db.all("SELECT text FROM messages WHERE bot = 'chief' AND text LIKE 'Reminder:%'");
+  assert.deepEqual(said.map((m: any) => m.text), ['Reminder: pack the sports kit.'], 'once, in the person’s own words, no helper turn');
+  assert.equal(fired(db, r.id).length, 1, 'and it never fires a second time');
+  assert.equal(db.get('SELECT next_at FROM routines WHERE id = ?', r.id)!.next_at, null, 'it keeps no next run');
+  assert.equal(db.get("SELECT COUNT(*) AS n FROM tasks WHERE routine = ?", r.id)!.n, 0, 'a reminder costs no AI');
+  assert.equal(A.routines(again.snapshot()).find((x: any) => x.id === r.id)!.next, `reminded ${A.clock(r.last_at ?? Date.now())}`);
+  again.deleteRoutine(r.id); // and it is still theirs to remove afterwards
+  assert.equal(db.get('SELECT COUNT(*) AS n FROM routines WHERE id = ?', r.id)!.n, 0);
+
+  // Removed before it was due, it stays silent.
+  const gone = crew.addRoutine({ once: 1, schedule: 'in 2 minutes', task: 'take the bins out' }, 'person');
+  again.deleteRoutine(gone.id);
+  again.schedule();
+  assert.equal(db.get("SELECT COUNT(*) AS n FROM messages WHERE text LIKE '%bins out%'")!.n, 0);
+  again.stop();
+  done();
+});

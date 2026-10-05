@@ -623,7 +623,7 @@ export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; 
           {when !== null && preview && !preview.bad && <div className="mute small routine-note">{preview.words}.{preview.guessed ? ` Did you mean ${preview.words.split(' at ').pop()}?` : ''} First time {preview.first}. {c.zoneNote}</div>}
           {when !== null && preview?.bad && <div className="mute small routine-note">I didn't catch that time. Try “every Monday 9:00”.</div>}
           <div className="btns">
-            <button className="btn go" disabled={stuck} onClick={start}>Start it</button>
+            <button className="btn go" disabled={stuck} onClick={start}>{yes?.label ?? 'Start it'}</button>
             <button className="btn" aria-pressed={when !== null} onClick={() => { setWhen(when === null ? c.schedule || '' : null); }}>{when === null ? 'Change time' : 'Keep the time'}</button>
             {deny && <button className="btn" onClick={() => act(deny.body)}>{deny.label}</button>}
           {remind && <button className="btn ghost" onClick={() => act(remind)}>Remind me tomorrow</button>}
