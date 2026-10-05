@@ -1077,6 +1077,10 @@ export function room(page: Json, state: Json) {
 
 const chatWords = (text: string) => text.replace(/```[\s\S]*?```/g, '').split('\n').map(plain).join('\n').trim();
 
+/** A Chief hand-off's ask for the person's eye: the words themselves, with any label an older hand-off wrapped them
+ *  in ("The person's words verbatim: …") and their quotes off, short enough for one collapsed line. */
+const handOff = (title: string, body: string) =>
+  (title.replace(/^the\s+person(?:'s)?\s+(?:words\s+)?(?:verbatim|says?|words)\s*:\s*/i, '').replace(/^[“"']|[”"']$/g, '').trim() || plain(body.split('\n')[0])).slice(0, 80);
 export function lines(page: Json, bot: string, state: Json = {}): Line[] {
   const checks = reviews(state);
   return (page?.messages ?? []).filter((m: Json) => !STUB.test(String(m.text ?? ''))).map((m: Json) => {
@@ -1093,10 +1097,11 @@ export function lines(page: Json, bot: string, state: Json = {}): Line[] {
     }
     // Another helper handing this one a job: a note in its words, "Reel asked: …".
     if (!['person', 'bot', 'chief'].includes(m.author)) return { id: m.id, from: 'note', text: `${String(m.author).replace(/^./, (c) => c.toUpperCase())} asked: ${plain(text)}`, files: [], choices: [] };
-    // Chief's hand-off to a helper: one short collapsed line — the ask, not the internal assignment prose — with the
-    // result and the full words (Show details) behind it.
+    // Chief's hand-off to a helper: one short collapsed line in the person's own words — never the label Chief's
+    // instructions once wrapped the ask in ("The person's words verbatim: …") — with the result and the full words
+    // (Show details) behind it.
     if (m.author === 'chief' && bot !== 'chief') return { id: m.id, from: 'chief',
-      text: `Chief asked: ${plain(String(m.title ?? text.split('\n')[0])).slice(0, 80)}`, detail: chatWords(text),
+      text: `From Chief: ${handOff(plain(String(m.title ?? text.split('\n')[0])), text)}`, detail: chatWords(text),
       files: [...pics, ...(m.files ?? []).map((f: Json) => fileView(f.bot, f.path))], choices: [] };
     return { id: m.id, from: m.author === 'person' ? 'me' : 'them', ...(m.helper ? { helper: String(m.helper) } : {}),
       recap: m.recap === true, text: m.author === 'person' ? (pics.length && /^Here (is a photo|are some photos)\.$/.test(text) ? '' : noTools(text)) : chatWords(text), files: [...pics, ...(m.files ?? []).map((f: Json) => fileView(f.bot, f.path))], choices: (m.choices ?? []).map(plain), at: m.at ? at(m.at) : undefined, unsure: m.author === 'bot' && /^Not sure it worked:|^[^.]{1,40} isn't sure “/.test(text) };
