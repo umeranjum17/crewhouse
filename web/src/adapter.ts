@@ -92,10 +92,13 @@ export const dayLabel = (t: number, now = new Date()) => {
  * machine and crewd has no server of its own (README); a job's own words are the only thing sent to the person's own
  * AI account or a connected app (src/engine.ts, src/connections.ts); a phone notification carries no words at all (src/link.ts).
  * `home` names the machine from wherever the line is read, `plan` the one the crew thinks with (`planName`). Keep it
- * free of technical words; test/ui.test.ts pins it.
+ * free of technical words; test/ui.test.ts pins it. The middle line is `awake`, the one condition every surface that
+ * mentions the computer or pairing repeats word for word.
  */
+export const awake = (home = 'this computer') => `The crew works only while ${home} is on and connected to the internet.`;
 export const atHome = (home = 'this computer', plan = 'AI plan') => [
   `Your helpers live on ${home} and use your own sign-ins.`,
+  awake(home),
   `Nothing you tell them is kept anywhere else — only what a job needs goes to your ${plan} or the app it's using.`,
 ];
 
@@ -290,17 +293,17 @@ function helperMood(b: Json, seat: Seat, events: Json[]): Mood {
   return 'idle';
 }
 
-/** Settings, Phones, "Reach it from anywhere": one of three states in plain words, and the steps still to do. The
- *  free connector app uses the same account on your computer and phone, so Settings never names it. */
+/** Settings, Phones, "Reach it away from home": one of three states in plain words, and the steps still to do. The
+ *  connector app uses the same account on your computer and phone, so Settings never names it. */
 export function anywhere(link: Json) {
   const state: 'home' | 'anywhere' | 'signin' = link?.anywhere === 'anywhere' || link?.anywhere === 'signin' ? link.anywhere : 'home';
   const words = {
-    home: 'Only at home. Phones reach this computer on the home Wi-Fi. To reach it from anywhere, get the free connector app:',
-    anywhere: "Reachable from anywhere. Your phone opens Crewhouse on mobile data too. To add your phone:",
+    home: 'Only at home. Phones reach this computer on the home Wi-Fi. To reach it away from home, get the connector app:',
+    anywhere: "Reachable away from home. Your phone opens Crewhouse on mobile data too. To add your phone:",
     signin: "The connector app needs signing in again on this computer. Until then, phones reach it only on the home Wi-Fi. Open the connector app here and sign in.",
   }[state];
   const steps = [
-    'On this computer, get the free connector app and sign in with Google.',
+    'On this computer, get the connector app and sign in with Google.',
     "On your phone, get the same app and sign in with the same Google account as this computer, or share this computer with that phone's account in the app.",
     'Then pair your phone here.',
   ];
@@ -400,12 +403,12 @@ export const phoneTyped = (t: Json) => {
   return `${t.short}-${t.code}${at ? `@${at}` : ''}`;
 };
 
-/** Settings, Phones: whether phones reach this computer from anywhere, in one sentence. */
+/** Settings, Phones: whether phones reach this computer away from home, in one sentence. */
 export function reach(link: Json) {
   let where = '';
   try { where = link?.relay ? new URL(link.relay).host : ''; } catch { /* kept as typed */ }
   const words: Record<string, string> = {
-    online: `On. Phones reach this computer from anywhere through ${where}, which passes along what they say without being able to read it.`,
+    online: `On. Phones reach this computer away from home through ${where}, which passes along what they say without being able to read it.`,
     connecting: `Getting in touch with ${where}…`,
     offline: `Can't reach ${where} right now. Trying again by itself.`,
     refused: `${where} didn't let this computer in. Ask whoever runs it for a new invitation and paste it below.`,
@@ -955,7 +958,7 @@ export function homeSetup(state: Json, accounts: Json[] | null, link: Json | nul
   const plan = planName(accounts);
   const rows = [
     { key: 'signin', says: plan === 'AI plan' ? 'An AI plan the crew can think with' : `The crew thinks with your ${plan}`, done: accounts?.some((a) => a.signedIn === true) === true },
-    { key: 'phones', says: 'Phones can reach the crew from anywhere', done: link?.anywhere === 'anywhere' },
+    { key: 'phones', says: 'Phones can reach the crew away from home', done: link?.anywhere === 'anywhere' },
     { key: 'google', says: 'Google setup', done: state.house?.google !== false },
   ];
   return { rows, left: rows.filter((r) => !r.done).length };
