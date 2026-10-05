@@ -9,8 +9,8 @@ export interface Request { text: string; earlier?: string }
 
 const ROUTE_MS = Number(process.env.CREWHOUSE_ROUTE_MS || 20_000);
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-/** Chief's own work, whoever it mentions: routines and check-ins, memory, how to be addressed, hiring. */
-export const chiefWork = /^(remember|call me)\b|\bevery\b|\beach (day|morning|evening|night|week|month)\b|\bweekdays\b|\bkeep an eye on\b|\blet me know if\b|\b(recruit|hire)\b|\b(market|marketing|promote|launch|paperwork)\b/i;
+/** Chief's own work, whoever it mentions: routines and check-ins, memory, how to be addressed, hiring, a helper's job. */
+export const chiefWork = /^(remember|call me)\b|\bevery\b|\beach (day|morning|evening|night|week|month)\b|\bweekdays\b|\bkeep an eye on\b|\blet me know if\b|\b(recruit|hire)\b|\bfrom now on\b|(\w's|\b(your|its|their)) (job|role)\b|\b(market|marketing|promote|launch|paperwork)\b/i;
 const arithmetic = /^(?:(?:what(?:'s| is)|calculate|solve|work out)\s+)?\d+(?:\s*(?:[+*\/×÷−-]|plus|minus|times|divided by)\s*\d+)+(?:\s*\?)?$/i;
 
 function question(helpers: Helper[]): Question {

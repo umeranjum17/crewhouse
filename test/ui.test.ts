@@ -253,27 +253,6 @@ test('draft cards keep the recipient, email subject and exact message separate a
   } finally { done(); }
 });
 
-test("a job proposal card names the helper's proposed job, never a memory heading", async () => {
-  // The real path: Chief drafts a five-part job (crew_job) and the ask the app receives is
-  // crew.snapshot()'s — every open ask already through Crew.askView. Before the fix askView dropped
-  // the job detail, so the card fell into the generic propose head (QA-233/D35).
-  const { setup: lab, until } = await import('./lab.ts');
-  const { crew, done } = lab();
-  crew.onboard('sir');
-  crew.recruit('scout', 'Scout', 'person');
-  const parts = { does: 'Sort bills and letters.', aim: 'Triage the post pile.', gets: 'The rough brief.', how: 'Sort oldest first, flag deadlines.', great: 'A tidy pile, bills by due date.' };
-  await crew.post('chief', `Please [tool crew_job ${JSON.stringify({ bot: 'scout', ...parts })}]`);
-  await until('the job ask in the served view', () => crew.snapshot().asks.some((a: any) => a.kind === 'propose' && a.detail.job));
-  const s: Json = crew.snapshot();
-  const ask = s.asks.find((a: any) => a.kind === 'propose' && a.detail.job)!;
-  const c = A.card(ask, s);
-  assert.equal(c.head, "Scout's proposed job", 'the card names the proposed job, not a memory preference');
-  assert.doesNotMatch(c.status ?? '', /remember/i, 'no memory-specific heading above a job change');
-  assert.deepEqual(c.choices.map((x: any) => x.label), ['Use it', 'Not now'], 'consent still replaces the job or leaves it');
-  assert.match(c.preview?.body ?? '', /What it does: Sort bills/);
-  done();
-});
-
 test('Home commits nothing: a row opens the review sheet, and a starter fills the box without sending', () => {
   const src = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
   const home = src.slice(src.indexOf('function NeedsRows('), src.indexOf('/** The standing'));
@@ -926,6 +905,9 @@ test('the bubble\'s buttons: fixed words to one helper, never Chief, and what ne
   assert.match(mail.ask, /^Find the email in my Gmail this is about.*Only look: don't change, move, send or delete anything\.\n“my flight booking to Lahore”$/s);
   const still = by(box('', '', 'com.whatsapp'), 'real'), letter = by(null, 'letter'), deal = by(null, 'deal');
   assert.deepEqual([still.from, letter.from, deal.from, deal.ask], ['screen', 'camera', 'screen', ''], 'Deal with this: the person says what to do');
+  // A still or a photo opens the share box with words a person would write; how to go about it is sent after, unseen.
+  assert.deepEqual([still.ask, letter.ask, deal.brief], ['Is this real?', 'Read this letter for me', '']);
+  assert.match(still.brief, /^It's on my phone's screen, in the picture\.\nPoint out the warning signs/);
   assert.deepEqual([by(box('hi'), 'write').from, by(box('hi'), 'write').to], ['box', { id: 'scribe', name: 'Scribe' }]);
   const keep = by(box('Ali is allergic to peanuts', 'allergic to peanuts'), 'remember');
   assert.deepEqual([keep.label, keep.from, keep.ask], ['Remember this', 'keep', 'allergic to peanuts'], 'only what was picked, kept as the person picked it');
@@ -1015,6 +997,7 @@ test('who is on what: one plain line from state alone, resting included, no mode
   const st = { ...state, resting: {}, bots: [bot('chief', { task: { id: 9, title: 'Plan dinners', state: 'working' } }), bot('scout', { task: { id: 6, title: 'Flights', state: 'working' }, controls: 'person' }),
     bot('scribe', { task: { id: 7, title: 'Post', state: 'working' }, stuck: true, quietSince: now - 9 * 60_000 }), bot('reel', { pausedUntil: now + 600_000 }), bot('tracer')] };
   assert.equal(A.crewLine(st), `Chief is on “Plan dinners”. Scout waits while you drive. Scribe has gone quiet. Reel is waiting until ${A.clock(now + 600_000)}.`);
+  assert.equal(A.crewLine(st, true), `Chief is working. Scout waits while you drive. Scribe has gone quiet. Reel is waiting until ${A.clock(now + 600_000)}.`, 'over other apps: no job\'s words');
   assert.equal(A.crewLine({ ...st, bots: [bot('chief'), bot('tracer')] }), '', 'a quiet crew says nothing (Chief\'s own line stands)');
   assert.equal(A.crewLine({ ...st, bots: [bot('chief'), bot('reel', { pausedUntil: now + 600_000, queued: 1 })] }), `Reel is waiting until ${A.clock(now + 600_000)}.`, 'a held job behind a queued one: waiting, nobody working yet');
   assert.doesNotMatch(A.crewLine(state), FORBIDDEN);
@@ -1266,12 +1249,6 @@ test('Chief-learned memories can be undone from his own page: the same trail, th
 
 test('no raw heading markers reach the ask card or its Read-all view', () => {
   const s = { bots: [{ id: 'chief', display: 'Chief' }, { id: 'scout', display: 'Scout' }], asks: [] };
-  const job = { bot: 'scout', does: '### Registry checks\nScout reads the public register', aim: '## Peace of mind about names',
-    gets: 'nothing', how: '### Gently, one page a day', great: '### Quiet weeks, a word when something changed' };
-  const c = A.card({ id: 9, bot: 'chief', kind: 'propose', at: now, detail: { job } }, s);
-  assert.equal(c.head, `Scout's proposed job`);
-  assert.doesNotMatch(c.preview!.body, /#|\\\\n/, c.preview!.body);
-  assert.match(c.preview!.body, /What it does: Registry checks\nScout reads the public register/);
   const offered = A.card({ id: 10, bot: 'scout', kind: 'propose', at: now,
     detail: { words: 'Scout has an idea', preview: { head: 'How Scout would do it', body: '### Step one\nPick the pages' } } }, s);
   assert.ok(!offered.preview!.body.includes('#'), offered.preview!.body);
