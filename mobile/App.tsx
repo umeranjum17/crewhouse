@@ -1202,7 +1202,7 @@ function ChiefHero({ live, state, go }: { live: A.OfficeView; state: Json; go: C
     <View style={[s.askCard, { flexDirection: 'row', minHeight: narrow ? 180 : 220, overflow: 'hidden', backgroundColor: t.solid, borderColor: t.line2, borderWidth: 1, borderRadius: 24 }]} accessibilityLabel="Chief">
       <View style={{ width: narrow ? 104 : 150, justifyContent: 'flex-end', marginLeft: narrow ? -8 : 0 }}><ChiefArt mood={live.chief.mood} size={narrow ? 120 : 160} whole wave /></View>
       <View style={{ flex: 1, minWidth: 0, gap: 10, paddingTop: 18, paddingRight: 12, paddingBottom: 14, paddingLeft: 4 }}>
-        <T style={[s.serif, { fontSize: 40, lineHeight: 44 }]}>Chief <Text style={[s.small, { fontFamily: 'Inter', color: t.mute }]}>Studio Chief</Text></T>
+        <T style={[s.serif, { fontSize: 40, lineHeight: 44 }]}>Chief</T>
         <View style={{ alignSelf: 'flex-start', borderWidth: 1, borderColor: t.line2, borderRadius: 16, paddingVertical: 10, paddingHorizontal: 14 }}><T>{A.chiefSaid(state) || live.chief.line}</T></View>
         <View style={{ flex: 1 }} />
         {crew.length > 0 && <View style={[s.row, { flexWrap: 'wrap', gap: 4 }]}>
