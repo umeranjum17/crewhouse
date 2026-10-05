@@ -5,7 +5,8 @@
 // what and what the crew knows about the person itself. Write it here: the writer drafts for the box the person was
 // typing in, and Put it in fills it.
 // Nothing is sent that the person didn't send. `frame` is a still back from the phone's ask, for helper `to` with
-// `words` in the box; `listen` opens with the mic on (a long press on the bubble).
+// `words` in the box (and `brief` sent after them, never shown); `listen` opens with the mic on (a long press on the
+// bubble). Over another app the panel names who is working, never a job's words: those stay in Crewhouse.
 import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import * as ImagePicker from 'expo-image-picker';
 import { KeyboardAvoidingView, Linking, Pressable, ScrollView, StyleSheet, useColorScheme, View } from 'react-native';
@@ -15,7 +16,7 @@ import { AskSheet, attempt, Btn, Composer, Face, look, s, say, ShareIn, T, Theme
 import { closePanel, handScreen, logTap, putIn, restrictedWords, showCrew, tappedBox, used as usedIn, type Box } from './bubble';
 import { connect, loadGrant, type Grant, type Status } from './link';
 
-export function Panel({ frame, to, words, listen }: { frame?: string; to?: string; words?: string; listen?: string }) {
+export function Panel({ frame, to, words, brief, listen }: { frame?: string; to?: string; words?: string; brief?: string; listen?: string }) {
   const t = look(useColorScheme() === 'dark');
   const [paired, setPaired] = useState<Grant | null | undefined>(undefined);
   const [box, setBox] = useState<Box>(null);
@@ -30,7 +31,7 @@ export function Panel({ frame, to, words, listen }: { frame?: string; to?: strin
         <KeyboardAvoidingView behavior="padding">
           <Pressable style={[s.sheet, { backgroundColor: t.surface, paddingBottom: 28 }]} onPress={() => {}}>
             <View style={[s.grabber, { backgroundColor: t.line2 }]} />
-            {paired === null ? <Unpaired /> : paired ? <Body grant={paired} still={frame ? { path: frame, mimeType: 'image/png', to: to ?? '', words: words ?? '' } : undefined} box={box} used={used} listen={!!listen} /> : null}
+            {paired === null ? <Unpaired /> : paired ? <Body grant={paired} still={frame ? { path: frame, mimeType: 'image/png', to: to ?? '', words: words ?? '', brief: brief ?? '' } : undefined} box={box} used={used} listen={!!listen} /> : null}
           </Pressable>
         </KeyboardAvoidingView>
       </Pressable>
@@ -49,7 +50,7 @@ function Unpaired() {
 
 const open = async (url: string) => { await Linking.openURL(url).catch(() => {}); await closePanel(); };
 
-type Shared = { path: string; mimeType: string; to: string; words: string };
+type Shared = { path: string; mimeType: string; to: string; words: string; brief: string };
 
 function Body({ grant, still, box, used, listen }: { grant: Grant; still?: Shared; box: Box; used: Record<string, number>; listen: boolean }) {
   const t = useContext(Theme);
@@ -86,7 +87,7 @@ function Body({ grant, still, box, used, listen }: { grant: Grant; still?: Share
   useEffect(() => { if (shared && !shared.to && state && canAct) void hire(A.handTo(state, 'scout')).then((to) => (to ? setShared({ ...shared, to }) : closePanel())); }, [!!state, canAct]);
   if (!state) return <View style={s.row}><Face who="chief" size={40} mood="work" /><T tone="ink2" style={{ flex: 1 }}>{status === 'offline' ? "Can't reach the home computer right now." : 'Waking the crew…'}</T></View>;
   const crew = A.crew(state);
-  if (shared && canAct && shared.to) return <ShareIn state={state} to={shared.to} shared={{ text: shared.words, files: [shared] }} go={() => void closePanel()} onDone={() => void closePanel()} />;
+  if (shared && canAct && shared.to) return <ShareIn state={state} to={shared.to} shared={{ text: shared.words, brief: shared.brief, files: [shared] }} go={() => void closePanel()} onDone={() => void closePanel()} />;
   if (writing === 'off' && box === 'off') return <SwitchOn />;
   const writer = crew.find((h) => h.id === writing);
   // Only a phone that may ask; a link blip keeps the job (and its draft) on screen until the link is back.
@@ -95,8 +96,8 @@ function Body({ grant, still, box, used, listen }: { grant: Grant; still?: Share
   if (said) return <Said {...said} canAct={canAct} onDone={() => setSaid(null)} />;
   if (kept) return <Kept line={kept} />;
   if (replier && asked) return <Reply who={replier} task={asked.task} state={state} onAsk={setAsking} asking={asking} canAct={canAct} refresh={refresh} />;
-  const chief = online ? A.chief(state) : { mood: 'rest' as const, line: "Can't reach the home computer right now" };
-  const line = online ? A.crewLine(state) : '';
+  const chief = online ? A.chief(state, { bare: true }) : { mood: 'rest' as const, line: "Can't reach the home computer right now" };
+  const line = online ? A.crewLine(state, true) : '';
   const needs = A.needsYou(state);
   const top = needs.slice(0, 3).map((c) => crew.find((h) => h.id === c.helper)).find((h) => h?.computer);
   const buttons = A.quick(state, { box, used }, canAct);
@@ -123,13 +124,13 @@ function Body({ grant, still, box, used, listen }: { grant: Grant; still?: Share
       setKept(r.line);
     });
     if (b.from === 'box' && box === 'off') return setWriting('off'); // the switch first; nobody is hired for it
-    if (b.from === 'screen') return handScreen(b.to.id || hired.current, b.ask); // a helper is hired once the still is back
+    if (b.from === 'screen') return handScreen(b.to.id || hired.current, b.ask, b.brief); // a helper is hired once the still is back
     if (b.from === 'camera') {
       if (!(await ImagePicker.requestCameraPermissionsAsync().catch(() => null))?.granted) return say('Allow the camera for Crewhouse in your phone settings, then try again.');
       const r = await ImagePicker.launchCameraAsync({ quality: 1 }).catch(() => null);
       const a = r && !r.canceled ? r.assets[0] : null;
       const to = a ? await hire(b.to) : '';
-      if (a && to) setShared({ path: a.uri, mimeType: a.mimeType ?? 'image/jpeg', to, words: b.ask });
+      if (a && to) setShared({ path: a.uri, mimeType: a.mimeType ?? 'image/jpeg', to, words: b.ask, brief: b.brief });
       return;
     }
     const to = await hire(b.to);
@@ -149,7 +150,7 @@ function Body({ grant, still, box, used, listen }: { grant: Grant; still?: Share
         {needs.slice(0, 3).map((c, i) => <Pressable key={c.id} onPress={() => setAsking(c)} accessibilityRole="button" accessibilityLabel={c.head}
           style={[s.listRow, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: t.line }]}>
           <Face who={crew.find((h) => h.id === c.helper) ?? 'chief'} size={32} />
-          <View style={{ flex: 1 }}><T style={s.rowTitle} lines={1}>{c.head}</T><T tone="ink2" style={s.small} lines={1}>{c.words}</T></View>
+          <T style={[s.rowTitle, { flex: 1 }]} lines={1}>{c.head}</T>
           <T tone="mute">›</T>
         </Pressable>)}
         {needs.length > 3 && <Btn ghost label={`See all ${needs.length}`} onPress={() => void open('crewhouse://needs')} />}

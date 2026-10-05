@@ -926,6 +926,9 @@ test('the bubble\'s buttons: fixed words to one helper, never Chief, and what ne
   assert.match(mail.ask, /^Find the email in my Gmail this is about.*Only look: don't change, move, send or delete anything\.\n“my flight booking to Lahore”$/s);
   const still = by(box('', '', 'com.whatsapp'), 'real'), letter = by(null, 'letter'), deal = by(null, 'deal');
   assert.deepEqual([still.from, letter.from, deal.from, deal.ask], ['screen', 'camera', 'screen', ''], 'Deal with this: the person says what to do');
+  // A still or a photo opens the share box with words a person would write; how to go about it is sent after, unseen.
+  assert.deepEqual([still.ask, letter.ask, deal.brief], ['Is this real?', 'Read this letter for me', '']);
+  assert.match(still.brief, /^It's on my phone's screen, in the picture\.\nPoint out the warning signs/);
   assert.deepEqual([by(box('hi'), 'write').from, by(box('hi'), 'write').to], ['box', { id: 'scribe', name: 'Scribe' }]);
   const keep = by(box('Ali is allergic to peanuts', 'allergic to peanuts'), 'remember');
   assert.deepEqual([keep.label, keep.from, keep.ask], ['Remember this', 'keep', 'allergic to peanuts'], 'only what was picked, kept as the person picked it');
@@ -1015,6 +1018,7 @@ test('who is on what: one plain line from state alone, resting included, no mode
   const st = { ...state, resting: {}, bots: [bot('chief', { task: { id: 9, title: 'Plan dinners', state: 'working' } }), bot('scout', { task: { id: 6, title: 'Flights', state: 'working' }, controls: 'person' }),
     bot('scribe', { task: { id: 7, title: 'Post', state: 'working' }, stuck: true, quietSince: now - 9 * 60_000 }), bot('reel', { pausedUntil: now + 600_000 }), bot('tracer')] };
   assert.equal(A.crewLine(st), `Chief is on “Plan dinners”. Scout waits while you drive. Scribe has gone quiet. Reel is waiting until ${A.clock(now + 600_000)}.`);
+  assert.equal(A.crewLine(st, true), `Chief is working. Scout waits while you drive. Scribe has gone quiet. Reel is waiting until ${A.clock(now + 600_000)}.`, 'over other apps: no job\'s words');
   assert.equal(A.crewLine({ ...st, bots: [bot('chief'), bot('tracer')] }), '', 'a quiet crew says nothing (Chief\'s own line stands)');
   assert.equal(A.crewLine({ ...st, bots: [bot('chief'), bot('reel', { pausedUntil: now + 600_000, queued: 1 })] }), `Reel is waiting until ${A.clock(now + 600_000)}.`, 'a held job behind a queued one: waiting, nobody working yet');
   assert.doesNotMatch(A.crewLine(state), FORBIDDEN);

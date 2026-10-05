@@ -1812,8 +1812,9 @@ function RoutineRow({ r, h, act, go, canAct }: { r: Json; h: A.Helper | undefine
   );
 }
 
-/** Something shared from another app (a photo of the school poster, a link, some text): who should have it, and a word. */
-function ShareIn({ state, shared, onDone, go, to: first = 'chief' }: { state: Json; shared: { text: string; files: { path: string; mimeType: string }[] }; onDone: () => void; go: Ctx['go']; to?: string }) {
+/** Something shared from another app (a photo of the school poster, a link, some text): who should have it, and a word.
+ *  A bubble button's `brief` (how to go about it) is sent after the person's words and never shown in the box. */
+function ShareIn({ state, shared, onDone, go, to: first = 'chief' }: { state: Json; shared: { text: string; brief?: string; files: { path: string; mimeType: string }[] }; onDone: () => void; go: Ctx['go']; to?: string }) {
   const t = useLook();
   const [to, setTo] = useState(first);
   const [text, setText] = useState(shared.text);
@@ -1824,7 +1825,7 @@ function ShareIn({ state, shared, onDone, go, to: first = 'chief' }: { state: Js
   }, []);
   const crew = A.crew(state);
   const send = () => attempt(async () => {
-    await api.post(to, text.trim(), (pics ?? []).map(({ type, data }) => ({ type, data })));
+    await api.post(to, [text.trim(), shared.brief].filter(Boolean).join('\n'), (pics ?? []).map(({ type, data }) => ({ type, data })));
     onDone();
     go(to === 'chief' ? { view: 'chief' } : { view: 'helper', id: to });
   }, 'Sent');
