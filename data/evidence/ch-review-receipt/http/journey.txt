@@ -11,4 +11,5 @@
 --- what the chat says, in order
 1: Desk joined the crew (support desk for a product: reads its public issues, drafts replies, proves fixes in a copy (drafts only)).
 3: Delivered files/toggle.patch: Suggested change (for the maintainer to review): its own check did not pass — the same check still fails after the change
-9: Delivered files/broken.patch: Suggested change (for the maintainer to review): its own check did not pass — the same check still fails after the change
+7: Re-checked files/toggle.patch: it passes now. This run is the current one.
+10: Delivered files/broken.patch: Suggested change (for the maintainer to review): its own check did not pass — the same check still fails after the change

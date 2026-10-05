@@ -1,6 +1,6 @@
-390: result: "\"{\\\"btnTop\\\":726,\\\"btnBottom\\\":766,\\\"dockTop\\\":814,\\\"underComposer\\\":false}\""
+390: result: "\"{\\\"top\\\":186,\\\"bottom\\\":336,\\\"dockTop\\\":774,\\\"clear\\\":true,\\\"hasButton\\\":true}\""
 help[1]:
   Run `chrome-devtools-axi snapshot` to see current page state
-1440: result: "\"{\\\"btnTop\\\":791,\\\"btnBottom\\\":831,\\\"dockTop\\\":413,\\\"underComposer\\\":true}\""
+1440: result: "\"{\\\"top\\\":184,\\\"bottom\\\":335,\\\"dockTop\\\":343,\\\"clear\\\":true,\\\"hasButton\\\":true}\""
 help[1]:
   Run `chrome-devtools-axi snapshot` to see current page state

@@ -1,8 +1,2 @@
-task3 session: agent:m1:crewhouse:desk:3
-task count: 3
-task.unsure {"task":3,"title":"[tool crew_verify…","result":"I suggested a change (files/broken.patch) for the maintainer to review, but it wasn't seen to fail before it and pass after it. Che
+after  session: agent:m1:crewhouse:desk:3 tasks: 3
 run.resumed {"task":3,"why":"The person asked you to start this again, because it did not pass its own check"}
-task.queued {"task":3,"title":"[tool crew_verify…"}
-task.unsure {"task":3,"title":"[tool crew_verify…","result":"I suggested a change (files/broken.patch) for the maintainer to review, but it wasn't seen to fail before it and pass after it. Che
-task.done {"task":2,"title":"[tool crew_verify…","result":"stub desk: crew_verify said {\"passed\":true,\"missingDep\":false,\"before\":{\"exit\":1,\"tail\":\"\"},\"after\":{\"exit\":0,\"tai
-task.unsure {"task":1,"title":"[tool crew_verify…","result":"I suggested a change (files/toggle.patch) for the maintainer to review, but it wasn't seen to fail before it and pass after it. Che
