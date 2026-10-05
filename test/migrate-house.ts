@@ -2,7 +2,7 @@
 // house per test, the canned host every gateway boots against, and the two
 // end-state witnesses (sealed store, retired crewhouse copy).
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { OpenClawRuntime } from '../src/openclaw/runtime.ts';
@@ -29,7 +29,13 @@ export function sealed(stateDir: string) {
   const file = readFileSync(join(engine, 'auth-store.sealed'));
   assert.equal(file.subarray(0, 4).toString(), 'BKS1');
   assert.ok(!file.includes(Buffer.from('a-preserved')), 'credentials never appear in the sealed bytes');
-  for (const dir of ['state', 'home']) assert.ok(!existsSync(join(engine, dir)), `${dir} plaintext is gone`);
+  assert.ok(!existsSync(join(engine, 'state')), 'credential state plaintext is gone');
+  // The kit seals credential state only: regenerable caches, transcripts and logs stay on disk unsealed, so the
+  // engine home survives a seal and must carry no credential of its own.
+  const home = join(engine, 'home');
+  if (existsSync(home)) for (const entry of readdirSync(home, { recursive: true, withFileTypes: true }))
+    if (entry.isFile()) assert.ok(!readFileSync(join(entry.parentPath, entry.name)).includes(Buffer.from('a-preserved')),
+      `no credential plaintext survives in ${join(entry.parentPath, entry.name)}`);
 }
 
 export function retired(legacy: string) {
