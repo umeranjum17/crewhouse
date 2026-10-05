@@ -297,7 +297,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       const b = crew.botPage(r[1]).bot;
       const idea = String(body.idea ?? '').replace(/\r/g, '').trim();
       if (!idea || idea.length > 600) throw Object.assign(new Error('describe the job in under 600 characters'), { status: 400 });
-      crew.requestChief(`Write ${b.display}'s job from: ${idea}. Use crew_job.`, idea);
+      crew.requestChief(`Change ${b.display}'s job: ${idea}`, idea);
       return { ok: true };
     }
     // What a helper learned about the person, and what the whole crew knows about them.

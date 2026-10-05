@@ -623,13 +623,6 @@ export function card(a: Json, state: Json): Card {
   if (a.kind === 'propose' && d.pass) return { ...base, kind: 'ok', status: 'Wants to hand work on', head: `${name} wants to hand work on`, words: plain(d.words ?? a.title),
     lines: (d.pass.files ?? []).map((f: string) => `With “${pretty(f)}”`),
     choices: [{ label: 'Hand it on', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
-  if (a.kind === 'propose' && d.job) {
-    const labels = ['What it does', "What it's aiming for", 'What it gets from others', 'How it goes about it', 'What great looks like'];
-    const keys = ['does', 'aim', 'gets', 'how', 'great'];
-    return { ...base, kind: 'ok', status: `${crewName(state, d.job.bot)}'s proposed job`, head: `${crewName(state, d.job.bot)}'s proposed job`, words: 'Take a look. Nothing changes until you use it.', evidence: 'lines',
-      preview: { head: `${crewName(state, d.job.bot)}'s job`, body: labels.map((label, i) => `${label}: ${plain(d.job[keys[i]])}`).join('\n\n') },
-      choices: [{ label: 'Use it', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
-  }
   if (a.kind === 'propose' && d.draft) {
     const head = `${name} wrote your ${d.draft.channel}`;
     const body = String(d.preview?.body ?? '').trim();
