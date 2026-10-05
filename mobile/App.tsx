@@ -706,6 +706,13 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
     setTransport(call);
     return release;
   }, [grant, refresh, onRemoved]);
+  // Going quiet is time passing, not news, so no event says it: look again while on screen, as the computer's app does.
+  const awake = motion.useAwake();
+  useEffect(() => {
+    if (status !== 'online' || !awake) return;
+    const t = setInterval(refresh, 15000);
+    return () => clearInterval(t);
+  }, [status, awake, refresh]);
   useEffect(() => {
     if (status === 'online') { setLate(false); return; }
     const t = setTimeout(() => setLate(true), 8000);
