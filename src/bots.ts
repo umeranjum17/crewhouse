@@ -169,13 +169,10 @@ export const JOB_LABELS = ['What it does', "What it's aiming for", 'What it gets
 export type Job = { does: string; aim: string; gets: string; how: string; great: string };
 const jobKeys = ['does', 'aim', 'gets', 'how', 'great'] as const;
 export const jobPreview = (j: Job) => JOB_LABELS.map((label, i) => `### ${label}\n${j[jobKeys[i]]}`).join('\n\n');
-const checkParts = (clean: Record<string, string>) => {
+export const validateJob = (clean: Record<string, string>) => {
   if (jobKeys.some((k) => !clean[k] || clean[k].length > 600)) throw Object.assign(new Error('each part needs words, under 600 characters'), { status: 400 });
   if (jobPreview(clean as Job).length > 3000) throw Object.assign(new Error('the whole job must be under 3,000 characters'), { status: 400 });
 };
-export function validateJob(j: Record<string, string>) {
-  checkParts(j);
-}
 export function readJob(cfg: Config, id: string): Job {
   const text = readFileSync(join(botDir(cfg, id), 'AGENTS.md'), 'utf8');
   const section = text.match(/^## Your job\s*\n([\s\S]*?)(?=^## |$(?![\s\S]))/m)?.[1] ?? '';
@@ -185,7 +182,7 @@ export function readJob(cfg: Config, id: string): Job {
 }
 export function writeJob(cfg: Config, id: string, value: Job) {
   const clean = Object.fromEntries(jobKeys.map((k) => [k, String(value[k] ?? '').replace(/\r/g, '').trim()]));
-  checkParts(clean);
+  validateJob(clean);
   const section = jobPreview(clean as Job);
   const p = join(botDir(cfg, id), 'AGENTS.md');
   let text = readFileSync(p, 'utf8');

@@ -75,12 +75,12 @@ export const closePanel = () => overlay.closePanel();
 /** What to do when the phone greys out a switch for an app installed outside its store. */
 export const restrictedWords = () => words('overlay.restricted');
 /** Deal with this, or a button that needs a still: the panel steps aside, the phone asks (every time) and takes one
- *  still of the screen, and the panel comes back with it, `to` that helper with `words` in the box, to send or pick
- *  someone else. A no leaves nothing behind. */
-export async function handScreen(to = '', words = '') {
+ *  still of the screen, and the panel comes back with it, `to` that helper with `words` in the box (`brief` goes after
+ *  them, unseen), to send or pick someone else. A no leaves nothing behind. */
+export async function handScreen(to = '', words = '', brief = '') {
   await overlay.closePanel();
   const frame = await screenFrame().catch(() => '');
-  if (frame) await overlay.openPanel({ frame, to, words });
+  if (frame) await overlay.openPanel({ frame, to, words, brief });
 }
 // Hold him to talk to Chief: the panel opens already listening (the mic starts there, never from the bubble's own
 // window), and what was heard waits in the box until the person sends it.

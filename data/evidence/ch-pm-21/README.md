@@ -1,7 +1,10 @@
 # ch-pm-21 — a connect is proved by using the app
 
-**The real-account leg is outstanding.** This is the real product driven end to end, but against a lane-owned
-stand-in app, not a live Google, Notion or Canva account. Nothing here should be read as "proved on a real account".
+**The live-account leg now exists, and it is partly proved.** `data/evidence/ch-pm-21-live` runs this same
+path on the real engine against a live Google Calendar account: the connect is proved by a real read of that
+calendar ("You have 0 things on today."). The first real *use* is still outstanding — the retained home's ChatGPT
+account is rate-limited, and that run says so with the engine's exact words. Everything below is still against a
+lane-owned stand-in app, not a live account.
 
 Real `crewd` on the stub engine (`.agents/skills/verify-crewhouse`), loopback only, throwaway HOME, one lane.
 Notion and Canva were pointed at a lane-owned OAuth 2.1 + remote MCP app (`provider.ts`, `daemon.ts`, `start.sh`,

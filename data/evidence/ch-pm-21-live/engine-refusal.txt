@@ -1,0 +1,6 @@
+2026-10-05T16:47:55.154+04:00 [model-fallback/decision] model fallback decision: decision=probe_cooldown_candidate requested=openai/gpt-5.6-sol candidate=openai/gpt-5.6-sol reason=rate_limit next=none
+2026-10-05T16:47:55.173+04:00 [diagnostic] lane task error: lane=main durationMs=15 error="openai is asking us to slow down. Please wait a moment before trying again."
+2026-10-05T16:47:55.173+04:00 [diagnostic] lane task error: lane=session:agent:m1:crewhouse:chief:106 durationMs=16 error="openai is asking us to slow down. Please wait a moment before trying again."
+2026-10-05T16:48:31.459+04:00 [model-fallback/decision] model fallback decision: decision=probe_cooldown_candidate requested=openai/gpt-5.6-sol candidate=openai/gpt-5.6-sol reason=rate_limit next=none
+2026-10-05T16:48:31.478+04:00 [diagnostic] lane task error: lane=main durationMs=15 error="openai is asking us to slow down. Please wait a moment before trying again."
+2026-10-05T16:48:31.498+04:00 [diagnostic] lane task error: lane=session:agent:m1:crewhouse:chief:107 durationMs=16 error="openai is asking us to slow down. Please wait a moment before trying again."

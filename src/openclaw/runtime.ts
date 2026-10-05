@@ -59,7 +59,7 @@ const ABOUT: Record<string, string> = {
 export const TOOLS: ToolSpec[] = ['shell', 'browser', 'calendar', 'mail', 'crew_app', 'crew_web_fetch', 'crew_web_search', 'crew_read', 'crew_write',
   'crew_edit', 'crew_ls', 'crew_grep', 'crew_find', 'crew_connect', 'crew_outcome', 'crew_report', 'crew_batch', 'crew_deliver', 'crew_workbook', 'crew_document',
   'crew_copy', 'crew_remember', 'crew_draft', 'crew_verify', 'crew_learn', 'crew_routine', 'crew_pass', 'crew_add_phone', 'crew_roster',
-  'crew_recruit', 'crew_assign', 'crew_routines', 'crew_status', 'crew_suggest', 'crew_create', 'crew_job', 'crew_call_me',
+  'crew_recruit', 'crew_assign', 'crew_routines', 'crew_status', 'crew_suggest', 'crew_create', 'crew_call_me',
 ].map((name) => ({ name, description: ABOUT[name] ?? `Crewhouse ${name.slice(5).replaceAll('_', ' ')}. The person sees the result in their crew.`,
   parameters: SCHEMAS[name] ?? { type: 'object', additionalProperties: true } }));
 

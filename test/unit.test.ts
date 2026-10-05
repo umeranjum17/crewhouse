@@ -1166,7 +1166,7 @@ test('passing work on: a helper hands the next step to another for the same pers
   done();
 });
 
-test('Chief makes up a new helper on a short card: nothing until the person says yes, then it joins with its job, its own look, and its first result in Chief\'s chat', async () => {
+test('Chief makes up a new helper on a short card (or adapts one already on the crew): nothing until the person says yes, then it joins with its job, its own look, and its first result in Chief\'s chat', async () => {
   const { db, crew, done } = setup();
   crew.onboard('sir');
   const create = (args: object) => `[tool crew_create ${JSON.stringify(args)}]`;
@@ -1215,6 +1215,24 @@ test('Chief makes up a new helper on a short card: nothing until the person says
   await settled(db, t3);
   assert.equal(card(), undefined);
   assert.match(lastSaid(db, 'chief')!, /already a helper called Pip/);
+
+  // A job close to Pip's: Chief adapts Pip instead of making another helper, on the same short card and first-job path.
+  const more = { bot: 'pip', role: 'Finds you a flat or a room in Phuket', job: { ...pip.job, does: 'Watches flat and room listings in Phuket.' }, first: 'find me a room in Phuket under $400' };
+  const crewSize = crew.snapshot().bots.length;
+  // Said to Pip by name, a change to its job still goes to Chief, never to Pip as a one-off task.
+  const { task: t4 } = (await crew.post('chief', `Pip, from now on rooms too ${create(more)}`))!;
+  assert.equal(db.get('SELECT bot FROM tasks WHERE id = ?', t4)!.bot, 'chief');
+  await settled(db, t4);
+  const adapt = A.card(crew.snapshot().asks.find((a: any) => a.id === card()!.id)!, crew.snapshot());
+  assert.deepEqual([adapt.status, adapt.words, adapt.lines?.[0], adapt.choices.map((c: any) => c.label)], ['A new job', 'Shall Pip take this on?', 'Pip now finds you a flat or a room in Phuket.', ['Yes, Pip can take it on', 'Not now']]);
+  await crew.answer(card()!.id, { answer: 'allow' });
+  assert.deepEqual([crew.snapshot().bots.length, crew.bot('pip')!.role, disk.readJob(crew['cfg'], 'pip').does], [crewSize, more.role, more.job.does], 'no new helper: Pip\'s role and job widen');
+  assert.equal(readFileSync(join(dir, 'soul.md'), 'utf8'), '# Pip\n\nYou are Pip. Cheerful and quick.\n', 'who Pip is stays');
+  assert.equal(lastSaid(db, 'chief'), "From now on, Pip finds you a flat or a room in Phuket. Pip is starting on it now; I'll bring the result back here.");
+  const next = db.get('SELECT * FROM tasks WHERE bot = ? AND body = ?', 'pip', more.first)!;
+  assert.equal(next.origin, 'chief');
+  await settled(db, next.id);
+  assert.equal(lastSaid(db, 'chief'), relayResult(db.get('SELECT result FROM tasks WHERE id = ?', next.id)!.result), 'its first result comes back in Chief\'s chat');
   done();
 });
 
@@ -1230,64 +1248,17 @@ test('Chief uses low effort for the first coordination turn', async () => {
   done();
 });
 
-test('Chief proposes helper job recipes; nothing writes until Use it, and crew_job belongs only to Chief', async () => {
+test('Chief\'s coordination turn carries no helper tools, and the job page\'s Write it for me shows the person\'s own words', async () => {
   const { db, crew, done } = setup();
   crew.onboard('sir');
   crew.recruit('scout', 'Scout', 'person');
-  crew.recruit('helper', 'Pip', 'person');
-  const botDir = join(crew['cfg'].crewDir, 'bots', 'scout');
-  const before = readFileSync(join(botDir, 'AGENTS.md'), 'utf8');
   const chiefTools = (crew as any).crewTools('chief').map((t: any) => t.name);
-  assert.ok(chiefTools.includes('crew_job'));
   for (const name of ['crew_deliver', 'crew_workbook', 'crew_document', 'crew_copy', 'crew_draft', 'crew_verify', 'crew_batch'])
     assert.ok(!chiefTools.includes(name), `${name} belongs to helpers, not Chief's coordination turn`);
-  for (const id of ['scout', 'scribe', 'pip']) assert.ok(!(crew as any).crewTools(id).some((t: any) => t.name === 'crew_job'), `${id} cannot write helper jobs`);
-  const job = { bot: 'scout', does: 'Find reliable answers.', aim: 'Give a concise answer.', gets: 'The person’s question.', how: 'Check trustworthy sources.', great: 'A sourced answer; for example, three clear findings.' };
-  const askJob = async () => {
-    const { task: id } = (await crew.post('chief', `Please ${call('crew_job', job)}`))!;
-    await settled(db, id);
-    return db.get("SELECT * FROM asks WHERE bot = 'chief' AND kind = 'propose' AND state = 'open'");
-  };
-  let ask = await askJob();
-  assert.ok(ask);
-  assert.deepEqual(JSON.parse(ask!.detail).job, job);
-  assert.equal(readFileSync(join(botDir, 'AGENTS.md'), 'utf8'), before, 'suggesting a recipe does not write it');
-  assert.equal(A.card({ ...ask, detail: JSON.parse(ask!.detail) }, crew.snapshot()).choices.some((c: any) => /always/i.test(c.label)), false);
-  await crew.answer(ask!.id, { answer: 'deny' });
-  assert.equal(readFileSync(join(botDir, 'AGENTS.md'), 'utf8'), before, 'Not now leaves the file alone');
-  ask = await askJob();
-  await crew.answer(ask!.id, { answer: 'allow' });
-  assert.deepEqual(disk.readJob(crew['cfg'], 'scout'), { does: job.does, aim: job.aim, gets: job.gets, how: job.how, great: job.great });
-  const after = readFileSync(join(botDir, 'AGENTS.md'), 'utf8');
-  assert.match(after, /## Your job[\s\S]*### What great looks like[\s\S]*three clear findings/);
-  assert.match(after, /## Boundaries[\s\S]*never sign in/, 'outside sections are retained');
-  assert.throws(() => disk.writeJob(crew['cfg'], 'scout', { does: job.does, aim: job.aim, gets: job.gets, how: job.how, great: 'x'.repeat(601) }), /600/);
-  done();
-});
-
-test('Write it for me: crew_job takes the nested five-part shape too, and the thread keeps the person\'s own words', async () => {
-  const { db, crew, done } = setup();
-  crew.onboard('sir');
-  crew.recruit('scout', 'Scout', 'person');
-  const botDir = join(crew['cfg'].crewDir, 'bots', 'scout');
-  const before = readFileSync(join(botDir, 'AGENTS.md'), 'utf8');
-  const parts = { does: 'Sort bills and letters.', aim: 'Triage the post pile.', gets: 'The person\u2019s rough brief.', how: 'Sort oldest first, flag deadlines.', great: 'A tidy pile; for example, bills by due date.' };
-  // The gateway shows the model no parameter schema for crew_job, so it sends the nested
-  // five-part shape it knows from crew_create. That must draft, not reject.
-  const { task: id } = (await crew.post('chief', `Please ${call('crew_job', { bot: 'Scout', job: parts })}`))!;
-  await settled(db, id);
-  const ask = db.get("SELECT * FROM asks WHERE bot = 'chief' AND kind = 'propose' AND state = 'open'");
-  assert.ok(ask, 'a nested five-part call drafts a proposal card');
-  assert.deepEqual(JSON.parse(ask!.detail).job, { bot: 'scout', ...parts });
-  assert.equal(readFileSync(join(botDir, 'AGENTS.md'), 'utf8'), before, 'nothing writes until Use it');
-  await crew.answer(ask!.id, { answer: 'allow' });
-  assert.deepEqual(disk.readJob(crew['cfg'], 'scout'), parts);
-  // The draft route shows the person's rough words in Chief's thread, never the internal prompt.
+  assert.ok(!(crew as any).crewTools('scout').some((t: any) => t.name === 'crew_create'), 'a helper cannot change a job');
   const idea = 'sort my bills and letters, oldest first, do not pay or send anything';
-  const { task: t2 } = (crew as any).requestChief(`Write Scout's job from: ${idea}. Use crew_job.`, idea);
-  const shown = db.get("SELECT text FROM messages WHERE task_id = ? AND author = 'person'", t2)?.text;
-  assert.equal(shown, idea);
-  assert.doesNotMatch(shown!, /crew_job/);
+  const { task: t2 } = (crew as any).requestChief(`Change Scout's job: ${idea}`, idea);
+  assert.equal(db.get("SELECT text FROM messages WHERE task_id = ? AND author = 'person'", t2)?.text, idea);
   await settled(db, t2);
   done();
 });
