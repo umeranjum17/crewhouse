@@ -638,8 +638,13 @@ test('the checkout card is read from the page: items and total as the page write
   assert.match(over.reason, /past the \$100/);
   assert.equal(db.get("SELECT COUNT(*) AS n FROM asks WHERE bot = 'scout'")!.n, 1);
 
-  // A page whose total can't be read: said plainly, and it doesn't count.
+  // A payment page of that same order shows no total of its own: the yes still covers placing it.
   live.snapshot = '- Page Snapshot:\n- button "Pay" [ref=e1]';
+  assert.equal(await click(), undefined, 'placing the order the person approved is not a second purchase');
+  assert.equal(db.get("SELECT COUNT(*) AS n FROM asks WHERE bot = 'scout'")!.n, 1, 'one purchase, one card');
+
+  // A page of its own that names no total is a purchase nobody has been asked about: said plainly, and not counted.
+  live.snapshot = '- Page Snapshot:\n- listitem "Something else" [ref=e1]: $9.00\n- button "Pay" [ref=e2]';
   const unread = click();
   await until('asked again', open);
   assert.equal(open()!.title, "Scout wants to act on a checkout page at shop.example. I couldn't read the total on this page.");

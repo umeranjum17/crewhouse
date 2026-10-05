@@ -241,8 +241,8 @@ export class Crew {
   private checking = new Set<number>();
   /** Each fenced helper's allowlisting proxy (src/net.ts), started the first time it is needed. */
   private nets = new Map<string, Server>();
-  /** A checkout the person said yes to: that task's clicks on that page go through while its total stays the same. */
-  private checkouts = new Map<string, { task: number; page: string; total: number | null }>();
+  /** A checkout the person said yes to: that task's clicks at that shop go through while its total stays the same. */
+  private checkouts = new Map<string, { task: number; shop: string; total: number | null }>();
   private stopped = false;
 
   private cfg: Config;
@@ -1754,16 +1754,16 @@ export class Crew {
     }
     if (e.kind === 'safe') return undefined;
     if (e.kind === 'refuse') return { block: true, reason: e.why };
-    let checkout: { page: string; total: number | null } | undefined;
+    let checkout: { shop: string; total: number | null; basket: boolean } | undefined;
     if (e.kind === 'spend' && tool === 'browser') {
       // The whole page, read by crewd itself: the model's view of it is cut short and never decides a card.
       const l = this.live.get(botId);
       if (l?.browser) l.snapshot = await l.browser.run(['snapshot', '--full']);
       const r = this.order(botId, e);
       e = r.effect; checkout = r.checkout;
-      // One yes covers the rest of that page's clicks (place order included), until the page or its total changes.
+      // One yes covers the whole order: the same job at the same shop, page to payment page to placing it, while the total holds.
       const ok = this.checkouts.get(botId);
-      if (ok && ok.task === task?.id && ok.page === checkout.page && ok.total === checkout.total) {
+      if (ok && ok.task === task?.id && ok.shop === checkout.shop && (checkout.total === ok.total || (checkout.total === null && !checkout.basket))) {
         this.db.event('run.allowed', botId, { task: task?.id, words: e.words });
         return undefined;
       }
@@ -1796,8 +1796,8 @@ export class Crew {
   private order(botId: string, e: Extract<Effect, { words: string }>) {
     const l = this.live.get(botId);
     const name = this.bot(botId)?.display ?? botId;
-    let host = 'a shop', page = '';
-    try { const u = new URL(l?.page ?? ''); host = u.hostname.replace(/^www\./, ''); page = u.origin + u.pathname; } catch { /* no page yet */ }
+    let host = 'a shop', shop = '';
+    try { const u = new URL(l?.page ?? ''); host = u.hostname.replace(/^www\./, ''); shop = u.origin; } catch { /* no page yet */ }
     const o = orderOf(l?.snapshot ?? '');
     const few = o.items.slice(0, 3).map((i) => i.replace(/\s*[—–-]?\s*[$£€]\s?[\d,.]+\s*$/, '')).join(', ');
     // The card says what the page charges, in the page's own money. Only a dollar price counts toward the dollar cap;
@@ -1807,7 +1807,7 @@ export class Crew {
       : `${name} wants to place this order at ${host}${few ? `: ${few}${o.items.length + o.more > 3 ? ', …' : ''}` : ''}. Total ${o.shown}.${not$ ? ` That's ${o.currency === '£' ? 'pounds' : 'euros'}, not dollars, so the monthly limit can't count it.` : ''}`;
     const body = [...o.items, ...(o.more ? [`and ${o.more} more`] : []),
       o.total === null ? "Total: couldn’t read it on this page" : `Total ${o.shown}${not$ ? " — not dollars, the monthly limit can't count it" : ''}`].join('\n');
-    return { effect: { ...e, words, ...(o.capped ? { cost: o.total! } : {}), preview: { head: `The order at ${host}`, body } }, checkout: { page, total: o.total, shown: o.shown, currency: o.currency } };
+    return { effect: { ...e, words, ...(o.capped ? { cost: o.total! } : {}), preview: { head: `The order at ${host}`, body } }, checkout: { shop, total: o.total, basket: o.items.length > 0, shown: o.shown, currency: o.currency } };
   }
 
   /** The host of a page, named the way a person would: no www, no path. */
@@ -1848,7 +1848,7 @@ export class Crew {
         body: value !== null ? `${p.label}: ${value}` : back ? `You'd get ${back.shown} back.\n${p.body}` : p.body } };
   }
 
-  private async ask(botId: string, task: Row | undefined, e: Extract<Effect, { words: string }>, checkout?: { page: string; total: number | null }): Promise<string | null> {
+  private async ask(botId: string, task: Row | undefined, e: Extract<Effect, { words: string }>, checkout?: { shop: string; total: number | null; basket: boolean }): Promise<string | null> {
     // The same call asked again (the bot resumed after a restart) takes over the card already shown.
     const same = this.db.all("SELECT id FROM asks WHERE bot = ? AND kind = 'permission' AND state = 'open' AND title = ?", botId, e.words).find((a) => !this.holds.has(a.id));
     const askId = same ? same.id : this.openAsk(botId, task, e.words, { effect: e.kind, key: e.key, ...(e.cost !== undefined ? { cost: e.cost } : {}), ...(e.preview ? { preview: e.preview } : {}), ...(checkout ? { checkout } : {}), ...(e.press ? { press: true } : {}), ...(e.fill ? { fill: true } : {}) });
