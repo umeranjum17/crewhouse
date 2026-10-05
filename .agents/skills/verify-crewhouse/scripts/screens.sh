@@ -20,11 +20,13 @@ set -euo pipefail
 DEST=$1; SLUG=$2; URL=$3; EXTRA=${4:-}
 [ $# -ge 3 ] || { echo "usage: screens.sh <dest-dir> <screen-slug> <app-url> [extra-query]" >&2; exit 2; }
 mkdir -p "$DEST"
+# The query goes before the hash: the app routes on location.hash, so "?night#/settings" would pin nothing.
+withq() { local q=$1; case "$2" in *'#'*) printf '%s?%s%s' "${2%%#*}" "$q" "#${2#*#}";; *) printf '%s?%s' "$2" "$q";; esac; }
 for theme in night day; do
   for wh in 1440x900 390x844; do
     w=${wh%x*}; h=${wh#*x}
     chrome-devtools-axi resize "$w" "$h" >/dev/null
-    chrome-devtools-axi open "$URL?$([ -n "$EXTRA" ] && printf '%s&' "$EXTRA")$theme" >/dev/null
+    chrome-devtools-axi open "$(withq "$([ -n "$EXTRA" ] && printf '%s&' "$EXTRA")$theme" "$URL")" >/dev/null
     [ -z "${THEN:-}" ] || chrome-devtools-axi eval "$THEN" >/dev/null
     out="$DEST/$SLUG-$theme-$w.png"
     chrome-devtools-axi screenshot "$out" >/dev/null

@@ -34,7 +34,7 @@ import { chip, chipSettings, chipState, chipWords, onChip, type StatusState } fr
 import { island } from './src/island';
 import { Office, useOffice } from './src/office';
 import { canHear, hear, stopHearing } from './modules/crewhouse-net';
-import { connect, desktopSignaling, forgetGrant, kept, loadGrant, onLive, pair, pairTypedCode, type Grant, type Status } from './src/link';
+import { connect, desktopSignaling, forgetGrant, kept, LINK_WORDS, loadGrant, onLive, pair, pairTypedCode, type Grant, type Status } from './src/link';
 
 // ---------- look ----------
 type Look = typeof color.day & { go: string; goInk: string; solid: string; soft: string; card: string; ok: string; wait: string; pinkInk: string; night: boolean };
@@ -528,11 +528,15 @@ function VideoSheet({ f, onClose }: { f: A.FileView; onClose: () => void }) {
 }
 
 // ---------- pairing ----------
-/** One plain line for a pairing failure, and the retry is the action — never the machinery's own words. */
+/** One plain line for a pairing failure, and the retry is the action — never the machinery's own words.
+ *  The link's own sentences already say which mistake it was (the computer said no, the code didn't match, that
+ *  address is unreachable), so a message the link owns passes through as it is; only machinery text is replaced. */
 const pairWords = (e: any): string => {
   const m = String(e?.message ?? e ?? '');
+  if (/isn't a pairing code/i.test(m)) return "That's not a Crewhouse code. Point the camera at the code on your computer, then try again.";
   if (/run out|expired/i.test(m)) return 'That code has run out. Show a new one on your computer, then try again.';
   if (/copy the whole code/i.test(m)) return m; // already said for the person
+  if ((Object.values(LINK_WORDS) as string[]).includes(m)) return m; // the link's own sentence for this exact failure
   if (/match|refus|wrong|no such|not found|unknown/i.test(m)) return "That code didn't match. Show a fresh one and try again.";
   if (/reach|network|timeout|address|relay|host/i.test(m)) return "Couldn't reach your computer. Check it's awake, then try again.";
   return 'That didn\'t go through. Check the code, then try again.';
@@ -565,6 +569,9 @@ function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
   const [typing, setTyping] = useState(false);
   const [code, setCode] = useState('');
   const seen = useRef('');
+  // Whether the camera itself is the problem, kept as its own answer: the "Open phone settings" button belongs to
+  // that, and no pairing sentence can be read for it (the wrong-code sentence talks about pointing the camera).
+  const [noCamera, setNoCamera] = useState(false);
   const typed = async () => {
     setBusy(true);
     setErr('');
@@ -658,11 +665,11 @@ function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
       {busy ? <ActivityIndicator color={t.pink} style={{ margin: 20 }} /> : (
         <Btn go big label="Scan the code" onPress={async () => {
           const p = perm?.granted ? perm : await askPerm();
-          if (p.granted) setScanning(true); else setErr('Crewhouse needs the camera to read the code.');
+          if (p.granted) { setNoCamera(false); setScanning(true); } else { setNoCamera(true); setErr('Crewhouse needs the camera to read the code.'); }
         }} />
       )}
       {!!err && <T tone="pinkInk" style={s.centerText}>{err}</T>}
-      {!!err && /camera/.test(err) && <Btn label="Open phone settings" onPress={() => void Linking.openSettings()} />}
+      {noCamera && <Btn label="Open phone settings" onPress={() => void Linking.openSettings()} />}
       {!busy && <Btn label="Type a code" onPress={() => { setTyping(true); setErr(''); }} />}
       <T tone="mute" style={[s.small, s.centerText, { marginTop: 20 }]}>🔒 Only your computer can read what this phone sends. Anything passing it along can't read it.</T>
     </ScrollView>
