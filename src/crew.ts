@@ -741,7 +741,18 @@ export class Crew {
     this.db.tx(() => { this.db.run('DELETE FROM routines WHERE id = ?', id); this.db.event('routine.deleted', r.bot, { routine: id, name: r.name }); });
   }
 
-  runRoutine(id: number) { this.fire(this.routine(id), 'now'); }
+  /** Fire a routine now, and answer from crewd's own record: the fire or skip event it wrote, and for a digest the
+   *  message row it left in Chief's chat. A run that landed nothing is a failure carrying that reason. */
+  async runRoutine(id: number) {
+    const r = this.routine(id), seq = this.db.get('SELECT COALESCE(MAX(seq), 0) AS seq FROM events')!.seq;
+    const out = this.fire(r, 'now');
+    if (out) await out; // a Calendar-connected digest lands on its own promise
+    const e = this.db.get("SELECT kind, data FROM events WHERE kind IN ('routine.fired', 'routine.skipped') AND json_extract(data, '$.routine') = ? AND seq > ? ORDER BY seq DESC", r.id, seq);
+    const d = e ? JSON.parse(e.data) : {};
+    if (e?.kind !== 'routine.fired' || (d.message && !this.db.get('SELECT 1 FROM messages WHERE id = ? AND bot = ?', d.message, CHIEF))) throw Object.assign(new Error(
+      d.why === 'overlap' ? `The last run of “${r.name}” is still going.` : d.why === 'daily' ? `Today's “${r.name}” is already in Chief's chat.` : `“${r.name}” did not run.`), { status: 409 });
+    return d;
+  }
 
   /** Fire every routine that is due, and notice files arriving for event-started chores: one query, no AI until
    *  something actually starts. A machine that slept through runs catches up once (latest only), then moves on. */
@@ -774,22 +785,20 @@ export class Crew {
   private sendDigest(r: Row, why: string, now: number, day?: { at: number | null; title: string }[]) {
     this.db.tx(() => {
       const last = this.routine(r.id).last_at;
-      if (last && new Date(last).toDateString() === new Date(now).toDateString()) return;
+      if (last && new Date(last).toDateString() === new Date(now).toDateString()) { this.db.event('routine.skipped', CHIEF, { routine: r.id, name: r.name, why: 'daily' }); return; }
       const message = this.say(CHIEF, 'bot', this.digest(last ?? now - 86_400_000, day), null);
       this.db.run('UPDATE routines SET last_at = ? WHERE id = ?', now, r.id);
       this.db.event('routine.fired', CHIEF, { routine: r.id, name: r.name, why, message });
     });
   }
 
-  private fire(r: Row, why: 'schedule' | 'late' | 'now' | 'file' | 'wake', note?: string) {
+  /** Fire one routine. A branch that finishes on its own promise returns it, so a manual run answers from the record. */
+  private fire(r: Row, why: 'schedule' | 'late' | 'now' | 'file' | 'wake', note?: string): void | Promise<unknown> {
     const now = Date.now();
-    if (r.kind === 'digest') {
-      // With Calendar connected, crewd reads today's events itself first; the digest still costs no AI.
-      if (this.connections.connected('calendar')) {
-        return void this.connections.today().catch(() => null).then((day) => this.sendDigest(r, why, now, day ?? undefined));
-      }
-      return this.sendDigest(r, why, now);
-    }
+    // With Calendar connected, crewd reads today's events itself first; the digest still costs no AI.
+    if (r.kind === 'digest') return this.connections.connected('calendar')
+      ? this.connections.today().catch(() => null).then((day) => this.sendDigest(r, why, now, day ?? undefined))
+      : this.sendDigest(r, why, now);
     // Overlap: the last run is still going (or waiting on the person), so this one is skipped, not stacked. A last
     // run parked waiting on sign-in is not under way: it is retried instead, never silently skipped.
     const open = r.last_task && this.db.get("SELECT * FROM tasks WHERE id = ? AND state IN ('queued', 'working', 'needs_you', 'paused')", r.last_task);
@@ -799,18 +808,15 @@ export class Crew {
         // told to the person as a false "took longer than an hour". The origin keeps the documented share bypass.
         this.db.run("UPDATE tasks SET origin = 'routine.now', wake_at = NULL, created_at = ? WHERE id = ?", Date.now(), open.id);
         this.setTask(open, 'queued');
+        this.db.event('routine.fired', r.bot, { routine: r.id, name: r.name, why, task: open.id });
         this.dispatch();
         return;
       }
-      if (open.state === 'paused' && open.wake_at == null && /^Waiting for (you to sign in with .+|a .+ plan with helpers\.)$/.test(open.result ?? '')) {
-        if (why === 'now') return void this.retryPaused(r, open, 'routine.now', why);
-        void this.retryPausedWhenSignedIn(r, open, why);
-        return;
-      }
+      if (open.state === 'paused' && open.wake_at == null && /^Waiting for (you to sign in with .+|a .+ plan with helpers\.)$/.test(open.result ?? '')) return why === 'now' ? this.retryPaused(r, open, 'routine.now', why) : this.retryPausedWhenSignedIn(r, open, why);
       this.db.event('routine.skipped', r.bot, { routine: r.id, name: r.name, why: 'overlap', task: r.last_task });
       return;
     }
-    if (r.watch) return void this.check(r, why);
+    if (r.watch) return this.check(r, why);
     const { task } = this.addTask(r.bot, note ? `${r.body}\n\n[Crewhouse] ${note}` : r.body, why === 'now' ? 'routine.now' : 'routine', r.brain ?? undefined, r);
     this.db.tx(() => {
       this.db.run('UPDATE routines SET last_at = ?, last_task = ? WHERE id = ?', now, task, r.id);
