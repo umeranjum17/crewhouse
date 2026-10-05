@@ -213,13 +213,23 @@ export const teaser = (text: string) => plain(text).replace(/(\*\*|\*)(?=[^\s*])
 
 // ---------- the crew ----------
 const KINDS = Object.keys(PALS) as Kind[];
-/** Which pal a bot looks like: its template's, else a steady pick from its name. */
-export function kindOf(b: Json): Kind {
-  const t = String(b?.template ?? b?.id ?? '');
-  if ((KINDS as string[]).includes(t)) return t as Kind;
-  let h = 0;
-  for (const c of String(b?.id ?? '')) h = (h * 31 + c.charCodeAt(0)) >>> 0;
-  return KINDS[h % KINDS.length];
+/** The looks for helpers no template draws (Chief's made-up hires): never a template pal's clone. */
+const MADE: Kind[] = ['pip', 'bow', 'cap', 'specs', 'scarf'];
+/** Which pal a bot looks like: its template's, else a steady pick from its name that skips a look someone who joined
+ *  before it already wears (`crew`, in joining order), so a new hire stands apart until every look is taken. */
+export function kindOf(b: Json, crew: Json[] = []): Kind {
+  const drawn = (x: Json) => (KINDS as string[]).includes(String(x?.template ?? x?.id)) && !(MADE as string[]).includes(String(x?.template ?? x?.id));
+  if (drawn(b)) return String(b.template ?? b.id) as Kind;
+  const worn = new Set<Kind>();
+  const order = crew.some((x) => x.id === b?.id) ? crew : [...crew, b];
+  for (const x of order.filter((x) => x.id !== 'chief' && !drawn(x))) {
+    let h = 0;
+    for (const c of String(x?.id ?? '')) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+    const k = [...MADE.keys()].map((i) => MADE[(h + i) % MADE.length]).find((m) => !worn.has(m)) ?? MADE[h % MADE.length];
+    if (x.id === b?.id) return k;
+    worn.add(k);
+  }
+  return MADE[0];
 }
 
 /** A helper's desk: its active job's delivered files as views, own output first, one row per path where it
@@ -232,14 +242,14 @@ export function deskThings(id: string, task: Json | null): FileView[] {
   return paths.filter((p, i) => paths.lastIndexOf(p) === i).map((p) => fileView(id, p));
 }
 
-export function helper(b: Json, events: Json[] = []): Helper {
+export function helper(b: Json, events: Json[] = [], crew: Json[] = []): Helper {
   const needs = b.task?.state === 'needs_you';
   const stuck = !!b.stuck;
   const driving = b.controls === 'person';
   const status = driving ? 'Paused while you drive' : needs ? 'Needs you' : stuck ? 'Quiet for a while' : b.task ? b.task.title
     : b.queued ? 'Up next' : b.pausedUntil ? `Resting until ${clock(at(b.pausedUntil))}` : 'Free to help';
   return {
-    id: b.id, name: b.display, kind: kindOf(b), role: plain(b.role ?? ''), status: plain(status), computer: !!b.computer, driving,
+    id: b.id, name: b.display, kind: kindOf(b, crew), role: plain(b.role ?? ''), status: plain(status), computer: !!b.computer, driving,
     mood: helperMood(b, needs, stuck, events),
     ring: needs ? 'needs' : b.task ? 'working' : '',
     stuckFor: stuck ? Math.max(1, Math.round((Date.now() - b.quietSince) / 60_000)) : 0, quietSince: b.quietSince ?? 0,
@@ -481,7 +491,7 @@ export function zoneNote(state: Json) {
 
 /** The person's helpers. */
 export function crew(state: Json) {
-  return state.bots.filter((b: Json) => b.id !== 'chief').map((b: Json) => helper(b, state.events ?? [])) as Helper[];
+  return state.bots.filter((b: Json) => b.id !== 'chief').map((b: Json) => helper(b, state.events ?? [], state.bots)) as Helper[];
 }
 
 /** One thread in the chat list: Chief pinned on top, then the helpers, the latest talk first. */
@@ -604,6 +614,10 @@ export function card(a: Json, state: Json): Card {
       draftTo: plain(d.draft.to), draftSubject: plain(d.draft.subject) || undefined, draftText: body, head, words: head, preview: { body },
       choices: [{ label: 'Approve', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Reject', body: { answer: 'deny' } }] };
   }
+  // Chief's hire in a glance: who, the role, what it can do and the first job; nothing is made until the yes.
+  if (a.kind === 'propose' && d.hire) return { ...base, kind: 'ok', status: 'A new helper', head: plain(d.words ?? a.title), words: plain(d.words ?? a.title),
+    lines: String(d.preview?.body ?? '').split('\n').map((l: string) => plain(l)).filter(Boolean),
+    choices: [{ label: plain(d.yes ?? 'Yes'), body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
   if (a.kind === 'propose') {
     // A suggestion: a skill a helper would like to keep, or a new personality from Chief. Nothing changes without a yes.
     return { ...base, kind: 'ok', status: 'Would like to remember this',
@@ -985,7 +999,7 @@ const PHOTO = /\n?\[photo ([a-z0-9-]+)\] (files\/\S+)/g;
 const photos = (text: string) => [...text.matchAll(PHOTO)].map((m) => fileView(m[1], m[2]));
 
 export function room(page: Json, state: Json) {
-  const people = new Map((state.bots ?? []).map((b: Json) => [b.id, helper(b, state.events ?? [])]));
+  const people = new Map((state.bots ?? []).map((b: Json) => [b.id, helper(b, state.events ?? [], state.bots)]));
   return (page?.lines ?? []).map((m: Json) => ({ id: m.id as number, who: people.get(m.bot) as Helper | undefined,
     to: m.to ? (people.get(m.to) as Helper | undefined)?.name : undefined,
     from: m.from ? (people.get(m.from) as Helper | undefined)?.name : undefined,

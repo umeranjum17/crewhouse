@@ -340,6 +340,7 @@ a.back:not([aria-label]) { font: 500 15px/20px var(--ui); padding: 0 8px; margin
 .line.note { max-width: 92%; }
 .line.unsure .bubble-text { border-left: 2px solid var(--amber); padding-left: 12px; }
 .lines > .ask, .line .ask { max-width: 440px; margin: 12px 0 0 36px; }
+.line-wrap > .ask, .line-wrap > .card { max-width: 440px; margin: 12px 0 0 46px; }
 .work-title { display: grid; gap: 4px; padding: 16px; }
 .work-title .small { color: var(--ink2); }
 .working-on-frame { margin-bottom: 32px; }

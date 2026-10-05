@@ -477,7 +477,7 @@ export class Crew {
     const d = JSON.parse(detail || '{}');
     const covers = d.key ? coversOf(d.key) : null;
     if (a.kind === 'connect') return { ...a, detail: { app: d.app, words: d.words } };
-    if (a.kind === 'propose') return { ...a, detail: { words: a.title, preview: d.preview, ...(d.create ? { yes: `Yes, take ${d.create.name} on` } : d.draft ? { yes: 'Approve' } : {}), ...(d.draft ? { draft: d.draft } : {}), ...(d.job ? { job: d.job } : {}), ...(d.pass ? { pass: { root: d.pass.root, files: d.pass.files.map((f: string) => basename(f)) } } : {}), ...(d.routine ? { routine: d.routine } : {}), ...(d.plan ? { plan: { bot: d.plan.bot, steps: d.plan.steps } } : {}) } };
+    if (a.kind === 'propose') return { ...a, detail: { words: a.title, preview: d.preview, ...(d.create ? { yes: `Yes, take ${d.create.name} on`, hire: d.create.name } : d.draft ? { yes: 'Approve' } : {}), ...(d.draft ? { draft: d.draft } : {}), ...(d.job ? { job: d.job } : {}), ...(d.pass ? { pass: { root: d.pass.root, files: d.pass.files.map((f: string) => basename(f)) } } : {}), ...(d.routine ? { routine: d.routine } : {}), ...(d.plan ? { plan: { bot: d.plan.bot, steps: d.plan.steps } } : {}) } };
     return { ...a, detail: { effect: d.effect, words: a.title, spends: d.effect === 'spend', covers, ...(covers ? { always: covers } : {}), ...(d.preview ? { preview: d.preview } : {}), ...(d.press ? { press: true } : {}), ...(d.fill ? { fill: true } : {}),
       ...(d.checkout ? { order: { shown: d.checkout.shown ?? '', known: Number.isFinite(d.checkout.total), dollars: d.checkout.currency === '$' } } : {}) } };
   }
@@ -2092,22 +2092,21 @@ export class Crew {
           return this.propose(CHIEF, `Chief suggests a change to how ${b.display} comes across`,
             { soul: { bot: b.id, text }, preview: { head: `${b.display}, as Chief suggests`, body } });
         }),
-      tool('crew_create', 'Suggest a new helper when no one on the crew and no template fits a job that will come round again (a watch, a standing chore). ' +
-        '`name`: a short friendly first name; `job`: all five parts (does, aim, gets, how, great); `personality`: a few short plain lines ' +
-        'in the second person ("You are Pip. …"); `first`: the person\'s request, to start on once they say yes. The person sees a card and decides; nothing is made until then.',
-        { name: Type.String(), job: Type.Object({ does: Type.String(), aim: Type.String(), gets: Type.String(), how: Type.String(), great: Type.String() }), personality: Type.String(), first: Type.Optional(Type.String()) }, (p) => {
-          const name = clean(p.name, 24);
+      tool('crew_create', 'Take on a new helper when the person asks for someone ("I need someone to…") or a job will come round again, and no one on the crew and no template fits. `name`: a short friendly ' +
+        'first name; `role`: what it does, as a person would say it ("Keeps your invoices in order"); `job`: all five parts (does, aim, gets, how, great); `personality`: a few short plain lines ' +
+        'in the second person ("You are Pip. …"); `first`: the person\'s request, its first job once they say yes. The person sees a short card and decides; nothing is made until then.',
+        { name: Type.String(), role: Type.String(), job: Type.Object({ does: Type.String(), aim: Type.String(), gets: Type.String(), how: Type.String(), great: Type.String() }), personality: Type.String(), first: Type.Optional(Type.String()) }, (p) => {
+          const name = clean(p.name, 24), role = clean(p.role, 80).replace(/[.!?]$/, ''), first = p.first ? String(p.first).slice(0, 2000) : undefined;
           const job = Object.fromEntries(['does', 'aim', 'gets', 'how', 'great'].map((k) => [k, String(p.job?.[k] ?? '').replace(/\r/g, '').trim()])) as disk.Job;
           disk.validateJob(job);
           const body = String(p.personality ?? '').replace(/\r/g, '').trim().replace(/^# .*\n+/, '');
-          if (!name || !/[a-z]/i.test(name)) throw fail('give the new helper a name');
+          if (!name || !/[a-z]/i.test(name) || !role) throw fail('give the new helper a name and a role');
           if (this.bot(disk.slug(name)) || disk.slug(name) === 'helper') throw fail(`there is already a helper called ${name}; pick another name`, 409);
           const soul = `# ${name}\n\n${body || `You are ${name}. Friendly, careful and brief.`}`;
           if (soul.length > disk.SOUL_CAP) throw fail(`say who it is in a few lines, under ${disk.SOUL_CAP} characters`);
-          const summary = `${job.does}`;
-          return this.propose(CHIEF, `Shall I take on a new helper? ${name}: ${short(summary, 160)}`,
-            { create: { name, job, soul, first: p.first ? String(p.first).slice(0, 2000) : undefined },
-              preview: { head: `${name}, a new helper`, body: `${disk.jobPreview(job)}\n\n${body}\n\n${name} can use the web, a browser of its own and its own files, and asks you before anything leaves this computer or costs money.` } });
+          // The card is the hire in a glance (role, reach, first job); the five-part job goes to its file unshown.
+          return this.propose(CHIEF, `Shall I take on ${name}?`, { create: { name, role, job, soul, first },
+            preview: { head: name, body: [`${role}.`, 'Can look things up. Asks you before sending or spending.', first ? `First job: ${short(first, 120)}` : ''].filter(Boolean).join('\n') } });
         }),
       tool('crew_job', 'Write the five parts of a helper’s job when the person asks. Nothing changes until they say Use it. ' +
         'Pass `bot` and the five parts flat, or the five parts inside `job` (the shape crew_create uses).',
@@ -2224,17 +2223,18 @@ export class Crew {
 
   /** A helper Chief made up, on the person's yes: the plain base template with the job and personality from the card,
    *  and the request that prompted it as its first task. It gets the base tools only: nothing that spends money. */
-  private create(c: { name: string; job: disk.Job; soul: string; first?: string }) {
+  private create(c: { name: string; role?: string; job: disk.Job; soul: string; first?: string }) {
     const id = disk.slug(c.name);
     if (this.bot(id)) throw fail(`there is already a helper called ${c.name}`, 409);
     const tpl = disk.loadTemplate(this.cfg, 'helper');
     this.db.tx(() => {
-      this.addBot({ ...tpl, role: short(c.job.does.split(/\n|(?<=[.!?])\s/)[0].replace(/[.!?]$/, ''), 80) }, c.name, id, CHIEF);
+      this.addBot({ ...tpl, role: c.role || short(c.job.does.split(/\n|(?<=[.!?])\s/)[0].replace(/[.!?]$/, ''), 80) }, c.name, id, CHIEF);
       this.say(id, 'system', `${c.name} joined the crew.`);
     });
     disk.writeJob(this.cfg, id, c.job);
     disk.writeSoul(this.cfg, id, c.soul, 'Who it is, as Chief suggested and the person agreed');
-    this.say(CHIEF, 'bot', `${c.name} has joined the crew.${c.first ? ` I've handed ${c.name} your request; results will reach you in ${c.name}'s chat.` : ''}`, null);
+    // The first job is Chief's hand-on, so its result comes back here in Chief's chat.
+    this.say(CHIEF, 'bot', `${c.name} has joined the crew.${c.first?.trim() ? ` ${c.name} is starting on it now; I'll bring the result back here.` : ''}`, null);
     if (c.first?.trim()) this.addTask(id, c.first.trim(), CHIEF, undefined);
   }
 
