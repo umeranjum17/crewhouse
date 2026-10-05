@@ -1,6 +1,6 @@
 ---
 name: find-clients
-description: Turn a website, or three questions about what someone sells, into one workbook of the clients worth pursuing — the segments worth arguing, about ten real companies with the sourced fact that makes each a fit, the right person, a verified work email where one was actually found, a grounded opener, and what each lookup cost — plus one finished email on a draft card for them to send themselves. Use for "find me clients", "who should I sell to", "get me leads for this", "build me a prospect list".
+description: Find the clients worth pursuing for one person's business: the segments, ten real companies, the right person, a verified work email and what it cost. Use for any "find me clients" or "who should I sell to" request.
 says: Open one workbook and know exactly who to contact and why
 ---
 

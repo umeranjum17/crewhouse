@@ -6,6 +6,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import * as disk from '../src/bots.ts';
 
 process.env.CREWHOUSE_HOLD_MS ??= '9000'; // the ask cards are answered by hand here; give the run room to reach them
 const { setup: lab, settled, until, holding, release, lastSaid } = await import('./lab.ts');
@@ -69,9 +70,10 @@ test('find-clients is wired into Tracer, and Home offers the job once the lookup
   const file = join(cfg.repoDir, 'templates', 'tracer', 'bot.json');
   const conf = JSON.parse(readFileSync(file, 'utf8'));
   assert.ok(conf.skills.includes('find-clients'), 'the template lists the skill');
-  assert.match(readFileSync(join(cfg.repoDir, 'templates', 'tracer', 'AGENTS.md'), 'utf8'),
-    /Asked who should buy from their business, follow `find-clients`/, 'the job file points at it');
   assert.ok(existsSync(join(cfg.crewDir, 'bots', 'tracer', 'skills', 'find-clients', 'SKILL.md')), 'recruiting Tracer copies the skill in');
+  const mine = disk.listSkills(cfg, 'tracer').find((k) => k.name === 'find-clients');
+  assert.ok(mine?.description && mine?.says, 'the model gets a description and the person a line in their own words');
+  assert.ok(disk.systemPrompt(cfg, 'tracer', false).length < 5_000, 'Tracer keeps his own words stay inside the frozen prompt budget');
   const row = crew.snapshot().ideas.find((i: any) => /Find me clients/.test(i.ask));
   assert.ok(row, 'Home lists the job');
   assert.match(row.promise, /one workbook/, 'and says what they get');
