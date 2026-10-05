@@ -405,12 +405,22 @@ test('routines: Chief offers one as a card, the person starts it (or changes the
   const sched = (await api('GET', '/api/schedule?text=' + encodeURIComponent('weekdays at 8am'))).body;
   assert.equal(sched.words, 'Weekdays at 8:00 am');
   assert.match(sched.first, /am|pm/, "the first run in the computer's own words, so every screen reads the same");
-  // Wed 5:36 pm on "weekdays at 8am" is a Thursday morning: the first run names its day unless it is today.
-  const day = (at: number) => new Date(at).toDateString() === new Date().toDateString() ? '' : new Date(at).toLocaleDateString([], { weekday: 'short' }) + ' ';
-  assert.equal(sched.first, `${day(sched.next)}${sched.words.split(' at ')[1]}`, 'the first run never reads as some other day');
+  // The first run must name the day `next` really falls on. Which words it uses is the product's call (a bare time for
+  // today, a weekday near by, a date further out), so the check asks only that every form is `next`'s own day — never
+  // the wall clock's, which is what made this red whenever the suite ran on the wrong side of a day boundary.
+  const dayWords = (at: number, time: string) => [time, `${new Date(at).toLocaleDateString([], { weekday: 'short' })} ${time}`,
+    `${new Date(at).toLocaleDateString([], { month: 'short', day: 'numeric' })} ${time}`];
+  assert.ok(dayWords(sched.next, sched.words.split(' at ')[1]).includes(sched.first), `the first run never reads as some other day: ${sched.first}`);
   assert.equal((await api('GET', '/api/schedule?text=' + encodeURIComponent('every Monday'))).body.guessed, true, 'words that never named a time are a guess, and say so');
   const monday = (await api('GET', '/api/schedule?text=' + encodeURIComponent('every Monday'))).body;
-  assert.equal(monday.first, `${day(monday.next)}9:00 am`, 'even a guessed hour is read on the day it lands');
+  assert.ok(dayWords(monday.next, '9:00 am').includes(monday.first), 'even a guessed hour is read on the day it lands');
+  // Whichever hour the suite runs at, at most one of the seven weekdays is today: every other one names the day it lands
+  // on, so this guard can never go quiet just because the clock is on a Monday morning.
+  for (const name of ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']) {
+    const each = (await api('GET', `/api/schedule?text=${encodeURIComponent(`every ${name} 23:59`)}`)).body;
+    if (new Date(each.next).toDateString() === new Date().toDateString()) continue;
+    assert.ok(dayWords(each.next, '11:59 pm').includes(each.first), `every ${name} 23:59 must name the day it lands on, got "${each.first}"`);
+  }
   assert.equal(sched.guessed, false, 'words that named a time are not a guess');
   assert.equal(typeof sched.zone, 'string', 'the computer names its zone, so a screen away from home can too');
   assert.equal((await api('GET', '/api/schedule?text=someday')).status, 400);
