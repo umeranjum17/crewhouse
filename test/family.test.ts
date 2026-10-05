@@ -167,3 +167,49 @@ test('the meals cart goes to the checkout only through its card: the order as th
   assert.doesNotMatch(lastSaid(db, 'scout')!, /placed|ordered/i, 'nothing says the order went in');
   done();
 });
+
+const payment = `### Page state
+- Page URL: https://www.grocer.example/checkout/payment
+- Page Snapshot:
+\`\`\`yaml
+- main [ref=e1]:
+  - heading "Pay now" [level=1] [ref=e2]
+  - textbox "Card number" [ref=e3]: 4242 4242 4242 4242
+  - button "Place order" [ref=e4]
+\`\`\``;
+
+test('one yes buys that whole order: the payment page and the click that places it ask nothing more', async () => {
+  const { db, crew, done } = setup();
+  const { task: t } = (await crew.post('scout', 'ask permission: place the grocery order for this week’s list'))!;
+  crew.setMoneyCap(100); // the person's own limit, above both totals, so the second card is about the total and nothing else
+  await until('working', () => crew.sessionOf('scout'));
+  const live = (crew as any).live.get('scout');
+  const open = () => db.get("SELECT * FROM asks WHERE bot = 'scout' AND state = 'open'");
+  live.page = 'https://www.grocer.example/cart';
+  live.snapshot = basket;
+  const toPay = (crew as any).gate('scout', 'browser', { args: ['click', 'e8'] });
+  await until('asked', open);
+  assert.match(crew.snapshot().asks.find((a: any) => a.id === open()!.id)!.detail.preview.body, /Total \$18\.30/);
+  await crew.answer(open()!.id, { answer: 'allow' });
+  assert.equal(await toPay, undefined, 'the yes carries the order to the payment page');
+
+  // The payment page shows no total of its own: the same order, further along, so the click that places it is free.
+  live.page = 'https://www.grocer.example/checkout/payment';
+  live.snapshot = payment;
+  assert.equal(await (crew as any).gate('scout', 'browser', { args: ['click', 'e4'] }), undefined, 'placing it is the same order');
+  assert.equal(open(), undefined, 'one purchase, one card');
+
+  // A different total on the same shop is a different order: that asks again.
+  live.page = 'https://www.grocer.example/cart';
+  live.snapshot = basket.replace('$18.30', '$24.10');
+  const again = (crew as any).gate('scout', 'browser', { args: ['click', 'e8'] });
+  await until('asked again', open);
+  assert.match(crew.snapshot().asks.find((a: any) => a.id === open()!.id)!.detail.words, /Total \$24\.10/, 'more money asks again');
+  await crew.answer(open()!.id, { answer: 'deny' });
+  assert.equal((await again).block, true);
+  await release(crew, 'scout', 'I placed the first order.');
+  await settled(db, t);
+  assert.equal(db.get("SELECT COUNT(*) AS n FROM events WHERE kind = 'money.spent' AND json_extract(data, '$.amount') = 18.3", )!.n, 1,
+    'the money was counted once, when the person said yes');
+  done();
+});
