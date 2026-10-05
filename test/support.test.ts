@@ -160,6 +160,26 @@ test('a delivered fix ends done only when crewd saw its check fail before and pa
   await settled(db, noop.id);
   assert.match(events(db, 'run.resumed').at(-1).why, /start this again, because it did not pass its own check/);
 
+  // The same change, checked twice: the second run overturns the first. One verdict has to win, so crewd says so in
+  // the thread itself — the delivery line it contradicts is never the last thing a person reads.
+  writeFileSync(join(repo, 'add.sh'), 'echo $(($1 - $2))\n');
+  writeFileSync(join(repo, 'check.sh'), '[ "$(sh add.sh 2 3)" = 5 ]\n');
+  git('add', '-A'); git('commit', '-qm', 'wants five');
+  const five = git('rev-parse', 'HEAD').trim();
+  writeFileSync(join(repo, 'check.sh'), '[ "$(sh add.sh 2 3)" = 4 ]\n');
+  git('add', '-A'); git('commit', '-qm', 'wants four');
+  const four = git('rev-parse', 'HEAD').trim();
+  writeFileSync(join(repo, 'add.sh'), 'echo $(($1 + $2))\n'); git('add', '-A');   // the fix, and the only thing in the patch
+  writeFileSync(join(space, 'files', 'flip.patch'), git('diff', '--cached', '--', 'add.sh'));
+  git('reset', '-q', '--hard', five);
+  const against = (b: string) => call('crew_verify', { repo: 'work/app', base: b, patch: 'files/flip.patch', tests: ['check.sh'], command: 'sh check.sh' });
+  await job(`fix it ${against(four)}`);
+  assert.equal(events(db, 'verify.result').at(-1).passed, false, 'against the checkout whose check wants another answer, it proves nothing');
+  await job(`try it ${against(five)}`);
+  assert.equal(events(db, 'verify.result').at(-1).passed, true);
+  assert.match(db.get("SELECT text FROM messages WHERE bot = 'desk' AND author = 'system' ORDER BY id DESC")!.text,
+    /^Re-checked files\/flip\.patch: it passes now\. This run is the current one\.$/);
+
   // Checked in an earlier job, the same patch still counts; changed since, it doesn't.
   assert.equal((await job(`send it ${call('crew_deliver', { path: good })}`)).state, 'done');
   writeFileSync(join(space, good), '');

@@ -215,9 +215,13 @@ export const mdPlain = (text = '') => text;
  * A helper's own words, scrubbed of the machinery: code spans, fenced blocks, file paths and the names of engines.
  * ponytail: a pattern scrub, not a guarantee; the engine's prompts keep bots in plain words (docs/ui-contract.md).
  */
-const TOOL_CALL = /\[tool \w+ [^\]]*\]/g; // a tool call is an engine event, never a sentence
+/** A JSON object, three levels of nesting deep. Matching it balanced is the whole fix: a tool call's own array
+ *  (a check's `["check.sh"]`) ends a `[^]]*` match early, which left the tail of the call rendered as if the
+ *  person had typed it — a raw `"command":"sh check.sh"}]` in their own bubble. */
+const OBJ = String.raw`\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\}`;
+const TOOL_CALL = new RegExp(String.raw`\[tool \w+ ${OBJ}\s*\]?`, 'g'); // a tool call is an engine event, never a sentence
 const TOOL_FRAGMENT = /\[tool\b[\s\S]*$/i; // ...and a cut-off one (task titles are trimmed) still isn't
-const JSON_BLOB = /\{(?:[^{}]|\{[^{}]*\})*\}/g; // nor is a raw JSON object, one nesting level deep
+const JSON_BLOB = new RegExp(OBJ, 'g'); // nor is a raw JSON object
 export const noTools = (text = '') => text.replace(TOOL_CALL, ' ').replace(JSON_BLOB, ' ').replace(TOOL_FRAGMENT, '').replace(/\s{2,}/g, ' ').trim();
 
 export function plain(text = '') {
