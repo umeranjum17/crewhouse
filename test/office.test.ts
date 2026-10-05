@@ -5,10 +5,12 @@
 // Needs a Chromium on PATH (skipped without one).
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn, spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { extname, join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { taskBrowser } from './browser.ts';
 import WebSocket from 'ws';
 import { browserBin } from '../src/desktop.ts';
 import { temp } from './tmp.ts';
@@ -64,7 +66,9 @@ test('office truth: the room, its counts, the tray, the roster and Needs you rea
       { id: 11, bot: 'scribe', task_id: 3, kind: 'propose', at: now - min, detail: { words: 'Keep this?' } },
       { id: 12, bot: 'chief', kind: 'question', at: now - 2 * min, detail: { question: 'Which day?' } },
     ],
-    tasks: [{ id: 9, bot: 'scout', title: 'Done thing', state: 'done', updated_at: now - min, files: [] },
+    tasks: [{ id: 9, bot: 'scout', title: 'Done thing', state: 'done', result: 'Three stories worth telling.', updated_at: now - min, files: [] },
+      // A job that ended with nothing to say made nothing: never a thing, never the rail's Done.
+      { id: 7, bot: 'scout', title: 'Silent thing', state: 'done', updated_at: now - min, files: [] },
       { id: 8, bot: 'tracer', title: 'Find the email', state: 'failed', updated_at: now - min, files: [] }],
     events: [{ kind: 'task.failed', bot: 'tracer', at: now - min, data: { title: 'Find the email' } }],
   };
@@ -81,6 +85,7 @@ test('office truth: the room, its counts, the tray, the roster and Needs you rea
   assert.equal(v.counts.working, A.homeCounts(state).working, 'Home\'s working count');
   assert.equal(v.counts.working, 1);
   assert.equal(v.counts.done, 1, 'the tray holds today\'s');
+  assert.deepEqual(v.done.map((t) => t.id), [9], 'only the job that said something');
   assert.ok(v.crew.find((c) => c.id === 'h6')!.second && v.crew.find((c) => c.id === 'h7')!.second, 'a second of a kind is marked');
   assert.deepEqual(A.roster(v.crew).map((c) => c.id), ['reel', 'scribe', 'scout', 'tracer', 'pip', 'h6', 'h7']);
   const chats = new Map(A.chats(state).map((c) => [c.id, c.line]));
@@ -116,6 +121,9 @@ test('office truth: the room, its counts, the tray, the roster and Needs you rea
 
   // Truth over time (J6/ch-pm-17): no seat crewd does not hold, and none that drifts.
   const hour = 60 * min, crew = (bots: Json[], tasks: Json[] = []) => A.office({ ...state, asks: [], events: [], bots: [bot('chief'), ...bots], tasks });
+  // "Today" and "yesterday" are measured from the clock's midnight, not from now: run at 01:40, "three hours ago"
+  // is yesterday, and the job that ended badly today would read as free. (main's fixture, flake found on this branch.)
+  const today = new Date().setHours(0, 0, 0, 0);
   const one = (v2: A.OfficeView) => ({ seat: A.seatOf(v2.crew[0]), word: A.railWord(v2.crew[0], v2).word });
   // A job with no news past crewd's limit has gone quiet: never shown, or counted, as working.
   const quiet = crew([bot('scout', { task: task(1, 'scout', 'working'), stuck: true, quietSince: now - 9 * min })]);
@@ -130,9 +138,9 @@ test('office truth: the room, its counts, the tray, the roster and Needs you rea
   assert.equal(A.officeEvent(crew([bot('scout', { task: task(2, 'scout', 'working') })]), { kind: 'task.paused', bot: 'scout', data: { task: 2, result: 'Waiting for you to sign in with ChatGPT.' } }).crew[0].status,
     'Waiting for you to sign in with ChatGPT', 'the live event says the same, never "free"');
   // A job that ended badly today says so whatever the clock or the chat; yesterday's is just free, like yesterday's finish.
-  const failed = crew([bot('scout')], [{ id: 3, bot: 'scout', title: 'Refund', state: 'unsure', updated_at: now - 3 * hour }, { id: 1, bot: 'scout', title: 'Older', state: 'done', updated_at: now - 4 * hour }]);
+  const failed = crew([bot('scout')], [{ id: 3, bot: 'scout', title: 'Refund', state: 'unsure', updated_at: today + hour }, { id: 1, bot: 'scout', title: 'Older', state: 'done', updated_at: today }]);
   assert.deepEqual([one(failed), failed.crew[0].status], [{ seat: 'failed', word: 'Not sure' }, 'Not sure it worked']);
-  const old = crew([bot('scout')], [{ id: 3, bot: 'scout', title: 'Refund', state: 'failed', updated_at: now - 30 * hour }, { id: 1, bot: 'scout', title: 'Older', state: 'done', updated_at: now - 31 * hour, files: [] }]);
+  const old = crew([bot('scout')], [{ id: 3, bot: 'scout', title: 'Refund', state: 'failed', updated_at: today - hour }, { id: 1, bot: 'scout', title: 'Older', state: 'done', updated_at: today - 2 * hour, files: [] }]);
   assert.deepEqual([one(old), old.counts.done, A.idleLine(old)], [{ seat: 'free', word: 'Free' }, 0, 'Nobody is working right now. The crew is free.']);
   // A new job is only queued until crewd starts it: the event does not claim work.
   assert.equal(A.seatOf(A.officeEvent(crew([bot('scout')]), { kind: 'task.created', bot: 'scout', data: { title: 'Next' } }).crew[0]), 'free');
@@ -148,26 +156,22 @@ async function browse() {
   });
   await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
-  const profile = temp(`office-browser-${Date.now()}`);
-  const chrome = spawn(bin!, ['--headless=new', '--disable-dev-shm-usage', '--no-first-run', '--no-default-browser-check',
-    '--remote-debugging-port=0', `--user-data-dir=${profile}`, '--window-size=1440,900', 'about:blank'], { stdio: 'ignore', detached: true });
+  const profile = mkdtempSync(join(tmpdir(), 'office-browser-'));
+  const browser = taskBrowser(bin!, ['--headless=new', '--disable-dev-shm-usage', '--no-first-run', '--no-default-browser-check',
+    '--remote-debugging-port=0', `--user-data-dir=${profile}`, '--window-size=1440,900', 'about:blank'], profile);
+  let ws: WebSocket;
+  after(async () => {
+    ws?.close();
+    server.close();
+    await browser.close();
+  });
   const portFile = join(profile, 'DevToolsActivePort');
   await until('the browser to listen', () => existsSync(portFile) && readFileSync(portFile, 'utf8').includes('\n'), 30_000);
   const port = readFileSync(portFile, 'utf8').split('\n')[0];
   let page: { webSocketDebuggerUrl: string } | undefined;
   await until('a page', async () => (page = ((await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()) as any[]).find((t) => t.type === 'page')), 10_000);
-  const ws = new WebSocket(page!.webSocketDebuggerUrl);
+  ws = new WebSocket(page!.webSocketDebuggerUrl);
   await new Promise((r, j) => { ws.once('open', r); ws.once('error', j); });
-  after(async () => {
-    // Chrome's helper processes keep writing the profile after the main one exits (see test/teach.test.ts):
-    // end the whole group and wait for it, so the scratch cleanup never unlinks a live profile.
-    ws.close();
-    server.close();
-    if (chrome.exitCode === null && chrome.signalCode === null) {
-      try { process.kill(-chrome.pid!, 'SIGKILL'); } catch { /* already gone */ }
-      await until('the browser to exit', () => chrome.exitCode !== null || chrome.signalCode !== null, 10_000);
-    }
-  });
   let id = 0;
   const waiting = new Map<number, (m: any) => void>();
   ws.on('message', (d) => { const m = JSON.parse(String(d)); waiting.get(m.id)?.(m); waiting.delete(m.id); });

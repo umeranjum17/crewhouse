@@ -36,8 +36,11 @@ withq() { local q=$1; case "$2" in *'#'*) printf '%s?%s%s' "${2%%#*}" "$q" "#${2
 for theme in night day; do
   for wh in 1440x900 390x844; do
     w=${wh%x*}; h=${wh#*x}
+    u="$(withq "$([ -n "$EXTRA" ] && printf '%s&' "$EXTRA")$theme" "$URL")"
+    # A page first: `resize` has nothing to act on before one exists, and the tool exits non-zero saying so.
+    chrome-devtools-axi open "$u" >/dev/null 2>&1 || true
     chrome-devtools-axi resize "$w" "$h" >/dev/null
-    chrome-devtools-axi open "$(withq "$([ -n "$EXTRA" ] && printf '%s&' "$EXTRA")$theme" "$URL")" >/dev/null
+    chrome-devtools-axi open "$u" >/dev/null
     [ -z "${THEN:-}" ] || chrome-devtools-axi eval "$THEN" >/dev/null
     out="$DEST/$SLUG-$theme-$w.png"
     chrome-devtools-axi screenshot "$out" >/dev/null
