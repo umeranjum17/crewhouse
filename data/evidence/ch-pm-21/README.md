@@ -1,5 +1,8 @@
 # ch-pm-21 — a connect is proved by using the app
 
+**The real-account leg is outstanding.** This is the real product driven end to end, but against a lane-owned
+stand-in app, not a live Google, Notion or Canva account. Nothing here should be read as "proved on a real account".
+
 Real `crewd` on the stub engine (`.agents/skills/verify-crewhouse`), loopback only, throwaway HOME, one lane.
 Notion and Canva were pointed at a lane-owned OAuth 2.1 + remote MCP app (`provider.ts`, `daemon.ts`, `start.sh`,
 copied here so the run can be repeated). Everything else is the product as shipped: the real server, the real crew,
@@ -31,6 +34,12 @@ the real SQLite, the real kit sign-in, the real web app in a browser.
   (`/home/umer/lab-tmp/crewhouse-retained`) carries a ChatGPT sign-in only, and there is no household Google client
   anywhere in the lab, so a live Google consent round trip is not reachable from this lane. The account behind the
   connect is the lane's stand-in app. Every step except the third party's own servers is the product's own code.
+  Not shown here: any third party's own servers, Google's "this app isn't verified" warning, or a live account's data.
+- **What a live account would need.** Google (Drive, Calendar, Gmail): a household OAuth client id + secret
+  (`PUT /api/house/google`) with the service API enabled and the consent screen published — one-tap Google without
+  that console work is ch-pm-6. Notion or Canva: a test account login, nothing else (their MCP endpoints register
+  themselves). With either credential this lane repeats unchanged against the real engine, one lane at a time on the
+  retained home.
 - A real model would add Chief's own wording for the same steps; on the stub engine the app hides stub replies
   (`web/src/adapter.ts` filters `stub <bot>:`), so Scout's answer is in the API transcript rather than the chat.
 
