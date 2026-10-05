@@ -4,18 +4,28 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
-import { loadavg, tmpdir } from 'node:os';
+import { loadavg, setPriority, tmpdir } from 'node:os';
 import { browserBin } from '../src/desktop.ts';
 import { taskBrowser } from '../test/browser.ts';
 
 const rounds = Number(process.argv[2] ?? 5);
 const spinners = Number(process.argv[3] ?? 0);
 const spin = [];
-for (let i = 0; i < spinners; i++) spin.push(spawn(process.execPath, ['-e', 'const t=Date.now();while(Date.now()-t<600000){Math.sqrt(Math.random())}'], { stdio: 'ignore', nice: 19 }));
+for (let i = 0; i < spinners; i++) {
+  const child = spawn(process.execPath, ['-e', 'const t=Date.now();while(Date.now()-t<600000){Math.sqrt(Math.random())}'], { stdio: 'ignore' });
+  try { setPriority(child.pid, 19); } catch { undefined; }
+  spin.push(child);
+}
+try {
 const bin = browserBin();
 if (!bin) throw new Error('no Chromium on PATH');
 const until = async (what, fn, ms = 30000) => {
-  for (const end = Date.now() + ms; !(await fn()); await new Promise((r) => setTimeout(r, 20))) if (Date.now() > end) throw new Error(`timed out waiting for ${what}`);
+  for (const end = Date.now() + ms;; await new Promise((r) => setTimeout(r, 20))) {
+    let ok = false;
+    try { ok = !!(await fn()); } catch { ok = false; }
+    if (ok) return;
+    if (Date.now() > end) throw new Error(`timed out waiting for ${what}`);
+  }
 };
 for (let i = 0; i < rounds; i++) {
   const profile = mkdtempSync(join(tmpdir(), 'close-measure-'));
@@ -31,4 +41,6 @@ for (let i = 0; i < rounds; i++) {
   console.log(`round ${i + 1}: closed in ${Date.now() - began} ms (load ${loadavg()[0].toFixed(1)})`);
   rmSync(profile, { recursive: true, force: true });
 }
-for (const s of spin) s.kill('SIGKILL');
+} finally {
+  for (const s of spin) try { s.kill('SIGKILL'); } catch { undefined; }
+}
