@@ -66,7 +66,9 @@ test('office truth: the room, its counts, the tray, the roster and Needs you rea
       { id: 11, bot: 'scribe', task_id: 3, kind: 'propose', at: now - min, detail: { words: 'Keep this?' } },
       { id: 12, bot: 'chief', kind: 'question', at: now - 2 * min, detail: { question: 'Which day?' } },
     ],
-    tasks: [{ id: 9, bot: 'scout', title: 'Done thing', state: 'done', updated_at: now - min, files: [] },
+    tasks: [{ id: 9, bot: 'scout', title: 'Done thing', state: 'done', result: 'Three stories worth telling.', updated_at: now - min, files: [] },
+      // A job that ended with nothing to say made nothing: never a thing, never the rail's Done.
+      { id: 7, bot: 'scout', title: 'Silent thing', state: 'done', updated_at: now - min, files: [] },
       { id: 8, bot: 'tracer', title: 'Find the email', state: 'failed', updated_at: now - min, files: [] }],
     events: [{ kind: 'task.failed', bot: 'tracer', at: now - min, data: { title: 'Find the email' } }],
   };
@@ -83,6 +85,7 @@ test('office truth: the room, its counts, the tray, the roster and Needs you rea
   assert.equal(v.counts.working, A.homeCounts(state).working, 'Home\'s working count');
   assert.equal(v.counts.working, 1);
   assert.equal(v.counts.done, 1, 'the tray holds today\'s');
+  assert.deepEqual(v.done.map((t) => t.id), [9], 'only the job that said something');
   assert.ok(v.crew.find((c) => c.id === 'h6')!.second && v.crew.find((c) => c.id === 'h7')!.second, 'a second of a kind is marked');
   assert.deepEqual(A.roster(v.crew).map((c) => c.id), ['reel', 'scribe', 'scout', 'tracer', 'pip', 'h6', 'h7']);
   const chats = new Map(A.chats(state).map((c) => [c.id, c.line]));
@@ -118,6 +121,9 @@ test('office truth: the room, its counts, the tray, the roster and Needs you rea
 
   // Truth over time (J6/ch-pm-17): no seat crewd does not hold, and none that drifts.
   const hour = 60 * min, crew = (bots: Json[], tasks: Json[] = []) => A.office({ ...state, asks: [], events: [], bots: [bot('chief'), ...bots], tasks });
+  // "Today" and "yesterday" are measured from the clock's midnight, not from now: run at 01:40, "three hours ago"
+  // is yesterday, and the job that ended badly today would read as free. (main's fixture, flake found on this branch.)
+  const today = new Date().setHours(0, 0, 0, 0);
   const one = (v2: A.OfficeView) => ({ seat: A.seatOf(v2.crew[0]), word: A.railWord(v2.crew[0], v2).word });
   // A job with no news past crewd's limit has gone quiet: never shown, or counted, as working.
   const quiet = crew([bot('scout', { task: task(1, 'scout', 'working'), stuck: true, quietSince: now - 9 * min })]);
@@ -132,9 +138,9 @@ test('office truth: the room, its counts, the tray, the roster and Needs you rea
   assert.equal(A.officeEvent(crew([bot('scout', { task: task(2, 'scout', 'working') })]), { kind: 'task.paused', bot: 'scout', data: { task: 2, result: 'Waiting for you to sign in with ChatGPT.' } }).crew[0].status,
     'Waiting for you to sign in with ChatGPT', 'the live event says the same, never "free"');
   // A job that ended badly today says so whatever the clock or the chat; yesterday's is just free, like yesterday's finish.
-  const failed = crew([bot('scout')], [{ id: 3, bot: 'scout', title: 'Refund', state: 'unsure', updated_at: now - 3 * hour }, { id: 1, bot: 'scout', title: 'Older', state: 'done', updated_at: now - 4 * hour }]);
+  const failed = crew([bot('scout')], [{ id: 3, bot: 'scout', title: 'Refund', state: 'unsure', updated_at: today + hour }, { id: 1, bot: 'scout', title: 'Older', state: 'done', updated_at: today }]);
   assert.deepEqual([one(failed), failed.crew[0].status], [{ seat: 'failed', word: 'Not sure' }, 'Not sure it worked']);
-  const old = crew([bot('scout')], [{ id: 3, bot: 'scout', title: 'Refund', state: 'failed', updated_at: now - 30 * hour }, { id: 1, bot: 'scout', title: 'Older', state: 'done', updated_at: now - 31 * hour, files: [] }]);
+  const old = crew([bot('scout')], [{ id: 3, bot: 'scout', title: 'Refund', state: 'failed', updated_at: today - hour }, { id: 1, bot: 'scout', title: 'Older', state: 'done', updated_at: today - 2 * hour, files: [] }]);
   assert.deepEqual([one(old), old.counts.done, A.idleLine(old)], [{ seat: 'free', word: 'Free' }, 0, 'Nobody is working right now. The crew is free.']);
   // A new job is only queued until crewd starts it: the event does not claim work.
   assert.equal(A.seatOf(A.officeEvent(crew([bot('scout')]), { kind: 'task.created', bot: 'scout', data: { title: 'Next' } }).crew[0]), 'free');

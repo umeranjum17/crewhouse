@@ -136,7 +136,7 @@ function Body({ grant, still, box, used, listen }: { grant: Grant; still?: Share
     const to = await hire(b.to);
     if (!to) return;
     if (b.from === 'box') return setWriting(to);
-    await attempt(async () => { const r: Json = await api.post(to, b.ask); if (r?.task) setAsked({ to, task: r.task }); });
+    await attempt(async () => { const r: Json = await api.post(to, b.ask, undefined, b.said || undefined); if (r?.task) setAsked({ to, task: r.task }); });
   };
   return <>
     <View style={s.row}>
@@ -245,7 +245,7 @@ function Write({ box, who, state }: { box: Exclude<Box, null>; who: A.Helper; st
   // The first ask's box says "Not sent" itself; Try again has only the toast.
   const ask = async (words: string, not = '', quiet = true) => {
     let r: Json = null;
-    if (!await attempt(async () => { r = await api.post(who.id, A.writeAsk(words, box, not)); }, undefined, quiet) || !r?.task) return false;
+    if (!await attempt(async () => { r = await api.post(who.id, A.writeAsk(words, box, not), undefined, A.writeSaid(words, box)); }, undefined, quiet) || !r?.task) return false;
     setWant(words); setDraft(null); setWaits(''); setTask(r.task);
     return true;
   };

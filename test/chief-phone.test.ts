@@ -38,7 +38,7 @@ test('Chief offers every phone phrasing to the person', async () => {
   assert.ok(!JSON.stringify(crew.snapshot()).includes(offer.qr), 'ticket never enters public state');
 });
 
-test('a Chief hand-off in a helper chat carries its task title, for the collapsed Chief asked line', async () => {
+test('a Chief hand-off in a helper chat carries its task title, for the collapsed From Chief line', async () => {
   const { crew, db } = setup();
   crew.onboard('Owner');
   crew.recruit('scribe', 'Scribe', 'system');
@@ -47,7 +47,7 @@ test('a Chief hand-off in a helper chat carries its task title, for the collapse
   const m = crew.botPage('scribe').messages.find((x: any) => x.author === 'chief')!;
   assert.equal(m.title, 'Plan the dinners');
   const [l] = lines({ messages: [m] }, 'scribe');
-  assert.equal(l.text, 'Chief asked: Plan the dinners');
+  assert.equal(l.text, 'From Chief: Plan the dinners');
   assert.match(l.detail!, /Done means/);
 });
 

@@ -1231,10 +1231,13 @@ test('Chief\'s hand-off in a helper chat is one short ask with the whole words b
   const [l] = A.lines({ messages: [{ id: 1, author: 'chief', task_id: 9, title: 'Plan the week\'s dinners',
     text: 'The person says: plan dinners for four. Done means: a plan document with seven meals and one shopping list.' }] }, 'scribe');
   assert.equal(l.from, 'chief');
-  assert.equal(l.text, 'Chief asked: Plan the week\'s dinners', 'the ask, not the assignment prose');
+  assert.equal(l.text, 'From Chief: Plan the week\'s dinners', 'the ask, not the assignment prose');
   assert.match(l.detail!, /Done means/);
+  const [g] = A.lines({ messages: [{ id: 4, author: 'chief', title: 'The person\'s words verbatim: "help me chase a refund for the stroller"',
+    text: 'The person\'s words verbatim: "help me chase a refund for the stroller"' }] }, 'scribe');
+  assert.equal(g.text, 'From Chief: help me chase a refund for the stroller', 'a label an older hand-off wrapped the ask in never reaches the person');
   const [f] = A.lines({ messages: [{ id: 2, author: 'chief', text: 'First line stands in\nwhen no title came with it' }] }, 'scribe');
-  assert.equal(f.text, 'Chief asked: First line stands in');
+  assert.equal(f.text, 'From Chief: First line stands in');
   assert.equal(A.lines({ messages: [{ id: 3, author: 'person', text: 'hello there' }] }, 'chief')[0].detail, undefined, 'Chief\'s own thread keeps whole lines');
   // Teasers: a Things row and a chat list line read as words, never raw ** emphasis.
   assert.equal(A.teaser('The **dinner plan** is ready — see *the timing*'), 'The dinner plan is ready — see the timing');

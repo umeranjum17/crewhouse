@@ -1826,7 +1826,7 @@ function ShareIn({ state, shared, onDone, go, to: first = 'chief' }: { state: Js
   }, []);
   const crew = A.crew(state);
   const send = () => attempt(async () => {
-    await api.post(to, [text.trim(), shared.brief].filter(Boolean).join('\n'), (pics ?? []).map(({ type, data }) => ({ type, data })));
+    await api.post(to, [text.trim(), shared.brief].filter(Boolean).join('\n'), (pics ?? []).map(({ type, data }) => ({ type, data })), text.trim());
     onDone();
     go(to === 'chief' ? { view: 'chief' } : { view: 'helper', id: to });
   }, 'Sent');
