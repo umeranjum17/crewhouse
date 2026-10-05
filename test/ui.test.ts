@@ -1028,6 +1028,33 @@ test('Write it here: the writer is asked in plain words, and its draft is the jo
     assert.doesNotMatch(w, FORBIDDEN);
 });
 
+test('Write it here on Reddit or in a Hacker News reader: labelled notes to write from, and Copy instead of Put it in', () => {
+  const s = { ...state, bots: [bot('chief'), bot('scribe')], asks: [] };
+  const write = (app: string, text = 'Great writeup, but', picked = '') => {
+    const box = { app, text, picked }, b = A.quick(s, { box }).find((x) => x.id === 'write')!;
+    return { label: b.label, put: b.put, ask: A.writeAsk('agree, add the caching numbers', box) };
+  };
+  for (const [app, on] of [['com.reddit.frontpage', 'Reddit'], ['com.simon.harmonichackernews', 'Hacker News'], ['io.github.hidroh.materialistic', 'Hacker News']]) {
+    const w = write(app);
+    assert.deepEqual([w.label, w.put], ['Write it here', 'Copy'], app);
+    assert.match(w.ask, new RegExp(`^Write it here: agree, add the caching numbers\nThat's for the text box I'm typing in on my phone\. It says so far: “Great writeup, but”\n`), app);
+    assert.match(w.ask.split('\n').at(-1)!, new RegExp(`^It's a reply on ${on}, where people want my own words, so don't write the reply\. Reply with short labelled notes .*\(Point:, Why:, Example:\)`), app);
+    assert.match(write(app, 'Great writeup', 'writeup').ask, /labelled notes/, 'a picked part gets notes too');
+    assert.doesNotMatch(w.ask, FORBIDDEN);
+  }
+  for (const app of ['com.twitter.android', 'com.linkedin.android', 'com.whatsapp', '']) {
+    const w = write(app);
+    assert.equal(w.put, 'Put it in', app);
+    assert.match(w.ask, /\nReply with only what the whole box should say, keeping what I wrote where it fits, as plain text: no file, no notes\.$/, app);
+  }
+  // The panel offers what the button says: Copy puts the notes on the clipboard (nothing goes in the box, nothing is
+  // sent), and the bubble says how to paste.
+  const mobile = join(import.meta.dirname, '..', 'mobile');
+  assert.match(readFileSync(join(mobile, 'src', 'panel.tsx'), 'utf8'), /A\.notesOn\(box\.app\) \? <Btn go label="Copy" onPress=\{\(\) => void copyOut\(draft\)\} \/>\n\s*: <Btn go label="Put it in"/);
+  assert.match(readFileSync(join(mobile, 'src', 'bubble.ts'), 'utf8'), /export async function copyOut\(text: string\) \{\n  Clipboard\.setString\(text\);\n  await overlay\.closePanel\(\);/);
+  assert.doesNotMatch('Copy', FORBIDDEN);
+});
+
 test('the iPhone\'s Live Activity: the chip\'s own status, counts only until unlocked, started by work and ended by quiet', async () => {
   // Built for real from mobile/src/island.ios.tsx, with expo-widgets and @expo/ui swapped for a recorder.
   const stubs: Plugin = { name: 'stubs', setup(b) {

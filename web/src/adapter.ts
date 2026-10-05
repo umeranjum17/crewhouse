@@ -755,7 +755,7 @@ export type Screen = { box: { app?: string; text: string; picked: string } | 'of
  *  person would write, with `brief` (how to go about it) sent after them, never shown in the box. A
  *  button that needs an app the person hasn't connected says so in its label (`needs`), and its tap opens Settings. */
 export type BubbleButton = { id: 'write' | 'calendar' | 'real' | 'mail' | 'remember' | 'short' | 'lookup' | 'deal' | 'letter' | 'plan'; label: string; to: Hand; ask: string;
-  from: 'box' | 'text' | 'keep' | 'screen' | 'camera' | 'none'; needs: string[]; brief: string };
+  from: 'box' | 'text' | 'keep' | 'screen' | 'camera' | 'none'; needs: string[]; brief: string; put?: 'Put it in' | 'Copy' };
 const REAL = "Point out the warning signs you can see, and anything that looks normal. Don't tell me it's safe or a scam, and don't open or look up any web address in it. End with how I can check for myself: in the official app, or on the official website typed in by hand.";
 /** Web addresses written so no tool follows them by accident: hxxp://, and [.] before the last part of a name. */
 export const defang = (text: string) => text.replace(/\bhttp(s?):\/\//gi, 'hxxp$1://').replace(/\b([a-z0-9-]+)\.(?=[a-z]{2,}\b)/gi, '$1[.]');
@@ -766,6 +766,10 @@ const DATE = new RegExp(`\\b(mon|tues|wednes|thurs|fri|satur|sun)day\\b|\\b${MON
 const LINK = /\bhttps?:\/\/|\bwww\.|\b[a-z0-9-]+\.(com|co|uk|org|net|top|xyz|info|io|app|ly|me|link|click|site|online|shop|store|live|biz|cc|pk|in|ru|cn)\b/i;
 const PRESSURE = /\b(urgent|immediately|suspended|locked|verify|pay now|overdue|final notice|prize|gift card|act now|within 24 hours|unusual activity)\b/i;
 const BOOKING = /\b(booking|booked|reservation|order|receipt|invoice|ticket|flight|confirmation|delivery|tracking|e-?mail(ed)?|sent you|inbox)\b/i;
+// Where a reply is the person's own words (Reddit, a Hacker News reader): Write it here gives notes to write from, and
+// Copy instead of Put it in. ponytail: package names, not the site; Reddit in a browser gets prose like any box.
+const NOTES = /^com\.reddit\.frontpage$|hackernews|materialistic|\.hews$/i;
+export const notesOn = (app = '') => (NOTES.test(app) ? (/reddit/i.test(app) ? 'Reddit' : 'Hacker News') : '');
 const CHAT = /whatsapp|telegram|securesms|messaging|orca|slack|discord|viber|teams|instagram/i, MAIL = /\.gm$|mail|outlook/i;
 type Seen = { box: Screen['box']; said: string; picked: string; app: string };
 /** The bubble's rules table: the first three rows that fit what the tap read are its buttons, never chosen by a model.
@@ -790,14 +794,14 @@ export function quick(state: Json, screen: Screen, canAct = true): BubbleButton[
   const seen: Seen = { box: screen.box, picked, said: picked || read?.text.trim() || '', app: read?.app ?? '' };
   const used = screen.used ?? {};
   return [...new Set(ROWS.filter(([, fits]) => fits(seen)).map(([id]) => id))].slice(0, 3)
-    .sort((a, b) => (used[b] ?? 0) - (used[a] ?? 0)).map((id) => button(state, id, seen.said));
+    .sort((a, b) => (used[b] ?? 0) - (used[a] ?? 0)).map((id) => button(state, id, seen.said, seen.app));
 }
-function button(state: Json, id: BubbleButton['id'], said: string): BubbleButton {
+function button(state: Json, id: BubbleButton['id'], said: string, app = ''): BubbleButton {
   const quote = `\n“${said}”`;
   const google = (app: string) => (state.connections?.includes?.(app) ? [] : ['Google']);
   const b = (label: string, from: BubbleButton['from'], ask = '', needs: string[] = [], brief = ''): BubbleButton =>
     ({ id, label: needs.length ? `${label} · needs ${needs.join(' and ')}` : label, to: handTo(state, id === 'write' ? 'scribe' : 'scout'), ask, from, needs, brief });
-  if (id === 'write') return b('Write it here', 'box');
+  if (id === 'write') return { ...b('Write it here', 'box'), put: notesOn(app) ? 'Copy' : 'Put it in' };
   if (id === 'calendar') return b('Put this date in my calendar', 'text', `Put this date in my Google Calendar:${quote}\nWork out the date and time from it. If there isn't a clear one, say so instead of guessing.`, google('calendar'));
   if (id === 'real') return said ? b('Is this real?', 'text', `Is this real? Here's what it says:\n“${defang(said)}”\n${REAL}`) : b('Is this real?', 'screen', 'Is this real?', [], `It's on my phone's screen, in the picture.\n${REAL}`);
   if (id === 'mail') return b('Find that email', 'text', `Find the email in my Gmail this is about, and tell me in a few lines what it says, who sent it and when. Only look: don't change, move, send or delete anything.${quote}`, google('gmail'));
@@ -875,16 +879,18 @@ export function crewLine(state: Json, bare = false) {
 }
 /** Write it here's ask, in the writer's chat like any other (its first line is the job's title): what the person
  *  wants, what the box says, and (on Try again) the draft they passed on. The draft is what the whole box should say,
- *  keeping what they wrote; with some of it picked, it is only what goes in place of that part. */
-export function writeAsk(want: string, box: { text: string; picked: string }, not = '') {
-  const sofar = box.text.trim(), picked = box.picked.trim();
+ *  keeping what they wrote; with some of it picked, it is only what goes in place of that part. On Reddit or in a
+ *  Hacker News reader it is labelled notes the person writes their reply from. */
+export function writeAsk(want: string, box: { app?: string; text: string; picked: string }, not = '') {
+  const sofar = box.text.trim(), picked = box.picked.trim(), on = notesOn(box.app);
   return [
     `Write it here: ${want.trim()}`,
     picked ? `That's for the part I picked in a text box I'm typing in on my phone: “${picked}”. The whole box says: “${sofar}”`
       : `That's for the text box I'm typing in on my phone.${sofar ? ` It says so far: “${sofar}”` : ''}`,
     not && `Not this one: “${not}”`,
     "Don't ask me anything first: decide what fits and write it.",
-    picked ? 'Reply with only the words to put in place of the part I picked, as plain text: no file, no notes.'
+    on ? `It's a reply on ${on}, where people want my own words, so don't write the reply. Reply with short labelled notes I'll write it from, one per line (Point:, Why:, Example:), as plain text: no file.`
+      : picked ? 'Reply with only the words to put in place of the part I picked, as plain text: no file, no notes.'
       : `Reply with only what the whole box should say${sofar ? ', keeping what I wrote where it fits' : ''}, as plain text: no file, no notes.`,
   ].filter(Boolean).join('\n');
 }

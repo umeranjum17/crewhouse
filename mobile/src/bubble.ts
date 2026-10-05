@@ -7,6 +7,7 @@
 import { overlay, stateWords, words, type OverlayState } from '@byokit/overlay';
 import { focusedField } from '@byokit/overlay/focused-field';
 import * as SecureStore from 'expo-secure-store';
+import { Clipboard } from 'react-native';
 import * as A from '../../web/src/adapter.ts';
 import { api, setTransport, type Json } from '../../web/src/api.ts';
 import { screenFrame } from '../modules/crewhouse-net';
@@ -122,4 +123,11 @@ export async function putIn(text: string, who: string, was: { app: string; text:
   const r = same ? await focusedField.insert(text, { replace: was.picked ? 'selection' : 'all', attempts: 13, retryMs: 150, acceptNewlineLoss: true }).catch(() => 'failed' as const) : 'failed';
   if (r === 'copied') overlay.say('Copied: hold the box and paste', 'chief_idle', 6000, { announce: true });
   else if (r === 'failed') overlay.say(`Couldn't put it in. It's in ${who}'s chat.`, 'chief_worried', 6000, { announce: true });
+}
+/** Copy: where the reply is the person's own words (A.notesOn), the notes go on the clipboard and the panel steps aside
+ *  for them to paste and write from. */
+export async function copyOut(text: string) {
+  Clipboard.setString(text);
+  await overlay.closePanel();
+  overlay.say('Copied: hold the box and paste', 'chief_idle', 6000, { announce: true });
 }
