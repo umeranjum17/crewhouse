@@ -235,7 +235,7 @@ export function ConnectApp({ app, helper, state, tab: first, ask, onConnected, o
         <Pill tone="wait" live>Waiting for {who}…</Pill>
         <button className="link" onClick={cancel}>Cancel</button>
       </>}
-      {phase === 'done' && <><h2>{app.name} is connected</h2><p>{app.does}</p>{helper && <p className="mute">{helper} is carrying on with it now.</p>}
+      {phase === 'done' && <><h2>{app.name} is connected</h2><p>{poll.value?.proof ?? app.does}</p>{helper && <p className="mute">{helper} is carrying on with it now.</p>}
         <button className="btn go big" onClick={onDone}>Done</button></>}
       {phase === 'cancelled' && <><h2>No problem</h2><p className="mute">Nothing was connected{helper ? `, and ${helper} will manage without it` : ''}.
         {app.warns ? ` Google shows that warning for every app it hasn't reviewed — a personal app always gets it. Crewhouse is your app, running on your own computer. Tap Advanced, then Go to Crewhouse.` : ` You can connect ${app.name} any time.`}</p>

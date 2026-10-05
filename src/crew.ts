@@ -261,6 +261,7 @@ export class Crew {
     this.connections = new Connections(cfg, `http://${cfg.host}:${cfg.port}/connect/callback`);
     this.connections.onChange = (app) => this.db.event('app.changed', null, { app });
     this.connections.onExpired = (app) => this.say(CHIEF, 'system', `Your ${this.connections.apps[app].name} connection has run out. Connect it again under Settings, Connections, whenever you like.`, null);
+    this.connections.onProof = (_app, words) => this.say(CHIEF, 'bot', words, null);
   }
 
   init() {
