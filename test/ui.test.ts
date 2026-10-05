@@ -416,21 +416,32 @@ test('first success: starters never dead-end, and setup stays in Settings', () =
 });
 
 test('the runs-at-home line is said once, in the same plain words, in all three places a family meets it', () => {
-  const [here, only] = A.atHome();
+  const [here, on, only] = A.atHome();
   assert.equal(here, 'Your helpers live on this computer and use your own sign-ins.', 'no technical words, no vendor voice');
+  // the one truthful condition, repeated word for word wherever the computer or pairing comes up
+  assert.equal(on, 'The crew works only while this computer is on and connected to the internet.');
+  assert.equal(on, A.awake());
   // honest about what does leave: what a job needs, to ChatGPT or the app it's using (README, "Nothing leaves your machine…")
   assert.equal(only, "Nothing you tell them is kept anywhere else — only what a job needs goes to your AI plan or the app it's using.");
-  assert.match(A.atHome(undefined, 'Claude plan')[1], /goes to your Claude plan or/, 'Settings names the plan in use');
-  assert.doesNotMatch(`${here} ${only}`, FORBIDDEN);
+  assert.match(A.atHome(undefined, 'Claude plan')[2], /goes to your Claude plan or/, 'Settings names the plan in use');
+  assert.doesNotMatch(`${here} ${on} ${only}`, FORBIDDEN);
   assert.match(A.atHome('the home computer')[0], /^Your helpers live on the home computer and use your own sign-ins\.$/, 'the phone names the home computer');
+  assert.equal(A.atHome('the home computer')[1], A.awake('the home computer'));
   const web = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
-  assert.equal([...web.matchAll(/A\.atHome\(/g)].length, 2, 'Hello and Settings both quote it; nobody paraphrases it');
-  assert.match(web, /<ul className="promises">\s+<li>[^<]+<\/li>\s+<li>\{A\.atHome\(\)\[1\]\}<\/li>\s+<li>[^<]+<\/li>\s+<\/ul>/, "it sits in Hello's promises, the same three rows as before");
+  assert.equal([...web.matchAll(/A\.atHome\(/g)].length, 3, 'Hello and Settings both quote it; nobody paraphrases it');
+  assert.match(web, /<ul className="promises">\s+<li>[^<]+<\/li>\s+<li>\{A\.atHome\(\)\[1\]\}<\/li>\s+<li>\{A\.atHome\(\)\[2\]\}<\/li>\s+<li>[^<]+<\/li>\s+<\/ul>/, "it sits in Hello's promises, the condition right after where the helpers live");
   assert.match(web, /<h1>Settings<\/h1>\s+<p className="mute small">\{A\.atHome\(undefined, A\.planName\(accounts\)\)\.join\(' '\)\}<\/p>/, 'Settings says it under the title, in the quiet style');
+  assert.match(web, /<b>Reach it away from home<\/b>\s+<p className="mute small">\{A\.awake\(\)\}<\/p>\s+<p className="mute small">\{A\.anywhere\(link\)\.words\}<\/p>/, 'pairing a phone repeats the condition');
   const app = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
-  assert.equal([...app.matchAll(/A\.atHome\('the home computer'\)/g)].length, 3, 'the phone quotes it at first run (two lines) and on This phone');
+  assert.equal([...app.matchAll(/A\.atHome\('the home computer'\)/g)].length, 2, 'the phone quotes it at first run and on This phone');
+  assert.match(app, /\{\[\.\.\.A\.atHome\('the home computer'\), "I'll ask/, 'first run on the phone shows every line, condition included');
   assert.match(app, /\{A\.atHome\('the home computer'\)\.join\(' '\)\}<\/T>\s+<T tone="mute" style=\{s\.small\}>🔒/, 'on This phone it sits above the lock line');
+  assert.match(app, /\{A\.awake\('your computer'\)\}<\/T>\s+<T [^>]+>🔒 Only your computer/, 'the phone says it before pairing, above the lock line');
   assert.doesNotMatch(app, /I run the crew on this computer/, 'the phone never calls the family computer "this computer"');
+  // No surface promises more than is true: no guaranteed reach, no cost or setup claim, no detection talk.
+  const adapter = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'adapter.ts'), 'utf8');
+  const PROMISE = /always works|works (from )?anywhere|from anywhere|no setup|zero cost|free (forever|connector)|always online|bypass detection|residential|untraceable/i;
+  for (const [name, src] of [['main.tsx', web], ['adapter.ts', adapter], ['App.tsx', app]]) assert.doesNotMatch(src.replace(/^\s*(\/\/|\/?\*).*$/gm, ''), PROMISE, name);
 });
 
 test('Tracer is visible and recruitable without an owner filter', () => {
@@ -1109,7 +1120,7 @@ test('reach it from anywhere: three plain states and numbered steps, and the pho
   assert.match(home.words, /^Only at home\./);
   assert.deepEqual(home.steps.map((x) => x.split(' ').slice(0, 2).join(' ')), ['On this', 'On your', 'Then pair']);
   const anywhere = A.anywhere({ anywhere: 'anywhere', hosts: ['100.101.2.3'] });
-  assert.match(anywhere.words, /^Reachable from anywhere\./);
+  assert.match(anywhere.words, /^Reachable away from home\./);
   assert.equal(anywhere.steps.length, 2, 'this computer is done; the steps for your phone stay');
   const signin = A.anywhere({ anywhere: 'signin' });
   assert.match(signin.words, /^The connector app needs signing in again/);

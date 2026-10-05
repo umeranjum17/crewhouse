@@ -93,6 +93,7 @@ function Hello({ state, refresh, night }: Ctx) {
       <ul className="promises">
         <li>Your helpers live on this computer, and think with an AI account you already pay for.</li>
         <li>{A.atHome()[1]}</li>
+        <li>{A.atHome()[2]}</li>
         <li>I'll ask before sending messages, deleting things or spending money.</li>
       </ul>
       <h2 className="plate">What can I take off your plate?</h2>
@@ -1018,7 +1019,7 @@ function Phones({ tick }: { tick: number }) {
             <p className="mute small">{left > 0 ? `Works once, for ${left} more seconds.` : 'Make a new one when the phone is ready.'}</p>
             {left > 0 && <p className="small">Can't scan? Type this code on the phone (or copy it to someone you trust): <b style={{ overflowWrap: 'anywhere', userSelect: 'all' }}>{offer.typed}</b></p>}
             {left > 0 && A.reach(link).online && (typed ? <p className="small">If the phone is away from home, type this one instead: <b style={{ overflowWrap: 'anywhere', userSelect: 'all' }}>{A.phoneTyped(typed)}</b></p>
-              : <button className="link inline small" onClick={() => attempt(async () => setTyped(await api.phoneCode(offer.role)))}>Show a code that works from anywhere</button>)}
+              : <button className="link inline small" onClick={() => attempt(async () => setTyped(await api.phoneCode(offer.role)))}>Show a code for a phone away from home</button>)}
             <div className="btns">{left <= 0 && <button className="btn go" onClick={() => show(offer.role)}>New code</button>}<button className="btn ghost" onClick={() => setOffer(null)}>Close</button></div>
           </div>
         </div>
@@ -1026,10 +1027,11 @@ function Phones({ tick }: { tick: number }) {
       <label className="card row">
         <input type="checkbox" checked={link.lan} disabled={link.pinned} onChange={(e) => attempt(async () => setLink(await api.phonesAtHome(e.target.checked)))} />
         <span className="grow"><b>Phones on this Wi-Fi can reach the crew</b>
-          <div className="mute small">Off: the Wi-Fi opens only while a pairing code is showing here, so a phone can join at home. After that it reaches this computer through <a href="https://tailscale.com" target="_blank" rel="noreferrer">the connector app</a>, from anywhere. Either way everything between them is locked.</div></span>
+          <div className="mute small">Off: the Wi-Fi opens only while a pairing code is showing here, so a phone can join at home. After that it reaches this computer through <a href="https://tailscale.com" target="_blank" rel="noreferrer">the connector app</a>, away from home. Either way everything between them is locked.</div></span>
       </label>
       <div className="card anywhere">
-        <b>Reach it from anywhere</b>
+        <b>Reach it away from home</b>
+        <p className="mute small">{A.awake()}</p>
         <p className="mute small">{A.anywhere(link).words}</p>
         {!!A.anywhere(link).steps.length && <ol className="how">{A.anywhere(link).steps.map((s) => <li key={s}>{s}</li>)}</ol>}
         <p className="mute small"><a href="https://tailscale.com/download" target="_blank" rel="noreferrer">Get the connector app ↗</a> · For your own devices. It sees which devices are yours, never what they say.</p>

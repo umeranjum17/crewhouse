@@ -671,7 +671,8 @@ function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
       {!!err && <T tone="pinkInk" style={s.centerText}>{err}</T>}
       {noCamera && <Btn label="Open phone settings" onPress={() => void Linking.openSettings()} />}
       {!busy && <Btn label="Type a code" onPress={() => { setTyping(true); setErr(''); }} />}
-      <T tone="mute" style={[s.small, s.centerText, { marginTop: 20 }]}>🔒 Only your computer can read what this phone sends. Anything passing it along can't read it.</T>
+      <T tone="mute" style={[s.small, s.centerText, { marginTop: 20 }]}>{A.awake('your computer')}</T>
+      <T tone="mute" style={[s.small, s.centerText]}>🔒 Only your computer can read what this phone sends. Anything passing it along can't read it.</T>
     </ScrollView>
   );
 }
@@ -876,7 +877,7 @@ function Hello({ state, refresh, go }: Ctx) {
         <T tone="ink2" style={s.centerText}>I'm Chief, your personal assistant. I run your crew of helpers.</T>
       </View></motion.Rise>
       <motion.Rise reduce={reduce} delay={160}><Card style={{ gap: 10 }}>
-        {[A.atHome('the home computer')[0], A.atHome('the home computer')[1], "I'll ask before sending messages, deleting things or spending money."].map((l) =>
+        {[...A.atHome('the home computer'), "I'll ask before sending messages, deleting things or spending money."].map((l) =>
           <View key={l} style={[s.row, { alignItems: 'flex-start' }]}><T style={{ color: t.ok, fontWeight: '700' }}>✓</T><T tone="ink2" style={{ flex: 1 }}>{l}</T></View>)}
       </Card></motion.Rise>
       {name}
