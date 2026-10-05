@@ -453,6 +453,19 @@ test('routines: Chief offers one as a card, the person starts it (or changes the
   assert.equal((await api('PUT', `/api/routines/${r.id}`, { state: 'paused' })).status, 200);
   assert.equal((await api('POST', `/api/routines/${r.id}/run`)).status, 200);
   await until(async () => (await api('GET', '/api/state')).body.routines.find((x: any) => x.id === r.id && x.history[0]?.why === 'now' && x.history[0]?.state === 'done'));
+  // The morning recap over the same door: the run lands in Chief's thread, and a second run that sends nothing is a
+  // failure naming why, not an ok for a call that returned.
+  const digest = (await api('GET', '/api/state')).body.routines.find((x: any) => x.kind === 'digest');
+  const thread = async () => (await api('GET', '/api/bots/chief')).body.messages.map((m: any) => m.text);
+  const before = (await thread()).length;
+  assert.equal((await api('POST', `/api/routines/${digest.id}/run`)).status, 200);
+  const recap = (await thread()).slice(before);
+  assert.equal(recap.length, 1, 'the recap really reached Chief');
+  assert.match(recap[0], /^Good (morning|afternoon|evening)/);
+  const second = await api('POST', `/api/routines/${digest.id}/run`);
+  assert.equal(second.status, 409);
+  assert.match(second.body.error, /already in Chief's chat/, 'the launcher is told what really happened');
+  assert.equal((await thread()).length, before + 1, 'nothing was sent the second time');
   const own = (await api('POST', '/api/routines', { bot: 'reel', schedule: 'every 2 hours', task: 'Tidy the screenshots folder', model: 'copilot' })).body;
   assert.equal(own.thinks, 'GitHub Copilot');
   assert.equal((await api('DELETE', `/api/routines/${own.id}`)).status, 200);

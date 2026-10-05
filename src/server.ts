@@ -404,7 +404,8 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     if (m === 'POST' && p === '/api/routines') { const row = crew.addRoutine(body, 'person'); return crew.routines().find((x) => x.id === row.id); }
     if ((r = p.match(/^\/api\/routines\/(\d+)$/)) && m === 'PUT') { crew.updateRoutine(Number(r[1]), body); return { ok: true }; }
     if ((r = p.match(/^\/api\/routines\/(\d+)$/)) && m === 'DELETE') { crew.deleteRoutine(Number(r[1])); return { ok: true }; }
-    if ((r = p.match(/^\/api\/routines\/(\d+)\/run$/)) && m === 'POST') { crew.runRoutine(Number(r[1])); return { ok: true }; }
+    // A run reports from crewd's own record (Crew.runRoutine), not from this call returning.
+    if ((r = p.match(/^\/api\/routines\/(\d+)\/run$/)) && m === 'POST') { await crew.runRoutine(Number(r[1])); return { ok: true }; }
     if ((r = p.match(/^\/api\/asks\/(\d+)\/answer$/)) && m === 'POST') { await crew.answer(Number(r[1]), body, key); return { ok: true }; }
     throw Object.assign(new Error('not found'), { status: 404 });
   }

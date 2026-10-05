@@ -85,8 +85,8 @@ test('routines: fire when due, catch up once after sleep, skip on overlap, pause
   await until('holding', () => crew.sessionOf('reel'));
   assert.equal(db.get('SELECT state FROM tasks WHERE id = ?', t.id)!.state, 'working', 'the stub holds "ask permission" tasks open');
 
-  // Due again while the last run is still going: skipped, not stacked.
-  crew.runRoutine(r.id);
+  // Due again while the last run is still going: skipped, not stacked — and the run says so, naming why.
+  await assert.rejects(crew.runRoutine(r.id), /The last run of “Weekly demo” is still going\./);
   h = fired(db, r.id);
   assert.equal(h.at(-1).kind, 'routine.skipped');
   assert.equal(h.at(-1).why, 'overlap');
@@ -95,7 +95,8 @@ test('routines: fire when due, catch up once after sleep, skip on overlap, pause
   // Once it finishes, Run now starts a fresh task.
   await release(crew, 'reel', 'Demo made.');
   await settled(db, t.id);
-  crew.runRoutine(r.id);
+  const firedNow = await crew.runRoutine(r.id);
+  assert.equal(firedNow.task, db.get('SELECT id FROM tasks WHERE routine = ? ORDER BY id DESC', r.id)!.id, 'the answer is the record the run wrote');
   assert.equal(db.get('SELECT COUNT(*) AS n FROM tasks WHERE routine = ?', r.id)!.n, 2);
   const again = db.get('SELECT id FROM tasks WHERE routine = ? ORDER BY id DESC', r.id)!.id;
   await release(crew, 'reel', 'Demo made again.');
@@ -151,7 +152,8 @@ test('recap keeps an unknown name out, stays quiet on an empty day, and is a sep
   assert.doesNotMatch(crew.digest(0), /Nothing new|Nothing needs|Nothing is scheduled|Tap to begin/);
   crew.setAddress('Umer.');
   const digest = crew.routines().find((r) => r.kind === 'digest')!;
-  crew.runRoutine(digest.id);
+  const sent = await crew.runRoutine(digest.id);
+  assert.equal(db.get('SELECT bot FROM messages WHERE id = ?', sent.message)?.bot, 'chief', 'the run answers with the recap it left in Chief\'s chat');
   const recap = crew.botPage('chief').messages.at(-1)!;
   assert.equal(recap.recap, true);
   assert.equal(recap.task_id, null);
@@ -160,18 +162,19 @@ test('recap keeps an unknown name out, stays quiet on an empty day, and is a sep
   assert.doesNotMatch(answer.text, /While you were away|Everything is quiet/);
   assert.match(recap.text, /^Good \w+, Umer\. While you were away:/);
   assert.doesNotMatch(recap.text, /\.\./);
-  crew.runRoutine(digest.id);
+  await assert.rejects(crew.runRoutine(digest.id), /already in Chief's chat/, 'a rerun that lands nowhere fails with its reason');
   assert.equal(crew.botPage('chief').messages.at(-1)!.id, recap.id, 'manual reruns keep one recap per day');
   db.run('UPDATE routines SET next_at = ? WHERE id = ?', Date.now() - 1000, digest.id);
   crew.schedule();
   assert.equal(crew.botPage('chief').messages.at(-1)!.id, recap.id, 'the tick also keeps one recap per day');
   const { Crew } = await import('../src/crew.ts');
   const restarted = new Crew(cfg, db);
-  restarted.runRoutine(digest.id);
-  assert.equal(restarted.botPage('chief').messages.at(-1)!.id, recap.id, 'a new crew reads the same daily record');
+  await assert.rejects(restarted.runRoutine(digest.id), /already in Chief's chat/, 'a new crew reads the same daily record');
+  assert.equal(restarted.botPage('chief').messages.at(-1)!.id, recap.id);
   db.run('UPDATE routines SET last_at = ? WHERE id = ?', Date.now() - 86_400_000, digest.id);
-  restarted.runRoutine(digest.id);
-  assert.ok(restarted.botPage('chief').messages.at(-1)!.id > recap.id, 'the following day gets its own recap');
+  const next = await restarted.runRoutine(digest.id);
+  assert.ok(next.message > recap.id, 'the following day gets its own recap, and the run says which');
+  assert.equal(restarted.botPage('chief').messages.at(-1)!.id, next.message);
   restarted.stop();
   done();
 });
