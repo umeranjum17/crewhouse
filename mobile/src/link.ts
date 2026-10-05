@@ -1,6 +1,6 @@
 // The phone's end of the link: @byokit/link's device side, its grant in secure storage, and the transport that
 // web/src/api.ts calls through. Each call is one request, `METHOD /path`, answered like HTTP (src/link.ts).
-import { DeviceLink, LinkError, hostId, pairWithCode, pairWithOffer, offerText, decodeOffer, secureDeviceStore, migrateGrant, unb64url, type DeviceGrant, type LinkStatus } from '@byokit/link';
+import { DeviceLink, LINK_WORDS, LinkError, hostId, pairWithCode, pairWithOffer, offerText, decodeOffer, secureDeviceStore, migrateGrant, unb64url, type DeviceGrant, type LinkStatus } from '@byokit/link';
 import { findHost } from '@byokit/relay/device';
 import { readTyped } from './typed.ts';
 import * as Device from 'expo-device';
@@ -14,6 +14,8 @@ import { addresses } from '../modules/crewhouse-net';
 
 export type Grant = DeviceGrant;
 export type Status = LinkStatus;
+/** The link's own failure sentences, for the screens that show one (App.tsx `pairWords`). */
+export { LINK_WORDS };
 const STORE = 'crewhouse.grant';
 // Unpaired or removed on the computer: the chats this phone kept go with the grant.
 const grants = secureDeviceStore(SecureStore, STORE);

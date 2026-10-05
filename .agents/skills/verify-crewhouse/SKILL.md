@@ -153,10 +153,11 @@ off the screen must still say what changed.
 
 **What this app does not have, so this section skips it** — say each skip in the report:
 
-- **The native Expo app (`mobile/`).** A separate surface with its own build: this skill
-  drives the shipped web app on loopback, and a native capture needs an emulator plus
-  task-generated Android credentials that no loopback run has. A PR changing `mobile/` must
-  name its own native proof instead of claiming these four web captures.
+- **The native Expo app (`mobile/`) on its own screens.** A separate surface with its own build: these
+  four web captures prove the computer's half, never the phone's. A PR changing `mobile/` runs the
+  native proof in `features/phone-pairing.md` (`scripts/phone-pair.mjs`: an emulator whose camera reads
+  the live code, the computer confirms, the phone lands on "You're in") and says so instead of claiming
+  these four captures.
 - **A third form factor.** 1440 (desktop) and 390 (phone) are the two widths the app is
   designed at; 320 stays the narrowest *probe* in the Drive section, reported as measured
   behaviour, not a fifth capture.
@@ -178,6 +179,10 @@ folder survive — a cleanup that eats the proof fails. Never kill by process na
   changed screen (dark and light, 1440 and 390).
 - `scripts/record.mjs --cdp <port> --out <file.webm> --seconds 8` — one motion recording of
   a changed interaction: screencast frames timed by their own timestamps, muxed by ffmpeg.
+- `node scripts/phone-pair.mjs --out <dir> [--serial …] [--base …] [--apk …] [--runs n]
+  [--record]` — the native pairing proof (`features/phone-pairing.md`): the phone's camera
+  reads the live code, the computer confirms, the phone reaches "You're in"; screenshots, an
+  mp4 and `timings.json`.
 - `node scripts/floor-guard.mjs` — the CONSTRAINTS.md floor on the current diff (exit 0
   clean / 1 violation / 2 could not run). Not app verification; run it before claiming done.
 - `npm run check` (tsc, strict) and `npm test` (`scripts/test.mjs`, full isolated suite)
