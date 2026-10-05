@@ -762,7 +762,7 @@ details.card[open] > summary { margin-bottom: 10px; }
 .o-cap i { display: none; width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--line2); }
 .o-cap.needs, .o-cap.chat { background: var(--soft-accent); } .o-cap.needs span, .o-cap.chat span { color: var(--pink-ink); }
 .o-cap.needs i, .o-cap.chat i { background: var(--pink); } .o-cap.working i { background: none; box-shadow: inset 0 0 0 1.6px var(--ink); } .o-cap.done i, .o-cap.here i { background: var(--ink); }
-.o-cap.failed i { background: var(--danger); }
+.o-cap.failed i, .o-cap.quiet i { background: var(--danger); }
 .o-room.wide .o-cap { padding: 12px 6px; } .o-room.wide .o-cap b { font-size: 14px; line-height: 18px; } .o-room.wide .o-cap span { font-size: 12.5px; line-height: 16px; } .o-room.wide .o-cap i { display: inline-block; }
 
 /* B1 motion: each member in the room wears a calm loop for their station, in CSS alone (no frame callbacks). Working
@@ -849,7 +849,7 @@ details.card[open] > summary { margin-bottom: 10px; }
   .side-seat.needs i, .side-seat.chat i { background: var(--pink); }
   .side-seat.working i, .side-seat.done i { background: var(--ok); }
   .side-seat { min-width: 0; }
-  .side-seat.failed i { background: var(--danger); }
+  .side-seat.failed i, .side-seat.quiet i { background: var(--danger); }
   .side-seat.next i { background: var(--amber); }
 }
 @media (min-width: 1200px) {
@@ -1043,7 +1043,7 @@ h1 { font: 400 32px/36px var(--serif); letter-spacing: -.005em; }
 .ch-crew { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .ch-face { position: relative; display: grid; border-radius: 50%; box-shadow: 0 0 0 1px var(--line2); text-decoration: none; }
 .ch-badge { position: absolute; right: -3px; bottom: -3px; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; font: 700 10px/1 var(--ui); font-style: normal; color: #fff; border: 2px solid var(--solid); background: var(--mute); }
-.ch-badge.needs, .ch-badge.chat, .ch-badge.failed { background: #D63A1E; }
+.ch-badge.needs, .ch-badge.chat, .ch-badge.failed, .ch-badge.quiet { background: #D63A1E; }
 .ch-badge.working { background: #1F9D62; }
 .ch-badge.done { background: #3B6FE0; }
 .ch-more { font: 600 13px/1 var(--ui); color: var(--ink2); text-decoration: none; padding: 0 4px; }

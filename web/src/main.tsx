@@ -227,12 +227,12 @@ function HomeBar({ ctx, mode, pick }: { ctx: Ctx; mode: HomeMode; pick: (m: Home
 const tonight = (d = new Date()) => <h2 className="feed-head">{d.getHours() >= 17 || d.getHours() < 5 ? 'Tonight' : d.getHours() < 12 ? 'This morning' : 'This afternoon'}<small>{d.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })}</small></h2>;
 
 /** On it now (B1): a card per helper at work, their face, name and the step they are on; honest when nobody is. */
-function OnItNow({ live, waiting }: { live: A.OfficeView; waiting: number }) {
+function OnItNow({ live }: { live: A.OfficeView }) {
   const working = live.crew.filter((c) => A.seatOf(c) === 'working');
   return <section className="home-section working" aria-label="On it now"><div className="section-head"><span className="label">On it now</span><span className="small mute">{working.length} working</span></div>
     {working.length ? <div className="on-cards">{working.map((c) => <a key={c.id} className="list-row on-card" href={hrefOf(c.id)}>
       <Face who={{ kind: c.kind, name: c.name, mood: c.mood }} size={30} /><span className="grow"><b className="clamp1">{c.name}</b><span className="small">{c.step || c.status}</span></span>
-    </a>)}</div> : <Empty>{waiting ? `Nobody is working: ${waiting} waiting on you.` : 'Nobody is working right now. The crew is free.'}</Empty>}
+    </a>)}</div> : <Empty>{A.idleLine(live)}</Empty>}
   </section>;
 }
 
@@ -293,14 +293,14 @@ function NeedsCard({ state, c, flat, onLater }: { state: Json; c: A.Card; flat?:
 
 /** "Scout", "Reel and Scribe", "Reel, Scribe and Pip". */
 const names = (l: string[]) => (l.length < 2 ? l.join('') : `${l.slice(0, -1).join(', ')} and ${l.at(-1)}`);
-const BADGE: Partial<Record<A.Seat | 'done', string>> = { needs: '!', chat: '!', working: '', failed: '!', done: '✓', resting: 'z' };
+const BADGE: Partial<Record<A.Seat | 'done', string>> = { needs: '!', chat: '!', working: '', quiet: '?', failed: '!', done: '✓', waiting: '…' };
 
 /** Home's chat opens on Chief (B1): his figure, his own line in a bubble, and the crew in a row with a badge each and
  *  one plain caption, every word from the office's state. */
 function ChiefHero({ live, state }: { live: A.OfficeView; state: Json }) {
   const crew = A.roster(live.crew), seat = (c: A.OfficeMember) => A.railWord(c, live).seat;
   const by = (k: (A.Seat | 'done')[]) => crew.filter((c) => k.includes(seat(c))).map((c) => c.name);
-  const said = [[by(['needs', 'chat']), 'needs you', 'need you'], [by(['working']), 'working', 'working'], [by(['failed']), 'stuck', 'stuck'], [by(['resting']), 'resting', 'resting']] as const;
+  const said = [[by(['needs', 'chat']), 'needs you', 'need you'], [by(['working']), 'working', 'working'], [by(['quiet']), 'gone quiet', 'gone quiet'], [by(['failed']), "didn't finish", "didn't finish"], [by(['waiting']), 'waiting', 'waiting']] as const;
   const caption = said.filter(([l]) => l.length).map(([l, one, many]) => `${names([...l])} ${l.length === 1 ? one : many}`).join(' · ');
   return (
     <section className="chief-hero" aria-label="Chief">
@@ -321,7 +321,7 @@ function ChiefHero({ live, state }: { live: A.OfficeView; state: Json }) {
  *  resting, each a card; a section with nothing in it says so. */
 function TonightRail({ live }: { live: A.OfficeView }) {
   const crew = A.roster(live.crew), seat = (c: A.OfficeMember) => A.seatOf(c);
-  const working = crew.filter((c) => seat(c) === 'working'), resting = crew.filter((c) => seat(c) === 'resting');
+  const working = crew.filter((c) => seat(c) === 'working'), held = crew.filter((c) => seat(c) === 'waiting');
   const day = new Date().setHours(0, 0, 0, 0), ready = live.done.filter((t) => t.at >= day);
   const who = (id: string) => live.crew.find((c) => c.id === id);
   const card = (c: A.OfficeMember, line: string, tag?: string) => <a key={c.id} className="tr-card" href={hrefOf(c.id)}><Face who={c} size={52} /><span className="grow"><b>{c.name}</b><span className="clamp2">{line}</span></span>{tag && <em>{tag}</em>}</a>;
@@ -332,8 +332,8 @@ function TonightRail({ live }: { live: A.OfficeView }) {
     <div className="label">Ready for you</div>
     {ready.length ? ready.slice(0, 3).map((t) => { const h = who(t.helper); return <a key={t.id} className="tr-card" href={`#/things/t${t.id}`}>{h ? <Face who={h} size={52} /> : <Face who="chief" size={52} />}<span className="grow"><b className="clamp1">{t.title}</b><span className="clamp1">From {h?.name ?? 'Chief'} · in your tray</span></span></a>; })
       : <p className="tr-empty">Nothing new in your tray today.</p>}
-    <div className="label">Resting</div>
-    {resting.length ? resting.map((c) => card(c, c.status)) : <p className="tr-empty">Nobody is resting.</p>}
+    <div className="label">Waiting</div>
+    {held.length ? held.map((c) => card(c, c.status)) : <p className="tr-empty">Nothing is on hold.</p>}
   </>;
 }
 
@@ -375,7 +375,7 @@ function Home(ctx: Ctx) {
         <Office state={state} live={live} night={ctx.night} />
         <div className="phone-only">
           <NeedsPin state={state} cards={live.needs} />
-          <OnItNow live={live} waiting={waiting} />
+          <OnItNow live={live} />
           <Chats state={state} refresh={refresh} /><JobList state={state} phone refresh={refresh} />
         </div>
       </div>
@@ -383,7 +383,7 @@ function Home(ctx: Ctx) {
         <div className="feed-list">
           {tonight()}
           <NeedsPin state={state} cards={live.needs} />
-          <OnItNow live={live} waiting={waiting} />
+          <OnItNow live={live} />
           <Chats state={state} refresh={refresh} desk />
           <JobList state={state} few refresh={refresh} />
         </div>

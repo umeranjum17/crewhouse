@@ -670,12 +670,12 @@ test("Chief's mood is the first matching row of the table, and the line follows 
 
 test('helpers wear the same story on their own faces', () => {
   const min = 60_000, ago = (m: number) => Date.now() - m * min;
-  const s = { person: { id: 1 }, asks: [], tasks: [], resting: {}, events: [
+  const s = { person: { id: 1 }, asks: [], tasks: [{ id: 3, bot: 'scribe', state: 'failed', updated_at: ago(3) }], resting: {}, events: [
     { kind: 'task.failed', bot: 'scribe', at: ago(3), data: { title: 'The note' } },
     { kind: 'task.done', bot: 'scout', at: ago(2), data: { title: 'Flights' } },
   ], bots: [
     { id: 'chief', display: 'Chief' },
-    { id: 'scribe', display: 'Scribe', template: 'scribe', unread: 1 },                       // unread failure → sad
+    { id: 'scribe', display: 'Scribe', template: 'scribe', unread: 1 },                       // today's failure → sad
     { id: 'reel', display: 'Reel', template: 'reel', task: { id: 1, title: 'A video', state: 'needs_you' } }, // → ask
     { id: 'scout', display: 'Scout', template: 'scout' },                                     // fresh work → happy
     { id: 'pip', display: 'Pip', template: 'scout', stuck: true, quietSince: ago(7) },        // → worried
@@ -1002,7 +1002,7 @@ test('Chief\'s box answers who is on what and what the crew knows about you itse
     'who is working on the tax return, and can they hurry', 'my details changed: new address is 4 Elm Road', 'plan my day around the dentist at 3'])
     assert.equal(A.cannedOf(t), '', t);
   assert.equal(A.canned(state, 'status'), `${A.crewLine(state)} ${A.homeCounts(state).needs} things need you.`);
-  assert.equal(A.canned({ ...state, asks: [], resting: {}, bots: [bot('chief'), bot('scout')] }, 'status'), 'Nobody is on a job right now.');
+  assert.equal(A.canned({ ...state, asks: [], resting: {}, tasks: [], bots: [bot('chief'), bot('scout')] }, 'status'), 'Nobody is on a job right now.');
   assert.equal(A.canned(state, 'details', '- Vegetarian at home\n- Two children: Zara (9) and Ali (6)\n'), "You're Umer.\nWhat the crew knows about you:\n• Vegetarian at home\n• Two children: Zara (9) and Ali (6)");
   assert.match(A.canned(state, 'details', ''), /^You're Umer\.\nThe crew knows nothing else about you yet\./);
   for (const k of ['status', 'details'] as const) assert.doesNotMatch(A.canned(state, k, '- See files/x.md'), FORBIDDEN);
@@ -1014,9 +1014,9 @@ test('who is on what: one plain line from state alone, resting included, no mode
   assert.equal(A.crewLine(state), `Reel needs you. Scout is on “Flights”. The crew is resting until ${A.clock(now + 3600_000)}.`);
   const st = { ...state, resting: {}, bots: [bot('chief', { task: { id: 9, title: 'Plan dinners', state: 'working' } }), bot('scout', { task: { id: 6, title: 'Flights', state: 'working' }, controls: 'person' }),
     bot('scribe', { task: { id: 7, title: 'Post', state: 'working' }, stuck: true, quietSince: now - 9 * 60_000 }), bot('reel', { pausedUntil: now + 600_000 }), bot('tracer')] };
-  assert.equal(A.crewLine(st), `Chief is on “Plan dinners”. Scout waits while you drive. Scribe has gone quiet. Reel is resting until ${A.clock(now + 600_000)}.`);
+  assert.equal(A.crewLine(st), `Chief is on “Plan dinners”. Scout waits while you drive. Scribe has gone quiet. Reel is waiting until ${A.clock(now + 600_000)}.`);
   assert.equal(A.crewLine({ ...st, bots: [bot('chief'), bot('tracer')] }), '', 'a quiet crew says nothing (Chief\'s own line stands)');
-  assert.equal(A.crewLine({ ...st, bots: [bot('chief'), bot('reel', { pausedUntil: now + 600_000, queued: 1 })] }), '', 'a job waiting its turn is nobody working yet');
+  assert.equal(A.crewLine({ ...st, bots: [bot('chief'), bot('reel', { pausedUntil: now + 600_000, queued: 1 })] }), `Reel is waiting until ${A.clock(now + 600_000)}.`, 'a held job behind a queued one: waiting, nobody working yet');
   assert.doesNotMatch(A.crewLine(state), FORBIDDEN);
 });
 

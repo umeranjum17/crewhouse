@@ -706,6 +706,13 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
     setTransport(call);
     return release;
   }, [grant, refresh, onRemoved]);
+  // Going quiet is time passing, not news, so no event says it: look again while on screen, as the computer's app does.
+  const awake = motion.useAwake();
+  useEffect(() => {
+    if (status !== 'online' || !awake) return;
+    const t = setInterval(refresh, 15000);
+    return () => clearInterval(t);
+  }, [status, awake, refresh]);
   useEffect(() => {
     if (status === 'online') { setLate(false); return; }
     const t = setTimeout(() => setLate(true), 8000);
@@ -1169,8 +1176,8 @@ function NeedsPin({ state, cards, open, go }: { state: Json; cards: A.Card[]; op
   );
 }
 
-const BADGE: Partial<Record<A.Seat | 'done', string>> = { needs: '!', chat: '!', working: '', failed: '!', done: '\u2713', resting: 'z' };
-const BADGE_BG: Partial<Record<A.Seat | 'done', string>> = { needs: '#D63A1E', chat: '#D63A1E', failed: '#D63A1E', working: '#1F9D62', done: '#3B6FE0' };
+const BADGE: Partial<Record<A.Seat | 'done', string>> = { needs: '!', chat: '!', working: '', quiet: '?', failed: '!', done: '\u2713', waiting: '\u2026' };
+const BADGE_BG: Partial<Record<A.Seat | 'done', string>> = { needs: '#D63A1E', chat: '#D63A1E', quiet: '#D63A1E', failed: '#D63A1E', working: '#1F9D62', done: '#3B6FE0' };
 /** Home's chat opens on Chief (web/src/main.tsx ChiefHero, B1 phone): his whole figure, his own last words in a
  *  bubble, and the crew's faces at the card's foot with a badge each; no caption on the phone. */
 function ChiefHero({ live, state, go }: { live: A.OfficeView; state: Json; go: Ctx['go'] }) {
@@ -1201,12 +1208,12 @@ function ChiefHero({ live, state, go }: { live: A.OfficeView; state: Json; go: C
 /** On it now (B1): a card per helper at work, their face, name and step; honest when nobody is. */
 function OnItNow({ view }: { view: A.OfficeView }) {
   const t = useLook();
-  const working = view.crew.filter((c) => A.seatOf(c) === 'working'), waiting = view.crew.filter(A.waitsOnYou).length;
+  const working = view.crew.filter((c) => A.seatOf(c) === 'working');
   return <View style={{ gap: 8 }}>
     <View style={[s.row, { justifyContent: 'space-between' }]}><Label>On it now</Label><T tone="mute" style={s.small}>{`${working.length} working`}</T></View>
     {working.length ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{working.map((c) => <View key={c.id} style={[s.listRow, { flexBasis: '47%', flexGrow: 1, minWidth: 0, borderWidth: 1, borderColor: t.line, borderRadius: 16, backgroundColor: t.solid }]}>
       <Face who={{ kind: c.kind, name: c.name, mood: c.mood }} size={34} /><View style={{ flex: 1, minWidth: 0 }}><T style={s.b} lines={1}>{c.name}</T><T tone="ink2" style={s.small} lines={1}>{c.step || c.status}</T></View>
-    </View>)}</View> : <Card><T tone="ink2">{waiting ? `Nobody is working: ${waiting} waiting on you.` : 'Nobody is working right now. The crew is free.'}</T></Card>}
+    </View>)}</View> : <Card><T tone="ink2">{A.idleLine(view)}</T></Card>}
   </View>;
 }
 
