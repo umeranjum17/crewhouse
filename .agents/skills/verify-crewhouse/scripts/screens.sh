@@ -17,8 +17,19 @@
 #   )" scripts/screens.sh "$EV/screens" office "http://127.0.0.1:$PORT/"
 set -euo pipefail
 
-DEST=$1; SLUG=$2; URL=$3; EXTRA=${4:-}
+SKILL_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 [ $# -ge 3 ] || { echo "usage: screens.sh <dest-dir> <screen-slug> <app-url> [extra-query]" >&2; exit 2; }
+# Mandatory on every UI run, before the first capture: Crewhouse is a personal assistant
+# for ONE person, so no screen, seed or prompt may speak about several people sharing it.
+# A hit exits 1 and stops the run — fix the producer (the seed, the prompt, the component),
+# never edit the string out of a screenshot. --self-test is its own negative test.
+# (run from the repo top: the scan's default paths are relative to it)
+cd -- "$(git -C "$SKILL_DIR" rev-parse --show-toplevel)"
+node "$SKILL_DIR/scripts/personal-voice.mjs" --self-test >/dev/null
+node "$SKILL_DIR/scripts/personal-voice.mjs" || {
+  echo "screens.sh: personal-voice check failed — fix the producer, then re-run" >&2; exit 1; }
+
+DEST=$1; SLUG=$2; URL=$3; EXTRA=${4:-}
 mkdir -p "$DEST"
 # The query goes before the hash: the app routes on location.hash, so "?night#/settings" would pin nothing.
 withq() { local q=$1; case "$2" in *'#'*) printf '%s?%s%s' "${2%%#*}" "$q" "#${2#*#}";; *) printf '%s?%s' "$2" "$q";; esac; }
