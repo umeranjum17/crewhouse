@@ -8,7 +8,7 @@ import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { chmodSync, existsSync, mkdirSync,  readdirSync, readFileSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync,  readdirSync, readFileSync, statSync, symlinkSync, writeFileSync, type Dirent } from 'node:fs';
 import { join } from 'node:path';
 import { temp } from './tmp.ts';
 import { createServer, type AddressInfo } from 'node:net';
@@ -35,6 +35,10 @@ put(join(xdgConfig, 'gws-axi', 'credentials.json'), JSON.stringify({ installed: 
 put(join(home, '.chrome-devtools-axi', 'snapshot-generation'), '7');
 put(join(home, '.claude', 'settings.json'), '{}');
 put(join(home, '.npmrc'), `//registry.npmjs.org/:_authToken=${CANARY}`);
+// One path of the owner's this process cannot read, as another tool's quarantined folder is: the inventory below must
+// walk past it and name it, never take the whole check down (and a root run, which can read it anyway, sees the file).
+put(join(home, 'quarantined', 'never-read.txt'), `${CANARY}-locked`);
+chmodSync(join(home, 'quarantined'), 0o000);
 put(join(install, 'package.json'), JSON.stringify({ name: '@earendil-works/pi-coding-agent', version: '0.0.1', piConfig: { name: 'pi', configDir: '.pi' } }));
 const bin = join(root, 'bin');
 for (const b of ['pi', 'playwright-axi', 'chrome-devtools-axi', 'npx', 'npm']) {
@@ -53,11 +57,30 @@ mkdirSync(join(tools, 'bin'), { recursive: true });
 symlinkSync(axi, join(tools, 'bin', 'playwright-axi'));
 mkdirSync(marks);
 
-const hashes = (dir: string): Record<string, string> => Object.fromEntries(readdirSync(dir, { recursive: true, withFileTypes: true })
-  .filter((e) => e.isFile()).map((e) => { const p = join(e.parentPath, e.name); return [p, createHash('sha256').update(readFileSync(p)).digest('hex') + statSync(p).mtimeMs]; }));
+// The inventory of what the owner owns. A path this process cannot read becomes an explicit UNKNOWN entry and the walk
+// carries on, so one unreadable folder can never abort the check that exists to prove isolation.
+const inventory = (dir: string) => {
+  const files: Record<string, string> = {};
+  const unknown: string[] = [];
+  const walk = (d: string): void => {
+    let entries: Dirent[];
+    try { entries = readdirSync(d, { withFileTypes: true }); } catch { unknown.push(d); return; }
+    for (const e of entries) {
+      const p = join(d, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (e.isFile()) { try { files[p] = createHash('sha256').update(readFileSync(p)).digest('hex') + statSync(p).mtimeMs; } catch { unknown.push(p); } }
+    }
+  };
+  walk(dir);
+  return { files, unknown: unknown.sort() };
+};
 const owned = [pi, install, agents, xdgCache, xdgConfig, join(home, '.chrome-devtools-axi'), join(home, '.claude')];
-const everything = () => ({ ...hashes(home), ...hashes(install) }); // the owner's whole home, not just the folders traced
+const everything = () => { // the owner's whole home, not just the folders traced
+  const a = inventory(home), b = inventory(install);
+  return { files: { ...a.files, ...b.files }, unknown: [...a.unknown, ...b.unknown].sort() };
+};
 const before = everything();
+for (const p of before.unknown) console.error(`# UNKNOWN (could not read): ${p}`); // a gap must never read as "nothing there"
 
 const port = await new Promise<number>((r) => { const s = createServer().listen(0, '127.0.0.1', () => { const { port } = s.address() as AddressInfo; s.close(() => r(port)); }); });
 const base = `http://127.0.0.1:${port}`;
@@ -75,7 +98,7 @@ const env = {
 };
 let daemon: ChildProcess;
 const start = () => { daemon = spawn(process.execPath, ['--import', traceFs, join(import.meta.dirname, '..', 'src', 'main.ts')], { env, stdio: ['ignore', 'ignore', 'inherit'] }); };
-after(() => daemon?.kill());
+after(() => { try { chmodSync(join(home, 'quarantined'), 0o700); } catch {} daemon?.kill(); }); // readable again, so the temp tree can be removed
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const api = async (method: string, path: string, body?: unknown) =>
@@ -109,6 +132,8 @@ test("the owner's own Pi is never read or written, and never run", async () => {
   const touched = readFileSync(trace, 'utf8').trim();
   assert.equal(touched, '', `crewd touched the owner's Pi or tools:\n${touched}`);
   assert.deepEqual(everything(), before, 'byte for byte, and not even rewritten');
+  assert.deepEqual(before.unknown, [join(home, 'quarantined')],
+    'the one unreadable path is on the inventory as UNKNOWN and named, not dropped');
   assert.deepEqual(readdirSync(marks), [], 'the owner\'s extension never loaded, and their pi, AXIs and npx never ran');
 
   // The browser ran from Crewhouse's own copy, on crewd's node, with only what crewd gave it.
