@@ -48,6 +48,8 @@ export type Step = { at: number; text: string; now?: boolean; asked?: boolean; s
 export type Line = { id: number; from: 'me' | 'them' | 'chief' | 'note'; text: string; files: FileView[]; choices: string[]; at?: number; unsure?: boolean; recap?: boolean;
   /** A tray notice's helper (Chief's thread): the small face beside "Tracer finished … · it's in your tray". */
   by?: string;
+  /** A helper speaking in Chief's thread (its finished job or its question, in its own words): its face and name lead. */
+  helper?: string;
   /** Chief's full assignment in a helper's chat, behind Show details: the line itself stays one short ask. */
   detail?: string;
   /** What a delivered workbook or document holds, said once: the web's card says it itself, the phone shows these. */
@@ -132,16 +134,16 @@ export function workbook(json: Json, name: string): Workbook {
   return {
     name,
     sheets: (Array.isArray(json?.sheets) ? json.sheets : []).slice(0, 12).map((s: Json) => {
-      const rows = (Array.isArray(s?.rows) ? s.rows : []).slice(0, 40)
-        .map((r: Json) => (Array.isArray(r) ? r : []).slice(0, 14).map((c: Json) => plain(String(c ?? '')).slice(0, 160)));
-      const nums = (Array.isArray(s?.nums) ? s.nums : []).slice(0, 40).map((n: Json) => Number(n) || 0);
-      const roles = (Array.isArray(s?.roles) ? s.roles : []).slice(0, 40)
-        .map((r: Json) => (Array.isArray(r) ? r : []).slice(0, 14).map((c: Json) => ['head', 'in', 'calc'].includes(String(c)) ? String(c) : ''));
+      const rows = (Array.isArray(s?.rows) ? s.rows : []).slice(0, 501)
+        .map((r: Json) => (Array.isArray(r) ? r : []).slice(0, 24).map((c: Json) => plain(String(c ?? '')).slice(0, 160)));
+      const nums = (Array.isArray(s?.nums) ? s.nums : []).slice(0, 501).map((n: Json) => Number(n) || 0);
+      const roles = (Array.isArray(s?.roles) ? s.roles : []).slice(0, 501)
+        .map((r: Json) => (Array.isArray(r) ? r : []).slice(0, 24).map((c: Json) => ['head', 'in', 'calc'].includes(String(c)) ? String(c) : ''));
       return { name: plain(String(s?.name ?? '').trim()) || 'Sheet', head: rows[0] ?? [], rows: rows.slice(1), total: Number(s?.total) || rows.length, nums, roles };
     }),
   };
 }
-/** A sheet's column letter: A, B, C… (workbook() keeps 14 columns at most, so one letter always does). */
+/** A sheet's column letter: A, B, C… (workbook() keeps 24 columns at most, so one letter always does). */
 export const column = (i: number) => String.fromCharCode(65 + i);
 /** How many tabs a workbook has, said the way a person would: "One sheet", "4 sheets". */
 export const sheetWords = (n: number) => (n === 1 ? 'One sheet' : n > 1 ? `${n} sheets` : 'A spreadsheet');
@@ -525,7 +527,7 @@ export function preview(last: Json | null | undefined, status = '') {
 /** What Chief last said himself, for his hero (B1): his own message, never the person's; '' when he has said nothing. */
 export function chiefSaid(state: Json): string {
   const last = state.bots.find((b: Json) => b.id === 'chief')?.last;
-  return last && last.author !== 'person' && String(last.text ?? '').trim() ? preview(last) : '';
+  return last && last.author !== 'person' && !last.helper && String(last.text ?? '').trim() ? preview(last) : ''; // a helper's own words are never Chief's
 }
 export function chats(state: Json): Chat[] {
   const bot = (id: string) => state.bots.find((b: Json) => b.id === id) ?? {};
@@ -1046,7 +1048,7 @@ export function lines(page: Json, bot: string): Line[] {
     if (m.author === 'chief' && bot !== 'chief') return { id: m.id, from: 'chief',
       text: `Chief asked: ${plain(String(m.title ?? text.split('\n')[0])).slice(0, 80)}`, detail: chatWords(text),
       files: [...pics, ...(m.files ?? []).map((f: Json) => fileView(f.bot, f.path))], choices: [] };
-    return { id: m.id, from: m.author === 'person' ? 'me' : 'them',
+    return { id: m.id, from: m.author === 'person' ? 'me' : 'them', ...(m.helper ? { helper: String(m.helper) } : {}),
       recap: m.recap === true, text: m.author === 'person' ? (pics.length && /^Here (is a photo|are some photos)\.$/.test(text) ? '' : noTools(text)) : chatWords(text), files: [...pics, ...(m.files ?? []).map((f: Json) => fileView(f.bot, f.path))], choices: (m.choices ?? []).map(plain), at: m.at ? at(m.at) : undefined, unsure: m.author === 'bot' && /^Not sure it worked:|^[^.]{1,40} isn't sure “/.test(text) };
   }).filter((l: Line) => l.text || l.files.length);
 }

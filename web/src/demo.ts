@@ -152,7 +152,7 @@ const state = {
     task(38, 'reel', 'Eid photo collage', 'done', { updated_at: now - 26 * 60 * min, result: 'A collage of the twelve best Eid photos, sized for WhatsApp.', files: [svg('#ffc27a', '#ff7aa2', 'Eid Mubarak ♡')] }),
     task(36, 'scribe', 'Letter to the landlord about the boiler', 'done', { updated_at: now - 50 * 60 * min, result: 'A short, polite letter asking for the boiler to be fixed before the weekend.', files: ['files/letter-to-landlord.pdf'] }),
     task(35, 'pip', 'Dentist in the calendar', 'done', { updated_at: now - 3 * 24 * 60 * min, result: 'Added the dentist, Friday 9 am, with a reminder the night before.' }),
-    task(46, 'scribe', 'Hotel guest reception', 'done', { updated_at: Math.max(today, now - 22 * min), result: 'A workbook the front desk can run the day on: the dashboard, the booking log, the room board and the payments.', files: ['files/hotel-guest-reception.xlsx'] }),
+    task(46, 'scribe', 'Monthly budget', 'done', { updated_at: Math.max(today, now - 22 * min), result: 'Your monthly budget: what is planned and spent, the bills by due date, and the savings goals.', files: ['files/monthly-budget.xlsx'] }),
   ],
   ideas: [
     { bot: 'scout', promise: "I'll keep an eye on what you just bought, and tell you the day you can claim the money back. I'll do it end to end — you just tap approve.", ask: 'Watch something I bought and tell me when I can claim the difference back', group: 'money', needs: ['Gmail'] },
@@ -279,16 +279,16 @@ if (variant === 'connect') pages.pip = { messages: [
 ] };
 // A workbook, asked for in one line: one question back, then the finished file. The screens show what crewd read out of it.
 pages.scribe = { messages: [
-  { id: 1, author: 'person', text: 'create an excel for reception at the hotel' },
-  { id: 2, author: 'bot', text: 'One thing before I build it: is this the desk\u2019s own day sheet, or the manager\u2019s log of every booking?' },
-  { id: 3, author: 'person', text: "the desk's own day sheet" },
-  { id: 4, author: 'bot', text: 'Then one workbook, ready to use: a dashboard for today, the booking and check-in log, the room and housekeeping board, and the payments. Each has an example row and dropdowns where you need them.' },
-  { id: 5, author: 'system', text: 'Delivered files/hotel-guest-reception.xlsx: 4 sheets: Daily dashboard, Booking & check-in, Rooms & housekeeping, Payments' },
-  { id: 6, author: 'person', text: 'now put the desk rules together as a word document for the drawer' },
-  { id: 7, author: 'bot', text: 'One thing: just for the front-desk team, or one the manager signs off on too?' },
-  { id: 8, author: 'person', text: 'just the front-desk team' },
-  { id: 9, author: 'bot', text: 'Done: the front-desk handbook. How the day opens, check-ins, payments, and what to do when the power goes. Say the word and I’ll change anything in it.' },
-  { id: 10, author: 'system', text: 'Delivered files/front-desk-handbook.docx: A document in 3 sections: Front-desk handbook' },
+  { id: 1, author: 'person', text: 'make me a spreadsheet for my monthly budget' },
+  { id: 2, author: 'bot', text: 'One thing before I build it: just October, or one you can copy every month?' },
+  { id: 3, author: 'person', text: 'one I can copy every month' },
+  { id: 4, author: 'bot', text: 'Here it is: what you planned and spent this month, the bills with their due dates, and your savings goals. The sums work themselves out, so change any number and they follow.' },
+  { id: 5, author: 'system', text: 'Delivered files/monthly-budget.xlsx: 3 sheets: This month, Bills, Savings' },
+  { id: 6, author: 'person', text: 'now a word document for my Murree trip, something I can print' },
+  { id: 7, author: 'bot', text: 'One thing: the long weekend, or the whole week?' },
+  { id: 8, author: 'person', text: 'the long weekend' },
+  { id: 9, author: 'bot', text: 'Done: your Murree weekend. Each day’s plan, what to pack, and where you’re staying. Say the word and I’ll change anything in it.' },
+  { id: 10, author: 'system', text: 'Delivered files/murree-weekend.docx: A document in 3 sections: Murree weekend' },
 ] };
 // ?demo=building: Scribe mid-build — the question answered, the workbook not yet delivered, so the chat holds its place.
 if (variant === 'building') {
@@ -347,30 +347,34 @@ const flights = { sheets: [{ name: 'Flights', total: 4, rows: [['Airline', 'Leav
   nums: [1, 2, 3, 4], roles: [['head', 'head', 'head', 'head'], ['', '', '', ''], ['', '', '', ''], ['', '', '', '']] }] };
 const book = {
   sheets: [
-    { name: 'Daily dashboard', total: 6, rows: [
-      ['Today', 'Number', 'Notes'], ['Arrivals', '6', 'Two early, one at 4pm'], ['Departures', '4', 'One late checkout agreed'], ['Walk-ins so far', '1', 'Room 204 taken'], ['Rooms ready', 'auto', 'Worked out when you open it']],
-      nums: [1, 2, 3, 4, 5], roles: [['head', 'head', 'head'], ['', '', ''], ['', '', ''], ['', '', ''], ['', 'calc', '']] },
-    { name: 'Booking & check-in', total: 34, rows: [
-      ['Guest', 'Room', 'Arrival', 'Departure', 'Nights', 'Status', 'Rate', 'Paid'],
-      ['Amina Khan', '204', '11 Oct', '14 Oct', '3', 'Checked in', '285', '285'],
-      ['Bilal Sheikh', '108', '12 Oct', '13 Oct', '1', 'Booked', '120', '40'],
-      ['Sana Nazir', '301', '12 Oct', '16 Oct', '4', 'Waitlist', '520', '0']],
-      nums: [1, 2, 3, 4], roles: [['head', 'head', 'head', 'head', 'head', 'head', 'head', 'head'],
-        ['', '', '', '', '', 'in', '', ''], ['', '', '', '', '', 'in', '', ''], ['', '', '', '', '', 'in', '', '']] },
-    { name: 'Rooms & housekeeping', total: 40, rows: [
-      ['Room', 'Type', 'Guest', 'State', 'Checked by', 'Notes'],
-      ['204', 'Sea view double', 'Amina Khan', 'Checked in', 'Rani', 'Extra pillow asked for'],
-      ['108', 'Standard single', '', 'Cleaning', '', 'Start after 11'],
-      ['301', 'Suite', '', 'To do', '', 'Hairdryer missing']],
-      nums: [1, 2, 3, 4], roles: [['head', 'head', 'head', 'head', 'head', 'head'],
-        ['', '', '', 'in', '', ''], ['', '', '', 'in', '', ''], ['', '', '', 'in', '', '']] },
-    { name: 'Payments', total: 12, rows: [
-      ['Guest', 'Room', 'Bill', 'Paid', 'To pay', 'Way paid'],
-      ['Amina Khan', '204', '285', '285', '0', 'Card'],
-      ['Bilal Sheikh', '108', '120', '40', '80', 'Cash'],
-      ['Sana Nazir', '301', '520', '0', '520', 'Not paid yet']],
-      nums: [1, 2, 3, 4], roles: [['head', 'head', 'head', 'head', 'head', 'head'],
-        ['', '', '', '', 'calc', 'in'], ['', '', '', '', 'calc', 'in'], ['', '', '', '', 'calc', 'in']] },
+    { name: 'This month', total: 10, rows: [
+      ['What', 'Planned', 'Spent so far', 'Left'],
+      ['Groceries', '600', '412', '188'],
+      ['Rent', '1450', '1450', '0'],
+      ['Bills', '380', '295', '85'],
+      ['Transport', '160', '98', '62'],
+      ['Gym', '220', '141', '79'],
+      ['Eating out', '150', '96', '54'],
+      ['Gifts', '80', '35', '45'],
+      ['Savings', '400', '400', '0'],
+      ['Total', '3440', '2927', '513']],
+      nums: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], roles: [['head', 'head', 'head', 'head'], ['', '', '', 'calc'], ['', '', '', 'calc'], ['', '', '', 'calc'], ['', '', '', 'calc'], ['', '', '', 'calc'], ['', '', '', 'calc'], ['', '', '', 'calc'], ['', '', '', 'calc'], ['', 'calc', 'calc', 'calc']] },
+    { name: 'Bills', total: 8, rows: [
+      ['Bill', 'Due', 'Amount', 'Paid?'],
+      ['Electricity', 'Oct 8', '85', 'Yes'],
+      ['Water', 'Oct 12', '42', 'Yes'],
+      ['Internet', 'Oct 15', '45', 'No'],
+      ['Phones', 'Oct 21', '58', 'No'],
+      ['Car insurance', 'Oct 25', '65', 'No'],
+      ['Gym membership', 'Oct 28', '85', 'No'],
+      ['Total still to pay', '', '253', '']],
+      nums: [1, 2, 3, 4, 5, 6, 7, 8], roles: [['head', 'head', 'head', 'head'], ['', '', '', 'in'], ['', '', '', 'in'], ['', '', '', 'in'], ['', '', '', 'in'], ['', '', '', 'in'], ['', '', '', 'in'], ['', '', 'calc', '']] },
+    { name: 'Savings', total: 4, rows: [
+      ['Goal', 'Target', 'Saved', 'Still to go'],
+      ['Rainy-day fund', '3000', '1850', '1150'],
+      ['Lahore trip in December', '1800', '960', '840'],
+      ['New running shoes', '120', '120', '0']],
+      nums: [1, 2, 3, 4], roles: [['head', 'head', 'head', 'head'], ['', '', '', 'calc'], ['', '', '', 'calc'], ['', '', '', 'calc']] },
   ],
 };
 /** What crewd read out of a watch brief (?demo=neighbour, ?demo=brief, src/documents.ts): plain parts, never the file. */
@@ -404,16 +408,16 @@ const doc = variant === 'voice-after' ? briefDoc('muxr launch plan', [
   { kind: 'p', text: 'The association meets on the 9th to set winter hours; whatever it decides, the Monday gap is yours until it does.' },
 ]) : {
   parts: [
-    { kind: 'heading', text: 'Front-desk handbook' },
-    { kind: 'p', text: 'How the desk runs on an ordinary day, and what to do on a day that is not ordinary.' },
-    { kind: 'heading', text: 'Opening the day' },
-    { kind: 'li', text: 'Count the till against yesterday’s sheet before the first check-in.' },
-    { kind: 'li', text: 'Walk the free rooms; anything not ready goes on the board as Cleaning.' },
-    { kind: 'li', text: 'Print the arrivals list and mark early check-ins the guest asked for.' },
-    { kind: 'heading', text: 'Check-ins and departures' },
-    { kind: 'p', text: 'Check-in is from 2 pm; the night team leaves the welcome envelopes ready. At departure, walk the room before returning the key deposit.' },
-    { kind: 'heading', text: 'Today' },
-    { kind: 'table', head: ['Shift', 'On the desk', 'Notes'], rows: [['Morning', 'Rani', 'Two early arrivals'], ['Evening', 'Yusuf', 'Late checkout, room 204']] },
+    { kind: 'heading', text: 'Murree weekend' },
+    { kind: 'p', text: 'Friday to Sunday. Leave early, before the motorway gets busy.' },
+    { kind: 'heading', text: 'Getting there' },
+    { kind: 'li', text: 'Leave home at 6 am; breakfast at the Bhera stop.' },
+    { kind: 'li', text: 'Fuel up in Islamabad; the hill road has few pumps.' },
+    { kind: 'li', text: 'A warm jacket, gloves, and snacks for the drive.' },
+    { kind: 'heading', text: 'Where you stay' },
+    { kind: 'p', text: 'Two nights at the guest house on Kashmir Point; check-in from 2 pm, breakfast included.' },
+    { kind: 'heading', text: 'Each day' },
+    { kind: 'table', head: ['Day', 'Plan', 'Notes'], rows: [['Saturday', 'Patriata chairlift', 'Go before noon'], ['Sunday', 'Mall Road, then home', 'Leave by 3 pm']] },
   ],
 };
 if (variant.startsWith('phone')) pages.chief = {

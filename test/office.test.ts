@@ -390,7 +390,7 @@ test('at 1, 5, 12 and 30 crew and in the B1 mock\'s house, on a phone and a comp
 test('a finished file opens beside its chat: the composer stays clear of the panel', { skip: !bin && 'no Chromium here' }, async () => {
   const b = await browse();
   await b.send('Page.enable'); await b.send('Runtime.enable');
-  await b.open(`demo&day#/f/scribe/${encodeURIComponent('files/hotel-guest-reception.xlsx')}`);
+  await b.open(`demo&day#/f/scribe/${encodeURIComponent('files/monthly-budget.xlsx')}`);
   const edges = "(() => { const c = document.querySelector('.composer'), p = document.querySelector('.wb-panel'); return c && p && p.querySelector('.wb-grid') ? { composer: c.getBoundingClientRect().right, panel: p.getBoundingClientRect().left } : null; })()";
   await until('the chat and the open workbook', () => b.run(edges), 30_000);
   const { composer, panel } = await b.run(edges);

@@ -1001,11 +1001,12 @@ test("a helper's question round-trips in Chief's thread: one answer, then the fi
 
   // The question reaches Chief's thread word for word, ending in "?", carrying its task but no card.
   const question = chiefBot().at(-1)!;
-  assert.ok(question.startsWith('Scribe asks: '));
+  assert.ok(question.endsWith(' Visitor log, bookings, or something else?') && !question.includes('asks:'), 'in the helper\'s own words, no "asks:" prefix');
   assert.ok(question.endsWith('?'));
   assert.equal(db.get("SELECT task_id AS id FROM messages WHERE bot = 'chief' AND author = 'bot' AND text = ?", question)?.id, first);
   let page = await crew.botPage('chief');
   assert.deepEqual(page.messages.find((m: any) => m.task_id === first)?.files, [], 'a line with a task and no files adds no card');
+  assert.equal(page.messages.find((m: any) => m.task_id === first)?.helper, 'scribe', 'the app shows Scribe said it');
 
   // Posting the answer starts a fresh Scribe task carrying the context, skipping routing and Chief.
   const second = (await crew.post('chief', 'bookings'))!.task;
