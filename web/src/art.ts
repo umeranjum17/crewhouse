@@ -86,6 +86,11 @@ export function beanSvg(kind: Kind, mood: Mood | Pose = 'idle', o: Opts = {}) {
     reel: `<g class="prop"><path d="M28 80C28 50 92 50 92 80" stroke="${INK}" stroke-width="3.4" fill="none"/><rect x="22" y="74" width="11" height="18" rx="5.5" fill="${INK}"/><rect x="87" y="74" width="11" height="18" rx="5.5" fill="${INK}"/></g>`,
     scribe: `<path d="M42 90h16M62 90h16" stroke="${INK}" stroke-width="2"/><path d="M42 90a8 6 0 0 0 16 0M62 90a8 6 0 0 0 16 0" fill="rgba(255,255,255,.5)" stroke="${INK}" stroke-width="2"/><rect x="58" y="108" width="30" height="22" rx="2" fill="#fff" stroke="${INK}" stroke-width="2"/><path d="M63 115h18M63 121h12" stroke="${INK}" stroke-width="1.6"/><g class="prop"><path d="M92 102l-10 18" stroke="${INK}" stroke-width="2.6" stroke-linecap="round"/><path d="M92 102l3 -5" stroke="${RED}" stroke-width="2.6" stroke-linecap="round"/></g>`,
     tracer: `<g class="prop"><rect x="58" y="100" width="30" height="36" rx="3" fill="#fff" stroke="${INK}" stroke-width="2"/><rect x="66" y="96" width="14" height="7" rx="2" fill="${INK}"/><path d="M63 112l3 3l5 -5M63 124l3 3l5 -5" stroke="${RED}" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M74 113h9M74 125h9" stroke="${INK}" stroke-width="1.6"/></g>`,
+    // The looks for helpers Chief makes up: each its own pastel and one thing to wear, so a new hire is never a clone.
+    bow: `<path d="M60 106l-13 -8v16zM60 106l13 -8v16z" fill="${RED}" stroke="${INK}" stroke-width="2" stroke-linejoin="round"/><circle cx="60" cy="106" r="3.2" fill="${RED}" stroke="${INK}" stroke-width="2"/>`,
+    cap: `<path d="M32 68C32 42 88 42 88 68Z" fill="#fff" stroke="${INK}" stroke-width="2.2" stroke-linejoin="round"/><path d="M31 68h58" stroke="${INK}" stroke-width="4" stroke-linecap="round"/><circle cx="60" cy="41" r="5" fill="${RED}" stroke="${INK}" stroke-width="2"/>`,
+    specs: `<circle cx="50" cy="82" r="8.5" fill="rgba(255,255,255,.35)" stroke="${INK}" stroke-width="2.2"/><circle cx="70" cy="82" r="8.5" fill="rgba(255,255,255,.35)" stroke="${INK}" stroke-width="2.2"/><path d="M58.5 82h3" stroke="${INK}" stroke-width="2.2"/>`,
+    scarf: `<path d="M31 100Q60 111 89 100v9Q60 120 31 109Z" fill="${RED}" stroke="${INK}" stroke-width="2" stroke-linejoin="round"/><path d="M68 112l3 22l9 -2l-3 -21" fill="${RED}" stroke="${INK}" stroke-width="2" stroke-linejoin="round"/>`,
     pip: `<path d="M30 76C28 50 50 40 68 44C84 48 98 62 104 84C98 88 92 82 88 74Z" fill="#fff" stroke="${INK}" stroke-width="2.2" stroke-linejoin="round"/><path d="M34 62C46 58 70 58 84 64" stroke="${f}" stroke-width="5"/><circle cx="104" cy="88" r="6" fill="${RED}" stroke="${INK}" stroke-width="2"/>`,
   }[kind];
   const zz = shut ? `<text class="zz" x="90" y="34" ${Z} font-size="20" fill="${INK}" opacity=".5">z</text>` : '';
@@ -99,13 +104,17 @@ export const headSvg = (who: Kind | 'chief', mood: Mood | Pose = 'idle') =>
   who === 'chief' ? chiefSvg(mood, { vb: '30 28 140 140', floor: false }) : beanSvg(who, mood, { vb: '8 26 104 104', floor: false });
 
 // ── The crew's colours: the bean's pastel and the tile behind a face ──
-export type Kind = 'reel' | 'scout' | 'scribe' | 'tracer' | 'pip';
+export type Kind = 'reel' | 'scout' | 'scribe' | 'tracer' | 'pip' | 'bow' | 'cap' | 'specs' | 'scarf';
 export const PALS: Record<Kind, { body: string; soft: string }> = {
   reel: { body: '#DCEBFF', soft: '#EDF4FF' },
   scout: { body: '#FFE3DB', soft: '#FFF1EC' },
   scribe: { body: '#FFF3C8', soft: '#FFF9E3' },
   tracer: { body: '#DDF4E6', soft: '#EEF9F2' },
   pip: { body: '#ECE6FF', soft: '#F5F2FF' },
+  bow: { body: '#D4F3EF', soft: '#EAF9F7' },
+  cap: { body: '#FFDDEA', soft: '#FFEEF4' },
+  specs: { body: '#F1E4D3', soft: '#F8F1E8' },
+  scarf: { body: '#E8F4CC', soft: '#F3F9E5' },
 };
 
 // ── The logo: a dot house with a smile, and the wordmark in the same dots ──

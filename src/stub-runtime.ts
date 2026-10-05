@@ -24,6 +24,8 @@ const GOLDEN: Record<string, string> = {
   'how do i pair my computer with you?': 'Open Add a phone on your computer and scan its code with your phone.',
   'i want to market my app': 'I can help market it. Send the site so I can see the product and audience before drafting a plan.',
   'https://trymuxr.com/': 'muxr lets developers manage coding agents from their phone. I’ll map the audience, focus on developer communities and founder posts, then ask Scout and Scribe for first drafts. Nothing will be posted.',
+  'I need someone to sort out my invoices': `I'll take on someone to keep your invoices in order. [tool crew_create {"name": "Penny", "role": "Keeps your invoices in order", "job": {"does": "Sorts your invoices: who sent each, how much, when it is due, and whether it is paid.", "aim": "Nothing you owe slips past its due date.", "gets": "Invoices you share or point to.", "how": "Reads each invoice, puts it in one sheet by due date and flags what is due soon.", "great": "One sheet you can trust at a glance; for example, two due this week, flagged first."}, "personality": "You are Penny. Tidy, calm and quick with numbers.", "first": "Sort out my invoices"}]`,
+  'Sort out my invoices': `Your invoices are in one sheet by due date: two are due this week. [tool crew_workbook {"name": "Your invoices", "sheets": [{"name": "Invoices", "columns": [{"header": "From"}, {"header": "Amount"}, {"header": "Due"}, {"header": "Paid?", "options": ["Yes", "No"]}], "rows": [["Water board", 42.5, "Oct 8", "No"], ["Dentist", 120, "Oct 10", "No"], ["Phone", 35, "Oct 21", "Yes"]]}]}]`,
 };
 
 /** Fast product-rule fixture. Security/engine acceptance runs the actual pinned Gateway on the HTTP stub (src/stub.ts).
@@ -59,7 +61,9 @@ export class StubRuntime implements AgentRuntime {
     this.specs.set(spec.key, spec);
     const said = spec.message;
     let result = '';
-    const seen = calls(said);
+    const last = said.split('\n').map((line) => line.trim()).filter((line) => line && !line.startsWith('[Crewhouse')).at(-1) ?? '';
+    const scripted = process.env.CREWHOUSE_STUB_GOLDEN ? GOLDEN[last.replace(/^The person says: /, '')] : undefined;
+    const seen = calls(said + (scripted ?? ''));
     if (spec.bot === 'chief' && /\[first words\]/.test(said)) on({ type: 'text', text: 'I’ll start by checking the next step.' });
     for (const { name, input } of seen) {
       on({ type: 'tool', name, phase: 'start' });
@@ -75,13 +79,10 @@ export class StubRuntime implements AgentRuntime {
     if (/no helpers in plan/i.test(said) && spec.account === 'chatgpt')
       return { ok: false, kind: 'plan', message: "Your plan doesn't include this model." };
     if (/sign me out/i.test(said)) return { ok: false, kind: 'signed-out', message: '401 Unauthorized: your sign-in has expired' };
-    const last = said.split('\n').map((line) => line.trim()).filter((line) => line && !line.startsWith('[Crewhouse')).at(-1) ?? '';
     let text = result ? `stub ${spec.bot}: ${seen.at(-1)?.name} said ${result.slice(0, 300)}` : `stub ${spec.bot}: done with "${last.slice(0, 60)}"`;
     if (/\[two-fare-backtest\]/.test(said))
       text = 'I recommend the lower fare from Fareboard. I checked Fareboard and Narrowfare; I didn\'t check baggage fees or live inventory.';
-    const asked = last.replace(/^The person says: /, '');
-    const scripted = process.env.CREWHOUSE_STUB_GOLDEN && spec.bot === 'chief' ? GOLDEN[asked] : undefined;
-    text = scripted ?? text;
+    text = scripted?.replace(/\s*\[tool [\s\S]*$/, '') ?? text;
     if (/ask permission/i.test(said)) {
       text = await new Promise<string>((resolve) => this.holds.set(spec.key, (reply) => resolve(reply || text)));
       if (this.cancelled.delete(spec.key)) return { ok: false, aborted: true }; // stopped on purpose, not finished

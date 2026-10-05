@@ -12,7 +12,7 @@ import { temp } from './tmp.ts';
 import { setup, sleep, task, until, prompted, settled, holding, release, lastSaid } from './lab.ts';
 import * as A from '../web/src/adapter.ts';
 
-const { Crew, quietNow, short, cleanReply } = await import('../src/crew.ts');
+const { Crew, quietNow, short, cleanReply, relayResult } = await import('../src/crew.ts');
 const { classify: classifyText } = await import('@byokit/accounts');
 const { Accounts, PROVIDERS } = await import('../src/accounts.ts');
 const { effectOf, browserAsk, coversOf, toolWords, orderOf } = await import('../src/policy.ts');
@@ -1165,11 +1165,11 @@ test('passing work on: a helper hands the next step to another for the same pers
   done();
 });
 
-test('Chief makes up a new helper on a card: nothing until the person says yes, then it joins with its job and starts', async () => {
+test('Chief makes up a new helper on a short card: nothing until the person says yes, then it joins with its job, its own look, and its first result in Chief\'s chat', async () => {
   const { db, crew, done } = setup();
   crew.onboard('sir');
   const create = (args: object) => `[tool crew_create ${JSON.stringify(args)}]`;
-  const pip = { name: 'Pip', job: { does: 'Watches rental listings in Phuket.', aim: 'Find new flats under $900 a month.', gets: 'Your budget and preferred area.', how: 'Check current listings and compare the details.', great: 'A shortlist with links and prices; for example, two verified flats under $900.' }, personality: 'You are Pip. Cheerful and quick.', first: 'find me flats in Phuket under $900' };
+  const pip = { name: 'Pip', role: 'Finds you a flat in Phuket', job: { does: 'Watches rental listings in Phuket.', aim: 'Find new flats under $900 a month.', gets: 'Your budget and preferred area.', how: 'Check current listings and compare the details.', great: 'A shortlist with links and prices; for example, two verified flats under $900.' }, personality: 'You are Pip. Cheerful and quick.', first: 'find me flats in Phuket under $900' };
   const { task: t } = (await crew.post('chief', `please ${create(pip)}`))!;
   await settled(db, t);
   const card = () => db.get("SELECT * FROM asks WHERE bot = 'chief' AND kind = 'propose' AND state = 'open'");
@@ -1177,7 +1177,10 @@ test('Chief makes up a new helper on a card: nothing until the person says yes, 
   assert.equal(crew.bot('pip'), undefined);
   const view = crew.snapshot().asks.find((a: any) => a.id === card()!.id)!;
   assert.equal(view.detail.yes, 'Yes, take Pip on');
-  assert.match(view.detail.preview.body, /Phuket[\s\S]*Cheerful[\s\S]*asks you before/);
+  // The hire in a glance, never the five-part job: the role, what it can and can't do, its first job.
+  const shown = A.card(view, crew.snapshot());
+  assert.deepEqual([shown.status, shown.words, shown.lines, shown.choices.map((c: any) => c.label)], ['A new helper', 'Shall I take on Pip?',
+    ['Finds you a flat in Phuket.', 'Can look things up. Asks you before sending or spending.', 'First job: find me flats in Phuket under $900'], ['Yes, take Pip on', 'Not now']]);
   assert.ok(!crew.snapshot().templates.some((x: any) => x.id === 'helper'), 'the base is never offered on its own');
 
   // Not now: nothing is made.
@@ -1189,7 +1192,9 @@ test('Chief makes up a new helper on a card: nothing until the person says yes, 
   await settled(db, t2);
   await crew.answer(card()!.id, { answer: 'allow' });
   const b = crew.bot('pip')!;
-  assert.equal(b.role, 'Watches rental listings in Phuket');
+  assert.equal(b.role, 'Finds you a flat in Phuket');
+  const bots = crew.snapshot().bots;
+  assert.ok(!bots.some((x: any) => x.id !== 'pip' && A.kindOf(x, bots) === A.kindOf(b, bots)) && !['reel', 'scout', 'scribe', 'tracer'].includes(A.kindOf(b, bots)), 'a look of its own');
   assert.equal(b.template, 'helper');
   const dir = join(crew['cfg'].crewDir, 'bots', 'pip');
   const instructions = readFileSync(join(dir, 'AGENTS.md'), 'utf8');
@@ -1198,10 +1203,11 @@ test('Chief makes up a new helper on a card: nothing until the person says yes, 
   assert.match(instructions, /## Boundaries[\s\S]*never sign in/);
   assert.throws(() => disk.writeJob(crew['cfg'], 'pip', { ...pip.job, aim: 'x'.repeat(601) }), /600/);
   assert.equal(readFileSync(join(dir, 'soul.md'), 'utf8'), '# Pip\n\nYou are Pip. Cheerful and quick.\n');
-  assert.match(lastSaid(db, 'chief'), /^Pip has joined the crew\. I've handed Pip your request/);
+  assert.equal(lastSaid(db, 'chief'), "Pip has joined the crew. Pip is starting on it now; I'll bring the result back here.");
   const first = db.get("SELECT * FROM tasks WHERE bot = 'pip'")!;
   assert.deepEqual([first.origin, first.body], ['chief', 'find me flats in Phuket under $900']);
   await settled(db, first.id);
+  assert.equal(lastSaid(db, 'chief'), relayResult(db.get('SELECT result FROM tasks WHERE id = ?', first.id)!.result), 'the first result comes back in Chief\'s chat');
 
   // A name already taken is refused before any card.
   const { task: t3 } = (await crew.post('chief', `once more ${create(pip)}`))!;
