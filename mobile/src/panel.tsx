@@ -13,7 +13,7 @@ import { KeyboardAvoidingView, Linking, Pressable, ScrollView, StyleSheet, useCo
 import * as A from '../../web/src/adapter.ts';
 import { api, setTransport, type Json } from '../../web/src/api.ts';
 import { AskSheet, attempt, Btn, Composer, Face, look, s, say, ShareIn, T, Theme, Toast } from '../App';
-import { closePanel, handScreen, logTap, putIn, restrictedWords, showCrew, tappedBox, used as usedIn, type Box } from './bubble';
+import { closePanel, copyOut, handScreen, logTap, putIn, restrictedWords, showCrew, tappedBox, used as usedIn, type Box } from './bubble';
 import { connect, loadGrant, type Grant, type Status } from './link';
 
 export function Panel({ frame, to, words, brief, listen }: { frame?: string; to?: string; words?: string; brief?: string; listen?: string }) {
@@ -230,7 +230,8 @@ function SwitchOn() {
 }
 
 /** Write it here: what the box should say, the writer's draft when its job replies, and Put it in. Nothing is sent: the
- *  words land in the box and the person presses the app's own Send. The first time, the phone's switch comes first. */
+ *  words land in the box and the person presses the app's own Send. On Reddit or a Hacker News reader the draft is notes
+ *  to write from, and Copy takes them instead. The first time, the phone's switch comes first. */
 function Write({ box, who, state }: { box: Exclude<Box, null>; who: A.Helper; state: Json }) {
   const t = useContext(Theme);
   const [want, setWant] = useState('');
@@ -267,7 +268,8 @@ function Write({ box, who, state }: { box: Exclude<Box, null>; who: A.Helper; st
       <T>{draft}</T>
     </ScrollView>}
     <View style={s.chips}>
-      {!!draft && <Btn go label="Put it in" onPress={() => void putIn(draft, who.name, box)} />}
+      {!!draft && (A.notesOn(box.app) ? <Btn go label="Copy" onPress={() => void copyOut(draft)} />
+        : <Btn go label="Put it in" onPress={() => void putIn(draft, who.name, box)} />)}
       <Btn label="Try again" disabled={trying} onPress={() => { setTrying(true); void ask(want, draft, false).finally(() => setTrying(false)); }} />
       <Btn ghost label="Not now" onPress={() => void closePanel()} />
     </View>
