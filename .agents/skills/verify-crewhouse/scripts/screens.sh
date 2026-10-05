@@ -9,6 +9,12 @@
 # the OS colour scheme, so each capture is opened with the theme in the URL. Widths
 # are the two the app is designed at; `resize` then `open` re-renders, as the layout
 # is pure CSS. Set CHROME_DEVTOOLS_AXI_SESSION to your task-named session first.
+# A screen that lives behind an in-memory switch (Home's Office view is never in the URL)
+# needs one step after each open: THEN='<js>' is evaluated before the shot, e.g.
+#   THEN="$(cat <<'JS'
+#   (async () => { document.querySelector('[data-mode=office]')?.click(); for (let i = 0; i < 50 && !document.querySelector('.office'); i++) await new Promise((r) => setTimeout(r, 100)); return !!document.querySelector('.office'); })()
+#   JS
+#   )" scripts/screens.sh "$EV/screens" office "http://127.0.0.1:$PORT/"
 set -euo pipefail
 
 DEST=$1; SLUG=$2; URL=$3; EXTRA=${4:-}
@@ -19,6 +25,7 @@ for theme in night day; do
     w=${wh%x*}; h=${wh#*x}
     chrome-devtools-axi resize "$w" "$h" >/dev/null
     chrome-devtools-axi open "$URL?$([ -n "$EXTRA" ] && printf '%s&' "$EXTRA")$theme" >/dev/null
+    [ -z "${THEN:-}" ] || chrome-devtools-axi eval "$THEN" >/dev/null
     out="$DEST/$SLUG-$theme-$w.png"
     chrome-devtools-axi screenshot "$out" >/dev/null
     echo "$out"

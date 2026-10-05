@@ -1281,12 +1281,13 @@ export type OfficeView = { chief: ChiefView; crew: OfficeMember[]; done: Thing[]
 export type Seat = 'needs' | 'chat' | 'working' | 'quiet' | 'failed' | 'next' | 'waiting' | 'free';
 export const seatOf = (c: OfficeMember): Seat => (c.ask ? 'needs' : c.seat);
 export const SEAT_WORDS: Record<Seat, string> = { needs: 'Needs you', chat: 'Waiting on your reply', working: 'Working', quiet: 'Gone quiet', failed: "Didn't finish", next: 'Up next', waiting: 'Waiting', free: 'Free' };
-/** The rail's word for one helper: its seat (a hold or a bad ending in its own words), except that a free helper whose
- *  latest job landed today says which (Main590 6: the rail shows Reel done after a hand-off). An older finish is just free. */
+/** The rail's word for one helper, short enough for the rail: its seat (the panel and the chat say what a hold waits for),
+ *  except that a free helper whose latest job landed today says which (Main590 6: the rail shows Reel done after a
+ *  hand-off). An older finish is just free. */
 export function railWord(c: OfficeMember, v: OfficeView): { word: string; seat: Seat | 'done' } {
   const seat = seatOf(c);
   const last = seat === 'free' ? v.done.filter((t) => t.helper === c.id && t.at >= midnight()).sort((a, b) => b.at - a.at)[0] : undefined;
-  return last ? { word: `Done: ${last.title || 'a job'}`, seat: 'done' } : { word: seat === 'waiting' || seat === 'failed' ? c.status : SEAT_WORDS[seat], seat };
+  return last ? { word: `Done: ${last.title || 'a job'}`, seat: 'done' } : { word: seat === 'failed' && c.status === 'Not sure it worked' ? 'Not sure' : SEAT_WORDS[seat], seat };
 }
 /** Who comes first when there is one seat less than helpers: whoever needs you, then working, then anything held,
  *  free last. */

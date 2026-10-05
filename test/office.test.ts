@@ -123,15 +123,15 @@ test('office truth: the room, its counts, the tray, the roster and Needs you rea
   assert.equal(A.idleLine(quiet), 'Nobody is working right now: 1 gone quiet.', 'the crew is not called free');
   // A job held for a sign-in waits, in crewd's own words, rather than reading free.
   const signin = crew([bot('scout')], [{ id: 2, bot: 'scout', title: 'Flights', state: 'paused', wake_at: null, result: 'Waiting for you to sign in with ChatGPT.' }]);
-  assert.deepEqual(one(signin), { seat: 'waiting', word: 'Waiting for you to sign in with ChatGPT' });
+  assert.deepEqual([one(signin), signin.crew[0].status], [{ seat: 'waiting', word: 'Waiting' }, 'Waiting for you to sign in with ChatGPT']);
   assert.equal(A.idleLine(signin), 'Nobody is working right now: 1 waiting.');
   const share = crew([bot('scout', { pausedUntil: now + hour })], [{ id: 2, bot: 'scout', title: 'Digest', state: 'paused', wake_at: now + hour, result: 'Waiting for tomorrow: the crew has had its share of your AI today.' }]);
-  assert.equal(one(share).word, 'Waiting for tomorrow');
-  assert.equal(one(A.officeEvent(crew([bot('scout', { task: task(2, 'scout', 'working') })]), { kind: 'task.paused', bot: 'scout', data: { task: 2, result: 'Waiting for you to sign in with ChatGPT.' } })).word,
+  assert.equal(share.crew[0].status, 'Waiting for tomorrow');
+  assert.equal(A.officeEvent(crew([bot('scout', { task: task(2, 'scout', 'working') })]), { kind: 'task.paused', bot: 'scout', data: { task: 2, result: 'Waiting for you to sign in with ChatGPT.' } }).crew[0].status,
     'Waiting for you to sign in with ChatGPT', 'the live event says the same, never "free"');
   // A job that ended badly today says so whatever the clock or the chat; yesterday's is just free, like yesterday's finish.
   const failed = crew([bot('scout')], [{ id: 3, bot: 'scout', title: 'Refund', state: 'unsure', updated_at: now - 3 * hour }, { id: 1, bot: 'scout', title: 'Older', state: 'done', updated_at: now - 4 * hour }]);
-  assert.deepEqual(one(failed), { seat: 'failed', word: 'Not sure it worked' });
+  assert.deepEqual([one(failed), failed.crew[0].status], [{ seat: 'failed', word: 'Not sure' }, 'Not sure it worked']);
   const old = crew([bot('scout')], [{ id: 3, bot: 'scout', title: 'Refund', state: 'failed', updated_at: now - 30 * hour }, { id: 1, bot: 'scout', title: 'Older', state: 'done', updated_at: now - 31 * hour, files: [] }]);
   assert.deepEqual([one(old), old.counts.done, A.idleLine(old)], [{ seat: 'free', word: 'Free' }, 0, 'Nobody is working right now. The crew is free.']);
   // A new job is only queued until crewd starts it: the event does not claim work.
