@@ -260,9 +260,30 @@ export function Pill({ tone = 'ok', live, children }: { tone?: 'ok' | 'wait' | '
   return <span className={`pill ${tone}${live ? ' live' : ''}`}><i />{children}</span>;
 }
 
+/** Crewd's own check on a suggested change, read as a verdict and not a quiet line: what the check found, when it ran,
+ *  which run is current when a newer one overturned an older, and — when it did not pass — one tap that reopens the very
+ *  same job with those findings still in hand. A dead end is the one thing this card never is. */
+export function ReviewCard({ f }: { f: FileView }) {
+  const r = f.review!, bot = fileSource(f.url)?.bot ?? '';
+  const [busy, setBusy] = useState(false);
+  const again = async () => {
+    setBusy(true);
+    try { await api.again(bot, r.task); dispatchEvent(new HashChangeEvent('hashchange')); } finally { setBusy(false); }
+  };
+  return <div className={`review ${r.ok ? 'ok' : 'bad'}`} role={r.ok ? undefined : 'alert'}>
+    <b>{r.ok ? 'Its check passed' : 'Its check did not pass'}</b>
+    <span>{plainEnd(r.why)}</span>
+    {r.changed ? `An earlier check said the opposite, so this ${clock(r.when)} one counts.` : `Checked ${clock(r.when)}.`}
+    {r.runs > 1 && <span className="small mute">Checked {r.runs} times; the last one, at {clock(r.when)}, is the current one.</span>}
+    {!r.ok && <button className="btn go" disabled={busy} onClick={again}>{busy ? 'Starting again…' : 'Start it again'}</button>}
+  </div>;
+}
+const plainEnd = (s: string) => `${s.replace(/[.!]$/, '')}.`;
+
 export function Media({ f, big }: { f: FileView; big?: boolean }) {
   const [play, setPlay] = useState(false);
   if (f.kind === 'image') return <a href={f.url} target="_blank" rel="noreferrer" className="media"><img src={f.url} alt={f.name} /></a>;
+  if (f.review) return <div className="with-review"><a className="doc" href={f.url} target="_blank" rel="noreferrer"><span className="doc-ic">▤</span><span className="grow">{f.name}</span><b>Open</b></a><ReviewCard f={f} /></div>;
   if (f.kind === 'sheet' || f.kind === 'page') return <PreviewCard f={f} big={big} />;
   if (f.kind === 'video') {
     return play

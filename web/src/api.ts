@@ -63,6 +63,8 @@ export const api = {
   removeSkill: (id: string, name: string) => call('DELETE', `/api/bots/${id}/skills/${name}`),
   settings: (id: string, body: { allow?: string[]; memory?: boolean; handoff?: 'ask' | 'go' }) => call('PUT', `/api/bots/${id}/settings`, body),
   reset: (id: string) => call('POST', `/api/bots/${id}/reset`),
+  /** A review card's Start again: the same job and the same session, its findings still in hand. */
+  again: (id: string, task: number) => call('POST', `/api/bots/${id}/task/${task}/again`),
   undoMemory: (id: string, seq: number) => call('POST', `/api/bots/${id}/memory/${seq}/undo`),
   /** How one job was done, step by step, in plain words — recorded by crewd, on demand. */
   taskTrail: (id: number) => call('GET', `/api/task/${id}/trail`) as Promise<{ at: number; words: string; ok: boolean }[]>,

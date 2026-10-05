@@ -2234,7 +2234,7 @@ export class Crew {
   }
 
   /** crew_verify: crewd applies the check alone to the base (it must fail), then the whole patch (it must pass), each in a
-   *  fresh worktree seeded with a copy of the helper's installed node_modules, and keeps the exit codes. The model's word about its tests never counts. */
+   *  fresh worktree seeded with a copy of the helper's installed node_modules. The model's word about its tests never counts. */
   private async verify(botId: string, p: { repo: string; base: string; patch: string; tests: string[]; command: string }) {
     if (!sandboxReady()) throw new Error('this computer has no sandbox to run a check in');
     const space = disk.botDir(this.cfg, botId), repo = disk.insideBot(this.cfg, botId, String(p.repo ?? '')), patch = disk.insideBot(this.cfg, botId, String(p.patch ?? ''));
@@ -2251,8 +2251,28 @@ export class Crew {
     const before = await run('base', tests), after = await run('fix', []);
     if (before.code === 97 || after.code === 97) throw new Error(`the patch doesn't apply to ${p.base}: ${(before.code === 97 ? before : after).tail}`);
     const missingDep = /Cannot find (?:package|module)|ERR_MODULE_NOT_FOUND/.test(before.tail), passed = before.code !== 0 && after.code === 0 && !missingDep; // red on a missing module proves nothing: a patch that deletes the import would pass it
-    this.db.event('verify.result', botId, { task, patch: patch.slice(space.length + 1), sha: sha(readFileSync(patch, 'utf8')), base: p.base, command: clean(p.command, 300), before: before.code, after: after.code, passed, ...(missingDep ? { missingDep } : {}) });
+    const ev = this.db.event('verify.result', botId, { task, patch: patch.slice(space.length + 1), sha: sha(readFileSync(patch, 'utf8')), base: p.base, command: clean(p.command, 300), before: before.code, after: after.code, passed, ...(missingDep ? { missingDep } : {}) });
+    // A run that overturns an earlier one says so in the thread, so the newest word on a change is the current verdict.
+    const was = this.db.get("SELECT data FROM events WHERE kind = 'verify.result' AND bot = ? AND json_extract(data, '$.patch') = ? AND seq < ? ORDER BY seq DESC LIMIT 1", botId, ev.data.patch, ev.seq);
+    if (was && JSON.parse(String(was.data)).passed !== passed) this.say(botId, 'system', `Re-checked ${ev.data.patch}: ${passed ? 'it passes now' : 'it does not pass'}. This run is the current one.`, task ?? null);
     return { passed, missingDep, before: { exit: before.code, tail: before.tail }, after: { exit: after.code, tail: after.tail } };
+  }
+
+  /** What crewd's own check last said about a suggested change, as the file is now; '' when none ever ran on it. */
+  private verdict(botId: string, full: string) {
+    const v = this.db.get("SELECT data FROM events WHERE kind = 'verify.result' AND bot = ? AND json_extract(data, '$.sha') = ? ORDER BY seq DESC LIMIT 1", botId, sha(readFileSync(full, 'utf8'))); if (!v) return '';
+    const d = JSON.parse(String(v.data));
+    return d.passed ? ': passed its own check' : `: its own check did not pass — ${d.missingDep ? 'the check could not run: something it needs is not installed' : d.after === 0 ? 'the check passes here but never failed before the change, so nothing was proved' : d.before === 0 ? 'the check passed before the change and fails after it: the change broke it' : 'the same check still fails after the change'}`;
+  }
+
+  /** The person reopens a finished job from its review card: the same task and session, the check's own verdict in the handoff. */
+  reopen(botId: string, id: number) {
+    const t = this.db.get('SELECT * FROM tasks WHERE id = ? AND bot = ?', id, botId);
+    if (!t || !['done', 'failed', 'unsure'].includes(String(t.state))) throw Object.assign(new Error(t ? 'that job is still going' : 'no such job'), { status: t ? 409 : 404 });
+    const v = this.db.get("SELECT data FROM events WHERE kind = 'verify.result' AND json_extract(data, '$.task') = ? ORDER BY seq DESC LIMIT 1", t.id); this.db.run('UPDATE tasks SET result = NULL WHERE id = ?', t.id);
+    this.handoffs.set(t.id, `The person asked you to start this again, because it ${v && JSON.parse(String(v.data)).passed ? 'passed' : 'did not pass'} its own check`);
+    this.setTask(t, 'queued'); this.dispatch();
+    return { ok: true };
   }
 
   /** A patch this task delivered that crewd never saw pass its check, as the file is now; null when there is none. */
@@ -2397,8 +2417,8 @@ export class Crew {
     const task = active?.id;
     if (task && this.db.get(`SELECT 1 FROM events WHERE kind = 'file.delivered' AND bot = ? AND json_extract(data, '$.task') = ? AND json_extract(data, '$.path') = ?`, botId, task, rel)) return { ok: true, already: true };
     this.db.event('file.delivered', botId, { task, path: rel, note: short(clean(note, 1000), 200), size: statSync(full).size });
-    // A patch is only ever a suggested change for the maintainer to review, in crewd's own words, never the model's.
-    this.say(botId, 'system', /\.(patch|diff)$/.test(rel) ? `Delivered ${rel}: Suggested change (for the maintainer to review)${this.db.get("SELECT 1 FROM events WHERE kind = 'verify.result' AND bot = ? AND json_extract(data, '$.passed') AND json_extract(data, '$.sha') = ?", botId, sha(readFileSync(full, 'utf8'))) ? ': passed its own check' : ''}` : `Delivered ${rel}${note ? `: ${note}` : ''}`, task ?? null);
+    // A patch is only ever a suggested change for the maintainer to review, and a check that did not pass is said out loud.
+    this.say(botId, 'system', /\.(patch|diff)$/.test(rel) ? `Delivered ${rel}: Suggested change (for the maintainer to review)${this.verdict(botId, full)}` : `Delivered ${rel}${note ? `: ${note}` : ''}`, task ?? null);
     return { ok: true };
   }
 

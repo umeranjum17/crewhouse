@@ -37,7 +37,7 @@ export type Card = {
 export const askTag = (c: Card) => ({ spend: 'Wants to spend money', question: 'Has a question', routine: 'A routine to start', plan: 'A plan to start', connect: 'Wants an app' } as Record<string, string>)[c.kind] ?? 'Needs your OK';
 export type Work = { helper: string; title: string; line: string; waiting: boolean; things: FileView[] };
 export type Thing = { id: number; helper: string; title: string; at: number; summary: string; files: FileView[] };
-export type FileView = { url: string; kind: 'video' | 'image' | 'doc' | 'sheet' | 'page'; name: string };
+export type FileView = { url: string; kind: 'video' | 'image' | 'doc' | 'sheet' | 'page'; name: string; review?: Review };
 /** One tab of a delivered workbook, read back by crewd: its headings, its first rows, how many it has,
  *  and the parallel row numbers and cell roles (`head`, `in`, `calc`, or empty) the panel reads. */
 export type Sheet = { name: string; head: string[]; rows: string[][]; total: number; nums: number[]; roles: string[][] };
@@ -110,11 +110,32 @@ export function pretty(path: string) {
 /** The bot and path a file view came from, for the phone's photo fetch: `/files/<bot>/<path under files/>`. */
 export const fileSource = (url: string) => { const m = /^\/files\/([a-z0-9-]+)\/(.+)$/.exec(url); return m ? { bot: m[1], path: `files/${decodeURIComponent(m[2])}` } : null; };
 
-export function fileView(bot: string, path: string): FileView {
+/** Crewd's own check on a suggested change, as a person reads it: did it pass, what the check actually found, when, and
+ *  whether a newer run overturned an older verdict. Nothing at all when no check ever ran on this change. */
+export type Review = { task: number; ok: boolean; why: string; when: number; runs: number; changed: boolean };
+const WHY = (d: Json) => d.passed ? 'the check failed on the old code and passes with this change'
+  : d.missingDep ? 'the check could not run: something it needs is not installed'
+  : Number(d.after) === 0 ? 'the check passes here but never failed before the change, so nothing was proved'
+  : Number(d.before) === 0 ? 'the check passed before the change and fails after it: the change broke it'
+  : 'the same check still fails after the change';
+
+/** Every check crewd has run, newest verdict for each suggested change, keyed `bot|files/x.patch`. A second run on the
+ *  same change is the current one; `changed` marks a verdict a newer run overturned, so nobody acts on the stale one. */
+export function reviews(state: Json) {
+  const out = new Map<string, Review>();
+  for (const e of (state.events ?? []) as Json[]) {
+    if (e.kind !== 'verify.result') continue;
+    const d = (e.data ?? {}) as Json, key = `${e.bot}|${d.patch}`, prev = out.get(key);
+    out.set(key, { task: Number(d.task), ok: d.passed === true, why: WHY(d), when: at(e.at), runs: (prev?.runs ?? 0) + 1, changed: !!prev && prev.ok !== (d.passed === true) });
+  }
+  return out;
+}
+
+export function fileView(bot: string, path: string, review?: Review): FileView {
   const rel = path.replace(/^files\//, '');
   const url = /^(data:|\/)/.test(path) ? path : `/files/${bot}/${rel.split('/').map(encodeURIComponent).join('/')}`;
   if (path.startsWith('data:image/')) return { url, name: 'A picture', kind: 'image' };
-  return { url, name: pretty(rel), kind: /\.(mp4|webm|mov)$/i.test(rel) ? 'video' : /\.(png|jpe?g|webp|gif)$/i.test(rel) ? 'image' : /\.xlsx?$/i.test(rel) ? 'sheet' : /(\.docx?|\.md|\.txt)$/i.test(rel) ? 'page' : 'doc' };
+  return { url, name: pretty(rel), kind: /\.(mp4|webm|mov)$/i.test(rel) ? 'video' : /\.(png|jpe?g|webp|gif)$/i.test(rel) ? 'image' : /\.xlsx?$/i.test(rel) ? 'sheet' : /(\.docx?|\.md|\.txt)$/i.test(rel) ? 'page' : 'doc', ...(review ? { review } : {}) };
 }
 
 /** Where a tap on a delivered file goes: the read-only panel for a page or sheet, the file itself (a PDF, a download)
@@ -197,9 +218,13 @@ export const mdPlain = (text = '') => text;
  * A helper's own words, scrubbed of the machinery: code spans, fenced blocks, file paths and the names of engines.
  * ponytail: a pattern scrub, not a guarantee; the engine's prompts keep bots in plain words (docs/ui-contract.md).
  */
-const TOOL_CALL = /\[tool \w+ [^\]]*\]/g; // a tool call is an engine event, never a sentence
+/** A JSON object, three levels of nesting deep. Matching it balanced is the whole fix: a tool call's own array
+ *  (a check's `["check.sh"]`) ends a `[^]]*` match early, which left the tail of the call rendered as if the
+ *  person had typed it — a raw `"command":"sh check.sh"}]` in their own bubble. */
+const OBJ = String.raw`\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\}`;
+const TOOL_CALL = new RegExp(String.raw`\[tool \w+ ${OBJ}\s*\]?`, 'g'); // a tool call is an engine event, never a sentence
 const TOOL_FRAGMENT = /\[tool\b[\s\S]*$/i; // ...and a cut-off one (task titles are trimmed) still isn't
-const JSON_BLOB = /\{(?:[^{}]|\{[^{}]*\})*\}/g; // nor is a raw JSON object, one nesting level deep
+const JSON_BLOB = new RegExp(OBJ, 'g'); // nor is a raw JSON object
 export const noTools = (text = '') => text.replace(TOOL_CALL, ' ').replace(JSON_BLOB, ' ').replace(TOOL_FRAGMENT, '').replace(/\s{2,}/g, ' ').trim();
 
 export function plain(text = '') {
@@ -1028,15 +1053,17 @@ const photos = (text: string) => [...text.matchAll(PHOTO)].map((m) => fileView(m
 
 export function room(page: Json, state: Json) {
   const people = new Map((state.bots ?? []).map((b: Json) => [b.id, helper(b, state.events ?? [], state.bots, state.tasks ?? [])]));
+  const checks = reviews(state);
   return (page?.lines ?? []).map((m: Json) => ({ id: m.id as number, who: people.get(m.bot) as Helper | undefined,
     to: m.to ? (people.get(m.to) as Helper | undefined)?.name : undefined,
     from: m.from ? (people.get(m.from) as Helper | undefined)?.name : undefined,
-    text: chatWords(m.text ?? ''), files: (m.files ?? []).map((f: Json) => fileView(f.bot, f.path)), at: at(m.at), author: m.author }));
+    text: chatWords(m.text ?? ''), files: (m.files ?? []).map((f: Json) => fileView(f.bot, f.path, checks.get(`${f.bot}|${f.path}`))), at: at(m.at), author: m.author }));
 }
 
 const chatWords = (text: string) => text.replace(/```[\s\S]*?```/g, '').split('\n').map(plain).join('\n').trim();
 
-export function lines(page: Json, bot: string): Line[] {
+export function lines(page: Json, bot: string, state: Json = {}): Line[] {
+  const checks = reviews(state);
   return (page?.messages ?? []).filter((m: Json) => !/\bstub [\w-]+:/.test(String(m.text ?? ''))).map((m: Json) => {
     const pics = photos(String(m.text ?? ''));
     const text = String(m.text ?? '').replace(PHOTO, '').trim();
@@ -1047,7 +1074,7 @@ export function lines(page: Json, bot: string): Line[] {
       // A built workbook or document is its card on the web, which says what is in it: no words of its own there. The
       // phone's plainer card has no count, so it keeps them as `about`.
       const card = /\.(xlsx|docx)$/i.test(f[1]);
-      return { id: m.id, from: 'note', text: card ? '' : words, about: card ? words : undefined, files: [fileView(bot, f[1])], choices: [] };
+      return { id: m.id, from: 'note', text: card ? '' : words, about: card ? words : undefined, files: [fileView(bot, f[1], checks.get(`${bot}|${f[1]}`))], choices: [] };
     }
     // Another helper handing this one a job: a note in its words, "Reel asked: …".
     if (!['person', 'bot', 'chief'].includes(m.author)) return { id: m.id, from: 'note', text: `${String(m.author).replace(/^./, (c) => c.toUpperCase())} asked: ${plain(text)}`, files: [], choices: [] };

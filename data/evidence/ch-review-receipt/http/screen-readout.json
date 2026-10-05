@@ -1,0 +1,3 @@
+result: "\"[\\\"Its check passed | the check failed on the old code and passes with this change. | An earlier check said the opposite, so this 3:31 pm one counts. | Checked 2 times; the last one, at 3:31 pm, is the current one.\\\",\\\"Its check did not pass | the same check still fails after the change. | Checked 3:31 pm. | Start it again\\\"]\""
+help[1]:
+  Run `chrome-devtools-axi snapshot` to see current page state
