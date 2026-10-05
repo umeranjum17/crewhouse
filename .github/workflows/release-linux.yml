@@ -1,6 +1,6 @@
 name: Linux desktop release
 
-# The one download a family installs without a terminal: build the .deb and attach it to a GitHub release.
+# The one download a person installs without a terminal: build the .deb and attach it to a GitHub release.
 # Push a tag (linux-v<version>) and the asset lands there; nobody types a command to install it.
 on:
   push:

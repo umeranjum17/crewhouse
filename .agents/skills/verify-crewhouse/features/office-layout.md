@@ -20,7 +20,7 @@ tray, badge and room all read `A.office` — one state.
 
 Preconditions: a crew with mixed states. Easiest honest data: drive onboard + recruit +
 assign first, so one helper is `working` and one result lands in the tray; `?demo=crew5`
-runs a fixed household with no crewd for the pure-layout side.
+runs a fixed demo crew with no crewd for the pure-layout side.
 
 - **Counts.** `eval` the header count, the tray strip names, and `+N` label; they must agree with `/api/state`'s bots and tasks (`A.office` is computed from it).
 - **Labels.** The one Needs-you pill and the tray bubble must sit inside the room, clear of each other and of every figure — `getBoundingClientRect` on both, compare boxes (this is `test/office.test.ts`'s rule).

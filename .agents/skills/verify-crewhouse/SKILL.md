@@ -75,12 +75,27 @@ is shared across lanes; any CDP harness works, as `test/office.test.ts` shows). 
 shows the Hello screen (person's name, three ideas); picking one onboards and opens Chief's
 thread. Layout is pure CSS, so `resize` then reload works: **1440×900** (desktop),
 **390×844** (phone), and **320** wide as the narrowest probe — at 320, report what actually
-happens (scroll, wrap, overflow) rather than assuming support. For the longest-title probe,
+happens (scroll, wrap, overflow) rather than assuming support. For a phone capture use
+`chrome-devtools-axi emulate --viewport "390x844x3,mobile,touch"` (`"1440x900x1"` back to desktop).
+Themes: `?day` or `?night` on the URL pins light or dark (otherwise the app follows the clock),
+so a theme pair is two loads, e.g. `/?night#/h/scout`. For the longest-title probe,
 use the longest visible strings (the standing jobs' idea asks, a helper's display name) and
 prove placement with `eval` + `getBoundingClientRect`, not by looking at a screenshot.
 `?demo` variants (`?demo=crew1|crew5|crew12|crew30|calm|office`, `web/src/demo.ts`) run
 every screen with no crewd — fine for pure-UI layout checks, never a substitute for a real
 drive. Anything a person sees also owes the Review evidence set below.
+
+**Real model words** (a proof of what Chief or a helper actually says) need the real engine
+and a signed-in account: run the same launch without `CREWHOUSE_ENGINE=stub`, with HOME/XDG
+under `/home/umer/lab-tmp/crewhouse-retained/home` and `CREWHOUSE_STATE_DIR`/`CREW_DIR`/`TOOLS_DIR`
+pointing at its `run/state`, `run/crew`, `run/tools` (never a copy; one lane at a time, under
+the heavy lock; its `start.sh`/`stop.sh` do this, on port 7751), `PATH=/usr/bin:/bin` and `MISE_OFFLINE=1` (a shell PATH leaks into the
+sealed engine home and can make the reseal too big to boot), and stop it with TERM to crewd and
+its children, waiting for `auth-store.sealed` to replace the plaintext state. `GET /api/accounts`
+shows `signedIn: true` once the engine is ready. A `Codex error: The usage limit has been
+reached` or `asking us to slow down` in `run/state/logs/openclaw.log` means the account rests:
+wait it out, never sign in again. That home carries earlier lanes' chat history
+and notes, which reach Chief's prompt; say so beside any answer it gives.
 
 ## Evidence
 

@@ -101,7 +101,7 @@ Helpers work in their own folders without bothering you. Anything that costs mon
 
 ### Drafts, never sent behind your back
 
-When a helper writes in your name (a reply to the school, a refund chase, a cancellation email), it arrives as a draft. You approve it or you don't, and nothing is sent either way. The helper hands you the words to send yourself.
+When a helper writes in your name (a reply to the clinic, a refund chase, a cancellation email), it arrives as a draft. You approve it or you don't, and nothing is sent either way. The helper hands you the words to send yourself.
 
 <p align="center">
   <img src="docs/screenshots/readme/draft.webp" alt="DEMO: Scout's refund email, with its recipient and subject separate from the message, marked 'Nothing is sent, send it yourself'" width="300" />
@@ -118,7 +118,7 @@ Ask for a spreadsheet or a document and you get a real `.xlsx` or `.docx`. The h
 
 ### A crew you can grow
 
-Each helper has a soul (who it is, written by you), a job, its own skills and tools, and notes about the people it works for. Every note it keeps is a git commit you can undo. Add a helper from a template, or describe one to Chief and approve what he suggests.
+Each helper has a soul (who it is, written by you), a job, its own skills and tools, and notes about you. Every note it keeps is a git commit you can undo. Add a helper from a template, or describe one to Chief and approve what he suggests.
 
 <p align="center">
   <img src="docs/screenshots/readme/crew.webp" alt="The crew screen: Chief, Reel, Scout, Scribe, Pip and Tracer, each with what it is doing now, and Add a helper" width="300" />
@@ -129,7 +129,7 @@ Each helper has a soul (who it is, written by you), a job, its own skills and to
 "Every Friday 5pm" or "weekdays 8am" become routines that run on the computer's own clock. If the computer slept through one, it catches up once. If the last run is still going, the next one is skipped, not stacked. A quiet check-in only tells you when something changed. Chief's morning digest (what finished, what needs you, what's coming) is written by Crewhouse itself, so it uses none of your account.
 
 <p align="center">
-  <img src="docs/screenshots/readme/routines.webp" alt="The Routines screen: a box to tell Chief what should happen regularly, Your week every morning, Plan the week's dinners every Saturday, and a paused school newsletter check" width="300" />
+  <img src="docs/screenshots/readme/routines.webp" alt="The Routines screen: a box to tell Chief what should happen regularly, Your week every morning, Plan the week's dinners every Saturday, and a paused gym timetable check" width="300" />
 </p>
 
 ### Sign in once, inside the app

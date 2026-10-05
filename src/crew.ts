@@ -446,7 +446,7 @@ export class Crew {
       // A tool the bot does not have: the promise is not made. An app they haven't connected: it is, with what's missing.
       return (disk.botConfig(this.cfg, b.id).ideas ?? []).filter((i) => i.needs.every((n) => ready.has(n) || APPS[n]))
         .map((i) => ({ bot: b.id, promise: i.promise, ask: i.ask, title: i.title, line: i.line, group: i.group ?? 'life',
-          // Two of the household's Google apps name one thing: the row says "Google", not "Google and Google".
+          // Two of the person's Google apps name one thing: the row says "Google", not "Google and Google".
           needs: [...new Set(i.needs.filter((n) => !ready.has(n) && !on.has(n)).map((n) => (APPS[n] ? (APPS[n].google && !house ? 'Google' : APPS[n].name) : '')))] }));
     });
     const hire = disk.listTemplates(this.cfg).filter((t) => !hired.has(t.id)).flatMap((t) => (t.ideas ?? []).filter((i) => !(i.needs ?? []).length).map((i) => ({ bot: t.id, promise: i.promise, ask: i.ask, title: i.title, line: i.line, group: i.group ?? 'life', needs: [], hire: t.id }))).sort((a, b) => Number(b.group === 'goal') - Number(a.group === 'goal')).slice(0, 3);
@@ -1227,7 +1227,7 @@ export class Crew {
     // The debrief: the bot proposes what to keep; crewd caps it, commits it and offers Undo.
     const debrief = disk.botConfig(this.cfg, task.bot).memory === false ? '' : `\n\n[Crewhouse] When you finish: if this task showed you a lasting preference of ${who} (not how to address them; Crewhouse keeps that), ` +
       'call crew_remember with `text` set to one short line (and `replaces` naming an old note to correct one). Set `everyone` when every helper should know it ' +
-      '(family, diet, units, where they live); leave it out for how they like your own work. Otherwise save nothing.';
+      '(diet, units, where they live); leave it out for how they like your own work. Otherwise save nothing.';
     // A new job in a chat often answers the last thing said there ("OK, post it"): a new session carries that line.
     const said = task.origin === 'person' && task.bot !== CHIEF && this.db.get("SELECT text FROM messages WHERE bot = ? AND author = 'bot' AND COALESCE(task_id, 0) != ? AND at > ? ORDER BY id DESC LIMIT 1", task.bot, task.id, Date.now() - 2 * 86_400_000)?.text;
     const last = said ? `[Crewhouse] Your last message in this chat, which this may answer: “${short(said, 800)}”\n` : '';
@@ -1819,7 +1819,7 @@ export class Crew {
    *  it will fill, the host, the page's own lines around it, and the money the page shows — all read by crewd from the
    *  page as the browser tool itself reports it, never from what the model says it was about to do. A filled line is
    *  shown as `label: value` — the label from the page, the value from the call — since this is the one card that
-   *  carries the family's own words (an unclaimed-money claim). A press that submits a form the helper typed lines
+   *  carries the person's own words (an unclaimed-money claim). A press that submits a form the helper typed lines
    *  into asks wherever it is, and its card lists every line it will fill in. */
   private press(botId: string, e: Extract<Effect, { words: string }>, input: Record<string, any>) {
     const l = this.live.get(botId);

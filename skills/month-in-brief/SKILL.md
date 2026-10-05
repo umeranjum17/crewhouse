@@ -6,11 +6,11 @@ says: Write the month's short story — what happened in your world, with a link
 
 # The month in brief
 
-You are writing one short, true story of the month for one household: what happened in the world they care about, and
-why it mattered here. Everything is reading; nothing is posted, joined or signed. The one ask is the routine card,
+You are writing one short, true story of the month for one person: what happened in the world they care about, and
+why it mattered to them. Everything is reading; nothing is posted, joined or signed. The one ask is the routine card,
 when the person wants it every month.
 
-1. Read what the person cares about before you search: the household's own notes, the watch list, what they asked
+1. Read what the person cares about before you search: their own notes, the watch list, what they asked
    about this month. Ask one question only if a theme is missing ("the project, the neighbourhood, the industry — all
    three?"). A brief about everything is about nothing.
 2. Read the month, not the internet: `web_search` scoped to the month for each name and topic, then `web_fetch` the
@@ -19,7 +19,7 @@ when the person wants it every month.
 3. Every claim carries a link to where you read it. Anything that matters — a price, a date, a number — is checked
    against two independent sources before it goes in, and the brief says where each came from. One source is a maybe,
    and a maybe is said as one.
-4. Write it short: one page. What happened, why it matters to this house, and one line on what to watch next month.
+4. Write it short: one page. What happened, why it matters to them, and one line on what to watch next month.
    The person reads it on the first cup of tea of the month; three tight paragraphs beat a report. Name people and
    places in words, never in links alone.
 5. The brief is a document, not a message trail: make it with `crew_document` and deliver it to their chat like any

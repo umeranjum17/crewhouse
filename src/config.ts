@@ -16,7 +16,7 @@ export interface Config {
    *  it on in Settings, Phones. A comma list pins the addresses instead. Port 0 turns the link off. */
   linkHost: string;
   linkPort: number;
-  /** A relay the family runs themselves (relay/), for phones away from home. None by default: there is no hosted one.
+  /** A relay the person runs themselves (relay/), for phones away from home. None by default: there is no hosted one.
    *  Settings, Phones overrides it. */
   relay: string;
   /** 'openclaw' for the real engine, 'stub' for tests: the scripted model, no quota. */

@@ -3,7 +3,7 @@
 // request, waiting for his sign-in), ?demo=answer (Chief's first answer), ?demo=plan (a plan without helpers),
 // ?demo=resting, ?demo=connect (a helper asks for Google Calendar in chat), ?demo=nogoogle (Google not set up yet), ?demo=share (the crew's share used up today, $4 spent), ?demo=claim (Scout asks to fill a line of an unclaimed-money claim),
 // ?demo=return (Scout asks to press a shop's Start return), ?demo=chase (Scout's chase email as a draft to send), ?demo=renewal (Scout's renewal warning and the cancellation email as a draft to send), ?demo=day (Scout's plan of the day, three things in order),
-// ?demo=b1 (the B1 mocks' household), ?demo=paper (Scout's reply to the school as a draft to approve — the paper, sorted), ?demo=meals (this week's dinners shopped into a cart, waiting on its checkout card),
+// ?demo=b1 (the B1 mocks' crew), ?demo=paper (Scout's reply to the clinic as a draft to approve — the paper, sorted), ?demo=meals (this week's dinners shopped into a cart, waiting on its checkout card),
 // ?demo=watch (the name watch heard: one source-linked line), ?demo=neighbour (the weekly brief as a document), ?demo=brief (the month in brief as a document),
 // ?demo=office (Home's office with first looks on the desks), ?demo=calm (nothing on the go), ?demo=finished (the quiet just after a job lands),
 // ?demo=fresh (the Chief-only Home a new person gets: no helpers hired yet, nothing to hand over),
@@ -27,7 +27,7 @@ const houseGoogle = variant !== 'nogoogle' && !new URLSearchParams(location.sear
 // The day, planned waits on the person's own calendar and mail (?demo=day has both on, ?demo=nogoogle neither).
 const connected = variant === 'connect' ? [] : ['drive', 'gmail', ...(variant === 'day' ? ['calendar'] : [])];
 const dayNeeds = !houseGoogle ? ['Google'] : connected.includes('calendar') ? [] : ['Google Calendar'];
-// The family desk reads the mail and writes the calendar, so it waits on both of the person's own Google apps.
+// The paper desk reads the mail and writes the calendar, so it waits on both of the person's own Google apps.
 const paperNeeds = !houseGoogle ? ['Google'] : connected.includes('gmail') ? (connected.includes('calendar') ? [] : ['Google Calendar']) : ['Gmail', 'Google Calendar'];
 
 const svg = (a: string, b: string, label: string) => `data:image/svg+xml,${encodeURIComponent(
@@ -47,7 +47,7 @@ const bots = [
     task: task(42, 'scout', 'Flights to Lahore in December', 'working'), step: { kind: 'task.progress', at: now - min, data: { text: 'Comparing three airlines' } },
   }),
   bot('scribe', 'Scribe', 'Writes notes, emails and letters with you', { task: task(43, 'scribe', 'Thank-you note for Aunty Sara', 'needs_you') }),
-  bot('pip', 'Pip', 'Keeps your week and the school stuff in order', { last: { author: 'bot', text: 'Sports day is in your calendar, with a reminder the night before.', at: now - 3 * 60 * min }, unread: 0 }),
+  bot('pip', 'Pip', 'Keeps your week and your appointments in order', { last: { author: 'bot', text: 'The dentist is in your calendar, with a reminder the night before.', at: now - 3 * 60 * min }, unread: 0 }),
   bot('tracer', 'Tracer', "Finds a person's work email or number", { task: task(44, 'tracer', "Sara Malik's work email", 'needs_you', { member: 1 }) }),
 ];
 
@@ -75,7 +75,7 @@ const asks = [
     }) } },
   { id: 8, bot: 'reel', task_id: 41, kind: 'connect', at: now - min, member: 1, title: '', detail: { app: 'drive', words: 'Want a copy in your Drive too?' } },
   { id: 12, bot: 'reel', task_id: 41, kind: 'question', at: now - 2 * min, member: 1, title: '', detail: { question: 'Include the baby photos Mum sent, or just the recent ones?' } },
-  { id: 13, bot: 'pip', task_id: null, kind: 'question', at: now - 6 * min, member: 1, title: '', detail: { question: 'Sports day and the dentist trip are both on Friday morning. Keep both?' } },
+  { id: 13, bot: 'pip', task_id: null, kind: 'question', at: now - 6 * min, member: 1, title: '', detail: { question: 'The dentist and your gym class are both on Friday morning. Keep both?' } },
   { id: 14, bot: 'chief', task_id: null, kind: 'propose', at: now - 30_000, member: 1, title: "Every weekday at 8:00 am, Pip will plan the week's dinners.", detail: {
     words: "Every weekday at 8:00 am, Pip will plan the week's dinners.",
     routine: { bot: 'pip', schedule: 'weekdays 8am', task: "Plan the week's dinners and make the shopping list", quiet: true },
@@ -144,14 +144,14 @@ const state = {
     { id: 'reel', display: 'Reel', role: 'Makes videos and posters from your photos' },
     { id: 'scout', display: 'Scout', role: 'Finds things out and compares them for you' },
     { id: 'scribe', display: 'Scribe', role: 'Writes notes, emails and letters with you' },
-    { id: 'pip', display: 'Pip', role: 'Keeps your week and the school stuff in order' },
+    { id: 'pip', display: 'Pip', role: 'Keeps your week and your appointments in order' },
     { id: 'tracer', display: 'Tracer', role: "Finds a person's work email or number" },
   ],
   tasks: [
-    task(40, 'scout', "This week's dinners", 'done', { updated_at: Math.max(today, now - 50 * min), result: 'Seven dinners the kids will actually eat, and one shopping list sorted by aisle.', files: ['files/dinners-and-shopping-list.pdf'] }),
+    task(40, 'scout', "This week's dinners", 'done', { updated_at: Math.max(today, now - 50 * min), result: 'Seven dinners you will actually eat, and one shopping list sorted by aisle.', files: ['files/dinners-and-shopping-list.pdf'] }),
     task(38, 'reel', 'Eid photo collage', 'done', { updated_at: now - 26 * 60 * min, result: 'A collage of the twelve best Eid photos, sized for WhatsApp.', files: [svg('#ffc27a', '#ff7aa2', 'Eid Mubarak ♡')] }),
-    task(36, 'scribe', 'Letter to the school about the trip', 'done', { updated_at: now - 50 * 60 * min, result: 'A short, polite letter asking to move Ayaan to the Friday group.', files: ['files/letter-to-school.pdf'] }),
-    task(35, 'pip', 'Sports day in the calendar', 'done', { updated_at: now - 3 * 24 * 60 * min, result: 'Added sports day, Friday 9 am, with a reminder the night before.' }),
+    task(36, 'scribe', 'Letter to the landlord about the boiler', 'done', { updated_at: now - 50 * 60 * min, result: 'A short, polite letter asking for the boiler to be fixed before the weekend.', files: ['files/letter-to-landlord.pdf'] }),
+    task(35, 'pip', 'Dentist in the calendar', 'done', { updated_at: now - 3 * 24 * 60 * min, result: 'Added the dentist, Friday 9 am, with a reminder the night before.' }),
     task(46, 'scribe', 'Hotel guest reception', 'done', { updated_at: Math.max(today, now - 22 * min), result: 'A workbook the front desk can run the day on: the dashboard, the booking log, the room board and the payments.', files: ['files/hotel-guest-reception.xlsx'] }),
   ],
   ideas: [
@@ -163,17 +163,17 @@ const state = {
     { bot: 'scout', promise: "Once a week I'll plan seven dinners you will enjoy, write the shopping list sorted by aisle, and put the shop day on your calendar. If you want, I'll fill the cart too — you approve it like any purchase.", ask: "Plan my dinners for the week and write the shopping list", needs: [] },
     { bot: 'scout', promise: "I'll keep an ear out for your name and anything you told me to listen for — across Reddit, Hacker News, news sites and X — and send you one line saying where it came from when something shows up. Quiet otherwise.", ask: 'Watch for my name online and tell me when something shows up', needs: [] },
     { bot: 'scout', promise: "Give me the names of the others doing what you do. I'll watch their pages and newsletters, and once a week you get one short brief: what changed, what it means, what you could do about it. I never contact anyone.", ask: 'Watch my competitors and give me a weekly brief', needs: [] },
-    { bot: 'scout', promise: "Once a month I'll write the short story of what happened in our world — the topics, names and places you care about — with a note on where every claim came from, as a document you keep.", ask: 'Write me the month in brief', needs: [] },
+    { bot: 'scout', promise: "Once a month I'll write the short story of what happened in your world — the topics, names and places you care about — with a note on where every claim came from, as a document you keep.", ask: 'Write me the month in brief', needs: [] },
     { bot: 'scout', promise: "I'll catch a renewal or a price rise before it's charged, and have the cancellation email ready. Every step asks you first, on its own card.", ask: 'Watch my subscriptions so nothing gets renewed without me hearing about it first', group: 'money', needs: houseGoogle ? [] : ['Google'] },
     { bot: 'pip', promise: 'Plan a birthday party', ask: 'Plan a birthday party for ' },
     { bot: 'chief', promise: "What's on this week?", ask: "What's on this week?" },
     { bot: 'reel', promise: 'Make a poster from photos', ask: 'Make a poster from these photos: ' },
   ],
   asks: variant.startsWith('phone') || variant === 'finished' ? [] : variant === 'room' ? [{ id: 90, bot: 'scout', task_id: null, kind: 'propose', at: now - min, title: 'Scout wants to hand this to Scribe: draft the story', detail: { words: 'Scout wants to hand this to Scribe: draft the story, with stories.md', pass: { root: 70, files: ['stories.md'] }, preview: { head: 'Scout → Scribe', body: 'Draft the story for your newsletter.' } } }]
-    : variant === 'job-card' ? [{ id: 21, bot: 'chief', task_id: null, kind: 'propose', at: now, member: 1, title: "Chief wrote Pip's job", detail: { job: { bot: 'pip', does: 'Keep Umer’s calendar in order.', aim: 'Help Umer know what is coming.', gets: 'Events and reminders from the person.', how: 'Check dates, add reminders only when asked, and explain changes.', great: 'A clear, accurate week; for example, sports day with a reminder the evening before.' }, preview: { head: "Pip's job", body: 'What it does: Keep Umer’s calendar in order.\n\nWhat it’s aiming for: Help Umer know what is coming.\n\nWhat it gets from others: Events and reminders from the person.\n\nHow it goes about it: Check dates, add reminders only when asked, and explain changes.\n\nWhat great looks like: A clear, accurate week; for example, sports day with a reminder the evening before.' } } }]
-    : variant === 'job-plan' ? [{ id: 22, bot: 'chief', task_id: null, kind: 'propose', at: now, member: 1, title: 'Here’s the plan for “Find the best five strollers under $400”. Scout starts when you say Go.', detail: {
-        words: 'Here’s the plan for “Find the best five strollers under $400”. Scout starts when you say Go.',
-        plan: { bot: 'scout', steps: ['Look through reviews and parents’ forums for strollers under $400', 'Pick the five that come up best, with any recalls checked', 'Compare them on weight, fold, storage and price in one sheet', 'Tell you the one to buy and why'] } } }]
+    : variant === 'job-card' ? [{ id: 21, bot: 'chief', task_id: null, kind: 'propose', at: now, member: 1, title: "Chief wrote Pip's job", detail: { job: { bot: 'pip', does: 'Keep Umer’s calendar in order.', aim: 'Help Umer know what is coming.', gets: 'Events and reminders from the person.', how: 'Check dates, add reminders only when asked, and explain changes.', great: 'A clear, accurate week; for example, the dentist with a reminder the evening before.' }, preview: { head: "Pip's job", body: 'What it does: Keep Umer’s calendar in order.\n\nWhat it’s aiming for: Help Umer know what is coming.\n\nWhat it gets from others: Events and reminders from the person.\n\nHow it goes about it: Check dates, add reminders only when asked, and explain changes.\n\nWhat great looks like: A clear, accurate week; for example, the dentist with a reminder the evening before.' } } }]
+    : variant === 'job-plan' ? [{ id: 22, bot: 'chief', task_id: null, kind: 'propose', at: now, member: 1, title: 'Here’s the plan for “Find the best five standing desks under $400”. Scout starts when you say Go.', detail: {
+        words: 'Here’s the plan for “Find the best five standing desks under $400”. Scout starts when you say Go.',
+        plan: { bot: 'scout', steps: ['Look through reviews and owners’ forums for standing desks under $400', 'Pick the five that come up best, with any recalls checked', 'Compare them on height range, wobble, size and price in one sheet', 'Tell you the one to buy and why'] } } }]
     : variant === 'connect' ? [{ id: 11, bot: 'pip', task_id: 45, kind: 'connect', at: now, member: 1, title: 'Connect Google Calendar', detail: { app: 'calendar', words: 'Let Pip use your Google Calendar' } }]
     : variant === 'claim' ? [{ id: 13, bot: 'scout', task_id: 42, kind: 'permission', at: now - 30_000, member: 1, title: '', detail: {
         effect: 'send', press: true, fill: true, spends: false,
@@ -189,12 +189,12 @@ const state = {
         preview: { head: 'Draft for the shop’s support inbox', body: 'Hello, my return reached you on 16 May, inside your own 30-day window. The order page still shows no refund.\n\nPlease confirm when the refund goes back to my card. Regards,\nUmer' } } }]
     : variant === 'renewal' ? [{ id: 18, bot: 'scout', task_id: 49, kind: 'propose', at: now - 30_000, member: 1, title: 'Scout wrote your email.', detail: {
         words: 'Scout wrote your email.',
-        draft: { channel: 'email', subject: 'Streaming plan — please cancel before 14 June', to: 'the streaming service’s support inbox', path: 'files/cancel-family-plan.md', sha: 'demo' }, yes: 'Approve',
+        draft: { channel: 'email', subject: 'Streaming plan — please cancel before 14 June', to: 'the streaming service’s support inbox', path: 'files/cancel-streaming-plan.md', sha: 'demo' }, yes: 'Approve',
         preview: { head: 'Draft for the streaming service’s support inbox', body: 'Hello, my Streaming plan renews on 14 June at $18.99. Please cancel it from that date and confirm in writing that nothing further will be charged to my card.\n\nRegards,\nUmer' } } }]
     : variant === 'paper' ? [{ id: 19, bot: 'scout', task_id: 50, kind: 'propose', at: now - 30_000, member: 1, title: 'Scout wrote your email.', detail: {
         words: 'Scout wrote your email.',
-        draft: { channel: 'email', subject: 'Ayaan’s trip form — Friday', to: 'the school office', path: 'files/reply-trip-form.md', sha: 'demo' }, yes: 'Approve',
-        preview: { head: 'Draft for the school office', body: 'Hello, the signed trip form is in Ayaan’s bag this morning. He takes the packed-lunch option, and I can walk with the group if you are still short of adults.\n\nThank you,\nUmer' } } }]
+        draft: { channel: 'email', subject: 'New-patient form — Friday', to: 'the dental clinic', path: 'files/reply-clinic-form.md', sha: 'demo' }, yes: 'Approve',
+        preview: { head: 'Draft for the dental clinic', body: 'Hello, the signed new-patient form is attached. Friday at 9:30 still suits me, and I can bring my old X-rays if they help.\n\nThank you,\nUmer' } } }]
     : variant === 'meals' ? [{ id: 20, bot: 'scout', task_id: 51, kind: 'permission', at: now - 30_000, member: 1, title: '', detail: {
         effect: 'spend', spends: true,
         words: 'Scout wants to place this order at grocer.example: Basmati rice 10 lb, Whole milk (1 gal) x2, Garlic, 2 kg. Total $43.10.',
@@ -207,7 +207,7 @@ const state = {
   routines: [
     routine(1, 'chief', 'Your week, every morning', 'every day 8:00', 'on', 'digest'),
     routine(2, 'scout', 'Plan the week’s dinners', 'every Saturday 10:00', 'on'),
-    { ...routine(3, 'pip', 'Check the school newsletter', 'every Friday 16:00', 'paused'), quiet: 1 },
+    { ...routine(3, 'pip', 'Check the gym timetable', 'every Friday 16:00', 'paused'), quiet: 1 },
     { id: 4, bot: 'scout', kind: 'task', name: 'File the new receipts', words: '', on: "When a file arrives in Scout's inbox", state: 'on', next_at: null, history: [] },
   ],
   connections: connected,
@@ -269,7 +269,7 @@ const pages: Record<string, Json> = {
   soul: '# Reel\n\n## How you come across\n- Upbeat and practical: one sentence on what was made, then let the video speak.\n- Loves a tidy thirty seconds: clean cuts, steady pacing, nothing that shouts.\n- Makes a sensible call when something is missing, and says what was assumed.',
   skills: [{ name: 'make-reel', says: 'Turn photos and screenshots into a short video' }, { name: 'birthday-video', says: 'Make a birthday video from your photos', learned: true }] },
 };
-if (variant === 'job-plan') pages.chief.messages.push({ id: 71, author: 'person', text: 'find me a good stroller under $400, compare the best five' },
+if (variant === 'job-plan') pages.chief.messages.push({ id: 71, author: 'person', text: 'find me a good standing desk under $400, compare the best five' },
   { id: 72, author: 'chief', text: 'Happy to, Umer. Scout will take it; here is how, before anything starts.' });
 if (variant === 'room') pages.chief.messages.push({ id: 70, author: 'bot', text: 'All done, Umer. Scout: three stories. Scribe: a newsletter draft waiting for your yes.' });
 if (fresh) pages.chief = { messages: [] };
@@ -308,19 +308,19 @@ if (variant === 'renewal') pages.scout = { messages: [
 // The paper, sorted (?demo=paper): the week's letters in one line, and the reply sitting below as a draft to approve.
 if (variant === 'paper') pages.scout = { messages: [
   { id: 1, author: 'person', text: "Sort the paperwork: what's due, and draft the replies" },
-  { id: 2, author: 'bot', text: 'Four letters came in. Two are done: the dentist letter needs nothing, and the trip form is filled in on the school\'s page — its card asked you first.\nDue this week: the club payment by Thursday (I\'ve put it on your calendar), and the doctor\'s form to sign at the desk.\nThe reply to the school office is on a card below, in your name. Nothing is sent: you read it and post it yourself.' },
+  { id: 2, author: 'bot', text: 'Four letters came in. Two are done: the bank letter needs nothing, and the new-patient form is filled in on the clinic\'s page — its card asked you first.\nDue this week: the gym payment by Thursday (I\'ve put it on your calendar), and the council tax form to sign.\nThe reply to the clinic is on a card below, in your name. Nothing is sent: you read it and post it yourself.' },
 ], notes: '', tasks: [] };
 // The meals, planned (?demo=meals): the week's dinners and the list, and the cart waiting on its checkout card.
 if (variant === 'meals') pages.scout = { messages: [
   { id: 1, author: 'person', text: 'Plan my dinners for the week and write the shopping list' },
-  { id: 2, author: 'bot', text: 'Seven dinners, one line each, nothing over forty minutes on a school night — Friday stays pizza night, and Sunday\'s roast covers Monday\'s leftovers.\nThe list is below, sorted the way you walk the shop: produce first, then chilled, pantry, freezer. The shop day is on your calendar for Saturday morning.\nYou asked me to fill the cart too: it\'s at the checkout on a card, every item and the total. Placing the order is yours.' },
+  { id: 2, author: 'bot', text: 'Seven dinners, one line each, nothing over forty minutes on a weeknight — Friday stays pizza night, and Sunday\'s roast covers Monday\'s leftovers.\nThe list is below, sorted the way you walk the shop: produce first, then chilled, pantry, freezer. The shop day is on your calendar for Saturday morning.\nYou asked me to fill the cart too: it\'s at the checkout on a card, every item and the total. Placing the order is yours.' },
   { id: 3, author: 'system', text: 'Delivered files/dinners-and-shopping-list.md: Seven dinners and the list, sorted by aisle' },
 ], notes: '', tasks: [] };
 // The name watch, heard (?demo=watch): one source-linked line on the morning something showed up — and nothing on the quiet days.
 if (variant === 'watch') pages.scout = { messages: [
   { id: 1, author: 'person', text: 'Watch for my name online and tell me when something shows up' },
   { id: 2, author: 'bot', text: 'Set up: Ada Ali, @adaali, and the name of the market stall — across Reddit, Hacker News, news sites and X. I\'ll say one line, with where it came from, when something shows up, and nothing on the quiet days.' },
-  { id: 3, author: 'bot', text: 'This morning, a Reddit thread in r/lahore mentions the stall by name: "Has anyone been to the Ali family stall at Liberty market lately? Went back after two years." — reddit.com/r/lahore/comments/ada_stall. Nothing else this week; the day the thread turns sour, that line comes too.' },
+  { id: 3, author: 'bot', text: 'This morning, a Reddit thread in r/lahore mentions the stall by name: "Has anyone been to Ali\'s chai stall at Liberty market lately? Went back after two years." — reddit.com/r/lahore/comments/ada_stall. Nothing else this week; the day the thread turns sour, that line comes too.' },
 ], notes: '', tasks: [] };
 // The neighbours, watched (?demo=neighbour): the week's brief as a finished document — what changed, what it means, what to do.
 if (variant === 'neighbour') pages.scout = { messages: [
@@ -337,7 +337,7 @@ if (variant === 'brief') pages.scout = { messages: [
 // The day, planned, answered where the job was handed over (?demo=day): one message, three things, in order, at times.
 if (variant === 'day') pages.scout = { messages: [
   { id: 1, author: 'person', text: "Give me my day: what's on, what's waiting on me, what to do first" },
-  { id: 2, author: 'bot', text: 'Two fixed things today, and one form to sign.\n1. 8:40 am \u2014 Sign Ayaan\u2019s trip form, the school office wants it before the run.\n2. 1:15 pm \u2014 Call the shop back about the espresso machine, the refund waits on what you tell them.\n3. 6:30 pm \u2014 Pack the kit bag for tomorrow\u2019s sports day, it goes in the car.\nThe rest of the mail can wait until tomorrow. Want me to bring you a list like this every weekday morning?' },
+  { id: 2, author: 'bot', text: 'Two fixed things today, and one form to sign.\n1. 8:40 am \u2014 Sign the clinic\u2019s new-patient form, they want it before your 9:30.\n2. 1:15 pm \u2014 Call the shop back about the espresso machine, the refund waits on what you tell them.\n3. 6:30 pm \u2014 Pack the gym bag for tomorrow\u2019s early class, it goes in the car.\nThe rest of the mail can wait until tomorrow. Want me to bring you a list like this every weekday morning?' },
 ] };
 /** What crewd read out of that workbook (src/workbooks.ts): the demo\u2019s own copy, in crewd\u2019s shape. */
 // Scout's first look at the flights (?demo=office): three airlines side by side.
@@ -354,21 +354,21 @@ const book = {
       ['Guest', 'Room', 'Arrival', 'Departure', 'Nights', 'Status', 'Rate', 'Paid'],
       ['Amina Khan', '204', '11 Oct', '14 Oct', '3', 'Checked in', '285', '285'],
       ['Bilal Sheikh', '108', '12 Oct', '13 Oct', '1', 'Booked', '120', '40'],
-      ['Family Nazir', '301', '12 Oct', '16 Oct', '4', 'Waitlist', '520', '0']],
+      ['Sana Nazir', '301', '12 Oct', '16 Oct', '4', 'Waitlist', '520', '0']],
       nums: [1, 2, 3, 4], roles: [['head', 'head', 'head', 'head', 'head', 'head', 'head', 'head'],
         ['', '', '', '', '', 'in', '', ''], ['', '', '', '', '', 'in', '', ''], ['', '', '', '', '', 'in', '', '']] },
     { name: 'Rooms & housekeeping', total: 40, rows: [
       ['Room', 'Type', 'Guest', 'State', 'Checked by', 'Notes'],
       ['204', 'Sea view double', 'Amina Khan', 'Checked in', 'Rani', 'Extra pillow asked for'],
       ['108', 'Standard single', '', 'Cleaning', '', 'Start after 11'],
-      ['301', 'Family suite', '', 'To do', '', 'Hairdryer missing']],
+      ['301', 'Suite', '', 'To do', '', 'Hairdryer missing']],
       nums: [1, 2, 3, 4], roles: [['head', 'head', 'head', 'head', 'head', 'head'],
         ['', '', '', 'in', '', ''], ['', '', '', 'in', '', ''], ['', '', '', 'in', '', '']] },
     { name: 'Payments', total: 12, rows: [
       ['Guest', 'Room', 'Bill', 'Paid', 'To pay', 'Way paid'],
       ['Amina Khan', '204', '285', '285', '0', 'Card'],
       ['Bilal Sheikh', '108', '120', '40', '80', 'Cash'],
-      ['Family Nazir', '301', '520', '0', '520', 'Not paid yet']],
+      ['Sana Nazir', '301', '520', '0', '520', 'Not paid yet']],
       nums: [1, 2, 3, 4], roles: [['head', 'head', 'head', 'head', 'head', 'head'],
         ['', '', '', '', 'calc', 'in'], ['', '', '', '', 'calc', 'in'], ['', '', '', '', 'calc', 'in']] },
   ],
@@ -426,10 +426,10 @@ if (variant.startsWith('phone')) pages.chief = {
     ...(variant === 'phone-waiting' ? { waiting: { id: 1, name: 'Pixel', words: 'maple lantern' } } : variant === 'phone-paired' ? { joined: 'Pixel' } : {}) },
 };
 for (const b of bots) pages[b.id] ??= { messages: [], notes: '', tasks: [] };
-if (variant.startsWith('job')) pages.pip.job = { does: 'Keep Umer’s calendar in order.', aim: 'Help Umer know what is coming.', gets: 'Events and reminders from the person.', how: 'Check dates, add reminders only when asked, and explain changes.', great: 'A clear, accurate week; for example, sports day with a reminder the evening before.' };
+if (variant.startsWith('job')) pages.pip.job = { does: 'Keep Umer’s calendar in order.', aim: 'Help Umer know what is coming.', gets: 'Events and reminders from the person.', how: 'Check dates, add reminders only when asked, and explain changes.', great: 'A clear, accurate week; for example, the dentist with a reminder the evening before.' };
 // "Wheeled": the person is holding Scout's controls at its screen, signed it in to a shop, and is about to hand
 // the wheel back — the give-back sheet lists the tabs crewd read itself, and Details lists what it is signed in to.
-// ?demo=b1: the household the B1 mocks draw — Scout needs you on a $412 flight, Reel and Scribe working, Tracer's
+// ?demo=b1: the crew the B1 mocks draw — Scout needs you on a $412 flight, Reel and Scribe working, Tracer's
 // dinner list landed today, Pip resting until 3 pm. The M5 side-by-sides compare against it.
 if (variant === 'b1' || variant === 'b1handoff' || variant === 'b1after') {
   const b = (id: string) => bots.find((x) => x.id === id)!;
@@ -444,7 +444,7 @@ if (variant === 'b1' || variant === 'b1handoff' || variant === 'b1after') {
     words: 'Scout wants to place this order at flights.example: Fri 3 Oct 08:40 → 11:10, one stop, seat 14A, bag included. Total $412.00.',
     preview: { head: 'The order at flights.example', body: 'Fri 3 Oct · 08:40 → 11:10\nOne stop · seat 14A · bag included — $412.00\nTotal $412.00' },
     order: { shown: '$412.00', known: true, dollars: true }, yes: 'Book for $412.00' } }];
-  // Only Tracer's list is done today, as the mocks' "Tray · 1": the base household's other jobs done today are dropped here.
+  // Only Tracer's list is done today, as the mocks' "Tray · 1": the base demo's other jobs done today are dropped here.
   (state as Json).tasks = [task(52, 'tracer', 'your dinner list', 'done', { updated_at: Math.max(today, now - 12 * min), result: 'Seven dinners and one shopping list, sorted by aisle.', files: ['files/dinner-list.pdf'] }),
     ...state.tasks.filter((t: Json) => !(t.state === 'done' && t.updated_at >= today))];
   events.push(ev(20, 13, 'file.delivered', 'tracer', { task: 52, path: 'files/dinner-list.pdf' }), ev(21, 12, 'task.done', 'tracer', { task: 52, title: 'your dinner list' }));
@@ -469,7 +469,7 @@ const accounts = AIS.map((ai) => ({ account: ai.key, name: ai.name,
 
 // ?demo=handoff: Reel finishes while you watch. 4 s after the page opens the snapshot changes and the two events
 // crewd would send land through the live path, so the room's hand-off, the tray and the feed all move as they would.
-// ?demo=b1handoff is the same finish in the B1 household (Reel working on the same job, Tracer's list already in);
+// ?demo=b1handoff is the same finish in the B1 crew (Reel working on the same job, Tracer's list already in);
 // ?demo=after and ?demo=b1after open on the room just after it, for the still checks.
 const finish = () => {
   const done = task(41, 'reel', "Mum's birthday video", 'done', { updated_at: Date.now(), result: 'A one-minute video for Mum, with the piano song and her title.', files: ['files/happy-birthday-first-cut.mp4'] });
@@ -498,7 +498,7 @@ export async function demoCall(method: string, path: string, body?: Json) {
   if (method === 'POST' && /^\/api\/bots\/([a-z0-9-]+)\/forget$/.test(path)) return { ok: true };
   if (method === 'GET' && path.startsWith('/api/room')) return { lines: [
     { id: 81, bot: 'scout', author: 'person', text: 'Find three stories about the neighbourhood.', at: now - 5 * min },
-    { id: 82, bot: 'scout', author: 'bot', text: 'Three stories worth telling: a new park, a school garden, and a night market.', at: now - 4 * min },
+    { id: 82, bot: 'scout', author: 'bot', text: 'Three stories worth telling: a new park, a community garden, and a night market.', at: now - 4 * min },
     { id: 83, bot: 'scribe', author: 'scout', from: 'scout', to: 'scribe', text: 'Draft the story for your newsletter.', at: now - 2 * min, files: [{ bot: 'scribe', path: 'files/from-scout/stories.md' }] },
     { id: 84, bot: 'chief', author: 'bot', text: 'All done, Umer. Scout: three stories. Scribe: a newsletter draft waiting for your yes.', at: now - min },
   ], busy: ['scout', 'scribe'], asks: state.asks.filter((a: Json) => a.detail?.pass) };
@@ -521,7 +521,7 @@ export async function demoCall(method: string, path: string, body?: Json) {
   if (method === 'GET' && path.startsWith('/api/document')) return path.includes('dinners-and-shopping-list.md') ? { text: [
     "# This week's dinners",
     '',
-    'Seven dinners, nothing over forty minutes on a school night. Friday stays pizza night.',
+    'Seven dinners, nothing over forty minutes on a weeknight. Friday stays pizza night.',
     '',
     '## The week',
     '',
@@ -545,7 +545,7 @@ export async function demoCall(method: string, path: string, body?: Json) {
     '',
     'The shop day is on your calendar for Saturday morning. Anything ticked was already in the cupboard.',
   ].join('\n') } : doc;
-  if (method === 'GET' && path === '/api/about') return { notes: '- Vegetarian at home\n- Two children: Zara (9) and Ali (6)\n- Prefers weekend plans before Thursday' };
+  if (method === 'GET' && path === '/api/about') return { notes: '- Vegetarian\n- Lives in Lahore\n- Prefers weekend plans before Thursday' };
   // ?demo=home / ?demo=signin-again: Settings, Phones before Tailscale, and with it signed out.
   if (method === 'GET' && path === '/api/phones/link') return { on: true, lan: false, pinned: false, tailscale: variant !== 'home', relay: '', relayStatus: 'off', asking: [], push: variant === 'home' ? 'missing' : 'ready',
     anywhere: variant === 'home' ? 'home' : variant === 'signin-again' ? 'signin' : 'anywhere' };

@@ -87,7 +87,7 @@ export const api = {
    *  `fresh` asks ChatGPT's page which account again ("Use my personal account"). */
   signIn: (account: string, body: { via?: 'code'; fresh?: boolean } = {}) => call('POST', `/api/accounts/1/${account}/login`, body),
   retryAccount: (account: string) => call('POST', `/api/accounts/1/${account}/retry`),
-  /** The owner switches Google on for the house: the household Google app's client ID and secret (docs/google-setup.md). */
+  /** The person switches Google on for their crew: their own Google app's client ID and secret (docs/google-setup.md). */
   houseGoogle: (id: string, secret: string) => call('PUT', '/api/house/google', { id, secret }),
   /** Owner only: the most helpers may spend in a month, in dollars. */
   moneyCap: (cap: number) => call('PUT', '/api/house/money', { cap }),
