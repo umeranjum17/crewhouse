@@ -452,7 +452,8 @@ export function resting(state: Json) {
  * actually going; `local` carries what only the app knows (the computer out of reach, his composer, the sign-in).
  * Every Chief render — hero, sidebar, avatars, chat header — reads this.
  */
-export type ChiefLocal = { offline?: boolean; listen?: boolean; signedOut?: boolean };
+/** `bare`: no job's words, only names (the bubble's panel and the status bar, which sit over other apps). */
+export type ChiefLocal = { offline?: boolean; listen?: boolean; signedOut?: boolean; bare?: boolean };
 export type ChiefView = { mood: Mood; line: string; tone: 'ok' | 'wait' | 'off'; rank: number };
 export function chief(state: Json, local: ChiefLocal = {}): ChiefView {
   const v = chiefRow(state, local);
@@ -486,15 +487,15 @@ function chiefRow(state: Json, local: ChiefLocal): ChiefView {
   const name = (id: string) => crewName(state, id);
   const line = needs ? `${needs.name} needs you`
     : asks ? `${name(state.asks[0].bot)} needs you`
-    : busy.length === 1 ? `${busy[0].name} is on “${busy[0].status}”`
+    : busy.length === 1 ? (local.bare ? `${busy[0].name} is working` : `${busy[0].name} is on “${busy[0].status}”`)
     : busy.length > 1 ? `${busy.map((h) => h.name).join(' and ')} are working`
     : rest || 'Keeping an eye on things';
   const view: ChiefView =
-    failure ? { mood: 'error', line: `${name(String(failure.bot))} couldn't finish “${plain(failure.data?.title ?? '') || 'its job'}”`, tone: 'wait', rank: 3 }
+    failure ? { mood: 'error', line: `${name(String(failure.bot))} couldn't finish ${local.bare ? 'a job' : `“${plain(failure.data?.title ?? '') || 'its job'}”`}`, tone: 'wait', rank: 3 }
     : stuck ? { mood: 'worried', line: `${stuck.name} has gone quiet`, tone: 'wait', rank: 4 }
     : local.signedOut ? { mood: 'worried', line: 'Waiting for your sign-in', tone: 'wait', rank: 4 }
     : needs || asks ? { mood: 'ask', line, tone: 'wait', rank: 5 }
-    : done ? { mood: 'happy', line: `${name(String(done.bot))} finished “${plain(done.data?.title ?? '') || 'a job'}”`, tone: 'ok', rank: 6 }
+    : done ? { mood: 'happy', line: `${name(String(done.bot))} finished ${local.bare ? 'a job' : `“${plain(done.data?.title ?? '') || 'a job'}”`}`, tone: 'ok', rank: 6 }
     : busy.length ? { mood: 'work', line, tone: 'ok', rank: 7 }
     : rest ? { mood: 'rest', line: rest, tone: 'off', rank: 8 }
     : { mood: 'idle', line: 'Keeping an eye on things', tone: 'ok', rank: 9 };
@@ -732,7 +733,7 @@ export function status(state: Json, canAct = true): CrewStatus | null {
   return {
     active: n > 0, needsYou: needs,
     title: n === 1 ? `${working[0]} is working` : n ? `${n} helpers working` : need,
-    text: n && needs ? need : chief(state).line,
+    text: n && needs ? need : chief(state, { bare: true }).line,
     publicText: [n ? `${n} working` : '', needs ? need : ''].filter(Boolean).join(' · '),
     chip: needs ? 'Needs' : n > 1 && n < 10 ? `${n} busy` : 'Busy',
     actions: canAct ? [...(needs ? [{ id: 'needs' as const, label: 'See what needs you' }] : []), { id: 'ask' as const, label: 'Ask Chief' }] : [],
@@ -757,10 +758,11 @@ export type Screen = { box: { app?: string; text: string; picked: string } | 'of
 /** A bubble button: fixed words to one helper (`handTo`), so its reply is an ordinary job. `from` is what goes with
  *  them: `box` is Write it here's own flow, `text` sends what the box says (the part picked, if any), `keep` puts the
  *  part picked in what the whole crew knows about the person (`keep()`, no helper), `screen` a still (the phone asks
- *  every time) and `camera` a photo, both to the share screen with that helper picked and the words in its box. A
+ *  every time) and `camera` a photo, both to the share screen with that helper picked and `ask` in its box: words a
+ *  person would write, with `brief` (how to go about it) sent after them, never shown in the box. A
  *  button that needs an app the person hasn't connected says so in its label (`needs`), and its tap opens Settings. */
 export type BubbleButton = { id: 'write' | 'calendar' | 'real' | 'mail' | 'remember' | 'short' | 'lookup' | 'deal' | 'letter' | 'plan'; label: string; to: Hand; ask: string;
-  from: 'box' | 'text' | 'keep' | 'screen' | 'camera' | 'none'; needs: string[] };
+  from: 'box' | 'text' | 'keep' | 'screen' | 'camera' | 'none'; needs: string[]; brief: string };
 const REAL = "Point out the warning signs you can see, and anything that looks normal. Don't tell me it's safe or a scam, and don't open or look up any web address in it. End with how I can check for myself: in the official app, or on the official website typed in by hand.";
 /** Web addresses written so no tool follows them by accident: hxxp://, and [.] before the last part of a name. */
 export const defang = (text: string) => text.replace(/\bhttp(s?):\/\//gi, 'hxxp$1://').replace(/\b([a-z0-9-]+)\.(?=[a-z]{2,}\b)/gi, '$1[.]');
@@ -800,18 +802,18 @@ export function quick(state: Json, screen: Screen, canAct = true): BubbleButton[
 function button(state: Json, id: BubbleButton['id'], said: string): BubbleButton {
   const quote = `\n“${said}”`;
   const google = (app: string) => (state.connections?.includes?.(app) ? [] : ['Google']);
-  const b = (label: string, from: BubbleButton['from'], ask = '', needs: string[] = []): BubbleButton =>
-    ({ id, label: needs.length ? `${label} · needs ${needs.join(' and ')}` : label, to: handTo(state, id === 'write' ? 'scribe' : 'scout'), ask, from, needs });
+  const b = (label: string, from: BubbleButton['from'], ask = '', needs: string[] = [], brief = ''): BubbleButton =>
+    ({ id, label: needs.length ? `${label} · needs ${needs.join(' and ')}` : label, to: handTo(state, id === 'write' ? 'scribe' : 'scout'), ask, from, needs, brief });
   if (id === 'write') return b('Write it here', 'box');
   if (id === 'calendar') return b('Put this date in my calendar', 'text', `Put this date in my Google Calendar:${quote}\nWork out the date and time from it. If there isn't a clear one, say so instead of guessing.`, google('calendar'));
-  if (id === 'real') return said ? b('Is this real?', 'text', `Is this real? Here's what it says:\n“${defang(said)}”\n${REAL}`) : b('Is this real?', 'screen', `Is this real? It's on my phone's screen, in the picture.\n${REAL}`);
+  if (id === 'real') return said ? b('Is this real?', 'text', `Is this real? Here's what it says:\n“${defang(said)}”\n${REAL}`) : b('Is this real?', 'screen', 'Is this real?', [], `It's on my phone's screen, in the picture.\n${REAL}`);
   if (id === 'mail') return b('Find that email', 'text', `Find the email in my Gmail this is about, and tell me in a few lines what it says, who sent it and when. Only look: don't change, move, send or delete anything.${quote}`, google('gmail'));
   if (id === 'remember') return b('Remember this', 'keep', said);
   if (id === 'short') return b('Short version', 'text', `Give me the short version, in three lines or fewer:${quote}`);
   if (id === 'lookup') return b('Look it up', 'text', `Look this up and tell me in a few lines what it is, and where you found it:${quote}`);
   if (id === 'deal') return b('Deal with this', 'screen');
   if (id === 'plan') return b('Plan my day', 'none', "Give me my day: what's on, what's waiting on me, what to do first", [...new Set([...google('calendar'), ...google('gmail')])]);
-  return b('Scan a letter', 'camera', "Read this letter: who it's from, what it wants and by when, in a few lines. If it has a date to keep, offer to put it on my calendar.");
+  return b('Scan a letter', 'camera', 'Read this letter for me', [], "Who it's from, what it wants and by when, in a few lines. If it has a date to keep, offer to put it on my calendar.");
 }
 
 // Remember this: kept on the phone's tap, straight into what the whole crew knows (GET/PUT /api/about), with no model.
@@ -869,13 +871,14 @@ export function canned(state: Json, kind: 'status' | 'details', notes = '') {
   return [name ? `You're ${name}.` : '', lines.length ? `What the crew knows about you:\n${lines.map((l) => `• ${l}`).join('\n')}` : 'The crew knows nothing else about you yet. Pick some words in any app, tap me and choose Remember this.'].filter(Boolean).join('\n');
 }
 /** Who is on what, in one plain line from state alone (no model turn): each of the crew that is working, waiting on the
- *  person, gone quiet, paused while they drive or resting, then when a resting account is back. '' when nobody is. */
-export function crewLine(state: Json) {
+ *  person, gone quiet, paused while they drive or resting, then when a resting account is back. '' when nobody is.
+ *  `bare` names no job, only who is working (over other apps: the bubble's panel). */
+export function crewLine(state: Json, bare = false) {
   const lead = (state.bots as Json[]).find((b) => b.id === 'chief');
   const each = crew(state).map((h) => (h.seat === 'chat' ? `${h.name} needs you` : h.driving ? `${h.name} waits while you drive`
-    : h.seat === 'quiet' ? `${h.name} has gone quiet` : h.seat === 'working' ? `${h.name} is on “${h.status}”`
+    : h.seat === 'quiet' ? `${h.name} has gone quiet` : h.seat === 'working' ? (bare ? `${h.name} is working` : `${h.name} is on “${h.status}”`)
     : h.seat === 'waiting' ? `${h.name} is ${h.status.replace(/^Waiting/, 'waiting')}` : h.seat === 'failed' ? `${h.name} ${h.status === 'Not sure it worked' ? "isn't sure the last job worked" : "didn't finish the last job"}` : ''));
-  return [lead?.task?.state === 'working' ? `Chief is on “${plain(lead.task.title)}”` : '', ...each, resting(state)].filter(Boolean).map((l) => `${l}.`).join(' ');
+  return [lead?.task?.state === 'working' ? (bare ? 'Chief is working' : `Chief is on “${plain(lead.task.title)}”`) : '', ...each, resting(state)].filter(Boolean).map((l) => `${l}.`).join(' ');
 }
 /** Write it here's ask, in the writer's chat like any other (its first line is the job's title): what the person
  *  wants, what the box says, and (on Try again) the draft they passed on. The draft is what the whole box should say,
