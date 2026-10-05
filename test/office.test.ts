@@ -36,15 +36,16 @@ test('the office is flat 2D: no 3D library in any bundle or in the dependencies'
 });
 
 test('one floor: five spots in roster order, whoever waits on you first, everyone else counted', () => {
-  const who = (i: number, ring: OfficeMember['ring'], extra: Partial<OfficeMember> = {}): OfficeMember => ({ id: `h${i}`, name: `H${i}`, kind: 'pip', mood: 'idle', ring, status: '', step: '', steps: [], things: [], ...extra });
+  const who = (i: number, ring: OfficeMember['ring'], extra: Partial<OfficeMember> = {}): OfficeMember => ({ id: `h${i}`, name: `H${i}`, kind: 'pip', mood: 'idle', ring,
+    seat: ring === 'needs' ? 'chat' : ring || 'free', status: '', step: '', steps: [], things: [], ...extra });
   const crew = Array.from({ length: 30 }, (_, i) => who(i, i % 4 === 3 ? 'needs' : i % 4 === 1 ? 'working' : ''));
   const p = floorPlan(crew);
   assert.equal(p.seats.length, 5, 'the floor never grows');
   assert.ok(p.seats.every((c) => c.ring === 'needs'), 'whoever waits on you stands first');
   assert.deepEqual(p.seats.map((c) => c.id), crew.filter((c) => c.ring === 'needs').slice(0, 5).map((c) => c.id), "in the crew's own order");
   assert.equal(p.seats.length + p.more.length, 30, 'everyone is drawn or counted under +N');
-  const few = floorPlan([who(0, 'working'), who(1, '', { mood: 'rest' }), who(2, 'needs'), who(3, '')]);
-  assert.deepEqual(few.seats.map((c) => c.id), ['h2', 'h0', 'h3', 'h1'], 'needs you, working, free, resting last');
+  const few = floorPlan([who(0, 'working'), who(1, '', { seat: 'waiting' }), who(2, 'needs'), who(3, '')]);
+  assert.deepEqual(few.seats.map((c) => c.id), ['h2', 'h0', 'h3', 'h1'], 'needs you, working, free, waiting last');
   assert.equal(few.more.length, 0);
 });
 
@@ -63,12 +64,13 @@ test('office truth: the room, its counts, the tray, the roster and Needs you rea
       { id: 11, bot: 'scribe', task_id: 3, kind: 'propose', at: now - min, detail: { words: 'Keep this?' } },
       { id: 12, bot: 'chief', kind: 'question', at: now - 2 * min, detail: { question: 'Which day?' } },
     ],
-    tasks: [{ id: 9, bot: 'scout', title: 'Done thing', state: 'done', updated_at: now - min, files: [] }],
+    tasks: [{ id: 9, bot: 'scout', title: 'Done thing', state: 'done', updated_at: now - min, files: [] },
+      { id: 8, bot: 'tracer', title: 'Find the email', state: 'failed', updated_at: now - min, files: [] }],
     events: [{ kind: 'task.failed', bot: 'tracer', at: now - min, data: { title: 'Find the email' } }],
   };
   const v = A.office(state);
   const seat = Object.fromEntries(v.crew.map((c) => [c.id, A.seatOf(c)]));
-  assert.deepEqual(seat, { scout: 'working', reel: 'needs', scribe: 'chat', tracer: 'failed', pip: 'resting', h6: 'next', h7: 'free' });
+  assert.deepEqual(seat, { scout: 'working', reel: 'needs', scribe: 'chat', tracer: 'failed', pip: 'waiting', h6: 'next', h7: 'free' });
   assert.deepEqual(v.needs.map((c) => c.id), A.needsYou(state).map((c) => c.id), 'Needs you is the office\'s own list');
   assert.equal(v.counts.needs, 2, 'Reel\'s question and Chief\'s; the suggestion is not counted');
   assert.equal(v.crew.find((c) => c.id === 'scribe')!.ask, undefined, 'no Review for a suggestion');
@@ -110,7 +112,30 @@ test('office truth: the room, its counts, the tray, the roster and Needs you rea
   // Out of reach: nobody claims to be busy or waiting.
   const away = A.officeAway(v);
   assert.deepEqual(away.counts, { needs: 0, working: 0, done: 1 });
-  assert.ok(away.crew.every((c) => A.seatOf(c) === 'resting'));
+  assert.ok(away.crew.every((c) => A.seatOf(c) === 'waiting'));
+
+  // Truth over time (J6/ch-pm-17): no seat crewd does not hold, and none that drifts.
+  const hour = 60 * min, crew = (bots: Json[], tasks: Json[] = []) => A.office({ ...state, asks: [], events: [], bots: [bot('chief'), ...bots], tasks });
+  const one = (v2: A.OfficeView) => ({ seat: A.seatOf(v2.crew[0]), word: A.railWord(v2.crew[0], v2).word });
+  // A job with no news past crewd's limit has gone quiet: never shown, or counted, as working.
+  const quiet = crew([bot('scout', { task: task(1, 'scout', 'working'), stuck: true, quietSince: now - 9 * min })]);
+  assert.deepEqual([one(quiet), quiet.counts.working], [{ seat: 'quiet', word: 'Gone quiet' }, 0]);
+  assert.equal(A.idleLine(quiet), 'Nobody is working right now: 1 gone quiet.', 'the crew is not called free');
+  // A job held for a sign-in waits, in crewd's own words, rather than reading free.
+  const signin = crew([bot('scout')], [{ id: 2, bot: 'scout', title: 'Flights', state: 'paused', wake_at: null, result: 'Waiting for you to sign in with ChatGPT.' }]);
+  assert.deepEqual(one(signin), { seat: 'waiting', word: 'Waiting for you to sign in with ChatGPT' });
+  assert.equal(A.idleLine(signin), 'Nobody is working right now: 1 waiting.');
+  const share = crew([bot('scout', { pausedUntil: now + hour })], [{ id: 2, bot: 'scout', title: 'Digest', state: 'paused', wake_at: now + hour, result: 'Waiting for tomorrow: the crew has had its share of your AI today.' }]);
+  assert.equal(one(share).word, 'Waiting for tomorrow');
+  assert.equal(one(A.officeEvent(crew([bot('scout', { task: task(2, 'scout', 'working') })]), { kind: 'task.paused', bot: 'scout', data: { task: 2, result: 'Waiting for you to sign in with ChatGPT.' } })).word,
+    'Waiting for you to sign in with ChatGPT', 'the live event says the same, never "free"');
+  // A job that ended badly today says so whatever the clock or the chat; yesterday's is just free, like yesterday's finish.
+  const failed = crew([bot('scout')], [{ id: 3, bot: 'scout', title: 'Refund', state: 'unsure', updated_at: now - 3 * hour }, { id: 1, bot: 'scout', title: 'Older', state: 'done', updated_at: now - 4 * hour }]);
+  assert.deepEqual(one(failed), { seat: 'failed', word: 'Not sure it worked' });
+  const old = crew([bot('scout')], [{ id: 3, bot: 'scout', title: 'Refund', state: 'failed', updated_at: now - 30 * hour }, { id: 1, bot: 'scout', title: 'Older', state: 'done', updated_at: now - 31 * hour, files: [] }]);
+  assert.deepEqual([one(old), old.counts.done, A.idleLine(old)], [{ seat: 'free', word: 'Free' }, 0, 'Nobody is working right now. The crew is free.']);
+  // A new job is only queued until crewd starts it: the event does not claim work.
+  assert.equal(A.seatOf(A.officeEvent(crew([bot('scout')]), { kind: 'task.created', bot: 'scout', data: { title: 'Next' } }).crew[0]), 'free');
 });
 
 const TYPES: Record<string, string> = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.png': 'image/png' };

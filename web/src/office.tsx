@@ -24,11 +24,12 @@ const reduced = () => typeof matchMedia !== 'undefined' && matchMedia('(prefers-
 
 type Tone = { cls: string; pill: 'ok' | 'wait' | 'off' };
 const TONES: Record<A.Seat, Tone> = { needs: { cls: 'needs', pill: 'wait' }, chat: { cls: 'needs', pill: 'wait' }, working: { cls: 'work', pill: 'ok' },
-  failed: { cls: 'failed', pill: 'wait' }, next: { cls: 'next', pill: 'off' }, resting: { cls: 'free', pill: 'off' }, free: { cls: 'free', pill: 'off' } };
+  quiet: { cls: 'failed', pill: 'wait' }, failed: { cls: 'failed', pill: 'wait' }, next: { cls: 'next', pill: 'off' }, waiting: { cls: 'free', pill: 'off' }, free: { cls: 'free', pill: 'off' } };
 const tone = (c: A.OfficeMember) => TONES[A.seatOf(c)];
 const said = (c: A.OfficeMember) => {
   const k = A.seatOf(c);
-  return k === 'needs' ? `${c.name} needs you: ${c.ask!.head}` : k === 'working' ? `${c.name}, working on ${c.status}` : k === 'free' || k === 'resting' ? `${c.name}, ${c.status.toLowerCase()}` : `${c.name}, ${A.SEAT_WORDS[k].toLowerCase()}`;
+  return k === 'needs' ? `${c.name} needs you: ${c.ask!.head}` : k === 'working' ? `${c.name}, working on ${c.status}` : k === 'quiet' ? `${c.name}, gone quiet on ${c.status}`
+    : k === 'chat' ? `${c.name}, ${A.SEAT_WORDS[k].toLowerCase()}` : `${c.name}, ${c.status[0].toLowerCase()}${c.status.slice(1)}`;
 };
 
 const KIND_WORDS: Record<A.FileView['kind'], string> = { image: 'a picture', video: 'a video', sheet: 'a spreadsheet', page: 'a document', doc: 'a file' };
@@ -155,7 +156,7 @@ export function Office({ state, live, night }: { state: Json; live: A.OfficeView
 
 /** The strip's word for each figure, short enough for a sixth of a phone: waiting on you is one word whatever it is. */
 type StripSeat = A.Seat | 'done' | 'here';
-const STRIP: Record<StripSeat, string> = { needs: 'needs you', chat: 'needs you', working: 'working', failed: 'stuck', next: 'up next', resting: 'resting', free: 'free', done: 'done', here: 'here' };
+const STRIP: Record<StripSeat, string> = { needs: 'needs you', chat: 'needs you', working: 'working', quiet: 'quiet', failed: 'not done', next: 'up next', waiting: 'waiting', free: 'free', done: 'done', here: 'here' };
 const stripSeat = (c: A.OfficeMember, v: A.OfficeView): StripSeat => { const r = A.railWord(c, v); return r.seat; };
 
 /** The room itself: wall, floor line, a shelf with a plant, the night window and a clock (B1 Studio). */
@@ -187,8 +188,8 @@ const PAD: Record<Station, [number, number]> = { needs: [48, 24], chief: [38, 26
 const TIGHT: Record<Station, [number, number]> = { ...PAD, needs: [26, 28], monitor: [26, 28], failed: [26, 28] };
 const stationOf = (c: A.OfficeMember, v: A.OfficeView): Station => {
   const k = A.seatOf(c);
-  return k === 'needs' || k === 'chat' ? 'needs' : k === 'working' ? (c.kind === 'scribe' ? 'writing' : 'monitor') : k === 'failed' ? 'failed'
-    : k === 'resting' ? 'rest' : stripSeat(c, v) === 'done' ? 'done' : 'stand';
+  return k === 'needs' || k === 'chat' ? 'needs' : k === 'working' ? (c.kind === 'scribe' ? 'writing' : 'monitor') : k === 'failed' || k === 'quiet' ? 'failed'
+    : k === 'waiting' ? 'rest' : stripSeat(c, v) === 'done' ? 'done' : 'stand';
 };
 const TALL: Station[] = ['chief', 'monitor', 'failed', 'needs'];
 type Spot = { m: A.OfficeMember | 'chief' | 'tray'; st: Station; x: number; tray: boolean; tight?: boolean };
@@ -475,8 +476,12 @@ function HelperSheet({ c, h, state, asks, onClose }: { c: A.OfficeMember; h: A.H
   useDialogOwn(box, onClose);
   const job = A.work(state).find((w) => w.helper === c.id);
   const t = tone(c);
-  let body: ReactNode;
-  if (!c.ring && !c.ask) body = <p className="o-note">{c.status === 'Up next' ? `Your job is next in line. ${c.name} starts it as soon as the desk is clear.` : `${c.name} is free to help. Tell Chief what you need, and he'll pass it over.`}</p>;
+  const seat = A.seatOf(c);
+  const note: Partial<Record<A.Seat, string>> = { next: `Your job is next in line. ${c.name} starts it as soon as the desk is clear.`,
+    quiet: `No news from ${c.name} for a while. Their chat lets you stop the job.`, waiting: `${c.status}. ${c.name} carries on by itself after that.`,
+    failed: `${c.name}'s last job ${c.status === 'Not sure it worked' ? 'may not have worked' : "didn't finish"}. Their chat says what happened.`,
+    free: `${c.name} is free to help. Tell Chief what you need, and he'll pass it over.` };
+  const body: ReactNode = note[seat] && <p className="o-note">{note[seat]}</p>;
   return (
     <div className="scrim o-scrim" onClick={onClose}>
       <div ref={box} className="o-sheet" role="dialog" aria-modal aria-label={c.name} onClick={(e) => e.stopPropagation()}>
@@ -485,8 +490,8 @@ function HelperSheet({ c, h, state, asks, onClose }: { c: A.OfficeMember; h: A.H
           <span className="grow"><h2>{c.name}</h2>{h?.role && <span className="mute small">{h.role}</span>}</span>
           <button className="icon-btn" onClick={onClose} aria-label="Close">✕</button>
         </header>
-        <Pill tone={t.pill} live={A.seatOf(c) === 'working'}>{A.seatOf(c) === 'working' ? 'Working' : A.waitsOnYou(c) ? A.SEAT_WORDS[A.seatOf(c)] : c.status}</Pill>
-        {(c.ring || c.ask) && job && <div className="o-sec"><div className="o-eyebrow">{A.waitsOnYou(c) ? 'Waiting on you' : 'Working on'}</div><h3>{job.title}</h3></div>}
+        <Pill tone={t.pill} live={seat === 'working'}>{['waiting', 'failed', 'next', 'free'].includes(seat) ? c.status : A.SEAT_WORDS[seat]}</Pill>
+        {(c.ring || c.ask) && job && <div className="o-sec"><div className="o-eyebrow">{A.waitsOnYou(c) ? 'Waiting on you' : seat === 'quiet' ? 'Gone quiet on' : 'Working on'}</div><h3>{job.title}</h3></div>}
         {asks.map((a) => <div key={a.id} className="o-ask big"><div className="o-ask-tag"><i /><span>{a.head}</span></div><p>{a.words}</p><a className="btn go" href={`#/ask/${a.id}`}>Review</a></div>)}
         {c.steps.length > 0 && <Steps steps={c.steps} max={5} />}
         {c.things.length > 0 && <div className="o-sec"><div className="o-eyebrow">{c.ring ? 'First looks' : 'Made for you'}</div>

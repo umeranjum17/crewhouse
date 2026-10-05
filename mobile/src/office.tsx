@@ -22,12 +22,13 @@ type Room = typeof ROOM.day;
 const G = 196, H = 210, L = 32, R = 244, ACCENT = '#F0482A';
 const spots = (k: number) => { const span = Math.min(R - L, (k - 1) * 58), x0 = (L + R) / 2 - span / 2; return Array.from({ length: k }, (_, i) => (k === 1 ? (L + R) / 2 : x0 + (i * span) / (k - 1))); };
 type StripSeat = A.Seat | 'done' | 'here';
-const STRIP: Record<StripSeat, string> = { needs: 'needs you', chat: 'needs you', working: 'working', failed: 'stuck', next: 'up next', resting: 'resting', free: 'free', done: 'done', here: 'here' };
+const STRIP: Record<StripSeat, string> = { needs: 'needs you', chat: 'needs you', working: 'working', quiet: 'quiet', failed: 'not done', next: 'up next', waiting: 'waiting', free: 'free', done: 'done', here: 'here' };
 
 /** How a helper reads to a screen reader, in the room's own words. */
 const said = (c: A.OfficeMember) => {
   const k = A.seatOf(c);
-  return k === 'needs' ? `${c.name} needs you: ${c.ask!.head}` : k === 'working' ? `${c.name}, working on ${c.status}` : k === 'free' || k === 'resting' ? `${c.name}, ${c.status.toLowerCase()}` : `${c.name}, ${A.SEAT_WORDS[k].toLowerCase()}`;
+  return k === 'needs' ? `${c.name} needs you: ${c.ask!.head}` : k === 'working' ? `${c.name}, working on ${c.status}` : k === 'quiet' ? `${c.name}, gone quiet on ${c.status}`
+    : k === 'chat' ? `${c.name}, ${A.SEAT_WORDS[k].toLowerCase()}` : `${c.name}, ${c.status[0].toLowerCase()}${c.status.slice(1)}`;
 };
 
 /** The room, `width` points wide, with its strip. Tapping a figure or its strip cell opens them (`onDesk`, Chief his
@@ -90,8 +91,8 @@ export function Office({ view, night, offline, width, onChief, onDesk, onAsk, on
               <motion.Hop beat={chief.mood} reduce={reduce} awake={awake}><motion.Loop pose={pose} reduce={reduce} awake={awake}><Image source={PALS[`chief-${pose}`]} style={{ width: u(80), height: u(100) }} /></motion.Loop></motion.Hop>
             </Pressable>;
           }
-          const seat = A.seatOf(m), pose = poseOf(m.mood), desk = seat === 'needs' || seat === 'chat' || seat === 'working' || seat === 'failed';
-          const lift = seat === 'resting' && m.kind !== 'pip' ? 8 : 0;
+          const seat = A.seatOf(m), pose = poseOf(m.mood), desk = seat === 'needs' || seat === 'chat' || seat === 'working' || seat === 'quiet' || seat === 'failed';
+          const lift = seat === 'waiting' && m.kind !== 'pip' ? 8 : 0;
           const img = <motion.Loop pose={pose} reduce={reduce} awake={awake}><Image source={PALS[`${m.kind}-${pose}`]} style={{ width: u(60), height: u(75) }} /></motion.Loop>;
           return <Pressable key={m.id} onPress={() => onDesk(m)} accessibilityRole="button" accessibilityLabel={said(m)} style={{ position: 'absolute', left: u(x - 30), top: u(G - 100), width: u(60), height: u(104) }}>
             {seat === 'working' && <View pointerEvents="none" style={{ position: 'absolute', left: u(-4), top: u(44), width: u(68), height: u(20), borderRadius: u(34), backgroundColor: '#FFE7A3', opacity: 0.45 }} />}
