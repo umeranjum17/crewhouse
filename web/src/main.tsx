@@ -1245,6 +1245,12 @@ function Skills({ refresh }: Ctx) {
     if (q.trim().length < 2) return;
     void attempt(async () => setFound(A.skillSearch((await api.skillSearch(q.trim())).results ?? [], list)), '');
   };
+  // Switching answers in crewd's own words (the stand-in engine says it is still starting; the trust
+  // check names an unreviewed skill), so the failure toast carries the reason, not a generic line.
+  const flip = (s: A.StarterSkill, on: boolean) => (async () => {
+    try { await api.skillSwitch(s.slug, on); await load(); refresh(); toast(`${s.name} is ${on ? 'on' : 'off'}`); }
+    catch (e: any) { toast(e?.status ? String(e.message) : "Can't reach the home computer right now. Check it's on, then try again."); }
+  })();
   const row = (s: A.StarterSkill, i: number) => (
     <div key={`${s.slug}-${i}`} className="row-item">
       <span className="grow"><b>{s.name}</b><div className="mute small">{s.what}</div>
@@ -1252,8 +1258,8 @@ function Skills({ refresh }: Ctx) {
         {!!s.needs.length && <div className="mute small">Needs: {s.needs.join(' · ')}</div>}
         {!s.reviewed && <div className="mute small">Not reviewed yet, so the crew leaves it alone.</div>}</span>
       {s.reviewed ? (s.on
-        ? <button className="link" onClick={() => attempt(async () => { await api.skillSwitch(s.slug, false); await load(); refresh(); }, `${s.name} is off`)}>Turn off</button>
-        : <button className="btn" onClick={() => attempt(async () => { await api.skillSwitch(s.slug, true); await load(); refresh(); }, `${s.name} is on`)}>Turn on</button>)
+        ? <button className="link" onClick={() => void flip(s, false)}>Turn off</button>
+        : <button className="btn" onClick={() => void flip(s, true)}>Turn on</button>)
         : null}
     </div>);
   return (
