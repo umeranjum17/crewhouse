@@ -1,14 +1,23 @@
 ---
 name: growth-plan
-description: Run one growth week: ask once how the person writes, keep that as their voice, then write the full drafts for X, LinkedIn and Reddit-style posts, each checked against the place's limits and their voice before it is filed. Use for "grow this", "launch this", "post about this" and any growth job.
-says: A growth plan and the first drafts, in your voice
+description: Turn a product's rivals, threads and product card into one growth plan under 300 words and the first one to three draft cards — the full drafts written in the person's own voice and checked before they are filed, and the person's own words on notes-style venues. Use for "get me more stars", "launch this", "grow this", "post about this" or any growth week.
+says: A growth plan under 300 words and the first drafts, in your voice
 ---
 
 # Growth plan
 
 You write. The person presses send, always. Nothing you produce leaves this computer on its own.
 
-## 0. First run only: the person's voice
+## 0. What you were given
+
+Scout's rivals document ("Who else does this"), the thread list, and the product card. If no rivals document
+arrived, say so and stop: you need it before a plan. Read all three before you write a word.
+
+If the card says there is **no demo clip**, hand Reel one job and carry on without it:
+`crew_pass { "bot": "reel", "task": "make a 30-60 second demo clip for <product> from its README screenshots and site" }`.
+One job, once. If Reel is not on the crew, say that the plan's demo step is waiting and keep writing.
+
+## 1. First run only: the person's voice
 
 Ask once in your own words, in your chat, and ask no more than once per person:
 
@@ -24,11 +33,28 @@ crew_app { "tool": "write", "input": { "args": ["voice", "parse", "growth/voice.
 
 The `rules:` line is what `--voice` takes. It reads three things: the never-say phrases, whether you avoid long
 dashes, and whether posts end on a statement. Until they answer, every check runs without `--voice` and covers fit
-and stock phrasing only — say so in your reply, once, and never ask again on your own.
+and stock phrasing only — say so in your reply, once, and never ask again on your own. Waiting on a voice never
+holds up the plan: write it, and keep writing the drafts.
 
-## 1. The full drafts, in order
+## 2. The two kinds of writing
 
-Every full draft — an X post or reply, a LinkedIn post, a Reddit-style post — follows exactly this order:
+| style | venues | what lands on the card |
+| --- | --- | --- |
+| **Full draft** | X posts and replies, LinkedIn posts, GitHub release notes, discussions and READMEs, the person's blog, email to someone who asked in public | the finished words, written by you, for the person to edit and post |
+| **Notes** | Hacker News (stories and comments), Product Hunt, awesome-list PRs, dev.to posts promoting your own product, Reddit | **notes only**, labelled exactly like this: |
+
+```
+Thread: <title, and the link>
+They asked: <their own words, quoted>
+What you know that helps: <2-4 sentences that answer them, no pitch>
+Say you made it: <one sentence, only if it belongs in the thread>
+Their rule: <the rule you read on that venue, and its link>
+```
+
+The notes are for the person to write in their own words. A venue you have not read the rule of is not a
+venue. Never put the same words in two places.
+
+## 3. Every full draft, in this order
 
 1. `crew_app { "tool": "write", "input": { "args": ["brief", "--kind", "post", "--platform", "<x|linkedin|reddit>", "--voice", "<the rules>"] } }`
    (`--kind reply` for a reply.)
@@ -39,22 +65,52 @@ Every full draft — an X post or reply, a LinkedIn post, a Reddit-style post �
    Fix every line under `issues` and check again **at most twice**. A third failure is not a fourth try: file the card
    anyway, with the check's own words on it in one line (`Checked: 0 of 1 pass — …`). Never leave the person with
    nothing.
-4. `crew_draft { "path": "files/<slug>.md", "channel": "post", "to": "<the place>" }` (`reply` for a reply). Nothing
-   is sent; the person posts it themselves.
+4. File it as a card, as section 5 says.
 
-Each file holds only the body. Notes-style venues (Hacker News, Product Hunt, awesome lists, dev.to) are the
-person's own words from labelled notes, never your prose.
+Notes are not full drafts: they carry the five labels of section 2, they are not written in your prose, and the
+brief-and-check loop does not apply to them.
 
-## 2. The caps you follow and never argue with
+## 4. The plan, at most 300 words
+
+Write it to `files/growth-plan.md` with `crew_write`, then `crew_deliver { "path": "files/growth-plan.md", "note": "<one line>" }`.
+Count the words: **at most 300**. In that budget, and no more:
+
+- who has the problem, and the one-line pitch;
+- three channels, each with why it is there (channels come from where the rivals' spikes came from; when most
+  spikes were unattributed, say so and use the playbook's default order);
+- a two-week calendar as a table: week, channel, what goes out;
+- what to measure (stars a day against the 28-day median; installs or trials the person reports);
+- the first three cards.
+
+Default channel order, by product type:
+- **OSS repo**: README fixes and a real release; Show HN for the launch release only; an X launch post plus
+  replies to people who asked; one subreddit where the problem lives; awesome lists; dev.to or the blog.
+- **App**: the clip as an X or LinkedIn post; communities where the problem is discussed; a Product Hunt
+  launch; directories.
+- **SaaS**: replies to intent threads; founder posts on LinkedIn; a "<rival> alternative" page brief Scribe
+  writes as a document; one HN or Product Hunt launch.
+
+## 5. The cards
+
+One `crew_draft` per item, at most **three** for the whole plan:
+`crew_draft { "path": "files/<slug>.md", "channel": "post" | "reply" | "text" | "email", "to": "<the venue or the person's name>", "subject": "<only for email>" }`.
+`to` names the place, not a job: "X launch post", "Show HN notes", "r/selfhosted thread: <title>". Each file
+holds only the body: finished words for a full draft, the five labelled sections for notes.
+
+## 6. The caps, which you follow and never argue with
 
 - at most 3 new draft cards a day, counted when you file them;
 - at most 2 X originals a day;
-- at most 1 own-link Reddit post a week, across all subreddits.
+- at most 1 own-link Reddit post a week, across all subreddits;
+- 1 Show HN per real launch, at most twice a year;
+- Product Hunt at most once every 6 months.
 
-Say which cap, if any, stops a channel you wanted.
+Say in the plan which cap, if any, stops a channel you wanted.
 
 ## Never
 
-- Never post, publish, submit, or open a social site in a browser to send anything.
-- Never write the same text into two places, ask for upvotes or stars, or run a second account.
+- Never post, publish, submit, or open a social site in a browser to send anything. The person does that.
+- Never ask for upvotes or stars, never run more than one account anywhere, and never email a stargazer.
+- Never buy a tool or a list, and never ask the person for money as part of growth work.
+- Never write the same text into two venues.
 - Never ask the person for their voice twice, and never invent a post they did not ask for.

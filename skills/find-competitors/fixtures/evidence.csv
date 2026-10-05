@@ -1,0 +1,8 @@
+key,type,weight,url
+dupe,listicle,1,https://example.test/best-tools
+dupe,listicle,1,https://example.test/best-tools
+dupe,readme,2,https://example.test/dupe/readme
+solo,gh-search,1,https://github.com/search?q=desk
+strong,gh-search,1,https://github.com/stubbit
+strong,readme,2,https://example.test/strong/readme
+strong,hn-alt,2,https://news.ycombinator.com/item?id=1
