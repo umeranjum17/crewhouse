@@ -142,13 +142,23 @@ test('a delivered fix ends done only when crewd saw its check fail before and pa
   assert.equal(db.get("SELECT text FROM messages WHERE bot = 'desk' AND author = 'system' ORDER BY id DESC")!.text,
     'Delivered files/fix.patch: Suggested change (for the maintainer to review): passed its own check');
 
-  // A "fix" whose check never failed proves nothing.
+  // A "fix" whose check never failed proves nothing — and a review that found problems says so, out loud, with what it found.
   const idle = patch(false, 'noop.patch');
   const noop = await job(`fix it ${verify(idle)} ${call('crew_deliver', { path: idle })}`);
   assert.equal(events(db, 'verify.result').at(-1).passed, false);
   assert.equal(noop.state, 'unsure');
   assert.equal(db.get("SELECT text FROM messages WHERE bot = 'desk' AND author = 'system' ORDER BY id DESC")!.text,
-    'Delivered files/noop.patch: Suggested change (for the maintainer to review)', 'unproved, it cannot say it passed');
+    'Delivered files/noop.patch: Suggested change (for the maintainer to review): its own check did not pass — the same check still fails after the change');
+
+  // A failed review is a way through, not a dead end: Start again reopens the very same job, in its own session, with
+  // the verdict still in hand. No second task, nothing stacked, nothing learned thrown away.
+  const kept = task(db, noop.id).session, count = db.get('SELECT COUNT(*) AS n FROM tasks')!.n;
+  crew.reopen('desk', noop.id);
+  assert.equal(task(db, noop.id).state, 'queued');
+  assert.equal(task(db, noop.id).session, kept, 'the same session, so nothing it learned is lost');
+  assert.equal(db.get('SELECT COUNT(*) AS n FROM tasks')!.n, count, 'no second job beside it');
+  await settled(db, noop.id);
+  assert.match(events(db, 'run.resumed').at(-1).why, /start this again, because it did not pass its own check/);
 
   // Checked in an earlier job, the same patch still counts; changed since, it doesn't.
   assert.equal((await job(`send it ${call('crew_deliver', { path: good })}`)).state, 'done');

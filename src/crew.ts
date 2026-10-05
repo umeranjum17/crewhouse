@@ -2269,6 +2269,25 @@ export class Crew {
     return { passed, missingDep, before: { exit: before.code, tail: before.tail }, after: { exit: after.code, tail: after.tail } };
   }
 
+  /** What crewd's own check last said about a suggested change, as the file is now; '' when none ever ran on it, so a
+   *  patch is never called proved. */
+  private verdict(botId: string, full: string) {
+    const v = this.db.get("SELECT data FROM events WHERE kind = 'verify.result' AND bot = ? AND json_extract(data, '$.sha') = ? ORDER BY seq DESC LIMIT 1", botId, sha(readFileSync(full, 'utf8'))); if (!v) return '';
+    const d = JSON.parse(String(v.data));
+    return d.passed ? ': passed its own check' : `: its own check did not pass — ${d.missingDep ? 'the check could not run: something it needs is not installed' : d.after === 0 ? 'the check passes here but never failed before the change, so nothing was proved' : d.before === 0 ? 'the check passed before the change and fails after it: the change broke it' : 'the same check still fails after the change'}`;
+  }
+
+  /** The person reopens a finished job from its review card: the same task and session, never a second one, the check's own verdict in the handoff. */
+  reopen(botId: string, id: number) {
+    const t = this.db.get('SELECT * FROM tasks WHERE id = ? AND bot = ?', id, botId);
+    if (!t || !['done', 'failed', 'unsure'].includes(String(t.state))) throw Object.assign(new Error(t ? 'that job is still going' : 'no such job'), { status: t ? 409 : 404 });
+    const v = this.db.get("SELECT data FROM events WHERE kind = 'verify.result' AND json_extract(data, '$.task') = ? ORDER BY seq DESC LIMIT 1", t.id);
+    this.db.run('UPDATE tasks SET result = NULL WHERE id = ?', t.id);
+    this.handoffs.set(t.id, `The person asked you to start this again, because it ${v && JSON.parse(String(v.data)).passed ? 'passed' : 'did not pass'} its own check`);
+    this.setTask(t, 'queued'); this.dispatch();
+    return { ok: true };
+  }
+
   /** A patch this task delivered that crewd never saw pass its check, as the file is now; null when there is none. */
   private unchecked(task: Row): string | null {
     const ok = new Set(this.db.all("SELECT data FROM events WHERE kind = 'verify.result' AND bot = ? AND json_extract(data, '$.passed')", task.bot).map((e) => JSON.parse(e.data).sha));
@@ -2411,8 +2430,9 @@ export class Crew {
     const task = active?.id;
     if (task && this.db.get(`SELECT 1 FROM events WHERE kind = 'file.delivered' AND bot = ? AND json_extract(data, '$.task') = ? AND json_extract(data, '$.path') = ?`, botId, task, rel)) return { ok: true, already: true };
     this.db.event('file.delivered', botId, { task, path: rel, note: short(clean(note, 1000), 200), size: statSync(full).size });
-    // A patch is only ever a suggested change for the maintainer to review, in crewd's own words, never the model's.
-    this.say(botId, 'system', /\.(patch|diff)$/.test(rel) ? `Delivered ${rel}: Suggested change (for the maintainer to review)${this.db.get("SELECT 1 FROM events WHERE kind = 'verify.result' AND bot = ? AND json_extract(data, '$.passed') AND json_extract(data, '$.sha') = ?", botId, sha(readFileSync(full, 'utf8'))) ? ': passed its own check' : ''}` : `Delivered ${rel}${note ? `: ${note}` : ''}`, task ?? null);
+    // A patch is only ever a suggested change for the maintainer to review, in crewd's own words, and a check that did
+    // not pass is said out loud, so a failed review never reads as a quiet success.
+    this.say(botId, 'system', /\.(patch|diff)$/.test(rel) ? `Delivered ${rel}: Suggested change (for the maintainer to review)${this.verdict(botId, full)}` : `Delivered ${rel}${note ? `: ${note}` : ''}`, task ?? null);
     return { ok: true };
   }
 

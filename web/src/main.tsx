@@ -492,7 +492,7 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
   const load = useCallback((ar = around) => api.bot(id, ar || undefined).then(setPage).catch(() => {}), [id, around]);
   useEffect(() => { void load(); }, [load, tick]);
   const end = useRef<HTMLDivElement>(null);
-  const lines = hero ? A.trayNotes(state, A.lines(page, id)) : A.lines(page, id);
+  const lines = hero ? A.trayNotes(state, A.lines(page, id, state)) : A.lines(page, id, state);
   const echoed = pending && !(page?.messages ?? []).some((x: Json) => x.author === 'person' && x.id > pending.after && A.plain(x.text) === A.plain(pending.text));
   const waiting = pending && !partial && !(page?.messages ?? []).some((x: Json) => x.author === 'bot' && x.id > pending.after);
   useEffect(() => subscribe((e) => {
