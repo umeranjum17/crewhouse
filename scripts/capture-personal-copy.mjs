@@ -11,7 +11,7 @@ const scenes = [
   ['phone-day', 'demo&day', 390, 844], ['phone-night', 'demo&night', 390, 844],
   ['draft', 'demo=chase&day#/ask/17', 390, 844], ['order', 'demo=meals&day#/ask/20', 390, 844],
   ['routine', 'demo&day#/chief', 390, 844], ['routines', 'demo&day#/routines', 390, 844],
-  ['crew', 'demo&day#/crew', 900, 900], ['workbook', 'demo&day#/f/scribe/files%2Fhotel-guest-reception.xlsx', 1440, 900],
+  ['crew', 'demo&day#/crew', 900, 900], ['workbook', 'demo&day#/f/scribe/files%2Fmonthly-budget.xlsx', 1440, 900],
 ];
 for (const [name, query, w, h] of scenes) {
   axi('resize', String(w), String(h));

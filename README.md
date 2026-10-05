@@ -113,7 +113,7 @@ When a helper writes in your name (a reply to the clinic, a refund chase, a canc
 Ask for a spreadsheet or a document and you get a real `.xlsx` or `.docx`. The helper describes what goes in it, and Crewhouse builds the file. You can open it right in the chat to read it, or download it.
 
 <p align="center">
-  <img src="docs/screenshots/readme/workbook.webp" alt="Scribe's hotel reception workbook open beside the chat: four sheets, the daily dashboard showing arrivals, departures and walk-ins" width="760" />
+  <img src="docs/screenshots/readme/workbook.webp" alt="Scribe's monthly budget open beside the chat: three sheets, this month's plan showing what is planned, spent and left" width="760" />
 </p>
 
 ### A crew you can grow

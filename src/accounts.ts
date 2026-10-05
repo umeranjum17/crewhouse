@@ -60,9 +60,7 @@ export class Accounts {
   }
   restingUntil(account: string) { return this.rests.get(account) ?? 0; }
   /** An account the person doesn't have: never signed in, or a sign-in that stopped working. */
-  unready(account: string) {
-    return this.expired.has(account) || this.ready.get(account) === false;
-  }
+  unready(account: string) { return this.expired.has(account) || this.ready.get(account) === false; }
   /** The account hit trouble: rest it, flag it signed out, or mark the plan. Null: not about the account. */
   failed(account: string, error: string) {
     const f = classify(error);

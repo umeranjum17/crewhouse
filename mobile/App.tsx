@@ -484,6 +484,13 @@ function VideoSheet({ f, onClose }: { f: A.FileView; onClose: () => void }) {
   const [uri, setUri] = useState('');
   const [err, setErr] = useState('');
   const player = useVideoPlayer(uri ? { uri } : null);
+  // The frame takes the video's own shape, so a portrait video fills it instead of sitting in black bands.
+  const [shape, setShape] = useState(16 / 9);
+  const screen = useWindowDimensions();
+  useEffect(() => {
+    const sub = player.addListener('sourceLoad', ({ availableVideoTracks: [v] }) => { if (v?.size.width && v.size.height) setShape(v.size.width / v.size.height); });
+    return () => sub.remove();
+  }, [player]);
   useEffect(() => {
     const src = A.fileSource(f.url);
     if (!src) { setErr("This video can't open here."); return; }
@@ -512,7 +519,7 @@ function VideoSheet({ f, onClose }: { f: A.FileView; onClose: () => void }) {
     <Pressable style={s.scrim} onPress={onClose}>
       <Pressable style={[s.sheet, { backgroundColor: t.bg }]} onPress={() => {}}>
         <View style={s.row}><T tone="mute">▶</T><T style={[s.h2, { flex: 1 }]}>{f.name}</T><Btn label="Close" onPress={onClose} /></View>
-        {uri ? <VideoView player={player} contentFit="contain" style={{ width: '100%', aspectRatio: 16 / 9, borderRadius: 12, backgroundColor: '#000' }} accessibilityLabel={`Playing ${f.name}`} />
+        {uri ? <VideoView player={player} contentFit="contain" style={{ width: Math.min(screen.width - 44, screen.height * 0.62 * shape), aspectRatio: shape, alignSelf: 'center', borderRadius: 12 }} accessibilityLabel={`Playing ${f.name}`} />
           : err ? <T tone="pinkInk">{err}</T>
           : <T tone="mute">Getting it from your computer… {size ? `${Math.min(100, Math.round((part / size) * 100))}%` : ''}</T>}
       </Pressable>
@@ -1470,7 +1477,7 @@ function Chat({ id, m, state, tick, refresh, canAct, offline, open, writer, hero
         {lines.map((l, i) => start && i === 0 && l.from === 'note' && l.text.startsWith(`${name} joined the crew`) ? null : <View key={l.id} style={{ gap: 10 }}>{dayOf(l.at)}<motion.Rise reduce={reduce || l.id <= (opened.current ?? Infinity)}>
           <View onLayout={(e) => ys.current.set(l.id, e.nativeEvent.layout.y)}
             style={[s.line, l.from === 'me' && { alignSelf: 'flex-end', maxWidth: '82%' }, l.from === 'note' && { maxWidth: '92%' }]}>
-            {l.from !== 'me' && l.from !== 'note' && !(i && lines[i - 1].from === l.from && !l.recap && !lines[i - 1].recap) && <View style={s.row}><Face who={l.from === 'chief' ? 'chief' : h ?? 'chief'} size={28} /><T style={[s.small, s.b]}>{l.from === 'chief' ? 'Chief' : name}</T><T tone="mute" style={s.time}>{l.at ? A.clock(l.at) : ''}</T></View>}
+            {l.from !== 'me' && l.from !== 'note' && !(i && lines[i - 1].from === l.from && lines[i - 1].helper === l.helper && !l.recap && !lines[i - 1].recap) && <View style={s.row}><Face who={l.from === 'chief' ? 'chief' : A.crew(state).find((x) => x.id === l.helper) ?? h ?? 'chief'} size={28} /><T style={[s.small, s.b]}>{l.from === 'chief' ? 'Chief' : A.crew(state).find((x) => x.id === l.helper)?.name ?? name}</T><T tone="mute" style={s.time}>{l.at ? A.clock(l.at) : ''}</T></View>}
             {!!l.by && <View style={[s.row, { gap: 8, paddingLeft: 36 }]}><Face who={A.crew(state).find((x) => x.id === l.by) ?? 'chief'} size={20} /><T tone="ink2" style={[s.small, { flex: 1 }]}>{l.text}</T></View>}
             {!!l.text && !l.by && (l.detail ? <ChiefAsk l={{ text: l.text, detail: l.detail }} /> : l.from === 'me'
               ? <View style={[s.bubbleText, { backgroundColor: t.go, borderBottomRightRadius: 6 }]}><Theme.Provider value={mine}><ChatText text={l.text} /></Theme.Provider></View>

@@ -18,7 +18,7 @@ const spec = {
   name: 'Hotel Guest Reception',
   sheets: [
     { name: 'Daily dashboard', columns: [{ header: 'Today', width: 24 }, { header: 'Number' }, { header: 'Where it comes from' }],
-      rows: [['Arrivals', 6, 'Booking log'], ['Rooms ready', 3, '=COUNTIF(Rooms!D2:D40,"Ready")']] },
+      rows: [['Arrivals', 6, 'Booking log'], ['Rooms ready', 3, "=COUNTIF('Rooms and housekeeping'!B2:B40,\"Ready\")"]] },
     { name: 'Booking and check-in', columns: [{ header: 'Guest' }, { header: 'Room' }, { header: 'Status', options: ['Booked', 'Checked in', 'Due out'] }, { header: 'Paid' }],
       rows: [['Amina Khan', '204', 'Checked in', 'yes'], ['Bilal Sheikh', '108', 'Booked', 'not yet']] },
     { name: 'Rooms and housekeeping', columns: [{ header: 'Room' }, { header: 'State', options: ['Dirty', 'Cleaning', 'Ready'] }, { header: 'Checked by' }],
@@ -50,7 +50,7 @@ test('the workbook crewd writes is a real .xlsx: its sheets, the dropdown, the f
   assert.equal(bookings.getCell('D9').dataValidation, undefined, 'only the column asked for');
   assert.equal(wb.worksheets[2].getColumn(1).width, 10, 'a default width of its own, not Excel of one character');
   assert.equal(wb.worksheets[0].getColumn(1).width, 24, 'the width the helper asked for');
-  assert.equal((wb.worksheets[0].getCell('C3').value as any).formula, 'COUNTIF(Rooms!D2:D40,"Ready")', 'a formula, not the word "formula"');
+  assert.equal((wb.worksheets[0].getCell('C3').value as any).formula, "COUNTIF('Rooms and housekeeping'!B2:B40,\"Ready\")", 'a formula, not the word "formula"');
   assert.equal((wb.worksheets[0].getCell('A1').fill as any)?.fgColor?.argb, 'FF1F2937', 'the header sits on a dark fill');
   assert.equal(wb.worksheets[0].getCell('A1').font?.color?.argb, 'FFFFFFFF', 'white bold header text');
   assert.equal((wb.worksheets[0].getCell('C3').fill as any)?.fgColor?.argb, 'FFDBEAFE', 'a calculated cell is blue');
@@ -112,7 +112,7 @@ test('the preview JSON: every sheet, its headings and its first rows, as words a
   assert.deepEqual(json.sheets[1].rows[1], ['Amina Khan', '204', 'Checked in', 'yes']);
   assert.deepEqual(json.sheets[1].rows.at(-1), ['Bilal Sheikh', '108', 'Booked', 'not yet']);
   assert.equal(json.sheets[1].total, 3, 'the header and the finished rows, not the blank ones under the dropdown');
-  assert.equal(json.sheets[0].rows[2][2], 'auto', 'a formula with no computed value reads auto, never the formula text');
+  assert.equal(json.sheets[0].rows[2][2], '1', 'a fresh formula reads its worked-out value, never "auto" or the formula text');
   for (const s of json.sheets) {
     for (const r of s.rows) for (const c of r) { assert.doesNotMatch(c, /^=/, 'no preview cell ever shows a formula'); assert.doesNotMatch(c, /—/, 'no quiet dash either'); }
     assert.deepEqual(s.nums, s.rows.map((_: any, i: number) => i + 1), 'row numbers run with the rows when none are blank');
@@ -136,9 +136,13 @@ test('the preview JSON: every sheet, its headings and its first rows, as words a
   const ws = cached.addWorksheet('Maths');
   ws.addRow(['Guests', 6]);
   ws.addRow(['Beds', { formula: 'B1+2', result: 8 }]);
+  ws.addRow(['Total', { formula: 'SUM(B1:B2)*2-COUNTIF(A1:A3,"beds")' }, { formula: "IF(B1>5,\"busy\",\"calm\")&\" day\"" }]);
+  ws.addRow(['Twice', { formula: 'B3+B3' }, { formula: 'C4' }]);
   await cached.xlsx.writeFile(join(dir, 'cached.xlsx'));
   const again = await readWorkbook(join(dir, 'cached.xlsx'));
   assert.deepEqual(again.sheets[0].rows[1], ['Beds', '8'], 'the computed value, when the file has one');
+  assert.deepEqual(again.sheets[0].rows[2], ['Total', '27', 'busy day'], 'a fresh formula is worked out from its cells');
+  assert.deepEqual(again.sheets[0].rows[3], ['Twice', '54', '0'], 'a formula read twice counts twice; one that reads itself reads as an empty cell, 0');
   assert.deepEqual(JSON.parse(JSON.stringify(json)), json, 'plain JSON: no dates, no library objects');
 });
 
@@ -150,7 +154,7 @@ test('a helper makes one in its own chat: the file lands in files/, is delivered
   await settled(db, id);
   assert.equal(task(db, id).state, 'done');
 
-  const rel = `files/hotel-guest-reception-t${id}.xlsx`;
+  const rel = `files/hotel-guest-reception.xlsx`;
   const full = join(disk.botDir(cfg, 'quill'), rel);
   assert.ok(existsSync(full), 'the workbook is in the helper folder');
   const delivered = db.all("SELECT data FROM events WHERE kind = 'file.delivered'").map((e: any) => JSON.parse(e.data));
@@ -182,7 +186,7 @@ test('repeated requests for the same title get separate delivered files that bot
   assert.equal(task(db, theirs).state, 'done');
   const paths = db.all("SELECT data FROM events WHERE kind = 'file.delivered'").map((e: any) => JSON.parse(e.data).path);
   assert.equal(new Set(paths).size, 2, 'one file per task, no overwrite');
-  assert.ok(paths.every((p: string) => new RegExp(`-t(${mine}|${theirs})\\.xlsx$`).test(p)));
+  assert.ok(/[a-z]\.xlsx$/.test(paths[0]) && paths[1] === paths[0].replace('.xlsx', '-2.xlsx'), 'a person reads the title, then -2: never a task id');
   const [a, b] = paths;
   assert.ok(await crew.workbookView('quill', b));
   assert.ok(await crew.workbookView('quill', a));

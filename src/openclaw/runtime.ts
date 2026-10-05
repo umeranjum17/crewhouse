@@ -145,9 +145,7 @@ export class OpenClawRuntime implements AgentRuntime {
   }
 
   /** Stage offline through the kit; confirmation removes the verified source without a plaintext archive. */
-  async migrate(legacyAuthPath: string) {
-    return await this.kit.migrateRetainedLogin(ME, { path: legacyAuthPath }) === 'staged';
-  }
+  async migrate(legacyAuthPath: string) { return await this.kit.migrateRetainedLogin(ME, { path: legacyAuthPath }) === 'staged'; }
   confirm(legacyAuthPath: string) { return this.kit.confirmRetainedLogin(ME, { path: legacyAuthPath }); }
 
   /** Set the custom OpenAI-compatible provider and primary model (the tests' scripted model). */

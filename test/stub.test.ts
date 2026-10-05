@@ -678,8 +678,9 @@ test('one chat end to end on the stub: excel request, one question, bookings, th
 
   // The question reaches Chief's thread word for word, ending in "?", carrying its task but no card.
   const question = chiefSays().at(-1)!;
-  assert.ok(question.startsWith('Scribe asks: '));
+  assert.ok(question.endsWith(' Visitor log, bookings, or something else?') && !question.includes('asks:'), 'in the helper\'s own words, no "asks:" prefix');
   assert.ok(question.endsWith('?'));
+  assert.equal((await crew.botPage('chief')).messages.find((m: any) => m.text === question)?.helper, 'scribe', 'the app shows Scribe said it');
 
   // Posting the answer builds the workbook, and its card lands in Chief's thread.
   const second = (await crew.post('chief', 'bookings'))!.task;

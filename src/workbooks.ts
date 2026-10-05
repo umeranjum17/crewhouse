@@ -91,27 +91,67 @@ export async function buildWorkbook(file: string, spec: WorkbookSpec) {
   return { sheets: wb.worksheets.map((w: any) => w.name) };
 }
 
-/** What a cell says, whatever kind of cell it is: one string for the preview's table. A formula shows its computed
- *  value when the file has one cached, or "auto" — never the formula text; the downloaded file keeps the real thing. */
+/** What a cell says, whatever kind of cell it is: one string for the preview's table. A formula shows its value —
+ *  the file's cached one, else worked out by `calc` — never the formula text; the downloaded file keeps the real thing. */
 function text(v: any): string {
   if (v === null || v === undefined) return '';
   if (v instanceof Date) return Number.isNaN(v.getTime()) ? '' : v.toISOString().slice(0, 10);
+  if (typeof v === 'number') return Number.isFinite(v) ? String(Math.round(v * 1e10) / 1e10) : '';
   if (typeof v === 'object') {
     if (Array.isArray(v.richText)) return v.richText.map((t: any) => text(t.text)).join('');
-    if ('result' in v || 'formula' in v) return v.result == null ? 'auto' : text(v.result);
+    if ('result' in v || 'formula' in v) return text(v.result);
     if ('text' in v || 'hyperlink' in v) return text(v.text ?? v.hyperlink);
     return '';
   }
-  return typeof v === 'number' || typeof v === 'boolean' ? String(v) : String(v).replace(/\r?\n/g, ' ');
+  return typeof v === 'boolean' ? String(v) : String(v).replace(/\r?\n/g, ' ');
+}
+
+/** The few sheet functions a helper's workbook uses, so a fresh file (no cached values) still reads as numbers. */
+const nums = (a: unknown[]) => a.flat(9).filter((v): v is number => typeof v === 'number');
+const meets = (v: unknown, crit: unknown) => {
+  const [, op = '=', rhs] = /^(<>|>=|<=|>|<|=)?(.*)$/s.exec(String(crit))!, n = Number(rhs);
+  const d = typeof v === 'number' && rhs.trim() && !Number.isNaN(n) ? v - n : String(v ?? '').toLowerCase() === rhs.toLowerCase() ? 0 : NaN;
+  return { '<>': d !== 0, '=': d === 0, '>': d > 0, '<': d < 0, '>=': d >= 0, '<=': d <= 0 }[op];
+};
+const FN: Record<string, (...a: any[]) => unknown> = {
+  SUM: (...a) => nums(a).reduce((s, n) => s + n, 0), COUNT: (...a) => nums(a).length, AVERAGE: (...a) => (FN.SUM(...a) as number) / nums(a).length,
+  MIN: (...a) => Math.min(...nums(a), Infinity) % Infinity || 0, MAX: (...a) => Math.max(...nums(a), -Infinity) % Infinity || 0,
+  COUNTA: (...a) => a.flat(9).filter((v) => v !== '').length, COUNTIF: (r, c) => [r].flat(9).filter((v) => meets(v, c)).length,
+  SUMIF: (r, c, s = r) => [r].flat(9).reduce((t: number, v, i) => t + (meets(v, c) ? nums([[s].flat(9)[i]])[0] ?? 0 : 0), 0),
+  ROUND: (n, d = 0) => Math.round(n * 10 ** d) / 10 ** d, ABS: Math.abs, IF: (c, a = true, b = false) => (c ? a : b),
+};
+const TOKEN = /\s+|([A-Z][A-Z0-9.]*)\(|(?:(?:'((?:[^']|'')+)'|(\w+))!)?(\$?[A-Z]{1,3}\$?\d+)(?::(\$?[A-Z]{1,3}\$?\d+))?|(\d+(?:\.\d+)?)(%?)|"((?:[^"]|"")*)"|(TRUE|FALSE)\b|(<>|<=|>=|[-+*/^&=<>(),])/y;
+/** A formula's value from the cells it reads, or '' when it uses something this does not know: only whitelisted
+ *  tokens become code, so a formula is never run as anything but arithmetic over the workbook's own cells. */
+function calc(wb: any, ws: any, cell: any, memo: Map<string, unknown>): unknown {
+  const key = `${ws.name}!${cell.address}`;
+  if (memo.has(key) || !cell.formula) return memo.get(key) ?? '';
+  memo.set(key, ''); // a formula that reads itself reads an empty cell
+  const value = (w: any, c: any) => { const v = c.value; return v?.formula ? v.result ?? calc(wb, w, c, memo) : v instanceof Date ? v.getTime() / 864e5 + 25569 : typeof v === 'object' ? text(v) : v ?? ''; };
+  const ref = (sheet: string | null, a: string, b?: string) => {
+    const w = sheet === null ? ws : wb.getWorksheet(sheet), p = w.getCell(a.replace(/\$/g, '')), q = b && w.getCell(b.replace(/\$/g, ''));
+    if (!q) { const v = value(w, p); return v === '' ? 0 : typeof v === 'string' && v.trim() && !Number.isNaN(Number(v)) ? Number(v) : v; }
+    return Array.from({ length: q.row - p.row + 1 }, (_, r) => Array.from({ length: q.col - p.col + 1 }, (_, c) => value(w, w.getCell(p.row + r, p.col + c))));
+  };
+  let js = '', m: RegExpExecArray | null;
+  for (TOKEN.lastIndex = 0; TOKEN.lastIndex < cell.formula.length;) {
+    if (!(m = TOKEN.exec(cell.formula)) || (m[1] && !FN[m[1]])) return '';
+    const [, fn, quoted, bare, a, b, n, pct, str, bool, op] = m;
+    js += fn ? `F.${fn}(` : a ? `R(${JSON.stringify(quoted?.replace(/''/g, "'") ?? bare ?? null)},"${a}"${b ? `,"${b}"` : ''})` : n ? String(Number(n) / (pct ? 100 : 1))
+      : str !== undefined ? JSON.stringify(str.replace(/""/g, '"')) : bool ? bool.toLowerCase() : op ? ({ '^': '**', '=': '==', '<>': '!=', '&': '+""+' }[op] ?? op) : ' ';
+  }
+  try { memo.set(key, new Function('F', 'R', `return (${js});`)(FN, ref)); } catch { /* reads blank */ }
+  return memo.get(key);
 }
 
 /** Read a workbook back as JSON for the app: header row first, at most this many rows and columns of each sheet,
  *  plus row numbers (`nums`, gaps where blanks were skipped) and cell roles (`roles`: head/in/calc/empty, from
  *  formulas and validation only). Nothing but words and counts leaves here — no paths or commands on a screen. */
-export async function readWorkbook(file: string, max = { rows: 40, cols: 14 }) {
+export async function readWorkbook(file: string, max = { rows: MAX.rows, cols: MAX.columns }) {
   const ExcelJS = await excel();
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.readFile(file);
+  const memo = new Map<string, unknown>();
   const sheets = wb.worksheets.slice(0, MAX.sheets).map((ws: any) => {
     const rows: string[][] = [], nums: number[] = [], roles: string[][] = [];
     let total = 0;
@@ -119,7 +159,7 @@ export async function readWorkbook(file: string, max = { rows: 40, cols: 14 }) {
       const cells: string[] = [], role: string[] = [];
       for (let c = 1; c <= max.cols; c++) {
         const cell = row.getCell(c), v: any = cell.value;
-        cells.push(text(v).slice(0, 120));
+        cells.push(text(v && typeof v === 'object' && 'formula' in v && v.result == null ? calc(wb, ws, cell, memo) : v).slice(0, 120));
         role.push(!total ? 'head' : v && typeof v === 'object' && 'formula' in v ? 'calc' : cell.dataValidation ? 'in' : '');
       }
       while (cells.length && !cells.at(-1)) { cells.pop(); role.pop(); } // the table ends where the words do

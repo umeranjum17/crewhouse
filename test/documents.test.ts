@@ -73,7 +73,7 @@ test('a helper makes one in its own chat: the file lands in files/, is delivered
   await settled(db, id);
   assert.equal(task(db, id).state, 'done');
 
-  const rel = `files/front-desk-handbook-t${id}.docx`;
+  const rel = `files/front-desk-handbook.docx`;
   const full = join(disk.botDir(cfg, 'quill'), rel);
   assert.ok(existsSync(full), 'the document is in the helper folder');
   const delivered = db.all("SELECT data FROM events WHERE kind = 'file.delivered'").map((e: any) => JSON.parse(e.data));
@@ -116,7 +116,7 @@ test('repeated requests for the same title get separate delivered files that bot
   assert.equal(task(db, theirs).state, 'done');
   const paths = db.all("SELECT data FROM events WHERE kind = 'file.delivered'").map((e: any) => JSON.parse(e.data).path);
   assert.equal(new Set(paths).size, 2, 'one file per task, no overwrite');
-  assert.ok(paths.every((p: string) => new RegExp(`-t(${mine}|${theirs})\\.docx$`).test(p)));
+  assert.ok(/[a-z]\.docx$/.test(paths[0]) && paths[1] === paths[0].replace('.docx', '-2.docx'), 'a person reads the title, then -2: never a task id');
   const [a, b] = paths;
   assert.ok(await crew.documentView('quill', b));
   assert.ok(await crew.documentView('quill', a));
