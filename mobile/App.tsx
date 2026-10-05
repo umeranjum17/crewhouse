@@ -1506,12 +1506,12 @@ function Head({ children, onBack }: { children: ReactNode; onBack: () => void })
 }
 
 function ChiefPage(ctx: Ctx & { m?: number }) {
-  const { mood, line } = chiefNow(ctx.state, ctx.offline);
+  const { mood } = chiefNow(ctx.state, ctx.offline);
   return (
     <View style={{ flex: 1 }}>
       <Head onBack={ctx.back}>
         <Face who="chief" size={32} mood={mood} />
-        <View style={{ flex: 1 }}><T style={s.rowTitle}>Chief</T><T tone="ink2" style={s.small} lines={1}>{line}</T></View>
+        <View style={{ flex: 1 }}><T style={s.rowTitle}>Chief</T><T tone="ink2" style={s.small}>{ctx.offline ? OUT : 'Runs the crew and answers to you'}</T></View>
       </Head>
       <Chat {...ctx} id="chief" m={ctx.m} />
     </View>
@@ -1553,7 +1553,7 @@ function HelperPage(ctx: Ctx & { id: string; tab: string; m?: number; setTab: (t
   const { id, tab, m, setTab, state, tick, refresh, canAct, back, go } = ctx;
   const h = A.crew(state).find((x) => x.id === id);
   const [page, setPage] = useState<Json>(null);
-  const [all, setAll] = useState(false); // Details shows what it is doing now; "Every step" opens the whole trail in place
+  const [all, setAll] = useState(false); // Details shows what it is doing now; "What happened" opens the whole trail in place
   const load = useCallback(() => api.bot(id).then(setPage).catch(() => {}), [id]);
   useEffect(() => { void load(); }, [load, tick]);
   if (!h) return <Center><T tone="mute">This helper has left the crew.</T></Center>;
@@ -1572,7 +1572,7 @@ function HelperPage(ctx: Ctx & { id: string; tab: string; m?: number; setTab: (t
       {tab === 'chat' ? <>
         <Head onBack={back}>
           <Face who={h} size={32} />
-          <View style={{ flex: 1 }}><T style={s.rowTitle}>{h.name}</T><T tone="ink2" style={s.small} lines={1}>{ctx.offline ? OUT : h.status}</T></View>
+          <View style={{ flex: 1 }}><T style={s.rowTitle}>{h.name}</T><T tone="ink2" style={s.small}>{ctx.offline ? OUT : h.role}</T></View>
           {b?.task && canAct && <Btn label="Stop" onPress={() => attempt(async () => { await api.reset(id); refresh(); }, `Stopped ${h.name}`)} />}
           <Btn ghost label="Details" onPress={() => setTab('details')} />
         </Head>
@@ -1588,7 +1588,7 @@ function HelperPage(ctx: Ctx & { id: string; tab: string; m?: number; setTab: (t
           <T style={s.b}>Now</T>
           {b?.task ? (trail.length ? <Card><Steps steps={A.steps(page?.trail ?? [], b.task.id, true)} max={all ? 40 : 7} /></Card> : <T tone="mute">{`Working on “${A.plain(b.task.title)}”. Steps show as they happen.`}</T>)
             : <T tone="mute">Nothing right now.</T>}
-          {trail.length > 7 && <Btn ghost label={all ? 'Just now' : 'Every step'} onPress={() => setAll((v) => !v)} />}
+          {trail.length > 7 && <Btn ghost label={all ? 'Just now' : 'What happened'} onPress={() => setAll((v) => !v)} />}
           <T style={s.b}>{`What ${h.name} made`}</T>
           {A.made(state, id).length ? <Card>{A.made(state, id).map((f) => <FileRow key={f.url} f={f} />)}</Card> : <Empty>{`${h.name}'s finished work shows up here.`}</Empty>}
           <T style={s.b}>Routines</T>
