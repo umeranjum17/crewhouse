@@ -598,7 +598,7 @@ export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; 
   const yes = c.choices[0];
   const deny = c.choices.find((x) => x.body.answer === 'deny' && x !== yes);
   // A deferred "Not now" comes back on its own: "Remind me tomorrow" re-asks it from a one-shot routine.
-  const remind = deny && deny.label === 'Not now' ? { ...deny.body, remind: true } : null;
+  const remind = !c.remind && deny && deny.label === 'Not now' ? { ...deny.body, remind: true } : null;
   const always = c.choices.find((x) => x.body.scope === 'always');
   const question = c.review && c.preview?.head ? c.preview.head : c.words;
   // A routine offered by Chief: the lines are the confirmation, and changing the time is an edit before the yes.

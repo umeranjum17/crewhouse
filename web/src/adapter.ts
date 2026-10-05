@@ -18,6 +18,8 @@ export type Card = {
   /** Chief's offered routine: the lines to confirm (cadence, what, quiet, first run), the schedule words to edit, and
    *  the time-zone line when the home computer's clock sits in another zone from this device's. */
   lines?: string[]; schedule?: string; zoneNote?: string;
+  /** A reminder is the person's own one moment: the card says when it is, and offers nothing else to remember. */
+  remind?: boolean;
   /** A checkout: the inbox opens the review before any yes, and the sheet's yes names the order.
    *  `known`: crewd could read the total. Without it, the safe way out is the person buying it themselves. */
   review?: boolean; order?: { shown: string; known: boolean; dollars: boolean };
@@ -590,7 +592,7 @@ export function card(a: Json, state: Json): Card {
     const one = !!d.routine.once; // a one-off reminder: the same card, in the words a reminder uses
     return { ...base, kind: 'routine', status: one ? 'A reminder' : 'A new routine', head: one ? 'A reminder' : 'A new routine', words: plain(d.words ?? a.title),
       lines: String(d.preview?.body ?? '').split('\n').map((l: string) => plain(l)).filter(Boolean).concat(note ? [note] : []),
-      schedule: String(d.routine.schedule ?? ''), zoneNote: note,
+      schedule: String(d.routine.schedule ?? ''), zoneNote: note, remind: one,
       choices: [{ label: one ? 'Remind me' : 'Start it', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
   }
   // Chief's plan for a job of several steps: the steps are the evidence, and nothing starts before Go. "Change it" is
