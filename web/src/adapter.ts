@@ -636,8 +636,8 @@ export function card(a: Json, state: Json): Card {
       draftTo: plain(d.draft.to), draftSubject: plain(d.draft.subject) || undefined, draftText: body, head, words: head, preview: { body },
       choices: [{ label: 'Approve', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Reject', body: { answer: 'deny' } }] };
   }
-  // Chief's hire in a glance: who, the role, what it can do and the first job; nothing is made until the yes.
-  if (a.kind === 'propose' && d.hire) return { ...base, kind: 'ok', status: 'A new helper', head: plain(d.words ?? a.title), words: plain(d.words ?? a.title),
+  // Chief's hire in a glance: who, the role, what it can do and the first job; nothing changes until the yes.
+  if (a.kind === 'propose' && d.hire) return { ...base, kind: 'ok', status: d.adapt ? 'A new job' : 'A new helper', head: plain(d.words ?? a.title), words: plain(d.words ?? a.title),
     lines: String(d.preview?.body ?? '').split('\n').map((l: string) => plain(l)).filter(Boolean),
     choices: [{ label: plain(d.yes ?? 'Yes'), body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
   if (a.kind === 'propose') {
