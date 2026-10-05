@@ -45,7 +45,7 @@ test('one floor: five spots in roster order, whoever waits on you first, everyon
   assert.deepEqual(p.seats.map((c) => c.id), crew.filter((c) => c.ring === 'needs').slice(0, 5).map((c) => c.id), "in the crew's own order");
   assert.equal(p.seats.length + p.more.length, 30, 'everyone is drawn or counted under +N');
   const few = floorPlan([who(0, 'working'), who(1, '', { seat: 'waiting' }), who(2, 'needs'), who(3, '')]);
-  assert.deepEqual(few.seats.map((c) => c.id), ['h2', 'h0', 'h3', 'h1'], 'needs you, working, free, waiting last');
+  assert.deepEqual(few.seats.map((c) => c.id), ['h2', 'h0', 'h1', 'h3'], 'needs you, working, held, free last');
   assert.equal(few.more.length, 0);
 });
 
@@ -82,7 +82,7 @@ test('office truth: the room, its counts, the tray, the roster and Needs you rea
   assert.equal(v.counts.working, 1);
   assert.equal(v.counts.done, 1, 'the tray holds today\'s');
   assert.ok(v.crew.find((c) => c.id === 'h6')!.second && v.crew.find((c) => c.id === 'h7')!.second, 'a second of a kind is marked');
-  assert.deepEqual(A.roster(v.crew).map((c) => c.id), ['reel', 'scribe', 'scout', 'tracer', 'h6', 'h7', 'pip']);
+  assert.deepEqual(A.roster(v.crew).map((c) => c.id), ['reel', 'scribe', 'scout', 'tracer', 'pip', 'h6', 'h7']);
   const chats = new Map(A.chats(state).map((c) => [c.id, c.line]));
   assert.equal(chats.get('reel'), 'Needs you');
   assert.equal(chats.get('scribe'), A.SEAT_WORDS.chat, 'the chat list says what the rail says');

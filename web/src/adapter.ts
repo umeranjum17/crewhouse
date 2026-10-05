@@ -1288,8 +1288,9 @@ export function railWord(c: OfficeMember, v: OfficeView): { word: string; seat: 
   const last = seat === 'free' ? v.done.filter((t) => t.helper === c.id && t.at >= midnight()).sort((a, b) => b.at - a.at)[0] : undefined;
   return last ? { word: `Done: ${last.title || 'a job'}`, seat: 'done' } : { word: seat === 'waiting' || seat === 'failed' ? c.status : SEAT_WORDS[seat], seat };
 }
-/** Who comes first when there is one seat less than helpers: whoever needs you, then working, then the rest. */
-const SEAT_ORDER: Seat[] = ['needs', 'chat', 'working', 'quiet', 'failed', 'next', 'free', 'waiting'];
+/** Who comes first when there is one seat less than helpers: whoever needs you, then working, then anything held,
+ *  free last. */
+const SEAT_ORDER: Seat[] = ['needs', 'chat', 'working', 'quiet', 'failed', 'waiting', 'next', 'free'];
 /** The whole crew, the one who matters most first (crew order inside each seat): the phone's dock and the web rail. */
 export const roster = (crew: OfficeMember[]) => SEAT_ORDER.flatMap((k) => crew.filter((c) => seatOf(c) === k));
 
@@ -1429,7 +1430,7 @@ export const handedIn = (was: OfficeView, now: OfficeView) => [...new Set(now.do
 export const SEATS = 5;
 export type FloorPlan = { seats: OfficeMember[]; more: OfficeMember[] };
 /** Who stands on the office's one floor, one rule for the web and the phone (B1): five spots in the roster's order,
- *  whoever waits on you first, then working, then the rest, resting last; everyone else is counted under "+N"
+ *  whoever waits on you first, then working, then anything held, free last; everyone else is counted under "+N"
  *  (`more`, roster order), never drawn smaller. The rail and the dock still name the whole crew. */
 export function floorPlan(crew: OfficeMember[]): FloorPlan {
   const order = roster(crew);

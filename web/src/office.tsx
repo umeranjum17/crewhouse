@@ -96,7 +96,7 @@ export function Office({ state, live, night }: { state: Json; live: A.OfficeView
   const r = night ? ROOM.night : ROOM.day;
   const vars = { '--r-wall': r.wall, '--r-floor': r.floor, '--r-desk': r.desk, '--r-edge': r.edge, '--r-screen': r.screen, '--r-sofa': r.sofa, '--r-window': r.window } as CSSProperties;
   const chiefAsk = A.chiefAsks(live).sort((a, b) => A.askRank(a) - A.askRank(b))[0];
-  // One floor, left to right in the roster's order (whoever waits on you, then working, then the rest, resting last),
+  // One floor, left to right in the roster's order (whoever waits on you, then working, then anything held, free last),
   // Chief standing just after whoever waits on you.
   const plan = A.floorPlan(crew);
   const waits = plan.seats.filter(A.waitsOnYou).length;
