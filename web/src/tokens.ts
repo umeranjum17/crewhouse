@@ -2,15 +2,15 @@
 export const color = {
   day: {
     bg: '#F6F7F9', surface: '#FFFFFF', sunken: '#EEF0F4', line: '#E3E6EC', line2: '#D2D7E0',
-    ink: '#141A2A', ink2: '#4D566B', mute: '#8A92A5', accent: '#141A2A', onAccent: '#FFFFFF',
+    ink: '#141A2A', ink2: '#4D566B', mute: '#666D80', accent: '#141A2A', onAccent: '#FFFFFF',
     // B1's one accent (#F0482A fills), a shade deeper wherever it is text on white
-    pink: '#D63A1E', fill: '#F0482A', softAccent: '#FFE9E3', green: '#1E9A58', amber: '#B86E00', danger: '#C4372C',
+    pink: '#C4331A', fill: '#F0482A', softAccent: '#FFE9E3', green: '#1E9A58', amber: '#B86E00', danger: '#C4372C',
     // a spreadsheet's cells: soft yellow for what the person fills in, soft blue for what works itself out
     cellIn: '#FFEFB8', cellCalc: '#DAE8FB',
   },
   night: {
     bg: '#111014', surface: '#1A191E', sunken: '#151418', line: '#2A2830', line2: '#36333D',
-    ink: '#F1EFEA', ink2: '#ABA7B1', mute: '#78747E', accent: '#F1EFEA', onAccent: '#111014',
+    ink: '#F1EFEA', ink2: '#ABA7B1', mute: '#88848E', accent: '#F1EFEA', onAccent: '#111014',
     pink: '#FF8A70', fill: '#FF6A4D', softAccent: '#3A2220', green: '#4BD08A', amber: '#F2B04B', danger: '#FF6B5E',
     cellIn: '#3A3118', cellCalc: '#1B2B42',
   },

@@ -4,9 +4,9 @@
 @font-face { font-family: 'JetBrains Mono'; src: url(/fonts/JetBrainsMono.woff2) format('woff2'); font-display: block; }
 :root {
   --bg: #F6F7F9; --solid: #FFFFFF; --soft: #EEF0F4; --line: #E3E6EC; --line2: #D2D7E0;
-  --ink: #141A2A; --ink2: #4D566B; --mute: #8A92A5; --go: #141A2A; --go-ink: #FFFFFF;
+  --ink: #141A2A; --ink2: #4D566B; --mute: #666D80; --go: #141A2A; --go-ink: #FFFFFF;
   --pink: #F0482A; --ok: #1E9A58; --amber: #B86E00; --danger: #C4372C; --soft-accent: #FFE9E3;
-  --card: var(--solid); --warm: #FFF1DC; --on-pink: #FFFFFF; --pink-ink: #D63A1E;
+  --card: var(--solid); --warm: #FFF1DC; --on-pink: #FFFFFF; --pink-ink: #C4331A;
   --serif: 'Instrument Serif', Georgia, serif; --ok-ink: var(--ok); --wait: var(--pink); --shadow: var(--line2);
   --cell-in: #FFEFB8; --cell-calc: #DAE8FB;
   --e1: 0 1px 2px rgba(20,18,26,.04), 0 4px 16px rgba(20,18,26,.06);
@@ -16,7 +16,7 @@
 }
 [data-theme='night'] {
   --bg: #111014; --solid: #1A191E; --soft: #151418; --line: #2A2830; --line2: #36333D;
-  --ink: #F1EFEA; --ink2: #ABA7B1; --mute: #78747E; --go: #F1EFEA; --go-ink: #111014;
+  --ink: #F1EFEA; --ink2: #ABA7B1; --mute: #88848E; --go: #F1EFEA; --go-ink: #111014;
   --pink: #FF6A4D; --ok: #4BD08A; --amber: #F2B04B; --danger: #FF6B5E; --soft-accent: #3A2220; --pink-ink: #FF8A70;
   --e1: 0 0 0 1px var(--line), 0 4px 16px #0003;
   --e2: 0 0 0 1px var(--line2), 0 16px 48px #0008;
@@ -124,7 +124,7 @@ b { font-weight: 600; }
 .link { background: none; border: 0; padding: 6px 2px; color: var(--ink2); font-weight: 500; text-decoration: none; }
 .link.inline { padding: 0; }
 .link.pink { color: var(--pink-ink); text-decoration: none; }
-.badge { background: var(--pink); color: var(--on-pink); font: 500 11px/14px var(--ui); border-radius: 999px; padding: 1px 6px; margin-left: auto; }
+.badge { background: var(--pink-ink); color: var(--on-pink); font: 500 11px/14px var(--ui); border-radius: 999px; padding: 1px 6px; margin-left: auto; }
 .input { width: 100%; background: var(--solid); border: 1px solid var(--line2); border-radius: 10px; padding: 12px 16px; font-size: 15px; }
 .input.center { text-align: center; font-weight: 600; }
 textarea.input { resize: vertical; }
@@ -1042,7 +1042,6 @@ h1 { font: 400 32px/36px var(--serif); letter-spacing: -.005em; }
 .ch-art .ink { width: 214px; height: auto; }
 .ch-body { min-width: 0; display: grid; gap: 10px; justify-items: start; align-content: start; padding: 30px 28px 22px 6px; }
 .ch-name { margin: 0; font: 400 52px/1 var(--serif); letter-spacing: -.01em; color: var(--ink); }
-.ch-name small { font: 400 13px/1 var(--ui); color: var(--mute); letter-spacing: 0; margin-left: 6px; }
 .ch-say { margin: 0; padding: 12px 18px; border: 1px solid var(--line2); border-radius: 16px; font: 400 16px/1.45 var(--ui); color: var(--ink); max-width: 60ch; }
 .ch-crew { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .ch-face { position: relative; display: grid; border-radius: 50%; box-shadow: 0 0 0 1px var(--line2); text-decoration: none; }
@@ -1205,10 +1204,8 @@ h1 { font: 400 32px/36px var(--serif); letter-spacing: -.005em; }
 @media (max-width: 899px) and (max-height: 700px) {
   .home-chat > .home-top { border-bottom: 1px solid var(--line2); }
 }
-/* 099: at 320 the hero keeps its words and faces but packs tighter: "Studio Chief" stays one phrase and the five faces
-   hold one row, so more of the pinned ask shows above the thread; the rest is a scroll of the top region away. */
+/* 099: at 320 the hero keeps its words and faces but packs tighter: the five faces hold one row, so more of the pinned ask shows above the thread; the rest is a scroll of the top region away. */
 @media (max-width: 359px) {
-  .ch-name small { white-space: nowrap; }
   .ch-face { zoom: .6; }
 }
 /* 101: on a small, short phone (320x640) the same hero packs down so the pinned ask's question and price show at first

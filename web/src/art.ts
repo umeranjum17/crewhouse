@@ -26,7 +26,10 @@ export type Pose = 'listen' | 'work' | 'needs' | 'pleased' | 'rest';
 export const POSES: Pose[] = ['listen', 'work', 'needs', 'pleased', 'rest'];
 export const poseOf = (m: Mood | Pose = 'idle'): Pose =>
   m === 'needs' || m === 'pleased' ? m : m === 'work' ? 'work' : m === 'happy' ? 'pleased' : m === 'rest' ? 'rest' : m === 'ask' || m === 'worried' || m === 'error' ? 'needs' : 'listen';
-type Opts = { vb?: string; floor?: boolean; wave?: boolean };
+type Opts = { vb?: string; floor?: boolean; wave?: boolean; night?: boolean };
+/** Chief's outer line after dark: the office's night ink (tokens.ts room.night.edge), so his outline, arms and hands
+ *  stay drawn on a dark page. What sits on his white body keeps the day ink. */
+export const NIGHT_INK = '#C9C4DA';
 const Z = 'font-family="Instrument Serif, Georgia, serif" font-style="italic"';
 let uid = 0;
 
@@ -36,7 +39,7 @@ let uid = 0;
  *  the body. The body clip paints exactly what it did, and nothing measures past his outline or below his feet. */
 const SHADE = 'M130.3144 240A30 120 0 0 1 136.5685 86.5742H150V240Z';
 export function chiefSvg(mood: Mood | Pose = 'idle', o: Opts = {}) {
-  const m = poseOf(mood), g = `ch${++uid}`, lw = 3.4;
+  const m = poseOf(mood), g = `ch${++uid}`, lw = 3.4, L = o.night ? NIGHT_INK : INK;
   const body = 'M52 232V120a48 48 0 0 1 96 0V232Z';
   const ey = m === 'work' ? 121 : 118;
   const eyes = m === 'rest' ? '' : m === 'pleased' ? `<path d="M80 ${ey + 1}q6 -7 12 0M108 ${ey + 1}q6 -7 12 0" stroke="${INK}" stroke-width="3.2" fill="none" stroke-linecap="round"/>`
@@ -45,8 +48,8 @@ export function chiefSvg(mood: Mood | Pose = 'idle', o: Opts = {}) {
   const tip = m === 'pleased' ? -5 : 0;
   const tash = `<path d="M100 131C94 127 86 128 80 132C76 135 72 ${134 + tip} 71 ${129 + tip}C69 ${136 + tip} 74 141 81 140C88 139 95 137 100 135C105 137 112 139 119 140C126 141 131 ${136 + tip} 129 ${129 + tip}C128 ${134 + tip} 124 135 120 132C114 128 106 127 100 131Z" fill="${INK}"/>`;
   const mouth = m === 'pleased' ? `<path d="M93 145q7 5 14 0" stroke="${INK}" stroke-width="2.8" fill="none" stroke-linecap="round"/>` : m === 'needs' ? `<ellipse cx="100" cy="146" rx="3" ry="2.6" fill="${INK}"/>` : '';
-  const hand = (x: number, y: number) => `<circle cx="${x}" cy="${y}" r="7" fill="#fff" stroke="${INK}" stroke-width="${lw - .6}"/>`;
-  const arm = (d: string) => `<path d="${d}" stroke="${INK}" stroke-width="${lw}" fill="none" stroke-linecap="round"/>`;
+  const hand = (x: number, y: number) => `<circle cx="${x}" cy="${y}" r="7" fill="#fff" stroke="${L}" stroke-width="${lw - .6}"/>`;
+  const arm = (d: string) => `<path d="${d}" stroke="${L}" stroke-width="${lw}" fill="none" stroke-linecap="round"/>`;
   // The bowler never leaves his head: a pose only tilts it about the crown's seat (or pulls it over his eyes to nap).
   // A thin paper edge keeps the black hat whole against a night background.
   // `wave` (Chief's hero only, B1): calling for you, he lifts the bowler off his head by its brim instead of tipping it.
@@ -55,18 +58,18 @@ export function chiefSvg(mood: Mood | Pose = 'idle', o: Opts = {}) {
   const hat = `<g class="hat"><g transform="${hatAt}"><path d="M50 78Q100 94 150 78" stroke="#fff" stroke-width="9.6" fill="none" stroke-linecap="round"/><path d="M68 77C68 51 82 37 100 37C118 37 132 51 132 77Z" fill="${INK}" stroke="#fff" stroke-width="2.2" stroke-linejoin="round"/><path d="M69 71H131" stroke="${RED}" stroke-width="5"/><path d="M50 78Q100 94 150 78" stroke="${INK}" stroke-width="5.2" fill="none" stroke-linecap="round"/><path d="M80 60C80 52 86 46 93 44" stroke="rgba(255,255,255,.28)" stroke-width="3" fill="none" stroke-linecap="round"/></g></g>`;
   const arms = {
     listen: arm('M54 166C44 184 44 198 48 210') + hand(48, 213) + arm('M146 164C160 160 156 148 132 146') + hand(128, 146),
-    work: arm('M54 166C60 184 74 192 88 192') + hand(90, 192) + `<g class="watch"><circle cx="102" cy="196" r="12" fill="#fff" stroke="${INK}" stroke-width="2.8"/><path d="M102 189v7l5 3" stroke="${INK}" stroke-width="2.4" fill="none" stroke-linecap="round"/></g><path d="M114 192C124 186 132 178 134 168" stroke="${INK}" stroke-width="1.6" fill="none" stroke-dasharray="2 3"/>` + arm('M146 166C156 184 156 198 152 210') + hand(152, 213),
+    work: arm('M54 166C60 184 74 192 88 192') + hand(90, 192) + `<g class="watch"><circle cx="102" cy="196" r="12" fill="#fff" stroke="${L}" stroke-width="2.8"/><path d="M102 189v7l5 3" stroke="${INK}" stroke-width="2.4" fill="none" stroke-linecap="round"/></g><path d="M114 192C124 186 132 178 134 168" stroke="${L}" stroke-width="1.6" fill="none" stroke-dasharray="2 3"/>` + arm('M146 166C156 184 156 198 152 210') + hand(152, 213),
     needs: arm('M54 166C44 184 44 198 48 210') + hand(48, 213) + (wave ? arm('M146 162C172 140 178 82 164 42') + hand(163, 38) : arm('M146 162C166 146 172 112 160 80') + hand(158, 76)),
     pleased: arm('M54 166C38 172 30 160 32 148') + hand(32, 144) + arm('M146 166C162 172 170 160 168 148') + hand(168, 144),
     rest: arm('M54 170C70 190 112 190 132 176') + arm('M146 170C130 190 88 190 68 176') + hand(66, 175) + hand(134, 175),
   }[m];
   const marks = m === 'needs' ? `<path class="cue" d="${wave ? 'M180 62l9 -9M186 78l12 -3M176 50l6 -10' : 'M178 56l9 -9M186 70l12 -3M170 48l2 -12'}" stroke="${RED}" stroke-width="3.4" stroke-linecap="round"/>`
-    : m === 'rest' ? `<g class="zz"><text x="150" y="62" ${Z} font-size="30" fill="${INK}" opacity=".55">z</text><text x="168" y="40" ${Z} font-size="21" fill="${INK}" opacity=".4">z</text></g>`
+    : m === 'rest' ? `<g class="zz"><text x="150" y="62" ${Z} font-size="30" fill="${L}" opacity=".55">z</text><text x="168" y="40" ${Z} font-size="21" fill="${L}" opacity=".4">z</text></g>`
     : m === 'work' ? `<path d="M30 96l8 4M26 112h9" stroke="${RED}" stroke-width="3" stroke-linecap="round"/>` : '';
   return `<svg viewBox="${o.vb ?? '0 0 200 250'}" xmlns="http://www.w3.org/2000/svg"><defs><clipPath id="${g}c"><path d="${body}"/></clipPath></defs>`
-    + (o.floor === false ? '' : `<ellipse cx="100" cy="235" rx="58" ry="4.5" fill="${INK}" opacity=".1"/>`)
+    + (o.floor === false ? '' : `<ellipse cx="100" cy="235" rx="58" ry="4.5" fill="${L}" opacity=".1"/>`)
     + `<g class="body"><path d="${body}" fill="#fff"/><g clip-path="url(#${g}c)"><path d="${SHADE}" fill="#EEF1F6"/></g>`
-    + `<path d="${body}" fill="none" stroke="${INK}" stroke-width="${lw}" stroke-linejoin="round"/>`
+    + `<path d="${body}" fill="none" stroke="${L}" stroke-width="${lw}" stroke-linejoin="round"/>`
     + `<circle cx="76" cy="134" r="6.5" fill="${RED}" opacity=".2"/><circle cx="124" cy="134" r="6.5" fill="${RED}" opacity=".2"/>`
     + `<g class="eyes">${eyes}</g>${brow ? `<path d="${brow}" stroke="${INK}" stroke-width="3.6" fill="none" stroke-linecap="round"/>` : ''}${tash}${mouth}`
     + `<path d="M100 170L86 162V178ZM100 170L114 162V178Z" fill="${RED}" stroke="${INK}" stroke-width="2.4" stroke-linejoin="round"/><circle cx="100" cy="170" r="3.6" fill="${RED}" stroke="${INK}" stroke-width="2.2"/>`
@@ -100,8 +103,8 @@ export function beanSvg(kind: Kind, mood: Mood | Pose = 'idle', o: Opts = {}) {
 }
 
 /** Head and shoulders, for faces and avatars: square crops of the same drawings. */
-export const headSvg = (who: Kind | 'chief', mood: Mood | Pose = 'idle') =>
-  who === 'chief' ? chiefSvg(mood, { vb: '30 28 140 140', floor: false }) : beanSvg(who, mood, { vb: '8 26 104 104', floor: false });
+export const headSvg = (who: Kind | 'chief', mood: Mood | Pose = 'idle', night = false) =>
+  who === 'chief' ? chiefSvg(mood, { vb: '30 28 140 140', floor: false, night }) : beanSvg(who, mood, { vb: '8 26 104 104', floor: false });
 
 // ── The crew's colours: the bean's pastel and the tile behind a face ──
 export type Kind = 'reel' | 'scout' | 'scribe' | 'tracer' | 'pip' | 'bow' | 'cap' | 'specs' | 'scarf';

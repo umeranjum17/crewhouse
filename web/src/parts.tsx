@@ -156,7 +156,7 @@ export function Ink({ svg, w, h = w, label, className = '' }: { svg: string; w: 
 export function ChiefArt({ mood = 'idle', d = 6, hero, whole }: { mood?: art.Mood; d?: number; dark?: boolean; hero?: boolean; whole?: boolean }) {
   const flash = useChangeBlink(!!hero, mood);
   const m = flash ? 'blink' : mood, pose = art.poseOf(m), w = d * 14;
-  const svg = useMemo(() => whole ? art.chiefSvg(pose, { wave: hero }) : art.headSvg('chief', pose), [pose, whole, hero]);
+  const svg = useMemo(() => whole ? art.chiefSvg(pose, { wave: hero, night }) : art.headSvg('chief', pose, night), [pose, whole, hero, night]);
   return <Ink svg={svg} w={w} h={whole ? w * 1.25 : w} label="Chief" className={`pose-${pose}`} />;
 }
 export function PalArt({ kind, mood = 'idle', d = 4, name }: { kind: art.Kind; mood?: art.Mood; d?: number; name?: string; crisp?: boolean }) {

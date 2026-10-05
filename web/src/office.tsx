@@ -128,7 +128,7 @@ export function Office({ state, live, night }: { state: Json; live: A.OfficeView
           <Scene id={id} wide={wide} />
           <g transform={`translate(${X(0)} ${G}) scale(${s}) translate(0 ${-G})`}>
             {order.map((m) => m === 'chief'
-              ? <Seat key="chief" spot={spotOf(m)} id={id} kind="chief" pose={art.poseOf(live.chief.mood)} seat={chiefAsk ? 'needs' : live.chief.mood === 'work' ? 'working' : 'free'} beat={live.chief.mood}
+              ? <Seat key="chief" spot={spotOf(m)} id={id} kind="chief" night={night} pose={art.poseOf(live.chief.mood)} seat={chiefAsk ? 'needs' : live.chief.mood === 'work' ? 'working' : 'free'} beat={live.chief.mood}
                   label={`Chief: ${live.chief.line}`} onOpen={() => setProfile(true)} />
               : <Seat key={m.id} spot={spotOf(m)} id={id} kind={m.kind} pose={art.poseOf(m.mood)} seat={A.seatOf(m)} second={m.second} dataId={m.id} beat={`${m.ring}|${m.mood}|${m.things.length}|${m.ask?.id ?? ''}`}
                   label={said(m) + (m.things.length ? `, made ${m.things.map((f) => KIND_WORDS[f.kind]).join(', ')}` : '')} onOpen={() => setOpen(m.id)} />)}
@@ -307,10 +307,10 @@ const Desk = ({ x, w }: { x: number; w: number }) => <g className="o-desk"><rect
   <path d={`M${x + 6} 155V${G}M${x + w - 6} 155V${G}`} stroke="var(--r-edge)" strokeWidth="1.8" /></g>;
 
 /** One station: its furniture and the figure, the whole group the button that opens them. */
-function Seat({ spot, id, kind, pose, seat, second, dataId, beat, label, onOpen }: { spot: Spot; id: string; kind: art.Kind | 'chief'; pose: art.Pose; seat: A.Seat;
-  second?: boolean; dataId?: string; beat: string; label: string; onOpen: () => void }) {
+function Seat({ spot, id, kind, pose, seat, second, dataId, beat, label, onOpen, night }: { spot: Spot; id: string; kind: art.Kind | 'chief'; pose: art.Pose; seat: A.Seat;
+  second?: boolean; night?: boolean; dataId?: string; beat: string; label: string; onOpen: () => void }) {
   const { x, st, tight } = spot, ink = 'var(--r-edge)', red = '#F0482A', fill = kind === 'chief' ? '#fff' : art.PALS[kind].body;
-  const chief = useMemo(() => (kind === 'chief' ? art.chiefSvg(pose, { vb: '24 30 176 210' }).replace('<svg ', `<svg x="${x - 30.4}" y="${G - 80.8}" width="70.4" height="84" `) : ''), [kind, pose, x]);
+  const chief = useMemo(() => (kind === 'chief' ? art.chiefSvg(pose, { vb: '24 30 176 210', night }).replace('<svg ', `<svg x="${x - 30.4}" y="${G - 80.8}" width="70.4" height="84" `) : ''), [kind, pose, x, night]);
   const fig = useRef<SVGGElement>(null);
   // A hop when their news lands (a new ring, mood or thing): once, never on the first paint, never with Reduce Motion.
   const was = useRef(beat);

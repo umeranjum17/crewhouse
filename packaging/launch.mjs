@@ -60,8 +60,8 @@ if (!(await up())) {
 <title>Crewhouse</title>
 <style>
 /* The app's own values (web/src/tokens.ts): the same day and night the person sees everywhere else. */
-:root{color-scheme:light dark;--bg:#F6F7F9;--surface:#FFF;--ink:#141A2A;--ink2:#4D566B;--mute:#8A92A5;--fill:#F0482A;--line:#E3E6EC}
-@media (prefers-color-scheme:dark){:root{--bg:#111014;--surface:#1A191E;--ink:#F1EFEA;--ink2:#ABA7B1;--mute:#78747E;--fill:#FF6A4D;--line:#2A2830}}
+:root{color-scheme:light dark;--bg:#F6F7F9;--surface:#FFF;--ink:#141A2A;--ink2:#4D566B;--mute:#666D80;--fill:#F0482A;--line:#E3E6EC}
+@media (prefers-color-scheme:dark){:root{--bg:#111014;--surface:#1A191E;--ink:#F1EFEA;--ink2:#ABA7B1;--mute:#88848E;--fill:#FF6A4D;--line:#2A2830}}
 body{margin:0;background:var(--bg);color:var(--ink);font:400 15px/1.55 'Inter',system-ui,sans-serif}
 main{max-width:34rem;margin:0 auto;padding:12vh 1.5rem 4rem;text-align:center}
 h1{font:600 28px/1.2 'Instrument Serif',Georgia,serif;margin:.6rem 0 .8rem}
