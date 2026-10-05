@@ -1,0 +1,20 @@
+base=4d4d2b6412abb455510f86802f62f57224b711a8
+tracked_source_sha256
+0a8b99e43d73b2f12b0fb57095f322aa432430c1eb141b45e8f0b730ddb894a5  test/browser.ts
+3bdc3481277c07d8cbd747c37b1eda31484f27aae44e190247da1534070451c9  test/office.test.ts
+6f73e40f8334e003c4dcd6425bfd17a0cb99a919944da8bf231f16c84154bafe  test/teach.test.ts
+
+no-group inspection (no matching signals expected in changed browser paths)
+
+load/admission
+ 07:23:52 up 13 days, 15:22,  1 user,  load average: 74.29, 64.38, 62.02
+
+diff-check
+
+changed-source scope
+14	16	test/office.test.ts
+6	7	test/teach.test.ts
+
+new helper lines
+104 test/browser.ts
+tsc_exit=0

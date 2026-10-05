@@ -1,0 +1,181 @@
+{
+  "at": 1791092629.7501004,
+  "method": "exact recorded PID/starttime targets only; no /proc enumeration or whole-owner scan",
+  "cleanup": {
+    "root": {
+      "pid": 4001015,
+      "parent": 3999970,
+      "start": "135065"
+    },
+    "before": [
+      {
+        "pid": 4001015,
+        "parent": 3999970,
+        "start": "135065"
+      },
+      {
+        "pid": 4001076,
+        "parent": 4001015,
+        "start": "135071"
+      },
+      {
+        "pid": 4001078,
+        "parent": 4001015,
+        "start": "135072"
+      },
+      {
+        "pid": 4001098,
+        "parent": 4001078,
+        "start": "135075"
+      },
+      {
+        "pid": 4001157,
+        "parent": 4001076,
+        "start": "135090"
+      },
+      {
+        "pid": 4001159,
+        "parent": 4001015,
+        "start": "135090"
+      },
+      {
+        "pid": 4001229,
+        "parent": 4001098,
+        "start": "135108"
+      },
+      {
+        "pid": 4001306,
+        "parent": 4001098,
+        "start": "135120"
+      },
+      {
+        "pid": 4001334,
+        "parent": 4001098,
+        "start": "135124"
+      },
+      {
+        "pid": 4001354,
+        "parent": 4001098,
+        "start": "135126"
+      },
+      {
+        "pid": 4001369,
+        "parent": 4001098,
+        "start": "135127"
+      }
+    ],
+    "after": [],
+    "acknowledged": true,
+    "exit": 0,
+    "signal": null,
+    "began": 1791091890707,
+    "cutoff": 1791091895707,
+    "finished": 1791091890866
+  },
+  "known_identity_readback": [
+    {
+      "recorded": {
+        "pid": 4001015,
+        "parent": 3999970,
+        "start": "135065"
+      },
+      "current_stat": "absent",
+      "same_start": false
+    },
+    {
+      "recorded": {
+        "pid": 4001076,
+        "parent": 4001015,
+        "start": "135071"
+      },
+      "current_stat": "absent",
+      "same_start": false
+    },
+    {
+      "recorded": {
+        "pid": 4001078,
+        "parent": 4001015,
+        "start": "135072"
+      },
+      "current_stat": "absent",
+      "same_start": false
+    },
+    {
+      "recorded": {
+        "pid": 4001098,
+        "parent": 4001078,
+        "start": "135075"
+      },
+      "current_stat": "absent",
+      "same_start": false
+    },
+    {
+      "recorded": {
+        "pid": 4001157,
+        "parent": 4001076,
+        "start": "135090"
+      },
+      "current_stat": "absent",
+      "same_start": false
+    },
+    {
+      "recorded": {
+        "pid": 4001159,
+        "parent": 4001015,
+        "start": "135090"
+      },
+      "current_stat": "absent",
+      "same_start": false
+    },
+    {
+      "recorded": {
+        "pid": 4001229,
+        "parent": 4001098,
+        "start": "135108"
+      },
+      "current_stat": "absent",
+      "same_start": false
+    },
+    {
+      "recorded": {
+        "pid": 4001306,
+        "parent": 4001098,
+        "start": "135120"
+      },
+      "current_stat": "absent",
+      "same_start": false
+    },
+    {
+      "recorded": {
+        "pid": 4001334,
+        "parent": 4001098,
+        "start": "135124"
+      },
+      "current_stat": "absent",
+      "same_start": false
+    },
+    {
+      "recorded": {
+        "pid": 4001354,
+        "parent": 4001098,
+        "start": "135126"
+      },
+      "current_stat": "absent",
+      "same_start": false
+    },
+    {
+      "recorded": {
+        "pid": 4001369,
+        "parent": 4001098,
+        "start": "135127"
+      },
+      "current_stat": "absent",
+      "same_start": false
+    }
+  ],
+  "own_marker_paths": [],
+  "positive_recorded_owned_survivors": [],
+  "unknown_unrecorded_descendants": true,
+  "port_identity": "not recorded; unknown, no global port scan",
+  "signals_sent": []
+}

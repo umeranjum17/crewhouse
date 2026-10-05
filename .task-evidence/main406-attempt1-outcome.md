@@ -1,0 +1,17 @@
+# Main406 attempt1 — FAIL (new budget2, one attempt remains)
+
+Command: python3 .task-evidence/qualify-main406.py. Refreshed exact runner readback before launch; syntax parse valid. Runner SHA256382bcda1cd5b5aed6cbae5b7c0039ffea6051e0c8deba1a5d0c19dedd8b98c58. Source hashes unchanged from recovery-source.sha256, base4d4d2b6412abb455510f86802f62f57224b711a8.
+
+Admission06:22:33Z, fresh load75.26708984375, Main381 elapsed-deadline override; Main406 did not supply a new heavy-load waiver. Nonblocking heavy lock held throughout. Node24.21.0, MISE_OFFLINE=1, masked owner HOME plus isolated allXDG and short disk-backed TMPDIR. Command inside bwrap: node --version && npm run check && node --test --test-concurrency=1 test/office.test.ts test/teach.test.ts.
+
+Actual result: elapsed138.948877s, process exit1, cutoff false, errors[], signals[], observed owned survivors[], 53 durably recorded own PID/starttime identities. See main406-1791094953/result.json and ownership.json. Qualifier race/receipt fix worked on the real run: root/descendant identities retained; no global /proc scan, no mutable-parent survivor equality, no fallback signal.
+
+npm run check completed successfully (&& reached selected journeys). Existing8 tests: pass7, fail1, skipped0, cancelled0; test runtime128279.89342ms. Failed test is Office calm motion journey's after-hook: Browser.close acknowledged, but first browser root2459237/start446785 plus6 descendants were still observed at5000ms. Cleanup began1791095023893, cutoff1791095028893, failure evidence finished1791095028894. No bound relaxed and no passing cleanup substituted. Profile and cleanup-failure.json retained at main406-1791094953/tmp/office-browser-rQlf49/. Browser later exited before final owned census; that does NOT turn the failed5000ms cleanup into PASS.
+
+Other automatic normal cleanups succeeded: Office layout root2505602/start449577 closed287ms; workbook root2602822/start455310 closed260ms; teach root2605295/start455508 closed278ms. Each records ack=true, exit0, signal=null, after[]. Layout/actual desk and +N clicks, workbook and teach trusted assertions passed unchanged.
+
+Diagnosis: first close shows acknowledgment versus delayed process/descendant exit, not the prior missing acknowledgment/socket-path or qualifier ESRCH defects. High admission load is observed, not proven causal. Later three closes succeeded on identical source/runtime. Last attempt should discriminate low-load scheduling from source lifecycle failure by using the named fresh<40 admission branch (no deadline override), unchanged journeys and original5000ms bounds. No speculative browser flags/source edits, blind same-high-load rerun or test additions.
+
+Go-deep before final retry: NO1 whole passing slice missing, NO3 unmerged shared code, NO7 no landed safe template; YES2 fixed checks, YES4 single isolated lane, YES5 local browser, YES6 zero new lanes. First wait for fresh<40 without an idle lock, then one final existing proof; no third attempt under Main406 budget2. Pre-review remains deferred; no ready claim/commit/pipeline/PR yet.
+
+Old budget3 failure and its unrecorded survivor uncertainty remain preserved/unresolved; this new attempt's recorded empty observed census does not reconcile those old identities. Full ./crewhouse test unrun due installed kit normal group signals; no owner secret files, installed tools, device/auth/Mac/production actions or frozen packets touched.

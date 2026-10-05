@@ -1,0 +1,10 @@
+# Sandboxes and caches from the drained lane's isolated proof attempts (steer 010/011).
+# Committed alongside: the receipts that are the actual evidence.
+# **/tmp/ is node-compile-cache and chromium profile scratch, ~10 MB.
+# lab-* are throwaway lab roots from earlier attempts.
+# kun is fetched /kun skill sources, third-party content.
+# **/Crash Reports/ are chromium crash dumps.
+**/tmp/
+lab-*
+kun
+**/Crash Reports/

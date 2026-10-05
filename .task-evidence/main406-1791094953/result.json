@@ -1,0 +1,409 @@
+{
+  "began": 1791094953.2840297,
+  "utc": "2026-10-04T06:22:33Z",
+  "load1": 75.26708984375,
+  "admission_limit": 40,
+  "forced": true,
+  "authority": "Main381 + Main406 budget2",
+  "budget_seconds": 360,
+  "work_seconds": 330,
+  "cleanup_reserve_seconds": 30,
+  "command": [
+    "/usr/bin/bwrap",
+    "--die-with-parent",
+    "--ro-bind",
+    "/",
+    "/",
+    "--tmpfs",
+    "/home/umer",
+    "--ro-bind",
+    "/home/umer/.treehouse/crewhouse-0ec48b/19/crewhouse",
+    "/home/umer/.treehouse/crewhouse-0ec48b/19/crewhouse",
+    "--tmpfs",
+    "/opt",
+    "--ro-bind",
+    "/home/umer/.local/share/mise/installs/node/24.21.0",
+    "/opt/task-node",
+    "--bind",
+    "/home/umer/.treehouse/crewhouse-0ec48b/19/crewhouse/.task-evidence/main406-1791094953",
+    "/home/umer/.treehouse/crewhouse-0ec48b/19/crewhouse/.task-evidence/main406-1791094953",
+    "--tmpfs",
+    "/tmp",
+    "--bind",
+    "/home/umer/.treehouse/crewhouse-0ec48b/19/crewhouse/.task-evidence/main406-1791094953",
+    "/tmp/ch-proof",
+    "--tmpfs",
+    "/run",
+    "--dev",
+    "/dev",
+    "--proc",
+    "/proc",
+    "--unshare-ipc",
+    "--unshare-uts",
+    "--chdir",
+    "/home/umer/.treehouse/crewhouse-0ec48b/19/crewhouse",
+    "/bin/bash",
+    "-c",
+    "node --version && npm run check && node --test --test-concurrency=1 test/office.test.ts test/teach.test.ts"
+  ],
+  "env": {
+    "HOME": "/tmp/ch-proof/home",
+    "TMPDIR": "/tmp/ch-proof/tmp",
+    "PATH": "/opt/task-node/bin:/usr/bin:/bin",
+    "MISE_OFFLINE": "1",
+    "CREWHOUSE_ENGINE": "stub",
+    "OFFICE_SHOTS": "/tmp/ch-proof/shots",
+    "DBUS_SESSION_BUS_ADDRESS": "unix:path=/tmp/ch-proof/no-bus",
+    "XDG_CONFIG_HOME": "/tmp/ch-proof/config",
+    "XDG_CACHE_HOME": "/tmp/ch-proof/cache",
+    "XDG_DATA_HOME": "/tmp/ch-proof/data",
+    "XDG_STATE_HOME": "/tmp/ch-proof/state",
+    "XDG_RUNTIME_DIR": "/tmp/ch-proof/runtime"
+  },
+  "base": "4d4d2b6412abb455510f86802f62f57224b711a8",
+  "signals": [],
+  "errors": [],
+  "source_sha256": {
+    "test/browser.ts": "0a8b99e43d73b2f12b0fb57095f322aa432430c1eb141b45e8f0b730ddb894a5",
+    "test/office.test.ts": "3bdc3481277c07d8cbd747c37b1eda31484f27aae44e190247da1534070451c9",
+    "test/teach.test.ts": "6f73e40f8334e003c4dcd6425bfd17a0cb99a919944da8bf231f16c84154bafe"
+  },
+  "runner_sha256": "382bcda1cd5b5aed6cbae5b7c0039ffea6051e0c8deba1a5d0c19dedd8b98c58",
+  "excluded_pids": [
+    1443,
+    2332045
+  ],
+  "root": {
+    "pid": 2332202,
+    "parent": 2332045,
+    "start": "441974",
+    "state": "R"
+  },
+  "owned": [
+    {
+      "pid": 2332202,
+      "parent": 2332045,
+      "start": "441974",
+      "state": "R"
+    },
+    {
+      "pid": 2332226,
+      "parent": 2332202,
+      "start": "441975",
+      "state": "S"
+    },
+    {
+      "pid": 2332273,
+      "parent": 2332226,
+      "start": "441976",
+      "state": "S"
+    },
+    {
+      "pid": 2333122,
+      "parent": 2332273,
+      "start": "442003",
+      "state": "R"
+    },
+    {
+      "pid": 2361200,
+      "parent": 2332226,
+      "start": "443034",
+      "state": "R"
+    },
+    {
+      "pid": 2450547,
+      "parent": 2361200,
+      "start": "446487",
+      "state": "R"
+    },
+    {
+      "pid": 2459237,
+      "parent": 2361200,
+      "start": "446785",
+      "state": "S"
+    },
+    {
+      "pid": 2459373,
+      "parent": 2459237,
+      "start": "446793",
+      "state": "S"
+    },
+    {
+      "pid": 2459384,
+      "parent": 2459237,
+      "start": "446793",
+      "state": "S"
+    },
+    {
+      "pid": 2461050,
+      "parent": 2459237,
+      "start": "446860",
+      "state": "S"
+    },
+    {
+      "pid": 2459539,
+      "parent": 2459384,
+      "start": "446799",
+      "state": "S"
+    },
+    {
+      "pid": 2461156,
+      "parent": 2459539,
+      "start": "446864",
+      "state": "S"
+    },
+    {
+      "pid": 2461493,
+      "parent": 2459539,
+      "start": "446874",
+      "state": "S"
+    },
+    {
+      "pid": 2461644,
+      "parent": 2459539,
+      "start": "446879",
+      "state": "R"
+    },
+    {
+      "pid": 2461713,
+      "parent": 2459539,
+      "start": "446881",
+      "state": "S"
+    },
+    {
+      "pid": 2461727,
+      "parent": 2459539,
+      "start": "446882",
+      "state": "S"
+    },
+    {
+      "pid": 2460975,
+      "parent": 2459373,
+      "start": "446856",
+      "state": "S"
+    },
+    {
+      "pid": 2505602,
+      "parent": 2361200,
+      "start": "449577",
+      "state": "D"
+    },
+    {
+      "pid": 2505872,
+      "parent": 2505602,
+      "start": "449592",
+      "state": "S"
+    },
+    {
+      "pid": 2505875,
+      "parent": 2505602,
+      "start": "449592",
+      "state": "S"
+    },
+    {
+      "pid": 2506018,
+      "parent": 2505602,
+      "start": "449598",
+      "state": "S"
+    },
+    {
+      "pid": 2505958,
+      "parent": 2505875,
+      "start": "449595",
+      "state": "S"
+    },
+    {
+      "pid": 2506094,
+      "parent": 2505958,
+      "start": "449602",
+      "state": "S"
+    },
+    {
+      "pid": 2506244,
+      "parent": 2505958,
+      "start": "449609",
+      "state": "S"
+    },
+    {
+      "pid": 2506464,
+      "parent": 2505958,
+      "start": "449624",
+      "state": "S"
+    },
+    {
+      "pid": 2506493,
+      "parent": 2505958,
+      "start": "449625",
+      "state": "S"
+    },
+    {
+      "pid": 2505996,
+      "parent": 2505872,
+      "start": "449597",
+      "state": "S"
+    },
+    {
+      "pid": 2602822,
+      "parent": 2361200,
+      "start": "455310",
+      "state": "R"
+    },
+    {
+      "pid": 2602988,
+      "parent": 2602822,
+      "start": "455324",
+      "state": "R"
+    },
+    {
+      "pid": 2602995,
+      "parent": 2602822,
+      "start": "455325",
+      "state": "R"
+    },
+    {
+      "pid": 2603066,
+      "parent": 2602995,
+      "start": "455331",
+      "state": "S"
+    },
+    {
+      "pid": 2603140,
+      "parent": 2602988,
+      "start": "455336",
+      "state": "D"
+    },
+    {
+      "pid": 2603146,
+      "parent": 2602822,
+      "start": "455336",
+      "state": "R"
+    },
+    {
+      "pid": 2603192,
+      "parent": 2603066,
+      "start": "455340",
+      "state": "S"
+    },
+    {
+      "pid": 2603328,
+      "parent": 2603066,
+      "start": "455354",
+      "state": "R"
+    },
+    {
+      "pid": 2603460,
+      "parent": 2603140,
+      "start": "455369",
+      "state": "R"
+    },
+    {
+      "pid": 2603385,
+      "parent": 2603066,
+      "start": "455362",
+      "state": "Z"
+    },
+    {
+      "pid": 2603396,
+      "parent": 2603066,
+      "start": "455362",
+      "state": "S"
+    },
+    {
+      "pid": 2603468,
+      "parent": 2603066,
+      "start": "455370",
+      "state": "S"
+    },
+    {
+      "pid": 2603471,
+      "parent": 2603066,
+      "start": "455370",
+      "state": "R"
+    },
+    {
+      "pid": 2603918,
+      "parent": 2603140,
+      "start": "455410",
+      "state": "R"
+    },
+    {
+      "pid": 2605022,
+      "parent": 2332226,
+      "start": "455486",
+      "state": "R"
+    },
+    {
+      "pid": 2605295,
+      "parent": 2605022,
+      "start": "455508",
+      "state": "S"
+    },
+    {
+      "pid": 2605374,
+      "parent": 2605295,
+      "start": "455515",
+      "state": "R"
+    },
+    {
+      "pid": 2605377,
+      "parent": 2605295,
+      "start": "455515",
+      "state": "R"
+    },
+    {
+      "pid": 2605491,
+      "parent": 2605374,
+      "start": "455522",
+      "state": "R"
+    },
+    {
+      "pid": 2605505,
+      "parent": 2605295,
+      "start": "455524",
+      "state": "S"
+    },
+    {
+      "pid": 2605580,
+      "parent": 2605377,
+      "start": "455530",
+      "state": "S"
+    },
+    {
+      "pid": 2605780,
+      "parent": 2605377,
+      "start": "455538",
+      "state": "S"
+    },
+    {
+      "pid": 2605887,
+      "parent": 2605377,
+      "start": "455541",
+      "state": "R"
+    },
+    {
+      "pid": 2605889,
+      "parent": 2605377,
+      "start": "455542",
+      "state": "R"
+    },
+    {
+      "pid": 2605933,
+      "parent": 2605377,
+      "start": "455546",
+      "state": "S"
+    },
+    {
+      "pid": 2605961,
+      "parent": 2605377,
+      "start": "455547",
+      "state": "S"
+    }
+  ],
+  "last_ancestry_at": 1791095089.2074726,
+  "cutoff": false,
+  "before_fallback": [],
+  "known_survivors": [],
+  "survivors": [],
+  "finished": 1791095092.232907,
+  "exit": 1
+}

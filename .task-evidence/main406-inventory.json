@@ -1,0 +1,172 @@
+{
+  "authority": "Main406 inbox005",
+  "at": 1791094646.902111,
+  "scope": "admitted lab-1791091883: 11 recorded identities plus recorded test parent and qualifier; no whole-owner process scan",
+  "ps_command": [
+    "ps",
+    "-p",
+    "3999854,3999970,4001015,4001076,4001078,4001098,4001157,4001159,4001229,4001306,4001334,4001354,4001369",
+    "-o",
+    "pid=,ppid=,stat=,comm="
+  ],
+  "ps_exit": 1,
+  "scoped_ps": "",
+  "ps_stderr": "",
+  "ss_command": [
+    "ss",
+    "-H",
+    "-antup"
+  ],
+  "ss_exit": 0,
+  "scoped_ss": [],
+  "ss_stderr": "",
+  "identities": [
+    {
+      "pid": 3999854,
+      "expected": null,
+      "current": null,
+      "proved_recorded_identity": false,
+      "exclusion": "prior starttime absent"
+    },
+    {
+      "pid": 3999970,
+      "expected": null,
+      "current": null,
+      "proved_recorded_identity": false,
+      "exclusion": "prior starttime absent"
+    },
+    {
+      "pid": 4001015,
+      "expected": {
+        "pid": 4001015,
+        "parent": 3999970,
+        "start": "135065"
+      },
+      "current": null,
+      "proved_recorded_identity": false,
+      "exclusion": null
+    },
+    {
+      "pid": 4001076,
+      "expected": {
+        "pid": 4001076,
+        "parent": 4001015,
+        "start": "135071"
+      },
+      "current": null,
+      "proved_recorded_identity": false,
+      "exclusion": null
+    },
+    {
+      "pid": 4001078,
+      "expected": {
+        "pid": 4001078,
+        "parent": 4001015,
+        "start": "135072"
+      },
+      "current": null,
+      "proved_recorded_identity": false,
+      "exclusion": null
+    },
+    {
+      "pid": 4001098,
+      "expected": {
+        "pid": 4001098,
+        "parent": 4001078,
+        "start": "135075"
+      },
+      "current": null,
+      "proved_recorded_identity": false,
+      "exclusion": null
+    },
+    {
+      "pid": 4001157,
+      "expected": {
+        "pid": 4001157,
+        "parent": 4001076,
+        "start": "135090"
+      },
+      "current": null,
+      "proved_recorded_identity": false,
+      "exclusion": null
+    },
+    {
+      "pid": 4001159,
+      "expected": {
+        "pid": 4001159,
+        "parent": 4001015,
+        "start": "135090"
+      },
+      "current": null,
+      "proved_recorded_identity": false,
+      "exclusion": null
+    },
+    {
+      "pid": 4001229,
+      "expected": {
+        "pid": 4001229,
+        "parent": 4001098,
+        "start": "135108"
+      },
+      "current": null,
+      "proved_recorded_identity": false,
+      "exclusion": null
+    },
+    {
+      "pid": 4001306,
+      "expected": {
+        "pid": 4001306,
+        "parent": 4001098,
+        "start": "135120"
+      },
+      "current": null,
+      "proved_recorded_identity": false,
+      "exclusion": null
+    },
+    {
+      "pid": 4001334,
+      "expected": {
+        "pid": 4001334,
+        "parent": 4001098,
+        "start": "135124"
+      },
+      "current": null,
+      "proved_recorded_identity": false,
+      "exclusion": null
+    },
+    {
+      "pid": 4001354,
+      "expected": {
+        "pid": 4001354,
+        "parent": 4001098,
+        "start": "135126"
+      },
+      "current": null,
+      "proved_recorded_identity": false,
+      "exclusion": null
+    },
+    {
+      "pid": 4001369,
+      "expected": {
+        "pid": 4001369,
+        "parent": 4001098,
+        "start": "135127"
+      },
+      "current": null,
+      "proved_recorded_identity": false,
+      "exclusion": null
+    }
+  ],
+  "positive_proved_survivors": [],
+  "excluded_self_and_ancestor_pids": [
+    1,
+    1443,
+    1488,
+    5915,
+    1333685,
+    1416716,
+    1416735
+  ],
+  "signals_sent": [],
+  "uncertainty": "Unrecorded bwrap/build/browser descendants or their reparented identities cannot be recovered from missing qualifier owned-map receipt. Missing PID/marker is not absence of those identities; no outside-root cleanup authorized."
+}
