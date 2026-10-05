@@ -7,7 +7,7 @@ import { setup as lab, settled, release, holding, until, lastSaid, sleep } from 
 import * as disk from '../src/bots.ts';
 import * as A from '../web/src/adapter.ts';
 import type { Store } from '../src/db.ts';
-const { describe, describeTrigger, nextRun, parseSchedule, parseTrigger } = await import('../src/routines.ts');
+const { describe, describeTrigger, firstRun, nextRun, parseSchedule, parseTrigger } = await import('../src/routines.ts');
 
 const at = (y: number, mo: number, d: number, h = 0, m = 0) => new Date(y, mo - 1, d, h, m).getTime();
 const state = (db: Store, t: number) => db.get('SELECT state FROM tasks WHERE id = ?', t)!.state;
@@ -46,6 +46,31 @@ test('next run: same day if still ahead, else the next matching day; intervals c
   // Local wall-clock time holds across a daylight-saving change (a no-op where the zone has none).
   assert.equal(new Date(nextRun(parseSchedule('every day 9:00'), at(2026, 3, 28, 12))).getHours(), 9);
   assert.equal(new Date(nextRun(parseSchedule('every day 9:00'), at(2026, 10, 24, 12))).getHours(), 9);
+});
+
+test('first run in words: names the day it lands on, at every hour of the day and either side of UTC', () => {
+  // The words come from a `now` the test owns, so nothing here can turn red on a day boundary or a zone the
+  // suite happens to run in. The expected day is read off the run itself, never off a clock.
+  const home = process.env.TZ;
+  try {
+    for (const zone of ['Pacific/Kiritimati', 'Asia/Tokyo', 'UTC', 'America/Los_Angeles', 'Pacific/Niue']) {
+      process.env.TZ = zone;
+      for (const [when, now] of [
+        ['a Monday at 11:58 pm, a minute before the day turns', at(2026, 9, 21, 23, 58)],
+        ['just after midnight, the first minute of the day', at(2026, 9, 22, 0, 1)],
+        ['late in the evening, after a same-day run is already past', at(2026, 9, 23, 23, 47)],
+      ] as [string, number][]) for (const text of ['weekdays at 8am', 'every Monday 9:00', 'every Friday 17:00', 'every day 7:15']) {
+        const next = nextRun(parseSchedule(text), now);
+        const first = firstRun(next, now);
+        const d = new Date(next);
+        const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).replace(/\s([AP])M$/, (m) => m.toLowerCase());
+        const ok = d.toDateString() === new Date(now).toDateString() ? [time]
+          : [`${d.toLocaleDateString([], { weekday: 'short' })} ${time}`, `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })} ${time}`];
+        assert.ok(ok.includes(first), `${zone}, ${when}, "${text}": the first run must read as the day it lands on, got "${first}"`);
+        assert.match(first, /am|pm/, 'the time is in the computer\'s own words');
+      }
+    }
+  } finally { if (home === undefined) delete process.env.TZ; else process.env.TZ = home; }
 });
 
 function setup() {
