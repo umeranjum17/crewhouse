@@ -185,7 +185,7 @@ off the screen must still say what changed.
   four web captures prove the computer's half, never the phone's. A PR changing `mobile/` runs the
   native proof in `features/phone-pairing.md` (`scripts/phone-pair.mjs`: an emulator whose camera reads
   the live code, the computer confirms, the phone lands on "You're in") and says so instead of claiming
-  these four captures.
+  these four captures. A change to Chief's bubble or its panel runs `features/bubble-write-it-here.md`.
 - **A third form factor.** 1440 (desktop) and 390 (phone) are the two widths the app is
   designed at; 320 stays the narrowest *probe* in the Drive section, reported as measured
   behaviour, not a fifth capture.
@@ -208,6 +208,8 @@ folder survive — a cleanup that eats the proof fails. Never kill by process na
 - `scripts/personal-voice.mjs [paths…] [--self-test]` — the mandatory personal-voice check
   (one person, one assistant) over the demo seed, the screens and the prompts: exit 0 clean /
   1 a hit to fix at the producer / 2 could not run. `--self-test` is its negative test.
+- `SERIAL=<emulator> node scripts/phone-ui.mjs texts | tap '<regex>' [n] | shot <png>` — the phone driven by what
+  is on screen (uiautomator), for the bubble recipe.
 - `scripts/record.mjs --cdp <port> --out <file.webm> --seconds 8` — one motion recording of
   a changed interaction: screencast frames timed by their own timestamps, muxed by ffmpeg.
 - `node scripts/phone-pair.mjs --out <dir> [--serial …] [--base …] [--apk …] [--runs n]
