@@ -126,25 +126,6 @@ test('a run carries its own account to the engine: the picked provider is the on
   } finally { await f.done(); }
 });
 
-test('Claude signed in on this computer is usable: the kit reports it as claude-cli and a Claude run calls it', async () => {
-  const f = faked({}, { 'models.authStatus': () => ({ providers: [] }),
-    'openclaw.setup.detect': () => ({ candidates: [{ kind: 'claude-cli', credentials: true }] }) });
-  try {
-    await f.started;
-    assert.equal(await f.runtime.signedIn('claude'), true);
-    const end = await f.runtime.run({ key: 'agent:m1:crewhouse:chief:1', bot: 'chief', task: 1, account: 'claude',
-      model: 'claude-opus-5', cwd: '', system: '', message: 'Say hello.', builtins: [] }, () => {});
-    assert.ok(end.ok, JSON.stringify(end));
-    const agent = f.fake.calls.find((c) => c.method === 'agent');
-    assert.deepEqual([(agent?.params as any)?.provider, (agent?.params as any)?.model], ['claude-cli', 'claude-opus-5']);
-    // A bare Claude brain still calls Claude, never the engine's default (ChatGPT's) model.
-    await f.runtime.run({ key: 'agent:m1:crewhouse:chief:2', bot: 'chief', task: 2, account: 'claude',
-      cwd: '', system: '', message: 'Say hello.', builtins: [] }, () => {});
-    const bare = f.fake.calls.filter((c) => c.method === 'agent')[1];
-    assert.deepEqual([(bare?.params as any)?.provider, (bare?.params as any)?.model], ['claude-cli', 'claude-opus-5']);
-  } finally { await f.done(); }
-});
-
 test('resolved engine config disables silent memory flush and heartbeat without disabling the workshop', async () => {
   const f = faked();
   const configPath = join(f.state, 'openclaw', 'openclaw.json');

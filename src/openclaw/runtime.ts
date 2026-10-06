@@ -13,8 +13,8 @@ import type { AgentRuntime, RunEnd, RunEvent, RunRef, RunSpec, SignInStep, ToolH
 export { ENGINE_VERSION } from '@byokit/openclaw';
 
 const repo = resolve(import.meta.dirname, '../..');
-/** Crewhouse account key → OpenClaw provider id. ChatGPT is the one front door; the rest are quiet options. Claude is its CLI: the kit names it claude-cli, never anthropic. */
-const PROVIDER_OF: Record<string, string> = { chatgpt: 'openai', grok: 'xai', copilot: 'github-copilot', openrouter: 'openrouter', minimax: 'minimax', claude: 'claude-cli' };
+/** Crewhouse account key → OpenClaw provider id. ChatGPT is the one front door; the rest are quiet options. */
+const PROVIDER_OF: Record<string, string> = { chatgpt: 'openai', grok: 'xai', copilot: 'github-copilot', openrouter: 'openrouter', minimax: 'minimax', claude: 'anthropic' };
 /** The engine's own sign-in route per account (the pin's wizard choices). */
 const AUTH_CHOICE: Record<string, string> = {
   chatgpt: 'openai', grok: 'xai-oauth', copilot: 'github-copilot', openrouter: 'openrouter-oauth', minimax: 'minimax-global-oauth', claude: 'anthropic-cli',
@@ -170,10 +170,10 @@ export class OpenClawRuntime implements AgentRuntime {
   async run(spec: RunSpec, on: (event: RunEvent) => void, opts?: { register?: boolean }): Promise<RunEnd> {
     const register = opts?.register !== false;
     if (register) this.runs.set(spec.key, spec);
-    const provider = PROVIDER_OF[spec.account], model = spec.model ?? (provider === 'claude-cli' ? 'claude-opus-5' : undefined); // the run's own account is the one called and billed; bare Claude runs the CLI's default, never the engine's (ChatGPT's)
+    const provider = PROVIDER_OF[spec.account]; // the run's own account: this provider is the one called and billed
     try {
       return await this.kit.run({ sessionKey: spec.key, member: ME, message: spec.message, system: spec.system,
-        ...(model && provider ? { model: `${provider}/${model}` } : {}), ...(spec.images?.length ? { images: spec.images } : {}), ...(spec.thinking ? { thinking: spec.thinking } : {}), register },
+        ...(spec.model && provider ? { model: `${provider}/${spec.model}` } : {}), ...(spec.images?.length ? { images: spec.images } : {}), ...(spec.thinking ? { thinking: spec.thinking } : {}), register },
         (e) => on(e.type === 'tool' ? { ...e, name: crewName(e.name) } : e));
     } catch (error) { return { ok: false, kind: 'other', message: String(error) }; }
     finally { if (register) this.runs.delete(spec.key); }
