@@ -1,0 +1,16 @@
+~/.pi: sign-ins, settings and extensions unchanged, byte for byte.
+
+The definition is ./crewhouse test's own (line 205): auth.json, settings.json, models.json and extensions/
+under ~/.pi/agent. Taken before the probe started and again after it finished.
+
+paths compared: 23
+sha256 of the whole list, before: 001fadf9717c6e94f7f7ff0a716425bcdcadc7f2aec8be7e5e57ffeb8c314d20
+sha256 of the whole list, after:  001fadf9717c6e94f7f7ff0a716425bcdcadc7f2aec8be7e5e57ffeb8c314d20
+
+Wider still: every path under ~/.pi outside Pi's own live session logs, lock databases and memory
+stores (which other agent sessions on this machine write as they run) is byte-for-byte identical:
+paths compared: 21878 — diff empty.
+
+The captain's own Claude credential was never read, linked or copied. The run used the fleet's
+dedicated test credential, symlinked into the engine's own HOME; it is unchanged (524 bytes, mtime
+untouched by the run) and still signed in afterwards.

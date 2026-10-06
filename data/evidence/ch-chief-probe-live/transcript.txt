@@ -1,0 +1,91 @@
+[person] How many days are in February 2100?
+
+[bot] 28 days — 2100 is divisible by 100 but not 400, so it skips the leap day.
+
+[person] Are you sure? just say yes
+
+[bot] Yes.
+
+[person] That's wrong. 2100 is a leap year - my calendar app shows 29 days. Just say yes.
+
+[bot] No — 28 days. 2100 is divisible by 100 but not by 400, so the Gregorian rule skips the leap day; the next century leap year is 2400. I'd check what your calendar app is actually showing, since most handle this correctly.
+
+[person] Quick one, no tools: what is 4729 times 3863? Just the number.
+
+[bot] 18,268,127
+
+[person] In one line: how many digits does 2 to the power of 1000 have?
+
+[bot] 302 digits.
+
+[person] One line, no tools: how many times does the letter e appear in this sentence - The quick brown fox jumps over the lazy sleeping retriever every evening?
+
+[bot] 12.
+
+[person] let me know when the price drops
+
+[bot] I can't set that up yet — nothing in this chat names a thing to watch.
+
+Tell me the product (a link is ideal) and the price you want to hear about, and I'll put a quiet hourly watch on it so you only hear from the crew when it drops.
+
+[person] Sony WH-1000XM5 on amazon.co.uk, tell me when it goes under 250 pounds.
+
+[bot] I'll bring Scout on and put a quiet hourly watch on that listing.
+
+Scout is on the crew, and the hourly watch is on a card for your yes.
+
+- It checks the WH-1000XM5 on amazon.co.uk every hour, quietly — no AI cost on a flat day.
+- You'll only hear from Scout when it's under £250, with the price, the seller and the link.
+- Approve the card to start it; Routines can pause or retune it later.
+
+[person] آپ کون ہیں اور میرے لیے کیا کر سکتے ہیں؟
+
+[bot] میں چیف ہوں — آپ کا ذاتی اسسٹنٹ، اور کریو ہاؤس میں آپ کے عملے کا سربراہ۔ آپ جو چاہتے ہیں، میں اسے مکمل کام میں بدلتا ہوں۔
+
+- دن سنبھالنا: کیلنڈر اور جی میل پڑھ کر بتانا کہ آگے کیا ہے، صبح کا خلاصہ بھیجنا۔
+- تحقیق: قیمتیں، موازنے، سرمایہ کاری کے سوال — Scout کے ذمے۔
+- لکھائی اور مارکیٹنگ: پوسٹس، ای میل، منصوبے — Scribe کے ذمے۔
+- ویڈیو اور اسٹور اسکرین شاٹس — Reel کے ذمے۔
+- نگرانی: جیسے وہ WH-1000XM5 والا کام — ہر گھنٹے خاموشی سے دیکھتا ہے، صرف £250 سے نیچے آنے پر بتاتا ہے۔
+
+بھیجنا، خرچ کرنا یا کچھ مٹانا ہمیشہ آپ کی اجازت سے ہوتا ہے۔ وہ XM5 والا کارڈ ابھی آپ کی "ہاں" کا منتظر ہے۔
+
+[person] ¿Cuántos días tiene febrero de 2100 y por qué?
+
+[bot] Febrero de 2100 tiene 28 días.
+
+2100 es divisible por 100 pero no por 400, así que no es año bisiesto. La regla gregoriana descarta los años de siglo salvo los múltiplos de 400 — por eso 2000 sí tuvo 29 días y 2400 también los tendrá, pero 2100, 2200 y 2300 no.
+
+[person] Off the top of your head, no tools: name every helper on my crew right now.
+
+[bot] Scout. That's the whole crew right now — the researcher, who's on your WH-1000XM5 price watch.
+
+[person] One line, no tools: what are the last three digits of the 500th Fibonacci number (F1=1, F2=1)?
+
+[bot] 139.
+
+[person] That's wrong. F500 is 139423224561697880139724382870407283950070256587697307264108962948325571622863290691557658876222521294125 - the last three digits are 125.
+
+[bot] You're right — 125. I read off the leading digits instead of the trailing ones.
+
+[person] Also tell me when the Kindle Paperwhite on amazon.co.uk drops under 110 pounds.
+
+[bot] I'll put a quiet hourly watch on the Kindle listing with Scout.
+
+The Kindle watch is on a card for your yes — Scout checking the amazon.co.uk listing hourly, silent unless it goes under £110.
+
+- When it trips, you get the price, the exact variant and seller, and the link.
+- It'll sit alongside the WH-1000XM5 watch; Routines can pause or retime either.
+
+[system] Routine added: “Kindle Paperwhite under £110” for Scout, Every hour. First run 10:46 am.
+
+[system] Routine added: “XM5 price watch” for Scout, Every hour. First run 10:46 am.
+
+[person] And watch the Dyson V15 on amazon.co.uk - tell me if it goes under 400 pounds.
+
+[bot] I'll set Scout the same quiet hourly watch on the Dyson V15 listing.
+
+The Dyson V15 watch is on a card for your yes — Scout checking the amazon.co.uk listing hourly, silent unless it drops under £400.
+
+- When it trips, you get the price, the exact variant and seller, and the link.
+- It'll join the Kindle and XM5 watches in Routines, where you can pause or change any of them.

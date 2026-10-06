@@ -649,8 +649,8 @@ export class Crew {
    *  A routine starts on its schedule, on its local event (`on`), or either when both are given; a trigger-only
    *  routine keeps no time at all. A one-off reminder (`once`) keeps only its moment, in the person's own words.
    *  Nothing runs until the person says yes on the card. */
-  private planRoutine(b: { bot?: string; schedule?: string; on?: string; task?: string; model?: string; name?: string; quiet?: boolean; watch?: string; once?: boolean | number }) {
-    const once = b.once === true || b.once === 1;
+  private planRoutine(b: { bot?: string; schedule?: string; on?: string; task?: string; model?: string; name?: string; quiet?: unknown; watch?: string; once?: unknown }) {
+    const yes = (v: unknown) => v === true || v === 1 || v === 'true' || v === '1', once = yes(b.once); // the model's JSON is untyped: a flag it wrote as "true" still means yes, or a watch Chief called quiet is made noisy
     const bot = once ? this.bot(CHIEF)! : this.bot(String(b.bot ?? '').toLowerCase());
     if (!bot || (!once && bot.id === CHIEF)) throw Object.assign(new Error(`no bot called ${b.bot}; a routine hands a task to one of the crew`), { status: 404 });
     // A watch: crewd reads the page on schedule and wakes the helper only when it changed.
@@ -667,11 +667,11 @@ export class Crew {
     const brain = b.model ? disk.brainKey(disk.parseBrain(b.model)) : null;
     const first = body.split(/\n|(?<=[.!?])\s/)[0].replace(/[.!?]$/, '');
     const name = String(b.name ?? '').trim().slice(0, 60) || (watch && !b.task ? new URL(watch).hostname.replace(/^www\./, '') : short(once ? body : first, once ? 160 : 60));
-    return { bot, watch, body, when, at, on, brain, first, name, quiet: b.quiet === true || !!watch };
+    return { bot, watch, body, when, at, on, brain, first, name, quiet: yes(b.quiet) || !!watch };
   }
 
   /** A routine added by the person or Chief runs on the person's accounts. A reminder belongs to the person alone. */
-  addRoutine(b: { bot?: string; schedule?: string; on?: string; task?: string; model?: string; name?: string; quiet?: boolean; watch?: string; once?: boolean | number }, by: string) {
+  addRoutine(b: { bot?: string; schedule?: string; on?: string; task?: string; model?: string; name?: string; quiet?: unknown; watch?: string; once?: unknown }, by: string) {
     const plan = this.planRoutine(b);
     const words = plan.at ? `Reminds you once, at ${firstRun(plan.at)}` :
       [plan.when ? describe(plan.when) : '', plan.on ? describeTrigger(parseTrigger(plan.on), plan.bot.display) : ''].filter(Boolean).join('; ');
@@ -706,7 +706,7 @@ export class Crew {
       ...(plan.when ? [`First time: ${firstRun(nextRun(plan.when, Date.now()))}`] : [])];
     const words = `${start.join('; ')}, ${what}.`;
     return this.propose(CHIEF, words, {
-      routine: { bot: plan.bot.id, schedule: String(p.schedule ?? '').trim(), on: plan.on, task: p.task, name: p.name, model: p.model, quiet: p.quiet, watch: p.watch },
+      routine: { bot: plan.bot.id, schedule: String(p.schedule ?? '').trim(), on: plan.on, task: p.task, name: p.name, model: p.model, quiet: plan.quiet, watch: p.watch },
       preview: { head: 'A new routine', body: lines.join('\n') },
     });
   }

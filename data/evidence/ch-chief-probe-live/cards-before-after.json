@@ -1,0 +1,21 @@
+{
+ "note": "Same model, same words, one card each side of the fix. The model writes quiet as the JSON string \"true\"; before the fix planRoutine only accepted the boolean, so the card told the person the opposite of what Chief had just promised.",
+ "beforeTheFix": [
+  {
+   "id": 1,
+   "title": "Every hour, Scout will watch the Sony WH-1000XM5 headphones listing on amazon.co.uk.",
+   "quietSentByTheModel": "true",
+   "typeOfThatValue": "string",
+   "cardLine": "Tells you each time it runs"
+  }
+ ],
+ "afterTheFix": [
+  {
+   "id": 3,
+   "title": "Every hour, Scout will check the Dyson V15 listing on amazon.co.uk.",
+   "quietSentByTheModel": true,
+   "typeOfThatValue": "boolean",
+   "cardLine": "Tells you only when something changed"
+  }
+ ]
+}
