@@ -161,11 +161,13 @@ night at 1440 and 390**.
   this probe.
 - **No motion recording.** The change alters words a person reads on a card, not how anything moves, and
   `scripts/record.mjs` is absent.
-- **Six pre-existing suite failures.** `./crewhouse test` on this branch: 403 tests, 396 pass, 6 fail. The same
-  six fail on clean `main` in this environment — all engine install/seal work (`test/openclaw-bridge.test.ts`
-  prepare, five in `test/openclaw-migrate.test.ts`), none touched by this change. A seventh
-  (`test/package.test.ts`, "keeps answering while it fetches the helpers' tools") timed out once under full
-  suite load and passes on this branch when run alone, twice.
+- **Six suite failures on this machine, none of them this change's.** `./crewhouse test` here: 403 tests, 396
+  pass, 6 fail. The same six fail on clean `main` in this environment — all engine install/seal work
+  (`test/openclaw-bridge.test.ts` prepare, five in `test/openclaw-migrate.test.ts`), none touched by this
+  change. A seventh (`test/package.test.ts`, "keeps answering while it fetches the helpers' tools") timed out
+  once under full suite load and passes on this branch when run alone, twice. **CI settles it: all four checks
+  pass on this branch** (`check (22.22.3)`, `check (24)`, `package`, `relay-image`), so the six are local to
+  this machine's engine-install environment, not the code.
 - `npm run check` (tsc, strict) is clean; `test/plan.test.ts`, `test/routines.test.ts` and `test/stub.test.ts`
   pass on this branch.
 
