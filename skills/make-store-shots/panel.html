@@ -10,7 +10,7 @@
   h1 { position: relative; z-index: 3; font: 400 62px/0.98 Headline, 'Noto Serif', Georgia, serif; letter-spacing: -0.02em;
     -webkit-text-stroke: 0.8px currentColor; text-align: center; padding: 64px 28px 0; text-wrap: balance; }
   h1 .mark { position: relative; white-space: nowrap; }
-  h1 .mark svg { position: absolute; inset: -16% -10% -4% -12%; width: 122%; height: 124%; overflow: visible; }
+  h1 .mark svg { position: absolute; z-index: -1; inset: -8% -10% -4% -12%; width: 122%; height: 112%; overflow: visible; }
   .note { position: absolute; z-index: 3; font: italic 400 26px/1.1 Headline, 'Noto Serif', Georgia, serif; }
   .phone { position: absolute; z-index: 1; left: 50%; width: 388px; margin-left: -194px; border-radius: 58px;
     background: #141A2A; padding: 10px; box-shadow: 0 30px 60px -20px rgba(20, 26, 42, 0.35); }
@@ -79,12 +79,12 @@
     el('div', 'blob', { width: '600px', height: '560px', left: '-85px', top: '330px' });
     const head = el('h1', '', {}, words);
     // The phone starts under the headline and runs off the bottom. Its screen scrolls to the first lifted card (a sixth of
-    // the way down the glass), never past the end of the shot.
+    // the way down the glass), never past the end of the shot; it starts 30px down, clear of the frame's round corners.
     const phoneTop = Math.round(head.getBoundingClientRect().bottom + 24), inner = 368, k = inner / SHOT_W, glass = 932 - phoneTop - 10;
-    const first = (P.lift || [])[0], top = first ? Math.max(0, Math.min(first.y - glass * 0.16 / k, 2796 - glass / k)) : 0, screenTop = phoneTop + 10;
+    const first = (P.lift || [])[0], top = first ? Math.max(0, Math.min(first.y - glass * 0.16 / k, 2796 - glass / k)) : 0, screenTop = phoneTop + 10 + 30;
     const phone = el('div', 'phone', { top: `${phoneTop}px`, height: `${932 - phoneTop + 60}px` });
     const screen = phone.appendChild(document.createElement('div'));
-    Object.assign(screen, { className: 'screen' }).style.cssText = `background-image:url("${P.shot}");background-size:${inner}px auto;background-position:0 ${-top * k}px`;
+    Object.assign(screen, { className: 'screen' }).style.cssText = `background-image:url("${P.shot}");background-size:${inner}px auto;background-position:0 ${30 - top * k}px`;
     // Each lifted card sits where it is on the screen, grown and pushed out past the frame's edge.
     const low = Math.max(0, ...(P.lift || []).slice(0, 2).map((c, i) => {
       const w = Math.min(414, c.w * k * 1.14), left = i % 2 ? 430 - w - 4 : 4;
