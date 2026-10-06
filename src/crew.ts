@@ -58,9 +58,9 @@ const STOPPED = 'Stopped by you.';
 /** How crewd starts the line for a job that acted but couldn't confirm it worked; the app shows it apart from the rest. */
 const UNSURE = 'Not sure it worked:';
 const MONEY_CAP = 20; // dollars a month, until the owner changes it
-/** What one run of crewd's own check found, in a person's words: the verdict, and when it failed, why. One run, one sentence. */
-const verdictWords = (d: Record<string, unknown>) => d.passed ? 'its own check passed'
-  : `its own check did not pass — ${d.missingDep ? 'the check could not run: something it needs is not installed'
+/** One run of crewd's own check, in a person's words: the verdict, why it failed, and never a path. One run, one sentence. */
+const verdictWords = (d: Record<string, unknown>) => d.passed ? 'passed its own check'
+  : `did not pass its own check — ${d.missingDep ? 'the check could not run: something it needs is not installed'
     : Number(d.after) === 0 ? 'the check passes here but never failed before the change, so nothing was proved'
     : Number(d.before) === 0 ? 'the check passed before the change and fails after it: the change broke it'
     : 'the same check still fails after the change'}`;
@@ -1585,7 +1585,7 @@ export class Crew {
       // A fix it delivered counts only when crewd saw its check fail without it and pass with it (crew_verify).
       const unchecked = this.unchecked(task);
       if (unchecked || (said ? !said.worked : task.acted)) {
-        this.setTask(task, 'unsure', unchecked ? `I suggested a change (${unchecked}) for the maintainer to review, and I haven't seen that it works, so this isn't done. Check it before you use it.`
+        this.setTask(task, 'unsure', unchecked ? `I suggested a change for the maintainer to review, and I haven't seen that it works, so this isn't done. Check it before you use it.`
           : said?.seen || `I did something on ${task.acted}, but I didn't see it confirmed. Worth checking there yourself.`);
         if (task.origin === CHIEF && !this.teamJob(task)) this.say(CHIEF, 'bot', `${b.display} isn't sure “${short(task.title, 60)}” worked. It's in ${b.display}'s chat.`, null);
         return;
@@ -2272,7 +2272,7 @@ export class Crew {
     const ev = this.db.event('verify.result', botId, { task, patch: rel, sha: sha(readFileSync(patch, 'utf8')), base: p.base, command: clean(p.command, 300), before: before.code, after: after.code, passed, ...(missingDep ? { missingDep } : {}) });
     // One verdict line per check run, and one that overturns an older says so: the newest word is the current verdict.
     const was = this.db.get("SELECT data FROM events WHERE kind = 'verify.result' AND bot = ? AND json_extract(data, '$.patch') = ? AND seq < ? ORDER BY seq DESC LIMIT 1", botId, rel, ev.seq);
-    this.say(botId, 'system', `${rel}: ${verdictWords(ev.data)}${was && JSON.parse(String(was.data)).passed !== passed ? '. An earlier check said otherwise; this run is the current one' : ''}.`, task ?? null);
+    this.say(botId, 'system', `The suggested change ${verdictWords(ev.data)}${was && JSON.parse(String(was.data)).passed !== passed ? '. An earlier check said otherwise; this run is the current one' : ''}.`, task ?? null);
     return { passed, missingDep, before: { exit: before.code, tail: before.tail }, after: { exit: after.code, tail: after.tail } };
   }
 

@@ -1361,8 +1361,9 @@ test('a patch is only ever a suggested change, never a fix, wherever the app wor
   assert.deepEqual([card.text, card.files.length, card.files[0].name], ['Suggested change (for the maintainer to review)', 1, 'Suggested']);
   // One style for a line the person reads: crewd's own words are a note in a helper's chat and in the crew room alike,
   // so the same line never reads as a bubble with somebody's face on it in one and plain words in the other.
-  const [said] = A.room({ lines: [{ id: 1, bot: 'desk', author: 'system', text: 'files/x.patch: its own check did not pass — the same check still fails after the change' }] }, { bots: [{ id: 'desk', display: 'Desk' }], events: [] });
-  assert.equal(said.author, 'note');
+  const verdict = 'The suggested change did not pass its own check — the same check still fails after the change.';
+  const [said] = A.room({ lines: [{ id: 1, bot: 'desk', author: 'system', text: verdict }] }, { bots: [{ id: 'desk', display: 'Desk' }], events: [] });
+  assert.deepEqual([said.author, said.text], ['note', verdict], 'crewd names the work in plain words, so no path reaches the screen to be mangled');
 });
 
 test('the week under the share is a third in words, never a number', () => {
