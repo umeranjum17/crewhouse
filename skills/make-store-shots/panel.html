@@ -57,6 +57,16 @@
     return el('div', 'lift', { left: `${left}px`, top: `${top}px`, width: `${w}px`, height: `${c.h * k}px`, backgroundImage: `url("${shot}")`,
       backgroundSize: `${SHOT_W * k}px auto`, backgroundPosition: `${-c.x * k}px ${-c.y * k}px`, transform: `rotate(${turn}deg)` });
   };
+  // The composed panel, checked once its drawings load: every line of the panel's own words (headline, note, speech) must
+  // show whole, on top; a layout adds its screen's lines. dataset.cut counts lines that do not; shoot.mjs --check fails on any.
+  const compose = [], parts = [];
+  addEventListener('load', async () => {
+    for (const f of compose) await f();
+    for (const e of document.querySelectorAll('h1, .note, .say')) { const r = document.createRange(); r.selectNodeContents(e); parts.push({ lines: [...r.getClientRects()].map((q) => ({ x: q.x, y: q.y, w: q.width, h: q.height })), on: (h) => e.contains(h) }); }
+    const shows = (l, on) => [0.1, 0.3, 0.5, 0.7, 0.9].flatMap((t) => [0.2, 0.8].map((u) => on(document.elementFromPoint(l.x + l.w * t, l.y + l.h * u))));
+    document.body.dataset.left ||= 0;
+    document.body.dataset.cut = parts.flatMap((g) => g.lines.filter((l) => { const s = shows(l, g.on); return g.part ? s.some(Boolean) && !s.every(Boolean) : !s.every(Boolean); })).length;
+  });
   const pal = (src, css) => src && el('img', 'pal', css).setAttribute('src', src);
   const say = (text, css, side = '') => text && el('div', `say ${side}`, css, String(text).replace(/[<>&]/g, ''));
   const doodle = (d, css) => el('div', 'doodle', css, `<svg viewBox="0 0 100 100" width="100%" height="100%"><path d="${d}"/></svg>`);
@@ -84,48 +94,63 @@
   } else {
     el('div', 'blob', { width: '600px', height: '560px', left: '-85px', top: '330px' });
     const head = el('h1', '', {}, words);
+    const M = window.MAP || { cards: [], lines: [] }, inner = 368, k = inner / SHOT_W;
+    const inside = (a, b, m = 0) => a.x >= b.x + m && a.y >= b.y + m && a.x + a.w <= b.x + b.w - m && a.y + a.h <= b.y + b.h - m;
+    const meets = (a, b, m = 0) => a.x < b.x + b.w + m && b.x - m < a.x + a.w && a.y < b.y + b.h + m && b.y - m < a.y + a.h;
+    // Lifting a box lifts the outermost card it sits in, frame and all; a box inside one already lifted stays put.
+    const lifts = (P.lift || []).map((c) => M.cards.filter((o) => inside(c, o)).sort((a, b) => b.w * b.h - a.w * a.h)[0] || c)
+      .filter((c, i, all) => !all.slice(0, i).some((o) => inside(c, o))).slice(0, 2);
     // The phone starts under the headline and runs off the bottom. Its screen scrolls to the first lifted card (a sixth of
     // the way down the glass), never past the end of the shot; it starts 30px down, clear of the frame's round corners.
-    const phoneTop = Math.round(head.getBoundingClientRect().bottom + 24), inner = 368, k = inner / SHOT_W, glass = 932 - phoneTop - 10;
-    const first = (P.lift || [])[0], top = first ? Math.max(0, Math.min(first.y - glass * 0.16 / k, 2796 - glass / k)) : 0, screenTop = phoneTop + 10 + 30;
+    const phoneTop = Math.round(head.getBoundingClientRect().bottom + 24), glass = 932 - phoneTop - 10;
+    const first = lifts[0], top = first ? Math.max(0, Math.min(first.y - glass * 0.16 / k, 2796 - glass / k)) : 0, screenTop = phoneTop + 10 + 30;
     const phone = el('div', 'phone', { top: `${phoneTop}px`, height: `${932 - phoneTop + 60}px` });
     const screen = phone.appendChild(document.createElement('div'));
     Object.assign(screen, { className: 'screen' }).style.cssText = `background-image:url("${P.shot}");background-size:${inner}px auto;background-position:0 ${30 - top * k}px`;
     // Each lifted card sits where it is on the screen, grown and pushed out past the frame's edge.
-    const lifts = (P.lift || []).slice(0, 2), feet = lifts.map((c, i) => {
+    const feet = lifts.map((c, i) => {
       const w = Math.min(414, c.w * k * 1.14), left = i % 2 ? 430 - w - 4 : 4, at = screenTop + (c.y - top) * k - 8;
-      lift(P.shot, c, left, at, w, i % 2 ? 1.2 : -1.2);
-      return { x: left, y: at, w, h: c.h * (w / c.w) };
+      return { x: left, y: at, w, h: c.h * (w / c.w), c, el: lift(P.shot, c, left, at, w, i % 2 ? 1.2 : -1.2) };
     });
-    // No ghosts: the lifted card's spot on the screen (and a card it sat in) is painted over in the colour behind it, and
-    // so is every line of words a lifted card would cut or the glass's top edge and round corners (radius 48) would clip.
-    // dataset.cut counts lines still cut; shoot.mjs --check fails on any.
-    const M = window.MAP || { cards: [], lines: [] }, sx = 215 - 194 + 10, sy = phoneTop + 10; // the glass's corner on the page
-    const onPage = (b) => ({ x: sx + b.x * k, y: sy + 30 + (b.y - top) * k, w: b.w * k, h: b.h * k });
-    const inside = (a, b, m = 0) => a.x >= b.x + m && a.y >= b.y + m && a.x + a.w <= b.x + b.w - m && a.y + a.h <= b.y + b.h - m;
-    const meets = (a, b, m = 0) => a.x < b.x + b.w + m && b.x - m < a.x + a.w && a.y < b.y + b.h + m && b.y - m < a.y + a.h;
-    const patches = [], patch = (b, bg, m = 0) => {
-      const r = onPage(b), d = screen.appendChild(document.createElement('div'));
-      Object.assign(d, { className: 'patch' }).style.cssText = `left:${r.x - sx - m}px;top:${r.y - sy - m}px;width:${r.w + 2 * m}px;height:${r.h + 2 * m}px;background:${bg}`;
-      patches.push({ x: r.x - m, y: r.y - m, w: r.w + 2 * m, h: r.h + 2 * m });
-    };
-    for (const c of lifts) {
-      const outer = M.cards.filter((o) => inside(c, o) && o.w * o.h <= 2 * c.w * c.h).sort((a, b) => b.w * b.h - a.w * a.h)[0] || c;
-      patch(outer, outer.bg || c.bg || '#fff', 2);
-    }
-    const pane = { x: sx, y: sy, w: inner, h: 932 - sy };
-    const corner = (l) => 48 - Math.sqrt(Math.max(0, 48 ** 2 - Math.max(0, sy + 48 - l.y) ** 2));
-    const clipped = (l) => l.y < sy || l.x < sx + corner(l) || l.x + l.w > sx + inner - corner(l);
-    const cut = (l) => meets(l, pane) && (clipped(l) || feet.some((f) => meets(l, f, 6)) && !feet.some((f) => inside(l, f, 6))) && !patches.some((p) => inside(l, p));
-    for (const l of M.lines) if (cut(onPage(l))) patch(l, l.bg, 3);
-    document.body.dataset.cut = window.MAP ? M.lines.filter((l) => cut(onPage(l))).length : lifts.length; // no map, no proof
-    // The phone ends just under the screen's last words when they stop short, instead of showing empty screen.
-    const end = Math.max(0, ...M.lines.map((l) => onPage(l).y + onPage(l).h), ...M.cards.map((c) => onPage(c).y + onPage(c).h));
-    if (end && end < 932 - 140) phone.style.height = `${end + 28 - phoneTop}px`;
     const low = Math.max(0, ...feet.map((f) => f.y + f.h + 8));
     // The mascot peeks in below the cards; its words only where they cover none of them.
     if (low < 932 - 230) say(P.say, { right: '22px', bottom: '150px' }, 'right');
     pal(P.art, { right: '14px', bottom: '-10px', height: low < 932 - 230 ? '150px' : '120px' });
+    const sx = 215 - 194 + 10, sy = phoneTop + 10, pane = { x: sx, y: sy, w: inner, h: 932 - sy }; // the glass on the page
+    const onPage = (b) => ({ x: sx + b.x * k, y: sy + 30 + (b.y - top) * k, w: b.w * k, h: b.h * k });
+    compose.push(async () => {
+      // No ghosts: each lifted card's spot on the screen is painted over, and so is every line of words a lifted card would
+      // cut, a drawing would run over, or the glass's top edge and round corners (radius 48) or the panel's foot would clip. A patch takes its
+      // colour from the shot itself: a line's, the colour most of its own box shows (what its words sit on); a card's, what
+      // most of its four sides show (what it sits on).
+      const img = new Image(); img.src = P.shot; await img.decode();
+      const px = new OffscreenCanvas(img.width, img.height).getContext('2d'); px.drawImage(img, 0, 0);
+      const most = (pts) => { const s = pts.map(([x, y]) => String(px.getImageData(Math.max(0, Math.min(img.width - 1, Math.round(x))), Math.max(0, Math.min(img.height - 1, Math.round(y))), 1, 1).data.slice(0, 3)));
+        return `rgb(${s.sort((a, b) => s.filter((t) => t === b).length - s.filter((t) => t === a).length)[0]})`; };
+      const own = (b) => most([1, 3, 5, 7, 9, 11, 13, 15].flatMap((t) => [1, 3, 5].map((u) => [b.x + b.w * t / 16, b.y + b.h * u / 6])));
+      const sides = (b) => most([1, 3, 5, 7].flatMap((t) => [[b.x - 6, b.y + b.h * t / 8], [b.x + b.w + 6, b.y + b.h * t / 8], [b.x + b.w * t / 8, b.y - 6], [b.x + b.w * t / 8, b.y + b.h + 6]]));
+      const patches = [], spots = [], patch = (b, m = 0, colour = own) => {
+        const r = onPage(b), d = screen.appendChild(document.createElement('div'));
+        Object.assign(d, { className: colour === sides ? 'patch spot' : 'patch' }).style.cssText = `left:${r.x - sx - m}px;top:${r.y - sy - m}px;width:${r.w + 2 * m}px;height:${r.h + 2 * m}px;background:${colour(b)}`;
+        (colour === sides ? spots : patches).push({ x: r.x - m, y: r.y - m, w: r.w + 2 * m, h: r.h + 2 * m });
+      };
+      for (const f of feet) patch(f.c, 2, sides);
+      const drawn = [...document.querySelectorAll('.pal, .say')].map((e) => { const r = e.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; });
+      const corner = (l) => 48 - Math.sqrt(Math.max(0, 48 ** 2 - Math.max(0, sy + 48 - l.y) ** 2));
+      const clipped = (l) => l.y < sy || l.y + l.h > 932 || l.x < sx + corner(l) || l.x + l.w > sx + inner - corner(l);
+      const cut = (l) => meets(l, pane) && (clipped(l) || drawn.some((d) => meets(l, d)) || [...feet, ...spots].some((f) => meets(l, f, 6)) && ![...feet, ...spots].some((f) => inside(l, f, 6))) && ![...patches, ...spots].some((p) => inside(l, p));
+      // A drawing over a card's words takes the whole card away (no half-read message); other cut lines go one by one.
+      for (const l of M.lines) if (cut(onPage(l)) && drawn.some((d) => meets(onPage(l), d))) { const o = M.cards.filter((o) => inside(l, o)).sort((a, b) => b.w * b.h - a.w * a.h)[0]; if (o) patch(o, 2, sides); }
+      for (const l of M.lines) if (cut(onPage(l))) patch(l, 3);
+      // The phone ends just under the screen's last words left showing (or its lifted cards) when they stop short.
+      const end = Math.max(0, ...[...M.lines, ...M.cards].map(onPage).filter((b) => ![...patches, ...spots].some((p) => inside(b, p))).map((b) => b.y + b.h), ...feet.map((f) => f.y + f.h));
+      if (end && end < 932 - 140) phone.style.height = `${end + 28 - phoneTop}px`;
+      // What the check reads: the screen's lines where the screen shows (in part is cut), each lifted card's lines (all must
+      // show), and a lifted box still inside a bigger card on the screen (its frame left behind). No map, no proof.
+      parts.push({ lines: M.lines.map(onPage), on: (h) => h === screen, part: true });
+      for (const f of feet) parts.push({ lines: M.lines.filter((l) => inside(l, f.c)).map((l) => ({ x: f.x + (l.x - f.c.x) * f.w / f.c.w, y: f.y + (l.y - f.c.y) * f.w / f.c.w, w: l.w * f.w / f.c.w, h: l.h * f.w / f.c.w })), on: (h) => h === f.el });
+      document.body.dataset.left = window.MAP ? feet.filter((f) => M.cards.some((o) => inside(f.c, o) && o.w * o.h > f.c.w * f.c.h && meets(onPage(o), pane))).length : lifts.length;
+    });
   }
 </script>
 </body>

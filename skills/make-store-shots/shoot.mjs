@@ -1,9 +1,10 @@
 // Shoot one page as a phone screen at store size (430x932 at 3x = 1290x2796) with the headless Chromium on this computer.
 // node shoot.mjs <address or .html file> <out.png> [--map <dir> | --check]
-// --map also writes <dir>/map.json (and map.js for panel.html): the screen's cards and lines of words (box in the PNG's
-// pixels, colour behind), its drawings (each saved as an .svg), its fonts (each saved) and its links to other screens, so a
+// --map also writes <dir>/map.json (and map.js for panel.html): the screen's cards and lines of words as it shows them (box in
+// the PNG's pixels), its drawings (each saved as an .svg), its fonts (each saved) and its links to other screens, so a
 // panel can lift a real card, the app's own art and type. --check shoots a panel and fails if any line of words is cut by a
-// lifted card or the frame, a ring crosses a letter, or words run under a drawing.
+// lifted card, the frame or a drawing, a lifted box leaves its frame behind, a painted-over spot shows, or a ring crosses
+// a letter.
 import { spawn } from 'node:child_process';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -14,7 +15,7 @@ if (!src || !out) { console.error('usage: node shoot.mjs <address or .html file>
 const url = /^https?:/.test(src) ? src : `file://${resolve(src)}`;
 const W = 430, H = 932, SCALE = 3;
 const chrome = spawn(process.env.CHROME ?? 'chromium', ['--headless', '--no-sandbox', '--disable-gpu', '--hide-scrollbars', '--no-first-run',
-  '--remote-debugging-pipe', `--user-data-dir=${mkdtempSync(join(tmpdir(), 'shoot-'))}`, 'about:blank'], { stdio: ['ignore', 'ignore', 'ignore', 'pipe', 'pipe'] });
+  '--allow-file-access-from-files', '--remote-debugging-pipe', `--user-data-dir=${mkdtempSync(join(tmpdir(), 'shoot-'))}`, 'about:blank'], { stdio: ['ignore', 'ignore', 'ignore', 'pipe', 'pipe'] });
 chrome.on('error', (e) => { console.error(`error: no Chromium to shoot with (${e.message}); set CHROME to its path`); process.exit(1); });
 chrome.on('exit', (code) => { if (waiting.size) { console.error(`error: Chromium quit (exit ${code})`); process.exit(1); } });
 
@@ -52,18 +53,22 @@ try {
     }
     return false; })()`);
   if (!settled) console.error('note: the page was still changing after 20 s; shot it as it was');
+  // A panel is composed once its drawings have loaded: wait for its counts (at most 10 s; none fails the check).
+  const counts = flag === '--check' && await evaluate(s, `(async () => { for (let i = 0; i < 200 && !document.body.dataset.cut; i++) await new Promise((r) => setTimeout(r, 50));
+    return document.body.dataset.cut ? [Number(document.body.dataset.cut), Number(document.body.dataset.left)] : [-1, -1]; })()`);
   const shot = await send('Page.captureScreenshot', { format: 'png' }, s);
   writeFileSync(out, Buffer.from(shot.data, 'base64'));
   console.log(`${out}: ${W * SCALE}x${H * SCALE}`);
   if (flag === '--check') {
-    // Cut words: panel.html counts the lines a lifted card cuts. Rings: the headline shot with words only, rings only and
-    // neither; a pixel inked in both is a ring crossing a letter.
-    const cut = await evaluate(s, 'Number(document.body.dataset.cut || 0)');
+    // Cut words and frames left behind: panel.html counts them on the composed panel. Rings: the headline shot with words
+    // only, rings only and neither; a pixel inked in both is a ring crossing a letter.
+    const [cut, left] = counts;
     const head = await evaluate(s, `({ x: 0, y: 0, width: ${W}, height: Math.ceil(document.querySelector('h1').getBoundingClientRect().bottom + 40), scale: 1 })`);
-    const look = async (css) => {
+    const look = async (css, clip = head) => {
       await evaluate(s, `(document.getElementById('look') || document.head.appendChild(Object.assign(document.createElement('style'), { id: 'look' }))).textContent = ${JSON.stringify(css)}`);
-      return (await send('Page.captureScreenshot', { format: 'png', clip: head }, s)).data;
+      return (await send('Page.captureScreenshot', { format: 'png', ...(clip && { clip }) }, s)).data;
     };
+    const bare = await look('.patch:not(.spot) { visibility: hidden; }', null);
     const noWords = 'h1 { color: transparent !important; -webkit-text-stroke-color: transparent !important; } ', noRings = 'h1 .mark svg { visibility: hidden; }';
     const shots = [await look(noWords + noRings), await look(noRings), await look(noWords)];
     const crossed = await evaluate(s, `(async () => {
@@ -72,29 +77,37 @@ try {
       const inked = (a, i) => Math.abs(a[i] - px[0][i]) + Math.abs(a[i + 1] - px[0][i + 1]) + Math.abs(a[i + 2] - px[0][i + 2]) > 90;
       let n = 0; for (let i = 0; i < px[0].length; i += 4) if (inked(px[1], i) && inked(px[2], i)) n++;
       return n; })()`);
-    // Covered: a line of the panel's own words (headline, note, speech) under a drawing.
-    const covered = await evaluate(s, `(() => { const pals = [...document.querySelectorAll('.pal')].map((p) => p.getBoundingClientRect());
-      return [...document.querySelectorAll('h1, .note, .say')].flatMap((w) => { const r = document.createRange(); r.selectNodeContents(w); return [...r.getClientRects()]; })
-        .filter((l) => pals.some((p) => Math.min(l.right, p.right) - Math.max(l.left, p.left) > 4 && Math.min(l.bottom, p.bottom) - Math.max(l.top, p.top) > 4)).length; })()`);
-    if (cut || crossed > 30 || covered) { console.error(`error: ${cut} line(s) of words cut by a lifted card or the frame; a ring crosses letters on ${crossed} pixels; ${covered} line(s) of words under a drawing`); process.exitCode = 1; }
-    else console.log('check: no words cut or covered, rings clear of letters');
+    // Patches that show: a line's patch on top whose colour is not what most of the line's box shows without it (what its
+    // words sit on). A lifted card's spot is left to the frame count: its sides fall in the lifted card's shadow.
+    const shows = await evaluate(s, `(async () => { const i = new Image(); i.src = 'data:image/png;base64,${bare}'; await i.decode();
+      const c = new OffscreenCanvas(i.width, i.height).getContext('2d'); c.drawImage(i, 0, 0);
+      const at = (x, y) => String(c.getImageData(Math.round(x * ${SCALE}), Math.round(y * ${SCALE}), 1, 1).data.slice(0, 3));
+      return [...document.querySelectorAll('.patch:not(.spot)')].filter((p) => { const r = p.getBoundingClientRect(), x = r.x + r.width / 2, y = r.y + r.height / 2;
+        const under = [1, 3, 5, 7, 9, 11, 13, 15].flatMap((t) => [1, 3, 5].map((u) => at(r.x + r.width * t / 16, r.y + r.height * u / 6)));
+        const most = under.sort((a, b) => under.filter((t) => t === b).length - under.filter((t) => t === a).length)[0];
+        const own = getComputedStyle(p).backgroundColor.match(/\\d+/g).map(Number), was = most.split(',').map(Number); // a shadow's shade is no patch
+        return document.elementFromPoint(x, y) === p && own.slice(0, 3).reduce((d, v, j) => d + Math.abs(v - was[j]), 0) > 30; }).length; })()`);
+    if (cut || left || shows || crossed > 30) { console.error(`error: ${cut} line(s) of words cut or covered; ${left} lifted box(es) leave their frame behind; ${shows} painted-over spot(s) show; a ring crosses letters on ${crossed} pixels`); process.exitCode = 1; }
+    else console.log('check: no words cut or covered, no frame left behind, no painted spot shows, rings clear of letters');
   }
   if (flag === '--map' && dir) {
     mkdirSync(dir, { recursive: true });
     const map = await evaluate(s, `(async () => {
       const S = ${SCALE}, box = (r) => ({ x: Math.round(r.x * S), y: Math.round(r.y * S), w: Math.round(r.width * S), h: Math.round(r.height * S) });
       const seen = (r) => r.width > 0 && r.height > 0 && r.top >= 0 && r.bottom <= innerHeight && r.left >= 0 && r.right <= innerWidth;
-      // On top where it is drawn: not under a pinned header or another card.
-      const shown = (e, r) => e.contains(document.elementFromPoint(r.x + r.width / 2, r.y + Math.min(r.height / 2, 20)));
-      const behind = (e) => { for (let p = e; p; p = p.parentElement) { const b = getComputedStyle(p).backgroundColor; if (b !== 'rgba(0, 0, 0, 0)') return b; } return '#fff'; };
+      // The part of a box drawn on top (not under a pinned header or another card), or null: what the shot really shows.
+      const vis = (e, r) => { const on = (y) => e.contains(document.elementFromPoint(r.x + r.width / 2, y)); let a = r.top + 1, b = r.bottom - 1;
+        while (a < b && !on(a)) a += 2; while (b > a && !on(b)) b -= 2; return a < b ? new DOMRect(r.x, a, r.width, b - a) : null; };
       // A card: a box with its own background or border and rounded corners, holding words, smaller than the screen.
-      const cards = [...document.querySelectorAll('body *')].filter((e) => {
-        const c = getComputedStyle(e), r = e.getBoundingClientRect();
+      const cards = [...document.querySelectorAll('body *')].flatMap((e) => {
+        const c = getComputedStyle(e), r = e.getBoundingClientRect(), v = seen(r) && vis(e, r);
         const framed = c.backgroundColor !== 'rgba(0, 0, 0, 0)' || parseFloat(c.borderTopWidth) > 0 || c.boxShadow !== 'none';
-        return seen(r) && shown(e, r) && framed && parseFloat(c.borderTopLeftRadius) >= 8 && r.width >= 120 && r.height >= 36 && r.height < innerHeight * 0.6 && e.innerText.trim();
-      }).map((e) => ({ text: e.innerText.trim().replace(/\\s+/g, ' ').slice(0, 90), ...box(e.getBoundingClientRect()), bg: behind(e.parentElement) }));
+        return v && framed && parseFloat(c.borderTopLeftRadius) >= 8 && r.width >= 120 && v.height >= 36 && r.height < innerHeight * 0.6 && e.innerText.trim()
+          ? [{ text: e.innerText.trim().replace(/\\s+/g, ' ').slice(0, 90), ...box(v) }] : [];
+      });
       const lines = [], walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT), r = document.createRange();
-      for (let n; (n = walk.nextNode());) if (n.textContent.trim()) { r.selectNodeContents(n); for (const q of r.getClientRects()) if (seen(q)) lines.push({ ...box(q), bg: behind(n.parentElement) }); }
+      for (const e of document.querySelectorAll('input[placeholder], textarea[placeholder]')) { const q = e.getBoundingClientRect(), v = seen(q) && vis(e, q); if (v) lines.push(box(v)); }
+      for (let n; (n = walk.nextNode());) if (n.textContent.trim()) { r.selectNodeContents(n); for (const q of r.getClientRects()) { const v = seen(q) && vis(n.parentElement, q); if (v) lines.push(box(v)); } }
       const art = [...document.querySelectorAll('img')].filter((i) => i.src.startsWith('data:image/svg+xml') && seen(i.getBoundingClientRect()))
         .map((i) => ({ name: i.alt || 'drawing', svg: decodeURIComponent(i.src.split(',').slice(1).join(',')), ...box(i.getBoundingClientRect()) }));
       const fonts = [];

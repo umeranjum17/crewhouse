@@ -32,13 +32,15 @@ address, ask once; never draw an app you have not seen. Every screen in the set 
    - Panel 1 is always `hero`: the headline names the app or the person's gain, the mascot large (`art`), up to three of
      the cast small (`crew`), one short `note`.
    - `phone`: the screen in a phone frame running off the bottom; `lift` takes one or two cards from that screen's map
-     (copy `x`, `y`, `w`, `h` exactly) and pulls them out past the frame. The screen scrolls to the first one.
+     (copy `x`, `y`, `w`, `h` exactly) and pulls them out past the frame; a box inside a card brings the whole card. The
+     screen scrolls to the first one.
    - `cards`: no phone; two to four cards from one screen, floating. Use it once in the set.
    - `say` is the mascot's own short line in a speech bubble (at most 22 letters); leave it out where nothing fits.
    - `bg`: a different soft pastel per panel, such as `#E9E4FF`, `#DCEBFF`, `#FFF3C8`, `#FFE3DB`, `#DFF3E4`.
 7. Render each panel: `for n in 1 2 3 4 5; do node shoot.mjs "panel.html#$n" "files/<app>-store-$n.png" --check || break; done`
-   (`<app>` is the app's name in lowercase, with hyphens). `--check` fails a panel where a lifted card cuts a line of the
-   screen's words or a ring crosses a letter. On a failure, change that panel (a shorter marked word, another card) and
+   (`<app>` is the app's name in lowercase, with hyphens). `--check` fails a panel where a line of words shows only in part
+   (under a lifted card, the frame or a drawing), a lifted box leaves its frame behind, a painted-over spot shows, or a
+   ring crosses a letter. On a failure, change that panel (a shorter marked word, another card) and
    render it again; never deliver a panel that failed.
 8. Check before delivering: `magick identify files/<app>-store-*.png` shows five at 1290x2796; then make one sheet
    to look at, `magick files/<app>-store-[1-5].png -resize 25% +append files/<app>-store-sheet.png`.
