@@ -1513,7 +1513,10 @@ export class Crew {
     this.db.tx(() => {
       this.db.run('UPDATE tasks SET wake_at = ? WHERE id = ?', wake, task.id);
       this.setTask(task, 'paused', state);
-      this.say(task.bot, voice, words, task.id);
+      // One waiting line per words: another job pausing on the same account state would say it again. Only this
+      // bot's own last system line counts; what the person or another helper said in between changes nothing.
+      const said = this.db.get("SELECT text FROM messages WHERE bot = ? AND author = 'system' ORDER BY id DESC LIMIT 1", task.bot)?.text;
+      if (said !== (voice === 'bot' ? cleanReply(words) : words)) this.say(task.bot, voice, words, task.id);
     });
   }
 
