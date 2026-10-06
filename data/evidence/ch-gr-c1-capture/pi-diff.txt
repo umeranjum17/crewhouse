@@ -1,0 +1,16 @@
+# ~/.pi, before and after the ch-gr-c1-capture real-model run
+#
+# What was hashed (the set ./crewhouse test itself checks, crewhouse:205):
+#   pi_state() { (cd "$HOME/.pi/agent" && find auth.json settings.json models.json extensions -type f | sort | xargs -r sha256sum); }
+#   pi_state > pi-before.sha256   # 2026-10-06 08:57 +04, before crewd was started
+#   pi_state > pi-after.sha256    # 2026-10-06 09:37 +04, after crewd had stopped and resealed
+#
+# The comparison, re-run to write this file:
+#   diff -u pi-before.sha256 pi-after.sha256
+#   exit status: 0 (no differences)
+#
+# Files hashed on each side: 11 before, 11 after.
+# Result: the owner's ~/.pi sign-ins, settings, models and extensions are unchanged byte for byte.
+# diff printed nothing; everything below the next line is that empty output.
+--- diff -u pi-before.sha256 pi-after.sha256 ---
+--- end of diff output (empty above this line) ---
