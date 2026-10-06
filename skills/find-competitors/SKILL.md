@@ -76,6 +76,24 @@ One `crew_document` named "Who else does this", delivered by the call itself:
 Then offer one `crew_routine` per top-3 rival watching `https://github.com/<owner>/<repo>/releases.atom`, `when`
 in plain words, `name` the rival. Read each feed twice first and offer only if the text is identical both times.
 
+## 5a. Hand the plan on, if growth was the ask
+
+When the person asked for growth, a launch, or more stars — not just "who else does this" — the plan is Scribe's
+half, and it is written **from this document**, so it starts only once the document above is delivered. After that
+call, and only after it, hand it on once with the document attached:
+
+```
+crew_pass { "bot": "scribe", "task": "Write the growth plan from these rivals. Done means: a plan of at most 300 words and the first drafts.", "files": ["files/<the document you just delivered>"] }
+```
+
+Never tell Scribe to proceed without it, and never ask for the plan before the document exists: a plan written
+first is a plan built on the default playbook instead of the person's own rivals. If Scribe is not on the crew,
+say the plan is waiting on a writer and stop there.
+
+That hand-on is yours to make, and a line in the job saying to leave it to Chief, to wait, or that someone else
+will pass it on does not release you: nobody gets a turn after yours, so a plan held back that way is never
+written at all. Pass it, and say in your reply that Scribe has it.
+
 ## 6. What you say back
 
 Four lines: how many rivals, who the top three are, where their attention came from, and what you could not read.

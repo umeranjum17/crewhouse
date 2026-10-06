@@ -33,8 +33,8 @@ export function validate({ db, crewDir }, id) {
   // The whole job, including the halves a helper handed on: the rivals document comes from Scout's task.
   const root = t.root ?? id;
   const kin = db.all('SELECT id FROM tasks WHERE root = ? OR id = ?', root, root).map((r) => r.id);
-  const ev = (kind) => db.all(`SELECT bot, data FROM events WHERE kind = ? AND json_extract(data, '$.task') IN (${kin.map(() => '?').join(',')})`, kind, ...kin)
-    .map((e) => ({ bot: e.bot, ...JSON.parse(e.data) }));
+  const ev = (kind) => db.all(`SELECT bot, at, data FROM events WHERE kind = ? AND json_extract(data, '$.task') IN (${kin.map(() => '?').join(',')})`, kind, ...kin)
+    .map((e) => ({ bot: e.bot, at: e.at, ...JSON.parse(e.data) }));
   const delivered = ev('file.delivered');
   const calls = db.all(`SELECT bot, data FROM events WHERE kind = 'run.call' AND json_extract(data, '$.task') IN (${kin.map(() => '?').join(',')})`, ...kin)
     .map((e) => { const d = JSON.parse(e.data); return { bot: e.bot, tool: String(d.tool), args: argsOf(d.input ?? '{}'), ok: d.ok }; });
@@ -55,6 +55,14 @@ export function validate({ db, crewDir }, id) {
   const plan = plans.map((p) => ({ ...p, words: words(text(p.bot, p.path)) })).sort((a, b) => a.words - b.words)[0];
   if (!plan) row('FAIL', 'plan', 'no plan file was delivered');
   else row(plan.words <= 300 ? 'PASS' : 'FAIL', 'plan under 300 words', `${plan.path}: ${plan.words} words`);
+
+  // 2a. The plan is built on that document, so it can only be delivered after it. A plan delivered first was
+  //     written on the default playbook, whatever the hand-off that started it said: existing is not enough.
+  const when = (ms) => new Date(ms).toISOString().slice(11, 19);
+  if (!doc || !plan) row('UNKNOWN', 'plan after the rivals document', `nothing to compare: no ${doc ? 'plan' : 'rivals document'}`);
+  else row(plan.at > doc.at ? 'PASS' : 'FAIL', 'plan after the rivals document',
+    plan.at > doc.at ? `rivals ${when(doc.at)}, plan ${when(plan.at)}`
+      : `the plan (${when(plan.at)}) is ${Math.round((doc.at - plan.at) / 1000)}s older than the rivals document (${when(doc.at)}), so it was not built on it`);
 
   // 3. One to three draft cards.
   const drafts = calls.filter((c) => c.tool === 'crew_draft');

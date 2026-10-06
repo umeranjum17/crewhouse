@@ -89,6 +89,8 @@ test('a finished growth job passes the validator; a long plan and a prose Hacker
   assert.ok(ok.find((r: any) => r.what === 'rivals document')!.detail.includes('who-else-does-this.docx'),
     'the rivals document Scout delivered counts');
   assert.ok(ok.find((r: any) => r.what === 'plan under 300 words')!.detail.includes('words'));
+  assert.equal(ok.find((r: any) => r.what === 'plan after the rivals document')!.verdict, 'PASS',
+    'Scout delivered the rivals document before Scribe wrote the plan');
   assert.equal(ok.find((r: any) => r.what === '1-3 draft cards')!.detail, '2 crew_draft call(s)');
   assert.match(ok.find((r: any) => r.what.startsWith('notes for'))!.detail, /all five labels/);
   const reel = crewOf(db, 'crew_pass').find((c: any) => c.input.includes('"reel"'));
@@ -130,6 +132,29 @@ test('growth in Chief’s thread reaches Scout as a hand-off, with and without a
     assert.equal(JSON.parse(rec.input).steps, undefined, 'no steps');
     done();
   }
+});
+
+/** Issue 329's shape, the other way round: the plan is delivered first and the rivals document only afterwards,
+ *  so the plan cannot have been built on it. The run validator has to say so from the two delivery times alone —
+ *  a rivals document that merely exists somewhere is what let that run pass. */
+test('a plan delivered before the rivals document fails the validator, however the job was handed on', async () => {
+  const { crew, db, cfg, done } = crewWith(() => {});
+  await settled(db, (await crew.post('scribe', 'Growth for muxr, plan first. '
+    + call('crew_write', { path: 'files/growth-plan.md', content: 'Growth plan' })
+    + call('crew_deliver', { path: 'files/growth-plan.md', note: 'the plan' })
+    + call('crew_draft', { path: 'files/show-hn.md', channel: 'post', to: 'Show HN notes' })
+    + call('crew_write', { path: 'files/show-hn.md', content: NOTES }))).task);
+  await settled(db, (await crew.post('scout', 'Who else does this? '
+    + call('crew_document', { name: 'Who else does this', blocks: [{ heading: 'Who else does this' }, { text: 'Two rivals.' }] }))).task);
+  const scribe = db.get("SELECT * FROM tasks WHERE bot = 'scribe' ORDER BY id DESC LIMIT 1");
+  assert.ok(scribe, 'the plan ran');
+  const out = rows(db, cfg.crewDir, scribe.id);
+  const order = out.find((r: any) => r.what === 'plan after the rivals document')!;
+  assert.equal(order.verdict, 'FAIL', `the late rivals document is caught, got ${JSON.stringify(out)}`);
+  assert.match(order.detail, /older than the rivals document/);
+  assert.equal(out.find((r: any) => r.what === 'rivals document')!.verdict, 'PASS',
+    'the document does exist: existing was the whole of the old check, which is why that run passed');
+  done();
 });
 
 test('an untouched existing Scout gets the new skill when the template lands', () => {

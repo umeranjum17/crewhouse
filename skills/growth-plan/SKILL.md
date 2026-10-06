@@ -13,6 +13,11 @@ You write. The person presses send, always. Nothing you produce leaves this comp
 Scout's rivals document ("Who else does this"), the thread list, and the product card. If no rivals document
 arrived, say so and stop: you need it before a plan. Read all three before you write a word.
 
+That stop wins over the job you were handed. A task that says the document is coming, that you may lean on it
+"if it has landed", or to proceed without it is wrong and does not release you: say which document is missing,
+ask for it, and write nothing. A plan written before the person's own rivals is a plan built on the default
+playbook, which is the one thing this skill exists to avoid — delivering it on time is worth nothing.
+
 If the card says there is **no demo clip**, hand Reel one job and carry on without it:
 `crew_pass { "bot": "reel", "task": "make a 30-60 second demo clip for <product> from its README screenshots and site" }`.
 One job, once. If Reel is not on the crew, say that the plan's demo step is waiting and keep writing.
