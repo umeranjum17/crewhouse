@@ -7,14 +7,15 @@
   html, body { width: 430px; height: 932px; overflow: hidden; }
   body { position: relative; background: var(--bg); color: var(--ink); font-family: Inter, system-ui, sans-serif; }
   .blob { position: absolute; border-radius: 48% 52% 44% 56% / 52% 46% 54% 48%; background: var(--deep); }
-  h1 { position: relative; z-index: 3; font: 400 62px/0.98 Headline, 'Noto Serif', Georgia, serif; letter-spacing: -0.02em;
+  h1 { position: relative; z-index: 3; font: 400 62px/1.36 Headline, 'Noto Serif', Georgia, serif; letter-spacing: -0.02em;
     -webkit-text-stroke: 0.8px currentColor; text-align: center; padding: 64px 28px 0; text-wrap: balance; }
-  h1 .mark { position: relative; white-space: nowrap; }
-  h1 .mark svg { position: absolute; z-index: -1; inset: -8% -10% -4% -12%; width: 122%; height: 112%; overflow: visible; }
+  h1 .mark { position: relative; white-space: nowrap; margin: 0 0.3em; }
+  h1 .mark svg { position: absolute; z-index: -1; top: -0.04em; bottom: -0.3em; left: calc(-0.3em - 4%); right: calc(-0.3em - 4%); width: calc(108% + 0.6em); height: calc(100% + 0.34em); overflow: visible; }
   .note { position: absolute; z-index: 3; font: italic 400 26px/1.1 Headline, 'Noto Serif', Georgia, serif; }
   .phone { position: absolute; z-index: 1; left: 50%; width: 388px; margin-left: -194px; border-radius: 58px;
     background: #141A2A; padding: 10px; box-shadow: 0 30px 60px -20px rgba(20, 26, 42, 0.35); }
-  .screen { width: 100%; height: 100%; border-radius: 48px; background-repeat: no-repeat; background-color: #fff; }
+  .screen { position: relative; overflow: hidden; width: 100%; height: 100%; border-radius: 48px; background-repeat: no-repeat; background-color: #fff; }
+  .patch { position: absolute; }
   .lift { position: absolute; z-index: 2; border-radius: 18px; background-repeat: no-repeat; background-color: #fff;
     box-shadow: 0 18px 36px -10px rgba(20, 26, 42, 0.30), 0 0 0 1.5px rgba(20, 26, 42, 0.08); }
   .pal { position: absolute; z-index: 4; filter: drop-shadow(0 10px 14px rgba(20, 26, 42, 0.18)); }
@@ -28,6 +29,11 @@
   .mark path { stroke: var(--accent); stroke-width: 3.4; }
 </style>
 <script src="panels.js"></script>
+<script>
+  // The shot's map (shoot.mjs --map shots/<name> beside shots/<name>.png): where its words are, so a lift leaves no ghost.
+  const shotOf = ((window.PANELS || [])[Number(location.hash.slice(1) || 1) - 1] || {}).shot;
+  if (shotOf) document.write(`<script src="${shotOf.replace(/\.png$/, '/map.js')}"><\/script>`);
+</script>
 <body>
 <script>
   const P = (window.PANELS || [])[Number(location.hash.slice(1) || 1) - 1];
@@ -42,7 +48,7 @@
   root.setProperty('--bg', P.bg || '#EFE9FF'); root.setProperty('--deep', P.deep || 'rgba(255,255,255,0.45)');
   root.setProperty('--ink', P.ink || '#141A2A'); root.setProperty('--accent', P.accent || '#F0482A');
   // A hand-drawn ring round a *word*, a hand-drawn stroke under an _underlined_ one.
-  const ring = '<svg viewBox="0 0 100 50" preserveAspectRatio="none"><path d="M60 4C30 1 4 9 3 26c-1 17 30 22 56 20 25-2 40-10 38-24C95 8 70 3 40 6"/></svg>';
+  const ring = '<svg viewBox="0 0 100 50" preserveAspectRatio="none"><path d="M56 3C22 2 3 5 3 24c0 19 20 23 50 23 30 0 44-4 44-23C97 5 76 2 36 5"/></svg>';
   const under = '<svg viewBox="0 0 100 50" preserveAspectRatio="none"><path d="M4 46c25-5 60-6 92-2"/></svg>';
   const words = String(P.title || '').replace(/[<>&]/g, '').replace(/\*([^*]+)\*/g, `<span class="mark">$1${ring}</span>`).replace(/_([^_]+)_/g, `<span class="mark">$1${under}</span>`);
   // A real card cut from the shot: its box in the shot's pixels, drawn `w` wide at (left, top).
@@ -86,10 +92,34 @@
     const screen = phone.appendChild(document.createElement('div'));
     Object.assign(screen, { className: 'screen' }).style.cssText = `background-image:url("${P.shot}");background-size:${inner}px auto;background-position:0 ${30 - top * k}px`;
     // Each lifted card sits where it is on the screen, grown and pushed out past the frame's edge.
-    const low = Math.max(0, ...(P.lift || []).slice(0, 2).map((c, i) => {
-      const w = Math.min(414, c.w * k * 1.14), left = i % 2 ? 430 - w - 4 : 4;
-      return lift(P.shot, c, left, screenTop + (c.y - top) * k - 8, w, i % 2 ? 1.2 : -1.2).getBoundingClientRect().bottom;
-    }));
+    const lifts = (P.lift || []).slice(0, 2), feet = lifts.map((c, i) => {
+      const w = Math.min(414, c.w * k * 1.14), left = i % 2 ? 430 - w - 4 : 4, at = screenTop + (c.y - top) * k - 8;
+      lift(P.shot, c, left, at, w, i % 2 ? 1.2 : -1.2);
+      return { x: left, y: at, w, h: c.h * (w / c.w) };
+    });
+    // No ghosts: the lifted card's spot on the screen (and a card it sat in) is painted over in the colour behind it, and
+    // so is every line of words a lifted card would cut. dataset.cut counts lines still cut; shoot.mjs --check fails on any.
+    const M = window.MAP || { cards: [], lines: [] }, sx = 215 - 194 + 10, sy = phoneTop + 10; // the glass's corner on the page
+    const onPage = (b) => ({ x: sx + b.x * k, y: sy + 30 + (b.y - top) * k, w: b.w * k, h: b.h * k });
+    const inside = (a, b, m = 0) => a.x >= b.x + m && a.y >= b.y + m && a.x + a.w <= b.x + b.w - m && a.y + a.h <= b.y + b.h - m;
+    const meets = (a, b, m = 0) => a.x < b.x + b.w + m && b.x - m < a.x + a.w && a.y < b.y + b.h + m && b.y - m < a.y + a.h;
+    const patches = [], patch = (b, bg, m = 0) => {
+      const r = onPage(b), d = screen.appendChild(document.createElement('div'));
+      Object.assign(d, { className: 'patch' }).style.cssText = `left:${r.x - sx - m}px;top:${r.y - sy - m}px;width:${r.w + 2 * m}px;height:${r.h + 2 * m}px;background:${bg}`;
+      patches.push({ x: r.x - m, y: r.y - m, w: r.w + 2 * m, h: r.h + 2 * m });
+    };
+    for (const c of lifts) {
+      const outer = M.cards.filter((o) => inside(c, o) && o.w * o.h <= 2 * c.w * c.h).sort((a, b) => b.w * b.h - a.w * a.h)[0] || c;
+      patch(outer, outer.bg || c.bg || '#fff', 2);
+    }
+    const pane = { x: sx, y: sy, w: inner, h: 932 - sy };
+    const cut = (l) => meets(l, pane) && feet.some((f) => meets(l, f, 6)) && !feet.some((f) => inside(l, f, 6)) && !patches.some((p) => inside(l, p));
+    for (const l of M.lines) if (cut(onPage(l))) patch(l, l.bg, 3);
+    document.body.dataset.cut = window.MAP ? M.lines.filter((l) => cut(onPage(l))).length : lifts.length; // no map, no proof
+    // The phone ends just under the screen's last words when they stop short, instead of showing empty screen.
+    const end = Math.max(0, ...M.lines.map((l) => onPage(l).y + onPage(l).h), ...M.cards.map((c) => onPage(c).y + onPage(c).h));
+    if (end && end < 932 - 140) phone.style.height = `${end + 28 - phoneTop}px`;
+    const low = Math.max(0, ...feet.map((f) => f.y + f.h + 8));
     // The mascot peeks in below the cards; its words only where they cover none of them.
     if (low < 932 - 230) say(P.say, { right: '22px', bottom: '150px' }, 'right');
     pal(P.art, { right: '14px', bottom: '-10px', height: low < 932 - 230 ? '150px' : '120px' });
