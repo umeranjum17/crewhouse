@@ -110,23 +110,17 @@ export function pretty(path: string) {
 /** The bot and path a file view came from, for the phone's photo fetch: `/files/<bot>/<path under files/>`. */
 export const fileSource = (url: string) => { const m = /^\/files\/([a-z0-9-]+)\/(.+)$/.exec(url); return m ? { bot: m[1], path: `files/${decodeURIComponent(m[2])}` } : null; };
 
-/** Crewd's own check on a suggested change, as a person reads it: did it pass, what the check actually found, when, and
- *  whether a newer run overturned an older verdict. Nothing at all when no check ever ran on this change. */
-export type Review = { task: number; ok: boolean; why: string; when: number; runs: number; changed: boolean };
-const WHY = (d: Json) => d.passed ? 'the check failed on the old code and passes with this change'
-  : d.missingDep ? 'the check could not run: something it needs is not installed'
-  : Number(d.after) === 0 ? 'the check passes here but never failed before the change, so nothing was proved'
-  : Number(d.before) === 0 ? 'the check passed before the change and fails after it: the change broke it'
-  : 'the same check still fails after the change';
+/** Crewd's own check on a suggested change, as a person reads it: did it pass, when, and the job to start again.
+ *  What the check found and which run counts are crewd's own thread line; the card never says them a second time. */
+export type Review = { task: number; ok: boolean; when: number };
 
-/** Every check crewd has run, newest verdict for each suggested change, keyed `bot|files/x.patch`. A second run on the
- *  same change is the current one; `changed` marks a verdict a newer run overturned, so nobody acts on the stale one. */
+/** Every check crewd has run, newest verdict for each suggested change, keyed `bot|files/x.patch`. */
 export function reviews(state: Json) {
   const out = new Map<string, Review>();
   for (const e of (state.events ?? []) as Json[]) {
     if (e.kind !== 'verify.result') continue;
-    const d = (e.data ?? {}) as Json, key = `${e.bot}|${d.patch}`, prev = out.get(key);
-    out.set(key, { task: Number(d.task), ok: d.passed === true, why: WHY(d), when: at(e.at), runs: (prev?.runs ?? 0) + 1, changed: !!prev && prev.ok !== (d.passed === true) });
+    const d = (e.data ?? {}) as Json;
+    out.set(`${e.bot}|${d.patch}`, { task: Number(d.task), ok: d.passed === true, when: at(e.at) });
   }
   return out;
 }

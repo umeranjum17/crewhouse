@@ -679,7 +679,9 @@ function HelperPage(ctx: Ctx & { id: string; tab: string }) {
           <header className="chat-head">
             <a href="#/" className="back" aria-label="Back" onClick={(e) => { e.preventDefault(); back(); }}>‹</a>
             <Face who={h} size={32} ring={h.ring} />
-            <div className="grow"><b>{h.name}</b><div className="mute small sub">{h.role}</div></div>
+            {/* The name alone: the job sits under the helper's face at the top of the thread and on Details, and at
+                phone width a second copy of it wrapped the header onto four lines. */}
+            <div className="grow"><b>{h.name}</b></div>
             {b?.task?.state === 'working' && <button className="btn" onClick={() => confirm(`Stop ${h.name}'s job?`) && attempt(async () => { await api.reset(id); refresh(); }, `Stopped ${h.name}`)}>Stop</button>}
             <button className="link" onClick={() => go(`#/h/${id}/details`)}>Details</button>
           </header>
