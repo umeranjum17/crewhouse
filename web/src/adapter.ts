@@ -655,9 +655,13 @@ export function card(a: Json, state: Json): Card {
     lines: (d.pass.files ?? []).map((f: string) => `With “${pretty(f)}”`),
     choices: [{ label: 'Hand it on', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
   if (a.kind === 'propose' && d.draft) {
-    const head = `${name} wrote your ${d.draft.channel}`;
-    const body = String(d.preview?.body ?? '').trim();
-    return { ...base, kind: 'ok', status: `Nothing is sent · ${d.draft.channel === 'post' ? 'post' : 'send'} it yourself`, evidence: 'draft',
+    // A card written before the channel was recorded still has to say a real noun: nothing here ever shows undefined.
+    const channel = plain(String(d.draft.channel ?? '')).trim() || 'draft';
+    const head = `${name} wrote your ${channel}`;
+    // A draft is words to send, not a document: heading and quote marks are stripped, every word kept — the person
+    // would otherwise post or mail the marks themselves. A "#hashtag" a post opens with is not a heading.
+    const body = String(d.preview?.body ?? '').replace(/^\s{0,3}(?:#{1,6}|>)[ \t]+/gm, '').trim();
+    return { ...base, kind: 'ok', status: `Nothing is sent · ${channel === 'post' ? 'post' : 'send'} it yourself`, evidence: 'draft',
       draftTo: plain(d.draft.to), draftSubject: plain(d.draft.subject) || undefined, draftText: body, head, words: head, preview: { body },
       choices: [{ label: 'Approve', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Reject', body: { answer: 'deny' } }] };
   }

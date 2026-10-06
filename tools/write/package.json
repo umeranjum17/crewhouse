@@ -1,0 +1,9 @@
+{
+  "name": "crewhouse-tool-write",
+  "private": true,
+  "description": "The write tool's pinned dependency tree; installed by ./crewhouse tools install write with npm ci.",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@byokit/write": "0.2.0"
+  }
+}

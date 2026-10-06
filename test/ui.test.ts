@@ -253,6 +253,31 @@ test('draft cards keep the recipient, email subject and exact message separate a
   } finally { done(); }
 });
 
+test('a draft card filed before its channel was recorded still names a real noun, never undefined', () => {
+  // The card an older crewd filed: the draft is there, the channel never was. The renderer's own words, not the row's title.
+  const ask: Json = { id: 7, bot: 'scribe', kind: 'propose', at: 1, member: 1, title: 'Scribe wrote your undefined.', detail: {
+    draft: { to: 'X launch post', subject: undefined, path: 'files/x.md', sha: 'abc' },
+    preview: { body: 'One small win today.' } } };
+  const c = A.card(ask, { asks: [ask], bots: [{ id: 'scribe', display: 'Scribe' }] } as any);
+  assert.equal(c.head, 'Scribe wrote your draft');
+  assert.doesNotMatch(`${c.head} ${c.words} ${c.status}`, /undefined/, 'no raw undefined reaches the person');
+  assert.equal(c.status, 'Nothing is sent · send it yourself');
+});
+
+test('a draft is words to send, not a document: its heading marks go, its words stay', () => {
+  // What Scribe filed: markdown headings in a plain email the person would send with the marks still in it.
+  const body = '# Overdue refund follow-up\n\n## Recommended\n\nHello,\n\nPlease confirm my refund.\n\nThanks,\nUmer';
+  const ask: Json = { id: 8, bot: 'scribe', kind: 'propose', at: 1, member: 1, title: 'Scribe wrote your email.', detail: {
+    draft: { channel: 'email', to: 'returns@shop.example', subject: 'Refund', path: 'files/a.md', sha: 'abc' },
+    preview: { body } } };
+  const c = A.card(ask, { asks: [ask], bots: [{ id: 'scribe', display: 'Scribe' }] } as any);
+  for (const text of [c.head, c.words, c.status, c.preview?.body, c.draftText].join('\n'))
+    assert.doesNotMatch(text, /^\s*#{1,6}\s/m, 'no raw heading marks reach the person');
+  assert.equal(c.preview?.body, 'Overdue refund follow-up\nRecommended\n\nHello,\n\nPlease confirm my refund.\n\nThanks,\nUmer');
+  assert.equal(c.draftText, c.preview?.body, 'Edit starts from the same words the card shows');
+  assert.match(c.preview!.body, /Please confirm my refund\./, 'the words themselves are untouched');
+});
+
 test('Home commits nothing: a row opens the review sheet, and a starter fills the box without sending', () => {
   const src = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
   const home = src.slice(src.indexOf('function NeedsRows('), src.indexOf('/** The standing'));

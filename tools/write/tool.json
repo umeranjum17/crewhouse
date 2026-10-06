@@ -1,0 +1,29 @@
+{
+  "id": "write",
+  "name": "write (Own Voice)",
+  "provides": "The places a post can go with their limits, the lines a draft must follow, and a check on a finished draft: does it fit, does it sound like the person, is any of it stock. No model, no network, no sign-in",
+  "kind": "cli",
+  "bins": [
+    "write"
+  ],
+  "license": "Apache-2.0 (BYOKit)",
+  "source": "pinned",
+  "install": {
+    "npm": "@byokit/write@0.2.0"
+  },
+  "asks": [
+    "never: it only reads and checks the drafts you hand it"
+  ],
+  "grant": {
+    "default": false
+  },
+  "run": {
+    "free": [
+      "platforms",
+      "brief",
+      "check",
+      "voice parse"
+    ]
+  },
+  "migrationDebt": "Raw tool installation/execution and third-party SDK ownership must move to published BYOKit capabilities; this manifest records current behavior, not an approved bypass."
+}
