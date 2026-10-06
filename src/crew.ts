@@ -2023,8 +2023,8 @@ export class Crew {
         }),
       tool('crew_draft', 'Show ONE finished message for approval; nothing is sent. `path`: a file containing ONLY the message body, with its line breaks, no subject, headings, variants or planning notes. ' +
         '`channel`: email, text, post (social), or reply (a site). `to`: the actual recipient name/address or site, NEVER a job title. `subject`: required for email, separate from the body. '
-        + '`why`: one short line saying why this one matters now, in the person\'s own words if you have them; it is kept on the receipt and nothing else. '
-        + '`link`: an https page the person should open themselves, to paste or send these words into; the card\'s yes then copies the words and opens it.',
+        + '`why`: one short line saying why this one matters now, in the person\'s own words if you have them; it is kept on the receipt and nothing else — never put an address in it. '
+        + '`link`: the https page the person opens to paste or send these words. Whenever they name a page to open, paste into or send from, it belongs here and nowhere else: the card\'s yes then copies the words and opens that page for them.',
         { path: Type.String(), channel: Type.Union(['email', 'text', 'post', 'reply'].map((x) => Type.Literal(x))), to: Type.String(), subject: Type.Optional(Type.String()), why: Type.Optional(Type.String()), link: Type.Optional(Type.String()) }, (p) => {
           const full = disk.insideBot(this.cfg, botId, String(p.path ?? ''));
           if (!existsSync(full)) throw new Error(`no file at ${p.path}`);

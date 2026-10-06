@@ -32,7 +32,8 @@ Until they answer, `check` runs without `--voice` and covers fit and stock phras
      too long at 312 characters`). Never check a fourth time, and never leave the person with nothing.
 4. **File.** `crew_draft { "path": "files/<slug>.md", "channel": "post", "to": "<the place>" }`, where `to` names the
    venue, not a person or a job: `X launch post`, `LinkedIn founder post`, `r/selfhosted thread: <title>`.
-   For a reply, `channel` is `reply`. Nothing is sent.
+   For a reply, `channel` is `reply`. When they name a page to open, paste into or send from, add `"link": "https://…"`
+   — the page itself, never in `to` or `why`; their yes then copies the words and opens it. Nothing is sent.
 
 ## Never
 
