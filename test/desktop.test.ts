@@ -181,10 +181,10 @@ test("a bot's shell cannot find or drive another bot's browser", { skip: noAttac
   const drive = async (cdp: string, path: string) => {
     const ws = new WebSocket(cdp);
     await new Promise((r, j) => { ws.once('open', r); ws.once('error', j); });
-    const call = (id: number, method: string, params = {}) => new Promise<any>((r) => {
+    const call = (id: number, method: string, params = {}) => answer(method, new Promise<any>((r) => {
       ws.on('message', (raw) => { const j = JSON.parse(String(raw)); if (j.id === id) r(j.result); });
       ws.send(JSON.stringify({ id, method, params }));
-    });
+    }));
     if (path) await call(1, 'Target.createTarget', { url: `${site}${path}` });
     const { targetInfos } = await call(2, 'Target.getTargets');
     ws.close();
@@ -248,10 +248,10 @@ test("a show is recorded through crewd's own endpoint to the bot's browser", { s
   await new Promise((r, j) => { bot.once('open', r); bot.once('error', j); });
   // The person took the wheel on the front page; behind it sit pages crewd opened itself (its tool's page, and one an
   // old session restored). The recorder writes down what the person saw, never the pages behind the front one.
-  const open = (id: number, path: string) => new Promise((r) => {
+  const open = (id: number, path: string) => answer(`a page at ${path}`, new Promise((r) => {
     bot.send(JSON.stringify({ id, method: 'Target.createTarget', params: { url: `${url}${path}` } }));
     bot.on('message', function back(m) { if (JSON.parse(String(m)).id === id) { bot.off('message', back); r(0); } });
-  });
+  }));
   await open(1, '/crewd');
   await open(2, '/search');
   bot.close();
@@ -274,8 +274,10 @@ test('give back reads its tabs and keeps what the person ticked', { skip: noXvfb
   crew.recruit('reel', 'Reel', 'person');
   const space = join(cfg.crewDir, 'bots', 'reel');
   const host = (s: any) => `http://127.0.0.1:${(s.address() as AddressInfo).port}`;
-  const desk = await crew.desktops.ensure('reel', space);
+  // Registered before the first call that can fail: a failed start must not leave these servers listening, or the
+  // whole file stops exiting and every later file is reported cancelled instead of run.
   t.after(async () => { front.close(); behind.close(); await crew.desktops.stopAll(); done(); });
+  const desk = await crew.desktops.ensure('reel', space);
   assert.deepEqual(await crew.desktops.pages('reel'), [], 'nothing signed in to yet: no tabs at all');
 
   // Two tabs. The one opened last would be on screen, but a window-managerless Xvfb puts each createTarget in its
@@ -283,10 +285,10 @@ test('give back reads its tabs and keeps what the person ticked', { skip: noXvfb
   // paths — the visible-tab-first ordering the sheet pre-ticks is A.signTicks, proven in ui.test.ts.
   const ws = new WebSocket(desk.cdp!);
   await new Promise((r, j) => { ws.once('open', r); ws.once('error', j); });
-  const open = (id: number, url: string, background = false) => new Promise((r) => {
+  const open = (id: number, url: string, background = false) => answer(`a page at ${url}`, new Promise((r) => {
     ws.send(JSON.stringify({ id, method: 'Target.createTarget', params: background ? { url, background: true } : { url } }));
     ws.on('message', function back(raw) { if (JSON.parse(String(raw)).id === id) { ws.off('message', back); r(0); } });
-  });
+  }));
   await open(1, `http://localhost:${(behind.address() as AddressInfo).port}/behind`);
   await open(2, `${host(front)}/front`);
   ws.close();
@@ -334,4 +336,8 @@ test('give back reads its tabs and keeps what the person ticked', { skip: noXvfb
 
 async function until(what: string, fn: () => unknown, ms = 15_000) {
   for (const end = Date.now() + ms; !(await fn()); await sleep(50)) if (Date.now() > end) throw new Error(`timed out waiting for ${what}`);
+}
+/** A DevTools reply. A browser that stops answering mid-test fails its own test, rather than wedging the whole file. */
+function answer<T>(what: string, reply: Promise<T>, ms = 30_000) {
+  return Promise.race([reply, new Promise<T>((_, no) => setTimeout(() => no(new Error(`the browser never answered ${what}`)), ms).unref())]);
 }

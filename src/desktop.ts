@@ -15,11 +15,9 @@ const onPath = (bin: string) => (process.env.PATH ?? '').split(':').find((d) => 
 export const browserBin = () => BROWSERS.map(onPath).find(Boolean) || null;
 /** What is missing on this machine for bot desktops, in words fit for doctor and the app. */
 export function missing() {
-  const out: string[] = [];
-  if (!onPath('Xvfb')) out.push('Xvfb (apt install xvfb, dnf install xorg-x11-server-Xvfb, pacman -S xorg-server-xvfb)');
   const engine = explainMissingEngine();
-  if (engine) out.push(`the desklink engine: ${engine}`);
-  return out;
+  return [!onPath('Xvfb') && 'Xvfb (apt install xvfb, dnf install xorg-x11-server-Xvfb, pacman -S xorg-server-xvfb)',
+    engine && `the desklink engine: ${engine}`].filter((m): m is string => !!m);
 }
 
 /** An Xauthority file with one wildcard MIT-MAGIC-COOKIE-1 entry: only holders of this file may use the display. */
@@ -137,29 +135,32 @@ export class Desktops {
       '--ozone-platform=x11', `--user-data-dir=${join(botDir, 'browser')}`, '--remote-debugging-pipe',
       '--no-first-run', '--no-default-browser-check', '--password-store=basic', '--force-device-scale-factor=1', '--start-maximized',
       '--window-position=0,0', `--window-size=${WIDTH},${HEIGHT}`, 'about:blank',
-    ], { env: this.env(d), stdio: ['ignore', 'ignore', 'ignore', 'pipe', 'pipe'] });
-    child.on('error', () => {});
+    ], { env: this.env(d), stdio: ['ignore', 'ignore', 'pipe', 'pipe', 'pipe'] });
+    let said = '', buf = '', client: WebSocket | undefined, answered: ((bad?: string) => void) | undefined;
+    child.stderr!.on('data', (c) => { said = (said + c).slice(-400); });
+    child.on('error', (e) => { said = `${said}\n${e.message}`.slice(-400); });
     const path = `/devtools/browser/${randomBytes(24).toString('hex')}`;
     const wss = new WebSocketServer({ host: '127.0.0.1', port: 0, path });
     await new Promise((r) => wss.once('listening', r));
     // Chromium's pipe carries one JSON message per NUL; one client at a time (a newer attach replaces the last).
     const toChrome = child.stdio[3] as NodeJS.WritableStream, fromChrome = child.stdio[4] as NodeJS.ReadableStream;
-    let client: WebSocket | undefined, buf = '';
     fromChrome.setEncoding('utf8'); // a character split across chunks stays whole
     fromChrome.on('data', (c) => {
       buf += c;
-      for (let i; (i = buf.indexOf('\0')) >= 0; buf = buf.slice(i + 1)) client?.send(buf.slice(0, i));
+      for (let i; (i = buf.indexOf('\0')) >= 0; buf = buf.slice(i + 1)) { answered?.(); client?.send(buf.slice(0, i)); }
     });
     toChrome.on('error', () => {});
-    wss.on('connection', (ws) => {
-      client?.close();
-      client = ws;
-      ws.on('message', (m) => toChrome.write(`${m}\0`));
-    });
+    wss.on('connection', (ws) => { client?.close(); client = ws; ws.on('message', (m) => toChrome.write(`${m}\0`)); });
     child.on('exit', () => { wss.close(); if (d.devtools === wss) d.cdp = undefined; });
-    d.chrome = child;
-    d.devtools = wss;
-    d.cdp = `ws://127.0.0.1:${(wss.address() as AddressInfo).port}${path}`;
+    // A Chromium that died (a crash, a missing library, a socket path past the kernel's 108 bytes) leaves this relay
+    // listening, and every DevTools call then waits for a reply forever: make it answer before handing the endpoint out.
+    toChrome.write('{"id":0,"method":"Browser.getVersion"}\0');
+    await new Promise<void>((ok, no) => {
+      answered = (bad) => { answered = undefined; if (!bad) return ok(); // settled once: a later ordinary exit is not a failed start
+        console.error(`${d.bot}'s browser ${bad}: ${said.trim().split('\n').pop() || 'it said nothing'}`); no(new Error(`${d.bot}'s browser ${bad}`)); };
+      child.once('exit', () => answered?.('could not start')); setTimeout(() => answered?.('did not answer'), 60_000).unref();
+    }).catch((e) => { wss.close(); child.kill('SIGKILL'); throw e; });
+    d.chrome = child; d.devtools = wss; d.cdp = `ws://127.0.0.1:${(wss.address() as AddressInfo).port}${path}`;
   }
 
   /** Environment bound to the bot's display only: its cookie, and no route to the owner's Wayland session. */
@@ -304,8 +305,7 @@ export class Desktops {
       p && p.exitCode === null && p.signalCode === null ? new Promise((r) => p.once('exit', r)) : undefined)]);
     this.ends.set(bot, gone);
     void gone.finally(() => { if (this.ends.get(bot) === gone) this.ends.delete(bot); });
-    const chrome = d.chrome;
-    chrome?.kill();
+    const chrome = d.chrome; chrome?.kill();
     // A Chromium that won't finish shutting down is not left running.
     if (chrome) setTimeout(() => { if (chrome.exitCode === null && chrome.signalCode === null) chrome.kill('SIGKILL'); }, 3000).unref();
     d.devtools?.close();
