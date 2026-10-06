@@ -1,7 +1,7 @@
-import { mkdtempSync, readdirSync, rmSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 
 const prefix = 'crewhouse-test-';
 const rootPrefix = 'cw-test-'; // leave room for Unix socket paths beneath an on-disk TMPDIR
@@ -29,14 +29,54 @@ const before = new Set(readdirSync(scratch));
 const cleanup = () => rmSync(root, { recursive: true, force: true });
 for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => { cleanup(); process.kill(process.pid, signal); });
 const files = readdirSync('test').filter((name) => name.endsWith('.test.ts')).map((name) => join('test', name));
-// Serial files: the engine tests each spawn a real gateway; parallel runs starve them past their timeouts.
-// Ubuntu CI bounds each file's whole process group: 295 seconds plus five to stop its children.
+// CI lanes: a file that builds a real gateway (`new OpenClawRuntime`) starves past its timeouts when it
+// overlaps another gateway boot, and a file that drives a real browser (Chromium via browserBin/taskBrowser)
+// doubles those boots when it overlaps them — CI 2026-10-06: migrate 150s serial went past its 295s bound
+// next to three busy lanes. So gateway files run one at a time, browser files run one at a time, and
+// everything else (OS-assigned ports, per-process temp dirs, mostly idle stub holds) runs alongside, two
+// at a time. Ubuntu CI bounds each file's whole process group: 295 seconds plus five to stop its children.
 const bounded = process.env.CI === 'true' && process.platform === 'linux';
-const results = (bounded ? files.map((file) => [file]) : [files]).map((group) => spawnSync(
-  bounded ? 'timeout' : process.execPath,
-  [...(bounded ? ['--kill-after=5s', '295s', process.execPath] : []), '--test', '--test-concurrency=1', ...group],
-  { stdio: 'inherit', env },
-));
+const LIGHT_CONCURRENCY = 2;
+const isGateway = (file) => readFileSync(file, 'utf8').includes('new OpenClawRuntime');
+const isBrowser = (file) => /browserBin|taskBrowser|ownedBrowser|Xvfb/.test(readFileSync(file, 'utf8'));
+const runOne = (file) => new Promise((resolve) => {
+  const t0 = Date.now();
+  const child = spawn(bounded ? 'timeout' : process.execPath,
+    [...(bounded ? ['--kill-after=5s', '295s', process.execPath] : []), '--test', '--test-concurrency=1', file],
+    { env });
+  let out = '';
+  child.stdout.on('data', (d) => { out += d; });
+  child.stderr.on('data', (d) => { out += d; });
+  child.on('error', (error) => resolve({ file, status: 1, secs: (Date.now() - t0) / 1000, out: `${out}${String(error)}\n` }));
+  child.on('close', (status) => resolve({ file, status: status ?? 1, secs: (Date.now() - t0) / 1000, out }));
+});
+const timed = async (file, lane = '') => {
+  const r = await runOne(file);
+  results.push(r);
+  console.log(`### done${lane} ${file} (${r.secs.toFixed(1)}s, exit ${r.status})\n${r.out}`);
+};
+const results = [];
+if (!bounded) {
+  results.push(spawnSync(process.execPath, ['--test', '--test-concurrency=1', ...files], { stdio: 'inherit', env }));
+} else {
+  const serial = (lane, laneFiles) => (async () => { for (const file of laneFiles) await timed(file, ` [${lane}]`); })();
+  const gateway = files.filter(isGateway);
+  const browser = files.filter((file) => !isGateway(file) && isBrowser(file));
+  const pool = files.filter((file) => !isGateway(file) && !isBrowser(file));
+  console.log(`### lanes: serial gateway [${gateway.join(', ')}], serial browser [${browser.join(', ')}], ${pool.length} files across ${LIGHT_CONCURRENCY} parallel lanes`);
+  const gatewayRun = serial('gateway', gateway);
+  const browserRun = serial('browser', browser);
+  const lightRun = Promise.all(Array.from({ length: LIGHT_CONCURRENCY }, async () => {
+    for (;;) {
+      const file = pool.shift();
+      if (!file) return;
+      await timed(file);
+    }
+  }));
+  await Promise.all([gatewayRun, browserRun, lightRun]);
+  console.log('### per-file wall time (slowest first):');
+  for (const r of [...results].sort((a, b) => b.secs - a.secs)) console.log(`###   ${r.secs.toFixed(1)}s exit=${r.status} ${r.file}`);
+}
 const leaked = readdirSync(scratch).filter((name) => name.startsWith(prefix) && !before.has(name));
 cleanup();
 if (leaked.length) { console.error(`Test scratch leaked from ${scratch}:\n${leaked.map((name) => `  ${join(scratch, name)}`).join('\n')}`); process.exitCode = 1; }
