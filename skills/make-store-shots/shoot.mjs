@@ -3,7 +3,7 @@
 // --map also writes <dir>/map.json (and map.js for panel.html): the screen's cards and lines of words (box in the PNG's
 // pixels, colour behind), its drawings (each saved as an .svg), its fonts (each saved) and its links to other screens, so a
 // panel can lift a real card, the app's own art and type. --check shoots a panel and fails if any line of words is cut by a
-// lifted card, or a ring crosses a letter.
+// lifted card or the frame, a ring crosses a letter, or words run under a drawing.
 import { spawn } from 'node:child_process';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -72,8 +72,12 @@ try {
       const inked = (a, i) => Math.abs(a[i] - px[0][i]) + Math.abs(a[i + 1] - px[0][i + 1]) + Math.abs(a[i + 2] - px[0][i + 2]) > 90;
       let n = 0; for (let i = 0; i < px[0].length; i += 4) if (inked(px[1], i) && inked(px[2], i)) n++;
       return n; })()`);
-    if (cut || crossed > 30) { console.error(`error: ${cut} line(s) of words cut by a lifted card; a ring crosses letters on ${crossed} pixels`); process.exitCode = 1; }
-    else console.log('check: no words cut, rings clear of letters');
+    // Covered: a line of the panel's own words (headline, note, speech) under a drawing.
+    const covered = await evaluate(s, `(() => { const pals = [...document.querySelectorAll('.pal')].map((p) => p.getBoundingClientRect());
+      return [...document.querySelectorAll('h1, .note, .say')].flatMap((w) => { const r = document.createRange(); r.selectNodeContents(w); return [...r.getClientRects()]; })
+        .filter((l) => pals.some((p) => Math.min(l.right, p.right) - Math.max(l.left, p.left) > 4 && Math.min(l.bottom, p.bottom) - Math.max(l.top, p.top) > 4)).length; })()`);
+    if (cut || crossed > 30 || covered) { console.error(`error: ${cut} line(s) of words cut by a lifted card or the frame; a ring crosses letters on ${crossed} pixels; ${covered} line(s) of words under a drawing`); process.exitCode = 1; }
+    else console.log('check: no words cut or covered, rings clear of letters');
   }
   if (flag === '--map' && dir) {
     mkdirSync(dir, { recursive: true });
