@@ -105,7 +105,8 @@ is started in, which is Chief's prompt and the validator's reach.
 
 Media is never committed; it is in the private evidence folder (`data/evidence/ch-gr-c1-capture/` in the
 supervising firstmate home), beside `REPORT.md`, the HTTP transcripts, the delivered files, `validate-growth.txt`,
-`engine-model-lines.txt`, `geometry-doc-panel.txt` and the `~/.pi` hash lists.
+`engine-model-lines.txt`, `geometry-doc-panel.txt` and `pi-before.sha256` / `pi-after.sha256`. `pi-diff.txt` is
+committed here: it names the command that compared the two `~/.pi` hash lists and carries its empty result.
 
 | File | What it shows |
 | --- | --- |
