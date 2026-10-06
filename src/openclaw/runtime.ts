@@ -43,7 +43,7 @@ const SCHEMAS: Record<string, object> = {
       items: { type: 'object', additionalProperties: true }, minItems: 1 },
   }, required: ['name', 'blocks'], additionalProperties: false },
   crew_report: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'], additionalProperties: false },
-  crew_draft: { type: 'object', properties: { path: { type: 'string' }, channel: { type: 'string', enum: ['email', 'text', 'post', 'reply'] }, to: { type: 'string' }, subject: { type: 'string' }, why: { type: 'string' } }, required: ['path', 'channel', 'to'], additionalProperties: false },
+  crew_draft: { type: 'object', properties: { path: { type: 'string' }, channel: { type: 'string', enum: ['email', 'message', 'post'] }, to: { type: 'string' }, subject: { type: 'string' }, why: { type: 'string' } }, required: ['path', 'channel', 'to'], additionalProperties: false },
   crew_batch: { type: 'object', properties: { question: { type: 'string' }, items: { type: 'array', items: { type: 'string' } } }, required: ['question', 'items'], additionalProperties: false },
 };
 const ABOUT: Record<string, string> = {

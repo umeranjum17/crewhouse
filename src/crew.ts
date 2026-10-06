@@ -2022,19 +2022,19 @@ export class Crew {
           this.db.event('memory.learned', botId, { task: task(), text: change.added.slice(2, 202), ...(everyone ? { everyone } : {}), ...change });
         }),
       tool('crew_draft', 'Show ONE finished message for approval; nothing is sent. `path`: a file containing ONLY the message body, with its line breaks, no subject, headings, variants or planning notes. ' +
-        '`channel`: email, text, post (social), or reply (a site). `to`: the actual recipient name/address or site, NEVER a job title. `subject`: required for email, separate from the body. '
-        + '`why`: one short line saying why this one matters now, in the person\'s own words if you have them; it is kept on the receipt and nothing else — never put an address in it. '
+        '`channel`: what you really wrote, because the card says “wrote your …” in that word: `email`, `message` (a text, a chat, a reply on a site, words for a form) or `post` (ONE public post on their own social account, never a form or an inbox). `to`: the actual recipient name/address or site, NEVER a job title. `subject`: required for email, separate from the body; a post has none. '
+        + '`why`: the person\'s own line this draft answers, copied word for word from what you remember about them; leave it out when no line fits, because the card quotes them and drops anything else — never your note about the draft, and never an address. '
         + '`link`: the https page the person opens to paste or send these words. Whenever they name a page to open, paste into or send from, it belongs here and nowhere else: the card\'s yes then copies the words and opens that page for them.',
-        { path: Type.String(), channel: Type.Union(['email', 'text', 'post', 'reply'].map((x) => Type.Literal(x))), to: Type.String(), subject: Type.Optional(Type.String()), why: Type.Optional(Type.String()), link: Type.Optional(Type.String()) }, (p) => {
+        { path: Type.String(), channel: Type.Union(['email', 'message', 'post'].map((x) => Type.Literal(x))), to: Type.String(), subject: Type.Optional(Type.String()), why: Type.Optional(Type.String()), link: Type.Optional(Type.String()) }, (p) => {
           const full = disk.insideBot(this.cfg, botId, String(p.path ?? ''));
           if (!existsSync(full)) throw new Error(`no file at ${p.path}`);
-          const text = readFileSync(full, 'utf8').trim(), to = clean(p.to, 80), channel = String(p.channel), subject = clean(p.subject, 160), link = String(p.link ?? '').trim();
-          if (!to || !['email', 'text', 'post', 'reply'].includes(channel) || (channel === 'email' && !subject)) throw new Error('give the channel, recipient and email subject separately');
+          const text = readFileSync(full, 'utf8').trim(), to = clean(p.to, 80), channel = String(p.channel), subject = clean(p.subject, 160), link = String(p.link ?? '').trim(), said = clean(p.why, 160).toLowerCase(), mine = `${disk.readNotes(this.cfg, { bot: null })}\n${disk.readNotes(this.cfg, { bot: botId })}`.split('\n').map((l) => clean(l.replace(/^[-*]\s*/, ''), 160).toLowerCase()); // what the crew remembers the person saying
+          if (!to || !['email', 'message', 'post'].includes(channel) || (channel === 'email' && !subject) || (channel === 'post' && subject)) throw new Error('give the channel, recipient and subject apart: an email has a subject, a post has none and is one public post, and words for a form or a site are a message');
           if (link && (!/^https:\/\/\S+$/.test(link) || link.length > 500)) throw new Error('a draft link must be an https address of at most 500 characters');
           if (!text) throw new Error('the draft is empty');
           if (text.length > DRAFT_CAP) throw new Error(`the draft is over ${DRAFT_CAP} characters; shorten it`);
           return this.propose(botId, `${this.bot(botId)!.display} wrote your ${channel}.`,
-            { draft: { channel, to, subject, why: clean(p.why, 160), path: full.slice(disk.botDir(this.cfg, botId).length + 1), sha: sha(text), ...(link ? { link } : {}) }, preview: { body: text } });
+            { draft: { channel, to, subject, why: said && mine.includes(said) ? clean(p.why, 160) : '', path: full.slice(disk.botDir(this.cfg, botId).length + 1), sha: sha(text), ...(link ? { link } : {}) }, preview: { body: text } }); // the card quotes the person: only a line this helper remembers them saying survives
         }),
       tool('crew_verify', 'Have Crewhouse itself check a fix you propose to a git checkout in your folder: it applies only the check (`tests`, the ' +
         'paths in the patch that test the fix) to `base` and runs `command`, which must fail; then the whole patch, which must pass; it runs in a ' +

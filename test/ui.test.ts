@@ -229,7 +229,7 @@ test('draft cards keep the recipient, email subject and exact message separate a
     for (const [channel, to, subject, message] of [
       ['email', 'returns@shop.example', 'Order 98765 refund', 'Hello,\n\nPlease confirm my refund.\n\nThanks,\nUmer'],
       ['email', 'office@school.example', 'Friday trip', 'Hello,\n\nThe form is in the bag.\n\nThanks,\nUmer'],
-      ['text', 'Sara', '', 'Can we meet at 6?'],
+      ['message', 'Sara', '', 'Can we meet at 6?'],
       ['post', 'X', '', 'One small win today.\n\nThe seedlings are up. #garden'],
     ]) {
       const tool = (name: string, args: Json) => `[tool ${name} ${JSON.stringify(args)}]`;

@@ -29,13 +29,13 @@ test('Chief sees what each template knows, and a drafted reply waits on a card t
   const dir = join(disk.botDir(cfg, 'desk'), 'files', 'support', '208');
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, 'reply.md'), 'Thanks for the two-day log. Headless, Herdr reports idle, not done (apps/host/src/x.ts:12@abc).\n');
-  const draft = call('crew_draft', { path: 'files/support/208/reply.md', channel: 'reply', to: 'muxr issue #208' });
+  const draft = call('crew_draft', { path: 'files/support/208/reply.md', channel: 'message', to: 'muxr issue #208' });
   const card = () => db.get("SELECT * FROM asks WHERE bot = 'desk' AND kind = 'propose' AND state = 'open'");
   const t = (await crew.post('desk', `draft it ${draft}`))!.task;
   await settled(db, t);
   const view = crew.snapshot().asks.find((a: any) => a.id === card()!.id)!;
   assert.equal(view.detail.yes, 'Approve');
-  assert.match(view.detail.words, /^Desk wrote your reply/);
+  assert.match(view.detail.words, /^Desk wrote your message/);
   assert.match(view.detail.preview.body, /Herdr reports idle/);
   await crew.answer(card()!.id, { answer: 'deny' });
   assert.equal(events(db, 'draft.rejected')[0].to, 'muxr issue #208');
@@ -60,7 +60,7 @@ test('the person can change a draft before Approve: their words are the ones kep
   const card = () => db.get("SELECT * FROM asks WHERE bot = 'desk' AND kind = 'propose' AND state = 'open'");
   const draft = async (words: string) => {
     writeFileSync(file, words);
-    await settled(db, (await crew.post('desk', `draft it ${call('crew_draft', { path: 'files/reply.md', channel: 'text', to: 'the school office' })}`))!.task);
+    await settled(db, (await crew.post('desk', `draft it ${call('crew_draft', { path: 'files/reply.md', channel: 'message', to: 'the school office' })}`))!.task);
     return card()!.id;
   };
   let id = await draft('Hello, the form is in the bag.\n');
@@ -271,7 +271,7 @@ test('the validator checks a run against crewd\'s record: issues read, citations
   };
   const run = async (n: number, fetch: string) => {
     const f = (p: string) => call('crew_deliver', { path: `files/support/${n}/${p}` });
-    const t = (await crew.post('desk', `${fetch} ${f('triage.md')} ${f('reply.md')} ${call('crew_draft', { path: `files/support/${n}/reply.md`, channel: 'reply', to: `app issue #${n}` })}`))!.task;
+    const t = (await crew.post('desk', `${fetch} ${f('triage.md')} ${f('reply.md')} ${call('crew_draft', { path: `files/support/${n}/reply.md`, channel: 'message', to: `app issue #${n}` })}`))!.task;
     await settled(db, t);
     return t;
   };
