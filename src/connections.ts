@@ -7,7 +7,7 @@ import { osKeyringSeal, writeFileAtomic, type Keystore } from '@byokit/secrets/n
 import type { Config } from './config.ts';
 import { tool, type CrewTool } from './engine.ts';
 import { CALENDAR, calendarTool, events } from './calendar.ts';
-import { mailTool } from './mail.ts';
+import { mailTool, runMail } from './mail.ts';
 
 export { CALENDAR };
 export type App = Provider & { google?: boolean; warns?: boolean; tool?: (token: () => Promise<string | null>) => CrewTool };
@@ -18,12 +18,15 @@ export const APPS: Record<string, App> = {
   gmail: { ...providers.gmail, google: true, warns: true, tool: mailTool },
   notion: { ...providers.notion }, canva: { ...providers.canva },
 };
-export type Connecting = { state: 'waiting' | 'done' | 'failed'; url?: string; error?: string; why?: 'declined' | 'unticked'; step?: number };
+export type Connecting = { state: 'waiting' | 'done' | 'failed'; url?: string; error?: string; why?: 'declined' | 'unticked'; step?: number; proof?: string };
+/** The sign-in was taken but the app did not answer when it was used: our own words, not a kit code. */
+class Unusable extends Error {}
 export type Step = { state: 'checked' | 'said' | 'missing'; note: string };
 const CONNECT_MS = Number(process.env.CREWHOUSE_SIGNIN_MS || 15 * 60_000);
 
 /** Only typed kit diagnostics supply connection words; provider bodies and credentials never reach the screen. */
 export function connectError(name: string, error: unknown) {
+  if (error instanceof Unusable) return error.message;
   if (error instanceof ConnectError) {
     if (error.code === 'declined') return "No problem, nothing was connected. Tap Connect whenever you'd like to try again.";
     if (error.code === 'scope') return `${name} still isn't ticked. Tap Connect, then tick ${name} on the app's page.`;
@@ -74,6 +77,7 @@ export class Connections {
   readonly ready: Promise<void>;
   onChange?: (app: string) => void;
   onExpired?: (app: string) => void;
+  onProof?: (app: string, words: string) => void;
 
   constructor(cfg: Config, redirect: string) {
     this.redirect = redirect; this.store = deviceStore(cfg);
@@ -128,7 +132,7 @@ export class Connections {
   connected(id: string) { return this.active.has(id); }
   on() { return [...this.active]; }
   status(id: string) {
-    if (this.connected(id)) return { state: 'on' };
+    if (this.connected(id)) return { state: 'on', proof: this.view(id)?.proof };
     const v = this.view(id);
     if (!v) return { state: 'cancelled' };
     return { state: v.state === 'waiting' ? 'waiting' : v.why ?? (/too long|expired/.test(v.error ?? '') ? 'expired' : 'failed'), error: v.error, step: v.step };
@@ -178,13 +182,27 @@ export class Connections {
       await f.flow.finish(callback);
       if (this.views.get(f.app) !== f.view) return new ConnectError('declined').message;
       this.active.add(f.app);
-      Object.assign(f.view, { state: 'done', url: undefined, error: undefined });
       this.toolCache = undefined;
-      return `${a.name} is connected. You can go back to Crewhouse now.`;
+      const proof = await this.proof(f.app);
+      Object.assign(f.view, { state: 'done', url: undefined, error: undefined, proof });
+      this.onProof?.(f.app, `${a.name} is connected, and it works. ${proof}`);
+      return `${a.name} is connected, and it works. ${proof} You can go back to Crewhouse now.`;
     } catch (e) {
+      // A grant that saves and then fails at first use is not a connection: it leaves nothing behind to retry from.
+      this.active.delete(f.app); this.toolCache = undefined;
       Object.assign(f.view, { state: 'failed', url: undefined, why: e instanceof ConnectError ? e.code === 'scope' ? 'unticked' : e.code === 'declined' ? 'declined' : undefined : undefined, error: connectError(a.name, e) });
       return f.view.error!;
     } finally { f.flow.cancel(); this.flows.delete(state); this.onChange?.(f.app); }
+  }
+  /** The one real use that proves a connection: what the app answers right now. Nothing is called connected before this
+   *  has worked, so a sign-in that saves and then fails at first use is caught here, not in the helper's turn. */
+  async proof(id: string) {
+    const a = this.app(id), s = (n: number) => (n === 1 ? '' : 's'), bad = () => new Unusable(`${a.name} took the sign-in but didn't answer when we tried to use it, so nothing is connected. Try again in a moment.`);
+    if (id === 'calendar') { const day = await this.today().catch(() => null); if (!day) throw bad(); return `You have ${day.length} thing${s(day.length)} on today.`; }
+    if (id === 'gmail') { const n = /^unread: (\d+)/.exec(await runMail(() => this.token(id), ['inbox']).catch(() => ''))?.[1]; if (!n) throw bad(); return `You have ${n} unread in your inbox.`; }
+    const n = Object.values((await this.tools()).effects).filter((e) => e.app === a.name).length;
+    if (!n) throw bad();
+    return `Your helper can ask it for ${n} different thing${s(n)}.`;
   }
   private async sync(id: string) {
     if (await this.handle(id).connected() || !this.active.delete(id)) return;

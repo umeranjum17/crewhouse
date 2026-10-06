@@ -13,7 +13,7 @@ const { ConnectError } = await import('@byokit/connect');
 const grant = { expires: 3600, refresh: 'ok', refreshExpires: 3600 };
 
 
-const seen: { tokens: Record<string, string>[]; auth: string[] } = { tokens: [], auth: [] };
+const seen: { tokens: Record<string, string>[]; auth: string[]; silent?: boolean } = { tokens: [], auth: [] };
 const app = createServer(async (req, res) => {
   let body = '';
   for await (const c of req) body += c;
@@ -51,6 +51,7 @@ const app = createServer(async (req, res) => {
     const m = JSON.parse(body);
     if (m.id === undefined) { res.writeHead(202); return res.end(); }
     if (m.method === 'initialize') return json({ jsonrpc: '2.0', id: m.id, result: { protocolVersion: '2025-06-18', capabilities: { tools: {} }, serverInfo: { name: 'stand-in', version: '1' } } }, 200, { 'mcp-session-id': 's1' });
+    if (m.method === 'tools/list' && seen.silent) return json({ jsonrpc: '2.0', id: m.id, error: { code: -32000, message: 'nothing for you' } }, 500);
     if (m.method === 'tools/list' && m.params?.cursor === 'next') return json({ jsonrpc: '2.0', id: m.id, result: { tools: [{ name: 'rich', inputSchema: { type: 'object' }, annotations: { readOnlyHint: true } }] } });
     if (m.method === 'tools/list') return json({ jsonrpc: '2.0', id: m.id, result: { tools: [
       { name: 'search', description: 'Search pages', inputSchema: { type: 'object', properties: { q: { type: 'string' } } }, annotations: { readOnlyHint: true } },
@@ -60,6 +61,10 @@ const app = createServer(async (req, res) => {
     res.writeHead(200, { 'content-type': 'text/event-stream' });
     return res.end(`event: message\ndata: ${JSON.stringify({ jsonrpc: '2.0', id: m.id, result: { ...(m.params.name === 'rich' ? { structuredContent: { rows: [1, 2] }, isError: true } : {}), content: [{ type: 'text', text: `did ${m.params.name} ${JSON.stringify(m.params.arguments)}` }, ...(m.params.name === 'rich' ? [{ type: 'image', data: 'aGVsbG8=', mimeType: 'image/png' }] : [])] } })}\n\n`);
   }
+  // The apps crewd itself reads once a connection is made, stood in for as Google's own REST answers.
+  if (url.pathname === '/cal/calendars/primary/events') return json({ items: [{ id: 'ev1', summary: 'Swimming', start: { dateTime: new Date().toISOString() }, end: { dateTime: new Date(Date.now() + 3_600_000).toISOString() } }] });
+  if (url.pathname === '/gm/labels/INBOX') return json({ threadsUnread: 4 });
+  if (url.pathname === '/gm/threads') return json({ threads: [] });
   json({ error: 'not found' }, 404);
 });
 const google = { ticked: '', testing: false };
@@ -69,6 +74,10 @@ const SECRET = ['GOCSPX', 'abcdefghijklmnopqrstuvwxyz12'].join('-');
 await new Promise<void>((r) => app.listen(0, '127.0.0.1', () => r()));
 const base = `http://127.0.0.1:${(app.address() as any).port}`;
 after(() => app.close());
+
+// Google answers its own REST hosts; the stand-in answers them here, so a proved connection is a real read and not a stored grant.
+const realFetch = globalThis.fetch;
+globalThis.fetch = ((url: any, init: any) => realFetch(String(url).replace('https://www.googleapis.com/calendar/v3/', `${base}/cal/`).replace('https://gmail.googleapis.com/gmail/v1/users/me/', `${base}/gm/`), init)) as typeof fetch;
 
 function lab() {
   Object.assign(grant, { expires: 3600, refresh: 'ok', refreshExpires: 3600 });
@@ -94,7 +103,7 @@ test('connect: the app\'s own page, back to Crewhouse, connected; the tokens sta
   for (const k of ['client_id', 'state', 'code_challenge', 'redirect_uri']) assert.ok(url.searchParams.get(k), k);
   assert.equal(url.searchParams.get('code_challenge_method'), 'S256');
   assert.equal(url.searchParams.get('scope'), 'read write');
-  assert.equal(await back(crew, view.url!, { code: 'good' }), 'Mocknote is connected. You can go back to Crewhouse now.');
+  assert.equal(await back(crew, view.url!, { code: 'good' }), 'Mocknote is connected, and it works. Your helper can ask it for 3 different things. You can go back to Crewhouse now.');
   assert.equal(crew.connections.view('mocknote')!.state, 'done');
   const file = savedFiles(cfg)[0];
   assert.equal(statSync(file).mode & 0o777, 0o600);
@@ -165,7 +174,7 @@ test('connect failures: declined, a bad return, an old link, offline, too slow; 
   assert.match(await back(crew, first, { code: 'good' }), /expired/);
   assert.match(await back(crew, second, { code: 'good' }), /connected/);
   assert.equal((await crew.connections.connect('mocknote')).state, 'done', 'already on: nothing to open');
-  assert.deepEqual(crew.connections.status('mocknote'), { state: 'on' });
+  assert.deepEqual(crew.connections.status('mocknote'), { state: 'on', proof: 'Your helper can ask it for 3 different things.' });
   await crew.connections.cancel('mocknote');
   assert.deepEqual(crew.connections.status('mocknote'), { state: 'cancelled' }, 'closing the sheet on a finished one disconnects it');
   crew.connections.apps.offline = { id: 'offline', name: 'Offline', issuer: 'http://127.0.0.1:9' };
@@ -177,16 +186,25 @@ test('connect failures: declined, a bad return, an old link, offline, too slow; 
   assert.match(await back(crew, slow, { code: 'good' }), /expired/);
   await assert.rejects(crew.connections.connect('outlook'), /no such app/, 'Outlook is cut from v1');
   assert.equal(connectError('Canva', new ConnectError('network')), "Couldn't reach Canva. Check the internet connection, then tap Connect again.");
+  // The app takes the sign-in and then does not answer: that is not a connection, and the person is told the real cause.
+  seen.silent = true;
+  link = await start(crew);
+  assert.match(await back(crew, link, { code: 'good' }), /^Mocknote took the sign-in but didn't answer when we tried to use it, so nothing is connected\./);
+  assert.equal(crew.connections.connected('mocknote'), false, 'a grant that cannot be used leaves nothing behind');
+  assert.equal(crew.connections.status('mocknote').state, 'failed');
+  assert.match(crew.connections.status('mocknote').error!, /^Mocknote took the sign-in/);
+  seen.silent = false;
   done();
 });
 
 test('kit refresh stays sealed; transient failures preserve sign-in, expired tokens never return and revocation says so once', async () => {
   const { cfg, db, crew, done } = lab();
   crew.onboard('sir');
-  grant.expires = 30; grant.refreshExpires = 0;
+  grant.expires = 30; grant.refreshExpires = 30;
+  // Proving the connection is a real read of the app, so the first refresh is spent there and the grant starts at A2.
   await back(crew, await start(crew), { code: 'good' });
   grant.refresh = 'network';
-  assert.equal(await crew.connections.token('mocknote'), 'A1', 'unexpired token survives a transient failure');
+  assert.equal(await crew.connections.token('mocknote'), 'A2', 'unexpired token survives a transient failure');
   grant.refresh = 'ok';
   assert.equal(await crew.connections.token('mocknote'), 'A2');
   grant.refresh = 'server_error';
@@ -319,7 +337,7 @@ test("Google: one service per connection, only after its one-time setup; Google'
   // Ticked: connected, as Calendar only.
   url = new URL(await start(crew, 'calendar'));
   google.ticked = 'https://www.googleapis.com/auth/calendar.events';
-  assert.match(await back(crew, url.toString(), { code: 'good' }), /^Google Calendar is connected/);
+  assert.match(await back(crew, url.toString(), { code: 'good' }), /^Google Calendar is connected, and it works\. You have 1 thing on today\./);
   assert.deepEqual(crew.snapshot().connections, ['calendar']);
   assert.equal(crew.connections.connected('gmail'), false, 'Calendar is not Gmail');
   done();
@@ -339,6 +357,7 @@ test('in chat: a helper asks for an app, the person connects it from the card, a
   await settled(db, t);
   assert.equal(task(db, t).state, 'done');
   assert.ok(db.get("SELECT 1 FROM messages WHERE bot = 'quill' AND text = 'Mocknote is connected now. Quill carries on.'"));
+  assert.ok(db.get("SELECT 1 FROM messages WHERE bot = 'chief' AND text = 'Mocknote is connected, and it works. Your helper can ask it for 3 different things.'"), 'Chief says what the app actually answered');
   // Asked again while connected: nothing to ask.
   const u = crew.assign('quill', 'again [tool crew_connect {"app":"mocknote"}]', 'chief').task;
   await settled(db, u);

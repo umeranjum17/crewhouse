@@ -562,7 +562,6 @@ test('the digest reads today\'s calendar itself once Calendar is connected, and 
   const { db, crew, cfg, done } = setup();
   const { signInApp } = await import('./connect-fixture.ts');
   const { CALENDAR } = await import('../src/connections.ts');
-  await signInApp(crew.connections, 'calendar');
   const nine = new Date(); nine.setHours(9, 0, 0, 0);
   const real = globalThis.fetch;
   let asked = '';
@@ -571,6 +570,8 @@ test('the digest reads today\'s calendar itself once Calendar is connected, and 
     asked = `${url} ${init?.headers?.authorization}`;
     return new Response(JSON.stringify({ items: [{ summary: 'Dentist', start: { dateTime: nine.toISOString() } }, { summary: 'Eid', start: { date: '2026-09-25' } }, { summary: 'Gone', status: 'cancelled', start: {} }] }), { status: 200 });
   }) as typeof fetch;
+  // The connect is proved by a real read of the calendar, so it is signed in with the page answering.
+  await signInApp(crew.connections, 'calendar');
   try {
     const d = crew.routines().find((x) => x.kind === 'digest')!;
     crew.runRoutine(d.id);

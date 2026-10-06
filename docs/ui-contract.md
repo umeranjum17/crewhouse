@@ -106,7 +106,7 @@ A sign-in that fails ends as `signIn: {state: 'failed', error, why?}`: `why: 'de
 | Call | Returns |
 |---|---|
 | `POST /api/connections/:app` | `{url}` of the app's own sign-in page, or `{state: 'on'}` if already connected; 409 for a Google app before Google is set up; 404 for an app not in v1 |
-| `GET /api/connections/:app` | `{state: 'waiting' \| 'on' \| 'declined' \| 'unticked' \| 'expired' \| 'failed' \| 'cancelled', error?}`, polled |
+| `GET /api/connections/:app` | `{state: 'waiting' \| 'on' \| 'declined' \| 'unticked' \| 'expired' \| 'failed' \| 'cancelled', error?, proof?}`, polled. `proof` is the app's own answer to one real read at the moment it was connected ("You have 4 unread in your inbox."), and `state: 'on'` never arrives without it |
 | `DELETE /api/connections/:app` | Cancels a pending one, or disconnects |
 | `PUT /api/house/google` `{id, secret}` | From the computer: your Google app's client, once ([google-setup.md](google-setup.md)). Current raw backend (migration debt pending BYOKit OAuth/keystore/Google validation and API-probe contracts): checked with Google before it is kept: 400 with plain words for a swapped or mistyped paste, a key Google doesn't know, a secret that doesn't match, or a key that isn't a Desktop app; 502 if Google can't be reached |
 
