@@ -60,7 +60,7 @@ export function parseSchedule(text: string): Schedule {
   return { days: [...days].sort(), at: at ?? tod ?? 9 * 60, guessed: at === undefined && tod === undefined };
 }
 
-const hhmm = (at: number) => new Date(2000, 0, 1, Math.floor(at / 60), at % 60).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase();
+export const hhmm = (at: number) => new Date(2000, 0, 1, Math.floor(at / 60), at % 60).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase();
 
 /** The schedule back in plain words: "Every Monday at 9:00 am". */
 export function describe(s: Schedule) {
@@ -71,8 +71,6 @@ export function describe(s: Schedule) {
   return `${days} at ${hhmm(s.at)}`;
 }
 
-/** The time alone, in the same words as `describe`: "9:00 am". */
-export const timeOf = (s: Schedule) => ('every' in s ? '' : hhmm(s.at));
 
 /** The first run in words, naming its day unless it is today: "Thu 8:00 am", so it never reads as some other day. */
 export function firstRun(at: number, now = Date.now()) {

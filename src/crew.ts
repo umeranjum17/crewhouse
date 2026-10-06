@@ -15,7 +15,7 @@ import { allowed, proxy } from './net.ts';
 import type { Server } from 'node:net';
 import { acts, claimOf, coversOf, effectOf, orderOf, pressOf, toolWords, type Effect } from './policy.ts';
 import { axiEnv, registry, resolveGrants, toolBin, which } from './tools.ts';
-import { describe, describeTrigger, firstRun, nextRun, parseSchedule, parseTrigger, reminderAt, timeOf } from './routines.ts';
+import { describe, describeTrigger, firstRun, hhmm, nextRun, parseSchedule, parseTrigger, reminderAt } from './routines.ts';
 import { newThreads } from './mail.ts';
 import { buildWorkbook, readWorkbook } from './workbooks.ts';
 import { MAX_ITEMS, MAX_PARALLEL, subMessage, type BatchAnswer } from './batch.ts';
@@ -71,9 +71,6 @@ const STUCK_MS = Number(process.env.CREWHOUSE_STUCK_MS || 180_000); // working w
 /** A quiet check-in's reply when nothing needs the person, and how its run is recorded. */
 const ALL_CLEAR = 'ALL-CLEAR';
 const ALL_CLEAR_RESULT = 'All clear';
-/** Chief's mail watch: the model reads the new mail named in each run and says only what needs the person. */
-const MAIL_WATCH = 'Look at the new mail below with the mail tool and decide whether anything in it needs the person. Stay silent about newsletters, receipts, promos and anything that can wait. ' +
-  'If something needs them, say it in one short message: the fact; its date or deadline; what is not confirmed yet; one thing they can do; and one link to the source mail (the thread link given).';
 /** Events that make up a bot's plain "what I did" trail. */
 const TRAIL = ['task.created', 'task.working', 'task.done', 'task.failed', 'task.unsure', 'task.progress', 'run.tool', 'run.allowed',
   'ask.opened', 'ask.answered', 'ask.parked', 'file.delivered', 'memory.learned', 'memory.undone', 'bot.allowed', 'run.resumed',
@@ -704,7 +701,7 @@ export class Crew {
     const what = plan.watch ? `Keeps an eye on ${p.name?.trim() || host}` : `${plan.bot.display} will ${plan.first.charAt(0).toLowerCase()}${plan.first.slice(1)}`;
     const start = [plan.when ? describe(plan.when) : '', plan.on ? describeTrigger(parseTrigger(plan.on), plan.bot.display) : ''].filter(Boolean);
     // Words that never named a time: say so and ask, rather than let Crewhouse's own hour pass as the person's.
-    const ask = plan.when && 'guessed' in plan.when && plan.when.guessed ? [`Did you mean ${timeOf(plan.when)}?`] : [];
+    const ask = plan.when && 'guessed' in plan.when && plan.when.guessed ? [`Did you mean ${'every' in plan.when ? '' : hhmm(plan.when.at)}?`] : [];
     const lines = [...start, ...ask, what,
       plan.watch ? 'Tells you only when the page changes' : plan.quiet ? 'Tells you only when something changed' : 'Tells you each time it runs',
       ...(plan.when ? [`First time: ${firstRun(nextRun(plan.when, Date.now()))}`] : [])];
@@ -757,10 +754,12 @@ export class Crew {
   /** Fire every routine that is due, and notice files arriving for event-started chores: one query, no AI until
    *  something actually starts. A machine that slept through runs catches up once (latest only), then moves on. */
   schedule(now = Date.now()) {
-    // The mail watch: while Gmail is connected Chief keeps one quiet routine that notices new mail.
+    // The mail watch: while Gmail is connected Chief keeps one quiet routine; the model reads the new mail named in each run and says only what needs the person.
     if (this.connections.connected('gmail') && !this.db.get('SELECT 1 FROM routines WHERE mailwatch = 1'))
       this.db.run("INSERT INTO routines (bot, name, schedule, body, quiet, mailwatch, next_at, created_at, kind) VALUES (?, 'Mail watch', 'every 2 hours', ?, 1, 1, ?, ?, 'task')",
-        CHIEF, MAIL_WATCH, nextRun(parseSchedule('every 2 hours'), now), Date.now());
+        CHIEF, 'Look at the new mail below with the mail tool and decide whether anything in it needs the person. Stay silent about newsletters, receipts, promos and anything that can wait. ' +
+        'If something needs them, say it in one short message: the fact; its date or deadline; what is not confirmed yet; one thing they can do; and one link to the source mail (the thread link given).',
+        nextRun(parseSchedule('every 2 hours'), now), Date.now());
     for (const r of this.db.all("SELECT * FROM routines WHERE state = 'on' AND (next_at <= ? OR trigger IS NOT NULL)", now)) {
       if (r.trigger) { try { if ('file' in parseTrigger(r.trigger)) this.checkInbox(r); } catch (e) { console.error('trigger', r.id, e); } }
       if ((!r.schedule && r.kind === 'task') || r.next_at > now) continue; // trigger-only: no time; wake triggers fire from slept(); a once reminder or an ask carry their time in next_at
@@ -870,8 +869,7 @@ export class Crew {
       this.db.event('routine.fired', r.bot, { routine: r.id, name: r.name, why, watch, ...(task ? { task } : {}) });
     });
     try {
-      // The mail watch: threads newer than the cursor start one quiet Chief task; the model decides what
-      // matters and stays silent otherwise. The first look is the baseline, so old mail is never noticed.
+      // The mail watch: only threads newer than the cursor start one quiet task; the first look is the baseline.
       if (r.mailwatch) {
         if (!this.connections.connected('gmail')) return seen('signed-out');
         const after = Number(JSON.parse(r.cursor ?? 'null') ?? 0);
@@ -880,8 +878,7 @@ export class Crew {
         this.db.run('UPDATE routines SET cursor = ? WHERE id = ?', JSON.stringify(fresh.length ? Math.max(...fresh.map((m) => m.at)) : Date.now()), r.id);
         if (r.cursor == null || !fresh.length) return seen(r.cursor == null ? 'started' : 'same');
         const lines = fresh.map((m) => `• ${m.subject} — ${m.from} (https://mail.google.com/mail/u/0/#inbox/${m.id})`).join('\n');
-        const { task } = this.addTask(r.bot, `${r.body}\n\n[Crewhouse] New mail since the last check:\n${lines}`, 'routine', r.brain ?? undefined, r);
-        return seen('mail', task);
+        return seen('mail', this.addTask(r.bot, `${r.body}\n\n[Crewhouse] New mail since the last check:\n${lines}`, 'routine', r.brain ?? undefined, r).task);
       }
       let now: string;
       try { const page = await readPage(r.watch); if (page.status >= 400) throw new Error(String(page.status)); now = page.text.trim(); }
@@ -893,9 +890,8 @@ export class Crew {
       writeFileSync(file, now);
       if (before === null) return seen('started');
       if (before === now) return seen('same');
-      const { task } = this.addTask(r.bot, `${r.body}\n\n[Crewhouse] The page you watch (${r.watch}) changed since the last check.\n${changed(before, now)}`,
-        why === 'now' ? 'routine.now' : 'routine', r.brain ?? undefined, r);
-      seen('changed', task);
+      seen('changed', this.addTask(r.bot, `${r.body}\n\n[Crewhouse] The page you watch (${r.watch}) changed since the last check.\n${changed(before, now)}`,
+        why === 'now' ? 'routine.now' : 'routine', r.brain ?? undefined, r).task);
     } finally { this.checking.delete(r.id); }
   }
 

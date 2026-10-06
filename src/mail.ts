@@ -55,7 +55,6 @@ async function rows(token: Token, threads: { id: string }[]) {
   }));
 }
 
-/** Threads in the inbox newer than `after` (epoch ms), newest first: who, what and when. */
 export async function newThreads(token: Token, after: number, limit = 25) {
   const list = await get(token, `/threads?${new URLSearchParams({ q: 'in:inbox', maxResults: String(limit) })}`);
   return (await rows(token, list.threads ?? [])).filter((m) => m.at > after);
