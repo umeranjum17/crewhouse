@@ -5,12 +5,18 @@ import { spawnSync } from 'node:child_process';
 
 const prefix = 'crewhouse-test-';
 const rootPrefix = 'cw-test-'; // leave room for Unix socket paths beneath an on-disk TMPDIR
-for (const name of readdirSync(tmpdir()).filter((name) => name.startsWith(rootPrefix))) {
+// Chromium binds $TMPDIR/org.chromium.Chromium.XXXXXX/SingletonSocket, and a Unix socket path past the kernel's 108
+// bytes is a FATAL abort that kills every browser the suite starts. Our own tree spends the bytes below, so a deep
+// caller TMPDIR (a task scratch dir) cannot be the base however private it is: /tmp always has the room.
+const spent = `/${rootPrefix}${process.pid}-XXXXXX/tmp/org.chromium.Chromium.XXXXXX/SingletonSocket`.length;
+const base = tmpdir().length + spent < 108 ? tmpdir() : '/tmp';
+if (base !== tmpdir()) console.error(`TMPDIR ${tmpdir()} leaves no room for a browser's socket path: testing under ${base}`);
+for (const name of readdirSync(base).filter((name) => name.startsWith(rootPrefix))) {
   const pid = Number(name.slice(rootPrefix.length).split('-')[0]);
   if (!Number.isInteger(pid) || pid <= 0) continue;
-  try { process.kill(pid, 0); } catch (error) { if (error.code === 'ESRCH') rmSync(join(tmpdir(), name), { recursive: true, force: true }); }
+  try { process.kill(pid, 0); } catch (error) { if (error.code === 'ESRCH') rmSync(join(base, name), { recursive: true, force: true }); }
 }
-const root = mkdtempSync(join(tmpdir(), `${rootPrefix}${process.pid}-`));
+const root = mkdtempSync(join(base, `${rootPrefix}${process.pid}-`));
 mkdirSync(join(root, 'home'));
 mkdirSync(join(root, 'tmp'));
 const scratch = join(root, 'tmp');

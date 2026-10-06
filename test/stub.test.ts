@@ -20,7 +20,7 @@ const base = `http://127.0.0.1:${port}`;
 // Fixture writers share crewd's WAL file and its bounded SQLite contention handler.
 const openDb = () => new DatabaseSync(join(root, 'state', 'crew.db'), { timeout: 3000 });
 const startDaemon = () => spawn(process.execPath, [join(import.meta.dirname, '..', 'src', 'main.ts')], {
-  env: { ...process.env, CREWHOUSE_ENGINE: 'stub', CREWHOUSE_HOLD_MS: '5000', CREWHOUSE_PORT: String(port), CREWHOUSE_STATE_DIR: join(root, 'state'), CREWHOUSE_CREW_DIR: join(root, 'crew'), CREWHOUSE_TOOLS_DIR: join(root, 'tools') },
+  env: { ...process.env, CREWHOUSE_ENGINE: 'stub', CREWHOUSE_HOLD_MS: '5000', CREWHOUSE_PORT: String(port), CREWHOUSE_LINK_PORT: '0', CREWHOUSE_STATE_DIR: join(root, 'state'), CREWHOUSE_CREW_DIR: join(root, 'crew'), CREWHOUSE_TOOLS_DIR: join(root, 'tools') },
   stdio: ['ignore', 'pipe', 'inherit'],
 });
 let daemon = startDaemon();

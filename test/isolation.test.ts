@@ -93,7 +93,7 @@ const env = {
   PI_CODING_AGENT_DIR: join(pi, 'agent'), PI_PACKAGE_DIR: install, PI_SESSION_FILE: join(pi, 'agent', 'sessions', 'x.jsonl'), PI_PROVIDER: 'openai', PI_MODEL: 'gpt-5.5',
   PI_CODING_AGENT: 'true', AI_AGENT: 'pi', OPENAI_API_KEY: `${CANARY}-key`, XAI_API_KEY: `${CANARY}-xai`,
   XDG_CACHE_HOME: xdgCache, XDG_CONFIG_HOME: xdgConfig, npm_config_prefix: join(root, 'global-npm'),
-  CREWHOUSE_ENGINE: 'stub', CREWHOUSE_PORT: String(port), CREWHOUSE_STATE_DIR: state, CREWHOUSE_CREW_DIR: join(root, 'crew'), CREWHOUSE_TOOLS_DIR: tools,
+  CREWHOUSE_ENGINE: 'stub', CREWHOUSE_PORT: String(port), CREWHOUSE_LINK_PORT: '0', CREWHOUSE_STATE_DIR: state, CREWHOUSE_CREW_DIR: join(root, 'crew'), CREWHOUSE_TOOLS_DIR: tools,
   TRACE_ROOTS: owned.join(':'), TRACE_LOG: trace,
 };
 let daemon: ChildProcess;

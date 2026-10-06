@@ -36,7 +36,7 @@ test('crewd serves the shell with no-cache and an ETag, and hashed bundles as im
   if (!existsSync(join(repo, 'web', 'dist', 'index.html'))) assert.equal(build(repo + '/web').status, 0);
   const port = await new Promise<number>((r) => { const s = createServer().listen(0, '127.0.0.1', () => { const { port } = s.address() as AddressInfo; s.close(() => r(port)); }); });
   const root = temp('crewhouse-cache');
-  const env = { ...process.env, CREWHOUSE_ENGINE: 'stub', CREWHOUSE_PORT: String(port), CREWHOUSE_STATE_DIR: join(root, 'state'), CREWHOUSE_CREW_DIR: join(root, 'crew'), CREWHOUSE_TOOLS_DIR: join(root, 'tools') };
+  const env = { ...process.env, CREWHOUSE_ENGINE: 'stub', CREWHOUSE_PORT: String(port), CREWHOUSE_LINK_PORT: '0', CREWHOUSE_STATE_DIR: join(root, 'state'), CREWHOUSE_CREW_DIR: join(root, 'crew'), CREWHOUSE_TOOLS_DIR: join(root, 'tools') };
   const daemon: ChildProcess = spawn(process.execPath, [join(repo, 'src', 'main.ts')], { env, stdio: ['ignore', 'ignore', 'inherit'] });
   const base = `http://127.0.0.1:${port}`;
   try {
