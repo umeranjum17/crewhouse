@@ -3,7 +3,7 @@
 // to the person.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { pool, MAX_ITEMS, MAX_PARALLEL, subMessage } from '../src/batch.ts';
+import { MAX_ITEMS, subMessage } from '../src/batch.ts';
 import { setup, settled, task } from './lab.ts';
 
 const call = (tool: string, input: object) => `[tool ${tool} ${JSON.stringify(input)}]`;
@@ -115,19 +115,6 @@ test('an empty question or item list is a plain error, not a run of nothing', as
     assert.match(transcript(crew, `agent:m1:crewhouse:scout:${id}`), /error: (say the one question|list the items)/);
     assert.equal(specOf(crew, batchKey('scout', id, 0)), undefined, 'nothing ran');
   } finally { done(); }
-});
-
-test('the pool never runs more than eight at once and keeps input order', async () => {
-  let flying = 0, widest = 0;
-  const out = await pool([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], MAX_PARALLEL, async (n) => {
-    flying++;
-    widest = Math.max(widest, flying);
-    await new Promise((r) => setImmediate(r));
-    flying--;
-    return n * 2;
-  });
-  assert.deepEqual(out, [2, 4, 6, 8, 10, 12, 14, 16, 18, 20]);
-  assert.ok(widest <= MAX_PARALLEL && widest > 1, `widest wave was ${widest}`);
 });
 
 test('each item prompt carries its item, the shared question, and a sources line', () => {

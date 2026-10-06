@@ -72,9 +72,8 @@ const STUCK_MS = Number(process.env.CREWHOUSE_STUCK_MS || 180_000); // working w
 const ALL_CLEAR = 'ALL-CLEAR';
 const ALL_CLEAR_RESULT = 'All clear';
 /** Chief's mail watch: the model reads the new mail named in each run and says only what needs the person. */
-const MAIL_WATCH = 'Look at the new mail below with the mail tool and decide whether anything in it needs the person. ' +
-  'Stay silent about newsletters, receipts, promos and anything that can wait. If something needs them, say it in one short message: ' +
-  'the fact; its date or deadline; what is not confirmed yet; one thing they can do; and one link to the source mail (the thread link given).';
+const MAIL_WATCH = 'Look at the new mail below with the mail tool and decide whether anything in it needs the person. Stay silent about newsletters, receipts, promos and anything that can wait. ' +
+  'If something needs them, say it in one short message: the fact; its date or deadline; what is not confirmed yet; one thing they can do; and one link to the source mail (the thread link given).';
 /** Events that make up a bot's plain "what I did" trail. */
 const TRAIL = ['task.created', 'task.working', 'task.done', 'task.failed', 'task.unsure', 'task.progress', 'run.tool', 'run.allowed',
   'ask.opened', 'ask.answered', 'ask.parked', 'file.delivered', 'memory.learned', 'memory.undone', 'bot.allowed', 'run.resumed',

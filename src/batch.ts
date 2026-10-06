@@ -12,17 +12,3 @@ export function subMessage(question: string, item: string) {
     'Answer in a few short lines, each claim with its source. End with one line "Sources: ..." naming the pages you read.';
 }
 
-/** At most `n` workers at once; results land in input order even though finishes race. */
-export async function pool<T, R>(items: T[], n: number, fn: (item: T, i: number) => Promise<R>): Promise<R[]> {
-  const out = new Array<R>(items.length);
-  let next = 0;
-  const workers = Array.from({ length: Math.max(1, Math.min(n, items.length)) }, async () => {
-    for (;;) {
-      const i = next++;
-      if (i >= items.length) return;
-      out[i] = await fn(items[i], i);
-    }
-  });
-  await Promise.all(workers);
-  return out;
-}
