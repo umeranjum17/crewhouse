@@ -453,6 +453,15 @@ test('routines: Chief offers one as a card, the person starts it (or changes the
   assert.equal((await api('POST', `/api/asks/${again.id}/answer`, { answer: 'deny' })).status, 200);
   assert.equal((await api('GET', '/api/state')).body.routines.some((x: any) => x.name === 'Tidy the screenshots folder'), false);
 
+  // A quiet check-in the model wrote as the string "true": the card must still say it stays quiet, and the routine it
+  // makes must be quiet. Chief promises "you only hear when it changes" in the same breath, so a card reading the
+  // opposite — or an hourly helper speaking up on a flat day — is the person told two different things.
+  await done('chief', (await say('chief', `and ${call('crew_routine', { bot: 'reel', when: 'every 2 hours', task: 'Watch the shared folder for new photos', quiet: 'true' })}`)).body.task);
+  const hush = await until(async () => (await api('GET', '/api/state')).body.asks.find((a: any) => a.kind === 'propose' && a.detail.routine));
+  assert.ok(hush.detail.preview.body.split('\n').includes('Tells you only when something changed'), `a quiet watch must not be previewed as a noisy one: ${hush.detail.preview.body}`);
+  assert.equal((await api('POST', `/api/asks/${hush.id}/answer`, { answer: 'allow' })).status, 200);
+  assert.equal((await api('GET', '/api/state')).body.routines.find((x: any) => x.name === 'Watch the shared folder for new photos').quiet, 1, 'the routine the person approved is the quiet one they were shown');
+
   // Its time comes (moved into the past, as after a sleep): crewd's own clock fires it and Reel does the work.
   const routineDb = openDb();
   try { routineDb.prepare('UPDATE routines SET next_at = ? WHERE id = ?').run(Date.now() - 1000, r.id); } finally { routineDb.close(); }

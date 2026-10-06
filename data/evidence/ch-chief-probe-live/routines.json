@@ -1,0 +1,26 @@
+[
+ {
+  "id": 1,
+  "bot": "chief",
+  "name": "Morning digest",
+  "schedule": "every day 8:00",
+  "quiet": 0,
+  "watch": null
+ },
+ {
+  "id": 2,
+  "bot": "scout",
+  "name": "Kindle Paperwhite under £110",
+  "schedule": "hourly",
+  "quiet": 1,
+  "watch": null
+ },
+ {
+  "id": 3,
+  "bot": "scout",
+  "name": "XM5 price watch",
+  "schedule": "hourly",
+  "quiet": 0,
+  "watch": null
+ }
+]
