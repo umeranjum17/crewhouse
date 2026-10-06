@@ -270,15 +270,14 @@ export function ReviewCard({ f }: { f: FileView }) {
     setBusy(true);
     try { await api.again(bot, r.task); dispatchEvent(new HashChangeEvent('hashchange')); } finally { setBusy(false); }
   };
+  // What the check found, and which run counts, are already the thread's own line right above this card.
+  // The card says it once more would be twice: the verdict, when, and the way back.
   return <div className={`review ${r.ok ? 'ok' : 'bad'}`} role={r.ok ? undefined : 'alert'}>
     <b>{r.ok ? 'Its check passed' : 'Its check did not pass'}</b>
-    <span>{plainEnd(r.why)}</span>
-    {r.changed ? `An earlier check said the opposite, so this ${clock(r.when)} one counts.` : `Checked ${clock(r.when)}.`}
-    {r.runs > 1 && <span className="small mute">Checked {r.runs} times; the last one, at {clock(r.when)}, is the current one.</span>}
+    {`Checked ${clock(r.when)}.`}
     {!r.ok && <button className="btn go" disabled={busy} onClick={again}>{busy ? 'Starting again…' : 'Start it again'}</button>}
   </div>;
 }
-const plainEnd = (s: string) => `${s.replace(/[.!]$/, '')}.`;
 
 export function Media({ f, big }: { f: FileView; big?: boolean }) {
   const [play, setPlay] = useState(false);

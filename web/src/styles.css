@@ -286,7 +286,9 @@ video.media { width: auto; max-width: 100%; max-height: min(70vh, 640px); height
 .bubble { display: grid; justify-items: center; gap: 4px; font: 600 13.5px var(--ui); flex: none; }
 .bubble.dim { color: var(--mute); font-weight: 500; }
 .bubble .face { background: var(--solid) !important; }
-.dock { position: sticky; bottom: 0; padding: 18px 18px 12px; margin: 8px -18px 0; z-index: 3; background: color-mix(in srgb, var(--bg) 60%, transparent); mask-image: linear-gradient(transparent, #000 16px); }
+/* The fade at the top edge is the dock's only see-through part: at 60% the whole box read the card behind it,
+   so a line of someone else's words sat under the box you type in. */
+.dock { position: sticky; bottom: 0; padding: 18px 18px 12px; margin: 8px -18px 0; z-index: 3; background: color-mix(in srgb, var(--bg) 94%, transparent); mask-image: linear-gradient(transparent, #000 16px); }
 .home-room { isolation: isolate; margin-bottom: 16px; }
 .dock .chips { flex-wrap: nowrap; overflow-x: auto; margin: 0 0 8px; scrollbar-width: none; }
 .composer { display: flex; gap: 8px; align-items: flex-end; background: var(--solid); border: 1px solid var(--line); border-radius: 999px; padding: 7px 7px 7px 20px; box-shadow: var(--e1); min-height: 52px; transition: border-color 120ms var(--ease), box-shadow 160ms var(--ease); }
@@ -320,7 +322,8 @@ video.media { width: auto; max-width: 100%; max-height: min(70vh, 640px); height
 a.back:not([aria-label]) { font: 500 15px/20px var(--ui); padding: 0 8px; margin-bottom: 6px; justify-content: flex-start; }
 .chat { display: flex; flex-direction: column; min-height: calc(100dvh - 190px); }
 .chat > .dock { margin-left: -16px; margin-right: -16px; }
-.lines { flex: 1; display: flex; flex-direction: column; padding-bottom: 6px; }
+/* Room under the newest line so the box you type in never sits on a card. */
+.lines { flex: 1; display: flex; flex-direction: column; padding-bottom: 28px; }
 .line { max-width: 560px; margin-top: 20px; }
 .line.consecutive { margin-top: 12px; }
 .line-by { display: flex; gap: 8px; align-items: center; margin-bottom: 4px; }
@@ -469,7 +472,7 @@ input[role='switch']:focus-visible { outline: 2px solid var(--ink); outline-offs
   .chat-page .chat-head { min-height: 56px; max-width: 1072px; border-bottom: 1px solid var(--line); }
   .chat-page .back { display: none; }
   .chat-page .chat, .helper.chat-page .chat { min-height: 0; flex: 1; display: flex; flex-direction: column; }
-  .chat-page .lines { flex: 1; overflow-y: auto; min-height: 0; max-width: 720px; padding-bottom: 10px; }
+  .chat-page .lines { flex: 1; overflow-y: auto; min-height: 0; max-width: 720px; }
   .chat-page .dock { position: static; margin: 0; padding: 10px 0 18px; background: none; backdrop-filter: none; mask-image: none; max-width: 720px; }
   .working-on { display: block; width: 320px; }
 }

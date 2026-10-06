@@ -58,6 +58,12 @@ const STOPPED = 'Stopped by you.';
 /** How crewd starts the line for a job that acted but couldn't confirm it worked; the app shows it apart from the rest. */
 const UNSURE = 'Not sure it worked:';
 const MONEY_CAP = 20; // dollars a month, until the owner changes it
+/** One run of crewd's own check, in a person's words: the verdict, why it failed, and never a path. One run, one sentence. */
+const verdictWords = (d: Record<string, unknown>) => d.passed ? 'passed its own check'
+  : `did not pass its own check — ${d.missingDep ? 'the check could not run: something it needs is not installed'
+    : Number(d.after) === 0 ? 'the check passes here but never failed before the change, so nothing was proved'
+    : Number(d.before) === 0 ? 'the check passed before the change and fails after it: the change broke it'
+    : 'the same check still fails after the change'}`;
 /** Local calendar day and month: the share resets at midnight here, the money cap on the 1st. */
 const dayOf = (t = Date.now()) => new Date(t).toLocaleDateString('en-CA');
 const monthOf = (t = Date.now()) => dayOf(t).slice(0, 7);
@@ -1579,7 +1585,7 @@ export class Crew {
       // A fix it delivered counts only when crewd saw its check fail without it and pass with it (crew_verify).
       const unchecked = this.unchecked(task);
       if (unchecked || (said ? !said.worked : task.acted)) {
-        this.setTask(task, 'unsure', unchecked ? `I suggested a change (${unchecked}) for the maintainer to review, but it wasn't seen to fail before it and pass after it. Check it before you use it.`
+        this.setTask(task, 'unsure', unchecked ? `I suggested a change for the maintainer to review, and I haven't seen that it works, so this isn't done. Check it before you use it.`
           : said?.seen || `I did something on ${task.acted}, but I didn't see it confirmed. Worth checking there yourself.`);
         if (task.origin === CHIEF && !this.teamJob(task)) this.say(CHIEF, 'bot', `${b.display} isn't sure “${short(task.title, 60)}” worked. It's in ${b.display}'s chat.`, null);
         return;
@@ -2262,18 +2268,12 @@ export class Crew {
     const before = await run('base', tests), after = await run('fix', []);
     if (before.code === 97 || after.code === 97) throw new Error(`the patch doesn't apply to ${p.base}: ${(before.code === 97 ? before : after).tail}`);
     const missingDep = /Cannot find (?:package|module)|ERR_MODULE_NOT_FOUND/.test(before.tail), passed = before.code !== 0 && after.code === 0 && !missingDep; // red on a missing module proves nothing: a patch that deletes the import would pass it
-    const ev = this.db.event('verify.result', botId, { task, patch: patch.slice(space.length + 1), sha: sha(readFileSync(patch, 'utf8')), base: p.base, command: clean(p.command, 300), before: before.code, after: after.code, passed, ...(missingDep ? { missingDep } : {}) });
-    // A run that overturns an earlier one says so in the thread, so the newest word on a change is the current verdict.
-    const was = this.db.get("SELECT data FROM events WHERE kind = 'verify.result' AND bot = ? AND json_extract(data, '$.patch') = ? AND seq < ? ORDER BY seq DESC LIMIT 1", botId, ev.data.patch, ev.seq);
-    if (was && JSON.parse(String(was.data)).passed !== passed) this.say(botId, 'system', `Re-checked ${ev.data.patch}: ${passed ? 'it passes now' : 'it does not pass'}. This run is the current one.`, task ?? null);
+    const rel = patch.slice(space.length + 1);
+    const ev = this.db.event('verify.result', botId, { task, patch: rel, sha: sha(readFileSync(patch, 'utf8')), base: p.base, command: clean(p.command, 300), before: before.code, after: after.code, passed, ...(missingDep ? { missingDep } : {}) });
+    // One verdict line per check run, and one that overturns an older says so: the newest word is the current verdict.
+    const was = this.db.get("SELECT data FROM events WHERE kind = 'verify.result' AND bot = ? AND json_extract(data, '$.patch') = ? AND seq < ? ORDER BY seq DESC LIMIT 1", botId, rel, ev.seq);
+    this.say(botId, 'system', `The suggested change ${verdictWords(ev.data)}${was && JSON.parse(String(was.data)).passed !== passed ? '. An earlier check said otherwise; this run is the current one' : ''}.`, task ?? null);
     return { passed, missingDep, before: { exit: before.code, tail: before.tail }, after: { exit: after.code, tail: after.tail } };
-  }
-
-  /** What crewd's own check last said about a suggested change, as the file is now; '' when none ever ran on it. */
-  private verdict(botId: string, full: string) {
-    const v = this.db.get("SELECT data FROM events WHERE kind = 'verify.result' AND bot = ? AND json_extract(data, '$.sha') = ? ORDER BY seq DESC LIMIT 1", botId, sha(readFileSync(full, 'utf8'))); if (!v) return '';
-    const d = JSON.parse(String(v.data));
-    return d.passed ? ': passed its own check' : `: its own check did not pass — ${d.missingDep ? 'the check could not run: something it needs is not installed' : d.after === 0 ? 'the check passes here but never failed before the change, so nothing was proved' : d.before === 0 ? 'the check passed before the change and fails after it: the change broke it' : 'the same check still fails after the change'}`;
   }
 
   /** The person reopens a finished job from its review card: the same task and session, the check's own verdict in the handoff. */
@@ -2281,7 +2281,8 @@ export class Crew {
     const t = this.db.get('SELECT * FROM tasks WHERE id = ? AND bot = ?', id, botId);
     if (!t || !['done', 'failed', 'unsure'].includes(String(t.state))) throw Object.assign(new Error(t ? 'that job is still going' : 'no such job'), { status: t ? 409 : 404 });
     const v = this.db.get("SELECT data FROM events WHERE kind = 'verify.result' AND json_extract(data, '$.task') = ? ORDER BY seq DESC LIMIT 1", t.id); this.db.run('UPDATE tasks SET result = NULL WHERE id = ?', t.id);
-    this.handoffs.set(t.id, `The person asked you to start this again, because it ${v && JSON.parse(String(v.data)).passed ? 'passed' : 'did not pass'} its own check`);
+    // The handoff is handed to the helper and said into the person's thread alike: written for the person, never as an instruction to the helper.
+    this.handoffs.set(t.id, `You asked for this job to start again, and its own check ${v && JSON.parse(String(v.data)).passed ? 'passed' : 'did not pass'}`);
     this.setTask(t, 'queued'); this.dispatch();
     return { ok: true };
   }
@@ -2428,8 +2429,7 @@ export class Crew {
     const task = active?.id;
     if (task && this.db.get(`SELECT 1 FROM events WHERE kind = 'file.delivered' AND bot = ? AND json_extract(data, '$.task') = ? AND json_extract(data, '$.path') = ?`, botId, task, rel)) return { ok: true, already: true };
     this.db.event('file.delivered', botId, { task, path: rel, note: short(clean(note, 1000), 200), size: statSync(full).size });
-    // A patch is only ever a suggested change for the maintainer to review, and a check that did not pass is said out loud.
-    this.say(botId, 'system', /\.(patch|diff)$/.test(rel) ? `Delivered ${rel}: Suggested change (for the maintainer to review)${this.verdict(botId, full)}` : `Delivered ${rel}${note ? `: ${note}` : ''}`, task ?? null);
+    this.say(botId, 'system', /\.(patch|diff)$/.test(rel) ? `Delivered ${rel}: Suggested change (for the maintainer to review)` : `Delivered ${rel}${note ? `: ${note}` : ''}`, task ?? null);
     return { ok: true };
   }
 
