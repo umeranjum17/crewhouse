@@ -31,7 +31,6 @@ export interface AgentRuntime {
   run(spec: RunSpec, on: (event: RunEvent) => void): Promise<RunEnd>;
   steer(key: string, text: string): Promise<void>;
   abort(key: string): Promise<void>;
-  trail(key: string): Promise<{ tool: string; input: string; output: string; at: number }[]>;
   learned(): Promise<{ id: string; skill: string; at: number; state: string }[]>;
   forget(id: string, skill?: string): Promise<void>;
   /** The "Learn from how I work" switch: the engine's learning mode, auto or off. Optional: the stub may ignore it. */

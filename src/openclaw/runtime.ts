@@ -180,7 +180,6 @@ export class OpenClawRuntime implements AgentRuntime {
   }
   steer(key: string, text: string) { return this.kit.steer(key, text); }
   abort(key: string) { return this.kit.abort(key); }
-  async trail(_key: string) { return []; }
   /** The person's applied learned skills (the workshop's proposals, applied state last). */
   async learned() {
     const { agentId } = await this.kit.ensureMember(ME);

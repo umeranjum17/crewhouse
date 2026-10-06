@@ -26,7 +26,7 @@ export type Card = {
   /** One ask-card layout for every kind (§4.4): the kind changes only the status line under the helper's name,
    *  the evidence block and the button words. `evidence` picks the sunken block — a form's or a job's
    *  label-over-value lines, or a draft's to/subject/body — an order is a `review`, anything else a plain preview. */
-  status: string; evidence?: 'lines' | 'draft'; draftTo?: string; draftSubject?: string; draftWhy?: string;
+  status: string; evidence?: 'lines' | 'draft'; draftTo?: string; draftSubject?: string; draftLink?: string; draftWhy?: string;
   /** The person's own question for an OK or a spend: their task's title, with a question mark if it has no ending of its
    *  own. The tool's words (site, lines) stay on the review sheet. */
   question?: string;
@@ -662,8 +662,8 @@ export function card(a: Json, state: Json): Card {
     // would otherwise post or mail the marks themselves. A "#hashtag" a post opens with is not a heading.
     const body = String(d.preview?.body ?? '').replace(/^\s{0,3}(?:#{1,6}|>)[ \t]+/gm, '').trim();
     return { ...base, kind: 'ok', status: `Nothing is sent · ${channel === 'post' ? 'post' : 'send'} it yourself`, evidence: 'draft',
-      draftTo: plain(d.draft.to), draftSubject: plain(d.draft.subject) || undefined, draftText: body, draftWhy: plain(d.draft.why) || undefined, head, words: head, preview: { body },
-      choices: [{ label: 'Approve', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Reject', body: { answer: 'deny' } }] };
+      draftTo: plain(d.draft.to), draftSubject: plain(d.draft.subject) || undefined, draftLink: d.draft.link ? plain(d.draft.link) : undefined, draftText: body, draftWhy: plain(d.draft.why) || undefined, head, words: head, preview: { body },
+      choices: [{ label: d.draft.link ? 'Copy and open' : 'Copy', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Reject', body: { answer: 'deny' } }] };
   }
   // Chief's hire in a glance: who, the role, what it can do and the first job; nothing changes until the yes.
   if (a.kind === 'propose' && d.hire) return { ...base, kind: 'ok', status: d.adapt ? 'A new job' : 'A new helper', head: plain(d.words ?? a.title), words: plain(d.words ?? a.title),

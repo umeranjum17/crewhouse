@@ -97,7 +97,6 @@ export class StubRuntime implements AgentRuntime {
   }
   async steer(key: string, text: string) { this.steered.set(key, text); }
   async abort(key: string) { this.cancelled.add(key); this.release(key); }
-  async trail(_key: string) { return []; }
   async learned() { return []; }
   async forget(_id: string) {}
   private learningOn = true;
