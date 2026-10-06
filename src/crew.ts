@@ -16,6 +16,7 @@ import type { Server } from 'node:net';
 import { acts, claimOf, coversOf, effectOf, orderOf, pressOf, toolWords, type Effect } from './policy.ts';
 import { axiEnv, registry, resolveGrants, toolBin, which } from './tools.ts';
 import { describe, describeTrigger, firstRun, nextRun, parseSchedule, parseTrigger, reminderAt, timeOf } from './routines.ts';
+import { newThreads } from './mail.ts';
 import { buildWorkbook, readWorkbook } from './workbooks.ts';
 import { MAX_ITEMS, MAX_PARALLEL, subMessage, type BatchAnswer } from './batch.ts';
 import { buildDocument, readDocument } from './documents.ts';
@@ -70,6 +71,10 @@ const STUCK_MS = Number(process.env.CREWHOUSE_STUCK_MS || 180_000); // working w
 /** A quiet check-in's reply when nothing needs the person, and how its run is recorded. */
 const ALL_CLEAR = 'ALL-CLEAR';
 const ALL_CLEAR_RESULT = 'All clear';
+/** Chief's mail watch: the model reads the new mail named in each run and says only what needs the person. */
+const MAIL_WATCH = 'Look at the new mail below with the mail tool and decide whether anything in it needs the person. ' +
+  'Stay silent about newsletters, receipts, promos and anything that can wait. If something needs them, say it in one short message: ' +
+  'the fact; its date or deadline; what is not confirmed yet; one thing they can do; and one link to the source mail (the thread link given).';
 /** Events that make up a bot's plain "what I did" trail. */
 const TRAIL = ['task.created', 'task.working', 'task.done', 'task.failed', 'task.unsure', 'task.progress', 'run.tool', 'run.allowed',
   'ask.opened', 'ask.answered', 'ask.parked', 'file.delivered', 'memory.learned', 'memory.undone', 'bot.allowed', 'run.resumed',
@@ -753,6 +758,10 @@ export class Crew {
   /** Fire every routine that is due, and notice files arriving for event-started chores: one query, no AI until
    *  something actually starts. A machine that slept through runs catches up once (latest only), then moves on. */
   schedule(now = Date.now()) {
+    // The mail watch: while Gmail is connected Chief keeps one quiet routine that notices new mail.
+    if (this.connections.connected('gmail') && !this.db.get('SELECT 1 FROM routines WHERE mailwatch = 1'))
+      this.db.run("INSERT INTO routines (bot, name, schedule, body, quiet, mailwatch, next_at, created_at, kind) VALUES (?, 'Mail watch', 'every 2 hours', ?, 1, 1, ?, ?, 'task')",
+        CHIEF, MAIL_WATCH, nextRun(parseSchedule('every 2 hours'), now), Date.now());
     for (const r of this.db.all("SELECT * FROM routines WHERE state = 'on' AND (next_at <= ? OR trigger IS NOT NULL)", now)) {
       if (r.trigger) { try { if ('file' in parseTrigger(r.trigger)) this.checkInbox(r); } catch (e) { console.error('trigger', r.id, e); } }
       if ((!r.schedule && r.kind === 'task') || r.next_at > now) continue; // trigger-only: no time; wake triggers fire from slept(); a once reminder or an ask carry their time in next_at
@@ -823,7 +832,7 @@ export class Crew {
       this.db.event('routine.skipped', r.bot, { routine: r.id, name: r.name, why: 'overlap', task: r.last_task });
       return;
     }
-    if (r.watch) return this.check(r, why);
+    if (r.watch || r.mailwatch) return this.check(r, why);
     const { task } = this.addTask(r.bot, note ? `${r.body}\n\n[Crewhouse] ${note}` : r.body, why === 'now' ? 'routine.now' : 'routine', r.brain ?? undefined, r);
     this.db.tx(() => {
       this.db.run('UPDATE routines SET last_at = ?, last_task = ? WHERE id = ?', now, task, r.id);
@@ -862,6 +871,19 @@ export class Crew {
       this.db.event('routine.fired', r.bot, { routine: r.id, name: r.name, why, watch, ...(task ? { task } : {}) });
     });
     try {
+      // The mail watch: threads newer than the cursor start one quiet Chief task; the model decides what
+      // matters and stays silent otherwise. The first look is the baseline, so old mail is never noticed.
+      if (r.mailwatch) {
+        if (!this.connections.connected('gmail')) return seen('signed-out');
+        const after = Number(JSON.parse(r.cursor ?? 'null') ?? 0);
+        const fresh = await newThreads(() => this.connections.token('gmail'), after).catch(() => null);
+        if (!fresh) return seen('unreachable');
+        this.db.run('UPDATE routines SET cursor = ? WHERE id = ?', JSON.stringify(fresh.length ? Math.max(...fresh.map((m) => m.at)) : Date.now()), r.id);
+        if (r.cursor == null || !fresh.length) return seen(r.cursor == null ? 'started' : 'same');
+        const lines = fresh.map((m) => `• ${m.subject} — ${m.from} (https://mail.google.com/mail/u/0/#inbox/${m.id})`).join('\n');
+        const { task } = this.addTask(r.bot, `${r.body}\n\n[Crewhouse] New mail since the last check:\n${lines}`, 'routine', r.brain ?? undefined, r);
+        return seen('mail', task);
+      }
       let now: string;
       try { const page = await readPage(r.watch); if (page.status >= 400) throw new Error(String(page.status)); now = page.text.trim(); }
       catch { this.outage(r, true); return seen('unreachable'); }
@@ -1244,7 +1266,7 @@ export class Crew {
       .map((b) => `${b.display} (id ${b.id})`).join('; ') || 'nobody yet';
     const history = this.db.all("SELECT author, text FROM messages WHERE bot = ? AND id < (SELECT MIN(id) FROM messages WHERE task_id = ?) ORDER BY id DESC LIMIT 6", CHIEF, task.id)
       .reverse().map((m) => `${m.author === 'person' ? 'Person' : 'Chief'}: ${short(String(m.text).split('[tool ')[0], 300)}`).join('\n').slice(0, 1500);
-    return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}.\n${history ? `Earlier in this chat:\n${history}\n` : ''}The person says: ${task.body}`;
+    return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}.\n${history ? `Earlier in this chat:\n${history}\n` : ''}The person says: ${task.body}${quiet}`;
   }
 
   /** What the crew actually finished: titles and delivered files, for Chief's crew_status. */

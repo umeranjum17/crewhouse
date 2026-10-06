@@ -51,8 +51,14 @@ async function rows(token: Token, threads: { id: string }[]) {
   return Promise.all(threads.map(async ({ id }) => {
     const t = await get(token, `/threads/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject`);
     const m = t.messages?.at(-1);
-    return { id, from: header(m, 'From').slice(0, 60), subject: header(t.messages?.[0], 'Subject').slice(0, 100) || '(no subject)', age: ageOf(Number(m?.internalDate ?? 0)) };
+    return { id, from: header(m, 'From').slice(0, 60), subject: header(t.messages?.[0], 'Subject').slice(0, 100) || '(no subject)', age: ageOf(Number(m?.internalDate ?? 0)), at: Number(m?.internalDate ?? 0) };
   }));
+}
+
+/** Threads in the inbox newer than `after` (epoch ms), newest first: who, what and when. */
+export async function newThreads(token: Token, after: number, limit = 25) {
+  const list = await get(token, `/threads?${new URLSearchParams({ q: 'in:inbox', maxResults: String(limit) })}`);
+  return (await rows(token, list.threads ?? [])).filter((m) => m.at > after);
 }
 
 export async function runMail(token: Token, args: string[]): Promise<string> {
