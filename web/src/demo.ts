@@ -55,9 +55,9 @@ const bots = [
 if (firstRun || variant === 'connect') for (const b of bots) Object.assign(b, { task: b.id === 'pip' && variant === 'connect' ? task(45, 'pip', "What's on this week?", 'needs_you') : null, step: undefined });
 
 const asks = [
-  { id: 7, bot: 'scribe', task_id: 43, kind: 'propose', at: now - 3 * min, member: 1, title: 'Scribe wrote your text', detail: {
-    words: 'Scribe wrote your text.',
-    draft: { channel: 'text', to: 'Aunty Sara' }, yes: 'Approve',
+  { id: 7, bot: 'scribe', task_id: 43, kind: 'propose', at: now - 3 * min, member: 1, title: 'Scribe wrote your message', detail: {
+    words: 'Scribe wrote your message.',
+    draft: { channel: 'message', to: 'Aunty Sara' }, yes: 'Approve',
     preview: { head: 'Draft for Aunty Sara', body: "Dear Aunty Sara, thank you so much for the lovely dinner on Sunday. Mum hasn't stopped talking about your biryani, and neither have I. Next time, it's at ours! With love, Umer" },
   } },
   { id: 10, bot: 'scout', task_id: null, kind: 'propose', at: now - 4 * min, member: 1, title: 'Scout would like to remember how to do this: Plan the week’s dinners, with a shopping list', detail: {

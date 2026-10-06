@@ -91,7 +91,7 @@ test('model-visible crew tools tell the model the required arguments', () => {
   assert.match(document.description, /blocks/);
   const draft = tools.get('crew_draft')!;
   assert.deepEqual(draft.parameters.required, ['path', 'channel', 'to']);
-  assert.deepEqual(draft.parameters.properties.channel.enum, ['email', 'text', 'post', 'reply']);
+  assert.deepEqual(draft.parameters.properties.channel.enum, ['email', 'message', 'post']);
   assert.equal(draft.parameters.properties.subject.type, 'string');
 });
 
