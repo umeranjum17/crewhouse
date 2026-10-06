@@ -400,3 +400,21 @@ test('a finished file opens beside its chat: the composer stays clear of the pan
   const { composer, panel } = await b.run(edges);
   assert.ok(composer <= panel, `the composer ends at ${composer}px, left of the panel at ${panel}px`);
 });
+
+test('a routine\'s switch keeps its knob inside the track, clear of its On or Paused words, day and night, phone and computer, text at 1.3x', { skip: !bin && 'no Chromium here' }, async () => {
+  const b = await browse();
+  // The knob is a ::after, so its box comes from the computed style; translateX counts too (two switch rules once stacked both).
+  const gap = `(() => { const i = document.querySelector('.routine-switch input'); if (!i) return null; const w = i.nextElementSibling;
+    const k = getComputedStyle(i, '::after'), t = new DOMMatrix(k.transform === 'none' ? undefined : k.transform), r = i.getBoundingClientRect();
+    const knob = r.left + i.clientLeft + parseFloat(k.left) + t.e + parseFloat(k.width);
+    return { inTrack: r.right - knob, toWords: w.getBoundingClientRect().left - knob, words: w.textContent }; })()`;
+  for (const theme of ['day', 'night']) for (const [w, h, mobile] of [[390, 844, true], [1440, 900, false]] as const) for (const scale of [1, 1.3]) {
+    await b.send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile });
+    await b.open(`demo&${theme}#/routines`);
+    await until('the routine switch', () => b.run(gap), 30_000);
+    await b.run(`document.querySelectorAll('.routine-switch').forEach((s) => { s.style.fontSize = (parseFloat(getComputedStyle(s).fontSize) * ${scale}) + 'px'; }), 0`);
+    const g = await b.run(gap), at = `${theme} ${w} text ${scale}x`;
+    assert.ok(g.inTrack >= 0, `${at}: the knob ends ${-g.inTrack}px past its track`);
+    assert.ok(g.toWords > 0, `${at}: the knob covers "${g.words}" by ${-g.toWords}px`);
+  }
+});
