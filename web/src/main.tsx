@@ -739,7 +739,13 @@ function HelperPage(ctx: Ctx & { id: string; tab: string }) {
             await api.soul(id, String(ev.data.prev));
           } else await api.undoMemory(id, s.seq);
           void load();
-        }, 'Put back')} />
+        }, 'Put back')} onForget={(s) => attempt(async () => {
+          // The receipt's own reason, taken back from what this helper remembers: the next job reads notes afresh.
+          const i = A.memories(page.notes ?? '').findIndex((m) => m === s.forget);
+          if (i < 0) throw new Error('That line is not one of its own notes; add it under What it remembers to change it');
+          await api.notes(id, A.withoutMemory(page.notes ?? '', i));
+          void load();
+        }, 'Forgotten')} />
           : <div className="card empty">Nothing yet. Give {name} something to do.</div>}
       </> : null)}
       {tab === 'screen' && h && <Screen bot={{ ...page?.bot, ...b }} showing={A.showing(state, id)} refresh={() => { refresh(); void load(); }} />}

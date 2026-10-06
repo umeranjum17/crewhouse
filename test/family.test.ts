@@ -78,6 +78,37 @@ test('a reply to the school is a draft card: the yes approves it, nothing is sen
   done();
 });
 
+test('the receipt for an answered reply reads later: what, where, why, and that nothing was sent', async () => {
+  const { db, crew, done } = setup();
+  const { task: t } = (await crew.post('scout', 'The school wants the trip form back. Draft the reply on a card, with why it matters. '
+    + `[tool crew_write {"path":"files/reply-trip-form.md","content":"${reply}"}] `
+    + '[tool crew_draft {"path":"files/reply-trip-form.md","channel":"email","subject":"Ayaan’s trip form — Friday","to":"the school office","why":"Answer the school, not the shops"}] '
+    + '[tool crew_outcome {"worked": true, "seen": "The reply is a draft on your card."}]'))!;
+  await until('the draft card', () => db.get("SELECT * FROM asks WHERE bot = 'scout' AND kind = 'propose' AND state = 'open'"));
+  const ask = db.get("SELECT * FROM asks WHERE bot = 'scout' AND kind = 'propose' AND state = 'open'")!;
+  assert.equal(JSON.parse(ask.detail).draft.why, 'Answer the school, not the shops', 'the card carries the reason, so the person reads it before the yes');
+  // The person changes the words before the yes: their version is what the receipt quotes.
+  const mine = `${reply}\n\n(Friday is fine for me too.)`;
+  await crew.answer(ask.id, { answer: 'allow', text: mine });
+  await settled(db, t);
+  const got = JSON.parse(db.get("SELECT * FROM events WHERE kind = 'draft.approved' AND json_extract(data, '$.task') = ?", t)!.data);
+  assert.equal(got.to, 'the school office');
+  assert.equal(got.subject, 'Ayaan’s trip form — Friday');
+  assert.equal(got.why, 'Answer the school, not the shops');
+  assert.equal(got.edited, true, 'the receipt knows the person changed the words');
+  assert.match(got.body, /Friday is fine for me too/, 'the receipt carries their words, not the helper’s');
+  assert.ok(crew.botPage('scout').trail.some((e: any) => e.kind === 'draft.approved'), 'it is in the trail, so it is readable after the fact');
+  const { receipt } = await import('../web/src/adapter.ts');
+  const line = receipt('draft.approved', got);
+  assert.match(line, /school office/);
+  assert.match(line, /nothing was sent/);
+  assert.match(line, /because you said “Answer the school, not the shops”/);
+  assert.doesNotMatch(line, /files\/|\.md\b|claude|token/i, 'plain words a person can read weeks later');
+  assert.match(receipt('draft.rejected', got), /Didn't send that email/, 'a no is a receipt too');
+  assert.equal(db.get("SELECT COUNT(*) AS n FROM events WHERE kind = 'mail.sent'")!.n, 0, 'still nothing went out');
+  done();
+});
+
 const tripForm = `### Page state
 - Page URL: https://school.example/forms/trip
 - Page Snapshot:

@@ -104,17 +104,20 @@ const events = [
   ev(11, 3, 'ask.opened', 'scribe', { task: 43, kind: 'permission' }),
   ev(12, 2, 'task.progress', 'reel', { task: 41, text: 'Writing “Happy Birthday, Mum”' }),
   ev(13, 1, 'task.progress', 'scout', { task: 42, text: 'Comparing three airlines' }),
+  // A receipt from an answered reply, read days later: what, where, why, and that nothing was sent.
+  ev(14, 90, 'draft.approved', 'scout', { task: 39, channel: 'email', to: 'the school office', subject: 'Ayaan’s trip form — Friday',
+    why: 'Answer the school, not the shops', body: 'The signed trip form is in Ayaan’s bag this morning. He takes the packed-lunch option.', edited: true }),
 ];
 // ?demo=office: first looks on Reel's and Scout's desks. ?demo=calm: nothing on the go, so the room is idle.
 if (variant === 'office') {
-  events.push(ev(14, 1, 'file.delivered', 'reel', { task: 41, path: 'files/happy-birthday-first-cut.mp4' }),
-    ev(15, 1, 'file.delivered', 'scout', { task: 42, path: 'files/flights-to-lahore.xlsx' }));
+  events.push(ev(24, 1, 'file.delivered', 'reel', { task: 41, path: 'files/happy-birthday-first-cut.mp4' }),
+    ev(25, 1, 'file.delivered', 'scout', { task: 42, path: 'files/flights-to-lahore.xlsx' }));
 }
 if (variant === 'calm') for (const b of bots) Object.assign(b, { task: null, step: undefined });
 // ?demo=finished: the quiet just after Reel's video lands — nothing else on the go, so the state line stands alone.
 if (variant === 'finished') {
   for (const b of bots) Object.assign(b, { task: null, step: undefined });
-  events.push(ev(14, 1, 'task.done', 'reel', { task: 41, title: "Mum's birthday video", result: "A one-minute video for Mum, with the piano song and her title." }));
+  events.push(ev(24, 1, 'task.done', 'reel', { task: 41, title: "Mum's birthday video", result: "A one-minute video for Mum, with the piano song and her title." }));
 }
 // ?demo=crew1, crew5, crew12, crew30: the office at that many helpers. Scribe needs you at crew1;
 // larger crews add working helpers, questions and free desks.
@@ -185,7 +188,7 @@ const state = {
         preview: { head: 'What Scout will press on shop.example', body: 'Espresso machine — delivered 12 May\nReturns are free within 30 days. Starting a return books a collection and tells the shop to expect the item.\nStart return' } } }]
     : variant === 'chase' ? [{ id: 17, bot: 'scout', task_id: 48, kind: 'propose', at: now - 30_000, member: 1, title: 'Scout wrote your email.', detail: {
         words: 'Scout wrote your email.',
-        draft: { channel: 'email', subject: 'Order 98765 — returned 16 May, no refund yet', to: 'the shop’s support inbox', path: 'files/chase-order-98765.md', sha: 'demo' }, yes: 'Approve',
+        draft: { channel: 'email', subject: 'Order 98765 — returned 16 May, no refund yet', to: 'the shop’s support inbox', why: 'Money back first', path: 'files/chase-order-98765.md', sha: 'demo' }, yes: 'Approve',
         preview: { head: 'Draft for the shop’s support inbox', body: 'Hello, my return reached you on 16 May, inside your own 30-day window. The order page still shows no refund.\n\nPlease confirm when the refund goes back to my card. Regards,\nUmer' } } }]
     : variant === 'renewal' ? [{ id: 18, bot: 'scout', task_id: 49, kind: 'propose', at: now - 30_000, member: 1, title: 'Scout wrote your email.', detail: {
         words: 'Scout wrote your email.',
