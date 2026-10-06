@@ -1,7 +1,7 @@
-import { mkdtempSync, readdirSync, rmSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 
 const prefix = 'crewhouse-test-';
 const rootPrefix = 'cw-test-'; // leave room for Unix socket paths beneath an on-disk TMPDIR
@@ -29,14 +29,48 @@ const before = new Set(readdirSync(scratch));
 const cleanup = () => rmSync(root, { recursive: true, force: true });
 for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => { cleanup(); process.kill(process.pid, signal); });
 const files = readdirSync('test').filter((name) => name.endsWith('.test.ts')).map((name) => join('test', name));
-// Serial files: the engine tests each spawn a real gateway; parallel runs starve them past their timeouts.
+// Serial files: a file that builds a real gateway (`new OpenClawRuntime`) starves past its timeouts when it
+// overlaps another gateway boot, so those files run one at a time. Everything else only needs its own process
+// (OS-assigned ports, per-process temp dirs) and runs alongside, three at a time on the runner's four cores.
 // Ubuntu CI bounds each file's whole process group: 295 seconds plus five to stop its children.
 const bounded = process.env.CI === 'true' && process.platform === 'linux';
-const results = (bounded ? files.map((file) => [file]) : [files]).map((group) => spawnSync(
-  bounded ? 'timeout' : process.execPath,
-  [...(bounded ? ['--kill-after=5s', '295s', process.execPath] : []), '--test', '--test-concurrency=1', ...group],
-  { stdio: 'inherit', env },
-));
+const LIGHT_CONCURRENCY = 3;
+const isGateway = (file) => readFileSync(file, 'utf8').includes('new OpenClawRuntime');
+const runOne = (file) => new Promise((resolve) => {
+  const t0 = Date.now();
+  const child = spawn(bounded ? 'timeout' : process.execPath,
+    [...(bounded ? ['--kill-after=5s', '295s', process.execPath] : []), '--test', '--test-concurrency=1', file],
+    { env });
+  let out = '';
+  child.stdout.on('data', (d) => { out += d; });
+  child.stderr.on('data', (d) => { out += d; });
+  child.on('error', (error) => resolve({ file, status: 1, secs: (Date.now() - t0) / 1000, out: `${out}${String(error)}\n` }));
+  child.on('close', (status) => resolve({ file, status: status ?? 1, secs: (Date.now() - t0) / 1000, out }));
+});
+const timed = async (file) => {
+  const r = await runOne(file);
+  results.push(r);
+  console.log(`### done ${file} (${r.secs.toFixed(1)}s, exit ${r.status})\n${r.out}`);
+};
+const results = [];
+if (!bounded) {
+  results.push(spawnSync(process.execPath, ['--test', '--test-concurrency=1', ...files], { stdio: 'inherit', env }));
+} else {
+  const serial = files.filter(isGateway);
+  const pool = files.filter((file) => !isGateway(file));
+  console.log(`### lanes: serial gateway [${serial.join(', ')}], ${pool.length} files across ${LIGHT_CONCURRENCY} parallel lanes`);
+  const serialRun = (async () => { for (const file of serial) await timed(file); })();
+  const lightRun = Promise.all(Array.from({ length: LIGHT_CONCURRENCY }, async () => {
+    for (;;) {
+      const file = pool.shift();
+      if (!file) return;
+      await timed(file);
+    }
+  }));
+  await Promise.all([serialRun, lightRun]);
+  console.log('### per-file wall time (slowest first):');
+  for (const r of [...results].sort((a, b) => b.secs - a.secs)) console.log(`###   ${r.secs.toFixed(1)}s exit=${r.status} ${r.file}`);
+}
 const leaked = readdirSync(scratch).filter((name) => name.startsWith(prefix) && !before.has(name));
 cleanup();
 if (leaked.length) { console.error(`Test scratch leaked from ${scratch}:\n${leaked.map((name) => `  ${join(scratch, name)}`).join('\n')}`); process.exitCode = 1; }
