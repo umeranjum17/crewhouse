@@ -1,6 +1,6 @@
 {
   "display": "Reel",
-  "role": "Makes demo videos from screenshots",
+  "role": "Makes demo videos and store screenshots",
   "models": [
     "chatgpt"
   ],
@@ -18,6 +18,7 @@
   ],
   "skills": [
     "make-reel",
+    "make-store-shots",
     "use-the-browser"
   ],
   "ideas": [

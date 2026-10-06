@@ -22,7 +22,7 @@ test('Chief sees what each template knows, and a drafted reply waits on a card t
   crew.onboard('sir');
   const { task: r } = (await crew.post('chief', `who can help ${call('crew_roster', {})}`))!;
   await settled(db, r);
-  assert.match(db.get("SELECT text FROM messages WHERE bot = 'chief' AND author = 'bot' ORDER BY id DESC")!.text, /"id":"reel","name":"Reel","role":"[^"]+","knows":\["make-reel","use-the-browser"\]/);
+  assert.match(db.get("SELECT text FROM messages WHERE bot = 'chief' AND author = 'bot' ORDER BY id DESC")!.text, /"id":"reel","name":"Reel","role":"[^"]+","knows":\["make-reel","make-store-shots","use-the-browser"\]/);
 
   assert.deepEqual(disk.loadTemplate(cfg, 'support').skills, ['triage-issue', 'sandbox-patch']);
   crew.recruit('support', 'Desk', 'person');

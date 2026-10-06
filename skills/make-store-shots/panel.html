@@ -1,0 +1,98 @@
+<!doctype html>
+<!-- One store panel, drawn from panels.js beside it: panel.html#1 is PANELS[0]. Shot with shoot.mjs at 1290x2796. -->
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  @font-face { font-family: Headline; src: url(fonts/headline.ttf); }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { width: 430px; height: 932px; overflow: hidden; }
+  body { position: relative; background: var(--bg); color: var(--ink); font-family: Inter, system-ui, sans-serif; }
+  .blob { position: absolute; border-radius: 48% 52% 44% 56% / 52% 46% 54% 48%; background: var(--deep); }
+  h1 { position: relative; z-index: 3; font: 400 62px/0.98 Headline, 'Noto Serif', Georgia, serif; letter-spacing: -0.02em;
+    -webkit-text-stroke: 0.8px currentColor; text-align: center; padding: 64px 28px 0; text-wrap: balance; }
+  h1 .mark { position: relative; white-space: nowrap; }
+  h1 .mark svg { position: absolute; inset: -16% -10% -4% -12%; width: 122%; height: 124%; overflow: visible; }
+  .note { position: absolute; z-index: 3; font: italic 400 26px/1.1 Headline, 'Noto Serif', Georgia, serif; }
+  .phone { position: absolute; z-index: 1; left: 50%; width: 388px; margin-left: -194px; border-radius: 58px;
+    background: #141A2A; padding: 10px; box-shadow: 0 30px 60px -20px rgba(20, 26, 42, 0.35); }
+  .screen { width: 100%; height: 100%; border-radius: 48px; background-repeat: no-repeat; background-color: #fff; }
+  .lift { position: absolute; z-index: 2; border-radius: 18px; background-repeat: no-repeat; background-color: #fff;
+    box-shadow: 0 18px 36px -10px rgba(20, 26, 42, 0.30), 0 0 0 1.5px rgba(20, 26, 42, 0.08); }
+  .pal { position: absolute; z-index: 4; filter: drop-shadow(0 10px 14px rgba(20, 26, 42, 0.18)); }
+  .say { position: absolute; z-index: 5; background: #fff; border: 2.5px solid var(--ink); border-radius: 26px; padding: 12px 18px;
+    font: 400 24px/1.1 Headline, 'Noto Serif', Georgia, serif; max-width: 220px; text-align: center; }
+  .say::after { content: ''; position: absolute; bottom: -12px; width: 20px; height: 20px; background: #fff; border: 2.5px solid var(--ink);
+    border-top: 0; border-left: 0; transform: rotate(45deg); left: 34px; }
+  .say.right::after { left: auto; right: 34px; }
+  .doodle { position: absolute; z-index: 2; overflow: visible; }
+  .doodle path, .mark path { fill: none; stroke: var(--ink); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+  .mark path { stroke: var(--accent); stroke-width: 3.4; }
+</style>
+<script src="panels.js"></script>
+<body>
+<script>
+  const P = (window.PANELS || [])[Number(location.hash.slice(1) || 1) - 1];
+  if (!P) throw document.body.textContent = 'No such panel in panels.js';
+  const SHOT_W = 1290;
+  const el = (tag, cls, css = {}, html = '') => {
+    const e = Object.assign(document.createElement(tag), { className: cls, innerHTML: html });
+    for (const [k, v] of Object.entries(css)) e.style.setProperty(k.replace(/[A-Z]/g, (m) => '-' + m.toLowerCase()), v);
+    return document.body.appendChild(e);
+  };
+  const root = document.documentElement.style;
+  root.setProperty('--bg', P.bg || '#EFE9FF'); root.setProperty('--deep', P.deep || 'rgba(255,255,255,0.45)');
+  root.setProperty('--ink', P.ink || '#141A2A'); root.setProperty('--accent', P.accent || '#F0482A');
+  // A hand-drawn ring round a *word*, a hand-drawn stroke under an _underlined_ one.
+  const ring = '<svg viewBox="0 0 100 50" preserveAspectRatio="none"><path d="M60 4C30 1 4 9 3 26c-1 17 30 22 56 20 25-2 40-10 38-24C95 8 70 3 40 6"/></svg>';
+  const under = '<svg viewBox="0 0 100 50" preserveAspectRatio="none"><path d="M4 46c25-5 60-6 92-2"/></svg>';
+  const words = String(P.title || '').replace(/[<>&]/g, '').replace(/\*([^*]+)\*/g, `<span class="mark">$1${ring}</span>`).replace(/_([^_]+)_/g, `<span class="mark">$1${under}</span>`);
+  // A real card cut from the shot: its box in the shot's pixels, drawn `w` wide at (left, top).
+  const lift = (shot, c, left, top, w, turn = 0) => {
+    const k = w / c.w;
+    return el('div', 'lift', { left: `${left}px`, top: `${top}px`, width: `${w}px`, height: `${c.h * k}px`, backgroundImage: `url("${shot}")`,
+      backgroundSize: `${SHOT_W * k}px auto`, backgroundPosition: `${-c.x * k}px ${-c.y * k}px`, transform: `rotate(${turn}deg)` });
+  };
+  const pal = (src, css) => src && el('img', 'pal', css).setAttribute('src', src);
+  const say = (text, css, side = '') => text && el('div', `say ${side}`, css, String(text).replace(/[<>&]/g, ''));
+  const doodle = (d, css) => el('div', 'doodle', css, `<svg viewBox="0 0 100 100" width="100%" height="100%"><path d="${d}"/></svg>`);
+
+  if (P.layout === 'hero') {
+    el('div', 'blob', { width: '520px', height: '520px', right: '-170px', bottom: '-60px' });
+    el('h1', '', { textAlign: 'left', fontSize: '74px', paddingTop: '76px' }, words);
+    // The checklist doodle of a head being cleared: ticked, ticked, still open.
+    doodle('M8 12h14v14H8zM12 19l4 4 9-12M8 46h14v14H8zM12 53l4 4 9-12M8 80h14v14H8z', { left: '30px', top: '380px', width: '110px', height: '110px' });
+    doodle('M40 18c12-2 30-2 46 0M40 52c14-2 26-2 36 0M40 86c10-1 22-1 30 0', { left: '30px', top: '380px', width: '110px', height: '110px' });
+    pal(P.art, { right: '-6px', bottom: '64px', height: '480px' });
+    (P.crew || []).slice(0, 3).forEach((src, i) => pal(src, { left: `${22 + i * 64}px`, bottom: `${40 + (i % 2) * 18}px`, height: '96px' }));
+    if (P.note) el('div', 'note', { right: '30px', bottom: '28px' }, String(P.note).replace(/[<>&]/g, ''));
+    doodle('M10 50l10-10M30 30l4-14M44 44l14-4', { right: '250px', top: '520px', width: '60px', height: '60px' });
+  } else if (P.layout === 'cards') {
+    el('div', 'blob', { width: '560px', height: '640px', left: '-60px', top: '250px' });
+    el('h1', '', {}, words);
+    let top = 270;
+    (P.lift || []).slice(0, 4).forEach((c, i) => {
+      const w = 372, card = lift(P.shot, c, 29 + (i % 2 ? 10 : -8), top, w, i % 2 ? 1.6 : -1.4);
+      top += c.h * (w / c.w) + 22;
+    });
+    say(P.say, { right: '96px', bottom: '186px' }, 'right');
+    pal(P.art, { right: '18px', bottom: '22px', height: '170px' });
+  } else {
+    el('div', 'blob', { width: '600px', height: '560px', left: '-85px', top: '330px' });
+    const head = el('h1', '', {}, words);
+    // The phone starts under the headline and runs off the bottom. Its screen scrolls to the first lifted card (a sixth of
+    // the way down the glass), never past the end of the shot.
+    const phoneTop = Math.round(head.getBoundingClientRect().bottom + 24), inner = 368, k = inner / SHOT_W, glass = 932 - phoneTop - 10;
+    const first = (P.lift || [])[0], top = first ? Math.max(0, Math.min(first.y - glass * 0.16 / k, 2796 - glass / k)) : 0, screenTop = phoneTop + 10;
+    const phone = el('div', 'phone', { top: `${phoneTop}px`, height: `${932 - phoneTop + 60}px` });
+    const screen = phone.appendChild(document.createElement('div'));
+    Object.assign(screen, { className: 'screen' }).style.cssText = `background-image:url("${P.shot}");background-size:${inner}px auto;background-position:0 ${-top * k}px`;
+    // Each lifted card sits where it is on the screen, grown and pushed out past the frame's edge.
+    const low = Math.max(0, ...(P.lift || []).slice(0, 2).map((c, i) => {
+      const w = Math.min(414, c.w * k * 1.14), left = i % 2 ? 430 - w - 4 : 4;
+      return lift(P.shot, c, left, screenTop + (c.y - top) * k - 8, w, i % 2 ? 1.2 : -1.2).getBoundingClientRect().bottom;
+    }));
+    // The mascot peeks in below the cards; its words only where they cover none of them.
+    if (low < 932 - 230) say(P.say, { right: '22px', bottom: '150px' }, 'right');
+    pal(P.art, { right: '14px', bottom: '-10px', height: low < 932 - 230 ? '150px' : '120px' });
+  }
+</script>
+</body>
