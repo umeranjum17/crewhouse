@@ -29,7 +29,8 @@ jobs:
       # Private desktops, capture libraries and the sandboxed shell; cookie isolation must run, not skip.
       - run: sudo apt-get update -qq && sudo apt-get install -y -qq xvfb bubblewrap libpipewire-0.3-0t64 libxkbcommon0 libevdev2 libxcursor1 libx11-6 libwayland-client0 libstdc++6 && sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - run: node scripts/prepare-engine.mjs "$RUNNER_TEMP/engine-prepare"
-      - run: npm audit signatures --prefix runtime/openclaw
+      # Since kit 0.6.2 the engine installs as a verified read-only set; audit the installed set, not the engine dir.
+      - run: npm audit signatures --prefix "$(cat "$RUNNER_TEMP/engine-prepare/openclaw/engine-set")"
       - run: npm run check
       - run: npm run build:web
       - run: npm test # stub runner only: no Herdr, no CLI, no model calls

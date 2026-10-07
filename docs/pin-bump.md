@@ -1,6 +1,6 @@
 # Bumping the engine pin
 
-The kit installs and supervises its own pinned copy of OpenClaw under `runtime/openclaw` (the kit's `engineDir`).
+The kit installs and supervises its own pinned copy of OpenClaw as a verified read-only set under `runtime/openclaw.sets/` (keyed by the kit's `engineDir`, `runtime/openclaw`).
 There is no committed mirror of the engine in this repo, and the kit's published `engine/` pin is authoritative.
 
 **Never run `openclaw update`.** It would mutate the copy the kit asserts. The upgrade path is three hops:

@@ -40,7 +40,9 @@ const bundledEnv = { ...process.env, PATH: `${join(opt, 'node', 'bin')}:${proces
 sh(join(opt, 'node', 'bin', 'npm'), ['ci', '--omit=dev', '--no-audit', '--no-fund'], { cwd: app, env: bundledEnv });
 const engineState = join(stage, 'engine-prepare');
 sh(join(opt, 'node', 'bin', 'node'), ['scripts/prepare-engine.mjs', engineState], { cwd: app, env: bundledEnv });
-sh(join(opt, 'node', 'bin', 'npm'), ['audit', 'signatures', '--prefix', 'runtime/openclaw'], { cwd: app, env: bundledEnv });
+// Since kit 0.6.2 the engine installs as a verified read-only set; audit the installed set, not the engine dir.
+const engineSet = readFileSync(join(engineState, 'openclaw', 'engine-set'), 'utf8').trim();
+sh(join(opt, 'node', 'bin', 'npm'), ['audit', 'signatures', '--prefix', engineSet], { cwd: app, env: bundledEnv });
 // The kit locks its engine folders to 0700 for the build user; dpkg unpacks them root-owned, and crewd runs as the
 // person, who then cannot read the engine it was given. Everyone reads it; only crewd's own state stays private.
 sh('chmod', ['-R', 'a+rX', join(app, 'runtime')]);
