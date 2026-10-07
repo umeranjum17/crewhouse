@@ -23,7 +23,7 @@ export const type = {
   rowTitle: [15, 22, 500], small: [13, 18, 400], label: [12, 16, 500], micro: [11, 14, 500],
 } as const;
 export const motion = { fast: 120, base: 200, slow: 280, exit: 160 };
-export const font = { ui: "'Inter', system-ui, sans-serif", serif: "'Instrument Serif', Georgia, serif", art: "'JetBrains Mono', ui-monospace, monospace" };
+export const font = { ui: "'Inter', system-ui, sans-serif", serif: "'Inter', system-ui, sans-serif", art: "'JetBrains Mono', ui-monospace, monospace" };
 /** The office room's flat colours (web/src/office.tsx, mobile/src/office.tsx): one room, day and night. */
 export const room = {
   // B1: a paper room drawn in one ink line (desks, sofa and monitor are white or pastel with an ink edge, a night window).

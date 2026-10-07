@@ -79,7 +79,7 @@ function Toast() {
 
 export default function App() {
   const t = look(useColorScheme() === 'dark');
-  const [fontsReady, fontError] = useFonts({ Inter: require('./assets/fonts/InterVariable.ttf'), 'Instrument Serif': require('./assets/fonts/InstrumentSerif-Regular.ttf') });
+  const [fontsReady, fontError] = useFonts({ Inter: require('./assets/fonts/InterVariable.ttf') });
   const [grant, setGrant] = useState<Grant | null | undefined>(undefined);
   useEffect(() => { loadGrant().then(setGrant).catch(() => setGrant(null)); }, []);
   return (
@@ -2039,9 +2039,9 @@ const s = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   text: { fontFamily: 'Inter', fontSize: 15, lineHeight: 22, fontVariant: ['tabular-nums'] },
   h1: { fontSize: 26, lineHeight: 32, fontWeight: '700', letterSpacing: -0.6, marginVertical: 4 },
-  display: { fontFamily: 'Instrument Serif', fontSize: 38, lineHeight: 42, fontWeight: '400', letterSpacing: 0, textAlign: 'center' },
-  // B1 headings and names: Instrument Serif 400 (welcome, pairing, Hello, the office's sheets).
-  serif: { fontFamily: 'Instrument Serif', fontWeight: '400', letterSpacing: 0 },
+  display: { fontFamily: 'Inter', fontSize: 38, lineHeight: 42, fontWeight: '600', letterSpacing: 0, textAlign: 'center' },
+  // Titles and names: Inter 600 (welcome, pairing, Hello, the office's sheets).
+  serif: { fontFamily: 'Inter', fontWeight: '600', letterSpacing: 0 },
   stepNum: { width: 22, height: 22, borderRadius: 11, textAlign: 'center', lineHeight: 22, fontSize: 12, fontWeight: '700', overflow: 'hidden', marginTop: 0 },
   h2: { fontSize: 17, fontWeight: '600', lineHeight: 24 },
   b: { fontWeight: '600' },
