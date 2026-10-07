@@ -1022,6 +1022,17 @@ export class Crew {
     return b;
   }
 
+  /** Seat a helper whose folder already exists: the name check, its row, and the crew's hello. */
+  private seat(id: string, display: string, role: string, template: string, color: string) {
+    if (this.bot(id) || id === CHIEF) throw Object.assign(new Error(`there is already a bot called ${display}`), { status: 409 });
+    this.db.tx(() => {
+      this.db.run('INSERT INTO bots (id, display, role, template, color, token, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        id, display, role, template, color, randomBytes(16).toString('hex'), Date.now());
+      this.say(id, 'system', `${display} joined the crew (${role.toLowerCase()}).`);
+    });
+    return this.bot(id)!;
+  }
+
   /** The person or Chief can recruit a helper. */
   recruit(template: string, name: string | undefined, by: string) {
     const tpl = disk.loadTemplate(this.cfg, template);
@@ -1029,11 +1040,20 @@ export class Crew {
     const display = (name || tpl.display).trim().slice(0, 32);
     const id = disk.slug(display);
     if (this.bot(id) || id === CHIEF) throw Object.assign(new Error(`there is already a bot called ${display}`), { status: 409 });
-    this.db.tx(() => {
-      this.addBot(tpl, display, id, by);
-      this.say(id, 'system', `${display} joined the crew (${tpl.role.toLowerCase()}).`);
-    });
-    return this.bot(id)!;
+    disk.createBotFolder(this.cfg, id, tpl, display);
+    return this.seat(id, display, tpl.role, template, tpl.color);
+  }
+
+  /** Hire a marketplace import through the normal seat: the scripts/ module previews the recipe,
+   *  the clash check runs before anything is written, and re-importing pulls the latest. */
+  async importGrok(slug: string, name?: string, skill?: string, source?: string) {
+    const mod = await import((await import('node:url')).pathToFileURL(join(this.cfg.repoDir, 'scripts', 'grok-recipe.mjs')).href);
+    const pre = await mod.previewAny({ ref: skill ?? slug, name, apps: Object.fromEntries(Object.entries(APPS).map(([k, a]) => [k, a.name])), want: skill || /claude|skill/i.test(String(source ?? '')) ? 'skill' : undefined }).catch((e: any) => { throw fail(e instanceof Error ? e.message : String(e)); });
+    const was = this.bot(pre.id) ?? this.bots().find((b) => b.template === pre.template), id = was?.id ?? pre.id;
+    if (was && id === pre.id && was.template !== pre.template) throw Object.assign(new Error(`there is already a bot called ${pre.display}`), { status: 409 });
+    mod.writePlanned({ crewDir: this.cfg.crewDir, id, plan: pre.plan, labels: disk.JOB_LABELS, update: !!was, seed: disk.loadTemplate(this.cfg, 'helper') });
+    if (was) this.db.run('UPDATE bots SET display = ?, role = ?, color = ? WHERE id = ?', pre.display, pre.plan.role, pre.plan.color, id); else this.seat(id, pre.display, pre.plan.role, pre.template, pre.plan.color);
+    return { [was ? 'updated' : 'imported']: { id, name: pre.display }, source: pre.plan.link, routines: pre.plan.routines, needs: pre.plan.needs, note: pre.plan.note };
   }
 
   // ---- work ----
@@ -2082,6 +2102,9 @@ export class Crew {
       })),
       tool('crew_recruit', 'Recruit a bot from a template.', { template: Type.String(), name: Type.Optional(Type.String()) },
         (p) => { const n = this.recruit(p.template, p.name, CHIEF); return { recruited: { id: n.id, name: n.display } }; }),
+      tool('crew_import', 'Bring a marketplace template onto the crew as its own helper: `slug` a Grok Bot page ("pg") or address, `skill` a Claude skill ("algorithmic-art" or "owner/repo:skills/name"). The public recipe becomes the helper\'s own folder, for this person\'s own use; importing again pulls the latest. Say what it does, what needs connecting, offer routines, start nothing.',
+        { slug: Type.Optional(Type.String()), skill: Type.Optional(Type.String()), name: Type.Optional(Type.String()) },
+        (p) => this.importGrok(String(p.slug ?? p.handle ?? p.bot ?? p.id ?? p.template ?? p.url ?? p.address ?? p.query ?? p.grok ?? (p.skill ? '' : p.name ?? '')), p.name ? String(p.name) : undefined, p.skill ? String(p.skill) : undefined, String(p.source ?? ''))),
       tool('crew_assign', `Hand a bot a task. Give it a short descriptive title, never a URL. \`account\` (${accounts}) only when a task plainly suits another AI. ` +
         'A job of several steps: list them in `steps`, in plain words; the person sees the plan and it starts when they say Go.',
         { bot: Type.String(), task: Type.String(), title: Type.Optional(Type.String()), account: Type.Optional(Type.String()), steps: Type.Optional(Type.Array(Type.String())) },
