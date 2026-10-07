@@ -965,14 +965,7 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
   /* The rail reads like the mock: the status line stands apart, and a hairline opens each section. */
   .side-crew .side-sub { margin: 3px 0 0; }
   .side-crew .side-label { border-top: 1px solid var(--line); border-radius: 0; margin: 14px 0 8px; padding: 12px 10px 0; }
-/* Office takes the full width on a desk: no right pane beside the panels (the phone keeps its list under them). */
-@media (min-width: 900px) {
-  .home-office > .feed.desk-only { display: none; }
-}
-@media (min-width: 1200px) {
-  .home-office { grid-template-columns: minmax(0, 1fr); }
-  .home-office > .home-top { margin-right: 32px; }
-}
+
   .side .side-label { display: flex; margin: 0; padding: 0 10px 8px; color: var(--mute); text-decoration: none; }
   .side-label span { margin-left: auto; letter-spacing: 0; }
   .side-row { height: 38px; min-height: 38px; padding: 0 10px; gap: 10px; font: 500 14px/1 var(--ui); }
@@ -1228,4 +1221,14 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
   .room-page > .chat { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
   .room-page .lines { flex: 1 1 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-bottom: 10px; }
   .room-page .dock { position: static; flex: none; margin: 0 -16px; padding: 6px 16px max(12px, env(safe-area-inset-bottom)); mask-image: none; background: var(--bg); }
+}
+
+/* Office takes the full width on a desk: no right pane beside the panels (the phone keeps its list under them).
+   Kept last in the file so the single column wins over the two-column feed rule above. */
+@media (min-width: 900px) {
+  .home-office > .feed.desk-only { display: none; }
+}
+@media (min-width: 1200px) {
+  .home-office { grid-template-columns: minmax(0, 1fr); }
+  .home-office > .home-top { margin-right: 32px; }
 }
