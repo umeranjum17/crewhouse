@@ -59,8 +59,13 @@ b { font-weight: 600; }
 .helper-intro h1 { margin: 0 0 4px; }
 .helper-intro .lead { margin: 0; }
 .detail { max-width: 720px; }
-.crew-row { min-height: 68px; }
+.crew-row { min-height: 68px; flex-wrap: wrap; row-gap: 4px; }
 .crew-row > b, .crew-row > span.grow { min-width: 0; }
+.crew-row > span.grow { flex: 1 1 10em; overflow-wrap: anywhere; }
+.crew-row .grow > b { display: block; }
+/* Name, role and status read in full: a long status drops to its own line instead of squeezing the text. */
+.crew-row .status-word { margin-left: auto; max-width: 100%; }
+.crew-row .status-word .clamp1 { white-space: normal; }
 .status-word { display: inline-flex; align-items: center; gap: 7px; color: var(--ink2); font-size: 13px; white-space: nowrap; }
 .crew-row .status-word { min-width: 0; max-width: 100%; overflow: hidden; }
 .status-word > .clamp1 { min-width: 0; }

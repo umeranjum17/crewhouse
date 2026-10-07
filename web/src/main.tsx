@@ -650,8 +650,8 @@ function Crew(ctx: Ctx) {
   const chief = A.chief(state, chiefLocal(ctx));
   const helpers = A.crew(state);
   return <div className="page rest-screen"><a href="#/" className="back phone-only">‹ Home</a><h1>Your crew</h1><p className="lead">Everyone answers to Chief.</p><div className="card list">
-    <a className="row-item crew-row" href="#/chief"><Face who="chief" size={44} ring={chief.tone === 'wait' ? 'needs' : undefined} /><span className="grow"><b>Chief</b><span className="mute small clamp1">{chief.line || 'Runs the crew and answers to you'}</span></span></a>
-    {helpers.map((h) => <a key={h.id} className="row-item crew-row" href={hrefOf(h.id)}><Face who={h} size={44} ring={h.ring} /><span className="grow"><b>{h.name}</b><span className="mute small clamp1">{h.role}</span></span><span className={`status-word ${h.ring === 'needs' ? 'bad' : ''}`}><i className={h.ring === 'needs' ? 'needs' : h.ring ? 'working' : ''} /><span className="clamp1">{h.status}</span></span></a>)}
+    <a className="row-item crew-row" href="#/chief"><Face who="chief" size={44} ring={chief.tone === 'wait' ? 'needs' : undefined} /><span className="grow"><b>Chief</b><span className="mute small">{chief.line || 'Runs the crew and answers to you'}</span></span></a>
+    {helpers.map((h) => <a key={h.id} className="row-item crew-row" href={hrefOf(h.id)}><Face who={h} size={44} ring={h.ring} /><span className="grow"><b>{h.name}</b><span className="mute small">{h.role}</span></span><span className={`status-word ${h.ring === 'needs' ? 'bad' : ''}`}><i className={h.ring === 'needs' ? 'needs' : h.ring ? 'working' : ''} /><span>{h.status}</span></span></a>)}
     <a className="row-item crew-row" href="#/crew/add"><span className="face add" style={{ width: 44, height: 44 }}>+</span><span className="grow">Add a helper</span><span className="mute">›</span></a>
   </div></div>;}
 
@@ -666,7 +666,7 @@ function AddHelper({ state, refresh }: Ctx) {
     <div className="page rest-screen">
       <a href="#/crew" className="back">‹ Crew</a><h1>Add a helper</h1><p className="lead">Pick a starter, or tell Chief what you need.</p>
       <div className="label">Starters</div><div className="card list">
-        {A.gallery(state).map((t: Json) => <div key={t.id} className="row-item starter-row"><Face who={{ kind: t.kind, name: t.name }} size={44} /><span className="grow"><input className="starter-name" value={names[t.id] ?? t.name} onChange={(e) => setNames({ ...names, [t.id]: e.target.value })} aria-label={`Name for ${t.name}`} /><span className="mute small clamp">{t.does}</span></span><button className="btn" onClick={() => welcome(t)}>Add</button></div>)}
+        {A.gallery(state).map((t: Json) => <div key={t.id} className="row-item starter-row"><Face who={{ kind: t.kind, name: t.name }} size={44} /><span className="grow"><input className="starter-name" value={names[t.id] ?? t.name} onChange={(e) => setNames({ ...names, [t.id]: e.target.value })} aria-label={`Name for ${t.name}`} /><span className="mute small">{t.does}</span></span><button className="btn go" onClick={() => welcome(t)}>Add</button></div>)}
       </div>
       <div className="label">Something else</div><div className="card"><p className="mute small">Tell Chief what you need help with.</p><Composer placeholder="Tell Chief what you need help with" onSend={async (t) => { const ok = await attempt(() => api.post('chief', t), undefined, true); if (ok) go('#/chief'); return ok; }} {...typeInto('chief')} /></div>
     </div>
@@ -1246,11 +1246,11 @@ function Apps({ state, refresh }: Ctx) {
       <div className="label">Apps</div><div className="card list apps-list">
         {list.map((a) => <div key={a.id} className="row-item app-row-item"><span className="app-ic" style={{ background: a.bg }}>{a.mark}</span><div className="grow"><b>{a.name}</b><div className="mute small">{a.on ? 'On · read only' : 'Not connected'}</div></div>
           {a.on ? <button className="link" onClick={() => confirm(`Disconnect ${a.name}? Your helpers will stop using it.`) && attempt(async () => { await api.disconnect(a.id); refresh(); }, `${a.name} disconnected`)}>Turn off</button>
-            : <button className="btn" onClick={() => setConnecting({ app: a, tab: A.needsHouse(state, a) ? null : openTab() })}>Connect</button>}</div>)}
+            : <button className="btn go" onClick={() => setConnecting({ app: a, tab: A.needsHouse(state, a) ? null : openTab() })}>Connect</button>}</div>)}
       </div>
-      <div className="card row"><span className="app-ic" style={{ background: 'linear-gradient(135deg,#ffc27a,#ff7aa2)' }}>↗</span>
+      <div className="card row"><span className="o-ic" aria-hidden>↗</span>
         <span className="grow"><b>Share to Crewhouse</b><div className="mute small">On your phone, tap Share in any app (WhatsApp, Photos, a web page), then Crewhouse. Nothing to connect.</div></span></div>
-      <a className="card row" href="#/skills"><span className="app-ic" style={{ background: 'linear-gradient(135deg,#8ec5fc,#e0c3fc)' }}>✦</span><span className="grow"><b>Skills</b><div className="mute small">Extra abilities for your crew, each reviewed before it arrives.</div></span><b>›</b></a>
+      <a className="card row" href="#/skills"><span className="o-ic" aria-hidden>✦</span><span className="grow"><b>Skills</b><div className="mute small">Extra abilities for your crew, each reviewed before it arrives.</div></span><b>›</b></a>
       <p className="mute small center">Connecting opens the app's own sign-in page. That's all.</p>
       {connecting && <ConnectApp app={connecting.app} state={state} tab={connecting.tab} onClose={() => setConnecting(null)} onDone={() => { setConnecting(null); refresh(); }} />}
     </div>
@@ -1285,7 +1285,7 @@ function Skills({ refresh }: Ctx) {
         {!s.reviewed && <div className="mute small">Not reviewed yet, so the crew leaves it alone.</div>}</span>
       {s.reviewed ? (s.on
         ? <button className="link" onClick={() => void flip(s, false)}>Turn off</button>
-        : <button className="btn" onClick={() => void flip(s, true)}>Turn on</button>)
+        : <button className="btn go" onClick={() => void flip(s, true)}>Turn on</button>)
         : null}
     </div>);
   return (

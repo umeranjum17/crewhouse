@@ -6,6 +6,7 @@ import { canHear, hear } from './voice.ts';
 import { cycle, type Focused } from './dialog.ts';
 import { chatTokens, safeLink } from './chat-md.ts';
 import * as art from './art.ts';
+import { color } from './tokens.ts';
 import { MARKS } from './logos.ts';
 import { ICONS, type IconName } from './icons.ts';
 import { clock, column, docLinks, document as docView, fileSource, fileView, flowed, mdPlain, pageWords, workbook, type Card, type DocPart, type DocView, type FileView, type Helper, type Sheet, type Step, type Workbook } from './adapter.ts';
@@ -174,13 +175,20 @@ export function PalArt({ kind, mood = 'idle', d = 4, name, live }: { kind: art.K
   </pre>;
 }
 
-/** A round face: Chief or a pal, with a ring when it's working or needs you. */
+/** A round face: Chief or a helper, with a ring when it's working or needs you. The helmet is drawn
+ *  as rects (art.helmetSvg: the same cells, eyes and scan as the chat's text helmet), because text
+ *  glyphs shrink to noise below ~9px and these faces sit at 20-64px. */
 export function Face({ who, size = 44, ring = '' }: { who: Helper | 'chief' | { kind: art.Kind; name: string; mood?: art.Mood }; size?: number; ring?: string }) {
   const chief = who === 'chief';
-  const soft = chief ? (night ? '#2A2622' : '#EEF1F6') : art.PALS[who.kind].soft;
+  // The disc stays neutral in both themes: the board leaves pastel colour out. Night tints the
+  // raised surface faintly and seats Chief on warm dark; day seats every face on the raised surface.
+  const soft = night ? (chief ? '#2A2622' : `color-mix(in srgb, ${art.PALS[who.kind].soft} 16%, var(--solid))`) : color.day.surface;
+  const mode = art.helmetOf(chief ? chiefMood : who.mood);
+  const svg = useMemo(() => art.helmetSvg(24, mode, { night, ink: mode === 'rest' ? (night ? color.night.mute : color.day.mute) : undefined }), [mode]);
+  const w = Math.round(size * 0.82);
   return (
-    <span className={`face ${ring}`} style={{ width: size, height: size, background: night && !chief ? `color-mix(in srgb, ${soft} 16%, var(--solid))` : soft }}>
-      {chief ? <ChiefArt d={size * .74 / 14} mood={chiefMood} /> : <PalArt kind={who.kind} mood={who.mood} d={size * .74 / 12} name={who.name} crisp={size < 96} />}
+    <span className={`face ${ring}`} style={{ width: size, height: size, background: soft }}>
+      <Ink svg={svg} w={w} h={Math.round(w / 2)} label={chief ? 'Chief' : who.name} />
     </span>
   );
 }

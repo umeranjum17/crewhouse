@@ -341,6 +341,29 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, every row and panel is
 });
 
 
+test('your crew reads whole: every face is the drawn helmet, and no row overlaps or clips, phone and computer, day and night', { skip: !bin && 'no Chromium here' }, async () => {
+  const b = await browse();
+  await b.send('Page.enable'); await b.send('Runtime.enable');
+  const rows = `(() => [...document.querySelectorAll('.crew-row')].map((row) => {
+    const r = row.getBoundingClientRect(), kids = [...row.children].map((e) => e.getBoundingClientRect());
+    const overlap = kids.some((a, i) => kids.some((c, j) => j > i && a.left < c.right - 1 && c.left < a.right - 1 && a.top < c.bottom - 1 && c.top < a.bottom - 1));
+    const clip = kids.some((k) => k.left < r.left - 1 || k.right > r.right + 1);
+    return { faces: row.querySelectorAll('.face img.ink').length + (row.querySelector('.face.add') ? 1 : 0), kids: kids.length, overlap, clip };
+  }))()`;
+  for (const theme of ['day', 'night']) for (const [w, h, mobile] of [[390, 844, true], [1440, 900, false]] as const) {
+    await b.send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile });
+    await b.open(`demo=crew5&${theme}#/crew`);
+    await until('the crew rows', () => b.run("document.querySelectorAll('.crew-row').length > 3"), 30_000);
+    const found = await b.run(rows), at = `${theme} ${w}`;
+    assert.ok(found.length > 3, `${at}: the crew lists every helper (${found.length} rows)`);
+    for (const [i, f] of found.entries()) {
+      assert.equal(f.faces, 1, `${at} row ${i}: one drawn helmet face`);
+      assert.ok(!f.overlap, `${at} row ${i}: name, role and status never overlap`);
+      assert.ok(!f.clip, `${at} row ${i}: nothing spills past the row`);
+    }
+  }
+});
+
 test('a finished file opens beside its chat: the composer stays clear of the panel', { skip: !bin && 'no Chromium here' }, async () => {
   const b = await browse();
   await b.send('Page.enable'); await b.send('Runtime.enable');
