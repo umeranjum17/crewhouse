@@ -373,7 +373,7 @@ function Home(ctx: Ctx) {
     <div className="home home-office">
       <div className="office-main">
         <div className="home-top">{top}</div>
-        <Office state={state} live={live} night={ctx.night} />
+        <Office state={state} live={live} night={ctx.night} onDone={refresh} />
         <div className="phone-only">
           <NeedsPin state={state} cards={live.needs} />
           <OnItNow live={live} />

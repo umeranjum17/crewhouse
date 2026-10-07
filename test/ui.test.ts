@@ -625,7 +625,7 @@ test('the mascots: every app mood wears one of B1\'s five poses, and every pose 
   assert.deepEqual(new Set(art.MOODS.map(art.poseOf)), new Set(art.POSES), 'every pose is reachable');
   const chief = (p: (typeof art.POSES)[number]) => art.chiefSvg(p).replace(/ch\d+c/g, '');
   assert.equal(new Set(art.POSES.map(chief)).size, 5, 'two of Chief\'s poses look the same');
-  // A helper's face says done (a tick) or resting (eyes shut); the rest of their status is the room's loop and label.
+  // A helper's face says done (a tick) or resting (eyes shut); the rest of their status is the helmet's mood and the panel's label.
   for (const k of ['reel', 'scout', 'scribe', 'tracer'] as Kind[]) assert.equal(new Set((['listen', 'pleased', 'rest'] as const).map((p) => art.beanSvg(k, p))).size, 3, k);
   // Each drawing is one SVG whose clip ids never collide on a page with many faces.
   const ids = [art.chiefSvg(), art.chiefSvg()].map((x) => x.match(/id="(\w+)"/)![1]);
@@ -663,23 +663,22 @@ test('the phone mascot set matches art.ts: everyone whole and as a head, in ever
   assert.deepEqual(wired, new Set(files.keys()), 'mobile/src/marks.ts does not require the whole set');
 });
 
-test('the phone office: one flat room, a crew whose moves run on the native driver only', () => {
-  // The room is drawn in Views on A.floorPlan, as the web's is: no pictures of a room, no isometric plan.
-  // The battery budget: no JS timer or beat moves the room (its loops are native-driver animations), moves wait for the app to be on screen, the live
-  // desktop never opens here, and the room reads the shared view model for the person.
+test('the phone office: one grouped list, helmets still, the shared view model', () => {
+  // The office is a grouped list (Needs you / At work / Done today / Resting), as the web's panels are: every helper
+  // in exactly one group, no drawn room, no floor plan, no motion at all (the think-scan shows still while working).
   const office = readFileSync(join(import.meta.dirname, '..', 'mobile', 'src', 'office.tsx'), 'utf8');
-  assert.match(office, /A\.floorPlan\(crew\)/);
-  assert.match(office, /plan\.more\.length/, 'past five, the strip says "+N" and leads to the whole crew');
-  assert.doesNotMatch(office, /setInterval|setTimeout|useBeat|requestAnimationFrame|DesktopView|desktopSignaling/);
+  assert.doesNotMatch(office, /floorPlan|Image|PALS\[|motion\.(Hop|Loop|Fly|Pulse|Land|Note|useAwake)/);
+  assert.doesNotMatch(office, /setInterval|setTimeout|useBeat|requestAnimationFrame|DesktopView|desktopSignaling|Animated/);
+  assert.match(office, /\['needs', 'work', 'done', 'rest'\]/);
+  assert.match(office, /TITLES\[g\]/);
   assert.match(office, /A\.office\(state\)/);
   assert.match(office, /A\.officeEvent\(/);
-  assert.match(office, /motion\.useAwake\(\)/);
+  assert.match(office, /helmetDots\(cols, mode, night, mode === 'think' \? 12 : 0\)/, 'the scan shows still while working, and only there');
   const motion = readFileSync(join(import.meta.dirname, '..', 'mobile', 'src', 'motion.ts'), 'utf8');
-  assert.doesNotMatch(motion.slice(motion.indexOf('// ---------- the office')), /useNativeDriver: false/);
-  assert.match(motion, /if \(still \|\| beat == null\) \{ rest\(\); return; \}/, 'no office move starts under Reduce Motion or in the background');
+  assert.doesNotMatch(motion, /Hop|Pulse|Land|Loop|Note|Fly|useOnBeat/, 'no room loops left');
   const home = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
   const top = home.slice(home.indexOf('function Home('), home.indexOf('function ChatList('));
-  assert.ok(top.indexOf('<HomeBar') < top.indexOf('<ChiefHero') && top.indexOf('<ChiefHero') < top.indexOf('<NeedsPin') && top.indexOf('<Office') < top.lastIndexOf('{pinned}'), 'Chat: the bar, Chief\'s hero, then Needs you pinned; Office: Needs you right under the room (B1)');
+  assert.ok(top.indexOf('<HomeBar') < top.indexOf('<ChiefHero') && top.indexOf('<ChiefHero') < top.indexOf('<NeedsPin') && top.indexOf('<Office') < top.lastIndexOf('{pinned}'), 'Chat: the bar, Chief\'s hero, then Needs you pinned; Office: Needs you right under the grouped list');
   assert.match(top, /few=\{1\}/, 'one pinned row in Office, and "See all N" for the rest');
   assert.match(top, /if \(mode === 'chat'\) return <View style=\{\{ flex: 1 \}\}>\{top\}<Chat \{\.\.\.ctx\} id="chief" hero=\{/, 'Chat: the bar over Chief\'s own thread, which carries his hero and Needs you, and his box');
 });
@@ -1811,7 +1810,7 @@ test('the office moves on live events; the refresh stays the source of truth', (
   const v2 = A.officeEvent(v, { seq: 22, at: OTN, kind: 'run.tool', bot: 'pip', data: { task: 51, words: 'Reading the renewal letter' } });
   assert.equal(v2.crew.find((c) => c.id === 'pip')!.step, 'Reading the renewal letter');
   assert.equal(A.officeEvent(v, { seq: 23, at: OTN, kind: 'run.tool', bot: 'ghost', data: { task: 1, words: 'Hi' } }), v);
-  assert.equal(A.officeEvent(v, { seq: 24, at: OTN, kind: 'reply.partial', bot: 'scout', data: {} }), v, 'a kind the room does not draw leaves it alone');
+  assert.equal(A.officeEvent(v, { seq: 24, at: OTN, kind: 'reply.partial', bot: 'scout', data: {} }), v, 'a kind the panels do not draw leaves it alone');
   // Done: the jump, and the thing into the tray.
   v = A.officeEvent(v, { seq: 25, at: OTN, kind: 'task.done', bot: 'reel', data: { task: 41, title: "Mum's birthday video", result: 'Ninety seconds of photos, with a gentle piano song.' } });
   const done = v.crew.find((c) => c.id === 'reel')!;
@@ -1879,7 +1878,7 @@ test('a desk shows the job\'s first looks from its task, never a raw path', () =
   assert.doesNotMatch(h.things.map((f) => f.name).join(' '), /files\/|\.png/i, 'names are said, not pathed');
 });
 
-test('J5 repairs stay in: the night look paints first, the job row is never cut to one line, the page leaves the old desk, the pen clears the tray', () => {
+test('J5 repairs stay in: the night look paints first, the job row is never cut to one line, the panels read one state', () => {
   const read = (...p: string[]) => readFileSync(join(import.meta.dirname, '..', ...p), 'utf8');
   const html = read('web', 'index.html'), main = read('web', 'src', 'main.tsx'), css = read('web', 'src', 'styles.css'), office = read('web', 'src', 'office.tsx');
   // The look is set before the first paint, by the same rule useLook keeps after (a night viewer never sees a day frame).
@@ -1891,48 +1890,22 @@ test('J5 repairs stay in: the night look paints first, the job row is never cut 
   assert.doesNotMatch(css, /^\.jobs \{ padding/m, 'the old .jobs inset is gone');
   assert.match(css, /^\.jobs \.list-row \{ gap: 10px; padding: 10px 12px; \}/m);
   assert.match(main, /j\.says && <span className="small mute clamp">/, 'a job row\'s line wraps to two lines, never an ellipsis on one');
-  // The hand-off page leaves from where the desk was before the room re-laid them, not from their new spot by the tray.
-  assert.match(office, /const was = seen\.current, from = desks\.current;\s*seen\.current = live;\s*desks\.current = spritesIn\(box\.current\);/);
-  assert.match(office, /const got = A\.handedIn\(was, live\);\s*if \(got\.length\) handOff\(box\.current, got, from\)/, 'who handed in comes from the done list');
-  // 144: the start is measured in the room's current layout (every resize and the switch to wide, whose first layout is
-  // measured unpainted), and the page lands in the tray box on the floor, whole until it lands, not the floating label.
-  assert.match(office, /new ResizeObserver\(\(\[en\]\) => \{ setWide\(en\.contentRect\.width >= 560\); desks\.current = spritesIn\(el\); \}\)/);
-  assert.match(office, /useEffect\(\(\) => \{ desks\.current = spritesIn\(box\.current\); \}, \[wide\]\);/);
-  assert.match(office, /querySelector\('\.o-traybox > path'\)/); assert.doesNotMatch(office, /querySelector\('\.o-tray rect'\)/);
-  // 152: the page reaches the mouth whole (offset .72), settles in, and fades only after .88; the box is drawn in front.
-  assert.match(office, /\{ transform: at\(0, 1\), opacity: 1, offset: \.72 \}/); assert.match(office, /\{ transform: at\(\.35, \.92\), opacity: 1, offset: \.88 \}/);
-  assert.ok(office.indexOf('<TrayBox x={trayX}') > office.indexOf('{order.map((m) => m === \'chief\''), 'the tray box is drawn after (in front of) every figure');
-  assert.match(office, /left=\{bubble\} y=\{tight \? G \+ 7 : Y\(G - 64\)\} below=\{tight\}/, 'the Tray bubble sits low over its box, clear of every ink; a packed row captions it under the box');
-  assert.match(office, /H = tight \? G \+ 27 : 210/, 'the floor band grows by the caption only in a packed row');
-  assert.doesNotMatch(office, /HIGH/, 'no raised, detached bubble');
-  // 155: the caption's top clears every foot shadow and its pointer stands in the box's own column, outside the label.
-  assert.match(office, /<path className="o-pointer" d=\{`M\$\{x - 4\} \$\{y \+ 1\}L\$\{x\} \$\{G \+ 1\.2\}/);
-  // 147/148: a crowded row packs its desks (compact) before it scales, all five standing; the page is
-  // drawn at the figures' size on both sides.
-  assert.match(office, /it\.tray \? \[15, 20\] : it\.st === 'chief' \? \[32, 26\] : TIGHT\[it\.st\]/, 'a packed row reserves only the box, no bubble width');
-  // 172: the packed box stands just right of Chief, and the floor keeps one scale whatever its states.
-  assert.match(office, /items\.splice\(sts\.indexOf\('chief'\) \+ 1, 0, \{ m: 'tray', st: 'tray', tray: true \}\);/);
-  assert.match(office, /const span = Math\.max\(cur, 54 \* \(order\.length - 1\) \+ 93\), s = Math\.min\(1, W \/ span\)/);
-  // 162/163: the box on clear floor beside whoever finished (34 left of them, their station 55), the bubble clear of ink
-  // and furniture; a floor of five always takes the compact ones (no swap at a finish), a smaller row only when full.
-  assert.match(office, /const full = order\.length > 5 \? undefined : layAt\(order, sts, trayText, false\);\n\s*if \(full && full\.s >= 1\) return full;\n\s*const compact = layAt\(order, sts, trayText, true\);\n\s*return compact\.s < 1 \? packed\(order, sts\) : compact;/, 'a crowded row packs before it scales');
-  assert.match(office, /off = 34;/); assert.match(office, /it\.tray && it\.st === 'done' \? \[55, pad\.done\[1\]\]/);
-  assert.match(office, /compact && p\?\.st === 'chief' && \(it\.st === 'monitor' \|\| it\.st === 'failed'\)\) l = Math\.max\(l, 33\)/);
-  assert.match(office, /return at\(\[INK, FOOT\]\) \?\? at\(\[INK\]\) \?\? ideal;/);
-  // 169: Scout and Chief stand still through a finish on a floor of five (it starts at the left edge), the compact screen
-  // and Scribe's pen clear Chief's cue, and the desk room keeps to its picture (no floor band under the row).
-  assert.match(office, /const x0 = compact && order\.length > 5 && s >= 1 \? 180 - W \/ 2 : 180 - \(total \* s\) \/ 2/);
-  assert.match(office, /if \(p\?\.st === 'chief' && it\.st === 'writing'\) l = Math\.max\(l, 33\);/);
-  assert.match(office, /const c = tight \? x \+ 3 : x \+ 33;/); assert.match(office, /monitor: \[-14, 20\], failed: \[-14, 20\]/);
-  assert.match(read('web', 'src', 'styles.css'), /\.office-main \.o-room \{ flex: 0 1 auto; min-height: 0; \}/);
-  assert.match(office, /needs: \[26, 28\], monitor: \[26, 28\], failed: \[26, 28\]/); assert.match(office, /data-scale=\{s\.toFixed\(3\)\}/);
-  assert.doesNotMatch(office, /MOCK|floorPlan\(crew, /, 'no seat cap below five for size');
-  assert.match(office, /getScreenCTM\(\)\?\.a \?\? 1\) \* Number\(room\.dataset\.scale \?\? 1\), pw = 14 \* k, ph = 18 \* k/);
-  assert.match(read('mobile', 'src', 'office.tsx'), /width: u\(14\), height: u\(18\)/);
-  assert.match(read('mobile', 'src', 'office.tsx'), /dx=\{u\(318 - from\)\} dy=\{u\(28\)\} sink=\{u\(10\)\}/, 'the phone page drops into its floor box');
-  assert.match(read('mobile', 'src', 'motion.ts'), /inputRange: \[0, 0\.88, 1\], outputRange: \[1, 1, 0\]/);
-  // The phone's page flies on the same truth, the helper's done count, from where they stood before the re-lay.
-  assert.match(read('mobile', 'src', 'office.tsx'), /const n = view\.done\.filter\(\(d\) => d\.helper === m\.id\)\.length, from = fromOf\(m\.id, n, x\);\s*return <motion\.Fly beat=\{n\}/);
-  // Scribe's pen is held in the left hand: the Tray bubble floats over the right of that desk.
-  assert.match(office, /<g transform=\{`translate\(\$\{2 \* x\} 0\) scale\(-1 1\)`\}><path className="o-pen"/);
+  // No drawn room anywhere: no floor plan, no room tokens, no room markup or styles.
+  assert.doesNotMatch(office, /floorPlan|o-room|o-cell|o-strip|o-tag|SpritesIn|handOff|TrayBox|<svg/);
+  assert.doesNotMatch(read('web', 'src', 'tokens.ts'), /room/);
+  assert.doesNotMatch(css, /\.o-room|\.o-cell|\.o-strip|\.o-tag|\.o-sheet|\.o-tray|\.o-flyer|\.o-sprite|\.o-cap|\.o-ask|r-wall|r-edge/);
+  // Chief first, then the whole crew in roster order: nobody capped, nobody counted under "+N".
+  assert.match(office, /<ChiefPanel live=\{live\} \/>/);
+  assert.match(office, /\{A\.roster\(live\.crew\)\.map\(\(c\) => <HelperPanel/);
+  // Each panel: the helmet, the current line, one meta line, the last three timed steps, the one action.
+  assert.match(office, /steps=\{c\.steps\.slice\(-3\)\}/);
+  assert.match(office, /<time className="time">\{A\.clock\(s\.at\)\}<\/time>/, 'times in a column read in mono, never in a sentence');
+  assert.match(office, /action=\{c\.ask \? <AskAction/, 'a question\'s own yes and no');
+  assert.match(office, /: file \? <PreviewCard f=\{file\} \/> : null/, 'a finished file opens from the panel');
+  // The ask's yes answers exactly as the thread does, then the office refreshes.
+  assert.match(read('web', 'src', 'parts.tsx'), /export const answer = \(c: Card, body: Json\)/);
+  assert.match(main, /<Office state=\{state\} live=\{live\} night=\{ctx\.night\} onDone=\{refresh\} \/>/);
+  // The grid scrolls past six instead of shrinking: three columns on a desk, one below 900 px.
+  assert.match(css, /\.panels \{ display: grid; gap: 14px; grid-template-columns: minmax\(0, 1fr\); \}/);
+  assert.match(css, /@media \(min-width: 900px\) \{ \.panels \{ grid-template-columns: repeat\(3, minmax\(0, 1fr\)\); \} \}/);
 });

@@ -162,9 +162,12 @@ export function ChiefArt({ mood = 'idle', d = 6, hero, whole }: { mood?: art.Moo
     cells.map((row, y) => <div key={y}>{row.map((c, x) => c.eye ? <i key={x} className="eye">{c.ch}</i> : c.scan ? <i key={x} className="scan">{c.ch}</i> : c.ch)}</div>)}
   </pre>;
 }
-export function PalArt({ kind, mood = 'idle', d = 4, name }: { kind: art.Kind; mood?: art.Mood; d?: number; name?: string; crisp?: boolean }) {
+export function PalArt({ kind, mood = 'idle', d = 4, name, live }: { kind: art.Kind; mood?: art.Mood; d?: number; name?: string; crisp?: boolean; live?: boolean }) {
   const mode = art.helmetOf(mood);
-  const cells = useMemo(() => art.helmet(14, mode, night, 0), [mode]);
+  // A working helper's scan line moves (the Office panels pass live); every other helmet is still, and Reduce Motion
+  // runs none (useTicker). The eyes still light blue when needed, shut at rest: that is the mood, not motion.
+  const beat = useTicker(140, !!live && mode === 'think');
+  const cells = useMemo(() => art.helmet(14, mode, night, beat), [mode, beat]);
   return <pre className="art helmet" data-mode={mode} style={{ fontSize: d }} aria-label={name ?? kind}>{
     cells.map((row, y) => <div key={y}>{row.map((c, x) => c.eye ? <i key={x} className="eye">{c.ch}</i> : c.scan ? <i key={x} className="scan">{c.ch}</i> : c.ch)}</div>)}
   </pre>;
@@ -542,7 +545,7 @@ export function Composer({ placeholder, onSend, chat, chips }: { placeholder: st
 }
 
 // ---------- asks ----------
-const answer = (c: Card, body: Json) => attempt(() => api.answer(c.id, body), body.change ? 'Chief will change the plan' : body.remind ? 'OK, back tomorrow' : body.answer === 'deny' ? 'OK, not now' : 'Done. Carrying on.');
+export const answer = (c: Card, body: Json) => attempt(() => api.answer(c.id, body), body.change ? 'Chief will change the plan' : body.remind ? 'OK, back tomorrow' : body.answer === 'deny' ? 'OK, not now' : 'Done. Carrying on.');
 
 /** A waiting-for-the-computer schedule preview: the words in plain time, and the first run on the computer's own clock. */
 function useSchedule(text: string | null) {

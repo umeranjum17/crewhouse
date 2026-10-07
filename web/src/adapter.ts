@@ -1355,10 +1355,10 @@ export const skillSearch = (results: Json[], starter: StarterSkill[]): StarterSk
 // ---------- the office ----------
 /** One helper in the person's office, from the plain-words adapter views. `ask` is that helper's first row in
  *  Needs you (A.needsYou), never a suggestion that lives in its chat; `second` marks another helper of a kind that
- *  came earlier in the crew, so the room and the dock can tell the two apart. */
+ *  came earlier in the crew, so the panels and the dock can tell the two apart. */
 export type OfficeMember = { id: string; name: string; kind: Kind; mood: Mood; ring: Helper['ring']; seat: Seat; status: string;
   step: string; steps: Step[]; things: FileView[]; ask?: Card; second?: boolean };
-/** The one state source every office surface reads: the room, its header counts, the tray, the dock or rail roster
+/** The one state source every office surface reads: the panels, the header counts, the tray, the dock or rail roster
  *  and Needs you. `needs` is Needs you itself; `counts.needs` is its length, `working` the helpers whose seat is
  *  working (one waiting on you counts once, under needs, wherever they show), `done` what
  *  landed in the tray today. */
@@ -1504,6 +1504,9 @@ export function officeEvent(view: OfficeView, e: Json): OfficeView {
   }
 }
 
+/** Who handed a finished job to the tray between two views: a done row the earlier view lacked. The done list is what
+ *  the tray counts, so the hand-off follows it, however the events were grouped into commits. */
+export const handedIn = (was: OfficeView, now: OfficeView) => [...new Set(now.done.filter((t) => !was.done.some((w) => w.id === t.id)).map((t) => t.helper))];
 /** What On it now says when nobody is working: who waits on you, else who is held, quiet or ended badly; the crew is
  *  free only when every one of them is. */
 export function idleLine(v: OfficeView) {
@@ -1515,15 +1518,4 @@ export function idleLine(v: OfficeView) {
 }
 /** A helper waiting on you: a row in Needs you, or a job stopped for an answer in their chat. */
 export const waitsOnYou = (c: OfficeMember) => c.seat === 'chat' || !!c.ask;
-/** Who handed a finished job to the tray between two views: a done row the earlier view lacked. The done list is what
- *  the tray counts, so the hand-off follows it, however the events were grouped into commits. */
-export const handedIn = (was: OfficeView, now: OfficeView) => [...new Set(now.done.filter((t) => !was.done.some((w) => w.id === t.id)).map((t) => t.helper))];
-export const SEATS = 5;
-export type FloorPlan = { seats: OfficeMember[]; more: OfficeMember[] };
-/** Who stands on the office's one floor, one rule for the web and the phone (B1): five spots in the roster's order,
- *  whoever waits on you first, then working, then anything held, free last; everyone else is counted under "+N"
- *  (`more`, roster order), never drawn smaller. The rail and the dock still name the whole crew. */
-export function floorPlan(crew: OfficeMember[]): FloorPlan {
-  const order = roster(crew);
-  return { seats: order.slice(0, SEATS), more: order.slice(SEATS) };
-}
+
