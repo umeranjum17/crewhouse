@@ -24,11 +24,11 @@ export async function published(url) {
 }
 
 /** Read published Next flight JSON, never execute the page or infer a missing list. */
-function embedded(page, field) {
+function embedded(page, field, opening) {
   const flight = [...page.matchAll(/self\.__next_f\.push\((\[.*?\])\)<\/script>/gs)]
     .map((m) => { try { return JSON.parse(m[1])[1] ?? ''; } catch { return ''; } }).join('');
   const text = flight || page.replace(/\\(["'\\/])/g, '$1');
-  const from = text.indexOf(`"${field}":`);
+  const from = text.indexOf(`"${field}":${opening}`);
   if (from < 0) return null;
   const start = from + field.length + 3;
   let depth = 0, quoted = false, escaped = false;
@@ -47,7 +47,7 @@ function embedded(page, field) {
 }
 
 export async function listPublished() {
-  const rows = embedded((await published('https://x.ai/bot/marketplace'))?.toString('utf8') ?? '', 'templates');
+  const rows = embedded((await published('https://x.ai/bot/marketplace'))?.toString('utf8') ?? '', 'templates', '[');
   if (!Array.isArray(rows) || !rows.length) throw new Error('the marketplace has no readable published catalogue');
   const categories = Object.create(null);
   for (const row of rows) {
@@ -70,7 +70,7 @@ export async function listAny() {
 function parseGrokPage(page) {
   const facts = [...page.matchAll(/<li><p class="text-primary text-sm leading-6 whitespace-pre-wrap">(.*?)<\/p><\/li>/gs)]
     .map(([, t]) => t.replace(/<[^>]*>/g, '').replace(/&#x27;/g, "'").replace(/&quot;/g, '"').replace(/&#x2F;/g, '/').replace(/&amp;/g, '&').trim()).filter(Boolean);
-  const raw = embedded(page, 'template');
+  const raw = embedded(page, 'template', '{');
   const list = (v) => Array.isArray(v) ? v : [];
   const profile = facts[0] ?? '';
   if (!raw || typeof raw.name !== 'string' || !profile) throw new Error('that marketplace page has no published recipe to import');
