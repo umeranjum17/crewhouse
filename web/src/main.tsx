@@ -210,11 +210,14 @@ function HomeBar({ ctx, mode, pick }: { ctx: Ctx; mode: HomeMode; pick: (m: Home
   const needs = <span className="m-needs" data-n={n.needs}><i />{n.needs ? `${n.needs} ${n.needs === 1 ? 'needs' : 'need'} you` : 'Nothing needs you'}</span>;
   const busy = <span className="m-working" data-n={n.working}><i />{n.working} working</span>;
   const still = quiet && <span className="m-quiet"><Icon name="moon" size={14} />{quiet}</span>;
-  const tools = <div className="home-tools">
-    <a className="icon-btn home-gear" href="#/settings" aria-label="Settings"><Icon name="settings" size={18} /></a>
-    <div className="seg home-mode" role="tablist" aria-label="Home view">{HOME_MODES.map(([m, l]) => <button key={m} role="tab" aria-selected={mode === m} data-mode={m} className={mode === m ? 'on' : ''} onClick={() => pick(m)}><Icon name={m === 'chat' ? 'chief' : 'office'} />{l}{m === 'office' && mode === 'chat' && n.needs > 0 && <span className="count">{n.needs}</span>}</button>)}</div>
-  </div>;
-  if (mode === 'chat') return <header className="home-bar is-chat"><div className="home-meta">{needs}{busy}{still}</div>{tools}</header>;
+  const gear = <a className="icon-btn home-gear" href="#/settings" aria-label="Settings"><Icon name="settings" size={18} /></a>;
+  const seg = <div className="seg home-mode" role="tablist" aria-label="Home view">{HOME_MODES.map(([m, l]) => <button key={m} role="tab" aria-selected={mode === m} data-mode={m} className={mode === m ? 'on' : ''} onClick={() => pick(m)}><Icon name={m === 'chat' ? 'chief' : 'office'} />{l}{m === 'office' && mode === 'chat' && n.needs > 0 && <span className="count">{n.needs}</span>}</button>)}</div>;
+  const tools = <div className="home-tools">{gear}{seg}</div>;
+  // A phone header is one block (Term): the hero carries the gear top-right and the switch below its lines.
+  const phone = typeof matchMedia !== 'undefined' && matchMedia('(max-width: 899px)').matches;
+  if (mode === 'chat') return phone
+    ? <header className="home-bar is-chat"><ChiefHero live={ctx.live} state={ctx.state} side={gear} below={seg} /></header>
+    : <header className="home-bar is-chat"><div className="home-meta">{needs}{busy}{still}</div>{tools}</header>;
   // Office is a slim bar over the grid: the title (phone width only), the count line, the switch and settings.
   return (
     <header className="home-bar office-bar">
@@ -297,9 +300,9 @@ function NeedsCard({ state, c, flat, onLater }: { state: Json; c: A.Card; flat?:
 const names = (l: string[]) => (l.length < 2 ? l.join('') : `${l.slice(0, -1).join(', ')} and ${l.at(-1)}`);
 const BADGE: Partial<Record<A.Seat | 'done', string>> = { needs: '!', chat: '!', working: '', quiet: '?', failed: '!', done: '✓', waiting: '…' };
 
-/** Home's chat opens on Chief (B1): his figure, his own line in a bubble, and the crew in a row with a badge each and
- *  one plain caption, every word from the office's state. */
-function ChiefHero({ live, state }: { live: A.OfficeView; state: Json }) {
+/** The phone header (Term): mascot left; name with the gear top-right; status lines; the switch below them in that
+ *  column. Rendered only from HomeBar's phone branch; the desk rail (lane 3) carries its own header. */
+function ChiefHero({ live, state, side, below }: { live: A.OfficeView; state: Json; side?: ReactNode; below?: ReactNode }) {
   const crew = A.roster(live.crew), seat = (c: A.OfficeMember) => A.railWord(c, live).seat;
   // The phone header's own status: Needs you, or the one plain line under it.
   const needs = live.needs.length > 0, resting = !needs && live.chief.mood === 'rest';
@@ -310,9 +313,10 @@ function ChiefHero({ live, state }: { live: A.OfficeView; state: Json }) {
     <section className="chief-hero" aria-label="Chief">
       <span className="ch-art"><ChiefArt mood={live.chief.mood} d={9} hero whole /></span>
       <div className="ch-body">
-        <h2 className="ch-name">Chief</h2>
+        <div className="ch-title"><h2 className="ch-name">Chief</h2>{side}</div>
         <p className={`ch-status${needs ? '' : resting ? ' rest' : ' work'}`}><i aria-hidden />{needs ? 'Needs you' : resting ? 'Resting' : 'At work'}</p>
-        <p className="ch-line">{A.chiefSaid(state) || live.chief.line}</p>
+        <p className="ch-line">{A.stripLine(state)}</p>
+        {below}
         <p className="ch-say">{A.chiefSaid(state) || live.chief.line}</p>
         {crew.length > 0 && <div className="ch-crew">{crew.slice(0, 5).map((c) => { const k = seat(c); return <a key={c.id} href={hrefOf(c.id)} className="ch-face" aria-label={`${c.name}: ${A.railWord(c, live).word}`}>
           <Face who={c} size={44} />{BADGE[k] !== undefined && <i className={`ch-badge ${k}`} aria-hidden>{BADGE[k]}</i>}</a>; })}
@@ -371,7 +375,7 @@ function Home(ctx: Ctx) {
     {A.update(state) && <div className="card nudge"><span className="grow">{A.update(state)!.words}</span><a className="btn go" href={A.update(state)!.url} target="_blank" rel="noreferrer">Download</a></div>}
   </>;
   // Chat: Chief's own thread, its box and (on a wide desk) its side column of who is on what.
-  if (mode === 'chat') return <div className="page chat-page home-chat"><div className="home-top">{top}<ChiefHero live={live} state={state} /><NeedsPin state={state} cards={live.needs} flat /></div><Chat {...ctx} id="chief" hero rail={<ChiefRail state={state} live={live} refresh={refresh} />} /></div>;
+  if (mode === 'chat') return <div className="page chat-page home-chat"><div className="home-top">{top}<NeedsPin state={state} cards={live.needs} flat /></div><Chat {...ctx} id="chief" hero rail={<ChiefRail state={state} live={live} refresh={refresh} />} /></div>;
   // Office (B1): the greeting and the room with its strip in the middle; Tonight down the right on a computer (Needs you,
   // On it now, chats, a job to hand over, Chief's box), and under the room on a phone.
   return (

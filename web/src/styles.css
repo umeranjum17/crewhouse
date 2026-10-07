@@ -1163,6 +1163,10 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
   .home-chat .ch-art .helmet { font-size: 5px; }
   .home-chat .ch-body { padding: 0; gap: 2px; }
   .home-chat .ch-name { font-size: 22px; }
+  .home-chat .ch-title { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .home-chat .ch-title .icon-btn { flex: none; }
+  .home-chat .ch-body .home-mode { align-self: stretch; margin-top: 8px; }
+  .home-chat .ch-body .home-mode button { flex: 1; }
   .home-chat .ch-status { display: flex; gap: 6px; align-items: center; margin: 0; font: 500 13px/18px var(--ui); color: var(--pink-ink); }
   .home-chat .ch-status i { width: 7px; height: 7px; border-radius: 50%; background: var(--pink); flex: none; }
   .home-chat .ch-status.rest { color: var(--ink2); }

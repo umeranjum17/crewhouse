@@ -539,7 +539,8 @@ test('Home opens on Chat at every launch, with Office one tap away and never sto
   }
   const web = src('web/src/main.tsx');
   const home = web.slice(web.indexOf('function Home('), web.indexOf('/** The standing'));
-  assert.match(home, /if \(mode === 'chat'\) return <div className="page chat-page home-chat"><div className="home-top">\{top\}<ChiefHero live=\{live\} state=\{state\} \/><NeedsPin state=\{state\} cards=\{live\.needs\} flat \/><\/div><Chat \{\.\.\.ctx\} id="chief" hero rail=\{<ChiefRail state=\{state\} live=\{live\} refresh=\{refresh\} \/>\} \/><\/div>;/, 'web Chief (Term desk): the top, Chief\'s hero then Needs you over his own thread, box and the ask + doing rail');
+  assert.match(home, /if \(mode === 'chat'\) return <div className="page chat-page home-chat"><div className="home-top">\{top\}<NeedsPin state=\{state\} cards=\{live\.needs\} flat \/><\/div><Chat \{\.\.\.ctx\} id="chief" hero rail=\{<ChiefRail state=\{state\} live=\{live\} refresh=\{refresh\} \/>\} \/><\/div>;/, 'web Chief: the top (a phone renders the hero block from its bar) and Needs you over his own thread, box and the ask + doing rail');
+  assert.match(web.slice(web.indexOf('function HomeBar('), web.indexOf('function NeedsPin(')), /<ChiefHero live=\{ctx\.live\} state=\{ctx\.state\} side=\{gear\} below=\{seg\} \/>/, 'the phone header is one block: hero with gear top-right, switch below its lines');
   assert.match(home, /<NeedsPin state=\{state\} cards=\{live\.needs\}( flat)? \/>/, 'Needs you pinned from the office\'s one list');
   assert.match(home, /<div className="feed-ask"><Composer/, 'Office keeps Chief\'s box on a desk');
   assert.match(home, /<div className="dock phone-only"><Composer/, 'and on a phone');
@@ -706,7 +707,7 @@ test('the phone office: one grouped list, helmets still, the shared view model',
   const top = home.slice(home.indexOf('function Home('), home.indexOf('function ChatList('));
   const bar = home.slice(home.indexOf('function HomeBar('), home.indexOf('function NeedsPin('));
   const chatHead = bar.slice(bar.indexOf("if (mode === 'chat')"));
-  assert.ok(chatHead.indexOf('<ChiefHero') > 0 && chatHead.indexOf('{seg}') > chatHead.indexOf('<ChiefHero'), 'Chat header: the hero, then the switch under it');
+  assert.ok(chatHead.indexOf('<ChiefHero') > 0 && chatHead.indexOf('{tools}') > chatHead.indexOf('<ChiefHero'), 'Chat header: the hero, then gear and switch on one row under it');
   assert.match(top, /hero=\{<><\/>}/, 'the thread carries an empty hero slot (tray lines keep flowing)');
   assert.doesNotMatch(top, /NeedsPin/, 'no pinned card in the conversation; the ask sits inline');
   assert.ok(top.indexOf('<Office') < top.lastIndexOf('{pinned}'), 'Office: Needs you right under the grouped list');

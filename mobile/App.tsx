@@ -1136,14 +1136,8 @@ function HomeBar({ state, view, go, mode, pick }: { state: Json; view: A.OfficeV
     </Pressable>)}
   </View>;
   const tools = <View style={[s.row, { justifyContent: 'space-between' }]}>{gear}{seg}</View>;
-  // Chat opens on Chief: his header with the gear beside it, then the switch under it; his thread carries no pinned card.
-  if (mode === 'chat') return <View style={{ gap: 2 }}>
-    <View style={[s.row, { justifyContent: 'space-between', alignItems: 'center' }]}>
-      <View style={{ flex: 1, minWidth: 0 }}><ChiefHero live={view} state={state} /></View>
-      {gear}
-    </View>
-    {seg}
-  </View>;
+  // Chat opens on Chief: one header block — the hero with the gear top-right and the switch below its lines.
+  if (mode === 'chat') return <ChiefHero live={view} state={state} gear={gear} below={seg} />;
   // Office is a slim header: the title, the count line, then the switch.
   return (
     <View style={{ gap: 6 }}>
@@ -1202,18 +1196,22 @@ function NeedsPin({ state, cards, open, go }: { state: Json; cards: A.Card[]; op
 }
 
 /** Home's chat header (Term): the helmet, the name, the status and one plain line. The crew faces live in Office. */
-function ChiefHero({ live, state }: { live: A.OfficeView; state: Json }) {
+function ChiefHero({ live, state, gear, below }: { live: A.OfficeView; state: Json; gear?: ReactNode; below?: ReactNode }) {
   const t = useLook();
   const needs = live.needs.length > 0;
   const resting = !needs && live.chief.mood === 'rest';
   return (
-    <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center', paddingVertical: 4 }} accessibilityLabel="Chief">
-      <ChiefArt mood={live.chief.mood} size={112} />
+    <View style={{ flexDirection: 'row', gap: 12, paddingVertical: 4 }} accessibilityLabel="Chief">
+      <View style={{ justifyContent: 'center' }}><ChiefArt mood={live.chief.mood} size={112} /></View>
       <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-        <T style={[s.serif, { fontSize: 22, lineHeight: 26 }]}>Chief</T>
+        <View style={[s.row, { justifyContent: 'space-between', alignItems: 'center' }]}>
+          <T style={[s.serif, { fontSize: 22, lineHeight: 26 }]}>Chief</T>
+          {gear}
+        </View>
         <View style={[s.row, { gap: 6 }]}><View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: needs ? t.pink : resting ? t.line2 : t.green }} />
           <T style={[s.small, { fontWeight: '500', color: needs ? t.pinkInk : t.ink2 }]}>{needs ? 'Needs you' : resting ? 'Resting' : 'At work'}</T></View>
-        <T tone="ink2" style={s.small} lines={2}>{A.chiefSaid(state) || live.chief.line}</T>
+        <T tone="ink2" style={s.small} lines={2}>{A.stripLine(state)}</T>
+        {below}
       </View>
     </View>
   );
