@@ -301,6 +301,8 @@ const BADGE: Partial<Record<A.Seat | 'done', string>> = { needs: '!', chat: '!',
  *  one plain caption, every word from the office's state. */
 function ChiefHero({ live, state }: { live: A.OfficeView; state: Json }) {
   const crew = A.roster(live.crew), seat = (c: A.OfficeMember) => A.railWord(c, live).seat;
+  // The phone header's own status: Needs you, or the one plain line under it.
+  const needs = live.needs.length > 0, resting = !needs && live.chief.mood === 'rest';
   const by = (k: (A.Seat | 'done')[]) => crew.filter((c) => k.includes(seat(c))).map((c) => c.name);
   const said = [[by(['needs', 'chat']), 'needs you', 'need you'], [by(['working']), 'working', 'working'], [by(['quiet']), 'gone quiet', 'gone quiet'], [by(['failed']), "didn't finish", "didn't finish"], [by(['waiting']), 'waiting', 'waiting']] as const;
   const caption = said.filter(([l]) => l.length).map(([l, one, many]) => `${names([...l])} ${l.length === 1 ? one : many}`).join(' · ');
@@ -309,6 +311,8 @@ function ChiefHero({ live, state }: { live: A.OfficeView; state: Json }) {
       <span className="ch-art"><ChiefArt mood={live.chief.mood} d={9} hero whole /></span>
       <div className="ch-body">
         <h2 className="ch-name">Chief</h2>
+        <p className={`ch-status${needs ? '' : resting ? ' rest' : ' work'}`}><i aria-hidden />{needs ? 'Needs you' : resting ? 'Resting' : 'At work'}</p>
+        <p className="ch-line">{A.chiefSaid(state) || live.chief.line}</p>
         <p className="ch-say">{A.chiefSaid(state) || live.chief.line}</p>
         {crew.length > 0 && <div className="ch-crew">{crew.slice(0, 5).map((c) => { const k = seat(c); return <a key={c.id} href={hrefOf(c.id)} className="ch-face" aria-label={`${c.name}: ${A.railWord(c, live).word}`}>
           <Face who={c} size={44} />{BADGE[k] !== undefined && <i className={`ch-badge ${k}`} aria-hidden>{BADGE[k]}</i>}</a>; })}

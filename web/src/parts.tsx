@@ -653,7 +653,8 @@ export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; 
     <div className="card ask">
       <AskHead c={c} who={who} />
       <p className="ask-words">{question}</p>
-      {edit.box || <AskEvidence c={c.evidence === 'draft' && c.preview ? { ...c, preview: { ...c.preview, body: flowed(c.preview.body) } } : c} open={false} readAll={<a className="link" href={`#/ask/${c.id}`}>Read all</a>} />}
+      {edit.box || (c.kind === 'routine' && c.lines ? <div className="ask-lines">{c.lines.map((l, i) => <p key={i} className={`ask-line${i ? ' quiet' : ''}`}>{l}</p>)}</div>
+        : <AskEvidence c={c.evidence === 'draft' && c.preview ? { ...c, preview: { ...c.preview, body: flowed(c.preview.body) } } : c} open={false} readAll={<a className="link" href={`#/ask/${c.id}`}>Read all</a>} />)}
       {oops && <div className="send-failed" role="alert">That didn't go through. <button type="button" className="link inline" onClick={() => last.current && act(last.current)}>Try again</button></div>}
       {c.kind === 'routine' ? (
         <>

@@ -993,7 +993,9 @@ function AskCard({ c, who, state, onDone, canAct, offline, open }: { c: A.Card; 
     <View style={[s.askInline, { borderTopColor: t.line2 }]}>
       <AskHead c={c} who={who} />
       <T style={s.askWords}>{question}</T>
-      {edit.box || <AskEvidence c={c} open={false} readAll={<Btn label="Read all" onPress={() => open(c)} />} />}
+      {edit.box || (c.kind === 'routine' && c.lines ? <View style={{ gap: 4, marginTop: 8 }}>{c.lines.map((l: string, i: number) =>
+        <T key={i} tone={i ? 'mute' : 'ink2'} style={i ? s.small : { fontSize: 15, lineHeight: 24 }}>{l}</T>)}</View>
+        : <AskEvidence c={c} open={false} readAll={<Btn label="Read all" onPress={() => open(c)} />} />)}
       {oops && <T tone="pinkInk" style={s.small}>That didn't go through. Try again.</T>}
       {offline ? <T tone="mute" style={s.small}>You can answer once the home computer is back.</T>
         : !canAct ? <T tone="mute" style={s.small}>This phone watches; answer on another phone or the computer.</T> : c.kind === 'connect' ? (
@@ -1134,7 +1136,14 @@ function HomeBar({ state, view, go, mode, pick }: { state: Json; view: A.OfficeV
     </Pressable>)}
   </View>;
   const tools = <View style={[s.row, { justifyContent: 'space-between' }]}>{gear}{seg}</View>;
-  if (mode === 'chat') return tools;
+  // Chat opens on Chief: his header with the gear beside it, then the switch under it; his thread carries no pinned card.
+  if (mode === 'chat') return <View style={{ gap: 2 }}>
+    <View style={[s.row, { justifyContent: 'space-between', alignItems: 'center' }]}>
+      <View style={{ flex: 1, minWidth: 0 }}><ChiefHero live={view} state={state} /></View>
+      {gear}
+    </View>
+    {seg}
+  </View>;
   // Office is a slim header: the title, the count line, then the switch.
   return (
     <View style={{ gap: 6 }}>
@@ -1199,7 +1208,7 @@ function ChiefHero({ live, state }: { live: A.OfficeView; state: Json }) {
   const resting = !needs && live.chief.mood === 'rest';
   return (
     <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center', paddingVertical: 4 }} accessibilityLabel="Chief">
-      <ChiefArt mood={live.chief.mood} size={64} />
+      <ChiefArt mood={live.chief.mood} size={112} />
       <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
         <T style={[s.serif, { fontSize: 22, lineHeight: 26 }]}>Chief</T>
         <View style={[s.row, { gap: 6 }]}><View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: needs ? t.pink : resting ? t.line2 : t.green }} />
@@ -1247,7 +1256,7 @@ function Home(ctx: Ctx) {
     <HomeBar state={state} view={view} offline={offline} go={go} mode={mode} pick={pick} />
   </View>;
   // Chat: Chief's hero and Needs you stay over his thread, which scrolls on its own to the newest line.
-  if (mode === 'chat') return <View style={{ flex: 1 }}>{top}<Chat {...ctx} id="chief" hero={<View style={{ gap: 12 }}><ChiefHero live={view} state={state} /><NeedsPin state={state} cards={needs} open={open} go={go} /></View>} /></View>;
+  if (mode === 'chat') return <View style={{ flex: 1 }}>{top}<Chat {...ctx} id="chief" hero={<></>} /></View>;
   return (
     <View style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={s.page} keyboardShouldPersistTaps="handled">

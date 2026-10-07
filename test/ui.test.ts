@@ -704,9 +704,14 @@ test('the phone office: one grouped list, helmets still, the shared view model',
   assert.doesNotMatch(motion, /Hop|Pulse|Land|Loop|Note|Fly|useOnBeat/, 'no room loops left');
   const home = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
   const top = home.slice(home.indexOf('function Home('), home.indexOf('function ChatList('));
-  assert.ok(top.indexOf('<HomeBar') < top.indexOf('<ChiefHero') && top.indexOf('<ChiefHero') < top.indexOf('<NeedsPin') && top.indexOf('<Office') < top.lastIndexOf('{pinned}'), 'Chat: the bar, Chief\'s hero, then Needs you pinned; Office: Needs you right under the grouped list');
+  const bar = home.slice(home.indexOf('function HomeBar('), home.indexOf('function NeedsPin('));
+  const chatHead = bar.slice(bar.indexOf("if (mode === 'chat')"));
+  assert.ok(chatHead.indexOf('<ChiefHero') > 0 && chatHead.indexOf('{seg}') > chatHead.indexOf('<ChiefHero'), 'Chat header: the hero, then the switch under it');
+  assert.match(top, /hero=\{<><\/>}/, 'the thread carries an empty hero slot (tray lines keep flowing)');
+  assert.doesNotMatch(top, /NeedsPin/, 'no pinned card in the conversation; the ask sits inline');
+  assert.ok(top.indexOf('<Office') < top.lastIndexOf('{pinned}'), 'Office: Needs you right under the grouped list');
   assert.match(top, /few=\{1\}/, 'one pinned row in Office, and "See all N" for the rest');
-  assert.match(top, /if \(mode === 'chat'\) return <View style=\{\{ flex: 1 \}\}>\{top\}<Chat \{\.\.\.ctx\} id="chief" hero=\{/, 'Chat: the bar over Chief\'s own thread, which carries his hero and Needs you, and his box');
+  assert.match(top, /if \(mode === 'chat'\) return <View style=\{\{ flex: 1 \}\}>\{top\}<Chat \{\.\.\.ctx\} id="chief" hero=\{/, 'Chat: the header over Chief\'s own thread, and his box');
 });
 
 test("Chief's mood is the first matching row of the table, and the line follows the face", () => {
