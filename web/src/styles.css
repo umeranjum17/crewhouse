@@ -3,10 +3,10 @@
 @font-face { font-family: 'Instrument Serif'; src: url(/fonts/InstrumentSerif-Regular.ttf) format('truetype'); font-weight: 400; font-display: swap; }
 @font-face { font-family: 'JetBrains Mono'; src: url(/fonts/JetBrainsMono.woff2) format('woff2'); font-display: block; }
 :root {
-  --bg: #F6F7F9; --solid: #FFFFFF; --soft: #EEF0F4; --line: #E3E6EC; --line2: #D2D7E0;
-  --ink: #141A2A; --ink2: #4D566B; --mute: #666D80; --go: #141A2A; --go-ink: #FFFFFF;
-  --pink: #F0482A; --ok: #1E9A58; --amber: #B86E00; --danger: #C4372C; --soft-accent: #FFE9E3;
-  --card: var(--solid); --warm: #FFF1DC; --on-pink: #FFFFFF; --pink-ink: #C4331A;
+  --bg: #F3EEE3; --solid: #EBE5D7; --soft: #E0D7C0; --line: #D3C9B0; --line2: #BDB096;
+  --ink: #1D1B18; --ink2: #575046; --mute: #6B665D; --go: #3D6FD6; --go-ink: #FFFFFF;
+  --pink: #3D6FD6; --ok: #1C9F63; --amber: #B86E00; --danger: #C4372C; --soft-accent: #DBE6F8;
+  --card: var(--solid); --warm: #E9E1CB; --on-pink: #FFFFFF; --pink-ink: #3D6FD6;
   --serif: 'Instrument Serif', Georgia, serif; --ok-ink: var(--ok); --wait: var(--pink); --shadow: var(--line2);
   --cell-in: #FFEFB8; --cell-calc: #DAE8FB;
   --e1: 0 1px 2px rgba(20,18,26,.04), 0 4px 16px rgba(20,18,26,.06);
@@ -15,12 +15,12 @@
   --ease: cubic-bezier(.2,.8,.2,1); color-scheme: light;
 }
 [data-theme='night'] {
-  --bg: #111014; --solid: #1A191E; --soft: #151418; --line: #2A2830; --line2: #36333D;
-  --ink: #F1EFEA; --ink2: #ABA7B1; --mute: #88848E; --go: #F1EFEA; --go-ink: #111014;
-  --pink: #FF6A4D; --ok: #4BD08A; --amber: #F2B04B; --danger: #FF6B5E; --soft-accent: #3A2220; --pink-ink: #FF8A70;
+  --bg: #0C0C0B; --solid: #131312; --soft: #060605; --line: #262625; --line2: #3A3A38;
+  --ink: #ECECEC; --ink2: #C9C9C5; --mute: #9B9B98; --go: #0A84FF; --go-ink: #FFFFFF;
+  --pink: #0A84FF; --ok: #30D158; --amber: #F2B04B; --danger: #FF6B5E; --soft-accent: #16283F; --pink-ink: #0A84FF;
   --e1: 0 0 0 1px var(--line), 0 4px 16px #0003;
   --e2: 0 0 0 1px var(--line2), 0 16px 48px #0008;
-  --warm: #2B2319; --on-pink: #1A0F14; --cell-in: #3A3118; --cell-calc: #1B2B42;
+  --warm: #1A1815; --on-pink: #FFFFFF; --cell-in: #3A3118; --cell-calc: #1B2B42;
   color-scheme: dark;
 }
 
@@ -82,6 +82,19 @@ b { font-weight: 600; }
 /* art */
 .art { font-family: var(--art); line-height: 1; white-space: pre; margin: 0; letter-spacing: 0; }
 .art i { font-style: normal; }
+/* The helmet's mood colours: eyes light when here, blue when needed, a blue scan while thinking, dim at rest. */
+.helmet[data-mode="needs"] .eye { color: var(--pink); }
+.helmet[data-mode="think"] .scan { color: var(--pink); }
+.helmet[data-mode="rest"] { color: var(--mute); }
+/* Whole helmets size like the old figure: the hero slot first, then anywhere centred. */
+.helmet { font-size: 9px; }
+.ch-art .helmet { font-size: 11.5px; }
+/* The old figure bled past the slot's edge; text art must not clip, so the helmet resets the bleed. */
+@media (max-width: 899px) { .ch-art .helmet { font-size: 9px; } .ch-art:has(> .helmet) { margin-left: 0; } }
+@media (max-width: 359px) { .ch-art .helmet { font-size: 6px; } }
+@media (max-width: 359px) and (max-height: 700px) { .home-chat .ch-art .helmet { font-size: 4.5px; } }
+/* Standalone times and counts set in a column: the only mono outside the art. */
+.time { font-family: var(--art); font-size: 12px; letter-spacing: 0; color: var(--mute); }
 .dots { display: grid; grid-template-columns: repeat(var(--w), var(--d)); gap: calc(var(--d) * .22); width: max-content; }
 .dots b { width: var(--d); height: var(--d); border-radius: 50%; background: transparent; }
 .dots.crisp { gap: 0; image-rendering: pixelated; }

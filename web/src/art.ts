@@ -17,6 +17,80 @@ function draw(w: number, h: number, ...layers: [number, number, string[]][]): Bi
   return out.map((r) => r.join(''));
 }
 
+// ── The helmet: Chief and every helper wear one, drawn in density characters with a dark visor (the Term-look
+// mascot). mode: here | needs | think | rest (rest = eyes shut). Ported from the look board's static generator:
+// the same squircle (x⁴+y⁴), visor, eyes and think-scan math; only the markup became cells, so the web (<pre>),
+// the phone (dots) and the icon script (rects) all draw the same head. ──
+export const RAMP = ' .:-=+*#%@';
+export type HelmetMode = 'here' | 'needs' | 'think' | 'rest';
+export const HELMET_MODES: HelmetMode[] = ['here', 'needs', 'think', 'rest'];
+/** Every app mood wears one of the helmet's four moods (via the five poses: work thinks, pleased sits here). */
+export const helmetOf = (m: Mood | Pose | HelmetMode = 'idle'): HelmetMode => {
+  if (m === 'here' || m === 'needs' || m === 'think' || m === 'rest') return m;
+  const p = poseOf(m);
+  return p === 'needs' ? 'needs' : p === 'work' ? 'think' : p === 'rest' ? 'rest' : 'here';
+};
+export type HelmetCell = { ch: string; eye?: true; scan?: true };
+/** The helmet as cells: ' ' is bare canvas, eye/scan cells wear the mood colour. */
+export function helmet(cols: number, mode: HelmetMode = 'here', night = true, beat = 0): HelmetCell[][] {
+  const rows = Math.round(cols * 0.5);
+  const scan = ((beat % 24) / 23) * 1.8 - 0.9;
+  const grid: HelmetCell[][] = [];
+  for (let r = 0; r < rows; r++) {
+    const row: HelmetCell[] = [];
+    for (let c = 0; c < cols; c++) {
+      const x = ((c + 0.5) / cols) * 2 - 1, y = ((r + 0.5) / rows) * 2 - 1;
+      const d = x ** 4 + (y * 1.08) ** 4;
+      if (d > 1) { row.push({ ch: ' ' }); continue; }
+      const visor = Math.abs(y - 0.08) < 0.3 && Math.abs(x) < 0.76;
+      if (visor) {
+        const shut = mode === 'rest';
+        const eye = Math.abs(Math.abs(x) - 0.34) < 0.11 && Math.abs(y - 0.08) < (shut ? 0.05 : 0.17);
+        if (eye && mode !== 'think') { row.push({ ch: shut ? '-' : '@', eye: true }); continue; }
+        if (mode === 'think' && Math.abs(x - scan) < 0.07) { row.push({ ch: '|', scan: true }); continue; }
+        row.push({ ch: ' ' });
+        continue;
+      }
+      const z = Math.sqrt(Math.max(0, 1 - Math.min(1, d)));
+      const lx = x + 0.45, ly = y + 0.55;
+      let v = 0.12 + 0.62 * z * Math.exp(-(lx * lx + ly * ly) * 1.1) + 0.18 * z;
+      v = Math.max(0, Math.min(1, v - (d > 0.86 ? 0.12 : 0)));
+      const jitter = (((c * 7 + r * 13 + beat * 5) % 17) === 0 ? 1 : 0) * (beat % 2 ? 1 : -1);
+      const k = Math.max(1, Math.min(RAMP.length - 1, Math.round((night ? v : 1 - v * 0.8) * (RAMP.length - 1)) + jitter));
+      row.push({ ch: RAMP[k] });
+    }
+    grid.push(row);
+  }
+  return grid;
+}
+/** The helmet as plain text rows, for the web's <pre className="art">. */
+export const helmetText = (cols: number, mode: HelmetMode = 'here', night = true, beat = 0): string[] =>
+  helmet(cols, mode, night, beat).map((r) => r.map((c) => c.ch).join(''));
+/** The helmet as a dot bitmap for the phone's Dots path (no mono text on the phone): one dot per character,
+ *  the letter its density step, 'e' an eye and 's' the think-scan. Opacity carries the shading. */
+export function helmetDots(cols: number, mode: HelmetMode = 'here', night = true, beat = 0, eye = night ? '#ececec' : '#1d1b18'): { rows: Bitmap; pal: Palette } {
+  const ink: [number, number, number] = night ? [236, 236, 236] : [29, 27, 24];
+  const pal: Palette = { e: mode === 'needs' ? '#0a84ff' : eye, s: '#0a84ff' };
+  for (let k = 1; k < RAMP.length; k++) pal[String(k)] = `rgba(${ink[0]},${ink[1]},${ink[2]},${(0.2 + 0.8 * (k / (RAMP.length - 1))).toFixed(2)})`;
+  const rows = helmet(cols, mode, night, beat).map((r) => r.map((c) =>
+    c.ch === ' ' ? '.' : c.eye ? 'e' : c.scan ? 's' : String(Math.max(1, RAMP.indexOf(c.ch)))).join(''));
+  return { rows, pal };
+}
+/** The helmet as rects, for scripts/icons.mjs: no font needed, the same head at any size. */
+export function helmetSvg(cols: number, mode: HelmetMode = 'here', o: { night?: boolean; beat?: number; ink?: string; eye?: string; scan?: string; bg?: string; cw?: number; ch?: number } = {}): string {
+  const night = o.night ?? true, ink = o.ink ?? (night ? '#ececec' : '#1d1b18');
+  const eye = o.eye ?? (mode === 'needs' ? '#0a84ff' : ink), scan = o.scan ?? '#0a84ff';
+  const cw = o.cw ?? 10, chh = o.ch ?? 16, cells = helmet(cols, mode, night, o.beat ?? 0);
+  const w = cols * cw, h = cells.length * chh;
+  let s = `<svg viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">${o.bg ? `<rect width="${w}" height="${h}" fill="${o.bg}"/>` : ''}`;
+  cells.forEach((row, y) => row.forEach((cell, x) => {
+    if (cell.ch === ' ') return;
+    const op = cell.scan || cell.eye ? 1 : 0.2 + 0.8 * (Math.max(1, RAMP.indexOf(cell.ch)) / (RAMP.length - 1));
+    s += `<rect x="${x * cw}" y="${y * chh}" width="${cw}" height="${chh}" fill="${cell.scan ? scan : cell.eye ? eye : ink}" opacity="${op.toFixed(2)}"/>`;
+  }));
+  return s + '</svg>';
+}
+
 // ── Studio Chief (B1): one ink line, dot eyes, paper and vermilion. Chief is the white bean in the black bowler with
 // the red band; his personality lives in the brows, a small handlebar, the hat and two line arms. The crew are pastel
 // beans, each with one prop. Hand-drawn SVG; the phone renders the same drawings to PNGs (scripts/icons.mjs). ──
