@@ -11,24 +11,66 @@ export const slugOf = (s) => String(s ?? '').toLowerCase().normalize('NFKD').rep
 export const KEYS = ['does', 'aim', 'gets', 'how', 'great'];
 const COLORS = { magenta: '#C8328A', green: '#2E8A62', blue: '#3355C2', purple: '#6D51C4', orange: '#C9542F', teal: '#2F7F8A' };
 
+/** One bounded fetch path for both imports and their published catalogues. */
+export async function published(url) {
+  let res;
+  try { res = await fetch(url, { signal: AbortSignal.timeout(20_000), headers: { 'user-agent': 'Mozilla/5.0 Crewhouse' } }); }
+  catch (e) { throw new Error(`could not reach ${new URL(url).hostname} (${e?.message ?? e})`); }
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`${new URL(url).hostname} answered status ${res.status}`);
+  const data = Buffer.from(await res.arrayBuffer());
+  if (data.length > 2_000_000) throw new Error('that published page is too large to read');
+  return data;
+}
+
+/** Read published Next flight JSON, never execute the page or infer a missing list. */
+function embedded(page, field, opening) {
+  const flight = [...page.matchAll(/self\.__next_f\.push\((\[.*?\])\)<\/script>/gs)]
+    .map((m) => { try { return JSON.parse(m[1])[1] ?? ''; } catch { return ''; } }).join('');
+  const text = flight || page.replace(/\\(["'\\/])/g, '$1');
+  const from = text.indexOf(`"${field}":${opening}`);
+  if (from < 0) return null;
+  const start = from + field.length + 3;
+  let depth = 0, quoted = false, escaped = false;
+  for (let i = start; i < text.length; i++) {
+    const c = text[i];
+    if (escaped) { escaped = false; continue; }
+    if (c === '\\') { escaped = true; continue; }
+    if (c === '"') quoted = !quoted;
+    if (quoted) continue;
+    if (c === '{' || c === '[') depth++;
+    if ((c === '}' || c === ']') && --depth === 0) {
+      try { return JSON.parse(text.slice(start, i + 1)); } catch { return null; }
+    }
+  }
+  return null;
+}
+
+export async function listPublished() {
+  const rows = embedded((await published('https://x.ai/bot/marketplace'))?.toString('utf8') ?? '', 'templates', '[');
+  if (!Array.isArray(rows) || !rows.length) throw new Error('the marketplace has no readable published catalogue');
+  const categories = Object.create(null);
+  for (const row of rows) {
+    if (!/^[a-z0-9][a-z0-9-]{0,60}$/.test(row.id) || typeof row.name !== 'string' || !Array.isArray(row.categories)) continue;
+    for (const category of row.categories.filter((c) => typeof c === 'string'))
+      (categories[category] ??= []).push({ slug: row.id, name: clean(row.name, 100), description: clean(row.description, 300) });
+  }
+  if (!Object.keys(categories).length) throw new Error('the marketplace has no readable published categories');
+  return { source: 'https://x.ai/bot/marketplace', categories };
+}
+
+export async function listAny() {
+  const skills = await import('./claude-skill.mjs');
+  const results = await Promise.allSettled([listPublished(), skills.listPublished()]);
+  return Object.fromEntries(results.map((r, i) => [i ? 'skills' : 'grok', r.status === 'fulfilled' ? r.value
+    : { error: r.reason.message, note: 'Say this source could not be reached or read; still offer import by name. Never invent its list.' }]));
+}
+
 /** The marketplace page's recipe: the visible facts plus the embedded skills, routines and integrations. */
 function parseGrokPage(page) {
   const facts = [...page.matchAll(/<li><p class="text-primary text-sm leading-6 whitespace-pre-wrap">(.*?)<\/p><\/li>/gs)]
     .map(([, t]) => t.replace(/<[^>]*>/g, '').replace(/&#x27;/g, "'").replace(/&quot;/g, '"').replace(/&#x2F;/g, '/').replace(/&amp;/g, '&').trim()).filter(Boolean);
-  const from = page.indexOf('\\"template\\":{');
-  let raw = null;
-  if (from >= 0) {
-    let i = from + 13, depth = 0, instr = false, esc = false;
-    for (; i < page.length; i++) {
-      const c = page[i];
-      if (esc) esc = false;
-      else if (c === '\\') esc = true;
-      else if (c === '"') instr = !instr;
-      else if (!instr && c === '{') depth++;
-      else if (!instr && c === '}') { if (!--depth) break; }
-    }
-    try { raw = JSON.parse(page.slice(from + 13, i + 1).replace(/\\(["'\\/])/g, '$1')); } catch { raw = null; }
-  }
+  const raw = embedded(page, 'template', '{');
   const list = (v) => Array.isArray(v) ? v : [];
   const profile = facts[0] ?? '';
   if (!raw || typeof raw.name !== 'string' || !profile) throw new Error('that marketplace page has no published recipe to import');
@@ -46,13 +88,9 @@ function parseGrokPage(page) {
 export async function fetchRecipe(slug) {
   const key = /^(?:https:\/\/(?:x\.ai\/bot\/marketplace\/bots|grok\.com\/marketplace)\/)?([a-z0-9][a-z0-9-]{0,60})\/?$/.exec(String(slug ?? '').trim().toLowerCase())?.[1];
   if (!key) throw new Error('name a marketplace bot, like "pg", or paste its marketplace address');
-  let res;
-  try {
-    res = await fetch(`https://x.ai/bot/marketplace/bots/${key}`, { signal: AbortSignal.timeout(20_000), headers: { 'user-agent': 'Mozilla/5.0 Crewhouse' } });
-  } catch (e) { throw new Error(`could not reach that marketplace page (${e?.message ?? e}); check the name`); }
-  if (!res.ok) throw new Error(`the marketplace answered status ${res.status}; check the name`);
-  const page = await res.text();
-  if (page.length > 2_000_000) throw new Error('that marketplace page is too large to read');
+  const data = await published(`https://x.ai/bot/marketplace/bots/${key}`);
+  if (!data) throw new Error('the marketplace answered status 404; check the name');
+  const page = data.toString('utf8');
   return { key, recipe: parseGrokPage(page) };
 }
 

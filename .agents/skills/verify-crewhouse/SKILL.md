@@ -86,16 +86,22 @@ every screen with no crewd — fine for pure-UI layout checks, never a substitut
 drive. Anything a person sees also owes the Review evidence set below.
 
 **Real model words** (a proof of what Chief or a helper actually says) need the real engine
-and a signed-in account: run the same launch without `CREWHOUSE_ENGINE=stub`, with HOME/XDG
-under `/home/umer/lab-tmp/crewhouse-retained/home` and `CREWHOUSE_STATE_DIR`/`CREW_DIR`/`TOOLS_DIR`
-pointing at its `run/state`, `run/crew`, `run/tools` (never a copy; one lane at a time, under
-the heavy lock; its `start.sh`/`stop.sh` do this, on port 7751), `PATH=/usr/bin:/bin` and `MISE_OFFLINE=1` (a shell PATH leaks into the
-sealed engine home and can make the reseal too big to boot), and stop it with TERM to crewd and
-its children, waiting for `auth-store.sealed` to replace the plaintext state. `GET /api/accounts`
-shows `signedIn: true` once the engine is ready. A `Codex error: The usage limit has been
-reached` or `asking us to slow down` in `run/state/logs/openclaw.log` means the account rests:
-wait it out, never sign in again. That home carries earlier lanes' chat history
-and notes, which reach Chief's prompt; say so beside any answer it gives.
+and a signed-in account: run the same isolated launch without `CREWHOUSE_ENGINE=stub`.
+For Claude proofs hold `/home/umer/firstmate/config/fm-cred-lock.sh` for the entire engine
+lifetime, through `/home/umer/firstmate/config/fm-mem-gate.sh`. Use
+`PATH=/home/umer/.local/bin:/usr/bin:/bin`, `MISE_OFFLINE=1`. After the log says
+`crewd engine ready`, symlink only the dedicated test credential
+`/home/umer/lab-tmp/claude-test-cred/home/.claude/.credentials.json` into
+`$LAB/state/openclaw/home/.claude/.credentials.json`; never read/copy the person's credentials.
+Check `claude auth status` with that engine HOME and CLAUDE_CONFIG_DIR and the engine's own
+Claude CLI preflight before sending; select `["claude"]` with `PUT /api/bots/chief/models`.
+A positive preflight does not witness a successful turn: the CLI may fail to refresh an
+expired OAuth session. If the turn parks, inspect its terminal failure in the engine log,
+retain pre/post results and stop; never infer admission from missing crewd tool events.
+This route is hosted, not a scripted provider.
+Stop crewd with TERM and await its exit before releasing the lock.
+Sign-in tests alone reuse `/home/umer/lab-tmp/crewhouse-retained`; never copy its history.
+Quota errors mean the account rests: report the bound, never mint another sign-in.
 
 ## Evidence
 

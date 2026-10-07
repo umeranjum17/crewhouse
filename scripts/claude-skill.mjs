@@ -2,7 +2,7 @@
 // one helper around it. Same three exports as grok-recipe.mjs so crewd's thin crew_import hook stays
 // generic; page/repo-format changes land here, never in crewd. Only skills whose own LICENSE.txt grants
 // reuse (Apache 2.0) are imported — anything else is refused, never copied.
-import { short, clean, slugOf } from './grok-recipe.mjs';
+import { short, clean, slugOf, published as get } from './grok-recipe.mjs';
 export { writePlanned } from './grok-recipe.mjs';
 
 const OFFICIAL = 'anthropics/skills';
@@ -18,11 +18,13 @@ function locate(ref) {
   return { owner: m[1] ?? 'anthropics', repo: m[2] ?? 'skills', path };
 }
 
-async function get(url) {
-  const res = await fetch(url, { signal: AbortSignal.timeout(20_000), headers: { 'user-agent': 'Mozilla/5.0 Crewhouse' } });
-  if (res.status === 404) return null;
-  if (!res.ok) throw new Error(`the repo answered status ${res.status}`);
-  return Buffer.from(await res.arrayBuffer());
+export async function listPublished() {
+  const source = `https://api.github.com/repos/${OFFICIAL}/contents/skills`;
+  const rows = JSON.parse((await get(source))?.toString('utf8') ?? 'null');
+  if (!Array.isArray(rows)) throw new Error('the skill repo has no readable published list');
+  const skills = rows.filter((r) => r.type === 'dir' && /^[a-z0-9][a-z0-9-]{0,60}$/.test(r.name)).map((r) => ({ skill: r.name }));
+  if (!skills.length) throw new Error('the skill repo has no readable published skills');
+  return { source, skills, note: 'Published names, not a promise of importability: import checks each skill\'s reuse license.' };
 }
 
 /** A skill's own license must allow reuse; the kept LICENSE.txt is the attribution. */

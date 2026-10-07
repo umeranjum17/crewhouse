@@ -4,17 +4,20 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { setup } from './lab.ts';
+import { setup, settled, release, lastSaid } from './lab.ts';
+import type { StubRuntime } from '../src/stub-runtime.ts';
 import * as disk from '../src/bots.ts';
+import { TOOLS } from '../src/openclaw/runtime.ts';
+import { plain } from '../web/src/adapter.ts';
 
 const blob = (o: unknown) => '\\"template\\":{' + JSON.stringify(o).replace(/"/g, '\\"').slice(1) + '},\\"featured\\":false';
-const page = (o: unknown) => `<html><body><ul><li><p class="text-primary text-sm leading-6 whitespace-pre-wrap">I am Testy the prospector. I research named people on the public web and draft the first line. I never send without your yes.</p></li><li><p class="text-primary text-sm leading-6 whitespace-pre-wrap">Job: outbound prospecting. Build a list, research each name, draft the opener.</p></li><li><p class="text-primary text-sm leading-6 whitespace-pre-wrap">User prefs, fill during getting started: what they sell = unset, who buys it = unset.</p></li></ul><script>${blob(o)}</script></body></html>`;
+const page = (o: unknown) => `<html><body><ul><li><p class="text-primary text-sm leading-6 whitespace-pre-wrap">I am Testy the prospector. I research named people on the public web and draft the first line. I never send without your yes.</p></li><li><p class="text-primary text-sm leading-6 whitespace-pre-wrap">Job: outbound prospecting. Build a list, research each name, draft the opener.</p></li><li><p class="text-primary text-sm leading-6 whitespace-pre-wrap">User prefs, fill during getting started: what they sell = unset, who buys it = unset.</p></li></ul><script>\\"template\\":[];${blob(o)}</script></body></html>`;
 const recipe = () => ({ id: 'tb', name: 'Testy Prospecting', creatorName: 'Grok Team', handle: 'grokteam', description: 'Finds prospects and drafts the first line. Nothing sends without your yes.', summary: 'Prospecting.', categories: ['Sales'], installCount: 0, color: 'magenta', shape: 'pebble', addHref: '/bot/share1', imageUrl: '', instructions: '',
   memories: [{ id: 'memory-0', name: 'memory 1', description: '$42' }],
   skills: [{ id: 'skill-0', name: 'Getting started', description: 'Use to start.', content: 'Ask what they sell and who buys it.' }, { id: 'skill-1', name: 'Draft a first line', description: 'Use to draft.', content: 'Draft one line with a source link.' }],
   routines: [{ id: 'routine-0', name: 'Monday list top-up', summary: 'Every Monday, adds new names.' }],
   integrations: [{ id: 'Gmail', name: 'Gmail', description: 'Drafts sit unsent in your account.' }, { id: 'slack', name: 'slack', description: 'Posts drafts to a channel.' }] });
-const stubFetch = (p: string) => { (globalThis as any).fetch = async () => ({ ok: true, text: async () => p }); };
+const stubFetch = (p: string) => { (globalThis as any).fetch = async () => ({ ok: true, status: 200, arrayBuffer: async () => Buffer.from(p) }); };
 const unstub = () => { delete (globalThis as any).fetch; };
 const SKILL_MD = `---\nname: test-skill\ndescription: Make tiny web toys. Use when the person asks for a small interactive page.\nlicense: Complete terms in LICENSE.txt\n---\n\nBuild it with [the template](template.js) and ship it. Missing notes live in \`gone.md\`.\n`;
 const APACHE = 'Apache License\nVersion 2.0, January 2004\nhttp://www.apache.org/licenses/LICENSE-2.0\nTERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION';
@@ -24,6 +27,56 @@ const stubSkillFetch = (license = APACHE) => { (globalThis as any).fetch = async
   if (!(file in hit)) return { ok: false, status: 404 };
   return { ok: true, status: 200, text: async () => hit[file], arrayBuffer: async () => Buffer.from(hit[file]) };
 }; };
+
+test('Chief lists published categories and skills, proposes one, then imports after one yes', async () => {
+  const { crew, cfg, db, done } = setup();
+  const original = globalThis.fetch;
+  const calls: string[] = [];
+  globalThis.fetch = (async (url: string) => {
+    calls.push(String(url));
+    const body = String(url).endsWith('/marketplace')
+      ? `<script>self.__next_f.push(${JSON.stringify([1, `0:${JSON.stringify({ templates: [recipe(), { ...recipe(), id: 'designer', categories: ['Design', 'GTM', 'Marketing'] }] })}\n`])})</script>`
+      : String(url).includes('api.github.com') ? JSON.stringify([{ name: 'test-skill', type: 'dir' }])
+      : page(recipe());
+    return new Response(body);
+  }) as typeof fetch;
+  try {
+    const runtime = crew.runtime as StubRuntime;
+    for (const input of [{ list: true }, { input: '{"list": true}', tool: 'crew_import' }, { list: 'true' }]) {
+      const listed = await crew.post('chief', `What templates are published? [tool crew_import ${JSON.stringify(input)}] ask permission`);
+      await release(crew, 'chief', 'For your prospecting goal, Testy Prospecting fits because it researches names and drafts openers. Import it?');
+      await settled(db, listed!.task);
+      const seen = runtime.transcript(db.get('SELECT session FROM tasks WHERE id = ?', listed!.task)!.session);
+      for (const category of ['Design', 'GTM', 'Marketing', 'Sales']) assert.ok(seen.includes(category), `catalogue accepts recorded input ${JSON.stringify(input)}`);
+      assert.ok(seen.includes('test-skill'), 'the official skill list reaches Chief');
+      assert.match(lastSaid(db, 'chief'), /Testy Prospecting.*researches names/);
+      assert.equal(crew.bots().length, 1, 'listing and proposing seat nobody');
+    }
+    const native = TOOLS.find((t) => t.name === 'crew_import')!.parameters as { properties: Record<string, { type: string }> };
+    assert.equal(native.properties.list.type, 'boolean', 'the native model gets a typed list flag');
+    assert.equal(native.properties.name.type, 'string');
+    const malformed = await crew.post('chief', 'List [tool crew_import {"input":"[]"}]');
+    await settled(db, malformed!.task);
+    assert.match(runtime.transcript(db.get('SELECT session FROM tasks WHERE id = ?', malformed!.task)!.session), /use list: true/);
+    assert.equal(crew.bots().length, 1, 'an invalid envelope never imports');
+    const yes = await crew.post('chief', 'yes [tool crew_import {"slug":"tb"}]');
+    await settled(db, yes!.task);
+    assert.ok(crew.bots().some((b) => b.template === 'grok-tb'));
+    assert.ok(existsSync(join(disk.botDir(cfg, 'testy-prospecting'), 'SOURCE.md')));
+    assert.equal(calls.filter((u) => u.endsWith('/marketplace')).length, 3);
+    assert.equal(calls.filter((u) => u.endsWith('/bots/tb')).length, 1, 'the same import route fetched the recipe');
+    globalThis.fetch = (async () => { throw new Error('source offline'); }) as typeof fetch;
+    const missed = await crew.post('chief', 'List again [tool crew_import {"list":true}] ask permission');
+    await release(crew, 'chief', 'the published Grok/Claude catalogue - `crew_import` rejected the list request');
+    await settled(db, missed!.task);
+    assert.equal(plain(lastSaid(db, 'chief')), 'the published Grok/Claude catalogue - the template importer rejected the list request');
+    assert.equal(plain('Claude skills: claude-api'), 'Claude skills: claude-api');
+    assert.doesNotMatch(plain('anthropic/claude-opus-5 used mcp__crewhouse__crew_import'), /claude-opus|mcp__|crew_import/);
+    const errors = runtime.transcript(db.get('SELECT session FROM tasks WHERE id = ?', missed!.task)!.session);
+    assert.match(errors, /source offline/);
+    assert.match(errors, /import by name/i);
+  } finally { globalThis.fetch = original; done(); }
+});
 
 test('import hires the marketplace bot as the person\u2019s own helper, re-import pulls the latest', async () => {
   const { crew, cfg, done } = setup();
