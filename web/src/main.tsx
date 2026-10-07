@@ -12,7 +12,7 @@ import { keepDraft } from './draft.ts';
 import type { IconName } from './icons.ts';
 import { Screen } from './screen.tsx';
 import { hear, Office, summaryOf, useOffice } from './office.tsx';
-import { AccountCard, ConnectApp, ConnectCard, openTab, sheet, SignIn, Unreachable } from './flows.tsx';
+import { AccountCard, ConnectApp, ConnectCard, NEEDS_SIGNIN, openTab, sheet, SignIn, Unreachable } from './flows.tsx';
 
 type View = 'home' | 'chief' | 'room' | 'crew' | 'add' | 'helper' | 'things' | 'routines' | 'settings' | 'apps' | 'skills' | 'ask' | 'share';
 type Route = { view: View; id?: string; tab?: string; m?: string; file?: string };
@@ -214,9 +214,10 @@ function HomeBar({ ctx, mode, pick }: { ctx: Ctx; mode: HomeMode; pick: (m: Home
   const seg = <div className="seg home-mode" role="tablist" aria-label="Home view">{HOME_MODES.map(([m, l]) => <button key={m} role="tab" aria-selected={mode === m} data-mode={m} className={mode === m ? 'on' : ''} onClick={() => pick(m)}><Icon name={m === 'chat' ? 'chief' : 'office'} />{l}{m === 'office' && mode === 'chat' && n.needs > 0 && <span className="count">{n.needs}</span>}</button>)}</div>;
   const tools = <div className="home-tools">{gear}{seg}</div>;
   // A phone header is one block (Term): the hero carries the gear top-right and the switch below its lines.
+  // While the computer is out of reach its own words win; the sign-in wait rides along otherwise.
   const phone = typeof matchMedia !== 'undefined' && matchMedia('(max-width: 899px)').matches;
   if (mode === 'chat') return phone
-    ? <header className="home-bar is-chat"><ChiefHero live={ctx.live} state={ctx.state} side={gear} below={seg} /></header>
+    ? <header className="home-bar is-chat"><ChiefHero live={ctx.live} state={ctx.state} signedOut={chiefLocal(ctx).signedOut && !ctx.offline} side={gear} below={seg} /></header>
     : <header className="home-bar is-chat"><div className="home-meta">{needs}{busy}{still}</div>{tools}</header>;
   // Office is a slim bar over the grid: the title (phone width only), the count line, the switch and settings.
   return (
@@ -301,23 +302,27 @@ const names = (l: string[]) => (l.length < 2 ? l.join('') : `${l.slice(0, -1).jo
 const BADGE: Partial<Record<A.Seat | 'done', string>> = { needs: '!', chat: '!', working: '', quiet: '?', failed: '!', done: '✓', waiting: '…' };
 
 /** The phone header (Term): mascot left; name with the gear top-right; status lines; the switch below them in that
- *  column. Rendered only from HomeBar's phone branch; the desk rail (lane 3) carries its own header. */
-function ChiefHero({ live, state, side, below }: { live: A.OfficeView; state: Json; side?: ReactNode; below?: ReactNode }) {
+ *  column. Rendered only from HomeBar's phone branch; the desk rail (lane 3) carries its own header. Chief's own
+ *  state comes from the same table the thread reads (A.chief, with the sign-in HomeBar passes down): with no
+ *  account signed in he waits for a sign-in, whatever the crew's seats say. */
+function ChiefHero({ live, state, signedOut, side, below }: { live: A.OfficeView; state: Json; signedOut?: boolean; side?: ReactNode; below?: ReactNode }) {
   const crew = A.roster(live.crew), seat = (c: A.OfficeMember) => A.railWord(c, live).seat;
-  // The phone header's own status: Needs you, or the one plain line under it.
-  const needs = live.needs.length > 0, resting = !needs && live.chief.mood === 'rest';
+  const chief = signedOut ? A.chief(state, { signedOut: true }) : live.chief;
+  // The phone header's own status: a sign-in wait first — the thread card's own flag, said once here
+  // (the line under it keeps the standing state) and never the green "At work".
+  const needs = live.needs.length > 0, out = !!signedOut, resting = !needs && !out && chief.mood === 'rest';
   const by = (k: (A.Seat | 'done')[]) => crew.filter((c) => k.includes(seat(c))).map((c) => c.name);
   const said = [[by(['needs', 'chat']), 'needs you', 'need you'], [by(['working']), 'working', 'working'], [by(['quiet']), 'gone quiet', 'gone quiet'], [by(['failed']), "didn't finish", "didn't finish"], [by(['waiting']), 'waiting', 'waiting']] as const;
   const caption = said.filter(([l]) => l.length).map(([l, one, many]) => `${names([...l])} ${l.length === 1 ? one : many}`).join(' · ');
   return (
     <section className="chief-hero" aria-label="Chief">
-      <span className="ch-art"><ChiefArt mood={live.chief.mood} d={9} hero whole /></span>
+      <span className="ch-art"><ChiefArt mood={chief.mood} d={9} hero whole /></span>
       <div className="ch-body">
         <div className="ch-title"><h2 className="ch-name">Chief</h2>{side}</div>
-        <p className={`ch-status${needs ? '' : resting ? ' rest' : ' work'}`}><i aria-hidden />{needs ? 'Needs you' : resting ? 'Resting' : 'At work'}</p>
+        <p className={`ch-status${out || needs ? '' : resting ? ' rest' : ' work'}`}><i aria-hidden />{out ? NEEDS_SIGNIN : needs ? 'Needs you' : resting ? 'Resting' : 'At work'}</p>
         <p className="ch-line">{A.stripLine(state)}</p>
         {below}
-        <p className="ch-say">{A.chiefSaid(state) || live.chief.line}</p>
+        <p className="ch-say">{A.chiefSaid(state) || chief.line}</p>
         {crew.length > 0 && <div className="ch-crew">{crew.slice(0, 5).map((c) => { const k = seat(c); return <a key={c.id} href={hrefOf(c.id)} className="ch-face" aria-label={`${c.name}: ${A.railWord(c, live).word}`}>
           <Face who={c} size={44} />{BADGE[k] !== undefined && <i className={`ch-badge ${k}`} aria-hidden>{BADGE[k]}</i>}</a>; })}
           {crew.length > 5 && <a className="ch-more" href="#/crew">+{crew.length - 5}</a>}</div>}
