@@ -2,7 +2,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { execFile, spawn, type ChildProcess } from 'node:child_process';
 import { closeSync, constants, copyFileSync, existsSync, fstatSync, ftruncateSync, mkdirSync, openSync, readFileSync, readdirSync, readlinkSync, realpathSync, rmSync, statSync, writeFileSync, writeSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { basename, dirname, join } from 'node:path';
+import { basename, dirname, join, relative, resolve } from 'node:path';
 import { Type } from 'typebox';
 import { CHIEF, type Config } from './config.ts';
 import type { Row, Store } from './db.ts';
@@ -2088,7 +2088,7 @@ export class Crew {
       if (!others) return own;
       return [...own, tool('crew_pass', `Hand the next step to another helper, for the same person: ${others}. Write what they should do and what "done" means. ` +
         'Pass finished files from your files/ with `files`; the person can watch the work in The crew.',
-        { bot: Type.String(), task: Type.String(), files: Type.Optional(Type.Array(Type.String())) }, (p) => this.pass(botId, String(p.bot ?? '').toLowerCase(), String(p.task ?? ''), p.files ?? []))];
+        { bot: Type.String(), task: Type.String(), files: Type.Optional(Type.Union([Type.Array(Type.String()), Type.String()])) }, (p) => this.pass(botId, String(p.bot ?? '').toLowerCase(), String(p.task ?? ''), p.files ?? []))];
     }
     const accounts = Object.keys(PROVIDERS).join(', ');
     // Chief coordinates and delegates finished files to helpers; their artifact tools need not occupy his first model call.
@@ -2151,19 +2151,20 @@ export class Crew {
     ];
   }
 
-  /** Files handed from one helper's files/ to another's, resolved and checked: only real files, still inside. */
-  private handFiles(from: string, files: string[]) {
-    const base = realpathSync(join(disk.botDir(this.cfg, from), 'files'));
-    return files.map((f) => {
-      const full = disk.insideBot(this.cfg, from, f);
-      if (!realpathSync(full).startsWith(base + '/') || !statSync(full).isFile()) throw fail('pass only files from your files/');
-      return { full, name: f.slice('files/'.length) };
+  private handFiles(from: string, files: unknown) {
+    const expected = 'use files: an array, JSON-string array or one path from your files/ (relative or your own absolute path), at most twenty existing files';
+    if (typeof files === 'string') { try { files = JSON.parse(files); } catch { files = [files]; } }
+    if (!Array.isArray(files) || files.length > 20 || files.some((f) => typeof f !== 'string')) throw fail(expected);
+    const dir = disk.botDir(this.cfg, from), base = join(realpathSync(dir), 'files');
+    return files.map((f: string) => {
+      let full = resolve(dir, f);
+      if (!full.startsWith(join(dir, 'files') + '/') && !full.startsWith(base + '/')) throw fail(`outside your files/: ${f}; ${expected}`);
+      try { full = realpathSync(full); } catch { throw fail(`missing file: ${f}; ${expected}`); }
+      if (!full.startsWith(base + '/') || !statSync(full).isFile()) throw fail(`outside your files/ or not a file: ${f}; ${expected}`);
+      return { full, name: relative(base, full) };
     });
   }
-
-  /** A helper hands the next step to another, for the person. Three hand-offs from one request at most, so two
-   *  helpers can't pass a job back and forth for ever. Chief is not handed work: the person talks to him. */
-  private pass(from: string, to: string, text: string, files: string[] = []) {
+  private pass(from: string, to: string, text: string, files: unknown = []) {
     const task = this.activeTask(from);
     const b = this.bot(to);
     if (!task) throw fail('pass work on while you are working on a task');
@@ -2171,11 +2172,10 @@ export class Crew {
     if (!text.trim()) throw fail('say what they should do');
     const hops = (task.hops ?? 0) + 1;
     if (hops > 3) throw fail('this job has been handed on three times already; finish it yourself, or tell the person what is left');
-    if (!Array.isArray(files) || files.length > 20 || files.some((f) => typeof f !== 'string')) throw fail('pass up to twenty files');
-    const checked = this.handFiles(from, files);
-    const detail = { to, text: text.trim(), files: files.slice(), root: task.root ?? task.id, parent: task.id, hops };
+    const checked = this.handFiles(from, files), paths = checked.map((f) => `files/${f.name}`);
+    const detail = { to, text: text.trim(), files: paths, root: task.root ?? task.id, parent: task.id, hops };
     if (disk.botConfig(this.cfg, from).handoff === 'ask') return this.propose(from,
-      `${this.bot(from)!.display} wants to hand this to ${b.display}: ${short(text, 160)}${files.length ? `, with ${files.map((f) => basename(f)).join(', ')}` : ''}`,
+      `${this.bot(from)!.display} wants to hand this to ${b.display}: ${short(text, 160)}${paths.length ? `, with ${paths.map((f) => basename(f)).join(', ')}` : ''}`,
       { pass: detail, preview: { head: `${this.bot(from)!.display} → ${b.display}`, body: text.trim() } });
     return this.handOn(from, detail, checked);
   }

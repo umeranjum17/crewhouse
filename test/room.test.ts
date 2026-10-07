@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { setup, holding, release, settled, until, task } from './lab.ts';
 import * as disk from '../src/bots.ts';
@@ -31,6 +31,43 @@ test('handoff copies only the passer’s files into the crew room', async () => 
   done();
 });
 
+test('Scout hands recorded file argument forms to Scribe through the engine', async () => {
+  const { db, cfg, crew, done } = setup();
+  // A person's crew directory may itself be a symlink; file authority is the physical bot, not the alias.
+  renameSync(cfg.crewDir, cfg.crewDir + '-actual'); symlinkSync(cfg.crewDir + '-actual', cfg.crewDir);
+  crew.onboard('Umer'); crew.recruit('scout', 'Scout', 'person'); crew.recruit('scribe', 'Scribe', 'person');
+  const name = 'who-else-does-this-crewh.docx', path = `files/${name}`;
+  const full = join(disk.botDir(cfg, 'scout'), path);
+  writeFileSync(full, 'Rivals research');
+  // seq 116, 120, 122 of real-attempt1/transcript/23-pass-calls.json; absolute path rebased to this bot.
+  for (const files of [[path], '["files/who-else-does-this-crewh.docx"]', path, full, realpathSync(full)]) {
+    const first = (await crew.post('scout', `[tool crew_pass ${JSON.stringify({ bot: 'scribe', task: 'Write the growth plan from these rivals. Done means: drafts only.', files })}]`))!.task;
+    await settled(db, first);
+    const next = db.get('SELECT * FROM tasks WHERE parent = ?', first);
+    assert.ok(next, `handoff failed for ${JSON.stringify(files)}`);
+    await settled(db, next.id);
+    assert.match(next.body, /Files handed over:\nfiles\/from-scout\/who-else-does-this-crewh.docx/);
+    assert.equal(readFileSync(join(disk.botDir(cfg, 'scribe'), 'files/from-scout', name), 'utf8'), 'Rivals research');
+    assert.ok(crew.snapshot().tasks.find((t: any) => t.id === next.id)?.files.includes(`files/from-scout/${name}`));
+  }
+  writeFileSync(join(disk.botDir(cfg, 'scribe'), 'files/private.md'), 'Not Scout’s');
+  symlinkSync(join(disk.botDir(cfg, 'scribe'), 'files/private.md'), join(disk.botDir(cfg, 'scout'), 'files/escape.md'));
+  for (const files of ['x', 'files/missing.docx', '../secret', 'files/escape.md', Array(21).fill(path)]) {
+    const first = (await crew.post('scout', `[tool crew_pass ${JSON.stringify({ bot: 'scribe', task: 'Test pass — ignore.', files })}]`))!.task;
+    await settled(db, first);
+    assert.equal(db.get('SELECT id FROM tasks WHERE parent = ?', first), undefined);
+    const call = db.get("SELECT data FROM events WHERE kind = 'run.call' AND json_extract(data, '$.task') = ?", first);
+    assert.match(JSON.parse(call!.data).head, /error:.*array.*path/i);
+  }
+  // Even replacing the whole files directory must not make another helper's absolute path ours.
+  renameSync(join(disk.botDir(cfg, 'scout'), 'files'), join(disk.botDir(cfg, 'scout'), 'old-files'));
+  symlinkSync(join(disk.botDir(cfg, 'scribe'), 'files'), join(disk.botDir(cfg, 'scout'), 'files'));
+  const first = (await crew.post('scout', `[tool crew_pass ${JSON.stringify({ bot: 'scribe', task: 'Review it', files: join(disk.botDir(cfg, 'scribe'), 'files/private.md') })}]`))!.task;
+  await settled(db, first);
+  assert.equal(db.get('SELECT id FROM tasks WHERE parent = ?', first), undefined);
+  done();
+});
+
 test('two passes settle into exactly one wrap-up without per-task completions', async () => {
   const { db, crew, done } = setup();
   crew.onboard('Sara'); crew.recruit('reel', 'Reel', 'person'); crew.recruit('scout', 'Scout', 'person');
@@ -52,7 +89,7 @@ test('handoff check waits, survives a restart, and never has a standing answer',
   crew.onboard('Sara'); crew.recruit('reel', 'Reel', 'person'); crew.recruit('scout', 'Scout', 'person');
   disk.setSettings(cfg, 'reel', { handoff: 'ask' });
   writeFileSync(join(disk.botDir(cfg, 'reel'), 'files/story.md'), 'A source');
-  const first = (await crew.post('reel', `ask permission: pass it ${pass}`))!.task;
+  const first = (await crew.post('reel', `ask permission: pass it [tool crew_pass ${JSON.stringify({ bot: 'scout', task: 'Find the sources. Done means: three links', files: JSON.stringify(['files/story.md']) })}]`))!.task;
   await until('check card', () => db.get("SELECT * FROM asks WHERE kind = 'propose' AND state = 'open' AND json_extract(detail, '$.pass.to') = 'scout'"));
   const card = db.get("SELECT * FROM asks WHERE kind = 'propose' AND state = 'open'")!;
   assert.equal(db.get("SELECT 1 FROM tasks WHERE bot = 'scout'"), undefined);
