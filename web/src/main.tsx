@@ -11,7 +11,7 @@ import { AiMark, AskCard, Banner, AskSheet, attempt, Celebrate, setAway, setChie
 import { keepDraft } from './draft.ts';
 import type { IconName } from './icons.ts';
 import { Screen } from './screen.tsx';
-import { hear, Office, useOffice } from './office.tsx';
+import { hear, Office, summaryOf, useOffice } from './office.tsx';
 import { AccountCard, ConnectApp, ConnectCard, openTab, sheet, SignIn, Unreachable } from './flows.tsx';
 
 type View = 'home' | 'chief' | 'room' | 'crew' | 'add' | 'helper' | 'things' | 'routines' | 'settings' | 'apps' | 'skills' | 'ask' | 'share';
@@ -206,7 +206,7 @@ function NeedsRows({ state, cards, quiet, all = false }: { state: Json; cards: A
  *  under "Good evening," and the switch sits beside the name), then the counts with your quiet hours to the right; in Chat the counts and quiet hours in one line. Counts come from `A.office` alone (a helper
  *  waiting on you counts once, under needs you). On a narrow screen the gear sits by the switch: there is no tab bar. */
 function HomeBar({ ctx, mode, pick }: { ctx: Ctx; mode: HomeMode; pick: (m: HomeMode) => void }) {
-  const n = ctx.live.counts, name = String(ctx.state.person?.name ?? '').trim(), quiet = A.quietLine(ctx.state.person);
+  const n = ctx.live.counts, quiet = A.quietLine(ctx.state.person);
   const needs = <span className="m-needs" data-n={n.needs}><i />{n.needs ? `${n.needs} ${n.needs === 1 ? 'needs' : 'need'} you` : 'Nothing needs you'}</span>;
   const busy = <span className="m-working" data-n={n.working}><i />{n.working} working</span>;
   const still = quiet && <span className="m-quiet"><Icon name="moon" size={14} />{quiet}</span>;
@@ -215,11 +215,12 @@ function HomeBar({ ctx, mode, pick }: { ctx: Ctx; mode: HomeMode; pick: (m: Home
     <div className="seg home-mode" role="tablist" aria-label="Home view">{HOME_MODES.map(([m, l]) => <button key={m} role="tab" aria-selected={mode === m} data-mode={m} className={mode === m ? 'on' : ''} onClick={() => pick(m)}><Icon name={m === 'chat' ? 'chief' : 'office'} />{l}</button>)}</div>
   </div>;
   if (mode === 'chat') return <header className="home-bar is-chat"><div className="home-meta">{needs}{busy}{still}</div>{tools}</header>;
+  // Office is a slim bar over the grid: the title (phone width only), the count line, the switch and settings.
   return (
-    <header className="home-bar">
-      <h1 className="home-greet">{A.greeting()}{name && <>,<span className="nm"> <i>{name}</i></span></>}</h1>
+    <header className="home-bar office-bar">
+      <h1 className="office-title">Office</h1>
+      <div className="home-meta office-counts" data-needs={n.needs} data-working={n.working}>{summaryOf(ctx.live)}</div>
       {tools}
-      <div className="home-sub"><div className="home-meta">{busy}{needs}</div><div className="home-aside">{still}</div></div>
     </header>
   );
 }
@@ -344,7 +345,7 @@ const Empty = ({ children }: { children: ReactNode }) => <div className="frame-e
 /** Home opens on Chat every time the app starts (kept in memory only, never stored): Chief's thread under the bar and
  *  the pinned Needs you. Office is the optional view of the same state; neither view hides Needs you or Chief's box. */
 type HomeMode = 'chat' | 'office';
-const HOME_MODES: [HomeMode, string][] = [['chat', 'Chat'], ['office', 'Office']];
+const HOME_MODES: [HomeMode, string][] = [['chat', 'Chief'], ['office', 'Office']];
 let homeMode: HomeMode = 'chat';
 
 function Home(ctx: Ctx) {
@@ -373,7 +374,7 @@ function Home(ctx: Ctx) {
     <div className="home home-office">
       <div className="office-main">
         <div className="home-top">{top}</div>
-        <Office state={state} live={live} night={ctx.night} />
+        <Office state={state} live={live} night={ctx.night} onDone={refresh} />
         <div className="phone-only">
           <NeedsPin state={state} cards={live.needs} />
           <OnItNow live={live} />

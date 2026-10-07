@@ -24,12 +24,3 @@ export const type = {
 } as const;
 export const motion = { fast: 120, base: 200, slow: 280, exit: 160 };
 export const font = { ui: "'Inter', system-ui, sans-serif", serif: "'Inter', system-ui, sans-serif", art: "'JetBrains Mono', ui-monospace, monospace" };
-/** The office room's flat colours (web/src/office.tsx, mobile/src/office.tsx): one room, day and night. */
-export const room = {
-  // B1: a paper room drawn in one ink line (desks, sofa and monitor are white or pastel with an ink edge, a night window).
-  day: { wall: '#F4F6FA', stripe: '#F3F5FA', skirt: '#141A2A', floor: '#E9ECF3', seam: '#E9ECF3', desk: '#FFFFFF', top: '#141A2A', edge: '#141A2A',
-    bezel: '#141A2A', screen: '#FFF3C8', sofa: '#ECE6FF', sofaDark: '#141A2A', window: '#1D2A55', frame: '#141A2A', leaf: '#141A2A', pot: '#FFFFFF' },
-  // No B1 night palette was designed: the same shapes, with the app's night contrast (light ink on a dark room).
-  night: { wall: '#1F1C2B', stripe: '#1F1C2B', skirt: '#C9C4DA', floor: '#2A2638', seam: '#2A2638', desk: '#2C2839', top: '#C9C4DA', edge: '#C9C4DA',
-    bezel: '#C9C4DA', screen: '#4A4532', sofa: '#3A3456', sofaDark: '#C9C4DA', window: '#0F1631', frame: '#C9C4DA', leaf: '#C9C4DA', pot: '#2C2839' },
-};
