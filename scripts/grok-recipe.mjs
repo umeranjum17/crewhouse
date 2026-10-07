@@ -1,9 +1,9 @@
 // Grok Bot marketplace import: fetch a public template page, take its published recipe, and write one
 // helper's folder. Pure strings plus node:fs — no imports from src/, so a page-format change lands here,
 // never in crewd. crewd's thin crew_import hook fetches, plans, validates, commits and seats the result.
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
-import { join } from 'node:path';
+import { join, relative, sep } from 'node:path';
 
 export const short = (s, n) => (s = String(s ?? '').trim(), s.length > n ? `${s.slice(0, n - 1).replace(/\s+\S*$/, '')}…` : s);
 export const clean = (s, n) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n);
@@ -106,6 +106,33 @@ export function writeBot(dir, plan, update, labels, seed) {
   for (const s of plan.skills) {
     mkdirSync(join(dir, s.file.split('/').slice(0, -1).join('/')), { recursive: true });
     writeFileSync(join(dir, s.file), s.data);
+  }
+  if (update) {
+    const keep = new Set(plan.skills.map((s) => s.file));
+    const learned = new Set();
+    let top = [];
+    try { top = readdirSync(join(dir, 'skills'), { withFileTypes: true }); } catch { top = []; }
+    for (const e of top) {
+      if (!e.isDirectory() || e.name.startsWith('.')) continue;
+      let md = '';
+      try { md = readFileSync(join(dir, 'skills', e.name, 'SKILL.md'), 'utf8'); } catch { md = ''; }
+      if (/^learned:\s*yes\s*$/m.test(md)) learned.add(`skills/${e.name}`);
+    }
+    const owned = (rel) => !learned.has(rel.split('/').slice(0, 2).join('/'));
+    const sweep = (abs) => {
+      let kids = [];
+      try { kids = readdirSync(abs, { withFileTypes: true }); } catch { return; }
+      for (const e of kids) {
+        if (e.name.startsWith('.')) continue;
+        const p = join(abs, e.name);
+        const rel = relative(dir, p).split(sep).join('/');
+        if (!owned(rel)) continue;
+        if (e.isDirectory()) sweep(p);
+        else if (!keep.has(rel)) rmSync(p);
+      }
+      try { if (readdirSync(abs).length === 0 && relative(dir, abs).split(sep).join('/').startsWith('skills/')) rmSync(abs, { recursive: true }); } catch { /* keep a dir that will not go quietly */ }
+    };
+    sweep(join(dir, 'skills'));
   }
   writeFileSync(join(dir, 'SOURCE.md'), plan.source);
   return ['soul.md', 'AGENTS.md', 'SOURCE.md', 'skills'];

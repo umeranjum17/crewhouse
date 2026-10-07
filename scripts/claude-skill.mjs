@@ -27,7 +27,11 @@ async function get(url) {
 
 /** A skill's own license must allow reuse; the kept LICENSE.txt is the attribution. */
 function licensed(text) {
-  return /apache license/i.test(text ?? '') ? 'Apache-2.0' : null;
+  const t = String(text ?? '');
+  if (!/apache license/i.test(t) || !/version 2\.0/i.test(t)) return null;
+  if (!/apache\.org\/licenses/i.test(t) && !/appendix/i.test(t)) return null;
+  if (/commons clause|creative commons|additional terms|additional restrictions|all rights reserved|field of use/i.test(t)) return null;
+  return 'Apache-2.0';
 }
 
 /** Validate the ref, fetch SKILL.md, its license and its same-folder referenced resources. Only honest errors. */

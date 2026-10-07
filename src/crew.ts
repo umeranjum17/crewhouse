@@ -1049,11 +1049,11 @@ export class Crew {
   async importGrok(slug: string, name?: string, skill?: string, source?: string) {
     const mod = await import((await import('node:url')).pathToFileURL(join(this.cfg.repoDir, 'scripts', 'grok-recipe.mjs')).href);
     const pre = await mod.previewAny({ ref: skill ?? slug, name, apps: Object.fromEntries(Object.entries(APPS).map(([k, a]) => [k, a.name])), want: skill || /claude|skill/i.test(String(source ?? '')) ? 'skill' : undefined }).catch((e: any) => { throw fail(e instanceof Error ? e.message : String(e)); });
-    const was = this.bot(pre.id);
-    if (was && was.template !== pre.template) throw Object.assign(new Error(`there is already a bot called ${pre.display}`), { status: 409 });
-    mod.writePlanned({ crewDir: this.cfg.crewDir, id: pre.id, plan: pre.plan, labels: disk.JOB_LABELS, update: !!was, seed: disk.loadTemplate(this.cfg, 'helper') });
-    if (!was) this.seat(pre.id, pre.display, pre.plan.role, pre.template, pre.plan.color);
-    return { [was ? 'updated' : 'imported']: { id: pre.id, name: pre.display }, source: pre.plan.link, routines: pre.plan.routines, needs: pre.plan.needs, note: pre.plan.note };
+    const was = this.bot(pre.id) ?? this.bots().find((b) => b.template === pre.template), id = was?.id ?? pre.id;
+    if (was && id === pre.id && was.template !== pre.template) throw Object.assign(new Error(`there is already a bot called ${pre.display}`), { status: 409 });
+    mod.writePlanned({ crewDir: this.cfg.crewDir, id, plan: pre.plan, labels: disk.JOB_LABELS, update: !!was, seed: disk.loadTemplate(this.cfg, 'helper') });
+    if (was) this.db.run('UPDATE bots SET display = ?, role = ?, color = ? WHERE id = ?', pre.display, pre.plan.role, pre.plan.color, id); else this.seat(id, pre.display, pre.plan.role, pre.template, pre.plan.color);
+    return { [was ? 'updated' : 'imported']: { id, name: pre.display }, source: pre.plan.link, routines: pre.plan.routines, needs: pre.plan.needs, note: pre.plan.note };
   }
 
   // ---- work ----

@@ -17,7 +17,7 @@ const recipe = () => ({ id: 'tb', name: 'Testy Prospecting', creatorName: 'Grok 
 const stubFetch = (p: string) => { (globalThis as any).fetch = async () => ({ ok: true, text: async () => p }); };
 const unstub = () => { delete (globalThis as any).fetch; };
 const SKILL_MD = `---\nname: test-skill\ndescription: Make tiny web toys. Use when the person asks for a small interactive page.\nlicense: Complete terms in LICENSE.txt\n---\n\nBuild it with [the template](template.js) and ship it. Missing notes live in \`gone.md\`.\n`;
-const APACHE = 'Apache License\nVersion 2.0, January 2004\nTERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION';
+const APACHE = 'Apache License\nVersion 2.0, January 2004\nhttp://www.apache.org/licenses/LICENSE-2.0\nTERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION';
 const stubSkillFetch = (license = APACHE) => { (globalThis as any).fetch = async (url: string) => {
   const file = String(url).split('/').at(-1) ?? '';
   const hit: Record<string, string> = { 'SKILL.md': SKILL_MD, 'LICENSE.txt': license, 'template.js': 'console.log("toy");' };
