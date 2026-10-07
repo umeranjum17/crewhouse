@@ -654,7 +654,12 @@ export function card(a: Json, state: Json): Card {
     const head = `${name} wrote your ${channel}`;
     // A draft is words to send, not a document: heading and quote marks are stripped, every word kept — the person
     // would otherwise post or mail the marks themselves. A "#hashtag" a post opens with is not a heading.
-    const body = String(d.preview?.body ?? '').replace(/^\s{0,3}(?:#{1,6}|>)[ \t]+/gm, '').trim();
+    // A model that files the subject line inside the body too would show it twice (the card's subject, then the
+    // body's first line): that first line goes when it only repeats the subject, and stays when it says more.
+    const subject = plain(d.draft.subject);
+    let body = String(d.preview?.body ?? '').replace(/^\s{0,3}(?:#{1,6}|>)[ \t]+/gm, '').trim();
+    const [first, ...rest] = body.split('\n');
+    if (subject && /^subject:/i.test(first) && first.replace(/^subject:\s*/i, '').trim().toLowerCase() === subject.toLowerCase()) body = rest.join('\n').trim();
     return { ...base, kind: 'ok', status: `Nothing is sent · ${channel === 'post' ? 'post' : 'send'} it yourself`, evidence: 'draft',
       draftTo: plain(d.draft.to), draftSubject: plain(d.draft.subject) || undefined, draftLink: d.draft.link ? plain(d.draft.link) : undefined, draftText: body, draftWhy: plain(d.draft.why) || undefined, head, words: head, preview: { body },
       choices: [{ label: d.draft.link ? 'Copy and open' : 'Copy', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Reject', body: { answer: 'deny' } }] };

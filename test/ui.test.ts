@@ -278,6 +278,21 @@ test('a draft is words to send, not a document: its heading marks go, its words 
   assert.match(c.preview!.body, /Please confirm my refund\./, 'the words themselves are untouched');
 });
 
+test('a draft whose body repeats its own subject line shows it once', () => {
+  // What the real model files: the subject line inside the body too. The card already heads it.
+  const ask: Json = { id: 9, bot: 'scribe', kind: 'propose', at: 1, member: 1, title: 'Scribe wrote your email.', detail: {
+    draft: { channel: 'email', to: 'the school office', subject: 'Trip form Friday', path: 'files/a.md', sha: 'abc' },
+    preview: { body: 'Subject: Trip form Friday\n\nHello,\n\nThe form is in the bag.\n\nThanks,\nUmer' } } };
+  const c = A.card(ask, { asks: [ask], bots: [{ id: 'scribe', display: 'Scribe' }] } as any);
+  assert.equal(c.draftSubject, 'Trip form Friday');
+  assert.equal(c.draftText, 'Hello,\n\nThe form is in the bag.\n\nThanks,\nUmer', 'the repeated line goes, every other word stays');
+  const other: Json = { id: 10, bot: 'scribe', kind: 'propose', at: 1, member: 1, title: 'Scribe wrote your email.', detail: {
+    draft: { channel: 'email', to: 'the school office', subject: 'Trip form Friday', path: 'files/b.md', sha: 'def' },
+    preview: { body: 'Subject: something else entirely\n\nHello.' } } };
+  const d = A.card(other, { asks: [other], bots: [{ id: 'scribe', display: 'Scribe' }] } as any);
+  assert.match(d.draftText ?? '', /^Subject: something else entirely/, 'a line that says more than the subject stays');
+});
+
 test('Home commits nothing: a row opens the review sheet, and a starter fills the box without sending', () => {
   const src = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
   const home = src.slice(src.indexOf('function NeedsRows('), src.indexOf('/** The standing'));
