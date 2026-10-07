@@ -1535,7 +1535,7 @@ export class Crew {
       const first = !this.db.get("SELECT 1 FROM tasks WHERE id != ? AND state != 'paused'", task.id);
       state = blocked ? `Waiting for a ${name} plan with helpers.` : `Waiting for you to sign in${withName}.`;
       words = blocked ? `Your ${name} plan doesn't include helpers yet. Everything else in ${name} is fine.${key === 'chatgpt' ? ' ChatGPT Plus includes it.' : ` A bigger ${name} plan includes it.`}`
-        : /sign in again/.test(handoff) ? `${name ?? 'Your AI account'} signed you out. That happens after a password change. Sign in again and the crew picks up where it left off.`
+        : /sign in again/.test(handoff) ? `${name ? `${name} signed you out` : 'You were signed out'}. That happens after a password change. Sign in again and the crew picks up where it left off.`
         : first && task.bot === CHIEF ? `The crew uses your ${name ?? 'AI'} account. Sign in when you're ready and I'll start.`
         : `${task.bot === CHIEF ? 'I' : who} will start the moment you sign in${withName}.`;
       voice = task.bot === CHIEF ? 'bot' : 'system';

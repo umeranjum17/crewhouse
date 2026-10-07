@@ -224,11 +224,18 @@ const JSON_BLOB = new RegExp(OBJ, 'g'); // nor is a raw JSON object
 export const STUB = /\bstub [\w-]+:/;
 export const noTools = (text = '') => text.replace(TOOL_CALL, ' ').replace(JSON_BLOB, ' ').replace(TOOL_FRAGMENT, '').replace(/\s{2,}/g, ' ').trim();
 
+/** An account name in crewd's own account sentences ("sign in with Claude", "your Claude plan",
+ *  "Claude signed you out"): stashed before the machinery scrub and restored after, so the account
+ *  the crew uses keeps its name while engines and models still scrub to "the crew". */
+const ACCOUNT_NAMES = 'ChatGPT|Grok|GitHub Copilot|OpenRouter|MiniMax|Claude';
+const ACCOUNT_WORDS = new RegExp(`\\b(sign in with|your|a bigger|waiting for a) (${ACCOUNT_NAMES})( account| plan)?\\b|\\b(${ACCOUNT_NAMES}) signed you out\\b`, 'gi');
 export function plain(text = '') {
   if (STUB.test(text)) return 'On it.';
+  const kept: string[] = [];
   // Heading markers strip before noTools collapses whitespace (D23): a later heading must still sit at a line
   // start to be found — after the collapse every ### but the first survives mid-line as literal markup.
   return noTools(text.replace(/(^|\n)#{1,6}\s+/g, '$1'))
+    .replace(ACCOUNT_WORDS, (m: string) => `\0${kept.push(m) - 1}\0`)
     .replace(/```[\s\S]*?```/g, '')
     .replace(/`([^`\n]*)`/g, (_, s: string) => (/^[\w.\-~\/]+\.[a-z0-9]{2,4}$/i.test(s) ? `“${pretty(s)}”` : /[\/\\$|]|--?\w/.test(s) ? '' : s))
     .replace(/(^|[\s(“"'])((~|\.{1,2})?\/[\w.\-~]+)+\/?(?=[\s).,;:!?”"']|$)/g, (_, pre: string, p: string) => `${pre}${/\.[a-z0-9]{2,4}$/i.test(p) ? `“${pretty(p)}”` : 'its folder'}`)
@@ -236,7 +243,8 @@ export function plain(text = '') {
     .replace(/\b(claude(\s+code)?|anthropic|codex|sonnet|opus|haiku|gpt-[\w.]+|herdr|mcp__\w+|crew_[a-z_]+)\b/gi, 'the crew')
     .replace(/(^|[.!?]\s+)the crew\b/g, '$1The crew')
     .replace(/\s{2,}/g, ' ')
-    .trim();
+    .trim()
+    .replace(/\0(\d+)\0/g, (_, i: string) => kept[+i]);
 }
 /** A teaser line (a chat list row, a Things summary): plain words, no raw ** emphasis marks — those render only in a chat bubble. */
 export const teaser = (text: string) => plain(text).replace(/(\*\*|\*)(?=[^\s*])([^*]*[^\s*])\1/g, '$2');

@@ -1422,8 +1422,13 @@ test('no raw heading markers reach the ask card or its Read-all view', () => {
   assert.ok(!A.plain('### Plan\n### Costs\nHotel\n### Next\nGo').includes('#'));
   // A hash that is not a heading is content and stays: only line-start heading markers go, never inline ones.
   assert.match(A.plain('Tag it # Fun Friday, see issue C-###-12, topic #fun'), /# Fun Friday, see issue C-###-12, topic #fun/);
-  // The machinery scrub still reads as a sentence when it opens one: a signed-out account's fallback is capitalised.
-  assert.equal(A.plain('Claude signed you out. That happens after a password change.'), 'The crew signed you out. That happens after a password change.');
+  // An account name in crewd's own account sentences keeps its name; engines and models still scrub.
+  assert.equal(A.plain('Claude signed you out. That happens after a password change.'), 'Claude signed you out. That happens after a password change.');
+  assert.equal(A.plain('The crew uses your Claude account. Sign in when you are ready.'), 'The crew uses your Claude account. Sign in when you are ready.');
+  assert.equal(A.plain('I will start the moment you sign in with Claude.'), 'I will start the moment you sign in with Claude.');
+  assert.equal(A.plain("Your Claude plan doesn't include helpers yet."), "Your Claude plan doesn't include helpers yet.");
+  assert.equal(A.plain('Stopped on an error from claude: 529 overloaded'), 'Stopped on an error from the crew: 529 overloaded');
+  assert.equal(A.plain('Done! I ran it with Claude Code.'), 'Done! I ran it with the crew.');
   // The phone sheet renders this same view model verbatim (mobile/App.tsx), so the web assertion is the phone's too.
   const app = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
   assert.match(app, /\{c\.preview\.body\}/);

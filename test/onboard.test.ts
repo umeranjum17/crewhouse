@@ -118,6 +118,14 @@ test('Claude-only sign-in, nothing chosen for work: Chief names Claude, never Ch
   await until('waiting on the sign-in', () => task(db, v).state === 'paused');
   assert.ok(said().includes("I will start the moment you sign in with Claude."), said());
   assert.ok(!said().includes('ChatGPT'), said());
+  // Her sign-in fails mid-turn instead: the handoff names the exact account it lost.
+  await crew.accounts.login('claude', 'code');
+  await crew.accounts.finished('claude');
+  const { task: w } = await crew.post('chief', 'sign me out now', 'claude') as { task: number };
+  await until('waiting after the sign-out', () => task(db, w).state === 'paused');
+  assert.equal(crew.accounts.expired.has('claude'), true);
+  assert.ok(said().includes('Claude signed you out. That happens after a password change. Sign in again and the crew picks up where it left off.'), said());
+  assert.ok(!said().includes('ChatGPT'), said());
   done();
 });
 
