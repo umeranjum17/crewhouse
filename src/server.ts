@@ -222,7 +222,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       return Promise.all(Object.entries(PROVIDERS).map(async ([key, pr]) => {
         const signedIn = await crew.accounts.signedIn(key);
         return { account: key, name: pr.name, signedIn, restingUntil: crew.restingUntil(key), signIn: crew.accounts.view(key),
-          notIncluded: crew.accounts.notIncluded(key), work: false };
+          notIncluded: crew.accounts.notIncluded(key), signedOut: crew.accounts.expired.has(key), work: false };
       }));
     }
     // "Sign in with …": start (the page by default, `via: 'code'` for the code), paste the address the browser landed on,

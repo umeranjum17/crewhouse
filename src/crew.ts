@@ -825,7 +825,7 @@ export class Crew {
         this.dispatch();
         return;
       }
-      if (open.state === 'paused' && open.wake_at == null && /^Waiting for (you to sign in with .+|a .+ plan with helpers\.)$/.test(open.result ?? '')) return why === 'now' ? this.retryPaused(r, open, 'routine.now', why) : this.retryPausedWhenSignedIn(r, open, why);
+      if (open.state === 'paused' && open.wake_at == null && /^Waiting for (you to sign in( with .+)?\.|a .+ plan with helpers\.)$/.test(open.result ?? '')) return why === 'now' ? this.retryPaused(r, open, 'routine.now', why) : this.retryPausedWhenSignedIn(r, open, why);
       this.db.event('routine.skipped', r.bot, { routine: r.id, name: r.name, why: 'overlap', task: r.last_task });
       return;
     }
@@ -1516,32 +1516,33 @@ export class Crew {
     return undefined;
   }
 
-  /** Every account this task could use is resting: wait for the earliest. None usable yet (never signed in, signed out,
-   *  or a plan without helpers): the task waits for this person's own account, nobody else's, and starts by itself once
-   *  they sign in. The app shows the sign-in (or the plan's options) right under these words. */
+  /** Nothing usable yet: the task waits for this person's own sign-in and starts by itself once they sign in. */
   private pause(task: Row, choices: disk.Brain[]) {
-    const name = PROVIDERS[choices[0]?.provider]?.name ?? 'ChatGPT';
+    // The copy names the blocked plan, the task's pick, or an account the person has — never an unchosen default.
+    // Else the words stay plain, naming no provider at all.
+    const has = (f: (b: disk.Brain) => boolean) => choices.find(f)?.provider;
+    const blocked = has((b) => this.accounts.notIncluded(b.provider));
+    const key = blocked ?? (task.brain ? choices[0]?.provider : undefined) ?? has((b) => this.accounts.expired.has(b.provider));
+    const name = key ? PROVIDERS[key]?.name ?? key : null;
+    const withName = name ? ` with ${name}` : '';
     const who = this.bot(task.bot)!.display;
     // Only accounts the person has: a resting one wakes up; one never signed in doesn't.
     const rests = choices.filter((b) => !this.accounts.unready(b.provider)).map((b) => this.restingUntil(b.provider)).filter(Boolean);
-    let wake: number | null, state: string, words: string, voice: string;
+    let wake: number | null = null, state: string, words: string, voice: string;
     if (!rests.length) {
       const handoff = this.handoffs.get(task.id) ?? '';
       this.handoffs.delete(task.id);
-      const plan = choices.some((b) => this.accounts.notIncluded(b.provider));
       const first = !this.db.get("SELECT 1 FROM tasks WHERE id != ? AND state != 'paused'", task.id);
-      wake = null;
-      state = plan ? `Waiting for a ${name} plan with helpers.` : `Waiting for you to sign in with ${name}.`;
-      words = plan ? `Your ${name} plan doesn't include helpers yet. Everything else in ${name} is fine. ${name} Plus includes it.`
-        : /sign in again/.test(handoff) ? `${name} signed you out. That happens after a password change. Sign in again and the crew picks up where it left off.`
-        : first && task.bot === CHIEF ? `The crew uses your ${name} account. Sign in when you're ready and I'll start.`
-        : `${task.bot === CHIEF ? 'I' : who} will start the moment you sign in with ${name}.`;
+      state = blocked ? `Waiting for a ${name} plan with helpers.` : `Waiting for you to sign in${withName}.`;
+      words = blocked ? `Your ${name} plan doesn't include helpers yet. Everything else in ${name} is fine.${key === 'chatgpt' ? ' ChatGPT Plus includes it.' : ` A bigger ${name} plan includes it.`}`
+        : /sign in again/.test(handoff) ? `${name ?? 'Your AI account'} signed you out. That happens after a password change. Sign in again and the crew picks up where it left off.`
+        : first && task.bot === CHIEF ? `The crew uses your ${name ?? 'AI'} account. Sign in when you're ready and I'll start.`
+        : `${task.bot === CHIEF ? 'I' : who} will start the moment you sign in${withName}.`;
       voice = task.bot === CHIEF ? 'bot' : 'system';
     } else {
       wake = Math.min(...rests);
-      const why = choices.length === 1 ? `Your ${name} is resting until ${clock(wake)}` : `All your AI accounts are resting until ${clock(wake)}`;
-      state = `${why}.`;
-      words = `${why}. ${choices.length === 1 ? `${who} will finish this then` : "I'll pick this up then"}.`;
+      state = `All your AI accounts are resting until ${clock(wake)}.`;
+      words = `${state} I'll pick this up then.`;
       voice = 'system';
     }
     this.db.tx(() => {

@@ -324,6 +324,7 @@ test('nothing technical reaches the app; the person\'s own files ask in one plai
   const accounts = (await api('GET', '/api/accounts')).body;
   assert.ok(accounts.every((a: any) => !('member' in a)), 'account rows belong to the person');
   assert.deepEqual(accounts.map((a: any) => a.name), ['ChatGPT', 'Grok', 'GitHub Copilot', 'OpenRouter', 'MiniMax', 'Claude']);
+  assert.deepEqual(accounts.map((a: any) => a.signedOut), [false, false, false, false, false, false], 'nothing signed out on a fresh sign-in');
 
   // Touching the person's own files asks, in one plain sentence; the answer comes from the app.
   const outside = join(root, 'Documents', 'plan.txt');
