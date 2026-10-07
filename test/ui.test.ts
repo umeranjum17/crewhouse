@@ -611,6 +611,13 @@ test('the helmet: every app mood wears one of its four moods, and every mood loo
   assert.equal(rows.length, 10, 'rows follow the columns');
   assert.ok(rows.every((r) => r.length === 20 && /^[.es1-9]+$/.test(r)), 'dots carry only density steps, eyes and the scan');
   assert.match(pal.e, /0a84ff/i, 'needs-you eyes wear the blue');
+  // The helmet must survive the page's own type features: no ligatures, kerning or
+  // inherited feature sets, or the day ramp's `-`/`=`/`+` runs set unevenly (PR 343 review).
+  const css = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'styles.css'), 'utf8');
+  const artRule = (css.match(/\.art\s*\{([^}]*)\}/) ?? [])[1] ?? '';
+  assert.match(artRule, /font-variant-ligatures:\s*none/, '.art leaves ligatures off');
+  assert.match(artRule, /font-kerning:\s*none/, '.art leaves kerning off');
+  assert.match(artRule, /font-feature-settings:\s*normal/, '.art clears inherited feature sets');
 });
 
 test('the mascots: every app mood wears one of B1\'s five poses, and every pose of everyone looks different', async () => {

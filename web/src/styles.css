@@ -79,7 +79,7 @@ b { font-weight: 600; }
 .routine-switch { display: inline-flex; align-items: center; gap: 8px; color: var(--mute); font-size: 12px; }
 
 /* art */
-.art { font-family: var(--art); line-height: 1; white-space: pre; margin: 0; letter-spacing: 0; }
+.art { font-family: var(--art); line-height: 1; white-space: pre; margin: 0; letter-spacing: 0; font-kerning: none; font-variant-ligatures: none; font-feature-settings: normal; }
 .art i { font-style: normal; }
 /* The helmet's mood colours: eyes light when here, blue when needed, a blue scan while thinking, dim at rest. */
 .helmet[data-mode="needs"] .eye { color: var(--pink); }
