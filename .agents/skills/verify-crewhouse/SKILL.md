@@ -93,9 +93,12 @@ lifetime, through `/home/umer/firstmate/config/fm-mem-gate.sh`. Use
 `crewd engine ready`, symlink only the dedicated test credential
 `/home/umer/lab-tmp/claude-test-cred/home/.claude/.credentials.json` into
 `$LAB/state/openclaw/home/.claude/.credentials.json`; never read/copy the person's credentials.
-Check `claude auth status` with that engine HOME and CLAUDE_CONFIG_DIR, then select
-`["claude"]` with `PUT /api/bots/chief/models`. This selects the real hosted CLI route,
-not a scripted provider. Stop crewd with TERM and await its exit before releasing the lock.
+Check `claude auth status` with that engine HOME and CLAUDE_CONFIG_DIR and the engine's own
+Claude CLI preflight before sending; select `["claude"]` with `PUT /api/bots/chief/models`.
+A symlink-only bootstrap has produced a positive preflight then a parked first turn:
+preflight is not proof of usable sign-in. If that happens, stop and retain pre/post results;
+never claim model words or keep retrying. This route is hosted, not a scripted provider.
+Stop crewd with TERM and await its exit before releasing the lock.
 Sign-in tests alone reuse `/home/umer/lab-tmp/crewhouse-retained`; never copy its history.
 Quota errors mean the account rests: report the bound, never mint another sign-in.
 
