@@ -1286,7 +1286,9 @@ export class Crew {
     const on = disk.botConfig(this.cfg, id).memory !== false;
     const about = on ? disk.readNotes(this.cfg, { bot: null }).trim() : '';
     const notes = on ? disk.readNotes(this.cfg, { bot: id }).trim() : '';
+    const profile = disk.profileForPrompt(this.cfg);
     return `[Crewhouse] ${disk.addressLine(this.person().address)}` +
+      `${profile ? `\nAbout me and my work (write in this voice, for this audience):\n${profile}` : ''}` +
       `${about ? `\nWhat the whole crew knows about the person:\n${about}` : ''}` +
       `${notes ? `\nYour notes (what you have learned about how they like your work):\n${notes}` : ''}\n\n`;
   }

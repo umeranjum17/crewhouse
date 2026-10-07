@@ -200,9 +200,10 @@ export function writeJob(cfg: Config, id: string, value: Job) {
 // ---- the soul: who the bot is, in its own file, written by the person, never by the bot ----
 export const SOUL_CAP = 2000;
 
+const readText = (p: string) => existsSync(p) ? readFileSync(p, 'utf8') : '';
+
 export function readSoul(cfg: Config, id: string) {
-  const p = join(botDir(cfg, id), 'soul.md');
-  return existsSync(p) ? readFileSync(p, 'utf8') : '';
+  return readText(join(botDir(cfg, id), 'soul.md'));
 }
 
 export function writeSoul(cfg: Config, id: string, text: string, message = 'Personality changed by the person') {
@@ -231,8 +232,7 @@ const memoryFile = (m: Memory) => m.bot ? `notes/${m.bot}.md` : 'about.md';
 const capOf = (m: Memory) => m.bot ? NOTES_CAP : ABOUT_CAP;
 
 export function readNotes(cfg: Config, m: Memory) {
-  const p = join(personDir(cfg), memoryFile(m));
-  return existsSync(p) ? readFileSync(p, 'utf8') : '';
+  return readText(join(personDir(cfg), memoryFile(m)));
 }
 
 function saveNotes(cfg: Config, m: Memory, text: string, message: string) {
@@ -281,6 +281,22 @@ export function writeNotes(cfg: Config, m: Memory, text: string) {
   if (text.length > capOf(m)) throw new Error(`notes are over the ${capOf(m)} character cap`);
   saveNotes(cfg, m, text, 'Edited by the person');
 }
+
+// ---- profile: "About me and my work", one record per install, in every helper's job context ----
+// The cap is the stated prompt limit: Chief's ~10k-char first-turn prompt plus a full record stays
+// inside the measured prompt sizes (scripts/measure-firstwords.mjs), so the prompt carries it whole.
+export const PROFILE_CAP = 4000;
+const profilePath = (cfg: Config) => join(personDir(cfg), 'profile.md');
+export const readProfile = (cfg: Config) => readText(profilePath(cfg));
+export function writeProfile(cfg: Config, text: string) {
+  const clean = String(text).replace(/\r/g, '').trim();
+  if (clean.length > PROFILE_CAP) throw Object.assign(new Error(`that is longer than ${PROFILE_CAP} characters; say it shorter`), { status: 400 });
+  mkdirSync(dirname(profilePath(cfg)), { recursive: true });
+  writeFileSync(profilePath(cfg), clean ? clean + '\n' : '');
+  return commit(personDir(cfg), ['profile.md'], 'Edited by the person');
+}
+/** What one job carries: nothing when empty, the whole record otherwise (writes already cap it). */
+export const profileForPrompt = (cfg: Config) => readProfile(cfg).trim().slice(0, PROFILE_CAP);
 
 /** A bot's legacy notes.md becomes the person's, history kept in both folders;
  *  a soul still written into the job file moves into its own file. Runs at every start; a no-op once done. */
