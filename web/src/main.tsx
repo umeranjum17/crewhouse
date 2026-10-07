@@ -743,7 +743,8 @@ function HelperPage(ctx: Ctx & { id: string; tab: string }) {
           void load();
         }, 'Put back')} onForget={(s) => attempt(async () => {
           // The receipt's own reason, taken back from what this helper remembers: the next job reads notes afresh.
-          const i = A.memories(page.notes ?? '').findIndex((m) => m === s.forget);
+          // Matched the way crew_draft matched it (case-insensitive): the model quotes the line in its own casing.
+          const i = A.memories(page.notes ?? '').findIndex((m) => m.toLowerCase() === (s.forget ?? '').toLowerCase());
           if (i < 0) throw new Error('That line is not one of its own notes; add it under What it remembers to change it');
           await api.notes(id, A.withoutMemory(page.notes ?? '', i));
           void load();
