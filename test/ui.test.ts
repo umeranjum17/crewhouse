@@ -676,7 +676,7 @@ test('the phone office: one grouped list, helmets still, the shared view model',
   assert.match(office, /helmetDots\(cols, mode, night, mode === 'think' \? 12 : 0\)/, 'the scan shows still while working, and only there');
   assert.match(office, /export const summaryOf = \(v: A\.OfficeView\): string/, 'one count line from the office view');
   // A question's button wears the ask's own words (its yes, or its flow's label), never a generic one.
-  assert.match(office, /const label = simple \? yes!\.label : c\.ask!\.reply \? `Answer \$\{c\.name\}…` : c\.ask!\.review \? 'Review order' : yes\?\.label \?\? 'Review…';/);
+  assert.match(office, /const label = !c\.ask \? '' : simple \? yes!\.label : c\.ask\.reply/);
   const appHome = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
   assert.match(appHome, /<T style=\{\[s\.serif, \{ fontSize: 28, lineHeight: 32 \}\]\}>Office<\/T>/, 'Office is a slim title, not the greeting');
   assert.match(appHome, /<T tone="ink2" style=\{s\.small\}>{summaryOf\(view\)}<\/T>/, 'then the count line, then the switch');

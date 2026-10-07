@@ -85,7 +85,7 @@ function Row({ c, v, t, night, jobTitle, onDesk, onAsk }: { c: A.OfficeMember; v
   const yes = c.ask?.choices[0];
   const simple = !!c.ask && !!yes && !c.ask.reply && !c.ask.review && c.ask.kind !== 'routine' && c.ask.kind !== 'plan' && c.ask.evidence !== 'draft';
   // The button wears the ask's own words (its yes, or its flow's label), never a generic one.
-  const label = simple ? yes!.label : c.ask!.reply ? `Answer ${c.name}…` : c.ask!.review ? 'Review order' : yes?.label ?? 'Review…';
+  const label = !c.ask ? '' : simple ? yes!.label : c.ask.reply ? `Answer ${c.name}…` : c.ask.review ? 'Review order' : yes?.label ?? 'Review…';
   return (
     <Pressable onPress={() => onDesk(c)} accessibilityRole="button" accessibilityLabel={`${c.name}: ${line}`}
       style={{ flexDirection: 'row', gap: 12, paddingVertical: 12, paddingHorizontal: 14, borderTopWidth: 1, borderColor: t.line }}>
