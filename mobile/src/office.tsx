@@ -2,7 +2,7 @@
 // one group. Each row shows the helmet in its mood, the current line, one meta line and the one action (the ask's
 // own yes, which opens its review). Tapping a row opens that helper's desk. Every word and count comes from the one
 // A.office view Home also reads (useOffice). The helmets are still: the think-scan shows while working and nothing
-// moves, so the room's old battery budget holds with no code for it.
+// moves, so the old animation battery budget holds with no code for it.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import * as A from '../../web/src/adapter.ts';

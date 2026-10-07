@@ -1419,9 +1419,9 @@ export function office(state: Json): OfficeView {
   return { chief: chief(state), crew: crewRows, done, needs, counts: tally(crewRows, needs, done) };
 }
 
-/** Needs-you rows no helper in the room holds (Chief's own, or one left by a helper since let go): Chief carries
- *  them, so every row in Needs you has a Review somewhere in the room. */
-/** Chief's state in one word, the same in the room, his profile and on the phone. */
+/** Needs-you rows no crew panel holds (Chief's own, or one left by a helper since let go): Chief carries
+ *  them, so every row in Needs you has a Review somewhere in the office. */
+/** Chief's state in one word, the same on his panel, his profile and on the phone. */
 export const chiefWord = (v: OfficeView) => (chiefAsks(v).length ? 'Needs you' : v.chief.mood === 'work' ? 'Working' : 'Here');
 export const chiefAsks = (view: OfficeView) => view.needs.filter((c) => !view.crew.some((m) => m.id === c.helper));
 
