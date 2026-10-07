@@ -237,6 +237,22 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, every row and panel is
       for (const theme of ['day', 'night']) {
         await b.open(`demo=${demo}&${theme}`);
         await until("Chief's box", () => b.run("!!document.querySelector('.home-chat .composer')"), 30_000);
+        // Each launch opens on Chat: no room drawn, no pinned card in the conversation, and the thread with Chief's box on the first screen.
+        await until('a thread line', () => b.run("document.querySelectorAll('.home-chat .lines .line').length > 0"), 30_000);
+        const first = await b.run(`(() => {
+          const seen = (e) => { if (!e) return false; const r = e.getBoundingClientRect(); return r.height > 0 && r.top >= 0 && r.bottom <= innerHeight; };
+          const lines = [...document.querySelectorAll('.home-chat .lines .line')];
+          const asks = [...document.querySelectorAll('.home-chat .lines .ask')].map((e) => ({ text: e.innerText ?? '', on: (() => { const r = e.getBoundingClientRect(); return r.height > 0 && r.top < innerHeight && r.bottom > 0; })() }));
+          return { room: !!document.querySelector('.o-room'), pin: seen(document.querySelector('.home-chat .needs-pin .needs-row')), thread: lines.length > 0 && seen(lines.at(-1)), box: seen(document.querySelector('.home-chat .composer')), asks };
+        })()`);
+        const lead = `${demo} ${theme} at ${width}, first open`;
+        assert.equal(first.room, false, `${lead}: Chat by default, the room is not drawn`);
+        assert.equal(first.pin, false, `${lead}: no pinned card in the conversation (the ask sits inline)`);
+        assert.ok(first.thread && first.box, `${lead}: the conversation and Chief's box on the first screen`);
+        // Where the demo has an ask, the pinned row's replacement is the inline ask itself: its words in the thread, on screen.
+        if (first.asks.length) assert.ok(first.asks.some((a: { text: string; on: boolean }) => a.on && a.text.length > 40), `${lead}: the inline ask carries its words on the first screen (${first.asks.map((a: { text: string }) => JSON.stringify(a.text.slice(0, 60))).join(' | ')})`);
+        // A long thread leaves the page scrolled to its end; Office must still open on its room.
+        await b.run('scrollTo(0, document.documentElement.scrollHeight)');
         await toOffice(b);
         // Phone width renders the grouped list, a desk the panels; the slim header's count line reads on both.
         const m = await b.run(`(() => {
