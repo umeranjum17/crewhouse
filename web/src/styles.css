@@ -911,7 +911,7 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
 .home-bar.is-chat { align-items: center; }
 .home-bar.is-chat .home-meta { margin: 0; font-size: 15px; }
 /* B1 phone Chat: the bar is the gear and the switch; the hero's caption and Needs you carry the counts. */
-@media (max-width: 899px) { .home-bar.is-chat .home-meta { display: none; } .home-bar.is-chat .home-tools { flex: 1; justify-content: space-between; } }
+@media (max-width: 899px) { .home-bar.is-chat .home-meta { display: none; } .home-bar.is-chat .home-tools { flex: 1; justify-content: space-between; } .home-bar.is-chat:has(> .chief-hero) { display: flex; flex-direction: column; align-items: stretch; } }
 /* A desk keeps the same bar: the counts live in the rail, so only the switch and the gear stay on top. */
 @media (min-width: 900px) {
   .home-bar.is-chat .home-meta { display: none; }
@@ -1160,13 +1160,17 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
      already reads in the bar above; the crew faces move to Office in lane 4. */
   .home-chat .chief-hero { grid-template-columns: auto minmax(0, 1fr); min-height: 0; align-items: center; gap: 12px; background: none; border: 0; border-radius: 0; box-shadow: none; margin: 2px 0 8px; }
   /* The phone header reads above the switch: helmet, name, status, one plain line. */
-  .home-chat > .home-top { display: flex; flex-direction: column; }
-  .home-chat > .home-top > * { flex: none; }
-  .home-chat .chief-hero { order: -1; }
+  .home-chat > .home-top { display: flex; flex-direction: column; align-items: stretch; }
+  .home-chat > .home-top > * { flex: none; max-width: none; }
+  .home-chat .chief-hero { order: -1; border-bottom: 1px solid var(--line); padding-bottom: 12px; margin-bottom: 4px; }
   .home-chat .ch-art { padding: 0; margin: 0; width: 110px; overflow: hidden; }
   .home-chat .ch-art .helmet { font-size: 5px; }
-  .home-chat .ch-body { padding: 0; gap: 2px; }
+  .home-chat .ch-body { padding: 0; gap: 2px; justify-items: stretch; align-items: stretch; }
   .home-chat .ch-name { font-size: 22px; }
+  .home-chat .ch-title { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .home-chat .ch-title .icon-btn { flex: none; }
+  .home-chat .ch-body .home-mode { align-self: stretch; margin-top: 8px; }
+  .home-chat .ch-body .home-mode button { flex: 1; }
   .home-chat .ch-status { display: flex; gap: 6px; align-items: center; margin: 0; font: 500 13px/18px var(--ui); color: var(--pink-ink); }
   .home-chat .ch-status i { width: 7px; height: 7px; border-radius: 50%; background: var(--pink); flex: none; }
   .home-chat .ch-status.rest { color: var(--ink2); }
