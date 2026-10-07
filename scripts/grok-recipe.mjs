@@ -44,7 +44,7 @@ function parseGrokPage(page) {
 
 /** Validate the slug, fetch its public page, and return its published recipe. Only honest errors. */
 export async function fetchRecipe(slug) {
-  const key = /^(?:https:\/\/x\.ai\/bot\/marketplace\/bots\/)?([a-z0-9][a-z0-9-]{0,60})\/?$/.exec(String(slug ?? '').trim().toLowerCase())?.[1];
+  const key = /^(?:https:\/\/(?:x\.ai\/bot\/marketplace\/bots|grok\.com\/marketplace)\/)?([a-z0-9][a-z0-9-]{0,60})\/?$/.exec(String(slug ?? '').trim().toLowerCase())?.[1];
   if (!key) throw new Error('name a marketplace bot, like "pg", or paste its marketplace address');
   let res;
   try {
@@ -89,8 +89,10 @@ export function planBot(key, recipe, { display, apps }) {
   };
 }
 
-/** Write the planned folder; on update the person's own tools and standing answers stay untouched. */
-export function writeBot(dir, plan, update, labels) {
+/** Write the planned folder; on update the person's own tools and standing answers stay untouched.
+ *  `seed` is the crew's own helper base (the recruit path's template): an import is seated on the
+ *  same tools and accounts as a recruit, never on values hardcoded here. */
+export function writeBot(dir, plan, update, labels, seed) {
   if (!update) {
     mkdirSync(dir, { recursive: true });
     for (const d of ['files', 'work', 'skills']) mkdirSync(join(dir, d), { recursive: true });
@@ -98,7 +100,7 @@ export function writeBot(dir, plan, update, labels) {
   }
   const current = update && existsSync(join(dir, 'bot.json')) ? JSON.parse(readFileSync(join(dir, 'bot.json'), 'utf8')) : null;
   writeFileSync(join(dir, 'bot.json'), JSON.stringify(current ? { ...current, ideas: plan.ideas }
-    : { tools: ['crew', 'files', 'web', 'browser', 'computer', 'documents', 'search-files'], models: ['chatgpt'], ideas: plan.ideas }, null, 2) + '\n');
+    : { tools: seed?.tools ?? ['crew', 'files', 'web', 'browser', 'computer', 'documents', 'search-files'], models: seed?.models ?? ['chatgpt'], ideas: plan.ideas }, null, 2) + '\n');
   writeFileSync(join(dir, 'soul.md'), plan.soul + '\n');
   writeFileSync(join(dir, 'AGENTS.md'), `# ${plan.display}\n\n## Your job\n${labels.map((label, i) => `### ${label}\n${plan.job[KEYS[i]]}`).join('\n\n')}\n`);
   for (const s of plan.skills) {
@@ -137,8 +139,8 @@ export async function previewImport({ ref, name, apps }) {
 }
 
 /** Write and commit a previewed plan; returns nothing — the caller seats it through the normal path. */
-export function writePlanned({ crewDir, id, plan, labels, update }) {
+export function writePlanned({ crewDir, id, plan, labels, update, seed }) {
   checkJob(plan.job, labels, plan.display);
   const dir = join(crewDir, 'bots', id);
-  commitBot(dir, writeBot(dir, plan, update, labels), update ? 'Updated from its source' : 'Joined the crew');
+  commitBot(dir, writeBot(dir, plan, update, labels, seed), update ? 'Updated from its source' : 'Joined the crew');
 }

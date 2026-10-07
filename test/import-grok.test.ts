@@ -52,6 +52,30 @@ test('import hires the marketplace bot as the person\u2019s own helper, re-impor
   } finally { unstub(); done(); }
 });
 
+test('crew_import takes the handle however the model sends it (real run shapes), seated like a recruit', async () => {
+  const { crew, cfg, done } = setup();
+  stubFetch(page(recipe()));
+  try {
+    const tool = (crew as any).crewTools('chief').find((t: any) => t.name === 'crew_import');
+    // Every input shape Chief actually sent on the real-model run (run.call events): slug never arrived.
+    const shapes = [{ handle: 'tb', source: 'grok' }, { name: 'tb' }, { bot: 'tb' }, { id: 'tb' },
+      { url: 'https://grok.com/marketplace/tb' }, { grok: 'tb' },
+      { source: 'grok', handle: 'tb', name: 'tb', bot: 'tb', id: 'tb', template: 'tb', query: 'tb', address: 'tb' }];
+    for (const input of shapes) {
+      const out = JSON.parse(String(await tool.run(input)));
+      assert.ok(out.imported ?? out.updated, `shape ${JSON.stringify(input)} imports, never "name a marketplace bot"`);
+      (crew as any).db.run("DELETE FROM bots WHERE id IN ('tb', 'testy-prospecting')");
+    }
+    JSON.parse(String(await tool.run({ slug: 'tb' })));
+    const dir = disk.botDir(cfg, 'testy-prospecting');
+    const conf = JSON.parse(readFileSync(join(dir, 'bot.json'), 'utf8'));
+    const helper = disk.loadTemplate(cfg, 'helper');
+    assert.deepEqual(conf.models, helper.models, 'an import is seated on the crew\u2019s own accounts, like a recruit');
+    assert.deepEqual(conf.tools, helper.tools, 'an import carries the crew\u2019s own tool grants, like a recruit');
+    await assert.rejects(tool.run({ source: 'grok' }), /marketplace bot/, 'a marker with no handle still fails honestly');
+  } finally { unstub(); done(); }
+});
+
 test('import refuses a page with no published recipe and a name clash', async () => {
   const { crew, cfg, done } = setup();
   try {
