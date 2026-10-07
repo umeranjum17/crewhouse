@@ -30,7 +30,11 @@ function licensed(text) {
   const t = String(text ?? '');
   if (!/apache license/i.test(t) || !/version 2\.0/i.test(t)) return null;
   if (!/apache\.org\/licenses/i.test(t) && !/appendix/i.test(t)) return null;
-  if (/commons clause|creative commons|additional terms|additional restrictions|all rights reserved|field of use/i.test(t)) return null;
+  // "additional terms" alone is not a restriction signal: the canonical Apache-2.0 text itself says
+  // "without any additional terms or conditions" (section 9), so matching it refuses every genuine
+  // grant. Restriction addenda are caught by their own markers (Commons Clause names its clause and
+  // withholds the right to "Sell the Software").
+  if (/commons clause|creative commons|additional restrictions|all rights reserved|field of use|sell the software/i.test(t)) return null;
   return 'Apache-2.0';
 }
 

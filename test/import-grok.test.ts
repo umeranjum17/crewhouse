@@ -148,3 +148,24 @@ test('a skill without a reusable license is refused, never copied', async () => 
     assert.equal((crew as any).bot('test-skill'), undefined, 'nothing hired, nothing written');
   } finally { unstub(); done(); }
 });
+
+test('the canonical Apache-2.0 text passes the license gate (it names "additional terms" itself)', async () => {
+  const { crew, cfg, done } = setup();
+  try {
+    // Section 5 of the canonical grant reads "without any additional terms or conditions"; a gate that
+    // treats that phrase as a restriction refuses every genuine Apache-2.0 skill, live-proven 2026-10-07.
+    stubSkillFetch(`${APACHE}\n5. Submission of Contributions. Unless You explicitly state otherwise,\nany Contribution intentionally submitted for inclusion in the Work\nby You to the Licensor shall be under the terms and conditions of\nthis License, without any additional terms or conditions.`);
+    const r = await (crew as any).importGrok('', undefined, 'test-skill') as any;
+    assert.equal(r.imported.name, 'Test Skill');
+    assert.match(readFileSync(join(disk.botDir(cfg, 'test-skill'), 'skills', 'test-skill', 'SKILL.md'), 'utf8'), /license: Apache-2\.0/);
+  } finally { unstub(); done(); }
+});
+
+test('an Apache text with a Commons-Clause-style selling restriction is still refused', async () => {
+  const { crew, done } = setup();
+  try {
+    stubSkillFetch(`${APACHE}\nCommons Clause License Condition v1.0. The grant of rights under the License\nwill not include, and the License does not grant to you, the right to Sell the Software.`);
+    await assert.rejects((crew as any).importGrok('', undefined, 'test-skill'), /no reusable license/);
+    assert.equal((crew as any).bot('test-skill'), undefined, 'nothing hired, nothing written');
+  } finally { unstub(); done(); }
+});
