@@ -8,7 +8,7 @@ import { chatTokens, safeLink } from './chat-md.ts';
 import * as art from './art.ts';
 import { MARKS } from './logos.ts';
 import { ICONS, type IconName } from './icons.ts';
-import { clock, column, docLinks, document as docView, fileSource, fileView, flowed, mdPlain, pageWords, sheetWords, workbook, type Card, type DocPart, type DocView, type FileView, type Helper, type Sheet, type Step, type Workbook } from './adapter.ts';
+import { clock, column, docLinks, document as docView, fileSource, fileView, flowed, mdPlain, pageWords, workbook, type Card, type DocPart, type DocView, type FileView, type Helper, type Sheet, type Step, type Workbook } from './adapter.ts';
 
 /** Markdown inline runs, from the shared safe tokens (web/src/chat-md.ts): no raw HTML, http(s) links only. */
 const mdInline = (tokens: any[]): ReactNode => tokens.map((t, i) => t.type === 'strong' ? <strong key={i}>{mdInline(t.tokens)}</strong>
@@ -151,13 +151,14 @@ export function Ink({ svg, w, h = w, label, className = '' }: { svg: string; w: 
   return <img className={`ink ${className}`} src={`data:image/svg+xml,${encodeURIComponent(svg)}`} width={w} height={h} alt={label ?? ''} aria-hidden={label ? undefined : true} draggable={false} />;
 }
 
-/** Chief, head and shoulders (`whole` for all of him). `d` keeps the old 14-dot footprint, so callers keep their size.
- *  `hero` marks the one face on screen that lives: it shows the 170 ms change-blink, and the think-scan while he works. */
+/** Chief, head and shoulders (`whole` for all of him, the mock rail's 38-column grid). `d` keeps the old 14-dot footprint,
+ *  so callers keep their size. `hero` marks the one face on screen that lives: it shows the 170 ms change-blink,
+ *  and the think-scan while he works. */
 export function ChiefArt({ mood = 'idle', d = 6, hero, whole }: { mood?: art.Mood; d?: number; dark?: boolean; hero?: boolean; whole?: boolean }) {
   const flash = useChangeBlink(!!hero, mood);
   const mode = art.helmetOf(flash ? 'blink' : mood);
   const beat = useTicker(140, !!hero && mode === 'think');
-  const cells = useMemo(() => art.helmet(whole ? 30 : 24, mode, night, beat), [mode, beat]);
+  const cells = useMemo(() => art.helmet(whole ? 38 : 24, mode, night, beat), [mode, beat]);
   return <pre className="art helmet" data-mode={mode} style={whole ? undefined : { fontSize: d }} aria-label="Chief">{
     cells.map((row, y) => <div key={y}>{row.map((c, x) => c.eye ? <i key={x} className="eye">{c.ch}</i> : c.scan ? <i key={x} className="scan">{c.ch}</i> : c.ch)}</div>)}
   </pre>;
@@ -325,8 +326,12 @@ const bare = (t: string) => t.toLowerCase().replace(/^the\s+|[^a-z0-9]/g, '');
 /** The line under a file's name: what kind of thing it is, and how much is in it. */
 function aboutFile(f: FileView, book: Workbook | null, doc: DocView | null) {
   const kind = f.kind === 'page' ? 'Document' : 'Spreadsheet';
-  const count = book ? book.sheets.length : doc?.parts.filter((p) => p.kind === 'heading' && bare(p.text ?? '') !== bare(f.name)).length ?? 0;
-  return count ? `${kind} · ${book ? sheetWords(count) : pageWords(count)}` : kind;
+  if (book) {
+    const rows = book.sheets.reduce((n, s) => n + (s.total || s.rows.length), 0);
+    return rows ? `${kind} · ${rows === 1 ? '1 row' : `${rows} rows`}` : kind;
+  }
+  const count = doc?.parts.filter((p) => p.kind === 'heading' && bare(p.text ?? '') !== bare(f.name)).length ?? 0;
+  return count ? `${kind} · ${pageWords(count)}` : kind;
 }
 
 /** A page's peek: its first heading that is not the title said twice, over a grey line for each of the next few parts,
@@ -595,13 +600,11 @@ function AskEvidence({ c, open, readAll }: { c: Card; open: boolean; readAll: Re
   return null;
 }
 
-/** The ask card's head: the asker's face and name, the status line with the pink dot, the time on the right. */
+/** The ask inline in the thread: the name, the status flag with the dot, then the words. No face, no clock. */
 function AskHead({ c, who }: { c: Card; who: Helper | undefined }) {
   const name = c.helper === 'chief' ? 'Chief' : who?.name ?? c.head;
   return <div className="ask-head">
-    {c.helper === 'chief' ? <Face who="chief" size={28} /> : who ? <Face who={{ ...who, mood: 'ask' }} size={28} /> : null}
     <div className="grow"><b>{name}</b><div className="ask-status"><i />{c.status}</div></div>
-    <time className="mute small">{clock(c.at)}</time>
   </div>;
 }
 

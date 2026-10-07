@@ -936,17 +936,13 @@ function AskEvidence({ c, open, readAll }: { c: A.Card; open: boolean; readAll?:
   return null;
 }
 
-/** The ask card's head: the asker's face and name, the status line with the pink dot, the time on the right. */
+/** The ask inline in the thread: the name, the status flag with the dot, then the words. No face, no clock. */
 function AskHead({ c, who }: { c: A.Card; who: A.Helper | undefined }) {
   const t = useLook();
   const name = c.helper === 'chief' ? 'Chief' : who?.name ?? c.head;
-  return <View style={s.row}>
-    {c.helper === 'chief' ? <Face who="chief" size={28} /> : who ? <Face who={{ ...who, mood: 'ask' }} size={28} /> : null}
-    <View style={{ flex: 1 }}>
-      <T style={{ fontWeight: '500' }}>{name}</T>
-      <View style={s.askStatus}><View style={[s.statusDot, { backgroundColor: t.pink }]} /><T tone="ink2" style={s.small}>{c.status}</T></View>
-    </View>
-    <T tone="mute" style={s.small}>{A.clock(c.at)}</T>
+  return <View style={{ gap: 2 }}>
+    <T style={{ fontWeight: '600', color: t.pinkInk }}>{name}</T>
+    <View style={s.askStatus}><View style={[s.statusDot, { backgroundColor: t.pink }]} /><T tone="ink2" style={s.small}>{c.status}</T></View>
   </View>;
 }
 
@@ -994,7 +990,7 @@ function AskCard({ c, who, state, onDone, canAct, offline, open }: { c: A.Card; 
   const [change, setChange] = useState<string | null>(null);
   const edit = useDraftEdit(c);
   return (
-    <Card ask>
+    <View style={[s.askInline, { borderTopColor: t.line2 }]}>
       <AskHead c={c} who={who} />
       <T style={s.askWords}>{question}</T>
       {edit.box || <AskEvidence c={c} open={false} readAll={<Btn label="Read all" onPress={() => open(c)} />} />}
@@ -1050,7 +1046,7 @@ function AskCard({ c, who, state, onDone, canAct, offline, open }: { c: A.Card; 
       {always && <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: t.line, paddingTop: 10, width: '100%' }}><Btn ghost label={always.label} onPress={() => act(always.body)} /></View>}
       {c.kind === 'spend' && <T tone="mute" style={[s.small, { textAlign: 'center' }]}>Anything that costs money asks you every time.</T>}
       {c.kind === 'plan' && <T tone="mute" style={[s.small, { textAlign: 'center' }]}>Saying Go doesn’t OK any sending or spending. Those still ask you each time.</T>}
-    </Card>
+    </View>
   );
 }
 
@@ -1126,7 +1122,7 @@ function NeedsRows({ state, cards, open, few = 3 }: { state: Json; cards: A.Card
   );
 }
 
-/** Home's top (web/src/main.tsx HomeBar): in Chat just the gear on the left and the Chat | Office switch on the right
+/** Home's top (web/src/main.tsx HomeBar): in Chat just the gear on the left and the Chief | Office switch on the right
  *  (B1 phone); in Office the greeting and the counts from the office's one state as well. */
 function HomeBar({ state, view, go, mode, pick }: { state: Json; view: A.OfficeView; offline: boolean; go: Ctx['go']; mode: HomeMode; pick: (m: HomeMode) => void }) {
   const t = useLook();
@@ -1196,30 +1192,19 @@ function NeedsPin({ state, cards, open, go }: { state: Json; cards: A.Card[]; op
   );
 }
 
-const BADGE: Partial<Record<A.Seat | 'done', string>> = { needs: '!', chat: '!', working: '', quiet: '?', failed: '!', done: '\u2713', waiting: '\u2026' };
-const BADGE_BG: Partial<Record<A.Seat | 'done', string>> = { needs: '#D63A1E', chat: '#D63A1E', quiet: '#D63A1E', failed: '#D63A1E', working: '#1F9D62', done: '#3B6FE0' };
-/** Home's chat opens on Chief (web/src/main.tsx ChiefHero, B1 phone): his whole figure, his own last words in a
- *  bubble, and the crew's faces at the card's foot with a badge each; no caption on the phone. */
-function ChiefHero({ live, state, go }: { live: A.OfficeView; state: Json; go: Ctx['go'] }) {
+/** Home's chat header (Term): the helmet, the name, the status and one plain line. The crew faces live in Office. */
+function ChiefHero({ live, state }: { live: A.OfficeView; state: Json }) {
   const t = useLook();
-  const narrow = useWindowDimensions().width < 380;
-  const crew = A.roster(live.crew);
+  const needs = live.needs.length > 0;
+  const resting = !needs && live.chief.mood === 'rest';
   return (
-    <View style={[s.askCard, { flexDirection: 'row', minHeight: narrow ? 180 : 220, overflow: 'hidden', backgroundColor: t.solid, borderColor: t.line2, borderWidth: 1, borderRadius: 24 }]} accessibilityLabel="Chief">
-      <View style={{ width: narrow ? 104 : 150, justifyContent: 'flex-end', marginLeft: narrow ? -8 : 0 }}><ChiefArt mood={live.chief.mood} size={narrow ? 120 : 160} whole wave /></View>
-      <View style={{ flex: 1, minWidth: 0, gap: 10, paddingTop: 18, paddingRight: 12, paddingBottom: 14, paddingLeft: 4 }}>
-        <T style={[s.serif, { fontSize: 40, lineHeight: 44 }]}>Chief</T>
-        <View style={{ alignSelf: 'flex-start', borderWidth: 1, borderColor: t.line2, borderRadius: 16, paddingVertical: 10, paddingHorizontal: 14 }}><T>{A.chiefSaid(state) || live.chief.line}</T></View>
-        <View style={{ flex: 1 }} />
-        {crew.length > 0 && <View style={[s.row, { flexWrap: 'wrap', gap: 4 }]}>
-          {crew.slice(0, 5).map((c) => { const k = A.railWord(c, live).seat, b = BADGE[k];
-            return <Pressable key={c.id} onPress={() => go({ view: 'helper', id: c.id })} accessibilityRole="button" accessibilityLabel={`${c.name}: ${A.railWord(c, live).word}`} hitSlop={4}>
-              <Face who={c} size={34} />
-              {b !== undefined && <View style={{ position: 'absolute', right: -3, bottom: -3, width: 16, height: 16, borderRadius: 8, borderWidth: 2, borderColor: t.solid, backgroundColor: BADGE_BG[k] ?? t.mute, alignItems: 'center', justifyContent: 'center' }}>
-                <Text style={{ color: '#fff', fontSize: 8, lineHeight: 10, fontWeight: '700' }}>{b}</Text></View>}
-            </Pressable>; })}
-          {crew.length > 5 && <Pressable onPress={() => go({ view: 'crew' })} accessibilityRole="button" accessibilityLabel={`${crew.length - 5} more of the crew`} hitSlop={8}><T tone="ink2" style={[s.small, s.b]}>{`+${crew.length - 5}`}</T></Pressable>}
-        </View>}
+    <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center', paddingVertical: 4 }} accessibilityLabel="Chief">
+      <ChiefArt mood={live.chief.mood} size={64} />
+      <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+        <T style={[s.serif, { fontSize: 22, lineHeight: 26 }]}>Chief</T>
+        <View style={[s.row, { gap: 6 }]}><View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: needs ? t.pink : resting ? t.line2 : t.green }} />
+          <T style={[s.small, { fontWeight: '500', color: needs ? t.pinkInk : t.ink2 }]}>{needs ? 'Needs you' : resting ? 'Resting' : 'At work'}</T></View>
+        <T tone="ink2" style={s.small} lines={2}>{A.chiefSaid(state) || live.chief.line}</T>
       </View>
     </View>
   );
@@ -1262,7 +1247,7 @@ function Home(ctx: Ctx) {
     <HomeBar state={state} view={view} offline={offline} go={go} mode={mode} pick={pick} />
   </View>;
   // Chat: Chief's hero and Needs you stay over his thread, which scrolls on its own to the newest line.
-  if (mode === 'chat') return <View style={{ flex: 1 }}>{top}<Chat {...ctx} id="chief" hero={<View style={{ gap: 12 }}><ChiefHero live={view} state={state} go={go} /><NeedsPin state={state} cards={needs} open={open} go={go} /></View>} /></View>;
+  if (mode === 'chat') return <View style={{ flex: 1 }}>{top}<Chat {...ctx} id="chief" hero={<View style={{ gap: 12 }}><ChiefHero live={view} state={state} /><NeedsPin state={state} cards={needs} open={open} go={go} /></View>} /></View>;
   return (
     <View style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={s.page} keyboardShouldPersistTaps="handled">
@@ -1474,9 +1459,10 @@ function Chat({ id, m, state, tick, refresh, canAct, offline, open, writer, hero
   const reduce = motion.useReduceMotion();
   const beat = motion.useBeat(360, reduce);
   let day = '';
-  const dayOf = (at?: number) => { if (!at) return null; const d = A.dayLabel(at); if (d === day) return null; day = d; return <View style={s.day} accessibilityRole="header"><T tone="ink2" style={[s.dayText, { backgroundColor: t.bg, borderColor: t.line }]}>{d.toUpperCase()}</T></View>; };
-  const mine = { ...t, ink: t.goInk, ink2: t.goInk, soft: 'transparent' };
-  const who = (f: string) => <View style={s.row}><Face who={f === 'chief' ? 'chief' : h ?? 'chief'} size={28} /><T style={[s.small, s.b]}>{f === 'chief' ? 'Chief' : name}</T></View>;
+  const dayOf = (at?: number) => { if (!at) return null; const d = A.dayLabel(at); if (d === day) return null; day = d; return <View style={s.day} accessibilityRole="header"><T tone="mute" style={s.dayText}>{d}</T></View>; };
+  // The transcript's name column: every line named, no faces, no clocks.
+  const who = (f: string) => <T style={[s.small, s.b, { width: 60, color: t.ink2 }]}>{f === 'chief' ? 'Chief' : name}</T>;
+  const speaker = (l: { from: string; helper?: string }) => l.from === 'me' ? 'You' : l.from === 'chief' ? 'Chief' : A.crew(state).find((x) => x.id === l.helper)?.name ?? name;
   return (
     <View style={{ flex: 1 }}>
       {/* Home's hero and pinned ask stay in place over the thread (096); on a short screen they shrink and scroll alone. */}
@@ -1495,24 +1481,28 @@ function Chat({ id, m, state, tick, refresh, canAct, offline, open, writer, hero
             {own.map((i: Json) => <Btn key={i.bot + i.label} label={`✦ ${i.label}`} onPress={() => { keepDraft(id, i.ask); setSeed((n) => n + 1); }} />)}
           </View>}
         {lines.map((l, i) => start && i === 0 && l.from === 'note' && l.text.startsWith(`${name} joined the crew`) ? null : <View key={l.id} style={{ gap: 10 }}>{dayOf(l.at)}<motion.Rise reduce={reduce || l.id <= (opened.current ?? Infinity)}>
-          <View onLayout={(e) => ys.current.set(l.id, e.nativeEvent.layout.y)}
-            style={[s.line, l.from === 'me' && { alignSelf: 'flex-end', maxWidth: '82%' }, l.from === 'note' && { maxWidth: '92%' }]}>
-            {l.from !== 'me' && l.from !== 'note' && !(i && lines[i - 1].from === l.from && lines[i - 1].helper === l.helper && !l.recap && !lines[i - 1].recap) && <View style={s.row}><Face who={l.from === 'chief' ? 'chief' : A.crew(state).find((x) => x.id === l.helper) ?? h ?? 'chief'} size={28} /><T style={[s.small, s.b]}>{l.from === 'chief' ? 'Chief' : A.crew(state).find((x) => x.id === l.helper)?.name ?? name}</T><T tone="mute" style={s.time}>{l.at ? A.clock(l.at) : ''}</T></View>}
-            {!!l.by && <View style={[s.row, { gap: 8, paddingLeft: 36 }]}><Face who={A.crew(state).find((x) => x.id === l.by) ?? 'chief'} size={20} /><T tone="ink2" style={[s.small, { flex: 1 }]}>{l.text}</T></View>}
-            {!!l.text && !l.by && (l.detail ? <ChiefAsk l={{ text: l.text, detail: l.detail }} /> : l.from === 'me'
-              ? <View style={[s.bubbleText, { backgroundColor: t.go, borderBottomRightRadius: 6 }]}><Theme.Provider value={mine}><ChatText text={l.text} /></Theme.Provider></View>
-              : <View style={{ paddingLeft: 36 }}><ChatText text={l.text} /></View>)}
-            {!l.text && !!l.about && <View style={{ paddingLeft: 36 }}><ChatText text={l.about} /></View>}
-            {l.files.map((f) => <Card key={f.url}><FileRow f={f} /></Card>)}
-            {phoneOffer?.message === l.id && <PhoneCard offer={phoneOffer} reload={() => void load()} />}
-            {cards.filter((c) => lines.findLastIndex((x) => (x.at ?? 0) <= c.at) === i).map((c) => <AskCard key={c.id} c={c} who={h} state={state} onDone={refresh} canAct={canAct} offline={offline} open={open} />)}
+          <View onLayout={(e) => ys.current.set(l.id, e.nativeEvent.layout.y)} style={s.line}>
+            {l.from === 'note' ? <>
+              {!!l.by && <View style={[s.row, { gap: 8 }]}><Face who={A.crew(state).find((x) => x.id === l.by) ?? 'chief'} size={20} /><T tone="ink2" style={[s.small, { flex: 1 }]}>{l.text}</T></View>}
+              {!!l.text && !l.by && <ChatText text={l.text} />}
+            </> : <View style={{ flexDirection: 'row', gap: 10 }}>
+              <T style={[s.small, s.b, { width: 60, color: t.ink2, paddingTop: 2 }]}>{speaker(l)}</T>
+              <View style={{ flex: 1, minWidth: 0, gap: 6 }}>
+                {!!l.by && <View style={[s.row, { gap: 8 }]}><Face who={A.crew(state).find((x) => x.id === l.by) ?? 'chief'} size={20} /><T tone="ink2" style={[s.small, { flex: 1 }]}>{l.text}</T></View>}
+                {!!l.text && !l.by && (l.detail ? <ChiefAsk l={{ text: l.text, detail: l.detail }} /> : <ChatText text={l.text} />)}
+                {!l.text && !!l.about && <ChatText text={l.about} />}
+                {l.files.map((f) => <Card key={f.url}><FileRow f={f} /></Card>)}
+                {phoneOffer?.message === l.id && <PhoneCard offer={phoneOffer} reload={() => void load()} />}
+                {cards.filter((c) => lines.findLastIndex((x) => (x.at ?? 0) <= c.at) === i).map((c) => <AskCard key={c.id} c={c} who={h} state={state} onDone={refresh} canAct={canAct} offline={offline} open={open} />)}
+              </View>
+            </View>}
           </View></motion.Rise></View>
         )}
-        {echoed && <motion.Rise reduce={reduce}><View style={[s.line, s.bubbleText, { alignSelf: 'flex-end', maxWidth: '82%', backgroundColor: t.go, borderBottomRightRadius: 6 }]}><T style={{ color: t.goInk }}>{pending.text}</T></View></motion.Rise>}
-        {waiting && id === 'chief' && <motion.Rise reduce={reduce}><View style={s.line} accessible accessibilityLabel="Chief is on it" accessibilityLiveRegion="polite">{who('chief')}
+        {echoed && <motion.Rise reduce={reduce}><View style={s.line}><View style={{ flexDirection: 'row', gap: 10 }}><T style={[s.small, s.b, { width: 60, color: t.ink2, paddingTop: 2 }]}>You</T><T style={{ flex: 1 }}>{pending.text}</T></View></View></motion.Rise>}
+        {waiting && id === 'chief' && <motion.Rise reduce={reduce}><View style={s.line} accessible accessibilityLabel="Chief is on it" accessibilityLiveRegion="polite"><View style={{ flexDirection: 'row', gap: 10 }}>{who('chief')}
           <View style={s.typing}>{[0, 1, 2].map((k) => <View key={k} style={[s.typingDot, { backgroundColor: t.ink2, opacity: reduce ? 0.6 : beat % 3 === k ? 1 : 0.3, transform: [{ translateY: !reduce && beat % 3 === k ? -3 : 0 }] }]} />)}</View>
-        </View></motion.Rise>}
-        {!!partial && <View style={s.line} accessibilityLiveRegion="polite">{who(id)}<View style={{ paddingLeft: 36 }}><T>{partial}<Text style={{ color: t.pink, opacity: reduce || beat % 2 === 0 ? 1 : 0 }}> ▍</Text></T></View></View>}
+        </View></View></motion.Rise>}
+        {!!partial && <View style={s.line} accessibilityLiveRegion="polite"><View style={{ flexDirection: 'row', gap: 10 }}>{who(id)}<T style={{ flex: 1 }}>{partial}<Text style={{ color: t.pink, opacity: reduce || beat % 2 === 0 ? 1 : 0 }}> ▍</Text></T></View></View>}
         {canAct && !!last?.choices.length && <View style={s.chips}>{last.choices.map((c) => <Btn key={c} label={c} onPress={() => send(c)} />)}</View>}
         {cards.filter((c) => !lines.length || lines.every((x) => (x.at ?? 0) > c.at)).map((c) => <AskCard key={c.id} c={c} who={h} state={state} onDone={refresh} canAct={canAct} offline={offline} open={open} />)}
       </ScrollView>
@@ -2072,7 +2062,7 @@ const s = StyleSheet.create({
   btnBig: { alignSelf: 'stretch', minHeight: 48 },
   btnText: { fontFamily: 'Inter', fontSize: 14, fontWeight: '600' },
   input: { fontFamily: 'Inter', borderWidth: 1, borderRadius: radius.control, paddingHorizontal: 14, paddingVertical: 10, fontSize: 15 },
-  composer: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, borderRadius: radius.pill, borderWidth: 1, paddingVertical: 7, paddingRight: 7, paddingLeft: 14, minHeight: 52, shadowColor: '#14121a', shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
+  composer: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, borderRadius: radius.pill, borderWidth: 1, paddingVertical: 7, paddingRight: 7, paddingLeft: 14, minHeight: 52 },
   composerInput: { fontFamily: 'Inter', flex: 1, fontSize: 15, paddingVertical: 8, maxHeight: 140 },
   send: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
   dock: { paddingHorizontal: 12, paddingVertical: 8 },
@@ -2081,12 +2071,11 @@ const s = StyleSheet.create({
   step: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 5 },
   stepDot: { width: 10, height: 10, borderRadius: 5 },
   line: { maxWidth: '92%', gap: 4, alignSelf: 'flex-start' },
-  bubbleText: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20 },
   intro: { alignItems: 'center', gap: 2, paddingTop: 12, paddingBottom: 6 },
   introName: { fontSize: 20, lineHeight: 26, fontWeight: '700', letterSpacing: -0.3, marginTop: 8 },
   day: { alignItems: 'center', marginTop: 10 },
-  dayText: { fontSize: 11, lineHeight: 16, fontWeight: '600', letterSpacing: 0.7, borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3, overflow: 'hidden' },
-  typing: { flexDirection: 'row', gap: 5, paddingLeft: 36, paddingVertical: 8 },
+  dayText: { fontSize: 12, lineHeight: 16, fontWeight: '500' },
+  typing: { flexDirection: 'row', gap: 5, paddingVertical: 8, flex: 1 },
   typingDot: { width: 7, height: 7, borderRadius: 4 },
   bar: { height: 14, borderRadius: 7 },
   listGroup: { borderWidth: 1, borderRadius: radius.card, overflow: 'hidden' },
@@ -2108,6 +2097,7 @@ const s = StyleSheet.create({
   statusDot: { width: 6, height: 6, borderRadius: 3 },
   askWords: { fontSize: 17, lineHeight: 24, fontWeight: '600' },
   askQ: { fontSize: 20, lineHeight: 26, fontWeight: '600', letterSpacing: -0.2 },
+  askInline: { gap: 8, borderTopWidth: 1, borderStyle: 'dashed', paddingTop: 14, marginTop: 6 },
   ev: { borderRadius: radius.control, padding: 12, gap: 6, width: '100%' },
   orderRow: { flexDirection: 'row', gap: 12, alignItems: 'baseline', alignSelf: 'stretch' },
   label2: { fontSize: 12, lineHeight: 16, fontWeight: '500' },
