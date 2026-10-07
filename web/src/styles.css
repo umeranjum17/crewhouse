@@ -450,6 +450,22 @@ input[role='switch']:focus-visible { outline: 2px solid var(--ink); outline-offs
   .side-room { display: flex; align-items: center; width: 22px; flex: none; }
   .side-room .face + .face { margin-left: -12px; box-shadow: 0 0 0 2px var(--soft); }
   .side-blank { padding: 4px 10px 8px; }
+  /* The rail's head: Chief's helmet, his name, his one-word status and who else is around. */
+  .side-chief { display: grid; justify-items: center; gap: 2px; padding: 6px 6px 2px; color: inherit; text-decoration: none; }
+  .side-chief b { font: 600 17px/22px var(--ui); }
+  .side-helmet { display: block; max-width: 100%; overflow: hidden; }
+  .side-helmet .helmet { text-align: center; }
+  .side-status { display: flex; gap: 6px; align-items: center; justify-content: center; font: 600 13px/18px var(--ui); color: var(--ink2); }
+  .side-status i { width: 7px; height: 7px; border-radius: 50%; background: var(--line2); flex: none; }
+  .side-status.needs { color: var(--pink-ink); }
+  .side-status.needs i { background: var(--pink); }
+  .side-sub { text-align: center; padding: 0 10px; }
+  .side-sched { display: flex; gap: 10px; align-items: center; padding: 6px 10px; border-radius: 8px; font-size: 14px; min-height: 36px; }
+  .side-sched:hover { background: var(--solid); }
+  .side-sched .grow { display: grid; gap: 1px; }
+  .side-sched b { font-weight: 500; }
+  .home-mode button { display: inline-flex; align-items: center; gap: 6px; }
+  .home-mode .count { display: inline-block; min-width: 18px; padding: 0 6px; border-radius: 999px; background: var(--pink); color: var(--on-pink); font: 600 11px/18px var(--ui); text-align: center; }
   .side-nav { display: flex; gap: 12px; align-items: center; padding: 7px 12px; border-radius: 8px; font: 500 14px/20px var(--ui); color: var(--ink2); min-height: 34px; }
   .side-nav.on { background: var(--solid); color: var(--ink); box-shadow: 0 0 0 1px var(--line); }
   .side-nav .ic { width: 16px; height: 16px; flex: none; }
@@ -896,6 +912,20 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
 .home-bar.is-chat .home-meta { margin: 0; font-size: 15px; }
 /* B1 phone Chat: the bar is the gear and the switch; the hero's caption and Needs you carry the counts. */
 @media (max-width: 899px) { .home-bar.is-chat .home-meta { display: none; } .home-bar.is-chat .home-tools { flex: 1; justify-content: space-between; } }
+/* A desk keeps the same bar: the counts live in the rail, so only the switch and the gear stay on top. */
+@media (min-width: 900px) {
+  .home-bar.is-chat .home-meta { display: none; }
+  .home-bar.is-chat .home-tools { flex: 1; justify-content: space-between; }
+  .home-bar.is-chat .home-gear { order: 2; }
+}
+/* The desk's ask column: the claim's title beside its Needs-you flag, then the card itself. */
+.desk-ask .section-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.desk-ask .m-needs { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--pink-ink); white-space: nowrap; }
+.desk-ask .m-needs i { width: 7px; height: 7px; border-radius: 50%; background: var(--pink); flex: none; }
+/* The desk's right column never runs wider than its track: grid items give up their intrinsic width, and long
+   buttons wrap their words instead of pushing past the column. */
+.tonight-rail > * { min-width: 0; max-width: 100%; }
+.desk-ask .btn { white-space: normal; text-align: center; }
 .home-bar.is-chat .m-needs:not([data-n="0"]) { color: var(--pink-ink); font-weight: 600; }
 .home-bar.is-chat .m-working i { background: var(--ok); box-shadow: none; }
 .m-quiet { color: var(--ink2); } .m-quiet .lucide { flex: none; }
@@ -1066,6 +1096,24 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
   .page.chat-page.home-chat > .chat > .dock { grid-column: 1; grid-row: 3; }
   .page.chat-page.home-chat > .chat > .working-on { grid-column: 2; grid-row: 1 / -1; min-height: 0; overflow-y: auto; padding-top: 24px; }
   .with-book .page.chat-page.home-chat { grid-template-columns: minmax(0, 720px); }
+/* Below the board's width the two columns would squeeze the thread until its hero clips: the rail waits under the box
+   instead, full width, nothing cut. (Office already stacks its feed the same way below 1200px.) */
+/* The Term desk has no app nav: on Home the rail is only the crew column (Chief's chat), and Office takes the full
+   width under the top bar (no rail, no right column). Other views keep the rail so every screen stays reachable;
+   Your things, Routines, Apps and Your crew live in Settings (the gear) either way. */
+@media (min-width: 900px) {
+  .shell:has(> .main > .home-chat) > .side > :not(.side-crew) { display: none; }
+  .shell:has(> .main > .home-chat) > .side { padding-top: 10px; }
+  .shell:has(> .main > .home-office) { grid-template-columns: minmax(0, 1fr); }
+  .shell:has(> .main > .home-office) > .side { display: none; }
+}
+@media (min-width: 900px) and (max-width: 1439px) {
+  .page.chat-page.home-chat { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; }
+  .page.chat-page.home-chat > .home-top { grid-column: 1; grid-row: 1; }
+  .page.chat-page.home-chat > .chat > .lines { grid-column: 1; grid-row: 2; }
+  .page.chat-page.home-chat > .chat > .dock { grid-column: 1; grid-row: 3; }
+  .page.chat-page.home-chat > .chat > .working-on { grid-column: 1; grid-row: 4; width: auto; overflow: visible; }
+}
 }
 
 
