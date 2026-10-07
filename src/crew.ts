@@ -211,6 +211,39 @@ interface Live { key: string; task: number; account: string; model?: string; gra
   /** Lines the helper typed on this page that no card has shown yet (an unsigned register's claim form). */
   fills?: { label: string; value: string }[] }
 
+/** A Grok Bot marketplace template's published recipe, as its public detail page carries it: the visible
+ *  facts plus the embedded skills, routines and integrations. Throws an honest error when the page has none. */
+function grokTemplate(page: string) {
+  const facts = [...page.matchAll(/<li><p class="text-primary text-sm leading-6 whitespace-pre-wrap">(.*?)<\/p><\/li>/gs)]
+    .map(([, t]) => t.replace(/<[^>]*>/g, '').replace(/&#x27;/g, "'").replace(/&quot;/g, '"').replace(/&#x2F;/g, '/').replace(/&amp;/g, '&').trim()).filter(Boolean);
+  const from = page.indexOf('\\"template\\":{');
+  let raw: any = null;
+  if (from >= 0) {
+    let i = from + 13, depth = 0, instr = false, esc = false;
+    for (; i < page.length; i++) {
+      const c = page[i];
+      if (esc) esc = false;
+      else if (c === '\\') esc = true;
+      else if (c === '"') instr = !instr;
+      else if (!instr && c === '{') depth++;
+      else if (!instr && c === '}') { if (!--depth) break; }
+    }
+    try { raw = JSON.parse(page.slice(from + 13, i + 1).replace(/\\(["'\\/])/g, '$1')); } catch { raw = null; }
+  }
+  const list = (v: unknown) => Array.isArray(v) ? v : [];
+  const profile = facts[0] ?? '';
+  if (!raw || typeof raw.name !== 'string' || !profile) throw fail('that marketplace page has no published recipe to import');
+  const text = (v: unknown) => String(v ?? '');
+  return {
+    meta: { name: text(raw.name), description: text(raw.description), creator: text(raw.creatorName), handle: text(raw.handle), color: text(raw.color), share: text(raw.addHref) },
+    profile, facts: facts.slice(1),
+    memories: list(raw.memories).map((m: any) => text(m.description)).filter(Boolean),
+    skills: list(raw.skills).map((s: any) => ({ name: text(s.name), description: text(s.description), content: text(s.content) })).filter((s) => s.name && s.content),
+    routines: list(raw.routines).map((r: any) => ({ name: text(r.name), summary: text(r.summary) })).filter((r) => r.name),
+    integrations: list(raw.integrations).map((g: any) => ({ id: text(g.id), name: text(g.name), description: text(g.description) })).filter((g) => g.name),
+  };
+}
+
 /** The deterministic half: people, bots, tasks, the per-bot queue, asks. Models only ever see prompts. */
 export class Crew {
   private live = new Map<string, Live>();
@@ -1034,6 +1067,65 @@ export class Crew {
       this.say(id, 'system', `${display} joined the crew (${tpl.role.toLowerCase()}).`);
     });
     return this.bot(id)!;
+  }
+
+  /** Bring a Grok Bot marketplace template onto the crew as its own helper, at the person's own hire:
+   *  read its public page, take its published recipe as the helper's own folder, and hire it through the
+   *  normal path. The copy is the person's own, for their own use; importing again pulls the latest. */
+  async importGrok(slug: string, name?: string) {
+    const key = /^(?:https:\/\/x\.ai\/bot\/marketplace\/bots\/)?([a-z0-9][a-z0-9-]{0,60})\/?$/.exec(slug.trim().toLowerCase())?.[1];
+    if (!key) throw fail('name a marketplace bot, like "pg", or paste its marketplace address');
+    let page = '';
+    try {
+      const res = await fetch(`https://x.ai/bot/marketplace/bots/${key}`, { signal: AbortSignal.timeout(20_000), headers: { 'user-agent': 'Mozilla/5.0 Crewhouse' } });
+      if (!res.ok || (page = await res.text()).length > 2_000_000) throw new Error(`status ${res.status}`);
+    } catch (e) { throw fail(`could not read that marketplace page (${e instanceof Error ? e.message : e}); check the name`); }
+    const tpl = grokTemplate(page);
+    const display = (name || tpl.meta.name).trim().slice(0, 32) || tpl.meta.name.slice(0, 32);
+    const id = disk.slug(display);
+    const was = this.bot(id);
+    if (id === CHIEF || (was && was.template !== `grok-${key}`)) throw Object.assign(new Error(`there is already a helper called ${display}`), { status: 409 });
+    const role = clean(tpl.meta.description, 80).replace(/[.!?]$/, '') || clean(tpl.meta.name, 80);
+    const find = (re: RegExp) => tpl.facts.find((t) => re.test(t)) ?? '';
+    const job = {
+      does: short(tpl.meta.description || tpl.meta.name, 500),
+      aim: short(find(/^Job:/i) || tpl.facts[0] || tpl.meta.description, 500),
+      gets: short(find(/pref|getting started/i) || 'What you tell it when you start, and what you hand it per job.', 500),
+      how: short([find(/working state/i), tpl.skills.length ? `Its playbooks: ${tpl.skills.map((s) => s.name).join(', ')}.` : ''].filter(Boolean).join(' ') || 'Its published playbooks, kept in its skills.', 500),
+      great: short(find(/never (send|publish|post)/i) || (tpl.routines.length ? `${tpl.routines.map((r) => r.name).join(', ')} run once you start them; drafts wait on you, nothing sends itself.` : 'Drafts wait on you; nothing sends itself.'), 500),
+    };
+    disk.validateJob(job);
+    const dir = disk.botDir(this.cfg, id);
+    if (!was) {
+      mkdirSync(dir, { recursive: true });
+      for (const d of ['files', 'work', 'skills']) mkdirSync(join(dir, d), { recursive: true });
+      writeFileSync(join(dir, '.gitignore'), 'work/\nbrowser/\n');
+    }
+    const ideas = [{ needs: [], group: 'goal', promise: tpl.meta.description, title: `Start with ${display}`, line: 'takes its first job', ask: 'Get us started' }];
+    writeFileSync(join(dir, 'bot.json'), JSON.stringify(was ? { ...disk.botConfig(this.cfg, id), ideas } : { tools: ['crew', 'files', 'web', 'browser', 'computer', 'documents', 'search-files'], models: ['chatgpt'], ideas }, null, 2) + '\n');
+    disk.writeSoul(this.cfg, id, `# ${display}\n\n${short(tpl.profile, 1900)}`, was ? 'Updated from the marketplace' : 'Joined the crew');
+    writeFileSync(join(dir, 'AGENTS.md'), `# ${display}\n\n## Your job\n${disk.jobPreview(job)}\n`);
+    const seen = new Set<string>();
+    for (const s of tpl.skills) {
+      const sk = disk.slug(s.name);
+      if (seen.has(sk)) continue;
+      seen.add(sk);
+      mkdirSync(join(dir, 'skills', sk), { recursive: true });
+      writeFileSync(join(dir, 'skills', sk, 'SKILL.md'), `---\nname: ${sk}\ndescription: ${JSON.stringify(s.description || s.name)}\nsays: ${JSON.stringify(short(s.description || s.name, 120))}\n---\n\n${s.content.slice(0, 4000).trim()}\n`);
+    }
+    const apps = Object.keys(APPS);
+    const met = tpl.integrations.filter((g) => apps.some((a) => g.id.toLowerCase() === a || g.name.toLowerCase().includes(a))).map((g) => apps.find((a) => g.id.toLowerCase() === a || g.name.toLowerCase().includes(a))!);
+    const unmet = tpl.integrations.filter((g) => !apps.some((a) => g.id.toLowerCase() === a || g.name.toLowerCase().includes(a)));
+    writeFileSync(join(dir, 'SOURCE.md'), `# Source\n\n- marketplace: https://x.ai/bot/marketplace/bots/${key}\n- install: https://x.ai${tpl.meta.share}\n- creator: ${tpl.meta.creator}${tpl.meta.handle ? ` (@${tpl.meta.handle})` : ''}\n- imported: ${new Date().toISOString()}\n- routines, to offer with crew_routine (never started here):\n${tpl.routines.map((r) => `  - ${r.name}: ${r.summary}`).join('\n') || '  - none'}\n- integrations needing an app: ${[...new Set(met)].join(', ') || 'none'}\n- integrations with no Crewhouse equivalent yet:\n${unmet.map((g) => `  - ${g.name}: ${short(g.description, 120)}`).join('\n') || '  - none'}\n`);
+    disk.commit(dir, ['AGENTS.md', 'SOURCE.md', 'skills'], was ? 'Updated from the marketplace' : 'Joined the crew');
+    if (!was) this.db.tx(() => {
+      this.db.run('INSERT INTO bots (id, display, role, template, color, token, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        id, display, role, `grok-${key}`, ({ magenta: '#C8328A' } as Record<string, string>)[tpl.meta.color] ?? '#445577', randomBytes(16).toString('hex'), Date.now());
+      this.say(id, 'system', `${display} joined the crew (${role.toLowerCase()}).`);
+    });
+    return { [was ? 'updated' : 'imported']: { id, name: display }, source: `https://x.ai/bot/marketplace/bots/${key}`,
+      routines: tpl.routines.map((r) => `${r.name}: ${short(r.summary, 140)}`), needs: unmet.map((g) => `${g.name}: ${short(g.description, 120)} (no Crewhouse equivalent yet)`),
+      note: `Tell the person what ${display} does now${met.length ? `, offer to connect ${[...new Set(met)].map((a) => APPS[a].name).join(' and ')}` : ''}${unmet.length ? ', and say plainly what it cannot reach yet' : ''}; offer its routines with crew_routine, and start nothing.` };
   }
 
   // ---- work ----
@@ -2083,6 +2175,9 @@ export class Crew {
       })),
       tool('crew_recruit', 'Recruit a bot from a template.', { template: Type.String(), name: Type.Optional(Type.String()) },
         (p) => { const n = this.recruit(p.template, p.name, CHIEF); return { recruited: { id: n.id, name: n.display } }; }),
+      tool('crew_import', 'Bring a Grok Bot marketplace template onto the crew as its own helper, at the person\'s own hire. `slug` is the marketplace page ("pg") or its address; `name` renames it. The public recipe becomes the helper\'s own folder, for this person\'s own use; importing again pulls the latest. Tell them what it does, what needs connecting, and offer its routines — start nothing.',
+        { slug: Type.String(), name: Type.Optional(Type.String()) },
+        (p) => this.importGrok(String(p.slug ?? ''), p.name ? String(p.name) : undefined)),
       tool('crew_assign', `Hand a bot a task. Give it a short descriptive title, never a URL. \`account\` (${accounts}) only when a task plainly suits another AI. ` +
         'A job of several steps: list them in `steps`, in plain words; the person sees the plan and it starts when they say Go.',
         { bot: Type.String(), task: Type.String(), title: Type.Optional(Type.String()), account: Type.Optional(Type.String()), steps: Type.Optional(Type.Array(Type.String())) },

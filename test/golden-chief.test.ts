@@ -73,14 +73,14 @@ test('title, relay and markdown trust boundary', () => {
 
 test('the live system prompt stays brief, answers first, and honors a chosen address once', () => {
   const { cfg, crew, done } = setup();
-  // Frozen at 10,386 chars. Re-frozen from 9,986 for the three Chief lines of the reference-assistant
-  // study (hold steady under "are you sure?", offer a routine instead of promising a check-in, answer in
-  // the person's language): +400 chars of prompt, bought by shortening nothing else. The guard is still a
+  // Frozen at 10,685 chars. Re-frozen from 10,386 for the two Chief lines of marketplace import
+  // (crew_import and the recruit/import/hire routing: +299 chars of prompt). The guard is still a
   // plain length check; P7's note stands, the prompt no longer varies with HOME.
   const prompt = disk.systemPrompt(cfg, 'chief', true);
-  assert.ok(prompt.length <= 10_386, `Chief prompt grew past its frozen size (prompt ${prompt.length})`);
+  assert.ok(prompt.length <= 10_685, `Chief prompt grew past its frozen size (prompt ${prompt.length})`);
   // Every agent, Chief included, carries the same model-visible tool descriptions: no new ABOUT text.
-  assert.ok(TOOLS.reduce((n, t) => n + t.description.length, 0) <= 2742, 'TOOLS descriptions grew past 2742 chars');
+  // Re-frozen from 2742 for crew_import's auto description (+60 against existing headroom, net +3).
+  assert.ok(TOOLS.reduce((n, t) => n + t.description.length, 0) <= 2745, 'TOOLS descriptions grew past 2745 chars');
   for (const tpl of disk.listTemplates(cfg)) {
     if (tpl.hidden) continue;
     crew.recruit(tpl.id, tpl.display, 'person');

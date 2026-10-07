@@ -40,7 +40,7 @@ export function acts(tool: string, input: Record<string, any>, e: Effect) {
 const SAFE = new Set(['bash', 'web_search', 'web_fetch', 'crew_web_search', 'crew_web_fetch', 'memory_search', 'memory_get', 'view_image', 'pdf', 'image_generate',
   'crew_connect', 'crew_outcome', 'crew_report', 'crew_deliver', 'crew_workbook', 'crew_document', 'crew_remember', 'crew_draft',
   'crew_verify', 'crew_learn', 'crew_routine', 'crew_pass', 'crew_batch', 'crew_add_phone', 'crew_roster', 'crew_recruit', 'crew_assign',
-  'crew_routines', 'crew_status', 'crew_suggest', 'crew_create', 'crew_call_me']);
+  'crew_routines', 'crew_status', 'crew_suggest', 'crew_create', 'crew_import', 'crew_call_me']);
 /** The file tools keep their old names' effects under their crew_ names: same asks, same keys, same words. */
 const baseName = (tool: string) => tool.startsWith('crew_') ? tool.slice(5) : tool;
 // The browser AXI's commands: looking never asks, acting follows the "asks first" rules, anything else is refused
