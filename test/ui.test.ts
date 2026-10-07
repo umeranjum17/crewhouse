@@ -542,7 +542,11 @@ test('Home opens on Chat at every launch, with Office one tap away and never sto
   const web = src('web/src/main.tsx');
   const home = web.slice(web.indexOf('function Home('), web.indexOf('/** The standing'));
   assert.match(home, /if \(mode === 'chat'\) return <div className="page chat-page home-chat"><div className="home-top">\{top\}<NeedsPin state=\{state\} cards=\{live\.needs\} flat \/><\/div><Chat \{\.\.\.ctx\} id="chief" hero rail=\{<ChiefRail state=\{state\} live=\{live\} refresh=\{refresh\} \/>\} \/><\/div>;/, 'web Chief: the top (a phone renders the hero block from its bar) and Needs you over his own thread, box and the ask + doing rail');
-  assert.match(web.slice(web.indexOf('function HomeBar('), web.indexOf('function NeedsPin(')), /<ChiefHero live=\{ctx\.live\} state=\{ctx\.state\} side=\{gear\} below=\{seg\} \/>/, 'the phone header is one block: hero with gear top-right, switch below its lines');
+  assert.match(web.slice(web.indexOf('function HomeBar('), web.indexOf('function NeedsPin(')), /<ChiefHero live=\{ctx\.live\} state=\{ctx\.state\} signedOut=\{chiefLocal\(ctx\)\.signedOut && !ctx\.offline\} side=\{gear\} below=\{seg\} \/>/, 'the phone header is one block: hero with gear top-right, switch below its lines, carrying the sign-in the thread reads');
+  const hero = web.slice(web.indexOf('function ChiefHero('), web.indexOf('function ChiefHero(') + 2200);
+  assert.match(hero, /A\.chief\(state, \{ signedOut: true \}\)/, 'the phone header reads Chief from the same table as the thread, with the sign-in');
+  assert.match(hero, /out \? chief\.line : needs \? 'Needs you'/, 'signed out with a job queued: the thread\'s sign-in words, never the green "At work"');
+  assert.match(hero, /A\.stripLine\(state, signedOut \? \{ signedOut: true \} : \{\}\)/, 'the standing line under it waits for the sign-in too');
   assert.match(home, /<NeedsPin state=\{state\} cards=\{live\.needs\}( flat)? \/>/, 'Needs you pinned from the office\'s one list');
   assert.match(home, /<div className="feed-ask"><Composer/, 'Office keeps Chief\'s box on a desk');
   assert.match(home, /<div className="dock phone-only"><Composer/, 'and on a phone');
