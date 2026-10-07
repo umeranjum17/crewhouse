@@ -13,7 +13,7 @@ import type { AgentRuntime, RunEnd, RunEvent, RunRef, RunSpec, SignInStep, ToolH
 export { ENGINE_VERSION } from '@byokit/openclaw';
 
 const repo = resolve(import.meta.dirname, '../..');
-/** Crewhouse account key → OpenClaw provider id. ChatGPT is the one front door; the rest are quiet options. Claude is its CLI: the kit names it claude-cli, never anthropic. */
+/** Crewhouse account key → OpenClaw provider id, one per account the sign-in card offers. Claude is its CLI: the kit names it claude-cli, never anthropic. */
 const PROVIDER_OF: Record<string, string> = { chatgpt: 'openai', grok: 'xai', copilot: 'github-copilot', openrouter: 'openrouter', minimax: 'minimax', claude: 'claude-cli' };
 /** The engine's own sign-in route per account (the pin's wizard choices). */
 const AUTH_CHOICE: Record<string, string> = {

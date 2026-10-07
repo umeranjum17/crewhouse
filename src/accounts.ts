@@ -14,7 +14,7 @@ const EXTRA: Record<string, Omit<Provider, 'billing'>> = {
 };
 
 /** The offered accounts, generated from the kit's own catalogue: names and how each one is billed come from there,
- *  so a new kit route lands with the bump. ChatGPT is the front door; the rest are quiet "more options" paths. */
+ *  so a new kit route lands with the bump. The sign-in card offers every one; none is the front door alone. */
 export const PROVIDERS: Record<string, Provider> = Object.fromEntries([
   ...offered(['chatgpt', 'grok', 'copilot', 'openrouter']).map(({ key, name, billing }) => [key, { key, name, billing }]),
   ...Object.entries(EXTRA).map(([key, v]) => [key, { ...v, billing: 'subscription' as const }]),

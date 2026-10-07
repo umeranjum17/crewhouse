@@ -552,10 +552,16 @@ export function preview(last: Json | null | undefined, status = '') {
   if (f) return `Sent “${pretty(f[1])}”`;
   return last.author === 'person' ? `You: ${text.replace(/\s+/g, ' ')}` : teaser(text.replace(/\s+/g, ' '));
 }
-/** What Chief last said himself, for his hero (B1): his own message, never the person's; '' when he has said nothing. */
+/** A hero line is a real sentence: bare fragments ("4."), list markers and empty lines never reach it. */
+const realSentence = (text: string): string => String(text ?? '').split(/(?<=[.!?…])\s+/)
+  .filter((p) => /[A-Za-z]/.test(p.replace(/^[\s*•\-–—\d.)\]]+/, ''))).at(-1)?.trim() ?? '';
+/** What Chief last said himself, for his hero (B1): his own message's last real sentence, never the person's;
+ *  '' when he has said nothing a hero can say. */
 export function chiefSaid(state: Json): string {
   const last = state.bots.find((b: Json) => b.id === 'chief')?.last;
-  return last && last.author !== 'person' && !last.helper && String(last.text ?? '').trim() ? preview(last) : ''; // a helper's own words are never Chief's
+  if (!last || last.author === 'person' || last.helper || !String(last.text ?? '').trim()) return ''; // a helper's own words are never Chief's
+  const said = realSentence(String(last.text));
+  return said ? preview({ ...last, text: said }) : '';
 }
 export function chats(state: Json): Chat[] {
   const bot = (id: string) => state.bots.find((b: Json) => b.id === id) ?? {};
@@ -1245,7 +1251,7 @@ function lastRun(h: Json) {
 }
 
 /** The AI accounts a person can think with, in the order the app offers them: every route the engine supports,
- *  ChatGPT first (the one front door; the rest are quiet paths). Name and billing come from the kit's own catalogue,
+ *  every one on the sign-in card (no front door alone). Name and billing come from the kit's own catalogue,
  *  so a new route lands with the bump; `MARKS` is only what the kit can't know — the tile colour, the tool a route
  *  needs installed (`cli`), and where that provider's own page lives (`site`, `plans`). Kept in step with crewd's
  *  own list by test/ui.test.ts. */

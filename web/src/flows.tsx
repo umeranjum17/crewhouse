@@ -157,12 +157,15 @@ export function SignIn({ ai = A.AIS[0], tab: first, onReady, onClose }: { ai?: (
  * or, for a plan without helpers, the ways forward. Taps: Sign in (1), her account (2), Continue (3).
  */
 /** The sign-in card, in the ask-card anatomy (§4.11) with the account the crew will use as primary: whichever one is
- *  already signed in, or the front door while none is. The links a provider owns (its own site, its plans) sit under
- *  its own branch; no provider's name is written into another's card. */
+ *  already signed in, or every provider the kit offers while none is (no front door alone). The links a provider
+ *  owns (its own site, its plans) sit under its own branch; no provider's name is written into another's card. */
 export function AccountCard({ accounts, inChat, onReady }: { accounts: Json[] | null; inChat?: boolean; onReady: () => void }) {
   const [signing, setSigning] = useState<Window | null | false>(sheet === 'signin' ? null : false);
-  const [noAccount, setNoAccount] = useState(false);
-  const { ai, g } = A.aiList(accounts).mine[0];
+  const [signKey, setSignKey] = useState<string | null>(null);
+  const list = A.aiList(accounts);
+  const offered = [...list.mine, ...list.more];
+  const { ai, g } = list.mine[0];
+  const signAi = offered.find((r) => r.ai.key === signKey)?.ai ?? ai;
   if (g.state === 'ready' && !g.notIncluded && signing === false) return null;
   if (g.notIncluded) return (
     <div className="card ask">
@@ -178,14 +181,11 @@ export function AccountCard({ accounts, inChat, onReady }: { accounts: Json[] | 
   return (
     <div className="card ask">
       <div className="ask-head"><Face who="chief" size={28} /><div className="grow"><b>Chief</b><div className="ask-status"><i />Needs a sign-in</div></div></div>
-      <p className="ask-words">{g.recovery || <>Say yes once on {ai.name}'s page. Your job starts when you come back.</>}</p>
+      <p className="ask-words">{g.recovery || <>Say yes once on your AI's page. Your job starts when you come back.</>}</p>
       <div className="btns">
-        <button className="btn go big" onClick={() => setSigning(openTab())}><AiMark ai={ai} size={24} />Sign in with {ai.name}</button>
-        {ai.site && <button className="link" onClick={() => { setNoAccount(true); window.open(ai.site!, '_blank'); }}>No {ai.name} account? Make a free one</button>}
-        <button className="link" onClick={() => { location.hash = '#/settings'; }}>Another account? All of them are under Settings</button>
+        {offered.map(({ ai: r }) => <button key={r.key} className="btn go" onClick={() => { setSignKey(r.key); setSigning(openTab()); }}><AiMark ai={r} size={24} />Sign in with {r.name}</button>)}
       </div>
-      {noAccount && <p className="mute small">{ai.name} opened in a new tab: sign up in a few taps, then come straight back and tap Sign in.</p>}
-      {signing !== false && <SignIn ai={ai} tab={signing} onReady={() => { setSigning(false); onReady(); }} onClose={() => setSigning(false)} />}
+      {signing !== false && <SignIn ai={signAi} tab={signing} onReady={() => { setSigning(false); onReady(); }} onClose={() => setSigning(false)} />}
     </div>
   );
 }
