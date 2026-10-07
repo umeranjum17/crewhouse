@@ -301,6 +301,8 @@ const BADGE: Partial<Record<A.Seat | 'done', string>> = { needs: '!', chat: '!',
  *  one plain caption, every word from the office's state. */
 function ChiefHero({ live, state }: { live: A.OfficeView; state: Json }) {
   const crew = A.roster(live.crew), seat = (c: A.OfficeMember) => A.railWord(c, live).seat;
+  // The phone header's own status: Needs you, or the one plain line under it.
+  const needs = live.needs.length > 0, resting = !needs && live.chief.mood === 'rest';
   const by = (k: (A.Seat | 'done')[]) => crew.filter((c) => k.includes(seat(c))).map((c) => c.name);
   const said = [[by(['needs', 'chat']), 'needs you', 'need you'], [by(['working']), 'working', 'working'], [by(['quiet']), 'gone quiet', 'gone quiet'], [by(['failed']), "didn't finish", "didn't finish"], [by(['waiting']), 'waiting', 'waiting']] as const;
   const caption = said.filter(([l]) => l.length).map(([l, one, many]) => `${names([...l])} ${l.length === 1 ? one : many}`).join(' · ');
@@ -309,6 +311,8 @@ function ChiefHero({ live, state }: { live: A.OfficeView; state: Json }) {
       <span className="ch-art"><ChiefArt mood={live.chief.mood} d={9} hero whole /></span>
       <div className="ch-body">
         <h2 className="ch-name">Chief</h2>
+        <p className={`ch-status${needs ? '' : resting ? ' rest' : ' work'}`}><i aria-hidden />{needs ? 'Needs you' : resting ? 'Resting' : 'At work'}</p>
+        <p className="ch-line">{A.chiefSaid(state) || live.chief.line}</p>
         <p className="ch-say">{A.chiefSaid(state) || live.chief.line}</p>
         {crew.length > 0 && <div className="ch-crew">{crew.slice(0, 5).map((c) => { const k = seat(c); return <a key={c.id} href={hrefOf(c.id)} className="ch-face" aria-label={`${c.name}: ${A.railWord(c, live).word}`}>
           <Face who={c} size={44} />{BADGE[k] !== undefined && <i className={`ch-badge ${k}`} aria-hidden>{BADGE[k]}</i>}</a>; })}
@@ -562,23 +566,23 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
           ? <ChiefIdeas state={state} chat={id} picked={() => setSeed((n) => n + 1)} />
           : <HelperIdeas state={state} chat={id} picked={() => setSeed((n) => n + 1)} />)}
         {lines.map((l, i) => {
-          // A card raised after this line; never inside the person's own bubble, where it would shrink to their side.
+          // A card raised after this line; never inside the person's own line, where it would shrink to their side.
           const speaker = l.helper ? A.crew(state).find((x) => x.id === l.helper) : undefined;
           const here = cards.filter((c) => lines.findLastIndex((x) => (x.at ?? 0) <= c.at) === i).map((c) => c.kind === 'connect' ? <ConnectCard key={c.id} c={c} helper={h?.name} state={state} onDone={refresh} /> : <AskCard key={c.id} c={c} who={h} onDone={refresh} />);
           return start && i === 0 && l.from === 'note' && l.text.startsWith(`${name} joined the crew`) ? null : <div key={l.id} className="line-wrap">{dayOf(l.at)}
-          <div id={`m${l.id}`} className={`line ${l.from}${l.unsure ? ' unsure' : ''}${l.recap ? ' recap' : ''}${l.id > (opened.current ?? Infinity) ? ' fresh' : ''}${i && lines[i - 1].from === l.from && lines[i - 1].helper === l.helper && l.from !== 'me' && !l.recap && !lines[i - 1].recap ? ' consecutive' : ''}`}>
-            {l.from !== 'me' && l.from !== 'note' && <div className="line-by"><Face who={l.from === 'chief' ? 'chief' : speaker ?? h ?? 'chief'} size={28} /><span className="who">{l.from === 'chief' ? 'Chief' : speaker?.name ?? name}</span><time>{l.at ? A.clock(l.at) : ''}</time></div>}
-            {l.by && <span className="note-by"><Face who={A.crew(state).find((x) => x.id === l.by) ?? 'chief'} size={20} /></span>}
+          <div id={`m${l.id}`} className={`line ${l.from}${l.unsure ? ' unsure' : ''}${l.recap ? ' recap' : ''}${l.id > (opened.current ?? Infinity) ? ' fresh' : ''}`}>
+            {l.from !== 'note' && <div className="line-by"><span className="who">{l.from === 'me' ? 'You' : l.from === 'chief' ? 'Chief' : speaker?.name ?? name}</span><time className="sr">{l.at ? A.clock(l.at) : ''}</time></div>}
+            {l.by && <span className="note-by" aria-hidden />}
             {l.text && (l.detail ? <ChiefAsk l={{ text: l.text, detail: l.detail }} /> : <div className="bubble-text"><ChatText text={l.text} /></div>)}
             {l.files.map((f) => <Media key={f.url} f={f} big />)}
             {phoneOffer?.message === l.id && <PhoneCard offer={phoneOffer} reload={() => void load()} />}
             {l.from !== 'me' && here}
           </div>{l.from === 'me' && here}</div>;
         })}
-        {echoed && <div className="line me fresh"><div className="bubble-text">{pending.text}</div></div>}
-        {waiting && id === 'chief' && <div className="line them fresh" role="status"><div className="line-by"><Face who="chief" size={28} /><span className="who">Chief</span></div><div className="bubble-text"><span className="typing" aria-hidden><i /><i /><i /></span><span className="sr">Chief is on it</span></div></div>}
-        {!!partial && <div className="line them streaming" aria-live="polite"><div className="line-by"><Face who={h ?? 'chief'} size={28} /><span className="who">{name}</span></div><div className="bubble-text"><ChatText text={partial} /></div></div>}
-        {A.building(lines, live) && <div className="line them" role="status"><div className="line-by"><Face who={h ?? 'chief'} size={28} /><span className="who">{name}</span></div><div className="building-card" aria-label="Building it"><i aria-hidden /><i aria-hidden /><div className="bubble-text">Building it. I’ll share it here.</div></div></div>}
+        {echoed && <div className="line me fresh"><div className="line-by"><span className="who">You</span></div><div className="bubble-text">{pending.text}</div></div>}
+        {waiting && id === 'chief' && <div className="line them fresh" role="status"><div className="line-by"><span className="who">Chief</span></div><div className="bubble-text"><span className="typing" aria-hidden><i /><i /><i /></span><span className="sr">Chief is on it</span></div></div>}
+        {!!partial && <div className="line them streaming" aria-live="polite"><div className="line-by"><span className="who">{name}</span></div><div className="bubble-text"><ChatText text={partial} /></div></div>}
+        {A.building(lines, live) && <div className="line them" role="status"><div className="line-by"><span className="who">{name}</span></div><div className="building-card" aria-label="Building it"><i aria-hidden /><i aria-hidden /><div className="bubble-text">Building it. I’ll share it here.</div></div></div>}
         {last?.choices.length ? <div className="chips">{last.choices.map((c) => <button key={c} className="chip" onClick={() => send(c)}>{c}</button>)}</div> : null}
         {cards.filter((c) => !lines.length || lines.every((x) => (x.at ?? 0) > c.at)).map((c) => c.kind === 'connect' ? <ConnectCard key={c.id} c={c} helper={h?.name} state={state} onDone={refresh} /> : <AskCard key={c.id} c={c} who={h} onDone={refresh} />)}
         {h && <Stuck h={h} refresh={refresh} />}

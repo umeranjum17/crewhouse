@@ -551,6 +551,26 @@ test('Home opens on Chat at every launch, with Office one tap away and never sto
   assert.match(pin, /`See all \$\{cards\.length\}`/, 'and an exact "See all N"');
 });
 
+test("Chief's conversation reads as a named transcript, the ask inline under a dashed rule", async () => {
+  const src = (f: string) => readFileSync(join(import.meta.dirname, '..', f), 'utf8');
+  const art = await import('../web/src/art.ts');
+  const web = src('web/src/main.tsx'), css = src('web/src/styles.css'), app = src('mobile/App.tsx');
+  const chat = web.slice(web.indexOf('function Chat('), web.indexOf('function Chat(') + 9500);
+  assert.match(chat, /className="line-by"><span className="who">/, 'every line carries its name in the open');
+  assert.doesNotMatch(chat, /<Face/, 'no faces in the transcript rows');
+  assert.doesNotMatch(chat, /consecutive/, 'no collapsing: the name repeats on every line');
+  assert.match(css, /\.card\.ask \{[^}]*border-top: 1px dashed/, 'the ask sits inline under a dashed rule, with no card chrome');
+  const phone = app.slice(app.indexOf('function Chat('), app.indexOf('function Chat(') + 12000);
+  assert.match(phone, /\{speaker\(l\)\}/, 'the phone names every line too');
+  assert.equal(art.helmet(38, 'needs', true, 0).length, 19, 'the rail helmet is the mock\'s 38-column grid');
+  assert.doesNotMatch(phone, /bubbleText/, 'no bubbles on the phone either');
+  for (const [f, head] of [['web/src/parts.tsx', 'function AskHead'], ['mobile/App.tsx', 'function AskHead']] as const) {
+    const h = src(f).slice(src(f).indexOf(head), src(f).indexOf(head) + 700);
+    assert.match(h, /askStatus|ask-status/, 'the ask keeps its Needs-you flag');
+    assert.doesNotMatch(h, /<Face|Face who/, 'but loses the face');
+  }
+});
+
 test('Home renders once: a second full Home (bd51524) put a second composer below the first', () => {
   const src = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
   assert.equal([...src.matchAll(/<Home\b/g)].length, 1, 'the app is one page per view, never two');
@@ -684,9 +704,14 @@ test('the phone office: one grouped list, helmets still, the shared view model',
   assert.doesNotMatch(motion, /Hop|Pulse|Land|Loop|Note|Fly|useOnBeat/, 'no room loops left');
   const home = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
   const top = home.slice(home.indexOf('function Home('), home.indexOf('function ChatList('));
-  assert.ok(top.indexOf('<HomeBar') < top.indexOf('<ChiefHero') && top.indexOf('<ChiefHero') < top.indexOf('<NeedsPin') && top.indexOf('<Office') < top.lastIndexOf('{pinned}'), 'Chat: the bar, Chief\'s hero, then Needs you pinned; Office: Needs you right under the grouped list');
+  const bar = home.slice(home.indexOf('function HomeBar('), home.indexOf('function NeedsPin('));
+  const chatHead = bar.slice(bar.indexOf("if (mode === 'chat')"));
+  assert.ok(chatHead.indexOf('<ChiefHero') > 0 && chatHead.indexOf('{seg}') > chatHead.indexOf('<ChiefHero'), 'Chat header: the hero, then the switch under it');
+  assert.match(top, /hero=\{<><\/>}/, 'the thread carries an empty hero slot (tray lines keep flowing)');
+  assert.doesNotMatch(top, /NeedsPin/, 'no pinned card in the conversation; the ask sits inline');
+  assert.ok(top.indexOf('<Office') < top.lastIndexOf('{pinned}'), 'Office: Needs you right under the grouped list');
   assert.match(top, /few=\{1\}/, 'one pinned row in Office, and "See all N" for the rest');
-  assert.match(top, /if \(mode === 'chat'\) return <View style=\{\{ flex: 1 \}\}>\{top\}<Chat \{\.\.\.ctx\} id="chief" hero=\{/, 'Chat: the bar over Chief\'s own thread, which carries his hero and Needs you, and his box');
+  assert.match(top, /if \(mode === 'chat'\) return <View style=\{\{ flex: 1 \}\}>\{top\}<Chat \{\.\.\.ctx\} id="chief" hero=\{/, 'Chat: the header over Chief\'s own thread, and his box');
 });
 
 test("Chief's mood is the first matching row of the table, and the line follows the face", () => {
