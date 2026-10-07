@@ -8,6 +8,7 @@ import { setup, settled, release, lastSaid } from './lab.ts';
 import type { StubRuntime } from '../src/stub-runtime.ts';
 import * as disk from '../src/bots.ts';
 import { TOOLS } from '../src/openclaw/runtime.ts';
+import { plain } from '../web/src/adapter.ts';
 
 const blob = (o: unknown) => '\\"template\\":{' + JSON.stringify(o).replace(/"/g, '\\"').slice(1) + '},\\"featured\\":false';
 const page = (o: unknown) => `<html><body><ul><li><p class="text-primary text-sm leading-6 whitespace-pre-wrap">I am Testy the prospector. I research named people on the public web and draft the first line. I never send without your yes.</p></li><li><p class="text-primary text-sm leading-6 whitespace-pre-wrap">Job: outbound prospecting. Build a list, research each name, draft the opener.</p></li><li><p class="text-primary text-sm leading-6 whitespace-pre-wrap">User prefs, fill during getting started: what they sell = unset, who buys it = unset.</p></li></ul><script>\\"template\\":[];${blob(o)}</script></body></html>`;
@@ -65,8 +66,12 @@ test('Chief lists published categories and skills, proposes one, then imports af
     assert.equal(calls.filter((u) => u.endsWith('/marketplace')).length, 3);
     assert.equal(calls.filter((u) => u.endsWith('/bots/tb')).length, 1, 'the same import route fetched the recipe');
     globalThis.fetch = (async () => { throw new Error('source offline'); }) as typeof fetch;
-    const missed = await crew.post('chief', 'List again [tool crew_import {"list":true}]');
+    const missed = await crew.post('chief', 'List again [tool crew_import {"list":true}] ask permission');
+    await release(crew, 'chief', 'the published Grok/Claude catalogue - `crew_import` rejected the list request');
     await settled(db, missed!.task);
+    assert.equal(plain(lastSaid(db, 'chief')), 'the published Grok/Claude catalogue - the template importer rejected the list request');
+    assert.equal(plain('Claude skills: claude-api'), 'Claude skills: claude-api');
+    assert.doesNotMatch(plain('anthropic/claude-opus-5 used mcp__crewhouse__crew_import'), /claude-opus|mcp__|crew_import/);
     const errors = runtime.transcript(db.get('SELECT session FROM tasks WHERE id = ?', missed!.task)!.session);
     assert.match(errors, /source offline/);
     assert.match(errors, /import by name/i);
