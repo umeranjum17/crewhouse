@@ -95,9 +95,10 @@ lifetime, through `/home/umer/firstmate/config/fm-mem-gate.sh`. Use
 `$LAB/state/openclaw/home/.claude/.credentials.json`; never read/copy the person's credentials.
 Check `claude auth status` with that engine HOME and CLAUDE_CONFIG_DIR and the engine's own
 Claude CLI preflight before sending; select `["claude"]` with `PUT /api/bots/chief/models`.
-A symlink-only bootstrap has produced a positive preflight then a parked first turn:
-preflight is not proof of usable sign-in. If that happens, stop and retain pre/post results;
-never claim model words or keep retrying. This route is hosted, not a scripted provider.
+A positive preflight does not witness a successful turn: the CLI may fail to refresh an
+expired OAuth session. If the turn parks, inspect its terminal failure in the engine log,
+retain pre/post results and stop; never infer admission from missing crewd tool events.
+This route is hosted, not a scripted provider.
 Stop crewd with TERM and await its exit before releasing the lock.
 Sign-in tests alone reuse `/home/umer/lab-tmp/crewhouse-retained`; never copy its history.
 Quota errors mean the account rests: report the bound, never mint another sign-in.
