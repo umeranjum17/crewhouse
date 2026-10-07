@@ -135,7 +135,16 @@ export async function measure(opts) {
   try {
     await runtime.start({ tools: () => [], gate: async () => ({ allow: false, reason: 'no tools in a measured turn' }), call: async () => '' });
     if (opts.provider) await runtime.configureModelProvider(opts.provider.baseUrl, opts.provider.apiKey);
+    // `agents.create` answers before the Gateway's hot reload applies the new roster (the engine log has
+    // shown the create response ~100ms ahead of the reload), so a turn sent right after `ensureMember`
+    // can fail with `unknown agent id "m1"`. Wait for the roster itself, with a bound — never a retry of the turn.
     await kit.ensureMember('m1');
+    for (const readyBy = Date.now() + 30_000;;) {
+      const roster = await kit.call('agents.list', {}, { timeoutMs: 20_000 });
+      if ((roster.agents ?? []).some((a) => a.id === 'm1')) break;
+      if (Date.now() > readyBy) throw new Error('the engine never listed agent "m1" after creating it');
+      await new Promise((r) => setTimeout(r, 25));
+    }
     const providers = await kit.providers('m1').catch(() => []);
     if (!opts.provider && !providers.includes('openai')) throw new Error(`no ChatGPT sign-in on this state (signed in: ${providers.join(', ') || 'nobody'}); nothing was measured`);
     const cfgNow = await kit.call('config.get', {}, { timeoutMs: 20_000 }).catch(() => undefined);
