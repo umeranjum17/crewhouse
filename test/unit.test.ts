@@ -1242,6 +1242,51 @@ test('Chief makes up a new helper on a short card (or adapts one already on the 
   done();
 });
 
+test('Chief interviews a vague ask before hiring: questions first, the card built from the answers; a specific "just do it" goes straight to the card', async () => {
+  const { db, crew, done } = setup();
+  crew.onboard('sir');
+  const create = (args: object) => `[tool crew_create ${JSON.stringify(args)}]`;
+  // The model-visible rule, everywhere Chief reads it: the crew_create description and his own template.
+  const seen = (crew as any).crewTools('chief').find((t: any) => t.name === 'crew_create')!;
+  assert.match(seen.description, /at most three/);
+  assert.match(seen.description, /just do it/);
+  assert.match(seen.description, /never does/);
+  assert.match(readFileSync(join(crew['cfg'].repoDir, 'templates', 'chief', 'AGENTS.md'), 'utf8'), /Vague ask: questions first, then the card/);
+  const card = () => db.get("SELECT * FROM asks WHERE bot = 'chief' AND kind = 'propose' AND state = 'open'");
+  // A vague ask: Chief asks in plain words (the stub holds his turn; the release is his questions). No card, no helper.
+  const { task: t } = (await crew.post('chief', 'I need someone to help with my garden, ask permission'))!;
+  await holding(crew, 'chief');
+  await release(crew, 'chief', 'Happy to take someone on for the garden. Three quick questions: what would they look after? What does good look like? And what should they do first?');
+  await settled(db, t);
+  assert.equal(card(), undefined);
+  assert.equal(crew.bot('fern'), undefined);
+  assert.match(lastSaid(db, 'chief')!, /what should they do first\?/);
+  // The answers: Chief builds the card from them; yes hires Fern with the answers in her job, and starts the first job.
+  const fern = { name: 'Fern', role: 'Looks after your garden', job: { does: 'Waters the plants and weeds the beds, nothing else in the garden.', aim: 'Nothing dies.', gets: 'Photos of the beds when something looks wrong.', how: 'Waters weekly, weeds monthly, never sprays or prunes without asking.', great: 'Every plant alive at a glance; for example, no wilted pots this week.' }, personality: 'You are Fern. Patient, green-fingered and brief.', first: 'Clear the brambles' };
+  const { task: t2 } = (await crew.post('chief', `They would water the plants and weed the beds; good means nothing dies; first clear the brambles ${create(fern)}`))!;
+  // The earlier hold words stay in this chat's history, so later turns hold again: the tool call above already ran; release the turn.
+  await holding(crew, 'chief');
+  await release(crew, 'chief', 'I have put Fern on a card; take a look.');
+  await settled(db, t2);
+  assert.ok(card(), 'the answers become a card');
+  await crew.answer(card()!.id, { answer: 'allow' });
+  assert.equal(disk.readJob(crew['cfg'], 'fern').aim, 'Nothing dies.');
+  assert.match(disk.readJob(crew['cfg'], 'fern').how, /never sprays/);
+  const first = db.get("SELECT * FROM tasks WHERE bot = 'fern'")!;
+  assert.equal(first.body, 'Clear the brambles');
+  await settled(db, first.id);
+  // The skip path: an already-specific "just do it" files the card in the same turn, with no question turn.
+  const shed = { bot: 'fern', role: 'Looks after your garden and shed', job: { ...fern.job, does: 'Waters the plants, weeds the beds and keeps the shed tidy.' }, first: 'Tidy the shed' };
+  const { task: t3 } = (await crew.post('chief', `Just do it: Fern should also keep the shed tidy ${create(shed)}`))!;
+  await holding(crew, 'chief');
+  await release(crew, 'chief', 'I have put the shed on a card; take a look.');
+  await settled(db, t3);
+  assert.match(card()!.title, /Shall Fern take this on/);
+  await crew.answer(card()!.id, { answer: 'deny' });
+  assert.equal(crew.bot('fern')!.role, 'Looks after your garden');
+  done();
+});
+
 test('Chief uses low effort for the first coordination turn', async () => {
   const { db, crew, done } = setup();
   crew.onboard('Alex');
