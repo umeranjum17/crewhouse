@@ -233,9 +233,15 @@ test("a bot's shell cannot find or drive another bot's browser", { skip: noAttac
 // Teach by showing records through the same endpoint: crewd's recorder is the one client of the bot's DevTools while the
 // person has the wheel. The page clicks and moves on by itself, standing in for the person's hands on the screen.
 test("a show is recorded through crewd's own endpoint to the bot's browser", { skip: noXvfb || (!browserBin() && 'no Chromium here') }, async (t) => {
+  // The stand-in hands wait until the show is genuinely listening: the recorder installs its step binding on
+  // every page it attaches to, so acting before that means navigating before anyone listens — on a slow first
+  // render the navigation used to land before attach and replay as state, which is nobody's step, and the show
+  // then waited forever for a page it had already missed.
   const page = `<label for="q">Search</label><input id="q"><button id="go">Find</button>
-    <script>setTimeout(() => { const q = document.getElementById('q'); q.value = 'private words'; q.dispatchEvent(new Event('change', { bubbles: true }));
-      document.getElementById('go').click(); setTimeout(() => { location = '/results'; }, 300); }, 1500)</script>`;
+    <script>const hands = () => { const q = document.getElementById('q'); q.value = 'private words'; q.dispatchEvent(new Event('change', { bubbles: true }));
+      document.getElementById('go').click(); setTimeout(() => { location = '/results'; }, 300); };
+      const wait = () => (typeof window.__crewhouseStep === 'function' ? setTimeout(hands, 500) : setTimeout(wait, 100));
+      wait();</script>`;
   const site = createServer((q, r) => r.writeHead(200, { 'content-type': 'text/html' })
     .end(q.url === '/results' ? '<p>3 found</p>' : q.url === '/crewd' ? '<p>crewd was here</p>' : page)).listen(0, '127.0.0.1');
   await new Promise((r) => site.once('listening', r));
