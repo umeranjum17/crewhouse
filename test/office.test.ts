@@ -188,7 +188,7 @@ const WINDOW_MS = 600;
 const toOffice = async (b: Awaited<ReturnType<typeof browse>>) => {
   await until('the Chat | Office switch', () => b.run("[...document.querySelectorAll('.home-mode [role=tab]')].some((e) => /office/i.test(e.textContent))"), 30_000);
   await b.run("[...document.querySelectorAll('.home-mode [role=tab]')].find((e) => /office/i.test(e.textContent)).click()");
-  await until('the panels', () => b.run("!!document.querySelector('.office .panel')"), 30_000);
+  await until('the office rows', () => b.run("!!document.querySelector('.office .panel, .office .grow-row')"), 30_000);
 };
 
 // What moves: the working helmets' scan lines only (a 140 ms re-render, never a frame callback or a CSS loop).
@@ -228,7 +228,7 @@ test('the office keeps the battery budget: a scan line while working, still othe
 
 // Each demo house and its crew size.
 const HOUSES: [string, number][] = [['crew1', 1], ['crew5', 5], ['crew12', 12], ['crew30', 30], ['office', 5], ['calm', 5], ['finished', 5]];
-test('at 1, 5, 12 and 30 crew, on a phone and a computer, every panel is clear and whole, and counts agree', { skip: !bin && 'no Chromium here' }, async () => {
+test('at 1, 5, 12 and 30 crew, on a phone and a computer, every row and panel is clear and whole, and counts agree', { skip: !bin && 'no Chromium here' }, async () => {
   const b = await browse();
   await b.send('Page.enable'); await b.send('Runtime.enable');
   for (const [width, height, mobile] of [[390, 844, true], [1440, 900, false]] as const) {
@@ -238,46 +238,67 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, every panel is clear a
         await b.open(`demo=${demo}&${theme}`);
         await until("Chief's box", () => b.run("!!document.querySelector('.home-chat .composer')"), 30_000);
         await toOffice(b);
+        // Phone width renders the grouped list, a desk the panels; the slim header's count line reads on both.
         const m = await b.run(`(() => {
-          const ps = [...document.querySelectorAll('.office .panel')];
+          const narrow = innerWidth < 900;
+          const units = [...document.querySelectorAll(narrow ? '.office .grow-row' : '.office .panel')];
           const box = (e) => e.getBoundingClientRect(), st = box(document.querySelector('.office'));
           const hit = (a, c) => a.left < c.right - 0.5 && c.left < a.right - 0.5 && a.top < c.bottom - 0.5 && c.top < a.bottom - 0.5;
-          const rects = ps.map(box);
+          const rects = units.map(box);
           const pairs = [];
           rects.forEach((a, i) => rects.slice(i + 1).forEach((c, j) => { if (hit(a, c)) pairs.push(i + ' x ' + (i + 1 + j)); }));
           const out = rects.filter((r) => r.left < st.left - 1 || r.right > st.right + 1).length;
-          const clipped = ps.flatMap((p) => [...p.querySelectorAll('b, .p-line, .p-meta, .p-steps span, .p-acts .btn')])
+          const clipped = units.flatMap((p) => [...p.querySelectorAll('b, .p-line, .p-meta, .p-steps span, .btn')])
             .filter((e) => e.scrollWidth > e.clientWidth + 1).map((e) => e.textContent?.slice(0, 40));
-          const names = ps.map((p) => p.getAttribute('aria-label'));
-          const stat = Number(document.querySelector('.home-meta .m-needs')?.dataset.n);
-          const busy = Number(document.querySelector('.home-meta .m-working')?.dataset.n);
+          const names = units.map((p) => p.getAttribute('aria-label'));
+          const line = document.querySelector('.office-counts')?.textContent ?? '';
+          const nums = [...line.matchAll(/(\\d+) (?:needs? you|at work|done|resting)/g)].map((x) => Number(x[1]));
           const pinned = Number(document.querySelector('.office-main .needs-pin .count')?.textContent ?? 0);
           const onCards = document.querySelectorAll('.office-main .on-card').length;
-          const memberNeeds = ps.slice(1).filter((p) => p.classList.contains('glow-needs')).length;
-          const chiefGlows = ps[0].classList.contains('glow-needs');
-          const work = ps.filter((p) => p.classList.contains('glow-work')).length;
-          const modes = [...new Set(ps.map((p) => p.querySelector('.helmet')?.dataset.mode))];
-          const words = ps.map((p) => p.querySelector('.p-state')?.textContent?.trim());
+          const memberNeeds = units.filter((p) => !/^Chief:/.test(p.getAttribute('aria-label') ?? '') && p.querySelector('.p-state.needs')).length;
+          const chiefGlows = units.some((p) => /^Chief:/.test(p.getAttribute('aria-label') ?? '') && p.querySelector('.p-state.needs'));
+          const chiefRests = units.some((p) => /^Chief:/.test(p.getAttribute('aria-label') ?? '') && p.querySelector('.p-state.rest'));
+          const chiefWorks = units.some((p) => /^Chief:/.test(p.getAttribute('aria-label') ?? '') && p.querySelector('.p-state.work'));
+          const work = units.filter((p) => p.querySelector('.p-state.work')).length;
+          const done = units.filter((p) => p.querySelector('.p-state.done')).length;
+          const rest = units.filter((p) => p.querySelector('.p-state.rest')).length;
+          const modes = [...new Set(units.map((p) => p.querySelector('.helmet')?.dataset.mode))];
+          const words = units.map((p) => p.querySelector('.p-state')?.textContent?.trim());
+          const acts = units.flatMap((p) => [...p.querySelectorAll('.btn')]).map((e) => e.textContent);
+          const groups = [...document.querySelectorAll('.office .grp')].map((g) => g.getAttribute('aria-label'));
           const office = document.querySelector('.office-main > .office');
-          return { panels: ps.length, pairs, out, clipped, names, stat, busy, pinned, onCards, memberNeeds, chiefGlows, work, modes, words,
+          return { narrow, units: units.length, pairs, out, clipped, names, nums, pinned, onCards, memberNeeds, chiefGlows, chiefRests, chiefWorks, work, done, rest, modes, words, acts, groups,
             scroll: document.documentElement.scrollHeight > innerHeight + 1 || (office && office.scrollHeight > office.clientHeight + 1),
-            cols: getComputedStyle(document.querySelector('.panels')).gridTemplateColumns.split(' ').length };
+            cols: narrow ? 1 : getComputedStyle(document.querySelector('.panels')).gridTemplateColumns.split(' ').length };
         })()`);
         const at = `${demo} ${theme} at ${width}`;
         try {
-          assert.equal(m.panels, n + 1, `${at}: Chief plus every helper has a panel`);
-          assert.deepEqual([...new Set(m.names)].length, m.panels, `${at}: nobody twice, nobody missing`);
-          assert.equal(m.out, 0, `${at}: every panel inside the office column`);
-          assert.equal(m.pairs.length, 0, `${at}: no panel covers another: ${m.pairs.join('; ')}`);
+          assert.deepEqual(m.nums.length, 4, `${at}: the header counts needs, work, done and resting (${m.nums})`);
+          assert.deepEqual([...new Set(m.names)].length, m.units, `${at}: nobody twice, nobody missing`);
+          assert.equal(m.out, 0, `${at}: every row inside the office column`);
+          assert.equal(m.pairs.length, 0, `${at}: no row covers another: ${m.pairs.join('; ')}`);
           assert.deepEqual(m.clipped, [], `${at}: no word cut off`);
-          assert.equal(m.stat, m.pinned, `${at}: the header's needs count is the pinned Needs you`);
-          assert.equal(m.busy, m.onCards, `${at}: the header's working count is On it now`);
-          assert.equal(m.busy, m.work, `${at}: the header's working count is the At-work panels`);
-          // Needs-you rows no crew panel holds ride on Chief's: his panel glows exactly when rows are left over.
-          assert.equal(m.chiefGlows, m.stat > m.memberNeeds, `${at}: Chief carries the leftover needs rows (${m.stat} rows, ${m.memberNeeds} on crew panels)`);
-          if (width < 900) assert.equal(m.cols, 1, `${at}: one column on a phone`);
-          else assert.equal(m.cols, 3, `${at}: three columns on a desk`);
-          if (n === 30) assert.ok(m.scroll, `${at}: thirty panels scroll past six, on the page or in the column`);
+          assert.equal(m.nums[0], m.pinned, `${at}: the header's needs count is the pinned Needs you`);
+          assert.equal(m.nums[1], m.onCards, `${at}: the header's working count is On it now`);
+          assert.equal(m.nums[1], m.work - (m.chiefWorks ? 1 : 0), `${at}: the at-work count is the working rows`);
+          assert.equal(m.nums[2], m.done, `${at}: the done count is the done rows`);
+          // Chief's own resting panel is not a crew row.
+          assert.equal(m.nums[3], m.rest - (m.chiefRests ? 1 : 0), `${at}: the resting count is the resting rows`);
+          // Needs-you rows no crew row holds ride on Chief's: his panel glows exactly when rows are left over.
+          // Phone width has no Chief row; the leftover rows live in the pinned Needs you, counted above.
+          if (width < 900) assert.ok(m.memberNeeds <= m.nums[0], `${at}: no crew row holds a row twice (${m.memberNeeds} held, ${m.nums[0]} rows)`);
+          else assert.equal(m.chiefGlows, m.nums[0] > m.memberNeeds, `${at}: Chief carries the leftover needs rows (${m.nums[0]} rows, ${m.memberNeeds} on crew panels)`);
+          assert.ok(m.acts.every((a: string) => a !== 'Review…'), `${at}: every action wears its ask's own label (${m.acts.join(' | ')})`);
+          if (width < 900) {
+            assert.equal(m.units, n, `${at}: every helper has exactly one grouped row`);
+            const order = ['Needs you', 'At work', 'Done today', 'Resting'];
+            assert.ok(m.groups.every((g: string) => order.includes(g)) && m.groups.length === new Set(m.groups).size, `${at}: only the board's groups (${m.groups})`);
+            assert.deepEqual([...m.groups].sort((a: string, b: string) => order.indexOf(a) - order.indexOf(b)), m.groups, `${at}: groups in the board's order`);
+          } else {
+            assert.equal(m.units, n + 1, `${at}: Chief plus every helper has a panel`);
+            assert.equal(m.cols, 3, `${at}: three columns on a desk`);
+          }
+          if (n === 30) assert.ok(m.scroll, `${at}: thirty rows scroll past six, on the page or in the column`);
           assert.ok(m.modes.every((x: string) => ['here', 'needs', 'think', 'rest'].includes(x)), `${at}: helmets wear only their four moods (${m.modes})`);
           assert.ok(m.words.every((w: string) => !/session|terminal|console|pane|live|split|shell|tmux|command|prompt|cursor/i.test(w)), `${at}: no terminal words in the state words (${m.words.join(' | ')})`);
         } catch (e) {
@@ -292,12 +313,12 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, every panel is clear a
         }
       }
     }
-    // Day draws day art and night draws night art: the same panels' helmets differ between the two.
+    // Day draws day art and night draws night art: the same helmets differ between the two.
     const art: string[] = [];
     for (const theme of ['day', 'night']) {
       await b.open(`demo=crew5&${theme}`);
       await toOffice(b);
-      art.push(await b.run("[...document.querySelectorAll('.office .panel .helmet')].map((h) => h.textContent).join('\\n')"));
+      art.push(await b.run("[...document.querySelectorAll('.office .helmet')].map((h) => h.textContent).join('\\n')"));
     }
     assert.notEqual(art[0], art[1], `day and night draw different helmets at ${width}`);
   }

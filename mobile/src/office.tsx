@@ -19,6 +19,17 @@ const landed = (c: A.OfficeMember, v: A.OfficeView) =>
 
 type Group = 'needs' | 'work' | 'done' | 'rest';
 const TITLES: Record<Group, string> = { needs: 'Needs you', work: 'At work', done: 'Done today', rest: 'Resting' };
+/** The Office count line the phone header reads: needs-you rows, at work, done today and resting. The member
+ *  buckets partition the crew; the needs number counts every row. */
+export const summaryOf = (v: A.OfficeView): string => {
+  const needy = v.crew.filter(A.waitsOnYou);
+  const work = v.crew.filter((c) => !A.waitsOnYou(c) && ['working', 'quiet'].includes(A.seatOf(c)));
+  const done = v.crew.filter((c) => !A.waitsOnYou(c) && !['working', 'quiet', 'failed'].includes(A.seatOf(c)) && landed(c, v));
+  const rest = v.crew.length - needy.length - work.length - done.length;
+  const n = v.counts.needs;
+  return `${n} ${n === 1 ? 'needs' : 'need'} you · ${work.length} at work · ${done.length} done · ${rest} resting`;
+};
+
 /** Every helper lands in exactly one group: waiting on you, at work on an open job, done today, or resting. */
 const groupOf = (c: A.OfficeMember, v: A.OfficeView): Group => {
   if (A.waitsOnYou(c)) return 'needs';
@@ -73,6 +84,8 @@ function Row({ c, v, t, night, jobTitle, onDesk, onAsk }: { c: A.OfficeMember; v
   const meta = meta0 === line ? '' : meta0;
   const yes = c.ask?.choices[0];
   const simple = !!c.ask && !!yes && !c.ask.reply && !c.ask.review && c.ask.kind !== 'routine' && c.ask.kind !== 'plan' && c.ask.evidence !== 'draft';
+  // The button wears the ask's own words (its yes, or its flow's label), never a generic one.
+  const label = simple ? yes!.label : c.ask!.reply ? `Answer ${c.name}…` : c.ask!.review ? 'Review order' : yes?.label ?? 'Review…';
   return (
     <Pressable onPress={() => onDesk(c)} accessibilityRole="button" accessibilityLabel={`${c.name}: ${line}`}
       style={{ flexDirection: 'row', gap: 12, paddingVertical: 12, paddingHorizontal: 14, borderTopWidth: 1, borderColor: t.line }}>
@@ -84,9 +97,9 @@ function Row({ c, v, t, night, jobTitle, onDesk, onAsk }: { c: A.OfficeMember; v
         </View>
         <Text style={{ fontFamily: 'Inter', fontSize: 14, lineHeight: 19, fontWeight: '500', color: t.ink }}>{line}</Text>
         {!!meta && <Text numberOfLines={2} style={{ fontFamily: 'Inter', fontSize: 13, lineHeight: 17, color: t.mute }}>{meta}</Text>}
-        {c.ask && <Pressable onPress={() => onAsk(c.ask!)} accessibilityRole="button" accessibilityLabel={`${simple ? yes!.label : 'Review'}: ${c.ask.head}`}
+        {c.ask && <Pressable onPress={() => onAsk(c.ask!)} accessibilityRole="button" accessibilityLabel={`${label}: ${c.ask.head}`}
           style={{ alignSelf: 'flex-start', marginTop: 8, backgroundColor: t.pink, borderRadius: 999, paddingVertical: 9, paddingHorizontal: 16 }}>
-          <Text style={{ fontFamily: 'Inter', fontSize: 14, lineHeight: 18, fontWeight: '600', color: '#fff' }}>{simple ? yes!.label : 'Review…'}</Text>
+          <Text style={{ fontFamily: 'Inter', fontSize: 14, lineHeight: 18, fontWeight: '600', color: '#fff' }}>{label}</Text>
         </Pressable>}
       </View>
     </Pressable>

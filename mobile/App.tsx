@@ -32,7 +32,7 @@ import { askOf, sharedOf } from './src/ask';
 import { bubbleOff, bubbleOn, bubbleResume, bubbleState, bubbleWords, openBubblePermission, showCrew, wanted, type OverlayState } from './src/bubble';
 import { chip, chipSettings, chipState, chipWords, onChip, type StatusState } from './src/chip';
 import { island } from './src/island';
-import { Office, useOffice } from './src/office';
+import { Office, summaryOf, useOffice } from './src/office';
 import { canHear, hear, stopHearing } from './modules/crewhouse-net';
 import { connect, desktopSignaling, forgetGrant, kept, LINK_WORDS, loadGrant, onLive, pair, pairTypedCode, type Grant, type Status } from './src/link';
 
@@ -1130,8 +1130,7 @@ function NeedsRows({ state, cards, open, few = 3 }: { state: Json; cards: A.Card
  *  (B1 phone); in Office the greeting and the counts from the office's one state as well. */
 function HomeBar({ state, view, go, mode, pick }: { state: Json; view: A.OfficeView; offline: boolean; go: Ctx['go']; mode: HomeMode; pick: (m: HomeMode) => void }) {
   const t = useLook();
-  const n = view.counts, name = String(state.person?.name ?? '').trim(), quiet = A.quietLine(state.person);
-  // B1: no tab bar on Home. The gear by the Chat | Office switch reaches settings (and the rest of the app from there).
+  // B1: no tab bar on Home. The gear by the Chief | Office switch reaches settings (and the rest of the app from there).
   const gear = <Pressable onPress={() => go({ view: 'phone' })} accessibilityRole="button" accessibilityLabel="Settings" hitSlop={8} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}><T tone="ink2" style={{ fontSize: 22, lineHeight: 26 }}>{'\u2699'}</T></Pressable>;
   const seg = <View accessibilityRole="tablist" accessibilityLabel="Home view" style={[s.seg, { backgroundColor: t.soft, borderRadius: 14, padding: 4 }]}>
     {HOME_MODES.map(([m, l]) => <Pressable key={m} onPress={() => pick(m)} accessibilityRole="tab" accessibilityState={{ selected: mode === m }} style={[s.segBtn, { borderRadius: 10 }, mode === m && { backgroundColor: t.solid }]}>
@@ -1139,16 +1138,13 @@ function HomeBar({ state, view, go, mode, pick }: { state: Json; view: A.OfficeV
     </Pressable>)}
   </View>;
   const tools = <View style={[s.row, { justifyContent: 'space-between' }]}>{gear}{seg}</View>;
-  const dot = (c: string, ring = false) => <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: ring ? 'transparent' : c, borderWidth: ring ? 1.6 : 0, borderColor: c }} />;
-  const needs = <View style={[s.row, { gap: 6 }]}>{dot(n.needs ? t.fill : t.line2)}<T tone="ink2" style={[s.small, { fontWeight: '500' }]}>{n.needs ? `${n.needs} ${n.needs === 1 ? 'needs' : 'need'} you` : 'Nothing needs you'}</T></View>;
-  const busy = <View style={[s.row, { gap: 6 }]}>{dot(t.ink, true)}<T tone="ink2" style={[s.small, { fontWeight: '500' }]}>{`${n.working} working`}</T></View>;
-  const still = !!quiet && <T tone="ink2" style={[s.small, { fontWeight: '500' }]}>{`\u263E ${quiet}`}</T>;
   if (mode === 'chat') return tools;
+  // Office is a slim header: the title, the count line, then the switch.
   return (
     <View style={{ gap: 6 }}>
+      <T style={[s.serif, { fontSize: 28, lineHeight: 32 }]}>Office</T>
+      <T tone="ink2" style={s.small}>{summaryOf(view)}</T>
       {tools}
-      <T style={[s.serif, { fontSize: 38, lineHeight: 40 }]}>{A.greeting()}{name ? <>{', '}<Text style={{ fontStyle: 'italic' }}>{name}</Text></> : null}</T>
-      <View style={[s.row, { flexWrap: 'wrap', gap: 14 }]}>{busy}{needs}<View style={{ flex: 1 }} />{still}</View>
     </View>
   );
 }
@@ -1244,7 +1240,7 @@ function OnItNow({ view }: { view: A.OfficeView }) {
 /** Home opens on Chat every time the app starts (kept in memory only, never stored): Chief's thread under the bar and
  *  the pinned Needs you. Office is the optional view of the same state; neither view hides Needs you or Chief's box. */
 type HomeMode = 'chat' | 'office';
-const HOME_MODES: [HomeMode, string][] = [['chat', 'Chat'], ['office', 'Office']];
+const HOME_MODES: [HomeMode, string][] = [['chat', 'Chief'], ['office', 'Office']];
 let homeMode: HomeMode = 'chat';
 
 function Home(ctx: Ctx) {

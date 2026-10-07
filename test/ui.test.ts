@@ -532,7 +532,7 @@ test('Home opens on Chat at every launch, with Office one tap away and never sto
   for (const f of ['web/src/main.tsx', 'mobile/App.tsx']) {
     const app = src(f);
     assert.match(app, /let homeMode: HomeMode = 'chat';/, `${f}: each launch starts on Chat`);
-    assert.match(app, /const HOME_MODES: \[HomeMode, string\]\[\] = \[\['chat', 'Chat'\], \['office', 'Office'\]\];/, `${f}: one Chat | Office switch`);
+    assert.match(app, /const HOME_MODES: \[HomeMode, string\]\[\] = \[\['chat', 'Chief'\], \['office', 'Office'\]\];/, `${f}: one Chief | Office switch`);
     assert.doesNotMatch(app, /(localStorage|AsyncStorage|SecureStore|kept\.\w+)\([^)]*homeMode/, `${f}: the view is never stored`);
     const home = app.slice(app.indexOf('function Home('));
     assert.match(home.slice(0, 2600), /<HomeBar [^>]*mode=\{mode\} pick=\{pick\} \/>/, `${f}: the switch shows in both views`);
@@ -674,6 +674,12 @@ test('the phone office: one grouped list, helmets still, the shared view model',
   assert.match(office, /A\.office\(state\)/);
   assert.match(office, /A\.officeEvent\(/);
   assert.match(office, /helmetDots\(cols, mode, night, mode === 'think' \? 12 : 0\)/, 'the scan shows still while working, and only there');
+  assert.match(office, /export const summaryOf = \(v: A\.OfficeView\): string/, 'one count line from the office view');
+  // A question's button wears the ask's own words (its yes, or its flow's label), never a generic one.
+  assert.match(office, /const label = simple \? yes!\.label : c\.ask!\.reply \? `Answer \$\{c\.name\}…` : c\.ask!\.review \? 'Review order' : yes\?\.label \?\? 'Review…';/);
+  const appHome = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
+  assert.match(appHome, /<T style=\{\[s\.serif, \{ fontSize: 28, lineHeight: 32 \}\]\}>Office<\/T>/, 'Office is a slim title, not the greeting');
+  assert.match(appHome, /<T tone="ink2" style=\{s\.small\}>{summaryOf\(view\)}<\/T>/, 'then the count line, then the switch');
   const motion = readFileSync(join(import.meta.dirname, '..', 'mobile', 'src', 'motion.ts'), 'utf8');
   assert.doesNotMatch(motion, /Hop|Pulse|Land|Loop|Note|Fly|useOnBeat/, 'no room loops left');
   const home = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
@@ -1897,15 +1903,25 @@ test('J5 repairs stay in: the night look paints first, the job row is never cut 
   // Chief first, then the whole crew in roster order: nobody capped, nobody counted under "+N".
   assert.match(office, /<ChiefPanel live=\{live\} \/>/);
   assert.match(office, /\{A\.roster\(live\.crew\)\.map\(\(c\) => <HelperPanel/);
+  // Phone width renders the grouped list instead of the panels, helmets still.
+  assert.match(office, /if \(useNarrow\(\)\) return \(\s*<section className="office" aria-label="The office">\s*<Groups live=\{live\} titles=\{titles\} onDone=\{onDone\} \/>/);
+  assert.match(office, /<PalArt kind=\{c\.kind\} mood=\{c\.mood\} d=\{6\} name=\{c\.name\} \/>/, 'grouped rows draw the still helmet, no live scan');
+  assert.match(css, /\.grow-row \{ display: flex; gap: 12px; padding: 12px 2px; border-top: 1px solid var\(--line\); \}/);
   // Each panel: the helmet, the current line, one meta line, the last three timed steps, the one action.
   assert.match(office, /steps=\{c\.steps\.slice\(-3\)\}/);
   assert.match(office, /<time className="time">\{A\.clock\(s\.at\)\}<\/time>/, 'times in a column read in mono, never in a sentence');
-  assert.match(office, /action=\{c\.ask \? <AskAction/, 'a question\'s own yes and no');
+  assert.match(office, /action=\{c\.ask \? <AskButton c=\{c\.ask\} name=\{c\.name\} onDone=\{onDone\} \/>/, 'a question\'s own yes and no');
+  // Only a needs-you row carries a button, and it wears the ask's own words: its yes, or its flow's label.
+  assert.match(office, /const label = yes\?\.label \?\? \(c\.reply \? `Answer \$\{name\}…` : c\.review \? 'Review order' : 'Review…'\);/);
+  assert.doesNotMatch(office, />Review…<\/a>/, 'no generic Review anywhere in the office');
   assert.match(office, /: file \? <PreviewCard f=\{file\} \/> : null/, 'a finished file opens from the panel');
   // The ask's yes answers exactly as the thread does, then the office refreshes.
   assert.match(read('web', 'src', 'parts.tsx'), /export const answer = \(c: Card, body: Json\)/);
   assert.match(main, /<Office state=\{state\} live=\{live\} night=\{ctx\.night\} onDone=\{refresh\} \/>/);
-  // The grid scrolls past six instead of shrinking: three columns on a desk, one below 900 px.
-  assert.match(css, /\.panels \{ display: grid; gap: 14px; grid-template-columns: minmax\(0, 1fr\); \}/);
+  // Office header: the slim bar (title, count line, switch, settings), the title on phone width only.
+  assert.match(main, /<h1 className="office-title">Office<\/h1>/);
+  assert.match(main, /\{summaryOf\(ctx\.live\)\}/, 'one count line from the office view');
+  assert.match(css, /@media \(min-width: 900px\) \{ \.office-title \{ display: none; \} \}/);
+  // The grid scrolls past six instead of shrinking: three columns on a desk, groups below 900 px.
   assert.match(css, /@media \(min-width: 900px\) \{ \.panels \{ grid-template-columns: repeat\(3, minmax\(0, 1fr\)\); \} \}/);
 });
