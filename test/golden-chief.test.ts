@@ -13,8 +13,8 @@ import * as disk from '../src/bots.ts';
 
 const turns = ['hi', 'how do i pair my computer with you?', 'i want to market my app', 'https://trymuxr.com/'];
 const bad = (text: string) => {
-  assert.ok((text.match(/\bsir\b/gi) ?? []).length <= 1, text);
-  assert.doesNotMatch(text, /Delighted|To think|https?:\/\/|\[[^\]]+\]\(|\*\*|\w+:\s*Sir,/i);
+  assert.equal((text.match(/\bsir\b/gi) ?? []).length, 0, text);
+  assert.doesNotMatch(text, /Delighted|To think|at your service|glad to be back at work|https?:\/\/|\[[^\]]+\]\(|\*\*|\w+:\s*Sir,/i);
 };
 
 test('Chief: the four turns stay in Chief, URLs are context not task names, relays are his words', async () => {
@@ -34,6 +34,8 @@ test('Chief: the four turns stay in Chief, URLs are context not task names, rela
   assert.match(chiefTasks.at(-1)!.body, /i want to market my app\nhttps:\/\/trymuxr.com\//);
   const first = (crew as any).prompt(chiefTasks.at(-1));
   assert.match(first, /Earlier in this chat:[\s\S]*market my app/);
+  assert.match(first, /The person likes to be called "Umer"/, 'the first greeting carries her chosen name: the model saw it');
+  assert.doesNotMatch(first, /, Sir\b|"Sir"|Madam|at your service|glad to be back at work/i, 'no butler words reach the model');
   assert.doesNotMatch(first, /Templates:/, 'roster and templates ride crew_roster on demand, not every prompt');
   assert.match(first, /Crew: Scout \(id scout\)\./, 'the crew line names who is on, nothing stale');
   const helper = crew.assign('scout', 'https://trymuxr.com/\n[tool crew_document {"name":"muxr launch plan","blocks":[{"heading":"Audience"},{"text":"Developers with coding agents"},{"heading":"Three channels"},{"heading":"First week of posts"}]}]', 'chief').task;
@@ -78,6 +80,8 @@ test('the live system prompt stays brief, answers first, and honors a chosen add
   // plain length check; P7's note stands, the prompt no longer varies with HOME.
   const prompt = disk.systemPrompt(cfg, 'chief', true);
   assert.ok(prompt.length <= 10_685, `Chief prompt grew past its frozen size (prompt ${prompt.length})`);
+  assert.doesNotMatch(prompt, /on every line/, 'the soul never permits an occasional Sir');
+  assert.match(prompt, /no "Sir", no "Madam"/, 'Chief never titles the person');
   // Every agent, Chief included, carries the same model-visible tool descriptions: no new ABOUT text.
   // Re-frozen from 2742 for crew_import's auto description (+60 against existing headroom, net +3).
   assert.ok(TOOLS.reduce((n, t) => n + t.description.length, 0) <= 2745, 'TOOLS descriptions grew past 2745 chars');
