@@ -293,6 +293,24 @@ test('a draft whose body repeats its own subject line shows it once', () => {
   assert.match(d.draftText ?? '', /^Subject: something else entirely/, 'a line that says more than the subject stays');
 });
 
+test("a draft card flows the model's hard wraps; Copy and Edit keep the exact words", () => {
+  // What the real model files: every sentence wrapped mid-line. The card reads it as prose.
+  const wrapped = 'Hello,\n\nThanks for the reminder about the trip form. I have it\nhere, and I will get it signed and back to you before Friday.\n\nThanks,\nUmer';
+  assert.equal(A.flowed(wrapped),
+    'Hello,\n\nThanks for the reminder about the trip form. I have it here, and I will get it signed and back to you before Friday.\n\nThanks, Umer',
+    'lone newlines read as spaces, blank lines stay paragraph breaks');
+  const ask: Json = { id: 11, bot: 'scribe', kind: 'propose', at: 1, member: 1, title: 'Scribe wrote your email.', detail: {
+    draft: { channel: 'email', to: 'the school office', subject: 'Trip form Friday', path: 'files/a.md', sha: 'abc' },
+    preview: { body: wrapped } } };
+  const c = A.card(ask, { asks: [ask], bots: [{ id: 'scribe', display: 'Scribe' }] } as any);
+  assert.equal(c.draftText, wrapped, 'Copy and Edit start from the filed words, wraps and all');
+  const src = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'parts.tsx'), 'utf8');
+  const card = src.slice(src.indexOf('export function AskCard'), src.indexOf('/** The approval moment'));
+  assert.match(card, /flowed\(c\.preview\.body\)/, 'the card view flows the draft body');
+  const sheet = src.slice(src.indexOf('export function AskSheet'));
+  assert.doesNotMatch(sheet, /flowed/, 'the review sheet keeps the exact words');
+});
+
 test('Home commits nothing: a row opens the review sheet, and a starter fills the box without sending', () => {
   const src = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
   const home = src.slice(src.indexOf('function NeedsRows('), src.indexOf('/** The standing'));

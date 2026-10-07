@@ -615,6 +615,9 @@ export function gallery(state: Json) {
 }
 
 // ---------- asks ----------
+/** A draft's body as the card shows it: the model's hard wraps are one paragraph, so a lone newline
+ *  reads as a space and blank lines stay paragraph breaks. Copy and Edit keep the exact words. */
+export const flowed = (body = '') => String(body).split(/\n{2,}/).map((p) => p.replace(/\s*\n\s*/g, ' ').trim()).join('\n\n');
 /**
  * One card per open ask, in plain words. The engine's own sentence and preview when it sends them
  * (detail.words, detail.preview, detail.always, detail.app); a safe sentence of our own when it doesn't.
