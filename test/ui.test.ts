@@ -462,6 +462,8 @@ test('first success: starters never dead-end, and setup stays in Settings', () =
   assert.equal(half.rows[0].says, 'An AI plan the crew can think with', 'nobody signed in: no provider is named');
   const claude = [{ account: 'chatgpt', signedIn: false }, { account: 'claude', name: 'Claude', signedIn: true }];
   assert.equal(A.homeSetup({ house: {} }, claude, null).rows[0].says, 'The crew thinks with your Claude plan', 'the plan actually in use, never ChatGPT');
+  const out = [{ account: 'chatgpt', signedIn: false }, { account: 'grok', signedIn: false }, { account: 'claude', name: 'Claude', signedIn: false, signedOut: true }];
+  assert.equal(A.aiList(out).mine[0].ai.key, 'claude', 'the sign-in card leads with the account that signed out, never the front door');
   assert.equal(A.planName(openrouter), 'OpenRouter account', 'a pay-per-use route is not called a plan');
   const web = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
   assert.doesNotMatch(web, /MemberRow|memberSetup|set me up for you/, 'Home and Hello serve one person');
@@ -1421,6 +1423,13 @@ test('no raw heading markers reach the ask card or its Read-all view', () => {
   assert.ok(!A.plain('### Plan\n### Costs\nHotel\n### Next\nGo').includes('#'));
   // A hash that is not a heading is content and stays: only line-start heading markers go, never inline ones.
   assert.match(A.plain('Tag it # Fun Friday, see issue C-###-12, topic #fun'), /# Fun Friday, see issue C-###-12, topic #fun/);
+  // An account name in crewd's own account sentences keeps its name; engines and models still scrub.
+  assert.equal(A.plain('Claude signed you out. That happens after a password change.'), 'Claude signed you out. That happens after a password change.');
+  assert.equal(A.plain('The crew uses your Claude account. Sign in when you are ready.'), 'The crew uses your Claude account. Sign in when you are ready.');
+  assert.equal(A.plain('I will start the moment you sign in with Claude.'), 'I will start the moment you sign in with Claude.');
+  assert.equal(A.plain("Your Claude plan doesn't include helpers yet."), "Your Claude plan doesn't include helpers yet.");
+  assert.equal(A.plain('Stopped on an error from claude: 529 overloaded'), 'Stopped on an error from the crew: 529 overloaded');
+  assert.equal(A.plain('Done! I ran it with Claude Code.'), 'Done! I ran it with the crew.');
   // The phone sheet renders this same view model verbatim (mobile/App.tsx), so the web assertion is the phone's too.
   const app = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
   assert.match(app, /\{c\.preview\.body\}/);

@@ -44,7 +44,7 @@ test('first run: her first request waits for her own sign-in, Chief says why in 
   assert.equal(task(db, t).state, 'paused');
   assert.equal(task(db, t).member, sara);
   const said = () => db.all("SELECT text FROM messages WHERE bot = 'chief' AND author = 'bot'").map((m: any) => m.text);
-  assert.ok(said().includes("The crew uses your ChatGPT account. Sign in when you're ready and I'll start."), said().join('\n'));
+  assert.ok(said().includes("The crew uses your AI account. Sign in when you're ready and I'll start."), said().join('\n'));
   assert.equal(db.get("SELECT 1 FROM events WHERE kind = 'run.started'"), undefined, 'nothing ran on anyone else\'s account');
   // She signs in: it starts by itself, and Chief thanks her.
   await crew.accounts.login('chatgpt');
@@ -91,6 +91,41 @@ test('a sign-in that stopped working (a password change): signed out for real, s
   assert.equal(await crew.accounts.signedIn('grok'), false, 'its sign-in is gone, so nothing loops on it');
   assert.equal(db.get("SELECT text FROM messages WHERE bot = 'scout' ORDER BY id DESC")!.text,
     'Grok signed you out. That happens after a password change. Sign in again and the crew picks up where it left off.');
+  done();
+});
+
+test('Claude-only sign-in, nothing chosen for work: Chief names Claude, never ChatGPT, and a model-less message runs on Claude', async () => {
+  const { db, crew, done } = setup();
+  crew.onboard('Sara');
+  only(crew, ['claude']);
+  crew.accounts.ready.set('claude', true);
+  const said = () => db.all("SELECT text FROM messages WHERE bot = 'chief' AND author = 'bot'").map((m: any) => m.text).join('\n');
+  // Nothing usable (a plan without helpers): the pause names the account she has.
+  crew.accounts.notIncluded('claude', true);
+  const { task: u } = await crew.post('chief', 'find a plumber') as { task: number };
+  await until('waiting on the plan', () => task(db, u).state === 'paused');
+  assert.ok(said().includes("Your Claude plan doesn't include helpers yet. Everything else in Claude is fine. A bigger Claude plan includes it."), said());
+  assert.ok(!said().includes('ChatGPT'), said());
+  // The plan changes: the same model-less message runs on her signed-in account, with no model chosen.
+  crew.retryAccount('claude');
+  await settled(db, u);
+  assert.equal(task(db, u).state, 'done');
+  assert.equal(JSON.parse(db.get("SELECT data FROM events WHERE kind = 'run.started' AND json_extract(data, '$.task') = ?", u)!.data).account, 'claude');
+  assert.equal(task(db, u).brain, null, 'no model chosen: the signed-in account is the default');
+  // Her sign-in stops working instead: Chief names Claude, never a ChatGPT sign-in.
+  crew.accounts.expired.add('claude');
+  const { task: v } = await crew.post('chief', 'and another job') as { task: number };
+  await until('waiting on the sign-in', () => task(db, v).state === 'paused');
+  assert.ok(said().includes("I will start the moment you sign in with Claude."), said());
+  assert.ok(!said().includes('ChatGPT'), said());
+  // Her sign-in fails mid-turn instead: the handoff names the exact account it lost.
+  await crew.accounts.login('claude', 'code');
+  await crew.accounts.finished('claude');
+  const { task: w } = await crew.post('chief', 'sign me out now', 'claude') as { task: number };
+  await until('waiting after the sign-out', () => task(db, w).state === 'paused');
+  assert.equal(crew.accounts.expired.has('claude'), true);
+  assert.ok(said().includes('Claude signed you out. That happens after a password change. Sign in again and the crew picks up where it left off.'), said());
+  assert.ok(!said().includes('ChatGPT'), said());
   done();
 });
 

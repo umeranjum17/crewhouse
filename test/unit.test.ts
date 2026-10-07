@@ -515,8 +515,8 @@ test('limits: a limit rests that account and the task carries on in the same con
   await settled(db, d);
   assert.equal(task(db, d).state, 'paused');
   assert.equal(task(db, d).wake_at, null, 'no time to wake: it waits for the sign-in');
-  assert.equal(task(db, d).result, 'Waiting for you to sign in with Grok.');
-  assert.equal(db.get("SELECT text FROM messages WHERE bot = 'scout' ORDER BY id DESC")!.text, 'Scout will start the moment you sign in with Grok.');
+  assert.equal(task(db, d).result, 'Waiting for you to sign in.');
+  assert.equal(db.get("SELECT text FROM messages WHERE bot = 'scout' ORDER BY id DESC")!.text, 'Scout will start the moment you sign in.');
   // A second job waiting on the same sign-in says the same sentence: the thread says it once, not twice.
   const e = crew.assign('scout', 'and one more', 'chief').task;
   await settled(db, e);

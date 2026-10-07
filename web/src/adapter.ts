@@ -224,18 +224,27 @@ const JSON_BLOB = new RegExp(OBJ, 'g'); // nor is a raw JSON object
 export const STUB = /\bstub [\w-]+:/;
 export const noTools = (text = '') => text.replace(TOOL_CALL, ' ').replace(JSON_BLOB, ' ').replace(TOOL_FRAGMENT, '').replace(/\s{2,}/g, ' ').trim();
 
+/** An account name in crewd's own account sentences ("sign in with Claude", "your Claude plan",
+ *  "Claude signed you out"): stashed before the machinery scrub and restored after, so the account
+ *  the crew uses keeps its name while engines and models still scrub to "the crew". */
+const ACCOUNT_NAMES = 'ChatGPT|Grok|GitHub Copilot|OpenRouter|MiniMax|Claude';
+const ACCOUNT_WORDS = new RegExp(`\\b(sign in with|your|a bigger|waiting for a) (${ACCOUNT_NAMES})( account| plan)?\\b|\\b(${ACCOUNT_NAMES}) signed you out\\b`, 'gi');
 export function plain(text = '') {
   if (STUB.test(text)) return 'On it.';
+  const kept: string[] = [];
   // Heading markers strip before noTools collapses whitespace (D23): a later heading must still sit at a line
   // start to be found — after the collapse every ### but the first survives mid-line as literal markup.
   return noTools(text.replace(/(^|\n)#{1,6}\s+/g, '$1'))
+    .replace(ACCOUNT_WORDS, (m: string) => `\0${kept.push(m) - 1}\0`)
     .replace(/```[\s\S]*?```/g, '')
     .replace(/`([^`\n]*)`/g, (_, s: string) => (/^[\w.\-~\/]+\.[a-z0-9]{2,4}$/i.test(s) ? `“${pretty(s)}”` : /[\/\\$|]|--?\w/.test(s) ? '' : s))
     .replace(/(^|[\s(“"'])((~|\.{1,2})?\/[\w.\-~]+)+\/?(?=[\s).,;:!?”"']|$)/g, (_, pre: string, p: string) => `${pre}${/\.[a-z0-9]{2,4}$/i.test(p) ? `“${pretty(p)}”` : 'its folder'}`)
     .replace(/\bfiles\/([\w.\-]+)/g, (_, f: string) => `“${pretty(f)}”`)
     .replace(/\b(claude(\s+code)?|anthropic|codex|sonnet|opus|haiku|gpt-[\w.]+|herdr|mcp__\w+|crew_[a-z_]+)\b/gi, 'the crew')
+    .replace(/(^|[.!?]\s+)the crew\b/g, '$1The crew')
     .replace(/\s{2,}/g, ' ')
-    .trim();
+    .trim()
+    .replace(/\0(\d+)\0/g, (_, i: string) => kept[+i]);
 }
 /** A teaser line (a chat list row, a Things summary): plain words, no raw ** emphasis marks — those render only in a chat bubble. */
 export const teaser = (text: string) => plain(text).replace(/(\*\*|\*)(?=[^\s*])([^*]*[^\s*])\1/g, '$2');
@@ -1280,7 +1289,7 @@ export const AI_ROUTES = `Each one uses a plan you already pay for, except ${AIS
  *  code); how a sign-in ended (declined, the port busy, expired, failed); a plan without helpers; a work account. */
 export function account(accounts: Json[] | null, key = 'chatgpt') {
   const a = accounts?.find((x) => x.account === key);
-  const none = { recovery: '', signing: null, page: '', expired: false, failed: false, declined: false, busy: false, resting: '', notIncluded: false, work: '' };
+  const none = { recovery: '', signing: null, page: '', expired: false, failed: false, declined: false, busy: false, resting: '', notIncluded: false, signedOut: false, work: '' };
   if (!a) return { state: 'checking' as const, ...none };
   const s = a.signIn;
   const phase = phaseOf({ signIn: s });
@@ -1293,14 +1302,14 @@ export function account(accounts: Json[] | null, key = 'chatgpt') {
   // 'unavailable' was the CLI missing; the engine now ships inside Crewhouse, so there is always something to sign in to.
   return { state: a.signedIn && !waiting ? 'ready' as const : 'signed-out' as const as 'ready' | 'signed-out' | 'unavailable',
     recovery: s?.why === 'locked' ? plain(s.error) : '', signing, page: waiting && !s?.code ? s?.url ?? '' : '', expired, declined, busy, failed: s?.state === 'failed' && !expired && !declined && !busy,
-    resting: a.restingUntil > 0 ? `Resting until ${clock(a.restingUntil)}` : '', notIncluded: !!a.notIncluded,
+    resting: a.restingUntil > 0 ? `Resting until ${clock(a.restingUntil)}` : '', notIncluded: !!a.notIncluded, signedOut: !!a.signedOut,
     work: a.work ? (typeof a.work === 'string' ? a.work : 'a work account') : '' };
 }
 export const chatgpt = (accounts: Json[] | null) => account(accounts, 'chatgpt');
 
-/** Settings' account list: the accounts signed in first (or ChatGPT, the front door, while none is), every other route
- *  under "More ways to sign in". Each row's one line says where it stands in plain words; a route nobody has signed in
- *  to here is "not set up", never connected. */
+/** Settings' account list: the accounts signed in first (or the one that signed out, or ChatGPT the front door,
+ *  while none is), every other route under "More ways to sign in". Each row's one line says where it stands in
+ *  plain words; a route nobody has signed in to here is "not set up", never connected. */
 export function aiList(accounts: Json[] | null) {
   const rows = AIS.map((ai) => {
     const g = account(accounts, ai.key);
@@ -1314,7 +1323,8 @@ export function aiList(accounts: Json[] | null) {
     return { ai, g, says };
   });
   const mine = rows.filter((r) => r.g.state === 'ready');
-  const front = mine.length ? mine : rows.filter((r) => r.ai.key === 'chatgpt');
+  const out = rows.filter((r) => r.g.signedOut);
+  const front = mine.length ? mine : out.length ? out : rows.filter((r) => r.ai.key === 'chatgpt');
   return { mine: front, more: rows.filter((r) => !front.includes(r)) };
 }
 /** The account the crew thinks with: the first one signed in. Null while checking, 'none' when there is none yet. */
