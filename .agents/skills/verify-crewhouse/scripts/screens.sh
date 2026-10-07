@@ -9,6 +9,8 @@
 # the OS colour scheme, so each capture is opened with the theme in the URL. Widths
 # are the two the app is designed at; `resize` then `open` re-renders, as the layout
 # is pure CSS. Set CHROME_DEVTOOLS_AXI_SESSION to your task-named session first.
+# EXPAND_MORE=1 opens up to eight long replies; AFTER runs after expansion (e.g. scroll .lines).
+# WIDTHS defaults to both sizes. FULL_PAGE=1 captures document scroll only, not nested .lines on desktop.
 # A screen that lives behind an in-memory switch (Home's Office view is never in the URL)
 # needs one step after each open: THEN='<js>' is evaluated before the shot, e.g.
 #   THEN="$(cat <<'JS'
@@ -34,7 +36,7 @@ mkdir -p "$DEST"
 # The query goes before the hash: the app routes on location.hash, so "?night#/settings" would pin nothing.
 withq() { local q=$1; case "$2" in *'#'*) printf '%s?%s%s' "${2%%#*}" "$q" "#${2#*#}";; *) printf '%s?%s' "$2" "$q";; esac; }
 for theme in night day; do
-  for wh in 1440x900 390x844; do
+  for wh in ${WIDTHS:-1440x900 390x844}; do
     w=${wh%x*}; h=${wh#*x}
     u="$(withq "$([ -n "$EXTRA" ] && printf '%s&' "$EXTRA")$theme" "$URL")"
     # A page first: `resize` has nothing to act on before one exists, and the tool exits non-zero saying so.
@@ -42,8 +44,18 @@ for theme in night day; do
     chrome-devtools-axi resize "$w" "$h" >/dev/null
     chrome-devtools-axi open "$u" >/dev/null
     [ -z "${THEN:-}" ] || chrome-devtools-axi eval "$THEN" >/dev/null
+    if [ "${EXPAND_MORE:-0}" = 1 ]; then
+      # ponytail: eight More buttons; raise for longer replay threads.
+      for ((n=0; n<8; n++)); do
+        ref=$(chrome-devtools-axi snapshot --full | awk '/button "More"/{sub(/uid=/,"",$1); print $1; exit}')
+        [ -n "$ref" ] || break
+        chrome-devtools-axi click "@$ref" >/dev/null
+      done
+    fi
+    [ -z "${AFTER:-}" ] || chrome-devtools-axi eval "$AFTER" >/dev/null
     out="$DEST/$SLUG-$theme-$w.png"
-    chrome-devtools-axi screenshot "$out" >/dev/null
+    flags=(); [ "${FULL_PAGE:-0}" != 1 ] || flags+=(--full-page)
+    chrome-devtools-axi screenshot "$out" "${flags[@]}" >/dev/null
     echo "$out"
   done
 done
