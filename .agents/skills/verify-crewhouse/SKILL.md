@@ -158,6 +158,11 @@ EV=$FM_HOME/evidence/<task-name>/<change-slug>          # stable: named in the P
 mkdir -p "$EV/screens" "$EV/motion"
 ```
 
+For the custom-hire journey, use the verified native browser capture and recording recipe in
+[`features/recruit-assign.md`](features/recruit-assign.md): the `screens.sh` and `record.mjs`
+helpers below are absent at this revision. That recipe needs neither helper and retains
+all four theme/width captures plus the approval recording.
+
 **Four captures per changed screen** — `scripts/screens.sh <dest> <slug> <url> [extra-query]`
 drives the app's own theme switch (`?day` / `?night`, `useLook` in `web/src/main.tsx`; the OS
 colour scheme does nothing here) at both widths, and writes `<slug>-night-1440.png`,
