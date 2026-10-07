@@ -159,6 +159,8 @@ export function SignIn({ ai = A.AIS[0], tab: first, onReady, onClose }: { ai?: (
 /** The sign-in card, in the ask-card anatomy (§4.11) with the account the crew will use as primary: whichever one is
  *  already signed in, or every provider the kit offers while none is (no front door alone). The links a provider
  *  owns (its own site, its plans) sit under its own branch; no provider's name is written into another's card. */
+/** The thread sign-in card's flag, shared with the phone header so the two cannot drift. */
+export const NEEDS_SIGNIN = 'Needs a sign-in';
 export function AccountCard({ accounts, inChat, onReady }: { accounts: Json[] | null; inChat?: boolean; onReady: () => void }) {
   const [signing, setSigning] = useState<Window | null | false>(sheet === 'signin' ? null : false);
   const [signKey, setSignKey] = useState<string | null>(null);
@@ -180,7 +182,7 @@ export function AccountCard({ accounts, inChat, onReady }: { accounts: Json[] | 
   );
   return (
     <div className="card ask">
-      <div className="ask-head"><Face who="chief" size={28} /><div className="grow"><b>Chief</b><div className="ask-status"><i />Needs a sign-in</div></div></div>
+      <div className="ask-head"><Face who="chief" size={28} /><div className="grow"><b>Chief</b><div className="ask-status"><i />{NEEDS_SIGNIN}</div></div></div>
       <p className="ask-words">{g.recovery || <>Say yes once on your AI's page. Your job starts when you come back.</>}</p>
       <div className="btns">
         {offered.map(({ ai: r }) => <button key={r.key} className="btn go" onClick={() => { setSignKey(r.key); setSigning(openTab()); }}><AiMark ai={r} size={24} />Sign in with {r.name}</button>)}

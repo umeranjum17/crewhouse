@@ -545,8 +545,11 @@ test('Home opens on Chat at every launch, with Office one tap away and never sto
   assert.match(web.slice(web.indexOf('function HomeBar('), web.indexOf('function NeedsPin(')), /<ChiefHero live=\{ctx\.live\} state=\{ctx\.state\} signedOut=\{chiefLocal\(ctx\)\.signedOut && !ctx\.offline\} side=\{gear\} below=\{seg\} \/>/, 'the phone header is one block: hero with gear top-right, switch below its lines, carrying the sign-in the thread reads');
   const hero = web.slice(web.indexOf('function ChiefHero('), web.indexOf('function ChiefHero(') + 2200);
   assert.match(hero, /A\.chief\(state, \{ signedOut: true \}\)/, 'the phone header reads Chief from the same table as the thread, with the sign-in');
-  assert.match(hero, /out \? chief\.line : needs \? 'Needs you'/, 'signed out with a job queued: the thread\'s sign-in words, never the green "At work"');
-  assert.match(hero, /A\.stripLine\(state, signedOut \? \{ signedOut: true \} : \{\}\)/, 'the standing line under it waits for the sign-in too');
+  assert.match(hero, /out \? NEEDS_SIGNIN : needs \? 'Needs you'/, 'signed out with a job queued: the thread card\'s flag, never the green "At work"');
+  assert.match(hero, /<p className="ch-line">\{A\.stripLine\(state\)\}<\/p>/, 'the sign-in is said once: the line under it keeps the standing state');
+  const flows = src('web/src/flows.tsx');
+  assert.match(flows, /export const NEEDS_SIGNIN = 'Needs a sign-in';/, 'one flag for the thread card and the phone header');
+  assert.match(flows.slice(flows.indexOf('function AccountCard('), flows.indexOf('function AccountCard(') + 3000), /\{NEEDS_SIGNIN\}/, 'the thread card reads it from there too');
   assert.match(home, /<NeedsPin state=\{state\} cards=\{live\.needs\}( flat)? \/>/, 'Needs you pinned from the office\'s one list');
   assert.match(home, /<div className="feed-ask"><Composer/, 'Office keeps Chief\'s box on a desk');
   assert.match(home, /<div className="dock phone-only"><Composer/, 'and on a phone');

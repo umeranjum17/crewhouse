@@ -12,7 +12,7 @@ import { keepDraft } from './draft.ts';
 import type { IconName } from './icons.ts';
 import { Screen } from './screen.tsx';
 import { hear, Office, summaryOf, useOffice } from './office.tsx';
-import { AccountCard, ConnectApp, ConnectCard, openTab, sheet, SignIn, Unreachable } from './flows.tsx';
+import { AccountCard, ConnectApp, ConnectCard, NEEDS_SIGNIN, openTab, sheet, SignIn, Unreachable } from './flows.tsx';
 
 type View = 'home' | 'chief' | 'room' | 'crew' | 'add' | 'helper' | 'things' | 'routines' | 'settings' | 'apps' | 'skills' | 'ask' | 'share';
 type Route = { view: View; id?: string; tab?: string; m?: string; file?: string };
@@ -308,8 +308,8 @@ const BADGE: Partial<Record<A.Seat | 'done', string>> = { needs: '!', chat: '!',
 function ChiefHero({ live, state, signedOut, side, below }: { live: A.OfficeView; state: Json; signedOut?: boolean; side?: ReactNode; below?: ReactNode }) {
   const crew = A.roster(live.crew), seat = (c: A.OfficeMember) => A.railWord(c, live).seat;
   const chief = signedOut ? A.chief(state, { signedOut: true }) : live.chief;
-  // The phone header's own status: a sign-in wait first (the thread's words, never the green "At work"),
-  // then Needs you, or the one plain line under it.
+  // The phone header's own status: a sign-in wait first — the thread card's own flag, said once here
+  // (the line under it keeps the standing state) and never the green "At work".
   const needs = live.needs.length > 0, out = !!signedOut, resting = !needs && !out && chief.mood === 'rest';
   const by = (k: (A.Seat | 'done')[]) => crew.filter((c) => k.includes(seat(c))).map((c) => c.name);
   const said = [[by(['needs', 'chat']), 'needs you', 'need you'], [by(['working']), 'working', 'working'], [by(['quiet']), 'gone quiet', 'gone quiet'], [by(['failed']), "didn't finish", "didn't finish"], [by(['waiting']), 'waiting', 'waiting']] as const;
@@ -319,8 +319,8 @@ function ChiefHero({ live, state, signedOut, side, below }: { live: A.OfficeView
       <span className="ch-art"><ChiefArt mood={chief.mood} d={9} hero whole /></span>
       <div className="ch-body">
         <div className="ch-title"><h2 className="ch-name">Chief</h2>{side}</div>
-        <p className={`ch-status${out || needs ? '' : resting ? ' rest' : ' work'}`}><i aria-hidden />{out ? chief.line : needs ? 'Needs you' : resting ? 'Resting' : 'At work'}</p>
-        <p className="ch-line">{A.stripLine(state, signedOut ? { signedOut: true } : {})}</p>
+        <p className={`ch-status${out || needs ? '' : resting ? ' rest' : ' work'}`}><i aria-hidden />{out ? NEEDS_SIGNIN : needs ? 'Needs you' : resting ? 'Resting' : 'At work'}</p>
+        <p className="ch-line">{A.stripLine(state)}</p>
         {below}
         <p className="ch-say">{A.chiefSaid(state) || chief.line}</p>
         {crew.length > 0 && <div className="ch-crew">{crew.slice(0, 5).map((c) => { const k = seat(c); return <a key={c.id} href={hrefOf(c.id)} className="ch-face" aria-label={`${c.name}: ${A.railWord(c, live).word}`}>
