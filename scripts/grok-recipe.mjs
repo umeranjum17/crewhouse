@@ -15,7 +15,7 @@ const COLORS = { magenta: '#C8328A', green: '#2E8A62', blue: '#3355C2', purple: 
 export async function published(url) {
   let res;
   try { res = await fetch(url, { signal: AbortSignal.timeout(20_000), headers: { 'user-agent': 'Mozilla/5.0 Crewhouse' } }); }
-  catch (e) { throw new Error(`could not reach ${new URL(url).hostname} (${e?.message ?? e})`); }
+  catch (e) { throw new Error(`could not reach ${new URL(url).hostname} (${e?.message ?? e}${e?.cause?.message ? `: ${e.cause.message}` : ''})`); }
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`${new URL(url).hostname} answered status ${res.status}`);
   const data = Buffer.from(await res.arrayBuffer());

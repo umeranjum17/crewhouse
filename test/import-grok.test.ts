@@ -193,6 +193,34 @@ test('a Claude skill becomes its own helper, license-checked, resources carried'
   } finally { unstub(); done(); }
 });
 
+const SKILL_FLAKY = `---\nname: flaky-skill\ndescription: Ships small web toys with five helper files.\n---\n\nBuild it with [the template](template.js), notes in \`notes.md\`, log in \`run.log\`, data in \`data.csv\`, extras in \`extra.txt\`.\n`;
+
+test('a resource that fails to download is named with its reason, never a failed import', async () => {
+  const { crew, cfg, done } = setup();
+  const ok: Record<string, string> = { 'SKILL.md': SKILL_FLAKY, 'LICENSE.txt': APACHE, 'notes.md': 'notes', 'run.log': 'log', 'data.csv': 'a,b', 'extra.txt': 'more', 'template.js': 'console.log("toy");' };
+  const cases: Array<[kind: string, reason: RegExp]> = [
+    ['500', /not carried over: .*template\.js \(server error 500\)/],
+    ['reset', /not carried over: .*template\.js \(connection reset\)/],
+  ];
+  try {
+    for (const [kind, reason] of cases) {
+      (globalThis as any).fetch = async (url: string) => {
+        const file = String(url).split('/').at(-1) ?? '';
+        if (file === 'template.js' && kind === '500') return { ok: false, status: 500, arrayBuffer: async () => Buffer.from('boom') };
+        if (file === 'template.js' && kind === 'reset') { const e = new Error('fetch failed'); e.cause = new Error('other side closed'); throw e; }
+        if (!(file in ok)) return { ok: false, status: 404, arrayBuffer: async () => Buffer.alloc(0) };
+        return { ok: true, status: 200, arrayBuffer: async () => Buffer.from(ok[file]) };
+      };
+      const r = await (crew as any).importGrok('', undefined, 'flaky-skill') as any;
+      assert.equal(r.imported.name, 'Flaky Skill', `a ${kind} on one resource still hires the helper`);
+      const dir = disk.botDir(cfg, 'flaky-skill');
+      for (const f of ['notes.md', 'run.log', 'data.csv', 'extra.txt']) assert.ok(existsSync(join(dir, 'skills', 'flaky-skill', f)), `the other four resources ride along (${kind})`);
+      assert.match(readFileSync(join(dir, 'SOURCE.md'), 'utf8'), reason, `the import names the missing file with its reason (${kind})`);
+      (crew as any).db.run("DELETE FROM bots WHERE id = 'flaky-skill'");
+    }
+  } finally { unstub(); done(); }
+});
+
 test('a skill without a reusable license is refused, never copied', async () => {
   const { crew, done } = setup();
   try {

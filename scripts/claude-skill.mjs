@@ -40,6 +40,16 @@ function licensed(text) {
   return 'Apache-2.0';
 }
 
+/** A short plain reason for a failed resource fetch, for the import's own record. */
+const reasonOf = (e) => {
+  const m = `${e?.message ?? e} ${e?.cause?.message ?? ''}`;
+  const s = /answered status (\d{3})/.exec(m);
+  if (s) return `server error ${s[1]}`;
+  if (/timed?\s*out|abort|ETIMEDOUT/i.test(m)) return 'timed out';
+  if (/reset|closed|ECONNRESET/i.test(m)) return 'connection reset';
+  return 'could not reach it';
+};
+
 /** Validate the ref, fetch SKILL.md, its license and its same-folder referenced resources. Only honest errors. */
 export async function fetchRecipe(ref) {
   const { owner, repo, path } = locate(ref);
@@ -64,16 +74,18 @@ export async function fetchRecipe(ref) {
   const ticks = [...body.matchAll(/`((?:\.\/)?[\w./-]+\.\w+)`/g)].map((m) => m[1]);
   const refs = [...new Set(links.concat(ticks))]
     .map((r) => r.replace(/^\.\//, '')).filter((r) => r && !r.includes('..') && !r.startsWith('/') && r !== 'SKILL.md' && r !== 'LICENSE.txt').slice(0, MAX_FILES);
-  const files = [];
+  const files = [], missing = [];
   let bytes = 0;
   for (const r of refs) {
     let got = null;
-    try { got = await get(`${base}/${r}`); } catch { continue; }
-    if (!got || got.length > MAX_EACH || (bytes += got.length) > MAX_ALL) continue;
+    try { got = await get(`${base}/${r}`); }
+    catch (e) { missing.push(`${r} (${reasonOf(e)})`); continue; } // a failed download is named, never a failed import
+    if (!got) { missing.push(r); continue; } // 404
+    if (got.length > MAX_EACH || (bytes += got.length) > MAX_ALL) { missing.push(r); continue; } // oversized
     files.push({ rel: r, data: got });
   }
   const title = name.split(/[-_]+/).map((w) => (w[0] ?? '').toUpperCase() + w.slice(1)).join(' ');
-  return { key: slugOf(name), recipe: { name, title, description, body, license: lic, branch, files, missing: refs.filter((r) => !files.some((f) => f.rel === r)), repo: `${owner}/${repo}`, path } };
+  return { key: slugOf(name), recipe: { name, title, description, body, license: lic, branch, files, missing, repo: `${owner}/${repo}`, path } };
 }
 
 /** Map the skill onto a helper whose job is the skill's own description. */
