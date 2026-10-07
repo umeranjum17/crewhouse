@@ -152,17 +152,22 @@ export function Ink({ svg, w, h = w, label, className = '' }: { svg: string; w: 
 }
 
 /** Chief, head and shoulders (`whole` for all of him). `d` keeps the old 14-dot footprint, so callers keep their size.
- *  `hero` marks the one face on screen that lives: it shows the 170 ms change-blink. */
+ *  `hero` marks the one face on screen that lives: it shows the 170 ms change-blink, and the think-scan while he works. */
 export function ChiefArt({ mood = 'idle', d = 6, hero, whole }: { mood?: art.Mood; d?: number; dark?: boolean; hero?: boolean; whole?: boolean }) {
   const flash = useChangeBlink(!!hero, mood);
-  const m = flash ? 'blink' : mood, pose = art.poseOf(m), w = d * 14;
-  const svg = useMemo(() => whole ? art.chiefSvg(pose, { wave: hero, night }) : art.headSvg('chief', pose, night), [pose, whole, hero, night]);
-  return <Ink svg={svg} w={w} h={whole ? w * 1.25 : w} label="Chief" className={`pose-${pose}`} />;
+  const mode = art.helmetOf(flash ? 'blink' : mood);
+  const beat = useTicker(140, !!hero && mode === 'think');
+  const cells = useMemo(() => art.helmet(whole ? 30 : 24, mode, night, beat), [mode, beat]);
+  return <pre className="art helmet" data-mode={mode} style={whole ? undefined : { fontSize: d }} aria-label="Chief">{
+    cells.map((row, y) => <div key={y}>{row.map((c, x) => c.eye ? <i key={x} className="eye">{c.ch}</i> : c.scan ? <i key={x} className="scan">{c.ch}</i> : c.ch)}</div>)}
+  </pre>;
 }
 export function PalArt({ kind, mood = 'idle', d = 4, name }: { kind: art.Kind; mood?: art.Mood; d?: number; name?: string; crisp?: boolean }) {
-  const pose = art.poseOf(mood);
-  const svg = useMemo(() => art.headSvg(kind, pose), [kind, pose]);
-  return <Ink svg={svg} w={d * 12} label={name} className={`pose-${pose}`} />;
+  const mode = art.helmetOf(mood);
+  const cells = useMemo(() => art.helmet(14, mode, night, 0), [mode]);
+  return <pre className="art helmet" data-mode={mode} style={{ fontSize: d }} aria-label={name ?? kind}>{
+    cells.map((row, y) => <div key={y}>{row.map((c, x) => c.eye ? <i key={x} className="eye">{c.ch}</i> : c.scan ? <i key={x} className="scan">{c.ch}</i> : c.ch)}</div>)}
+  </pre>;
 }
 
 /** A round face: Chief or a pal, with a ring when it's working or needs you. */

@@ -27,7 +27,7 @@ import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { useShareIntent } from 'expo-share-intent';
 import { qrMatrix } from '@byokit/ui-core';
 import * as motion from './src/motion';
-import { MARKS, PALS } from './src/marks';
+import { MARKS } from './src/marks';
 import { askOf, sharedOf } from './src/ask';
 import { bubbleOff, bubbleOn, bubbleResume, bubbleState, bubbleWords, openBubblePermission, showCrew, wanted, type OverlayState } from './src/bubble';
 import { chip, chipSettings, chipState, chipWords, onChip, type StatusState } from './src/chip';
@@ -79,7 +79,7 @@ function Toast() {
 
 export default function App() {
   const t = look(useColorScheme() === 'dark');
-  const [fontsReady, fontError] = useFonts({ Inter: require('./assets/fonts/InterVariable.ttf'), 'Instrument Serif': require('./assets/fonts/InstrumentSerif-Regular.ttf') });
+  const [fontsReady, fontError] = useFonts({ Inter: require('./assets/fonts/InterVariable.ttf') });
   const [grant, setGrant] = useState<Grant | null | undefined>(undefined);
   useEffect(() => { loadGrant().then(setGrant).catch(() => setGrant(null)); }, []);
   return (
@@ -110,10 +110,13 @@ function Dots({ rows, pal, d, crisp = false }: { rows: art.Bitmap; pal: art.Pale
     </View>
   );
 }
-/** Chief or a helper in B1 line ink, head and shoulders (`whole` for all of him): the PNGs scripts/icons.mjs renders. */
+/** Chief or a helper in dots (art.helmetDots): the phone sets no text in mono, so the shading rides on dot
+ *  opacity. Every helper wears the same small helmet; `whole` draws all of it. */
 function Ink({ who, mood = 'idle', size, whole, wave }: { who: art.Kind | 'chief'; mood?: art.Mood; size: number; whole?: boolean; wave?: boolean }) {
-  const pose = art.poseOf(mood);
-  return <Image source={PALS[wave && whole && who === 'chief' && pose === 'needs' ? 'chief-wave' : `${whole ? '' : 'head-'}${who}-${pose}`]} style={{ width: size, height: whole ? size * 1.25 : size }} accessibilityIgnoresInvertColors />;
+  const t = useLook();
+  const cols = whole ? 30 : 20;
+  const { rows, pal } = art.helmetDots(cols, art.helmetOf(mood), t.night, 0);
+  return <Dots rows={rows} pal={pal} d={size / cols} />;
 }
 function ChiefArt({ mood = 'idle', size, whole, wave }: { mood?: art.Mood; size: number; whole?: boolean; wave?: boolean }) {
   return <Ink who="chief" mood={mood} size={size} whole={whole} wave={wave} />;
@@ -2036,9 +2039,9 @@ const s = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   text: { fontFamily: 'Inter', fontSize: 15, lineHeight: 22, fontVariant: ['tabular-nums'] },
   h1: { fontSize: 26, lineHeight: 32, fontWeight: '700', letterSpacing: -0.6, marginVertical: 4 },
-  display: { fontFamily: 'Instrument Serif', fontSize: 38, lineHeight: 42, fontWeight: '400', letterSpacing: 0, textAlign: 'center' },
-  // B1 headings and names: Instrument Serif 400 (welcome, pairing, Hello, the office's sheets).
-  serif: { fontFamily: 'Instrument Serif', fontWeight: '400', letterSpacing: 0 },
+  display: { fontFamily: 'Inter', fontSize: 38, lineHeight: 42, fontWeight: '600', letterSpacing: 0, textAlign: 'center' },
+  // Titles and names: Inter 600 (welcome, pairing, Hello, the office's sheets).
+  serif: { fontFamily: 'Inter', fontWeight: '600', letterSpacing: 0 },
   stepNum: { width: 22, height: 22, borderRadius: 11, textAlign: 'center', lineHeight: 22, fontSize: 12, fontWeight: '700', overflow: 'hidden', marginTop: 0 },
   h2: { fontSize: 17, fontWeight: '600', lineHeight: 24 },
   b: { fontWeight: '600' },

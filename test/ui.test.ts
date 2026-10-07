@@ -521,8 +521,8 @@ test('the screens read view models only, and the mono face draws art only', () =
   const css = readFileSync(join(dir, 'styles.css'), 'utf8');
   for (const rule of css.split('}')) {
     if (!/var\(--art\)|monospace/.test(rule)) continue;
-    // Mono draws the art and the desktop's ASCII furniture (frame headers, status marks) - never reading text.
-    assert.match(rule, /(\.art\b|\.ascii\b|--art:|@font-face)/, `mono type outside the art: ${rule.trim().slice(0, 80)}`);
+    // Mono draws the art and standalone times/counts in a column (.time) - never reading text.
+    assert.match(rule, /(\.art\b|\.ascii\b|\.time\b|--art:|@font-face)/, `mono type outside the art: ${rule.trim().slice(0, 80)}`);
   }
 });
 
@@ -594,6 +594,32 @@ test('sign-in states reach the screens as plain states, never the engine\'s word
   assert.ok(!A.needsHouse({ house: { google: false } }, A.apps({})[3]), 'Notion needs no setup');
 });
 
+test('the helmet: every app mood wears one of its four moods, and every mood looks different', async () => {
+  const art = await import('../web/src/art.ts');
+  assert.deepEqual(new Set(art.MOODS.map(art.helmetOf)), new Set(art.HELMET_MODES), 'every helmet mood is reachable');
+  assert.deepEqual(new Set((['listen', 'work', 'needs', 'pleased', 'rest'] as const).map(art.helmetOf)), new Set(art.HELMET_MODES), 'every pose lands on the helmet');
+  const seen = new Set(art.HELMET_MODES.map((m) => art.helmetText(24, m, true, 9).join('\n')));
+  assert.equal(seen.size, 3, 'here and needs-you share characters; the mood lives in the eye colour');
+  assert.notEqual(art.helmetText(12, 'here', true, 0).join('\n'), art.helmetText(12, 'here', false, 0).join('\n'), 'day inverts the ramp');
+  // Here and needs-you share characters; the mood lives in the eye colour.
+  assert.equal(art.helmetText(30, 'here', true, 0).join('\n'), art.helmetText(30, 'needs', true, 0).join('\n'));
+  assert.notEqual(art.helmetDots(20, 'here', true, 0).pal.e, art.helmetDots(20, 'needs', true, 0).pal.e);
+  assert.ok(art.helmet(24, 'rest', true, 0).flat().some((c) => c.eye && c.ch === '-'), 'rest shuts the eyes');
+  assert.ok(!art.helmet(30, 'think', true, 9).flat().some((c) => c.eye), 'think shows no eyes');
+  assert.ok(art.helmet(30, 'think', true, 9).flat().some((c) => c.scan), 'think shows the scan');
+  const { rows, pal } = art.helmetDots(20, 'needs', true, 0);
+  assert.equal(rows.length, 10, 'rows follow the columns');
+  assert.ok(rows.every((r) => r.length === 20 && /^[.es1-9]+$/.test(r)), 'dots carry only density steps, eyes and the scan');
+  assert.match(pal.e, /0a84ff/i, 'needs-you eyes wear the blue');
+  // The helmet must survive the page's own type features: no ligatures, kerning or
+  // inherited feature sets, or the day ramp's `-`/`=`/`+` runs set unevenly (PR 343 review).
+  const css = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'styles.css'), 'utf8');
+  const artRule = (css.match(/\.art\s*\{([^}]*)\}/) ?? [])[1] ?? '';
+  assert.match(artRule, /font-variant-ligatures:\s*none/, '.art leaves ligatures off');
+  assert.match(artRule, /font-kerning:\s*none/, '.art leaves kerning off');
+  assert.match(artRule, /font-feature-settings:\s*normal/, '.art clears inherited feature sets');
+});
+
 test('the mascots: every app mood wears one of B1\'s five poses, and every pose of everyone looks different', async () => {
   const art = await import('../web/src/art.ts');
   assert.deepEqual(new Set(art.MOODS.map(art.poseOf)), new Set(art.POSES), 'every pose is reachable');
@@ -617,7 +643,7 @@ test('the mascots: every app mood wears one of B1\'s five poses, and every pose 
 });
 
 test('the phone mascot set matches art.ts: everyone whole and as a head, in every pose', async () => {
-  // scripts/icons.mjs renders every B1 drawing into mobile/assets/pals/ at 3x, required from mobile/src/marks.ts.
+  // scripts/icons.mjs renders the helmet into mobile/assets/pals/ at 3x, required from mobile/src/marks.ts.
   const art = await import('../web/src/art.ts');
   const files = new Map<string, [number, number]>();
   for (const p of art.POSES) for (const who of ['chief', ...Object.keys(art.PALS)]) {
