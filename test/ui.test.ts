@@ -313,7 +313,7 @@ test("a draft card flows the model's hard wraps; Copy and Edit keep the exact wo
 
 test('Home commits nothing: a row opens the review sheet, and a starter fills the box without sending', () => {
   const src = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
-  const home = src.slice(src.indexOf('function NeedsRows('), src.indexOf('/** The standing'));
+  const home = src.slice(src.indexOf('function NeedsRows('), src.indexOf('function ChiefRail('));
   assert.ok(!home.includes('<AskCard'), 'ask cards with buttons sat right on Home; a row opens the sheet instead');
   assert.match(home, /needs-row/, 'the compact Needs-you rows');
   assert.match(home, /href=\{`#\/ask\/\$\{c\.id\}`\}/, 'every row opens the existing review sheet');
@@ -539,7 +539,7 @@ test('Home opens on Chat at every launch, with Office one tap away and never sto
   }
   const web = src('web/src/main.tsx');
   const home = web.slice(web.indexOf('function Home('), web.indexOf('/** The standing'));
-  assert.match(home, /if \(mode === 'chat'\) return <div className="page chat-page home-chat"><div className="home-top">\{top\}<ChiefHero live=\{live\} state=\{state\} \/><NeedsPin state=\{state\} cards=\{live\.needs\} flat \/><\/div><Chat \{\.\.\.ctx\} id="chief" hero rail=\{<TonightRail live=\{live\} \/>\} \/><\/div>;/, 'web Chat (B1): the top, Chief\'s hero then Needs you (the mock\'s order, both sizes) over his own thread, box and Tonight rail');
+  assert.match(home, /if \(mode === 'chat'\) return <div className="page chat-page home-chat"><div className="home-top">\{top\}<ChiefHero live=\{live\} state=\{state\} \/><NeedsPin state=\{state\} cards=\{live\.needs\} flat \/><\/div><Chat \{\.\.\.ctx\} id="chief" hero rail=\{<ChiefRail state=\{state\} live=\{live\} refresh=\{refresh\} \/>\} \/><\/div>;/, 'web Chief (Term desk): the top, Chief\'s hero then Needs you over his own thread, box and the ask + doing rail');
   assert.match(home, /<NeedsPin state=\{state\} cards=\{live\.needs\}( flat)? \/>/, 'Needs you pinned from the office\'s one list');
   assert.match(home, /<div className="feed-ask"><Composer/, 'Office keeps Chief\'s box on a desk');
   assert.match(home, /<div className="dock phone-only"><Composer/, 'and on a phone');

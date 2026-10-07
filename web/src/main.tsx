@@ -202,7 +202,7 @@ function NeedsRows({ state, cards, quiet, all = false }: { state: Json; cards: A
   );
 }
 
-/** Home's top (B1): in Office the serif greeting with the Chat | Office switch beside it (on a phone the name wraps
+/** Home's top (B1): in Office the serif greeting with the Chief | Office switch beside it (on a phone the name wraps
  *  under "Good evening," and the switch sits beside the name), then the counts with your quiet hours to the right; in Chat the counts and quiet hours in one line. Counts come from `A.office` alone (a helper
  *  waiting on you counts once, under needs you). On a narrow screen the gear sits by the switch: there is no tab bar. */
 function HomeBar({ ctx, mode, pick }: { ctx: Ctx; mode: HomeMode; pick: (m: HomeMode) => void }) {
@@ -212,7 +212,7 @@ function HomeBar({ ctx, mode, pick }: { ctx: Ctx; mode: HomeMode; pick: (m: Home
   const still = quiet && <span className="m-quiet"><Icon name="moon" size={14} />{quiet}</span>;
   const tools = <div className="home-tools">
     <a className="icon-btn home-gear" href="#/settings" aria-label="Settings"><Icon name="settings" size={18} /></a>
-    <div className="seg home-mode" role="tablist" aria-label="Home view">{HOME_MODES.map(([m, l]) => <button key={m} role="tab" aria-selected={mode === m} data-mode={m} className={mode === m ? 'on' : ''} onClick={() => pick(m)}><Icon name={m === 'chat' ? 'chief' : 'office'} />{l}</button>)}</div>
+    <div className="seg home-mode" role="tablist" aria-label="Home view">{HOME_MODES.map(([m, l]) => <button key={m} role="tab" aria-selected={mode === m} data-mode={m} className={mode === m ? 'on' : ''} onClick={() => pick(m)}><Icon name={m === 'chat' ? 'chief' : 'office'} />{l}{m === 'office' && mode === 'chat' && n.needs > 0 && <span className="count">{n.needs}</span>}</button>)}</div>
   </div>;
   if (mode === 'chat') return <header className="home-bar is-chat"><div className="home-meta">{needs}{busy}{still}</div>{tools}</header>;
   // Office is a slim bar over the grid: the title (phone width only), the count line, the switch and settings.
@@ -319,23 +319,23 @@ function ChiefHero({ live, state }: { live: A.OfficeView; state: Json }) {
   );
 }
 
-/** The desk's right rail beside Chief's chat (B1): tonight's working helpers, what is ready in your tray, and who is
- *  resting, each a card; a section with nothing in it says so. */
-function TonightRail({ live }: { live: A.OfficeView }) {
-  const crew = A.roster(live.crew), seat = (c: A.OfficeMember) => A.seatOf(c);
-  const working = crew.filter((c) => seat(c) === 'working'), held = crew.filter((c) => seat(c) === 'waiting');
-  const day = new Date().setHours(0, 0, 0, 0), ready = live.done.filter((t) => t.at >= day);
-  const who = (id: string) => live.crew.find((c) => c.id === id);
-  const card = (c: A.OfficeMember, line: string, tag?: string) => <a key={c.id} className="tr-card" href={hrefOf(c.id)}><Face who={c} size={52} /><span className="grow"><b>{c.name}</b><span className="clamp2">{line}</span></span>{tag && <em>{tag}</em>}</a>;
+/** The desk's right column beside Chief's chat: the question that matters most, with its exact lines and buttons,
+ *  then what its helper is doing, step by step. A file tapped in the chat opens beside it, in the preview sheet. */
+function ChiefRail({ state, live, refresh }: { state: Json; live: A.OfficeView; refresh: () => void }) {
+  const ask = live.needs[0]; // Needs you's own order: the question that matters most comes first
+  const who = ask ? A.crew(state).find((h) => h.id === ask.helper) : undefined;
+  const working = live.crew.filter((c) => A.seatOf(c) === 'working');
+  const doer = working.find((c) => c.steps.length) ?? working[0] // someone at work first, like the board's Penny
+    ?? (ask && live.crew.find((c) => c.id === ask.helper && c.steps.length));
   return <>
-    {tonight()}
-    <div className="label">On it now</div>
-    {working.length ? working.map((c) => card(c, c.step || c.status, 'Working')) : <p className="tr-empty">Nobody is working right now.</p>}
-    <div className="label">Ready for you</div>
-    {ready.length ? ready.slice(0, 3).map((t) => { const h = who(t.helper); return <a key={t.id} className="tr-card" href={`#/things/t${t.id}`}>{h ? <Face who={h} size={52} /> : <Face who="chief" size={52} />}<span className="grow"><b className="clamp1">{t.title}</b><span className="clamp1">From {h?.name ?? 'Chief'} · in your tray</span></span></a>; })
-      : <p className="tr-empty">Nothing new in your tray today.</p>}
-    <div className="label">Waiting</div>
-    {held.length ? held.map((c) => card(c, c.status)) : <p className="tr-empty">Nothing is on hold.</p>}
+    {ask && <section className="home-section desk-ask" aria-label="Needs you">
+      <div className="section-head"><span className="label">{ask.head}</span><span className="m-needs" data-n="1"><i />Needs you</span></div>
+      <AskCard c={ask} who={who} onDone={refresh} />
+    </section>}
+    {doer && doer.steps.length > 0 && <section className="home-section" aria-label={`What ${doer.name} is doing`}>
+      <div className="section-head"><span className="label">What {doer.name} is doing</span></div>
+      <Steps steps={doer.steps} max={4} />
+    </section>}
   </>;
 }
 
@@ -367,7 +367,7 @@ function Home(ctx: Ctx) {
     {A.update(state) && <div className="card nudge"><span className="grow">{A.update(state)!.words}</span><a className="btn go" href={A.update(state)!.url} target="_blank" rel="noreferrer">Download</a></div>}
   </>;
   // Chat: Chief's own thread, its box and (on a wide desk) its side column of who is on what.
-  if (mode === 'chat') return <div className="page chat-page home-chat"><div className="home-top">{top}<ChiefHero live={live} state={state} /><NeedsPin state={state} cards={live.needs} flat /></div><Chat {...ctx} id="chief" hero rail={<TonightRail live={live} />} /></div>;
+  if (mode === 'chat') return <div className="page chat-page home-chat"><div className="home-top">{top}<ChiefHero live={live} state={state} /><NeedsPin state={state} cards={live.needs} flat /></div><Chat {...ctx} id="chief" hero rail={<ChiefRail state={state} live={live} refresh={refresh} />} /></div>;
   // Office (B1): the greeting and the room with its strip in the middle; Tonight down the right on a computer (Needs you,
   // On it now, chats, a job to hand over, Chief's box), and under the room on a phone.
   return (
@@ -1088,7 +1088,7 @@ function Settings({ state, refresh, tick, accounts, look, setLook }: Ctx & { loo
       <h1>Settings</h1>
       <p className="mute small">{A.atHome(undefined, A.planName(accounts)).join(' ')}</p>
       {/* No tab bar on a phone (B1): the desk rail's places, reached from here. */}
-      <div className="card list phone-only">{GO_TO.map(([h, l, i]) => <a key={h} href={h} className="row-item go-to"><span className="o-ic"><Icon name={i} /></span><span className="grow">{l}</span><Icon name="next" /></a>)}</div>
+      <div className="card list go-tos">{GO_TO.map(([h, l, i]) => <a key={h} href={h} className="row-item go-to"><span className="o-ic"><Icon name={i} /></span><span className="grow">{l}</span><Icon name="next" /></a>)}</div>
       <HomeSetup state={state} accounts={accounts} tick={tick} />
 
       <div className="label">You</div>
@@ -1306,12 +1306,23 @@ function useLook() {
   return { look, setLook, night };
 }
 
-/** The rail's crew list (B1): every helper, the one who matters most first (A.roster), each with the word the office
- *  uses for them on the right; waiting on you in the accent. Chief has his own line in the nav above. */
+/** The desk rail: Chief's helmet and status, every helper with the word the office uses for them (A.roster),
+ *  and what's on a schedule. Chief's own line stays in the nav above; this is his face for the rail. */
 function SideCrew({ state, live, id }: { state: Json; live: A.OfficeView; id?: string }) {
   const chats = new Map(A.chats(state).map((c) => [c.id, c]));
+  const word = A.chiefWord(live);
+  const working = live.crew.filter((c) => A.seatOf(c) === 'working');
+  const held = live.crew.filter((c) => c.ask).length;
+  const rest = live.crew.length - working.length - held;
+  const sub = [...(working.length ? [`${working[0].name} is at work`] : []), ...(rest > 0 ? [`${rest} resting`] : [])].join(' · ');
+  const crew = A.crew(state);
+  const sched = A.routines(state).filter((r: Json) => !r.paused).slice(0, 4);
+  const schedWho = (h: string) => (h === 'chief' ? 'Chief' : crew.find((x) => x.id === h)?.name ?? 'Chief');
   return (
     <div className="side-crew">
+      <a className="side-chief" href="#/chief" aria-label="Chief's chat"><span className="side-helmet"><ChiefArt mood={live.chief.mood} d={7} whole /></span><b>Chief</b></a>
+      <div className={`side-status${word === 'Needs you' ? ' needs' : ''}`}><i />{word}</div>
+      {sub && <div className="mute small side-sub">{sub}</div>}
       <a className="label side-label" href="#/crew">Your crew<span>{live.crew.length}</span></a>
       {A.roster(live.crew).map((h) => {
         const r = A.railWord(h, live), c = chats.get(h.id);
@@ -1322,6 +1333,12 @@ function SideCrew({ state, live, id }: { state: Json; live: A.OfficeView; id?: s
         </a>;
       })}
       {!live.crew.length && <div className="mute small side-blank">No helpers yet.</div>}
+      {sched.length > 0 && <>
+        <div className="label side-label">On a schedule</div>
+        {sched.map((r: Json) => <a key={r.id} className="side-sched" href="#/routines">
+          <span className="grow"><b className="clamp1">{schedWho(r.helper)} · {r.name}</b><span className="mute small clamp1">{r.when || r.next}</span></span>
+        </a>)}
+      </>}
     </div>
   );
 }
