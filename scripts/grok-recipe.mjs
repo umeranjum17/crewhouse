@@ -130,6 +130,20 @@ export function commitBot(dir, files, message) {
   } catch { /* a folder without history still works; the next run retries */ }
 }
 
+/** Either source: an explicit skill or a Claude-flavoured marker goes straight to the skill repo;
+ *  anything else tries the marketplace first and the skill repo when the marketplace has no such name.
+ *  The combined error names both misses, so the model stops guessing at names. */
+export async function previewAny({ ref, name, apps, want }) {
+  const errs = [];
+  for (const kind of want === 'skill' ? ['skill'] : ['grok', 'skill']) {
+    try {
+      const mod = kind === 'skill' ? await import('./claude-skill.mjs') : { previewImport };
+      return await mod.previewImport({ ref, name, apps });
+    } catch (e) { errs.push(e instanceof Error ? e.message : String(e)); }
+  }
+  throw new Error(errs.join(' '));
+}
+
 /** Fetch and plan without writing, so the caller refuses a cross-template clash before anything changes. */
 export async function previewImport({ ref, name, apps }) {
   const { key, recipe } = await fetchRecipe(ref);

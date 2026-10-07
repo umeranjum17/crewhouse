@@ -1046,9 +1046,9 @@ export class Crew {
 
   /** Hire a marketplace import through the normal seat: the scripts/ module previews the recipe,
    *  the clash check runs before anything is written, and re-importing pulls the latest. */
-  async importGrok(slug: string, name?: string, skill?: string) {
-    const mod = await import((await import('node:url')).pathToFileURL(join(this.cfg.repoDir, 'scripts', skill ? 'claude-skill.mjs' : 'grok-recipe.mjs')).href);
-    const pre = await mod.previewImport({ ref: skill ?? slug, name, apps: Object.fromEntries(Object.entries(APPS).map(([k, a]) => [k, a.name])) }).catch((e: any) => { throw fail(e instanceof Error ? e.message : String(e)); });
+  async importGrok(slug: string, name?: string, skill?: string, source?: string) {
+    const mod = await import((await import('node:url')).pathToFileURL(join(this.cfg.repoDir, 'scripts', 'grok-recipe.mjs')).href);
+    const pre = await mod.previewAny({ ref: skill ?? slug, name, apps: Object.fromEntries(Object.entries(APPS).map(([k, a]) => [k, a.name])), want: skill || /claude|skill/i.test(String(source ?? '')) ? 'skill' : undefined }).catch((e: any) => { throw fail(e instanceof Error ? e.message : String(e)); });
     const was = this.bot(pre.id);
     if (was && was.template !== pre.template) throw Object.assign(new Error(`there is already a bot called ${pre.display}`), { status: 409 });
     mod.writePlanned({ crewDir: this.cfg.crewDir, id: pre.id, plan: pre.plan, labels: disk.JOB_LABELS, update: !!was, seed: disk.loadTemplate(this.cfg, 'helper') });
@@ -2105,7 +2105,7 @@ export class Crew {
         (p) => { const n = this.recruit(p.template, p.name, CHIEF); return { recruited: { id: n.id, name: n.display } }; }),
       tool('crew_import', 'Bring a marketplace template onto the crew as its own helper: `slug` a Grok Bot page ("pg") or address, `skill` a Claude skill ("algorithmic-art" or "owner/repo:skills/name"). The public recipe becomes the helper\'s own folder, for this person\'s own use; importing again pulls the latest. Say what it does, what needs connecting, offer routines, start nothing.',
         { slug: Type.Optional(Type.String()), skill: Type.Optional(Type.String()), name: Type.Optional(Type.String()) },
-        (p) => this.importGrok(String(p.slug ?? p.handle ?? p.bot ?? p.id ?? p.template ?? p.url ?? p.address ?? p.query ?? p.grok ?? (p.skill ? '' : p.name ?? '')), p.name ? String(p.name) : undefined, p.skill ? String(p.skill) : undefined)),
+        (p) => this.importGrok(String(p.slug ?? p.handle ?? p.bot ?? p.id ?? p.template ?? p.url ?? p.address ?? p.query ?? p.grok ?? (p.skill ? '' : p.name ?? '')), p.name ? String(p.name) : undefined, p.skill ? String(p.skill) : undefined, String(p.source ?? ''))),
       tool('crew_assign', `Hand a bot a task. Give it a short descriptive title, never a URL. \`account\` (${accounts}) only when a task plainly suits another AI. ` +
         'A job of several steps: list them in `steps`, in plain words; the person sees the plan and it starts when they say Go.',
         { bot: Type.String(), task: Type.String(), title: Type.Optional(Type.String()), account: Type.Optional(Type.String()), steps: Type.Optional(Type.Array(Type.String())) },

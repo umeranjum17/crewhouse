@@ -62,7 +62,10 @@ b { font-weight: 600; }
 .crew-row { min-height: 68px; }
 .crew-row > b, .crew-row > span.grow { min-width: 0; }
 .status-word { display: inline-flex; align-items: center; gap: 7px; color: var(--ink2); font-size: 13px; white-space: nowrap; }
-.status-word i { width: 6px; height: 6px; border-radius: 50%; background: var(--mute); }
+.crew-row .status-word { min-width: 0; max-width: 100%; overflow: hidden; }
+.status-word > .clamp1 { min-width: 0; }
+.side-seat > .clamp1 { min-width: 0; }
+.status-word i { width: 6px; height: 6px; border-radius: 50%; background: var(--mute); flex: none; }
 .status-word i.working { background: var(--ok); }
 .status-word i.needs { background: var(--pink); }
 .starter-row { min-height: 68px; }

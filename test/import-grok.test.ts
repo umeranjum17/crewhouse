@@ -76,6 +76,30 @@ test('crew_import takes the handle however the model sends it (real run shapes),
   } finally { unstub(); done(); }
 });
 
+test('a marketplace miss falls back to the skill repo; a Claude marker goes straight there', async () => {
+  const { crew, done } = setup();
+  (globalThis as any).fetch = async (url: string) => {
+    if (String(url).includes('x.ai')) return { ok: false, status: 404 };
+    if (!String(url).includes('/test-skill')) return { ok: false, status: 404 };
+    const file = String(url).split('/').at(-1) ?? '';
+    const hit: Record<string, string> = { 'SKILL.md': SKILL_MD, 'LICENSE.txt': APACHE, 'template.js': 'console.log("toy");' };
+    if (!(file in hit)) return { ok: false, status: 404 };
+    return { ok: true, status: 200, text: async () => hit[file], arrayBuffer: async () => Buffer.from(hit[file]) };
+  };
+  try {
+    const tool = (crew as any).crewTools('chief').find((t: any) => t.name === 'crew_import');
+    // Run-5 shapes: the model sent recruit-shaped args and a source marker, never slug/skill.
+    const fell = JSON.parse(String(await tool.run({ template: 'test-skill' })));
+    assert.ok(fell.imported ?? fell.updated, 'marketplace miss still imports the skill');
+    assert.match(JSON.stringify(fell), /github\.com\/anthropics/);
+    (crew as any).db.run("DELETE FROM bots WHERE id = 'test-skill'");
+    const marked = JSON.parse(String(await tool.run({ id: 'test-skill', source: 'claude' })));
+    assert.ok(marked.imported ?? marked.updated, 'a Claude marker routes straight to the skill repo');
+    (crew as any).db.run("DELETE FROM bots WHERE id = 'test-skill'");
+    await assert.rejects(tool.run({ slug: 'nope' }), /no skill at/, 'both misses name both, so the model stops guessing');
+  } finally { unstub(); done(); }
+});
+
 test('import refuses a page with no published recipe and a name clash', async () => {
   const { crew, cfg, done } = setup();
   try {
