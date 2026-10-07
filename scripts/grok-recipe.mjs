@@ -4,10 +4,10 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-const short = (s, n) => (s = String(s ?? '').trim(), s.length > n ? `${s.slice(0, n - 1).replace(/\s+\S*$/, '')}…` : s);
-const clean = (s, n) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n);
-const slugOf = (s) => String(s ?? '').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 24) || 'bot';
-const KEYS = ['does', 'aim', 'gets', 'how', 'great'];
+export const short = (s, n) => (s = String(s ?? '').trim(), s.length > n ? `${s.slice(0, n - 1).replace(/\s+\S*$/, '')}…` : s);
+export const clean = (s, n) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n);
+export const slugOf = (s) => String(s ?? '').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 24) || 'bot';
+export const KEYS = ['does', 'aim', 'gets', 'how', 'great'];
 const COLORS = { magenta: '#C8328A', green: '#2E8A62', blue: '#3355C2', purple: '#6D51C4', orange: '#C9542F', teal: '#2F7F8A' };
 
 /** The marketplace page's recipe: the visible facts plus the embedded skills, routines and integrations. */
@@ -42,7 +42,7 @@ function parseGrokPage(page) {
 }
 
 /** Validate the slug, fetch its public page, and return its published recipe. Only honest errors. */
-export async function fetchGrokRecipe(slug) {
+export async function fetchRecipe(slug) {
   const key = /^(?:https:\/\/x\.ai\/bot\/marketplace\/bots\/)?([a-z0-9][a-z0-9-]{0,60})\/?$/.exec(String(slug ?? '').trim().toLowerCase())?.[1];
   if (!key) throw new Error('name a marketplace bot, like "pg", or paste its marketplace address');
   let res;
@@ -58,7 +58,7 @@ export async function fetchGrokRecipe(slug) {
 /** Map the recipe onto a helper: soul, five-part job, skill files, ideas, source record. `labels` is the
  *  crew's own job labels (passed in, never copied) so the job file stays readable; `apps` maps app id to
  *  the person's words for it, and anything else is reported as an unmet need, never faked. */
-export function planGrokBot(key, recipe, { display, labels, apps }) {
+export function planBot(key, recipe, { display, apps }) {
   const find = (re) => recipe.facts.find((t) => re.test(t)) ?? '';
   const job = {
     does: short(recipe.meta.description || recipe.meta.name, 500),
@@ -76,10 +76,10 @@ export function planGrokBot(key, recipe, { display, labels, apps }) {
     role: clean(recipe.meta.description, 80).replace(/[.!?]$/, '') || clean(recipe.meta.name, 80),
     color: COLORS[recipe.meta.color] ?? '#445577', job,
     soul: `# ${display}\n\n${short(recipe.profile, 1900)}`,
-    section: `## Your job\n${labels.map((label, i) => `### ${label}\n${job[KEYS[i]]}`).join('\n\n')}\n`,
     skills: recipe.skills.flatMap((s) => { const sk = slugOf(s.name); if (seen.has(sk)) return []; seen.add(sk);
-      return [{ file: `skills/${sk}/SKILL.md`, text: `---\nname: ${sk}\ndescription: ${JSON.stringify(s.description || s.name)}\nsays: ${JSON.stringify(short(s.description || s.name, 120))}\n---\n\n${s.content.slice(0, 4000).trim()}\n` }]; }),
+      return [{ file: `skills/${sk}/SKILL.md`, data: `---\nname: ${sk}\ndescription: ${JSON.stringify(s.description || s.name)}\nsays: ${JSON.stringify(short(s.description || s.name, 120))}\n---\n\n${s.content.slice(0, 4000).trim()}\n` }]; }),
     ideas: [{ needs: [], group: 'goal', promise: recipe.meta.description, title: `Start with ${display}`, line: 'takes its first job', ask: 'Get us started' }],
+    link: `https://x.ai/bot/marketplace/bots/${key}`,
     source: `# Source\n\n- marketplace: https://x.ai/bot/marketplace/bots/${key}\n- install: https://x.ai${recipe.meta.share}\n- creator: ${recipe.meta.creator}${recipe.meta.handle ? ` (@${recipe.meta.handle})` : ''}\n- imported: ${new Date().toISOString()}\n- routines, to offer with crew_routine (never started here):\n${recipe.routines.map((r) => `  - ${r.name}: ${r.summary}`).join('\n') || '  - none'}\n- integrations needing an app: ${met.map((a) => apps[a]).join(', ') || 'none'}\n- integrations with no Crewhouse equivalent yet:\n${unmet.map((g) => `  - ${g.name}: ${short(g.description, 120)}`).join('\n') || '  - none'}\n`,
     routines: recipe.routines.map((r) => `${r.name}: ${short(r.summary, 140)}`),
     met: met.map((a) => apps[a]),
@@ -88,7 +88,7 @@ export function planGrokBot(key, recipe, { display, labels, apps }) {
 }
 
 /** Write the planned folder; on update the person's own tools and standing answers stay untouched. */
-export function writeGrokBot(dir, plan, update) {
+export function writeBot(dir, plan, update, labels) {
   if (!update) {
     mkdirSync(dir, { recursive: true });
     for (const d of ['files', 'work', 'skills']) mkdirSync(join(dir, d), { recursive: true });
@@ -98,10 +98,10 @@ export function writeGrokBot(dir, plan, update) {
   writeFileSync(join(dir, 'bot.json'), JSON.stringify(current ? { ...current, ideas: plan.ideas }
     : { tools: ['crew', 'files', 'web', 'browser', 'computer', 'documents', 'search-files'], models: ['chatgpt'], ideas: plan.ideas }, null, 2) + '\n');
   writeFileSync(join(dir, 'soul.md'), plan.soul + '\n');
-  writeFileSync(join(dir, 'AGENTS.md'), `# ${plan.display}\n\n${plan.section}`);
+  writeFileSync(join(dir, 'AGENTS.md'), `# ${plan.display}\n\n## Your job\n${labels.map((label, i) => `### ${label}\n${plan.job[KEYS[i]]}`).join('\n\n')}\n`);
   for (const s of plan.skills) {
-    mkdirSync(join(dir, s.file.slice(0, -'/SKILL.md'.length)), { recursive: true });
-    writeFileSync(join(dir, s.file), s.text);
+    mkdirSync(join(dir, s.file.split('/').slice(0, -1).join('/')), { recursive: true });
+    writeFileSync(join(dir, s.file), s.data);
   }
   writeFileSync(join(dir, 'SOURCE.md'), plan.source);
   return ['soul.md', 'AGENTS.md', 'SOURCE.md', 'skills'];

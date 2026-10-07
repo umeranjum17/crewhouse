@@ -16,6 +16,14 @@ const recipe = () => ({ id: 'tb', name: 'Testy Prospecting', creatorName: 'Grok 
   integrations: [{ id: 'Gmail', name: 'Gmail', description: 'Drafts sit unsent in your account.' }, { id: 'slack', name: 'slack', description: 'Posts drafts to a channel.' }] });
 const stubFetch = (p: string) => { (globalThis as any).fetch = async () => ({ ok: true, text: async () => p }); };
 const unstub = () => { delete (globalThis as any).fetch; };
+const SKILL_MD = `---\nname: test-skill\ndescription: Make tiny web toys. Use when the person asks for a small interactive page.\nlicense: Complete terms in LICENSE.txt\n---\n\nBuild it with [the template](template.js) and ship it. Missing notes live in \`gone.md\`.\n`;
+const APACHE = 'Apache License\nVersion 2.0, January 2004\nTERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION';
+const stubSkillFetch = (license = APACHE) => { (globalThis as any).fetch = async (url: string) => {
+  const file = String(url).split('/').at(-1) ?? '';
+  const hit: Record<string, string> = { 'SKILL.md': SKILL_MD, 'LICENSE.txt': license, 'template.js': 'console.log("toy");' };
+  if (!(file in hit)) return { ok: false, status: 404 };
+  return { ok: true, status: 200, text: async () => hit[file], arrayBuffer: async () => Buffer.from(hit[file]) };
+}; };
 
 test('import hires the marketplace bot as the person\u2019s own helper, re-import pulls the latest', async () => {
   const { crew, cfg, done } = setup();
@@ -57,4 +65,36 @@ test('import refuses a page with no published recipe and a name clash', async ()
       await assert.rejects((crew as any).importGrok('tb', 'Scout'), /already a helper/);
     } finally { unstub(); }
   } finally { done(); }
+});
+
+test('a Claude skill becomes its own helper, license-checked, resources carried', async () => {
+  const { crew, cfg, done } = setup();
+  try {
+    stubSkillFetch();
+    const r = await (crew as any).importGrok('', undefined, 'test-skill') as any;
+    assert.equal(r.imported.name, 'Test Skill');
+    assert.match(r.source, /github\.com\/anthropics\/skills\/tree\/main\/skills\/test-skill/);
+    const b = (crew as any).bot('test-skill');
+    assert.equal(b.template, 'skill-test-skill');
+    const dir = disk.botDir(cfg, 'test-skill');
+    const md = readFileSync(join(dir, 'skills', 'test-skill', 'SKILL.md'), 'utf8');
+    assert.match(md, /name: test-skill/);
+    assert.match(md, /says: /);
+    assert.match(md, /license: Apache-2\.0/);
+    assert.ok(readFileSync(join(dir, 'skills', 'test-skill', 'LICENSE.txt'), 'utf8').includes('Apache License'));
+    assert.ok(existsSync(join(dir, 'skills', 'test-skill', 'template.js')), 'referenced resources ride along');
+    assert.match(readFileSync(join(dir, 'SOURCE.md'), 'utf8'), /not carried over: gone\.md/);
+    disk.validateJob(disk.readJob(cfg, 'test-skill'));
+    const again = await (crew as any).importGrok('', 'Test Skill', 'anthropics/skills:skills/test-skill') as any;
+    assert.equal(again.updated.id, 'test-skill', 're-import by owner/repo:path updates the same hire');
+  } finally { unstub(); done(); }
+});
+
+test('a skill without a reusable license is refused, never copied', async () => {
+  const { crew, done } = setup();
+  try {
+    stubSkillFetch('Some custom terms. All rights reserved.');
+    await assert.rejects((crew as any).importGrok('', undefined, 'test-skill'), /no reusable license/);
+    assert.equal((crew as any).bot('test-skill'), undefined, 'nothing hired, nothing written');
+  } finally { unstub(); done(); }
 });

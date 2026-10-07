@@ -1040,23 +1040,24 @@ export class Crew {
   /** Bring a Grok Bot marketplace template onto the crew as its own helper, at the person's own hire.
    *  The recipe (scripts/grok-recipe.mjs: fetched, planned and written person-scoped) becomes the helper's
    *  own folder through the normal path; importing again pulls the latest. */
-  async importGrok(slug: string, name?: string) {
-    const recipe = await import(pathToFileURL(join(this.cfg.repoDir, 'scripts', 'grok-recipe.mjs')).href);
-    const fetched = await recipe.fetchGrokRecipe(slug).catch((e: any) => { throw fail(e instanceof Error ? e.message : String(e)); });
-    const display = (name || fetched.recipe.meta.name).trim().slice(0, 32) || fetched.recipe.meta.name.slice(0, 32);
+  async importGrok(slug: string, name?: string, skill?: string) {
+    const recipe = await import(pathToFileURL(join(this.cfg.repoDir, 'scripts', skill ? 'claude-skill.mjs' : 'grok-recipe.mjs')).href);
+    const fetched = await recipe.fetchRecipe(skill ?? slug).catch((e: any) => { throw fail(e instanceof Error ? e.message : String(e)); });
+    const display = (name || fetched.recipe.meta?.name || fetched.recipe.title || fetched.recipe.name).trim().slice(0, 32) || 'Imported';
     const id = disk.slug(display);
     const was = this.bot(id);
-    if (id === CHIEF || (was && was.template !== `grok-${fetched.key}`)) throw Object.assign(new Error(`there is already a helper called ${display}`), { status: 409 });
-    const plan = recipe.planGrokBot(fetched.key, fetched.recipe, { display, labels: disk.JOB_LABELS, apps: Object.fromEntries(Object.entries(APPS).map(([k, a]) => [k, a.name])) });
+    const template = `${skill ? 'skill' : 'grok'}-${fetched.key}`;
+    if (id === CHIEF || (was && was.template !== template)) throw Object.assign(new Error(`there is already a helper called ${display}`), { status: 409 });
+    const plan = recipe.planBot(fetched.key, fetched.recipe, { display, labels: disk.JOB_LABELS, apps: Object.fromEntries(Object.entries(APPS).map(([k, a]) => [k, a.name])) });
     disk.validateJob(plan.job);
     const dir = disk.botDir(this.cfg, id);
-    disk.commit(dir, recipe.writeGrokBot(dir, plan, !!was), was ? 'Updated from the marketplace' : 'Joined the crew');
+    disk.commit(dir, recipe.writeBot(dir, plan, !!was, disk.JOB_LABELS), was ? 'Updated from its source' : 'Joined the crew');
     if (!was) this.db.tx(() => {
       this.db.run('INSERT INTO bots (id, display, role, template, color, token, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        id, display, plan.role, `grok-${fetched.key}`, plan.color, randomBytes(16).toString('hex'), Date.now());
+        id, display, plan.role, template, plan.color, randomBytes(16).toString('hex'), Date.now());
       this.say(id, 'system', `${display} joined the crew (${plan.role.toLowerCase()}).`);
     });
-    return { [was ? 'updated' : 'imported']: { id, name: display }, source: `https://x.ai/bot/marketplace/bots/${fetched.key}`,
+    return { [was ? 'updated' : 'imported']: { id, name: display }, source: plan.link,
       routines: plan.routines, needs: plan.needs,
       note: `Tell the person what ${display} does now${plan.met.length ? `, offer to connect ${plan.met.join(' and ')}` : ''}${plan.needs.length ? ', and say plainly what it cannot reach yet' : ''}; offer its routines with crew_routine, and start nothing.` };
   }
@@ -2108,9 +2109,9 @@ export class Crew {
       })),
       tool('crew_recruit', 'Recruit a bot from a template.', { template: Type.String(), name: Type.Optional(Type.String()) },
         (p) => { const n = this.recruit(p.template, p.name, CHIEF); return { recruited: { id: n.id, name: n.display } }; }),
-      tool('crew_import', 'Bring a Grok Bot marketplace template onto the crew as its own helper, at the person\'s own hire. `slug` is the marketplace page ("pg") or its address; `name` renames it. The public recipe becomes the helper\'s own folder, for this person\'s own use; importing again pulls the latest. Tell them what it does, what needs connecting, and offer its routines — start nothing.',
-        { slug: Type.String(), name: Type.Optional(Type.String()) },
-        (p) => this.importGrok(String(p.slug ?? ''), p.name ? String(p.name) : undefined)),
+      tool('crew_import', 'Bring a marketplace template onto the crew as its own helper: `slug` a Grok Bot page ("pg") or address, `skill` a Claude skill ("algorithmic-art" or "owner/repo:skills/name"). The public recipe becomes the helper\'s own folder, for this person\'s own use; importing again pulls the latest. Say what it does, what needs connecting, offer routines, start nothing.',
+        { slug: Type.Optional(Type.String()), skill: Type.Optional(Type.String()), name: Type.Optional(Type.String()) },
+        (p) => this.importGrok(String(p.slug ?? ''), p.name ? String(p.name) : undefined, p.skill ? String(p.skill) : undefined)),
       tool('crew_assign', `Hand a bot a task. Give it a short descriptive title, never a URL. \`account\` (${accounts}) only when a task plainly suits another AI. ` +
         'A job of several steps: list them in `steps`, in plain words; the person sees the plan and it starts when they say Go.',
         { bot: Type.String(), task: Type.String(), title: Type.Optional(Type.String()), account: Type.Optional(Type.String()), steps: Type.Optional(Type.Array(Type.String())) },

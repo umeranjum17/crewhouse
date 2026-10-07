@@ -338,7 +338,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/soul\/reset$/)) && m === 'POST') {
       const { bot: b, soul: prev } = crew.botPage(r[1]);
-      if (b.template.startsWith('grok-')) throw Object.assign(new Error('imported bots start over by importing again'), { status: 409 });
+      if (/^(grok|skill)-/.test(b.template)) throw Object.assign(new Error('imported bots start over by importing again'), { status: 409 });
       disk.writeSoul(cfg, r[1], disk.templateSoul(cfg, disk.loadTemplate(cfg, b.template), b.display), 'Put back how it started');
       db.event('soul.changed', r[1], { by: 'person', reset: true, prev });
       return { soul: disk.readSoul(cfg, r[1]) };
