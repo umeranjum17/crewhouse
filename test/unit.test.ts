@@ -1177,6 +1177,12 @@ test('Chief makes up a new helper on a short card (or adapts one already on the 
   crew.onboard('sir');
   const create = (args: object) => `[tool crew_create ${JSON.stringify(args)}]`;
   const pip = { name: 'Pip', role: 'Finds you a flat in Phuket', job: { does: 'Watches rental listings in Phuket.', aim: 'Find new flats under $900 a month.', gets: 'Your budget and preferred area.', how: 'Check current listings and compare the details.', great: 'A shortlist with links and prices; for example, two verified flats under $900.' }, personality: 'You are Pip. Cheerful and quick.', first: 'find me flats in Phuket under $900' };
+  // Malformed model arguments must explain the five-part object, not merely refuse the hire.
+  const { task: malformed } = (await crew.post('chief', `please ${create({ ...pip, job: 'Keep my bills in order' })}`))!;
+  await settled(db, malformed);
+  assert.match(lastSaid(db, 'chief')!, /job.*object.*does.*aim.*gets.*how.*great/);
+  assert.equal(crew.snapshot().asks.length, 0);
+  assert.equal(crew.bot('pip'), undefined);
   const { task: t } = (await crew.post('chief', `please ${create(pip)}`))!;
   await settled(db, t);
   const card = () => db.get("SELECT * FROM asks WHERE bot = 'chief' AND kind = 'propose' AND state = 'open'");
