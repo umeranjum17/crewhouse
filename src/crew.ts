@@ -207,7 +207,7 @@ interface Browser { run: (args: string[], signal?: AbortSignal) => Promise<strin
 /** A run's place in the crew: which task, account and session key, and the browser if it has one. */
 interface Live { key: string; task: number; account: string; model?: string; grants: string[]; browser?: Browser; page?: string; snapshot?: string; apps?: Record<string, AppTool>;
   /** The tools crewd runs for this run: the sandboxed shell, the browser AXI, the person's connected apps'. */
-  shell?: CrewTool; browserTool?: CrewTool; appTools?: Map<string, CrewTool>;
+  shell?: CrewTool; browserTool?: CrewTool; appTools?: Map<string, CrewTool>; pending?: string;
   /** Lines the helper typed on this page that no card has shown yet (an unsigned register's claim form). */
   fills?: { label: string; value: string }[] }
 
@@ -1401,6 +1401,7 @@ export class Crew {
   private turn(botId: string, l: Live, text: string, images?: { type: 'image'; data: string; mimeType: string }[]) {
     const task = this.activeTask(botId);
     if (!task) return;
+    if (this.busy.has(botId)) { l.pending = [l.pending, text].filter(Boolean).join('\n'); return; }
     this.db.run('UPDATE tasks SET session = ? WHERE id = ?', l.key, task.id); // the session key, so a resume continues it
     this.db.event('run.prompted', botId, { task: l.task, ...(images?.length ? { photos: images.length } : {}) });
     this.busy.add(botId);
@@ -1419,7 +1420,7 @@ export class Crew {
   private systemPromptFor(botId: string, l: Live) {
     const skills = disk.listSkills(this.cfg, botId);
     const apps = [...(l.appTools?.keys() ?? [])].filter((n) => n !== 'calendar' && n !== 'mail')
-      .map((n) => `${n} (${l.apps?.[n]?.app ?? 'app'})`).concat(Object.entries(this.seen(botId).run).map(([n, t]) => `${n} (${t.name}; input: {args: [...]})`));
+      .map((n) => `${n} (${l.apps?.[n]?.app ?? 'app'})`).concat(Object.entries(this.seen(botId, l.grants).run).map(([n, t]) => `${n} (${t.name}; input: {args: [...]})`));
     return disk.systemPrompt(this.cfg, botId, botId === CHIEF)
       + (skills.length ? `\n## Skills you follow\n${skills.map((s) => `- ${s.name}: ${s.description || 'how you do this kind of job'} (in ${join(disk.botDir(this.cfg, botId), 'skills', s.name)})`).join('\n')}\n` : '')
       + (apps.length ? `\nThe person's apps and granted tools give you more tools through crew_app: pass \`tool\` (one of ${apps.join(', ')}) and \`input\` (its arguments).\n` : '');
@@ -1442,8 +1443,12 @@ export class Crew {
 
   private settled(botId: string, task: Row, l: Live, end: RunEnd) {
     if (this.stopped) return; // a turn cut short by shutdown settles after the store has closed
-    this.busy.delete(botId);
     if (this.live.get(botId) !== l) return; // replaced or reset
+    this.busy.delete(botId);
+    if (l.pending && (end.ok || 'aborted' in end)) {
+      const text = l.pending; delete l.pending;
+      return this.turn(botId, l, text);
+    }
     if (end.ok) {
       void this.recordLearned(botId, l).catch(() => {});
       return this.finish(botId, end.text); // a rest expires by its own time; a success never clears one early
@@ -1465,8 +1470,6 @@ export class Crew {
       this.setTask(task, 'failed', `${name} couldn't finish this one. Try again.`);
       return this.dispatch();
     }
-    // The account hit its limit, needs signing in again, or its plan doesn't include helpers: rest or flag it, and the
-    // task continues in its own session on the next account, conversation and all.
     if (end.kind === 'resting') {
       const until = end.until ?? Date.now() + 60 * 60_000;
       this.accounts.rest(l.account, until);
@@ -1623,7 +1626,7 @@ export class Crew {
             return { allow: false, reason: 'This helper can read only the places on its list. Use its checked web tool.' };
           }
           // crew_app carries connected app tools and granted command tools; the policy still checks each call.
-          const ok = tool === 'crew_app' ? (this.live.get(run.bot)?.appTools?.has(name) ?? false) || Object.hasOwn(this.seen(run.bot).run, name)
+          const ok = tool === 'crew_app' ? (this.live.get(run.bot)?.appTools?.has(name) ?? false) || Object.hasOwn(this.seen(run.bot, this.live.get(run.bot)!.grants).run, name)
             : this.toolAllowed(run.bot, name);
           if (!ok) return { allow: false, reason: 'This run does not have that tool.' };
           const result = await this.gate(run.bot, name, input);
@@ -1643,7 +1646,6 @@ export class Crew {
         try {
           text = await this.toolCall(run, tool, rawInput, signal);
         } catch (e: any) {
-          // A refused tool is a result the model reads and adapts to, never a crashed run.
           ok = false;
           text = `error: ${String(e?.message ?? e).slice(0, 300)}`;
         }
@@ -1704,15 +1706,14 @@ export class Crew {
     if (name === 'calendar' || name === 'mail') return l.appTools?.has(name) ?? false;
     if (name === 'crew_app') return true; // the inner tool is checked inside the gate and again in call
     if (name.startsWith('crew_')) return this.crewTools(botId).some((t) => t.name === name);
-    // Command-line tools that need the person's own sign-in (a kit tool's run grant).
     return registry(this.cfg).some((t) => t.run && grants.includes(t.id) && t.id.replace(/-/g, '_') === name);
   }
 
   // ---- the gate: every tool call, before it runs ----
-  /** What the policy needs to know about a bot right now. */
-  private seen(botId: string) {
+  /** Policy classifies configured tools; offering/admission narrows them to the live run's installed grants. */
+  private seen(botId: string, tools?: string[]) {
     const conf = disk.botConfig(this.cfg, botId);
-    const granted = new Set(conf.tools ?? []);
+    const granted = new Set(tools ?? conf.tools ?? []);
     return {
       bot: this.bot(botId)!.display, space: disk.botDir(this.cfg, botId), page: this.live.get(botId)?.page, signedIn: conf.signedIn ?? [], apps: this.live.get(botId)?.apps,
       filledHost: this.live.get(botId)?.fills?.length ? this.hostOf(this.live.get(botId)?.page) : undefined,
@@ -1889,7 +1890,6 @@ export class Crew {
   /** Allow once, for this task, or always for the bot; or not now — with a reminder tomorrow when asked. Spending is never more than once. */
   async answer(askId: number, body: { answer?: string; scope?: string; schedule?: string; change?: string; text?: string; remind?: boolean }, key?: string) {
     const ask = this.db.get("SELECT * FROM asks WHERE id = ? AND state = 'open'", askId);
-    // A replayed phone answer lands here when the first one acted but its reply never shipped: already settled, same key.
     if (!ask && key && this.db.get('SELECT 1 FROM settings WHERE key = ?', `link.key.${key}`)) return;
     if (!ask) throw fail('that question is already settled', 409);
     const detail = JSON.parse(ask.detail || '{}');
@@ -1921,7 +1921,6 @@ export class Crew {
     this.db.tx(() => {
       this.db.run("UPDATE asks SET state = 'answered', answer = ?, answered_at = ? WHERE id = ?", shown, Date.now(), askId);
       this.db.event('ask.answered', ask.bot, { ask: askId, task: ask.task_id, answer: shown });
-      // Counted when the person says yes, at its most: the cap holds even if the tool spent less.
       if (body.answer === 'allow' && detail.checkout && ask.task_id) this.checkouts.set(ask.bot, { task: ask.task_id, ...detail.checkout });
       if (body.answer === 'allow' && detail.effect === 'spend' && detail.cost) this.db.event('money.spent', ask.bot, { amount: detail.cost, month: monthOf(), ask: askId });
       if (scope === 'task') this.taskGrants.set(ask.task_id, [...(this.taskGrants.get(ask.task_id) ?? []), detail.key]);
@@ -1929,7 +1928,7 @@ export class Crew {
         disk.setSettings(this.cfg, ask.bot, { allow: [...(disk.botConfig(this.cfg, ask.bot).allow ?? []), detail.key] });
         this.db.event('bot.allowed', ask.bot, { covers: coversOf(detail.key) });
       }
-      if (task?.state === 'needs_you' && !held) this.setTask(task, 'working');
+      if (task?.state === 'needs_you' && !held && !this.db.get("SELECT 1 FROM asks WHERE task_id = ? AND state = 'open' AND kind IN ('permission', 'connect')", task.id)) this.setTask(task, 'working');
       if (detail.pass) this.wrap(detail.pass.root);
       if (body.answer === 'deny' && body.remind === true && !change) this.defer(ask);
       if (key) this.db.run('INSERT INTO settings (key, value) VALUES (?, ?)', `link.key.${key}`, '{"ok":true}');
@@ -1947,12 +1946,12 @@ export class Crew {
       this.setTask(task, 'queued');
       return this.dispatch();
     }
-    // Parked: the turn already ended with a "wait", so the answer is the next prompt into the same session.
     if (body.answer === 'allow') this.granted.add(`${ask.bot}\n${ask.title}`);
+    if (task && this.db.get("SELECT 1 FROM asks WHERE task_id = ? AND state = 'open' AND kind IN ('permission', 'connect')", task.id)) return;
     const l = this.live.get(ask.bot);
     if (!task || !l || l.task !== task.id) return; // not running now (after a restart): it asks again when it resumes, and goes through
-    this.turn(ask.bot, l, `[Crewhouse] ${this.called().replace(/^the/, 'The')} has answered your request ("${ask.title}"): ` +
-      (body.answer === 'allow' ? 'allowed. Go ahead and continue the task.' : 'not now. Continue without it, or explain what you need.'));
+    const answers = this.db.all("SELECT title, answer FROM asks WHERE task_id = ? AND state = 'answered' AND kind IN ('permission', 'connect') ORDER BY id", task.id);
+    this.turn(ask.bot, l, `[Crewhouse] ${this.called().replace(/^the/, 'The')} has answered your requests: ${JSON.stringify(answers)}. Continue with what was allowed; skip what was declined, or explain what you need.`);
   }
 
   /** "Chief, call me Umer": for the person. */

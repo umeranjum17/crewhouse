@@ -12,6 +12,7 @@ import { createServer as createHttpServer } from 'node:http';
 import { DatabaseSync } from 'node:sqlite';
 import { WebSocket } from 'ws';
 import * as A from '../web/src/adapter.ts';
+import { startServer } from '../src/server.ts';
 
 const root = temp('crewhouse-test');
 // A port the OS says is free, not a random guess that another run may hold.
@@ -119,6 +120,70 @@ test('chief onboarding, recruit, assign, grants', async () => {
   assert.deepEqual((await api('GET', '/api/bots/reel')).body.tools.filter((x: any) => x.granted).map((x: any) => x.id).sort(), ['crew', 'files', 'github']);
   await api('PUT', '/api/bots/reel/tools', { tools: ['files', 'media', 'images'] });
 
+});
+
+test('parked peer reads: both approvals resume one turn and the person gets the finished draft', async () => {
+  const s = lab();
+  s.cfg.port = 0; s.cfg.linkPort = 0;
+  s.crew.onboard('Umer');
+  s.crew.recruit('scribe', 'Quill', 'person');
+  const server = await startServer(s.cfg, s.db, s.crew);
+  const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  const request = async (method: string, path: string, body?: object) => {
+    const res = await fetch(url + path, { method, headers: { 'content-type': 'application/json', 'x-crewhouse': '1' }, body: body && JSON.stringify(body) });
+    assert.equal(res.status, 200);
+    return res.json();
+  };
+  const outside = join(s.root, 'peer', 'files');
+  mkdirSync(outside, { recursive: true });
+  const paths = ['ask permission-one.md', 'ask permission-two.md'].map((name) => join(outside, name));
+  paths.forEach((path) => writeFileSync(path, 'A writing brief'));
+  try {
+    const results: { mode: string; prompts: number }[] = [];
+    for (const mode of ['one ask', 'spaced answers', 'close answers', 'answer before settlement']) {
+      const selected = (mode === 'one ask' ? paths.slice(0, 1) : paths).map((path) => path.replace('.md', `-${mode}.md`));
+      selected.forEach((path) => writeFileSync(path, 'A writing brief'));
+      const { task: id } = await request('POST', '/api/bots/quill/messages', { text: selected.map((path) => call('crew_read', { path })).join(' ') });
+      await until(async () => s.db.all("SELECT * FROM events WHERE kind = 'ask.parked' AND json_extract(data, '$.task') = ?", id).length === selected.length);
+      if (mode !== 'answer before settlement') {
+        await release(s.crew, 'quill'); // fixture control: release the initial hold after its parked-call abort
+        await until(async () => !s.crew.busy.has('quill'));
+      }
+      const asks = s.db.all("SELECT * FROM asks WHERE task_id = ? ORDER BY id", id);
+      const answer = (ask: any) => request('POST', `/api/asks/${ask.id}/answer`, { answer: 'allow', scope: 'task' });
+      if (mode === 'spaced answers') {
+        await answer(asks[0]);
+        console.log('only one answered', { state: task(s.db, id).state, busy: s.crew.busy.has('quill') });
+        if (s.crew.busy.has('quill')) await release(s.crew, 'quill', 'Waiting on the other read.');
+        await until(async () => !s.crew.busy.has('quill'));
+        const gap = Date.now() + 2000;
+        await until(async () => Date.now() >= gap);
+        await answer(asks[1]);
+      } else await Promise.all(asks.map(answer));
+      if (mode === 'answer before settlement') {
+        assert.equal(s.db.all("SELECT * FROM events WHERE kind = 'run.prompted' AND json_extract(data, '$.task') = ?", id).length, 1, 'a queued resume waits for the live turn to settle');
+        await release(s.crew, 'quill');
+        await until(async () => s.db.all("SELECT * FROM events WHERE kind = 'run.prompted' AND json_extract(data, '$.task') = ?", id).length === 2);
+      }
+      results.push({ mode, prompts: s.db.all("SELECT * FROM events WHERE kind = 'run.prompted' AND json_extract(data, '$.task') = ?", id).length });
+      await release(s.crew, 'quill', 'The writing plan is ready.');
+      await until(async () => task(s.db, id).state === 'done');
+      assert.match(JSON.stringify(await request('GET', '/api/bots/quill')), /The writing plan is ready/);
+    }
+    console.log('approval counterfactuals', results);
+    assert.deepEqual(results.map((r) => r.prompts), [2, 2, 2, 2], 'one initial turn and one resume after all parked reads are answered');
+    const missing = await request('POST', '/api/bots/quill/messages', { text: call('crew_app', { tool: 'write', input: { args: ['platforms'] } }) });
+    await until(async () => task(s.db, missing.task).state === 'done');
+    const page = await request('GET', '/api/bots/quill');
+    const reply = page.messages.find((m: any) => m.task_id === missing.task && m.author === 'bot');
+    assert.match(reply.text, /does not have that tool/);
+    assert.doesNotMatch(reply.text, /Unknown tool/);
+    assert.equal(s.db.all("SELECT * FROM events WHERE kind = 'run.call' AND json_extract(data, '$.task') = ?", missing.task).length, 0, 'missing commands never reach execution');
+  } finally {
+    await s.crew.stop();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    s.done();
+  }
 });
 
 test('a Chief reply streams partial words before its durable message', async () => {
