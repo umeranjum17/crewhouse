@@ -15,7 +15,7 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: ${{ matrix.node == '22.22.3' && 15 || 10 }}
+    timeout-minutes: 15
     strategy:
       matrix:
         node: ['22.22.3', '24'] # OpenClaw's supported Node floor and the current LTS
