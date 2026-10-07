@@ -1586,7 +1586,7 @@ test('a delivered workbook is a card in the chat, and opens as a read-only sheet
   assert.match(panel, /role="dialog" aria-modal aria-label=\{f\.name\}/, 'the panel is a dialog the keyboard belongs to');
   assert.match(panel, /<nav className="wb-tabs"[\s\S]{0,160}setTab\(i\)/, 'sheet tabs');
   assert.ok(panel.indexOf('<nav className="wb-tabs"') > panel.indexOf('<SheetTable s={s} />'), 'the tabs sit under the sheet, as in its own program');
-  assert.match(panel, /className="btn" href=\{f\.url\}[^>]*>Download</, 'Download hands over the file');
+  assert.match(panel, /className="btn go" href=\{f\.url\}[^>]*>Download</, 'Download hands over the file');
 
   // The card's peek and the panel's grid, rendered for real: letters over the columns, the file's own row numbers
   // (a gap where a blank row was skipped), a tint for each role, and a four-by-four corner on the card.

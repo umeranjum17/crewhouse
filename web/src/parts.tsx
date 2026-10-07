@@ -452,7 +452,7 @@ export function PreviewPanel({ bot, path, onClose }: { bot: string; path: string
         <header className="wb-head">
           <span className={`wb-ic wb-${f.kind}`} aria-hidden>{f.kind === 'page' ? '▤' : '▦'}</span>
           <span className="grow wb-what"><b>{f.name}</b><span className="mute small">{about}</span></span>
-          <a className="btn" href={f.url} target="_blank" rel="noreferrer">Download</a>
+          <a className="btn go" href={f.url} target="_blank" rel="noreferrer">Download</a>
           <button className="icon-btn" onClick={onClose} aria-label="Close">✕</button>
         </header>
         {!book && !doc && text === null && <div className="mute">Opening “{f.name}”…</div>}

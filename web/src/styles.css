@@ -80,6 +80,8 @@ b { font-weight: 600; }
 .file-row .media { width: 48px; height: 40px; object-fit: cover; margin: 0; flex: none; border-radius: 10px; }
 /* A sheet or page row carries its own preview card: who made it and when sit under it, inside the row, not squeezed beside it. */
 .file-row:has(> .wb-card, > .doc) { flex-wrap: wrap; gap: 6px; }
+/* A media row's title sits over its meta line: names read in full and wrap cleanly, never crushed beside it. */
+.file-row .grow > b { display: block; overflow-wrap: anywhere; }
 .file-row > .wb-card, .file-row > .doc { flex: 1 0 100%; }
 .file-row:has(> .wb-card, > .doc) > .grow > b, .file-row:has(> .wb-card, > .doc) > .mute:last-child { display: none; }
 .file-chip { width: 36px; height: 40px; flex: none; display: grid; place-items: center; background: var(--soft); border-radius: 6px; color: var(--ok); font-size: 10px; font-weight: 600; }
@@ -1080,6 +1082,8 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
 .needs-pin.flat .nb-acts { margin-top: 12px; }
 
 .o-ic { width: 36px; height: 36px; flex: none; display: grid; place-items: center; border-radius: 10px; background: var(--soft); color: var(--ink2); }
+/* A file's extension sits in the shared tile: four capitals at tile size, never cut. */
+.row-item .o-ic, .list-row .o-ic, .file-row .o-ic { font-size: 10px; font-weight: 700; letter-spacing: .04em; }
 
 /* Settings on a phone: the places the desk rail reaches, one row each (B1 has no tab bar). */
 .go-to { color: inherit; text-decoration: none; min-height: 52px; font: 500 15px/20px var(--ui); }

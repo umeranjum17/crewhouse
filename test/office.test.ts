@@ -391,3 +391,44 @@ test('a routine\'s switch keeps its knob inside the track, clear of its On or Pa
     assert.ok(g.toWords > 0, `${at}: the knob covers "${g.words}" by ${-g.toWords}px`);
   }
 });
+
+test('things, routines and helper details read Term: shared tiles, one blue primary, names in full, nothing overlaps', { skip: !bin && 'no Chromium here' }, async () => {
+  const b = await browse();
+  await b.send('Page.enable'); await b.send('Runtime.enable');
+  // Old-style markers: the pastel file chip and the coral result link. Their Term replacements carry the rows.
+  const markers = `(() => ({ chips: document.querySelectorAll('.file-chip').length,
+    coral: document.querySelectorAll('.link.pink').length,
+    tiles: [...document.querySelectorAll('.thing-list .o-ic, .detail .o-ic')].map((e) => e.textContent),
+    primary: [...document.querySelectorAll('.routine .btn.go, .wb-panel .btn.go')].map((e) => e.textContent),
+    rows: [...document.querySelectorAll('.thing-list .row-item, .routine, .detail .list-row')].map((row) => {
+      const r = row.getBoundingClientRect(), kids = [...row.children].map((e) => e.getBoundingClientRect());
+      const overlap = kids.some((a, i) => kids.some((c, j) => j > i && a.left < c.right - 1 && c.left < a.right - 1 && a.top < c.bottom - 1 && c.top < a.bottom - 1));
+      const clip = kids.some((k) => k.left < r.left - 1 || k.right > r.right + 1);
+      const cut = [...row.querySelectorAll('b')].some((e) => e.scrollWidth > e.clientWidth + 1);
+      return { overlap, clip, cut };
+    }) }))()`;
+  for (const theme of ['day', 'night']) for (const [w, h, mobile] of [[390, 844, true], [1440, 900, false]] as const) {
+    await b.send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile });
+    const at = `${theme} ${w}`;
+    await b.open(`demo&${theme}#/things`);
+    await until('the things rows', () => b.run("document.querySelectorAll('.thing-list .row-item').length > 0"), 30_000);
+    let m = await b.run(markers);
+    assert.equal(m.chips, 0, `${at} things: no old file chips`);
+    assert.ok((m.tiles as string[]).length > 0 && (m.tiles as string[]).every((t) => t.trim().length > 0), `${at} things: every file row wears its extension tile`);
+    await b.open(`demo&${theme}#/routines`);
+    await until('the routine rows', () => b.run("document.querySelectorAll('.routine').length > 0"), 30_000);
+    m = await b.run(markers);
+    assert.equal(m.coral, 0, `${at} routines: no coral result link`);
+    assert.ok(((m.primary as string[]).some((t) => /Do it now|Download/.test(t ?? ''))), `${at} routines: one filled-blue primary per row`);
+    await b.open(`demo&${theme}#/h/scribe/details`);
+    await until("scribe's files", () => b.run("document.querySelectorAll('.detail .list-row').length > 0"), 30_000);
+    m = await b.run(markers);
+    assert.equal(m.chips, 0, `${at} helper details: no old file chips`);
+    assert.ok(m.tiles.length > 0, `${at} helper details: finished work wears the shared tile`);
+    for (const [i, r] of m.rows.entries()) {
+      assert.ok(!r.overlap, `${at} row ${i}: never overlaps`);
+      assert.ok(!r.clip, `${at} row ${i}: nothing spills past the row`);
+      assert.ok(!r.cut, `${at} row ${i}: names read in full`);
+    }
+  }
+});

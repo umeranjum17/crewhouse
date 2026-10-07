@@ -719,7 +719,7 @@ function HelperPage(ctx: Ctx & { id: string; tab: string }) {
           <a className="link" href={`#/h/${id}/did`}>What happened</a>
           <h2 className="plate">What {h.name} made</h2>
           {A.made(state, id).length ? <div className="list-group">{A.made(state, id).map((f) => { const t = A.fileTarget(f)!; const out = !t.href.startsWith('#');
-            return <a key={f.url} className="list-row" href={t.href} target={out ? '_blank' : undefined} rel={out ? 'noreferrer' : undefined}><span className="file-chip">{t.chip}</span><span className="grow"><b className="clamp">{f.name}</b><span className="small">{A.clock(f.at)}</span></span><span className="mute">›</span></a>; })}</div>
+            return <a key={f.url} className="list-row" href={t.href} target={out ? '_blank' : undefined} rel={out ? 'noreferrer' : undefined}><span className="o-ic" aria-hidden>{t.chip}</span><span className="grow"><b>{f.name}</b><span className="small">{A.clock(f.at)}</span></span><span className="mute">›</span></a>; })}</div>
             : <div className="card empty">{h.name}'s finished work shows up here.</div>}
           <h2 className="plate">Routines</h2>
           <RoutineList {...ctx} bot={id} />
@@ -909,7 +909,7 @@ function Things({ state, id }: Ctx & { id?: string }) {
     const start = group === 'Today' ? now.getTime() : group === 'Yesterday' ? now.getTime() - 86400000 : 0;
     const end = group === 'Today' ? now.getTime() + 86400000 : now.getTime();
     const items = list.filter((t) => group === 'Earlier' ? t.at < now.getTime() - 86400000 : t.at >= start && t.at < end);
-    return items.length ? <section key={group}><div className="label">{group}</div><div className="card list thing-list">{items.map((t) => { const h = A.crew(state).find((x) => x.id === t.helper); const f = t.files[0]; return <a key={t.id} id={`t${t.id}`} className="row-item file-row" href={f?.url ?? `#/h/${t.helper}`} target={f?.url ? '_blank' : undefined} rel={f?.url ? 'noreferrer' : undefined}>{f ? <Media f={f} /> : <span className="file-chip">FILE</span>}<span className="grow"><b className="clamp1">{t.title}</b><span className="mute small">{h?.name ?? 'The crew'} · {A.clock(t.at)}</span></span><span className="mute">›</span></a>; })}</div></section> : null;
+    return items.length ? <section key={group}><div className="label">{group}</div><div className="card list thing-list">{items.map((t) => { const h = A.crew(state).find((x) => x.id === t.helper); const f = t.files[0]; return <a key={t.id} id={`t${t.id}`} className="row-item file-row" href={f?.url ?? `#/h/${t.helper}`} target={f?.url ? '_blank' : undefined} rel={f?.url ? 'noreferrer' : undefined}>{f ? <Media f={f} /> : <span className="o-ic" aria-hidden>FILE</span>}<span className="grow"><b>{t.title}</b><span className="mute small">{h?.name ?? 'The crew'} · {A.clock(t.at)}</span></span><span className="mute">›</span></a>; })}</div></section> : null;
   })}{!list.length && <div className="card empty">Videos, lists, letters and plans the crew makes for you land here.</div>}</div>;
 }
 
@@ -945,7 +945,7 @@ function RoutineRow({ r, h, act }: { r: Json; h: Helper | undefined; act: (fn: (
           {when === null ? <button className="link line-when" onClick={() => setWhen(r.remind ? 'in 20 minutes' : r.when || '')}>
             {[r.on, r.watching ? `Keeps an eye on ${r.watching}` : '', r.when].filter(Boolean).join(' · ')}{r.paused ? ' · paused' : r.next ? ` · ${r.remind ? '' : 'next '}${r.next}` : ''}{r.quiet && !r.watching ? " · stays quiet if there's nothing" : ''}
           </button> : <div className="mute small">Moving it — save a new time below, or cancel.</div>}
-          {r.last && <div className="mute small">{r.last}{r.result && <> · <a className="link pink" href={r.result.thing ? `#/things/t${r.result.thing}` : `#/h/${r.helper}/chat/m${r.result.msg}`}>See result</a></>}</div>}
+          {r.last && <div className="mute small">{r.last}{r.result && <> · <a className="link" href={r.result.thing ? `#/things/t${r.result.thing}` : `#/h/${r.helper}/chat/m${r.result.msg}`}>See result</a></>}</div>}
         </div>
       </div>
       {when !== null && <form className="row" onSubmit={(e) => { e.preventDefault(); if (when.trim() && preview && !preview.bad) void save(); }}>
@@ -956,7 +956,7 @@ function RoutineRow({ r, h, act }: { r: Json; h: Helper | undefined; act: (fn: (
       {when !== null && preview && !preview.bad && <div className="mute small">{preview.words}.{preview.guessed ? ` Did you mean ${preview.words.split(' at ').pop()}?` : ''} First time {preview.first}.</div>}
       {when !== null && preview?.bad && <div className="mute small">I didn't catch that time. Try “every Monday 9:00”.</div>}
       <div className="btns">
-        <button className="btn" onClick={() => act(() => api.runRoutine(r.id), 'Asked to run')} disabled={!!r.reminded}>{r.reminded ? 'Already reminded' : 'Do it now'}</button>
+        <button className="btn go" onClick={() => act(() => api.runRoutine(r.id), 'Asked to run')} disabled={!!r.reminded}>{r.reminded ? 'Already reminded' : 'Do it now'}</button>
         <label className="routine-switch"><input type="checkbox" role="switch" checked={!r.paused} aria-label={`${r.paused ? 'Resume' : 'Pause'} ${r.name}`} onChange={(e) => act(() => api.routine(r.id, { state: e.target.checked ? 'on' : 'paused' }))} /><span>{r.paused ? 'Paused' : 'On'}</span></label>        {!r.digest && !r.watching && !r.remind && <button className={`chip ${r.quiet ? 'on' : ''}`} aria-pressed={r.quiet} onClick={() => act(() => api.routine(r.id, { quiet: !r.quiet }), r.quiet ? 'It will always report back' : "It will only speak up when something's up")}>Only tell me if something's up</button>}
         {!r.digest && <button className="btn ghost" onClick={() => confirm(`Remove “${r.name}”?`) && act(() => api.removeRoutine(r.id))}>Remove</button>}
       </div>
