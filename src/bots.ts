@@ -170,7 +170,7 @@ export type Job = { does: string; aim: string; gets: string; how: string; great:
 const jobKeys = ['does', 'aim', 'gets', 'how', 'great'] as const;
 export const jobPreview = (j: Job) => JOB_LABELS.map((label, i) => `### ${label}\n${j[jobKeys[i]]}`).join('\n\n');
 export const validateJob = (clean: Record<string, string>) => {
-  if (jobKeys.some((k) => !clean[k] || clean[k].length > 600)) throw Object.assign(new Error('each part needs words, under 600 characters'), { status: 400 });
+  if (jobKeys.some((k) => !clean[k] || clean[k].length > 600)) throw Object.assign(new Error('job must be an object with does, aim, gets, how, great; each part needs words, under 600 characters'), { status: 400 });
   if (jobPreview(clean as Job).length > 3000) throw Object.assign(new Error('the whole job must be under 3,000 characters'), { status: 400 });
 };
 export function readJob(cfg: Config, id: string): Job {

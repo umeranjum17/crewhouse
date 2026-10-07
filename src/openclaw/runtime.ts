@@ -33,18 +33,17 @@ const SCHEMAS: Record<string, object> = {
   shell: { type: 'object', properties: { command: { type: 'string' } }, required: ['command'], additionalProperties: false },
   browser: args, calendar: args, mail: args,
   crew_app: { type: 'object', properties: { tool: { type: 'string' }, input: { type: 'object', additionalProperties: true } }, required: ['tool'], additionalProperties: false },
-  crew_remember: { type: 'object', properties: {
-    text: { type: 'string', description: 'One short line stating the lasting preference to save.' },
-    replaces: { type: 'string', description: 'Words of an old note this corrects, if any.' },
-    everyone: { type: 'boolean', description: 'True if every helper should know it; otherwise it stays in your notes.' },
-  }, required: ['text'], additionalProperties: false },
-  crew_document: { type: 'object', properties: {
-    name: { type: 'string', description: 'Title of the finished document.' },
-    blocks: { type: 'array', description: 'Document content in order: {heading}, {text}, {bullets: [strings]} or {table: {head: [cells], rows: [[cells]]}}.',
-      items: { type: 'object', additionalProperties: true }, minItems: 1 },
-  }, required: ['name', 'blocks'], additionalProperties: false },
+  crew_remember: { type: 'object', properties: { text: { type: 'string', description: 'One short line stating the lasting preference to save.' }, replaces: { type: 'string', description: 'Words of an old note this corrects, if any.' }, everyone: { type: 'boolean', description: 'True if every helper should know it; otherwise it stays in your notes.' } }, required: ['text'], additionalProperties: false },
+  crew_document: { type: 'object', properties: { name: { type: 'string', description: 'Title of the finished document.' }, blocks: { type: 'array', description: 'Document content in order: {heading}, {text}, {bullets: [strings]} or {table: {head: [cells], rows: [[cells]]}}.', items: { type: 'object', additionalProperties: true }, minItems: 1 } }, required: ['name', 'blocks'], additionalProperties: false },
+  crew_create: { type: 'object', properties: { bot: { type: 'string' }, name: { type: 'string' }, role: { type: 'string' }, job: { type: 'object', properties: Object.fromEntries(['does', 'aim', 'gets', 'how', 'great'].map((k) => [k, { type: 'string', minLength: 1, maxLength: 600 }])), required: ['does', 'aim', 'gets', 'how', 'great'], additionalProperties: false }, personality: { type: 'string' }, first: { type: 'string' } }, required: ['role', 'job'], additionalProperties: false },
+  crew_outcome: { type: 'object', properties: { worked: { type: 'boolean' }, seen: { type: 'string' } }, required: ['worked', 'seen'], additionalProperties: false },
+  crew_workbook: { type: 'object', properties: { name: { type: 'string' }, sheets: { type: 'array', items: { type: 'object', properties: { name: { type: 'string' }, columns: { type: 'array', items: { type: 'object', properties: { header: { type: 'string' }, width: { type: 'number' }, options: { type: 'array', items: { type: 'string' } } }, required: ['header'], additionalProperties: false } }, rows: { type: 'array', items: { type: 'array', items: { type: ['string', 'number', 'boolean', 'null'] } } } }, required: ['name', 'columns'], additionalProperties: false } } }, required: ['name', 'sheets'], additionalProperties: false },
+  crew_verify: { type: 'object', properties: { repo: { type: 'string' }, base: { type: 'string' }, patch: { type: 'string' }, tests: { type: 'array', items: { type: 'string' } }, command: { type: 'string' } }, required: ['repo', 'base', 'patch', 'tests', 'command'], additionalProperties: false },
+  crew_pass: { type: 'object', properties: { bot: { type: 'string' }, task: { type: 'string' }, files: { anyOf: [{ type: 'array', items: { type: 'string' } }, { type: 'string' }] } }, required: ['bot', 'task'], additionalProperties: false },
+  crew_assign: { type: 'object', properties: { bot: { type: 'string' }, task: { type: 'string' }, title: { type: 'string' }, account: { type: 'string' }, steps: { type: 'array', items: { type: 'string' } } }, required: ['bot', 'task'], additionalProperties: false },
+  crew_routine: { type: 'object', properties: { bot: { type: 'string' }, when: { type: 'string' }, on: { type: 'string' }, task: { type: 'string' }, name: { type: 'string' }, account: { type: 'string' }, quiet: { type: 'boolean' }, watch: { type: 'string' }, once: { type: 'boolean' } }, required: ['task'], additionalProperties: false },
   crew_report: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'], additionalProperties: false },
-  crew_draft: { type: 'object', properties: { path: { type: 'string' }, channel: { type: 'string', enum: ['email', 'message', 'post'] }, to: { type: 'string' }, subject: { type: 'string' }, why: { type: 'string' } }, required: ['path', 'channel', 'to'], additionalProperties: false },
+  crew_draft: { type: 'object', properties: { path: { type: 'string' }, channel: { type: 'string', enum: ['email', 'message', 'post'] }, to: { type: 'string' }, subject: { type: 'string' }, why: { type: 'string' }, link: { type: 'string' } }, required: ['path', 'channel', 'to'], additionalProperties: false },
   crew_batch: { type: 'object', properties: { question: { type: 'string' }, items: { type: 'array', items: { type: 'string' } } }, required: ['question', 'items'], additionalProperties: false },
 };
 const ABOUT: Record<string, string> = {
