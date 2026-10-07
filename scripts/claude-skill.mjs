@@ -36,12 +36,14 @@ export async function fetchRecipe(ref) {
   let base = '', skill = '', license = '', branch = BRANCHES[0];
   for (const b of BRANCHES) {
     base = `https://raw.githubusercontent.com/${owner}/${repo}/${b}/${path}`;
-    const got = await get(`${base}/SKILL.md`);
+    let got = null;
+    try { got = await get(`${base}/SKILL.md`); } catch { continue; }
     if (got) { skill = got.toString('utf8'); branch = b; break; }
   }
   if (!skill) throw new Error(`no skill at "${String(ref).trim()}" (looked on ${BRANCHES.join(' and ')})`);
   if (skill.length > 200_000) throw new Error('that SKILL.md is too large to read');
-  const lic = await get(`${base}/LICENSE.txt`);
+  let lic = null;
+  try { lic = await get(`${base}/LICENSE.txt`); } catch { lic = null; }
   const kind = lic && licensed(lic.toString('utf8'));
   if (!kind) throw new Error(`"${path}" carries no reusable license (LICENSE.txt must grant it); not imported`);
   const name = /^name:\s*(.+)$/m.exec(skill)?.[1].trim() || path.split('/').at(-1);
@@ -55,7 +57,8 @@ export async function fetchRecipe(ref) {
   const files = [];
   let bytes = 0;
   for (const r of refs) {
-    const got = await get(`${base}/${r}`);
+    let got = null;
+    try { got = await get(`${base}/${r}`); } catch { continue; }
     if (!got || got.length > MAX_EACH || (bytes += got.length) > MAX_ALL) continue;
     files.push({ rel: r, data: got });
   }
