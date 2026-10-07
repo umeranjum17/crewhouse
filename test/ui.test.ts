@@ -1950,3 +1950,21 @@ test('J5 repairs stay in: the night look paints first, the job row is never cut 
   // The grid scrolls past six instead of shrinking: three columns on a desk, groups below 900 px.
   assert.match(css, /@media \(min-width: 900px\) \{ \.panels \{ grid-template-columns: repeat\(3, minmax\(0, 1fr\)\); \} \}/);
 });
+test("Chief's hero shows his last real sentence; the sign-in card offers every provider", async () => {
+  const chief = (text: string, extra = {}) => ({ bots: [{ id: 'chief', last: { author: 'bot', text, at: now }, ...extra }] });
+  assert.equal(A.chiefSaid(chief('4.')), '', 'a bare fragment never reaches the hero');
+  assert.equal(A.chiefSaid(chief('Reel is on it.')), 'Reel is on it.');
+  assert.equal(A.chiefSaid(chief('All done. 4.')), 'All done.', 'the last real sentence wins');
+  assert.equal(A.chiefSaid(chief('- Buy milk')), '- Buy milk', 'a list line is real content');
+  assert.equal(A.chiefSaid(chief('What is 2+2?', { last: { author: 'person', text: 'hi', at: now } })), '', "never the person's words");
+  const unsigned = A.AIS.map((a) => ({ account: a.key, signedIn: false }));
+  const dir = mkdtempSync(join(process.cwd(), 'test/.card-'));
+  try {
+    await build({ entryPoints: ['web/src/flows.tsx'], outfile: join(dir, 'flows.mjs'), bundle: true, platform: 'node', format: 'esm', packages: 'external', logLevel: 'error' });
+    const { AccountCard } = await import(join(dir, 'flows.mjs'));
+    const card = renderToStaticMarkup(createElement(AccountCard, { accounts: unsigned, onReady: () => {} }));
+    assert.equal((card.match(/Sign in with /g) ?? []).length, 6, 'every provider, never ChatGPT alone');
+    assert.match(card, /Sign in with Claude/, 'the kit list carries Claude too');
+    assert.doesNotMatch(card, /under Settings/, 'no other account hides under Settings');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
