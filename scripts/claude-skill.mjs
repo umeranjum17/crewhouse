@@ -3,6 +3,7 @@
 // generic; page/repo-format changes land here, never in crewd. Only skills whose own LICENSE.txt grants
 // reuse (Apache 2.0) are imported — anything else is refused, never copied.
 import { short, clean, slugOf } from './grok-recipe.mjs';
+export { writePlanned } from './grok-recipe.mjs';
 
 const OFFICIAL = 'anthropics/skills';
 const BRANCHES = ['main', 'master'];
@@ -84,9 +85,16 @@ export function planBot(key, recipe, { display }) {
       ...recipe.files.map((f) => ({ file: `skills/${skill}/${f.rel}`, data: f.data }))],
     ideas: [{ needs: [], group: 'goal', promise: recipe.description, title: `Try ${display}`, line: `uses its ${recipe.name} skill`, ask: `Use your ${recipe.name} skill for ` }],
     link: `https://github.com/${recipe.repo}/tree/${recipe.branch}/${recipe.path}`,
-    source: `# Source\n\n- skill: https://github.com/${recipe.repo}/tree/HEAD/${recipe.path}\n- license: Apache-2.0 (LICENSE.txt kept with the skill)\n- imported: ${new Date().toISOString()}\n${recipe.missing.length ? `- resources not carried over: ${recipe.missing.join(', ')}\n` : ''}`,
+    source: `# Source\n\n- skill: https://github.com/${recipe.repo}/tree/${recipe.branch}/${recipe.path}\n- license: Apache-2.0 (LICENSE.txt kept with the skill)\n- imported: ${new Date().toISOString()}\n${recipe.missing.length ? `- resources not carried over: ${recipe.missing.join(', ')}\n` : ''}`,
     routines: [], met: [], needs: [],
+    note: `Tell the person what ${display} does now; it follows its ${recipe.name} skill. Start nothing.`,
   };
 }
 
-export { writeBot } from './grok-recipe.mjs';
+/** Fetch and plan without writing, so the caller refuses a cross-template clash before anything changes. */
+export async function previewImport({ ref, name }) {
+  const { key, recipe } = await fetchRecipe(ref);
+  const display = (name || recipe.title || recipe.name).trim().slice(0, 32) || recipe.title || 'Imported';
+  const plan = planBot(key, recipe, { display });
+  return { key, id: slugOf(display), display, template: `skill-${key}`, plan };
+}

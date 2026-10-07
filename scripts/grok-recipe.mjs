@@ -2,6 +2,7 @@
 // helper's folder. Pure strings plus node:fs — no imports from src/, so a page-format change lands here,
 // never in crewd. crewd's thin crew_import hook fetches, plans, validates, commits and seats the result.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 
 export const short = (s, n) => (s = String(s ?? '').trim(), s.length > n ? `${s.slice(0, n - 1).replace(/\s+\S*$/, '')}…` : s);
@@ -84,6 +85,7 @@ export function planBot(key, recipe, { display, apps }) {
     routines: recipe.routines.map((r) => `${r.name}: ${short(r.summary, 140)}`),
     met: met.map((a) => apps[a]),
     needs: unmet.map((g) => `${g.name}: ${short(g.description, 120)} (no Crewhouse equivalent yet)`),
+    note: `Tell the person what ${display} does now${met.length ? `, offer to connect ${met.map((a) => apps[a]).join(' and ')}` : ''}${unmet.length ? ', and say plainly what it cannot reach yet' : ''}; offer its routines with crew_routine, and start nothing.`,
   };
 }
 
@@ -105,4 +107,38 @@ export function writeBot(dir, plan, update, labels) {
   }
   writeFileSync(join(dir, 'SOURCE.md'), plan.source);
   return ['soul.md', 'AGENTS.md', 'SOURCE.md', 'skills'];
+}
+
+/** The job in the crew's own shape: every part present, under its caps, like disk.validateJob. */
+export function checkJob(job, labels, display) {
+  const parts = KEYS.map((k) => job[k]);
+  if (parts.some((v) => !v || v.length > 600) || labels.map((label, i) => `### ${label}\n${parts[i]}`).join('\n\n').length > 3000)
+    throw new Error(`"${display}" came back unusable; not imported`);
+}
+
+/** The folder's own history, like disk.commit for a fresh write: init, add, commit. */
+export function commitBot(dir, files, message) {
+  const git = (...args) => execFileSync('git', ['-c', 'user.name=Crewhouse', '-c', 'user.email=crewhouse@localhost', '-c', 'commit.gpgsign=false',
+    '-c', 'core.hooksPath=/dev/null', ...args], { cwd: dir, stdio: 'pipe' }).toString().trim();
+  try {
+    if (!existsSync(join(dir, '.git'))) git('init', '-q');
+    const present = files.filter((f) => existsSync(join(dir, f)));
+    if (present.length) git('add', '--', ...present);
+    git('commit', '-q', '-m', message.slice(0, 200), '--', ...present);
+  } catch { /* a folder without history still works; the next run retries */ }
+}
+
+/** Fetch and plan without writing, so the caller refuses a cross-template clash before anything changes. */
+export async function previewImport({ ref, name, apps }) {
+  const { key, recipe } = await fetchRecipe(ref);
+  const display = (name || recipe.meta.name).trim().slice(0, 32) || recipe.meta.name.slice(0, 32) || 'Imported';
+  const plan = planBot(key, recipe, { display, apps });
+  return { key, id: slugOf(display), display, template: `grok-${key}`, plan };
+}
+
+/** Write and commit a previewed plan; returns nothing — the caller seats it through the normal path. */
+export function writePlanned({ crewDir, id, plan, labels, update }) {
+  checkJob(plan.job, labels, plan.display);
+  const dir = join(crewDir, 'bots', id);
+  commitBot(dir, writeBot(dir, plan, update, labels), update ? 'Updated from its source' : 'Joined the crew');
 }

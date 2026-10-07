@@ -53,7 +53,7 @@ test('import hires the marketplace bot as the person\u2019s own helper, re-impor
 });
 
 test('import refuses a page with no published recipe and a name clash', async () => {
-  const { crew, done } = setup();
+  const { crew, cfg, done } = setup();
   try {
     stubFetch('<html><body>renamed or removed</body></html>');
     try {
@@ -62,8 +62,10 @@ test('import refuses a page with no published recipe and a name clash', async ()
     crew.recruit('scout', 'Scout', 'person');
     stubFetch(page(recipe()));
     try {
-      await assert.rejects((crew as any).importGrok('tb', 'Scout'), /already a helper/);
+      await assert.rejects((crew as any).importGrok('tb', 'Scout'), /already a bot/);
     } finally { unstub(); }
+    assert.match(readFileSync(join(disk.botDir(cfg, 'scout'), 'AGENTS.md'), 'utf8'), /Scout/, 'the refused import writes nothing over Scout');
+    assert.ok(!readFileSync(join(disk.botDir(cfg, 'scout'), 'AGENTS.md'), 'utf8').includes('Testy'));
   } finally { done(); }
 });
 

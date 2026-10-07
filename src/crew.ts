@@ -3,7 +3,6 @@ import { execFile, spawn, type ChildProcess } from 'node:child_process';
 import { closeSync, constants, copyFileSync, existsSync, fstatSync, ftruncateSync, mkdirSync, openSync, readFileSync, readdirSync, readlinkSync, realpathSync, rmSync, statSync, writeFileSync, writeSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
-import { pathToFileURL } from 'node:url';
 import { Type } from 'typebox';
 import { CHIEF, type Config } from './config.ts';
 import type { Row, Store } from './db.ts';
@@ -1023,6 +1022,17 @@ export class Crew {
     return b;
   }
 
+  /** Seat a helper whose folder already exists: the name check, its row, and the crew's hello. */
+  private seat(id: string, display: string, role: string, template: string, color: string) {
+    if (this.bot(id) || id === CHIEF) throw Object.assign(new Error(`there is already a bot called ${display}`), { status: 409 });
+    this.db.tx(() => {
+      this.db.run('INSERT INTO bots (id, display, role, template, color, token, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        id, display, role, template, color, randomBytes(16).toString('hex'), Date.now());
+      this.say(id, 'system', `${display} joined the crew (${role.toLowerCase()}).`);
+    });
+    return this.bot(id)!;
+  }
+
   /** The person or Chief can recruit a helper. */
   recruit(template: string, name: string | undefined, by: string) {
     const tpl = disk.loadTemplate(this.cfg, template);
@@ -1030,36 +1040,20 @@ export class Crew {
     const display = (name || tpl.display).trim().slice(0, 32);
     const id = disk.slug(display);
     if (this.bot(id) || id === CHIEF) throw Object.assign(new Error(`there is already a bot called ${display}`), { status: 409 });
-    this.db.tx(() => {
-      this.addBot(tpl, display, id, by);
-      this.say(id, 'system', `${display} joined the crew (${tpl.role.toLowerCase()}).`);
-    });
-    return this.bot(id)!;
+    disk.createBotFolder(this.cfg, id, tpl, display);
+    return this.seat(id, display, tpl.role, template, tpl.color);
   }
 
-  /** Bring a Grok Bot marketplace template onto the crew as its own helper, at the person's own hire.
-   *  The recipe (scripts/grok-recipe.mjs: fetched, planned and written person-scoped) becomes the helper's
-   *  own folder through the normal path; importing again pulls the latest. */
+  /** Hire a marketplace import through the normal seat: the scripts/ module previews the recipe,
+   *  the clash check runs before anything is written, and re-importing pulls the latest. */
   async importGrok(slug: string, name?: string, skill?: string) {
-    const recipe = await import(pathToFileURL(join(this.cfg.repoDir, 'scripts', skill ? 'claude-skill.mjs' : 'grok-recipe.mjs')).href);
-    const fetched = await recipe.fetchRecipe(skill ?? slug).catch((e: any) => { throw fail(e instanceof Error ? e.message : String(e)); });
-    const display = (name || fetched.recipe.meta?.name || fetched.recipe.title || fetched.recipe.name).trim().slice(0, 32) || 'Imported';
-    const id = disk.slug(display);
-    const was = this.bot(id);
-    const template = `${skill ? 'skill' : 'grok'}-${fetched.key}`;
-    if (id === CHIEF || (was && was.template !== template)) throw Object.assign(new Error(`there is already a helper called ${display}`), { status: 409 });
-    const plan = recipe.planBot(fetched.key, fetched.recipe, { display, labels: disk.JOB_LABELS, apps: Object.fromEntries(Object.entries(APPS).map(([k, a]) => [k, a.name])) });
-    disk.validateJob(plan.job);
-    const dir = disk.botDir(this.cfg, id);
-    disk.commit(dir, recipe.writeBot(dir, plan, !!was, disk.JOB_LABELS), was ? 'Updated from its source' : 'Joined the crew');
-    if (!was) this.db.tx(() => {
-      this.db.run('INSERT INTO bots (id, display, role, template, color, token, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        id, display, plan.role, template, plan.color, randomBytes(16).toString('hex'), Date.now());
-      this.say(id, 'system', `${display} joined the crew (${plan.role.toLowerCase()}).`);
-    });
-    return { [was ? 'updated' : 'imported']: { id, name: display }, source: plan.link,
-      routines: plan.routines, needs: plan.needs,
-      note: `Tell the person what ${display} does now${plan.met.length ? `, offer to connect ${plan.met.join(' and ')}` : ''}${plan.needs.length ? ', and say plainly what it cannot reach yet' : ''}; offer its routines with crew_routine, and start nothing.` };
+    const mod = await import((await import('node:url')).pathToFileURL(join(this.cfg.repoDir, 'scripts', skill ? 'claude-skill.mjs' : 'grok-recipe.mjs')).href);
+    const pre = await mod.previewImport({ ref: skill ?? slug, name, apps: Object.fromEntries(Object.entries(APPS).map(([k, a]) => [k, a.name])) }).catch((e: any) => { throw fail(e instanceof Error ? e.message : String(e)); });
+    const was = this.bot(pre.id);
+    if (was && was.template !== pre.template) throw Object.assign(new Error(`there is already a bot called ${pre.display}`), { status: 409 });
+    mod.writePlanned({ crewDir: this.cfg.crewDir, id: pre.id, plan: pre.plan, labels: disk.JOB_LABELS, update: !!was });
+    if (!was) this.seat(pre.id, pre.display, pre.plan.role, pre.template, pre.plan.color);
+    return { [was ? 'updated' : 'imported']: { id: pre.id, name: pre.display }, source: pre.plan.link, routines: pre.plan.routines, needs: pre.plan.needs, note: pre.plan.note };
   }
 
   // ---- work ----
