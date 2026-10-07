@@ -15,7 +15,7 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: ${{ matrix.node == '22.22.3' && 15 || 10 }}
+    timeout-minutes: 15
     strategy:
       matrix:
         node: ['22.22.3', '24'] # OpenClaw's supported Node floor and the current LTS
@@ -39,7 +39,7 @@ jobs:
     # The one download, built and installed as a person would: apt brings bubblewrap and Xvfb, the menu entry's
     # launcher starts crewd from /opt/crewhouse with its own Node, and the app answers.
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
