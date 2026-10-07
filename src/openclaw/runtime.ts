@@ -29,6 +29,7 @@ const crewName = (tool: string) => tool === 'shell' ? 'bash' : tool;
 
 const args = { type: 'object', properties: { args: { type: 'array', items: { type: 'string' } } }, required: ['args'], additionalProperties: false };
 const SCHEMAS: Record<string, object> = {
+  crew_import: { type: 'object', properties: { list: { type: 'boolean', description: 'List published Grok categories and Claude skills without importing.' }, slug: { type: 'string', description: 'Grok template handle or published address.' }, skill: { type: 'string', description: 'Claude skill name or owner/repo:skills/name.' }, name: { type: 'string' }, source: { type: 'string' } }, additionalProperties: false },
   shell: { type: 'object', properties: { command: { type: 'string' } }, required: ['command'], additionalProperties: false },
   browser: args, calendar: args, mail: args,
   crew_app: { type: 'object', properties: { tool: { type: 'string' }, input: { type: 'object', additionalProperties: true } }, required: ['tool'], additionalProperties: false },

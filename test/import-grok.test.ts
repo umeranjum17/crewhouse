@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { setup, settled, release, lastSaid } from './lab.ts';
 import type { StubRuntime } from '../src/stub-runtime.ts';
 import * as disk from '../src/bots.ts';
+import { TOOLS } from '../src/openclaw/runtime.ts';
 
 const blob = (o: unknown) => '\\"template\\":{' + JSON.stringify(o).replace(/"/g, '\\"').slice(1) + '},\\"featured\\":false';
 const page = (o: unknown) => `<html><body><ul><li><p class="text-primary text-sm leading-6 whitespace-pre-wrap">I am Testy the prospector. I research named people on the public web and draft the first line. I never send without your yes.</p></li><li><p class="text-primary text-sm leading-6 whitespace-pre-wrap">Job: outbound prospecting. Build a list, research each name, draft the opener.</p></li><li><p class="text-primary text-sm leading-6 whitespace-pre-wrap">User prefs, fill during getting started: what they sell = unset, who buys it = unset.</p></li></ul><script>\\"template\\":[];${blob(o)}</script></body></html>`;
@@ -39,20 +40,29 @@ test('Chief lists published categories and skills, proposes one, then imports af
     return new Response(body);
   }) as typeof fetch;
   try {
-    const listed = await crew.post('chief', 'What templates are published? [tool crew_import {"list":true}] ask permission');
-    await release(crew, 'chief', 'For your prospecting goal, Testy Prospecting fits because it researches names and drafts openers. Import it?');
-    await settled(db, listed!.task);
     const runtime = crew.runtime as StubRuntime;
-    const seen = runtime.transcript(db.get('SELECT session FROM tasks WHERE id = ?', listed!.task)!.session);
-    for (const category of ['Design', 'GTM', 'Marketing', 'Sales']) assert.ok(seen.includes(category));
-    assert.ok(seen.includes('test-skill'), 'the official skill list reaches Chief');
-    assert.match(lastSaid(db, 'chief'), /Testy Prospecting.*researches names/);
-    assert.equal(crew.bots().length, 1, 'listing and proposing seat nobody');
+    for (const input of [{ list: true }, { input: '{"list": true}', tool: 'crew_import' }, { list: 'true' }]) {
+      const listed = await crew.post('chief', `What templates are published? [tool crew_import ${JSON.stringify(input)}] ask permission`);
+      await release(crew, 'chief', 'For your prospecting goal, Testy Prospecting fits because it researches names and drafts openers. Import it?');
+      await settled(db, listed!.task);
+      const seen = runtime.transcript(db.get('SELECT session FROM tasks WHERE id = ?', listed!.task)!.session);
+      for (const category of ['Design', 'GTM', 'Marketing', 'Sales']) assert.ok(seen.includes(category), `catalogue accepts recorded input ${JSON.stringify(input)}`);
+      assert.ok(seen.includes('test-skill'), 'the official skill list reaches Chief');
+      assert.match(lastSaid(db, 'chief'), /Testy Prospecting.*researches names/);
+      assert.equal(crew.bots().length, 1, 'listing and proposing seat nobody');
+    }
+    const native = TOOLS.find((t) => t.name === 'crew_import')!.parameters as { properties: Record<string, { type: string }> };
+    assert.equal(native.properties.list.type, 'boolean', 'the native model gets a typed list flag');
+    assert.equal(native.properties.name.type, 'string');
+    const malformed = await crew.post('chief', 'List [tool crew_import {"input":"[]"}]');
+    await settled(db, malformed!.task);
+    assert.match(runtime.transcript(db.get('SELECT session FROM tasks WHERE id = ?', malformed!.task)!.session), /use list: true/);
+    assert.equal(crew.bots().length, 1, 'an invalid envelope never imports');
     const yes = await crew.post('chief', 'yes [tool crew_import {"slug":"tb"}]');
     await settled(db, yes!.task);
     assert.ok(crew.bots().some((b) => b.template === 'grok-tb'));
     assert.ok(existsSync(join(disk.botDir(cfg, 'testy-prospecting'), 'SOURCE.md')));
-    assert.equal(calls.filter((u) => u.endsWith('/marketplace')).length, 1);
+    assert.equal(calls.filter((u) => u.endsWith('/marketplace')).length, 3);
     assert.equal(calls.filter((u) => u.endsWith('/bots/tb')).length, 1, 'the same import route fetched the recipe');
     globalThis.fetch = (async () => { throw new Error('source offline'); }) as typeof fetch;
     const missed = await crew.post('chief', 'List again [tool crew_import {"list":true}]');
