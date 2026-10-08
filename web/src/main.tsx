@@ -507,7 +507,6 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
   const [around, setAround] = useState(m ? Number(m.slice(1)) : 0);
   const load = useCallback((ar = around) => api.bot(id, ar || undefined).then(setPage).catch(() => {}), [id, around]);
   useEffect(() => { void load(); }, [load, tick]);
-  const end = useRef<HTMLDivElement>(null);
   const lines = hero ? A.trayNotes(state, A.lines(page, id, state)) : A.lines(page, id, state);
   const echoed = pending && !(page?.messages ?? []).some((x: Json) => x.author === 'person' && x.id > pending.after && A.plain(x.text) === A.plain(pending.text));
   const waiting = pending && !partial && !(page?.messages ?? []).some((x: Json) => x.author === 'bot' && x.id > pending.after);
@@ -519,14 +518,14 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
   useEffect(() => { if ((page?.messages ?? []).some((x: Json) => x.author === 'bot' && x.text === partial)) setPartial(''); }, [page, partial]);
   const phoneOffer = id === 'chief' ? A.phoneOffer(page) : null;
   const box = useRef<HTMLDivElement>(null);
-  // The thread scrolls by its own column on a desk and in Home's chat on a phone (a scrollIntoView here once dragged the
-  // whole page up with it, hiding Chief's hero); other phone chats keep the document scroll. An anchored landing
-  // scrolls to the line instead. Every chat opens at its newest line (Main600) under a hero that stays in place (096).
+  // Every thread scrolls in its own lines column (phone and desk alike), so the box holds itself at its newest line.
+  // A scrollIntoView here once dragged the whole page up with it, hiding Chief's hero. An anchored landing scrolls
+  // to the line instead. Every chat opens at its newest line (Main600) under a hero that stays in place (096).
   useEffect(() => {
     if (around) return;
-    if (hero || matchMedia('(min-width: 900px)').matches) { const el = box.current; if (el) el.scrollTop = el.scrollHeight; }
-    else end.current?.scrollIntoView({ block: 'end' });
-  }, [lines.length, around, !!echoed, !!waiting, partial, hero]);
+    const el = box.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [lines.length, around, !!echoed, !!waiting, partial]);
   // The landing itself: the matched line, centred, with the one motion that explains where you are.
   useEffect(() => {
     if (!around || !lines.length) return;
@@ -598,7 +597,6 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
         {h && <Stuck h={h} refresh={refresh} />}
         <AccountCard accounts={accounts} inChat onReady={() => { void load(); refresh(); }} />
         {g.state === 'ready' && !g.notIncluded && A.resting(state) && <div className="card nudge"><span className="grow">{A.resting(state)}. {name === 'Chief' ? "I'll" : `${name} will`} finish then.</span></div>}
-        <div ref={end} className="end" />
       </div>
       <aside className={`working-on${rail ? ' tonight-rail' : ''}`}>
         {rail}
