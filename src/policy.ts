@@ -233,7 +233,7 @@ export function toolWords(tool: string, input: Record<string, any>): string {
     case 'calendar': return ({ add: `Added “${String(input.args?.[1] ?? '').slice(0, 60)}” to the calendar`, move: 'Moved a calendar event', cancel: 'Cancelled a calendar event' } as Record<string, string>)[input.args?.[0]] ?? 'Looked at the calendar';
     case 'mail': return input.args?.[0] === 'search' ? `Searched the email for “${String(input.args[1] ?? '').slice(0, 60)}”` : input.args?.[0] === 'read' ? 'Read an email' : 'Looked at the email';
     case 'browser': return input.args?.[0] === 'goto' ? `Opened ${host(input.args[1])} in its browser` : 'Used its browser';
+    case 'report': return String(input.text ?? '').trim().slice(0, 200); // the note names its own object; folds with it
   }
-  if (tool.startsWith('crew_')) return '';
   return `Used ${tool.replace(/_/g, ' ')}`;
 }
