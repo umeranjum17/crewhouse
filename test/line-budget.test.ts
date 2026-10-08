@@ -3,12 +3,15 @@
 // Raised 6838 -> 6856 for the marketplace import feature (Main1094): the thin crew_import hook, the shared
 // seat path and the soul-reset guard; fetch/parse/map/write live unbudgeted in scripts/. The dead-code hunt
 // recorded in the firstmate home (data/ch-crew-templates/budget-note.md) found nothing honest to delete.
+// Raised 6856 -> 6876 for the crew-brain slice-1 shared profile (ch-crew-brain-1, awaiting owner
+// decision): people/1/profile.md storage, the one shared prompt path and GET/PUT /api/profile.
+// A fresh unused-export hunt found nothing honest to delete.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-const BUDGET = 6856;
+const BUDGET = 6876;
 
 test('src stays within its line budget', () => {
   const root = join(import.meta.dirname, '..', 'src');

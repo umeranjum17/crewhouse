@@ -1,0 +1,24 @@
+[
+ {
+  "id": 388,
+  "bot": "scribe",
+  "author": "person",
+  "text": "Write a post announcing my weekly ops review. One variant, plain words.",
+  "task_id": 155,
+  "at": 1791401104941,
+  "member": null,
+  "recap": false,
+  "files": []
+ },
+ {
+  "id": 389,
+  "bot": "scribe",
+  "author": "bot",
+  "text": "Drafted it for LinkedIn — that's where busy agency founders actually read — and it's on a card for you, nothing sent.\n\n> I built inbox-zero crews for two design studios. Both times the fix came down to one bottleneck, not ten.\n>\n> So that is what I am selling now: a weekly ops review.\n>\n> Once a week I look at how your agency actually runs and find the one thing holding it up. You get that one thing, and what to do about it. Nothing else.\n>\n> It is for founders who know something is off but do not have a free afternoon to go find it.\n>\n> Want one? Send me a message.\n\nIt opens on the studios because that's the only proof in the post — swap in a real result if you have one (\"cut their reply time from two days to four hours\") and it gets stronger.\n\nOne thing that'd help every draft after this: paste me two or three posts you liked writing. I'll keep them as your voice and stop guessing.",
+  "task_id": 155,
+  "at": 1791401206168,
+  "member": null,
+  "recap": false,
+  "files": []
+ }
+]

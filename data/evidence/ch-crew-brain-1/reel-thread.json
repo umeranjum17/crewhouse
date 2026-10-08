@@ -1,0 +1,35 @@
+[
+ {
+  "id": 391,
+  "bot": "reel",
+  "author": "person",
+  "text": "Write a 30-second demo script for my weekly ops review. Plain words, no jargon.",
+  "task_id": 157,
+  "at": 1791401232139,
+  "member": null,
+  "recap": false,
+  "files": []
+ },
+ {
+  "id": 393,
+  "bot": "reel",
+  "author": "system",
+  "text": "Delivered files/weekly-ops-review-30-sec.docx: The Weekly Ops Review - 30 Second Demo Script is ready: weekly ops review — 30-second script, beat sheet, full voiceover, clean read.",
+  "task_id": 157,
+  "at": 1791401316303,
+  "member": null,
+  "recap": false,
+  "files": []
+ },
+ {
+  "id": 394,
+  "bot": "reel",
+  "author": "bot",
+  "text": "Wrote you a 30-second script built around one line: busy isn't the same as finished. It runs 78 spoken words across five beats, with the screen notes beside each one, plus a silent-captions version if you'd rather it play without sound.\n\n- The close needs a real next step on screen — a booking link or your email — otherwise it ends in air.\n- Say \"shop\" or \"studio\" throughout; \"operations\" and \"workflow\" make it sound like someone else's deck.\n- Want it cut to a 30-second video? Point me at screens or a recording and I'll build it.",
+  "task_id": 157,
+  "at": 1791401332221,
+  "member": null,
+  "recap": false,
+  "files": []
+ }
+]
