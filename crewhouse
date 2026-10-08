@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Crewhouse: setup | start | autostart | update | uninstall | doctor | tools | test
+# Crewhouse: setup | start | open | autostart | update | uninstall | phones | doctor | tools | test
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -179,7 +179,7 @@ spawn('xdg-open', [`http://${c.host}:${c.port}/#person=${readFileSync(join(c.sta
 NODE
     ;;
   phones)
-    # A local HTTP client only; unlike crewd, it does not need the engine's Node floor.
+    # Local HTTP client; reads the same config and private capability as the launcher.
     action="${2:-}"; shift 2 || true
     case "$action" in code|pending|approve) ;; *) echo 'usage: ./crewhouse phones code | pending | approve <two words>' >&2; exit 2 ;; esac
     [ "$action" != approve ] || [ "$#" -gt 0 ] || { echo 'Give the exact two words shown on the phone.' >&2; exit 2; }

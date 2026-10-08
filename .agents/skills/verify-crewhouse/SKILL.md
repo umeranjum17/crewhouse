@@ -51,10 +51,10 @@ is stub) plus `curl -fsS "http://127.0.0.1:$PORT/"` returning HTML.
 
 ## Drive
 
-**HTTP (the app's own consumer path).** Every non-GET needs `x-crewhouse: 1` (CSRF)
-and `Authorization: Bearer <person.key>` (person authority). Read the capability only
-from your own `$LAB/state/person.key`; never from the owner's install. The public header
-alone must return 403 and leave the question open. The canonical journey, from `test/stub.test.ts`:
+**HTTP (the app's own consumer path).** Follow the authority contract in
+[`docs/ui-contract.md`](../../../docs/ui-contract.md).
+Read the capability only from your own `$LAB/state/person.key`; never from the owner's
+install. The canonical journey, from `test/stub.test.ts`:
 
 ```bash
 B="http://127.0.0.1:$PORT"; PERSON=$(<"$LAB/state/person.key")
@@ -244,7 +244,7 @@ folder survive — a cleanup that eats the proof fails. Never kill by process na
   is on screen (uiautomator), for the bubble recipe.
 - `scripts/record.mjs --cdp <port> --out <file.webm> --seconds 8` — one motion recording of
   a changed interaction: screencast frames timed by their own timestamps, muxed by ffmpeg.
-- `node scripts/phone-pair.mjs --out <dir> [--serial …] [--base …] [--apk …] [--runs n]
+- `node .agents/skills/verify-crewhouse/scripts/phone-pair.mjs --out <dir> --state <owned-state-dir> [--serial …] [--base …] [--apk …] [--runs n]
   [--record]` — the native pairing proof (`features/phone-pairing.md`): the phone's camera
   reads the live code, the computer confirms, the phone reaches "You're in"; screenshots, an
   mp4 and `timings.json`.

@@ -3,7 +3,8 @@
 // showing, the person confirms on the computer, and the phone lands on "You're in". Writes a screenshots
 // and timings folder and prints one timings line per run.
 //
-//   node scripts/phone-pair.mjs --out "$EV/phone" [--serial emulator-5562] [--base http://127.0.0.1:$PORT]
+//   node .agents/skills/verify-crewhouse/scripts/phone-pair.mjs --out "$EV/phone" --state "$LAB/state"
+//                                [--serial emulator-5562] [--base http://127.0.0.1:$PORT]
 //                                [--apk path.apk] [--camera-file <png>] [--runs 3] [--record] [--qr-file <txt>]
 //
 // Task-owned prerequisites, none of the owner's:
