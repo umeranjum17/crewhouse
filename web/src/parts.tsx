@@ -10,7 +10,7 @@ import * as art from './art.ts';
 import { color } from './tokens.ts';
 import { MARKS } from './logos.ts';
 import { ICONS, type IconName } from './icons.ts';
-import { clock, column, docLinks, document as docView, fileSource, fileView, flowed, mdPlain, pageWords, workbook, type Card, type DocPart, type DocView, type FileView, type Helper, type Sheet, type Step, type Workbook } from './adapter.ts';
+import { clock, column, docLinks, document as docView, fileSource, fileView, flowed, mdPlain, pageWords, workbook, type Card, type CampaignOutcome, type DocPart, type DocView, type FileView, type Helper, type Sheet, type Step, type Workbook } from './adapter.ts';
 
 /** Markdown inline runs, from the shared safe tokens (web/src/chat-md.ts): no raw HTML, http(s) links only. */
 const mdInline = (tokens: any[]): ReactNode => tokens.map((t, i) => t.type === 'strong' ? <strong key={i}>{mdInline(t.tokens)}</strong>
@@ -591,8 +591,38 @@ const splitAmount = (l: string): [string, string] => {
 /** The ask's evidence in the sunken block (§4.4): an order's lines with the total above a hairline, a form's or a
  *  job's label-over-value lines, a draft's to/subject/body, Chief's routine confirmation lines, or exactly what
  *  goes out. Long bodies clamp until `open`; `readAll` is the card's or the sheet's own way of opening them. */
+function CampaignPosts({ text, approved = false }: { text: string; approved?: boolean }) {
+  const [copied, setCopied] = useState(-1), [error, setError] = useState('');
+  const parts = text.split('\n\n---\n\n');
+  const copy = async (text: string, i: number) => {
+    try { if (!navigator.clipboard) throw new Error('Copy is unavailable here. Select the post text to copy it.'); await navigator.clipboard.writeText(text); setCopied(i); setError(''); }
+    catch (e) { setError(e instanceof Error ? e.message : 'Could not copy. Select the post text to copy it.'); }
+  };
+  return <div className="ev">{parts.map((part, i) => { const at = part.indexOf('\n'); return <section key={i}><b className="ev-to">{at < 0 ? '' : part.slice(0, at)}</b><div className="ev-body">{at < 0 ? part : part.slice(at + 1)}</div>{approved && parts.length === 2 && at > 0 && <button className="btn" onClick={() => void copy(part.slice(at + 1), i)}>{copied === i ? 'Copied' : `Copy ${part.slice(0, at)} post`}</button>}</section>; })}{error && <p role="alert">{error}</p>}</div>;
+}
+
+export function CampaignReceipt({ outcome: c }: { outcome: CampaignOutcome }) {
+  const [text, setText] = useState(''), [error, setError] = useState('');
+  useEffect(() => {
+    if (!c.approved) return;
+    let active = true;
+    void api.document(c.source.bot, c.source.path).then(async (d) => {
+      const text = String(d.text ?? '').trim();
+      const hash = [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)))].map((x) => x.toString(16).padStart(2, '0')).join('');
+      if (hash !== c.source.sha) throw new Error('This is no longer the campaign you approved. Ask Chief for a fresh draft.');
+      if (active) setText(text);
+    }).catch((e) => active && setError(e?.status ? 'Could not read the approved campaign. Ask Chief to check its file.' : e.message));
+    return () => { active = false; };
+  }, [c.approved, c.source.bot, c.source.path, c.source.sha]);
+  return <div className="card ask campaign"><div className="ask-head"><b>Chief</b></div><p>{c.approved ? 'Campaign approved. Ready to copy; nothing was sent.' : 'Campaign put aside. Nothing was copied or sent.'}</p>
+    {error && <p role="alert">{error}</p>}{c.approved && !text && !error && <p role="status">Opening your approved posts…</p>}{text && <CampaignPosts text={text} approved />}
+    {c.approved && c.poster && <><Media f={c.poster} big /><a className="btn" href={c.poster.url} download={c.poster.name}>Save poster</a></>}
+  </div>;
+}
+
 function AskEvidence({ c, open, readAll }: { c: Card; open: boolean; readAll: ReactNode }) {
   const body = c.preview?.body ?? '';
+  if (c.campaign) return <><CampaignPosts text={body} />{c.campaign.poster ? <Media f={c.campaign.poster} big /> : <p>The poster is not ready here yet.</p>}</>;
   if (c.review) return <div className="ev">{body.split('\n').map((l, i) => {
     const [text, amount] = splitAmount(l);
     return <div key={i} className={`order-row${/^Total/.test(l) ? ' total' : ''}`}>{amount ? <><span className="grow">{text}</span><span>{amount}</span></> : text}</div>;
@@ -656,7 +686,7 @@ export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; 
   const yes = c.choices[0];
   const deny = c.choices.find((x) => x.body.answer === 'deny' && x !== yes);
   // A deferred "Not now" comes back on its own: "Remind me tomorrow" re-asks it from a one-shot routine.
-  const remind = !c.remind && deny && deny.label === 'Not now' ? { ...deny.body, remind: true } : null;
+  const remind = !c.campaign && !c.remind && deny && deny.label === 'Not now' ? { ...deny.body, remind: true } : null;
   const always = c.choices.find((x) => x.body.scope === 'always');
   const question = c.review && c.preview?.head ? c.preview.head : c.words;
   // A routine offered by Chief: the lines are the confirmation, and changing the time is an edit before the yes.
@@ -668,7 +698,7 @@ export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; 
   const [change, setChange] = useState<string | null>(null);
   const edit = useDraftEdit(c);
   return (
-    <div className="card ask">
+    <div className={`card ask${c.campaign ? ' campaign' : ''}`}>
       <AskHead c={c} who={who} />
       <p className="ask-words">{question}</p>
       {edit.box || (c.kind === 'routine' && c.lines ? <div className="ask-lines">{c.lines.map((l, i) => <p key={i} className={`ask-line${i ? ' quiet' : ''}`}>{l}</p>)}</div>

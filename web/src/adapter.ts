@@ -32,6 +32,7 @@ export type Card = {
   question?: string;
   /** A draft's own words, unscrubbed: the person may change them before Approve, and their version is what is kept. */
   draftText?: string;
+  campaign?: { ready: boolean; poster?: FileView };
 };
 /** The small line above an ask's title: what kind of yes it wants, so the title itself can stay plain. */
 export const askTag = (c: Card) => ({ spend: 'Wants to spend money', question: 'Has a question', routine: 'A routine to start', plan: 'A plan to start', connect: 'Wants an app' } as Record<string, string>)[c.kind] ?? 'Needs your OK';
@@ -509,7 +510,7 @@ function chiefRow(state: Json, local: ChiefLocal): ChiefView {
   const all = crew(state);
   const now = Date.now();
   const events = (state.events ?? []) as Json[];
-  const asks = state.asks.length;
+  const pending = cards(state), asks = pending.length;
   const needs = all.find((h) => h.ring === 'needs');
   const stuck = all.find((h) => h.stuckFor > 0);
   const busy = all.filter((h) => h.ring === 'working');
@@ -521,7 +522,7 @@ function chiefRow(state: Json, local: ChiefLocal): ChiefView {
   const done = recent('task.done', 5 * 60_000)[0];
   const name = (id: string) => crewName(state, id);
   const line = needs ? `${needs.name} needs you`
-    : asks ? `${name(state.asks[0].bot)} needs you`
+    : asks ? `${name(pending[0].helper)} needs you`
     : busy.length === 1 ? (local.bare ? `${busy[0].name} is working` : `${busy[0].name} is on “${busy[0].status}”`)
     : busy.length > 1 ? `${busy.map((h) => h.name).join(' and ')} are working`
     : rest || 'Keeping an eye on things';
@@ -605,7 +606,7 @@ export function needsYou(state: Json): Card[] {
     if (d.spends || d.effect === 'spend' || d.effect === 'send') return 0;
     return a.kind === 'permission' ? 1 : 2;
   };
-  return (state.asks as Json[]).map((a) => ({ a, c: card(a, state) })).filter((x) => rank(x.a) < 3)
+  return (state.asks as Json[]).map((a) => ({ a, c: card(a, state) })).filter((x) => rank(x.a) < 3 && x.c.campaign?.ready !== false)
     .sort((x, y) => rank(x.a) - rank(y.a) || y.c.at - x.c.at).map((x) => x.c);
 }
 
@@ -641,7 +642,7 @@ export const flowed = (body = '') => String(body).split(/\n{2,}/).map((p) => p.r
 export function card(a: Json, state: Json): Card {
   const name = crewName(state, a.bot);
   const d = a.detail ?? {};
-  const base = { id: a.id, helper: a.bot, at: a.at, reply: false };
+  const base = { id: a.id, helper: a.kind === 'propose' && d.draft ? 'chief' : a.bot, at: a.at, reply: false };
   const title = plain(String(state.bots.find((b: Json) => b.task?.id === a.task_id)?.task?.title ?? state.tasks?.find((t: Json) => t.id === a.task_id)?.title ?? '')).trim();
   const question = title ? (/[?.!]$/.test(title) ? title : `${title}?`) : undefined;
   if (a.kind === 'connect' || d.app) {
@@ -670,6 +671,14 @@ export function card(a: Json, state: Json): Card {
   if (a.kind === 'propose' && d.draft) {
     // A card written before the channel was recorded still has to say a real noun: nothing here ever shows undefined.
     const channel = plain(String(d.draft.channel ?? '')).trim() || 'draft';
+    if (campaignPath(d.draft.path)) {
+      const task = state.tasks?.find((t: Json) => t.bot === a.bot && t.files?.includes(d.draft.path));
+      const parts = task ? state.tasks.filter((t: Json) => t.root === task.root) : [];
+      const poster = campaignPoster(state, task?.root);
+      return { ...base, kind: 'ok', status: 'Nothing copied or sent', head: 'Your campaign', words: 'Review both posts and the poster. Approve makes them ready to copy; it never posts them.', preview: { body: String(d.preview?.body ?? '') },
+        campaign: { ready: !!parts.length && parts.every((t: Json) => ['done', 'failed', 'unsure'].includes(t.state)) && !state.bots.some((b: Json) => b.task?.root === task.root), poster },
+        choices: [{ label: 'Approve', body: { answer: 'allow' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
+    }
     const head = `${name} wrote your ${channel}`;
     // A draft is words to send, not a document: heading and quote marks are stripped, every word kept — the person
     // would otherwise post or mail the marks themselves. A "#hashtag" a post opens with is not a heading.
@@ -727,7 +736,12 @@ export function card(a: Json, state: Json): Card {
     preview: d.preview ? { head: d.preview.head ? plain(d.preview.head) : undefined, body: plain(d.preview.body ?? '') } : undefined,
   };
 }
-export const cards = (state: Json) => state.asks.map((a: Json) => card(a, state)) as Card[];
+export const cards = (state: Json) => (state.asks.map((a: Json) => card(a, state)) as Card[]).filter((c) => c.campaign?.ready !== false);
+const campaignPath = (path: unknown) => /^files\/campaign-[^/]+\.txt$/.test(String(path));
+const campaignPoster = (state: Json, root: number | undefined): FileView | undefined => root === undefined ? undefined : state.tasks.filter((t: Json) => t.root === root).flatMap((t: Json) => (t.files ?? []).filter((p: string) => /\.png$/i.test(p)).map((p: string) => fileView(t.bot, p)))[0];
+export type CampaignOutcome = { id: number; at: number; approved: boolean; source: { bot: string; path: string; sha: string }; poster?: FileView };
+// ponytail: the current 80-event window holds recent decisions; the helper's history keeps the durable receipt.
+export const campaignOutcomes = (state: Json): CampaignOutcome[] => (state.events ?? []).filter((e: Json) => ['draft.approved', 'draft.rejected'].includes(e.kind) && campaignPath(e.data?.path)).map((e: Json) => ({ id: e.seq, at: e.at, approved: e.kind === 'draft.approved', source: { bot: e.bot, path: e.data.path, sha: e.data.sha }, poster: campaignPoster(state, state.tasks.find((t: Json) => t.id === e.data.task)?.root) }));
 
 // ---------- work and things ----------
 export function work(state: Json): Work[] {

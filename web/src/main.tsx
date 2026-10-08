@@ -7,7 +7,7 @@ import { api, demo, subscribe, type Json } from './api.ts';
 import * as A from './adapter.ts';
 import * as art from './art.ts';
 type Helper = ReturnType<typeof A.crew>[number];
-import { AiMark, AskCard, Banner, AskSheet, attempt, Celebrate, setAway, setChiefMood, setNight, ChiefArt, Composer, Face, Icon, Logo, Media, ChatText, PalArt, Pill, Splash, Steps, Toasts, toast, useListen, PreviewPanel } from './parts.tsx';
+import { AiMark, AskCard, Banner, AskSheet, CampaignReceipt, attempt, Celebrate, setAway, setChiefMood, setNight, ChiefArt, Composer, Face, Icon, Logo, Media, ChatText, PalArt, Pill, Splash, Steps, Toasts, toast, useListen, PreviewPanel } from './parts.tsx';
 import { keepDraft } from './draft.ts';
 import type { IconName } from './icons.ts';
 import { Screen } from './screen.tsx';
@@ -607,6 +607,7 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
             {l.from !== 'me' && here}
           </div>{l.from === 'me' && here}</div>;
         })}
+        {id === 'chief' && A.campaignOutcomes(state).map((c) => <CampaignReceipt key={c.id} outcome={c} />)}
         {echoed && <div className="line me fresh"><div className="line-by"><span className="who">You</span></div><div className="bubble-text">{pending.text}</div></div>}
         {!!partial && <div className="line them streaming" aria-live="polite"><div className="line-by"><span className="who">{name}</span></div><div className="bubble-text"><ChatText text={partial} /></div></div>}
         {ln && <LiveRow ln={ln} />}
