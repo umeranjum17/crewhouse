@@ -1262,6 +1262,9 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
   /* The sticky band's negative top margin pulls the thread under the head once the page itself stops scrolling
      (the room carries the same band): the head keeps its full bleed, the thread starts under it. */
   .page.chat-page:not(.home-chat):has(> .chat) .sticky-top { margin-top: 0; }
+  /* Every phone thread (Chief's chat and the room too) fades out at its top edge, as the dock does at its own: a line
+     scrolled half past the bar fades rather than shows sliced; the padding keeps the first line clear of the fade. */
+  .page.chat-page:has(> .chat) .lines { padding-top: 20px; mask-image: linear-gradient(transparent, #000 20px); }
 }
 
 /* Office takes the full width on a desk: no right pane beside the panels (the phone keeps its list under them).
