@@ -2,8 +2,7 @@
 
 The maintained source for verifying user-facing behavior of Crewhouse. Read this index
 before driving the app, then use the matching feature file as the recipe. Launch, doctor,
-evidence and cleanup live in [`../SKILL.md`](../SKILL.md); every recipe assumes a fresh
-isolated crewd on the stub engine.
+evidence and cleanup live in [`../SKILL.md`](../SKILL.md); recipes assume an isolated crewd on the stub engine unless they explicitly require the real engine.
 
 ## Baseline preconditions
 
@@ -17,7 +16,7 @@ isolated crewd on the stub engine.
 | ID | File | What it proves |
 |----|------|----------------|
 | onboard-chief-chat | [onboard-chief-chat.md](onboard-chief-chat.md) | Hello screen, onboarding, Chief's greeting/chat, and shared profile facts with a plain saved note |
-| recruit-assign | [recruit-assign.md](recruit-assign.md) | Chief recruits or proposes a custom helper with a five-part job, one yes hires it; assignment and wrap-up |
+| recruit-assign | [recruit-assign.md](recruit-assign.md) | Chief recruits or proposes a custom helper; assignment and wrap-up; real Marketing crew recipe, shared profile and Chief's read-only skill admission |
 | office-layout | [office-layout.md](office-layout.md) | The Office view's counts and labels at desktop, phone and narrow widths |
 | bubble-write-it-here | [bubble-write-it-here.md](bubble-write-it-here.md) | On the release APK: Chief's bubble over another app's box, Write it here, and the action it offers (Copy or Put it in) |
 | ai-accounts-view | [ai-accounts-view.md](ai-accounts-view.md) | Settings' AI-accounts card: who is ready, resting, or plan-less, without any sign-in |

@@ -55,6 +55,41 @@ the snapshot and scroll the card into view. Answer through the API, wait for
 receipt and more than one decoded frame; retain it as interaction evidence, not an
 animation-performance measurement. Stop the engine before releasing its credential lock.
 
+## Marketing crew campaign (real engine)
+
+Chief's `run-a-marketing-campaign` skill is copied from the existing skills library,
+not a grouped-helper type. Hold the real-model credential lock with `FM_CRED_WAIT=1800`
+for the entire isolated daemon lifetime, including capture and cleanup.
+
+- Onboard as Umer; save through `PUT /api/profile`: Morning Loaf bakery, local families,
+  warm plain voice and only the offer/address/hours actually supplied. Select the dedicated
+  test account for Chief and recruited helpers through their models endpoint.
+- Send the plain request `help me market my bakery` to Chief's chat. Do not put tool calls
+  or the skill's name in that real-engine request. Inspect crewd's own `run.call` trail:
+  Chief must read the campaign skill, use `crew_roster`, recruit only missing Scout,
+  Scribe and Reel, state a short plan and assign all three their own parts.
+- Retain the request, Chief's reply and every helper's task/results via the HTTP API.
+  Each run's supplied context must contain the same About-me record. Research needs
+  sources, writing needs reviewable drafts, Reel needs a delivered PNG or silent video.
+  A scripted provider proves dispatch/profile plumbing, never skill selection or output.
+- Chief has read-only file admission: `crew_read` of its own skill is free; outside
+  reads ask through the existing file policy. Writes, edits and shell calls are refused.
+  The campaign skill's description directs Chief to `crew_read`, not native Skill/Read.
+- Wait for the helper runs to settle before capture. Streaming snapshots invalidate refs;
+  use stable visible-text DOM queries through `chrome-devtools-axi eval` for More, never
+  stale refs. `CHROME_DEVTOOLS_AXI_SESSION=<task> bash .agents/skills/verify-crewhouse/capture-marketing.sh <base> <EV>`
+  captures recruitment and the full plan at 390×844 and 1440×900, day and night, with geometry.
+  Read the PNGs and the command logs: any `error:` means that step was not proved.
+- For motion, launch that owned browser with `CHROME_DEVTOOLS_AXI_CHROME_ARGS=--remote-debugging-port=<free-port>`.
+  Run `node .agents/skills/verify-crewhouse/record.mjs http://127.0.0.1:<free-port> <base>/ <EV>/campaign-review.webm`.
+  Once it prints RECORDING, expand the campaign's More button with a stable eval query
+  and inspect its rectangle in that same eval. TERM the recorder after the action; its
+  30-second timer is only a safety bound. Require more than one captured/decoded frame.
+  Open every screenshot; retain geometry and file-delivery evidence. Never send or publish.
+- If the plain request does not load the skill, retain the engine trace and report it;
+  do not enlarge Chief's frozen base prompt or silently substitute an explicit skill ask.
+  Results tracking and native-phone changes are not part of this journey.
+
 ## Gotchas
 
 - The wrap line appears only after the helper's task settles — poll the helper's page, not just Chief's.

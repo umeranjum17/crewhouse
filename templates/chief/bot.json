@@ -5,7 +5,9 @@
     "chatgpt"
   ],
   "color": "#1F6F66",
+  "skills": ["run-a-marketing-campaign"],
   "tools": [
-    "crew"
+    "crew",
+    "files"
   ]
 }

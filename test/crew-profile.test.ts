@@ -2,6 +2,8 @@
 // in every helper's job context through the single prompt() path. Stub engine, no quota.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
 import { setup, settled } from './lab.ts';
 import * as disk from '../src/bots.ts';
@@ -52,6 +54,67 @@ test('chief, a built-in and an imported helper carry the record in the job conte
     assert.match(message, /agency founders/, `${bot} sees the audience`);
   }
   done();
+});
+
+test('marketing recruitment and assignments carry the bakery profile and Chief’s campaign skill', async () => {
+  const { crew, cfg, db, done } = setup();
+  cfg.port = 0; cfg.host = '127.0.0.1'; cfg.linkPort = 0;
+  const server = await startServer(cfg, db, crew);
+  const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  const api = async (path: string, body: object, method = 'POST') => {
+    const res = await fetch(base + path, { method, headers: { 'x-crewhouse': '1', 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    assert.equal(res.status, 200);
+    return res.json();
+  };
+  try {
+    await api('/api/onboard', { address: 'Umer' });
+    await api('/api/profile', { text: 'I run Morning Loaf bakery. My audience is local families. My voice is warm and plain.' }, 'PUT');
+    const request = await api('/api/bots/chief/messages', { text: 'help me market my bakery' });
+    await settled(db, request.task);
+    const spec = (crew.runtime as any).specOf(db.get('SELECT session FROM tasks WHERE id = ?', request.task)!.session);
+    assert.match(spec.system, /run-a-marketing-campaign/, 'a plain request presents the campaign skill to Chief');
+    assert.match(readFileSync(join(disk.botDir(cfg, 'chief'), 'skills/run-a-marketing-campaign/SKILL.md'), 'utf8'), /crew_recruit/);
+    // Script the model decisions, but exercise real HTTP, recruitment, queueing and profile injection.
+    const call = (name: string, input: object) => `[tool ${name} ${JSON.stringify(input)}]`;
+    const read = await api('/api/bots/chief/messages', { text: call('crew_read', { path: 'skills/run-a-marketing-campaign/SKILL.md' }) });
+    await settled(db, read.task);
+    assert.equal(db.all('SELECT * FROM asks WHERE task_id = ?', read.task).length, 0, 'Chief reads its own skill without asking');
+    const readCall = db.get("SELECT data FROM events WHERE kind = 'run.call' AND json_extract(data, '$.task') = ?", read.task)!;
+    assert.equal(JSON.parse(readCall.data).ok, true);
+    assert.match(JSON.parse(readCall.data).head, /---/);
+    for (const [name, input] of [['crew_write', { path: 'files/forbidden.md', content: 'No' }], ['crew_edit', { path: 'soul.md', old: '# Chief', new: '# Other' }], ['bash', { command: 'touch files/forbidden.md' }]] as const) {
+      const denied = await api('/api/bots/chief/messages', { text: call(name, input) });
+      await settled(db, denied.task);
+      const message = crew.botPage('chief').messages.find((m) => m.task_id === denied.task && m.author === 'bot')!;
+      assert.match(message.text, /does not have that tool/, `Chief has no ${name} grant`);
+    }
+    assert.equal(existsSync(join(disk.botDir(cfg, 'chief'), 'files/forbidden.md')), false);
+    assert.match(readFileSync(join(disk.botDir(cfg, 'chief'), 'soul.md'), 'utf8'), /# Chief/);
+    const recruits = await api('/api/bots/chief/messages', { text: ['scout', 'scribe', 'reel'].map((template) => call('crew_recruit', { template })).join(' ') });
+    await settled(db, recruits.task);
+    const parts = { scout: 'Research two local bakery campaign ideas with sources.', scribe: 'Write two bakery post drafts only.', reel: 'Make one bakery poster draft only.' };
+    const assigns = await api('/api/bots/chief/messages', { text: Object.entries(parts).map(([bot, task]) => call('crew_assign', { bot, task })).join(' ') });
+    await settled(db, assigns.task);
+    for (const [bot, body] of Object.entries(parts)) {
+      const task = db.get('SELECT * FROM tasks WHERE bot = ? AND body = ?', bot, body)!;
+      assert.ok(task, `${bot} has its campaign part`);
+      await settled(db, task.id);
+      assert.equal(db.get('SELECT state FROM tasks WHERE id = ?', task.id)!.state, 'done');
+      assert.match((crew.runtime as any).specOf(task.session).message, /Morning Loaf bakery/, `${bot} reads the shared profile`);
+    }
+    const outside = join(cfg.crewDir, 'outside-chief.txt');
+    writeFileSync(outside, 'Private fixture, never read without permission.');
+    const parked = await api('/api/bots/chief/messages', { text: call('crew_read', { path: outside }) });
+    await settled(db, parked.task);
+    const ask = db.get("SELECT * FROM asks WHERE task_id = ? AND state = 'open'", parked.task)!;
+    assert.ok(ask, 'a Chief read outside its folder still asks the person');
+    assert.equal(JSON.parse(ask.detail).effect, 'files');
+    assert.equal(db.get('SELECT state FROM tasks WHERE id = ?', parked.task)!.state, 'needs_you');
+    assert.equal(db.all("SELECT * FROM events WHERE kind = 'run.call' AND json_extract(data, '$.task') = ?", parked.task).length, 0, 'the unapproved outside read never executed');
+  } finally {
+    await new Promise<void>((r, reject) => server.close((e) => e ? reject(e) : r()));
+    done();
+  }
 });
 
 test('an empty record adds nothing; a full-length one stays inside a stated prompt budget', async () => {
