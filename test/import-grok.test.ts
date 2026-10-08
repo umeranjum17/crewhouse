@@ -36,7 +36,7 @@ test('Chief lists published categories and skills, proposes one, then imports af
     calls.push(String(url));
     const body = String(url).endsWith('/marketplace')
       ? `<script>self.__next_f.push(${JSON.stringify([1, `0:${JSON.stringify({ templates: [recipe(), ...Array.from({ length: 5 }, (_, i) => ({ ...recipe(), id: `seed-a91e4c-${i}`, name: `Design Helper ${i + 1}`, categories: ['Design', 'GTM', 'Marketing'] }))] })}\n`])})</script>`
-      : String(url).includes('api.github.com') ? JSON.stringify([{ name: 'test-skill', type: 'dir' }])
+      : String(url).endsWith('/marketplace.json') ? JSON.stringify({ plugins: [{ skills: ['./skills/test-skill', './skills/test-skill'] }] })
       : page(recipe());
     return new Response(body);
   }) as typeof fetch;
