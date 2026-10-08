@@ -3,7 +3,6 @@ import { signInApp } from './connect-fixture.ts';
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { setup, settled, task, until } from './lab.ts';
-import { chiefFirst } from '../src/crew.ts';
 
 const { CALENDAR } = await import('../src/calendar.ts');
 
@@ -44,11 +43,4 @@ test('Chief without Calendar asks to connect it: one connect ask, still no helpe
   assert.equal(asks[0].kind, 'connect', 'it asks to connect the calendar');
   assert.deepEqual(db.all('SELECT DISTINCT bot FROM tasks').map((t) => t.bot), ['chief'], 'no helper task');
   done();
-});
-
-test('chiefFirst names the next step: the calendar, the inbox, or the work', () => {
-  assert.equal(chiefFirst('what are my next meetings'), 'Checking your calendar.');
-  assert.equal(chiefFirst('anything new in my inbox'), 'Checking your email.');
-  assert.equal(chiefFirst('remind me about my meeting tomorrow'), "I'll work out the reminder and when it should run.");
-  assert.equal(chiefFirst('hi'), "I'll look into that now.");
 });

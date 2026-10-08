@@ -1099,6 +1099,62 @@ export function steps(events: Json[], task?: number, live = false): Step[] {
   return out;
 }
 
+// ---------- the live line: what the one answering is doing right now ----------
+/** One row of the live line: the step in plain words and when it began (client time, for the clock). */
+export type LiveStep = { text: string; at: number };
+export type LiveLine = { who: string; helper?: string; steps: LiveStep[]; since: number;
+  state: 'reading' | 'working' | 'needs' | 'waiting' | 'done' | 'failed' | 'unsure'; took?: number; count?: number };
+const OPEN = ['queued', 'working', 'needs_you', 'paused'];
+const END: Record<string, LiveLine['state']> = { 'task.done': 'done', 'task.failed': 'failed', 'task.unsure': 'unsure' };
+/** "8 s", "1 m 05 s": the clock beside the step, counting up from real crewd times. */
+export const took = (ms: number) => { const s = Math.max(0, Math.floor(ms / 1000)); return s < 60 ? `${s} s` : `${Math.floor(s / 60)} m ${String(s % 60).padStart(2, '0')} s`; };
+/** The newest job this thread waits on, from crewd's own events: its true steps, a clock, and how it ended. Chief's
+ *  thread also follows a job it passed to a helper, so a phone without the side column still sees the work. `sent` is a
+ *  send not yet answered by any job (the line then reads the message); `writing` maps a task whose reply is streaming
+ *  to when it began; `heard` are events pushed while the thread is open (they carry `seen`, the client time). */
+export function liveLine(o: { id: string; name: string; crew: { id: string; name: string }[]; tasks: Json[]; events: Json[];
+  heard: Json[]; sent?: number; writing: Map<number, number> }): LiveLine | null {
+  const evs = new Map<number, Json>();
+  for (const e of [...o.events, ...o.heard]) if (typeof e.seq === 'number') evs.set(e.seq, { ...evs.get(e.seq), ...e });
+  const all = [...evs.values()].sort((a, b) => a.seq - b.seq);
+  const when = (e: Json) => e.seen ?? at(e.at);
+  const mine = (bot: string, origin?: string) => bot === o.id || (o.id === 'chief' && origin === 'chief');
+  const tasks = new Map<number, Json>();
+  for (const t of o.tasks) if (mine(t.bot, t.origin)) tasks.set(t.id, t);
+  for (const e of all) if (e.kind === 'task.created' && mine(e.bot, e.data?.origin) && !tasks.has(e.data.task))
+    tasks.set(e.data.task, { id: e.data.task, bot: e.bot, origin: e.data.origin, state: 'queued', created_at: e.at });
+  const t = [...tasks.values()].sort((a, b) => b.id - a.id)[0];
+  const created = t && all.find((e) => e.kind === 'task.created' && e.data?.task === t.id);
+  if (o.sent && (!t || !created?.seen || created.seen < o.sent))
+    return { who: o.name, steps: [{ text: 'Reading your message', at: o.sent }], since: o.sent, state: 'reading' };
+  if (!t) return null;
+  const helper = t.bot !== o.id ? o.crew.find((c) => c.id === t.bot) : undefined;
+  const who = helper?.name ?? o.name;
+  const own = all.filter((e) => e.data?.task === t.id);
+  const start = created ? when(created) : at(t.created_at);
+  const steps: LiveStep[] = [{ text: helper ? `Passed to ${who}` : 'Starting on it', at: start }];
+  let state: LiveLine['state'] = OPEN.includes(t.state) ? (t.state === 'needs_you' ? 'needs' : t.state === 'paused' ? 'waiting' : 'working') : 'done';
+  let ended: Json | undefined;
+  for (const e of own) {
+    const text = e.kind === 'task.working' ? 'Working on it' : e.kind === 'task.paused' ? waitWords(e.data?.result)
+      : e.kind === 'ask.answered' ? 'Carrying on' : e.kind === 'ask.opened' ? 'Waiting for your OK' : e.kind in END || e.kind === 'task.created' ? null : step(e);
+    if (text && steps.at(-1)!.text !== text) steps.push({ text, at: when(e) });
+    if (e.kind === 'task.working' || e.kind === 'ask.answered') state = 'working';
+    if (e.kind === 'ask.opened') state = 'needs';
+    if (e.kind === 'task.paused') state = 'waiting';
+    if (e.kind in END) { state = END[e.kind]; ended = e; }
+  }
+  if (state === 'done' || state === 'failed' || state === 'unsure') {
+    // An end shows only when it happened while you watched; an old job is just its reply.
+    if (!ended?.seen) return null;
+    return { who, helper: helper?.id, steps: [], since: start, state, took: at(ended.at) - (created ? at(created.at) : at(t.created_at)),
+      count: own.filter((e) => e.kind === 'run.tool').length };
+  }
+  const writing = o.writing.get(t.id);
+  if (state === 'working' && writing) steps.push({ text: 'Writing the answer', at: writing });
+  return { who, helper: helper?.id, steps, since: start, state };
+}
+
 // ---------- a chat ----------
 /** Photos sent with a message ride in its text as `[photo <bot>] files/photos/…` lines: pictures, not words. */
 const PHOTO = /\n?\[photo ([a-z0-9-]+)\] (files\/\S+)/g;

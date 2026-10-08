@@ -1,4 +1,5 @@
 // The shared pieces: dot art, the ASCII moments, ask cards and the approval sheet, media, steps, the composer.
+import { createPortal } from 'react-dom';
 import { createElement, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { api, trouble, type Json } from './api.ts';
 import { draftOf, keepDraft, sent } from './draft.ts';
@@ -36,7 +37,7 @@ export function ChatText({ text }: { text: string }) {
 
 // ---------- toasts ----------
 const listeners = new Set<(m: string) => void>();
-/** A short line at the bottom of the screen: "Sent", "Connecting apps comes with the next update". */
+/** A short line at the foot of the screen: "Sent", "Connecting apps comes with the next update". */
 export const toast = (m: string) => listeners.forEach((l) => l(m));
 export function Toasts() {
   const [m, setM] = useState('');
@@ -46,7 +47,15 @@ export function Toasts() {
     listeners.add(l);
     return () => { listeners.delete(l); };
   }, []);
-  return m ? <div className="toast" role="status">{m}</div> : null;
+  return m ? <Toast>{m}</Toast> : null;
+}
+/** Every toast sits in one place, never over the words: just above the box you type in where the screen has one,
+ *  else in a bar along the foot of the screen, with room left below the page so its end clears the bar. */
+function Toast({ children }: { children: ReactNode }) {
+  const [, moved] = useState(0); // a toast still up when the screen changes moves to the new screen's place
+  useEffect(() => { const f = () => requestAnimationFrame(() => moved((n) => n + 1)); addEventListener('hashchange', f); return () => removeEventListener('hashchange', f); }, []);
+  const dock = Array.from(document.querySelectorAll<HTMLElement>('.dock')).find((d) => d.offsetParent);
+  return dock ? createPortal(<div className="toast" role="status">{children}</div>, dock) : <div className="toast foot" role="status">{children}</div>;
 }
 /** Run an action; a failure becomes a friendly toast, never a stack trace. `quiet` leaves the word to the caller —
  *  the composer, whose failed send keeps the words on screen with a Retry instead. */
@@ -269,7 +278,7 @@ export function Splash({ done: ready }: { done: boolean }) {
 /** A finished job, said once: a calm toast with a way in — never a full-screen party. Gone within 4 s. */
 export function Celebrate({ title, href, onDone }: { title: string; href: string; onDone: () => void }) {
   useEffect(() => { const x = setTimeout(onDone, 4000); return () => clearTimeout(x); }, [onDone]);
-  return <div className="toast celebrate-toast" role="status">✓ {title} · <a href={href} onClick={onDone}>Open</a></div>;
+  return <Toast>✓ {title} · <a href={href} onClick={onDone}>Open</a></Toast>;
 }
 
 // ---------- small things ----------

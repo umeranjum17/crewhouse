@@ -4,7 +4,8 @@
 // A tap opens his panel (src/panel.tsx), a long press opens it listening. On iPhone the kit is unsupported and every call is a no-op.
 // Write it here: the box the person is typing in is read once, on that tap, through Crewhouse's own accessibility
 // service (the crewhouse-net module) — never in the background, and never a password box (the kit skips those).
-import { overlay, stateWords, words, type OverlayState } from '@byokit/overlay';
+import { overlay, stateWords, words, type Edge, type OverlayState } from '@byokit/overlay';
+import { useEffect, useState } from 'react';
 import { focusedField } from '@byokit/overlay/focused-field';
 import * as SecureStore from 'expo-secure-store';
 import { Clipboard } from 'react-native';
@@ -38,6 +39,23 @@ export function showCrew(state: Json | null, offline = false) {
   overlay.setMood(`chief_${MOODS.has(mood) ? mood : 'idle'}`);
   if (n > needs && s) overlay.say(s.publicText, 'chief_ask', 4000);
   needs = n;
+}
+
+/** He sits over every app, this one too, flush to an edge, 56 dp wide (the kit's size): while he is on, this app's
+ *  screens keep that strip on his edge free, so no words of theirs are ever under him. Null while he is off. */
+export const BUBBLE_DP = 56;
+const EDGE = 'crewhouse.bubble.edge';
+export function useBubbleEdge(): Edge | null {
+  const [on, setOn] = useState(false);
+  const [edge, setEdge] = useState<Edge>('right');
+  useEffect(() => {
+    void overlay.state().then((st) => setOn(st === 'on'), () => {});
+    void SecureStore.getItemAsync(EDGE).then((e) => { if (e === 'left') setEdge('left'); }, () => {});
+    const offState = overlay.on('state', (e) => setOn(e.state === 'on'));
+    const offMoved = overlay.on('moved', (e) => { setEdge(e.edge); void SecureStore.setItemAsync(EDGE, e.edge).catch(() => {}); });
+    return () => { offState(); offMoved(); };
+  }, []);
+  return on ? edge : null;
 }
 
 let release: (() => void) | null = null;
