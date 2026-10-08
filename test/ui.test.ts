@@ -103,6 +103,7 @@ test('nothing technical survives the adapter', () => {
     crew: A.crew(state), chief: A.chief(state), cards: A.cards(state), work: A.work(state), things: A.things(state), ideas: A.ideas(state),
     steps: A.steps(page.trail, undefined, true), lines: A.lines(page, 'reel'), memories: A.memories(page.notes), personality: A.personality(page.soul), knows: A.knows(page.skills), routines: A.routines(state), gallery: A.gallery(state),
     resting: A.resting(state), apps: A.apps(state), chatgpt: { ...h, signing: { code: h.signing?.code } },
+    profile: A.profileParts('I run a bakery. See files/plan and `make` with sonnet about it.'),
   };
   for (const [name, v] of Object.entries(views)) assert.doesNotMatch(shown(v), FORBIDDEN, name);
   const jobView = A.jobParts({ does: 'Compare prices.', aim: 'Find a fair option.', gets: 'The person’s budget.', how: 'Check two sources.', great: 'A sourced comparison with totals.', prompt: 'You are Quill. Read /home/alex/private/AGENTS.md' });
@@ -114,6 +115,8 @@ test('nothing technical survives the adapter', () => {
   assert.deepEqual(A.aboutTraits('Reel', aboutSoul), ['Upbeat and practical', 'Loves a tidy thirty seconds'], 'the family reads traits, not instructions');
   assert.ok(!/\byou\b/i.test(A.aboutDraft('Reel', page.soul)), 'no second-person prompt text reaches the family');
   assert.equal(A.withoutMemory(A.withMemory('- One\n', 'Two'), 0), '- Two\n');
+  assert.equal(A.profileText(A.profileParts('I run a bakery. My audience is local families.')), 'I run a bakery. My audience is local families.', 'the record reads back as Chief left it');
+  assert.deepEqual(A.profileParts('Warm and plain, no closing mark'), ['Warm and plain, no closing mark'], 'a trailing fragment is a part of its own');
 });
 
 test('the account list is the one crewd really serves: every route, none made up', () => {
@@ -896,6 +899,7 @@ test('no jargon anywhere: the machinery\'s words never reach a person', () => {
     push: A.pushWords(linkView), typed: A.phoneTyped({ short: 'K7M2QX', code: '7KQ4-M2XP-9RTH', relay: 'https://go.example.com' }),
     anywhere: A.anywhere(linkView), away: A.away({ tailnet: true, vpn: true, knock: 'timeout', reached: { tailscale: now - 3.6e6 } }),
     status: A.status(state), crewLine: A.crewLine(state),
+    profile: A.profileParts('I run a bakery for local families. My business is called Morning Loaf.'),
     bubble: [null, 'off' as const, { text: 'Friday 3pm www.x.top order', picked: '' }, { text: 'a', picked: 'a' }].flatMap((box) => A.quick({ ...state, connections: [] }, { box })).map(({ label, ask }) => ({ label, ask })),
     canned: [A.canned(state, 'status'), A.canned(state, 'details', '- Vegetarian at home'), A.secretOf('PIN 1234'), A.secretOf('www.x.top')],
   };

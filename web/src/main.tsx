@@ -891,6 +891,49 @@ function AboutYou({ tick }: { tick: number }) {
   );
 }
 
+/** About me and my work: what your helpers know about you and your work. Every helper reads it before a
+ *  job for you; each sentence is its own part to change or forget, with a line to add one. The next job
+ *  already reads what you save here. */
+function AboutWork({ tick }: { tick: number }) {
+  const [got, setGot] = useState<{ text: string; cap: number } | null>(null);
+  const load = useCallback(() => api.profile().then((p) => setGot({ text: p.text ?? '', cap: p.cap ?? 4000 })).catch(() => {}), []);
+  useEffect(() => { void load(); }, [load, tick]);
+  const [editing, setEditing] = useState<number | null>(null);
+  const [draft, setDraft] = useState('');
+  const [adding, setAdding] = useState('');
+  if (got === null) return null;
+  const parts = A.profileParts(got.text);
+  const save = (next: string[], ok: string) => attempt(async () => { await api.setProfile(A.profileText(next)); await load(); setEditing(null); setDraft(''); setAdding(''); }, ok);
+  const left = got.cap - A.profileText(editing === null ? [...parts, adding] : parts.map((p, i) => (i === editing ? draft : p))).length;
+  const over = left < 0;
+  const hint = over ? 'A little shorter, please.' : left < 300 ? 'Nearly full.' : '';
+  return (
+    <>
+      <div className="label">About me and my work</div>
+      <p className="mute small">What your helpers know about you and your work. Every helper reads it before a job for you.</p>
+      {parts.length ? <div className="card list profile-parts">{parts.map((p, i) => editing === i ? (
+        <div key={i} className="row-item profile-part"><span className="grow">
+          <textarea className="input profile-edit" rows={3} value={draft} onChange={(e) => setDraft(e.target.value)} aria-label="This part in your words" autoFocus />
+          {!!hint && <div className={`small ${over ? 'bad' : 'mute'}`}>{hint}</div>}
+          <div className="btns">
+            <button className="btn go" disabled={!draft.trim() || over} onClick={() => save(parts.map((q, j) => (j === i ? draft : q)), 'Saved')}>Save</button>
+            <button className="btn ghost" onClick={() => { setEditing(null); setDraft(''); }}>Cancel</button>
+          </div></span></div>
+      ) : (
+        <div key={i} className="row-item profile-part"><span className="grow">{p}</span>
+          <button className="link" onClick={() => { setDraft(p); setEditing(i); }}>Change</button>
+          <button className="link" onClick={() => save(parts.filter((_, j) => j !== i), 'Forgotten')}>Forget</button></div>
+      ))}</div>
+        : editing === null ? <div className="card empty">Nothing yet. Tell Chief about yourself and your work, and the whole crew will know.</div> : null}
+      <div className="row add-row"><input className="input grow profile-add" value={adding} onChange={(e) => setAdding(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter' && adding.trim() && !over) void save([...parts, adding], 'Remembered'); }}
+        placeholder="Something about you or your work" aria-label="Something about you or your work" />
+        <button className="btn" disabled={!adding.trim() || over} onClick={() => save([...parts, adding], 'Remembered')}>Add</button></div>
+      {!!(adding.trim() && hint && editing === null) && <div className={`small ${over ? 'bad' : 'mute'}`}>{hint}</div>}
+    </>
+  );
+}
+
 // ---------- things ----------
 function Things({ state, id }: Ctx & { id?: string }) {
   const list = A.things(state);
@@ -1108,6 +1151,7 @@ function Settings({ state, refresh, tick, accounts, look, setLook }: Ctx & { loo
       <div className="label">You</div>
       <You state={state} act={act} plan={A.planName(accounts)} />
       <AboutYou tick={tick} />
+      <AboutWork tick={tick} />
 
       <div className="label" id="setup-signin">Your AI accounts</div>
       <AiAccounts accounts={accounts} refresh={refresh} signIn={(ai) => setSigning({ ai, tab: openTab() })} />

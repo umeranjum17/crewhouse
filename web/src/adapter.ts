@@ -1186,6 +1186,12 @@ export function withoutMemory(notes = '', i: number) {
   return notes.split('\n').filter((l) => { if (!l.replace(/^[-*]\s*/, '').trim() || l.trim().startsWith('#')) return true; n++; return n !== i; }).join('\n');
 }
 
+/** About me and my work, one editable part per sentence: Chief's merged record of the person and their
+ *  work, read as plain sentences. A trailing fragment without its closing mark is a part of its own. */
+export const profileParts = (text = '') => text.split(/(?<=[.!?…])\s+/).map((p) => plain(p.trim())).filter(Boolean);
+/** The record with its parts changed, forgotten or added to: one space between sentences. */
+export const profileText = (parts: string[]) => parts.map((p) => p.trim().replace(/\s+/g, ' ')).filter(Boolean).join(' ');
+
 /** Who a helper is, as plain lines: its own name heading dropped, section headings and bullets read as sentences. */
 export const personality = (soul = '') => soul.split('\n').slice(soul.startsWith('# ') ? 1 : 0)
   .map((l) => l.replace(/^#+\s*/, '').replace(/^[-*]\s*/, '').trim()).filter(Boolean).map(plain);
