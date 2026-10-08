@@ -115,7 +115,7 @@ test('the CTO sees terminal agents read-only and every drive asks, naming its pa
     await crew.answer(openAsk(db).id, { answer: 'allow' });
     await settled(db, drive);
     const ran = db.get("SELECT * FROM events WHERE kind = 'run.call' AND json_extract(data, '$.tool') = 'herdr' AND json_extract(data, '$.task') = ?", drive)!;
-    assert.deepEqual(JSON.parse(JSON.parse(ran.data).input).args, driveArgs, 'the approved argv is what ran');
+    assert.deepEqual(JSON.parse(JSON.parse(ran.data).input).input.args, driveArgs, 'the approved argv is what ran');
     assert.match(JSON.parse(ran.data).head, /herdr said: agent prompt reviewer echo harmless/, 'allowed, the drive ran');
     assert.equal(task(db, drive).state, 'unsure', 'an unconfirmed drive ends unsure, never done');
     const conf = registry(cfg).find((t) => t.id === 'herdr')!;
@@ -126,12 +126,17 @@ test('the CTO sees terminal agents read-only and every drive asks, naming its pa
       assert.equal(e.kind, 'send');
       if (e.kind !== 'send') throw new Error('drive must ask');
       assert.deepEqual(JSON.parse(e.preview!.body), args);
+      assert.equal(e.words, `CTO wants to drive your terminal agents: ${e.preview!.body}.`);
       const other = effectOf('herdr', { args: [...args.slice(0, 3), payload + 'different', ...args.slice(4)] }, seen);
       assert.notEqual(e.words, 'words' in other ? other.words : undefined);
       const split = effectOf('herdr', { args: [...args.slice(0, 4), '--flag two  spaces'] }, seen);
       assert.notEqual(e.words, 'words' in split ? split.words : undefined);
       const view = card({ id: 999, bot: 'cto', kind: 'permission', at: 0, detail: { effect: e.kind, words: e.words, preview: e.preview } }, crew.snapshot());
       assert.deepEqual(JSON.parse(view.preview!.body), args, 'the card preserves the exact arguments, including controls and command text');
+      assert.equal(view.words, e.words, 'the approval identity is also shown without scrubbing');
+      assert.equal(view.status, 'Needs your OK');
+      assert.equal(view.head, 'CTO would like your OK');
+      assert.deepEqual(view.choices.map((c) => c.label), ['Yes, go ahead', 'Not now']);
     }
     assert.equal(effectOf('herdr', { args: ['agent', 'start', 'new'] }, seen).kind, 'refuse');
     assert.equal(effectOf('herdr', { args: ['pane run', 'reviewer', payload] }, seen).kind, 'refuse');

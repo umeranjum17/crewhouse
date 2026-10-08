@@ -711,7 +711,7 @@ export function card(a: Json, state: Json): Card {
       words: d.question ? plain(d.question) : `${name} stopped to check something with you. Tell ${name} what to do:`, choices: [] };
   }
   const spend = !!d.spends || d.effect === 'spend';
-  const words = d.words ? plain(d.words) : spend ? `${name} wants to use something that costs money. Is that all right?` : `${name} would like your OK to carry on.`;
+  const words = d.words ? (d.preview?.verbatim ? String(d.words) : plain(d.words)) : spend ? `${name} wants to use something that costs money. Is that all right?` : `${name} would like your OK to carry on.`;
   // A checkout is review-first: the inbox only opens the review and offers the way out; the sheet's yes names the order.
   // With no readable total there is no yes at all — the person finishes that purchase themselves.
   const order = d.order as Card['order'] | undefined;
@@ -728,14 +728,15 @@ export function card(a: Json, state: Json): Card {
   const press = d.effect === 'send' && d.press === true;
   const fill = press && d.fill === true;
   const fillLines = String(d.preview?.body ?? '').split('\n').filter(Boolean).length;
-  const choices: Choice[] = [{ label: spend ? 'OK, spend it' : fill ? (fillLines > 1 ? 'Yes, fill these in' : 'Yes, fill it in') : press ? 'Yes, press it' : d.effect === 'send' ? 'Send' : 'Yes, go ahead', body: { answer: 'allow', scope: 'once' }, primary: true }];
+  const message = d.effect === 'send' && !d.preview?.verbatim;
+  const choices: Choice[] = [{ label: spend ? 'OK, spend it' : fill ? (fillLines > 1 ? 'Yes, fill these in' : 'Yes, fill it in') : press ? 'Yes, press it' : message ? 'Send' : 'Yes, go ahead', body: { answer: 'allow', scope: 'once' }, primary: true }];
   // "Always" is a relationship ("Always OK for Aunty Sara"), and money never gets one.
   if (!spend && (d.always || d.rule)) choices.push({ label: `Always OK for ${d.always ?? name}`, body: { answer: 'allow', scope: 'always' } });
   choices.push({ label: 'Not now', body: { answer: 'deny' } });
   return {
-    ...base, kind: spend ? 'spend' : 'ok', status: spend ? 'Wants to spend money' : fill ? 'Wants to fill in a form' : press ? 'Wants to press a button' : d.effect === 'send' ? 'Wants to send an email' : 'Needs your OK',
+    ...base, kind: spend ? 'spend' : 'ok', status: spend ? 'Wants to spend money' : fill ? 'Wants to fill in a form' : press ? 'Wants to press a button' : message ? 'Wants to send an email' : 'Needs your OK',
     evidence: fill ? 'lines' : undefined, words, choices, question,
-    head: spend ? `${name} needs your OK to spend` : press ? `${name} wants to act on a site` : d.effect === 'send' ? `${name}'s ${d.thing ?? 'message'} is ready to send` : `${name} would like your OK`,
+    head: spend ? `${name} needs your OK to spend` : press ? `${name} wants to act on a site` : message ? `${name}'s ${d.thing ?? 'message'} is ready to send` : `${name} would like your OK`,
     preview: d.preview ? { head: d.preview.head ? plain(d.preview.head) : undefined, body: d.preview.verbatim ? String(d.preview.body ?? '') : plain(d.preview.body ?? '') } : undefined,
   };
 }
