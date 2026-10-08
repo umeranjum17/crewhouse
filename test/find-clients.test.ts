@@ -21,6 +21,7 @@ function fakeTreg(root: string) {
   const log = join(root, 'treg.log');
   writeFileSync(join(bin, 'treg'), `#!/bin/sh\necho "$@" >> "${log}"\ncase "$1" in\n`
     + `  catalog) echo "treg.people.email.find 0.05 per verified work email" ;;\n`
+    + `  balance) echo '{"balance_usd":"1.00"}' ;;\n`
     + `  call) echo '{"full_name":"Ada Whitfield","email":"${EMAIL}","verified":"valid"}' ;;\n`
     + `  *) echo "error: refused" ;;\nesac\n`, { mode: 0o755 });
   return { log, path: `${bin}:${process.env.PATH}` };
@@ -30,22 +31,24 @@ const companies = [
   ['Fernwood Joinery', 'fernwood.example', 'restored the town hall roof in 2025', 'https://fernwood.example/projects/town-hall'],
   ['Bramble & Co', 'bramble.example', 'runs a two-day furnituremaking course each spring', 'https://bramble.example/courses'],
 ];
+const openers = [
+  'Saw Fernwood restored the town hall roof in 2025 — is worktop work on that scale on your horizon?',
+  'Bramble runs a two-day furnituremaking course each spring — do your course kitchens need new worktops?',
+];
 const people = (email: string | null) => companies.map(([c, d], n) => [
   c, n ? 'Head of buying' : 'Founder', n ? 'Sam Idowu' : 'Ada Whitfield', email ?? 'not looked up', email ? 'valid' : '',
-  email ? 'treg.people.email.find' : 'not looked up', email ? '0.05' : '0',
+  openers[n], email ? 'treg.people.email.find' : 'not looked up', email ? '0.05' : '0',
 ]);
 
-/** The workbook the job hands back: four sheets, and every company row carrying where it came from. */
-const book = (email: string | null, total: string) => ({ name: 'Who to contact', sheets: [
+/** The workbook the job hands back: three sheets, and every company row carrying where it came from. */
+const book = (email: string | null) => ({ name: 'Who to contact', sheets: [
   { name: 'Segments', columns: [{ header: 'Segment' }, { header: 'Why it is the best fit' }, { header: 'Source' }],
     rows: [['Independent joiners and furniture makers in the north', 'They buy fittings in small batches and shop locally',
       'https://trade.example/north-joinery-2026']] },
   { name: 'Companies', columns: [{ header: 'Company' }, { header: 'Site' }, { header: 'The fact that makes it a fit' }, { header: 'Source' }],
     rows: companies },
   { name: 'People', columns: [{ header: 'Company' }, { header: 'Role' }, { header: 'Name' }, { header: 'Work email' },
-    { header: 'Verified' }, { header: 'Where it came from' }, { header: 'Cost' }], rows: people(email) },
-  { name: 'What it cost', columns: [{ header: 'Lookup' }, { header: 'Cost' }, { header: 'Total spent' }, { header: 'Declined' }],
-    rows: [['treg.people.email.find (Ada Whitfield)', '0.05', total, email ? '0' : '1'], ['Catalog price read', '0', total, email ? '0' : '1']] },
+    { header: 'Verified' }, { header: 'Personal opener' }, { header: 'Where it came from' }, { header: 'Cost' }], rows: people(email) },
 ] });
 
 const EMAIL_TEXT = 'Hi Ada,\n\nI saw Fernwood restored the town hall roof this year — that kind of joinery is why I thought of you.\n\nDo you have 15 minutes on Thursday?\n\nUmer';
@@ -88,11 +91,14 @@ test('the job asks before every paid lookup, runs it only after the yes, and han
       'call', 'treg.people.email.find', '--header', 'X-Treg-Route-Max-Cost: 0.05', '--method', 'POST',
       '--data', JSON.stringify({ full_name: name, domain: 'fernwood.example' })] } });
     const { task: t } = (await crew.post('tracer', 'My site is fernwood.example, I make oak worktops for kitchens. Find me clients. '
+      + call('crew_app', { tool: 'people_search', input: { args: ['balance'] } })
       + call('crew_app', { tool: 'people_search', input: { args: ['catalog', 'search', 'work email founder'] } })
       + paid('Ada Whitfield')
-      + call('crew_workbook', book(EMAIL, '0.05'))
+      + call('crew_workbook', book(EMAIL))
       + call('crew_write', { path: 'files/fernwood-ada.md', content: EMAIL_TEXT })
       + call('crew_draft', { path: 'files/fernwood-ada.md', channel: 'email', to: EMAIL, subject: 'The town hall roof' })
+      + call('crew_app', { tool: 'people_search', input: { args: ['balance'] } })
+      + call('crew_outcome', { worked: true, seen: 'The treg lookup returned ada@fernwood.example, verified valid; the workbook and the one draft email are delivered, unsent.' })
       + ' ask permission: done'))!;
 
     // The catalog read is free; the paid lookup stops on a card, and nothing has been spent while it waits.
@@ -112,20 +118,23 @@ test('the job asks before every paid lookup, runs it only after the yes, and han
     await crew.answer(ask.id, { answer: 'allow' });
     await holding(crew, 'tracer');
     assert.match(spent(root(), treg.log), /call treg\.people\.email\.find .*X-Treg-Route-Max-Cost: 0\.05/, 'the yes runs exactly that call');
-    await release(crew, 'tracer', 'Fernwood is first: they restored the town hall roof this year. Here is your workbook and the one email, unsent.');
+    await release(crew, 'tracer', 'Fernwood is first: they restored the town hall roof this year. Here is your workbook and the one email, unsent. '
+      + 'Total spent $0.05. I checked trade directories and company sites; I did not check social profiles.');
     await settled(db, t);
 
-    // The workbook is the deliverable: every company row carries where it came from.
+    // The workbook is the deliverable: three sheets, and every company row carries where it came from.
     const delivered = db.all("SELECT data FROM events WHERE kind = 'file.delivered'").map((e: any) => JSON.parse(e.data));
     assert.equal(delivered.length, 1, 'one file, the workbook');
     const view: any = await crew.workbookView('tracer', delivered[0].path);
-    assert.deepEqual(view.sheets.map((s: any) => s.name), ['Segments', 'Companies', 'People', 'What it cost']);
+    assert.deepEqual(view.sheets.map((s: any) => s.name), ['Segments', 'Companies', 'People']);
     const rows = view.sheets.map((s: any) => s.rows);
     for (const row of rows[1].slice(1)) assert.ok(String(row[3]).startsWith('http'), `every company row carries a source: ${row[0]}`);
     assert.ok(rows[0].slice(1).every((r: any) => String(r[2]).startsWith('http')), 'the best segment carries its source too');
     assert.deepEqual(rows[2][1][3], EMAIL, 'the verified address is the one the lookup returned');
-    assert.equal(rows[3][rows[3].length - 1][2], '0.05', 'and the real total spent is on the sheet');
-    for (const row of rows[2].slice(1)) assert.match(String(row[5]), /^treg|^not looked up$/, 'each row says where its address came from');
+    assert.match(String(rows[2][1][5]), /town hall roof/, 'the opener quotes that row’s sourced fact');
+    assert.match(String(rows[2][2][5]), /furnituremaking course/, 'every opener is grounded in its own row');
+    for (const row of rows[2].slice(1)) assert.match(String(row[6]), /^treg|^not looked up$/, 'each row says where its address came from');
+    assert.equal(rows[2][1][7], '0.05', 'and each row carries the real cost of its lookup');
 
     // Exactly one draft card, still waiting on them; nothing was sent anywhere.
     const drafts = crew.snapshot().asks.filter((a: any) => a.kind === 'propose' && a.detail.draft);
@@ -138,6 +147,8 @@ test('the job asks before every paid lookup, runs it only after the yes, and han
     assert.ok(!tools.includes('mail'), 'the mail tool was never touched');
     assert.ok(!tools.some((x: string) => /send|mail|smtp/i.test(x)), `nothing sends: ${tools.join(', ')}`);
     assert.equal(db.get("SELECT COUNT(*) AS n FROM events WHERE kind = 'money.spent'")!.n, 1, 'one yes, one charge');
+    assert.match(lastSaid(db, 'tracer')!, /Total spent \$0\.05/, 'the closing line carries the real total spent');
+    assert.match(lastSaid(db, 'tracer')!, /did not check/, 'and says what was not checked');
   } finally { restore(); done(); }
 });
 
@@ -145,29 +156,38 @@ test('a person who says no to the lookup gets the workbook anyway, with no inven
   const { cfg, db, crew, done, treg, restore } = setup();
   try {
     const { task: t } = (await crew.post('tracer', 'I sell handmade soap in Leeds. Find me clients, but I do not want to pay for lookups. '
+      + call('crew_app', { tool: 'people_search', input: { args: ['balance'] } })
       + call('crew_app', { tool: 'people_search', input: { args: ['call', 'treg.people.email.find', '--header', 'X-Treg-Route-Max-Cost: 0.05',
         '--method', 'POST', '--data', '{"full_name":"Ada Whitfield","domain":"fernwood.example"}'] } })
-      + call('crew_workbook', book(null, '0'))
+      + call('crew_workbook', book(null))
       + call('crew_write', { path: 'files/soap-list.md', content: 'Ten soap shops near Leeds, with the source for each.' })
       + call('crew_draft', { path: 'files/soap-list.md', channel: 'email', to: 'hello@fernwood.example', subject: 'Your oak worktops' })
+      + call('crew_app', { tool: 'people_search', input: { args: ['balance'] } })
       + ' ask permission: done'))!;
     await until('the lookup card', () => db.get("SELECT * FROM asks WHERE bot = 'tracer' AND state = 'open'"));
     const ask = db.get("SELECT * FROM asks WHERE bot = 'tracer' AND state = 'open'")!;
     await crew.answer(ask.id, { answer: 'deny' });
     await holding(crew, 'tracer');
     assert.doesNotMatch(spent(root(), treg.log), /call/, 'the lookup never ran, so nothing was charged');
-    await release(crew, 'tracer', 'No problem — I used the open sources only. Ten shops with the source for each, and no email I could not verify.');
+    await release(crew, 'tracer', 'No problem — I used the open sources only. Ten shops with the source for each, and no email I could not verify. '
+      + 'Total spent $0. I checked trade directories and company sites; I did not check social profiles. '
+      + 'One caution: several of these shops look like one-person businesses, which count as individuals under the email rules — '
+      + 'do not email them without their permission.');
     await settled(db, t);
 
     const delivered = db.all("SELECT data FROM events WHERE kind = 'file.delivered'").map((e: any) => JSON.parse(e.data));
     const view: any = await crew.workbookView('tracer', delivered[0].path);
+    assert.deepEqual(view.sheets.map((s: any) => s.name), ['Segments', 'Companies', 'People']);
     const rows = view.sheets[2].rows.slice(1);
     assert.ok(rows.every((r: any) => r[3] === 'not looked up'), 'no email is invented for a lookup they said no to');
     assert.ok(rows.every((r: any) => !String(r[3]).includes('@')), 'not one address on the sheet');
+    assert.ok(rows.every((r: any) => r[7] === '0'), 'every declined row costs nothing');
+    assert.match(String(rows[0][5]), /town hall roof/, 'the opener still quotes the free fact, even with no email');
     for (const row of view.sheets[1].rows.slice(1)) assert.ok(String(row[3]).startsWith('http'), 'the companies still carry their sources');
-    assert.equal(view.sheets[3].rows[1][2], '0', 'and the sheet says the real total: nothing');
     assert.equal(db.get("SELECT COUNT(*) AS n FROM events WHERE kind = 'money.spent'")!.n, 0, 'a no spends nothing');
     assert.match(lastSaid(db, 'tracer')!, /open sources only/, 'the job says it went on without the paid lookup');
+    assert.match(lastSaid(db, 'tracer')!, /Total spent \$0/, 'the closing line says the real total: nothing');
+    assert.match(lastSaid(db, 'tracer')!, /one-person businesses/, 'and carries the sole-trader caution');
     const drafts = crew.snapshot().asks.filter((a: any) => a.kind === 'propose' && a.detail.draft);
     assert.equal(drafts.length, 1, 'one draft card, still theirs to send');
     assert.equal(drafts[0].state, 'open');
