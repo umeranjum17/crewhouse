@@ -544,7 +544,7 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
     if (around) return;
     const el = box.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [lines.length, around, !!echoed, ln?.state, ln?.steps.length, partial]);
+  }, [lines.length, around, !!echoed, ln?.state, ln?.todos.length, partial]);
   // The landing itself: the matched line, centred, with the one motion that explains where you are.
   useEffect(() => {
     if (!around || !lines.length) return;
@@ -630,20 +630,24 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
 
 const LIVE_WORD: Record<A.LiveLine['state'], string> = { reading: 'On it', working: 'At work', needs: 'Needs you', waiting: 'Waiting',
   done: 'Done', failed: "Didn't finish", unsure: 'Not sure it worked' };
-/** The live line under a thread: who is on it, a clock counting up, and the last few true steps; at the end, one quiet
- *  line with how long it took. A job passed to a helper links to that helper's chat. */
+/** The live line under a thread: who is on it, a clock counting up, and the job as a to-do list — done, doing, still
+ *  to do — with the small tool calls kept behind the expand. At the end, one quiet line with how long it took.
+ *  A job passed to a helper links to that helper's chat. */
+const TICK: Record<A.LiveTodo['state'], string> = { done: '✓', doing: '◐', todo: '○' };
 function LiveRow({ ln }: { ln: A.LiveLine }) {
   const link = ln.helper && <a className="link" href={`#/h/${ln.helper}`}>Open {ln.who}'s chat ›</a>;
   if (ln.took !== undefined) return <div className={`live-end ${ln.state}`} role="status">
     <span>{ln.helper ? `${ln.who} · ` : ''}{LIVE_WORD[ln.state]}</span><span className="time">{A.took(ln.took)}</span>
     {!!ln.count && <span>{ln.count} {ln.count === 1 ? 'step' : 'steps'}</span>}{link}</div>;
-  const last = ln.steps.at(-1)!;
+  const doing = ln.todos.find((x) => x.state === 'doing');
   return <div className={`line them live-line ${ln.state}`}>
     <div className="line-by"><span className="who">{ln.who}</span></div>
     <div className="live-body">
       <div className="live-head"><span className="live-word"><i aria-hidden />{LIVE_WORD[ln.state]}</span><span className="time" aria-hidden>{A.took(Date.now() - ln.since)}</span>{link}</div>
-      <ol className="live-steps" aria-live="polite">{ln.steps.slice(-4).map((s) => <li key={`${s.at}-${s.text}`} className={s === last ? 'now' : ''}>
-        <time className="time">{A.clock(s.at)}</time><span>{s.text}{s === last && Date.now() - s.at > 20_000 && <span className="mute"> · still on it</span>}</span></li>)}</ol>
+      <ol className="live-todos" aria-live="polite">{ln.todos.map((s) => <li key={`${s.at}-${s.text}`} className={s.state}>
+        <span className="tick" aria-hidden>{TICK[s.state]}</span><span>{s.text}{s === doing && Date.now() - s.at > 20_000 && <span className="mute"> · still on it</span>}</span></li>)}</ol>
+      {!!ln.detail.length && <details className="live-detail"><summary>Show the small steps ({ln.detail.length})</summary>
+        <ol>{ln.detail.map((s) => <li key={`${s.at}-${s.text}`}><time className="time">{A.clock(s.at)}</time><span>{s.text}</span></li>)}</ol></details>}
     </div>
   </div>;
 }

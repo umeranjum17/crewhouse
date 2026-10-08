@@ -756,7 +756,7 @@ details.card[open] > summary { margin-bottom: 10px; }
 .chat-intro .halo { padding: 14px; margin-bottom: 8px; animation: pop 320ms var(--ease) both; }
 .chat-intro b { font: 650 20px/26px var(--ui); letter-spacing: -.015em; }
 .chat-intro span:last-child { color: var(--ink2); font-size: 14px; line-height: 1.45; max-width: 36ch; }
-/* The live line (board: "What Penny is doing"): a word and a clock, then the last true steps with their times. */
+/* The live line (board: "What Penny is doing"): a word and a clock, then the job as a to-do list, the small steps behind the expand. */
 .live-body { display: grid; gap: 6px; padding-top: 1px; }
 .live-head { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; font: 600 13px/18px var(--ui); }
 .live-word { display: inline-flex; align-items: center; gap: 6px; color: var(--ok-ink); }
@@ -764,11 +764,16 @@ details.card[open] > summary { margin-bottom: 10px; }
 .live-line.needs .live-word, .live-line.reading .live-word { color: var(--pink-ink); }
 .live-line.waiting .live-word { color: var(--mute); }
 .live-head .link { font-weight: 500; }
-.live-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
-.live-steps li { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 8px; font: 400 14px/20px var(--ui); color: var(--ink2); overflow-wrap: anywhere; }
-.live-steps li .time { padding-top: 1px; }
-.live-steps li.now { color: var(--ink); }
-.live-line.working .live-steps li.now > span:first-of-type { color: var(--ok-ink); }
+.live-todos { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.live-todos li { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 4px; font: 400 14px/20px var(--ui); color: var(--ink2); overflow-wrap: anywhere; }
+.live-todos li .tick { color: var(--mute); }
+.live-todos li.done .tick { color: var(--ok-ink); }
+.live-todos li.doing { color: var(--ink); }
+.live-line.working .live-todos li.doing .tick { color: var(--ok-ink); }
+.live-todos li.todo { color: var(--mute); }
+.live-detail summary { font: 500 13px/18px var(--ui); color: var(--mute); cursor: pointer; }
+.live-detail ol { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 4px; }
+.live-detail li { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 8px; font: 400 13px/18px var(--ui); color: var(--mute); overflow-wrap: anywhere; }
 .live-end { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; max-width: 640px; margin: 10px 0 0; padding-left: 74px; font: 500 13px/18px var(--ui); color: var(--mute); }
 .live-end.failed, .live-end.unsure { color: var(--amber); }
 .streaming .chat-md > :last-child::after { content: ''; display: inline-block; width: .45em; height: 1.05em; margin-left: 3px; vertical-align: -.18em; border-radius: 2px; background: var(--pink); animation: caret 1s steps(1) infinite; }
