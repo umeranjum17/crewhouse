@@ -16,7 +16,7 @@ isolated crewd on the stub engine.
 
 | ID | File | What it proves |
 |----|------|----------------|
-| onboard-chief-chat | [onboard-chief-chat.md](onboard-chief-chat.md) | Hello screen, onboarding, Chief's first greeting and chat replies |
+| onboard-chief-chat | [onboard-chief-chat.md](onboard-chief-chat.md) | Hello screen, onboarding, Chief's greeting/chat, and shared profile facts with a plain saved note |
 | recruit-assign | [recruit-assign.md](recruit-assign.md) | Chief recruits or proposes a custom helper with a five-part job, one yes hires it; assignment and wrap-up |
 | office-layout | [office-layout.md](office-layout.md) | The Office view's counts and labels at desktop, phone and narrow widths |
 | bubble-write-it-here | [bubble-write-it-here.md](bubble-write-it-here.md) | On the release APK: Chief's bubble over another app's box, Write it here, and the action it offers (Copy or Put it in) |

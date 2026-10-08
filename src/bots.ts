@@ -283,8 +283,6 @@ export function writeNotes(cfg: Config, m: Memory, text: string) {
 }
 
 // ---- profile: "About me and my work", one record per install, in every helper's job context ----
-// The cap is the stated prompt limit: Chief's ~10k-char first-turn prompt plus a full record stays
-// inside the measured prompt sizes (scripts/measure-firstwords.mjs), so the prompt carries it whole.
 export const PROFILE_CAP = 4000;
 const profilePath = (cfg: Config) => join(personDir(cfg), 'profile.md');
 export const readProfile = (cfg: Config) => readText(profilePath(cfg));

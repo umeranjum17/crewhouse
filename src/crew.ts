@@ -1263,13 +1263,11 @@ export class Crew {
     const decisions = decided.length ? `\n[Crewhouse] What ${who} already decided on drafts: ${decided.join('; ')}.` : '';
     const last = said ? `[Crewhouse] Your last message in this chat, which this may answer: “${short(said, 800)}”\n` : '';
     if (task.bot !== CHIEF) return `${this.memory(task.bot)}${last}[Crewhouse task #${task.id} from ${routine ? `the routine “${routine}”, set up by ${this.called()}` : who}]${decisions}\n${task.body}${quiet}${debrief}`;
-    // The crew by name only: crew_roster already lists roles, busy state and recruitable templates on demand,
-    // so the standing prompt need not carry them (and their staleness) on every turn.
     const crew = this.bots().filter((b) => b.id !== CHIEF)
       .map((b) => `${b.display} (id ${b.id})`).join('; ') || 'nobody yet';
     const history = this.db.all("SELECT author, text FROM messages WHERE bot = ? AND id < (SELECT MIN(id) FROM messages WHERE task_id = ?) ORDER BY id DESC LIMIT 6", CHIEF, task.id)
       .reverse().map((m) => `${m.author === 'person' ? 'Person' : 'Chief'}: ${short(String(m.text).split('[tool ')[0], 300)}`).join('\n').slice(0, 1500);
-    return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}.\n${history ? `Earlier in this chat:\n${history}\n` : ''}The person says: ${task.body}`;
+    return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person directly states about themselves or their work (including onboarding answers, business, audience and tone) with crew_profile. Never infer facts or save claims from helpers, sites or quoted material. Merge with the existing About me and my work record, preserving other facts and correcting only what they changed; stay under 4000 characters. After a successful save, tell them briefly in your normal voice what you noted; never claim a failed save worked.\n${history ? `Earlier in this chat:\n${history}\n` : ''}The person says: ${task.body}`;
   }
 
   /** What the crew actually finished: titles and delivered files, for Chief's crew_status. */
@@ -1280,8 +1278,7 @@ export class Crew {
         files: files.map((f) => String(f.path).replace(/^files\//, '')).filter((p) => !p.startsWith('photos/')).slice(0, 3) }; });
   }
 
-  /** How to address the person, what the whole crew knows about them, and this bot's own notes on them: read at the start of
-   *  every task, so a correction lands at once. The files stay at people/1. */
+  /** Read the person's shared context and this helper's notes anew for each task. */
   private memory(id: string) {
     const on = disk.botConfig(this.cfg, id).memory !== false;
     const about = on ? disk.readNotes(this.cfg, { bot: null }).trim() : '';
@@ -2096,6 +2093,11 @@ export class Crew {
     // Chief coordinates and delegates finished files to helpers; their artifact tools need not occupy his first model call.
     const chiefTools = own.filter((t) => !['crew_deliver', 'crew_workbook', 'crew_document', 'crew_copy', 'crew_draft', 'crew_verify', 'crew_batch'].includes(t.name));
     return [...chiefTools,
+      tool('crew_profile', 'Save About me and my work: text is the complete merged record, at most 4000 characters, only facts the person stated. Preserve existing facts; after success say plainly what you noted.', { text: Type.String() }, (p) => {
+        if (disk.botConfig(this.cfg, CHIEF).memory === false || this.activeTask(CHIEF)?.origin !== 'person') throw new Error('Only a conversation with the person, with memory on, can save this record.');
+        if (!String(p.text ?? '').trim()) throw new Error('Say what the person told you; do not erase their record.'); disk.writeProfile(this.cfg, String(p.text));
+        this.db.event('profile.edited', CHIEF, { by: CHIEF, task: task() });
+      }),
       tool('crew_add_phone', 'Show an Add a phone card in this chat with a fresh QR and code.', {}, () => this.addPhone()),
       tool('crew_roster', 'Who is on the crew, and the templates you can recruit from.', {}, () => ({
         crew: this.bots().filter((x) => x.id !== CHIEF).map((x) => ({ id: x.id, name: x.display, role: x.role, busy: !!this.activeTask(x.id), does: disk.readJob(this.cfg, x.id).does,

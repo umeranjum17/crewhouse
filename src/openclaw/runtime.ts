@@ -42,12 +42,12 @@ const SCHEMAS: Record<string, object> = {
   crew_pass: { type: 'object', properties: { bot: { type: 'string' }, task: { type: 'string' }, files: { anyOf: [{ type: 'array', items: { type: 'string' } }, { type: 'string' }] } }, required: ['bot', 'task'], additionalProperties: false },
   crew_assign: { type: 'object', properties: { bot: { type: 'string' }, task: { type: 'string' }, title: { type: 'string' }, account: { type: 'string' }, steps: { type: 'array', items: { type: 'string' } } }, required: ['bot', 'task'], additionalProperties: false },
   crew_routine: { type: 'object', properties: { bot: { type: 'string' }, when: { type: 'string' }, on: { type: 'string' }, task: { type: 'string' }, name: { type: 'string' }, account: { type: 'string' }, quiet: { type: 'boolean' }, watch: { type: 'string' }, once: { type: 'boolean' } }, required: ['task'], additionalProperties: false },
-  crew_report: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'], additionalProperties: false },
+  crew_report: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'], additionalProperties: false }, crew_profile: { type: 'object', properties: { text: { type: 'string', maxLength: 4000 } }, required: ['text'], additionalProperties: false },
   crew_draft: { type: 'object', properties: { path: { type: 'string' }, channel: { type: 'string', enum: ['email', 'message', 'post'] }, to: { type: 'string' }, subject: { type: 'string' }, why: { type: 'string' }, link: { type: 'string' } }, required: ['path', 'channel', 'to'], additionalProperties: false },
   crew_batch: { type: 'object', properties: { question: { type: 'string' }, items: { type: 'array', items: { type: 'string' } } }, required: ['question', 'items'], additionalProperties: false },
 };
 const ABOUT: Record<string, string> = {
-  shell: 'Run a shell command in your own space (a sandbox: your folder is the only writable part of the disk). Long output is cut to the last lines.',
+  shell: 'Run a shell command in your sandbox; only your folder is writable. Long output is cut to its last lines.', crew_profile: 'Save person facts.',
   browser: 'Your own browser (playwright-axi): goto <url>, snapshot, find <text>, click <ref>, fill <ref> <text>, press <key>, go-back.',
   calendar: "The person's own Google Calendar: see what is next, the day or week, free time, add, move, cancel, as `args`.",
   mail: "The person's own Gmail, read-only: what is new, search it, read a conversation, as `args`. It cannot send or change mail.",
@@ -59,7 +59,7 @@ const ABOUT: Record<string, string> = {
 export const TOOLS: ToolSpec[] = ['shell', 'browser', 'calendar', 'mail', 'crew_app', 'crew_web_fetch', 'crew_web_search', 'crew_read', 'crew_write',
   'crew_edit', 'crew_ls', 'crew_grep', 'crew_find', 'crew_connect', 'crew_outcome', 'crew_report', 'crew_batch', 'crew_deliver', 'crew_workbook', 'crew_document',
   'crew_copy', 'crew_remember', 'crew_draft', 'crew_verify', 'crew_learn', 'crew_routine', 'crew_pass', 'crew_add_phone', 'crew_roster',
-  'crew_recruit', 'crew_assign', 'crew_routines', 'crew_status', 'crew_suggest', 'crew_create', 'crew_import', 'crew_call_me',
+  'crew_recruit', 'crew_assign', 'crew_routines', 'crew_status', 'crew_suggest', 'crew_create', 'crew_import', 'crew_call_me', 'crew_profile',
 ].map((name) => ({ name, description: ABOUT[name] ?? `Crewhouse ${name.slice(5).replaceAll('_', ' ')}. The person sees the result in their crew.`,
   parameters: SCHEMAS[name] ?? { type: 'object', additionalProperties: true } }));
 
