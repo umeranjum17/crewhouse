@@ -503,7 +503,7 @@ export function demoLive(hear: (e: Json) => void) {
 
 let calls = 0;
 // About me and my work: the record every helper reads before a job, as Chief last left it.
-let profile = 'I run a bakery for local families. My business is called Morning Loaf. I write in a warm, plain voice.';
+let profile = 'I run a bakery for my neighbourhood. My business is called Morning Loaf. I write in a warm, plain voice.';
 export async function demoCall(method: string, path: string, body?: Json) {
   // "offline": the home computer never answers; "lost": it answers once, then goes quiet.
   if (variant === 'offline' || (variant === 'lost' && calls++ > 0)) throw new TypeError('Failed to fetch');
