@@ -1406,17 +1406,26 @@ function JobList({ state, go, refresh }: { state: Json; go: Ctx['go']; refresh: 
 // ---------- a chat ----------
 /** `hero`: Home's Chief thread (B1): the hero and pinned ask stay above the thread, which opens at its newest line with
  *  the tray's notices among his lines. */
-function Chat({ id, m, state, tick, refresh, canAct, offline, open, writer, hero }: Ctx & { id: string; m?: number; hero?: ReactNode }) {
+function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, hero }: Ctx & { id: string; m?: number; hero?: ReactNode }) {
   const t = useLook();
   // The computer's page when it answers; otherwise the lines this phone kept, until it does.
   const [page, setPage] = useState<Json>(() => kept.page(id));
-  const [pending, setPending] = useState<{ text: string; after: number } | null>(null);
+  const [pending, setPending] = useState<{ text: string; after: number; at: number } | null>(null);
   const [partial, setPartial] = useState('');
+  // The live line's own feed, the same one web chat reads: crewd's pushed events with the moment
+  // they were heard, and which replies are streaming. Heard is every event, not just this thread's,
+  // so a job Chief passed to a helper is mirrored here too (adapter.liveLine).
+  const [heard, setHeard] = useState<Json[]>([]);
+  const [writing, setWriting] = useState(new Map<number, number>());
+  const [now, setNow] = useState(0);
   useEffect(() => onLive((e) => {
+    if (e.kind === 'reply.partial' && typeof e.data?.task === 'number') setWriting((w) => (w.has(e.data.task) ? w : new Map(w).set(e.data.task, Date.now())));
+    if (typeof e.seq === 'number') setHeard((h) => [...h.slice(-300), { ...e, seen: Date.now() }]);
     if (e.bot !== id) return;
     if (e.kind === 'reply.partial') setPartial(/\bstub [\w-]+:/.test(e.data.text) ? '' : e.data.text);
     if (e.kind === 'message' && e.data?.author === 'bot') setPartial('');
   }), [id]);
+  useEffect(() => { setHeard([]); setWriting(new Map()); }, [id]);
   // A search landing on an old line loads a window around it; once you send, the anchor goes and the thread reads to the end.
   const [around, setAround] = useState(m ?? 0);
   const load = useCallback((ar = around) => api.bot(id, ar || undefined).then((p) => { setPage(p); kept.chat(id, p); }).catch(() => {}), [id, around]);
@@ -1429,6 +1438,17 @@ function Chat({ id, m, state, tick, refresh, canAct, offline, open, writer, hero
   const phoneOffer = id === 'chief' ? A.phoneOffer(page) : null;
   const echoed = pending && !(page?.messages ?? []).some((x: Json) => x.author === 'person' && x.id > pending.after && A.plain(x.text) === A.plain(pending.text));
   const waiting = pending && !partial && !(page?.messages ?? []).some((x: Json) => x.author === 'bot' && x.id > pending.after);
+  const crewNames = A.crew(state);
+  const ln = page ? A.liveLine({ id, name: crewNames.find((x) => x.id === id)?.name ?? 'Chief', crew: crewNames, writing, heard,
+    tasks: [...(page.tasks ?? []), ...(id === 'chief' ? state.tasks ?? [] : [])], events: [...(page.trail ?? []), ...(state.events ?? [])],
+    sent: waiting && pending ? pending.at : undefined }) : null;
+  const ticking = !!ln && ln.took === undefined;
+  // The clock beside the step moves on each whole second of the job, so the thread never sits still.
+  useEffect(() => {
+    if (!ticking) return;
+    const t = setTimeout(() => setNow(Date.now()), 1005 - ((Date.now() - ln!.since) % 1000));
+    return () => clearTimeout(t);
+  }, [ticking, ln?.since, now]);
   const [seed, setSeed] = useState(0); // a starter chip fills the box from outside; remount reads the draft back
   const h = A.crew(state).find((x) => x.id === id);
   const b = state.bots.find((x: Json) => x.id === id);
@@ -1444,7 +1464,7 @@ function Chat({ id, m, state, tick, refresh, canAct, offline, open, writer, hero
   const newest = last?.id;
   useEffect(() => { if (canAct && newest && b?.unread) void api.read(id).then(refresh).catch(() => {}); }, [canAct, newest, b?.unread, id, refresh]);
   const send = async (x: string, p: Photo[] = []) => {
-    setPending({ text: x, after: page?.messages?.at(-1)?.id ?? 0 });
+    setPending({ text: x, after: page?.messages?.at(-1)?.id ?? 0, at: Date.now() });
     setPartial('');
     const ok = await attempt(() => api.post(id, x, p.map(({ type, data }) => ({ type, data }))), undefined, true);
     if (ok) { setAround(0); void load(0); refresh(); } else setPending(null);
@@ -1507,10 +1527,8 @@ function Chat({ id, m, state, tick, refresh, canAct, offline, open, writer, hero
           </View></motion.Rise></View>
         )}
         {echoed && <motion.Rise reduce={reduce}><View style={s.line}><View style={{ flexDirection: 'row', gap: 10 }}><T style={[s.small, s.b, { width: 60, color: t.ink2, paddingTop: 2 }]}>You</T><T style={{ flex: 1 }}>{pending.text}</T></View></View></motion.Rise>}
-        {waiting && id === 'chief' && <motion.Rise reduce={reduce}><View style={s.line} accessible accessibilityLabel="Chief is on it" accessibilityLiveRegion="polite"><View style={{ flexDirection: 'row', gap: 10 }}>{who('chief')}
-          <View style={s.typing}>{[0, 1, 2].map((k) => <View key={k} style={[s.typingDot, { backgroundColor: t.ink2, opacity: reduce ? 0.6 : beat % 3 === k ? 1 : 0.3, transform: [{ translateY: !reduce && beat % 3 === k ? -3 : 0 }] }]} />)}</View>
-        </View></View></motion.Rise>}
         {!!partial && <View style={s.line} accessibilityLiveRegion="polite"><View style={{ flexDirection: 'row', gap: 10 }}>{who(id)}<T style={{ flex: 1 }}>{partial}<Text style={{ color: t.pink, opacity: reduce || beat % 2 === 0 ? 1 : 0 }}> ▍</Text></T></View></View>}
+        {ln && <LiveLine ln={ln} go={go} />}
         {canAct && !!last?.choices.length && <View style={s.chips}>{last.choices.map((c) => <Btn key={c} label={c} onPress={() => send(c)} />)}</View>}
         {cards.filter((c) => !lines.length || lines.every((x) => (x.at ?? 0) > c.at)).map((c) => <AskCard key={c.id} c={c} who={h} state={state} onDone={refresh} canAct={canAct} offline={offline} open={open} />)}
       </ScrollView>
@@ -1518,6 +1536,42 @@ function Chat({ id, m, state, tick, refresh, canAct, offline, open, writer, hero
         : <T tone="mute" style={[s.small, { padding: 16 }]}>{offline ? "You can reply once the home computer is back." : "This phone watches the crew; it can't send messages."}</T>}
     </View>
   );
+}
+
+const LIVE_WORD: Record<A.LiveLine['state'], string> = { reading: 'On it', working: 'At work', needs: 'Needs you', waiting: 'Waiting',
+  done: 'Done', failed: "Didn't finish", unsure: 'Not sure it worked' };
+/** The live line under a thread, the same adapter web chat reads: who is on it, a clock counting up
+ *  from crewd's own event times, and the last few true steps; at the end, one quiet line with how
+ *  long it took. A job passed to a helper links to that helper's chat. The transcript's own look:
+ *  every line named, no faces, no clocks beyond the step times. */
+function LiveLine({ ln, go }: { ln: A.LiveLine; go: Ctx['go'] }) {
+  const t = useLook();
+  const reduce = motion.useReduceMotion();
+  const beat = motion.useBeat(360, reduce);
+  const open = ln.helper ? <Pressable onPress={() => go({ view: 'helper', id: ln.helper })} accessibilityRole="link" hitSlop={8}><T style={[s.small, s.b]}>Open {ln.who}'s chat ›</T></Pressable> : null;
+  if (ln.took !== undefined) return <View style={s.line} accessibilityLiveRegion="polite"><View style={{ flexDirection: 'row', gap: 10 }}>
+    <T style={[s.small, s.b, { width: 60, color: t.ink2, paddingTop: 2 }]}>{ln.who}</T>
+    <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+      <T tone="mute" style={s.small}>{ln.helper ? `${ln.who} · ` : ''}{LIVE_WORD[ln.state]} · {A.took(ln.took)}{!!ln.count && ` · ${ln.count} ${ln.count === 1 ? 'step' : 'steps'}`}</T>
+      {open}
+    </View>
+  </View></View>;
+  const last = ln.steps.at(-1)!;
+  return <View style={s.line} accessible accessibilityLabel={`${ln.who} is ${LIVE_WORD[ln.state]}`} accessibilityLiveRegion="polite"><View style={{ flexDirection: 'row', gap: 10 }}>
+    <T style={[s.small, s.b, { width: 60, color: t.ink2, paddingTop: 2 }]}>{ln.who}</T>
+    <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
+      <View style={[s.row, { gap: 6 }]}>
+        <View style={[s.statusDot, { backgroundColor: ln.state === 'needs' ? t.pink : ln.state === 'waiting' ? t.line : t.ok, opacity: reduce ? 0.6 : beat % 2 === 0 ? 1 : 0.35 }]} />
+        <T style={[s.small, s.b, { flexShrink: 1 }]}>{LIVE_WORD[ln.state]}</T>
+        <T tone="mute" style={s.time}>{A.took(Date.now() - ln.since)}</T>
+      </View>
+      {ln.steps.slice(-4).map((st) => <View key={`${st.at}-${st.text}`} style={[s.row, { gap: 6, alignItems: 'flex-start' }]}>
+        <T tone="mute" style={s.time}>{A.clock(st.at)}</T>
+        <T style={[s.small, { flex: 1, fontWeight: st === last ? '600' : '400' }]}>{st.text}{st === last && Date.now() - st.at > 20_000 ? ' · still on it' : ''}</T>
+      </View>)}
+      {open}
+    </View>
+  </View></View>;
 }
 
 function Head({ children, onBack }: { children: ReactNode; onBack: () => void }) {
