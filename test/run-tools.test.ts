@@ -1,12 +1,47 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { setup, settled, task, until } from './lab.ts';
 import * as disk from '../src/bots.ts';
 import type { StubRuntime } from '../src/stub-runtime.ts';
+import { effectOf } from '../src/policy.ts';
+import { herdrStatus, registry } from '../src/tools.ts';
+import { card, herdr } from '../web/src/adapter.ts';
 
 const openAsk = (db: any) => db.get("SELECT * FROM asks WHERE state = 'open'");
+
+test('Herdr setup probes are asynchronous, bounded and report live state', async () => {
+  const { cfg, root, done } = setup();
+  const bin = join(root, 'bin');
+  mkdirSync(bin, { recursive: true });
+  const originalPath = process.env.PATH;
+  process.env.PATH = bin;
+  try {
+    const missing = await herdrStatus(cfg);
+    assert.equal(missing.ready, false);
+    assert.equal(missing.connected, false);
+    assert.deepEqual(herdr(missing), { state: 'missing', says: 'Not installed.', howto: missing.howto });
+    const binary = join(bin, 'herdr');
+    writeFileSync(binary, '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+    assert.deepEqual(await herdrStatus(cfg), { ready: true, connected: true, howto: '' });
+    const started = join(root, 'probe-started');
+    writeFileSync(binary, `#!${process.execPath}\nimport { writeFileSync } from 'node:fs';\nprocess.on('SIGTERM', () => {});\nwriteFileSync(${JSON.stringify(started)}, 'started');\nsetInterval(() => {}, 1000);\n`);
+    let finished = false;
+    const probe = herdrStatus(cfg).then((result) => { finished = true; return result; });
+    await until('the unresponsive probe started without blocking the caller', () => existsSync(started));
+    assert.equal(finished, false, 'other event-loop work proceeds during the probe');
+    const result = await probe;
+    assert.equal(result.ready, true);
+    assert.equal(result.connected, false);
+    assert.equal(herdr(result)!.state, 'setup');
+    writeFileSync(binary, '#!/bin/sh\nexit 0\n');
+    assert.equal((await herdrStatus(cfg)).connected, true, 'Retry probes again');
+  } finally {
+    process.env.PATH = originalPath;
+    done();
+  }
+});
 
 test('granted run tools work through crew_app, with grant and command checks intact', async () => {
   const { cfg, db, crew, root, done } = setup();
@@ -47,6 +82,8 @@ test('the CTO sees terminal agents read-only and every drive asks, naming its pa
   crew.onboard('sir');
   crew.recruit('cto', 'CTO', 'person');
   assert.ok(disk.botConfig(cfg, 'cto').tools.includes('herdr'), 'the CTO template holds the grant');
+  assert.ok(!disk.botConfig(cfg, 'cto').tools.includes('web'));
+  assert.ok(!crew.snapshot().ideas.some((i: any) => i.bot === 'cto'));
   assert.ok(disk.templateKit(cfg, disk.loadTemplate(cfg, 'cto')).some((k) => k.id === 'herdr'), 'the recruit card offers it');
   const bin = join(root, 'bin');
   mkdirSync(bin, { recursive: true });
@@ -67,16 +104,37 @@ test('the CTO sees terminal agents read-only and every drive asks, naming its pa
     assert.match(task(db, second).result, /herdr said: agent read reviewer/, 'a standing answer covers later looks');
     assert.equal(db.all("SELECT * FROM asks WHERE state = 'answered'").length, 1);
     // Driving names its pane or agent and the command, asks every time, and is never money.
-    const drive = crew.assign('cto', `[tool crew_app ${JSON.stringify({ tool: 'herdr', input: { args: ['agent', 'prompt', 'reviewer', 'ship it'] } })}]`, 'chief').task;
+    const payload = 'echo harmless; '.repeat(12) + 'rm -rf /tmp/example; `codex`\n\t\u202e';
+    const driveArgs = ['agent', 'prompt', 'reviewer', payload];
+    const drive = crew.assign('cto', `[tool crew_app ${JSON.stringify({ tool: 'herdr', input: { args: driveArgs } })}]`, 'chief').task;
     await until('the drive asks', () => openAsk(db));
-    assert.match(openAsk(db).title, /reviewer.*prompt/);
+    assert.match(openAsk(db).title, /prompt.*reviewer/);
+    assert.deepEqual(JSON.parse(card(crew.snapshot().asks[0], crew.snapshot()).preview!.body), driveArgs);
     assert.equal(crew.snapshot().asks[0].detail.spends, false, 'driving is not spending');
     await assert.rejects(crew.answer(openAsk(db).id, { answer: 'allow', scope: 'always' }), /once, for this task, or always/);
     await crew.answer(openAsk(db).id, { answer: 'allow' });
     await settled(db, drive);
     const ran = db.get("SELECT * FROM events WHERE kind = 'run.call' AND json_extract(data, '$.tool') = 'herdr' AND json_extract(data, '$.task') = ?", drive)!;
-    assert.match(JSON.parse(ran.data).head, /herdr said: agent prompt reviewer ship it/, 'allowed, the drive ran');
+    assert.deepEqual(JSON.parse(JSON.parse(ran.data).input).args, driveArgs, 'the approved argv is what ran');
+    assert.match(JSON.parse(ran.data).head, /herdr said: agent prompt reviewer echo harmless/, 'allowed, the drive ran');
     assert.equal(task(db, drive).state, 'unsure', 'an unconfirmed drive ends unsure, never done');
+    const conf = registry(cfg).find((t) => t.id === 'herdr')!;
+    const seen = { bot: 'CTO', space: root, secret: [], run: { herdr: { name: conf.name, ...conf.run! } } };
+    for (const prefix of conf.run!.spend) {
+      const args = [...prefix.split(' '), 'reviewer', payload, '--flag', 'two  spaces'];
+      const e = effectOf('herdr', { args }, seen);
+      assert.equal(e.kind, 'send');
+      if (e.kind !== 'send') throw new Error('drive must ask');
+      assert.deepEqual(JSON.parse(e.preview!.body), args);
+      const other = effectOf('herdr', { args: [...args.slice(0, 3), payload + 'different', ...args.slice(4)] }, seen);
+      assert.notEqual(e.words, 'words' in other ? other.words : undefined);
+      const split = effectOf('herdr', { args: [...args.slice(0, 4), '--flag two  spaces'] }, seen);
+      assert.notEqual(e.words, 'words' in split ? split.words : undefined);
+      const view = card({ id: 999, bot: 'cto', kind: 'permission', at: 0, detail: { effect: e.kind, words: e.words, preview: e.preview } }, crew.snapshot());
+      assert.deepEqual(JSON.parse(view.preview!.body), args, 'the card preserves the exact arguments, including controls and command text');
+    }
+    assert.equal(effectOf('herdr', { args: ['agent', 'start', 'new'] }, seen).kind, 'refuse');
+    assert.equal(effectOf('herdr', { args: ['pane run', 'reviewer', payload] }, seen).kind, 'refuse');
     const again = crew.assign('cto', `[tool crew_app ${JSON.stringify({ tool: 'herdr', input: { args: ['agent', 'prompt', 'reviewer', 'ship it'] } })}]`, 'chief').task;
     await until('the drive asks again', () => openAsk(db));
     await crew.answer(openAsk(db).id, { answer: 'deny' });

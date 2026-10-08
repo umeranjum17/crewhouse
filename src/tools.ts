@@ -1,6 +1,6 @@
 // The kit: one manifest per tool in tools/<id>/tool.json, pinned installs into Crewhouse's own tool folder.
 // `node src/tools.ts install [ids...]` installs; never globally, never with sudo.
-import { execFileSync } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, readlinkSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -89,11 +89,11 @@ export function toolStatus(cfg: Config) {
 export type ToolState = ReturnType<typeof toolStatus>[number];
 
 /** Herdr's setup state for its own row on the Apps screen: here, and its server answering. Probed on demand, never in the snapshot. */
-export function herdrStatus(cfg: Config) {
+export async function herdrStatus(cfg: Config) {
   const t = toolStatus(cfg).find((x) => x.id === 'herdr');
   const howto = t?.install.system ?? '';
   try {
-    execFileSync(which(cfg, 'herdr')!, ['status', 'server'], { timeout: 5000, stdio: 'pipe' });
+    await new Promise<void>((resolve, reject) => execFile(which(cfg, 'herdr')!, ['status', 'server'], { timeout: 5000, killSignal: 'SIGKILL' }, (err) => err ? reject(err) : resolve()));
     return { ready: true, connected: true, howto: '' };
   } catch { return { ready: !!t && !t.missing.length, connected: false, howto }; }
 }

@@ -36,8 +36,7 @@
       "pane send-keys",
       "pane run",
       "agent prompt",
-      "agent send-keys",
-      "agent start"
+      "agent send-keys"
     ]
   },
   "migrationDebt": "Raw tool installation/execution and third-party SDK ownership must move to published BYOKit capabilities; this manifest records current behavior, not an approved bypass."

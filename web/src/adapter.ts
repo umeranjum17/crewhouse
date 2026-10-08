@@ -736,7 +736,7 @@ export function card(a: Json, state: Json): Card {
     ...base, kind: spend ? 'spend' : 'ok', status: spend ? 'Wants to spend money' : fill ? 'Wants to fill in a form' : press ? 'Wants to press a button' : d.effect === 'send' ? 'Wants to send an email' : 'Needs your OK',
     evidence: fill ? 'lines' : undefined, words, choices, question,
     head: spend ? `${name} needs your OK to spend` : press ? `${name} wants to act on a site` : d.effect === 'send' ? `${name}'s ${d.thing ?? 'message'} is ready to send` : `${name} would like your OK`,
-    preview: d.preview ? { head: d.preview.head ? plain(d.preview.head) : undefined, body: plain(d.preview.body ?? '') } : undefined,
+    preview: d.preview ? { head: d.preview.head ? plain(d.preview.head) : undefined, body: d.preview.verbatim ? String(d.preview.body ?? '') : plain(d.preview.body ?? '') } : undefined,
   };
 }
 export const cards = (state: Json) => (state.asks.map((a: Json) => card(a, state)) as Card[]).filter((c) => c.campaign?.ready !== false);
@@ -1469,7 +1469,7 @@ export const herdr = (status: Json | null): HerdrSetup | null => {
   if (!status) return null;
   if (status.connected) return { state: 'on', says: 'On · your terminal agents answer here', howto: '' };
   if (status.ready) return { state: 'setup', says: 'Installed, not answering. Open Herdr once, then Retry.', howto: '' };
-  return { state: 'missing', says: 'Not installed. Nothing leaves this computer either way.', howto: String(status.howto ?? '') };
+  return { state: 'missing', says: 'Not installed.', howto: String(status.howto ?? '') };
 };
 
 /** One reviewed starter skill: its name, what it does, why it is in the set, what it needs, and whether it is on. */

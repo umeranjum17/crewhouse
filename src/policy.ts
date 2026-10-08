@@ -8,7 +8,7 @@ export type Effect =
   | { kind: 'refuse'; why: string }
   /** `key` is what "For this task" and "Always" remember (spending has none, so it asks every time); `cost` caps a spend in dollars when stated up front. */
   | { kind: 'files' | 'send' | 'spend' | 'delete'; words: string; key?: string; covers?: string; cost?: number;
-      preview?: { head: string; body: string }; press?: boolean; fill?: boolean };
+      preview?: { head: string; body: string; verbatim?: boolean }; press?: boolean; fill?: boolean };
 
 export interface Seen {
   bot: string;
@@ -147,11 +147,11 @@ export function effectOf(tool: string, input: Record<string, any>, s: Seen): Eff
     // Herdr is the person's own terminal agents: looking asks once (a standing answer covers later
     // looks); driving names its pane or agent and the command, and asks every time.
     if (tool === 'herdr') {
-      const [area = '', verb = '', target = '', ...rest] = (Array.isArray(input.args) ? input.args : []).map(String);
-      const where = area === 'agent' ? `the terminal agent “${target}”` : `pane “${target}”`;
-      const what = rest.join(' ').trim().slice(0, 80);
-      if (cli.spend.some(starts)) return { kind: 'send', words: `${s.bot} wants to drive ${where} (${verb}${what ? `: ${what}` : ''}).` };
-      if (cli.free.some(starts)) return { kind: 'files', words: `${s.bot} wants to look at your terminal agents.`, key: 'herdr:look' };
+      const argv = (Array.isArray(input.args) ? input.args : []).map(String);
+      const matches = (p: string) => p.split(' ').every((part, i) => argv[i] === part);
+      const shown = JSON.stringify(argv).replace(/[^\x20-\x7e]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`);
+      if (cli.spend.some(matches)) return { kind: 'send', words: `${s.bot} wants to drive your terminal agents: ${shown}.`, preview: { head: 'Exact terminal arguments', body: shown, verbatim: true } };
+      if (cli.free.some(matches)) return { kind: 'files', words: `${s.bot} wants to look at your terminal agents.`, key: 'herdr:look' };
       return { kind: 'refuse', why: 'Herdr here lists and reads panes and agents, and drives them with their own commands.' };
     }
     if (cli.spend.some(starts)) {

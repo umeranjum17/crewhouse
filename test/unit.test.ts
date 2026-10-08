@@ -156,8 +156,8 @@ test('policy: own space and the sandboxed shell run silently; the person\'s file
   assert.equal(coversOf(look.key), 'your terminal agents');
   const drive = effectOf('herdr', { args: ['agent', 'prompt', 'reviewer', 'ship it'] }, hs) as any;
   assert.deepEqual([drive.kind, drive.key], ['send', undefined], 'drives ask every time: no standing key');
-  assert.match(drive.words, /reviewer.*prompt/, 'the card names the agent and the command');
-  assert.match((effectOf('herdr', { args: ['pane', 'run', 'w1:p1', 'pytest'] }, hs) as any).words, /w1:p1.*run/, 'the card names the pane and the command');
+  assert.match(drive.words, /prompt.*reviewer/, 'the card names the agent and the command');
+  assert.match((effectOf('herdr', { args: ['pane', 'run', 'w1:p1', 'pytest'] }, hs) as any).words, /run.*w1:p1/, 'the card names the pane and the command');
   assert.equal(effectOf('herdr', { args: ['server', 'stop'] }, hs).kind, 'refuse', 'anything else is refused');
   assert.equal(effectOf('browser', { args: ['click', 'e1'] }, s).kind, 'send');
   assert.equal(effectOf('browser', { args: ['snapshot', '--query', 'inbox'] }, s).kind, 'safe');
