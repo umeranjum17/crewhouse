@@ -57,6 +57,9 @@ export const api = {
   notes: (id: string, text: string) => call('PUT', `/api/bots/${id}/notes`, { text }),
   about: () => call('GET', '/api/about'),
   setAbout: (text: string) => call('PUT', '/api/about', { text }),
+  /** About me and my work: the record every helper reads before a job for them. */
+  profile: () => call('GET', '/api/profile'),
+  setProfile: (text: string) => call('PUT', '/api/profile', { text }),
   /** Who a helper is, in the person's words; `soulReset` puts back how it started. */
   job: (id: string, parts: Json) => call('PUT', `/api/bots/${id}/job`, parts),
   draftJob: (id: string, idea: string) => call('POST', `/api/bots/${id}/job/draft`, { idea }),

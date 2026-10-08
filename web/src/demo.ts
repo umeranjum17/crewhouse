@@ -502,6 +502,8 @@ export function demoLive(hear: (e: Json) => void) {
 }
 
 let calls = 0;
+// About me and my work: the record every helper reads before a job, as Chief last left it.
+let profile = 'I run a bakery for local families. My business is called Morning Loaf. I write in a warm, plain voice.';
 export async function demoCall(method: string, path: string, body?: Json) {
   // "offline": the home computer never answers; "lost": it answers once, then goes quiet.
   if (variant === 'offline' || (variant === 'lost' && calls++ > 0)) throw new TypeError('Failed to fetch');
@@ -561,6 +563,9 @@ export async function demoCall(method: string, path: string, body?: Json) {
     'The shop day is on your calendar for Saturday morning. Anything ticked was already in the cupboard.',
   ].join('\n') } : doc;
   if (method === 'GET' && path === '/api/about') return { notes: '- Vegetarian\n- Lives in Lahore\n- Prefers weekend plans before Thursday' };
+  // About me and my work: the record every helper reads before a job (GET/PUT /api/profile).
+  if (method === 'GET' && path === '/api/profile') return { text: profile, cap: 4000 };
+  if (method === 'PUT' && path === '/api/profile') { profile = String(body?.text ?? ''); return { ok: true }; }
   // ?demo=home / ?demo=signin-again: Settings, Phones before Tailscale, and with it signed out.
   if (method === 'GET' && path === '/api/phones/link') return { on: true, lan: false, pinned: false, tailscale: variant !== 'home', relay: '', relayStatus: 'off', asking: [], push: variant === 'home' ? 'missing' : 'ready',
     anywhere: variant === 'home' ? 'home' : variant === 'signin-again' ? 'signin' : 'anywhere' };
