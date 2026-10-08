@@ -17,8 +17,10 @@ import { startServer } from '../src/server.ts';
 
 const repo = join(import.meta.dirname, '..');
 const bin = browserBin();
-/** The bar: never more than a second without a visible change (sampling adds up to one interval). */
-const GAP_MS = 1000, SAMPLE_MS = 100, HELD_MS = 3500;
+/** The bar: never more than a second without a visible change, timed by the page itself (a slow runner's own
+ *  round trips do not count against the product). The clock ticks on each whole second of the job, so a still
+ *  stretch is its one-second period plus the browser's timer jitter, held to one frame. */
+const GAP_MS = 1000, FRAME_MS = 17, HELD_MS = 3500;
 
 test('from send to reply the thread never sits still: a held Chief turn and a job passed to Scout, at 1440 and 390', { skip: !bin && 'no Chromium here' }, async () => {
   // The app as built from this tree, served by crewd itself.
@@ -59,7 +61,8 @@ test('from send to reply the thread never sits still: a held Chief turn and a jo
     return r.result.value;
   };
   // What the person sees of the thread: its visible words, live line included.
-  const screen = () => run(`[...document.querySelectorAll('.chat .lines')].filter((e) => e.offsetParent).map((e) => e.innerText).join('|')`);
+  const SCREEN = `[...document.querySelectorAll('.chat .lines')].filter((e) => e.offsetParent).map((e) => e.innerText).join('|')`;
+  const screen = () => run(SCREEN);
 
   /** Send the words from the box and watch the thread while the model holds its turn; then let it answer. */
   const journey = async (width: number, bot: string, words: string, expect: RegExp) => {
@@ -68,20 +71,23 @@ test('from send to reply the thread never sits still: a held Chief turn and a jo
     await until('Chief\'s box', () => run("!!document.querySelector('.chat .dock textarea')"), 30_000);
     await run("document.querySelector('.chat .dock textarea').focus()");
     await send('Input.insertText', { text: words });
-    let last = await screen(), changed = Date.now(), gap = 0;
+    // Every change to the visible thread's words, stamped by the page as it happens, from the key press on.
+    await run(`{ window.__watch?.disconnect(); window.__seen = []; window.__sent = undefined; let was = ${SCREEN};
+      (window.__watch = new MutationObserver(() => { const now = ${SCREEN}; if (now !== was) { was = now; __seen.push(performance.now()); } }))
+        .observe(document.querySelector('.chat'), { subtree: true, childList: true, characterData: true });
+      document.querySelector('.chat .dock textarea').addEventListener('keydown', () => { window.__sent ??= performance.now(); }, { capture: true }); true }`);
     const sent = Date.now();
     await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r' });
     await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
     await holding(crew, bot);
-    while (Date.now() - sent < HELD_MS) {
-      const now = await screen();
-      if (now !== last) { gap = Math.max(gap, Date.now() - changed); changed = Date.now(); last = now; }
-      await new Promise((r) => setTimeout(r, SAMPLE_MS));
-    }
-    gap = Math.max(gap, Date.now() - changed);
-    console.log(`${width} ${bot}: longest still screen ${gap} ms`);
-    assert.ok(gap <= GAP_MS + SAMPLE_MS, `${width}: the thread sat still for ${gap} ms while ${bot} worked`);
-    assert.match(last, expect, `${width}: the live line says who is on it`);
+    await new Promise((r) => setTimeout(r, HELD_MS - (Date.now() - sent)));
+    const { seen, from, to } = await run('({ seen: __seen, from: __sent, to: performance.now() })');
+    let gap = 0, prev = from;
+    for (const t of [...seen, to]) { gap = Math.max(gap, t - prev); prev = t; }
+    gap = Math.round(gap);
+    console.log(`${width} ${bot}: longest still screen ${gap} ms (${seen.length} changes)`);
+    assert.ok(gap <= GAP_MS + FRAME_MS, `${width}: the thread sat still for ${gap} ms while ${bot} worked`);
+    assert.match(await screen(), expect, `${width}: the live line says who is on it`);
     await release(crew, bot, `All set for Umer from ${bot}.`);
     await until('the reply and the end line', async () => /All set for Umer/.test(await screen()) && /Done/.test(await run("document.querySelector('.live-end')?.innerText ?? ''")), 15_000);
   };
