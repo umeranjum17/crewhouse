@@ -89,12 +89,19 @@ test('from send to reply the thread never sits still: a held Chief turn and a jo
     console.log(`${width} ${bot}: longest still screen ${gap} ms (${seen.length} changes)`);
     assert.ok(gap <= GAP_MS + FRAME_MS, `${width}: the thread sat still for ${gap} ms while ${bot} worked`);
     assert.match(await screen(), expect, `${width}: the live line says who is on it`);
+    // The to-do list names its object and never repeats a bare label; the small steps stay behind the expand.
+    assert.doesNotMatch(await screen(), /Working on it|Worked in its own space/, `${width}: no bare repeated label on screen`);
+    if (bot === 'scout') {
+      assert.match(await screen(), /Looked up the tower/, `${width}: the model's own progress note is the doing line`);
+      assert.match(await screen(), /Show the small steps \(1\)/, `${width}: the small steps hide behind the expand`);
+    }
     await release(crew, bot, `All set for Umer from ${bot}.`);
     await until('the reply and the end line', async () => /All set for Umer/.test(await screen()) && /Done/.test(await run("document.querySelector('.live-end')?.innerText ?? ''")), 15_000);
   };
   for (const width of [1440, 390]) {
-    await journey(width, 'chief', 'Please ask permission before you plan my week', /Chief[\s\S]*At work[\s\S]*Working on it/);
-    // On a phone there is no side column: the job passed to Scout is followed in Chief's thread itself.
-    await journey(width, 'scout', 'Ask Scout to ask permission first, then look up the tower', /Scout[\s\S]*At work[\s\S]*Passed to Scout/);
+    await journey(width, 'chief', 'Please ask permission before you plan my week', /Chief[\s\S]*At work[\s\S]*Started on/);
+    // On a phone there is no side column: the job passed to Scout is followed in Chief's thread itself. Scout's own
+    // progress note is the doing line; its small steps stay behind the expand.
+    await journey(width, 'scout', 'Ask Scout to ask permission first, then look up the tower [tool crew_report {"text":"Looked up the tower"}] [tool bash {"command":"echo tower"}]', /Scout[\s\S]*At work[\s\S]*Passed to Scout/);
   }
 });

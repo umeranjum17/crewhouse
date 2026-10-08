@@ -1119,16 +1119,26 @@ export function steps(events: Json[], task?: number, live = false): Step[] {
 // ---------- the live line: what the one answering is doing right now ----------
 /** One row of the live line: the step in plain words and when it began (client time, for the clock). */
 export type LiveStep = { text: string; at: number };
-export type LiveLine = { who: string; helper?: string; steps: LiveStep[]; since: number;
+/** One row of the to-do list: done (it happened), doing (the current focus) or todo (an approved plan step still ahead).
+ *  Every row names the thing it acts on; nothing repeats. The small tool calls live in `detail`, behind the expand. */
+export type LiveTodo = { text: string; state: 'done' | 'doing' | 'todo'; at: number };
+export type LiveLine = { who: string; helper?: string; todos: LiveTodo[]; detail: LiveStep[]; since: number;
   state: 'reading' | 'working' | 'needs' | 'waiting' | 'done' | 'failed' | 'unsure'; took?: number; count?: number };
 const OPEN = ['queued', 'working', 'needs_you', 'paused'];
 const END: Record<string, LiveLine['state']> = { 'task.done': 'done', 'task.failed': 'failed', 'task.unsure': 'unsure' };
 /** "8 s", "1 m 05 s": the clock beside the step, counting up from real crewd times. */
 export const took = (ms: number) => { const s = Math.max(0, Math.floor(ms / 1000)); return s < 60 ? `${s} s` : `${Math.floor(s / 60)} m ${String(s % 60).padStart(2, '0')} s`; };
-/** The newest job this thread waits on, from crewd's own events: its true steps, a clock, and how it ended. Chief's
- *  thread also follows a job it passed to a helper, so a phone without the side column still sees the work. `sent` is a
- *  send not yet answered by any job (the line then reads the message); `writing` maps a task whose reply is streaming
- *  to when it began; `heard` are events pushed while the thread is open (they carry `seen`, the client time). */
+/** The approved plan's own steps ("said Go to:\n1. …"), still ahead: the person's to-do list for this job. */
+const planOf = (body: unknown): string[] => {
+  const after = String(body ?? '').split('said Go to:')[1] ?? '';
+  return after.split('\n').map((l) => /^[\s>]*\d+[.)]\s+(.+?)\s*$/.exec(l)?.[1]).filter(Boolean)
+    .map((x) => plain(x!)).filter(Boolean).slice(0, 10);
+};
+/** The newest job this thread waits on, as a to-do list: the plan-level milestones done and doing, the approved plan's
+ *  steps still to do, and the small tool calls kept for the expand. Chief's thread also follows a job it passed to a
+ *  helper, so a phone without the side column still sees the work. `sent` is a send not yet answered by any job (the
+ *  list then reads the message); `writing` maps a task whose reply is streaming to when it began; `heard` are events
+ *  pushed while the thread is open (they carry `seen`, the client time). */
 export function liveLine(o: { id: string; name: string; crew: { id: string; name: string }[]; tasks: Json[]; events: Json[];
   heard: Json[]; sent?: number; writing: Map<number, number> }): LiveLine | null {
   const evs = new Map<number, Json>();
@@ -1143,19 +1153,27 @@ export function liveLine(o: { id: string; name: string; crew: { id: string; name
   const t = [...tasks.values()].sort((a, b) => b.id - a.id)[0];
   const created = t && all.find((e) => e.kind === 'task.created' && e.data?.task === t.id);
   if (o.sent && (!t || !created?.seen || created.seen < o.sent))
-    return { who: o.name, steps: [{ text: 'Reading your message', at: o.sent }], since: o.sent, state: 'reading' };
+    return { who: o.name, todos: [{ text: 'Reading your message', state: 'doing', at: o.sent }], detail: [], since: o.sent, state: 'reading' };
   if (!t) return null;
   const helper = t.bot !== o.id ? o.crew.find((c) => c.id === t.bot) : undefined;
   const who = helper?.name ?? o.name;
   const own = all.filter((e) => e.data?.task === t.id);
   const start = created ? when(created) : at(t.created_at);
-  const steps: LiveStep[] = [{ text: helper ? `Passed to ${who}` : 'Starting on it', at: start }];
+  const title = plain(String(created?.data?.title ?? t.title ?? '')) || 'the job';
+  // Plan-level rows, each naming its object and never repeated: the model's own progress notes, deliveries and asks.
+  // The small tool calls stay out of the list, in `detail` for the expand; `task.working` only flips the state.
+  const said = new Set<string>();
+  const todos: LiveTodo[] = [];
+  const detail: LiveStep[] = [];
+  const push = (text: string, at: number) => { if (text && !said.has(text)) { said.add(text); todos.push({ text, state: 'done', at }); } };
+  push(helper ? `Passed to ${who}` : `Started on “${title}”`, start);
   let state: LiveLine['state'] = OPEN.includes(t.state) ? (t.state === 'needs_you' ? 'needs' : t.state === 'paused' ? 'waiting' : 'working') : 'done';
   let ended: Json | undefined;
   for (const e of own) {
-    const text = e.kind === 'task.working' ? 'Working on it' : e.kind === 'task.paused' ? waitWords(e.data?.result)
-      : e.kind === 'ask.answered' ? 'Carrying on' : e.kind === 'ask.opened' ? 'Waiting for your OK' : e.kind in END || e.kind === 'task.created' ? null : step(e);
-    if (text && steps.at(-1)!.text !== text) steps.push({ text, at: when(e) });
+    if (e.kind === 'run.tool') { const text = step(e); if (text && detail.at(-1)?.text !== text) detail.push({ text, at: when(e) }); continue; }
+    const text = e.kind === 'task.working' ? null : e.kind === 'task.paused' ? waitWords(e.data?.result)
+      : e.kind === 'ask.answered' ? `Carrying on with “${title}”` : e.kind === 'ask.opened' ? 'Waiting for your OK' : e.kind in END || e.kind === 'task.created' ? null : step(e);
+    if (text) push(text, when(e));
     if (e.kind === 'task.working' || e.kind === 'ask.answered') state = 'working';
     if (e.kind === 'ask.opened') state = 'needs';
     if (e.kind === 'task.paused') state = 'waiting';
@@ -1164,12 +1182,17 @@ export function liveLine(o: { id: string; name: string; crew: { id: string; name
   if (state === 'done' || state === 'failed' || state === 'unsure') {
     // An end shows only when it happened while you watched; an old job is just its reply.
     if (!ended?.seen) return null;
-    return { who, helper: helper?.id, steps: [], since: start, state, took: at(ended.at) - (created ? at(created.at) : at(t.created_at)),
+    return { who, helper: helper?.id, todos: [], detail: [], since: start, state, took: at(ended.at) - (created ? at(created.at) : at(t.created_at)),
       count: own.filter((e) => e.kind === 'run.tool').length };
   }
+  // Nothing narrated yet: the distinct things it tried are the list, latest last; the rest stays in the expand.
+  if (todos.length <= 1) for (const d of [...new Map(detail.map((x) => [x.text, x])).values()].slice(-4)) push(d.text, d.at);
   const writing = o.writing.get(t.id);
-  if (state === 'working' && writing) steps.push({ text: 'Writing the answer', at: writing });
-  return { who, helper: helper?.id, steps, since: start, state };
+  if (state === 'working' && writing) push('Writing the answer', writing);
+  todos.forEach((x, i) => { x.state = i < todos.length - 1 ? 'done' : 'doing'; });
+  for (const p of planOf(t.body)) if (p && !said.has(p)) { said.add(p); todos.push({ text: p, state: 'todo', at: start }); }
+  // A progress note rides both rows (the call and the note); the list said it, so the expand must not repeat it.
+  return { who, helper: helper?.id, todos, detail: detail.filter((d) => !said.has(d.text)), since: start, state };
 }
 
 // ---------- a chat ----------

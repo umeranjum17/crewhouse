@@ -1541,13 +1541,15 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
 const LIVE_WORD: Record<A.LiveLine['state'], string> = { reading: 'On it', working: 'At work', needs: 'Needs you', waiting: 'Waiting',
   done: 'Done', failed: "Didn't finish", unsure: 'Not sure it worked' };
 /** The live line under a thread, the same adapter web chat reads: who is on it, a clock counting up
- *  from crewd's own event times, and the last few true steps; at the end, one quiet line with how
- *  long it took. A job passed to a helper links to that helper's chat. The transcript's own look:
- *  every line named, no faces, no clocks beyond the step times. */
+ *  from crewd's own event times, and the job as a to-do list — done, doing, still to do — with the small
+ *  tool calls behind the expand. At the end, one quiet line with how long it took. A job passed to a helper
+ *  links to that helper's chat. The transcript's own look: every line named, no faces, no clocks beyond the step times. */
+const TICK: Record<A.LiveTodo['state'], string> = { done: '✓', doing: '◐', todo: '○' };
 function LiveLine({ ln, go }: { ln: A.LiveLine; go: Ctx['go'] }) {
   const t = useLook();
   const reduce = motion.useReduceMotion();
   const beat = motion.useBeat(360, reduce);
+  const [openDetail, setOpenDetail] = useState(false);
   const open = ln.helper ? <Pressable onPress={() => go({ view: 'helper', id: ln.helper })} accessibilityRole="link" hitSlop={8}><T style={[s.small, s.b]}>Open {ln.who}'s chat ›</T></Pressable> : null;
   if (ln.took !== undefined) return <View style={s.line} accessibilityLiveRegion="polite"><View style={{ flexDirection: 'row', gap: 10 }}>
     <T style={[s.small, s.b, { width: 60, color: t.ink2, paddingTop: 2 }]}>{ln.who}</T>
@@ -1556,7 +1558,7 @@ function LiveLine({ ln, go }: { ln: A.LiveLine; go: Ctx['go'] }) {
       {open}
     </View>
   </View></View>;
-  const last = ln.steps.at(-1)!;
+  const doing = ln.todos.find((x) => x.state === 'doing');
   return <View style={s.line} accessible accessibilityLabel={`${ln.who} is ${LIVE_WORD[ln.state]}`} accessibilityLiveRegion="polite"><View style={{ flexDirection: 'row', gap: 10 }}>
     <T style={[s.small, s.b, { width: 60, color: t.ink2, paddingTop: 2 }]}>{ln.who}</T>
     <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
@@ -1565,9 +1567,15 @@ function LiveLine({ ln, go }: { ln: A.LiveLine; go: Ctx['go'] }) {
         <T style={[s.small, s.b, { flexShrink: 1 }]}>{LIVE_WORD[ln.state]}</T>
         <T tone="mute" style={s.time}>{A.took(Date.now() - ln.since)}</T>
       </View>
-      {ln.steps.slice(-4).map((st) => <View key={`${st.at}-${st.text}`} style={[s.row, { gap: 6, alignItems: 'flex-start' }]}>
+      {ln.todos.map((st) => <View key={`${st.at}-${st.text}`} style={[s.row, { gap: 6, alignItems: 'flex-start' }]}>
+        <T style={[s.small, { color: st.state === 'todo' ? t.ink2 : st.state === 'done' ? t.ok : t.ink }]}>{TICK[st.state]}</T>
+        <T style={[s.small, { flex: 1, fontWeight: st === doing ? '600' : '400', color: st.state === 'todo' ? t.ink2 : t.ink }]}>{st.text}{st === doing && Date.now() - st.at > 20_000 ? ' · still on it' : ''}</T>
+      </View>)}
+      {!!ln.detail.length && <Pressable onPress={() => setOpenDetail((v) => !v)} accessibilityRole="button" hitSlop={8}>
+        <T tone="mute" style={s.small}>{openDetail ? 'Hide the small steps' : `Show the small steps (${ln.detail.length})`}</T></Pressable>}
+      {openDetail && ln.detail.map((st) => <View key={`${st.at}-${st.text}`} style={[s.row, { gap: 6, alignItems: 'flex-start' }]}>
         <T tone="mute" style={s.time}>{A.clock(st.at)}</T>
-        <T style={[s.small, { flex: 1, fontWeight: st === last ? '600' : '400' }]}>{st.text}{st === last && Date.now() - st.at > 20_000 ? ' · still on it' : ''}</T>
+        <T tone="mute" style={[s.small, { flex: 1 }]}>{st.text}</T>
       </View>)}
       {open}
     </View>
