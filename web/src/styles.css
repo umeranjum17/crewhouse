@@ -575,7 +575,6 @@ button.code { border: 0; color: var(--ink); cursor: pointer; display: grid; gap:
 .sticky-top { position: sticky; top: 0; z-index: 5; margin: -18px -18px 0; padding: 14px 18px 0; background: color-mix(in srgb, var(--bg) 78%, transparent); backdrop-filter: blur(14px); }
 /* A chat's header is an opaque band: lines scroll under it, never half-show through. */
 .chat-page .sticky-top { margin: -16px -16px 0; padding: 16px; background: var(--bg); backdrop-filter: none; }
-
 @media (min-width: 900px) { .sticky-top { margin: -32px -36px 0; padding: 24px 36px 0; } .chat-page .sticky-top { margin: 0; padding: 0; } }
 
 /* ---------- first run, sign-in and connect cards (the onboarding prototype) ---------- */
