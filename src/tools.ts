@@ -28,7 +28,7 @@ export interface Tool {
   /** "Asks you first when…", in plain words, for the recruit card and bot settings. */
   asks: string[];
   /** A command-line tool that runs with the person's own sign-in, on this computer rather than in the bot's sandbox.
-   *  The bot calls it with a list of arguments: `free` prefixes run at once, `spend` prefixes ask every time, anything else is refused. */
+   *  The bot calls it with a list of arguments: `free` prefixes run at once (Herdr reads ask first), `spend` prefixes ask every time, anything else is refused. */
   run?: { free: string[]; spend: string[] };
   /** An AXI: a pinned agent-ergonomic CLI the bot calls with an argument list, run with crewd's own environment
    *  (`axiEnv`) plus this; the gate reads every argument list. */

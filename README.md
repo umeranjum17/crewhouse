@@ -120,6 +120,8 @@ Ask for a spreadsheet or a document and you get a real `.xlsx` or `.docx`. The h
 
 Each helper has a soul (who it is, written by you), a job, its own skills and tools, and notes about you. Every note it keeps is a git commit you can undo. Add a helper from a template, or describe one to Chief and approve what he suggests.
 
+Ask Chief to hire CTO to watch and nudge your terminal agents. It needs [Herdr](https://herdr.dev), installed by you, never bundled or installed by Crewhouse, and available on Crewhouse's PATH. On the computer, Settings → Your apps → Plugins shows its status: install it if missing, open Herdr once if it is not answering, then tap Retry. CTO's Tools settings let you revoke access. Looking asks first and can get a standing answer; every drive asks separately, showing the complete terminal arguments with **Yes, go ahead** / **Not now**. Terminal text read for the job goes to the helper's AI account.
+
 <p align="center">
   <img src="docs/screenshots/readme/crew.webp" alt="The crew screen: Chief, Reel, Scout, Scribe, Pip and Tracer, each with what it is doing now, and Add a helper" width="300" />
 </p>

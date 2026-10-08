@@ -7,9 +7,8 @@ The Apps screen carries Herdr's own row under Plugins with three states.
 
 ## Sub-features
 
-- `herdr-row` — `GET /api/herdr` reports `{ready, connected, howto}` (probed on
-  demand, never in the snapshot). Missing shows the plain install line + Retry;
-  installed-not-answering says to open Herdr once + Retry; answering lights up On.
+- `herdr-row` — exercise the three setup states in
+  [the UI contract](../../../../docs/ui-contract.md#herdr-setup-today).
 - `cto-grant` — only the `cto` template grants `herdr`; the recruit card offers it
   with its asks, and per-bot Tools settings can take it back.
 - `cto-look` — a CTO `pane list` / `agent read` opens one ask
@@ -21,7 +20,7 @@ The Apps screen carries Herdr's own row under Plugins with three states.
 ## Driving it with the API
 
 Preconditions: onboarded person; a `herdr` binary on crewd's PATH answering
-`status server` (a two-line shell script echoing `{}` is enough for the stub run).
+`status server --json` (a two-line shell script echoing `{"running":true}` is enough for the stub run).
 
 - **Row.** `curl -fsS "$B/api/herdr"` → `{"ready":true,"connected":true,...}`;
   without the binary → `{"ready":false,...}` with the install line as `howto`.
@@ -33,7 +32,9 @@ Preconditions: onboarded person; a `herdr` binary on crewd's PATH answering
   `POST /api/asks/<id>/answer`, and the task result carries the binary's output.
 - **Drive.** Same with `args: ["agent","prompt","reviewer","ship it"]`; the ask
   title names `reviewer` and `prompt`. Allow once: crewd's own `run.call` row
-  carries the output while the task ends `unsure` without `crew_outcome`.
+  records the original `crew_app` envelope in its JSON-encoded `input` (arguments
+  at `.input.args`, subject to the record's 1,000-character cap) and the output's
+  first line in `head`; the task ends `unsure` without `crew_outcome`.
 
 ## Capture
 
