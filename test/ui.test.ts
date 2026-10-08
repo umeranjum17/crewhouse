@@ -534,8 +534,9 @@ test('the screens read view models only, and the mono face draws art only', () =
   const css = readFileSync(join(dir, 'styles.css'), 'utf8');
   for (const rule of css.split('}')) {
     if (!/var\(--art\)|monospace/.test(rule)) continue;
-    // Mono draws the art and standalone times/counts in a column (.time) - never reading text.
-    assert.match(rule, /(\.art\b|\.ascii\b|\.time\b|--art:|@font-face)/, `mono type outside the art: ${rule.trim().slice(0, 80)}`);
+    // Mono draws the art, standalone times/counts in a column (.time), and inline code chips
+    // in chat answers (.chat-code) - never other reading text.
+    assert.match(rule, /(\.art\b|\.ascii\b|\.time\b|\.chat-code\b|--art:|@font-face)/, `mono type outside the art: ${rule.trim().slice(0, 80)}`);
   }
 });
 

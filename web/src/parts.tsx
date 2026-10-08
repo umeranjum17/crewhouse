@@ -16,7 +16,7 @@ import { clock, column, docLinks, document as docView, fileSource, fileView, flo
 const mdInline = (tokens: any[]): ReactNode => tokens.map((t, i) => t.type === 'strong' ? <strong key={i}>{mdInline(t.tokens)}</strong>
   : t.type === 'em' ? <em key={i}>{mdInline(t.tokens)}</em>
   : t.type === 'link' && safeLink(t.href) ? <a className="chat-link" key={i} href={safeLink(t.href)} target="_blank" rel="noopener noreferrer">{mdInline(t.tokens)}</a>
-  : t.type === 'codespan' ? <span key={i}>{t.text}</span>
+  : t.type === 'codespan' ? <code className="chat-code" key={i}>{t.text}</code>
   : t.type === 'br' ? <br key={i} />
   : t.type === 'html' ? t.raw : t.tokens ? <span key={i}>{mdInline(t.tokens)}</span> : t.text ?? t.raw);
 /** Markdown blocks from the same tokens: headings, paragraphs, task lists with read-only ticks, tables. */
