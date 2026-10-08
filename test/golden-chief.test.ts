@@ -64,7 +64,7 @@ test('title, relay and markdown trust boundary', () => {
   assert.equal(relayResult('The full investment brief is ready.', 'A document in 6 sections: How can $50,000 for a home down payment in fi, answer, findings, strategies and caveats'.repeat(2)), 'The full investment brief is ready.', 'long delivery notes never create a cut-off title');
   assert.doesNotMatch(relayResult('done', 'The launch plan is ready: audience and first posts.'), /A document in|\b\d+ sections?\b|^\w+: /i);
   assert.equal(relayResult('Start with this pitch: “' + 'a'.repeat(175) + '.” The two-week launch plan and first drafts are ready.'), 'The two-week launch plan and first drafts are ready.');
-  assert.equal(relayResult('A very long unfinished headline ' + 'words '.repeat(40)), 'The result is ready.');
+  assert.equal(relayResult('A very long unfinished headline ' + 'words '.repeat(40)), 'A very long unfinished headline ' + 'words '.repeat(21).trim() + '…');
   assert.doesNotMatch(relayResult('A long ' + 'word '.repeat(40) + '. The plan is ready.'), /…|\.\.\./);
   assert.equal(safeLink('javascript:alert(1)'), '');
   assert.equal(safeLink('https://trymuxr.com/'), 'https://trymuxr.com/');
