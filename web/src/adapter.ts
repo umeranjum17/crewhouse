@@ -293,22 +293,24 @@ const midnight = () => new Date().setHours(0, 0, 0, 0);
 /** One helper, from crewd's row and its jobs (`tasks`, newest first): the seat says only what crewd holds. A working job
  *  with no news past crewd's limit has gone quiet (never "working"); a held job waits, with crewd's reason; the last job
  *  that ended badly today says so until a newer one starts. */
-export function helper(b: Json, events: Json[] = [], crew: Json[] = [], tasks: Json[] = []): Helper {
-  const needs = b.task?.state === 'needs_you';
+export function helper(b: Json, events: Json[] = [], crew: Json[] = [], tasks: Json[] = [], asks: Json[] = []): Helper {
+  const own = asks.filter((a) => a.bot === b.id);
+  const chiefDraft = b.task?.state === 'needs_you' && own.length > 0 && own.every((a) => a.detail?.draft);
+  const needs = b.task?.state === 'needs_you' && !chiefDraft;
   const stuck = !!b.stuck;
   const driving = b.controls === 'person';
   const mine = b.task ? [] : tasks.filter((t) => t.bot === b.id);
   const held = mine.find((t) => t.state === 'paused');
   const ended = ['failed', 'unsure'].includes(mine[0]?.state) && at(mine[0].updated_at) >= midnight() ? mine[0] : null;
-  const seat: Seat = driving ? 'waiting' : needs ? 'chat' : stuck ? 'quiet' : b.task ? 'working'
+  const seat: Seat = driving || chiefDraft ? 'waiting' : needs ? 'chat' : stuck ? 'quiet' : b.task ? 'working'
     : held || b.pausedUntil ? 'waiting' : b.queued ? 'next' : ended ? 'failed' : 'free';
-  const status = driving ? 'Paused while you drive' : needs ? 'Needs you' : b.task ? b.task.title
+  const status = driving ? 'Paused while you drive' : chiefDraft ? 'Waiting for Chief' : needs ? 'Needs you' : b.task ? b.task.title
     : held || b.pausedUntil ? waitWords(held?.result, held?.wake_at ?? b.pausedUntil) : b.queued ? 'Up next'
     : ended ? (ended.state === 'unsure' ? 'Not sure it worked' : "Didn't finish") : 'Free to help';
   return {
     id: b.id, name: b.display, kind: kindOf(b, crew), role: plain(b.role ?? ''), status: plain(status), computer: !!b.computer, driving,
-    mood: helperMood(b, seat, events), seat,
-    ring: needs ? 'needs' : b.task ? 'working' : '',
+    mood: chiefDraft ? 'rest' : helperMood(b, seat, events), seat,
+    ring: chiefDraft ? '' : needs ? 'needs' : b.task ? 'working' : '',
     stuckFor: stuck ? Math.max(1, Math.round((Date.now() - b.quietSince) / 60_000)) : 0, quietSince: b.quietSince ?? 0,
     things: deskThings(b.id, b.task ?? null),
   };
@@ -548,7 +550,7 @@ export function zoneNote(state: Json) {
 
 /** The person's helpers. */
 export function crew(state: Json) {
-  return state.bots.filter((b: Json) => b.id !== 'chief').map((b: Json) => helper(b, state.events ?? [], state.bots, state.tasks ?? [])) as Helper[];
+  return state.bots.filter((b: Json) => b.id !== 'chief').map((b: Json) => helper(b, state.events ?? [], state.bots, state.tasks ?? [], state.asks ?? [])) as Helper[];
 }
 
 /** One thread in the chat list: Chief pinned on top, then the helpers, the latest talk first. */
@@ -1175,7 +1177,7 @@ const PHOTO = /\n?\[photo ([a-z0-9-]+)\] (files\/\S+)/g;
 const photos = (text: string) => [...text.matchAll(PHOTO)].map((m) => fileView(m[1], m[2]));
 
 export function room(page: Json, state: Json) {
-  const people = new Map((state.bots ?? []).map((b: Json) => [b.id, helper(b, state.events ?? [], state.bots, state.tasks ?? [])]));
+  const people = new Map((state.bots ?? []).map((b: Json) => [b.id, helper(b, state.events ?? [], state.bots, state.tasks ?? [], state.asks ?? [])]));
   const checks = reviews(state);
   // Crewd's own lines (a delivery, a verdict, a reopen) are notes, here exactly as in a helper's chat: one style for
   // every line the person reads, whoever wrote it. Only a helper's or the person's own words are a bubble.

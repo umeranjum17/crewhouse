@@ -563,7 +563,7 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
   const newest = lines.at(-1)?.id;
   useEffect(() => { if (newest && b?.unread) void api.read(id).then(refresh).catch(() => {}); }, [newest, b?.unread, id, refresh]);
   const trail = live && page ? A.steps(page.trail ?? [], live.id, true) : [];
-  const cards = A.cards(state).filter((c) => c.helper === id);
+  const cards = page ? A.cards(state).filter((c) => c.helper === id) : [];
   const last = lines.at(-1);
   const send = async (t: string) => {
     setPending({ text: t, after: page?.messages?.at(-1)?.id ?? 0, at: Date.now() });

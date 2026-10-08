@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
-import { setup, settled } from './lab.ts';
+import { setup, settled, holding, release } from './lab.ts';
 import * as disk from '../src/bots.ts';
 import { startServer } from '../src/server.ts';
 import * as A from '../web/src/adapter.ts';
@@ -76,7 +76,7 @@ test('marketing recruitment and assignments carry the bakery profile and Chiefâ€
     assert.match(spec.system, /run-a-marketing-campaign/, 'a plain request presents the campaign skill to Chief');
     assert.match(readFileSync(join(disk.botDir(cfg, 'chief'), 'skills/run-a-marketing-campaign/SKILL.md'), 'utf8'), /crew_recruit/);
     // Script the model decisions, but exercise real HTTP, recruitment, queueing and profile injection.
-    const call = (name: string, input: object) => `[tool ${name} ${JSON.stringify(input).replace(/\[tool/g, '[t\\u006fol')}]`; // nested helper scripts are JSON, not Chief calls
+    const call = (name: string, input: object) => `[tool ${name} ${JSON.stringify(input).replace(/\[tool/g, '[t\\u006fol').replace(/ask permission/g, 'ask\\u0020permission')}]`; // nested helper scripts are JSON, not Chief calls
     const read = await api('/api/bots/chief/messages', { text: call('crew_read', { path: 'skills/run-a-marketing-campaign/SKILL.md' }) });
     await settled(db, read.task);
     assert.equal(db.all('SELECT * FROM asks WHERE task_id = ?', read.task).length, 0, 'Chief reads its own skill without asking');
@@ -104,14 +104,19 @@ test('marketing recruitment and assignments carry the bakery profile and Chiefâ€
       assert.match((crew.runtime as any).specOf(task.session).message, /Morning Loaf bakery/, `${bot} reads the shared profile`);
     }
     // The marketing journey uses one existing draft, handed to Chief by the app, after every part finishes.
-    const body = 'Facebook\nWarm bread for a family weekend.\nCome say hello at Morning Loaf.\n\nInstagram\n#MorningLoaf\nA small bakery welcome for local families.';
+    const body = 'Facebook\nWarm bread for a family weekend.\nCome say hello at Morning Loaf.\n\n---\n\nInstagram\n#MorningLoaf\nA small bakery welcome for local families.';
     writeFileSync(join(disk.botDir(cfg, 'reel'), 'files/poster.png'), Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a1XkAAAAASUVORK5CYII=', 'base64'));
     for (const answer of ['deny', 'allow']) {
       const path = `files/campaign-${answer}.txt`;
-      const bodies = { scout: 'Research the bakery campaign.', scribe: call('crew_write', { path, content: body }) + ' ' + call('crew_deliver', { path, note: 'Both campaign posts' }) + ' ' + call('crew_draft', { path, channel: 'post', to: 'Facebook and Instagram' }), reel: call('crew_deliver', { path: 'files/poster.png', note: 'Morning Loaf poster' }) };
+      const bodies = { scout: 'Research the bakery campaign. ask permission', scribe: call('crew_write', { path, content: body }) + ' ' + call('crew_deliver', { path, note: 'Both campaign posts' }) + ' ' + call('crew_draft', { path, channel: 'post', to: 'Facebook and Instagram' }), reel: call('crew_deliver', { path: 'files/poster.png', note: 'Morning Loaf poster' }) };
       const campaign = await api('/api/bots/chief/messages', { text: Object.entries(bodies).map(([bot, task]) => call('crew_assign', { bot, task })).join(' ') });
       await settled(db, campaign.task);
-      for (const part of db.all('SELECT id FROM tasks WHERE parent = ?', campaign.task)) await settled(db, part.id);
+      const parts = db.all('SELECT id, bot FROM tasks WHERE parent = ?', campaign.task);
+      for (const part of parts.filter((p) => p.bot !== 'scout')) await settled(db, part.id);
+      await holding(crew, 'scout');
+      assert.equal(A.cards(await (await fetch(base + '/api/state')).json()).length, 0, 'the campaign review waits for the last part to finish');
+      await release(crew, 'scout', 'Research finished with sources.');
+      for (const part of parts) await settled(db, part.id);
       const state = await (await fetch(base + '/api/state')).json();
       assert.equal(state.asks.length, 1, 'one existing draft card for both posts');
       const card = A.cards(state)[0];

@@ -598,7 +598,7 @@ function CampaignPosts({ text, approved = false }: { text: string; approved?: bo
     try { if (!navigator.clipboard) throw new Error('Copy is unavailable here. Select the post text to copy it.'); await navigator.clipboard.writeText(text); setCopied(i); setError(''); }
     catch (e) { setError(e instanceof Error ? e.message : 'Could not copy. Select the post text to copy it.'); }
   };
-  return <div className="ev">{parts.map((part, i) => { const at = part.indexOf('\n'); return <section key={i}><b className="ev-to">{at < 0 ? '' : part.slice(0, at)}</b><div className="ev-body">{at < 0 ? part : part.slice(at + 1)}</div>{approved && parts.length === 2 && at > 0 && <button className="btn" onClick={() => void copy(part.slice(at + 1), i)}>{copied === i ? 'Copied' : `Copy ${part.slice(0, at)} post`}</button>}</section>; })}{error && <p role="alert">{error}</p>}</div>;
+  return <div className="ev">{parts.map((part, i) => { const at = part.indexOf('\n'); return <section key={i}><b className="ev-to">{at < 0 ? '' : part.slice(0, at)}</b><div className="ev-body">{at < 0 ? part : part.slice(at + 1)}</div>{approved && parts.length === 2 && at > 0 && <button className="btn" aria-label={`Copy ${part.slice(0, at)}`} onClick={() => void copy(part.slice(at + 1), i)}>{copied === i ? 'Copied' : 'Copy post'}</button>}</section>; })}{error && <p role="alert">{error}</p>}</div>;
 }
 
 export function CampaignReceipt({ outcome: c }: { outcome: CampaignOutcome }) {
