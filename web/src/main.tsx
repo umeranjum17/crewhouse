@@ -98,7 +98,7 @@ function Hello({ state, refresh, night }: Ctx) {
       </ul>
       <h2 className="plate">What can I take off your plate?</h2>
       <div className="ideas">
-        {A.firstIdeas(state).map((i) => <button key={i.label} className="idea" onClick={() => pick(i.label, i.bot)}><span aria-hidden>{i.icon}</span><b>{i.label}</b><i aria-hidden>›</i></button>)}
+        {A.firstIdeas(state).map((i) => <button key={i.label} className="idea" onClick={() => pick(i.label, i.bot)}><span className="o-ic" aria-hidden>{i.icon}</span><b>{i.label}</b><i aria-hidden>›</i></button>)}
       </div>
       {own ? <div className="own-ask">
         <input className="input" value={words} onChange={(e) => setWords(e.target.value)} placeholder="Ask for anything…" aria-label="Your first ask"
@@ -113,7 +113,7 @@ function Hello({ state, refresh, night }: Ctx) {
   );
 }
 
-/** Shared from another app on the phone (the Share sheet): Chief asks what to do with it, as chips. */
+/** Shared from another app on the phone (the Share sheet): Chief asks what to do with it, one blue primary first. */
 function Share({ refresh }: Ctx) {
   const q = new URLSearchParams(location.search);
   const text = [q.get('title'), q.get('text'), q.get('url')].filter(Boolean).join('\n').trim();
@@ -123,13 +123,14 @@ function Share({ refresh }: Ctx) {
   if (!text) return <div className="page"><div className="card empty">Nothing came through. Try sharing it again.</div></div>;
   return (
     <div className="page share">
-      <div className="card shared"><div className="mute small">Shared with Crewhouse</div><div className="clamp">{text}</div></div>
-      <div className="line chief"><div className="bubble-text">Got it. What shall the crew do with this?</div></div>
-      <div className="chips">
-        <button className="chip on" onClick={() => send('Add this to my calendar and remind me the day before')}>📅 Add to my calendar + remind me</button>
-        <button className="chip" onClick={() => send('Just remember this for me')}>Just remember it</button>
-        <button className="chip" onClick={() => setOther(true)}>Something else…</button>
-      </div>
+      <div className="card shared"><div className="mute small">Shared with Crewhouse</div><div className="said">{text}</div></div>
+      <div className="line chief"><div className="line-by"><Face who="chief" size={36} /><span className="who">Chief</span></div>
+        <div className="bubble-text">Got it. What shall the crew do with this?</div>
+        <div className="share-acts">
+          <button className="btn go" onClick={() => send('Add this to my calendar and remind me the day before')}>📅 Add to my calendar + remind me</button>
+          <button className="btn" onClick={() => send('Just remember this for me')}>Just remember it</button>
+          <button className="btn" onClick={() => setOther(true)}>Something else…</button>
+        </div></div>
       {other && <div className="dock"><Composer placeholder="What shall the crew do with it?" onSend={send} /></div>}
     </div>
   );

@@ -177,7 +177,7 @@ async function browse() {
     window.requestAnimationFrame = (f) => { n.raf++; const id = ask((t) => { n.pending.delete(id); f(t); }); n.pending.add(id); return id; };
     window.cancelAnimationFrame = (id) => { n.pending.delete(id); drop(id); };
   })()` });
-  const open = async (query: string) => { await send('Page.navigate', { url: `${base}/?${query}` }); };
+  const open = async (query: string, path = '/') => { await send('Page.navigate', { url: `${base}${path}?${query}` }); };
   return { send, run, open };
 }
 
@@ -430,5 +430,39 @@ test('things, routines and helper details read Term: shared tiles, one blue prim
       assert.ok(!r.clip, `${at} row ${i}: nothing spills past the row`);
       assert.ok(!r.cut, `${at} row ${i}: names read in full`);
     }
+  }
+});
+
+test('first run and the Share sheet read Term: helmet faces, shared tiles, no bubble, one blue primary, words in full', { skip: !bin && 'no Chromium here' }, async () => {
+  const b = await browse();
+  await b.send('Page.enable'); await b.send('Runtime.enable');
+  const look = `(() => { const W = innerWidth, sp = document.querySelector('.speech'), st = sp && getComputedStyle(sp);
+    const boxes = (sel) => [...document.querySelectorAll(sel)].map((row) => {
+      const r = row.getBoundingClientRect(), kids = [...row.children].map((e) => e.getBoundingClientRect());
+      return { overlap: kids.some((a, i) => kids.some((c, j) => j > i && a.left < c.right - 1 && c.left < a.right - 1 && a.top < c.bottom - 1 && c.top < a.bottom - 1)),
+        clip: r.left < -1 || r.right > W + 1 || kids.some((k) => k.left < r.left - 1 || k.right > r.right + 1) }; });
+    return { ideas: document.querySelectorAll('.idea').length, tiles: document.querySelectorAll('.idea > .o-ic').length,
+      bubble: !!st && (parseFloat(st.borderTopWidth) > 0 || st.backgroundColor !== 'rgba(0, 0, 0, 0)'),
+      chips: document.querySelectorAll('.share .chip').length, primary: document.querySelectorAll('.share .btn.go').length,
+      faces: document.querySelectorAll('.share .line-by .face img.ink').length,
+      cut: [...document.querySelectorAll('.share .said, .idea b')].some((e) => e.scrollWidth > e.clientWidth + 1 || e.scrollHeight > e.clientHeight + 1),
+      rows: boxes('.idea, .share .line, .share-acts') }; })()`;
+  const shared = new URLSearchParams({ title: 'Dentist appointment', text: 'Dr Patel, Thursday 14 November at 10:30, Harley Street Dental Practice, please arrive 10 minutes early' });
+  for (const theme of ['day', 'night']) for (const [w, h, mobile] of [[390, 844, true], [1440, 900, false]] as const) {
+    await b.send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile });
+    const at = `${theme} ${w}`;
+    await b.open(`demo=hello&${theme}`);
+    await until('the first-run ideas', () => b.run("document.querySelectorAll('.idea').length > 0"), 30_000);
+    let m = await b.run(look);
+    assert.equal(m.tiles, m.ideas, `${at} hello: every idea wears the shared tile`);
+    assert.ok(!m.bubble, `${at} hello: Chief's greeting is plain words, not a speech bubble`);
+    await b.open(`demo&${theme}&${shared}`, '/share');
+    await until('the share sheet', () => b.run("document.querySelectorAll('.share-acts .btn').length > 0"), 30_000);
+    m = await b.run(look);
+    assert.equal(m.chips, 0, `${at} share: no old chips`);
+    assert.equal(m.primary, 1, `${at} share: one filled-blue primary`);
+    assert.equal(m.faces, 1, `${at} share: Chief speaks with his drawn helmet`);
+    assert.ok(!m.cut, `${at}: what was shared and every idea read in full`);
+    for (const [i, r] of m.rows.entries()) assert.ok(!r.overlap && !r.clip, `${at} row ${i}: nothing overlaps or spills`);
   }
 });
