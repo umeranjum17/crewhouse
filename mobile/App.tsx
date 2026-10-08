@@ -128,7 +128,7 @@ function Face({ who, size = 44, mood }: { who: A.Helper | 'chief' | { kind: art.
   const ring = chief || !('ring' in who) ? '' : who.ring;
   return (
     <View style={{ width: size, height: size, borderRadius: size, alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
-      backgroundColor: chief ? (t.night ? '#2A2622' : '#EEF1F6') : t.night ? t.surface : art.PALS[who.kind].soft, borderWidth: ring ? 2 : 0, borderColor: ring === 'needs' ? t.pink : t.green }}>
+      backgroundColor: chief && t.night ? '#2A2622' : t.surface, borderWidth: ring ? 2 : 0, borderColor: ring === 'needs' ? t.pink : t.green }}>
       <Ink who={chief ? 'chief' : who.kind} mood={chief ? mood : who.mood} size={size * 0.8} />
     </View>
   );
@@ -1551,7 +1551,7 @@ function Room(ctx: Ctx) {
   const lines = A.room(page, state);
   const send = async (text: string) => { const ok = await attempt(() => api.post('chief', text, { room: true }), undefined, true); if (ok) { void load(); refresh(); } return ok; };
   return <View style={{ flex: 1 }}><Head onBack={ctx.back}><View style={{ width: 40, flexDirection: 'row' }}>{crew.slice(0, 2).map((h, i) => <View key={h.id} style={{ marginLeft: i ? -12 : 0 }}><Face who={h} size={26} /></View>)}</View><View style={{ flex: 1 }}><T style={s.rowTitle}>The crew</T><T tone="ink2" style={s.small}>Work handed between helpers</T></View></Head>
-    <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>{lines.map((l: { id: number; who?: A.Helper; from?: string; to?: string; text: string; at: number; author: string; files: A.FileView[] }) => <View key={l.id} style={{ maxWidth: '92%', alignSelf: l.author === 'person' ? 'flex-end' : 'flex-start' }}>
+    <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>{lines.map((l: { id: number; who?: A.Helper; from?: string; to?: string; text: string; at: number; author: string; files: A.FileView[] }) => <View key={l.id} style={{ width: '100%', maxWidth: '92%', alignSelf: l.author === 'person' ? 'flex-end' : 'flex-start' }}>
       {l.who && <View style={s.row}><Face who={l.who} size={28} /><T style={s.rowTitle}>{l.from && l.to ? `${l.from} → ${l.to}` : l.who.name}</T><T tone="mute" style={s.time}>{A.clock(l.at)}</T></View>}
       <View style={{ paddingLeft: l.author === 'person' ? 0 : 36 }}><ChatText text={l.text} /></View>{l.files.map((f) => <Card key={f.url}><FileRow f={f} /></Card>)}
     </View>)}{!lines.length && <T tone="mute">Start a job here and follow along as the crew works together.</T>}</ScrollView>
@@ -2077,7 +2077,7 @@ const s = StyleSheet.create({
   job: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 },
   step: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 5 },
   stepDot: { width: 10, height: 10, borderRadius: 5 },
-  line: { maxWidth: '92%', gap: 4, alignSelf: 'flex-start' },
+  line: { width: '100%', maxWidth: '92%', gap: 4, alignSelf: 'flex-start' },
   intro: { alignItems: 'center', gap: 2, paddingTop: 12, paddingBottom: 6 },
   introName: { fontSize: 20, lineHeight: 26, fontWeight: '700', letterSpacing: -0.3, marginTop: 8 },
   day: { alignItems: 'center', marginTop: 10 },
