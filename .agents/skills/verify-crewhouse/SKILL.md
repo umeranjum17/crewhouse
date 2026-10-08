@@ -126,12 +126,12 @@ silent.
 
 Crewhouse is a personal assistant for **one** person. No screen, capture or reply may speak
 as if several people share it — the word list lives in
-`scripts/personal-voice.mjs` (`TERMS`). The check runs automatically at the top of every
+`.agents/skills/verify-crewhouse/scripts/personal-voice.mjs` (`TERMS`). The check runs automatically at the top of every
 `scripts/screens.sh` capture, and by hand anywhere else:
 
 ```bash
-node scripts/personal-voice.mjs               # the copy surfaces: demo seed, screens, prompts
-node scripts/personal-voice.mjs --self-test    # its negative test (see below)
+node .agents/skills/verify-crewhouse/scripts/personal-voice.mjs               # copy sources
+node .agents/skills/verify-crewhouse/scripts/personal-voice.mjs --self-test    # negative test
 ```
 
 It scans the **rendered copy and the producers**: `web/src/demo.ts` (the seed and the
@@ -216,7 +216,7 @@ folder survive — a cleanup that eats the proof fails. Never kill by process na
 
 - `scripts/screens.sh <dest> <slug> <url> [query]` — the four design-bar captures of one
   changed screen (dark and light, 1440 and 390), after the mandatory personal-voice check.
-- `scripts/personal-voice.mjs [paths…] [--self-test]` — the mandatory personal-voice check
+- `node .agents/skills/verify-crewhouse/scripts/personal-voice.mjs [paths…] [--self-test]` — the mandatory personal-voice check
   (one person, one assistant) over the demo seed, the screens and the prompts: exit 0 clean /
   1 a hit to fix at the producer / 2 could not run. `--self-test` is its negative test.
 - `SERIAL=<emulator> node scripts/phone-ui.mjs texts | tap '<regex>' [n] | shot <png>` — the phone driven by what

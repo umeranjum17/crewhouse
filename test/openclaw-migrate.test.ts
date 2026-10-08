@@ -2,7 +2,7 @@
 // the canonical auth route, the config fence on an existing gateway, a retired
 // import repaired through doctor, and an old engine login sealed across restart.
 import assert from 'node:assert/strict';
-import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
@@ -120,8 +120,15 @@ test('an existing engine login and migration archives seal on prepare, restore a
     const good = readFileSync(snapshot), tampered = Buffer.from(good);
     tampered[tampered.length - 1] ^= 1;
     writeFileSync(snapshot, tampered);
-    await assert.rejects(runtime.start(host), /authenticated/, 'tampering fails before restoring credentials');
-    assert.ok(!existsSync(join(engine, 'state')));
+    await runtime.start(host);
+    assert.equal(runtime.kit.state.phase, 'ready');
+    assert.equal(runtime.kit.state.why, 'sign-in-reset', 'tampering reports the reset rather than restoring credentials');
+    assert.equal(await runtime.signedIn('chatgpt'), false, 'the old engine login never returns from bad bytes');
+    const unreadable = readdirSync(engine).filter((name) => /^auth-store\.sealed\.unreadable-\d+$/.test(name));
+    assert.equal(unreadable.length, 1, 'the unreadable snapshot is kept aside once');
+    assert.deepEqual(readFileSync(join(engine, unreadable[0])), tampered, 'the bad bytes are preserved exactly');
+    await runtime.stop();
+    assert.deepEqual(readFileSync(join(engine, unreadable[0])), tampered, 'stopping never overwrites the kept bytes');
     writeFileSync(snapshot, good);
     await runtime.start(host);
     assert.equal(await runtime.signedIn('chatgpt'), true, 'repairing the sealed snapshot preserves the login');
