@@ -1463,6 +1463,15 @@ const APPS: App[] = [
 /** The app grid; which ones are on comes from crewd's connections once it has them. */
 export const apps = (state: Json): App[] => APPS.map((a) => ({ ...a, on: !!state.connections?.includes?.(a.id) }));
 
+/** Herdr's own row on the Apps screen: missing, installed but not answering, or answering. */
+export type HerdrSetup = { state: 'missing' | 'setup' | 'on'; says: string; howto: string };
+export const herdr = (status: Json | null): HerdrSetup | null => {
+  if (!status) return null;
+  if (status.connected) return { state: 'on', says: 'On · your terminal agents answer here', howto: '' };
+  if (status.ready) return { state: 'setup', says: 'Installed, not answering. Open Herdr once, then Retry.', howto: '' };
+  return { state: 'missing', says: 'Not installed. Nothing leaves this computer either way.', howto: String(status.howto ?? '') };
+};
+
 /** One reviewed starter skill: its name, what it does, why it is in the set, what it needs, and whether it is on. */
 export type StarterSkill = { slug: string; name: string; what: string; why: string; needs: string[]; on: boolean; reviewed: boolean };
 /** The Skills screen's set: the reviewed skills as crewd lists them (`GET /api/skills`), plus catalog search rows. */

@@ -1325,6 +1325,9 @@ function You({ state, act, plan }: { state: Json; act: (fn: () => Promise<unknow
 function Apps({ state, refresh }: Ctx) {
   const list = A.apps(state);
   const [connecting, setConnecting] = useState<{ app: A.App; tab: Window | null } | null>(null);
+  const [herdr, setHerdr] = useState<Json>(null);
+  useEffect(() => { void api.herdr().then(setHerdr).catch(() => setHerdr(false)); }, []);
+  const plugin = A.herdr(herdr);
   return (
     <div className="page">
       <a href="#/settings" className="back">‹ Settings</a>
@@ -1335,6 +1338,13 @@ function Apps({ state, refresh }: Ctx) {
           {a.on ? <button className="link" onClick={() => confirm(`Disconnect ${a.name}? Your helpers will stop using it.`) && attempt(async () => { await api.disconnect(a.id); refresh(); }, `${a.name} disconnected`)}>Turn off</button>
             : <button className="btn go" onClick={() => setConnecting({ app: a, tab: A.needsHouse(state, a) ? null : openTab() })}>Connect</button>}</div>)}
       </div>
+      {plugin && <><div className="label">Plugins</div><div className="card list">
+        <div className="row-item app-row-item"><span className="app-ic" style={{ background: '#3b3b4d' }}>H</span><div className="grow"><b>Herdr</b>
+          {plugin.state === 'missing' && plugin.howto ? <><div className="mute small">{plugin.howto}</div><div className="mute small">{plugin.says}</div></>
+            : <div className="mute small">{plugin.says}</div>}</div>
+          {plugin.state === 'on' ? <span className="mute small">On</span>
+            : <button className="btn go" onClick={() => void attempt(async () => setHerdr(await api.herdr()), '')}>Retry</button>}</div>
+      </div></>}
       <div className="card row"><span className="o-ic" aria-hidden>↗</span>
         <span className="grow"><b>Share to Crewhouse</b><div className="mute small">On your phone, tap Share in any app (WhatsApp, Photos, a web page), then Crewhouse. Nothing to connect.</div></span></div>
       <a className="card row" href="#/skills"><span className="o-ic" aria-hidden>✦</span><span className="grow"><b>Skills</b><div className="mute small">Extra abilities for your crew, each reviewed before it arrives.</div></span><b>›</b></a>

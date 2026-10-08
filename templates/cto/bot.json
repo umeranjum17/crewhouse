@@ -1,0 +1,21 @@
+{
+  "display": "CTO",
+  "role": "Watches your terminal agents in Herdr and gets them moving",
+  "models": [
+    "chatgpt"
+  ],
+  "color": "#8A6D1B",
+  "tools": [
+    "crew",
+    "files",
+    "web",
+    "herdr"
+  ],
+  "ideas": [
+    {
+      "needs": [],
+      "promise": "Ask what your terminal agents are up to and I'll tell you which ones are working, stuck or done.",
+      "ask": "What are my terminal agents doing"
+    }
+  ]
+}

@@ -144,6 +144,16 @@ export function effectOf(tool: string, input: Record<string, any>, s: Seen): Eff
   if (cli) {
     const args = (Array.isArray(input.args) ? input.args : []).map(String).join(' ');
     const starts = (p: string) => args === p || args.startsWith(p + ' ');
+    // Herdr is the person's own terminal agents: looking asks once (a standing answer covers later
+    // looks); driving names its pane or agent and the command, and asks every time.
+    if (tool === 'herdr') {
+      const [area = '', verb = '', target = '', ...rest] = (Array.isArray(input.args) ? input.args : []).map(String);
+      const where = area === 'agent' ? `the terminal agent “${target}”` : `pane “${target}”`;
+      const what = rest.join(' ').trim().slice(0, 80);
+      if (cli.spend.some(starts)) return { kind: 'send', words: `${s.bot} wants to drive ${where} (${verb}${what ? `: ${what}` : ''}).` };
+      if (cli.free.some(starts)) return { kind: 'files', words: `${s.bot} wants to look at your terminal agents.`, key: 'herdr:look' };
+      return { kind: 'refuse', why: 'Herdr here lists and reads panes and agents, and drives them with their own commands.' };
+    }
     if (cli.spend.some(starts)) {
       const cap = /max-cost:\s*\$?([\d.]+)/i.exec(args)?.[1];
       return { kind: 'spend', words: `${s.bot} wants to make a paid lookup with ${cli.name}${cap ? `, up to $${cap}` : ''}.`, ...(cap ? { cost: Number(cap) } : {}) };
@@ -198,7 +208,7 @@ export function coversOf(key: string) {
   const [kind, ...rest] = key.split(':');
   const what = rest.join(':');
   if (kind === 'app') { const [app, ...title] = rest; return `“${title.join(':')}” in your ${app}`; }
-  return kind === 'files' ? folderWords(what + '/x') : 'this';
+  return kind === 'files' ? folderWords(what + '/x') : kind === 'herdr' ? 'your terminal agents' : 'this';
 }
 
 /** The element a browser press targets, read out of the page's own snapshot: its name as the page writes it, and the

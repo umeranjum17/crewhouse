@@ -589,6 +589,7 @@ export async function demoCall(method: string, path: string, body?: Json) {
   ] };
   if (method === 'POST' && /^\/api\/skills\/[a-z0-9-]+\/(on|off)$/.test(path)) return { ok: true };
   if (method === 'GET' && path.startsWith('/api/connections/')) return { state: 'waiting' };
+  if (method === 'GET' && path === '/api/herdr') return { ready: false, connected: false, howto: 'Install Herdr from https://herdr.dev, then open Herdr once, in your own terminal' };
   if (method === 'GET' && path.startsWith('/api/schedule')) {
     const text = decodeURIComponent(path.split('text=')[1] ?? '').replace(/\+/g, ' ');
     try {

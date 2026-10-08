@@ -7,7 +7,7 @@ import type { Config } from './config.ts';
 import type { Store } from './db.ts';
 import { quietNow, type Crew } from './crew.ts';
 import * as disk from './bots.ts';
-import { toolStatus } from './tools.ts';
+import { herdrStatus, toolStatus } from './tools.ts';
 import { PROVIDERS, provider } from './accounts.ts';
 import { coversOf, toolWords } from './policy.ts';
 import { describe, firstRun, nextRun, parseSchedule, reminderAt } from './routines.ts';
@@ -240,6 +240,8 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     }
     // Connections: the person's apps (Notion, Canva, Google…), connected on the app's own page (docs/ui-contract.md).
     if (m === 'GET' && p === '/api/connections') return crew.connections.list();
+    // Herdr's own row on the Apps screen: missing, installed, or answering (probed when the screen opens).
+    if (m === 'GET' && p === '/api/herdr') return herdrStatus(cfg);
     // The "How I did it" drawer: one plain row per tool call of a task, recorded by crewd, redacted to words.
     if ((r = p.match(/^\/api\/task\/(\d+)\/trail$/)) && m === 'GET') {
       const id = Number(r[1]);

@@ -88,6 +88,16 @@ export function toolStatus(cfg: Config) {
 
 export type ToolState = ReturnType<typeof toolStatus>[number];
 
+/** Herdr's setup state for its own row on the Apps screen: here, and its server answering. Probed on demand, never in the snapshot. */
+export function herdrStatus(cfg: Config) {
+  const t = toolStatus(cfg).find((x) => x.id === 'herdr');
+  const howto = t?.install.system ?? '';
+  try {
+    execFileSync(which(cfg, 'herdr')!, ['status', 'server'], { timeout: 5000, stdio: 'pipe' });
+    return { ready: true, connected: true, howto: '' };
+  } catch { return { ready: !!t && !t.missing.length, connected: false, howto }; }
+}
+
 /** What a bot's grants turn into: ready tools, AXIs and env. Missing tools are not offered. */
 export function resolveGrants(cfg: Config, grants: string[], vars: Record<string, string>) {
   const all = new Map(toolStatus(cfg).map((t) => [t.id, t]));
