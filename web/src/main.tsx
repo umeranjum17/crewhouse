@@ -40,10 +40,11 @@ const typeInto = (id: string) => ({ chat: id });
 
 type Ctx = { state: Json; live: A.OfficeView; tick: number; refresh: () => void; night: boolean; offline: boolean; accounts: Json[] | null };
 
-/** What Chief knows from the app itself, not the state: the computer out of reach, his composer, the sign-in. */
+/** What Chief knows from the app itself, not the state: the computer out of reach, his composer, the sign-in.
+ *  The sign-in wait is the thread card's own test (AccountCard: no account ready to think with), once accounts are known. */
 function chiefLocal(ctx: Ctx, listen = false): A.ChiefLocal {
-  const g = A.account(ctx.accounts);
-  return { offline: ctx.offline, listen, signedOut: g.state === 'signed-out' || g.notIncluded };
+  const g = A.aiList(ctx.accounts).mine[0].g;
+  return { offline: ctx.offline, listen, signedOut: !!ctx.accounts && (g.state !== 'ready' || g.notIncluded) };
 }
 
 // ---------- first run ----------
@@ -507,7 +508,6 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
   const [around, setAround] = useState(m ? Number(m.slice(1)) : 0);
   const load = useCallback((ar = around) => api.bot(id, ar || undefined).then(setPage).catch(() => {}), [id, around]);
   useEffect(() => { void load(); }, [load, tick]);
-  const end = useRef<HTMLDivElement>(null);
   const lines = hero ? A.trayNotes(state, A.lines(page, id, state)) : A.lines(page, id, state);
   const echoed = pending && !(page?.messages ?? []).some((x: Json) => x.author === 'person' && x.id > pending.after && A.plain(x.text) === A.plain(pending.text));
   const waiting = pending && !partial && !(page?.messages ?? []).some((x: Json) => x.author === 'bot' && x.id > pending.after);
@@ -519,14 +519,14 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
   useEffect(() => { if ((page?.messages ?? []).some((x: Json) => x.author === 'bot' && x.text === partial)) setPartial(''); }, [page, partial]);
   const phoneOffer = id === 'chief' ? A.phoneOffer(page) : null;
   const box = useRef<HTMLDivElement>(null);
-  // The thread scrolls by its own column on a desk and in Home's chat on a phone (a scrollIntoView here once dragged the
-  // whole page up with it, hiding Chief's hero); other phone chats keep the document scroll. An anchored landing
-  // scrolls to the line instead. Every chat opens at its newest line (Main600) under a hero that stays in place (096).
+  // Every thread scrolls in its own lines column (phone and desk alike), so the box holds itself at its newest line.
+  // A scrollIntoView here once dragged the whole page up with it, hiding Chief's hero. An anchored landing scrolls
+  // to the line instead. Every chat opens at its newest line (Main600) under a hero that stays in place (096).
   useEffect(() => {
     if (around) return;
-    if (hero || matchMedia('(min-width: 900px)').matches) { const el = box.current; if (el) el.scrollTop = el.scrollHeight; }
-    else end.current?.scrollIntoView({ block: 'end' });
-  }, [lines.length, around, !!echoed, !!waiting, partial, hero]);
+    const el = box.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [lines.length, around, !!echoed, !!waiting, partial]);
   // The landing itself: the matched line, centred, with the one motion that explains where you are.
   useEffect(() => {
     if (!around || !lines.length) return;
@@ -598,7 +598,6 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
         {h && <Stuck h={h} refresh={refresh} />}
         <AccountCard accounts={accounts} inChat onReady={() => { void load(); refresh(); }} />
         {g.state === 'ready' && !g.notIncluded && A.resting(state) && <div className="card nudge"><span className="grow">{A.resting(state)}. {name === 'Chief' ? "I'll" : `${name} will`} finish then.</span></div>}
-        <div ref={end} className="end" />
       </div>
       <aside className={`working-on${rail ? ' tonight-rail' : ''}`}>
         {rail}
@@ -1322,9 +1321,9 @@ function useLook() {
 
 /** The desk rail: Chief's helmet and status, every helper with the word the office uses for them (A.roster),
  *  and what's on a schedule. Chief's own line stays in the nav above; this is his face for the rail. */
-function SideCrew({ state, live, id }: { state: Json; live: A.OfficeView; id?: string }) {
+function SideCrew({ state, live, id, signedOut }: { state: Json; live: A.OfficeView; id?: string; signedOut?: boolean }) {
   const chats = new Map(A.chats(state).map((c) => [c.id, c]));
-  const word = A.chiefWord(live);
+  const word = signedOut ? NEEDS_SIGNIN : A.chiefWord(live);
   const working = live.crew.filter((c) => A.seatOf(c) === 'working');
   const held = live.crew.filter((c) => c.ask).length;
   const rest = live.crew.length - working.length - held;
@@ -1335,7 +1334,7 @@ function SideCrew({ state, live, id }: { state: Json; live: A.OfficeView; id?: s
   return (
     <div className="side-crew">
       <a className="side-chief" href="#/chief" aria-label="Chief's chat"><span className="side-helmet"><ChiefArt mood={live.chief.mood} d={7} whole /></span><b>Chief</b></a>
-      <div className={`side-status${word === 'Needs you' ? ' needs' : ''}`}><i />{word}</div>
+      <div className={`side-status${word === 'Needs you' || signedOut ? ' needs' : ''}`}><i />{word}</div>
       {sub && <div className="mute small side-sub">{sub}</div>}
       <a className="label side-label" href="#/crew">Your crew<span>{live.crew.length}</span></a>
       {A.roster(live.crew).map((h) => {
@@ -1418,7 +1417,7 @@ function App() {
         <aside className="side">
           <a href="#/" className="brand"><Logo night={night} />{demo && <span className="demo-tag">Demo</span>}</a>
           <nav className="side-navs">{rail.map(([h, l, i, n]) => <a key={h} href={h} className={`side-nav ${railOn(h) ? 'on' : ''}`}><Icon name={i} />{l}{n > 0 && <span className={`side-count${h === '#/' ? ' hot' : ''}`}>{n}</span>}</a>)}</nav>
-          <SideCrew state={ctx.state} live={ctx.live} id={v.view === 'helper' ? v.id : undefined} />
+          <SideCrew state={ctx.state} live={ctx.live} id={v.view === 'helper' ? v.id : undefined} signedOut={chiefLocal(ctx).signedOut && !ctx.offline} />
           <div className="grow" />
           {A.meter(ctx.state) && <a href="#/settings" className="side-meter mute small">{A.meter(ctx.state)}</a>}
           <a href="#/settings" className={`side-me ${v.view === 'settings' ? 'on' : ''}`} aria-label={`Settings${me ? `, ${me}` : ''}`}>

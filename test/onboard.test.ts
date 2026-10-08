@@ -46,6 +46,12 @@ test('first run: her first request waits for her own sign-in, Chief says why in 
   const said = () => db.all("SELECT text FROM messages WHERE bot = 'chief' AND author = 'bot'").map((m: any) => m.text);
   assert.ok(said().includes("The crew uses your AI account. Sign in when you're ready and I'll start."), said().join('\n'));
   assert.equal(db.get("SELECT 1 FROM events WHERE kind = 'run.started'"), undefined, 'nothing ran on anyone else\'s account');
+  // More notes while she waits: Chief notes the next one in other words, then holds the rest quietly, never one sentence twice.
+  for (const note of ['Also the school run on Friday', 'And remind me about the dentist']) {
+    const { task: n } = await crew.post('chief', note) as { task: number };
+    await until('the note waits', () => task(db, n).state === 'paused');
+  }
+  assert.deepEqual(said(), ["The crew uses your AI account. Sign in when you're ready and I'll start.", "Noted. I'll start on this once you sign in."]);
   // She signs in: it starts by itself, and Chief thanks her.
   await crew.accounts.login('chatgpt');
   await crew.accounts.finished('chatgpt');

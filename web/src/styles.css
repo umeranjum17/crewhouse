@@ -575,7 +575,6 @@ button.code { border: 0; color: var(--ink); cursor: pointer; display: grid; gap:
 .sticky-top { position: sticky; top: 0; z-index: 5; margin: -18px -18px 0; padding: 14px 18px 0; background: color-mix(in srgb, var(--bg) 78%, transparent); backdrop-filter: blur(14px); }
 /* A chat's header is an opaque band: lines scroll under it, never half-show through. */
 .chat-page .sticky-top { margin: -16px -16px 0; padding: 16px; background: var(--bg); backdrop-filter: none; }
-.lines .end { scroll-margin-bottom: 140px; }
 @media (min-width: 900px) { .sticky-top { margin: -32px -36px 0; padding: 24px 36px 0; } .chat-page .sticky-top { margin: 0; padding: 0; } }
 
 /* ---------- first run, sign-in and connect cards (the onboarding prototype) ---------- */
@@ -1250,6 +1249,22 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
   .room-page > .chat { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
   .room-page .lines { flex: 1 1 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-bottom: 10px; }
   .room-page .dock { position: static; flex: none; margin: 0 -16px; padding: 6px 16px max(12px, env(safe-area-inset-bottom)); mask-image: none; background: var(--bg); }
+}
+
+/* Every other thread on a phone is one screen too: the head stays put, only the thread's own lines scroll, the box
+   stands under them. Chief's chat and the room carry their own copies of this above; the one cause is shared, so a
+   thread never runs under a bar or the composer on any phone chat. Details pages keep the document scroll. */
+@media (max-width: 899px) {
+  .page.chat-page:not(.home-chat):not(.room-page):has(> .chat) { position: relative; height: 100dvh; display: flex; flex-direction: column; padding-bottom: 0; overflow: hidden; }
+  .page.chat-page:not(.home-chat):not(.room-page):has(> .chat) > .chat { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
+  .page.chat-page:not(.home-chat):not(.room-page):has(> .chat) .lines { flex: 1 1 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+  .page.chat-page:not(.home-chat):not(.room-page):has(> .chat) .dock { position: static; flex: none; margin: 0 -16px; padding: 6px 16px max(12px, env(safe-area-inset-bottom)); mask-image: none; background: var(--bg); }
+  /* The sticky band's negative top margin pulls the thread under the head once the page itself stops scrolling
+     (the room carries the same band): the head keeps its full bleed, the thread starts under it. */
+  .page.chat-page:not(.home-chat):has(> .chat) .sticky-top { margin-top: 0; }
+  /* Every phone thread (Chief's chat and the room too) fades out at its top edge, as the dock does at its own: a line
+     scrolled half past the bar fades rather than shows sliced; the padding keeps the first line clear of the fade. */
+  .page.chat-page:has(> .chat) .lines { padding-top: 20px; mask-image: linear-gradient(transparent, #000 20px); }
 }
 
 /* Office takes the full width on a desk: no right pane beside the panels (the phone keeps its list under them).

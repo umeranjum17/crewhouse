@@ -9,6 +9,8 @@
 // ?demo=fresh (the Chief-only Home a new person gets: no helpers hired yet, nothing to hand over),
 // ?demo=crew1, crew5, crew12, crew30 (the office at that many helpers).
 // ?demo=building (Scribe mid-build: the question answered, the workbook not yet delivered).
+// ?demo=longthread (a signed-out thread long enough to scroll, for the thread-clear regression test).
+// &slowaccounts holds the accounts answer 3 s (the real engine's sign-in check is that slow).
 // &sheet=signin or &sheet=connect opens that sheet, and &phase=… pins it to one state.
 import type { Json } from './api.ts';
 import { AIS } from './adapter.ts';
@@ -19,7 +21,7 @@ const now = Date.now();
 // The local day's start, as the app counts "done today": jobs meant to be done today never slip into yesterday after midnight.
 const today = new Date(now).setHours(0, 0, 0, 0);
 const min = 60_000;
-const signin = ['signin', 'hello', 'first', 'work'].includes(variant);
+const signin = ['signin', 'hello', 'first', 'work', 'longthread'].includes(variant);
 const firstRun = ['first', 'answer', 'plan', 'work'].includes(variant);
 const fresh = variant === 'fresh';
 // Google setup: what crewd's ideas[] says a job waits on (docs/ui-contract.md).
@@ -276,6 +278,11 @@ if (variant === 'job-plan') pages.chief.messages.push({ id: 71, author: 'person'
   { id: 72, author: 'chief', text: 'Happy to, Umer. Scout will take it; here is how, before anything starts.' });
 if (variant === 'room') pages.chief.messages.push({ id: 70, author: 'bot', text: 'All done, Umer. Scout: three stories. Scribe: a newsletter draft waiting for your yes.' });
 if (fresh) pages.chief = { messages: [] };
+// ?demo=longthread: a signed-out thread long enough to scroll, for the thread-clear regression test:
+// every provider button and every line must clear the bars and the composer at any scroll position.
+if (variant === 'longthread') for (let i = 0; i < 12; i++) pages.chief.messages.push(
+  { id: 100 + 2 * i, author: 'person', text: `Umer's thread filler message number ${i + 1} about bills and helpers, with enough words to wrap a couple of lines on a phone screen` },
+  { id: 101 + 2 * i, author: 'chief', text: 'I will start the moment you sign in with ChatGPT.' });
 if (variant === 'connect') pages.pip = { messages: [
   { id: 1, author: 'person', text: "What's on this week?" },
   { id: 2, author: 'bot', text: 'I can do this with your Google Calendar.' },
@@ -520,7 +527,8 @@ export async function demoCall(method: string, path: string, body?: Json) {
     const things = state.tasks.filter((t: Json) => `${t.title} ${t.result ?? ''}`.toLowerCase().includes(q)).map((t: Json) => ({ id: t.id, bot: t.bot, title: t.title, at: t.updated_at }));
     return { messages: messages.slice(0, 50), things: things.slice(0, 20) };
   }
-  if (method === 'GET' && path.startsWith('/api/accounts')) return accounts;
+  // &slowaccounts: the accounts answer takes 3 s, as the real engine's can: the screens while it is still checking.
+  if (method === 'GET' && path.startsWith('/api/accounts')) return new URLSearchParams(location.search).has('slowaccounts') ? new Promise((r) => setTimeout(() => r(accounts), 3000)) : accounts;
   // The workbook crewd reads for the card and the panel (src/workbooks.ts): the tabs, headings and first rows.
   if (method === 'GET' && path.startsWith('/api/workbook')) return path.includes('flights') ? flights : book;
   // The document crewd reads for its card and panel (src/documents.ts): the headings, paragraphs, lists and tables —
