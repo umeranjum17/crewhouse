@@ -1,5 +1,0 @@
-rows: 2
-max lines[] (preview, capped 160): 160
-max linesFull[] (whole text): 505
-longest linesFull sample: : Today You 11:49 am Please acknowledge this long probe line without calling any tools: 0123456789 0123456789 0123456789...
-PASS: a reply line over 400 chars is recorded whole in screen.jsonl
