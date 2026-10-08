@@ -30,7 +30,8 @@ const mdBlocks = (tokens: any[]): ReactNode => tokens.map((t, i) => t.type === '
 export function ChatText({ text }: { text: string }) {
   const [more, setMore] = useState(false);
   const long = text.length > 700 || text.split('\n').length > 10;
-  const shown = long && !more ? text.slice(0, 650).replace(/\s+\S*$/, '') : text;
+  // A cut inside a list item drops that item, so the fold never ends on an empty or half-cut bullet.
+  const shown = long && !more ? text.slice(0, 650).replace(/\s+\S*$/, '').replace(/\n[ \t]*(?:[-*+]|\d+[.)])(?:[ \t][^\n]*)?$/, '') : text;
   return <div className="chat-md">{mdBlocks(chatTokens(shown))}{long && <button className="chat-more" onClick={() => setMore(!more)}>{more ? 'Less' : 'More'}</button>}</div>;
 }
 

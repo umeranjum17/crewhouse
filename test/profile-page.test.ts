@@ -81,7 +81,7 @@ test('About me and my work shows the record, and each part can be changed, forgo
   await b.open('demo=calm&day#/settings');
   await until('the record in plain parts', () => b.run(`document.querySelectorAll('.profile-part').length >= 3`), 30_000);
   assert.deepEqual(await b.run(parts()), [
-    'I run a bakery for local families.',
+    'I run a bakery for my neighbourhood.',
     'My business is called Morning Loaf.',
     'I write in a warm, plain voice.',
   ]);
