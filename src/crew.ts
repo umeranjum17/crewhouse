@@ -130,17 +130,6 @@ export function relayResult(reply: string, note = '') {
   return 'The result is ready.';
 }
 
-export function chiefFirst(body: string) {
-  const url = /https?:\/\/[^\s]+/i.exec(body)?.[0];
-  if (url) { try { return `Looking at ${new URL(url).hostname.replace(/^www\./, '')} now.`; } catch { /* malformed address */ } }
-  if (/\b(market|marketing|promote|launch)\b/i.test(body)) return "I'll work out the next step for your app.";
-  if (/\b(dinner|meal)\b/i.test(body)) return "I'll put together a dinner plan.";
-  if (/\b(remind|reminder)\b/i.test(body)) return "I'll work out the reminder and when it should run.";
-  if (/\b(research|look into|find out|what do people say)\b/i.test(body)) return "I'll check the question and what evidence would help.";
-  if (/\b(calendar|meetings?|inbox|emails?|mail)\b/i.test(body)) return /\b(calendar|meetings?)\b/i.test(body) ? 'Checking your calendar.' : 'Checking your email.';
-  return "I'll look into that now.";
-}
-
 const partOfDay = () => { const h = new Date().getHours(); return h >= 5 && h < 12 ? 'morning' : h >= 12 && h < 18 ? 'afternoon' : 'evening'; };
 /** Chief's first words before the person opens Hello or sends a task. */
 export const chiefGreeting = () =>
@@ -1199,7 +1188,6 @@ export class Crew {
       if (link.key) this.db.run('INSERT INTO settings (key, value) VALUES (?, ?)', `link.key.${link.key}`, JSON.stringify({ task: id, shown }));
       return id;
     });
-    if (bot === CHIEF) this.db.live('reply.partial', CHIEF, { task: id, text: chiefFirst(body) });
     queueMicrotask(() => this.dispatch());
     return { task: id, shown };
   }
@@ -1449,7 +1437,7 @@ export class Crew {
     if (this.live.get(botId) !== l) return;
     if (e.type === 'text') {
       if (firstWords) { firstWords = false; stamp('first words'); }
-      this.db.live('reply.partial', botId, { task: l.task, text: cleanReply(e.text).slice(0, 280) });
+      this.db.live('reply.partial', botId, { task: l.task, text: cleanReply(e.text) });
     }
     else if (e.type === 'usage' && e.tokens) {
       this.db.run('UPDATE tasks SET tokens = tokens + ? WHERE id = ?', Math.round(e.tokens), l.task);

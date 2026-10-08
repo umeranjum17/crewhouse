@@ -238,8 +238,7 @@ video.media { width: auto; max-width: 100%; max-height: min(70vh, 640px); height
 .cur { display: inline-block; width: .55em; height: 1.05em; background: #8dffc0; vertical-align: -3px; margin-left: 3px; }
 
 /* A finished job is a toast now (parts.tsx Celebrate), not an overlay. */
-.celebrate-toast { bottom: 90px; }
-.celebrate-toast a { text-decoration: underline; text-underline-offset: 3px; margin-left: 4px; }
+.toast a { text-decoration: underline; text-underline-offset: 3px; margin-left: 4px; }
 
 /* hello */
 .hello { max-width: 440px; margin: 0 auto; padding: 36px 20px 40px; display: grid; justify-items: center; text-align: center; gap: 4px; }
@@ -432,7 +431,12 @@ input[role='switch']:focus-visible { outline: 2px solid var(--ink); outline-offs
 .nudge-line { color: var(--ink2); font-size: 14.5px; }
 
 /* toast, offline */
-.toast { position: fixed; left: 50%; bottom: 90px; transform: translateX(-50%); background: var(--ink); color: var(--bg); font-weight: 500; border-radius: 999px; padding: 10px 18px; z-index: 60; max-width: 90vw; text-align: center; animation: up .25s ease; box-shadow: 0 10px 30px #0003; }
+/* One place for every toast (parts.tsx Toast): first in the dock, above the box you type in, or a bar along the foot. */
+.toast { background: var(--ink); color: var(--bg); font-weight: 500; border-radius: 999px; padding: 10px 18px; width: fit-content; max-width: 100%; margin: 0 auto 10px; text-align: center; animation: up .25s ease; }
+.dock:has(> .toast) { display: flex; flex-direction: column; }
+.dock > .toast { order: -1; }
+.toast.foot { position: fixed; left: 0; right: 0; bottom: 0; z-index: 60; width: auto; max-width: none; margin: 0; border-radius: 0; padding: 14px 18px calc(14px + env(safe-area-inset-bottom)); }
+body:has(> * .toast.foot) { padding-bottom: 56px; }
 .offline { position: sticky; top: 0; z-index: 20; background: color-mix(in srgb, var(--amber) 14%, var(--solid)); color: var(--ink); border-bottom: 1px solid color-mix(in srgb, var(--amber) 35%, var(--line)); text-align: center; font: 500 14px/1.45 var(--ui); padding: 10px 16px; }
 
 /* shell: phone first, no tab bar (B1): Home's gear reaches Settings, and Settings every other place */
@@ -747,10 +751,21 @@ details.card[open] > summary { margin-bottom: 10px; }
 .chat-intro .halo { padding: 14px; margin-bottom: 8px; animation: pop 320ms var(--ease) both; }
 .chat-intro b { font: 650 20px/26px var(--ui); letter-spacing: -.015em; }
 .chat-intro span:last-child { color: var(--ink2); font-size: 14px; line-height: 1.45; max-width: 36ch; }
-.typing { display: inline-flex; gap: 5px; padding: 8px 0 6px; }
-.typing i { width: 7px; height: 7px; border-radius: 50%; background: var(--ink2); animation: dot 1.2s ease-in-out infinite; }
-.typing i:nth-child(2) { animation-delay: .15s; }
-.typing i:nth-child(3) { animation-delay: .3s; }
+/* The live line (board: "What Penny is doing"): a word and a clock, then the last true steps with their times. */
+.live-body { display: grid; gap: 6px; padding-top: 1px; }
+.live-head { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; font: 600 13px/18px var(--ui); }
+.live-word { display: inline-flex; align-items: center; gap: 6px; color: var(--ok-ink); }
+.live-word i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex: none; }
+.live-line.needs .live-word, .live-line.reading .live-word { color: var(--pink-ink); }
+.live-line.waiting .live-word { color: var(--mute); }
+.live-head .link { font-weight: 500; }
+.live-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.live-steps li { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 8px; font: 400 14px/20px var(--ui); color: var(--ink2); overflow-wrap: anywhere; }
+.live-steps li .time { padding-top: 1px; }
+.live-steps li.now { color: var(--ink); }
+.live-line.working .live-steps li.now > span:first-of-type { color: var(--ok-ink); }
+.live-end { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; max-width: 640px; margin: 10px 0 0; padding-left: 74px; font: 500 13px/18px var(--ui); color: var(--mute); }
+.live-end.failed, .live-end.unsure { color: var(--amber); }
 .streaming .chat-md > :last-child::after { content: ''; display: inline-block; width: .45em; height: 1.05em; margin-left: 3px; vertical-align: -.18em; border-radius: 2px; background: var(--pink); animation: caret 1s steps(1) infinite; }
 .skeleton { display: grid; gap: 12px; padding: 28px 0 0 36px; }
 .skeleton i { height: 14px; border-radius: 7px; background: linear-gradient(90deg, var(--soft) 20%, var(--line) 50%, var(--soft) 80%); background-size: 200% 100%; animation: shimmer 1.4s linear infinite; }

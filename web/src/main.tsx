@@ -501,8 +501,12 @@ function PhoneCard({ offer, reload }: { offer: Json; reload: () => void }) {
 function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id: string; m?: string; hero?: boolean; rail?: ReactNode }) {
   const g = A.account(accounts);
   const [page, setPage] = useState<Json>(null);
-  const [pending, setPending] = useState<{ text: string; after: number } | null>(null);
+  const [pending, setPending] = useState<{ text: string; after: number; at: number } | null>(null);
   const [partial, setPartial] = useState('');
+  // The live line's own feed: crewd's pushed events with the moment they were heard, and which replies are streaming.
+  const [heard, setHeard] = useState<Json[]>([]);
+  const [writing, setWriting] = useState(new Map<number, number>());
+  const [now, setNow] = useState(0);
   const [seed, setSeed] = useState(0); // a starter chip fills the box from outside; remount reads the draft back
   // A search landing on an old line loads a window around it; once you send, the anchor goes and the thread reads to the end.
   const [around, setAround] = useState(m ? Number(m.slice(1)) : 0);
@@ -510,12 +514,26 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
   useEffect(() => { void load(); }, [load, tick]);
   const lines = hero ? A.trayNotes(state, A.lines(page, id, state)) : A.lines(page, id, state);
   const echoed = pending && !(page?.messages ?? []).some((x: Json) => x.author === 'person' && x.id > pending.after && A.plain(x.text) === A.plain(pending.text));
-  const waiting = pending && !partial && !(page?.messages ?? []).some((x: Json) => x.author === 'bot' && x.id > pending.after);
+  const waiting = pending && !(page?.messages ?? []).some((x: Json) => x.author === 'bot' && x.id > pending.after);
+  useEffect(() => { setHeard([]); setWriting(new Map()); }, [id]);
   useEffect(() => subscribe((e) => {
+    if (e.kind === 'reply.partial' && typeof e.data?.task === 'number') setWriting((w) => (w.has(e.data.task) ? w : new Map(w).set(e.data.task, Date.now())));
+    if (typeof e.seq === 'number') setHeard((h) => [...h.slice(-300), { ...e, seen: Date.now() }]);
     if (e.bot !== id) return;
     if (e.kind === 'reply.partial') setPartial(/\bstub [\w-]+:/.test(e.data.text) ? '' : e.data.text);
     if (e.kind === 'message' && e.data?.author === 'bot') setPartial('');
   }), [id]);
+  const crewNames = A.crew(state);
+  const ln = page ? A.liveLine({ id, name: crewNames.find((x) => x.id === id)?.name ?? 'Chief', crew: crewNames, writing, heard,
+    tasks: [...(page.tasks ?? []), ...(id === 'chief' ? state.tasks ?? [] : [])], events: [...(page.trail ?? []), ...(state.events ?? [])],
+    sent: waiting && pending ? pending.at : undefined }) : null;
+  const ticking = !!ln && ln.took === undefined;
+  // The clock beside the step moves on each whole second of the job, so the thread never sits still.
+  useEffect(() => {
+    if (!ticking) return;
+    const t = setTimeout(() => setNow(Date.now()), 1005 - ((Date.now() - ln!.since) % 1000));
+    return () => clearTimeout(t);
+  }, [ticking, ln?.since, now]);
   useEffect(() => { if ((page?.messages ?? []).some((x: Json) => x.author === 'bot' && x.text === partial)) setPartial(''); }, [page, partial]);
   const phoneOffer = id === 'chief' ? A.phoneOffer(page) : null;
   const box = useRef<HTMLDivElement>(null);
@@ -526,7 +544,7 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
     if (around) return;
     const el = box.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [lines.length, around, !!echoed, !!waiting, partial]);
+  }, [lines.length, around, !!echoed, ln?.state, ln?.steps.length, partial]);
   // The landing itself: the matched line, centred, with the one motion that explains where you are.
   useEffect(() => {
     if (!around || !lines.length) return;
@@ -548,7 +566,7 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
   const cards = A.cards(state).filter((c) => c.helper === id);
   const last = lines.at(-1);
   const send = async (t: string) => {
-    setPending({ text: t, after: page?.messages?.at(-1)?.id ?? 0 });
+    setPending({ text: t, after: page?.messages?.at(-1)?.id ?? 0, at: Date.now() });
     setPartial('');
     const ok = await attempt(() => api.post(id, t), undefined, true);
     if (ok) { setAround(0); void load(0); refresh(); } else setPending(null);
@@ -590,8 +608,8 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
           </div>{l.from === 'me' && here}</div>;
         })}
         {echoed && <div className="line me fresh"><div className="line-by"><span className="who">You</span></div><div className="bubble-text">{pending.text}</div></div>}
-        {waiting && id === 'chief' && <div className="line them fresh" role="status"><div className="line-by"><span className="who">Chief</span></div><div className="bubble-text"><span className="typing" aria-hidden><i /><i /><i /></span><span className="sr">Chief is on it</span></div></div>}
         {!!partial && <div className="line them streaming" aria-live="polite"><div className="line-by"><span className="who">{name}</span></div><div className="bubble-text"><ChatText text={partial} /></div></div>}
+        {ln && <LiveRow ln={ln} />}
         {A.building(lines, live) && <div className="line them" role="status"><div className="line-by"><span className="who">{name}</span></div><div className="building-card" aria-label="Building it"><i aria-hidden /><i aria-hidden /><div className="bubble-text">Building it. I’ll share it here.</div></div></div>}
         {last?.choices.length ? <div className="chips">{last.choices.map((c) => <button key={c} className="chip" onClick={() => send(c)}>{c}</button>)}</div> : null}
         {cards.filter((c) => !lines.length || lines.every((x) => (x.at ?? 0) > c.at)).map((c) => c.kind === 'connect' ? <ConnectCard key={c.id} c={c} helper={h?.name} state={state} onDone={refresh} /> : <AskCard key={c.id} c={c} who={h} onDone={refresh} />)}
@@ -607,6 +625,26 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
       <div className="dock"><Composer key={seed} placeholder={id === 'chief' ? (hero && !matchMedia('(min-width: 900px)').matches ? 'Ask Chief anything' : 'Ask Chief anything…') : `Message ${name}…`} onSend={send} chips={hero ? A.ideas(state).map((i: Json) => ({ label: i.ask.trim(), ask: i.ask })) : undefined} {...typeInto(id)} /></div>
     </div>
   );
+}
+
+const LIVE_WORD: Record<A.LiveLine['state'], string> = { reading: 'On it', working: 'At work', needs: 'Needs you', waiting: 'Waiting',
+  done: 'Done', failed: "Didn't finish", unsure: 'Not sure it worked' };
+/** The live line under a thread: who is on it, a clock counting up, and the last few true steps; at the end, one quiet
+ *  line with how long it took. A job passed to a helper links to that helper's chat. */
+function LiveRow({ ln }: { ln: A.LiveLine }) {
+  const link = ln.helper && <a className="link" href={`#/h/${ln.helper}`}>Open {ln.who}'s chat ›</a>;
+  if (ln.took !== undefined) return <div className={`live-end ${ln.state}`} role="status">
+    <span>{ln.helper ? `${ln.who} · ` : ''}{LIVE_WORD[ln.state]}</span><span className="time">{A.took(ln.took)}</span>
+    {!!ln.count && <span>{ln.count} {ln.count === 1 ? 'step' : 'steps'}</span>}{link}</div>;
+  const last = ln.steps.at(-1)!;
+  return <div className={`line them live-line ${ln.state}`}>
+    <div className="line-by"><span className="who">{ln.who}</span></div>
+    <div className="live-body">
+      <div className="live-head"><span className="live-word"><i aria-hidden />{LIVE_WORD[ln.state]}</span><span className="time" aria-hidden>{A.took(Date.now() - ln.since)}</span>{link}</div>
+      <ol className="live-steps" aria-live="polite">{ln.steps.slice(-4).map((s) => <li key={`${s.at}-${s.text}`} className={s === last ? 'now' : ''}>
+        <time className="time">{A.clock(s.at)}</time><span>{s.text}{s === last && Date.now() - s.at > 20_000 && <span className="mute"> · still on it</span>}</span></li>)}</ol>
+    </div>
+  </div>;
 }
 
 function Room(ctx: Ctx) {
@@ -1422,7 +1460,8 @@ function App() {
     addEventListener('hashchange', onHash);
     refresh();
     let pending: any;
-    const stop = subscribe((e) => { hear(e); clearTimeout(pending); pending = setTimeout(refresh, 120); });
+    // Streamed words are not a change of state: refreshing on each would hold the refresh off until the reply ends.
+    const stop = subscribe((e) => { hear(e); if (e.kind === 'reply.partial') return; clearTimeout(pending); pending = setTimeout(refresh, 120); });
     const poll = setInterval(refresh, 15000); // belt and braces if the socket is quietly gone
     if (new URLSearchParams(location.search).has('celebrate')) setParty({ title: "Mum's birthday video", helper: 'reel' });
     return () => { removeEventListener('hashchange', onHash); stop(); clearInterval(poll); };

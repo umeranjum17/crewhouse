@@ -29,7 +29,7 @@ import { qrMatrix } from '@byokit/ui-core';
 import * as motion from './src/motion';
 import { MARKS } from './src/marks';
 import { askOf, sharedOf } from './src/ask';
-import { bubbleOff, bubbleOn, bubbleResume, bubbleState, bubbleWords, openBubblePermission, showCrew, wanted, type OverlayState } from './src/bubble';
+import { BUBBLE_DP, bubbleOff, bubbleOn, bubbleResume, bubbleState, bubbleWords, openBubblePermission, showCrew, useBubbleEdge, wanted, type OverlayState } from './src/bubble';
 import { chip, chipSettings, chipState, chipWords, onChip, type StatusState } from './src/chip';
 import { island } from './src/island';
 import { Office, summaryOf, useOffice } from './src/office';
@@ -744,6 +744,7 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
   useEffect(() => () => show(null), []);
   // Chief on the screen, when the person left him on: his face follows this same refresh while the app is open.
   useEffect(() => { void bubbleResume(grant); }, [grant]);
+  const edge = useBubbleEdge();
   useEffect(() => { if (out || state) showCrew(out ? null : state, out); }, [state, out]);
   // Out of touch: say what the phone observed and what to try, looked at again every few seconds (Tailscale switched
   // on, back on the Wi-Fi, the computer woke); each look is bounded, and the link keeps retrying by itself meanwhile.
@@ -838,7 +839,7 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
           </Pressable>
         </Pressable>
       </Modal>
-      <View style={{ flex: 1 }}>
+      <View style={[{ flex: 1 }, edge && { [edge === 'left' ? 'paddingLeft' : 'paddingRight']: BUBBLE_DP }]}>
         {route.view === 'home' && <Home {...ctx} />}
         {route.view === 'chief' && <ChiefPage key={stack.length} {...ctx} m={route.m} />}
         {route.view === 'room' && <Room {...ctx} />}
