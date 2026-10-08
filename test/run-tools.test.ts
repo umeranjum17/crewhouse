@@ -23,7 +23,11 @@ test('Herdr setup probes are asynchronous, bounded and report live state', async
     assert.equal(missing.connected, false);
     assert.deepEqual(herdr(missing), { state: 'missing', says: 'Not installed.', howto: missing.howto });
     const binary = join(bin, 'herdr');
-    writeFileSync(binary, '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+    writeFileSync(binary, '#!/bin/sh\nprintf \'%s\\n\' \'{"status":"not_running","running":false}\'\n', { mode: 0o755 });
+    const stopped = await herdrStatus(cfg);
+    assert.deepEqual(stopped, { ready: true, connected: false, howto: missing.howto });
+    assert.deepEqual(herdr(stopped), { state: 'setup', says: 'Installed, not answering. Open Herdr once, then Retry.', howto: '' });
+    writeFileSync(binary, '#!/bin/sh\nprintf \'%s\\n\' \'{"running":true}\'\n');
     assert.deepEqual(await herdrStatus(cfg), { ready: true, connected: true, howto: '' });
     const started = join(root, 'probe-started');
     writeFileSync(binary, `#!${process.execPath}\nimport { writeFileSync } from 'node:fs';\nprocess.on('SIGTERM', () => {});\nwriteFileSync(${JSON.stringify(started)}, 'started');\nsetInterval(() => {}, 1000);\n`);
@@ -35,7 +39,7 @@ test('Herdr setup probes are asynchronous, bounded and report live state', async
     assert.equal(result.ready, true);
     assert.equal(result.connected, false);
     assert.equal(herdr(result)!.state, 'setup');
-    writeFileSync(binary, '#!/bin/sh\nexit 0\n');
+    writeFileSync(binary, '#!/bin/sh\nprintf \'%s\\n\' \'{"running":true}\'\n');
     assert.equal((await herdrStatus(cfg)).connected, true, 'Retry probes again');
   } finally {
     process.env.PATH = originalPath;

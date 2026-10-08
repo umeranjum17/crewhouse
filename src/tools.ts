@@ -93,8 +93,8 @@ export async function herdrStatus(cfg: Config) {
   const t = toolStatus(cfg).find((x) => x.id === 'herdr');
   const howto = t?.install.system ?? '';
   try {
-    await new Promise<void>((resolve, reject) => execFile(which(cfg, 'herdr')!, ['status', 'server'], { timeout: 5000, killSignal: 'SIGKILL' }, (err) => err ? reject(err) : resolve()));
-    return { ready: true, connected: true, howto: '' };
+    const connected = JSON.parse(await new Promise<string>((resolve, reject) => execFile(which(cfg, 'herdr')!, ['status', 'server', '--json'], { timeout: 5000, killSignal: 'SIGKILL' }, (err, stdout) => err ? reject(err) : resolve(stdout)))).running === true;
+    return { ready: true, connected, howto: connected ? '' : howto };
   } catch { return { ready: !!t && !t.missing.length, connected: false, howto }; }
 }
 
