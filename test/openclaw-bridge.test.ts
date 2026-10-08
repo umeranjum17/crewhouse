@@ -79,8 +79,16 @@ test('the curation window: the person\'s own reviewer, its reconcile, one call w
   } finally { await f.done(); }
 });
 
-test('model-visible crew tools tell the model the required arguments', () => {
-  const tools = new Map(TOOLS.map((t) => [t.name, t as { description: string; parameters: any }]));
+test('model-visible crew tools tell the model the required arguments', async () => {
+  const f = faked();
+  let registered: typeof TOOLS;
+  try { await f.started; registered = JSON.parse(readFileSync(join(f.state, 'openclaw/plugin/tools.json'), 'utf8')).tools; }
+  finally { await f.done(); }
+  const untyped = registered.filter((t) => { const p = t.parameters as any; return p.type !== 'object' || !p.properties; }).map((t) => t.name);
+  assert.deepEqual(untyped, [], `untyped registered tools: ${untyped.join(', ')}`);
+  const tools = new Map(registered.map((t) => [t.name, t as { description: string; parameters: any }]));
+  assert.deepEqual(tools.get('crew_read')!.parameters.required, ['path']);
+  assert.deepEqual(tools.get('crew_recruit')!.parameters.required, ['template']);
   const remember = tools.get('crew_remember')!;
   assert.deepEqual(remember.parameters.required, ['text']);
   assert.equal(remember.parameters.properties.text.type, 'string');

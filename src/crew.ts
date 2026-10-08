@@ -3,14 +3,13 @@ import { execFile, spawn, type ChildProcess } from 'node:child_process';
 import { closeSync, constants, copyFileSync, existsSync, fstatSync, ftruncateSync, mkdirSync, openSync, readFileSync, readdirSync, readlinkSync, realpathSync, rmSync, statSync, writeFileSync, writeSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, join, relative, resolve } from 'node:path';
-import { Type } from 'typebox';
 import { CHIEF, type Config } from './config.ts';
 import type { Row, Store } from './db.ts';
 import * as disk from './bots.ts';
 import { Desktops, browserBin, missing as desktopMissing, type Watcher } from './desktop.ts';
 import { Accounts, PROVIDERS, clock } from './accounts.ts';
 import { Connections, type AppTool, APPS } from './connections.ts';
-import { bashTool, readPage, runAxi, runSandboxed, q, sandboxReady, said, tool, webTools, type CrewTool } from './engine.ts';
+import { PARAMETERS, HELPER_ROUTINE, CHIEF_ROUTINE, bashTool, readPage, runAxi, runSandboxed, q, sandboxReady, said, tool, webTools, type CrewTool } from './engine.ts';
 import { allowed, proxy } from './net.ts';
 import type { Server } from 'node:net';
 import { acts, claimOf, coversOf, effectOf, orderOf, pressOf, toolWords, type Effect } from './policy.ts';
@@ -1979,8 +1978,8 @@ export class Crew {
 
   // ---- the crew tools: how a bot reports, delivers and remembers, and how Chief runs the crew ----
   private crewTools(botId: string): CrewTool[] {
-    const tool = (name: string, description: string, params: Record<string, any>, fn: (p: any) => unknown): CrewTool => ({
-      name, description, parameters: Type.Object(params),
+    const tool = (name: keyof typeof PARAMETERS, description: string, fn: (p: any) => unknown): CrewTool => ({
+      name, description, parameters: name === 'crew_routine' ? (botId === CHIEF ? CHIEF_ROUTINE : HELPER_ROUTINE) : PARAMETERS[name],
       run: async (p) => JSON.stringify(await fn(p) ?? { ok: true }),
     });
     const task = () => this.activeTask(botId)?.id;
@@ -1988,37 +1987,37 @@ export class Crew {
     const own = [
       tool('crew_connect', `Ask the person to connect one of their apps (${apps}) when the task needs it and it isn't connected yet. ` +
         'Ask for one app at a time, then end your turn with one short line saying what you could do with it; you are resumed when they answer.',
-        { app: Type.String() }, (p) => this.askConnect(botId, String(p.app ?? '').toLowerCase())),
+        (p) => this.askConnect(botId, String(p.app ?? '').toLowerCase())),
       tool('crew_outcome', 'Before you end a job that did something outside your own space (booked, sent, bought, posted, pressed a button on a ' +
         'site, changed something in an app), say whether it worked. `worked`: true only when you saw the proof yourself (a confirmation page ' +
         'or number, the sent message, the event read back), and `seen` names it. Otherwise false, and `seen` says in plain words what you did ' +
         'and what the person should check ("I pressed Book, but the page didn\'t show a confirmation. Worth checking your email for one."). ' +
         'Not sure is an honest answer; a job that acted and says nothing counts as not sure.',
-        { worked: Type.Boolean(), seen: Type.String() }, (p) => {
+        (p) => {
           const seen = clean(p.seen, 400);
           if (!seen) throw new Error('say what you saw, or what the person should check');
           const id = task();
           if (id) this.db.run('UPDATE tasks SET outcome = ? WHERE id = ?', JSON.stringify({ worked: p.worked === true, seen }), id);
         }),
-      tool('crew_report', 'A one-line progress note the person sees.', { text: Type.String() }, (p) => { this.db.event('task.progress', botId, { task: task(), text: clean(p.text, 200) }); }),
-      tool('crew_deliver', 'Register a finished file (a path in your folder, usually under files/).', { path: Type.String(), note: Type.Optional(Type.String()) }, (p) => this.deliver(botId, p.path, p.note)),
+      tool('crew_report', 'A one-line progress note the person sees.', (p) => { this.db.event('task.progress', botId, { task: task(), text: clean(p.text, 200) }); }),
+      tool('crew_deliver', 'Register a finished file (a path in your folder, usually under files/).', (p) => this.deliver(botId, p.path, p.note)),
       tool('crew_workbook', 'Make a real spreadsheet the person can use straight away (.xlsx), in your files/, and deliver it. `name` is the title; '
         + '`sheets` is [{ name, columns: [{ header, width?, options? }], rows: [[cell, …], …] }]. `options` on a column makes it a dropdown; a cell that '
         + 'starts with "=" is a formula. crewd writes the file, so never make the binary yourself. Make it finished: a real heading on every sheet and at '
         + 'least one example row that shows the person how to fill it in.',
-        { name: Type.String(), sheets: Type.Any() }, (p) => this.workbook(botId, String(p.name ?? ''), p.sheets)),
+        (p) => this.workbook(botId, String(p.name ?? ''), p.sheets)),
       tool('crew_batch', 'Research several items at once (up to 24) against the one `question`: `items` is the list, each a short name. ' +
         'Each item is researched in parallel and you get back one JSON array of {item, ok, text}. Put every answer — with a source column — into a single crew_workbook, delivered once. ' +
         'A batch item answers its own item only; it cannot start another batch.',
-        { question: Type.String(), items: Type.Array(Type.String()) }, (p) =>
+        (p) =>
           this.batch(botId, String(p.question ?? ''), Array.isArray(p.items) ? p.items.map(String) : [])),
       tool('crew_document', 'Write a real document the person can open and edit (.docx), in your files/, and deliver it. `name` is the title; '
         + '`blocks` is the document in order: {heading}, {text, bold?, italic?}, {bullets: […]} or {table: {head: […], rows: [[cell, …], …]}}. '
         + 'crewd writes the file, so never make the binary yourself. Make it finished: a title, short paragraphs and a table where rows help. '
         + 'They read it right in Crewhouse on the web and on their phone, so one finished document is enough — never a shorter companion copy of it.',
-        { name: Type.String(), blocks: Type.Any() }, (p) => this.document(botId, String(p.name ?? ''), p.blocks)),
+        (p) => this.document(botId, String(p.name ?? ''), p.blocks)),
       tool('crew_copy', "Put a copy of a file from your folder into the person's own folders. `to` is the full path of the new file.",
-        { from: Type.String(), to: Type.String() }, (p) => {
+        (p) => {
           const from = disk.insideBot(this.cfg, botId, String(p.from ?? ''));
           if (!existsSync(from)) throw new Error(`no file at ${p.from}`);
           mkdirSync(dirname(String(p.to)), { recursive: true });
@@ -2027,7 +2026,7 @@ export class Crew {
         }),
       tool('crew_remember', 'Save a lasting preference of the person (one short line). `replaces`: words of an old note this corrects. ' +
         '`everyone`: true for something every helper should know about them; otherwise it goes in your own notes.',
-        { text: Type.String(), replaces: Type.Optional(Type.String()), everyone: Type.Optional(Type.Boolean()) }, (p) => {
+        (p) => {
           if (disk.botConfig(this.cfg, botId).memory === false) throw new Error('memory is off for this bot; the person turned it off');
           const everyone = p.everyone === true;
           const change = disk.remember(this.cfg, { bot: everyone ? null : botId }, String(p.text ?? ''), String(p.replaces ?? ''));
@@ -2037,7 +2036,7 @@ export class Crew {
         '`channel`: what you really wrote, because the card says “wrote your …” in that word: `email`, `message` (a text, a chat, a reply on a site, words for a form) or `post` (ONE public post on their own social account, never a form or an inbox). `to`: the actual recipient name/address or site, NEVER a job title. `subject`: required for email, separate from the body; a post has none. '
         + '`why`: the person\'s own line this draft answers, copied word for word from what you remember about them; leave it out when no line fits, because the card quotes them and drops anything else — never your note about the draft, and never an address. '
         + '`link`: the https page the person opens to paste or send these words. Whenever they name a page to open, paste into or send from, it belongs here and nowhere else: the card\'s yes then copies the words and opens that page for them.',
-        { path: Type.String(), channel: Type.Union(['email', 'message', 'post'].map((x) => Type.Literal(x))), to: Type.String(), subject: Type.Optional(Type.String()), why: Type.Optional(Type.String()), link: Type.Optional(Type.String()) }, (p) => {
+        (p) => {
           const full = disk.insideBot(this.cfg, botId, String(p.path ?? ''));
           if (!existsSync(full)) throw new Error(`no file at ${p.path}`);
           const text = readFileSync(full, 'utf8').trim(), to = clean(p.to, 80), channel = String(p.channel), subject = clean(p.subject, 160), link = String(p.link ?? '').trim(), said = clean(p.why, 160).toLowerCase(), mine = `${disk.readNotes(this.cfg, { bot: null })}\n${disk.readNotes(this.cfg, { bot: botId })}`.split('\n').map((l) => clean(l.replace(/^[-*]\s*/, ''), 160).toLowerCase()); // what the crew remembers the person saying
@@ -2051,11 +2050,11 @@ export class Crew {
       tool('crew_verify', 'Have Crewhouse itself check a fix you propose to a git checkout in your folder: it applies only the check (`tests`, the ' +
         'paths in the patch that test the fix) to `base` and runs `command`, which must fail; then the whole patch, which must pass; it runs in a ' +
         'fresh copy seeded with the dependencies your checkout already has installed. A check that failed before only on a missing module proves nothing, and a patch you deliver unproven ends as not sure.',
-        { repo: Type.String(), base: Type.String(), patch: Type.String(), tests: Type.Array(Type.String()), command: Type.String() }, (p) => this.verify(botId, p)),
+        (p) => this.verify(botId, p)),
       tool('crew_learn', 'Ask to keep a skill when the person explicitly says to follow a way of working from now on (even the first time), or when you have done the same kind of job at least twice. Never propose one for an ordinary one-off job. ' +
         '`name`: two to four words; `description`: when to use it; `says`: what it does, in the person\'s plain words; `steps`: the steps, short and in plain words, as the person sees them. ' +
         'The person sees a card; it becomes one of your skills only if they say yes.',
-        { name: Type.String(), description: Type.String(), says: Type.String(), steps: Type.String() }, (p) => {
+        (p) => {
           const d = disk.draftSkill(this.cfg, botId, p);
           const b = this.bot(botId)!;
           return this.propose(botId, `${b.display} would like to remember how to do this: ${d.says}`,
@@ -2069,37 +2068,34 @@ export class Crew {
         'yes on a card. `when` is plain words in local time: "every day 9:00", "every 2 hours". `on` starts it on a local event instead of a time: "when a file arrives in the inbox" or "when this computer wakes up" (the card names the inbox; `when` may be empty then). `watch`: a page address Crewhouse reads itself, waking ' +
         'you only when it changed, so a quiet day costs the person no AI — prefer it. `quiet`: you look each time but speak only when something ' +
         'changed; use it when the page draws what matters with JavaScript, so only your own browser can read it. Say in `task` what you are looking for.',
-        { when: Type.Optional(Type.String()), on: Type.Optional(Type.String()), task: Type.String(), name: Type.Optional(Type.String()), quiet: Type.Optional(Type.Boolean()), watch: Type.Optional(Type.String()) },
         (p) => this.offerRoutine({ bot: botId, schedule: p.when, on: p.on, task: p.task, name: p.name, quiet: p.quiet, watch: p.watch })));
       const others = this.bots().filter((b) => b.id !== CHIEF && b.id !== botId).map((b) => `${b.id} (${b.role})`).join('; ');
       if (!others) return own;
       return [...own, tool('crew_pass', `Hand the next step to another helper, for the same person: ${others}. Write what they should do and what "done" means. ` +
         'Pass finished files from your files/ with `files`; the person can watch the work in The crew.',
-        { bot: Type.String(), task: Type.String(), files: Type.Optional(Type.Union([Type.Array(Type.String()), Type.String()])) }, (p) => this.pass(botId, String(p.bot ?? '').toLowerCase(), String(p.task ?? ''), p.files ?? []))];
+        (p) => this.pass(botId, String(p.bot ?? '').toLowerCase(), String(p.task ?? ''), p.files ?? []))];
     }
     const accounts = Object.keys(PROVIDERS).join(', ');
     // Chief coordinates and delegates finished files to helpers; their artifact tools need not occupy his first model call.
     const chiefTools = own.filter((t) => !['crew_deliver', 'crew_workbook', 'crew_document', 'crew_copy', 'crew_draft', 'crew_verify', 'crew_batch'].includes(t.name));
     return [...chiefTools,
-      tool('crew_profile', 'Save About me and my work: text is the complete merged record, at most 4000 characters, only facts the person stated. Preserve existing facts; after success say plainly what you noted.', { text: Type.String() }, (p) => {
+      tool('crew_profile', 'Save About me and my work: text is the complete merged record, at most 4000 characters, only facts the person stated. Preserve existing facts; after success say plainly what you noted.', (p) => {
         if (disk.botConfig(this.cfg, CHIEF).memory === false || this.activeTask(CHIEF)?.origin !== 'person') throw new Error('Only a conversation with the person, with memory on, can save this record.');
         if (!String(p.text ?? '').trim()) throw new Error('Say what the person told you; do not erase their record.'); disk.writeProfile(this.cfg, String(p.text));
         this.db.event('profile.edited', CHIEF, { by: CHIEF, task: task() });
       }),
-      tool('crew_add_phone', 'Show an Add a phone card in this chat with a fresh QR and code.', {}, () => this.addPhone()),
-      tool('crew_roster', 'Who is on the crew, and the templates you can recruit from.', {}, () => ({
+      tool('crew_add_phone', 'Show an Add a phone card in this chat with a fresh QR and code.', () => this.addPhone()),
+      tool('crew_roster', 'Who is on the crew, and the templates you can recruit from.', () => ({
         crew: this.bots().filter((x) => x.id !== CHIEF).map((x) => ({ id: x.id, name: x.display, role: x.role, busy: !!this.activeTask(x.id), does: disk.readJob(this.cfg, x.id).does,
           knows: disk.listSkills(this.cfg, x.id).map((k) => k.description || k.name) })),
         templates: disk.listTemplates(this.cfg).map((t) => ({ id: t.id, name: t.display, role: t.role, knows: t.skills ?? [] })),
       })),
-      tool('crew_recruit', 'Recruit a bot from a template.', { template: Type.String(), name: Type.Optional(Type.String()) },
+      tool('crew_recruit', 'Recruit a bot from a template.',
         (p) => { const n = this.recruit(p.template, p.name, CHIEF); return { recruited: { id: n.id, name: n.display } }; }),
       tool('crew_import', 'List categories with counts and three plain-title examples with `list: true`; `category` lists only that category in full (no hire); for a goal propose one fit with a reason, import on one yes. Otherwise bring a template onto the crew: `slug` a Grok Bot page ("pg") or address, `skill` a Claude skill ("algorithmic-art" or "owner/repo:skills/name"). The public recipe becomes the helper\'s own folder, for this person\'s own use; importing again pulls the latest. Say what it does, what needs connecting, offer routines, start nothing.',
-        { list: Type.Optional(Type.Boolean()), category: Type.Optional(Type.String()), slug: Type.Optional(Type.String()), skill: Type.Optional(Type.String()), name: Type.Optional(Type.String()) },
         (p) => { if (typeof p.input === 'string') p = JSON.parse(p.input); if (!p || typeof p !== 'object' || Array.isArray(p)) throw fail('use list: true, or a template slug or skill name'); return this.importGrok(String(p.slug ?? p.handle ?? p.bot ?? p.id ?? p.template ?? p.url ?? p.address ?? p.query ?? p.grok ?? (p.skill ? '' : p.name ?? '')), p.name ? String(p.name) : undefined, p.skill ? String(p.skill) : undefined, String(p.source ?? ''), p.list === true || p.list === 'true', p.category ? String(p.category) : undefined); }),
       tool('crew_assign', `Hand a bot a task. Give it a short descriptive title, never a URL. \`account\` (${accounts}) only when a task plainly suits another AI. ` +
         'A job of several steps: list them in `steps`, in plain words; the person sees the plan and it starts when they say Go.',
-        { bot: Type.String(), task: Type.String(), title: Type.Optional(Type.String()), account: Type.Optional(Type.String()), steps: Type.Optional(Type.Array(Type.String())) },
         (p) => this.plan(String(p.bot).toLowerCase(), p.task ?? '', p.account, p.title, p.steps)),
       tool('crew_routine', 'Offer the person a routine: the same task on a schedule, for them to say yes or no. `when` is plain words in local time: "every Monday 9:00", "weekdays 8am", "every 2 hours". ' +
         'Set `once` for a one-off reminder they asked for ("remind me Friday 9am to pack the sports kit"): `when` is then the moment in their words ("Friday 9:00", "tomorrow 8am", "in 20 minutes"), `task` is what to remind them about, and it goes to them once, in your chat, without a helper. ' +
@@ -2107,13 +2103,12 @@ export class Crew {
         '`quiet`: a check-in that only speaks up when something needs the person. `watch`: a page address to keep an eye on; Crewhouse reads it on ' +
         'schedule and wakes the bot only when it changed, and `task` says what matters ("tell me if the price drops below $900"). ' +
         'The person sees a card with the cadence and first run; nothing runs until they start it.',
-        { bot: Type.String(), when: Type.Optional(Type.String()), on: Type.Optional(Type.String()), task: Type.String(), name: Type.Optional(Type.String()), account: Type.Optional(Type.String()), quiet: Type.Optional(Type.Boolean()), watch: Type.Optional(Type.String()), once: Type.Optional(Type.Boolean()) },
         (p) => this.offerRoutine({ bot: p.bot, schedule: p.when, on: p.on, task: p.task, name: p.name, model: p.account, quiet: p.quiet, watch: p.watch, once: p.once })),
-      tool('crew_routines', 'The routines and when each runs next.', {}, () => this.routines().map((x) => ({ id: x.id, bot: x.bot, name: x.name, when: x.words, on: x.on ?? '', state: x.state, next: x.next_at ? new Date(x.next_at).toString() : '' }))),
-      tool('crew_status', 'Open tasks, and what this person’s crew finished recently (titles and delivered files).', {}, () => ({ open: this.db.all("SELECT id, bot, title, state FROM tasks WHERE state IN ('queued','working','needs_you','paused') ORDER BY id"), finished: this.finishedList() })),
+      tool('crew_routines', 'The routines and when each runs next.', () => this.routines().map((x) => ({ id: x.id, bot: x.bot, name: x.name, when: x.words, on: x.on ?? '', state: x.state, next: x.next_at ? new Date(x.next_at).toString() : '' }))),
+      tool('crew_status', 'Open tasks, and what this person’s crew finished recently (titles and delivered files).', () => ({ open: this.db.all("SELECT id, bot, title, state FROM tasks WHERE state IN ('queued','working','needs_you','paused') ORDER BY id"), finished: this.finishedList() })),
       tool('crew_suggest', 'Suggest a change to how a helper comes across (its personality), when the person asks for one. ' +
         '`text`: the whole new personality, a few short plain lines in the second person ("You are Reel. …"). The person sees it and says yes or no.',
-        { bot: Type.String(), text: Type.String() }, (p) => {
+        (p) => {
           const b = this.bot(String(p.bot ?? '').toLowerCase());
           if (!b) throw fail(`no bot called ${p.bot}; see crew_roster`, 404);
           const body = String(p.text ?? '').replace(/\r/g, '').trim().replace(/^# .*\n+/, '');
@@ -2125,7 +2120,7 @@ export class Crew {
       tool('crew_create', 'Take on a helper for a job no one on the crew does yet, when the person asks for someone ("I need someone to…") or a job will come round again, or change a helper\'s job when they ask ("Penny should also…"). A vague ask gets plain-words questions first, in chat and never on this card: at most three (what it does, what good looks like, its first job) across two turns, then build the card from the answers; an already-specific ask, or "just do it", skips the questions. Adapt first: when a crew member\'s work is close, `bot` is that helper and `job` is its whole job from now on; only when no one and no template fits, a new one with `name` (a short friendly first name) ' +
         'and `personality` (a few short plain lines, "You are Pip. …"). `role`: what it does, as a person would say it ("Keeps your invoices in order"); `job`: all five parts (does, aim, gets, how, great) as one tight job that also says what it never does; ' +
         '`first`: the person\'s request, its first job once they say yes. The person sees a short card and decides; nothing changes until then.',
-        { bot: Type.Optional(Type.String()), name: Type.Optional(Type.String()), role: Type.String(), job: Type.Object({ does: Type.String(), aim: Type.String(), gets: Type.String(), how: Type.String(), great: Type.String() }), personality: Type.Optional(Type.String()), first: Type.Optional(Type.String()) }, (p) => {
+        (p) => {
           const was = p.bot ? this.bot(String(p.bot).toLowerCase()) : undefined;
           if (p.bot && (!was || was.id === CHIEF)) throw fail(`no helper called ${p.bot}; see crew_roster`, 404);
           const name = was?.display ?? clean(p.name, 24), role = clean(p.role, 80).replace(/[.!?]$/, ''), first = p.first ? String(p.first).slice(0, 2000) : undefined;
@@ -2139,7 +2134,7 @@ export class Crew {
           return this.propose(CHIEF, was ? `Shall ${name} take this on?` : `Shall I take on ${name}?`, { create: { bot: was?.id, name, role, job, soul, first },
             preview: { head: name, body: [was ? `${name} now ${role.replace(/^./, (x) => x.toLowerCase())}.` : `${role}.\nCan look things up. Asks you before sending or spending.`, first ? `First job: ${short(first, 120)}` : ''].filter(Boolean).join('\n') } });
         }),
-      tool('crew_call_me', 'Change how the person is addressed only when they explicitly give a name or title to call them. Never infer it from a task or other message.', { how: Type.String() }, (p) => { this.setAddress(String(p.how ?? '')); }),
+      tool('crew_call_me', 'Change how the person is addressed only when they explicitly give a name or title to call them. Never infer it from a task or other message.', (p) => { this.setAddress(String(p.how ?? '')); }),
     ];
   }
 

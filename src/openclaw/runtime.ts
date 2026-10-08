@@ -8,6 +8,7 @@ import { osKeyringSeal } from '@byokit/secrets';
 import { PROVIDERS } from '../accounts.ts';
 import { commit } from '../bots.ts';
 import { CALLBACK_PORT } from '../callback-port.ts';
+import { PARAMETERS } from '../engine.ts';
 import type { AgentRuntime, RunEnd, RunEvent, RunRef, RunSpec, SignInStep, ToolHost } from '../runtime.ts';
 
 export { ENGINE_VERSION } from '@byokit/openclaw';
@@ -27,25 +28,6 @@ const ME = 'm1';
 /** The engine-side name of a Crewhouse tool and back: only the shell differs. */
 const crewName = (tool: string) => tool === 'shell' ? 'bash' : tool;
 
-const args = { type: 'object', properties: { args: { type: 'array', items: { type: 'string' } } }, required: ['args'], additionalProperties: false };
-const SCHEMAS: Record<string, object> = {
-  crew_import: { type: 'object', properties: { list: { type: 'boolean', description: 'Summarize published categories without importing.' }, category: { type: 'string', description: 'Only when the person requests one category: list its full plain titles.' }, slug: { type: 'string', description: 'Grok template handle or published address.' }, skill: { type: 'string', description: 'Claude skill name or owner/repo:skills/name.' }, name: { type: 'string' }, source: { type: 'string' } }, additionalProperties: false },
-  shell: { type: 'object', properties: { command: { type: 'string' } }, required: ['command'], additionalProperties: false },
-  browser: args, calendar: args, mail: args,
-  crew_app: { type: 'object', properties: { tool: { type: 'string' }, input: { type: 'object', additionalProperties: true } }, required: ['tool'], additionalProperties: false },
-  crew_remember: { type: 'object', properties: { text: { type: 'string', description: 'One short line stating the lasting preference to save.' }, replaces: { type: 'string', description: 'Words of an old note this corrects, if any.' }, everyone: { type: 'boolean', description: 'True if every helper should know it; otherwise it stays in your notes.' } }, required: ['text'], additionalProperties: false },
-  crew_document: { type: 'object', properties: { name: { type: 'string', description: 'Title of the finished document.' }, blocks: { type: 'array', description: 'Document content in order: {heading}, {text}, {bullets: [strings]} or {table: {head: [cells], rows: [[cells]]}}.', items: { type: 'object', additionalProperties: true }, minItems: 1 } }, required: ['name', 'blocks'], additionalProperties: false },
-  crew_create: { type: 'object', properties: { bot: { type: 'string' }, name: { type: 'string' }, role: { type: 'string' }, job: { type: 'object', properties: Object.fromEntries(['does', 'aim', 'gets', 'how', 'great'].map((k) => [k, { type: 'string', minLength: 1, maxLength: 600 }])), required: ['does', 'aim', 'gets', 'how', 'great'], additionalProperties: false }, personality: { type: 'string' }, first: { type: 'string' } }, required: ['role', 'job'], additionalProperties: false },
-  crew_outcome: { type: 'object', properties: { worked: { type: 'boolean' }, seen: { type: 'string' } }, required: ['worked', 'seen'], additionalProperties: false },
-  crew_workbook: { type: 'object', properties: { name: { type: 'string' }, sheets: { type: 'array', items: { type: 'object', properties: { name: { type: 'string' }, columns: { type: 'array', items: { type: 'object', properties: { header: { type: 'string' }, width: { type: 'number' }, options: { type: 'array', items: { type: 'string' } } }, required: ['header'], additionalProperties: false } }, rows: { type: 'array', items: { type: 'array', items: { type: ['string', 'number', 'boolean', 'null'] } } } }, required: ['name', 'columns'], additionalProperties: false } } }, required: ['name', 'sheets'], additionalProperties: false },
-  crew_verify: { type: 'object', properties: { repo: { type: 'string' }, base: { type: 'string' }, patch: { type: 'string' }, tests: { type: 'array', items: { type: 'string' } }, command: { type: 'string' } }, required: ['repo', 'base', 'patch', 'tests', 'command'], additionalProperties: false },
-  crew_pass: { type: 'object', properties: { bot: { type: 'string' }, task: { type: 'string' }, files: { anyOf: [{ type: 'array', items: { type: 'string' } }, { type: 'string' }] } }, required: ['bot', 'task'], additionalProperties: false },
-  crew_assign: { type: 'object', properties: { bot: { type: 'string' }, task: { type: 'string' }, title: { type: 'string' }, account: { type: 'string' }, steps: { type: 'array', items: { type: 'string' } } }, required: ['bot', 'task'], additionalProperties: false },
-  crew_routine: { type: 'object', properties: { bot: { type: 'string' }, when: { type: 'string' }, on: { type: 'string' }, task: { type: 'string' }, name: { type: 'string' }, account: { type: 'string' }, quiet: { type: 'boolean' }, watch: { type: 'string' }, once: { type: 'boolean' } }, required: ['task'], additionalProperties: false },
-  crew_report: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'], additionalProperties: false }, crew_profile: { type: 'object', properties: { text: { type: 'string', maxLength: 4000 } }, required: ['text'], additionalProperties: false },
-  crew_draft: { type: 'object', properties: { path: { type: 'string' }, channel: { type: 'string', enum: ['email', 'message', 'post'] }, to: { type: 'string' }, subject: { type: 'string' }, why: { type: 'string' }, link: { type: 'string' } }, required: ['path', 'channel', 'to'], additionalProperties: false },
-  crew_batch: { type: 'object', properties: { question: { type: 'string' }, items: { type: 'array', items: { type: 'string' } } }, required: ['question', 'items'], additionalProperties: false },
-};
 const ABOUT: Record<string, string> = {
   shell: 'Run a shell command in your sandbox; only your folder is writable. Long output is cut to its last lines.', crew_profile: 'Save person facts.',
   browser: 'Your own browser (playwright-axi): goto <url>, snapshot, find <text>, click <ref>, fill <ref> <text>, press <key>, go-back.',
@@ -56,12 +38,7 @@ const ABOUT: Record<string, string> = {
   crew_batch: 'Research several items at once against one question, then merge the answers into your spreadsheet.',
   crew_document: 'Write and deliver an editable document: pass {name: "title", blocks: [{heading: "Title"}, {text: "Paragraph"}, {bullets: ["Item"]}]}. Crewhouse writes the file; do not make it yourself.',
 };
-export const TOOLS: ToolSpec[] = ['shell', 'browser', 'calendar', 'mail', 'crew_app', 'crew_web_fetch', 'crew_web_search', 'crew_read', 'crew_write',
-  'crew_edit', 'crew_ls', 'crew_grep', 'crew_find', 'crew_connect', 'crew_outcome', 'crew_report', 'crew_batch', 'crew_deliver', 'crew_workbook', 'crew_document',
-  'crew_copy', 'crew_remember', 'crew_draft', 'crew_verify', 'crew_learn', 'crew_routine', 'crew_pass', 'crew_add_phone', 'crew_roster',
-  'crew_recruit', 'crew_assign', 'crew_routines', 'crew_status', 'crew_suggest', 'crew_create', 'crew_import', 'crew_call_me', 'crew_profile',
-].map((name) => ({ name, description: ABOUT[name] ?? `Crewhouse ${name.slice(5).replaceAll('_', ' ')}. The person sees the result in their crew.`,
-  parameters: SCHEMAS[name] ?? { type: 'object', additionalProperties: true } }));
+export const TOOLS: ToolSpec[] = Object.entries(PARAMETERS).map(([name, parameters]) => ({ name, description: ABOUT[name] ?? `Crewhouse ${name.slice(5).replaceAll('_', ' ')}. The person sees the result in their crew.`, parameters }));
 
 const CONFIG = {
   // An empty allow list: the engine otherwise narrows to its model map, and the person's other providers vanish.

@@ -26,6 +26,21 @@ syntax `[tool <name> <json>]` inside the message text.
 - **Assign.** `curl -fsS -X POST $H -d '{"text":"please [tool crew_assign {\"bot\":\"reel\",\"task\":\"Make a 10 second demo\"}]"}' "$B/api/bots/chief/messages"`; poll `/api/bots/reel` until the task `Make a 10 second demo` is `done`, and `/api/bots/chief` shows one `author:"bot"` message starting `All done.` whose `task_id` is the Chief task.
 - **File card.** A delivered file rides the wrap line: the message object's `files` array names paths under `files/…`. For a real workbook delivered by the helper, drive `[tool crew_workbook …]` per `test/workbooks.test.ts`; the app renders it via `GET /api/workbook?bot=<id>&path=<rel>` (JSON only, never the binary).
 
+## Registered crew tool arguments (real engine)
+
+Run `node --test --test-name-pattern='model-visible crew tools' test/openclaw-bridge.test.ts`:
+it checks the kit's emitted `openclaw/plugin/tools.json`, not a separate host-only list.
+Every registered tool must have object properties, including empty objects for no-argument tools.
+Schemas live with the executor helpers in `src/engine.ts`; `src/crew.ts` and the engine port share them.
+
+Under the isolated real-model launch and credential lock below, send one ordinary Chief message:
+`Read AGENTS.md in your folder and tell me its first line, then recruit Reel from the reel template. Do not assign any tasks.`
+Retain the request, reply, registered tool table and engine session log lines for `crew_read` and
+`crew_recruit`. Both must use their named fields and succeed on their first call; prove the returned
+file line and the recruited helper through `/api/bots/chief` and `/api/state`. Retain crewd's
+`run.call` rows as an independent result witness. A retry, open schema or stub turn does not pass.
+This is tool/API proof with no changed screen, so screenshots are unnecessary.
+
 ## A custom helper on the real engine
 
 Use SKILL.md's isolated real-model launch and hold the dedicated credential lock for the
