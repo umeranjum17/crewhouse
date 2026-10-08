@@ -7,8 +7,8 @@ mkdir -p "$EV"
 for theme in day night; do
   for width in 1440 390; do
     if [ "$width" = 390 ]; then height=844; else height=900; fi
-    chrome-devtools-axi resize "$width" "$height" > "$EV/resize-$theme-$width.txt"
     chrome-devtools-axi open "$B/?$theme#/crew" > "$EV/recruit-$theme-$width.txt"
+    chrome-devtools-axi resize "$width" "$height" >> "$EV/recruit-$theme-$width.txt"
     chrome-devtools-axi wait 'Scout' >> "$EV/recruit-$theme-$width.txt"
     chrome-devtools-axi eval '() => ({width:innerWidth,height:innerHeight,helpers:[...document.querySelectorAll("a")].filter(a=>/\b(Scout|Scribe|Reel)\b/.test(a.innerText)).map(a=>({text:a.innerText,rect:a.getBoundingClientRect().toJSON()}))})' > "$EV/recruit-geometry-$theme-$width.txt"
     chrome-devtools-axi screenshot "$EV/recruit-$theme-$width.png" >> "$EV/recruit-$theme-$width.txt"
