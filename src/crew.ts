@@ -118,15 +118,14 @@ export function relayResult(reply: string, note = '') {
   const tidy = (s: string) => s.replace(/^A document in \d+ sections?:\s*(.+)$/i, 'The $1 is ready.')
     .replace(/\[([^\]]+)\]\(https?:\/\/[^)]+\)/g, '$1').replace(/\*\*|^\s*[-*]\s*/gm, '')
     .replace(/\b(sir|ma'am)\b[,.]?\s*/gi, '').replace(/^\w+:\s*/, '').replace(/https?:\/\/\S+/g, '').trim();
-  // Only complete sentences fit for a headline; never apply short(), which adds a cut-off ellipsis.
-  // A semicolon joins what are really two headlines, so split there too: the stale half must not ride along.
-  // The helper's own first full sentence leads, in its voice; its delivery note stands in when the reply has none.
+  // Prefer a full sentence or delivery note; never relay stale work-in-progress clauses.
   for (const source of [reply, note.length < 140 ? note : '']) {
     const sentences = tidy(source).match(/[^.!?;]+[.!?;][”"']?(?=\s|$)/g) ?? [];
     const full = sentences.map((s) => s.trim()).find((s) => s.length <= 160 && s.split(' ').length > 2 && !/(?:…|\.{2,})[”"']?$/.test(s) && !STALE_PROGRESS.test(s));
     if (full) return `${full.replace(/[.!?;][”"']?$/, '').trim()}.`;
   }
-  return 'The result is ready.';
+  const opening = tidy(reply).split(/(?<=[.!?;])\s+|\n+/).map((s) => s.trim()).find((s) => /[\p{L}\p{N}]/u.test(s) && !STALE_PROGRESS.test(s));
+  return opening ? `${short(opening, 159).replace(/…$/, '')}…` : 'The result is ready.';
 }
 
 const partOfDay = () => { const h = new Date().getHours(); return h >= 5 && h < 12 ? 'morning' : h >= 12 && h < 18 ? 'afternoon' : 'evening'; };

@@ -1052,7 +1052,13 @@ test('routing: explicit helpers are direct; uncertain requests start Chief witho
   assert.equal(task(db, a).body, 'Reel, make a 10 second demo of the signup screen');
   assert.equal(chiefSaid(), 'Reel is on it.');
   await settled(db, a);
-  assert.equal(db.get("SELECT text FROM messages WHERE bot = 'chief' ORDER BY id DESC")!.text, 'The result is ready.', 'an incomplete helper reply is not cut into a headline');
+  assert.equal(chiefSaid(), relayResult(task(db, a).result), 'an incomplete helper reply carries its own opening');
+  const long = 'I found that your three overdue invoices need attention before Friday because the water bill and dentist bill both carry late fees, while the phone bill can wait until next month without an extra charge.';
+  assert.equal(relayResult(long), 'I found that your three overdue invoices need attention before Friday because the water bill and dentist bill both carry late fees, while the phone bill can…');
+  assert.equal(relayResult('- Water bill due Friday\n- Dentist bill due Friday\n- Phone bill due next month'), 'Water bill due Friday…');
+  assert.equal(relayResult('Scout is preparing the report;\n- Water bill due Friday'), 'Water bill due Friday…');
+  assert.equal(relayResult('*** — …'), 'The result is ready.');
+  assert.equal(relayResult(''), 'The result is ready.');
 
   // "@Scout" anywhere is a rule too: the person's AI (here set to say Reel) is never asked.
   const m = (await crew.post('chief', 'could you look into standing desks for me @Scout [route reel]'))!.task;

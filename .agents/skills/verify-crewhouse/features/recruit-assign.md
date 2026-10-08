@@ -11,6 +11,7 @@ thread gets exactly one `All done.` wrap-up line carrying any delivered files as
 - `refuse-cross-recruit` — a helper asking for a recruit is refused; only Chief recruits.
 - `assign` — `crew_assign` queues the helper's task; it settles `done` and reports back.
 - `wrapup-card` — one `All done.` line in Chief's thread per Chief job, with delivered-file cards.
+- `relay-opening` — a finished helper's answer appears in Chief's thread in its own words: a full short sentence first, otherwise a word-boundary opening marked with `…`, at most 160 characters. Stale progress is excluded; empty or wordless replies retain the generic ready line.
 
 ## How to get to it (user POV)
 
@@ -25,6 +26,31 @@ syntax `[tool <name> <json>]` inside the message text.
 - **Cross-recruit refused.** Same `crew_recruit` call addressed to `/api/bots/reel/messages` → no `scout` ever appears in `/api/state`.
 - **Assign.** `curl -fsS -X POST $H -d '{"text":"please [tool crew_assign {\"bot\":\"reel\",\"task\":\"Make a 10 second demo\"}]"}' "$B/api/bots/chief/messages"`; poll `/api/bots/reel` until the task `Make a 10 second demo` is `done`, and `/api/bots/chief` shows one `author:"bot"` message starting `All done.` whose `task_id` is the Chief task.
 - **File card.** A delivered file rides the wrap line: the message object's `files` array names paths under `files/…`. For a real workbook delivered by the helper, drive `[tool crew_workbook …]` per `test/workbooks.test.ts`; the app renders it via `GET /api/workbook?bot=<id>&path=<rel>` (JSON only, never the binary).
+
+## Long and bullet-only helper relays (stub engine)
+
+`test/chat-relay.test.ts` reuses the real-server, isolated stub crew and owned headless
+browser setup from `test/chat-live.test.ts`, without measuring its unrelated live-line
+timing gate. Run `node --test test/chat-relay.test.ts` in a throwaway HOME with all XDG
+dirs isolated and a **short TMPDIR** (a long path makes the browser's singleton socket
+exceed the Unix path limit). The test builds and serves this tree's actual web app.
+
+Set `CREWHOUSE_RELAY_EVIDENCE=<absolute evidence directory>` to capture this journey:
+onboard Umer, recruit Scout through the API, send Chief `Ask Scout to ask permission
+first, then check my long invoice list` from the composer, wait for Scout's held turn,
+and release it with the test's >160-character invoice sentence. Repeat for the bullet
+invoice list. The replies are scripted model output, not real-model claims.
+
+The test waits for Scout's done row and Chief's persisted message, then proves the same
+words are rendered in Chief's thread. It writes `long.json` and `bullets.json` (original
+reply, relay, both API pages), eight `long|bullets-day|night-390|1440.png` captures with
+matching geometry JSON, and `relay.webm` plus `recording.log` through `../record.mjs`.
+It waits for the opening overlay to disappear and fonts to paint; every relay rectangle
+must fit the viewport. Open all eight images and require more than one decoded video
+frame. The owned browser and server close at test exit. This proves relay wording on
+the web app, not the native phone, sign-ins, or timing. On the old rule both cases say
+`The result is ready.`; the candidate must show the invoice opening and
+`Water bill due Friday…` instead, without changing helper replies or other relay rules.
 
 ## Registered crew tool arguments (real engine)
 
