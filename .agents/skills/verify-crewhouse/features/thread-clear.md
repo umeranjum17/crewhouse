@@ -27,3 +27,13 @@ either. The column fades at its top edge, so a line scrolled half past the bar f
 
 Every sign-in button fully visible above the composer at the bottom, 0 lines under the top bar, a cut line at the
 column's top edge only faded, at both widths and in both themes.
+
+## The sign-in wait in Chief's words and header
+
+While no account is ready, Chief answers the first note with "The crew uses your … account. Sign in when you're
+ready and I'll start.", the next with "Noted. I'll start on this once you sign in.", and holds the rest quietly
+(`src/crew.ts` `pause`; gate: the first-run test in `test/onboard.test.ts`). His phone header (`.home-chat .ch-status`)
+and the desk rail (`.side-status`) say "Needs a sign-in" in the card's blue, and only once the accounts answer has
+come back, as the card does (gate: the last block of `test/thread-clear.test.ts`, on `&slowaccounts`).
+Drive: the real-crewd recipe above with ~14 notes; read `GET /api/bots/chief` (two Chief lines, then none) and the
+status text beside each capture; add a scrolled-to-top capture so both of Chief's lines show.
