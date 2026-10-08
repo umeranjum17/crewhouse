@@ -63,7 +63,7 @@ test('marketing recruitment and assignments carry the bakery profile and Chiefâ€
   const server = await startServer(cfg, db, crew);
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   const api = async (path: string, body: object, method = 'POST') => {
-    const res = await fetch(base + path, { method, headers: { 'x-crewhouse': '1', 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    const res = await fetch(base + path, { method, headers: { authorization: method === 'GET' ? '' : `Bearer ${readFileSync(join(cfg.stateDir, 'person.key'), 'utf8')}`, 'x-crewhouse': '1', 'content-type': 'application/json' }, body: JSON.stringify(body) });
     assert.equal(res.status, 200);
     return res.json();
   };
@@ -168,7 +168,7 @@ test('the record reads and writes through crewdâ€™s API', async () => {
   try {
     const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
     const api = async (method: string, path: string, body?: object) => {
-      const res = await fetch(base + path, { method, headers: { 'x-crewhouse': '1', 'content-type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
+      const res = await fetch(base + path, { method, headers: { authorization: method === 'GET' ? '' : `Bearer ${readFileSync(join(cfg.stateDir, 'person.key'), 'utf8')}`, 'x-crewhouse': '1', 'content-type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
       return { status: res.status, body: await res.json() };
     };
     assert.equal((await api('GET', '/api/profile')).body.text, '');

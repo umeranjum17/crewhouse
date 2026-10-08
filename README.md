@@ -50,7 +50,7 @@ There is no full release yet, only phone-app previews, so GitHub's `/releases/la
 
 The computer owner's bar can show `2 working · 1 needs you`, using the same status as the phone. It shows only your own work, with counts in both the pill and tooltip. It clears when the crew is quiet or unreachable. Start Crewhouse normally; the bar only reads its status.
 
-Replace `/absolute/path/crewhouse` with your source checkout and `/absolute/path/node` with your Node executable (`command -v node`, Node 22.22.3 or later). The bar runs [packaging/bar-pill.mjs](packaging/bar-pill.mjs) once every 10 seconds. For a different Crewhouse port, prefix the command with `CREWHOUSE_PORT=1234` and change the click address too.
+Replace `/absolute/path/crewhouse` with your source checkout and `/absolute/path/node` with your Node executable (`command -v node`, Node 22.22.3 or later). The bar runs [packaging/bar-pill.mjs](packaging/bar-pill.mjs) once every 10 seconds. For a different Crewhouse port, prefix both the polling and click commands with `CREWHOUSE_PORT=1234`.
 
 For Omarchy's Quickshell bar, add this command module to an existing `bar.layout` section in `~/.config/omarchy/shell.json`:
 
@@ -59,7 +59,7 @@ For Omarchy's Quickshell bar, add this command module to an existing `bar.layout
   "id": "crewhouse", "type": "command",
   "exec": "/absolute/path/node /absolute/path/crewhouse/packaging/bar-pill.mjs",
   "interval": 10,
-  "onClick": "xdg-open http://127.0.0.1:7711"
+  "onClick": "/absolute/path/crewhouse/crewhouse open"
 }
 ```
 
@@ -69,7 +69,7 @@ For Waybar, add `custom/crewhouse` to `modules-right` (or another module list) a
 "custom/crewhouse": {
   "exec": "/absolute/path/node /absolute/path/crewhouse/packaging/bar-pill.mjs",
   "return-type": "json", "interval": 10,
-  "on-click": "xdg-open http://127.0.0.1:7711"
+  "on-click": "/absolute/path/crewhouse/crewhouse open"
 }
 ```
 
@@ -175,7 +175,7 @@ git clone https://github.com/umeranjum17/crewhouse && cd crewhouse
 ./crewhouse start     # starts Crewhouse and prints the address
 ```
 
-Open **http://127.0.0.1:7711**. Chief greets you and offers three things to take off your plate. Tap one, then **Sign in with…** under his reply, and the crew starts work.
+Run **`./crewhouse open`** in another terminal (or use the installed app menu). The launcher hands your browser a private capability from your install, so a helper cannot approve its own work over local HTTP. The public address alone is read-only; paired phones use their authenticated encrypted link. Chief greets you and offers three things to take off your plate. Tap one, then **Sign in with…** under his reply, and the crew starts work.
 
 <p align="center">
   <img src="docs/screenshots/readme/hello.webp" alt="The first screen after install: Chief says Good morning, promises to ask before sending, deleting or spending, and offers three jobs" width="760" />

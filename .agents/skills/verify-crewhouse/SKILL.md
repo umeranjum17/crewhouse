@@ -51,14 +51,17 @@ is stub) plus `curl -fsS "http://127.0.0.1:$PORT/"` returning HTML.
 
 ## Drive
 
-**HTTP (the app's own consumer path).** Every non-GET needs the header `x-crewhouse: 1`
-(403 otherwise — same-origin CSRF guard). The canonical journey, from `test/stub.test.ts`:
+**HTTP (the app's own consumer path).** Every non-GET needs `x-crewhouse: 1` (CSRF)
+and `Authorization: Bearer <person.key>` (person authority). Read the capability only
+from your own `$LAB/state/person.key`; never from the owner's install. The public header
+alone must return 403 and leave the question open. The canonical journey, from `test/stub.test.ts`:
 
 ```bash
-B="http://127.0.0.1:$PORT"; H='-H content-type:application/json -H x-crewhouse:1'
+B="http://127.0.0.1:$PORT"; PERSON=$(<"$LAB/state/person.key")
+H=(-H content-type:application/json -H x-crewhouse:1 -H "Authorization: Bearer $PERSON") # never log the capability
 curl -fsS "$B/api/state"                                   # person.name "Owner", bots list with chief
-curl -fsS -X POST $H -d '{"address":"Sir"}' "$B/api/onboard"   # then /api/state shows person.address "Sir"
-curl -fsS -X POST $H -d '{"text":"I need a demo video"}' "$B/api/bots/chief/messages"
+curl -fsS -X POST "${H[@]}" -d '{"address":"Sir"}' "$B/api/onboard"   # then /api/state shows person.address "Sir"
+curl -fsS -X POST "${H[@]}" -d '{"text":"I need a demo video"}' "$B/api/bots/chief/messages"
 # poll GET /api/bots/chief until the bot reply appears:
 #   stub chief: done with "The person says: I need a demo video"
 ```
@@ -69,7 +72,11 @@ tool calls written into the message: `[tool crew_recruit {"template":"reel","nam
 one `All done.` line; see `features/recruit-assign.md`). SQLite truth lives at
 `$LAB/state/crew.db` (read-only probe: `node -e 'new (require("node:sqlite").DatabaseSync)(process.argv[1],{readOnly:true})…'`).
 
-**UI (browser).** Open `http://127.0.0.1:$PORT/` with the fleet's browser tool
+**UI (browser).** Bootstrap only your owned browser with the private launcher URL
+`http://127.0.0.1:$PORT/#person=<contents of $LAB/state/person.key>`; the app removes the
+fragment and keeps authority in that tab's sessionStorage. Subsequent themed loads use
+the same tab. No API read or public page may mint or return this capability.
+Open with the fleet's browser tool
 (`chrome-devtools-axi` with `CHROME_DEVTOOLS_AXI_SESSION=<task-name>` — the default session
 is shared across lanes; any CDP harness works, as `test/office.test.ts` shows). First run
 shows the Hello screen (person's name, three ideas); picking one onboards and opens Chief's
@@ -112,6 +119,20 @@ the *action*); capture the action and the resulting state (the reply message and
 row, not just a final screen); verify side effects where the feature has them (files under
 `$LAB/crew/bots/<bot>/files/`, rows in `crew.db`); label anything the stub cannot prove
 (no real model words, no real sign-in) as a stub-engine result.
+
+## Person authority (shared ingress)
+
+Run the real paired-phone journey with `node --test test/link.test.ts` under an isolated
+HOME/XDG/TMPDIR. It pairs a control phone with Noise, asks for a synthetic unsent draft,
+then drives an unfenced Tracer shell's exact public-header HTTP approval attack: expect
+403, the ask still open and no `draft.approved` event. Answer through the paired phone:
+expect 200 and the event. Pairing approval itself also requires the private computer
+capability; a phone cannot approve itself, and a view-only grant cannot write.
+For the original `probe-person-authority.mjs`, adjust only the owned repo/evidence/scratch
+paths and legitimate setup calls to use the owned `person.key`; leave the shell's forged
+POST without authority. Wait for its recorded shell result, then witness denial and the
+unchanged ask, rather than waiting for the old success event. Never send real mail.
+This is API-only proof: no changed screen, screenshots or motion required.
 
 ## Review evidence (fleet standard)
 

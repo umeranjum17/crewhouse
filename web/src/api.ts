@@ -10,11 +10,16 @@ export type Transport = (method: string, path: string, body?: Json) => Promise<J
 let call: Transport = http;
 export function setTransport(t: Transport) { call = t; }
 
+// The private launcher hands authority through a fragment, never an HTTP URL or response.
+const launched = typeof location !== 'undefined' && /^#person=([a-f0-9]{64})$/.exec(location.hash)?.[1];
+if (launched) { sessionStorage.setItem('crewhouse.person', launched); history.replaceState(null, '', `${location.pathname}${location.search}#/`); }
+const person = () => typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('crewhouse.person') ?? '' : '';
+
 async function http(method: string, path: string, body?: Json) {
   if (demo) return (await import('./demo.ts')).demoCall(method, path, body);
   const res = await fetch(path, {
     method,
-    headers: { 'content-type': 'application/json', 'x-crewhouse': '1' },
+    headers: { 'content-type': 'application/json', 'x-crewhouse': '1', authorization: `Bearer ${person()}` },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const out = await res.json().catch(() => ({}));
@@ -134,7 +139,7 @@ const wsBase = () => `${location.protocol === 'https:' ? 'wss' : 'ws'}://${locat
  * permissions; closing the socket ends the session.
  */
 export function desktopSignaling(bot: string) {
-  const ws = new WebSocket(`${wsBase()}/ws/desktop/${bot}`);
+  const ws = new WebSocket(`${wsBase()}/ws/desktop/${bot}`, `crewhouse-person.${person()}`);
   const open = new Promise<void>((resolve, reject) => { ws.onopen = () => resolve(); ws.onerror = () => reject(new Error('could not reach Crewhouse')); });
   const pending = new Map<number, { resolve: (v: Json) => void; reject: (e: Error) => void }>();
   const handlers = new Set<(e: Json) => void>();

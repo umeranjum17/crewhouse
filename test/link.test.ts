@@ -205,7 +205,7 @@ after(() => daemon.kill());
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 async function http(method: string, path: string, body?: unknown, headers: Record<string, string> = { 'x-crewhouse': '1' }) {
-  const res = await fetch(base + path, { method, headers: { 'content-type': 'application/json', ...headers }, body: body ? JSON.stringify(body) : undefined });
+  const res = await fetch(base + path, { method, headers: { authorization: method === 'GET' ? '' : `Bearer ${readFileSync(join(root, 'state', 'person.key'), 'utf8')}`, 'content-type': 'application/json', ...headers }, body: body ? JSON.stringify(body) : undefined });
   return { status: res.status, body: await res.json() };
 }
 async function until<T>(fn: () => Promise<T | undefined | false>, ms = 10_000): Promise<T> {
@@ -326,6 +326,7 @@ test('pairing with a yes at the computer, grants, approvals from the phone, and 
   assert.equal(waiting.name, 'Inline phone');
   assert.equal((await http('POST', '/api/phones/answer', { id: waiting.id, yes: true, offer: 'wrong' })).status, 403);
   assert.equal((await a.req('POST', '/api/phones/answer', { id: waiting.id, yes: true, offer: card.token })).status, 403, 'phone cannot approve itself');
+  assert.equal((await http('POST', '/api/phones/answer', { id: waiting.id, yes: true, offer: card.token }, { 'x-crewhouse': '1', authorization: '' })).status, 403, 'known pairing words and offer are not person authority');
   assert.equal((await http('POST', '/api/phones/answer', { id: waiting.id, yes: true, offer: card.token })).status, 200);
   await pairing;
   await until(async () => (await http('GET', '/api/bots/chief')).body.phoneOffer.joined === 'Inline phone');
@@ -340,9 +341,26 @@ test('pairing with a yes at the computer, grants, approvals from the phone, and 
   const job = (await a.req('POST', '/api/bots/reel/messages', { text: `save it [tool crew_write ${JSON.stringify({ path: outside, content: 'from the phone' })}]` })).body.task;
   const ask = await until(async () => (await a.req('GET', '/api/state')).body.asks.find((x: any) => x.kind === 'permission'));
   assert.match(ask.title, /Reel wants to change a file/);
+  assert.equal((await http('POST', `/api/asks/${ask.id}/answer`, { answer: 'allow' }, { 'x-crewhouse': '1', authorization: '' })).status, 403, 'the public header is not person authority');
+  assert.ok((await a.req('GET', '/api/state')).body.asks.some((x: any) => x.id === ask.id), 'a refused answer leaves the question open');
   assert.equal((await a.req('POST', `/api/asks/${ask.id}/answer`, { answer: 'allow' })).status, 200);
   await until(async () => (await http('GET', '/api/bots/reel')).body.tasks.find((x: any) => x.id === job && x.state === 'done'));
   assert.equal(readFileSync(outside, 'utf8'), 'from the phone');
+
+  // Replay the reported attack: an unfenced bot's actual shell, not a forged test caller.
+  await http('POST', '/api/recruit', { template: 'tracer', name: 'Tracer' });
+  const tool = (name: string, input: object) => `[tool ${name} ${JSON.stringify(input)}]`;
+  await a.req('POST', '/api/bots/tracer/messages', { text: tool('crew_write', { path: 'files/authority.md', content: 'Synthetic unsent draft for Umer' }) +
+    tool('crew_draft', { path: 'files/authority.md', channel: 'email', to: 'ada@fernwood.example', subject: 'Synthetic authority probe' }) });
+  const draft = await until(async () => (await a.req('GET', '/api/state')).body.asks.find((x: any) => x.bot === 'tracer' && x.detail.draft));
+  const attack = (await a.req('POST', '/api/bots/tracer/messages', { text: tool('bash', { command:
+    `curl -sS -o /dev/null -w '%{http_code}' -X POST -H 'content-type: application/json' -H 'x-crewhouse: 1' --data '{"answer":"allow","scope":"once"}' '${base}/api/asks/${draft.id}/answer' > files/denial.txt` }) })).body.task;
+  await until(async () => (await a.req('GET', '/api/bots/tracer')).body.tasks.find((x: any) => x.id === attack && x.state === 'done'));
+  assert.equal(readFileSync(join(root, 'crew', 'bots', 'tracer', 'files', 'denial.txt'), 'utf8'), '403');
+  assert.ok((await a.req('GET', '/api/state')).body.asks.some((x: any) => x.id === draft.id), 'the helper cannot attest to its own draft');
+  assert.ok(!(await a.req('GET', '/api/events')).body.some((x: any) => x.kind === 'draft.approved' && x.bot === 'tracer'));
+  assert.equal((await a.req('POST', `/api/asks/${draft.id}/answer`, { answer: 'allow' })).status, 200, 'the authenticated paired phone can approve');
+  assert.ok((await a.req('GET', '/api/events')).body.some((x: any) => x.kind === 'draft.approved' && x.bot === 'tracer'));
 
   // Another member cannot mint a code; the owner's view-only tablet can watch but not answer.
   const offer = (await http('POST', '/api/phones/pair', { role: 'view' })).body;
@@ -376,7 +394,7 @@ test('pairing with a yes at the computer, grants, approvals from the phone, and 
 test('a direct typed code and exact local CLI words pair once', async () => {
   await until(async () => (await fetch(`${base}/api/state`).catch(() => null))?.ok);
   const cli = (...args: string[]) => execFileSync(join(import.meta.dirname, '..', 'crewhouse'), ['phones', ...args],
-    { encoding: 'utf8', env: { ...process.env, CREWHOUSE_PORT: String(port) } });
+    { encoding: 'utf8', env: { ...process.env, CREWHOUSE_PORT: String(port), CREWHOUSE_STATE_DIR: join(root, 'state') } });
   const offer = (await http('POST', '/api/phones/pair', { role: 'control' })).body;
   const typed = decodeTyped(offer.typed);
   assert.deepEqual(typed.urls, offer.urls);
@@ -480,7 +498,7 @@ test('phones, push and quiet hold survive a restart after the P1 migration', asy
     assert.equal((await view.req('GET', '/api/state')).status, 200);
     assert.equal((await view.req('POST', '/api/bots/chief/messages', { text: 'no' })).status, 403);
     assert.equal(pushes.length, 0, 'quiet hours still hold news across the upgrade');
-    const live = new DatabaseSync(join(root, 'state', 'crew.db'));
+    const live = new DatabaseSync(join(root, 'state', 'crew.db'), { timeout: 3000 });
     try {
       assert.equal(live.prepare("SELECT value FROM settings WHERE key = 'push.held.1'").get()!.value, '1');
       assert.equal(live.prepare('SELECT 1 FROM devices WHERE id = ?').get(bGrant.device.id), undefined);

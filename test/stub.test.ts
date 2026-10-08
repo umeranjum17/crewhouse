@@ -30,7 +30,7 @@ after(() => daemon.kill());
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const { PROVIDERS } = await import('../src/accounts.ts');
 async function api(method: string, path: string, body?: unknown, headers: Record<string, string> = { 'x-crewhouse': '1' }) {
-  const res = await fetch(base + path, { method, headers: { 'content-type': 'application/json', ...headers }, body: body ? JSON.stringify(body) : undefined });
+  const res = await fetch(base + path, { method, headers: { authorization: method === 'GET' ? '' : `Bearer ${readFileSync(join(root, 'state', 'person.key'), 'utf8')}`, 'content-type': 'application/json', ...headers }, body: body ? JSON.stringify(body) : undefined });
   return { status: res.status, body: await res.json() };
 }
 async function until<T>(fn: () => Promise<T | undefined | false>, ms = 10_000): Promise<T> {
@@ -130,7 +130,7 @@ test('parked peer reads: both approvals resume one turn and the person gets the 
   const server = await startServer(s.cfg, s.db, s.crew);
   const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   const request = async (method: string, path: string, body?: object) => {
-    const res = await fetch(url + path, { method, headers: { 'content-type': 'application/json', 'x-crewhouse': '1' }, body: body && JSON.stringify(body) });
+    const res = await fetch(url + path, { method, headers: { 'content-type': 'application/json', 'x-crewhouse': '1', authorization: `Bearer ${readFileSync(join(s.cfg.stateDir, 'person.key'), 'utf8')}` }, body: body && JSON.stringify(body) });
     assert.equal(res.status, 200);
     return res.json();
   };
@@ -333,12 +333,14 @@ test('screen: take over and give back through the API; watching needs the Comput
 
   // Set this test's own grant precondition, even if an earlier onboarding assertion fails.
   await api('PUT', '/api/bots/reel/tools', { tools: ['files', 'media', 'images'] });
-  const ws = new WebSocket(`ws://127.0.0.1:${port}/ws/desktop/reel`);
+  const ws = new WebSocket(`ws://127.0.0.1:${port}/ws/desktop/reel`, `crewhouse-person.${readFileSync(join(root, 'state', 'person.key'), 'utf8')}`);
   await new Promise((r) => ws.once('open', r));
   ws.send(JSON.stringify({ id: 1, method: 'session.open', params: { permissions: ['view'] } }));
   const reply = JSON.parse(String(await new Promise((r) => ws.once('message', r))));
   assert.equal(reply.error.code, 'no-screen');
   ws.close();
+  const unauthenticated = new WebSocket(`ws://127.0.0.1:${port}/ws/desktop/reel`);
+  assert.equal(await new Promise((r) => { unauthenticated.once('open', () => r('open')); unauthenticated.once('error', () => r('refused')); }), 'refused', 'loopback alone cannot control a desktop');
   const foreign = new WebSocket(`ws://127.0.0.1:${port}/ws/desktop/reel`, { origin: 'https://evil.example' });
   assert.equal(await new Promise((r) => { foreign.once('open', () => r('open')); foreign.once('error', () => r('refused')); }), 'refused');
 });
