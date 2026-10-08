@@ -35,8 +35,8 @@ test('Chief lists published categories and skills, proposes one, then imports af
   globalThis.fetch = (async (url: string) => {
     calls.push(String(url));
     const body = String(url).endsWith('/marketplace')
-      ? `<script>self.__next_f.push(${JSON.stringify([1, `0:${JSON.stringify({ templates: [recipe(), { ...recipe(), id: 'designer', categories: ['Design', 'GTM', 'Marketing'] }] })}\n`])})</script>`
-      : String(url).includes('api.github.com') ? JSON.stringify([{ name: 'test-skill', type: 'dir' }])
+      ? `<script>self.__next_f.push(${JSON.stringify([1, `0:${JSON.stringify({ templates: [recipe(), ...Array.from({ length: 5 }, (_, i) => ({ ...recipe(), id: `seed-a91e4c-${i}`, name: `Design Helper ${i + 1}`, categories: ['Design', 'GTM', 'Marketing'] }))] })}\n`])})</script>`
+      : String(url).endsWith('/marketplace.json') ? JSON.stringify({ plugins: [{ skills: ['./skills/test-skill', './skills/test-skill'] }] })
       : page(recipe());
     return new Response(body);
   }) as typeof fetch;
@@ -47,11 +47,21 @@ test('Chief lists published categories and skills, proposes one, then imports af
       await release(crew, 'chief', 'For your prospecting goal, Testy Prospecting fits because it researches names and drafts openers. Import it?');
       await settled(db, listed!.task);
       const seen = runtime.transcript(db.get('SELECT session FROM tasks WHERE id = ?', listed!.task)!.session);
-      for (const category of ['Design', 'GTM', 'Marketing', 'Sales']) assert.ok(seen.includes(category), `catalogue accepts recorded input ${JSON.stringify(input)}`);
-      assert.ok(seen.includes('test-skill'), 'the official skill list reaches Chief');
+      for (const category of ['Design', 'Go to market', 'Marketing', 'Sales']) assert.ok(seen.includes(category), `catalogue accepts recorded input ${JSON.stringify(input)}`);
+      assert.ok(seen.includes('Test skill'), 'plain skill titles reach Chief');
+      assert.doesNotMatch(seen, /seed-a91e4c|test-skill|"slug"/, 'the list contains titles, never raw handles');
+      assert.ok(seen.includes('"count":5'), 'summary keeps the full category count');
+      assert.ok(seen.includes('Design Helper 3'));
+      assert.ok(!seen.includes('Design Helper 4'), 'summary has at most three examples per category');
       assert.match(lastSaid(db, 'chief'), /Testy Prospecting.*researches names/);
       assert.equal(crew.bots().length, 1, 'listing and proposing seat nobody');
     }
+    const category = await crew.post('chief', 'Show Design [tool crew_import {"list":true,"category":"Design"}]');
+    await settled(db, category!.task);
+    const full = runtime.transcript(db.get('SELECT session FROM tasks WHERE id = ?', category!.task)!.session);
+    assert.ok(full.includes('Design Helper 5'), 'one requested category gets all plain titles');
+    assert.ok(!full.includes('Testy Prospecting'), 'other categories stay out of the full list');
+    assert.doesNotMatch(full, /seed-a91e4c/);
     const native = TOOLS.find((t) => t.name === 'crew_import')!.parameters as { properties: Record<string, { type: string }> };
     assert.equal(native.properties.list.type, 'boolean', 'the native model gets a typed list flag');
     assert.equal(native.properties.name.type, 'string');
@@ -63,7 +73,7 @@ test('Chief lists published categories and skills, proposes one, then imports af
     await settled(db, yes!.task);
     assert.ok(crew.bots().some((b) => b.template === 'grok-tb'));
     assert.ok(existsSync(join(disk.botDir(cfg, 'testy-prospecting'), 'SOURCE.md')));
-    assert.equal(calls.filter((u) => u.endsWith('/marketplace')).length, 3);
+    assert.equal(calls.filter((u) => u.endsWith('/marketplace')).length, 4);
     assert.equal(calls.filter((u) => u.endsWith('/bots/tb')).length, 1, 'the same import route fetched the recipe');
     globalThis.fetch = (async () => { throw new Error('source offline'); }) as typeof fetch;
     const missed = await crew.post('chief', 'List again [tool crew_import {"list":true}] ask permission');

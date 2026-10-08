@@ -19,10 +19,10 @@ function locate(ref) {
 }
 
 export async function listPublished() {
-  const source = `https://api.github.com/repos/${OFFICIAL}/contents/skills`;
-  const rows = JSON.parse((await get(source))?.toString('utf8') ?? 'null');
-  if (!Array.isArray(rows)) throw new Error('the skill repo has no readable published list');
-  const skills = rows.filter((r) => r.type === 'dir' && /^[a-z0-9][a-z0-9-]{0,60}$/.test(r.name)).map((r) => ({ skill: r.name }));
+  const source = `https://raw.githubusercontent.com/${OFFICIAL}/main/.claude-plugin/marketplace.json`;
+  const data = JSON.parse((await get(source))?.toString('utf8') ?? 'null');
+  if (!Array.isArray(data?.plugins)) throw new Error('the skill repo has no readable published list');
+  const skills = [...new Set(data.plugins.flatMap((p) => Array.isArray(p?.skills) ? p.skills : []).map((s) => typeof s === 'string' ? /^\.\/skills\/([a-z0-9][a-z0-9-]{0,60})$/.exec(s)?.[1] : null).filter(Boolean))].sort().map((skill) => ({ skill }));
   if (!skills.length) throw new Error('the skill repo has no readable published skills');
   return { source, skills, note: 'Published names, not a promise of importability: import checks each skill\'s reuse license.' };
 }

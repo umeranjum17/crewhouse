@@ -59,11 +59,22 @@ export async function listPublished() {
   return { source: 'https://x.ai/bot/marketplace', categories };
 }
 
-export async function listAny() {
+export async function listAny(category = '') {
   const skills = await import('./claude-skill.mjs');
   const results = await Promise.allSettled([listPublished(), skills.listPublished()]);
-  return Object.fromEntries(results.map((r, i) => [i ? 'skills' : 'grok', r.status === 'fulfilled' ? r.value
-    : { error: r.reason.message, note: 'Say this source could not be reached or read; still offer import by name. Never invent its list.' }]));
+  const title = (s) => s.replace(/-/g, ' ').replace(/^./, (c) => c.toUpperCase());
+  const label = (s) => s === 'GTM' ? 'Go to market' : s;
+  const requested = clean(category, 100).toLowerCase();
+  return Object.fromEntries(results.map((r, i) => {
+    if (r.status !== 'fulfilled') return [i ? 'skills' : 'grok', { error: r.reason.message,
+      note: 'Say this source could not be reached or read; still offer import by name. Never invent its list.' }];
+    const groups = i ? { 'Claude skills': r.value.skills.map((s) => ({ name: title(s.skill) })) }
+      : Object.fromEntries(Object.entries(r.value.categories).map(([k, rows]) => [label(k), rows.map(({ name, description }) => ({ name, description }))]));
+    const selected = Object.entries(groups).filter(([k]) => !requested || k.toLowerCase() === requested || (requested === 'gtm' && k === 'Go to market'));
+    return [i ? 'skills' : 'grok', { categories: selected.map(([name, rows]) => ({ name, count: rows.length,
+      [requested ? 'templates' : 'examples']: requested ? rows : rows.slice(0, 3) })),
+      note: requested ? 'Show only this category, using plain titles.' : 'Show each category with its count and these examples only, then your pick and reason. Full names only when the person asks for one category; call list with category.' }];
+  }));
 }
 
 /** The marketplace page's recipe: the visible facts plus the embedded skills, routines and integrations. */
