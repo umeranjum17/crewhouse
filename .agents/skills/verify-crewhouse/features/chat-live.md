@@ -14,7 +14,9 @@ over a second. Prove a regression with it by checking the old `src`/`web` out ov
 HOME and the run under `fm-cred-lock.sh` and `fm-mem-gate.sh`; set `chief` and the helper to `{"models":["claude"]}`.
 Then per message: `node .agents/skills/verify-crewhouse/scripts/chat-probe.mjs $BASE $EV/<run> "<words>" 390 844 '/?night#/'` (and 1440 900, `?day`).
 It writes `changes.json` (every change to the thread, timed in the page: `longestStillMs` until the end line is the
-number), `screen.jsonl`, `push.jsonl` and one frame a second named by ms since send. Run one plain question and one
+number), `screen.jsonl` (rows carry the 160-character `lines` preview plus `linesFull` with
+each of the last four thread lines whole — likewise `asideFull`/`heroFull` beside the capped
+`aside`/`hero`), `push.jsonl` and one frame a second named by ms since send. Run one plain question and one
 "Ask Scout to …" at each width; stitch the frames into a timestamped recording with ffmpeg (`drawtext` with the ms
 from each file name, 1 fps). The probe's own loop is too coarse to judge a 1 s gap; `changes.json` is the measure.
 
