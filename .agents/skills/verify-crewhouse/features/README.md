@@ -21,6 +21,7 @@ isolated crewd on the stub engine.
 | office-layout | [office-layout.md](office-layout.md) | The Office view's counts and labels at desktop, phone and narrow widths |
 | bubble-write-it-here | [bubble-write-it-here.md](bubble-write-it-here.md) | On the release APK: Chief's bubble over another app's box, Write it here, and the action it offers (Copy or Put it in) |
 | ai-accounts-view | [ai-accounts-view.md](ai-accounts-view.md) | Settings' AI-accounts card: who is ready, resting, or plan-less, without any sign-in |
+| term-screens | [term-screens.md](term-screens.md) | Things, routines, helper details and the file panel wear Term: shared tiles, one blue primary, names in full |
 
 ## Proof and skip reporting
 
