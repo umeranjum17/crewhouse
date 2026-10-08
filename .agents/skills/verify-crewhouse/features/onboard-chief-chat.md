@@ -10,6 +10,7 @@ first message.
 - `onboard` — the person's chosen address lands in `/api/state` (`person.address`).
 - `chief-greeting` — Chief's thread opens with his greeting (`I am Chief, of the Crewhouse…`).
 - `chief-chat` — a message becomes a task that settles with a reply.
+- `shared-profile` — Chief saves directly stated personal/work facts from onboarding and chat with `crew_profile`; the complete merged record stays under 4000 characters and his reply says plainly what he noted.
 
 ## How to get to it (user POV)
 
@@ -25,6 +26,32 @@ Preconditions: fresh lab (no onboarded person); `$B` and `$H` as in SKILL.md.
 - **Chief's page.** `curl -fsS "$B/api/bots/chief"` → first `author:"bot"` message matches `I am Chief, of the Crewhouse` and names his stop-and-ask rules (`stop and ask you first before sending anything, spending money`).
 - **Chat.** `curl -fsS -X POST $H -d '{"text":"I need a demo video"}' "$B/api/bots/chief/messages"`; poll the same page until the reply `stub chief: done with "The person says: I need a demo video"` appears and the task row reaches `done`.
 - **UI.** Browser to `http://127.0.0.1:$PORT/`: the Hello screen shows the name field and three ideas (eval their labels and `getBoundingClientRect`); after onboarding the Chief thread shows hero + Needs-you row and the composer. Capture 1440 and 390 screenshots; at 320 record the actual wrap/scroll behavior of the longest idea label.
+
+## Shared profile (real-model words)
+
+Use SKILL.md's isolated real-engine launch and credential lock for the whole lifetime.
+Select the signed-in Claude account for Chief through `PUT /api/bots/chief/models`.
+Onboard with `{address:"Umer", ask:"I run a bakery for local families. My business is called Morning Loaf. I am introducing myself, not asking for a helper or a job yet."}`.
+Await the settled Chief task; retain `GET /api/profile` and `GET /api/bots/chief`.
+The record must contain the bakery and audience, and Chief must plainly say what he noted.
+Then send `My writing tone is warm and plain. I prefer short sentences.` in Chief's
+composer, recording that send and reply. Read the record again: the business/audience
+must remain and the tone must be added. No tool syntax belongs in these real-model requests.
+Capture Chief's note before/after at 390×844 and 1440×900, `?day` and `?night`, and open
+every shot. These web widths do not prove native Expo UI. `test/crew-profile.test.ts`
+pins the HTTP onboarding/chat dispatch and over-cap preservation on the scripted runtime;
+it does not prove model judgment or plain model words.
+
+The screenshot/recording helpers mentioned in SKILL.md are absent. When using the
+fleet-required `chrome-devtools-axi`, use its own task-scoped session, `emulate --viewport`,
+`open <base>/?day` / `open <base>/?night`, `eval` for visible text/geometry, and
+`screenshot <EV>/<name>.png`. Record real browser frames from that same session's CDP
+`Page.startScreencast` (acknowledge frames, retain timestamps), then mux with ffmpeg.
+Do not substitute demo copy or injected messages for the actual Chief reply.
+Stop every owned daemon/engine by its recorded port before releasing the credential lock.
+`node scripts/personal-voice.mjs` and its self-test are also absent at this revision;
+report them as unperformed rather than claiming a clean scan. Inspect the actual note's
+plain, single-person wording in the retained replies and all four captures.
 
 ## Published template catalogue (real-model words)
 

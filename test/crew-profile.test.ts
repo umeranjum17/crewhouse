@@ -78,6 +78,17 @@ test('the record reads and writes through crewd’s API', async () => {
       return { status: res.status, body: await res.json() };
     };
     assert.equal((await api('GET', '/api/profile')).body.text, '');
+    const save = async (text: string, fact: string) => {
+      const reply = await api('POST', '/api/bots/chief/messages', { text: `${fact} [tool crew_profile ${JSON.stringify({ text })}]` });
+      await settled(db, reply.body.task);
+    };
+    const first = await api('POST', '/api/onboard', { address: 'Umer', ask: `I run a bakery. [tool crew_profile ${JSON.stringify({ text: 'I run a bakery.' })}]` });
+    await settled(db, first.body.task);
+    assert.equal((await api('GET', '/api/profile')).body.text.trim(), 'I run a bakery.', 'onboarding reaches the shared record');
+    await save('I run a bakery. My audience is local families.', 'My audience is local families.');
+    assert.equal((await api('GET', '/api/profile')).body.text.trim(), 'I run a bakery. My audience is local families.', 'chat facts merge with onboarding');
+    await save('x'.repeat(disk.PROFILE_CAP + 1), 'My tone is warm.');
+    assert.equal((await api('GET', '/api/profile')).body.text.trim(), 'I run a bakery. My audience is local families.', 'over-cap saves preserve the record');
     assert.equal((await api('PUT', '/api/profile', { text: VOICE })).status, 200);
     const back = await api('GET', '/api/profile');
     assert.equal(back.body.text.trim(), VOICE);
