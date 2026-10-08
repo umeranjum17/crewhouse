@@ -1,4 +1,4 @@
-# Things, routines, helper details and the file panel in Term
+# Things, routines, helper details, the file panel, first run and Share in Term
 
 These screens wear the same Term look as Home and Your crew: a file row carries the shared
 `o-ic` extension tile (never the old pastel `file-chip`), names and titles read in full and
@@ -26,3 +26,18 @@ The stub cannot deliver image or document-kind files; `?demo` covers those rows 
 - **Widths and themes.** 390 and 1440, `?day` and `?night` — the four captures per screen.
 
 The same checks run headless in `test/office.test.ts` ("things, routines and helper details read Term").
+
+## First run (Hello) and the Share sheet
+
+Hello: Chief's greeting is plain words under his helmet (`.speech` has no border or fill, no bubble arrow), and each
+idea wears the shared `o-ic` tile. Share: what came in reads in full (`.said`, no clamp), Chief speaks with his drawn
+helmet face in the name column (`.line-by .face img.ink`), and the three choices are buttons with one blue primary
+(`.share-acts .btn.go`), never the old `chip`s.
+
+- **Get there.** A fresh crewd opens on Hello at `/`. After `POST /api/onboard`, open
+  `/share?title=…&text=…&url=…` (what the phone's Share target sends).
+- **Check.** `eval` `document.querySelectorAll('.idea > .o-ic').length` equals the idea count; on Share,
+  `.share .chip` is 0, `.share .btn.go` is 1, and `.said` has `scrollHeight <= clientHeight + 1`.
+- **Motion.** Tap Something else…: the composer appears under the buttons.
+
+Headless: `test/office.test.ts` ("first run and the Share sheet read Term").
