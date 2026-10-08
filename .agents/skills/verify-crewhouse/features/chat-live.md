@@ -12,7 +12,7 @@ over a second. Prove a regression with it by checking the old `src`/`web` out ov
 
 **Real engine (the proof that counts).** crewd as SKILL.md says, with Claude's test credential linked into the engine
 HOME and the run under `fm-cred-lock.sh` and `fm-mem-gate.sh`; set `chief` and the helper to `{"models":["claude"]}`.
-Then per message: `node scripts/chat-probe.mjs $BASE $EV/<run> "<words>" 390 844 '/?night#/'` (and 1440 900, `?day`).
+Then per message: `node .agents/skills/verify-crewhouse/scripts/chat-probe.mjs $BASE $EV/<run> "<words>" 390 844 '/?night#/'` (and 1440 900, `?day`).
 It writes `changes.json` (every change to the thread, timed in the page: `longestStillMs` until the end line is the
 number), `screen.jsonl`, `push.jsonl` and one frame a second named by ms since send. Run one plain question and one
 "Ask Scout to …" at each width; stitch the frames into a timestamped recording with ffmpeg (`drawtext` with the ms
