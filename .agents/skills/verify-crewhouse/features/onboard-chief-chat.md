@@ -69,14 +69,15 @@ With the real-engine launch in SKILL.md, first prove browsing in two Chief turns
 2. Ask for the full list of one category named in the first reply. `run.call` must show
    `crew_import {list:true,category:"<that category>"}`; its result contains all that
    category's titles and no other category's names. Chief must show titles, not handles.
+   Wait for `/api/accounts` to report the real account ready; no sign-in card should remain.
    Capture both replies at 390/1440, day/night and record sending the follow-up.
 
 Use `chrome-devtools-axi` in a task-named session: `emulate --viewport "390x844x3,mobile,touch"`
 (or `"1440x900x1"`), `open <base>/?day#/chief` / `?night#/chief`, wait for the actual reply, then
 `screenshot <EV>/<reply>-<theme>-<width>.png`. Resize after navigation and verify
 `innerWidth`/`innerHeight`: mobile emulation can reset on navigation. Scroll `.lines`
-when it owns the scroll; at 390 it has visible overflow, so use its actual owner,
-`document.scrollingElement`. Preserve overlapping frames when the whole reply does not fit. Record with Chrome's
+when it owns the scroll; otherwise use `document.scrollingElement`. After the thread-layout
+fix, `.lines` owns the phone scroll too. Preserve overlapping frames when a reply does not fit. Record with Chrome's
 CDP `Page.startScreencast` and ffmpeg; `scripts/screens.sh` and `scripts/record.mjs` are
 absent at this revision. Keep API replies, tool-call events, capture geometry and decoded
 motion-frame count alongside the images.
