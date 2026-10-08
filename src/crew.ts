@@ -1533,11 +1533,10 @@ export class Crew {
     if (!rests.length) {
       const handoff = this.handoffs.get(task.id) ?? '';
       this.handoffs.delete(task.id);
-      const first = !this.db.get("SELECT 1 FROM tasks WHERE id != ? AND state != 'paused'", task.id);
       state = blocked ? `Waiting for a ${name} plan with helpers.` : `Waiting for you to sign in${withName}.`;
       words = blocked ? `Your ${name} plan doesn't include helpers yet. Everything else in ${name} is fine.${key === 'chatgpt' ? ' ChatGPT Plus includes it.' : ` A bigger ${name} plan includes it.`}`
         : /sign in again/.test(handoff) ? `${name ? `${name} signed you out` : 'You were signed out'}. That happens after a password change. Sign in again and the crew picks up where it left off.`
-        : first && task.bot === CHIEF ? `The crew uses your ${name ?? 'AI'} account. Sign in when you're ready and I'll start.`
+        : task.bot === CHIEF && !this.db.get("SELECT 1 FROM tasks WHERE id != ? AND state != 'paused'", task.id) ? `The crew uses your ${name ?? 'AI'} account. Sign in when you're ready and I'll start.`
         : `${task.bot === CHIEF ? 'I' : who} will start the moment you sign in${withName}.`;
       voice = task.bot === CHIEF ? 'bot' : 'system';
     } else {
@@ -1549,10 +1548,11 @@ export class Crew {
     this.db.tx(() => {
       this.db.run('UPDATE tasks SET wake_at = ? WHERE id = ?', wake, task.id);
       this.setTask(task, 'paused', state);
-      // One waiting line per words: another job pausing on the same account state would say it again. Only this
-      // bot's own last system line counts; what the person or another helper said in between changes nothing.
-      const said = this.db.get("SELECT text FROM messages WHERE bot = ? AND author = 'system' ORDER BY id DESC LIMIT 1", task.bot)?.text;
-      if (said !== (voice === 'bot' ? cleanReply(words) : words)) this.say(task.bot, voice, words, task.id);
+      // One waiting line per words, judged by this bot's own last line in that voice (what others said in between
+      // changes nothing): Chief says his once per wait, notes the next ask in other words, then holds quietly (Main1325).
+      const last = this.db.get('SELECT text FROM messages WHERE bot = ? AND author = ? ORDER BY id DESC LIMIT 1', task.bot, voice)?.text;
+      const noted = cleanReply(`Noted. I'll start on this once ${blocked ? 'your plan includes helpers' : 'you sign in'}.`), again = voice === 'bot' && last === cleanReply(words);
+      if (voice === 'system' ? last !== words : last !== noted) this.say(task.bot, voice, again ? noted : words, task.id);
     });
   }
 

@@ -10,6 +10,7 @@
 // ?demo=crew1, crew5, crew12, crew30 (the office at that many helpers).
 // ?demo=building (Scribe mid-build: the question answered, the workbook not yet delivered).
 // ?demo=longthread (a signed-out thread long enough to scroll, for the thread-clear regression test).
+// &slowaccounts holds the accounts answer 3 s (the real engine's sign-in check is that slow).
 // &sheet=signin or &sheet=connect opens that sheet, and &phase=… pins it to one state.
 import type { Json } from './api.ts';
 import { AIS } from './adapter.ts';
@@ -526,7 +527,8 @@ export async function demoCall(method: string, path: string, body?: Json) {
     const things = state.tasks.filter((t: Json) => `${t.title} ${t.result ?? ''}`.toLowerCase().includes(q)).map((t: Json) => ({ id: t.id, bot: t.bot, title: t.title, at: t.updated_at }));
     return { messages: messages.slice(0, 50), things: things.slice(0, 20) };
   }
-  if (method === 'GET' && path.startsWith('/api/accounts')) return accounts;
+  // &slowaccounts: the accounts answer takes 3 s, as the real engine's can: the screens while it is still checking.
+  if (method === 'GET' && path.startsWith('/api/accounts')) return new URLSearchParams(location.search).has('slowaccounts') ? new Promise((r) => setTimeout(() => r(accounts), 3000)) : accounts;
   // The workbook crewd reads for the card and the panel (src/workbooks.ts): the tabs, headings and first rows.
   if (method === 'GET' && path.startsWith('/api/workbook')) return path.includes('flights') ? flights : book;
   // The document crewd reads for its card and panel (src/documents.ts): the headings, paragraphs, lists and tables —

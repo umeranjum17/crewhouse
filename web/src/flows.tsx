@@ -168,7 +168,8 @@ export function AccountCard({ accounts, inChat, onReady }: { accounts: Json[] | 
   const offered = [...list.mine, ...list.more];
   const { ai, g } = list.mine[0];
   const signAi = offered.find((r) => r.ai.key === signKey)?.ai ?? ai;
-  if (g.state === 'ready' && !g.notIncluded && signing === false) return null;
+  // Not before the accounts are known: Chief's header says the same sign-in wait from the same test (chiefLocal).
+  if ((!accounts || (g.state === 'ready' && !g.notIncluded)) && signing === false) return null;
   if (g.notIncluded) return (
     <div className="card ask">
       <div className="ask-head"><Face who="chief" size={28} /><div className="grow"><b>Chief</b><div className="ask-status"><i />Needs a bigger plan</div></div></div>

@@ -131,4 +131,20 @@ test('a phone thread clears its bars: every sign-in button above the composer, n
     })()`);
     assert.deepEqual(mid.under, [], `${route} mid-way, thread content under the top bar (bar ${Math.round(mid.head.top)}-${Math.round(mid.head.bottom)}): ${mid.under.join(' | ')}`);
   }
+
+  // Chief's status says the sign-in wait the card says, in the card's words, from the first frame on: never "At work"
+  // beside the sign-in buttons, even while the accounts answer is still on its way (as slow as the real engine's).
+  for (const [w, h, sel] of [[390, 844, '.home-chat .ch-status'], [1440, 900, '.side-status']] as const) {
+    await send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile: w < 900 });
+    await send('Page.navigate', { url: `${base}/?demo=longthread&day&slowaccounts#/` });
+    const seen: string[] = [];
+    await until('the sign-in wait', async () => {
+      const s = await run(`(() => { const st = document.querySelector('${sel}');
+        return { card: [...document.querySelectorAll('.chat .card.ask .btn.go')].some((e) => /^Sign in/.test(e.textContent.trim())),
+          status: st?.textContent.trim() ?? '', blue: st ? getComputedStyle(st).color : '', ask: ((a) => (a ? getComputedStyle(a).color : ''))(document.querySelector('.ask-status')) }; })()`);
+      if (s.card) seen.push(`${s.status}${s.status === 'Needs a sign-in' && s.blue !== s.ask ? ' (not the card blue)' : ''}`);
+      return s.card && seen.length > 3;
+    }, 30_000);
+    assert.deepEqual([...new Set(seen)], ['Needs a sign-in'], `at ${w}, Chief's status beside the sign-in card`);
+  }
 });
