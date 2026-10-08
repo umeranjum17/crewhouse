@@ -71,9 +71,10 @@ test('from send to reply the thread never sits still: a held Chief turn and a jo
     await until('Chief\'s box', () => run("!!document.querySelector('.chat .dock textarea')"), 30_000);
     await run("document.querySelector('.chat .dock textarea').focus()");
     await send('Input.insertText', { text: words });
-    // Every change to the visible thread's words, stamped by the page as it happens, from the key press on.
+    // Stamp the mutation before innerText forces layout: the read's variable cost is measurement work,
+    // not time before the words changed. Still count only changed, visible words, from the key press on.
     await run(`{ window.__watch?.disconnect(); window.__seen = []; window.__sent = undefined; let was = ${SCREEN};
-      (window.__watch = new MutationObserver(() => { const now = ${SCREEN}; if (now !== was) { was = now; __seen.push(performance.now()); } }))
+      (window.__watch = new MutationObserver(() => { const at = performance.now(); const now = ${SCREEN}; if (now !== was) { was = now; __seen.push(at); } }))
         .observe(document.querySelector('.chat'), { subtree: true, childList: true, characterData: true });
       document.querySelector('.chat .dock textarea').addEventListener('keydown', () => { window.__sent ??= performance.now(); }, { capture: true }); true }`);
     const sent = Date.now();

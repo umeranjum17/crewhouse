@@ -8,7 +8,11 @@ the helper's chat. The rules and their numbers are the bar (ch-chat-live-1 `bar.
 
 **Gate (stub engine, no account).** `node --test test/chat-live.test.ts`: real crewd, the built web app, headless
 Chromium at 1440 and 390, a held Chief turn and a job passed to Scout; it fails if the visible thread sits still for
-over a second. Prove a regression with it by checking the old `src`/`web` out over the new and running it again.
+over a second (one frame of timer jitter allowed). Mutation times are captured before reading `innerText`, whose
+forced-layout cost must not be charged to the preceding still stretch. It still requires changed visible words:
+slowing the live-line timer to two seconds must fail. For loaded-run qualification, repeat the gate ten times under
+the same bounded CPU contention before and after; retain logs and the load command. Prove a regression with it by
+checking the old `src`/`web` out over the new and running it again.
 
 **Real engine (the proof that counts).** crewd as SKILL.md says, with Claude's test credential linked into the engine
 HOME and the run under `fm-cred-lock.sh` and `fm-mem-gate.sh`; set `chief` and the helper to `{"models":["claude"]}`.
