@@ -71,8 +71,8 @@ With the real-engine launch in SKILL.md, first prove browsing in two Chief turns
    Capture both replies at 390/1440, day/night and record sending the follow-up.
 
 Use `chrome-devtools-axi` in a task-named session: `emulate --viewport "390x844x3,mobile,touch"`
-(or `"1440x900x1"`), `open <base>/?day` / `?night`, wait for the actual reply, then
-`screenshot <EV>/<reply>-<theme>-<width>.png`. Scroll the chat's `.log` container when
+(or `"1440x900x1"`), `open <base>/?day#/chief` / `?night#/chief`, wait for the actual reply, then
+`screenshot <EV>/<reply>-<theme>-<width>.png`. Scroll the chat's `.lines` container when
 needed; preserve extra frames when the whole reply does not fit. Record with Chrome's
 CDP `Page.startScreencast` and ffmpeg; `scripts/screens.sh` and `scripts/record.mjs` are
 absent at this revision. Keep API replies, tool-call events, capture geometry and decoded
