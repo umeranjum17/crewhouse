@@ -1365,7 +1365,7 @@ export class Crew {
     const net = this.netOf(bot.id);
     const l = { key: `agent:m1:crewhouse:${bot.id}:${task.id}`, task: task.id, account: brain.provider, model: brain.model, grants: g.tools } as Live;
     // The bot's shell: bubblewrap, where its space is the only writable part of the disk.
-    if (g.tools.includes('files') && sandboxReady()) l.shell = bashTool(space, [this.cfg.toolsDir], { ...g.env, PATH: toolBin(this.cfg) }, net?.sock);
+    if (bot.id !== CHIEF && g.tools.includes('files') && sandboxReady()) l.shell = bashTool(space, [this.cfg.toolsDir], { ...g.env, PATH: toolBin(this.cfg) }, net?.sock);
     // The person's connected apps (their Notion, their Google…): every helper working for them can use them, through the gate.
     const apps = await this.connections.tools();
     l.apps = apps.effects;
@@ -1718,8 +1718,8 @@ export class Crew {
     const grants = l.grants ?? [];
     // OpenClaw's own read/recall/media tools, adopted for unfenced runs; a fenced helper's way out stays crewd's.
     if (NATIVE_TOOLS.has(name)) return !this.netOf(botId);
-    if (/^crew_(read|write|edit|ls|grep|find)$/.test(name)) return grants.includes('files');
-    if (name === 'bash') return grants.includes('files') && sandboxReady();
+    if (/^crew_(read|write|edit|ls|grep|find)$/.test(name)) return grants.includes('files') && (botId !== CHIEF || name === 'crew_read');
+    if (name === 'bash') return botId !== CHIEF && grants.includes('files') && sandboxReady();
     if (name === 'crew_web_fetch' || name === 'crew_web_search') return grants.includes('web');
     if (name === 'browser') return !!l.browserTool;
     if (name === 'calendar' || name === 'mail') return l.appTools?.has(name) ?? false;
