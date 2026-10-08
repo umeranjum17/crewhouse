@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
-import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
+import { createReadStream, existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { extname, join } from 'node:path';
 import { WebSocketServer } from 'ws';
@@ -14,7 +15,6 @@ import { describe, firstRun, nextRun, parseSchedule, reminderAt } from './routin
 import { Link } from './link.ts';
 import { lesson, Teacher } from './teach.ts';
 
-/** A sign-in result tab: one line, in Crewhouse's own words, then the tab closes itself. */
 const resultPage = (title: string, words: string, close = false) => '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width">' +
   `<title>${title.replace(/[<&]/g, '')}</title><body style="font:18px system-ui;margin:3em auto;max-width:26em;padding:0 1em;text-align:center;color:#2e2a40">${words.replace(/[<&]/g, '')}` +
   (close ? '<script>setTimeout(() => window.close(), 1500)</script>' : '') + '</body>';
@@ -42,9 +42,7 @@ const skillWords = (message: string) => /not one of the reviewed starter skills/
   : /starting up|still starting|not ready|ECONNREFUSED|connect/i.test(message) ? 'The crew is starting up; skills switch once it is ready.'
   : /not a trusted skill|trust/i.test(message) ? 'That skill has not been reviewed yet, so the crew leaves it alone.'
   : 'That did not go through. Try again in a bit.';
-/** Weak validator: same file (size and mtime) → the browser's copy is still good and the answer is a 304. */
 const etagOf = (path: string) => { const st = statSync(path); return `W/"${st.size.toString(16)}.${Math.floor(st.mtimeMs).toString(16)}"`; };
-/** Content-named bundles (scripts/build-web.mjs) never change, so they cache forever; the shell is revalidated each load. */
 const FRESH_BUNDLE = /-[\w-]{8}\.(?:js|css)$/;
 
 function sendFile(req: IncomingMessage, res: ServerResponse, path: string) {
@@ -67,6 +65,11 @@ function sendFile(req: IncomingMessage, res: ServerResponse, path: string) {
 /** HTTP + WebSocket on 127.0.0.1: the app API and the web UI. What it returns is plain words: no commands, paths or model ids. */
 export async function startServer(cfg: Config, db: Store, crew: Crew) {
   const dist = join(cfg.repoDir, 'web', 'dist');
+  // Only the person's launcher reads this file; never serve it or give it to a bot.
+  const authorityFile = join(cfg.stateDir, 'person.key');
+  if (!existsSync(authorityFile)) writeFileSync(authorityFile, randomBytes(32).toString('hex'), { mode: 0o600, flag: 'wx' });
+  const authority = readFileSync(authorityFile, 'utf8');
+  if (!/^[a-f0-9]{64}$/.test(authority)) throw new Error('invalid person authority');
   const installing = new Set<string>();
   const teacher = new Teacher();
   /** "Done showing": the wheel goes back, and the bot gets the steps (and a few page pictures) to keep as a skill. */
@@ -94,12 +97,8 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       child.on('error', (e) => { console.error(`install ${id}:`, e); done(false); });
     });
   };
-  // The downloaded app has no setup step: on its first runs it fetches the helpers' own tools itself, one at a time,
-  // while everything else already works. The browser, with its own Chromium, is the big one.
   const packaged = process.env.CREWHOUSE_PACKAGED === '1';
   if (packaged) void (async () => { for (const t of toolStatus(cfg).filter((x) => x.installable && !x.ready)) await install(t.id); })();
-  // A newer release, from the project's public release list, once a day and only for the downloaded app: nothing of
-  // yours is sent. You see "A new Crewhouse is ready" with its download page.
   let update: { version: string; url: string } | null = null;
   const version = JSON.parse(readFileSync(join(cfg.repoDir, 'package.json'), 'utf8')).version as string;
   const newer = (a: string, b: string) => { const x = a.split('.').map(Number), y = b.split('.').map(Number); for (let i = 0; i < 3; i++) if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) > (y[i] ?? 0); return false; };
@@ -124,8 +123,8 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       if (!localHost(req.headers.host) || !/^(127\.0\.0\.1|::1|::ffff:127\.0\.0\.1)$/.test(req.socket.remoteAddress ?? '')) return send(res, 403, { error: 'loopback only' });
 
       if (p.startsWith('/api/')) {
-        // Mutations need a custom header, which a cross-site page cannot send without a preflight we never allow.
-        if (req.method !== 'GET' && req.headers['x-crewhouse'] !== '1') return send(res, 403, { error: 'missing x-crewhouse header' });
+        // The public header prevents browser CSRF; it never establishes person authority.
+        if (req.method !== 'GET' && (req.headers['x-crewhouse'] !== '1' || req.headers.authorization !== `Bearer ${authority}`)) return send(res, 403, { error: 'Open Crewhouse from this computer’s app menu to make changes.' });
         // Phones: pairing and grants answer on this computer only, never over the phone link.
         if (p === '/api/phones' && req.method === 'GET') return send(res, 200, link.devices());
         if (p === '/api/phones/link' && req.method === 'GET') return send(res, 200, link.status());
@@ -424,11 +423,11 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     const origin = req.headers.origin;
     if (!localHost(req.headers.host) || (origin && !localHost(new URL(origin).host)) || !req.url?.startsWith('/ws')) return socket.destroy();
     const bot = /^\/ws\/desktop\/([a-z0-9-]+)$/.exec(req.url)?.[1];
+    if (bot && req.headers['sec-websocket-protocol'] !== `crewhouse-person.${authority}`) return socket.destroy();
     if (bot) return desk.handleUpgrade(req, socket, head, (ws) => watch(ws, bot));
     wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws));
   });
 
-  /** One socket per watching screen: desklink signaling in, desktop events out. Closing it ends the session. */
   function watch(ws: import('ws').WebSocket, bot: string) {
     const watcher = { send: (event: unknown) => { if (ws.readyState === 1) ws.send(JSON.stringify({ event })); } };
     ws.on('message', async (raw) => {

@@ -25,7 +25,7 @@ test('helper relays in Chief carry long and bullet-only answers', { skip: !bin &
   Object.assign(cfg, { port: 0, host: '127.0.0.1', linkPort: 0, repoDir: parent });
   const server = await startServer(cfg, db, crew);
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-  const api = (method: string, path: string, body?: object) => fetch(base + path, { method, headers: { 'x-crewhouse': '1', 'content-type': 'application/json' }, body: body && JSON.stringify(body) }).then((r) => r.json());
+  const api = (method: string, path: string, body?: object) => fetch(base + path, { method, headers: { authorization: method === 'GET' ? '' : `Bearer ${readFileSync(join(cfg.stateDir, 'person.key'), 'utf8')}`, 'x-crewhouse': '1', 'content-type': 'application/json' }, body: body && JSON.stringify(body) }).then((r) => r.json());
   await api('POST', '/api/onboard', { address: 'Umer' });
   assert.equal((await api('POST', '/api/recruit', { template: 'scout', name: 'Scout' })).id, 'scout');
   const profile = mkdtempSync(join(tmpdir(), 'chat-relay-browser-'));
@@ -55,7 +55,7 @@ test('helper relays in Chief carry long and bullet-only answers', { skip: !bin &
   const evidence = process.env.CREWHOUSE_RELAY_EVIDENCE;
   if (evidence) mkdirSync(evidence, { recursive: true });
   await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
-  await send('Page.navigate', { url: `${base}/?day#/` });
+  await send('Page.navigate', { url: `${base}/?day#person=${readFileSync(join(cfg.stateDir, 'person.key'), 'utf8')}` });
   await until('Chief\'s box and opening overlay gone', () => run("!!document.querySelector('.chat .dock textarea') && !document.querySelector('.splash')"), 30_000);
   const relays: string[] = [];
   for (const [slug, reply] of [

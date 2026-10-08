@@ -3,7 +3,8 @@
 // showing, the person confirms on the computer, and the phone lands on "You're in". Writes a screenshots
 // and timings folder and prints one timings line per run.
 //
-//   node scripts/phone-pair.mjs --out "$EV/phone" [--serial emulator-5562] [--base http://127.0.0.1:$PORT]
+//   node .agents/skills/verify-crewhouse/scripts/phone-pair.mjs --out "$EV/phone" --state "$LAB/state"
+//                                [--serial emulator-5562] [--base http://127.0.0.1:$PORT]
 //                                [--apk path.apk] [--camera-file <png>] [--runs 3] [--record] [--qr-file <txt>]
 //
 // Task-owned prerequisites, none of the owner's:
@@ -31,6 +32,8 @@ const opt = (name, fallback) => { const i = args.indexOf(`--${name}`); return i 
 const flag = (name) => args.includes(`--${name}`);
 const OUT = opt('out', null);
 if (!OUT) { console.error('usage: phone-pair.mjs --out <dir> [--serial emulator-5562] [--base http://127.0.0.1:7801] [--apk apk] [--camera-file png] [--runs 3] [--record] [--qr-file <txt>]'); process.exit(2); }
+const STATE = opt('state', process.env.CREWHOUSE_STATE_DIR);
+if (!STATE) throw new Error('Pass --state for the task-owned crewd state directory');
 const SERIAL = opt('serial', 'emulator-5562');
 const BASE = opt('base', 'http://127.0.0.1:7801');
 const APK = opt('apk', null);
@@ -48,7 +51,10 @@ const require = createRequire(process.env.CREWHOUSE_REPO ? join(process.env.CREW
 const { qrMatrix } = require('@byokit/ui-core');
 const adb = (...a) => execFileSync('adb', ['-s', SERIAL, ...a], { encoding: 'utf8' }).trim();
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const api = async (path, body) => (await fetch(`${BASE}${path}`, body ? { method: 'POST', headers: { 'content-type': 'application/json', 'x-crewhouse': '1' }, body: JSON.stringify(body) } : undefined)).json();
+const api = async (path, body) => {
+  const r = await fetch(`${BASE}${path}`, body ? { method: 'POST', headers: { 'content-type': 'application/json', 'x-crewhouse': '1', authorization: `Bearer ${readFileSync(join(STATE, 'person.key'), 'utf8')}` }, body: JSON.stringify(body) } : undefined);
+  const out = await r.json(); if (!r.ok) throw new Error(out.error || `HTTP ${r.status}`); return out;
+};
 const shot = async (name) => { await new Promise((res, rej) => { const s = spawn('adb', ['-s', SERIAL, 'exec-out', 'screencap', '-p']); const out = []; s.stdout.on('data', (d) => out.push(d)); s.on('close', () => { writeFileSync(join(OUT, name), Buffer.concat(out)); res(); }); s.on('error', rej); }); return name; };
 /** The computer's code, drawn the way the emulator camera sees it: pre-squashed modules in its visible window. */
 function drawPoster(qr, out) {

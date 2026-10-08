@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Crewhouse: setup | start | autostart | update | uninstall | doctor | tools | test
+# Crewhouse: setup | start | open | autostart | update | uninstall | phones | doctor | tools | test
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -92,9 +92,9 @@ case "${1:-}" in
     echo
     if [ -t 0 ] && has_systemd && [ ! -f "$UNIT" ]; then
       read -r -p "Start Crewhouse by itself whenever you log in? [Y/n] " yn
-      case "${yn:-y}" in [Yy]*) autostart_on && { echo "Open http://127.0.0.1:${CREWHOUSE_PORT:-7711}"; exit 0; } ;; esac
+      case "${yn:-y}" in [Yy]*) autostart_on && { echo "Open Crewhouse from the app menu, or run ./crewhouse open"; exit 0; } ;; esac
     fi
-    echo "Next: ./crewhouse start, then open the address it prints."
+    echo "Next: ./crewhouse start, then ./crewhouse open in another terminal."
     ;;
   autostart)
     need_node
@@ -107,7 +107,7 @@ case "${1:-}" in
   start)
     need_node
     [ -f web/dist/index.html ] || npm run build:web
-    if autostarted; then echo "Crewhouse is already running (it starts by itself when you log in): http://127.0.0.1:${CREWHOUSE_PORT:-7711}"; exit 0; fi
+    if autostarted; then echo "Crewhouse is already running; open it from the app menu or run ./crewhouse open"; exit 0; fi
     exec node src/main.ts
     ;;
   update)
@@ -167,18 +167,33 @@ case "${1:-}" in
     [ -n "$all" ] && remove "$CREW"
     echo "Crewhouse is uninstalled. To remove the code as well, delete $(pwd)."
     ;;
+  open)
+    need_node
+    node --input-type=module - <<'NODE'
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { spawn } from 'node:child_process';
+import { loadConfig } from './src/config.ts';
+const c = loadConfig();
+spawn('xdg-open', [`http://${c.host}:${c.port}/#person=${readFileSync(join(c.stateDir, 'person.key'), 'utf8')}`], { stdio: 'inherit' });
+NODE
+    ;;
   phones)
-    # A local HTTP client only; unlike crewd, it does not need the engine's Node floor.
+    # Local HTTP client; reads the same config and private capability as the launcher.
     action="${2:-}"; shift 2 || true
     case "$action" in code|pending|approve) ;; *) echo 'usage: ./crewhouse phones code | pending | approve <two words>' >&2; exit 2 ;; esac
     [ "$action" != approve ] || [ "$#" -gt 0 ] || { echo 'Give the exact two words shown on the phone.' >&2; exit 2; }
     node --input-type=module - "$action" "$*" <<'NODE'
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { loadConfig } from './src/config.ts';
 const [action, words] = process.argv.slice(2);
 const port = Number(process.env.CREWHOUSE_PORT || 7711);
 const path = action === 'code' ? 'pair' : action;
 try {
   const res = await fetch(`http://127.0.0.1:${port}/api/phones/${path}`, {
-    method: action === 'pending' ? 'GET' : 'POST', headers: { 'x-crewhouse': '1', 'content-type': 'application/json' },
+    method: action === 'pending' ? 'GET' : 'POST', headers: { 'x-crewhouse': '1', 'content-type': 'application/json',
+      authorization: `Bearer ${readFileSync(join(loadConfig().stateDir, 'person.key'), 'utf8')}` },
     body: action === 'pending' ? undefined : JSON.stringify(action === 'approve' ? { words } : { role: 'control' }),
   });
   const data = await res.json();

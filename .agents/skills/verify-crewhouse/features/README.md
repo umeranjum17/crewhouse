@@ -9,7 +9,7 @@ evidence and cleanup live in [`../SKILL.md`](../SKILL.md); recipes assume an iso
 - crewd healthy at `http://127.0.0.1:$PORT` (engine: stub), started by this run, per SKILL.md.
 - `GET /api/state` answers with `person` and a `bots` list containing `chief`.
 - Browser drive uses a task-named `CHROME_DEVTOOLS_AXI_SESSION` (shared default session is another lane's).
-- Non-GET API calls carry `x-crewhouse: 1`.
+- HTTP headers and browser authority bootstrap follow [Drive](../SKILL.md#drive); use its `H` array for mutations before driving any feature.
 
 ## Features
 

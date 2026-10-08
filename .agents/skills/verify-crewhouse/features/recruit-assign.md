@@ -22,9 +22,9 @@ thread gets exactly one `All done.` wrap-up line carrying any delivered files as
 Preconditions: onboarded person (see onboard-chief-chat.md); the stub engine's tool-call
 syntax `[tool <name> <json>]` inside the message text.
 
-- **Recruit.** `curl -fsS -X POST $H -d '{"text":"get me a video maker [tool crew_recruit {\"template\":\"reel\",\"name\":\"Reel\"}]"}' "$B/api/bots/chief/messages"`; poll `/api/bots/chief` until the task settles, then `/api/state` lists `reel`, and `$LAB/crew/bots/reel/` contains `AGENTS.md`, `soul.md`, `skills/make-reel/SKILL.md`.
+- **Recruit.** `curl -fsS -X POST "${H[@]}" -d '{"text":"get me a video maker [tool crew_recruit {\"template\":\"reel\",\"name\":\"Reel\"}]"}' "$B/api/bots/chief/messages"`; poll `/api/bots/chief` until the task settles, then `/api/state` lists `reel`, and `$LAB/crew/bots/reel/` contains `AGENTS.md`, `soul.md`, `skills/make-reel/SKILL.md`.
 - **Cross-recruit refused.** Same `crew_recruit` call addressed to `/api/bots/reel/messages` → no `scout` ever appears in `/api/state`.
-- **Assign.** `curl -fsS -X POST $H -d '{"text":"please [tool crew_assign {\"bot\":\"reel\",\"task\":\"Make a 10 second demo\"}]"}' "$B/api/bots/chief/messages"`; poll `/api/bots/reel` until the task `Make a 10 second demo` is `done`, and `/api/bots/chief` shows one `author:"bot"` message starting `All done.` whose `task_id` is the Chief task.
+- **Assign.** `curl -fsS -X POST "${H[@]}" -d '{"text":"please [tool crew_assign {\"bot\":\"reel\",\"task\":\"Make a 10 second demo\"}]"}' "$B/api/bots/chief/messages"`; poll `/api/bots/reel` until the task `Make a 10 second demo` is `done`, and `/api/bots/chief` shows one `author:"bot"` message starting `All done.` whose `task_id` is the Chief task.
 - **File card.** A delivered file rides the wrap line: the message object's `files` array names paths under `files/…`. For a real workbook delivered by the helper, drive `[tool crew_workbook …]` per `test/workbooks.test.ts`; the app renders it via `GET /api/workbook?bot=<id>&path=<rel>` (JSON only, never the binary).
 
 ## Long and bullet-only helper relays (stub engine)

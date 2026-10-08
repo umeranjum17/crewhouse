@@ -10,7 +10,7 @@ code the computer is showing, the person says yes on the computer, and the phone
 ```bash
 REPO=$PWD                                  # the script renders the code with this repo's @byokit/ui-core
 CREWHOUSE_REPO=$REPO node .agents/skills/verify-crewhouse/scripts/phone-pair.mjs \
-  --out "$EV/phone" --serial emulator-5562 --base http://127.0.0.1:$PORT \
+  --out "$EV/phone" --state "$LAB/state" --serial emulator-5562 --base http://127.0.0.1:$PORT \
   --camera-file /path/to/live-qr.png --apk /path/to/app.apk --runs 3 --record
 ```
 
