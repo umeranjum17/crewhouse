@@ -1,7 +1,7 @@
 // "Copy and open" on a draft with a link, in the real web app on both ask surfaces (the card in the thread and the
 // sheet that opens it): the yes copies the words the person sees — their edit when they made one — and opens the link.
 // Driven in a real Chromium on the built app (web/src/parts.tsx useDraftEdit), so the copy and the open are what a
-// person gets. Needs a Chromium on PATH (skipped without one).
+// person gets. Also checks exact terminal-argument approvals fit the sheet. Needs Chromium on PATH (skipped without one).
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -14,6 +14,9 @@ import WebSocket from 'ws';
 import { browserBin } from '../src/desktop.ts';
 import { temp } from './tmp.ts';
 import { until } from './lab.ts';
+import { buildSync } from 'esbuild';
+import { effectOf } from '../src/policy.ts';
+import { card } from '../web/src/adapter.ts';
 
 const repo = join(import.meta.dirname, '..');
 const bin = browserBin();
@@ -69,7 +72,7 @@ async function browse() {
     window.open = (url, ...rest) => { log.opened.push(String(url)); return null; };
     void open;
   })()` });
-  return { run, base, type: (text: string) => send('Input.insertText', { text }), open: async (query: string) => { await send('Page.navigate', { url: `${base}/?${query}` }); } };
+  return { run, base, type: (text: string) => send('Input.insertText', { text }), send, open: async (query: string, path = '/') => { await send('Page.navigate', { url: `${base}${path}?${query}` }); } };
 }
 
 /** The yes on one surface, with the person's edit, exactly as they tap it. */
@@ -85,6 +88,45 @@ const pressYes = async (b: Awaited<ReturnType<typeof browse>>, edit: string, sco
   await b.run(`${in_('Copy and open')}.click()`);
   return b.run('window.__done');
 };
+
+test('long terminal arguments remain whole and approval controls fit the sheet', { skip: !bin && 'no Chromium here' }, async () => {
+  const args = ['pane', 'run', 'w1:p1', 'x'.repeat(231 - 'COMPLETE_TAIL_987'.length) + 'COMPLETE_TAIL_987'];
+  const effect = effectOf('herdr', { args }, { bot: 'CTO', space: '/bot', secret: [], run: { herdr: { name: 'Herdr', free: [], spend: ['pane run'] } } });
+  assert.equal(effect.kind, 'send');
+  if (effect.kind !== 'send') throw new Error('expected a drive approval');
+  const c = card({ id: 99, bot: 'cto', kind: 'permission', detail: { effect: effect.kind, words: effect.words, preview: effect.preview } }, { bots: [{ id: 'cto', display: 'CTO' }], tasks: [] });
+  buildSync({
+    stdin: { contents: `import React from 'react'; import { createRoot } from 'react-dom/client';
+      import { AskSheet } from ${JSON.stringify(join(repo, 'web/src/parts.tsx'))};
+      createRoot(document.getElementById('app')).render(<AskSheet c={${JSON.stringify(c)}} onClose={() => {}} />);`, resolveDir: repo, loader: 'tsx' },
+    outfile: join(dist, 'approval.js'), bundle: true, format: 'esm', jsx: 'automatic', define: { 'process.env.NODE_ENV': '"production"' },
+  });
+  const css = readdirSync(dist).find((f) => /^styles-.*\.css$/.test(f));
+  writeFileSync(join(dist, 'approval.html'), `<meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/${css}"><div id="app"></div><script type="module" src="/approval.js"></script>`);
+  const b = await browse();
+  for (const theme of ['day', 'night']) for (const width of [320, 390, 1440]) {
+    await b.send('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: width < 600 });
+    await b.open('', '/approval.html');
+    await until('the approval sheet', () => b.run("!!document.querySelector('.sheet.approve .ask-words')"), 30_000);
+    await b.run(`document.documentElement.dataset.theme = '${theme}'`);
+    await b.run('document.fonts.ready');
+    for (const expanded of [false, true]) {
+      if (expanded) await b.run("[...document.querySelectorAll('.sheet button')].find((b) => b.textContent === 'Read all').click()");
+      const layout = await b.run(`(() => {
+        const sheet = document.querySelector('.sheet'), heading = sheet.querySelector('.ask-words'), body = sheet.querySelector('.ev-body');
+        const r = sheet.getBoundingClientRect();
+        const controls = [...sheet.querySelectorAll('.approve-btns button')];
+        return { heading: heading.textContent, body: body.textContent, width: sheet.clientWidth, scroll: sheet.scrollWidth,
+          fits: [heading, body, ...controls].every((e) => { const b = e.getBoundingClientRect(); return b.left >= r.left && b.right <= r.right && e.scrollWidth <= e.clientWidth + 1; }),
+          labels: controls.map((b) => b.textContent) };
+      })()`);
+      assert.equal(layout.heading, effect.words);
+      assert.equal(layout.body, JSON.stringify(args));
+      assert.deepEqual(layout.labels, ['Remind me tomorrow', 'Not now', 'Yes, go ahead']);
+      assert.ok(layout.fits && layout.scroll <= layout.width + 1, `${theme} ${width}px expanded=${expanded}: ${JSON.stringify(layout)}`);
+    }
+  }
+});
 
 test('the app is built', () => {
   assert.equal(built.status, 0, built.stderr);

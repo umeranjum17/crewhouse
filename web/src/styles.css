@@ -255,7 +255,7 @@ video.media { width: auto; max-width: 100%; max-height: min(70vh, 640px); height
 
 /* sheets: a bottom sheet on a phone, the same content in a centred dialog on a desk */
 .scrim { position: fixed; inset: 0; z-index: 30; background: rgba(12,10,16,.32); display: grid; align-items: end; justify-items: center; }
-.sheet { background: var(--solid); width: min(480px, 100%); border-radius: 20px 20px 0 0; padding: 8px 16px 34px; box-shadow: var(--e2); display: grid; gap: 12px; max-height: 88vh; overflow: auto; animation: up 280ms var(--ease); justify-items: start; }
+.sheet { background: var(--solid); width: min(480px, 100%); border-radius: 20px 20px 0 0; padding: 8px 16px 34px; box-shadow: var(--e2); display: grid; grid-template-columns: minmax(0, 1fr); overflow-wrap: anywhere; gap: 12px; max-height: 88vh; overflow: auto; animation: up 280ms var(--ease); justify-items: start; }
 .sheet::before { content: ''; width: 36px; height: 5px; border-radius: 3px; background: var(--line2); justify-self: center; margin-bottom: 2px; }
 @keyframes up { from { transform: translateY(20px); opacity: 0; } }
 [role=dialog]:focus-visible { outline: none; }
