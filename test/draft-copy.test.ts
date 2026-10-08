@@ -69,19 +69,18 @@ async function browse() {
     window.open = (url, ...rest) => { log.opened.push(String(url)); return null; };
     void open;
   })()` });
-  return { run, base, open: async (query: string) => { await send('Page.navigate', { url: `${base}/?${query}` }); } };
+  return { run, base, type: (text: string) => send('Input.insertText', { text }), open: async (query: string) => { await send('Page.navigate', { url: `${base}/?${query}` }); } };
 }
 
 /** The yes on one surface, with the person's edit, exactly as they tap it. */
-const pressYes = async (b: Awaited<ReturnType<typeof browse>>, edit: string, scope = '.card.ask') => {
+const pressYes = async (b: Awaited<ReturnType<typeof browse>>, edit: string, scope = '.home-chat .lines .card.ask') => {
   const in_ = (what: string) => `[...document.querySelectorAll('${scope} button, ${scope} a')].find((x) => x.textContent === ${JSON.stringify(what)})`;
   await until(`the draft's yes in ${scope}`, () => b.run(`!!${in_('Copy and open')}`), 30_000);
   if (edit) {
     await b.run(`${in_('Edit')}.click()`);
-    await until('the person\'s own words box', () => b.run("!!document.querySelector('textarea.draft-edit')"), 10_000);
-    await b.run(`(() => { const t = document.querySelector('textarea.draft-edit');
-      const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
-      setter.call(t, ${JSON.stringify(edit)}); t.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+    await until('the person\'s own words box', () => b.run(`!!document.querySelector('${scope} textarea.draft-edit')`), 10_000);
+    await b.run(`(() => { const t = document.querySelector('${scope} textarea.draft-edit'); t.focus(); t.select(); })()`);
+    await b.type(edit);
   }
   await b.run(`${in_('Copy and open')}.click()`);
   return b.run('window.__done');
@@ -97,8 +96,7 @@ test('a draft with a link: both ask surfaces read Copy and open, copy the words 
   // The card in the thread, with the person's edit.
   await b.open('demo=chase&day');
   await until("Chief's box", () => b.run("!!document.querySelector('.home-chat .composer')"), 30_000);
-  // Scout wrote the draft, so its card is in Scout's chat.
-  await b.run("document.querySelector('a[href=\"#/h/scout\"]').click()");
+  // Scout wrote the draft; Chief carries its decision in the opening chat.
   assert.deepEqual(await pressYes(b, EDIT), { copied: [EDIT], opened: [LINK] });
   // The sheet that opens the same draft, with no edit: the draft's own words.
   await b.open('demo=chase&day#/ask/17');
