@@ -27,9 +27,14 @@ const PHONE_SCREENS = ['App.tsx', 'src/office.tsx', 'src/panel.tsx'].map((f) => 
 
 test('crew room lines and handoff checks hide machinery', () => {
   const s: Json = { bots: [{ id: 'scout', display: 'Scout', template: 'scout', task: null }], events: [], asks: [] };
-  const lines = A.room({ lines: [{ id: 1, bot: 'scout', author: 'bot', text: 'See /home/alex/files/story.md and `ffmpeg -i x` from sonnet', files: [{ bot: 'scout', path: 'files/story.md' }], at: now }] }, s);
-  assert.ok(!/\/home\/|ffmpeg|sonnet|files\//i.test(lines[0].text));
-  assert.equal(lines[0].files.length, 1);
+  // A chat answer reads as written: inline code and bullets stay, so the person sees what the helper said.
+  const said = A.room({ lines: [{ id: 1, bot: 'scout', author: 'bot', text: '- `--branch`: View a specific repository branch.\n- `--web`: Open the repository in a web browser.', files: [{ bot: 'scout', path: 'files/story.md' }], at: now }] }, s);
+  assert.ok(said[0].text.includes('--branch') && said[0].text.includes('--web'));
+  assert.equal(said[0].files.length, 1);
+  // Engine events still never read as sentences, whoever typed them.
+  const stripped = A.room({ lines: [{ id: 2, bot: 'scout', author: 'bot', text: 'On it [tool crew_do {"x":1}]', files: [], at: now }] }, s);
+  assert.doesNotMatch(stripped[0].text, /\[tool|\{"x"/);
+  assert.equal(stripped[0].files.length, 0);
   const c = A.card({ id: 2, bot: 'scout', kind: 'propose', at: now, detail: { pass: { files: ['story.md'] }, words: 'Scout wants to hand this to Scribe' } }, s);
   assert.deepEqual(c.choices?.map((x) => x.label), ['Hand it on', 'Not now']);
 });
@@ -101,11 +106,14 @@ test('nothing technical survives the adapter', () => {
   const h = A.chatgpt([{ account: 'chatgpt', name: 'ChatGPT', signedIn: false, signIn: { state: 'waiting', url: 'https://auth.openai.com/codex/device', code: 'AB12-CDE34' } }]);
   const views = {
     crew: A.crew(state), chief: A.chief(state), cards: A.cards(state), work: A.work(state), things: A.things(state), ideas: A.ideas(state),
-    steps: A.steps(page.trail, undefined, true), lines: A.lines(page, 'reel'), memories: A.memories(page.notes), personality: A.personality(page.soul), knows: A.knows(page.skills), routines: A.routines(state), gallery: A.gallery(state),
+    steps: A.steps(page.trail, undefined, true), memories: A.memories(page.notes), personality: A.personality(page.soul), knows: A.knows(page.skills), routines: A.routines(state), gallery: A.gallery(state),
     resting: A.resting(state), apps: A.apps(state), chatgpt: { ...h, signing: { code: h.signing?.code } },
     profile: A.profileParts('I run a bakery. See files/plan and `make` with sonnet about it.'),
   };
   for (const [name, v] of Object.entries(views)) assert.doesNotMatch(shown(v), FORBIDDEN, name);
+  // A chat answer is the exception: it reads as written, never scrubbed — the person sees what the helper said.
+  const [reply] = A.lines(page, 'reel').filter((l) => l.from === 'them');
+  assert.match(reply.text, /`ffmpeg -i/);
   const jobView = A.jobParts({ does: 'Compare prices.', aim: 'Find a fair option.', gets: 'The person’s budget.', how: 'Check two sources.', great: 'A sourced comparison with totals.', prompt: 'You are Quill. Read /home/alex/private/AGENTS.md' });
   assert.doesNotMatch(shown(jobView), /You are|\/home\/|AGENTS\.md/, 'job view contains only the five plain recipe parts, never prompt text or paths');
   assert.equal(h.signing?.code, 'AB12-CDE34', 'the one-time code reaches the sign-in sheet');
@@ -1462,6 +1470,20 @@ test('a thread never shows a tool call or raw JSON, whoever typed it', () => {
   for (const l of ls) assert.doesNotMatch(l.text, /\[tool|\{"|crew_[a-z_]+/);
   assert.equal(ls[0].text, 'set up the weekly demo', 'the person\'s words stay, the machinery goes');
   assert.equal(ls[1].text, 'I could do that — shall I?');
+});
+
+test('inline code stays visible in a chat answer: flags keep their names and their bullets', () => {
+  // The helper's own words, as the stub engine saved them: two bullets naming --branch and --web.
+  const producer = '- `--branch`: View a specific repository branch.\n- `--web`: Open the repository in a web browser.';
+  const [line] = A.lines({ messages: [{ id: 150, author: 'bot', text: producer }] }, 'scout');
+  assert.equal(line.text, producer, 'the answer reads as written, never scrubbed');
+  // What the bubble renders: one list, two items, each keeping its flag name as code.
+  const lists = chatTokens(line.text).filter((t: any) => t.type === 'list') as any[];
+  assert.equal(lists.length, 1, 'the bullets still render as one list');
+  const [list] = lists;
+  assert.equal(list.items.length, 2, 'both bullets still render as a list');
+  assert.deepEqual(list.items.map((item: any) => item.tokens[0].tokens.filter((x: any) => x.type === 'codespan').map((x: any) => x.text)),
+    [['--branch'], ['--web']], 'both flag names reach the screen');
 });
 
 test('a patch is only ever a suggested change, never a fix, wherever the app words it', () => {

@@ -1,6 +1,7 @@
-// The thin adapter: crewd's state in, plain words out. Every screen reads these view models and nothing raw,
-// so the engine underneath can change (docs/ui-contract.md) without the screens changing, and nothing technical
-// (commands, file paths, model names, percentages, raw prompts) can reach a person. test/ui.test.ts holds this.
+// The thin adapter: crewd's state in, view models out. Every screen reads these view models and nothing raw,
+// so the engine underneath can change (docs/ui-contract.md) without the screens changing. Crewhouse's own
+// status lines read in plain words (no commands, paths, model names, percentages or raw prompts);
+// a chat answer reads as written. test/ui.test.ts holds this.
 import { PROVIDERS as ROUTES } from '@byokit/accounts';
 import { phaseOf } from '@byokit/ui-core/phase';
 import type { Json } from './api.ts';
@@ -1171,7 +1172,11 @@ export function room(page: Json, state: Json) {
     text: chatWords(m.text ?? ''), files: (m.files ?? []).map((f: Json) => fileView(f.bot, f.path, checks.get(`${f.bot}|${f.path}`))), at: at(m.at), author: m.author === 'system' ? 'note' : m.author }));
 }
 
-const chatWords = (text: string) => text.replace(/```[\s\S]*?```/g, '').split('\n').map(plain).join('\n').trim();
+/** A chat answer, as written: a helper's answer to the person is never scrubbed, just as the person's own
+ *  words never are — inline code (`--branch`), bullets and emphasis stay. Only engine events still go: a tool
+ *  call or raw JSON blob is never a sentence (`noTools`, per line so the list stays a list). Crewhouse's own
+ *  status lines keep the full plain-words scrub (`plain`); the test engine's echo is still never an answer. */
+const chatWords = (text: string) => STUB.test(text) ? 'On it.' : text.split('\n').map((l) => noTools(l)).join('\n').trim();
 
 /** A Chief hand-off's ask for the person's eye: the words themselves, with any label an older hand-off wrapped them
  *  in ("The person's words verbatim: …") and their quotes off, short enough for one collapsed line. */
