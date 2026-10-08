@@ -63,8 +63,9 @@ With the real-engine launch in SKILL.md, first prove browsing in two Chief turns
    Read `run.call` events: `crew_import {list:true}` must have fetched the real catalogue.
    No imported helper should exist yet. Each category has its count and only 2–3 examples
    (or all when fewer exist), using plain titles, never handles. Claude skills are one
-   counted category with examples, not a second wall of names. Chief ends with his pick
-   and reason. Compare to the tool result, not a fixed list. Name a failed source plainly.
+   counted category with examples, not a second wall of names. Chief gives his pick
+   and reason (the shared answer-first rule may put it first). Compare to the tool result,
+   not a fixed list. Name a failed source plainly.
 2. Ask for the full list of one category named in the first reply. `run.call` must show
    `crew_import {list:true,category:"<that category>"}`; its result contains all that
    category's titles and no other category's names. Chief must show titles, not handles.
@@ -72,8 +73,10 @@ With the real-engine launch in SKILL.md, first prove browsing in two Chief turns
 
 Use `chrome-devtools-axi` in a task-named session: `emulate --viewport "390x844x3,mobile,touch"`
 (or `"1440x900x1"`), `open <base>/?day#/chief` / `?night#/chief`, wait for the actual reply, then
-`screenshot <EV>/<reply>-<theme>-<width>.png`. Scroll the chat's `.lines` container when
-needed; preserve extra frames when the whole reply does not fit. Record with Chrome's
+`screenshot <EV>/<reply>-<theme>-<width>.png`. Resize after navigation and verify
+`innerWidth`/`innerHeight`: mobile emulation can reset on navigation. Scroll `.lines`
+when it owns the scroll; at 390 it has visible overflow, so use its actual owner,
+`document.scrollingElement`. Preserve overlapping frames when the whole reply does not fit. Record with Chrome's
 CDP `Page.startScreencast` and ffmpeg; `scripts/screens.sh` and `scripts/record.mjs` are
 absent at this revision. Keep API replies, tool-call events, capture geometry and decoded
 motion-frame count alongside the images.
