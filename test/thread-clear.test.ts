@@ -66,9 +66,12 @@ test('a phone thread clears its bars: every sign-in button above the composer, n
     return r.result.value;
   };
   await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
-  await send('Page.navigate', { url: `${base}/?demo=longthread&night#/chief` });
+  // Both of Chief's phone threads: Home's chat (under the Getting set up bar) and his own page.
+  for (const route of ['#/', '#/chief']) {
+  await send('Page.navigate', { url: `${base}/?demo=longthread&night${route}` });
+  await until('the new route', () => run(`location.hash === '${route}' && document.readyState === 'complete'`), 30_000);
   // Signed out, so the thread ends on the sign-in card with every provider's button.
-  await until('the sign-in card', () => run("document.querySelectorAll('.chat .card.ask .btn.go').length >= 6"), 30_000);
+  await until('the sign-in card', () => run("[...document.querySelectorAll('.chat .card.ask .btn.go')].filter((e) => /^Sign in/.test(e.textContent.trim())).length >= 6"), 30_000);
   await until('a long thread', () => run("document.querySelectorAll('.chat .lines .line').length > 10"), 30_000);
 
   // Scroll the thread itself where it scrolls (its own lines column once contained, the document before that).
@@ -87,20 +90,20 @@ test('a phone thread clears its bars: every sign-in button above the composer, n
   const near = await run(`(() => {
     const box = document.querySelector('.chat .lines').getBoundingClientRect();
     const dock = document.querySelector('.chat .dock').getBoundingClientRect();
-    const under = [...document.querySelectorAll('.chat .card.ask .btn.go')]
+    const under = [...document.querySelectorAll('.chat .card.ask .btn.go')].filter((e) => /^Sign in/.test(e.textContent.trim()))
       .filter((e) => { const b = e.getBoundingClientRect();
         const seenTop = Math.max(b.top, box.top, 0), seenBottom = Math.min(b.bottom, box.bottom, innerHeight);
         return seenBottom > seenTop && seenBottom > dock.top + 1 && seenTop < dock.bottom - 1; })
       .map((e) => e.textContent.trim());
     return { dock: { top: Math.round(dock.top), bottom: Math.round(dock.bottom) }, under };
   })()`);
-  assert.deepEqual(near.under, [], `near the bottom, sign-in buttons under the composer (composer ${near.dock.top}-${near.dock.bottom}): ${near.under.join(' | ')}`);
+  assert.deepEqual(near.under, [], `${route} near the bottom, sign-in buttons under the composer (composer ${near.dock.top}-${near.dock.bottom}): ${near.under.join(' | ')}`);
 
   // At the very bottom, the card's last button is whole and tappable above the composer.
   await scrollThread(1);
   const bottom = await run(`(() => {
     const R = (e) => { const b = e.getBoundingClientRect(); return { top: b.top, bottom: b.bottom, left: b.left, right: b.right }; };
-    const btns = [...document.querySelectorAll('.chat .card.ask .btn.go')];
+    const btns = [...document.querySelectorAll('.chat .card.ask .btn.go')].filter((e) => /^Sign in/.test(e.textContent.trim()));
     const last = btns.at(-1);
     const dock = document.querySelector('.chat .dock');
     const r = R(last);
@@ -108,7 +111,7 @@ test('a phone thread clears its bars: every sign-in button above the composer, n
     return { text: last.textContent.trim(), rect: R(last), dock: R(dock), vh: innerHeight,
       hit: hit?.closest('.btn.go')?.textContent.trim() ?? hit?.tagName ?? 'none' };
   })()`);
-  assert.ok(bottom.rect.bottom <= bottom.dock.top, `at the bottom, ${bottom.text} ends at ${Math.round(bottom.rect.bottom)} but the composer starts at ${Math.round(bottom.dock.top)}`);
+  assert.ok(bottom.rect.bottom <= bottom.dock.top, `${route} at the bottom, ${bottom.text} ends at ${Math.round(bottom.rect.bottom)} but the composer starts at ${Math.round(bottom.dock.top)}`);
   assert.ok(bottom.rect.bottom <= bottom.vh && bottom.rect.top >= 0, `${bottom.text} is on screen whole`);
   assert.equal(bottom.hit, bottom.text, `${bottom.text} is tappable, not covered (hit ${bottom.hit})`);
 
@@ -117,7 +120,7 @@ test('a phone thread clears its bars: every sign-in button above the composer, n
   const mid = await run(`(() => {
     const R = (e) => { const b = e.getBoundingClientRect(); return { top: b.top, bottom: b.bottom }; };
     const box = document.querySelector('.chat .lines').getBoundingClientRect();
-    const head = document.querySelector('.page .chat-head');
+    const head = document.querySelector('.page .chat-head, .page .home-top');
     const h = R(head);
     const under = [...document.querySelectorAll('.chat .lines .line, .chat .lines .line-wrap, .chat .lines .card.ask')]
       .filter((e) => { const b = e.getBoundingClientRect(); if (!b.height) return false;
@@ -126,5 +129,6 @@ test('a phone thread clears its bars: every sign-in button above the composer, n
       .map((e) => JSON.stringify({ cls: e.className.toString().slice(0, 20), top: Math.round(e.getBoundingClientRect().top), text: (e.innerText ?? '').slice(0, 40).replace(/\\n/g, ' ') }));
     return { head: h, under };
   })()`);
-  assert.deepEqual(mid.under, [], `mid-way, thread content under the top bar (bar ${Math.round(mid.head.top)}-${Math.round(mid.head.bottom)}): ${mid.under.join(' | ')}`);
+  assert.deepEqual(mid.under, [], `${route} mid-way, thread content under the top bar (bar ${Math.round(mid.head.top)}-${Math.round(mid.head.bottom)}): ${mid.under.join(' | ')}`);
+  }
 });
