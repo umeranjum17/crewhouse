@@ -184,7 +184,6 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     if (m === 'GET' && p === '/api/state') return { ...crew.snapshot(), zone: Intl.DateTimeFormat().resolvedOptions().timeZone, installing: [...installing], showing: teacher.showing(), ...(update ? { update } : {}) };
     if (m === 'GET' && p === '/api/events') return db.events(Number(q.get('after') || 0), 200);
     if (m === 'GET' && p === '/api/room') return crew.room(Number(q.get('before')) || undefined);
-    if (m === 'GET' && p === '/api/push') return link.pushStatus(); // the installed app's push, via the person's relay
     if (m === 'POST' && p === '/api/push') { await link.setWebPush(body); return { ok: true }; }
     // The one phone-admin call a paired phone makes itself: renewing the Add-a-phone code it is looking at, so the
     // card on the phone refreshes like the web card's.

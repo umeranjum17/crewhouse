@@ -4,7 +4,7 @@
 import { api, demo } from './api.ts';
 
 type Badging = Navigator & { setAppBadge?: (n?: number) => Promise<void>; clearAppBadge?: () => Promise<void> };
-const canServe = () => typeof navigator !== 'undefined' && 'serviceWorker' in navigator && !demo;
+const canServe = () => typeof navigator !== 'undefined' && 'serviceWorker' in navigator && !(typeof location !== 'undefined' && new URLSearchParams(location.search).has('demo'));
 
 /** Register the shell worker for an offline cold start; harmless where the browser has none. */
 export function startWorker() {

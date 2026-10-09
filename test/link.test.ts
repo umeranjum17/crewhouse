@@ -87,7 +87,7 @@ test('the installed web app subscribes a browser push address through the relay 
     client: { vapidKey: 'BFx-key', subscribe: async (d: string, s: any) => calls.push(['subscribe', d, s]), unsubscribe: async (d: string) => calls.push(['unsubscribe', d]), notify: async (n: any) => { calls.push(['notify', n]); return {}; } },
     relayStatus: 'online', host: { devices: () => [{ id: 'pixel' }] },
   });
-  assert.deepEqual(link.pushStatus(), { ready: true, vapid: 'BFx-key' });
+  assert.equal(link.status().vapid, 'BFx-key');
   const web = { endpoint: 'https://fcm.googleapis.com/fcm/send/abc', keys: { p256dh: 'p', auth: 'a' } };
   await link.setWebPush({ web });
   assert.deepEqual(calls.shift(), ['subscribe', 'web', { web }]);

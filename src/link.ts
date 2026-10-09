@@ -371,7 +371,7 @@ export class Link {
     // `push: 'missing'`: this app build, or Expo, has no Android push credential yet (README, "Phone notifications").
     const missing = this.setting('push.refused') || this.host?.devices().some((g) => this.setting(`phone.push.${g.id}`) === 'missing');
     return { on: this.cfg.linkPort > 0, lan: this.lan, pinned: !!this.cfg.linkHost, hosts: [...this.servers.keys()], tailscale: routes(this.ifaces(), this.tailnetIPs).tailscale.length > 0, anywhere: this.anywhere,
-      relay: this.relay, relayStatus: this.relayStatus, push: missing ? 'missing' : 'ready',
+      relay: this.relay, relayStatus: this.relayStatus, vapid: this.client?.vapidKey ?? null, push: missing ? 'missing' : 'ready',
       asking: [...this.asking.values()].map(({ id, name, words, role, offer }) => ({ id, name, words, role, offer })) };
   }
 
@@ -404,14 +404,11 @@ export class Link {
       seen: g.lastSeen ?? g.created, online: g.online, reached: this.reached(g.id), push: pushOf(this.setting(`phone.push.${g.id}`)) }));
   }
 
-  /** The installed web app's push: whether the relay can carry it and the key to subscribe with; `{off}` drops a browser's address. */
-  pushStatus() { return { ready: this.relayStatus === 'online' && !!this.client?.vapidKey, vapid: this.client?.vapidKey ?? null }; }
   async setWebPush(sub: any) {
     if (sub?.off === true) { this.put('push.web', ''); await this.client?.unsubscribe(WEB_DEVICE); return; }
     if (!this.client || typeof sub?.web !== 'object') throw Object.assign(new Error('no relay for notifications'), { status: 409 });
     await this.client.subscribe(WEB_DEVICE, { web: sub.web }); this.put('push.web', '1');
   }
-
   async revoke(id: string) {
     if (!this.host.devices().some((g) => g.id === id)) throw Object.assign(new Error('no such device'), { status: 404 });
     // Said inside the encrypted channel; the phone forgets its grant only then. Through the relay, its push addresses go too.

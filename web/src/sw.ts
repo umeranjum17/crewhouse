@@ -46,14 +46,8 @@ sw.addEventListener('fetch', (e) => {
     })());
     return;
   }
-  // Shell assets are content-hashed or the icons and fonts beside them: cache-first, filled in as the app loads.
-  e.respondWith((async () => {
-    const hit = await caches.match(req);
-    if (hit) return hit;
-    const fresh = await fetch(req);
-    if (fresh.ok && fresh.type === 'basic') void (await caches.open(__CACHE__)).put(req, fresh.clone());
-    return fresh;
-  })());
+  // The shell's own files were precached at install: a cache hit answers, anything else goes to the network.
+  e.respondWith(caches.match(req).then((hit) => hit ?? fetch(req)));
 });
 
 sw.addEventListener('push', (e) => {

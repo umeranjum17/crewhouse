@@ -32,6 +32,14 @@ test('a changed build gets new bundle names, and the built shell points at them'
   const fresh = shell();
   assert.ok(css && !fresh.includes(css), 'the css reference changed with the content');
   assert.ok(fresh.includes(bundleRef(fresh, 'styles')!), 'the shell references the new bundle');
+
+  // A file the worker precaches under its own name (the manifest) changes content: the worker itself must change too,
+  // so the installed copy gets a new cache and re-precaches it.
+  const worker = () => readFileSync(join(web, 'dist', 'sw.js'), 'utf8');
+  const before = worker();
+  writeFileSync(join(web, 'manifest.webmanifest'), readFileSync(join(web, 'manifest.webmanifest'), 'utf8').replace('"name"', '"name "'));
+  assert.equal(build(web).status, 0);
+  assert.notEqual(worker(), before, 'a changed precached file gives the worker a new cache name');
 });
 
 test('crewd serves the shell with no-cache and an ETag, and hashed bundles as immutable', async () => {

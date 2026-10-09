@@ -47,15 +47,16 @@ writeFileSync(root + 'dist/index.html', html);
 // list and cache name are known only here and injected; the worker bundles no app code (web/src/sw.ts is standalone).
 const dist = root + 'dist';
 const precache = ['/']; // every navigation, deep links included, is answered by the cached index at '/'
+const digest = createHash('sha256'); // any changed file, precached or not, gives the worker a new cache name and so an update
 const walk = (dir) => { for (const e of readdirSync(dir, { withFileTypes: true })) {
-  const p = dir + '/' + e.name;
+  const p = dir + '/' + e.name, url = '/' + relative(dist, p).split(sep).join('/');
   if (e.isDirectory()) walk(p);
-  else if (e.name !== 'index.html' && e.name !== 'sw.js' && !e.name.endsWith('.map')) precache.push('/' + relative(dist, p).split(sep).join('/'));
+  else if (e.name !== 'sw.js' && !e.name.endsWith('.map')) { digest.update(url).update(readFileSync(p)); if (e.name !== 'index.html') precache.push(url); }
 } };
 walk(dist);
 await build({
   entryPoints: [root + 'src/sw.ts'], outfile: dist + '/sw.js', bundle: true, format: 'iife', minify: true, target: 'es2022', logLevel: 'warning',
   nodePaths: [new URL('../node_modules/', import.meta.url).pathname],
-  define: { __PRECACHE__: JSON.stringify(precache), __CACHE__: JSON.stringify('crewhouse-' + createHash('sha256').update(JSON.stringify(precache)).digest('hex').slice(0, 8)) },
+  define: { __PRECACHE__: JSON.stringify(precache), __CACHE__: JSON.stringify('crewhouse-' + digest.digest('hex').slice(0, 8)) },
 });
 console.log('web UI built into ' + dist);
