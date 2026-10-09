@@ -1344,7 +1344,7 @@ function Apps({ state, refresh }: Ctx) {
             : <div className="mute small">{plugin.says}</div>}</div>
           {plugin.state === 'on' ? <span className="mute small">On</span>
             : <><button className="btn go" onClick={() => { const tab = openTab(); if (tab) tab.location.href = 'https://herdr.dev'; }}>Connect</button>
-            <button className="btn go" onClick={() => void attempt(async () => setHerdr(await api.herdr()), '')}>Retry</button></>}</div>
+            <button className="btn" onClick={() => void attempt(async () => setHerdr(await api.herdr()), '')}>Retry</button></>}</div>
       </div></>}
       <div className="card row"><span className="o-ic" aria-hidden>↗</span>
         <span className="grow"><b>Share to Crewhouse</b><div className="mute small">On your phone, tap Share in any app (WhatsApp, Photos, a web page), then Crewhouse. Nothing to connect.</div></span></div>
