@@ -21,11 +21,12 @@ export function remember() {
   if (namesPlace(location.hash)) s.setItem(key(), location.hash); else s.removeItem(key());
 }
 
-/** A home-screen launch (start_url "/", nothing after the #) reopens the remembered place. A normal link or a
- *  shortcut that already names a place has one and always wins over the memory; an unknown one falls back to Home. */
+/** A home-screen launch (start_url "/", nothing after the #) reopens the remembered place. Any hash at all — a
+ *  normal link, a manifest shortcut, even a deliberate `#/` — names its own place and wins over the memory; a
+ *  remembered place that no longer exists falls back to Home. */
 export function resume() {
   if (location.pathname !== '/') return; // the /share target is not the app root
-  if (namesPlace(location.hash)) return;
+  if (location.hash !== '') return; // a bare start_url is the only launch that reopens the memory
   const s = store(); if (!s) return;
   const saved = s.getItem(key());
   if (saved && namesPlace(saved)) history.replaceState(null, '', `${location.pathname}${location.search}${saved}`);
