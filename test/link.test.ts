@@ -76,7 +76,30 @@ test('quiet hours hold the push and send exactly one when they end, even across 
   quiet = false;
   b.sendHeld();
   b.sendHeld();
-  assert.deepEqual(sent.map((n) => n.to), [['pixel', 'ipad']], 'one push when quiet hours end, for however much came in');
+  assert.deepEqual(sent.map((n) => n.to), [['pixel', 'ipad', 'web']], 'one push when quiet hours end, for however much came in');
+  db.close();
+});
+
+test('the installed web app subscribes a browser push address through the relay and hears the same news', async () => {
+  const db = new Store(temp('crewhouse-web-push'));
+  const calls: any[] = [];
+  const link = Object.assign(new Link({} as any, db, async () => null) as any, {
+    client: { vapidKey: 'BFx-key', subscribe: async (d: string, s: any) => calls.push(['subscribe', d, s]), unsubscribe: async (d: string) => calls.push(['unsubscribe', d]), notify: async (n: any) => { calls.push(['notify', n]); return {}; } },
+    relayStatus: 'online', host: { devices: () => [{ id: 'pixel' }] },
+  });
+  assert.equal(link.status().vapid, 'BFx-key');
+  const web = { endpoint: 'https://fcm.googleapis.com/fcm/send/abc', keys: { p256dh: 'p', auth: 'a' } };
+  await link.setWebPush({ web });
+  assert.deepEqual(calls.shift(), ['subscribe', 'web', { web }]);
+  await assert.rejects(new Link({} as any, db, async () => null).setWebPush({ web }), { status: 409 });
+  // A failed job: the browser hears the same content-free news as the phone.
+  await link.tell('e7');
+  const notify = calls.shift();
+  assert.equal(notify[0], 'notify');
+  assert.equal(notify[1].title, NEWS);
+  assert.ok(notify[1].to.includes('web'), 'the browser device is addressed');
+  await assert.rejects(link.setWebPush({ off: true }), { status: 400 });
+  assert.equal(calls.length, 0, 'a bare off reaches no browser');
   db.close();
 });
 
@@ -522,4 +545,38 @@ test('phones, push and quiet hold survive a restart after the P1 migration', asy
     assert.equal((await http('POST', '/api/house/ask', { app: 'calendar' })).status, 404);
     assert.equal((await http('POST', '/api/accounts/1/chatgpt/ask-owner')).status, 404);
   } finally { a.link.stop(); b.link.stop(); view.link.stop(); }
+});
+
+test('one browser turning notifications off leaves the other browsers addressed', async () => {
+  const db = new Store(temp('crewhouse-web-off'));
+  const calls: any[] = [];
+  const link = Object.assign(new Link({} as any, db, async () => null) as any, {
+    client: { vapidKey: 'BFx-key', subscribe: async (d: string, s: any) => calls.push(['subscribe', d, s]), unsubscribe: async (d: string, s?: any) => calls.push(['unsubscribe', d, s]), notify: async (n: any) => { calls.push(['notify', n]); return {}; } },
+    relayStatus: 'online', host: { devices: () => [] },
+  });
+  const laptop = { endpoint: 'https://fcm.example/laptop', keys: {} }, phone = { endpoint: 'https://fcm.example/phone', keys: {} };
+  await link.setWebPush({ web: laptop });
+  await link.setWebPush({ web: phone });
+  await link.setWebPush({ off: true, web: laptop });
+  assert.deepEqual(calls.at(-1), ['unsubscribe', 'web', { web: laptop }], 'only the laptop\'s address is dropped');
+  await link.setWebPush({ off: true, web: phone });
+  assert.deepEqual(calls.at(-1), ['unsubscribe', 'web', { web: phone }]);
+  db.close();
+});
+
+test('a null browser address is refused by the browser and by a phone alike', async () => {
+  const db = new Store(temp('crewhouse-web-null'));
+  const calls: any[] = [];
+  const link = Object.assign(new Link({} as any, db, async () => null) as any, {
+    client: { vapidKey: 'BFx-key', subscribe: async (d: string, s: any) => calls.push(['subscribe', d, s]), unsubscribe: async (d: string, s?: any) => calls.push(['unsubscribe', d, s]), notify: async () => ({}) },
+    relayStatus: 'online', host: { devices: () => [] },
+  });
+  await assert.rejects(link.setWebPush({ web: null }), { status: 409 });
+  await assert.rejects(link.setWebPush({ off: true, web: null }), { status: 400 });
+  assert.deepEqual(await link.request('POST /api/push', { build: 'p9b', web: null }, { id: 'pixel' }), { status: 409, body: { error: 'no relay for notifications' } });
+  assert.equal(calls.length, 0, 'nothing reaches the relay');
+  const web = { endpoint: 'https://fcm.example/phone', keys: {} };
+  assert.deepEqual(await link.request('POST /api/push', { build: 'p9b', web }, { id: 'pixel' }), { status: 200, body: { ok: true } });
+  assert.deepEqual(calls.shift(), ['subscribe', 'pixel', { web }], 'a phone\'s browser address is still kept under the phone');
+  db.close();
 });

@@ -1,8 +1,9 @@
 // Bundles web/src into web/dist. The daemon serves web/dist; nothing here runs at request time.
 // An optional web-tree argument (tests) builds a copy of the tree instead of the checkout's own.
 import { build } from 'esbuild';
+import { createHash } from 'node:crypto';
 import { cpSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { basename, resolve } from 'node:path';
+import { basename, relative, resolve, sep } from 'node:path';
 const root = process.argv[2] ? resolve(process.argv[2]) + '/' : new URL('../web/', import.meta.url).pathname;
 // A fresh dist each time: yesterday's bundles must not linger under names nothing references any more.
 rmSync(root + 'dist', { recursive: true, force: true });
@@ -41,4 +42,21 @@ html = html.replace('</head>', readdirSync(root + 'splash').map((f) => {
   return `  <link rel="apple-touch-startup-image" href="/splash/${f}" media="(device-width: ${w}px) and (device-height: ${h}px) and (-webkit-device-pixel-ratio: ${d}) and (prefers-color-scheme: ${look === 'night' ? 'dark' : 'light'})" />\n`;
 }).join('') + '</head>');
 writeFileSync(root + 'dist/index.html', html);
-console.log('web UI built into ' + root + 'dist');
+
+// The service worker: it precaches the whole shell at install, so a cold offline reload serves the app itself. The
+// list and cache name are known only here and injected; the worker bundles no app code (web/src/sw.ts is standalone).
+const dist = root + 'dist';
+const precache = ['/']; // every navigation, deep links included, is answered by the cached index at '/'
+const digest = createHash('sha256'); // any changed file, precached or not, gives the worker a new cache name and so an update
+const walk = (dir) => { for (const e of readdirSync(dir, { withFileTypes: true })) {
+  const p = dir + '/' + e.name, url = '/' + relative(dist, p).split(sep).join('/');
+  if (e.isDirectory()) walk(p);
+  else if (e.name !== 'sw.js' && !e.name.endsWith('.map')) { digest.update(url).update(readFileSync(p)); if (e.name !== 'index.html') precache.push(url); }
+} };
+walk(dist);
+await build({
+  entryPoints: [root + 'src/sw.ts'], outfile: dist + '/sw.js', bundle: true, format: 'iife', minify: true, target: 'es2022', logLevel: 'warning',
+  nodePaths: [new URL('../node_modules/', import.meta.url).pathname],
+  define: { __PRECACHE__: JSON.stringify(precache), __CACHE__: JSON.stringify('crewhouse-' + digest.digest('hex').slice(0, 8)) },
+});
+console.log('web UI built into ' + dist);

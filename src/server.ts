@@ -109,7 +109,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
   if (packaged || process.env.CREWHOUSE_RELEASES) { void checkUpdate(); setInterval(checkUpdate, 86_400_000).unref(); }
   const localHost = (h = '') => /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/.test(h);
   // Every paired phone uses the person's crew.
-  const link = new Link(cfg, db, (m, path, body, key) => { const u = new URL(path, 'http://x'); return api(m, u.pathname, u.searchParams, body, key); });
+  const link: Link = new Link(cfg, db, (m, path, body, key) => { const u = new URL(path, 'http://x'); return api(m, u.pathname, u.searchParams, body, key); });
   crew.phoneLink = link;
   link.desk = { signal: (bot, w, method, params, canControl) => crew.desktopSignal(bot, w, method, params, canControl), release: (w) => crew.desktops.release(w) };
   link.quiet = () => quietNow(crew.person().quiet);
@@ -184,6 +184,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     if (m === 'GET' && p === '/api/state') return { ...crew.snapshot(), zone: Intl.DateTimeFormat().resolvedOptions().timeZone, installing: [...installing], showing: teacher.showing(), ...(update ? { update } : {}) };
     if (m === 'GET' && p === '/api/events') return db.events(Number(q.get('after') || 0), 200);
     if (m === 'GET' && p === '/api/room') return crew.room(Number(q.get('before')) || undefined);
+    if (m === 'POST' && p === '/api/push') { await link.setWebPush(body); return { ok: true }; }
     // The one phone-admin call a paired phone makes itself: renewing the Add-a-phone code it is looking at, so the
     // card on the phone refreshes like the web card's.
     if (m === 'POST' && p === '/api/phones/refresh') {

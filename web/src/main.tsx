@@ -13,6 +13,7 @@ import type { IconName } from './icons.ts';
 import { Screen } from './screen.tsx';
 import { hear, Office, summaryOf, useOffice } from './office.tsx';
 import { AccountCard, ConnectApp, ConnectCard, NEEDS_SIGNIN, openTab, sheet, SignIn, Unreachable } from './flows.tsx';
+import { pushPossible, setBadge, startWorker, turnOffNotifications, turnOnNotifications } from './pwa.ts';
 
 type View = 'home' | 'chief' | 'room' | 'crew' | 'add' | 'helper' | 'things' | 'routines' | 'settings' | 'apps' | 'skills' | 'ask' | 'share';
 type Route = { view: View; id?: string; tab?: string; m?: string; file?: string };
@@ -1092,6 +1093,7 @@ function Phones({ tick }: { tick: number }) {
           </div>
         ))}
         {!!A.pushWords(link) && <p className="mute small">{A.pushWords(link)}</p>}
+        {pushPossible() && <p className="mute small">Notifications on this device: <button className="link inline" onClick={() => attempt(async () => { const r = await turnOnNotifications(!!link.relay); toast(r === 'on' ? 'This device shows Crewhouse news.' : r === 'norelay' ? 'Turn on your mailbox below first, then try again.' : r === 'offline' ? "Your mailbox isn't connected right now. Try again in a moment." : 'Notifications were not allowed.'); })}>turn on</button> · <button className="link inline" onClick={() => attempt(async () => { await turnOffNotifications(); toast('Notifications are off on this device.'); })}>turn off</button></p>}
         {!phones.length && <p className="mute">No phones yet. Install the Crewhouse app, then scan the code it asks for.</p>}
         {!offer && <div className="btns"><button className="btn go" onClick={() => show('control')}>Add a phone</button><button className="btn" onClick={() => show('view')}>Add one that only watches</button></div>}
       </div>
@@ -1515,6 +1517,9 @@ function App() {
   const live = useOffice(state, offline);
   const ctx: Ctx | null = useMemo(() => (state && live ? { state, live, tick, refresh, night, offline, accounts } : null), [state, live, tick, refresh, night, offline, accounts]);
 
+  // The home-screen icon mirrors the count of what Needs you shows (web/src/pwa.ts).
+  const badge = ctx?.live.needs.length;
+  useEffect(() => { if (badge !== undefined) setBadge(badge); }, [badge]);
   const splash = <Splash done={!!ctx || offline} />;
   if (!ctx) return <>{splash}{offline && <Unreachable retry={refresh} />}</>;
   // Every little Chief face on the page carries the mood from here, the way the night palette does.
@@ -1522,7 +1527,7 @@ function App() {
   if (!ctx.state.person.onboarded) return <>{splash}<Hello {...ctx} /><Toasts /></>;
   const v = under.current;
   const crew = A.crew(ctx.state);
-  const asks = ctx.live.needs.length; // the badge counts only what Needs you shows
+  const asks = ctx.live.needs.length;
   const sheet = route.view === 'ask' ? A.cards(ctx.state).find((c) => String(c.id) === route.id) : undefined;
   const book = route.file && route.id ? { bot: route.id, path: route.file } : undefined;
   // The desk rail (B1): Chief, your things, routines and apps; the crew under it; you and the gear at the foot.
@@ -1567,4 +1572,5 @@ function App() {
   );
 }
 
+startWorker(); // the offline shell and web-push handler are ready from the first load on
 createRoot(document.getElementById('root')!).render(<App />);
