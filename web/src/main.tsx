@@ -1199,7 +1199,7 @@ function Settings({ state, refresh, tick, accounts, look, setLook }: Ctx & { loo
       <AiAccounts accounts={accounts} refresh={refresh} signIn={(ai) => setSigning({ ai, tab: openTab() })} />
 
       <div className="label">Your apps</div>
-      <a className="card row" href="#/apps"><span className="app-row">{A.apps(state).slice(0, 5).map((a) => <span key={a.id} className="app-ic sm" style={{ background: a.bg }}>{a.mark}</span>)}</span><span className="grow mute">{A.apps(state).filter((a) => a.on).length} connected</span><b>›</b></a>
+      <a className="card row" href="#/apps"><span className="app-row">{A.apps(state).slice(0, 5).map((a) => <span key={a.id} className="app-ic sm"><img className="app-logo" src={a.logo} alt="" /></span>)}</span><span className="grow mute">{A.apps(state).filter((a) => a.on).length} connected</span><b>›</b></a>
 
       <Phones tick={tick} />
 
@@ -1334,12 +1334,12 @@ function Apps({ state, refresh }: Ctx) {
       <h1>Your apps</h1>
       <p className="lead">Connect an app when a helper asks for it.</p>
       <div className="label">Apps</div><div className="card list apps-list">
-        {list.map((a) => <div key={a.id} className="row-item app-row-item"><span className="app-ic" style={{ background: a.bg }}>{a.mark}</span><div className="grow"><b>{a.name}</b><div className="mute small">{a.on ? 'On · read only' : 'Not connected'}</div></div>
+        {list.map((a) => <div key={a.id} className="row-item app-row-item"><span className="app-ic"><img className="app-logo" src={a.logo} alt="" /></span><div className="grow"><b>{a.name}</b><div className="mute small">{a.on ? 'On · read only' : 'Not connected'}</div></div>
           {a.on ? <button className="link" onClick={() => confirm(`Disconnect ${a.name}? Your helpers will stop using it.`) && attempt(async () => { await api.disconnect(a.id); refresh(); }, `${a.name} disconnected`)}>Turn off</button>
             : <button className="btn go" onClick={() => setConnecting({ app: a, tab: A.needsHouse(state, a) ? null : openTab() })}>Connect</button>}</div>)}
       </div>
       {plugin && <><div className="label">Plugins</div><div className="card list">
-        <div className="row-item app-row-item stack-row"><span className="app-ic" style={{ background: '#3b3b4d' }}>H</span><div className="grow"><b>Herdr</b>
+        <div className="row-item app-row-item stack-row"><span className="app-ic"><img className="app-logo" src="/marks/herdr.png" alt="" /></span><div className="grow"><b>Herdr</b>
           {plugin.state === 'missing' && plugin.howto ? <><div className="mute small">{plugin.howto}</div><div className="mute small">{plugin.says}</div></>
             : <div className="mute small">{plugin.says}</div>}</div>
           {plugin.state === 'on' ? <span className="mute small">On</span>
