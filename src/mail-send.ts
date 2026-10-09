@@ -2,6 +2,7 @@
 import type { Store, Row } from './db.ts';
 import type { Connections } from './connections.ts';
 import { GMAIL } from './mail.ts';
+import { receipt } from './crew.ts';
 // Free-mail domains hold many people, so one mailbox on them is never a whole organisation: attesting them domain-wide would email sole traders.
 const FREE_MAIL = new Set(['gmail.com', 'googlemail.com', 'googlemail.co.uk', 'outlook.com', 'outlook.co.uk', 'hotmail.com', 'hotmail.co.uk', 'live.com', 'live.co.uk', 'msn.com', 'yahoo.com', 'yahoo.co.uk', 'ymail.com', 'icloud.com', 'me.com', 'mac.com', 'aol.com', 'aol.co.uk', 'proton.me', 'protonmail.com', 'gmx.com', 'gmx.co.uk', 'btinternet.com', 'btopenworld.com', 'blueyonder.co.uk', 'ntlworld.com', 'virginmedia.com', 'virgin.net', 'sky.com', 'talktalk.net']);
 const INDIVIDUALS = "Sole traders and small partnerships count as individuals under UK email rules. This job will not email them.";
@@ -74,10 +75,14 @@ export class MailSend {
     const ask = Number(r.lastInsertRowid); this.db.event('mail.review', 'chief', { ask, draft: id });
     return { id: ask };
   }
+  private receiptOf(draft: number, kind: string) {
+    const row = this.db.get('SELECT bot, detail FROM asks WHERE id = ?', draft), d = JSON.parse(row.detail);
+    this.db.event(kind, row.bot, { ...receipt(d.draft, d.preview), task: d.task });
+  }
   async answer(ask: Row, answer: string, phone: string) {
     if (!['allow', 'deny'].includes(answer)) throw fail('Choose Send or Not now.', 400);
-    if (answer === 'deny') { this.db.run("UPDATE asks SET state='answered',answer='not now',answered_at=? WHERE id=? AND state='open'", Date.now(), ask.id); this.db.event('mail.declined', ask.bot, { ask: ask.id, phone }); return; }
     const m = JSON.parse(ask.detail).send, to = address(m.to);
+    if (answer === 'deny') { this.db.run("UPDATE asks SET state='answered',answer='not now',answered_at=? WHERE id=? AND state='open'", Date.now(), ask.id); this.db.event('mail.declined', ask.bot, { ask: ask.id, phone }); this.receiptOf(m.draft, 'draft.rejected'); return; }
     this.eligible(to);
     const { token, from } = await this.sender();
     if (from !== m.from) throw fail('Your Gmail account changed. Review a new email card before sending.');
@@ -93,11 +98,19 @@ export class MailSend {
     const raw = Buffer.from(`From: ${from}\r\nTo: ${to}\r\nSubject: ${m.subject.match(/[\s\S]{1,10}/gu)!.map((s: string) => `=?UTF-8?B?${Buffer.from(s).toString('base64')}?=`).join('\r\n ')}\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n${Buffer.from(m.body).toString('base64').match(/.{1,76}/g)!.join('\r\n')}\r\n`).toString('base64url');
     try {
       const res = await fetch(`${GMAIL}/messages/send`, { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ raw }), redirect: 'error', signal: AbortSignal.timeout(20_000) });
-      if (!res.ok) throw fail(`Gmail said ${res.status}.`);
+      if (!res.ok) throw Object.assign(fail(`Gmail said ${res.status}. Nothing was sent; the draft is open again for a new review.`), { refused: true });
       const sent = await res.json() as Row;
       if (typeof sent.id !== 'string' || !sent.id) throw fail('Gmail did not confirm delivery.');
-      this.db.run("UPDATE asks SET state='answered',answer='sent' WHERE id=?", ask.id); this.db.event('mail.sent', ask.bot, { ask: ask.id, id: sent.id, from, to });
+      this.db.run("UPDATE asks SET state='answered',answer='sent' WHERE id=?", ask.id); this.db.event('mail.sent', ask.bot, { ask: ask.id, id: sent.id, from, to }); this.receiptOf(m.draft, 'draft.approved');
     } catch (e: any) {
+      if (e.refused) {
+        this.db.tx(() => {
+          this.db.run("UPDATE asks SET state='answered',answer='not sent',answered_at=? WHERE id=?", Date.now(), ask.id);
+          this.db.run("UPDATE asks SET state='open',answer=NULL,answered_at=NULL WHERE id=? AND answer='Gmail sending attempted'", m.draft);
+          this.db.event('mail.refused', ask.bot, { ask: ask.id, to });
+        });
+        throw e;
+      }
       this.db.run("UPDATE asks SET state='uncertain',answer='check Gmail' WHERE id=?", ask.id); this.db.event('mail.unsure', ask.bot, { ask: ask.id, to });
       throw fail(`Could not confirm sending: ${e.message} Check Gmail before doing anything else. This message will not be retried automatically.`);
     }

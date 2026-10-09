@@ -13,6 +13,7 @@ const A = await import('../web/src/adapter.ts');
 
 const { GMAIL, ageOf, bodyOf, runMail } = await import('../src/mail.ts');
 const { MailSend } = await import('../src/mail-send.ts');
+const { Crew } = await import('../src/crew.ts');
 const { effectOf, toolWords } = await import('../src/policy.ts');
 
 const b64 = (s: string) => Buffer.from(s).toString('base64url');
@@ -233,4 +234,87 @@ test('a free-mail domain can never be attested, so a sole trader on it is never 
     const draft = Number(db.run("INSERT INTO asks (bot,kind,title,detail,at) VALUES ('tracer','propose','Email',?,?)", JSON.stringify({ draft: { channel: 'email', to: 'plumber@gmail.com', subject: 'Hi' }, preview: { body: 'Hello there.' } }), Date.now()).lastInsertRowid);
     await assert.rejects(mail.review(draft), (e: any) => /count as individuals/.test(e.message));
   } finally { done(); }
+});
+
+const sendDraft = (db: any, to: string, subject: string) => Number(db.run("INSERT INTO asks (bot,kind,title,detail,at) VALUES ('tracer','propose','Email',?,?)", JSON.stringify({ draft: { channel: 'email', to, subject }, preview: { body: 'Hello there.' } }), Date.now()).lastInsertRowid);
+
+test('an open send card survives a restart and a reset of Chief', async () => {
+  const { db, crew, cfg, done } = setup();
+  crew.onboard('Umer'); crew.recruit('tracer', 'Tracer', 'person');
+  db.run("INSERT INTO devices (id,name,pk,role,created_at) VALUES ('ctl','Control','pk-ctl','control',?)", Date.now());
+  const who = createServer((_q, r) => { r.writeHead(200, { 'content-type': 'application/json' }); r.end(JSON.stringify({ email: 'umer@sender.example', email_verified: true })); });
+  await new Promise<void>(r => who.listen(0, '127.0.0.1', r)); identity = `http://127.0.0.1:${(who.address() as any).port}`;
+  const mail = new MailSend(db, { token: async () => 'tok' } as any);
+  const restarted = new Crew(cfg, db);
+  try {
+    mail.set('ada@fernwood.example', { kind: 'corporate', name: 'Fernwood' }, 'ctl');
+    const card = (await mail.review(sendDraft(db, 'ada@fernwood.example', 'Hi'))).id;
+    restarted.init();
+    assert.equal(db.get('SELECT state FROM asks WHERE id=?', card)!.state, 'open', 'a restart leaves the card waiting for the person');
+    await restarted.resetBot('chief');
+    assert.equal(db.get('SELECT state FROM asks WHERE id=?', card)!.state, 'open', 'resetting Chief leaves it waiting too');
+  } finally { await restarted.stop(); identity = ''; await new Promise<void>(r => who.close(() => r())); done(); }
+});
+
+test('a sent email and a declined card each leave the draft receipt Tracer reads', async () => {
+  const { db, crew, done } = setup();
+  crew.onboard('Umer'); crew.recruit('tracer', 'Tracer', 'person');
+  db.run("INSERT INTO devices (id,name,pk,role,created_at) VALUES ('ctl','Control','pk-ctl','control',?)", Date.now());
+  const who = createServer((_q, r) => { r.writeHead(200, { 'content-type': 'application/json' }); r.end(JSON.stringify({ email: 'umer@sender.example', email_verified: true })); });
+  await new Promise<void>(r => who.listen(0, '127.0.0.1', r)); identity = `http://127.0.0.1:${(who.address() as any).port}`;
+  const mail = new MailSend(db, { token: async () => 'tok' } as any);
+  const receipts = () => db.all("SELECT kind, data FROM events WHERE kind IN ('draft.approved','draft.rejected') ORDER BY seq").map((e: any) => { const d = JSON.parse(String(e.data)); return [e.kind, d.to, d.subject]; });
+  try {
+    mail.set('ada@fernwood.example', { kind: 'corporate', name: 'Fernwood' }, 'ctl');
+    sendOk = true;
+    const sent = (await mail.review(sendDraft(db, 'ada@fernwood.example', 'Sent one'))).id;
+    await mail.answer(db.get('SELECT * FROM asks WHERE id=?', sent)!, 'allow', 'ctl');
+    assert.deepEqual(receipts(), [['draft.approved', 'ada@fernwood.example', 'Sent one']]);
+    const declined = (await mail.review(sendDraft(db, 'ada@fernwood.example', 'Declined one'))).id;
+    await mail.answer(db.get('SELECT * FROM asks WHERE id=?', declined)!, 'deny', 'ctl');
+    assert.deepEqual(receipts(), [['draft.approved', 'ada@fernwood.example', 'Sent one'], ['draft.rejected', 'ada@fernwood.example', 'Declined one']]);
+  } finally { sendOk = false; identity = ''; await new Promise<void>(r => who.close(() => r())); done(); }
+});
+
+test('a definite Gmail refusal sends nothing, reopens the draft for a new review, and is not retried by itself', async () => {
+  const { db, crew, done } = setup();
+  crew.onboard('Umer'); crew.recruit('tracer', 'Tracer', 'person');
+  db.run("INSERT INTO devices (id,name,pk,role,created_at) VALUES ('ctl','Control','pk-ctl','control',?)", Date.now());
+  const who = createServer((_q, r) => { r.writeHead(200, { 'content-type': 'application/json' }); r.end(JSON.stringify({ email: 'umer@sender.example', email_verified: true })); });
+  await new Promise<void>(r => who.listen(0, '127.0.0.1', r)); identity = `http://127.0.0.1:${(who.address() as any).port}`;
+  const mail = new MailSend(db, { token: async () => 'tok' } as any);
+  const posts = () => asked.filter((x) => x.startsWith('POST /messages/send')).length;
+  try {
+    mail.set('ada@fernwood.example', { kind: 'corporate', name: 'Fernwood' }, 'ctl');
+    const draft = sendDraft(db, 'ada@fernwood.example', 'Hi');
+    sendOk = false; asked.length = 0;
+    const card = (await mail.review(draft)).id;
+    await assert.rejects(mail.answer(db.get('SELECT * FROM asks WHERE id=?', card)!, 'allow', 'ctl'), (e: any) => /Nothing was sent/.test(e.message));
+    assert.equal(posts(), 1);
+    assert.equal(db.get('SELECT state, answer FROM asks WHERE id=?', card)!.answer, 'not sent');
+    assert.equal(db.get('SELECT state FROM asks WHERE id=?', draft)!.state, 'open', 'the draft is open again');
+    sendOk = true;
+    const again = (await mail.review(draft)).id;
+    assert.notEqual(again, card, 'a new card, approved on its own');
+    await mail.answer(db.get('SELECT * FROM asks WHERE id=?', again)!, 'allow', 'ctl');
+    assert.equal(posts(), 2);
+    assert.equal(db.all("SELECT * FROM events WHERE kind='mail.sent'").length, 1);
+  } finally { sendOk = false; identity = ''; await new Promise<void>(r => who.close(() => r())); done(); }
+});
+
+test('a send card can be declined from the computer, but approving it still needs the paired phone', async () => {
+  const { db, crew, cfg, done } = setup(); cfg.port = 0; cfg.linkHost = '127.0.0.1';
+  const free = createServer(); await new Promise<void>(r => free.listen(0, '127.0.0.1', r)); cfg.linkPort = (free.address() as any).port; await new Promise<void>(r => free.close(() => r()));
+  crew.onboard('Umer'); crew.recruit('tracer', 'Tracer', 'person');
+  const server = await startServer(cfg, db, crew), base = `http://127.0.0.1:${(server.address() as any).port}`;
+  const person = `Bearer ${readFileSync(join(cfg.stateDir, 'person.key'), 'utf8')}`;
+  const answer = (id: number, body: object) => real(`${base}/api/asks/${id}/answer`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-crewhouse': '1', authorization: person }, body: JSON.stringify(body) });
+  const draft = sendDraft(db, 'ada@fernwood.example', 'Hi');
+  const card = Number(db.run("INSERT INTO asks (bot,kind,title,detail,at) VALUES ('chief','mail','Send?',?,?)", JSON.stringify({ effect: 'send', send: { draft, from: 'umer@sender.example', to: 'ada@fernwood.example', subject: 'Hi', body: 'Hello there.' }, preview: { body: 'Hello there.' } }), Date.now()).lastInsertRowid);
+  try {
+    assert.equal((await answer(card, { answer: 'allow' })).status, 403, 'Send is refused without the phone');
+    assert.equal(db.get('SELECT state FROM asks WHERE id=?', card)!.state, 'open');
+    assert.equal((await answer(card, { answer: 'deny' })).status, 200, 'Not now works from the computer');
+    assert.equal(db.get('SELECT state, answer FROM asks WHERE id=?', card)!.answer, 'not now');
+  } finally { await new Promise<void>(r => server.close(() => r())); done(); }
 });
