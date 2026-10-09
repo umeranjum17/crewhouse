@@ -633,6 +633,7 @@ function AskEvidence({ c, open, readAll }: { c: Card; open: boolean; readAll: Re
   })}</div>;
   if (c.evidence === 'draft') {
     return <div className="ev">
+      {c.mailFrom && <div className="ev-to">From {c.mailFrom}</div>}
       {c.draftTo && <div className="ev-to">To {c.draftTo}</div>}
       {c.draftSubject && <b className="ev-subject">Subject: {c.draftSubject}</b>}
       {c.draftWhy && <div className="ev-quiet">Because you said “{c.draftWhy}”</div>}
@@ -667,7 +668,7 @@ function useDraftEdit(c: Card) {
     toggle: () => setWords(words === null ? c.draftText ?? '' : null),
     box: words !== null && <textarea className="input draft-edit" rows={8} value={words} onChange={(e) => setWords(e.target.value)} aria-label="Your version of the message" autoFocus />,
     yes: (body: Json) => {
-      if (c.evidence !== 'draft') return body;
+      if (c.evidence !== 'draft' || c.mailSend) return body;
       const text = changed ? words!.trim() : c.draftText ?? '';
       void navigator.clipboard?.writeText(text).catch(() => { /* the person pastes from the card itself */ });
       if (c.draftLink) window.open(c.draftLink, '_blank', 'noopener');
@@ -686,7 +687,7 @@ export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; 
   const yes = c.choices[0];
   const deny = c.choices.find((x) => x.body.answer === 'deny' && x !== yes);
   // A deferred "Not now" comes back on its own: "Remind me tomorrow" re-asks it from a one-shot routine.
-  const remind = !c.campaign && !c.remind && deny && deny.label === 'Not now' ? { ...deny.body, remind: true } : null;
+  const remind = !c.mailSend && !c.campaign && !c.remind && deny && deny.label === 'Not now' ? { ...deny.body, remind: true } : null;
   const always = c.choices.find((x) => x.body.scope === 'always');
   const question = c.review && c.preview?.head ? c.preview.head : c.words;
   // A routine offered by Chief: the lines are the confirmation, and changing the time is an edit before the yes.
@@ -702,7 +703,7 @@ export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; 
       <AskHead c={c} who={who} />
       {!(c.kind === 'routine' && c.lines) && <p className="ask-words">{question}</p>}
       {edit.box || (c.kind === 'routine' && c.lines ? <div className="ask-lines">{c.lines.map((l, i) => <p key={i} className={`ask-line${i ? ' quiet' : ''}`}>{l}</p>)}</div>
-        : <AskEvidence c={c.evidence === 'draft' && c.preview ? { ...c, preview: { ...c.preview, body: flowed(c.preview.body) } } : c} open={false} readAll={<a className="link" href={`#/ask/${c.id}`}>Read all</a>} />)}
+        : <AskEvidence c={c.evidence === 'draft' && c.preview ? { ...c, preview: { ...c.preview, body: c.mailSend ? c.preview.body : flowed(c.preview.body) } } : c} open={false} readAll={<a className="link" href={`#/ask/${c.id}`}>Read all</a>} />)}
       {oops && <div className="send-failed" role="alert">That didn't go through. <button type="button" className="link inline" onClick={() => last.current && act(last.current)}>Try again</button></div>}
       {c.kind === 'routine' ? (
         <>
@@ -744,14 +745,15 @@ export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; 
         </div>
       ) : yes ? (
         <div className="btns">
-          <button className="btn go" disabled={edit.empty} onClick={() => act(edit.yes(yes.body))}>{yes.label}</button>
+          <button className="btn go" disabled={edit.empty || c.mailSend || !!c.mailTo} onClick={() => act(edit.yes(yes.body))}>{yes.label}</button>
           {edit.can && <button className="btn" aria-pressed={edit.editing} onClick={edit.toggle}>{edit.editing ? 'Use the original' : 'Edit'}</button>}
-          {deny && <button className="btn" onClick={() => act(deny.body)}>{deny.label}</button>}
+          {deny && <button className="btn" disabled={c.mailSend} onClick={() => act(deny.body)}>{deny.label}</button>}
           {remind && <button className="btn quiet" onClick={() => act(remind)}>Remind me tomorrow</button>}
           {always && <button className="btn ghost always" onClick={() => act(always.body)}>{always.label}</button>}
         </div>
       ) : null}
       {c.kind === 'spend' && <p className="ask-note">Anything that costs money asks you every time.</p>}
+      {(c.mailSend || c.mailTo) && <p className="ask-note">Approve this email on your paired phone. Nothing sends from this screen.</p>}
       {c.kind === 'plan' && <p className="ask-note">Saying Go doesn’t OK any sending or spending. Those still ask you each time.</p>}
     </div>
   );
@@ -771,7 +773,7 @@ export function AskSheet({ c, who, chiefSays, onClose }: { c: Card; who: Helper 
   const yes = c.choices[0]?.body.answer === 'allow' ? c.choices[0] : null;
   // Every way out that isn't the one yes — an unpriced order has two, and neither is a yes.
   const rest = c.choices.filter((x) => x !== yes && x.body.scope !== 'always');
-  const remind = rest.find((x) => x.label === 'Not now' && x.body.answer === 'deny');
+  const remind = !c.mailSend && rest.find((x) => x.label === 'Not now' && x.body.answer === 'deny');
   const always = c.choices.find((x) => x.body.scope === 'always');
   const edit = useDraftEdit(c);
   return (
@@ -786,10 +788,11 @@ export function AskSheet({ c, who, chiefSays, onClose }: { c: Card; who: Helper 
         <div className="approve-btns">
           {edit.can && <button className="btn big" aria-pressed={edit.editing} onClick={edit.toggle}>{edit.editing ? 'Use the original' : 'Edit'}</button>}
           {remind && <button className="btn big ghost" onClick={() => act({ ...remind.body, remind: true })}>Remind me tomorrow</button>}
-          {rest.map((x) => <button key={x.label} className="btn big" onClick={() => act(x.body)}>{x.label}</button>)}
-          {yes && <button className="btn go big" disabled={edit.empty} onClick={() => act(edit.yes(yes.body))}>{yes.label}</button>}
+          {rest.map((x) => <button key={x.label} className="btn big" disabled={c.mailSend} onClick={() => act(x.body)}>{x.label}</button>)}
+          {yes && <button className="btn go big" disabled={edit.empty || c.mailSend || !!c.mailTo} onClick={() => act(edit.yes(yes.body))}>{yes.label}</button>}
         </div>
         {always && <button className="btn ghost always" onClick={() => act(always.body)}>{always.label}</button>}
+        {(c.mailSend || c.mailTo) && <p className="ask-note">Approve this email on your paired phone. Nothing sends from this screen.</p>}
         {c.kind === 'spend' && <p className="ask-note">Anything that costs money asks you every time.</p>}
       </div>
     </div>

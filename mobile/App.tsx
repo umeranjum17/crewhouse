@@ -82,6 +82,8 @@ export default function App() {
   const [fontsReady, fontError] = useFonts({ Inter: require('./assets/fonts/InterVariable.ttf') });
   const [grant, setGrant] = useState<Grant | null | undefined>(undefined);
   useEffect(() => { loadGrant().then(setGrant).catch(() => setGrant(null)); }, []);
+  // Stable: the connect effect keys off this, so a plain re-render (theme, fonts) must never stop and re-dial the link.
+  const onRemoved = useCallback(() => setGrant(null), []);
   return (
     <Theme.Provider value={t}>
       <SafeAreaProvider>
@@ -90,7 +92,7 @@ export default function App() {
           {!fontsReady && !fontError ? <Center><ActivityIndicator color={t.ink} /></Center>
             : grant === undefined ? <Center><ActivityIndicator color={t.ink} /></Center>
             : grant === null ? <Pair onPaired={setGrant} />
-            : <Crewhouse grant={grant} onRemoved={() => setGrant(null)} />}
+            : <Crewhouse grant={grant} onRemoved={onRemoved} />}
           <Toast />
         </SafeAreaView>
       </SafeAreaProvider>
@@ -900,7 +902,7 @@ function Hello({ state, refresh, go }: Ctx) {
 }
 
 // ---------- asks ----------
-const answer = (c: A.Card, body: Json) => attempt(() => api.answer(c.id, body), body.change ? 'Chief will change the plan' : body.answer === 'deny' ? 'OK, not now' : 'Done. Carrying on.');
+const answer = (c: A.Card, body: Json) => c.mailSend ? api.answer(c.id, body).then(() => { say(body.answer === 'deny' ? 'Nothing sent.' : 'Sent from your Gmail.'); return true; }, e => { say(e.message); return false; }) : attempt(() => api.answer(c.id, body), body.change ? 'Chief will change the plan' : body.answer === 'deny' ? 'OK, not now' : 'Done. Carrying on.');
 
 /** The ask's evidence in the sunken block, mirroring web/src/parts.tsx AskEvidence (§4.4): the order's lines with
  *  the total above a hairline, a form's or a job's label-over-value lines, a draft, the routine's confirmation
@@ -922,6 +924,7 @@ function AskEvidence({ c, open, readAll }: { c: A.Card; open: boolean; readAll?:
   })}</View>;
   if (c.evidence === 'draft') {
     return <View style={[s.ev, { backgroundColor: t.sunken }]}>
+      {!!c.mailFrom && <T tone="mute" style={s.small}>From {c.mailFrom}</T>}
       {!!c.draftTo && <T tone="mute" style={s.small}>To {c.draftTo}</T>}
       {!!c.draftSubject && <T style={{ fontWeight: '500' }}>Subject: {c.draftSubject}</T>}
       <ScrollView style={{ maxHeight: 240 }} nestedScrollEnabled><T tone="ink2">{body}</T></ScrollView>
@@ -959,7 +962,7 @@ function useDraftEdit(c: A.Card) {
     box: words !== null && <TextInput style={[s.input, { color: t.ink, borderColor: t.line, minHeight: 160, textAlignVertical: 'top' }]} value={words} onChangeText={setWords}
       multiline autoFocus accessibilityLabel="Your version of the message" />,
     yes: (body: Json) => {
-      if (c.evidence !== 'draft') return body;
+      if (c.evidence !== 'draft' || c.mailSend) return body;
       const text = changed ? words!.trim() : c.draftText ?? '';
       Clipboard.setString(text);
       if (c.draftLink) void Linking.openURL(c.draftLink);
@@ -968,6 +971,24 @@ function useDraftEdit(c: A.Card) {
   };
 }
 
+function MailSetup({ c, canAct, done }: { c: A.Card; canAct: boolean; done: () => void }) {
+  const t = useLook(), [status, setStatus] = useState<ReturnType<typeof A.mailWords> | null>(null), [name, setName] = useState(''), [error, setError] = useState(''), [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (!canAct) return; // the link must be up and the transport set before we ask the computer anything
+    let active = true;
+    setError('');
+    void api.mailStatus(c.mailTo!).then((raw) => { if (active) { const v = A.mailWords(raw); setStatus(v); setName(v.name); } }).catch((e) => active && setError(e.message));
+    return () => { active = false; };
+  }, [c.mailTo, canAct]);
+  const act = async (body: Json) => { setBusy(true); setError(''); try { setStatus(A.mailWords(await api.mailMark(c.mailTo!, body))); } catch (e: any) { setError(e.message); } finally { setBusy(false); } };
+  const review = async () => { setBusy(true); setError(''); try { await api.mailReview(c.id); done(); } catch (e: any) { setError(e.message); } finally { setBusy(false); } };
+  return <View style={{ gap: 8 }}><T style={s.b}>Send from your Gmail</T><T tone="mute" style={s.small}>{status?.org} · {status?.note ?? (canAct ? 'Checking this address…' : 'Waiting for the home computer…')}</T>
+    <T tone="mute" style={s.small}>Only you can mark an organisation, from your own knowledge. This never approves an email.</T>
+    <TextInput style={[s.input, { color: t.ink, borderColor: t.line }]} value={name} onChangeText={setName} placeholder="Organisation name" placeholderTextColor={t.mute} accessibilityLabel="Organisation name" editable={canAct && !busy} />
+    <View style={s.chips}>{[['corporate', 'Corporate-eligible'], ['sole-trader', 'Sole trader'], ['small-partnership', 'Small partnership'], ['unknown', 'Unknown']].map(([kind, label]) => <Btn key={kind} label={label} disabled={!canAct || busy || !name.trim()} onPress={() => void act({ kind, name })} />)}</View>
+    <View style={s.chips}><Btn label={status?.stopped ? 'Remove from do-not-email list' : 'Do not email this address'} disabled={!canAct || busy || !status} onPress={() => void act({ suppressed: !status!.stopped })} />
+      <Btn go label="Review one email" disabled={!canAct || busy || !status} onPress={() => void review()} /></View>{!!error && <T tone="pinkInk" style={s.small}>{error}</T>}</View>;
+}
 function AskCard({ c, who, state, onDone, canAct, offline, open }: { c: A.Card; who: A.Helper | undefined; state: Json; onDone: () => void; canAct: boolean; offline: boolean; open: (c: A.Card) => void }) {
   const [reply, setReply] = useState('');
   const [oops, setOops] = useState(false);
@@ -997,7 +1018,8 @@ function AskCard({ c, who, state, onDone, canAct, offline, open }: { c: A.Card; 
       {edit.box || (c.kind === 'routine' && c.lines ? <View style={{ gap: 4, marginTop: 8 }}>{c.lines.map((l: string, i: number) =>
         <T key={i} tone={i ? 'mute' : 'ink2'} style={i ? s.small : { fontSize: 15, lineHeight: 24 }}>{l}</T>)}</View>
         : <AskEvidence c={c} open={false} readAll={<Btn label="Read all" onPress={() => open(c)} />} />)}
-      {oops && <T tone="pinkInk" style={s.small}>That didn't go through. Try again.</T>}
+      {c.mailTo && <MailSetup c={c} canAct={canAct && !offline} done={onDone} />}
+      {oops && <T tone="pinkInk" style={s.small}>{c.mailSend ? 'Sending was not confirmed. Check Gmail before doing anything else.' : "That didn't go through. Try again."}</T>}
       {offline ? <T tone="mute" style={s.small}>You can answer once the home computer is back.</T>
         : !canAct ? <T tone="mute" style={s.small}>This phone watches; answer on another phone or the computer.</T> : c.kind === 'connect' ? (
         <View style={{ gap: 8 }}>
@@ -1074,12 +1096,14 @@ function AskSheet({ c, who, chiefSays, canAct, onClose }: { c: A.Card; who: A.He
       <Pressable style={s.scrim} onPress={onClose}>
         <Pressable style={[s.sheet, { backgroundColor: t.surface }]} onPress={() => {}}>
           <View style={[s.grabber, { backgroundColor: t.line2 }]} />
+          <ScrollView style={{ flexShrink: 1, flexGrow: 0 }} contentContainerStyle={{ gap: 12 }} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
           <AskHead c={c} who={who} />
           <T style={s.askQ}>{question}</T>
           {edit.box || <AskEvidence c={c} open={open} readAll={<Btn label="Read all" onPress={() => setOpen(true)} />} />}
+          {c.mailTo && <MailSetup c={c} canAct={canAct} done={onClose} />}
           {c.review && c.order && !c.order.known && <T tone="mute" style={s.small}>So nothing is counted against the monthly limit.</T>}
           {!!chiefSays && <View style={s.row}><Face who="chief" size={20} /><T tone="ink2" style={{ flex: 1 }}><Text style={s.b}>Chief:</Text> {A.plain(chiefSays)}</T></View>}
-          {oops && <T tone="pinkInk" style={s.small}>That didn't go through. Try again.</T>}
+          {oops && <T tone="pinkInk" style={s.small}>{c.mailSend ? 'Sending was not confirmed. Check Gmail before doing anything else.' : "That didn't go through. Try again."}</T>}
           {canAct ? <>
             {c.evidence === 'draft' && yes && <Btn go big label={yes.label} disabled={edit.empty} onPress={() => act(edit.yes(yes.body))} />}
             {edit.can && <Btn big label={edit.editing ? 'Use the original' : 'Edit'} onPress={edit.toggle} />}
@@ -1088,6 +1112,7 @@ function AskSheet({ c, who, chiefSays, canAct, onClose }: { c: A.Card; who: A.He
           </> : <Btn big label="Close" onPress={onClose} />}
           {always && canAct && <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: t.line, paddingTop: 10 }}><Btn ghost big label={always.label} onPress={() => act(always.body)} /></View>}
           {c.kind === 'spend' && <T tone="mute" style={[s.small, { textAlign: 'center' }]}>Anything that costs money asks you every time.</T>}
+          </ScrollView>
         </Pressable>
       </Pressable>
     </Modal>
