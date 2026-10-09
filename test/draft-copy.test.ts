@@ -21,7 +21,7 @@ import { card } from '../web/src/adapter.ts';
 const repo = join(import.meta.dirname, '..');
 const bin = browserBin();
 const LINK = 'https://shop.example/orders/98765/refund';
-const BODY = 'Hello, my return reached you on 16 May, inside your own 30-day window. The order page still shows no refund.\n\nPlease confirm when the refund goes back to my card. Regards,\nUmer';
+const BODY = 'Hello, my return reached you on 16 May, inside your own 30-day window. The order page still shows no refund.\n\nPlease confirm when the refund goes back to my card. Regards,\nMaya';
 const EDIT = 'Hello, my return reached you on 16 May. Where is the refund?';
 
 const parent = temp('draft-web');
