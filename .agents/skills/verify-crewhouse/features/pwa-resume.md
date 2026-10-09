@@ -26,14 +26,23 @@ named link wins; then a stored gone thread opens Home. Run it alone:
 npm run build:web && node --test --test-concurrency=1 test/resume.test.ts
 ```
 
-For the installed app, follow the Android Chrome install in [pwa-shell.md](pwa-shell.md): serve the
-built shell on a `*.localhost` origin, `adb reverse tcp:$PORT tcp:$PORT`, install from Chrome, then
-attach to the standalone page (`adb forward tcp:<n> localabstract:chrome_devtools_remote`). Open a
-thread, force-stop Chrome, and tap the home-screen icon again; the standalone page returns on the
-same `#/h/…`. The browser helper for the installed window is `scripts/` under this skill's own
-`pwa-shell.mjs` (headed Chromium install) when no emulator slot is free. The extreme cases ride the
-same page: `Emulation.setDeviceMetricsOverride` for 320 px, the system font scale for 1.3×,
-`Network.emulateNetworkConditions {offline:true}` for the offline shell, and `?day`/`?night`.
+For the installed app, `scripts/resume-plan.mjs` builds a plan for `scripts/pwa-shell.mjs` (a real,
+headed Chromium install in standalone `display-mode`) and drives every case. Serve the built shell on a
+`*.localhost` origin, then run the plan:
+
+```bash
+npm run build:web
+PORT=$(node -e 'require("node:net").createServer().listen(0,"127.0.0.1",function(){console.log(this.address().port);this.close()})')
+node .agents/skills/verify-crewhouse/scripts/serve-web.mjs web/dist "$PORT" &
+LAB=$(mktemp -d) EV=$PWD/out
+node .agents/skills/verify-crewhouse/scripts/resume-plan.mjs "http://crewhouse.localhost:$PORT" "$EV" "$LAB" > "$LAB/plan.json"
+xvfb-run -a -s "-screen 0 1920x1200x24" node .agents/skills/verify-crewhouse/scripts/pwa-shell.mjs "$LAB/plan.json"
+```
+
+On a real Android Chrome install, the plan's one CDP page also drives the standalone window reached
+through `adb reverse tcp:$PORT tcp:$PORT` and `adb forward tcp:<n> localabstract:chrome_devtools_remote`.
+This emulator crashes (SwiftShader/Vulkan) when the installed webapp is launched, so the isolated
+Chromium standalone window is the installed-PWA proof here; see the PR's evidence note.
 
 ## Read it
 
