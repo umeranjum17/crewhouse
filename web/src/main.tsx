@@ -1182,7 +1182,7 @@ function Settings({ state, refresh, tick, accounts, look, setLook }: Ctx & { loo
       <h1>Settings</h1>
       <p className="mute small">{A.atHome(undefined, A.planName(accounts)).join(' ')}</p>
       {demo && <PairRow />}
-      {paired && <div className="card nudge"><span className="grow"><b>Paired with {paired.name}</b><div className="mute small">This app shows your own crew, over a locked link to that computer.</div></span>
+      {paired && <div className="card nudge"><span className="grow"><b>Paired with {paired.name}</b><div className="mute small">This app shows your own crew, straight from that computer and locked to it.</div></span>
         <button className="btn" onClick={() => confirm('Unpair this app? It goes back to the demo, and you can pair again any time.') && attempt(paired!.unpair)}>Unpair</button></div>}
       {/* No tab bar on a phone (B1): the desk rail's places, reached from here. */}
       <div className="card list go-tos">{GO_TO.map(([h, l, i]) => <a key={h} href={h} className="row-item go-to"><span className="o-ic"><Icon name={i} /></span><span className="grow">{l}</span><Icon name="next" /></a>)}</div>

@@ -317,11 +317,11 @@ export function PairSheet({ onClose }: { onClose: () => void }) {
       {phase === 'code' && <>
         <h2>Pair with your computer</h2>
         <p className="mute">Your crew lives on your own computer. Run these there once:</p>
-        <pre className="cmds">{PAIR_CMDS}</pre>
+        <div className="cmds">{PAIR_CMDS.split('\n').map((c) => <code className="chat-code" key={c}>{c}</code>)}</div>
         <button className="link" onClick={() => copy(PAIR_CMDS)}>Copy these</button>
         <p className="mute small">Already have Crewhouse? Run just the last one.</p>
         <label className="pair-label">Paste the code it prints
-          <textarea className="input pair-code" rows={3} value={text} onChange={(e) => setText(e.target.value)} placeholder="ABCDEF-1234-5678-9ABC@your-relay" autoCapitalize="off" autoCorrect="off" spellCheck={false} /></label>
+          <textarea className="input pair-code" rows={3} value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste the code here" autoCapitalize="off" autoCorrect="off" spellCheck={false} /></label>
         {problem && <p className="pair-problem" role="alert">{problem}</p>}
         <button className="btn go big" disabled={busy || !text.trim()} onClick={pair}>{busy ? 'Connecting…' : 'Pair'}</button>
         <button className="link" onClick={onClose}>Not now</button>
@@ -330,7 +330,7 @@ export function PairSheet({ onClose }: { onClose: () => void }) {
         <h2>Check these two words</h2>
         <p className="mute">Your computer shows two words too. If they match, say yes there:</p>
         <b className="pair-words">{said}</b>
-        <pre className="cmds">./crewhouse phones approve '{said}'</pre>
+        <div className="cmds"><code className="chat-code">./crewhouse phones approve '{said}'</code></div>
         <p className="mute small">Or open Crewhouse on the computer and tap Yes under Phones.</p>
         <Pill tone="wait" live>Waiting for your computer…</Pill>
       </>}
