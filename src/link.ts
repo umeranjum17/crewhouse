@@ -62,6 +62,7 @@ const ROUTES = ['home', 'tailscale', 'relay'];
 
 /** Every notification says only this; the phone fetches the words over the link (the relay enforces it too). */
 export const NEWS = 'Crewhouse has news';
+const WEB_DEVICE = 'web'; // the person's browser holds no link grant; a paired phone keeps its own grant id
 const UPDATE_APP = 'Get the latest Crewhouse app to keep chatting.', currentPhone = (body: any) => body?.build === 'p9b';
 /** The relay's WebSocket origin, from the https/wss address Settings keeps. */
 const wsOrigin = (url: string) => url.replace(/^http/, 'ws');
@@ -328,7 +329,7 @@ export class Link {
    *  quiet hours the push is held (kept in the store, so a restart keeps it) and `sendHeld` sends one when they end. */
   private async tell(id: string) {
     if (this.quiet()) return void this.db.run("INSERT INTO settings (key, value) VALUES (?, '1') ON CONFLICT(key) DO NOTHING", 'push.held.1');
-    const to = this.host.devices().map((g) => g.id);
+    const to = [...this.host.devices().map((g) => g.id), WEB_DEVICE];
     const phones = to.map((d) => [d, this.setting(`phone.push.${d}`)]).filter(([, t]) => isExpoToken(t));
     if (phones.length) await this.expo(id, phones as [string, string][]).catch((e) => console.error('push:', e.message));
     // A browser's Web Push address is kept on the person's relay, which holds the key for it.
@@ -401,6 +402,14 @@ export class Link {
   devices() {
     return this.host.devices().map((g) => ({ id: g.id, name: g.name, role: g.role,
       seen: g.lastSeen ?? g.created, online: g.online, reached: this.reached(g.id), push: pushOf(this.setting(`phone.push.${g.id}`)) }));
+  }
+
+  /** The installed web app's push: whether the relay can carry it and the key to subscribe with; `{off}` drops a browser's address. */
+  pushStatus() { return { ready: this.relayStatus === 'online' && !!this.client?.vapidKey, vapid: this.client?.vapidKey ?? null }; }
+  async setWebPush(sub: any) {
+    if (!this.client) return;
+    if (sub?.off === true) await this.client.unsubscribe(WEB_DEVICE);
+    else if (sub?.web && typeof sub.web === 'object') await this.client.subscribe(WEB_DEVICE, { web: sub.web });
   }
 
   async revoke(id: string) {

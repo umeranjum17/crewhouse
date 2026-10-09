@@ -66,5 +66,14 @@ test('crewd serves the shell with no-cache and an ETag, and hashed bundles as im
     assets.push(...[...manifest.icons, ...manifest.screenshots, ...manifest.shortcuts.flatMap((s: Json) => s.icons)].map((i: Json) => i.src));
     // A missing file would come back as the shell itself (the app's own routes), so the type is what tells.
     for (const src of assets) assert.match((await fetch(base + src)).headers.get('content-type') ?? '', /^image\//, src);
+    // The service worker is served from the same tree, revalidated every load, and precaches the whole shell so a
+    // cold offline reload serves the app: the index, both hashed bundles, the manifest and the icons.
+    const sw = await fetch(`${base}/sw.js`);
+    assert.equal(sw.status, 200);
+    assert.match(sw.headers.get('content-type') ?? '', /javascript/);
+    assert.match(sw.headers.get('cache-control') ?? '', /no-cache/, 'the worker is revalidated, so an update ships');
+    const worker = await sw.text();
+    for (const asset of ['"/",', `/${js}`, `/${bundleRef(html, 'styles')!}`, '/manifest.webmanifest']) assert.ok(worker.includes(asset), `the worker precaches the shell: ${asset}`);
+    assert.match(worker, /'push'|"push"/, 'it carries the notification handler');
   } finally { daemon.kill(); }
 });

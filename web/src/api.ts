@@ -135,6 +135,9 @@ export const api = {
   phoneRelay: (url: string | null, enrol?: string) => call('PUT', '/api/phones/relay', { url, enrol }),
   /** Codes to type on the phone instead of scanning, through the relay. */
   phoneCode: (role: 'control' | 'view' = 'control') => call('POST', '/api/phones/code', { role }),
+  /** Web push for the installed app: the relay's key to subscribe with, and the address handed back (or `{off}`). */
+  pushKey: () => call('GET', '/api/push') as Promise<{ vapid: string | null; ready: boolean }>,
+  push: (body: Json) => call('POST', '/api/push', body),
   connect: (app: string) => call('POST', `/api/connections/${app}`),
   connection: (app: string) => call('GET', `/api/connections/${app}`),
   disconnect: (app: string) => call('DELETE', `/api/connections/${app}`),

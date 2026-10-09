@@ -76,7 +76,29 @@ test('quiet hours hold the push and send exactly one when they end, even across 
   quiet = false;
   b.sendHeld();
   b.sendHeld();
-  assert.deepEqual(sent.map((n) => n.to), [['pixel', 'ipad']], 'one push when quiet hours end, for however much came in');
+  assert.deepEqual(sent.map((n) => n.to), [['pixel', 'ipad', 'web']], 'one push when quiet hours end, for however much came in');
+  db.close();
+});
+
+test('the installed web app subscribes a browser push address through the relay and hears the same news', async () => {
+  const db = new Store(temp('crewhouse-web-push'));
+  const calls: any[] = [];
+  const link = Object.assign(new Link({} as any, db, async () => null) as any, {
+    client: { vapidKey: 'BFx-key', subscribe: async (d: string, s: any) => calls.push(['subscribe', d, s]), unsubscribe: async (d: string) => calls.push(['unsubscribe', d]), notify: async (n: any) => { calls.push(['notify', n]); return {}; } },
+    relayStatus: 'online', host: { devices: () => [{ id: 'pixel' }] },
+  });
+  assert.deepEqual(link.pushStatus(), { ready: true, vapid: 'BFx-key' });
+  const web = { endpoint: 'https://fcm.googleapis.com/fcm/send/abc', keys: { p256dh: 'p', auth: 'a' } };
+  await link.setWebPush({ web });
+  assert.deepEqual(calls.shift(), ['subscribe', 'web', { web }]);
+  // A failed job: the browser hears the same content-free news as the phone.
+  await link.tell('e7');
+  const notify = calls.shift();
+  assert.equal(notify[0], 'notify');
+  assert.equal(notify[1].title, NEWS);
+  assert.ok(notify[1].to.includes('web'), 'the browser device is addressed');
+  await link.setWebPush({ off: true });
+  assert.deepEqual(calls.shift(), ['unsubscribe', 'web']);
   db.close();
 });
 
