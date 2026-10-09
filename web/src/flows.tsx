@@ -288,6 +288,57 @@ export function ConnectCard({ c, helper, state, onDone }: { c: A.Card; helper?: 
   );
 }
 
+// ---------- pairing the public app with the person's own computer ----------
+/** What to run on the computer: Crewhouse itself, then the one-use code (`./crewhouse phones code`). */
+const PAIR_CMDS = 'git clone https://github.com/umeranjum17/crewhouse\ncd crewhouse && ./crewhouse setup\n./crewhouse start\n./crewhouse phones code';
+
+/** The demo's way to the person's own crew: the few commands for their computer, one box for the code it prints (a relay
+ *  code or the long direct one, web/src/link.ts), then the two words to check there. Paired, the same installed app
+ *  opens again on their real crew. ?demo&phase=waiting|done pins a step, for review. */
+export function PairSheet({ onClose }: { onClose: () => void }) {
+  const [text, setText] = useState('');
+  const [words, setWords] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState('');
+  const [done, setDone] = useState(false);
+  const pair = () => { setBusy(true); setProblem(''); void (async () => {
+    const link = await import('./link.ts');
+    await link.pair(text, setWords);
+    setDone(true);
+    setTimeout(() => void link.leave(), 1200);
+  })().catch((e: Error) => { setProblem(e.message); setWords(null); setBusy(false); }); };
+  const phase = pinned === 'waiting' || pinned === 'done' ? pinned : done ? 'done' : words ? 'waiting' : 'code';
+  const said = words ?? 'maple lantern';
+  const copy = (t: string) => navigator.clipboard?.writeText(t).then(() => toast('Copied'), () => {});
+  return (
+    <Sheet label="Pair with your computer" onClose={onClose}>
+      <Progress at={phase === 'done' ? 2 : phase === 'waiting' ? 1 : 0} steps={['Your computer', 'Two words', 'Done']} />
+      <Mood phase={phase} />
+      {phase === 'code' && <>
+        <h2>Pair with your computer</h2>
+        <p className="mute">Your crew lives on your own computer. Run these there once:</p>
+        <div className="cmds">{PAIR_CMDS.split('\n').map((c) => <code className="chat-code" key={c}>{c}</code>)}</div>
+        <button className="link" onClick={() => copy(PAIR_CMDS)}>Copy these</button>
+        <p className="mute small">Already have Crewhouse? Run just the last one.</p>
+        <label className="pair-label">Paste the code it prints
+          <textarea className="input pair-code" rows={3} value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste the code here" autoCapitalize="off" autoCorrect="off" spellCheck={false} /></label>
+        {problem && <p className="pair-problem" role="alert">{problem}</p>}
+        <button className="btn go big" disabled={busy || !text.trim()} onClick={pair}>{busy ? 'Connecting…' : 'Pair'}</button>
+        <button className="link" onClick={onClose}>Not now</button>
+      </>}
+      {phase === 'waiting' && <>
+        <h2>Check these two words</h2>
+        <p className="mute">Your computer shows two words too. If they match, say yes there:</p>
+        <b className="pair-words">{said}</b>
+        <div className="cmds"><code className="chat-code">./crewhouse phones approve '{said}'</code></div>
+        <p className="mute small">Or open Crewhouse on the computer and tap Yes under Phones.</p>
+        <Pill tone="wait" live>Waiting for your computer…</Pill>
+      </>}
+      {phase === 'done' && <><h2>Paired!</h2><p>Opening your own crew…</p></>}
+    </Sheet>
+  );
+}
+
 // ---------- the home computer out of reach ----------
 function OfflineWords({ onClose }: { onClose: () => void }) {
   return <><h2>Can't reach the home computer</h2><p className="mute">It may be asleep, switched off, or offline. Your helpers live there, so they'll carry on the moment it's back. I'll keep trying, and pick up right here.</p>

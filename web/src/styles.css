@@ -1480,3 +1480,10 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
   .chat .chips.center { flex-direction: column; gap: 6px; margin: 22px 0 0; }
   .chat .chips.center .chip { width: 100%; padding: 10px 16px; border: 0; border-radius: 20px; background: var(--tint); font: 500 17px/24px var(--ui); color: var(--ink); }
 }
+/* the pair sheet: the commands for the computer, the code box, the two words */
+.cmds { width: 100%; display: grid; justify-items: start; gap: 6px; padding: 12px 14px; background: var(--soft); border-radius: 12px; text-align: left; font-size: 13px; line-height: 1.5; }
+.cmds .chat-code { font-size: 1em; padding: 0; background: none; }
+.pair-label { width: 100%; display: grid; gap: 6px; text-align: left; font-weight: 600; margin-top: 4px; }
+.pair-code { font: 500 15px/1.5 var(--ui); letter-spacing: .02em; }
+.flow .pair-problem { color: var(--danger); }
+.pair-words { font: 800 26px/1.2 var(--ui); padding: 12px 20px; background: var(--soft); border-radius: 16px; }

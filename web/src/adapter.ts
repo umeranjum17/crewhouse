@@ -6,6 +6,7 @@ import { PROVIDERS as ROUTES } from '@byokit/accounts';
 import { phaseOf } from '@byokit/ui-core/phase';
 import type { Json } from './api.ts';
 import { safeLink } from './chat-md.ts';
+import { relayTyped } from './typed.ts';
 import { PALS, type Kind, type Mood } from './art.ts';
 
 export type Helper = {
@@ -437,8 +438,7 @@ export const googleHeadline = (steps?: GoogleStep[] | null) => {
  *  address carried inside it, so the phone knows where to look and nobody types an address. Empty when there is none. */
 export const phoneTyped = (t: Json) => {
   if (!t?.short || !t?.code) return '';
-  let at = ''; try { at = new URL(t.relay).host; } catch { at = String(t.relay ?? ''); }
-  return `${t.short}-${t.code}${at ? `@${at}` : ''}`;
+  return t.relay ? relayTyped(t.short, t.code, t.relay) : `${t.short}-${t.code}`;
 };
 
 /** Settings, Phones: whether phones reach this computer away from home, in one sentence. */

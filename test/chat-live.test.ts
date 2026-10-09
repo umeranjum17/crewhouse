@@ -41,9 +41,11 @@ test('from send to reply the thread never sits still: a held Chief turn and a jo
   const browser = taskBrowser(bin!, ['--headless=new', '--disable-dev-shm-usage', '--no-first-run', '--no-default-browser-check',
     '--remote-debugging-port=0', `--user-data-dir=${profile}`, '--window-size=1440,900', 'about:blank'], profile);
   let ws: WebSocket | undefined;
-  after(async () => { ws?.close(); await browser.close(); server.closeAllConnections(); await new Promise((r) => server.close(r)); done(); });
+  // A failed browser close must not keep the server (and so the process) alive: the suite then waits out its file bound and kills it.
+  after(async () => { ws?.close(); try { await browser.close(); } finally { server.closeAllConnections(); await new Promise((r) => server.close(r)); done(); } });
   const portFile = join(profile, 'DevToolsActivePort');
-  await until('the browser to listen', () => existsSync(portFile) && readFileSync(portFile, 'utf8').includes('\n'), 30_000);
+  // In CI the gateway lane's boots run beside this browser and starve its start past 30 s (CI 2026-10-09).
+  await until('the browser to listen', () => existsSync(portFile) && readFileSync(portFile, 'utf8').includes('\n'), 60_000);
   const port = readFileSync(portFile, 'utf8').split('\n')[0];
   let target: { webSocketDebuggerUrl: string } | undefined;
   await until('a page', async () => (target = ((await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()) as any[]).find((t) => t.type === 'page')), 10_000);
