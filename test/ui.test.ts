@@ -558,7 +558,8 @@ test('Home opens on Chat at every launch, with Office one tap away and never sto
   const hero = web.slice(web.indexOf('function ChiefHero('), web.indexOf('function ChiefHero(') + 2200);
   assert.match(hero, /A\.chief\(state, \{ signedOut: true \}\)/, 'the phone header reads Chief from the same table as the thread, with the sign-in');
   assert.match(hero, /out \? NEEDS_SIGNIN : needs \? 'Needs you'/, 'signed out with a job queued: the thread card\'s flag, never the green "At work"');
-  assert.match(hero, /<p className="ch-line">\{A\.stripLine\(state\)\}<\/p>/, 'the sign-in is said once: the line under it keeps the standing state');
+  assert.match(hero, /<div className="ch-row">[\s\S]*className="ch-name"[\s\S]*className=\{`ch-status[\s\S]*\{side\}[\s\S]*<\/div>[\s\S]*\{below\}/, 'one compact row: avatar, name, the single status and the gear, then the switch on its own row under it');
+  assert.doesNotMatch(hero, /className="ch-line"/, 'exactly one status line, never a second echoing strip');
   const flows = src('web/src/flows.tsx');
   assert.match(flows, /export const NEEDS_SIGNIN = 'Needs a sign-in';/, 'one flag for the thread card and the phone header');
   assert.match(flows.slice(flows.indexOf('function AccountCard('), flows.indexOf('function AccountCard(') + 3000), /\{NEEDS_SIGNIN\}/, 'the thread card reads it from there too');

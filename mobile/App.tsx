@@ -1131,14 +1131,14 @@ function HomeBar({ state, view, go, mode, pick }: { state: Json; view: A.OfficeV
   const t = useLook();
   // B1: no tab bar on Home. The gear by the Chief | Office switch reaches settings (and the rest of the app from there).
   const gear = <Pressable onPress={() => go({ view: 'phone' })} accessibilityRole="button" accessibilityLabel="Settings" hitSlop={8} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}><T tone="ink2" style={{ fontSize: 22, lineHeight: 26 }}>{'\u2699'}</T></Pressable>;
-  const seg = <View accessibilityRole="tablist" accessibilityLabel="Home view" style={[s.seg, { backgroundColor: t.soft, borderRadius: 14, padding: 4 }]}>
-    {HOME_MODES.map(([m, l]) => <Pressable key={m} onPress={() => pick(m)} accessibilityRole="tab" accessibilityState={{ selected: mode === m }} style={[s.segBtn, { borderRadius: 10 }, mode === m && { backgroundColor: t.solid }]}>
+  const seg = (wide = false) => <View accessibilityRole="tablist" accessibilityLabel="Home view" style={[s.seg, { backgroundColor: t.soft, borderRadius: 14, padding: 4 }, wide && { alignSelf: 'stretch' }]}>
+    {HOME_MODES.map(([m, l]) => <Pressable key={m} onPress={() => pick(m)} accessibilityRole="tab" accessibilityState={{ selected: mode === m }} style={[s.segBtn, { borderRadius: 10 }, wide && { flex: 1, alignItems: 'center' }, mode === m && { backgroundColor: t.solid }]}>
       <T tone={mode === m ? undefined : 'ink2'} style={[s.small, s.b]}>{l}</T>
     </Pressable>)}
   </View>;
-  const tools = <View style={[s.row, { justifyContent: 'space-between' }]}>{gear}{seg}</View>;
-  // Chat opens on Chief: one header block — the hero with the gear top-right and the switch below its lines.
-  if (mode === 'chat') return <ChiefHero live={view} state={state} gear={gear} below={seg} />;
+  const tools = <View style={[s.row, { justifyContent: 'space-between' }]}>{gear}{seg()}</View>;
+  // Chat opens on Chief: one compact header line, then the switch as its own full-width row under it.
+  if (mode === 'chat') return <ChiefHero live={view} state={state} gear={gear} below={seg(true)} />;
   // Office is a slim header: the title, the count line, then the switch.
   return (
     <View style={{ gap: 6 }}>
@@ -1196,24 +1196,25 @@ function NeedsPin({ state, cards, open, go }: { state: Json; cards: A.Card[]; op
   );
 }
 
-/** Home's chat header (Term): the helmet, the name, the status and one plain line. The crew faces live in Office. */
-function ChiefHero({ live, state, gear, below }: { live: A.OfficeView; state: Json; gear?: ReactNode; below?: ReactNode }) {
+/** Home's chat header (Term): one compact line — the helmet, the name, the single status and the gear, centred on
+ *  that line — then the Chief | Office switch as its own full-width row under it. The crew faces live in Office. */
+function ChiefHero({ live, gear, below }: { live: A.OfficeView; state: Json; gear?: ReactNode; below?: ReactNode }) {
   const t = useLook();
   const needs = live.needs.length > 0;
   const resting = !needs && live.chief.mood === 'rest';
   return (
-    <View style={{ flexDirection: 'row', gap: 12, paddingVertical: 4 }} accessibilityLabel="Chief">
-      <View style={{ justifyContent: 'center' }}><ChiefArt mood={live.chief.mood} size={112} /></View>
-      <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-        <View style={[s.row, { justifyContent: 'space-between', alignItems: 'center' }]}>
-          <T style={[s.serif, { fontSize: 22, lineHeight: 26 }]}>Chief</T>
-          {gear}
+    <View accessibilityLabel="Chief" style={{ gap: 8 }}>
+      <View style={[s.row, { alignItems: 'center', gap: 10 }]}>
+        <ChiefArt mood={live.chief.mood} size={56} whole />
+        <T style={[s.serif, { fontSize: 22, lineHeight: 26 }]}>Chief</T>
+        <View style={[s.row, { gap: 6, flexShrink: 1, minWidth: 0 }]}>
+          <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: needs ? t.pink : resting ? t.line2 : t.green }} />
+          <T numberOfLines={1} style={[s.small, { fontWeight: '500', color: needs ? t.pinkInk : t.ink2 }]}>{needs ? 'Needs you' : resting ? 'Resting' : 'At work'}</T>
         </View>
-        <View style={[s.row, { gap: 6 }]}><View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: needs ? t.pink : resting ? t.line2 : t.green }} />
-          <T style={[s.small, { fontWeight: '500', color: needs ? t.pinkInk : t.ink2 }]}>{needs ? 'Needs you' : resting ? 'Resting' : 'At work'}</T></View>
-        <T tone="ink2" style={s.small} lines={2}>{A.stripLine(state)}</T>
-        {below}
+        <View style={{ flex: 1 }} />
+        {gear}
       </View>
+      {below}
     </View>
   );
 }
