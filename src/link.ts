@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import { WebSocketServer } from 'ws';
 import { Host, keyPair, keyPairFrom, parseOffer, encodeOffer, b64url, type Grant, type PairRequest, type Role } from '@byokit/link';
 import { advertise, routes, tailscaleState as kitTailscaleState, isPeer, type Bonjour, type TailscaleState } from '@byokit/reach';
-import { RelayClient, isExpoToken, linkUrl, type RelayStatus } from '@byokit/relay';
+import { RelayClient, isExpoToken, linkUrl, type RelayStatus, type WebSubscription } from '@byokit/relay';
 import type { Config } from './config.ts';
 import type { Store } from './db.ts';
 import type { Watcher } from './desktop.ts';
@@ -62,7 +62,7 @@ const ROUTES = ['home', 'tailscale', 'relay'];
 /** Every notification says only this; the phone fetches the words over the link (the relay enforces it too). */
 export const NEWS = 'Crewhouse has news';
 const WEB_DEVICE = 'web'; // the person's browser holds no link grant; a paired phone keeps its own grant id
-const webAddress = (v: unknown) => typeof v === 'object' && v !== null;
+const webAddress = (v: unknown): v is WebSubscription => typeof v === 'object' && v !== null;
 const UPDATE_APP = 'Get the latest Crewhouse app to keep chatting.', currentPhone = (body: any) => body?.build === 'p9b';
 /** The relay's WebSocket origin, from the https/wss address Settings keeps. */
 const wsOrigin = (url: string) => url.replace(/^http/, 'ws');
