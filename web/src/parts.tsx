@@ -165,11 +165,16 @@ export function Ink({ svg, w, h = w, label, className = '' }: { svg: string; w: 
 /** Chief, head and shoulders (`whole` for all of him, the mock rail's 38-column grid). `d` keeps the old 14-dot footprint,
  *  so callers keep their size. `hero` marks the one face on screen that lives: it shows the 170 ms change-blink,
  *  and the think-scan while he works. */
-export function ChiefArt({ mood = 'idle', d = 6, hero, whole }: { mood?: art.Mood; d?: number; dark?: boolean; hero?: boolean; whole?: boolean }) {
+export function ChiefArt({ mood = 'idle', d = 6, hero, whole, disc }: { mood?: art.Mood; d?: number; dark?: boolean; hero?: boolean; whole?: boolean; disc?: boolean }) {
   const flash = useChangeBlink(!!hero, mood);
   const mode = art.helmetOf(flash ? 'blink' : mood);
   const beat = useTicker(140, !!hero && mode === 'think');
   const cells = useMemo(() => art.helmet(whole ? 38 : 24, mode, night, beat), [mode, beat]);
+  // The phone header's mascot (Main1804, as Muse heads a thread): the same helmet as whole-pixel rects, one CSS px a
+  // column and two a row, so every edge lands on a device pixel at 2x and 3x. Text glyphs this small only blur.
+  const pal = night ? color.night : color.day;
+  if (disc) return <Ink className="helmet" w={40} label="Chief" svg={art.helmetSvg(40, mode, { night, beat, cw: 1, ch: 2, ink: mode === 'rest' ? pal.mute : undefined, eye: mode === 'needs' ? pal.pink : undefined, scan: pal.pink })
+    .replace('<svg ', '<svg shape-rendering="crispEdges" ')} />;
   return <pre className="art helmet" data-mode={mode} style={whole ? undefined : { fontSize: d }} role="img" aria-label="Chief">{
     cells.map((row, y) => <div key={y}>{row.map((c, x) => c.eye ? <i key={x} className="eye">{c.ch}</i> : c.scan ? <i key={x} className="scan">{c.ch}</i> : c.ch)}</div>)}
   </pre>;

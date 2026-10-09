@@ -1374,3 +1374,103 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
   .hello { min-height: calc(100dvh - var(--top)); display: flex; flex-direction: column; align-items: center; }
   .hello .hello-ask { position: sticky; bottom: 0; margin-top: auto; padding: 8px 0 max(12px, env(safe-area-inset-bottom)); background: var(--bg); }
 }
+
+/* ch-pwa-chat r3 (Main1799/1803/1804): a phone thread in the class of Grok Bot and Dots, headed as Muse heads its own.
+   Two edges: every box and marker starts on 16 (the page's own gutter), every word in the thread on 32. One accent,
+   the ink; green only for the live dot. Two sizes, 17 to read and 13 for what is quiet. Chief speaks in grey bubbles
+   and you in ink ones; 6px inside a speaker's run, 22px when the speaker changes. A desk keeps its transcript. */
+:root { --tint: color-mix(in srgb, var(--ink) 6%, var(--bg)); --tint2: color-mix(in srgb, var(--ink) 11%, var(--bg)); --knob: color-mix(in srgb, #fff 60%, var(--bg)); }
+[data-theme='night'] { --tint: color-mix(in srgb, var(--ink) 9%, var(--bg)); --tint2: color-mix(in srgb, var(--ink) 16%, var(--bg)); --knob: color-mix(in srgb, var(--ink) 20%, var(--bg)); }
+.day-time { display: none; }
+@media (max-width: 899px) {
+  /* Muse's header: the mascot on a 56px disc, centred, over a pill with the name and the one status; the gear a round
+     button at the right; then the Chief | Office switch as a borderless pill track at the column's width. */
+  .home-bar.is-chat { margin: 0 0 4px; }
+  .home-chat .chief-hero { display: flex; flex-direction: column; gap: 12px; margin: 0; padding: 4px 0 8px; border: 0; }
+  .home-chat .ch-row { position: relative; display: grid; grid-template-columns: 1fr auto 1fr; grid-template-rows: 46px auto auto; gap: 0; justify-items: center; align-self: stretch; }
+  .home-chat .ch-row::before { content: ''; grid-column: 2; grid-row: 2 / 4; justify-self: stretch; align-self: stretch; margin: 0 -18px; border-radius: 20px; background: var(--tint); }
+  /* The disc sits on a whole CSS pixel at any width (round), so the helmet's 1px cells stay sharp at 2x and 3x. */
+  .home-chat .ch-art { grid-column: 1 / -1; grid-row: 1; position: absolute; top: 0; left: calc(50% - 28px); left: round(50% - 28px, 1px); z-index: 1; width: 56px; height: 56px; margin: 0; border-radius: 50%; background: var(--tint2); box-shadow: 0 0 0 3px var(--bg); display: grid; place-items: center; }
+  .home-chat .ch-art { padding: 0; }
+  .home-chat .ch-art .helmet { display: block; width: 40px; height: 40px; }
+  .home-chat .ch-name { grid-column: 2; grid-row: 2; align-self: auto; margin: 0; padding: 14px 0 0; font: 600 17px/22px var(--ui); }
+  .home-chat .ch-status { grid-column: 2; grid-row: 3; align-self: auto; display: block; margin: 0; padding: 0 0 10px; font: 500 13px/18px var(--ui); color: var(--ink); white-space: nowrap; }
+  .home-chat .ch-status > span { display: inline; }
+  .home-chat .ch-status i { display: inline-block; width: 7px; height: 7px; margin: 0 6px 0 0; vertical-align: 1px; background: var(--ink); }
+  .home-chat .ch-status.rest, .home-chat .ch-status.work { color: var(--ink2); }
+  .home-chat .ch-row > .icon-btn { grid-column: 3; grid-row: 1; justify-self: end; align-self: start; width: 44px; height: 44px; margin: 6px 0 0; border-radius: 50%; background: var(--tint); }
+  .home-chat .chief-hero > .home-mode { display: grid; grid-template-columns: 1fr 1fr; align-self: stretch; height: 40px; padding: 3px; gap: 0; border: 0; border-radius: 20px; background: var(--tint); box-shadow: none; }
+  .home-chat .chief-hero > .home-mode button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 34px; padding: 0; border: 0; border-radius: 17px; background: none; box-shadow: none; font: 500 13px/18px var(--ui); color: var(--mute); }
+  .home-chat .chief-hero > .home-mode button.on { background: var(--knob); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px #0000000d; }
+  .home-chat .chief-hero > .home-mode .count { background: none; padding: 0; min-width: 0; font: inherit; color: var(--mute); }
+  .day-time { display: inline; }
+  .chat .day { margin: 22px 0 14px; }
+  .chat .day span { font: 500 13px/18px var(--ui); }
+
+  /* The turns: a speaker's run sits 6px apart, a new speaker 22px down. */
+  .chat .line, .home-chat .line:has(> .line-by) { margin-top: 22px; }
+  .chat .day + .line, .chat .day + .line-wrap > .line { margin-top: 0; }
+  .chat .line-wrap:has(> .line:is(.them, .chief)) + .line-wrap > .line:is(.them, .chief),
+  .chat .line-wrap:has(> .line.me) + .line-wrap > .line.me,
+  .chat .line-wrap:has(> .line:is(.them, .chief)) + .line.them,
+  .chat .line-wrap:has(> .line.me) + .line.me,
+  .chat .line.them + .line.them, .chat .line > .card.ask { margin-top: 6px; }
+  .chat .line-wrap > .card.ask { margin-top: 22px; }
+  .chat .line:is(.them, .chief) > .bubble-text { width: fit-content; max-width: 84%; padding: 9px 16px; border-radius: 20px; background: var(--tint); font: 400 17px/24px var(--ui); text-wrap: pretty; }
+  .chat .line.me { max-width: 84%; }
+  .chat .line.me .bubble-text, [data-theme='night'] .chat .line.me .bubble-text { padding: 9px 16px; border-radius: 20px; background: var(--ink); color: var(--bg); font: 400 17px/24px var(--ui); text-wrap: pretty; }
+
+  /* A card is Chief's grey: its title 17, one quiet line 13, the evidence 17; an ink primary and ⋯, both 44px pills. */
+  .chat .card.ask { gap: 10px; padding: 14px 16px 16px; border: 0; border-radius: 20px; background: var(--tint); }
+  .chat .card.ask .ask-words, .chat .card.ask .ask-line:first-child { font: 600 17px/24px var(--ui); text-wrap: balance; }
+  .chat .card.ask .ask-lines { font: 400 13px/18px var(--ui); }
+  .chat .card.ask .ev { font: 400 17px/24px var(--ui); color: var(--ink2); gap: 4px; }
+  .chat .card.ask .ev-to, .chat .card.ask .ev-quiet, .chat .card.ask .ev-line span { font: 400 13px/18px var(--ui); }
+  .chat .card.ask .ev .link, .chat .live-head .link { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+  .chat .card.ask .btns { gap: 8px; margin-top: 2px; }
+  .chat .card.ask .btns .btn { min-height: 44px; border-radius: 22px; }
+  .chat .card.ask .btn.go { padding: 0 20px; border: 0; background: var(--ink); color: var(--bg); font: 600 17px/24px var(--ui); }
+  .chat .card.ask .more-dots { width: 56px; border: 1px solid var(--line); background: var(--tint2); color: var(--ink); }
+
+  /* The live line: the dot and the step marks on 16, every word on 32, all at 13 under the 17 of the turns. A mark is
+     the cap height of its words and stands on the first line's baseline: a check done, a turning ring now, a ring to do. */
+  .chat .live-line { padding-right: 16px; }
+  .chat .live-body { gap: 6px; }
+  .chat .live-head { align-items: baseline; gap: 2px 10px; padding-left: 16px; font: 400 13px/18px var(--ui); }
+  .chat .live-word { display: block; }
+  .chat .live-word i { display: inline-block; margin: 0 9px 0 -16px; vertical-align: 1px; }
+  .chat .live-todos { gap: 4px; }
+  .chat .live-todos li { grid-template-columns: 16px minmax(0, 1fr); gap: 0; align-items: baseline; font: 400 13px/18px var(--ui); color: var(--ink2); text-wrap: pretty; }
+  .chat .live-todos li.doing { color: var(--ink); }
+  .chat .live-todos li.todo { color: var(--mute); }
+  .chat .live-todos li .tick, .chat .live-line.working .live-todos li.doing .tick { display: block; box-sizing: border-box; width: 9px; height: 9px; margin: 0; border-radius: 50%; font-size: 0; color: inherit; }
+  .chat .live-todos li.done .tick { border-radius: 0; background: var(--ink2); -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 9 9'%3E%3Cpath d='M1 4.8 3.4 7.2 8 1.8' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 9px 9px no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 9 9'%3E%3Cpath d='M1 4.8 3.4 7.2 8 1.8' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 9px 9px no-repeat; }
+  .chat .live-todos li.doing .tick, .chat .live-line.working .live-todos li.doing .tick { border: 1.75px solid var(--ink); border-left-color: transparent; }
+  .chat .live-todos li.todo .tick { border: 1.5px solid var(--mute); }
+
+  /* The composer, Grok Bot's shapes: a round grey + on 16, a borderless grey pill with the mic inside, a round ink
+     send ending on 374. */
+  .chat .dock { padding-top: 8px; }
+  .chat .dock .composer, .chat .dock .composer.has-bar { flex-wrap: nowrap; align-items: flex-end; gap: 8px; min-height: 0; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
+  .chat .dock .composer textarea { flex: 1; min-width: 0; min-height: 44px; padding: 10px 16px; border-radius: 22px; background: var(--tint); font: 400 17px/24px var(--ui); }
+  .chat .dock .composer:has(> .mic) textarea { padding-right: 52px; }
+  .chat .dock .c-bar { flex: none; order: -1; }
+  .chat .dock .c-clip { width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%; background: var(--tint); color: var(--ink); display: grid; place-items: center; }
+  .chat .dock .c-clip:disabled { opacity: 1; }
+  .chat .dock .mic { width: 36px; height: 36px; margin: 0 4px 4px -48px; }
+  .chat .dock .send, .chat .dock .send:disabled { width: 44px; height: 44px; border-radius: 50%; background: var(--ink); color: var(--bg); font: 600 20px/1 var(--ui); transform: none; }
+
+  /* The ⋯ sheet: rules on 16, words on 32, 17 and 13. */
+  .more-sheet { background: var(--bg); }
+  .more-head { padding: 4px 16px 12px; }
+  .more-head b { font: 600 17px/24px var(--ui); text-wrap: balance; }
+  .more-row { min-height: 48px; padding: 12px 16px; font: 400 17px/24px var(--ui); }
+
+  /* First run: the same grey and sizes. */
+  .hello .lead, .hello h2.plate { font-size: 17px; line-height: 24px; }
+  .hello .idea { border: 0; border-radius: 20px; background: var(--tint); font: 500 17px/24px var(--ui); }
+  /* An empty thread's starters: Hello's rows, not chips. */
+  .chat .ideas-intro { margin: 22px 16px 0; font: 400 17px/24px var(--ui); }
+  .chat .chips.center { flex-direction: column; gap: 6px; margin: 22px 0 0; }
+  .chat .chips.center .chip { width: 100%; padding: 10px 16px; border: 0; border-radius: 20px; background: var(--tint); font: 500 17px/24px var(--ui); color: var(--ink); }
+}

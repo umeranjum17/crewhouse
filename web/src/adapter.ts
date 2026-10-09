@@ -63,9 +63,11 @@ export const phoneOffer = (page: Json): { qr: string; typed: string; expires: nu
 export type App = { id: string; name: string; logo: string; on: boolean; does: string; warns?: boolean };
 
 // ---------- words ----------
+/** "8:02 pm": the time alone (a phone's day line carries it, "Today 8:02 pm"). */
+export const timeOf = (t: number) => new Date(t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).toLowerCase();
 export const clock = (t: number) => {
   const d = new Date(t);
-  const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).toLowerCase();
+  const time = timeOf(t);
   if (d.toDateString() === new Date().toDateString()) return time;
   return Math.abs(t - Date.now()) < 6 * 86_400_000 ? `${d.toLocaleDateString([], { weekday: 'short' })} ${time}` : `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })}, ${time}`;
 };

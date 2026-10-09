@@ -8,6 +8,7 @@
 // ?demo=office (Home's office with first looks on the desks), ?demo=calm (nothing on the go), ?demo=finished (the quiet just after a job lands),
 // ?demo=fresh (the Chief-only Home a new person gets: no helpers hired yet, nothing to hand over),
 // ?demo=crew1, crew5, crew12, crew30 (the office at that many helpers).
+// ?demo=live (Scout part way down Saturday's dinner plan, live under Chief's thread).
 // ?demo=building (Scribe mid-build: the question answered, the workbook not yet delivered).
 // ?demo=longthread (a signed-out thread long enough to scroll, for the thread-clear regression test).
 // &slowaccounts holds the accounts answer 3 s (the real engine's sign-in check is that slow).
@@ -278,6 +279,20 @@ if (variant === 'job-plan') pages.chief.messages.push({ id: 71, author: 'person'
   { id: 72, author: 'chief', text: 'Happy to, Maya. Scout will take it; here is how, before anything starts.' });
 if (variant === 'room') pages.chief.messages.push({ id: 70, author: 'bot', text: 'All done, Maya. Scout: three stories. Scribe: a newsletter draft waiting for your yes.' });
 if (fresh) pages.chief = { messages: [] };
+// ?demo=live: Chief has passed Saturday's dinner to Scout, part way down the plan: the live line under Chief's thread
+// with steps done, doing and still to do. Each turn is timed, so the day line carries its time.
+if (variant === 'live') {
+  const job = task(47, 'scout', 'Somewhere nice for dinner on Saturday', 'working', { origin: 'chief', created_at: now - 2 * min,
+    body: 'Maya said Go to:\n1. Look for places near home open Saturday evening\n2. Check reviews and a table at 7:30\n3. Send you the best two' });
+  Object.assign(bots.find((b) => b.id === 'scout')!, { task: job, step: { kind: 'task.progress', at: now - min, data: { text: 'Check reviews and a table at 7:30' } } });
+  state.tasks.unshift(job);
+  events.push(ev(30, 2, 'task.created', 'scout', { task: 47, title: job.title, origin: 'chief' }),
+    ev(31, 1.5, 'task.progress', 'scout', { task: 47, text: 'Look for places near home open Saturday evening' }),
+    ev(32, 1, 'task.progress', 'scout', { task: 47, text: 'Check reviews and a table at 7:30' }));
+  const [hi, saturday, , weekday, pip] = pages.chief.messages;
+  pages.chief.messages = [[hi, 14], [weekday, 12], [pip, 10], [saturday, 2.5], [{ id: 6, author: 'chief', text: 'Of course. Scout is on it now.' }, 2.4]]
+    .map(([m, ago]) => ({ ...m, at: now - ago * min }));
+}
 // ?demo=longthread: a signed-out thread long enough to scroll, for the thread-clear regression test:
 // every provider button and every line must clear the bars and the composer at any scroll position.
 if (variant === 'longthread') for (let i = 0; i < 12; i++) pages.chief.messages.push(

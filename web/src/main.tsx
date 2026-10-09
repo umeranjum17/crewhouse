@@ -307,7 +307,7 @@ function ChiefHero({ live, state, signedOut, side, below }: { live: A.OfficeView
   return (
     <section className="chief-hero" aria-label="Chief">
       <div className="ch-row">
-        <span className="ch-art"><ChiefArt mood={chief.mood} d={9} hero whole /></span>
+        <span className="ch-art"><ChiefArt mood={chief.mood} hero disc /></span>
         <h2 className="ch-name">Chief</h2>
         <p className={`ch-status${out || needs ? '' : resting ? ' rest' : ' work'}`}><i aria-hidden /><span>{out ? NEEDS_SIGNIN : needs ? 'Needs you' : resting ? 'Resting' : 'At work'}</span></p>
         {side}
@@ -569,7 +569,7 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
   // The top of the thread (crewd sends the newest 200): who this is, before the first line.
   const start = !!page && !around && (page.messages?.length ?? 0) < 200;
   let day = '';
-  const dayOf = (t?: number) => { if (!t) return null; const d = A.dayLabel(t); if (d === day) return null; day = d; return <div className="day" role="separator"><span>{d}</span></div>; };
+  const dayOf = (t?: number) => { if (!t) return null; const d = A.dayLabel(t); if (d === day) return null; day = d; return <div className="day" role="separator"><span>{d}<span className="day-time"> {A.timeOf(t)}</span></span></div>; };
   return (
     <div className={`chat${live && h ? ' with-live' : ''}`}>
       <div className="lines" ref={box}>
