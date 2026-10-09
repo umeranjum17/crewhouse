@@ -59,19 +59,15 @@ export async function tailscalePeer(ip: string, bin = 'tailscale'): Promise<bool
 
 /** The routes a phone reaches this computer by, as it reports them (`GET /api/reach {via}`). */
 const ROUTES = ['home', 'tailscale', 'relay'];
-
 /** Every notification says only this; the phone fetches the words over the link (the relay enforces it too). */
 export const NEWS = 'Crewhouse has news';
 const WEB_DEVICE = 'web'; // the person's browser holds no link grant; a paired phone keeps its own grant id
 const UPDATE_APP = 'Get the latest Crewhouse app to keep chatting.', currentPhone = (body: any) => body?.build === 'p9b';
 /** The relay's WebSocket origin, from the https/wss address Settings keeps. */
 const wsOrigin = (url: string) => url.replace(/^http/, 'ws');
-
 const pushOf = (v?: string) => (v === 'missing' || v === 'off' ? v : v ? 'on' : undefined);
-
 /** A phone waiting at the computer for the person's yes: its name and the two words both screens show. */
 type Asking = { id: number; name: string; words: string; role: Role; offer?: string; answer: (yes: boolean) => void };
-
 export class Link {
   host!: Host;
   private servers = new Map<string, Server>(); // one listener per bound address
@@ -190,10 +186,8 @@ export class Link {
   private put(key: string, value: string) { this.db.run('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', key, value); }
   /** When a phone last reached this computer by each route: `{home?, tailscale?, relay?}`. */
   private reached(id: string): Record<string, number> { return JSON.parse(this.setting(`phone.reach.${id}`) ?? '{}'); }
-
   get lan() { return this.db.get("SELECT value FROM settings WHERE key = 'link.lan'")?.value === '1'; }
   hosts() { return linkHosts(this.cfg.linkHost, this.lan || Date.now() < this.pairing, this.ifaces(), this.tailnetIPs); }
-
   /** Listen on exactly the addresses `hosts()` names now, then tell paired phones if where to dial changed.
    *  Rerun when the LAN setting changes, and every half minute for Tailscale coming up or the home address moving. */
   async bind() {
@@ -254,7 +248,6 @@ export class Link {
 
   /** The person's own relay, from Settings, else CREWHOUSE_RELAY. Empty (the default): no relay. */
   get relay(): string { return this.db.get("SELECT value FROM settings WHERE key = 'link.relay'")?.value ?? this.cfg.relay; }
-
   /** An `https://` or `wss://` address (`http`/`ws` for a relay on the home network or Tailscale); '' turns the relay
    *  off; null goes back to CREWHOUSE_RELAY. */
   setRelay(url: string | null, enrol?: string) {
@@ -295,10 +288,8 @@ export class Link {
 
   /** The address a phone dials through the relay, or none. */
   relayUrl() { return this.relay && this.host ? linkUrl(this.relay, this.host.id) : ''; }
-
   /** Set by the server: what a phone's desktop stream talks to. */
   desk?: Desk;
-
   /** A phone watching (and, holding the controls, driving) a bot's screen: one JSON message per line each way,
    *  {id, method, params} in and {id, result | error} or {event} out, as on the computer's own socket. */
   private desktop(s: import('@byokit/link').LinkStream, args: any, g: Grant) {
@@ -329,7 +320,7 @@ export class Link {
    *  quiet hours the push is held (kept in the store, so a restart keeps it) and `sendHeld` sends one when they end. */
   private async tell(id: string) {
     if (this.quiet()) return void this.db.run("INSERT INTO settings (key, value) VALUES (?, '1') ON CONFLICT(key) DO NOTHING", 'push.held.1');
-    const to = [...this.host.devices().map((g) => g.id), ...(this.setting('push.web') ? [WEB_DEVICE] : [])];
+    const to = [...this.host.devices().map((g) => g.id), ...(this.webs().length ? [WEB_DEVICE] : [])];
     const phones = to.map((d) => [d, this.setting(`phone.push.${d}`)]).filter(([, t]) => isExpoToken(t));
     if (phones.length) await this.expo(id, phones as [string, string][]).catch((e) => console.error('push:', e.message));
     // A browser's Web Push address is kept on the person's relay, which holds the key for it.
@@ -404,10 +395,12 @@ export class Link {
       seen: g.lastSeen ?? g.created, online: g.online, reached: this.reached(g.id), push: pushOf(this.setting(`phone.push.${g.id}`)) }));
   }
 
+  private webs(): string[] { return JSON.parse(this.setting('push.web') || '[]'); }
   async setWebPush(sub: any) {
-    if (sub?.off === true) { this.put('push.web', ''); await this.client?.unsubscribe(WEB_DEVICE); return; }
+    const end = sub?.web?.endpoint, webs = this.webs();
+    if (sub?.off === true) { this.put('push.web', JSON.stringify(end ? webs.filter((e) => e !== end) : [])); return void await this.client?.unsubscribe(WEB_DEVICE, end ? sub.web : undefined); }
     if (!this.client || typeof sub?.web !== 'object') throw Object.assign(new Error('no relay for notifications'), { status: 409 });
-    await this.client.subscribe(WEB_DEVICE, { web: sub.web }); this.put('push.web', '1');
+    await this.client.subscribe(WEB_DEVICE, { web: sub.web }); this.put('push.web', JSON.stringify([...new Set([...webs, end])]));
   }
   async revoke(id: string) {
     if (!this.host.devices().some((g) => g.id === id)) throw Object.assign(new Error('no such device'), { status: 404 });

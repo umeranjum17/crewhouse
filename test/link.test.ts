@@ -546,3 +546,24 @@ test('phones, push and quiet hold survive a restart after the P1 migration', asy
     assert.equal((await http('POST', '/api/accounts/1/chatgpt/ask-owner')).status, 404);
   } finally { a.link.stop(); b.link.stop(); view.link.stop(); }
 });
+
+test('one browser turning notifications off leaves the other browsers addressed', async () => {
+  const db = new Store(temp('crewhouse-web-off'));
+  const calls: any[] = [];
+  const link = Object.assign(new Link({} as any, db, async () => null) as any, {
+    client: { vapidKey: 'BFx-key', subscribe: async (d: string, s: any) => calls.push(['subscribe', d, s]), unsubscribe: async (d: string, s?: any) => calls.push(['unsubscribe', d, s]), notify: async (n: any) => { calls.push(['notify', n]); return {}; } },
+    relayStatus: 'online', host: { devices: () => [] },
+  });
+  const laptop = { endpoint: 'https://fcm.example/laptop', keys: {} }, phone = { endpoint: 'https://fcm.example/phone', keys: {} };
+  await link.setWebPush({ web: laptop });
+  await link.setWebPush({ web: phone });
+  await link.setWebPush({ off: true, web: laptop });
+  assert.deepEqual(calls.at(-1), ['unsubscribe', 'web', laptop]);
+  await link.tell('e1');
+  assert.deepEqual(calls.at(-1)[1].to, ['web'], 'the phone browser still hears the news');
+  await link.setWebPush({ off: true, web: phone });
+  calls.length = 0;
+  await link.tell('e2');
+  assert.deepEqual(calls, [], 'no browser left addressed: nothing goes to the relay');
+  db.close();
+});
