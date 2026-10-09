@@ -23,7 +23,10 @@ export async function pair(text: string, onWords: (w: string) => void) {
   const o = { name: deviceName(), onWords };
   if (t.kind === 'unknown') throw new Error('That code is missing a part. Copy the whole code from your computer, then try again.');
   let grant: DeviceGrant;
-  if (t.kind === 'relay') grant = await pairWithCode(await findHost(t.base, t.short), t.code, o);
+  // A relay that is off fails the fetch itself ('Failed to fetch'), so the person gets the app's words instead.
+  if (t.kind === 'relay') grant = await pairWithCode(await findHost(t.base, t.short).catch((e) => {
+    throw e instanceof TypeError ? new Error("Could not reach your computer's relay. Check it is on and try again.") : e;
+  }), t.code, o);
   // A direct code dials the computer's own addresses, so off its network it can't get through; the relay's code can.
   else grant = await pairWithOffer(offerText(decodeOffer(t.text)), o).catch((e) => {
     throw e instanceof LinkError && e.code === 'unreachable' ? new Error(`${e.message} On another network? Paste the second code the command printed instead.`) : e;

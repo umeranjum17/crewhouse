@@ -17,6 +17,7 @@ import { browserBin } from '../src/desktop.ts';
 import { startRelay } from '../relay/main.ts';
 import { temp } from './tmp.ts';
 import { until } from './lab.ts';
+import { pair } from '../web/src/link.ts';
 
 const repo = join(import.meta.dirname, '..');
 const bin = browserBin();
@@ -126,4 +127,8 @@ test('the public demo app pairs by a relay code or a direct code, opens on real 
   // At home: the long direct code, as the first line `./crewhouse phones code` prints.
   await pair((await http('POST', '/api/phones/pair', { role: 'control' })).typed);
   assert.equal(await devices(), 1);
+});
+
+test('a well-formed code whose relay cannot be reached says so in plain words and pairs nothing', async () => {
+  await assert.rejects(pair('VBF8PJ-G4S7-KC97-H5GM@http://127.0.0.1:1', () => {}), { message: "Could not reach your computer's relay. Check it is on and try again." });
 });
