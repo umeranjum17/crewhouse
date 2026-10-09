@@ -21,9 +21,7 @@ const HELP = [
 type Event = { id: string; start: Date; end: Date; allDay: boolean; title: string; where: string };
 type Token = () => Promise<string | null>;
 
-const pad = (n: number) => String(n).padStart(2, '0'), ymd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-const hm = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`, addDays = (d: Date, n: number) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n, d.getHours(), d.getMinutes());
-const plain = (s: unknown, n = 80) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n);
+const pad = (n: number) => String(n).padStart(2, '0'), ymd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`, hm = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`, addDays = (d: Date, n: number) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n, d.getHours(), d.getMinutes()), plain = (s: unknown, n = 80) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n);
 
 /** "2026-10-03", "today", "tomorrow", optionally followed by " HH:MM" or "THH:MM", in this computer's time zone. */
 export function parseWhen(s: string): { at: Date; allDay: boolean } | null {
@@ -48,9 +46,7 @@ export function table(name: string, fields: string[], rows: Record<string, strin
 }
 
 const toEvent = (e: any): Event => {
-  const allDay = !e.start?.dateTime;
-  const start = allDay ? parseWhen(e.start?.date ?? '')?.at ?? new Date(NaN) : new Date(e.start.dateTime);
-  const end = allDay ? parseWhen(e.end?.date ?? '')?.at ?? addDays(start, 1) : new Date(e.end?.dateTime ?? start);
+  const allDay = !e.start?.dateTime, start = allDay ? parseWhen(e.start?.date ?? '')?.at ?? new Date(NaN) : new Date(e.start.dateTime), end = allDay ? parseWhen(e.end?.date ?? '')?.at ?? addDays(start, 1) : new Date(e.end?.dateTime ?? start);
   return { id: String(e.id), start, end, allDay, title: plain(e.summary) || 'Busy', where: plain(e.location, 60) };
 };
 
@@ -99,9 +95,7 @@ export async function runCalendar(token: Token, args: string[]): Promise<string>
   if (cmd === 'week') {
     const from = o.from ? parseWhen(o.from) : { at: today };
     if (!from) return bad(`"${o.from}" is not a day`);
-    const start = new Date(from.at.getFullYear(), from.at.getMonth(), from.at.getDate());
-    const list = await events(token, start, addDays(start, 7));
-    const clashes = list.filter((e) => !e.allDay).filter((e, i, t) => t.slice(0, i).some((p) => p.end > e.start)).length;
+    const start = new Date(from.at.getFullYear(), from.at.getMonth(), from.at.getDate()), list = await events(token, start, addDays(start, 7)), clashes = list.filter((e) => !e.allDay).filter((e, i, t) => t.slice(0, i).some((p) => p.end > e.start)).length;
     return [table('events', ['id', 'when', 'title', 'where'], list.map((e) => ({ id: e.id, when: whenOf(e), title: e.title, where: e.where }))),
       `total: ${list.length}`, `clashes: ${clashes}`].join('\n');
   }
@@ -143,10 +137,7 @@ export async function runCalendar(token: Token, args: string[]): Promise<string>
     if (cmd === 'cancel') { await call(token, 'DELETE', `/${id}`); return `cancelled: {id: ${id}}`; }
     const to = parseWhen(rest[1] ?? '');
     if (!to) return bad('calendar move <id> <when>');
-    const e = toEvent(await call(token, 'GET', `/${id}`));
-    const days = Math.max(1, Math.round((e.end.getTime() - e.start.getTime()) / 86_400_000));
-    const end = to.allDay ? addDays(to.at, e.allDay ? days : 1) : new Date(to.at.getTime() + (e.allDay ? 3_600_000 : e.end.getTime() - e.start.getTime()));
-    const moved = toEvent(await call(token, 'PATCH', `/${id}`, span(to.at, to.allDay, end)));
+    const e = toEvent(await call(token, 'GET', `/${id}`)), days = Math.max(1, Math.round((e.end.getTime() - e.start.getTime()) / 86_400_000)), end = to.allDay ? addDays(to.at, e.allDay ? days : 1) : new Date(to.at.getTime() + (e.allDay ? 3_600_000 : e.end.getTime() - e.start.getTime())), moved = toEvent(await call(token, 'PATCH', `/${id}`, span(to.at, to.allDay, end)));
     return `moved: {id: ${moved.id}, when: ${whenOf(moved)}}`;
   }
   return bad(`no command "${cmd}"`);
