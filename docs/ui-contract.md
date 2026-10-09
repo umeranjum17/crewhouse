@@ -119,7 +119,7 @@ A sign-in that fails ends as `signIn: {state: 'failed', error, why?}`: `why: 'de
 
 ## Herdr setup (today)
 
-On the computer's Apps screen (`#/apps`), Plugins has one Herdr row. `GET /api/herdr` returns `{ready, connected, howto}` on demand, never in the snapshot: `ready` means the binary was found; `connected` requires `herdr status server --json` to report `running: true`. The asynchronous probe is bounded to five seconds. `adapter.herdr()` maps missing to the manifest's install instructions + Retry, installed but not answering to Open Herdr once + Retry, and answering to On. Only the CTO template grants the tool by default; the row reports setup, not a helper's grant. User setup is in [README.md](../README.md#a-crew-you-can-grow).
+On the computer's Apps screen (`#/apps`), Plugins has one Herdr row. `GET /api/herdr` returns `{ready, connected, howto}` on demand, never in the snapshot: `ready` means the binary was found; `connected` requires `herdr status server --json` to report `running: true`. The asynchronous probe is bounded to five seconds. `adapter.herdr()` maps missing to the manifest's install instructions + Connect + Retry, installed but not answering to Open Herdr once + Connect + Retry, and answering to On. Connect opens herdr.dev in a new tab; Retry re-probes. Only the CTO template grants the tool by default; the row reports setup, not a helper's grant. User setup is in [README.md](../README.md#a-crew-you-can-grow).
 
 ## Skills (today)
 
