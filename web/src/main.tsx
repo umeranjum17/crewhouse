@@ -631,13 +631,15 @@ const TICK: Record<A.LiveTodo['state'], string> = { done: '✓', doing: '', todo
 const QUIET_MS = 4000;
 function LiveRow({ ln, quiet }: { ln: A.LiveLine; quiet: boolean }) {
   const link = ln.helper && <a className="link" href={`#/h/${ln.helper}`}>Open chat ›</a>;
+  // A crew member waiting on the person reads the neutral "Waiting"; only Chief's own line says "Needs you".
+  const word = ln.state === 'needs' && !ln.chief ? 'Waiting' : LIVE_WORD[ln.state];
   // Chief's own reply done in under a second says nothing worth a line (Main1780b): "Done · 0 s" goes.
   if (ln.took !== undefined) return ln.state === 'done' && ln.took < 1000 && !ln.helper ? null : <div className={`live-end ${ln.state}`} role="status">
-    <span>{ln.helper ? `${ln.who} · ${LIVE_WORD[ln.state].toLowerCase()}` : LIVE_WORD[ln.state]} · {A.took(ln.took)}{ln.count ? ` · ${ln.count} ${ln.count === 1 ? 'step' : 'steps'}` : ''}</span>{link}</div>;
+    <span>{ln.helper ? `${ln.who} · ${word.toLowerCase()}` : word} · {A.took(ln.took)}{ln.count ? ` · ${ln.count} ${ln.count === 1 ? 'step' : 'steps'}` : ''}</span>{link}</div>;
   // One quiet line over the to-do: who, the state and the clock in plain type, then the helper's chat (Main1777).
   return <div className={`line them live-line ${ln.state}`}>
     <div className="live-body">
-      <div className="live-head"><span className="live-word"><i aria-hidden /><span>{ln.who} · {LIVE_WORD[ln.state].toLowerCase()} · <span aria-hidden>{A.took(Date.now() - ln.since)}</span>{quiet && <span role="status"> · still working</span>}</span></span>{link}</div>
+      <div className="live-head"><span className="live-word"><i aria-hidden /><span>{ln.who} · {word.toLowerCase()} · <span aria-hidden>{A.took(Date.now() - ln.since)}</span>{quiet && <span role="status"> · still working</span>}</span></span>{link}</div>
       <ol className="live-todos" aria-live="polite">{ln.todos.map((s) => <li key={`${s.at}-${s.text}`} className={s.state}>
         <span className={`tick ${s.state}`} aria-hidden>{TICK[s.state]}</span><span>{s.text}</span></li>)}</ol>
       {!!ln.detail.length && <details className="live-detail"><summary>Show the small steps ({ln.detail.length})</summary>

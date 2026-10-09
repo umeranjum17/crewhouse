@@ -1128,7 +1128,7 @@ export type LiveStep = { text: string; at: number };
 /** One row of the to-do list: done (it happened), doing (the current focus) or todo (an approved plan step still ahead).
  *  Every row names the thing it acts on; nothing repeats. The small tool calls live in `detail`, behind the expand. */
 export type LiveTodo = { text: string; state: 'done' | 'doing' | 'todo'; at: number };
-export type LiveLine = { who: string; helper?: string; todos: LiveTodo[]; detail: LiveStep[]; since: number;
+export type LiveLine = { who: string; helper?: string; chief?: boolean; todos: LiveTodo[]; detail: LiveStep[]; since: number;
   state: 'reading' | 'working' | 'needs' | 'waiting' | 'done' | 'failed' | 'unsure'; took?: number; count?: number;
   /** Client time of the run's last event of any kind, streamed words included: a silence counts from here. */
   heard?: number };
@@ -1191,7 +1191,7 @@ export function liveLine(o: { id: string; name: string; crew: { id: string; name
   if (state === 'done' || state === 'failed' || state === 'unsure') {
     // An end shows only when it happened while you watched; an old job is just its reply.
     if (!ended?.seen) return null;
-    return { who, helper: helper?.id, todos: [], detail: [], since: start, state, took: at(ended.at) - (created ? at(created.at) : at(t.created_at)),
+    return { who, helper: helper?.id, chief: t.bot === 'chief', todos: [], detail: [], since: start, state, took: at(ended.at) - (created ? at(created.at) : at(t.created_at)),
       count: own.filter((e) => e.kind === 'run.tool').length };
   }
   // Nothing narrated yet: the distinct things it tried are the list, latest last; the rest stays in the expand.
@@ -1201,7 +1201,7 @@ export function liveLine(o: { id: string; name: string; crew: { id: string; name
   todos.forEach((x, i) => { x.state = i < todos.length - 1 ? 'done' : 'doing'; });
   for (const p of planOf(t.body)) if (p && !said.has(p)) { said.add(p); todos.push({ text: p, state: 'todo', at: start }); }
   // A progress note rides both rows (the call and the note); the list said it, so the expand must not repeat it.
-  return { who, helper: helper?.id, todos, detail: detail.filter((d) => !said.has(d.text)), since: start, state,
+  return { who, helper: helper?.id, chief: t.bot === 'chief', todos, detail: detail.filter((d) => !said.has(d.text)), since: start, state,
     heard: Math.max(start, writing ?? 0, o.last?.get(t.id) ?? 0, ...own.map(when)) };
 }
 
