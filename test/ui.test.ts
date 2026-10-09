@@ -2035,7 +2035,7 @@ test('the paired installed app keeps notifications: its key comes over the link,
   assert.match(main, /<NotifyLine relay=\{relay\} norelay="Your computer has no mailbox for notifications yet\./, 'no mailbox is said in plain words, not a broken toggle');
   assert.match(main, /<NotifyLine relay=\{!!link\.relay\} norelay="Turn on your mailbox below first/, 'the Phones screen keeps its own switch');
   // One line, state and the one action that changes it — never two links and no state.
-  assert.match(main, /Notifications: \{on \? 'On' : 'Off'\}/, 'the line names the state');
+  assert.match(main, /Notifications: \{on \? 'On' : 'Off'\} · /, 'the line names the state, separated from its one action');
   assert.match(main, /\{on \? 'Turn off' : 'Turn on'\}/, 'and carries exactly one action');
   assert.match(readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'pwa.ts'), 'utf-8'), /Notification\.permission === 'denied'/, 'pushState names the browser-blocked state');
   assert.match(main, /blocked in this browser\. Allow them for this app in the browser’s own settings/, 'the blocked state says how to unblock, with no dead button');

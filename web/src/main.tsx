@@ -1079,7 +1079,7 @@ function NotifyLine({ relay, norelay }: { relay: boolean | null; norelay: string
   if (state === 'denied') return <p className="mute small">Notifications are blocked in this browser. Allow them for this app in the browser’s own settings, then try again.</p>;
   if (relay === false) return <p className="mute small">Notifications on this device: {norelay}</p>;
   const on = state === 'on';
-  return <p className="mute small">Notifications: {on ? 'On' : 'Off'} <button className={`link inline notify-${on ? 'off' : 'on'}`} onClick={() => attempt(async () => {
+  return <p className="mute small">Notifications: {on ? 'On' : 'Off'} · <button className={`link inline notify-${on ? 'off' : 'on'}`} onClick={() => attempt(async () => {
     if (on) { await turnOffNotifications(); toast('Notifications are off on this device.'); }
     else {
       const r = await turnOnNotifications(relay === true);
