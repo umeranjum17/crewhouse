@@ -1,11 +1,10 @@
 // The installed-app layer for the web shell: the service worker, web push through the person's own relay, and the
 // home-screen badge. Framework-free, and it owns no provider: crewd holds the relay's key and subscription, and the
 // app only carries a subscription back to it (src/link.ts, POST /api/push).
-import { api } from './api.ts';
+import { api, demo } from './api.ts';
 
 type Badging = Navigator & { setAppBadge?: (n?: number) => Promise<void>; clearAppBadge?: () => Promise<void> };
-const demo = () => typeof location !== 'undefined' && new URLSearchParams(location.search).has('demo');
-const canServe = () => typeof navigator !== 'undefined' && 'serviceWorker' in navigator && !demo();
+const canServe = () => typeof navigator !== 'undefined' && 'serviceWorker' in navigator && !demo;
 
 /** Register the shell worker for an offline cold start; harmless where the browser has none. */
 export function startWorker() {
@@ -14,6 +13,7 @@ export function startWorker() {
 
 /** Mirror the app's unread count onto the home-screen icon (0 clears it). */
 export function setBadge(n: number) {
+  if (demo) return;
   const nav = (typeof navigator === 'undefined' ? {} : navigator) as Badging;
   void (n > 0 ? nav.setAppBadge?.(n) : nav.clearAppBadge?.())?.catch(() => {});
 }
@@ -28,6 +28,7 @@ export async function turnOnNotifications(): Promise<'on' | 'off' | 'unsupported
   const reg = await navigator.serviceWorker.ready;
   const { vapid, ready } = await api.pushKey();
   if (!vapid || !ready) return 'norelay';
+  await (await reg.pushManager.getSubscription())?.unsubscribe();
   const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(vapid) });
   await api.push({ web: sub.toJSON() });
   return 'on';

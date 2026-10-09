@@ -38,8 +38,11 @@ sw.addEventListener('fetch', (e) => {
   if (req.mode === 'navigate') {
     // A reachable computer always wins, so an update shows on the next visit; the cached shell is the offline floor.
     e.respondWith((async () => {
-      try { const fresh = await fetch(req); void (await caches.open(__CACHE__)).put(SHELL, fresh.clone()); return fresh; }
-      catch { return (await caches.match(SHELL)) ?? Response.error(); }
+      try {
+        const fresh = await fetch(req);
+        if (url.pathname === SHELL && fresh.ok) void (await caches.open(__CACHE__)).put(SHELL, fresh.clone());
+        return fresh;
+      } catch { return (await caches.match(SHELL)) ?? Response.error(); }
     })());
     return;
   }
@@ -55,10 +58,8 @@ sw.addEventListener('fetch', (e) => {
 
 sw.addEventListener('push', (e) => {
   // The relay's push is content-free: only "Crewhouse has news". The words wait on the person's computer.
-  let title = 'Crewhouse has news', url = SHELL;
-  try { const d = e.data?.json(); if (d?.title) title = d.title; if (d?.url) url = d.url; } catch { /* a bare push still shows the default */ }
   e.waitUntil((async () => {
-    await sw.registration.showNotification(title, { body: 'Open Crewhouse to see what your crew did.', icon: '/icon-192.png', badge: '/notify-96.png', tag: 'crewhouse', data: { url } });
+    await sw.registration.showNotification('Crewhouse has news', { body: 'Open Crewhouse to see what your crew did.', icon: '/icon-192.png', badge: '/notify-96.png', tag: 'crewhouse' });
     await sw.navigator.setAppBadge?.(); // the icon gets a dot; the app sets the real count when it is open
   })());
 });

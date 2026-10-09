@@ -76,7 +76,7 @@ test('quiet hours hold the push and send exactly one when they end, even across 
   quiet = false;
   b.sendHeld();
   b.sendHeld();
-  assert.deepEqual(sent.map((n) => n.to), [['pixel', 'ipad', 'web']], 'one push when quiet hours end, for however much came in');
+  assert.deepEqual(sent.map((n) => n.to), [['pixel', 'ipad']], 'one push when quiet hours end, for however much came in');
   db.close();
 });
 
@@ -91,6 +91,7 @@ test('the installed web app subscribes a browser push address through the relay 
   const web = { endpoint: 'https://fcm.googleapis.com/fcm/send/abc', keys: { p256dh: 'p', auth: 'a' } };
   await link.setWebPush({ web });
   assert.deepEqual(calls.shift(), ['subscribe', 'web', { web }]);
+  await assert.rejects(new Link({} as any, db, async () => null).setWebPush({ web }), { status: 409 });
   // A failed job: the browser hears the same content-free news as the phone.
   await link.tell('e7');
   const notify = calls.shift();

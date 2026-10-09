@@ -25,7 +25,7 @@ context; loopback (`http://127.0.0.1:$PORT`) qualifies.
 
 - **Register.** `eval "() => navigator.serviceWorker.getRegistration().then(r => !!r && !!navigator.serviceWorker.controller)"` is true after a second load.
 - **Offline cold reload.** `chrome-devtools-axi emulate --network Offline`, then `page.open` the app: it returns 200 and the page renders (the app's offline screen), not `ERR_INTERNET_DISCONNECTED`; capture at 390 and 1440, day and night.
-- **Push.** `chrome-devtools-axi` has no push command; deliver one over CDP the way DevTools' Push button does: `ServiceWorker.deliverPushMessage {origin, registrationId, data: '{"title":"Crewhouse has news"}'}` (grant `notifications` first), then `getNotifications()` shows the notification. `data/evidence/ch-pwa-sw/push-proof.mjs` is a worked script.
+- **Push.** `chrome-devtools-axi` has no push command; deliver one over CDP the way DevTools' Push button does: `ServiceWorker.deliverPushMessage {origin, registrationId, data: '{"title":"Crewhouse has news"}'}` (grant `notifications` first), then `getNotifications()` shows the notification.
 - **Badge.** Spy `navigator.setAppBadge`/`clearAppBadge`, create one pending ask (a helper writing a file outside its home), let the app refresh: it calls `setAppBadge(1)`; answer the ask and it calls `clearAppBadge()`.
 
 ## Gotchas
