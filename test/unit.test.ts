@@ -146,6 +146,19 @@ test('policy: own space and the sandboxed shell run silently; the person\'s file
   assert.deepEqual([pay.kind, pay.words, pay.key, pay.cost], ['spend', 'Maya wants to make a paid lookup with people search, up to $0.05.', undefined, 0.05], 'spending has no standing key');
   assert.deepEqual(effectOf('people_search', { args: ['catalog', 'search', 'phone'] }, s), { kind: 'safe' });
   assert.equal(effectOf('people_search', { args: ['logout'] }, s).kind, 'refuse');
+  // Herdr drives the person's own terminal agents: looking asks once (a standing answer covers later
+  // looks); driving names its pane or agent and the command, and asks every time.
+  const herd = JSON.parse(readFileSync(join(import.meta.dirname, '..', 'tools', 'herdr', 'tool.json'), 'utf8'));
+  assert.deepEqual([herd.source, herd.bins, herd.grant], ['system', ['herdr'], { default: false }], 'a user-installed binary, never bundled, held only by its role');
+  const hs = { ...s, run: { herdr: { name: herd.name, ...herd.run } } };
+  const look = effectOf('herdr', { args: ['pane', 'list'] }, hs) as any;
+  assert.deepEqual([look.kind, look.words, look.key], ['files', 'Maya wants to look at your terminal agents.', 'herdr:look'], 'reads ask once, under a standing answer');
+  assert.equal(coversOf(look.key), 'your terminal agents');
+  const drive = effectOf('herdr', { args: ['agent', 'prompt', 'reviewer', 'ship it'] }, hs) as any;
+  assert.deepEqual([drive.kind, drive.key], ['send', undefined], 'drives ask every time: no standing key');
+  assert.match(drive.words, /prompt.*reviewer/, 'the card names the agent and the command');
+  assert.match((effectOf('herdr', { args: ['pane', 'run', 'w1:p1', 'pytest'] }, hs) as any).words, /run.*w1:p1/, 'the card names the pane and the command');
+  assert.equal(effectOf('herdr', { args: ['server', 'stop'] }, hs).kind, 'refuse', 'anything else is refused');
   assert.equal(effectOf('browser', { args: ['click', 'e1'] }, s).kind, 'send');
   assert.equal(effectOf('browser', { args: ['snapshot', '--query', 'inbox'] }, s).kind, 'safe');
   // The browser's own reach: only web pages, its own space for files, and crewd's choice of browser and session.

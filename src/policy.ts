@@ -8,7 +8,7 @@ export type Effect =
   | { kind: 'refuse'; why: string }
   /** `key` is what "For this task" and "Always" remember (spending has none, so it asks every time); `cost` caps a spend in dollars when stated up front. */
   | { kind: 'files' | 'send' | 'spend' | 'delete'; words: string; key?: string; covers?: string; cost?: number;
-      preview?: { head: string; body: string }; press?: boolean; fill?: boolean };
+      preview?: { head: string; body: string; verbatim?: boolean }; press?: boolean; fill?: boolean };
 
 export interface Seen {
   bot: string;
@@ -144,6 +144,16 @@ export function effectOf(tool: string, input: Record<string, any>, s: Seen): Eff
   if (cli) {
     const args = (Array.isArray(input.args) ? input.args : []).map(String).join(' ');
     const starts = (p: string) => args === p || args.startsWith(p + ' ');
+    // Herdr is the person's own terminal agents: looking asks once (a standing answer covers later
+    // looks); driving names its pane or agent and the command, and asks every time.
+    if (tool === 'herdr') {
+      const argv = (Array.isArray(input.args) ? input.args : []).map(String);
+      const matches = (p: string) => p.split(' ').every((part, i) => argv[i] === part);
+      const shown = JSON.stringify(argv).replace(/[^\x20-\x7e]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`);
+      if (cli.spend.some(matches)) return { kind: 'send', words: `${s.bot} wants to drive your terminal agents: ${shown}.`, preview: { head: 'Exact terminal arguments', body: shown, verbatim: true } };
+      if (cli.free.some(matches)) return { kind: 'files', words: `${s.bot} wants to look at your terminal agents.`, key: 'herdr:look' };
+      return { kind: 'refuse', why: 'Herdr here lists and reads panes and agents, and drives them with their own commands.' };
+    }
     if (cli.spend.some(starts)) {
       const cap = /max-cost:\s*\$?([\d.]+)/i.exec(args)?.[1];
       return { kind: 'spend', words: `${s.bot} wants to make a paid lookup with ${cli.name}${cap ? `, up to $${cap}` : ''}.`, ...(cap ? { cost: Number(cap) } : {}) };
@@ -198,7 +208,7 @@ export function coversOf(key: string) {
   const [kind, ...rest] = key.split(':');
   const what = rest.join(':');
   if (kind === 'app') { const [app, ...title] = rest; return `“${title.join(':')}” in your ${app}`; }
-  return kind === 'files' ? folderWords(what + '/x') : 'this';
+  return kind === 'files' ? folderWords(what + '/x') : kind === 'herdr' ? 'your terminal agents' : 'this';
 }
 
 /** The element a browser press targets, read out of the page's own snapshot: its name as the page writes it, and the

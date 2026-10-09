@@ -1,6 +1,6 @@
 // The kit: one manifest per tool in tools/<id>/tool.json, pinned installs into Crewhouse's own tool folder.
 // `node src/tools.ts install [ids...]` installs; never globally, never with sudo.
-import { execFileSync } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, readlinkSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -28,7 +28,7 @@ export interface Tool {
   /** "Asks you first when…", in plain words, for the recruit card and bot settings. */
   asks: string[];
   /** A command-line tool that runs with the person's own sign-in, on this computer rather than in the bot's sandbox.
-   *  The bot calls it with a list of arguments: `free` prefixes run at once, `spend` prefixes ask every time, anything else is refused. */
+   *  The bot calls it with a list of arguments: `free` prefixes run at once (Herdr reads ask first), `spend` prefixes ask every time, anything else is refused. */
   run?: { free: string[]; spend: string[] };
   /** An AXI: a pinned agent-ergonomic CLI the bot calls with an argument list, run with crewd's own environment
    *  (`axiEnv`) plus this; the gate reads every argument list. */
@@ -87,6 +87,16 @@ export function toolStatus(cfg: Config) {
 }
 
 export type ToolState = ReturnType<typeof toolStatus>[number];
+
+/** Herdr's setup state for its own row on the Apps screen: here, and its server answering. Probed on demand, never in the snapshot. */
+export async function herdrStatus(cfg: Config) {
+  const t = toolStatus(cfg).find((x) => x.id === 'herdr');
+  const howto = t?.install.system ?? '';
+  try {
+    const connected = JSON.parse(await new Promise<string>((resolve, reject) => execFile(which(cfg, 'herdr')!, ['status', 'server', '--json'], { timeout: 5000, killSignal: 'SIGKILL' }, (err, stdout) => err ? reject(err) : resolve(stdout)))).running === true;
+    return { ready: true, connected, howto: connected ? '' : howto };
+  } catch { return { ready: !!t && !t.missing.length, connected: false, howto }; }
+}
 
 /** What a bot's grants turn into: ready tools, AXIs and env. Missing tools are not offered. */
 export function resolveGrants(cfg: Config, grants: string[], vars: Record<string, string>) {

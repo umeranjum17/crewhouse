@@ -1,0 +1,13 @@
+{
+  "display": "CTO",
+  "role": "Watches your terminal agents in Herdr and gets them moving",
+  "models": [
+    "chatgpt"
+  ],
+  "color": "#8A6D1B",
+  "tools": [
+    "crew",
+    "files",
+    "herdr"
+  ]
+}
