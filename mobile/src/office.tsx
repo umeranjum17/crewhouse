@@ -19,15 +19,15 @@ const landed = (c: A.OfficeMember, v: A.OfficeView) =>
 
 type Group = 'needs' | 'work' | 'done' | 'rest';
 const TITLES: Record<Group, string> = { needs: 'Waiting', work: 'At work', done: 'Done today', rest: 'Resting' };
-/** The Office count line the phone header reads: needs-you rows, at work, done today and resting. The member
- *  buckets partition the crew; the needs number counts every row. */
+/** The Office count line the phone header reads: waiting crew, at work, done today and resting — the same words as the
+ *  groups (only Chief says "Needs you"). The member buckets partition the crew; the waiting number counts every crew
+ *  member waiting on the person. */
 export const summaryOf = (v: A.OfficeView): string => {
   const needy = v.crew.filter(A.waitsOnYou);
   const work = v.crew.filter((c) => !A.waitsOnYou(c) && ['working', 'quiet'].includes(A.seatOf(c)));
   const done = v.crew.filter((c) => !A.waitsOnYou(c) && !['working', 'quiet', 'failed'].includes(A.seatOf(c)) && landed(c, v));
   const rest = v.crew.length - needy.length - work.length - done.length;
-  const n = v.counts.needs;
-  return `${n} ${n === 1 ? 'needs' : 'need'} you · ${work.length} at work · ${done.length} done · ${rest} resting`;
+  return `${needy.length} waiting · ${work.length} at work · ${done.length} done · ${rest} resting`;
 };
 
 /** Every helper lands in exactly one group: waiting on you, at work on an open job, done today, or resting. */

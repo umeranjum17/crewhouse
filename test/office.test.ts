@@ -270,7 +270,7 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, every row and panel is
             .filter((e) => e.scrollWidth > e.clientWidth + 1).map((e) => e.textContent?.slice(0, 40));
           const names = units.map((p) => p.getAttribute('aria-label'));
           const line = document.querySelector('.office-counts')?.textContent ?? '';
-          const nums = [...line.matchAll(/(\\d+) (?:needs? you|at work|done|resting)/g)].map((x) => Number(x[1]));
+          const nums = [...line.matchAll(/(\\d+) (?:waiting|at work|done|resting)/g)].map((x) => Number(x[1]));
           const pinned = Number(document.querySelector('.office-main .needs-pin .count')?.textContent ?? 0);
           const onCards = document.querySelectorAll('.office-main .on-card').length;
           const memberNeeds = units.filter((p) => !/^Chief:/.test(p.getAttribute('aria-label') ?? '') && p.querySelector('.p-state.needs')).length;
@@ -298,7 +298,7 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, every row and panel is
           assert.equal(m.out, 0, `${at}: every row inside the office column`);
           assert.equal(m.pairs.length, 0, `${at}: no row covers another: ${m.pairs.join('; ')}`);
           assert.deepEqual(m.clipped, [], `${at}: no word cut off`);
-          assert.equal(m.nums[0], m.pinned, `${at}: the header's needs count is the pinned Needs you`);
+          assert.equal(m.nums[0], m.memberNeeds, `${at}: the header's waiting count is the waiting crew rows`);
           assert.equal(m.nums[1], m.onCards, `${at}: the header's working count is On it now`);
           assert.equal(m.nums[1], m.work - (m.chiefWorks ? 1 : 0), `${at}: the at-work count is the working rows`);
           assert.equal(m.nums[2], m.done, `${at}: the done count is the done rows`);
@@ -306,8 +306,8 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, every row and panel is
           assert.equal(m.nums[3], m.rest - (m.chiefRests ? 1 : 0), `${at}: the resting count is the resting rows`);
           // Needs-you rows no crew row holds ride on Chief's: his panel glows exactly when rows are left over.
           // Phone width has no Chief row; the leftover rows live in the pinned Needs you, counted above.
-          if (width < 900) assert.ok(m.memberNeeds <= m.nums[0], `${at}: no crew row holds a row twice (${m.memberNeeds} held, ${m.nums[0]} rows)`);
-          else assert.equal(m.chiefGlows, m.nums[0] > m.memberNeeds, `${at}: Chief carries the leftover needs rows (${m.nums[0]} rows, ${m.memberNeeds} on crew panels)`);
+          if (width < 900) assert.ok(m.memberNeeds <= m.pinned, `${at}: no crew row holds a row twice (${m.memberNeeds} held, ${m.pinned} rows)`);
+          else assert.equal(m.chiefGlows, m.pinned > m.memberNeeds, `${at}: Chief carries the leftover needs rows (${m.pinned} rows, ${m.memberNeeds} on crew panels)`);
           // Only Chief says "Needs you": no crew panel or grouped row does, in the Office too.
           assert.ok(m.memberWords.every((w: string) => w !== 'Needs you'), `${at}: no crew panel says "Needs you" (${m.memberWords.join(' | ')})`);
           if (m.chiefGlows) assert.equal(m.chiefWord, 'Needs you', `${at}: Chief still says "Needs you"`);
