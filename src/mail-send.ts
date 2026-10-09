@@ -2,6 +2,9 @@
 import type { Store, Row } from './db.ts';
 import type { Connections } from './connections.ts';
 import { GMAIL } from './mail.ts';
+// Free-mail domains hold many people, so one mailbox on them is never a whole organisation: attesting them domain-wide would email sole traders.
+const FREE_MAIL = new Set(['gmail.com', 'googlemail.com', 'outlook.com', 'hotmail.com', 'live.com', 'msn.com', 'yahoo.com', 'yahoo.co.uk', 'icloud.com', 'me.com', 'aol.com', 'proton.me', 'protonmail.com', 'gmx.com', 'btinternet.com', 'sky.com', 'talktalk.net', 'virgin.net']);
+const INDIVIDUALS = "Sole traders and small partnerships count as individuals under UK email rules. This job will not email them.";
 const fail = (message: string, status = 409) => Object.assign(new Error(message), { status });
 const address = (raw: unknown) => {
   if (typeof raw !== 'string' || !/^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?\.[A-Za-z]{2,}$/.test(raw) || raw.length > 254) throw fail('Give one work email address, without names or extra recipients.', 400);
@@ -20,12 +23,14 @@ export class MailSend {
   private eligible(to: string) {
     const s = this.status(to);
     if (s.suppressed) throw fail('This address is on your do-not-email list. Nothing was sent.');
+    if (FREE_MAIL.has(s.org)) throw fail(INDIVIDUALS);
     if (s.eligibility?.kind !== 'corporate' || s.eligibility?.person !== 1) throw fail(s.eligibility?.kind === 'sole-trader' || s.eligibility?.kind === 'small-partnership'
-      ? 'Sole traders and small partnerships count as individuals under UK email rules. This job will not email them.'
+      ? INDIVIDUALS
       : 'You have not marked this organisation as corporate-eligible. Unknown organisations cannot be emailed.');
   }
   set(raw: unknown, body: Row, phone: string) {
     const s = this.status(raw), at = Date.now();
+    if (FREE_MAIL.has(s.org)) throw fail(INDIVIDUALS, 400);
     if (!['corporate', 'sole-trader', 'small-partnership', 'unknown'].includes(body.kind) && typeof body.suppressed !== 'boolean') throw fail('Choose an organisation type or change the do-not-email list.', 400);
     if (body.kind !== undefined && (!['corporate', 'sole-trader', 'small-partnership', 'unknown'].includes(body.kind) || typeof body.name !== 'string' || !body.name.trim() || body.name.length > 160)) throw fail('Name the organisation you are marking.', 400);
     this.db.tx(() => {
