@@ -4,15 +4,17 @@ import type { Connections } from './connections.ts';
 import { GMAIL } from './mail.ts';
 import { receipt } from './crew.ts';
 // Free-mail domains hold many people, so one mailbox on them is never a whole organisation: attesting them domain-wide would email sole traders.
-const FREE_MAIL = new Set(['gmail.com', 'googlemail.com', 'googlemail.co.uk', 'outlook.com', 'outlook.co.uk', 'hotmail.com', 'hotmail.co.uk', 'live.com', 'live.co.uk', 'msn.com', 'yahoo.com', 'yahoo.co.uk', 'ymail.com', 'icloud.com', 'me.com', 'mac.com', 'aol.com', 'aol.co.uk', 'proton.me', 'protonmail.com', 'gmx.com', 'gmx.co.uk', 'btinternet.com', 'btopenworld.com', 'blueyonder.co.uk', 'ntlworld.com', 'virginmedia.com', 'virgin.net', 'sky.com', 'talktalk.net']), INDIVIDUALS = "Sole traders and small partnerships count as individuals under UK email rules. This job will not email them.", fail = (message: string, status = 409) => Object.assign(new Error(message), { status });
+const FREE_MAIL = new Set(['gmail.com', 'googlemail.com', 'googlemail.co.uk', 'outlook.com', 'outlook.co.uk', 'hotmail.com', 'hotmail.co.uk', 'live.com', 'live.co.uk', 'msn.com', 'yahoo.com', 'yahoo.co.uk', 'ymail.com', 'icloud.com', 'me.com', 'mac.com', 'aol.com', 'aol.co.uk', 'proton.me', 'protonmail.com', 'gmx.com', 'gmx.co.uk', 'btinternet.com', 'btopenworld.com', 'blueyonder.co.uk', 'ntlworld.com', 'virginmedia.com', 'virgin.net', 'sky.com', 'talktalk.net']), INDIVIDUALS = "Sole traders and small partnerships count as individuals under UK email rules. This job will not email them.", fail = (message: string, status = 409) => Object.assign(new Error(message), { status }), ATTEMPTED = 'This message was already sent or attempted. Check Gmail; it will not be sent again.';
 const address = (raw: unknown) => {
   if (typeof raw !== 'string' || !/^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?\.[A-Za-z]{2,}$/.test(raw) || raw.length > 254) throw fail('Give one work email address, without names or extra recipients.', 400);
   return raw.toLowerCase();
 };
 export class MailSend {
-  constructor(db: Store, connections: Connections) { this.db = db; this.connections = connections; }
+  constructor(db: Store, connections: Connections) { this.db = db; this.connections = connections; this.reconcile(); }
   private db: Store;
   private connections: Connections;
+  reconcile() { for (const a of this.db.all("SELECT * FROM asks WHERE kind='mail' AND state='sending'")) this.unsure(a, address(JSON.parse(a.detail).send.to)); }
+  private unsure(ask: Row, to: string) { this.db.run("UPDATE asks SET state='uncertain',answer='check Gmail' WHERE id=?", ask.id); this.db.event('mail.unsure', ask.bot, { ask: ask.id, to }); }
   private record(key: string) { return JSON.parse(this.db.get('SELECT value FROM settings WHERE key = ?', key)?.value ?? 'null'); }
   private save(key: string, value: Row) { this.db.run('INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', key, JSON.stringify(value)); }
   status(raw: unknown) {
@@ -23,9 +25,7 @@ export class MailSend {
     const s = this.status(to);
     if (s.suppressed) throw fail('This address is on your do-not-email list. Nothing was sent.');
     if (FREE_MAIL.has(s.org)) throw fail(INDIVIDUALS);
-    if (s.eligibility?.kind !== 'corporate' || s.eligibility?.person !== 1) throw fail(s.eligibility?.kind === 'sole-trader' || s.eligibility?.kind === 'small-partnership'
-      ? INDIVIDUALS
-      : 'You have not marked this organisation as corporate-eligible. Unknown organisations cannot be emailed.');
+    if (s.eligibility?.kind !== 'corporate' || s.eligibility?.person !== 1) throw fail(s.eligibility?.kind === 'sole-trader' || s.eligibility?.kind === 'small-partnership' ? INDIVIDUALS : 'You have not marked this organisation as corporate-eligible. Unknown organisations cannot be emailed.');
   }
   set(raw: unknown, body: Row, phone: string) {
     const s = this.status(raw), at = Date.now();
@@ -52,7 +52,7 @@ export class MailSend {
     return { token, from: address(who.email) };
   }
   private openDraft(id: number) {
-    if (this.db.get("SELECT 1 FROM asks WHERE json_extract(detail,'$.send.draft')=? AND state IN ('sending','uncertain') OR json_extract(detail,'$.send.draft')=? AND answer='sent'", id, id)) throw fail('This message was already sent or attempted. Check Gmail; it will not be sent again.');
+    if (this.db.get("SELECT 1 FROM asks WHERE json_extract(detail,'$.send.draft')=? AND state IN ('sending','uncertain') OR json_extract(detail,'$.send.draft')=? AND answer='sent'", id, id)) throw fail(ATTEMPTED);
     const draft = this.db.get("SELECT asks.* FROM asks JOIN bots ON bots.id=asks.bot WHERE asks.id=? AND bots.template='tracer' AND asks.kind='propose' AND asks.state='open'", id), d = JSON.parse(draft?.detail ?? '{}');
     if (!draft || d.draft?.channel !== 'email' || typeof d.preview?.body !== 'string') throw fail('Open one of Tracer’s email drafts first.');
     return d;
@@ -85,7 +85,7 @@ export class MailSend {
     if (!this.db.get("SELECT 1 FROM devices WHERE id=? AND role='control'", phone)) throw fail('This phone no longer has permission to approve sending.', 403);
     this.db.tx(() => {
       const claimed = this.db.run("UPDATE asks SET state='sending',answer='approved once',answered_at=? WHERE id=? AND state='open'", Date.now(), ask.id), drafted = this.db.run("UPDATE asks SET state='answered',answer='Gmail sending attempted',answered_at=? WHERE id=? AND state='open'", Date.now(), m.draft);
-      if (!claimed.changes) throw fail('This message was already attempted. Check Gmail; it will not be sent again.');
+      if (!claimed.changes) throw fail(ATTEMPTED);
       if (!drafted.changes) throw fail('This message was already answered on its draft. Nothing was sent.');
       this.db.event('mail.approved', ask.bot, { ask: ask.id, person: 1, from, to });
     });
@@ -105,7 +105,7 @@ export class MailSend {
         });
         throw e;
       }
-      this.db.run("UPDATE asks SET state='uncertain',answer='check Gmail' WHERE id=?", ask.id); this.db.event('mail.unsure', ask.bot, { ask: ask.id, to });
+      this.unsure(ask, to);
       throw fail(`Could not confirm sending: ${e.message} Check Gmail before doing anything else. This message will not be retried automatically.`);
     }
   }

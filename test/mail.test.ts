@@ -187,6 +187,36 @@ test('one approval sends exactly once, and a check-Gmail card can always be dism
   } finally { sendOk = false; identity = ''; await new Promise<void>(r => who.close(() => r())); done(); }
 });
 
+test('a send left mid-flight when crewd stops becomes the check-Gmail card, never re-sent', async () => {
+  const { db, crew, cfg, done } = setup();
+  crew.onboard('Umer'); crew.recruit('tracer', 'Tracer', 'person');
+  db.run("INSERT INTO devices (id,name,pk,role,created_at) VALUES ('ctl','Control','pk-ctl','control',?)", Date.now());
+  const who = createServer((_q, r) => { r.writeHead(200, { 'content-type': 'application/json' }); r.end(JSON.stringify({ email: 'umer@sender.example', email_verified: true })); });
+  await new Promise<void>(r => who.listen(0, '127.0.0.1', r)); identity = `http://127.0.0.1:${(who.address() as any).port}`;
+  const mail = new MailSend(db, { token: async () => 'tok' } as any);
+  let restarted: InstanceType<typeof Crew> | undefined;
+  try {
+    mail.set('ada@fernwood.example', { kind: 'corporate', name: 'Fernwood' }, 'ctl');
+    const draft = sendDraft(db, 'ada@fernwood.example', 'Stuck one');
+    const card = (await mail.review(draft)).id;
+    // The claim committed but Gmail never answered: crewd stops right here.
+    db.run("UPDATE asks SET state='sending',answer='approved once' WHERE id=?", card);
+    asked.length = 0;
+    restarted = new Crew(cfg, db);
+    const mail2 = new MailSend(db, { token: async () => 'tok' } as any); // a restart re-initialises both, as at boot
+    restarted.init();
+    assert.equal(db.get('SELECT state FROM asks WHERE id=?', card)!.state, 'uncertain', 'the stuck send becomes the check-Gmail card');
+    assert.equal(db.get('SELECT answer FROM asks WHERE id=?', card)!.answer, 'check Gmail');
+    assert.equal(db.all("SELECT * FROM events WHERE kind='mail.unsure'").length, 1, 'the same unsure event the failed-send path uses');
+    assert.equal(asked.filter((x) => x.startsWith('POST /messages/send')).length, 0, 'nothing is re-sent');
+    const snapshot = crew.snapshot().asks.find((a: any) => a.id === card)!;
+    assert.equal(A.card(snapshot, crew.snapshot()).mailUncertain, true, 'the existing uncertain card shows, with no new UI');
+    mail2.dismiss(db.get('SELECT * FROM asks WHERE id=?', card)!);
+    assert.equal(db.get('SELECT answer FROM asks WHERE id=?', card)!.answer, 'dismissed');
+    assert.ok(!crew.snapshot().asks.some((a: any) => a.id === card), 'the person can clear it');
+  } finally { await restarted?.stop(); identity = ''; await new Promise<void>(r => who.close(() => r())); done(); }
+});
+
 test('a draft decided elsewhere after its send card was made sends nothing and says so', async () => {
   const { db, crew, done } = setup();
   crew.onboard('Umer'); crew.recruit('tracer', 'Tracer', 'person');
