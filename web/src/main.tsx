@@ -14,6 +14,7 @@ import { Screen } from './screen.tsx';
 import { hear, Office, summaryOf, useOffice } from './office.tsx';
 import { AccountCard, ConnectApp, ConnectCard, NEEDS_SIGNIN, openTab, PairSheet, sheet, SignIn, Unreachable } from './flows.tsx';
 import { pushPossible, setBadge, startWorker, turnOffNotifications, turnOnNotifications } from './pwa.ts';
+import { remember, resume } from './resume.ts';
 
 type View = 'home' | 'chief' | 'room' | 'crew' | 'add' | 'helper' | 'things' | 'routines' | 'settings' | 'apps' | 'skills' | 'ask' | 'share' | 'pair';
 type Route = { view: View; id?: string; tab?: string; m?: string; file?: string };
@@ -1503,8 +1504,9 @@ function App() {
     setTick((t) => t + 1);
   }, []);
   useEffect(() => {
-    const onHash = () => { moved = true; setRoute(parseRoute()); };
+    const onHash = () => { moved = true; setRoute(parseRoute()); remember(); };
     addEventListener('hashchange', onHash);
+    remember(); // the opening place (a link or shortcut) is remembered too
     refresh();
     let pending: any;
     // Streamed words are not a change of state: refreshing on each would hold the refresh off until the reply ends.
@@ -1529,6 +1531,12 @@ function App() {
   // The home-screen icon mirrors the count of what Needs you shows (web/src/pwa.ts).
   const badge = ctx?.live.needs.length;
   useEffect(() => { if (badge !== undefined) setBadge(badge); }, [badge]);
+  // A place whose thread has since been deleted opens Home instead, with no error (web/src/resume.ts). The check is
+  // the same one HelperPage uses to tell "still here" from "left the crew".
+  const here = under.current;
+  const stranded = !!ctx && here.view === 'helper' && !!here.id && here.id !== 'chief'
+    && !A.crew(ctx.state).some((h) => h.id === here.id) && !ctx.state.bots.some((b: Json) => b.id === here.id);
+  useEffect(() => { if (stranded) { history.replaceState(null, '', '/#/'); dispatchEvent(new HashChangeEvent('hashchange')); } }, [stranded]);
   const splash = <Splash done={!!ctx || offline} />;
   if (!ctx) return <>{splash}{offline && <Unreachable retry={refresh} />}</>;
   // Every little Chief face on the page carries the mood from here, the way the night palette does.
@@ -1584,4 +1592,4 @@ function App() {
 
 startWorker(); // the offline shell and web-push handler are ready from the first load on
 // The public shell decides once, before its first screen: a device grant kept here makes it the paired app; none, the demo.
-void (pairable ? import('./link.ts').then((l) => l.resume()) : Promise.resolve()).finally(() => createRoot(document.getElementById('root')!).render(<App />));
+void (pairable ? import('./link.ts').then((l) => l.resume()) : Promise.resolve()).finally(() => { resume(); createRoot(document.getElementById('root')!).render(<App />); });

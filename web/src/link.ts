@@ -44,9 +44,11 @@ export async function unpair(link: DeviceLink) {
   await leave();
 }
 
-/** The same installed app opens fresh: the grant (or its absence) decides the mode at boot. */
+/** The same installed app opens fresh: the grant (or its absence) decides the mode at boot. A deliberate restart
+ *  lands Home, never on the last place, so it flags itself for `resume()` (web/src/resume.ts). */
 export async function leave() {
   await setBadge(0);
+  try { sessionStorage.setItem('crewhouse.home', '1'); } catch { /* no storage: Home is the default anyway */ }
   location.replace('/');
 }
 
