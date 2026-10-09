@@ -62,8 +62,7 @@ const ROUTES = ['home', 'tailscale', 'relay'];
 
 /** Every notification says only this; the phone fetches the words over the link (the relay enforces it too). */
 export const NEWS = 'Crewhouse has news';
-const UPDATE_APP = 'Get the latest Crewhouse app to keep chatting.';
-const currentPhone = (body: any) => body?.build === 'p9b';
+const UPDATE_APP = 'Get the latest Crewhouse app to keep chatting.', currentPhone = (body: any) => body?.build === 'p9b';
 /** The relay's WebSocket origin, from the https/wss address Settings keeps. */
 const wsOrigin = (url: string) => url.replace(/^http/, 'ws');
 

@@ -110,8 +110,7 @@ export function templateKit(cfg: Config, tpl: Template) {
 /** Granted and working on this machine. */
 export const canUse = (cfg: Config, id: string, tool: string) => botTools(cfg, id).some((t) => t.id === tool && t.granted && t.ready);
 
-export const templatesDir = (cfg: Config) => join(cfg.repoDir, 'templates');
-export const botDir = (cfg: Config, id: string) => join(cfg.crewDir, 'bots', id);
+export const templatesDir = (cfg: Config) => join(cfg.repoDir, 'templates'), botDir = (cfg: Config, id: string) => join(cfg.crewDir, 'bots', id);
 
 export function listTemplates(cfg: Config): Template[] {
   return readdirSync(templatesDir(cfg))
@@ -167,8 +166,7 @@ export function commit(dir: string, files: string[], message: string, snapshot =
 
 export const JOB_LABELS = ['What it does', "What it's aiming for", 'What it gets from others', 'How it goes about it', 'What great looks like'] as const;
 export type Job = { does: string; aim: string; gets: string; how: string; great: string };
-const jobKeys = ['does', 'aim', 'gets', 'how', 'great'] as const;
-export const jobPreview = (j: Job) => JOB_LABELS.map((label, i) => `### ${label}\n${j[jobKeys[i]]}`).join('\n\n');
+const jobKeys = ['does', 'aim', 'gets', 'how', 'great'] as const, jobPreview = (j: Job) => JOB_LABELS.map((label, i) => `### ${label}\n${j[jobKeys[i]]}`).join('\n\n');
 export const validateJob = (clean: Record<string, string>) => {
   if (jobKeys.some((k) => !clean[k] || clean[k].length > 600)) throw Object.assign(new Error('job must be an object with does, aim, gets, how, great; each part needs words, under 600 characters'), { status: 400 });
   if (jobPreview(clean as Job).length > 3000) throw Object.assign(new Error('the whole job must be under 3,000 characters'), { status: 400 });
@@ -221,15 +219,13 @@ export function templateSoul(cfg: Config, tpl: Template, display: string) {
 }
 
 // ---- memory: people/1/about.md is shared by the crew; people/1/notes/<bot>.md is one helper's notes ----
-export const NOTES_CAP = 2500;
-export const ABOUT_CAP = 1500;
+export const NOTES_CAP = 2500, ABOUT_CAP = 1500;
 
 /** Which memory: one helper's notes (`bot`), or what the whole crew knows about them (`bot` null). */
 export interface Memory { bot: string | null }
 
 export const personDir = (cfg: Config) => join(cfg.crewDir, 'people', '1');
-const memoryFile = (m: Memory) => m.bot ? `notes/${m.bot}.md` : 'about.md';
-const capOf = (m: Memory) => m.bot ? NOTES_CAP : ABOUT_CAP;
+const memoryFile = (m: Memory) => m.bot ? `notes/${m.bot}.md` : 'about.md', capOf = (m: Memory) => m.bot ? NOTES_CAP : ABOUT_CAP;
 
 export function readNotes(cfg: Config, m: Memory) {
   return readText(join(personDir(cfg), memoryFile(m)));
@@ -243,8 +239,7 @@ function saveNotes(cfg: Config, m: Memory, text: string, message: string) {
   return commit(personDir(cfg), [memoryFile(m)], message);
 }
 
-const noteLines = (cfg: Config, m: Memory) => { const t = readNotes(cfg, m).replace(/\n$/, ''); return t ? t.split('\n') : []; };
-const joinLines = (lines: string[]) => lines.join('\n').replace(/\n*$/, '\n').replace(/^\n$/, '');
+const noteLines = (cfg: Config, m: Memory) => { const t = readNotes(cfg, m).replace(/\n$/, ''); return t ? t.split('\n') : []; }, joinLines = (lines: string[]) => lines.join('\n').replace(/\n*$/, '\n').replace(/^\n$/, '');
 
 /** A memory change, enough to undo it: the line added and the one it replaced. */
 export interface Learned { added: string; removed: string | null; commit: string | null }
@@ -354,8 +349,7 @@ export interface SkillDraft { slug: string; says: string; steps: string; text: s
 
 export function draftSkill(cfg: Config, id: string, p: { name?: unknown; description?: unknown; says?: unknown; steps?: unknown }): SkillDraft {
   const one = (v: unknown) => String(v ?? '').replace(/\s+/g, ' ').trim();
-  const name = slug(one(p.name)), description = one(p.description), says = one(p.says);
-  const steps = String(p.steps ?? '').replace(/\r/g, '').trim();
+  const name = slug(one(p.name)), description = one(p.description), says = one(p.says), steps = String(p.steps ?? '').replace(/\r/g, '').trim();
   if (!one(p.name) || !description || !says || !steps) throw new Error('a skill needs a name, a description, what it does in the person\'s words (`says`) and its steps');
   // A skill is kept instructions, like a note: a page the bot read must not be able to plant an address in it.
   if (/https?:|www\.|[\w.+-]+@[\w-]+\.[a-z]/i.test(`${description} ${says} ${steps}`)) throw new Error('a skill has no links or email addresses in it; describe the steps in plain words');

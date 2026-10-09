@@ -64,8 +64,7 @@ const verdictWords = (d: Record<string, unknown>) => d.passed ? 'passed its own 
     : Number(d.before) === 0 ? 'the check passed before the change and fails after it: the change broke it'
     : 'the same check still fails after the change'}`;
 /** Local calendar day and month: the share resets at midnight here, the money cap on the 1st. */
-const dayOf = (t = Date.now()) => new Date(t).toLocaleDateString('en-CA');
-const monthOf = (t = Date.now()) => dayOf(t).slice(0, 7);
+const dayOf = (t = Date.now()) => new Date(t).toLocaleDateString('en-CA'), monthOf = (t = Date.now()) => dayOf(t).slice(0, 7);
 /** The shortest a routine may repeat: faster checks would use up the person's AI. */
 export const MIN_EVERY = 15;
 
@@ -73,8 +72,7 @@ export const MIN_EVERY = 15;
 const SLEPT_MS = 60_000;
 const STUCK_MS = Number(process.env.CREWHOUSE_STUCK_MS || 180_000); // working with no news this long: show "stuck?"
 /** A quiet check-in's reply when nothing needs the person, and how its run is recorded. */
-const ALL_CLEAR = 'ALL-CLEAR';
-const ALL_CLEAR_RESULT = 'All clear';
+const ALL_CLEAR = 'ALL-CLEAR', ALL_CLEAR_RESULT = 'All clear';
 /** Events that make up a bot's plain "what I did" trail. */
 const TRAIL = ['task.created', 'task.working', 'task.done', 'task.failed', 'task.unsure', 'task.progress', 'run.tool', 'run.allowed',
   'ask.opened', 'ask.answered', 'ask.parked', 'file.delivered', 'memory.learned', 'memory.undone', 'bot.allowed', 'run.resumed',
@@ -88,8 +86,7 @@ export function quietNow(quiet: string | null | undefined, at = new Date()) {
   return from <= to ? t >= from && t < to : t >= from || t < to;
 }
 
-const sha = (s: string) => createHash('sha256').update(s).digest('hex');
-const DRAFT_CAP = 20_000;
+const sha = (s: string) => createHash('sha256').update(s).digest('hex'), DRAFT_CAP = 20_000;
 const clean = (s: unknown, n: number) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n);
 /** What each batch item hears: its one item and the shared question. The parent's own prompt stays out of it,
  *  so eight parallel items don't each pay for the whole conversation. */

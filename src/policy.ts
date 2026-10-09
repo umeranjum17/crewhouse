@@ -27,8 +27,7 @@ export interface Seen {
   apps?: Record<string, { app: string; title: string; readOnly: boolean; destructive: boolean }>;
 }
 
-const READS = new Set(['read', 'ls', 'grep', 'find']);
-const WRITES = new Set(['write', 'edit']);
+const READS = new Set(['read', 'ls', 'grep', 'find']), WRITES = new Set(['write', 'edit']);
 /** Whether a call that goes through does something out in the world (sends, buys, deletes, or presses and types on a web
  *  page): a job that did has to say whether it worked. */
 export function acts(tool: string, input: Record<string, any>, e: Effect) {
@@ -165,8 +164,7 @@ export function effectOf(tool: string, input: Record<string, any>, s: Seen): Eff
 }
 
 // ---- a checkout page, read from the browser tool's own page snapshot (tool output, never the model's words) ----
-const MONEY = /([$£€])\s?(\d{1,3}(?:,\d{3})+(?:\.\d{2})?|\d+(?:\.\d{2})?)/;
-const NOT_ITEM = /sub\s?-?total|\btotal\b|tax|vat|shipping|delivery|discount|saving|you save|\bfee|\btip\b|balance|gift card|coupon|promo|points/i;
+const MONEY = /([$£€])\s?(\d{1,3}(?:,\d{3})+(?:\.\d{2})?|\d+(?:\.\d{2})?)/, NOT_ITEM = /sub\s?-?total|\btotal\b|tax|vat|shipping|delivery|discount|saving|you save|\bfee|\btip\b|balance|gift card|coupon|promo|points/i;
 const BEST_TOTAL = /order total|grand total|estimated total|total due|total to pay|amount due|total \(|pay now/i;
 
 /** One snapshot line as a person reads it: `- listitem "Garlic" [ref=e5]: 2 kg — $3.10` → "Garlic 2 kg — $3.10". */

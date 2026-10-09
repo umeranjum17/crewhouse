@@ -8,8 +8,7 @@ import { EngineClient, resolveEngine, explainMissingEngine, type EngineEvent } f
 import { WebSocket, WebSocketServer } from 'ws';
 
 export const WIDTH = 1280, HEIGHT = 800;
-const IDLE_MS = Number(process.env.CREWHOUSE_DESKTOP_IDLE_MS || 10 * 60_000);
-const BROWSERS = ['chromium', 'chromium-browser', 'google-chrome', 'google-chrome-stable'];
+const IDLE_MS = Number(process.env.CREWHOUSE_DESKTOP_IDLE_MS || 10 * 60_000), BROWSERS = ['chromium', 'chromium-browser', 'google-chrome', 'google-chrome-stable'];
 
 const onPath = (bin: string) => (process.env.PATH ?? '').split(':').find((d) => d && existsSync(join(d, bin))) && bin;
 export const browserBin = () => BROWSERS.map(onPath).find(Boolean) || null;

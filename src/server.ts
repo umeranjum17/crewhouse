@@ -42,8 +42,7 @@ const skillWords = (message: string) => /not one of the reviewed starter skills/
   : /starting up|still starting|not ready|ECONNREFUSED|connect/i.test(message) ? 'The crew is starting up; skills switch once it is ready.'
   : /not a trusted skill|trust/i.test(message) ? 'That skill has not been reviewed yet, so the crew leaves it alone.'
   : 'That did not go through. Try again in a bit.';
-const etagOf = (path: string) => { const st = statSync(path); return `W/"${st.size.toString(16)}.${Math.floor(st.mtimeMs).toString(16)}"`; };
-const FRESH_BUNDLE = /-[\w-]{8}\.(?:js|css)$/;
+const etagOf = (path: string) => { const st = statSync(path); return `W/"${st.size.toString(16)}.${Math.floor(st.mtimeMs).toString(16)}"`; }, FRESH_BUNDLE = /-[\w-]{8}\.(?:js|css)$/;
 
 function sendFile(req: IncomingMessage, res: ServerResponse, path: string) {
   const size = statSync(path).size;
