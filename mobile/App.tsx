@@ -1063,7 +1063,7 @@ function AskCard({ c, who, state, onDone, canAct, offline, open }: { c: A.Card; 
         </View>
       ) : yes ? (
         <View style={s.chips}>
-          <Btn go label={yes.label} disabled={edit.empty} onPress={() => act(edit.yes(yes.body))} />
+          <Btn go={!c.mailTo} label={yes.label} disabled={edit.empty} onPress={() => act(edit.yes(yes.body))} />
           {edit.can && <Btn label={edit.editing ? 'Use the original' : 'Edit'} onPress={edit.toggle} />}
           {deny && <Btn label={deny.label} onPress={() => act(deny.body)} />}
         </View>
