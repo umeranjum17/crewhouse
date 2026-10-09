@@ -180,3 +180,17 @@ test('one approval sends exactly once, and a check-Gmail card can always be dism
     assert.ok(!crew.snapshot().asks.some((a: any) => a.id === card), 'the check-Gmail card clears from Needs you');
   } finally { sendOk = false; identity = ''; await new Promise<void>(r => who.close(() => r())); done(); }
 });
+
+test('a free-mail domain can never be attested, so a sole trader on it is never emailed', async () => {
+  const { db, crew, done } = setup();
+  crew.onboard('Umer');
+  crew.recruit('tracer', 'Tracer', 'person');
+  db.run("INSERT INTO devices (id,name,pk,role,created_at) VALUES ('ctl','Control','pk-ctl','control',?)", Date.now());
+  const mail = new MailSend(db, { token: async () => 'tok' } as any);
+  try {
+    assert.throws(() => mail.set('jane@gmail.com', { kind: 'corporate', name: 'Jane' }, 'ctl'), (e: any) => e.status === 400);
+    assert.equal(mail.status('plumber@gmail.com').eligibility, null, 'attesting one mailbox marks nothing on its domain');
+    const draft = Number(db.run("INSERT INTO asks (bot,kind,title,detail,at) VALUES ('tracer','propose','Email',?,?)", JSON.stringify({ draft: { channel: 'email', to: 'plumber@gmail.com', subject: 'Hi' }, preview: { body: 'Hello there.' } }), Date.now()).lastInsertRowid);
+    await assert.rejects(mail.review(draft), (e: any) => /count as individuals/.test(e.message));
+  } finally { done(); }
+});
