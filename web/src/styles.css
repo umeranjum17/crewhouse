@@ -115,7 +115,7 @@ b { font-weight: 600; }
 .face .dots b:not(.on), .halo .dots b:not(.on), .logo .dots b:not(.on) { background: transparent; }
 .ink { display: inline-block; flex: none; line-height: 0; }
 .ink svg { display: block; width: 100%; height: 100%; overflow: visible; }
-.halo { display: grid; place-items: center; padding: 18px; border-radius: 50%; background: var(--soft); }
+.halo { position: relative; display: grid; place-items: center; padding: 18px; border-radius: 50%; background: var(--soft); }
 .face { border-radius: 50%; display: inline-grid; place-items: center; flex: none; position: relative; }
 .face.working::after, .face.needs::after { content: ''; position: absolute; inset: 0; border: 2px solid var(--ok); border-radius: 50%; box-shadow: 0 0 0 2px var(--bg) inset; pointer-events: none; }
 .face.needs::after { border-color: var(--pink); }
@@ -567,7 +567,7 @@ body:has(> * .toast.foot) { padding-bottom: 56px; }
 .flow .btn.big { margin-top: 4px; }
 .flow .link { min-height: 44px; }
 .ai-badge { display: grid; border-radius: 12px; }
-.progress { list-style: none; display: flex; gap: 6px; padding: 0; margin: 0 0 4px; width: 100%; justify-content: center; }
+.progress { list-style: none; display: flex; gap: 6px; padding: 0; margin: 0 0 4px; width: 100%; justify-content: center; overflow-wrap: normal; }
 .progress li { display: flex; gap: 6px; align-items: center; font: 700 12.5px var(--ui); color: var(--mute); }
 .progress li + li::before { content: ''; width: 18px; height: 2px; border-radius: 2px; background: var(--line); margin-right: 2px; }
 .progress i { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font-size: 11.5px; background: var(--soft); }
@@ -576,8 +576,8 @@ body:has(> * .toast.foot) { padding-bottom: 56px; }
 .progress .done i { background: var(--ok); color: #07140e; }
 .flow-face { position: relative; display: grid; justify-items: center; }
 .badge-ic { position: absolute; right: -6px; bottom: 4px; width: 38px; height: 38px; box-shadow: 0 0 0 3px var(--solid); }
-.flow .laptop { margin-top: -14px; }
-.sparkle { color: var(--ink2); font-size: 14px; margin-top: -8px; }
+.flow .laptop { margin-top: -2px; }
+.sparkle { color: var(--ink2); font-size: 14px; margin-top: 0; }
 .dotdot { display: flex; gap: 6px; margin: 6px 0; }
 .dotdot i { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); }
 button.code { border: 0; color: var(--ink); cursor: pointer; display: grid; gap: 4px; margin: 6px 0; }

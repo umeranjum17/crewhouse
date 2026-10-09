@@ -392,6 +392,29 @@ test('a routine\'s switch keeps its knob inside the track, clear of its On or Pa
   }
 });
 
+test('a stepper\'s step labels split only between words, never mid-word, at the narrowest phones and text at 1.3x', { skip: !bin && 'no Chromium here' }, async () => {
+  const b = await browse();
+  await b.send('Page.enable'); await b.send('Runtime.enable');
+  // A word that spans two line boxes is a mid-word break: find every word whose own Range reports more than one rect.
+  const broken = `(() => { const out = []; for (const li of document.querySelectorAll('.progress li')) {
+    const tn = [...li.childNodes].find((n) => n.nodeType === 3); if (!tn) continue;
+    const re = /\\S+/g; let m; while ((m = re.exec(tn.textContent))) {
+      const r = document.createRange(); r.setStart(tn, m.index); r.setEnd(tn, m.index + m[0].length);
+      if (r.getClientRects().length > 1) out.push(m[0]);
+    }
+  } return out; })()`;
+  for (const [w, h] of [[320, 800], [360, 800], [390, 844]] as const) {
+    await b.send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile: true });
+    await b.open('demo&sheet=signin&phase=waiting&night#/settings');
+    await until('the three steps', () => b.run("document.querySelectorAll('.progress li').length === 3"), 30_000);
+    await b.run("document.querySelectorAll('.progress li').forEach((li) => { li.style.fontSize = (parseFloat(getComputedStyle(li).fontSize) * 1.3) + 'px'; }), 0");
+    const split = await b.run(broken), at = `${w}px text 1.3x`;
+    assert.deepEqual(split, [], `${at}: no step word breaks mid-word (${split.join(', ')})`);
+    const over = await b.run('document.documentElement.scrollWidth - document.documentElement.clientWidth');
+    assert.equal(over, 0, `${at}: the page never scrolls sideways`);
+  }
+});
+
 test('things, routines and helper details read Term: shared tiles, one blue primary, names in full, nothing overlaps', { skip: !bin && 'no Chromium here' }, async () => {
   const b = await browse();
   await b.send('Page.enable'); await b.send('Runtime.enable');
