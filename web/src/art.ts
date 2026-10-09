@@ -91,6 +91,24 @@ export function helmetSvg(cols: number, mode: HelmetMode = 'here', o: { night?: 
   return s + '</svg>';
 }
 
+/** The same helmet as a smooth drawing (the phone header's mascot, Main1808): helmet()'s shell, visor and eyes as
+ *  vector shapes, shaded from its light, so it reads as a character at 52px and stays sharp at any pixel ratio. */
+export function helmetSoft(mode: HelmetMode = 'here', o: { night?: boolean; beat?: number; eye?: string; scan?: string } = {}): string {
+  const night = o.night ?? true, X = (x: number) => (50 + 48 * x).toFixed(2), Y = (y: number) => (46 + 48 * y).toFixed(2);
+  const shell = Array.from({ length: 96 }, (_, i) => {
+    const t = (i / 96) * 2 * Math.PI, c = Math.cos(t), s = Math.sin(t);
+    return `${X(Math.sign(c) * Math.abs(c) ** 0.5)},${Y((Math.sign(s) * Math.abs(s) ** 0.5) / 1.08)}`;
+  }).join(' ');
+  const [hi, mid, lo] = night ? ['#FFFFFF', '#C9C9C5', '#8A8A86'] : ['#7A756D', '#3A3733', '#1D1B18'];
+  const glass = night ? '#141413' : '#F3EEE3', eye = o.eye ?? (night ? '#ECECEC' : '#1D1B18');
+  const shut = mode === 'rest', eh = shut ? 4.8 : 16.3, scan = ((((o.beat ?? 0) % 24) / 23) * 1.8 - 0.9);
+  const eyes = mode === 'think' ? `<rect x="${X(scan - 0.035)}" y="${Y(-0.22)}" width="3.4" height="${(48 * 0.6).toFixed(2)}" fill="${o.scan ?? '#0a84ff'}"/>`
+    : [-0.34, 0.34].map((x) => `<rect x="${X(x - 0.11)}" y="${(46 + 48 * 0.08 - eh / 2).toFixed(2)}" width="10.56" height="${eh}" rx="2.6" fill="${eye}"/>`).join('');
+  return `<svg viewBox="0 0 100 92" xmlns="http://www.w3.org/2000/svg"><defs><radialGradient id="hs" cx="0.28" cy="0.2" r="0.95">`
+    + `<stop offset="0" stop-color="${hi}"/><stop offset="0.5" stop-color="${mid}"/><stop offset="1" stop-color="${lo}"/></radialGradient></defs>`
+    + `<polygon points="${shell}" fill="url(#hs)"/><rect x="${X(-0.76)}" y="${Y(-0.22)}" width="${(48 * 1.52).toFixed(2)}" height="${(48 * 0.6).toFixed(2)}" rx="13" fill="${glass}"/>${eyes}</svg>`;
+}
+
 // ── Studio Chief (B1): one ink line, dot eyes, paper and vermilion. Chief is the white bean in the black bowler with
 // the red band; his personality lives in the brows, a small handlebar, the hat and two line arms. The crew are pastel
 // beans, each with one prop. Hand-drawn SVG; the phone renders the same drawings to PNGs (scripts/icons.mjs). ──

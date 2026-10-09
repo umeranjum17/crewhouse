@@ -47,13 +47,19 @@ Headless: `test/office.test.ts` ("first run and the Share sheet read Term").
 Fewer things, the whole width. Hello has no wordmark: greeting, then "What shall I call you?" as a small inline box
 (`.name-ask input`, or a Call me something else link once named), the three ideas, How it works, and Chief's normal
 box pinned at the foot (`.hello-ask .composer`). A thread is a conversation, not a transcript: no name on any turn
-(`.chat .line-by` is clipped for screen readers only), the person's words in a bubble on the right (`.line.me`),
-Chief's plain across the width. An ask card is one block: its title, one quiet grey line, the evidence with no inner
-box, then one compact blue primary and "⋯" (`.more-dots`); the rest (`.more-act`) wait in a bottom sheet with the
-card's title on top and one 15px full-width row each (`.more-sheet .more-row`). The live to-do's head is one quiet
-line, "Scout · at work · 12 s · Open chat ›", in plain type (no mono clock); Chief's own reply done in under a second
-leaves no "Done · 0 s" row. The Home header is one row: helmet, Chief over his status, the small Chief | Office
-switch, the gear; no divider. A thread page's head is the name alone. Sign-in choices are one list of plain rows
+(`.chat .line-by` is clipped for screen readers only), Chief's turns in grey bubbles that hug their words and the
+person's in ink ones on the right (`.line.me`); cards share Chief's grey. Ink is the one accent, the chat screen's
+visible type is 17/24 and 13/18 only, and turns sit 6px apart within a speaker and 22px when it changes. An ask card is
+one block: its title, one quiet grey line, the evidence with no inner box, then one ink primary and a "⋯" pill of
+the same 44px height and radius (`.more-dots`); the rest (`.more-act`) wait in a bottom sheet with the card's title
+on top and one full-width row each (`.more-sheet .more-row`). The live to-do's head is one quiet 13px line, "Scout ·
+at work · 12 s · Open chat ›", and its steps share that size: a 9px mark on each step's first baseline, a check for
+done, a spinner (a faint full ring with an ink half turning on it) for doing, a closed grey ring for to do. Chief's own reply done in under
+a second leaves no "Done · 0 s" row. The composer is a round +, a grey pill with the mic inside and a round ink send.
+The Home header is Muse's, compact: the helmet drawn smooth (`.ch-art img.helmet`, `art.helmetSoft`, no disc, its left
+rounded to a whole pixel) at the top centre, overlapping a one-line pill with Chief and his status, the round gear on
+its line, then the Chief | Office switch as a borderless pill track across the column, and the day line right under
+it (no band). A thread page's head is the name alone. Sign-in choices are one list of plain rows
 (`.ai-picks .btn`). A fresh helper shows at most three starters. A desk keeps the named transcript and the card's
 buttons in a row (`.more-dots` hidden).
 
