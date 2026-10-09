@@ -75,8 +75,10 @@ test('office truth: the panels, their counts, the tray, the roster and Needs you
   assert.ok(v.crew.find((c) => c.id === 'h6')!.second && v.crew.find((c) => c.id === 'h7')!.second, 'a second of a kind is marked');
   assert.deepEqual(A.roster(v.crew).map((c) => c.id), ['reel', 'scribe', 'scout', 'tracer', 'pip', 'h6', 'h7']);
   const chats = new Map(A.chats(state).map((c) => [c.id, c.line]));
-  assert.equal(chats.get('reel'), 'Needs you');
+  assert.equal(chats.get('reel'), 'Waiting', 'a crew member waiting on the person never says "Needs you"; only Chief does');
   assert.equal(chats.get('scribe'), A.SEAT_WORDS.chat, 'the chat list says what the rail says');
+  assert.deepEqual(A.railWord(v.crew.find((c) => c.id === 'reel')!, v), { word: 'Waiting', seat: 'waiting' }, 'the rail says the same, in the neutral style, never "Needs you"');
+  assert.equal(A.chiefWord(v), 'Needs you', 'only Chief says "Needs you"');
   // Live events move every count together.
   const answered = A.officeEvent(v, { kind: 'ask.answered', bot: 'reel', data: { ask: 10 } });
   assert.equal(answered.counts.needs, 1);
@@ -361,6 +363,21 @@ test('your crew reads whole: every face is the drawn helmet, and no row overlaps
       assert.ok(!f.overlap, `${at} row ${i}: name, role and status never overlap`);
       assert.ok(!f.clip, `${at} row ${i}: nothing spills past the row`);
     }
+  }
+  // Only Chief says "Needs you" (Main: one person, one Chief): a crew member waiting on the person reads "Waiting", on the
+  // crew page and on the desk rail beside Chief. `?demo` is the mixed crew whose Tracer waits on the person.
+  for (const theme of ['day', 'night']) {
+    await b.send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+    await b.open(`demo&${theme}#/crew`);
+    await until('the crew rows', () => b.run("document.querySelectorAll('.crew-row').length > 3"), 30_000);
+    const page = await b.run("[...document.querySelectorAll('.crew-row .status-word')].map((e) => e.textContent)"), at = `${theme} crew page`;
+    assert.ok(!page.includes('Needs you'), `${at}: no crew row says "Needs you" (${page.join(' | ')})`);
+    assert.ok(page.includes('Waiting'), `${at}: a waiting crew member says "Waiting" (${page.join(' | ')})`);
+    await b.open(`demo&${theme}`);
+    await until('the desk rail', () => b.run("document.querySelectorAll('.side-row').length > 3"), 30_000);
+    const rail = await b.run("[...document.querySelectorAll('.side-row .side-seat')].map((e) => e.textContent)"), atRail = `${theme} rail`;
+    assert.ok(!rail.includes('Needs you'), `${atRail}: no crew rail row says "Needs you" (${rail.join(' | ')})`);
+    assert.equal(await b.run("document.querySelector('.side-status')?.textContent"), 'Needs you', `${atRail}: Chief still says "Needs you"`);
   }
 });
 

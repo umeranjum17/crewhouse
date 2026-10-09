@@ -309,7 +309,7 @@ export function helper(b: Json, events: Json[] = [], crew: Json[] = [], tasks: J
   const ended = ['failed', 'unsure'].includes(mine[0]?.state) && at(mine[0].updated_at) >= midnight() ? mine[0] : null;
   const seat: Seat = driving || chiefDraft ? 'waiting' : needs ? 'chat' : stuck ? 'quiet' : b.task ? 'working'
     : held || b.pausedUntil ? 'waiting' : b.queued ? 'next' : ended ? 'failed' : 'free';
-  const status = driving ? 'Paused while you drive' : chiefDraft ? 'Waiting for Chief' : needs ? 'Needs you' : b.task ? b.task.title
+  const status = driving ? 'Paused while you drive' : chiefDraft ? 'Waiting for Chief' : needs ? 'Waiting' : b.task ? b.task.title
     : held || b.pausedUntil ? waitWords(held?.result, held?.wake_at ?? b.pausedUntil) : b.queued ? 'Up next'
     : ended ? (ended.state === 'unsure' ? 'Not sure it worked' : "Didn't finish") : 'Free to help';
   return {
@@ -1517,14 +1517,16 @@ export type OfficeView = { chief: ChiefView; crew: OfficeMember[]; done: Thing[]
  *  for something else (a sign-in, an account back later, the person at the wheel), or free. */
 export type Seat = 'needs' | 'chat' | 'working' | 'quiet' | 'failed' | 'next' | 'waiting' | 'free';
 export const seatOf = (c: OfficeMember): Seat => (c.ask ? 'needs' : c.seat);
-export const SEAT_WORDS: Record<Seat, string> = { needs: 'Needs you', chat: 'Waiting on your reply', working: 'Working', quiet: 'Gone quiet', failed: "Didn't finish", next: 'Up next', waiting: 'Waiting', free: 'Free' };
+export const SEAT_WORDS: Record<Seat, string> = { needs: 'Waiting', chat: 'Waiting on your reply', working: 'Working', quiet: 'Gone quiet', failed: "Didn't finish", next: 'Up next', waiting: 'Waiting', free: 'Free' };
 /** The rail's word for one helper, short enough for the rail: its seat (the panel and the chat say what a hold waits for),
  *  except that a free helper whose latest job landed today says which (Main590 6: the rail shows Reel done after a
- *  hand-off). An older finish is just free. */
+ *  hand-off). An older finish is just free. A crew member waiting on the person reads the neutral "Waiting", never
+ *  Chief's own "Needs you": only Chief says that, and the ask itself reaches the person through him. */
 export function railWord(c: OfficeMember, v: OfficeView): { word: string; seat: Seat | 'done' } {
   const seat = seatOf(c);
-  const last = seat === 'free' ? v.done.filter((t) => t.helper === c.id && t.at >= midnight()).sort((a, b) => b.at - a.at)[0] : undefined;
-  return last ? { word: `Done: ${last.title || 'a job'}`, seat: 'done' } : { word: seat === 'failed' && c.status === 'Not sure it worked' ? 'Not sure' : SEAT_WORDS[seat], seat };
+  const shown: Seat = seat === 'needs' ? 'waiting' : seat;
+  const last = shown === 'free' ? v.done.filter((t) => t.helper === c.id && t.at >= midnight()).sort((a, b) => b.at - a.at)[0] : undefined;
+  return last ? { word: `Done: ${last.title || 'a job'}`, seat: 'done' } : { word: shown === 'failed' && c.status === 'Not sure it worked' ? 'Not sure' : SEAT_WORDS[shown], seat: shown };
 }
 /** Who comes first when there is one seat less than helpers: whoever needs you, then working, then anything held,
  *  free last. */
@@ -1630,7 +1632,7 @@ export function officeEvent(view: OfficeView, e: Json): OfficeView {
       return touch(String(e.bot), (c) => ({ ...c, ring: '' as const, seat: 'failed' as const, mood: 'error' as Mood, step: step(e) ?? c.step,
         status: e.kind === 'task.unsure' ? 'Not sure it worked' : "Didn't finish" }));
     case 'ask.opened':
-      return touch(String(e.bot), (c) => ({ ...c, ring: 'needs' as const, seat: 'chat' as const, mood: 'ask' as Mood, status: 'Needs you', step: 'Waiting for your OK' }));
+      return touch(String(e.bot), (c) => ({ ...c, ring: 'needs' as const, seat: 'chat' as const, mood: 'ask' as Mood, status: 'Waiting', step: 'Waiting for your OK' }));
     case 'ask.answered':
     case 'ask.parked': {
       // The row leaves Needs you at once; the helper goes back to the last step the refresh knew, since the snapshot

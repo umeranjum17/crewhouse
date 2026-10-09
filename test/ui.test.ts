@@ -1900,7 +1900,7 @@ test('the office moves on live events; the refresh stays the source of truth', (
   // A question, then its answer.
   let u = A.office(officeState());
   u = A.officeEvent(u, { seq: 26, at: OTN, kind: 'ask.opened', bot: 'pip', data: { task: 51 } });
-  assert.deepEqual([u.crew.find((c) => c.id === 'pip')!.ring, u.crew.find((c) => c.id === 'pip')!.status], ['needs', 'Needs you']);
+  assert.deepEqual([u.crew.find((c) => c.id === 'pip')!.ring, u.crew.find((c) => c.id === 'pip')!.status], ['needs', 'Waiting']);
   assert.equal(u.counts.needs, 2, 'the count waits for the refresh to bring the actual Needs-you row');
   assert.equal(A.seatOf(u.crew.find((c) => c.id === 'pip')!), 'chat', 'and so does Review');
   u = A.officeEvent(u, { seq: 27, at: OTN, kind: 'ask.answered', bot: 'pip', data: { task: 51, answer: 'allow' } });
