@@ -1207,7 +1207,7 @@ const GO_TO: [string, string, IconName][] = [['#/things', 'Your things', 'things
  *  answers for this device's own grant — never /api/phones/link, which it refuses away from the computer. */
 function PairedCard({ tick }: { tick: number }) {
   const [relay, setRelay] = useState<boolean | 'offline' | 'unreachable' | null>(null);
-  useEffect(() => { setRelay(null); api.pushKey().then((k) => setRelay(k.ready ? true : k.vapid ? 'offline' : false)).catch(() => setRelay('unreachable')); }, [tick]);
+  useEffect(() => { api.pushKey().then((k) => setRelay(k.ready ? true : k.vapid ? 'offline' : false)).catch(() => setRelay('unreachable')); }, [tick]);
   return <div className="card nudge">
     <span className="grow"><b>Paired with {paired!.name}</b><div className="mute small">This app shows your own crew, straight from that computer and locked to it.</div>
       <NotifyLine relay={relay} norelay="Your computer has no mailbox for notifications yet. Turn one on there, then try again." /></span>
