@@ -79,10 +79,10 @@ const asks = [
   { id: 8, bot: 'reel', task_id: 41, kind: 'connect', at: now - min, member: 1, title: '', detail: { app: 'drive', words: 'Want a copy in your Drive too?' } },
   { id: 12, bot: 'reel', task_id: 41, kind: 'question', at: now - 2 * min, member: 1, title: '', detail: { question: 'Include the baby photos Mum sent, or just the recent ones?' } },
   { id: 13, bot: 'pip', task_id: null, kind: 'question', at: now - 6 * min, member: 1, title: '', detail: { question: 'The dentist and your gym class are both on Friday morning. Keep both?' } },
-  { id: 14, bot: 'chief', task_id: null, kind: 'propose', at: now - 30_000, member: 1, title: "Every weekday at 8:00 am, Pip will plan the week's dinners.", detail: {
-    words: "Every weekday at 8:00 am, Pip will plan the week's dinners.",
-    routine: { bot: 'pip', schedule: 'weekdays 8am', task: "Plan the week's dinners and make the shopping list", quiet: true },
-    preview: { head: 'A new routine', body: "Every weekday at 8:00 am\nPip will plan the week's dinners\nTells you only when something changed\nFirst time: Mon 8:00 am" } } },
+  { id: 14, bot: 'chief', task_id: null, kind: 'propose', at: now - 30_000, member: 1, title: "Every Monday at 8:00 am, Pip will plan the week's dinners.", detail: {
+    words: "Every Monday at 8:00 am, Pip will plan the week's dinners.",
+    routine: { bot: 'pip', schedule: 'every Monday 8am', task: "Plan the week's dinners and make the shopping list", quiet: true },
+    preview: { head: 'A new routine', body: "Every Monday at 8:00 am\nPip will plan the week's dinners\nTells you only when something changed\nFirst time: Mon 8:00 am" } } },
   { id: 9, bot: 'tracer', task_id: 44, kind: 'permission', at: now - 2 * min, member: 1, title: '', detail: {
     effect: 'spend', spends: true, words: "Tracer wants to spend about $0.50 to find Nisha Malik's work email. OK?" } },
   ...(variant === 'nogoogle' ? [{ id: 45, bot: 'pip', task_id: null, kind: 'connect', at: now, member: 1, title: 'Connect Google Calendar', detail: { app: 'calendar', words: 'Let Pip use your Google Calendar' } }] : []),
@@ -212,7 +212,7 @@ const state = {
   resting: variant === 'resting' ? { chatgpt: now + 95 * min } : {},
   routines: [
     routine(1, 'chief', 'Your week, every morning', 'every day 8:00', 'on', 'digest'),
-    routine(2, 'scout', 'Plan the week’s dinners', 'every Saturday 10:00', 'on'),
+    routine(2, 'pip', 'Plan the week’s dinners', 'every Monday 8:00', 'on'),
     { ...routine(3, 'pip', 'Check the gym timetable', 'every Friday 16:00', 'paused'), quiet: 1 },
     { id: 4, bot: 'scout', kind: 'task', name: 'File the new receipts', words: '', on: "When a file arrives in Scout's inbox", state: 'on', next_at: null, history: [] },
   ],
@@ -263,7 +263,7 @@ const pages: Record<string, Json> = {
     { id: 1, author: 'chief', text: "Good evening, Maya. Two small things need you. Scribe's note for Aunty Nisha is ready to go, and Reel would like to save a copy of Mum's video. Scout expects to have flights within ten minutes." },
     { id: 2, author: 'person', text: 'great, and can scout find somewhere nice for dinner on saturday too?' },
     { id: 3, author: 'chief', text: "Of course. I've asked Scout to look once the flights are done. Shall I tell him four people, near home?", choices: ['Yes, four, near home', 'Six people', 'Somewhere special'] },
-    { id: 4, author: 'person', text: "every weekday morning, have Pip plan the week's dinners" },
+    { id: 4, author: 'person', text: "every Monday morning, have Pip plan the week's dinners" },
     { id: 5, author: 'chief', text: "Pip has a plan ready. Say yes and it starts; the first run lands tomorrow morning." },
   ] },
   reel: { messages: [
