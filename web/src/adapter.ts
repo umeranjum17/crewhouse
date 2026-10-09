@@ -1463,7 +1463,7 @@ export const needsHouse = (state: Json, app: App) => signsInWith(app) === 'Googl
 
 /** Person-attested eligibility; internal device ids never reach a screen. */
 export const mailWords = (s: Json) => ({ org: String(s.org), name: String(s.eligibility?.name ?? ''), kind: String(s.eligibility?.kind ?? 'unknown'), stopped: s.suppressed === true, note: s.suppressed ? 'On your do-not-email list.' : s.eligibility?.kind === 'corporate' ? 'You marked this organisation corporate-eligible.' : 'Unknown organisations, sole traders and small partnerships cannot be emailed.' });
-// v1: Drive, Calendar and Gmail on the person's own Google app, then Notion and Canva. Sharing from the phone needs no
+// v1: Drive, Calendar, Gmail and Gmail sending on the person's own Google app, then Notion and Canva. Sharing from the phone needs no
 // connection at all. Calendar and Gmail show Google's "unverified app" screen, so their card warns first.
 // Each row carries that product's own logo (`logo`, an asset under web/marks/; see NOTICE for the source of each file),
 // drawn on the screen's neutral tile (styles.css `.app-ic`), never a home-made letter or glyph.
