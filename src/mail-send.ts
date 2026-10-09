@@ -30,7 +30,7 @@ export class MailSend {
   }
   set(raw: unknown, body: Row, phone: string) {
     const s = this.status(raw), at = Date.now();
-    if (FREE_MAIL.has(s.org)) throw fail(INDIVIDUALS, 400);
+    if (body.kind !== undefined && FREE_MAIL.has(s.org)) throw fail(INDIVIDUALS, 400);
     if (!['corporate', 'sole-trader', 'small-partnership', 'unknown'].includes(body.kind) && typeof body.suppressed !== 'boolean') throw fail('Choose an organisation type or change the do-not-email list.', 400);
     if (body.kind !== undefined && (!['corporate', 'sole-trader', 'small-partnership', 'unknown'].includes(body.kind) || typeof body.name !== 'string' || !body.name.trim() || body.name.length > 160)) throw fail('Name the organisation you are marking.', 400);
     this.db.tx(() => {
@@ -84,7 +84,7 @@ export class MailSend {
       if (!claimed.changes || !drafted.changes) throw fail('This message was already attempted. Check Gmail; it will not be sent again.');
       this.db.event('mail.approved', ask.bot, { ask: ask.id, person: 1, phone, from, to });
     });
-    const raw = Buffer.from(`From: ${from}\r\nTo: ${to}\r\nSubject: ${m.subject.match(/.{1,10}/gu)!.map((s: string) => `=?UTF-8?B?${Buffer.from(s).toString('base64')}?=`).join('\r\n ')}\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n${Buffer.from(m.body).toString('base64').match(/.{1,76}/g)!.join('\r\n')}\r\n`).toString('base64url');
+    const raw = Buffer.from(`From: ${from}\r\nTo: ${to}\r\nSubject: ${m.subject.match(/[\s\S]{1,10}/gu)!.map((s: string) => `=?UTF-8?B?${Buffer.from(s).toString('base64')}?=`).join('\r\n ')}\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n${Buffer.from(m.body).toString('base64').match(/.{1,76}/g)!.join('\r\n')}\r\n`).toString('base64url');
     try {
       const res = await fetch(`${GMAIL}/messages/send`, { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ raw }), redirect: 'error', signal: AbortSignal.timeout(20_000) });
       if (!res.ok) throw fail(`Gmail said ${res.status}.`);
