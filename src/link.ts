@@ -62,6 +62,7 @@ const ROUTES = ['home', 'tailscale', 'relay'];
 /** Every notification says only this; the phone fetches the words over the link (the relay enforces it too). */
 export const NEWS = 'Crewhouse has news';
 const WEB_DEVICE = 'web'; // the person's browser holds no link grant; a paired phone keeps its own grant id
+const webAddress = (v: unknown) => typeof v === 'object' && v !== null;
 const UPDATE_APP = 'Get the latest Crewhouse app to keep chatting.', currentPhone = (body: any) => body?.build === 'p9b';
 /** The relay's WebSocket origin, from the https/wss address Settings keeps. */
 const wsOrigin = (url: string) => url.replace(/^http/, 'ws');
@@ -395,10 +396,14 @@ export class Link {
       seen: g.lastSeen ?? g.created, online: g.online, reached: this.reached(g.id), push: pushOf(this.setting(`phone.push.${g.id}`)) }));
   }
 
+  /** A browser's Web Push address, subscribed at the relay under `device`; 409 when there is no relay. */
+  private async webSubscribe(device: string, web: unknown) {
+    if (!this.client || !webAddress(web)) throw Object.assign(new Error('no relay for notifications'), { status: 409 });
+    await this.client.subscribe(device, { web });
+  }
   async setWebPush(sub: any) {
-    if (sub?.off === true) { if (typeof sub.web !== 'object') throw Object.assign(new Error('say which browser'), { status: 400 }); return void await this.client?.unsubscribe(WEB_DEVICE, { web: sub.web }); }
-    if (!this.client || typeof sub?.web !== 'object') throw Object.assign(new Error('no relay for notifications'), { status: 409 });
-    await this.client.subscribe(WEB_DEVICE, { web: sub.web });
+    if (sub?.off === true) { if (!webAddress(sub.web)) throw Object.assign(new Error('say which browser'), { status: 400 }); return void await this.client?.unsubscribe(WEB_DEVICE, { web: sub.web }); }
+    await this.webSubscribe(WEB_DEVICE, sub?.web);
   }
   async revoke(id: string) {
     if (!this.host.devices().some((g) => g.id === id)) throw Object.assign(new Error('no such device'), { status: 404 });
@@ -431,9 +436,7 @@ export class Link {
       const sub = body as any;
       const phone = isExpoToken(sub?.expo) ? sub.expo : sub?.missing === true ? 'missing' : sub?.off === true ? 'off' : '';
       if (phone) { this.put(`phone.push.${g.id}`, phone); this.db.event('device.push', null, { id: g.id }); return { status: 200, body: { ok: true } }; }
-      if (!this.client || typeof sub?.web !== 'object') return { status: 409, body: { error: 'no relay for notifications' } };
-      await this.client.subscribe(g.id, { web: sub.web });
-      return { status: 200, body: { ok: true } };
+      return this.webSubscribe(g.id, sub?.web).then(() => ({ status: 200, body: { ok: true } }), (e: any) => ({ status: e.status ?? 400, body: { error: e.message } }));
     }
     // Settings stay on the computer: AI account sign-ins, people, Google setup, connecting apps
     // (their sign-in pages come back to this computer's own address), and the phones themselves — except the person's

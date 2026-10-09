@@ -8,7 +8,7 @@ type Sw = {
   addEventListener(type: string, cb: (e: any) => void): void;
   skipWaiting(): Promise<void>;
   clients: { claim(): Promise<void>; matchAll(o: any): Promise<any[]>; openWindow(url: string): Promise<any> };
-  registration: { showNotification(title: string, o?: any): Promise<void> };
+  registration: { showNotification(title: string, o?: any): Promise<void>; setAppBadge?(): Promise<void> };
   location: { origin: string };
 };
 const sw = self as unknown as Sw;
@@ -48,8 +48,12 @@ sw.addEventListener('fetch', (e) => {
 });
 
 sw.addEventListener('push', (e) => {
-  // The relay's push is content-free: only "Crewhouse has news". The words wait on the person's computer.
-  e.waitUntil(sw.registration.showNotification('Crewhouse has news', { body: 'Open Crewhouse to see what your crew did.', icon: '/icon-192.png', badge: '/notify-96.png', tag: 'crewhouse' }));
+  // The relay's push is content-free: only "Crewhouse has news". The words wait on the person's computer. The icon gets a
+  // plain dot (no count, which this worker cannot know); the open app replaces it with the real count.
+  e.waitUntil(Promise.all([
+    sw.registration.showNotification('Crewhouse has news', { body: 'Open Crewhouse to see what your crew did.', icon: '/icon-192.png', badge: '/notify-96.png', tag: 'crewhouse' }),
+    sw.registration.setAppBadge?.(),
+  ]));
 });
 
 sw.addEventListener('notificationclick', (e) => {

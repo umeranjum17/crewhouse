@@ -136,9 +136,9 @@ export const api = {
   /** Codes to type on the phone instead of scanning, through the relay. */
   phoneCode: (role: 'control' | 'view' = 'control') => call('POST', '/api/phones/code', { role }),
   /** Web push for the installed app: the relay's key to subscribe with, and the address handed back (or `{off}`). */
-  pushKey: async (): Promise<{ vapid: string | null; ready: boolean; relay: boolean }> => {
+  pushKey: async (): Promise<{ vapid: string | null; ready: boolean }> => {
     const s = await call('GET', '/api/phones/link');
-    return { vapid: s.vapid, ready: s.relayStatus === 'online' && !!s.vapid, relay: !!s.relay };
+    return { vapid: s.vapid, ready: s.relayStatus === 'online' && !!s.vapid };
   },
   push: (body: Json) => call('POST', '/api/push', body),
   connect: (app: string) => call('POST', `/api/connections/${app}`),

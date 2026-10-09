@@ -91,6 +91,7 @@ function runWorker(source: string, network: (url: string) => Promise<Response>) 
   const listeners = new Map<string, (e: any) => void>();
   const stored = new Map<string, Response>();
   const shown: Array<[string, any]> = [];
+  const badged: Array<number | undefined> = [];
   const key = (r: string | { url: string }) => typeof r === 'string' ? r : new URL(r.url).pathname;
   const caches = {
     open: async () => ({
@@ -104,7 +105,7 @@ function runWorker(source: string, network: (url: string) => Promise<Response>) 
   const self = {
     location: { origin: ORIGIN }, addEventListener: (type: string, cb: (e: any) => void) => listeners.set(type, cb),
     skipWaiting: async () => {}, clients: { claim: async () => {}, matchAll: async () => [], openWindow: async () => {} },
-    registration: { showNotification: async (title: string, o: any) => { shown.push([title, o]); } }, navigator: {},
+    registration: { showNotification: async (title: string, o: any) => { shown.push([title, o]); }, setAppBadge: async (n?: number) => { badged.push(n); } }, navigator: {},
   };
   vm.runInNewContext(source, { self, caches, fetch: (r: string | { url: string }) => network(key(r)), Response, URL });
   const dispatch = async (type: string, e: Record<string, unknown> = {}) => {
@@ -114,7 +115,7 @@ function runWorker(source: string, network: (url: string) => Promise<Response>) 
     await Promise.all(waits);
     return answer && await answer;
   };
-  return { dispatch, stored, shown };
+  return { dispatch, stored, shown, badged };
 }
 
 test('the built worker precaches the shell, refreshes it only from the app shell, and shows the news push', async () => {
@@ -152,4 +153,5 @@ test('the built worker precaches the shell, refreshes it only from the app shell
   assert.equal(worker.shown.length, 1);
   assert.equal(worker.shown[0][0], 'Crewhouse has news');
   assert.equal(worker.shown[0][1].tag, 'crewhouse');
+  assert.deepEqual(worker.badged, [undefined], 'the icon gets a plain dot, not a count');
 });

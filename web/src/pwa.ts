@@ -21,14 +21,21 @@ export function setBadge(n: number) {
 /** Whether this browser can be told about news while the app is closed. */
 export const pushPossible = () => canServe() && typeof Notification !== 'undefined' && 'PushManager' in window;
 
-/** Ask for notifications and hand the person's relay a Web Push address, through crewd. */
-export async function turnOnNotifications(): Promise<'on' | 'off' | 'unsupported' | 'norelay' | 'offline'> {
+// A worker that never activates (a failed install) must not hang the button: the wait is bounded, and the caller's toast says so.
+const worker = () => Promise.race([
+  navigator.serviceWorker.ready,
+  new Promise<never>((_, no) => setTimeout(() => no(new Error('the app is not ready yet')), 10_000)),
+]);
+
+/** Ask for notifications and hand the person's relay a Web Push address, through crewd. `relay` is what the page already
+ *  holds, so "no relay" never prompts; the permission request is the first await, so it stays inside the tap (iOS). */
+export async function turnOnNotifications(relay: boolean): Promise<'on' | 'off' | 'unsupported' | 'norelay' | 'offline'> {
   if (!pushPossible()) return 'unsupported';
-  const reg = await navigator.serviceWorker.ready;
-  const { vapid, ready, relay } = await api.pushKey();
   if (!relay) return 'norelay';
-  if (!ready || !vapid) return 'offline';
   if ((await Notification.requestPermission()) !== 'granted') return 'off';
+  const { vapid, ready } = await api.pushKey();
+  if (!ready || !vapid) return 'offline';
+  const reg = await worker();
   const old = await reg.pushManager.getSubscription();
   if (old) { await old.unsubscribe(); await api.push({ off: true, web: old.toJSON() }); }
   const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(vapid) });
@@ -39,7 +46,7 @@ export async function turnOnNotifications(): Promise<'on' | 'off' | 'unsupported
 /** Stop notifications on this browser and forget its address at the relay. */
 export async function turnOffNotifications() {
   if (!canServe()) return;
-  const sub = await (await navigator.serviceWorker.ready).pushManager.getSubscription();
+  const sub = await (await worker()).pushManager.getSubscription();
   if (!sub) return;
   await sub.unsubscribe();
   await api.push({ off: true, web: sub.toJSON() });
