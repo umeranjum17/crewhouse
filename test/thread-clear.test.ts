@@ -142,7 +142,7 @@ test('a phone thread clears its bars: every sign-in button above the composer, n
       const s = await run(`(() => { const st = document.querySelector('${sel}');
         return { card: [...document.querySelectorAll('.chat .card.ask .btn')].some((e) => /^Sign in/.test(e.textContent.trim())),
           status: st?.textContent.trim() ?? '', blue: st ? getComputedStyle(st).color : '', ask: ((a) => (a ? getComputedStyle(a).color : ''))(document.querySelector('.ask-status')) }; })()`);
-      if (s.card) seen.push(`${s.status}${s.status === 'Needs a sign-in' && s.blue !== s.ask ? ' (not the card blue)' : ''}`);
+      if (s.card) seen.push(`${s.status}${w >= 900 && s.status === 'Needs a sign-in' && s.blue !== s.ask ? ' (not the card blue)' : ''}`); // a phone card's status is its quiet grey line
       return s.card && seen.length > 3;
     }, 30_000);
     assert.deepEqual([...new Set(seen)], ['Needs a sign-in'], `at ${w}, Chief's status beside the sign-in card`);

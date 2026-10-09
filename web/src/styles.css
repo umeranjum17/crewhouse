@@ -768,11 +768,11 @@ details.card[open] > summary { margin-bottom: 10px; }
 .chat-intro span:last-child { color: var(--ink2); font-size: 14px; line-height: 1.45; max-width: 36ch; }
 /* The live line (board: "What Penny is doing"): a word and a clock, then the job as a to-do list, the small steps behind the expand. */
 .live-body { display: grid; gap: 6px; padding-top: 1px; }
-.live-head { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; font: 600 13px/18px var(--ui); }
-.live-word { display: inline-flex; align-items: center; gap: 6px; color: var(--ok-ink); }
-.live-word i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex: none; }
-.live-line.needs .live-word, .live-line.reading .live-word { color: var(--pink-ink); }
-.live-line.waiting .live-word { color: var(--mute); }
+.live-head { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; font: 400 13px/18px var(--ui); color: var(--mute); }
+.live-word { display: inline-flex; align-items: center; gap: 6px; }
+.live-word i { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); flex: none; }
+.live-line.needs .live-word i, .live-line.reading .live-word i { background: var(--pink); }
+.live-line.waiting .live-word i { background: var(--line2); }
 .live-head .link { font-weight: 500; }
 .live-todos { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
 .live-todos li { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 4px; font: 400 14px/20px var(--ui); color: var(--ink2); overflow-wrap: anywhere; }
@@ -1314,8 +1314,6 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
   .hello-brand { display: none; }
   .hello > .halo { zoom: .55; }
   .hello .speech { margin-top: 6px; }
-  .card.ask .btns:has(> .quiet) { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
-  .card.ask .btns:has(> .quiet) .btn { font-size: 13px; padding-inline: 10px; }
   .page .line:has(> .line-by) { display: block; }
   .page .line-by { padding: 0 0 2px; }
   .share .line-by { display: flex; align-items: center; gap: 8px; } /* Share's face sits beside the name, not above it */
@@ -1323,4 +1321,56 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
   .line-wrap > .card { margin-left: 0; max-width: none; }
   .live-end { padding-left: 0; }
   .chat-head .sub { display: none; } /* the name alone, as Muse and Grok head a thread; the hero under it says the role */
+}
+
+/* ch-pwa-chat (Main1774/1777): a phone thread reads as a conversation, not a transcript. No name on any turn (kept for
+   screen readers); your words in a bubble on the right, Chief's plain across the width. A card is one block: its title,
+   one quiet line, the evidence without a box, then one compact primary and "⋯" (a bottom sheet holds the rest). Two
+   type sizes per card: 15 and 13. The header's Chief | Office switch sits small in its one row. A desk keeps its rows. */
+.more-dots { display: none; }
+.live-line { padding-left: 74px; }
+.more-sheet { gap: 0; padding-bottom: max(16px, env(safe-area-inset-bottom)); }
+.more-head, .more-row { justify-self: stretch; }
+.more-head { display: grid; gap: 2px; padding: 6px 4px 12px; border-bottom: 1px solid var(--line); }
+.more-head b { font: 600 15px/20px var(--ui); }
+.more-head span { font: 400 13px/18px var(--ui); color: var(--mute); }
+.more-row { display: block; width: 100%; min-height: 52px; padding: 15px 4px; border: 0; border-bottom: 1px solid var(--line); background: none; text-align: left; font: 400 15px/22px var(--ui); color: var(--ink); cursor: pointer; }
+.more-row:last-child { border-bottom: 0; }
+.hello .name-ask { display: flex; flex-wrap: wrap; justify-content: center; align-items: baseline; gap: 4px 8px; margin-top: 10px; font: 400 15px/22px var(--ui); color: var(--ink2); }
+.hello .name-ask .input { width: 9em; padding: 2px 4px; border: 0; border-bottom: 1px solid var(--line2); border-radius: 0; background: none; text-align: center; font: 600 15px/22px var(--ui); }
+.hello .hello-ask { width: 100%; margin-top: 18px; text-align: left; }
+@media (max-width: 899px) {
+  .live-line { padding-left: 0; }
+  .chat .line-by { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .chat .line { margin-top: 16px; }
+  .chat .line .bubble-text { font: 400 16px/24px var(--ui); }
+  .chat .line.me { align-self: flex-end; max-width: 82%; }
+  .chat .line.me .bubble-text { background: var(--warm); padding: 9px 14px; border-radius: 20px 20px 6px 20px; }
+  [data-theme='night'] .chat .line.me .bubble-text { background: var(--line); }
+  .chat .card.ask { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; padding: 14px; border: 1px solid var(--line); border-radius: 18px; background: var(--card); max-width: none; }
+  .chat .card.ask > * { margin: 0; }
+  .chat .card.ask .ask-words, .chat .card.ask .ask-lines { order: -2; font: 600 15px/20px var(--ui); }
+  .chat .card.ask .ask-head { order: -1; }
+  .chat .card.ask:has(.ask-lines) .ask-head, .chat .ask-head > .face, .chat .ask-head > .app-ic, .chat .ask-head b, .chat .ask-head time, .chat .ask-status i { display: none; }
+  .chat .card.ask .ask-status { color: var(--mute); }
+  .chat .card.ask .ask-lines { display: block; }
+  .chat .card.ask .ask-line { display: inline; font: 400 13px/18px var(--ui); color: var(--mute); }
+  .chat .card.ask .ask-line:first-child { display: block; margin-bottom: 2px; font: 600 15px/20px var(--ui); color: var(--ink); }
+  .chat .card.ask .ask-line.quiet + .ask-line.quiet::before { content: ' · '; }
+  .chat .card.ask .ask-note { text-align: left; }
+  .chat .card.ask .ev { margin: 0; padding: 0; background: none; border-radius: 0; }
+  .chat .card.ask .btns { flex-wrap: nowrap; align-items: center; margin-top: 4px; }
+  .chat .card.ask .btn.go { min-height: 40px; padding: 8px 18px; font: 600 15px/20px var(--ui); }
+  .chat .card.ask .more-act { display: none; }
+  .chat .card.ask .more-dots { display: grid; place-items: center; width: 40px; min-height: 40px; padding: 0; }
+  .home-chat .chief-hero { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; column-gap: 10px; align-items: center; padding-bottom: 8px; border-bottom: 0; }
+  .home-chat .ch-row { display: contents; }
+  .home-chat .ch-art { grid-row: 1 / 3; }
+  .home-chat .ch-name { grid-column: 2; grid-row: 1; align-self: end; font-size: 20px; line-height: 24px; }
+  .home-chat .ch-status { grid-column: 2; grid-row: 2; align-self: start; font-size: 12px; line-height: 16px; }
+  .home-chat .chief-hero > .home-mode { grid-column: 3; grid-row: 1 / 3; align-self: center; padding: 3px; border-radius: 10px; }
+  .home-chat .chief-hero > .home-mode button { flex: none; padding: 5px 10px; border-radius: 8px; font: 600 13px/16px var(--ui); }
+  .home-chat .ch-row > .icon-btn { grid-column: 4; grid-row: 1 / 3; margin-left: 0; }
+  .hello { min-height: calc(100dvh - var(--top)); display: flex; flex-direction: column; align-items: center; }
+  .hello .hello-ask { position: sticky; bottom: 0; margin-top: auto; padding: 8px 0 max(12px, env(safe-area-inset-bottom)); background: var(--bg); }
 }

@@ -44,14 +44,23 @@ Headless: `test/office.test.ts` ("first run and the Share sheet read Term").
 
 ## On a phone (under 900 wide)
 
-Fewer things, the whole width. Hello has no wordmark: greeting, the three ideas, Or ask in your own words, then the
-four promises as quiet text (no boxed card). Every thread (Home, `#/chief`, a helper's page) drops the name column:
-the name sits small above the words, ask cards lose their indent, and a thread page's head is the name alone (its
-role is in the hero under it). An ask card's name and status share one line; a routine card shows its lines, not its
-headline twice. Sign-in choices are one list of plain rows (`.ai-picks .btn`, no blue primary). A fresh helper shows
-at most three starters, and they wrap.
+Fewer things, the whole width. Hello has no wordmark: greeting, then "What shall I call you?" as a small inline box
+(`.name-ask input`, or a Call me something else link once named), the three ideas, How it works, and Chief's normal
+box pinned at the foot (`.hello-ask .composer`). A thread is a conversation, not a transcript: no name on any turn
+(`.chat .line-by` is clipped for screen readers only), the person's words in a bubble on the right (`.line.me`),
+Chief's plain across the width. An ask card is one block: its title, one quiet grey line, the evidence with no inner
+box, then one compact blue primary and "⋯" (`.more-dots`); the rest (`.more-act`) wait in a bottom sheet with the
+card's title on top and one 15px full-width row each (`.more-sheet .more-row`). The live to-do's head is one quiet
+line, "Scout · at work · 12 s · Open chat ›", in plain type (no mono clock); Chief's own reply done in under a second
+leaves no "Done · 0 s" row. The Home header is one row: helmet, Chief over his status, the small Chief | Office
+switch, the gear; no divider. A thread page's head is the name alone. Sign-in choices are one list of plain rows
+(`.ai-picks .btn`). A fresh helper shows at most three starters. A desk keeps the named transcript and the card's
+buttons in a row (`.more-dots` hidden).
 
 - **Check.** At 360, 390 and 430 over Hello, Home, Office, fresh, first, a helper, Settings, an ask, Apps and Things
   (`?demo` variants): no text box wider than its clip parent, nothing painted past the screen edge, no document
-  scroll, and every `pre.art.helmet` has `role="img"` (a screen reader says its name, not hundreds of `%#*`).
-  `.page .line .line-by` is a block above `.bubble-text` (its top below the name's bottom).
+  scroll, and every `pre.art.helmet` has `role="img"`. In `?demo` Chief's thread at 390, `.chat .card.ask .more-act`
+  is not displayed and each card shows one `.btn.go` and one `.more-dots` (`test/office.test.ts` "a phone card is one
+  primary and ⋯" runs this and the sheet at 390 and 1440, day and night).
+- **Motion.** Tap a card's "⋯": the sheet rises with the card's title on top; tap Change time: the sheet closes and
+  the card's time box opens (`.routine-edit`). Escape or a tap on the scrim closes it.

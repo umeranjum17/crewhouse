@@ -1,8 +1,11 @@
 # The chat never goes quiet: live line, handoff mirror, toasts and the bubble
 
 From the send to the reply a thread changes at least once a second: "Reading your message" at once, then crewd's own
-steps ("Starting on it", "Passed to Scout", each tool step in plain words) with a clock counting up, and "Done · 14 s ·
-3 steps" at the end. In the thread where the person asked, a job passed to a helper is mirrored live, with a link to
+steps ("Starting on it", "Passed to Scout", each tool step in plain words) under one quiet line with the clock counting
+up ("Scout · at work · 12 s · Open chat ›"), and "Done · 14 s · 3 steps" at the end (Chief's own reply done in under a
+second shows none). The engine can send nothing for tens of seconds while the model writes a big file, so a working
+run with no event for 4 s says so on its live line, beside its one clock ("Chief · at work · 27 s · still working"; streamed
+words count as events); the next event clears it. No second clock. In the thread where the person asked, a job passed to a helper is mirrored live, with a link to
 the helper's chat. The rules and their numbers are the bar (ch-chat-live-1 `bar.md`); `adapter.liveLine` builds it from
 `/ws` events only (docs/ui-contract.md).
 
@@ -18,7 +21,9 @@ when no route is usable (expired sign-in, quota), say "not proven" with the caus
 
 **Gate (stub engine, no account).** `node --test test/chat-live.test.ts`: real crewd, the built web app, headless
 Chromium at 1440 and 390, a held Chief turn and a job passed to Scout; it fails if the visible thread sits still for
-over a second (one frame of timer jitter allowed). Mutation times are captured before reading `innerText`, whose
+over a second (one frame of timer jitter allowed). In the Chief turn it also waits for "Chief · at work · N s · still
+working" (at least 4 s after the task's last event, in sight inside the thread's scrolling box, one clock in the live
+line), emits crewd's own `run.tool` event (`db.event`) and expects "still working" gone. Mutation times are captured before reading `innerText`, whose
 forced-layout cost must not be charged to the preceding still stretch. It still requires changed visible words:
 slowing the live-line timer to two seconds must fail. For loaded-run qualification, repeat the gate ten times under
 the same bounded CPU contention before and after; retain logs and the load command. Prove a regression with it by
@@ -33,6 +38,10 @@ each of the last four thread lines whole — likewise `asideFull`/`heroFull` bes
 `aside`/`hero`), `push.jsonl` and one frame a second named by ms since send. Run one plain question and one
 "Ask Scout to …" at each width; stitch the frames into a timestamped recording with ffmpeg (`drawtext` with the ms
 from each file name, 1 fps). The probe's own loop is too coarse to judge a 1 s gap; `changes.json` is the measure.
+For the long silence on the stub, run crewd in-process (as the test does) with a 100 ms loop that, once Chief holds an
+"ask permission" turn, calls `db.event('run.tool', 'chief', {task, words})` 30 s after the task's last event, then
+releases the turn: shoot at 20 s ("· still working") and 34 s (gone) at 390 day and night, and record from 4 s to 33 s
+with `record.mjs` (its 30 s bound). Use a thread long enough to scroll: the live line must stay in sight above the box.
 
 **Toasts.** One shared toast (`parts.tsx` `Toast`): first in the dock, above the box you type in, or a bar along the
 screen's foot where a screen has no box. On the stub: onboard, seed a few About-you lines and chat lines, then

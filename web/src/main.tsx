@@ -76,12 +76,10 @@ function Hello({ state, refresh, night }: Ctx) {
   const [other, setOther] = useState(!named);
   const input = useRef<HTMLInputElement>(null);
   const [tipped, setTipped] = useState(false); // he raises his bowler as he greets, then settles
-  const [own, setOwn] = useState(false);
-  const [words, setWords] = useState('');
   useEffect(() => { const t = setTimeout(() => setTipped(true), 2400); return () => clearTimeout(t); }, []);
   const pick = (ask: string, bot?: string) => {
-    if (!address.trim()) { setOther(true); toast('First, what shall I call you?'); input.current?.focus(); return; }
-    void attempt(async () => { await api.onboard(address.trim(), ask, bot); refresh(); go('#/chief'); });
+    if (!address.trim()) { setOther(true); toast('First, what shall I call you?'); input.current?.focus(); return false; }
+    return attempt(async () => { await api.onboard(address.trim(), ask, bot); refresh(); go('#/chief'); });
   };
   return (
     <div className="hello">
@@ -91,19 +89,13 @@ function Hello({ state, refresh, night }: Ctx) {
         <h1>{A.greeting()}{address.trim() ? `, ${address.trim()}` : ''}</h1>
         <p className="lead">I'm Chief, your personal assistant. I run your crew of helpers.</p>
       </div>
+      {other
+        ? <label className="name-ask">What shall I call you?<input ref={input} className="input" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Your name" /></label>
+        : <button className="link name-ask" onClick={() => setOther(true)}>Call me something else</button>}
       <h2 className="plate">What can I take off your plate?</h2>
       <div className="ideas">
         {A.firstIdeas(state).map((i) => <button key={i.label} className="idea" onClick={() => pick(i.label, i.bot)}><span className="o-ic" aria-hidden>{i.icon}</span><b>{i.label}</b><i aria-hidden>›</i></button>)}
       </div>
-      {own ? <div className="own-ask">
-        <input className="input" value={words} onChange={(e) => setWords(e.target.value)} placeholder="Ask for anything…" aria-label="Your first ask"
-          onKeyDown={(e) => { if (e.key === 'Enter' && words.trim()) pick(words.trim()); }} />
-        <button className="btn go" disabled={!words.trim()} onClick={() => pick(words.trim())}>Send</button>
-      </div>
-        : <button className="link" onClick={() => setOwn(true)}>Or ask in your own words</button>}
-      {other
-        ? <input ref={input} className="input name" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="What shall I call you?" aria-label="What shall I call you?" />
-        : <button className="link" onClick={() => setOther(true)}>Call me something else</button>}
       <details className="how"><summary className="link">How it works</summary>
         <ul className="promises">
           <li>Your helpers live on this computer, and think with an AI account you already pay for.</li>
@@ -112,6 +104,7 @@ function Hello({ state, refresh, night }: Ctx) {
           <li>I'll ask before sending messages, deleting things or spending money.</li>
         </ul>
       </details>
+      <div className="hello-ask"><Composer placeholder="Ask Chief anything" onSend={(t) => pick(t)} /></div>
     </div>
   );
 }
@@ -496,6 +489,7 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
   // The live line's own feed: crewd's pushed events with the moment they were heard, and which replies are streaming.
   const [heard, setHeard] = useState<Json[]>([]);
   const [writing, setWriting] = useState(new Map<number, number>());
+  const stirred = useRef(new Map<number, number>()); // task → when anything about it last arrived; the clock re-renders
   const [now, setNow] = useState(0);
   const [seed, setSeed] = useState(0); // a starter chip fills the box from outside; remount reads the draft back
   // A search landing on an old line loads a window around it; once you send, the anchor goes and the thread reads to the end.
@@ -507,6 +501,7 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
   const waiting = pending && !(page?.messages ?? []).some((x: Json) => x.author === 'bot' && x.id > pending.after);
   useEffect(() => { setHeard([]); setWriting(new Map()); }, [id]);
   useEffect(() => subscribe((e) => {
+    if (typeof e.data?.task === 'number') stirred.current.set(e.data.task, Date.now());
     if (e.kind === 'reply.partial' && typeof e.data?.task === 'number') setWriting((w) => (w.has(e.data.task) ? w : new Map(w).set(e.data.task, Date.now())));
     if (typeof e.seq === 'number') setHeard((h) => [...h.slice(-300), { ...e, seen: Date.now() }]);
     if (e.bot !== id) return;
@@ -514,10 +509,13 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
     if (e.kind === 'message' && e.data?.author === 'bot') setPartial('');
   }), [id]);
   const crewNames = A.crew(state);
-  const ln = page ? A.liveLine({ id, name: crewNames.find((x) => x.id === id)?.name ?? 'Chief', crew: crewNames, writing, heard,
+  const ln = page ? A.liveLine({ id, name: crewNames.find((x) => x.id === id)?.name ?? 'Chief', crew: crewNames, writing, heard, last: stirred.current,
     tasks: [...(page.tasks ?? []), ...(id === 'chief' ? state.tasks ?? [] : [])], events: [...(page.trail ?? []), ...(state.events ?? [])],
     sent: waiting && pending ? pending.at : undefined }) : null;
   const ticking = !!ln && ln.took === undefined;
+  // The engine can say nothing for tens of seconds while the model writes a big file (Main1785): never a silent gap,
+  // so a run with no event for 4 s says "still working" on the live line, beside its one clock; the next event clears it.
+  const quiet = ln?.state === 'working' && ln.heard !== undefined && Date.now() - ln.heard >= QUIET_MS;
   // The clock beside the step moves on each whole second of the job, so the thread never sits still.
   useEffect(() => {
     if (!ticking) return;
@@ -534,7 +532,7 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
     if (around) return;
     const el = box.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [lines.length, around, !!echoed, ln?.state, ln?.todos.length, partial]);
+  }, [lines.length, around, !!echoed, ln?.state, ln?.todos.length, partial, quiet]);
   // The landing itself: the matched line, centred, with the one motion that explains where you are.
   useEffect(() => {
     if (!around || !lines.length) return;
@@ -600,7 +598,7 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
         {id === 'chief' && A.campaignOutcomes(state).map((c) => <CampaignReceipt key={c.id} outcome={c} />)}
         {echoed && <div className="line me fresh"><div className="line-by"><span className="who">You</span></div><div className="bubble-text">{pending.text}</div></div>}
         {!!partial && <div className="line them streaming" aria-live="polite"><div className="line-by"><span className="who">{name}</span></div><div className="bubble-text"><ChatText text={partial} /></div></div>}
-        {ln && <LiveRow ln={ln} />}
+        {ln && <LiveRow ln={ln} quiet={quiet} />}
         {A.building(lines, live) && <div className="line them" role="status"><div className="line-by"><span className="who">{name}</span></div><div className="building-card" aria-label="Building it"><i aria-hidden /><i aria-hidden /><div className="bubble-text">Building it. I’ll share it here.</div></div></div>}
         {last?.choices.length ? <div className="chips">{last.choices.map((c) => <button key={c} className="chip" onClick={() => send(c)}>{c}</button>)}</div> : null}
         {cards.filter((c) => !lines.length || lines.every((x) => (x.at ?? 0) > c.at)).map((c) => c.kind === 'connect' ? <ConnectCard key={c.id} c={c} helper={h?.name} state={state} onDone={refresh} /> : <AskCard key={c.id} c={c} who={h} onDone={refresh} />)}
@@ -624,18 +622,18 @@ const LIVE_WORD: Record<A.LiveLine['state'], string> = { reading: 'On it', worki
  *  to do — with the small tool calls kept behind the expand. At the end, one quiet line with how long it took.
  *  A job passed to a helper links to that helper's chat. */
 const TICK: Record<A.LiveTodo['state'], string> = { done: '✓', doing: '', todo: '○' };
-function LiveRow({ ln }: { ln: A.LiveLine }) {
-  const link = ln.helper && <a className="link" href={`#/h/${ln.helper}`}>Open {ln.who}'s chat ›</a>;
-  if (ln.took !== undefined) return <div className={`live-end ${ln.state}`} role="status">
-    <span>{ln.helper ? `${ln.who} · ` : ''}{LIVE_WORD[ln.state]}</span><span className="time">{A.took(ln.took)}</span>
-    {!!ln.count && <span>{ln.count} {ln.count === 1 ? 'step' : 'steps'}</span>}{link}</div>;
-  const doing = ln.todos.find((x) => x.state === 'doing');
+const QUIET_MS = 4000;
+function LiveRow({ ln, quiet }: { ln: A.LiveLine; quiet: boolean }) {
+  const link = ln.helper && <a className="link" href={`#/h/${ln.helper}`}>Open chat ›</a>;
+  // Chief's own reply done in under a second says nothing worth a line (Main1780b): "Done · 0 s" goes.
+  if (ln.took !== undefined) return ln.state === 'done' && ln.took < 1000 && !ln.helper ? null : <div className={`live-end ${ln.state}`} role="status">
+    <span>{ln.helper ? `${ln.who} · ${LIVE_WORD[ln.state].toLowerCase()}` : LIVE_WORD[ln.state]} · {A.took(ln.took)}{ln.count ? ` · ${ln.count} ${ln.count === 1 ? 'step' : 'steps'}` : ''}</span>{link}</div>;
+  // One quiet line over the to-do: who, the state and the clock in plain type, then the helper's chat (Main1777).
   return <div className={`line them live-line ${ln.state}`}>
-    <div className="line-by"><span className="who">{ln.who}</span></div>
     <div className="live-body">
-      <div className="live-head"><span className="live-word"><i aria-hidden />{LIVE_WORD[ln.state]}</span><span className="time" aria-hidden>{A.took(Date.now() - ln.since)}</span>{link}</div>
+      <div className="live-head"><span className="live-word"><i aria-hidden /><span>{ln.who} · {LIVE_WORD[ln.state].toLowerCase()} · <span aria-hidden>{A.took(Date.now() - ln.since)}</span>{quiet && <span role="status"> · still working</span>}</span></span>{link}</div>
       <ol className="live-todos" aria-live="polite">{ln.todos.map((s) => <li key={`${s.at}-${s.text}`} className={s.state}>
-        <span className={`tick ${s.state}`} aria-hidden>{TICK[s.state]}</span><span>{s.text}{s === doing && Date.now() - s.at > 20_000 && <span className="mute"> · still on it</span>}</span></li>)}</ol>
+        <span className={`tick ${s.state}`} aria-hidden>{TICK[s.state]}</span><span>{s.text}</span></li>)}</ol>
       {!!ln.detail.length && <details className="live-detail"><summary>Show the small steps ({ln.detail.length})</summary>
         <ol>{ln.detail.map((s) => <li key={`${s.at}-${s.text}`}><time className="time">{A.clock(s.at)}</time><span>{s.text}</span></li>)}</ol></details>}
     </div>

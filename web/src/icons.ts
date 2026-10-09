@@ -13,6 +13,7 @@ export const ICONS = {
   check: '<path d="M20 6 9 17l-5-5"/>',
   next: '<path d="m9 18 6-6-6-6"/>',
   money: '<circle cx="12" cy="12" r="10"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 18V6"/>',
+  more: '<circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/>',
   phone: '<rect width="14" height="20" x="5" y="2" rx="2"/><path d="M12 18h.01"/>',
 } as const;
 export type IconName = keyof typeof ICONS;

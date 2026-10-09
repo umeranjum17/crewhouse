@@ -1124,7 +1124,9 @@ export type LiveStep = { text: string; at: number };
  *  Every row names the thing it acts on; nothing repeats. The small tool calls live in `detail`, behind the expand. */
 export type LiveTodo = { text: string; state: 'done' | 'doing' | 'todo'; at: number };
 export type LiveLine = { who: string; helper?: string; todos: LiveTodo[]; detail: LiveStep[]; since: number;
-  state: 'reading' | 'working' | 'needs' | 'waiting' | 'done' | 'failed' | 'unsure'; took?: number; count?: number };
+  state: 'reading' | 'working' | 'needs' | 'waiting' | 'done' | 'failed' | 'unsure'; took?: number; count?: number;
+  /** Client time of the run's last event of any kind, streamed words included: a silence counts from here. */
+  heard?: number };
 const OPEN = ['queued', 'working', 'needs_you', 'paused'];
 const END: Record<string, LiveLine['state']> = { 'task.done': 'done', 'task.failed': 'failed', 'task.unsure': 'unsure' };
 /** "8 s", "1 m 05 s": the clock beside the step, counting up from real crewd times. */
@@ -1139,9 +1141,10 @@ const planOf = (body: unknown): string[] => {
  *  steps still to do, and the small tool calls kept for the expand. Chief's thread also follows a job it passed to a
  *  helper, so a phone without the side column still sees the work. `sent` is a send not yet answered by any job (the
  *  list then reads the message); `writing` maps a task whose reply is streaming to when it began; `heard` are events
- *  pushed while the thread is open (they carry `seen`, the client time). */
+ *  pushed while the thread is open (they carry `seen`, the client time); `last` maps a task to when anything about it
+ *  last arrived, streamed words included. */
 export function liveLine(o: { id: string; name: string; crew: { id: string; name: string }[]; tasks: Json[]; events: Json[];
-  heard: Json[]; sent?: number; writing: Map<number, number> }): LiveLine | null {
+  heard: Json[]; sent?: number; writing: Map<number, number>; last?: Map<number, number> }): LiveLine | null {
   const evs = new Map<number, Json>();
   for (const e of [...o.events, ...o.heard]) if (typeof e.seq === 'number') evs.set(e.seq, { ...evs.get(e.seq), ...e });
   const all = [...evs.values()].sort((a, b) => a.seq - b.seq);
@@ -1193,7 +1196,8 @@ export function liveLine(o: { id: string; name: string; crew: { id: string; name
   todos.forEach((x, i) => { x.state = i < todos.length - 1 ? 'done' : 'doing'; });
   for (const p of planOf(t.body)) if (p && !said.has(p)) { said.add(p); todos.push({ text: p, state: 'todo', at: start }); }
   // A progress note rides both rows (the call and the note); the list said it, so the expand must not repeat it.
-  return { who, helper: helper?.id, todos, detail: detail.filter((d) => !said.has(d.text)), since: start, state };
+  return { who, helper: helper?.id, todos, detail: detail.filter((d) => !said.has(d.text)), since: start, state,
+    heard: Math.max(start, writing ?? 0, o.last?.get(t.id) ?? 0, ...own.map(when)) };
 }
 
 // ---------- a chat ----------
