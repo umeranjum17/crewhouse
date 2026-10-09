@@ -45,4 +45,8 @@ test('the printed away code pastes back through the one code box, for an https, 
     { kind: 'relay', short: 'K7M2QX', code: '7KQ4M2XP9RTH', base: 'https://relay.example.com:8443' });
   assert.deepEqual(readTyped(await printedCode('http://127.0.0.1:7712')),
     { kind: 'relay', short: 'K7M2QX', code: '7KQ4M2XP9RTH', base: 'http://127.0.0.1:7712' });
+  assert.deepEqual(readTyped(await printedCode('https://localhost:8443')),
+    { kind: 'relay', short: 'K7M2QX', code: '7KQ4M2XP9RTH', base: 'https://localhost:8443' });
+  assert.deepEqual(readTyped(await printedCode('wss://[::1]:8443')),
+    { kind: 'relay', short: 'K7M2QX', code: '7KQ4M2XP9RTH', base: 'https://[::1]:8443' });
 });

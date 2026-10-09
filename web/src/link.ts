@@ -33,7 +33,7 @@ export async function pair(text: string, onWords: (w: string) => void) {
 
 /** Back to the demo: tell the computer (briefly; it may be off), forget the grant, clear the icon's count. */
 export async function unpair(link: DeviceLink) {
-  await Promise.race([turnOffNotifications().then(() => link.unpair()), new Promise((ok) => setTimeout(ok, 5000))]).catch(() => {});
+  await Promise.race([turnOffNotifications().catch(() => {}).then(() => link.unpair()).catch(() => {}), new Promise((ok) => setTimeout(ok, 5000))]);
   link.stop();
   await store.clear();
   await leave();
