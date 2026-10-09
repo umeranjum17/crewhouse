@@ -76,7 +76,7 @@ test('quiet hours hold the push and send exactly one when they end, even across 
   quiet = false;
   b.sendHeld();
   b.sendHeld();
-  assert.deepEqual(sent.map((n) => n.to), [['pixel', 'ipad']], 'one push when quiet hours end, for however much came in');
+  assert.deepEqual(sent.map((n) => n.to), [['pixel', 'ipad', 'web']], 'one push when quiet hours end, for however much came in');
   db.close();
 });
 
@@ -558,12 +558,8 @@ test('one browser turning notifications off leaves the other browsers addressed'
   await link.setWebPush({ web: laptop });
   await link.setWebPush({ web: phone });
   await link.setWebPush({ off: true, web: laptop });
-  assert.deepEqual(calls.at(-1), ['unsubscribe', 'web', laptop]);
-  await link.tell('e1');
-  assert.deepEqual(calls.at(-1)[1].to, ['web'], 'the phone browser still hears the news');
+  assert.deepEqual(calls.at(-1), ['unsubscribe', 'web', { web: laptop }], 'only the laptop\'s address is dropped');
   await link.setWebPush({ off: true, web: phone });
-  calls.length = 0;
-  await link.tell('e2');
-  assert.deepEqual(calls, [], 'no browser left addressed: nothing goes to the relay');
+  assert.deepEqual(calls.at(-1), ['unsubscribe', 'web', { web: phone }]);
   db.close();
 });

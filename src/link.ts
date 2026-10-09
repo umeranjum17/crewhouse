@@ -320,11 +320,11 @@ export class Link {
    *  quiet hours the push is held (kept in the store, so a restart keeps it) and `sendHeld` sends one when they end. */
   private async tell(id: string) {
     if (this.quiet()) return void this.db.run("INSERT INTO settings (key, value) VALUES (?, '1') ON CONFLICT(key) DO NOTHING", 'push.held.1');
-    const to = [...this.host.devices().map((g) => g.id), ...(this.webs().length ? [WEB_DEVICE] : [])];
+    const to = [...this.host.devices().map((g) => g.id), WEB_DEVICE];
     const phones = to.map((d) => [d, this.setting(`phone.push.${d}`)]).filter(([, t]) => isExpoToken(t));
     if (phones.length) await this.expo(id, phones as [string, string][]).catch((e) => console.error('push:', e.message));
     // A browser's Web Push address is kept on the person's relay, which holds the key for it.
-    if (to.length && this.client && this.relayStatus === 'online') await this.client.notify({ id, title: NEWS, to }).catch((e) => console.error('push:', e.message));
+    if (this.client && this.relayStatus === 'online') await this.client.notify({ id, title: NEWS, to }).catch((e) => console.error('push:', e.message));
   }
 
   /** One content-free push per phone through Expo. Expo refusing the app's credential (none set up yet) is kept for
@@ -395,12 +395,10 @@ export class Link {
       seen: g.lastSeen ?? g.created, online: g.online, reached: this.reached(g.id), push: pushOf(this.setting(`phone.push.${g.id}`)) }));
   }
 
-  private webs(): string[] { return JSON.parse(this.setting('push.web') || '[]'); }
   async setWebPush(sub: any) {
-    const end = sub?.web?.endpoint, webs = this.webs();
-    if (sub?.off === true) { this.put('push.web', JSON.stringify(end ? webs.filter((e) => e !== end) : [])); return void await this.client?.unsubscribe(WEB_DEVICE, end ? sub.web : undefined); }
+    if (sub?.off === true) return void await this.client?.unsubscribe(WEB_DEVICE, sub.web && { web: sub.web });
     if (!this.client || typeof sub?.web !== 'object') throw Object.assign(new Error('no relay for notifications'), { status: 409 });
-    await this.client.subscribe(WEB_DEVICE, { web: sub.web }); this.put('push.web', JSON.stringify([...new Set([...webs, end])]));
+    await this.client.subscribe(WEB_DEVICE, { web: sub.web });
   }
   async revoke(id: string) {
     if (!this.host.devices().some((g) => g.id === id)) throw Object.assign(new Error('no such device'), { status: 404 });
