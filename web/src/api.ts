@@ -2,18 +2,30 @@
 export type Json = any;
 
 
-/** `?demo` runs the screens on a personal assistant demo (web/src/demo.ts): for design review and screenshots. */
-export const demo = typeof location !== 'undefined' && new URLSearchParams(location.search).has('demo');
+// The private launcher hands authority through a fragment, never an HTTP URL or response.
+const launched = typeof location !== 'undefined' && /^#person=([a-f0-9]{64})$/.exec(location.hash)?.[1];
+if (launched) { sessionStorage.setItem('crewhouse.person', launched); history.replaceState(null, '', `${location.pathname}${location.search}#/`); }
+const person = () => typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('crewhouse.person') ?? '' : '';
+
+/** Is crewd serving this page itself? It answers loopback only (src/server.ts's guard), so a loopback origin, or the
+ *  launcher's own person fragment, means a real backend is right here. A public static host is neither. */
+const localTransport = typeof location !== 'undefined' && (/^(127\.0\.0\.1|localhost|\[::1\])$/.test(location.hostname ?? '') || !!launched);
+
+/** `?demo` runs the screens on a personal assistant demo (web/src/demo.ts): for design review and screenshots.
+ *  With no explicit choice the app boots in demo only when it has no backend of its own: the published static shell
+ *  (a public host, not crewd's loopback, no stored device grant yet) opens straight into demo, while crewd's own
+ *  pages stay real. `?real` forces a backend even on the public shell; pairing (a stored device grant) does too. */
+export const demo = typeof location !== 'undefined' && (() => {
+  const search = new URLSearchParams(location.search);
+  if (search.has('demo')) return true;
+  if (search.has('real')) return false;
+  return !localTransport;
+})();
 
 /** How a call reaches crewd: HTTP on this computer; the phone app swaps in its encrypted link. */
 export type Transport = (method: string, path: string, body?: Json) => Promise<Json>;
 let call: Transport = http;
 export function setTransport(t: Transport) { call = t; }
-
-// The private launcher hands authority through a fragment, never an HTTP URL or response.
-const launched = typeof location !== 'undefined' && /^#person=([a-f0-9]{64})$/.exec(location.hash)?.[1];
-if (launched) { sessionStorage.setItem('crewhouse.person', launched); history.replaceState(null, '', `${location.pathname}${location.search}#/`); }
-const person = () => typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('crewhouse.person') ?? '' : '';
 
 async function http(method: string, path: string, body?: Json) {
   if (demo) return (await import('./demo.ts')).demoCall(method, path, body);

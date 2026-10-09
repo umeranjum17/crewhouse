@@ -24,6 +24,7 @@ evidence and cleanup live in [`../SKILL.md`](../SKILL.md); recipes assume an iso
 | term-screens | [term-screens.md](term-screens.md) | Things, routines, helper details, the file panel, first run and the Share sheet wear Term: shared tiles, one blue primary, names in full |
 | thread-clear | [thread-clear.md](thread-clear.md) | Phone threads scroll in their own column: the sign-in card's buttons clear the composer, no line under the top bar; Chief says the sign-in wait once, and his header says it too |
 | reply-fold | [reply-fold.md](reply-fold.md) | A long chat reply folds behind More on whole items (no empty or half-cut bullet); More and Less toggle |
+| pwa-demo-boot | [pwa-demo-boot.md](pwa-demo-boot.md) | The published static shell boots into the in-bundle demo on a public origin (no backend), while crewd's loopback stays real; ?demo/?real override |
 
 ## Proof and skip reporting
 
