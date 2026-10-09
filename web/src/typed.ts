@@ -7,6 +7,12 @@ export type Typed =
 
 const CODES = 18; // the relay's short code (6) then link's pairing code (12)
 
+/** A relay code as a person types it: host only for https or wss (readTyped rebuilds https://), else the full origin. */
+export function relayTyped(short: string, code: string, relay: string) {
+  const u = new URL(relay);
+  return `${short}-${code}@${u.protocol === 'https:' || u.protocol === 'wss:' ? u.host : u.origin}`;
+}
+
 export function readTyped(text: string): Typed {
   const at = text.indexOf('@');
   if (at < 0) {
@@ -17,7 +23,7 @@ export function readTyped(text: string): Typed {
   const codes = text.slice(0, at).toUpperCase().replace(/[\s-]/g, '');
   const base = text.slice(at + 1).trim();
   if (codes.length !== CODES) return { kind: 'unknown' };
-  const address = /^[a-z]+:\/\//i.test(base) || /^([a-z0-9-]+\.)+[a-z0-9-]+$/i.test(base);
+  const address = /^[a-z]+:\/\//i.test(base) || /^([a-z0-9-]+\.)+[a-z0-9-]+(:\d+)?$/i.test(base);
   if (!address) return { kind: 'unknown' };
   return { kind: 'relay', short: codes.slice(0, 6), code: codes.slice(6), base: /^[a-z]+:\/\//i.test(base) ? base : `https://${base}` };
 }

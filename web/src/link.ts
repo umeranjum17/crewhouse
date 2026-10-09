@@ -70,8 +70,9 @@ function start(grant: DeviceGrant) {
     desktop: (bot) => lineSignaling(async (hear, lost) => {
       const s = await link.stream('desktop', { bot, build: BUILD });
       let buf = '';
+      const utf8 = new TextDecoder();
       s.onData = (chunk) => {
-        buf += new TextDecoder().decode(chunk);
+        buf += utf8.decode(chunk, { stream: true });
         for (let i; (i = buf.indexOf('\n')) >= 0; buf = buf.slice(i + 1)) hear(JSON.parse(buf.slice(0, i)));
       };
       s.onEnd = lost;
