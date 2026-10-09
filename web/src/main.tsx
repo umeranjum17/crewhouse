@@ -91,12 +91,6 @@ function Hello({ state, refresh, night }: Ctx) {
         <h1>{A.greeting()}{address.trim() ? `, ${address.trim()}` : ''}</h1>
         <p className="lead">I'm Chief, your personal assistant. I run your crew of helpers.</p>
       </div>
-      <ul className="promises">
-        <li>Your helpers live on this computer, and think with an AI account you already pay for.</li>
-        <li>{A.atHome()[1]}</li>
-        <li>{A.atHome()[2]}</li>
-        <li>I'll ask before sending messages, deleting things or spending money.</li>
-      </ul>
       <h2 className="plate">What can I take off your plate?</h2>
       <div className="ideas">
         {A.firstIdeas(state).map((i) => <button key={i.label} className="idea" onClick={() => pick(i.label, i.bot)}><span className="o-ic" aria-hidden>{i.icon}</span><b>{i.label}</b><i aria-hidden>›</i></button>)}
@@ -110,6 +104,14 @@ function Hello({ state, refresh, night }: Ctx) {
       {other
         ? <input ref={input} className="input name" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="What shall I call you?" aria-label="What shall I call you?" />
         : <button className="link" onClick={() => setOther(true)}>Call me something else</button>}
+      <details className="how"><summary className="link">How it works</summary>
+        <ul className="promises">
+          <li>Your helpers live on this computer, and think with an AI account you already pay for.</li>
+          <li>{A.atHome()[1]}</li>
+          <li>{A.atHome()[2]}</li>
+          <li>I'll ask before sending messages, deleting things or spending money.</li>
+        </ul>
+      </details>
     </div>
   );
 }
@@ -440,7 +442,7 @@ function ChiefIdeas({ state, chat, picked }: { state: Json; chat: string; picked
 
 /** A helper's starters in its own fresh chat: its own ready rows only, never another helper's. A tap fills the box, it never sends. */
 function HelperIdeas({ state, chat, picked }: { state: Json; chat: string; picked: () => void }) {
-  const rows = A.ideas(state).filter((i: Json) => i.bot === chat);
+  const rows = A.ideas(state).filter((i: Json) => i.bot === chat).slice(0, 3); // three starters; the rest wait in Hand me a job
   if (!rows.length) return null;
   return <div className="chips center">{rows.map((i: Json) => (
     <button key={i.bot + i.label} className="chip" onClick={() => { keepDraft(chat, i.ask); picked(); }}>✦ {i.label}</button>

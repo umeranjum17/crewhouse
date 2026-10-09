@@ -170,7 +170,7 @@ export function ChiefArt({ mood = 'idle', d = 6, hero, whole }: { mood?: art.Moo
   const mode = art.helmetOf(flash ? 'blink' : mood);
   const beat = useTicker(140, !!hero && mode === 'think');
   const cells = useMemo(() => art.helmet(whole ? 38 : 24, mode, night, beat), [mode, beat]);
-  return <pre className="art helmet" data-mode={mode} style={whole ? undefined : { fontSize: d }} aria-label="Chief">{
+  return <pre className="art helmet" data-mode={mode} style={whole ? undefined : { fontSize: d }} role="img" aria-label="Chief">{
     cells.map((row, y) => <div key={y}>{row.map((c, x) => c.eye ? <i key={x} className="eye">{c.ch}</i> : c.scan ? <i key={x} className="scan">{c.ch}</i> : c.ch)}</div>)}
   </pre>;
 }
@@ -180,7 +180,7 @@ export function PalArt({ kind, mood = 'idle', d = 4, name, live }: { kind: art.K
   // runs none (useTicker). The eyes still light blue when needed, shut at rest: that is the mood, not motion.
   const beat = useTicker(140, !!live && mode === 'think');
   const cells = useMemo(() => art.helmet(14, mode, night, beat), [mode, beat]);
-  return <pre className="art helmet" data-mode={mode} style={{ fontSize: d }} aria-label={name ?? kind}>{
+  return <pre className="art helmet" data-mode={mode} style={{ fontSize: d }} role="img" aria-label={name ?? kind}>{
     cells.map((row, y) => <div key={y}>{row.map((c, x) => c.eye ? <i key={x} className="eye">{c.ch}</i> : c.scan ? <i key={x} className="scan">{c.ch}</i> : c.ch)}</div>)}
   </pre>;
 }
@@ -700,7 +700,7 @@ export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; 
   return (
     <div className={`card ask${c.campaign ? ' campaign' : ''}`}>
       <AskHead c={c} who={who} />
-      <p className="ask-words">{question}</p>
+      {!(c.kind === 'routine' && c.lines) && <p className="ask-words">{question}</p>}
       {edit.box || (c.kind === 'routine' && c.lines ? <div className="ask-lines">{c.lines.map((l, i) => <p key={i} className={`ask-line${i ? ' quiet' : ''}`}>{l}</p>)}</div>
         : <AskEvidence c={c.evidence === 'draft' && c.preview ? { ...c, preview: { ...c.preview, body: flowed(c.preview.body) } } : c} open={false} readAll={<a className="link" href={`#/ask/${c.id}`}>Read all</a>} />)}
       {oops && <div className="send-failed" role="alert">That didn't go through. <button type="button" className="link inline" onClick={() => last.current && act(last.current)}>Try again</button></div>}
@@ -715,7 +715,7 @@ export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; 
             <button className="btn go" disabled={stuck} onClick={start}>{yes?.label ?? 'Start it'}</button>
             <button className="btn" aria-pressed={when !== null} onClick={() => { setWhen(when === null ? c.schedule || '' : null); }}>{when === null ? 'Change time' : 'Keep the time'}</button>
             {deny && <button className="btn" onClick={() => act(deny.body)}>{deny.label}</button>}
-          {remind && <button className="btn ghost" onClick={() => act(remind)}>Remind me tomorrow</button>}
+            {remind && <button className="btn quiet" onClick={() => act(remind)}>Remind me tomorrow</button>}
           </div>
         </>
       ) : c.kind === 'plan' ? (
@@ -728,7 +728,7 @@ export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; 
             {change === null && <button className="btn go" onClick={() => act(yes.body)}>{yes.label}</button>}
             <button className="btn" aria-pressed={change !== null} onClick={() => setChange(change === null ? '' : null)}>{change === null ? 'Change it' : 'Keep the plan'}</button>
             {deny && <button className="btn" onClick={() => act(deny.body)}>{deny.label}</button>}
-          {remind && <button className="btn ghost" onClick={() => act(remind)}>Remind me tomorrow</button>}
+            {remind && <button className="btn quiet" onClick={() => act(remind)}>Remind me tomorrow</button>}
           </div>
         </>
       ) : c.reply ? (
@@ -740,14 +740,14 @@ export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; 
         <div className="btns">
           <a className="btn go" href={`#/ask/${c.id}`}>Review order</a>
           {deny && <button className="btn ghost" onClick={() => act(deny.body)}>{deny.label}</button>}
-          {remind && <button className="btn ghost" onClick={() => act(remind)}>Remind me tomorrow</button>}
+          {remind && <button className="btn quiet" onClick={() => act(remind)}>Remind me tomorrow</button>}
         </div>
       ) : yes ? (
         <div className="btns">
           <button className="btn go" disabled={edit.empty} onClick={() => act(edit.yes(yes.body))}>{yes.label}</button>
           {edit.can && <button className="btn" aria-pressed={edit.editing} onClick={edit.toggle}>{edit.editing ? 'Use the original' : 'Edit'}</button>}
           {deny && <button className="btn" onClick={() => act(deny.body)}>{deny.label}</button>}
-          {remind && <button className="btn ghost" onClick={() => act(remind)}>Remind me tomorrow</button>}
+          {remind && <button className="btn quiet" onClick={() => act(remind)}>Remind me tomorrow</button>}
           {always && <button className="btn ghost always" onClick={() => act(always.body)}>{always.label}</button>}
         </div>
       ) : null}

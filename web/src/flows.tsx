@@ -6,7 +6,7 @@ import { createPortal } from 'react-dom';
 import { api, demo, trouble, type Json } from './api.ts';
 import * as A from './adapter.ts';
 import * as art from './art.ts';
-import { AiMark, attempt, ChiefArt, Dots, Face, Laptop, Pill, toast, useDialogOwn } from './parts.tsx';
+import { AiMark, attempt, ChiefArt, Dots, Face, Icon, Laptop, Pill, toast, useDialogOwn } from './parts.tsx';
 
 type Phase = 'opening' | 'waiting' | 'code' | 'done' | 'work' | 'busy' | 'cancelled' | 'unticked' | 'expired' | 'failed' | 'offline' | 'unavailable' | 'house';
 /** ?demo&phase=expired pins a flow to one state, for design review and screenshots. */
@@ -185,8 +185,8 @@ export function AccountCard({ accounts, inChat, onReady }: { accounts: Json[] | 
     <div className="card ask">
       <div className="ask-head"><Face who="chief" size={28} /><div className="grow"><b>Chief</b><div className="ask-status"><i />{NEEDS_SIGNIN}</div></div></div>
       <p className="ask-words">{g.recovery || <>Say yes once on your AI's page. Your job starts when you come back.</>}</p>
-      <div className="btns">
-        {offered.map(({ ai: r }) => <button key={r.key} className="btn go" onClick={() => { setSignKey(r.key); setSigning(openTab()); }}><AiMark ai={r} size={24} />Sign in with {r.name}</button>)}
+      <div className="ai-picks">
+        {offered.map(({ ai: r }) => <button key={r.key} className="btn" onClick={() => { setSignKey(r.key); setSigning(openTab()); }}><AiMark ai={r} size={24} /><span className="grow">Sign in with {r.name}</span><Icon name="next" /></button>)}
       </div>
       {signing !== false && <SignIn ai={signAi} tab={signing} onReady={() => { setSigning(false); onReady(); }} onClose={() => setSigning(false)} />}
     </div>

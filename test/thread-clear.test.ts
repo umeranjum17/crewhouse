@@ -71,7 +71,7 @@ test('a phone thread clears its bars: every sign-in button above the composer, n
     await send('Page.navigate', { url: `${base}/?demo=longthread&night${route}` });
     await until('the new route', () => run(`location.hash === '${route}' && document.readyState === 'complete'`), 30_000);
     // Signed out, so the thread ends on the sign-in card with every provider's button.
-    await until('the sign-in card', () => run("[...document.querySelectorAll('.chat .card.ask .btn.go')].filter((e) => /^Sign in/.test(e.textContent.trim())).length >= 6"), 30_000);
+    await until('the sign-in card', () => run("[...document.querySelectorAll('.chat .card.ask .btn')].filter((e) => /^Sign in/.test(e.textContent.trim())).length >= 6"), 30_000);
     await until('a long thread', () => run("document.querySelectorAll('.chat .lines .line').length > 10"), 30_000);
 
     // Scroll the thread itself where it scrolls (its own lines column once contained, the document before that).
@@ -90,7 +90,7 @@ test('a phone thread clears its bars: every sign-in button above the composer, n
     const near = await run(`(() => {
       const box = document.querySelector('.chat .lines').getBoundingClientRect();
       const dock = document.querySelector('.chat .dock').getBoundingClientRect();
-      const under = [...document.querySelectorAll('.chat .card.ask .btn.go')].filter((e) => /^Sign in/.test(e.textContent.trim()))
+      const under = [...document.querySelectorAll('.chat .card.ask .btn')].filter((e) => /^Sign in/.test(e.textContent.trim()))
         .filter((e) => { const b = e.getBoundingClientRect();
           const seenTop = Math.max(b.top, box.top, 0), seenBottom = Math.min(b.bottom, box.bottom, innerHeight);
           return seenBottom > seenTop && seenBottom > dock.top + 1 && seenTop < dock.bottom - 1; })
@@ -103,13 +103,13 @@ test('a phone thread clears its bars: every sign-in button above the composer, n
     await scrollThread(1);
     const bottom = await run(`(() => {
       const R = (e) => { const b = e.getBoundingClientRect(); return { top: b.top, bottom: b.bottom, left: b.left, right: b.right }; };
-      const btns = [...document.querySelectorAll('.chat .card.ask .btn.go')].filter((e) => /^Sign in/.test(e.textContent.trim()));
+      const btns = [...document.querySelectorAll('.chat .card.ask .btn')].filter((e) => /^Sign in/.test(e.textContent.trim()));
       const last = btns.at(-1);
       const dock = document.querySelector('.chat .dock');
       const r = R(last);
       const hit = document.elementFromPoint((r.left + r.right) / 2, (r.top + r.bottom) / 2);
       return { text: last.textContent.trim(), rect: R(last), dock: R(dock), vh: innerHeight,
-        hit: hit?.closest('.btn.go')?.textContent.trim() ?? hit?.tagName ?? 'none' };
+        hit: hit?.closest('.btn')?.textContent.trim() ?? hit?.tagName ?? 'none' };
     })()`);
     assert.ok(bottom.rect.bottom <= bottom.dock.top, `${route} at the bottom, ${bottom.text} ends at ${Math.round(bottom.rect.bottom)} but the composer starts at ${Math.round(bottom.dock.top)}`);
     assert.ok(bottom.rect.bottom <= bottom.vh && bottom.rect.top >= 0, `${bottom.text} is on screen whole`);
@@ -140,7 +140,7 @@ test('a phone thread clears its bars: every sign-in button above the composer, n
     const seen: string[] = [];
     await until('the sign-in wait', async () => {
       const s = await run(`(() => { const st = document.querySelector('${sel}');
-        return { card: [...document.querySelectorAll('.chat .card.ask .btn.go')].some((e) => /^Sign in/.test(e.textContent.trim())),
+        return { card: [...document.querySelectorAll('.chat .card.ask .btn')].some((e) => /^Sign in/.test(e.textContent.trim())),
           status: st?.textContent.trim() ?? '', blue: st ? getComputedStyle(st).color : '', ask: ((a) => (a ? getComputedStyle(a).color : ''))(document.querySelector('.ask-status')) }; })()`);
       if (s.card) seen.push(`${s.status}${s.status === 'Needs a sign-in' && s.blue !== s.ask ? ' (not the card blue)' : ''}`);
       return s.card && seen.length > 3;

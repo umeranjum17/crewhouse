@@ -129,6 +129,7 @@ b { font-weight: 600; }
 .pill.off i { background: var(--shadow); box-shadow: none; }
 .chips { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0; }
 .chips.center { justify-content: center; }
+.chips.center .chip { white-space: normal; text-align: left; max-width: 100%; }
 .ideas-intro { text-align: center; color: var(--ink2); margin: 10px 0 0; }
 .chip { font: 500 13px/18px var(--ui); background: var(--soft); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; white-space: nowrap; display: inline-flex; gap: 6px; align-items: center; }
 .chip.on { background: var(--solid); border-color: var(--ink2); }
@@ -158,6 +159,7 @@ textarea.input { resize: vertical; }
 /* The ask sits inline in the thread: no card, a dashed rule above it; the name and flag, the words, then two buttons. */
 .card.ask { background: none; border: 0; border-top: 1px dashed var(--line2); border-radius: 0; padding: 14px 0 0; margin-top: 16px; max-width: 640px; }
 .ask-head { display: flex; gap: 10px; align-items: center; }
+.ask-head .grow { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; min-width: 0; }
 .ask-head b { font-weight: 600; color: var(--pink-ink); }
 .ask-status { display: flex; gap: 6px; align-items: center; font: 400 13px/18px var(--ui); color: var(--pink-ink); }
 .ask-status i { width: 6px; height: 6px; border-radius: 50%; background: var(--pink); flex: none; }
@@ -800,8 +802,8 @@ details.card[open] > summary { margin-bottom: 10px; }
 .hello > * { animation: rise 420ms var(--ease) both; }
 .hello > .halo { animation-name: pop; animation-delay: 60ms; }
 .hello > .speech { animation-delay: 140ms; }
-.hello > .promises { animation-delay: 220ms; }
 .hello > .plate, .hello > .ideas { animation-delay: 300ms; }
+.hello > .how { animation-delay: 380ms; }
 .idea { transition: border-color 120ms var(--ease), transform 160ms var(--ease), box-shadow 160ms var(--ease); }
 .idea:hover { border-color: var(--line2); box-shadow: var(--e1); }
 .idea:active { transform: scale(.985); }
@@ -1287,4 +1289,31 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
 @media (min-width: 1200px) {
   .home-office { grid-template-columns: minmax(0, 1fr); }
   .home-office > .home-top { margin-right: 32px; }
+}
+
+/* ch-pwa-simplify: the phone shows less and uses its width. First run leads with the three ideas (no wordmark; the
+   promises wait behind How it works); every thread drops its name column (the name sits small above the words)
+   and the cards their indent; the sign-in choices are one list of plain rows. */
+.ai-picks { display: grid; gap: 8px; margin-top: 12px; }
+.hello .how { width: 100%; padding: 0; }
+.hello .how > summary { display: block; width: fit-content; margin: 0 auto; list-style: none; cursor: pointer; }
+.hello .how > summary::-webkit-details-marker { display: none; }
+.hello .how .promises { margin-top: 10px; padding: 0 4px; background: none; border: 0; border-radius: 0; font-size: 13px; gap: 6px; color: var(--mute); }
+.hello .how .promises li { grid-template-columns: 14px 1fr; gap: 8px; }
+.ai-picks .btn { justify-content: flex-start; gap: 10px; text-align: left; }
+.ai-picks .btn > svg:last-child { color: var(--mute); }
+@media (max-width: 899px) {
+  .hello { padding-top: 24px; }
+  .hello-brand { display: none; }
+  .hello > .halo { zoom: .55; }
+  .hello .speech { margin-top: 6px; }
+  .card.ask .btns:has(> .quiet) { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+  .card.ask .btns:has(> .quiet) .btn { font-size: 13px; padding-inline: 10px; }
+  .page .line:has(> .line-by) { display: block; }
+  .page .line-by { padding: 0 0 2px; }
+  .share .line-by { display: flex; align-items: center; gap: 8px; } /* Share's face sits beside the name, not above it */
+  .page .line-by .who { font: 600 12px/16px var(--ui); color: var(--mute); }
+  .line-wrap > .card { margin-left: 0; max-width: none; }
+  .live-end { padding-left: 0; }
+  .chat-head .sub { display: none; } /* the name alone, as Muse and Grok head a thread; the hero under it says the role */
 }
