@@ -91,22 +91,39 @@ export function helmetSvg(cols: number, mode: HelmetMode = 'here', o: { night?: 
   return s + '</svg>';
 }
 
-/** The same helmet as a smooth drawing (the phone header's mascot, Main1808): helmet()'s shell, visor and eyes as
- *  vector shapes, shaded from its light, so it reads as a character at 52px and stays sharp at any pixel ratio. */
+/** The same helmet as a soft 3D figure (the phone header's mascot, Main1808): helmet()'s squircle shell, visor and eyes
+ *  as layered vector shapes — a ceramic shell lit from the top left (its key light, a bounce from below, a soft form
+ *  shadow and a specular), a recessed glass visor with a reflection, and eyes that glow. One material in both themes, as
+ *  a real object; day adds a faint outline so the light shell keeps its edge on the paper. Sharp at any pixel ratio. */
 export function helmetSoft(mode: HelmetMode = 'here', o: { night?: boolean; beat?: number; eye?: string; scan?: string } = {}): string {
-  const night = o.night ?? true, X = (x: number) => (50 + 48 * x).toFixed(2), Y = (y: number) => (46 + 48 * y).toFixed(2);
+  const X = (x: number) => (50 + 48 * x).toFixed(2), Y = (y: number) => (46 + 48 * y).toFixed(2);
   const shell = Array.from({ length: 96 }, (_, i) => {
     const t = (i / 96) * 2 * Math.PI, c = Math.cos(t), s = Math.sin(t);
     return `${X(Math.sign(c) * Math.abs(c) ** 0.5)},${Y((Math.sign(s) * Math.abs(s) ** 0.5) / 1.08)}`;
   }).join(' ');
-  const [hi, mid, lo] = night ? ['#FFFFFF', '#C9C9C5', '#8A8A86'] : ['#7A756D', '#3A3733', '#1D1B18'];
-  const glass = night ? '#141413' : '#F3EEE3', eye = o.eye ?? (night ? '#ECECEC' : '#1D1B18');
-  const shut = mode === 'rest', eh = shut ? 4.8 : 16.3, scan = ((((o.beat ?? 0) % 24) / 23) * 1.8 - 0.9);
-  const eyes = mode === 'think' ? `<rect x="${X(scan - 0.035)}" y="${Y(-0.22)}" width="3.4" height="${(48 * 0.6).toFixed(2)}" fill="${o.scan ?? '#0a84ff'}"/>`
-    : [-0.34, 0.34].map((x) => `<rect x="${X(x - 0.11)}" y="${(46 + 48 * 0.08 - eh / 2).toFixed(2)}" width="10.56" height="${eh}" rx="2.6" fill="${eye}"/>`).join('');
-  return `<svg viewBox="0 0 100 92" xmlns="http://www.w3.org/2000/svg"><defs><radialGradient id="hs" cx="0.28" cy="0.2" r="0.95">`
-    + `<stop offset="0" stop-color="${hi}"/><stop offset="0.5" stop-color="${mid}"/><stop offset="1" stop-color="${lo}"/></radialGradient></defs>`
-    + `<polygon points="${shell}" fill="url(#hs)"/><rect x="${X(-0.76)}" y="${Y(-0.22)}" width="${(48 * 1.52).toFixed(2)}" height="${(48 * 0.6).toFixed(2)}" rx="13" fill="${glass}"/>${eyes}</svg>`;
+  const eye = o.eye ?? '#EAF4FF', shut = mode === 'rest', eh = shut ? 4.8 : 16.3, scan = ((((o.beat ?? 0) % 24) / 23) * 1.8 - 0.9);
+  const vx = X(-0.76), vy = Y(-0.22), vw = (48 * 1.52).toFixed(2), vh = (48 * 0.6).toFixed(2);
+  const lit = (body: string, glow: boolean) => (glow ? `<g filter="url(#gl)" opacity="0.85">${body}</g>` : '') + body;
+  const eyes = mode === 'think' ? lit(`<rect x="${X(scan - 0.035)}" y="${vy}" width="3.4" height="${vh}" fill="${o.scan ?? '#0a84ff'}"/>`, true)
+    : lit([-0.34, 0.34].map((x) => `<rect x="${X(x - 0.11)}" y="${(46 + 48 * 0.08 - eh / 2).toFixed(2)}" width="10.56" height="${eh}" rx="${shut ? 2.4 : 5.28}" fill="${eye}"/>`).join(''), !shut);
+  const g = (id: string, a: string, stops: [number, string, number?][]) => `<${a.startsWith('x') ? 'linear' : 'radial'}Gradient id="${id}" ${a}>`
+    + stops.map(([k, c, op = 1]) => `<stop offset="${k}" stop-color="${c}" stop-opacity="${op}"/>`).join('') + `</${a.startsWith('x') ? 'linear' : 'radial'}Gradient>`;
+  return `<svg viewBox="0 0 100 92" xmlns="http://www.w3.org/2000/svg"><defs>`
+    + g('k', 'cx="0.3" cy="0.2" r="0.95"', [[0, '#FFFFFF'], [0.4, '#ECEBE7'], [0.78, '#B9B7B1'], [1, '#8F8D87']])
+    + g('e', 'cx="0.5" cy="0.5" r="0.56"', [[0.72, '#000', 0], [1, '#000', 0.24]])
+    + g('b', 'cx="0.62" cy="1.08" r="0.5"', [[0, '#FFFFFF', 0.7], [1, '#FFFFFF', 0]])
+    + g('f', 'x1="0" y1="0" x2="0" y2="1"', [[0.5, '#000', 0], [1, '#000', 0.2]])
+    + g('s', 'cx="0.5" cy="0.5" r="0.5"', [[0, '#FFFFFF'], [0.45, '#FFFFFF', 0.8], [1, '#FFFFFF', 0]])
+    + g('v', 'x1="0" y1="0" x2="0" y2="1"', [[0, '#55534E'], [1, '#FFFFFF']])
+    + g('q', 'x1="0" y1="0" x2="0" y2="1"', [[0, '#34363C'], [0.55, '#15161A'], [1, '#0A0A0C']])
+    + `<filter id="gl" x="-1" y="-1" width="3" height="3"><feGaussianBlur stdDeviation="2.2"/></filter>`
+    + `<clipPath id="c"><rect x="${vx}" y="${vy}" width="${vw}" height="${vh}" rx="13"/></clipPath></defs>`
+    + `<polygon points="${shell}" fill="url(#k)"${o.night ? '' : ' stroke="#1D1B18" stroke-opacity="0.16" stroke-width="0.8"'}/>`
+    + `<polygon points="${shell}" fill="url(#f)"/><polygon points="${shell}" fill="url(#e)"/><polygon points="${shell}" fill="url(#b)"/>`
+    + `<ellipse cx="29" cy="15" rx="13" ry="5.5" transform="rotate(-24 29 15)" fill="url(#s)"/>`
+    + `<rect x="${(+vx - 1.6).toFixed(2)}" y="${(+vy - 1.6).toFixed(2)}" width="${(+vw + 3.2).toFixed(2)}" height="${(+vh + 3.2).toFixed(2)}" rx="14.6" fill="url(#v)"/>`
+    + `<rect x="${vx}" y="${vy}" width="${vw}" height="${vh}" rx="13" fill="url(#q)"/>${eyes}`
+    + `<ellipse cx="44" cy="${(+vy + 1).toFixed(2)}" rx="34" ry="7" fill="#FFFFFF" opacity="0.13" clip-path="url(#c)"/></svg>`;
 }
 
 // ── Studio Chief (B1): one ink line, dot eyes, paper and vermilion. Chief is the white bean in the black bowler with
