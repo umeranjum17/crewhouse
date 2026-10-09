@@ -28,6 +28,7 @@ evidence and cleanup live in [`../SKILL.md`](../SKILL.md); recipes assume an iso
 | pwa-shell | [pwa-shell.md](pwa-shell.md) | The home-screen app: status bar and browser bar in the look's colour, safe-area insets, iOS launch screens, the rich install sheet and Settings' quiet install row, installed for real in an isolated Chromium |
 | pwa-offline | [pwa-offline.md](pwa-offline.md) | The service worker: a cold offline reload served from cache, a real push event showing a content-free notification, and the home-screen badge mirroring Needs you |
 | pwa-pair | [pwa-pair.md](pwa-pair.md) | The demo's Pair card: a relay or direct code pairs the installed app through @byokit/link, the two words match the computer's, the same app reloads on real data over the link, and Unpair goes back to the demo |
+| find-clients-send | [find-clients-send.md](find-clients-send.md) | Paired-phone-only corporate attestation, suppression and one exact Gmail review; local/helper approvals refused; stop before Send |
 
 ## Proof and skip reporting
 
