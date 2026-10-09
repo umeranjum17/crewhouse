@@ -23,7 +23,8 @@ node --test test/mail.test.ts
 The last journey starts the real HTTP server and real encrypted BYOKit phone link,
 pairs control and watch-only fixture devices, and runs a real Tracer sandbox shell
 attempt to approve a synthetic draft. It proves refusal of local approval/attestation,
-unknown organisations, sole traders, small partnerships and suppressed addresses;
+unknown organisations, free-mail domains (attestation refused, suppression still
+recordable), sole traders, small partnerships and suppressed addresses;
 then creates one exact From/To/Subject/Body review card and backs out. It uses a
 scripted model and a synthetic provider identity, never a real mailbox or a Send press.
 The long body (100 grounded-opener repetitions) is the extreme case: every character

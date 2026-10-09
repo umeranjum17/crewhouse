@@ -101,7 +101,7 @@ Helpers work in their own folders without bothering you. Anything that costs mon
 
 ### Drafts, never sent behind your back
 
-When a helper writes in your name (a reply to the clinic, a refund chase, a cancellation email), it arrives as a draft. You approve it or you don't, and nothing is sent either way. The helper hands you the words to send yourself.
+When a helper writes in your name (a reply to the clinic, a refund chase, a cancellation email), it arrives as a draft. You approve it or you don't, and nothing is sent either way. The one exception is Tracer's find-clients emails, which can go from your own Gmail one at a time, each after a yes on your paired phone (see Connected apps). For everything else the helper hands you the words to send yourself.
 
 <p align="center">
   <img src="docs/screenshots/readme/draft.webp" alt="DEMO: Scout's refund email, with its recipient and subject separate from the message, marked 'Nothing is sent, send it yourself'" width="300" />
