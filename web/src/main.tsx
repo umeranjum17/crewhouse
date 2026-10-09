@@ -91,12 +91,6 @@ function Hello({ state, refresh, night }: Ctx) {
         <h1>{A.greeting()}{address.trim() ? `, ${address.trim()}` : ''}</h1>
         <p className="lead">I'm Chief, your personal assistant. I run your crew of helpers.</p>
       </div>
-      <ul className="promises">
-        <li>Your helpers live on this computer, and think with an AI account you already pay for.</li>
-        <li>{A.atHome()[1]}</li>
-        <li>{A.atHome()[2]}</li>
-        <li>I'll ask before sending messages, deleting things or spending money.</li>
-      </ul>
       <h2 className="plate">What can I take off your plate?</h2>
       <div className="ideas">
         {A.firstIdeas(state).map((i) => <button key={i.label} className="idea" onClick={() => pick(i.label, i.bot)}><span className="o-ic" aria-hidden>{i.icon}</span><b>{i.label}</b><i aria-hidden>›</i></button>)}
@@ -110,6 +104,14 @@ function Hello({ state, refresh, night }: Ctx) {
       {other
         ? <input ref={input} className="input name" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="What shall I call you?" aria-label="What shall I call you?" />
         : <button className="link" onClick={() => setOther(true)}>Call me something else</button>}
+      <details className="how"><summary className="link">How it works</summary>
+        <ul className="promises">
+          <li>Your helpers live on this computer, and think with an AI account you already pay for.</li>
+          <li>{A.atHome()[1]}</li>
+          <li>{A.atHome()[2]}</li>
+          <li>I'll ask before sending messages, deleting things or spending money.</li>
+        </ul>
+      </details>
     </div>
   );
 }

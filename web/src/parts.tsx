@@ -715,7 +715,7 @@ export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; 
             <button className="btn go" disabled={stuck} onClick={start}>{yes?.label ?? 'Start it'}</button>
             <button className="btn" aria-pressed={when !== null} onClick={() => { setWhen(when === null ? c.schedule || '' : null); }}>{when === null ? 'Change time' : 'Keep the time'}</button>
             {deny && <button className="btn" onClick={() => act(deny.body)}>{deny.label}</button>}
-          {remind && <button className="btn ghost" onClick={() => act(remind)}>Remind me tomorrow</button>}
+            {remind && <button className="btn quiet" onClick={() => act(remind)}>Remind me tomorrow</button>}
           </div>
         </>
       ) : c.kind === 'plan' ? (
@@ -728,7 +728,7 @@ export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; 
             {change === null && <button className="btn go" onClick={() => act(yes.body)}>{yes.label}</button>}
             <button className="btn" aria-pressed={change !== null} onClick={() => setChange(change === null ? '' : null)}>{change === null ? 'Change it' : 'Keep the plan'}</button>
             {deny && <button className="btn" onClick={() => act(deny.body)}>{deny.label}</button>}
-          {remind && <button className="btn ghost" onClick={() => act(remind)}>Remind me tomorrow</button>}
+            {remind && <button className="btn quiet" onClick={() => act(remind)}>Remind me tomorrow</button>}
           </div>
         </>
       ) : c.reply ? (
@@ -740,14 +740,14 @@ export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; 
         <div className="btns">
           <a className="btn go" href={`#/ask/${c.id}`}>Review order</a>
           {deny && <button className="btn ghost" onClick={() => act(deny.body)}>{deny.label}</button>}
-          {remind && <button className="btn ghost" onClick={() => act(remind)}>Remind me tomorrow</button>}
+          {remind && <button className="btn quiet" onClick={() => act(remind)}>Remind me tomorrow</button>}
         </div>
       ) : yes ? (
         <div className="btns">
           <button className="btn go" disabled={edit.empty} onClick={() => act(edit.yes(yes.body))}>{yes.label}</button>
           {edit.can && <button className="btn" aria-pressed={edit.editing} onClick={edit.toggle}>{edit.editing ? 'Use the original' : 'Edit'}</button>}
           {deny && <button className="btn" onClick={() => act(deny.body)}>{deny.label}</button>}
-          {remind && <button className="btn ghost" onClick={() => act(remind)}>Remind me tomorrow</button>}
+          {remind && <button className="btn quiet" onClick={() => act(remind)}>Remind me tomorrow</button>}
           {always && <button className="btn ghost always" onClick={() => act(always.body)}>{always.label}</button>}
         </div>
       ) : null}
