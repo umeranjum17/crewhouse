@@ -181,6 +181,25 @@ test('one approval sends exactly once, and a check-Gmail card can always be dism
   } finally { sendOk = false; identity = ''; await new Promise<void>(r => who.close(() => r())); done(); }
 });
 
+test('a draft decided elsewhere after its send card was made sends nothing and says so', async () => {
+  const { db, crew, done } = setup();
+  crew.onboard('Umer'); crew.recruit('tracer', 'Tracer', 'person');
+  db.run("INSERT INTO devices (id,name,pk,role,created_at) VALUES ('ctl','Control','pk-ctl','control',?)", Date.now());
+  const who = createServer((_q, r) => { r.writeHead(200, { 'content-type': 'application/json' }); r.end(JSON.stringify({ email: 'umer@sender.example', email_verified: true })); });
+  await new Promise<void>(r => who.listen(0, '127.0.0.1', r)); identity = `http://127.0.0.1:${(who.address() as any).port}`;
+  const mail = new MailSend(db, { token: async () => 'tok' } as any);
+  try {
+    mail.set('ada@fernwood.example', { kind: 'corporate', name: 'Fernwood' }, 'ctl');
+    sendOk = true; asked.length = 0;
+    const draft = Number(db.run("INSERT INTO asks (bot,kind,title,detail,at) VALUES ('tracer','propose','Email',?,?)", JSON.stringify({ draft: { channel: 'email', to: 'ada@fernwood.example', subject: 'Hi' }, preview: { body: 'Hello there.' } }), Date.now()).lastInsertRowid);
+    const card = (await mail.review(draft)).id;
+    db.run("UPDATE asks SET state='answered',answer='not now' WHERE id=?", draft);
+    await assert.rejects(mail.answer(db.get('SELECT * FROM asks WHERE id=?', card)!, 'allow', 'ctl'), (e: any) => /answered on its draft\. Nothing was sent\./.test(e.message));
+    assert.equal(asked.filter((x) => x.startsWith('POST /messages/send')).length, 0, 'no email is sent');
+    assert.equal(db.get('SELECT state FROM asks WHERE id=?', card)!.state, 'open', 'the send card stays open, not stuck as attempted');
+  } finally { sendOk = false; identity = ''; await new Promise<void>(r => who.close(() => r())); done(); }
+});
+
 test('a free-mail domain can never be attested, so a sole trader on it is never emailed', async () => {
   const { db, crew, done } = setup();
   crew.onboard('Umer');
@@ -189,6 +208,7 @@ test('a free-mail domain can never be attested, so a sole trader on it is never 
   const mail = new MailSend(db, { token: async () => 'tok' } as any);
   try {
     assert.throws(() => mail.set('jane@gmail.com', { kind: 'corporate', name: 'Jane' }, 'ctl'), (e: any) => e.status === 400);
+    assert.throws(() => mail.set('jo@hotmail.co.uk', { kind: 'corporate', name: 'Jo' }, 'ctl'), (e: any) => e.status === 400);
     assert.equal(mail.status('plumber@gmail.com').eligibility, null, 'attesting one mailbox marks nothing on its domain');
     const draft = Number(db.run("INSERT INTO asks (bot,kind,title,detail,at) VALUES ('tracer','propose','Email',?,?)", JSON.stringify({ draft: { channel: 'email', to: 'plumber@gmail.com', subject: 'Hi' }, preview: { body: 'Hello there.' } }), Date.now()).lastInsertRowid);
     await assert.rejects(mail.review(draft), (e: any) => /count as individuals/.test(e.message));
