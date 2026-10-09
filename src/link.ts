@@ -21,7 +21,7 @@ export interface Desk {
 }
 
 export const PAIR_MS = Number(process.env.CREWHOUSE_PAIR_MS || 120_000); // a pairing QR is good for two minutes
-export type Handler = (method: string, path: string, body: any, key?: string) => Promise<unknown>;
+export type Handler = (method: string, path: string, body: any, key?: string, phone?: string) => Promise<unknown>;
 type Ifaces = ReturnType<typeof networkInterfaces>;
 
 // Migration debt (G05): reach has no directRoutes({listen:{loopback,tailnet,lan}}) for multiple listeners.
@@ -444,7 +444,7 @@ export class Link {
     if (op === 'POST /api/phones/refresh') return this.handle(method, path, body ?? {}, key).then(
       (r) => ({ status: 200, body: r }), (e: any) => ({ status: e.status ?? 400, body: { error: e.message } }));
     if (/^\/api\/(accounts|house|phones)\b/.test(path) || (/^\/api\/(people|connections)\b/.test(path) && method !== 'GET')) return { status: 403, body: { error: 'do that on the computer' } };
-    try { return { status: 200, body: await this.handle(method, path, body ?? {}, key) }; }
+    try { return { status: 200, body: await this.handle(method, path, body ?? {}, key, g.id) }; }
     catch (e: any) { return { status: e.status ?? 400, body: { error: e.message } }; }
   }
 
