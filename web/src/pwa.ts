@@ -24,11 +24,11 @@ export const pushPossible = () => canServe() && typeof Notification !== 'undefin
 /** Ask for notifications and hand the person's relay a Web Push address, through crewd. */
 export async function turnOnNotifications(): Promise<'on' | 'off' | 'unsupported' | 'norelay' | 'offline'> {
   if (!pushPossible()) return 'unsupported';
-  if ((await Notification.requestPermission()) !== 'granted') return 'off';
   const reg = await navigator.serviceWorker.ready;
   const { vapid, ready, relay } = await api.pushKey();
   if (!relay) return 'norelay';
   if (!ready || !vapid) return 'offline';
+  if ((await Notification.requestPermission()) !== 'granted') return 'off';
   const old = await reg.pushManager.getSubscription();
   if (old) { await old.unsubscribe(); await api.push({ off: true, web: old.toJSON() }); }
   const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(vapid) });

@@ -38,9 +38,7 @@ sw.addEventListener('fetch', (e) => {
     // A reachable computer always wins, so an update shows on the next visit; the cached shell is the offline floor.
     e.respondWith((async () => {
       try {
-        const fresh = await fetch(req);
-        if (url.pathname === SHELL && fresh.ok) void (await caches.open(__CACHE__)).put(SHELL, fresh.clone());
-        return fresh;
+        return await fetch(req);
       } catch { return (await caches.match(SHELL)) ?? Response.error(); }
     })());
     return;

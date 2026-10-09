@@ -138,14 +138,14 @@ test('the built worker precaches the shell, refreshes it only from the app shell
   assert.equal(await (await worker.dispatch('fetch', { request: reqOf('/connect/callback') }))!.text(), 'Connected.');
   assert.equal(await worker.stored.get('/')!.clone().text(), 'app v1', 'a result page never replaces the shell');
 
-  // A reachable app-shell navigation refreshes the cached shell.
+  // A reachable app-shell navigation answers from the network; the stored shell stays the install-time copy.
   version = 'v2';
   assert.equal(await (await worker.dispatch('fetch', { request: reqOf('/') }))!.text(), 'app v2');
-  assert.equal(await worker.stored.get('/')!.clone().text(), 'app v2');
+  assert.equal(await worker.stored.get('/')!.clone().text(), 'app v1', 'navigation never rewrites the shell');
 
-  // Offline, a cold navigation is answered by the cached app, never a browser error.
+  // Offline, a cold navigation is answered by the precached app, never a browser error.
   online = false;
-  assert.equal(await (await worker.dispatch('fetch', { request: reqOf('/chief') }))!.text(), 'app v2');
+  assert.equal(await (await worker.dispatch('fetch', { request: reqOf('/chief') }))!.text(), 'app v1');
 
   // The push is content-free: a fixed notification, whatever the payload says.
   await worker.dispatch('push', { data: { json: () => ({ title: 'Something private' }) } });

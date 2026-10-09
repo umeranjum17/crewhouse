@@ -396,7 +396,7 @@ export class Link {
   }
 
   async setWebPush(sub: any) {
-    if (sub?.off === true) return void await this.client?.unsubscribe(WEB_DEVICE, sub.web && { web: sub.web });
+    if (sub?.off === true) { if (typeof sub.web !== 'object') throw Object.assign(new Error('say which browser'), { status: 400 }); return void await this.client?.unsubscribe(WEB_DEVICE, { web: sub.web }); }
     if (!this.client || typeof sub?.web !== 'object') throw Object.assign(new Error('no relay for notifications'), { status: 409 });
     await this.client.subscribe(WEB_DEVICE, { web: sub.web });
   }

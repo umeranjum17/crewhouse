@@ -1519,6 +1519,9 @@ function App() {
   const live = useOffice(state, offline);
   const ctx: Ctx | null = useMemo(() => (state && live ? { state, live, tick, refresh, night, offline, accounts } : null), [state, live, tick, refresh, night, offline, accounts]);
 
+  // The home-screen icon mirrors the count of what Needs you shows (web/src/pwa.ts).
+  const badge = ctx?.live.needs.length;
+  useEffect(() => { if (badge !== undefined) setBadge(badge); }, [badge]);
   const splash = <Splash done={!!ctx || offline} />;
   if (!ctx) return <>{splash}{offline && <Unreachable retry={refresh} />}</>;
   // Every little Chief face on the page carries the mood from here, the way the night palette does.
@@ -1526,8 +1529,7 @@ function App() {
   if (!ctx.state.person.onboarded) return <>{splash}<Hello {...ctx} /><Toasts /></>;
   const v = under.current;
   const crew = A.crew(ctx.state);
-  const asks = ctx.live.needs.length; // the badge counts only what Needs you shows
-  setBadge(asks); // the home-screen icon mirrors the same count (web/src/pwa.ts)
+  const asks = ctx.live.needs.length;
   const sheet = route.view === 'ask' ? A.cards(ctx.state).find((c) => String(c.id) === route.id) : undefined;
   const book = route.file && route.id ? { bot: route.id, path: route.file } : undefined;
   // The desk rail (B1): Chief, your things, routines and apps; the crew under it; you and the gear at the foot.

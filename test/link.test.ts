@@ -98,8 +98,8 @@ test('the installed web app subscribes a browser push address through the relay 
   assert.equal(notify[0], 'notify');
   assert.equal(notify[1].title, NEWS);
   assert.ok(notify[1].to.includes('web'), 'the browser device is addressed');
-  await link.setWebPush({ off: true });
-  assert.deepEqual(calls.shift(), ['unsubscribe', 'web']);
+  await assert.rejects(link.setWebPush({ off: true }), { status: 400 });
+  assert.equal(calls.length, 0, 'a bare off reaches no browser');
   db.close();
 });
 
