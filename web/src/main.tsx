@@ -440,7 +440,7 @@ function ChiefIdeas({ state, chat, picked }: { state: Json; chat: string; picked
 
 /** A helper's starters in its own fresh chat: its own ready rows only, never another helper's. A tap fills the box, it never sends. */
 function HelperIdeas({ state, chat, picked }: { state: Json; chat: string; picked: () => void }) {
-  const rows = A.ideas(state).filter((i: Json) => i.bot === chat);
+  const rows = A.ideas(state).filter((i: Json) => i.bot === chat).slice(0, 3); // three starters; the rest wait in Hand me a job
   if (!rows.length) return null;
   return <div className="chips center">{rows.map((i: Json) => (
     <button key={i.bot + i.label} className="chip" onClick={() => { keepDraft(chat, i.ask); picked(); }}>✦ {i.label}</button>

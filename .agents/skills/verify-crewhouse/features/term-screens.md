@@ -31,7 +31,7 @@ The same checks run headless in `test/office.test.ts` ("things, routines and hel
 
 Hello: Chief's greeting is plain words under his helmet (`.speech` has no border or fill, no bubble arrow), and each
 idea wears the shared `o-ic` tile. Share: what came in reads in full (`.said`, no clamp), Chief speaks with his drawn
-helmet face in the name column (`.line-by .face img.ink`), and the three choices are buttons with one blue primary
+helmet face in the name column on a desk, beside his name on a phone (`.line-by .face img.ink`), and the three choices are buttons with one blue primary
 (`.share-acts .btn.go`), never the old `chip`s.
 
 - **Get there.** A fresh crewd opens on Hello at `/`. After `POST /api/onboard`, open
@@ -41,3 +41,17 @@ helmet face in the name column (`.line-by .face img.ink`), and the three choices
 - **Motion.** Tap Something else…: the composer appears under the buttons.
 
 Headless: `test/office.test.ts` ("first run and the Share sheet read Term").
+
+## On a phone (under 900 wide)
+
+Fewer things, the whole width. Hello has no wordmark: greeting, the three ideas, Or ask in your own words, then the
+four promises as quiet text (no boxed card). Every thread (Home, `#/chief`, a helper's page) drops the name column:
+the name sits small above the words, ask cards lose their indent, and a thread page's head is the name alone (its
+role is in the hero under it). An ask card's name and status share one line; a routine card shows its lines, not its
+headline twice. Sign-in choices are one list of plain rows (`.ai-picks .btn`, no blue primary). A fresh helper shows
+at most three starters, and they wrap.
+
+- **Check.** At 360, 390 and 430 over Hello, Home, Office, fresh, first, a helper, Settings, an ask, Apps and Things
+  (`?demo` variants): no text box wider than its clip parent, nothing painted past the screen edge, no document
+  scroll, and every `pre.art.helmet` has `role="img"` (a screen reader says its name, not hundreds of `%#*`).
+  `.page .line .line-by` is a block above `.bubble-text` (its top below the name's bottom).

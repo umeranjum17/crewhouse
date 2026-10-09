@@ -170,7 +170,7 @@ export function ChiefArt({ mood = 'idle', d = 6, hero, whole }: { mood?: art.Moo
   const mode = art.helmetOf(flash ? 'blink' : mood);
   const beat = useTicker(140, !!hero && mode === 'think');
   const cells = useMemo(() => art.helmet(whole ? 38 : 24, mode, night, beat), [mode, beat]);
-  return <pre className="art helmet" data-mode={mode} style={whole ? undefined : { fontSize: d }} aria-label="Chief">{
+  return <pre className="art helmet" data-mode={mode} style={whole ? undefined : { fontSize: d }} role="img" aria-label="Chief">{
     cells.map((row, y) => <div key={y}>{row.map((c, x) => c.eye ? <i key={x} className="eye">{c.ch}</i> : c.scan ? <i key={x} className="scan">{c.ch}</i> : c.ch)}</div>)}
   </pre>;
 }
@@ -180,7 +180,7 @@ export function PalArt({ kind, mood = 'idle', d = 4, name, live }: { kind: art.K
   // runs none (useTicker). The eyes still light blue when needed, shut at rest: that is the mood, not motion.
   const beat = useTicker(140, !!live && mode === 'think');
   const cells = useMemo(() => art.helmet(14, mode, night, beat), [mode, beat]);
-  return <pre className="art helmet" data-mode={mode} style={{ fontSize: d }} aria-label={name ?? kind}>{
+  return <pre className="art helmet" data-mode={mode} style={{ fontSize: d }} role="img" aria-label={name ?? kind}>{
     cells.map((row, y) => <div key={y}>{row.map((c, x) => c.eye ? <i key={x} className="eye">{c.ch}</i> : c.scan ? <i key={x} className="scan">{c.ch}</i> : c.ch)}</div>)}
   </pre>;
 }
@@ -700,7 +700,7 @@ export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; 
   return (
     <div className={`card ask${c.campaign ? ' campaign' : ''}`}>
       <AskHead c={c} who={who} />
-      <p className="ask-words">{question}</p>
+      {!(c.kind === 'routine' && c.lines) && <p className="ask-words">{question}</p>}
       {edit.box || (c.kind === 'routine' && c.lines ? <div className="ask-lines">{c.lines.map((l, i) => <p key={i} className={`ask-line${i ? ' quiet' : ''}`}>{l}</p>)}</div>
         : <AskEvidence c={c.evidence === 'draft' && c.preview ? { ...c, preview: { ...c.preview, body: flowed(c.preview.body) } } : c} open={false} readAll={<a className="link" href={`#/ask/${c.id}`}>Read all</a>} />)}
       {oops && <div className="send-failed" role="alert">That didn't go through. <button type="button" className="link inline" onClick={() => last.current && act(last.current)}>Try again</button></div>}
