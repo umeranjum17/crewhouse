@@ -47,11 +47,14 @@ writeFileSync(root + 'dist/index.html', html);
 // list and cache name are known only here and injected; the worker bundles no app code (web/src/sw.ts is standalone).
 const dist = root + 'dist';
 const precache = ['/']; // every navigation, deep links included, is answered by the cached index at '/'
+// The precache is the app shell the running app itself fetches. The iOS launch screens (splash/), the install
+// sheet's screenshots (shots/), the notification glyph's source svg and the font licence texts are served but fetched
+// on demand (or never by the app at all), so they cost a cold install nothing.
 const digest = createHash('sha256'); // any changed file, precached or not, gives the worker a new cache name and so an update
 const walk = (dir) => { for (const e of readdirSync(dir, { withFileTypes: true })) {
   const p = dir + '/' + e.name, url = '/' + relative(dist, p).split(sep).join('/');
   if (e.isDirectory()) walk(p);
-  else if (e.name !== 'sw.js' && !e.name.endsWith('.map')) { digest.update(url).update(readFileSync(p)); if (e.name !== 'index.html') precache.push(url); }
+  else if (e.name !== 'sw.js' && !e.name.endsWith('.map')) { digest.update(url).update(readFileSync(p)); if (e.name !== 'index.html' && !/^\/(?:splash|shots)\//.test(url) && e.name !== 'notify.svg' && !e.name.endsWith('.txt')) precache.push(url); }
 } };
 walk(dist);
 await build({

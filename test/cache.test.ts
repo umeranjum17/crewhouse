@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import vm from 'node:vm';
-import { cpSync, existsSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { createServer, type AddressInfo } from 'node:net';
 import { join } from 'node:path';
@@ -40,6 +40,12 @@ test('a changed build gets new bundle names, and the built shell points at them'
   writeFileSync(join(web, 'manifest.webmanifest'), readFileSync(join(web, 'manifest.webmanifest'), 'utf8').replace('"name"', '"name "'));
   assert.equal(build(web).status, 0);
   assert.notEqual(worker(), before, 'a changed precached file gives the worker a new cache name');
+  // A file the precache leaves out (a launch screen) still versions the worker: the digest covers every shipped file.
+  const mid = worker();
+  const splash = join(web, 'splash', readdirSync(join(web, 'splash'))[0]);
+  writeFileSync(splash, Buffer.concat([readFileSync(splash), Buffer.from([0])]));
+  assert.equal(build(web).status, 0);
+  assert.notEqual(worker(), mid, 'a changed non-precached file still gives the worker a new cache name');
 });
 
 test('crewd serves the shell with no-cache and an ETag, and hashed bundles as immutable', async () => {
@@ -133,6 +139,9 @@ test('the built worker precaches the shell, refreshes it only from the app shell
 
   await worker.dispatch('install');
   for (const asset of ['/', `/${js}`, `/${css}`, '/manifest.webmanifest']) assert.ok(worker.stored.has(asset), `install precaches ${asset}`);
+  // The install downloads the app shell alone: launch screens, install-sheet shots, the notify glyph's source svg and
+  // the font licences are served but never precached.
+  for (const asset of worker.stored.keys()) assert.ok(!/^\/(?:splash|shots)\//.test(asset) && !asset.endsWith('.txt') && asset !== '/notify.svg', `not precached: ${asset}`);
   assert.equal(await worker.stored.get('/')!.clone().text(), 'app v1');
 
   // The sign-in tab returns to /connect/callback: its result page is answered, and the cached shell stays the app.
