@@ -6,6 +6,16 @@ steps ("Starting on it", "Passed to Scout", each tool step in plain words) with 
 the helper's chat. The rules and their numbers are the bar (ch-chat-live-1 `bar.md`); `adapter.liveLine` builds it from
 `/ws` events only (docs/ui-contract.md).
 
+**The doing mark (a turning ring).** The live line's doing row carries a small ring that turns while work is in
+progress (`web/src/styles.css` `@keyframes spin` on `li.doing .tick`, `mobile/src/motion.ts` `Ring`), not the old
+half-filled circle that read as clipped; done (✓) and todo (○) are unchanged. Reduce Motion holds the ring still — a
+fixed gap in a ring still says "in progress" — and the web `prefers-reduced-motion` rule stops the spin. Prove the web
+side by driving a held run to a doing row, then `scripts/screens.sh "$EV" doing-ring "<url>"` for the four
+theme/width captures. Prove the phone side on an Android emulator (`features/phone-pairing.md` for the pairing): build
+`mobile/` to a release APK, run the stub crewd, hold a Scout job with an approved plan, and capture the to-do line
+collapsed and expanded, day and night, plus the done footer. Real-model words need a signed-in account (SKILL.md);
+when no route is usable (expired sign-in, quota), say "not proven" with the cause rather than minting one.
+
 **Gate (stub engine, no account).** `node --test test/chat-live.test.ts`: real crewd, the built web app, headless
 Chromium at 1440 and 390, a held Chief turn and a job passed to Scout; it fails if the visible thread sits still for
 over a second (one frame of timer jitter allowed). Mutation times are captured before reading `innerText`, whose

@@ -623,7 +623,7 @@ const LIVE_WORD: Record<A.LiveLine['state'], string> = { reading: 'On it', worki
 /** The live line under a thread: who is on it, a clock counting up, and the job as a to-do list — done, doing, still
  *  to do — with the small tool calls kept behind the expand. At the end, one quiet line with how long it took.
  *  A job passed to a helper links to that helper's chat. */
-const TICK: Record<A.LiveTodo['state'], string> = { done: '✓', doing: '◐', todo: '○' };
+const TICK: Record<A.LiveTodo['state'], string> = { done: '✓', doing: '', todo: '○' };
 function LiveRow({ ln }: { ln: A.LiveLine }) {
   const link = ln.helper && <a className="link" href={`#/h/${ln.helper}`}>Open {ln.who}'s chat ›</a>;
   if (ln.took !== undefined) return <div className={`live-end ${ln.state}`} role="status">
@@ -635,7 +635,7 @@ function LiveRow({ ln }: { ln: A.LiveLine }) {
     <div className="live-body">
       <div className="live-head"><span className="live-word"><i aria-hidden />{LIVE_WORD[ln.state]}</span><span className="time" aria-hidden>{A.took(Date.now() - ln.since)}</span>{link}</div>
       <ol className="live-todos" aria-live="polite">{ln.todos.map((s) => <li key={`${s.at}-${s.text}`} className={s.state}>
-        <span className="tick" aria-hidden>{TICK[s.state]}</span><span>{s.text}{s === doing && Date.now() - s.at > 20_000 && <span className="mute"> · still on it</span>}</span></li>)}</ol>
+        <span className={`tick ${s.state}`} aria-hidden>{TICK[s.state]}</span><span>{s.text}{s === doing && Date.now() - s.at > 20_000 && <span className="mute"> · still on it</span>}</span></li>)}</ol>
       {!!ln.detail.length && <details className="live-detail"><summary>Show the small steps ({ln.detail.length})</summary>
         <ol>{ln.detail.map((s) => <li key={`${s.at}-${s.text}`}><time className="time">{A.clock(s.at)}</time><span>{s.text}</span></li>)}</ol></details>}
     </div>
