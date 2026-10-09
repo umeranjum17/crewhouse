@@ -36,9 +36,10 @@ function Mood({ phase, app, ai }: { phase: Phase; app?: A.App; ai?: { key: strin
     : phase === 'failed' || phase === 'expired' || phase === 'unavailable' ? 'error' : 'ask';
   return (
     <div className="flow-face">
-      <span className="halo"><ChiefArt mood={mood} d={5} /></span>
-      {app && <span className="app-ic badge-ic"><img className="app-logo" src={app.logo} alt="" /></span>}
-      {ai && <span className="badge-ic ai-badge"><AiMark ai={ai} size={38} /></span>}
+      <span className="halo"><ChiefArt mood={mood} mascot />
+        {app && <span className="app-ic badge-ic"><img className="app-logo" src={app.logo} alt="" /></span>}
+        {ai && <span className="badge-ic ai-badge"><AiMark ai={ai} size={38} /></span>}
+      </span>
       {phase === 'opening' && <Laptop />}
       {phase === 'done' && <pre className="art sparkle" aria-hidden>{'✦  ·  ✧  ·  ✦'}</pre>}
     </div>
