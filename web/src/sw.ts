@@ -10,7 +10,6 @@ type Sw = {
   clients: { claim(): Promise<void>; matchAll(o: any): Promise<any[]>; openWindow(url: string): Promise<any> };
   registration: { showNotification(title: string, o?: any): Promise<void> };
   location: { origin: string };
-  navigator: { setAppBadge?: (n?: number) => Promise<void> };
 };
 const sw = self as unknown as Sw;
 
@@ -52,10 +51,7 @@ sw.addEventListener('fetch', (e) => {
 
 sw.addEventListener('push', (e) => {
   // The relay's push is content-free: only "Crewhouse has news". The words wait on the person's computer.
-  e.waitUntil((async () => {
-    await sw.registration.showNotification('Crewhouse has news', { body: 'Open Crewhouse to see what your crew did.', icon: '/icon-192.png', badge: '/notify-96.png', tag: 'crewhouse' });
-    await sw.navigator.setAppBadge?.(); // the icon gets a dot; the app sets the real count when it is open
-  })());
+  e.waitUntil(sw.registration.showNotification('Crewhouse has news', { body: 'Open Crewhouse to see what your crew did.', icon: '/icon-192.png', badge: '/notify-96.png', tag: 'crewhouse' }));
 });
 
 sw.addEventListener('notificationclick', (e) => {
