@@ -13,6 +13,7 @@ in-bundle demo (`web/src/demo.ts`) on its own: demo is the default entry the pub
 - The same bytes served by **crewd on its loopback** load the real app (or the Hello screen
   before onboarding): no "Demo" tag.
 - `?demo` forces demo anywhere, `?real` forces a backend even on the public shell.
+- A pairing grant stored in the browser boots the public shell paired instead (see [pwa-pair.md](pwa-pair.md)).
 
 ## How to drive it
 
