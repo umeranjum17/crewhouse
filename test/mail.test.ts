@@ -200,6 +200,26 @@ test('a draft decided elsewhere after its send card was made sends nothing and s
   } finally { sendOk = false; identity = ''; await new Promise<void>(r => who.close(() => r())); done(); }
 });
 
+test('a send card withdrawn at restart never blocks its draft: review makes a fresh card', async () => {
+  const { db, crew, done } = setup();
+  crew.onboard('Umer'); crew.recruit('tracer', 'Tracer', 'person');
+  db.run("INSERT INTO devices (id,name,pk,role,created_at) VALUES ('ctl','Control','pk-ctl','control',?)", Date.now());
+  const who = createServer((_q, r) => { r.writeHead(200, { 'content-type': 'application/json' }); r.end(JSON.stringify({ email: 'umer@sender.example', email_verified: true })); });
+  await new Promise<void>(r => who.listen(0, '127.0.0.1', r)); identity = `http://127.0.0.1:${(who.address() as any).port}`;
+  const mail = new MailSend(db, { token: async () => 'tok' } as any);
+  try {
+    mail.set('ada@fernwood.example', { kind: 'corporate', name: 'Fernwood' }, 'ctl');
+    const draft = Number(db.run("INSERT INTO asks (bot,kind,title,detail,at) VALUES ('tracer','propose','Email',?,?)", JSON.stringify({ draft: { channel: 'email', to: 'ada@fernwood.example', subject: 'Hi' }, preview: { body: 'Hello there.' } }), Date.now()).lastInsertRowid);
+    const first = (await mail.review(draft)).id;
+    db.run("UPDATE asks SET state = 'withdrawn' WHERE state = 'open' AND kind != 'propose'");
+    assert.equal(db.get('SELECT state FROM asks WHERE id=?', first)!.state, 'withdrawn');
+    const second = await mail.review(draft);
+    assert.notEqual(second.id, first, 'a new card is made, not a refusal');
+    assert.equal(db.get('SELECT state FROM asks WHERE id=?', second.id)!.state, 'open');
+    assert.equal(db.get('SELECT state FROM asks WHERE id=?', draft)!.state, 'open', 'the draft stays open for the new card');
+  } finally { identity = ''; await new Promise<void>(r => who.close(() => r())); done(); }
+});
+
 test('a free-mail domain can never be attested, so a sole trader on it is never emailed', async () => {
   const { db, crew, done } = setup();
   crew.onboard('Umer');

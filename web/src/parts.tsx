@@ -822,7 +822,7 @@ export function AskSheet({ c, who, chiefSays, onClose }: { c: Card; who: Helper 
         <div className="approve-btns">
           {edit.can && <button className="btn big" aria-pressed={edit.editing} onClick={edit.toggle}>{edit.editing ? 'Use the original' : 'Edit'}</button>}
           {remind && <button className="btn big ghost" onClick={() => act({ ...remind.body, remind: true })}>Remind me tomorrow</button>}
-          {rest.map((x) => <button key={x.label} className="btn big" disabled={c.mailSend} onClick={() => act(x.body)}>{x.label}</button>)}
+          {rest.map((x) => <button key={x.label} className="btn big" disabled={c.mailSend && !c.mailUncertain} onClick={() => act(x.body)}>{x.label}</button>)}
           {yes && <button className="btn go big" disabled={edit.empty || (c.mailSend && !c.mailUncertain) || !!c.mailTo} onClick={() => act(edit.yes(yes.body))}>{yes.label}</button>}
         </div>
         {always && <button className="btn ghost always" onClick={() => act(always.body)}>{always.label}</button>}

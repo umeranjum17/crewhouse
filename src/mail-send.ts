@@ -62,8 +62,8 @@ export class MailSend {
     this.eligible(to);
     const { from } = await this.sender();
     this.eligible(to);
-    const old = this.db.get("SELECT * FROM asks WHERE json_extract(detail,'$.send.draft') = ? AND (state != 'answered' OR answer != 'not now')", id);
-    if (old) { if (old.state === 'open') return { id: old.id }; throw fail('This message was already sent or attempted. Check Gmail; it will not be sent again.'); }
+    const open = this.db.get("SELECT * FROM asks WHERE json_extract(detail,'$.send.draft') = ? AND state = 'open'", id);
+    if (open) return { id: open.id };
     const detail = { effect: 'send', send: { draft: id, from, to, subject, body }, preview: { body } };
     const r = this.db.run("INSERT INTO asks (bot,kind,title,detail,at) VALUES ('chief','mail','Send this one email from your Gmail?',?,?)", JSON.stringify(detail), Date.now());
     const ask = Number(r.lastInsertRowid); this.db.event('mail.review', 'chief', { ask, draft: id });
