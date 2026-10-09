@@ -28,13 +28,14 @@ const worker = () => Promise.race([
 ]);
 
 /** Ask for notifications and hand the person's relay a Web Push address, through crewd. `relay` is what the page already
- *  holds, so "no relay" never prompts; the permission request is the first await, so it stays inside the tap (iOS). */
+ *  holds, so "no relay" never prompts; the mailbox key is asked before the permission prompt, so no prompt comes for a
+ *  mailbox that cannot carry one. */
 export async function turnOnNotifications(relay: boolean): Promise<'on' | 'off' | 'unsupported' | 'norelay' | 'offline'> {
   if (!pushPossible()) return 'unsupported';
   if (!relay) return 'norelay';
-  if ((await Notification.requestPermission()) !== 'granted') return 'off';
   const { vapid, ready } = await api.pushKey();
   if (!ready || !vapid) return 'offline';
+  if ((await Notification.requestPermission()) !== 'granted') return 'off';
   const reg = await worker();
   const old = await reg.pushManager.getSubscription();
   if (old) { await old.unsubscribe(); await api.push({ off: true, web: old.toJSON() }).catch(() => {}); }

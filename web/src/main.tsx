@@ -175,13 +175,13 @@ function Chats({ state, refresh, desk }: { state: Json; refresh: () => void; des
   </section>;
 }
 
-/** The owner's row until the house is fully set up: how many of the jobs are left. Paired, only the job the link can
- *  carry (Google's) is counted: the sign-in and phone jobs' calls are refused over it. */
+/** The owner's row until the house is fully set up: how many of the three jobs are left. None of them is this
+ *  device's to do once paired — their calls are refused over the link — so the row waits for the computer. */
 function SetupRow({ state, accounts, tick }: { state: Json; accounts: Json[] | null; tick: number }) {
   const [link, setLink] = useState<Json>(null);
   useEffect(() => { if (!paired) api.phoneLink().then(setLink).catch(() => {}); }, [tick]);
-  const { left } = A.homeSetup(state, accounts, link, !!paired);
-  if (!left) return null;
+  const { left } = A.homeSetup(state, accounts, link);
+  if (paired || !left) return null;
   return <a className="card nudge" href="#/settings"><span className="grow">Getting set up: {left} {left === 1 ? 'thing' : 'things'} left</span><b>›</b></a>;
 }
 
@@ -1185,7 +1185,8 @@ function Phones({ tick }: { tick: number }) {
 function HomeSetup({ state, accounts, tick }: { state: Json; accounts: Json[] | null; tick: number }) {
   const [link, setLink] = useState<Json>(null);
   useEffect(() => { if (!paired) api.phoneLink().then(setLink).catch(() => {}); }, [tick]);
-  const { rows, left } = A.homeSetup(state, accounts, link, !!paired);
+  if (paired) return null;
+  const { rows, left } = A.homeSetup(state, accounts, link);
   const jump = (key: string) => document.getElementById(`setup-${key}`)?.scrollIntoView({ behavior: 'smooth' });
   return (<>
     <div className="label">Getting set up</div>
