@@ -52,17 +52,22 @@ export class MailSend {
     if (who.email_verified !== true) throw fail('Gmail has not confirmed your sending address. Nothing was sent.');
     return { token, from: address(who.email) };
   }
-  async review(id: number) {
+  private openDraft(id: number) {
     if (this.db.get("SELECT 1 FROM asks WHERE json_extract(detail,'$.send.draft')=? AND state IN ('sending','uncertain') OR json_extract(detail,'$.send.draft')=? AND answer='sent'", id, id)) throw fail('This message was already sent or attempted. Check Gmail; it will not be sent again.');
     const draft = this.db.get("SELECT asks.* FROM asks JOIN bots ON bots.id=asks.bot WHERE asks.id=? AND bots.template='tracer' AND asks.kind='propose' AND asks.state='open'", id);
     const d = JSON.parse(draft?.detail ?? '{}');
     if (!draft || d.draft?.channel !== 'email' || typeof d.preview?.body !== 'string') throw fail('Open one of Tracer’s email drafts first.');
+    return d;
+  }
+  async review(id: number) {
+    const d = this.openDraft(id);
     const to = address(d.draft.to), subject = d.draft.subject, body = d.preview.body;
     if (typeof subject !== 'string' || !subject.trim() || /[\r\n]/.test(subject) || subject.length > 160 || !body.trim() || body.length > 12000) throw fail('The email needs one subject and a complete body of at most 12,000 characters.');
     this.eligible(to);
     const { from } = await this.sender();
     this.eligible(to);
-    const open = this.db.get("SELECT * FROM asks WHERE json_extract(detail,'$.send.draft') = ? AND state = 'open'", id);
+    this.openDraft(id);
+    const open =this.db.get("SELECT * FROM asks WHERE json_extract(detail,'$.send.draft') = ? AND state = 'open'", id);
     if (open) return { id: open.id };
     const detail = { effect: 'send', send: { draft: id, from, to, subject, body }, preview: { body } };
     const r = this.db.run("INSERT INTO asks (bot,kind,title,detail,at) VALUES ('chief','mail','Send this one email from your Gmail?',?,?)", JSON.stringify(detail), Date.now());
