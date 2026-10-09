@@ -120,15 +120,14 @@ test('an existing engine login and migration archives seal on prepare, restore a
     const good = readFileSync(snapshot), tampered = Buffer.from(good);
     tampered[tampered.length - 1] ^= 1;
     writeFileSync(snapshot, tampered);
-    await runtime.start(host);
-    assert.equal(runtime.kit.state.phase, 'ready');
-    assert.equal(runtime.kit.state.why, 'sign-in-reset', 'tampering reports the reset rather than restoring credentials');
+    // Kit 0.8.0+ fails closed on an unreadable sealed store: nothing is reset or kept aside, the bad bytes stay
+    // exactly as they are, and the person is told to restore the key or a backup (0.6.3 quarantined and reset).
+    await assert.rejects(runtime.start(host), (e: any) => e.code === 'auth-store-unreadable');
+    assert.equal(runtime.kit.state.phase, 'failed');
+    assert.equal(runtime.kit.state.why, 'auth-store-unreadable', 'tampering is reported as an unreadable store, never silently reset');
     assert.equal(await runtime.signedIn('chatgpt'), false, 'the old engine login never returns from bad bytes');
-    const unreadable = readdirSync(engine).filter((name) => /^auth-store\.sealed\.unreadable-\d+$/.test(name));
-    assert.equal(unreadable.length, 1, 'the unreadable snapshot is kept aside once');
-    assert.deepEqual(readFileSync(join(engine, unreadable[0])), tampered, 'the bad bytes are preserved exactly');
-    await runtime.stop();
-    assert.deepEqual(readFileSync(join(engine, unreadable[0])), tampered, 'stopping never overwrites the kept bytes');
+    assert.deepEqual(readFileSync(snapshot), tampered, 'the bad bytes stay in place, unchanged');
+    assert.equal(readdirSync(engine).filter((name) => name.startsWith('auth-store.sealed.')).length, 0, 'no quarantine copy is made');
     writeFileSync(snapshot, good);
     await runtime.start(host);
     assert.equal(await runtime.signedIn('chatgpt'), true, 'repairing the sealed snapshot preserves the login');

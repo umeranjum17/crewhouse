@@ -82,7 +82,7 @@ export class OpenClawRuntime implements AgentRuntime {
   }
   async start(host: ToolHost) { this.host = host; await this.kit.start(); }
   async stop() { await this.kit.stop(); }
-  signInRecovery() { return this.kit.state.phase === 'locked' || this.kit.state.why === 'engine-already-running' ? stateWords(this.kit.state) : ''; }
+  signInRecovery() { return this.kit.state.phase === 'locked' || this.kit.state.why === 'engine-already-running' || this.kit.state.why === 'auth-store-unreadable' ? stateWords(this.kit.state) : ''; }
   memoryLimited() { return this.kit.memoryLimited(ME); }
 
   // ---- accounts: the engine owns credentials; the kit drives its wizard and reads its status ----
@@ -150,7 +150,7 @@ export class OpenClawRuntime implements AgentRuntime {
     try {
       return await this.kit.run({ sessionKey: spec.key, member: ME, message: spec.message, system: spec.system,
         ...(model && provider ? { model: `${provider}/${model}` } : {}), ...(spec.images?.length ? { images: spec.images } : {}), ...(spec.thinking ? { thinking: spec.thinking } : {}), register },
-        (e) => on(e.type === 'tool' ? { ...e, name: crewName(e.name) } : e));
+        (e) => { if (e.type !== 'started' && e.type !== 'thinking') on(e.type === 'tool' ? { ...e, name: crewName(e.name) } : e); }); // 0.8.0 progress events stay unwired until ch-chat-live-2
     } catch (error) { return { ok: false, kind: 'other', message: String(error) }; }
     finally { if (register) this.runs.delete(spec.key); }
   }

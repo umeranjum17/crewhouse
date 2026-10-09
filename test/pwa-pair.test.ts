@@ -77,7 +77,9 @@ test('the public demo app pairs by a relay code or a direct code, opens on real 
     if (r.exceptionDetails) throw new Error(`page error: ${r.exceptionDetails.exception?.description ?? r.exceptionDetails.text}`);
     return r.result.value;
   };
-  const mode = () => run(`document.querySelector('main') ? (document.querySelector('.demo-tag') ? 'demo' : 'real') : document.querySelector('.hello') ? 'real' : ''`);
+  // Unpair and reload navigate the page under a poll: a poll that lands mid-navigation is "not yet", not a failure.
+  const mode = () => run(`document.querySelector('main') ? (document.querySelector('.demo-tag') ? 'demo' : 'real') : document.querySelector('.hello') ? 'real' : ''`)
+    .catch((e: Error) => { if (/navigated or closed/.test(e.message)) return ''; throw e; });
   const devices = async () => (await http('GET', '/api/phones')).length;
 
   /** Paste a code into the Pair sheet, then say yes at the computer once its two words match the page's. */
