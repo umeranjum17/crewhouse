@@ -32,7 +32,6 @@ let said = '';
 const fill = (t) => t?.replaceAll('{{out}}', JSON.stringify(said));
 const evalJs = async (expr) => (await send('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true }, s)).result.value;
 for (const st of plan.steps) {
-  console.error(`step ${st.name}`);
   try {
     if (st.w) await send('Emulation.setDeviceMetricsOverride', { width: st.w, height: st.h, deviceScaleFactor: st.dpr ?? 1, mobile: !!st.mobile }, s);
     if (st.inject) await send('Page.addScriptToEvaluateOnNewDocument', { source: st.inject }, s);
@@ -49,7 +48,7 @@ for (const st of plan.steps) {
     if (st.key) { out.push({ key: execFileSync('python3', ['-I', plan.xkey, ...String(st.key).split(' ')]).toString() }); await sleep(4000); }
     if (st.attachApp) { const { targetInfos: ts } = await send('Target.getTargets'); out.push({ targets: ts.map((t) => [t.type, t.url.replace(/#.*/, '')]) }); const app = ts.filter((t) => t.type === 'page' && t.targetId !== target.targetId && t.url.startsWith(st.attachApp)).pop(); if (app) { target = app; ({ sessionId: s } = await send('Target.attachToTarget', { targetId: app.targetId, flatten: true })); await prep(); } }
     if (st.record) { rec = spawn('node', [plan.recorder, '--cdp', port, '--out', st.record, '--seconds', String(st.seconds ?? 5), '--max-width', '1200', ...(st.match ? ['--match', st.match] : [])]); rec.out = ''; rec.stdout.on('data', (c) => rec.out += c); rec.stderr.on('data', (c) => rec.out += c); await sleep(1500); }
-    if (st.recwait) { if (rec.exitCode !== null) out.push({ recorded: rec.out, already: true }); else await new Promise((r) => { rec.once('exit', r); }); out.push({ recorded: rec.out }); }
+    if (st.recwait) { const already = rec.exitCode !== null; if (!already) await new Promise((r) => { rec.once('exit', r); }); out.push({ recorded: rec.out, already }); }
     if (st.errors) out.push({ installability: await send('Page.getInstallabilityErrors', {}, s) });
     if (st.wait) { const end = Date.now() + (st.timeout ?? 30_000); while (!(await evalJs(fill(st.wait)))) { if (Date.now() > end) throw new Error(`timed out waiting for ${st.wait}`); await sleep(100); } }
     if (st.eval) out.push({ step: st.name, value: await evalJs(fill(st.eval)) });

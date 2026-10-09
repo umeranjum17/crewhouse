@@ -139,7 +139,6 @@ test('the public demo app pairs by a relay code or a direct code, opens on real 
   await until('paired after the mailbox went', async () => (await mode()) === 'real', 30_000);
   await run(`location.hash = '#/settings'`);
   await until('the plain no-mailbox words', () => run(`/no mailbox for notifications yet/.test(document.body.innerText)`));
-  await until('no dead toggle', () => run(`[...document.querySelectorAll('.notify-on,.notify-off')].length`) === 0);
   assert.equal(await run(`[...document.querySelectorAll('.notify-on,.notify-off')].length`), 0, 'nothing to tap that cannot work');
 });
 
