@@ -3,7 +3,7 @@ import type { Store, Row } from './db.ts';
 import type { Connections } from './connections.ts';
 import { GMAIL } from './mail.ts';
 // Free-mail domains hold many people, so one mailbox on them is never a whole organisation: attesting them domain-wide would email sole traders.
-const FREE_MAIL = new Set(['gmail.com', 'googlemail.com', 'outlook.com', 'hotmail.com', 'live.com', 'msn.com', 'yahoo.com', 'yahoo.co.uk', 'icloud.com', 'me.com', 'aol.com', 'proton.me', 'protonmail.com', 'gmx.com', 'btinternet.com', 'sky.com', 'talktalk.net', 'virgin.net']);
+const FREE_MAIL = new Set(['gmail.com', 'googlemail.com', 'googlemail.co.uk', 'outlook.com', 'outlook.co.uk', 'hotmail.com', 'hotmail.co.uk', 'live.com', 'live.co.uk', 'msn.com', 'yahoo.com', 'yahoo.co.uk', 'ymail.com', 'icloud.com', 'me.com', 'mac.com', 'aol.com', 'aol.co.uk', 'proton.me', 'protonmail.com', 'gmx.com', 'gmx.co.uk', 'btinternet.com', 'btopenworld.com', 'blueyonder.co.uk', 'ntlworld.com', 'virginmedia.com', 'virgin.net', 'sky.com', 'talktalk.net']);
 const INDIVIDUALS = "Sole traders and small partnerships count as individuals under UK email rules. This job will not email them.";
 const fail = (message: string, status = 409) => Object.assign(new Error(message), { status });
 const address = (raw: unknown) => {
@@ -81,7 +81,8 @@ export class MailSend {
     this.db.tx(() => {
       const claimed = this.db.run("UPDATE asks SET state='sending',answer='approved once',answered_at=? WHERE id=? AND state='open'", Date.now(), ask.id);
       const drafted = this.db.run("UPDATE asks SET state='answered',answer='Gmail sending attempted',answered_at=? WHERE id=? AND state='open'", Date.now(), m.draft);
-      if (!claimed.changes || !drafted.changes) throw fail('This message was already attempted. Check Gmail; it will not be sent again.');
+      if (!claimed.changes) throw fail('This message was already attempted. Check Gmail; it will not be sent again.');
+      if (!drafted.changes) throw fail('This message was already answered on its draft. Nothing was sent.');
       this.db.event('mail.approved', ask.bot, { ask: ask.id, person: 1, phone, from, to });
     });
     const raw = Buffer.from(`From: ${from}\r\nTo: ${to}\r\nSubject: ${m.subject.match(/[\s\S]{1,10}/gu)!.map((s: string) => `=?UTF-8?B?${Buffer.from(s).toString('base64')}?=`).join('\r\n ')}\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n${Buffer.from(m.body).toString('base64').match(/.{1,76}/g)!.join('\r\n')}\r\n`).toString('base64url');
