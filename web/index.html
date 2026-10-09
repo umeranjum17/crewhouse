@@ -2,8 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#fff7f2" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
+  <meta name="theme-color" content="#F3EEE3" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Crewhouse" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <link rel="preload" href="/fonts/InterVariable.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="preload" href="/fonts/JetBrainsMono.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48" />
@@ -13,8 +17,9 @@
   <link rel="manifest" href="/manifest.webmanifest" />
   <title>Crewhouse</title>
   <link rel="stylesheet" href="/styles.css" />
-  <!-- The look before the first paint (useLook in main.tsx keeps it after): a night viewer's first frame is the night background, not the day one. -->
-  <script>try { var q = new URLSearchParams(location.search), l = q.has('night') ? 'night' : q.has('day') ? 'day' : localStorage.getItem('crewhouse.look') || 'auto', h = new Date().getHours(); document.documentElement.dataset.theme = l === 'night' || (l === 'auto' && (h >= 19 || h < 7)) ? 'night' : 'day'; } catch (e) {}</script>
+  <!-- The look before the first paint (useLook in main.tsx keeps it after): a night viewer's first frame is the night background, not the day one,
+       under a night status bar. iOS reads the status bar style once, at launch: at night the page runs under a see-through bar. -->
+  <script>try { var q = new URLSearchParams(location.search), l = q.has('night') ? 'night' : q.has('day') ? 'day' : localStorage.getItem('crewhouse.look') || 'auto', h = new Date().getHours(), n = l === 'night' || (l === 'auto' && (h >= 19 || h < 7)); document.documentElement.dataset.theme = n ? 'night' : 'day'; if (n) { document.querySelector('meta[name=theme-color]').content = '#0C0C0B'; document.querySelector('meta[name=apple-mobile-web-app-status-bar-style]').content = 'black-translucent'; } } catch (e) {}</script>
 </head>
 <body>
   <div id="root"></div>

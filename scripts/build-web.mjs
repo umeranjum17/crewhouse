@@ -1,7 +1,7 @@
 // Bundles web/src into web/dist. The daemon serves web/dist; nothing here runs at request time.
 // An optional web-tree argument (tests) builds a copy of the tree instead of the checkout's own.
 import { build } from 'esbuild';
-import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
 const root = process.argv[2] ? resolve(process.argv[2]) + '/' : new URL('../web/', import.meta.url).pathname;
 // A fresh dist each time: yesterday's bundles must not linger under names nothing references any more.
@@ -14,6 +14,8 @@ cpSync(root + 'marks', root + 'dist/marks', { recursive: true });
 // Icons are drawn from Chief's bitmaps by scripts/icons.mjs.
 for (const f of ['icon.svg', 'favicon.svg', 'favicon.ico', 'favicon-16.png', 'favicon-32.png', 'favicon-48.png', 'notify.svg', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'icon-maskable-192.png', 'apple-touch-icon.png', 'notify-96.png']) cpSync(root + f, root + 'dist/' + f);
 cpSync(root + 'manifest.webmanifest', root + 'dist/manifest.webmanifest'); // "Share to Crewhouse" from the phone's Share sheet
+// iOS launch screens and the install sheet's screenshots, both drawn and captured ahead of time (scripts/icons.mjs, web/shots/).
+for (const d of ['splash', 'shots']) cpSync(root + d, root + 'dist/' + d, { recursive: true });
 // Content-named bundles: the browser caches each build forever, and a changed build simply gets a new name.
 const built = await build({
   entryPoints: [root + 'src/main.tsx', root + 'src/styles.css'],
@@ -33,5 +35,10 @@ for (const [f, o] of Object.entries(built.metafile.outputs)) {
   if (o.entryPoint?.endsWith('styles.css') && /\.css$/.test(f)) html = html.replace('/styles.css', '/' + basename(f));
   if (o.entryPoint?.endsWith('main.tsx') && /\.js$/.test(f)) html = html.replace('/main.js', '/' + basename(f));
 }
+// Each launch screen matches one device size and the phone's light or dark setting by its file name (WxH@density-look).
+html = html.replace('</head>', readdirSync(root + 'splash').map((f) => {
+  const [, w, h, d, look] = /^(\d+)x(\d+)@(\d)-(day|night)\.png$/.exec(f) ?? [];
+  return `  <link rel="apple-touch-startup-image" href="/splash/${f}" media="(device-width: ${w}px) and (device-height: ${h}px) and (-webkit-device-pixel-ratio: ${d}) and (prefers-color-scheme: ${look === 'night' ? 'dark' : 'light'})" />\n`;
+}).join('') + '</head>');
 writeFileSync(root + 'dist/index.html', html);
 console.log('web UI built into ' + root + 'dist');

@@ -1,10 +1,17 @@
 {
+  "id": "/",
   "name": "Crewhouse",
   "short_name": "Crewhouse",
+  "description": "Your own crew of AI helpers, led by Chief.",
+  "lang": "en",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#fff7f2",
-  "theme_color": "#fff7f2",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#F3EEE3",
+  "theme_color": "#F3EEE3",
+  "categories": ["productivity", "utilities"],
   "icons": [
     { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" },
     { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
@@ -12,6 +19,15 @@
     { "src": "/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
     { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
     { "src": "/notify-96.png", "sizes": "96x96", "type": "image/png", "purpose": "monochrome" }
+  ],
+  "screenshots": [
+    { "src": "/shots/phone.png", "sizes": "780x1688", "type": "image/png", "form_factor": "narrow", "label": "Chat with Chief" },
+    { "src": "/shots/desk.png", "sizes": "1440x900", "type": "image/png", "form_factor": "wide", "label": "Your crew at work" }
+  ],
+  "shortcuts": [
+    { "name": "Chat with Chief", "url": "/#/chief", "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }] },
+    { "name": "Your things", "url": "/#/things", "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }] },
+    { "name": "Routines", "url": "/#/routines", "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }] }
   ],
   "share_target": { "action": "/share", "method": "GET", "params": { "title": "title", "text": "text", "url": "url" } }
 }
