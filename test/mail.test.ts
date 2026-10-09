@@ -134,7 +134,7 @@ test('Tracer email: real sandbox HTTP cannot approve; paired control attests onc
     const mark = (kind: string) => request('PUT /api/mail', { to: 'ada@fernwood.example', name: 'Fernwood', kind });
     await mark('sole-trader'); assert.match((await request('POST /api/mail/review', { draft: draft.id })).body.error, /count as individuals/);
     await mark('small-partnership'); assert.match((await request('POST /api/mail/review', { draft: draft.id })).body.error, /count as individuals/);
-    const attested = await mark('corporate'); assert.equal(attested.body.eligibility.person, 1); assert.ok(attested.body.eligibility.phone && attested.body.eligibility.at);
+    const attested = await mark('corporate'); assert.equal(attested.body.eligibility.person, 1); assert.ok(attested.body.eligibility.at); assert.equal(attested.body.eligibility.phone, undefined, 'the paired phone’s device id stays server-side');
     await request('PUT /api/mail', { to: 'ADA@FERNWOOD.EXAMPLE', suppressed: true });
     assert.match((await request('POST /api/mail/review', { draft: draft.id })).body.error, /do-not-email list/);
     await request('PUT /api/mail', { to: 'ada@fernwood.example', suppressed: false }); asked.length = 0;
@@ -143,7 +143,7 @@ test('Tracer email: real sandbox HTTP cannot approve; paired control attests onc
     const card = (await request('GET /api/state')).body.asks.find((a: any) => a.id === review.body.id);
     assert.equal(card.bot, 'chief', 'sending is reviewed with Chief, never in a helper’s Needs you');
     assert.deepEqual(card.detail.send, { from: 'umer@sender.example', to: 'ada@fernwood.example', subject: 'A grounded subject' }); assert.equal(card.detail.preview.body, text);
-    assert.equal((await http('POST', `/api/asks/${card.id}/answer`, { answer: 'allow', phone: attested.body.eligibility.phone })).status, 403, 'final send cannot be approved locally');
+    assert.equal((await http('POST', `/api/asks/${card.id}/answer`, { answer: 'allow', phone: db.get("SELECT id FROM devices WHERE role='control'")!.id })).status, 403, 'final send cannot be approved locally');
     view = await pair('view'); await assert.rejects(view.request('PUT /api/mail', { to: 'ada@fernwood.example', kind: 'corporate', name: 'Fake', build: 'p9b' }), (e: any) => e.code === 'view-only');
     assert.equal(asked.length, 0, 'no Gmail send request, even with an attestation and a review card');
     await request(`POST /api/asks/${card.id}/answer`, { answer: 'deny' });
@@ -234,6 +234,24 @@ test('a free-mail domain can never be attested, so a sole trader on it is never 
     const draft = Number(db.run("INSERT INTO asks (bot,kind,title,detail,at) VALUES ('tracer','propose','Email',?,?)", JSON.stringify({ draft: { channel: 'email', to: 'plumber@gmail.com', subject: 'Hi' }, preview: { body: 'Hello there.' } }), Date.now()).lastInsertRowid);
     await assert.rejects(mail.review(draft), (e: any) => /count as individuals/.test(e.message));
   } finally { done(); }
+});
+
+test('a Not now on a send card whose draft was decided elsewhere records no refusal', async () => {
+  const { db, crew, done } = setup();
+  crew.onboard('Umer'); crew.recruit('tracer', 'Tracer', 'person');
+  db.run("INSERT INTO devices (id,name,pk,role,created_at) VALUES ('ctl','Control','pk-ctl','control',?)", Date.now());
+  const who = createServer((_q, r) => { r.writeHead(200, { 'content-type': 'application/json' }); r.end(JSON.stringify({ email: 'umer@sender.example', email_verified: true })); });
+  await new Promise<void>(r => who.listen(0, '127.0.0.1', r)); identity = `http://127.0.0.1:${(who.address() as any).port}`;
+  const mail = new MailSend(db, { token: async () => 'tok' } as any);
+  try {
+    mail.set('ada@fernwood.example', { kind: 'corporate', name: 'Fernwood' }, 'ctl');
+    const draft = sendDraft(db, 'ada@fernwood.example', 'Copied one');
+    const card = (await mail.review(draft)).id;
+    db.run("UPDATE asks SET state='answered',answer='allowed once' WHERE id=?", draft);
+    await mail.answer(db.get('SELECT * FROM asks WHERE id=?', card)!, 'deny', 'ctl');
+    assert.equal(db.get('SELECT state, answer FROM asks WHERE id=?', card)!.answer, 'not now');
+    assert.equal(db.all("SELECT * FROM events WHERE kind='draft.rejected'").length, 0, 'the email was not refused; it was already decided');
+  } finally { identity = ''; await new Promise<void>(r => who.close(() => r())); done(); }
 });
 
 const sendDraft = (db: any, to: string, subject: string) => Number(db.run("INSERT INTO asks (bot,kind,title,detail,at) VALUES ('tracer','propose','Email',?,?)", JSON.stringify({ draft: { channel: 'email', to, subject }, preview: { body: 'Hello there.' } }), Date.now()).lastInsertRowid);

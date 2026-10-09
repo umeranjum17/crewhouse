@@ -19,7 +19,8 @@ export class MailSend {
   private save(key: string, value: Row) { this.db.run('INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', key, JSON.stringify(value)); }
   status(raw: unknown) {
     const to = address(raw), org = to.split('@')[1];
-    return { to, org, eligibility: this.record(`mail.org.${org}`), suppressed: !!this.record(`mail.stop.${to}`) };
+    const rec = this.record(`mail.org.${org}`);
+    return { to, org, eligibility: rec && { ...rec, phone: undefined }, suppressed: !!this.record(`mail.stop.${to}`) };
   }
   private eligible(to: string) {
     const s = this.status(to);
@@ -76,13 +77,13 @@ export class MailSend {
     return { id: ask };
   }
   private receiptOf(draft: number, kind: string) {
-    const row = this.db.get('SELECT bot, detail FROM asks WHERE id = ?', draft), d = JSON.parse(row.detail);
+    const row = this.db.get('SELECT bot, detail FROM asks WHERE id = ?', draft)!, d = JSON.parse(row.detail);
     this.db.event(kind, row.bot, { ...receipt(d.draft, d.preview), task: d.task });
   }
   async answer(ask: Row, answer: string, phone: string) {
     if (!['allow', 'deny'].includes(answer)) throw fail('Choose Send or Not now.', 400);
     const m = JSON.parse(ask.detail).send, to = address(m.to);
-    if (answer === 'deny') { this.db.run("UPDATE asks SET state='answered',answer='not now',answered_at=? WHERE id=? AND state='open'", Date.now(), ask.id); this.db.event('mail.declined', ask.bot, { ask: ask.id, phone }); this.receiptOf(m.draft, 'draft.rejected'); return; }
+    if (answer === 'deny') { this.db.run("UPDATE asks SET state='answered',answer='not now',answered_at=? WHERE id=? AND state='open'", Date.now(), ask.id); this.db.event('mail.declined', ask.bot, { ask: ask.id, phone }); if (this.db.get("SELECT 1 FROM asks WHERE id=? AND state='open'", m.draft)) this.receiptOf(m.draft, 'draft.rejected'); return; }
     this.eligible(to);
     const { token, from } = await this.sender();
     if (from !== m.from) throw fail('Your Gmail account changed. Review a new email card before sending.');
