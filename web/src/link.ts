@@ -24,14 +24,10 @@ export async function pair(text: string, onWords: (w: string) => void) {
   if (t.kind === 'unknown') throw new Error('That code is missing a part. Copy the whole code from your computer, then try again.');
   let grant: DeviceGrant;
   if (t.kind === 'relay') grant = await pairWithCode(await findHost(t.base, t.short), t.code, o);
-  else {
-    const offer = decodeOffer(t.text);
-    // A page from an https address may not open a plain ws:// socket to another machine: the browser blocks it. Such a
-    // code reaches only the computer this browser runs on; the relay's code works from anywhere.
-    if (location.protocol === 'https:' && !offer.urls.some((u) => /^wss:|^ws:\/\/(127\.0\.0\.1|localhost|\[::1\])[:/]/.test(u)))
-      throw new Error("This browser can't use that code. Set up your relay in Crewhouse on your computer (Settings, Phones), then run the code command again and paste the code it prints for away from home.");
-    grant = await pairWithOffer(offerText(offer), o);
-  }
+  // A direct code dials the computer's own addresses, so off its network it can't get through; the relay's code can.
+  else grant = await pairWithOffer(offerText(decodeOffer(t.text)), o).catch((e) => {
+    throw e instanceof LinkError && e.code === 'unreachable' ? new Error(`${e.message} On another network? Paste the second code the command printed instead.`) : e;
+  });
   await store.save(grant);
 }
 
