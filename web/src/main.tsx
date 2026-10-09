@@ -13,7 +13,7 @@ import type { IconName } from './icons.ts';
 import { Screen } from './screen.tsx';
 import { hear, Office, summaryOf, useOffice } from './office.tsx';
 import { AccountCard, ConnectApp, ConnectCard, NEEDS_SIGNIN, openTab, PairSheet, sheet, SignIn, Unreachable } from './flows.tsx';
-import { pushState, setBadge, startWorker, turnOffNotifications, turnOnNotifications } from './pwa.ts';
+import { pushPossible, pushState, setBadge, startWorker, turnOffNotifications, turnOnNotifications } from './pwa.ts';
 import { remember, resume } from './resume.ts';
 
 type View = 'home' | 'chief' | 'room' | 'crew' | 'add' | 'helper' | 'things' | 'routines' | 'settings' | 'apps' | 'skills' | 'ask' | 'share' | 'pair';
@@ -1068,10 +1068,10 @@ function Routines(ctx: Ctx) {
 }
 
 // ---------- settings ----------
-/** The installed app's own notifications, wherever they live: under Phones on the computer, on the paired card
- *  away from it. One line: the state and the one action that changes it. `relay`: whether a mailbox can carry them
- *  — null while the paired app is still asking over the link; false says `norelay` in plain words, no dead button. */
-function NotifyLine({ relay, norelay }: { relay: boolean | null; norelay: string }) {
+/** The paired app's own notifications, on the paired card. One line: the state and the one action that changes it.
+ *  `relay`: whether a mailbox can carry them — null while the key is still being asked over the link; false says
+ *  `norelay` in plain words, no dead button; 'unreachable' says the computer could not be reached. */
+function NotifyLine({ relay, norelay }: { relay: boolean | 'unreachable' | null; norelay: string }) {
   const [state, setState] = useState<'unsupported' | 'denied' | 'on' | 'off' | null>(null);
   const look = () => pushState().then(setState).catch(() => setState('off'));
   useEffect(() => { void look(); }, []);
@@ -1079,14 +1079,18 @@ function NotifyLine({ relay, norelay }: { relay: boolean | null; norelay: string
   if (state === 'denied') return <p className="mute small">Notifications are blocked in this browser. Allow them for this app in the browser’s own settings, then try again.</p>;
   if (relay === false) return <p className="mute small">Notifications on this device: {norelay}</p>;
   const on = state === 'on';
-  return <p className="mute small">Notifications: {on ? 'On' : 'Off'} · <button className={`link inline notify-${on ? 'off' : 'on'}`} onClick={() => attempt(async () => {
-    if (on) { await turnOffNotifications(); toast('Notifications are off on this device.'); }
-    else {
-      const r = await turnOnNotifications(relay === true);
-      if (r === 'on') toast('This device shows Crewhouse news.');
-      else if (r === 'offline') toast("Your mailbox isn't connected right now. Try again in a moment.");
-    }
-  }).then(() => look())}>{on ? 'Turn off' : 'Turn on'}</button></p>;
+  return <>
+    <p className="mute small">Notifications: {on ? 'On' : 'Off'} · <button className={`link inline notify-${on ? 'off' : 'on'}`} onClick={() => attempt(async () => {
+      if (on) { await turnOffNotifications(); toast('Notifications are off on this device.'); }
+      else {
+        const r = await turnOnNotifications(relay === true);
+        if (r === 'on') toast('This device shows Crewhouse news.');
+        else if (r === 'off') toast('Notifications were not allowed.');
+        else if (r === 'offline') toast("Your mailbox isn't connected right now. Try again in a moment.");
+      }
+    }).then(() => look())}>{on ? 'Turn off' : 'Turn on'}</button></p>
+    {relay === 'unreachable' && <p className="mute small">Couldn't reach your computer. Try again when it's on.</p>}
+  </>;
 }
 
 /** Settings, Phones: pair the phone app by its camera, see each phone, take one away. Only this computer can. */
@@ -1121,7 +1125,7 @@ function Phones({ tick }: { tick: number }) {
           </div>
         ))}
         {!!A.pushWords(link) && <p className="mute small">{A.pushWords(link)}</p>}
-        <NotifyLine relay={!!link.relay} norelay="Turn on your mailbox below first, then try again." />
+        {pushPossible() && <p className="mute small">Notifications on this device: <button className="link inline" onClick={() => attempt(async () => { const r = await turnOnNotifications(!!link.relay); toast(r === 'on' ? 'This device shows Crewhouse news.' : r === 'norelay' ? 'Turn on your mailbox below first, then try again.' : r === 'offline' ? "Your mailbox isn't connected right now. Try again in a moment." : 'Notifications were not allowed.'); })}>turn on</button> · <button className="link inline" onClick={() => attempt(async () => { await turnOffNotifications(); toast('Notifications are off on this device.'); })}>turn off</button></p>}
         {!phones.length && <p className="mute">No phones yet. Install the Crewhouse app, then scan the code it asks for.</p>}
         {!offer && <div className="btns"><button className="btn go" onClick={() => show('control')}>Add a phone</button><button className="btn" onClick={() => show('view')}>Add one that only watches</button></div>}
       </div>
@@ -1201,8 +1205,8 @@ const GO_TO: [string, string, IconName][] = [['#/things', 'Your things', 'things
  *  switch sits on this card: whether one is there is asked over the link (`POST /api/push {key}`), the one call crewd
  *  answers for this device's own grant — never /api/phones/link, which it refuses away from the computer. */
 function PairedCard({ tick }: { tick: number }) {
-  const [relay, setRelay] = useState<boolean | null>(null);
-  useEffect(() => { setRelay(null); api.pushKey().then((k) => setRelay(!!k.vapid)).catch(() => {}); }, [tick]);
+  const [relay, setRelay] = useState<boolean | 'unreachable' | null>(null);
+  useEffect(() => { setRelay(null); api.pushKey().then((k) => setRelay(!!k.vapid)).catch(() => setRelay('unreachable')); }, [tick]);
   return <div className="card nudge">
     <span className="grow"><b>Paired with {paired!.name}</b><div className="mute small">This app shows your own crew, straight from that computer and locked to it.</div>
       <NotifyLine relay={relay} norelay="Your computer has no mailbox for notifications yet. Turn one on there, then try again." /></span>

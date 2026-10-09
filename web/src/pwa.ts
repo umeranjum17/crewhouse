@@ -34,8 +34,7 @@ export async function turnOnNotifications(relay: boolean): Promise<'on' | 'off' 
   if (!relay) return 'norelay';
   if ((await Notification.requestPermission()) !== 'granted') return 'off';
   const { vapid, ready } = await api.pushKey();
-  if (!vapid) return 'norelay';
-  if (!ready) return 'offline';
+  if (!ready || !vapid) return 'offline';
   const reg = await worker();
   const old = await reg.pushManager.getSubscription();
   if (old) { await old.unsubscribe(); await api.push({ off: true, web: old.toJSON() }); }
