@@ -8,13 +8,15 @@
 // Raised 6876 -> 6888 for the Herdr first slice (ch-herdr-slice-1): the herdr gate entry in policy.ts, the
 // on-demand herdrStatus probe in tools.ts and GET /api/herdr. The paired trim lane ch-src-trim-s3 compacted
 // single-use declarations back out of src/, restoring BUDGET to 6876.
+// Raised 6876 -> 7026 for the guarded Gmail send path (ch-explee-send-path): the person-only send card, the
+// person-attested eligibility record and the durable suppression list. The paired trim lane ch-src-trim-s2
+// compacted single-use declarations back out of src/, restoring BUDGET to 6876.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-// ch-explee-send-path: owner-authorized +160 net src ceiling (raised 6876 -> 7026); paired ch-src-trim-s2 restores the budget after this slice.
-const BUDGET = 7026;
+const BUDGET = 6876;
 
 test('src stays within its line budget', () => {
   const root = join(import.meta.dirname, '..', 'src');

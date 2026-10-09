@@ -4,9 +4,7 @@ import type { Connections } from './connections.ts';
 import { GMAIL } from './mail.ts';
 import { receipt } from './crew.ts';
 // Free-mail domains hold many people, so one mailbox on them is never a whole organisation: attesting them domain-wide would email sole traders.
-const FREE_MAIL = new Set(['gmail.com', 'googlemail.com', 'googlemail.co.uk', 'outlook.com', 'outlook.co.uk', 'hotmail.com', 'hotmail.co.uk', 'live.com', 'live.co.uk', 'msn.com', 'yahoo.com', 'yahoo.co.uk', 'ymail.com', 'icloud.com', 'me.com', 'mac.com', 'aol.com', 'aol.co.uk', 'proton.me', 'protonmail.com', 'gmx.com', 'gmx.co.uk', 'btinternet.com', 'btopenworld.com', 'blueyonder.co.uk', 'ntlworld.com', 'virginmedia.com', 'virgin.net', 'sky.com', 'talktalk.net']);
-const INDIVIDUALS = "Sole traders and small partnerships count as individuals under UK email rules. This job will not email them.";
-const fail = (message: string, status = 409) => Object.assign(new Error(message), { status });
+const FREE_MAIL = new Set(['gmail.com', 'googlemail.com', 'googlemail.co.uk', 'outlook.com', 'outlook.co.uk', 'hotmail.com', 'hotmail.co.uk', 'live.com', 'live.co.uk', 'msn.com', 'yahoo.com', 'yahoo.co.uk', 'ymail.com', 'icloud.com', 'me.com', 'mac.com', 'aol.com', 'aol.co.uk', 'proton.me', 'protonmail.com', 'gmx.com', 'gmx.co.uk', 'btinternet.com', 'btopenworld.com', 'blueyonder.co.uk', 'ntlworld.com', 'virginmedia.com', 'virgin.net', 'sky.com', 'talktalk.net']), INDIVIDUALS = "Sole traders and small partnerships count as individuals under UK email rules. This job will not email them.", fail = (message: string, status = 409) => Object.assign(new Error(message), { status });
 const address = (raw: unknown) => {
   if (typeof raw !== 'string' || !/^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?\.[A-Za-z]{2,}$/.test(raw) || raw.length > 254) throw fail('Give one work email address, without names or extra recipients.', 400);
   return raw.toLowerCase();
@@ -18,8 +16,7 @@ export class MailSend {
   private record(key: string) { return JSON.parse(this.db.get('SELECT value FROM settings WHERE key = ?', key)?.value ?? 'null'); }
   private save(key: string, value: Row) { this.db.run('INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', key, JSON.stringify(value)); }
   status(raw: unknown) {
-    const to = address(raw), org = to.split('@')[1];
-    const rec = this.record(`mail.org.${org}`);
+    const to = address(raw), org = to.split('@')[1], rec = this.record(`mail.org.${org}`);
     return { to, org, eligibility: rec && { ...rec, phone: undefined }, suppressed: !!this.record(`mail.stop.${to}`) };
   }
   private eligible(to: string) {
@@ -56,14 +53,12 @@ export class MailSend {
   }
   private openDraft(id: number) {
     if (this.db.get("SELECT 1 FROM asks WHERE json_extract(detail,'$.send.draft')=? AND state IN ('sending','uncertain') OR json_extract(detail,'$.send.draft')=? AND answer='sent'", id, id)) throw fail('This message was already sent or attempted. Check Gmail; it will not be sent again.');
-    const draft = this.db.get("SELECT asks.* FROM asks JOIN bots ON bots.id=asks.bot WHERE asks.id=? AND bots.template='tracer' AND asks.kind='propose' AND asks.state='open'", id);
-    const d = JSON.parse(draft?.detail ?? '{}');
+    const draft = this.db.get("SELECT asks.* FROM asks JOIN bots ON bots.id=asks.bot WHERE asks.id=? AND bots.template='tracer' AND asks.kind='propose' AND asks.state='open'", id), d = JSON.parse(draft?.detail ?? '{}');
     if (!draft || d.draft?.channel !== 'email' || typeof d.preview?.body !== 'string') throw fail('Open one of Tracer’s email drafts first.');
     return d;
   }
   async review(id: number) {
-    const d = this.openDraft(id);
-    const to = address(d.draft.to), subject = d.draft.subject, body = d.preview.body;
+    const d = this.openDraft(id), to = address(d.draft.to), subject = d.draft.subject, body = d.preview.body;
     if (typeof subject !== 'string' || !subject.trim() || /[\r\n]/.test(subject) || subject.length > 160 || !body.trim() || body.length > 12000) throw fail('The email needs one subject and a complete body of at most 12,000 characters.');
     this.eligible(to);
     const { from } = await this.sender();
@@ -71,8 +66,7 @@ export class MailSend {
     this.openDraft(id);
     const open = this.db.get("SELECT * FROM asks WHERE json_extract(detail,'$.send.draft') = ? AND state = 'open'", id);
     if (open) return { id: open.id };
-    const detail = { effect: 'send', send: { draft: id, from, to, subject, body }, preview: { body } };
-    const r = this.db.run("INSERT INTO asks (bot,kind,title,detail,at) VALUES ('chief','mail','Send this one email from your Gmail?',?,?)", JSON.stringify(detail), Date.now());
+    const detail = { effect: 'send', send: { draft: id, from, to, subject, body }, preview: { body } }, r = this.db.run("INSERT INTO asks (bot,kind,title,detail,at) VALUES ('chief','mail','Send this one email from your Gmail?',?,?)", JSON.stringify(detail), Date.now());
     const ask = Number(r.lastInsertRowid); this.db.event('mail.review', 'chief', { ask, draft: id });
     return { id: ask };
   }
@@ -90,8 +84,7 @@ export class MailSend {
     this.eligible(to);
     if (!this.db.get("SELECT 1 FROM devices WHERE id=? AND role='control'", phone)) throw fail('This phone no longer has permission to approve sending.', 403);
     this.db.tx(() => {
-      const claimed = this.db.run("UPDATE asks SET state='sending',answer='approved once',answered_at=? WHERE id=? AND state='open'", Date.now(), ask.id);
-      const drafted = this.db.run("UPDATE asks SET state='answered',answer='Gmail sending attempted',answered_at=? WHERE id=? AND state='open'", Date.now(), m.draft);
+      const claimed = this.db.run("UPDATE asks SET state='sending',answer='approved once',answered_at=? WHERE id=? AND state='open'", Date.now(), ask.id), drafted = this.db.run("UPDATE asks SET state='answered',answer='Gmail sending attempted',answered_at=? WHERE id=? AND state='open'", Date.now(), m.draft);
       if (!claimed.changes) throw fail('This message was already attempted. Check Gmail; it will not be sent again.');
       if (!drafted.changes) throw fail('This message was already answered on its draft. Nothing was sent.');
       this.db.event('mail.approved', ask.bot, { ask: ask.id, person: 1, from, to });

@@ -67,9 +67,7 @@ export class Store {
 
   /** Append an event; listeners (WebSocket fan-out) hear it after the caller's transaction. */
   event(kind: string, bot: string | null, data: Row = {}): Row {
-    const at = Date.now();
-    const r = this.run('INSERT INTO events (at, kind, bot, data) VALUES (?, ?, ?, ?)', at, kind, bot, JSON.stringify(data));
-    const e = { seq: Number(r.lastInsertRowid), at, kind, bot, data };
+    const at = Date.now(), r = this.run('INSERT INTO events (at, kind, bot, data) VALUES (?, ?, ?, ?)', at, kind, bot, JSON.stringify(data)), e = { seq: Number(r.lastInsertRowid), at, kind, bot, data };
     queueMicrotask(() => this.listeners.forEach((l) => l(e)));
     return e;
   }

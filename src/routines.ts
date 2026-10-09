@@ -95,9 +95,7 @@ export function nextRun(s: Schedule, after: number) {
 /** The moment a one-off reminder is due, in the person's own words: "in 20 minutes" counts from now, and "today",
  *  "tomorrow" and a weekday name ("friday 9:00") are the same clock the routines keep. */
 export function reminderAt(text: string, now = Date.now()) {
-  const day = (n: number) => DAYS[(new Date(now).getDay() + n) % 7];
-  const s = String(text).toLowerCase().trim().replace(/\btomorrow\b/, () => day(1)).replace(/\btoday\b/, () => day(0));
-  const rel = /^in\s+(\d{1,4})\s*(minutes?|mins?|hours?|hrs?)$/.exec(s);
+  const day = (n: number) => DAYS[(new Date(now).getDay() + n) % 7], s = String(text).toLowerCase().trim().replace(/\btomorrow\b/, () => day(1)).replace(/\btoday\b/, () => day(0)), rel = /^in\s+(\d{1,4})\s*(minutes?|mins?|hours?|hrs?)$/.exec(s);
   if (rel) return now + Number(rel[1]) * (rel[2][0] === 'h' ? 60 : 1) * 60_000;
   try { return nextRun(parseSchedule(s.replace(/^(at|on)\s+/, '')), now); } catch { throw whenBad(text); }
 }

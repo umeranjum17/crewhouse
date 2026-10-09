@@ -100,10 +100,7 @@ export async function herdrStatus(cfg: Config) {
 
 /** What a bot's grants turn into: ready tools, AXIs and env. Missing tools are not offered. */
 export function resolveGrants(cfg: Config, grants: string[], vars: Record<string, string>) {
-  const all = new Map(toolStatus(cfg).map((t) => [t.id, t]));
-  const wanted = [...new Set(['crew', ...grants])].map((g) => all.get(g)).filter((t) => t) as ToolState[];
-  const tools = wanted.filter((t) => t.ready);
-  const v = { tools: cfg.toolsDir, ...vars };
+  const all = new Map(toolStatus(cfg).map((t) => [t.id, t])), wanted = [...new Set(['crew', ...grants])].map((g) => all.get(g)).filter((t) => t) as ToolState[], tools = wanted.filter((t) => t.ready), v = { tools: cfg.toolsDir, ...vars };
   // The script itself (the bin is a link into the tool's own node_modules), run on crewd's own node: no PATH lookup.
   const axi = Object.fromEntries(tools.filter((t) => t.axi).map((t) => [t.id, {
     script: realpathSync(binOf(cfg, t, t.bins[0])!),

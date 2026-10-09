@@ -35,9 +35,7 @@ export function linkHosts(pinned: string, lan: boolean, ifaces: Ifaces = network
 /** Addresses a phone can dial for those hosts: home network first, then Tailscale. Loopback only when there is
  *  nothing else, which reaches an emulator or a phone forwarded over USB. */
 export function phoneAddresses(hosts: string[], ifaces: Ifaces = networkInterfaces(), tailnetIPs: readonly string[] = []): string[] {
-  const found = routes(ifaces, tailnetIPs);
-  const ips = hosts.includes('0.0.0.0') ? [...found.lan, ...found.tailscale] : hosts.filter((h) => !/^127\.|^localhost$/.test(h));
-  const out = [...ips.filter((ip) => !found.tailscale.includes(ip)), ...ips.filter((ip) => found.tailscale.includes(ip))];
+  const found = routes(ifaces, tailnetIPs), ips = hosts.includes('0.0.0.0') ? [...found.lan, ...found.tailscale] : hosts.filter((h) => !/^127\.|^localhost$/.test(h)), out = [...ips.filter((ip) => !found.tailscale.includes(ip)), ...ips.filter((ip) => found.tailscale.includes(ip))];
   return out.length ? out : ['127.0.0.1'];
 }
 
@@ -62,11 +60,9 @@ const ROUTES = ['home', 'tailscale', 'relay'];
 /** Every notification says only this; the phone fetches the words over the link (the relay enforces it too). */
 export const NEWS = 'Crewhouse has news';
 const WEB_DEVICE = 'web'; // the person's browser holds no link grant; a paired phone keeps its own grant id
-const webAddress = (v: unknown): v is WebSubscription => typeof v === 'object' && v !== null;
-const UPDATE_APP = 'Get the latest Crewhouse app to keep chatting.', currentPhone = (body: any) => body?.build === 'p9b';
+const webAddress = (v: unknown): v is WebSubscription => typeof v === 'object' && v !== null, UPDATE_APP = 'Get the latest Crewhouse app to keep chatting.', currentPhone = (body: any) => body?.build === 'p9b';
 /** The relay's WebSocket origin, from the https/wss address Settings keeps. */
-const wsOrigin = (url: string) => url.replace(/^http/, 'ws');
-const pushOf = (v?: string) => (v === 'missing' || v === 'off' ? v : v ? 'on' : undefined);
+const wsOrigin = (url: string) => url.replace(/^http/, 'ws'), pushOf = (v?: string) => (v === 'missing' || v === 'off' ? v : v ? 'on' : undefined);
 /** A phone waiting at the computer for the person's yes: its name and the two words both screens show. */
 type Asking = { id: number; name: string; words: string; role: Role; offer?: string; answer: (yes: boolean) => void };
 export class Link {
@@ -195,8 +191,7 @@ export class Link {
     if (!this.cfg.linkPort) return this.follow();
     const state = await kitTailscaleState({ bin: this.tailscaleBin, timeoutMs: 5000 });
     this.tailnetIPs = state.ips;
-    const want = new Set(this.hosts());
-    const before = [...this.servers.keys()].join(', ');
+    const want = new Set(this.hosts()), before = [...this.servers.keys()].join(', ');
     for (const [host, s] of this.servers) if (!want.has(host)) { s.close(); this.servers.delete(host); }
     await Promise.all([...want].filter((h) => !this.servers.has(h)).map((host) => new Promise<void>((resolve) => {
       const s = createServer((_req, res) => { res.writeHead(404).end(); });
@@ -321,8 +316,7 @@ export class Link {
    *  quiet hours the push is held (kept in the store, so a restart keeps it) and `sendHeld` sends one when they end. */
   private async tell(id: string) {
     if (this.quiet()) return void this.db.run("INSERT INTO settings (key, value) VALUES (?, '1') ON CONFLICT(key) DO NOTHING", 'push.held.1');
-    const to = [...this.host.devices().map((g) => g.id), WEB_DEVICE];
-    const phones = to.map((d) => [d, this.setting(`phone.push.${d}`)]).filter(([, t]) => isExpoToken(t));
+    const to = [...this.host.devices().map((g) => g.id), WEB_DEVICE], phones = to.map((d) => [d, this.setting(`phone.push.${d}`)]).filter(([, t]) => isExpoToken(t));
     if (phones.length) await this.expo(id, phones as [string, string][]).catch((e) => console.error('push:', e.message));
     // A browser's Web Push address is kept on the person's relay, which holds the key for it.
     if (this.client && this.relayStatus === 'online') await this.client.notify({ id, title: NEWS, to }).catch((e) => console.error('push:', e.message));
@@ -433,8 +427,7 @@ export class Link {
     // Its push address: an Expo token (kept here; crewd sends through Expo), `{missing}` when this app build has no push
     // credential, `{off}` when the person said no to notifications; a browser's Web Push address goes to the relay.
     if (op === 'POST /api/push') {
-      const sub = body as any;
-      const phone = isExpoToken(sub?.expo) ? sub.expo : sub?.missing === true ? 'missing' : sub?.off === true ? 'off' : '';
+      const sub = body as any, phone = isExpoToken(sub?.expo) ? sub.expo : sub?.missing === true ? 'missing' : sub?.off === true ? 'off' : '';
       if (phone) { this.put(`phone.push.${g.id}`, phone); this.db.event('device.push', null, { id: g.id }); return { status: 200, body: { ok: true } }; }
       return this.webSubscribe(g.id, sub?.web).then(() => ({ status: 200, body: { ok: true } }), (e: any) => ({ status: e.status ?? 400, body: { error: e.message } }));
     }

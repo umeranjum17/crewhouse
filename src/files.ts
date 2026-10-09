@@ -10,9 +10,7 @@ function writeAll(fd: number, text: string) {
   for (let at = 0; at < bytes.length;) at += writeSync(fd, bytes, at, bytes.length - at, at);
 }
 function within<T>(root: string, path: string, create: boolean, run: (parent: number, leaf: string) => T): T {
-  const base = resolve(root), full = resolve(base, path);
-  const names = relative(base, full).split(sep).filter((name) => name && name !== '.');
-  const leaf = names.pop() ?? '.';
+  const base = resolve(root), full = resolve(base, path), names = relative(base, full).split(sep).filter((name) => name && name !== '.'), leaf = names.pop() ?? '.';
   let dir = openSync(base, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
   try {
     for (const name of names) {

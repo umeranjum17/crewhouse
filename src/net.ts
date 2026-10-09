@@ -12,10 +12,7 @@ export function proxy(sock: string, list: string[], refused: (host: string, port
     c.on('error', () => c.destroy());
     // ponytail: reads the request line from the first chunk; tools send CONNECT in one small write.
     c.once('data', (head) => {
-      const line = head.toString('latin1').split('\r\n')[0];
-      const m = /^CONNECT \[?([^\s\]]+?)\]?:(\d+) HTTP\/1\.[01]$/.exec(line);
-      const host = (m?.[1] ?? (URL.canParse(line.split(' ')[1] ?? '') ? new URL(line.split(' ')[1]).hostname : '?')).toLowerCase().slice(0, 253);
-      const port = Number(m?.[2] ?? 80);
+      const line = head.toString('latin1').split('\r\n')[0], m = /^CONNECT \[?([^\s\]]+?)\]?:(\d+) HTTP\/1\.[01]$/.exec(line), host = (m?.[1] ?? (URL.canParse(line.split(' ')[1] ?? '') ? new URL(line.split(' ')[1]).hostname : '?')).toLowerCase().slice(0, 253), port = Number(m?.[2] ?? 80);
       if (!m || !allowed(list, host, port)) {
         refused(host, port);
         return void c.end(`HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain\r\n\r\nCrewhouse: ${host} is not on this helper's list of places it may reach.\n`);

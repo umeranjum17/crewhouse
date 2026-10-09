@@ -34,8 +34,7 @@ function envPath(name: string, fallback: string): string {
 }
 
 export function loadConfig(): Config {
-  const home = homedir();
-  const xdgState = process.env.XDG_STATE_HOME?.trim() || join(home, '.local', 'state');
+  const home = homedir(), xdgState = process.env.XDG_STATE_HOME?.trim() || join(home, '.local', 'state');
   return {
     stateDir: envPath('CREWHOUSE_STATE_DIR', join(xdgState, 'crewhouse')),
     crewDir: envPath('CREWHOUSE_CREW_DIR', join(home, 'Crewhouse')),
