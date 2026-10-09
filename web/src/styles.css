@@ -12,6 +12,7 @@
   --e2: 0 16px 48px rgba(20,18,26,.16), 0 2px 6px rgba(20,18,26,.06);
   --ui: Inter, system-ui, sans-serif; --art: 'JetBrains Mono', ui-monospace, monospace;
   --ease: cubic-bezier(.2,.8,.2,1); color-scheme: light;
+  --top: env(safe-area-inset-top, 0px);
 }
 [data-theme='night'] {
   --bg: #0C0C0B; --solid: #131312; --soft: #060605; --line: #262625; --line2: #3A3A38;
@@ -26,6 +27,9 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; min-height: 100%; }
 body { background: var(--bg); color: var(--ink); font: 400 15px/22px var(--ui); font-feature-settings: 'cv11','ss03'; font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; }
+/* Home-screen app: the page runs under the status bar and beside any notch, so it keeps clear of both, and a band of the page's own colour sits under the clock. */
+body { padding: var(--top) env(safe-area-inset-right) 0 env(safe-area-inset-left); }
+body::before { content: ''; position: fixed; top: 0; left: 0; right: 0; height: var(--top); background: var(--bg); z-index: 100; }
 a { color: inherit; text-decoration: none; }
 button, input, textarea, select { font: inherit; color: inherit; }
 button { cursor: pointer; }
@@ -151,6 +155,7 @@ textarea.input { resize: vertical; }
    are elevated (shadow, 24 px corners) */
 .card { background: var(--solid); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-top: 12px; display: block; }
 .card.row { display: flex; }
+.card.install { align-items: center; gap: 12px; }
 .card.empty { text-align: center; color: var(--mute); padding: 22px; }
 .card.nudge { display: flex; gap: 12px; align-items: center; }
 .card.list { padding: 6px 16px; }
@@ -444,9 +449,9 @@ input[role='switch']:focus-visible { outline: 2px solid var(--ink); outline-offs
 .toast { background: var(--ink); color: var(--bg); font-weight: 500; border-radius: 999px; padding: 10px 18px; width: fit-content; max-width: 100%; margin: 0 auto 10px; text-align: center; animation: up .25s ease; }
 .dock:has(> .toast) { display: flex; flex-direction: column; }
 .dock > .toast { order: -1; }
-.toast.foot { position: fixed; left: 0; right: 0; bottom: 0; z-index: 60; width: auto; max-width: none; margin: 0; border-radius: 0; padding: 14px 18px calc(14px + env(safe-area-inset-bottom)); }
+.toast.foot { position: fixed; left: 0; right: 0; bottom: 0; z-index: 60; width: auto; max-width: none; margin: 0; border-radius: 0; padding: 14px max(18px, env(safe-area-inset-right)) calc(14px + env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left)); }
 body:has(> * .toast.foot) { padding-bottom: 56px; }
-.offline { position: sticky; top: 0; z-index: 20; background: color-mix(in srgb, var(--amber) 14%, var(--solid)); color: var(--ink); border-bottom: 1px solid color-mix(in srgb, var(--amber) 35%, var(--line)); text-align: center; font: 500 14px/1.45 var(--ui); padding: 10px 16px; }
+.offline { position: sticky; top: var(--top); z-index: 20; background: color-mix(in srgb, var(--amber) 14%, var(--solid)); color: var(--ink); border-bottom: 1px solid color-mix(in srgb, var(--amber) 35%, var(--line)); text-align: center; font: 500 14px/1.45 var(--ui); padding: 10px 16px; }
 
 /* shell: phone first, no tab bar (B1): Home's gear reaches Settings, and Settings every other place */
 .side, .rail { display: none; }
@@ -457,11 +462,11 @@ body:has(> * .toast.foot) { padding-bottom: 56px; }
 
 /* desktop: the crew room's wall down the left, the work in frames */
 @media (min-width: 900px) {
-  .shell { display: grid; grid-template-columns: 320px minmax(0, 1fr); min-height: 100vh; }
+  .shell { display: grid; grid-template-columns: 320px minmax(0, 1fr); min-height: calc(100vh - var(--top)); }
   .main { padding-bottom: 0; display: flex; flex-direction: column; }
   .main > .home, .main > .page { flex: 1; }
   .is-chat .dock, .home .dock { bottom: 0; }
-  .side { display: flex; flex-direction: column; gap: 4px; padding: 14px 10px; position: sticky; top: 0; height: 100vh; overflow-y: auto; background: var(--soft); border-right: 1px solid var(--line); }
+  .side { display: flex; flex-direction: column; gap: 4px; padding: 14px 10px; position: sticky; top: var(--top); height: calc(100vh - var(--top)); overflow-y: auto; background: var(--soft); border-right: 1px solid var(--line); }
   .brand { padding: 0 8px 18px; }
   .side .label { margin: 24px 8px 8px; }
   .side-row { display: flex; gap: 10px; align-items: center; padding: 4px 10px; border-radius: 8px; font-size: 14px; min-height: 32px; }
@@ -518,7 +523,7 @@ body:has(> * .toast.foot) { padding-bottom: 56px; }
 
 
   /* a chat is its own column: the header and dock stay put, the thread scrolls, no phone boxes */
-  .page.chat-page { max-width: none; height: 100dvh; display: flex; flex-direction: column; padding-bottom: 0; }
+  .page.chat-page { max-width: none; height: calc(100dvh - var(--top)); display: flex; flex-direction: column; padding-bottom: 0; }
   .chat-page .sticky-top { position: static; margin: 0; padding: 0; background: none; backdrop-filter: none; }
   .chat-page .chat-head { min-height: 56px; max-width: 1072px; border-bottom: 1px solid var(--line); }
   .chat-page .back { display: none; }
@@ -578,14 +583,14 @@ body:has(> * .toast.foot) { padding-bottom: 56px; }
 button.code { border: 0; color: var(--ink); cursor: pointer; display: grid; gap: 4px; margin: 6px 0; }
 .code span { font: 700 12px var(--ui); letter-spacing: .5px; color: var(--mute); }
 .flow .pill { box-shadow: none; background: var(--soft); padding: 6px 12px; }
-.unreachable { max-width: 520px; margin: 0 auto; padding: 48px 22px; display: grid; justify-items: center; text-align: center; gap: 6px; min-height: 100vh; align-content: center; }
+.unreachable { max-width: 520px; margin: 0 auto; padding: 48px 22px; display: grid; justify-items: center; text-align: center; gap: 6px; min-height: calc(100vh - var(--top)); align-content: center; }
 .unreachable h1 { font-size: 26px; }
 .asleep { position: relative; opacity: .8; filter: saturate(.7); }
 .zzz { position: absolute; right: -34px; top: -26px; color: var(--mute); font-size: 16px; }
 .tips { width: 100%; text-align: left; }
 .tips > div { display: flex; gap: 12px; align-items: center; }
 
-.sticky-top { position: sticky; top: 0; z-index: 5; margin: -18px -18px 0; padding: 14px 18px 0; background: color-mix(in srgb, var(--bg) 78%, transparent); backdrop-filter: blur(14px); }
+.sticky-top { position: sticky; top: var(--top); z-index: 5; margin: -18px -18px 0; padding: 14px 18px 0; background: color-mix(in srgb, var(--bg) 78%, transparent); backdrop-filter: blur(14px); }
 /* A chat's header is an opaque band: lines scroll under it, never half-show through. */
 .chat-page .sticky-top { margin: -16px -16px 0; padding: 16px; background: var(--bg); backdrop-filter: none; }
 @media (min-width: 900px) { .sticky-top { margin: -32px -36px 0; padding: 24px 36px 0; } .chat-page .sticky-top { margin: 0; padding: 0; } }
@@ -822,7 +827,7 @@ details.card[open] > summary { margin-bottom: 10px; }
 .btn .ai-mark { border-radius: 7px; box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--go-ink) 70%, transparent); }
 /* A desk chat is exactly one screen tall, so the thread scrolls in its own column and a reply arriving at the bottom
    is always in view (flex: 1 let a long thread stretch the page past the screen). */
-@media (min-width: 900px) { .main > .page.chat-page { flex: none; height: 100dvh; } }
+@media (min-width: 900px) { .main > .page.chat-page { flex: none; height: calc(100dvh - var(--top)); } }
 
 /* The office (web/src/office.tsx): Home's Office view, one panel per helper plus Chief's, in a 3-column grid on a
    desk and one column below 900 px. Each panel shows the helmet in its mood, the current line, one meta line, the
@@ -913,7 +918,7 @@ details.card[open] > summary { margin-bottom: 10px; }
 .home-bar .stat { padding: 5px 10px 6px; text-decoration: none; }
 .home-bar .stat b { font-size: 17px; line-height: 22px; }
 .home-mode { flex: none; }
-.home-top { position: sticky; top: 0; z-index: 4; background: var(--bg); padding: 4px 0 2px; max-height: 55dvh; overflow-y: auto; }
+.home-top { position: sticky; top: var(--top); z-index: 4; background: var(--bg); padding: 4px 0 2px; max-height: 55dvh; overflow-y: auto; }
 .needs-pin { margin-bottom: 8px; }
 /* "See all N" opens the list inside the pin, never over Chief's thread or box. */
 .needs-pin .list-group { max-height: 36dvh; overflow-y: auto; }
@@ -1020,9 +1025,9 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
 }
 @media (min-width: 1200px) {
   .home-office { grid-template-columns: minmax(0, 1fr) 420px; padding: 0; }
-  .office-main { padding: 26px 30px; height: 100dvh; min-height: 0; position: sticky; top: 0; }
+  .office-main { padding: 26px 30px; height: calc(100dvh - var(--top)); min-height: 0; position: sticky; top: var(--top); }
   /* The rail's content scrolls on its own above Chief's box, which stands apart under it. */
-  .home-office > .feed { border-left: 1.5px solid var(--ink); padding: 24px 0 0; height: 100dvh; position: sticky; top: 0; }
+  .home-office > .feed { border-left: 1.5px solid var(--ink); padding: 24px 0 0; height: calc(100dvh - var(--top)); position: sticky; top: var(--top); }
   .home-office > .feed > .feed-list { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; padding: 0 22px; }
   .home-office > .feed > .feed-ask { position: static; padding: 12px 22px 16px; }
   /* The panels scroll inside the Office column past six; the feed beside them stays put. */
@@ -1180,7 +1185,7 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
    at its newest line, above a composer docked at the foot (clear of the home indicator). On a short screen the top
    shrinks and scrolls by itself so the thread keeps its room. The thread and the ask take the mock's compact sizes. */
 @media (max-width: 899px) {
-  .page.chat-page.home-chat { position: relative; height: 100dvh; display: flex; flex-direction: column; padding-bottom: 0; overflow: hidden; }
+  .page.chat-page.home-chat { position: relative; height: calc(100dvh - var(--top)); display: flex; flex-direction: column; padding-bottom: 0; overflow: hidden; }
   .home-chat > .home-top { position: static; flex: 0 1 auto; min-height: 0; max-height: none; overflow-y: auto; }
   /* The chat reserves its own floor: a 140px thread plus the dock (its composer may wrap to two lines at 320). The base
      .chat minimum (100dvh - 190px) and a scroller's content height must never size it (d868bb4). */
@@ -1261,7 +1266,7 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
 /* The crew room on a phone, one screen like Chief's chat (096): the bar and picker stay put, only the thread
    scrolls, opened at its top, above a picker and composer docked at the foot. Nothing sits under them. */
 @media (max-width: 899px) {
-  .page.chat-page.room-page { position: relative; height: 100dvh; display: flex; flex-direction: column; padding-bottom: 0; overflow: hidden; }
+  .page.chat-page.room-page { position: relative; height: calc(100dvh - var(--top)); display: flex; flex-direction: column; padding-bottom: 0; overflow: hidden; }
   .room-page > .chat { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
   .room-page .lines { flex: 1 1 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-bottom: 10px; }
   .room-page .dock { position: static; flex: none; margin: 0 -16px; padding: 6px 16px max(12px, env(safe-area-inset-bottom)); mask-image: none; background: var(--bg); }
@@ -1271,7 +1276,7 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
    stands under them. Chief's chat and the room carry their own copies of this above; the one cause is shared, so a
    thread never runs under a bar or the composer on any phone chat. Details pages keep the document scroll. */
 @media (max-width: 899px) {
-  .page.chat-page:not(.home-chat):not(.room-page):has(> .chat) { position: relative; height: 100dvh; display: flex; flex-direction: column; padding-bottom: 0; overflow: hidden; }
+  .page.chat-page:not(.home-chat):not(.room-page):has(> .chat) { position: relative; height: calc(100dvh - var(--top)); display: flex; flex-direction: column; padding-bottom: 0; overflow: hidden; }
   .page.chat-page:not(.home-chat):not(.room-page):has(> .chat) > .chat { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
   .page.chat-page:not(.home-chat):not(.room-page):has(> .chat) .lines { flex: 1 1 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
   .page.chat-page:not(.home-chat):not(.room-page):has(> .chat) .dock { position: static; flex: none; margin: 0 -16px; padding: 6px 16px max(12px, env(safe-area-inset-bottom)); mask-image: none; background: var(--bg); }

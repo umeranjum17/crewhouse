@@ -1178,6 +1178,7 @@ function Settings({ state, refresh, tick, accounts, look, setLook }: Ctx & { loo
       <p className="mute small">{A.atHome(undefined, A.planName(accounts)).join(' ')}</p>
       {/* No tab bar on a phone (B1): the desk rail's places, reached from here. */}
       <div className="card list go-tos">{GO_TO.map(([h, l, i]) => <a key={h} href={h} className="row-item go-to"><span className="o-ic"><Icon name={i} /></span><span className="grow">{l}</span><Icon name="next" /></a>)}</div>
+      <Install />
       <HomeSetup state={state} accounts={accounts} tick={tick} />
 
       <div className="label">You</div>
@@ -1198,6 +1199,34 @@ function Settings({ state, refresh, tick, accounts, look, setLook }: Ctx & { loo
       <Money state={state} refresh={refresh} />
       <HouseGoogle on={!!state.house?.google} steps={state.house?.steps} refresh={refresh} />
       {signing !== false && <SignIn ai={signing?.ai} tab={signing?.tab} onReady={() => { setSigning(false); refresh(); }} onClose={() => setSigning(false)} />}
+    </div>
+  );
+}
+
+// The browser's own install offer (Chrome, Edge, Android), held for Settings rather than shown on its own.
+let offer: (Event & { prompt: () => Promise<unknown> }) | null = null;
+addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); offer = e as typeof offer; });
+addEventListener('appinstalled', () => { offer = null; });
+
+/** One quiet row: put Crewhouse on this device like an app. The browser's own install where it offers one, the Share
+ *  steps on an iPhone or iPad; never once it runs installed, or after Not now on this device. */
+function Install() {
+  const [, redraw] = useState(0);
+  const [gone, setGone] = useState(() => { try { return !!localStorage.getItem('crewhouse.install.hide'); } catch { return false; } });
+  useEffect(() => {
+    const f = () => redraw((n) => n + 1);
+    addEventListener('beforeinstallprompt', f); addEventListener('appinstalled', f);
+    return () => { removeEventListener('beforeinstallprompt', f); removeEventListener('appinstalled', f); };
+  }, []);
+  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+  if (gone || matchMedia('(display-mode: standalone)').matches || (navigator as { standalone?: boolean }).standalone || !(offer || ios)) return null;
+  const hide = () => { try { localStorage.setItem('crewhouse.install.hide', '1'); } catch { /* remembered for this visit only */ } setGone(true); };
+  return (
+    <div className="card row install">
+      <span className="o-ic"><Icon name="phone" /></span>
+      <span className="grow">{offer ? 'Use Crewhouse like an app' : 'Keep Crewhouse on your Home Screen: tap Share, then Add to Home Screen'}</span>
+      {offer && <button className="btn" onClick={() => attempt(async () => { const o = offer!; offer = null; await o.prompt(); redraw((n) => n + 1); })}>Install</button>}
+      <button className="link" onClick={hide}>Not now</button>
     </div>
   );
 }
@@ -1402,7 +1431,10 @@ function useLook() {
   useEffect(() => { const t = setInterval(() => setHour(new Date().getHours()), 60_000); return () => clearInterval(t); }, []);
   const night = look === 'night' || (look === 'auto' && (hour >= 19 || hour < 7));
   setNight(night);
-  useEffect(() => { document.documentElement.dataset.theme = night ? 'night' : 'day'; }, [night]);
+  useEffect(() => {
+    document.documentElement.dataset.theme = night ? 'night' : 'day';
+    document.querySelector('meta[name=theme-color]')?.setAttribute('content', night ? '#0C0C0B' : '#F3EEE3'); // the browser's bar and the phone's status bar
+  }, [night]);
   const setLook = (l: string) => { localStorage.setItem('crewhouse.look', l); setLookState(l); };
   return { look, setLook, night };
 }

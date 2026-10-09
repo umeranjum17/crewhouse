@@ -25,6 +25,7 @@ evidence and cleanup live in [`../SKILL.md`](../SKILL.md); recipes assume an iso
 | thread-clear | [thread-clear.md](thread-clear.md) | Phone threads scroll in their own column: the sign-in card's buttons clear the composer, no line under the top bar; Chief says the sign-in wait once, and his header says it too |
 | reply-fold | [reply-fold.md](reply-fold.md) | A long chat reply folds behind More on whole items (no empty or half-cut bullet); More and Less toggle |
 | pwa-demo-boot | [pwa-demo-boot.md](pwa-demo-boot.md) | The published static shell boots into the in-bundle demo on a public origin (no backend), while crewd's loopback stays real; ?demo/?real override |
+| pwa-shell | [pwa-shell.md](pwa-shell.md) | The home-screen app: status bar and browser bar in the look's colour, safe-area insets, iOS launch screens, the rich install sheet and Settings' quiet install row, installed for real in an isolated Chromium |
 
 ## Proof and skip reporting
 

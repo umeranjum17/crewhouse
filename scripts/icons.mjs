@@ -49,6 +49,13 @@ execFileSync('magick', [[16, 32, 48].map(px => web + `favicon-${px}.png`), web +
 png(mobile + 'icon.svg', mobile + 'icon.png', 1024, true);
 for (const layer of ['foreground', 'background', 'monochrome']) png(mobile + `android-icon-${layer}.svg`, mobile + `android-icon-${layer}.png`, 1024, layer === 'background');
 png('notify.svg', mobile + 'notification-icon.png', 96);
+// iOS launch screens (apple-touch-startup-image): the icon on the app's own day or night page, one per device size in
+// CSS px @ density, so a home-screen launch never flashes white. scripts/build-web.mjs links each one by its name.
+rmSync(web + 'splash', { recursive: true, force: true });
+mkdirSync(web + 'splash');
+for (const [w, h, d] of [[440, 956, 3], [430, 932, 3], [428, 926, 3], [402, 874, 3], [393, 852, 3], [390, 844, 3], [375, 812, 3], [414, 896, 2], [375, 667, 2], [1024, 1366, 2], [834, 1194, 2], [820, 1180, 2], [810, 1080, 2]])
+  for (const [look, bg] of [['day', '#F3EEE3'], ['night', '#0C0C0B']])
+    execFileSync('magick', ['-size', `${w * d}x${h * d}`, `xc:${bg}`, '(', '-background', 'none', '-density', '300', web + 'icon.svg', '-resize', `${120 * d}x${120 * d}`, ')', '-gravity', 'center', '-composite', '-depth', '8', '-strip', `PNG8:${web}splash/${w}x${h}@${d}-${look}.png`]);
 const desktop = new URL('../packaging/icons/', import.meta.url).pathname;
 mkdirSync(desktop, { recursive: true });
 for (const px of [16, 24, 32, 48, 64, 128, 256, 512]) png(px <= 64 ? 'favicon.svg' : 'icon.svg', `../packaging/icons/crewhouse-${px}.png`, px);

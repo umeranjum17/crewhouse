@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 import { createServer, type AddressInfo } from 'node:net';
 import { join } from 'node:path';
 import { temp } from './tmp.ts';
+import type { Json } from '../web/src/api.ts';
 
 const repo = join(import.meta.dirname, '..');
 const build = (web: string) => spawnSync(process.execPath, [join(repo, 'scripts', 'build-web.mjs'), web], { encoding: 'utf8' });
@@ -58,5 +59,12 @@ test('crewd serves the shell with no-cache and an ETag, and hashed bundles as im
     const bundle = await fetch(`${base}/${js}`);
     assert.equal(bundle.status, 200);
     assert.match(bundle.headers.get('cache-control') ?? '', /immutable/);
+    // The home-screen app: every launch screen the shell links and every picture its manifest names is served.
+    const manifest = await (await fetch(base + '/manifest.webmanifest')).json();
+    const assets = [...html.matchAll(/apple-touch-startup-image" href="([^"]+)"/g)].map((m) => m[1]);
+    assert.equal(assets.length, 26, 'one launch screen per device size, day and night');
+    assets.push(...[...manifest.icons, ...manifest.screenshots, ...manifest.shortcuts.flatMap((s: Json) => s.icons)].map((i: Json) => i.src));
+    // A missing file would come back as the shell itself (the app's own routes), so the type is what tells.
+    for (const src of assets) assert.match((await fetch(base + src)).headers.get('content-type') ?? '', /^image\//, src);
   } finally { daemon.kill(); }
 });
