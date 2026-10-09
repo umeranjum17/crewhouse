@@ -82,8 +82,6 @@ export default function App() {
   const [fontsReady, fontError] = useFonts({ Inter: require('./assets/fonts/InterVariable.ttf') });
   const [grant, setGrant] = useState<Grant | null | undefined>(undefined);
   useEffect(() => { loadGrant().then(setGrant).catch(() => setGrant(null)); }, []);
-  // Stable: the connect effect keys off this, so a plain re-render (theme, fonts) must never stop and re-dial the link.
-  const onRemoved = useCallback(() => setGrant(null), []);
   return (
     <Theme.Provider value={t}>
       <SafeAreaProvider>
@@ -92,7 +90,7 @@ export default function App() {
           {!fontsReady && !fontError ? <Center><ActivityIndicator color={t.ink} /></Center>
             : grant === undefined ? <Center><ActivityIndicator color={t.ink} /></Center>
             : grant === null ? <Pair onPaired={setGrant} />
-            : <Crewhouse grant={grant} onRemoved={onRemoved} />}
+            : <Crewhouse grant={grant} onRemoved={() => setGrant(null)} />}
           <Toast />
         </SafeAreaView>
       </SafeAreaProvider>
@@ -902,7 +900,7 @@ function Hello({ state, refresh, go }: Ctx) {
 }
 
 // ---------- asks ----------
-const answer = (c: A.Card, body: Json) => c.mailSend ? api.answer(c.id, body).then(() => { say(body.answer === 'deny' ? 'Nothing sent.' : 'Sent from your Gmail.'); return true; }, e => { say(e.message); return false; }) : attempt(() => api.answer(c.id, body), body.change ? 'Chief will change the plan' : body.answer === 'deny' ? 'OK, not now' : 'Done. Carrying on.');
+const answer = (c: A.Card, body: Json) => c.mailSend ? api.answer(c.id, body).then(() => { say(body.answer === 'deny' ? 'Nothing sent.' : body.answer === 'dismiss' ? 'OK.' : 'Sent from your Gmail.'); return true; }, e => { say(e.message); return false; }) : attempt(() => api.answer(c.id, body), body.change ? 'Chief will change the plan' : body.answer === 'deny' ? 'OK, not now' : 'Done. Carrying on.');
 
 /** The ask's evidence in the sunken block, mirroring web/src/parts.tsx AskEvidence (§4.4): the order's lines with
  *  the total above a hairline, a form's or a job's label-over-value lines, a draft, the routine's confirmation
