@@ -23,7 +23,7 @@ const landed = (c: A.OfficeMember, v: A.OfficeView) =>
 /** The panel's state word, in the board's own sentence case. */
 export type Glow = { word: string; cls: 'needs' | 'work' | 'quiet' | 'failed' | 'done' | 'rest' };
 export const glowOf = (c: A.OfficeMember, v: A.OfficeView): Glow => {
-  if (A.waitsOnYou(c)) return { word: 'Needs you', cls: 'needs' };
+  if (A.waitsOnYou(c)) return { word: 'Waiting', cls: 'needs' };
   const seat = A.seatOf(c);
   if (seat === 'working') return { word: 'At work', cls: 'work' };
   if (seat === 'quiet') return { word: 'Gone quiet', cls: 'quiet' };
@@ -93,7 +93,7 @@ export function Office({ state, live, night, onDone }: { state: Json; live: A.Of
 }
 
 type Group = 'needs' | 'work' | 'done' | 'rest';
-const TITLES: Record<Group, string> = { needs: 'Needs you', work: 'At work', done: 'Done today', rest: 'Resting' };
+const TITLES: Record<Group, string> = { needs: 'Waiting', work: 'At work', done: 'Done today', rest: 'Resting' };
 /** Every helper lands in exactly one group: waiting on you, at work on an open job, done today, or resting. */
 const groupOf = (c: A.OfficeMember, v: A.OfficeView): Group => {
   if (A.waitsOnYou(c)) return 'needs';
@@ -123,7 +123,7 @@ function GroupRow({ c, live, jobTitle, onDone }: { c: A.OfficeMember; live: A.Of
   const glow = glowOf(c, live);
   const line = c.ask ? c.ask.head : g === 'done' && done!.summary ? done!.summary : c.status;
   const meta0 = jobTitle && (A.seatOf(c) === 'working' || A.seatOf(c) === 'quiet' || A.waitsOnYou(c)) ? jobTitle
-    : g === 'done' ? c.status : c.status === 'Needs you' ? c.step : c.status;
+    : g === 'done' ? c.status : A.waitsOnYou(c) ? c.step : c.status;
   const meta = meta0 === line ? '' : meta0;
   return (
     <article className="grow-row" aria-label={`${c.name}: ${line}`}>

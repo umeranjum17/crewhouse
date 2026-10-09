@@ -282,10 +282,12 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, every row and panel is
           const rest = units.filter((p) => p.querySelector('.p-state.rest')).length;
           const modes = [...new Set(units.map((p) => p.querySelector('.helmet')?.dataset.mode))];
           const words = units.map((p) => p.querySelector('.p-state')?.textContent?.trim());
+          const memberWords = units.filter((p) => !/^Chief:/.test(p.getAttribute('aria-label') ?? '')).map((p) => p.querySelector('.p-state')?.textContent?.trim());
+          const chiefWord = units.filter((p) => /^Chief:/.test(p.getAttribute('aria-label') ?? '')).map((p) => p.querySelector('.p-state')?.textContent?.trim())[0];
           const acts = units.flatMap((p) => [...p.querySelectorAll('.btn')]).map((e) => e.textContent);
           const groups = [...document.querySelectorAll('.office .grp')].map((g) => g.getAttribute('aria-label'));
           const office = document.querySelector('.office-main > .office');
-          return { narrow, units: units.length, pairs, out, clipped, names, nums, pinned, onCards, memberNeeds, chiefGlows, chiefRests, chiefWorks, work, done, rest, modes, words, acts, groups,
+          return { narrow, units: units.length, pairs, out, clipped, names, nums, pinned, onCards, memberNeeds, chiefGlows, chiefRests, chiefWorks, work, done, rest, modes, words, memberWords, chiefWord, acts, groups,
             scroll: document.documentElement.scrollHeight > innerHeight + 1 || (office && office.scrollHeight > office.clientHeight + 1),
             cols: narrow ? 1 : getComputedStyle(document.querySelector('.panels')).gridTemplateColumns.split(' ').length };
         })()`);
@@ -306,10 +308,13 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, every row and panel is
           // Phone width has no Chief row; the leftover rows live in the pinned Needs you, counted above.
           if (width < 900) assert.ok(m.memberNeeds <= m.nums[0], `${at}: no crew row holds a row twice (${m.memberNeeds} held, ${m.nums[0]} rows)`);
           else assert.equal(m.chiefGlows, m.nums[0] > m.memberNeeds, `${at}: Chief carries the leftover needs rows (${m.nums[0]} rows, ${m.memberNeeds} on crew panels)`);
+          // Only Chief says "Needs you": no crew panel or grouped row does, in the Office too.
+          assert.ok(m.memberWords.every((w: string) => w !== 'Needs you'), `${at}: no crew panel says "Needs you" (${m.memberWords.join(' | ')})`);
+          if (m.chiefGlows) assert.equal(m.chiefWord, 'Needs you', `${at}: Chief still says "Needs you"`);
           assert.ok(m.acts.every((a: string) => a !== 'Review…'), `${at}: every action wears its ask's own label (${m.acts.join(' | ')})`);
           if (width < 900) {
             assert.equal(m.units, n, `${at}: every helper has exactly one grouped row`);
-            const order = ['Needs you', 'At work', 'Done today', 'Resting'];
+            const order = ['Waiting', 'At work', 'Done today', 'Resting'];
             assert.ok(m.groups.every((g: string) => order.includes(g)) && m.groups.length === new Set(m.groups).size, `${at}: only the board's groups (${m.groups})`);
             assert.deepEqual([...m.groups].sort((a: string, b: string) => order.indexOf(a) - order.indexOf(b)), m.groups, `${at}: groups in the board's order`);
           } else {

@@ -1335,7 +1335,7 @@ function ChiefSheet({ view, state, offline, go, onClose }: Ctx & { view: A.Offic
           {computers.map((c) => {
             const k = A.seatOf(c), h = crew.find((x) => x.id === c.id)!;
             return row(c.id, `${c.name}'s computer`, h.driving ? 'You have the wheel' : `Watch ${c.name}`, () => to({ view: 'helper', id: c.id, tab: 'watch' }),
-              <Pill tone={A.waitsOnYou(c) ? 'wait' : k === 'working' ? 'ok' : 'off'}>{offline ? OUT : A.waitsOnYou(c) ? 'Needs you' : k === 'working' ? 'Working' : 'Resting'}</Pill>, <Face who={h} size={36} />);
+              <Pill tone={A.waitsOnYou(c) ? 'wait' : k === 'working' ? 'ok' : 'off'}>{offline ? OUT : A.waitsOnYou(c) ? 'Waiting' : k === 'working' ? 'Working' : 'Resting'}</Pill>, <Face who={h} size={36} />);
           })}
           {made.length > 0 && <Label>Outputs</Label>}
           {made.map((m) => row(String(m.id), m.title, `From ${crew.find((h) => h.id === m.helper)?.name ?? 'the crew'}`, () => to({ view: 'helper', id: m.helper })))}

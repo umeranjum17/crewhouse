@@ -18,7 +18,7 @@ const landed = (c: A.OfficeMember, v: A.OfficeView) =>
   v.done.filter((t) => t.helper === c.id && t.at >= today()).sort((a, b) => b.at - a.at)[0];
 
 type Group = 'needs' | 'work' | 'done' | 'rest';
-const TITLES: Record<Group, string> = { needs: 'Needs you', work: 'At work', done: 'Done today', rest: 'Resting' };
+const TITLES: Record<Group, string> = { needs: 'Waiting', work: 'At work', done: 'Done today', rest: 'Resting' };
 /** The Office count line the phone header reads: needs-you rows, at work, done today and resting. The member
  *  buckets partition the crew; the needs number counts every row. */
 export const summaryOf = (v: A.OfficeView): string => {
@@ -60,7 +60,7 @@ function Helmet({ mood, night, size }: { mood: Mood; night: boolean; size: numbe
 function State({ c, v, t }: { c: A.OfficeMember; v: A.OfficeView; t: Look }) {
   const g = groupOf(c, v);
   const done = g === 'done' ? landed(c, v) : undefined;
-  const word = g === 'needs' ? 'Needs you' : g === 'work' ? (A.seatOf(c) === 'quiet' ? 'Gone quiet' : 'At work')
+  const word = g === 'needs' ? 'Waiting' : g === 'work' ? (A.seatOf(c) === 'quiet' ? 'Gone quiet' : 'At work')
     : done ? `✓ Done ${A.clock(done.at)}` : A.seatOf(c) === 'failed' ? "Didn't finish" : '○ Resting';
   const col = g === 'needs' ? t.pink : g === 'work' ? (A.seatOf(c) === 'quiet' ? t.amber : t.green)
     : A.seatOf(c) === 'failed' ? t.danger : g === 'done' ? t.ink : t.mute;
@@ -80,7 +80,7 @@ function Row({ c, v, t, night, jobTitle, onDesk, onAsk }: { c: A.OfficeMember; v
   // Done leads with the finished work itself, as the web panels do; a question without a job shows its latest step.
   const line = c.ask ? c.ask.head : g === 'done' && done!.summary ? done!.summary : c.status;
   const meta0 = jobTitle && (A.seatOf(c) === 'working' || A.seatOf(c) === 'quiet' || A.waitsOnYou(c)) ? jobTitle
-    : g === 'done' ? c.status : c.status === 'Needs you' ? c.step : c.status;
+    : g === 'done' ? c.status : A.waitsOnYou(c) ? c.step : c.status;
   const meta = meta0 === line ? '' : meta0;
   const yes = c.ask?.choices[0];
   const simple = !!c.ask && !!yes && !c.ask.reply && !c.ask.review && c.ask.kind !== 'routine' && c.ask.kind !== 'plan' && c.ask.evidence !== 'draft';
