@@ -1397,7 +1397,9 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
   .home-chat .ch-row::before { content: ''; grid-column: 2 / 4; grid-row: 2; justify-self: stretch; align-self: stretch; margin: 0 -14px; border-radius: 19px; background: var(--tint); }
   /* On a whole CSS pixel at any width (round), so its edges stay sharp at 2x and 3x. */
   .home-chat .ch-art { grid-column: 1 / -1; grid-row: 1; position: absolute; top: 0; left: calc(50% - 26px); left: round(50% - 26px, 1px); z-index: 1; width: 52px; height: 48px; margin: 0; padding: 0; background: none; box-shadow: none; display: block; }
-  .home-chat .ch-art .helmet { display: block; width: 52px; height: 48px; }
+  /* A soft contact shadow seats the 3D figure on the pill, as Muse's does; deeper at night so it still reads. */
+  .home-chat .ch-art .helmet { display: block; width: 52px; height: 48px; filter: drop-shadow(0 2px 3px rgb(29 27 24 / .22)); }
+  [data-theme='night'] .home-chat .ch-art .helmet { filter: drop-shadow(0 2px 4px rgb(0 0 0 / .6)); }
   .home-chat .ch-name { grid-column: 2; grid-row: 2; align-self: baseline; margin: 0; padding: 9px 4px 5px 0; font: 600 17px/22px var(--ui); }
   .home-chat .ch-status { grid-column: 3; grid-row: 2; align-self: baseline; display: block; margin: 0; padding: 9px 0 5px 4px; font: 500 13px/22px var(--ui); color: var(--ink); white-space: nowrap; }
   .home-chat .ch-status > span { display: inline; }

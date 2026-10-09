@@ -56,8 +56,9 @@ on top and one full-width row each (`.more-sheet .more-row`). The live to-do's h
 at work · 12 s · Open chat ›", and its steps share that size: a 9px mark on each step's first baseline, a check for
 done, a spinner (a faint full ring with an ink half turning on it) for doing, a closed grey ring for to do. Chief's own reply done in under
 a second leaves no "Done · 0 s" row. The composer is a round +, a grey pill with the mic inside and a round ink send.
-The Home header is Muse's, compact: the helmet drawn smooth (`.ch-art img.helmet`, `art.helmetSoft`, no disc, its left
-rounded to a whole pixel) at the top centre, overlapping a one-line pill with Chief and his status, the round gear on
+The Home header is Muse's, compact: the helmet as a soft 3D figure (`.ch-art img.helmet`, `art.helmetSoft`: a lit
+ceramic shell, a glass visor, glowing eyes and a soft contact shadow on the pill; the same white shell in day and night, no
+disc, its left rounded to a whole pixel) at the top centre, overlapping a one-line pill with Chief and his status, the round gear on
 its line, then the Chief | Office switch as a borderless pill track across the column, and the day line right under
 it (no band). A thread page's head is the name alone. Sign-in choices are one list of plain rows
 (`.ai-picks .btn`). A fresh helper shows at most three starters. A desk keeps the named transcript and the card's

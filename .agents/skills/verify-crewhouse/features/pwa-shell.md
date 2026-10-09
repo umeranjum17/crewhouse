@@ -39,6 +39,17 @@ then write a plan for `scripts/pwa-shell.mjs` (its header lists the step keys). 
   `eval` `matchMedia('(display-mode: standalone)').matches` (true) and `.install` absent.
   Chromium 151 here has no `PWA.install` over CDP, so the app's own button and the real sheet do it.
 
+- Android Chrome install (emulator): a task AVD on `system-images;android-36;google_apis;x86_64` (it ships Chrome
+  and is debuggable), booted per the fleet emulator flags. `adb -s <serial> reverse tcp:$PORT tcp:$PORT` makes
+  `http://localhost:$PORT` a secure origin; write `_ --disable-fre --no-first-run` to
+  `/data/local/tmp/chrome-command-line` and `am set-debug-app --persistent com.android.chrome` first. Open
+  `http://localhost:$PORT/?day` (crewd's own origin answers the shell without `#person=`), menu, Add to Home screen,
+  Install, Add to home screen, then tap the home-screen icon: `dumpsys activity activities` shows Chrome's
+  `WebappActivity`. Without Play services it is a Chrome shortcut (the icon wears a Chrome badge), not a WebAPK.
+  `adb forward tcp:<n> localabstract:chrome_devtools_remote` reaches the standalone page: `Page.navigate` to
+  `/?night` switches the theme and `matchMedia('(display-mode: standalone)').matches` is true. The slow emulator raises
+  "System UI isn't responding": tap Wait.
+
 ## Evidence
 
 The four captures of Settings (day/night × 390/1440) in the browser and in the installed window, the
