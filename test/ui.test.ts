@@ -16,7 +16,7 @@ import { readTyped } from '../web/src/typed.ts';
 import { askOf } from '../mobile/src/ask.ts';
 import { draftOf, keepDraft, sent } from '../web/src/draft.ts';
 import { chatTokens, safeLink } from '../web/src/chat-md.ts';
-import { api, setTransport } from '../web/src/api.ts';
+import { api, setLink, setTransport } from '../web/src/api.ts';
 import { color } from '../web/src/tokens.ts';
 import { cycle } from '../web/src/dialog.ts';
 
@@ -2015,4 +2015,33 @@ test("Chief's hero shows his last real sentence; the sign-in card offers every p
     assert.match(card, /Sign in with Claude/, 'the kit list carries Claude too');
     assert.doesNotMatch(card, /under Settings/, 'no other account hides under Settings');
   } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('the paired installed app keeps notifications: its key comes over the link, and no setup call is a dead end', async () => {
+  // Last in the file on purpose: setLink below stays set for the process, and nothing follows.
+  const calls: string[] = [];
+  setTransport((method, path) => { calls.push(`${method} ${path}`); return Promise.resolve({ vapid: 'BFx-key', relayStatus: 'online' }); });
+  assert.deepEqual(await api.pushKey(), { vapid: 'BFx-key', ready: true }, 'on the computer itself, the key comes from the Phones screen\'s own call');
+  setLink({ name: 'your computer', call: (method, path) => { calls.push(`${method} ${path}`); return Promise.resolve({ ok: true, vapid: 'BFx-key', online: true }); },
+    subscribe: () => () => {}, desktop: (() => ({})) as any, unpair: async () => {} });
+  assert.deepEqual(await api.pushKey(), { vapid: 'BFx-key', ready: true });
+  assert.deepEqual(calls, ['GET /api/phones/link', 'POST /api/push'], 'paired, only the one op crewd answers for the calling device');
+  await api.push({ web: { endpoint: 'https://fcm.example/ipad', keys: {} } });
+  assert.deepEqual(calls.at(-1), 'POST /api/push', 'the address goes back the same way');
+  // The screens: the paired card carries the switch (crewd refuses the Phones screen over the link), and neither
+  // Getting-set-up view asks /api/phones/link once paired — no refused call, no dead-end Open.
+  const main = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf-8');
+  assert.match(main, /function PairedCard/, 'the paired card is its own view');
+  assert.match(main, /<NotifyLine relay=\{relay\} norelay="Your computer has no mailbox for notifications yet\./, 'no mailbox is said in plain words, not a broken toggle');
+  assert.match(main, /<NotifyLine relay=\{!!link\.relay\} norelay="Turn on your mailbox below first/, 'the Phones screen keeps its own switch');
+  // One line, state and the one action that changes it — never two links and no state.
+  assert.match(main, /Notifications: \{on \? 'On' : 'Off'\}/, 'the line names the state');
+  assert.match(main, /\{on \? 'Turn off' : 'Turn on'\}/, 'and carries exactly one action');
+  assert.match(readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'pwa.ts'), 'utf-8'), /Notification\.permission === 'denied'/, 'pushState names the browser-blocked state');
+  assert.match(main, /blocked in this browser\. Allow them for this app in the browser’s own settings/, 'the blocked state says how to unblock, with no dead button');
+  assert.equal((main.match(/if \(!paired\) api\.phoneLink\(\)/g) ?? []).length, 2, 'both Getting-set-up views skip the refused call once paired');
+  assert.match(main, /if \(paired \|\| !left\) return null/, 'Home hides its setup nudge once paired');
+  assert.match(main, /if \(paired\) return null;\s*\n\s*const \{ rows, left \}/, 'Settings hides its setup list once paired');
+  // The plain-words gate: nothing new names the relay, a path or a status code.
+  for (const m of main.match(/norelay="([^"]+)"/g) ?? []) assert.doesNotMatch(m.slice(8), /relay|\/api\/|vapid|409|link/i, m);
 });

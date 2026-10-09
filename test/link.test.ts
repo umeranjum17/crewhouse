@@ -580,3 +580,30 @@ test('a null browser address is refused by the browser and by a phone alike', as
   assert.deepEqual(calls.shift(), ['subscribe', 'pixel', { web }], 'a phone\'s browser address is still kept under the phone');
   db.close();
 });
+
+test('a paired browser asks for the push key over the link, and off really removes its address', async () => {
+  const db = new Store(temp('crewhouse-web-off-relay'));
+  const calls: any[] = [];
+  const link = Object.assign(new Link({} as any, db, async () => null) as any, {
+    client: { vapidKey: 'BFx-key', subscribe: async (d: string, s: any) => calls.push(['subscribe', d, s]), unsubscribe: async (d: string, s?: any) => calls.push(['unsubscribe', d, s]), notify: async () => ({}) },
+    relayStatus: 'online', host: { devices: () => [] },
+  });
+  // The installed PWA's own ask: the mailbox's public key, over the one op the link answers for its grant.
+  assert.deepEqual(await link.request('POST /api/push', { key: true, build: 'p9b' }, { id: 'ipad', role: 'control' }),
+    { status: 200, body: { ok: true, vapid: 'BFx-key', online: true } });
+  // Without a mailbox the key is null and online false — plain words on the device, never a broken toggle.
+  (link as any).client = undefined;
+  (link as any).relayStatus = 'off';
+  assert.deepEqual(await link.request('POST /api/push', { key: true, build: 'p9b' }, { id: 'ipad', role: 'control' }),
+    { status: 200, body: { ok: true, vapid: null, online: false } });
+  // Turning off removes this device's own address at the mailbox (under its grant id, as setWebPush does for 'web').
+  (link as any).client = { unsubscribe: async (d: string, s?: any) => calls.push(['unsubscribe', d, s]) };
+  const web = { endpoint: 'https://fcm.example/ipad', keys: {} };
+  assert.deepEqual(await link.request('POST /api/push', { build: 'p9b', off: true, web }, { id: 'ipad', role: 'control' }), { status: 200, body: { ok: true } });
+  assert.deepEqual(calls, [['unsubscribe', 'ipad', { web }]], 'off drops the calling device\'s own address, not another\'s');
+  // Off without a browser address stays the phone app\'s person-said-no.
+  assert.deepEqual(await link.request('POST /api/push', { build: 'p9b', off: true }, { id: 'ipad', role: 'control' }), { status: 200, body: { ok: true } });
+  assert.equal(db.get('SELECT value FROM settings WHERE key = ?', 'phone.push.ipad')?.value, 'off');
+  assert.equal(calls.length, 1, 'no second unsubscribe');
+  db.close();
+});

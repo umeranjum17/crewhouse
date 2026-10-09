@@ -13,7 +13,7 @@ import type { IconName } from './icons.ts';
 import { Screen } from './screen.tsx';
 import { hear, Office, summaryOf, useOffice } from './office.tsx';
 import { AccountCard, ConnectApp, ConnectCard, NEEDS_SIGNIN, openTab, PairSheet, sheet, SignIn, Unreachable } from './flows.tsx';
-import { pushPossible, setBadge, startWorker, turnOffNotifications, turnOnNotifications } from './pwa.ts';
+import { pushState, setBadge, startWorker, turnOffNotifications, turnOnNotifications } from './pwa.ts';
 import { remember, resume } from './resume.ts';
 
 type View = 'home' | 'chief' | 'room' | 'crew' | 'add' | 'helper' | 'things' | 'routines' | 'settings' | 'apps' | 'skills' | 'ask' | 'share' | 'pair';
@@ -175,12 +175,13 @@ function Chats({ state, refresh, desk }: { state: Json; refresh: () => void; des
   </section>;
 }
 
-/** The owner's row until the house is fully set up: how many of the three jobs are left. */
+/** The owner's row until the house is fully set up: how many of the three jobs are left. None of them is this
+ *  device's to do once paired — their calls are refused over the link — so the row waits for the computer. */
 function SetupRow({ state, accounts, tick }: { state: Json; accounts: Json[] | null; tick: number }) {
   const [link, setLink] = useState<Json>(null);
-  useEffect(() => { api.phoneLink().then(setLink).catch(() => {}); }, [tick]);
+  useEffect(() => { if (!paired) api.phoneLink().then(setLink).catch(() => {}); }, [tick]);
   const { left } = A.homeSetup(state, accounts, link);
-  if (!left) return null;
+  if (paired || !left) return null;
   return <a className="card nudge" href="#/settings"><span className="grow">Getting set up: {left} {left === 1 ? 'thing' : 'things'} left</span><b>›</b></a>;
 }
 
@@ -1067,6 +1068,27 @@ function Routines(ctx: Ctx) {
 }
 
 // ---------- settings ----------
+/** The installed app's own notifications, wherever they live: under Phones on the computer, on the paired card
+ *  away from it. One line: the state and the one action that changes it. `relay`: whether a mailbox can carry them
+ *  — null while the paired app is still asking over the link; false says `norelay` in plain words, no dead button. */
+function NotifyLine({ relay, norelay }: { relay: boolean | null; norelay: string }) {
+  const [state, setState] = useState<'unsupported' | 'denied' | 'on' | 'off' | null>(null);
+  const look = () => pushState().then(setState).catch(() => setState('off'));
+  useEffect(() => { void look(); }, []);
+  if (state === null || state === 'unsupported') return null;
+  if (state === 'denied') return <p className="mute small">Notifications are blocked in this browser. Allow them for this app in the browser’s own settings, then try again.</p>;
+  if (relay === false) return <p className="mute small">Notifications on this device: {norelay}</p>;
+  const on = state === 'on';
+  return <p className="mute small">Notifications: {on ? 'On' : 'Off'} <button className={`link inline notify-${on ? 'off' : 'on'}`} onClick={() => attempt(async () => {
+    if (on) { await turnOffNotifications(); toast('Notifications are off on this device.'); }
+    else {
+      const r = await turnOnNotifications(relay === true);
+      if (r === 'on') toast('This device shows Crewhouse news.');
+      else if (r === 'offline') toast("Your mailbox isn't connected right now. Try again in a moment.");
+    }
+  }).then(() => look())}>{on ? 'Turn off' : 'Turn on'}</button></p>;
+}
+
 /** Settings, Phones: pair the phone app by its camera, see each phone, take one away. Only this computer can. */
 function Phones({ tick }: { tick: number }) {
   const [phones, setPhones] = useState<Json[] | null | undefined>(undefined);
@@ -1099,7 +1121,7 @@ function Phones({ tick }: { tick: number }) {
           </div>
         ))}
         {!!A.pushWords(link) && <p className="mute small">{A.pushWords(link)}</p>}
-        {pushPossible() && <p className="mute small">Notifications on this device: <button className="link inline" onClick={() => attempt(async () => { const r = await turnOnNotifications(!!link.relay); toast(r === 'on' ? 'This device shows Crewhouse news.' : r === 'norelay' ? 'Turn on your mailbox below first, then try again.' : r === 'offline' ? "Your mailbox isn't connected right now. Try again in a moment." : 'Notifications were not allowed.'); })}>turn on</button> · <button className="link inline" onClick={() => attempt(async () => { await turnOffNotifications(); toast('Notifications are off on this device.'); })}>turn off</button></p>}
+        <NotifyLine relay={!!link.relay} norelay="Turn on your mailbox below first, then try again." />
         {!phones.length && <p className="mute">No phones yet. Install the Crewhouse app, then scan the code it asks for.</p>}
         {!offer && <div className="btns"><button className="btn go" onClick={() => show('control')}>Add a phone</button><button className="btn" onClick={() => show('view')}>Add one that only watches</button></div>}
       </div>
@@ -1157,7 +1179,8 @@ function Phones({ tick }: { tick: number }) {
 /** The three setup jobs, and where each one is finished. Google's own words stay inside the Google panel. */
 function HomeSetup({ state, accounts, tick }: { state: Json; accounts: Json[] | null; tick: number }) {
   const [link, setLink] = useState<Json>(null);
-  useEffect(() => { api.phoneLink().then(setLink).catch(() => {}); }, [tick]);
+  useEffect(() => { if (!paired) api.phoneLink().then(setLink).catch(() => {}); }, [tick]);
+  if (paired) return null;
   const { rows, left } = A.homeSetup(state, accounts, link);
   const jump = (key: string) => document.getElementById(`setup-${key}`)?.scrollIntoView({ behavior: 'smooth' });
   return (<>
@@ -1174,6 +1197,18 @@ function HomeSetup({ state, accounts, tick }: { state: Json; accounts: Json[] | 
 }
 
 const GO_TO: [string, string, IconName][] = [['#/things', 'Your things', 'things'], ['#/routines', 'Routines', 'routines'], ['#/apps', 'Apps', 'apps'], ['#/crew', 'Your crew', 'chief']];
+/** Paired: this installed app carries a crew from its own computer. Its notifications ride the same mailbox, so the
+ *  switch sits on this card: whether one is there is asked over the link (`POST /api/push {key}`), the one call crewd
+ *  answers for this device's own grant — never /api/phones/link, which it refuses away from the computer. */
+function PairedCard({ tick }: { tick: number }) {
+  const [relay, setRelay] = useState<boolean | null>(null);
+  useEffect(() => { setRelay(null); api.pushKey().then((k) => setRelay(!!k.vapid)).catch(() => {}); }, [tick]);
+  return <div className="card nudge">
+    <span className="grow"><b>Paired with {paired!.name}</b><div className="mute small">This app shows your own crew, straight from that computer and locked to it.</div>
+      <NotifyLine relay={relay} norelay="Your computer has no mailbox for notifications yet. Turn one on there, then try again." /></span>
+    <button className="btn" onClick={() => confirm('Unpair this app? It goes back to the demo, and you can pair again any time.') && attempt(paired!.unpair)}>Unpair</button>
+  </div>;
+}
 function Settings({ state, refresh, tick, accounts, look, setLook }: Ctx & { look: string; setLook: (l: string) => void }) {
   const [signing, setSigning] = useState<{ ai: (typeof A.AIS)[number]; tab: Window | null } | null | false>(sheet === 'signin' ? null : false);
   const act = (fn: () => Promise<unknown>, ok?: string) => attempt(async () => { await fn(); refresh(); }, ok);
@@ -1183,8 +1218,9 @@ function Settings({ state, refresh, tick, accounts, look, setLook }: Ctx & { loo
       <h1>Settings</h1>
       <p className="mute small">{A.atHome(undefined, A.planName(accounts)).join(' ')}</p>
       {demo && <PairRow />}
-      {paired && <div className="card nudge"><span className="grow"><b>Paired with {paired.name}</b><div className="mute small">This app shows your own crew, straight from that computer and locked to it.</div></span>
-        <button className="btn" onClick={() => confirm('Unpair this app? It goes back to the demo, and you can pair again any time.') && attempt(paired!.unpair)}>Unpair</button></div>}
+      {/* Paired: notifications ride the person's mailbox like at home — the switch lives here, since crewd refuses
+          the Phones screen over the link. `relay` is asked over the link too, so no refused call and no dead toggle. */}
+      {paired && <PairedCard tick={tick} />}
       {/* No tab bar on a phone (B1): the desk rail's places, reached from here. */}
       <div className="card list go-tos">{GO_TO.map(([h, l, i]) => <a key={h} href={h} className="row-item go-to"><span className="o-ic"><Icon name={i} /></span><span className="grow">{l}</span><Icon name="next" /></a>)}</div>
       <Install />

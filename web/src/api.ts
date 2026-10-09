@@ -141,8 +141,10 @@ export const api = {
   phoneRelay: (url: string | null, enrol?: string) => call('PUT', '/api/phones/relay', { url, enrol }),
   /** Codes to type on the phone instead of scanning, through the relay. */
   phoneCode: (role: 'control' | 'view' = 'control') => call('POST', '/api/phones/code', { role }),
-  /** Web push for the installed app: the relay's key to subscribe with, and the address handed back (or `{off}`). */
+  /** Web push for the installed app: the mailbox's key to subscribe with, and the address handed back (or `{off}`).
+   *  Paired, the ask goes over the link (`POST /api/push {key}`) — never /api/phones/link, which the computer refuses. */
   pushKey: async (): Promise<{ vapid: string | null; ready: boolean }> => {
+    if (paired) { const k = await call('POST', '/api/push', { key: true }); return { vapid: k.vapid ?? null, ready: k.online === true && !!k.vapid }; }
     const s = await call('GET', '/api/phones/link');
     return { vapid: s.vapid, ready: s.relayStatus === 'online' && !!s.vapid };
   },

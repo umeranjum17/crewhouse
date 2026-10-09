@@ -34,7 +34,8 @@ export async function turnOnNotifications(relay: boolean): Promise<'on' | 'off' 
   if (!relay) return 'norelay';
   if ((await Notification.requestPermission()) !== 'granted') return 'off';
   const { vapid, ready } = await api.pushKey();
-  if (!ready || !vapid) return 'offline';
+  if (!vapid) return 'norelay';
+  if (!ready) return 'offline';
   const reg = await worker();
   const old = await reg.pushManager.getSubscription();
   if (old) { await old.unsubscribe(); await api.push({ off: true, web: old.toJSON() }); }
@@ -50,6 +51,14 @@ export async function turnOffNotifications() {
   if (!sub) return;
   await sub.unsubscribe();
   await api.push({ off: true, web: sub.toJSON() });
+}
+
+/** What this browser's own notifications are doing right now, for Settings' one-line switch: `denied` is the
+ *  browser itself having blocked them (only its own settings page can undo that). */
+export async function pushState(): Promise<'unsupported' | 'denied' | 'on' | 'off'> {
+  if (!pushPossible()) return 'unsupported';
+  if (Notification.permission === 'denied') return 'denied';
+  return (await (await worker()).pushManager.getSubscription()) ? 'on' : 'off';
 }
 
 const keyBytes = (base64: string) => {

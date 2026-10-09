@@ -427,8 +427,15 @@ export class Link {
     // Its push address: an Expo token (kept here; crewd sends through Expo), `{missing}` when this app build has no push
     // credential, `{off}` when the person said no to notifications; a browser's Web Push address goes to the relay.
     if (op === 'POST /api/push') {
-      const sub = body as any, phone = isExpoToken(sub?.expo) ? sub.expo : sub?.missing === true ? 'missing' : sub?.off === true ? 'off' : '';
+      const sub = body as any;
+      // A browser asks for the mailbox's public Web Push key first (the kit's own device flow: it is what a device
+      // needs to subscribe its own address). `null` without a relay, said plainly; `online` is the mailbox's own state.
+      if (sub?.key === true) return { status: 200, body: { ok: true, vapid: this.client?.vapidKey ?? null, online: this.relayStatus === 'online' } };
+      const phone = isExpoToken(sub?.expo) ? sub.expo : sub?.missing === true ? 'missing' : sub?.off === true && !webAddress(sub?.web) ? 'off' : '';
       if (phone) { this.put(`phone.push.${g.id}`, phone); this.db.event('device.push', null, { id: g.id }); return { status: 200, body: { ok: true } }; }
+      // Off with a browser address: drop this device's own address at the relay (as the computer's own browser does,
+      // setWebPush), so off really means no pushes.
+      if (sub?.off === true) return Promise.resolve(this.client?.unsubscribe(g.id, { web: sub.web })).then(() => ({ status: 200, body: { ok: true } }), (e: any) => ({ status: e.status ?? 400, body: { error: e.message } }));
       return this.webSubscribe(g.id, sub?.web).then(() => ({ status: 200, body: { ok: true } }), (e: any) => ({ status: e.status ?? 400, body: { error: e.message } }));
     }
     // Settings stay on the computer: AI account sign-ins, people, Google setup, connecting apps
