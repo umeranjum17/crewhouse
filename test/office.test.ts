@@ -466,3 +466,27 @@ test('first run and the Share sheet read Term: helmet faces, shared tiles, no bu
     for (const [i, r] of m.rows.entries()) assert.ok(!r.overlap && !r.clip, `${at} row ${i}: nothing overlaps or spills`);
   }
 });
+
+test('a phone card is one primary and ⋯: the sheet names the card and its rows read at 15px; a desk keeps its buttons', { skip: !bin && 'no Chromium here' }, async () => {
+  const b = await browse();
+  await b.send('Page.enable'); await b.send('Runtime.enable');
+  const shown = (sel: string) => `[...document.querySelectorAll('${sel}')].filter((e) => e.getClientRects().length)`;
+  for (const theme of ['day', 'night']) for (const [w, h, mobile] of [[390, 844, true], [1440, 900, false]] as const) {
+    await b.send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile });
+    const at = `${theme} ${w}`;
+    await b.open(`demo&${theme}`);
+    await until('a card in Chief\'s thread', () => b.run("!!document.querySelector('.chat .lines .card.ask .btns')"), 30_000);
+    const m = await b.run(`({ dots: ${shown('.chat .lines .more-dots')}.length, acts: ${shown('.chat .lines .more-act')}.length })`);
+    if (!mobile) { assert.equal(m.dots, 0, `${at}: a desk shows no ⋯`); assert.ok(m.acts > 0, `${at}: a desk keeps every choice inline`); continue; }
+    assert.ok(m.dots > 0 && m.acts === 0, `${at}: the other choices sit behind ⋯`);
+    await b.run(`${shown('.chat .lines .more-dots')}[0].click()`);
+    await until('the ⋯ sheet, settled', () => b.run("!!document.querySelector('.more-sheet .more-row') && !document.querySelector('.more-sheet').getAnimations().length"), 10_000);
+    const s = await b.run(`(() => { const head = document.querySelector('.more-head b'), rows = [...document.querySelectorAll('.more-row')];
+      return { head: head?.textContent ?? '', rows: rows.map((r) => { const q = r.getBoundingClientRect();
+        return { font: parseFloat(getComputedStyle(r).fontSize), h: q.height, inside: q.left >= -1 && q.right <= innerWidth + 1 && q.bottom <= innerHeight + 1 }; }) }; })()`);
+    assert.ok(s.head.trim(), `${at}: the sheet names its card`);
+    for (const [i, r] of s.rows.entries()) assert.ok(r.font >= 15 && r.h >= 48 && r.inside, `${at} row ${i}: 15px, a full tap height, on screen`);
+    await b.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
+    await until('the sheet to close', () => b.run("!document.querySelector('.more-sheet')"), 10_000);
+  }
+});

@@ -676,6 +676,31 @@ function useDraftEdit(c: Card) {
   };
 }
 
+type MoreAct = { label: string; run: () => unknown; pressed?: boolean; cls?: string };
+/** A card's other choices: in its row on a desk; on a phone they wait behind "⋯", which opens a bottom sheet with
+ *  the card's title on top and one full-width row per choice, so a card shows one primary (Main1774). */
+export function More({ title, sub, acts }: { title: string; sub?: string; acts: (MoreAct | false | null | undefined)[] }) {
+  const [open, setOpen] = useState(false);
+  const shown = acts.filter((a): a is MoreAct => !!a);
+  if (!shown.length) return null;
+  return <>
+    {shown.map((a) => <button key={a.label} className={`btn more-act${a.cls ? ` ${a.cls}` : ''}`} aria-pressed={a.pressed} onClick={() => void a.run()}>{a.label}</button>)}
+    <button className="btn more-dots" aria-label="More choices" aria-haspopup="dialog" onClick={() => setOpen(true)}><Icon name="more" size={20} /></button>
+    {open && createPortal(<MoreSheet title={title} sub={sub} acts={shown} onClose={() => setOpen(false)} />, document.body)}
+  </>;
+}
+
+function MoreSheet({ title, sub, acts, onClose }: { title: string; sub?: string; acts: MoreAct[]; onClose: () => void }) {
+  const box = useRef<HTMLDivElement>(null);
+  useDialogOwn(box, onClose);
+  return <div className="scrim" onClick={onClose}>
+    <div ref={box} className="sheet more-sheet" role="dialog" aria-modal aria-label={title} onClick={(e) => e.stopPropagation()}>
+      <div className="more-head"><b>{title}</b>{sub && <span>{sub}</span>}</div>
+      {acts.map((a) => <button key={a.label} className="more-row" onClick={() => { onClose(); void a.run(); }}>{a.label}</button>)}
+    </div>
+  </div>;
+}
+
 /** The plain-language ask card, in the thread: one decision with the evidence in front of you. A checkout opens the
  *  review before any yes; spending always says the footer note. */
 export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; onDone: () => void }) {
@@ -697,11 +722,13 @@ export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; 
   // Chief's plan: "Change it" opens a box, and what the person types goes back to Chief for a new plan.
   const [change, setChange] = useState<string | null>(null);
   const edit = useDraftEdit(c);
+  const routine = c.kind === 'routine' ? c.lines : undefined;
+  const title = routine ? routine[0] : question, sub = routine ? routine[1] : c.status;
   return (
     <div className={`card ask${c.campaign ? ' campaign' : ''}`}>
       <AskHead c={c} who={who} />
-      {!(c.kind === 'routine' && c.lines) && <p className="ask-words">{question}</p>}
-      {edit.box || (c.kind === 'routine' && c.lines ? <div className="ask-lines">{c.lines.map((l, i) => <p key={i} className={`ask-line${i ? ' quiet' : ''}`}>{l}</p>)}</div>
+      {!routine && <p className="ask-words">{question}</p>}
+      {edit.box || (routine ? <div className="ask-lines">{routine.map((l, i) => <p key={i} className={`ask-line${i ? ' quiet' : ''}`}>{l}</p>)}</div>
         : <AskEvidence c={c.evidence === 'draft' && c.preview ? { ...c, preview: { ...c.preview, body: flowed(c.preview.body) } } : c} open={false} readAll={<a className="link" href={`#/ask/${c.id}`}>Read all</a>} />)}
       {oops && <div className="send-failed" role="alert">That didn't go through. <button type="button" className="link inline" onClick={() => last.current && act(last.current)}>Try again</button></div>}
       {c.kind === 'routine' ? (
@@ -713,9 +740,10 @@ export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; 
           {when !== null && preview?.bad && <div className="mute small routine-note">I didn't catch that time. Try “every Monday 9:00”.</div>}
           <div className="btns">
             <button className="btn go" disabled={stuck} onClick={start}>{yes?.label ?? 'Start it'}</button>
-            <button className="btn" aria-pressed={when !== null} onClick={() => { setWhen(when === null ? c.schedule || '' : null); }}>{when === null ? 'Change time' : 'Keep the time'}</button>
-            {deny && <button className="btn" onClick={() => act(deny.body)}>{deny.label}</button>}
-            {remind && <button className="btn quiet" onClick={() => act(remind)}>Remind me tomorrow</button>}
+            <More title={title} sub={sub} acts={[
+              { label: when === null ? 'Change time' : 'Keep the time', pressed: when !== null, run: () => setWhen(when === null ? c.schedule || '' : null) },
+              deny && { label: deny.label, run: () => act(deny.body) },
+              remind && { label: 'Remind me tomorrow', cls: 'quiet', run: () => act(remind) }]} />
           </div>
         </>
       ) : c.kind === 'plan' ? (
@@ -726,9 +754,10 @@ export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; 
           </form>}
           <div className="btns">
             {change === null && <button className="btn go" onClick={() => act(yes.body)}>{yes.label}</button>}
-            <button className="btn" aria-pressed={change !== null} onClick={() => setChange(change === null ? '' : null)}>{change === null ? 'Change it' : 'Keep the plan'}</button>
-            {deny && <button className="btn" onClick={() => act(deny.body)}>{deny.label}</button>}
-            {remind && <button className="btn quiet" onClick={() => act(remind)}>Remind me tomorrow</button>}
+            <More title={title} sub={sub} acts={[
+              { label: change === null ? 'Change it' : 'Keep the plan', pressed: change !== null, run: () => setChange(change === null ? '' : null) },
+              deny && { label: deny.label, run: () => act(deny.body) },
+              remind && { label: 'Remind me tomorrow', cls: 'quiet', run: () => act(remind) }]} />
           </div>
         </>
       ) : c.reply ? (
@@ -739,16 +768,18 @@ export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; 
       ) : c.review ? (
         <div className="btns">
           <a className="btn go" href={`#/ask/${c.id}`}>Review order</a>
-          {deny && <button className="btn ghost" onClick={() => act(deny.body)}>{deny.label}</button>}
-          {remind && <button className="btn quiet" onClick={() => act(remind)}>Remind me tomorrow</button>}
+          <More title={title} sub={sub} acts={[
+            deny && { label: deny.label, cls: 'ghost', run: () => act(deny.body) },
+            remind && { label: 'Remind me tomorrow', cls: 'quiet', run: () => act(remind) }]} />
         </div>
       ) : yes ? (
         <div className="btns">
           <button className="btn go" disabled={edit.empty} onClick={() => act(edit.yes(yes.body))}>{yes.label}</button>
-          {edit.can && <button className="btn" aria-pressed={edit.editing} onClick={edit.toggle}>{edit.editing ? 'Use the original' : 'Edit'}</button>}
-          {deny && <button className="btn" onClick={() => act(deny.body)}>{deny.label}</button>}
-          {remind && <button className="btn quiet" onClick={() => act(remind)}>Remind me tomorrow</button>}
-          {always && <button className="btn ghost always" onClick={() => act(always.body)}>{always.label}</button>}
+          <More title={title} sub={sub} acts={[
+            edit.can && { label: edit.editing ? 'Use the original' : 'Edit', pressed: edit.editing, run: edit.toggle },
+            deny && { label: deny.label, run: () => act(deny.body) },
+            remind && { label: 'Remind me tomorrow', cls: 'quiet', run: () => act(remind) },
+            always && { label: always.label, cls: 'ghost always', run: () => act(always.body) }]} />
         </div>
       ) : null}
       {c.kind === 'spend' && <p className="ask-note">Anything that costs money asks you every time.</p>}

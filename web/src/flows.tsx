@@ -6,7 +6,7 @@ import { createPortal } from 'react-dom';
 import { api, demo, trouble, type Json } from './api.ts';
 import * as A from './adapter.ts';
 import * as art from './art.ts';
-import { AiMark, attempt, ChiefArt, Dots, Face, Icon, Laptop, Pill, toast, useDialogOwn } from './parts.tsx';
+import { AiMark, attempt, ChiefArt, Dots, Face, Icon, Laptop, More, Pill, toast, useDialogOwn } from './parts.tsx';
 
 type Phase = 'opening' | 'waiting' | 'code' | 'done' | 'work' | 'busy' | 'cancelled' | 'unticked' | 'expired' | 'failed' | 'offline' | 'unavailable' | 'house';
 /** ?demo&phase=expired pins a flow to one state, for design review and screenshots. */
@@ -281,7 +281,7 @@ export function ConnectCard({ c, helper, state, onDone }: { c: A.Card; helper?: 
       {app.warns && <p className="warn-line">Google shows a warning for apps it hasn't reviewed — a personal app always gets it. Tap <b>Advanced</b>, then <b>Go to Crewhouse</b>.</p>}
       <div className="btns">
         <button className="btn go" onClick={() => setOpen(A.needsHouse(state, app) ? null : openTab())}>Connect {app.name}</button>
-        <button className="btn" onClick={no}>Not now</button>
+        <More title={c.words} sub={c.status} acts={[{ label: 'Not now', run: no }]} />
       </div>
       {open !== false && <ConnectApp app={app} helper={helper} state={state} tab={open} ask={c.id} onConnected={yes} onClose={() => setOpen(false)} onDone={() => setOpen(false)} />}
     </div>

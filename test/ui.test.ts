@@ -558,7 +558,7 @@ test('Home opens on Chat at every launch, with Office one tap away and never sto
   const hero = web.slice(web.indexOf('function ChiefHero('), web.indexOf('function ChiefHero(') + 2200);
   assert.match(hero, /A\.chief\(state, \{ signedOut: true \}\)/, 'the phone header reads Chief from the same table as the thread, with the sign-in');
   assert.match(hero, /out \? NEEDS_SIGNIN : needs \? 'Needs you'/, 'signed out with a job queued: the thread card\'s flag, never the green "At work"');
-  assert.match(hero, /<div className="ch-row">[\s\S]*className="ch-name"[\s\S]*className=\{`ch-status[\s\S]*\{side\}[\s\S]*<\/div>[\s\S]*\{below\}/, 'one compact row: avatar, name, the single status and the gear, then the switch on its own row under it');
+  assert.match(hero, /<div className="ch-row">[\s\S]*className="ch-name"[\s\S]*className=\{`ch-status[\s\S]*\{side\}[\s\S]*<\/div>[\s\S]*\{below\}/, 'one compact row: avatar, the name over its single status, the small switch and the gear');
   assert.doesNotMatch(hero, /className="ch-line"/, 'exactly one status line, never a second echoing strip');
   const flows = src('web/src/flows.tsx');
   assert.match(flows, /export const NEEDS_SIGNIN = 'Needs a sign-in';/, 'one flag for the thread card and the phone header');
@@ -574,7 +574,7 @@ test('Home opens on Chat at every launch, with Office one tap away and never sto
   assert.match(pin, /`See all \$\{cards\.length\}`/, 'and an exact "See all N"');
 });
 
-test("Chief's conversation reads as a named transcript, the ask inline under a dashed rule", async () => {
+test("Chief's conversation is a named transcript on a desk, a conversation on a phone", async () => {
   const src = (f: string) => readFileSync(join(import.meta.dirname, '..', f), 'utf8');
   const art = await import('../web/src/art.ts');
   const web = src('web/src/main.tsx'), css = src('web/src/styles.css'), app = src('mobile/App.tsx');
@@ -583,6 +583,9 @@ test("Chief's conversation reads as a named transcript, the ask inline under a d
   assert.doesNotMatch(chat, /<Face/, 'no faces in the transcript rows');
   assert.doesNotMatch(chat, /consecutive/, 'no collapsing: the name repeats on every line');
   assert.match(css, /\.card\.ask \{[^}]*border-top: 1px dashed/, 'the ask sits inline under a dashed rule, with no card chrome');
+  // ch-pwa-chat: a phone keeps the names for screen readers only, and a card shows one primary with "⋯" for the rest.
+  assert.match(css, /\.chat \.line-by \{ position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset\(50%\)/, 'a phone hides the names from sight, not from screen readers');
+  assert.match(css, /\.chat \.card\.ask \.more-act \{ display: none; \}/, 'a phone card keeps one primary in sight');
   const phone = app.slice(app.indexOf('function Chat('), app.indexOf('function Chat(') + 12000);
   assert.match(phone, /\{speaker\(l\)\}/, 'the phone names every line too');
   assert.equal(art.helmet(38, 'needs', true, 0).length, 19, 'the rail helmet is the mock\'s 38-column grid');
