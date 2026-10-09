@@ -67,7 +67,7 @@ export class MailSend {
     const { from } = await this.sender();
     this.eligible(to);
     this.openDraft(id);
-    const open =this.db.get("SELECT * FROM asks WHERE json_extract(detail,'$.send.draft') = ? AND state = 'open'", id);
+    const open = this.db.get("SELECT * FROM asks WHERE json_extract(detail,'$.send.draft') = ? AND state = 'open'", id);
     if (open) return { id: open.id };
     const detail = { effect: 'send', send: { draft: id, from, to, subject, body }, preview: { body } };
     const r = this.db.run("INSERT INTO asks (bot,kind,title,detail,at) VALUES ('chief','mail','Send this one email from your Gmail?',?,?)", JSON.stringify(detail), Date.now());
