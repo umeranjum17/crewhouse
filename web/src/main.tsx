@@ -1339,7 +1339,7 @@ function Apps({ state, refresh }: Ctx) {
             : <button className="btn go" onClick={() => setConnecting({ app: a, tab: A.needsHouse(state, a) ? null : openTab() })}>Connect</button>}</div>)}
       </div>
       {plugin && <><div className="label">Plugins</div><div className="card list">
-        <div className="row-item app-row-item"><span className="app-ic" style={{ background: '#3b3b4d' }}>H</span><div className="grow"><b>Herdr</b>
+        <div className="row-item app-row-item stack-row"><span className="app-ic" style={{ background: '#3b3b4d' }}>H</span><div className="grow"><b>Herdr</b>
           {plugin.state === 'missing' && plugin.howto ? <><div className="mute small">{plugin.howto}</div><div className="mute small">{plugin.says}</div></>
             : <div className="mute small">{plugin.says}</div>}</div>
           {plugin.state === 'on' ? <span className="mute small">On</span>
