@@ -10,7 +10,7 @@ onto the home-screen icon through the Badging API (`web/src/pwa.ts`).
 
 - `shell` — first online load registers `/sw.js`; a cold offline reload is answered from the cache.
 - `push` — a real push event reaches the worker and shows a content-free notification ("Crewhouse has news"); tapping it focuses or opens the app.
-- `badge` — `navigator.setAppBadge(needs)` while work waits, `clearAppBadge()` when it is done.
+- `badge` — a content-free push sets a plain dot; the open app replaces it with `navigator.setAppBadge(needs)` while work waits, and `clearAppBadge()` when none does.
 
 ## How to get to it (user POV)
 
