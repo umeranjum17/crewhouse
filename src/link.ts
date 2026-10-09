@@ -7,7 +7,7 @@ import { createServer, type Server } from 'node:http';
 import { networkInterfaces } from 'node:os';
 import { join } from 'node:path';
 import { WebSocketServer } from 'ws';
-import { Host, keyPair, keyPairFrom, parseOffer, encodeOffer, b64url, type Grant, type PairRequest, type Role } from '@byokit/link';
+import { Host, keyPair, keyPairFrom, parseV1Offer, encodeOffer, b64url, type Grant, type PairRequest, type Role } from '@byokit/link';
 import { advertise, routes, tailscaleState as kitTailscaleState, isPeer, type Bonjour, type TailscaleState } from '@byokit/reach';
 import { RelayClient, isExpoToken, linkUrl, type RelayStatus, type WebSubscription } from '@byokit/relay';
 import type { Config } from './config.ts';
@@ -372,7 +372,7 @@ export class Link {
     await this.bind();
     const urls = this.urls();
     const { text, expires } = this.host.offer({ role, urls, meta: { offer } });
-    const raw = parseOffer(text);
+    const raw = parseV1Offer(text); // the host's own QR is always a v1 offer; pair 0.8.0's compact offers never reach here
     return { qr: text, typed: encodeOffer(raw), expires, urls };
   }
 
