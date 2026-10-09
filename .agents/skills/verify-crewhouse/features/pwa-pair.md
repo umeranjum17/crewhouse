@@ -14,7 +14,7 @@ clears the icon badge and goes back to the demo.
   grant, it boots paired and never shows the demo.
 - A relay code and a direct code both pair. The page's two words equal crewd's `phones pending`.
 - Once paired, the app shows crewd's own state. A change (a message to Chief, the first-run name) lands in crewd over
-  the link. Settings reads "Paired with your computer" and hides Phones, which stay the computer's to manage.
+  the link. Settings reads "Paired with <computer name>" and hides Phones, which stay the computer's to manage.
 - Unpair: crewd's device list drops the browser, and the app shows the demo again with no reinstall.
 - The link's trust rules hold: crewd still refuses admin writes over the link (`src/link.ts`).
 
