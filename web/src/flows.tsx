@@ -37,7 +37,7 @@ function Mood({ phase, app, ai }: { phase: Phase; app?: A.App; ai?: { key: strin
   return (
     <div className="flow-face">
       <span className="halo"><ChiefArt mood={mood} d={5} /></span>
-      {app && <span className="app-ic badge-ic" style={{ background: app.bg }}>{app.mark}</span>}
+      {app && <span className="app-ic badge-ic"><img className="app-logo" src={app.logo} alt="" /></span>}
       {ai && <span className="badge-ic ai-badge"><AiMark ai={ai} size={38} /></span>}
       {phase === 'opening' && <Laptop />}
       {phase === 'done' && <pre className="art sparkle" aria-hidden>{'✦  ·  ✧  ·  ✦'}</pre>}
@@ -273,7 +273,7 @@ export function ConnectCard({ c, helper, state, onDone }: { c: A.Card; helper?: 
   return (
     <div className="card ask">
       <div className="ask-head">
-        {who ? <Face who={{ ...who, mood: 'ask' }} size={28} /> : <span className="app-ic" style={{ background: app.bg }}>{app.mark}</span>}
+        {who ? <Face who={{ ...who, mood: 'ask' }} size={28} /> : <span className="app-ic"><img className="app-logo" src={app.logo} alt="" /></span>}
         <div className="grow"><b>{who?.name ?? helper ?? 'The crew'}</b><div className="ask-status"><i />{c.status}</div></div>
         <time className="mute small">{A.clock(c.at)}</time>
       </div>

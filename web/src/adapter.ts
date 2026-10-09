@@ -60,7 +60,7 @@ export type Line = { id: number; from: 'me' | 'them' | 'chief' | 'note'; text: s
   about?: string };
 /** The one-use pairing ticket is rendered in Chief's chat, never as chat text. */
 export const phoneOffer = (page: Json): { qr: string; typed: string; expires: number; message: number; token?: string; waiting?: { id: number; name: string; words: string }; joined?: string } | null => page?.phoneOffer ?? null;
-export type App = { id: string; name: string; mark: string; bg: string; on: boolean; does: string; warns?: boolean };
+export type App = { id: string; name: string; logo: string; on: boolean; does: string; warns?: boolean };
 
 // ---------- words ----------
 export const clock = (t: number) => {
@@ -1454,12 +1454,14 @@ export const needsHouse = (state: Json, app: App) => signsInWith(app) === 'Googl
 
 // v1: Drive, Calendar and Gmail on the person's own Google app, then Notion and Canva. Sharing from the phone needs no
 // connection at all. Calendar and Gmail show Google's "unverified app" screen, so their card warns first.
+// Each row carries that product's own logo (`logo`, an asset under web/marks/; see NOTICE for the source of each file),
+// drawn on the screen's neutral tile (styles.css `.app-ic`), never a home-made letter or glyph.
 const APPS: App[] = [
-  { id: 'drive', name: 'Google Drive', mark: '▲', bg: '#fbbc04', on: false, does: 'Helpers can save copies of what they make, and open files you pick.' },
-  { id: 'calendar', name: 'Google Calendar', mark: '31', bg: '#4285f4', on: false, warns: true, does: 'Helpers can see your week and add things. You can undo any change.' },
-  { id: 'gmail', name: 'Gmail', mark: 'M', bg: '#ea4335', on: false, warns: true, does: 'Helpers can read your email to find things. They never send from it.' },
-  { id: 'notion', name: 'Notion', mark: 'N', bg: '#2e2a40', on: false, does: 'Helpers can read and add pages you share with them.' },
-  { id: 'canva', name: 'Canva', mark: 'C', bg: 'linear-gradient(135deg,#00c4cc,#7d2ae8)', on: false, does: 'Helpers can make designs in your Canva.' },
+  { id: 'drive', name: 'Google Drive', logo: '/marks/drive.png', on: false, does: 'Helpers can save copies of what they make, and open files you pick.' },
+  { id: 'calendar', name: 'Google Calendar', logo: '/marks/calendar.png', on: false, warns: true, does: 'Helpers can see your week and add things. You can undo any change.' },
+  { id: 'gmail', name: 'Gmail', logo: '/marks/gmail.png', on: false, warns: true, does: 'Helpers can read your email to find things. They never send from it.' },
+  { id: 'notion', name: 'Notion', logo: '/marks/notion.png', on: false, does: 'Helpers can read and add pages you share with them.' },
+  { id: 'canva', name: 'Canva', logo: '/marks/canva.png', on: false, does: 'Helpers can make designs in your Canva.' },
 ];
 /** The app grid; which ones are on comes from crewd's connections once it has them. */
 export const apps = (state: Json): App[] => APPS.map((a) => ({ ...a, on: !!state.connections?.includes?.(a.id) }));

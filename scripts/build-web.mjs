@@ -9,6 +9,8 @@ rmSync(root + 'dist', { recursive: true, force: true });
 mkdirSync(root + 'dist', { recursive: true });
 cpSync(root + 'index.html', root + 'dist/index.html');
 cpSync(root + 'fonts', root + 'dist/fonts', { recursive: true });
+// Each app/plugin's own official logo (web/marks/), served as-is at /marks/.
+cpSync(root + 'marks', root + 'dist/marks', { recursive: true });
 // Icons are drawn from Chief's bitmaps by scripts/icons.mjs.
 for (const f of ['icon.svg', 'favicon.svg', 'favicon.ico', 'favicon-16.png', 'favicon-32.png', 'favicon-48.png', 'notify.svg', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'icon-maskable-192.png', 'apple-touch-icon.png', 'notify-96.png']) cpSync(root + f, root + 'dist/' + f);
 cpSync(root + 'manifest.webmanifest', root + 'dist/manifest.webmanifest'); // "Share to Crewhouse" from the phone's Share sheet
