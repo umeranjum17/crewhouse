@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { qrMatrix } from '@byokit/ui-core';
-import { api, demo, subscribe, type Json } from './api.ts';
+import { api, demo, pairable, paired, subscribe, type Json } from './api.ts';
 import * as A from './adapter.ts';
 import * as art from './art.ts';
 type Helper = ReturnType<typeof A.crew>[number];
@@ -12,10 +12,10 @@ import { keepDraft } from './draft.ts';
 import type { IconName } from './icons.ts';
 import { Screen } from './screen.tsx';
 import { hear, Office, summaryOf, useOffice } from './office.tsx';
-import { AccountCard, ConnectApp, ConnectCard, NEEDS_SIGNIN, openTab, sheet, SignIn, Unreachable } from './flows.tsx';
+import { AccountCard, ConnectApp, ConnectCard, NEEDS_SIGNIN, openTab, PairSheet, sheet, SignIn, Unreachable } from './flows.tsx';
 import { pushPossible, setBadge, startWorker, turnOffNotifications, turnOnNotifications } from './pwa.ts';
 
-type View = 'home' | 'chief' | 'room' | 'crew' | 'add' | 'helper' | 'things' | 'routines' | 'settings' | 'apps' | 'skills' | 'ask' | 'share';
+type View = 'home' | 'chief' | 'room' | 'crew' | 'add' | 'helper' | 'things' | 'routines' | 'settings' | 'apps' | 'skills' | 'ask' | 'share' | 'pair';
 type Route = { view: View; id?: string; tab?: string; m?: string; file?: string };
 const ANCHOR = /^m(\d+)$/;
 function parseRoute(): Route {
@@ -25,6 +25,7 @@ function parseRoute(): Route {
   // #/f/<helper>/<file>: the chat that delivered it, with the workbook open beside it (web/src/parts.tsx).
   if (a === 'f' && b && c) return { view: 'helper', id: b, tab: 'chat', file: decodeURIComponent(c) };
   if (a === 'ask' && b) return { view: 'ask', id: b };
+  if (a === 'pair' && demo) return { view: 'pair' };
   if (a === 'chief' && ANCHOR.test(b ?? '')) return { view: 'chief', m: b };
   if (a === 'things' && /^t\d+$/.test(b ?? '')) return { view: 'things', id: b };
   if (a === 'crew' && b === 'add') return { view: 'add' };
@@ -339,6 +340,9 @@ function ChiefRail({ state, live, refresh }: { state: Json; live: A.OfficeView; 
 }
 
 /** An empty list, said warmly: a small mark and a plain line, never a blank box. */
+/** The demo's one way out: pair this app with the person's own computer (flows.tsx PairSheet, at #/pair). */
+const PairRow = () => <div className="card nudge pair-row"><span className="grow"><b>You're trying a demo crew.</b> Your own crew lives on your computer.</span><a className="btn go" href="#/pair">Pair — yes, let's go</a></div>;
+
 const Empty = ({ children }: { children: ReactNode }) => <div className="frame-empty">{children}</div>;
 
 /** Home opens on Chat every time the app starts (kept in memory only, never stored): Chief's thread under the bar and
@@ -358,6 +362,7 @@ function Home(ctx: Ctx) {
   const waiting = live.crew.filter(A.waitsOnYou).length;
   const top = <>
     <HomeBar ctx={ctx} mode={mode} pick={pick} />
+    {demo && <PairRow />}
     {/* Chief's thread shows its own sign-in card and resting line; Office shows them here. */}
     {mode === 'office' && <AccountCard accounts={accounts} onReady={refresh} />}
     <SetupRow state={state} accounts={accounts} tick={tick} />
@@ -1176,6 +1181,9 @@ function Settings({ state, refresh, tick, accounts, look, setLook }: Ctx & { loo
       <a href="#/" className="back phone-only">‹ Home</a>
       <h1>Settings</h1>
       <p className="mute small">{A.atHome(undefined, A.planName(accounts)).join(' ')}</p>
+      {demo && <PairRow />}
+      {paired && <div className="card nudge"><span className="grow"><b>Paired with {paired.name}</b><div className="mute small">This app shows your own crew, over a locked link to that computer.</div></span>
+        <button className="btn" onClick={() => confirm('Unpair this app? It goes back to the demo, and you can pair again any time.') && attempt(paired!.unpair)}>Unpair</button></div>}
       {/* No tab bar on a phone (B1): the desk rail's places, reached from here. */}
       <div className="card list go-tos">{GO_TO.map(([h, l, i]) => <a key={h} href={h} className="row-item go-to"><span className="o-ic"><Icon name={i} /></span><span className="grow">{l}</span><Icon name="next" /></a>)}</div>
       <Install />
@@ -1192,7 +1200,8 @@ function Settings({ state, refresh, tick, accounts, look, setLook }: Ctx & { loo
       <div className="label">Your apps</div>
       <a className="card row" href="#/apps"><span className="app-row">{A.apps(state).slice(0, 5).map((a) => <span key={a.id} className="app-ic sm"><img className="app-logo" src={a.logo} alt="" /></span>)}</span><span className="grow mute">{A.apps(state).filter((a) => a.on).length} connected</span><b>›</b></a>
 
-      <Phones tick={tick} />
+      {/* Phones are this computer's to add and remove: crewd refuses them over the link. */}
+      {!paired && <Phones tick={tick} />}
 
       <div className="label">Look</div>
       <div className="seg">{[['auto', 'Evenings dark'], ['day', 'Day'], ['night', 'Night']].map(([k, l]) => <button key={k} className={look === k ? 'on' : ''} onClick={() => setLook(k)}>{l}</button>)}</div>
@@ -1479,7 +1488,7 @@ function SideCrew({ state, live, id, signedOut }: { state: Json; live: A.OfficeV
 function App() {
   const [route, setRoute] = useState<Route>(parseRoute());
   const under = useRef<Route>({ view: 'home' });
-  if (route.view !== 'ask') under.current = route;
+  if (route.view !== 'ask' && route.view !== 'pair') under.current = route;
   const [state, setState] = useState<Json>(null);
   const [tick, setTick] = useState(0);
   const [offline, setOffline] = useState(false);
@@ -1566,6 +1575,7 @@ function App() {
       </div>
       {sheet && <AskSheet c={sheet} who={crew.find((h) => h.id === sheet.helper)} chiefSays={ctx.state.asks.find((a: Json) => a.id === sheet.id)?.detail?.chief} onClose={() => history.length > 1 ? history.back() : go('#/')} />}
       {book && <PreviewPanel bot={book.bot} path={book.path} onClose={() => history.length > 1 ? history.back() : go('#/')} />}
+      {route.view === 'pair' && <PairSheet onClose={back} />}
       {party && <Celebrate title={party.title} href={hrefOf(party.helper)} onDone={() => setParty(null)} />}
       <Toasts />
     </>
@@ -1573,4 +1583,5 @@ function App() {
 }
 
 startWorker(); // the offline shell and web-push handler are ready from the first load on
-createRoot(document.getElementById('root')!).render(<App />);
+// The public shell decides once, before its first screen: a device grant kept here makes it the paired app; none, the demo.
+void (pairable ? import('./link.ts').then((l) => l.resume()) : Promise.resolve()).finally(() => createRoot(document.getElementById('root')!).render(<App />));

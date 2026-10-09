@@ -12,10 +12,10 @@ export function startWorker() {
 }
 
 /** Mirror the app's unread count onto the home-screen icon (0 clears it). */
-export function setBadge(n: number) {
+export async function setBadge(n: number) {
   if (demo) return;
   const nav = (typeof navigator === 'undefined' ? {} : navigator) as Badging;
-  void (n > 0 ? nav.setAppBadge?.(n) : nav.clearAppBadge?.())?.catch(() => {});
+  await (n > 0 ? nav.setAppBadge?.(n) : nav.clearAppBadge?.())?.catch(() => {});
 }
 
 /** Whether this browser can be told about news while the app is closed. */

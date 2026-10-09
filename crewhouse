@@ -189,16 +189,24 @@ import { join } from 'node:path';
 import { loadConfig } from './src/config.ts';
 const [action, words] = process.argv.slice(2);
 const port = Number(process.env.CREWHOUSE_PORT || 7711);
-const path = action === 'code' ? 'pair' : action;
-try {
+const phones = async (path, body) => {
   const res = await fetch(`http://127.0.0.1:${port}/api/phones/${path}`, {
-    method: action === 'pending' ? 'GET' : 'POST', headers: { 'x-crewhouse': '1', 'content-type': 'application/json',
+    method: body ? 'POST' : 'GET', headers: { 'x-crewhouse': '1', 'content-type': 'application/json',
       authorization: `Bearer ${readFileSync(join(loadConfig().stateDir, 'person.key'), 'utf8')}` },
-    body: action === 'pending' ? undefined : JSON.stringify(action === 'approve' ? { words } : { role: 'control' }),
+    body: body && JSON.stringify(body),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'Could not reach Crewhouse');
-  if (action === 'code') console.log(`${data.typed}\nWorks once; expires ${new Date(data.expires).toLocaleString()}.`);
+  return data;
+};
+try {
+  const data = await phones(action === 'code' ? 'pair' : action, action === 'pending' ? undefined : action === 'approve' ? { words } : { role: 'control' });
+  if (action === 'code') {
+    console.log(`${data.typed}\nWorks once; expires ${new Date(data.expires).toLocaleString()}.`);
+    // From anywhere (a phone, the web app at its public address): the relay's code, when this computer has a relay.
+    const away = await phones('code', { role: 'control' }).catch(() => null);
+    if (away) console.log(`\nAway from this computer, paste this one instead:\n${away.short}-${away.code}@${away.relay}`);
+  }
   else if (action === 'pending') console.log(data.length ? data.map((a) => `${a.name}: ${a.words}`).join('\n') : 'No phone waiting.');
   else console.log('Phone approved.');
 } catch (e) { console.error(e.message); process.exitCode = 1; }

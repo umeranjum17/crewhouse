@@ -13,19 +13,22 @@ const localTransport = typeof location !== 'undefined' && (/^(127\.0\.0\.1|local
 
 /** `?demo` runs the screens on a personal assistant demo (web/src/demo.ts): for design review and screenshots.
  *  With no explicit choice the app boots in demo only when it has no backend of its own: the published static shell
- *  (a public host, not crewd's loopback, no stored device grant yet) opens straight into demo, while crewd's own
- *  pages stay real. `?real` forces a backend even on the public shell; pairing (a stored device grant) does too. */
-export const demo = typeof location !== 'undefined' && (() => {
-  const search = new URLSearchParams(location.search);
-  if (search.has('demo')) return true;
-  if (search.has('real')) return false;
-  return !localTransport;
-})();
+ *  (a public host, not crewd's loopback) opens straight into demo, while crewd's own pages stay real. `?real` forces a
+ *  backend even on the public shell. A device grant kept on the public shell makes it the paired app (`setLink`). */
+const search = typeof location !== 'undefined' ? new URLSearchParams(location.search) : null;
+export let demo = !!search && (search.has('demo') || (!search.has('real') && !localTransport));
+/** The public shell with no `?demo` asked for: at boot it looks for a device grant (web/src/link.ts `resume`). */
+export const pairable = demo && !search!.has('demo');
 
 /** How a call reaches crewd: HTTP on this computer; the phone app swaps in its encrypted link. */
 export type Transport = (method: string, path: string, body?: Json) => Promise<Json>;
 let call: Transport = http;
 export function setTransport(t: Transport) { call = t; }
+
+/** The encrypted link, once this browser is paired (web/src/link.ts): every call, the live events and a bot's screen. */
+export type Link = { name: string; call: Transport; subscribe: typeof subscribe; desktop: typeof desktopSignaling; unpair: () => Promise<void> };
+export let paired: Link | null = null;
+export function setLink(l: Link) { paired = l; demo = false; setTransport(l.call); }
 
 async function http(method: string, path: string, body?: Json) {
   if (demo) return (await import('./demo.ts')).demoCall(method, path, body);
@@ -154,38 +157,45 @@ export const api = {
 
 const wsBase = () => `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`;
 
-/**
- * desklink's `Signaling` for one bot's screen, over its own socket to crewd. crewd picks the display and the
- * permissions; closing the socket ends the session.
- */
-export function desktopSignaling(bot: string) {
-  const ws = new WebSocket(`${wsBase()}/ws/desktop/${bot}`, `crewhouse-person.${person()}`);
-  const open = new Promise<void>((resolve, reject) => { ws.onopen = () => resolve(); ws.onerror = () => reject(new Error('could not reach Crewhouse')); });
+/** desklink's `Signaling` over a carrier of crewd's desktop messages, one JSON each way: `connect` opens it, calls `hear`
+ *  with each message and `lost` when it ends. crewd picks the display and the permissions; closing it ends the session. */
+export function lineSignaling(connect: (hear: (msg: Json) => void, lost: () => void) => Promise<{ send: (msg: Json) => unknown; close: () => void }>) {
   const pending = new Map<number, { resolve: (v: Json) => void; reject: (e: Error) => void }>();
   const handlers = new Set<(e: Json) => void>();
   let next = 1;
-  ws.onmessage = (m) => {
-    const msg = JSON.parse(m.data);
+  const opened = connect((msg) => {
     if (msg.event) return handlers.forEach((h) => h(msg.event));
     const p = pending.get(msg.id);
     pending.delete(msg.id);
     if (msg.error) p?.reject(Object.assign(new Error(msg.error.message), { code: msg.error.code }));
     else p?.resolve(msg.result);
-  };
-  ws.onclose = () => { for (const p of pending.values()) p.reject(new Error('lost touch with Crewhouse')); pending.clear(); };
+  }, () => { for (const p of pending.values()) p.reject(new Error('lost touch with Crewhouse')); pending.clear(); });
   return {
     async request<T = unknown>(method: string, params?: Record<string, unknown>): Promise<T> {
-      await open;
+      const c = await opened;
       const id = next++;
-      return new Promise<T>((resolve, reject) => { pending.set(id, { resolve, reject }); ws.send(JSON.stringify({ id, method, params })); });
+      return new Promise<T>((resolve, reject) => { pending.set(id, { resolve, reject }); Promise.resolve(c.send({ id, method, params })).catch(reject); });
     },
     subscribe(handler: (e: Json) => void) { handlers.add(handler); return () => { handlers.delete(handler); }; },
-    close() { ws.close(); },
+    close() { void opened.then((c) => c.close(), () => {}); },
   };
 }
 
+/** One bot's screen over its own socket to crewd, or over the link once paired. */
+export function desktopSignaling(bot: string): ReturnType<typeof lineSignaling> {
+  if (paired) return paired.desktop(bot);
+  return lineSignaling((hear, lost) => new Promise((resolve, reject) => {
+    const ws = new WebSocket(`${wsBase()}/ws/desktop/${bot}`, `crewhouse-person.${person()}`);
+    ws.onopen = () => resolve({ send: (m) => ws.send(JSON.stringify(m)), close: () => ws.close() });
+    ws.onerror = () => reject(new Error('could not reach Crewhouse'));
+    ws.onmessage = (m) => hear(JSON.parse(m.data));
+    ws.onclose = lost;
+  }));
+}
+
 /** Live events; reconnects forever. Returns a stop function. */
-export function subscribe(onEvent: (e: Json) => void) {
+export function subscribe(onEvent: (e: Json) => void): () => void {
+  if (paired) return paired.subscribe(onEvent);
   if (demo) { let stop = () => {}; void import('./demo.ts').then((m) => { stop = m.demoLive(onEvent); }); return () => stop(); }
   let ws: WebSocket | undefined, stopped = false;
   const open = () => {
