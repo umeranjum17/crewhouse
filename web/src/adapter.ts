@@ -730,7 +730,7 @@ export function card(a: Json, state: Json): Card {
   const fillLines = String(d.preview?.body ?? '').split('\n').filter(Boolean).length;
   const message = d.effect === 'send' && !d.preview?.verbatim;
   const choices: Choice[] = [{ label: spend ? 'OK, spend it' : fill ? (fillLines > 1 ? 'Yes, fill these in' : 'Yes, fill it in') : press ? 'Yes, press it' : message ? 'Send' : 'Yes, go ahead', body: { answer: 'allow', scope: 'once' }, primary: true }];
-  // "Always" is a relationship ("Always OK for Aunty Sara"), and money never gets one.
+  // "Always" is a relationship ("Always OK for Aunty Nisha"), and money never gets one.
   if (!spend && (d.always || d.rule)) choices.push({ label: `Always OK for ${d.always ?? name}`, body: { answer: 'allow', scope: 'always' } });
   choices.push({ label: 'Not now', body: { answer: 'deny' } });
   return {
