@@ -32,6 +32,11 @@ must survive in `detail.preview.body`; repeated Review calls must return the sam
 An attestation records person 1, authenticated phone, server time, organisation domain,
 organisation name and type. The helper cannot supply this authority.
 
+A send stranded by a stop between the durable claim and Gmail's answer (the mail ask
+left in `sending`) becomes the same `check Gmail` card when crewd starts, so it shows in
+Needs you and clears through the existing dismiss path; it is never re-sent or reopened.
+`MailSend` reconciles this on construction, at the same startup where the server makes it.
+
 ## Real product drive and captures
 
 Launch and health-check an isolated stub-engine crewd per `../SKILL.md` (OS-assigned
