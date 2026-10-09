@@ -296,12 +296,12 @@ test('Google setup saves a sealed key without pretending it was verified; typed 
 
 test("Google: one service per connection, only after its one-time setup; Google's own failures said plainly", async () => {
   const { crew, done } = googleLab();
-  assert.deepEqual(Object.keys(crew.connections.apps).filter((k) => k !== 'mocknote'), ['drive', 'calendar', 'gmail', 'notion', 'canva'], 'v1: no Outlook, no OneDrive');
+  assert.deepEqual(Object.keys(crew.connections.apps).filter((k) => k !== 'mocknote'), ['drive', 'calendar', 'gmail', 'gmailsend', 'notion', 'canva'], 'v1: no Outlook, no OneDrive');
   // Before setup: you is sent to Google's "OAuth client not found" page.
   await assert.rejects(crew.connections.connect('calendar'), (e: any) => e.status === 409 && /Google switched on for your crew/.test(e.message));
   assert.match(crew.connections.list().find((c: any) => c.app === 'gmail')!.house!, /set it up once in Settings/);
   await house(crew);
-  assert.deepEqual(crew.connections.list().filter((c: any) => c.warns).map((c: any) => c.app), ['calendar', 'gmail'], 'Drive shows no unverified-app warning');
+  assert.deepEqual(crew.connections.list().filter((c: any) => c.warns).map((c: any) => c.app), ['calendar', 'gmail', 'gmailsend'], 'Drive shows no unverified-app warning');
 
   // One scope per request, and the household app's own client.
   let url = new URL(await start(crew, 'calendar'));

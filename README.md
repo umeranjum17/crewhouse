@@ -101,7 +101,7 @@ Helpers work in their own folders without bothering you. Anything that costs mon
 
 ### Drafts, never sent behind your back
 
-When a helper writes in your name (a reply to the clinic, a refund chase, a cancellation email), it arrives as a draft. You approve it or you don't, and nothing is sent either way. The helper hands you the words to send yourself.
+When a helper writes in your name (a reply to the clinic, a refund chase, a cancellation email), it arrives as a draft. You approve it or you don't, and nothing is sent either way. The one exception is Tracer's find-clients emails, which can go from your own Gmail one at a time, each after a yes on your paired phone (see Connected apps). For everything else the helper hands you the words to send yourself.
 
 <p align="center">
   <img src="docs/screenshots/readme/draft.webp" alt="DEMO: Scout's refund email, with its recipient and subject separate from the message, marked 'Nothing is sent, send it yourself'" width="300" />
@@ -155,7 +155,7 @@ The same app works at desktop and phone width, and switches to night colours in 
 
 - **Your personal assistant.** One install is for you and your crew of helpers. Ask in your own words, read what comes back, and tap yes when a helper needs you. No technical knowledge needed to use it.
 - **Each helper's own computer (Linux).** A helper with the Computer tool gets its own virtual display and browser, never yours. Watch it live, take the wheel (the helper pauses until you hand it back), or show it how to do a task so it can keep the steps as a skill.
-- **Connected apps.** Connect your Notion, Canva, Google Drive, Calendar or Gmail. A helper that needs one asks with a Connect card in the chat. Reading happens straight away; changing or sending asks first. Google needs a one-time setup under Settings → Google setup on your computer ([docs/google-setup.md](docs/google-setup.md)).
+- **Connected apps.** Connect your Notion, Canva, Google Drive, Calendar or Gmail. A helper that needs one asks with a Connect card in the chat. Reading happens straight away; changing or sending asks first. Gmail sending is a separate connection, and each email it sends is its own card, approved on your paired phone. Google needs a one-time setup under Settings → Google setup on your computer ([docs/google-setup.md](docs/google-setup.md)).
 - **Picks up after a restart.** Stop the computer mid-job, start it again, and the job carries on in the same conversation. A question waiting on you is still there.
 - **Learns how you work.** After a long job the helper can keep what it learned as a skill. You can review or forget what it kept on its page, and Settings can switch this off. Background learning stays out of your chats.
 

@@ -16,6 +16,7 @@ export const APPS: Record<string, App> = {
   drive: { ...providers.drive, google: true },
   calendar: { ...providers.calendar, google: true, warns: true, tool: calendarTool },
   gmail: { ...providers.gmail, google: true, warns: true, tool: mailTool },
+  gmailsend: { ...providers.gmail, id: 'gmailsend', name: 'Gmail sending', scopes: ['openid', 'email', 'https://www.googleapis.com/auth/gmail.send'], google: true, warns: true },
   notion: { ...providers.notion }, canva: { ...providers.canva },
 };
 export type Connecting = { state: 'waiting' | 'done' | 'failed'; url?: string; error?: string; why?: 'declined' | 'unticked'; step?: number };
@@ -85,9 +86,7 @@ export class Connections {
     return a;
   }
   private handle(id: string) {
-    const a = this.app(id), client = a.google ? this.googleClient : undefined;
-    const key = JSON.stringify([a, client]);
-    const cached = this.handles.get(id);
+    const a = this.app(id), client = a.google ? this.googleClient : undefined, key = JSON.stringify([a, client]), cached = this.handles.get(id);
     if (cached?.key === key) return cached.connection;
     const connection = connect(a, { store: this.store, person: '1', redirectUri: this.redirect, client, clientName: 'Crewhouse', flowTimeoutMs: CONNECT_MS });
     this.handles.set(id, { key, connection });

@@ -65,9 +65,7 @@ export class StubRuntime implements AgentRuntime {
     this.specs.set(spec.key, spec);
     const said = spec.message;
     let result = '';
-    const last = said.split('\n').map((line) => line.trim()).filter((line) => line && !line.startsWith('[Crewhouse')).at(-1) ?? '';
-    const scripted = process.env.CREWHOUSE_STUB_GOLDEN ? GOLDEN[last.replace(/^The person says: /, '')] : undefined;
-    const seen = calls(said + (scripted ?? ''));
+    const last = said.split('\n').map((line) => line.trim()).filter((line) => line && !line.startsWith('[Crewhouse')).at(-1) ?? '', scripted = process.env.CREWHOUSE_STUB_GOLDEN ? GOLDEN[last.replace(/^The person says: /, '')] : undefined, seen = calls(said + (scripted ?? ''));
     if (spec.bot === 'chief' && /\[first words\]/.test(said)) on({ type: 'text', text: 'I’ll start by checking the next step.' });
     for (const { name, input } of seen) {
       on({ type: 'tool', name, phase: 'start' });

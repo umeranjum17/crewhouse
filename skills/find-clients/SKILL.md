@@ -59,9 +59,9 @@ One real-looking example row per sheet, so the person sees how to fill it in. Ne
 
 ## 6. One draft, and nothing sent
 
-- Write the finished email for the strongest fit in the best segment to `files/<short-slug>.md`, then `crew_draft` it — it goes on a card for them to send themselves or reject.
+- Write the finished email for the strongest fit in the best segment to `files/<short-slug>.md`, then `crew_draft` it — it goes on a card for them to approve or reject.
 - Its `to` is a verified lookup address when you have one, else a contact address you actually read on that company's own site. Never an invented one; if you have no address at all, say so and skip the draft.
-- Exactly one draft card per run. Never send it, never queue anything, never use a mail tool to send.
+- Exactly one draft card per run. Approving the card sends nothing; the person can send that one email later from their paired phone, after it shows the exact From, To, Subject and body. Never send it, never queue anything, never use a mail tool to send.
 
 ## 7. What you say back
 
@@ -69,7 +69,7 @@ Six short lines: the best segment and why, how many companies, how many emails (
 
 - End every run naming where you looked and what you skipped ("I checked X and Y; I didn't check Z").
 - If any paid lookup ran, close with `crew_outcome`: `worked: true` only when a lookup returned an address you verified, naming what you saw; otherwise say what the person should check.
-- **Sole-trader caution.** Where the likely prospects are one-person businesses (sole traders or small partnerships, common in the UK and EU), say plainly: these count as individuals under the email rules, so do not email them without their permission — ask first, and any future sending must skip them by default.
+- **Sole-trader caution.** Where the likely prospects are one-person businesses (sole traders or small partnerships, common in the UK and EU), say plainly: these count as individuals under the email rules, so do not email them without their permission — ask first. Crewhouse's send refuses sole traders and small partnerships outright.
 
 ## Never
 

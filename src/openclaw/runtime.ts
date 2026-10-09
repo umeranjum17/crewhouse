@@ -184,9 +184,7 @@ export class OpenClawRuntime implements AgentRuntime {
    *  a restore that cannot be verified throws and leaves the workspace untouched. The blob is written as raw bytes,
    *  so the restore is byte-for-byte: leading and trailing whitespace and the final newline all survive. */
   restoreLearned(name: string, hash?: string) {
-    const dir = this.workspaceOf();
-    const git = (argv: string[]) => execFileSync('git', ['-c', 'user.name=Crewhouse', '-c', 'user.email=crewhouse@localhost', ...argv], { cwd: dir, stdio: 'pipe' });
-    const at = (hash ?? git(['rev-parse', '--short', 'HEAD'])).toString().trim();
+    const dir = this.workspaceOf(), git = (argv: string[]) => execFileSync('git', ['-c', 'user.name=Crewhouse', '-c', 'user.email=crewhouse@localhost', ...argv], { cwd: dir, stdio: 'pipe' }), at = (hash ?? git(['rev-parse', '--short', 'HEAD'])).toString().trim();
     let body: Buffer;
     try { body = git(['show', `${at}:${name}/SKILL.md`]); }
     catch { throw new Error(`no learned-skill capture holds "${name}"; nothing was restored`); }
@@ -218,9 +216,7 @@ export class OpenClawRuntime implements AgentRuntime {
         const runs = await this.kit.call('cron.runs', { id: job.id }, { timeoutMs: 20_000 }).catch(() => undefined) as { entries?: { runId: string; status: string }[] } | undefined;
         if (runs?.entries?.some((e) => e.runId === kicked.runId && e.status === 'ok')) break;
       }
-      const curator = await this.kit.call('skills.curator.status', {}, { timeoutMs: 20_000 }).catch(() => undefined) as any;
-      const outcome = curator?.collectionReview ?? {};
-      const names = (v: any) => Array.isArray(v) ? v.map((x: any) => x?.name ?? x?.skill ?? x).filter(Boolean) : [];
+      const curator = await this.kit.call('skills.curator.status', {}, { timeoutMs: 20_000 }).catch(() => undefined) as any, outcome = curator?.collectionReview ?? {}, names = (v: any) => Array.isArray(v) ? v.map((x: any) => x?.name ?? x?.skill ?? x).filter(Boolean) : [];
       return { capture, kept: names(outcome.kept), written: names(outcome.written), dropped: names(outcome.dropped) };
     } finally { this.kit.disallowOnce(); }
   }
@@ -247,9 +243,7 @@ export class OpenClawRuntime implements AgentRuntime {
   }
   /** Search the public skill catalog the engine's own way; while the engine is still starting this answers empty. */
   async searchSkills(query: string) {
-    const r = await this.kit.call('skills.search', { query, limit: 10 }, { timeoutMs: 30_000 }).catch(() => undefined) as any;
-    const items = Array.isArray(r?.items) ? r.items : Array.isArray(r?.results) ? r.results : [];
-    const on = new Set(this.starterSkills().filter((s) => s.on).map((s) => s.slug));
+    const r = await this.kit.call('skills.search', { query, limit: 10 }, { timeoutMs: 30_000 }).catch(() => undefined) as any, items = Array.isArray(r?.items) ? r.items : Array.isArray(r?.results) ? r.results : [], on = new Set(this.starterSkills().filter((s) => s.on).map((s) => s.slug));
     return items.slice(0, 10).map((i: any) => ({ slug: String(i.slug ?? ''), owner: String(i.ownerHandle ?? i.owner ?? ''),
       summary: String(i.summary ?? i.description ?? ''), version: String(i.version ?? i.latestVersion ?? ''),
       reviewed: this.starterSkills().some((s) => s.slug === String(i.slug ?? '')),
