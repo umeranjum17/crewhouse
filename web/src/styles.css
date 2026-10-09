@@ -731,6 +731,7 @@ details.card[open] > summary { margin-bottom: 10px; }
 @keyframes caret { 50% { opacity: 0; } }
 @keyframes shimmer { to { background-position: -200% 0; } }
 @keyframes pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--pink) 45%, transparent); } 70%, 100% { box-shadow: 0 0 0 6px transparent; } }
+@keyframes spin { to { transform: rotate(360deg); } }
 .main > .page, .main > .home { animation: fade 200ms var(--ease) both; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
@@ -771,6 +772,7 @@ details.card[open] > summary { margin-bottom: 10px; }
 .live-todos li .tick { color: var(--mute); }
 .live-todos li.done .tick { color: var(--ok-ink); }
 .live-todos li.doing { color: var(--ink); }
+.live-todos li.doing .tick { width: 12px; height: 12px; margin: 4px 0 0; display: inline-block; box-sizing: border-box; border-radius: 50%; border: 2px solid color-mix(in srgb, currentColor 30%, transparent); border-top-color: currentColor; animation: spin 900ms linear infinite; }
 .live-line.working .live-todos li.doing .tick { color: var(--ok-ink); }
 .live-todos li.todo { color: var(--mute); }
 .live-detail summary { font: 500 13px/18px var(--ui); color: var(--mute); cursor: pointer; }

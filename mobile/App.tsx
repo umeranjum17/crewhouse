@@ -1545,7 +1545,7 @@ const LIVE_WORD: Record<A.LiveLine['state'], string> = { reading: 'On it', worki
  *  from crewd's own event times, and the job as a to-do list — done, doing, still to do — with the small
  *  tool calls behind the expand. At the end, one quiet line with how long it took. A job passed to a helper
  *  links to that helper's chat. The transcript's own look: every line named, no faces, no clocks beyond the step times. */
-const TICK: Record<A.LiveTodo['state'], string> = { done: '✓', doing: '◐', todo: '○' };
+const TICK: Record<A.LiveTodo['state'], string> = { done: '✓', doing: '', todo: '○' };
 function LiveLine({ ln, go }: { ln: A.LiveLine; go: Ctx['go'] }) {
   const t = useLook();
   const reduce = motion.useReduceMotion();
@@ -1569,7 +1569,8 @@ function LiveLine({ ln, go }: { ln: A.LiveLine; go: Ctx['go'] }) {
         <T tone="mute" style={s.time}>{A.took(Date.now() - ln.since)}</T>
       </View>
       {ln.todos.map((st) => <View key={`${st.at}-${st.text}`} style={[s.row, { gap: 6, alignItems: 'flex-start' }]}>
-        <T style={[s.small, { color: st.state === 'todo' ? t.ink2 : st.state === 'done' ? t.ok : t.ink }]}>{TICK[st.state]}</T>
+        {st.state === 'doing' ? <motion.Ring size={13} width={2} color={t.ink} reduce={reduce} />
+          : <T style={[s.small, { color: st.state === 'todo' ? t.ink2 : t.ok }]}>{TICK[st.state]}</T>}
         <T style={[s.small, { flex: 1, fontWeight: st === doing ? '600' : '400', color: st.state === 'todo' ? t.ink2 : t.ink }]}>{st.text}{st === doing && Date.now() - st.at > 20_000 ? ' · still on it' : ''}</T>
       </View>)}
       {!!ln.detail.length && <Pressable onPress={() => setOpenDetail((v) => !v)} accessibilityRole="button" hitSlop={8}>

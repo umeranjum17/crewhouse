@@ -30,6 +30,20 @@ export function useBeat(ms: number, reduce: boolean) {
   return reduce ? 0 : n;
 }
 
+/** A ring turning while work is in progress, so a "doing" row reads as active rather than a half-filled circle.
+ *  Reduce Motion holds it still: a bright gap in a quiet ring still says "in progress". */
+export function Ring({ size = 13, width = 2, color, reduce }: { size?: number; width?: number; color: string; reduce: boolean }) {
+  const [v] = useState(() => new Animated.Value(0));
+  useEffect(() => {
+    if (reduce) { v.setValue(0); return; }
+    const a = Animated.loop(Animated.timing(v, { toValue: 1, duration: 900, easing: Easing.linear, useNativeDriver: true }));
+    a.start();
+    return () => a.stop();
+  }, [reduce]);
+  return createElement(Animated.View, { style: { width: size, height: size, borderRadius: size / 2, borderWidth: width,
+    borderColor: color, borderTopColor: 'transparent', transform: [{ rotate: v.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] }) }] } });
+}
+
 /** Something new arrives by rising a few points into place (a chat line, Hello's parts in order, after `delay` ms).
  *  Reduce Motion: it is simply there. */
 export function Rise({ reduce, delay = 0, children }: { reduce: boolean; delay?: number; children: ReactNode }) {
