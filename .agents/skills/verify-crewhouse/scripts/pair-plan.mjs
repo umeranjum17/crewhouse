@@ -11,7 +11,8 @@ const WEB = /^WEB=(.*)$/m.exec(readFileSync(`${S}/env`, 'utf8'))[1];
 const cli = `LAB=${S} ${SK}/pair-lab.sh cli`;
 const put = (sel) => `(() => { const t = document.querySelector(${JSON.stringify(sel)}); const p = t.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
   Object.getOwnPropertyDescriptor(p, 'value').set.call(t, {{out}}); t.dispatchEvent(new Event('input', { bubbles: true })); return t.value.length; })()`;
-const mode = `(document.querySelector('.demo-tag') ? 'demo' : document.querySelector('main') ? 'real' : 'none')`;
+// The demo is always onboarded, so Chief's Hello (no shell, no .demo-tag) can only be the real crew's first run.
+const mode = `(document.querySelector('.demo-tag') ? 'demo' : document.querySelector('main') || document.querySelector('.hello') ? 'real' : 'none')`;
 const toTop = `(() => { scrollTo(0, 0); for (const e of document.querySelectorAll('*')) if (e.scrollHeight > e.clientHeight && /auto|scroll/.test(getComputedStyle(e).overflowY)) e.scrollTop = 0; return true; })()`;
 const sizes = [{ tag: 'phone', w: 390, h: 844, mobile: true }, { tag: 'desk', w: 1440, h: 900, mobile: false }];
 const steps = [
@@ -33,6 +34,9 @@ const steps = [
   { name: 'rec-hold', run: 'sleep 3; true' },
   { name: 'rec-approve', run: `${cli} phones approve "$(${cli} phones pending | tail -1 | sed 's/.*: //')"` },
   { name: 'rec-real', wait: `${mode.replace(/'/g, "'")} === 'real'`, timeout: 20000, eval: mode },
+  // The real crew is new, so it opens on Hello: give a name and take the first idea, which reaches Home and Settings.
+  { name: 'rec-name', run: 'echo Maya', eval: put('.name-ask input') },
+  { name: 'rec-onboard', click: '.hello .idea', settle: 4000 },
   { name: 'rec-hold2', run: 'sleep 3; true' },
   { name: 'rec-say', run: `echo 'I want to market my app'`, eval: put('.composer textarea') },
   { name: 'rec-send', click: '.composer .send', settle: 6000 },
