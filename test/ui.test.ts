@@ -12,7 +12,7 @@ import type { Kind } from '../web/src/art.ts';
 import { PROVIDERS } from '../src/accounts.ts';
 import { PROVIDERS as ROUTES } from '@byokit/accounts';
 import * as A from '../web/src/adapter.ts';
-import { readTyped } from '../mobile/src/typed.ts';
+import { readTyped } from '../web/src/typed.ts';
 import { askOf } from '../mobile/src/ask.ts';
 import { draftOf, keepDraft, sent } from '../web/src/draft.ts';
 import { chatTokens, safeLink } from '../web/src/chat-md.ts';

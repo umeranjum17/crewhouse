@@ -27,7 +27,6 @@ test('the public demo app pairs by a relay code or a direct code, opens on real 
   // A copy of the web tree, so the checkout's own dist stays as its last real build (as test/office.test.ts does).
   cpSync(join(repo, 'web'), join(root, 'web'), { recursive: true, filter: (s) => !/[/\\]dist([/\\]|$)/.test(s) });
   symlinkSync(join(repo, 'src'), join(root, 'src'), 'dir');
-  symlinkSync(join(repo, 'mobile'), join(root, 'mobile'), 'dir'); // web/src/link.ts reads the one code box's rules there
   const built = spawnSync(process.execPath, [join(repo, 'scripts', 'build-web.mjs'), join(root, 'web')], { encoding: 'utf8' });
   assert.equal(built.status, 0, built.stderr);
   const dist = join(root, 'web', 'dist');

@@ -2,7 +2,7 @@
 // web/src/api.ts calls through. Each call is one request, `METHOD /path`, answered like HTTP (src/link.ts).
 import { DeviceLink, LINK_WORDS, LinkError, hostId, pairWithCode, pairWithOffer, offerText, decodeOffer, secureDeviceStore, migrateGrant, unb64url, type DeviceGrant, type LinkStatus } from '@byokit/link';
 import { findHost } from '@byokit/relay/device';
-import { readTyped } from './typed.ts';
+import { readTyped } from '../../web/src/typed.ts';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { File, Paths } from 'expo-file-system';

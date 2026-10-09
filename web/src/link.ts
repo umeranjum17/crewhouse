@@ -3,7 +3,7 @@
 // (web/src/api.ts `setLink`); with no grant the public shell runs its demo. Loaded only on the public shell.
 import { DeviceLink, LinkError, browserDeviceStore, decodeOffer, offerText, pairWithCode, pairWithOffer, type DeviceGrant } from '@byokit/link';
 import { findHost } from '@byokit/relay/device';
-import { readTyped } from '../../mobile/src/typed.ts';
+import { readTyped } from './typed.ts';
 import { lineSignaling, setLink, type Json } from './api.ts';
 import { setBadge, turnOffNotifications } from './pwa.ts';
 
