@@ -23,10 +23,14 @@ export function remember() {
 
 /** A home-screen launch (start_url "/", nothing after the #) reopens the remembered place. Any hash at all — a
  *  normal link, a manifest shortcut, even a deliberate `#/` — names its own place and wins over the memory; a
- *  remembered place that no longer exists falls back to Home. */
+ *  deliberate in-app restart (pairing/unpairing) flags itself and also lands Home; a remembered place that no
+ *  longer exists falls back to Home. */
 export function resume() {
   if (location.pathname !== '/') return; // the /share target is not the app root
   if (location.hash !== '') return; // a bare start_url is the only launch that reopens the memory
+  let restart = false;
+  try { restart = sessionStorage.getItem('crewhouse.home') === '1'; if (restart) sessionStorage.removeItem('crewhouse.home'); } catch { /* no storage */ }
+  if (restart) return; // a deliberate restart (pairing/unpairing, web/src/link.ts) lands Home
   const s = store(); if (!s) return;
   const saved = s.getItem(key());
   if (saved && namesPlace(saved)) history.replaceState(null, '', `${location.pathname}${location.search}${saved}`);
