@@ -13,7 +13,8 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-const BUDGET = 6876;
+// ch-explee-send-path: owner-authorized +160 net src ceiling (raised 6876 -> 7026); paired ch-src-trim-s2 restores the budget after this slice.
+const BUDGET = 7026;
 
 test('src stays within its line budget', () => {
   const root = join(import.meta.dirname, '..', 'src');
