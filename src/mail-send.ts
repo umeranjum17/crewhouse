@@ -36,11 +36,11 @@ export class MailSend {
     if (!['corporate', 'sole-trader', 'small-partnership', 'unknown'].includes(body.kind) && typeof body.suppressed !== 'boolean') throw fail('Choose an organisation type or change the do-not-email list.', 400);
     if (body.kind !== undefined && (!['corporate', 'sole-trader', 'small-partnership', 'unknown'].includes(body.kind) || typeof body.name !== 'string' || !body.name.trim() || body.name.length > 160)) throw fail('Name the organisation you are marking.', 400);
     this.db.tx(() => {
-      if (body.kind !== undefined) { const v = { org: s.org, name: body.name.trim(), kind: body.kind, person: 1, phone, at }; this.save(`mail.org.${s.org}`, v); this.db.event('mail.attested', null, v); }
+      if (body.kind !== undefined) { const v = { org: s.org, name: body.name.trim(), kind: body.kind, person: 1, phone, at }; this.save(`mail.org.${s.org}`, v); this.db.event('mail.attested', null, { org: s.org, name: v.name, kind: body.kind, person: 1, at }); }
       if (typeof body.suppressed === 'boolean') {
         if (body.suppressed) this.save(`mail.stop.${s.to}`, { to: s.to, person: 1, phone, at });
         else this.db.run('DELETE FROM settings WHERE key = ?', `mail.stop.${s.to}`);
-        this.db.event('mail.suppression', null, { to: s.to, suppressed: body.suppressed, person: 1, phone, at });
+        this.db.event('mail.suppression', null, { to: s.to, suppressed: body.suppressed, person: 1, at });
       }
     });
     return this.status(s.to);
@@ -83,7 +83,7 @@ export class MailSend {
   async answer(ask: Row, answer: string, phone: string) {
     if (!['allow', 'deny'].includes(answer)) throw fail('Choose Send or Not now.', 400);
     const m = JSON.parse(ask.detail).send, to = address(m.to);
-    if (answer === 'deny') { this.db.run("UPDATE asks SET state='answered',answer='not now',answered_at=? WHERE id=? AND state='open'", Date.now(), ask.id); this.db.event('mail.declined', ask.bot, { ask: ask.id, phone }); if (this.db.get("SELECT 1 FROM asks WHERE id=? AND state='open'", m.draft)) this.receiptOf(m.draft, 'draft.rejected'); return; }
+    if (answer === 'deny') { this.db.run("UPDATE asks SET state='answered',answer='not now',answered_at=? WHERE id=? AND state='open'", Date.now(), ask.id); this.db.event('mail.declined', ask.bot, { ask: ask.id }); if (this.db.get("SELECT 1 FROM asks WHERE id=? AND state='open'", m.draft)) this.receiptOf(m.draft, 'draft.rejected'); return; }
     this.eligible(to);
     const { token, from } = await this.sender();
     if (from !== m.from) throw fail('Your Gmail account changed. Review a new email card before sending.');
@@ -94,12 +94,12 @@ export class MailSend {
       const drafted = this.db.run("UPDATE asks SET state='answered',answer='Gmail sending attempted',answered_at=? WHERE id=? AND state='open'", Date.now(), m.draft);
       if (!claimed.changes) throw fail('This message was already attempted. Check Gmail; it will not be sent again.');
       if (!drafted.changes) throw fail('This message was already answered on its draft. Nothing was sent.');
-      this.db.event('mail.approved', ask.bot, { ask: ask.id, person: 1, phone, from, to });
+      this.db.event('mail.approved', ask.bot, { ask: ask.id, person: 1, from, to });
     });
     const raw = Buffer.from(`From: ${from}\r\nTo: ${to}\r\nSubject: ${m.subject.match(/[\s\S]{1,10}/gu)!.map((s: string) => `=?UTF-8?B?${Buffer.from(s).toString('base64')}?=`).join('\r\n ')}\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n${Buffer.from(m.body).toString('base64').match(/.{1,76}/g)!.join('\r\n')}\r\n`).toString('base64url');
     try {
       const res = await fetch(`${GMAIL}/messages/send`, { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ raw }), redirect: 'error', signal: AbortSignal.timeout(20_000) });
-      if (!res.ok) throw Object.assign(fail(`Gmail said ${res.status}. Nothing was sent; the draft is open again for a new review.`), { refused: true });
+      if (!res.ok) { const refused = res.status < 500; throw Object.assign(fail(refused ? `Gmail said ${res.status}. Nothing was sent; the draft is open again for a new review.` : `Gmail said ${res.status}.`), { refused }); }
       const sent = await res.json() as Row;
       if (typeof sent.id !== 'string' || !sent.id) throw fail('Gmail did not confirm delivery.');
       this.db.run("UPDATE asks SET state='answered',answer='sent' WHERE id=?", ask.id); this.db.event('mail.sent', ask.bot, { ask: ask.id, id: sent.id, from, to }); this.receiptOf(m.draft, 'draft.approved');

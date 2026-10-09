@@ -31,6 +31,7 @@ const threads: Record<string, any> = {
 const asked: string[] = [];
 let identity = '';
 let sendOk = false;
+let sendRefusal = 404;
 const real = globalThis.fetch;
 globalThis.fetch = (async (url: any, init: any = {}) => {
   if (String(url) === 'https://openidconnect.googleapis.com/v1/userinfo' && identity) return real(identity, init);
@@ -43,7 +44,7 @@ globalThis.fetch = (async (url: any, init: any = {}) => {
   if (path === '/labels/INBOX') return json({ threadsUnread: 2 });
   if (path === '/threads') return json({ threads: u.searchParams.get('q') === 'from:school' ? [{ id: '18c0a1f00d2e3b4a' }] : [{ id: '18c0b2f00d2e3b4a' }, { id: '18c0a1f00d2e3b4a' }], resultSizeEstimate: u.searchParams.get('q') ? 1 : 2 });
   const t = threads[path.split('/threads/')[1]];
-  if (path === '/messages/send') return sendOk ? json({ id: 'sent-1' }) : json({}, 404);
+  if (path === '/messages/send') return sendOk ? json({ id: 'sent-1' }) : json({}, sendRefusal);
   return t ? json(t) : json({}, 404);
 }) as typeof fetch;
 after(() => { globalThis.fetch = real; });
@@ -135,6 +136,10 @@ test('Tracer email: real sandbox HTTP cannot approve; paired control attests onc
     await mark('sole-trader'); assert.match((await request('POST /api/mail/review', { draft: draft.id })).body.error, /count as individuals/);
     await mark('small-partnership'); assert.match((await request('POST /api/mail/review', { draft: draft.id })).body.error, /count as individuals/);
     const attested = await mark('corporate'); assert.equal(attested.body.eligibility.person, 1); assert.ok(attested.body.eligibility.at); assert.equal(attested.body.eligibility.phone, undefined, 'the paired phone’s device id stays server-side');
+    const phoneId = db.get("SELECT id FROM devices WHERE role='control'")!.id;
+    const mailEvents = [...(await http('GET', '/api/events')).body, ...(await http('GET', '/api/state')).body.events].filter((e: any) => String(e.kind).startsWith('mail.'));
+    assert.ok(mailEvents.some((e: any) => e.kind === 'mail.attested'), 'the attestation event is served');
+    assert.equal(JSON.stringify(mailEvents).includes(phoneId), false, 'no served mail event carries the device id');
     await request('PUT /api/mail', { to: 'ADA@FERNWOOD.EXAMPLE', suppressed: true });
     assert.match((await request('POST /api/mail/review', { draft: draft.id })).body.error, /do-not-email list/);
     await request('PUT /api/mail', { to: 'ada@fernwood.example', suppressed: false }); asked.length = 0;
@@ -292,6 +297,27 @@ test('a sent email and a declined card each leave the draft receipt Tracer reads
     await mail.answer(db.get('SELECT * FROM asks WHERE id=?', declined)!, 'deny', 'ctl');
     assert.deepEqual(receipts(), [['draft.approved', 'ada@fernwood.example', 'Sent one'], ['draft.rejected', 'ada@fernwood.example', 'Declined one']]);
   } finally { sendOk = false; identity = ''; await new Promise<void>(r => who.close(() => r())); done(); }
+});
+
+test('a Gmail server error is unknown, not a refusal: the draft stays locked and nothing is retried', async () => {
+  const { db, crew, done } = setup();
+  crew.onboard('Umer'); crew.recruit('tracer', 'Tracer', 'person');
+  db.run("INSERT INTO devices (id,name,pk,role,created_at) VALUES ('ctl','Control','pk-ctl','control',?)", Date.now());
+  const who = createServer((_q, r) => { r.writeHead(200, { 'content-type': 'application/json' }); r.end(JSON.stringify({ email: 'umer@sender.example', email_verified: true })); });
+  await new Promise<void>(r => who.listen(0, '127.0.0.1', r)); identity = `http://127.0.0.1:${(who.address() as any).port}`;
+  const mail = new MailSend(db, { token: async () => 'tok' } as any);
+  const posts = () => asked.filter((x) => x.startsWith('POST /messages/send')).length;
+  try {
+    mail.set('ada@fernwood.example', { kind: 'corporate', name: 'Fernwood' }, 'ctl');
+    const draft = sendDraft(db, 'ada@fernwood.example', 'Hi');
+    sendOk = false; sendRefusal = 503; asked.length = 0;
+    const card = (await mail.review(draft)).id;
+    await assert.rejects(mail.answer(db.get('SELECT * FROM asks WHERE id=?', card)!, 'allow', 'ctl'), (e: any) => /Could not confirm sending: Gmail said 503/.test(e.message));
+    assert.equal(db.get('SELECT state FROM asks WHERE id=?', card)!.state, 'uncertain', 'the card asks whether it went out');
+    assert.equal(db.get('SELECT state FROM asks WHERE id=?', draft)!.state, 'answered', 'the draft stays locked');
+    await assert.rejects(mail.review(draft), (e: any) => /already sent or attempted/.test(e.message));
+    assert.equal(posts(), 1, 'no automatic retry');
+  } finally { sendOk = false; sendRefusal = 404; identity = ''; await new Promise<void>(r => who.close(() => r())); done(); }
 });
 
 test('a definite Gmail refusal sends nothing, reopens the draft for a new review, and is not retried by itself', async () => {
