@@ -307,7 +307,7 @@ function ChiefHero({ live, state, signedOut, side, below }: { live: A.OfficeView
   return (
     <section className="chief-hero" aria-label="Chief">
       <div className="ch-row">
-        <span className="ch-art"><ChiefArt mood={chief.mood} hero disc /></span>
+        <span className="ch-art"><ChiefArt mood={chief.mood} hero mascot /></span>
         <h2 className="ch-name">Chief</h2>
         <p className={`ch-status${out || needs ? '' : resting ? ' rest' : ' work'}`}><i aria-hidden /><span>{out ? NEEDS_SIGNIN : needs ? 'Needs you' : resting ? 'Resting' : 'At work'}</span></p>
         {side}

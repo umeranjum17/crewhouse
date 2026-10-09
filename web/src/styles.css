@@ -1383,24 +1383,29 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
 [data-theme='night'] { --tint: color-mix(in srgb, var(--ink) 9%, var(--bg)); --tint2: color-mix(in srgb, var(--ink) 16%, var(--bg)); --knob: color-mix(in srgb, var(--ink) 20%, var(--bg)); }
 .day-time { display: none; }
 @media (max-width: 899px) {
-  /* Muse's header: the mascot on a 56px disc, centred, over a pill with the name and the one status; the gear a round
-     button at the right; then the Chief | Office switch as a borderless pill track at the column's width. */
-  .home-bar.is-chat { margin: 0 0 4px; }
-  .home-chat .chief-hero { display: flex; flex-direction: column; gap: 12px; margin: 0; padding: 4px 0 8px; border: 0; }
-  .home-chat .ch-row { position: relative; display: grid; grid-template-columns: 1fr auto 1fr; grid-template-rows: 46px auto auto; gap: 0; justify-items: center; align-self: stretch; }
-  .home-chat .ch-row::before { content: ''; grid-column: 2; grid-row: 2 / 4; justify-self: stretch; align-self: stretch; margin: 0 -18px; border-radius: 20px; background: var(--tint); }
-  /* The disc sits on a whole CSS pixel at any width (round), so the helmet's 1px cells stay sharp at 2x and 3x. */
-  .home-chat .ch-art { grid-column: 1 / -1; grid-row: 1; position: absolute; top: 0; left: calc(50% - 28px); left: round(50% - 28px, 1px); z-index: 1; width: 56px; height: 56px; margin: 0; border-radius: 50%; background: var(--tint2); box-shadow: 0 0 0 3px var(--bg); display: grid; place-items: center; }
-  .home-chat .ch-art { padding: 0; }
-  .home-chat .ch-art .helmet { display: block; width: 40px; height: 40px; }
-  .home-chat .ch-name { grid-column: 2; grid-row: 2; align-self: auto; margin: 0; padding: 14px 0 0; font: 600 17px/22px var(--ui); }
-  .home-chat .ch-status { grid-column: 2; grid-row: 3; align-self: auto; display: block; margin: 0; padding: 0 0 10px; font: 500 13px/18px var(--ui); color: var(--ink); white-space: nowrap; }
+  /* Muse's header, compact (Main1808): the mascot drawn smooth at the top centre, overlapping a one-line pill with the
+     name and the one status; the gear a round button on the mascot's line; then the Chief | Office switch as a
+     borderless pill track at the column's width. */
+  .page.chat-page.home-chat { padding-top: 8px; }
+  .home-bar.is-chat { margin: 0; }
+  .home-chat > .home-top { padding: 0; }
+  .home-chat .chief-hero { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; border: 0; }
+  /* No band under the switch: the thread's fade is 12px and its first day line sits at the top. */
+  .home-chat .lines, .page.chat-page.home-chat:has(> .chat) .lines { padding-top: 12px; mask-image: linear-gradient(transparent, #000 12px); }
+  .home-chat .lines > .day:first-child, .home-chat .lines > :first-child > .day:first-child { margin-top: 0; }
+  .home-chat .ch-row { position: relative; display: grid; grid-template-columns: 1fr auto auto 1fr; grid-template-rows: 40px auto; gap: 0; align-self: stretch; }
+  .home-chat .ch-row::before { content: ''; grid-column: 2 / 4; grid-row: 2; justify-self: stretch; align-self: stretch; margin: 0 -14px; border-radius: 19px; background: var(--tint); }
+  /* On a whole CSS pixel at any width (round), so its edges stay sharp at 2x and 3x. */
+  .home-chat .ch-art { grid-column: 1 / -1; grid-row: 1; position: absolute; top: 0; left: calc(50% - 26px); left: round(50% - 26px, 1px); z-index: 1; width: 52px; height: 48px; margin: 0; padding: 0; background: none; box-shadow: none; display: block; }
+  .home-chat .ch-art .helmet { display: block; width: 52px; height: 48px; }
+  .home-chat .ch-name { grid-column: 2; grid-row: 2; align-self: baseline; margin: 0; padding: 9px 4px 5px 0; font: 600 17px/22px var(--ui); }
+  .home-chat .ch-status { grid-column: 3; grid-row: 2; align-self: baseline; display: block; margin: 0; padding: 9px 0 5px 4px; font: 500 13px/22px var(--ui); color: var(--ink); white-space: nowrap; }
   .home-chat .ch-status > span { display: inline; }
   .home-chat .ch-status i { display: inline-block; width: 7px; height: 7px; margin: 0 6px 0 0; vertical-align: 1px; background: var(--ink); }
   .home-chat .ch-status.rest, .home-chat .ch-status.work { color: var(--ink2); }
-  .home-chat .ch-row > .icon-btn { grid-column: 3; grid-row: 1; justify-self: end; align-self: start; width: 44px; height: 44px; margin: 6px 0 0; border-radius: 50%; background: var(--tint); }
-  .home-chat .chief-hero > .home-mode { display: grid; grid-template-columns: 1fr 1fr; align-self: stretch; height: 40px; padding: 3px; gap: 0; border: 0; border-radius: 20px; background: var(--tint); box-shadow: none; }
-  .home-chat .chief-hero > .home-mode button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 34px; padding: 0; border: 0; border-radius: 17px; background: none; box-shadow: none; font: 500 13px/18px var(--ui); color: var(--mute); }
+  .home-chat .ch-row > .icon-btn { grid-column: 4; grid-row: 1; justify-self: end; align-self: start; width: 44px; height: 44px; margin: 2px 0 0; border-radius: 50%; background: var(--tint); }
+  .home-chat .chief-hero > .home-mode { display: grid; grid-template-columns: 1fr 1fr; align-self: stretch; height: 36px; padding: 3px; gap: 0; border: 0; border-radius: 18px; background: var(--tint); box-shadow: none; }
+  .home-chat .chief-hero > .home-mode button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 30px; padding: 0; border: 0; border-radius: 15px; background: none; box-shadow: none; font: 500 13px/18px var(--ui); color: var(--mute); }
   .home-chat .chief-hero > .home-mode button.on { background: var(--knob); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px #0000000d; }
   .home-chat .chief-hero > .home-mode .count { background: none; padding: 0; min-width: 0; font: inherit; color: var(--mute); }
   .day-time { display: inline; }
@@ -1445,7 +1450,8 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
   .chat .live-todos li.todo { color: var(--mute); }
   .chat .live-todos li .tick, .chat .live-line.working .live-todos li.doing .tick { display: block; box-sizing: border-box; width: 9px; height: 9px; margin: 0; border-radius: 50%; font-size: 0; color: inherit; }
   .chat .live-todos li.done .tick { border-radius: 0; background: var(--ink2); -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 9 9'%3E%3Cpath d='M1 4.8 3.4 7.2 8 1.8' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 9px 9px no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 9 9'%3E%3Cpath d='M1 4.8 3.4 7.2 8 1.8' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 9px 9px no-repeat; }
-  .chat .live-todos li.doing .tick, .chat .live-line.working .live-todos li.doing .tick { border: 1.75px solid var(--ink); border-left-color: transparent; }
+  /* A real spinner: a faint full track with an ink half turning on it (Main1808); still, it reads as a half-filled ring. */
+  .chat .live-todos li.doing .tick, .chat .live-line.working .live-todos li.doing .tick { border: 2px solid color-mix(in srgb, var(--ink) 22%, transparent); border-top-color: var(--ink); border-right-color: var(--ink); }
   .chat .live-todos li.todo .tick { border: 1.5px solid var(--mute); }
 
   /* The composer, Grok Bot's shapes: a round grey + on 16, a borderless grey pill with the mic inside, a round ink
