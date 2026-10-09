@@ -1083,7 +1083,7 @@ function NotifyLine({ relay, norelay }: { relay: boolean | 'offline' | 'unreacha
     <p className="mute small">Notifications: {on ? 'On' : 'Off'} · <button className={`link inline notify-${on ? 'off' : 'on'}`} onClick={() => attempt(async () => {
       if (on) { await turnOffNotifications(); toast('Notifications are off on this device.'); }
       else {
-        const r = await turnOnNotifications(relay === true);
+        const r = await turnOnNotifications(true);
         if (r === 'on') toast('This device shows Crewhouse news.');
         else if (r === 'off') toast('Notifications were not allowed.');
         else if (r === 'offline') toast("Your mailbox isn't connected right now. Try again in a moment.");

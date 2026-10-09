@@ -37,7 +37,7 @@ export async function turnOnNotifications(relay: boolean): Promise<'on' | 'off' 
   if (!ready || !vapid) return 'offline';
   const reg = await worker();
   const old = await reg.pushManager.getSubscription();
-  if (old) { await old.unsubscribe(); await api.push({ off: true, web: old.toJSON() }); }
+  if (old) { await old.unsubscribe(); await api.push({ off: true, web: old.toJSON() }).catch(() => {}); }
   const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(vapid) });
   await api.push({ web: sub.toJSON() });
   return 'on';
@@ -49,7 +49,7 @@ export async function turnOffNotifications() {
   const sub = await (await worker()).pushManager.getSubscription();
   if (!sub) return;
   await sub.unsubscribe();
-  await api.push({ off: true, web: sub.toJSON() });
+  await api.push({ off: true, web: sub.toJSON() }).catch(() => {});
 }
 
 /** What this browser's own notifications are doing right now, for Settings' one-line switch: `denied` is the

@@ -5,10 +5,10 @@ import { api } from '../web/src/api.ts';
 import { turnOffNotifications, turnOnNotifications } from '../web/src/pwa.ts';
 
 /** Stands in for the browser: the permission prompt, the worker's `ready`, and its push subscription, all logged. */
-function browser(log: string[], ready: () => Promise<unknown>) {
+function browser(log: string[], ready: () => Promise<unknown>, sub: any = null) {
   const reg = {
     pushManager: {
-      getSubscription: async () => { log.push('get'); return null; },
+      getSubscription: async () => { log.push('get'); return sub; },
       subscribe: async () => { log.push('subscribe'); return { toJSON: () => ({ endpoint: 'https://push.example/1' }) }; },
     },
   };
@@ -31,6 +31,18 @@ test('turning notifications on asks for permission before anything else waits, i
     assert.equal(await on, 'on');
     assert.deepEqual(log, ['prompt', 'key', 'ready', 'get', 'subscribe', 'push:on']);
   } finally { restore(); Object.assign(api, { pushKey, push }); }
+});
+
+test('turning off ends off even when the mailbox cannot be told: the local subscription is already gone', async () => {
+  const log: string[] = [];
+  const { push } = api;
+  api.push = async (body: any) => { log.push(body.off ? 'push:off' : 'push:on'); throw new Error('the computer is off'); };
+  const sub = { unsubscribe: async () => { log.push('unsubscribe'); return true; }, toJSON: () => ({ endpoint: 'https://push.example/1' }) };
+  const restore = browser(log, () => Promise.resolve(), sub);
+  try {
+    await assert.doesNotReject(turnOffNotifications());
+    assert.deepEqual(log.filter((l) => l === 'unsubscribe' || l.startsWith('push')), ['unsubscribe', 'push:off']);
+  } finally { restore(); Object.assign(api, { push }); }
 });
 
 test('no relay means no prompt at all, decided from the page state', async () => {
