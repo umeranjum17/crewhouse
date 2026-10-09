@@ -122,6 +122,10 @@ test('the public demo app pairs by a relay code or a direct code, opens on real 
   await run(`location.hash = '#/settings'`);
   await until('the paired row', () => run(`[...document.querySelectorAll('.card')].some((c) => /Paired with your computer/.test(c.textContent))`));
   assert.equal(await run(`!!document.getElementById('setup-phones')`), false, 'phones stay the computer’s to manage');
+  // Notifications are first-class paired: the state line and its one action sit on the paired card, its key asked
+  // over the link (`POST /api/push {key}`, never /api/phones/link).
+  await until('the notifications line', () => run(`/Notifications: (On|Off)/.test(document.body.innerText)`));
+  assert.match(await run(`document.body.innerText`), /Notifications: Off · Turn on/);
   await run(`(() => { window.confirm = () => true; [...document.querySelectorAll('button')].find((b) => b.textContent === 'Unpair').click(); })()`);
   await until('back to the demo', async () => (await mode()) === 'demo', 20_000);
   assert.equal(await devices(), 0, 'the computer forgot this browser');
@@ -129,6 +133,14 @@ test('the public demo app pairs by a relay code or a direct code, opens on real 
   // At home: the long direct code, as the first line `./crewhouse phones code` prints.
   await pair((await http('POST', '/api/phones/pair', { role: 'control' })).typed);
   assert.equal(await devices(), 1);
+  // A computer with no mailbox: the paired app (direct-paired, so still connected) says so in plain words,
+  // never a broken toggle. The switch itself stays off — nothing to tap that cannot work.
+  await http('PUT', '/api/phones/relay', { url: '' });
+  await send('Page.navigate', { url: shell });
+  await until('paired after the mailbox went', async () => (await mode()) === 'real', 30_000);
+  await run(`location.hash = '#/settings'`);
+  await until('the plain no-mailbox words', () => run(`/no mailbox for notifications yet/.test(document.body.innerText)`));
+  assert.equal(await run(`[...document.querySelectorAll('.notify-on,.notify-off')].length`), 0, 'nothing to tap that cannot work');
 });
 
 test('a well-formed code whose relay cannot be reached says so in plain words and pairs nothing', async () => {

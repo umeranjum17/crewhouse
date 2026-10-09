@@ -16,7 +16,7 @@ import { readTyped } from '../web/src/typed.ts';
 import { askOf } from '../mobile/src/ask.ts';
 import { draftOf, keepDraft, sent } from '../web/src/draft.ts';
 import { chatTokens, safeLink } from '../web/src/chat-md.ts';
-import { api, setTransport } from '../web/src/api.ts';
+import { api, setLink, setTransport } from '../web/src/api.ts';
 import { color } from '../web/src/tokens.ts';
 import { cycle } from '../web/src/dialog.ts';
 
@@ -2015,4 +2015,17 @@ test("Chief's hero shows his last real sentence; the sign-in card offers every p
     assert.match(card, /Sign in with Claude/, 'the kit list carries Claude too');
     assert.doesNotMatch(card, /under Settings/, 'no other account hides under Settings');
   } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('the paired installed app keeps notifications: its key and address go over the link', async () => {
+  // Last in the file on purpose: setLink below stays set for the process, and nothing follows.
+  const calls: string[] = [];
+  setTransport((method, path) => { calls.push(`${method} ${path}`); return Promise.resolve({ vapid: 'BFx-key', relayStatus: 'online' }); });
+  assert.deepEqual(await api.pushKey(), { vapid: 'BFx-key', ready: true }, 'on the computer itself, the key comes from the Phones screen\'s own call');
+  setLink({ name: 'your computer', call: (method, path) => { calls.push(`${method} ${path}`); return Promise.resolve({ ok: true, vapid: 'BFx-key', online: true }); },
+    subscribe: () => () => {}, desktop: (() => ({})) as any, unpair: async () => {} });
+  assert.deepEqual(await api.pushKey(), { vapid: 'BFx-key', ready: true });
+  assert.deepEqual(calls, ['GET /api/phones/link', 'POST /api/push'], 'paired, only the one op crewd answers for the calling device');
+  await api.push({ web: { endpoint: 'https://fcm.example/ipad', keys: {} } });
+  assert.deepEqual(calls.at(-1), 'POST /api/push', 'the address goes back the same way');
 });

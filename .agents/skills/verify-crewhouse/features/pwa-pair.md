@@ -15,6 +15,11 @@ clears the icon badge and goes back to the demo.
 - A relay code and a direct code both pair. The page's two words equal crewd's `phones pending`.
 - Once paired, the app shows crewd's own state. A change (a message to Chief, the first-run name) lands in crewd over
   the link. Settings reads "Paired with <computer name>" and hides Phones, which stay the computer's to manage.
+- Paired notifications are first-class: the paired card in Settings carries the notifications on/off switch, the
+  mailbox's public Web Push key is asked over the link (`POST /api/push {key}`, never `/api/phones/link`, which crewd
+  refuses), `{off: true, web}` removes the calling device's own address at the mailbox, a computer with no mailbox is
+  said in plain words with no dead toggle, and no Getting-set-up item whose call the link refuses is left — Home's
+  setup nudge waits for the computer too.
 - Unpair: crewd's device list drops the browser, and the app shows the demo again with no reinstall.
 - The link's trust rules hold: crewd still refuses admin writes over the link (`src/link.ts`).
 
@@ -37,6 +42,14 @@ $S/pair-lab.sh down
 `pair-lab.sh cli phones code | pending | approve <words>` is the computer's own CLI against the lab. `phones code`
 prints the direct code, then "Away from this computer, paste this one instead:" and the relay code.
 
+A real paired delivery needs a browser whose push service the kit's relay allows: **google-chrome-stable** subscribes
+at `fcm.googleapis.com`; the distro `chromium` hands out the staging endpoint `jmt17.google.com`, which the relay's
+push-host allowlist refuses ("bad subscription") — a lab-only artifact, since production browsers use the allowed
+hosts. Drive it from the paired, installed app: `Browser.grantPermissions ['notifications']` (pwa-shell's `grant`
+step), click `.notify-on`, confirm the subscription endpoint at `pushManager.getSubscription()` and the record under
+the device's grant id in `<lab>/relay/relay.json`, then post a message to Chief through crewd's own API and read
+`getNotifications()` for "Crewhouse has news". Toggle off (`.notify-off`), send again, and confirm nothing arrives.
+
 ## Read it
 
 `run.json` lists every step. Expect no `error`, `standalone: true`, `rec-real` and `paired` as `real`, `rec-back` as
@@ -49,4 +62,5 @@ The recording is `motion/demo-pair-real-unpair.webm`.
 - A direct code dials the computer's own addresses (plain `ws://` on the LAN). Chromium allows that from an https page
   with a warning. Safari and Firefox may block it, so off the computer's network the relay code is the way in.
   The lab proves the direct path from a `*.localhost` origin only.
-- Web push in paired mode is not wired: `api.pushKey` reads `/api/phones/link`, which crewd refuses over the link.
+- A relay-code pairing bakes only the relay address into the grant, so with the relay off that app is stranded
+  offline until it unpairs; a direct-code grant carries every address (link kit behaviour, not Crewhouse's).
