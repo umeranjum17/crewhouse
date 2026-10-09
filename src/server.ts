@@ -14,6 +14,7 @@ import { coversOf, toolWords } from './policy.ts';
 import { describe, firstRun, nextRun, parseSchedule, reminderAt } from './routines.ts';
 import { Link } from './link.ts';
 import { lesson, Teacher } from './teach.ts';
+import { MailSend } from './mail-send.ts';
 
 const resultPage = (title: string, words: string, close = false) => '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width">' +
   `<title>${title.replace(/[<&]/g, '')}</title><body style="font:18px system-ui;margin:3em auto;max-width:26em;padding:0 1em;text-align:center;color:#2e2a40">${words.replace(/[<&]/g, '')}` +
@@ -71,6 +72,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
   if (!/^[a-f0-9]{64}$/.test(authority)) throw new Error('invalid person authority');
   const installing = new Set<string>();
   const teacher = new Teacher();
+  const mail = new MailSend(db, crew.connections);
   /** "Done showing": the wheel goes back, and the bot gets the steps (and a few page pictures) to keep as a skill. */
   const shown = async (bot: string, keep: boolean) => {
     const s = teacher.stop(bot);
@@ -109,7 +111,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
   if (packaged || process.env.CREWHOUSE_RELEASES) { void checkUpdate(); setInterval(checkUpdate, 86_400_000).unref(); }
   const localHost = (h = '') => /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/.test(h);
   // Every paired phone uses the person's crew.
-  const link: Link = new Link(cfg, db, (m, path, body, key) => { const u = new URL(path, 'http://x'); return api(m, u.pathname, u.searchParams, body, key); });
+  const link: Link = new Link(cfg, db, (m, path, body, key, phone) => { const u = new URL(path, 'http://x'); return api(m, u.pathname, u.searchParams, body, key, phone); });
   crew.phoneLink = link;
   link.desk = { signal: (bot, w, method, params, canControl) => crew.desktopSignal(bot, w, method, params, canControl), release: (w) => crew.desktops.release(w) };
   link.quiet = () => quietNow(crew.person().quiet);
@@ -178,7 +180,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
   });
 
   /** The app API, shared by the web app (HTTP) and paired phones (the link). Every screen uses the person’s crew. */
-  async function api(m: string, p: string, q: URLSearchParams, body: any, key?: string) {
+  async function api(m: string, p: string, q: URLSearchParams, body: any, key?: string, phone?: string) {
     let r: RegExpMatchArray | null;
     // What is installing now, and a newer Crewhouse to download.
     if (m === 'GET' && p === '/api/state') return { ...crew.snapshot(), zone: Intl.DateTimeFormat().resolvedOptions().timeZone, installing: [...installing], showing: teacher.showing(), ...(update ? { update } : {}) };
@@ -241,6 +243,13 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     if (m === 'GET' && p === '/api/connections') return crew.connections.list();
     // Herdr's own row on the Apps screen: missing, installed, or answering (probed when the screen opens).
     if (m === 'GET' && p === '/api/herdr') return herdrStatus(cfg);
+    if (p === '/api/mail' || p === '/api/mail/review') {
+      if (m === 'GET' && p === '/api/mail') return mail.status(q.get('to'));
+      if (!phone) throw Object.assign(new Error('Use your paired phone to mark organisations or approve Gmail sending.'), { status: 403 });
+      if (m === 'PUT' && p === '/api/mail') return mail.set(body.to, body, phone);
+      if (m === 'POST' && p === '/api/mail/review') return mail.review(Number(body.draft));
+      throw Object.assign(new Error('No such email action.'), { status: 404 });
+    }
     // The "How I did it" drawer: one plain row per tool call of a task, recorded by crewd, redacted to words.
     if ((r = p.match(/^\/api\/task\/(\d+)\/trail$/)) && m === 'GET') {
       const id = Number(r[1]);
@@ -415,7 +424,17 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     if ((r = p.match(/^\/api\/routines\/(\d+)$/)) && m === 'DELETE') { crew.deleteRoutine(Number(r[1])); return { ok: true }; }
     // A run reports from crewd's own record (Crew.runRoutine), not from this call returning.
     if ((r = p.match(/^\/api\/routines\/(\d+)\/run$/)) && m === 'POST') { await crew.runRoutine(Number(r[1])); return { ok: true }; }
-    if ((r = p.match(/^\/api\/asks\/(\d+)\/answer$/)) && m === 'POST') { await crew.answer(Number(r[1]), body, key); return { ok: true }; }
+    if ((r = p.match(/^\/api\/asks\/(\d+)\/answer$/)) && m === 'POST') {
+      const id = Number(r[1]);
+      const ask = db.get("SELECT * FROM asks WHERE id=? AND (state='open' OR (kind='mail' AND state='uncertain'))", id), d = JSON.parse(ask?.detail ?? '{}');
+      const dismissing = ask?.kind === 'mail' && ask.state === 'uncertain' && body.answer === 'dismiss';
+      // The uncertain card's own acknowledgement may be cleared from either device; a send or a Tracer draft allow needs the paired phone.
+      if (!dismissing && body.answer !== 'deny' && (ask?.kind === 'mail' || (ask && ask.state === 'open' && db.get("SELECT 1 FROM bots WHERE id=? AND template='tracer'", ask.bot) && d.draft?.channel === 'email' && body.answer === 'allow')) && !phone) throw Object.assign(new Error('Approve this email on your paired phone. Nothing was sent.'), { status: 403 });
+      if (dismissing) mail.dismiss(ask!);
+      else if (ask?.kind === 'mail') { if (ask.state !== 'open') throw Object.assign(new Error('This email was already decided.'), { status: 409 }); if (body.scope && body.scope !== 'once' || body.text !== undefined) throw Object.assign(new Error('Each email needs its own unchanged, one-time approval.'), { status: 400 }); await mail.answer(ask, body.answer, phone!); }
+      else await crew.answer(id, body, key);
+      return { ok: true };
+    }
     throw Object.assign(new Error('not found'), { status: 404 });
   }
 

@@ -92,7 +92,7 @@ const clean = (s: unknown, n: number) => String(s ?? '').replace(/\s+/g, ' ').tr
  *  so eight parallel items don't each pay for the whole conversation. */
 const BATCH_SYSTEM = 'You research one item on the web and report back briefly. Read the web; never sign in, post, buy or submit forms. Every claim that matters gets its source.';
 const fail = (message: string, status = 400) => Object.assign(new Error(message), { status });
-const receipt = (d: Row, p?: Row) => ({ channel: d.channel, to: d.to, subject: d.subject, why: d.why, body: short(String(p?.body ?? '').replace(/\s+/g, ' '), 400), edited: d.edited === true, sha: d.sha, path: d.path }); // a receipt: what was answered and where it went, in the words on the card
+export const receipt = (d: Row, p?: Row) => ({ channel: d.channel, to: d.to, subject: d.subject, why: d.why, body: short(String(p?.body ?? '').replace(/\s+/g, ' '), 400), edited: d.edited === true, sha: d.sha, path: d.path }); // a receipt: what was answered and where it went, in the words on the card
 /** Person's words, trimmed to `n`: every name and address goes through here, or the card has nothing to show. */
 const needText = (v: unknown, n: number, msg: string) => { const s = clean(v, n); if (!s) throw fail(msg); return s; }
 /** A URL is context for a job, never its name. */
@@ -259,8 +259,8 @@ export class Crew {
       if (!this.db.get('SELECT 1 FROM people WHERE id = 1')) this.db.run('INSERT INTO people (id, name, created_at) VALUES (1, ?, ?)', 'Owner', Date.now());
       if (!this.bot(CHIEF)) this.addBot(disk.loadTemplate(this.cfg, 'chief'), 'Chief', CHIEF, 'system');
       // Questions whose task is over have no one left to answer them.
-      // A suggestion (a skill to keep, a new personality) belongs to no running task, so it waits for its answer across restarts.
-      this.db.run("UPDATE asks SET state = 'withdrawn' WHERE state = 'open' AND kind != 'propose' AND (task_id IS NULL OR task_id NOT IN (SELECT id FROM tasks WHERE state IN ('working', 'needs_you')))");
+      // A suggestion (a skill to keep, a new personality) or an email waiting for its send belongs to no running task, so it waits for its answer across restarts.
+      this.db.run("UPDATE asks SET state = 'withdrawn' WHERE state = 'open' AND kind NOT IN ('propose', 'mail') AND (task_id IS NULL OR task_id NOT IN (SELECT id FROM tasks WHERE state IN ('working', 'needs_you')))");
       this.db.run("UPDATE bots SET state = 'off'");
       this.db.event('system.started', null, {});
       // Chats were unread-less before: an existing install starts with everything already seen.
@@ -464,6 +464,7 @@ export class Crew {
     const d = JSON.parse(detail || '{}');
     const covers = d.key ? coversOf(d.key) : null;
     if (a.kind === 'connect') return { ...a, detail: { app: d.app, words: d.words } };
+    if (a.kind === 'mail') return { ...a, detail: { effect: 'send', send: { from: d.send.from, to: d.send.to, subject: d.send.subject }, preview: d.preview } };
     if (a.kind === 'propose') return { ...a, detail: { words: a.title, preview: d.preview, ...(d.create ? { yes: d.create.bot ? `Yes, ${d.create.name} can take it on` : `Yes, take ${d.create.name} on`, hire: d.create.name, ...(d.create.bot ? { adapt: true } : {}) } : d.draft ? { yes: 'Approve' } : {}), ...(d.draft ? { draft: d.draft } : {}), ...(d.pass ? { pass: { root: d.pass.root, files: d.pass.files.map((f: string) => basename(f)) } } : {}), ...(d.routine ? { routine: d.routine } : {}), ...(d.plan ? { plan: { bot: d.plan.bot, steps: d.plan.steps } } : {}) } };
     return { ...a, detail: { effect: d.effect, words: a.title, spends: d.effect === 'spend', covers, ...(covers ? { always: covers } : {}), ...(d.preview ? { preview: d.preview } : {}), ...(d.press ? { press: true } : {}), ...(d.fill ? { fill: true } : {}),
       ...(d.checkout ? { order: { shown: d.checkout.shown ?? '', known: Number.isFinite(d.checkout.total), dollars: d.checkout.currency === '$' } } : {}) } };
@@ -493,7 +494,7 @@ export class Crew {
       tasks: this.db.all('SELECT * FROM tasks WHERE bot != ? ORDER BY id DESC LIMIT 50', CHIEF).map((t) => ({ ...this.task(t), files: t.state === 'done' ? files(t.id) : [] })),
       ideas: this.ideas(),
       room: (() => { const r = this.room(); return { last: r.lines.at(-1) ?? null, busy: r.busy }; })(),
-      asks: this.db.all("SELECT * FROM asks WHERE state = 'open' ORDER BY id").map((a) => this.askView(a)),
+      asks: this.db.all("SELECT * FROM asks WHERE state = 'open' OR (kind = 'mail' AND state = 'uncertain') ORDER BY id").map((a) => this.askView(a)),
       events: this.db.events(0, 80),
       /** The person's AI accounts that are resting now, and until when (docs/ui-contract.md). */
       resting: Object.fromEntries(Object.keys(PROVIDERS).map((k) => [k, this.restingUntil(k)]).filter(([, t]) => t)),
@@ -2550,7 +2551,7 @@ export class Crew {
     this.close(id);
     this.db.tx(() => {
       for (const t of this.db.all("SELECT * FROM tasks WHERE bot = ? AND state IN ('working', 'needs_you')", id)) this.setTask(t, 'failed', why);
-      this.db.run("UPDATE asks SET state = 'withdrawn' WHERE bot = ? AND state = 'open'", id);
+      this.db.run("UPDATE asks SET state = 'withdrawn' WHERE bot = ? AND state = 'open' AND kind != 'mail'", id);
       this.db.run("UPDATE bots SET state = 'off' WHERE id = ?", id);
     });
   }

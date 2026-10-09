@@ -35,6 +35,7 @@ export type Card = {
   /** A draft's own words, unscrubbed: the person may change them before Approve, and their version is what is kept. */
   draftText?: string;
   campaign?: { ready: boolean; poster?: FileView };
+  mailTo?: string; mailSend?: boolean; mailFrom?: string; mailUncertain?: boolean;
 };
 /** The small line above an ask's title: what kind of yes it wants, so the title itself can stay plain. */
 export const askTag = (c: Card) => ({ spend: 'Wants to spend money', question: 'Has a question', routine: 'A routine to start', plan: 'A plan to start', connect: 'Wants an app' } as Record<string, string>)[c.kind] ?? 'Needs your OK';
@@ -421,7 +422,7 @@ export const update = (state: Json) => (state.update ? { words: `A new Crewhouse
 export const GOOGLE_STEPS = [
   { title: 'Make space for Crewhouse', url: 'https://console.cloud.google.com/projectcreate', says: 'Name it “Crewhouse (personal)” and press Create. No billing needed.' },
   { title: 'Switch on Calendar, Gmail and Drive', url: 'https://console.cloud.google.com/apis/library', says: 'Search “Google Calendar” and press Enable. Do the same for “Gmail” and “Google Drive”.' },
-  { title: 'Describe the app', url: 'https://console.cloud.google.com/auth/overview', says: 'Pick External, call it “Crewhouse”, give your email. Under Data access add calendar.events, gmail.readonly and drive.file. Under Audience press Publish app, so it says “In production”.' },
+  { title: 'Describe the app', url: 'https://console.cloud.google.com/auth/overview', says: 'Pick External, call it “Crewhouse”, give your email. Under Data access add calendar.events, gmail.readonly and drive.file; for sending also add gmail.send, openid and email. Under Audience press Publish app, so it says “In production”.' },
   { title: 'Make the sign-in', url: 'https://console.cloud.google.com/apis/credentials', says: 'Create credentials → OAuth client ID → type “Desktop app”. Paste the Client ID and Client secret below.' },
 ];
 
@@ -673,6 +674,8 @@ export function card(a: Json, state: Json): Card {
   if (a.kind === 'propose' && d.pass) return { ...base, kind: 'ok', status: 'Wants to hand work on', head: `${name} wants to hand work on`, words: plain(d.words ?? a.title),
     lines: (d.pass.files ?? []).map((f: string) => `With “${pretty(f)}”`),
     choices: [{ label: 'Hand it on', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
+  if (a.kind === 'mail') { const unsure = a.state === 'uncertain';
+    return { ...base, kind: 'ok', status: unsure ? 'Check Gmail before doing anything else' : 'Nothing sent · approve on your paired phone', head: unsure ? 'Did this email go out?' : 'Send this one email?', words: unsure ? 'Sending was not confirmed. Check your Gmail Sent folder; this email will not be sent again.' : 'Check the sender, recipient and every word. Send approves this message only.', evidence: 'draft', mailSend: true, mailUncertain: unsure, mailFrom: d.send.from, draftTo: d.send.to, draftSubject: d.send.subject, preview: d.preview, choices: unsure ? [{ label: 'OK, got it', body: { answer: 'dismiss' } }] : [{ label: 'Send', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] }; }
   if (a.kind === 'propose' && d.draft) {
     // A card written before the channel was recorded still has to say a real noun: nothing here ever shows undefined.
     const channel = plain(String(d.draft.channel ?? '')).trim() || 'draft';
@@ -694,7 +697,7 @@ export function card(a: Json, state: Json): Card {
     const [first, ...rest] = body.split('\n');
     if (subject && /^subject:/i.test(first) && first.replace(/^subject:\s*/i, '').trim().toLowerCase() === subject.toLowerCase()) body = rest.join('\n').trim();
     return { ...base, kind: 'ok', status: `Nothing is sent · ${channel === 'post' ? 'post' : 'send'} it yourself`, evidence: 'draft',
-      draftTo: plain(d.draft.to), draftSubject: plain(d.draft.subject) || undefined, draftLink: d.draft.link ? plain(d.draft.link) : undefined, draftText: body, draftWhy: plain(d.draft.why) || undefined, head, words: head, preview: { body },
+      ...(state.bots?.some((b: Json) => b.id === a.bot && b.template === 'tracer') && channel === 'email' ? { mailTo: String(d.draft.to) } : {}), draftTo: plain(d.draft.to), draftSubject: plain(d.draft.subject) || undefined, draftLink: d.draft.link ? plain(d.draft.link) : undefined, draftText: body, draftWhy: plain(d.draft.why) || undefined, head, words: head, preview: { body },
       choices: [{ label: d.draft.link ? 'Copy and open' : 'Copy', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Reject', body: { answer: 'deny' } }] };
   }
   // Chief's hire in a glance: who, the role, what it can do and the first job; nothing changes until the yes.
@@ -1453,12 +1456,14 @@ export function planName(accounts: Json[] | null) {
 }
 
 /** Whose sign-in page an app opens: "Google" for Gmail, Calendar and Drive. */
-export const signsInWith = (app: App) => ({ gmail: 'Google', calendar: 'Google', drive: 'Google' } as Record<string, string>)[app.id] ?? app.name;
+export const signsInWith = (app: App) => ({ gmail: 'Google', gmailsend: 'Google', calendar: 'Google', drive: 'Google' } as Record<string, string>)[app.id] ?? app.name;
 export const appById = (state: Json, id: string) => apps(state).find((a) => a.id === id);
 /** Google's apps wait for the owner to switch Google on for your crew (once, in Settings). */
 export const needsHouse = (state: Json, app: App) => signsInWith(app) === 'Google' && state.house?.google === false;
 
-// v1: Drive, Calendar and Gmail on the person's own Google app, then Notion and Canva. Sharing from the phone needs no
+/** Person-attested eligibility; internal device ids never reach a screen. */
+export const mailWords = (s: Json) => ({ org: String(s.org), name: String(s.eligibility?.name ?? ''), kind: String(s.eligibility?.kind ?? 'unknown'), stopped: s.suppressed === true, note: s.suppressed ? 'On your do-not-email list.' : s.eligibility?.kind === 'corporate' ? 'You marked this organisation corporate-eligible.' : 'Unknown organisations, sole traders and small partnerships cannot be emailed.' });
+// v1: Drive, Calendar, Gmail and Gmail sending on the person's own Google app, then Notion and Canva. Sharing from the phone needs no
 // connection at all. Calendar and Gmail show Google's "unverified app" screen, so their card warns first.
 // Each row carries that product's own logo (`logo`, an asset under web/marks/; see NOTICE for the source of each file),
 // drawn on the screen's neutral tile (styles.css `.app-ic`), never a home-made letter or glyph.
@@ -1466,6 +1471,7 @@ const APPS: App[] = [
   { id: 'drive', name: 'Google Drive', logo: '/marks/drive.png', on: false, does: 'Helpers can save copies of what they make, and open files you pick.' },
   { id: 'calendar', name: 'Google Calendar', logo: '/marks/calendar.png', on: false, warns: true, does: 'Helpers can see your week and add things. You can undo any change.' },
   { id: 'gmail', name: 'Gmail', logo: '/marks/gmail.png', on: false, warns: true, does: 'Helpers can read your email to find things. They never send from it.' },
+  { id: 'gmailsend', name: 'Gmail sending', logo: '/marks/gmail.png', on: false, warns: true, does: 'Send one email from your own Gmail after you approve it on your paired phone.' },
   { id: 'notion', name: 'Notion', logo: '/marks/notion.png', on: false, does: 'Helpers can read and add pages you share with them.' },
   { id: 'canva', name: 'Canva', logo: '/marks/canva.png', on: false, does: 'Helpers can make designs in your Canva.' },
 ];

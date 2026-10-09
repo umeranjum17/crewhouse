@@ -635,9 +635,9 @@ test('sign-in states reach the screens as plain states, never the engine\'s word
   const ready = row(null, { signedIn: true, notIncluded: true, work: 'sara@acme.com' });
   assert.deepEqual([ready.state, ready.notIncluded, ready.work], ['ready', true, 'sara@acme.com']);
   assert.equal(A.resting({ resting: { chatgpt: Date.now() + 3600_000 } }).startsWith('Your ChatGPT is resting until'), true);
-  assert.deepEqual(A.apps({ connections: [] }).map((a) => a.id), ['drive', 'calendar', 'gmail', 'notion', 'canva'], 'v1: no Outlook');
-  assert.ok(A.needsHouse({ house: { google: false } }, A.apps({})[1]));
-  assert.ok(!A.needsHouse({ house: { google: false } }, A.apps({})[3]), 'Notion needs no setup');
+  assert.deepEqual(A.apps({ connections: [] }).map((a) => a.id), ['drive', 'calendar', 'gmail', 'gmailsend', 'notion', 'canva'], 'v1: no Outlook');
+  assert.ok(A.needsHouse({ house: { google: false } }, A.apps({}).find(a => a.id === 'calendar')!));
+  assert.ok(!A.needsHouse({ house: { google: false } }, A.apps({}).find(a => a.id === 'notion')!), 'Notion needs no setup');
 });
 
 test('the helmet: every app mood wears one of its four moods, and every mood looks different', async () => {

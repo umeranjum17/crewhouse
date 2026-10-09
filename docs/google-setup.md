@@ -16,7 +16,7 @@ Google allows that without its review for personal use by fewer than 100 people:
 2. **APIs & Services → Library**: enable the **Google Calendar API**, the **Gmail API** and the **Google Drive API**.
 3. **APIs & Services → OAuth consent screen** (Google now calls it *Google Auth Platform*):
    - User type **External**. App name **Crewhouse**, your email as the support and developer contact.
-   - **Data access / Scopes**: add `.../auth/calendar.events`, `.../auth/gmail.readonly` and `.../auth/drive.file`.
+   - **Data access / Scopes**: add `.../auth/calendar.events`, `.../auth/gmail.readonly` and `.../auth/drive.file`. For Gmail sending, also add `.../auth/gmail.send`, `openid` and `email`.
    - **Audience**: press **Publish app** so the status reads **In production**.
      Leave it in *Testing* and every connection stops working after 7 days ([Google: refresh token expiration](https://developers.google.com/identity/protocols/oauth2#expiration)).
      Publishing does not start a review; it only lifts the 7-day limit and the test-user list.
@@ -36,6 +36,7 @@ That's all. The Client ID and secret stay on the home computer, in Crewhouse's o
 | Google Drive | 3: Connect → your account → Continue | Crewhouse only asks for the files it makes or you pick (`drive.file`), which Google counts as non-sensitive: no warning. |
 | Google Calendar | 5: Connect → account → **Advanced** → **Go to Crewhouse (unsafe)** → Continue | Calendar is a *sensitive* scope, so Google shows its "This app isn't verified" screen. The Connect card warns you first, in one line. |
 | Gmail (read only) | 5, the same way | Gmail is a *restricted* scope. The warning stays: removing it needs a paid yearly security assessment, which a personal app doesn't need. |
+| Gmail sending (separate) | 5, the same way | Its own Connect, so reading Gmail never grants sending. Sending is a sensitive scope, so the warning is the same as Calendar's. Each email still waits for your yes on your phone. |
 
 The warning is Google's, and "unsafe" is Google's word for an app it has not reviewed.
 If you tap **Back to safety**, nothing is connected and Crewhouse says so kindly, with Try again.
