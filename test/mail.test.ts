@@ -9,8 +9,10 @@ import { DeviceLink, pairWithOffer } from '@byokit/link';
 import { startServer } from '../src/server.ts';
 import assert from 'node:assert/strict';
 import { setup, settled, task, until } from './lab.ts';
+const A = await import('../web/src/adapter.ts');
 
 const { GMAIL, ageOf, bodyOf, runMail } = await import('../src/mail.ts');
+const { MailSend } = await import('../src/mail-send.ts');
 const { effectOf, toolWords } = await import('../src/policy.ts');
 
 const b64 = (s: string) => Buffer.from(s).toString('base64url');
@@ -27,6 +29,7 @@ const threads: Record<string, any> = {
 };
 const asked: string[] = [];
 let identity = '';
+let sendOk = false;
 const real = globalThis.fetch;
 globalThis.fetch = (async (url: any, init: any = {}) => {
   if (String(url) === 'https://openidconnect.googleapis.com/v1/userinfo' && identity) return real(identity, init);
@@ -39,6 +42,7 @@ globalThis.fetch = (async (url: any, init: any = {}) => {
   if (path === '/labels/INBOX') return json({ threadsUnread: 2 });
   if (path === '/threads') return json({ threads: u.searchParams.get('q') === 'from:school' ? [{ id: '18c0a1f00d2e3b4a' }] : [{ id: '18c0b2f00d2e3b4a' }, { id: '18c0a1f00d2e3b4a' }], resultSizeEstimate: u.searchParams.get('q') ? 1 : 2 });
   const t = threads[path.split('/threads/')[1]];
+  if (path === '/messages/send') return sendOk ? json({ id: 'sent-1' }) : json({}, 404);
   return t ? json(t) : json({}, 404);
 }) as typeof fetch;
 after(() => { globalThis.fetch = real; });
@@ -144,4 +148,35 @@ test('Tracer email: real sandbox HTTP cannot approve; paired control attests onc
     await request(`POST /api/asks/${card.id}/answer`, { answer: 'deny' });
     assert.equal(db.all("SELECT * FROM events WHERE kind='mail.approved' OR kind='mail.sent'").length, 0, 'backed out; no Send press');
   } finally { phone?.stop(); view?.stop(); identity = ''; await new Promise<void>(r => server.close(() => r())); await new Promise<void>(r => who.close(() => r())); done(); }
+});
+
+test('one approval sends exactly once, and a check-Gmail card can always be dismissed', async () => {
+  const { db, crew, cfg, done } = setup();
+  crew.onboard('Umer'); crew.recruit('tracer', 'Tracer', 'person');
+  db.run("INSERT INTO devices (id,name,pk,role,created_at) VALUES ('ctl','Control','pk-ctl','control',?)", Date.now());
+  const who = createServer((_q, r) => { r.writeHead(200, { 'content-type': 'application/json' }); r.end(JSON.stringify({ email: 'umer@sender.example', email_verified: true })); });
+  await new Promise<void>(r => who.listen(0, '127.0.0.1', r)); identity = `http://127.0.0.1:${(who.address() as any).port}`;
+  const mail = new MailSend(db, { token: async () => 'tok' } as any);
+  try {
+    mail.set('ada@fernwood.example', { kind: 'corporate', name: 'Fernwood' }, 'ctl');
+    sendOk = true; asked.length = 0;
+    const draft = Number(db.run("INSERT INTO asks (bot,kind,title,detail,at) VALUES ('tracer','propose','Email',?,?)", JSON.stringify({ draft: { channel: 'email', to: 'ada@fernwood.example', subject: 'Hi' }, preview: { body: 'Hello there.' } }), Date.now()).lastInsertRowid);
+    const card = (await mail.review(draft)).id;
+    const row = () => db.get('SELECT * FROM asks WHERE id=?', card)!;
+    const results = await Promise.allSettled([mail.answer(row(), 'allow', 'ctl'), mail.answer(row(), 'allow', 'ctl')]);
+    assert.equal(results.filter((r) => r.status === 'fulfilled').length, 1, 'exactly one of two approvals is accepted');
+    assert.equal(asked.filter((x) => x.startsWith('POST /messages/send')).length, 1, 'exactly one email is sent for one approval');
+    assert.equal(db.all("SELECT * FROM events WHERE kind='mail.sent'").length, 1, 'one sent event, never two');
+    // A failed send leaves the card uncertain; the person can always clear it, so it never sticks in Needs you.
+    db.run("UPDATE asks SET state='uncertain',answer='check Gmail' WHERE id=?", card);
+    const snapshot = crew.snapshot().asks.find((a: any) => a.id === card)!;
+    assert.equal(snapshot.state, 'uncertain', 'the uncertain card is still shown to the person');
+    const view = A.card(snapshot, crew.snapshot());
+    assert.equal(view.mailUncertain, true, 'the card says it is the uncertain one');
+    assert.deepEqual(view.choices.map((c) => c.body.answer), ['dismiss'], 'and offers a way to clear it');
+    mail.dismiss(db.get('SELECT * FROM asks WHERE id=?', card)!);
+    assert.equal(db.get('SELECT state FROM asks WHERE id=?', card)!.state, 'answered');
+    assert.equal(db.get('SELECT answer FROM asks WHERE id=?', card)!.answer, 'dismissed');
+    assert.ok(!crew.snapshot().asks.some((a: any) => a.id === card), 'the check-Gmail card clears from Needs you');
+  } finally { sendOk = false; identity = ''; await new Promise<void>(r => who.close(() => r())); done(); }
 });

@@ -745,7 +745,7 @@ export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; 
         </div>
       ) : yes ? (
         <div className="btns">
-          <button className="btn go" disabled={edit.empty || c.mailSend || !!c.mailTo} onClick={() => act(edit.yes(yes.body))}>{yes.label}</button>
+          <button className="btn go" disabled={edit.empty || (c.mailSend && !c.mailUncertain) || !!c.mailTo} onClick={() => act(edit.yes(yes.body))}>{yes.label}</button>
           {edit.can && <button className="btn" aria-pressed={edit.editing} onClick={edit.toggle}>{edit.editing ? 'Use the original' : 'Edit'}</button>}
           {deny && <button className="btn" disabled={c.mailSend} onClick={() => act(deny.body)}>{deny.label}</button>}
           {remind && <button className="btn quiet" onClick={() => act(remind)}>Remind me tomorrow</button>}
@@ -753,7 +753,7 @@ export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; 
         </div>
       ) : null}
       {c.kind === 'spend' && <p className="ask-note">Anything that costs money asks you every time.</p>}
-      {(c.mailSend || c.mailTo) && <p className="ask-note">Approve this email on your paired phone. Nothing sends from this screen.</p>}
+      {((c.mailSend && !c.mailUncertain) || c.mailTo) && <p className="ask-note">Approve this email on your paired phone. Nothing sends from this screen.</p>}
       {c.kind === 'plan' && <p className="ask-note">Saying Go doesn’t OK any sending or spending. Those still ask you each time.</p>}
     </div>
   );
@@ -789,10 +789,10 @@ export function AskSheet({ c, who, chiefSays, onClose }: { c: Card; who: Helper 
           {edit.can && <button className="btn big" aria-pressed={edit.editing} onClick={edit.toggle}>{edit.editing ? 'Use the original' : 'Edit'}</button>}
           {remind && <button className="btn big ghost" onClick={() => act({ ...remind.body, remind: true })}>Remind me tomorrow</button>}
           {rest.map((x) => <button key={x.label} className="btn big" disabled={c.mailSend} onClick={() => act(x.body)}>{x.label}</button>)}
-          {yes && <button className="btn go big" disabled={edit.empty || c.mailSend || !!c.mailTo} onClick={() => act(edit.yes(yes.body))}>{yes.label}</button>}
+          {yes && <button className="btn go big" disabled={edit.empty || (c.mailSend && !c.mailUncertain) || !!c.mailTo} onClick={() => act(edit.yes(yes.body))}>{yes.label}</button>}
         </div>
         {always && <button className="btn ghost always" onClick={() => act(always.body)}>{always.label}</button>}
-        {(c.mailSend || c.mailTo) && <p className="ask-note">Approve this email on your paired phone. Nothing sends from this screen.</p>}
+        {((c.mailSend && !c.mailUncertain) || c.mailTo) && <p className="ask-note">Approve this email on your paired phone. Nothing sends from this screen.</p>}
         {c.kind === 'spend' && <p className="ask-note">Anything that costs money asks you every time.</p>}
       </div>
     </div>

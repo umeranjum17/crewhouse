@@ -75,8 +75,8 @@ export class MailSend {
     if (!this.db.get("SELECT 1 FROM devices WHERE id=? AND role='control'", phone)) throw fail('This phone no longer has permission to approve sending.', 403);
     this.db.tx(() => {
       const claimed = this.db.run("UPDATE asks SET state='sending',answer='approved once',answered_at=? WHERE id=? AND state='open'", Date.now(), ask.id);
-      if (!claimed.changes) throw fail('This message was already attempted. Check Gmail; it will not be sent again.');
-      this.db.run("UPDATE asks SET state='answered',answer='Gmail sending attempted',answered_at=? WHERE id=?", Date.now(), m.draft);
+      const drafted = this.db.run("UPDATE asks SET state='answered',answer='Gmail sending attempted',answered_at=? WHERE id=? AND state='open'", Date.now(), m.draft);
+      if (!claimed.changes || !drafted.changes) throw fail('This message was already attempted. Check Gmail; it will not be sent again.');
       this.db.event('mail.approved', ask.bot, { ask: ask.id, person: 1, phone, from, to });
     });
     const raw = Buffer.from(`From: ${from}\r\nTo: ${to}\r\nSubject: ${m.subject.match(/.{1,10}/gu)!.map((s: string) => `=?UTF-8?B?${Buffer.from(s).toString('base64')}?=`).join('\r\n ')}\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n${Buffer.from(m.body).toString('base64').match(/.{1,76}/g)!.join('\r\n')}\r\n`).toString('base64url');
@@ -90,5 +90,11 @@ export class MailSend {
       this.db.run("UPDATE asks SET state='uncertain',answer='check Gmail' WHERE id=?", ask.id); this.db.event('mail.unsure', ask.bot, { ask: ask.id, to });
       throw fail(`Could not confirm sending: ${e.message} Check Gmail before doing anything else. This message will not be retried automatically.`);
     }
+  }
+  /** Clear a card stuck on "check Gmail": the person acknowledges it, whichever device they read it on. */
+  dismiss(ask: Row) {
+    const changed = this.db.run("UPDATE asks SET state='answered',answer='dismissed',answered_at=? WHERE id=? AND kind='mail' AND state='uncertain'", Date.now(), ask.id);
+    if (!changed.changes) throw fail('This email is not waiting to be checked.');
+    this.db.event('mail.dismissed', ask.bot, { ask: ask.id });
   }
 }

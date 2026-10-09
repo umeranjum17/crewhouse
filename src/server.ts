@@ -424,10 +424,14 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     // A run reports from crewd's own record (Crew.runRoutine), not from this call returning.
     if ((r = p.match(/^\/api\/routines\/(\d+)\/run$/)) && m === 'POST') { await crew.runRoutine(Number(r[1])); return { ok: true }; }
     if ((r = p.match(/^\/api\/asks\/(\d+)\/answer$/)) && m === 'POST') {
-      const ask = db.get("SELECT * FROM asks WHERE id=? AND state='open'", Number(r[1])), d = JSON.parse(ask?.detail ?? '{}');
-      if ((ask?.kind === 'mail' || (ask && db.get("SELECT 1 FROM bots WHERE id=? AND template='tracer'", ask.bot) && d.draft?.channel === 'email' && body.answer === 'allow')) && !phone) throw Object.assign(new Error('Approve this email on your paired phone. Nothing was sent.'), { status: 403 });
-      if (ask?.kind === 'mail') { if (body.scope && body.scope !== 'once' || body.text !== undefined) throw Object.assign(new Error('Each email needs its own unchanged, one-time approval.'), { status: 400 }); await mail.answer(ask, body.answer, phone!); }
-      else await crew.answer(Number(r[1]), body, key);
+      const id = Number(r[1]);
+      const ask = db.get("SELECT * FROM asks WHERE id=? AND (state='open' OR (kind='mail' AND state='uncertain'))", id), d = JSON.parse(ask?.detail ?? '{}');
+      const dismissing = ask?.kind === 'mail' && ask.state === 'uncertain' && body.answer === 'dismiss';
+      // The uncertain card's own acknowledgement may be cleared from either device; a send or a Tracer draft allow needs the paired phone.
+      if (!dismissing && (ask?.kind === 'mail' || (ask && ask.state === 'open' && db.get("SELECT 1 FROM bots WHERE id=? AND template='tracer'", ask.bot) && d.draft?.channel === 'email' && body.answer === 'allow')) && !phone) throw Object.assign(new Error('Approve this email on your paired phone. Nothing was sent.'), { status: 403 });
+      if (dismissing) mail.dismiss(ask!);
+      else if (ask?.kind === 'mail') { if (ask.state !== 'open') throw Object.assign(new Error('This email was already decided.'), { status: 409 }); if (body.scope && body.scope !== 'once' || body.text !== undefined) throw Object.assign(new Error('Each email needs its own unchanged, one-time approval.'), { status: 400 }); await mail.answer(ask, body.answer, phone!); }
+      else await crew.answer(id, body, key);
       return { ok: true };
     }
     throw Object.assign(new Error('not found'), { status: 404 });
