@@ -435,7 +435,7 @@ export class Link {
       if (phone) { this.put(`phone.push.${g.id}`, phone); this.db.event('device.push', null, { id: g.id }); return { status: 200, body: { ok: true } }; }
       // Off with a browser address: drop this device's own address at the relay (as the computer's own browser does,
       // setWebPush), so off really means no pushes.
-      if (sub?.off === true) return Promise.resolve(this.client?.unsubscribe(g.id, { web: sub.web })).then(() => ({ status: 200, body: { ok: true } }), (e: any) => ({ status: e.status ?? 400, body: { error: e.message } }));
+      if (sub?.off === true) return Promise.resolve(this.client?.unsubscribe(g.id, { web: sub.web })).catch(() => {}).then(() => ({ status: 200, body: { ok: true } }));
       return this.webSubscribe(g.id, sub?.web).then(() => ({ status: 200, body: { ok: true } }), (e: any) => ({ status: e.status ?? 400, body: { error: e.message } }));
     }
     // Settings stay on the computer: AI account sign-ins, people, Google setup, connecting apps

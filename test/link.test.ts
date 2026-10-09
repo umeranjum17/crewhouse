@@ -601,6 +601,8 @@ test('a paired browser asks for the push key over the link, and off really remov
   const web = { endpoint: 'https://fcm.example/ipad', keys: {} };
   assert.deepEqual(await link.request('POST /api/push', { build: 'p9b', off: true, web }, { id: 'ipad', role: 'control' }), { status: 200, body: { ok: true } });
   assert.deepEqual(calls, [['unsubscribe', 'ipad', { web }]], 'off drops the calling device\'s own address, not another\'s');
+  (link as any).client = { unsubscribe: async () => { throw Object.assign(new Error('relay down'), { status: 503 }); } };
+  assert.deepEqual(await link.request('POST /api/push', { build: 'p9b', off: true, web }, { id: 'ipad', role: 'control' }), { status: 200, body: { ok: true } }, 'off ends off even when the mailbox is down');
   // Off without a browser address stays the phone app\'s person-said-no.
   assert.deepEqual(await link.request('POST /api/push', { build: 'p9b', off: true }, { id: 'ipad', role: 'control' }), { status: 200, body: { ok: true } });
   assert.equal(db.get('SELECT value FROM settings WHERE key = ?', 'phone.push.ipad')?.value, 'off');

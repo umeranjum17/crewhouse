@@ -1039,13 +1039,13 @@ export function firstIdeas(state: Json) {
 
 /** Your three setup jobs: what the crew thinks with, the phones reaching it, and Google setup.
  *  Until all three are done, the owner's Home says how many are left. */
-export function homeSetup(state: Json, accounts: Json[] | null, link: Json | null) {
+export function homeSetup(state: Json, accounts: Json[] | null, link: Json | null, paired = false) {
   const plan = planName(accounts);
   const rows = [
     { key: 'signin', says: plan === 'AI plan' ? 'An AI plan the crew can think with' : `The crew thinks with your ${plan}`, done: accounts?.some((a) => a.signedIn === true) === true },
     { key: 'phones', says: 'Phones can reach the crew away from home', done: link?.anywhere === 'anywhere' },
     { key: 'google', says: 'Google setup', done: state.house?.google !== false },
-  ];
+  ].filter((r) => !paired || r.key === 'google');
   return { rows, left: rows.filter((r) => !r.done).length };
 }
 

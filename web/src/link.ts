@@ -62,10 +62,10 @@ function start(grant: DeviceGrant) {
   });
   setLink({
     name: grant.hostName,
-    // A read gives up after 15 s, so a computer that's off shows as out of reach; a change waits through reconnects.
+    // A read or the notifications key ask gives up after 15 s, so a computer that's off shows as out of reach; a change waits through reconnects.
     call: async (method, path, body) => {
       let r: { status: number; body: Json };
-      try { r = await link.request(`${method} ${path}`, { ...body, build: BUILD }, { timeoutMs: method === 'GET' ? 15_000 : undefined }) as typeof r; } catch (e) {
+      try { r = await link.request(`${method} ${path}`, { ...body, build: BUILD }, { timeoutMs: method === 'GET' || body?.key === true ? 15_000 : undefined }) as typeof r; } catch (e) {
         // No status means "can't reach the home computer"; a device that only watches is told it can't, as crewd would.
         throw Object.assign(new Error((e as Error).message), e instanceof LinkError && e.code === 'view-only' ? { status: 403 } : {});
       }

@@ -121,10 +121,9 @@ test('the public demo app pairs by a relay code or a direct code, opens on real 
   await until('the paired row', () => run(`[...document.querySelectorAll('.card')].some((c) => /Paired with your computer/.test(c.textContent))`));
   assert.equal(await run(`!!document.getElementById('setup-phones')`), false, 'phones stay the computer’s to manage');
   // Notifications are first-class paired: the state line and its one action sit on the paired card, its key asked
-  // over the link (`POST /api/push {key}`, never /api/phones/link), and no Getting-set-up item is a dead end.
+  // over the link (`POST /api/push {key}`, never /api/phones/link).
   await until('the notifications line', () => run(`/Notifications: (On|Off)/.test(document.body.innerText)`));
   assert.match(await run(`document.body.innerText`), /Notifications: Off · Turn on/);
-  assert.doesNotMatch(await run(`document.body.innerText`), /Getting set up/, 'no setup row whose calls the link refuses');
   await run(`(() => { window.confirm = () => true; [...document.querySelectorAll('button')].find((b) => b.textContent === 'Unpair').click(); })()`);
   await until('back to the demo', async () => (await mode()) === 'demo', 20_000);
   assert.equal(await devices(), 0, 'the computer forgot this browser');

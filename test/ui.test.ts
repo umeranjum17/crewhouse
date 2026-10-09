@@ -473,6 +473,8 @@ test('first success: starters never dead-end, and setup stays in Settings', () =
   assert.equal(half.rows[0].says, 'An AI plan the crew can think with', 'nobody signed in: no provider is named');
   const claude = [{ account: 'chatgpt', signedIn: false }, { account: 'claude', name: 'Claude', signedIn: true }];
   assert.equal(A.homeSetup({ house: {} }, claude, null).rows[0].says, 'The crew thinks with your Claude plan', 'the plan actually in use, never ChatGPT');
+  assert.deepEqual(A.homeSetup({ house: { google: false } }, null, null, true).rows.map((r) => r.key), ['google'], 'paired, only the job the link can carry');
+  assert.equal(A.homeSetup({ house: { google: true } }, null, null, true).left, 0, 'paired and nothing left: the row hides');
   const out = [{ account: 'chatgpt', signedIn: false }, { account: 'grok', signedIn: false }, { account: 'claude', name: 'Claude', signedIn: false, signedOut: true }];
   assert.equal(A.aiList(out).mine[0].ai.key, 'claude', 'the sign-in card leads with the account that signed out, never the front door');
   assert.equal(A.planName(openrouter), 'OpenRouter account', 'a pay-per-use route is not called a plan');

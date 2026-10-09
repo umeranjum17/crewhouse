@@ -175,13 +175,13 @@ function Chats({ state, refresh, desk }: { state: Json; refresh: () => void; des
   </section>;
 }
 
-/** The owner's row until the house is fully set up: how many of the three jobs are left. None of them is this
- *  device's to do once paired — their calls are refused over the link — so the row waits for the computer. */
+/** The owner's row until the house is fully set up: how many of the jobs are left. Paired, only the job the link can
+ *  carry (Google's) is counted: the sign-in and phone jobs' calls are refused over it. */
 function SetupRow({ state, accounts, tick }: { state: Json; accounts: Json[] | null; tick: number }) {
   const [link, setLink] = useState<Json>(null);
   useEffect(() => { if (!paired) api.phoneLink().then(setLink).catch(() => {}); }, [tick]);
-  const { left } = A.homeSetup(state, accounts, link);
-  if (paired || !left) return null;
+  const { left } = A.homeSetup(state, accounts, link, !!paired);
+  if (!left) return null;
   return <a className="card nudge" href="#/settings"><span className="grow">Getting set up: {left} {left === 1 ? 'thing' : 'things'} left</span><b>›</b></a>;
 }
 
@@ -1070,8 +1070,8 @@ function Routines(ctx: Ctx) {
 // ---------- settings ----------
 /** The paired app's own notifications, on the paired card. One line: the state and the one action that changes it.
  *  `relay`: whether a mailbox can carry them — null while the key is still being asked over the link; false says
- *  `norelay` in plain words, no dead button; 'unreachable' says the computer could not be reached. */
-function NotifyLine({ relay, norelay }: { relay: boolean | 'unreachable' | null; norelay: string }) {
+ *  `norelay` in plain words, no dead button; 'offline' and 'unreachable' say why under the switch. */
+function NotifyLine({ relay, norelay }: { relay: boolean | 'offline' | 'unreachable' | null; norelay: string }) {
   const [state, setState] = useState<'unsupported' | 'denied' | 'on' | 'off' | null>(null);
   const look = () => pushState().then(setState).catch(() => setState('off'));
   useEffect(() => { void look(); }, []);
@@ -1089,6 +1089,7 @@ function NotifyLine({ relay, norelay }: { relay: boolean | 'unreachable' | null;
         else if (r === 'offline') toast("Your mailbox isn't connected right now. Try again in a moment.");
       }
     }).then(() => look())}>{on ? 'Turn off' : 'Turn on'}</button></p>
+    {relay === 'offline' && <p className="mute small">Your computer can't send notifications right now. They come back when it reconnects.</p>}
     {relay === 'unreachable' && <p className="mute small">Couldn't reach your computer. Try again when it's on.</p>}
   </>;
 }
@@ -1184,8 +1185,7 @@ function Phones({ tick }: { tick: number }) {
 function HomeSetup({ state, accounts, tick }: { state: Json; accounts: Json[] | null; tick: number }) {
   const [link, setLink] = useState<Json>(null);
   useEffect(() => { if (!paired) api.phoneLink().then(setLink).catch(() => {}); }, [tick]);
-  if (paired) return null;
-  const { rows, left } = A.homeSetup(state, accounts, link);
+  const { rows, left } = A.homeSetup(state, accounts, link, !!paired);
   const jump = (key: string) => document.getElementById(`setup-${key}`)?.scrollIntoView({ behavior: 'smooth' });
   return (<>
     <div className="label">Getting set up</div>
@@ -1205,8 +1205,8 @@ const GO_TO: [string, string, IconName][] = [['#/things', 'Your things', 'things
  *  switch sits on this card: whether one is there is asked over the link (`POST /api/push {key}`), the one call crewd
  *  answers for this device's own grant — never /api/phones/link, which it refuses away from the computer. */
 function PairedCard({ tick }: { tick: number }) {
-  const [relay, setRelay] = useState<boolean | 'unreachable' | null>(null);
-  useEffect(() => { setRelay(null); api.pushKey().then((k) => setRelay(!!k.vapid)).catch(() => setRelay('unreachable')); }, [tick]);
+  const [relay, setRelay] = useState<boolean | 'offline' | 'unreachable' | null>(null);
+  useEffect(() => { setRelay(null); api.pushKey().then((k) => setRelay(k.ready ? true : k.vapid ? 'offline' : false)).catch(() => setRelay('unreachable')); }, [tick]);
   return <div className="card nudge">
     <span className="grow"><b>Paired with {paired!.name}</b><div className="mute small">This app shows your own crew, straight from that computer and locked to it.</div>
       <NotifyLine relay={relay} norelay="Your computer has no mailbox for notifications yet. Turn one on there, then try again." /></span>
