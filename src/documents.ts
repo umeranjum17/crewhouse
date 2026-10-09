@@ -15,8 +15,7 @@ export type DocumentSpec = { name: string; blocks: BlockSpec[] };
 const MAX = { blocks: 300, bullets: 50, rows: 200, cols: 12, text: 8000, parts: 150 };
 
 /** The writer is CommonJS-shaped and only worth loading for the seconds it is used. */
-const docx = () => import('docx').then((m: any) => m.default ?? m);
-const words = (v: Cell) => String(v ?? '').replace(/\r?\n/g, ' ').slice(0, MAX.text);
+const docx = () => import('docx').then((m: any) => m.default ?? m), words = (v: Cell) => String(v ?? '').replace(/\r?\n/g, ' ').slice(0, MAX.text);
 
 /** Write a document the person can open and edit: real headings, real lists, a table with a bold header row. */
 export async function buildDocument(file: string, spec: DocumentSpec) {

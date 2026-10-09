@@ -21,10 +21,8 @@ const HELP = [
 type Event = { id: string; start: Date; end: Date; allDay: boolean; title: string; where: string };
 type Token = () => Promise<string | null>;
 
-const pad = (n: number) => String(n).padStart(2, '0');
-const ymd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-const hm = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
-const addDays = (d: Date, n: number) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n, d.getHours(), d.getMinutes());
+const pad = (n: number) => String(n).padStart(2, '0'), ymd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const hm = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`, addDays = (d: Date, n: number) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n, d.getHours(), d.getMinutes());
 const plain = (s: unknown, n = 80) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n);
 
 /** "2026-10-03", "today", "tomorrow", optionally followed by " HH:MM" or "THH:MM", in this computer's time zone. */

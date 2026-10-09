@@ -23,8 +23,7 @@ const AUTH_CHOICE: Record<string, string> = {
 const CODE_CHOICE: Record<string, string> = {
   chatgpt: 'openai-device-code', grok: 'xai-device-code', openrouter: 'openrouter-oauth', minimax: 'minimax-global-oauth',
 };
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-const ME = 'm1';
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms)), ME = 'm1';
 /** The engine-side name of a Crewhouse tool and back: only the shell differs. */
 const crewName = (tool: string) => tool === 'shell' ? 'bash' : tool;
 

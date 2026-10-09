@@ -15,8 +15,7 @@ if ((cfg.stateDir + '/').startsWith(cfg.repoDir + '/') || (cfg.crewDir + '/').st
 mkdirSync(join(cfg.crewDir, 'bots'), { recursive: true });
 const db = new Store(cfg.stateDir);
 db.single();
-const url = `http://${cfg.host}:${cfg.port}`;
-const crew = new Crew(cfg, db);
+const url = `http://${cfg.host}:${cfg.port}`, crew = new Crew(cfg, db);
 await crew.connections.ready;
 const server = await startServer(cfg, db, crew);
 crew.init();
