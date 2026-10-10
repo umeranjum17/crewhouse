@@ -744,6 +744,22 @@ test('the phone office: one grouped list, helmets still, the shared view model',
   assert.match(top, /if \(mode === 'chat'\) return <View style=\{\{ flex: 1 \}\}>\{top\}<Chat \{\.\.\.ctx\} id="chief" hero=\{/, 'Chat: the header over Chief\'s own thread, and his box');
 });
 
+test('your crew page reads the rail status: one rule for every row', () => {
+  // A crew row's status word and dot are the rail's own (A.railWord, from A.groupOf). A second rule here showed
+  // Reel and Scout at work on their job while the rail said Waiting, and Scribe waiting while it said Done.
+  const web = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
+  const crew = web.slice(web.indexOf('function Crew('), web.indexOf('function AddHelper('));
+  assert.match(crew, /A\.railWord\(/, 'the crew page reads the rail word, never a second status');
+  assert.match(crew, /r\.seat === 'done' \? 'Done' : r\.word/, 'a done row reads Done, as the rail does');
+  assert.doesNotMatch(crew, /\{h\.status\}/, 'no raw helper status on a crew row');
+  assert.doesNotMatch(crew, /h\.ring === 'working'/, 'no raw helper ring on the dot');
+  const app = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
+  const phone = app.slice(app.indexOf('function Crew('), app.indexOf('function HelperPage('));
+  assert.match(phone, /A\.railWord\(/, 'the phone reads the same rail word');
+  const pill = app.slice(app.indexOf('function HelperPill('), app.indexOf('function NeedsRows('));
+  assert.doesNotMatch(pill, /h\.status|h\.ring/, 'the phone pill carries no raw helper status either');
+});
+
 test("Chief's mood is the first matching row of the table, and the line follows the face", () => {
   const min = 60_000, ago = (m: number) => Date.now() - m * min;
   const bot = (id: string, extra: Json = {}) => ({ id, display: id[0].toUpperCase() + id.slice(1), template: id, ...extra });

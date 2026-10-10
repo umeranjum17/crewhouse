@@ -1121,8 +1121,10 @@ function AskSheet({ c, who, chiefSays, canAct, onClose }: { c: A.Card; who: A.He
 // What this phone kept says how things were, not how they are: while the computer is out of reach, nobody claims to be busy.
 const OUT = 'Out of reach for now';
 const chiefNow = (state: Json, offline: boolean) => (offline ? { mood: 'rest' as const, line: OUT } : A.chief(state));
-function HelperPill({ h, offline }: { h: A.Helper; offline: boolean }) {
-  return offline ? <Pill tone="off">{OUT}</Pill> : <Pill tone={h.ring === 'needs' ? 'wait' : h.ring ? 'ok' : 'off'}>{h.status}</Pill>;
+// A crew row's pill is the rail's own word (A.railWord, from A.groupOf): the same per-member status the web
+// rail and the Office read, so the phone's crew list can never disagree with them.
+function HelperPill({ word, tone, offline }: { word: string; tone: 'ok' | 'wait' | 'off'; offline: boolean }) {
+  return offline ? <Pill tone="off">{OUT}</Pill> : <Pill tone={tone}>{word}</Pill>;
 }
 
 /** Needs you as one compact list: a number, the face, the subject, one plain line; a row opens the review sheet.
@@ -1652,12 +1654,18 @@ function Crew(ctx: Ctx) {
   const { state, go } = ctx;
   const t = useLook();
   const chief = chiefNow(state, ctx.offline);
+  const view = A.office(state);
+  const member = new Map(view.crew.map((m) => [m.id, m]));
   const row = (key: string, face: ReactNode, name: string, role: string, status: ReactNode, route: Route) => <Pressable key={key} onPress={() => go(route)} style={{ minHeight: 68, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 12, borderBottomWidth: 1, borderColor: t.line }}>
     {face}<View style={{ flex: 1, minWidth: 0 }}><T style={s.b}>{name}</T><T tone="mute" style={s.small} lines={1}>{role}</T></View>{status}
   </Pressable>;
   return <Page title="Your crew" lead="Everyone answers to Chief." back={['Home', () => go({ view: 'home' }, true)]}><Card>
     {row('chief', <Face who="chief" size={44} />, 'Chief', 'Runs the crew and answers to you', <Pill tone={chief.mood === 'rest' ? 'off' : 'ok'}>{chief.line}</Pill>, { view: 'chief' })}
-    {A.crew(state).map((h) => row(h.id, <Face who={h} size={44} />, h.name, h.role, <HelperPill h={h} offline={ctx.offline} />, { view: 'helper', id: h.id }))}
+    {A.crew(state).map((h) => {
+      const r = A.railWord(member.get(h.id)!, view);
+      return row(h.id, <Face who={h} size={44} />, h.name, h.role,
+        <HelperPill word={r.seat === 'done' ? 'Done' : r.word} tone={r.seat === 'working' || r.seat === 'done' ? 'ok' : 'off'} offline={ctx.offline} />, { view: 'helper', id: h.id });
+    })}
     {ctx.canAct && <Pressable onPress={() => go({ view: 'add' })} style={{ minHeight: 68, flexDirection: 'row', alignItems: 'center', gap: 12 }}><View style={{ width: 44, height: 44, borderRadius: 22, borderWidth: 1, borderStyle: 'dashed', borderColor: t.line, alignItems: 'center', justifyContent: 'center' }}><T tone="mute">+</T></View><T style={{ flex: 1 }}>Add a helper</T><T tone="mute">›</T></Pressable>}
   </Card></Page>;}
 

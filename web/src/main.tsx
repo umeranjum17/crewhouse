@@ -687,13 +687,20 @@ function ChiefPage(ctx: Ctx & { m?: string }) {
 }
 
 // ---------- the crew ----------
+// A crew row's status word and dot are the rail's own (A.railWord, from A.groupOf): the same per-member
+// status the rail rows and the Office header read, so the page can never disagree with them. The row keeps
+// the member's role line; the job title is not a second status.
 function Crew(ctx: Ctx) {
-  const { state } = ctx;
+  const { state, live } = ctx;
   const chief = A.chief(state, chiefLocal(ctx));
   const helpers = A.crew(state);
+  const member = new Map(live.crew.map((m) => [m.id, m]));
   return <div className="page rest-screen"><a href="#/" className="back phone-only">‹ Home</a><h1>Your crew</h1><p className="lead">Everyone answers to Chief.</p><div className="card list">
     <a className="row-item crew-row" href="#/chief"><Face who="chief" size={44} ring={chief.tone === 'wait' ? 'needs' : undefined} /><span className="grow"><b>Chief</b><span className="mute small">{chief.line || 'Runs the crew and answers to you'}</span></span></a>
-    {helpers.map((h) => <a key={h.id} className="row-item crew-row" href={hrefOf(h.id)}><Face who={h} size={44} ring={h.ring} /><span className="grow"><b>{h.name}</b><span className="mute small">{h.role}</span></span><span className="status-word"><i className={h.ring === 'working' ? 'working' : ''} /><span>{h.status}</span></span></a>)}
+    {helpers.map((h) => {
+      const r = A.railWord(member.get(h.id)!, live);
+      return <a key={h.id} className="row-item crew-row" href={hrefOf(h.id)}><Face who={h} size={44} ring={h.ring} /><span className="grow"><b>{h.name}</b><span className="mute small">{h.role}</span></span><span className="status-word"><i className={r.seat === 'working' || r.seat === 'done' ? 'working' : ''} /><span>{r.seat === 'done' ? 'Done' : r.word}</span></span></a>;
+    })}
     <a className="row-item crew-row" href="#/crew/add"><span className="face add" style={{ width: 44, height: 44 }}>+</span><span className="grow">Add a helper</span><span className="mute">›</span></a>
   </div></div>;}
 
