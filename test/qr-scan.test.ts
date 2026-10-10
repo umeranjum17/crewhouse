@@ -7,7 +7,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { b64url, pendingGrant } from '@byokit/link';
+import { b64url, pendingGrant } from '@byokit/pair';
 
 // What the QR holds: offerText's `byokit-link:1:<base64url JSON>`, built here the same way (the kit only exports the
 // parse side at the root; mobile/src/link.ts pair() feeds the scanned string straight to pairWithOffer → parseOffer).

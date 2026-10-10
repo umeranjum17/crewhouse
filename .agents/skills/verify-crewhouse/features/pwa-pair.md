@@ -3,7 +3,7 @@
 The public shell's way out of the demo (`web/src/link.ts`, `PairSheet` in `web/src/flows.tsx`). The demo's Home and
 Settings show "Pair — yes, let's go", which opens a card with the desktop commands and one paste box. The box takes the
 relay code (`SHORT-CODE@relay`) or the long direct code, told apart by shape (`web/src/typed.ts` `readTyped`, which the
-phone uses too). `@byokit/link` pairs the browser and shows the two words while the person says yes at the computer.
+phone uses too). `@byokit/pair` pairs the browser and shows the two words while the person says yes at the computer.
 The grant is sealed in IndexedDB (`browserDeviceStore('crewhouse.grant')`), and the same installed app reloads on real
 data: every call, live event and desktop stream rides the link (`web/src/api.ts` `setLink`). Unpair forgets the grant,
 clears the icon badge and goes back to the demo.

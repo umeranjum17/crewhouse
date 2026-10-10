@@ -1,5 +1,5 @@
 // The phone link: where it listens, then pairing, the person's yes, grants, approvals and removal through the real
-// daemon, with @byokit/link's own device side as the phone. The Noise handshake and frames are the package's, tested there.
+// daemon, with @byokit/pair's own device side as the phone. The Noise handshake and frames are the package's, tested there.
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
@@ -8,13 +8,13 @@ import { createServer as http1, request as http1Request } from 'node:http';
 import { createServer, type AddressInfo } from 'node:net';
 import { join } from 'node:path';
 import { temp } from './tmp.ts';
-import { DeviceLink, pairWithOffer, type DeviceGrant, type LinkStatus, encodeOffer, offerText, parseOffer } from '@byokit/link';
+import { DeviceLink, pairWithOffer, type DeviceGrant, type LinkStatus, encodeOffer, offerText, parseOffer } from '@byokit/pair';
 import { Link, NEWS, linkHosts, phoneAddresses, tailscalePeer } from '../src/link.ts';
 import { Store } from '../src/db.ts';
 import { DatabaseSync } from 'node:sqlite';
 import * as A from '../web/src/adapter.ts';
-import { decodeOffer as decodeTyped, encodeOffer as encodeTyped } from '@byokit/link';
-import { b64url } from '@byokit/link';
+import { decodeOffer as decodeTyped, encodeOffer as encodeTyped } from '@byokit/pair';
+import { b64url } from '@byokit/pair';
 
 test('typed envelope carries addresses, port, key and one-use secret; errors are plain', () => {
   const o = { v: 1 as const, host: b64url(new Uint8Array(32).fill(3)), ticket: b64url(new Uint8Array(16).fill(7)),

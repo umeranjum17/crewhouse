@@ -5,7 +5,7 @@ import { test, after } from 'node:test';
 import { createServer } from 'node:http';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { DeviceLink, pairWithOffer } from '@byokit/link';
+import { DeviceLink, pairWithOffer } from '@byokit/pair';
 import { startServer } from '../src/server.ts';
 import assert from 'node:assert/strict';
 import { setup, settled, task, until } from './lab.ts';

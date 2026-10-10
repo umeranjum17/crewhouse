@@ -1,4 +1,4 @@
-import './src/random'; // before anything loads @byokit/link (libsodium wants crypto.getRandomValues)
+import './src/random'; // before anything loads @byokit/pair (libsodium wants crypto.getRandomValues)
 import { registerRootComponent } from 'expo';
 import { AppRegistry } from 'react-native';
 import App from './App';

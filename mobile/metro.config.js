@@ -1,5 +1,5 @@
 // The app shares the web app's api, adapter, tokens and art (../web/src). Metro watches those folders and resolves
-// their imports as if from this app. @byokit/link's libsodium resolves to sodium-javascript through its browser field.
+// their imports as if from this app. @byokit/pair's libsodium resolves to sodium-javascript through its browser field.
 const { getDefaultConfig } = require('expo/metro-config');
 const path = require('path');
 

@@ -588,7 +588,7 @@ function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
     setScanning(false);
     setBusy(true);
     setErr('');
-    // @byokit/link's failures are already plain sentences ("That pairing code has run out. Show a new one on your computer.").
+    // @byokit/pair's failures are already plain sentences ("That pairing code has run out. Show a new one on your computer.").
     try { setDone(await pair(text, setWords)); } catch (e: any) { seen.current = ''; setErr(pairWords(e)); }
     setWords('');
     setBusy(false);
