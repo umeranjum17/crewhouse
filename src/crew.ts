@@ -1898,9 +1898,9 @@ export class Crew {
     if (change) this.requestChief(`[Crewhouse] ${this.called()} wants a change to your plan for ${detail.plan.bot}: ${detail.plan.text}\nSteps:\n` +
       `${detail.plan.steps.map((x: string, i: number) => `${i + 1}. ${x}`).join('\n')}\nThey say: ${change}\nOffer the changed plan with crew_assign and steps.`, change);
     if (ask.kind === 'propose') return;
-    if (ask.kind === 'connect' && task && body.answer === 'allow' && this.live.get(ask.bot)?.task === task.id) {
-      // Connected: the app's tools arrive with a fresh session, so the task picks up in its own conversation with them.
-      this.close(ask.bot);
+    if (ask.kind === 'connect' && task && body.answer === 'allow' && this.live.get(task.bot)?.task === task.id) {
+      // Connected: the app's tools arrive with a fresh session; the task's own bot resumes here even when Chief asked.
+      this.close(task.bot);
       this.handoffs.set(task.id, `${this.connections.apps[detail.app]?.name ?? 'The app'} is connected now`);
       this.connected.add(task.id);
       this.setTask(task, 'queued');
@@ -1908,10 +1908,9 @@ export class Crew {
     }
     if (body.answer === 'allow') this.granted.add(`${ask.bot}\n${ask.title}`);
     if (task && this.db.get("SELECT 1 FROM asks WHERE task_id = ? AND state = 'open' AND kind IN ('permission', 'connect')", task.id)) return;
-    const l = this.live.get(ask.bot);
-    if (!task || !l || l.task !== task.id) return; // not running now (after a restart): it asks again when it resumes, and goes through
+    const l = task && this.live.get(task.bot); if (!task || !l || l.task !== task.id) return; // not running now (after a restart): it asks again when it resumes, and goes through
     const answers = this.db.all("SELECT title, answer FROM asks WHERE task_id = ? AND state = 'answered' AND kind IN ('permission', 'connect') ORDER BY id", task.id);
-    this.turn(ask.bot, l, `[Crewhouse] ${this.called().replace(/^the/, 'The')} has answered your requests: ${JSON.stringify(answers)}. Continue with what was allowed; skip what was declined, or explain what you need.`);
+    this.turn(task.bot, l, `[Crewhouse] ${this.called().replace(/^the/, 'The')} has answered your requests: ${JSON.stringify(answers)}. Continue with what was allowed; skip what was declined, or explain what you need.`);
   }
 
   /** "Chief, call me Umer": for the person. */
@@ -2206,8 +2205,10 @@ export class Crew {
     const a = this.connections.apps[app];
     if (!a) throw fail(`no app called ${app}`);
     if (this.connections.connected(app)) return { connected: true, note: `${a.name} is already connected; its tools arrive with your next task.` };
-    if (!this.db.get("SELECT 1 FROM asks WHERE bot = ? AND kind = 'connect' AND state = 'open' AND json_extract(detail, '$.app') = ?", botId, app))
-      this.openAsk(botId, this.activeTask(botId), `Connect ${a.name}`, { app, words: `Let ${this.bot(botId)!.display} use your ${a.name}` }, 'connect');
+    // Google is Chief's to ask: the person talks only to Chief about it, never to the helper that needs it.
+    const owner = a.google ? CHIEF : botId;
+    if (!this.db.get("SELECT 1 FROM asks WHERE bot = ? AND kind = 'connect' AND state = 'open' AND json_extract(detail, '$.app') = ?", owner, app))
+      this.openAsk(owner, this.activeTask(botId), `Connect ${a.name}`, { app, words: `Let ${this.bot(botId)!.display} use your ${a.name}` }, 'connect');
     return { asked: true, note: 'The person sees a Connect card now. End your turn with one short line; you will be told when they answer.' };
   }
 

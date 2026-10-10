@@ -29,7 +29,7 @@ The rule behind every field: nothing a person reads may be a command, a file pat
 | `showing` `{[bot]: {what, steps}}` | "Showing how to …: 3 steps so far" on the Screen tab, with Done showing and Cancel (`adapter.showing()`) | `POST /api/bots/:id/show {what}` starts one (Take over with a recorder; needs the bot's computer), `POST /api/bots/:id/shown {keep}` ends it: `keep` hands the bot the steps and page pictures as a message from the person |
 | `installing` | "Getting the helpers' own web browser ready…" (`adapter.gettingReady()`) | Tool ids crewd is fetching now; the downloaded app fetches every missing tool on its first runs |
 | `update` `{version, url}` | "A new Crewhouse is ready (0.2.0)" with Download (`adapter.update()`) | Shown to you in the downloaded app (checked once a day from the project's public release list) |
-| `house` `{google, steps}` | Google's apps: connect; Settings, Google setup | Whether you have switched Google on; once the key is in, `steps` is the four setup steps as `{state: 'checked' \| 'said' \| 'missing', note}`, from Google's own answers (`said`: you have not connected yet to find out) |
+| `house` `{google, steps}` | Google's apps: connect; Settings, Google setup | Whether Google is switched on. On the crew's own Google app (the kit's `googleClientFile`) `steps` is `null`: there is nothing to set up. When you pasted your own key, `steps` is the four setup steps as `{state: 'checked' \| 'said' \| 'missing', note}`, from Google's own answers (`said`: you have not connected yet to find out). With no key at all, `google` is `false` and `steps` is `null` |
 
 ## Asks: the approval moment
 
@@ -50,8 +50,8 @@ Pressing something on a site the person signed the bot in to (a `send` from the 
 | `chief` | "A lovely note, if I may say so." | Chief's line under the preview |
 | `question` | "Which photos, the Eid ones or the beach?" | For a question ask, instead of terminal text |
 
-A connection a task needs is an ask with `kind: 'connect'` and `detail.{app, words}` ("Let Pip use your Google Calendar"), opened by the helper's `crew_connect` tool.
-It shows as a card in that helper's chat, never on Home. Answer `allow` once connected (the app does it by itself), `deny` for Not now; the task carries on either way.
+A connection a task needs is an ask with `kind: 'connect'` and `detail.{app, words}` ("Let Pip use your Google Calendar"), opened by the helper's `crew_connect` tool. A Google app's ask is Chief's: it opens in Chief's chat (`bot: 'chief'`), even when a helper asked, and the helper's own task carries on once it is connected. Any other app's ask stays in the helper's chat.
+It shows as a card in that chat, never on Home. Answer `allow` once connected (the app does it by itself), `deny` for Not now; the task carries on either way.
 
 ## The crew room
 
@@ -115,9 +115,9 @@ A sign-in that fails ends as `signIn: {state: 'failed', error, why?}`: `why: 'de
 | `POST /api/connections/:app` | `{url}` of the app's own sign-in page, or `{state: 'on'}` if already connected; 409 for a Google app before Google is set up; 404 for an app not in v1 |
 | `GET /api/connections/:app` | `{state: 'waiting' \| 'on' \| 'declined' \| 'unticked' \| 'expired' \| 'failed' \| 'cancelled', error?}`, polled |
 | `DELETE /api/connections/:app` | Cancels a pending one, or disconnects |
-| `PUT /api/house/google` `{id, secret}` | From the computer: your Google app's client, once ([google-setup.md](google-setup.md)). Current raw backend (migration debt pending BYOKit OAuth/keystore/Google validation and API-probe contracts): checked with Google before it is kept: 400 with plain words for a swapped or mistyped paste, a key Google doesn't know, a secret that doesn't match, or a key that isn't a Desktop app; 502 if Google can't be reached |
+| `PUT /api/house/google` `{id, secret}` | From the computer: your Google app's client, once, for a machine without the crew's own client ([google-setup.md](google-setup.md)). Crewhouse first reads the kit's house client (`googleClientFile`, `~/.config/byokit/google-oauth-client.json` or `$CREWHOUSE_GOOGLE_CLIENT`); this paste is the fallback, and the key it saves is used only while no house file is present. Current raw backend (migration debt pending BYOKit OAuth/keystore/Google validation and API-probe contracts): checked with Google before it is kept: 400 with plain words for a swapped or mistyped paste, a key Google doesn't know, a secret that doesn't match, or a key that isn't a Desktop app; 502 if Google can't be reached |
 
-`drive`, `calendar`, `gmail` and `gmailsend` are one Google service each, on the personal Google app; `calendar`, `gmail` and `gmailsend` show Google's "unverified app" screen, which the card warns about first. `notion` and `canva` need nothing set up.
+`drive`, `calendar`, `gmail` and `gmailsend` are one Google service each. On the crew's own Google app (the house client) each connects with a tap; on a pasted personal Google app `calendar`, `gmail` and `gmailsend` show Google's "unverified app" screen, which the card warns about first. `notion` and `canva` need nothing set up.
 
 ## Herdr setup (today)
 

@@ -25,6 +25,7 @@ export interface Config {
   maxConcurrent: number;
   /** A custom OpenAI-compatible model provider for the engine (the tests' scripted model; a self-hosted gateway later). */
   engineProvider?: { baseUrl: string; apiKey: string };
+  googleClient: string;
   repoDir: string;
 }
 
@@ -48,6 +49,7 @@ export function loadConfig(): Config {
     maxConcurrent: Number(process.env.CREWHOUSE_MAX_CONCURRENT || 3),
     engineProvider: process.env.CREWHOUSE_ENGINE_BASE_URL && process.env.CREWHOUSE_ENGINE_API_KEY
       ? { baseUrl: process.env.CREWHOUSE_ENGINE_BASE_URL, apiKey: process.env.CREWHOUSE_ENGINE_API_KEY } : undefined,
+    googleClient: envPath('CREWHOUSE_GOOGLE_CLIENT', join(process.env.XDG_CONFIG_HOME?.trim() || join(home, '.config'), 'byokit', 'google-oauth-client.json')),
     repoDir: resolve(import.meta.dirname, '..'),
   };
 }

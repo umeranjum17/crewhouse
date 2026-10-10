@@ -1335,8 +1335,8 @@ function HouseGoogle({ on, steps, refresh }: { on: boolean; steps?: A.GoogleStep
   return (<>
     <div className="label" id="setup-google">Google setup</div>
     {on && !edit ? <div className="card">
-        <div className="row"><span className="grow"><b>{A.googleHeadline(steps)}</b><div className="mute small">Your setup so far. Check the remaining steps on Google’s pages.</div></span>
-          <button className="btn" onClick={() => { setEdit(true); setStep(A.GOOGLE_STEPS.length - 1); }}>Change sign-in</button></div>
+        <div className="row"><span className="grow"><b>{A.googleHeadline(steps)}</b><div className="mute small">{steps ? 'Your setup so far. Check the remaining steps on Google’s pages.' : 'Your crew’s own Google app is ready. Connect Calendar, Gmail or Drive from any app, in one tap.'}</div></span>
+          <button className="btn" onClick={() => { setEdit(true); setStep(A.GOOGLE_STEPS.length - 1); }}>{steps ? 'Change sign-in' : 'Use my own key'}</button></div>
         {steps?.map((m, i) => <div key={i} className="row stack-row">
           <span className="grow"><b>{i + 1}. {A.GOOGLE_STEPS[i].title}</b> <span className={m.state === 'checked' ? 'ok' : m.state === 'missing' ? 'warn-line' : 'mute'}>{A.STEP_MARK[m.state]}</span><div className="mute small">{m.note}</div></span>
           {m.state === 'missing' && <a className="btn go" href={A.GOOGLE_STEPS[i].url} target="_blank" rel="noreferrer">Open Google's page</a>}
@@ -1513,10 +1513,14 @@ function SideCrew({ state, live, id, signedOut }: { state: Json; live: A.OfficeV
       <a className="label side-label" href="#/crew">Your crew<span>{live.crew.length}</span></a>
       {A.roster(live.crew).map((h) => {
         const r = A.railWord(h, live), c = chats.get(h.id);
+        // A crew member waiting on the person is Chief's to bring (waitsOnYou): the row carries no badge for it;
+        // the ask reaches the person through Chief's own chat. The seat class is namespaced (`seat-…`) so a seat
+        // word like "chat" never collides with an unrelated rule (`.chat`'s own min-height once stretched the label
+        // over the nav).
         return <a key={h.id} href={hrefOf(h.id)} className={`side-row ${id === h.id ? 'on' : ''}`}>
           <Face who={{ kind: h.kind, name: h.name, mood: h.mood }} size={26} /><b className="clamp1 grow">{h.name}</b>
-          {(c?.unread ?? 0) > 0 && <span className="badge">{A.unreadBadge(c!.unread)}</span>}
-          <span className={`side-seat ${r.seat}`}><i /><span className="clamp1">{r.seat === 'done' ? 'Done' : r.word}</span></span>
+          {(c?.unread ?? 0) > 0 && !A.waitsOnYou(h) && <span className="badge">{A.unreadBadge(c!.unread)}</span>}
+          <span className={`side-seat seat-${r.seat}`}><i /><span className="clamp1">{r.seat === 'done' ? 'Done' : r.word}</span></span>
         </a>;
       })}
       {!live.crew.length && <div className="mute small side-blank">No helpers yet.</div>}

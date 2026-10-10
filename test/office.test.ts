@@ -78,6 +78,7 @@ test('office truth: the panels, their counts, the tray, the roster and Needs you
   assert.equal(chats.get('reel'), 'Waiting', 'a crew member waiting on the person never says "Needs you"; only Chief does');
   assert.equal(chats.get('scribe'), 'Waiting', 'a job stopped for an answer waits for Chief in Chats, as in the Office');
   assert.deepEqual(A.railWord(v.crew.find((c) => c.id === 'reel')!, v), { word: 'Waiting', seat: 'waiting' }, 'the rail says the same, in the neutral style, never "Needs you"');
+  assert.deepEqual(A.railWord(v.crew.find((c) => c.id === 'scribe')!, v), { word: 'Waiting', seat: 'waiting' }, 'a job stopped for an answer reads the same on the rail, never "Waiting on your reply"');
   assert.equal(A.chiefWord(v), 'Needs you', 'only Chief says "Needs you"');
   // Live events move every count together.
   const answered = A.officeEvent(v, { kind: 'ask.answered', bot: 'reel', data: { ask: 10 } });

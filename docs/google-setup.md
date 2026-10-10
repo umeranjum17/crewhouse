@@ -1,7 +1,8 @@
 # Switching Google on for your crew
 
-Set this up once, about twenty minutes, free. After this, you can let a helper use your Google Calendar, Gmail or Drive with a tap on the Connect card in a chat.
-Until it is done, those cards say the app needs Google switched on for your crew first, which you do once in Settings, and nobody reaches a broken Google page.
+**Most people do nothing here.** Crewhouse uses the crew's own Google app, already switched on for your computer, so you can let a helper use your Google Calendar, Gmail or Drive with a tap on the Connect card in a chat. Open **Settings → Google setup**: if it says "Google is on for your crew", you are done — skip this page.
+
+This page is for the other case: your computer has no crew Google app yet (a self-hosted machine, no Google file at `~/.config/byokit/google-oauth-client.json` or `$CREWHOUSE_GOOGLE_CLIENT`). Then Google cards say the app needs Google switched on for your crew first, and you make your own private app once, below. About twenty minutes, free.
 
 Notion, Canva, sharing from the phone and ChatGPT need none of this.
 
@@ -44,11 +45,14 @@ If you tap **Back to safety**, nothing is connected and Crewhouse says so kindly
 ## Costs
 
 Nothing. The Cloud project, the APIs and the OAuth client are free for personal use, and no billing account is attached.
+On the crew's own Google app (the usual case) there is nothing at all to pay for or set up.
 
 Optional, later: Google's free *sensitive-scope verification* (a privacy policy, a homepage on a domain you own, a short demo video, a few weeks of review) removes the warning for Calendar, making it 3 taps.
 Gmail's warning can only go with the paid assessment (CASA), so it stays at 5.
 
 ## How Crewhouse checks each step
+
+These checks apply only when you paste your own key. On the crew's own app, Settings just says Google is on.
 
 Settings → Google setup distinguishes **Checked** (a completed sign-in proved it) from **You said done** (check it on Google's own pages).
 
@@ -62,3 +66,7 @@ Settings → Google setup distinguishes **Checked** (a completed sign-in proved 
 
 On the phone, Google needs an `https` return address rather than the home computer's own.
 That comes with the phone app's sign-in relay (a second, *Web application* client whose return address is a static Crewhouse page), and will be one more ID to paste here.
+
+## The crew's own Google app
+
+The file `~/.config/byokit/google-oauth-client.json` (or `$CREWHOUSE_GOOGLE_CLIENT`) holds a Google **Desktop app** client belonging to the crew, read through the kit's `googleClientFile` and never copied into Crewhouse's own storage. Crewhouse refuses a file other users can read, a non-regular file, or any client type other than a Desktop app; a missing file just falls back to the key you paste above. When the file is present, every Google app connects with a tap and the four steps above are not needed.
