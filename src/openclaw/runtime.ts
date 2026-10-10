@@ -150,7 +150,7 @@ export class OpenClawRuntime implements AgentRuntime {
     try {
       return await this.kit.run({ sessionKey: spec.key, member: ME, message: spec.message, system: spec.system,
         ...(model && provider ? { model: `${provider}/${model}` } : {}), ...(spec.images?.length ? { images: spec.images } : {}), ...(spec.thinking ? { thinking: spec.thinking } : {}), register },
-        (e) => { if (e.type !== 'started' && e.type !== 'thinking') on(e.type === 'tool' ? { ...e, name: crewName(e.name) } : e); }); // 0.8.0 progress events stay unwired until ch-chat-live-2
+        (e) => on(e.type === 'tool' ? { ...e, name: crewName(e.name) } : e));
     } catch (error) { return { ok: false, kind: 'other', message: String(error) }; }
     finally { if (register) this.runs.delete(spec.key); }
   }

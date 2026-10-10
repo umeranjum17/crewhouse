@@ -227,5 +227,5 @@ export function toolWords(tool: string, input: Record<string, any>): string {
     case 'browser': return input.args?.[0] === 'goto' ? `Opened ${host(input.args[1])} in its browser` : 'Used its browser';
     case 'report': return String(input.text ?? '').trim().slice(0, 200); // the note names its own object; folds with it
   }
-  return `Used ${tool.replace(/_/g, ' ')}`;
+  return tool === 'document' ? 'Writing the document…' : `Used ${tool.replace(/_/g, ' ')}`;
 }

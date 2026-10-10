@@ -1178,10 +1178,14 @@ export function liveLine(o: { id: string; name: string; crew: { id: string; name
   const todos: LiveTodo[] = [];
   const detail: LiveStep[] = [];
   const push = (text: string, at: number) => { if (text && !said.has(text)) { said.add(text); todos.push({ text, state: 'done', at }); } };
-  push(helper ? `Passed to ${who}` : `Started on “${title}”`, start);
+  // A thread from before the kit's started event (or demo data) has no admission row: keep its own first step.
+  if (!own.some((e) => e.kind === 'run.admitted')) push(helper ? `Passed to ${who}` : `Starting on “${title}”`, start);
   let state: LiveLine['state'] = OPEN.includes(t.state) ? (t.state === 'needs_you' ? 'needs' : t.state === 'paused' ? 'waiting' : 'working') : 'done';
   let ended: Json | undefined;
   for (const e of own) {
+    // The engine's own first real step and its thinking, wired from the kit's RunEvents (ch-chat-live-2).
+    if (e.kind === 'run.admitted') { push(helper ? `Passed to ${who}` : `Started on “${title}”`, when(e)); continue; }
+    if (e.kind === 'run.thinking') { push('Thinking', when(e)); continue; }
     if (e.kind === 'run.tool') { const text = step(e); if (text && detail.at(-1)?.text !== text) detail.push({ text, at: when(e) }); continue; }
     const text = e.kind === 'task.working' ? null : e.kind === 'task.paused' ? waitWords(e.data?.result)
       : e.kind === 'ask.answered' ? `Carrying on with “${title}”` : e.kind === 'ask.opened' ? 'Waiting for your OK' : e.kind in END || e.kind === 'task.created' ? null : step(e);
